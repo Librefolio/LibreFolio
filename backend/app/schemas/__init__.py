@@ -141,6 +141,7 @@ if TYPE_CHECKING:
         FAHistoricalData,
         FAPriceDeleteResult,
         FAPricePoint,
+        FAPriceWritePoint,
         FAUpsert,
         FAUpsertResult,
     )
@@ -353,7 +354,8 @@ __all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting
     "FAProviderRefreshFieldsDetail",
     # Prices
     "FAUpsert",
-    "FAPricePoint",  # Note: FAUpsertItem merged into FAPricePoint
+    "FAPricePoint",
+    "FAPriceWritePoint",  # N92: the write model apart again (FAUpsertItem had been merged into FAPricePoint)
     "FAAssetDelete",
     "FABulkUpsertResponse",
     "FABulkDeleteResponse",
@@ -573,6 +575,7 @@ _EXPORT_GROUPS = {
         "FAHistoricalData",
         "FAPriceDeleteResult",
         "FAPricePoint",
+        "FAPriceWritePoint",
         "FAUpsert",
         "FAUpsertResult",
     ),

@@ -95,7 +95,7 @@ backend/app/services/financial_math/
     ├── prices.py            from the asset's AssetPriceSeries: a lot's reference price at its opening, the last day valued at cost
     ├── conversions.py       FxRateResolver, a closure's legs at their own dates, and the conversions each view needs
     ├── economic_events.py   income and FEE/TAX as engine inputs, their outputs, what is withheld
-    ├── histories.py         value, return, price and performance histories
+    ├── histories.py         value, return, price, market price and performance histories
     ├── summary.py           a lot's figures: the cost of its open quantity, value and P&L by direction, the lot summary
     ├── scope_boundary.py    transfer legs whose partner sits outside the scope, read at its edge: in at their cost, out at market
     └── average_cost_lines.py  per-broker and cumulative WAC history points

@@ -1499,25 +1499,30 @@ async def test_convert_over_the_item_day_budget_is_refused_fast(test_server):
 
 
 # ============================================================================
-# X-R65 (N83): a stored rate is dated within [1900-01-01, the server's tomorrow]
+# X-R65 (N83, revised 19/10): a stored rate is dated no later than the server's tomorrow
 # ============================================================================
 #
-# POST /fx/currencies/rate checks every item's date against date_range_limits.stored_date_bounds() -- 1900-01-01 and
-# latest_range_end(), both included -- before its loop: one item outside refuses the request with a 422 coded detail, and
-# nothing is written, not even the valid items. The frozen ceiling, the bounds themselves and the cap of ten are pinned on
-# the handler (services range-ceiling, RC-W05…W07); here the route on the lane's server, at its real ceiling, read before
-# the request and after the answer. The pair is this block's own (no seed and no other test uses CVE or GMD); its rates
-# on the block's days are dropped before and after.
+# POST /fx/currencies/rate checks every item's date against date_range_limits.latest_stored_date() -- latest_range_end(),
+# included -- before its loop: one item after it refuses the request with a 422 coded detail, and nothing is written, not
+# even the valid items. A rate before 1900 is written like any other: N83's revision (developer, 19/10) took away the
+# 1900 floor X-R65 had put there, and the walks stay bounded where they read. The frozen ceiling and the cap of ten are
+# pinned on the handler (services range-ceiling, RC-W05…W07, RC-W09); here the route on the lane's server, at its real
+# ceiling, read before the request and after the answer. The pair is this block's own (no seed and no other test uses
+# CVE or GMD); its rates on each test's days are dropped before and after, and the two tests use different days.
 
 BOUNDS_PAIR = ("CVE", "GMD")  # stored as it is: CVE < GMD
-STORED_FLOOR = "1900-01-01"  # the contract's floor (EARLIEST_RANGE_START), written here and not read from the code
 
 
 async def _pair_rate_days(client: httpx.AsyncClient, base: str, quote: str) -> set[str]:
     """Every day the pair has a rate on, whatever its date: the backup export reads the table, no range and no fill."""
+    return set(await _pair_rates(client, base, quote))
+
+
+async def _pair_rates(client: httpx.AsyncClient, base: str, quote: str) -> dict[str, Decimal]:
+    """The pair's rates by ISO day, whatever their date: the backup export, as ``_pair_rate_days``."""
     resp = await client.get(f"{API_BASE}/backup/fx/{base}/{quote}/rates", params={"format": "json"}, timeout=TIMEOUT)
     assert resp.status_code == 200, resp.text
-    return {row["date"] for row in resp.json()["rows"]}
+    return {row["date"]: Decimal(str(row["rate"])) for row in resp.json()["rows"]}
 
 
 async def _drop_pair_rate_days(client: httpx.AsyncClient, base: str, quote: str, days: list[str]) -> None:
@@ -1528,17 +1533,19 @@ async def _drop_pair_rate_days(client: httpx.AsyncClient, base: str, quote: str,
 
 
 @pytest.mark.asyncio
-async def test_rate_upsert_outside_the_stored_bounds_writes_nothing(test_server):
-    """RC-API-06 (X-R65, N83): POST /fx/currencies/rate with four CVE/GMD rates -- a valid day, 1899-12-31, another
-    valid day, a day past the ceiling -- answers 422 ``{"code": "date_out_of_range", "message", "params": {"min":
-    "1900-01-01", "max": the ceiling}, "items": [{"index": 1, "date": "1899-12-31"}, {"index": 3, "date": that day}],
-    "count": 2}``, and the pair has no rate on any of the four days: the valid ones are not written either.
+async def test_rate_upsert_after_the_ceiling_writes_nothing(test_server):
+    """RC-API-06 (X-R65, N83 revised 19/10): POST /fx/currencies/rate with four CVE/GMD rates -- a valid day, 1899-12-31,
+    another valid day, a day past the ceiling -- answers 422 ``{"code": "date_out_of_range", "message", "params": {"max":
+    the ceiling}, "items": [{"index": 3, "date": that day}], "count": 1}``, and the pair has no rate on any of the four
+    days: the valid ones are not written either, 1899-12-31 among them.
 
     The ceiling is ``latest_range_end()``, read before the request and after the answer: ``max`` lies between them. The
     day past it is 30 days on, past whatever the ceiling becomes meanwhile.
-    Red before X-R65: 200, the four rates stored one by one -- 1899-12-31 and the day past the ceiling with them.
+    Red before X-R65: 200, the four rates stored one by one -- the day past the ceiling with them.
+    Red before N83's revision: ``params`` is ``{"min": "1900-01-01", "max"}``, and 1899-12-31 is refused too
+    (``{"index": 1, …}``, ``count`` 2).
     """
-    print_section("RC-API-06: rate upsert outside the stored bounds refused")
+    print_section("RC-API-06: rate upsert after the ceiling refused")
 
     base, quote = BOUNDS_PAIR
     async with httpx.AsyncClient() as client:
@@ -1553,13 +1560,44 @@ async def test_rate_upsert_outside_the_stored_bounds_writes_nothing(test_server)
             ceiling_after = latest_range_end()
             detail = _coded_refusal(response, "date_out_of_range")
             assert set(detail) == {"code", "message", "params", "items", "count"}, detail
-            assert set(detail["params"]) == {"min", "max"} and detail["params"]["min"] == STORED_FLOOR, detail
+            assert set(detail["params"]) == {"max"}, f"params {detail['params']}: a stored date has one bound, the ceiling"
             assert ceiling_before <= date.fromisoformat(detail["params"]["max"]) <= ceiling_after, f"max {detail['params']['max']} outside {ceiling_before} … {ceiling_after}"
-            assert detail["items"] == [{"index": 1, "date": "1899-12-31"}, {"index": 3, "date": days[3]}], detail
-            assert detail["count"] == 2, detail
+            assert detail["items"] == [{"index": 3, "date": days[3]}], detail
+            assert detail["count"] == 1, detail
             written = await _pair_rate_days(client, base, quote) & set(days)
             assert not written, f"{base}/{quote} has rates on {sorted(written)}: nothing of a refused request may be written"
             print_success(f"✓ 422 {detail['code']}: {detail['count']} item(s), nothing written")
+        finally:
+            await _drop_pair_rate_days(client, base, quote, days)
+
+
+@pytest.mark.asyncio
+async def test_rate_upsert_before_1900_is_written(test_server):
+    """RC-API-08 (N83 revised 19/10): POST /fx/currencies/rate with CVE/GMD rates on 1850-06-01, 1899-12-30 and a valid
+    day answers 200: each rate ``inserted`` on its day, in order, no error -- and the pair holds the three rates as sent.
+
+    Red before N83's revision: 422 ``date_out_of_range``, ``params`` ``{"min": "1900-01-01", "max"}``, the two days
+    before 1900 refused and nothing written.
+    """
+    print_section("RC-API-08: rate upsert before 1900 written")
+
+    base, quote = BOUNDS_PAIR
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        sent = {"1850-06-01": Decimal("2.5"), "1899-12-30": Decimal("3.5"), "2020-03-04": Decimal("4.5")}
+        days = list(sent)
+        await _drop_pair_rate_days(client, base, quote, days)
+        try:
+            assert not await _pair_rate_days(client, base, quote) & set(days), "barrier: the block's days still hold a rate after the drop"
+            rates = [{"date": day, "base": base, "quote": quote, "rate": str(rate)} for day, rate in sent.items()]
+            response = await client.post(f"{API_BASE}/fx/currencies/rate", json=rates, timeout=TIMEOUT)
+            assert response.status_code == 200, f"{response.status_code}: {response.text[:400]}"
+            upserted = FXBulkUpsertResponse(**response.json())
+            assert (upserted.success_count, upserted.errors) == (len(days), []), upserted
+            assert [(result.action, result.date.isoformat(), result.base, result.quote) for result in upserted.results] == [("inserted", day, base, quote) for day in days], upserted.results
+            stored = {day: rate for day, rate in (await _pair_rates(client, base, quote)).items() if day in sent}
+            assert stored == sent, f"{base}/{quote} holds {stored} on the days sent: expected {sent}"
+            print_success(f"✓ 200: {upserted.success_count} rates written, the first on {days[0]}")
         finally:
             await _drop_pair_rate_days(client, base, quote, days)
 

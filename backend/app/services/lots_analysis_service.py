@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
+from types import MappingProxyType
 from typing import Iterable, Mapping, Sequence
 
 from sqlalchemy import func, or_, select
@@ -35,6 +36,7 @@ from backend.app.services.financial_math.lots.conversions import FxRateResolver,
 from backend.app.services.financial_math.lots.economic_events import NOTHING_WITHHELD, WithheldEconomics, build_cost_economic_events, build_engine_transactions, build_income_economic_events, extract_cost_outputs, extract_income_outputs, map_economic_groups, withheld_economics
 from backend.app.services.financial_math.lots.histories import (
     PerformanceSourceContext,
+    build_market_price_history,
     build_performance_history,
     build_price_history,
     build_return_history,
@@ -48,7 +50,7 @@ from backend.app.services.financial_math.lots.histories import (
     trim_dates,
 )
 from backend.app.services.financial_math.lots.prices import last_day_without_observation, opening_reference_price
-from backend.app.services.financial_math.lots.scope_boundary import ScopeBoundaryReading, TransferPartner, partner_ids_to_load, read_transfers_at_scope_boundary
+from backend.app.services.financial_math.lots.scope_boundary import BoundaryDirection, BoundaryLeg, ScopeBoundaryReading, TransferPartner, partner_ids_to_load, read_transfers_at_scope_boundary
 from backend.app.services.financial_math.lots.summary import lot_summary_figures
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report, load_configured_fx_pair_sets
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, MarkSource, build_asset_price_series
@@ -64,8 +66,9 @@ _WARNING_ISSUE_CODES = {
     IssueCode.ASSET_COST_NO_ELIGIBLE_LOTS,
 }
 
-# The analyses a FAILED replay still answers (J-12): the average-cost lines come from the transactions, not from the lots.
-_AVERAGE_COST_ANALYSES = frozenset({LotAnalysisType.BROKER_WAC_HISTORY, LotAnalysisType.CUMULATIVE_WAC_HISTORY})
+# The analyses a FAILED replay still answers (J-12): the average-cost lines come from the transactions, and the market
+# price line from the asset's prices (Y-30), not from the lots.
+_REPLAY_FREE_ANALYSES = frozenset({LotAnalysisType.BROKER_WAC_HISTORY, LotAnalysisType.CUMULATIVE_WAC_HISTORY, LotAnalysisType.MARKET_PRICE_HISTORY})
 
 _ORPHAN_ISSUE_CODES = {
     IssueCode.ASSET_INCOME_NO_ELIGIBLE_LOTS,
@@ -78,6 +81,8 @@ _CUSTODY_KINDS = {
     LotTimelineEventKind.TRANSFER_DEPART,
     LotTimelineEventKind.TRANSFER_ARRIVE,
 }
+
+_NO_BOUNDARY_LEGS: Mapping[int, BoundaryLeg] = MappingProxyType({})
 
 
 class LotsAnalysisService:
@@ -233,9 +238,10 @@ class LotsAnalysisService:
             replay_until=actual_to,
         )
         # J-12 (N81): a FAILED replay is unreliable as a whole, so no lot figure leaves the analysis: only the failure, the
-        # row to fix, and the average-cost lines, which do not come from the replay. From here on only those analyses run.
+        # row to fix, the average-cost lines and the market price line (Y-30), which do not come from the replay. From here
+        # on only those analyses run.
         failed = engine_result.analysis_status == "FAILED"
-        shown_analyses = [analysis for analysis in normalized_analyses if analysis in _AVERAGE_COST_ANALYSES] if failed else normalized_analyses
+        shown_analyses = [analysis for analysis in normalized_analyses if analysis in _REPLAY_FREE_ANALYSES] if failed else normalized_analyses
 
         lots_by_id = {lot.lot_id: lot for lot in engine_result.lots}
         selected_ids = self._resolve_selected_lot_ids(selected_lot_ids, lots_by_id)
@@ -346,10 +352,11 @@ class LotsAnalysisService:
             )
         # The histories read every day's price, the summary only the last one: value no other day, so the
         # report never holds the gap of a day nobody reads.
-        daily_series = any(analysis in shown_analyses for analysis in (LotAnalysisType.VALUE_HISTORY, LotAnalysisType.RETURN_HISTORY, LotAnalysisType.PRICE_HISTORY, LotAnalysisType.PERFORMANCE_HISTORY))
+        daily_series = any(analysis in shown_analyses for analysis in (LotAnalysisType.VALUE_HISTORY, LotAnalysisType.RETURN_HISTORY, LotAnalysisType.PRICE_HISTORY, LotAnalysisType.MARKET_PRICE_HISTORY, LotAnalysisType.PERFORMANCE_HISTORY))
         active_price_dates = history_dates if daily_series else ([actual_to] if LotAnalysisType.LOT_SUMMARY in shown_analyses else [])
         # Both the open-lot valuation (``market_prices`` -> NAV / value / return / performance) and the
-        # chart price line (``estimated_market_prices``) read the series built above. Each native mark is
+        # chart price lines (``estimated_market_prices``: per lot, and the lot-free market line of Y-30)
+        # read the series built above. Each native mark is
         # converted to the target currency at *its own valuation date* (per-day FX, never frozen at the
         # observation date); ``None`` marks a day the resolver has no observation for (genuine MISSING),
         # or whose price cannot be converted: that day is not valued, never at the native price.
@@ -405,6 +412,7 @@ class LotsAnalysisService:
                 selected_ids=selected_ids,
                 fx_resolver=fx_resolver,
                 lots_by_id=lots_by_id,
+                boundary_legs=boundary.legs,
             )
 
         custody_history = None
@@ -471,6 +479,14 @@ class LotsAnalysisService:
                     target_currency=target_currency,
                     closures_by_lot=closures_by_lot,
                 ),
+                display_from,
+                actual_to,
+            )
+
+        market_price_history = None
+        if LotAnalysisType.MARKET_PRICE_HISTORY in shown_analyses:
+            market_price_history = trim_dates(
+                build_market_price_history(estimated_market_prices=estimated_market_prices, history_dates=history_dates, target_currency=target_currency),
                 display_from,
                 actual_to,
             )
@@ -546,6 +562,7 @@ class LotsAnalysisService:
             value_history=value_history,
             return_history=return_history,
             price_history=price_history,
+            market_price_history=market_price_history,
             broker_wac_history=broker_wac_history,
             cumulative_wac_history=cumulative_wac_history,
             performance_history=performance_history,
@@ -932,12 +949,13 @@ class LotsAnalysisService:
         selected_ids: Sequence[int],
         fx_resolver: FxRateResolver,
         lots_by_id: dict[int, FifoLot],
+        boundary_legs: Mapping[int, BoundaryLeg] = _NO_BOUNDARY_LEGS,
     ) -> list[LotTimelineEventSchema]:
         selected = set(selected_ids)
         rows: list[LotTimelineEventSchema] = []
-        rows.extend(self._build_opening_and_split_rows(engine_result, selected, fx_resolver, lots_by_id))
+        rows.extend(self._build_opening_and_split_rows(engine_result, selected, fx_resolver, lots_by_id, boundary_legs))
         rows.extend(self._build_transfer_rows(engine_result.fragment_intervals, selected, lots_by_id, fx_resolver))
-        rows.extend(self._build_closure_rows(engine_result.closures, selected, lots_by_id, fx_resolver))
+        rows.extend(self._build_closure_rows(engine_result.closures, selected, lots_by_id, fx_resolver, boundary_legs))
         return sorted(rows, key=lambda row: (row.date, row.lot_id, row.transaction_id, row.kind))
 
     def _build_opening_and_split_rows(
@@ -946,6 +964,7 @@ class LotsAnalysisService:
         selected: set[int],
         fx_resolver: FxRateResolver,
         lots_by_id: dict[int, FifoLot],
+        boundary_legs: Mapping[int, BoundaryLeg] = _NO_BOUNDARY_LEGS,
     ) -> list[LotTimelineEventSchema]:
         rows: list[LotTimelineEventSchema] = []
         for event in engine_result.classified_events:
@@ -977,6 +996,7 @@ class LotsAnalysisService:
                         proceeds=None,
                         ratio=event.ratio,
                         opening_value=opening_value,
+                        scope_boundary=_boundary_direction(boundary_legs, event.transaction_id),
                     )
                 )
             elif event.kind == "SPLIT":
@@ -1097,6 +1117,7 @@ class LotsAnalysisService:
         selected: set[int],
         lots_by_id: dict[int, FifoLot],
         fx_resolver: FxRateResolver,
+        boundary_legs: Mapping[int, BoundaryLeg] = _NO_BOUNDARY_LEGS,
     ) -> list[LotTimelineEventSchema]:
         rows: list[LotTimelineEventSchema] = []
         for closure in closures:
@@ -1122,6 +1143,7 @@ class LotsAnalysisService:
                     realized_pnl=converted.realized_pnl,
                     proceeds=converted.proceeds,
                     ratio=None,
+                    scope_boundary=_boundary_direction(boundary_legs, closure.transaction_id),
                 )
             )
         return rows
@@ -1231,6 +1253,12 @@ def _message_key_for_issue(code: IssueCode) -> str:
         IssueCode.ASSET_COST_NO_ELIGIBLE_LOTS: "dataQuality.assetCostNoEligibleLots",
     }
     return mapping[code]
+
+
+def _boundary_direction(legs: Mapping[int, BoundaryLeg], transaction_id: int) -> BoundaryDirection | None:
+    """J-48: the direction of a TRANSFER leg read at the scope's edge, for its rows' label; None for any other row."""
+    leg = legs.get(transaction_id)
+    return leg.direction if leg is not None else None
 
 
 def _parse_transfer_pair_id(fragment_id: str) -> int:

@@ -8,7 +8,7 @@
  */
 import {describe, it, expect} from 'vitest';
 import type {BrokerLike} from '$lib/utils/broker/brokerColors';
-import {unwrapScalar, getBroker, historyKey, eventMarkerKind, groupCustodySlices, compareHistoryEvents, type CustodyGroup} from './lotCustodyModalHelpers';
+import {unwrapScalar, getBroker, historyKey, eventMarkerKind, closureValueLabelKey, groupCustodySlices, compareHistoryEvents, type CustodyGroup} from './lotCustodyModalHelpers';
 
 const brokers: BrokerLike[] = [
     {id: 1, name: 'Fineco'},
@@ -211,5 +211,80 @@ describe('compareHistoryEvents', () => {
             {date: '2024-01-01', transaction_id: 4},
         ].sort(compareHistoryEvents);
         expect(sorted.map((e) => e.transaction_id)).toEqual([4, 9, 2]);
+    });
+});
+
+/*
+ * J-48 (workstream J) — a TRANSFER leg crossing the analysis scope is a transfer on the modal's timeline.
+ *
+ * The contract. The backend reads a TRANSFER leg whose partner sits at a broker outside the lots' scope as an
+ * ADJUSTMENT_IN (entering) or an ADJUSTMENT_OUT (leaving) row (J-10), so the timeline draws it as an opening or as a
+ * closure. J-48 gives each lot timeline event an optional `scope_boundary`, 'IN' | 'OUT' | null, which the generated
+ * client may type scalar-or-array (`unwrapScalar`), and the modal shows a boundary row as a transfer — its marker and its
+ * label only:
+ * - `eventMarkerKind(event)` answers 'transfer' for an ADJUSTMENT_IN or an ADJUSTMENT_OUT carrying a boundary, and
+ *   classifies it by its kind as before without one: 'open', 'close';
+ * - the value row keeps reading `kind`: a leg leaving the scope still hands its units over, at the market value of its
+ *   day (J-10), so `closureValueLabelKey` keeps the handed-over key, never the proceeds one.
+ *
+ * Red, before the cure: the boundary cases of `eventMarkerKind`, on their assertion — today it reads the kind alone. The
+ * cases named «control» hold today and after the cure. Events are built as the modal receives them and passed as
+ * variables, so this block type-checks before the cure and after it; keys are asserted, never their translations.
+ */
+
+/** A lot timeline event as the modal receives it (`LotTimelineEventSchema`): the fields these cases set, and J-48's. */
+interface WireLotEvent {
+    lot_id: number;
+    date: string;
+    kind: string;
+    transaction_id: number;
+    quantity: string;
+    scope_boundary?: unknown;
+}
+
+/** An event of `kind` on lot 7, with `field` spread in: the boundary as sent, or nothing at all. */
+function timelineEvent(kind: string, field: {scope_boundary?: unknown} = {}): WireLotEvent {
+    return {lot_id: 7, date: '2024-03-15', kind, transaction_id: 4201, quantity: '10', ...field};
+}
+
+describe('J-48 — scope boundary', () => {
+    /** «No boundary» as the modal may receive it: the field absent or null, or the array shape empty or holding null. */
+    const NO_BOUNDARY: ReadonlyArray<{name: string; field: {scope_boundary?: unknown}}> = [
+        {name: 'absent', field: {}},
+        {name: 'null', field: {scope_boundary: null}},
+        {name: 'an empty array', field: {scope_boundary: []}},
+        {name: '[null]', field: {scope_boundary: [null]}},
+    ];
+
+    // RED until J-48's cure: today the marker reads the kind alone — 'open' for ADJUSTMENT_IN, 'close' for ADJUSTMENT_OUT.
+    it.each([
+        {name: 'ADJUSTMENT_IN across IN', kind: 'ADJUSTMENT_IN', boundary: 'IN'},
+        {name: 'ADJUSTMENT_OUT across OUT', kind: 'ADJUSTMENT_OUT', boundary: 'OUT'},
+        {name: 'ADJUSTMENT_IN across [IN], the array shape', kind: 'ADJUSTMENT_IN', boundary: ['IN']},
+        {name: 'ADJUSTMENT_OUT across [OUT], the array shape', kind: 'ADJUSTMENT_OUT', boundary: ['OUT']},
+    ] as ReadonlyArray<{name: string; kind: string; boundary: unknown}>)('eventMarkerKind: $name is a transfer', ({kind, boundary}) => {
+        expect(eventMarkerKind(timelineEvent(kind, {scope_boundary: boundary})), 'J-48: a leg crossing the scope is a transfer on the timeline').toBe('transfer');
+    });
+
+    // Control, green before and after the cure: the no-boundary case beside each red.
+    it.each([
+        {kind: 'ADJUSTMENT_IN', marker: 'open'},
+        {kind: 'ADJUSTMENT_OUT', marker: 'close'},
+    ])('control: eventMarkerKind — $kind without a boundary is still $marker', ({kind, marker}) => {
+        for (const {name, field} of NO_BOUNDARY) {
+            expect(eventMarkerKind(timelineEvent(kind, field)), `the field ${name}`).toBe(marker);
+        }
+    });
+
+    // Control, green before and after the cure: a null boundary moves no other kind.
+    it('control: eventMarkerKind — every other kind keeps its marker under a null boundary', () => {
+        const kinds = ['BUY', 'SELL', 'SPLIT', 'TRANSFER_DEPART', 'TRANSFER_ARRIVE'];
+        expect(kinds.map((kind) => eventMarkerKind(timelineEvent(kind, {scope_boundary: null})))).toEqual(['open', 'close', 'split', 'transfer', 'transfer']);
+    });
+
+    // Control, green before and after the cure: the value row reads the kind, whatever label the row gets.
+    it('control: closureValueLabelKey — a leg leaving the scope still hands its units over: its ADJUSTMENT_OUT reads handedOver, not proceeds', () => {
+        const leaving = timelineEvent('ADJUSTMENT_OUT', {scope_boundary: 'OUT'});
+        expect(closureValueLabelKey(leaving.kind)).toBe('brokers.lots.modal.historyDetail.handedOver');
     });
 });

@@ -1,9 +1,11 @@
-"""J-12 (decision N81, option A) — a FAILED lots analysis withholds every lot figure: only the failure and what to fix.
+"""J-12 (decision N81, option A) and Y-30 (N89) — a FAILED lots analysis withholds every lot figure: only the failure and what to fix.
 
 Workstream J «Numeri e analisi», release 1.3: the service-level reds and guards S1–S6 of the lot, through
 ``lots_analysis_service.get_lots_analysis``. The engine half of S4 is in
 ``test_financial_math/test_fifo_transfer_issue_names_the_giving_leg.py``; the AI Export half of the lot beside the FIFO
-component tests (``test_ai_export_fifo_failed_reconstruction.py``).
+component tests (``test_ai_export_fifo_failed_reconstruction.py``). Workstream Y's Y-30 adds the market price line
+(``MARKET_PRICE_HISTORY``), which does not come from the lots either: its FAILED half is here (Y30-B1 beside S1/S2,
+Y30-B2 beside S7), the rest of its contract in ``test_lots_market_price_history.py``.
 
 THE RULE. A replay that hits a code of ``_QUANTITATIVE_FAILURE_CODES`` (``financial_math/fifo/models.py``: a sale beyond
 what is held, ``FIFO_SOURCE_QUANTITY_MISSING``; a lone or broken TRANSFER leg, ``TRANSFER_PAIR_MISSING``; the two
@@ -23,6 +25,11 @@ so none is given — as Yield on Cost already withholds its number when the same
   ``REFERENCE_PRICE_FALLBACK``, ``REFERENCE_PRICE_UNAVAILABLE``, ``ASSET_INCOME_NO_ELIGIBLE_LOTS``,
   ``ASSET_COST_NO_ELIGIBLE_LOTS``, ``CURRENT_PRICE_ASSUMED_AT_COST`` and the rates missing for the lot figures (rule
   agreed with Y, the panel's owner; S7). A DEGRADED analysis keeps every issue it has today.
+- Y-30: the market price line (``market_price_history``) is drawn from the asset's price series, never from the lots, so
+  it stays with FAILED — one point per day of the window with a mark convertible to the target currency, whatever the
+  replay — and, amending the bullet above, the rates it misses stay in the data quality beside the blocking issues: the
+  pair and its days in ``missing_fx_pairs``, its FX issue (``MISSING_FX_MARKET`` for a pair with no route). Every lot
+  section stays None beside it (Y30-B1, Y30-B2).
 - ``transaction_id`` is always a real row of the scope: a transfer departing with more than its broker holds, or a
   short one, names the GIVING leg, never the lower id of the pair (S4).
 - DEGRADED and COMPLETE analyses are unchanged (S5, S6).
@@ -31,16 +38,19 @@ TODAY (base ``2f4ef68e6``) a FAILED analysis returns every section, filled with 
 unreliable, and every issue of those sections; its failure issues carry ``transaction_id``, ``lot_id``, ``broker_id``,
 ``related_transaction_id`` (and ``missing_quantity``) only; a transfer issue names the departure event's
 ``transaction_id`` — the lower id of a same-day pair, or the earlier-dated leg. Each red says what it read today in its
-docstring.
+docstring. Y-30's reds read, today (base ``7dbd46aa6``), ValueError: ``'MARKET_PRICE_HISTORY' is not a valid
+LotAnalysisType`` — the analysis is asked for by its string, so the rest of the file collects.
 
 Every test owns its rows: users, brokers and assets carry a uuid4 (``_scope_boundary_books.py``), written into the test's
-session and rolled back. No FX: everything is in EUR. Dates in 2025.
+session and rolled back. No FX: everything is in EUR, but Y30-B2's asset, quoted in VND with no rate and no route to EUR
+— an absence owned inside the test's transaction (``_own_no_rate_to_eur``). Dates in 2025.
 """
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
@@ -49,9 +59,10 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, Broker, Transaction, TransactionType, User
+from backend.app.db.models import Asset, AssetType, Broker, FxConversionRoute, FxRate, PriceHistory, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.portfolio import LotAnalysisType, LotsAnalysisResponse
 from backend.app.services.lots_analysis_service import get_lots_analysis
@@ -81,6 +92,18 @@ LOT_SECTIONS = ("lots", "gantt_segments", "custody_history", "lot_events", "valu
 ORPHANS = ("asset_orphan_income", "asset_orphan_fees", "asset_orphan_taxes")
 QUANTITATIVE_FAILURES = {"FIFO_SOURCE_QUANTITY_MISSING", "TRANSFER_PAIR_MISSING", "SHORT_TRANSFER_NOT_SUPPORTED", "SHORT_ADJUSTMENT_NOT_SUPPORTED"}
 NEW_KEYS = ("transaction_date", "fails_analysis")
+# Y-30: the market price line, asked for by its string (the LotAnalysisType member is new). Once it exists ALL_ANALYSES
+# holds it too, hence the filter: the list never asks for it twice.
+MARKET_PRICE_HISTORY = "MARKET_PRICE_HISTORY"
+WITH_THE_MARKET_PRICE = [*(analysis for analysis in ALL_ANALYSES if analysis != MARKET_PRICE_HISTORY), MARKET_PRICE_HISTORY]
+# Y30-B1: PRICES carried forward, one mark a day from the first transaction (3 Feb) to DATE_TO (14 Feb), every one a quote.
+MARKET_LINE = [(BUY_DAY + timedelta(days=offset), D(price)) for offset, price in enumerate(["100"] * 3 + ["105"] * 4 + ["110"] * 3 + ["112"] * 2)]
+# Y30-B2: the asset quoted in VND on these two days only, the trades in EUR on other days.
+VND_QUOTES: Mapping[date, str] = {date(2025, 2, 6): "2600000", date(2025, 2, 13): "2800000"}
+# The days marked by a VND quote, exact or carried (6–9 and 13–14 Feb): with no VND/EUR rate, no point and a gap.
+VND_MARKED_DAYS = [date(2025, 2, 6), date(2025, 2, 7), date(2025, 2, 8), date(2025, 2, 9), date(2025, 2, 13), date(2025, 2, 14)]
+# The days marked by an EUR trade, exact or carried (the BUY's 100 on 3–5 Feb, the SELL's 110 on 10–12 Feb): no rate needed.
+EUR_TRADE_LINE = [(date(2025, 2, day), D("100")) for day in (3, 4, 5)] + [(date(2025, 2, day), D("110")) for day in (10, 11, 12)]
 
 
 @pytest_asyncio.fixture
@@ -208,12 +231,48 @@ async def seed_same_day_pair(session: AsyncSession, *, giving: str, short: bool 
     return Book(owner, a, asset, rows, broker_b=b)
 
 
+async def _own_no_rate_to_eur(session: AsyncSession, currency: str) -> None:
+    """``currency`` has no rate and no route to EUR while this test runs (Y30-B2).
+
+    ``fx_rates`` and ``fx_conversion_routes`` are global and store a pair alphabetically, so both are emptied for it inside
+    this test's transaction, which the ``session`` fixture rolls back — a neighbour's rows come back intact. A neighbour's
+    committed rate would matter however old it is: the FX service backward-fills without limit. With no route the pair is
+    not configured, so its gap is ``MISSING_FX_MARKET``.
+    """
+    base, quote = sorted((currency, "EUR"))
+    await session.execute(delete(FxRate).where(FxRate.base == base, FxRate.quote == quote))
+    await session.execute(delete(FxConversionRoute).where(FxConversionRoute.base == base, FxConversionRoute.quote == quote))
+    await session.flush()
+
+
+async def seed_oversell_quoted_in_vnd(session: AsyncSession) -> Book:
+    """Y30-B2: the oversell of S1 on an asset listed in VND. A (no shorting) buys 5 for 500 EUR on 3 Feb and sells 8 for 880
+    EUR on 10 Feb, 3 beyond what it holds; no income. The asset is quoted in VND only, on 6 and 13 Feb (``VND_QUOTES``), and
+    VND has no rate and no route to EUR. The trades are in EUR, so the only conversion that needs VND/EUR is the market
+    price line, on each day a VND quote marks (6–9 and 13–14 Feb); the days the trades mark (3–5 and 10–12 Feb) need none.
+    """
+    owner = await new_user(session, "j12_vnd")
+    a = await new_broker(session, "J12 vnd A", owner)
+    tag = uuid4().hex[:16]
+    asset = Asset(display_name=f"J12 vnd {tag}", identifier_ticker=f"J12V{tag[:8].upper()}", currency="VND", asset_type=AssetType.STOCK)
+    session.add(asset)
+    await session.flush()
+    session.add_all([PriceHistory(asset_id=asset.id, date=day, close=Decimal(close), currency="VND", source_plugin_key="TEST") for day, close in VND_QUOTES.items()])
+    await _own_no_rate_to_eur(session, "VND")
+    rows = await _add(
+        session,
+        buy=asset_row(a, asset, TransactionType.BUY, BUY_DAY, "5", amount="-500"),
+        sell=asset_row(a, asset, TransactionType.SELL, FAILURE_DAY, "-8", amount="880"),
+    )
+    return Book(owner, a, asset, rows)
+
+
 # --------------------------------------------------------------------------- #
 # Readings
 # --------------------------------------------------------------------------- #
 
 
-async def _analysis(session: AsyncSession, book: Book, analyses: list[LotAnalysisType] = ALL_ANALYSES) -> LotsAnalysisResponse:
+async def _analysis(session: AsyncSession, book: Book, analyses: list[LotAnalysisType | str] = ALL_ANALYSES) -> LotsAnalysisResponse:
     return await get_lots_analysis(
         session=session,
         user_id=book.owner.id,
@@ -301,6 +360,28 @@ async def test_s1_s2_guard_failed_analysis_keeps_the_wac_lines_the_metadata_and_
         "computed until": DATE_TO,
         "issues": ["FIFO_SOURCE_QUANTITY_MISSING" if book_name == "oversell" else "TRANSFER_PAIR_MISSING"],
     }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("book_name", FAILED_BOOKS)
+async def test_s1_s2_failed_analysis_keeps_the_market_price_line(session, book_name):
+    """Y30-B1, beside S1 (oversell) and S2 (a lone TRANSFER leg): every analysis and the market price line requested. The
+    replay is FAILED and, as S1/S2 want, every lot section and orphan is None; the market price line, which does not come
+    from the lots, stays: one point a day from the first transaction (3 Feb) to ``date_to`` (14 Feb), the quotes of
+    ``PRICES`` carried forward — a quote wins its day over a trade, so none is estimated —, in EUR. It adds no issue: in
+    EUR it misses no rate, and it values nothing at cost.
+
+    Today: ValueError — 'MARKET_PRICE_HISTORY' is not a valid LotAnalysisType.
+    """
+    book = await _seeded(session, book_name)
+
+    result = await _analysis(session, book, WITH_THE_MARKET_PRICE)
+
+    assert (result.calculation_status, _issue_codes(result)) == ("FAILED", ["FIFO_SOURCE_QUANTITY_MISSING" if book_name == "oversell" else "TRANSFER_PAIR_MISSING"])
+    observed = {name: _shape(getattr(result, name)) for name in (*LOT_SECTIONS, *ORPHANS)}
+    assert observed == dict.fromkeys((*LOT_SECTIONS, *ORPHANS))
+    line = [(point.date, point.market_price, point.currency, point.estimated) for point in result.market_price_history]
+    assert line == [(day, price, "EUR", False) for day, price in MARKET_LINE]
 
 
 # --------------------------------------------------------------------------- #
@@ -427,6 +508,53 @@ async def test_s7_guard_degraded_analysis_keeps_every_issue_it_has_today(session
 
     assert result.calculation_status == "DEGRADED"
     assert _codes_one_per_issue(result) == today
+
+
+# --------------------------------------------------------------------------- #
+# Y30-B2 — S7 and the new FX-gap code with FAILED: the market price line's missing rates stay
+# --------------------------------------------------------------------------- #
+
+MARKET_PRICE_SETS = {
+    "every-analysis-and-the-market-price": WITH_THE_MARKET_PRICE,
+    "the-market-price-alone": [MARKET_PRICE_HISTORY],
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("analyses", list(MARKET_PRICE_SETS))
+async def test_s7_failed_analysis_keeps_the_fx_gap_of_the_market_price_line(session, analyses):
+    """Y30-B2, S7 extended: the oversell on an asset quoted in VND, VND without a rate or a route to EUR, read in EUR, the
+    market price line requested (with every other analysis, or alone). FAILED. The data quality keeps the blocking issue
+    AND the line's FX gap — the one conversion this ledger needs VND/EUR for: VND/EUR in ``missing_fx_pairs`` with the
+    days a VND quote marks (6–9 and 13–14 Feb), and ``MISSING_FX_MARKET`` for EUR-VND. Nothing else: the lot figures'
+    gaps go with their sections (S7), and the trades are in EUR. The line has no point on those days — never the VND
+    price read as euros — and has one on each day an EUR trade marks (3–5 and 10–12 Feb), estimated.
+
+    Today: ValueError — 'MARKET_PRICE_HISTORY' is not a valid LotAnalysisType.
+    """
+    book = await seed_oversell_quoted_in_vnd(session)
+
+    result = await _analysis(session, book, MARKET_PRICE_SETS[analyses])
+
+    assert result.calculation_status == "FAILED"
+    assert _codes_one_per_issue(result) == ["FIFO_SOURCE_QUANTITY_MISSING", "MISSING_FX_MARKET"]
+    assert {item.pair: list(item.dates) for item in result.data_quality.missing_fx_pairs} == {"VND/EUR": VND_MARKED_DAYS}
+    assert [list(issue.affected_fx_pairs) for issue in _issues(result, "MISSING_FX_MARKET")] == [["EUR-VND"]]
+    line = [(point.date, point.market_price, point.currency, point.estimated) for point in result.market_price_history]
+    assert line == [(day, price, "EUR", True) for day, price in EUR_TRADE_LINE]
+
+
+@pytest.mark.asyncio
+async def test_s7_guard_failed_analysis_without_the_market_price_line_has_no_fx_issue(session):
+    """GUARD for Y30-B2 (green today and after): the same VND ledger with the broker's average-cost line alone. The market
+    price line is not computed and the trades are in EUR, so nothing needs VND/EUR: no FX issue, no missing pair — the
+    blocking issue alone, FAILED, the average-cost line kept."""
+    book = await seed_oversell_quoted_in_vnd(session)
+
+    result = await _analysis(session, book, [LotAnalysisType.BROKER_WAC_HISTORY])
+
+    observed = (result.calculation_status, _codes_one_per_issue(result), result.data_quality.missing_fx_pairs, bool(result.broker_wac_history))
+    assert observed == ("FAILED", ["FIFO_SOURCE_QUANTITY_MISSING"], [], True)
 
 
 # --------------------------------------------------------------------------- #

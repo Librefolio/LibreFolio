@@ -12,6 +12,7 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
+    import {CLEARED_CELL} from '$lib/components/ui/data-editor/DataEditorTypes';
     import {Save, X, DollarSign, CalendarClock} from 'lucide-svelte';
     import {untrack} from 'svelte';
     import {zodiosApi} from '$lib/api';
@@ -83,9 +84,9 @@
     ]);
 
     // F.5 — OHLC/volume columns are flagged `erasable: true`. DataEditor renders
-    //   ErasableNumberCell, whose eraser emits the sentinel `-1` at once, with no
-    //   confirm: the row's Revert action is the undo. The save path sends `-1` and the
-    //   backend reads it as SET NULL in the MERGE upsert. `Delete` on an empty input
+    //   ErasableNumberCell, whose eraser sets 'clear' (CLEARED_CELL, N92) at once, with no
+    //   confirm: the row's Revert action is the undo. The save path sends 'clear' and the
+    //   backend empties the column in the MERGE upsert. `Delete` on an empty input
     //   does the same. NULL values render as an italic "not set" placeholder.
     //   i18n keys: `dataEditor.cell.{notSet,clearField}` (4 langs).
 
@@ -288,22 +289,26 @@
                 // Filter valid upserts (close must be valid)
                 // Post-Blocco I: currency is NOT part of the payload anymore — backend
                 // derives it from asset.currency and rejects any mismatch defensively.
+                // N92: a row whose open, high, low or volume is a negative number (only an imported file can bring one) is not
+                // sent, as a close of 0 or less is not: LibreFolio keeps no negative price
+                const negativeOptional = (v: unknown): boolean => v !== undefined && v !== null && v !== '' && v !== CLEARED_CELL && Number(v) < 0;
                 const validUpserts = upsertPrices.filter((r) => {
                     const close = Number(r.values.close);
-                    return !isNaN(close) && close > 0;
+                    return !isNaN(close) && close > 0 && !(['open', 'high', 'low', 'volume'] as const).some((key) => negativeOptional(r.values[key]));
                 });
                 const invalidCount = upsertPrices.length - validUpserts.length;
 
                 if (validUpserts.length > 0) {
-                    // F.5 — sentinel semantics for optional OHLC/volume fields:
-                    //   undefined/null → omit (backend preserves existing DB value)
-                    //   -1             → send -1 (backend MERGE upsert interprets as SET NULL)
+                    // N92 — optional OHLC/volume fields:
+                    //   undefined/null → omit (the server keeps the stored value)
+                    //   'clear'        → send 'clear' (the server empties the stored value)
                     //   other number   → send as-is
-                    const optionalField = (v: unknown): number | undefined => {
+                    const optionalField = (v: unknown): number | typeof CLEARED_CELL | undefined => {
                         if (v === undefined || v === null || v === '') return undefined;
+                        if (v === CLEARED_CELL) return CLEARED_CELL;
                         const n = Number(v);
                         if (isNaN(n)) return undefined;
-                        return n; // includes -1 sentinel
+                        return n;
                     };
                     const priceItems = validUpserts.map((r) => ({
                         date: r.date,

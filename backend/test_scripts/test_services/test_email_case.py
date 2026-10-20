@@ -10,8 +10,9 @@ coordinator approved, pinned here:
   ``same_email(a, b)`` is ``email_fold(a) == email_fold(b)``, a ``bool``. The documented limit: letters outside ASCII
   compare as written, so ``Émile@example.com`` and ``émile@example.com`` are two addresses.
 - C2 — the database: a unique index ``ux_users_email_lower`` on ``lower(email)``, declared on the ``User`` model, so
-  ``SQLModel.metadata.create_all`` builds it (migration 009 builds it on an install: unit ``db migration-009``). No new
-  column; the exact index stays. Every write is covered, plain SQL included; the non-ASCII pair is not refused.
+  ``SQLModel.metadata.create_all`` builds it (the 1.3 migration, ``005_release_1_3_0_schema``, builds it on an install:
+  ``test_migration_005_release_1_3``). No new column; the exact uniqueness stays. Every write is covered, plain SQL
+  included; the non-ASCII pair is not refused.
 - C3 — the lookups: ``get_user_by_email`` and the email half of ``get_user_by_username_or_email`` compare
   ``lower(email) = lower(:value)``: an equality, never a pattern. The username half is pinned neither way here (lot A-21
   changes it): no username of this module looks like an address, and no probe like a username.
@@ -71,9 +72,8 @@ from backend.app.services.accounts import auth_service, bootstrap_admin_service,
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.test_scripts.test_utils import print_section, print_success
 
-#: The index P18 adds, and the exact one that stays.
+#: The index P18 adds.
 INDEX = "ux_users_email_lower"
-EXACT_INDEX = "ix_users_email"
 #: ``CREATE UNIQUE INDEX ux_users_email_lower ON users (lower(email))`` as ``sqlite_master`` keeps it, read in lower case
 #: and without quotes, brackets or spaces: how the statement is spelled does not matter, what it says does.
 INDEX_SQL = "createuniqueindexux_users_email_loweronusers(lower(email))"
@@ -521,9 +521,16 @@ def test_same_email_is_email_fold_compared(first: str, second: str, same: bool) 
 
 
 @pytest.mark.asyncio
-async def test_create_all_builds_a_unique_index_on_lower_email(engine: AsyncEngine, db_path: Path) -> None:
-    """ECASE-010 — C2, red until P18 (``create_all`` builds no such index): the ``User`` model declares ``ux_users_email_lower``, so a ``create_all`` database has it, read from ``sqlite_master`` and SQLite's PRAGMAs: an index of ``users``, unique, on every row (not partial), with one key, the expression ``lower(email)``. ``ix_users_email`` stays, unique on ``email``."""
-    print_section(f"ECASE-010: {INDEX} built by create_all")
+async def test_create_all_builds_a_unique_index_on_lower_email_and_refuses_an_exact_duplicate(engine: AsyncEngine, db_path: Path) -> None:
+    """ECASE-010 — C2, red until P18 (``create_all`` builds no such index): the ``User`` model declares ``ux_users_email_lower``, so a ``create_all`` database has it, read from ``sqlite_master`` and SQLite's PRAGMAs: an index of ``users``, unique, on every row (not partial), with one key, the expression ``lower(email)``. And the exact uniqueness stays: a second account whose address is written exactly as the first's is refused by the database with a UNIQUE ``IntegrityError`` — through the ORM, and in plain SQL —, and nothing is written.
+
+    The property, not an index name (lot H-57, the 1.3 squash): the model declared ``email`` ``unique=True, index=True``,
+    which ``create_all`` builds as a unique index named ``ix_users_email``; it now declares ``unique=True`` alone, an
+    inline ``UNIQUE`` that SQLite holds as a ``sqlite_autoindex_users_*``, as on a migrated database. Which unique index
+    refuses the duplicate is not pinned either: ``ux_users_email_lower`` refuses it too. Green before the squash and
+    after it.
+    """
+    print_section(f"ECASE-010: {INDEX} built by create_all, an exact duplicate refused")
 
     found = _schema_object(db_path, INDEX)
 
@@ -533,8 +540,19 @@ async def test_create_all_builds_a_unique_index_on_lower_email(engine: AsyncEngi
     assert _normalized(sql) == INDEX_SQL, f"{INDEX} must be a unique index on lower(email), SQLite's own fold: {sql!r}"
     assert _index_flags(db_path, INDEX) == (True, False), f"{INDEX} must be unique, and cover every row (not partial): (unique, partial) = {_index_flags(db_path, INDEX)}"
     assert _key_columns(db_path, INDEX) == [(-2, None)], f"{INDEX} must have one key, an expression: {_key_columns(db_path, INDEX)}"
-    assert _index_flags(db_path, EXACT_INDEX) == (True, False) and [column for _cid, column in _key_columns(db_path, EXACT_INDEX)] == ["email"], f"the exact {EXACT_INDEX} must stay, unique on email"
-    print_success(f"{INDEX}: unique, on lower(email); {EXACT_INDEX} kept")
+
+    address = _address("exact")
+    first = await _add_account(engine, email=address)
+    through_orm, in_plain_sql = f"orm_{_tag()}", f"raw_{_tag()}"
+    refused_by_orm = await _orm_refusal(engine, through_orm, address)
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+        refused_in_sql = _refusal(conn, RAW_INSERT, (in_plain_sql, address, MARKER_HASH, STAMP, STAMP))
+
+    assert refused_by_orm is not None and "UNIQUE constraint failed" in refused_by_orm, f"a second account with {address!r}, written exactly as the first's, must be refused by the database through the ORM: {refused_by_orm}"
+    assert refused_in_sql is not None and "UNIQUE constraint failed" in refused_in_sql, f"a second account with {address!r}, written exactly as the first's, must be refused by the database in plain SQL: {refused_in_sql}"
+    assert await _same_fold(engine, address) == [(first, address)], "the address must keep its one account, as written"
+    assert await _usernames(engine, through_orm, in_plain_sql) == set(), "the refused accounts must not be in the database"
+    print_success(f"{INDEX}: unique, on lower(email); an exact duplicate refused by the database")
 
 
 @pytest.mark.asyncio

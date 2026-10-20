@@ -1236,3 +1236,132 @@ describe('B4 — isEnvelopeFile: the first four bytes are LFBK', () => {
         await expect(secure('isEnvelopeFile')(new WholeReadRefused([content]))).resolves.toBe(true);
     });
 });
+
+// =====================================================================================================================
+// B-15 + B-8 — a proxy's 413 on the upload; the running job a backup_busy names (written red first)
+// =====================================================================================================================
+
+/*
+ * The contract under test (the B-15 + B-8 contract):
+ *   - `uploadFailureCode(error)`, what to tell about a failed upload of an archive: what `backupFailureCode` tells — the
+ *     refusal's `detail.code` whatever the status, `network` for an AxiosError that got no answer, `unexpected`
+ *     otherwise —, except that an AxiosError answered 413 with no LibreFolio code is `proxy_too_large`: the page of a
+ *     proxy in front of LibreFolio (nginx's `client_max_body_size`, Fly, a CDN), an empty body, JSON without
+ *     `detail.code`. LibreFolio's own 413 carries `backup_too_large` (with `limit_mb`), and keeps it. The upload is the
+ *     one request read this way: `backupFailureCode` itself is unchanged (B-15);
+ *   - `backupBusyJob(error)`: `{jobId, origin}` from a `backup_busy` refusal whose detail names the running job —
+ *     `job_id` 32 lowercase hex digits, `origin` a string —; `null` for anything else: the refusal of before
+ *     (`{code, message}`), another code, an id that is not 32 lowercase hex digits, no id, no origin, no answer (B-8).
+ *     The origin is handed over as named — `ui`, `cli` or `panel` —: which one a tab follows is the controller's
+ *     business (backupJob.test.ts).
+ *
+ * Where the contract is silent, the choices of this file, each one place to change: «no LibreFolio code» is what
+ * `backupErrorCode` reads as none, an empty code included; an error axios did not raise is neither `proxy_too_large`
+ * nor a busy job, as it carries no code for `backupErrorCode`; the job is read inside `detail`, beside the code, never
+ * elsewhere in the body; a `job_id` or an `origin` that is null or not a string names no job.
+ *
+ * Red today: neither function exists. Both are reached through `refusalReader()`, so each case fails on its own and
+ * names the missing export, and the type check does not wait for them. Green today, and to stay so: `backupFailureCode`
+ * still reads a 413 without a code as `unexpected`.
+ */
+
+/** The two readers of a refusal B-15 and B-8 add to backupApi.ts. */
+interface RefusalReaders {
+    uploadFailureCode: (error: unknown) => string;
+    backupBusyJob: (error: unknown) => {jobId: string; origin: string} | null;
+}
+
+/** One reader of backupApi.ts as B-15 or B-8 makes it, or a failure that names it: each case fails on its own until it exists. */
+function refusalReader<K extends keyof RefusalReaders>(name: K): RefusalReaders[K] {
+    const fn = (backupApiModule as unknown as Partial<RefusalReaders>)[name];
+    expect(typeof fn, `backupApi.ts exports no ${name}() (B-15 + B-8 contract)`).toBe('function');
+    return fn as RefusalReaders[K];
+}
+
+/** What nginx answers an upload over its `client_max_body_size`: its own HTML page, nothing of LibreFolio's. */
+const NGINX_413 = '<html>\r\n<head><title>413 Request Entity Too Large</title></head>\r\n<body>\r\n<center><h1>413 Request Entity Too Large</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n';
+
+/** LibreFolio's own 413 on the upload: `backup_too_large`, and its limit in megabytes. */
+const LIBREFOLIO_413 = {detail: {code: 'backup_too_large', message: 'refused: backup_too_large', limit_mb: 250}};
+
+describe('B-15 — uploadFailureCode: a 413 without a LibreFolio code was refused by a proxy', () => {
+    it.each<[string, string, unknown]>([
+        // A proxy refused the archive.
+        ["a 413 with nginx's page", 'proxy_too_large', answered(413, NGINX_413)],
+        ['a 413 with an empty body', 'proxy_too_large', answered(413, '')],
+        ['a 413 with no body at all', 'proxy_too_large', answered(413, undefined)],
+        ['a 413 with a null body', 'proxy_too_large', answered(413, null)],
+        ['a 413 with JSON that has no detail (an API gateway)', 'proxy_too_large', answered(413, {message: 'Request Too Long'})],
+        ['a 413 whose detail is a string', 'proxy_too_large', answered(413, {detail: 'Request Entity Too Large'})],
+        ['a 413 whose detail has no code', 'proxy_too_large', answered(413, {detail: {message: 'Request Entity Too Large'}})],
+        ['a 413 with an empty code', 'proxy_too_large', refusal(413, '')],
+        ["a 413 with nginx's page, raised by axios itself", 'proxy_too_large', realAxiosError(413, NGINX_413)],
+        // LibreFolio's own 413, and every other answer: as backupFailureCode.
+        ["LibreFolio's own 413: backup_too_large, kept", 'backup_too_large', answered(413, LIBREFOLIO_413)],
+        ["LibreFolio's own 413, raised by axios itself: backup_too_large, kept", 'backup_too_large', realAxiosError(413, LIBREFOLIO_413)],
+        ['a 413 with any other code: that code', 'backup_upload_incomplete', refusal(413, 'backup_upload_incomplete')],
+        ['another status with a code: the code', 'backup_no_space', refusal(507, 'backup_no_space')],
+        ['a proxy page of another status (502): unexpected', 'unexpected', answered(502, '<html><body>Bad Gateway</body></html>')],
+        ['another status without a code (500): unexpected', 'unexpected', answered(500, {detail: 'Internal Server Error'})],
+        ['another status with an empty body (400): unexpected', 'unexpected', answered(400, '')],
+        ['no answer (a proxy that drops the connection): network', 'network', noAnswer()],
+        ['a timeout: network', 'network', noAnswer('ECONNABORTED')],
+        ['no answer, raised by axios itself: network', 'network', realAxiosError(null)],
+        ['a plain Error: unexpected', 'unexpected', new Error('boom')],
+        ['an object shaped like a 413 that axios did not raise: unexpected', 'unexpected', {response: {status: 413, data: NGINX_413}}],
+        ['null: unexpected', 'unexpected', null],
+    ])('%s → %s', (_case, expected, error) => {
+        expect(refusalReader('uploadFailureCode')(error)).toBe(expected);
+    });
+
+    it.each<[string, unknown]>([
+        ["nginx's page", answered(413, NGINX_413)],
+        ['an empty body', answered(413, '')],
+        ['JSON without detail.code', answered(413, {detail: 'Request Entity Too Large'})],
+    ])('backupFailureCode, the reader of every request but the upload, still reads a 413 with %s as unexpected (green today: the guard)', (_case, error) => {
+        expect(backupFailureCode(error)).toBe('unexpected');
+    });
+});
+
+/** The 409 of a start while a backup runs: `detail: {code: 'backup_busy', message}`, and the running job when the caller may read it (B-8). */
+function busy(job: Record<string, unknown> = {}) {
+    return answered(409, {detail: {code: 'backup_busy', message: 'refused: backup_busy', ...job}});
+}
+
+describe('B-8 — backupBusyJob: the running job a backup_busy refusal names', () => {
+    it.each<[string, unknown, {jobId: string; origin: string}]>([
+        ['started from a Backup tab (ui)', busy({job_id: JOB_ID, origin: 'ui'}), {jobId: JOB_ID, origin: 'ui'}],
+        ['started from the command line (cli)', busy({job_id: JOB_ID, origin: 'cli'}), {jobId: JOB_ID, origin: 'cli'}],
+        ['started from the hosting panel (panel)', busy({job_id: JOB_ID, origin: 'panel'}), {jobId: JOB_ID, origin: 'panel'}],
+        ['started from a Backup tab, the refusal raised by axios itself', realAxiosError(409, {detail: {code: 'backup_busy', message: 'refused', job_id: JOB_ID, origin: 'ui'}}), {jobId: JOB_ID, origin: 'ui'}],
+    ])('a refusal naming a job %s → {jobId, origin}, as it names them', (_case, error, expected) => {
+        expect(refusalReader('backupBusyJob')(error)).toEqual(expected);
+    });
+
+    it.each<[string, unknown]>([
+        ['the refusal of before: {code, message}, no job', busy()],
+        ['another code naming a job', answered(409, {detail: {code: 'backup_job_running', message: 'refused: backup_job_running', job_id: JOB_ID, origin: 'ui'}})],
+        ['a job id in upper case', busy({job_id: JOB_ID.toUpperCase(), origin: 'ui'})],
+        ['a job id of 31 digits', busy({job_id: JOB_ID.slice(1), origin: 'ui'})],
+        ['a job id of 33 digits', busy({job_id: `${JOB_ID}a`, origin: 'ui'})],
+        ['a job id that is not hex', busy({job_id: 'not-a-backup-job-id-at-all-00000', origin: 'ui'})],
+        ['a path around a valid id', busy({job_id: `../${JOB_ID}`, origin: 'ui'})],
+        ['a valid id and a newline', busy({job_id: `${JOB_ID}\n`, origin: 'ui'})],
+        ['an empty job id', busy({job_id: '', origin: 'ui'})],
+        ['a job id that is a number', busy({job_id: 1234, origin: 'ui'})],
+        ['a null job id', busy({job_id: null, origin: 'ui'})],
+        ['no job id', busy({origin: 'ui'})],
+        ['no origin', busy({job_id: JOB_ID})],
+        ['a null origin', busy({job_id: JOB_ID, origin: null})],
+        ['an origin that is not a string', busy({job_id: JOB_ID, origin: 1})],
+        ['the job named outside detail', answered(409, {detail: {code: 'backup_busy', message: 'refused: backup_busy'}, job_id: JOB_ID, origin: 'ui'})],
+        ['no answer', noAnswer()],
+        ['no answer, raised by axios itself', realAxiosError(null)],
+        ['an object shaped like a busy refusal that axios did not raise', {response: {status: 409, data: {detail: {code: 'backup_busy', message: 'refused', job_id: JOB_ID, origin: 'ui'}}}}],
+        ['a plain Error', new Error('boom')],
+        ['null', null],
+        ['undefined', undefined],
+    ])('%s → null', (_case, error) => {
+        expect(refusalReader('backupBusyJob')(error)).toBeNull();
+    });
+});

@@ -556,7 +556,7 @@ curl -sS -X DELETE -H "Authorization: Bearer $TOKEN" "$JOBS/<job_id>"
 | `401` | No token, or not the token of this instance | `backup_panel_unauthorized` |
 | `503` | The token is set but cannot be used: shorter than 32 characters, a character that is not visible ASCII, or a `_FILE` that cannot give it. The start log names it already (`check` is `backup.panel_token`), and each call logs it | `backup_panel_unavailable` |
 | `404` | A job your panel did not start, or one that does not exist, or no longer does | `backup_job_not_found` |
-| `409` | A start while another backup runs | `backup_busy` |
+| `409` | A start while another backup runs. When it is a backup your panel started, the answer adds its `job_id` and `origin` (`panel`): follow that job instead of starting another | `backup_busy` |
 | `409` | A download of a job that has no archive: still running, or failed | `backup_job_not_ready` |
 | `409` | A delete while the job runs | `backup_job_running` |
 | `507` | A start while the disk of the data directory, or a quota, is full: free some space, then start again | `backup_no_space` |

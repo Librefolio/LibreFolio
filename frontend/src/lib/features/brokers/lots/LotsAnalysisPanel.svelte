@@ -9,12 +9,13 @@
   Fetch strategy (two tiers, per plan v2 §13 "il frontend non effettua autonomamente ...
   calcoli WAC"):
   - Main fetch (asset/broker change): LOT_SUMMARY + GANTT_TOPOLOGY +
-    EVENT_HISTORY + PRICE_HISTORY + BROKER_WAC_HISTORY + CUMULATIVE_WAC_HISTORY, with
+    EVENT_HISTORY + MARKET_PRICE_HISTORY + BROKER_WAC_HISTORY + CUMULATIVE_WAC_HISTORY, with
     NO selected_lot_ids (service defaults to "all lots" — see
     LotsAnalysisService._resolve_selected_lot_ids). EVENT_HISTORY (superset of the old
     CUSTODY_HISTORY subset) feeds both the WAC chart's transaction markers and the
-    Custody modal's full chronology (refinement v1 §5 / modal spec). PRICE_HISTORY +
-    BROKER_WAC_HISTORY + CUMULATIVE_WAC_HISTORY feed the WAC/price chart.
+    Custody modal's full chronology (refinement v1 §5 / modal spec). MARKET_PRICE_HISTORY (the
+    asset's price, independent of the lots, Y-30) + BROKER_WAC_HISTORY + CUMULATIVE_WAC_HISTORY
+    feed the WAC/price chart.
   - Selection fetch (effectiveSelectionIds change): VALUE_HISTORY + RETURN_HISTORY scoped to
     the effective lot set.
   Both go through `lotsAnalysisStore` (page cache, phase 1): an answer already known — fresh, or
@@ -28,7 +29,8 @@
   §16: "possiede zoom indipendente") — no live sync back into it.
 
   A FAILED analysis (J-12, N81 option A) has no reliable lot: the panel takes no lot-derived
-  section from it, draws only the average-cost lines of the WAC chart, hides the Gantt, the table
+  section from it, draws the WAC chart with its average-cost lines and the market price line
+  (the lot-independent market_price_history, Y-30), hides the Gantt, the table
   and the comparison, and shows LotAnalysisFailedNotice (the transactions to fix) above the
   banner, which keeps the issues that did not break the replay.
 
@@ -65,7 +67,7 @@
     type LotTimelineEventSchema = z.infer<typeof schemas.LotTimelineEventSchema>;
     type LotValueHistoryPoint = z.infer<typeof schemas.LotValueHistoryPoint>;
     type LotReturnHistoryPoint = z.infer<typeof schemas.LotReturnHistoryPoint>;
-    type LotPriceHistoryPoint = z.infer<typeof schemas.LotPriceHistoryPoint>;
+    type MarketPriceHistoryPoint = z.infer<typeof schemas.MarketPriceHistoryPoint>;
     type BrokerWACHistoryPoint = z.infer<typeof schemas.BrokerWACHistoryPoint>;
     type CumulativeWACHistoryPoint = z.infer<typeof schemas.CumulativeWACHistoryPoint>;
     type DateRange = {min: string; max: string};
@@ -102,7 +104,7 @@
     let lots = $state<LotSummarySchema[]>([]);
     let ganttSegments = $state<GanttSegmentSchema[]>([]);
     let lotEvents = $state<LotTimelineEventSchema[]>([]);
-    let priceHistory = $state<LotPriceHistoryPoint[]>([]);
+    let marketPriceHistory = $state<MarketPriceHistoryPoint[]>([]);
     let brokerWacHistory = $state<BrokerWACHistoryPoint[]>([]);
     let cumulativeWacHistory = $state<CumulativeWACHistoryPoint[]>([]);
     let incomeEvents = $state<LotIncomeEvent[]>([]);
@@ -176,7 +178,7 @@
         sharedZoomEnd = end;
     }
 
-    const MAIN_ANALYSES = ['LOT_SUMMARY', 'GANTT_TOPOLOGY', 'EVENT_HISTORY', 'PRICE_HISTORY', 'BROKER_WAC_HISTORY', 'CUMULATIVE_WAC_HISTORY', 'INCOME_EVENTS'] as const;
+    const MAIN_ANALYSES = ['LOT_SUMMARY', 'GANTT_TOPOLOGY', 'EVENT_HISTORY', 'MARKET_PRICE_HISTORY', 'BROKER_WAC_HISTORY', 'CUMULATIVE_WAC_HISTORY', 'INCOME_EVENTS'] as const;
     const SELECTION_ANALYSES = ['VALUE_HISTORY', 'RETURN_HISTORY'] as const;
     /** The answers last put on screen: a reload that finds the same cached answer leaves the charts alone. */
     let shownMain: LotsAnalysisResponse | null = null;
@@ -199,8 +201,9 @@
         // _build_lot_event_rows/_CUSTODY_KINDS) — fetching it once here feeds both the WAC
         // chart's transaction markers and the Custody modal's full chronology, no double fetch.
         lotEvents = lotSection<LotTimelineEventSchema>(response.lot_events);
-        // Per lot (`LotPriceHistoryPoint.lot_id`): the market line is their union by date, so it goes with the lots.
-        priceHistory = lotSection<LotPriceHistoryPoint>(response.price_history);
+        // Y-30: the asset's price, one point a day whatever lots are open — not a lot section, so it stays with FAILED,
+        // as the average-cost lines do.
+        marketPriceHistory = asArray<MarketPriceHistoryPoint>(response.market_price_history);
         brokerWacHistory = asArray<BrokerWACHistoryPoint>(response.broker_wac_history);
         cumulativeWacHistory = asArray<CumulativeWACHistoryPoint>(response.cumulative_wac_history);
         quoteBaseQuantity = normalizeQuoteBaseQuantity(response.quote_base_quantity);
@@ -228,7 +231,7 @@
         lots = [];
         ganttSegments = [];
         lotEvents = [];
-        priceHistory = [];
+        marketPriceHistory = [];
         brokerWacHistory = [];
         cumulativeWacHistory = [];
         dataQualityIssues = [];
@@ -516,7 +519,7 @@
                     {selectedLotIds}
                     {brokerWacHistory}
                     {cumulativeWacHistory}
-                    {priceHistory}
+                    {marketPriceHistory}
                     {lotEvents}
                     {incomeEvents}
                     {brokers}

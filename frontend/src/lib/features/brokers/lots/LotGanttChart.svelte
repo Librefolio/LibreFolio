@@ -2,6 +2,7 @@
     import {tick} from 'svelte';
     import * as echarts from 'echarts';
     import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
+    import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {z} from 'zod';
     import {schemas} from '$lib/api';
@@ -21,13 +22,14 @@
     import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {safeDecimal, safeNumber, safeString} from '$lib/types';
-    import {isUnknownOrNonZero, resolveBrokerName} from './lotChartShared';
+    import {eventLabelKind, isUnknownOrNonZero, resolveBrokerName, scopeBoundaryOf} from './lotChartShared';
     import {withAlpha} from '$lib/theme/colorAlpha';
     import {
         applySharedZoomWindow as sharedApplyZoomWindow,
         branchDepthForLaneKey,
         estimateTextWidthPx,
         eventMarkerKind,
+        eventMarkerLabelKey,
         eventMarkerSymbol,
         firstPresentUnknown,
         formatQuantity,
@@ -589,13 +591,13 @@
             ),
     );
 
-    function eventMarkerLabel(kind: EventMarkerKind): string {
-        const keyKind = kind === 'TRANSFER' ? 'TRANSFER_DEPART' : kind;
-        const fallback = kind === 'ADJUSTMENT_IN' ? 'Adjustment In' : kind === 'ADJUSTMENT_OUT' ? 'Adjustment Out' : kind === 'TRANSFER' ? 'Transfer' : kind === 'SELL' ? 'Sale' : kind === 'SPLIT' ? 'Split' : 'Buy';
-        return translateOr($t, `brokers.lots.chartMarkers.eventType.${keyKind}`, fallback);
+    function eventMarkerLabel(kind: EventMarkerKind, labelKind: string | null = null): string {
+        const fallback =
+            labelKind === 'TRANSFER_IN' ? 'Transfer In' : labelKind === 'TRANSFER_OUT' ? 'Transfer Out' : kind === 'ADJUSTMENT_IN' ? 'Adjustment In' : kind === 'ADJUSTMENT_OUT' ? 'Adjustment Out' : kind === 'TRANSFER' ? 'Transfer' : kind === 'SELL' ? 'Sale' : kind === 'SPLIT' ? 'Split' : 'Buy';
+        return translateOr($t, eventMarkerLabelKey(kind, labelKind), fallback);
     }
 
-    function pushEventMarker(target: EventMarkerDatum[], seen: Set<string>, kind: EventMarkerKind, segment: RenderedSegment, dateMs: number, date: string, quantity: number | null = segment.quantity) {
+    function pushEventMarker(target: EventMarkerDatum[], seen: Set<string>, kind: EventMarkerKind, segment: RenderedSegment, dateMs: number, date: string, quantity: number | null = segment.quantity, labelKind: string | null = null) {
         const key = `${kind}:${segment.lotId}:${segment.laneIndex}:${dateMs}`;
         if (seen.has(key)) return;
         seen.add(key);
@@ -609,7 +611,7 @@
                 dateMs,
                 date,
                 quantity,
-                label: eventMarkerLabel(kind),
+                label: eventMarkerLabel(kind, labelKind),
             },
         });
     }
@@ -631,7 +633,9 @@
             const lane = (fragmentId != null ? byLaneKey.get(laneKeyForFragmentId(event.lot_id, fragmentId)) : null) ?? firstByLot.get(event.lot_id);
             const segment = lane?.segments.find((entry) => entry.startMs <= dateMs && entry.endMs >= dateMs) ?? lane?.segments[0];
             if (!segment) continue;
-            pushEventMarker(out, seen, eventMarkerKind(event.kind), segment, dateMs, date, parseUnknownNumber(event.quantity));
+            // A transfer leg read at the scope's edge is a transfer marker, labelled by its direction (J-48).
+            const boundary = scopeBoundaryOf(event);
+            pushEventMarker(out, seen, eventMarkerKind(event.kind, boundary), segment, dateMs, date, parseUnknownNumber(event.quantity), boundary ? eventLabelKind(event) : null);
         }
         return out.sort((a, b) => a.value[0] - b.value[0] || a.value[1] - b.value[1] || a.name.localeCompare(b.name));
     }
@@ -1289,7 +1293,7 @@
         }
 
         if (!chartInstance) {
-            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'});
+            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, chartInitOptions(chartContainer));
             attachChartReady(chartInstance, chartContainer, 'lot-gantt');
             tooltipCleanup?.();
             tooltipCleanup = setupTooltipAutoHide(chartContainer, () => chartInstance);
@@ -1306,7 +1310,7 @@
             chartInstance.on('rendered', refreshOverlayRects);
         }
         if (axisContainer && !axisInstance) {
-            axisInstance = echarts.init(axisContainer, CHART_INIT_THEME, {renderer: 'canvas'});
+            axisInstance = echarts.init(axisContainer, CHART_INIT_THEME, chartInitOptions(axisContainer));
             axisOptionSet = false;
             axisDataZoomTouchPanHandle = attachDataZoomTouchPan(axisInstance, axisContainer);
             axisDataZoomSyncHandle = attachDataZoomSync(axisInstance, (start, end) => onZoomChange?.(start, end));
