@@ -1495,8 +1495,8 @@ data, is answered by the rules below: no message or traceback in an answer, no q
 | Failure | Answer | Log |
 |---------|--------|-----|
 | An `HTTPException` below `500` | FastAPI's own, unchanged | Nothing from the platform |
-| An `HTTPException` from `500` | FastAPI's `{"detail": …}` plus `request_id` and `error_type`, with the exception's headers | The failure once, unless the code that caught it logged it already |
-| An exception nobody handled | `500`, `{"detail": "Internal Server Error", "request_id": …, "error_type": …}` | One `ERROR`, *Unhandled error* |
+| An `HTTPException` from `500` | FastAPI's `{"detail": …}` plus `request_id` and `error_type`, with the exception's headers | The failure once, unless the code that caught it logged it in this request; a short `WARNING` when another request's log has it |
+| An exception nobody handled | `500`, `{"detail": "Internal Server Error", "request_id": …, "error_type": …}` | One `ERROR`, *Unhandled error*, unless this request's log has it; a short `WARNING` when another request's log has it |
 | A response that breaks its model (H-33) | `500`, `{"detail": "Internal Server Error", "request_id": …, "error_type": "ResponseValidationError"}` | Its own `ERROR`, without the response ([Request Logs](#request-logs)) |
 
 - **Where.** `install_server_error_handler(app)` (`backend/app/api/server_errors.py`), which `main.py` installs after
@@ -1516,25 +1516,38 @@ data, is answered by the rules below: no message or traceback in an answer, no q
   when it has no cause.
 - **Never the message, never the traceback.** A message can hold data (an SQL error quotes its statement), a
   traceback paths and values: both go to the log, and only there. `detail` stays what the route wrote.
-- **The log gets the failure once.** For a `5xx` `HTTPException`, `report_server_error()` writes:
+- **The log gets the failure once.** One exception object can reach several requests. The portfolio engine runs one
+  build per key at a time, and when the build fails, every request waiting on it gets the same exception
+  ([one build per key](../backend/financial_math.md#single-flight), MF-J45b/d); the risk engines
+  (`backend/app/services/risk/quant/engine.py`, `optimization_engine.py`) do the same. One mark on the object let the
+  first request that logged the failure silence the others, which answered with ids no line carried. Since lot H-60r
+  the mark is per request ([Request Logs](#request-logs)): the safety net writes the traceback once, and a short line
+  with its own `request_id` for each other request the failure reaches. For a `5xx` `HTTPException`,
+  `report_server_error()` writes exactly one of:
     - for a visible cause nobody logged, one `ERROR`, *Request failed*, with `request_id`, `status`, `method`, `path`,
       `error_type`, `error_chain` (the class names from the `HTTPException` down to the root cause) and the traceback,
       in `exception`. When the chain goes through a `cause` attribute, the traceback is that of the last exception
       reached that way (`shown_error()`): Python never renders such a link, so that traceback says the most;
     - without a visible cause, and with nothing logged, one `WARNING`, *Request answered a server error*, with
       `request_id`, `status`, `method` and `path`, so that every id a client sees is in the log;
-    - nothing when the code that caught the failure logged it already: a warning or a higher line written with the
-      exception (`exc_info`), or inside its `except`, marks the exception as reported (`LibreFolioBoundLogger`,
-      `backend/app/logging_config.py`), and `chain_reported()` reads the marks of every exception linked to the
-      `HTTPException`, the suppressed contexts included. The asset and FX routes below (`logger.exception(...)`, then
-      `from e`) and the backup routes (a warning inside the `except`, then `from None`) get no second line. Only a line
-      actually written marks: a warning that `LOG_LEVEL` filters out marks nothing, and the safety net then writes the
-      failure at its own level.
-- **An exception nobody handled.** `SecurityHeadersMiddleware` catches it, writes one `ERROR`, *Unhandled error*, with
-  `request_id`, `method`, `path`, `error_type`, `error_chain` and the traceback, unless that exception is already
-  marked as reported, sends the JSON `500` when the response has not started, then raises the exception again.
-  uvicorn's own line for it, *Exception in ASGI application*, is dropped ([Request Logs](#request-logs)). A failure
-  after the response started gets the same line, and no second answer.
+    - nothing when the code that caught the failure logged it already, in this request: a warning or a higher line
+      written with the exception (`exc_info`), or inside its `except`, marks the exception for the request the line
+      names (`LibreFolioBoundLogger`, `backend/app/logging_config.py`), and `chain_reported_for()` reads that request's
+      marks on every exception linked to the `HTTPException`, the suppressed contexts included. The asset and FX
+      routes below (`logger.exception(...)`, then `from e`) and the backup routes (a warning inside the `except`, then
+      `from None`) get no second line. Only a line actually written marks: a warning that `LOG_LEVEL` filters out marks
+      nothing, and the safety net then writes the failure at its own level;
+    - when only another request's log has the failure, or a line written outside any request (`chain_reported()`),
+      one `WARNING`, *Request failed with an error already logged* (`ALREADY_LOGGED`), with `request_id`, `status`,
+      `method`, `path`, `error_type` when known, and `logged_with_request_id`, the request of the first line about the
+      failure, when that line was written in one. No traceback and no `error_chain`: that first line has them.
+- **An exception nobody handled.** `SecurityHeadersMiddleware` catches it, and `report_unhandled_error()` writes one
+  `ERROR`, *Unhandled error*, with `request_id`, `method`, `path`, `error_type`, `error_chain` and the traceback. It
+  judges on the exception itself, not its chain: nothing when this request's log has it already (`is_reported_for()`),
+  and the short *Request failed with an error already logged*, without `status`, when only another request's log has
+  it, or a line outside any request (`is_reported()`). The middleware then sends the JSON `500` when the response has
+  not started, and raises the exception again. uvicorn's own line for it, *Exception in ASGI application*, is dropped
+  ([Request Logs](#request-logs)). A failure after the response started gets the same line, and no second answer.
 - **What a line holds.** The method and the path, never the query string (it can carry a token), never a header or
   the body. The failure's message reaches the log only inside the traceback.
 - **AI Export.** A component that fails to build is written once, where it fails: `BuildContext._build()`
@@ -1543,19 +1556,32 @@ data, is answered by the rules below: no message or traceback in an answer, no q
   built because a component it needs failed writes a short *AI Export component not built: a dependency failed*, with
   `component_id` and `dependency_id` and no traceback: the dependency's own line has it. A failure is written once per
   build context, never again when its cached outcome is read, and an optional component's failure is written too, so
-  an export that comes back without a section says why. Before, the `503` `snapshot_source_failure` left nothing in
-  the log; now the component's line is the failure's, the `503` carries `request_id` and the `error_type` of the
-  component's failure beside its problem `detail`, and the handler writes no line of its own.
+  an export that comes back without a section says why. A traceback is written once too (lot H-60r). A resource that
+  fails to load is memoized for the request as one `ResourceLoadError`, raised to every component that reads it, and
+  a loader can raise an exception several requests share, the failure of a shared build. So the line carries the
+  traceback of `shown_error()` only when no line has carried it yet (`traceback_reported()`). When a line already has
+  it, another component's, another request's or the loader's own, the line keeps `component_id`, `error_type` and
+  `reason_code`, has no traceback, and names `logged_with_request_id`, the request whose line has it, when that line
+  was written in one: this very request, for a second component reading the same failed resource. Before, the `503`
+  `snapshot_source_failure` left nothing in the log; now the component's line is the failure's, the `503` carries
+  `request_id` and the `error_type` of the component's failure beside its problem `detail`, and the handler writes no
+  line of its own.
 
 Tests: `./dev.py test services server-errors` (`backend/test_scripts/test_services/test_server_errors.py`: an
 `X-Request-Id` on every answer, never the client's, and the `request_id` in every line of the request; a `4xx` answered
 as FastAPI answers it; the three cases of a `5xx`, a cause held in a `cause` attribute included; the unhandled `500`
 as JSON, logged once and raised again, also after its answer started; the H-33 `500` as JSON; no `Authorization`,
 `Cookie`, body, query string or exception message in an answer or a line, the message only inside the traceback;
-`client_log_level`), `./dev.py test services logging-errors`
-(`backend/test_scripts/test_services/test_logging_errors.py`: the helpers of `errors.py`, `logger.exception()`, the
-mark and uvicorn's dropped line, see [Request Logs](#request-logs)) and `./dev.py test services ai-export-pure`, whose
-`backend/test_scripts/test_services/test_ai_export_build_failure_log.py` pins the component's lines.
+`client_log_level`; since H-60r, two requests failing together on one shared build, answered with a `503` or let go:
+both ids in the log and the traceback once, the second request's short line pointing to the first, also when the build
+logged its failure itself; one exception object raised by three requests in turn, each later one pointing to the first;
+no secret in the short line), `./dev.py test services logging-errors`
+(`backend/test_scripts/test_services/test_logging_errors.py`: the helpers of `errors.py`, the per-request mark
+included, `logger.exception()`, the request a line marks, the mark and uvicorn's dropped line, see
+[Request Logs](#request-logs)) and `./dev.py test services ai-export-pure`, whose
+`backend/test_scripts/test_services/test_ai_export_build_failure_log.py` pins the component's lines; since H-60r, two
+components reading one failed resource, two requests whose loaders raise one shared exception, and a loader that logged
+its failure itself: the traceback in one line only, the next lines without it.
 
 #### The Asset and FX Routes {: #asset-fx-error-answers }
 
@@ -2754,13 +2780,22 @@ lot H-60 each one names its request, and a failure is written once:
   once, inside the JSON line, under `exception`. Before, the standard library's `Logger.exception` added it a second
   time, in plain text after the line, and the level read `EXCEPTION`.
 - **A failure is written once.** A warning or a higher line written with an exception, or while one is handled, marks
-  that exception as reported, when its logger writes that level (`mark_reported()`,
-  `backend/app/utils/runtime/errors.py`). The platform's safety net, the `5xx` handler and the `500` of an exception
-  nobody handled, reads the mark and does not write the failure again ([Error Answers](#error-answers)). uvicorn logs
-  an exception that leaves the app once more, as *Exception in ASGI application* on `uvicorn.error`, a plain-text
-  traceback without the request id: `configure_logging()` adds to that logger a filter, `_ReportedExceptionFilter`,
-  which drops such a record when its exception is marked and lets every other record through. The app has logged it
-  already, as JSON, with the request id.
+  that exception as reported, when its logger writes that level (`LibreFolioBoundLogger`, `mark_reported()` in
+  `backend/app/utils/runtime/errors.py`). The mark is per request (lot H-60r): one exception object can reach several
+  requests, such as the failure of a build they all waited on. It keeps the `request_id` of each request whose log has
+  a line about the exception, `None` for a line outside any request, and whether such a line carried its traceback. A
+  line names the `request_id` it carries: the call's keyword, else the logger's bound context, else structlog's context
+  variables, where `RequestIdMiddleware` binds it. A line with `exc_info`, `exception()` included, marks every
+  exception its traceback shows: `__cause__`, else a `__context__` that is not suppressed (`mark_traceback_reported()`).
+  The platform's safety net, the `5xx` handler and the `500` of an exception nobody handled, reads the mark. It writes
+  nothing when the request's own log has the failure, and only the short *Request failed with an error already
+  logged*, pointing to the first request's line, when another request's log has it ([Error Answers](#error-answers)).
+  So every request id a client sees is in the log, and a traceback is written once. uvicorn logs an exception that
+  leaves the app once more, as *Exception in ASGI application* on `uvicorn.error`, a plain-text traceback without the
+  request id: `configure_logging()` adds to that logger a filter, `_ReportedExceptionFilter`, which drops such a record
+  when its exception is marked, in any request, and lets every other record through. Any request will do:
+  `SecurityHeadersMiddleware` writes the line of the request it answers, unless that request's log has it already,
+  before it raises the exception again, so uvicorn's record is always a second copy.
 
 Nor does the log keep a response that breaks its model (lot H-33, from workstream E's security review R13-SEC4). When
 an endpoint returns what its `response_model` refuses, FastAPI raises `ResponseValidationError`, for which it registers
@@ -2807,8 +2842,8 @@ the interceptor.
   whole answer it refused; a value Zod received. The line says enough to find the request in the server log, and
   nothing a user typed or the server sent.
 - **The id for a message.** `requestIdOf(error)` gives the request id of a failed call, the `X-Request-Id` of its
-  answer, else the `request_id` of its body, or `null`: for a message that shows it to the user (H-60's decision D3,
-  a later lot of workstreams A and J).
+  answer, else the `request_id` of its body, or `null`. A message shows it to the user through `withRequestId()`, for
+  a server error only ([The Error Code in a Message](#error-code)).
 - **No other raw error.** `BrokerImportFilesModal.svelte` no longer prints the error object of a failed load, and the
   request interceptor's own line, written in a debug build only (`debug.log()`, `$lib/debug`), names the path without
   its query string.
@@ -2835,6 +2870,36 @@ throw, and a leak sweep: every value the console must never show carries a canar
 every console call, through the real client too) and `src/lib/features/instance/instanceConfig.test.ts` (the level a
 successful load sets, and that a failed or superseded one leaves alone); `./dev.py test services server-errors` covers
 `client_log_level` on the backend side.
+
+#### The Error Code in a Message {: #error-code }
+
+A user who meets a generic failure can quote its code, and the administrator finds the request in the server log with
+it (H-60's decision D3, lot H-60r). `withRequestId(t, message, error)` (`frontend/src/lib/api/requestIdMessage.ts`) is
+the one helper for every surface. It keeps the surface's message whole and puts the code after it, in parentheses, at
+the end, on the same line, through the key `common.errorWithRequestId` (`REQUEST_ID_MESSAGE_KEY`, in
+`frontend/src/lib/i18n/base/`): «… (code: 0123456789abcdef)», in Italian «… (codice: …)», in French «… (code : …)»,
+with the space the French catalogue puts before a colon, in Spanish «… (código: …)».
+
+- **A server error only.** The code is the request id of the failed call, shown only for a `5xx` that carries a
+  LibreFolio id: that is the failure whose id the server log always holds ([Error Answers](#error-answers)). The
+  platform writes no line for a `4xx`, so its id would lead nowhere. A network failure has no answer, so no id, and a
+  `5xx` from a proxy carries no LibreFolio id. Otherwise `withRequestId()` returns the message unchanged, without
+  calling `t`.
+- **The answer behind a wrapper.** `serverErrorRequestId(error)` looks for the failed answer, the `response`, on
+  `error`, then on what it wraps: `originalError` (the AI Export client errors), else `cause` (the standard `Error`
+  cause), eight links at most, never the same object twice. The id is `requestIdOf()`'s, above, kept only when it has
+  the shape of an id. It never throws: an error it cannot read, `null` included, gives the message as it is.
+- **Where to use it.** Where the interface shows a generic failure (the server failed, the answer was not the expected
+  one), never instead of a message that tells the user what to do. Pass the caught error as it is: an Axios or Zodios
+  error, or a wrapper that keeps it in `cause` or `originalError`. `RequestIdTranslate`, the type of `t`, accepts
+  svelte-i18n's `$_` and `get(_)`, `AiExportTranslate` and the `Translate` aliases of `frontend/src/lib/api/` as they
+  are.
+
+Tests: `./dev.py test front-utility core-unit` runs `src/lib/api/requestIdMessage.test.ts` (a `5xx` with its id, from
+the header before the body; a `4xx`, a network failure, a canceled request and a `5xx` without an id keep the message,
+and `t` is never called; the answer up to eight links behind `cause` or `originalError`, and not further; cycles;
+hostile objects that must not make it throw; the key in the four generated catalogues; the translators the surfaces
+hold, taken with no cast).
 
 ## 🤐 Validation Errors Without the Input {: #validation-errors }
 
@@ -2906,9 +2971,10 @@ on in the managed profile: see [Frame Protection and the Report-Only Policy](#ma
   outside every middleware of the stack, so its 500 would go out without the headers. When a request raises before
   its response has started, the middleware sends the 500 itself with the headers of every response: since H-60 in
   JSON, `{"detail": "Internal Server Error", "request_id": …, "error_type": …}`, plain text before
-  ([Error Answers](#error-answers)). The exception reaches the log once, as *Unhandled error* unless the app logged it
-  already, and the middleware re-raises it: `ServerErrorMiddleware` finds the response started and sends nothing, and
-  uvicorn's own line for the exception is dropped ([Request Logs](#request-logs)).
+  ([Error Answers](#error-answers)). The exception reaches the request's log once, as *Unhandled error* unless that
+  log has it already, or as a short line when another request's log has it, and the middleware re-raises it:
+  `ServerErrorMiddleware` finds the response started and sends nothing, and uvicorn's own line for the exception is
+  dropped ([Request Logs](#request-logs)).
 - **`X-Request-Id`** is not a security header, but it is on every HTTP response too: `RequestIdMiddleware`, the
   `request_id` entry right outside this one, adds the request's id, so the 500 this middleware sends carries it as
   well. An `X-Request-Id` the app set itself is kept, and never repeated. See [Request Logs](#request-logs).

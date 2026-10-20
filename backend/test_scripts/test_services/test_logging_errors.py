@@ -1,5 +1,6 @@
 """
-Readable errors (workstream H, lot H-60): the error helpers and the log, contract §0 and §2.
+Readable errors (workstream H, lots H-60 and H-60r): the error helpers and the log, contract §0 and §2 of H-60, §0 and §1
+of H-60r.
 
 §0. ``backend/app/utils/runtime/errors.py``, new, imported by each test that needs it.
 
@@ -28,15 +29,44 @@ Readable errors (workstream H, lot H-60): the error helpers and the log, contrac
   ``exc_info`` holds a reported exception (uvicorn's «Exception in ASGI application» for a failure the app already
   wrote) and lets every other record through.
 
+H-60r §0, the mark per request. Several requests can share one exception object (a build they all await, a resource
+memoized for a whole request), so the mark records where the log has a line about it: for each request its
+``request_id`` (``None`` for a line written outside any request) and whether such a line carried the exception's
+traceback, in the order the requests first wrote about it. Marking a request again adds nothing, except that
+``traceback=True`` upgrades its entry.
+
+- ``mark_reported(error, request_id=None, *, traceback=False)``: one positional argument still marks, outside any
+  request. ``mark_traceback_reported(error, request_id=None)`` marks with the traceback ``error`` and every exception its
+  traceback shows, as Python renders it: ``__cause__``, else ``__context__`` unless suppressed, never a ``cause``
+  attribute. It stops at ``None``, at an exception already seen, or at 50.
+- ``is_reported`` and ``chain_reported`` keep their meaning, in any request. ``is_reported_for`` and
+  ``chain_reported_for`` read one request, ``None`` matching only lines outside any request. ``traceback_reported``: a
+  line carried that exception's own traceback.
+- ``first_reporting_request``: the request of the first entry of the first marked exception along ``linked_errors``.
+  ``traceback_reporting_request``: the request of the first entry of the exception itself that has the traceback. Each
+  is ``None`` when there is no such entry, or when that entry was written outside a request.
+- None of them raises, an exception that refuses attributes stays unmarked for every query, and the mark shows nowhere:
+  not in ``str``, ``args`` or the formatted traceback.
+
+H-60r §1, what a line marks. ``LibreFolioBoundLogger`` marks at warning or above, on a logger enabled for the level, as
+before. The request it marks is the one the line carries: the call's ``request_id`` keyword, even ``None``; else the
+logger's bound ``request_id``; else the one in structlog's contextvars, where ``RequestIdMiddleware`` binds it; else
+``None``. An ``exc_info`` that is an exception, or a ``(type, value, tb)`` tuple holding one, marks that exception's
+rendered chain with the traceback; any other true ``exc_info``, ``exception()`` included, the rendered chain of the
+exception being handled; no ``exc_info``, or a false one, the exception being handled alone, without the traceback.
+The filter on ``uvicorn.error`` does not change: it drops the record of an exception reported in any request.
+
 Pure: no server, no database, no network, no file written outside ``tmp_path``. The tests that call
 ``configure_logging()`` (file logging off) put every logger, the root handlers pytest attached for the test and
-structlog's configuration back before they end. The bootstrap is read in a fresh interpreter, which writes no bytecode.
-Every exception is built here, and no message holds a real value.
+structlog's configuration back before they end. A ``request_id`` goes into structlog's contextvars only through
+``bound_contextvars()``, or in a copy of the context, so nothing stays bound. The bootstrap is read in a fresh
+interpreter, which writes no bytecode. Every exception is built here, and no message holds a real value.
 """
 
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import importlib
 import inspect
 import io
@@ -48,7 +78,7 @@ import subprocess
 import sys
 import textwrap
 import traceback
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import FrozenInstanceError, dataclass
 from pathlib import Path
 from types import ModuleType
@@ -505,6 +535,312 @@ def test_mark_reported_leaves_an_exception_that_refuses_attributes_unmarked_and_
     assert errors.chain_reported(error) is False
 
 
+# ── H-60r §0 the mark, per request ───────────────────────────────────────────
+
+#: The requests a mark names in these tests; ``None`` stands for a line written outside any request.
+REQUEST_IDS = ("r1", "r2", "r3", None)
+
+
+def _requests_marked(errors: ModuleType, error: BaseException) -> list[str | None]:
+    """The requests of ``REQUEST_IDS`` that wrote a line about ``error`` itself, by ``is_reported_for``, in that order."""
+    return [request_id for request_id in REQUEST_IDS if errors.is_reported_for(error, request_id)]
+
+
+def test_mark_reported_names_its_request_and_is_reported_for_reads_that_request_only():
+    errors = _errors()
+    in_r1, by_keyword, outside = _raised_failure("written in r1"), _raised_failure("written in r2"), _raised_failure("written outside any request")
+    assert not any(errors.is_reported(error) for error in (in_r1, by_keyword, outside)), "precondition: a new exception is unmarked"
+
+    assert errors.mark_reported(in_r1, "r1") is None
+    errors.mark_reported(by_keyword, request_id="r2")
+    errors.mark_reported(outside)
+
+    assert errors.is_reported_for(in_r1, "r1") is True, "a line about it was written in r1"
+    assert errors.is_reported_for(in_r1, "r2") is False, "r2 wrote no line about it"
+    assert errors.is_reported_for(in_r1, None) is False, "None matches only a line written outside any request"
+    assert errors.is_reported(in_r1) is True, "is_reported keeps its meaning: a line about it exists, in any request"
+    assert _requests_marked(errors, by_keyword) == ["r2"], "the request may be given by keyword"
+    assert errors.is_reported_for(outside, None) is True, "one positional argument: a line written outside any request"
+    assert errors.is_reported_for(outside, "r1") is False, "a line outside any request is no line of r1"
+    assert errors.is_reported(outside) is True, "one positional argument still reports it, as before"
+
+
+@pytest.mark.parametrize(("build", "marked"), CHAIN_MARKS)
+def test_chain_reported_for_finds_a_linked_mark_of_that_request_only(build, marked):
+    errors = _errors()
+    chain = build()
+    assert errors.chain_reported(chain.error) is False, "precondition: nothing in the chain is marked yet"
+
+    errors.mark_reported(chain.named[marked], "r1")
+
+    assert errors.chain_reported(chain.error) is True, f"chain_reported keeps its meaning: {marked} is linked to the error and marked, in some request"
+    assert errors.chain_reported_for(chain.error, "r1") is True, f"{marked} is linked to the error and marked for r1"
+    assert errors.chain_reported_for(chain.error, "r2") is False, "r2 wrote no line about any exception of the chain"
+    assert errors.chain_reported_for(chain.error, None) is False, "nor did a line outside any request"
+    assert errors.is_reported_for(chain.error, "r1") is (chain.named[marked] is chain.error), "is_reported_for reads the mark of that one object"
+
+
+def test_chain_reported_for_ignores_a_mark_of_that_request_outside_the_chain():
+    errors = _errors()
+    chain, elsewhere = _wrapper_over_a_context(), _raised_failure("elsewhere")
+
+    errors.mark_reported(elsewhere, "r1")
+
+    assert errors.is_reported_for(elsewhere, "r1") is True, "barrier: the mark for r1 is set"
+    assert errors.chain_reported_for(chain.error, "r1") is False
+    assert errors.chain_reported(chain.error) is False
+
+
+#: The marks made on one exception, in time order, as (request, with the traceback), and what its mark then says:
+#: (traceback_reported, first_reporting_request, traceback_reporting_request).
+MARK_SEQUENCES = [
+    pytest.param([], (False, None, None), id="nothing-marked"),
+    pytest.param([("r1", False)], (False, "r1", None), id="a-line-without-the-traceback"),
+    pytest.param([("r1", True)], (True, "r1", "r1"), id="a-line-with-the-traceback"),
+    pytest.param([("r1", False), ("r1", True)], (True, "r1", "r1"), id="the-same-request-upgraded"),
+    pytest.param([("r1", True), ("r1", False)], (True, "r1", "r1"), id="never-downgraded"),
+    pytest.param([("r1", False), ("r2", True)], (True, "r1", "r2"), id="the-first-request-and-the-first-with-the-traceback"),
+    # One entry per request, in the order of first writing: the upgraded r1 stays before r2. An entry appended for the
+    # second line of r1 would put r2's traceback first.
+    pytest.param([("r1", False), ("r2", True), ("r1", True)], (True, "r1", "r1"), id="an-upgrade-keeps-the-order-of-first-writing"),
+    pytest.param([("r1", False), ("r2", False), ("r1", False)], (False, "r1", None), id="a-request-again-adds-nothing"),
+    pytest.param([(None, False), ("r1", True)], (True, None, "r1"), id="the-first-line-outside-any-request"),
+    pytest.param([("r1", False), (None, True), ("r2", True)], (True, "r1", None), id="the-first-traceback-outside-any-request"),
+]
+
+
+@pytest.mark.parametrize(("marks", "expected"), MARK_SEQUENCES)
+def test_the_mark_keeps_each_request_once_in_the_order_it_first_wrote(marks, expected):
+    errors = _errors()
+    error = _raised_failure("marked in turn")
+
+    for request_id, with_traceback in marks:
+        errors.mark_reported(error, request_id, traceback=with_traceback)
+
+    assert errors.is_reported(error) is bool(marks), "barrier: is_reported, in any request, follows the marks"
+    assert _requests_marked(errors, error) == [request_id for request_id in REQUEST_IDS if any(mark[0] == request_id for mark in marks)], "every request that wrote about it, and no other"
+    said = (errors.traceback_reported(error), errors.first_reporting_request(error), errors.traceback_reporting_request(error))
+    assert said == expected, f"(traceback_reported, first_reporting_request, traceback_reporting_request) after the marks {marks}"
+
+
+def test_traceback_reported_and_its_request_read_that_exception_not_its_chain():
+    errors = _errors()
+    chain = _raise_from()
+    cause = chain.named["A"]
+
+    errors.mark_reported(cause, "r1", traceback=True)
+
+    assert errors.traceback_reported(cause) is True and errors.traceback_reporting_request(cause) == "r1", "barrier: the cause's traceback was written in r1"
+    assert errors.first_reporting_request(chain.error) == "r1", "barrier: along the chain, the cause's line is found"
+    assert errors.traceback_reported(chain.error) is False, "a line with the traceback of its cause did not carry the error's own traceback"
+    assert errors.traceback_reporting_request(chain.error) is None
+
+
+def _wrapper_raised_from_its_cause() -> _Chain:
+    """W, wrapping C, raised from C while handling it: the ``cause`` attribute is also its ``__cause__``."""
+    c = _Failure("C")
+    w = _ComponentFailure("component.w", c)
+    with contextlib.suppress(_ComponentFailure):
+        try:
+            raise c
+        except _Failure:
+            raise w from c
+    return _Chain(w, {"W": w, "C": c})
+
+
+def _python_renders(chain: _Chain) -> list[str]:
+    """The names of the exceptions Python renders in the traceback of ``chain.error``, in order: the oracle of the table below.
+
+    ``TracebackException`` builds the chain Python renders (``compact=True``: only the contexts it shows), stopping at an
+    exception it has already met, and its ``format()`` follows ``__cause__``, else an unsuppressed ``__context__``. Each
+    exception is found back by its message, unique in every chain of this file.
+    """
+    by_message = {str(exception): name for name, exception in chain.named.items()}
+    assert len(by_message) == len(chain.named), f"setup: each exception of the chain has its own message: {list(by_message)}"
+    names: list[str] = []
+    rendered = traceback.TracebackException.from_exception(chain.error, lookup_lines=False, compact=True)
+    while rendered is not None:
+        names.append(by_message[str(rendered)])
+        if rendered.__cause__ is not None:
+            rendered = rendered.__cause__
+        elif rendered.__context__ is not None and not rendered.__suppress_context__:
+            rendered = rendered.__context__
+        else:
+            rendered = None
+    return names
+
+
+#: Each chain, and the exceptions Python renders in its traceback, in order: what mark_traceback_reported marks.
+RENDERED_CHAINS = [
+    pytest.param(_lone, "A", id="lone"),
+    pytest.param(_raise_from, "B A", id="raise-from"),
+    pytest.param(_implicit_context, "B A", id="implicit-context"),
+    pytest.param(_raise_from_none, "B", id="raise-from-none-its-context-suppressed"),
+    pytest.param(_cause_over_a_context, "B A", id="raise-from-while-handling-another"),
+    pytest.param(_wrapper, "W", id="cause-attribute-not-followed"),
+    pytest.param(_wrapper_raised_from_its_cause, "W C", id="cause-attribute-that-is-also-its-cause"),
+    pytest.param(_wrapper_over_a_context, "W X", id="cause-attribute-skipped-its-context-followed"),
+    pytest.param(_two_wrappers, "W1", id="two-cause-attributes"),
+    pytest.param(_wrapper_under_a_cause, "E W", id="cause-attribute-under-raise-from"),
+    pytest.param(_text_cause, "N A", id="cause-attribute-not-an-exception"),
+    pytest.param(_cycle_of_causes, "A B", id="cycle-of-causes"),
+    pytest.param(_cycle_through_a_cause_attribute, "W", id="cycle-through-a-cause-attribute"),
+    pytest.param(_own_cause, "A", id="own-cause"),
+]
+
+
+@pytest.mark.parametrize(("build", "rendered"), RENDERED_CHAINS)
+def test_mark_traceback_reported_marks_with_the_traceback_exactly_the_chain_python_renders(build, rendered):
+    errors = _errors()
+    chain = build()
+    assert _python_renders(chain) == rendered.split(), "barrier: the table holds the chain Python renders in this traceback"
+    assert errors.chain_reported(chain.error) is False, "precondition: nothing in the chain is marked yet"
+
+    assert errors.mark_traceback_reported(chain.error, "r1") is None
+
+    marked = sorted(name for name, exception in chain.named.items() if errors.is_reported(exception))
+    with_traceback_in_r1 = sorted(name for name, exception in chain.named.items() if _requests_marked(errors, exception) == ["r1"] and errors.traceback_reported(exception) and errors.traceback_reporting_request(exception) == "r1")
+    assert marked == sorted(rendered.split()), f"the exceptions its traceback shows are marked, and no other: {marked}"
+    assert with_traceback_in_r1 == marked, f"each of them in r1, with its traceback: {with_traceback_in_r1}"
+
+
+def test_mark_traceback_reported_marks_fifty_exceptions_of_a_longer_chain_at_most():
+    errors = _errors()
+    links = [_Failure(f"link {index}") for index in range(CHAIN_CAP + 10)]
+    for outer, inner in itertools.pairwise(links):
+        outer.__cause__ = inner
+
+    errors.mark_traceback_reported(links[0], "r1")
+
+    marked = [index for index, link in enumerate(links) if errors.is_reported(link)]
+    assert marked == list(range(CHAIN_CAP)), f"the first fifty along the chain are marked, the fifty-first and the rest are not: {marked}"
+    assert all(errors.traceback_reporting_request(link) == "r1" for link in links[:CHAIN_CAP]), "each of the fifty in r1, with its traceback"
+
+
+def test_mark_traceback_reported_with_one_argument_marks_outside_any_request():
+    errors = _errors()
+    chain = _raise_from()
+
+    errors.mark_traceback_reported(chain.error)
+
+    for name in ("B", "A"):
+        exception = chain.named[name]
+        assert _requests_marked(errors, exception) == [None], f"{name}: a line written outside any request"
+        assert errors.traceback_reported(exception) is True, f"{name}: with its traceback"
+        assert errors.traceback_reporting_request(exception) is None, f"{name}: its traceback was written outside any request"
+
+
+def test_mark_traceback_reported_upgrades_the_entry_of_its_request():
+    errors = _errors()
+    chain = _raise_from()
+    errors.mark_reported(chain.error, "r1")
+    errors.mark_reported(chain.error, "r2", traceback=True)
+    assert errors.traceback_reporting_request(chain.error) == "r2", "barrier: so far only r2 wrote the traceback"
+
+    errors.mark_traceback_reported(chain.error, "r1")
+
+    assert errors.traceback_reporting_request(chain.error) == "r1", "r1's entry, written first, now has the traceback: one entry per request, upgraded"
+    assert errors.traceback_reporting_request(chain.named["A"]) == "r1", "and the cause the traceback shows, in r1"
+
+
+#: A linear chain, its order along linked_errors, the marks made on it in time order as (name, request), and the request
+#: first_reporting_request names.
+FIRST_REPORTING = [
+    pytest.param(_raise_from, "B A", [], None, id="nothing-in-the-chain-marked"),
+    pytest.param(_raise_from, "B A", [("A", "r1")], "r1", id="the-cause-alone"),
+    pytest.param(_raise_from, "B A", [("A", "r1"), ("B", "r2")], "r2", id="the-error-before-its-cause-whatever-the-time"),
+    pytest.param(_raise_from, "B A", [("B", "r1"), ("B", "r2"), ("A", "r3")], "r1", id="the-first-entry-of-the-first-marked"),
+    pytest.param(_raise_from, "B A", [("B", None), ("B", "r1"), ("A", "r2")], None, id="its-first-entry-outside-any-request"),
+    pytest.param(_raise_from_none, "B A", [("A", "r1")], "r1", id="a-suppressed-context"),
+    pytest.param(_wrapper, "W C R", [("R", "r1"), ("C", "r2")], "r2", id="behind-a-cause-attribute-the-nearer-first"),
+]
+
+
+@pytest.mark.parametrize(("build", "linked", "marks", "expected"), FIRST_REPORTING)
+def test_first_reporting_request_is_the_first_entry_of_the_first_marked_exception_along_linked_errors(build, linked, marks, expected):
+    errors = _errors()
+    chain, elsewhere = build(), _raised_failure("outside the chain")
+    assert chain.names(errors.linked_errors(chain.error)) == linked.split(), "barrier: linked_errors lists the chain in this order"
+
+    errors.mark_reported(elsewhere, "r0")
+    for name, request_id in marks:
+        errors.mark_reported(chain.named[name], request_id)
+
+    assert errors.chain_reported(chain.error) is bool(marks), "barrier: chain_reported follows the marks in the chain, not the one outside it"
+    assert errors.first_reporting_request(chain.error) == expected
+
+
+@pytest.mark.parametrize("refusing_class", [_Refusing, _RefusingWithTypeError], ids=["frozen-instance-error", "type-error"])
+def test_the_per_request_marks_leave_an_exception_that_refuses_attributes_unmarked_and_never_raise(refusing_class):
+    errors = _errors()
+    error = refusing_class("refuses attributes")
+    with pytest.raises(refusing_class.refusal):
+        error.any_attribute = True
+
+    assert errors.mark_reported(error, "r1", traceback=True) is None
+    assert errors.mark_traceback_reported(error, "r1") is None
+
+    said = {
+        "is_reported": errors.is_reported(error),
+        "is_reported_for(r1)": errors.is_reported_for(error, "r1"),
+        "is_reported_for(None)": errors.is_reported_for(error, None),
+        "chain_reported": errors.chain_reported(error),
+        "chain_reported_for(r1)": errors.chain_reported_for(error, "r1"),
+        "traceback_reported": errors.traceback_reported(error),
+        "first_reporting_request": errors.first_reporting_request(error),
+        "traceback_reporting_request": errors.traceback_reporting_request(error),
+    }
+    unmarked = {
+        "is_reported": False,
+        "is_reported_for(r1)": False,
+        "is_reported_for(None)": False,
+        "chain_reported": False,
+        "chain_reported_for(r1)": False,
+        "traceback_reported": False,
+        "first_reporting_request": None,
+        "traceback_reporting_request": None,
+    }
+    assert said == unmarked, f"an exception that refuses attributes stays unmarked, for every query: {said}"
+
+
+@pytest.mark.parametrize("refusing_class", [_Refusing, _RefusingWithTypeError], ids=["frozen-instance-error", "type-error"])
+def test_mark_traceback_reported_walks_on_past_an_exception_that_refuses_attributes(refusing_class):
+    errors = _errors()
+    inner, refusing, outer = _Failure("inner"), refusing_class("refuses attributes"), _Failure("outer")
+    with pytest.raises(refusing_class.refusal):
+        refusing.any_attribute = True
+    with contextlib.suppress(_Failure):
+        try:
+            try:
+                raise inner
+            except _Failure:
+                raise refusing from inner
+        except _Refusing:
+            raise outer from refusing
+    assert outer.__cause__ is refusing and refusing.__cause__ is inner, "setup: outer raised from the refusing exception, itself raised from inner"
+
+    errors.mark_traceback_reported(outer, "r1")
+
+    assert errors.is_reported(refusing) is False, "the exception that refuses attributes stays unmarked"
+    assert [errors.traceback_reporting_request(item) for item in (outer, inner)] == ["r1", "r1"], "outer's traceback shows inner too: both marked in r1, with the traceback"
+
+
+def test_the_per_request_marks_change_nothing_the_exception_shows():
+    errors = _errors()
+    chain = _raise_from()
+    error = chain.error
+    shown_before, args_before, text_before, repr_before = traceback.format_exception(error), error.args, str(error), repr(error)
+
+    errors.mark_reported(error, "r1")
+    errors.mark_reported(error, "r2", traceback=True)
+    errors.mark_reported(error)
+    errors.mark_traceback_reported(error, "r3")
+
+    assert _requests_marked(errors, error) == ["r1", "r2", "r3", None], "barrier: the marks are set"
+    assert traceback.format_exception(error) == shown_before, "the marks must not show in the traceback, nor in its cause's"
+    assert (error.args, str(error), repr(error)) == (args_before, text_before, repr_before)
+
+
 # ── §2 the logging state, saved and put back ─────────────────────────────────
 
 
@@ -897,6 +1233,151 @@ def test_a_report_while_handling_an_exception_that_refuses_attributes_does_not_f
     assert errors.is_reported(refusing) is False, "an exception that refuses attributes stays unmarked"
 
 
+# ── H-60r §1 the request and the traceback a line marks ──────────────────────
+
+
+def _lines_of(probe: _Probe, event: str) -> list[dict[str, Any]]:
+    """The lines of ``event`` the probe wrote: the captured event dicts, or the JSON lines of the console."""
+    lines = probe.captured if probe.captured is not None else _json_lines(probe.console.getvalue())
+    return [line for line in lines if line.get("event") == event]
+
+
+def _carries_a_traceback(probe: _Probe, line: dict[str, Any]) -> bool:
+    """Whether a line of the probe carries a traceback: rendered into its ``exception`` key, or, captured, a true ``exc_info``."""
+    if probe.captured is not None:
+        return bool(line.get("exc_info"))
+    return TRACEBACK_HEADER in line.get("exception", "")
+
+
+def _handling_an_error_raised_from_a_cause(act: Callable[[], None]) -> tuple[_Failure, _Failure]:
+    """``act()`` in the ``except`` that handles an error raised from a cause; then the error and its cause."""
+    cause, error = _Failure("handled cause"), _Failure("handled")
+    try:
+        try:
+            raise cause
+        except _Failure:
+            raise error from cause
+    except _Failure:
+        act()
+    return error, cause
+
+
+#: Where the request of a line comes from (H-60r §1), as (structlog's contextvars, the logger's bind, the call's
+#: keywords): the call's ``request_id`` keyword, even ``None``; else the logger's bind; else the contextvars; else None.
+LINE_REQUESTS = [
+    pytest.param({"request_id": "ctx"}, {}, {}, "ctx", id="the-contextvars"),
+    pytest.param({"request_id": "ctx"}, {}, {"request_id": "kw"}, "kw", id="the-keyword-over-the-contextvars"),
+    pytest.param({"request_id": "ctx"}, {}, {"request_id": None}, None, id="a-none-keyword-over-the-contextvars"),
+    pytest.param({"request_id": "ctx"}, {"request_id": "bound"}, {}, "bound", id="the-bind-over-the-contextvars"),
+    pytest.param({"request_id": "ctx"}, {"request_id": "bound"}, {"request_id": "kw"}, "kw", id="the-keyword-over-the-bind"),
+    pytest.param({}, {"request_id": "bound"}, {"request_id": None}, None, id="a-none-keyword-over-the-bind"),
+    pytest.param({}, {"request_id": "bound"}, {}, "bound", id="the-bind-alone"),
+    pytest.param({}, {}, {}, None, id="nothing-bound"),
+]
+#: Every request a line of LINE_REQUESTS can carry.
+LINE_REQUEST_IDS = ("ctx", "kw", "bound", None)
+
+
+@pytest.mark.parametrize(("in_contextvars", "in_bind", "in_call", "expected"), LINE_REQUESTS)
+def test_a_report_marks_the_request_its_line_carries(in_contextvars, in_bind, in_call, expected, capture_mode):
+    errors = _errors()
+    canary, handled = _Failure("canary"), _Failure("handled")
+
+    def report_in_a_copy_of_the_context(probe: _Probe) -> None:
+        """The report, its contextvars holding what the case binds and nothing else; the copy is dropped on return."""
+        structlog.contextvars.clear_contextvars()
+        with structlog.contextvars.bound_contextvars(**in_contextvars):
+            assert structlog.contextvars.get_contextvars() == in_contextvars, "setup: the contextvars hold what the case binds, nothing else"
+            logger = probe.logger.bind(**in_bind) if in_bind else probe.logger
+            try:
+                raise handled
+            except _Failure:
+                logger.warning(EVENT, **in_call)
+
+    with _probe("INFO", capture_mode) as probe:
+        try:
+            raise canary
+        except _Failure:
+            probe.logger.warning(CANARY_EVENT)
+        assert errors.is_reported(canary) is True, "barrier: in this very setup a warning marks"
+        contextvars.copy_context().run(report_in_a_copy_of_the_context, probe)
+        lines = _lines_of(probe, EVENT)
+        assert len(lines) == 1, f"barrier: the call reached the console or the capture, once: {lines}"
+        if probe.captured is None:
+            assert lines[0].get("request_id") == expected, f"barrier: the rendered line carries the request the case expects: {lines[0]}"
+
+    assert errors.is_reported(handled) is True, "the line reports the exception being handled, in some request, as before"
+    marked_for = [request_id for request_id in LINE_REQUEST_IDS if errors.is_reported_for(handled, request_id)]
+    assert marked_for == [expected], f"the mark names the request of the line, {expected!r}, and no other: {marked_for}"
+
+
+#: Reports whose ``exc_info`` names an exception (H-60r §1), made while another one is handled.
+NAMING_REPORTS = [
+    pytest.param(lambda logger, named: logger.warning(EVENT, exc_info=named), id="warning-exc_info-the-exception"),
+    pytest.param(lambda logger, named: logger.warning(EVENT, exc_info=(type(named), named, named.__traceback__)), id="warning-exc_info-a-tuple"),
+    pytest.param(lambda logger, named: logger.error(EVENT, exc_info=named), id="error-exc_info-the-exception"),
+    pytest.param(lambda logger, named: logger.exception(EVENT, exc_info=named), id="exception-exc_info-the-exception"),
+]
+#: Reports that carry the traceback of the exception being handled: any other true ``exc_info``, ``exception()`` included.
+HANDLED_TRACEBACK_REPORTS = [
+    pytest.param(lambda logger: logger.warning(EVENT, exc_info=True), id="warning-exc_info-true"),
+    pytest.param(lambda logger: logger.error(EVENT, exc_info=True), id="error-exc_info-true"),
+    pytest.param(lambda logger: logger.exception(EVENT), id="exception"),
+]
+#: Reports made while an exception is handled, without its traceback: no ``exc_info``, or a false one.
+NO_TRACEBACK_REPORTS = [
+    pytest.param(lambda logger: logger.warning(EVENT), id="warning"),
+    pytest.param(lambda logger: logger.warning(EVENT, exc_info=False), id="warning-exc_info-false"),
+    pytest.param(lambda logger: logger.error(EVENT, exc_info=None), id="error-exc_info-none"),
+]
+
+
+@pytest.mark.parametrize("report", NAMING_REPORTS)
+def test_a_report_naming_an_exception_marks_it_and_its_cause_with_the_traceback(report, capture_mode):
+    errors = _errors()
+    chain, bystander = _raise_from(), _Failure("bystander")
+    named, cause = chain.error, chain.named["A"]
+    with _probe("INFO", capture_mode) as probe, structlog.contextvars.bound_contextvars(request_id="r1"):
+        try:
+            raise bystander
+        except _Failure:
+            report(probe.logger, named)
+        lines = _lines_of(probe, EVENT)
+        assert [_carries_a_traceback(probe, line) for line in lines] == [True], f"barrier: one line, with a traceback: {lines}"
+
+    assert errors.is_reported(named) is True, "the line reports the exception its exc_info names, as before"
+    assert [errors.traceback_reported(item) for item in (named, cause)] == [True, True], "the line rendered the traceback of the named exception, its __cause__ with it"
+    assert [errors.traceback_reporting_request(item) for item in (named, cause)] == ["r1", "r1"], "in the request of the line"
+    assert errors.is_reported(bystander) is False, "exc_info names the exception the line reports: the one being handled is not in it"
+
+
+@pytest.mark.parametrize("report", HANDLED_TRACEBACK_REPORTS)
+def test_a_report_with_the_handled_traceback_marks_the_handled_exception_and_its_cause_with_it(report, capture_mode):
+    errors = _errors()
+    with _probe("INFO", capture_mode) as probe, structlog.contextvars.bound_contextvars(request_id="r1"):
+        handled, cause = _handling_an_error_raised_from_a_cause(lambda: report(probe.logger))
+        lines = _lines_of(probe, EVENT)
+        assert [_carries_a_traceback(probe, line) for line in lines] == [True], f"barrier: one line, with a traceback: {lines}"
+
+    assert errors.is_reported(handled) is True, "the line reports the exception being handled, as before"
+    assert [errors.traceback_reported(item) for item in (handled, cause)] == [True, True], "the line rendered the traceback of the handled exception, its __cause__ with it"
+    assert [errors.traceback_reporting_request(item) for item in (handled, cause)] == ["r1", "r1"], "in the request of the line"
+
+
+@pytest.mark.parametrize("report", NO_TRACEBACK_REPORTS)
+def test_a_report_without_a_traceback_marks_the_handled_exception_alone_without_it(report, capture_mode):
+    errors = _errors()
+    with _probe("INFO", capture_mode) as probe, structlog.contextvars.bound_contextvars(request_id="r1"):
+        handled, cause = _handling_an_error_raised_from_a_cause(lambda: report(probe.logger))
+        lines = _lines_of(probe, EVENT)
+        assert [_carries_a_traceback(probe, line) for line in lines] == [False], f"barrier: one line, without a traceback: {lines}"
+
+    assert errors.is_reported(handled) is True, "a line written while handling the exception reports it, as before"
+    assert errors.is_reported_for(handled, "r1") is True, "in the request of the line"
+    assert errors.traceback_reported(handled) is False, "the line did not carry its traceback"
+    assert errors.is_reported(cause) is False, "a line without a traceback reports the exception being handled, not its chain"
+
+
 # ── §2 uvicorn.error and a failure the app already wrote ─────────────────────
 
 
@@ -984,6 +1465,33 @@ def test_uvicorn_error_drops_its_record_of_an_exception_the_app_reported(uvicorn
     assert canary == [unreported], f"barrier: uvicorn's record of an unreported exception reaches the handler, or the drop below proves nothing: {canary}"
     assert passed == [unreported], f"uvicorn's record of an exception the app already reported must be dropped by the filters of uvicorn.error: {passed}"
     print_success("✓ The record of a reported exception dropped, the one of an unreported exception kept")
+
+
+#: How the app reported the exception, in request r1 only: a line about it, or a line with its traceback.
+REPORTS_IN_R1_ONLY = [
+    pytest.param(lambda errors, error: errors.mark_reported(error, "r1"), id="a-line-in-r1"),
+    pytest.param(lambda errors, error: errors.mark_traceback_reported(error, "r1"), id="its-traceback-in-r1"),
+]
+
+
+@pytest.mark.parametrize("report_in_r1", REPORTS_IN_R1_ONLY)
+@pytest.mark.parametrize("uvicorn_logs", [pytest.param(_uvicorn_logs_http, id="http-protocol"), pytest.param(_uvicorn_logs_websocket, id="websocket-protocol")])
+def test_uvicorn_error_drops_its_record_of_an_exception_reported_in_another_request_only(uvicorn_logs, report_in_r1):
+    print_section(f"H-60r §1: uvicorn.error, {uvicorn_logs.__name__}, an exception reported in r1 only")
+    errors = _errors()
+    unreported, reported_in_r1 = _raised_failure("never reported"), _raised_failure("reported in r1 only")
+    report_in_r1(errors, reported_in_r1)
+    assert _requests_marked(errors, reported_in_r1) == ["r1"], "precondition: r1 alone wrote about it, and no line outside a request"
+    records = _Records()
+    with _uvicorn_error_configured(records):
+        uvicorn_logs(unreported)
+        canary = records.asgi_exceptions()
+        uvicorn_logs(reported_in_r1)
+        passed = records.asgi_exceptions()
+
+    assert canary == [unreported], f"barrier: uvicorn's record of an unreported exception reaches the handler, or the drop below proves nothing: {canary}"
+    assert passed == [unreported], f"the filter reads is_reported, in any request: uvicorn's record of an exception r1 already wrote must be dropped: {passed}"
+    print_success("✓ The record of an exception reported in another request dropped, the one of an unreported exception kept")
 
 
 def _an_unreported_exception(errors: ModuleType) -> BaseException | None:

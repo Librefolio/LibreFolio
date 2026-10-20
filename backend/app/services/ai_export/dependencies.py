@@ -88,7 +88,7 @@ from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, ResourceKey
 from backend.app.services.ai_export.temporal.plan import BucketPlan
 from backend.app.services.ai_export.temporal.policy import BucketDetailLevel, BucketingPolicy
-from backend.app.utils.runtime.errors import reason_code_of, root_cause, shown_error
+from backend.app.utils.runtime.errors import reason_code_of, root_cause, shown_error, traceback_reported, traceback_reporting_request
 
 T = TypeVar("T")
 
@@ -486,12 +486,20 @@ class BuildContext:
                 logger.warning("AI Export component not built: a dependency failed", component_id=component_id, dependency_id=exc.component_id)
             else:
                 reason_code = reason_code_of(exc)
+                shown = shown_error(exc)
+                if traceback_reported(shown):
+                    # Its traceback is in the log already (H-60r): another component read the same failed resource, or
+                    # another request waited on the same build. The line names the component and says where it is.
+                    pointer = traceback_reporting_request(shown)
+                    told: dict[str, object] = {"logged_with_request_id": pointer} if pointer is not None else {}
+                else:
+                    told = {"exc_info": shown}
                 logger.warning(
                     "AI Export component failed to build",
                     component_id=component_id,
                     error_type=type(root_cause(exc)).__name__,
                     **({"reason_code": reason_code} if reason_code is not None else {}),
-                    exc_info=shown_error(exc),
+                    **told,
                 )
             return _ComponentOutcome(envelope=None, error=exc)
 
