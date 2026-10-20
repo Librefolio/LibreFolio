@@ -315,7 +315,8 @@
             />
             {#if (exactDecimalSign(draft.quantity) ?? 0) > 0 && costBasisMode !== 'auto' && !draft.cost_basis_override?.amount?.trim()}
                 <p class="text-xs text-lf-warning mt-1" data-testid="tx-form-cost-basis-warning">
-                    {$t('transactions.costBasisOverride.warningAdjustment') || 'The manual cost basis is empty: the transaction cannot be saved without it. If these shares cost nothing (a stock split or a gift), enter 0.'}
+                    {$t('transactions.costBasisOverride.warningAdjustment') ||
+                        "The manual cost basis is empty: the transaction can't be saved without it. Enter what these units cost you: 0 for the new shares of a stock split. For a gift, enter 0, or what the donor paid for them: that keeps the weighted average cost, and the gain you may be taxed on, closer to the real ones."}
                 </p>
             {/if}
         </div>
