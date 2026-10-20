@@ -8172,3 +8172,22 @@ di finire riassunta in silenzio. È più giusto (la custodia copre quel giorno e
 - ✅ 6. Simulazione d'integrazione (`n74_sim_light.sh dev_release2 merge`, dev `701054da9`, base `9857be3d2`, 16 file): pulita. Dev
   non ha toccato i file del lotto; ruff e black puliti sui file fusi.
 - ✅ 7. Il backlog: W-B89, la data descritta ancora come «settlement date» in modelli, schemi e doc (file condivisi).
+
+### W-B89 · La data di una transazione è la data dell'operazione, anche nelle descrizioni: cura ✅ (2026-10-20, base `9989facda`)
+
+Il via del coordinatore (10:10): lotto piccolo prima di B-51. Le descrizioni di `transactions.date` dicono «trade date», non
+«settlement date», in `models.py`, negli schemi e nella doc del DB; poi `api sync`. Solo testo, nessuno schema del DB.
+- I 7 testi:
+  - `backend/app/db/models.py`: la docstring di `TransactionType` («All calculations based on the trade date…»), le «Field
+    semantics» di `Transaction` e la `description` del campo;
+  - `schemas/transactions/transactions.py`: `TXCreateItem.date` e `TXUpdateItem.date`;
+  - `schemas/transactions/batch.py`: la data fusa di un promote;
+  - `developer/architecture/database/brokers_transactions.md`: la riga `date`.
+- Le altre occorrenze restano: parlano della colonna di regolamento di un report (la guida dei plugin) o della storia di N74
+  (`service.md`).
+- Nessun rosso: nessun test fissa quei testi, e il comportamento non cambia. La `description` di un campo SQLModel è solo metadato
+  pydantic (non un commento di colonna), quindi nessuna migrazione.
+- Prove (10:14-10:17, carico 39-43, `files/scripts/wb89_light.sh`, log `files/logs/wb89/`), tutte exit 0: `api sync` (nessun file
+  tracciato cambiato: il client generato è ignorato), ruff e black sui 3 file Python, `front check` senza errori né avvisi, `mkdocs
+  build` strict.
+- La simulazione su dev `f73514a77`: pulita. Dev contiene il mio HEAD e non tocca i 4 file.
