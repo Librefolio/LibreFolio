@@ -7861,3 +7861,685 @@ lettura di Q1 nelle date comuni. Con Y, per un'uscita a gradini: solo se il deve
   - i tagli vecchi dei chiamanti ora non tolgono nulla: si possono lasciare come difesa;
   - il ripiego della finestra senza stati poggia sull'invariante «ogni stato porta ogni broker», che P2 inchioda con
     un test.
+
+#### J-57 completo — esecuzione (via del 19/10 ~16:35; base `2534c71fd`)
+
+- **Via del coordinatore** (19/10 ~16:35):
+  - i file di W sono miei per questo lotto: `bulkTodos.ts`, `TransactionBulkModal.svelte`, `TxBulkBanners.svelte`,
+    `TxFormBanners.svelte`;
+  - `transaction_batch_stages.py` aspetta N74 di W (in revisione da B): prima il frontend e i Vitest, il controllo J-60
+    nel batch dopo l'aggiornamento di base che mi segnala lui;
+  - i18n: scrivo io le mie chiavi `transactions.*`, coi testi approvati;
+  - la riga del CHANGELOG la scrive il coordinatore all'ingresso: la propongo nel checkpoint;
+  - lo slot E2E `front-transaction` lo chiedo quando sono pronto. Prima i rossi.
+- **Risposte del coordinatore** (19/10 ~16:45):
+  - Q-J57-4: il salto dopo ⚡, dopo il passaggio dall'import e dopo un Salva rifiutato; non dopo la validazione di
+    sfondo (dettaglio del «sì» del developer, che può cambiarlo);
+  - `TxFormSingleSection.svelte:318` (la copia inglese di ripiego del testo regalo): posso cambiare quella riga sola;
+  - (c) vale per i todo **bloccanti** del costo, come diceva la domanda. Oggi lo sono tutti e tre: gap-fix, scissione
+    Danske, operazione societaria del CSV generico. Un todo del costo solo avviso, che oggi non esiste, resterebbe
+    con D6.
+- **Testi approvati dal developer** (19/10 ~15:40, «così come sono»; copia anche in `files/j/j57c/approved_texts.md`):
+  - `transactions.errors.autoCostEmptyPool`, la prima frase resta, poi:
+    - EN «Choose Manual and enter what these units cost you; if you received them as a gift, enter 0.»
+    - IT «Scegli Manuale e scrivi quanto ti sono costate; se le hai ricevute in regalo, scrivi 0.»
+    - FR «Choisissez Manuel et saisissez ce que ces unités vous ont coûté ; si vous les avez reçues en don, saisissez 0.»
+    - ES «Elige Manual e introduce lo que te costaron estas unidades; si las recibiste como regalo, escribe 0.»
+  - `transactions.errors.autoCostUnknownPool`, la prima frase resta, poi:
+    - EN «Choose Manual and enter what these units cost you.»
+    - IT «Scegli Manuale e scrivi quanto ti sono costate.»
+    - FR «Choisissez Manuel et saisissez ce que ces unités vous ont coûté.»
+    - ES «Elige Manual e introduce lo que te costaron.»
+  - `transactions.costBasisOverride.warningAdjustment`, tutto il testo (rovescia C-48):
+    - EN «The manual cost basis is empty: the transaction can't be saved without it. Enter what these units cost you: 0
+      for the new shares of a stock split. For a gift, enter 0, or what the donor paid for them: that keeps the weighted
+      average cost, and the gain you may be taxed on, closer to the real ones.»
+    - IT «Il costo di carico manuale è vuoto: senza, la transazione non si può salvare. Scrivi quanto ti sono costate
+      queste quote: 0 per le quote nuove di uno split. Per un regalo, scrivi 0, oppure quanto le ha pagate il donante:
+      così il prezzo medio di carico, e l'utile su cui potresti pagare le tasse, restano più vicini a quelli veri.»
+    - FR «Le coût de base manuel est vide : sans lui, la transaction ne peut pas être enregistrée. Saisissez ce que ces
+      parts vous ont coûté : 0 pour les nouvelles parts d'une division d'actions. Pour un don, saisissez 0, ou ce que le
+      donateur les a payées : le prix de revient unitaire, et la plus-value sur laquelle vous pourriez être imposé,
+      restent ainsi plus proches de la réalité.»
+    - ES «El coste base manual está vacío: sin él, la transacción no se puede guardar. Escribe lo que te costaron estas
+      participaciones: 0 para las nuevas de un desdoblamiento. Para un regalo, escribe 0, o lo que pagó por ellas el
+      donante: así el precio medio de compra, y la ganancia por la que podrías tributar, quedan más cerca de los
+      reales.»
+  - `transactions.errors.costBasisNegative` (J-60, chiave nuova; entra con il controllo nel batch):
+    - EN «The cost basis can't be negative: enter 0 or more.»
+    - IT «Il costo di carico non può essere negativo: scrivi 0 o più.»
+    - FR «Le coût de base ne peut pas être négatif : saisissez 0 ou plus.»
+    - ES «El coste base no puede ser negativo: escribe 0 o más.»
+- **Rilettura del codice sulla base nuova** (le righe dell'analisi del mattino, ricontrollate):
+  - `bulkTodos.ts:22`: Auto risponde a ogni todo del costo (D6), anche bloccante. `FieldTodoLike` ha solo `field`.
+  - In Auto il form manda come `cost_basis_override` la sentinella della valuta `{code, amount: '0'}`
+    (`TransactionFormModal.svelte:1013`), e `applyFormPayload` la salva sulla riga
+    (`TransactionBulkModal.svelte:791`). Quindi in Auto un costo non nullo può essere solo la sentinella: non conta come
+    risposta.
+  - Le righe dell'import entrano in `onImportBatch` (`TransactionBulkModal.svelte:2291`) con la modalità del plugin,
+    di solito nessuna. Il form le apre in Auto (`TransactionFormModal.svelte:450`, ripiego senza costo). La modalità
+    iniziale Manuale va data lì, rispettando la regola del costo del tipo (come `applyFormPayload`, `:802-826`): la
+    spec dei todo F1-D4 inietta un todo bloccante del costo su una riga di sola cassa.
+  - La validazione: `validateFn(reason)` riceve già il motivo (`'change' | 'manual' | 'idle'`,
+    `useValidateScheduler.svelte.ts`); il passaggio dall'import chiama `trigger('manual')` (`:2305`). Il Salva
+    rifiutato è in `commitAll` (`:1499-1503`). Il salto esiste già: `jumpToIssue` → `tableRef.navigateToRowId`
+    (`:2112`).
+  - `TxFormBanners.svelte`: le voci `tx-form-issue` (righe 46, 70, 88) e `tx-form-balance-issue` (54, 97) senza
+    `data-code`.
+- **Passi**:
+  1. Rossi (due test-author in parallelo, file distinti):
+     - Vitest su `bulkTodos` (regola nuova e `hasBlockingCostTodo`), su `bulkDisplay` (`firstAutoCostRefusalRowId`),
+       un componente `TxFormBanners` (`data-code`); B1 nel backend (controllo);
+     - E2E E1–E4 (`front-transaction`).
+  2. Cura del frontend: `bulkTodos.ts`, `bulkDisplay.ts`, `TransactionBulkModal.svelte`, `TxFormBanners.svelte`, la riga
+     318 di `TxFormSingleSection.svelte`. Poi i18n, 3 chiavi × 4 lingue, e la documentazione (`form.en.md:40`, la
+     guida dell'import).
+  3. Verdi leggeri (Vitest, `front check`, `i18n check`), poi lo slot E2E.
+  4. Dopo N74: J-60 nel batch (rosso, cura, chiave `costBasisNegative`, `wac.md`).
+- **Esecuzione**:
+  - ✅ 19/10 — **Passo 1, i rossi** (due test-author in parallelo).
+    > **Note implementazione**:
+    > - Unità (`j57-unit-reds`): `bulkTodos.test.ts`, `bulkDisplay.test.ts` e il nuovo `TxFormBanners.test.ts`. Su
+    >   HEAD: **22 rossi, 47 controlli verdi** (Vitest, 69 test).
+    >   - 16 rossi dicono «… not implemented yet (J-57, …)»: 5 di `hasBlockingCostTodo`, 11 di
+    >     `firstAutoCostRefusalRowId`;
+    >   - 4 sono la regola nuova di `remainingTodos`: il bloccante resta aperto in Auto, con la sentinella e col
+    >     Manuale vuoto o di soli spazi;
+    >   - 2 sono il `data-code` dei banner del form.
+    >   Riscritti due test che fissavano D6 su un todo bloccante: il D6 dichiarato, e «the 'auto' exception is the cost
+    >   basis's alone», ora su un todo d'avviso. Il test-author ha provato 13 cure sbagliate in `/tmp`: ognuna fa
+    >   fallire almeno un test.
+    > - B1 (controllo) in `TestN88AutoCostWithNothingToAverage`: la gamba che riceve un TRANSFER in Auto, su un mittente
+    >   con unità di costo ignoto, dà `autoCostUnknownPool`; con Manuale 0 si salva, e il pool di chi riceve vale 0.
+    >   `services transaction-cost-basis-rule N88`: **20 passed** su HEAD.
+    > - E2E (`j57-e2e`): `frontend/e2e/transactions/tx-auto-cost-refusal.spec.ts`, E1–E4 più una variante di E2 per ⚡ e
+    >   il Salva rifiutato; registrato in `front-transaction` (`tx-auto-cost-refusal`). Non ancora girato.
+    > - Contratto ritoccato in corsa: `firstAutoCostRefusalRowId` ordina per la data della riga rifiutata (a parità,
+    >   l'ordine d'incontro) senza comparatore. Il comparatore delle date dell'editor indicizza i gruppi per id visibile,
+    >   quindi una riga partner nascosta finiva sempre prima. Generico sul tipo dell'issue (`ValidationIssue` ha
+    >   `error` obbligatorio).
+    > - Registrazione: `TxFormBanners.test.ts` in `front_component_unit` (`scripts/test_runner/_frontend_utility.py`),
+    >   una riga.
+    >
+    > **⚠️ Fuori pista**:
+    > - **Un errore della mia analisi del mattino**, trovato dal test-author degli E2E. Una riga dell'import senza
+    >   modalità (la «Receive» crypto senza todo) **non** prende Auto entrando nell'editor: Auto arriva solo quando
+    >   l'utente applica il suo form (`applyFormPayload`). Quindi al passaggio dall'import il rifiuto è
+    >   `costBasisRequired`, non `autoCostEmptyPool`. Il testo nuovo del regalo si vede solo dopo aver scelto Auto, e al
+    >   passaggio non c'è un rifiuto di costo Auto verso cui saltare. Domanda Q-J57-5 al coordinatore, con le opzioni
+    >   (a) Auto al passaggio, (b) salto e testo anche su `costBasisRequired`, (c) com'è oggi; consiglio (b).
+    > - Q-J57-6: `autoCostUnreadable` (W-B69) nel salto? Consiglio sì.
+    > - Ho lanciato i Vitest rossi su HEAD con carico a 110, senza aspettare: una corsa di pochi secondi, ma fuori
+    >   regola. Da lì ogni corsa aspetta il carico sotto 50. Anche il test-author delle unità ha fatto partire due prove
+    >   in `/tmp` a 51 e 55.
+  - ✅ 19/10 — **Passo 2, la cura del frontend** (`files/j/j57c/patch_cure_front.py`, prova a secco e poi applicata).
+    > **Note implementazione**:
+    > - `bulkTodos.ts`:
+    >   - un todo bloccante del costo si chiude solo con un costo scritto a mano, cioè un importo non vuoto fuori da
+    >     Auto, 0 compreso;
+    >   - un todo del costo non bloccante resta con D6;
+    >   - nuova `hasBlockingCostTodo`.
+    > - `bulkDisplay.ts`: nuova `firstAutoCostRefusalRowId`.
+    > - `TransactionBulkModal.svelte`:
+    >   - `onImportBatch` dà Manuale alle righe con un todo bloccante del costo, senza modalità, dove il tipo prende un
+    >     costo (`costBasisModeAllowed`, la stessa guardia di `applyFormPayload`);
+    >   - `validateFn(reason)` salta con `reason === 'manual'`, cioè ⚡ e il passaggio dall'import; salta anche il Salva
+    >     rifiutato. Il salto (`jumpToFirstAutoCostRefusal`) usa `jumpToTodoRow`.
+    > - `TxFormBanners.svelte`: `data-code` sulle 5 voci.
+    > - `TxFormSingleSection.svelte:318`: il ripiego inglese col testo nuovo (Prettier l'ha portato su due righe).
+    >
+    > Verdi:
+    > - Vitest sui 3 file **69/69**;
+    > - Prettier pulito;
+    > - `dev.py front check`: esce con 0, svelte-check **0 errori, 0 avvisi**.
+    > - i18n (`files/j/j57c/i18n_update.sh`, `dev.py i18n update`): 3 chiavi × 4 lingue, solo nella sorgente
+    >   `transactions` (+12/−12 righe); catalogo stretto, 5 101 chiavi.
+  - ✅ 19/10 — **Passo 3, la documentazione** (docs-writer; solo EN, niente traduzioni né timbri).
+    > **Note implementazione**:
+    > - `user/transactions/form.en.md`, il riquadro «💰 Cost basis of incoming units»:
+    >   - niente più «0 by design»: con niente da mediare Auto è rifiutato, si sceglie Manuale (0 per un regalo);
+    >   - il regalo secondo la decisione: 0, oppure quanto ha pagato il donante;
+    >   - le unità a 0 contano come gratuite;
+    >   - l'ancora `<div id="cost-basis"></div>` prima del riquadro, alla maniera di `buy-sell`.
+    > - `user/transactions/import/how-to.en.md`, «💾 Save in the bulk workspace», due paragrafi: le righe col todo
+    >   bloccante del costo aprono in Manuale vuoto, e Auto non le toglie dalla lista; il salto dopo ⚡ e dopo un
+    >   Salva rifiutato, non dopo la validazione di sfondo. Il passaggio dall'import è lasciato fuori (Q-J57-5 aperta).
+    >
+    > `mkdocs build` stretto esce con 0, `check-links` dà 97 validi, `translate-validate` mostra solo il debito atteso
+    > di quelle due pagine:
+    > - `form`: il `<div>` nuovo;
+    > - `how-to`: i link nuovi e `ADJUSTMENT` in codice.
+    >
+    > **⚠️ Fuori pista**: il docs-writer ha trovato che il plugin del CSV generico tratta come mancante un costo **0
+    > scritto nel file** (`broker_generic_csv/plugin.py:460`, `has_cbo`). Un regalo registrato a 0 nel CSV arriva
+    > quindi col todo bloccante, e l'utente deve riscrivere 0. Va contro «lo 0 è un costo vero». È fuori dal mio
+    > perimetro (plugin): J-64 nel backlog, da assegnare.
+  - **19/10 ~17:45 — le decisioni su Q-J57-5 e Q-J57-6** (dal coordinatore):
+    - **Q-J57-5: (a)**, del developer. Testuale: «se il plugin non è in grado di mettere un numero esplicito, allora deve
+      andare in auto, se poi quel numero esplicito è 0, va bene, ma lasciarlo non selezionato direi che è un bug».
+      - Al passaggio dall'import, una riga il cui tipo prende un costo e che il plugin lascia senza modo parte in Auto.
+        Fa eccezione la riga con un todo bloccante, che resta in Manuale vuoto.
+      - La validazione risponde subito: con quote da mediare, il WAC; senza, `autoCostEmptyPool` col testo del regalo
+        e il salto.
+      - Cambiano i numeri salvati, ed è voluto: una riga 🔄 nel CHANGELOG (la scrive il coordinatore) e una frase
+        nella guida all'import.
+    - **Q-J57-6: sì**, del coordinatore: anche `autoCostUnreadable` entra nel salto.
+    - Richiesta: un rosso per il passaggio in Auto e uno per la riga col todo bloccante, che resta in Manuale.
+    - **Lettura del codice**: i tipi che prendono un costo sono solo `required_qty_pos`, cioè la rettifica in entrata e
+      la gamba che riceve un TRANSFER (`cost_basis_pair: ["forbidden", "required_qty_pos"]`); `optional` non lo usa
+      nessun tipo. Oggi tutte e due, senza modo, al passaggio danno `costBasisRequired`. Il form, applicato, le mette
+      già in Auto (`applyFormPayload`): la regola nuova è la stessa.
+    - **Disegno**: la scelta passa in una funzione pura, `initialCostBasisMode(row, todos)` in `bulkTodos.ts`.
+      L'ordine:
+      1. resta il modo del plugin;
+      2. un tipo senza costo non ha modo;
+      3. un costo scritto dal plugin, 0 compreso, va in Manuale, e così un todo bloccante;
+      4. il resto va in Auto.
+      `onImportBatch` la usa. La guardia del tipo legge il segno esatto (`exactDecimalSign`), come `diffDualItem`.
+  - ✅ 19/10 — **Passo 4, rossi e cura v2** (Q-J57-5 (a), Q-J57-6).
+    > **Note implementazione**:
+    > - Rossi (test-author delle unità), sulla cura v1, a carico 32: **14 rossi, 68 controlli verdi**.
+    >   - 11 in `bulkTodos.test.ts` per `initialCostBasisMode` («… not implemented yet (J-57, Q-J57-5)»): il cuore di
+    >     (a), il todo bloccante in Manuale, il costo del plugin 0 e 12.5, l'importo di soli spazi, il todo d'avviso, il
+    >     tipo senza costo, il modo del plugin che vince, la purezza.
+    >   - 3 in `bulkDisplay.test.ts`: `autoCostUnreadable` conta, anche più vecchio di un `autoCostEmptyPool` e a pari
+    >     data se viene prima. Il test «ignora ogni altro codice» ora prova `balanceCash/AssetNegative` e
+    >     `costBasisRequired`.
+    > - Cura v2 (`files/j/j57c/patch_cure_front_v2.py`):
+    >   - nuova `initialCostBasisMode` in `bulkTodos.ts`;
+    >   - `onImportBatch` la usa al posto della riga della v1;
+    >   - `costBasisModeAllowed` legge il segno esatto (`exactDecimalSign`);
+    >   - `autoCostUnreadable` è fra i codici del salto.
+    > - Verdi: Vitest sui 3 file **84/84**; Prettier pulito; `front check` con svelte-check **0 errori, 0 avvisi**;
+    >   `front-transaction tx-unit` **1026 passed** (23 file); `front-utility component-unit` **4991 passed** (190 file,
+    >   `TxFormBanners.test.ts` compreso, su cura v1; quei componenti non cambiano in v2).
+    > - In corso: il docs-writer aggiunge alla guida dell'import il passaggio in Auto e il salto subito dopo; il
+    >   test-author degli E2E allinea la spec a (a).
+  - ✅ 19/10 — **Passo 5, la guida e la spec allineate a (a)**.
+    > **Note implementazione**:
+    > - Guida dell'import (docs-writer), «💾 Save in the bulk workspace», tre paragrafi:
+    >   - la riga che porta unità tiene il costo del report, anche 0, in Manuale; senza costo parte in Auto (💡) e
+    >     **Save All** la salva al costo medio, o la rifiuta se non c'è niente da mediare;
+    >   - le righe col todo rosso del costo aprono in Manuale vuoto;
+    >   - il salto all'arrivo delle righe, dopo ⚡ e dopo un Save All rifiutato, alla prima riga «whose Auto cost was
+    >     refused».
+    >   `mkdocs build` stretto pulito, `check-links` 97 validi; `translate-validate` dà solo il debito atteso della
+    >   pagina (in tutto 1 511 errori, contro 1 508). `form.en.md` +3/−1, `how-to.en.md` +18.
+    > - Spec E2E (test-author): intestazione e docstring su (a) e Q-J57-6. E2 al passaggio è diviso in due passi, il
+    >   modo e il salto. Il test di ⚡ e del Salva rifiutato non passa più dai form: lo fa già il passaggio. E3 resta un
+    >   controllo. `prettier --check` pulito, `tsc -p tsconfig.e2e.json` 0 errori.
+    >
+    > **⚠️ Fuori pista — un difetto preesistente**, trovato dal test-author leggendo il codice. Il verdetto della
+    > validazione del passaggio dall'import viene scartato. `validateFn` campiona `lastDraftKey` prima del primo
+    > `await`, ma l'effetto della chiave (`TransactionBulkModal.svelte:1439`) lo aggiorna solo dopo che `onImportBatch`
+    > è tornata: la risposta sembra vecchia e si butta. Fino a 50 righe una validazione di sfondo mostra i rifiuti ma
+    > non salta. Sopra le 50 righe non si vede niente fino a ⚡, contro D5. Senza la correzione il salto dopo il
+    > passaggio (Q-J57-4) non può funzionare.
+    >
+    > Correzione pronta, non applicata (`files/j/j57c/patch_cure_front_v3.py`, prova a secco pulita): `await tick()`
+    > prima del `trigger('manual')`. L'effetto aggiorna la chiave, e il trigger manuale annulla la corsa di sfondo
+    > accodata, quindi resta una validazione sola. Il rosso si vede nello slot: la spec sulla cura v2 deve fallire solo
+    > al passo del salto di E2. Poi la correzione e la stessa spec verde. Slot chiesto al coordinatore (19/10 ~18:00).
+- **Coda dopo J-57** (dal coordinatore, 19/10):
+  - **H-60, errori leggibili** (~16:28):
+    - l'elenco chiuso dei `reason_code` di `snapshot_source_failure`, allineato con H sul codice dell'asset senza
+      prezzi salvati (E-AI503);
+    - se il `request_id` dei metadati dello snapshot (`schemas/ai_export_runtime.py:402`) debba essere quello del
+      middleware di H.
+    Prima l'analisi; il log in `ai_export/dependencies.py:_build` lo fa H.
+  - **Gantt dei lotti, §29** (~18:05, priorità bassa): il developer dice sì a tutte e due. Un'etichetta sui marcatori
+    ◆; le righe di chiusura nominano il broker da cui le quote escono davvero, non quello d'apertura. Prima l'analisi
+    breve.
+  - **J-60 nel batch**: dopo l'ingresso di N74 e l'aggiornamento di base.
+  - **TC-23** (programma colori, ~18:05, priorità bassa): nei pannelli del rischio `add_fx_pair` manda ogni chip a
+    `/fx`, qualunque sia il suo `target` (`syncTargets.ts`). Nella Dashboard, dopo T2, ogni coppia è un chip suo e apre
+    l'aggiunta della coppia premuta: allineare i pannelli del rischio.
+  - **Due revisioni dell'AI Export** (~18:05, esito in questo piano):
+    - **E-AI503 di E** (`48b44ee64`, ramo `e-alfy-e-email`). Un asset senza prezzi non fa più 503: va in
+      `uncovered_assets` con un `reason_code`. Nell'asset singolo, valuta nulla più `reason_code`; il prompt dice
+      perché; le versioni dei componenti passano da 1 a 2. Le frasi del prompt le approva il developer. Si lega
+      all'elenco chiuso di H-60.
+    - **Z-29r di Z** (`37c3ec3ee`): solo `services/signals/aggregation.py` e `ai_export/temporal/aggregators.py`, la
+      regola per secchio in una casa sola. Più Z-38: `ai_export/temporal/uniform.py` ne tiene una copia sua.
+  - ✅ 19/10 18:10–18:14 — **Slot E2E, parte 1: il rosso della correzione `tick()`** (slot dalle 18:12).
+    > `front-transaction tx-auto-cost-refusal` sulla cura v2, senza la v3, a carico 9,8: **4 passed, 1 failed**, 248 s
+    > (`files/j/j57c/slot_e2e_red_v2.log`).
+    > - Verdi: E1, E2 di ⚡ e del Salva rifiutato, E3, E4.
+    > - Rosso: E2 al passaggio, solo al passo del salto. Il messaggio è «decision 3: the hand-over's own validation pages
+    >   the grid to the row it refused…»: il passo del modo è passato. È il rosso atteso per la correzione `tick()`.
+
+#### Fermo generale del 19/10 18:12 (richiesta del developer) — lo stato per ripartire
+
+- **HEAD** `2534c71fd` (nessun commit dopo la revisione di P2). Nessun comando git dal fermo. La macchina si spegne:
+  `/tmp` si pulisce, il worktree e la cartella di sessione restano.
+- **Lotto in corso: J-57 completo.**
+  - **Fatto, nel worktree, non committato**:
+    - cure v1 e v2 applicate:
+      - `bulkTodos.ts`: la regola dei todo bloccanti, `hasBlockingCostTodo`, `initialCostBasisMode`;
+      - `bulkDisplay.ts`: `firstAutoCostRefusalRowId`, 3 codici;
+      - `TransactionBulkModal.svelte`: `onImportBatch` con `initialCostBasisMode`; il salto dopo ⚡, il passaggio e
+        il Salva rifiutato; `costBasisModeAllowed`;
+      - `TxFormBanners.svelte`: `data-code`;
+      - `TxFormSingleSection.svelte:318`.
+    - i18n: 3 chiavi × 4 lingue nella sorgente `transactions`.
+    - Documentazione: `user/transactions/form.en.md`, `user/transactions/import/how-to.en.md`.
+    - Test:
+      - `bulkTodos.test.ts`, `bulkDisplay.test.ts`, nuovo `TxFormBanners.test.ts`;
+      - B1 in `test_transaction_cost_basis_rule.py`;
+      - nuova spec `frontend/e2e/transactions/tx-auto-cost-refusal.spec.ts`.
+    - Registrazioni: `scripts/test_runner/_frontend_transaction.py` (spec) e `_frontend_utility.py` (componente).
+    - Giornale: questo piano, J-64 nel backlog.
+  - **I rossi visti**:
+    - v1: 22 Vitest rossi;
+    - v2: 14 Vitest rossi;
+    - B1 verde (è un controllo);
+    - E2E: E2 al passaggio, al passo del salto, sulla v2.
+  - **Le decisioni ricevute**:
+    - **applicate**: Q-J57-1 (c), Q-J57-3 (i testi), Q-J57-4 col dettaglio del coordinatore, Q-J57-5 (a), Q-J57-6;
+    - **approvata e non ancora applicata**: la correzione `await tick()` in `onImportBatch` (cura v3, patch pronta in
+      `files/j/j57c/patch_cure_front_v3.py`, prova a secco pulita);
+    - **J-60** (rifiutare il costo negativo): aspetta N74. Testi pronti in `files/j/j57c/approved_texts.md`.
+  - **Non fatto**: la cura v3; l'E2E verde; `front-transaction all`; `front-broker detail`;
+    `front-utility onboarding-tour`; `front check` dopo la v3; il checkpoint; J-60 nel batch.
+  - **Il prossimo passo esatto** (con lo slot E2E dato dal coordinatore):
+    1. ricreare la corsia, che stava in `/tmp`:
+       `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6185 --data-dir /tmp/librefolio-r13-j db populate --force --clean`;
+    2. `bash files/j/j57c/slot_part2.sh`: applica la v3, poi la spec verde, `front-transaction all --workers 2`,
+       `front-broker detail`, `front-utility onboarding-tour`. Ogni corsa aspetta il carico sotto 50;
+    3. `front check`, Prettier, poi «slot libero» e il checkpoint FROZEN, con la proposta della riga 🔄 del CHANGELOG.
+- **Tutto ciò che serve sta nella cartella di sessione** (`files/j/j57c/`):
+  - le patch v1/v2/v3, `i18n_update.sh`, `approved_texts.md`;
+  - gli script dello slot (`slot_common.sh`, `slot_part1.sh`, `slot_part2.sh`);
+  - i log.
+  In `/tmp` restava solo la corsia, che si ricrea.
+- **Coda dopo J-57** (sopra): H-60, Gantt §29, TC-23, revisioni E-AI503 e Z-29r, J-60 dopo N74.
+
+#### Ripresa del 20/10 e revisione di E-AI503 (`48b44ee64`, ramo di E; 20/10 ~08:50, sola lettura)
+
+- **Ripresa** (coordinatore, 08:47): `/tmp` svuotato dal riavvio. Corsia 6185 ricreata
+  (`test db populate --force --clean`, a carico 29, esce con 0; porta libera). HEAD `2534c71fd` e 20 file sporchi,
+  come al fermo. Lo slot di J-57 v3 viene dopo quello di A; nel frattempo due revisioni in sola lettura.
+- **Cosa fa E-AI503**. Un asset tenuto la cui storia dei prezzi non restituisce punti, o li restituisce in più valute,
+  faceva fallire `portfolio.technical_prices`, `broker.technical_prices` e `asset.ohlc_returns` (503). Ora:
+  - entra in `uncovered_assets` con un `reason_code` (`no_stored_price`, `mixed_price_currencies`);
+  - nell'asset singolo, `currency` nulla più `reason_code`;
+  - il prompt dice perché, con un testo locale per codice (`PRICE_SERIES_GAP_MEANINGS`);
+  - le versioni dei tre componenti vanno da 1 a 2.
+- **Verificato sul codice del ramo**:
+  - **Solo i punti, mai il tipo.** `price_series_gap(result)` guarda solo `result.prices`. Nessun dato sul tipo nel
+    percorso: l'universo viene dalle posizioni del report (tenute, valore finale non nullo e diverso da zero), e il
+    renderer sceglie la frase solo dal codice. `get_prices_bulk` dà un risultato per ogni asset chiesto. Il seme è
+    l'ultimo prezzo prima dell'inizio del caricamento, di qualunque età (`order by date desc limit 1`): la serie è
+    vuota **esattamente** quando nessun prezzo è salvato fino alla fine del periodo. Il ramo «inizio dopo domani →
+    risultato vuoto» non si raggiunge: `_bounded_period_request` tiene l'inizio ≤ fine ≤ domani.
+  - **`mixed_price_currencies` vuol dire davvero più valute**: `PriceHistory.currency` è NOT NULL e validata ISO, e
+    `coherent_price_currency` scarta solo le valute vuote.
+  - **I validatori reggono per costruzione**: `covered_asset_count = len(assets)`; ogni asset dell'universo (insieme
+    ordinato, senza doppioni) va in una delle due liste; valuta e codice dell'asset singolo vengono dalla stessa
+    regola. L'aggregatore OHLC è solo metadato: niente ricostruisce il payload dopo il builder. Altri costruttori dei
+    due payload: nessuno, solo i test.
+  - **Nessun cambio di API**: il payload delle sezioni è `dict[str, JsonValue]`, quindi niente `api sync`.
+  - **Versioni**: 1 nella 1.2.1 e su HEAD, ora 2. Spec, segnaposto del catalogo e `COMPACT_COMPONENT_VERSIONS`
+    cambiano insieme. Il renderer è l'unico punto del frontend che fissa le versioni: nessun blocco del catalogo.
+  - **Renderer**:
+    - riferimento locale (A#), mai l'id;
+    - codice ignoto → ripiego generico, senza testi inventati;
+    - le serie FX non hanno i campi nuovi;
+    - `records([])` dà `[]`, quindi «tutti non coperti» resta compatto (PSG-04);
+    - senza buchi l'uscita è identica byte per byte alla v1 (PSG-01).
+  - **Test**: la prova API è la matrice 2×2, ETF e CROWDFUND, con e senza prezzi, più l'asset singolo per tutti e due
+    i tipi. Prova l'indipendenza dal tipo nei due versi.
+  - **Documentazione** (`ai_export_composition.md`): coincide col codice.
+- **Esito: OK.** Tre note:
+  1. **Testo, per il developer.** Il significato di `no_stored_price` dice «no price, return or price-based indicator
+     can be read for it». Per lo stesso asset la sezione delle posizioni può mostrare un `unit_price` con
+     `valuation_source=LAST_TRADE_PRICE`, oppure `ESTIMATED_AT_COST`: un asset ammesso senza prezzi salvati ha per
+     forza il valore dalle sue operazioni o dal costo. Proposta: limitarlo alla sezione e rimandare alla fonte del
+     valore. Per esempio «…so it has no price series here: no price series, return or price-based indicator for it in
+     the technical data; its value in the positions comes from its last trade or its cost (valuation_source); missing
+     data, not a zero».
+  2. **Preesistente, già segnalata da E «per J»**: una serie stantia (prezzi salvati solo prima del periodo), o fatta
+     solo di righe senza `close`, resta in `assets`. Ha la valuta e tutti i secchi vuoti, ed è contata coperta, mentre
+     `technical_coverage` dà 0 osservazioni. Due definizioni di «coperto». La registro come J-65.
+     - **20/10, dal coordinatore**: J-65 chiusa come doppione di E-23. Il developer ha deciso E-23 (l'asset con prezzi
+       solo prima del periodo) e l'ha assegnato a E.
+  3. **Per H-60**: dopo E-AI503 l'asset senza prezzi non fallisce più, quindi non ha un codice in
+     `snapshot_source_failure`. `no_stored_price` e `mixed_price_currencies` sono codici del payload, non dell'elenco
+     chiuso degli errori.
+- **Non girati**: le suite di E e la sonda mirata sulla copia di riferimento (l'export dello sviluppatore, con
+  l'equivalenza UI/sonda), che E proponeva come facoltativa per J. Serve una copia dei dati veri e uno slot.
+
+#### Revisione di Z-29r (`37c3ec3ee`, ramo di Z; la parte `signals/aggregation.py`; 20/10 ~09:10, sola lettura)
+
+- **Cosa fa**. La scelta per secchio dei profili dei segnali (primo, ultimo, minimo, massimo; per le bande inferiore =
+  minimo, centrale = ultima, superiore = massimo) passa in una casa neutra, `services/signals/aggregation.py` (decisione
+  del coordinatore del 19/10). Le espone con `select_point`, `SCALAR_PROFILE_SELECTORS`, `BAND_ENVELOPE_SELECTORS`,
+  `scalar_representative` e `band_envelope`. Gli aggregatori dell'AI Export (`ai_export/temporal/aggregators.py`) ci
+  passano.
+- **Verificato sul codice del ramo**:
+  - **Le uscite dell'AI Export restano identiche.**
+    - Prima: il primo e l'ultimo punto del secchio, e per minimo e massimo il primo punto il cui valore è uguale
+      (`==`) all'estremo.
+    - I punti arrivano già ordinati per data (`_assign_by_date` → `sort_by_date`).
+    - Ora: `select_point` ordina per data in modo stabile e sostituisce solo con `<` o `>` stretto, quindi tiene il
+      più vecchio fra i valori uguali, lo stesso oggetto di prima.
+    - `select_scalar_representative` e `select_band_envelope` mappano sugli stessi campi; il messaggio d'errore è lo
+      stesso.
+  - **La banda rotta**: l'AI Export la rifiutava già (`BandEnvelopeRepresentative.__post_init__`, «lower <= middle <=
+    upper»), e così fa il grafico (SAG-T03). La nuova `band_envelope()` fa lo stesso.
+  - **Il legame col browser**: `aggregation_profiles.v1.json` lo leggono i test dei due lati
+    (`test_signal_aggregation.py`, `test_ai_export_temporal.py`, `timeSeriesAggregation.test.ts`).
+  - **Dipendenze**: `services/signals/__init__.py` ha solo la docstring, e `aggregation.py` importa solo
+    `schemas.signals`. Import leggero, nessun ciclo.
+  - **Un'altra copia nel backend**: solo `ai_export/temporal/uniform.py:81-82` (la riga Z-38).
+- **Z-38, confermata**: `uniform_observed_buckets` ha i suoi `min`/`max` con la chiave. I punti sono ordinati per data
+  e con date uniche, e `min`/`max` di Python danno il primo estremo incontrato: oggi è la stessa regola, con le stesse
+  uscite. Farli passare da `select_point` (primo, minimo, massimo, ultimo) sarebbe un riordino senza effetti.
+  `representative` (il primo punto nel secchio 0, l'ultimo negli altri) è una regola dei secchi uniformi, non del
+  profilo: resta lì.
+- **Esito: OK.** Nessuna correzione. Note minori, senza azione: `select_point` ordina a ogni chiamata (4 volte per
+  secchio, su secchi piccoli); `_SCALAR_AGGREGATION_PROFILES` si calcola all'import dalla mappa.
+- **Non girati**: le suite di Z (sola lettura).
+
+#### H-60 per J — l'elenco chiuso dei `reason_code` e il `request_id` dell'AI Export (analisi breve; 20/10 ~09:30, sola lettura)
+
+- **Base letta**: il mio HEAD `2534c71fd`, più il lotto di H `bf16865ed` («request id, traceable 5xx», ramo di H, letto
+  con git). Da H: `request_id.py` (`secrets.token_hex(8)`, 16 caratteri esadecimali, in `scope["state"]`, in ogni riga
+  di log e in `X-Request-Id`), `request_id_of(request)`, `utils/runtime/errors.py` (`reason_code_of`: il primo
+  `reason_code` non vuoto lungo le cause visibili) e il log di `dependencies.py:_build`.
+- **Oggi.** `snapshot_source_failure` porta `reason_code=getattr(root_cause, "reason_code", None)`
+  (`runtime_service.py:833-837`): un attributo qualunque della causa, senza elenco. I codici che ci arrivano davvero
+  sono due, tutti e due di `FxRateHistoryError` (`technical_shared.py:684-708`, i componenti `fx.*`):
+  - `fx_no_usable_rate`: nessun cambio della coppia fino alla fine del periodo;
+  - `fx_minimum_payload_unavailable`: la storia dei cambi si interrompe dopo essere cominciata, oppure una conversione
+    non valida (valuta diversa, importo ≤ 0);
+  - ogni altra causa: `null`.
+  `SignalUnavailableError` porta un codice, ma lo assorbe `signals/execution.py:593` e non arriva al 503. Gli altri
+  casi hanno già il loro esito: `AssetNotFoundError` → 404; `BulkTooManyDaysError` → 422 `too_many_price_days` (J-50).
+  Dopo E-AI503 l'asset senza prezzi non fallisce più: **nessun codice da aggiungere per E-AI503**.
+- **Il pannello oggi** (`ai-export/ui.ts`, `problemMessage`): ogni `snapshot_source_failure` diventa
+  `aiExport.sourceUnavailable`, «A required data source is unavailable. Try again later.». Ma `retryable` è sempre
+  `false`: riprovare non serve mai, e per i cambi mancanti serve sincronizzarli.
+- **Proposta Q-H60-J1, l'elenco chiuso**: `reason_code: Literal["fx_no_usable_rate", "fx_minimum_payload_unavailable"]
+  | None` in `AiExportSnapshotSourceFailureProblem`. `null` vuol dire «non classificata»: il nome della classe lo dà già
+  `error_type` di H nel corpo del 5xx e nel log, quindi un codice generico non aggiungerebbe niente.
+  - Il runtime passa da `reason_code_of(exc)` di H: un codice dell'elenco passa, ogni altro diventa `null`. Si scrive
+    nel log, mai al client.
+  - I nomi restano quelli di oggi: il campo esisteva già nella 1.2.
+  - Opzione: dividere `fx_minimum_payload_unavailable` in «buco nella storia» e «conversione non valida». Il mio
+    consiglio è di no: per l'utente l'azione è la stessa, sincronizzare i cambi.
+  - Prove: un rosso per un codice fuori elenco, che deve diventare `null`; una guardia che ogni `FxRateHistoryError`
+    del codice usi un codice dell'elenco; i due codici fino al corpo del 503.
+- **Proposta Q-H60-J2, il `request_id`**: un id solo. L'endpoint passa `request_id_of(request)` allo snapshot
+  (`prepare_request`, oggi `uuid4().hex`), e fuori da HTTP (sonde, test) si usa `new_request_id()` di H.
+  - Così `meta.request_id`, `X-Request-Id`, le righe di log della richiesta e il `request_id` del 503 coincidono.
+  - Il contratto di `BuildScope` lo prevede già («one fresh id per HTTP request»). Il renderer non stampa l'id: il
+    prompt non cambia.
+  - Lo schema chiede solo `min_length=1`, quindi i 16 caratteri al posto di 32 vanno bene. Vanno aggiornati i test che
+    fissano `uuid4`.
+- **Frontend** (testi del developer):
+  - l'id nel messaggio generico dell'AI Export è già deciso; servirà `requestIdOf(error)` di H;
+  - un messaggio per i due codici FX, per esempio EN «Exchange rates are missing for this period: sync the FX rates,
+    then export again.»;
+  - togliere «Try again later.» dal messaggio generico.
+- **Dipendenze**: `bf16865ed` di H nella mia base. File: `schemas/ai_export_runtime.py`, `runtime_service.py`,
+  `api/v1/ai_export.py`, `ai-export/ui.ts`, l'i18n `aiExport`, la pagina dev `ai_export_*.md`. Peso: piccolo, circa
+  mezza giornata dopo l'approvazione dei testi.
+- **Risposte del coordinatore** (20/10 ~09:40):
+  - Q-H60-J1 **sì**: elenco chiuso dei due codici FX, il resto `null` più `error_type`;
+  - Q-H60-J2 **sì**: un solo id;
+  - i testi li porta lui al developer;
+  - il lotto parte quando H-60 è in dev, dopo la cura dei due difetti trovati dalla revisione;
+  - «i miei» messaggi generici: l'elenco delle superfici 5xx del frontend sta nell'analisi H-60 di H (`80037ab83`). Le
+    mie sono AI Export, pannello del rischio e analisi: l'elenco va nella proposta.
+  - Analisi in sola lettura del Gantt §29 e di TC-23: via. Lo slot di J-57 v3 è verso le 11:30.
+
+#### J-57 v3 e slot pesante, parte 2 (20/10, slot dalle 09:06; base `2534c71fd`)
+
+> Il coordinatore (09:06): lo slot 2 è mio da subito, A l'ha liberato prima. Dopo di me tocca a MF.
+
+- ✅ **Cura v3** (09:06): `files/j/j57c/patch_cure_front_v3.py`, prova a secco pulita poi applicata, 2 modifiche in
+  `TransactionBulkModal.svelte` (`onImportBatch` asincrona, `await tick()` prima di `scheduler.trigger('manual')`).
+  - Prettier: tutti i 9 file di J-57 puliti, lanciato da `frontend/`.
+  > **⚠️ Fuori pista**: il controllo Prettier dentro `slot_part2.sh` girava dalla radice del repository e non trovava
+  > `prettier-plugin-svelte` (`[error] Cannot find package …`). Nessun effetto sui file: rilanciato da `frontend/`, pulito.
+- ✅ **E2E `front-transaction tx-auto-cost-refusal`** (09:06–09:09, carico 14): **5 passed**. Il test E2 del passaggio
+  dall'import, rosso nella parte 1 (19/10 18:14), ora passa: il salto dopo l'import funziona con la v3.
+- ✅ **E2E `front-transaction all --workers 2`** (09:09–09:23, carico 15–18): **355 passed, 2 failed**; dentro, i Vitest
+  di `tx-unit` **1026/1026**. I 2 rossi: `tx-fx-implied-rate.spec.ts` Scenario A (`:126`) e A2 (`:170`).
+  > **⚠️ Fuori pista — un difetto già presente sulla base, non di J-57** (triage, 09:24–09:28).
+  > - **Cosa si vede**: A si aspetta «1.1000» (prelievo 1000 EUR, deposito 1100 USD, il lato «da» per primo) e riceve
+  >   «$ 🇺🇸 USD → € 🇪🇺 EUR @ 0.9091». A2 si aspetta l'icona del prelievo per prima e riceve
+  >   `/icons/transactions/deposit.png`.
+  > - **Si ripete identico in una corsa da sola**
+  >   (`front-transaction tx-fx-implied-rate`, 09:27, carico 15: 2 failed, 1 passed; log
+  >   `files/j/j57c/slot_fx_implied_alone.log`). Non è instabilità né il parallelo.
+  > - **La causa**: W-B65 (`2b3c9e8d7`, 17/10, già nella mia base) ha cambiato la convenzione del bulk.
+  >   `applyFormPayload` e `fieldsFromTx` tengono come valore assoluto il contante di un tipo con regola
+  >   `cashSign: 'negative'` (`magnitudeForRule`, `txPayloadHelpers.ts`), quindi il prelievo resta +1000.
+  >   `TxBulkBanners.svelte` sceglie invece il lato «da» dal segno: `needSwap` a `:272` (`Number(cash.amount) > 0` e
+  >   `< 0`) e `fromOpFx` a `:327` (`aAmtFx < 0`). Senza un negativo il prelievo non è mai «da»: coppia e tasso escono
+  >   al contrario.
+  > - **Perché J-57 non c'entra**: il mio diff non tocca né il segno del contante né il banner. In
+  >   `TransactionBulkModal.svelte` il salto parte solo con `reason === 'manual'` (⚡ e il passaggio dall'import),
+  >   mentre questi test aggiungono le righe dal form, con la validazione di sfondo. `TxFormSingleSection.svelte` cambia
+  >   solo il testo di riserva, `TxFormBanners.svelte` solo `data-code`.
+  > - **Il rimedio possibile** (fuori dal perimetro, da assegnare): leggere il lato «da» dalla regola del tipo
+  >   (`getTypeRule(type).cashSign === 'negative'`) invece che dal segno del valore tenuto. Vale anche per un candidato
+  >   del DB, che `fieldsFromTx` tiene allo stesso modo. Registrato come J-66 nel backlog.
+- ✅ **E2E `front-broker detail`** (09:23–09:26): **40 passed**.
+- ✅ **E2E `front-utility onboarding-tour`** (09:26–09:27): **10 passed**.
+- ✅ **`front check`** (09:28): svelte-check **0 errori, 0 avvisi**. **`i18n check`**: pulito, 5101 chiavi, strict.
+- ✅ Porta 6185 libera (`lsof` vuoto, 09:29); `git diff --check` pulito; slot liberato alle 09:29 (coordinatore
+  avvisato).
+- ✅ **Checkpoint di J-57 mandato** (20/10 ~09:40), poi FROZEN su J-57. Proposte per il coordinatore:
+  - **CHANGELOG** (in inglese, le scrive lui):
+    - 🔄 **Import: a row that brings units in without a cost starts in Auto.**
+      - An Adjustment that adds units, or the receiving side of an Asset Transfer, that the report leaves without a
+        cost is now saved at the average cost of the units already held, instead of staying without a mode.
+      - A cost written in the report, 0 included, stays in Manual.
+      - The rows the importer flags (Align with the bank, a Danske Bank demerger line, a Generic CSV adjustment
+        without a cost) open in Manual with the cost empty, and stay listed until a cost is typed, even 0.
+    - 🔄 **A refused Auto cost says what to do, and the import grid takes you there.**
+      - When there is nothing to average, the message asks you to choose Manual and type what the units cost you (0
+        for a gift).
+      - After the rows arrive, after ⚡ Validate now and after a refused Save All, the grid turns to the oldest
+        refused row.
+    - 🐛 **Import: the check made when the rows arrive is no longer discarded.** On imports of more than 50 rows,
+      refused rows appeared only after ⚡ Validate now.
+  - **Commit**:
+    - codice: `feat(import): start costless incoming rows in Auto`, con un corpo breve (J-57, le decisioni
+      Q-J57-1 (c) e Q-J57-3…6);
+    - giornale: `docs(journal): J-57 done, §29 TC-23 H-60 analyses`.
+
+#### Gantt dei lotti §29 — analisi breve (20/10 ~09:15, sola lettura)
+
+> La fonte: la revisione di Y su J-48 (`plan-phase01DashboardCharts.prompt.md` in `dev_release2`, note 1 e 2). Il
+> developer dice sì a tutte e due (coordinatore, 19/10 ~18:05): un'etichetta sui marcatori ◆; le righe di chiusura
+> nominano il broker da cui le quote escono davvero, non quello d'apertura. Nessun codice, nessun test.
+
+**Punto 1 — l'etichetta sui marcatori.**
+- **Stato.** La serie `__event-markers` ha `tooltip: {show: false}` (`LotGanttChart.svelte:979`). `meta.label`
+  (`eventMarkerLabel`, `:593-597`) si calcola e nessuno lo legge. Un'entrata al bordo, un'uscita al bordo e un
+  trasferimento interno sono tutti ◆: la direzione si legge solo dalla posizione.
+- **Tre trappole trovate nel codice.**
+  - Il formatter del tooltip del grafico (`:1033`) legge solo `segmentSeriesData[params.dataIndex]`. Accendere il
+    tooltip della serie senza un formatter suo mostrerebbe il segmento con lo stesso indice: un tooltip sbagliato.
+  - La chiave di deduplica `${kind}:${lotId}:${laneIndex}:${dateMs}` (`:600`) fonde due ◆ sulla stessa corsia e lo
+    stesso giorno (nota di Y). Con l'etichetta il secondo evento sparirebbe.
+  - `eventMarkerLabelKey` (`lotGanttChartHelpers.ts:272`) dà `TRANSFER_DEPART` a ogni ◆ che non è al bordo, arrivi
+    compresi: `buildExplicitEventMarkers` (`:637`) passa `labelKind` solo per le gambe di confine. Oggi non si vede,
+    perché le due chiavi hanno lo stesso testo nelle 4 lingue («Transfer»).
+- **I dati ci sono già.** Le righe di trasferimento portano `source_broker_id` e `destination_broker_id`
+  (`lots_analysis_service.py:965-967`, `:1085-1132`). Le gambe di confine portano solo il broker dell'ambito: il
+  partner non si nomina mai (regola di J-48).
+- **Nessuna chiave nuova.** I titoli sono `brokers.lots.chartMarkers.eventType.*` (9 tipi, 4 lingue, con
+  `TRANSFER_IN`/`TRANSFER_OUT`). Le righe sono `common.date`, `common.quantity`, `common.broker`, `common.from` e
+  `common.to`, le stesse del grafico WAC (`LotWacPriceChart.svelte:607-634`).
+- **Q-G29-1, la forma (scelta d'interfaccia, per il developer):**
+  - **(a), consiglio**: un tooltip al passaggio del mouse e al tocco, su **tutti** i marcatori. Sono la stessa serie
+    (▲ ▼ + × │ ◆), quindi il codice è lo stesso.
+    - Titolo: l'etichetta. Righe: data e quantità, mascherata in privacy come nel tooltip dei segmenti.
+    - Broker: «Da A / A B» per un trasferimento interno; il broker dell'ambito per una gamba di confine; il broker
+      dell'evento per gli altri.
+    - Un marcatore che ne fonde due li elenca tutti e due.
+  - (b) lo stesso tooltip solo sui ◆;
+  - (c) un testo visibile accanto a ogni ◆: sconsigliato, perché nelle corsie fitte i testi si sovrappongono.
+- **Lavoro.**
+  - Un aiutante puro in `lotGanttChartHelpers.ts` che dà titolo e righe.
+  - Il dato del marcatore tiene l'elenco dei suoi eventi, così la fusione non perde più nulla.
+  - La serie riceve `tooltip: {show: true, formatter}`.
+  - L'arrivo prende la sua chiave, `TRANSFER_ARRIVE`.
+- **Rossi.**
+  - Vitest in `lotGanttChartHelpers.test.ts`:
+    - la chiave dell'arrivo;
+    - «Da/A» di un trasferimento interno;
+    - la gamba di confine senza partner;
+    - il marcatore fuso che elenca due eventi;
+    - la quantità mascherata.
+  - Un E2E sul passaggio del mouse su un segno del canvas è fragile: solo se `front-broker detail` ha già un modello
+    (decide test-author).
+- **Documentazione**:
+  - `developer/frontend/components/features/lots-analysis.md`: una frase, chiesta da Y;
+  - `user/dashboard/positions.en.md`, «Lot Life»: una frase.
+- **Peso**: circa 3 ore.
+
+**Punto 2 — la riga di chiusura nomina il broker da cui le quote escono.**
+- **Stato.** `_build_closure_rows` (`lots_analysis_service.py:1145-1179`) scrive `broker_id=lot.opening_broker_id`
+  (`:1166`).
+  - `LotClosure` non ha un broker, solo `fragment_id` (`financial_math/fifo/models.py:184-205`).
+  - Il frammento (`FragmentInterval.broker_id`, `:169-181`) dice dove stanno le quote. L'id del frammento codifica il
+    luogo, quindi a un id corrisponde un broker solo.
+- **Rimedio.**
+  - Una mappa `fragment_id → broker_id` da `engine_result.fragment_intervals`, passata a `_build_closure_rows`
+    (chiamata a `:989`).
+  - Si ripiega su `lot.opening_broker_id` solo per un frammento senza broker (in transito: il motore non ci chiude
+    nulla; si tiene per sicurezza, con un commento).
+- **Lo schema dice già così**: «Broker directly associated with this event, when singular» (`schemas/portfolio.py:937`).
+  Il rimedio porta il valore alla descrizione. `api sync` resta senza differenze.
+- **Chi legge il valore.**
+  - Solo la riga dello Storico nella modale di custodia (`LotCustodyModal.svelte:169-171`, «<etichetta> <broker>»).
+  - Non lo leggono:
+    - il tooltip del grafico WAC: per vendite e rettifiche non ha una riga broker (`:1411-1440`);
+    - il Gantt: mette i segni per `fragment_id`;
+    - l'AI Export: legge solo `LOT_SUMMARY` (`asset_resources.py:307`, `portfolio_broker.py:967`).
+  - Nessun test fissa il broker di chiusura.
+- **I valori che cambiano (dichiarati).**
+  - Cosa: `lot_events[].broker_id` sulle righe di chiusura dei lotti spostati dentro l'ambito prima di chiudersi. Passa
+    dal broker d'apertura a quello da cui le quote escono.
+  - Le righe: SELL, il BUY che chiude uno short, ADJUSTMENT_OUT, comprese le uscite al bordo.
+  - `custody_history` contiene i BUY, quindi anche lì cambia il BUY che chiude uno short spostato (caso raro).
+  - Nessuna cifra cambia. Serve una riga 🐛 nel CHANGELOG (la scrive il coordinatore).
+- **Rossi** (test di servizio sul DB, accanto a `test_lots_transfer_scope_boundary.py`):
+  - aperto in A, spostato A→B, venduto in B: la riga SELL dice B (oggi A);
+  - aperto in A, spostato in B, mandato fuori dall'ambito da B (ambito {A, B}): la riga TRANSFER- dice B;
+  - guardia: un lotto mai spostato tiene A.
+- **Parità di L1a**: le due strade usano lo stesso `_build_closure_rows`, quindi tiene.
+- **Documentazione**: una frase in `developer/backend/transactions/lots_analysis_service.md`; la pagina utente la
+  verifica docs-writer.
+- **Peso**: circa un'ora e mezza con il test.
+
+**Ordine, file, conflitti.**
+- Prima il punto 2 (backend, piccolo, file mio), poi il punto 1.
+- File:
+  - `lots_analysis_service.py` (mio);
+  - `LotGanttChart.svelte` e `lotGanttChartHelpers.ts` (dei lotti; li ho toccati in J-48);
+  - i test e la documentazione.
+- Da chiedere al coordinatore: nessun lotto del programma colori aperto su questi due file? Il Gantt legge
+  `LOT_GANTT_COLORS`.
+- L1b (dopo P3 di MF) tocca `lots_analysis_service.py` altrove, nelle serie giornaliere: rischio basso.
+
+#### TC-23 — l'aggiunta della coppia nei pannelli del rischio: analisi breve (20/10 ~09:20, sola lettura)
+
+- **Stato sulla mia base** (`2534c71fd`). Tre gestori mandano `add_fx_pair` a `/fx` e ignorano il `target`:
+  1. `syncTargets.ts:82`, `labQualityAction`, letto da `AssetSetRiskPanel.svelte:635`: il laboratorio del rischio,
+     `assets/+page.svelte:1753`;
+  2. `levels/RiskPanelHeader.svelte:70`, una copia in linea: i livelli del rischio sulla Dashboard
+     (`dashboard/+page.svelte:1109`) e sulla pagina del broker (`brokers/[id]/+page.svelte:753`);
+  3. `RiskAnalysisPanel.svelte:536`, una copia in linea: il dettaglio asset, via `AssetRiskScenariosView`
+     (`assets/[id]/+page.svelte:2782`).
+  - Le due copie in linea sono proprio quelle che `syncTargets.ts` dice di aver sollevato «so a second surface does
+    not become a second copy». In più differiscono: `includes('sync')` contro `startsWith('sync_')`.
+- **Il backend** manda `add_fx_pair` senza `cta_target` (`risk/data_quality.py:110`, `target=False`), con le coppie in
+  `affected_fx_pairs`.
+- **T2** (`e673d4af6`, in dev con `ccc2a4141`, **non nella mia base**).
+  - Il banner raggruppato disegna un chip per coppia per `add_fx_pair` e `navigate_fx`, e chiama
+    `onaction(action, pair, issue)`.
+  - La Dashboard apre `FxPairAddModal` sulla coppia premuta (`fxPairCreateSlug = target ?? ''`); la pagina
+    dell'asset lo faceva già.
+  - Sulla Dashboard quindi convivono due comportamenti: il banner della pagina apre il dialogo, quello dei livelli del
+    rischio porta a `/fx`.
+- **Q-TC23-1, la forma (scelta d'interfaccia):**
+  - **(a), consiglio**: i pannelli del rischio aprono loro `FxPairAddModal`.
+    - Il dialogo parte sulla coppia premuta; senza coppia parte vuoto, come sulla Dashboard.
+    - Dopo `oncreated`/`onsynced` il pannello ricarica la sua risposta (`controller.handleSynced()` o il suo reload).
+    - Una regola sola: `labQualityAction` dà `{kind: 'add_pair', pair}`, i tre pannelli la usano e le due copie in
+      linea spariscono.
+    - Funziona sulle 4 pagine senza collegamenti: la pagina del broker e quella degli asset oggi non hanno il dialogo.
+  - (b) una callback `onaddpair(pair)` verso la pagina, che apre il suo dialogo: collegamenti in 4 pagine, e 2 non
+    hanno il dialogo.
+  - (c) `/fx?add=EUR-USD`, con la pagina FX che apre il dialogo: un contratto d'indirizzo nuovo su una pagina d'altri,
+    e l'utente esce dall'analisi.
+- **Rossi.**
+  - `syncTargets.test.ts`: `add_fx_pair` con una coppia dà `add_pair` con la coppia, senza coppia `add_pair` vuoto;
+    `navigate_fx` per coppia resta com'è.
+  - Un test di componente o un E2E: il chip premuto apre il dialogo con base e quotata (decide test-author).
+- **Dipendenze**: T2 nella mia base, cioè un aggiornamento di base.
+- **File**: `syncTargets.ts`, `RiskPanelHeader.svelte`, `RiskAnalysisPanel.svelte`, `AssetSetRiskPanel.svelte` e i
+  test. Sono file del rischio toccati anche dal programma colori: per queste righe lo scrittore sono io, su
+  assegnazione del coordinatore.
+- **Documentazione**: una frase nella pagina utente del rischio, se descrive il banner (verifica docs-writer).
+- **Peso**: 2–3 ore.
+
+#### H-60 — i miei messaggi d'errore generici (bozza per la proposta del lotto; 20/10 ~09:25, sola lettura)
+
+- L'analisi di H (`80037ab83`) non ha un elenco per superficie: dice solo «A e J per l'interfaccia» (D3). Questo elenco
+  viene dal codice.
+- **AI Export**: una funzione sola, `getAiExportErrorMessage` (`ai-export/ui.ts:119-127`).
+  - La usano 4 toast: asset, broker, coppia FX, Dashboard.
+  - L'id va su `sourceUnavailable` (il 503 e i codici di problema sconosciuti, `problemMessage` `:116`) e su
+    `genericFailed` (`:126`). L'errore porta `originalError`, da cui `requestIdOf` legge l'id.
+  - L'id non va su:
+    - la rete: non c'è una risposta;
+    - contratto, catalogo, entità e selezione: sono messaggi specifici;
+    - il messaggio FX nuovo: è specifico e dice cosa fare;
+    - la validazione della richiesta.
+- **Rischio**: 8 punti più un toast. Oggi ognuno tiene un flag; terrebbe anche l'id.
+  - `RiskAnalysisPanel.svelte:598` (`loadError`);
+  - `levels/RiskPanelHeader.svelte:95` (`controller.loadError`);
+  - `levels/RiskLevelsPanel.svelte:83`: il toast di `onrefreshfailed`, che oggi non riceve l'errore;
+  - `AssetSetRiskPanel.svelte:789` (`brokerLoadFailed`) e `:794` (`eligibilityFailed`, un avviso);
+  - `AssetSetRiskReturnSection.svelte:178`, `AssetSetCorrelationSection.svelte:138`,
+    `AssetSetLossComparisonSection.svelte:241`;
+  - `BenchmarkSelect.svelte:212` (`signals.comparisonAsset.loadError`).
+  - Esclusi `RiskResultFrame.svelte:81` e `levels/RiskLevelSection.svelte:126`: il fallimento di un'analitica dentro un
+    200, con il suo codice.
+- **Analisi dei lotti**: `brokers/lots/LotsAnalysisPanel.svelte:266-273` (il toast e il riquadro
+  `brokers.lots.loadFailed`). Escluso `LotAnalysisFailedNotice`: l'analisi FAILED dentro un 200, con il suo rimedio.
+- **Da assegnare** (nella tabella di H i `tools` del backend sono di J): il pianificatore del PAC,
+  `RefreshFailedPanel.svelte` (un `SourceLoadError`, che può essere un 5xx), e `tools.status.unavailable` (`ToolHost`,
+  `ToolsHub`).
+- **La forma**: un modo solo per scrivere «codice: 3f9a…» (un componente o un aiutante, con una chiave i18n). Lo scrive
+  una volta H o A, e lo usiamo tutti e due: da accordare prima del lotto.
+
+#### Risposte del coordinatore su §29, TC-23 e H-60 (20/10 ~09:25)
+
+- Nessun lotto del programma colori tocca `LotGanttChart.svelte` o `lotGanttChartHelpers.ts`, né nei rami né nei
+  worktree dei colori.
+- **Gantt §29, punto 2** (il broker di chiusura dal frammento): **via dopo J-57**, prima i rossi. La riga 🐛 del
+  CHANGELOG va proposta nel suo checkpoint.
+- **Q-G29-1 e Q-TC23-1**: le porta il coordinatore al developer. Il punto 1 del §29 e TC-23 aspettano la risposta.
+- **TC-23**: dipende da T2; il coordinatore aggiorna la base quando J-57 è entrato.
+- **H-60, «codice: …»**: lo scrive H, una volta sola per tutti, dentro la cura di H-60. Io poi lo uso.
+- **Il contratto di H** (coordinatore, 20/10 ~09:30; arriva con il checkpoint di H-60r; niente codice prima che H-60
+  sia in dev):
+  - il modulo `frontend/src/lib/api/requestIdMessage.ts`, con `withRequestId(t, message, error): string`; il `t` va
+    prima, come in `getAiExportErrorMessage`;
+  - la chiave `common.errorWithRequestId`: EN `{message} (code: {requestId})`, IT `(codice: …)`, FR `(code : …)`, ES
+    `(código: …)`;
+  - il messaggio della superficie resta intero, col codice in fondo tra parentesi, solo sui messaggi generici. Gli si
+    passa l'errore catturato così com'è: le classi dell'AI Export vanno già bene;
+  - il codice compare solo per un 5xx con id. Su un 4xx, un errore di rete o un 5xx di un proxy il messaggio non cambia;
+  - la Vitest è di H, in `core-unit`.
+  - Per me: nei punti del rischio e dei lotti che oggi tengono solo un flag va tenuto l'errore catturato, per passarlo
+    a `withRequestId`. Nell'AI Export basta avvolgere i due rami generici di `getAiExportErrorMessage`.
