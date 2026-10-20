@@ -4,9 +4,10 @@
  * calls no provider and fills only a rate still waiting for its first read;
  * `refreshPlan` reads copied rates again just before the calculation.
  */
-import {SvelteMap, SvelteSet} from 'svelte/reactivity';
+import {SvelteSet} from 'svelte/reactivity';
 import {applyAwaitingFxRates, newCopyRecord, rateAwaitsRead} from './copies';
 import type {PlannerDraft} from './draft.svelte';
+import {forgetFxPairIssues, fxPairIssues, rememberFxPairIssues} from './fxIssues';
 import {loadCopyScope, selectableIds} from './scope';
 import type {SourceIssue} from './source';
 import {SourceLoad, type SourceLoadError} from './sourceLoad.svelte';
@@ -21,8 +22,6 @@ interface FxMemory {
     missed: SvelteSet<string>;
     /** Pairs that could not be read: LibreFolio reads only for a user who owns a Broker. */
     ownerless: SvelteSet<string>;
-    /** What the last read said about each pair (X-R45b): a saved rate skipped for an older one, or none usable. */
-    issues: SvelteMap<string, SourceIssue[]>;
 }
 
 const memories = new WeakMap<PlannerDraft, FxMemory>();
@@ -30,18 +29,10 @@ const memories = new WeakMap<PlannerDraft, FxMemory>();
 function memoryOf(draft: PlannerDraft): FxMemory {
     let memory = memories.get(draft);
     if (!memory) {
-        memory = {attempted: new SvelteSet(), missed: new SvelteSet(), ownerless: new SvelteSet(), issues: new SvelteMap()};
+        memory = {attempted: new SvelteSet(), missed: new SvelteSet(), ownerless: new SvelteSet()};
         memories.set(draft, memory);
     }
     return memory;
-}
-
-/** «No stored rate»: the card says it on its own (`notStored`), so it is not repeated among the pair's issues. */
-const SAVED_FX_MISSING = 'allocation.saved_fx_missing';
-
-/** The issues of a read about one pair: those of its FX quote (`fx:<pair>:<date>:<source>`), but «missing». */
-function pairIssues(issues: readonly SourceIssue[], pair: string): SourceIssue[] {
-    return issues.filter((issue) => issue.code !== SAVED_FX_MISSING && 'entity_kind' in issue.path && issue.path.entity_kind === 'fx_quote' && issue.path.entity_id.split(':')[1] === pair);
 }
 
 function awaits(draft: PlannerDraft, pair: string): boolean {
@@ -72,9 +63,9 @@ export class FxRateReader {
         return memoryOf(draft).ownerless.has(pair);
     }
 
-    /** What the last read said about the pair (X-R45b): a saved rate skipped for an older one, or none usable. */
+    /** What the last read said about the pair (X-R45b): this step's read, or the re-read before «Calcola». */
     issues(draft: PlannerDraft, pair: string): SourceIssue[] {
-        return memoryOf(draft).issues.get(pair) ?? [];
+        return fxPairIssues(draft, pair);
     }
 
     /** Needed pairs never read in this session and still waiting for a rate. */
@@ -95,8 +86,8 @@ export class FxRateReader {
         for (const pair of pairs) {
             memory.missed.delete(pair);
             memory.ownerless.delete(pair);
-            memory.issues.delete(pair);
         }
+        forgetFxPairIssues(draft, pairs);
         this.busy = true;
         this.error = null;
         let owners: number[];
@@ -131,10 +122,7 @@ export class FxRateReader {
         }
         const outcome = applyAwaitingFxRates(draft, source, newCopyRecord(draft, 'fx', source), wanted);
         for (const pair of outcome.missing) memory.missed.add(pair);
-        for (const pair of wanted) {
-            const about = pairIssues(outcome.issues, pair);
-            if (about.length > 0) memory.issues.set(pair, about);
-        }
+        rememberFxPairIssues(draft, wanted, outcome.issues);
         for (const pair of wanted) memory.attempted.add(pair);
         this.#finish(null, []);
     }

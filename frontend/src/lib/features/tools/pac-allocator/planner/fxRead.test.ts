@@ -44,6 +44,9 @@
  *     a rate by then, so the read loads nothing for it: the clearing at the start of `read()` is what empties it.
  *   - RED until X-R45b-ui: a later read of CHF/USD, after its rates were downloaded (the step's «read again»), clears
  *     its issue and leaves the EUR/USD warning: a read clears only the pairs it is given.
+ *
+ * The review of X-R45b-ui (D2) adds the last block: the re-read before «Calcola» replaces what this memory holds for
+ * every pair it reads again.
  */
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 
@@ -65,9 +68,10 @@ vi.mock('./scope', async (importOriginal) => ({
 }));
 
 import {getClientSessionGeneration, transitionClientSession} from '$lib/stores/app/clientSession';
+import {refreshCopiedFacts, refreshPlan, refreshQuery, setRateManual, type RefreshPlan} from './copies';
 import {PlannerDraft} from './draft.svelte';
 import {FxRateReader} from './fxRead.svelte';
-import type {SourceIssue} from './source';
+import {fetchPlannerSource, type SourceIssue} from './source';
 
 const EUR_USD = 'EUR/USD';
 const CHF_USD = 'CHF/USD';
@@ -239,5 +243,186 @@ describe('FxRateReader — the issues of the Auto read, per pair (X-R45b-ui)', (
 
         expect(issuesOf(reader, draft, CHF_USD)).toEqual([]);
         expect(issuesOf(reader, draft, EUR_USD), 'a read clears only the pairs it is given').toEqual([SKIPPED]);
+    });
+});
+
+// -- The review of X-R45b-ui, D2: the re-read and the step's memory ---------------------------------------------------
+
+/*
+ * D2 — the FX card keeps an old warning after the re-read.
+ *   - The step's read remembers, per draft, what the source said about each pair (`FxRateReader.issues`, a module
+ *     WeakMap keyed by the draft). Only a new `FxRateReader.read` resets it.
+ *   - The re-read before «Calcola» (`refreshCopiedFacts`) rewrites the pair's rate, copy, stamp, date and source, but
+ *     not that memory.
+ *   - So once «Calcola» has read the corrected D2, the card still warns that D2 was skipped; and a skip only the re-read
+ *     found never reaches the card.
+ *
+ * The cure: `refreshCopiedFacts`, for every pair of `plan.fxPairs` it reads again, replaces the remembered issues with
+ * what the re-read said about that pair: its `fx_quote` issues but `saved_fx_missing`, the reader's own filter. Nothing
+ * about the pair clears it.
+ *   - It reads again the pairs still copied or still waiting: not those its first `continue` skips.
+ *   - A pair outside the plan (a Manual one) keeps its memory.
+ *
+ * Observed through the existing public API only: `refreshCopiedFacts`, and the `issues` of a *fresh* `FxRateReader`,
+ * which reads the per-draft memory as the step does when the user comes back. The cure may move the memory to another
+ * module, so nothing new is imported: every red fails on an assertion.
+ *
+ * Scenario: valuation USD, a contribution in CHF and one in EUR, so the step shows CHF/USD and EUR/USD. For CHF/USD, D2
+ * (2026-01-05) is the latest saved rate and D1 (2026-01-02) the previous valid one. The re-read runs as
+ * `PacPlannerTool.refreshCopies` runs it: `refreshPlan`, `refreshQuery` for the owned Broker, one load,
+ * `refreshCopiedFacts`.
+ *
+ * Tests.
+ *   - RED until the X-R45b-ui review (D2):
+ *       (a) the re-read of the corrected D2 clears the skip warning the step remembered;
+ *       (b) a skip only the re-read found is remembered for its pair;
+ *       (e) a pair still waiting, which the re-read finds with no saved rate at all, forgets its invalid-rate error.
+ *           It is read again but stops at the second `continue` (no rate): the replacement must not depend on a rate.
+ *   - GUARD (green before and after):
+ *       (c) a Manual pair, outside the plan, keeps its memory;
+ *       (c2) a pair switched to Manual while the re-read runs (its first `continue`) keeps its memory;
+ *       (d) an issue the re-read reports for EUR/USD does not land on CHF/USD.
+ */
+
+/** CHF/USD: D2, its latest saved rate, and D1, the previous valid one. */
+const CHF_D1 = {rate: '1.1250', date: USED.date};
+const CHF_D2 = {rate: '1.1310', date: SKIPPED_DATE};
+const CHF_AT_D1 = quoteRow(CHF_USD, CHF_D1.rate, CHF_D1.date, quoteId(CHF_USD, CHF_D1.date));
+const CHF_AT_D2 = quoteRow(CHF_USD, CHF_D2.rate, CHF_D2.date, quoteId(CHF_USD, CHF_D2.date));
+/** No saved CHF/USD rate at all: the user deleted the one that was not valid. */
+const CHF_NONE = quoteRow(CHF_USD, null, null, quoteId(CHF_USD, AS_OF, MISSING_TOKEN));
+
+/** `saved_fx_skipped` of CHF/USD: D2 skipped, D1 used, on the quote of D1. */
+const CHF_SKIPPED: SourceIssue = {
+    code: 'allocation.saved_fx_skipped',
+    kind: 'invalid',
+    severity: 'warning',
+    path: {kind: 'field', section: 'fx_quotes', entity_kind: 'fx_quote', entity_id: quoteId(CHF_USD, CHF_D1.date), field: 'rate'},
+    params: [
+        {kind: 'text', name: 'pair', value: CHF_USD},
+        {kind: 'date', name: 'skipped_date', value: CHF_D2.date},
+        {kind: 'date', name: 'used_date', value: CHF_D1.date},
+    ],
+};
+
+/** `saved_fx_missing` of CHF/USD: no saved rate. */
+const CHF_MISSING: SourceIssue = {
+    code: 'allocation.saved_fx_missing',
+    kind: 'missing',
+    severity: 'error',
+    path: {kind: 'field', section: 'fx_quotes', entity_kind: 'fx_quote', entity_id: quoteId(CHF_USD, AS_OF, MISSING_TOKEN), field: 'rate'},
+    params: [{kind: 'text', name: 'pair', value: CHF_USD}],
+};
+
+type QuoteRow = ReturnType<typeof quoteRow>;
+
+/** Valuation USD; a contribution in CHF and one in EUR: CHF/USD and EUR/USD, both waiting for their first rate. */
+function chfAndEur(): PlannerDraft {
+    const draft = new PlannerDraft('USD');
+    for (const currency of ['CHF', 'EUR']) draft.addContribution(currency, `${currency} savings`);
+    expect(draft.requiredPairs, 'precondition: the scenario needs CHF/USD and EUR/USD').toEqual([CHF_USD, EUR_USD]);
+    return draft;
+}
+
+/** The FX step's read of both pairs, answered by `quotes` and `issues`. */
+async function stepRead(draft: PlannerDraft, quotes: readonly QuoteRow[], issues: readonly SourceIssue[]): Promise<void> {
+    const reader = new FxRateReader();
+    allocationSource.mockResolvedValueOnce(response(quotes, issues));
+    await reader.read(draft, draft.requiredPairs, getClientSessionGeneration());
+    expect(reader.error, 'barrier: the step’s read did not fail').toBeNull();
+}
+
+/** What the step lists for `pair` when the user comes back to it: a fresh reader, the draft's memory. */
+function remembered(draft: PlannerDraft, pair: string): SourceIssue[] {
+    return new FxRateReader().issues(draft, pair);
+}
+
+/**
+ * The re-read before «Calcola», as `PacPlannerTool.refreshCopies` runs it: the plan of the copied rates, its query for
+ * the owned Broker, one load answered by `quotes` and `issues`, then `refreshCopiedFacts`. `meanwhile` is what the user
+ * does while the load is out: after the plan, before the apply.
+ */
+async function rereadBeforeCalcola(draft: PlannerDraft, quotes: readonly QuoteRow[], issues: readonly SourceIssue[], meanwhile: () => void = () => {}): Promise<RefreshPlan> {
+    const plan = refreshPlan(draft);
+    expect(plan, 'precondition: the draft has copied rates to read again').not.toBeNull();
+    if (!plan) throw new Error('unreachable: the plan was asserted above');
+    allocationSource.mockResolvedValueOnce(response(quotes, issues));
+    const source = await fetchPlannerSource(refreshQuery(draft, plan, [OWNED.id]), getClientSessionGeneration());
+    meanwhile();
+    refreshCopiedFacts(draft, source, plan);
+    return plan;
+}
+
+describe('refreshCopiedFacts — what the FX step remembers of each pair (X-R45b-ui review, D2)', () => {
+    it('RED until the X-R45b-ui review (D2): (a) the re-read of the corrected D2 clears the skip warning the step remembered', async () => {
+        const draft = chfAndEur();
+        await stepRead(draft, [CHF_AT_D1, EUR_USD_ROW], [CHF_SKIPPED]);
+        expect(remembered(draft, CHF_USD), 'barrier: the step remembers «D2 skipped, D1 used»').toEqual([CHF_SKIPPED]);
+
+        const plan = await rereadBeforeCalcola(draft, [CHF_AT_D2, EUR_USD_ROW], []);
+        expect(plan.fxPairs, 'precondition: the re-read reads CHF/USD again').toContain(CHF_USD);
+        expect(draft.fx(CHF_USD), 'barrier: the pair now holds the corrected D2, still Auto').toMatchObject({rate: CHF_D2.rate, referenceDate: CHF_D2.date, manual: false});
+
+        expect(remembered(draft, CHF_USD)).toEqual([]);
+    });
+
+    it('RED until the X-R45b-ui review (D2): (b) a skip only the re-read found is remembered for its pair', async () => {
+        const draft = chfAndEur();
+        await stepRead(draft, [CHF_AT_D1, EUR_USD_ROW], []);
+        expect(remembered(draft, CHF_USD), 'barrier: the step read D1, then the latest rate, and had nothing to say').toEqual([]);
+
+        const plan = await rereadBeforeCalcola(draft, [CHF_AT_D1, EUR_USD_ROW], [CHF_SKIPPED]);
+        expect(plan.fxPairs, 'precondition: the re-read reads CHF/USD again').toContain(CHF_USD);
+        expect(draft.fx(CHF_USD), 'barrier: the pair keeps D1, the rate the re-read quoted').toMatchObject({rate: CHF_D1.rate, referenceDate: CHF_D1.date, manual: false});
+
+        expect(remembered(draft, CHF_USD)).toEqual([CHF_SKIPPED]);
+    });
+
+    it('RED until the X-R45b-ui review (D2): (e) a pair still waiting, which the re-read finds with no saved rate at all, forgets its invalid-rate error', async () => {
+        const draft = chfAndEur();
+        await stepRead(draft, [CHF_USD_ROW, EUR_USD_ROW], [INVALID]);
+        expect(remembered(draft, CHF_USD), 'barrier: the step remembers that the saved rate is not valid').toEqual([INVALID]);
+        expect(draft.fx(CHF_USD), 'barrier: and CHF/USD has no rate').toBeUndefined();
+
+        const plan = await rereadBeforeCalcola(draft, [CHF_NONE, EUR_USD_ROW], [CHF_MISSING]);
+        expect(plan.fxPairs, 'precondition: the re-read reads the waiting CHF/USD again').toContain(CHF_USD);
+        expect(draft.fx(CHF_USD), 'barrier: still no rate').toBeUndefined();
+
+        expect(remembered(draft, CHF_USD), 'what the re-read said about CHF/USD, but saved_fx_missing: nothing').toEqual([]);
+    });
+
+    it('GUARD: (c) a Manual pair, outside the re-read plan, keeps what the step remembered about it', async () => {
+        const draft = chfAndEur();
+        await stepRead(draft, [CHF_AT_D1, EUR_USD_ROW], [CHF_SKIPPED]);
+        setRateManual(draft, CHF_USD, true);
+        expect(remembered(draft, CHF_USD), 'barrier: the step remembers the skip').toEqual([CHF_SKIPPED]);
+
+        const plan = await rereadBeforeCalcola(draft, [EUR_USD_ROW], []);
+        expect(plan.fxPairs, 'precondition: the Manual pair is not in the plan').toEqual([EUR_USD]);
+
+        expect(remembered(draft, CHF_USD)).toEqual([CHF_SKIPPED]);
+    });
+
+    it('GUARD: (c2) a pair switched to Manual while the re-read runs is not read again, and keeps its memory', async () => {
+        const draft = chfAndEur();
+        await stepRead(draft, [CHF_AT_D1, EUR_USD_ROW], [CHF_SKIPPED]);
+        expect(remembered(draft, CHF_USD), 'barrier: the step remembers the skip').toEqual([CHF_SKIPPED]);
+
+        const plan = await rereadBeforeCalcola(draft, [CHF_AT_D2, EUR_USD_ROW], [], () => setRateManual(draft, CHF_USD, true));
+        expect(plan.fxPairs, 'precondition: CHF/USD was in the plan').toContain(CHF_USD);
+        expect(draft.fx(CHF_USD), 'barrier: the re-read skipped the Manual pair, which keeps D1').toMatchObject({rate: CHF_D1.rate, manual: true});
+
+        expect(remembered(draft, CHF_USD)).toEqual([CHF_SKIPPED]);
+    });
+
+    it('GUARD: (d) an issue the re-read reports for EUR/USD does not land on CHF/USD', async () => {
+        const draft = chfAndEur();
+        await stepRead(draft, [CHF_AT_D1, EUR_USD_ROW], []);
+
+        const plan = await rereadBeforeCalcola(draft, [CHF_AT_D2, EUR_USD_ROW], [SKIPPED]);
+        expect(plan.fxPairs, 'precondition: both pairs are read again').toEqual([CHF_USD, EUR_USD]);
+        expect(draft.fx(CHF_USD)?.rate, 'barrier: CHF/USD was read again').toBe(CHF_D2.rate);
+
+        expect(remembered(draft, CHF_USD)).toEqual([]);
     });
 });

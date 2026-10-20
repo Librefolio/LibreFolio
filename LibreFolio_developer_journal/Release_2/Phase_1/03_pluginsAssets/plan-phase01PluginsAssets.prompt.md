@@ -8038,3 +8038,103 @@ strade del frontend che chiedono `fx_quotes` scartano `source.issues`.
     da quello di HEAD.
   - Sono modifiche di contenuto, che le traduzioni devono ricevere.
 - **Non girato**: nessun E2E usa una pagina di supporto; l'`href` lo prova ASA-R9.
+
+### X-R45b-ui, seconda revisione — ✅ 20/10 (pausa il 19/10 alle 18:12, base `186b92404`)
+
+> **Stato alla pausa generale** del 19/10 (richiesta del developer, 18:12): rossi scritti e visti, cura preparata e
+> **non applicata**, nessun server, porta 6183 libera, nessun comando git eseguito. Ripreso il 20/10 alle 08:47
+> («Ripresa» qui sotto).
+>
+> - Sporchi nel worktree: i 3 file di test qui sotto più questo piano.
+> - Tutto ciò che serve per ripartire sta nella cartella di sessione
+>   (`~/.copilot/session-state/ad5f37c8-22bd-4df5-9dd2-74f51ca0fe6c/files/`), non in `/tmp`.
+
+**I due difetti** (revisione automatica di `082805b7a`, girati dal coordinatore):
+1. **La rilettura mostra avvisi di broker fuori dal piano.**
+   - `refreshQuery` chiede tutti i broker posseduti e, con cassa copiata, le sezioni `brokers` e `cash_balances`.
+   - `RefreshSummary.issues` le prende tutte tranne `broker_execution_profile_unsupported`: così compaiono
+     `broker_inactive`, `negative_cash_unsupported` e `currency_spec_missing` di broker fuori dal piano, e la nota passa
+     al tono warning.
+   - La copia esplicita della liquidità le filtra con `selectedBrokerIssues` (`copies.ts:31`).
+2. **La card FX tiene un avviso vecchio dopo la rilettura.**
+   - La memoria delle issue per coppia la azzera solo `FxRateReader.read`; `refreshCopiedFacts` riscrive il tasso, ma
+     non quella memoria.
+   - Così, corretto il D2 e riletto da «Calcola», la card dice ancora «D2 saltato». Al contrario, un salto trovato solo
+     dalla rilettura non compare mai sulla card.
+
+**Decisioni ricevute** (coordinatore, 19/10):
+- Prima i rossi, poi un commit a parte sopra `186b92404`, poi il checkpoint.
+- Intanto il coordinatore porta in dev il ramo fino a `51c5f1d2c`. La UI di X-R45b (`082805b7a`) e N61-form
+  (`ea532c5eb`) entrano dopo questa cura.
+- Poi, nell'ordine: la revisione del contratto di Z-29a, l'analisi della funzione «a gradini», N64, Q1–Q3/S1.
+
+**Cura** (preparata il 19/10, a secco pulita con Prettier su `/tmp`; **applicata il 20/10**, «Ripresa»):
+- Gli strumenti, nella cartella di sessione:
+  - `files/checks/xr45bui2_code.py`, a sostituzioni contate, con una copia in `files/parked/`;
+  - lo stesso cambiamento come patch, `files/parked/xr45bui2.patch` (prova `patch -p1 --dry-run` sul worktree: OK).
+- **D1**: `summary.issues = selectedBrokerIssues(source, plan.cashBrokerIds)`, meno la nota strutturale. È la regola
+  della copia della liquidità: restano le issue dei broker la cui cassa è nel piano, e tutte quelle senza chiave
+  `broker:N` (`fx_quote`, `price`, asset, sezioni).
+- **D2**:
+  - La memoria per coppia esce da `fxRead.svelte.ts` e va nel modulo nuovo `planner/fxIssues.ts`, con
+    `fxPairIssues`, `forgetFxPairIssues` e `rememberFxPairIssues`. Il modulo nuovo serve a evitare un ciclo:
+    `fxRead.svelte.ts` importa già da `copies.ts`.
+  - `FxRateReader` la scrive come prima.
+  - `refreshCopiedFacts` la scrive, insieme al tasso, per ogni coppia che rilegge, cioè quelle che passano il suo
+    primo `continue`: le issue `fx_quote` della coppia, meno `saved_fx_missing`, come fa il lettore. Nessuna issue → la
+    voce si cancella. Le coppie fuori dal piano o manuali tengono la memoria.
+- Nessun file da registrare nel runner: `fxIssues.ts` non è un test, e i rossi stanno in file già registrati.
+
+**Rossi** ✅ (test-author `5c16fc14`, secondo giro): 3 file modificati, nessuno nuovo, nessun caso esistente
+adattato.
+- Una corsa, a carico 22,5: `cd frontend && node_modules/.bin/vitest run --reporter=verbose` sui 3 file → **7 rossi,
+  18 verdi**.
+- `copies.refresh.test.ts`, D1:
+  - 3 rossi, il broker 9 posseduto ma fuori dal piano: `broker_inactive`, `negative_cash_unsupported` su
+    `cash:broker:9:USD`, `currency_spec_missing`;
+  - 3 guardie: `broker_inactive` del broker 7 del piano, `saved_fx_skipped` di EUR/USD, `price_missing`.
+  - ⚠️ **L'ultima modifica del file non è verificata**: le due tabelle `it.each` passate ad array con `%s`. Non
+    l'hanno vista né Vitest né Prettier.
+- `fxRead.test.ts`, D2:
+  - rossi: (a) la rilettura del D2 corretto cancella l'avviso; (b) un salto trovato solo dalla rilettura si ricorda;
+    (e) una coppia in attesa, che la rilettura trova senza alcun tasso salvato, dimentica il suo `saved_fx_invalid`;
+  - guardie: (c) una coppia manuale fuori dal piano tiene la memoria; (c2) una coppia passata a «Manuale» durante la
+    rilettura la tiene anch'essa; (d) l'issue di EUR/USD non finisce su CHF/USD.
+- `steps/FxStep.test.ts`: 1 rosso, lo scenario del revisore.
+  - Il passo legge e mostra il salto; si smonta; la rilettura trova il D2 valido; si rimonta.
+  - Atteso: nessun `pac-planner-fx-issues` nella card CHF/USD, e il tasso del D2.
+  - Barriera di presenza: la card EUR/USD tiene il suo avviso, ancora vero.
+- A lettura la cura copre tutti e 7, da provare:
+  - (e) perché una coppia in attesa passa il primo `continue` ed è riletta;
+  - (c2) perché il primo `continue` viene prima della riga che segna la coppia come riletta.
+
+**Ripresa** ✅ 20/10 (messaggio del coordinatore delle 08:46: riapplicare la cura dalla patch parcheggiata, i verdi, il
+checkpoint; poi la revisione di Z-29a, con l'esito in un messaggio):
+1. ✅ Stato: HEAD `186b92404`, sporchi i 3 test più questo piano, porta 6183 libera, `/tmp/librefolio-r13-x`
+   sparita col riavvio.
+2. ✅ Rossi rieseguiti, a carico 25,8: `cd frontend && node_modules/.bin/vitest run --reporter=verbose` sui 3 file → **7
+   rossi, 18 verdi**, come il 19/10. Tutti e 7 cadono su un'asserzione (`AssertionError`), nessuno su un import o un
+   errore. Prettier `--check` pulito sui 3 file: l'ultima modifica di `copies.refresh.test.ts`, non verificata il 19/10,
+   ora lo è.
+3. ✅ Cura: `patch -p1` con `files/parked/xr45bui2.patch`, prima a secco poi vera. 3 file: `copies.ts`,
+   `fxRead.svelte.ts`, il nuovo `fxIssues.ts`. Il diff applicato corrisponde alla cura descritta sopra.
+4. ✅ Verdi:
+   - Vitest sui 3 file: 25/25;
+   - Vitest sull'intera cartella `pac-allocator` più il test del cancello dei colori: **602/602** in 18 file, cioè 589
+     più i 13 casi nuovi;
+   - Prettier pulito su `copies.ts`, `fxRead.svelte.ts` e `fxIssues.ts`; cancelli dei colori puliti;
+   - `api sync` (nessun file tracciato toccato) e `front check` 0 errori e 0 avvisi;
+   - `check-orphans`: 571 test frontend, 144 E2E e 490 backend, tutti raggiungibili. Nessun file di test nuovo.
+5. ✅ Doc: nessuna modifica. La guida del PAC (`user/tools/pac-allocator/index.en.md`, passo FX) dice già quello che ora
+   succede: l'avviso nomina la coppia, il giorno saltato e quello usato, e la lettura si ripete prima del calcolo. Il
+   CHANGELOG (Unreleased) resta vero.
+6. Non girato: l'E2E `pac-allocator-real`, che il coordinatore lascia al gate d'ingresso.
+
+Commit proposto: `fix(pac): re-read warnings for planned Brokers; FX card follows the re-read (X-R45b review)`.
+
+**Corsia** ✅ ricreata il 20/10: `test --test-port 6183 --data-dir /tmp/librefolio-r13-x db populate --force --clean`,
+7 148 record (erano 7 124 sulla base `6c108929f`; la base nel frattempo è cambiata). Porta 6183 libera dopo.
+
+**Domande aperte**, non toccate dalla pausa:
+- le righe ≤ 0 già salvate (N92), dal developer;
+- X-R48b resta sospesa, dipende da N68.
