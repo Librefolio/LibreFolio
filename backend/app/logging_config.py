@@ -46,7 +46,7 @@ import structlog.stdlib
 from structlog.types import EventDict
 
 from backend.app.config import get_data_dir
-from backend.app.utils.runtime.errors import is_reported, mark_reported
+from backend.app.utils.runtime.errors import is_reported, mark_reported, mark_traceback_reported
 from backend.app.utils.runtime.secret_masking import SecretMaskingFilter, mask_event_dict
 
 # TRACE level constant — importable by other modules
@@ -72,13 +72,27 @@ if not hasattr(logging.Logger, "trace"):
 _REPORTING_LEVELS = {"warning": logging.WARNING, "warn": logging.WARNING, "error": logging.ERROR, "exception": logging.ERROR, "critical": logging.CRITICAL, "fatal": logging.CRITICAL}
 
 
-def _reported_exception(exc_info: Any) -> BaseException | None:
-    """The exception a log call is about: the one given as ``exc_info`` (an exception or a tuple), else the one being handled."""
+def _reported_exception(exc_info: Any) -> tuple[BaseException | None, bool]:
+    """The exception a log call is about, and whether the line renders its traceback.
+
+    The one given as ``exc_info`` (an exception or a tuple holding one), its traceback rendered; else the one being
+    handled, its traceback rendered when ``exc_info`` is any other true value (``True``, ``exception()``), as structlog's
+    ``format_exc_info`` reads it.
+    """
     if isinstance(exc_info, BaseException):
-        return exc_info
+        return exc_info, True
     if isinstance(exc_info, tuple) and len(exc_info) == 3 and isinstance(exc_info[1], BaseException):
-        return exc_info[1]
-    return sys.exc_info()[1]
+        return exc_info[1], True
+    return sys.exc_info()[1], bool(exc_info) and not isinstance(exc_info, tuple)
+
+
+def _line_request_id(context: Any, event_kw: dict[str, Any]) -> str | None:
+    """The ``request_id`` a line carries: the call's keyword, else the logger's bound context, else structlog's contextvars."""
+    if "request_id" in event_kw:
+        return event_kw["request_id"]
+    if isinstance(context, dict) and "request_id" in context:
+        return context["request_id"]
+    return structlog.contextvars.get_contextvars().get("request_id")
 
 
 class LibreFolioBoundLogger(structlog.stdlib.BoundLogger):
@@ -87,8 +101,9 @@ class LibreFolioBoundLogger(structlog.stdlib.BoundLogger):
     - ``exception()`` logs at error with ``exc_info``: the processors render the traceback into the JSON line, and the
       stdlib ``error`` adds none (``Logger.exception`` would add it a second time, in plain text, at level EXCEPTION).
     - A warning or a higher call, when its logger is enabled for that level, marks as reported the exception it is
-      about (``exc_info``, else the one being handled). In the wrapper, not in a processor: ``capture_logs()`` replaces
-      the processors, and the code under test must behave as in production.
+      about (``exc_info``, else the one being handled), for the request the line names (its ``request_id``, H-60r), with
+      every exception the line's traceback shows when it renders one. In the wrapper, not in a processor:
+      ``capture_logs()`` replaces the processors, and the code under test must behave as in production.
     """
 
     def exception(self, event: str | None = None, *args: Any, **kw: Any) -> Any:
@@ -98,9 +113,13 @@ class LibreFolioBoundLogger(structlog.stdlib.BoundLogger):
     def _proxy_to_logger(self, method_name: str, event: str | None = None, *event_args: Any, **event_kw: Any) -> Any:
         level = _REPORTING_LEVELS.get(method_name)
         if level is not None and self._logger.isEnabledFor(level):
-            error = _reported_exception(event_kw.get("exc_info"))
+            error, with_traceback = _reported_exception(event_kw.get("exc_info"))
             if error is not None:
-                mark_reported(error)
+                request_id = _line_request_id(self._context, event_kw)
+                if with_traceback:
+                    mark_traceback_reported(error, request_id)
+                else:
+                    mark_reported(error, request_id)
         return super()._proxy_to_logger(method_name, event, *event_args, **event_kw)
 
 
@@ -212,7 +231,11 @@ class _QueryCredentialFilter(logging.Filter):
 
 class _ReportedExceptionFilter(logging.Filter):
     """Drop a record of an exception the app already logged (lot H-60): uvicorn's «Exception in ASGI application» for the
-    500 that ``security_headers.py`` answered and logged as JSON, with the request id. Every other record passes."""
+    500 that ``security_headers.py`` answered and logged as JSON, with the request id. Every other record passes.
+
+    The mark of any request will do (H-60r): ``security_headers.py`` writes a line for the request it answers, unless
+    that request's log has one, before it raises the exception again, so uvicorn's record is always a second copy.
+    """
 
     def filter(self, record: logging.LogRecord) -> bool:
         info = record.exc_info

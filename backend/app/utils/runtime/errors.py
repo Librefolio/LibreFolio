@@ -12,9 +12,14 @@ caught. These helpers serve the code that logs a failure and the platform's safe
   renders an exception's own ``__cause__``/``__context__`` chain, never a ``cause`` attribute, so it is the last
   exception reached through such an attribute.
 - ``mark_reported`` marks an exception the log already has: a warning or a higher line was written with it, or while it
-  was being handled (``logging_config.LibreFolioBoundLogger``). The safety net reads ``is_reported`` and
-  ``chain_reported`` so as not to write it twice. The mark is an attribute of the exception object: exceptions cannot be
-  weakly referenced.
+  was being handled (``logging_config.LibreFolioBoundLogger``). The mark is per request (H-60r): one object can reach
+  several requests (the portfolio engine and the risk engines hand the failure of one build to every request waiting
+  on it), so the mark keeps, in order, the ``request_id`` of each request whose log has a line about the exception
+  (``None`` for a line outside any request), and whether such a line carried its traceback. The safety net reads
+  ``chain_reported_for`` and ``is_reported_for`` so as not to write a failure twice in a request, and ``chain_reported``
+  and ``is_reported`` to write only a short line, pointing to the first one, in a request the failure reached after
+  another. ``mark_traceback_reported`` marks the exceptions a traceback shows. The mark is an attribute of the
+  exception object: exceptions cannot be weakly referenced.
 """
 
 #: No chain is walked further: a guard against a cycle the links were built into, or a runaway chain.
@@ -101,19 +106,92 @@ def linked_errors(error: BaseException) -> list[BaseException]:
     return found
 
 
-def mark_reported(error: BaseException) -> None:
-    """Mark ``error`` as already in the log. An object that refuses attributes stays unmarked: never an error here."""
+def _entries(error: BaseException) -> tuple[tuple[str | None, bool], ...]:
+    """The mark of ``error``: one ``(request_id, traceback)`` per request whose log has a line about it, in order."""
+    entries = getattr(error, _MARK, ())
+    return entries if isinstance(entries, tuple) else ()
+
+
+def mark_reported(error: BaseException, request_id: str | None = None, *, traceback: bool = False) -> None:
+    """Mark ``error`` as in the log of request ``request_id`` (None: a line outside any request), with its traceback
+    when ``traceback``. A request already in the mark is not added again; ``traceback`` upgrades its entry. An object
+    that refuses attributes stays unmarked: never an error here."""
+    entries = _entries(error)
+    for index, (marked_request, marked_traceback) in enumerate(entries):
+        if marked_request == request_id:
+            if not traceback or marked_traceback:
+                return
+            entries = (*entries[:index], (request_id, True), *entries[index + 1 :])
+            break
+    else:
+        entries = (*entries, (request_id, traceback))
     try:
-        setattr(error, _MARK, True)
+        setattr(error, _MARK, entries)
     except (AttributeError, TypeError):
         pass
 
 
+def _rendered_errors(error: BaseException) -> list[BaseException]:
+    """``error`` and the exceptions its traceback shows, as Python renders it: ``__cause__`` when set, else an
+    unsuppressed ``__context__``, step by step; never a ``cause`` attribute."""
+    chain = [error]
+    seen = {id(error)}
+    current = error
+    while len(chain) < _LIMIT:
+        follows = current.__cause__ if current.__cause__ is not None else (None if current.__suppress_context__ else current.__context__)
+        if follows is None or id(follows) in seen:
+            break
+        chain.append(follows)
+        seen.add(id(follows))
+        current = follows
+    return chain
+
+
+def mark_traceback_reported(error: BaseException, request_id: str | None = None) -> None:
+    """Mark ``error`` and every exception its traceback shows as in the log of ``request_id``, traceback included."""
+    for item in _rendered_errors(error):
+        mark_reported(item, request_id, traceback=True)
+
+
 def is_reported(error: BaseException) -> bool:
-    """Whether ``error`` itself was marked by ``mark_reported``."""
-    return getattr(error, _MARK, False) is True
+    """Whether the log has a line about ``error`` itself, in any request or outside one."""
+    return bool(_entries(error))
+
+
+def is_reported_for(error: BaseException, request_id: str | None) -> bool:
+    """Whether the log of request ``request_id`` (None: outside any request) has a line about ``error`` itself."""
+    return any(marked_request == request_id for marked_request, _ in _entries(error))
 
 
 def chain_reported(error: BaseException) -> bool:
-    """Whether ``error`` or an exception linked to it (``linked_errors``) was marked by ``mark_reported``."""
+    """Whether ``error`` or an exception linked to it (``linked_errors``) is in the log, in any request."""
     return any(is_reported(item) for item in linked_errors(error))
+
+
+def chain_reported_for(error: BaseException, request_id: str | None) -> bool:
+    """Whether ``error`` or an exception linked to it (``linked_errors``) is in the log of request ``request_id``."""
+    return any(is_reported_for(item, request_id) for item in linked_errors(error))
+
+
+def traceback_reported(error: BaseException) -> bool:
+    """Whether a line carried the traceback of ``error`` itself."""
+    return any(marked_traceback for _, marked_traceback in _entries(error))
+
+
+def first_reporting_request(error: BaseException) -> str | None:
+    """The request of the first line about ``error`` or a linked exception: the first entry of the first marked one
+    along ``linked_errors``; None when nothing is marked or that line was written outside any request."""
+    for item in linked_errors(error):
+        entries = _entries(item)
+        if entries:
+            return entries[0][0]
+    return None
+
+
+def traceback_reporting_request(error: BaseException) -> str | None:
+    """The request of the first line that carried the traceback of ``error``; None when no line did or it was written
+    outside any request."""
+    for marked_request, marked_traceback in _entries(error):
+        if marked_traceback:
+            return marked_request
+    return None

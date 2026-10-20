@@ -214,6 +214,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/instance/instanceBlock.test.ts",
             "src/lib/api/zodios-client.test.ts",
             "src/lib/api/apiErrorConsole.test.ts",
+            "src/lib/api/requestIdMessage.test.ts",
             "src/lib/api/apiClientRuneFree.gate.test.ts",
             "src/lib/features/live-updates/activityTracker.test.ts",
             "src/lib/features/live-updates/activePolling.test.ts",

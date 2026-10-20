@@ -158,7 +158,11 @@ canceled request is not a failure.
   holds the request's body and configuration, a `ZodiosError` message embeds the whole answer it refused.
 - **Never print** a request body, a header (the `X-Request-Id` aside), a token, a password, a query string, the text of
   a `detail`, the `input` a 422 can repeat.
-- **To show the id to the user**, in a generic error message: `requestIdOf(error)`.
+- **To show the id to the user**, in a generic error message: `withRequestId(t, message, error)`
+  (`lib/api/requestIdMessage.ts`, H-60r). The message stays whole and the code follows it, «… (code: <id>)»
+  (`common.errorWithRequestId`), only for a 5xx carrying a LibreFolio id: the failure whose id the server log always
+  holds. Pass the caught error as it is (a wrapper is followed through `originalError` or `cause`); never build that
+  text by hand, never instead of a message that tells the user what to do.
 - A console line is for the human who investigates; it is never the signal a test or a component reads («Publish
   state, do not print it»).
 

@@ -1,10 +1,10 @@
-"""H-60 · TA-1 — the line ``BuildContext._build`` writes when an AI Export component fails (contract §1, §0's meanings).
+"""H-60 · TA-1 and H-60r · TA-R3 — the line ``BuildContext._build`` writes when an AI Export component fails.
 
-Today a component that fails to build leaves no trace: ``_build`` turns the exception into a cached failed outcome (a
-``ComponentDiagnostic`` for an optional caller, a ``RequiredComponentBuildError`` for a required one) and writes nothing,
-so an export that comes back short never says why. Contract §1 gives ``backend.app.services.ai_export.dependencies`` a
-module logger, ``get_logger(__name__)``, and one **warning** per failed component per ``BuildContext``, written in the
-``except Exception`` of ``_build``:
+H-60 (TA-1: its contract's §1, with §0's meanings). A component that failed to build used to leave no trace: ``_build``
+turns the exception into a cached failed outcome (a ``ComponentDiagnostic`` for an optional caller, a
+``RequiredComponentBuildError`` for a required one) and wrote nothing, so an export that came back short never said why.
+H-60 gives ``backend.app.services.ai_export.dependencies`` a module logger, ``get_logger(__name__)``, and one **warning**
+per failed component per ``BuildContext``, written in the ``except Exception`` of ``_build``:
 
 - the exception is a ``RequiredComponentBuildError`` (a dependency failed, declared or resolved as required by the
   builder, and that failure has its own line where it was built) → ``"AI Export component not built: a dependency
@@ -19,26 +19,53 @@ Nothing else changes: same outcome, same exception object, same diagnostics; a c
 ``asyncio.CancelledError`` is not caught and writes nothing. No payload value goes in the line (ids, a class name, a
 reason code): the message reaches the log only inside the traceback.
 
+H-60r (TA-R3: its contract's §3, with §0/§1 for the mark): one traceback per failed resource. In one request
+``BuildContext`` memoizes a failed resource as one ``ResourceLoadError`` and raises that same object to every component
+that reads the key; across requests, a loader awaiting a shared build (the portfolio engine's, MF-J45b/d) raises the
+build's own exception, the same object, in each. The ``failed to build`` warning stays one per component per request,
+with the keys above; only the traceback changes, written with the first line about it:
+
+- ``traceback_reported(shown_error(exc))`` false → ``exc_info`` = ``shown_error(exc)``, as above;
+- true, because a line already wrote that traceback (another component's, in this request or another, or the loader's
+  own, logged before it raised) → no ``exc_info`` key, and ``logged_with_request_id`` =
+  ``traceback_reporting_request(shown_error(exc))``, the request whose line holds it (possibly this very one); the key is
+  absent when that line was written outside any request.
+
+The mark is set by the logger (§1): a warning written with ``exc_info`` records on the exception the request it was
+written in, for ``_build`` the ``request_id`` bound in structlog's contextvars, as ``RequestIdMiddleware`` binds it for
+each HTTP request; not ``BuildContext.request_id``, the snapshot's own id (a fresh uuid in ``runtime_service.py``), so the
+tests keep the two apart. The capture below has no ``merge_contextvars``: ``request_id`` is in no captured line, and a
+test that needs a request binds one with ``structlog.contextvars.bound_contextvars`` around its resolves. Outcomes,
+diagnostics, exceptions, build counts and the «a dependency failed» line do not change, and every H-60 test keeps
+holding: each of its failures has an exception of its own.
+
 The log is read with ``structlog.testing.capture_logs`` for the whole test, ``add_logger_name`` naming each event's
 logger, behind a barrier: a probe logged under the module's logger name reaches the capture before anything is built
 (this works before the module has a logger; capture_logs swaps the processors inside the configured list, so a logger
 cached on it still reaches the capture: test_post_migration.py, section 13). Every expected line is compared whole, keys
 included; an exception compares by identity, so ``exc_info`` is pinned to the very object. An absence (a successful
-build, a cancellation) is asserted beside a presence in the same request, a failing sibling's line: without it the
-absence would hold just as well with no logging at all.
+build, a cancellation, a traceback not written twice) is asserted beside a presence in the same capture: a failing
+sibling's line, or the line that does hold the traceback; without it the absence would hold just as well with no logging
+at all.
 
 Pure: in-memory registries and builders, as in test_ai_export_component_runtime.py; no database, no server, no file.
 
-Red today: ``_build`` writes nothing (the module has no logger), so every expected line is missing, the presence
-barriers of the two absence tests included.
+Red today (HEAD 2c7fc7b8d). The H-60 tests pin what bf16865ed implemented: their «Red today» notes date from before that
+commit, when ``_build`` wrote nothing. The H-60r tests are red: ``_build`` passes ``exc_info`` on every ``failed to
+build`` line, so the second component, or the second request, to fail on one loader exception, and a component whose
+loader already logged its failure with the traceback, write that traceback again, and no line has
+``logged_with_request_id``. Their preconditions (one load per request, the same exception objects, H-60's mark on the
+loader's exception, the loader's own line, the behaviour unchanged) hold today.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 import traceback
 import uuid
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Awaitable, Callable, Iterator, Mapping
+from contextlib import AbstractContextManager, nullcontext
 from typing import Any, NoReturn
 
 import pytest
@@ -52,14 +79,16 @@ from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import Domain, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext, RequiredComponentBuildError, ResourceLoadError
+from backend.app.utils.runtime.errors import is_reported
 
 #: The structlog name of the module's logger (contract §1: ``get_logger(__name__)``).
 MODULE_LOGGER = "backend.app.services.ai_export.dependencies"
 FAILED_EVENT = "AI Export component failed to build"
 DEPENDENCY_EVENT = "AI Export component not built: a dependency failed"
-#: Every key a line may hold: ids, a class name, a reason code, the exception, and what the capture adds (``logger``,
-#: ``log_level``). Nothing that could carry a payload value.
-FAILED_KEYS = frozenset({"event", "log_level", "logger", "component_id", "error_type", "reason_code", "exc_info"})
+#: Every key a line may hold: ids, a class name, a reason code, the exception or, when another line already holds its
+#: traceback, that line's request (H-60r §3), and what the capture adds (``logger``, ``log_level``). Nothing that could
+#: carry a payload value.
+FAILED_KEYS = frozenset({"event", "log_level", "logger", "component_id", "error_type", "reason_code", "exc_info", "logged_with_request_id"})
 DEPENDENCY_KEYS = frozenset({"event", "log_level", "logger", "component_id", "dependency_id"})
 
 SOURCE = "portfolio.h60_source"
@@ -68,6 +97,15 @@ TOP = "portfolio.h60_top"
 RESOURCE_USER = "portfolio.h60_resource_user"
 INVALID_PAYLOAD = "portfolio.h60_invalid_payload"
 BARRIER = "portfolio.h60_presence_barrier"
+#: H-60r: two components reading one resource in one request.
+FIRST_READER = "portfolio.h60r_first_reader"
+SECOND_READER = "portfolio.h60r_second_reader"
+#: H-60r: the resource both readers read, and the one a build shared by two requests stands behind.
+ROWS = ResourceKey("h60r.rows", int)
+PORTFOLIO_BUILD = ResourceKey("h60r.portfolio_build", int)
+#: H-60r: the logger of a test's own loader, which logs its failure with the traceback before raising it, and that line.
+LOADER_LOGGER = "backend.test_scripts.test_services.h60r_loader"
+LOADER_EVENT = "H-60r test loader could not read the rows"
 
 
 # =============================================================================
@@ -119,20 +157,43 @@ def _raising(error: BaseException) -> Callable[..., NoReturn]:
     return _raise
 
 
+def _counted(loader: Callable[[], object], runs: list[None]) -> Callable[[], object]:
+    """``loader``, appending to ``runs`` each time it is called: how many times a resource was really loaded."""
+
+    def _load() -> object:
+        runs.append(None)
+        return loader()
+
+    return _load
+
+
+def _reads(key: ResourceKey[int], loader: Callable[[], object]) -> Callable[[BuildContext, Mapping[str, SectionEnvelope]], Awaitable[_Payload]]:
+    """A builder that reads the resource ``key`` through ``loader``: any number of components may read the same key."""
+
+    async def _read(context: BuildContext, dependencies_map: Mapping[str, SectionEnvelope]) -> _Payload:
+        return _Payload(value=await context.resource(key, loader))
+
+    return _read
+
+
 # =============================================================================
 # Reading the log
 # =============================================================================
 
 
 class _ModuleLog:
-    """The events the capture saw from the module's logger, in the order written, the barrier's probe left out."""
+    """The events the capture saw, by logger, in the order written, the barrier's probe left out: the module's
+    (``lines``), or a test's own (``lines_of``)."""
 
     def __init__(self, entries: list[dict[str, Any]], probe: str) -> None:
         self._entries = entries
         self._probe = probe
 
     def lines(self) -> list[dict[str, Any]]:
-        return [entry for entry in self._entries if entry.get("logger") == MODULE_LOGGER and entry.get("event") != self._probe]
+        return self.lines_of(MODULE_LOGGER)
+
+    def lines_of(self, logger_name: str) -> list[dict[str, Any]]:
+        return [entry for entry in self._entries if entry.get("logger") == logger_name and entry.get("event") != self._probe]
 
 
 @pytest.fixture
@@ -152,10 +213,23 @@ def module_log() -> Iterator[_ModuleLog]:
 
 
 def _failed_line(component_id: str, error_type: str, shown: BaseException, *, reason_code: str | None = None) -> dict[str, Any]:
-    """A whole ``failed to build`` line; its ``exc_info`` compares by identity (an exception has no ``__eq__``)."""
-    line: dict[str, Any] = {"event": FAILED_EVENT, "log_level": "warning", "logger": MODULE_LOGGER, "component_id": component_id, "error_type": error_type, "exc_info": shown}
+    """A whole ``failed to build`` line with the traceback; its ``exc_info`` compares by identity (an exception has no ``__eq__``)."""
+    line = _failed_line_without_traceback(component_id, error_type, reason_code=reason_code)
+    line["exc_info"] = shown
+    return line
+
+
+def _failed_line_without_traceback(component_id: str, error_type: str, *, reason_code: str | None = None, logged_with_request_id: str | None = None) -> dict[str, Any]:
+    """A whole ``failed to build`` line whose traceback another line already wrote (H-60r §3): no ``exc_info`` key.
+
+    ``logged_with_request_id`` names the request whose line holds that traceback; the key is absent when that line was
+    written outside any request.
+    """
+    line: dict[str, Any] = {"event": FAILED_EVENT, "log_level": "warning", "logger": MODULE_LOGGER, "component_id": component_id, "error_type": error_type}
     if reason_code is not None:
         line["reason_code"] = reason_code
+    if logged_with_request_id is not None:
+        line["logged_with_request_id"] = logged_with_request_id
     return line
 
 
@@ -167,6 +241,12 @@ def _dependency_line(component_id: str, dependency_id: str) -> dict[str, Any]:
 def _said(lines: list[dict[str, Any]]) -> list[tuple[Any, Any, Any]]:
     """What the module wrote, one ``(level, event, component_id)`` per line: for the assertion messages."""
     return [(line.get("log_level"), line.get("event"), line.get("component_id")) for line in lines]
+
+
+def _said_with_traceback(lines: list[dict[str, Any]]) -> list[tuple[Any, Any, bool, Any]]:
+    """What the module wrote, one ``(event, component_id, carries exc_info, logged_with_request_id)`` per line: for the
+    H-60r assertion messages, where the question is which line carries the traceback."""
+    return [(line.get("event"), line.get("component_id"), "exc_info" in line, line.get("logged_with_request_id")) for line in lines]
 
 
 # =============================================================================
@@ -506,3 +586,213 @@ async def test_a_payload_value_in_a_message_reaches_the_log_only_inside_the_trac
             shown = line.get("exc_info")
             assert isinstance(shown, BaseException), f"{line['component_id']}: exc_info must be the exception, got {shown!r}"
             assert canary in "".join(traceback.format_exception(shown)), f"{line['component_id']}: the message must still reach the log, inside the traceback of exc_info"
+
+
+# =============================================================================
+# H-60r §3: a failed resource read twice, its traceback written once
+# =============================================================================
+
+
+def _in_request(request_id: str | None) -> AbstractContextManager[None]:
+    """The HTTP request the resolves run in, bound in structlog's contextvars as ``RequestIdMiddleware`` binds it; with
+    ``None``, outside any request: nothing is bound."""
+    return structlog.contextvars.bound_contextvars(request_id=request_id) if request_id is not None else nullcontext()
+
+
+def _no_request_bound() -> None:
+    """Precondition of the H-60r tests: no request id leaked into the test's context, so the only request a line can
+    name is one the test binds itself."""
+    bound = structlog.contextvars.get_contextvars()
+    assert "request_id" not in bound, f"precondition: no request may be bound around the test, found request_id {bound.get('request_id')!r}"
+
+
+async def _failure_of(context: BuildContext, component_id: str) -> BaseException:
+    """The exception ``component_id``'s cached outcome holds, as a required caller receives it: the ``cause`` of its
+    ``RequiredComponentBuildError``. Read once the component has been built: it builds nothing and writes no line."""
+    with pytest.raises(RequiredComponentBuildError) as raised:
+        await context.resolve(component_id, required=True)
+    assert raised.value.component_id == component_id, f"the required caller of {component_id} must be told its own component, got {raised.value.component_id!r}"
+    return raised.value.cause
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("http_request_id", [None, "req-h60r-one"], ids=["outside-any-request", "in-a-request"])
+async def test_two_components_reading_one_failed_resource_write_its_traceback_once(module_log: _ModuleLog, http_request_id: str | None) -> None:
+    """Brief R3·1 and R3·2: two components read one failed resource in one request → its traceback in the first line only.
+
+    Both builders read ``ROWS`` through one loader raising ``lookup_error``; both are resolved as optional in one
+    ``BuildContext``, outside any request, then in one bound as ``RequestIdMiddleware`` binds it. Preconditions: the
+    loader ran once, both outcomes failed on the same ``ResourceLoadError`` object (its ``cause`` ``lookup_error``), and
+    the first line marked ``lookup_error`` (H-60's mark, which §3 reads). Lines, in order: the first reader's ``failed to
+    build`` with ``exc_info`` ``lookup_error``; then the second reader's, with the same ``error_type``, no ``exc_info``
+    key, and ``logged_with_request_id`` the request whose line holds the traceback, this very one; outside any request,
+    no such key either. The context keeps its own id (``req-h60-ta1``), as a snapshot keeps its uuid in production: the
+    line names the HTTP request. Red today: the second line carries ``exc_info`` again, the loader's traceback twice.
+    """
+    _no_request_bound()
+    lookup_error = LookupError("no price row for the requested day")
+    loads: list[None] = []
+    loader = _counted(_raising(lookup_error), loads)
+    context = _context(_spec(FIRST_READER, builder=_reads(ROWS, loader)), _spec(SECOND_READER, builder=_reads(ROWS, loader)))
+
+    with _in_request(http_request_id):
+        for component_id in (FIRST_READER, SECOND_READER):
+            assert await context.resolve(component_id, required=False) is None, f"precondition: {component_id} must fail, reading the failed {ROWS.name!r}"
+
+    first_failure = await _failure_of(context, FIRST_READER)
+    second_failure = await _failure_of(context, SECOND_READER)
+    assert len(loads) == 1, f"precondition: a failed resource is loaded once per request, then memoized; got {len(loads)} loads"
+    assert isinstance(first_failure, ResourceLoadError) and first_failure.cause is lookup_error, f"precondition: the first reader must fail on a ResourceLoadError wrapping the loader's LookupError, got {first_failure!r}"
+    assert second_failure is first_failure, f"precondition: both readers must fail on the same ResourceLoadError object, got {second_failure!r}"
+    assert is_reported(lookup_error), "precondition: the first line marked the loader's exception as reported (H-60), the mark §3 reads"
+
+    lines = module_log.lines()
+    expected = [_failed_line(FIRST_READER, "LookupError", lookup_error), _failed_line_without_traceback(SECOND_READER, "LookupError", logged_with_request_id=http_request_id)]
+    assert lines == expected, f"the loader's traceback goes with the first reader's line only, the second's points to it; the module wrote {_said_with_traceback(lines)}"
+
+
+@pytest.mark.asyncio
+async def test_a_loader_exception_two_requests_share_is_written_with_its_traceback_once(module_log: _ModuleLog) -> None:
+    """Brief R3·3: two requests whose loaders raise the same exception object → its traceback in request one's line only.
+
+    The portfolio engine runs one build per key (MF-J45b/d): a request that arrives while the build runs awaits it, and
+    when the build fails every waiting request gets its exception, the same object. Here two ``BuildContext``s over one
+    registry, each with its own id (a fresh uuid, as ``runtime_service.py`` gives a snapshot), resolved one after the
+    other, each in its own HTTP request; the loader of each raises ``shared``, which carries a reason code so that the
+    line without traceback is seen to keep it. Preconditions: each request loaded once and failed on its own
+    ``ResourceLoadError``, both wrapping ``shared`` (what the requests share is the loader's exception, not the
+    wrapper), and request one's line marked ``shared`` (H-60). Lines, in order: request one's with ``exc_info``
+    ``shared``; request two's with the same ``error_type`` and ``reason_code``, no ``exc_info`` key, and
+    ``logged_with_request_id`` request one's id. Red today: request two's line carries ``exc_info`` again.
+    """
+    _no_request_bound()
+    shared = _RateHistoryError("fx_no_usable_rate", "no FX rate exists on or before the period end")
+    loads: list[None] = []
+    registry = ComponentRegistry([_spec(RESOURCE_USER, builder=_reads(PORTFOLIO_BUILD, _counted(_raising(shared), loads)))])
+    first_request, second_request = "req-h60r-first", "req-h60r-second"
+
+    failures: list[BaseException] = []
+    for http_request_id in (first_request, second_request):
+        context = BuildContext(registry, request_id=uuid.uuid4().hex)
+        with _in_request(http_request_id):
+            assert await context.resolve(RESOURCE_USER, required=False) is None, f"precondition: {RESOURCE_USER} must fail in {http_request_id}"
+        failures.append(await _failure_of(context, RESOURCE_USER))
+
+    first_failure, second_failure = failures
+    assert len(loads) == 2, f"precondition: each request loads its resource once, got {len(loads)} loads for two requests"
+    assert all(isinstance(failure, ResourceLoadError) and failure.cause is shared for failure in failures), f"precondition: each request must fail on a ResourceLoadError wrapping the shared exception, got {failures!r}"
+    assert second_failure is not first_failure, "precondition: each request wraps the shared exception in a ResourceLoadError of its own"
+    assert is_reported(shared), "precondition: request one's line marked the shared exception as reported (H-60), the mark §3 reads"
+
+    lines = module_log.lines()
+    expected = [
+        _failed_line(RESOURCE_USER, "_RateHistoryError", shared, reason_code="fx_no_usable_rate"),
+        _failed_line_without_traceback(RESOURCE_USER, "_RateHistoryError", reason_code="fx_no_usable_rate", logged_with_request_id=first_request),
+    ]
+    assert lines == expected, f"the shared exception's traceback goes with request one's line only, request two's points to it; the module wrote {_said_with_traceback(lines)}"
+
+
+@pytest.mark.asyncio
+async def test_a_resource_failure_two_components_share_behaves_as_before(module_log: _ModuleLog) -> None:
+    """Brief R3·4, §3 «outcomes, diagnostics, exceptions and build counts do not change»: only the second traceback goes.
+
+    One request: the first reader resolved as required, the second as optional, then each the other way. Checked first,
+    as before the cure: each required caller gets a ``RequiredComponentBuildError`` naming its own component, whose
+    ``cause`` is the request's one ``ResourceLoadError`` (key ``ROWS``, ``cause`` the loader's exception); each optional
+    caller gets None and one diagnostic, its reason the wrapper's message, in the order they were resolved; each builder
+    ran once, the loader once; the first line marked the loader's exception (H-60). Then the lines: the first reader's
+    with the traceback, the second's pointing to this request. Red today: the behaviour holds, the second line carries
+    ``exc_info`` again.
+    """
+    _no_request_bound()
+    lookup_error = LookupError("no price row for the requested day")
+    loads: list[None] = []
+    loader = _counted(_raising(lookup_error), loads)
+    context = _context(_spec(FIRST_READER, builder=_reads(ROWS, loader)), _spec(SECOND_READER, builder=_reads(ROWS, loader)))
+    http_request_id = "req-h60r-behaviour"
+
+    with _in_request(http_request_id):
+        with pytest.raises(RequiredComponentBuildError) as first_required:
+            await context.resolve(FIRST_READER, required=True)
+        second_optional = await context.resolve(SECOND_READER, required=False)
+        first_optional = await context.resolve(FIRST_READER, required=False)
+        with pytest.raises(RequiredComponentBuildError) as second_required:
+            await context.resolve(SECOND_READER, required=True)
+
+    wrapper = first_required.value.cause
+    assert (first_required.value.component_id, second_required.value.component_id) == (FIRST_READER, SECOND_READER), "each required caller must be told its own component"
+    assert isinstance(wrapper, ResourceLoadError) and wrapper.key_name == ROWS.name and wrapper.cause is lookup_error, f"the required caller must get the ResourceLoadError wrapping the loader's exception as cause, got {wrapper!r}"
+    assert second_required.value.cause is wrapper, f"both required callers must get the request's one ResourceLoadError as cause, got {second_required.value.cause!r}"
+    assert first_optional is None and second_optional is None, "an optional caller of a failed component gets None"
+    diagnostics = [(diagnostic.component_id, diagnostic.reason) for diagnostic in context.diagnostics]
+    assert diagnostics == [(SECOND_READER, str(wrapper)), (FIRST_READER, str(wrapper))], f"one diagnostic per optional component, in the order resolved, its reason the wrapper's message; got {diagnostics}"
+    assert (context.build_count(FIRST_READER), context.build_count(SECOND_READER), len(loads)) == (1, 1, 1), "each builder runs once per request, and the loader once"
+    assert is_reported(lookup_error), "precondition: the first line marked the loader's exception as reported (H-60), the mark §3 reads"
+
+    lines = module_log.lines()
+    expected = [_failed_line(FIRST_READER, "LookupError", lookup_error), _failed_line_without_traceback(SECOND_READER, "LookupError", logged_with_request_id=http_request_id)]
+    assert lines == expected, f"behaviour unchanged, and the loader's traceback written once, with the first reader's line; the module wrote {_said_with_traceback(lines)}"
+
+
+@pytest.fixture
+def loader_logger() -> Iterator[structlog.stdlib.BoundLogger]:
+    """The logger of a test's own loader, writing warnings whatever the lane's level; its level put back on exit, pass or fail.
+
+    ``LibreFolioBoundLogger`` marks an exception only when its stdlib logger is enabled for the line's level (§1, as
+    H-60): a level inherited from a lane at ERROR would leave the loader's line unmarked, and ``_build`` would then be
+    right to write the traceback. So the logger gets a level of its own, WARNING, and is checked to be enabled for it.
+    """
+    stdlib_logger = logging.getLogger(LOADER_LOGGER)
+    previous_level = stdlib_logger.level
+    # setLevel, not an assignment: it also clears the cached answers of isEnabledFor, both ways.
+    stdlib_logger.setLevel(logging.WARNING)
+    try:
+        assert stdlib_logger.isEnabledFor(logging.WARNING), f"precondition: {LOADER_LOGGER!r} must write warnings at its own level; it is disabled, or logging.disable() covers WARNING in this process"
+        yield get_logger(LOADER_LOGGER)
+    finally:
+        stdlib_logger.setLevel(previous_level)
+
+
+@pytest.mark.asyncio
+async def test_a_traceback_the_loader_already_logged_is_not_written_again_by_build(module_log: _ModuleLog, loader_logger: structlog.stdlib.BoundLogger) -> None:
+    """§3, ``traceback_reported`` true because of any line: the loader's own, logged before it raised, in this request.
+
+    Inside a bound request, the loader catches its failure, logs it on a logger of the test, ``warning(…,
+    exc_info=error)`` (``loader_logger``: warnings whatever the lane's level), then raises it again. §1 marks ``error``
+    as rendered in that request; ``_build`` meets it behind the ``ResourceLoadError`` as ``shown_error``, so its ``failed
+    to build`` line has no ``exc_info`` key and ``logged_with_request_id`` the bound request. Preconditions, as before
+    the cure: the loader ran once, its line marked ``error`` before ``_build`` wrote anything (H-60), and the component
+    failed on a ``ResourceLoadError`` wrapping ``error``. Barrier before the absence: the loader's line was captured
+    whole, its ``exc_info`` ``error`` itself, so the traceback is in the log. Red today: ``_build``'s line carries
+    ``exc_info`` again, and no ``logged_with_request_id``.
+    """
+    _no_request_bound()
+    error = LookupError("no price row for the requested day")
+    reported_after_its_line: list[bool] = []
+
+    def _logs_then_raises() -> NoReturn:
+        try:
+            raise error
+        except LookupError:
+            # The loader's own handling: its failure logged with the traceback, then raised again to the builder.
+            loader_logger.warning(LOADER_EVENT, exc_info=error)
+            reported_after_its_line.append(is_reported(error))
+            raise
+
+    context = _context(_spec(RESOURCE_USER, builder=_reads(ROWS, _logs_then_raises)))
+    http_request_id = "req-h60r-loader"
+
+    with _in_request(http_request_id):
+        assert await context.resolve(RESOURCE_USER, required=False) is None, f"precondition: {RESOURCE_USER} must fail, its loader raising"
+
+    failure = await _failure_of(context, RESOURCE_USER)
+    assert reported_after_its_line == [True], f"precondition: the loader runs once, and its own line marks its exception as reported (H-60) before _build writes anything; got {reported_after_its_line}"
+    assert isinstance(failure, ResourceLoadError) and failure.cause is error, f"precondition: the component must fail on a ResourceLoadError wrapping the loader's exception, got {failure!r}"
+
+    loader_lines = module_log.lines_of(LOADER_LOGGER)
+    expected_loader_line = {"event": LOADER_EVENT, "log_level": "warning", "logger": LOADER_LOGGER, "exc_info": error}
+    assert loader_lines == [expected_loader_line], f"barrier: the loader's own line must be captured with its traceback, exc_info the very exception; the loader wrote {_said_with_traceback(loader_lines)}"
+
+    lines = module_log.lines()
+    expected = [_failed_line_without_traceback(RESOURCE_USER, "LookupError", logged_with_request_id=http_request_id)]
+    assert lines == expected, f"the loader's line holds the traceback, so _build's line points to its request instead of writing it again; the module wrote {_said_with_traceback(lines)}"
