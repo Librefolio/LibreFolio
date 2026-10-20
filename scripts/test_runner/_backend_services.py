@@ -49,6 +49,7 @@ AI_EXPORT_SERVICE_TEST_PATHS = (
 # the shared DB) so the unit can honestly declare PURE isolation and run beside
 # anything.
 AI_EXPORT_PURE_TEST_PATHS = (
+    "backend/test_scripts/test_services/test_ai_export_build_failure_log.py",
     "backend/test_scripts/test_services/test_ai_export_components_drawdown_total_loss.py",
     "backend/test_scripts/test_services/test_ai_export_fx_payload_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_fx_timing_invariants.py",
@@ -1443,6 +1444,14 @@ def services_response_validation(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Response validation tests", verbose=verbose)
 
 
+def services_server_errors(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the request id and the 5xx answers: id in every answer and log line, the HTTPException handler, the unhandled 500, H-33's 500, D4 (H-60)."""
+    print_section("Services: Request Id and Server Errors")
+    print_info("Testing: services/platform/request_id.py, api/server_errors.py, services/platform/failure_report.py, the unhandled 500 of security_headers.py, api/response_validation.py, client_log_level of /system/instance")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_server_errors.py", test_names)
+    return run_command(cmd, "Request id and server error tests", verbose=verbose)
+
+
 def services_client_address(verbose: bool = False, test_names: list = None) -> bool:
     """Test the client address behind a trusted proxy: LIBREFOLIO_CLIENT_IP_HEADER, client_address and client_rate_key (P17); no function only for the tests (N58)."""
     print_section("Services: Client Address")
@@ -1641,6 +1650,14 @@ def services_series_export_csv(verbose: bool = False, test_names: list = None) -
     print_info("Testing: backend/app/services/platform/series_export.py (stream_rows_as_csv, stream_rows_as_json)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_series_export_csv.py", test_names)
     return run_command(cmd, "Series export CSV tests", verbose=verbose)
+
+
+def services_logging_errors(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the error helpers and the log of a failure: one traceback per exception, the «reported» mark, uvicorn's duplicate dropped (H-60)."""
+    print_section("Services: Errors in the Log")
+    print_info("Testing: backend/app/utils/runtime/errors.py (causes, root, shown error, reason code, reported mark) and backend/app/logging_config.py (LibreFolioBoundLogger, add_log_level, the uvicorn.error filter)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_logging_errors.py", test_names)
+    return run_command(cmd, "Errors in the log tests", verbose=verbose)
 
 
 def services_logging_access_filter(verbose: bool = False, test_names: list = None) -> bool:
@@ -2823,8 +2840,18 @@ Note: No backend server required.
         "response-validation",
         services_response_validation,
         name="Response Validation",
-        desc="H-33: a response that breaks its response_model is logged with its route, endpoint, error types and locations, never its content, and answered 500 in plain text",
+        desc="H-33: a response that breaks its response_model is logged with its route, endpoint, error types and locations, never its content, and answered 500 as every platform 5xx (H-60: JSON with request_id and error_type)",
         # Fresh FastAPI apps in process, and the real app's handler table; logs captured with structlog. No DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "server-errors",
+        services_server_errors,
+        name="Request Id and Server Errors",
+        desc="H-60: X-Request-Id on every answer and request_id in every line of the request; 4xx as FastAPI; a 5xx with request_id and error_type, its cause logged once (error with traceback, warning without a cause, nothing when the route logged it); the unhandled 500 as JSON, logged once and re-raised; H-33's 500 as JSON; no request secret in an answer or a line; client_log_level follows LOG_LEVEL; H-60r: requests failing on one shared exception (a shared build, one object raised twice) each leave their id in the log, the traceback once, the later ones a short warning pointing to the first",
+        # PURE: fresh FastAPI apps in process; the real app for its handler table, its stack and D4, its session on an
+        # in-memory SQLite built with create_all; the activity record monkeypatched per request. No lane DB, no server.
         isolation="pure",
     )
     add_test(
@@ -3013,6 +3040,16 @@ Note: No backend server required.
         name="Series Export CSV",
         desc="Lot B-39, CSV formula injection in the series exports (series_export.stream_rows_as_csv): a cell whose text starts with =, +, -, @, a tab or a CR, behind any apostrophes ('*[=+-@\\t\\r]), written with one leading apostrophe ('=x becomes ''=x, so the round trip is exact; a CR alone too; a value that is no str written as one; in a row of the events' schema, only that cell); a plain number never escaped in any type (Decimal -1.5, text -1.5, +2, -1E+2, -0, int -3); dates, UTC datetimes, None, other text ('hello included), the header rows of the three schemas and the ; delimiter unchanged; the JSON export unchanged; every cell read back with csv.reader",
         # PURE: the two stream functions called directly. No database, no server, no network, no file.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "logging-errors",
+        services_logging_errors,
+        name="Errors in the Log",
+        desc="H-60: the error helpers (visible causes, root, shown error, reason code, linked errors, the reported mark); logger.exception writes one JSON line at ERROR with its traceback once; a warning or more with an exception, or while one is handled, marks it; uvicorn.error drops its own record of a reported exception; H-60r: the mark per request (is_reported_for, chain_reported_for), the traceback flag on the chain a traceback shows (mark_traceback_reported), the first reporting request; a line marks the request it carries (its keyword, the bound context, structlog's contextvars)",
+        # PURE: helpers on exceptions built in the test; configure_logging with file logging off, structlog and every
+        # logger put back after each test; one fresh interpreter for the import-time bootstrap. No DB, no server.
         isolation="pure",
     )
     add_test(
