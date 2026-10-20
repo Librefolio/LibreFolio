@@ -7883,3 +7883,351 @@ dell'avviso nelle 4 lingue è approvato così com'è.
 
 - **Niente stamp sulla guida del PAC.** La cache di Aphra ha l'MD5 `1e299f28…` (tradotta il 10/10), mentre la pagina EN a
   HEAD, prima della mia modifica, era già `f1d2f335…`. Il debito c'era già, e uno stamp lo nasconderebbe.
+
+### N61-form — analisi breve (19/10, sola lettura, base `51c5f1d2c`)
+
+Richiesta (developer, via coordinatore): con `LIBREFOLIO_SUPPORT_URL` pagina https (non mailto), la riga «Non lo trovi?»
+della ricerca asset passa alla pagina lo stesso oggetto e testo del mailto, `?title=…&body=…` come per GitHub, senza dati
+personali. Il modulo del sito cloud li leggerà.
+
+Oggi (`frontend/src/lib/components/assets/assetSearchReport.ts`, `reportHref`):
+- mailto: `mailto:addr?subject=<enc>&body=<enc, CRLF>` (RFC 6068);
+- github: `https://github.com/Librefolio/LibreFolio/issues/new?title=<enc>&body=<enc, LF>` (encodeURIComponent);
+- page: l'URL nudo; il clic copia il body negli appunti (`reportClicked`), toast «copiato»;
+- link con `target=_blank rel="noopener noreferrer"` per page e github: nessun Referer, l'indirizzo dell'istanza non esce.
+
+Forma proposta per la pagina:
+- parametri `title` (= oggetto del mailto) e `body` (= corpo), gli stessi nomi di GitHub;
+- codifica: UTF-8 percent-encoding con `encodeURIComponent`: spazio `%20` (mai `+`), `+` → `%2B`, a capo LF `%0A`
+  (non il CRLF del mailto). Si legge con qualunque parser standard (URLSearchParams, parse_qs, decodeURIComponent);
+- composizione: si aggiungono alla query già presente nell'URL configurato (`&` se c'è già una query), il frammento `#…`
+  resta in fondo; un `title`/`body` già presenti nell'URL configurato si sostituiscono;
+- contenuto (fisso, in inglese, come oggi): title «LibreFolio: asset not found — <testo cercato, max 80 code point, poi …>»;
+  body: «I searched LibreFolio for an asset and could not find it.» / riga vuota / «Search: <testo>» / «Providers:» con
+  «- <codice>: N result(s) | error <codice> | no answer» (o «Providers: none») / facoltativa «In the form: currency …,
+  type …, <tipo id> <valore>» / «LibreFolio <versione>, <profilo>, language <lingua>» / riga vuota / «Anything else that
+  helps (the exchange, a link to the asset's page):».
+- privacy: niente utente, email, indirizzo dell'istanza o dati del portafoglio (per costruzione); a differenza del mailto,
+  l'URL con i parametri finisce nei log del sito e nella cronologia del browser: stesso contenuto della mail o della issue.
+
+Note:
+- appunti: lascerei la copia negli appunti per la pagina, per le pagine che non leggono i parametri (nessun cambio
+  visibile; da togliere solo se il developer lo chiede);
+- lunghezza: la ricerca non ha un massimo (`q: Query(..., min_length=1)`), quindi un testo enorme farebbe un URL oltre gli
+  ~8 KB che molti server accettano (414); vale già oggi per GitHub. Nessun taglio proposto (nessuno digita 7 000 caratteri).
+- lavoro: `reportHref` (caso page), il Vitest `assetSearchReport.test.ts` (il caso «page: the page itself, nothing added»
+  si rovescia: rosso prima), eventuale E2E della riga, doc admin (`configuration.en.md`, `hosting_providers.en.md`),
+  doc utente (`user/assets/create-edit.md#let-us-know`), sviluppatore (`architecture/settings.md`), CHANGELOG. Piccolo.
+
+**N61-form — via** (19/10, developer): la forma proposta; la copia negli appunti resta; nessun taglio di lunghezza; prima
+il rosso. La forma la gira il coordinatore al coordinatore del cloud.
+- **Rossi**: un test-author nuovo, su due file Vitest.
+  - `assetSearchReport.test.ts`: il caso «page: the page itself, nothing added» si rovescia, più i casi con query,
+    frammento, `title`/`body` già presenti, e la codifica esatta.
+  - `AssetSearchAutocomplete.test.ts`, ASA-R9: l'`href` della pagina con i due parametri.
+  - Nessun E2E usa una pagina di supporto.
+- **Doc**: un docs-writer, solo EN (le traduzioni non hanno queste sezioni, debito già presente):
+  - la riga «A web page» di `user/assets/create-edit.en.md`;
+  - la riga di `LIBREFOLIO_SUPPORT_URL` in `admin/configuration.en.md`;
+  - il punto «Your own support page» di `admin/hosting_providers.en.md`, con il contratto del modulo e un esempio.
+- **CHANGELOG**: la voce «Can't find it? Let us know» è già in Unreleased, mai uscita. La aggiorno invece di aggiungere
+  una riga.
+- **Cura preparata**: `n61form_code.py`.
+  - `pageWithReport` dentro `reportHref`: la query della pagina resta, `title` e `body` già presenti si sostituiscono, il
+    frammento va in fondo.
+  - A secco su `/tmp`: Prettier pulito.
+  - Provato in Node su sei URL: andata e ritorno esatti con `URLSearchParams`, `%20`, `%2B`, `%0A`, nessun `%0D`, un
+    solo `title`, il frammento in fondo.
+
+### X-R45b-ui — l'avviso del tasso saltato arriva all'utente (19/10, base `51c5f1d2c`)
+
+**Il difetto**, trovato dalla revisione automatica di X-R45b e girato dal coordinatore: il backend è corretto, ma le due
+strade del frontend che chiedono `fx_quotes` scartano `source.issues`.
+- `FxRateReader.read()` (`planner/fxRead.svelte.ts`) usa solo `outcome.missing`.
+- `refreshCopiedFacts` (`copies.ts`) restituisce un `RefreshSummary` che non ha un campo per le issue.
+- Così il tasso più vecchio si copia senza nessun messaggio, mentre CHANGELOG, guida e i18n promettono l'avviso.
+
+**Domanda e decisione.** Il lettore Auto chiede solo `fx_quotes`; ogni card di coppia dice già «nessun tasso salvato».
+- Mostrare tutte le issue ripeterebbe «missing» due volte per ogni coppia senza tassi, il caso di un utente nuovo.
+- Ho proposto (a): nella card, sotto il tasso, senza `saved_fx_missing`; oppure (b): una lista unica in cima.
+- **Il developer sceglie (a).** La rilettura in `RefreshNotice` va come proposta: le issue della rilettura, senza la nota
+  strutturale dei Broker, come fa `CopyNotice`.
+
+**Cura** (`xr45bui_code.py`, provata a secco su `/tmp`, Prettier pulito):
+- `FxRateReader` tiene le issue dell'ultima lettura per coppia.
+  - Un metodo `issues(draft, pair)`, azzerato all'inizio di ogni lettura della coppia.
+  - Le issue sono quelle della quota FX della coppia (`fx:<coppia>:…`), meno `saved_fx_missing`.
+- In `FxStep`, nella card, solo in Auto, `IssueList` (`pac-planner-fx-issues`) con `presentSourceIssues` e `listIssue`.
+- In `RefreshSummary`, `issues`: quelle della rilettura, senza `broker_execution_profile_unsupported`.
+- `RefreshNotice` prende i props `draft` e `source` e mostra la lista (`…-issues`). Diventa *warning* anche quando c'è una
+  issue che non è *info*.
+- `PacPlannerTool` tiene la fonte della rilettura per i due punti dove mostra la nota.
+- Nessun colore nuovo: solo `mt-2` di layout e componenti esistenti sui ruoli (skill `design-system`).
+
+**Rossi**: un test-author nuovo, in quattro file nuovi da registrare: `copies.refresh.test.ts`,
+`result/RefreshNotice.test.ts`, `fxRead.test.ts`, `steps/FxStep.test.ts`.
+
+**N61-form — rossi e doc** (19/10):
+- **Rossi** ✅: Vitest sui due file, 7 rossi e 142 verdi.
+  - In `assetSearchReport.test.ts`, 6 casi pagina: senza query, con query, frammento, query e frammento, `title`/`body`
+    sostituiti, codifica esatta con andata e ritorno.
+  - In `AssetSearchAutocomplete.test.ts`, ASA-R9.
+  - Il test-author ha adattato anche ASA-S3 e ASA-S8, che confrontavano `href` con la pagina nuda: ora confrontano il
+    prefisso fino a `?` o `#`. Sono guardie, verdi prima e dopo.
+- **Doc** ✅, docs-writer, solo EN:
+  - `user/assets/create-edit.en.md`, la riga «A web page»;
+  - `admin/configuration.en.md`, la riga `LIBREFOLIO_SUPPORT_URL`, con il link a `#support-form`;
+  - `admin/hosting_providers.en.md`, il sottopunto nuovo `{: #support-form }`: codifica, posizione (con la barra
+    finale che il backend toglie), contenuto, log e cronologia, appunti, un esempio di link;
+  - `developer/backend/assets/search_link_finder.md`, il canale pagina.
+- **Nota mandata al coordinatore**, per il modulo del cloud: `env_url` toglie una barra finale, quindi `…/support/`
+  riceve `…/support?title=…`.
+- La cura (`n61form_code.py`, che corregge anche il commento di `AssetSearchAutocomplete.svelte`) si applica dopo il
+  checkpoint di X-R45b-ui, che ha la precedenza.
+
+**X-R45b-ui — rossi, cura, verdi** ✅ 19/10:
+- **Rossi**: un test-author, 4 file nuovi, tutti in jsdom come `request.test.ts`.
+  - `copies.refresh.test.ts` e `result/RefreshNotice.test.ts`.
+  - `fxRead.test.ts` e `steps/FxStep.test.ts`, con la coppia CHF/USD: `canonicalPair` ordina le valute, e USD/CHF non
+    sarebbe mai richiesta.
+  - Vitest: 10 rossi, 4 guardie verdi.
+  - Fuori dalla richiesta, il test-author ha aggiunto un rosso: una rilettura di CHF/USD pulisce solo la sua issue e
+    lascia l'avviso di EUR/USD.
+- **Cura**: `xr45bui_code.py`, 5 file. Registrati i 4 test nell'azione `component-unit` (`_frontend_utility.py`).
+- **Verdi**:
+  - Vitest sull'intera cartella `pac-allocator` più il test del cancello dei colori: 589/589 in 18 file;
+  - cancelli dei colori puliti; `front check` 0/0;
+  - `check-orphans`: 571 test frontend raggiungibili, 4 in più.
+- **Non girato**: l'E2E `pac-allocator-real.spec.ts`. La cura aggiunge DOM solo quando c'è un'issue, e i dati di prova
+  non hanno tassi saltati.
+
+**N61-form — la domanda del cloud, cura e verdi** ✅ 19/10 (base `9c8bafeca`):
+- **La domanda del coordinatore del cloud** (17:36): `LIBREFOLIO_SUPPORT_URL` può già avere una query, per esempio
+  `https://librefolio.eu/segnala?i=<riferimento opaco dell'istanza>`?
+  - Backend, `env_url`: la query è accettata. Rifiuta solo uno schema non http(s), l'host mancante, nome utente o
+    password, gli spazi. Toglie una barra finale dall'intero valore: un riferimento che finisce con `/` la perderebbe.
+  - Frontend, `supportChannel`: `new URL()` → `href`; query e frammento restano.
+  - `pageWithReport`: i parametri della pagina restano byte per byte e in ordine; un `title` o un `body` già presenti si
+    tolgono; i due nuovi si aggiungono con `&`, codificati con `encodeURIComponent`; il frammento resta in fondo.
+    Provato in Node: `?i=Ab3-x_9.z~q` identico; `?i=Ab3&title=old&body=old` → un solo `title` e un solo `body`;
+    `?i=a%20b#modulo` resta `a%20b`.
+  - Perché non `URLSearchParams.set`: riscrive tutta la query (`i=a%20b` → `i=a+b`) e scrive gli spazi come `+`,
+    contro la forma approvata (`%20`).
+  - Il riferimento: caratteri sicuri (lettere, cifre, `-` `_` `.` `~`) o già codificati; non finisce con `/`; non si
+    chiama `title` o `body`; è **pubblico** (`GET /api/v1/system/instance`): un indizio per l'assistenza, mai una prova
+    d'identità.
+  - Il coordinatore conferma (19/10): `encodeURIComponent` e la query della pagina intatta. Il contratto finale l'ha
+    girato al coordinatore del cloud.
+- **Cura** ✅: `n61form_code.py` applicato, 3 file.
+  - `assetSearchReport.ts`: `pageWithReport` nel caso `page` di `reportHref`, e il commento d'intestazione.
+  - `AssetSearchAutocomplete.svelte`: il commento di `reportClicked`.
+  - `CHANGELOG.md`: corretta la voce «Can't find it? Let us know» di Unreleased, nessuna riga nuova.
+  - Un `user:pass@` nell'URL sparirebbe con `origin`, ma `supportChannel` rifiuta già un indirizzo con nome utente o
+    password (`assetSearchReport.ts:85`): il caso non arriva mai a `pageWithReport`.
+- **Doc**: il docs-writer ha aggiunto a `#support-form` il punto «An instance reference», tre righe con le regole
+  sopra.
+- **Verdi**:
+  - Vitest sui due file: 149/149; sull'intera cartella `components/assets/`: 1 668/1 668 in 40 file;
+  - `front check` 0/0; cancelli dei colori puliti;
+  - `mkdocs build` stretto, uscita 0; `mkdocs check-links`: 97 link validi;
+  - l'esempio di `#support-form` rifatto in Node col modulo vero (`n61form_doc_example.mjs`): identico byte per byte, e
+    la decodifica ridà oggetto e corpo.
+- **Traduzioni**: nessun timbro.
+  - `hosting_providers` non ha traduzioni.
+  - `configuration` (375 errori) e `create-edit` (30) hanno debito già presente: l'hash della cache di Aphra è diverso
+    da quello di HEAD.
+  - Sono modifiche di contenuto, che le traduzioni devono ricevere.
+- **Non girato**: nessun E2E usa una pagina di supporto; l'`href` lo prova ASA-R9.
+
+### X-R45b-ui, seconda revisione — ✅ 20/10 (pausa il 19/10 alle 18:12, base `186b92404`)
+
+> **Stato alla pausa generale** del 19/10 (richiesta del developer, 18:12): rossi scritti e visti, cura preparata e
+> **non applicata**, nessun server, porta 6183 libera, nessun comando git eseguito. Ripreso il 20/10 alle 08:47
+> («Ripresa» qui sotto).
+>
+> - Sporchi nel worktree: i 3 file di test qui sotto più questo piano.
+> - Tutto ciò che serve per ripartire sta nella cartella di sessione
+>   (`~/.copilot/session-state/ad5f37c8-22bd-4df5-9dd2-74f51ca0fe6c/files/`), non in `/tmp`.
+
+**I due difetti** (revisione automatica di `082805b7a`, girati dal coordinatore):
+1. **La rilettura mostra avvisi di broker fuori dal piano.**
+   - `refreshQuery` chiede tutti i broker posseduti e, con cassa copiata, le sezioni `brokers` e `cash_balances`.
+   - `RefreshSummary.issues` le prende tutte tranne `broker_execution_profile_unsupported`: così compaiono
+     `broker_inactive`, `negative_cash_unsupported` e `currency_spec_missing` di broker fuori dal piano, e la nota passa
+     al tono warning.
+   - La copia esplicita della liquidità le filtra con `selectedBrokerIssues` (`copies.ts:31`).
+2. **La card FX tiene un avviso vecchio dopo la rilettura.**
+   - La memoria delle issue per coppia la azzera solo `FxRateReader.read`; `refreshCopiedFacts` riscrive il tasso, ma
+     non quella memoria.
+   - Così, corretto il D2 e riletto da «Calcola», la card dice ancora «D2 saltato». Al contrario, un salto trovato solo
+     dalla rilettura non compare mai sulla card.
+
+**Decisioni ricevute** (coordinatore, 19/10):
+- Prima i rossi, poi un commit a parte sopra `186b92404`, poi il checkpoint.
+- Intanto il coordinatore porta in dev il ramo fino a `51c5f1d2c`. La UI di X-R45b (`082805b7a`) e N61-form
+  (`ea532c5eb`) entrano dopo questa cura.
+- Poi, nell'ordine: la revisione del contratto di Z-29a, l'analisi della funzione «a gradini», N64, Q1–Q3/S1.
+
+**Cura** (preparata il 19/10, a secco pulita con Prettier su `/tmp`; **applicata il 20/10**, «Ripresa»):
+- Gli strumenti, nella cartella di sessione:
+  - `files/checks/xr45bui2_code.py`, a sostituzioni contate, con una copia in `files/parked/`;
+  - lo stesso cambiamento come patch, `files/parked/xr45bui2.patch` (prova `patch -p1 --dry-run` sul worktree: OK).
+- **D1**: `summary.issues = selectedBrokerIssues(source, plan.cashBrokerIds)`, meno la nota strutturale. È la regola
+  della copia della liquidità: restano le issue dei broker la cui cassa è nel piano, e tutte quelle senza chiave
+  `broker:N` (`fx_quote`, `price`, asset, sezioni).
+- **D2**:
+  - La memoria per coppia esce da `fxRead.svelte.ts` e va nel modulo nuovo `planner/fxIssues.ts`, con
+    `fxPairIssues`, `forgetFxPairIssues` e `rememberFxPairIssues`. Il modulo nuovo serve a evitare un ciclo:
+    `fxRead.svelte.ts` importa già da `copies.ts`.
+  - `FxRateReader` la scrive come prima.
+  - `refreshCopiedFacts` la scrive, insieme al tasso, per ogni coppia che rilegge, cioè quelle che passano il suo
+    primo `continue`: le issue `fx_quote` della coppia, meno `saved_fx_missing`, come fa il lettore. Nessuna issue → la
+    voce si cancella. Le coppie fuori dal piano o manuali tengono la memoria.
+- Nessun file da registrare nel runner: `fxIssues.ts` non è un test, e i rossi stanno in file già registrati.
+
+**Rossi** ✅ (test-author `5c16fc14`, secondo giro): 3 file modificati, nessuno nuovo, nessun caso esistente
+adattato.
+- Una corsa, a carico 22,5: `cd frontend && node_modules/.bin/vitest run --reporter=verbose` sui 3 file → **7 rossi,
+  18 verdi**.
+- `copies.refresh.test.ts`, D1:
+  - 3 rossi, il broker 9 posseduto ma fuori dal piano: `broker_inactive`, `negative_cash_unsupported` su
+    `cash:broker:9:USD`, `currency_spec_missing`;
+  - 3 guardie: `broker_inactive` del broker 7 del piano, `saved_fx_skipped` di EUR/USD, `price_missing`.
+  - ⚠️ **L'ultima modifica del file non è verificata**: le due tabelle `it.each` passate ad array con `%s`. Non
+    l'hanno vista né Vitest né Prettier.
+- `fxRead.test.ts`, D2:
+  - rossi: (a) la rilettura del D2 corretto cancella l'avviso; (b) un salto trovato solo dalla rilettura si ricorda;
+    (e) una coppia in attesa, che la rilettura trova senza alcun tasso salvato, dimentica il suo `saved_fx_invalid`;
+  - guardie: (c) una coppia manuale fuori dal piano tiene la memoria; (c2) una coppia passata a «Manuale» durante la
+    rilettura la tiene anch'essa; (d) l'issue di EUR/USD non finisce su CHF/USD.
+- `steps/FxStep.test.ts`: 1 rosso, lo scenario del revisore.
+  - Il passo legge e mostra il salto; si smonta; la rilettura trova il D2 valido; si rimonta.
+  - Atteso: nessun `pac-planner-fx-issues` nella card CHF/USD, e il tasso del D2.
+  - Barriera di presenza: la card EUR/USD tiene il suo avviso, ancora vero.
+- A lettura la cura copre tutti e 7, da provare:
+  - (e) perché una coppia in attesa passa il primo `continue` ed è riletta;
+  - (c2) perché il primo `continue` viene prima della riga che segna la coppia come riletta.
+
+**Ripresa** ✅ 20/10 (messaggio del coordinatore delle 08:46: riapplicare la cura dalla patch parcheggiata, i verdi, il
+checkpoint; poi la revisione di Z-29a, con l'esito in un messaggio):
+1. ✅ Stato: HEAD `186b92404`, sporchi i 3 test più questo piano, porta 6183 libera, `/tmp/librefolio-r13-x`
+   sparita col riavvio.
+2. ✅ Rossi rieseguiti, a carico 25,8: `cd frontend && node_modules/.bin/vitest run --reporter=verbose` sui 3 file → **7
+   rossi, 18 verdi**, come il 19/10. Tutti e 7 cadono su un'asserzione (`AssertionError`), nessuno su un import o un
+   errore. Prettier `--check` pulito sui 3 file: l'ultima modifica di `copies.refresh.test.ts`, non verificata il 19/10,
+   ora lo è.
+3. ✅ Cura: `patch -p1` con `files/parked/xr45bui2.patch`, prima a secco poi vera. 3 file: `copies.ts`,
+   `fxRead.svelte.ts`, il nuovo `fxIssues.ts`. Il diff applicato corrisponde alla cura descritta sopra.
+4. ✅ Verdi:
+   - Vitest sui 3 file: 25/25;
+   - Vitest sull'intera cartella `pac-allocator` più il test del cancello dei colori: **602/602** in 18 file, cioè 589
+     più i 13 casi nuovi;
+   - Prettier pulito su `copies.ts`, `fxRead.svelte.ts` e `fxIssues.ts`; cancelli dei colori puliti;
+   - `api sync` (nessun file tracciato toccato) e `front check` 0 errori e 0 avvisi;
+   - `check-orphans`: 571 test frontend, 144 E2E e 490 backend, tutti raggiungibili. Nessun file di test nuovo.
+5. ✅ Doc: nessuna modifica. La guida del PAC (`user/tools/pac-allocator/index.en.md`, passo FX) dice già quello che ora
+   succede: l'avviso nomina la coppia, il giorno saltato e quello usato, e la lettura si ripete prima del calcolo. Il
+   CHANGELOG (Unreleased) resta vero.
+6. Non girato: l'E2E `pac-allocator-real`, che il coordinatore lascia al gate d'ingresso.
+
+Commit proposto: `fix(pac): re-read warnings for planned Brokers; FX card follows the re-read (X-R45b review)`.
+
+**Corsia** ✅ ricreata il 20/10: `test --test-port 6183 --data-dir /tmp/librefolio-r13-x db populate --force --clean`,
+7 148 record (erano 7 124 sulla base `6c108929f`; la base nel frattempo è cambiata). Porta 6183 libera dopo.
+
+**Domande aperte**, non toccate dalla pausa:
+- le righe ≤ 0 già salvate (N92), dal developer;
+- X-R48b resta sospesa, dipende da N68.
+
+### Revisione del contratto di Z-29a v3 — ✅ OK, nessun difetto bloccante (20/10, sola lettura)
+
+Richiesta del coordinatore (19/10, ripetuta il 20/10): la parte di contratto del commit `37c3ec3ee` di Z (ramo
+`e-alfy-z-sospensione-e-risveglio`), con l'esito in un messaggio. HEAD `5a53e00ad`. Nessun comando git che scrive:
+solo `merge-tree`, `archive`, `show`, `grep`.
+
+**Fusione di prova**:
+- pulita sia con la mia HEAD (albero `1012444fc`) sia con `dev_release2` `ecc7ac667` (albero `6130aed3c`, quello che
+  Z riceverà davvero; dev ha già N92 e il mio ramo fino a `51c5f1d2c`);
+- 3 file fusi da soli, riletti:
+  - `schemas/prices.py`: qui sotto;
+  - `developer/backend/assets/architecture.md`: Z aggiunge 4 pezzi nella parte della query, il testo di N92 non lo
+    tocca, i due testi sono coerenti;
+  - `scripts/test_runner/_backend_services.py`: si legge, 189 azioni senza doppioni, ci sono le mie e le sue.
+- **Il percorso della query di Z sull'albero fuso**: `price_query.py` è identico a quello di Z. Da allora dev ha
+  cambiato, in quel percorso, solo tre file:
+  - `schemas/prices.py`, cioè N92;
+  - `price_store.py`, di cui la query usa solo `storable_current_value`, il prezzo corrente;
+  - `fx/conversion.py`, cioè il mio rovescio di X-R45: lo stesso filtro dei tassi usabili, scritto in linea, quindi
+    lo stesso comportamento.
+  - Quindi il rischio che porta la fusione sta solo nello schema.
+
+**N92 e il `model_config` di Z convivono** — provato sull'albero `6130aed3c`, esportato in una cartella di prova
+(`files/checks/z29a_merged_proof.sh`):
+- una sola `model_config` per classe: in `FAPricePoint` il gancio di Z `_description_without_backticks`, in
+  `FAPriceWritePoint` il `from_attributes` di N92;
+- la descrizione di `FAPricePoint` nello schema non ha più apici inversi e tiene il `"clear"` di N92;
+- `api sync`: uscita 0. Il generatore scrive la descrizione come template literal (`generated.ts`,
+  `` first: FAPricePoint.describe(`Single price point…`) ``), dove le virgolette doppie non danno noia;
+- `front check`: 0 errori e 0 avvisi; nessun venv nuovo.
+
+**I punti del contratto**, riletti nel codice e provati con la validazione dello schema fuso:
+- **Voci**:
+  - `key` e `sample_like` seguono `^[A-Za-z0-9_.:-]{1,64}$`; `max_points` va da 1 a 10 000; `resolution` è
+    `daily`, `weekly` o `monthly`;
+  - al massimo uno dei tre, e mai insieme a segnali, annotazioni o eventi: altrimenti il 422 di pydantic, provato.
+- **Il 422 `sample_reference`**:
+  - `detail = {code, reason, item, key, message}`, con `reason` uno di `unknown_key`, `duplicate_key`, `chained`,
+    `range_mismatch`;
+  - si alza prima di ogni lettura, anche prima del taglio al soffitto.
+- **I risultati**:
+  - `resolution` vale `daily` di default, `sample_bounds` è `None`;
+  - in settimanale o mensile, i punti sono le fini dei secchi, e il primo punto va negli estremi quando non è una
+    fine di secchio;
+  - gli estremi si calcolano dopo la conversione dei cambi. La conversione non scarta mai un punto, quindi il
+    `pop(0)` è sicuro.
+- **Il seguace di una scheda giornaliera** è giornaliero dal giorno F' più tardo: Z riscrive `date_range`
+  (`daily_starts`) solo quando il primo giorno della scheda viene dopo il suo, e la risposta non ha estremi. Se la
+  scheda non ha dati, sul riempimento del seguace vale il `max_points` o la `resolution` della scheda.
+- **Con `include_price: false`** la risposta è `weekly`/`monthly`, senza punti né estremi. Confermato, ed è scritto
+  nella doc.
+- **I chiamanti di `get_prices_bulk`** in produzione passano tutti un `FAPriceQueryItem`: l'API, tre componenti
+  dell'AI Export, il rischio. Così i campi nuovi valgono sempre `None` e per loro non cambia niente.
+
+**Note, nessuna bloccante**:
+1. **`include_price: false`**: le righe dei secchi si leggono lo stesso (`_read_samples`) e contano nel budget dei
+   giorni (punti + 2). Una voce che non restituisce prezzi può quindi provocare `bulk_too_many_days`.
+   - Proposta: saltare la lettura e il conteggio per queste voci, perché la `resolution` viene dal solo piano; oppure
+     rifiutarle nella validazione.
+   - La descrizione di `sample_bounds`, «None for a daily one», dovrebbe aggiungere «or without prices».
+2. **Requisito per Z-29b, il frontend**:
+   - `planBulkBatches` e `splitBatch` (`frontend/src/lib/api/bulkBatches.ts`) tagliano la lista in fette contigue;
+   - un `sample_like` il cui capo finisce in un altro lotto fa fallire tutto il lotto con un 422 `unknown_key`;
+   - quindi ogni gruppo (la voce della scheda e il bersaglio del confronto) deve restare nello stesso lotto, anche
+     nel nuovo taglio dopo un `bulk_too_many_days`.
+3. **Estetica dello schema**:
+   - il gancio trasforma ``` ``x`` ``` in `''x''` nella descrizione OpenAPI: Swagger mostra `''FAHistoricalData''`.
+     Sostituire prima la coppia di apici inversi darebbe `'x'`;
+   - il rischio degli apici inversi vale per ogni modello nuovo puntato da un campo obbligatorio. Un ritocco
+     nell'esportatore (`scripts/list_api_endpoints.py`) li coprirebbe tutti. Il guasto è rumoroso (`api sync` o
+     `front check` falliscono), quindi non è urgente.
+4. **Strati**:
+   - `schemas/prices.py` importa `SampleResolution` da `services/assets/price_sampling.py`. C'è un precedente:
+     `schemas/risk.py`, MF-D3;
+   - il modulo e i due `__init__` dei pacchetti importano solo la libreria standard, quindi nessun ciclo;
+   - in alternativa, il tipo potrebbe stare negli schemi. È solo una questione di stile.
+
+**Previsione dei conflitti con la mia coda**: Q1 (i prezzi per osservazioni) e Q2 (la conversione solo nei giorni di
+cambiamento) riscrivono gli stessi blocchi di `get_prices_bulk` che Z cambia: il riempimento, il budget, la
+conversione.
+- Quindi Q1 e Q2 partono su una base che ha già Z-29a. Si costruiscono su `_fill_point` e `_sample_series`, e tengono
+  il budget di Z per le voci campionate.
+- Nessuna sovrapposizione con la funzione «a gradini» (`fx/conversion.py`) né con N64.
+
+**Non girato**: i pytest di Z (`services price-query-sampling`) sull'albero fuso.
+- Il runner, per la categoria `services`, cancella il DB della corsia e lo ricostruisce dalle migrazioni dell'albero.
+- Il conftest della radice, poi, apre il DB di `get_data_dir()`.
+- Quindi non si possono girare con sicurezza da una copia di prova: restano al gate dopo la fusione.
+
+**Prove** (cartella di sessione `files/checks/logs/`): `z29a_mt_head.log`, `z29a_mt_dev.log`,
+`z29a_merged_proof.log`, `z29a_merged_schema_probe.log`, `z29a_merged_api_sync.log`, `z29a_merged_front_check.log`.
+Cartella di prova in `/tmp` cancellata.
