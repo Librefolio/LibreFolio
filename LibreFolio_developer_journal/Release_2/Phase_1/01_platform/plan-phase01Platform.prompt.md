@@ -9331,6 +9331,24 @@ Ogni punto ha un test nei passi 2–4.
 > guida (`connection_checks.en.md` ~l.174, Level 4 di `service_exposure`) **è giusto per HTTPS**. Nel paragrafo nuovo
 > basta una frase: con `--http` niente `X-Forwarded-Proto`, ed è corretto così. Il consiglio sul cookie non cambia.
 
+> **N70, passo 2 fatto (20/10, 10:15–10:50)**: il docs-writer, sul brief `files/n70/docs_writer_brief.md`, ha scritto in
+> `mkdocs_src/docs/admin/connection_checks.en.md`:
+> - il grassetto «When LibreFolio does not trust your proxy» è diventato un titolo, `#### 🕵️ When LibreFolio Does Not
+>   Trust Your Proxy {: #untrusted-proxy }`, e il rimando nel testo un link;
+> - la sottosezione nuova `#### 🐳 Tailscale Serve and Funnel with Docker {: #tailscale }`, dopo «Forwarding headers
+>   from a public address», a passi: trovare il gateway (`docker inspect`, `docker network inspect`, il log
+>   d'accesso), `FORWARDED_ALLOW_IPS`, `docker compose up -d`, la verifica (`100.x.y.z:0` nel log);
+> - le tre avvertenze, compresa la porta su loopback;
+> - in seguito, su mia richiesta, nel punto «To fix it» il rimando a `#tailscale` e la nota sul gateway della rete
+>   intera.
+>
+> `mkdocs build` stretto ok; `check-links` ok, 97 validi. Nessuno stamp: testo nuovo, debito di traduzione vero.
+> - **⚠️ Fuori pista**: il brief diceva «Level 3» per `tailscale serve`, ma in `service_exposure` è il consiglio
+>   HTTPS del Livello 1 (il Livello 3 è solo Funnel). Il docs-writer l'ha corretto. In più `configuration.en.md:106`
+>   li chiama in un terzo modo («Levels 3 and 4»); lasciato com'è.
+> - **Verificato**: uvicorn 0.52.4 scrive `(host, 0)` per un indirizzo senza porta (`_parse_host_port`), quindi la
+>   riga del log dopo la correzione finisce in `:0`.
+
 #### Contratto della mappa delle guide per A (N69d), 19/10 18:20, inviato ad A prima del codice
 
 - **Modulo** (di H): `frontend/src/lib/features/instance/checkGuides.ts`.
