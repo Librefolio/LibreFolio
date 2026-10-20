@@ -8744,3 +8744,96 @@ Ognuno con i rossi prima e uno slot. Uno slot API (`users-admin`) per N69-4 e N6
   - `_frontend_utility.py` (15);
   - `BACKLOG_POST_1.2.md` (72).
 - Checkpoint mandato; FROZEN.
+
+## N69b entrato; H-61 · `admin_setup_status()`; A-62 dopo (20/10, 13:34–; base `a35f40c48`)
+- **Coordinatore** (13:34): N69b è committato, `84c1329c4` codice, `1b6f2354d` doc, `a35f40c48` giornale; entra col
+  treno 4, con la riga ✨. **A-62: sì alla (a)**, come piccolo seguito dopo H-61. La nota per G la gira lui al
+  coordinatore dei colori. Via a H-61, prima i rossi.
+- **Base**: HEAD `a35f40c48`, nell'albero di dev (dev locale `15fa228ef`), albero pulito.
+- **H-61, rossi**: `test-author` `73892fb5`, in una sezione nuova in fondo a
+  `backend/test_scripts/test_services/test_admin_bootstrap.py`. L'unità è `services admin-bootstrap`, pura: niente
+  server né corsia, leggera. I test seguono il contratto concordato con H; `account_tokens.user_id` ha `ON DELETE
+  CASCADE`, quindi un admin eliminato dà `none`.
+- **A-62, bozza** (`work/a62/`):
+  - `apply_a62.py`: una modifica, `menuLabel` di `Header.svelte` comincia con `$_('nav.toggleMenu')`;
+  - `i18n_add.py`: la chiave `nav.toggleMenu` va nella sorgente `base`, accanto a `nav.dashboard` e `nav.settings`.
+    `i18n add` la manda lì da solo (nessun sottosistema dichiara il prefisso `nav`).
+  - I testi: en «Toggle menu», it «Apri o chiudi il menu», fr «Ouvrir ou fermer le menu», es «Abrir o cerrar el menú».
+  - Il test: `Header.test.ts` legge già la prima parte dell'etichetta dal pulsante, senza scriverla. Il rosso nuovo
+    darà alla chiave un testo marcatore (`addMessages`) e chiederà che l'etichetta cominci con quello.
+
+### H61.1 — Rossi, codice, verdi ✅; una domanda a H (20/10, 13:40–14:05)
+- **Rossi** (`test-author` `73892fb5`): 17 test, H61-001…017, 76 casi, in una sezione nuova di `test_admin_bootstrap.py`
+  (+683 righe, più un paragrafo «Lot H-61» nel docstring del modulo).
+  - Tutti rossi sulla stessa asserzione: «red until H-61: bootstrap_admin_service has no AdminSetupState,
+    AdminSetupStatus, admin_setup_status».
+  - I 226 test che c'erano restano verdi (`work/h61/red-setup-status.log`, `full-unit.log`).
+  - Il filtro `setup_status` prende esattamente i 76.
+  - Coprono:
+    - il vocabolario e la firma;
+    - `none`, anche con i token di altri scopi;
+    - `pending` dal bootstrap, con la scadenza in UTC = `NOW + DEFAULT_TTL`;
+    - il confine esatto della scadenza;
+    - `done` per il setup e per A-32 (quattro vie);
+    - `expired` per annullamento, disattivazione, cambio d'indirizzo (A-33) e revoca diretta;
+    - il link che sostituisce un altro;
+    - l'ultimo che decide, i pareggi su `created_at` (vince l'id più alto);
+    - qualunque account;
+    - `none` dopo l'eliminazione (cascata, `foreign_keys=1`);
+    - la sola lettura in ogni stato;
+    - l'orologio senza `now`.
+- **Codice**: `work/h61/apply_h61.py`, poi `black` (una riga ricomposta).
+  - Verde dell'unità intera `services admin-bootstrap`: **302 passed** (226 + 76).
+  - Dopo la formattazione, `setup_status`: **76 passed**.
+  - ruff e black puliti.
+- **Domanda a H** (14:05), dai dubbi 1 e 3 del `test-author`: un setup fatto può leggere `expired`.
+  - Come succede: `complete_admin_setup` revoca soltanto gli altri link vivi. Se c'è un link nuovo randagio, diventa
+    l'ultimo, revocato senza uso.
+  - Nessun flusso di oggi ci arriva; ci arrivano la scena di SETUP-001 e un DB di una build 1.3 precedente.
+  - (i) Lasciare «decide l'ultimo». (ii) **«Il fatto vince»**, il mio consiglio: un link consumato → `done`, altrimenti
+    decide l'ultimo degli altri; due coppie irraggiungibili di H61-012 passano a `done`.
+  - Anche, salvo obiezioni: «qualunque account» (H61-014) e `none` per un admin eliminato prima del setup (H61-015).
+- **Prossimo**: la risposta di H, l'eventuale ritocco con rosso e verde, la riga della doc (`docs-writer`), il
+  checkpoint; poi A-62.
+- **Risposta di H** (14:10): **(ii), «il fatto vince»**.
+  - Un link `admin_setup` consumato, speso o ritirato da A-32, dà `done`; altrimenti decide l'ultimo degli altri:
+    revocato o scaduto → `expired`, vivo → `pending`.
+  - Per il pannello il consumo è definitivo: il cliente ha attivato l'istanza.
+  - Le due coppie irraggiungibili di H61-012 si capovolgono. «Qualunque account» e `none` per l'admin eliminato prima
+    del setup restano così.
+  - H chiude il suo checkpoint 1 col mio.
+- **Rosso prima**: lo stesso `test-author` `73892fb5`:
+  - capovolge le coppie e allinea ogni caso in cui un link consumato non è l'ultimo;
+  - aggiunge il caso del flusso vero: un setup fatto col link più vecchio di due vivi → `done` (oggi `expired`);
+  - riscrive il paragrafo del docstring.
+  - La cura è pronta in `work/h61/apply_h61_ii.py`, prova a vuoto pulita: un `EXISTS` sui link consumati prima
+    dell'ultimo, e il docstring della funzione riscritto.
+
+### H61.2 — «Il fatto vince»: rossi, cura, verdi ✅ (20/10, 14:10–14:35)
+- **Rossi** (`test-author` `73892fb5`, secondo giro), contro il codice «decide l'ultimo»: `setup_status` dà **11 failed,
+  73 passed**; l'unità intera 11 failed / 299 passed, nessun rosso fuori dalla sezione
+  (`work/h61/red-done-wins.log`, `full-unit-done-wins.log`).
+  - Capovolti a `done` 6 casi: tre di H61-012 (un consumato più vecchio con un più nuovo revocato, vivo o scaduto),
+    due di H61-013 (pareggi e ordine, rinominati), uno di H61-014 (il link consumato di un altro account).
+  - Nuovo **H61-018**, 4 casi, il flusso vero del dubbio 1: due link vivi come nella scena di SETUP-001; il setup col
+    più vecchio; `complete_admin_setup` revoca il più nuovo → `done`. Più H61-016
+    `[done-through-the-older-of-two-links]`.
+  - H61-013 ha tre casi nuovi senza link consumati, che tengono la copertura dell'ordine: verdi prima e dopo.
+  - Docstring «Lot H-61» e commenti riscritti alle tre regole.
+- **Cura**: `work/h61/apply_h61_ii.py`, poi una pulizia: la seconda query non legge più `consumed_at`, che non serve dopo
+  il controllo dei consumati.
+  - Unità intera `services admin-bootstrap`: **310 passed** (226 + 84 casi di H-61), prima e dopo la pulizia
+    (`work/h61/green-final-full.log`).
+  - ruff, black e `git diff --check` puliti.
+- **Doc**: `docs-writer` `h61-docs`, `developer/architecture/access_control.md` (`#initial-admin`), solo inglese. La
+  guida del pannello è di H.
+- **Doc fatta** (`docs-writer` `a792c5a8`): in `developer/architecture/access_control.md` la sottosezione «The setup's
+  status, for a hosting panel» `#setup-status`, dopo i punti «At startup»; più H61-001…018 nel paragrafo dei test.
+  Build strict (3085) e `check-links` (97) puliti.
+  - La rotta di H e la sua guida non sono ancora nell'albero, quindi nessun link a H.
+- **Ritocco del docstring**, dalla nota del `docs-writer`: «a newer link issued» non poteva decidere `expired`, perché il
+  link nuovo è l'ultimo e decide (H61-011). Ora: «A replaced link is revoked, but the newer one is the latest and
+  decides». In più «no write lock», che è ciò che H61-016 controlla. L'unità è di nuovo **310 passed**.
+- **Previsione dei conflitti** con dev `b844f83f2` (base = HEAD `a35f40c48`): solo `access_control.md` (1 commit di dev),
+  `git merge-file` pulito.
+- **Delta**: 4 file, +948/−1. Checkpoint mandato; FROZEN. Poi A-62.
