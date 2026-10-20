@@ -11,7 +11,11 @@
  *     next `load()` ask again, a fetcher that throws before returning a promise included (its request still starts
  *     within `load()`);
  *   - `fetchInstanceConfigFromApi()` is the generated client's `get_instance_config_api_v1_system_instance_get`;
- *   - the getters are reactive: a consumer reading them re-runs when the answer lands.
+ *   - the getters are reactive: a consumer reading them re-runs when the answer lands;
+ *   - H-60 (contract §8, decision D4): a successful load sets the browser console's level of API failures from its
+ *     answer, `setApiConsoleLevel(config.client_log_level ?? 'error')` (`src/lib/api/apiErrorConsole.ts`): `'debug'` when
+ *     the backend logs at DEBUG or TRACE, `'error'` otherwise and when the answer carries no level. A failed load, and
+ *     the late answer of a superseded request, set nothing.
  *
  * The store keeps its state in module-level `$state` and a module-level request, so every test takes a freshly
  * imported graph (`vi.resetModules()` + `import()`): the store, and `svelte` and the rune helpers of the same graph, so
@@ -21,6 +25,12 @@
  * and `$lib/debug` are mocks: the generated client is the subject of one test only, and the warning of a failure is
  * read from the `debug.warn` mock (the real one is compiled out of production builds). jsdom, because effects run
  * only there and the reactivity case needs them.
+ *
+ * `$lib/api/apiErrorConsole` is a mock too: its `setApiConsoleLevel` is the spy the H-60 cases read (what the level
+ * does is `apiErrorConsole.test.ts`'s). The store is expected to import the setter from that module, by
+ * `$lib/api/apiErrorConsole` or a relative path; the `$lib/api` mock does not carry it. Until `./dev.py api sync` brings
+ * `client_log_level` into the generated type, the answers that carry it are cast. Red until H-60: the store sets no
+ * level; the cases of a failed load and of a superseded request fail on their barrier, the level a success sets.
  */
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 import type {InstanceConfig} from './instanceConfig.svelte';
@@ -28,14 +38,20 @@ import type {InstanceConfig} from './instanceConfig.svelte';
 const mocks = vi.hoisted(() => ({
     getInstanceConfig: vi.fn().mockName('zodiosApi.get_instance_config_api_v1_system_instance_get'),
     warn: vi.fn().mockName('debug.warn'),
+    setApiConsoleLevel: vi.fn().mockName('apiErrorConsole.setApiConsoleLevel'),
 }));
 
 vi.mock('$lib/api', () => ({zodiosApi: {get_instance_config_api_v1_system_instance_get: mocks.getInstanceConfig}}));
 vi.mock('$lib/debug', () => ({debug: {log: vi.fn(), warn: mocks.warn, error: vi.fn(), info: vi.fn()}, isDebugEnabled: () => false}));
+vi.mock('$lib/api/apiErrorConsole', () => ({setApiConsoleLevel: mocks.setApiConsoleLevel, apiConsoleLevel: () => 'error'}));
 
 // The accounts part (A5a/A5b): the default is an open registration nobody pinned; the managed answer differs in it too.
 const SELFHOSTED: InstanceConfig = {profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}};
 const MANAGED: InstanceConfig = {profile: 'managed', accounts: {registration_mode: 'invite', registration_locked: true}};
+// H-60 (D4): the answer publishes the console level of API failures. The generated type gains the field with the next
+// `./dev.py api sync`; until then these answers are cast.
+const MANAGED_DEBUG = {...MANAGED, client_log_level: 'debug' as const} as InstanceConfig;
+const MANAGED_ERROR = {...MANAGED, client_log_level: 'error' as const} as InstanceConfig;
 
 /** The store of a page load that has just begun, with the rune helpers and `flushSync` of the same module graph. */
 async function freshPageLoad() {
@@ -61,6 +77,7 @@ function scriptedFetch() {
 beforeEach(() => {
     mocks.getInstanceConfig.mockReset();
     mocks.warn.mockClear();
+    mocks.setApiConsoleLevel.mockClear();
 });
 
 describe('instanceConfig — before the server answers', () => {
@@ -264,5 +281,77 @@ describe('instanceConfig — the getters are reactive', () => {
             ['managed', true, false],
             ['managed', true, true],
         ]);
+    });
+});
+
+describe('instanceConfig.load — the console level of API failures follows the instance (H-60, D4)', () => {
+    // red until H-60: the store sets no level
+    it('a successful load sets the level its answer publishes, once the answer lands', async () => {
+        const {instanceConfig} = await freshPageLoad();
+        const {fetchConfig, answers} = scriptedFetch();
+
+        const loading = instanceConfig.load({fetchConfig});
+        expect(mocks.setApiConsoleLevel, 'nothing is set before the answer lands').not.toHaveBeenCalled();
+        answers[0].resolve(MANAGED_DEBUG);
+        await loading;
+
+        expect(instanceConfig.config, 'Barrier: the answer is the configuration in force').toEqual(MANAGED_DEBUG);
+        expect(mocks.setApiConsoleLevel.mock.calls, 'one call, with the level of the answer').toEqual([['debug']]);
+    });
+
+    // red until H-60: the store sets no level
+    it.each([
+        ['error', MANAGED_ERROR],
+        ['no level at all (a server before H-60, or a fetcher that leaves it out)', MANAGED],
+    ])('a successful load whose answer carries %s sets error', async (_case, answer) => {
+        const {instanceConfig} = await freshPageLoad();
+        const {fetchConfig, answers} = scriptedFetch();
+
+        const loading = instanceConfig.load({fetchConfig});
+        answers[0].resolve(answer);
+        await loading;
+
+        expect(instanceConfig.loaded, 'Barrier: the load succeeded').toBe(true);
+        expect(mocks.setApiConsoleLevel.mock.calls).toEqual([['error']]);
+    });
+
+    // red until H-60: the barrier, the level a success sets, fails first
+    it('a failed load sets nothing, whether its request rejects or its fetcher throws: the level stays the one set last', async () => {
+        const {instanceConfig} = await freshPageLoad();
+        const {fetchConfig, answers} = scriptedFetch();
+        const first = instanceConfig.load({fetchConfig});
+        answers[0].resolve(MANAGED_DEBUG);
+        await first;
+        expect(mocks.setApiConsoleLevel.mock.calls, 'Barrier: the successful load set its level').toEqual([['debug']]);
+
+        const rejected = instanceConfig.load({force: true, fetchConfig});
+        answers[1].reject(new Error('503 Service Unavailable'));
+        await rejected;
+        await instanceConfig.load({
+            force: true,
+            fetchConfig: () => {
+                throw new Error('thrown before returning a promise');
+            },
+        });
+
+        expect([instanceConfig.config, instanceConfig.failed], 'Barrier: both reloads failed, and the first answer is still in force').toEqual([MANAGED_DEBUG, true]);
+        expect(mocks.setApiConsoleLevel.mock.calls, 'a failed load set a level').toEqual([['debug']]);
+    });
+
+    // red until H-60: the barrier, the level the forced answer sets, fails first
+    it('the late answer of a superseded request sets nothing: the level stays the one of the configuration in force', async () => {
+        const {instanceConfig} = await freshPageLoad();
+        const {fetchConfig, answers} = scriptedFetch();
+        const older = instanceConfig.load({fetchConfig});
+        const forced = instanceConfig.load({force: true, fetchConfig});
+
+        answers[1].resolve(MANAGED_DEBUG);
+        await forced;
+        expect(mocks.setApiConsoleLevel.mock.calls, 'Barrier: the forced answer set its level').toEqual([['debug']]);
+        answers[0].resolve(SELFHOSTED);
+        await older;
+
+        expect(instanceConfig.config, 'Barrier: the forced answer is still the configuration in force').toEqual(MANAGED_DEBUG);
+        expect(mocks.setApiConsoleLevel.mock.calls, 'the late answer of the older request set a level').toEqual([['debug']]);
     });
 });

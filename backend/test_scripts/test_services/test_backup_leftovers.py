@@ -12,7 +12,10 @@ Under test: ``backend/app/services/platform/instance_backup/leftovers.py`` (new:
 ``DECRYPT_FOLDER_LIFETIME``, ``remove_stale_decrypt_folders``, ``sweep_backup_leftovers``),
 ``restore_jobs.remove_stray_decrypted_archives`` (new), ``restore_jobs.prune`` (its answer), ``jobs.end_interrupted_jobs``
 (new), ``jobs.remove_expired_jobs`` (no link followed), ``jobs.get_job`` (its interrupted branch) and the step of
-``app_lifespan.py``. The frozen contract: ``b4b-test-brief.md`` §1, with its revision of 03:58.
+``app_lifespan.py``. The frozen contract: ``b4b-test-brief.md`` §1, with its revision of 03:58. And B-50, (h): what
+``restore_jobs`` and ``jobs`` make of a state no reader can take, through ``restore_jobs._checks``, ``prune``,
+``read_check``, ``remove_check``, ``confirm_check``, ``start_check``, ``UploadWriter.finish`` and the sweep; its contract:
+``b50-contract.md``.
 
 (a) The restore's folder. A check recorded ``running`` while the lock of the checks is free was left by a stopped
     server: ``prune`` ends it ``failed``/``restore_interrupted``, its stage and its upload removed, as before, and now
@@ -63,6 +66,19 @@ Under test: ``backend/app/services/platform/instance_backup/leftovers.py`` (new:
 (g) The step ``backup-leftovers`` of ``STARTUP_STEPS``: its awaitable runs ``app_lifespan.sweep_backup_leftovers``
     once, without arguments, in a worker thread. Its place, right after ``restore-commit``, is pinned with the other
     steps in ``test_backup_apply.py`` (j).
+(h) B-50: a state no reader can take is no state, never a failed sweep (the coordinator, 19/10 17:37 and 20/10 09:06).
+    A check's state that is JSON but no object (``[]``, ``null``, ``"x"``, ``5``) is skipped as ``_read_state`` already
+    skips an empty file, ``{}``, a folder where the file belongs and a file of mode 000: ``_checks`` answers the checks
+    it reads; ``prune`` does its usual work on them (a check a stopped server left running ended, one that ended 25
+    hours ago removed with its copy, one that ended ten minutes ago kept) and leaves the unreadable state as it was;
+    ``read_check``, ``remove_check`` and ``confirm_check`` of its id raise ``CheckNotFoundError`` — the routes' 404
+    ``restore_stage_not_found`` — and log nothing; a check starts beside it, and an upload that finishes still replaces
+    the one before; the sweep logs neither an error nor a warning, and does the whole work of its ``restore`` part; a
+    state that is a folder, read 20 times, leaves no descriptor open on it. A job's ``state.json`` that is JSON but no
+    object, a folder or a file the server may not read is a job without a state, as one missing, empty or ``{}``
+    already is: the sweep logs no error, ends the run that died, removes the job that ended two hours ago, keeps the
+    one that ended ten minutes ago, and dates the unreadable folder by its modification time — kept ten minutes on,
+    removed two hours on, whatever a state of mode 000 would say were it read.
 
 How. Every data directory is a folder of ``tmp_path`` built file by file: the sweep never opens a database nor reads
 an archive, and none is made. A check's state is written as ``restore_jobs`` writes it (a ``RestoreCheck`` as JSON in
@@ -76,6 +92,11 @@ compared whole with ``entries`` of the same tests: every path, never through a l
 file's SHA-256), its mode and its modification time. A part made to raise is its functions replaced, in their module and
 wherever a module of the package bound them, each reaching a barrier. Logs are read with ``capture_logs`` behind a
 barrier (``logs`` of ``test_backup_apply.py``: a warning through a logger of the module's name must reach the capture).
+(h) reads a file of mode 000 by ``lstat`` alone (``as_left``), and gives every mode back when the test ends
+(``mode_000``); the thread of a check's start runs inline (``InlineThreads``, as the API tests' ``Threads``), on an
+upload that is no archive: the check stops at its first bytes, before any copy is made or any database opened. The
+descriptors left open on a folder are found in ``/dev/fd`` by its device and inode (``descriptors_on`` of
+``test_backup_archive.py``, imported, with its ``needs_dev_fd``), behind a barrier: one the test opens itself is found.
 
 Pure: every path under ``tmp_path``. This process's production data directory is a folder of the test that must stay
 absent but where a test configures its own (``configured_data_dir`` of the staging tests, imported, autouse): the lane's
@@ -87,6 +108,14 @@ Written RED, before B4b: ``instance_backup.leftovers`` does not exist, nor do
 needs it (``leftovers_module``, ``new_function``), never at collection: the file collects without them, and each test
 fails on its own with a "[new] …" message. The cases on what exists already fail on what it does today: ``get_job``
 leaves the work files, ``prune`` answers ``None``, ``remove_expired_jobs`` removes a job through a link.
+
+Written RED again for B-50, before its cure: JSON that is no object raises ``AttributeError`` from
+``restore_jobs._read_state`` (``record.get``) and from ``BackupJob.from_json`` (``.items()``), and a job's ``state.json``
+that is a folder or of mode 000 raises ``IsADirectoryError`` or ``PermissionError`` from ``jobs._read_state``: nobody
+catches them, and the rows of (h) that hold one fail on it. A check state that is a folder reads as none today, yet each
+read leaves a descriptor open on it (``os.fdopen`` refuses a folder without closing the descriptor it is handed): the
+test that looks for them fails, 20 reads leaving 20. The other rows of (h), what the readers already take for no state,
+are guards, green today.
 """
 
 from __future__ import annotations
@@ -96,14 +125,15 @@ import importlib
 import inspect
 import json
 import os
+import stat
 import sys
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import pytest
@@ -132,6 +162,7 @@ from backend.app.services.platform.instance_backup.paths import (
 from backend.app.services.platform.instance_backup.restore_jobs import RestoreCheck
 from backend.app.services.platform.instance_backup.staging import new_stage_id
 from backend.test_scripts.test_services import test_backup_apply as apply_cases
+from backend.test_scripts.test_services import test_backup_archive as archive_cases
 from backend.test_scripts.test_services import test_backup_jobs as jobs_cases
 from backend.test_scripts.test_services import test_backup_staging as cases
 from backend.test_scripts.test_utilities import test_backup_cli_secure as cli_secure
@@ -1139,3 +1170,421 @@ async def test_the_startup_step_backup_leftovers_runs_the_sweep_once_in_a_worker
     assert [(args, kwargs) for args, kwargs, _thread in calls] == [((), {})], f"app_lifespan.sweep_backup_leftovers called once, without arguments: {calls}"
     assert calls[0][2] != threading.get_ident(), "called in a worker thread, off the event loop"
     print_success("backup-leftovers → app_lifespan.sweep_backup_leftovers(), in a thread")
+
+
+# =============================================================================
+# (h) B-50, unreadable states: skipped, never a failed sweep
+# =============================================================================
+#
+# A state no reader can take for one is no state. The coordinator, 19/10 17:37: the cure in two files, the 404
+# ``backup_job_not_found`` for an unreadable state, in the backup as in the restore (whose own not-found is
+# ``restore_stage_not_found``); 20/10 09:06, its perimeter: a ``state.json`` that is a folder, or that the server may not
+# read, is unreadable too, while any other ``OSError`` (transient) stays a 500 the tab retries. A check's unreadable
+# state reads as no check, unlogged; a job's as a job without a state, dated by its folder's modification time. Each row
+# of the lists below is one way a state cannot be read: the rows red until the cure are named with each list, the others
+# are guards, green today and to stay green.
+
+#: JSON that is no object, a state's whole content. ``restore_jobs._read_state`` calls ``record.get`` on it and
+#: ``BackupJob.from_json`` ``.items()``: today neither catches the ``AttributeError``. Red until B-50's cure.
+NOT_AN_OBJECT = {"json-list": b"[]", "json-null": b"null", "json-string": b'"x"', "json-number": b"5"}
+#: Contents every reader already takes for no state: an empty file, an object without a field of a state. Guards.
+ALREADY_NO_STATE = {"empty-file": b"", "empty-object": b"{}"}
+#: What a state file holds, for the ways that are a content.
+CONTENTS = {**NOT_AN_OBJECT, **ALREADY_NO_STATE}
+#: The ways a check's state cannot be read. Red until the cure: ``NOT_AN_OBJECT``. Guards: what ``_read_state`` already
+#: answers ``None`` for — ``ALREADY_NO_STATE``, a folder where the file belongs (whose descriptor each read leaves open,
+#: though: red, ``FOLDER_READS``), a file of mode 000 (root reads it all the same: skipped as root).
+CHECK_STATES = [
+    *(pytest.param(how, id=how) for how in CONTENTS),
+    pytest.param("a-folder", id="a-folder"),
+    pytest.param("mode-000", id="mode-000", marks=cases.needs_permission_checks),
+]
+#: The ways a job's ``state.json`` cannot be read. Red until the cure: ``NOT_AN_OBJECT`` (``AttributeError``), a folder
+#: (``IsADirectoryError``), a file of mode 000 (``PermissionError``; skipped as root) — the perimeter of 20/10 09:06.
+#: Guards: no ``state.json`` at all, and ``ALREADY_NO_STATE``.
+JOB_STATES = [
+    *(pytest.param(how, id=how) for how in NOT_AN_OBJECT),
+    pytest.param("a-folder", id="a-folder"),
+    pytest.param("mode-000", id="mode-000", marks=cases.needs_permission_checks),
+    pytest.param("no-state-file", id="no-state-file"),
+    *(pytest.param(how, id=how) for how in ALREADY_NO_STATE),
+]
+#: An upload that is neither a zip nor an envelope: its check ends at its first bytes, ``not_a_backup``, before any copy
+#: is made or any database opened.
+NOT_A_BACKUP = b"neither a zip nor an envelope: the file an administrator uploaded"
+#: The lines an operator must look at: a check's unreadable state never makes one (contract §3: unlogged).
+WARNED_LEVELS = {"warning", "error", "critical"}
+#: An error, what a failed part of the sweep is logged at.
+ERROR_LEVELS = {"error", "critical"}
+
+
+class Mode000:
+    """The files a test made mode 000, each given its mode back when the test ends, whatever happened (as ``Modes`` of
+    ``test_backup_apply.py`` (o)), so that pytest can remove ``tmp_path``; one the sweep removed meanwhile, with its
+    folder, needs nothing."""
+
+    def __init__(self) -> None:
+        self._made: list[tuple[Path, int]] = []
+
+    def make(self, path: Path) -> None:
+        self._made.append((path, stat.S_IMODE(path.lstat().st_mode)))
+        path.chmod(0o000)
+
+    def put_back(self) -> None:
+        while self._made:
+            path, mode = self._made.pop()
+            if os.path.lexists(path):
+                path.chmod(mode)
+
+
+@pytest.fixture
+def mode_000() -> Iterator[Mode000]:
+    """``Mode000`` for one test."""
+    made = Mode000()
+    try:
+        yield made
+    finally:
+        made.put_back()
+
+
+def as_left(path: Path) -> dict[str, tuple[int, int, int, int]]:
+    """``path`` and everything below it, read without opening a file nor following a link — a file of mode 000 too, whose
+    bytes ``entries`` would have to read: each entry's kind, mode, size and modification time."""
+    below = [Path(folder, name) for folder, folders, files in os.walk(path) for name in (*folders, *files)]
+    found: dict[str, tuple[int, int, int, int]] = {}
+    for entry in (path, *below):
+        info = entry.lstat()
+        found[entry.relative_to(path.parent).as_posix()] = (stat.S_IFMT(info.st_mode), stat.S_IMODE(info.st_mode), info.st_size, info.st_mtime_ns)
+    return found
+
+
+def logged_at(events: list[dict[str, Any]], levels: set[str]) -> list[dict[str, Any]]:
+    """The events logged at one of ``levels``, the canary of ``logs`` left out: whole, so that a failure shows the
+    ``part`` and the ``error`` of each."""
+    return [event for event in events if event.get("log_level") in levels and event.get("event") != apply_cases.LOG_CANARY]
+
+
+# -----------------------------------------------------------------------------
+# The restore's checks
+# -----------------------------------------------------------------------------
+
+
+def unreadable_check_state(root: Path, how: str, mode_000: Mode000) -> str:
+    """A check's state no reader can take for one, ``.restore/checks/<id>.json``, as ``how`` says (``CHECK_STATES``): a
+    content of ``CONTENTS``, 0600 as the checks write theirs; a folder where the file belongs; or the state of a check
+    that ended ten minutes ago, made mode 000. Its id."""
+    stage_id = new_stage_id()
+    path = check_state_path(root, stage_id)
+    if how == "a-folder":
+        path.mkdir(mode=0o700)
+    elif how == "mode-000":
+        recorded_check(root, stage_id, new_stage_id(), status="done")
+        mode_000.make(path)
+    else:
+        path.write_bytes(CONTENTS[how])
+        path.chmod(0o600)
+    return stage_id
+
+
+@dataclass(frozen=True)
+class ChecksBeside:
+    """``.restore/`` where ``prune`` has its usual work, beside a check's state no reader can take: a check that ended 25
+    hours ago, with its copy (``old``); one that ended ten minutes ago, with its copy (``recent``); one a stopped server
+    left running, with its stage and its upload (``interrupted``). And the id of the unreadable state."""
+
+    old: RestoreCheck
+    recent: RestoreCheck
+    interrupted: InterruptedCheck
+    unreadable: str
+
+
+def checks_beside(root: Path, how: str, mode_000: Mode000) -> ChecksBeside:
+    """``ChecksBeside`` in ``root``, the lock of the checks there and free; the unreadable state made last, as ``how``
+    says, once the running check was read as running while its lock was held (``interrupted_checks``)."""
+    restore_folders(root)
+    old_id, recent_id = new_stage_id(), new_stage_id()
+    stage_holding(root, old_id, archive=None, report=True)
+    old = recorded_check(root, old_id, new_stage_id(), status="done", ended_ago=timedelta(hours=25))
+    stage_holding(root, recent_id, archive=None, report=True)
+    recent = recorded_check(root, recent_id, new_stage_id(), status="done")
+    [interrupted] = interrupted_checks(root, 1)
+    return ChecksBeside(old=old, recent=recent, interrupted=interrupted, unreadable=unreadable_check_state(root, how, mode_000))
+
+
+def readable_checks(root: Path) -> dict[str, str]:
+    """``restore_jobs._checks``, what ``prune`` and an upload that finishes read: every check it answers, by id, with its
+    status."""
+    return {check.stage_id: check.status for check in restore_jobs._checks(root)}
+
+
+def assert_prune_did_its_work(root: Path, world: ChecksBeside, unreadable: dict[str, tuple[int, int, int, int]]) -> None:
+    """``prune``'s usual work on the checks it reads: the one a stopped server left running ended ``restore_interrupted``,
+    its stage and its upload removed; the one that ended 25 hours ago removed with its copy; the one that ended ten
+    minutes ago kept as it was, with its copy. The unreadable state, just made, left as it was (``unreadable``: its
+    ``as_left`` before)."""
+    assert ended_interrupted(root, world.interrupted), f"the check a stopped server left running is ended restore_interrupted, its stage and its upload removed: {check_state(root, world.interrupted.stage_id)}"
+    old = (check_state(root, world.old.stage_id), os.path.lexists(stage_dir(root, world.old.stage_id)))
+    assert old == (None, False), f"the check that ended 25 hours ago is removed with its copy: its state {old[0]}, its copy there {old[1]}"
+    recent = restore_jobs.read_check(world.recent.stage_id, data_dir=root)
+    assert (recent, stage_dir(root, world.recent.stage_id).is_dir()) == (world.recent, True), f"the check that ended ten minutes ago is kept as it was, with its copy: {recent}"
+    assert as_left(check_state_path(root, world.unreadable)) == unreadable, "the unreadable state, just made, is left as it was"
+
+
+@pytest.mark.parametrize("how", CHECK_STATES)
+def test_an_unreadable_check_state_is_skipped_and_prune_does_its_work(tmp_path, mode_000, how):
+    """(h) B-50. ``_checks`` answers the three checks it reads and skips the unreadable state; ``prune``, which reads them
+    through it, does its usual work on them and answers 1, the check it ended as interrupted. Red until the cure for
+    ``NOT_AN_OBJECT``: ``_read_state`` raises ``AttributeError`` (``record.get``), which nobody catches — every new check
+    (``start_check`` prunes first) and every upload that finishes is a 500. Guards, the other rows."""
+    print_section(f"(h) B-50 An unreadable check state, {how}: prune")
+    root = data_root(tmp_path)
+    world = checks_beside(root, how, mode_000)
+    unreadable = as_left(check_state_path(root, world.unreadable))
+    found = readable_checks(root)
+    expected = {world.old.stage_id: "done", world.recent.stage_id: "done", world.interrupted.stage_id: "running"}
+    assert found == expected, f"_checks answers the three checks it reads, and skips the unreadable state: {found}"
+    answer = prune(root)
+    assert answer == 1, f"prune ends the check a stopped server left running, and answers 1, not {answer!r}"
+    assert_prune_did_its_work(root, world, unreadable)
+    print_success(f"{how}: skipped; prune ended 1 check, removed 1, kept 1")
+
+
+def read_it(root: Path, stage_id: str) -> object:
+    """``GET /backup/restore/stage/{id}``."""
+    return restore_jobs.read_check(stage_id, data_dir=root)
+
+
+def remove_it(root: Path, stage_id: str) -> object:
+    """``DELETE /backup/restore/stage/{id}``."""
+    return restore_jobs.remove_check(stage_id, data_dir=root)
+
+
+def confirm_it(root: Path, stage_id: str) -> object:
+    """``POST /backup/restore/stage/{id}/confirm``."""
+    return restore_jobs.confirm_check(stage_id, confirmed_by="cli", data_dir=root)
+
+
+#: What the three routes that reach a check by its id call: each answers ``CheckNotFoundError`` with its 404
+#: ``restore_stage_not_found`` (``api/v1/backup/restore.py``).
+BY_ITS_ID = [pytest.param(read_it, id="read_check"), pytest.param(remove_it, id="remove_check"), pytest.param(confirm_it, id="confirm_check")]
+
+
+@pytest.mark.parametrize("reach", BY_ITS_ID)
+@pytest.mark.parametrize("how", CHECK_STATES)
+def test_a_check_whose_state_is_unreadable_is_not_found_and_nothing_is_logged(tmp_path, mode_000, how, reach):
+    """(h) B-50. A check whose state no reader can take is no check: reading it, removing it and confirming its restore
+    raise ``CheckNotFoundError`` — the routes' 404 ``restore_stage_not_found``, the restore's own not-found —, nothing is
+    logged (contract §3: unlogged, as the other unreadable checks today), and nothing in ``.restore/`` is written or
+    removed. Red until the cure for ``NOT_AN_OBJECT``: ``AttributeError``, a 500. Guards, the other rows."""
+    root = data_root(tmp_path)
+    restore_folders(root)
+    stage_id = unreadable_check_state(root, how, mode_000)
+    before = as_left(restore_dir(root))
+    with apply_cases.logs(restore_jobs.__name__) as events, pytest.raises(restore_jobs.CheckNotFoundError):
+        reach(root, stage_id)
+    assert apply_cases.logged(events) == [], f"an unreadable check is not found in silence: {apply_cases.logged(events)}"
+    after = as_left(restore_dir(root))
+    assert after == before, f"nothing in .restore/ is written or removed: {cli_secure.differences(before, after)}"
+    print_success(f"{how}, {reach.__name__}: CheckNotFoundError, nothing logged")
+
+
+#: How often the descriptor test reads a check state that is a folder: each read opens the folder and, until B-50's cure,
+#: leaves its descriptor open — that many left, then.
+FOLDER_READS = 20
+
+
+def read_every_check(root: Path, stage_id: str) -> None:
+    """``restore_jobs._checks``, what ``prune``, an upload that finishes and a check's start read: it skips the state."""
+    found = restore_jobs._checks(root)
+    assert found == [], f"_checks skips a check state that is a folder: {found}"
+
+
+def read_that_check(root: Path, stage_id: str) -> None:
+    """``read_check`` of the state's id, what the routes call: no check."""
+    with pytest.raises(restore_jobs.CheckNotFoundError):
+        restore_jobs.read_check(stage_id, data_dir=root)
+
+
+@archive_cases.needs_dev_fd
+@pytest.mark.parametrize("reader", [pytest.param(read_every_check, id="_checks"), pytest.param(read_that_check, id="read_check")])
+def test_reading_a_check_state_that_is_a_folder_leaves_no_descriptor_open(tmp_path, mode_000, reader):
+    """(h) B-50, the descriptor. A check state that is a folder reads as no check (the rows ``a-folder`` above), yet each
+    read opens the folder and leaves its descriptor open: ``os.fdopen`` refuses a folder without closing the descriptor
+    it is handed — the defect ``test_backup_archive.py`` (f) pins for ``_add_file``. In a server every prune, upload that
+    finishes, check's start and read of that id keeps one more, up to «too many open files». After 20 reads, through
+    ``_checks`` or ``read_check``, no descriptor of this process is open on the folder. Red until the cure: 20 are,
+    closed by the test, so that a red run carries none into the tests that follow."""
+    root = data_root(tmp_path)
+    restore_folders(root)
+    stage_id = unreadable_check_state(root, "a-folder", mode_000)
+    folder = check_state_path(root, stage_id)
+    assert archive_cases.descriptors_on(folder) == [], "precondition: no descriptor of this process is open on the folder"
+    probe = os.open(folder, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))  # as restore_jobs opens a state
+    try:
+        seen = archive_cases.descriptors_on(folder)
+    finally:
+        os.close(probe)
+    closed = archive_cases.descriptors_on(folder)
+    assert (seen, closed) == ([probe], []), f"barrier: /dev/fd lists this process's descriptors, and the folder opens as restore_jobs opens a state — the test's own found on it, then none once closed: {seen}, then {closed}"
+    try:
+        for _ in range(FOLDER_READS):
+            reader(root, stage_id)
+    finally:
+        left_open = archive_cases.descriptors_on(folder)
+        for fd in left_open:
+            os.close(fd)  # a red run must not carry them into the tests that follow
+    assert left_open == [], f"{len(left_open)} descriptor(s) left open on a check state that is a folder by {FOLDER_READS} reads through {reader.__name__}: one per read, os.fdopen refusing a folder without closing the descriptor it is handed: {left_open}"
+    print_success(f"{reader.__name__}: {FOLDER_READS} reads of a folder, no descriptor left open")
+
+
+@pytest.mark.parametrize("how", CHECK_STATES)
+def test_an_upload_that_finishes_beside_an_unreadable_check_state_replaces_the_one_before(tmp_path, mode_000, how):
+    """(h) B-50. An upload that finishes drops the uploads it replaces but the one a running check reads
+    (``_remove_replaced_uploads``, which reads every check). Beside an unreadable check state, while a check runs: the
+    upload is received under its id, the upload before it removed, the one the running check reads kept. Red until the
+    cure for ``NOT_AN_OBJECT``: ``finish`` raises ``AttributeError`` once the archive is in place — the upload's request
+    a 500, the upload it replaces left. Guards, the other rows."""
+    root = data_root(tmp_path)
+    restore_folders(root)
+    earlier = an_upload(root, new_stage_id())
+    read = an_upload(root, new_stage_id())
+    recorded_check(root, new_stage_id(), read.name)
+    unreadable_check_state(root, how, mode_000)
+    holder = cases.hold_the_lock(root)
+    try:
+        writer = restore_jobs.UploadWriter(root, max_bytes=None, declared=None)
+        writer.write(CLEAR)
+        received = writer.finish()
+    finally:
+        holder.release()
+    assert received == restore_jobs.RestoreUploaded(upload_id=writer.upload_id, size=len(CLEAR), kind="zip"), f"the upload is received: {received}"
+    assert upload_path(root, received.upload_id).read_bytes() == CLEAR, "the archive is kept under its id, as sent"
+    assert (os.path.lexists(earlier), read.is_file()) == (False, True), "the upload before it is replaced; the one a running check reads is kept"
+    print_success(f"{how}: received; the upload before it removed, the one a check reads kept")
+
+
+class InlineThreads:
+    """``threading`` as ``restore_jobs`` sees it: the thread a start makes runs its target at once, inside the call that
+    starts it, so the check has ended when ``start_check`` returns (the API tests' ``Threads``, ``test_backup_restore.py``,
+    never holding one). What the target raises is kept, as a real thread would lose it."""
+
+    def __init__(self) -> None:
+        self.started: list[str | None] = []
+        self.raised: list[Exception] = []
+
+    def Thread(self, *, target: Callable[..., Any], args: tuple[Any, ...] = (), kwargs: dict[str, Any] | None = None, name: str | None = None, daemon: bool | None = None) -> SimpleNamespace:  # the name restore_jobs calls
+        def start() -> None:
+            self.started.append(name)
+            try:
+                target(*args, **(kwargs or {}))
+            except Exception as exc:
+                self.raised.append(exc)
+
+        return SimpleNamespace(start=start)
+
+
+@pytest.mark.parametrize("how", CHECK_STATES)
+def test_a_check_starts_beside_an_unreadable_check_state(tmp_path, monkeypatch, mode_000, how):
+    """(h) B-50. ``start_check`` prunes first. Beside an unreadable check state, the check of an upload still starts, in
+    its thread, and runs to its end — here at once: ``failed``/``not_a_backup``, the upload being no backup —, its upload
+    removed and the lock of the checks free again. Red until the cure for ``NOT_AN_OBJECT``: the start raises
+    ``AttributeError`` from ``prune`` before it takes the lock — every new check a 500. Guards, the other rows."""
+    root = data_root(tmp_path)
+    restore_folders(root)
+    unreadable_check_state(root, how, mode_000)
+    upload_id = new_stage_id()
+    upload = upload_path(root, upload_id)
+    upload.write_bytes(NOT_A_BACKUP)
+    upload.chmod(0o600)
+    threads = InlineThreads()
+    monkeypatch.setattr(restore_jobs, "threading", threads)
+    first = restore_jobs.start_check(upload_id, data_dir=root)
+    started = (first.upload_id, first.status, len(threads.started), threads.raised)
+    assert started == (upload_id, "running", 1, []), f"the check of the upload starts, in its thread, which raises nothing: {first}, {threads.started}, {threads.raised}"
+    ended = restore_jobs.read_check(first.stage_id, data_dir=root)
+    assert (ended.status, ended.error_code) == ("failed", "not_a_backup"), f"the check ran to its end, as any check of a file that is no backup: {ended}"
+    assert (upload.exists(), cases.lock_is_free(root)) == (False, True), "its upload is removed, and the lock of the checks is free again"
+    print_success(f"{how}: the check started and ended, not_a_backup")
+
+
+@pytest.mark.parametrize("how", CHECK_STATES)
+def test_the_sweep_cleans_the_checks_beside_an_unreadable_check_state_and_logs_no_error(tmp_path, mode_000, how):
+    """(h) B-50. The sweep's ``restore`` part beside an unreadable check state: neither an error nor a warning logged, and
+    its whole work done — ``prune``'s (the check a stopped server left running ended, the one 25 hours old removed with
+    its copy, the recent one kept, the unreadable state left as it was), then the decrypted archive a killed check left
+    in a copy removed; its INFO line says so, ``checks_interrupted`` 1 and ``decrypted_archives`` 1, every other count 0.
+    Red until the cure for ``NOT_AN_OBJECT``: the part fails at ``prune`` — «A cleanup of backup leftovers failed»,
+    ``part`` ``restore``, ``AttributeError`` — and none of that work is done. Guards, the other rows."""
+    print_section(f"(h) B-50 An unreadable check state, {how}: the sweep")
+    root = data_root(tmp_path)
+    world = checks_beside(root, how, mode_000)
+    stray = stage_holding(root) / STAGE_DECRYPTED_ARCHIVE
+    unreadable = as_left(check_state_path(root, world.unreadable))
+    with apply_cases.logs(LEFTOVERS) as events:
+        sweep(root)
+    warned = logged_at(events, WARNED_LEVELS)
+    assert warned == [], f"an unreadable check state is no check: the restore part does not fail, and nothing is said of it: {warned}"
+    assert_prune_did_its_work(root, world, unreadable)
+    assert not os.path.lexists(stray), "the decrypted archive a killed check left in a copy is removed, after prune, in the same part"
+    counts = summary_counts(events)
+    assert counts == {**dict.fromkeys(COUNTS, 0), "checks_interrupted": 1, "decrypted_archives": 1}, f"the sweep says what it did, and nothing else: {counts}"
+    print_success(f"{how}: nothing logged above INFO; 1 check ended, 1 removed, 1 decrypted archive removed")
+
+
+# -----------------------------------------------------------------------------
+# The backup jobs
+# -----------------------------------------------------------------------------
+
+
+def unreadable_job_folder(root: Path, how: str, mode_000: Mode000, *, age: timedelta) -> Path:
+    """A job folder, ``backups/.jobs/<id>/``, whose ``state.json`` no reader can take for a state, as ``how`` says
+    (``JOB_STATES``): a content of ``CONTENTS``; a folder; none at all; or the state of a finished job, beside its
+    archive, made mode 000 — a state that says the opposite of the folder's age (ended two hours ago in a folder ten
+    minutes old, and the reverse), so that only the folder's modification time can decide. The folder, last modified
+    ``age`` ago once everything in it is made."""
+    if how == "mode-000":
+        _job, folder = finished_job(root, ended=RECENTLY if age > jobs.JOB_RETENTION else LONG_AGO)
+        mode_000.make(folder / STATE_FILE)
+    else:
+        folder = ensure_private_dir(job_dir(root, new_stage_id()), root)
+        if how == "a-folder":
+            (folder / STATE_FILE).mkdir(mode=0o700)
+        elif how != "no-state-file":
+            (folder / STATE_FILE).write_bytes(CONTENTS[how])
+    return cli_secure.aged(folder, age.total_seconds())
+
+
+@pytest.mark.parametrize("how", JOB_STATES)
+def test_the_sweep_cleans_the_jobs_beside_an_unreadable_job_state_and_logs_no_error(tmp_path, mode_000, how):
+    """(h) B-50. The sweep's ``jobs`` part beside two job folders whose ``state.json`` no reader can take, one last
+    modified ten minutes ago, one two hours ago: no error logged; the run a stopped server left running ended
+    ``backup_interrupted``, its state alone left; the job that ended two hours ago removed; the one that ended ten minutes
+    ago kept as it was; the unreadable folder ten minutes old kept as it was, the one two hours old removed — dated by
+    its modification time, as a folder without a state is, whatever a state of mode 000 would say were it read. Its INFO
+    line says so: ``jobs_interrupted`` 1, ``jobs_expired`` 2, every other count 0. Red until the cure for
+    ``NOT_AN_OBJECT`` (``AttributeError`` from ``BackupJob.from_json``), ``a-folder`` (``IsADirectoryError``) and
+    ``mode-000`` (``PermissionError``): ``end_interrupted_jobs`` raises, «A cleanup of backup leftovers failed» is logged
+    with ``part`` ``jobs``, and ``remove_expired_jobs`` never runs. Guards, green today: ``no-state-file`` and
+    ``ALREADY_NO_STATE``."""
+    print_section(f"(h) B-50 An unreadable job state, {how}: the sweep")
+    root = data_root(tmp_path)
+    job, folder = running_job(root)
+    _expired_job, expired = finished_job(root, ended=LONG_AGO)
+    _recent_job, recent = finished_job(root, ended=RECENTLY)
+    young = unreadable_job_folder(root, how, mode_000, age=RECENTLY)
+    old = unreadable_job_folder(root, how, mode_000, age=LONG_AGO)
+    free_run_lock(root)
+    kept, young_before = cli_secure.entries(recent), as_left(young)
+    started = datetime.now(UTC)
+    with apply_cases.logs(LEFTOVERS) as events:
+        sweep(root)
+    errors = logged_at(events, ERROR_LEVELS)
+    assert errors == [], f"an unreadable job state is no state: the jobs part does not fail: {errors}"
+    assert_ended_interrupted(job, folder, started, datetime.now(UTC))
+    assert not os.path.lexists(expired), "the job that ended two hours ago is removed, with its archive"
+    assert cli_secure.entries(recent) == kept, "the job that ended ten minutes ago is kept as it was"
+    assert as_left(young) == young_before, "the unreadable folder last modified ten minutes ago is kept as it was"
+    assert not os.path.lexists(old), "the unreadable folder last modified two hours ago is removed: its modification time dates it"
+    counts = summary_counts(events)
+    assert counts == {**dict.fromkeys(COUNTS, 0), "jobs_interrupted": 1, "jobs_expired": 2}, f"the sweep says what it did, and nothing else: {counts}"
+    print_success(f"{how}: no error; 1 job ended, the expired job and the unreadable folder two hours old removed")

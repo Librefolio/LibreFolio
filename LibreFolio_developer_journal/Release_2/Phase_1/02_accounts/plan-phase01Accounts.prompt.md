@@ -7883,3 +7883,739 @@ Ognuno con i rossi prima e uno slot. Uno slot API (`users-admin`) per N69-4 e N6
     nel mio ramo sembravano tolte da dev).
 - **Checkpoint** mandato al coordinatore (12:50): tre commit proposti, nessuna riga del CHANGELOG (solo test e doc per
   sviluppatori). FROZEN.
+
+## A-CL1 — Il changelog resta «in caricamento» aperto da Impostazioni → Informazioni: analisi (19/10, 14:40–15:40, sola lettura; base `f3805aa09`)
+- **Richiesta** (coordinatore, 14:36): difetto visto dal developer sulla nightly `v1.2.1-2591-g5e1a7c3af`. Il clic sulla
+  versione sotto il logo apre il changelog, che resta «in caricamento»; dalla versione nella sidebar si apre subito.
+  Servono la causa, un rosso Vitest o E2E, la cura proposta e il costo. Niente codice prima del via.
+- **Stesso codice**: `5e1a7c3af` è «Merge pull request #53 from Librefolio/dev_release2» (17/10, 20:47Z). Letti via
+  `gh api …/contents?ref=` (nessun `git fetch`), sono identici byte per byte al mio albero:
+  - `ChangelogModal.svelte`, `changelog.ts`, `AboutTab.svelte`, `Sidebar.svelte`;
+  - `WhatsNewModal.svelte`, `ModalBase.svelte`, `package.json`.
+
+### Causa
+1. **Lo stato «pronto» legge una cache che non è reattiva.**
+   - `ChangelogModal.svelte:43`: `ready = $derived(localizedChangelog.peek(uiLanguage) ?? (loaded?.language ===
+     uiLanguage ? loaded.chapters : undefined))`.
+   - `peek()` legge `merged`, una `Map` semplice (`changelog.ts:402`), quindi non è una dipendenza.
+   - `ready` si ricalcola solo quando cambiano `uiLanguage` o `loaded`.
+2. **Il risultato viene scartato alla chiusura.** Se la modale si chiude mentre la traduzione carica, il teardown
+   dell'effetto di caricamento (`:47–59`) mette `live = false`: il risultato non arriva mai in `loaded`, ma la cache
+   `merged` si riempie lo stesso.
+3. **Alla riapertura resta bloccata.**
+   - `ready` tiene il suo `undefined` in cache: le sue dipendenze non sono cambiate, e un `$derived` di Svelte 5 resta in
+     cache anche attraverso la chiusura e la riapertura del blocco `{#if open}`.
+   - L'effetto trova `peek()` pieno ed esce subito, quindi `loaded` non viene mai assegnato.
+   - Risultato: «Caricamento…» per sempre, fino a un cambio di lingua o a un ricaricamento.
+4. **Perché la sidebar si apre subito**: è un'altra istanza. Il suo `ready` si calcola per la prima volta all'apertura,
+   quando la cache è già piena (l'ha riempita il caricamento dell'Informazioni).
+5. **Le ipotesi del coordinatore**:
+   - *promessa rifiutata o mai risolta*: **no**.
+     - `load()` non rifiuta mai (`.catch(() => englishOnly)`).
+     - Un chunk appeso bloccherebbe anche la sidebar, che condivide la stessa promessa `pending`.
+   - *l'effetto che si riesegue e scarta il risultato*: **sì**, ma a rieseguirlo è la chiusura (`open` falso), non una
+     riesecuzione spontanea.
+     - La prima apertura, col chunk che arriva a modale aperta, funziona (R0 e M3 verdi).
+     - Anche la galleria e `changelog-locale.spec.ts` aprono la modale della sidebar in italiano a ogni giro.
+   - *`WhatsNewModal` o la sidebar che precaricano*: **non la causano**. Una cache riempita da altri *prima* della prima
+     apertura rende l'apertura immediata, non bloccata.
+6. **Il gesto da confermare col developer**:
+   - la modale si è chiusa mentre la traduzione caricava;
+   - modi possibili: Esc, un clic fuori, o — il più probabile — un secondo clic sulla versione: lo sfondo della modale la
+     copre già, e un clic sullo sfondo chiude;
+   - poi è stata riaperta dopo l'arrivo del chunk.
+   - Non è un difetto solo dell'Informazioni: la stessa sequenza blocca anche la modale della sidebar, se è la prima della
+     sessione a caricare la traduzione.
+   - Nell'Informazioni è più probabile: la scheda si apre con 7 chiamate API e le icone dei provider in volo, e il chunk
+     (~140–150 KB) fa la coda con loro.
+
+### Rossi (scratch, nella cartella di sessione `work/acl1/`)
+- **Procedura**: i file venivano copiati nell'albero solo per la corsa, poi tolti (`git status` pulito dopo ogni corsa);
+  Vitest con il carico a 1 minuto 28–39.
+- **`AboutTab.changelog.acl1.test.ts`**: l'AboutTab vera, la modale vera, e un fake che copia riga per riga
+  `createLocalizedChangelog` (cache `Map`, `pending` condiviso).
+  - R0, prima apertura, chunk che arriva a modale aperta: ✅.
+  - **R1, chiusa mentre carica, chunk che arriva a modale chiusa, riaperta: ✗.** Dopo 1 s c'è ancora
+    `changelog-loading`, con `merged.has('it')` vero.
+  - R2, una seconda istanza (come la sidebar): si apre subito ✅.
+  - R3, chiusa e riaperta mentre carica ancora: ✅.
+- **`ChangelogModal.acl1.test.ts`**: la modale da sola, 3 varianti × 3 scenari, nessun avviso di Svelte.
+  - Gli scenari:
+    - M1: la sequenza R1;
+    - M2: un chunk fallito mostra l'inglese, poi un altro consumatore carica l'italiano, e la modale si riapre;
+    - M3: il controllo.
+  - Esiti:
+
+    | Variante | M1 | M2 | M3 |
+    |---|---|---|---|
+    | oggi | ✗ | ✗ | ✅ |
+    | C4 | ✅ | ✗ | ✅ |
+    | C1 | ✅ | ✅ | ✅ |
+- **Un test sul modulo vero non è possibile in Vitest**:
+  - jsdom rifiuta l'import `?raw` di `CHANGELOG.md` anche con `vi.mock` («Denied ID …/CHANGELOG.md?raw»);
+  - in ambiente node, `svelte/reactivity` è la build server, non reattiva.
+  - Quindi la reattività del modulo vero si vede solo in un E2E.
+
+### Cura proposta (scelta tecnica: nessun cambiamento visibile oltre al difetto risolto)
+- **C1, consigliata: la cache diventa reattiva.**
+  - In `changelog.ts`, `merged` diventa una `SvelteMap` (`svelte/reactivity`): +2 righe.
+  - Ogni `$derived` o `$effect` che chiama `peek()` segue la cache, e `ready` si ricalcola quando un caricamento
+    qualsiasi la riempie.
+  - I componenti non cambiano: `loaded` resta per il ripiego inglese di un fallimento.
+  - Copre anche M2 (oggi resta in inglese fino al ricaricamento) e `WhatsNewModal`, che ha lo stesso schema.
+- **C4, alternativa minima: togliere la guardia `live`.**
+  - In `ChangelogModal.svelte`, −4 righe: il risultato arriva sempre in `loaded`.
+  - `loaded` porta la sua lingua, quindi `ready` ignora già una risposta tardiva per un'altra lingua.
+  - Lascia aperto M2.
+- **Non proposta: C2** (copiare `peek()` in `loaded` nel ramo d'uscita dell'effetto). È una scrittura di stato in un
+  effetto, e alla riapertura mostrerebbe un fotogramma di «Caricamento…».
+
+### Costo, test, rischi
+- **C1**:
+  - codice: 2 righe;
+  - Vitest: M1 + M2 nella sezione CL di `ChangelogModal.test.ts`, rossi oggi col fake fedele. Nello stesso commit la
+    cache del fake (`cached`) diventa una `SvelteMap`, perché rispecchia il modulo. Il fake di `WhatsNewModal.test.ts`
+    si allinea pure (facoltativo, senza test nuovi);
+  - E2E: un test in `e2e/layout/changelog-locale.spec.ts`, dall'Informazioni in italiano:
+    - il chunk della traduzione viene trattenuto con `page.route`; i nomi dei chunk sono hash, quindi si riconosce dal
+      corpo, che contiene una riga di `CHANGELOG.it.md`;
+    - poi apri, chiudi, rilascia, riapri, e i capitoli devono esserci;
+    - rosso oggi, verde dopo: serve uno slot E2E (2 corse, ~5 min);
+  - totale ~1–1,5 h con il `test-author`, più una riga 🐛 del CHANGELOG.
+- **C4**: codice −4 righe; Vitest M1 (il fake resta com'è: rosso oggi, verde dopo); E2E facoltativo; ~30–45 min.
+- **Conflitti**:
+  - nessun ramo locale (32) e nemmeno `dev_release2` (`7fa7d4f93`) ha commit oltre il mio HEAD su questi file:
+    - `ChangelogModal.svelte` e `ChangelogModal.test.ts`;
+    - `features/changelog/` e `AboutTab.svelte`;
+    - `changelog-locale.spec.ts`.
+  - Altri autori di questi file: CL e M-23 (`changelog.ts`); H e il programma colori (`ChangelogModal.svelte`).
+- **Colori**: nessuna classe cambia, quindi nessun effetto sui cancelli.
+- **Domanda al developer** (una conferma, non una decisione): la modale si era chiusa e riaperta (Esc, clic fuori,
+  secondo clic sulla versione) prima di restare «in caricamento»?
+  - Se anche un solo clic, senza chiusura, la blocca, c'è una seconda via che non ho riprodotto.
+  - In quel caso il passo successivo è l'E2E sopra, senza la trattenuta, sulla build della nightly.
+- Stato: **FROZEN** in attesa del via; nessun file del prodotto toccato.
+
+## A-CL1 — Via al lotto (19/10, 15:00; base `1d50d8c42`)
+- **Giornale**: l'analisi è in `1d50d8c42`. Il developer non è certo di aver chiuso e riaperto la finestra.
+- **Decisione del developer** (testuale): «mi pare una duplicazione errata di codice, la modale da chiamare è la stessa,
+  solo l'entry point cambia, quindi leva quella vecchia che non funziona e usa quella che funziona in entrambi i posti».
+- **Via del coordinatore**:
+  1. un'istanza sola di `ChangelogModal`, quella della sidebar con `APP_VERSION`; l'Informazioni la apre per la stessa via
+     (uno store o una funzione condivisa, la forma più semplice); via la seconda istanza in `AboutTab.svelte`;
+  2. anche C1 (`merged` come `SvelteMap`), perché con un'istanza sola R1 resta possibile; Vitest M1 e M2; la finta in
+     `SvelteMap` nello stesso commit;
+  3. l'E2E che trattiene il chunk con `page.route`, dall'Informazioni in italiano, e un caso che dalla sidebar e
+     dall'Informazioni apre la stessa istanza;
+  4. una riga 🐛 nel CHANGELOG.
+- Prima i rossi; corsia 6182; lo slot E2E (~5 min) va chiesto quando è pronto.
+
+### Contratto
+- **Una finestra sola.**
+  - La monta la Sidebar: `ChangelogModal` con `currentVersion={APP_VERSION}`, fuori dal `<nav>` come oggi.
+  - Lo stato aperto/chiuso vive in `lib/features/changelog/changelogModalStore.svelte.ts`: `changelogModal.open`,
+    `show()`, `close()`.
+  - La versione della sidebar e quella sotto il logo dell'Informazioni chiamano `show()`. L'Informazioni non monta più
+    una finestra sua: niente `import` di `ChangelogModal`, niente `changelogOpen`.
+  - La Sidebar, quando si smonta, chiude lo stato: la finestra vive quanto la shell dell'app, come lo stato locale di
+    oggi. Così, dopo un nuovo accesso, non si riapre da sola.
+- **C1**: in `changelog.ts`, `merged` diventa `SvelteMap` (`svelte/reactivity`). Nell'ambiente node dei test è la `Map`
+  (la build server di `svelte/reactivity` esporta `SvelteMap = globalThis.Map`), quindi `changelog.test.ts` non cambia.
+- **Le finte** che rispecchiano il modulo (`ChangelogModal.test.ts`; `WhatsNewModal.test.ts` per coerenza) passano a
+  `SvelteMap` nello stesso passo del modulo, non prima: con la finta reattiva i rossi M1/M2 diventerebbero verdi senza la
+  cura.
+- **Effetti da segnalare** (conseguenze della decisione, non scelte mie):
+  - dall'Informazioni il controllo degli aggiornamenti riporta `APP_VERSION` invece della versione del backend (nella
+    stessa immagine sono uguali);
+  - aperta dall'Informazioni, la finestra si comporta come quella della sidebar: resta aperta se si torna indietro col
+    browser, mentre oggi quella dell'Informazioni si chiudeva con la scheda.
+- **CHANGELOG**: il testo della riga 🐛 va nel checkpoint; la scrive il coordinatore, come nei lotti precedenti.
+
+### Passi
+1. **CL1.1** — Il modulo di stato, inerte finché Sidebar e Informazioni non lo usano. Serve perché i rossi falliscano su
+   un'asserzione, non su un import mancante.
+2. **CL1.2** — Rossi Vitest (`test-author`):
+   - M1 e M2 in `ChangelogModal.test.ts`;
+   - «la versione apre la finestra dell'app» in `AboutTab.test.ts`;
+   - `Sidebar.changelog.test.ts`, nuovo.
+3. **CL1.3** — Rossi E2E (`test-author`, in parallelo), in `e2e/layout/changelog-locale.spec.ts`:
+   - E1: dall'Informazioni in italiano, chunk trattenuto, chiusa, rilasciata, riaperta;
+   - E2: dalla sidebar e dall'Informazioni la stessa finestra.
+   - Scritti e controllati staticamente; osservati nello slot.
+4. **CL1.4** — Codice e verdi Vitest:
+   - il codice: Sidebar, Informazioni, `changelog.ts`; le finte; i mock morti del changelog in `AboutTab*.test.ts`;
+   - le verifiche: front check, prettier, cancello dei colori;
+   - poi i file del prodotto tornano a HEAD per il rosso E2E (le bozze restano in `work/acl1/`).
+5. **CL1.5** — Doc: `app-state.md` (il nuovo store); la riga `desc` di `changelog-locale` nel registro, se il
+   coordinatore dà il via alla scrittura.
+6. **CL1.6** — Slot E2E: rosso sul codice di oggi, poi il codice rimesso, poi verde.
+7. **CL1.7** — Checkpoint e FROZEN.
+
+### CL1.1 — Il modulo di stato ✅ (19/10, 15:20)
+- `frontend/src/lib/features/changelog/changelogModalStore.svelte.ts`, nuovo: `changelogModal.open`, `show()`, `close()`.
+  Nessuno lo importa ancora, quindi il prodotto non cambia. Prettier pulito.
+- **Note implementazione**:
+  - le bozze del codice sono in `work/acl1/apply_code.py`: 13 modifiche a corrispondenza esatta su Sidebar,
+    Informazioni e `changelog.ts`, tutte trovate una volta sola nella prova a vuoto;
+  - in `work/acl1/apply_tests.py` ci sono i seguiti dei test (9 modifiche, prova a vuoto pulita):
+    - le finte in `SvelteMap`;
+    - via i mock del changelog, ormai morti, da `AboutTab.test.ts` e `AboutTab.legal.test.ts`;
+  - i file del prodotto di HEAD sono copiati in `work/acl1/orig/`; `restore_orig.sh` li rimette per il rosso E2E.
+- Due `test-author` in parallelo, su file distinti:
+  - Vitest: `ChangelogModal.test.ts`, `AboutTab.test.ts`, `Sidebar.changelog.test.ts` nuovo;
+  - E2E: `changelog-locale.spec.ts`, senza esecuzione.
+
+### CL1.2 — Rossi Vitest ✅ (19/10, 15:20–15:37; `test-author` `34a0ecfe`)
+- Una corsa sui tre file, con il carico a 43,9 (1 min 48 s), log `work/acl1/cl12-red-run1.log`. I 7 test nuovi sono
+  rossi su un'asserzione: nessun errore d'import o di caricamento. I test già nei file restano verdi: ChangelogModal
+  48/48, AboutTab 38/38.
+  - **M1** (`ChangelogModal.test.ts`): riaperta dopo il caricamento, `changelog-loading` c'è ancora. Prima di riaprire il
+    test verifica `cached.has('it')`.
+  - **M2**: riaperta dopo il caricamento fatto da un altro consumatore, v1.2.0 resta `lang="en"`. Il test verifica le due
+    letture del file, quella fallita e quella riuscita.
+  - **About** (`AboutTab.test.ts`): `changelogModal.open` resta falso, e la scheda disegna una sua `changelog-modal`.
+    Il test usa `expect.soft`, così il rosso mostra entrambe le cose.
+  - **`Sidebar.changelog.test.ts`**, nuovo: la `ChangelogModal` vera; mock solo il modulo del changelog e
+    `ConnectionSecurityIndicator`. I test 1–4 sono rossi:
+    1. `show()` da fuori: nessuna finestra;
+    2. la versione della sidebar apre la finestra, ma `open` resta falso;
+    3. la chiusura: rosso già all'apertura, per la stessa causa del test 1;
+    4. lo smontaggio non chiude lo stato.
+- **Note implementazione**:
+  - nella Sidebar, che è in modalità legacy, Svelte 5.48 compila `open={changelogModal.open}` in
+    `($.deep_read_state(changelogModal), $.untrack(() => changelogModal.open))`;
+  - resta reattivo perché `deep_read_state` scorre l'oggetto e chiama il getter `open`. Se smettesse di funzionare, lo
+    coglie il test 1 della Sidebar.
+
+### CL1.4 — Codice e verdi Vitest ✅ (19/10, 15:33–15:45)
+- `work/acl1/apply_code.py` applicato. Le modifiche:
+  - **`Sidebar.svelte`**:
+    - importa `changelogModal`; la variabile locale `changelogOpen` non c'è più;
+    - la versione chiama `changelogModal.show()`;
+    - `<ChangelogModal open={changelogModal.open} onClose={changelogModal.close} currentVersion={APP_VERSION} />`
+      resta fuori dal `<nav>`;
+    - `onDestroy(() => changelogModal.close())`.
+  - **`AboutTab.svelte`**: niente import di `ChangelogModal`, niente `changelogOpen`, niente seconda finestra; la versione
+    chiama `changelogModal.show()`. Il testo del bottone non cambia (la versione del backend, `systemInfo.app_version`).
+  - **`changelog.ts`**:
+    - `merged` diventa `new SvelteMap(...)`, con un commento;
+    - il commento di `peek()` dice che è reattivo.
+- `work/acl1/apply_tests.py` applicato:
+  - le finte di `ChangelogModal.test.ts` e `WhatsNewModal.test.ts` passano a `SvelteMap`, con
+    `await vi.hoisted(async () => { const {SvelteMap} = await import('svelte/reactivity'); … })`; anche il loro commento
+    lo dice;
+  - via i mock del changelog, ormai morti, e il loro commento da `AboutTab.test.ts` e `AboutTab.legal.test.ts`. La
+    scheda non importa più niente che legga `?raw`.
+- **Verdi**: Vitest su 7 file (i tre dei rossi, `AboutTab.legal`, `Sidebar.legal`, `WhatsNewModal`,
+  `ChangelogModal.managed`): **121/121**, carico 40.
+  - Il log non ha avvisi di Svelte né errori non gestiti (`work/acl1/cl14-green-run1.log`).
+- **Controlli**:
+  - Prettier pulito sui 9 file;
+  - `theme-roles.mjs --check` pulito («0 files dropped below their record»);
+  - `dev.py front check`: **0 errori, 0 avvisi** (carico 43; `work/acl1/cl14-front-check.log`).
+  - **⚠️ Fuori pista**: un'attesa del carico (54, poi 48).
+- **Doc** (CL1.5, fatta qui perché è una riga sola): `developer/frontend/state/app-state.md`, una riga «Changelog window»
+  nella tabella degli store, dopo «What's new» (3 celle, come le altre).
+  - La pagina utente `user/settings/about.en.md` nomina già i due punti d'accesso, e resta vera.
+  - `developer/docs/release-pipeline.md` («App: the sidebar, and the changelog modal it opens») resta vera.
+- Lo slot è pronto, `work/slot_acl1/slot.sh <HEAD> both`:
+  - prima `restore_orig.sh`, che rimette i tre file del prodotto a HEAD, e il rosso;
+  - poi `apply_code.py` e il verde;
+  - in mezzo il runner ricostruisce da sé la build di debug, perché è vecchia.
+
+### CL1.3 — Rossi E2E scritti ✅ (19/10, 15:20–15:50; `test-author` `84ceedb4`; nessuna esecuzione)
+- `e2e/layout/changelog-locale.spec.ts`, nuovo blocco «Changelog window — one window for every entry point (A-CL1)»,
+  solo desktop, TEST_USER, sola lettura, tetto di 90 s per test.
+  - **Precondizioni rilette**: nessun onboarding dovuto, e `GET /api/v1/auth/me` con `whats_new` nullo. Le corsie di
+    test hanno `LIBREFOLIO_DISABLE_WHATS_NEW`.
+  - **E1** (UI italiana, Informazioni):
+    - il chunk della traduzione viene trattenuto con `page.route('**/_app/immutable/**/*.js')`. Lo riconosce un marcatore
+      letto da `CHANGELOG.it.md`: la prima sequenza ASCII di almeno 40 caratteri che nessun altro `CHANGELOG*.md`
+      contiene;
+    - poi apri («loading», una sola richiesta trattenuta), Esc, rilascia, aspetta la valutazione, riapri;
+    - alla fine i capitoli devono essere nelle lingue che dice `CHANGELOG.it.md`.
+  - **E2** (UI inglese): dall'Informazioni, nessuna finestra dentro `about-tab`. Il genitore della finestra riceve un
+    segno; Esc; poi la versione della sidebar apre una finestra figlia dello stesso elemento segnato.
+- **Due scostamenti dal brief**, motivati dall'autore:
+  - `route.continue()` invece di `route.fulfill({response, body})`. Il backend comprime in gzip i JS sopra 1 KB, e un
+    corpo decodificato servito con la `content-encoding` originale rompe la pagina, come in `auth.spec.ts`
+    (`holdItalianCatalogue`);
+  - due `import(url)` nella pagina, sotto un `expect.poll` di 10 s:
+    - in Chromium gli import in attesa dello stesso fetch si risolvono in un ordine non fisso, quindi uno solo non basta;
+    - il secondo trova la voce del module map già completa e si risolve con un task in coda dopo quello dell'app;
+    - la continuazione dell'app (il merge nella cache) è fatta solo di microtask.
+- **Controlli**: prettier pulito; `tsc --noEmit -p tsconfig.e2e.json` esce 0 (`work/acl1/e2e-acl1-*.log`).
+- **Atteso**:
+  - E1 rosso oggi: «loading» resta dopo la riapertura;
+  - E2 rosso oggi: la finestra dell'Informazioni sta dentro `about-tab`;
+  - entrambi verdi con la cura;
+  - i due test esistenti, aperti dalla sidebar alla prima apertura, verdi in tutte e due le corse.
+- **Filtro del runner**: le parole dopo l'azione diventano il `--grep` di Playwright. Lo slot fa girare l'intera voce,
+  4 test.
+- La riga `desc` della voce `changelog-locale` nel registro descrive ancora solo i due test vecchi. È un file condiviso:
+  serve il via del coordinatore per scriverla.
+
+### CL1.6 — Slot E2E (coordinatore, 15:48: «slot E2E tuo da adesso, ~12 minuti»; ok di scrittura sulla riga `desc`)
+- Il coordinatore segnala il disco pieno verso le 15:45, e ha cancellato la mia `mkdocs_src/site`.
+- Le verifiche prima dello slot:
+  - 21 GiB liberi;
+  - il piano è integro;
+  - le scritture dei passi CL1.1–CL1.4 sono tutte anteriori alle 15:45, e i verdi e il front check sono passati;
+  - le copie dei tre file curati sono in `work/acl1/cured/`.
+- `work/slot_acl1/slot.sh 1d50d8c42 both`, partito alle 15:49:05, impronta prima `017cd12d872dc986`.
+  - **Corsa 1, rosso** (15:49–15:54; i tre file del prodotto rimessi a HEAD, diff 0+/0−; build di debug rifatta):
+    **2 failed, 2 passed** (46,5 s).
+    - I due test vecchi dalla sidebar sono verdi.
+    - **E1** è rosso dove deve: dopo la riapertura dall'Informazioni, `changelog-loading` c'è ancora («Expected: 0,
+      Received: 1», riga 357, dopo `MODAL_TIMEOUT_MS`).
+      - Tutto ciò che precede è passato: l'apertura con «loading», una sola richiesta trattenuta, Esc, il rilascio, la
+        barriera di valutazione.
+      - È il sintomo del developer, riprodotto con il modulo vero e il chunk vero.
+    - **E2** è rosso dove deve: `about-tab` contiene la sua `changelog-modal` («Expected: 0, Received: 1», riga 384).
+  - **Corsa 2, verde** (15:54–16:00; la cura rimessa con `apply_code.py`, diff 16+/14−; build di debug rifatta):
+    **4 passed** (1,1 min).
+  - Impronta dopo `017cd12d872dc986`, identica a prima. I tre file curati sono identici byte per byte alle copie di
+    `work/acl1/cured/` (`cmp`). Porta 6182 libera; «slot libero» al coordinatore alle 16:00.
+- ✅ CL1.6 chiuso.
+
+### CL1.5 — La riga `desc` del registro ✅ (19/10, 16:02)
+- Ok di scrittura del coordinatore (15:48) sulla sola riga `desc` di `changelog-locale` in
+  `scripts/test_runner/_frontend_utility.py`. La riga aggiunge il blocco A-CL1 (E2: la finestra della sidebar, nello
+  stesso elemento, mai dentro la scheda; E1: chiusa con il chunk trattenuto, riaperta dall'Informazioni dopo il
+  caricamento).
+- Applicata con `work/acl1/apply_desc.py`: `ruff` e `black --check` puliti, il file si analizza, `git diff --check`
+  pulito.
+
+### CL1.7 — Verifiche finali e checkpoint (19/10, 16:00–16:15)
+- **Vitest dei vicini** (carico 39): 12 file, **636/636**:
+  - `changelog.test.ts` (ambiente node: la `SvelteMap` della build server è la `Map`);
+  - `whatsNewStore`, `whatsNew`, `DeferredAppPopups`, `OnboardingCoachmark`, `settingsTabs`;
+  - `layout.authGate`, `layout.gate`, `settings/page.tabs`;
+  - i cancelli `instanceProfile`, `themeColorMeta`, `themeRoles`.
+  - Nessun avviso di Svelte (`work/acl1/cl17-neighbours.log`).
+- **Indice**: ✅ A-CL1 aggiunta in fondo alla sezione A di `BACKLOG_POST_1.2.md`. Nessun residuo da indicizzare.
+- **Previsione dei conflitti** (base = `git merge-base HEAD dev_release2` = `f3805aa09`; dev locale `a397812d1`):
+  - **`_frontend_utility.py`**: 7 commit di dev. `git merge-file` è pulito: la mia riga è la `desc` di
+    `changelog-locale`, lontana dalle loro.
+  - **`BACKLOG_POST_1.2.md`**: 37 commit di dev, `merge-file` pulito.
+  - **Nessun altro file**: il diff a tre punti è vuoto su ogni ramo locale.
+- Checkpoint mandato al coordinatore; FROZEN.
+
+## A-CL1 — Entrato; pagina della devWiki (19/10, 16:05–16:20; base `74539988e`)
+- **Commit del coordinatore**:
+  - `5ccb495e5` `fix(changelog): one window, reactive translations`;
+  - `be69c7eee`, la doc;
+  - `3184bf83e`, il giornale.
+- **Base aggiornata**: merge di `dev_release2` (`a397812d1`) → `74539988e`, pulito. Il coordinatore riporta al
+  developer i due effetti della decisione e scrive lui la riga del CHANGELOG all'ingresso.
+- **Corsia ripopolata**, come chiesto, prima di qualsiasi altro lancio:
+  - comando: `dev.py test --test-port 6182 --data-dir /tmp/librefolio-r13-a db populate --force --clean`;
+  - carico 32, ✅ in 20 s (16:06–16:07), con istantanea del DB di test in `00_archive/`;
+  - log in `work/acl1/populate-74539988e.log`.
+- **devWiki** (via del coordinatore: un commit a parte, con solo la pagina, l'indice e il log):
+  - `wiki/problems/svelte5-derived-stale-over-non-reactive-cache.md`, nuova;
+  - `index.md`: una riga in cima alla tabella «Problems» e una riga 2026-10-19 nel registro cronologico;
+  - `log.md`: una voce «file».
+  - `check_source_paths.py` non trova percorsi inesistenti nella pagina. I 7 inesistenti che segnala sono in altre 7
+    pagine: cartelle di coverage, e due css dei componenti tolti dal lavoro R.
+  - Il grafo non è aggiornato, perché graphify non c'è in questo worktree (lo dice anche il log).
+- **⚠️ Fuori pista**:
+  - un mio comando di confronto ha cominciato a copiare `frontend/` (con `node_modules`) in `/tmp/acl1_head`, col disco
+    al 95 %;
+  - l'ho fermato dopo circa 30 s e ho cancellato la copia parziale (604 MB);
+  - il worktree non è stato toccato (la copia lo leggeva soltanto); restano 20 GiB liberi.
+
+## A-CL1 — Revisione automatica di `5ccb495e5`: nessun Vitest prova la cura vera (19/10, 16:12–16:35; base `74539988e`)
+- **Coordinatore** (16:12): pagina devWiki `71670d3ec` e giornale `5926ed69d` committati.
+- **La lacuna**, solo nei test: M1/M2 sono diventati verdi perché la finta è passata a `SvelteMap`, non per
+  `changelog.ts`. Con `new Map` rimesso, ogni Vitest passerebbe ancora, e se ne accorgerebbe solo E1 (desktop).
+- **Cura proposta dal revisore**: in `changelog.test.ts`, `peek('it')` letto in un `$derived` sotto `$effect.root`; rosso
+  con `new Map` in un export fuori dal worktree, poi verde; un commit a parte.
+- **Non si può fare così.** Le verifiche, tutte in sola lettura o con file temporanei tolti dopo la corsa:
+  - **Ambiente node** (quello di `changelog.test.ts`): `svelte/reactivity` è la build server (`SvelteMap =
+    globalThis.Map`); `$derived` si calcola una volta sola e `$effect` non gira mai. Lo documenta
+    `src/__tests__/runes.svelte.ts`. Inoltre in un `.test.ts` non si possono scrivere rune.
+  - **jsdom**: Vite rifiuta l'import `?raw` del `CHANGELOG.md` alla radice del repo («Denied ID»,
+    `isServerAccessDeniedForTransform`), anche con il mock.
+    - Prova `work/acl1/probe-raw-mock.log`: tre forme di `vi.doMock`, relativa, assoluta e `/@fs`, tutte «Denied ID».
+- **Alternativa provata** (`work/acl1/seam/`, `work/acl1/probe-seam.log`, carico 47):
+  - l'import `?raw` e l'`import.meta.glob` vanno in un modulo a parte, che il test sostituisce con `vi.mock`;
+  - la `createLocalizedChangelog` vera, letta da un effetto con `recordReads` di `$test/runes.svelte`:
+    - **✓ con `SvelteMap`**;
+    - **✗ con `new Map`**, in una copia: «expected [ undefined ] to deeply equal [ undefined, 'it' ]».
+  - Nessun «Denied ID».
+- **Domanda al coordinatore**: l'alternativa tocca un file del prodotto (un modulo nuovo, 3 righe di `changelog.ts`,
+  nessun cambiamento di comportamento). Le opzioni, con il mio consiglio, sono nel messaggio. FROZEN fino al via.
+- **Via del coordinatore (16:2x): opzione 1**, la cucitura. Le opzioni 2 e 3 sono escluse (la config di tutti; la forma
+  invece del comportamento). Il test jsdom lo scrive il `test-author` e pilota la vera `createLocalizedChangelog`: rosso
+  con `new Map`, provato in una copia fuori dal worktree; verde con `SvelteMap`. Poi N69.
+
+### CLR.1 — La cucitura ✅ (19/10, 16:25)
+- `work/acl1/apply_seam.py` applicato (prova a vuoto pulita):
+  - `frontend/src/lib/features/changelog/changelogSources.ts`, nuovo: `englishChangelog` (l'import `?raw` di
+    `CHANGELOG.md`) e `translationModules` (l'`import.meta.glob` dei `CHANGELOG.<xx>.md`);
+  - in `changelog.ts` cambiano tre righe: l'import, `parseChangelog(englishChangelog)` e
+    `translationLoaders(translationModules)`; c'è anche una frase nel commento di testa.
+- Nessun cambiamento di comportamento: stesse chiavi del glob (stessa cartella), stesso testo. Prettier pulito.
+- `test-author` `5f7f850b`: `changelog.reactivity.test.ts` (jsdom; mock di `./changelogSources`; quattro casi:
+  - la cura;
+  - due lettori;
+  - un caricamento fallito non avvisa;
+  - l'inglese senza caricamento).
+- Rosso preparato in `work/acl1/red2/`:
+  - `changelog.acl1map-scratch.ts`: la copia di `changelog.ts` di oggi, con `new Map`;
+  - `run_red.sh`: copia il test cambiando il solo specificatore d'import, lo fa girare una volta, poi toglie i due file.
+
+### CLR.2 — Il test della cura vera: verde, rosso, registrazione ✅ (19/10, 16:25–16:55)
+- **`frontend/src/lib/features/changelog/changelog.reactivity.test.ts`**, nuovo (`test-author` `5f7f850b`). jsdom, con
+  `vi.mock('./changelogSources')`, un solo import del modulo in prova e `recordReads`/`assertEffectsRun` di
+  `$test/runes.svelte`. Quattro casi:
+  1. la cura: chi legge `peek('it')` viene avvisato quando `load('it')` riempie la cache;
+  2. due lettori indipendenti vedono un solo caricamento, partito da fuori (uno legge `peek('it-IT')`);
+  3. un caricamento fallito non avvisa e non salva; il successivo sì;
+  4. l'inglese non chiede caricamenti, e un riempimento italiano non fa ripartire i suoi lettori (con un controllo
+     positivo sul lettore italiano).
+- **Verde**: 4/4 tre volte; `changelog.test.ts` 189/189 (node, modulo vero); `ChangelogModal.test.ts` 50/50 (log
+  `work/acl1/reactivity-*.log`).
+- **Rosso** (`work/acl1/red2/run_red.sh`):
+  - il test, con il solo specificatore d'import cambiato, contro una copia di `changelog.ts` con `new Map`: **4 failed**;
+  - ognuno cade su «the reader was told», il caso 4 sul suo controllo positivo;
+  - i due file temporanei stavano nell'albero solo per la corsa; il `changelog.ts` vero non è mai cambiato.
+- **Registrazione** (ok del coordinatore sulle 2 righe):
+  - `check-orphans` trovava 2 orfani: questo test e **`Sidebar.changelog.test.ts` del lotto `5ccb495e5`, una mia
+    dimenticanza**;
+  - aggiunti in core-unit (dopo `changelog.test.ts`) e in component-unit (dopo `Sidebar.legal.test.ts`);
+  - ruff e black puliti; `check-orphans` passa: «all 569 unit tests registered», tutti raggiungibili da `all`.
+- **⚠️ Fuori pista**:
+  - il primo `front check` dava 4 errori su `scope_boundary` nei file dei lotti (J-48, entrato con la base): era il
+    client generato, ignorato da git, ormai vecchio;
+  - `dev.py api sync` lo rigenera, senza cambiare file tracciati; dopo, `front check` **0/0**.
+- **Vitest finale** (carico 45), 9 file, **322/322**:
+  - il test nuovo;
+  - `changelog`, `whatsNewStore`, `whatsNew`, `WhatsNewModal`, `ChangelogModal`, `Sidebar.changelog`;
+  - `DeferredAppPopups`, `layout.gate`.
+- **devWiki** (commit a parte): la pagina dava il modulo vero per non verificabile in jsdom. Aggiornata la «Prevention»
+  (i due muri, la cucitura, il test, la registrazione) e le fonti (due righe), più una voce «update» nel log.
+  `check_source_paths.py` non trova nulla sulla pagina.
+
+## N69 — L'amministrazione: via al lotto (19/10, 16:54; base `976b6916c`, in dev `c0cc8330b`)
+- **Coordinatore** (16:19 e 16:54): A-CL1 è in `dev_release2` (`c0cc8330b`). Il developer ha detto «fai come hai
+  scritto», cioè sì a D1–D11 (§49 del documento del coordinatore). Le risposte:
+  - D1 (a): il puntino anche nel cloud;
+  - D2 (a): anche sul telefono;
+  - D3 (a): un puntino, non un numero;
+  - D4 (a): Amministrazione solo agli admin;
+  - D5 (b): la modalità si salva alla scelta, con una conferma solo per «aperta»;
+  - D6: solo la modalità;
+  - D7: accanto a «Invita»;
+  - D8 (a): l'iniziale in un cerchio;
+  - D9: «Guida», con il libro;
+  - D11 (a): la pagina tradotta, dall'inizio.
+  - **D10 cambiato dal developer**: il link della guida di ogni controllo viene dalla soluzione di H, una mappa nel
+    frontend controllata da un test. La scrive H; il bottone «Guida» di N69 la legge da lì.
+- **Avviso del coordinatore**: H-60 tocca `test_registration_api.py:895`, `test_instance_config_legal_api.py:88`
+  (`INSTANCE_KEYS`) e il mock di `zodios-client.test.ts`. N69 non tocca nessuno di questi file.
+- **Base**: HEAD `976b6916c`, antenato di dev. I 17 commit di dev che mancano non toccano file di N69, quindi non serve
+  aggiornare la base. I fatti di F2.2 sono riverificati sul codice di oggi e valgono.
+
+### Contratto e ordine (quattro sotto-lotti, ognuno con rossi, codice, verdi, doc, slot e checkpoint suoi)
+- **N69a = N69-2 + N69-4.**
+  - **N69-2**:
+    - `settingsTabs.ts`, la voce `admin`: `visible: (ctx) => ctx.isSuperuser`;
+    - le `props` restano (`canEdit`); il ramo in sola lettura di `GlobalSettingsTab` non si raggiunge più dalla UI e si
+      toglie in una pulizia futura;
+    - un `?tab=admin` per un non admin cade sulla prima scheda visibile (Profilo).
+  - **N69-4, backend**:
+    - `AdminUserRead.avatar_url: Optional[str]` (None senza);
+    - `user_service.avatar_urls(session, user_ids)`: una query su `UserSettings`;
+    - `_admin_user_read(..., avatar_url=None)`: la lista legge la mappa, la risposta del PATCH l'avatar del suo account;
+    - poi `api sync`.
+  - **N69-4, frontend**:
+    - `AdminAccount.avatar_url?: string | null`;
+    - nuovo `components/ui/media/UserAvatar.svelte`, un cerchio di 24 px, solo ruoli:
+      - con l'avatar: `LazyImage` `circle`, `alt` = nome utente; `?img_preview=48x48` solo per un file caricato
+        nell'app (`/api/v1/uploads/`), e un indirizzo esterno com'è;
+      - senza: l'iniziale maiuscola su `bg-lf-panel text-lf-secondary`, una coppia misurata dal cancello.
+        UserSearchSelect usa `bg-lf-neutral`/`text-lf-muted`, una coppia non promessa: da allineare con il programma
+        colori;
+    - in `UserRow.svelte`, il cerchio subito dopo la freccia: `data-testid="users-row-avatar"`,
+      `data-avatar="image"|"initial"`.
+- **N69b = N69-1** (il puntino):
+  - `ConnectionSecurityIndicator`:
+    - legge `securityChecks`; per un admin chiama `ensureLoaded()`;
+    - il puntino sull'angolo dell'icona: `bg-lf-bar-danger` con un errore, `bg-lf-bar-warning` con soli avvisi;
+    - `data-security-attention` e `data-security-severity` sulla radice;
+    - il nome accessibile, e il `title` con la barra compatta, portano «N avvisi di sicurezza» (ICU);
+    - nel pannello un link a `/settings?tab=security` che lo chiude;
+  - `Header.svelte`: il puntino del menu anche per gli avvisi di un admin, il più grave vince;
+  - chiavi `connectionSecurity.*` nelle 4 lingue.
+- **N69c = N69-3**:
+  - un modulo comune `features/settings/registrationMode` (le opzioni, «bloccata dalla variabile», il salvataggio con
+    `PATCH /settings/global/bulk` e la rilettura della configurazione), usato da Utenti e da Impostazioni globali;
+  - in Utenti, nella prima sezione accanto a «Invita»: si salva alla scelta, con conferma solo per «aperta».
+- **N69d = N69-5**: «Guida» (`DocsLink`, libro, nuova scheda) su ogni riga della scheda Sicurezza, dalla mappa di H.
+  Aspetta il contratto della mappa (modulo, nome, forma), da chiedere al coordinatore.
+
+### N69b — Contratto del puntino (scritto in anticipo, 19/10 17:05; si parte dopo il checkpoint di N69a)
+- **`ConnectionSecurityIndicator.svelte`**:
+  - `isAdmin = $auth.user?.is_superuser === true`. Un `$effect` chiama `securityChecks.ensureLoaded()` solo per un
+    admin: nessuna richiesta per un non admin.
+  - `attention = isAdmin ? securityChecks.attentionCount : 0`. La gravità è `error` se fra
+    `securityChecks.findings.attention` c'è un errore, altrimenti `warning`; `none` con zero.
+  - **Radice `connection-security`**: `data-security-attention` (il numero, 0 per un non admin) e
+    `data-security-severity` (`error` | `warning` | `none`).
+  - **Il puntino**: `connection-security-attention-dot`, solo con `attention > 0`, con la barra larga e con quella
+    compatta, sull'angolo dell'icona.
+    - Classi: `bg-lf-bar-danger` per `error`, `bg-lf-bar-warning` per `warning`, e un anello del colore della barra.
+    - `aria-hidden`; `data-severity` uguale alla gravità.
+  - **Il nome accessibile del toggle**: con `attention > 0` è «‹livello› — ‹N avvisi›», sia largo sia compatto; anche il
+    `title` da compatto. Senza attenzione resta quello di oggi.
+  - **Nel pannello**: dopo il motivo, il link `connection-security-attention-link` (`<a href="/settings?tab=security">`)
+    con il testo «‹N avvisi›». Chiude il pannello al clic. Bordo e icona nel colore della gravità
+    (`border-lf-bar-danger`/`-warning`), testo `text-lf-bar-text`. Solo con `attention > 0`.
+- **`Header.svelte`**, il puntino del menu (`mobile-menu-security-dot`, oggi solo per la connessione `insecure`):
+  - c'è anche con l'attenzione di un admin; `data-severity` `error` (connessione insicura o un errore) oppure
+    `warning`; `bg-lf-danger` o `bg-lf-warning`, nello stesso ternario;
+  - l'`aria-label` del menu aggiunge «— ‹N avvisi›» come fa oggi per «insicura». Il «Toggle menu» in inglese è
+    preesistente e fuori lotto (F2.2, «Trovato strada facendo»).
+- **i18n**, sorgente `app`, `connectionSecurity.attention`, in 4 lingue:
+  - en: «{count, plural, one {# security warning} other {# security warnings}}»;
+  - it: «{count, plural, one {# avviso di sicurezza} other {# avvisi di sicurezza}}»;
+  - fr: «{count, plural, one {# avertissement de sécurité} other {# avertissements de sécurité}}»;
+  - es: «{count, plural, one {# aviso de seguridad} other {# avisos de seguridad}}».
+- **Test**:
+  - Vitest `ConnectionSecurityIndicator.test.ts`: il puntino e i `data-*`; nessuna richiesta per un non admin; il link
+    e la sua destinazione; il nome accessibile; la barra compatta;
+  - Vitest `Header.test.ts`: il puntino del menu per l'attenzione dell'admin, la gravità, l'`aria-label`;
+  - E2E `layout/connection-security.spec.ts`: un admin vede il puntino se e solo se `GET /security/checks` della corsia
+    ha errori o avvisi (letto prima, senza scrivere); un utente normale mai.
+
+### N69a.1 — Rossi ✅ (19/10, 17:00–17:30; `test-author` `db1ffee9` per N69-2 e `946ddb38` per N69-4)
+- **N69-2, Vitest: 7 rossi, 93 verdi su 100.**
+  - `settingsTabs.test.ts`:
+    - il test ~261 dice ora «admin solo agli admin», e tiene `canEdit`;
+    - le righe utente di `CONTEXTS` e `BARS` sono aggiornate;
+    - STAB-14 è nuovo: per un utente nessuna voce Amministrazione.
+  - `routes/(app)/settings/page.tabs.test.ts`: la pagina si può disegnare sul registro vero (getter dietro
+    `mocks.registry.real`). SPAGE-22/23 sono rossi; SPAGE-24 (admin) è verde.
+  - Il `test-author` ha provato in una copia temporanea che la sola riga `visible` porta tutti i 100 al verde: la
+    pagina non deve cambiare.
+- **N69-2, E2E** (`settings.spec.ts`, senza esecuzione):
+  - «non-admin can view but not edit…» diventa due test: niente Amministrazione per un membro, e `?tab=admin` porta
+    al Profilo;
+  - il describe «Non-Admin Read-Only» era vuoto ed è tolto;
+  - «shows all settings tabs» non pretende più l'Amministrazione per un membro;
+  - prettier e tsc puliti.
+- **N69-4, backend** (`test_users_admin_api.py`, non eseguito): nuovi UADM-AV-01…04.
+  - AV-01: la lista, nella corsia, con cinque account del caso;
+  - AV-02: la risposta del PATCH;
+  - AV-03: in-process, con le righe di impostazioni scritte con l'id di un altro account;
+  - AV-04: lo schema.
+  - Anche il controllo delle chiavi esatte di un elemento (`USER_ITEM_KEYS`) ha `avatar_url`. **Così 21 casi esistenti
+    restano rossi finché il campo non entra**: sarebbero rossi comunque quando entra.
+  - ruff, black e ast puliti.
+- **N69-4, Vitest** (`UserRow.avatar.test.ts`, nuovo): 5 rossi («the users-row-avatar of the row: expected [] to have a
+  length of 1»), 2 guardie verdi. La URL richiesta si legge con il `fetch` spiato (il blob di `LazyImage`) e con
+  l'`<img src>`.
+- **⚠️ Fuori pista**: con N69-2 diventano rossi i casi del membro di altri file, perché pretendono l'«Amministrazione»
+  per TEST_USER:
+  - miei: `e2e/settings/admin-users.spec.ts:484` e `e2e/settings/security-tab.spec.ts` (ASEC-E-03), affidati a un
+    terzo `test-author` (`73bae070`);
+  - `email-tab.spec.ts:167` (di E) e `backup.spec.ts:264` (FBKP-001, di B);
+  - il commento e il messaggio d'errore della fixture condivisa `e2e/fixtures/settings-tabs.ts`.
+  - Gli altri riferimenti (`scheduler`, `select-components`, `auth-email-verification`, la galleria) usano TEST_ADMIN.
+  - Chiesti al coordinatore: l'ok di scrittura sulle righe di E, di B e della fixture; una riga del registro per
+    `UserRow.avatar.test.ts`; lo slot API (rosso `api users-admin avatar`, poi il codice e `api sync`, poi la corsa
+    intera).
+
+### N69a.2 — Slot API, codice, verdi locali ✅ (19/10, 17:37–18:05)
+- **Slot API** (coordinatore, 17:37, fino alle 17:50; `work/slot_n69a/slot.sh 976b6916c`):
+  - rosso `api users-admin avatar`: **4 failed** (UADM-AV-01…04, tutti asserzioni), 167 deselezionati;
+  - poi `apply_n69a.py` (10 modifiche più `UserAvatar.svelte`);
+  - verde, `api users-admin` intera: **171 passed** (100 s), compresi i 4 nuovi e i 21 delle chiavi esatte;
+  - porta libera alle 17:48.
+- **⚠️ Fuori pista**:
+  - dopo il verde, ruff segnala C416 su `avatar_urls`, e la comprensione diventa `dict(result.tuples().all())`
+    (SQLAlchemy 2.0.52); anche la bozza è aggiornata;
+  - la prova sull'albero finale è `api users-admin avatar` nel prossimo slot.
+- **Ok di scrittura del coordinatore** (17:37), applicati:
+  - la riga del registro per `UserRow.avatar.test.ts` (component-unit);
+  - nei file di E e di B (`email-tab.spec.ts`, «a user has no Email tab»; `backup.spec.ts` FBKP-001): la barriera
+    diventa About visibile, più `settings-tab-administration` a 0, e il commento è riscritto;
+  - nella fixture `settings-tabs.ts`, solo testo (testata, commento di `openSettingsTab`, messaggio d'errore);
+  - le testate di `admin-users.spec.ts` e `security-tab.spec.ts` sono allineate;
+  - le modifiche ai test le ha fatte il `test-author` `73bae070`; prettier e tsc puliti.
+- **Verdi locali**:
+  - `api sync`: `avatar_url` è nel client generato;
+  - Vitest, 8 file: **388/388** (settingsTabs, page.tabs, i tre UserRow, UsersTab, GlobalSettingsTab,
+    SettingsLayout);
+  - il cancello `themeRoles.gate.test.ts`: 80/80;
+  - `front check` **0/0**;
+  - `theme-roles.mjs --check` pulito; prettier pulito; `check-orphans` 570 registrati; ruff e black puliti.
+- **Doc**: `docs-writer` `5139f39f`, solo inglese, senza stamp (il debito delle traduzioni resta visibile, A-10).
+- **Slot E2E**: il coordinatore dice «sei il prossimo», dopo l'`all-backend` di H (~18:10). Lo script è
+  `work/slot_n69a_e2e/slot.sh`:
+  - rosso: `settingsTabs.ts` a HEAD, le cinque unità filtrate ai casi del membro;
+  - verde: le cinque unità intere;
+  - infine `api users-admin avatar`.
+
+## ⏸ STOP del developer (19/10, 18:12) — stato materializzato per la ripartenza
+- **Ordine del coordinatore** (18:12): pausa generale; il developer spegne la macchina e `/tmp` verrà ripulito. Fermare
+  tutto, materializzare lo stato, nessun comando git, rispondere con una riga e FROZEN.
+- **Fatto alle 18:13**:
+  - lo slot E2E di N69a è interrotto (`stop_bash`); la porta 6182 è libera e non resta nessun processo della corsia;
+  - `settingsTabs.ts` è la copia curata (`cmp` con `work/slot_n69a_e2e/settingsTabs.cured.ts`).
+- **Base**: HEAD `976b6916c`, invariato; dev locale `c0cc8330b`. File sporchi: 26 modificati e 2 nuovi. Il conto viene
+  dalla mia contabilità, senza git, come chiesto:
+  - **codice**: `backend/app/api/v1/users.py`, `backend/app/schemas/users.py`,
+    `backend/app/services/accounts/user_service.py`, `frontend/src/lib/features/settings/settingsTabs.ts`,
+    `frontend/src/lib/features/settings/users/UserRow.svelte`, `frontend/src/lib/features/settings/users/types.ts`;
+    nuovo `frontend/src/lib/components/ui/media/UserAvatar.svelte`;
+  - **test**: `backend/test_scripts/test_api/test_users_admin_api.py`,
+    `frontend/src/lib/features/settings/settingsTabs.test.ts`, `frontend/src/routes/(app)/settings/page.tabs.test.ts`,
+    `frontend/e2e/settings.spec.ts`, `frontend/e2e/settings/admin-users.spec.ts`,
+    `frontend/e2e/settings/security-tab.spec.ts`, `frontend/e2e/settings/email-tab.spec.ts` (di E, ok 17:37),
+    `frontend/e2e/settings/backup.spec.ts` (di B, ok 17:37), `frontend/e2e/fixtures/settings-tabs.ts` (solo testo, ok
+    17:37); nuovo `frontend/src/lib/features/settings/users/UserRow.avatar.test.ts`;
+  - **registro**: `scripts/test_runner/_frontend_utility.py` (la riga di `UserRow.avatar.test.ts`, ok 17:37);
+  - **doc** (9 pagine, dal `docs-writer`): `user/settings/index.en.md`, `admin/settings.en.md`, `admin/users.en.md`,
+    `developer/frontend/components/features/settings.md`, `developer/frontend/components/core-ui/file-upload.md`,
+    `developer/frontend/pages/index.md`, `developer/architecture/settings.md`,
+    `developer/architecture/settings_cache.md`, `developer/architecture/access_control.md`;
+  - **giornale**: questo piano.
+- **N69a, a che punto**:
+  - rossi Vitest visti (N69-2: 7 rossi; N69-4: 5 rossi) e rossi API visti (4);
+  - verde API: 171/171; verdi Vitest: 388/388, più il cancello 80/80; front check 0/0; colori, prettier, orfani (570),
+    ruff e black puliti;
+  - doc fatte: build strict e link puliti, nessuno stamp;
+  - **rossi E2E visti nello slot (18:00–18:09), tutti per la ragione giusta**: `settings` 2, `admin-users` AUSR-E-01,
+    `security-tab` ASEC-E-03, `email-tab` «a user has no Email tab», `backup` FBKP-001. Ognuno è «Expected: 0,
+    Received: 1» su `settings-tab-administration`, più il Profilo non selezionato con `?tab=admin`;
+  - **il verde E2E è interrotto**: in `settings` 18/56 passati, 0 falliti al momento dello stop. Gli altri quattro e
+    `api users-admin avatar` non sono partiti.
+- **Prossimo passo esatto, alla ripartenza**:
+  1. ripopolare la corsia, che `/tmp` avrà perso:
+     `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6182 --data-dir
+     /tmp/librefolio-r13-a db populate --force --clean`;
+  2. chiedere uno slot E2E di circa 20 minuti e lanciare `work/slot_n69a_e2e/slot_green.sh 976b6916c`. Fa solo il
+     verde delle cinque unità, più `api users-admin avatar` sull'albero finale (dopo la correzione C416);
+  3. poi, fuori dallo slot:
+     - il `docs-writer` corregge `user/settings/profile.en.md:19` (l'avatar anche nella scheda Utenti) e
+       `community/faq.en.md:66,74` («Scheduler Enabled» è roba da amministratore), senza stamp;
+     - io correggo il commento di `GlobalSettingsTab.svelte` ~856 («Cache Panel (status for all users…)»);
+     - con l'ok del coordinatore, le righe `desc` del registro `_frontend_utility.py:1050` («admin visible to
+       everyone…») e `:1022` (security-tab: «Administration» apre Global Settings per un membro);
+  4. checkpoint di N69a, con le righe del CHANGELOG da proporre (🔄 Amministrazione solo agli admin; ✨ l'avatar
+     nelle righe degli account) e i messaggi di commit.
+- **Decisioni ricevute e non ancora applicate**:
+  - N69b, il puntino: D1 (a), D2 (a), D3 (a). Il contratto è scritto sopra («N69b — Contratto del puntino»);
+  - N69c, la modalità d'iscrizione: D5 (b), D6, D7;
+  - N69d, «Guida»: D9, D11 (a), e la mappa dei link di H (D10 cambiato dal developer). H mi scrive il contratto
+    direttamente;
+  - A-58 e la CSP imposta: aspettano la politica di H.
+- **Nulla in `/tmp` serve alla ripartenza**: script, bozze, copie e log sono in
+  `/Users/ea_enel/.copilot/session-state/119ed166-3c8b-4455-858d-d6c6d6879a2f/files/work/` (`n69a/`,
+  `slot_n69a/`, `slot_n69a_e2e/`, `acl1/`). Nessuna patch solo in `/tmp`, quindi niente `files/parked/`.
+- FROZEN.
+- **Arrivata dopo lo STOP (18:14), da applicare alla ripartenza**: la condizione del programma colori su N69-4.
+  - L'iniziale nel cerchio della lista utenti riusa lo schema di `components/ui/select/UserSearchSelect.svelte`: un
+    disco `bg-lf-neutral` con l'iniziale in `text-lf-muted`.
+  - Niente colori generati per utente (`getStringColor`/`getIndexColor`: domanda ancora aperta per la designer), e
+    niente iniziali ambra di `BrokerSharingPanel`.
+  - Alla ripartenza, prima dello slot verde:
+    - in `UserAvatar.svelte` (e nella bozza `work/n69a/UserAvatar.svelte`), `bg-lf-panel text-lf-secondary` diventa
+      `bg-lf-neutral text-lf-muted`; si aggiorna anche il commento di testa, che parla di «coppia misurata»;
+    - si controlla se la sezione `#useravatar` di `developer/frontend/components/core-ui/file-upload.md` nomina i ruoli;
+    - di nuovo `theme-roles.mjs --check`, il cancello `themeRoles.gate.test.ts` e `UserRow.avatar.test.ts`, che non
+      guarda le classi, solo `data-avatar` e il testo;
+    - nel checkpoint, il mio dubbio sul contrasto (la coppia `muted` su `neutral` non è fra quelle misurate dal
+      cancello) diventa una nota per il programma colori, non una scelta mia.
+- FROZEN (invariato).
+- **Arrivato dopo lo STOP (18:20), da H: il contratto della mappa delle guide per N69d.** Il disegno è fissato; il codice
+  non c'è ancora.
+  - **Modulo**: `frontend/src/lib/features/instance/checkGuides.ts` (di H). **Export**:
+    - `checkGuidePath(checkId: string): string | undefined`, da usare nel bottone;
+    - `CHECK_GUIDES: Readonly<Record<string, string>>`, la mappa intera.
+  - **Chiave**: il mio `finding.id`, così com'è, per tutte e due le fonti:
+    - il `check_id` del server: i 17 di oggi (`platform.*`, `accounts.login_limit`, `backup.*`, `email.*`);
+    - il controllo del browser `accounts.openRegistration` (`OPEN_REGISTRATION_NOTICE_ID`); con H-55 v2 arriverà quello
+      dello «script bloccato».
+    - Lo stesso link vale per ogni stato, superati compresi.
+  - **Valore**: un percorso relativo a `/mkdocs/`, senza lingua e senza `/` iniziale; cartella più ancora, per esempio
+    `admin/connection_checks/#untrusted-proxy`.
+    - Va passato tale e quale a `<DocsLink path={…}>`, che aggiunge da solo il prefisso della lingua;
+      `localizedFallbackPath` non serve.
+  - **`undefined`** vuol dire un id sconosciuto: niente bottone (con gli id di oggi non succede).
+  - **I test di H**: la mappa contro il registro del backend, nei due sensi; un Vitest controlla che ogni ancora esista
+    nella pagina `.en.md`.
+  - **Lingue**:
+    - `#session-cookie` c'è in tutte e quattro;
+    - le pagine solo inglesi sono pubblicate anche sotto `/it/` ecc., col testo inglese;
+    - in IT, FR ed ES `configuration`, `connection_checks` e `settings` non hanno ancora le sezioni della 1.3: il link
+      apre la pagina giusta, ma in cima (D11 a), fino alla traduzione di fine release.
+  - **I valori possono cambiare** (H-55 v2): nei test chiamo la funzione o mocko il modulo, senza copiare i percorsi.
+  - **Quando**: domani 20/10, nel primo lotto di codice di H dopo N70. L'ingresso e l'aggiornamento della mia base li
+    decide il coordinatore. Fino ad allora i test si scrivono con
+    `vi.mock('$lib/features/instance/checkGuides', () => ({checkGuidePath: …}))`; `front check` passa solo dopo
+    l'aggiornamento.
+  - **Restano miei**: l'etichetta («Guida», D9, con il libro), il `data-testid` e la posizione del bottone. N69d resta
+    dopo N69b e N69c.
+- FROZEN (invariato).
+
+## N69a — Ripresa del 20/10 (08:47; HEAD `976b6916c`, dev locale `ecc7ac667`)
+- **Coordinatore** (08:47): il riavvio ha svuotato `/tmp`, quindi la corsia 6182 si ripopola con `--force --clean`. Poi:
+  1. la condizione colori di N69-4, con il cancello dei temi e il test dell'avatar (leggeri, carico sotto 50);
+  2. lo **slot pesante 2**, fino alle 11:30: `work/slot_n69a_e2e/slot_green.sh 976b6916c`;
+  3. i ritocchi della doc e il checkpoint.
+  - La mappa delle guide di H (N69d) arriva dopo la sua N70; la base la aggiorna il coordinatore dopo il mio ingresso.
+- **Stato dopo il riavvio**: HEAD invariato, 28 percorsi sporchi (2 nuovi), `settingsTabs.ts` uguale alla copia curata,
+  porta libera; la cartella dati della corsia non c'è più, come previsto.
+
+### N69a.3 — La condizione colori e lo slot 2 ✅ (20/10, 08:48–09:01)
+- `work/n69a/apply_colours.py`:
+  - `UserAvatar.svelte` passa da `bg-lf-panel text-lf-secondary` a `bg-lf-neutral text-lf-muted`, lo schema di
+    `UserSearchSelect`; anche il commento di testa cambia (niente colore per utente);
+  - la bozza `work/n69a/UserAvatar.svelte` è riallineata;
+  - la sezione `#useravatar` di `developer/frontend/components/core-ui/file-upload.md` nomina i ruoli nuovi;
+  - il commento di `GlobalSettingsTab.svelte:856` («status for all users») diventa «the tab is administrators-only
+    since N69-2».
+- **Controlli leggeri** (carico 21):
+  - prettier pulito;
+  - `theme-roles.mjs --check` pulito;
+  - Vitest 5 file **266/266**: il cancello `themeRoles.gate.test.ts`, i tre `UserRow.*`, `GlobalSettingsTab.test.ts`.
+- **Slot 2** (`work/slot_n69a_e2e/slot_green.log`):
+  - `db populate --force --clean` ✅ (08:49);
+  - poi i verdi: `settings` **56**, `admin-users` **10**, `security-tab` **3**, `email-tab` **5**, `backup` **14** passati;
+    `api users-admin avatar` **4** passati sull'albero finale, dopo la correzione C416;
+  - 08:49–09:01, carico 18–22; porta libera; «slot libero» al coordinatore alle 09:01.
+  - I rossi E2E sono quelli del 19/10 (18:00–18:09), sul registro di HEAD.
+- **Dopo lo slot**:
+  - `front check` **0/0** sull'albero finale; `git diff --check` pulito;
+  - previsione dei conflitti con dev `ecc7ac667` (59 commit; base = HEAD): solo `_frontend_utility.py` (2 commit di
+    dev), e `git merge-file` è pulito.
+- **Chiesto al coordinatore**: l'ok sulle frasi rese false da N69-2 in due righe `desc` del registro (`:1022`
+  security-tab; `:1050` core-unit, che ha anche un «alignEnd» falso da A8b).
+- **`docs-writer` `10c3631d`** (quello di ieri non c'è più dopo il riavvio), senza stamp:
+  - `user/settings/profile.en.md:19`: l'avatar anche nella scheda Utenti;
+  - `community/faq.en.md:66,74`: «Scheduler Enabled» lo controlla un amministratore.
+
+### N69a.4 — Le righe `desc`, i ritocchi della doc, l'indice, il checkpoint ✅ (20/10, 09:06–09:20)
+- **Ok del coordinatore** (09:06) sulle due righe `desc` di `scripts/test_runner/_frontend_utility.py`, applicate con
+  `work/n69a/apply_desc.py`:
+  - `:1022` (security-tab): «a member: no «Administration» group at all (N69-2)»;
+  - `:1050` (core-unit): «admin (with canEdit), users (order 110), backup and email for administrators only (N69-2)»,
+    senza più il falso «alignEnd».
+  - ruff e black puliti, il file si analizza; `git merge-file` con dev è pulito.
+- **Doc** (`docs-writer` `10c3631d`, solo inglese, senza stamp):
+  - `user/settings/profile.en.md`: gli amministratori vedono l'avatar anche in Settings › Administration › Users, con
+    un link a `admin/users.md#accounts`;
+  - `community/faq.en.md:66,74`: «Only administrators have that tab: if you are not one, ask your administrator to
+    check it» (l'elenco comincia con «Check that:»);
+  - build strict pulito (3085 risorse) e `check-links` pulito (97). Il debito delle traduzioni: profile ha un link in
+    più (una voce per lingua); faq solo nel testo.
+- **Indice**:
+  - A-10 ha un punto per le pagine di N69a, senza timbro: le traduzioni ora dicono cose false;
+  - nuove A-59 (il ramo in sola lettura di `GlobalSettingsTab`, da togliere) e A-60 (i due altri cerchi d'avatar, e la
+    coppia `muted` su `neutral` che il cancello non misura: la decide il programma colori);
+  - `git merge-file` con dev (34 commit sull'indice) è pulito.
+- **Delta finale**: 32 percorsi (30 modificati, 2 nuovi), +933/−206; porta 6182 libera. Checkpoint mandato; FROZEN.

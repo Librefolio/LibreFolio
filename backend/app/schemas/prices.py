@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from datetime import date as date_type
 from decimal import Decimal
-from typing import List, Literal, Optional
+from typing import Annotated, List, Literal, Optional, Union
 
 from pydantic import (
     ConfigDict,
@@ -59,6 +59,10 @@ from backend.app.schemas.signals import (
     SignalRequest,
     SignalResult,
 )
+from backend.app.services.assets.price_sampling import SampleResolution  # Z-29: a pure module of dates, no service
+
+#: A price query item's key, and a sample_like naming one (Z-29)
+SAMPLE_KEY_PATTERN = r"^[A-Za-z0-9_.:-]{1,64}$"
 
 # ============================================================================
 # BACKWARD-FILL INFO (EXTENDED FOR FX STALENESS)
@@ -87,34 +91,38 @@ class AssetBackwardFillInfo(BackwardFillInfo, FxBackwardFillInfo):
 # ============================================================================
 
 
+def _description_without_backticks(schema: dict) -> None:
+    """The web client's generator writes the description of a required field's model between backticks
+    (openapi-zod-client, a multi-line text in a template literal): a backtick inside would end it. Since Z-29,
+    ``FAPriceSampleBounds`` holds two required ``FAPricePoint`` fields; the docstring keeps its backticks, the
+    schema says quotes."""
+    if isinstance(schema.get("description"), str):
+        schema["description"] = schema["description"].replace("`", "'")
+
+
 class FAPricePoint(StrictModel):
     """Single price point with OHLC data.
 
-    Used for both:
-    - Upsert operations (backward_fill_info is None)
-    - Query results (backward_fill_info may be present)
+    Used for:
+    - a provider's history (``FAHistoricalData``) and the Sync's ``changed_points`` (backward_fill_info is None);
+    - query results (backward_fill_info may be present).
 
     The API contract uses separate `close: Decimal` and `currency: str` fields
     for JSON compatibility. Build a `Currency(code=…, amount=…)` inline where
     a Currency object is needed (project-wide style).
 
-    **F.4 sentinel rules on upsert** (applied per-field, for ``open/high/low/volume``):
-
-    - ``None`` / omitted → **no-op**: existing DB value is preserved (partial merge).
-    - ``>= 0`` → write the provided value.
-    - ``-1`` → ``SET NULL`` on the DB column.
-
-    ``close`` is **not** affected by the sentinel rules: it is always required
-    and always written verbatim. To "clear" a row use the DELETE endpoint on
-    that date; to clear OHLC auxiliary fields use ``-1``.
+    A manual write uses ``FAPriceWritePoint`` (N92), where ``"clear"`` empties a stored field. This model checks no
+    sign: the refresh discards a provider's point with a price not above 0, and the write model refuses one (N92).
     """
 
+    model_config = ConfigDict(json_schema_extra=_description_without_backticks)
+
     date: date_type = Field(..., description="Price date")
-    open: Optional[SafeDecimal] = Field(None, description="Opening price (upsert: None=no-op, -1=SET NULL, >=0=write)")
-    high: Optional[SafeDecimal] = Field(None, description="High price (upsert: None=no-op, -1=SET NULL, >=0=write)")
-    low: Optional[SafeDecimal] = Field(None, description="Low price (upsert: None=no-op, -1=SET NULL, >=0=write)")
-    close: SafeDecimal = Field(..., description="Closing price (required; not affected by -1 sentinel)")
-    volume: Optional[SafeDecimal] = Field(None, description="Trading volume (upsert: None=no-op, -1=SET NULL, >=0=write)")
+    open: Optional[SafeDecimal] = Field(None, description="Opening price (None when unknown)")
+    high: Optional[SafeDecimal] = Field(None, description="High price (None when unknown)")
+    low: Optional[SafeDecimal] = Field(None, description="Low price (None when unknown)")
+    close: SafeDecimal = Field(..., description="Closing price")
+    volume: Optional[SafeDecimal] = Field(None, description="Trading volume (None when unknown)")
     currency: Optional[str] = Field(
         None,
         description=(
@@ -148,23 +156,57 @@ class FAPricePoint(StrictModel):
             return None
         return Decimal(str(v))
 
-    @field_validator("close", mode="after")
-    @classmethod
-    def close_must_be_positive(cls, v: Decimal) -> Decimal:
-        if v <= 0:
-            raise ValueError("close price must be positive (> 0)")
-        return v
 
-    @field_validator("open", "high", "low", "volume", "original_open", "original_high", "original_low", "original_close", mode="after")
+#: The value of a manual write that empties a stored open, high, low or volume (N92); ``null`` or no field leaves it.
+CLEAR = "clear"
+
+#: A manual write's open, high, low or volume (N92): a number, written; ``"clear"``, which empties the stored value; or
+#: ``null``. Read left to right, so ``"clear"`` is never taken for a number; any other text is refused. The ``enum``
+#: beside pydantic's ``const`` makes the generated client read ``'clear'`` as a literal (openapi-zod-client 1.18.3
+#: ignores ``const``), as in ``schemas/signals.py``.
+PriceWriteValue = Annotated[Union[Annotated[Literal["clear"], Field(json_schema_extra={"enum": [CLEAR]})], SafeDecimal, None], Field(union_mode="left_to_right")]
+
+
+class FAPriceWritePoint(StrictModel):
+    """One price point of a manual write (``POST /assets/prices``), N92.
+
+    ``open``, ``high``, ``low`` and ``volume`` each take a number of 0 or more, written as it is; the string ``"clear"``,
+    which empties the stored value (NULL); or ``null``, or no field at all, which leaves the stored value as it is.
+    ``close`` is required and above 0: LibreFolio keeps no negative price. The ``-1`` that emptied a field before N92 is
+    a negative number now, refused. ``from_attributes``: a ``FAPricePoint`` can be given, read field by field.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    date: date_type = Field(..., description="Price date")
+    open: PriceWriteValue = Field(None, description="Opening price: a number (0 or more) writes it, 'clear' empties the stored value, null or absent leaves it")
+    high: PriceWriteValue = Field(None, description="High price: a number (0 or more) writes it, 'clear' empties the stored value, null or absent leaves it")
+    low: PriceWriteValue = Field(None, description="Low price: a number (0 or more) writes it, 'clear' empties the stored value, null or absent leaves it")
+    close: SafeDecimal = Field(..., description="Closing price, above 0 (required)")
+    volume: PriceWriteValue = Field(None, description="Trading volume: a number (0 or more) writes it, 'clear' empties the stored value, null or absent leaves it")
+    currency: Optional[str] = Field(None, description="Currency code (ISO 4217), optional: if omitted the backend uses `asset.currency`; if provided and != asset.currency, the whole upsert is refused with HTTP 422 price_currency_mismatch before anything is written.")
+
+    @field_validator("currency")
     @classmethod
-    def ohlcv_must_be_positive_or_sentinel(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+    def currency_validate(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
             return None
-        # -1 is the "SET NULL" sentinel — allowed
-        if v == Decimal("-1"):
+        return Currency.validate_code(v)
+
+    @field_validator("close", mode="after")
+    @classmethod
+    def close_above_zero(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError("close price must be above 0")
+        return v
+
+    @field_validator("open", "high", "low", "volume", mode="after")
+    @classmethod
+    def zero_or_more_or_clear(cls, v: Decimal | str | None) -> Decimal | str | None:
+        if v is None or v == CLEAR:
             return v
         if v < 0:
-            raise ValueError("price/volume fields must be >= 0 (or -1 sentinel to clear)")
+            raise ValueError('price and volume fields must be 0 or more, or "clear" to empty the stored value')
         return v
 
 
@@ -175,7 +217,7 @@ class FAUpsert(StrictModel):
     """
 
     asset_id: int = Field(..., description="Asset ID")
-    prices: List[FAPricePoint] = Field(..., min_length=1, description="List of price points")
+    prices: List[FAPriceWritePoint] = Field(..., min_length=1, description="List of price points (N92: open, high, low and volume take a number, 'clear' or null)")
 
 
 class FAPriceRejection(StrictModel):
@@ -309,6 +351,26 @@ class FAPriceQueryItem(StrictModel):
         default_factory=list,
         description="Optional cross/threshold rules evaluated on extended signal output",
     )
+    key: Optional[str] = Field(None, pattern=SAMPLE_KEY_PATTERN, description="A name for this item, unique in the request, that another item's sample_like can give (Z-29)")
+    max_points: Optional[int] = Field(
+        None,
+        ge=1,
+        le=10_000,
+        description=(
+            "Sample the series for a compact chart (Z-29): the most points the chart's plot takes. Per asset, the finest of daily, weekly (ISO, Monday to Sunday) and monthly whose count over the asset's own fill fits, "
+            "monthly when none does; a weekly or monthly series is the last point of each week or month, each the point the daily series has on that date, and sample_bounds its first and last points. "
+            "The result's resolution says the step. At most one of max_points, resolution and sample_like; not with signals, annotation_requests or include_events. None: every day."
+        ),
+    )
+    resolution: Optional[SampleResolution] = Field(None, description="Sample the series at this step whatever its length (Z-29): daily, weekly (ISO, Monday to Sunday) or monthly; as max_points does otherwise")
+    sample_like: Optional[str] = Field(
+        None,
+        pattern=SAMPLE_KEY_PATTERN,
+        description=(
+            "Sample the series like the item of this request whose key this is (Z-29): its step and buckets, from the later of its first day and this item's own; the same date_range. "
+            "A comparison's target, on its card. That item has no sample_like itself; with nothing to fill it lends its max_points or resolution."
+        ),
+    )
 
     @field_validator("target_currency")
     @classmethod
@@ -335,6 +397,25 @@ class FAPriceQueryItem(StrictModel):
                     raise ValueError(f"annotation source '{source.instance_id}' is not in signals")
         return self
 
+    @model_validator(mode="after")
+    def validate_sampling(self) -> FAPriceQueryItem:
+        """One way to sample the series at most, and a sampled series alone: signals, their annotations and events need
+        every day (Z-29)."""
+        asked = [name for name in ("max_points", "resolution", "sample_like") if getattr(self, name) is not None]
+        if len(asked) > 1:
+            raise ValueError(f"at most one of max_points, resolution and sample_like, not {' and '.join(asked)}")
+        if asked and (self.signals or self.annotation_requests or self.include_events):
+            raise ValueError(f"{asked[0]} samples the price series alone: not with signals, annotation_requests or include_events")
+        return self
+
+
+class FAPriceSampleBounds(StrictModel):
+    """The ends of a sampled price series (Z-29): the chart draws the last point of each week or month, and these two
+    points apart — the fill's first, from which the percentage view and «All» start, and its last."""
+
+    first: FAPricePoint = Field(..., description="The fill's first point: the range's start when a row precedes it, else the asset's first row in the range (with sample_like, the later of that and the item named's)")
+    last: FAPricePoint = Field(..., description="The fill's last point, on the range's end once cut at the ceiling: the last point of prices too")
+
 
 class FAPriceQueryResult(StrictModel):
     """Response for a single asset price query."""
@@ -350,6 +431,8 @@ class FAPriceQueryResult(StrictModel):
         default_factory=list,
         description="Technical signal results keyed by request instance_id",
     )
+    resolution: SampleResolution = Field("daily", description="The step of prices (Z-29): daily, or weekly or monthly when the item's max_points, resolution or sample_like sampled the series")
+    sample_bounds: Optional[FAPriceSampleBounds] = Field(None, description="A weekly or monthly series' first and last points (Z-29); None for a daily one")
 
 
 class FAPriceQueryResponse(BaseListResponse[FAPriceQueryResult]):

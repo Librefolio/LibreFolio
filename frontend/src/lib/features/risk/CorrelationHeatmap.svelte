@@ -39,6 +39,7 @@
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {CHART_FONT_FAMILY, CHART_INIT_THEME} from '$lib/components/charts/chartFont';
+    import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
     import {scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
@@ -452,7 +453,7 @@
             return;
         }
         if (!chart) {
-            chart = echarts.init(container, CHART_INIT_THEME);
+            chart = echarts.init(container, CHART_INIT_THEME, chartInitOptions(container));
             attachChartReady(chart, container, 'correlation-heatmap');
             scheduleFirstRenderStabilityFix(chart, container);
             // The other direction of the link: a cell clicked in the matrix selects its ranking entry, if it has one.

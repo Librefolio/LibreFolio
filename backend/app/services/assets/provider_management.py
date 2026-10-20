@@ -31,6 +31,7 @@ from backend.app.schemas.provider import (
     FAProviderConfigBase,
     FAProviderKind,
     FAProviderProbeResponse,
+    FAQuoteBaseSuggestion,
     ProbeCurrentPriceResult,
     ProbeHistoryResult,
     ProbeMetadataResult,
@@ -525,6 +526,20 @@ class ProviderManagementOperations:
                     execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
                 )
 
+        async def _suggest_quote_base() -> FAQuoteBaseSuggestion | None:
+            """The plugin's quote base suggestion (Z-32 d), asked once the metadata has answered: after it, so that at
+            the end of a pause the one trial call goes to the metadata. Any failure is no suggestion, and a plugin that
+            keeps the base class's method suggests nothing without a call."""
+            suggest = getattr(provider, "suggest_quote_base", None)
+            if suggest is None or getattr(suggest, "__func__", None) is AssetSourceProvider.suggest_quote_base:
+                return None
+            try:
+                raw = await core.call_provider(provider, lambda: suggest(config.identifier, mapped_id_type, params), timeout=5.0, scope=scope)
+                return None if raw is None else FAQuoteBaseSuggestion.model_validate(raw)
+            except Exception as error:  # noqa: BLE001 — a suggestion never changes the metadata's outcome
+                logger.info("Probe: no quote base suggestion", provider=config.provider_code, error=type(error).__name__)
+                return None
+
         async def _probe_metadata() -> ProbeMetadataResult:
             op_start = time.monotonic_ns()
             try:
@@ -533,6 +548,7 @@ class ProviderManagementOperations:
                     success=patch is not None,
                     patch_data=patch.model_dump(mode="json") if patch else None,
                     error=None if patch else "Provider returned no metadata",
+                    quote_base_suggestion=await _suggest_quote_base(),
                     execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
                 )
             except TimeoutError:

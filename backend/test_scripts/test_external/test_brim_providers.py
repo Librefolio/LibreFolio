@@ -62,6 +62,7 @@ from backend.app.services.brim_providers.broker_credit_agricole.plugin import Cr
 from backend.app.services.brim_providers.broker_degiro.plugin import DegiroBrokerProvider, _extract_quantity_from_description, _parse_degiro_date
 from backend.app.services.brim_providers.broker_directa.plugin import DirectaBrokerProvider, _parse_directa_date, _parse_directa_number
 from backend.app.services.brim_providers.broker_etoro.plugin import EtoroBrokerProvider, _parse_etoro_date, _parse_etoro_number
+from backend.app.services.brim_providers.broker_fineco import plugin as fineco_plugin
 from backend.app.services.brim_providers.broker_fineco.plugin import FinecoBrokerProvider
 from backend.app.services.brim_providers.broker_finpension.plugin import FinpensionBrokerProvider, _parse_finpension_date, _parse_finpension_number
 from backend.app.services.brim_providers.broker_freetrade.plugin import FreetradeBrokerProvider, _parse_freetrade_datetime, _parse_freetrade_number
@@ -2714,6 +2715,631 @@ class TestBrokerParserCoverageHelpers:
         assert notice.transaction_indexes == [coupon_index]
         # Contract only: a reason must be present, its wording is not part of the contract.
         assert notice.reason and notice.reason.strip()
+
+
+# =============================================================================
+# FINECO — SAFE ROWS (lot N74 · W-B83): only settled rows, incomplete rows noted
+# =============================================================================
+
+#: The header row of a Variant-B «Movimenti Dossier Titoli» export, as the samples carry it (``fineco-export.csv``).
+FINECO_COLUMNS = [
+    "Operazione",
+    "Data valuta",
+    "Descrizione",
+    "Titolo",
+    "Isin",
+    "Segno",
+    "Quantita",
+    "Divisa",
+    "Prezzo",
+    "Cambio",
+    "Controvalore",
+    "Commissioni Fondi Sw/Ingr/Uscita",
+    "Commissioni Fondi Banca Corrispondente",
+    "Spese Fondi Sgr",
+    "Commissioni amministrato",
+]
+#: The metadata lines above the header, as in the samples: the header is the file's line 6, the first data row line 7.
+_FINECO_PREAMBLE = ["Dossier: 123456789" + "," * 15, "Intestatario: ROSSI MARIO" + "," * 15, "," * 15, "Titoli e operazioni" + "," * 15, "," * 15]
+_FINECO_FIRST_LINE = len(_FINECO_PREAMBLE) + 2
+
+#: «Today» for the Fineco tests of lot N74. The cure's plugin reads it from ``server_today()`` (``utils/datetime_utils``,
+#: the server's local date), which it imports by name, so the tests pin that name on the plugin module: never the clock.
+FINECO_TODAY = date(2026, 10, 19)
+FINECO_NOT_YET_SETTLED = "fineco_not_yet_settled"
+FINECO_INCOMPLETE_ROWS = "fineco_incomplete_rows"
+_FINECO_N74_CODES = {FINECO_NOT_YET_SETTLED, FINECO_INCOMPLETE_ROWS}
+_FINECO_TAGS = ("import", "fineco")
+
+
+def _pin_fineco_today(monkeypatch: pytest.MonkeyPatch, today: date = FINECO_TODAY) -> date:
+    """Pin the Fineco plugin's ``server_today`` to ``today``. ``raising=False``: before the cure the plugin module has no
+    such name, and a red must fail on its assertion, not on its setup."""
+    monkeypatch.setattr(fineco_plugin, "server_today", lambda: today, raising=False)
+    return today
+
+
+def _fineco_row(trade: str, value: str, description: str, title: str, isin: str, segno: str, quantity: str, currency: str, price: str, fx: str, amount: str, fee: str = "") -> List[str]:
+    """One Variant-B data row: the 15 cells of ``FINECO_COLUMNS``, the commission in the last one (Commissioni amministrato)."""
+    return [trade, value, description, title, isin, segno, quantity, currency, price, fx, amount, "", "", "", fee]
+
+
+def _write_fineco(tmp_path: Path, rows: List[List[str]]) -> Path:
+    """A Variant-B export: the samples' preamble and header, then ``rows`` from line 7 (row ``i`` on line ``7 + i``)."""
+    lines = [*_FINECO_PREAMBLE, ",".join(FINECO_COLUMNS), *(",".join(row) for row in rows)]
+    path = tmp_path / "fineco-n74.csv"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def _fineco_tx(tx_type: str, day: str, quantity: str, cash: tuple | None, isin: str | None, description: str, tags: tuple = _FINECO_TAGS) -> tuple:
+    """A transaction as ``_fineco_transactions`` reads it; ``cash`` is ``(code, amount)`` or None."""
+    code, amount = cash if cash is not None else (None, None)
+    return (tx_type, day, Decimal(quantity), code, None if amount is None else Decimal(amount), isin, description, tags)
+
+
+def _fineco_fee(day: str, amount: str, isin: str, name: str) -> tuple:
+    """The Variant-B FEE of a row: the sum of its commission columns, in EUR, linked to the row's security."""
+    return _fineco_tx("FEE", day, "0", ("EUR", amount), isin, f"Commissioni: {name}", ("import", "fineco", "fee"))
+
+
+def _fineco_transactions(out: BRIMParseOutput) -> list:
+    """Every transaction, in order: type, date, quantity, cash code and amount, ISIN of the linked asset, description, tags."""
+    rows = []
+    for tx in out.transactions:
+        asset = out.extracted_assets.get(tx.asset_id) if tx.asset_id is not None else None
+        rows.append(
+            (
+                tx.type.value,
+                tx.date.isoformat(),
+                tx.quantity,
+                tx.cash.code if tx.cash is not None else None,
+                tx.cash.amount if tx.cash is not None else None,
+                asset.extracted_isin if asset is not None else None,
+                tx.description,
+                tuple(tx.tags or ()),
+            )
+        )
+    return rows
+
+
+def _undated(rows: list) -> list:
+    """``_fineco_transactions`` rows without their date (the second item).
+
+    Lot B-52 moves only the date of a transaction (from ``Data valuta`` to ``Operazione``). The tests of N74 and W-B83 compare
+    the transactions this way, so they keep their own subject and stay green on both sides of that change. The fixtures
+    still carry the operation dates, and B-52's reds (``*_operation_date``) compare them with their dates.
+    """
+    return [row[:1] + row[2:] for row in rows]
+
+
+def _fineco_notices(out: BRIMParseOutput, code: str) -> List[BRIMNotice]:
+    return [notice for notice in out.warnings if notice.code == code]
+
+
+def _stripped(cells) -> List[str]:
+    """Cells compared without their surrounding blanks: a plugin may strip them (``Segno`` is a single space on a redemption)."""
+    return [str(cell).strip() for cell in cells]
+
+
+#: The four Fineco samples as they parse after lot B-52. Every transaction is dated on its row's operation date
+#: (``Operazione``), the Variant-B FEE too. Lot N74's contract C holds: the cure keeps every transaction, and only the date moves.
+FINECO_SAMPLE_TRANSACTIONS = {
+    "fineco-export.csv": [
+        _fineco_tx("BUY", "2024-01-15", "5", ("EUR", "-528.55"), "IE00B4L5Y983", "Compravendita titoli: ISHARES MSCI WORLD ACC"),
+        _fineco_fee("2024-01-15", "-2.95", "IE00B4L5Y983", "ISHARES MSCI WORLD ACC"),
+        _fineco_tx("BUY", "2024-01-15", "10", ("EUR", "-330.50"), "IE00BKM4GZ66", "Compravendita titoli: ISHARES CORE MSCI EM IMI"),
+        _fineco_fee("2024-01-15", "-2.95", "IE00BKM4GZ66", "ISHARES CORE MSCI EM IMI"),
+        _fineco_tx("SELL", "2024-03-15", "-4", ("EUR", "136.80"), "IE00BKM4GZ66", "Compravendita titoli: ISHARES CORE MSCI EM IMI"),
+        _fineco_fee("2024-03-15", "-2.95", "IE00BKM4GZ66", "ISHARES CORE MSCI EM IMI"),
+        _fineco_tx("BUY", "2024-02-20", "2", ("USD", "-329.03"), "US0378331005", "Compravendita titoli: APPLE INC"),
+        _fineco_fee("2024-02-20", "-12.95", "US0378331005", "APPLE INC"),
+        _fineco_tx("SELL", "2024-05-15", "-1", ("USD", "176.10"), "US0378331005", "Compravendita titoli: APPLE INC"),
+        _fineco_fee("2024-05-15", "-12.95", "US0378331005", "APPLE INC"),
+        _fineco_tx("BUY", "2024-01-10", "2000", ("EUR", "-1990.00"), "IT0005583478", "Compravendita titoli: BTP VALORE SC MZ30"),
+        _fineco_fee("2024-01-10", "-5.00", "IT0005583478", "BTP VALORE SC MZ30"),
+        _fineco_tx("BUY", "2024-02-01", "3", ("EUR", "-431.04"), "IE00B3B8Q275", "Compravendita titoli: ETF COVERED BOND ISH"),
+        _fineco_tx("DIVIDEND", "2024-06-15", "0", ("EUR", "20.95"), "IE00B2NPKV68", "Dividendo: ISHARES JPMORGAN EM BOND"),
+        _fineco_tx("DIVIDEND", "2024-08-15", "0", ("USD", "4.23"), "US0378331005", "Dividendo: APPLE INC"),
+        _fineco_tx("INTEREST", "2024-06-01", "0", ("EUR", "24.38"), "IT0005583478", "Stacco Cedole: BTP VALORE SC MZ30"),
+        _fineco_tx("ADJUSTMENT", "2024-07-20", "6", None, "IE00BKM4GZ66", "Aumento capitale: ISHARES CORE MSCI EM IMI"),
+        _fineco_tx("ADJUSTMENT", "2024-06-19", "3", None, "IE00B4L5Y983", "Aumento capitale: ISHARES MSCI WORLD ACC"),
+        _fineco_tx("SELL", "2024-09-01", "-2000", ("EUR", "2000.00"), "IT0005583478", "Rimborso: BTP VALORE SC MZ30"),
+        _fineco_tx("SELL", "2024-10-13", "-5", ("USD", "450.81"), "US0378331005", "Rimborso: APPLE INC"),
+    ],
+    "fineco_btp_market.csv": [
+        _fineco_tx("BUY", "2023-09-04", "5000", ("EUR", "-4920.00"), "IT0005416570", "Compravendita titoli: BTP 20-25 1.40%"),
+        _fineco_fee("2023-09-04", "-3.50", "IT0005416570", "BTP 20-25 1.40%"),
+        _fineco_tx("BUY", "2023-09-11", "2", ("EUR", "-208.20"), "IE00B4L5Y983", "Compravendita titoli: ISHARES MSCI WORLD ACC"),
+        _fineco_fee("2023-09-11", "-2.95", "IE00B4L5Y983", "ISHARES MSCI WORLD ACC"),
+        _fineco_tx("BUY", "2023-09-18", "3", ("EUR", "-420.00"), "IE00B3B8Q275", "Compravendita titoli: ETF COVERED BOND ISH"),
+        _fineco_fee("2023-09-18", "-2.95", "IE00B3B8Q275", "ETF COVERED BOND ISH"),
+    ],
+    "fineco_btp_placement.csv": [
+        _fineco_tx("BUY", "2023-05-12", "10000", ("EUR", "-10000.00"), "IT0005410912", "Compravendita titoli: BTP 20-25 1.40% CUM"),
+        _fineco_fee("2023-05-12", "-3.50", "IT0005410912", "BTP 20-25 1.40% CUM"),
+        _fineco_tx("BUY", "2023-06-20", "4", ("EUR", "-409.20"), "IE00B4L5Y983", "Compravendita titoli: ISHARES MSCI WORLD ACC"),
+        _fineco_fee("2023-06-20", "-2.95", "IE00B4L5Y983", "ISHARES MSCI WORLD ACC"),
+    ],
+    # Variant A: no commission columns, so no FEE.
+    "fineco_variant_a.csv": [
+        _fineco_tx("BUY", "2024-01-10", "8", ("EUR", "-841.60"), "IE00BK5BQT80", "Compravendita titoli: VANGUARD FTSE ALL-WORLD"),
+        _fineco_tx("BUY", "2024-02-14", "3", ("USD", "-1126.24"), "US5949181045", "Compravendita titoli: MICROSOFT CORP"),
+        _fineco_tx("SELL", "2024-03-20", "-2", ("EUR", "221.00"), "IE00BK5BQT80", "Compravendita titoli: VANGUARD FTSE ALL-WORLD"),
+        _fineco_tx("DIVIDEND", "2024-04-15", "0", ("USD", "2.25"), "US5949181045", "Dividendo: MICROSOFT CORP"),
+        _fineco_tx("INTEREST", "2024-05-01", "0", ("EUR", "18.40"), "IT0005583478", "Stacco Cedole: BTP VALORE SC MZ30"),
+    ],
+}
+#: The line of ``fineco-export.csv`` each of its transactions comes from, in the order above (a row's FEE follows it).
+FINECO_EXPORT_LINES = (7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 14, 15, 16, 17, 18, 19, 20)
+
+# A: rows settled by today and rows settled after it, interleaved. Line = 7 + index. Lot B-52: a kept row is recorded on its
+# operation date (``Operazione``, the first cell); whether it is kept is still decided by its value date (the second cell).
+_FINECO_SETTLEMENT_ROWS = [
+    # line 7 — settled long ago, with its commission: BUY + FEE, kept, both dated 2024-01-15 (traded 15/01, valued 17/01).
+    _fineco_row("15/01/2024", "17/01/2024", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "105.71", "", "528.55", "2.95"),
+    # line 8 — traded before today, value date tomorrow: its BUY and its Variant-B FEE are left out (the value date decides).
+    _fineco_row("16/10/2026", "20/10/2026", "Compravendita titoli", "ISHARES CORE MSCI EM IMI", "IE00BKM4GZ66", "A", "10", "EUR", "33.05", "", "330.50", "2.95"),
+    # line 9 — value date today: BUY + FEE, kept, both dated on the operation date 2026-10-15.
+    _fineco_row("15/10/2026", "19/10/2026", "Compravendita titoli", "VANGUARD FTSE ALL-WORLD", "IE00BK5BQT80", "A", "2", "EUR", "110.00", "", "220.00", "2.95"),
+    # line 10 — a bond redeemed above par, traded today, value date the day after tomorrow: its par SELL and its INTEREST
+    # surplus are left out.
+    _fineco_row("19/10/2026", "21/10/2026", "Rimborso", "BTP ITALIA FOI NV28", "IT0005000001", " ", "10000", "EUR", "100.40000", "1.00000", "10040.00"),
+    # line 11 — no value date, traded today: the trade date decides, kept, dated 2026-10-19.
+    _fineco_row("19/10/2026", "", "Dividendo", "APPLE INC", "US0378331005", "", "", "USD", "", "1.0850", "4.23"),
+    # line 12 — no value date, traded tomorrow: the trade date decides, left out.
+    _fineco_row("20/10/2026", "", "Dividendo", "ISHARES JPMORGAN EM BOND", "IE00B2NPKV68", "", "", "EUR", "", "", "20.95"),
+]
+_FINECO_SETTLED_TRANSACTIONS = [
+    _fineco_tx("BUY", "2024-01-15", "5", ("EUR", "-528.55"), "IE00B4L5Y983", "Compravendita titoli: ISHARES MSCI WORLD ACC"),
+    _fineco_fee("2024-01-15", "-2.95", "IE00B4L5Y983", "ISHARES MSCI WORLD ACC"),
+    _fineco_tx("BUY", "2026-10-15", "2", ("EUR", "-220.00"), "IE00BK5BQT80", "Compravendita titoli: VANGUARD FTSE ALL-WORLD"),
+    _fineco_fee("2026-10-15", "-2.95", "IE00BK5BQT80", "VANGUARD FTSE ALL-WORLD"),
+    _fineco_tx("DIVIDEND", "2026-10-19", "0", ("USD", "4.23"), "US0378331005", "Dividendo: APPLE INC"),
+]
+_FINECO_UNSETTLED_LINES = [8, 10, 12]
+#: The securities of the kept rows (lines 7, 9 and 11): those of lines 8, 10 and 12 appear in no other row.
+_FINECO_SETTLED_ISINS = ["IE00B4L5Y983", "IE00BK5BQT80", "US0378331005"]
+
+# B: one row per (type, needed field) of the contract, blank or unreadable, among complete rows. Line = 7 + index.
+_FINECO_INCOMPLETE_FILE = [
+    # line 7 — complete BUY: not counted.
+    _fineco_row("15/01/2024", "17/01/2024", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "105.71", "", "528.55", "2.95"),
+    # line 8 — BUY, Controvalore blank: a BUY with cash 0, and its FEE.
+    _fineco_row("20/02/2024", "22/02/2024", "Compravendita titoli", "APPLE INC", "US0378331005", "A", "2", "USD", "178.50", "1.0850", "", "12.95"),
+    # line 9 — SELL, Quantita blank: the validation issue qtyNegative.
+    _fineco_row("15/05/2024", "17/05/2024", "Compravendita titoli", "APPLE INC", "US0378331005", "V", "", "USD", "192.30", "1.0920", "176.10"),
+    # line 10 — DIVIDEND, Controvalore blank: a DIVIDEND with cash 0.
+    _fineco_row("15/06/2024", "17/06/2024", "Dividendo", "ISHARES JPMORGAN EM BOND", "IE00B2NPKV68", "", "", "EUR", "", "", ""),
+    # line 11 — INTEREST (Stacco Cedole), Controvalore unreadable: an INTEREST with cash 0.
+    _fineco_row("01/06/2024", "03/06/2024", "Stacco Cedole", "BTP VALORE SC MZ30", "IT0005583478", "", "", "EUR", "", "", "n.d."),
+    # line 12 — ADJUSTMENT (Aumento capitale), Quantita blank: the validation issue qtyNonzero.
+    _fineco_row("20/07/2024", "20/07/2024", "Aumento capitale", "ISHARES CORE MSCI EM IMI", "IE00BKM4GZ66", " ", "", "EUR", "0.00000", "1.00000", "0.00"),
+    # line 13 — SELL (Rimborso), Quantita blank: the validation issue qtyNegative.
+    _fineco_row("01/09/2024", "03/09/2024", "Rimborso", "BTP VALORE SC MZ30", "IT0005583478", " ", "", "EUR", "100.00000", "1.00000", "2000.00"),
+    # line 14 — BUY, Quantita unreadable: the validation issue qtyPositive, and its FEE.
+    _fineco_row("10/01/2024", "12/01/2024", "Compravendita titoli", "BTP VALORE SC MZ30", "IT0005583478", "A", "n.d.", "EUR", "99.50", "", "1990.00", "5.00"),
+    # line 15 — SELL, Controvalore blank: a SELL with cash 0, and its FEE.
+    _fineco_row("15/03/2024", "19/03/2024", "Compravendita titoli", "ISHARES CORE MSCI EM IMI", "IE00BKM4GZ66", "V", "4", "EUR", "34.20", "", "", "2.95"),
+    # line 16 — ADJUSTMENT with Controvalore blank: complete, an ADJUSTMENT needs only its quantity.
+    _fineco_row("19/06/2024", "19/06/2024", "Aumento capitale", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", " ", "3", "EUR", "", "", ""),
+    # line 17 — BUY with Divisa and Prezzo blank: complete, neither is in the set.
+    _fineco_row("01/02/2024", "03/02/2024", "Compravendita titoli", "ETF COVERED BOND ISH", "IE00B3B8Q275", "A", "3", "", "", "", "431.04"),
+]
+#: Line -> the column whose value the row's type needs and does not give.
+_FINECO_INCOMPLETE_COLUMNS = {8: "Controvalore", 9: "Quantita", 10: "Controvalore", 11: "Controvalore", 12: "Quantita", 13: "Quantita", 14: "Quantita", 15: "Controvalore"}
+#: What the file imports (contract B: the incomplete rows still import exactly so), each transaction dated on its row's
+#: operation date (lot B-52) — the FEE of line 14, whose BUY is refused, too.
+_FINECO_INCOMPLETE_TRANSACTIONS = [
+    _fineco_tx("BUY", "2024-01-15", "5", ("EUR", "-528.55"), "IE00B4L5Y983", "Compravendita titoli: ISHARES MSCI WORLD ACC"),
+    _fineco_fee("2024-01-15", "-2.95", "IE00B4L5Y983", "ISHARES MSCI WORLD ACC"),
+    _fineco_tx("BUY", "2024-02-20", "2", ("USD", "0"), "US0378331005", "Compravendita titoli: APPLE INC"),
+    _fineco_fee("2024-02-20", "-12.95", "US0378331005", "APPLE INC"),
+    _fineco_tx("DIVIDEND", "2024-06-15", "0", ("EUR", "0"), "IE00B2NPKV68", "Dividendo: ISHARES JPMORGAN EM BOND"),
+    _fineco_tx("INTEREST", "2024-06-01", "0", ("EUR", "0"), "IT0005583478", "Stacco Cedole: BTP VALORE SC MZ30"),
+    _fineco_fee("2024-01-10", "-5.00", "IT0005583478", "BTP VALORE SC MZ30"),
+    _fineco_tx("SELL", "2024-03-15", "-4", ("EUR", "0"), "IE00BKM4GZ66", "Compravendita titoli: ISHARES CORE MSCI EM IMI"),
+    _fineco_fee("2024-03-15", "-2.95", "IE00BKM4GZ66", "ISHARES CORE MSCI EM IMI"),
+    _fineco_tx("ADJUSTMENT", "2024-06-19", "3", None, "IE00B4L5Y983", "Aumento capitale: ISHARES MSCI WORLD ACC"),
+    _fineco_tx("BUY", "2024-02-01", "3", ("EUR", "-431.04"), "IE00B3B8Q275", "Compravendita titoli: ETF COVERED BOND ISH"),
+]
+_FINECO_INCOMPLETE_ISSUES = [(9, "qtyNegative"), (12, "qtyNonzero"), (13, "qtyNegative"), (14, "qtyPositive")]
+
+
+class TestFinecoSafeRows:
+    """Lot N74 · Fineco, safe rows (workstream W; W-B83), and lot B-52, the operation date.
+
+    A. Only settled rows. A row is settled when its value date (``Data valuta``), or its trade date (``Operazione``) when the
+       value date is blank, is not after ``server_today()`` (``utils/datetime_utils``, the server's local date, imported by
+       the plugin by name). A row that is not settled is left out whole — its transaction, its Variant-B FEE, the INTEREST
+       surplus of a bond redeemed above par — and the plugin says so once: an ``info`` notice ``fineco_not_yet_settled``,
+       ``context {"count": n}``, one evidence table with the file's header row, those rows and their 1-based line numbers.
+       No ``warning`` for it, not even the «No valid transactions found in file» of a file whose rows are all left out; and
+       a security seen only in left-out rows is not extracted (the row is skipped before its asset is resolved).
+       A settled row is kept. Lot B-52 does not change this rule: a row traded on or before today and valued after it is
+       still left out.
+    B. Incomplete rows. A row is incomplete when a field its type needs gives no number (blank or unreadable): ``Quantita``
+       for BUY, SELL (``Rimborso`` too) and ADJUSTMENT (``Aumento capitale``); ``Controvalore`` for BUY, SELL, DIVIDEND and
+       INTEREST (``Stacco Cedole``) — never ``Divisa`` or ``Prezzo``. It still imports exactly as today (a BUY without
+       ``Controvalore`` is a BUY with cash 0, a SELL without ``Quantita`` the issue ``qtyNegative``), and one ``info``
+       notice ``fineco_incomplete_rows`` lists those rows (``context`` ``count`` and ``report_issue: True``), each evidence
+       row ending with a cell that names the empty column. A row left out for its date is not counted.
+    C. The four samples keep their transactions, with neither notice.
+    D. The operation date (lot B-52, the developer's decision of 19/10/2026). Every transaction is recorded on its row's
+       operation date (``Operazione``), and so are the Variant-B FEE and the INTEREST surplus of a bond redeemed above par.
+       When ``Operazione`` is empty or unreadable, ``Data valuta`` is used. With neither date readable, the row is skipped
+       with today's «invalid date» warning. The plugin becomes 1.3.0.
+
+    The tests of A, B and C compare the transactions without their date (``_undated``). So they keep their own subject and
+    stay green on both sides of B-52. The fixtures carry the operation dates, and D's reds compare them on the same rows.
+
+    «Today» is pinned on the plugin module (``_pin_fineco_today``), never read from the clock. N74 and W-B83 are cured, so
+    their tests are guards now. D's reds fail today because the plugin dates every row on its value date. Guards are green
+    today and must stay so.
+    """
+
+    # --- C: the samples (guards) ---
+
+    def test_guard_the_fineco_samples_are_all_listed(self):
+        """Guard: the plugin's samples are the four this class pins; a fifth must be added to ``FINECO_SAMPLE_TRANSACTIONS``."""
+        samples = sorted(path.name for path in _all_samples_for_plugin(FinecoBrokerProvider()))
+
+        assert samples == sorted(FINECO_SAMPLE_TRANSACTIONS), f"Fineco samples on disk {samples}, pinned {sorted(FINECO_SAMPLE_TRANSACTIONS)}"
+
+    @pytest.mark.parametrize("sample", sorted(FINECO_SAMPLE_TRANSACTIONS))
+    def test_guard_fineco_samples_keep_their_transactions_with_neither_new_notice(self, sample: str, monkeypatch: pytest.MonkeyPatch):
+        """Guard (C): every transaction of the sample, in order, as today except its date (type, quantity, cash, security,
+        description, tags); no validation issue; neither N74 notice. B-52 moves only the date, which
+        ``test_fineco_samples_are_dated_on_the_operation_date`` pins."""
+        _pin_fineco_today(monkeypatch)
+
+        out = FinecoBrokerProvider().parse(SAMPLE_DIR / sample, broker_id=1)
+
+        assert _undated(_fineco_transactions(out)) == _undated(FINECO_SAMPLE_TRANSACTIONS[sample]), f"{sample}: the transactions drifted from today's"
+        assert out.validation_issues == [], f"{sample}: {[(issue.row, issue.code) for issue in out.validation_issues]}"
+        assert [notice.code for notice in out.warnings if notice.code in _FINECO_N74_CODES] == [], f"{sample}: every row is settled and complete"
+
+    @pytest.mark.parametrize("sample", sorted(FINECO_SAMPLE_TRANSACTIONS))
+    def test_fineco_samples_are_dated_on_the_operation_date(self, sample: str, monkeypatch: pytest.MonkeyPatch):
+        """Red today: every transaction is dated on its row's value date (``Data valuta``), two days after the operation in
+        most rows.
+
+        Contract (D): every transaction of the sample, in order, is dated on its row's operation date (``Operazione``), and so
+        is the Variant-B FEE that follows it — for example ``fineco-export.csv`` line 7, traded 15/01/2024 and valued
+        17/01/2024, gives a BUY and a FEE on 2024-01-15."""
+        _pin_fineco_today(monkeypatch)
+
+        out = FinecoBrokerProvider().parse(SAMPLE_DIR / sample, broker_id=1)
+
+        assert _fineco_transactions(out) == FINECO_SAMPLE_TRANSACTIONS[sample], f"{sample}: B-52 records every row on its operation date (Operazione)"
+
+    # --- A: only settled rows (N74, cured: guards for B-52) ---
+
+    def test_guard_fineco_rows_valued_today_or_earlier_are_kept(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Guard (A): with today pinned to 2026-10-19, these rows are all kept: a row settled long ago, one whose value date
+        is today, one without a value date traded today, and a bond redeemed above par whose value date is today. The FEEs,
+        the par SELL and its INTEREST surplus are kept too, and nothing is noted. The dates are left out of the comparison
+        (``_undated``): B-52 moves them, and ``test_fineco_settled_rows_are_recorded_on_their_operation_date`` pins them."""
+        _pin_fineco_today(monkeypatch)
+        rows = [
+            _FINECO_SETTLEMENT_ROWS[0],
+            _FINECO_SETTLEMENT_ROWS[2],
+            _FINECO_SETTLEMENT_ROWS[4],
+            _fineco_row("16/10/2026", "19/10/2026", "Rimborso", "BTP ITALIA FOI NV28", "IT0005000001", " ", "10000", "EUR", "100.40000", "1.00000", "10040.00"),
+        ]
+        premium = "Rimborso a scadenza — premio/rivalutazione oltre la pari: BTP ITALIA FOI NV28"
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
+
+        assert _undated(_fineco_transactions(out)) == _undated(
+            [
+                *_FINECO_SETTLED_TRANSACTIONS,
+                _fineco_tx("SELL", "2026-10-16", "-10000", ("EUR", "10000.00"), "IT0005000001", "Rimborso: BTP ITALIA FOI NV28"),
+                _fineco_tx("INTEREST", "2026-10-16", "0", ("EUR", "40.00"), "IT0005000001", premium, ("import", "fineco", "maturity_premium")),
+            ]
+        )
+        assert out.validation_issues == []
+        assert [(notice.severity, notice.code) for notice in out.warnings] == [], "nothing is left out or incomplete: nothing to say"
+
+    def test_fineco_rows_after_today_are_left_out_whole(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """N74, cured, now a guard for B-52 (green today and after).
+
+        Contract (A): today is pinned to 2026-10-19. The rows not settled by then give no transaction at all: lines 8 and 10
+        by their value date (both traded on or before today: the value date decides, not the operation date), line 12 by
+        its trade date (its value date is blank). The other rows are kept, in order, compared without their dates (B-52's).
+        A left-out row is skipped before its security is resolved. So the extracted assets are exactly the securities of
+        the kept rows: those of lines 8, 10 and 12, seen nowhere else, are not extracted.
+        """
+        _pin_fineco_today(monkeypatch)
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, _FINECO_SETTLEMENT_ROWS), broker_id=1)
+
+        assert _undated(_fineco_transactions(out)) == _undated(_FINECO_SETTLED_TRANSACTIONS), "N74: a row not settled by today is left out whole (its FEE and its INTEREST surplus too)"
+        assert out.validation_issues == []
+        extracted = sorted(str(info.extracted_isin) for info in out.extracted_assets.values())
+        assert extracted == sorted(_FINECO_SETTLED_ISINS), "N74: a security seen only in rows left out is not extracted: nothing would carry it to map"
+
+    def test_fineco_a_file_with_only_rows_after_today_gives_only_the_note(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """N74, cured, now a guard for B-52 (green today and after).
+
+        Contract (A), today pinned to 2026-10-19, on a file whose only data rows (lines 7, 8, 9: lines 8, 10 and 12 of the
+        mixed file) are not settled by today: no transaction, no validation issue, no extracted asset; no ``warning`` notice
+        at all — none of the «No valid transactions found in file» a plain string becomes — and exactly one
+        ``fineco_not_yet_settled`` info note, its ``count`` the three rows, its evidence their lines.
+        """
+        _pin_fineco_today(monkeypatch)
+        rows = [_FINECO_SETTLEMENT_ROWS[line - _FINECO_FIRST_LINE] for line in _FINECO_UNSETTLED_LINES]
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
+
+        assert _fineco_transactions(out) == [], "N74: every row is dated after today, so none gives a transaction"
+        assert out.validation_issues == []
+        assert out.extracted_assets == {}, "a security seen only in rows left out is not extracted"
+        assert [(notice.code, notice.message) for notice in out.warnings if notice.severity == "warning"] == [], "N74: a file whose rows all settle after today says so in a note, never a warning"
+        notices = _fineco_notices(out, FINECO_NOT_YET_SETTLED)
+        assert [(notice.severity, (notice.context or {}).get("count")) for notice in notices] == [("info", len(rows))], [(n.severity, n.code, n.context) for n in out.warnings]
+        assert sorted(line for evidence in notices[0].evidence for line in evidence.row_numbers) == [_FINECO_FIRST_LINE + index for index in range(len(rows))]
+
+    def test_fineco_rows_after_today_get_one_info_note_with_their_rows(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """N74, cured, now a guard for B-52 (green today and after): the value date still decides.
+
+        Contract (A): exactly one ``fineco_not_yet_settled`` notice, ``severity="info"``, ``context == {"count": 3}``, one
+        evidence table whose headers are the file's header row and whose rows are lines 8, 10 and 12 as the file holds them,
+        each with its line number; and no ``warning`` notice. Lines 8 and 10 are traded on or before today: a plugin that
+        decided by the operation date would keep them, and this test would see only line 12.
+        """
+        _pin_fineco_today(monkeypatch)
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, _FINECO_SETTLEMENT_ROWS), broker_id=1)
+
+        notices = _fineco_notices(out, FINECO_NOT_YET_SETTLED)
+        assert len(notices) == 1, f"N74: one {FINECO_NOT_YET_SETTLED} notice for the rows dated after today; the plugin said {[(n.severity, n.code) for n in out.warnings]}"
+        notice = notices[0]
+        assert (notice.severity, notice.context) == ("info", {"count": len(_FINECO_UNSETTLED_LINES)}), "a row settling after today comes with the next export: a note, never a warning"
+        assert len(notice.evidence) == 1, f"one evidence table, got {len(notice.evidence)}"
+        evidence = notice.evidence[0]
+        assert _stripped(evidence.headers) == FINECO_COLUMNS, "the evidence headers are the file's header row"
+        assert len(evidence.row_numbers) == len(evidence.rows) and all(len(row) == len(evidence.headers) for row in evidence.rows), "each row has its line number and one cell per header"
+        assert sorted(evidence.row_numbers) == _FINECO_UNSETTLED_LINES, f"the rows left out are on lines {_FINECO_UNSETTLED_LINES}, the evidence names {evidence.row_numbers}"
+        assert {line: _stripped(row) for line, row in zip(evidence.row_numbers, evidence.rows, strict=True)} == {line: _stripped(_FINECO_SETTLEMENT_ROWS[line - _FINECO_FIRST_LINE]) for line in _FINECO_UNSETTLED_LINES}
+        assert [(n.severity, n.code) for n in out.warnings if n.severity == "warning"] == [], "N74 adds no warning for a row not yet settled"
+
+    @pytest.mark.parametrize(
+        ("today", "left_out"),
+        [
+            pytest.param(date(2024, 3, 19), [11, 14, 15, 16, 17, 18, 19, 20], id="line-9-valued-today"),
+            pytest.param(date(2024, 3, 18), [9, 11, 14, 15, 16, 17, 18, 19, 20], id="line-9-traded-before-today-valued-after"),
+        ],
+    )
+    def test_fineco_the_pinned_server_today_decides_not_the_wall_clock(self, today: date, left_out: List[int], monkeypatch: pytest.MonkeyPatch):
+        """N74, cured, now a guard for B-52 (green today and after).
+
+        Contract (A), read through the pin. «Today» is the plugin's ``server_today``, never the wall clock (the other tests'
+        2026-10-19 is far from these days). With it pinned, the sample's rows whose value date is after that day are left
+        out and noted, and the others are kept, compared without their dates (B-52's).
+
+        Line 9 is traded 15/03/2024 and valued 19/03/2024. It is kept when today is its value date, and left out on
+        2024-03-18 although it was traded before that day: the value date decides.
+        """
+        _pin_fineco_today(monkeypatch, today)
+
+        out = FinecoBrokerProvider().parse(SAMPLE_DIR / "fineco-export.csv", broker_id=1)
+
+        kept = [tx for tx, line in zip(FINECO_SAMPLE_TRANSACTIONS["fineco-export.csv"], FINECO_EXPORT_LINES, strict=True) if line not in left_out]
+        assert _undated(_fineco_transactions(out)) == _undated(kept), "N74: «today» is server_today() as the plugin module names it, not the clock"
+        notices = _fineco_notices(out, FINECO_NOT_YET_SETTLED)
+        assert len(notices) == 1 and (notices[0].context or {}).get("count") == len(left_out), [(n.code, n.context) for n in out.warnings]
+        assert sorted(line for evidence in notices[0].evidence for line in evidence.row_numbers) == left_out
+
+    # --- B: incomplete rows (W-B83, cured: guards for B-52) ---
+
+    @staticmethod
+    def _assert_incomplete_file_imports_as_today(out: BRIMParseOutput) -> None:
+        """The W-B83 outcome of the incomplete file, compared without the dates (B-52's, pinned by
+        ``test_fineco_incomplete_rows_are_recorded_on_their_operation_date``)."""
+        assert _undated(_fineco_transactions(out)) == _undated(_FINECO_INCOMPLETE_TRANSACTIONS), "W-B83: an incomplete row still imports exactly as today"
+        assert [(issue.row, issue.code) for issue in out.validation_issues] == _FINECO_INCOMPLETE_ISSUES, "W-B83: an incomplete row keeps today's validation issue"
+
+    def test_guard_fineco_incomplete_rows_import_as_today(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Guard (B): the incomplete rows import as today, compared without their dates (B-52's). The BUY, DIVIDEND,
+        INTEREST and SELL without ``Controvalore`` give cash 0, with their FEEs. The rows without ``Quantita`` (or with an
+        unreadable one) get the issue each gets today."""
+        _pin_fineco_today(monkeypatch)
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, _FINECO_INCOMPLETE_FILE), broker_id=1)
+
+        self._assert_incomplete_file_imports_as_today(out)
+
+    def test_fineco_incomplete_rows_get_one_info_note_that_asks_for_an_issue(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """W-B83, cured, now a guard for B-52 (green today and after). The outcome is pinned first, without the dates.
+
+        Contract (B): one ``fineco_incomplete_rows`` notice, ``severity="info"``, ``context["count"] == 8`` and
+        ``context["report_issue"] is True``; its evidence lists lines 8 to 15 — never the complete 7, 16 and 17 — each row
+        the file's cells then one naming the empty column (``Controvalore`` or ``Quantita``; that column's header is not
+        pinned); no ``warning`` notice.
+        """
+        _pin_fineco_today(monkeypatch)
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, _FINECO_INCOMPLETE_FILE), broker_id=1)
+
+        self._assert_incomplete_file_imports_as_today(out)
+        notices = _fineco_notices(out, FINECO_INCOMPLETE_ROWS)
+        assert len(notices) == 1, f"W-B83: one {FINECO_INCOMPLETE_ROWS} notice for the rows a needed number is missing from; the plugin said {[(n.severity, n.code) for n in out.warnings]}"
+        notice = notices[0]
+        context = notice.context or {}
+        assert (notice.severity, context.get("count"), context.get("report_issue")) == ("info", len(_FINECO_INCOMPLETE_COLUMNS), True), f"severity {notice.severity!r}, context {notice.context}"
+        rows: dict = {}
+        for evidence in notice.evidence:
+            assert _stripped(evidence.headers[:-1]) == FINECO_COLUMNS, "the evidence headers are the file's header row, then the column naming the empty field"
+            assert len(evidence.row_numbers) == len(evidence.rows) and all(len(row) == len(evidence.headers) for row in evidence.rows), "each row has its line number and one cell per header"
+            rows.update({line: _stripped(row) for line, row in zip(evidence.row_numbers, evidence.rows, strict=True)})
+        assert sorted(rows) == sorted(_FINECO_INCOMPLETE_COLUMNS), f"the incomplete rows are on lines {sorted(_FINECO_INCOMPLETE_COLUMNS)}, the evidence names {sorted(rows)}"
+        assert {line: row[-1] for line, row in rows.items()} == _FINECO_INCOMPLETE_COLUMNS, "each row's last cell names the empty column"
+        assert {line: row[:-1] for line, row in rows.items()} == {line: _stripped(_FINECO_INCOMPLETE_FILE[line - _FINECO_FIRST_LINE]) for line in _FINECO_INCOMPLETE_COLUMNS}
+        assert [(n.severity, n.code) for n in out.warnings if n.severity == "warning"] == []
+
+    def test_fineco_a_row_left_out_for_its_date_is_not_counted_as_incomplete(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """N74 and W-B83, cured, now a guard for B-52 (green today and after).
+
+        Contract (A then B), today pinned to 2026-10-19. Line 7 is settled and has no ``Controvalore``: it is the one
+        incomplete row (its transaction is compared without its date, B-52's). Lines 8 (no ``Controvalore``) and 9 (no
+        ``Quantita``) are traded on or before today and valued after it. They are left out whole — no transaction, no issue
+        — and noted as not yet settled, not as incomplete.
+        """
+        _pin_fineco_today(monkeypatch)
+        rows = [
+            _fineco_row("20/02/2024", "22/02/2024", "Compravendita titoli", "APPLE INC", "US0378331005", "A", "2", "USD", "178.50", "1.0850", ""),
+            _fineco_row("16/10/2026", "20/10/2026", "Compravendita titoli", "APPLE INC", "US0378331005", "A", "1", "USD", "250.00", "1.0850", "", "1.95"),
+            _fineco_row("19/10/2026", "21/10/2026", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "V", "", "EUR", "120.00", "", "240.00", "2.95"),
+        ]
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
+
+        assert _undated(_fineco_transactions(out)) == _undated([_fineco_tx("BUY", "2024-02-20", "2", ("USD", "0"), "US0378331005", "Compravendita titoli: APPLE INC")])
+        assert out.validation_issues == [], "a row left out whole has no issue either"
+        incomplete = _fineco_notices(out, FINECO_INCOMPLETE_ROWS)
+        assert len(incomplete) == 1 and (incomplete[0].context or {}).get("count") == 1, [(n.code, n.context) for n in out.warnings]
+        assert sorted(line for evidence in incomplete[0].evidence for line in evidence.row_numbers) == [7], "only the settled row is counted as incomplete"
+        unsettled = _fineco_notices(out, FINECO_NOT_YET_SETTLED)
+        assert len(unsettled) == 1 and sorted(line for evidence in unsettled[0].evidence for line in evidence.row_numbers) == [8, 9]
+
+    def test_guard_fineco_complete_rows_get_no_incomplete_note(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Guard (B): a blank field a row's type does not need leaves it complete — ``Divisa`` and ``Prezzo`` of a trade,
+        ``Prezzo`` of a redemption, ``Quantita`` of a DIVIDEND and an INTEREST, ``Controvalore`` of an ADJUSTMENT. They import
+        as today (compared without their dates, B-52's), and no ``fineco_incomplete_rows`` notice is emitted."""
+        _pin_fineco_today(monkeypatch)
+        rows = [
+            _fineco_row("01/02/2024", "03/02/2024", "Compravendita titoli", "ETF COVERED BOND ISH", "IE00B3B8Q275", "A", "3", "", "", "", "431.04"),
+            _fineco_row("15/03/2024", "19/03/2024", "Compravendita titoli", "ISHARES CORE MSCI EM IMI", "IE00BKM4GZ66", "V", "4", "EUR", "", "", "136.80", "2.95"),
+            _fineco_row("15/06/2024", "17/06/2024", "Dividendo", "ISHARES JPMORGAN EM BOND", "IE00B2NPKV68", "", "", "EUR", "", "", "20.95"),
+            _fineco_row("01/06/2024", "03/06/2024", "Stacco Cedole", "BTP VALORE SC MZ30", "IT0005583478", "", "", "EUR", "", "", "24.38"),
+            _fineco_row("19/06/2024", "19/06/2024", "Aumento capitale", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", " ", "3", "EUR", "", "", ""),
+            _fineco_row("01/09/2024", "03/09/2024", "Rimborso", "BTP VALORE SC MZ30", "IT0005583478", " ", "2000", "EUR", "", "", "2000.00"),
+        ]
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
+
+        assert _undated(_fineco_transactions(out)) == _undated(
+            [
+                _fineco_tx("BUY", "2024-02-01", "3", ("EUR", "-431.04"), "IE00B3B8Q275", "Compravendita titoli: ETF COVERED BOND ISH"),
+                _fineco_tx("SELL", "2024-03-15", "-4", ("EUR", "136.80"), "IE00BKM4GZ66", "Compravendita titoli: ISHARES CORE MSCI EM IMI"),
+                _fineco_fee("2024-03-15", "-2.95", "IE00BKM4GZ66", "ISHARES CORE MSCI EM IMI"),
+                _fineco_tx("DIVIDEND", "2024-06-15", "0", ("EUR", "20.95"), "IE00B2NPKV68", "Dividendo: ISHARES JPMORGAN EM BOND"),
+                _fineco_tx("INTEREST", "2024-06-01", "0", ("EUR", "24.38"), "IT0005583478", "Stacco Cedole: BTP VALORE SC MZ30"),
+                _fineco_tx("ADJUSTMENT", "2024-06-19", "3", None, "IE00B4L5Y983", "Aumento capitale: ISHARES MSCI WORLD ACC"),
+                _fineco_tx("SELL", "2024-09-01", "-2000", ("EUR", "2000.00"), "IT0005583478", "Rimborso: BTP VALORE SC MZ30"),
+            ]
+        )
+        assert out.validation_issues == []
+        assert _fineco_notices(out, FINECO_INCOMPLETE_ROWS) == [], "every row gives the numbers its type needs"
+
+    # --- D: the operation date (lot B-52) ---
+
+    def test_fineco_a_trade_is_recorded_on_its_operation_date_with_its_fee(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Red today: the BUY and its FEE are dated 2024-01-17, the row's value date.
+
+        Contract (D): a row traded on 15/01/2024 (``Operazione``) and valued on 17/01/2024 (``Data valuta``), settled long
+        ago, gives its BUY on its operation date, 2024-01-15, and its Variant-B FEE on the same day."""
+        _pin_fineco_today(monkeypatch)
+        row = _fineco_row("15/01/2024", "17/01/2024", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "105.71", "", "528.55", "2.95")
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, [row]), broker_id=1)
+
+        assert _fineco_transactions(out) == [
+            _fineco_tx("BUY", "2024-01-15", "5", ("EUR", "-528.55"), "IE00B4L5Y983", "Compravendita titoli: ISHARES MSCI WORLD ACC"),
+            _fineco_fee("2024-01-15", "-2.95", "IE00B4L5Y983", "ISHARES MSCI WORLD ACC"),
+        ], "B-52: the trade and its commission are recorded on the operation date"
+
+    def test_fineco_a_bond_redeemed_above_par_is_recorded_on_its_operation_date(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Red today: the par SELL and the INTEREST surplus are dated 2024-09-03, the row's value date.
+
+        Contract (D): a bond redeemed above par, traded on 01/09/2024 and valued on 03/09/2024, still gives two
+        transactions: the par SELL of its nominal and the INTEREST surplus over par. Both are dated on the row's operation
+        date, 2024-09-01."""
+        _pin_fineco_today(monkeypatch)
+        row = _fineco_row("01/09/2024", "03/09/2024", "Rimborso", "BTP ITALIA FOI NV28", "IT0005000001", " ", "10000", "EUR", "100.40000", "1.00000", "10040.00")
+        premium = "Rimborso a scadenza — premio/rivalutazione oltre la pari: BTP ITALIA FOI NV28"
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, [row]), broker_id=1)
+
+        assert _fineco_transactions(out) == [
+            _fineco_tx("SELL", "2024-09-01", "-10000", ("EUR", "10000.00"), "IT0005000001", "Rimborso: BTP ITALIA FOI NV28"),
+            _fineco_tx("INTEREST", "2024-09-01", "0", ("EUR", "40.00"), "IT0005000001", premium, ("import", "fineco", "maturity_premium")),
+        ], "B-52: the par SELL and the maturity premium are recorded on the operation date"
+
+    def test_fineco_settled_rows_are_recorded_on_their_operation_date(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Red today: lines 7 and 9 are dated on their value dates (2024-01-17 and 2026-10-19).
+
+        Contract (D over A), today pinned to 2026-10-19, on the mixed file. First the premise: the value date still decides
+        which rows are left out, lines 8, 10 and 12 (line 8 is traded on 16/10 and valued on 20/10). Then each kept row is
+        recorded on its operation date, its FEE too: line 7 on 2024-01-15; line 9, traded on 15/10 and valued today, on
+        2026-10-15; line 11, without a value date, on 2026-10-19."""
+        _pin_fineco_today(monkeypatch)
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, _FINECO_SETTLEMENT_ROWS), broker_id=1)
+
+        notes = _fineco_notices(out, FINECO_NOT_YET_SETTLED)
+        assert [sorted(line for evidence in note.evidence for line in evidence.row_numbers) for note in notes] == [_FINECO_UNSETTLED_LINES], "premise (A): the value date decides"
+        assert _fineco_transactions(out) == _FINECO_SETTLED_TRANSACTIONS, "B-52: a kept row is recorded on its operation date, with its FEE"
+
+    def test_fineco_incomplete_rows_are_recorded_on_their_operation_date(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Red today: every transaction is dated on its row's value date.
+
+        Contract (D over B): the incomplete file imports as W-B83 pins it (premise: the same validation issues). Each
+        transaction is dated on its row's operation date. This includes the FEE of line 14, whose BUY is refused because
+        its ``Quantita`` cannot be read."""
+        _pin_fineco_today(monkeypatch)
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, _FINECO_INCOMPLETE_FILE), broker_id=1)
+
+        assert [(issue.row, issue.code) for issue in out.validation_issues] == _FINECO_INCOMPLETE_ISSUES, "premise (B): today's validation issues"
+        assert _fineco_transactions(out) == _FINECO_INCOMPLETE_TRANSACTIONS, "B-52: every transaction on its row's operation date"
+
+    def test_guard_fineco_an_empty_or_unreadable_operation_date_falls_back_to_the_value_date(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Guard (D), green today and after. It cannot be red, because today every row is already dated on its value date.
+
+        A row whose ``Operazione`` is empty (line 7) or unreadable (line 8, ``31/02/2024``) is recorded on its ``Data
+        valuta``, 2024-01-17, and so is its Variant-B FEE. The value date still decides whether such a row is settled: line
+        9, with an empty ``Operazione`` and valued tomorrow, is left out and noted, and no warning is given."""
+        _pin_fineco_today(monkeypatch)
+        rows = [
+            _fineco_row("", "17/01/2024", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "105.71", "", "528.55", "2.95"),
+            _fineco_row("31/02/2024", "17/01/2024", "Compravendita titoli", "ISHARES CORE MSCI EM IMI", "IE00BKM4GZ66", "A", "10", "EUR", "33.05", "", "330.50", "2.95"),
+            _fineco_row("", "20/10/2026", "Compravendita titoli", "VANGUARD FTSE ALL-WORLD", "IE00BK5BQT80", "A", "2", "EUR", "110.00", "", "220.00", "2.95"),
+        ]
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
+
+        assert _fineco_transactions(out) == [
+            _fineco_tx("BUY", "2024-01-17", "5", ("EUR", "-528.55"), "IE00B4L5Y983", "Compravendita titoli: ISHARES MSCI WORLD ACC"),
+            _fineco_fee("2024-01-17", "-2.95", "IE00B4L5Y983", "ISHARES MSCI WORLD ACC"),
+            _fineco_tx("BUY", "2024-01-17", "10", ("EUR", "-330.50"), "IE00BKM4GZ66", "Compravendita titoli: ISHARES CORE MSCI EM IMI"),
+            _fineco_fee("2024-01-17", "-2.95", "IE00BKM4GZ66", "ISHARES CORE MSCI EM IMI"),
+        ], "without a readable operation date, the value date is the row's date"
+        notes = _fineco_notices(out, FINECO_NOT_YET_SETTLED)
+        assert [sorted(line for evidence in note.evidence for line in evidence.row_numbers) for note in notes] == [[9]], "the value date still decides whether the row is settled"
+        assert [(notice.severity, notice.code) for notice in out.warnings if notice.severity == "warning"] == []
+
+    def test_guard_fineco_a_row_without_a_readable_date_is_skipped(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Guard (D), green today and after. If neither ``Operazione`` nor ``Data valuta`` can be read, the row is skipped
+        with today's «invalid date» warning: a plain-string warning, so its code is ``legacy``, and its words are not pinned.
+        It gives no transaction and no N74 note. The row after it imports; it is traded and valued on the same day, so its
+        date is the same before and after B-52."""
+        _pin_fineco_today(monkeypatch)
+        rows = [
+            _fineco_row("", "n.d.", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "105.71", "", "528.55", "2.95"),
+            _fineco_row("19/06/2024", "19/06/2024", "Aumento capitale", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", " ", "3", "EUR", "", "", ""),
+        ]
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
+
+        assert _fineco_transactions(out) == [_fineco_tx("ADJUSTMENT", "2024-06-19", "3", None, "IE00B4L5Y983", "Aumento capitale: ISHARES MSCI WORLD ACC")]
+        assert [(notice.severity, notice.code) for notice in out.warnings] == [("warning", "legacy")], "one warning, the skipped row's; no N74 note"
+
+    def test_fineco_plugin_version_is_1_3_0(self):
+        """Red today: 1.2.0 (N74 and W-B83). Contract (D): recording on the operation date changes what the plugin
+        outputs, so its version becomes 1.3.0."""
+        assert FinecoBrokerProvider().plugin_version == "1.3.0"
 
 
 # =============================================================================

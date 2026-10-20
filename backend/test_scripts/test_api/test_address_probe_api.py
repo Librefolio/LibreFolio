@@ -17,14 +17,17 @@ issued it answers ``match``. The nonce is signed with a key derived from the ins
 3. H-19, in process: when the instance key cannot be used, ``POST /users/address-probe`` answers 503 and issues
    nothing. ``derive_key`` raises ``InstanceKeyError`` then: at runtime, once a generated ``secrets/instance.key`` goes
    bad or loses its permissions (a configured key that cannot be used already stops the start). The body is exactly
-   ``{"detail": {"error_code": "INSTANCE_KEY_UNAVAILABLE", "message": <the message below>}}``, with the message «The
-   instance key cannot be used: see the configuration checks» — no nonce and no ``expires_at`` anywhere —, and the
-   module logger of ``users.py`` writes one warning, «Address probe: the instance key cannot be used, no nonce issued»,
-   with the administrator's ``admin_id``, neither the reason nor exception info. Red until H-19: the route let the
-   error out, a plain 500 with its traceback in the server log (in process, the error itself reaches the test). The
-   public check already tolerates that state: 200 ``{"match": false}`` with both headers, even for a nonce this
-   instance issued. Both cases replace the probe module's ``derive_key`` with ``monkeypatch`` for the test only: no key
-   file is touched, and the lane's server is not asked meanwhile.
+   ``{"detail": {"error_code": "INSTANCE_KEY_UNAVAILABLE", "message": <the message below>}, "request_id": <the answer's
+   X-Request-Id>}`` (H-60: a 5xx carries its request's id; the route raises ``from None``, so no ``error_type``), with
+   the message «The instance key cannot be used: see the configuration checks» — no nonce and no ``expires_at``
+   anywhere —, and the module logger of ``users.py`` writes one warning, «Address probe: the instance key cannot be
+   used, no nonce issued», with the administrator's ``admin_id``, neither the reason nor exception info. The
+   server-error handler writes no line of its own (H-60): that warning, written inside the ``except``, already reported
+   the failure. Red until H-19: the route let the error out, a plain 500 with its traceback in the server log (in
+   process, the error itself reaches the test); red until H-60: no ``X-Request-Id`` on the answer, no ``request_id`` in
+   its body. The public check already tolerates that state: 200 ``{"match": false}`` with both headers, even for a
+   nonce this instance issued. Both cases replace the probe module's ``derive_key`` with ``monkeypatch`` for the test
+   only: no key file is touched, and the lane's server is not asked meanwhile.
 
 The cross-origin promise is checked where it can break: on the lane's server, which runs the whole middleware stack of
 ``main.py``, its global ``CORSMiddleware`` included (``allow_credentials=True``, no allowed origin). A GET carrying
@@ -59,6 +62,7 @@ in this process do not find ``backend.app.services.accounts.address_probe`` (``M
 import base64
 import contextlib
 import importlib
+import logging
 import re
 import time
 from collections.abc import Callable, Iterator
@@ -530,6 +534,23 @@ LOG_CANARY = "AP-API-12 canary: the module logger of users.py reaches the captur
 #: The reason the stand-in of derive_key gives, worded as H's errors word an unreadable key file. The answer and the
 #: warning are pinned exactly, so neither can carry it.
 UNUSABLE_KEY_REASON = "/srv/librefolio-ap-api-12/secrets/instance.key: the instance key cannot be reached (Permission denied), raised by this test"
+#: H-60: the request id every answer of the app carries in X-Request-Id, secrets.token_hex(8); and the lines of the
+#: server-error handler and of the unhandled-error fallback, none of which a failure the route already logged gets.
+REQUEST_ID_SHAPE = re.compile(r"[0-9a-f]{16}")
+SERVER_ERROR_LINES = ("Request failed", "Request answered a server error", "Unhandled error")
+
+
+@contextlib.contextmanager
+def _writes_warnings(logger_name: str) -> Iterator[None]:
+    """For the block, the stdlib logger ``logger_name`` writes warnings, whatever the lane's LOG_LEVEL: H-60's logging
+    wrapper marks the failure a warning reports only when its logger writes warnings. Its level restored after."""
+    stdlib_logger = logging.getLogger(logger_name)
+    before = stdlib_logger.level
+    stdlib_logger.setLevel(min(stdlib_logger.getEffectiveLevel(), logging.WARNING))
+    try:
+        yield
+    finally:
+        stdlib_logger.setLevel(before)
 
 
 def _make_the_instance_key_unusable(monkeypatch: pytest.MonkeyPatch) -> list[str]:
@@ -558,10 +579,13 @@ async def _admin_in_process(app: FastAPI) -> tuple[dict[str, str], int]:
 
 @pytest.mark.asyncio
 async def test_issue_answers_503_when_the_instance_key_cannot_be_used(app, monkeypatch):
-    """AP-API-12 (H-19), in process: ``derive_key`` raising ``InstanceKeyError``, the administrator's route answers 503
-    with the body exactly ``{"detail": UNAVAILABLE_DETAIL}`` — no nonce, no expires_at — and the module logger of
-    users.py writes exactly one warning, «Address probe: the instance key cannot be used, no nonce issued», with the
-    administrator's ``admin_id`` and nothing else: no reason, no exception info. Nothing at error level.
+    """AP-API-12 (H-19, H-60), in process: ``derive_key`` raising ``InstanceKeyError``, the administrator's route answers
+    503 with the body exactly ``{"detail": UNAVAILABLE_DETAIL, "request_id": <the answer's X-Request-Id>}`` — no nonce,
+    no expires_at, and no ``error_type``: the route raises ``from None``, so no cause is visible (H-60) — and the module
+    logger of users.py writes exactly one warning, «Address probe: the instance key cannot be used, no nonce issued»,
+    with the administrator's ``admin_id`` and nothing else: no reason, no exception info. Nothing at error level, and no
+    line of the server-error handler (H-60): the warning, written inside the ``except``, already reported the failure —
+    the users.py logger writes warnings for the request, whatever the lane's LOG_LEVEL, as that report needs.
 
     The traceback in a server log is uvicorn's, written when an exception leaves the app. In process, ``_in_process``
     (httpx's default ``raise_app_exceptions``) raises that exception in the test instead: red until H-19, turned into
@@ -572,7 +596,7 @@ async def test_issue_answers_503_when_the_instance_key_cannot_be_used(app, monke
     with _instance_key(monkeypatch, KEY_A):
         _issued(await _in_process(app, "POST", ISSUE_PATH, headers=admin), "in process, Barrier: the same call with the instance key usable")
         asked = _make_the_instance_key_unusable(monkeypatch)
-        with capture_logs(processors=[structlog.stdlib.add_logger_name]) as events:
+        with capture_logs(processors=[structlog.stdlib.add_logger_name]) as events, _writes_warnings(users_api.__name__):
             users_api.logger.info(LOG_CANARY)
             try:
                 response = await _in_process(app, "POST", ISSUE_PATH, headers=admin)
@@ -580,14 +604,19 @@ async def test_issue_answers_503_when_the_instance_key_cannot_be_used(app, monke
                 pytest.fail(f"POST {ISSUE_PATH}, the instance key unusable: {type(escaped).__name__} left the app ({escaped}) — a client gets a plain 500 and the server logs its traceback; expected 503 with detail {UNAVAILABLE_DETAIL!r}")
     assert any(event.get("event") == LOG_CANARY for event in events), f"barrier: the module logger of users.py does not reach capture_logs, so what this test reads of the log proves nothing: {events!r}"
     assert asked, "Precondition: the route asked the probe's derive_key for its key, so the answer comes from a key that cannot be used"
+    request_id = response.headers.get("x-request-id")
+    assert isinstance(request_id, str) and REQUEST_ID_SHAPE.fullmatch(request_id), f"H-60: every answer of the app carries its request id in X-Request-Id, 16 lowercase hex characters: {request_id!r}"
     status, body = _answer(response)
-    assert (status, body) == (503, {"detail": UNAVAILABLE_DETAIL}), f"POST {ISSUE_PATH} as an administrator, the instance key unusable: expected 503 with the body exactly {{'detail': {UNAVAILABLE_DETAIL!r}}} — no nonce, no expires_at —, got {status} {body!r}"
+    expected_body = {"detail": UNAVAILABLE_DETAIL, "request_id": request_id}
+    assert (status, body) == (503, expected_body), f"POST {ISSUE_PATH} as an administrator, the instance key unusable: expected 503 with the body exactly {expected_body!r} — no nonce, no expires_at, no error_type (raised from None) —, got {status} {body!r}"
     expected = {"event": UNAVAILABLE_WARNING, "admin_id": admin_id, "logger": users_api.__name__, "log_level": "warning"}
     logged = [event for event in events if event.get("event") == UNAVAILABLE_WARNING]
     assert logged == [expected], f"exactly one warning {expected!r}: the administrator's id, neither the reason nor exception info; logged: {logged!r}"
     loud = [event for event in events if event.get("log_level") in ("error", "critical") or event.get("exc_info") or event.get("stack_info")]
     assert loud == [], f"nothing at error level, no exception info, no stack while the route answers: {loud!r}"
-    print_success(f"503 {UNAVAILABLE_DETAIL['error_code']}, one warning with admin_id {admin_id}")
+    handler_lines = [event for event in events if event.get("event") in SERVER_ERROR_LINES]
+    assert handler_lines == [], f"H-60: the route's warning already reported the failure, so the server-error handler writes no line of its own: {handler_lines!r}"
+    print_success(f"503 {UNAVAILABLE_DETAIL['error_code']} with its request_id, one warning with admin_id {admin_id}, no line of the handler")
 
 
 @pytest.mark.asyncio

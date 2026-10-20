@@ -60,7 +60,7 @@ Its order is contractual:
 
 | # | Stage call | Purpose |
 |---|------------|---------|
-| 1 | `parse_inputs()`, then `check_decimal_limits()` and `check_dates()` | Parse create, update, split, and promote rows independently; then refuse a quantity, cash amount, manual cost basis or the cost basis a promote resolves over its column's limit (C-97, see [Decimal limits](#decimal-limits)), and a date outside 1900-01-01 … today + 1 year (N74, see [Transaction dates](#transaction-dates)) |
+| 1 | `parse_inputs()`, then `check_decimal_limits()` and `check_dates()` | Parse create, update, split, and promote rows independently; then refuse a quantity, cash amount, manual cost basis or the cost basis a promote resolves over its column's limit (C-97, see [Decimal limits](#decimal-limits)), and a date outside 1900-01-01 … tomorrow by the server's calendar (N74, see [Transaction dates](#transaction-dates)) |
 | 2 | `preload_and_authorize()` | Load referenced rows, collect touched brokers, and require `EDITOR` access |
 | 3 | `apply_deletes()` | Stage valid deletions |
 | 4 | `apply_splits()` | Split linked pairs before any dependent update |
@@ -252,12 +252,13 @@ whose `Currency.model_validate()` raised out of the batch: a 500.
 
 ### 📅 Transaction dates {: #transaction-dates }
 
-`check_dates()` (`transaction_batch_stages.py`; night decision N74 of R13-SEC7-3, pending
-the developer's review) runs right after `check_decimal_limits()`. A transaction's date
-must lie between 1900-01-01 (`EARLIEST_RANGE_START`, `utils/datetime_utils.py`: the floor every
-replay and history walk starts from too) and today one year on:
-`transaction_date_bounds()` takes today from `today_date()`, in UTC, and maps a
-29 February to 28 February. The stage reads:
+`check_dates()` (`transaction_batch_stages.py`; decision N74 of R13-SEC7-3) runs right
+after `check_decimal_limits()`. A transaction's date must lie between 1900-01-01
+(`EARLIEST_RANGE_START`, `utils/datetime_utils.py`: the floor every replay and history walk
+starts from too) and tomorrow by the server's calendar (`latest_range_end()`, same module:
+`server_today()`, the server's local date, plus one day). `transaction_date_bounds()`
+returns that pair. The last day is also the last one a price or a rate written by hand may
+carry (N83). The stage reads:
 
 - the `date` of every parsed create;
 - the `date` of an update that sets one: an update that leaves an older row's date alone
@@ -269,8 +270,9 @@ replay and history walk starts from too) and today one year on:
 Out of the range, the row gets one issue: code `dateOutOfRange`
 (`TXValidationCode.DATE_OUT_OF_RANGE`, listed by `GET /transactions/types` →
 `validation_codes`), `field` `date`, `params` `{"min", "max"}` as ISO dates, and the
-English `error` *Date: between 1900-01-01 and 2027-10-17*. A promote's issue has
-`operation` `promote` and the promote's index; an update's has the row's id as `ref_id`.
+English `error` *Date: between 1900-01-01 and 2026-10-20* on a server whose today is
+19 October 2026. A promote's issue has `operation` `promote` and the promote's index; an
+update's has the row's id as `ref_id`.
 `check_dates()` then returns `True`, and `execute_batch()` stops right after
 `preload_and_authorize()`, as for the integer digits: the batch's usual 200, with
 `committed=False`, the issues collected so far and no results. It stops because the stages
@@ -278,11 +280,16 @@ after it replay a broker's days and look rates up at a row's date. A broker impo
 confirms through this batch, so its rows are checked here too, when the bulk workspace
 validates or saves them (as for the decimal limits, decision D2).
 
-The bound is one year ahead because the interface never offers a future date
-(`SingleDatePicker`, whose `allowFuture` is false by default), while a broker's report can
-put a row ahead of today: time zones, settlement dates. The frontend reads the code as
+The bound is tomorrow, not today, as slack for a user east of the server, whose today can
+already be the server's tomorrow. No legitimate date goes further: the interface never
+offers a future date (`SingleDatePicker`, whose `allowFuture` is false by default), and a
+broker import keeps only settled rows (the rule *The operation date, and only settled rows* of
+the [plugin guide](../../architecture/patterns/brim_plugin_guide.md#import-philosophy-currency-rules)),
+so a later date is a typing error. Lot N74 set the bound there; before, it was a year
+after today, for the settlement dates a broker's report puts ahead: under that rule, a
+plugin now leaves such a row out until it has settled. The frontend reads the code as
 `transactions.errors.dateOutOfRange`, *Between {min} and {max}*, behind the field label
-(`FIELD_PREFIXED_CODES`): *Date: Between 1900-01-01 and 2027-10-17*.
+(`FIELD_PREFIXED_CODES`): *Date: Between 1900-01-01 and 2026-10-20*.
 
 ---
 

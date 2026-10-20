@@ -17,8 +17,17 @@
  * an answer without a code), and `failure` what failed. The end of a job is announced (`onDone`, or `onFailed` with
  * `job`) once, and only for a job this controller started or saw running: an archive picked up already finished, or
  * read again, is not news.
+ *
+ * A start refused because another backup runs never names that backup on the card (developer, 19/10): the card says
+ * only that one runs, or follows it when the Backup tab started it (B-8). The browser console names it — its id, its
+ * origin and its state — with one `console.warn`, whatever the log level, for whoever has to find it.
+ *
+ * Only a clear start follows such a backup, and offers it only if it ends clear (defect of the review, 19/10). A job
+ * records no user: a secure start cannot know whether that backup carries its password, so it says «busy»; and a backup
+ * followed for a clear start that ends secure is someone else's, sealed with a password this tab never had — «busy»
+ * too. The adoption is kept across a reload (`BACKUP_ADOPTED_STORAGE_KEY`), so `resume()` applies the same check.
  */
-import {backupErrorCode, backupFailureCode, deleteInstanceBackupJob, getInstanceBackupJob, startInstanceBackup, type InstanceBackupJob} from './backupApi';
+import {backupBusyJob, backupErrorCode, backupFailureCode, deleteInstanceBackupJob, getInstanceBackupJob, startInstanceBackup, type InstanceBackupJob} from './backupApi';
 
 export type BackupJobState = 'idle' | 'loading' | 'starting' | 'running' | 'done' | 'deleting' | 'failed';
 
@@ -49,6 +58,8 @@ export interface BackupJobOptions {
 }
 
 export const BACKUP_JOB_STORAGE_KEY = 'librefolio.backup.job';
+/** The job followed from a 409 for a clear start (B-8), kept across reloads: offered only if it ends clear. */
+export const BACKUP_ADOPTED_STORAGE_KEY = 'librefolio.backup.adopted';
 
 const JOB_ID = /^[0-9a-f]{32}$/;
 const MAX_BACKOFF_STEPS = 5;
@@ -96,6 +107,8 @@ export class BackupJobController {
     #failures = 0;
     // The job whose end is news here: started by this controller, or seen running by it.
     #watched: string | null = null;
+    // The job followed from a 409 for a clear start (B-8): offered only if it ends clear (defect of the review, 19/10).
+    #adopted: string | null = null;
     // Every action starts a new generation: an answer that arrives for an older one is dropped.
     #generation = 0;
     #disposed = false;
@@ -108,6 +121,7 @@ export class BackupJobController {
         this.#onDone = options.onDone;
         this.#onFailed = options.onFailed;
         this.followedJobId = this.#remembered();
+        this.#adopted = this.#rememberedAdoption(this.followedJobId);
     }
 
     /** Pick up the job this tab followed last, while the server still has it; silent when it is gone. */
@@ -133,10 +147,31 @@ export class BackupJobController {
         try {
             const job = await (password === undefined ? this.#api.start() : this.#api.start(password));
             if (this.#stale(generation)) return;
+            this.#unadopt();
             this.#watched = job.job_id;
             this.#settle(job, generation, true);
         } catch (error) {
             if (this.#stale(generation)) return;
+            // B-8: refused because a backup started from the Backup tab runs — this one, whose answer was lost, or one of
+            // another tab: followed as if started here. One started from the command line or the hosting panel is not:
+            // its archive goes elsewhere, or is the panel's. With an archive on offer, the offer stays (developer, 19/10).
+            const running = backupBusyJob(error);
+            // The card never names it; the console does, once per refusal, followed or not (developer, 19/10). The server
+            // names a job only while its state says it runs.
+            if (running !== null) console.warn('LibreFolio backup: another backup is running', {job_id: running.jobId, origin: running.origin, status: 'running'});
+            // Only a clear start follows it (defect of the review, 19/10): a secure one cannot know whether that backup
+            // carries its password — a job records no user — so it says «busy», as for the other origins.
+            if (running !== null && running.origin === 'ui' && offered === null && password === undefined) {
+                this.#watched = running.jobId;
+                // The job this tab already follows by itself (started here, its polling given up, say) is its own: followed
+                // as such, never adopted, so its end is offered whatever its mode (coordinator, 19/10).
+                if (running.jobId !== this.followedJobId || running.jobId === this.#adopted) this.#adopt(running.jobId);
+                // Remembered before its first read (developer, 19/10): when that read fails, «Check again» reads it.
+                this.#remember(running.jobId);
+                this.state = 'loading';
+                await this.#read(running.jobId, generation, true);
+                return;
+            }
             const code = backupFailureCode(error);
             if (offered === null) {
                 this.#fail(code, 'start', null, true);
@@ -253,6 +288,13 @@ export class BackupJobController {
         const news = announce && this.#watched === job.job_id;
         this.#watched = null;
         if (job.status === 'done') {
+            if (job.job_id === this.#adopted && job.encrypted) {
+                // Followed for a clear start, it ended secure: someone else's backup, sealed with a password this tab never
+                // had. Not this request's result: «busy», as for the other origins, and forgotten (defect of the review).
+                this.#forget();
+                this.#fail('backup_busy', 'start', null, news);
+                return;
+            }
             this.state = 'done';
             this.#setError(null, null);
             this.#remember(job.job_id);
@@ -314,6 +356,40 @@ export class BackupJobController {
         this.followedJobId = null;
         try {
             this.#storage?.removeItem(BACKUP_JOB_STORAGE_KEY);
+        } catch {
+            // Same as above.
+        }
+        this.#unadopt();
+    }
+
+    /** The adoption a previous page kept, when it names the job followed; any other is dropped. */
+    #rememberedAdoption(followed: string | null): string | null {
+        try {
+            const adopted = this.#storage?.getItem(BACKUP_ADOPTED_STORAGE_KEY) ?? null;
+            if (adopted === null) return null;
+            if (adopted === followed) return adopted;
+            this.#storage?.removeItem(BACKUP_ADOPTED_STORAGE_KEY);
+        } catch {
+            // Same as above.
+        }
+        return null;
+    }
+
+    #adopt(jobId: string): void {
+        this.#adopted = jobId;
+        try {
+            this.#storage?.setItem(BACKUP_ADOPTED_STORAGE_KEY, jobId);
+        } catch {
+            // Same as above.
+        }
+    }
+
+    // Storage is touched only when there is an adoption to drop: the other paths make no extra call.
+    #unadopt(): void {
+        if (this.#adopted === null) return;
+        this.#adopted = null;
+        try {
+            this.#storage?.removeItem(BACKUP_ADOPTED_STORAGE_KEY);
         } catch {
             // Same as above.
         }

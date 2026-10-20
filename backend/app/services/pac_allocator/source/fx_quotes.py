@@ -1,4 +1,5 @@
-"""Saved FX quotes for the planner source: the latest stored rate of every pair the copied facts need."""
+"""Saved FX quotes for the planner source: the latest valid stored rate of every pair the copied facts need; a later
+rate the planner cannot use (0, not finite) is skipped with a warning (X-R45b)."""
 
 from __future__ import annotations
 
@@ -8,12 +9,22 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import FxRate
-from backend.app.db.precision import usable_fx_rate_clause
 from backend.app.schemas.portfolio import (
     PortfolioPlannerSourceFxQuote,
     PortfolioPlannerSourceIssue,
 )
-from backend.app.services.pac_allocator.source.keys import FX_PROVENANCE_ID, field_issue, fx_key, normalized_fx_pair, text_param
+from backend.app.services.pac_allocator.source.keys import FX_PROVENANCE_ID, date_param, field_issue, fx_key, normalized_fx_pair, text_param, usable_rate
+
+
+async def _previous_usable_row(session: AsyncSession, base: str, quote: str, before: date_type) -> FxRate | None:
+    """The most recent saved row of the pair dated before ``before`` with a usable rate, or None (X-R45b). One query per
+    row looked at: an unusable row is rare, so the first row before is almost always the answer."""
+    cursor = before
+    while True:
+        row = (await session.execute(select(FxRate).where(FxRate.base == base, FxRate.quote == quote, FxRate.date < cursor).order_by(FxRate.date.desc()).limit(1))).scalar_one_or_none()
+        if row is None or usable_rate(row.rate):
+            return row
+        cursor = row.date
 
 
 async def _load_latest_planner_fx_rows(
@@ -33,9 +44,7 @@ async def _load_latest_planner_fx_rows(
             FxRate.quote.label("quote"),
             func.max(FxRate.date).label("latest_date"),
         )
-        # X-R45: the latest *usable* row per pair, so a rate an older version stored as 0 or inf never wins over an
-        # earlier real one
-        .where(pair_filter, FxRate.date <= as_of, usable_fx_rate_clause())
+        .where(pair_filter, FxRate.date <= as_of)
         .group_by(FxRate.base, FxRate.quote)
         .subquery()
     )
@@ -99,9 +108,27 @@ async def build_planner_fx_quotes(
             )
             continue
 
-        fx_id = fx_key(pair, saved_row.date, saved_row.source)
-        rate = saved_row.rate if saved_row.rate > 0 else None
-        if rate is None:
+        # X-R45b: a latest rate the planner cannot use (0 or not finite, which an older version could store) is skipped
+        # for the previous valid one, and a warning says so; without one, the quote has no rate (saved_fx_invalid)
+        used_row = saved_row
+        if not usable_rate(saved_row.rate):
+            used_row = await _previous_usable_row(session, saved_row.base, saved_row.quote, saved_row.date) or saved_row
+        fx_id = fx_key(pair, used_row.date, used_row.source)
+        rate = used_row.rate if usable_rate(used_row.rate) else None
+        if used_row is not saved_row:
+            issues.append(
+                field_issue(
+                    code="allocation.saved_fx_skipped",
+                    kind="invalid",
+                    severity="warning",
+                    section="fx_quotes",
+                    entity_kind="fx_quote",
+                    entity_id=fx_id,
+                    field="rate",
+                    params=[text_param("pair", pair), date_param("skipped_date", saved_row.date), date_param("used_date", used_row.date)],
+                )
+            )
+        elif rate is None:
             issues.append(
                 field_issue(
                     code="allocation.saved_fx_invalid",
@@ -119,9 +146,9 @@ async def build_planner_fx_quotes(
                 fx_quote_id=fx_id,
                 pair=pair,
                 rate=rate,
-                reference_date=saved_row.date,
-                source=saved_row.source,
-                days_before_requested=(as_of - saved_row.date).days,
+                reference_date=used_row.date,
+                source=used_row.source,
+                days_before_requested=(as_of - used_row.date).days,
                 provenance_id=FX_PROVENANCE_ID,
             )
         )

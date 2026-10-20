@@ -1,12 +1,17 @@
 # Piano — fase 01, 09: Y · Cruscotto e grafici (1.3.0)
 
-> **Stato**: 🧊 **Y1 consegnato FROZEN** (2026-10-15, 14:40), in attesa del commit del coordinatore; il cancello
-> d'ingresso è la galleria filtrata, dopo il commit. Y2 in preparazione in sola lettura, fino alla conferma
-> dell'annuncio. Autorizzati solo **Y1** e **Y2** (§0.2).
+> **Stato al 19/10 sera** (HEAD `15603fe69`): tutti i lotti di Y sono entrati in `dev_release2` tranne **Y4a** (fermo:
+> il coordinatore ha portato al developer «non nella 1.3, oppure una finestra notturna», 16/10 20:21) e **Y13**
+> (parcheggiato fino alla risposta del developer a Y13-1). L'ultimo ingresso è Y-N65 (merge `5cb47395f`, CHANGELOG
+> `b1e7a2dd5`, 19/10). Lotto per lotto, con i commit: §4, «Stato dei lotti». La ripresa dopo la pausa generale del
+> 19/10 sera (la corsia da ripopolare, le note in coda) è nella sezione «19/10 sera · Pausa generale»; il prossimo
+> lavoro, Z-29d, nella sezione «20/10 · Z-29d», in fondo. Dal 19/10 valgono le
+> regole nuove del coordinatore: nessuna decisione di prodotto da Y (ogni scelta diventa una domanda, con le opzioni e
+> un consiglio), si implementa solo col suo via esplicito, carichi pesanti solo in uno slot.
 >
 > - **Workstream Y** · worktree `LibreFolio-worktrees/e-alfy-redesigned-spork` · ramo `e-alfy-y-cruscotto-e-grafici`
 >   (rinominato dall'app all'avvio; prima `e-alfy-redesigned-spork`).
-> - **Base**: `1e9e567f79488cfb5630f3c05e1bd2727bf856d7` (avanzamento veloce del coordinatore dal `23f6578f3`
+> - **Base di partenza**: `1e9e567f79488cfb5630f3c05e1bd2727bf856d7` (avanzamento veloce del coordinatore dal `23f6578f3`
 >   dell'analisi: Designer Lab, chiusura di R, la 1.2.1 di sicurezza; nessun file del perimetro di Y).
 > - **Corsia**: `--test-port 6189 --data-dir /tmp/librefolio-r13-y`, con
 >   `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test …`; un comando alla volta; mai 6040 né
@@ -159,6 +164,9 @@ E2E del Lab legge il token della sua intestazione.
 | FE9, FE10, FE11 | ✗ | — | Y13, per ultimi |
 | Y-4 (G-12, dal coordinatore, 15/10) | ✗ | `charts/SignalTreeSelect.test.ts:16-17` e `:306-310`: i commenti descrivono `selectIndicatorFromTree` della galleria che espande la famiglia con un clic e clicca l'opzione; da G-9 (`1470bd693`) la galleria sceglie l'indicatore da tastiera. Solo testo | Y4 (FE2), passando dal file |
 
+Questa tabella è lo stato **all'analisi** del 15/10. Lo stato di oggi di ogni lotto, con il commit d'ingresso: §4, «Stato
+dei lotti».
+
 ## 3. Confini (D-Y5)
 
 **Nessun barile nuovo**: fra feature si importa dal file che definisce (D-P4 del 43 rinviato a FE9).
@@ -188,7 +196,7 @@ E2E del Lab legge il token della sua intestazione.
 
 Ognuno si chiude con un handoff `FROZEN`; commit e merge li fa il coordinatore.
 
-### Y1 — `GrowthChart` tagliato sul posto (FE6a) [autorizzato; via del 15/10]
+### Y1 — `GrowthChart` tagliato sul posto (FE6a) [autorizzato, via del 15/10; entrato in `dev_release2` il 15/10, `badec1465`]
 
 Forma (D-Y3): il componente tiene props, stato, `$derived`, effetti, ciclo di vita di ECharts (render, aggiornamento
 parziale, opzione completa, zoom, scala delle candele) e template. Escono, in moduli puri accanto:
@@ -222,7 +230,7 @@ Passi:
 Fatto quando: oracoli invariati e verdi; `--check` pulito con la riga `~split`; galleria identica salvo il rumore noto;
 handoff `FROZEN` con il messaggio di commit proposto.
 
-### Y2 — `DataTable` tagliata sul posto [autorizzato; forma approvata e taglio annunciato il 15/10; fatto, checkpoint FROZEN alle 16:45, galleria d'ingresso dopo il commit]
+### Y2 — `DataTable` tagliata sul posto [autorizzato; forma approvata e taglio annunciato il 15/10; entrato in `dev_release2` il 15/10, `c747a74c3`]
 
 **Stato verificato a `cf8101f29`** (il file non è cambiato dalla base `1e9e567f7`):
 - `components/table/DataTable.svelte`, 2 431 righe: script 13–960, template 961–1559, `<style>` 1560–2431. Lo stile
@@ -414,7 +422,7 @@ Passi:
 5. Documentazione, se cambia un contratto: l'asse sotto zoom in `charts.md`; tabelle della devWiki.
 6. Checkpoint FROZEN.
 
-### Y7 — tabelle sul telefono e ridimensionamento [via del coordinatore e dei colori, 15/10 20:52–21:22; in corso]
+### Y7 — tabelle sul telefono e ridimensionamento [via del coordinatore e dei colori, 15/10 20:52–21:22; entrato in `dev_release2` il 16/10, `a613a217c`]
 
 Base: `f98c20f1b` (`dev_release2` dopo l'ingresso di Y8). Decisioni D-Y17 e D-Y18 in §0.3. Verificato sul codice dopo
 il taglio di Y2.
@@ -449,11 +457,39 @@ Passi:
 6. Checkpoint FROZEN, con il filtro regex della galleria mobile d'ingresso, che si fa nello slot dei colori dopo G-13
    ed è confrontata con il riferimento di G-13.
 
-### Y3–Y13 — da avviare nell'ordine del §0.2
+### Stato dei lotti (19/10, base `ede7adf75`)
 
-Y3 FE6b; Y4 FE2a e FE2b; Y5 FE7 (dopo FE8a); Y6 FE3 (dopo FE8a); Y7 C-38 e C-62; Y9 K-15, C-34, C-15, K-13; Y10 54-1;
-Y11 C-85; Y12 U8 a/b; Y13 FE9–FE11. I dettagli sono nell'analisi del 15/10 (cartella di sessione) e nel §2; si
-scrivono qui quando partono.
+Ogni ingresso è il merge in `dev_release2` (numero del treno nel registro del [README della fase](../README.md)), verificato
+antenato della base il 19/10. I titoli ⏳ del §7 sono il registro del momento: lo stato di oggi è questa tabella.
+
+| Lotto | Contenuto | Stato | Ingresso (treno) | Dettagli |
+|---|---|---|---|---|
+| Y1 | taglio di `GrowthChart` (FE6a), B10 | ✅ 15/10 | `badec1465` (36) | §4 «Y1», §7 |
+| Y2 | taglio di `DataTable`, `~split` dichiarato | ✅ 15/10 | `c747a74c3` (45) | §4 «Y2», §7 |
+| Y8 | I-01, I-03 (Y-1), 47-1, O-16, 48-1 | ✅ 15/10 | `160562b56` (57) | §4 «Y8», §7 |
+| Y7 | C-38 e difetti 2 e 5 del PAC (D-Y17), C-62 (D-Y18) | ✅ 16/10 | `a613a217c` (76) | §4 «Y7», §7 |
+| Y4b | FE2b, il rischio in `lib/features/risk/` | ✅ 16/10 | `08efa5ac3` (81) | §7 «Y4b» |
+| Y3 | FE6b, la dashboard in `lib/features/dashboard/` | ✅ 16/10 | `4447814ed` (104) | §7 «Y3» |
+| Y9 | K-15, C-34 (con la guardia), C-15, K-13 | ✅ 16/10 | `4447814ed` (104) | §7 «Y9», «C-34» |
+| Y10 | 54-1, Y-6, decisione 49 | ✅ 16/10 | `4447814ed` (104) | §7 «Y10» |
+| Y5 | FE7, broker e lotti in `lib/features/brokers/` | ✅ 16/10 | `4447814ed` (104) | §7 «Y5» |
+| Y6 | FE3, i file in `lib/features/files/` | ✅ 16/10 | `4447814ed` (104) | §7 «Y6» |
+| Y12a | U8 senza campi nuovi: W7, le dichiarazioni, `LotCustodyModal` | ✅ 16/10 | `0c79932a7` (130) | «Y12a» |
+| Y11 | C-85, `pageBusy` (decisione 48, N55): passi 1–4b, poi il lotto `assets` | ✅ 16–17/10 | `0c79932a7` (130), `d32d0f3d9` (191) | «Y11» |
+| Y12b | U8 con i campi di J e MF: P19; R17, W8, P4; V11 e P5 | ✅ 16–17/10 | `23f71e739` (140), `1565b6bbb` (202), `d4ecfb692` (255) | «Y12b», «R17 · W8 · P4» |
+| Y4a | FE2a, i segnali in `lib/features/signals/` | ⏸ fermo | — | «Y4a · analisi aggiornata»: per il developer, «non nella 1.3, oppure una finestra notturna» (16/10 20:21) |
+| Y13 | FE9–FE11 | ⏸ parcheggiato | — | «Y13»: fino alla risposta del developer a Y13-1 (dopo il tag?) |
+| Y-N65 | N65: nessun intervallo di un giorno in tutti i selettori; il righello; il cursore del grafico (N65-7) | ✅ 19/10 | `5cb47395f` (treno da annotare) | «19/10 · Y-N65», «Il lotto Y-N65» (passo 7) |
+| Z-29d-0 | `AssetComparisonSignal._basePoint`: la base in % del confronto dal punto iniettato (per Z-29b e Z-29d) | ⏳ checkpoint 20/10 | — | «20/10 · Z-29d», «Risposte del coordinatore (20/10 09:01) e il lotto Z-29d-0» |
+| Z-29d | il dialogo chiede la serie allineata del bersaglio | ⏸ aspetta Z-29a in dev e Z-29b sulla base | — | «20/10 · Z-29d» |
+| Y-38 | il selettore dell'asset di confronto fa scorrere il nome lungo | ⏳ checkpoint 20/10 | — | «20/10 · Y-38» |
+| Y-39 | la scheda e la sua anteprima: un grafico solo, una funzione dei segnali (proposta) | ⏳ analisi 20/10, domande F-1…F-3 | — | «20/10 · La scheda e l'anteprima» |
+
+Fuori dai lotti:
+- **Le voci Y-N** della mia sezione del backlog: ognuna ✅ porta il suo commit d'ingresso (rimesse in pari il 19/10). Aperte,
+  tutte in attesa del developer: Y-7 (dopo Y4a), Y-9, Y-10, Y-15, Y-18, Y-26, Y-32, Y-35; più Y-36 e Y-37 (19/10, minime).
+- **Lavori per altri, fatti da Y**: la metà del pannello di J-12 (`46b5fbc0e`, treno 280), X-R59 lotti A e B (`f317e3a9f`,
+  330), J-53 (`fb6d58d17`, 338), Y-30 (`ede7adf75`, 19/10, dopo il sì del developer a N89).
 
 ## 5. Test e specialisti
 
@@ -6453,3 +6489,1229 @@ diventa un aiuto puro di `lotWacPriceChartHelpers.ts`, una data un punto; il gra
      worktree).
 6. ✅ 17/10 — **CHECKPOINT READY** al coordinatore (~21:5x): riga 🐛, nota per la 🔄 di J-12, J revisore del backend;
    l'eccezione di S7 per J, la trappola della corsia, Y-35 (il `PRICE_HISTORY` senza lettori) nella mia sezione. FROZEN.
+7. ✅ 19/10 — **Ingresso**: dopo il sì del developer a N89 («la linea del prezzo deve continuare anche dopo l'ultima
+   vendita»), il coordinatore fa entrare Y-30 in `dev_release2` con il merge `ede7adf75` (conflitto solo sul log della
+   devWiki, risolto da lui tenendo le righe di tutte e due le parti).
+
+## 19/10 · Ripartenza: contabilità e analisi (Y-30 dopo l'ultima vendita, N65)
+
+Base `ede7adf75`, worktree pulito. Fonte: le risposte del developer al resoconto, file del coordinatore
+`risposte-resoconto-20261019.md`, §4 e §6. **Regole nuove del coordinatore, da ora**: nessuna decisione di prodotto da
+Y (ogni scelta che cambia ciò che l'utente vede, i numeri o i dati diventa una domanda, con le opzioni e un consiglio);
+si implementa solo col suo via esplicito; niente carichi pesanti senza uno slot. Questa sezione è in sola lettura: nessun
+codice, nessun test lanciato, nessun server.
+
+### Contabilità ✅ (19/10, 11:10–11:45)
+
+- **Piano**: la testata «Stato al 19/10»; i titoli di Y1, Y2 e Y7 nel §4 con il commit d'ingresso (Y7 diceva ancora «in
+  corso»); nel §4 la tabella «Stato dei lotti» al posto di «Y3–Y13 — da avviare»; nel §2 un rimando a quella tabella.
+- **Backlog, sezione Y** (26 sostituzioni in 24 voci, ognuna limitata alla sua voce, `files/scripts/y19_backlog_proofs.py`):
+  - Y-3 e Y-4 ✅: fatte il 17/10 da `test-author` (`034f0f13a`, `1130d2eff`), entrate con `73443c6db` (treno 237), ma
+    non marcate. Verificate nel codice di oggi: `I18N_CALL` con `\bt\(`; il titolo del caso a clic di
+    `SignalTreeSelect.test.ts` non nomina più l'aiuto della galleria;
+  - il commit d'ingresso su 22 voci ✅ che non lo citavano: 14 senza alcun commit (Y-1, Y-5, Y-8, Y-14, Y-16, Y-19,
+    Y-20, Y-24, Y-25, Y-27, Y-29, Y-30, Y-31, Y-33), 8 con solo quello di contenuto (Y-2, Y-6, Y-11, Y-12, Y-13, Y-21,
+    Y-22, Y-23);
+  - aperte, tutte in attesa del developer: Y-7 (dopo Y4a), Y-9, Y-10, Y-15, Y-18, Y-26, Y-32, Y-35.
+- **Prove**: i 48 commit citati nella sezione e quelli della tabella sono antenati della base
+  (`git merge-base --is-ancestor`). Gli ingressi vengono dal registro dei treni del [README della fase](../README.md)
+  (fino al treno 370) e da `git log` per Y-34 (`7dbd46aa6`) e Y-30 (`ede7adf75`), che il registro non ha ancora. Per un
+  commit di contenuto, il primo commit della linea di `dev_release2` che lo contiene (`files/scripts/y19_entry_merge.sh`).
+- `git diff --check` pulito; un solo `## MF ·` nel backlog.
+
+### Analisi 1 · Y-30: la linea del prezzo continua dopo l'ultima vendita ✅ confermato
+
+- **Il percorso.** `get_lots_analysis` costruisce i giorni da `computed_from` (la prima transazione dell'ambito, mai
+  prima del 1900) ad `actual_to`, cioè `date_to` o oggi, con il tetto `latest_range_end()` (domani del server).
+  `MARKET_PRICE_HISTORY` è un'analisi giornaliera (`daily_series`), quindi ogni giorno ha il suo segno in
+  `estimated_market_prices`. `build_market_price_history` (`financial_math/lots/histories.py`) mette un punto per ogni
+  giorno con un segno, qualunque lotto sia aperto, e `trim_dates` taglia a `[display_from, actual_to]`.
+- **Dopo l'ultima vendita** il risolutore dei prezzi porta avanti l'ultima osservazione: la quotazione (linea piena) o,
+  senza quotazioni, l'ultimo scambio (linea tratteggiata, `estimated`). Il sync pianificato (`run_history_sync`,
+  `platform/scheduler/jobs.py`) prende ogni asset attivo con un provider, posseduto o no. Quindi dopo una vendita
+  totale la linea segue le quotazioni vere; resta piatta sull'ultimo valore solo per un asset senza provider o
+  disattivato.
+- **La fine della finestra.** Il pannello non manda `date_range` (`LotsAnalysisPanel.loadMain`): la finestra va dalla
+  prima transazione a oggi (data del server), e l'asse del grafico segue `computed_date_to` (`xAxisRange`).
+- **Le prove**, verdi il 17/10:
+  - D1 (`test_portfolio_api.py::test_market_price_history_continues_after_the_last_sale`) è il caso esatto del developer:
+    BUY 10 il 10/1/2026, vendita di tutto il 15/1, nessun riacquisto, letto fino al 20/1. Ha un punto per ogni giorno
+    fino al 20/1: 100 fino al 14, 110 dal 15, stimati. 8/8;
+  - A1 (`test_lots_market_price_history.py`): ultima vendita il 13/3, punti fino al 16/3. 213/213.
+- **Codice invariato** da `6db475ac9`: dopo, nei file della linea, solo `81a927681` (il banner dei lotti) e `279764d88`
+  (una riga di enum in `schemas/portfolio.py`).
+- **Non coperto**: nessun test nel browser fissa il tratto dopo l'ultima vendita (J12-1 legge `data-price-line` con
+  `FAILED`). Un caso E2E piccolo è possibile, se il developer lo vuole.
+
+### Analisi 2 · N65: il righello con lo stesso giorno in «Da» e «A»
+
+**La causa vera** non è nel `DateRangePicker`: è il righello, che rifiuta in silenzio.
+1. Il selettore della scheda della misura riceve le date a senso unico (`MeasurePanel.svelte:560`: `start={…} end={…}`,
+   nessun `bind:`) e avvisa con `onchange`.
+2. Il selettore scrive le sue date **prima** di avvisare. `start` ed `end` sono `$bindable` (`DateRangePicker.svelte:108-109`);
+   il clic del calendario (`handleDayClick`, `:463-480`) e i campi scritti (`flushTypedRange`, `:965-976`) le assegnano e
+   poi chiamano `onchange`. Se il genitore non le lega, quel valore resta locale finché il genitore non ne passa uno
+   diverso.
+3. Il righello rifiuta lo stesso giorno: `updateMeasureDates` (`MeasurePanel.svelte:228-233`) esce con
+   `if (s === e) return; // measure needs 2 different days`, prima di toccare la misura e senza riassegnare `measures`.
+4. Quindi la misura resta sulle date vecchie (i numeri della scheda, la riga riassuntiva, la sovrapposizione sul
+   grafico), e al selettore non arriva nessuna data nuova: resta sul giorno scelto. Due componenti in disaccordo, e niente
+   dice all'utente che la scelta è stata rifiutata. È «il componente mostra il dato giusto, il resto resta sul vecchio».
+
+**Due fatti che pesano sulla scelta:**
+- La misura **sa già** misurare un giorno solo. `MeasureSignal.getMeasurement` dà Δ 0, Δ% 0 % (o «—» se il valore è 0,
+  N65), 0 giorni, Δ%/anno «—» (sotto i 30 giorni, N65); `computePoints` dà un punto solo. È fissato da test:
+  `measureSignal.test.ts:105` e `:173`, il rosso T-D9 che vuole «—» per l'annualizzato di un giorno.
+- Il grafico **crea già** misure di un giorno. `addPoint` (`MeasurePanel.svelte:154-184`) non controlla lo stesso giorno:
+  un secondo clic sullo stesso punto, dopo 300 ms, ne crea una. Invece l'anteprima le rifiuta (`updatePendingEnd`, `:140`,
+  test `MeasurePanel.test.ts:246`), e così «misura tutto il grafico» (`:195`). Le due entrate oggi non sono d'accordo
+  (dalla lettura del codice; non provato nel browser).
+
+**Opzioni** (nessuna decisa):
+- **(a) Il righello accetta lo stesso giorno.** Tocca solo `MeasurePanel.svelte`: si toglie il rifiuto di
+  `updateMeasureDates` (l'anteprima può restare com'è).
+  - L'utente vede una misura di un giorno: Δ 0, Δ% 0 % (o «—»), 0 giorni, Δ%/anno «—»; sul grafico il segnaposto e la
+    freccia sullo stesso punto. È ciò che oggi esce da due clic sullo stesso punto.
+  - Nessun file condiviso, nessun testo nuovo, nessun colore.
+  - Test: un rosso in `MeasurePanel.test.ts` che sceglie lo stesso giorno nel calendario della scheda (oggi la scheda
+    resta sulle date vecchie). Documentazione: una riga in `user/assets/detail/measures.en.md` e
+    `user/fx/detail/measures.en.md`. Circa mezza giornata.
+- **(b) Il selettore non lascia scegliere lo stesso giorno, solo per il righello** (la proposta del developer, nella forma
+  del coordinatore).
+  - Una prop nuova di `DateRangePicker`, spenta di default. Gli altri 9 usi non cambiano (Dashboard, pagina del broker,
+    lista e dettaglio di asset e cambi, filtro delle colonne, `CellDateRange`, replay L4), e lì un giorno solo resta
+    valido.
+  - Il calendario disabilita il giorno già scelto finché si sceglie il secondo. `CalendarMonth` ha già i giorni
+    disabilitati (`disabledDates`), con l'aspetto già sui ruoli: nessun colore nuovo.
+  - Servono due scelte in più del developer:
+    - **(b1)** lo stesso giorno scritto a mano nei due campi: rifiutato con un messaggio sotto il campo (una stringa nuova
+      nelle 4 lingue; il mio consiglio) oppure spostato di un giorno da solo;
+    - **(b2)** le frecce che portano un capo sull'altro: saltano quel giorno (il mio consiglio) oppure si fermano.
+  - Per coerenza il secondo clic sul grafico sullo stesso giorno va ignorato, come fa già l'anteprima: così il righello
+    non ha mai misure di un giorno.
+  - Test in `DateRangePicker.test.ts` e `MeasurePanel.test.ts`; le stesse due pagine utente. Circa una giornata.
+- **(c) La minima**, solo se né (a) né (b): il righello continua a rifiutare, ma rimette il selettore sulle date della
+  misura. La scelta sparisce senza spiegazione e sembra un difetto: sconsigliata.
+
+**Il mio consiglio: (a).** La causa è un rifiuto silenzioso del righello, non il selettore. La misura di un giorno era
+già specificata (T-D9, N65) e già raggiungibile dal grafico; (a) mette d'accordo le due entrate con la modifica più
+piccola, senza toccare un componente condiviso né aprire sotto-decisioni. Se invece il developer vuole che una misura
+abbia sempre due giorni diversi (la sua proposta), allora (b), con (b1) il messaggio e (b2) il salto.
+
+**Il programma colori.** `DateRangePicker.svelte`, con `CalendarMonth.svelte`, era nell'ondata **W1-c di T** (`ui/date`):
+da 73 classi legacy a 0, `a5c7714ca` (16/10, 03:31), chiusa. Da allora nessun commit di colore sul file, e non è nel
+registro del cricchetto: oggi non è in un lotto aperto. (a) non lo tocca; (b) sì, solo nel comportamento, con l'aspetto
+disabilitato che c'è già: un avviso a T, tramite il coordinatore.
+
+**Domande per il developer**, tramite il coordinatore:
+- **N65-1**: (a), (b) o (c)? Il mio consiglio è (a).
+- Solo con (b): **N65-2**, cioè (b1), e **N65-3**, cioè (b2).
+
+**Definizione di fatto, dopo il via**: prima i rossi (Vitest; nessuna E2E nuova necessaria), poi la cura; `front check`,
+Prettier, `theme-roles --check`; le due pagine utente in inglese (il debito di traduzione resta visibile); checkpoint
+FROZEN.
+
+## 19/10 · Revisione a posteriori di J-21 bis (`def1d5259`, in dev `539371064`), sola lettura
+
+Via del coordinatore alle 11:28, sulla base `41fbfe3ea` (il giornale del 19/10 committato). Nessun test lanciato: lettura
+del commit, del codice di oggi, dei chiamanti, dei plugin e della documentazione.
+
+**Cosa fa.** `MAX_LINE_RUNS = 30` in `charts/signals/backendRenderer.ts`. In `renderScalarSeries` una linea senza regioni
+di stile, o un'area, con **più di 30 tratti** (31 o più) torna una serie sola che unisce i vuoti, com'era prima di J-21.
+Il nome prende « (gaps joined)» e `outcome.warnings` riceve un avviso. Le linee con regioni di stile e le barre non
+cambiano. Chiavi `signals.gapsJoined.{label,warning}` nelle 4 lingue. Nessun file di test o di catalogo nuovo: 230 righe
+in `backendRendererSegments.test.ts`.
+
+**Verdetto: OK, con tre note e un rischio latente.**
+
+Verificato e giusto:
+- **La logica.** Il tetto vale solo per linea e area. «Con stile» è `series.kind === 'line'` e una regione con `lineStyle`,
+  quindi un'area si unisce anche con regioni di stile. La serie unita tiene `id` (`${config.id}:${key}`), i due
+  indicatori agli estremi, i livelli e le regioni. `renderedSignalPointCount` non cambia, perché conta le date.
+- **I test**, completi sul renderer: 30 tratti restano divisi e 31 si uniscono; l'area si unisce anche con regioni di
+  stile; livelli e regioni restano; una linea con stile resta un tratto per pezzo; si unisce solo l'uscita oltre il
+  tetto, con un avviso dopo quelli del backend; `translate` con il ripiego in inglese; la barra resta intera. Il test di
+  J-21 «120 tratti restano 120 linee» è riscritto per il tetto.
+- **I18n**: le due chiavi sono a `signals.gapsJoined.*` in `charts/{en,it,fr,es}.json`, dove il codice le cerca.
+- **Il costo**: 30 tratti × circa 2 500 giorni di borsa ≈ 75 000 punti, come dice il commento. Nessun colore, nessun
+  calcolo finanziario nel frontend.
+
+Le note:
+1. **L'avviso non arriva all'utente** (basso, chiarezza). I sei chiamanti di `renderBackendSignalResult` (`fx/+page`
+   ×2, `fx/[pair]`, `assets/+page` ×2, `assets/[id]`) leggono solo `outcome.signals`; `outcome.warnings` non è letto da
+   nessuno, nemmeno prima di J-21 bis. Il pannello dei segnali costruisce i suoi avvisi da `item.result.warnings` del
+   backend (`signalProblem.ts:162`); `warningMessages` di `assets/[id]:1015` va solo nel log di debug. Si vede quindi
+   solo il nome «(gaps joined)», nel tooltip del grafico (`PriceChartFull.svelte:981-987`; i grafici non hanno una
+   legenda delle serie). Il messaggio del commit («plus
+   warning»), il commento di `MAX_LINE_RUNS` («its name and the outcome's warnings say so») e J-59 («con un avviso»)
+   descrivono un avviso che non si vede. Due strade, la scelta non è mia:
+   - (i) togliere l'avviso e lasciare il nome, che già lo dice (commento e J-59 da correggere): il mio consiglio, perché
+     non cambia nulla di visibile;
+   - (ii) mostrare gli avvisi del renderer nel pannello dei segnali: un cambio d'interfaccia, quindi una domanda per il
+     developer.
+2. **La guida per sviluppatori è rimasta indietro** (minimo, documentazione). `signal_plugin_guide.md:255-259` dice che
+   il renderer spezza sempre una linea o un'area ai punti senza valore, «so no segment crosses a day on which nothing was
+   measured». Da J-21 bis, oltre 30 tratti, una linea senza stile o un'area unisce i vuoti. Basta una frase, con
+   `docs-writer`.
+3. **Il CHANGELOG sbaglia di uno** (minimo; il file è del coordinatore). Dice «more than 30 gaps». Il tetto conta i
+   tratti: si unisce da 31 tratti, cioè da 30 vuoti, come fissano i test (30 tratti divisi, 31 uniti). Meglio «30 gaps or
+   more».
+
+Il rischio latente, nessuna azione per la 1.3:
+- Le linee con stile sono esenti dal tetto, per scelta e fissate da un test, e `limitStyledSegments` non unisce mai oltre
+  un vuoto. Quindi una linea con stile e N tratti resta almeno N serie lunghe quanto l'asse.
+- Oggi le linee con stile sono RSI, CCI, MFI e Stochastic RSI (le sole con `line_style` nelle regioni), e tutte chiamano
+  pandas-ta-classic con `talib=True`. TA-Lib dà 0, non NaN, su una finestra piatta, quindi i punti senza valore restano
+  quelli del riscaldamento, all'inizio, che non aprono un tratto. Letto nel codice, non misurato.
+- Morderebbe solo con un'uscita con stile che manda vuoti a metà serie. Anche uno stile di partizione scelto
+  dall'utente (`config.partitionStyles`) rende «con stile» una regione senza `line_style`, e la fa uscire dal tetto.
+- J-59, una serie sola per uscita, toglie sia il tetto sia questa esenzione. Da annotare in J-59 quando si fa.
+
+**Per dopo la 1.3**: J-56 (il gradino nel secchio del taglio) e J-59 stanno nella sezione di J del backlog, ma sono per Y
+(FE2): li prendo io quando il coordinatore li assegna. Non tocco la sezione di J.
+
+## 19/10 · Revisione di J-48 (`ab4be3daa`, ramo di J), sola lettura
+
+Richiesta del coordinatore alle 12:35, sulla base `88fdf4517`. Letti gli oggetti git dal mio worktree, non il worktree di
+J. Nessun test lanciato. J-48 è su `5da188c15`, che contiene Y-30 (`ede7adf75`). Dalla base comune, nei file dei lotti
+c'è solo J-48, e il mio ramo differisce solo nel giornale: nessun conflitto atteso.
+
+**Cosa fa.** Una gamba di trasferimento il cui partner sta presso un broker fuori dall'ambito si legge come una rettifica
+(J-10), e le viste dei lotti dicevano «rettifica». J-48 aggiunge `LotTimelineEventSchema.scope_boundary`: `IN` sulla
+riga d'apertura della gamba in arrivo, `OUT` su ogni riga di chiusura della gamba in partenza, `None` altrove.
+Il frontend lo legge con `scopeBoundaryOf` ed `eventLabelKind` (`lotChartShared.ts`) per l'etichetta e la categoria del
+marcatore, nelle tre viste: storia della modale, Gantt, grafico prezzo/costo medio. Chiavi `TRANSFER_IN`/`TRANSFER_OUT`
+in `brokers.lots.modal.event` e `brokers.lots.chartMarkers.eventType`, nelle 4 lingue. Una riga del CHANGELOG, la pagina
+utente, due pagine per sviluppatori e i test (backend 8, Vitest in 5 file).
+
+**Verdetto: OK.** Le tre cose chieste tengono; quattro note, nessuna bloccante.
+
+1. **Nessun numero cambia** ✅
+   - Backend: solo il campo nuovo. `kind`, prezzi, P&L e proventi non cambiano. Un `BoundaryLeg` tiene solo l'id e la
+     direzione.
+   - Frontend: `scope_boundary` lo leggono solo l'etichetta e la categoria del marcatore. `applyLotEvent` (la
+     ricostruzione di quantità e prezzo), le voci di dettaglio della modale e le righe di quantità ed effetto del tooltip
+     leggono ancora `kind`. Per una gamba in uscita `closureValueLabelKey` resta «consegnato», non «proventi».
+   - I test lo fissano: `applyLotEvent` uguale con e senza il campo, in entrata e in uscita; `closureValueLabelKey`.
+   - La tabella dei lotti ricava lo stato dalle quantità (aperto, parziale, chiuso), quindi lì nessuna etichetta di
+     rettifica rimane indietro.
+2. **Il broker dell'altro lato non viene mai nominato** ✅
+   - La gamba entra nel motore come un ADJUSTMENT a sé, sul proprio broker, con `related_transaction_id=None` (`_read` in
+     `scope_boundary.py`): nessuna riga riceve l'id o il broker del partner. Il test c3 lo fissa per tutti e due i lati.
+   - Le etichette («TRANSFER+/-», «Transfer In/Out») non nominano broker. Il tooltip del grafico per queste righe non ha
+     «Da/A» né il broker. La riga della modale nomina un broker dell'ambito (nota 2).
+3. **Etichette e colori coerenti, anche con Y-30** ✅
+   - Stessa famiglia nelle tre viste e nelle 4 lingue. Storia: «ADJUSTMENT+/-» diventa «TRANSFER+/-», mentre un
+     trasferimento dentro l'ambito resta «TRANSFER». Marcatori: «Adjustment In/Out» diventa «Transfer In/Out».
+   - Colori e glifi: la riga prende l'aspetto dei trasferimenti di ogni vista, senza nuovi colori:
+     - modale: il ⇄ blu, prima il + verde o il − ambra;
+     - Gantt: ◆, prima + o ×;
+     - grafico: la serie dei trasferimenti.
+     Nel diff nessuna classe cambia, quindi il cricchetto dei colori non si muove; i colori del distintivo della modale
+     sono categorici e preesistenti.
+   - Y-30: nel grafico l'unico pezzo vicino al codice di Y-30 è la chiamata di `eventCategory`. I marcatori restano sulla
+     linea del prezzo senza lotti (`resolveMarketPriceAtOrBefore` su `marketPriceLookupPoints`), quindi un marcatore
+     d'uscita sta sulla linea anche quando non resta nessun lotto. Con `FAILED` non ci sono eventi dei lotti, quindi
+     nessun marcatore.
+4. **Documentazione e testi** ✅: la pagina utente (una frase; le traduzioni restano in debito, vero, nessuno stamp), le
+   due pagine per sviluppatori (le àncore `#scope-edge-transfers` esistono in entrambe), la riga del CHANGELOG, le chiavi
+   in 4 lingue × 2 spazi.
+
+Le note:
+1. **La nota di J sul Gantt è confermata.** La serie `__event-markers` ha `tooltip: {show: false}` e nient'altro legge il
+   `label` del marcatore. Sul Gantt quindi cambia solo il glifo; `eventMarkerLabel` ed `eventMarkerLabelKey` producono un
+   testo che nessuno vede, già prima di J-48.
+   - Da aggiungere alla domanda per il developer: senza etichetta, sul Gantt entrata, uscita e trasferimento interno sono
+     tutti ◆. La direzione si legge solo dalla posizione: ◆ all'inizio di una corsia è un arrivo, alla fine un'uscita.
+   - Di conseguenza la chiave di deduplica `${kind}:${lotId}:${laneIndex}:${dateMs}` unisce in un solo ◆ un'uscita al bordo
+     e un trasferimento interno nello stesso giorno sulla stessa corsia (prima ◆ e ×). Nessun numero, ed è un caso raro.
+   - Se il developer sceglie di mostrare l'etichetta, `lots-analysis.md` ha bisogno di una frase.
+2. **Preesistente, non di J-48: la riga di chiusura nomina il broker d'apertura del lotto.** `_build_closure_rows` mette
+   `broker_id = lot.opening_broker_id`: `LotClosure` non ha un broker, solo `fragment_id`. La modale scrive
+   «<etichetta> <broker>».
+   - Con «TRANSFER-» la riga si legge «uscito da <broker>». È sbagliata quando il lotto si è spostato dentro l'ambito
+     prima di uscirne: aperto in A, spostato in B, mandato fuori da B, la riga dice «TRANSFER- A». Lo stesso vale oggi per
+     «SELL A» su una vendita in B, e prima di J-48 era «ADJUSTMENT- A».
+   - Resta un broker dell'ambito: il partner non è mai nominato.
+   - Dalla lettura del codice, non provato. Il test c3 filtra un broker solo, quindi non copre il caso.
+   - Rimedio possibile, nel backend di J: il broker di chiusura dal frammento chiuso (`closure.fragment_id`). Cambia un
+     testo visibile, quindi è una domanda; peso minimo, chiarezza.
+3. **`scripts/test_runner/_frontend_utility.py`, una riga**: il file di test nuovo in `front_utility_unit`, nel blocco dei
+   lotti. Nelle regole del mio avvio è un file del programma colori, che si tocca solo passando dal coordinatore. È
+   un'aggiunta e non porta conflitti: va solo confermato che J aveva il via.
+4. **Le prove di J non le ho viste girare**: la revisione è di lettura.
+
+## 19/10 · Y-N65 — lo stesso giorno in «Da» e «A», in tutti i selettori: analisi (sola lettura)
+
+**La decisione del developer** (inoltrata dal coordinatore alle 14:31), testuale: «va impedita sia nel grafico che
+selezionando le date, e come dicevo, nel datapicker range, non permettiamo proprio da ui di scegliere 2 volte la stessa
+data, se si fa 2 volte click sulla stessa data il click viene ignorato, anche meglio compare come per i giorni futuri
+l'icona che fa capire che non ci puoi andare sopra». Alla domanda del coordinatore («solo nel righello o in tutti i
+selettori?») ha risposto: in tutti i selettori di intervallo dell'app, sapendo che il filtro per data delle tabelle non
+potrà più avere un giorno solo.
+
+Base `918c2ce39`; `dev_release2` è a `84c1bcba1`, 36 commit avanti. Nei file del lotto, in quei commit, c'è solo X-R16
+sulle pagine di dettaglio di asset e cambi. Nessun codice, nessun test lanciato.
+
+### Dove nasce oggi un intervallo di un giorno
+
+1. **Calendario**: il secondo clic sul giorno in attesa dà inizio = fine (`handleDayClick`, `DateRangePicker.svelte:463-480`).
+2. **Data scritta uguale all'altro capo**: `applyRangeDate` (`:950-962`) la accetta.
+3. **Data scritta con l'altro capo vuoto o una sentinella**: `fieldIso(altro) || iso` copia la data sull'altro capo.
+   - Il filtro per data delle tabelle parte vuoto: una sola data in «Da» oggi filtra quel giorno solo.
+   - Con MAX attivo (`min`/`max`), una data d'inizio scritta dà [X, X].
+4. **Frecce**: un capo portato sull'altro dà inizio = fine (`handleFieldKeydown`, `:1042-1050`).
+5. **Grafico**: `MeasurePanel.addPoint` (`:154-184`) crea una misura se il secondo clic è sullo stesso giorno. Già oggi
+   rifiutano l'anteprima (`:140`) e «misura tutto il grafico» (`:195`).
+
+Non ne creano:
+- le scorciatoie: YTD, MTD e QTD hanno un minimo di 14 giorni, WTD di 6 (`withMinWindow`, `:301`);
+- la finestra personalizzata: `min={1}`, applicato da `isDraftValid` di `CompactDurationBadge`;
+- MAX, che dà `min`/`max`.
+
+**«L'icona» dei giorni futuri** è il cursore `not-allowed`, sul bottone del giorno `disabled`
+(`CalendarMonth.svelte:192-196`, `:270-273`).
+
+**Il backend accetta ovunque un giorno solo**: `DateRangeModel` (`end >= start`, un giorno solo documentato), il periodo
+dell'investimento programmato («end on or after start»), il replay del rischio («on or before»). Quindi il lotto è solo
+d'interfaccia: l'API non cambia (segnalibri, client dell'API).
+
+### La proposta, punto per punto
+
+1. **Il calendario del selettore.**
+   - Il giorno in attesa non si può cliccare: `disabled` e cursore `not-allowed`, come un giorno futuro. Tiene il suo
+     colore d'attesa, senza la barratura dei `disabledDates`.
+   - Passandoci sopra non si vede l'anteprima di un giorno solo (`hoveredDate` a `null` su quel giorno).
+   - `handleDayClick` lo ignora anche lui.
+   - Dove: `CalendarMonth`, perché solo il selettore d'intervallo imposta `pending` (`SingleDatePicker` mai), e
+     `DateRangePicker`. Nessun colore nuovo: `cursor-not-allowed` è già la classe dei giorni futuri.
+2. **Il grafico.**
+   - `addPoint` ignora il secondo clic sul giorno d'inizio: nessuna misura, la modalità misura resta accesa, l'inizio
+     resta in attesa.
+   - Sul giorno d'inizio `updatePendingEnd` toglie l'anteprima, invece di lasciare l'ultima.
+   - Facoltativo: il cursore di divieto anche sul grafico (N65-5).
+3. **`MeasurePanel`: niente più rifiuto silenzioso.** Si toglie `if (s === e) return` da `updateMeasureDates` (`:233`).
+   - Il selettore non può più mandare due date uguali.
+   - Se qualcos'altro lo facesse, una misura di un giorno si calcola giusta (T-D9): nessun disallineamento.
+4. **Lo stesso giorno scritto a mano** (N65-2): rifiutato come una data futura scritta, cioè testo rosso
+   (`text-lf-danger`, `data-invalid`), non applicato, nessun messaggio.
+   - In più, appena l'altro capo cambia e i due giorni sono diversi, il testo in attesa si applica.
+   - Senza questo, chi scrive un «Da» nuovo uguale al vecchio «A», e poi il nuovo «A», resterebbe con «Da» rifiutato.
+     È l'ordine delle E2E di `fx-detail` e il più naturale per un utente.
+5. **Le frecce su un capo** (N65-3): saltano il giorno uguale, cioè un giorno in più nella stessa direzione; lo scambio
+   dei capi continua a valere. Se il salto passerebbe oltre oggi (futuro non ammesso), il passo non fa nulla.
+6. **Una data scritta con l'altro capo vuoto o con MAX** (N65-4): l'altro capo non si copia più.
+   - Vuoto resta vuoto, cioè un intervallo aperto: «dal giorno X» o «fino al giorno X». Il filtro di colonna, l'URL
+     delle transazioni (`?date_start=&date_end=`, `transactions/filterState.ts`) e quello dei file (`?date=da,a`) lo
+     accettano già.
+   - Con MAX la sentinella resta: `max` vale «da X a oggi», risolto dalle pagine con `resolveDateSentinel`; `min` vale
+     «dai primi dati fino a X».
+   - Cambio visibile: nel filtro di una tabella, una sola data in «Da» significa «da X in poi», non più «solo X».
+   - Nota: con `min` il bottone MAX resta acceso anche con una fine diversa da oggi (`effectivePreset`, `:272-288`). È
+     una regola che c'è già; la lascerei.
+7. **Gli intervalli di un giorno già salvati** (N65-6): non li riscrive nulla, si caricano e funzionano.
+   - Dove stanno:
+     - il periodo delle pagine: `sessionStorage` `librefolio_dateRange`, per scheda, e l'URL `?start=&end=`;
+     - i filtri: transazioni, file, e il link della Dashboard verso le transazioni, che porta il periodo della pagina;
+     - i periodi degli investimenti programmati, nel DB.
+   - Il selettore li mostra; solo non se ne possono fare di nuovi.
+   - Le misure e il periodo del replay L4 non si salvano: non ce ne sono.
+   - L'alternativa, normalizzarli al caricamento, riscriverebbe un segnalibro o un periodo salvato dall'utente:
+     sconsigliata.
+
+### I 10 usi del selettore
+
+In nessuno serve codice: il comportamento viene dal componente condiviso.
+
+| Uso | Oggi un giorno solo nasce da | Dopo |
+|---|---|---|
+| Pagine ×6: Dashboard, broker, lista e dettaglio di asset e cambi | due clic sullo stesso giorno; data scritta uguale; data d'inizio scritta con MAX: [X, X] | impedito; con MAX, da X a oggi |
+| `DataTableColumnFilter`, il filtro per data | due clic; una data scritta sola, copiata | impedito; una data sola è un intervallo aperto |
+| `CellDateRange`, il periodo dell'investimento programmato (`allowFuture`) | due clic; data scritta | impedito; i periodi di un giorno già salvati restano |
+| `L4Replay`, senza MAX | due clic; data scritta | impedito |
+| `MeasurePanel` | nella scheda, due clic o la data scritta, rifiutati in silenzio (il difetto N65); sul grafico, il secondo clic ne crea uno | impedito nella scheda; secondo clic sul grafico ignorato |
+
+### I file, e chi li ha aperti
+
+- **Il nucleo del lotto**: `ui/date/DateRangePicker.svelte`, `ui/date/CalendarMonth.svelte`, `charts/MeasurePanel.svelte`
+  e i loro test.
+  - Invariati in `dev_release2` dalla mia base.
+  - Programma colori: `ui/date` era la W1-c di T, chiusa (`a5c7714ca`). `charts/` è l'area di DV, integrata fino a B4. Il
+    lotto non porta colori nuovi; basta un avviso a T e a DV, tramite il coordinatore.
+  - Lavoro committato su questi file negli altri rami: nessuno. Quello non committato non lo vedo: lo conferma il
+    coordinatore.
+- **Solo con N65-5 (b)**, il cursore sul grafico: `charts/PriceChartFull.svelte` (oggi `cursor-crosshair` in modalità
+  misura, `:1152`), `routes/(app)/assets/[id]/+page.svelte` e `routes/(app)/fx/[pair]/+page.svelte`. Le due pagine le ha
+  toccate X-R16 (`299393b19`, già in dev) e sono vicine al lavoro di X e di Z-29.
+- I 10 usi: nessuna modifica.
+- **Documentazione** (`docs-writer`, solo inglese):
+  - per sviluppatori: `developer/frontend/components/core-ui/datePickers.md`, `developer/frontend/components/charts.md`
+    (MeasurePanel), `core-ui/data-table.md` (il filtro per data);
+  - per gli utenti: `user/assets/detail/measures.en.md`, `user/fx/detail/measures.en.md`, e una frase sul filtro aperto
+    in `user/transactions/index.en.md`. Le traduzioni restano un debito vero.
+- **CHANGELOG**: una riga 🔄, del coordinatore.
+- **Prima del codice**: aggiornare la mia base a `dev_release2`.
+
+### Rossi, test, costo
+
+**Rossi** (Vitest, `test-author`):
+- `DateRangePicker.test.ts`:
+  - il secondo clic sul giorno in attesa non pubblica nulla, il giorno è `disabled`, il calendario resta aperto; un
+    altro giorno chiude l'intervallo;
+  - sul giorno in attesa nessuna anteprima;
+  - «A» scritto uguale a «Da» resta rosso, nessun `onchange` con due date uguali; con un nuovo «Da» il testo in attesa
+    si applica;
+  - un «Da» uguale al vecchio «A», poi un nuovo «A», pubblica i due nuovi;
+  - le frecce saltano il giorno uguale, e al tetto di oggi non fanno nulla;
+  - con «A» vuoto si pubblica `(X, '')`, con MAX `(X, 'max')` e `('min', X)`: oggi `(X, X)`.
+- `CalendarMonth.test.ts`: il giorno in attesa è `disabled` e il clic non arriva; controllo: senza `pending` nessun
+  giorno è disabilitato.
+- `MeasurePanel.test.ts`:
+  - due clic sullo stesso giorno non creano una misura e la modalità resta accesa;
+  - sul giorno d'inizio l'anteprima sparisce;
+  - nella scheda espansa, due clic sullo stesso giorno lasciano la misura e il selettore sulle stesse date. È il difetto
+    N65 di oggi: i campi mostrano X–X, la misura le date vecchie.
+
+**I test esistenti**: nessuno fissa un giorno solo dal selettore.
+- `MeasurePanel.test.ts:246` (anteprima sullo stesso giorno, nessun effetto) diventa «l'anteprima sparisce».
+- `measureSignal.test.ts:105` e `:173`, sul modello, restano.
+- `DataTableColumnFilter.test.ts:545` resta verde: controlla solo `from`.
+- Le E2E (`asset-browse`, `asset-detail`, `fx-detail`, `risk-analysis`, galleria) scrivono sempre due date diverse.
+
+**Prove**:
+- leggere, col carico sotto 50: i Vitest toccati più `DataTableColumnFilter`, `L4Replay` e `CellDateRange`;
+  `front check`, Prettier, `theme-roles --check`;
+- slot E2E di circa 30 minuti, solo regressione: `front-asset asset-detail` (le misure), `front-fx detail`,
+  `front-portfolio` sul replay L4, `front-asset asset-browse`. Una E2E nuova non serve.
+
+**Costo**: circa una giornata (selettore 3 h, calendario e righello 1 h, rossi 2 h, documentazione 1 h, slot); con
+N65-5 (b) da 1 a 2 ore in più.
+
+### Domande per il developer (tramite il coordinatore)
+
+- **N65-2, lo stesso giorno scritto a mano**: (a) rosso come una data futura, nessun testo nuovo (**consiglio**: è il
+  «come per i giorni futuri» del developer); (b) rosso, con un tooltip proprio in 4 lingue.
+- **N65-3, le frecce**: (a) saltano il giorno (**consiglio**); (b) si fermano prima.
+- **N65-4, una data scritta con l'altro capo vuoto o con MAX**: (a) l'altro capo resta com'è: intervallo aperto, con MAX
+  fino a oggi (**consiglio**); (b) «A» vuoto diventa oggi.
+- **N65-5, il cursore sul grafico**: (a) clic ignorato e anteprima tolta, senza cursore; (b) anche il cursore di divieto
+  sul punto d'inizio (**consiglio**, è il suo «anche meglio»), se X e Z-29 lasciano libere le due pagine di dettaglio.
+- **N65-6, gli intervalli di un giorno già salvati**: (a) restano come sono (**consiglio**); (b) normalizzati al
+  caricamento.
+
+### Il lotto Y-N65 (via del coordinatore, 19/10 15:01)
+
+**Decisioni del developer**: tutti i consigli, cioè N65-2 (a), N65-3 (a), N65-4 (a), N65-5 (b), N65-6 (a). Giornale
+committato in `156c1411d`. Prima i rossi (`test-author`), **scritti senza lanciare nulla** finché il coordinatore non
+aggiorna la base (dopo il cancello della fusione delle migrazioni; al suo «fermati» mi fermo). Dopo l'aggiornamento la
+corsia 6189 si ripopola con `--force --clean`: la migrazione 011 non esiste più. Le note per T e DV («nessun colore
+nuovo») le manda il coordinatore. Le pagine `assets/[id]` e `fx/[pair]` oggi non le ha aperte nessuno; se Z-29 parte
+prima, l'ordine lo decide il coordinatore.
+
+**Il contratto che i rossi fissano.**
+1. **`CalendarMonth`**: il giorno uguale a `highlights.pending` è un bottone `disabled`, col cursore `not-allowed`. Il
+   colore e `data-state` non cambiano, e il clic non arriva a `onDayClick`. Nessun altro giorno cambia;
+   `SingleDatePicker` non imposta mai `pending`.
+2. **`DateRangePicker`**:
+   - il secondo clic sul giorno in attesa è ignorato: nulla pubblicato, calendario aperto, attesa tenuta; il passaggio
+     del mouse su quel giorno non mostra l'anteprima di un giorno solo;
+   - una data scritta uguale all'altro capo non si applica: resta sul campo e, armata, è `data-invalid="true"`, come una
+     data futura scritta. Appena l'altro capo cambia e i due giorni sono diversi, il testo in attesa si applica;
+   - le frecce: se il passo cade sull'altro capo, si va di un giorno in più nella stessa direzione, e lo scambio vale. Se
+     quel giorno è nel futuro non ammesso, il passo non fa nulla;
+   - una data scritta con l'altro capo vuoto o con una sentinella (`min`/`max`) lascia l'altro capo com'è: si pubblica
+     `(X, '')`, `(X, 'max')`, `('min', X)`. Lo scambio solo fra due date vere.
+3. **`MeasurePanel`**:
+   - `addPoint` ignora il secondo clic sul giorno d'inizio: nessuna misura, la modalità resta accesa, l'inizio resta;
+   - `updatePendingEnd` restituisce `true` sul giorno d'inizio (bloccato) e `false` altrove. Sul giorno d'inizio toglie
+     l'anteprima se c'era (un'emissione senza `__pending__`), altrimenti non emette nulla;
+   - `updateMeasureDates` perde `if (s === e) return`.
+4. **Il cursore sul grafico** (`PriceChartFull`, vista a linea, e `CandlestickChart`), con N65-7 (b):
+   - in modalità misura il grafico gestisce il suo cursore con zr. A ogni `mousemove` di zr, subito, prima della
+     limitazione al frame, chiama `zr.setCursorStyle('crosshair')`, oppure `'not-allowed'` se l'ultimo passaggio era sul
+     giorno bloccato. zrender rimette il cursore a `default` a ogni movimento, prima degli ascoltatori
+     (`zrender/lib/Handler.js:95`, `:99`, versione 6.0.0);
+   - `onMeasureHover` può restituire `true`. Dopo il frame il grafico applica il cursore del nuovo esito e pubblica
+     `data-measure-hover="blocked" | "free"` sul contenitore;
+   - fuori dalla modalità misura il grafico non chiama `setCursorStyle`;
+   - le pagine non cambiano: le loro funzioni freccia restituiscono già il valore di `updatePendingEnd`
+     (`assets/[id]/+page.svelte:2525`, `fx/[pair]/+page.svelte:1544`, numeri alla base `bb676c44c`).
+5. **Gli intervalli di un giorno già salvati** restano come sono: nessun codice.
+
+**N65-7, il mirino** (deciso dal developer alle 15:11, (b): «si se puoi, io non sapevo manco fosse stato fatto, non l'ho
+mai visto!»). In modalità misura il contenitore dei due grafici ha `cursor-crosshair` (`PriceChartFull.svelte:1152`,
+`CandlestickChart.svelte:643`), ma zrender mette `cursor: default` in linea sul suo elemento al primo movimento: il
+mirino non si vedeva quasi mai. Lo rende vero la stessa chiamata del punto 4, con il suo rosso.
+
+**Passi.**
+1. ✅ 19/10 — **Rossi scritti, non lanciati** (`test-author` `85d6ba6a`, in sottofondo; nessun processo avviato, come
+   chiesto dal coordinatore). Quattro file, +673 righe:
+   - `CalendarMonth.test.ts`: 1 rosso (il giorno in attesa `disabled`, il clic non arriva) e 2 guardie (senza `pending`
+     nessun giorno passato è disabilitato; `data-state` invariato);
+   - `DateRangePicker.test.ts`, describe «no range of a single day (Y-N65)»: 2a, 2b, 2c (2 righe), 2d (2), 2e (4 righe)
+     rossi. Guardie: il flusso «Da = vecchio A, poi un A nuovo», verde oggi per un'altra strada (la bozza di un giorno),
+     e due giorni vicini;
+   - `MeasurePanel.test.ts`: `PanelApi.updatePendingEnd` restituisce `boolean`; 3a, 3b (2), 3c rossi;
+   - `PriceChartFull.test.ts`: l'imitazione di ECharts ha uno zr per grafico, che tiene i gestori e registra
+     `setCursorStyle`, e `pointerIndex` (predefinito `null`, quindi i casi esistenti non cambiano). Un `describe.each`
+     sulla vista a linea e a candele: 4 rossi e 1 guardia per vista.
+   > **Note implementazione**: revisione mia in sola lettura. `git diff --check` pulito; nessuna asserzione su classi
+   > (l'unica `cursor-crosshair` è in un commento) né su testo tradotto, nessuna attesa a tempo.
+   > **⚠️ Fuori pista**: in jsdom, con la delega degli eventi di Svelte 5, un clic inviato a un bottone `disabled`
+   > raggiunge comunque `onclick`. La cura deve quindi tenere anche il controllo nel gestore, come già per
+   > `disabledDates`. E il tipo `onMeasureHover` dei due grafici va allargato da `=> void`.
+2. ✅ 19/10 — Dopo l'aggiornamento della base: ripopolare la corsia; i rossi lanciati e visti rossi, col carico sotto 50.
+   > **Note implementazione** (19/10, 15:43–15:50):
+   > - base `bb676c44c` (fusione di `156c1411d` e dev `cc3c3af15`), i 5 file non committati intatti;
+   > - la fusione tocca solo `assets/[id]` e `fx/[pair]` (X-R16, l'isolamento dei segnali); le funzioni freccia di
+   >   `onMeasureHover` sono invariate, solo spostate a `:2525` e `:1544`;
+   > - `dev.py test --test-port 6189 --data-dir /tmp/librefolio-r13-y db populate --force --clean`: riuscito in 12 s.
+   >
+   > **⚠️ Fuori pista** (15:44): **disco pieno**. Il volume Data è al 100%, con meno di 500 MiB liberi, in calo per le
+   > scritture delle altre sessioni.
+   > - `TAG=red bash files/scripts/yn65_vitest.sh` (un file alla volta, con `nice`, a carico 28–41): tutti e 4 i file
+   >   sono caduti con `ENOSPC` alla trasformazione dei moduli, «Tests no tests».
+   > - È un rosso d'infrastruttura, prima della raccolta: nessun test è girato, i rossi non sono ancora visti.
+   > - Nessun server avviato, porta libera. Il populate di prima resta valido.
+   > - Segnalato al coordinatore (`purpose: error`), con la mia parte liberabile (`mkdocs_src/site`, 578 MB). Fermo
+   >   finché non tornano almeno 5 GB e il suo via. Intanto la cura si prepara a secco, nella cartella della sessione.
+   >
+   > ✅ 19/10, 16:0x — **Rossi visti rossi.** Il coordinatore ha liberato il disco (~21 GiB; ha cancellato lui la mia
+   > `mkdocs_src/site`). Stesso script, carico 20–23:
+   > - `CalendarMonth` 1 rosso su 15, `DateRangePicker` 10 su 86, `MeasurePanel` 4 su 32, `PriceChartFull` 8 su 58:
+   >   23 rossi, esattamente quelli di Y-N65. Tutte le guardie e tutti i test esistenti sono verdi.
+   > - Ogni rosso cade sulla sua asserzione, con il messaggio atteso; nessun `TypeError` e nessun montaggio fallito. Per
+   >   esempio: `toBeDisabled()` sul giorno in attesa; `[['2024-02-10','2024-02-10']]` contro `[['min','2024-02-10']]`;
+   >   `{cursor: undefined, hover: null}` contro `'not-allowed'`.
+   > - Prettier `--check` sui 4 file di test: pulito. Log in `files/logs/yn65_red_*.log`.
+3. ✅ 19/10 — La cura: `CalendarMonth`, `DateRangePicker`, `MeasurePanel`, `PriceChartFull`, `CandlestickChart`.
+   > **Note implementazione** (16:0x–16:3x):
+   > - `CalendarMonth`: `pendingDay` entra in `disabled` e nel controllo del clic. Nel blocco dello stato di base,
+   >   `cursor-not-allowed` dopo i casi futuri. Colore e `data-state` invariati.
+   > - `DateRangePicker`:
+   >   - `handleDayClick` ignora il giorno in attesa;
+   >   - `handleDayHover` sostituisce le 4 funzioni in linea identiche e mette `hoveredDate` a `null` su quel giorno;
+   >   - `isAcceptableDate(which, iso)` = tetto più «non il giorno dell'altro capo», usato da `*Unparseable` e da
+   >     `commitTypedField`;
+   >   - `applyRangeDate`:
+   >     - legge l'altro capo grezzo (`fieldValue`), così vuoto, `min` e `max` restano;
+   >     - scambia solo due date vere (`concreteIso`);
+   >     - prende in coppia la data in attesa dell'altro campo (`waitingTypedDate`: armata, sotto il tetto, diversa).
+   >       Così lo scambio ordina le due date scritte dall'utente; applicarle una alla volta poteva perderne una;
+   >   - le frecce: se il passo cade sull'altro capo, `addDays(±1)` nella stessa direzione; se quel giorno è oltre il
+   >     tetto, nulla.
+   > - `MeasurePanel`:
+   >   - `updatePendingEnd(): boolean`; sul giorno d'inizio toglie l'anteprima se c'è e risponde `true`;
+   >   - `addPoint` ignora il secondo clic sul giorno d'inizio;
+   >   - via `if (s === e) return` da `updateMeasureDates`.
+   > - `PriceChartFull` (vista a linea) e `CandlestickChart`:
+   >   - `onMeasureHover` restituisce `boolean | void`;
+   >   - `measureHover` (`$state`) è `blocked`, `free` o `null`, e un `$effect` lo azzera fuori dalla modalità misura;
+   >   - a ogni `mousemove` di zr in modalità misura, prima della limitazione rAF, `setCursorStyle` sincrono;
+   >   - nel rAF, il cursore e `data-measure-hover` dall'esito (`free` anche quando il puntatore non cade su un punto);
+   >   - il rAF ricontrolla `measureMode`, così un passaggio rimasto in coda alla fine della misura non pubblica nulla;
+   >   - le pagine non cambiano.
+   > - Vitest (stesso script, carico 14–25): `CalendarMonth` 15/15, `DateRangePicker` 86/86, `MeasurePanel` 32/32,
+   >   `PriceChartFull` 58/58, `CandlestickChart.tooltipEscape` 7/7.
+4. ✅ 19/10 — Prove leggere: i Vitest toccati più `DataTableColumnFilter`, `L4Replay`, `CellDateRange`; `front check`,
+   Prettier, `theme-roles --check`.
+   > **Note implementazione** (16:3x–17:0x, carico 16–36):
+   > - Vitest dei vicini: `files/scripts/yn65_vitest_batch.sh`, un solo processo con i 37 file di test che nominano
+   >   `DateRangePicker`, `CalendarMonth`, `SingleDatePicker`, `MeasurePanel`, `CandlestickChart`, `PriceChartFull`,
+   >   `DataTableColumnFilter`, `CellDateRange` o `L4Replay`, gate per percorso compresi. Risultato: 36 file su 37 verdi,
+   >   1810 test verdi e 17 saltati.
+   > - Prettier `--check` sui 5 sorgenti: pulito. `theme-roles.mjs --check`: «Colour gates: clean». `git diff --check`:
+   >   pulito.
+   > - `npm run check`: 0 errori, 0 avvisi (dopo `api sync`, vedi sotto).
+   >
+   > **⚠️ Fuori pista**:
+   > - Nel lotto dei 37 file, il `beforeAll` di `PriceChartFull.tooltipEscape.test.ts` è scaduto a 60 s: i suoi import
+   >   dinamici (`generated.ts`) erano in coda dietro gli altri 36 file. Rilanciato da solo: 17/17 verdi, 46 s. Verdetto:
+   >   ambiente (contesa degli import), non prodotto.
+   > - Il primo `npm run check` ha dato 4 errori nei file di J-48 (`LotCustodyModal.test.ts`, `LotGanttChart.svelte`,
+   >   `LotWacPriceChart.svelte`): `scope_boundary` assente da `LotTimelineEventSchema`. Il client generato (ignorato,
+   >   non committato) era di prima dell'aggiornamento della base. `dev.py api sync` lo ha rigenerato, senza toccare
+   >   nessun file tracciato; poi 0/0.
+   >
+   > **Copertura E2E, letta in sola lettura**:
+   > - `fx-detail` (`:1773`, `:2029`, `:2526`) e `asset-detail` (`:2609`) scrivono «Da», poi «A», poi Invio: il caso
+   >   della coppia, coperto anche quando «Da» è il vecchio «A».
+   > - `risk-analysis` mette solo il fuoco sui campi e li legge; `asset-browse` usa solo i preset.
+   > - Nessuna E2E clicca due volte sullo stesso punto del grafico in modalità misura, e nessuna scrive una data nel
+   >   filtro di colonna (le E2E dei filtri usano gli enum): quei casi li coprono solo i Vitest.
+5. ✅ 19/10 — Slot E2E (circa 30 minuti): `front-asset asset-detail`, `front-fx detail`, `front-portfolio` sul replay L4,
+   `front-asset asset-browse`.
+   > **Note implementazione**: slot del coordinatore dalle 16:11, `DEADLINE` 16:55, corsia 6189, `--workers 2`.
+   >
+   > | Spec | Esito | Durata | Ora di fine |
+   > |---|---|---|---|
+   > | `front-fx fx-detail` | 28/28 | 2,7 min | 16:24 |
+   > | `front-asset asset-detail` | 43/43 | 4,1 min | 16:36 |
+   > | `front-portfolio risk` | 38/38 | 5,0 min | 16:42 |
+   > | `front-asset asset-browse` | 8/8 | 1,6 min | 16:46 |
+   >
+   > In tutto 117/117 verdi; alle 16:46:13 la porta era libera. Gli script sono `files/scripts/yn65_e2e.sh` e
+   > `yn65_e2e_rest.sh`, i log `files/logs/yn65_e2e_*.log`.
+   > - La prima spec ha rifatto la build di debug e anche quella del sito MkDocs, perché il coordinatore aveva
+   >   cancellato `mkdocs_src/site` per lo spazio: 16:12–16:19.
+   > - Global-setup ha ripopolato con i report, perché dopo `--clean` la corsia non ne aveva più.
+   >
+   > **⚠️ Fuori pista**:
+   > - **Il carico.** Alle 16:23 il carico a 1 minuto è salito a 201, per le altre sessioni. `yn65_e2e.sh` lasciava
+   >   partire le spec dopo la prima con il carico a 5 minuti sotto 60. Il coordinatore aveva chiesto sotto 50: alla
+   >   fine di `fx-detail` ho fermato lo script mentre aspettava, con la porta libera e nessun processo in corsia. Ho
+   >   ripreso le altre tre spec con `yn65_e2e_rest.sh`: sotto 50 per tutte, fino a 6 minuti d'attesa.
+   > - **Il sito MkDocs si rifà da solo.** `auto_build_mkdocs` (`dev.py`) rifà l'intero sito prima di ogni spec, se un
+   >   `.md` di `mkdocs_src/docs` è più nuovo di `site/index.html`. Per questo ho messo in pausa `docs-writer` durante lo
+   >   slot. Non aveva ancora salvato nulla.
+   >
+   > **Nota di `docs-writer`, verificata**: per il backend, `end: null` vale un giorno solo (`DateRangeModel`,
+   > `GET /api/v1/transactions`); per il frontend, dopo Y-N65, «da X in poi». Oggi le due letture non si incontrano: la
+   > pagina delle transazioni filtra nel browser. Registrata nel backlog come **Y-36**.
+6. ✅ 19/10 — Documentazione (`docs-writer`, solo inglese); riga 🔄 del CHANGELOG nel checkpoint; CHECKPOINT READY.
+   > **Note implementazione** (`docs-writer` `283bfe61`, 16:0x–16:5x, in pausa durante lo slot E2E). 8 pagine, nessuno
+   > stamp: il debito di traduzione è vero.
+   > - Sviluppatori, solo inglese:
+   >   - `core-ui/datePickers.md`: il punto di `CalendarMonth` sul giorno in attesa, la sezione nuova
+   >     `#no-single-day-range` (calendario, date scritte, frecce, capi aperti in tabella, intervalli già salvati) e i
+   >     rimandi di «Used by»;
+   >   - `charts.md`: la sezione nuova `#measure-mode` (il cablaggio del pannello, `addPoint`, `updatePendingEnd` con il
+   >     suo booleano, N65, il cursore con zrender, `data-measure-hover`);
+   >   - `core-ui/data-table.md`: la sezione nuova `#date-filter` (ogni capo può restare vuoto; il formato `from,to`
+   >     dell'URL; un filtro di un giorno nell'URL vale com'è).
+   > - Utente, `.en.md`:
+   >   - `assets/detail/measures` e `fx/detail/measures`: il mirino, il secondo clic sull'inizio, il divieto, due giorni
+   >     diversi;
+   >   - `transactions/index`: «Da» solo vale da quel giorno in poi, «A» solo fino a quel giorno;
+   >   - `fx/detail/chart` e `assets/detail/chart`: due giorni diversi. In `assets/detail/chart` anche «Custom with a
+   >     calendar» corretto, nella stessa frase, e la data della pagina.
+   >
+   > **Verifica mia, in sola lettura, sul codice**:
+   > - esistono `startMeasureMode`, `stopMeasureMode`, `addMeasureFromChartData` e `onmeasuremodechange`, e il 📏 delle
+   >   due pagine li chiama;
+   > - il filtro per data va bene con un capo solo lungo tutta la catena: `DataTableColumnFilter` passa
+   >   `from: dateFrom || undefined`; `matchesColumnFilter` e il pre-filtro di `TransactionsTable` saltano un capo
+   >   vuoto; `urlFilters.ts` scrive «from,to (either can be empty)»;
+   > - esistono `resolveDateSentinel` e `lib/stores/dateRangeStore.svelte.ts`.
+   >
+   > **Prove** (`files/scripts/yn65_docs_check.sh`, carico 41):
+   > - `dev.py mkdocs build` strict: 0 avvisi in 105 s. L'ancora `#calendarmonth`, senza id esplicito, si risolve;
+   > - `check-links`: 97 link validi su 97;
+   > - `translate-validate --file` sulle 5 pagine utente, con `-L`: 15 file su 15 a posto, nessun errore. Il debito è
+   >   solo di contenuto;
+   > - `git diff --check`: pulito.
+   >
+   > **Lasciato com'è, scritto nel backlog come Y-37**: tre inesattezze di prima in `datePickers.md`, fuori da Y-N65.
+   > - In `CalendarMonth` non esiste «Keyboard navigation within the grid»: c'è solo `numericArrows` sull'anno.
+   > - Non è vero «week starts on Monday for most locales»: la griglia parte sempre da lunedì.
+   > - Il riferimento `DateRangePicker.svelte:36,216-251` (8/10) è approssimato. Quelle righe non le sposta Y-N65.
+   >
+   > **CHECKPOINT READY** al coordinatore (19/10, verso le 17:10), poi FROZEN. 25 percorsi, 22 modificati e 3 nuovi:
+   > - le liste sono `files/yn65_stage_{code,tests,docs,journal}.txt`;
+   > - due commit proposti: `fix(web): refuse one-day date ranges (Y-N65)` (codice, test, MkDocs) e
+   >   `docs(journal): Y-N65 plan, Y-36, Y-37, devWiki`;
+   > - due righe del CHANGELOG nel messaggio, una 🔄 e una 🐛.
+   >
+   > Conflitti previsti con dev `ccc2a4141`, solo nei file condivisi del giornale:
+   > - `LibreFolio_devWiki/index.md`: A-CL1 ha aggiunto righe in cima alla tabella dei problemi e al registro, dove
+   >   vanno le mie. Si tengono tutte;
+   > - `LibreFolio_devWiki/log.md`: tutti e due aggiungono in fondo. Si tengono tutti e due;
+   > - il backlog: nessun pezzo dentro la mia sezione.
+7. ✅ 19/10 — **Ingresso**. Il coordinatore ha committato `298be1611` (`fix(web)`, 17 percorsi) e `15603fe69` (il
+   giornale, 8 percorsi), che ho verificato contro le liste. Revisione automatica pulita; merge `5cb47395f` in
+   `dev_release2`, CHANGELOG `b1e7a2dd5` con le mie due righe (🔄 e 🐛); gate leggero del coordinatore: Vitest
+   236/236 su 6 file, `front check` 0/0.
+   > **Note implementazione**: i conflitti della devWiki (`index.md`, `log.md`) li ha risolti il coordinatore
+   > sommando le due parti, con A-CL1. Verificato in sola lettura alle 17:15: i miei commit sono antenati di dev, le mie
+   > righe (le due tabelle e il registro) e quelle di A-CL1 ci sono, nessun marcatore di conflitto. DV, che aspettava
+   > questo ingresso per la sua riga in `PriceChartFull` e `CandlestickChart`, lo avvisa il coordinatore.
+
+## 19/10 sera · Pausa generale (richiesta del developer, 18:12)
+
+Il developer spegne la macchina, e `/tmp` verrà ripulito. Stato scritto alle 18:1x, senza comandi git.
+
+- **Nulla in corsa**: nessun test, sonda o server; la porta 6189 è libera (18:14).
+- **Il worktree**: HEAD `15603fe69`, non ancora portato al merge di dev (`5cb47395f`, poi `b1e7a2dd5`). L'unico file
+  sporco è questo piano (la contabilità di Y-N65 e questa sezione): va nel prossimo checkpoint.
+- **La corsia non sopravvive**: `/tmp/librefolio-r13-y` sparisce con `/tmp`. Alla ripresa, prima di qualunque run e col
+  carico sotto 50: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6189
+  --data-dir /tmp/librefolio-r13-y db populate --force --clean`. Per le E2E resta la guardia dei report: senza un
+  `.csv` in `<data dir>/broker_reports/uploaded`, `LF_SETUP_DONE` va tolto. Script e log stanno nella cartella della
+  sessione, non in `/tmp`.
+- **Il prossimo lavoro**: **Z-29d**, il dialogo che chiede la serie del bersaglio. Parte quando Z-29b è avanti, al
+  messaggio del coordinatore: prima l'analisi, niente codice.
+
+**Note in coda, per il prossimo checkpoint:**
+1. **Le maschere della galleria** (nota del programma colori, 19/10 17:02). Il punto 4 delle verifiche del taglio di
+   `GrowthChart` (§4; oggi righe 95–99), l'unica procedura che le usa, cita `g-final3-r1`, con maschere e stabilità di
+   `g-final3__r1__vs__r2`: sono state cancellate per liberare il disco. Il riferimento di oggi è il trio del 18/10,
+   `g-r3-prima-ba8e06763-full`, `g-r3-dopo-cd686f445-full` e `g-r3-dopo2-cd686f445-full`, con maschere e stabilità da
+   `diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-cd686f445`. Lo descrive `scripts/visual_review/README.md`, sezione
+   «Known gallery behaviour»: è in dev, non ancora nella mia base, da rileggere dopo l'aggiornamento. Tutte le altre
+   citazioni di `g-final3` (gli esiti di Y1 e Y2, la galleria mobile di Y7, la nota sul giorno UTC) sono la storia
+   delle corse fatte: restano. Il coordinatore, 20/10: le maschere chiedono una pausa di tutta la macchina, quindi
+   più avanti. La nota resta in coda.
+2. **Il numero del treno di Y-N65** nella tabella «Stato dei lotti»: da leggere nel README della fase, dopo
+   l'aggiornamento della base.
+3. **Aperti, invariati**: nel backlog Y-7, Y-9, Y-10, Y-15, Y-18, Y-26, Y-32, Y-35, Y-36, Y-37 (in attesa del
+   developer, o minimi); fermi Y4a e Y13 (Y13-1); dopo la 1.3, se assegnati, J-56 e J-59.
+
+## 20/10 · Z-29d — il dialogo che chiede la serie del bersaglio: analisi (sola lettura)
+
+> **Richiesta del coordinatore** (20/10 08:46): «Z-29d aspetta che Z-29b sia avanti, e Z è ancora su Z-32 (d). […]
+> Nel frattempo prepara l'analisi di Z-29d (file, rischi, ordine dei passi), senza scrivere codice. Niente corse
+> pesanti.»
+>
+> - **Base del worktree**: `15603fe69`; sporco solo questo piano.
+> - **Codice letto**: quello di `dev_release2` `ecc7ac667`. Per il contratto di Z-29a, il ramo di Z `6510fe169`: commit,
+>   letti in sola lettura con `git show`.
+> - **Nessuna corsa** e nessun comando che cambia qualcosa. I numeri di riga sono di `ecc7ac667`.
+
+**Cos'è Z-29d.** Viene dal piano di Z, sezioni «piano breve del lotto intero» e «il contratto rivisto» (19/10
+15:25–15:35):
+- «in modalità scheda, scegliendo il bersaglio di un confronto, la pagina dà la serie allineata con un risolutore
+  asincrono; Vitest e un caso E2E. **0,5 giorni**»;
+- «Il dialogo, scegliendo un bersaglio, manda la voce della scheda (`include_price: false`) e quella del bersaglio in
+  una richiesta sola»;
+- a Y tocca anche `AssetComparisonSignal`, «una riga»: in percentuale, la base del confronto dal `first` del bersaglio
+  (`_baseValue`). Serve anche a Z-29b, per le schede.
+
+### Lo stato reale (20/10)
+
+**Le dipendenze.**
+- **Z-29a e Z-29r, committati sul ramo di Z** (`37c3ec3ee`; checkpoint del 19/10 17:15, revisori MF e X), non ancora
+  in `dev_release2`:
+  - Z-29a è il backend dei prezzi: `key`, `max_points`, `resolution` e `sample_like` nella richiesta; `resolution` e
+    `sample_bounds` nella risposta;
+  - Z-29r è la sede neutra della regola per secchio.
+- **Z-29s e Z-29b, non cominciati**: Z-29s riduce i segnali nel backend, Z-29b è la lista. Z è su Z-32 (d).
+
+**Il dialogo oggi** (`lib/components/charts/ChartSettingsModal.svelte`, 444 righe). La modalità scheda è
+`mode="pair"`.
+- **La linea principale dell'anteprima** è `pairData` (`:227`), cioè la `chartData` della scheda (pagina, `:1913`).
+  In % la normalizza `normalizeToPercentage`, che prende la base dal primo punto disegnato (`:231`).
+- **I segnali locali** passano da `renderLocalPreview` (`:287`) a `renderMulti(previewDataAbs, …)`. La loro base in %
+  è il primo punto dei dati di base (`ChartSignal.ts:421`).
+- **Il confronto con un asset**: `_resolvedData = assetsDataMap[targetId]` (`:296-301`). È la `chartData` della scheda
+  del bersaglio, sincrona.
+  - L'anteprima non mette il nome del bersaglio e non controlla l'asset stesso.
+  - La scheda invece salta il confronto con sé stessa (`assets/+page.svelte:1304`).
+- **I segnali del backend in modalità scheda** sono i risultati salvati, dati dalla pagina:
+  `resolveSettingsBackendPreview` → `getRenderedSignals(asset.id, asset.chartData, …)` (pagina, `:1265-1269`).
+- **Il modello per l'asincrono c'è già, in modalità globale**: i segnali del backend sulla curva sintetica, con un
+  ritardo di 250 ms (`:271`), un gettone (`livePreviewToken`) e uno stato d'errore.
+- **I test.** Nessun test del dialogo. Lo legge solo il controllo sul sorgente di `chartCoreHelpers.test.ts:256`:
+  verifica alcune proprietà di `<ChartSettingsModal>` nella pagina degli asset, e una proprietà in più non lo rompe.
+
+**La pagina degli asset** (`routes/(app)/assets/+page.svelte`).
+- `assetsDataMap` raccoglie le `chartData` delle schede (`:1916`).
+- `fetchPriceSeries` manda `{asset_id, date_range: {start: dateStart, end: dateEnd}, include_price, signals}`, senza
+  `target_currency` (`:739-742`), con `sendBulkBatches` e il pool dei worker (`:780`).
+
+**`AssetComparisonSignal`** (`lib/charts/signals/AssetComparisonSignal.ts`, 176 righe).
+- Allinea `_resolvedData` alle date del grafico per data esatta.
+- In % la base è il suo primo valore allineato, per la linea (`:67`) e per il fantasma della conversione (`:137`).
+  `comparisonSignals.test.ts:123` lo fissa.
+- Sulla lista non c'è conversione, quindi niente fantasma.
+
+**Il backend di Z-29a v3 per la richiesta del dialogo** (ramo di Z, `price_query.py`).
+- `_plan_samples` pianifica la voce indicata anche con `include_price: false`: ne legge il seme e la prima riga, cioè
+  il giorno F e il passo.
+- Una voce con `include_price: false` torna con `prices` vuoti e senza `sample_bounds` (`:1054-1056`).
+- Il `first` del bersaglio cade nel più tardo fra il giorno F della scheda e il primo giorno del bersaglio. Con una
+  scheda giornaliera, il bersaglio è giornaliero da quel giorno.
+- Due voci con intervalli diversi danno un 422 `range_mismatch`.
+
+### Rispetto al piano di Z: cosa manca, cosa devia
+- **Di Z-29d non c'è ancora nulla**, né del suo `AssetComparisonSignal`.
+- **Il confronto rado, cioè il difetto che Z-29d ripara.** Dopo Z-29b ogni scheda ha la sua serie ridotta, con il suo
+  giorno F e il suo passo. In modalità scheda l'anteprima allinea per data la serie ridotta del bersaglio
+  (`assetsDataMap`) sulle date ridotte della scheda: con passi o F diversi le date coincidono poco o niente, e la
+  linea è rada o vuota.
+- **«Una riga» non basta.** Il fantasma della conversione ha la sua base, il primo valore originale allineato. Con la
+  sola `_baseValue` linea e fantasma partirebbero da giorni diversi. Sulla lista oggi non succede (nessuna
+  conversione), ma la classe serve anche al dettaglio e ai cambi.
+- **La base dell'anteprima: un punto nuovo, che il piano di Z non tocca.**
+  - Dopo Z-29b la scheda disegna `prices` e prende la base dal `first`: per la percentuale e per i segnali locali e
+    del backend.
+  - Il dialogo invece normalizza `pairData` sul suo primo punto e calcola i segnali locali su `pairData`.
+  - Così, in %, la linea principale e i segnali locali dell'anteprima partono da 0 % alla fine del primo secchio, la
+    scheda dal giorno F: anteprima e scheda non coincidono più.
+  - Va riparato nello stesso lotto (D-Z29d-4).
+- **I segnali del backend nell'anteprima** vengono da `getRenderedSignals` con la `chartData` della scheda. Se Z-29b
+  cambia i dati di base di quella funzione per la scheda, deve cambiare anche questa chiamata (stesso file, di
+  Z-29b). Lo verifico all'inizio di Z-29d.
+- **La stima.** Il piano di Z dà 0,5 giorni per il dialogo, più la riga della classe. Con la base dell'anteprima, lo
+  stato pubblicato e i suoi test, la mia stima è di circa 1,25 giorni (sotto).
+
+### La proposta (tecnica, da concordare con Z)
+
+1. **`AssetComparisonSignal`: `_basePoint`**, un punto invece del numero `_baseValue`.
+   - In % la base della linea è `_basePoint.value`, quella del fantasma `_basePoint.originalValue` quando c'è.
+   - Senza `_basePoint`, o con una base inutilizzabile (zero, non finita, `missing`), resta tutto come oggi.
+   - Lo iniettano un solo aiuto comune, usato dalla scheda (Z-29b) e dall'anteprima (Z-29d), così i due calcoli del
+     confronto non divergono.
+2. **Il dialogo**, solo in modalità scheda. Le proprietà sono facoltative: senza, resta tutto com'è (lista dei cambi,
+   modalità globale).
+   - `comparisonTargetResolver(targetId)` restituisce `{data, basePoint, displayName}`, cioè la serie allineata del
+     bersaglio, `[first, …prices]`. La dà subito se la pagina la ha, altrimenti con una promessa.
+   - `pairFirst`, il `first` della scheda: dà la base della linea principale, e i segnali locali si calcolano su
+     `[first, …prices]`, come sulla scheda.
+   - Un piccolo modulo a rune accanto al dialogo tiene lo stato per bersaglio: `loading`, `ready` o `failed`.
+     - Una sola richiesta per bersaglio a ogni apertura.
+     - Un gettone per apertura: una risposta arrivata dopo la chiusura si scarta.
+     - Nessun ritardo: una scelta nel menù è un evento solo.
+   - L'anteprima pubblica lo stato, per i test: `data-testid="chart-settings-preview"`, con
+     `data-comparison-state="none|loading|ready|failed"`. Il `LineChart` dell'anteprima non espone le sue serie: niente
+     `__lfChart`, solo `data-chart-ready` e `data-chart-renders`.
+3. **La pagina** (`assets/+page.svelte`), il risolutore.
+   - **La serie c'è già**: se le strutture di Z-29b hanno la serie allineata per la coppia (scheda, bersaglio), il
+     risolutore la restituisce subito, senza richiesta. Succede con un confronto salvato della scheda, caricato nella
+     sua richiesta.
+   - **Altrimenti**, una richiesta sola con due voci, costruite dal costruttore di gruppo di Z-29b:
+     - la voce della scheda: la sua `key`, lo stesso `date_range` della sua voce in cache, `include_price: false`, e
+       il suo campo di campionamento (T-Z29d-1);
+     - quella del bersaglio: `sample_like` = la chiave della scheda, e lo stesso `date_range`.
+   - **La risposta** passa dalla stessa via dei worker e va nella cache di Z-29b, che il bus `{kind: 'prices'}` svuota.
+   - **Il bersaglio uguale alla scheda**: nessuna richiesta e nessuna linea, come sulla scheda (D-Z29d-3).
+
+### Domande
+
+**Di prodotto**: cambiano ciò che si vede. Il consiglio è in neretto.
+- **D-Z29d-1 · Mentre la serie allineata arriva** (qualche centinaio di ms):
+  - (a) **nessuna linea di confronto finché non arriva**. Niente lampo di una linea sbagliata, e oggi un bersaglio
+    senza dati non dà linea;
+  - (b) intanto la serie della scheda del bersaglio, rada, poi sostituita.
+- **D-Z29d-2 · Se la richiesta fallisce** (rete, 422, budget):
+  - (a) **nessuna linea, senza messaggio**. È un'anteprima: dopo il salvataggio la scheda chiede il suo confronto
+    nella sua richiesta, con la gestione degli errori della pagina;
+  - (b) un breve messaggio sotto l'anteprima, come quelli dei segnali del backend, con chiavi nuove nelle 4 lingue.
+- **D-Z29d-3 · Il confronto con l'asset stesso.** Oggi l'anteprima lo disegna, la scheda mai.
+  - (a) **lo salta anche l'anteprima**, come la scheda;
+  - (b) resta com'è.
+- **D-Z29d-4 · La base dell'anteprima dopo Z-29b:**
+  - (a) **l'anteprima segue la scheda**, dentro Z-29d: linea principale e segnali locali con la base dal `first`;
+  - (b) resta com'è, e in % anteprima e scheda sono diverse.
+
+**Tecniche**, per il coordinatore e Z:
+- **T-Z29d-1 · Il campo di campionamento della voce della scheda:**
+  - **la `resolution` della risposta della scheda**, cioè il passo disegnato. L'allineamento è garantito anche se la
+    larghezza è cambiata e la scheda non ha ancora richiesto;
+  - oppure il suo `max_points`: il backend rifà la stessa scelta, se la larghezza non è cambiata.
+- **T-Z29d-2 · Il nome e la forma della base:** **`_basePoint`** o `_baseValue`. Il punto copre anche il fantasma; il
+  nome lo usa anche Z-29b.
+- **T-Z29d-3 · Chi fa `AssetComparisonSignal`, e quando:**
+  - **io, subito, come lotto minimo Z-29d-0**: è indipendente, perché senza iniezione non cambia nulla, e Z-29b lo
+    trova pronto;
+  - oppure Z, dentro Z-29b, con la mia revisione.
+- **T-Z29d-4 · Dove va il caso E2E:**
+  - **in coda a `assets/asset-list.spec.ts`, dopo che le E2E di Z-29b sono entrate**: stessa azione,
+    `front-asset asset-list`, e nessuna riga nuova nel runner;
+  - oppure una spec nuova, con la sua riga nel runner, che è un file condiviso.
+- **Nota per Z, non bloccante.** Una voce pianificata con `include_price: false` legge e conta lo stesso le sue righe
+  di secchio, perché `_read_samples` scorre tutte le voci pianificate, e poi le scarta. Sono poche centinaia di righe.
+
+### Superfici
+- **Codice:**
+  - `lib/charts/signals/AssetComparisonSignal.ts` (Z-29d-0);
+  - `lib/components/charts/ChartSettingsModal.svelte`, più il modulo nuovo dello stato (nome da fissare, per esempio
+    `comparisonPreviewTargets.svelte.ts`);
+  - `routes/(app)/assets/+page.svelte`: il risolutore, e due proprietà su `<ChartSettingsModal>`;
+  - forse `lib/utils/chartUtils.ts`: `normalizeToPercentage` con una base, se Z-29b non lo ha già fatto.
+- **Test:**
+  - `comparisonSignals.test.ts` (Z-29d-0);
+  - il test del modulo dello stato, o un `ChartSettingsModal.test.ts` nuovo;
+  - il test del costruttore della richiesta;
+  - un caso in `asset-list.spec.ts`.
+- **Doc:**
+  - `developer/frontend/components/charts.md`: l'anteprima in modalità scheda, il risolutore, la base;
+  - la base del confronto nella pagina per sviluppatori dei segnali.
+  - Nessuna pagina utente descrive l'anteprima in modalità scheda: nessun cambio previsto.
+- **Fuori:** nessun backend; nessuna chiave i18n e nessun colore nuovo, salvo D-Z29d-2 (b), che userebbe un
+  `InfoBanner` esistente.
+
+### Conflitti previsti
+- **`assets/+page.svelte`** è il file principale di Z-29b: la cache, i bersagli, la ricarica per scheda. Z-29d parte
+  solo con il codice di Z-29b sulla mia base. Il risolutore è un pezzo a parte.
+- **`asset-list.spec.ts`**: Z-29b ci scrive le sue E2E. Io dopo di lui (T-Z29d-4).
+- **`ChartSettingsModal.svelte`**: oggi nessuno lo ha aperto.
+  - DV lo ha portato a 0 classi di palette, quindi non ha un record nel cricchetto: nel codice nuovo solo ruoli.
+  - Y4a lo sposterebbe in `lib/features/signals/` (tabella di DV, «D-Y14»), ma è fermo. Se riparte, l'ordine lo
+    decide il coordinatore.
+- **`AssetComparisonSignal.ts`**: solo Y. Z-29b inietta la base dal lato della pagina.
+- **Il controllo sul sorgente** in `chartCoreHelpers.test.ts`: le proprietà nuove non lo toccano.
+- **La galleria**: lo scatto `assets/chart-settings` è in modalità globale, e il confronto del dettaglio è
+  giornaliero. Nessuno scatto cambia.
+- **Gli altri**: J (il renderer dei segnali), X (i cambi; X rivede la lista), W, A e H non hanno file in comune.
+
+### Complessità e rischi
+- **Lo stato asincrono del dialogo**: risposte tardive, chiusura e riapertura, cambi rapidi di bersaglio, più confronti
+  insieme. È una complessità media, che il modello globale risolve già.
+- **Le forme di Z-29b**: la chiave, la voce in cache, il `first` della scheda, il mapping dei worker. Parto dal suo
+  codice committato, non da questa analisi: al primo passo ricontrollo e aggiorno.
+- **Due calcoli del confronto**, la scheda e l'anteprima, possono divergere. Il rimedio è un solo aiuto d'iniezione,
+  usato da tutti e due.
+- **`range_mismatch`**: l'intervallo della richiesta va preso dalla voce della scheda, non ricalcolato.
+- **Il costo**: una richiesta piccola per ogni bersaglio nuovo, nessuna per quelli salvati.
+
+### Lotti e passi
+
+Ogni lotto si chiude con un checkpoint FROZEN.
+
+0. ✅ 20/10 — Questa analisi, con le domande al coordinatore.
+1. **Z-29d-0 · `AssetComparisonSignal._basePoint`**, se T-Z29d-3 è (a). Indipendente da Z-29a e Z-29b. **0,25
+   giorni.**
+   - Rossi (`test-author`): la base iniettata, per la linea e per il fantasma; senza iniezione, come oggi; la base
+     zero.
+   - Poi la cura, i Vitest leggeri e il checkpoint.
+2. **L'attesa**: Z-29a in `dev_release2` e il codice di Z-29b sulla mia base, aggiornata dal coordinatore. Poi la
+   corsia 6189 si ripopola con `--force --clean`.
+3. **Z-29d · il dialogo.** **Circa 1 giorno.**
+   1. Ricontrollo sul codice di Z-29b (la chiave, la voce in cache, il `first`, i worker, `getRenderedSignals`, il bus)
+      e aggiornamento di questa analisi.
+   2. Rossi (`test-author`), poi visti rossi con il carico sotto 50:
+      - il modulo dello stato: una richiesta per bersaglio, la risposta subito dalla pagina, la risposta tardiva
+        scartata, il fallimento, il bersaglio uguale alla scheda;
+      - il costruttore della richiesta: due voci, con i campi detti;
+      - la base dell'anteprima dal `first`;
+      - GUARDIE: senza risolutore come oggi; la lista dei cambi e la modalità globale invariate.
+   3. La cura, poi le prove leggere:
+      - i Vitest toccati e i vicini: `comparisonSignals`, `chartCoreHelpers`, `ChartSignalsSection`,
+        `chartPageSignals`, `loadComparisonData`, `previewPolicy`;
+      - `front check`, Prettier, `theme-roles --check`, `git diff --check`.
+   4. Uno slot E2E:
+      - il caso nuovo: su «All», le impostazioni di una scheda, un confronto con un asset di storia diversa. Una
+        richiesta con le due voci giuste, e `data-comparison-state="ready"`;
+      - come regressione, `front-asset asset-list` e `asset-detail`.
+   5. La doc (`docs-writer`), poi CHECKPOINT READY.
+
+**Totale: circa 1,25 giorni.**
+
+**Fatto quando:**
+- in modalità scheda, il confronto dell'anteprima sta sulle date della scheda e, in %, parte dove parte sulla scheda,
+  con una scheda ridotta come con una giornaliera;
+- c'è una richiesta per ogni bersaglio nuovo, nessuna per uno salvato;
+- modalità globale, lista dei cambi e dettaglio non cambiano;
+- i rossi sono stati visti rossi, poi verdi; prove leggere ed E2E verdi; doc scritta; piano aggiornato.
+
+**Il piano dei passi** lo scrivo qui sotto, sezione «Il lotto Z-29d», al via del coordinatore.
+
+### Risposte del coordinatore (20/10 09:01) e il lotto Z-29d-0
+
+**Le risposte.**
+- **D-Z29d-1…4**: le porta il coordinatore al developer.
+- **T-Z29d-1**: la `resolution` della risposta della scheda.
+- **T-Z29d-2**: `_basePoint`.
+- **T-Z29d-3**: Z-29d-0 è mio, **via adesso**: prima i rossi, poi il codice, poi il checkpoint. Corse leggere solo con
+  il carico a 1 minuto sotto 50; la corsia 6189 si ripopola quando serve.
+- **T-Z29d-4**: il caso E2E in coda ad `asset-list.spec.ts`.
+- **`data-comparison-state`** sull'anteprima: sì.
+- **Il dialogo** parte quando Z-29a è in dev e Z-29b sulla mia base: avvisa il coordinatore.
+
+**Il contratto di chi consuma la serie ridotta** (le tre note della revisione di MF su Z-29a v3, per Y e Z-29b):
+- **(n1)** Il Vitest legge la tabella dei casi (`compactDensityCases.json`) con la regola del browser e i
+  `max_points` che la pagina manda. Per Z-29d: il dialogo non calcola `max_points`; manda la `resolution` della risposta
+  della scheda (T-Z29d-1), e il suo Vitest lo fissa.
+- **(n2)** Se un ridimensionamento cambia il passo, si rilegge dal server: un campione settimanale non si riaggrega in
+  mesi, e da un campione non si torna al giornaliero. Per Z-29d: la chiave dell'anteprima comprende la `resolution` e
+  l'intervallo della scheda; se la scheda rilegge con un altro passo, l'anteprima chiede di nuovo e non riaggrega mai
+  la serie che ha.
+- **(n3)** La base della percentuale e il colore della linea leggono `sample_bounds.first` (F), non `prices[0]`.
+  - Z-29d-0: `_basePoint` è il `sample_bounds.first` del bersaglio.
+  - Z-29d (D-Z29d-4, in attesa del developer): la linea principale dell'anteprima prende base e colore dal `first`
+    della scheda.
+  - Z-29b: lo stesso sulla scheda.
+
+**Il contratto di Z-29d-0** (`AssetComparisonSignal`).
+1. `params._basePoint`, facoltativo, è un `LineDataPoint`, iniettato dalla pagina come `_resolvedData`. Vale il punto
+   del bersaglio nel giorno in cui parte il confronto: dopo Z-29a, il `sample_bounds.first` della voce del bersaglio,
+   convertito come i suoi prezzi (`value` e, con la conversione, `originalValue`).
+2. In %:
+   - la linea si normalizza su `_basePoint.value`, non più sul suo primo valore allineato;
+   - il fantasma della conversione si normalizza su `_basePoint.originalValue` quando c'è, altrimenti come oggi.
+3. Un `_basePoint` inutilizzabile si ignora, e tutto resta come oggi: assente, non un oggetto, `missing: true`, oppure
+   un `value` non finito o zero. Lo stesso per `originalValue` nel fantasma.
+4. Nessun punto in più: il punto della base non si disegna. Le date restano quelle allineate, come per la scheda, che
+   non disegna F (Q-Z29-1). La vista assoluta non cambia.
+5. `toConfig()` lascia fuori `_basePoint`, come `_resolvedData`: è un dato del momento. Tiene gli altri parametri con
+   `_`, che sono preferenze di stile salvate (il commento di `toConfig`, per esempio `_signalColor` di MACD).
+   - Oggi `toConfig()` si chiama solo su un segnale appena creato (`createSignalConfig`), quindi niente perdite; la
+     regola resta esplicita.
+   - L'intestazione della classe dice che anche `_assetDisplayName` è escluso: non è vero (il codice esclude solo
+     `_resolvedData`). Si corregge.
+6. Senza `_basePoint` è tutto identico a oggi, per tutti i chiamanti di adesso: dettaglio, lista, cambi, anteprima.
+
+**Fuori da Z-29d-0.**
+- `FxPairSignal`: secondo l'analisi di Z, il negozio dei cambi ha ogni giorno di calendario. Con i dati di base
+  `[first, …prices]` di Z-29b il cambio ha quindi il giorno F, e la sua base è già quella di F. Fa eccezione solo una
+  coppia che comincia dopo F, un caso raro: nota per Z-29b.
+- Nessuna pagina MkDocs descrive la base del confronto. Le pagine utente («in % le due linee partono da 0 %») parlano
+  del dettaglio, che resta giornaliero. `_basePoint` si documenta con il suo primo uso, in Z-29b e Z-29d.
+- Niente CHANGELOG (nessun cambio visibile), niente E2E (nessun chiamante), niente corsia (nessun backend).
+
+**Passi.**
+1. ✅ 20/10 — Rossi (`test-author`), in coda a `lib/charts/signals/__tests__/comparisonSignals.test.ts`, describe
+   «AssetComparisonSignal — an injected base point (Z-29d-0)». Sono rossi oggi: la base iniettata per la linea e per il
+   fantasma, e `toConfig()` senza `_basePoint`. Le guardie:
+   - la vista assoluta non cambia;
+   - un `_basePoint` inutilizzabile lascia tutto come oggi;
+   - un `_basePoint` senza `originalValue` lascia il fantasma come oggi;
+   - il punto della base non si disegna;
+   - `toConfig()` tiene un parametro con `_` di stile e lascia fuori `_resolvedData`.
+   > **Note implementazione**: 4 rossi e 25 guardie nuove (tabelle comprese), più i 29 test di prima: 58 in tutto. Un
+   > secondo `test-author` ha aggiunto le righe di una decisione presa da me, che il primo aveva lasciato aperta.
+   > **⚠️ Fuori pista**: il caso di un `value` inutilizzabile con un `originalValue` buono, per esempio
+   > `{value: 0, originalValue: 200}`. Si leggeva in due modi. Ho deciso: il punto vale solo se vale il suo `value`, e
+   > il fantasma vuole in più un `originalValue` buono. Con un `value` inutilizzabile si ignora tutto il punto, fantasma
+   > compreso. Così vale alla lettera il punto 3 del contratto, «si ignora, e tutto resta come oggi».
+   >
+   > La base zero: l'analisi diceva «nessuna normalizzazione», il contratto «si ignora»; vale il contratto, cioè la
+   > linea di oggi, misurata dal suo primo valore. La frase dell'analisi è corretta qui sotto.
+2. ✅ 20/10 09:2x — I rossi visti rossi: `TAG=red bash files/scripts/z29d0_vitest.sh <file>`, carico 18. 4 falliti e 54
+   passati su 58: falliscono esattamente i 4 rossi, ognuno sulla sua asserzione. Per esempio «the comparison restarts at
+   0 % on its first drawn point (110 on 03-02) instead of measuring from … (100 on 03-01)», e «toConfig() saves the
+   moment's base point with the chart settings». Nessun `TypeError`.
+3. ✅ 20/10 — La cura.
+   - `ChartSignal.ts`:
+     - `TRANSIENT_PARAMS = {_resolvedData, _basePoint}`, che `toConfig()` lascia fuori (prima l'esclusione era una
+       chiave sola, scritta nel codice);
+     - corretti i due commenti, quello di `toConfig` e quello di `SignalConfig`.
+   - `AssetComparisonSignal.ts`:
+     - `isUsableBase`: un numero finito diverso da 0;
+     - `basePoint()`, privato: il punto iniettato, oppure null se manca o è inutilizzabile;
+     - `render()`: `p0 = basePoint()?.value ?? absData[0].value`;
+     - `renderMulti()`, il fantasma: `originalValue` del punto se è utilizzabile, altrimenti come oggi;
+     - l'intestazione, corretta: non dice più che `_assetDisplayName` è escluso.
+   - Diff: +44 −10 righe in 2 file.
+4. ✅ 20/10 — Prove leggere, con il carico fra 15 e 18:
+   - `comparisonSignals`: 58/58;
+   - i vicini, `files/scripts/z29d0_vitest_batch.sh`: 39 file in un solo processo, cioè tutti i test di `lib/charts/`,
+     i gate di `src/*.gate.test.ts` (compreso quello della matematica finanziaria), `chartSettingsStore` e
+     `chartSettingsStore.migration`, `ChartSignalsSection`, `SignalTreeSelect`, `chartCoreHelpers`,
+     `assetDetailPriceQuery` e `assetDetailFxRequirements`: 1216/1216;
+   - `npm run check`: 0 errori e 0 avvisi;
+   - Prettier `--check` sui 3 file, `theme-roles --check` e `git diff --check`: puliti.
+   - Log: `files/logs/z29d0_*`.
+5. ⏳ CHECKPOINT READY, poi FROZEN.
+
+**Le risposte del developer su Z-29d** (20/10, mattina, dal coordinatore). Valgono per il lotto del dialogo.
+- **D-Z29d-1: (a)**, nessuna linea di confronto finché la serie non arriva.
+- **D-Z29d-2**, testuale: «se la connessione manca io mostrerei in toast di errore rosse che dice che la connessione è
+  persa, se invece l'errore è nel segnale, in asset globa non mostriamo nulla, mentre in asset detail lo mostriamo
+  dentro la card del segnale, come già avviene per i segnali tecnici. Al più si potrebbe fare in asset global la stessa
+  cosa in impostazioni, anche se ha poco senso, vedi tu se è facile.» Secondo il coordinatore:
+  - **connessione persa**: il toast rosso che esiste già, se c'è;
+  - **errore nella pagina Assets**: nessuna linea;
+  - **errore nel dettaglio dell'asset**: come i segnali tecnici, dentro la card del segnale;
+  - **il messaggio nell'anteprima delle impostazioni**: facoltativo, solo se costa poco e riusa chiavi esistenti.
+  - Da verificare all'inizio del lotto del dialogo:
+    - se un toast rosso di connessione persa esiste già, e dove;
+    - se il dettaglio mostra già nella card un confronto fallito. `ChartSignalsSection` ha già una diagnostica del
+      confronto (`_conversionFailed`, `comparisonStatus`, i problemi tipizzati); manca forse il caso «richiesta
+      fallita». Se manca, è lavoro nuovo da proporre.
+- **D-Z29d-3: (a)**, l'anteprima salta il confronto con l'asset stesso, come la card.
+- **D-Z29d-4: sì, riallineare** (developer, 20/10), testuale: «si dobbiamo riallinearle, giusto per sicurezza mi
+  ripeto, lo 0 deve essere rispetto allo stesso giorno, se presente, se il segnale inizia con il suo primo punto
+  assoluto dopo, allora lo 0 di quel segnale di confronto è calcolato rispetto al suo primo punto, anche se nella vista
+  aggregata settimanalmente il punto richiesto è un martedì ma noi mostriamo nei punti il venerdì, significa che lo 0 è
+  rispetto al valore di martedì, e il primo punto è il venerdì scalato rispetto a martedì, tutto chiaro? questo vale per
+  entrambe, anzi in realtà è strano che siano 2 componenti, in origine erano lo stesso! c'è stata duplicazione di
+  codice? riesci a fonderle e riportarle ad essere un unico componente mergiando il meglio dei 2?»
+  - **La regola dello 0**, contratto di Z-29b e Z-29d:
+    - la linea si misura dal valore del giorno F, il primo giorno vero del periodo;
+    - un confronto si misura dal suo valore in F, oppure dal suo primo punto se comincia dopo F;
+    - i punti disegnati (per esempio i venerdì di una vista settimanale) si scalano da quel valore;
+    - vale per la scheda e per l'anteprima. Per i confronti è `_basePoint` (Z-29d-0); per la linea, il `first`.
+  - **La fusione**: analisi nella sezione «20/10 · La scheda e l'anteprima», prima di Z-29d.
+
+## 20/10 · Y-38 — il selettore dell'asset di confronto fa scorrere il nome lungo: analisi breve (sola lettura)
+
+> **Richiesta del developer** (dal coordinatore, 20/10), testuale: «in segnali il selettore dell'asset di confronto non
+> è praticamente mai largo abbastanza per far vedere il nome per intero dell'asset, possiamo aggiungere a quel
+> componente la capacità di "scorrere" come avviene in quasi tutto il resto del progetto, quando il nome è troppo
+> lungo?»
+> Il coordinatore: «Usa il componente di scorrimento che il progetto ha già, e fai prima un'analisi breve […]. Se è
+> piccolo e non tocca i file di Z-29b, puoi farlo dopo Z-29d-0.»
+>
+> - **Base:** `15603fe69`, uguale a `dev_release2` su questi file.
+> - **ID:** Y-38, libero.
+
+**Dove sta.** `lib/components/charts/ChartSignalsSection.svelte`, ramo `configuredAssets` (`:675-722`).
+- È un `SearchSelect` in un riquadro largo `w-48`, cioè 192 px, con due snippet, che disegnano tutti e due icona e
+  nome dentro `<span class="flex items-center gap-1.5 truncate">`. Da qui il nome tagliato con «…»:
+  - `selectedItem`, il campo chiuso;
+  - `item`, le righe della tendina.
+- La tendina è larga quanto il campo: `dropdownMinWidth` vale 0, e la larghezza è il massimo fra il campo e quel valore
+  (`SearchSelect.svelte:173`). Così anche le righe sono tagliate.
+- Lo stesso componente sta in tre posti, quindi una modifica li copre tutti:
+  - la finestra delle impostazioni (`ChartSettingsModal`), cioè la lista Asset e la lista dei cambi;
+  - il pannello dei segnali del dettaglio asset (`assets/[id]/+page.svelte:2341`);
+  - il pannello dei segnali del dettaglio cambio (`fx/[pair]/+page.svelte:1420`).
+- Il selettore della coppia di valute (`w-44`) ha etichette corte, bandiere e codici: resta com'è.
+
+**Cosa si riusa.** Lo scorrimento automatico del progetto, usato in 27 file (nomi di asset e broker nelle schede,
+tabelle, titoli, la pagina Informazioni):
+- l'azione `use:scrollOnOverflow` (`lib/actions/scrollOnOverflow.ts`): dopo 2 s di pausa il testo scorre fino alla
+  fine, si ferma e riparte. Non fa nulla se il testo ci sta, né con il movimento ridotto;
+- la classe comune `overflowScrollTextClass` (`lib/utils/overflowScroll.ts`).
+
+`MarqueeName.svelte` del PAC è lo stesso, ma con peso e colore fissi; si usano direttamente azione e classe, come negli
+altri 25 posti. La catena delle larghezze c'è già: `SearchSelect` mette gli snippet dentro
+`<div class="flex-1 min-w-0">` (`:450`, `:533`).
+
+**La modifica**, nei due snippet:
+- il contenitore passa da `truncate` a `min-w-0`;
+- il nome diventa `<span use:scrollOnOverflow class="{overflowScrollTextClass} text-xs" title={option.label}>`;
+- in più, due import. Nessun colore nuovo; il file non ha un record nel cricchetto (0 classi di palette).
+
+**Domanda** (di prodotto, consiglio in neretto). Scorrono anche le righe della tendina?
+- (a) **sì, come il campo**: due nomi lunghi con lo stesso inizio si distinguono. Le tabelle del progetto fanno già
+  scorrere più righe insieme;
+- (b) solo il campo chiuso: nella tendina il nome resta tagliato, con il nome intero nel tooltip.
+
+**Test.**
+- **Vitest**, in `ChartSignalsSection.test.ts`, describe del confronto. Un nome lungo nel campo chiuso (e nelle righe,
+  se (a)): il nome intero sta in un elemento dello scorrimento, trovato con `OVERFLOW_MARQUEE_SELECTOR` (il marcatore
+  che lo scorrimento esporta, come nei test di `GrowthChart` e del rischio), con `title` uguale al nome.
+- **Niente E2E nuova**: lo scorrimento è visivo, e le E2E del pannello usano i `data-testid`, che non cambiano.
+- **La galleria**: gira con il movimento ridotto (`gallery.spec.ts:489`), quindi lo scorrimento non parte mai. Lo scatto
+  del dettaglio con un confronto (`:5389`) può cambiare solo alla fine di un nome lungo: tagliato netto invece dei «…».
+
+**Conflitti.**
+- `ChartSignalsSection.svelte` non è fra i file di Z-29b, e oggi non l'ha aperto nessuno.
+- È di Y: il lotto del dialogo (D-Z29d-2, la card del dettaglio) potrebbe toccarlo dopo. Lo stesso proprietario, in
+  sequenza.
+- T ha scritto che non lo tocca più. Y4a lo sposterebbe, ma è fermo.
+
+**Costo**: circa 0,25 giorni, rossi e doc compresi. Doc: nessuna pagina descrive il selettore, quindi niente MkDocs;
+CHANGELOG, una riga 🔄.
+
+**Ordine**: dopo il commit di Z-29d-0. Prima i rossi (`test-author`), poi la cura, le prove leggere e il checkpoint.
+
+> **Decisione** (coordinatore, 20/10 09:35): **(a)**, scorrono anche le righe della tendina, «come nel resto del
+> progetto». Z-29d-0 committato (`bccf05cbb`, giornale `c19d808fe`). **Via a Y-38**: prima i rossi.
+
+**Il lotto Y-38.**
+1. ✅ 20/10 — Rossi (`test-author` `87d78b6d`, in sottofondo), describe «ChartSignalsSection — the asset-comparison
+   selector scrolls a long asset name with the project marquee (Y-38)».
+   - 2 rossi: il campo chiuso e le righe della tendina tengono ognuno un solo elemento dello scorrimento
+     (`OVERFLOW_MARQUEE_SELECTOR`), con testo e `title` uguali all'etichetta intera, cioè nome e suffisso (`✓`, `📌`).
+   - 1 guardia: il nome intero compare una volta sola nel campo.
+   - Visti rossi da me (carico 18): 2 falliti su 24, ognuno sulla sua asserzione («the closed field holds no marquee
+     with the whole label…»).
+   > **Note implementazione**: non è fissato l'ordine dell'icona, che non ha un `data-testid`: per selezionarla
+   > servirebbe il suo `src`. Non è fissato `👑`, perché in produzione non arriva in questa lista: la pagina toglie il
+   > suo asset da `availableAssets`.
+2. ✅ 20/10 — La cura, in `ChartSignalsSection.svelte`, nei due snippet:
+   - il contenitore passa da `truncate` a `min-w-0`;
+   - il nome diventa `<span use:scrollOnOverflow class="{overflowScrollTextClass} text-xs" title={option.label}>`;
+   - in più, due import.
+3. ✅ 20/10 — Prove leggere, con il carico a 21:
+   - il file: 24/24;
+   - i vicini, `files/scripts/y38_vitest_batch.sh`: 30 file in un solo processo, cioè i gate `src/*.gate.test.ts`, i
+     test di `ui/select`, `SignalTreeSelect`, `chartCoreHelpers`, `comparisonSignals`, `loadComparisonData` e tutti i
+     test che usano lo scorrimento: 1364/1364;
+   - `npm run check` 0/0; Prettier, `theme-roles --check` e `git diff --check` puliti.
+   - **Le E2E**, lette e non lanciate: `asset-detail.spec.ts:2816-2830` e `fx-detail.spec.ts:1952-1962` guidano il
+     selettore con i `data-testid` (`…-trigger`, `ArrowDown`, `search-select-option-<id>`), che non cambiano.
+   - **La galleria**: col movimento ridotto lo scorrimento non parte. Nello scatto del dettaglio con un confronto
+     (`gallery.spec.ts:5389`) un nome lungo finisce tagliato netto, senza i «…».
+   - **Doc**: nessuna pagina descrive il selettore.
+4. ⏳ CHECKPOINT READY, con una riga 🔄 nel CHANGELOG.
+
+## 20/10 · La scheda e l'anteprima: due componenti? Analisi della fusione (sola lettura)
+
+> **Richiesta del coordinatore** (20/10 09:35), dopo la risposta del developer a D-Z29d-4: «card e anteprima usano due
+> componenti diversi? Trova dove si sono separati, cosa ha in più ognuno e quanto costa fonderli in un componente
+> solo, "il meglio dei due". Senza codice: mandami l'analisi.»
+>
+> - **Base:** `c19d808fe`.
+> - **Metodo:** il codice di oggi e la storia di git, in sola lettura.
+
+**Sì, si sono separati, su due livelli.**
+
+1. **Il grafico.**
+   - Le schede (`AssetCard`, `FxCard`) disegnano con `PriceChartCompact.svelte`: 42 righe sopra un `LineChart`
+     compatto.
+   - L'anteprima è nata sullo stesso componente: `4f3ee08b5`, 9/3 11:20, «preview chart». L'intestazione di
+     `PriceChartCompact` lo dice ancora: «Used by FxCard, AssetCard, ChartSettingsModal preview».
+   - Sette ore dopo, `5487096df` (9/3 18:15: MACD su due assi, le bande, il selettore delle coppie) la porta su un
+     `LineChart` diretto e non compatto, con il suo interruttore Abs/%. Sposta anche la conversione in % nel dialogo
+     (`previewDataAbs`, il «Problema 1» del suo piano).
+   - Il 10/3 `e57408376` toglie l'import. Da allora sono due grafici.
+2. **I segnali: tre copie della stessa logica.** Per ogni segnale locale: crea l'istanza, inietta i dati del
+   confronto o del cambio, poi `renderMulti`; e i risultati del backend.
+   - `getRenderedSignals` della pagina dei cambi (`fx/+page.svelte:692`, dal 9/3, `099d252de`);
+   - `getRenderedSignals` della pagina Asset (`assets/+page.svelte:1276`, dal 4/4, `2c1ab6e24`, la «parità della
+     lista Asset»);
+   - `renderLocalPreview` del dialogo (`ChartSettingsModal.svelte:287`, dal 23/7, `5b9dddb45`, insieme ai segnali del
+     backend).
+   - Anche `resolveGlobalBackendPreview`, cioè i segnali del backend dal vivo sulla curva sintetica, è scritta due
+     volte. Le due copie sono uguali, salvo il dominio.
+
+**Cosa ha in più ognuno, oggi.**
+- **La scheda:**
+  - il nome del bersaglio nel confronto (`_assetDisplayName`), mentre l'anteprima mostra «Asset #id»;
+  - salta il confronto con sé stessa; D-Z29d-3 lo porta anche nell'anteprima;
+  - i cambi presi dal negozio dei cambi, sempre nel verso salvato. Nella lista dei cambi, invece, l'anteprima legge
+    `pairsDataMap`, che inverte la coppia bersaglio se è invertita sulla SUA scheda
+    (`isCardInverted(p.config.slug)`). Una coppia mostrata invertita arriva quindi invertita nell'anteprima e diritta
+    sulla scheda. Lo dice il codice; non l'ho ancora provato con un caso;
+  - il grafico compatto: l'asse mini, la riduzione per densità (`chooseStaticResolution`), 80 px.
+- **L'anteprima:**
+  - le configurazioni che si stanno modificando, non ancora salvate;
+  - in modalità globale, la curva sintetica con i segnali del backend dal vivo;
+  - gli stati dei segnali del backend: da applicare, serve un asset vero, non disponibile;
+  - il suo interruttore Abs/%, 140 px, le righe degli assi secondari;
+  - **il colore per la linea di base.** Il grafico non compatto lo applica, quello compatto mai: `LineChart.svelte:450`,
+    `colorByBaseline && !compact`, dal 3/3 (`0a551f1cb`, prima che l'anteprima esistesse). Così l'opzione «colora per
+    la linea di base» si vede nell'anteprima e non sulle schede. È la differenza più visibile.
+- **Uguale nelle due**: `normalizeToPercentage` sul primo punto disegnato. Dopo Z-29b deve passare a F (n3, D-Z29d-4).
+
+**La proposta: il meglio dei due.**
+1. **Una sola funzione per i segnali di una scheda**, pura, in `lib/charts/` (per esempio `renderCardSignals`).
+   - Riceve le configurazioni, i dati assoluti, la base F, la vista e un contesto: i risolutori del cambio e del
+     confronto (dati, nome, `_basePoint`), i risultati del backend, l'asset della scheda (per saltare sé stesso).
+   - La usano la scheda Asset, la scheda del cambio e l'anteprima: stesse configurazioni, stessi segnali.
+   - Le due `resolveGlobalBackendPreview` diventano una, con il dominio come parametro.
+2. **Un solo componente del grafico.** `PriceChartCompact` riceve i dati assoluti e la base F, e fa lui la
+   percentuale: la regola dello 0 sta in un posto solo. L'anteprima torna a montarlo, con l'altezza, l'interruttore e
+   le righe degli assi che ha oggi.
+3. **La regola dello 0 (D-Z29d-4) dentro quei due pezzi**: `first` per la linea, `_basePoint` per i confronti
+   (Z-29d-0, già fatto).
+
+**Domande** (di prodotto, consiglio in neretto).
+- **F-1 · L'aspetto dell'anteprima:**
+  - (a) **come la scheda, più grande**: grafico compatto con asse mini e riduzione per densità. È «un componente
+    solo», e l'anteprima mostra davvero la scheda;
+  - (b) grande con gli assi completi, come oggi, ma con gli stessi dati, la stessa base e gli stessi segnali della
+    scheda.
+- **F-2 · Il colore per la linea di base:**
+  - (a) **anche sulle schede, come dice l'opzione**: in % rosso sotto lo 0 e verde sopra; in valore assoluto, rispetto
+    al giorno F (n3);
+  - (b) solo nell'anteprima, come oggi, e l'opzione lo dice;
+  - (c) toglierlo anche dall'anteprima.
+- **F-3 · Il verso delle coppie nell'anteprima della lista dei cambi**: con la funzione comune, (a) **lo stesso della
+  scheda** (il verso salvato, più il `_inverted` del segnale). Si risolve da sé.
+
+**Costo: circa 2 giorni.**
+- La funzione comune e i suoi tre usi, con i Vitest di parità (scheda e anteprima danno gli stessi segnali): 1 giorno.
+- Il componente con la base F e l'anteprima che lo monta: 0,5 giorni.
+- E2E, cioè `asset-list`, `fx-chart-settings` e `fx-list`, e la doc: 0,5 giorni.
+- La galleria, in più: se cambia l'aspetto dell'anteprima (F-1 a) o il colore delle schede (F-2 a), cambiano gli
+  scatti `assets/chart-settings`, `fx/chart-settings` e quelli delle schede. Serve un cancello della galleria, cioè
+  una pausa della macchina.
+
+**Ordine e conflitti.**
+- **Prima di Z-29b (consiglio).** Così Z-29b mette `first` e `_basePoint` in un posto solo, e l'anteprima resta
+  allineata da sé. Z-29d si riduce al risolutore asincrono per un bersaglio nuovo: da circa 1,25 a circa 0,75 giorni.
+  Dopo Z-29b, invece, Z-29b scrive la sua logica in `getRenderedSignals` e la fusione deve spostarla.
+- **File toccati:**
+  - un modulo nuovo in `lib/charts/`;
+  - `PriceChartCompact.svelte`, `ChartSettingsModal.svelte`;
+  - `AssetCard.svelte` e `FxCard.svelte`: la percentuale passa al componente;
+  - `assets/+page.svelte`, il file principale di Z-29b;
+  - `fx/+page.svelte`, la lista dei cambi: va chiesto a X e al coordinatore;
+  - `LineChart.svelte`, solo con F-2 (a): ci lavora Z-29b, e c'entra il programma colori.
+- **Colori**: nessun ruolo nuovo. F-2 (a) usa il verde e il rosso che il grafico ha già.
+- **Lotto proposto**: Y-39, «una scheda e la sua anteprima: un grafico solo, una funzione dei segnali», di Y.

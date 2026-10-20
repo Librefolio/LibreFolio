@@ -13,11 +13,11 @@
  *   - colour roles only in the new card: no palette class and no `dark:` (the rest of the tab is not this lot's).
  *
  * Mocks follow `AboutTab.test.ts` — the generated client is a proxy of per-endpoint `vi.fn`s, the theme store, the
- * signal registry and its mapper, and the changelog feature (its `?raw` import is denied in tests) are stubs, and
- * `localStorage` is a stand-in — with one difference: `$lib/i18n` answers `⟦<key>⟧`, so a text is read as the key the
- * component asked for, never as a sentence. `LegalNotice` is the real one, reached through the tab. The instance
- * configuration is the real store, its answer set per test by a forced `load` whose `fetchConfig` the test owns; the
- * proxy's `GET /system/instance` refuses, so a `load()` of the component's own would reach no network either.
+ * signal registry and its mapper are stubs, and `localStorage` is a stand-in — with one difference: `$lib/i18n`
+ * answers `⟦<key>⟧`, so a text is read as the key the component asked for, never as a sentence. `LegalNotice` is the
+ * real one, reached through the tab. The instance configuration is the real store, its answer set per test by a forced
+ * `load` whose `fetchConfig` the test owns; the proxy's `GET /system/instance` refuses, so a `load()` of the
+ * component's own would reach no network either.
  *
  * Written red-first, before the card exists. The tab is imported once, in a `beforeAll` with a long budget: its first
  * `lucide-svelte` import may take ~27 s under load.
@@ -60,12 +60,6 @@ vi.mock('$lib/stores/app/themeStore', () => ({
 }));
 vi.mock('$lib/charts/signals/registry', () => ({getRegisteredSignalTypes: () => []}));
 vi.mock('$lib/charts/signals/catalogMapper', () => ({mapBackendSignalDefinition: (raw: unknown) => raw}));
-vi.mock('$lib/features/changelog/changelog', () => ({
-    changelogChapters: [],
-    baseLanguage: () => 'en',
-    localizedChangelog: {peek: () => [], load: () => Promise.resolve([])},
-    CHANGELOG_REMOTE_URL: 'https://example.invalid/CHANGELOG.md',
-}));
 
 import {zodiosApi} from '$lib/api';
 import {instanceConfig, type InstanceConfig} from '$lib/features/instance/instanceConfig.svelte';
