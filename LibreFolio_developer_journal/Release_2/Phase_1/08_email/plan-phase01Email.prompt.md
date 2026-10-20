@@ -192,12 +192,15 @@ i18n nuova `lib/i18n/email/` (prefisso `email`). Galleria con `page.route`.
 | Lotto | Contenuto | Dipende da | Stato |
 |---|---|---|---|
 | E0 | Questo piano, sezione E del backlog | via | ✅ (checkpoint E1) |
-| E1 | Configurazione, `.env.example` (sezione Email), `smtp`, `delivery`, `messages` e testi, `checks`, `rate_window`, SMTP finto, test, doc per sviluppatori | niente | 🧊 checkpoint |
-| E2 | `GET /email/status`, `POST /email/test`, router, `/system/instance.email`, `CONFIG_CHECKS`, scheda «Email», i18n, Vitest, E2E simulate, galleria, doc admin | A5a in base; H per `config_audit`; frontend dopo la finestra e L | ⏳ |
-| E3 | `links.py`, `POST /email/links`, `POST /email/password-reset`, attivazione dell'admin | A5a in base, punto 45 | ⏳ |
-| E4 | modulo «password dimenticata», «Spedisci per email» | A5b e A6 in base | ⏳ |
-| E5 | verifica dell'email | punto 44, A5a+A5b in base | ⏳ |
-| E6 | doc finali, devWiki, `TODO_FUTURI`, testo per il CHANGELOG, `all-backend` + E2E, `security-review` | tutto | ⏳ |
+| E1 | Configurazione, `.env.example` (sezione Email), `smtp`, `delivery`, `messages` e testi, `checks`, `rate_window`, SMTP finto, test, doc per sviluppatori | niente | ✅ dev `f46a93ffd` (15/10) |
+| E2 | `GET /email/status`, `POST /email/test`, router, `/system/instance.email`, `CONFIG_CHECKS`, scheda «Email», i18n, Vitest, E2E simulate, galleria, doc admin | A5a in base; H per `config_audit`; frontend dopo la finestra e L | ✅ dev `755158aad` (E2a ed E2b, 15/10), il cancello i18n `be7de95b6` |
+| E3 | `links.py`, `POST /email/links`, `POST /email/password-reset`, attivazione dell'admin | A5a in base, punto 45 | ✅ dev `8f908623b` (E3 ed E3s, 15/10), `e54ae96bb` (E3p, 15/10) |
+| E4 | modulo «password dimenticata», «Spedisci per email» | A5b e A6 in base | ✅ dev `73a68d95f` (E4a, 16/10), `56759b2c8` (E4b ed E4c, 16/10) |
+| E5 | verifica dell'email | punto 44, A5a+A5b in base | ✅ dev `e9a993e00` (E5a, 15/10), `dbe232723` (E5b, 16/10) |
+| E6 | doc finali, devWiki, `TODO_FUTURI`, testo per il CHANGELOG, `all-backend` + E2E, `security-review` | tutto | ✅ dev `56759b2c8` (16/10), il diario E6.10–E6.11 `30c2459e6` |
+
+> Contabilità del 19/10: gli ingressi sono i merge di primo genitore di `dev_release2`. I lotti venuti dopo E6, da E-4
+> a E-21, si seguono nella sezione E del backlog.
 
 ## 8. Definizione di fatto
 
@@ -7784,3 +7787,327 @@ non sposti il registro.
 > - Il caso che conta è un link finito nelle mani sbagliate, usato proprio mentre l'admin lo annulla. L'admin vedrebbe
 >   «inattivo» fino al ricaricamento; chi ha il link non può scegliere quel millisecondo.
 > - La cura, se la si vuole: rileggere l'account dopo la prima scrittura (un `refresh` sotto il lock) e decidere da lì.
+
+### A-51 — La revisione dopo l'ingresso (2026-10-17, 18:4x–19:0x; sola lettura, dev `180be0ff1`)
+> Codice di A `a2dbe7b7e`…`86b2f2f47`, letto dagli oggetti git mentre ero congelato. **OK**, tre note informative.
+> - **Verificato**: `begin_writes` emette `BEGIN` col suo `UPDATE … WHERE false`, le letture prima erano in autocommit,
+>   quindi `refresh` più le guardie leggono sotto il lock; ogni rifiuto fa `rollback` prima di tornare; nel CLI ogni
+>   guardia è sotto il lock; il validatore di `cancel_setup` dà 422 senza `is_active` falso; `__getnewargs__`
+>   restituisce `(code, message)` (UNAME-032).
+> - **Note**:
+>   1. una cancellazione concorrente dello stesso account dà 500, non 404: `session.refresh(user)` alza
+>      `InvalidRequestError` (prima era `StaleDataError`, anch'esso 500);
+>   2. la cancellazione rilegge sotto il lock solo nel ramo «in attesa»: un account promosso da un altro admin nella
+>      finestra si cancella senza `DEMOTE_FIRST` (mai l'ultimo admin, perché chi chiede lo è);
+>   3. preesistente: il controllo del limite (`usage.full`) di una riattivazione sta prima del lock.
+
+### C-54 — La revisione dopo l'ingresso (2026-10-17, 20:4x–20:5x; sola lettura, dev `630c478cd`)
+> Codice di A `9e9dff30c`…`737268864`. **OK**, due note informative (mandate al coordinatore, girate ad A).
+> - **Verificato**: `get_git_version()` è sotto `lru_cache`, quindi nessun `git` per richiesta; `last_seen_version` viene
+>   dalla migrazione 005 e C-54 è il solo a scriverlo; ogni account passa da `create_user`; `_auth_user()` è l'unico
+>   costruttore di `AuthUserResponse`; la POST scrive la release del server, idempotente; `whats-new/seen` fuori da
+>   `ALLOWED_WHEN_BLOCKED` è innocuo, perché la pagina del blocco non monta `DeferredAppPopups`.
+> - **Note**: `mark_seen` può riportare indietro il segno dopo un downgrade (cura: scrivere solo se più nuovo); una
+>   pre-release conta come la sua release.
+
+### C-70b — I rifiuti del parse e dell'anteprima tradotti (K2b di W)
+#### C-70b.0 — Analisi (2026-10-17, 21:0x–21:2x; sola lettura, HEAD `9e6faacf4`)
+> **La richiesta** (coordinatore, 21:0x): il 400 del parse è ancora in inglese nel wizard, e l'anteprima illeggibile non
+> ha un codice. Errori a codice con parametri, nello stile di `BRIMRefusal`, tradotti in `importWizard.parseRefusal.*`
+> come in K2a di W (`0eac8e1b6`). W rivede. Nessuno dei file è aperto altrove.
+>
+> **Lo stato vero**:
+> - **K2a** ha dato un codice ai rifiuti dei plugin (`cannot_parse_detail` → `BRIMRefusal{code, message, context}`), ma
+>   solo per il controllo dei plugin (`GET …/plugin-check`), che il wizard traduce con `resolveParseRefusalMessage`
+>   (`features/transactions/import/defaultPluginCheck.ts:86`).
+> - **Il parse** (`POST /brokers/import/files/{id}/parse`, `brokers.py:910`), tre 400 in inglese:
+>   - la guardia di `brim_provider.parse_file`: `ValueError(_refusal_message(...))`, cioè «Plugin 'X' cannot parse file
+>     'Y': <reason>», dove il motivo viene da `cannot_parse_reason`, testo;
+>   - `ValueError("Plugin not found: <code>")`;
+>   - `BRIMParseError` → `"Parse error: <message>"`: circa 60 punti in più di 30 plugin, frasi inglesi.
+>   - Il 422 `set_required` ha già un codice (`{code, message, missing_roles}`).
+>   - Il wizard: `result.errorMessage = extractErrorMessage(e)` (`ImportWizardModal.svelte:4041`), mostrato come testo.
+> - **L'anteprima**: le due rotte (`GET /brokers/import/files/{id}/preview`, `brokers.py:737`, e
+>   `GET /uploads/{id}/preview`, `uploads.py:291`) prendono ogni `ValueError` di `build_preview_response`
+>   (`services/files/file_preview.py`) come un 400 col testo. Gli errori:
+>   - `UnreadablePreviewError` (un `ValueError`): «This file cannot be read as an Excel workbook…»;
+>   - `UnsupportedPreviewError`: «Preview is not supported for '<file>'» o «Table preview…», e la libreria Excel che
+>     manca sul server;
+>   - `ValueError("Sheet '<x>' not found")`.
+>   - Il frontend: `getFilePreviewError(error, 'Preview failed')` (`utils/files/filePreview.ts:58`), con un ripiego
+>     inglese scritto nel codice; lo chiamano il wizard e `BrokerImportFilesModal`. Nessuna chiave i18n esistente.
+> - `extractErrorMessage` legge già `detail.message` da un `detail` oggetto, quindi un 400 a oggetto lascia ogni altro
+>   lettore com'è (la frase inglese).
+> - **Il passaggio fra processi**: il parse gira nel pool di processi (`parse_file_offloaded`), quindi l'eccezione torna
+>   serializzata. `BaseException.__reduce__` rimette il `__dict__` dopo `cls(*args)`: una sottoclasse di `ValueError`
+>   con attributi passa, se il costruttore accetta i propri `args`. Un rosso lo fissa sul pool vero.
+> - Fuori: il motivo che `move_to_failed` salva per un file fallito (`error_message`) non si mostra da nessuna parte; la
+>   rotta `/uploads/file/{id}` (testo e immagini) non è l'anteprima.
+>
+> **La proposta (K2b)**:
+> 1. **Il 400 del parse diventa un oggetto `{code, message, context}`**, come `BRIMRefusal` e `set_required`:
+>    - la guardia: un `BRIMParseRefusedError(ValueError)` col nome del plugin, il nome del file e il `BRIMRefusal` di
+>      `cannot_parse_detail` (o niente); codice `cannot_parse`, `context` `{plugin_name, file_name}` più `refusal`
+>      annidato. Il testo inglese resta il `message` (le corrispondenze `match="cannot parse file"` restano verdi);
+>    - `plugin_not_found` con `{plugin_code}`;
+>    - `BRIMParseError` → `parse_failed` con `{plugin_name, file_name}`, e la frase del plugin nel `message`: tradurre le
+>      frasi dei 30 plugin è un lotto suo;
+>    - lo spostamento in `failed` e i codici HTTP restano.
+> 2. **I 400 dell'anteprima** con lo stesso oggetto, da un solo aiuto usato dalle due rotte: `preview_unreadable`,
+>    `preview_unsupported` (`{file_name}`), `preview_engine_missing`, `preview_sheet_not_found` (`{sheet}`); gli errori
+>    di `file_preview.py` portano `code` e `context`, e le classi restano.
+> 3. **Il frontend**:
+>    - un risolutore puro, accanto a `resolveParseRefusalMessage`: `importWizard.parseRefusal.cannot_parse`
+>      («{plugin_name} cannot read {file_name}: {reason}», col motivo tradotto da K2a), `plugin_not_found`,
+>      `parse_failed`; senza codice, o senza traduzione, `extractErrorMessage`;
+>    - `getFilePreviewError` riceve il traduttore: `files.preview.error.<code>` e un ripiego tradotto al posto di
+>      «Preview failed».
+> 4. i18n 4 lingue (circa 9 chiavi), i documenti (`brim_plugin_guide.md`, `import-wizard.md`, la pagina dell'anteprima).
+>
+> **I rossi** (al `test-author`):
+> - service: la guardia alza il nuovo errore con codice, nomi e rifiuto (Generic CSV senza colonna, un plugin senza
+>   `cannot_parse_detail`); il viaggio in `pickle` e attraverso il pool vero; i codici e il `context` degli errori
+>   dell'anteprima;
+> - API: i 400 del parse (`cannot_parse` col rifiuto annidato, `plugin_not_found`, `parse_failed`) e delle due
+>   anteprime (`preview_unreadable`, `preview_unsupported`, `preview_sheet_not_found`);
+> - le riparazioni dei test che leggono il `detail` come testo: `test_brim_api.py:569`, `:2081`, `:2451`,
+>   `test_uploads_api.py:919`;
+> - Vitest: i due risolutori e le chiavi nei 4 cataloghi.
+>
+> **Da decidere**: la forma `{code, message, context}` (BRIM) o `{error_code, message}` (account): propongo la prima;
+> lo spazio delle chiavi dell'anteprima (`files.preview.error.*`, perché `filePreview.ts` è comune); `parse_failed`
+> lascia la frase del plugin in inglese, in una cornice tradotta.
+>
+> **Dimensione**: piccola-media. Backend circa 80 righe, frontend circa 60, 9 chiavi ×4, test dal `test-author`, docs.
+> W rivede.
+
+#### C-70b.1 — Le risposte, e i rossi al `test-author` (2026-10-17, 21:0x; HEAD `9e6faacf4`)
+> **Via del coordinatore**, W rivede:
+> - (a) la forma di BRIM, `{code, message, context}`;
+> - (b) le chiavi dell'anteprima in `files.preview.error.*`;
+> - (c) `parse_failed` tiene la frase inglese del plugin dentro una cornice tradotta, per la 1.3. La codifica dei circa
+>   60 `BRIMParseError` va nel backlog dopo la 1.3: messa nella mia sezione, **E-21** (la sezione di W non è mia).
+> - Rossi prima, compreso il viaggio in `pickle` sul pool vero; le 4 riparazioni approvate. `brokers.py`, `uploads.py`,
+>   `filePreview.ts` e il wizard non sono aperti altrove. Una riga 🐛 del CHANGELOG al checkpoint.
+>
+> **Il contratto al `test-author`** (`d923b69e`):
+> - `BRIMParseRefusedError(ValueError)` (`plugin_code`, `plugin_name`, `file_name`, `refusal`: il `BRIMRefusal` di
+>   `cannot_parse_detail`, o niente) e `BRIMPluginNotFoundError(ValueError)` (`plugin_code`); i messaggi inglesi di oggi;
+> - la rotta del parse: `cannot_parse` (`context`: i tre nomi e `refusal`), `plugin_not_found`, `parse_failed`
+>   (`BRIMParseError` e ogni altro `ValueError`: `context` coi nomi e `reason`); `move_to_failed` com'è;
+> - l'anteprima: `code` e `context` sugli errori di `file_preview.py` (classi tenute, sottoclassi nuove per il motore
+>   mancante e il foglio assente), `preview_error_detail(error)`, le due rotte con un solo `except ValueError`;
+> - il frontend: `parseErrors.ts` (`resolveParseErrorMessage`, accanto al risolutore di K2a), `getFilePreviewError(error,
+>   t)`, 8 chiavi (3 `importWizard.parseRefusal.*`, 5 `files.preview.error.*`).
+
+#### C-70b.2 — Parcheggiato ⏸ (2026-10-19, 11:1x; HEAD `9e6faacf4`)
+> Lo stop dello sviluppatore (17/10, 21:2x) è arrivato a metà lotto. Alla ripartenza del 19/10 il coordinatore: C-70b
+> aspetta la lettura dei lotti piccoli da parte dello sviluppatore, e si implementa solo dopo il suo via. Il lavoro è
+> parcheggiato fuori dal repo; il worktree è tornato a HEAD (`git restore` dei 7 file modificati, `rm` dei 3 nuovi).
+> - **La patch**, nella cartella della sessione: `files/parked/c70b-k2b-20261019.patch` (SHA-256 `984bbe66…`), 10 file:
+>   - i 7 modificati: `brokers.py`, `uploads.py`, `brim_provider.py`, `file_preview.py`, `test_brim_api.py`,
+>     `test_uploads_api.py`, `test_file_preview.py`;
+>   - i 3 nuovi: `test_brim_parse_refusal_codes.py`, `parseErrors.test.ts`, `filePreview.test.ts`;
+>   - accanto, la copia di ognuno (`c70b-files/`), `SHA256SUMS` e un README con la ripresa.
+> - **La verifica** (`files/tools/c70b_park.sh`): applicata ai 7 file di HEAD esportati fuori da ogni repository, la
+>   patch ricostruisce i 10 file byte per byte (10 su 10); dopo il ripristino `git apply --check` passa, HEAD e indice
+>   invariati, `git status` mostra solo il giornale.
+> - **Lo stato allo stop**:
+>   - fatto, il backend: `BRIMParseRefusedError` e `BRIMPluginNotFoundError` con `_refusal_detail`
+>     (`brim_provider.py`); il 400 a codice del parse (`_failed_parse_http_error` in `brokers.py`: `cannot_parse`,
+>     `plugin_not_found`, `parse_failed`); la gerarchia `PreviewError` con `code`, `context` e `preview_error_detail`
+>     (`file_preview.py`); le due rotte dell'anteprima. Ruff e black puliti;
+>   - i rossi del `test-author` (`d923b69e`): i puri verdi (codici del rifiuto 20 su 20, il viaggio nel pool vero
+>     compreso; `test_file_preview.py` 49 su 49); le API solo raccolte (168); i Vitest ancora rossi
+>     (`parseErrors.test.ts` 32, `filePreview.test.ts` 19 più 4 guardie);
+>   - da fare: il frontend (`parseErrors.ts`, `getFilePreviewError(error, t)` con i suoi **tre** chiamanti, anche
+>     `routes/(app)/files/+page.svelte` ~:722), le 8 chiavi ×4, la registrazione dei 3 file nuovi nel runner, i
+>     documenti, la riga 🐛 del CHANGELOG.
+> - **Domande per la ripresa** (dubbi del `test-author`, non decisi da me):
+>   1. un `detail` testuale (il 404, il 500) in `getFilePreviewError` si mostra com'è, come fissano due guardie, o
+>      diventa la frase generica tradotta?
+>   2. il nome del plugin tradotto anche per `parse_failed`, come fissano i rossi, e non solo per `cannot_parse`?
+>   3. `e2e/files.spec.ts` (~:730) finge un `detail` testuale e ne legge l'inglese: resta verde con la lettura 1.
+
+### Z-32cr — La revisione prima dell'ingresso (2026-10-19, 12:5x–13:2x; sola lettura, `4eccb5d43`)
+> Commit di Z `4eccb5d43` (padre `065c9df77`) sul ramo `e-alfy-z-sospensione-e-risveglio` (punta `f64a71ddc`), letto
+> dagli oggetti git: toglie l'avviso dei pence (D8: nessuna colonna nel DB) e assottiglia `HeldAssetQuoteFacts`. La
+> domanda del coordinatore: `NON_ISO_CURRENCY` e il resto di E-19b2 funzionano come prima? **OK, nessun rilievo.**
+> - **Il codice di E-19b2, invariato nel comportamento**:
+>   - `HeldAssetQuoteFacts` resta con `asset_id`, `name`, `currency`: i tre campi che `_non_iso_currency_assets` legge;
+>   - `_held_asset_quote_facts` (`portfolio_service.py:550`) tiene la soglia della polvere, gli id ordinati e senza
+>     doppioni e `order_by(Asset.id)`, da cui l'ordine di `affected_asset_ids`. Ora è una sola `select(Asset)`; prima
+>     era una `outerjoin` sull'assegnazione, che è unica per asset (`uq_asset_provider_asset_id`): non toglieva né
+>     duplicava righe, quindi stesso insieme e stesso ordine;
+>   - le due chiamate (`:1081`/`:1089` e `:2183`/`:2188`) passano ancora `non_iso_currency_assets=… or None` e
+>     `report_currency=base_currency`;
+>   - `data_quality.py`: tolti solo il parametro `quote_in_minor_unit_assets`, il suo paragrafo di docstring e il suo
+>     blocco. Il blocco NON_ISO, `_missing_pair_sides` (i `MISSING_FX_*` che saltano le coppie non ISO) e
+>     `_non_iso_currency_issue` sono intatti; `minor_unit_factor` resta importato, quindi a `GBp` non si suggerisce mai
+>     `GBP`, e `currency_units.py` resta per questo;
+>   - `IssueCode`: tolto `QUOTE_IN_MINOR_UNIT`, così `NON_ISO_CURRENCY` segue `INVALID_SPLIT_RATIO`, come le sue issue
+>     nel report;
+>   - non toccati: E-19a (`stored_currencies.py`, `app_lifespan.py`), E-19b1 (`staging.py`, `schemas/common.py`, il
+>     selettore), le 5 chiavi `dataQuality.nonIso*` di E-19b2, identiche nei 4 cataloghi; Z toglie solo
+>     `dataQuality.quoteInMinorUnit`.
+> - **I test, adattati senza indebolire NON_ISO**:
+>   - nel file puro sparisce solo `TestQuoteInMinorUnitIssue` (6 test, uno parametrizzato su 2: 8 casi). Si rinominano
+>     solo i due test della posizione (dopo `INVALID_SPLIT_RATIO`); `_held()` passa a tre campi. La barriera degli input
+>     canonici tiene ancora un'issue da conservare (`invalid_split_assets` al posto dei pence) e confronta ancora il
+>     dump intero. I casi `GBp` (valuta del report, valuta di un asset) restano;
+>   - `TestNonIsoCurrencyDataQuality` (API) è identica, salvo un riferimento di docstring;
+>   - DQN-04: il codice di controllo passa a `MISSING_PRICE`, che il client generato conosce ancora: stesso senso.
+> - **La prova** (`files/tools/z32cr_pure.sh`, nella cartella della sessione): `git archive` dell'albero, il python del
+>   venv condiviso chiamato direttamente, modalità test sulla data-dir della corsia, che non ha DB; niente pipenv, niente
+>   server, niente git che scrive. Gli import vengono dall'albero esportato; il worktree resta pulito.
+>   - `test_data_quality_report.py`: **101 passati** su `4eccb5d43`, **109** sul padre `065c9df77`. La differenza sono
+>     gli 8 casi della classe tolta.
+> - **Non eseguiti**:
+>   - le API: `TestNonIsoCurrencyDataQuality` vuole un server, e la classe è invariata;
+>   - il Vitest DQN: vuole il client rigenerato da `api sync` sull'OpenAPI di Z, e cambia un solo codice di controllo.
+> - **Altro, controllato**:
+>   - il CHANGELOG perde solo la riga dei pence; quella di E-19b2 resta;
+>   - il test Yahoo `test_historical_data_keeps_the_reported_currency_as_it_is` l'ha riscritto Z stesso (nessuna colonna,
+>     nessun avviso lo legge): coerente, non un resto;
+>   - nessun resto dei pence nelle traduzioni del CHANGELOG né nei documenti; i documenti di E-19b2
+>     (`data-quality-banner.md`, la pagina del cruscotto) sono aggiornati con coerenza.
+
+### E-EMF9 — EMF-009 ed EMA-017 rossi dopo A-11: analisi (2026-10-19, 14:1x–14:2x; sola lettura, HEAD `664c56c20`)
+> **La richiesta** (coordinatore, 14:15): H, nella suite completa, trova rossi EMF-009 (`test_email_flows.py`) e il
+> gemello EMA-017 (`test_email_api.py`): «DID NOT RAISE ValidationError». La precondizione era che `get_user_settings`
+> rifiutasse un tema salvato sconosciuto; dopo `3e12b09ae` di A (A-11, entrato con `250031cd1`) non lo rifiuta più, ed
+> è voluto. Prima un'analisi breve, senza codice; dopo il via la riscrittura la fa il `test-author`.
+> - **Cosa proteggono**: la scelta di E2a, cioè che `account_language` (`flows.py:93`) legga solo la colonna della lingua
+>   e mai il modello di lettura. La chiamano tutte le email di un account:
+>   - l'email di prova (`POST /email/test`);
+>   - il link di reset mandato dall'admin (`POST /email/links`);
+>   - «password dimenticata» (`forgotten_password_work`, in background);
+>   - l'avviso di cambio email (`email_changed_work`, in background);
+>   - la verifica dell'indirizzo (`verification._issue_and_send`).
+>
+>   Il rischio: con la lingua letta da `get_user_settings`, una riga rifiutata dal modello farebbe fallire il flusso.
+>   Sulle rotte sarebbe un 500 (in una versione precedente della rotta era peggio: il 422 «indirizzo non valido», che
+>   oggi EMA-018 esclude). In background l'email non partirebbe mai, in silenzio, proprio nel reset di chi non riesce a
+>   entrare.
+> - **Cosa ha cambiato A-11**:
+>   - `get_user_settings` e `update_user_settings` mostrano un tema sconosciuto come il `default_theme` dell'istanza,
+>     se è noto, altrimenti come `auto`; scrivono un warning e non riscrivono la riga;
+>   - lo schema `UserSettingsRead` rifiuta ancora `sepia`: A ne ricava `KNOWN_THEMES`;
+>   - la barriera dei due test (`_refused_by_the_read_model`, che chiama `get_user_settings`) non si può più
+>     costruire, ed è l'unico punto rosso.
+> - **Un altro modo legittimo per far fallire quel passo? No.**
+>   - Il modello vincola solo `theme`: `language` e `base_currency` sono `str` liberi, `avatar_url` è facoltativo, e le
+>     tre colonne sono `NOT NULL` (migrazione 001). Una valuta non ISO salvata (`978`) passa.
+>   - Lo fanno fallire solo dati corrotti, provati col python del venv: byte non UTF-8 in una colonna di testo (un BLOB:
+>     `ValidationError` `string_unicode`; B-49 rifiuta già questi archivi al controllo del restore), oppure una riga
+>     `default_theme` scritta a mano come JSON (un `TypeError` in `_shown_theme`, nemmeno una `ValidationError`).
+>   - Il caso «una riga che il modello di lettura rifiuta» quindi non esiste più. Resta vero, e controllabile, che un
+>     tema che questa versione non conosce non cambia la lingua delle email e non viene riscritto da nessun flusso.
+> - **La promessa del prodotto non cambia**: le email di un account vanno nella sua lingua, altrimenti in quella
+>   dell'istanza, altrimenti in inglese, e leggere la lingua non cambia nessuna riga. A-11 la rafforza (accesso e
+>   impostazioni non cadono più). Nessuna domanda per lo sviluppatore.
+> - **La prova** (`files/tools/emf9_probe.sh`, nella cartella della sessione): export di HEAD, il python del venv
+>   condiviso chiamato direttamente; nessun server, nessun DB della corsia, nessuna modifica al worktree.
+>   - I due file così come sono: **2 falliti** (EMF-009, EMA-017, «DID NOT RAISE ValidationError»), **315 passati**.
+>   - Con la sola barriera spostata sullo schema (`UserSettingsRead(theme="sepia")` rifiutato), nell'export: **2
+>     passati**. Il resto dei due test regge sulla base di oggi: la lingua `it`, il 200 con l'email in italiano,
+>     un'unità spesa, la riga intatta.
+>
+>   > **⚠️ Fuori pista**: al primo giro il passo 2 era rosso per un errore della prova, non del test: il controllo
+>   > dell'import trovava `UserSettingsRead` nella docstring del modulo e non lo aggiungeva (`NameError`). Corretto il
+>   > controllo, rifatto solo il passo 2.
+> - **Proposta per la riscrittura** (decide il coordinatore; la fa il `test-author`):
+>   - **R1, la mia raccomandazione.** Tenere i due test e spostare la barriera su «un tema che questa versione non
+>     conosce», che lo schema rifiuta, senza fissare quale tema mostra `get_user_settings` (è di A, e lo coprono i suoi
+>     test). Poi:
+>     - dare ai test nomi nuovi (un tema sconosciuto, non più una «riga rifiutata»);
+>     - riallineare il contratto 4 di `test_email_flows.py` e il 3 di `test_email_api.py`, i messaggi e l'helper nei due
+>       file;
+>     - in EMA-017 togliere il motivo «la riga si scrive dopo l'accesso perché il login la legge dal modello»; l'ordine
+>       può restare.
+>   - R2: cancellarli come obsoleti. Si perde un controllo economico che un tema sconosciuto lasci in pace email e riga.
+>     Sconsigliato.
+>   - R3: un altro campo da rendere illeggibile. Non c'è un caso legittimo (vedi sopra).
+>   - Da non toccare: EMA-018 e `_read_model_refusal`. L'errore iniettato lì si costruisce dallo schema, che lo rifiuta
+>     ancora, e il test è verde.
+>   - Facoltativo, mio (`flows.py`, solo la docstring di `account_language`): «a settings row that no longer validates
+>     (an old theme, say)» diventerebbe «qualunque altra cosa contenga la riga».
+> - **La dimensione**: piccola. Due file di test, due funzioni, due helper, due paragrafi di contratto. Nessun codice di
+>   prodotto e nessuna registrazione nel runner: i file sono già registrati e i nomi dei test non compaiono altrove.
+> - **I selettori**: `services email-flows` e `api email`, entrambi puri (la categoria api avvia comunque il backend
+>   della corsia), nella corsia 6188.
+
+#### E-EMF9.1 — R1, la riscrittura (via del coordinatore 2026-10-19, 14:23; base `f504cb61c`)
+> **Il via**: R1 scritto dal `test-author`.
+> - I due test tengono la barriera «un tema che questa versione non conosce», rifiutato dallo schema.
+> - Rinomina, e riallineamento di contratti, messaggi ed helper.
+> - In EMA-017 si toglie il motivo superato; EMA-018 resta com'è.
+> - La docstring di `account_language` si tocca solo se è falsa dopo A-11.
+> - Prima il rosso, poi il verde, nella corsia 6188 col carico sotto 50. Entra nel treno della fusione di H.
+>
+> **La docstring di `account_language` e `email.md` (:570, :1396) restano come sono.** «A settings row that no longer
+> validates (a theme outside light/dark/auto, say) never stops an email» è ancora vera: lo schema `UserSettingsRead`
+> rifiuta ancora quel tema, e la lingua arriva lo stesso. R1 tocca solo i due file di test.
+
+1. ✅ **Il rosso nella corsia** (2026-10-19, 14:24–14:25; HEAD `f504cb61c`)
+   > **Note implementazione**: `files/tools/e9_suites.sh emf9red services:email-flows api:email`, cioè
+   > `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6188 --data-dir
+   > /tmp/librefolio-r13-e services email-flows`, poi `… --no-shared-server api email` (il file è in-process: nessun
+   > server). Una corsa per volta, con `nice`.
+   > - `services email-flows`: **1 fallito, 148 passati**. È EMF-009,
+   >   `test_a_settings_row_the_read_model_refuses_still_gives_its_language`.
+   > - `api email`: **1 fallito, 167 passati**. È EMA-017,
+   >   `test_a_settings_row_the_read_model_refuses_still_gives_the_test_email_its_language`.
+   > - Entrambi con «DID NOT RAISE ValidationError». La porta 6188 è libera dopo.
+   >
+   > Log: `files/logs/e9_emf9red_*.log`, nella cartella della sessione.
+2. ✅ **La riscrittura** (`test-author` `emf9-r1-rewrite`, 14:2x–14:3x): `test_email_flows.py` e `test_email_api.py`.
+   > **Note implementazione**:
+   > - **I nomi**: EMF-009 diventa `test_a_theme_this_version_does_not_know_still_gives_its_language`, EMA-017
+   >   `test_a_theme_this_version_does_not_know_still_gives_the_test_email_its_language`. Restano gli ID e ogni asserzione.
+   > - **La barriera** è ora lo schema `UserSettingsRead` che rifiuta `STALE_THEME`, ed è il primo passo del test, prima
+   >   di ogni scrittura. Nei flussi è il nuovo `_unknown_theme_refusal()`, sincrono; nelle API si riusa
+   >   `_read_model_refusal()`, l'aiuto di EMA-018, senza toccarlo.
+   > - `_refused_by_the_read_model` sparisce dai due file, e così l'import di `get_user_settings`. Nei flussi si importa
+   >   `UserSettingsRead`.
+   > - **I testi**: il contratto 4 dei flussi, il contratto 3 delle API, le docstring, `print_section`, i messaggi e
+   >   `print_success` parlano di «un tema che questa versione non conosce». In EMA-017 il motivo superato («il login
+   >   legge la riga dal modello») è tolto; l'ordine (accesso, riga, `POST`) resta, senza un motivo nuovo.
+   > - Non toccati: `STALE_THEME` col suo commento (ancora vero), EMA-018 e `_read_model_refusal`.
+   > - Il `test-author` non ha eseguito niente (solo il controllo `ast`) e ha letto il piano con un `grep`.
+3. ✅ **La revisione del diff, poi ruff e black** (14:3x)
+   > **Note implementazione**: il diff è quello chiesto: 2 file, 29 righe aggiunte e 40 tolte (API +11 −21, flussi
+   > +18 −19).
+   > - `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python -m ruff check <i due file>`: «All checks
+   >   passed!».
+   > - `… -m black --check --diff <i due file>`: «2 files would be left unchanged».
+   > - Una differenza di parole, solo un'informazione: la docstring di `_read_model_refusal` e EMA-018 dicono ancora «the
+   >   read model» per lo schema, che i testi nuovi chiamano «the schema». Restano così perché EMA-018 non si tocca.
+4. ✅ **La prova di mutazione** (14:3x; `files/tools/emf9_mutation.sh`)
+   > **Note implementazione**: un export di HEAD con i due file di test del worktree; `flows.account_language` mutato
+   > solo nell'export. Si eseguono i due test rinominati (`-k test_a_theme_this_version_does_not_know`).
+   > - **R1**, così come sono: **2 passati**.
+   > - **M1**, la riga validata con lo schema `UserSettingsRead`: **2 falliti**, per la ragione giusta: `ValidationError`
+   >   `literal_error` sul tema, alla riga mutata (`flows.py:101`).
+   > - **M2**, il flusso riscrive il tema sconosciuto (`'auto'`) e fa commit: **2 falliti**, per la ragione giusta: «must
+   >   leave the row as it was», `('it', 'auto') != ('it', 'sepia')`.
+   > - **M3**, il controllo: la lingua letta da `get_user_settings`, tollerante dopo A-11: **2 passati**. È il limite
+   >   onesto: dopo A-11 quella lettura non fa più danni, e i test non la vietano. Vietano che un flusso validi la riga
+   >   con lo schema o la riscriva.
+   >
+   > **⚠️ Fuori pista**: la prova gira in modalità test sulla data-dir della corsia, che il runner ha creato al passo 1
+   > (14:24). Così la fixture di sessione del conftest ha aperto il DB della corsia in sola lettura: il WAL cambia la
+   > cartella `sqlite` alle 14:32. Non ha scritto: `app.db` è del 14:24 e `registration_mode` è `open`, scritto alle
+   > 14:24:38 dal setup del runner. È la mia corsia, ed è lo stesso percorso del runner. La prova dell'analisi delle 14:1x
+   > non lo toccava, perché allora la cartella non c'era.
+5. ✅ **Il verde nella corsia** (2026-10-19, 14:33–14:34; HEAD `f504cb61c` più i due file)
+   > **Note implementazione**: gli stessi comandi del passo 1 (`files/tools/e9_suites.sh emf9green services:email-flows
+   > api:email`), col carico a 1 minuto a 15,9.
+   > - `services email-flows`: **149 passati**.
+   > - `api email`: **168 passati**.
+   >
+   > I totali sono quelli del rosso (1 + 148 e 1 + 167), quindi nessun test è andato perso. I due test rinominati sono
+   > nel log, con la loro riga di successo e `PASSED`. La porta 6188 è libera dopo. Log: `files/logs/e9_emf9green_*.log`.
+6. ✅ **Il checkpoint** al coordinatore (2026-10-19, 14:3x), poi FROZEN.
+   > **Note implementazione**: nel checkpoint vanno i due file di test e questo piano. Niente di generato. Nessuna riga
+   > nel backlog: E-EMF9 non lascia niente per dopo.

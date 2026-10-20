@@ -3877,3 +3877,50 @@ check in the refresh that moves old rows only where the full history, read as a 
 Replacing the closes from a fresh history (D′) was dropped: they are adjusted as of each fetch (Z-35). Fix `60170aae5`.
 Filed: [[problems/yahoo-bars-dated-one-day-early-east-of-utc]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | A multi-line docstring with backticks breaks the generated client (J-19)
+J-19 gave `ToolItemMetrics` a two-paragraph docstring that named a field between backticks. The client generator writes
+a multi-line OpenAPI description as a JS template literal without escaping its backticks, so `generated.ts` broke,
+with 2 `front check` errors and dozens of core-unit suites unable to load. A single-line docstring goes in quotes and is safe.
+Filed: [[problems/multiline-docstring-backticks-break-generated-client]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | The lots chart keeps its price line, and the reports an `api` run removes (Y-30)
+Y-30 added a lot-free market price series, `MARKET_PRICE_HISTORY` / `market_price_history`, which a FAILED replay keeps
+(`_AVERAGE_COST_ANALYSES` became `_REPLAY_FREE_ANALYSES`); the panel draws its price line from it in every analysis
+(N89). The FAILED rule's one uncovered exception (income, fee and tax rates converted before the engine are still
+reported) is noted on the entity page. In the E2E slot, `LF_SETUP_DONE=1` after an `api` run found every broker's
+import history empty: that run's `--force` populate, without `--with-reports`, had emptied `broker_reports`.
+Filed: revision of [[decisions/fifo-v4-gross-net-status-model]], [[entities/lots-analysis-service]]; section added to
+[[problems/direct-playwright-run-in-a-test-lane]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-19] update | Yahoo bars dated one day early: the repair removed (Z-33r)
+Workstream Z, Z-33r (developer decision 19/10: «fai solo la correzione…»). The plugin's date fix stays; the one-time
+repair of stored rows goes: migration 011 with the `exchange_timezone` column and its `'legacy-utc'` mark, the D″ check
+in the refresh, the re-date helpers, the timezone the plugin declared. `exchange_zone()` became the plugin's private
+`_exchange_zone()`. A DB already at 011 is fixed by hand (plan 06, «Z-33r»). Page rewritten in short.
+Filed: revision of [[problems/yahoo-bars-dated-one-day-early-east-of-utc]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-19] file | Svelte 5: a `$derived` over a non-reactive module cache stays stale across close and reopen (A-CL1)
+Workstream A, A-CL1 (the developer's nightly, Settings › About). `ChangelogModal`'s `ready` read the translations through `peek()` on a plain `Map`: a window closed while its translation loaded dropped the answer and, once reopened, kept its stale `undefined` (the sidebar's was another instance, computed after the fill). Cure `5ccb495e5`: the cache is a `SvelteMap`; one window, the Sidebar's, opened from both versions.
+Filed: [[problems/svelte5-derived-stale-over-non-reactive-cache]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-19] update | The real module of the changelog cache, in Vitest (A-CL1 review)
+The automatic review of `5ccb495e5` found that only a fake proved the cure. The node environment has no reactivity
+and jsdom refuses the `?raw` import, mocked or not; the bundle imports moved to `changelogSources.ts`, which a jsdom
+test mocks, and `changelog.reactivity.test.ts` drives the real `createLocalizedChangelog` (red with `new Map`, green
+with `SvelteMap`). Page section «Prevention» and its source files updated.
+Filed: revision of [[problems/svelte5-derived-stale-over-non-reactive-cache]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-19] file | No range of a single day; zrender's cursor; jsdom and disabled buttons (Y-N65)
+Workstream Y, lot Y-N65 (developer decision 19/10, N65-2…N65-7). No range picker in the app makes a range of a single
+day, and the measuring ruler ignores a second click on its start. In measure mode the chart now owns its cursor through
+zrender (crosshair, not-allowed over the start), because zrender resets an inline cursor on every move. A Vitest
+finding, verified with a jsdom 30.0.1 probe: a dispatched click reaches a disabled button's handlers.
+Filed: [[decisions/no-range-of-a-single-day]], [[problems/zrender-resets-cursor-on-every-move]],
+[[problems/dispatched-click-reaches-disabled-button-in-jsdom]]; section and history row in [[features/F-045]].
+Graph: not updated; graphify is not available in this worktree.

@@ -5,9 +5,11 @@
  * (`AssetDataEditorSection.svelte`) — answer a refused save with Axios's own `e.message`, «Request failed with status
  * code 422», and count every row they sent as saved, the refused ones included. The server says more, with codes:
  *
- *   - 422 `{code: 'date_out_of_range', message, params: {min, max}, items, count}` (X-R65, `date_out_of_range_detail` in
+ *   - 422 `{code: 'date_out_of_range', message, params: {max}, items, count}` (X-R65, `date_out_of_range_detail` in
  *     `backend/app/utils/date_range_limits.py`): the items are `{asset_id, dates}` for prices and `{index, date}` for
- *     rates, at most 10 of each; `count` is every date refused;
+ *     rates, at most 10 of each; `count` is every date refused; `max` is the last day a price or a rate may carry, the
+ *     server's tomorrow. No `min`: N83's revision (developer, 19/10) took away the 1900 floor X-R65 had put on a stored
+ *     date, and the detail lost its `params.min` with it;
  *   - 422 `{code: 'price_currency_mismatch', message, items: [{asset_id, expected, found, dates}], count}` (X-R71,
  *     `price_currency_mismatch_detail` in `backend/app/services/assets/price_store.py`), with the same caps;
  *   - 422 `{code: 'bulk_too_many_items', message, max_items, items}` (MF-SEC9a, `bulk_too_many_items_detail` in
@@ -21,16 +23,17 @@
  * The contract under test:
  *
  *   - `writeRefusalMessage(error, t, dateLabel?)`: one sentence per coded refusal, null for anything else, and then `t`
- *     is not called. `date_out_of_range` → `common.writeRefusal.dateOutOfRange` with `{count, min, max, dates}`;
+ *     is not called. `date_out_of_range` → `common.writeRefusal.dateOutOfRange` with `{count, max, dates}` and never a
+ *     `min`, not even from a detail that still carries one;
  *     `price_currency_mismatch` → `common.writeRefusal.currencyMismatch` with `{count, expected, found, dates}`,
  *     `expected` the first item's, `found` every item's currencies once each, first seen first; `bulk_too_many_items`
  *     → `common.writeRefusal.tooManyItems` with `{max: max_items, count: items}`, a save's own sentence, no longer
  *     `bulkRefusalMessage`'s — X-R58's `common.bulkRefusal.tooManyItems`, «Some values could not be loaded…», is a
  *     read's, and the docs-writer found it on a refused FX import; `bulk_too_many_days` → still the very string
  *     `bulkRefusalMessage` gives; `fx_rates_refused` → `rejectedMessage` of its rows. Each code is read on its own
- *     status, as in `bulkRefusal.ts`. A non-finite `count`, a missing bound, `items` that are not a list, no date to
- *     name → null; so does a `bulk_too_many_items` whose `items` is not a finite number, or whose `max_items` is not a
- *     finite number above 0.
+ *     status, as in `bulkRefusal.ts`. A non-finite `count`, a missing `params.max`, `items` that are not a list, no
+ *     date to name → null; so does a `bulk_too_many_items` whose `items` is not a finite number, or whose `max_items`
+ *     is not a finite number above 0.
  *   - `rejectedMessage(rejected, t, dateLabel?)`: null for no row, else `common.writeRefusal.notSaved` with
  *     `{count, items}`; a row reads «<date> (<reason>)», the reason `common.writeRefusal.reason.<reason>` for one of
  *     `REJECTION_REASONS` and `common.writeRefusal.reason.other` for any other.
@@ -38,7 +41,7 @@
  *     (`utils/trySave.ts`) — the server's own text whenever the error carries one, never Axios's generic message.
  *   - A list shows at most 5 entries, in the order given, joined by «, », then a space and `common.writeRefusal.more`
  *     with `n` the entries not shown: for a refusal with a `count`, `count` minus those shown, since the backend lists at
- *     most 10 dates per item. Every date and bound goes through `dateLabel`, the ISO date itself by default (as in
+ *     most 10 dates per item. Every date and the bound go through `dateLabel`, the ISO date itself by default (as in
  *     `eventSaveErrorMessage`).
  *   - `REJECTION_REASONS` is exactly the backend's reasons — a literal here: the schemas that will declare them do not
  *     exist yet.
@@ -50,7 +53,9 @@
  *
  * Red first: before X-R46 `./writeRefusal` did not exist, and the file failed at its import. Red again until the
  * module gives `bulk_too_many_items` a save's own sentence: the three cases that expect
- * `common.writeRefusal.tooManyItems` got X-R58's.
+ * `common.writeRefusal.tooManyItems` got X-R58's. Red again for N83's revision (19/10), until the module reads the
+ * detail without `params.min` and asks for `{count, max, dates}` alone: every case that expects a `date_out_of_range`
+ * sentence got null from a detail without `min`, and a `min` among the values from a detail with one.
  */
 import {AxiosError, AxiosHeaders, type AxiosResponse, type InternalAxiosRequestConfig} from 'axios';
 import {describe, expect, it, vi} from 'vitest';
@@ -157,13 +162,14 @@ function rateItems(dates: string[]): Array<{index: number; date: string}> {
 //  The refusals, as the backend words them
 // =============================================================================
 
-/** The bounds of a stored date (`stored_date_bounds()`): 1900-01-01, and the server's tomorrow. */
-const MIN = '1900-01-01';
+/** The last day a stored date may carry (`latest_stored_date()`): the server's tomorrow. No first day since N83's revision. */
 const MAX = '2026-10-18';
+/** The floor X-R65 gave a stored date and N83's revision took away: only a detail shaped as before carries it. */
+const OLD_MIN = '1900-01-01';
 
-/** The 422 for dates outside the bounds (`date_out_of_range_detail`): the prices' items `{asset_id, dates}`, the rates' `{index, date}`. */
+/** The 422 for dates after the last day (`date_out_of_range_detail`): the prices' items `{asset_id, dates}`, the rates' `{index, date}`. */
 function outOfRange(items: unknown[], count: number): Record<string, unknown> {
-    return {code: 'date_out_of_range', message: `Dates must lie between ${MIN} and ${MAX}: ${count} ${count === 1 ? 'does' : 'do'} not`, params: {min: MIN, max: MAX}, items, count};
+    return {code: 'date_out_of_range', message: `Dates must not be after ${MAX}: ${count} ${count === 1 ? 'does' : 'do'} not`, params: {max: MAX}, items, count};
 }
 
 /** The 422 for prices in a currency other than their asset's (`price_currency_mismatch_detail`, X-R71). */
@@ -212,18 +218,18 @@ const RATES_REFUSED = ratesRefused([{index: 0, date: '2026-01-05', reason: 'same
 
 describe('writeRefusalMessage', () => {
     describe('dates out of range (422 date_out_of_range)', () => {
-        it('prices: the dates of every asset, flattened in order, each through dateLabel — and the bounds through dateLabel too', () => {
+        it('prices: the dates of every asset, flattened in order, each through dateLabel — and the bound through dateLabel too', () => {
             const t = fakeT();
             const error = axiosRefusal(422, {
                 detail: outOfRange(
                     [
                         {asset_id: 7, dates: ['2062-03-05', '2062-03-06']},
-                        {asset_id: 9, dates: ['1899-12-31']},
+                        {asset_id: 9, dates: ['9999-12-31']},
                     ],
                     3,
                 ),
             });
-            expect(writeRefusalMessage(error, t, dateLabel)).toBe(answer(OUT_OF_RANGE_KEY, {count: 3, min: 'D<1900-01-01>', max: 'D<2026-10-18>', dates: 'D<2062-03-05>, D<2062-03-06>, D<1899-12-31>'}));
+            expect(writeRefusalMessage(error, t, dateLabel)).toBe(answer(OUT_OF_RANGE_KEY, {count: 3, max: 'D<2026-10-18>', dates: 'D<2062-03-05>, D<2062-03-06>, D<9999-12-31>'}));
         });
 
         it('rates: the date of every item, {index, date}', () => {
@@ -232,12 +238,12 @@ describe('writeRefusalMessage', () => {
                 detail: outOfRange(
                     [
                         {index: 0, date: '2062-01-02'},
-                        {index: 3, date: '0001-01-01'},
+                        {index: 3, date: '9999-12-31'},
                     ],
                     2,
                 ),
             });
-            expect(writeRefusalMessage(error, t, dateLabel)).toBe(answer(OUT_OF_RANGE_KEY, {count: 2, min: 'D<1900-01-01>', max: 'D<2026-10-18>', dates: 'D<2062-01-02>, D<0001-01-01>'}));
+            expect(writeRefusalMessage(error, t, dateLabel)).toBe(answer(OUT_OF_RANGE_KEY, {count: 2, max: 'D<2026-10-18>', dates: 'D<2062-01-02>, D<9999-12-31>'}));
         });
 
         it('keeps the order the server gave — neither by date nor by index', () => {
@@ -246,13 +252,13 @@ describe('writeRefusalMessage', () => {
                 detail: outOfRange(
                     [
                         {index: 4, date: '2062-05-01'},
-                        {index: 1, date: '1899-12-31'},
+                        {index: 1, date: '2063-12-31'},
                         {index: 2, date: '2062-01-01'},
                     ],
                     3,
                 ),
             });
-            expect(writeRefusalMessage(error, t, dateLabel)).toBe(answer(OUT_OF_RANGE_KEY, {count: 3, min: 'D<1900-01-01>', max: 'D<2026-10-18>', dates: 'D<2062-05-01>, D<1899-12-31>, D<2062-01-01>'}));
+            expect(writeRefusalMessage(error, t, dateLabel)).toBe(answer(OUT_OF_RANGE_KEY, {count: 3, max: 'D<2026-10-18>', dates: 'D<2062-05-01>, D<2063-12-31>, D<2062-01-01>'}));
         });
 
         it('shows five dates at most, across the assets, then «more» with the dates not shown', () => {
@@ -266,13 +272,13 @@ describe('writeRefusalMessage', () => {
                     7,
                 ),
             });
-            expect(writeRefusalMessage(error, t, dateLabel)).toBe(answer(OUT_OF_RANGE_KEY, {count: 7, min: 'D<1900-01-01>', max: 'D<2026-10-18>', dates: `D<2062-01-05>, D<2062-01-06>, D<2062-01-07>, D<2062-02-02>, D<2062-02-03> ${more(2)}`}));
+            expect(writeRefusalMessage(error, t, dateLabel)).toBe(answer(OUT_OF_RANGE_KEY, {count: 7, max: 'D<2026-10-18>', dates: `D<2062-01-05>, D<2062-01-06>, D<2062-01-07>, D<2062-02-02>, D<2062-02-03> ${more(2)}`}));
         });
 
         it('counts the dates not shown from count, not from the list: the backend lists at most 10 dates per asset', () => {
             const t = fakeT();
             const error = axiosRefusal(422, {detail: outOfRange([{asset_id: 7, dates: days('2062-03', 10)}], 23)});
-            expect(writeRefusalMessage(error, t, dateLabel)).toBe(answer(OUT_OF_RANGE_KEY, {count: 23, min: 'D<1900-01-01>', max: 'D<2026-10-18>', dates: `D<2062-03-01>, D<2062-03-02>, D<2062-03-03>, D<2062-03-04>, D<2062-03-05> ${more(18)}`}));
+            expect(writeRefusalMessage(error, t, dateLabel)).toBe(answer(OUT_OF_RANGE_KEY, {count: 23, max: 'D<2026-10-18>', dates: `D<2062-03-01>, D<2062-03-02>, D<2062-03-03>, D<2062-03-04>, D<2062-03-05> ${more(18)}`}));
         });
 
         it.each<[number, string]>([
@@ -281,27 +287,37 @@ describe('writeRefusalMessage', () => {
         ])('%i dates: the cut falls after the fifth', (n, dates) => {
             const t = fakeT();
             const error = axiosRefusal(422, {detail: outOfRange(rateItems(days('2062-03', n)), n)});
-            expect(writeRefusalMessage(error, t, dateLabel)).toBe(answer(OUT_OF_RANGE_KEY, {count: n, min: 'D<1900-01-01>', max: 'D<2026-10-18>', dates}));
+            expect(writeRefusalMessage(error, t, dateLabel)).toBe(answer(OUT_OF_RANGE_KEY, {count: n, max: 'D<2026-10-18>', dates}));
         });
 
-        it('without dateLabel: the dates and the bounds as the server wrote them, ISO', () => {
+        it('without dateLabel: the dates and the bound as the server wrote them, ISO', () => {
             const t = fakeT();
             const error = axiosRefusal(422, {
                 detail: outOfRange(
                     [
                         {asset_id: 7, dates: ['2062-03-05']},
-                        {asset_id: 9, dates: ['1899-12-31']},
+                        {asset_id: 9, dates: ['9999-12-31']},
                     ],
                     2,
                 ),
             });
-            expect(writeRefusalMessage(error, t)).toBe(answer(OUT_OF_RANGE_KEY, {count: 2, min: '1900-01-01', max: '2026-10-18', dates: '2062-03-05, 1899-12-31'}));
+            expect(writeRefusalMessage(error, t)).toBe(answer(OUT_OF_RANGE_KEY, {count: 2, max: '2026-10-18', dates: '2062-03-05, 9999-12-31'}));
         });
 
         it('reads it from any axios-like error', () => {
             const t = fakeT();
             const error = axiosLike(422, {detail: outOfRange([{index: 0, date: '2062-01-02'}], 1)});
-            expect(writeRefusalMessage(error, t, dateLabel)).toBe(answer(OUT_OF_RANGE_KEY, {count: 1, min: 'D<1900-01-01>', max: 'D<2026-10-18>', dates: 'D<2062-01-02>'}));
+            expect(writeRefusalMessage(error, t, dateLabel)).toBe(answer(OUT_OF_RANGE_KEY, {count: 1, max: 'D<2026-10-18>', dates: 'D<2062-01-02>'}));
+        });
+
+        it.each<[string, Record<string, unknown>]>([
+            ['the detail the server sends since N83’s revision, params {max} alone', PRICES_OUT_OF_RANGE],
+            ['a detail that still carries params.min, shaped as before the revision', {...PRICES_OUT_OF_RANGE, params: {min: OLD_MIN, max: MAX}}],
+        ])('%s: asks the catalogue for count, max and dates — never a min, a stored date having no first day', (_label, detail) => {
+            const t = fakeT();
+            expect(writeRefusalMessage(axiosRefusal(422, {detail}), t, dateLabel)).toBe(answer(OUT_OF_RANGE_KEY, {count: 1, max: 'D<2026-10-18>', dates: 'D<2062-03-05>'}));
+            const asked = t.mock.calls.filter(([key]) => key === OUT_OF_RANGE_KEY).map(([, options]) => Object.keys(options?.values ?? {}).sort());
+            expect(asked).toStrictEqual([['count', 'dates', 'max']]);
         });
     });
 
@@ -485,11 +501,11 @@ describe('writeRefusalMessage', () => {
             ['the currency refusal’s count NaN', axiosRefusal(422, {detail: {...MISMATCH, count: NaN}})],
             ['the currency refusal’s count -Infinity', axiosRefusal(422, {detail: {...MISMATCH, count: -Infinity}})],
             ['the currency refusal’s count as a string', axiosRefusal(422, {detail: {...MISMATCH, count: '1'}})],
-            // A bound missing.
+            // A bound missing: the last day, since N83's revision the only one.
             ['the dates refusal without params', axiosRefusal(422, {detail: without(PRICES_OUT_OF_RANGE, 'params')})],
             ['the dates refusal with params null', axiosRefusal(422, {detail: {...PRICES_OUT_OF_RANGE, params: null}})],
-            ['the dates refusal without params.min', axiosRefusal(422, {detail: {...PRICES_OUT_OF_RANGE, params: {max: MAX}}})],
-            ['the dates refusal without params.max', axiosRefusal(422, {detail: {...PRICES_OUT_OF_RANGE, params: {min: MIN}}})],
+            ['the dates refusal with params empty', axiosRefusal(422, {detail: {...PRICES_OUT_OF_RANGE, params: {}}})],
+            ['the dates refusal without params.max, the old floor alone', axiosRefusal(422, {detail: {...PRICES_OUT_OF_RANGE, params: {min: OLD_MIN}}})],
             // Items that are not a list.
             ['the dates refusal without items', axiosRefusal(422, {detail: without(PRICES_OUT_OF_RANGE, 'items')})],
             ['the dates refusal’s items one object, not a list', axiosRefusal(422, {detail: {...PRICES_OUT_OF_RANGE, items: {asset_id: 7, dates: ['2062-03-05']}}})],
@@ -547,7 +563,7 @@ describe('writeRefusalMessage', () => {
         const everyField = (code: string): Record<string, unknown> => ({
             code,
             message: 'A refusal',
-            params: {min: MIN, max: MAX},
+            params: {max: MAX},
             items: [{asset_id: 7, expected: 'EUR', found: ['USD'], dates: ['2062-03-05']}],
             count: 1,
             rejected: [{index: 0, date: '2062-03-05', reason: 'same_currency'}],
@@ -561,7 +577,7 @@ describe('writeRefusalMessage', () => {
         });
 
         it.each<[string, number, string]>([
-            ['date_out_of_range', 422, answer(OUT_OF_RANGE_KEY, {count: 1, min: 'D<1900-01-01>', max: 'D<2026-10-18>', dates: 'D<2062-03-05>'})],
+            ['date_out_of_range', 422, answer(OUT_OF_RANGE_KEY, {count: 1, max: 'D<2026-10-18>', dates: 'D<2062-03-05>'})],
             ['price_currency_mismatch', 422, answer(MISMATCH_KEY, {count: 1, expected: 'EUR', found: 'USD', dates: 'D<2062-03-05>'})],
             ['fx_rates_refused', 400, answer(NOT_SAVED_KEY, {count: 1, items: refusedRow('D<2062-03-05>', 'same_currency')})],
         ])('control: the same detail under %s, on a %i, gives that refusal’s sentence — the code alone decided the nulls above', (code, status, sentence) => {
@@ -657,9 +673,9 @@ describe('saveErrorText', () => {
             expect(saveErrorText(error, t, dateLabel)).toBe(sentence);
         });
 
-        it('without dateLabel: ISO dates and bounds', () => {
+        it('without dateLabel: ISO dates and bound', () => {
             const t = fakeT();
-            expect(saveErrorText(axiosRefusal(422, {detail: PRICES_OUT_OF_RANGE}), t)).toBe(answer(OUT_OF_RANGE_KEY, {count: 1, min: '1900-01-01', max: '2026-10-18', dates: '2062-03-05'}));
+            expect(saveErrorText(axiosRefusal(422, {detail: PRICES_OUT_OF_RANGE}), t)).toBe(answer(OUT_OF_RANGE_KEY, {count: 1, max: '2026-10-18', dates: '2062-03-05'}));
         });
     });
 
@@ -709,7 +725,7 @@ describe('saveErrorText', () => {
 
     describe('never Axios’s generic «Request failed with status code 422» when the error carries a detail', () => {
         const DETAILS: Array<[string, unknown, string]> = [
-            ['a refusal this module reads: its sentence', PRICES_OUT_OF_RANGE, answer(OUT_OF_RANGE_KEY, {count: 1, min: 'D<1900-01-01>', max: 'D<2026-10-18>', dates: 'D<2062-03-05>'})],
+            ['a refusal this module reads: its sentence', PRICES_OUT_OF_RANGE, answer(OUT_OF_RANGE_KEY, {count: 1, max: 'D<2026-10-18>', dates: 'D<2062-03-05>'})],
             ['a refusal under a code this build does not know: its message', {code: 'price_rows_locked', message: 'The prices of asset 7 are locked until 2026-10-19'}, 'The prices of asset 7 are locked until 2026-10-19'],
             ['a refusal this module cannot read, its items not a list: its message', {...MISMATCH, items: 'USD'}, "Prices must be in their asset's currency: 1 are not"],
             ['a string: the string', 'The close of 2026-01-05 must be above 0', 'The close of 2026-01-05 must be above 0'],

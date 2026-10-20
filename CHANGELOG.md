@@ -11,7 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Added
 
-- The Dashboard's data-quality banner now warns when Yahoo quotes a London asset you hold in pence (GBp) while LibreFolio values it as pounds: set its «Units per single price» to 100 (the dividends it shows stay in pence for now).
 - After an update, each user sees once what changed since their last version: the new changelog chapters, in their language where translated. New accounts never see it, and it never opens over a guide or another window. Same on self-hosted and managed instances.
 - `./dev.py db currencies` lists stored currency codes that are not ISO codes (names or numbers saved by earlier versions), and the server warns about them at every start.
 - **Currency fields show what a non-ISO stored code stands for.** A currency saved as `978` or `EURO` by an earlier version stays visible in the picker, next to the ISO code it stands for (`EUR`), so you can pick the right one. Restoring a backup also warns about such codes before you confirm.
@@ -90,6 +89,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 
+- **The Fineco importer (beta) brings in only settled operations.** An operation whose value date is still ahead (usually the last one or two working days) waits for your next export, commission included; a blue note says how many. A row missing a quantity or an amount is imported as before, with a note that lists it and links to a new GitHub issue.
+- **Danske Bank**: trades settled after the cash statement's last day are a blue note instead of a warning; they arrive with the next import.
+- **Date ranges always span two different days.** In every date-range picker the day clicked first shows the not-allowed cursor and a second click on it is ignored; a typed date equal to the other end turns red; the arrow keys skip it. A date typed while the other end is empty leaves that end open: in a table's date filter, **From** alone keeps the rows from that day on (it used to keep that day only). Ranges of one day saved earlier still work.
+- **Leaner database indexes.** The upgrade to 1.3 removes 13 database indexes no query used: copies of the indexes unique constraints already have, and shorter versions of other indexes. Every new price now updates one index fewer, and price history takes about a fifth less space with its indexes. An existing database file keeps its size: the freed space is reused as new data arrives. Backups are written compact.
 - The same portfolio report requested twice at once (two tabs, a refresh during a slow load) is computed once.
 - **One change over the range, from the server.** The change over the selected range on the Assets cards, in the FX table and cards, on an FX pair's page and on an asset's page is now computed by the server, so the same figure appears everywhere; beside a live price it is the change up to that price. A price written down to 0 shows −100 %, and a change that cannot be computed in the display currency is left out instead of mixing currencies.
 - AI Export: when a value is unavailable in every row of a table, the prompt now names that column right after the table instead of leaving it out silently (unless a null there only means "none", such as an open lot's closing date or a single asset's portfolio weight), so the AI can tell missing data from data that isn't part of the export.
@@ -157,6 +160,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sign-in pages, new look:** icons in the fields, a highlighted border under the pointer and in focus, the password requirements in a box of their own, no subtitle under the logo, and the recovery commands in a dark terminal box.
 - **Charts: every asset type and sector keeps one colour everywhere:** the same in the allocation pie and in its history, in every portfolio, broker and period. Liquidity has a colour of its own, subtypes are shades of their family, and the maps, the sharing semi-donut and the correlation matrix follow the light and dark theme.
 - **Several server processes (`--workers`): any of them runs the scheduled jobs**, one at a time through a lock file in the data directory: a scheduled wake-up and a user's return no longer depend on the leader process (Windows keeps the leader).
+- **Lots: a transfer with a broker outside the panel now reads as a transfer.** In a lot's History, on Lot Life & Custody and on the Avg. Cost / Market Price markers, units moved to or from a broker the panel doesn't include were shown as adjustments. They now show as transfers (TRANSFER+ / TRANSFER- in the History, Transfer In / Transfer Out on the markers), without naming the other broker. No figure changes.
 
 ### 🧹 Repository cleanup
 
@@ -167,7 +171,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 
-- **Yahoo Finance prices, dividends and splits of exchanges east of UTC (e.g. Milan, London in summer, Tokyo) were stored one day early.** They are now dated on the exchange's own day, and the rows saved by earlier versions are moved to it once, at each asset's first sync after the update: that sync reads the full history and may take a little longer.
+- Measure tool: choosing the same day twice in a measure's dates left them showing a day the measure never took; a second click on the start point is ignored. In measure mode the chart shows its crosshair, which never appeared, and the not-allowed cursor over the start point.
+- **Yahoo Finance prices, dividends and splits of exchanges east of UTC (e.g. Milan, London in summer, Tokyo) were stored one day early.** New ones are dated on the exchange's own day; rows saved by earlier versions stay as they are.
 - The asset page now names the data provider (for example "Yahoo Finance") instead of its internal code when the provider list arrives after the asset.
 - **The bulk editor names a broker you can only view, and flags the row it refuses.** Copying a transfer whose receiving broker is shared with you as a viewer showed that side as "—" and reported the refusal on the sending row as "Broker #N". The grid and the message now name the broker, and the refusal sits on the row that caused it; refused edits, deletions and splits are flagged on their own rows too.
 - **Deleting a broker also removes its leftover import folders and lock file**, which used to pile up in the broker reports storage.
@@ -284,7 +289,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A portfolio, lots, risk or AI Export request with a date range reaching far into the future or the past no longer freezes the server: a range now ends no later than tomorrow and starts no earlier than your first transaction.
 - Scheduled Investment: the first sync of a new asset no longer fails, and an asset's late-interest value is the same in its history, its current price and its settlement.
 - A number too large for the server (`1E+400`) or `NaN` in a request body gets a validation error instead of a server error.
-- Numbers with an absurd exponent and transaction dates outside 1 January 1900 – one year from today are refused with a clear message, instead of slowing the server; the merged fields of a pair promotion are checked like a new transaction's.
+- Numbers with an absurd exponent and transaction dates outside 1 January 1900 – tomorrow (the server's date) are refused with a clear message, instead of slowing the server; the merged fields of a pair promotion are checked like a new transaction's.
 - The lots analysis no longer fails when shares moved by a transfer to or from a broker outside the view (a broker's page, a broker filter, a co-owner who sees one broker, AI Export): units received open a lot at the transfer's cost, units sent close at that day's market price.
 - The lots analysis no longer fails when a transfer between your brokers is still on its way at the end of the chosen period: its units show as in transit.
 - Lots performance for a position entered before the asset's first price: the days before that price are now valued at cost, as on the Dashboard. The TWRR now includes the move from cost to the first price (it used to miss it and disagree with the ROI), and a transfer on such a day no longer empties the chart.
@@ -336,10 +341,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A number pasted in scientific notation, like `1e-8` copied from a spreadsheet, is now read exactly instead of turning into another number; one that can't be read, or that has an exponent beyond ±100, is shown in red with an explanation. Pasting a very long text into a number field no longer freezes the page.
 - Dividends and other events that a price provider reports with more than 6 decimals are now stored as they are read back, cut to 6 decimals like prices, instead of being read back rounded differently from what was written.
 - Very small prices, exchange rates and costs, such as a crypto token worth a fraction of a cent, are now shown with their significant digits instead of «0.00», and quantities show all 10 decimals they are stored with (in transactions, the average-cost preview, import corrections, the data editor, the lots views, the asset list, cards and detail, the FX list and cards and a transaction's exchange-rate details, the price charts and the dashboard positions; a lot of a few satoshis no longer reads «1e-7» or «0»).
-- The data editors of assets and exchange rates no longer report as saved a value the server refused: a warning names each refused date and why, such as a close outside the day's low–high, and a refused save says what was wrong, such as a date before 1900 or after tomorrow, instead of «Request failed with status code 422».
+- The data editors of assets and exchange rates no longer report as saved a value the server refused: a warning names each refused date and why, such as a close outside the day's low–high, and a refused save says what was wrong, such as a date after tomorrow, instead of «Request failed with status code 422».
 - Assets: deleting an asset that transactions use opens its confirmation already on the result (how many transactions, with the link to them) instead of asking first; the confirmation also says the asset's events go with it; and the search's failure message, the source title, the «Manual» badge and the count of assets to delete follow your language.
 - API: converting an amount of 0 (`POST /api/v1/fx/currencies/convert`) answers 0 with the day's rate instead of a server error.
-- Exchange rates an older version could save but not use (0, infinite, or more than 14 digits) no longer reach the PAC planner's quotes and costs, where they gave absurd amounts; the scheduler fetches those days again from the provider.
+- An invalid technical signal no longer breaks the chart of an asset or an exchange rate: the prices and rates stay on the chart and in the page's cache, and **All** resolves the start of the range; only the signals are reported as unavailable.
+- A provider that delivers a day with a price of 0 or less no longer makes the whole price download of the asset fail: that day is skipped and the sync says so. A current price of 0 or less from a provider is refused like an unusable one: the last stored price stays.
+- PAC planner: a saved exchange rate an older version could store but not use (0, or infinite) no longer blocks the pair, nor, when infinite, breaks the planner: the previous valid rate is used, and a warning names the pair, the day skipped and the day used, to correct in the pair's rate editor.
 
 #### 🔒 Security
 
@@ -385,7 +392,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A restore is never applied while the hosting provider blocks the instance**: one confirmed before the block waits for the unblock. On a blocked instance every restore route answers 423, except reading the outcome of a restart with its ticket, which changes nothing.
 - **The outcome ticket stays out of logs and URLs**: the server keeps only its hash, it travels in a header and expires after an hour; `ticket` joins the query parameters the access log masks.
 - **A tampered backup cannot run code during a restore check** — a check now refuses an archive whose database holds triggers, views or virtual tables, which LibreFolio never creates, before anything of it can run (`database_foreign_objects`): a crafted backup can no longer keep the check busy forever or bring its own code into the server. The schema is read without running any of it, and the connections to the copy use SQLite's `trusted_schema=OFF`.
-- Prices and exchange rates entered by hand are now refused, with an explicit error, when dated before 1 January 1900 or after tomorrow; such a date could make charts and risk analyses walk hundreds of thousands of days. Provider data outside that range is skipped.
+- Prices and exchange rates entered by hand are now refused, with an explicit error, when dated after tomorrow, and provider data dated after tomorrow is skipped. Dates far in the past are accepted: charts and risk analyses no longer walk hundreds of thousands of days because of them.
 - A price dated far in the past (e.g. year 1), stored by an older version, no longer makes an asset's full-history drawdown load hundreds of thousands of days: the history starts on 1 January 1900.
 - The restore outcome route, which answers without signing in, no longer fills the server log: it reads the restore's state only for the ticket of the restart, and a ticket file it cannot use is logged once, not at every request.
 - A restored backup's database can no longer make the server run code through its schema: every database connection turns SQLite's `trusted_schema` off first and reads the schema again last, so a `CHECK`, a `DEFAULT` or an index that calls a function the app registers is refused instead of run, in the server and in the restore check's upgrade.
@@ -400,6 +407,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ⚠️ Breaking changes
 
+- **A transaction dated after tomorrow (the server's date) is refused** with `dateOutOfRange`, in the form, the bulk editor, the import and the API; 1.2 accepted later dates.
+- **`POST /api/v1/assets/prices`: `-1` no longer empties a field.** Open, high, low and volume take a number of 0 or more, `null` (or no field) to leave the stored value as it is, or the string `"clear"` to empty it; `-1` is now a negative number, refused with 422 like any other. A close must be above 0.
 - `POST /api/v1/fx/currencies/rate`: when every rate in a request is refused, the 400 answer's `detail` is now an object `{code: "fx_rates_refused", message, rejected}` instead of a plain string (the `message` keeps the old text). API clients that read `detail` as a string should read `detail.message`.
 - The global setting `enable_registration` becomes `registration_mode` (`open`, `invite`, `disabled`): an API client that read the old key must read the new one.
 - **`DELETE /api/v1/assets/events` requires `asset_id`.** Only that asset's events are deleted, so a wrong or crafted request can no longer delete another asset's events. A request with `ids` alone is refused (422), and an id of another asset answers `not_found`, its event untouched. A client deleting events must send their asset.

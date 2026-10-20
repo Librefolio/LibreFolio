@@ -28,6 +28,7 @@ import {safeDecimal} from '$lib/types';
 import {mapDateToBucket} from '$lib/components/charts/timeSeriesAggregation';
 import {themed} from '$lib/theme/themePair';
 import {CHART_GAIN_LOSS, LOT_WAC_COLORS} from '$lib/theme/chartTheme';
+import type {ScopeBoundary} from './lotChartShared';
 
 /** The seven presentation-level lot chronology event kinds. */
 export type LotEventKind = 'BUY' | 'SELL' | 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT' | 'SPLIT' | 'TRANSFER_DEPART' | 'TRANSFER_ARRIVE';
@@ -156,6 +157,27 @@ export function toPercentSeries(points: ReadonlyArray<{date: string; value: numb
         absolute: point.value,
         percent: point.value != null && baseline != null ? ((point.value - baseline) / baseline) * 100 : null,
     }));
+}
+
+/** One day of the market price line: the backend's price (null when it cannot be read) and whether it is estimated. */
+export interface MarketPriceLinePoint {
+    date: string;
+    value: number | null;
+    estimated: boolean;
+}
+
+/**
+ * The market price line from the analysis' lot-independent series (`market_price_history`, Y-30): one point a
+ * date, in date order. The backend sends one point a day; a repeated date keeps its first point. A price that
+ * cannot be read keeps its date with a `null` value, a gap of the line.
+ */
+export function marketPriceLine(points: ReadonlyArray<{date: string; market_price?: unknown; estimated?: boolean | null}>): MarketPriceLinePoint[] {
+    const byDate = new Map<string, MarketPriceLinePoint>();
+    for (const point of points) {
+        if (byDate.has(point.date)) continue;
+        byDate.set(point.date, {date: point.date, value: safeDecimal(point.market_price), estimated: point.estimated === true});
+    }
+    return Array.from(byDate.values()).sort((left, right) => sortDates(left.date, right.date));
 }
 
 // ---------------------------------------------------------------------------
@@ -365,8 +387,10 @@ export function eventKey(event: LotEventIdentity): string {
     return `${event.lot_id}:${event.date}:${event.kind}:${event.transaction_id}:${event.related_transaction_id ?? ''}:${event.fragment_id ?? ''}`;
 }
 
-/** The marker series an event kind belongs to, or `null` if it draws no marker. */
-export function eventCategory(kind: LotEventKind): 'buy' | 'sell' | 'transfer' | 'adjustment' | 'split' | null {
+/** The marker series an event kind belongs to, or `null` if it draws no marker. A transfer leg read at the scope's edge
+ *  (`scopeBoundary`, J-48) is a transfer marker, whatever adjustment kind carries its figures. */
+export function eventCategory(kind: LotEventKind, scopeBoundary?: ScopeBoundary | null): 'buy' | 'sell' | 'transfer' | 'adjustment' | 'split' | null {
+    if (scopeBoundary === 'IN' || scopeBoundary === 'OUT') return 'transfer';
     if (kind === 'BUY') return 'buy';
     if (kind === 'SELL') return 'sell';
     if (kind === 'TRANSFER_ARRIVE') return 'transfer';

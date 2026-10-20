@@ -42,7 +42,8 @@
  * `baseLanguage` and a faithful fake of `localizedChangelog`: `peek`/`load` spies
  * over translations each test programs, with the real module's rules (English
  * for `en` or a language without a file, a cache filled only by a successful
- * load, a failed chunk resolving to English). The UI language is the real
+ * load and observable, a `SvelteMap` as the module's since A-CL1, a failed
+ * chunk resolving to English). The UI language is the real
  * svelte-i18n `locale` store (the `$lib/i18n` mock below keeps it), set per test
  * and put back to English after each one.
  *
@@ -113,9 +114,12 @@ const changelogFixture = vi.hoisted(() => {
 //    answers undefined and `load` waits for it; a success is cached, a rejection is a
 //    failed chunk, which resolves to English and is not cached;
 //  - neither: a language without a file — English at once, as for `en`.
+// The cache is a `SvelteMap`, as the module's since A-CL1: a window reading `peek`
+// sees a load that fills it, whoever started it (M1, M2).
 // The English list keeps one identity while the fixture is unchanged, as a
 // module-level list would.
-const localizedFake = vi.hoisted(() => {
+const localizedFake = await vi.hoisted(async () => {
+    const {SvelteMap} = await import('svelte/reactivity');
     const baseLanguage = (locale: string | null | undefined): string => (locale ?? '').split('-')[0].toLowerCase() || 'en';
     let memo: {from: ChangelogChapter[]; shown: ShownChapter[]} | null = null;
     const english = (): ShownChapter[] => {
@@ -125,7 +129,7 @@ const localizedFake = vi.hoisted(() => {
         }
         return memo.shown;
     };
-    const cached = new Map<string, ShownChapter[]>();
+    const cached = new SvelteMap<string, ShownChapter[]>();
     const files = new Map<string, () => Promise<ShownChapter[]>>();
     const ready = (lang: string): ShownChapter[] | undefined => cached.get(lang) ?? (files.has(lang) ? undefined : english());
     const peek = vi.fn((locale: string | null | undefined): ShownChapter[] | undefined => ready(baseLanguage(locale)));
@@ -1233,6 +1237,81 @@ describe('ChangelogModal — the chapters in the UI language (CL)', () => {
         expect(localizedFake.load.mock.calls.map(([value]) => localizedFake.baseLanguage(value))).toEqual(['it']);
         file.resolve(shownInItalian());
         await waitFor(() => expect(screen.getByTestId('changelog-chapter-0')).toHaveAttribute('lang', 'it'));
+    });
+
+    // A-CL1 — a load the modal no longer waits for. Closed while its translation loads, the modal drops the result (the
+    // teardown of its load effect), but the load still fills the cache. `ready` reads that cache through `peek()`, which
+    // is not one of its dependencies: on reopening, nothing it depends on has changed, so it keeps its stale value — the
+    // loading state for good (M1), or the English list of a failed load after another consumer has loaded the
+    // translation (M2) — until a language change or a reload. The load effect does not rescue it: it finds `peek()` full
+    // and asks for nothing. Both pass once `ready` observes the cache, so that whichever load fills it reaches the modal.
+    // The waits that today never end are bounded, so the red is an assertion, not a hang.
+
+    // M1 — red until A-CL1
+    it('closed while its translation loads, reopened after it has loaded: the translated chapters, not the loading state', async () => {
+        await setUiLocale('it');
+        const file = deferred<ShownChapter[]>();
+        localizedFake.files.set('it', () => file.promise);
+        const onClose = vi.fn();
+
+        const view = render(ChangelogModal, {open: true, onClose});
+        await screen.findByTestId('changelog-loading');
+        await waitFor(() => expect(localizedFake.load).toHaveBeenCalled());
+        expect(localizedFake.load.mock.calls.map(([value]) => localizedFake.baseLanguage(value))).toEqual(['it']);
+
+        await view.rerender({open: false, onClose});
+        await waitFor(() => expect(screen.queryByTestId('changelog-modal')).not.toBeInTheDocument());
+
+        // The translation arrives while the modal is closed: the load the modal started settles, and the fake caches it.
+        file.resolve(shownInItalian());
+        await localizedFake.load.mock.results[0].value;
+        expect(localizedFake.cached.has('it'), 'precondition: the translation has loaded while the modal was closed').toBe(true);
+
+        await view.rerender({open: true, onClose});
+        await screen.findByTestId('changelog-modal');
+        await waitFor(() => expect(screen.queryByTestId('changelog-loading'), 'reopened after its translation has loaded: not the loading state').not.toBeInTheDocument(), {timeout: 1_000});
+        expectChapterLanguages('it', [
+            {version: '1.2.0', lang: 'it'},
+            {version: '1.1.0', lang: 'it'},
+            {version: '1.0.0', lang: 'en'},
+        ]);
+        expect(localizedFake.load, 'the load that filled the cache is the only one: reopening asks for nothing').toHaveBeenCalledTimes(1);
+    });
+
+    // M2 — red until A-CL1
+    it('a failed translation shows English; once another consumer has loaded it, reopening shows the translated chapters', async () => {
+        await setUiLocale('it');
+        // The translation file: its first fetch (the modal's) fails, the next one (another consumer's) arrives.
+        const file = vi.fn<() => Promise<ShownChapter[]>>().mockRejectedValueOnce(new Error('translation chunk failed')).mockResolvedValueOnce(shownInItalian());
+        localizedFake.files.set('it', file);
+        const onClose = vi.fn();
+
+        const view = render(ChangelogModal, {open: true, onClose});
+        await waitFor(() => expect(screen.getByTestId('changelog-chapter-0')).toBeInTheDocument());
+        expect(screen.queryByTestId('changelog-loading')).not.toBeInTheDocument();
+        expectChapterLanguages('it', [
+            {version: '1.2.0', lang: 'en'},
+            {version: '1.1.0', lang: 'en'},
+            {version: '1.0.0', lang: 'en'},
+        ]);
+        expect(file, 'precondition: the modal fetched the translation once, and that fetch failed').toHaveBeenCalledTimes(1);
+
+        await view.rerender({open: false, onClose});
+        await waitFor(() => expect(screen.queryByTestId('changelog-modal')).not.toBeInTheDocument());
+
+        // Another consumer loads the translation while the modal is closed: this time it arrives, and is cached.
+        await localizedFake.load('it');
+        expect(file, "precondition: the second fetch is the other consumer's").toHaveBeenCalledTimes(2);
+        expect(localizedFake.cached.has('it'), 'precondition: the translation has loaded while the modal was closed').toBe(true);
+
+        await view.rerender({open: true, onClose});
+        await screen.findByTestId('changelog-modal');
+        await waitFor(() => expect(screen.getByTestId('changelog-chapter-0'), 'reopened after the translation has loaded: v1.2.0 in Italian, not the English of the failed load').toHaveAttribute('lang', 'it'), {timeout: 1_000});
+        expectChapterLanguages('it', [
+            {version: '1.2.0', lang: 'it'},
+            {version: '1.1.0', lang: 'it'},
+            {version: '1.0.0', lang: 'en'},
+        ]);
     });
 
     it('search reads the displayed chapters: a word only the translation has is found, the English text of a translated chapter is not', async () => {

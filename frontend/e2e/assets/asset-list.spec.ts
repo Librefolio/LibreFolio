@@ -20,6 +20,8 @@ import {uniqueSuffix, uniqueToken} from '../fixtures/unique';
 import {t} from '../fixtures/i18n-data';
 import {daysAgoIso, localIso} from '../fixtures/dates';
 import {describeShown, isStoredPoint, overwriteCounts, overwriteWarningSentence, pageLanguage, recordSyncRequests, storedAssetPrices, type SyncPeriod} from '../fixtures/sync-overwrite';
+import {chooseTheme} from '../fixtures/galleryFiles';
+import {parkPointer} from '../fixtures/galleryRiskLab';
 import {schemas} from '../../src/lib/api/generated';
 
 type SyntheticAsset = {
@@ -2122,4 +2124,437 @@ test.describe('Assets list — a delete that transactions block opens already bl
         await expect(page.getByTestId(`asset-card-${assetId}`), 'the asset is still listed').toBeVisible();
         expect(deletes, 'cancelling sends none either').toEqual([]);
     });
+});
+
+// ============================================================================
+// The table's fixed columns keep the colour of their row, opaque, in every row state (DataTable, 19/10)
+// ============================================================================
+
+/** Each theme is a test of its own: a red names the theme it belongs to. */
+const FIXED_COLUMN_THEMES = ['light', 'dark'] as const;
+
+/**
+ * Where a cell is read: this many CSS pixels in from its top-left corner. That is inside the padding DataTable gives every
+ * cell (`td`: 0.625rem = 10 px above, 0.5rem = 8 px on the left), 3 px clear of the 1 px border of the row above, and clear
+ * of whatever the cell holds — text, a badge, the checkbox, the ⋮ button all sit lower, centred in the row. So the pixel
+ * read is the cell's background and nothing else.
+ */
+const CELL_INSET = 4;
+
+/**
+ * Two pixels painted from the same layers agree within this, per channel (0–255). On the fix a fixed cell paints exactly
+ * what its row paints — the card, and the state's tint over it — so only rasterisation separates the two pixels: Chromium
+ * draws a pinned cell (sticky, z-index 5) in a layer of its own and blends the tint there, and two 8-bit blends of one
+ * colour may round 1 apart. The defect lies far outside the margin: a tint drawn twice moves some channel by 7 at the least
+ * (the 6 % hover tint of a clickable row, dark theme) and by 23 for the selection in light (223,233,228 in a data cell,
+ * 200,218,209 in a fixed one, measured 19/10); the deeper tint of a pulse's beat moves some channel by 10 or more from the
+ * row at rest, in both themes.
+ */
+const SAME_PAINT = 2;
+
+/** The five rows of the measurement, one per state, all in the analysis panel (no transaction, held by nobody). */
+const FIXED_PLAIN = syntheticAsset(910_201, 0, 0, {displayName: 'Fixed columns plain'});
+const FIXED_SELECTED = syntheticAsset(910_202, 0, 0, {displayName: 'Fixed columns selected'});
+const FIXED_INACTIVE = syntheticAsset(910_203, 0, 0, {displayName: 'Fixed columns inactive', active: false});
+const FIXED_ANALYZED = syntheticAsset(910_204, 0, 0, {displayName: 'Fixed columns analyzed'});
+const FIXED_HIGHLIGHTED = syntheticAsset(910_205, 0, 0, {displayName: 'Fixed columns highlighted'});
+const FIXED_COLUMN_ROWS = [FIXED_PLAIN, FIXED_SELECTED, FIXED_INACTIVE, FIXED_ANALYZED, FIXED_HIGHLIGHTED];
+
+/** A colour on screen: its sRGB channels, 0–255. */
+type Rgb = readonly [number, number, number];
+type ScreenPoint = {x: number; y: number};
+
+/** The two fixed cells of a DataTable row, by the handles DataTable publishes: the selection cell pinned left, the actions cell pinned right. */
+const FIXED_CELLS = [
+    {name: 'selection', side: 'left', testId: (rowId: number) => `dt-select-cell-${rowId}`},
+    {name: 'actions', side: 'right', testId: (rowId: number) => `dt-actions-cell-${rowId}`},
+] as const;
+
+/** One fixed cell, read in the state its row is in. */
+interface FixedCellReading {
+    cell: (typeof FIXED_CELLS)[number]['name'];
+    /** The fixed cell's computed `background-color`, as Chrome serialises it. */
+    css: string;
+    /** Its alpha (0–1) as a canvas paints it; null when the canvas refuses the text. */
+    alpha: number | null;
+    /** What the screen shows inside the fixed cell's padding. */
+    fixed: Rgb;
+    /** What the screen shows inside the padding of an ordinary data cell of the same row, at the same moment. */
+    normal: Rgb;
+    /** That data cell's column. */
+    column: string;
+}
+
+/** Where one fixed cell is read, beside an ordinary data cell of the same row that is on screen with it. */
+interface FixedCellProbe {
+    fixed: ScreenPoint;
+    normal: ScreenPoint;
+    column: string;
+    /** Where the pointer rests to hover the row: the same data cell's bottom padding, away from both pixels read. */
+    pointer: ScreenPoint;
+    /** The fixed cell's computed `position`. */
+    position: string;
+    /** The table runs on beyond the fixed cell on its pinned side: there is scrolled content under the cell. */
+    overScrolledTable: boolean;
+}
+
+/** The largest gap between two colours, over their three channels. */
+function channelGap(a: Rgb, b: Rgb): number {
+    return Math.max(...a.map((value, index) => Math.abs(value - b[index])));
+}
+
+function rgb(colour: Rgb): string {
+    return `rgb(${colour.join(', ')})`;
+}
+
+/** One class of a row, matched whole. */
+function rowClass(name: string): RegExp {
+    return new RegExp(`(?:^|\\s)${name}(?:\\s|$)`);
+}
+
+/**
+ * The alpha (0–1) of a CSS colour as a canvas paints it, run in the page. Chrome serialises a computed colour in the notation
+ * it was written in — `rgb()`, `rgba()`, `oklab(… / a)` for a mix, `color(srgb …)` — and a canvas paints them all as the
+ * colours they are: the text is set as the fill style (twice, from two different values: a text the canvas refuses leaves
+ * each in place), one pixel is filled and its alpha byte read back. Null for a text the canvas refuses.
+ */
+const PAINTED_ALPHA = (css: string): number | null => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    const context = canvas.getContext('2d', {willReadFrequently: true});
+    if (!context) return null;
+    context.fillStyle = '#000000';
+    context.fillStyle = css;
+    const first = String(context.fillStyle);
+    context.fillStyle = '#ffffff';
+    context.fillStyle = css;
+    if (String(context.fillStyle) !== first) return null;
+    context.clearRect(0, 0, 1, 1);
+    context.fillRect(0, 0, 1, 1);
+    return context.getImageData(0, 0, 1, 1).data[3] / 255;
+};
+
+/**
+ * The colour the screen shows at one CSS pixel: what is painted, not what is computed. A 1×1 screenshot there, decoded in
+ * the page — the e2e dependencies hold no PNG decoder — through `createImageBitmap`: no fetch (so no CSP), and no colour
+ * conversion, so the bytes read are the bytes the screenshot holds. A screenshot moves no pointer, and with
+ * `animations: 'allow'` it leaves a held animation where it is (`'disabled'` would play the pulse to its end); `caret:
+ * 'initial'` spares the page the style Playwright injects to hide the caret.
+ */
+async function screenPixel(page: Page, point: ScreenPoint): Promise<Rgb> {
+    const png = await page.screenshot({clip: {x: point.x, y: point.y, width: 1, height: 1}, scale: 'css', animations: 'allow', caret: 'initial'});
+    return page.evaluate(async (base64) => {
+        const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+        const bitmap = await createImageBitmap(new Blob([bytes], {type: 'image/png'}), {colorSpaceConversion: 'none', premultiplyAlpha: 'none'});
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const context = canvas.getContext('2d', {willReadFrequently: true});
+        if (!context) throw new Error('no 2D canvas to decode the screenshot on');
+        context.drawImage(bitmap, 0, 0);
+        bitmap.close();
+        const [red, green, blue] = context.getImageData(Math.floor(canvas.width / 2), Math.floor(canvas.height / 2), 1, 1).data;
+        return [red, green, blue] as const;
+    }, png.toString('base64'));
+}
+
+/**
+ * The row has stopped changing colour: every transition of its own — the 0.15 s fade from one state to the next, of
+ * `--dt-row-tint` on the fix and of `background` before it — has ended, so the screen shows the state and not a frame of
+ * the fade. A condition, not a delay: `getAnimations()` brings the row's style up to date first, so the fade the last
+ * pointer move, class or theme change started is among those awaited, and one a later change replaced is read again. CSS
+ * animations are left alone: the only one a row runs is the highlight's pulse, which the highlighted reads hold themselves.
+ */
+async function rowFadesEnded(row: Locator): Promise<void> {
+    await row.evaluate(async (element) => {
+        const fading = () => element.getAnimations().filter((animation) => animation instanceof CSSTransition && animation.playState === 'running');
+        for (let running = fading(); running.length > 0; running = fading()) {
+            await Promise.all(running.map((animation) => animation.finished.catch(() => undefined)));
+        }
+    });
+}
+
+/**
+ * Where one fixed cell of the row is read. The row is brought to the middle of the screen through its own `scrollIntoView`:
+ * a row is wider than the table's scroll area, so `inline: 'nearest'` leaves the sideways scroll alone — the cell's own
+ * would not, where it is pinned: a scroll aimed at a sticky box aims at its unshifted place (CSS Positioned Layout 3,
+ * §3.4.1), and the table would lose the half-way scroll it was given. A cell that scrolls with the table (phone width) is
+ * then brought into view on its own. Its point is checked to be on screen and to be the cell's own (`elementFromPoint`: no
+ * header, toolbar or other cell lies over it); the ordinary data cell beside it is the first of the row whose point — and
+ * pointer spot — pass the same check, which rules out a cell scrolled out of the table's view or passing under a pinned one.
+ */
+async function fixedCellProbe(row: Locator, testId: string, side: 'left' | 'right', pinned: boolean): Promise<FixedCellProbe> {
+    const cell = row.getByTestId(testId);
+    await expect(cell, `the row draws its ${testId}`).toHaveCount(1);
+    await row.evaluate((element) => element.scrollIntoView({block: 'center', inline: 'nearest', behavior: 'instant'}));
+    if (!pinned) await cell.evaluate((element) => element.scrollIntoView({block: 'nearest', inline: 'nearest', behavior: 'instant'}));
+    const probe = await row.evaluate(
+        (tr, {id, pinSide, inset}) => {
+            const fixedCell = tr.querySelector<HTMLElement>(`[data-testid="${id}"]`);
+            const table = tr.closest('table');
+            if (!fixedCell || !table) return `the row has no ${id} inside a table`;
+            const shows = (element: Element, point: {x: number; y: number}) => {
+                const hit = document.elementFromPoint(point.x, point.y);
+                return hit !== null && element.contains(hit);
+            };
+            const box = fixedCell.getBoundingClientRect();
+            const fixed = {x: Math.round(box.left + inset), y: Math.round(box.top + inset)};
+            if (!shows(fixedCell, fixed)) return `${id}: at (${fixed.x}, ${fixed.y}) the screen shows ${document.elementFromPoint(fixed.x, fixed.y)?.outerHTML.slice(0, 160) ?? 'nothing'}, not the cell`;
+            const tableBox = table.getBoundingClientRect();
+            const overScrolledTable = pinSide === 'left' ? tableBox.left < box.left - 1 : tableBox.right > box.right + 1;
+            for (const dataCell of tr.querySelectorAll<HTMLElement>('td.td-data:not(.td-fixed)')) {
+                const dataBox = dataCell.getBoundingClientRect();
+                const normal = {x: Math.round(dataBox.left + inset), y: Math.round(dataBox.top + inset)};
+                const pointer = {x: normal.x, y: Math.round(dataBox.bottom - inset - 1)};
+                if (shows(dataCell, normal) && shows(dataCell, pointer)) {
+                    return {fixed, normal, column: dataCell.dataset.columnId ?? '(no column id)', pointer, position: getComputedStyle(fixedCell).position, overScrolledTable};
+                }
+            }
+            return `${id}: no ordinary data cell of the row is on screen beside it`;
+        },
+        {id: testId, pinSide: side, inset: CELL_INSET},
+    );
+    if (typeof probe === 'string') throw new Error(probe);
+    return probe;
+}
+
+/**
+ * Both fixed cells of the row, read in the state the row is in, with the pointer on the row or away from it. For each: where
+ * the pins are on, the cell is pinned and sits over the table scrolled beneath it (preconditions, hard); the pointer is
+ * placed and the row's `:hover` read back; the row's fades end; then the cell's computed background and the two pixels.
+ */
+async function readFixedCells(page: Page, row: Locator, rowId: number, how: {what: string; hovered: boolean; pinned: boolean}): Promise<FixedCellReading[]> {
+    const readings: FixedCellReading[] = [];
+    for (const fixedCell of FIXED_CELLS) {
+        const testId = fixedCell.testId(rowId);
+        const probe = await fixedCellProbe(row, testId, fixedCell.side, how.pinned);
+        if (how.pinned) {
+            expect(probe.position, `${how.what}: above 768 px the ${fixedCell.name} cell is pinned`).toBe('sticky');
+            expect(probe.overScrolledTable, `${how.what}: the ${fixedCell.name} cell sits over the table scrolled beneath it, as in the report`).toBe(true);
+        }
+        // The pointer on the row (an ordinary cell's bottom padding: a screenshot does not move it, so the row stays hovered
+        // while it is read), or parked where nothing reacts to it.
+        if (how.hovered) await page.mouse.move(probe.pointer.x, probe.pointer.y);
+        else await parkPointer(page);
+        await expect.poll(() => row.evaluate((element) => element.matches(':hover')), {message: `${how.what}: ${how.hovered ? 'the pointer is on the row' : 'no pointer is on the row'}`}).toBe(how.hovered);
+        await rowFadesEnded(row);
+        const css = await row.getByTestId(testId).evaluate((element) => getComputedStyle(element).backgroundColor);
+        const alpha = await page.evaluate(PAINTED_ALPHA, css);
+        const fixed = await screenPixel(page, probe.fixed);
+        const normal = await screenPixel(page, probe.normal);
+        readings.push({cell: fixedCell.name, css, alpha, fixed, normal, column: probe.column});
+    }
+    return readings;
+}
+
+/**
+ * The two verdicts of a state, for each fixed cell, soft so that one run lists every state that fails: (1) opaque — the
+ * computed background has alpha 1, so nothing scrolled under the cell can show through; (2) no seam — the screen shows
+ * the cell in the colour it shows an ordinary cell of the row, within {@link SAME_PAINT}.
+ */
+function expectFixedCellsLikeTheRow(readings: FixedCellReading[], what: string): void {
+    for (const reading of readings) {
+        expect.soft(reading.alpha, `${what}: the ${reading.cell} cell is opaque, so nothing scrolled under it shows through — its computed background-color is ${reading.css}`).toBe(1);
+        expect.soft(channelGap(reading.fixed, reading.normal), `${what}: the ${reading.cell} cell shows the colour of its row — it shows ${rgb(reading.fixed)} where the row's ${reading.column} cell shows ${rgb(reading.normal)}`).toBeLessThanOrEqual(SAME_PAINT);
+    }
+}
+
+/** Reads both fixed cells of the row in its present state and gives the verdicts; returns the readings. */
+async function expectRowState(page: Page, row: Locator, rowId: number, how: {what: string; hovered: boolean; pinned: boolean}): Promise<FixedCellReading[]> {
+    const readings = await readFixedCells(page, row, rowId, how);
+    expectFixedCellsLikeTheRow(readings, how.what);
+    return readings;
+}
+
+/**
+ * The fixed columns of the asset table — the selection cell pinned left, the actions cell (⋮) pinned right — are opaque and
+ * the colour of their row, whatever the row's state, in both themes; and the highlight pulses (DataTable, 19/10).
+ *
+ * The defect (reported 19/10, on this page's table): under the pointer the pinned Actions column turned transparent, and the
+ * row's content scrolling under it showed through instead of the ⋮. Since 77bfa6a39 the row states are translucent colour
+ * roles — `--lf-selected`, the focus green at 12 %; a clickable row's hover at 6 %; an analyzed row's hover at 20 % — and
+ * `.td-fixed { background: inherit }` copied the translucent colour. A fixed cell also paints its row's background behind
+ * itself, so it showed the tint twice: a darker strip down every hovered or selected row. And the highlight pulse
+ * (`tr.highlighted`, 3 × 0.6 s) never ran: the row's `background: … !important` beat the animation, 12/07–19/10.
+ *
+ * The fix: a row paints the card and, over it, the tint of its state (`--dt-row-tint`, a registered colour) as one image
+ * layer, so the row is opaque; a fixed cell inherits both layers and paints what its row paints. A state sets the tint
+ * only, the pulse animates it, and AssetTable's inactive row sets it too.
+ *
+ * ## What is read: for each fixed cell, in each state, in each theme
+ *
+ * 1. Opaque: the fixed cell's computed `background-color` has alpha 1 ({@link PAINTED_ALPHA}).
+ * 2. No seam: the colour the SCREEN shows inside the fixed cell's padding is the colour it shows inside an ordinary data
+ *    cell of the same row, at the same moment, within {@link SAME_PAINT} per channel ({@link screenPixel}). The painted
+ *    pixels, because the defect is in the painting: the computed colours of the two cells say nothing of the row's
+ *    background drawn behind the fixed one.
+ * 3. The pulse, on the highlighted row: the class starts a CSS animation; held at the middle of a beat, the row is deeper
+ *    than once the pulse has ended, and the fixed cells are the colour of the row at that moment too.
+ *
+ * Positive controls keep the readers honest: a row at rest reads the same in both cells on any code (the points read are
+ * backgrounds), a selected row reads apart from a row at rest (the pixel reader sees a tint), and the selection role reads
+ * translucent (the alpha reader sees a translucency).
+ *
+ * ## The states
+ *
+ * Reached as a user reaches them: a row under the pointer (asset rows open their asset, so DataTable makes them `clickable`:
+ * `tr.clickable:hover`); a selected row, its checkbox ticked, at rest and under the pointer; an inactive asset's row
+ * (`asset-row-inactive`), at rest and under the pointer. Two states of DataTable the asset table never sets are put on rows
+ * of this same table the way their consumers put them: `row-analyzed`, what the dashboard tables' `getRowClass` returns, and
+ * `highlighted`, what `navigateToRowId` adds (a real highlight also writes `data-highlighted`, which no style reads). Sound:
+ * Svelte (5.48, `set_class`) rewrites a row's class attribute only when the class string it computes changes, and nothing
+ * here changes it for those rows — no selection, no click on them, and `getRowClass` reads only `active`. Each is checked
+ * to still be on its row after its reads, so a redraw would be a red, not the reading of another state.
+ *
+ * ## Where the cells are pinned
+ *
+ * The runner runs this action on the desktop project only (1280 px): there the cells are pinned, and the list's columns
+ * (1,022 px at the least: 48 + 220 + 60 + 70 + 90 + 150 + 80 + 240 + 64, more with each Δ period) are wider than its scroll
+ * area beside the open sidebar (about 974 px), so the table is scrolled half way and both pinned cells sit over table
+ * scrolled beneath them, as in the report — checked at every read. At phone width (768 px or less, D-Y17) the pins are off:
+ * the cells scroll with the table and each is brought into view to be read; 1 and 2 hold there too, the pinning is not asked.
+ *
+ * Red on the code before the fix: the translucent states fail 1 (alpha 0.06, 0.12, 0.2; 0.5 for the inactive row under the
+ * pointer) and 2 (the tint drawn twice), and the pulse fails 3 (no change: it never ran). A row at rest and an inactive row
+ * at rest were opaque already: they pass on both codes, and guard the fix.
+ *
+ * Nothing is written: the list is mocked (`goToMockedAssets`), and the theme toggle keeps its choice in this browser
+ * context's localStorage, never in the user's settings. No clock: a read waits for the row's `:hover` state and for its own
+ * fades to end (`getAnimations()`), and the pulse is held and moved with the Web Animations API.
+ */
+test.describe('Assets list — the table’s fixed columns stay opaque and the colour of their row, in every row state (19/10)', () => {
+    // A ceiling, never a delay: the list loads, then eleven states are read, two cells each, every read waiting for the
+    // row's own fade.
+    test.describe.configure({timeout: 90_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    for (const theme of FIXED_COLUMN_THEMES) {
+        test(`${theme} theme: in every row state the selection and actions cells are opaque and the colour of their row, and the highlight pulses`, async ({page}) => {
+            const what = (state: string) => `${theme} theme, ${state}`;
+            await goToMockedAssets(page, FIXED_COLUMN_ROWS);
+            const assetsPage = page.getByTestId('assets-page');
+            // The list shows active assets only until the inactive toggle joins the inactive ones in.
+            const inactiveToggle = page.getByTestId('assets-inactive-toggle');
+            await inactiveToggle.click();
+            await expect(inactiveToggle).toHaveAttribute('aria-pressed', 'true');
+            await page.getByTestId('view-mode-list').click();
+            await waitForSettled(assetsPage, 20_000);
+            // Through the header's toggle, before anything scrolls the header away.
+            await chooseTheme(page, theme);
+
+            const panel = page.getByTestId('assets-table-panel-analysis');
+            const rowOf = (asset: SyntheticAsset) => panel.locator(`tbody tr[data-row-id="${asset.id}"]`);
+            for (const asset of FIXED_COLUMN_ROWS) await expect(rowOf(asset), `${asset.display_name} is a row of the analysis panel's table`).toBeVisible({timeout: 10_000});
+
+            // The highlight pulses only for a browser that asks for no reduced motion (DataTable's `prefers-reduced-motion`).
+            expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches), 'the browser asks for no reduced motion').toBe(false);
+            // Positive control of the alpha reader: the selection role, translucent by design, reads translucent.
+            const selectionRole = await page.evaluate(() => {
+                const probe = document.body.appendChild(document.createElement('div'));
+                probe.style.setProperty('background-color', 'var(--lf-selected)');
+                try {
+                    return getComputedStyle(probe).backgroundColor;
+                } finally {
+                    probe.remove();
+                }
+            });
+            expect(await page.evaluate(PAINTED_ALPHA, selectionRole), `positive control: the alpha reader reads the selection role, ${selectionRole}, as translucent`).toBeLessThan(1);
+
+            // The selected row, ticked as a user ticks it (the checkbox stops the click: the row does not open its asset).
+            await panel.getByTestId(`dt-row-checkbox-${FIXED_SELECTED.id}`).click();
+            await expect(rowOf(FIXED_SELECTED)).toHaveAttribute('data-selected', 'true');
+
+            // The table scrolled half way: content runs under both pinned cells, as in the report. At phone width each cell is
+            // brought into view to be read instead, and this position does not last.
+            const pinned = await page.evaluate(() => !matchMedia('(max-width: 768px)').matches);
+            const scrollArea = panel.getByTestId('dt-scroll');
+            await expect(scrollArea, 'the analysis panel draws one table').toHaveCount(1);
+            const overflow = await scrollArea.evaluate((element) => element.scrollWidth - element.clientWidth);
+            expect(overflow, 'the table is wider than its scroll area: it scrolls sideways, under its pinned cells').toBeGreaterThan(2 * CELL_INSET);
+            await scrollArea.evaluate((element) => {
+                element.scrollLeft = Math.round((element.scrollWidth - element.clientWidth) / 2);
+            });
+
+            // A row at rest: the card, on any code — the positive control of the points read.
+            const plain = rowOf(FIXED_PLAIN);
+            await expect(plain, 'asset rows open their asset: DataTable makes them clickable').toHaveClass(rowClass('clickable'));
+            await expect(plain).toHaveAttribute('data-selected', 'false');
+            const atRest = await expectRowState(page, plain, FIXED_PLAIN.id, {what: what('a row at rest'), hovered: false, pinned});
+            await expectRowState(page, plain, FIXED_PLAIN.id, {what: what('a row under the pointer (tr.clickable:hover)'), hovered: true, pinned});
+
+            // A selected row, at rest and under the pointer.
+            const selected = rowOf(FIXED_SELECTED);
+            const selectedAtRest = await expectRowState(page, selected, FIXED_SELECTED.id, {what: what('a selected row'), hovered: false, pinned});
+            // Positive control of the pixel reader: it sees a tint — the ordinary cells of a selected row read apart from those
+            // of a row at rest, on any code.
+            for (const [index, reading] of selectedAtRest.entries()) {
+                expect(channelGap(reading.normal, atRest[index].normal), `positive control: the pixel reader sees the selection tint — beside the ${reading.cell} cell a selected row reads ${rgb(reading.normal)}, a row at rest ${rgb(atRest[index].normal)}`).toBeGreaterThan(SAME_PAINT);
+            }
+            await expectRowState(page, selected, FIXED_SELECTED.id, {what: what('a selected row under the pointer'), hovered: true, pinned});
+            await expect(selected, 'the row stayed selected through its reads').toHaveAttribute('data-selected', 'true');
+
+            // An inactive asset's row: AssetTable's warning tint, at rest and under the pointer. The class is the subject here:
+            // it is what AssetTable's getRowClass hands DataTable, and what its style keys on.
+            const inactive = rowOf(FIXED_INACTIVE);
+            await expect(inactive, 'an inactive asset’s row carries AssetTable’s state').toHaveClass(rowClass('asset-row-inactive'));
+            await expectRowState(page, inactive, FIXED_INACTIVE.id, {what: what('an inactive asset’s row'), hovered: false, pinned});
+            await expectRowState(page, inactive, FIXED_INACTIVE.id, {what: what('an inactive asset’s row under the pointer'), hovered: true, pinned});
+
+            // An analyzed row (row-analyzed), put on as the dashboard tables' getRowClass puts it, at rest and under the pointer.
+            const analyzed = rowOf(FIXED_ANALYZED);
+            await analyzed.evaluate((element) => element.classList.add('row-analyzed'));
+            await expect(analyzed).toHaveClass(rowClass('row-analyzed'));
+            await expectRowState(page, analyzed, FIXED_ANALYZED.id, {what: what('an analyzed row (row-analyzed)'), hovered: false, pinned});
+            await expectRowState(page, analyzed, FIXED_ANALYZED.id, {what: what('an analyzed row (row-analyzed) under the pointer'), hovered: true, pinned});
+            await expect(analyzed, 'row-analyzed stayed on the row through its reads: nothing redrew it').toHaveClass(rowClass('row-analyzed'));
+            await analyzed.evaluate((element) => element.classList.remove('row-analyzed'));
+
+            // A highlighted row, put on as navigateToRowId puts it, with no pointer on it. The class starts the pulse, which is
+            // held at once — in the same task, before a frame of it is drawn — so that no speed of the machine decides which
+            // beat is read.
+            const highlighted = rowOf(FIXED_HIGHLIGHTED);
+            await parkPointer(page);
+            await expect.poll(() => highlighted.evaluate((element) => element.matches(':hover')), {message: 'no pointer is on the row to highlight'}).toBe(false);
+            await rowFadesEnded(highlighted);
+            const pulse = await highlighted.evaluate((element) => {
+                element.classList.add('highlighted');
+                const started = element.getAnimations().filter((animation): animation is CSSAnimation => animation instanceof CSSAnimation);
+                const [first] = started;
+                const playState = first?.playState;
+                for (const animation of started) animation.pause();
+                return first ? {name: first.animationName, playState, duration: Number(first.effect?.getComputedTiming().duration)} : null;
+            });
+            await expect(highlighted).toHaveClass(rowClass('highlighted'));
+            expect.soft(pulse, `${what('a highlighted row')}: the class starts a CSS animation, the pulse`).not.toBeNull();
+            let beat: FixedCellReading[] | null = null;
+            if (pulse) {
+                expect.soft(pulse.playState, `${what('a highlighted row')}: its pulse (${pulse.name}) runs as the class lands`).toBe('running');
+                expect(pulse.duration, `${what('a highlighted row')}: its pulse (${pulse.name}) beats over a finite time`).toBeGreaterThan(0);
+                // The middle of one beat: the deeper tint of the 50 % keyframe (each keyframe's easing ends exactly on it).
+                await highlighted.evaluate((element, time) => {
+                    for (const animation of element.getAnimations()) if (animation instanceof CSSAnimation) animation.currentTime = time;
+                }, pulse.duration / 2);
+                beat = await expectRowState(page, highlighted, FIXED_HIGHLIGHTED.id, {what: what('a highlighted row, its pulse held at the middle of a beat'), hovered: false, pinned});
+                // Then the pulse is over: played to its end, the row back on its steady tint.
+                await highlighted.evaluate((element) => {
+                    for (const animation of element.getAnimations()) if (animation instanceof CSSAnimation) animation.finish();
+                });
+            }
+            const steady = await expectRowState(page, highlighted, FIXED_HIGHLIGHTED.id, {what: what('a highlighted row once its pulse has ended'), hovered: false, pinned});
+            if (beat) {
+                for (const [index, reading] of beat.entries()) {
+                    expect
+                        .soft(channelGap(reading.normal, steady[index].normal), `${what('a highlighted row')}: the pulse changes the row's colour — at the middle of a beat its ${reading.column} cell shows ${rgb(reading.normal)}, once the pulse has ended ${rgb(steady[index].normal)}`)
+                        .toBeGreaterThan(SAME_PAINT);
+                }
+            }
+            await expectRowState(page, highlighted, FIXED_HIGHLIGHTED.id, {what: what('a highlighted row under the pointer'), hovered: true, pinned});
+            await expect(highlighted, 'highlighted stayed on the row through its reads: nothing redrew it').toHaveClass(rowClass('highlighted'));
+            await highlighted.evaluate((element) => element.classList.remove('highlighted'));
+        });
+    }
 });

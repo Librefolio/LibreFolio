@@ -2,9 +2,9 @@
  * emailCase — when two e-mail addresses are one (decision P18; accounts lot A-25, contract C1).
  *
  * P18 (the developer's, now in the backend): an address is the same whatever the case of its letters A–Z, and of those
- * only. The database holds a unique index on `lower(email)` (`ux_users_email_lower`, migration 009), and
- * `user_service.email_fold` folds as SQLite's `lower()` does: A–Z to a–z, and nothing else. Letters outside A–Z compare
- * as written — a documented limit: `émile@` and `Émile@` are two addresses.
+ * only. The database holds a unique index on `lower(email)` (`ux_users_email_lower`, step 6 of migration
+ * `005_release_1_3_0_schema`), and `user_service.email_fold` folds as SQLite's `lower()` does: A–Z to a–z, and nothing
+ * else. Letters outside A–Z compare as written — a documented limit: `émile@` and `Émile@` are two addresses.
  *
  * `emailCase.ts` is the interface's copy of that fold, written once, beside `passwordRules.ts` (decision 37): the
  * Profile tab asks for the current password, and sends it, only when the address really changes (A-25). The contract:

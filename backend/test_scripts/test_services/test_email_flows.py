@@ -17,9 +17,9 @@ checks the configuration and the hourly budget, sends and logs (``test_email_del
    ``user_settings`` row, or with one saying ``de``, ``de-DE`` or nothing, the instance's ``default_language`` (``fr`` →
    ``fr``); another account's row counts for nothing.
 4. With neither usable — and a ``default_language`` that is not one of the four languages, empty, or a row that is
-   missing — English. ``account_language`` reads the language column alone: a row the read model ``UserSettingsRead``
-   refuses (a theme outside light/dark/auto, written as a row) still gives its language. It never creates nor changes a
-   ``user_settings`` row: reading a language changes nothing.
+   missing — English. ``account_language`` reads the language column alone: a row whose theme this version does not
+   know (outside light/dark/auto, written as a row), which the schema ``UserSettingsRead`` refuses, still gives its
+   language. It never creates nor changes a ``user_settings`` row: reading a language changes nothing.
 5. ``send_test_email`` sends one message through ``send_email``: to the account's own address, from the configured
    sender; its subject and its text are those ``build_test_message`` writes for the account's language, the text naming
    ``instance`` and the user name. It returns that language and spends one unit of the hourly budget.
@@ -144,9 +144,9 @@ from structlog.testing import capture_logs
 
 from backend.app.db.base import SQLModel  # imports every model: SQLModel.metadata holds the whole schema
 from backend.app.db.models import AccountToken, AccountTokenPurpose, GlobalSetting, User, UserSettings
-from backend.app.schemas.settings import SETTINGS_REGISTRY
+from backend.app.schemas.settings import SETTINGS_REGISTRY, UserSettingsRead
 from backend.app.services.accounts import token_service, user_service
-from backend.app.services.accounts.settings_service import get_user_settings, initialize_global_settings
+from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, TokenInspection, TokenStatus
 from backend.app.services.email import delivery, flows, smtp
 from backend.app.services.email.delivery import EmailError, EmailRateLimitedError, EmailUnavailableError
@@ -360,11 +360,10 @@ async def _settings_row(engine: AsyncEngine, user_id: int) -> tuple[str, str] | 
     return None if row is None else tuple(row)
 
 
-async def _refused_by_the_read_model(engine: AsyncEngine, user_id: int) -> str:
-    """The precondition, verified: ``get_user_settings``, the read model the rest of the app reads the row through, refuses the account's row; what it said."""
-    async with AsyncSession(engine) as session:
-        with pytest.raises(ValidationError) as refused:
-            await get_user_settings(user_id, session)
+def _unknown_theme_refusal() -> str:
+    """The precondition, verified: the schema ``UserSettingsRead`` refuses ``STALE_THEME``, a theme this version does not know; what it said."""
+    with pytest.raises(ValidationError) as refused:
+        UserSettingsRead(language="it", base_currency="EUR", theme=STALE_THEME)
     return str(refused.value)
 
 
@@ -580,24 +579,24 @@ async def test_with_neither_usable_the_language_is_english(engine: AsyncEngine, 
 
 
 @pytest.mark.asyncio
-async def test_a_settings_row_the_read_model_refuses_still_gives_its_language(engine: AsyncEngine) -> None:
-    """EMF-009 — contract 4: Alice's row says ``it`` with a theme outside light/dark/auto (``sepia``, written as a row), the instance says ``fr``: ``account_language`` is ``it`` — it reads the language column alone — and the row is left as it was.
+async def test_a_theme_this_version_does_not_know_still_gives_its_language(engine: AsyncEngine) -> None:
+    """EMF-009 — contract 4: Alice's row holds ``it`` with a theme this version does not know (``sepia``, written as a row), the instance says ``fr``: ``account_language`` is ``it`` — it reads the language column alone — and the row is left as it was.
 
-    Barrier first: ``get_user_settings``, the read model the rest of the app reads the row through, refuses that row with
-    a ``ValidationError`` naming the theme — otherwise this would only be one more row with a valid theme.
+    Barrier first: the schema ``UserSettingsRead`` refuses that theme with a ``ValidationError`` naming it — otherwise
+    this would only be one more row with a valid theme.
     """
-    print_section("EMF-009: a row the read model refuses")
+    print_section("EMF-009: a theme this version does not know")
+    refusal = _unknown_theme_refusal()
+    assert "theme" in refusal, f"barrier: the schema must refuse the theme: {refusal}"
     alice = await _add_user(engine, ALICE)
     await _set_account_language(engine, alice.id, "it", theme=STALE_THEME)
     await _set_default_language(engine, "fr")
-    refusal = await _refused_by_the_read_model(engine, alice.id)
-    assert "theme" in refusal, f"barrier: the read model must refuse the row for its theme: {refusal}"
 
     language = await _language_of(engine, alice.id)
 
-    assert language == "it", f"the account says 'it' in a row the read model refuses, the instance 'fr': got {language!r}"
+    assert language == "it", f"the account says 'it' with a theme this version does not know, the instance 'fr': got {language!r}"
     assert await _settings_row(engine, alice.id) == ("it", STALE_THEME), "account_language must leave the row as it was"
-    print_success("'it' from a row the read model refuses; the row untouched")
+    print_success("'it' from a row with a theme this version does not know; the row untouched")
 
 
 # =============================================================================

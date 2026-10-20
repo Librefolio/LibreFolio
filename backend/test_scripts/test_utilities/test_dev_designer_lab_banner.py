@@ -305,7 +305,7 @@ def start_server(monkeypatch, capsys, tmp_path: Path, lab_check: Callable[[], bo
 
         return step
 
-    def configure_runtime(port=None, data_dir=None):
+    def configure_runtime(port=None, data_dir=None, lane_settings=None):
         return port, tmp_path / "data"
 
     def auto_build_frontend(debug=False):

@@ -174,7 +174,6 @@ class IssueCode(StrEnum):
     MISSING_FX_RATES = "MISSING_FX_RATES"
     MISSING_COST_BASIS = "MISSING_COST_BASIS"
     INVALID_SPLIT_RATIO = "INVALID_SPLIT_RATIO"
-    QUOTE_IN_MINOR_UNIT = "QUOTE_IN_MINOR_UNIT"
     NON_ISO_CURRENCY = "NON_ISO_CURRENCY"
     TRANSACTIONS_BEFORE_FLOOR = "TRANSACTIONS_BEFORE_FLOOR"
     NAV_INCOMPLETE = "NAV_INCOMPLETE"
@@ -807,6 +806,7 @@ class LotAnalysisType(StrEnum):
     VALUE_HISTORY = "VALUE_HISTORY"
     RETURN_HISTORY = "RETURN_HISTORY"
     PRICE_HISTORY = "PRICE_HISTORY"
+    MARKET_PRICE_HISTORY = "MARKET_PRICE_HISTORY"
     BROKER_WAC_HISTORY = "BROKER_WAC_HISTORY"
     CUMULATIVE_WAC_HISTORY = "CUMULATIVE_WAC_HISTORY"
     PERFORMANCE_HISTORY = "PERFORMANCE_HISTORY"
@@ -949,6 +949,10 @@ class LotTimelineEventSchema(StrictModel):
         None,
         description="For the event that opens a lot (BUY, ADJUSTMENT_IN): the lot's original cost in target_currency, converted at the opening date — the lot summary's original_cost, in the currency of unit_price. None on every other kind and when the conversion is missing.",
     )
+    scope_boundary: Optional[Literal["IN", "OUT"]] = Field(
+        None,
+        description="For a row of a TRANSFER leg whose partner sits at a broker outside the scope, read as an adjustment: IN when its units came into the scope, OUT when they left it. A label only, the economics follow kind; the partner broker is never named. None on every other row.",
+    )
 
 
 class LotValueHistoryPoint(StrictModel):
@@ -990,6 +994,20 @@ class LotPriceHistoryPoint(StrictModel):
     market_price: SafeDecimal
     currency: str = Field(..., description="Currency of market_price, normally equal to response target_currency.")
     estimated: bool = Field(default=False, description="True when market_price is estimated from the last-known trade (no real market quote on/before this date), False for an actual price-history quote.")
+
+    @field_validator("currency")
+    @classmethod
+    def validate_currency(cls, v: str) -> str:
+        return Currency.validate_code(v)
+
+
+class MarketPriceHistoryPoint(StrictModel):
+    """The asset's market price on one day, whatever lots are open (Y-30): a LotPriceHistoryPoint without lot_id."""
+
+    date: date_type
+    market_price: SafeDecimal
+    currency: str = Field(..., description="Currency of market_price: the response target_currency.")
+    estimated: bool = Field(default=False, description="True when market_price is estimated from the last-known trade (no real market quote on/before this date), False for an actual price-history quote, exact or carried forward.")
 
     @field_validator("currency")
     @classmethod
@@ -1134,6 +1152,10 @@ class LotsAnalysisResponse(StrictModel):
     value_history: Optional[List[LotValueHistoryPoint]] = Field(None, description="Flat per-lot VALUE_HISTORY points.")
     return_history: Optional[List[LotReturnHistoryPoint]] = Field(None, description="Flat per-lot RETURN_HISTORY points.")
     price_history: Optional[List[LotPriceHistoryPoint]] = Field(None, description="Flat per-lot PRICE_HISTORY points.")
+    market_price_history: Optional[List[MarketPriceHistoryPoint]] = Field(
+        None,
+        description="MARKET_PRICE_HISTORY payload — the asset's market price on each day of the window that has a mark convertible to target_currency, independent of the lots and of selected_lot_ids; kept with FAILED.",
+    )
     broker_wac_history: Optional[List[BrokerWACHistoryPoint]] = Field(None, description="BROKER_WAC_HISTORY payload.")
     cumulative_wac_history: Optional[List[CumulativeWACHistoryPoint]] = Field(None, description="CUMULATIVE_WAC_HISTORY payload.")
     performance_history: Optional[List[PerformanceHistoryPoint]] = Field(
@@ -1609,6 +1631,7 @@ PortfolioPlannerSourceIssueCode = Literal[
     "allocation.fiscal_currency_missing",
     "allocation.saved_fx_missing",
     "allocation.saved_fx_invalid",
+    "allocation.saved_fx_skipped",
     "allocation.negative_inventory_unsupported",
     "allocation.negative_cash_unsupported",
     "allocation.broker_execution_profile_unsupported",

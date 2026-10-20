@@ -35,19 +35,21 @@ currency.**
 
 This ensures that we only need to store one rate per pair, and we can easily calculate the inverse if needed.
 
-Rate writes keep to the [stored-date bounds](../assets/architecture.md#stored-date-bounds) of the
-prices: from 1900-01-01 to tomorrow by the server's calendar (`stored_date_bounds()`; X-R65, night
-decision N83). `POST /api/v1/fx/currencies/rate` (`upsert_rates_endpoint()`) checks every item's
-`date` before its loop: a single date outside refuses the whole request with the same 422
-`date_out_of_range` (`date_out_of_range_detail()`), its `items` `{"index", "date"}` (the item's
-0-based index; at most ten), its `count` all of them. Nothing is written, not even the valid
-items, unlike the endpoint's [per-item errors](configuration.md#chain-dates-writes-and-counters).
-The provider sync never stores a rate dated before 1900-01-01, whatever its start: in
-`sync_pairs_bulk()`, the live sync path, `_is_date_within_sync_range()`
-(`backend/app/services/fx/sync.py`), which keeps the dates of the requested range, is false before
-`EARLIEST_RANGE_START`, so neither `start: "min"` nor an older start reaches past it; its end stays
-the requested one, today at the latest. `ensure_rates_multi_source()`, which has no production
-caller, is left without that floor.
+Rate writes keep to the [last storable date](../assets/architecture.md#stored-date-bounds) of the
+prices: tomorrow by the server's calendar (`latest_stored_date()`; X-R65, night decision N83),
+with no first date since the developer lifted the 1900-01-01 floor on 19/10 (N83's revision).
+`POST /api/v1/fx/currencies/rate` (`upsert_rates_endpoint()`) checks every item's `date` before
+its loop: a single date after tomorrow refuses the whole request with the same 422
+`date_out_of_range` (`date_out_of_range_detail()`, `params` `{"max"}`), its `items`
+`{"index", "date"}` (the item's 0-based index; at most ten), its `count` all of them. Nothing is
+written, not even the valid items, unlike the endpoint's
+[per-item errors](configuration.md#chain-dates-writes-and-counters). An earlier date, 0001-01-01
+included, passes. The provider sync has no floor either: in `sync_pairs_bulk()`, the live sync
+path, `_is_date_within_sync_range()` (`backend/app/services/fx/sync.py`) keeps the dates of the
+requested range and nothing else, so a provider's rate dated before 1900 inside it,
+`start: "min"` included, is kept like any other; its end stays the requested one, today at the
+latest. Before N83's revision it was false before `EARLIEST_RANGE_START` (1900-01-01), whatever
+the start.
 {: #stored-rate-dates }
 
 ## 🔢 Priority System
@@ -177,8 +179,8 @@ in the same chunks):
 - it loads the rows from the **backward-fill anchor** — the last rate on or before `min_date`, a
   `MAX(date)` scalar subquery — up to `max_date`. The anchor keeps the unlimited backward fill exact:
   the earliest item still finds its rate, however old;
-- it reads only the usable rates (X-R38): `usable_fx_rate_clause()`, that is `rate >= 1E-10 AND rate < 1E+14`, the
-  bounds of `usable_fx_rate_bounds()` (`backend/app/db/precision.py`), in the anchor subquery as in the window,
+- it reads only the usable rates (X-R38): `rate >= 1E-10 AND rate < 1E+14`, the bounds of
+  `usable_fx_rate_bounds()` (`backend/app/db/precision.py`), in the anchor subquery as in the window,
   so a legacy unusable row neither anchors the window nor is loaded. There is no per-row check in
   Python: any double within those bounds reads back as a rate `storable_fx_rate()` keeps, and this
   path is hot;
@@ -196,19 +198,6 @@ skipped it as unusable.
 Apart from the unusable rates left out, return values and errors are those of the full-history version
 this replaced, which loaded every pair's whole history up to the latest requested date and scanned it
 linearly for each item (PR #30 by Martin Sova, commit `5aa267f11`).
-
-The same condition filters every other read that computes with a stored rate (X-R45):
-
-- the period changes' first usable day (`services/fx/period_changes.py`);
-- the PAC planner's latest saved quote per pair, inside its latest-date subquery so the latest *usable* row wins,
-  and its WAC evidence (`services/pac_allocator/source/fx_quotes.py`, `wac.py`);
-- the scheduler's last date per pair (`_last_fx_dates`), so a day an older version stored as 0 or `inf` is
-  fetched again and overwritten.
-
-The reads that must see every row stay raw: the sync's overwrite and change count, the writes and deletes,
-the backup export, the engine's cache fingerprint and the AI Export's `source` lookup.
-`./dev.py test utils gate-usable-fx-rate` keeps that list: a new read of `FxRate` that neither calls the
-clause nor is listed fails it.
 
 ### 📅 Fixed-Period Changes {: #fixed-period-changes }
 
