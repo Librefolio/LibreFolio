@@ -243,6 +243,22 @@ Proposta di X (19/10) per tutti e quattro: dopo la 1.3. CP6 (F05) e K-20 sono gi
   tradotta»](../Phase_0/BACKLOG_POST_1.2.md); [piano 08, «C-70b.1 — Le risposte, e i rossi al
   `test-author`»](08_email/plan-phase01Email.prompt.md).
 
+### MF · Matematica finanziaria
+
+#### MF-P1c · Il MWRR sui periodi lunghissimi che aprono a zero: gli zeri falsi della griglia
+
+- **Chi**: MF.
+- **Cos'è**: su un periodo che apre a valore 0 e dura più di circa 77 anni (la classe dell'errore di battitura al
+  1900), da un certo tasso in su tutti i termini del VAN vanno in underflow a 0,0: la scansione della griglia tiene quel
+  punto come «zero esatto» e la Dashboard mostra un MWRR falso dove dovrebbe mostrare «—» (es. 12,80 contro una radice
+  vera di circa 4,4·10⁷, fuori scala). È così oggi e dopo P1b, che non lo tocca. La cura (uno zero esatto della
+  griglia è radice solo se il VAN cambia davvero segno attorno, sopra la soglia di rumore di P1b) farebbe **sparire**
+  valori mostrati oggi (valore → «—»): domanda al developer, con i conteggi sui corpora di P1b e sui dati veri (dove
+  oggi non c'è nessuna storia così lunga).
+- **Stato**: ❌ non iniziato; domanda per dopo (coordinatore, 20/10).
+- **Dove**: [piano 11, «P1b — le due debolezze del MWRR già presenti», «PAUSA GENERALE 19/10» e «Ripresa
+  20/10»](11_financialMath/plan-phase01FinancialMath.prompt.md).
+
 ---
 
 ## Richieste degli utenti
