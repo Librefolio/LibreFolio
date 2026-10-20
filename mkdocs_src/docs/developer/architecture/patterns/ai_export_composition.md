@@ -159,11 +159,61 @@ price series, the rows of `assets`. Every other eligible asset stays in
 `portfolio_weight_ratio`, `reason_code`, ordered by `asset_id`); the payload validator
 checks both counts against the two lists, with no asset listed twice. The
 `reason_code` is decided on the price points the price history returns, never on the
-asset type (E-AI503): `no_stored_price` when it returns none (no price stored up to
-the period end), `mixed_price_currencies` when they do not share one currency. A
-single Asset keeps its section: `asset.ohlc_returns` (version 2) then has a `null`
-`currency` and a `reason_code`, every bucket empty, and `latest_close` and
-`latest_date` `null` ([Snapshot Data Tables](#snapshot-data-tables)).
+asset type (E-AI503, E-23), checked in this order: `no_stored_price` when it returns
+none (no price stored up to the period end), `mixed_price_currencies` when they do not
+share one currency, `no_price_in_period` when they are all carried from before the
+period (prices are stored, but none inside it). A `no_price_in_period` row also
+carries `currency`, `last_close` and `last_close_date`, the last price stored before
+the period; the validator requires the three for that code and `null` for the other
+two. A single Asset keeps its section: `asset.ohlc_returns` (version 2) then has a
+`reason_code`, every bucket empty, and `latest_close` and `latest_date` `null`. Its
+`currency` is `null` for the first two codes and stays for `no_price_in_period`,
+whose last stored price is the `last_value` of its whole-period [gap](#series-gaps)
+([Snapshot Data Tables](#snapshot-data-tables)).
+
+### 🕳️ Price and Rate Gaps {: #series-gaps }
+
+A price or rate payload keeps every bucket of its plan, the empty ones included.
+Since version 2 each series also lists its gaps (E-23): `price_gaps` on every series
+in the `assets` of `portfolio.technical_prices` and `broker.technical_prices` and on
+`asset.ohlc_returns`, `rate_gaps` on `fx.rate_ohlc`. A gap (`SeriesGap`:
+`start_date`, `end_date`, `calendar_days`, `last_value`, `last_value_date`) is a
+maximal run of contiguous empty buckets (no observed point) that holds at least one
+market-open day: Monday to Friday and not in the union of the main exchanges'
+holidays of the [Market Calendar](../../backend/risk/architecture.md#market-calendar)
+(weekends alone after a failed build of that table). A weekend or a holiday alone is
+never a gap. Nor is a run that reaches the snapshot day (`snapshot_as_of`, the plan's
+end) when that day is its only market-open day: that is the day's price not yet
+synchronized, and on every asset it would only be noise (E-23.3). A historical period
+that ends on a weekday without a price loses that one-day gap too. The run's buckets
+merge into one gap, from the first start to the last end, closed days at its edges
+included.
+
+`last_value` and `last_value_date` are the last value observed before the gap. For a
+gap that opens the period they are the last value stored before the period: the
+carried point that opens the asset's price points (`price_series_seed()`), or the
+period's first FX observation when it is carried from before the period
+(`rate_series_seed()`). Both are `null` when the history begins inside the period. A
+gap is missing data: never a zero, and never proof that the price or rate stayed the
+same.
+
+`series_gaps()` in `components/technical_shared.py` is pure: it reads the period's
+observed points, the bucket plan, that seed and a holiday set. `load_series_gaps()`
+reads the holiday table through `ensure_market_holidays()` only when some run of empty
+buckets has to be judged. The payload validators keep the gaps in date order, apart,
+never over a populated bucket, with `calendar_days` matching the range and the last
+value dated before the gap. An asset without a series has no gap, with one exception:
+a single Asset with `no_price_in_period`, whose whole period is one gap (when it holds
+a market-open day) carrying the last close stored before it. In the Portfolio and
+Broker components that close sits in the asset's `uncovered_assets` row instead.
+
+The three price components already moved to version 2 for 1.3 (E-AI503) and stay
+there, one bump per release; `fx.rate_ohlc` moves from 1 to 2, with its placeholder in
+`components/catalog.py` and its `COMPACT_COMPONENT_VERSIONS` entry.
+`./dev.py test services ai-export-pure` pins the rule and the validators,
+`services ai-export` the builders, `api ai-export-unpriced-asset` assets whose prices
+all predate the period, and `front-ai-export unit` the tables
+(`snapshotDataRenderer.priceSeriesGap.test.ts`).
 
 ### 🏦 Portfolio Broker Universes
 
@@ -595,16 +645,33 @@ The price series renderer, `renderContinuousSeries()`, prints the eligible asset
 without a price series. In `portfolio.technical_prices` and `broker.technical_prices`
 the `SERIES` table is followed by a table titled `ASSETS WITHOUT PRICE SERIES` that
 lists them by prompt ref (`entity`, `portfolio_weight_percent`, `reason_code`), then by
-one `<code>=<meaning>` line per distinct code present, sorted by code. Without a
-series, `asset.ohlc_returns` gains a `reason_code` row in its SUMMARY table, after
+one `<code>=<meaning>` line per distinct code present, sorted by code. When at least
+one row is `no_price_in_period`, the table gains `currency`, `last_price` and
+`last_price_date` (the payload's `currency`, `last_close`, `last_close_date`), filled
+on the rows of that code and empty (`undefined`, never `null`) on the others. Without
+such a row it keeps its three columns, byte for byte: the `null`s the backend writes in
+those fields for the other two codes are never printed. Without a series,
+`asset.ohlc_returns` gains a `reason_code` row in its SUMMARY table, after
 `price_basis`, and its `<code>=<meaning>` line follows that table; the `null`
-`currency`, `latest_value` and `latest_date` columns leave `SERIES` and are named on
-its `omitted_null_columns=` line. The meanings come from a local allow-list,
+`latest_value` and `latest_date` columns leave `SERIES` and are named on its
+`omitted_null_columns=` line, and so is `currency` for the two codes that leave it
+`null`. The meanings come from a local allow-list,
 `PRICE_SERIES_GAP_MEANINGS`, as the frontend never takes presentation text from the
 backend: an unknown code, or an `uncovered_assets` that is not a list of records, sends
 the section to the generic renderer, with its raw values and no meaning invented.
-`COMPACT_COMPONENT_VERSIONS` lists versions 1 and 2 of the three components, and a
-section without a gap renders exactly as its version 1.
+
+`BUCKETS` still lists only the buckets with an observation. Right after it, only when
+a series has a [gap](#series-gaps), comes a table titled `PRICE GAPS` (`entity`,
+`from`, `to`, `days`, `last_price`, `last_price_date`), or `RATE GAPS` for
+`fx.rate_ohlc` (with `last_rate` and `last_rate_date`): one row per gap, series by
+series, then one meaning line, `price_gap=` or `rate_gap=`, from a second local
+allow-list, `SERIES_GAP_MEANINGS`. A gap with no value stored before it has empty
+last-value cells (`undefined`, not `null`), so when no gap has one the two columns
+leave the table silently, with no `omitted_null_columns=` line. A gap list or record
+the renderer does not recognise sends the section to the generic renderer, as an
+unknown code does. `COMPACT_COMPONENT_VERSIONS` lists versions 1 and 2 of the three
+price components and of `fx.rate_ohlc`, and a section with no reason code and no gap
+renders exactly as its version 1.
 
 `portfolio.reconciliation` and `broker.reconciliation` state `residual`, the exact
 period P&L minus its components, and `reconciled`: `null` if a term is missing, true
@@ -763,7 +830,7 @@ and without `-O`, and expects the typed error each time.
 | Required dataset component raises                 | Analysis fails closed.                                                                                             |
 | Optional dataset has a required-component failure | Entire optional dataset is skipped.                                                                                |
 | Builder returns an empty valid payload            | Section remains successful and included.                                                                           |
-| An eligible asset has no price series (no stored price up to the period end, or stored prices in mixed currencies) | Section stays successful; the asset is listed in `uncovered_assets` with its `reason_code` (a single Asset: `currency` `null` and a `reason_code`), never a `503`. |
+| An eligible asset has no price series (no stored price up to the period end, stored prices in mixed currencies, or prices stored only before the period) | Section stays successful; the asset is listed in `uncovered_assets` with its `reason_code` (a single Asset: a `reason_code`, with a `null` `currency` except for `no_price_in_period`), never a `503`. |
 | Analysis facts fail applicability                 | `422 selection_not_applicable`.                                                                                    |
 | Signal result is `unavailable` or `failed`        | Only that indicator instance is omitted.                                                                           |
 | Signal result is `ok` or `partial`                | Indicator is exported with its available canonical series.                                                         |
