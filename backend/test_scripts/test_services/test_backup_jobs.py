@@ -67,22 +67,35 @@ Under test: ``backend/app/services/platform/instance_backup/jobs.py``.
     missing state is not found without that warning; a transient ``OSError`` (the first read of a state failing with
     ``EIO``) reaches the caller as it is (the API's 500, which the tab retries), is not logged as unreadable, and the
     next read finds the job.
+(B-53) A ``state.json`` that is no regular file is never waited on nor followed: a FIFO (without a writer, which a
+    plain read waits for, forever) and a link (to a whole state elsewhere, or dangling) are states that cannot be read,
+    as in B-50. ``get_job`` answers ``BackupJobNotFoundError`` at once, logs one warning whose ``error`` is
+    ``NotRegularFileError`` (by its name: the class comes with the cure), and leaves the folder as it is; a link's
+    target is never answered nor touched. With a FIFO there, the views of the routes answer 404
+    ``backup_job_not_found``, a start makes its backup and removes the FIFO's folder by its date,
+    ``remove_expired_jobs`` and ``end_interrupted_jobs`` do their work on the other folders, and a lock that names that
+    job names none. The guard of B-50 against a transient ``OSError`` fails the first open of the state wherever it is
+    made: the global ``os.open`` (the cure's ``paths.read_regular_file``) or ``io.open`` (``Path.read_text``'s, before
+    the cure).
 
 Pure: every data directory is in ``tmp_path`` and every call is given its ``data_dir``; ``jobs.get_data_dir`` is
 replaced by a guard that fails the test, so the lane's data directory is never reached (the cases of the routes' views,
-B-50, replace it with the test's own). ``LF_APP_VERSION`` is set, so no git process runs. No lane database, no server,
-no network. A background run ends before its test does: the test waits for the final state, then joins the run's
-thread, and an autouse fixture fails any test that would leave one running. Every wait polls a condition with a
+B-50 and B-53, replace it with the test's own). ``LF_APP_VERSION`` is set, so no git process runs. No lane database, no
+server, no network. A background run ends before its test does: the test waits for the final state, then joins the
+run's thread, and an autouse fixture fails any test that would leave one running. Every wait polls a condition with a
 deadline; the cases that need a run in progress hold its build at a gate (an ``Event`` the test opens) instead of
 hoping it is slow, or, for the CLI's run in the calling thread, look from its first progress report, while it holds
-the lock. A failing disk is simulated in this process only: the ``os`` of ``archive`` is replaced, for one test, by a
-stand-in that hands out the real files but one, which reads badly (``EIO`` after its first block) or is on a disk with
-a few hundred bytes left (``ENOSPC``).
+the lock. A call that may wait on a FIFO (B-53) runs in a thread of the test, with a deadline (``FIFO_DEADLINE_S``):
+still running by then, it is blocked, and the test releases it (a writer's open of the FIFO, ``O_NONBLOCK``, as often
+as a reader waits) before asserting anything, so a red run never hangs the suite. A failing disk is simulated in this
+process only: the ``os`` of ``archive`` is replaced, for one test, by a stand-in that hands out the real files but one,
+which reads badly (``EIO`` after its first block) or is on a disk with a few hundred bytes left (``ENOSPC``).
 """
 
 from __future__ import annotations
 
 import errno
+import io
 import json
 import os
 import sqlite3
@@ -130,6 +143,7 @@ AS_ROOT = POSIX and os.geteuid() == 0
 needs_posix_modes = pytest.mark.skipif(not POSIX, reason="file modes are POSIX only")
 needs_symlinks = pytest.mark.skipif(not POSIX, reason="symbolic links need a privilege on Windows")
 needs_permission_checks = pytest.mark.skipif(not POSIX or AS_ROOT, reason="needs POSIX permissions, which root bypasses")
+needs_fifos = pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFOs are POSIX only")
 
 APP_VERSION = "v0.0.0-b1-jobs-test"
 #: Seconds. Every wait of this module ends by then; a hung run fails the test instead of the session.
@@ -1635,20 +1649,31 @@ def backup_made(start: Callable[..., object], data_dir: Path) -> BackupJob | str
 
 
 def a_disk_that_fails_once(monkeypatch, state: Path, error: OSError) -> list[str]:
-    """The first read of ``state`` fails with ``error``, as a disk fails for an instant (through ``Path.read_text`` or
-    ``Path.read_bytes``: how a state is read); every other file, and ``state`` after that, reads as it is. How the
-    failed read was made, kept: an empty list is a read that never came this way."""
+    """The first open of ``state`` fails with ``error``, as a disk fails for an instant; every other file, and ``state``
+    after that, opens as it is. The open is caught for that path only, wherever a state is opened: the global
+    ``os.open`` (B-53: ``paths.read_regular_file`` opens with it) and ``io.open`` (``Path.read_text``, how a state was
+    read before B-53, opens through it, never through ``os.open``). Which of the two failed, kept: an empty list is an
+    open that never came this way."""
     failed: list[str] = []
-    for name in ("read_text", "read_bytes"):
-        real = getattr(Path, name)
+    real_os_open, real_io_open = os.open, io.open
 
-        def fail_once(self: Path, *args, _real=real, _name=name, **kwargs):
-            if self == state and not failed:
-                failed.append(_name)
-                raise error
-            return _real(self, *args, **kwargs)
+    def is_the_state(file: object) -> bool:
+        return not isinstance(file, int) and Path(os.fsdecode(file)) == state
 
-        monkeypatch.setattr(Path, name, fail_once)
+    def os_open(path, *args, **kwargs):
+        if is_the_state(path) and not failed:
+            failed.append("os.open")
+            raise error
+        return real_os_open(path, *args, **kwargs)
+
+    def io_open(file, *args, **kwargs):
+        if is_the_state(file) and not failed:
+            failed.append("io.open")
+            raise error
+        return real_io_open(file, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", os_open)
+    monkeypatch.setattr(io, "open", io_open)
     return failed
 
 
@@ -1700,10 +1725,11 @@ def test_a_job_whose_state_is_missing_is_not_found_and_not_logged_as_unreadable(
 
 
 def test_a_transient_error_reading_a_state_reaches_the_caller_as_it_is_never_as_not_found(data_dir, monkeypatch):
-    """(B-50) Guard, green before the cure and after it: a read of a job's state that fails for an instant (``EIO``) is
-    no state that cannot be read. ``get_job`` lets that very ``OSError`` through (the API's 500, which the Backup tab
-    retries: «not found» would make the tab forget a job that runs), logs no warning of an unreadable state, and the
-    next read finds the job as it was written."""
+    """(B-50, B-53) Guard, green before the cure and after it: a read of a job's state that fails for an instant
+    (``EIO``) is no state that cannot be read. ``get_job`` lets that very ``OSError`` through (the API's 500, which the
+    Backup tab retries: «not found» would make the tab forget a job that runs), logs no warning of an unreadable state,
+    and the next read finds the job as it was written. The open of the state fails wherever it is made
+    (``a_disk_that_fails_once``): B-53 moves it from ``io.open`` to the global ``os.open``."""
     job, folder = finished_job(data_dir, finished=datetime.now(UTC) - timedelta(minutes=1))
     eio = OSError(errno.EIO, os.strerror(errno.EIO))
     failed = a_disk_that_fails_once(monkeypatch, folder / STATE_FILE, eio)
@@ -1712,7 +1738,7 @@ def test_a_transient_error_reading_a_state_reaches_the_caller_as_it_is_never_as_
             first = get_job(job.job_id, data_dir=data_dir)
         except Exception as exc:  # noqa: BLE001 — asserted below: that very OSError, nothing else
             first = exc
-    assert failed, "precondition: get_job read the state through Path.read_text or Path.read_bytes, where the disk failed"
+    assert failed in (["os.open"], ["io.open"]), f"precondition: get_job opened the state through the global os.open (B-53's read_regular_file) or io.open (Path.read_text, before it), and that open failed: {failed}"
     assert first is eio, f"an EIO reading the state must reach the caller as that very OSError, never as not found: {first!r}"
     assert unreadable_warnings(events) == [], f"a transient error is no state that cannot be read: {unreadable_warnings(events)}"
     assert get_job(job.job_id, data_dir=data_dir) == job, "the next read (the tab retries) finds the job as it was written"
@@ -1801,3 +1827,288 @@ def test_a_lock_that_holds_the_id_of_a_job_whose_state_cannot_be_read_names_no_j
         named = refusals(data_dir)
     assert named == dict.fromkeys(named, None), f"a lock holding the id of a job whose state is {shape} must name no job, though the state of {running.job_id} says running: {named}"
     print_success(f"{shape}: refused, no job named")
+
+
+# =============================================================================
+# (B-53) a state that is no regular file: never waited on, never followed
+# =============================================================================
+# The defect (measured 20/10, b53_probe_jobs_fifo): a FIFO in place of a job's state.json blocks get_job and
+# remove_expired_jobs forever, a plain read of a FIFO without a writer waiting for one: every start (_prepare removes
+# the expired jobs first), the reads of the Backup tab and of the hosting panel, and the sweep at startup wait with it.
+# A link in place of state.json is followed: a state elsewhere is answered as the job's own.
+# The decision (coordinator, 20/10 10:10), verbatim: «sì, l'aiuto unico per aprire in lettura; chiude il descrittore
+# perso e il 500 di `read_report`»; the jobs' reader through the same helper (point 7 of the contract): yes, 10:39.
+# _read_state reads through paths.read_regular_file: opened with O_NOFOLLOW and O_NONBLOCK, its type checked on the
+# descriptor, which is always closed. A link or a special file there raises NotRegularFileError, one more state that
+# cannot be read (B-50): not found, 404 backup_job_not_found, one warning naming it, the folder left to its date.
+# Red today: every case below. The guard of B-50 against a transient OSError, whose helper (a_disk_that_fails_once) now
+# fails the open wherever it is made, stays green before the cure and after it.
+
+
+#: The class the cure raises for a link or a special file in place of a state (``paths.NotRegularFileError``), by its
+#: name: it does not exist before the cure, and an import would fail every case of this module instead of these.
+NOT_REGULAR = "NotRegularFileError"
+#: Seconds. A read of a job's state, or a start up to the end of its preparation, takes far less when it does not wait
+#: on a FIFO: a call still running by then is blocked on one.
+FIFO_DEADLINE_S = 10
+#: Seconds a blocked call has to end once the test releases the FIFOs it waits on. Each wait ends at the next writer's
+#: open, so only a call that never ends reaches it: it fails the test, and the suite goes on.
+RELEASE_DEADLINE_S = 2 * DEADLINE_S
+#: What ``unblocked`` answers for a call still running at ``FIFO_DEADLINE_S``.
+BLOCKED = f"blocked: still waiting after {FIFO_DEADLINE_S}s on a FIFO without a writer (released by the test since)"
+
+
+@dataclass
+class Fifos:
+    """The FIFOs a test puts in place of job states, each without a writer: a plain read of one waits for a writer,
+    forever. In ``data_dir``; the fixture ``fifos`` removes them after the test."""
+
+    data_dir: Path
+    paths: list[Path] = field(default_factory=list)
+
+    def job(self, *, dated: datetime) -> str:
+        """The id of a new job folder whose ``state.json`` is a FIFO, the folder dated ``dated`` once made: all
+        ``remove_expired_jobs`` can go by."""
+        job_id = uuid.uuid4().hex
+        folder = ensure_private_dir(job_dir(self.data_dir, job_id), self.data_dir)
+        os.mkfifo(folder / STATE_FILE, 0o600)
+        date_folder(folder, dated)
+        self.paths.append(folder / STATE_FILE)
+        return job_id
+
+    def release(self) -> None:
+        """A writer's open of each FIFO, closed at once: a reader waiting on one in its ``open`` goes on, and reads the
+        end of the file. ``O_NONBLOCK``: the writer never waits itself; without a reader its open fails (``ENXIO``), as
+        it does for a FIFO gone with its expired folder (``ENOENT``). ``O_NOFOLLOW``: nothing is opened through a
+        link."""
+        for path in self.paths:
+            try:
+                fd = os.open(path, os.O_WRONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0))
+            except OSError:
+                continue
+            os.close(fd)
+
+    def release_until_ended(self, thread: threading.Thread) -> None:
+        """Release the readers of these FIFOs until ``thread`` ends, as often as one waits: a call may read several, or
+        one twice (a refused start reads the job its lock names after removing the expired jobs). A thread that has
+        ended is left alone: no writer ever opens a FIFO then. Still running after ``RELEASE_DEADLINE_S``, it fails the
+        test."""
+        deadline = time.monotonic() + RELEASE_DEADLINE_S
+        while thread.is_alive() and time.monotonic() < deadline:
+            self.release()
+            thread.join(POLL_S)
+        if thread.is_alive():
+            pytest.fail(f"a call still ran {RELEASE_DEADLINE_S}s after the test began to release the FIFOs it waits on: {[str(path) for path in self.paths]}")
+
+
+@pytest.fixture
+def fifos(data_dir) -> Iterator[Fifos]:
+    """``Fifos`` in the test's data directory. Afterwards a reader still waiting on one is released, and each FIFO is
+    removed: nothing may wait on it once the test is over."""
+    made = Fifos(data_dir)
+    yield made
+    made.release()
+    for path in made.paths:
+        path.unlink(missing_ok=True)
+
+
+def unblocked(call: Callable[[], object], fifos: Fifos, *, passed: threading.Event | None = None) -> object:
+    """What ``call()`` returns, made in a thread of its own; ``BLOCKED`` when it has neither returned nor set ``passed``
+    within ``FIFO_DEADLINE_S``. ``passed``: set by a start once past its preparation, where it removes the expired jobs;
+    the backup it then makes has ``2 * DEADLINE_S`` to end. Whatever the verdict, the thread has ended when this returns
+    (``Fifos.release_until_ended``, in ``finally``). An exception the call raised is raised here, unless it was blocked:
+    what a blocked call does once released is not its answer."""
+    values: list[object] = []
+    errors: list[BaseException] = []
+
+    def run() -> None:
+        try:
+            values.append(call())
+        except BaseException as exc:  # noqa: BLE001 — raised again in the test's thread, below
+            errors.append(exc)
+
+    thread = threading.Thread(target=run, name="b53-call", daemon=True)
+    thread.start()
+    blocked = True
+    try:
+        deadline = time.monotonic() + FIFO_DEADLINE_S
+        while thread.is_alive() and not (passed is not None and passed.is_set()) and time.monotonic() < deadline:
+            thread.join(POLL_S)
+        if passed is not None and passed.is_set():
+            thread.join(2 * DEADLINE_S)
+        blocked = thread.is_alive()
+    finally:
+        fifos.release_until_ended(thread)
+    if blocked:
+        return BLOCKED
+    if errors:
+        raise errors[0]
+    return values[0]
+
+
+def backup_past_fifos(start: Callable[..., object], data_dir: Path, passed: threading.Event) -> BackupJob | str:
+    """The end state of the backup ``start`` makes, ``passed`` set as soon as the start is past its preparation, where
+    it removes the expired jobs: when ``start_backup`` returns its first state, at the first progress report of
+    ``run_backup``. A sentence naming what the start raised instead."""
+    try:
+        if start is run_backup:
+            return run_backup(data_dir=data_dir, progress=lambda phase, done, total: passed.set())[0]
+        first = start_backup(data_dir=data_dir)
+    except Exception as exc:  # noqa: BLE001 — named by the caller's assertion
+        return f"{start.__name__} raised {type(exc).__name__} ({exc})"
+    passed.set()
+    return wait_until_finished(first.job_id, data_dir)
+
+
+def entries_of(folder: Path) -> dict[str, str]:
+    """What ``folder`` holds, each entry by its kind, read without opening a FIFO nor following a link: a folder, a
+    FIFO, a link with its target, a regular file with its size and SHA-256."""
+    kinds: dict[str, str] = {}
+    for path in sorted(folder.rglob("*")):
+        kind = path.lstat().st_mode
+        name = path.relative_to(folder).as_posix()
+        if stat.S_ISLNK(kind):
+            kinds[name] = f"link to {os.readlink(path)}"
+        elif stat.S_ISFIFO(kind):
+            kinds[name] = "FIFO"
+        elif stat.S_ISDIR(kind):
+            kinds[name] = "folder"
+        elif stat.S_ISREG(kind):
+            kinds[name] = f"file {file_digest(path)}"
+        else:
+            kinds[name] = f"special file {stat.filemode(kind)}"
+    return kinds
+
+
+def one_warning_naming(events: list[dict], job_id: str) -> bool:
+    """Whether ``events`` hold exactly one warning of a state that cannot be read: of ``job_id``, naming
+    ``NOT_REGULAR``."""
+    return [(event.get("log_level"), event.get("job_id"), event.get("error")) for event in unreadable_warnings(events)] == [("warning", job_id, NOT_REGULAR)]
+
+
+@needs_fifos
+def test_a_job_whose_state_is_a_fifo_is_not_found_at_once_with_one_warning_and_left_as_it_is(data_dir, fifos):
+    """(B-53) A FIFO without a writer in place of a job's ``state.json``: ``get_job`` answers ``BackupJobNotFoundError``
+    (the API's 404) within ``FIFO_DEADLINE_S``, never waiting for a writer; it logs one warning naming
+    ``NotRegularFileError``, with the job's id, and leaves the folder as it is, the FIFO in it."""
+    print_section("B-53: a FIFO in place of a job's state")
+    job_id = fifos.job(dated=datetime.now(UTC))
+    folder = job_dir(data_dir, job_id)
+    before = entries_of(folder)
+    with jobs_logs() as events:
+        answer = unblocked(lambda: job_answer(get_job, job_id, data_dir), fifos)
+    assert answer == "not found", f"get_job of a job whose state is a FIFO must answer not found within {FIFO_DEADLINE_S}s, never wait for a writer (every start, the reads of the tab and of the panel, the sweep at startup would wait with it): {answer}"
+    assert one_warning_naming(events, job_id), f"the read must log one warning {UNREADABLE_WARNING!r} with the job's id and {NOT_REGULAR}: {unreadable_warnings(events)}"
+    assert entries_of(folder) == before, f"the folder must be left as it is, the FIFO in it: {entries_of(folder)}, before {before}"
+    print_success(f"FIFO: not found at once, one warning {NOT_REGULAR}, the folder left as it is")
+
+
+@needs_fifos
+def test_the_routes_of_a_job_whose_state_is_a_fifo_answer_404_backup_job_not_found_at_once(data_dir, monkeypatch, fifos):
+    """(B-53) The views of a job's routes (``job_views``: its state, its file, its deletion), as the Backup tab calls
+    them, each answer 404 ``backup_job_not_found`` within ``FIFO_DEADLINE_S`` for a job whose state is a FIFO, never
+    wait on it; the deletion removes nothing. Called as functions, no server: the jobs' data directory
+    (``jobs.get_data_dir``) is this test's."""
+    assert job_views.jobs is jobs, "precondition: the views call the very module whose data directory is replaced here"
+    monkeypatch.setattr(jobs, "get_data_dir", lambda: data_dir)
+    job_id = fifos.job(dated=datetime.now(UTC))
+    folder = job_dir(data_dir, job_id)
+    before = entries_of(folder)
+    answers: dict[str, object] = {}
+    for view in (job_views.read_job, job_views.job_file, job_views.remove_job):
+        # Once a view has blocked, the next would only cost FIFO_DEADLINE_S more for the same verdict.
+        answers[view.__name__] = "not called: a view before it blocked" if BLOCKED in answers.values() else unblocked(lambda view=view: route_answer(view, job_id, None), fifos)
+    assert answers == dict.fromkeys(answers, (404, "backup_job_not_found")), f"each route of a job whose state is a FIFO must answer 404 backup_job_not_found within {FIFO_DEADLINE_S}s, never wait on it: {answers}"
+    assert entries_of(folder) == before, f"the deletion must remove nothing of it: {entries_of(folder)}, before {before}"
+    print_success("FIFO: 404 backup_job_not_found three times, at once")
+
+
+@needs_fifos
+@pytest.mark.parametrize("start", [start_backup, run_backup], ids=["start_backup", "run_backup"])
+def test_a_backup_starts_past_a_job_whose_state_is_a_fifo_and_its_folder_expires_by_its_date(data_dir, fifos, start):
+    """(B-53) Every start removes the expired jobs first (``_prepare`` → ``remove_expired_jobs``): two job folders whose
+    state is a FIFO, one dated 5 minutes ago and one 2 hours ago, hold it up no more. The start is past its preparation
+    within ``FIFO_DEADLINE_S`` and makes its backup, done; the younger folder is kept, the older removed, by its
+    date."""
+    now = datetime.now(UTC)
+    young = fifos.job(dated=now - timedelta(minutes=5))
+    old = fifos.job(dated=now - 2 * JOB_RETENTION)
+    passed = threading.Event()
+    made = unblocked(lambda: backup_past_fifos(start, data_dir, passed), fifos, passed=passed)
+    assert isinstance(made, BackupJob) and made.status == "done", f"{start.__name__} must go past the job folders whose state is a FIFO within {FIFO_DEADLINE_S}s and make its backup: {made}"
+    assert job_folders(data_dir) == sorted([young, made.job_id]), f"the start keeps the FIFO's folder dated 5 min ago ({young}) and removes the one dated 2 h ago ({old}): {job_folders(data_dir)}"
+    print_success(f"{start.__name__}: past the FIFOs, done; the FIFO's folder kept until it is an hour old")
+
+
+@needs_fifos
+def test_the_removal_of_expired_jobs_goes_on_past_a_state_that_is_a_fifo(data_dir, fifos):
+    """(B-53) ``remove_expired_jobs`` (every start, the sweep at startup) waits on no FIFO: within ``FIFO_DEADLINE_S``
+    it removes the job that finished 2 hours ago and keeps the one that finished 5 minutes ago; the folders whose state
+    is a FIFO go by their date, the one dated 2 hours ago removed, the one dated 5 minutes ago kept."""
+    hour = JOB_RETENTION
+    expired = write_job(data_dir, status="done", created=NOW - 3 * hour, finished=NOW - 2 * hour).job_id
+    kept = write_job(data_dir, status="done", created=NOW - timedelta(minutes=10), finished=NOW - timedelta(minutes=5)).job_id
+    young = fifos.job(dated=NOW - timedelta(minutes=5))
+    old = fifos.job(dated=NOW - 2 * hour)
+    removed = unblocked(lambda: returned_or_raised(remove_expired_jobs, data_dir, now=NOW), fifos)
+    assert removed == 2, f"remove_expired_jobs must go past the folders whose state is a FIFO within {FIFO_DEADLINE_S}s and remove two (the job finished 2 h ago, the FIFO's folder dated 2 h ago): {removed}"
+    assert job_folders(data_dir) == sorted([kept, young]), f"left: the job finished 5 min ago ({kept}) and the FIFO's folder dated 5 min ago ({young}); gone: {expired}, {old}: {job_folders(data_dir)}"
+    print_success("FIFO: 2 removed, 2 kept, at once")
+
+
+@needs_fifos
+def test_the_end_of_dead_runs_goes_on_past_a_state_that_is_a_fifo(data_dir, fifos):
+    """(B-53) ``end_interrupted_jobs`` (the sweep at startup) waits on no FIFO: within ``FIFO_DEADLINE_S`` it ends the
+    dead run beside it (failed, ``backup_interrupted``, written down) and leaves the FIFO's folder as it is."""
+    now = datetime.now(UTC)
+    dead = write_job(data_dir, status="running", created=now - timedelta(minutes=5))
+    job_id = fifos.job(dated=now)
+    folder = job_dir(data_dir, job_id)
+    before = entries_of(folder)
+    ended = unblocked(lambda: returned_or_raised(end_interrupted_jobs, data_dir), fifos)
+    stored = BackupJob.from_json((job_dir(data_dir, dead.job_id) / STATE_FILE).read_text(encoding="utf-8"))
+    assert ended == 1, f"end_interrupted_jobs must go past the folder whose state is a FIFO within {FIFO_DEADLINE_S}s and end the one dead run: {ended}"
+    assert (stored.status, stored.error_code) == ("failed", "backup_interrupted"), f"the dead run is ended, and that is written down: {stored}"
+    assert entries_of(folder) == before, f"the FIFO's folder is left as it is: {entries_of(folder)}, before {before}"
+    print_success("FIFO: the dead run ended at once, the FIFO's folder left")
+
+
+@needs_fifos
+def test_a_lock_that_holds_the_id_of_a_job_whose_state_is_a_fifo_names_no_job(data_dir, fifos):
+    """(B-53, after B-8) The lock is held and a job's state says running, but the lock holds the id of a job whose state
+    is a FIFO: both starts are refused within ``FIFO_DEADLINE_S`` with ``BackupBusyError`` (the API's 409
+    ``backup_busy``) naming no job. Neither their removal of the expired jobs nor the read of the job the lock names
+    waits on the FIFO."""
+    running = running_elsewhere(data_dir)
+    stale_id = fifos.job(dated=datetime.now(UTC))
+    with lock_held(data_dir):
+        lock_path(data_dir).write_bytes(stale_id.encode("ascii"))
+        named = unblocked(lambda: refusals(data_dir), fifos)
+    assert named == {"start_backup": None, "run_backup": None}, f"a lock holding the id of a job whose state is a FIFO must have both starts refused within {FIFO_DEADLINE_S}s, naming no job, though the state of {running.job_id} says running: {named}"
+    print_success("FIFO named by the lock: both refused at once, no job named")
+
+
+@needs_symlinks
+@pytest.mark.parametrize("valid", [pytest.param(True, id="link-to-a-valid-state"), pytest.param(False, id="dangling-link")])
+def test_a_job_whose_state_is_a_link_is_not_found_with_one_warning_and_its_target_never_answered(data_dir, tmp_path, valid):
+    """(B-53) A link in place of a job's ``state.json`` is never followed, whatever it points to: a whole state of that
+    very job outside the data directory, finished a minute ago (a state any read would answer), or nothing. ``get_job``
+    answers ``BackupJobNotFoundError``, never the target's job; it logs one warning naming ``NotRegularFileError``, with
+    the job's id, and leaves the folder and the target as they are."""
+    now = datetime.now(UTC)
+    job_id = uuid.uuid4().hex
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    target = elsewhere / STATE_FILE
+    if valid:
+        pointed = BackupJob(job_id=job_id, origin="ui", status="done", phase=None, done_bytes=100, total_bytes=100, created_at=now - timedelta(minutes=2), finished_at=now - timedelta(minutes=1))
+        target.write_text(pointed.to_json(), encoding="utf-8")
+    folder = ensure_private_dir(job_dir(data_dir, job_id), data_dir)
+    (folder / STATE_FILE).symlink_to(target)
+    before, outside = entries_of(folder), entries_of(elsewhere)
+    with jobs_logs() as events:
+        answer = job_answer(get_job, job_id, data_dir)
+    assert answer == "not found", f"get_job of a job whose state is a link must answer not found, never follow it to a state elsewhere and answer that: {answer}"
+    assert one_warning_naming(events, job_id), f"the read must log one warning {UNREADABLE_WARNING!r} with the job's id and {NOT_REGULAR}: {unreadable_warnings(events)}"
+    assert (entries_of(folder), entries_of(elsewhere)) == (before, outside), f"the folder, its link, and what the link points to must be left as they are: {entries_of(folder)}, {entries_of(elsewhere)}"
+    print_success(f"{'link to a valid state' if valid else 'dangling link'}: not found, one warning {NOT_REGULAR}, nothing followed")
