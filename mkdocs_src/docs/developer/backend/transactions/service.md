@@ -283,8 +283,8 @@ validates or saves them (as for the decimal limits, decision D2).
 The bound is tomorrow, not today, as slack for a user east of the server, whose today can
 already be the server's tomorrow. No legitimate date goes further: the interface never
 offers a future date (`SingleDatePicker`, whose `allowFuture` is false by default), and a
-broker import keeps only settled rows (the rule *Only safe rows* of the
-[plugin guide](../../architecture/patterns/brim_plugin_guide.md#import-philosophy-currency-rules)),
+broker import keeps only settled rows (the rule *The operation date, and only settled rows* of
+the [plugin guide](../../architecture/patterns/brim_plugin_guide.md#import-philosophy-currency-rules)),
 so a later date is a typing error. Lot N74 set the bound there; before, it was a year
 after today, for the settlement dates a broker's report puts ahead: under that rule, a
 plugin now leaves such a row out until it has settled. The frontend reads the code as

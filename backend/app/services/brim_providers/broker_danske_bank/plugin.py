@@ -719,14 +719,14 @@ def _proven_segments(raw: List[Tuple[date, date]], unpaired_cash: List[_CashRow]
     return segments
 
 
-def _timeline(segments: List[Tuple[date, date]], first_cash: Optional[date]) -> List[_Segment]:
+def _timeline(segments: List[Tuple[date, date]]) -> List[_Segment]:
     timeline: List[_Segment] = []
-    for index, (start, end) in enumerate(segments):
+    for start, end in segments:
+        # The eve of the segment's oldest trade date, also when the cash statement starts later (A13): a trade is recorded on
+        # its trade date, so the opening precedes every one of them (B-52, the developer, 20/10/2026). The opening's cash
+        # truth is then the statement's first balance (_TableBuilder._checkpoint_lines).
         checkpoint = start - timedelta(days=1)
-        if index == 0 and first_cash is not None and first_cash > start:
-            # The cash statement starts after the custody export: the balance is known from the eve of its first row (A13).
-            checkpoint = first_cash - timedelta(days=1)
-        timeline.append(_Segment(start=start, end=end, checkpoint=checkpoint, kind="opening" if index == 0 else "gap"))
+        timeline.append(_Segment(start=start, end=end, checkpoint=checkpoint, kind="gap" if timeline else "opening"))
     for index, segment in enumerate(timeline):
         settled = _add_business_days(segment.end, LAG_BUSINESS_DAYS)
         segment.window_end = min(settled, timeline[index + 1].checkpoint) if index + 1 < len(timeline) else settled
@@ -872,7 +872,7 @@ class _Analysis:
         self.chain = _chain(self.cash)
         self.first_cash = self.chain.days[0] if self.chain.days else None
         self.cash_spans = _cash_spans(self.cash_files)
-        self.timeline = _timeline(self.segments, self.first_cash)
+        self.timeline = _timeline(self.segments)
         if self.timeline:
             self._settle()
 
@@ -962,11 +962,17 @@ class _Analysis:
 
     def _excluded_between(self, title: str, after: date, until: date, proof_row: Optional[_CustodyRow]) -> bool:
         for row in self._custody_rows_of(title):
-            if row is proof_row or row.outcome.kind != "excluded":
+            if row is proof_row or row.outcome.kind != "excluded" or self._absorbed_by_opening(row):
                 continue
             if any(day is not None and after < day <= until for day in (row.trade, row.value)):
                 return True
         return False
+
+    def _absorbed_by_opening(self, row: _CustodyRow) -> bool:
+        """A trade settled before the cash statement starts (A13): its cash is in the statement's first balance, the opening's
+        truth, and its units in the holding a later proof states. It belongs to the opening (B-52, the developer, 20/10/2026:
+        it lands there a few days early), so it never makes a proof uncertain."""
+        return row.outcome.reason == "outside_cash_coverage" and self.first_cash is not None and row.value is not None and row.value < self.first_cash
 
     def _recent_trades(self, title: str, start: date, end: date, proof_row: _CustodyRow) -> bool:
         for row in self._custody_rows_of(title):
@@ -1044,6 +1050,20 @@ class _Analysis:
     def border_cash(self, segment: _Segment) -> Decimal:
         rows = [row for row in self.cash if row.outcome.kind == "summarized" and row.outcome.checkpoint == segment.checkpoint and row.value > segment.checkpoint]
         return sum((row.amount for row in rows), ZERO)
+
+    def in_flight(self, day: date) -> Tuple[Decimal, Dict[str, Decimal]]:
+        """What the import records by ``day`` and the bank books after it (B-52): the paired trades, dated with their trade
+        date, whose cash the bank moves on their value date (trade date <= ``day`` < value date). Their cash and, per title,
+        their quantity: a truth on ``day`` adds both, so that it compares in operation-date terms."""
+        cash = ZERO
+        quantities: Dict[str, Decimal] = defaultdict(lambda: ZERO)
+        for custody, cash_row in self.pairs:
+            if custody.klass not in ("buy", "sell") or custody.trade is None or custody.value is None:
+                continue
+            if custody.trade <= day < custody.value:
+                cash += cash_row.amount or ZERO
+                quantities[custody.title] += custody.qty or ZERO
+        return cash, dict(quantities)
 
     def verification_day(self) -> Optional[date]:
         if not self.chain.days:
@@ -1159,23 +1179,31 @@ class _TableBuilder:
     def _checkpoint_lines(self, segment: _Segment) -> None:
         analysis = self.analysis
         chain = analysis.chain
-        balance = chain.balance_at(segment.checkpoint) if chain.covers(segment.checkpoint) else None
-        source = chain.source_at(segment.checkpoint) if balance is not None else None
+        day = segment.checkpoint
+        if segment.kind == "opening" and chain.days and day < chain.days[0] - timedelta(days=1):
+            # B-52, A13: the opening precedes the cash statement. Its truth is the statement's first balance, in value-date
+            # terms (the developer, 20/10/2026): what settled between the opening and that day is inside it, and lands in the
+            # opening a few days early.
+            day = chain.days[0] - timedelta(days=1)
+        balance = chain.balance_at(day) if chain.covers(day) else None
+        source = chain.source_at(day) if balance is not None else None
         amount, reason = None, ""
+        # B-52: the trades in flight on the checkpoint, already recorded on their trade date, not yet booked by the bank.
+        flight_cash, flight_quantities = analysis.in_flight(segment.checkpoint)
         if balance is None:
             reason = "not_covered"
         elif chain.breaks:
             reason = "balance_chain_broken"
-            self._verification_line(segment.checkpoint, segment.zone, balance, source)
+            self._verification_line(segment.checkpoint, segment.zone, balance + flight_cash, source)
         else:
-            amount = balance + analysis.border_cash(segment)
+            amount = balance + analysis.border_cash(segment) + flight_cash
         self._add(
             _truth_key(segment.checkpoint, 0, ""),
             _line("truth_cash", zone=segment.zone, reason=reason, checkpoint=segment.checkpoint, source=source.source if source else "", value=_money(amount) if amount is not None else "", currency=CURRENCY if amount is not None else "", cash=source),
         )
         proofs = analysis.proofs(segment)
         for proof in proofs:
-            quantity = _plain(proof.quantity) if proof.quantity is not None and not proof.reason else ""
+            quantity = _plain(proof.quantity + flight_quantities.get(proof.row.title, ZERO)) if proof.quantity is not None and not proof.reason else ""
             self._add(_truth_key(segment.checkpoint, 1, proof.row.title), _line("truth_position", zone=segment.zone, checkpoint=segment.checkpoint, source=proof.row.source, value=quantity, proof=proof.proof_text, custody=proof.row))
         self.summary_checkpoints.append(
             {
@@ -1202,7 +1230,7 @@ class _TableBuilder:
         if day is None:
             return
         chain = self.analysis.chain
-        self._verification_line(day, _zone(self.analysis.timeline, day)[0], chain.balance_at(day), chain.source_at(day))
+        self._verification_line(day, _zone(self.analysis.timeline, day)[0], chain.balance_at(day) + self.analysis.in_flight(day)[0], chain.source_at(day))
 
     def _summary(self) -> Dict[str, Any]:
         analysis = self.analysis
@@ -1381,7 +1409,9 @@ class _CombinedParser:
     def _pair(self, line: int, row: Row) -> None:
         quantity = _to_decimal(row["custody:Määrä"])
         amount = _to_decimal(row["cash:Määrä"])
-        day = _to_date(row["cash:Pvm"])
+        # B-52: the operation date, Kauppapäivä; the bank moves the cash on the value date (the cash row's Pvm), which the
+        # truths account for (_Analysis.in_flight).
+        day = _to_date(row["custody:Kauppapäivä"])
         self._required(line, quantity, amount, day)
         name = row["custody:Sijoituskohde"]
         label = row["cash:Saaja/Maksaja"]
@@ -1416,7 +1446,7 @@ class _CombinedParser:
 
     def _demerger(self, line: int, row: Row) -> None:
         quantity = _to_decimal(row["custody:Määrä"])
-        day = _to_date(row["custody:Arvopäivä"])
+        day = _to_date(row["custody:Kauppapäivä"])  # B-52: the operation date (an event has both dates equal)
         self._required(line, quantity, day)
         name = row["custody:Sijoituskohde"]
         order_type = row["custody:Toimeksiantotyyppi"]
@@ -1512,7 +1542,7 @@ class _CombinedParser:
                 logger.info("Danske Bank rows left out without a notice", reason=reason, count=len(lines))
                 continue
             message = _EXCLUDED_MESSAGES.get(reason, "{n} riviä jätettiin pois.").format(n=len(lines))
-            # A trade not settled yet is no problem: it arrives with the next import (only safe rows, N74): a note. The other
+            # A trade not settled yet is no problem: it arrives with the next import (only settled rows, N74): a note. The other
             # reasons ask the user to look.
             severity = "info" if reason == "not_yet_settled" else "warning"
             context: Dict[str, Any] = {"count": len(lines), "reason": reason}
@@ -1647,9 +1677,10 @@ class DanskeBankBrokerProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
-        # 1.0.1 — excluded_not_yet_settled is an info note, no longer a warning (N74: only safe rows).
+        # 1.0.1 — excluded_not_yet_settled is an info note, no longer a warning (N74: only settled rows).
         # 1.0.2 — a reservation («Varaus») is left out without a notice; excluded_status asks for an issue (W-B85).
-        return "1.0.2"
+        # 1.1.0 — trades dated with the trade date, Kauppapäivä; truths in operation-date terms (B-52).
+        return "1.1.0"
 
     @property
     def test_file_pattern(self) -> Optional[str]:

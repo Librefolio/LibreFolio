@@ -10,6 +10,9 @@ language of the export (Italian here). FinecoBank also operates in the UK; if a 
 other) export layout — different columns and language — is added later, its warnings
 should follow that layout's language.
 
+**The operation date (B-52).** Every transaction is dated with ``Operazione``, the day of the operation (``Data valuta``
+when it is empty): the developer's principle, 19/10/2026. ``Data valuta`` only decides whether the row has settled.
+
 **Only settled rows (N74).** A row whose date — its value date, or its trade date when the value date is empty — comes
 after the server's today has not settled yet: it is left out whole (its fee and its maturity premium too), and an info
 note (``fineco_not_yet_settled``) lists it. It arrives with the next export, once settled.
@@ -38,8 +41,8 @@ ignored — no conversion of any kind is performed.
 - Variant B — 15 columns, with 4 trailing commission columns.
 
 **Columns (0-based):**
-- 0  Operazione: Trade date (DD/MM/YYYY)
-- 1  Data valuta: Value/settlement date (DD/MM/YYYY) — used as transaction date; after today, the row is left out
+- 0  Operazione: Trade date (DD/MM/YYYY) — the transaction date (B-52); Data valuta when it is empty
+- 1  Data valuta: Value/settlement date (DD/MM/YYYY) — decides whether the row has settled: after today, it is left out
 - 2  Descrizione: Operation description (drives type mapping)
 - 3  Titolo: Asset name
 - 4  Isin: Asset ISIN
@@ -205,7 +208,8 @@ class FinecoBrokerProvider(BRIMProvider):
     def plugin_version(self) -> str:
         # 1.1.0 — bond redeemed above par split into par SELL + INTEREST surplus.
         # 1.2.0 — only settled rows (N74); a note for rows with a required number missing (W-B83).
-        return "1.2.0"
+        # 1.3.0 — dated with the operation date, Operazione; the value date only decides whether a row has settled (B-52).
+        return "1.3.0"
 
     @property
     def detection_priority(self) -> int:
@@ -315,15 +319,19 @@ class FinecoBrokerProvider(BRIMProvider):
                     warnings.append(f"Row {row_num}: insufficient columns, skipping")
                     continue
 
-                # Settlement date = value date (Data valuta); fall back to trade date
-                tx_date = _parse_fineco_date(row[COL_VALUE_DATE]) or _parse_fineco_date(row[COL_TRADE_DATE])
-                if not tx_date:
+                # B-52: the operation date records the row (Operazione; Data valuta when it is missing), the value date
+                # decides whether it has settled (Data valuta; Operazione when it is missing).
+                trade_day = _parse_fineco_date(row[COL_TRADE_DATE])
+                value_day = _parse_fineco_date(row[COL_VALUE_DATE])
+                tx_date = trade_day or value_day
+                settle_day = value_day or trade_day
+                if not tx_date or not settle_day:
                     warnings.append(f"Row {row_num}: invalid date, skipping")
                     continue
 
-                # N74: only settled rows. A date after the server's today is a movement not settled yet: the whole row (its
-                # fee and its maturity premium too) waits for the next export, with a note and no warning.
-                if tx_date > today:
+                # N74: only settled rows. A value date after the server's today is a movement not settled yet: the whole row
+                # (its fee and its maturity premium too) waits for the next export, with a note and no warning.
+                if settle_day > today:
                     not_settled.append((row_num, row))
                     continue
 

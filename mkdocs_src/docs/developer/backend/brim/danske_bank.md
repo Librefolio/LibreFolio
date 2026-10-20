@@ -3,7 +3,7 @@
 `broker_danske_bank` imports the **equity savings account** (*osakesäästötili*) of Danske Bank
 Finland from two exports that only make sense together: the custody transactions (XLSX) and the
 cash statement (CSV). It lives in `backend/app/services/brim_providers/broker_danske_bank/plugin.py`
-(`plugin_version` 1.0.2, 🔬 Alpha — built from the exports of one account, shared in
+(`plugin_version` 1.1.0, 🔬 Alpha — built from the exports of one account, shared in
 [issue #26](https://github.com/Librefolio/LibreFolio/issues/26)) and is LibreFolio's reference
 **report-set plugin**.
 
@@ -116,10 +116,20 @@ amount, is `invalid`. Then the label and the sign decide (`_cash_label_class`):
 
 | Combined line | Transaction | Date | Quantity | Cash |
 |---|---|---|---|---|
-| `pair` of a trade | `BUY` or `SELL` | cash `Pvm` | custody `Määrä` | cash `Määrä` |
-| `pair` of a `Tuotto` | `DIVIDEND` | cash `Pvm` | 0 | cash `Määrä` |
+| `pair` of a trade | `BUY` or `SELL` | custody `Kauppapäivä` | custody `Määrä` | cash `Määrä` |
+| `pair` of a `Tuotto` | `DIVIDEND` | custody `Kauppapäivä` | 0 | cash `Määrä` |
 | `standalone` cash row | `DEPOSIT`, `WITHDRAWAL`, `TAX`, `FEE` or `INTEREST` | `Pvm` | — | `Määrä` |
-| `standalone` demerger line | `ADJUSTMENT` | custody `Arvopäivä` | custody `Määrä` | — |
+| `standalone` demerger line | `ADJUSTMENT` | custody `Kauppapäivä` | custody `Määrä` | — |
+
+**The operation date** (1.1.0, lot B-52): every transaction is dated with the day the operation
+was made, the plugin guide's rule *The operation date, and only settled rows* under
+[Import philosophy](../../architecture/patterns/brim_plugin_guide.md#import-philosophy-currency-rules).
+What comes from the custody export takes its trade date, `Kauppapäivä` — a purchase made on the
+27th is a `BUY` of the 27th, whenever the bank moves its cash; for a `Tuotto` and a demerger line
+the two custody dates are equal in the bank's exports. A cash-only row has no other date than its
+`Pvm`. Before 1.1.0, pairs took the cash `Pvm` and demerger lines `Arvopäivä`, the value date.
+Pairing, zones, `not_yet_settled` and `deferred_rows` still read the **value date**, because the
+bank moves the cash on that day; the truth points bridge the two dates ([In flight](#in-flight)).
 
 Cash is always EUR, taken as written. Every transaction is tagged `import` and `danske_bank`,
 demerger lines also `demerger`. Each security gets one fake asset id per normalised name, with the
@@ -129,6 +139,16 @@ name as its only identifier (`extracted_name`): the exports carry no ISIN and no
 On a first import, the `standalone` rows of the `before` zone are written but dated before H0, so
 the review hides them
 ([Import Wizard → Rows before H0](../../frontend/components/features/import-wizard.md#rows-before-history)).
+
+**Sets imported before 1.1.0.** The wizard's duplicate check compares exact dates
+([BRIM Architecture → Deduplication Logic](architecture.md#deduplication-logic)): a set imported
+with 1.0.x and imported again brings its trades back on their trade date, a few days earlier than
+the value date they were saved with, so the check does not recognise them. No code bridges the
+two (the developer, 19/10/2026: the next imports carry the new date, so after the switch
+everything settles). The transition, once: delete the Danske transactions those files created —
+the `gap_fix` corrections included, so that the new import is a first import again — and import
+the whole set again, or import only from the day after the last imported day. The user page says
+the same.
 
 ---
 
@@ -166,8 +186,9 @@ of that day count once when identical, and become `excluded` (`superseded`) when
   5 business days after the eve of the second (`_proven_segments`). Otherwise they merge, hole
   included. Each hole left between two segments is a **gap** (`gaps()`, the preview's `gap`
   warning).
-- **Checkpoint** — the eve of each segment; for the first one, the eve of the first booked cash day
-  when the cash statement starts later (`_timeline`).
+- **Checkpoint** — the eve of each segment, the day before its oldest trade date (`_timeline`),
+  the first one included: also when the cash statement starts later
+  ([A13](#a13-opening)). Before 1.1.0 the first one moved to the eve of the first booked cash day.
 - **Window** — from the day after the checkpoint to the segment's last day plus 5 business days
   (`LAG_BUSINESS_DAYS`), capped at the next checkpoint. Its **border** is the first 5 business days
   after the checkpoint. Business days skip weekends only: holidays are not known.
@@ -187,7 +208,9 @@ Every row gets exactly one outcome (`_Analysis._settle`):
 
 The cash rows of the `before` zone — standalone, `ambiguous` or `unknown_type` — are also absorbed
 by the first checkpoint. The full matrix, zone by zone, is in the plugin guide, under *Zones and
-outcomes*.
+outcomes*. When the cash statement starts after the custody export, the opening's border starts on
+the custody export's eve, which leaves some cash trades `no_counterpart`
+([A13](#a13-opening)).
 
 The wizard's **Matching securities ↔ cash** reads the combined summary: the outcomes as chips
 (*pairs*, *standalone rows*, *summarised in a checkpoint*, *with the next import*, *excluded*) and
@@ -199,7 +222,7 @@ one row per reason
 | `no_counterpart` | no counterpart | a trade or income in one file only, inside a window |
 | `ambiguous` | ambiguous | candidates that cannot be told apart |
 | `not_yet_settled` | not settled yet | a custody trade valued after the cash statement's last day |
-| `outside_cash_coverage` | settled before the cash statement starts | a custody trade valued outside the cash statement's spans |
+| `outside_cash_coverage` | settled before the cash statement starts | a custody trade valued outside the cash statement's spans; valued before its first day, it belongs to the opening ([A13](#a13-opening)) |
 | `status` | not executed or not booked | a custody `Tila` other than `Toteutettu`, or a cash `Tila` other than `Toteutunut` on a row that is no `Varaus`: the `excluded_status` warning, with the link to open an issue |
 | `reservation` | reserved, not booked | a cash row labelled `Varaus`: no notice, one log line |
 | `unknown_type` | unknown type | an order type or a label the plugin does not know |
@@ -243,13 +266,16 @@ removes what H0 already represents
 
 - **Cash** — the cash statement's running balance at the end of the checkpoint day, plus the cash
   of the border rows summarised in it: trades made before the custody export and settled after the
-  checkpoint (`border_cash`). A day the statement does not cover gets no cash (`not_covered`).
+  checkpoint (`border_cash`); plus the cash in flight that day ([In flight](#in-flight)). For an
+  opening that precedes the statement, the balance is the statement's first balance
+  ([A13](#a13-opening)). Any other day the statement does not cover gets no cash (`not_covered`).
 - **Absorbed rows** — every cash row the checkpoint summarises (`lf_checkpoint`), with date, amount
   and label. For the opening checkpoint, `opening_cash` is the checkpoint's cash minus their total:
   the balance before them. The gap-fix explanation reads both.
 
 **Positions** come from proofs inside the segment's window, each brought back to the checkpoint by
-removing the movements imported in between — at most one per security:
+removing the movements imported in between (by value date), then adding the quantity of the
+security in flight that day — at most one per security:
 
 - **E1** — a `Tuotto` states the shares that earned it: exact. Discarded when another movement of
   the security falls in the 30 days up to its trade date (`recent_trades`), when those 30 days start
@@ -262,14 +288,17 @@ removing the movements imported in between — at most one per security:
 - Exact proofs that disagree, or that give a negative quantity, are all discarded (`conflict`), and
   E3 is tried instead.
 
-A discarded proof is written `discarded:<rule>:<reason>` in `lf_proof` and listed by the
-`proof_discarded` notice. Danske never states a `unit_cost`.
+An excluded row never discards a proof when it belongs to the opening: a custody trade settled
+before the cash statement starts (`_absorbed_by_opening`, [A13](#a13-opening)). A discarded proof
+is written `discarded:<rule>:<reason>` in `lf_proof` and listed by the `proof_discarded` notice.
+Danske never states a `unit_cost`.
 
 ### ✅ End-of-period check
 
 One `verification`, on the last day of the last segment — or on the cash statement's last day when
-it ends first — provided the running balance covers that day. Its cash is the plain running
-balance, and the wizard titles it *End-of-period check · ‹date›*. It is never a checkpoint: the next
+it ends first — provided the running balance covers that day. Its cash is the running balance plus
+the cash in flight that day ([In flight](#in-flight)), and the wizard titles it
+*End-of-period check · ‹date›*. It is never a checkpoint: the next
 import brings the `not_yet_settled` and `deferred` trades one by one, and a correction there would
 count them twice (the safety rule of the plugin guide).
 
@@ -279,6 +308,61 @@ order, since the statement lists the newest rows first — and checks each day a
 by row or at least as a day total. A day that does not add up is a break: the chain goes on from
 that day's last `Saldo`, and the cash of every checkpoint becomes a verification instead
 (`balance_chain_broken`, warned by both `describe_set` and the parse).
+
+### ✈️ In flight {: #in-flight }
+
+A pair is recorded on its trade date, while the bank moves its cash on its value date, a few
+business days later. In between, the trade is **in flight**: LibreFolio already holds it, the
+bank's balance does not yet. So every truth at a day D adds what is in flight at D
+(`_Analysis.in_flight(day)`, 1.1.0): the paired purchases and sales with trade date ≤ D < value
+date — their cash, a purchase negative and a sale positive, and their quantity per security. It
+applies to:
+
+- the cash of every checkpoint, and the verification a broken chain gives in its place;
+- the positions of every checkpoint, each for its own security;
+- the end-of-period verification.
+
+The gap-fix then compares LibreFolio, in operation-date terms, with the bank, whose balances are in
+value-date terms, without false corrections. Only the imported purchases and sales count: a trade
+left out (`not_yet_settled`, `outside_cash_coverage`…) or summarised is never in flight, nor is a
+`Tuotto`, whose two dates are equal. The opening never has anything in flight, since every trade of
+the set comes after it; a gap checkpoint or the end-of-period check may.
+
+### 🕰️ A cash statement that starts later (A13) {: #a13-opening }
+
+When the cash statement starts after the custody export — case A13 of the design
+(`design-phase00BrimReportSets.md`) — the set still opens on the eve of the custody export's
+oldest trade date, like any set (`_timeline`): a trade is recorded on its trade date, so the
+opening must come before every one of them (the developer, 20/10/2026). Until 1.0.2 it opened on
+the eve of the statement's first booked day.
+
+- **The opening's cash** is the statement's first balance, in value-date terms: the balance before
+  its first booked row, on the eve of its first booked day (`_checkpoint_lines`), plus the border
+  rows as for any checkpoint. Nothing is in flight then.
+- **A trade made before the statement starts and settled inside it** pairs as usual: it is imported
+  as a `BUY` or `SELL` on its trade date, after the opening, with its true cost. The opening's
+  positions subtract it, like any movement between the opening and a proof.
+- **A trade settled between the opening and the statement's first day** has no cash row. It stays
+  `excluded` (`outside_cash_coverage`, with the same `excluded_outside_cash_coverage` warning as
+  before), but its cash is inside the statement's first balance: it lands in the opening, a few
+  days before the day it was made — at most as many days as the statement starts after the custody
+  export. The developer accepted this explicitly (20/10/2026). Its units
+  belong to the opening too: the row no longer discards a proof of its security
+  (`_absorbed_by_opening`), so a later proof — a `Tuotto`, a demerger's old line, a sale of more
+  than was bought — brings them into the opening's position. A security with no proof gets no
+  opening position, as anywhere else.
+- **A sale straddling the statement's start, for a security with no exact proof** — the «at
+  least» proof E3 gives the opening at least the shares sold, so the position never goes negative
+  (an unchanged rule). Only another excluded row of the security between the opening and the sale
+  — a row of unknown status, an invalid or ambiguous one — discards E3: the security then has no
+  opening position (`proof_discarded`), and saving refuses the sale's day with
+  `balanceAssetNegative` unless the broker allows shorting. In such a set that interval now starts
+  on the custody export's eve, no longer on the statement's.
+- **A side effect, rare.** The opening's border — the 5 business days after the checkpoint — now
+  starts on the custody export's eve too. A cash trade row with no custody counterpart, valued
+  after that border and no later than the segment's last day, is `excluded` (`no_counterpart`, a
+  warning) instead of being summarised into the opening: the custody export covers its day, and
+  its row is missing there.
 
 ---
 
@@ -293,9 +377,9 @@ with this plugin's truth points it gives:
   transactions (without pending deletions) plus the editor's unsaved rows, the wizard's selection
   and the corrections proposed at the earlier checkpoints. Transactions entered by hand count like
   imported ones.
-- **Cash** — a difference above 0.01 € becomes a **Deposit** or a **Withdrawal** that brings the
-  cash to the balance of the cash statement (`DEPOSIT` when the bank holds more, `WITHDRAWAL` when
-  it holds less), dated on the checkpoint.
+- **Cash** — a difference above 0.01 € becomes a **Deposit** (`DEPOSIT`, the bank holds more) or
+  a **Withdrawal** (`WITHDRAWAL`, it holds less), dated on the checkpoint, that brings the cash to
+  the checkpoint's: the cash statement's balance, with what is [in flight](#in-flight).
 - **Positions** — an `exact` position gets an `ADJUSTMENT` of the difference, positive or negative;
   an `at_least` one only the missing part. With no `unit_cost` from Danske, every positive
   adjustment carries the blocker todo `gap_fix_cost` on `cost_basis_override`: the wizard tags it
@@ -334,7 +418,8 @@ commission is inside `Summa`. Every paired purchase and sale therefore gets the 
 ## ✂️ Demergers
 
 `Jakautuminen, vanha` and `Jakautuminen, uusi` lines are never paired: booked, with the right
-signs, they become cashless `ADJUSTMENT`s in any zone, dated on `Arvopäivä` and tagged `demerger`.
+signs, they become cashless `ADJUSTMENT`s in any zone, dated on `Kauppapäivä` (equal to
+`Arvopäivä` in the bank's exports; `Arvopäivä` before 1.1.0) and tagged `demerger`.
 
 - **New line** — blocker todo `demerger` on `cost_basis_override`: the file gives no acquisition
   cost. A demerger is tax-neutral in Finland, and the old cost is split among the new shares in the
@@ -357,7 +442,7 @@ are in Finnish. Evidence tables are titled `Arvopaperitapahtumat` (custody colum
 |---|---|---|
 | `excluded_<reason>` | warning | One per exclusion reason, with its rows: they are not imported. Every reason but `not_yet_settled` (an info note), `status` (its own row) and `reservation` (no notice). No `report_issue` |
 | `excluded_status` | warning | The rows whose `Tila` the plugin does not know (`status`): not imported. `context.report_issue` is `true`, so the wizard shows the link *open an issue on GitHub* under the message, which asks the user to open one if the rows are real movements, so that the plugin learns the case (the plugin guide's rule *Known rows quietly, unknown rows loudly*, under [Import philosophy](../../architecture/patterns/brim_plugin_guide.md#import-philosophy-currency-rules)) |
-| `excluded_not_yet_settled` | info | Custody trades valued after the cash statement's last day: not imported this time, they come with the next import. A note since N74, no longer a warning: nothing is wrong (the plugin guide's rule *Only safe rows*, under [Import philosophy](../../architecture/patterns/brim_plugin_guide.md#import-philosophy-currency-rules)) |
+| `excluded_not_yet_settled` | info | Custody trades valued after the cash statement's last day: not imported this time, they come with the next import. A note since N74, no longer a warning: nothing is wrong (the plugin guide's rule *The operation date, and only settled rows*, under [Import philosophy](../../architecture/patterns/brim_plugin_guide.md#import-philosophy-currency-rules)) |
 | `deferred_rows` | info | Cash trades after the last custody day come with the next import |
 | `name_mismatch` | warning | Paired trades whose names differ: check them |
 | `proof_discarded` | info | Holdings the files could not prove reliably (`context.proofs`) |
@@ -390,7 +475,8 @@ contract suite's `KNOWN_REASON_CODES`. The set warnings of `describe_set` (`empt
 | Files table | **Set of ‹date›**, **Incomplete**, **Combined**, **Used in a combined file**, **To re-combine** | [Import Wizard → Badges](../../frontend/components/features/import-wizard.md#report-set-badges) |
 
 The cash role's coverage warnings (`must_cover: custody`) — `coverage_starts_late` when the
-statement starts after the eve of the first custody trade date, `coverage_ends_early` when it ends
+statement starts after the eve of the first custody trade date (the set still opens on that eve:
+[A13](#a13-opening)), `coverage_ends_early` when it ends
 before the last one — never block the set. How the user changes a set (*Read as*, *Remove from the
 set*) is generic:
 [Import Wizard → How a set is read](../../frontend/components/features/import-wizard.md#set-read-as).
@@ -405,7 +491,8 @@ set*) is generic:
   synthetic values on the real column layout, declared in `test_sample_sets` and described in the
   folder's `README.md`.
 - `./dev.py test external brim-danske-bank` (`test_external/test_brim_danske_bank.py`) pins the
-  plugin's own rules; the generic suites are listed in
+  plugin's own rules — `TestOperationDateTruths` the operation date, the truths in flight and the
+  A13 opening, end to end through the gap-fix of a first import; the generic suites are listed in
   [Testing a report-set plugin](../../architecture/patterns/brim_plugin_guide.md#report-set-tests).
 
 ## 🔗 Related
