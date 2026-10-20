@@ -5098,6 +5098,23 @@ A-21b, A-31, A-41, A-49 e A-58 aspettano una decisione; A-4 e A-10 sono lavoro d
     testo su `neutral` non è promesso). La decide il programma colori.
   - Cura: i due cerchi passano a `UserAvatar`, con i loro proprietari. Dettagli: [piano
     02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «N69a.3».
+- **A-61 · Lo store dei controlli di sicurezza non si azzera al cambio d'account** — basso; A, 20/10 (N69b).
+  - `securityChecks` (`features/settings/security/securityChecks.svelte.ts`, da A8b) non registra un
+    `registerClientSessionReset`: dopo un'uscita e un altro accesso nella stessa scheda tiene la risposta di prima.
+  - Cosa si vede: niente di sbagliato. I componenti filtrano per ruolo, quindi un membro non vede né il puntino né
+    il conto; un altro admin vede i controlli dell'istanza, che sono gli stessi, ma letti prima, fino a «Controlla
+    di nuovo» o a un ricaricamento.
+  - Da N69b lo store si riempie su ogni pagina di un admin, non più solo in Impostazioni.
+  - Cura: un reset alla transizione della sessione (`checks`, `answered`, `status`), con il suo test. Dettagli: [piano
+    02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «N69b.1».
+- **A-62 · Il nome accessibile del pulsante del menu è in inglese in ogni lingua** — basso, a11y; A, 20/10 (N69b;
+  visto in F2.2).
+  - `Header.svelte`: «Toggle menu» è scritto a mano dal piano 36. Da N69b il nome aggiunge, dopo «—», il livello della
+    connessione e il conto degli avvisi nella lingua dell'utente, quindi in italiano diventa per esempio «Toggle menu
+    — 2 avvisi di sicurezza».
+  - Nel catalogo non c'è una chiave per il menu.
+  - Cura (chiesta al coordinatore nel checkpoint di N69b): una chiave nuova nelle 4 lingue e l'asserzione di
+    `Header.test.ts`. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «F2.2».
 
 ## X · Plugin, asset e ricerca (fase 01)
 

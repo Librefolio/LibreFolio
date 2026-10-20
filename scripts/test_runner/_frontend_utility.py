@@ -1171,7 +1171,7 @@ def populate_registry(registry: dict) -> None:
         "connection-security",
         front_connection_security,
         name="Connection Security Indicator",
-        desc="The sidebar's connection indicator from the browser's view and the server's (GET /system/connection): secure on localhost, local network on a mapped .lan name, uncertain on a public name the server sees as local, not secure with the menu dot when the server sees a public source; details, docs link (plan 36)",
+        desc="The sidebar's connection indicator from the browser's view and the server's (GET /system/connection): secure on localhost, local network on a mapped .lan name, uncertain on a public name the server sees as local, not secure with the menu dot when the server sees a public source; details, docs link (plan 36); for an administrator, the security dot of the checks on the line and on the burger, its count and severity, the link to Settings › Security (N69-1, ADOT-E-01…05)",
         prereq="Populated DB + test users",
         tests="layout/connection-security.spec.ts",
     )
