@@ -536,7 +536,8 @@ def test_price_series_gap_reads_the_points_and_never_the_asset():
 # not in the holiday set. Weekends and holidays alone never make a gap. The run's buckets merge, from the first start
 # to the last end. Its last value is the last observed point before its start; for a gap opening the period it is the
 # seed (the last value stored before the period), or nothing when the history begins inside the period. The pure
-# functions receive the holiday set; loading it is the builders' business (item 5).
+# functions receive the holiday set; loading it is the builders' business (item 5). E-23.3 spares one trailing run, the
+# snapshot day alone: section 11b.
 #
 # Every name E-23 adds is read from its module when the test runs (`_e23`, `_series_gap_model`), so that until E-23
 # only these tests are red, never this file's collection.
@@ -921,3 +922,138 @@ def test_e23_price_series_gap_names_a_series_of_carried_points_only(result: FAPr
 
     assert gap == expected, f"price_series_gap gave {gap!r}"
     assert (gap in ("no_stored_price", "mixed_price_currencies")) == (tsh.coherent_price_currency(result) is None)
+
+
+# ---------------------------------------------------------------------------
+# 11b. E-23.3 - a value missing on the snapshot day alone is no gap
+# ---------------------------------------------------------------------------
+#
+# Coordinator's decision of 20/10/2026, 11:43 («E-23.3» in plan-phase01Email). A bucket plan ends on `plan.end`, the
+# snapshot day: `snapshot_as_of`, the end of the exported period. A TRAILING run - the run of empty buckets that ends
+# on `plan.end` - whose ONLY market-open day is `plan.end` itself is no gap: it is the snapshot day's value not
+# synchronized yet, and such a gap on every asset would be noise. It is judged on `plan.end`, never on a clock, so a
+# historical period ending on a weekday without a value loses that one-day gap too.
+#
+# Nothing else changes. A trailing run holding another open day is still one gap, merged to `plan.end` as before; a
+# run that does not reach `plan.end` is a gap whatever its open days; a whole period without an observed point is one
+# gap after the seed when it holds an open day besides `plan.end`; the rates (`key="rate"`) follow the same rule.
+#
+# No case of section 11 changes: its trailing runs (E23-S04 closing-the-period, S09, S13) all end on a Sunday, never
+# open, and every other run there ends before its plan's end. Every case below passes its holiday set explicitly, and
+# reads its calendar off the names E23-S00 checks.
+
+
+# red until E-23.3
+@pytest.mark.parametrize(
+    ("points", "plan", "holidays"),
+    [
+        pytest.param((_observed(MON_2, "10"), _observed(TUE_3, "10.5"), _observed(WED_4, "11"), _observed(THU_5, "11.5")), _daily_plan(MON_2, FRI_6), NO_HOLIDAY, id="the-snapshot-friday-alone"),
+        pytest.param((_observed(FRI_6, "12"),), _daily_plan(FRI_6, MON_9), NO_HOLIDAY, id="a-weekend-then-the-snapshot-monday"),
+        pytest.param((_observed(FRI_6, "12"),), _plan((MON_2, SAT_7), (SUN_8, MON_9)), NO_HOLIDAY, id="a-sunday-monday-bucket-closing-the-period"),
+        pytest.param((_observed(THU_5, "11.5"),), _daily_plan(THU_5, MON_9), frozenset({FRI_6}), id="a-holiday-friday-a-weekend-then-the-snapshot-monday"),
+    ],
+)
+def test_e23_a_trailing_run_open_only_on_the_snapshot_day_is_no_gap(points: tuple[ContinuousMultiOutputPoint, ...], plan: BucketPlan, holidays: frozenset[date]):
+    """E23-S17 — red until E-23.3: a trailing run whose only market-open day is ``plan.end`` is no gap, and the series,
+    which has no other run, has none: ``()``.
+
+    The snapshot Friday alone, after a priced Thursday; a weekend then the snapshot Monday, after a priced Friday, in
+    daily buckets or as the Sunday-Monday bucket closing a compact plan (E23-S11's bucket, at the plan's end); and a
+    Friday in ``holidays``, the weekend and the snapshot Monday, after a priced Thursday - the holiday is a closed day,
+    so the Monday is still the run's only open day. Today each is one gap, from the run's first day to ``plan.end``,
+    after the last observed point.
+    """
+    assert plan.end.weekday() < 5 and plan.end not in holidays, "premise: the snapshot day is a market-open weekday"
+
+    assert _gaps(points, plan, holidays=holidays) == []
+
+
+# E-23.3 barrier: green today, and after E-23.3
+@pytest.mark.parametrize(
+    ("points", "plan", "holidays", "expected"),
+    [
+        pytest.param((_observed(MON_2, "10"), _observed(TUE_3, "10.5"), _observed(WED_4, "11")), _daily_plan(MON_2, FRI_6), NO_HOLIDAY, (THU_5, FRI_6, 2, 11.0, WED_4), id="thursday-and-the-snapshot-friday"),
+        pytest.param((_observed(MON_2, "10"),), _plan((MON_2, WED_4), (THU_5, FRI_6)), NO_HOLIDAY, (THU_5, FRI_6, 2, 10.0, MON_2), id="a-thursday-friday-bucket-closing-the-period"),
+        pytest.param((_observed(THU_5, "11.5"),), _daily_plan(THU_5, MON_9), NO_HOLIDAY, (FRI_6, MON_9, 4, 11.5, THU_5), id="an-open-friday-a-weekend-then-the-snapshot-monday"),
+        pytest.param((_observed(THU_5, "11.5"),), _daily_plan(THU_5, SUN_8), NO_HOLIDAY, (FRI_6, SUN_8, 3, 11.5, THU_5), id="an-open-friday-then-a-weekend-closing-the-period"),
+    ],
+)
+def test_e23_a_trailing_run_with_another_open_day_stays_one_gap(points: tuple[ContinuousMultiOutputPoint, ...], plan: BucketPlan, holidays: frozenset[date], expected: tuple):
+    """E23-S18 — barrier, green today and after E-23.3: a trailing run holding a market-open day other than ``plan.end``
+    is still ONE gap, merged as before from its first empty bucket to ``plan.end``, the snapshot day included.
+
+    Thursday's missing value is real, so Thursday and the snapshot Friday are one gap of two days, in daily buckets or
+    in one Thursday-Friday bucket closing the plan (judged on every day inside it, not spared as the bucket of
+    ``plan.end``). E23-S17's Friday-to-Monday run with that Friday open is one gap of four days: the holiday set
+    decides. And one open day is not enough to be spared, it has to be ``plan.end``: an export taken on a Sunday after a
+    missing Friday keeps its gap, Friday to Sunday.
+    """
+    assert _gaps(points, plan, holidays=holidays) == [expected]
+
+
+# red until E-23.3
+@pytest.mark.parametrize(
+    ("points", "plan", "expected"),
+    [
+        pytest.param((_observed(MON_2, "10"), _observed(WED_4, "11"), _observed(THU_5, "11.5")), _daily_plan(MON_2, FRI_6), [(TUE_3, TUE_3, 1, 10.0, MON_2)], id="a-lone-tuesday-then-the-snapshot-friday"),
+        pytest.param((_observed(FRI_6, "12"), _observed(TUE_10, "13.5")), _daily_plan(FRI_6, WED_11), [(SAT_7, MON_9, 3, 12.0, FRI_6)], id="a-weekend-and-its-monday-then-the-snapshot-wednesday"),
+    ],
+)
+def test_e23_only_the_run_reaching_the_snapshot_day_is_spared(points: tuple[ContinuousMultiOutputPoint, ...], plan: BucketPlan, expected: list[tuple]):
+    """E23-S19 — red until E-23.3: the rule spares only the run that ends on ``plan.end``. Each series has two runs. The
+    trailing one, the snapshot day alone, is no gap. The other does not reach ``plan.end`` and stays a gap although its
+    only open day is a single weekday: a lone Tuesday; or a weekend and its Monday - E23-S17's run, here followed by a
+    priced Tuesday - whose only open day is the run's own last day, not the plan's. Today the trailing run is a second
+    gap, after the last observed point.
+    """
+    assert _gaps(points, plan, holidays=NO_HOLIDAY) == expected
+
+
+# E-23.3 barrier: green today, and after E-23.3
+@pytest.mark.parametrize(
+    ("plan", "seed", "expected"),
+    [
+        pytest.param(_daily_plan(MON_2, FRI_6), SEED, [(MON_2, FRI_6, 5, 9.5, SEED_DAY)], id="a-week-to-the-snapshot-friday"),
+        pytest.param(_daily_plan(FRI_6, MON_9), (THU_5, 11.5), [(FRI_6, MON_9, 4, 11.5, THU_5)], id="friday-to-the-snapshot-monday"),
+        pytest.param(_plan((MON_2, MON_9)), SEED, [(MON_2, MON_9, 8, 9.5, SEED_DAY)], id="one-wide-bucket-to-the-snapshot-monday"),
+        pytest.param(_daily_plan(MON_2, FRI_6), None, [(MON_2, FRI_6, 5, None, None)], id="no-seed-either"),
+    ],
+)
+def test_e23_a_period_without_an_observed_point_stays_one_gap_to_an_open_snapshot_day(plan: BucketPlan, seed: tuple[date, float] | None, expected: list[tuple]):
+    """E23-S20 — barrier, green today and after E-23.3: no observed point at all - the asset with ``no_price_in_period``
+    - still makes the whole period one gap after the seed when the period ends on an open weekday, because that run holds
+    open days besides ``plan.end``: E23-S13, with a snapshot day that is open. Without a seed its last value stays empty.
+    """
+    assert plan.end.weekday() < 5, "premise: the snapshot day is a weekday"
+
+    assert _gaps((), plan, seed=seed, holidays=NO_HOLIDAY) == expected
+
+
+@pytest.mark.parametrize(
+    ("points", "plan", "expected"),
+    [
+        # red until E-23.3: today one gap, the snapshot Friday alone, after Thursday's rate
+        pytest.param(
+            (_observed(MON_2, "1.08", key="rate"), _observed(TUE_3, "1.085", key="rate"), _observed(WED_4, "1.09", key="rate"), _observed(THU_5, "1.095", key="rate")),
+            _daily_plan(MON_2, FRI_6),
+            [],
+            id="a-rate-missing-on-the-snapshot-friday",
+        ),
+        # red until E-23.3: today one gap, Saturday to the snapshot Monday, after Friday's rate
+        pytest.param((_observed(FRI_6, "1.1", key="rate"),), _daily_plan(FRI_6, MON_9), [], id="a-weekend-then-a-rate-missing-on-the-snapshot-monday"),
+        # E-23.3 barrier: green today, and after E-23.3
+        pytest.param(
+            (_observed(MON_2, "1.08", key="rate"), _observed(TUE_3, "1.085", key="rate"), _observed(WED_4, "1.09", key="rate")),
+            _daily_plan(MON_2, FRI_6),
+            [(THU_5, FRI_6, 2, 1.09, WED_4)],
+            id="a-rate-missing-on-thursday-too",
+        ),
+    ],
+)
+def test_e23_the_rates_spare_the_snapshot_day_alone_too(points: tuple[ContinuousMultiOutputPoint, ...], plan: BucketPlan, expected: list[tuple]):
+    """E23-S21 — red until E-23.3 for the two runs open only on the snapshot day, green today for the third: the rule
+    belongs to ``series_gaps`` whatever ``key`` it reads, so the FX rates of ``fx.rate_ohlc`` (``rate_gaps``) follow it.
+    A rate missing on the snapshot Friday alone, or a weekend then a rate missing on the snapshot Monday, is no gap;
+    missing on Thursday too, Thursday to Friday is one gap after Wednesday's rate.
+    """
+    assert _gaps(points, plan, key="rate", holidays=NO_HOLIDAY) == expected

@@ -3193,6 +3193,13 @@ class TestPriceSeriesGaps:
 # (`_DEFAULT_PLAN_SPANS`) the test checks first, with the empty buckets it
 # expects. The new fields are read with `.get`: before E-23 a test fails on its
 # assertion, never on a KeyError.
+#
+# E-23.3 (coordinator's decision of 20/10/2026, 11:43): a trailing run - one that
+# ends on the plan's end, the snapshot day (`snapshot_as_of`) - whose only open
+# day is that day is no gap: the snapshot day's value is not synchronized yet.
+# `_scope()`'s period ends on Saturday 28 February, never open, so no scenario on
+# it changes (E23-C01-C15); E23-C16 cuts the period one day short, to end on
+# Friday 27 February.
 # =============================================================================
 
 #: The STANDARD bucket plan of `_scope()`'s period, Thursday 1 January to Saturday 28 February 2026, oldest first: the
@@ -3285,6 +3292,36 @@ def _context_with_holes(monkeypatch: pytest.MonkeyPatch, component_id: str, hole
         return _make_context(_asset_scope(asset_id=1))
     _patch_get_prices_bulk_with_gaps(monkeypatch, {2: holes})
     return _three_asset_universe(monkeypatch, component_id)
+
+
+#: E23-C16's snapshot day: `_scope()`'s period cut one day short ends on Friday 27 February 2026, a weekday; and the
+#: two weekdays before it.
+_SNAPSHOT_FRIDAY = date(2026, 2, 27)
+_THURSDAY_BEFORE = date(2026, 2, 26)
+_WEDNESDAY_BEFORE = date(2026, 2, 25)
+
+
+def _context_with_holes_ending_on(monkeypatch: pytest.MonkeyPatch, component_id: str, holes: _HistoryHoles, period_end: date) -> BuildContext:
+    """`_context_with_holes` on `_scope()`'s period ending on ``period_end`` instead: asset 2 of `_three_asset_context`'s
+    portfolio (assets 1 and 3 have a close every day), the single asset 1, or the USD/EUR rate."""
+    if component_id == "fx.rate_ohlc":
+        _patch_convert_bulk(monkeypatch, holes=holes)
+        return _make_context(_fx_scope(period_end=period_end))
+    if component_id == "asset.ohlc_returns":
+        _patch_get_prices_bulk_with_gaps(monkeypatch, {1: holes})
+        return _make_context(_asset_scope(asset_id=1, period_end=period_end))
+    scope = _scope(period_end=period_end)
+    _patch_get_prices_bulk_with_gaps(monkeypatch, {2: holes})
+    _patch_get_report(monkeypatch, _report(scope, [_contribution(3, end_value=200), _contribution(1, end_value=500), _contribution(2, end_value=300)]))
+    return _make_context(scope)
+
+
+def _holed_series_and_gaps(payload: dict, component_id: str) -> tuple[dict, object]:
+    """(the series given the holes, its gaps) in a payload of `_context_with_holes_ending_on`: asset 2's entry of
+    `assets` and its `price_gaps`, or the payload with its `price_gaps` (`asset.ohlc_returns`) or `rate_gaps`
+    (`fx.rate_ohlc`). The gaps are None where the field is missing."""
+    series = _series_of(payload, 2) if component_id == "portfolio.technical_prices" else payload
+    return series, series.get("rate_gaps" if component_id == "fx.rate_ohlc" else "price_gaps")
 
 
 class TestEmptyBucketGaps:
@@ -3617,3 +3654,43 @@ class TestEmptyBucketGaps:
         _envelope_payload(await context.resolve(component_id, required=True))
 
         assert len(holiday_calls) >= 1, f"{component_id} judged a run of empty weekday buckets without reading the holiday table through technical_shared"
+
+    # red until E-23.3: the three snapshot-day-alone cases; the three day-before-too cases are barriers
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("component_id", "first_missing", "expected_gaps"),
+        [
+            # red until E-23.3: today one gap, the snapshot Friday alone, after Thursday's close
+            pytest.param("portfolio.technical_prices", _SNAPSHOT_FRIDAY, [], id="E23-C16-portfolio-the-snapshot-day-alone"),
+            # E-23.3 barrier: green today, and after E-23.3
+            pytest.param("portfolio.technical_prices", _THURSDAY_BEFORE, [_gap(_THURSDAY_BEFORE, _SNAPSHOT_FRIDAY, _close(2, _WEDNESDAY_BEFORE))], id="E23-C16-portfolio-the-day-before-too"),
+            # red until E-23.3: today one gap, the snapshot Friday alone, after Thursday's close
+            pytest.param("asset.ohlc_returns", _SNAPSHOT_FRIDAY, [], id="E23-C16-asset-the-snapshot-day-alone"),
+            # E-23.3 barrier: green today, and after E-23.3
+            pytest.param("asset.ohlc_returns", _THURSDAY_BEFORE, [_gap(_THURSDAY_BEFORE, _SNAPSHOT_FRIDAY, _close(1, _WEDNESDAY_BEFORE))], id="E23-C16-asset-the-day-before-too"),
+            # red until E-23.3: today one gap, the snapshot Friday alone, after Thursday's rate
+            pytest.param("fx.rate_ohlc", _SNAPSHOT_FRIDAY, [], id="E23-C16-fx-the-snapshot-day-alone"),
+            # E-23.3 barrier: green today, and after E-23.3
+            pytest.param("fx.rate_ohlc", _THURSDAY_BEFORE, [_gap(_THURSDAY_BEFORE, _SNAPSHOT_FRIDAY, _rate(_WEDNESDAY_BEFORE))], id="E23-C16-fx-the-day-before-too"),
+        ],
+    )
+    async def test_a_value_missing_on_the_snapshot_day_alone_is_no_gap(self, monkeypatch, component_id, first_missing, expected_gaps):
+        """E23-C16 — red until E-23.3 for the snapshot day alone; a barrier, green today and after, for the day before too.
+
+        The period is `_scope()`'s cut one day short: it ends on Friday 27 February 2026, its snapshot day, a weekday;
+        the holiday table is this module's weekends-only stub. The series has a value on every day, weekends included,
+        and none from ``first_missing`` on. Pins, for the portfolio's asset 2, the single asset and the USD/EUR rate
+        alike: missing on the snapshot Friday alone - its value not synchronized yet - the empty daily bucket of Friday
+        27 is no gap, and the gaps list is present and empty; missing on Thursday 26 too, Thursday's missing value is
+        real, and the two empty daily buckets are ONE gap, Thursday to Friday (2 days), after Wednesday 25's value. Red
+        until E-23.3: today the snapshot Friday alone is a gap of one day, after Thursday's value.
+        """
+        assert (_WEDNESDAY_BEFORE.weekday(), _THURSDAY_BEFORE.weekday(), _SNAPSHOT_FRIDAY.weekday()) == (2, 3, 4), "premise: the days are the weekdays they are named after"
+        context = _context_with_holes_ending_on(monkeypatch, component_id, _HistoryHoles(spans=((first_missing, None),)), _SNAPSHOT_FRIDAY)
+        assert context.bucket_plan.end == context.scope.snapshot_as_of == _SNAPSHOT_FRIDAY, "premise: the plan ends on the snapshot day"
+
+        payload = _envelope_payload(await context.resolve(component_id, required=True))
+
+        series, gaps = _holed_series_and_gaps(payload, component_id)
+        assert _empty_buckets(series) == tuple((day, day) for day in _daterange(first_missing, _SNAPSHOT_FRIDAY)), "premise: the missing days, and only they, empty a daily bucket each"
+        assert gaps == expected_gaps

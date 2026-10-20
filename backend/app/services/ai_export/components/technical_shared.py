@@ -881,12 +881,14 @@ def series_gaps(
     """The gaps of a series (E-23, developer's decisions of 20/10/2026): each maximal run of contiguous empty buckets
     that holds a market-open day, merged, with the last value observed before it; for a run at the period's start, the
     ``seed`` (the last value stored before the period), or None when none is. ``points`` are the period's observed
-    points. Weekends and market holidays alone never make a gap."""
+    points. Weekends and market holidays alone never make a gap; nor does a run that reaches ``plan.end``, the snapshot
+    day, when that day is its only market-open day: that is the day's price not yet synchronized (E-23.3)."""
     ordered = sorted(points, key=lambda point: point.date)
     dates = [point.date for point in ordered]
     gaps: list[SeriesGap] = []
     for start, end in _empty_runs(dates, plan):
-        if not any(is_market_open(start + timedelta(days=offset), holidays) for offset in range((end - start).days + 1)):
+        open_days = [day for day in (start + timedelta(days=offset) for offset in range((end - start).days + 1)) if is_market_open(day, holidays)]
+        if not open_days or (end == plan.end and open_days == [plan.end]):
             continue
         index = bisect_left(dates, start)
         if index:
