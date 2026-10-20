@@ -6,16 +6,86 @@
  * `:focus-visible` verdict the focus pin reads (ownFocusVisible) are owned.
  * Real sticky/transform/reduced-motion geometry, and the focus kind Chrome
  * gives a real click and a real Tab, live in header-scroll.spec.ts.
+ *
+ * The menu dot of N69b (an administrator's security attention) is the last
+ * describe. The checks' store it reads is a fake for the whole file, idle and
+ * empty unless a case says otherwise (see `securityStore` below).
  */
-import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance} from 'vitest';
 import type {ComponentProps} from 'svelte';
-import {tick} from 'svelte';
+import {flushSync, tick} from 'svelte';
+import {addMessages} from 'svelte-i18n';
 import {cleanup, fireEvent, render, screen, setupI18n, within} from '$test/component';
 import Header from './Header.svelte';
 import {guideAnchors} from '$lib/features/onboarding/guideAnchors.svelte';
 import {get} from 'svelte/store';
 import {connectionSecurity, refreshConnectionSecurity, resetConnectionSecurity, type LocationLike} from '$lib/stores/app/connectionSecurityStore';
 import type {ConnectionLevel, ServerView} from '$lib/utils/security/connectionSecurity';
+import {auth} from '$lib/stores/app/auth';
+import {zodiosApi} from '$lib/api';
+import {_ as formatMessage} from '$lib/i18n';
+
+/** A finding of the Security tab, as the store lists it (`securityFindings.ts`). */
+interface FakeFinding {
+    id: string;
+    severity: 'error' | 'warning' | 'info';
+    messageKey: string;
+    params: Record<string, string | number>;
+    source: 'server' | 'browser';
+}
+
+/**
+ * The checks' store (`$lib/features/settings/security/securityChecks.svelte`), faked over a `$state` box (`reactiveBox`)
+ * so the header re-renders when a case lands an answer — the real one is a module singleton nothing can reset between
+ * cases. One source of truth, the answer's attention findings: `findings`, `attentionCount` (errors and warnings) and
+ * `attentionSeverity` (error, else warning, else null) derive from it as the real store derives them, empty and `null`
+ * before the answer. `ensureLoaded` and `reload` are spies that never answer (a case lands the answer itself), so «the
+ * header never asks» is a counted call; `ensureLoaded` reads the status and, from idle, starts a request, as the real one.
+ */
+const securityStore = await vi.hoisted(async () => {
+    const {reactiveBox} = await import('$test/runes.svelte');
+    const state = reactiveBox<{status: 'idle' | 'loading' | 'ready' | 'error'; answered: boolean; attention: FakeFinding[]}>({status: 'idle', answered: false, attention: []});
+    const ensureLoaded = vi
+        .fn((): Promise<void> => {
+            if (state.status === 'idle' || state.status === 'error') state.status = 'loading';
+            return Promise.resolve();
+        })
+        .mockName('securityChecks.ensureLoaded');
+    const reload = vi
+        .fn((): Promise<void> => {
+            state.status = 'loading';
+            return Promise.resolve();
+        })
+        .mockName('securityChecks.reload');
+    const counted = (): FakeFinding[] => (state.answered ? state.attention.filter((finding) => finding.severity === 'error' || finding.severity === 'warning') : []);
+    const store = {
+        get status() {
+            return state.status;
+        },
+        get checks(): never[] {
+            return [];
+        },
+        get answered() {
+            return state.answered;
+        },
+        get findings(): {attention: FakeFinding[]; passed: FakeFinding[]} {
+            return {attention: state.answered ? state.attention : [], passed: []};
+        },
+        get attentionCount(): number {
+            return counted().length;
+        },
+        get attentionSeverity(): 'error' | 'warning' | null {
+            const found = counted();
+            if (found.some((finding) => finding.severity === 'error')) return 'error';
+            return found.length > 0 ? 'warning' : null;
+        },
+        ensureLoaded,
+        reload,
+    };
+    return {state, ensureLoaded, reload, store};
+});
+
+vi.mock('$lib/features/settings/security/securityChecks.svelte', () => ({securityChecks: securityStore.store}));
 
 let scrollY: number;
 let measuredHeight: number;
@@ -661,5 +731,212 @@ describe('Header menu security dot (plan 36)', () => {
 
         expect(get(connectionSecurity), 'premise: a LAN client makes the public name uncertain').toMatchObject({level: 'local', reason: 'uncertain', serverChecked: true});
         expect(screen.queryByTestId('mobile-menu-security-dot'), 'the dot leaves with the insecure level').toBeNull();
+    });
+});
+
+/**
+ * The menu dot, N69b (N69 point 1; the developer's answers D1 a, D2 a, D3 a). On a phone the sidebar's connection line —
+ * which now carries an administrator's security attention — hides behind the burger, so the burger says it too:
+ *   - `mobile-menu-security-dot` is drawn while the connection is insecure (plan 36) or while an administrator
+ *     (`$auth.user?.is_superuser === true`) has attention (`securityChecks.attentionCount > 0`); one dot either way;
+ *   - it carries `data-severity`: `error` when the connection is insecure or the administrator's `attentionSeverity` is
+ *     `error`, else `warning`;
+ *   - absent for anybody else on a secure or local connection, and for an administrator with nothing to see;
+ *   - the burger's `aria-label` appends the attention text, «… — ‹attention text›», after whatever it says today (the
+ *     English «Toggle menu», and «— ‹insecure label›» when insecure), the attention text being
+ *     `$_('connectionSecurity.attention', {values: {count}})`;
+ *   - the header only reads the store (`attentionCount`, `attentionSeverity`) and `$auth`: it never calls
+ *     `ensureLoaded()` — the sidebar's line, always mounted in the app shell, loads it.
+ *
+ * The doubles: the fake store at the top of the file, its answer landed by hand (`storeAnswers`); the user signed in
+ * through the auth store's own seam, `auth.checkAuth()` against a spied `GET /auth/me`; the connection primed as the
+ * plan-36 cases prime it. The attention key is given the test's own ICU plural (`addMessages`, English is the cases'
+ * locale), so the label reads `⟦key·branch·count⟧`: the key, the plural branch and the count passed, never a
+ * translation. Today's part of the label is read from the burger before the attention lands, never written here.
+ */
+describe('Header menu dot: an administrator’s security attention (N69b)', () => {
+    const ATTENTION_KEY = 'connectionSecurity.attention';
+    const ATTENTION_MESSAGE = `{count, plural, one {⟦${ATTENTION_KEY}·one·#⟧} other {⟦${ATTENTION_KEY}·other·#⟧}}`;
+    /** The first characters of any attention text: a label without them says nothing about the checks. */
+    const ATTENTION_MARK = `⟦${ATTENTION_KEY}`;
+    /** What the burger's label already puts before «insecure». */
+    const SEPARATOR = ' — ';
+    const SECURE_LOCATION: LocationLike = {protocol: 'https:', hostname: 'lf.example'};
+    const SECURE_ANSWER: ServerView = {clientClass: 'public', cookieSecure: true};
+    const INSECURE_LOCATION: LocationLike = {protocol: 'http:', hostname: 'lf.example'};
+    const INSECURE_ANSWER: ServerView = {clientClass: 'public', cookieSecure: false};
+
+    const finding = (id: string, severity: FakeFinding['severity']): FakeFinding => ({id, severity, messageKey: `test.${id}`, params: {}, source: 'server'});
+    /** Two warnings and an info: 2, warning. */
+    const WARNINGS = [finding('platform.jwt_secret', 'warning'), finding('accounts.login_limit', 'warning'), finding('platform.log_level', 'info')];
+    /** An error, a warning and an info: 2, error. */
+    const WITH_ERROR = [finding('platform.instance_key', 'error'), finding('email.smtp_encryption', 'warning'), finding('email.links', 'info')];
+    /** Infos only: listed in the tab, counted nowhere. */
+    const INFOS_ONLY = [finding('platform.log_level', 'info'), finding('email.links', 'info')];
+
+    /** `GET /auth/me` as the spy sees it: the generated client's types are too deep for `vi.spyOn` to instantiate. */
+    type MeOperation = () => Promise<unknown>;
+    let me: MockInstance<MeOperation>;
+
+    /** The attention text for `count`, as the test's own message renders it. */
+    function attentionText(count: number): string {
+        return `⟦${ATTENTION_KEY}·${count === 1 ? 'one' : 'other'}·${count}⟧`;
+    }
+
+    /** The insecure level's label, as the header's own `$_` gives it. */
+    function insecureLabel(): string {
+        return get(formatMessage)('connectionSecurity.level.insecure');
+    }
+
+    async function primeConnection(location: LocationLike, answer: ServerView, level: ConnectionLevel): Promise<void> {
+        resetConnectionSecurity();
+        await refreshConnectionSecurity({location, fetchServerView: () => Promise.resolve(answer), force: true});
+        expect(get(connectionSecurity).level, `premise: the store holds ${level}`).toBe(level);
+    }
+
+    /** Signs a user in through the auth store's own seam: `checkAuth()` against the spied `GET /auth/me`. */
+    async function signInAs(isSuperuser: boolean): Promise<void> {
+        const user = {id: isSuperuser ? 691 : 692, username: isSuperuser ? 'n69b-admin' : 'n69b-member', email: 'n69b@example.com', is_active: true, is_superuser: isSuperuser, created_at: '2026-10-20T00:00:00Z'};
+        me.mockResolvedValueOnce({user});
+        expect(await auth.checkAuth(), 'premise: the auth store signed the user in').toBe('authenticated');
+        expect(get(auth).user?.is_superuser, 'premise: the signed-in user is the one this case needs').toBe(isSuperuser);
+        await tick();
+    }
+
+    /** The checks' answer lands in the store, as the sidebar's `ensureLoaded()` lands it. */
+    async function storeAnswers(attention: FakeFinding[]): Promise<void> {
+        securityStore.state.attention = attention;
+        securityStore.state.answered = true;
+        securityStore.state.status = 'ready';
+        flushSync();
+        await tick();
+    }
+
+    function resetSecurityStore(): void {
+        securityStore.state.status = 'idle';
+        securityStore.state.answered = false;
+        securityStore.state.attention = [];
+        securityStore.ensureLoaded.mockClear();
+        securityStore.reload.mockClear();
+    }
+
+    function burger(): HTMLElement {
+        return within(header()).getByTestId('mobile-menu-toggle');
+    }
+
+    /** The dots inside the burger: one, or none. */
+    function burgerDots(): HTMLElement[] {
+        return within(burger()).queryAllByTestId('mobile-menu-security-dot');
+    }
+
+    function burgerLabel(): string {
+        return burger().getAttribute('aria-label') ?? '';
+    }
+
+    function expectNeverAsked(when: string): void {
+        expect(securityStore.ensureLoaded, `${when}: the header only reads the store, the sidebar’s line loads it`).not.toHaveBeenCalled();
+        expect(securityStore.reload, `${when}: nor forces a read`).not.toHaveBeenCalled();
+    }
+
+    beforeAll(() => {
+        addMessages('en', {[ATTENTION_KEY]: ATTENTION_MESSAGE});
+        expect(get(formatMessage)(ATTENTION_KEY, {values: {count: 2}}), 'premise: the attention key renders the test’s own marker').toBe(attentionText(2));
+    });
+    beforeEach(() => {
+        auth.reset();
+        resetConnectionSecurity();
+        resetSecurityStore();
+        // Restored by the file's afterEach (`vi.restoreAllMocks()`).
+        me = vi.spyOn(zodiosApi as unknown as {get_me_api_v1_auth_me_get: MeOperation}, 'get_me_api_v1_auth_me_get');
+    });
+    afterEach(() => {
+        auth.reset();
+        resetConnectionSecurity();
+        resetSecurityStore();
+    });
+
+    const ATTENTION_CASES: Array<[label: string, attention: FakeFinding[], count: number, severity: 'error' | 'warning']> = [
+        ['warnings', WARNINGS, 2, 'warning'],
+        ['an error among the warnings', WITH_ERROR, 2, 'error'],
+    ];
+
+    // red until N69b
+    it.each(ATTENTION_CASES)('an administrator with %s, on a secure connection: the dot and its severity, the count appended to the label — and the header never asks the store', async (_label, attention, count, severity) => {
+        await signInAs(true);
+        await primeConnection(SECURE_LOCATION, SECURE_ANSWER, 'secure');
+        await mount();
+        const todaysLabel = burgerLabel();
+        expect(todaysLabel, 'premise: the burger has a name').not.toBe('');
+        expect(burgerDots(), 'idle, before the checks are in: nothing to mark').toHaveLength(0);
+        expectNeverAsked('idle at mount');
+
+        await storeAnswers(INFOS_ONLY);
+        expect(burgerDots(), 'infos only: nothing for the administrator to see').toHaveLength(0);
+        expect(burgerLabel(), 'infos only: the label as today').toBe(todaysLabel);
+
+        await storeAnswers(attention);
+
+        const dots = burgerDots();
+        expect(dots, 'the administrator’s attention marks the burger').toHaveLength(1);
+        expect(dots[0], 'the dot says how serious').toHaveAttribute('data-severity', severity);
+        expect(dots[0], 'the dot is decoration: the count is in the name').toHaveAttribute('aria-hidden', 'true');
+        expect(burgerLabel(), 'the count is appended to the name, as «insecure» is').toBe(`${todaysLabel}${SEPARATOR}${attentionText(count)}`);
+        expectNeverAsked('after the answer');
+    });
+
+    // red until N69b
+    it('a member on an insecure connection: today’s dot, now with data-severity="error", and nothing about the checks in the label', async () => {
+        await signInAs(false);
+        await primeConnection(INSECURE_LOCATION, INSECURE_ANSWER, 'insecure');
+
+        await mount();
+
+        const dots = burgerDots();
+        expect(dots, 'one dot: the insecure connection’s').toHaveLength(1);
+        expect(dots[0], 'an insecure connection is an error').toHaveAttribute('data-severity', 'error');
+        expect(burgerLabel(), 'the insecure level is in the name, as today').toContain(`${SEPARATOR}${insecureLabel()}`);
+        expect(burgerLabel(), 'a member is told nothing about the checks').not.toContain(ATTENTION_MARK);
+        expectNeverAsked('a member');
+    });
+
+    // red until N69b
+    it('an administrator with warnings on an insecure connection: one dot, error wins; the label carries the level, then the count', async () => {
+        await signInAs(true);
+        await primeConnection(INSECURE_LOCATION, INSECURE_ANSWER, 'insecure');
+        await mount();
+        const todaysLabel = burgerLabel();
+        expect(todaysLabel, 'premise: today’s name carries the insecure level').toContain(`${SEPARATOR}${insecureLabel()}`);
+
+        await storeAnswers(WARNINGS);
+
+        expect(burgerLabel(), 'the count is appended after the level').toBe(`${todaysLabel}${SEPARATOR}${attentionText(2)}`);
+        const dots = burgerDots();
+        expect(dots, 'one dot, not one per reason').toHaveLength(1);
+        expect(dots[0], 'the most severe wins: the insecure connection is an error, the checks only warn').toHaveAttribute('data-severity', 'error');
+        expectNeverAsked('after the answer');
+    });
+
+    // red until N69b
+    it('a member, the store holding an administrator’s warnings, on a secure connection: no dot, nothing in the label — until an administrator signs in (the control)', async () => {
+        await signInAs(false);
+        await primeConnection(SECURE_LOCATION, SECURE_ANSWER, 'secure');
+        await storeAnswers(WARNINGS);
+        expect(securityStore.store.attentionCount, 'premise: the store holds two warnings, left by an administrator earlier in this runtime').toBe(2);
+
+        await mount();
+
+        expect(burger(), 'presence barrier: the burger is drawn').toBeInTheDocument();
+        expect(burgerDots(), 'a member is never marked for the checks').toHaveLength(0);
+        const membersLabel = burgerLabel();
+        expect(membersLabel, 'a member is told nothing about the checks').not.toContain(ATTENTION_MARK);
+
+        // The negative's control: the same header, the same store, an administrator.
+        await signInAs(true);
+
+        const dots = burgerDots();
+        expect(dots, 'control: the same store marks an administrator’s burger').toHaveLength(1);
+        expect(dots[0]).toHaveAttribute('data-severity', 'warning');
+        expect(burgerLabel(), 'control: and names the count').toBe(`${membersLabel}${SEPARATOR}${attentionText(2)}`);
+        expectNeverAsked('member then administrator');
     });
 });
