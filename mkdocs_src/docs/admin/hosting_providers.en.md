@@ -153,6 +153,46 @@ your users sign in again after each restart. See
   instance falls back to would publish the instance's profile, its provider codes and your
   customer's asset identifiers. Other help links in the app may still point to LibreFolio's
   GitHub. See «Main Options» in [Environment Variables](configuration.md).
+
+    **A support form that fills itself in.** With a page, **Let us know** opens it in a new tab
+    with the report of the search added to its address, like a prefilled GitHub issue: `title`
+    holds the subject, `body` the details, the same text the email would carry. Your form can read
+    them with any standard query parser, such as `URLSearchParams` in the browser or
+    `urllib.parse.parse_qs` in Python, and fill itself in.
+    {: #support-form }
+
+    - **Encoding**: each value goes through `encodeURIComponent`, UTF-8 percent-encoding. A space
+      is `%20`, never `+`; a `+` is `%2B`; a line break is `%0A` (LF), not the CRLF of an email
+      link.
+    - **Placement**: your page's own query is kept, and the two parameters join it after `?` or
+      `&`, `title` first, then `body`. A `#fragment` stays at the end. A `title` or `body` already
+      in `LIBREFOLIO_SUPPORT_URL` is replaced. One trailing slash is removed from that address, so
+      a form at `/support/` opens as `/support?title=…&body=…`: your site must accept that path, or
+      keep the query string when it redirects to `/support/`.
+    - **An instance reference**, such as `?i=<reference>`, is kept byte for byte: letters, digits,
+      `-` `_` `.` `~` or percent-encoding only, no final `/`, not named `title` or `body`. It is
+      **public** (`GET /api/v1/system/instance`): a hint for support, never proof of identity.
+    - **Content**: in English, the text searched, each provider asked and its outcome (codes only),
+      the currency, asset type and identifiers already in the form, and the app's version, profile
+      and language. Never the user, an email address, the instance's address or any portfolio
+      data.
+    - **Logs and history**: unlike an email, the address, with the report in it, appears in your
+      support site's access logs and in the user's browser history, like the GitHub issue link.
+      The page opens with `noopener noreferrer`: it receives no `Referer`, so not the instance's
+      address either.
+    - **Clipboard**: the details are still copied on click, for a page that does not read them; a
+      message confirms the copy or says it failed.
+
+    For example, with `LIBREFOLIO_SUPPORT_URL=https://help.example.org/support`, on a managed
+    instance in English, a search for `XYZ` from a blank form, with `yfinance` as the only provider
+    and no result, opens:
+
+    ```text
+    https://help.example.org/support?title=LibreFolio%3A%20asset%20not%20found%20%E2%80%94%20XYZ&body=I%20searched%20LibreFolio%20for%20an%20asset%20and%20could%20not%20find%20it.%0A%0ASearch%3A%20XYZ%0AProviders%3A%0A-%20yfinance%3A%200%20results%0ALibreFolio%20v1.3.0%2C%20managed%2C%20language%20en%0A%0AAnything%20else%20that%20helps%20(the%20exchange%2C%20a%20link%20to%20the%20asset's%20page)%3A
+    ```
+
+    Decoding it gives exactly the report: `title` is its subject, `body` its details.
+
 - Your own terms of service and privacy policy, `LIBREFOLIO_TOS_URL` and `LIBREFOLIO_PRIVACY_URL`
   (`https://…`): the legal notice links them for every user. See
   [Your Legal Pages](#legal-pages).
@@ -556,7 +596,7 @@ curl -sS -X DELETE -H "Authorization: Bearer $TOKEN" "$JOBS/<job_id>"
 | `401` | No token, or not the token of this instance | `backup_panel_unauthorized` |
 | `503` | The token is set but cannot be used: shorter than 32 characters, a character that is not visible ASCII, or a `_FILE` that cannot give it. The start log names it already (`check` is `backup.panel_token`), and each call logs it | `backup_panel_unavailable` |
 | `404` | A job your panel did not start, or one that does not exist, or no longer does | `backup_job_not_found` |
-| `409` | A start while another backup runs | `backup_busy` |
+| `409` | A start while another backup runs. When it is a backup your panel started, the answer adds its `job_id` and `origin` (`panel`): follow that job instead of starting another | `backup_busy` |
 | `409` | A download of a job that has no archive: still running, or failed | `backup_job_not_ready` |
 | `409` | A delete while the job runs | `backup_job_running` |
 | `507` | A start while the disk of the data directory, or a quota, is full: free some space, then start again | `backup_no_space` |

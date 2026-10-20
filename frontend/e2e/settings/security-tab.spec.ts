@@ -24,8 +24,8 @@
  *   ASEC-E-02  `?tab=security` opens Security inside its group; «check again» reads the checks again — the request held
  *              until the tab has been seen loading, the last checks still listed meanwhile —, then ready, the login-limit
  *              warning still there;
- *   ASEC-E-03  a member: «Administration» opens Global Settings directly — no second bar, no Security tab, no badge, no
- *              read of the checks —, and `?tab=security` opens Profile without mounting the tab.
+ *   ASEC-E-03  a member has no «Administration» group (N69-2, decision D4 a) — no Security tab, no badge, no read of
+ *              the checks —, and `?tab=security` opens Profile without mounting the tab.
  *
  * Read-only, parallel by default: GET requests, and the sign-ins of the two fixture users of `populate_mock_data.py`,
  * whose roles are checked, never changed; no setting is touched. The one route (ASEC-E-02) is the page's own, removed by
@@ -202,7 +202,7 @@ test.describe('Settings › Security — an administrator', () => {
 });
 
 test.describe('Settings › Security — a member of the instance', () => {
-    test('ASEC-E-03: «Administration» opens Global Settings directly, with no second bar, no Security tab and no badge; ?tab=security opens Profile', async ({page}) => {
+    test('ASEC-E-03: a member has no «Administration» group — no Security tab, no badge, no read of the checks —, and ?tab=security opens Profile', async ({page}) => {
         await login(page, TEST_USER);
         expect(await signedInAs(page), `${TEST_USER.username} must be an ordinary member`).toMatchObject({username: TEST_USER.username, is_superuser: false});
 
@@ -214,24 +214,27 @@ test.describe('Settings › Security — a member of the instance', () => {
         page.on('request', recordCheckRead);
         try {
             await navigateTo(page, '/settings');
-            const group = page.getByTestId('settings-tab-administration');
-            await expect(group, 'a member has «Administration» too: it stands for Global Settings, which everyone reads').toBeVisible({timeout: LOAD_MS});
+            // Presence first: the top bar is drawn, up to About, the last tab every account sees, and /settings opens
+            // on Profile. The bar's entries come from one derivation, and a member's context never turns administrator:
+            // an «Administration» entry would be drawn with them, or never.
+            await expect(page.getByTestId('settings-tab-about'), 'the top bar is drawn for the member, up to About').toBeVisible({timeout: LOAD_MS});
             await expect(page.getByTestId('settings-tab-profile'), 'precondition: /settings opens on Profile').toHaveAttribute('aria-selected', 'true');
-
-            await group.click();
-            await expect(group).toHaveAttribute('aria-selected', 'true', {timeout: UI_MS});
-            await expect(page.getByTestId('global-settings-tab'), '«Administration» opens Global Settings directly').toBeVisible({timeout: UI_MS});
-            // Presence above — the group selected, its body drawn —; the second bar comes in the same update, or never.
-            await expect(page.getByTestId('settings-subtabs'), 'one member: no second bar').toHaveCount(0);
-            await expect(page.getByTestId('settings-tab-admin'), 'so no Global Settings tab of its own').toHaveCount(0);
-            await expect(page.getByTestId('settings-tab-security'), 'and no Security tab anywhere').toHaveCount(0);
-            await expect(group.getByTestId('tab-badge'), "a member's «Administration» draws no badge: the checks are the administrators'").toHaveCount(0);
+            // Then the absences, left out of the page rather than hidden in it: «Administration» and every member of
+            // it are an administrator's alone (N69-2, decision D4 a).
+            await expect(page.getByTestId('settings-tab-administration'), 'a member has no «Administration» group').toHaveCount(0);
+            await expect(page.getByTestId('settings-tab-security'), 'so no Security tab anywhere').toHaveCount(0);
+            await expect(page.getByTestId('settings-subtabs'), 'and no second bar').toHaveCount(0);
+            // A badge is drawn with its tab, in the same update, and only the checks could fill one later: the recorder
+            // below proves they are never read. No settings body holds a tab bar: a badge here could only be a tab's.
+            await expect(page.getByTestId('settings-page').getByTestId('tab-badge'), "no tab of a member's Settings draws a badge: what Security's counts, the checks, is the administrators'").toHaveCount(0);
 
             await navigateTo(page, '/settings?tab=security');
             const profile = page.getByTestId('settings-tab-profile');
             await expect(profile, '?tab=security names no tab of a member: the first one, Profile, opens').toHaveAttribute('aria-selected', 'true', {timeout: LOAD_MS});
             await expect(page.getByTestId('profile-tab')).toBeVisible({timeout: UI_MS});
-            await expect(page.getByTestId('settings-tab-administration')).toHaveAttribute('aria-selected', 'false');
+            // Presence above — Profile selected, its body drawn —; so the absences below are the page's choice, not a
+            // late render.
+            await expect(page.getByTestId('settings-tab-administration'), 'no «Administration» entry ?tab=security could select').toHaveCount(0);
             await expect(page.getByTestId('security-tab'), 'the body of Security never mounts').toHaveCount(0);
             await expect(page.getByTestId('settings-subtabs')).toHaveCount(0);
             await expect(page.getByTestId('settings-tab-security')).toHaveCount(0);

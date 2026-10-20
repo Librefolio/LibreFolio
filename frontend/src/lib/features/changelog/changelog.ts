@@ -4,6 +4,8 @@
  *
  * Vite's `?raw` import inlines the English file into the bundle, so the modal
  * works fully offline (the file is parsed once per session, at module load).
+ * The bundled files are imported in `changelogSources.ts`, which a jsdom test
+ * can replace (A-CL1).
  * Chapters are the Keep-a-Changelog `## [x.y.z] - date` sections.
  *
  * Translations sit beside it as `CHANGELOG.<xx>.md`: the same chapters with the
@@ -18,7 +20,8 @@
  * keeps its plain spaces, as the translation pipeline writes them.
  */
 
-import changelogRaw from '../../../../../CHANGELOG.md?raw';
+import {SvelteMap} from 'svelte/reactivity';
+import {englishChangelog, translationModules} from './changelogSources';
 
 export interface ChangelogSubsection {
     /** `####`-level heading text. */
@@ -116,7 +119,7 @@ export function parseChangelog(raw: string): ChangelogChapter[] {
 }
 
 /** The bundled chapters (empty when the build shipped no changelog). */
-export const changelogChapters: ChangelogChapter[] = parseChangelog(changelogRaw);
+export const changelogChapters: ChangelogChapter[] = parseChangelog(englishChangelog);
 
 /** Canonical remote file — the modal always links here for the live version. */
 export const CHANGELOG_REMOTE_URL = 'https://github.com/Librefolio/LibreFolio/blob/main/CHANGELOG.md';
@@ -390,7 +393,8 @@ export function translationLoaders(modules: Record<string, () => Promise<string>
 
 export interface LocalizedChangelog {
     /** The chapters for a locale when they need no wait: English for `en` or a language with no
-     *  translation, the merge once that language has loaded; undefined while it still has to load. */
+     *  translation, the merge once that language has loaded; undefined while it still has to load.
+     *  Reactive: read in a `$derived` or an effect, it follows the load that fills it, whoever started it. */
     peek(locale: string | null | undefined): DisplayedChapter[] | undefined;
     /** Loads the language's translation once, merges and caches it. Never rejects: a failed load
      *  resolves to English and is not cached, so the next call tries again. */
@@ -399,7 +403,8 @@ export interface LocalizedChangelog {
 
 export function createLocalizedChangelog(english: readonly ChangelogChapter[], loaders: ReadonlyMap<string, () => Promise<string>>): LocalizedChangelog {
     const englishOnly = english.map(inEnglish);
-    const merged = new Map<string, DisplayedChapter[]>();
+    // A SvelteMap, so a window waiting for a language sees the load that fills it, its own or another's (A-CL1).
+    const merged = new SvelteMap<string, DisplayedChapter[]>();
     const pending = new Map<string, Promise<DisplayedChapter[]>>();
 
     function peek(locale: string | null | undefined): DisplayedChapter[] | undefined {
@@ -434,7 +439,7 @@ export function createLocalizedChangelog(english: readonly ChangelogChapter[], l
 }
 
 /** The translated changelogs bundled with the build: `CHANGELOG.<xx>.md` beside CHANGELOG.md, one lazy chunk each. */
-export const changelogTranslationLoaders = translationLoaders(import.meta.glob<string>('../../../../../CHANGELOG.[a-z][a-z].md', {query: '?raw', import: 'default'}));
+export const changelogTranslationLoaders = translationLoaders(translationModules);
 
 /** The app's changelog: the bundled English chapters and their bundled translations. */
 export const localizedChangelog = createLocalizedChangelog(changelogChapters, changelogTranslationLoaders);

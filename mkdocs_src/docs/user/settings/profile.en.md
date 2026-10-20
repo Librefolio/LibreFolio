@@ -16,7 +16,7 @@ While unlocked, every modified field shows its own **save** / **undo** buttons, 
 
 Hover your avatar (while unlocked) and click the 📷 camera overlay to open the image picker: choose an existing image from the [Files library](../files/index.md), a shared one or one of your own, or upload a new one. Uploads pass through the **[Image Crop tool](../misc/image-crop.md)** with the *avatar* preset (square crop, circular preview).
 
-The avatar is saved immediately and is used across the app wherever your identity is shown — sidebar, broker sharing, and collaborator lists.
+The avatar is saved immediately and is used across the app wherever your identity is shown — sidebar, broker sharing, and collaborator lists. Administrators also see it in **[Settings › Administration › Users](../../admin/users.md#accounts)**, next to your username.
 
 Since the other users see your avatar, its picture is **shared**: an image you upload here is stored shared, and one of your personal images becomes shared when you pick it, with a notice (see [Shared or personal](../files/index.md#visibility)).
 
