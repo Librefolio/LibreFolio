@@ -1308,6 +1308,18 @@ once per page load, when an administrator first opens Settings, so that the tab'
 opened, and again on «check again». On a [blocked instance](#instance-block) the route is not on the allow-list: an
 administrator gets `423`.
 
+Each check has a guide, the section of the admin guide that explains it. The map is
+`frontend/src/lib/features/instance/checkGuides.json`: `server`, every check of `GET /security/checks`, in the order of
+its answer; `browser`, the findings the browser adds to the tab, today `accounts.openRegistration`
+(`OPEN_REGISTRATION_NOTICE_ID`, [The Open-Registration Warning](#open-registration-warning)). Each value is a path
+below `/mkdocs/` without the language, which `DocsLink` adds: `admin/<page>/#<anchor>`, such as
+`admin/configuration/#frame-protection` for `platform.frame_protection`. The tab's «Guide» button (workstream A, N69d)
+reads it through `checkGuidePath(id)` of `checkGuides.ts`, beside the map. A new check needs its entry, and its anchor
+must be an explicit `{: #… }` of the English page: `./dev.py test services config-audit` fails when a check of the
+server has no entry, or an entry no check, and `./dev.py test front-utility core-unit` (`checkGuides.test.ts`) when an
+anchor is missing, or when a translation gains or loses one: a ratchet, whose baseline in the test goes to zero after
+the release's translation.
+
 Tests: `./dev.py test api login-throttle` (in-process: `401` and `403`, every check once, as `run_config_checks()` and
 `check_plugin_secrets()` evaluate them, `accounts.login_limit` `ok` with the limit on and a `warning` with `off`, no
 secret value in the body, nor the SMTP server and user that a summary names) and `./dev.py test api security-checks`
