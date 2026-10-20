@@ -93,3 +93,10 @@ export function securityFindings(checks: readonly SecurityCheck[], browser: Brow
 export function attentionCount(findings: Pick<SecurityFindings, 'attention'>): number {
     return findings.attention.filter((finding) => finding.severity === 'error' || finding.severity === 'warning').length;
 }
+
+/** The dot's state (N69-1): the worst of the findings the badge counts, an error before a warning; null with none. */
+export function attentionSeverity(findings: Pick<SecurityFindings, 'attention'>): 'error' | 'warning' | null {
+    if (findings.attention.some((finding) => finding.severity === 'error')) return 'error';
+    if (findings.attention.some((finding) => finding.severity === 'warning')) return 'warning';
+    return null;
+}
