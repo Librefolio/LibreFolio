@@ -3,6 +3,7 @@ import {describe, expect, it} from 'vitest';
 import {handleProbeMessage, probeTranslation} from '../../../../../scripts/ai-export-render-prompt-probe';
 import {AI_EXPORT_ANALYSIS_IDS, AI_EXPORT_DATASET_IDS, type AiExportCompatibleSelection} from '../catalog/shared';
 import {AiExportPromptRenderError, renderAiExportPrompt, renderAiExportPromptDiagnostics, type AiExportPromptDiagnostics, type AiExportResponseLanguageDisplayName} from '../templates/promptRenderer';
+import * as sharedInstructions from '../templates/sharedInstructions';
 import {backendCatalogFixture, compatibilityFixture, selectionFixture, snapshotFixture} from './runtimeFixtures';
 
 const markKey = (key: string): string => `⟦${key}⟧`;
@@ -487,10 +488,22 @@ describe('AI Export prompt renderer', () => {
  * Today (base `4df888f78`) neither section exists and no catalogue has the key: AF-01, AF-02 and RI-01 to RI-03 are red,
  * and so are three order pins of the suite above (the analysis order, the data-only order, the endings). AF-03 and RI-04
  * are guards, green today and after; so is the Export Data probe equivalence above, now in the four languages.
+ *
+ * E-24.2 (coordinator's decision, 20/10): right after asking for a web search when the data is not enough, Reply
+ * Instructions also tells the AI what to do when it cannot search, never inventing a source or a news item, as the Shared
+ * Verification Instructions already ask of every analysis. That sentence is one exported constant of `sharedInstructions`,
+ * `AI_EXPORT_NO_INVENTED_SOURCES_RULE`, interpolated once. RI-05 pins the constant, never its words: one plain line,
+ * carried exactly once by every dataset's reply_instructions, with key markers and in the four languages, and by no
+ * analysis' answer_focus, which must not repeat what the analyses' Shared Verification Instructions already say. That
+ * absence is no guard of its own: before the cure there is no constant to look for, so it would be green for the wrong
+ * reason; it is asserted after the presence. RI-05 reads the constant by name from the module namespace, so that this file
+ * compiles and runs before the cure. Today (base `badc30832`) the constant does not exist: RI-05 is red until E-24.2.
  */
 describe('AI Export prompt renderer — every prompt closes on a trusted instruction to answer, not to restate the data (E-24)', () => {
     /** The one catalogue key of Reply Instructions: the sentence the AI replies with when the user adds no question. */
     const DATA_RECEIVED_KEY = 'aiExport.replyInstructions.dataReceived';
+    /** E-24.2: the export of sharedInstructions holding the one sentence that forbids invented sources (RI-05). */
+    const NO_INVENTED_SOURCES_EXPORT = 'AI_EXPORT_NO_INVENTED_SOURCES_RULE';
     const ANSWER_FOCUS_HEADING = '## Answer Focus';
     const REPLY_INSTRUCTIONS_HEADING = '## Reply Instructions';
     /** user_notes is rendered only when non-empty, right before answer_focus: both cases. */
@@ -533,6 +546,18 @@ describe('AI Export prompt renderer — every prompt closes on a trusted instruc
         expect(content.slice(opening.length).trim(), `${label}: a body under the heading`).not.toBe('');
         expect(content, `${label}: no fence, trusted copy is never a data block`).not.toContain('```');
         expect(occurrences(diagnostics.rendered.prompt, content), `${label}: the prompt carries the section once`).toBe(1);
+    }
+
+    /**
+     * E-24.2's rule, read by name from the module namespace: a named import would not compile until the cure exports it,
+     * and every other test of this file must keep loading and running meanwhile. `unknown` until proved a string.
+     */
+    function noInventedSourcesRule(): string {
+        const rule: unknown = Reflect.get(sharedInstructions, NO_INVENTED_SOURCES_EXPORT);
+        if (typeof rule !== 'string') {
+            throw new TypeError(`sharedInstructions exports ${NO_INVENTED_SOURCES_EXPORT}, the one sentence that forbids invented sources (found: ${typeof rule})`);
+        }
+        return rule;
     }
 
     it.each(AI_EXPORT_ANALYSIS_IDS)('AF-01: %s renders answer_focus exactly once, under "## Answer Focus", outside any fence, with and without user notes', (id) => {
@@ -612,5 +637,33 @@ describe('AI Export prompt renderer — every prompt closes on a trusted instruc
         expect(renders.map(({label, diagnostics}) => [label, hasSection(diagnostics, 'legal_notice')])).toEqual(renders.map(({label}) => [label, true]));
         // ... and no reply_instructions: that one belongs to Export Data.
         expect(renders.map(({label, diagnostics}) => [label, hasSection(diagnostics, 'reply_instructions')])).toEqual(renders.map(({label}) => [label, false]));
+    });
+
+    it('RI-05: every dataset renders AI_EXPORT_NO_INVENTED_SOURCES_RULE exactly once in reply_instructions, with key markers and in every language, and no analysis repeats it in answer_focus', () => {
+        const rule = noInventedSourcesRule();
+        expect(rule.trim(), `${NO_INVENTED_SOURCES_EXPORT}: a non-empty sentence`).not.toBe('');
+        expect(rule, `${NO_INVENTED_SOURCES_EXPORT}: a single line`).not.toMatch(/[\r\n]/u);
+        expect(rule, `${NO_INVENTED_SOURCES_EXPORT}: no backtick, it is interpolated into a template literal`).not.toContain('`');
+        expect(rule, `${NO_INVENTED_SOURCES_EXPORT}: no double quote, the section already quotes ${DATA_RECEIVED_KEY} in double quotes`).not.toContain('"');
+
+        // Every dataset, with key markers and in each interface language with the response language the UI derives from it ...
+        const translations = [['key markers', markKey, 'English'] as const, ...LOCALES.map(([locale, responseLanguage]) => [locale, probeTranslation(locale), responseLanguage] as const)];
+        const replies = AI_EXPORT_DATASET_IDS.flatMap((id) =>
+            translations.map(([language, translate, responseLanguage]) => {
+                const label = `${id}, ${language}`;
+                return [label, occurrences(onlySection(render(selectionFixture('dataset', id), translate, {responseLanguage}), 'reply_instructions', label), rule)];
+            }),
+        );
+        expect(replies, `every dataset's reply_instructions carries ${NO_INVENTED_SOURCES_EXPORT} exactly once, with key markers and in the four languages`).toEqual(replies.map(([label]) => [label, 1]));
+
+        // ... and, now that the rule is proved findable in a render, no analysis' answer_focus carries it, with or without user
+        // notes. answer_focus reads no catalogue (AF-02): the key-marker render stands for every language.
+        const focuses = AI_EXPORT_ANALYSIS_IDS.flatMap((id) =>
+            NOTES_CASES.map(([notes, userNotes]) => {
+                const label = `${id} ${notes}`;
+                return [label, occurrences(onlySection(render(selectionFixture('analysis', id), markKey, {userNotes}), 'answer_focus', label), rule)];
+            }),
+        );
+        expect(focuses, `no analysis' answer_focus carries ${NO_INVENTED_SOURCES_EXPORT}: analyses already forbid invented sources in their Shared Verification Instructions`).toEqual(focuses.map(([label]) => [label, 0]));
     });
 });
