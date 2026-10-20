@@ -221,6 +221,19 @@ def front_tx_bulk_promote_exec(verbose: bool = False, ui: bool = False, headed: 
     return _run_playwright("transactions/tx-bulk-promote-exec.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_bulk_promote_split(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run BulkModal merged-pair sign + «Split pair» before the save E2E tests (J-67: F3 split of a mixed merge, F1 the paying leg shown, F2 its cash sign, G create+create guard)."""
+    print_section("Frontend TX Bulk Promote Split Tests")
+    if not _ensure_frontend_build():
+        return False
+    # Every test registers its own account and writes only there: no seeded row is read.
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-bulk-promote-split.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_bulk_promote_cost_basis(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run BulkModal promote → receiver without cost basis E2E tests (new/saved receiver, Merge all)."""
     print_section("Frontend TX Bulk Promote Cost Basis Tests")
@@ -675,6 +688,14 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "tx-commit-all-types", front_tx_commit_all_types, name="TX Commit All Types Tests", desc="End-to-end commit for every TX type: standalone + paired create, edit, delete", tests="transactions/tx-commit-all-types.spec.ts")
     add_test(cat, "tx-bulk-suggest-ux", front_tx_bulk_suggest_ux, name="TX Bulk Suggest UX Tests", desc="Split badge, type preview, undo split, suggest banner, ActionModal AFTER rows", tests="transactions/tx-bulk-suggest-ux.spec.ts")
     add_test(cat, "tx-bulk-promote-exec", front_tx_bulk_promote_exec, name="TX Bulk Promote Execution Tests", desc="Promote execution: edit+edit/create+create/mixed, merge modal confirm/cancel, banner link, restore-and-edit", tests="transactions/tx-bulk-promote-exec.spec.ts")
+    add_test(
+        cat,
+        "tx-bulk-promote-split",
+        front_tx_bulk_promote_split,
+        name="TX Bulk Promote Split Tests",
+        desc="J-67, each test on a disposable account with two brokers of its own: the editor holds a withdrawal's cash as its magnitude, and a merge with a saved row (mixed, edit+edit) changes the type without moving the sign — F3 (red) a saved DEPOSIT on B + a new WITHDRAWAL on A merged by the banner, then «Split pair» before the save: the grid gives each leg its type back, the commit sends one WITHDRAWAL create on A, no update, no promote, and the account holds it (soft; the grid, the request, the answer and the rows read back in every message, annotation «J-67 F3 verdict»: REFUSED / WRONG DATA SAVED / RIGHT); F1 (red) a saved WITHDRAWAL + a new DEPOSIT merged → the pair is shown as the withdrawal («From:»); F2 (red) its cash cell reads −X / +X; G (guard) two new rows merged (shown as the withdrawal, −X / +X), split (WITHDRAWAL / DEPOSIT again), saved as two creates and no promote",
+        tests="transactions/tx-bulk-promote-split.spec.ts",
+    )
     add_test(
         cat,
         "tx-bulk-promote-cost-basis",
