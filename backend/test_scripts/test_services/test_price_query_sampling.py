@@ -56,11 +56,13 @@ and the series a comparison on the card needs on the same buckets, reading each 
    ``DateRangeModel``'s single day); ``index`` is the item's position in the request as sent, items after the ceiling
    included. The route answers 422 with ``detail == sample_reference_detail(error)``.
 9. ``target_currency``: each sampled point and bound equals the daily answer's converted point on its date (the
-   conversion runs per point). ``include_price=False``: no point, as today.
+   conversion runs per point). ``include_price=False``: no point, as today — with a sampling field, a placeholder
+   (point 14).
 10. The day budget, ``MAX_BULK_ITEM_DAYS`` (read by name in ``price_query``, lowered here through that module as
     ``test_bulk_limits.py`` does): a weekly or monthly item counts its points plus its two bounds, a daily one its fill
-    days, as today. The budget is checked before the bucket rows are read: a request refused for its sampled points
-    has read, through the ORM, at most 2 ``PriceHistory`` rows of an asset it only samples.
+    days, as today; a placeholder nothing (point 14). The budget is checked before the bucket rows are read: a request
+    refused for its sampled points has read, through the ORM, at most 2 ``PriceHistory`` rows of an asset it only
+    samples.
 11. What a sample costs. A request of weekly and monthly items never builds the daily fill
     (``PriceQueryOperations._build_backward_filled_series``) and reads at most (buckets + 2) rows of an asset sampled
     on a card. One read per asset: an asset a daily item of the request reads whole, on the same range, serves its
@@ -76,6 +78,17 @@ and the series a comparison on the card needs on the same buckets, reading each 
     own float rule (``{"threshold", "cases": [{note, first, end, plot_width_px, days, weeks, max_points, resolution}]}``),
     ties the backend's rule to the chart's: for every case ``fill_counts`` gives its days and weeks and
     ``choose_resolution`` its step. Lot Z-29b adds the Vitest side over the same file.
+14. A placeholder (lot Z-29a-f, X's review of Z-29a v3): an item with ``max_points``, ``resolution`` or ``sample_like``
+    and ``include_price=False`` — the comparison dialog (Z-29d) sends the card so, only to give its step to its target.
+    Its plan stays (``_plan_samples``: the seed and the first row in the range, one probe each), and nothing more of its
+    asset is read on its account, whatever its step — weekly, monthly, or daily when its fill's days fit in
+    ``max_points`` or ``resolution`` asks it: no bucket statement names it, and the day-by-day read of
+    ``get_prices_bulk`` — its one ``SELECT … FROM price_history WHERE price_history.asset_id IN (…)``,
+    ``_is_daily_load`` — does not list it; alone, that read does not run. It counts nothing against the day budget. Its
+    answer: its plan's step in ``resolution`` (daily for a daily one), no point, no bounds, no error. A target follows
+    it from the later first day as it follows a card sent with prices (point 7), counting its own points and bounds
+    only. The description of ``FAPriceQueryResult.sample_bounds`` says None «without prices» too. An item with
+    ``include_price=False`` and no sampling field is read and counted as before: nothing new is pinned about it.
 
 The expectations are computed apart from the module under test: a day-by-day walk (``_ref_*``) for the buckets, the
 counts, the step and the sampled dates; the daily answer of the same item, without the fields, for the points.
@@ -93,6 +106,12 @@ the four fields cannot be built: an extra field). Green then, written green: PQS
 rule: it pins the table, not the code). Red before the cure that reads an absent ``end`` as the start, written red:
 PQS-M08's first two cases, one day with its ``end`` and without it (compared as sent: ``range_mismatch``); its control
 is green then, by construction.
+
+Red before Z-29a-f (on Z-29a v3), each for the reason its docstring gives ("Red before Z-29a-f"): PQS-Q24 and Q25 (a
+placeholder's asset is named by a bucket statement or listed by the day-by-day read, more than 2 of its rows loaded);
+PQS-Q26, Q27 and Q28 (its points and bounds, or its fill days, are counted: refused under 0 alone, under the exact count
+of the items beside it); PQS-S14 (the description of ``sample_bounds`` says None for a daily series only). Green then
+and after, kept: PQS-Q08 and PQS-Q18's last case, the answers of a placeholder and of the target it leads.
 """
 
 from __future__ import annotations
@@ -857,6 +876,21 @@ def test_pqs_s13_at_most_one_way_to_sample(fields):
     errors = _refused(_payload(**{field: SAMPLING_VALUES[field] for field in fields}))
     assert not [error for error in errors if error["type"] == "extra_forbidden"], f"refused as unknown fields: {errors}"
     assert any(error["type"] == "value_error" and all(field in error["msg"] for field in SAMPLE_FIELDS) for error in errors), errors
+
+
+def test_pqs_s14_sample_bounds_is_none_without_prices_too():
+    """PQS-S14: the description of ``FAPriceQueryResult.sample_bounds`` says it is None «without prices» too, not only
+    for a daily series — a placeholder (point 14: ``include_price=False`` with ``max_points``, ``resolution`` or
+    ``sample_like``) says weekly or monthly in ``resolution`` and carries no bounds. On the field, and in the JSON schema
+    in both modes, what the OpenAPI document and the generated client read. The words are checked, not the sentence.
+
+    Red before Z-29a-f: the description says None «for a daily one» only.
+    """
+    description = FAPriceQueryResult.model_fields["sample_bounds"].description or ""
+    assert "without prices" in description.lower(), f"the field's description: {description!r}"
+    for mode in ("validation", "serialization"):
+        field_schema = FAPriceQueryResult.model_json_schema(mode=mode)["properties"]["sample_bounds"]
+        assert "without prices" in field_schema.get("description", "").lower(), f"{mode}: {field_schema}"
 
 
 # =============================================================================
@@ -1842,3 +1876,261 @@ async def test_pqs_q23_one_bucket_statement_per_range_and_step(world, frozen_cei
     assert [_dates(result) for result in results] == [plan.dates for plan in expected]
     found = sorted(sorted(group) for group in _bucket_groups(said, world))
     assert found == sorted(sorted(group) for group in groups), f"bucket statements reading {found}, not {sorted(sorted(group) for group in groups)}; the statements: {_said(said)}"
+
+
+# ── point 14: a placeholder, sampled without its prices (Z-29a-f) ─────────────────────────────────────────────────
+
+_DAILY_LOAD = re.compile(r"\bFROM\s+price_history\b.*?\bprice_history\.asset_id\s+IN\s*\(", re.IGNORECASE | re.DOTALL)
+_LIMIT = re.compile(r"\bLIMIT\b", re.IGNORECASE)
+
+
+def _is_daily_load(statement: _Statement) -> bool:
+    """The day-by-day read of ``get_prices_bulk``: the statement that selects the ``price_history`` rows of the assets it
+    lists, ``price_history.asset_id IN (…)``, every row of the range — not grouped per bucket (``_is_bucket_statement``)
+    and not cut to one row by a ``LIMIT``, as the seed and the plan's probes are (they name one asset,
+    ``price_history.asset_id = …``, or rows by their id)."""
+    sql = statement.sql
+    return _DAILY_LOAD.search(sql) is not None and _LIMIT.search(sql) is None and not _is_bucket_statement(statement)
+
+
+def _reads_naming(statements: list[_Statement], asset_id: int) -> list[str]:
+    """The reads of an asset's price rows past a plan's probes, in order: ``bucket`` for each bucket statement that names
+    it, ``daily`` for each day-by-day read that lists it."""
+    reads = [statement for statement in statements if _is_bucket_statement(statement) or _is_daily_load(statement)]
+    return ["bucket" if _is_bucket_statement(statement) else "daily" for statement in reads if _names_asset(statement, asset_id)]
+
+
+def _read_kind(step: str) -> str:
+    """How an item at this step is read when it carries its prices: daily, by the day-by-day read; weekly or monthly, its
+    asset only sampled, by a bucket statement."""
+    return "daily" if step == "daily" else "bucket"
+
+
+def _priced(item: FAPriceQueryItem) -> FAPriceQueryItem:
+    """The same item sent with its prices: a placeholder's counterpart, read and counted as Z-29a reads and counts it."""
+    return FAPriceQueryItem.model_validate({**item.model_dump(), "include_price": True})
+
+
+def _counted(plan: _Expected) -> int:
+    """What an item of this plan counts against the day budget when it carries its prices (point 10): weekly or monthly,
+    its points and its two bounds; daily, its fill days."""
+    return len(plan.dates) + (0 if plan.step == "daily" else 2)
+
+
+def _assert_placeholder(result: FAPriceQueryResult, asset_id: int, step: str) -> None:
+    """A placeholder's answer: its asset, its plan's step in ``resolution``, no point, no bounds, no error, event or
+    signal."""
+    said = (result.asset_id, result.resolution, len(result.prices), result.sample_bounds, result.errors, result.events, result.signals)
+    expected = (asset_id, step, 0, None, [], [], [])
+    assert said == expected, f"the placeholder answers (asset, resolution, points, bounds, errors, events, signals) {said}, not {expected}"
+
+
+async def _answered_within_budget(make_call: Callable[[], Awaitable[list[FAPriceQueryResult]]]) -> list[FAPriceQueryResult]:
+    """The answer of a call the day budget must let through; refused, the test fails saying what was counted."""
+    try:
+        return await make_call()
+    except BulkTooManyDaysError as refusal:
+        pytest.fail(f"refused for its days: item_days {refusal.item_days:,} over a budget of {refusal.max_item_days:,}")
+
+
+#: A placeholder alone on «All», of each kind, the step of its plan and its count of dates: YOUNG on a card, weekly (346
+#: points); OLD on a card, monthly (322); RECENT asking weekly (41); YOUNG asking monthly (80); daily, RECENT on a card
+#: (its 286 days within 377 points) and YOUNG asking it (2 421 days).
+_LONE_PLACEHOLDERS = [
+    pytest.param("young", {"max_points": CARD}, "weekly", 346, id="weekly-on-a-card"),
+    pytest.param("old", {"max_points": CARD}, "monthly", 322, id="monthly-on-a-card"),
+    pytest.param("recent", {"resolution": "weekly"}, "weekly", 41, id="weekly-asked"),
+    pytest.param("young", {"resolution": "monthly"}, "monthly", 80, id="monthly-asked"),
+    pytest.param("recent", {"max_points": CARD}, "daily", 286, id="daily-its-days-within-max-points"),
+    pytest.param("young", {"resolution": "daily"}, "daily", 2421, id="daily-asked"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("asset", "fields", "step", "points"), _LONE_PLACEHOLDERS)
+async def test_pqs_q24_a_placeholder_alone_reads_no_price_row_past_its_plan(world, frozen_ceiling, asset, fields, step, points):
+    """PQS-Q24: a placeholder alone on «All» reads no price row past its plan, whatever its step: YOUNG on a card
+    (weekly, 346 points), OLD on a card (monthly, 322), RECENT asking weekly (41), YOUNG asking monthly (80); daily,
+    RECENT on a card (its 286 days within 377 points) and YOUNG asking daily (2 421 days). It answers its plan's step in
+    ``resolution``, no point, no bounds, no error; no bucket statement runs, nor the day-by-day read
+    (``_is_daily_load``); the ORM loads at most 2 price rows, the seed and the first row in the range ``_plan_samples``
+    probes. Statements are seen by a ``before_cursor_execute`` listener, rows by a ``load`` listener. Their presence
+    barrier: the same item with its prices answers its points, a bucket statement (weekly, monthly) or the day-by-day
+    read (daily) names its asset, and more than 2 of its rows are loaded — the reads are made where the listeners look.
+
+    Red before Z-29a-f: the placeholder is read as the same item with its prices is, by a bucket statement or by the
+    day-by-day read, more than 2 of its rows loaded. Its answer is green then, by construction (the last pass of
+    ``get_prices_bulk`` drops the points and the bounds of an item without its prices): asserted first, so the red is
+    the reads'.
+    """
+    placeholder = _item(getattr(world, asset), ALL_START, include_price=False, **fields)
+    plan = _expected(world, placeholder)
+    assert (plan.step, len(plan.dates)) == (step, points), "premise"
+    with _recording_statements(world.engine) as priced_said, _counting_loads() as priced_loads:
+        (priced,) = await _query(world.engine, _priced(placeholder))
+    assert (priced.resolution, _dates(priced)) == (step, plan.dates), f"premise: with its prices the item says {priced.resolution!r}; {_first_difference(_dates(priced), plan.dates)}"
+    assert _read_kind(step) in _reads_naming(priced_said, placeholder.asset_id), f"barrier: with its prices, the item is read by no {_read_kind(step)} statement the matchers see; the statements: {_said(priced_said)}"
+    assert priced_loads[placeholder.asset_id] > 2, f"barrier: with its prices, the listener saw {priced_loads[placeholder.asset_id]} of its rows loaded, not more than 2: the bound below would prove nothing"
+    with _recording_statements(world.engine) as said, _counting_loads() as loads:
+        (result,) = await _query(world.engine, placeholder)
+    _assert_placeholder(result, placeholder.asset_id, step)
+    reads = [statement for statement in said if _is_bucket_statement(statement) or _is_daily_load(statement)]
+    assert not reads, f"a placeholder alone ran {len(reads)} bucket statement(s) or day-by-day read(s): {_said(reads)}"
+    assert sum(loads.values()) <= 2, f"a placeholder alone loaded {dict(loads)} price rows (asset id: rows), more than the seed and the first row in the range its plan probes"
+
+
+#: A placeholder on «All» beside a daily item and a card (``key`` card, on a card) that carry their prices, each on an
+#: asset of its own: the placeholder's asset, its fields and the step of its plan; the daily item's asset; the card's
+#: (OLD's monthly, YOUNG's weekly).
+_PLACEHOLDERS_AMONG = [
+    pytest.param("young", {"max_points": CARD}, "weekly", "recent", "old", id="weekly-on-a-card"),
+    pytest.param("recent", {"resolution": "monthly"}, "monthly", "young", "old", id="monthly-asked-the-cards-step"),
+    pytest.param("recent", {"sample_like": "card"}, "monthly", "young", "old", id="monthly-following-the-card"),
+    pytest.param("recent", {"max_points": CARD}, "daily", "young", "old", id="daily-its-days-within-max-points"),
+    pytest.param("old", {"resolution": "daily"}, "daily", "recent", "young", id="daily-asked"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("asset", "fields", "step", "daily_asset", "card_asset"), _PLACEHOLDERS_AMONG)
+async def test_pqs_q25_beside_items_with_prices_no_statement_reads_the_placeholder(world, frozen_ceiling, asset, fields, step, daily_asset, card_asset):
+    """PQS-Q25: beside a daily item and a card that carry their prices, each on an asset of its own, a placeholder is read
+    by no statement past its plan: the card's bucket statement — even when the placeholder asks the card's step on the
+    same range, or follows the card — and the day-by-day read that lists the daily item's asset leave the placeholder's
+    asset out, and the ORM loads at most 2 of its rows. On «All»: YOUNG on a card (weekly) beside RECENT daily and OLD's
+    card (monthly); RECENT asking monthly, following OLD's card (monthly from its own first row, 2026-01-05) or on a
+    card (daily, its 286 days within 377 points), each beside YOUNG daily and OLD's card; OLD asking daily beside RECENT
+    daily and YOUNG's card (weekly). The placeholder answers its plan's step, no point, no bounds, no error; the two
+    others answer as they do without it. Presence barriers: in the same request the day-by-day read lists the daily
+    item's asset and a bucket statement names the card's; with its prices, the placeholder's asset is read too (a bucket
+    statement; the day-by-day read when daily) and more than 2 of its rows are loaded.
+
+    Red before Z-29a-f: the placeholder's asset is named by a bucket statement — the card's own when they share a range
+    and a step — or listed by the day-by-day read, more than 2 of its rows loaded. The answers are green then.
+    """
+    daily_item = _item(getattr(world, daily_asset), ALL_START)
+    card = _item(getattr(world, card_asset), ALL_START, key="card", max_points=CARD)
+    placeholder = _item(getattr(world, asset), ALL_START, include_price=False, **fields)
+    expected = _expected_all(world, [daily_item, card, placeholder])
+    assert ([_read_kind(plan.step) for plan in expected], expected[2].step, bool(expected[2].dates)) == (["daily", "bucket", _read_kind(step)], step, True), "premise"
+    with _recording_statements(world.engine) as priced_said, _counting_loads() as priced_loads:
+        await _query(world.engine, daily_item, card, _priced(placeholder))
+    assert _read_kind(step) in _reads_naming(priced_said, placeholder.asset_id), f"barrier: with its prices, the {step} item is read by no {_read_kind(step)} statement the matchers see; the statements: {_said(priced_said)}"
+    assert priced_loads[placeholder.asset_id] > 2, f"barrier: with its prices, the listener saw {priced_loads[placeholder.asset_id]} of its rows loaded, not more than 2: the bound below would prove nothing"
+    with _recording_statements(world.engine) as said, _counting_loads() as loads:
+        results = await _query(world.engine, daily_item, card, placeholder)
+    others = ("daily" in _reads_naming(said, daily_item.asset_id), "bucket" in _reads_naming(said, card.asset_id))
+    assert others == (True, True), f"barrier: (the daily item's asset listed by the day-by-day read, the card's named by a bucket statement) is {others}; the statements: {_said(said)}"
+    assert _reads_naming(said, placeholder.asset_id) == [], f"the placeholder's asset is read: {_reads_naming(said, placeholder.asset_id)}; the statements: {_said(said)}"
+    assert loads[placeholder.asset_id] <= 2, f"{loads[placeholder.asset_id]} of the placeholder's price rows loaded, more than the seed and the first row in the range its plan probes"
+    _assert_placeholder(results[2], placeholder.asset_id, step)
+    alone = await _query(world.engine, daily_item, card)
+    assert [_same(result, other) for result, other in zip(results[:2], alone, strict=True)] == [True, True], "the daily item or the card answers otherwise beside the placeholder"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("asset", "fields", "step", "points"), _LONE_PLACEHOLDERS)
+async def test_pqs_q26_a_placeholder_alone_passes_a_budget_of_zero(world, frozen_ceiling, monkeypatch, asset, fields, step, points):
+    """PQS-Q26: a placeholder counts nothing against the day budget: alone, each placeholder of PQS-Q24 is answered under
+    a budget of 0 (``MAX_BULK_ITEM_DAYS`` lowered through ``price_query``, which refuses a count above it) — its plan's
+    step in ``resolution``, no point, no bounds, no error. The barrier: under the same 0, the same item with its prices
+    is refused with ``item_days`` its points and its two bounds (weekly, monthly) or its fill days (daily) — the budget
+    is applied where it is lowered, and the item counts there when it carries its prices.
+
+    Red before Z-29a-f: refused under 0 — the placeholder counts as with its prices: 348, 324, 43, 82, 286 and 2 421.
+    """
+    placeholder = _item(getattr(world, asset), ALL_START, include_price=False, **fields)
+    plan = _expected(world, placeholder)
+    assert (plan.step, len(plan.dates)) == (step, points), "premise"
+    monkeypatch.setattr(price_query, "MAX_BULK_ITEM_DAYS", 0)
+    refusal = await _refused_for_days(lambda: _query(world.engine, _priced(placeholder)))
+    assert (refusal.item_days, refusal.max_item_days) == (_counted(plan), 0), f"barrier: with its prices the item is refused with item_days {refusal.item_days}, not {_counted(plan)}"
+    (result,) = await _answered_within_budget(lambda: _query(world.engine, placeholder))
+    _assert_placeholder(result, placeholder.asset_id, step)
+
+
+#: A placeholder on RECENT, on «All», and the step of its plan: weekly chosen (in 100 points: its 41 weeks fit, its 286
+#: days do not), monthly asked, monthly following OLD's card (from RECENT's first row), daily within a card's 377
+#: points, daily asked.
+_PLACEHOLDERS_ON_RECENT = [
+    pytest.param({"max_points": 100}, "weekly", id="weekly-chosen"),
+    pytest.param({"resolution": "monthly"}, "monthly", id="monthly-asked"),
+    pytest.param({"sample_like": "card"}, "monthly", id="monthly-following-the-card"),
+    pytest.param({"max_points": CARD}, "daily", id="daily-its-days-within-max-points"),
+    pytest.param({"resolution": "daily"}, "daily", id="daily-asked"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("fields", "step"), _PLACEHOLDERS_ON_RECENT)
+async def test_pqs_q27_beside_items_that_fit_a_placeholder_counts_nothing(world, frozen_ceiling, monkeypatch, fields, step):
+    """PQS-Q27: beside items that fit, a placeholder adds nothing to the count. PQS-Q10's request — YOUNG daily from
+    2026-01-01, seeded (290 days), and OLD on «All» on a card (monthly, 322 points and 2 bounds; keyed ``card``), 614 —
+    with a placeholder on RECENT on «All»: weekly chosen (in 100 points: its 41 weeks fit, its 286 days do not), monthly
+    asked, monthly following OLD's card, daily within 377 points, daily asked. Under a budget of 614, the others' exact
+    total, the request is answered: the two others as without the placeholder, the placeholder with its plan's step, no
+    point, no bounds, no error. Under 613, ``BulkTooManyDaysError`` with ``item_days`` 614 — the others' count to the
+    unit, the placeholder's nothing; that refusal is also the barrier: the budget is applied where it is lowered.
+
+    Red before Z-29a-f: refused under 614 — the placeholder counts too: 43, 12, 12, 286 and 286 more.
+    """
+    others = [_item(world.young, date(2026, 1, 1)), _item(world.old, ALL_START, key="card", max_points=CARD)]
+    placeholder = _item(world.recent, ALL_START, include_price=False, **fields)
+    items = [*others, placeholder]
+    expected = _expected_all(world, items)
+    total = sum(_counted(plan) for plan in expected[:2])
+    assert ([plan.step for plan in expected], total, bool(expected[2].dates)) == (["daily", "monthly", step], 614, True), "premise"
+    monkeypatch.setattr(price_query, "MAX_BULK_ITEM_DAYS", total)
+    answered = await _answered_within_budget(lambda: _query(world.engine, *items))
+    alone = await _query(world.engine, *others)
+    assert [_dates(result) for result in answered[:2]] == [plan.dates for plan in expected[:2]]
+    assert [_same(result, other) for result, other in zip(answered[:2], alone, strict=True)] == [True, True], "the daily item or the card answers otherwise beside the placeholder"
+    _assert_placeholder(answered[2], world.recent, step)
+    monkeypatch.setattr(price_query, "MAX_BULK_ITEM_DAYS", total - 1)
+    refusal = await _refused_for_days(lambda: _query(world.engine, *items))
+    assert (refusal.item_days, refusal.max_item_days) == (total, total - 1), f"refused with item_days {refusal.item_days}: the placeholder counted {refusal.item_days - total}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("card_asset", "target_asset", "step", "first", "points", "counted"),
+    [
+        pytest.param("old", "young", "monthly", date(2020, 3, 2), 80, 82, id="a-monthly-card"),
+        pytest.param("recent", "old", "daily", date(2026, 1, 5), 286, 286, id="a-daily-card"),
+    ],
+)
+async def test_pqs_q28_a_placeholder_card_leads_its_target_on_the_targets_own_budget(world, frozen_ceiling, monkeypatch, card_asset, target_asset, step, first, points, counted):
+    """PQS-Q28: the comparison dialog's request (Z-29d): a card sent as a placeholder (``key`` card, on a card,
+    ``include_price=False``) and its target (``sample_like`` card, with its prices), both on «All». The target follows
+    the card's step from the later first day exactly as beside the card sent with prices (PQS-Q18's last case), every
+    point and bound its own daily answer's: YOUNG on OLD's card, monthly from its own first row 2020-03-02 (80 points);
+    OLD on RECENT's card, daily from RECENT's first row 2026-01-05 (286 days). The request passes a budget of the
+    target's own count — its points and its two bounds, 82; its fill days, 286 — and is refused under one less with
+    ``item_days`` that count: the card adds nothing. The card answers its plan's step (monthly, daily), no point, no
+    bounds, no error; no bucket statement names its asset, the day-by-day read does not list it, the ORM loads at most 2
+    of its rows. Presence barriers: the target is read in the same request (a bucket statement; the day-by-day read);
+    with its prices, the card's asset is read too.
+
+    Red before Z-29a-f: refused under the target's own count — the card counts too, 324 (its monthly points and bounds)
+    or 286 (its fill days). The answers, under the default budget, are green then (PQS-Q18).
+    """
+    card = _item(getattr(world, card_asset), ALL_START, key="card", max_points=CARD, include_price=False)
+    target = _item(getattr(world, target_asset), ALL_START, sample_like="card")
+    expected = _expected_like(world, target, card)
+    assert (_expected(world, card).step, expected.step, expected.first, len(expected.dates), _counted(expected)) == (step, step, first, points, counted), "premise"
+    with _recording_statements(world.engine) as priced_said:
+        _card_priced, led = await _query(world.engine, _priced(card), target)
+    (target_daily,) = await _query(world.engine, _daily(target))
+    assert _read_kind(step) in _reads_naming(priced_said, card.asset_id), f"barrier: with its prices, the card is read by no {_read_kind(step)} statement the matchers see; the statements: {_said(priced_said)}"
+    monkeypatch.setattr(price_query, "MAX_BULK_ITEM_DAYS", counted)
+    with _recording_statements(world.engine) as said, _counting_loads() as loads:
+        card_answer, target_answer = await _answered_within_budget(lambda: _query(world.engine, card, target))
+    _assert_placeholder(card_answer, card.asset_id, step)
+    _assert_sample_of_daily(target_answer, target_daily, expected)
+    assert _same(target_answer, led), "the target differs from its answer beside the card sent with prices"
+    assert _read_kind(step) in _reads_naming(said, target.asset_id), f"barrier: the target is read by no {_read_kind(step)} statement the matchers see; the statements: {_said(said)}"
+    assert _reads_naming(said, card.asset_id) == [], f"the placeholder card's asset is read: {_reads_naming(said, card.asset_id)}; the statements: {_said(said)}"
+    assert loads[card.asset_id] <= 2, f"{loads[card.asset_id]} of the placeholder card's price rows loaded, more than the seed and the first row in the range its plan probes"
+    monkeypatch.setattr(price_query, "MAX_BULK_ITEM_DAYS", counted - 1)
+    refusal = await _refused_for_days(lambda: _query(world.engine, card, target))
+    assert (refusal.item_days, refusal.max_item_days) == (counted, counted - 1), f"refused with item_days {refusal.item_days}: the card counted {refusal.item_days - counted}"

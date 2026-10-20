@@ -501,7 +501,9 @@ the builders of their 422 `detail`, `bulk_too_many_items_detail()` and
   (a rolling beta against another asset) count too; a comparison against the item's own asset is
   not counted twice. An item that starts after the ceiling counts zero. A
   [sampled](#price-query-sampling) weekly or monthly item counts its points plus two for its
-  `sample_bounds`, before any of its bucket rows is read. Over `MAX_BULK_ITEM_DAYS`
+  `sample_bounds`, before any of its bucket rows is read; an item with `max_points`, `resolution` or
+  `sample_like` sent with `include_price: false`, a placeholder that only gives its step, counts
+  nothing, whatever its step. Over `MAX_BULK_ITEM_DAYS`
   (1,000,000) the method raises `BulkTooManyDaysError`, its `item_days` the request's exact total,
   and the route answers 422 `{"code": "bulk_too_many_days", "message", "max_item_days", "item_days"}`.
 
@@ -594,8 +596,10 @@ any series, each point on its own date.
 by default. A weekly or monthly result also carries `sample_bounds` (`FAPriceSampleBounds`, two
 `FAPricePoint`): `first`, the fill's point on F, and `last`, its point on the range end, which is
 also the last point of `prices`. A daily result, an empty one included, has no `sample_bounds`, and
-`include_price: false` gives neither points nor bounds. In the OpenAPI document, the description
-of `FAPricePoint` has single quotes where its docstring has backticks
+`include_price: false` gives neither points nor bounds. With `max_points`, `resolution` or
+`sample_like`, an item sent with `include_price: false` is a placeholder (see the reads, below): it
+still says its step in `resolution`, weekly or monthly from its plan, else `daily`. In the OpenAPI
+document, the description of `FAPricePoint` has single quotes where its docstring has backticks
 (`_description_without_backticks()`): the web client's generator, openapi-zod-client, writes the
 description of the model a required field refers to into a template literal, which a backtick
 would close.
@@ -631,7 +635,12 @@ comparison series), is sampled from those rows, not read a second time. The othe
 by one statement per range and step, which covers every asset of that group
 (`_bucket_last_rows()`): SQLite groups the rows by asset and ISO week or calendar month and, through
 its bare-column rule for `max()`, returns only the last row of each bucket. No daily fill is built
-for a weekly or monthly item.
+for a weekly or monthly item. A placeholder only gives its step (Z-29a-f, `placeholders` in
+`get_prices_bulk()`): `_plan_samples()` still plans it, with the probes above, and a `sample_like`
+that names it takes its step and first day as from any item; but, whatever its step, the placeholder
+is left out of the day-by-day read and of `_read_samples()`, so no price row is read for it past its
+plan, and it counts nothing against the budget. So a comparison drawn on a card can send the card's
+item without its prices, beside the target that follows it.
 
 The step rule is the chart's. The case table
 `frontend/src/lib/components/charts/__tests__/compactDensityCases.json` holds cases of the

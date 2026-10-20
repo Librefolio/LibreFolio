@@ -340,7 +340,10 @@ class FAPriceQueryItem(StrictModel):
 
     asset_id: int = Field(..., description="Asset ID to query")
     date_range: DateRangeModel = Field(..., description="Date range (end defaults to start)")
-    include_price: bool = Field(True, description="Include price history in response")
+    include_price: bool = Field(
+        True,
+        description="Include price history in response. False with max_points, resolution or sample_like (Z-29a-f): the item only gives its step (its resolution, and a sample_like's buckets), reads no price row past its plan and counts nothing against the day budget",
+    )
     include_events: bool = Field(False, description="Include asset events in response")
     target_currency: Optional[str] = Field(None, description="Convert prices to this currency via FX rates (None = native currency)")
     signals: List[SignalRequest] = Field(
@@ -432,7 +435,7 @@ class FAPriceQueryResult(StrictModel):
         description="Technical signal results keyed by request instance_id",
     )
     resolution: SampleResolution = Field("daily", description="The step of prices (Z-29): daily, or weekly or monthly when the item's max_points, resolution or sample_like sampled the series")
-    sample_bounds: Optional[FAPriceSampleBounds] = Field(None, description="A weekly or monthly series' first and last points (Z-29); None for a daily one")
+    sample_bounds: Optional[FAPriceSampleBounds] = Field(None, description="A weekly or monthly series' first and last points (Z-29); None for a daily one or without prices")
 
 
 class FAPriceQueryResponse(BaseListResponse[FAPriceQueryResult]):
