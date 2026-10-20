@@ -114,6 +114,12 @@ each point the rate of that single solve bit for bit, and is faster on long hist
 step from the starting guess fails, it skips the grid scan only where the scan's answer is known — the previous point's
 rate, by Newton, points at the one true root (one sign change in the flows, Descartes' rule), and the answer is the
 scan's own Brent call on that grid interval (`_mwrr_solve`, `_bracketed_xirr_at`); everywhere else the scan runs.
+A rate is returned only when it solves the equation: its NPV within 1e-7 of the flows' size (`_is_xirr_root`, the test
+of Newton's answer); a root the bracketing found may instead show the NPV changing sign within ±1e-9 of it
+(`_is_bracketed_xirr_root`), which keeps the true root of an ill-conditioned NPV, whose terms are far larger than the
+flows and cancel at the root (P1b). A sign change is read from the two signs, never from their product, which
+underflows to 0.0 when both NPVs are tiny; and a sign is trusted only above the NPV's rounding noise where its terms
+underflow (`_npv_noise_floor`, `_opposite_signs`).
 
 `float_price_return()` and `observed_annualization()` (`returns.py`) serve the float return series that the risk and
 signal statistics read. `market_series.py`, which prepares those series, takes both from here and keeps no return

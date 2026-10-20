@@ -3960,3 +3960,226 @@ Le convenzioni possibili:
   paragrafo sulle viste con la finestra); `mkdocs build` stretto e `check-links` verdi. Slot `api portfolio` da chiedere.
 - ✅ **Slot** (14:16, HEAD `bbbc085d2`): `api portfolio` **55** passati; porta 6190 libera. **CHECKPOINT READY** inviato,
   FROZEN. Revisione di J chiesta dal coordinatore, come per P1. Poi la coda: P1b, E2 (piano breve), P3, P4.
+
+#### P1b — le due debolezze del MWRR già presenti (19/10, via del coordinatore 14:17; base `325e78fc8`)
+- Via del developer («ok») come lotto a parte; i valori che cambiano dichiarati nel checkpoint (quali serie, quali
+  casi, se serve una riga di CHANGELOG). Rossi prima.
+- ✅ **Codice** (`financial_math/returns.py`): (1) `_opposite_signs(a, b)` — entrambi diversi da zero e di segno opposto,
+  letti dai segni — al posto di `a * b < 0.0` nei tre punti: la scansione (`_bracketed_xirr`), l'intervallo di P1
+  (`_bracketed_xirr_at`) e la guardia di P1 (`_changes_sign_at`); il prodotto di due VAN piccolissimi andava in underflow
+  a −0,0 e la radice vera si perdeva. (2) `_is_xirr_root`: come prima, oppure — se la tolleranza non basta — il VAN cambia
+  segno entro ±1e-9 del tasso (una radice vera così vicina, più precisa del test di tolleranza): un VAN mal condizionato
+  (termini enormi che si annullano) non dipende più dagli ultimi bit della radice. Accetta solo **di più** di HEAD, mai
+  di meno. Doc sviluppatore: `financial_math.md`, il paragrafo del MWRR.
+- In corso: test-author `p1b-tests` (rossi dalla sezione 6 di `test_mwrr_warm_start.py`, le premesse dei test di P1 che
+  poggiavano sulle debolezze, la parità di P1 caldo = freddo, la tabella dei valori che cambiano, i mutanti); misura sulle
+  copie del DB.
+- ✅ **Misura sulle copie del DB** (sola lettura, `files/p1b/p1b_db.py`: la card `period_mwrr` e la linea
+  `period_mwrr_series` di HEAD contro le nuove, al bit): copia base, **tutti** gli utenti × EUR/USD × 14 finestre (tutto,
+  1A, 6M, 3M, 1M, da inizio anno, trimestri) — ~120 000 punti, 504 card: **0 cambi**; le tre copie col 1900, utente
+  admin × EUR/USD × 6 finestre — ~284 000 punti, 36 card: **0 cambi**. Sui dati veri nessun numero mostrato cambia.
+- **⚠️ Fuori pista — la prima stesura aveva un difetto suo e spostava una scelta** (test-author `p1b-tests`, corpora
+  contro la copia di HEAD, verifica a 80 cifre): (1) leggere i segni invece del prodotto fidava anche i VAN subnormali
+  (~1e-320), che sono rumore d'arrotondamento: **22 radici false nuove** nel corpus estremo (periodi che aprono a 0 e
+  durano più di ~77 anni, la classe del 1900; HEAD era già sbagliato su tutti e 22, P1b li cambiava in altri valori
+  sbagliati); il prodotto di HEAD li filtrava per caso. (2) La verifica allargata valeva anche per la radice di Newton:
+  con più radici, quella di Newton (più lontana da 0,1) passava prima della scansione — un cambio di *quale* radice si
+  mostra, non richiesto (12 punti della serie semplice in un portafoglio realistico, mai sulla linea della Dashboard).
+- ✅ **Codice, seconda stesura**: (1) `_npv_noise_floor(flussi) = 4 · (Σ|importi| + n) · ulp(0)` — l'errore dei termini che
+  vanno in underflow, quattro volte — e `_opposite_signs(a, b, soglia)`: segni opposti con entrambi i valori sopra la
+  soglia; (2) `_is_xirr_root` torna quello di HEAD (Newton, freddo e caldo, invariato: la scelta della radice resta di
+  HEAD), la verifica allargata è `_is_bracketed_xirr_root`, solo per le radici di Brent (scansione e intervallo di P1). Il
+  caso 1720 di test-author torna al valore di HEAD (lo zero esatto falso della griglia: è una **terza** debolezza, fuori
+  da questo lotto, da proporre a parte).
+- ✅ **Misura sulle copie del DB, seconda stesura** (`files/p1b/db2.jsonl`): base 36 utente×valuta, 122 339 punti, 504
+  card; copie col 1900 6 × 6 finestre, 283 620 punti, 36 card: **0 cambi**.
+
+##### ⏸ PAUSA GENERALE 19/10 18:12 (developer) — stato materializzato
+- **HEAD `325e78fc8`**, nessun commit di P1b. Sporchi 4 file (codice a metà, NON committare senza il ciclo):
+  `financial_math/returns.py` (seconda stesura, completa), `test_financial_math/test_mwrr_warm_start.py` (test-author
+  `p1b-tests`, completo: 199 test), `mkdocs_src/docs/developer/backend/financial_math.md` (paragrafo MWRR aggiornato alla
+  seconda stesura), questo piano. Istantanea del diff: `files/p1b/wip_20261019_1815.patch` (sha256 `dcb0e5b2…`).
+  Prove e sonde in `files/p1b/` (harness di test-author `compare.py`, `verify_changes.py`, `run_tests.py`, `mutants/`,
+  `out2_*`, `out3_*`, `compare2_*.json`, `res2_*.json`; i miei `p1b_db.py`, `db_base.jsonl`, `db_typo.jsonl`,
+  `db2.jsonl`; i log della corsia copiati da /tmp in `files/p1b/logs/`). Porta 6190 libera, nessuna corsa attiva.
+- **Fatto**: codice seconda stesura (soglia di rumore, verifica allargata solo sulle radici di Brent, Newton come HEAD);
+  copie del DB 0 cambi (due stesure); test-author round 2: `test_mwrr_warm_start` **199 passati** in corsia (carico 35),
+  `test_mwrr_verified_root` 38, `test_period_mwrr` 28, `utils roi-utils` 9; rossi contro la copia di HEAD **63**; i due
+  perni (caso 1720 del rumore subnormale, caso 670 di Newton) verdi su HEAD e rossi sulla prima stesura; mutanti tutti
+  presi salvo due equivalenti (verifica allargata valutata per prima; `isfinite` tolto da `_is_bracketed_xirr_root`);
+  soglia 0 presa dal perno 1720, soglia 1e-100 dai test della debolezza 1, Newton con la verifica allargata dal perno
+  670. Parità P1 caldo = freddo: 0 fallimenti su 616 143 punti. Costo: storie lunghe invariate (22,5 e 13,1 VAN a
+  punto), mal condizionati 316 (HEAD 691), realistici 112 (= HEAD).
+- **Tabella dei valori che cambiano (HEAD → P1b, da dichiarare al developer come domanda)**: input dei test esistenti
+  6 589 punti, 0 cambi; famiglie 4 815, None→valore 34, valore→altro 3 (lo zero falso del 1900 → la radice vera), card
+  None→valore 3; **realistici, 1000 portafogli: 480 983 punti, None→valore 2 496 (debolezza 2), card None→valore 20,
+  nessun valore→altro**: dopo perdite quasi totali la Dashboard mostrerebbe un MWRR fra −41 % e −100 % l'anno dove oggi
+  mostra «—»; mal condizionati 3000: None→valore 12 055, card 1 100; estremi 700: None→valore 1 997, valore→altro 282
+  (gli zeri falsi della griglia sostituiti dalla radice vera, verificati a 60 cifre), card None→valore 126, valore→altro
+  30. **Radici false introdotte: 0**, salvo un punto estremo impreciso (apre il 1848 a 0, 10 000 versati l'8/12/2011,
+  valore 10 246,56 il 10/12/2011: HEAD 94,499259 falso, P1b 84,211901, vera 84,212040 — il VAN è subnormale vicino alla
+  radice e Brent si ferma 1,4e-4 prima: limite di precisione, più vicino del valore di HEAD). Copie del DB: 0 cambi.
+- **Non fatto / prossimo passo esatto** (alla ripresa, con il carico sotto 50):
+  1. `ruff`/`black --check` su `test_mwrr_warm_start.py` e `services financial-math test_mwrr_warm_start` una volta (l'ultima
+     modifica di test-author è una frase del docstring; la corsa di conferma è stata interrotta dalla pausa).
+  2. Creare `files/p1b.sh` da `files/p1.sh` (P = `backend/app/services/financial_math/returns.py`; W/L = `p1b`; rossi
+     `services financial-math test_mwrr_warm_start` con il prodotto tolto e rimesso, sha uguale); verdi `financial-math`,
+     `utils roi-utils`, `roi-fifo-utils`, `portfolio-engine`; slot `api portfolio` dal coordinatore; `mkdocs build` e
+     `check-links`.
+  3. Checkpoint con la **domanda al developer** sui valori che cambiano (la tabella sopra; il punto 1848; riga di
+     CHANGELOG 🐛 proposta: «Il MWRR mostra il rendimento anche dopo perdite quasi totali e su storie lunghissime, dove
+     prima restava vuoto o dava una radice falsa»), più la **terza debolezza** da proporre a parte: gli zeri esatti
+     falsi della griglia (tutti i termini in underflow, periodi che aprono a 0) tenuti come radice quando non ce n'è una
+     vera più vicina (caso 1720 di test-author: HEAD e P1b 12,803843, la vera ≈ 4,4e7 fuori griglia → dovrebbe essere
+     None).
+- **In coda dopo P1b** (dal coordinatore): revisioni **L1a** (J), il **rovescio di X-R45** già entrato, **Z-29a**,
+  l'**analisi N78 con W**; poi MF-E2 (piano breve), P3 (funzione «a gradini» di X), P4. P2: revisione di J chiesta dal
+  coordinatore, poi l'ingresso in `dev_release2`.
+
+##### ▶ Ripresa 20/10 (coordinatore 08:47)
+- Coda del coordinatore, decisa durante la pausa: (1) P3 — la funzione «a gradini» la scrive **X** in `fx/conversion.py`
+  dopo il rovescio di X-R45, revisore MF; se arrivo a P3 prima, aspetto o passo a P4; (2) revisioni: **L1a** di J
+  (`197a421fd`, ramo `e-alfy-j-numeri-e-analisi`, base `d2303c81f`: giorni di cambiamento in `lots/change_days.py`,
+  bisezione in `lots/prices.py`, `trim_dates` tolto da `lots/histories.py`; da verificare la completezza dei giorni — FX
+  d'un giorno senza prezzo, split, chiusure parziali, `at_cost_until + 1` — e l'identità con `Decimal('1')`); il
+  **rovescio di X-R45** (`c720e25cb`: J-1 e P1/P2 non toccati, `oriented_rate` intatto, `test_fx_gap_single_reading.py`
+  solo docstring, `convert_bulk`/period changes filtrano ancora); **Z-29a v3** (`37c3ec3ee`, `services/assets/price_sampling.py`:
+  i valori disegnati restano quelli di oggi); **N78-bis / N78-1** con W (il costo d'un ADJUSTMENT in uscita:
+  `fifo/engine.py:245`, `lots/histories.py:124`/`:691`, `lots/conversions.py:235`, `portfolio/engine.py:637`, decisione 47).
+  Ordine dato alla ripresa: L1a → Z-29a v3 → N78-1; X-R45 dopo.
+- ✅ **P1b, passi leggeri** (08:47, carico 27): diff uguale all'istantanea della pausa (`returns.py`, test, doc); `ruff`,
+  `black --check`, diff-check verdi; `files/p1b.sh` creato (P = `returns.py`). **Corsia** (`/tmp/librefolio-r13-mf` non
+  serve: test puri): `financial-math test_mwrr_warm_start` con il prodotto tolto **63 rossi** / 136, sha `3e4f72a9…` uguale
+  dopo; verde **199**. La corsa più ampia (`financial-math`, `roi-utils`, `roi-fifo-utils`, `portfolio-engine`,
+  `api portfolio`) nello slot che il coordinatore assegna dopo A e J.
+- ✅ **Esempio per il developer** (`files/p1b/example_card.py`, corpus realistico di test-author, seme 1): realistic/178 — un
+  piano di 30 anni (1994→2024), 55 versamenti per 64 286,87 €, nessun prelievo, picco ~11 854 € nel 2003, valore finale
+  122,44 €: card HEAD «—» → P1b **−60,6100 %** l'anno; la radice a 60 cifre (bisezione in `Decimal`) è −0,606100. Perché
+  HEAD la scartava: al tasso −60 % per 30 anni il primo versamento pesa ~10¹² volte, i termini del VAN arrivano a ~10¹⁵ e
+  si annullano; l'errore d'arrotondamento (~0,1) supera la tolleranza ammessa (1e-7 × 65 409 ≈ 0,0065). Altri due:
+  realistic/110 (40 anni) −55,28 %, realistic/63 (30 anni) −59,00 %.
+- **⚠️ Fuori pista — dati veri non misurabili ora**: la copia di riferimento è alla revisione Alembic
+  `005_release_1_3_0_schema` (in `dev_release2` le migrazioni 005–011 sono state riunite); il mio ramo (base `325e78fc8`,
+  134 commit dietro) non la conosce. Per la skill niente scorciatoie: la copia di lavoro `/tmp/librefolio-r2-mf-realdata`
+  **non è stata creata**. La misura sui dati veri si fa dopo un aggiornamento della base (chiesto al coordinatore).
+- ✅ **Decisione del developer su P1b** (coordinatore, 20/10 09:0x), parola per parola: «P1b: il developer ha scelto **A**,
+  mostrare il valore, con la riga 🐛 nel CHANGELOG come l'hai scritta tu (09:0x, 20/10).» La riga proposta: «**The
+  money-weighted return (MWRR) after near-total losses.** On portfolios that lost almost everything over many years, the
+  card and the chart line showed "—" where a rate exists; they now show it.» La misura sui dati veri si rifà dopo
+  l'aggiornamento della base, al checkpoint di P1b (coordinatore); lo slot della corsa più ampia dopo A e J. La terza
+  debolezza va in `PROSSIMI_LAVORI` come domanda per dopo.
+- **Bozza per `Phase_1/PROSSIMI_LAVORI.md`** (il file c'è solo in `dev_release2`, non nella mia base: la aggiungo dopo
+  l'aggiornamento della base, al checkpoint di P1b), sotto un nuovo `### MF · Matematica finanziaria`:
+
+  > #### MF-P1c · Il MWRR sui periodi lunghissimi che aprono a zero: gli zeri falsi della griglia
+  >
+  > - **Chi**: MF.
+  > - **Cos'è**: su un periodo che apre a valore 0 e dura più di ~77 anni (la classe dell'errore di battitura al 1900),
+  >   tutti i termini del VAN vanno in underflow a 0,0 da un certo tasso in su: la scansione della griglia tiene quel
+  >   punto come «zero esatto» e la Dashboard mostra un MWRR falso dove dovrebbe mostrare «—» (es. 12,80 contro una
+  >   radice vera di ~4,4·10⁷, fuori scala). Oggi e dopo P1b è uguale: P1b non lo tocca. La cura (uno zero esatto è
+  >   radice solo se il VAN cambia davvero segno attorno, sopra la soglia di rumore) farebbe **sparire** valori mostrati
+  >   oggi (valore → «—»): domanda al developer, con i conteggi sui corpora e sui dati veri.
+  > - **Stato**: ❌ non iniziato; domanda per dopo (coordinatore, 20/10).
+  > - **Dove**: [piano 11, «P1b — le due debolezze del MWRR già presenti», «PAUSA GENERALE 19/10» e «Ripresa
+  >   20/10»](11_financialMath/plan-phase01FinancialMath.prompt.md).
+
+#### Revisione L1a di J (20/10; `197a421fd`, base `d2303c81f`) — ✅ OK, nessun blocco
+- Letta dagli oggetti git (sola lettura; copie in `files/reviews/l1a/`). Ogni ingresso per giorno dei costruttori, e chi
+  lo rende un giorno di cambiamento:
+  - prezzo convertito (`market_prices`) e prezzo stimato con il suo flag: confronto per rappresentazione
+    (`as_tuple`); il prezzo è convertito **al cambio del giorno** (`fx_resolver.convert(mark, ccy, current_date)`), quindi
+    un cambio FX nuovo in un giorno senza prezzo nuovo cambia il convertito e diventa giorno di cambiamento; un cambio
+    mancante dà None (None ≠ valore). ✅ Coperto anche dal libro `fx-daily` del test di parità (HUF chiuso ogni lunedì,
+    cambio ogni giorno, 5 giorni senza cambio);
+  - frammenti attivi (`start ≤ d < end`), aperture, chiusure (anche parziali), prefissi di proventi/acquisti/redditi/costi
+    e date «ignoto da», passi delle linee del costo medio: tutte in `analysis_event_dates`; split: transazioni
+    collegate + frammenti (libro `split`) ✅;
+  - giorni a costo: `at_cost_until + 1` ✅; la bisezione di `last_day_without_observation` è corretta perché
+    `AssetPriceSeries.resolve` dà MISSING **solo** prima della prima osservazione (porta avanti senza limite) ✅;
+  - fine della serie d'un lotto (`basis.last_date` = il giorno prima d'una chiusura senza cambio, o l'ultima chiusura):
+    il giorno di chiusura è un giorno di cambiamento senza riga, e `expand_to_days` smette di copiare lì ✅; l'ultimo
+    giorno di `history_dates` resta l'ultimo dei giorni di cambiamento ✅;
+  - storia di performance: tutti i flussi (transazioni, chiusure SELL, eventi di trasferimento, gambe al bordo) cadono su
+    giorni di cambiamento; tolti i giorni quieti, il TWRR perde solo fattori `1 + 0`.
+- **L'identità con `Decimal('1')`** (sonda `files/reviews/l1a/twrr_identity.py`, 4 000 serie casuali, NAV a zero e
+  negativi, flussi): serie solo sui giorni di cambiamento (+ il giorno dopo) contro ogni giorno, al bit (`as_tuple`):
+  **0 differenze su 121 102 confronti** (TWRR, ROI, indice di ricchezza, e i giorni quieti contro la riga copiata). Il
+  rendimento d'un giorno quieto è `0E(e−e) = Decimal('0')`, quindi `1 + 0 = Decimal('1')` e `x · 1 = x` con lo stesso
+  esponente. Solo con NAV a esponente positivo (artificiali: questo percorso somma da `Decimal("0")`, esponente ≤ 0)
+  cambia la **rappresentazione** interna dell'indice (es. `-0E-136` contro `-0E-134`), mai TWRR o ROI in uscita.
+- Note, nessuna bloccante: (n1) ogni ingresso per giorno che arriverà dopo (anche **MF-E2**: i flussi d'apertura degli
+  short sono datati dalle transazioni, i riacquisti dalle chiusure, quindi già coperti) va registrato in
+  `lot_change_days`/`analysis_event_dates`, altrimenti la parità si rompe in silenzio; (n2) i 150 s rimasti sul caso
+  1900 sono il ciclo dei prezzi convertiti, uno per giorno (`resolve` + `convert` su 46 000 giorni): terreno di P3 (i
+  cambi a gradini); (n3) `_same_amount` per rappresentazione è prudente: un prezzo scritto in un altro modo costa un giorno
+  di cambiamento in più, mai un valore sbagliato; (n4) `expand_to_days` copia le righe con `model_copy` (superficiale):
+  va bene finché nessuno modifica un oggetto annidato dopo.
+
+#### Revisione Z-29a v3 di Z (20/10; `37c3ec3ee`, la semantica) — ✅ OK, nessun blocco
+- Letta dagli oggetti git (copie in `files/reviews/z29a/`). Il grafico compatto di oggi (`LineChart.svelte`
+  `chooseStaticResolution` + `timeSeriesAggregation.ts`): giornaliero se `giorni / larghezza ≤ 1,3`, altrimenti
+  settimanale se `settimane / larghezza ≤ 1,3`, altrimenti mensile; poi `aggregateLineSeries` tiene **l'ultimo punto
+  presente** di ogni secchio (settimana ISO lun–dom, mese di calendario).
+- Il backend: `choose_resolution` con `max_points` = la soglia; `sample_dates` = l'ultimo giorno di ogni secchio da quello
+  di F a quello della fine, l'ultimo tagliato alla fine; il valore d'ogni data = `_fill_point` sull'ultima riga ≤ data,
+  **la stessa funzione del riempimento giornaliero** (che ha un punto per ogni giorno di calendario da F alla fine,
+  quindi l'ultimo punto del secchio è proprio la sua fine). Le righe lette bastano: il seme (ultima riga prima
+  dell'intervallo), la prima nell'intervallo, l'ultima riga di ogni secchio (una istruzione, `max(date)` con la colonna
+  nuda di SQLite: univoca perché `(asset_id, date)` è `UNIQUE`), e per `sample_like` l'ultima riga ≤ F′; il secchio
+  settimanale in SQL (`date(d, '-6 days', 'weekday 1')`) è il lunedì ISO, il mensile `%Y-%m`. Nessun filtro sul `close`
+  nullo, come il riempimento giornaliero. Conversione di valuta per punto, alla sua data, prima di staccare il primo. Il
+  test di Z usa come oracolo la risposta giornaliera (punto 6 del contratto). ✅
+- **La traduzione larghezza → `max_points`** (`floor(1,3 · w)` nella tabella dei casi: 290 → 377, 291,5 → 378): sonda mia
+  su tutte le larghezze a passi di 0,25 fino a 10 000, 0,1 fino a 4 000 e 0,01 fino a 400: **0 divergenze** dalla
+  regola del browser in virgola mobile (`count / w ≤ 1,3`). ✅
+- `sample_like`: passo e secchi della scheda, F′ = max(F_scheda, F_bersaglio), la scheda giornaliera porta il bersaglio
+  giornaliero da F′; i riferimenti controllati prima di leggere, e prima del taglio al tetto (un seguace e la sua scheda
+  hanno lo stesso intervallo, quindi stanno o tutti e due prima o tutti e due dopo il tetto). Budget: campione + 2,
+  prudente. `include_price: false`: niente punti e niente estremi, come oggi. ✅
+- Note per il consumo (Z-29b / Y), nessuna sul backend: (n1) la tabella dei casi oggi la legge solo il test del backend:
+  il lato Vitest di Z-29b deve leggerla con la regola del browser, `chooseStaticResolution` e il `max_points` inviato;
+  (n2) **a un ridimensionamento che cambia il passo, rifare la richiesta**: mai riaggregare un campione settimanale in
+  mesi (l'ultimo fine-settimana del mese non è il fine mese che il browser disegna oggi), mai tornare al giornaliero da un
+  campione; (n3) la base della vista in percentuale e il colore leggono `sample_bounds.first` (F), non `prices[0]` (la
+  fine del primo secchio).
+
+#### N78-1 con W — preparazione (20/10, in attesa della bozza di W; codice letto su `dev_release2`, `files/reviews/n78/`)
+- La domanda del developer: «in una rettifica in uscita, che PMC dovremmo segnare? … se esce, è come fosse una vendita,
+  modifica le quantità non il PMC». Che cosa fa oggi il costo d'un ADJUSTMENT in uscita (`cost_basis_override`):
+  - **PMC (costo medio)**: niente. `average_cost.cost_movement_from_transaction`: ogni quantità negativa è una
+    `REDUCTION` senza costo; il costo medio di ciò che resta non cambia, con o senza costo dichiarato. ✅ già oggi;
+  - **prezzi**: niente. `price_marks`: un ADJUSTMENT non è mai un prezzo (P2, J-17);
+  - **Dashboard** (`daily_state.py` ~:418, J-24): con il costo, il capitale scende del **valore consegnato**
+    (`|q| × cost_basis_override` al cambio del giorno) e la differenza dal costo storico (PMC × q) è **realizzata**;
+    senza costo l'uscita non tocca il capitale: è una correzione di quantità (le unità «spariscono», perdita pari al loro
+    valore di mercato);
+  - **lotti FIFO** (`fifo/engine.py:245`, `_apply_adjustment_out`): consuma i lotti come una vendita, al prezzo per unità
+    dichiarato (0 senza costo; il costo FIFO del lotto stesso con `hands_over_at_own_cost`, le gambe al bordo di J-10);
+    realizzato del lotto = dichiarato − costo del lotto;
+  - **performance dei lotti** (`lots/histories.py` ~:124): con il costo, un flusso in uscita pari al valore dichiarato;
+  - **decisione 47**: la gamba che cede d'un TRANSFER orfano diventa ADJUSTMENT-out al costo Auto (PMC) del suo broker.
+- I tre modi possibili d'un'uscita senza «PMC da scrivere», e il loro effetto (da confrontare con la bozza di W):
+  (a) **al costo** (PMC per il Dashboard, costo FIFO del lotto per i lotti, `hands_over_at_own_cost`): realizzato 0; il
+  capitale scende del costo; il P&L totale perde il guadagno non realizzato di quelle unità; **il TWRR del giorno vede
+  un rendimento falso** −q·(mercato − costo)/NAV (il NAV scende del valore di mercato, il flusso è il costo);
+  (b) **al valore di mercato del giorno** (come le gambe al bordo di J-10): realizzato = q·(mercato − PMC), capitale −
+  valore di mercato, P&L continuo, TWRR neutro; serve un prezzo quel giorno (senza: al costo, come i giorni a costo);
+  (c) **correzione di quantità** (oggi senza costo): nessun flusso, le unità spariscono come perdita.
+  Il PMC resta invariato in tutti e tre: «modifica le quantità non il PMC» vale già. La scelta vera è **a che valore
+  escono** (realizzato, capitale, TWRR), e se un'uscita dichiarata al costo di decisione 47 resta coerente con essa.
+
+#### Revisione del rovescio di X-R45 (20/10; `c720e25cb`, già in `dev_release2`) — ✅ OK
+- I miei lotti non sono toccati: nessun file di `financial_math/`, `risk/`, `risk_plugins/` né `portfolio_service.py` nel
+  diff (J-1 voce 1, P1, P2); `financial_math/fx_rates.py` identico byte per byte al mio J-1 (`068d5dd51`); `oriented_rate`
+  ancora importato e usato nei 4 punti (`fx/conversion.py`, `fx/storage.py`, `pac_allocator/evaluation/scenario.py`,
+  `pac_allocator/source/wac.py`). ✅
+- `test_fx_gap_single_reading.py`: solo due frasi del docstring (il nome del filtro, ora i limiti in linea di
+  `convert_bulk`). ✅
+- `convert_bulk` (X-R38) e i period changes (X-R59) filtrano ancora: la condizione in linea `rate >= minimo AND rate <
+  primo rifiutato` è la stessa dell'`usable_fx_rate_clause` tolta. ✅
+- Nota per X, nessuna bloccante: nei lettori del PAC una riga storica non utilizzabile ora può vincere (decisione del
+  developer: «vince l'ultima riga salvata»). `wac.py` controlla `rate > 0` prima d'invertire (un `inf` invertito dà 0 →
+  prova incompleta, nessun errore); in `fx_quotes.py` lo 0 ricade su `allocation.saved_fx_invalid` (il mio appunto
+  «irraggiungibile» di X-R45 torna raggiungibile, quindi utile), ma un `inf` storico passa `> 0` e diventa una quota:
+  `rate.is_finite()` accanto a `> 0` lo chiuderebbe.
