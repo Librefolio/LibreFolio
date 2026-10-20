@@ -51,11 +51,12 @@ from backend.app.schemas.prices import (
     FAHistoricalData,
     FAPricePoint,
 )
-from backend.app.schemas.provider import FAVolumeKind
+from backend.app.schemas.provider import FAQuoteBaseSuggestion, FAVolumeKind
 from backend.app.services.assets.base import AssetHistoryStartDate, AssetRateLimitedError, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.provider_registry import register_provider
 from backend.app.utils.asset.sector import validate_sector
+from backend.app.utils.currency_units import minor_unit_factor
 
 logger = get_logger(__name__)
 
@@ -238,6 +239,13 @@ def _acquire_history_data(
         dividends=dividends,
         splits=splits,
     )
+
+
+def _quote_base_suggestion(currency: str | None) -> FAQuoteBaseSuggestion | None:
+    """Z-32 (d): a line Yahoo quotes in a minor unit (``GBp``, pence) has one price per 100 units, the factor of
+    ``MINOR_UNIT_FACTORS``; None for any other currency, or none."""
+    factor = minor_unit_factor(currency)
+    return FAQuoteBaseSuggestion(quantity=factor, quote_currency=currency.strip()) if factor and currency else None
 
 
 def _map_history_prices(
@@ -661,7 +669,8 @@ class YahooFinanceProvider(AssetSourceProvider):
 
         Returns:
             List of matching tickers with metadata.
-            Each result: {identifier, display_name, currency, type}
+            Each result: {identifier, display_name, currency, type}, and quote_base_suggestion for a line quoted in a
+            minor unit (GBp: 100 units per price, Z-32 d).
 
         Raises:
             AssetSourceError: If yfinance not available or search fails
@@ -710,15 +719,17 @@ class YahooFinanceProvider(AssetSourceProvider):
                 raw_type = (quote.get("quoteType", "Unknown") or "").lower()
                 normalized_type = search_type_map.get(raw_type, "OTHER")
 
-                results.append(
-                    {
-                        "identifier": symbol,
-                        "identifier_type": IdentifierType.TICKER,  # YFinance uses ticker symbols
-                        "display_name": quote.get("longname", quote.get("shortname", symbol)),
-                        "currency": currency,
-                        "type": normalized_type,
-                    }
-                )
+                item = {
+                    "identifier": symbol,
+                    "identifier_type": IdentifierType.TICKER,  # YFinance uses ticker symbols
+                    "display_name": quote.get("longname", quote.get("shortname", symbol)),
+                    "currency": currency,
+                    "type": normalized_type,
+                }
+                suggestion = _quote_base_suggestion(currency)
+                if suggestion is not None:
+                    item["quote_base_suggestion"] = suggestion.model_dump()
+                results.append(item)
 
             logger.debug(f"Search for '{query}': found {len(results)} results")
             return results
@@ -728,6 +739,19 @@ class YahooFinanceProvider(AssetSourceProvider):
         except Exception as e:
             logger.warning(f"Search failed for '{query}': {e}")
             return []
+
+    async def suggest_quote_base(
+        self,
+        identifier: str,
+        identifier_type: IdentifierType,
+        provider_params: Dict | None = None,
+    ) -> FAQuoteBaseSuggestion | None:
+        """Z-32 (d): 100 units per price for a line Yahoo quotes in pence (``GBp``), read from the currency of
+        ``fast_info`` (``_fetch_currency``, cached 24 h, the one the search reads); None otherwise. The core runs it in
+        the provider's thread, like ``search``."""
+        if not YFINANCE_AVAILABLE or not identifier:
+            return None
+        return _quote_base_suggestion(self._fetch_currency(identifier))
 
     def validate_params(self, params: Dict | None) -> None:
         """

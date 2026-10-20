@@ -1049,6 +1049,16 @@ def services_probe_rate_limit(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Probe rate-limit tests", verbose=verbose)
 
 
+def services_quote_base_suggestion(verbose: bool = False, test_names: list = None) -> bool:
+    """Z-32 (d): a provider's quote base suggestion (FAQuoteBaseSuggestion) in its search results and in the probe's metadata."""
+    print_section("Services: Quote Base Suggestion (Z-32 d)")
+    print_info("Testing: schemas/provider.py (FAQuoteBaseSuggestion; quote_base_suggestion on FAProviderSearchResultItem and ProbeMetadataResult), AssetSearchService.search, AssetSourceProvider.suggest_quote_base, probe_provider_config, the Yahoo Finance and mockprov plugins")
+    print_info("Search: a plugin's suggestion (dict or model) reaches its result; an invalid one is dropped with a warning, the result kept")
+    print_info("Probe: asked after the metadata answered, through core.call_provider with 5 s; never after a failed metadata, never of a provider keeping the base class's hook")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_quote_base_suggestion.py", test_names)
+    return run_command(cmd, "Quote base suggestion tests", verbose=verbose)
+
+
 def services_bulk_reads_chunked(verbose: bool = False, test_names: list = None) -> bool:
     """MF-SEC9a (rest): bulk reads of the BRIM candidate search and of the WAC FX evidence in statements SQLite can parse (private in-memory DB)."""
     print_section("Services: Bulk Reads Chunked (MF-SEC9a)")
@@ -2498,6 +2508,20 @@ Note: No backend server required.
         # SlidingWindowLimiter on a fake clock (or PROBES_BY_LIMIT starts empty per test) and the manager's probe is a
         # recording stub, all with monkeypatch, so the lane's real limiters are never consumed. The lane switch runs dev.cmd_server in-process with every launch
         # stubbed (test_dev_designer_lab_banner.start_server): nothing starts.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "quote-base-suggestion",
+        services_quote_base_suggestion,
+        name="Quote Base Suggestion",
+        desc="Z-32 (d): FAQuoteBaseSuggestion (quantity a whole number ≥ 1, required; quote_currency as the provider reports it, GBp kept; strict), quote_base_suggestion on FAProviderSearchResultItem and ProbeMetadataResult (null when absent, in the OpenAPI document: quantity required, minimum 1); the search carries a plugin's suggestion (dict or model, also from the query cache) and drops an invalid one with a warning, the result, its neighbours and the provider kept; AssetSourceProvider.suggest_quote_base answers None with no I/O; the probe asks it once fetch_asset_metadata answered (a patch or None), never in parallel, through core.call_provider with 5 s and the metadata's arguments, never after a failed metadata (exception, refusal, timeout), never without the metadata operation, never of a provider keeping the base class's hook or of a double without one, never into patch_data, its own failures None with the metadata's outcome unchanged; Yahoo: a GBp search result and suggest_quote_base → 100 GBp, GBP/USD/none → nothing; mockprov: MINOR_UNIT_QUERY lf-minor-unit → MOCK_MINOR_UNIT, a GBp STOCK with 100 GBp, suggest_quote_base for it only, the other searches unchanged",
+        # PURE: no lane DB, no server, no network. The providers are in-process doubles without settings handed out by
+        # AssetProviderRegistry.get_provider_instance (monkeypatch), so configured_provider reads no row; the pauses go
+        # to a private Cooldowns on a fake clock; core.call_provider is wrapped to record the calls; the Yahoo plugin's
+        # yf module is a fake; mockprov is called directly; the OpenAPI document is an app of the test around the real
+        # provider_router (backend.app.main is not imported). Codes, queries and symbols are unique per test, so the
+        # process's search and currency caches answer for no other test.
         isolation="pure",
     )
     add_test(
