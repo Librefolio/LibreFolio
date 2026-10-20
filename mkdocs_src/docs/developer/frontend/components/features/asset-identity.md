@@ -180,10 +180,12 @@ A manual **Ask provider** is unchanged: `handleAskProvider()` reads with the def
 `'manual'` and opens the comparison with every row. The rule is unit-tested in
 `providerComparisonQueue.test.ts`, the modal flow in `AssetModal.providerLifecycle.test.ts`.
 
-Which fields become rows at all is decided upstream, in `fetchAndCompareMetadata()`, from the
-`patch_data` of the probe's `metadata` operation:
+Which fields become rows at all is decided upstream, by the pure `compareMetadata()` in
+`components/assets/assetMetadataComparison.ts`, which `fetchAndCompareMetadata()` calls before
+applying its writes in order, from the `patch_data` of the probe's `metadata` operation:
 
-- a field empty in the form, and not edited while the read ran, is filled silently;
+- a field empty in the form, and not edited while the read ran, is filled silently (never the
+  quote base: see [below](#quote-base-proposal));
 - an equal value agrees, and so does a provider type that only names the family of the stored
   subtype — `isFamilyOnlyProposal()` in `lib/utils/assetTypes.ts` (`ETF` against `ETF_STOCK`).
   A refinement (`ETF` → `ETF_STOCK`) is still a row;
@@ -197,6 +199,57 @@ Which fields become rows at all is decided upstream, in `fetchAndCompareMetadata
 On **Apply Selected**, a ticked field edited since the differences were computed (while the
 comparison was held or open) sends it back to a fresh `'all'` read instead of overwriting the
 edit.
+
+### 🔢 The quote base: proposed, never filled {: #quote-base-proposal }
+
+**Units per single price** (`quote_base_quantity`) is never empty, so a comparison never fills it:
+it agrees or it is a row. Every proposal comes from one ladder,
+`proposeQuoteBase(suggestion, assetType)` in `components/assets/assetFormState.ts`: the provider's
+explicit [suggestion](../../../architecture/patterns/asset_plugin_guide.md#quote-base-suggestion)
+when its `quantity` is a whole number of at least 1, else `defaultQuoteBaseQuantity(assetType)`,
+read from `QUOTE_BASE_TYPE_DEFAULTS` (`BOND`: 100, one entry per exception) and 1 for any other
+type. The `QuoteBaseSource` it returns, `suggestion` or `typeDefault`, travels with the number.
+
+- **A search pick writes it.** `applySearchResult()` sets the ladder's number like the name, over
+  any value, with the type the result has just set (the form's, if it carries none); in edit mode
+  too, after **Confirm Asset Change** when the provider identifier changes.
+  `AssetSearchAutocomplete.svelte` copies the result's `quote_base_suggestion` into what it hands
+  `onselect`, from the stream and from the REST fallback.
+- **A comparison proposes it.** In scope `'all'` only (the selection's read, the global
+  **Ask Provider**), `compareQuoteBase()` inside `compareMetadata()` runs the ladder on the line's
+  suggestion and on the type the provider proposes when it proposes another one (not
+  `isFamilyOnlyProposal()`), else on the form's. A number other than the field's is a
+  `quote_base_quantity` row, `selected: true` like every row, grouped under **Asset Details** after
+  the currency (`DIFF_FIELD_SECTIONS` in `ProviderComparisonModal.svelte`); never an action.
+  `handleComparisonApply()` writes it through `setFieldValue()`.
+- **The row's note.** `quoteBaseNote(source, provider)` gives `DiffItem.note`:
+  `assets.modal.quoteBaseSuggested` (provider, quote currency, quantity) for a suggestion,
+  `assets.modal.quoteBaseSuggestedPlain` when it has no `quote_currency`,
+  `assets.modal.bondQuoteBaseHint` for a `BOND`'s default, nothing for any other type's 1.
+  `ProviderComparisonModal.svelte` draws a row's `note` under its values
+  (`comparison-note-<field>`).
+- **The hint under the field.** `quoteBaseHint` keeps a suggestion's provider name, quote currency
+  and quantity with the key of its line: `providerConfigurationKey()` of the provider
+  configuration it came from, the picked result's or the comparison request's. A pick or an
+  applied row sets it from a suggestion and clears it for a type default; a keystroke in the field
+  clears it (`markManualField('quote_base_quantity')`). `visibleQuoteBaseHint` passes it on only
+  while `providerConfigKey` is still that key: another identifier hides it and keeps the value.
+  `AssetModalDetails.svelte` renders it with the same two keys (`asset-modal-qbq-suggestion-hint`);
+  the bond hint (`asset-modal-bond-qbq-hint`) follows `assetType === 'BOND'` alone.
+- **R1, the line's last suggestion.** `lineQuoteBaseSuggestion` (`{key, suggestion}`, keyed the
+  same way) holds the latest explicit suggestion for a line: written by a pick (`null` when the
+  result has none) and by a probe that brings one, before its success check; emptied by
+  `resetDraftReads()`. `fetchAndCompareMetadata()` hands it to `compareMetadata()` only when its
+  `key` is the request's. Without it, a probe whose suggestion is lost (the 5 s timeout, a pause)
+  right after a pence pick would propose `100 → 1`, ticked.
+
+Elsewhere, `populateFromPrefill()` keeps a positive base from the prefill, else takes the type's
+default (the import wizard's two prefills in `ImportWizardModal.svelte` carry neither a type nor a
+base today: 1); `populateFromEditData()` loads the stored value; a manual **Type** change only
+marks its own field (`markManualField('asset_type')`). Only a save sends `quote_base_quantity`
+(`buildCreateItem()`, `buildPatchItem()` in `assetPayload.ts`). Pinned by
+`assetFormState.test.ts`, `assetMetadataComparison.test.ts`, `ProviderComparisonModal.test.ts`,
+`AssetSearchAutocomplete.test.ts` and the Z-32 (d) block of `AssetModal.test.ts`.
 
 ---
 
