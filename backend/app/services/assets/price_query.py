@@ -462,7 +462,9 @@ class PriceQueryOperations:
         once — from the day-by-day rows when the request reads its asset whole, else one statement per range and step
         for every such asset (``_read_samples``). Each result says its step (``resolution``); a sampled one carries its
         first and last points apart (``sample_bounds``). A ``sample_like`` that cannot be followed raises
-        ``SampleReferenceError`` before any read.
+        ``SampleReferenceError`` before any read. Such an item sent with ``include_price=False`` only gives its step
+        (Z-29a-f): its plan stays, but no price row is read for it past the plan and it counts nothing against the
+        budget, whatever its step.
         """
         if not requests:
             return []
@@ -489,6 +491,9 @@ class PriceQueryOperations:
         sample_plans, daily_starts = await PriceQueryOperations._plan_samples(requests, session)
         for index, start in daily_starts.items():
             requests[index] = requests[index].model_copy(update={"date_range": DateRangeModel(start=start, end=requests[index].date_range.end or requests[index].date_range.start)})
+        # Z-29a-f: an item that asks a sampling and no prices only gives its step (a comparison's card, beside its target):
+        # its plan stays, but it reads no price row past it and counts nothing against the day budget, whatever its step
+        placeholders = {index for index, req in enumerate(requests) if not req.include_price and (req.max_points is not None or req.resolution is not None or req.sample_like is not None)}
 
         signal_service = SignalService()
         signal_plans = []
@@ -536,7 +541,7 @@ class PriceQueryOperations:
             request_ranges.append(requested_range)
             load_ranges.append(load_range)
             signal_plans.append(plan)
-            if index in sample_plans:
+            if index in sample_plans or index in placeholders:
                 continue
             for asset_id in (
                 req.asset_id,
@@ -599,9 +604,12 @@ class PriceQueryOperations:
         # Z-25: the per-day points the fills will build, comparison series included, against the request's budget. The
         # count follows the fill, not the request: a full-history signal loads from 1900-01-01 at the latest (Z-30), and
         # its fill emits from the first stored price, or from the load start when an older row seeds it, even when the
-        # visible range is one day. A sampled item counts its points and its two bounds (Z-29).
+        # visible range is one day. A sampled item counts its points and its two bounds (Z-29); an item without prices
+        # that only gives its step, nothing (Z-29a-f).
         item_days = 0
         for index, (req, plan, (start, end)) in enumerate(zip(requests, signal_plans, load_ranges, strict=True)):
+            if index in placeholders:
+                continue
             if index in sample_plans:
                 item_days += len(sample_plans[index].dates) + 2 if sample_plans[index].dates else 0
                 continue
@@ -612,7 +620,8 @@ class PriceQueryOperations:
                         item_days += PriceQueryOperations._fill_span(price_maps.get(comparison_asset_id, {}), start, end, seed_prices.get(comparison_asset_id))
         if item_days > MAX_BULK_ITEM_DAYS:
             raise BulkTooManyDaysError(item_days=item_days, max_item_days=MAX_BULK_ITEM_DAYS)
-        sampled = await PriceQueryOperations._read_samples(requests, sample_plans, session, price_maps, seed_prices, asset_ranges)
+        sampled = await PriceQueryOperations._read_samples(requests, {index: plan for index, plan in sample_plans.items() if index not in placeholders}, session, price_maps, seed_prices, asset_ranges)
+        sampled.update({index: ([], False) for index in placeholders})
 
         # Build backward-filled series per asset (preserving request order)
         results = []
@@ -660,7 +669,7 @@ class PriceQueryOperations:
         for index, (req, (start, end)) in enumerate(zip(requests, load_ranges, strict=True)):
             aid = req.asset_id
             if index in sampled:
-                results.append(FAPriceQueryResult(asset_id=aid, prices=sampled[index][0], resolution=sample_plans[index].resolution))
+                results.append(FAPriceQueryResult(asset_id=aid, prices=sampled[index][0], resolution=sample_plans[index].resolution if index in sample_plans else "daily"))
                 continue
             price_map = price_maps.get(aid, {})
             in_memory_seed = max(
