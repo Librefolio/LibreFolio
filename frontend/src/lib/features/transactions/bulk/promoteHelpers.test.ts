@@ -15,7 +15,7 @@
  * (edit+edit pairs could never be promoted, because +11 + +11 is never 0).
  */
 import {describe, expect, it} from 'vitest';
-import {cashAmountsCancel, mergeStrings, mergeTagSets, type CashCancelable} from './promoteHelpers';
+import {cashAmountsCancel, mergeStrings, mergeTagSets, promotePairOrder, type CashCancelable, type PromotePairOrder} from './promoteHelpers';
 import * as promoteHelpers from './promoteHelpers';
 import type {TypeRule} from '$lib/features/transactions/transactionTypeStore';
 
@@ -185,6 +185,130 @@ describe('cashAmountsCancel — exact at large magnitudes', () => {
         const withdrawal = op('10000000.00', 'CASH_OUT'); // stored as a magnitude
         const deposit = op('10000000.01', 'CASH_IN');
         expect(cashAmountsCancel(withdrawal, deposit, resolve)).toBe(false);
+    });
+});
+
+/**
+ * promotePairOrder (J-66) — which row of a suggested pair pays. One rule, five readers: the banner lists that row first,
+ * an exchange reads its implied rate and asks the market rate from it to the other row, «Merge all → left» names it,
+ * and the merge dialog of a single «Merge» lists it first.
+ *
+ * The bulk editor holds the cash of a type whose rule demands a negative value as its magnitude: a WITHDRAWAL, whether
+ * saved (`fieldsFromTx`), imported (`txCreateItemToPendingOp`) or applied from the form (W-B65, `magnitudeForRule`),
+ * holds 1000, not -1000, while the legs of a split pair keep their signed cash (`handleSplitRow`). Read as stored, a
+ * withdrawal of 1000 EUR beside a deposit of 1100 USD has no paying row and, depending on the order, the banner listed
+ * the deposit first (Scenario A2) or its rate read USD → EUR @ 0.9091 instead of 1.1000 (tx-fx-implied-rate.spec.ts,
+ * Scenario A). So each row's cash first takes its type's sign (`buildSignedCash`, as `cashAmountsCancel` does), and the
+ * sign is read from the digits: a row without cash, or whose amount is no plain decimal, never pays.
+ *
+ * Reds today: a withdrawal held as its magnitude, a deposit carrying a minus, an amount in exponent notation. Guards,
+ * green before and after the cure: signed rows (a split pair's legs), free-sign pair legs, a row without cash,
+ * two deposits.
+ */
+describe('promotePairOrder — the paying row first, signed by its type (J-66)', () => {
+    /** The cash sign of each real type used here, as the backend declares it (`schemas/transactions/type_metadata.py`).
+     *  `nonzero`, the rule of the pair legs, is a free-sign rule: their stored sign is the information. */
+    const CASH_SIGN: Record<string, string> = {WITHDRAWAL: 'negative', DEPOSIT: 'positive', FX_CONVERSION: 'nonzero', CASH_TRANSFER: 'nonzero'};
+
+    /** Type-rule resolver for those types. A code it does not know is a slip in this test, never a free-sign type. */
+    const ruleOf = (type: string): TypeRule => {
+        const cashSign = CASH_SIGN[type];
+        if (cashSign === undefined) throw new Error(`no cash sign stubbed for type ${type}`);
+        return rule(cashSign);
+    };
+
+    /** A row of the bulk editor, its amount as the editor holds it; `null` for a row without cash. */
+    const txRow = (type: string, amount: string | null, code = 'EUR'): CashCancelable => ({fields: {type, cash: amount !== null ? {code, amount} : null}});
+
+    /** The whole answer — `swapped`, and `from` and `to` as the very rows passed in — under a label naming the call. */
+    const expectOrder = (order: PromotePairOrder<CashCancelable>, expected: PromotePairOrder<CashCancelable>, label = 'promotePairOrder(a, b)') => {
+        expect(order.swapped, `${label} — swapped: the banner lists b first`).toBe(expected.swapped);
+        expect(order.from, `${label} — from: the row the money leaves`).toBe(expected.from);
+        expect(order.to, `${label} — to: the other row`).toBe(expected.to);
+    };
+
+    // --- reds: a WITHDRAWAL held as its magnitude (W-B65) ---------------
+
+    it('a WITHDRAWAL held as its magnitude still pays: from the withdrawal to the DEPOSIT, and nothing swaps', () => {
+        const withdrawal = txRow('WITHDRAWAL', '1000', 'EUR'); // -1000 EUR, held as its magnitude
+        const deposit = txRow('DEPOSIT', '1100', 'USD');
+
+        expectOrder(promotePairOrder(withdrawal, deposit, ruleOf), {swapped: false, from: withdrawal, to: deposit});
+    });
+
+    it('given second, a WITHDRAWAL held as its magnitude still pays: the banner swaps it first', () => {
+        const withdrawal = txRow('WITHDRAWAL', '1000', 'EUR'); // -1000 EUR, held as its magnitude
+        const deposit = txRow('DEPOSIT', '1100', 'USD');
+
+        expectOrder(promotePairOrder(deposit, withdrawal, ruleOf), {swapped: true, from: withdrawal, to: deposit});
+    });
+
+    it('a WITHDRAWAL of one satoshi held as its magnitude, 0.00000001, still pays: the smallest amount takes its type’s sign too', () => {
+        const withdrawal = txRow('WITHDRAWAL', '0.00000001', 'EUR');
+        const deposit = txRow('DEPOSIT', '1100', 'USD');
+
+        expectOrder(promotePairOrder(withdrawal, deposit, ruleOf), {swapped: false, from: withdrawal, to: deposit});
+    });
+
+    it('a WITHDRAWAL held as its magnitude pays beside a row without cash, which never does', () => {
+        const withdrawal = txRow('WITHDRAWAL', '1000', 'EUR');
+        const noCash = txRow('DEPOSIT', null); // its amount not entered yet
+
+        expectOrder(promotePairOrder(withdrawal, noCash, ruleOf), {swapped: false, from: withdrawal, to: noCash});
+    });
+
+    // --- guards: green today, and after the cure ------------------------
+
+    it('rows already signed, as a split pair’s legs keep them, give the same answers in both orders: the representation never changes the order', () => {
+        const withdrawal = txRow('WITHDRAWAL', '-1000', 'EUR'); // signed, as a split pair's leg keeps it
+        const deposit = txRow('DEPOSIT', '1100', 'USD');
+
+        expectOrder(promotePairOrder(withdrawal, deposit, ruleOf), {swapped: false, from: withdrawal, to: deposit}, 'the withdrawal first');
+        expectOrder(promotePairOrder(deposit, withdrawal, ruleOf), {swapped: true, from: withdrawal, to: deposit}, 'the deposit first');
+    });
+
+    it('a free-sign pair leg keeps its stored sign: the negative leg pays, and the pair swaps only when that leg comes second', () => {
+        const legs: Array<[CashCancelable, CashCancelable]> = [
+            [txRow('FX_CONVERSION', '-1000', 'EUR'), txRow('FX_CONVERSION', '1100', 'USD')],
+            [txRow('CASH_TRANSFER', '-1000', 'EUR'), txRow('CASH_TRANSFER', '1000', 'EUR')],
+        ];
+        for (const [out, into] of legs) {
+            expectOrder(promotePairOrder(out, into, ruleOf), {swapped: false, from: out, to: into}, `${out.fields.type}, the negative leg first`);
+            expectOrder(promotePairOrder(into, out, ruleOf), {swapped: true, from: out, to: into}, `${out.fields.type}, the negative leg second`);
+        }
+    });
+
+    it('a row without cash never pays, whatever its type: given first beside a WITHDRAWAL held as its magnitude, the withdrawal pays and nothing swaps', () => {
+        const withdrawal = txRow('WITHDRAWAL', '1000', 'EUR');
+        for (const type of ['DEPOSIT', 'WITHDRAWAL']) {
+            const noCash = txRow(type, null); // a WITHDRAWAL too: its rule alone pays nothing
+            expectOrder(promotePairOrder(noCash, withdrawal, ruleOf), {swapped: false, from: withdrawal, to: noCash}, `a ${type} without cash, first`);
+        }
+    });
+
+    it('when neither row pays, as two DEPOSITs, from is b and nothing swaps: the documented fallback', () => {
+        const first = txRow('DEPOSIT', '1000', 'EUR');
+        const second = txRow('DEPOSIT', '1100', 'USD');
+
+        expectOrder(promotePairOrder(first, second, ruleOf), {swapped: false, from: second, to: first});
+    });
+
+    // --- reds: the positive rule binds, the sign read from the digits ---
+
+    it('a DEPOSIT whose amount carries a minus still receives, as the save will send it: its positive rule decides, so the WITHDRAWAL pays and the pair swaps', () => {
+        const deposit = txRow('DEPOSIT', '-1100', 'USD'); // saved as 1100: `buildCreatePayload` applies the positive rule
+        const withdrawal = txRow('WITHDRAWAL', '1000', 'EUR');
+
+        expectOrder(promotePairOrder(deposit, withdrawal, ruleOf), {swapped: true, from: withdrawal, to: deposit});
+    });
+
+    it('an amount that is no plain decimal never pays nor swaps: -1e3 is not read through a double as -1000, and the pair reads as one where nothing pays', () => {
+        const exponent = txRow('FX_CONVERSION', '-1e3', 'EUR');
+        const into = txRow('FX_CONVERSION', '1100', 'USD');
+
+        // Nothing pays, so `from` is b both ways (the fallback), and no swap.
+        expectOrder(promotePairOrder(exponent, into, ruleOf), {swapped: false, from: into, to: exponent}, 'the exponent leg first');
+        expectOrder(promotePairOrder(into, exponent, ruleOf), {swapped: false, from: exponent, to: into}, 'the exponent leg second');
     });
 });
 
