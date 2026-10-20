@@ -11,10 +11,10 @@ The problem is described by plain data only:
   (when it has one), its currency and the share of the broker the caller counts;
 * the report currency T, and the last day the rates are needed on.
 
-All the conversions go to the FX service in one ``convert_bulk`` call: every foreign
-movement at its own date (the flows), and one unit of every foreign currency on every day
-from its first movement on, and from 1 January 1900 at the earliest, with only the movements' own days before it (the
-valuation). An amount already in T is taken as it is, so
+All the conversions go to the FX service: every foreign movement at its own date (the flows) in one ``convert_bulk``
+call, and one unit of every foreign currency on every day from its first movement on, and from 1 January 1900 at the
+earliest, with only the movements' own days before it (the valuation), in one ``unit_rate_steps`` call — the same rates,
+kept as the days a stored rate changes (P3). An amount already in T is taken as it is, so
 cash held only in the report currency never needs a rate. A conversion that cannot be made
 never becomes a zero: the movement stays out of values and flows, and its pair is reported
 with every date it was needed on.
@@ -35,12 +35,12 @@ import bisect
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date as date_type
-from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 
 from backend.app.schemas.common import Currency
-from backend.app.services.fx.conversion import convert_bulk
+from backend.app.services.financial_math.fx_rates import AskedDayRates
+from backend.app.services.fx.conversion import convert_bulk, unit_rate_steps
 from backend.app.utils.datetime_utils import EARLIEST_RANGE_START
 
 _ZERO = Decimal("0")
@@ -175,7 +175,9 @@ class NativeCash:
 
         counted = [movement for movement, value in zip(movements, converted, strict=True) if self._is_counted(movement, value)]
         foreign = [movement for movement in counted if movement.currency != self.report_currency]
-        rate_days, rate_values = _rate_series(self.unit_rates)
+        # P3: a view on steps gives its steps, not every asked day: the last rate on or before a day, and the days a rate
+        # changes, are the same on the steps (between two of them the rate does not move)
+        rate_days, rate_values = _step_rate_series(self.unit_rates) if isinstance(self.unit_rates, AskedDayRates) else _rate_series(self.unit_rates)
         object.__setattr__(self, "_balances", _running_balances(counted))
         object.__setattr__(self, "_first_counted", _first_dates(counted))
         object.__setattr__(self, "_rate_days", rate_days)
@@ -409,6 +411,12 @@ def _rate_series(unit_rates: Mapping[tuple[str, date_type], Decimal]) -> tuple[d
     return rate_days, rate_values
 
 
+def _step_rate_series(unit_rates: AskedDayRates) -> tuple[dict[str, tuple[date_type, ...]], dict[str, tuple[Decimal, ...]]]:
+    """The steps of every currency (P3): the days a rate starts and its values, sorted by day."""
+    series = unit_rates.step_series()
+    return {currency: days for currency, (days, _values) in series.items()}, {currency: values for currency, (_days, values) in series.items()}
+
+
 def change_days(read: Callable[[str, date_type], Decimal | None], currencies: Iterable[str], days: Iterable[date_type]) -> tuple[date_type, ...]:
     """The days of the calendar ``days``, in its order, on which ``read`` gives a currency of ``currencies`` another
     rate than on the calendar's previous day — the one home of «the day a rate changes».
@@ -453,20 +461,21 @@ async def compute_native_cash(
 ) -> NativeCash:
     """Every broker's native cash, with its conversions into ``report_currency``.
 
-    One ``convert_bulk`` call answers everything: each foreign movement at its own date, then
-    one unit of each foreign currency on every day from its first movement through
-    ``rates_until`` (its last movement when None). None is made, and ``session`` is not
-    used, when every non-zero amount is already in the report currency.
+    One ``convert_bulk`` call converts each foreign movement at its own date; one ``unit_rate_steps`` call gives one unit
+    of each foreign currency on every day from its first movement through ``rates_until`` (its last movement when None),
+    as steps (P3): the same rates as a request a day, read on the days a rate changes. None is made, and ``session`` is
+    not used, when every non-zero amount is already in the report currency.
     """
     movements = tuple(movements)
     amount_indexes = [index for index, movement in enumerate(movements) if movement.currency != report_currency and movement.amount != 0]
     if not amount_indexes:
         return NativeCash(report_currency=report_currency, movements=movements, converted=tuple(movement.amount for movement in movements), unit_rates={})
 
-    unit_requests = _unit_requests([movements[index] for index in amount_indexes], rates_until)
+    unit_windows = _unit_windows([movements[index] for index in amount_indexes], rates_until)
     requests = [(Currency(code=movements[index].currency, amount=movements[index].amount), report_currency, movements[index].date) for index in amount_indexes]
-    requests += [(Currency(code=currency, amount=_ONE), report_currency, day) for currency, day in unit_requests]
     results, _errors = await convert_bulk(session, requests, raise_on_error=False)
+    windows = {(currency, report_currency): asked for currency, asked in unit_windows.items()}
+    steps = await unit_rate_steps(session, windows) if windows else {}
 
     def _result(position: int) -> Decimal | None:
         result = results[position] if position < len(results) else None
@@ -475,17 +484,12 @@ async def compute_native_cash(
     converted: list[Decimal | None] = [movement.amount for movement in movements]
     for position, index in enumerate(amount_indexes):
         converted[index] = _result(position)
-    unit_rates: dict[tuple[str, date_type], Decimal] = {}
-    offset = len(amount_indexes)
-    for position, key in enumerate(unit_requests):
-        rate = _result(offset + position)
-        if rate is not None:
-            unit_rates[key] = rate
+    unit_rates = AskedDayRates(steps, windows, fixed_destination=report_currency)
     return NativeCash(report_currency=report_currency, movements=movements, converted=tuple(converted), unit_rates=unit_rates)
 
 
-def _unit_requests(foreign: Sequence[CashMovement], rates_until: date_type | None) -> list[tuple[str, date_type]]:
-    """``(currency, day)`` for every day a foreign balance may need a rate, currencies by code.
+def _unit_windows(foreign: Sequence[CashMovement], rates_until: date_type | None) -> dict[str, list[tuple[date_type, date_type]]]:
+    """By currency, the windows of days a foreign balance may need a rate on (P3: the days a request a day asked).
 
     Every day from the currency's first movement — but from ``EARLIEST_RANGE_START`` at the earliest (R13-SEC8: a
     movement stored centuries back would otherwise ask one per day since). Before the floor only the movements' own
@@ -503,12 +507,13 @@ def _unit_requests(foreign: Sequence[CashMovement], rates_until: date_type | Non
             last[currency] = movement.date
         if movement.date < EARLIEST_RANGE_START:
             early.setdefault(currency, set()).add(movement.date)
-    requests: list[tuple[str, date_type]] = []
+    windows: dict[str, list[tuple[date_type, date_type]]] = {}
     for currency in sorted(first):
-        requests.extend((currency, day) for day in sorted(early.get(currency, ())))
-        day = max(first[currency], EARLIEST_RANGE_START)
+        asked = [(day, day) for day in sorted(early.get(currency, ()))]
+        start = max(first[currency], EARLIEST_RANGE_START)
         end = last[currency] if rates_until is None else rates_until
-        while day <= end:
-            requests.append((currency, day))
-            day += timedelta(days=1)
-    return requests
+        if start <= end:
+            asked.append((start, end))
+        if asked:
+            windows[currency] = asked
+    return windows

@@ -68,7 +68,7 @@ backend/app/services/financial_math/
 ├── ledger_totals.py         control totals of the ledger for backups: cash per broker and currency, quantity per position
 ├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*; ROI and TWRR on a given capital or exposure for the lots' shorts; a flow counts on the first snapshot on or after it, flows_by_snapshot_date), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return (also as a float for a return series), observed annualization of a return series (DAYS_PER_YEAR, its validator, calendar days ↔ observations both ways), fixed-period changes of a price or rate (1D … 5Y, both orientations) and its change over a whole range, recovery from a drawdown
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
-├── fx_rates.py              the orientation of a stored FX rate: a pair read from source to destination, either way (oriented_rate, any number type)
+├── fx_rates.py              the orientation of a stored FX rate: a pair read from source to destination, either way (oriented_rate, any number type); the unit rates a calculation reads by day, as steps answered on the asked days only (AskedDayRates)
 ├── interest.py              day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360), simple interest and daily compounding over a span in closed form, at a cost independent of the span (compound_growth, memoized): the primitives the Scheduled Investment provider builds its accrual on
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
@@ -199,7 +199,8 @@ One call of `PortfolioCalculationEngine.calculate()` (`portfolio/engine.py`):
    `position_states_start` — that starts on or before the requested start and ends on the
    requested end date;
 4. loads the prices, `quote_base_quantity`, currencies, types and classifications of the held
-   assets, and preloads the FX rates in one `convert_bulk()` call (`_preload_fx_rates()`);
+   assets, and preloads the FX rates in one `unit_rate_steps()` call (`_preload_fx_rates()`: each
+   currency's windows of days, read as steps; the map answers on the asked days only, P3);
 5. computes the average cost of every position (`compute_average_costs()` over
    `build_cost_positions()`), one `AssetPriceSeries` per held asset
    (`build_asset_price_series()`) and the native cash (`compute_native_cash()`);
@@ -347,7 +348,7 @@ of its rate points. The engine reads the rate `fx_rate_map` holds for that exact
 (`_read_rate()`), on every replayed day — or day of the transit, for cash in transit — each
 compared with the day before (`_calendar()` starts one day early); its calendars start on
 `EARLIEST_RANGE_START` at the earliest, since no rate is loaded before it. `_read_rate()` reads only the
-map, which `_preload_fx_rates()` already fills for these currencies on every day of
+map, which `_preload_fx_rates()` already answers for these currencies on every day of
 `[date_from, date_to]` (a day replayed before a later `date_from` may find none there, and its
 state is not emitted), and for cash in transit on every day of its transit from
 `EARLIEST_RANGE_START` on: the rule asks the FX service for nothing more.
@@ -589,7 +590,8 @@ flowchart LR
     ```
 
     The modules that read `convert_bulk` are `average_cost.py`, `native_cash.py`,
-    `yield_on_cost.py`, `lots/conversions.py` and `portfolio/engine.py`. A pure test of a layer
+    `yield_on_cost.py` and `lots/conversions.py`; `native_cash.py` and `portfolio/engine.py` also read
+    `unit_rate_steps` (P3). A pure test of a layer
     module can live in `backend/test_scripts/test_services/test_financial_math/`, which
     `services financial-math` runs as a whole, as a pure unit.
 5. **Update the maps.** The module map in the docstring of `financial_math/__init__.py` (and of
