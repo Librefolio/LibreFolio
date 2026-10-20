@@ -5,21 +5,23 @@ When an endpoint returns what its ``response_model`` refuses, FastAPI raises ``R
 no handler for it: Starlette's ``ServerErrorMiddleware`` answers ``500 Internal Server Error`` and uvicorn logs the
 traceback, whose message is ``str(exc)``: every error with its ``input``, that is the response itself, the data of the
 user who asked. This handler logs the route and, for each error, its ``type`` and ``loc`` only: never the ``input``,
-nor the ``msg`` (a validator may build it from the value), nor the traceback (its message is ``str(exc)``). It gives
-the same answer as before, ``500 Internal Server Error`` in plain text. ``main.py`` installs it next to the 422 handler
-of ``validation_errors.py``.
+nor the ``msg`` (a validator may build it from the value), nor the traceback (its message is ``str(exc)``). It answers
+500 as every 5xx of the platform does (H-60): ``{"detail": "Internal Server Error", "request_id": ...,
+"error_type": "ResponseValidationError"}``. ``main.py`` installs it next to the 422 handler of ``validation_errors.py``.
 """
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import ResponseValidationError
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse
 
 from backend.app.logging_config import get_logger
+from backend.app.services.platform.failure_report import error_body
+from backend.app.services.platform.request_id import request_id_of
 
 logger = get_logger(__name__)
 
 
-async def _without_content(request: Request, exc: Exception) -> PlainTextResponse:
+async def _without_content(request: Request, exc: Exception) -> JSONResponse:
     """Log which part of its model a response broke, and answer as an unhandled error does: nothing of it is kept."""
     errors = exc.errors() if isinstance(exc, ResponseValidationError) else []
     # FastAPI writes "GET /api/v1/…": the full template, with the prefixes of the included routers, which
@@ -35,7 +37,7 @@ async def _without_content(request: Request, exc: Exception) -> PlainTextRespons
         endpoint=getattr(endpoint, "__name__", None),
         errors=[{"type": error.get("type"), "loc": list(error.get("loc", ()))} for error in errors],
     )
-    return PlainTextResponse("Internal Server Error", status_code=500)
+    return JSONResponse(error_body("Internal Server Error", request_id_of(request), "ResponseValidationError"), status_code=500)
 
 
 def install_response_validation_handler(app: FastAPI) -> None:

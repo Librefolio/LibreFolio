@@ -10,8 +10,11 @@ exception also carries ``.body``, the whole response.
 
 The contract: ``backend/app/api/response_validation.py`` gives ``install_response_validation_handler(app)``, called once in
 ``backend/app/main.py`` beside A's ``install_validation_error_handler(app)``. It registers, for ``ResponseValidationError``
-and nothing else, a handler that answers what ``ServerErrorMiddleware`` answers (``500``, ``Internal Server Error``,
-``text/plain``) and keeps the exception inside the app, so the server has nothing to log. The handler logs one event,
+and nothing else, a handler that answers ``500`` and keeps the exception inside the app, so the server has nothing to
+log. Since H-60 (§6) the answer is JSON, ``{"detail": "Internal Server Error", "request_id": <the request's id>,
+"error_type": "ResponseValidationError"}``, ``request_id`` absent when the request has none — as on the fresh apps here,
+which hold no request-id middleware (``test_server_errors.py`` asks it with one); before H-60 it was what
+``ServerErrorMiddleware`` answers, ``Internal Server Error`` in plain text. The handler logs one event,
 ``A response does not match its model``, at level error, through the project's logger (``get_logger(__name__)``: the
 logger named after the module), with ``method``, the request's; ``route``, the route's full template
 (``/api/v1/h33/items/{item_id}`` for a route of a router included under ``/api/v1``), never the concrete path;
@@ -25,11 +28,12 @@ its message is ``str(exc)``), nor any value of the response.
 3. **In process**, fresh apps, requests through httpx's ASGI transport. Three routes whose model, ``_H33Item``, is a text
    and a number: ``GET /h33/broken`` and ``GET /h33/valid`` on the app, ``GET /h33/items/{item_id}`` on an ``APIRouter``
    included under ``/api/v1``. The broken ones return a body built around a unique secret — a text where the number is
-   due, or the number missing. With the install: Starlette's own plain 500, the exception kept inside the app, exactly
-   the one event above, and the secret nowhere — in no captured structlog event, in no Python logging record (``caplog``
-   at DEBUG on the root, proved live by a barrier record). Through the included router the event names the full
-   template. A valid response is answered as without the install, and logs nothing.
-4. **Control and premise**, green before and after. Without the install, the same broken route gets the same plain 500 and
+   due, or the number missing. With the install: the JSON 500 of H-60, ``{"detail": "Internal Server Error",
+   "error_type": "ResponseValidationError"}`` (no request id on these apps), the exception kept inside the app, exactly
+   the one event above, and the secret nowhere — not in the answer, in no captured structlog event, in no Python logging
+   record (``caplog`` at DEBUG on the root, proved live by a barrier record). Through the included router the event
+   names the full template. A valid response is answered as without the install, and logs nothing.
+4. **Control and premise**, green before and after. Without the install, the same broken route gets Starlette's plain 500 and
    the exception leaves the app carrying the response: ``str(exc)`` and the traceback a server writes hold the secret,
    ``exc.body`` is the whole body. Premise of the included-router case: FastAPI 0.141.1 puts in ``scope["route"]`` the
    included router's own ``APIRoute``, whose ``path`` lacks the include prefix; the full template is in the exception's
@@ -37,7 +41,9 @@ its message is ``str(exc)``), nor any value of the response.
 
 Red until H-33: 1, 2 but its guard, and 3, each on the barrier "H-33: backend/app/api/response_validation.py is missing":
 the module is imported inside the tests, so the file is collected all the same and each test fails on its own; 2 then
-on the missing handler until ``main.py`` calls the install.
+on the missing handler until ``main.py`` calls the install. Red until H-60: the three tests of 3, on the answer —
+``Internal Server Error`` in plain text until then, the JSON of §6 after (``_assert_json_500``); every log assertion is
+the same before and after.
 
 The routes' endpoints are module-level functions that read their body from ``app.state``: FastAPI caches the endpoint
 context it puts in the exception, ``endpoint_function`` included, by the ``id()`` of the endpoint and never drops it, so a
@@ -73,6 +79,8 @@ from backend.test_scripts.test_utils import print_section, print_success
 MODULE = "backend.app.api.response_validation"
 #: The one event the handler logs for each response its model refuses.
 EVENT = "A response does not match its model"
+#: H-60 (§6): what the handler answers on these fresh apps, which hold no request-id middleware: no request_id key.
+JSON_500 = {"detail": "Internal Server Error", "error_type": "ResponseValidationError"}
 #: Keys under which a response's content travels: pydantic's input, msg and ctx, the exception's body, a traceback.
 CONTENT_KEYS = frozenset({"input", "msg", "ctx", "body", "exc_info", "exception"})
 
@@ -240,6 +248,13 @@ def _assert_plain_500(answered: httpx.Response) -> None:
     assert content_type.split(";")[0].strip() == "text/plain", content_type
 
 
+def _assert_json_500(answered: httpx.Response) -> None:
+    """H-60 (§6), the handler's answer on an app without a request id: ``500``, JSON, exactly ``JSON_500``."""
+    content_type = answered.headers.get("content-type", "")
+    assert (answered.status_code, content_type.split(";")[0].strip()) == (500, "application/json"), f"H-60: the 500 of a response that breaks its model is JSON: {answered.status_code} {content_type!r} {answered.text[:300]}"
+    assert answered.json() == JSON_500, f"H-60: the body is exactly {JSON_500} (no request id on this app): {answered.text}"
+
+
 def _the_event(events: list[dict[str, Any]]) -> dict[str, Any]:
     """The one ``EVENT`` among the captured ``events``: exactly one, at level error, on the module's own logger."""
     found = [event for event in events if event.get("event") == EVENT]
@@ -380,13 +395,14 @@ def test_the_app_still_holds_the_422_handler_without_input():
 # =============================================================================
 
 
-# red until H-33: backend.app.api.response_validation does not exist yet
+# red until H-33: backend.app.api.response_validation does not exist yet; red again until H-60: the JSON 500 of §6
 @pytest.mark.asyncio
 @pytest.mark.parametrize("case", list(_BREAKAGES))
 async def test_a_response_that_breaks_its_model_is_logged_without_its_content(case: str, caplog: pytest.LogCaptureFixture):
     """With the install, a response ``_H33Item`` refuses — ``case``'s body, every value built around a secret — is
-    answered as Starlette answers any error nobody handles (``500``, ``Internal Server Error``, ``text/plain``: the same
-    status, type and bytes as the app without the install), and the exception stays inside the app.
+    answered ``500`` with the JSON of H-60 (§6), ``{"detail": "Internal Server Error", "error_type":
+    "ResponseValidationError"}`` — no ``request_id``: this app holds no request-id middleware —, the secret not in it, and
+    the exception stays inside the app.
 
     structlog's capture holds exactly one ``A response does not match its model``, at level error, on the module's own
     logger, with ``method`` ``GET``, ``route`` ``/h33/broken``, ``endpoint`` the endpoint's name (FastAPI's
@@ -400,15 +416,14 @@ async def test_a_response_that_breaks_its_model_is_logged_without_its_content(ca
     breakage = _BREAKAGES[case]
     secret = _secret()
     body = breakage.body(secret)
-    default = await _get(_app(install=None, body=body), BROKEN_PATH, raise_app_exceptions=False)
     app = _app(install=install, body=body)
     _caplog_is_capturing(caplog)
 
     with capture_logs(processors=[structlog.stdlib.add_logger_name]) as events:
         answered = await _get_handled(app, BROKEN_PATH)
 
-    _assert_plain_500(answered)
-    assert _answer(answered) == _answer(default), f"the answer must be Starlette's own to an unhandled error, nothing changed: {_answer(answered)} != {_answer(default)}"
+    _assert_json_500(answered)
+    assert secret not in answered.text, "H-60: the answer carries the response's content"
     event = _the_event(events)
     assert (event.get("method"), event.get("route"), event.get("endpoint")) == ("GET", BROKEN_PATH, h33_broken.__name__), f"H-33: method, route template and endpoint name: {event.get('method')!r}, {event.get('route')!r}, {event.get('endpoint')!r}"
     assert _logged_errors(event) == breakage.logged, f"H-33: the refused field's type and loc: {_logged_errors(event)} != {breakage.logged}"
@@ -416,10 +431,10 @@ async def test_a_response_that_breaks_its_model_is_logged_without_its_content(ca
     assert not content_keys, f"H-33: the event must hold none of {sorted(CONTENT_KEYS)}: found {content_keys}"
     _assert_no_event_carries(secret, events)
     _assert_no_record_carries(secret, caplog)
-    print_success("the plain 500; one event with method, route, endpoint and each error's type and loc; the secret nowhere")
+    print_success("the JSON 500 without the content; one event with method, route, endpoint and each error's type and loc; the secret nowhere")
 
 
-# red until H-33: backend.app.api.response_validation does not exist yet
+# red until H-33: backend.app.api.response_validation does not exist yet; red again until H-60: the JSON 500 of §6
 @pytest.mark.asyncio
 async def test_a_route_of_an_included_router_is_logged_by_its_full_template():
     """A route of an ``APIRouter`` included under ``/api/v1`` — as the real app includes every API route — is logged by
@@ -436,7 +451,7 @@ async def test_a_route_of_an_included_router_is_logged_by_its_full_template():
     with capture_logs(processors=[structlog.stdlib.add_logger_name]) as events:
         answered = await _get_handled(app, ITEM_PATH)
 
-    _assert_plain_500(answered)
+    _assert_json_500(answered)
     event = _the_event(events)
     logged, seen = event.get("route"), getattr(app.state, "h33_scope_route", None)
     why = f" — the path of the route FastAPI put in scope['route'] ({seen!r}), the included router's own, without the prefix {PREFIX!r} given to include_router" if logged == seen and seen != ITEM_ROUTE else ""
@@ -447,7 +462,7 @@ async def test_a_route_of_an_included_router_is_logged_by_its_full_template():
     print_success(f"the event names {ITEM_ROUTE}")
 
 
-# red until H-33: backend.app.api.response_validation does not exist yet
+# red until H-33: backend.app.api.response_validation does not exist yet; red again until H-60: the JSON 500 of §6
 @pytest.mark.asyncio
 async def test_a_response_that_matches_its_model_is_untouched():
     """With the install, a response its model accepts is answered as without it — ``200``, the same type and bytes, the
@@ -465,7 +480,7 @@ async def test_a_response_that_matches_its_model_is_untouched():
 
     assert (answered.status_code, answered.json()) == (200, VALID_BODY), f"{answered.status_code} {answered.text}"
     assert _answer(answered) == _answer(default), f"a valid response must be answered as without the install: {_answer(answered)} != {_answer(default)}"
-    _assert_plain_500(broken)
+    _assert_json_500(broken)
     event = _the_event(events)
     assert event.get("route") == BROKEN_PATH, f"H-33: the one event must be the broken route's, none for the valid one: {event.get('route')!r}"
     print_success("200 and the same JSON as without the install; nothing logged for it")
@@ -481,7 +496,7 @@ async def test_a_response_that_matches_its_model_is_untouched():
 @pytest.mark.parametrize("case", list(_BREAKAGES))
 async def test_without_the_install_the_exception_carries_the_response_out(case: str):
     """The defect H-33 closes. FastAPI registers no handler for ``ResponseValidationError``: on an app without the
-    install the same broken route gets the same plain ``500`` from Starlette's ``ServerErrorMiddleware``, which then lets
+    install the same broken route gets Starlette's plain ``500`` from its ``ServerErrorMiddleware``, which then lets
     the exception out for the server to log. What it lets out carries the response: every error keeps its ``input`` — the
     refused value, and for a missing field the whole object, its valid values too — so ``str(exc)`` and the traceback a
     server writes (formatted as ``logging`` formats uvicorn's ``exc_info``) hold the secret, and ``exc.body`` is the
@@ -503,7 +518,7 @@ async def test_without_the_install_the_exception_carries_the_response_out(case: 
     assert secret in str(exc), f"str(exc) must carry the response, as FastAPI writes it: {exc}"
     assert secret in traceback_text, "the traceback a server writes must carry the response, as its last line is str(exc)"
     assert exc.body == body, f"exc.body must be the whole response: {exc.body!r}"
-    print_success("the same plain 500; the exception leaves the app with the response in its message")
+    print_success("Starlette's plain 500; the exception leaves the app with the response in its message")
 
 
 # premise: green before and after H-33 (FastAPI 0.141.1)
