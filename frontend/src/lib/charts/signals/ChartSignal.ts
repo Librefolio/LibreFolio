@@ -174,7 +174,7 @@ export interface SignalStyle {
  * Backend technical configs remain plain transported state and are rendered
  * generically from backend results.
  *
- * Local runtime data such as `params._resolvedData` is excluded by `toConfig()`.
+ * Local runtime data such as `params._resolvedData` and `params._basePoint` is excluded by `toConfig()`.
  */
 export interface SignalConfig {
     /** Unique instance ID (UUID) */
@@ -297,6 +297,12 @@ export interface RenderedSignal {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
+ * Params the page injects for one render and `toConfig()` never stores: the comparison data
+ * (`_resolvedData`) and the comparison's base point (`_basePoint`, AssetComparisonSignal, Z-29d-0).
+ */
+const TRANSIENT_PARAMS: ReadonlySet<string> = new Set(['_resolvedData', '_basePoint']);
+
+/**
  * Abstract base class for all chart overlay signals.
  *
  * Subclasses MUST define static properties:
@@ -378,12 +384,13 @@ export abstract class ChartSignal {
 
     /**
      * Serialize to storable config.
-     * Excludes `_resolvedData` (transient runtime data injected by the modal for FxPairSignal).
+     * Excludes the transient runtime data the page injects (`TRANSIENT_PARAMS`: `_resolvedData`,
+     * and AssetComparisonSignal's `_basePoint`).
      * Other `_` prefixed params (e.g. MACD's `_signalColor`, `_signalLineType`)
      * are persistent style overrides and must be included.
      */
     toConfig(): SignalConfig {
-        const serializableParams = Object.fromEntries(Object.entries(this.params).filter(([k]) => k !== '_resolvedData'));
+        const serializableParams = Object.fromEntries(Object.entries(this.params).filter(([k]) => !TRANSIENT_PARAMS.has(k)));
         return {
             id: this.id,
             signalType: (this.constructor as typeof ChartSignal).signalType,
