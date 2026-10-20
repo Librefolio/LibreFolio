@@ -2725,6 +2725,9 @@ class TestN88AutoCostWithNothingToAverage:
     units for 1 000 EUR. Each batch runs as ``POST /transactions/commit`` or ``/validate`` runs it, its transaction included
     (``_as_the_endpoint``: a refusal is an issue, a batch that raises fails the test), and its rows are read back by id or by
     raw SQL. What each pool holds is checked before the batch (``_pool``), never assumed.
+
+    B1 (J-57 complete), a control at the end: the receiving leg of a TRANSFER, whose pool is its partner's broker, over units
+    of unknown cost — refused in Auto, committed at a Manual cost of 0, the answer Q-J57-1 (c) asks of the user.
     """
 
     @pytest.mark.asyncio
@@ -2920,3 +2923,73 @@ class TestN88AutoCostWithNothingToAverage:
         response = await _as_the_endpoint(world, commit=commit, creates=batch.creates)
 
         await _assert_takes(world, response, batch, cost=understated, commit=commit, what=f"J-58, today: an Auto ADJUSTMENT +{ADJUSTMENT_QUANTITY} over {BUY_QUANTITY} units bought for {WORLD_PAID} EUR and {BUY_QUANTITY} of unknown cost")
+
+    @staticmethod
+    def _transfer(sender_id: int, receiver_id: int, asset_id: int, *, receiving: dict) -> list[dict]:
+        """A TRANSFER pair to create on ``MOVE_DAY``, ``sender_id`` → ``receiver_id``, under a link of its own: the giving leg
+        −4 at index 0, the receiving leg +4 at index 1, carrying ``receiving`` (its mode, or its cost basis)."""
+        link_uuid = str(uuid.uuid4())
+        giving = {"broker_id": sender_id, "asset_id": asset_id, "type": "TRANSFER", "date": MOVE_DAY.isoformat(), "quantity": str(-TRANSFER_QUANTITY), "link_uuid": link_uuid}
+        received = {"broker_id": receiver_id, "asset_id": asset_id, "type": "TRANSFER", "date": MOVE_DAY.isoformat(), "quantity": str(TRANSFER_QUANTITY), "link_uuid": link_uuid, **receiving}
+        return [giving, received]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", ENDPOINTS)
+    async def test_receiving_transfer_leg_over_units_of_unknown_cost_is_refused_in_auto_and_commits_at_a_manual_zero(self, world, commit):
+        """B1 (J-57 complete), control, green today and after: N88 on the receiving leg of a TRANSFER, then the answer
+        Q-J57-1 (c) asks of the user.
+
+        ``dest`` holds 5 units of unknown cost — an ADJUSTMENT +5 planted on ``N88_POOL_DAY`` without a cost basis — and sends
+        4 of them on ``MOVE_DAY`` to a receiver of the test's own, which holds nothing of the asset. In ``auto`` the receiving
+        leg (create 1) averages its partner's broker, ``dest``, up to the partner's date, without the two legs
+        (``_auto_cost_source``): units, none at a known cost. The batch refuses it with one ``autoCostUnknownPool`` on create
+        1 — field ``cost_basis_override``, no params, ``ref_id`` None —, no ``wac_results`` item, nothing committed (/commit
+        and /validate alike). The reds above cover ADJUSTMENTs and an update; ``test_wac_inline.py``'s P27 a TRANSFER from an
+        empty pool, through the API.
+
+        Then the same transfer with the receiving leg at a Manual cost of 0 EUR — no mode, as the form sends a manual cost:
+        Q-J57-1 (c), 19/10, a blocking cost todo is answered only by a value, 0 included — commits with no issue. The leg
+        stores 0 EUR, a known cost, and the lot it brings the receiver reads 0: the receiver's pool is that leg alone, 4 units
+        at a unit cost of 0, their average 0 EUR.
+        """
+        await _n88_plant(world, broker=world.dest, tx_type=TransactionType.ADJUSTMENT, quantity=ADJUSTMENT_QUANTITY)
+        now = utcnow()
+        receiver = Broker(name=f"{world.marker} N88 receiver", description="N88 B1: the broker the transfer reaches", allow_cash_overdraft=True, allow_asset_shorting=False, created_at=now, updated_at=now)
+        world.session.add(receiver)
+        await world.session.flush()
+        sender_pool = await _pool(world, world.dest)
+        assert sender_pool == [(TransactionType.ADJUSTMENT, ADJUSTMENT_QUANTITY, Decimal("0"), None)], f"precondition broken: dest's pool on {MOVE_DAY} must be one ADJUSTMENT +{ADJUSTMENT_QUANTITY} without a cost basis: {sender_pool}"
+        receiver_pool = await _pool(world, receiver)
+        assert receiver_pool == [], f"precondition broken: the receiver must hold nothing of the asset; its pool on {MOVE_DAY} holds {receiver_pool}"
+        # The ids and both batches are taken before either runs: the refused batch's rollback expires what it touched.
+        sender_id, receiver_id, asset_id = world.dest.id, receiver.id, world.asset.id
+        auto_pair = self._transfer(sender_id, receiver_id, asset_id, receiving={"cost_basis_mode": "auto"})
+        manual_zero_pair = self._transfer(sender_id, receiver_id, asset_id, receiving={"cost_basis_override": _cost_sent(ZERO_COST)})
+        brokers = await _world_brokers(world)
+        before = await _raw_rows(world, brokers)
+
+        refused = await _as_the_endpoint(world, commit=commit, creates=auto_pair)
+
+        await _assert_nothing_to_average(
+            world,
+            refused,
+            [("create", 1, AUTO_COST_UNKNOWN_POOL)],
+            commit=commit,
+            brokers=brokers,
+            before=before,
+            pool=f"dest's {ADJUSTMENT_QUANTITY} units of unknown cost (the receiving leg of a TRANSFER dest → receiver, in auto, averages its partner's broker up to the partner's date)",
+            today=f"{N88_TODAY_UNKNOWN} — N88's defect, back on a receiving TRANSFER leg",
+        )
+
+        answered = await _as_the_endpoint(world, commit=True, creates=manual_zero_pair)
+
+        assert (answered.committed, answered.issues) == (True, []), f"Q-J57-1 (c): the same transfer with the receiving leg at a Manual cost of 0 {EUR}, no mode, must commit with no issue: {_render(answered.issues)}"
+        receiving_id = _created_id(answered, 1)
+        stored = await _stored_cost(world, receiving_id)
+        assert stored == (ZERO_COST.amount, ZERO_COST.code), f"The receiving leg id={receiving_id} was committed with {_show(stored)}, not the Manual {ZERO_COST.amount} {ZERO_COST.code} it was sent with"
+        lot = await compute_wac_iterative(world.session, broker_id=receiver_id, asset_id=asset_id, as_of_date=MOVE_DAY, asset_currency=EUR, use_cache=False)
+        read = ([(row.tx_id, row.type, row.quantity, row.unit_cost) for row in lot.wac_qualifying_txs], (lot.wac.amount, lot.wac.code) if lot.wac else None)
+        assert read == (
+            [(receiving_id, TransactionType.TRANSFER.value, TRANSFER_QUANTITY, ZERO_COST.amount)],
+            (ZERO_COST.amount, EUR),
+        ), f"The lot the receiving leg id={receiving_id} brings the receiver must read a cost of 0: its pool that leg alone, {TRANSFER_QUANTITY} units at a unit cost of 0, their average 0 {EUR}; (tx_id, type, quantity, unit_cost) of its rows, and its average: {read}"

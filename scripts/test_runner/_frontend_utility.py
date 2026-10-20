@@ -350,6 +350,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/transactions/events/EventExistsPanel.test.ts",
             "src/lib/features/transactions/events/EventCreateMiniModal.test.ts",
             "src/lib/features/transactions/form/CompactCashCell.test.ts",
+            "src/lib/features/transactions/form/TxFormBanners.test.ts",
             "src/lib/components/ui/display/KpiMetricBar.test.ts",
             "src/lib/components/ui/display/KpiDivergingFlowBar.test.ts",
             "src/lib/components/ui/display/RiskMetricCard.test.ts",

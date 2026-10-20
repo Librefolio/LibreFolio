@@ -136,7 +136,7 @@
     },
     "costBasisOverride": {
       "tooltip": "Override du prix de revient unitaire. Si vide, calculé automatiquement à partir des achats lors de la sauvegarde. Remplacer pour Exit Tax, héritage ou règles fiscales particulières. Utilisez le sélecteur Total/Par unité ci-dessous pour choisir comment saisir ce montant.",
-      "warningAdjustment": "Le coût de base manuel est vide : sans lui, la transaction ne peut pas être enregistrée. Saisissez ce que ces parts ont coûté : 0 pour une division d’actions, le coût de base d’origine du donateur pour un don."
+      "warningAdjustment": "Le coût de base manuel est vide : sans lui, la transaction ne peut pas être enregistrée. Saisissez ce que ces parts vous ont coûté : 0 pour les nouvelles parts d'une division d'actions. Pour un don, saisissez 0, ou ce que le donateur les a payées : le prix de revient unitaire, et la plus-value sur laquelle vous pourriez être imposé, restent ainsi plus proches de la réalité."
     },
     "wacPreview": {
       "calculating": "Calcul en cours...",
@@ -250,8 +250,8 @@
       "integerDigitsExceeded": "Au maximum {max} chiffres avant la virgule",
       "dateOutOfRange": "Entre {min} et {max}",
       "autoCostUnreadable": "Coût automatique indisponible : {count, plural, one {# transaction utilisée} many {# transactions utilisées} other {# transactions utilisées}} pour le coût moyen de cet actif {count, plural, one {contient} many {contiennent} other {contiennent}} une valeur qui n'est pas un nombre. Saisissez le coût à la main.",
-      "autoCostEmptyPool": "Coût automatique indisponible : aucune unité de cet actif n'était détenue à cette date pour en faire la moyenne. Saisissez le coût à la main (0 si elles étaient gratuites).",
-      "autoCostUnknownPool": "Coût automatique indisponible : les unités de cet actif détenues à cette date n'ont aucun coût connu dont faire la moyenne. Saisissez le coût à la main.",
+      "autoCostEmptyPool": "Coût automatique indisponible : aucune unité de cet actif n'était détenue à cette date pour en faire la moyenne. Choisissez Manuel et saisissez ce que ces unités vous ont coûté ; si vous les avez reçues en don, saisissez 0.",
+      "autoCostUnknownPool": "Coût automatique indisponible : les unités de cet actif détenues à cette date n'ont aucun coût connu dont faire la moyenne. Choisissez Manuel et saisissez ce que ces unités vous ont coûté.",
       "ledgerUnreadable": "Les soldes de {brokerName} ne peuvent pas être vérifiés : {count, plural, one {# de ses transactions contient} many {# de ses transactions contiennent} other {# de ses transactions contiennent}} une valeur qui n'est pas un nombre. Demandez à l'administrateur de réparer les données.",
       "costBasisNotAllowed": "❌ {type} ne prend pas de coût de base ici : retirez-le. Seules les unités qui entrent par un Ajustement ou un Transfert d'Actif en ont un.",
       "costBasisModeIncompatible": "❌ {type} ne prend pas de coût de base ici, donc aucun mode Auto ou Manuel : retirez-le."

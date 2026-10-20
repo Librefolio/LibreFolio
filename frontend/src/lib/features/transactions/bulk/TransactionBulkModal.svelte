@@ -33,7 +33,7 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import BrimEvidenceTable from '$lib/features/transactions/import/BrimEvidenceTable.svelte';
-    import {remainingTodos} from '$lib/features/transactions/bulk/bulkTodos';
+    import {initialCostBasisMode, remainingTodos} from '$lib/features/transactions/bulk/bulkTodos';
     import {resolveBrimTodoMessage} from '$lib/features/transactions/resolveBrimNotice';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import TransactionResultBanner from './TransactionResultBanner.svelte';
@@ -59,6 +59,7 @@
         buildBulkOperationIndex,
         buildBulkRowLabels,
         createBulkDateComparator,
+        firstAutoCostRefusalRowId,
         isBulkBalanceIssue,
         resolveBulkIssueRows,
         serializeOps,
@@ -786,6 +787,15 @@
         });
     }
 
+    /** Whether a row of these fields takes a cost-basis mode: the guardrail of `applyFormPayload` below, on the exact sign
+     *  of the quantity as the payload reads it (`diffDualItem`). */
+    function costBasisModeAllowed(fields: DraftFields): boolean {
+        const sign = exactDecimalSign(fields.quantity ?? '0') ?? 0;
+        const side: 'from' | 'to' | 'self' = sign < 0 ? 'from' : sign > 0 ? 'to' : 'self';
+        const cbRule = getCostBasisRule(fields.type, side);
+        return cbRule !== 'forbidden' && !(cbRule === 'required_qty_pos' && sign <= 0);
+    }
+
     function applyFormPayload(target: DraftFields, p: Record<string, unknown>) {
         const prevType = target.type; // Capture before overwrite for type-change detection
         if (typeof p.broker_id === 'number') target.broker_id = p.broker_id;
@@ -1225,7 +1235,7 @@
                 return true;
             }),
         draftKey: () => lastDraftKey,
-        validateFn: async () => {
+        validateFn: async (reason) => {
             if (ops.length === 0) {
                 issues = [];
                 lastValidatedDraftKey = lastDraftKey;
@@ -1261,6 +1271,9 @@
             lastValidatedDraftKey = sentKey;
             issuesDismissed = false;
             applyIssueSnapshot(issueSnapshot, opsMap, result.rawResponse, sentKey);
+            // Q-J57-4: an explicit validation (⚡, the import hand-over) leads to the first row refused for an Auto cost;
+            // the background ones never move the grid under the user's hands.
+            if (reason === 'manual') jumpToFirstAutoCostRefusal();
 
             // ── Phase C: extract wac_results from validate response ──
             const rawResp = result.rawResponse as Record<string, unknown> | null;
@@ -1501,6 +1514,7 @@
                 applyIssueSnapshot(issueSnapshot, opsMap, result.rawResponse, currentKey);
                 issuesDismissed = false;
                 commitFailed = true;
+                jumpToFirstAutoCostRefusal();
                 return;
             }
             onCommitted?.(result.rawResponse);
@@ -2109,6 +2123,14 @@
         tableRef.navigateToRowId(rowId);
     }
 
+    /** Q-J57-4: page the grid to the first row refused for an Auto cost (`firstAutoCostRefusalRowId`), as a click on its
+     *  issue would; nothing when the issues no longer describe the draft or no row is refused for an Auto cost. */
+    function jumpToFirstAutoCostRefusal() {
+        if (lastIssueDraftKey !== lastDraftKey) return;
+        const rowId = firstAutoCostRefusalRowId(issues, getIssueRows);
+        if (rowId) jumpToTodoRow(rowId);
+    }
+
     function jumpToIssue(issue: ValidationIssue) {
         if (lastIssueDraftKey !== lastDraftKey) return;
         const rows = getIssueRows(issue);
@@ -2288,10 +2310,14 @@
         return newOps;
     }
 
-    function onImportBatch(creates: Array<{tx: TransactionCreateItem; todos: ImportTodo[]}>, guideProgress?: {current: number; total: number}) {
+    async function onImportBatch(creates: Array<{tx: TransactionCreateItem; todos: ImportTodo[]}>, guideProgress?: {current: number; total: number}) {
         const newOps = creates.map((item) => {
             const op = txCreateItemToPendingOp(item.tx);
             if (item.todos.length > 0) op.todos = item.todos;
+            // Q-J57-5 (a) and Q-J57-1 (c): a row the plugin left without a cost mode starts in Auto where its type takes a
+            // cost, so the hand-over's validation costs it or refuses it and leads to it; a cost the plugin wrote, or a
+            // blocking cost todo, starts it in Manual.
+            op.fields.cost_basis_mode = initialCostBasisMode({mode: op.fields.cost_basis_mode, cost: op.fields.cost_basis_override, costAllowed: costBasisModeAllowed(op.fields)}, item.todos);
             return op;
         });
         const linked = linkPairedImportOps(newOps);
@@ -2302,6 +2328,10 @@
         toasts.success($t('importWizard.importedCount', {values: {n: creates.length}}));
         // Every hand-over is validated once, whatever its size (D5): above the auto threshold the
         // editor would otherwise say nothing until "Validate now". Later edits follow the usual rules.
+        // The validation checks the state its draft key names, and the key effect names the new rows only once this
+        // call has returned: wait for it, or the verdict comes back «stale» and is dropped — nothing shown above the
+        // threshold, and no lead to a refused row (Q-J57-4). The manual trigger cancels the run the effect queued.
+        await tick();
         scheduler.trigger('manual');
     }
 
