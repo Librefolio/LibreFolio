@@ -6859,3 +6859,52 @@ di prodotto nel worktree. Nessuna corsa né server della corsia; porta 6186 libe
    > `prettier --write` sul solo file (binario bloccato), di nuovo 77/77.
    > **⚠️ Fuori pista** (mio, da Z-29a): nello slot di Z-29a avevo lanciato ai-export, rischio e mkdocs, nessuna
    > suite Vitest. Da qui in avanti un cambio di contratto API passa anche da `core-unit`.
+
+### Z-29a-f — una voce ridotta senza prezzi non legge e non conta (20/10 ~11:50, base `daf7b200d`)
+
+> **Richiesta** (nota di X alla revisione di Z-29a v3, girata dal coordinatore il 20/10 ~09:10; lotto piccolo subito
+> dopo Z-32 (d)): «`include_price: false`. Le righe dei secchi si leggono e contano nel budget lo stesso, quindi una
+> voce che non restituisce prezzi può causare `bulk_too_many_days` […] Proposta: saltare la lettura (la `resolution`
+> viene dal solo piano). In più, nella descrizione di `sample_bounds`, aggiungere «or without prices».» L'avevano
+> notato anche Y e MF. Serve al dialogo dei confronti (Z-29d): la voce della scheda va con `include_price: false` e dà
+> il passo al bersaglio (`sample_like`).
+
+**Oggi** (`price_query.py` a `daf7b200d`): una voce con `max_points`, `resolution` o `sample_like` e
+`include_price: false` ha il suo piano (`_plan_samples`, due sonde per asset); se il passo è settimanale o mensile
+conta i punti più due nel budget (`:606`) e i suoi secchi si leggono (`_read_samples`, `:615`); se il passo è
+giornaliero entra nella lettura giornaliera (`asset_ranges`, `:541`) e conta i giorni del riempimento (`:608`). Alla
+fine i prezzi si buttano (`:1054`) e gli estremi vanno a None (`:1056`).
+
+**Cura** (tecnica, dentro la proposta di X): una voce così è un segnaposto che dà solo il passo. Il piano resta: dà la
+sua `resolution` e, a un `sample_like`, il passo e il giorno F. Ma la voce non entra nella lettura giornaliera, non
+legge secchi e non conta nel budget, con qualunque passo. Risponde `resolution` (settimanale o mensile dal piano,
+altrimenti `daily`), nessun prezzo, nessun estremo. Testi: la descrizione di `sample_bounds` («None for a daily one or
+without prices»), quella di `include_price`, la docstring della rotta, la doc (`#price-query-sampling` e il budget).
+Una voce senza campi di riduzione e con `include_price: false` non cambia (fuori portata).
+
+**Passi.** 1. Rossi (test-author, PURE in `test_price_query_sampling.py`). 2. Cura (script di sostituzioni esatte, su
+una copia). 3. Verdi: `services price-query-sampling`, `api assets-price`, i vicini; `api sync`, `front check`,
+`core-unit`. 4. Doc (docs-writer). 5. Checkpoint FROZEN.
+1. ✅ 12:12 — Rossi (test-author): PQS-Q24…Q28 e PQS-S14, 25 casi, sei tipi di segnaposto (settimanale e mensile da
+   `max_points` e da `resolution`, giornaliero perché `max_points` copre il riempimento, giornaliero chiesto); un
+   riconoscitore nuovo della lettura giornaliera (`_is_daily_load`) e, indipendente dalla forma dell'SQL, al più due
+   righe del segnaposto caricate. Ruff e black puliti. Visti: 25 rossi per le ragioni dette (il segnaposto letto da
+   un'istruzione dei secchi o dalla lettura giornaliera; il budget lo conta: 348, 324, 43, 82, 286 o 2 421; la
+   descrizione senza «without prices»), 157 verdi (i casi di prima, PQS-Q08 e l'ultimo di Q18 compresi).
+   Note di test-author: il budget a 0 è valido (il controllo è `>`); Q28 ha anche il caso della scheda giornaliera;
+   nessun caso API (il blocco Z-25 tiene il budget vero solo al servizio).
+2. ✅ 12:14 — Cura: `files/z29af-draft/apply_z29af.py` (i `placeholders` subito dopo `daily_starts`; fuori dalla
+   lettura giornaliera, dal budget e da `_read_samples`; risposta dal piano o `daily`; le due descrizioni dello schema,
+   la docstring del metodo e della rotta, la riga del runner). Provato su una copia di HEAD: ruff e black puliti,
+   inverso esatto; applicato con la stessa impronta. 12:14 `services price-query-sampling` 182/182.
+   > **⚠️ Fuori pista**: un'ancora sbagliata nello script (la riga della docstring comincia con «first and last»),
+   > trovata prima della prova, corretta.
+3. ✅ 12:21 — Verdi (corsia 6186, uno alla volta, carico sotto 50): 12:15 `services range-ceiling` 74; 12:19
+   `api assets-price` 31; `api sync` (`generated.ts` si legge, «without prices» presente); 12:20 `front check` 0/0;
+   12:21 `front-utility core-unit` 220 file, 9603 test. Porta libera.
+4. ✅ 12:22 — Doc (docs-writer): `developer/backend/assets/architecture.md`, tre punti: il «Item-days» di
+   `#bulk-request-limits` (un segnaposto non conta), «The answer» e «The reads» di `#price-query-sampling` (cosa fa
+   un segnaposto, il caso del dialogo detto come possibilità: il web non manda ancora questi campi). `mkdocs build`
+   stretto 0 avvisi, `check-links` 97 validi.
+5. ✅ Checkpoint FROZEN. In comune con `dev_release2` (`6e1761121`, che contiene già `daf7b200d`) solo
+   `_backend_services.py` (7 commit di dev), senza conflitto (`git merge-file`).
