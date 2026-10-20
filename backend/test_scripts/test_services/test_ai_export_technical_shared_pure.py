@@ -18,6 +18,7 @@ Isolation: PURE.
 
 from __future__ import annotations
 
+import inspect
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -464,3 +465,55 @@ def test_build_events_payload_requires_a_bucket_plan():
     context = BuildContext(ComponentRegistry(()), request_id="technical-shared-unit")
     with pytest.raises(ValueError, match="event payload construction requires bucket_plan"):
         tsh.build_events_payload((), context)
+
+
+# ---------------------------------------------------------------------------
+# 10. price_series_gap - why a held asset has no price series (E-AI503)
+# ---------------------------------------------------------------------------
+#
+# Decided on the points the price history returns, NEVER on the asset type
+# (developer's decision, 19/10/2026). `result.prices` is already sliced to the
+# period, carried points included: empty means no stored price dated up to the
+# period end. Read through the module (`tsh.price_series_gap`), so that today
+# only these tests are red, never the file's collection.
+
+
+@pytest.mark.parametrize(
+    ("result", "expected"),
+    [
+        pytest.param(None, "no_stored_price", id="no-result"),
+        pytest.param(_price_result(), "no_stored_price", id="no-point"),
+        pytest.param(_price_result(_price_point(DAY_1, "10"), _price_point(DAY_2, "11")), None, id="one-currency"),
+        pytest.param(_price_result(_price_point(DAY_1, "10", currency="EUR"), _price_point(DAY_2, "11", currency="USD")), "mixed_price_currencies", id="two-currencies"),
+        pytest.param(_price_result(_price_point(DAY_2, "10", days_back=5), _price_point(DAY_3, "10", days_back=6)), None, id="only-carried-points"),
+        pytest.param(_price_result(_price_point(DAY_1, "10", currency=None)), "mixed_price_currencies", id="points-without-a-currency"),
+    ],
+)
+def test_price_series_gap_names_why_a_result_has_no_coherent_series(result: FAPriceQueryResult | None, expected: str | None):
+    """AI503-S01 — red until E-AI503: the reason a price result gives no series, read from its points alone.
+
+    No result or no point: ``no_stored_price``. Points sharing one currency - carries included, as a stale series is -
+    give no gap. Points that do not share one (two currencies, or none at all, which ``price_history.currency NOT NULL``
+    makes impossible) give ``mixed_price_currencies``. The builders write ``coherent_price_currency`` as the currency,
+    so a gap is named exactly when that is None: never a null currency without a reason, never a reason beside one.
+    """
+    gap = tsh.price_series_gap(result)
+
+    assert gap == expected
+    assert (gap is None) == (tsh.coherent_price_currency(result) is not None)
+
+
+def test_price_series_gap_reads_the_points_and_never_the_asset():
+    """AI503-S02 — red until E-AI503: the verdict does not depend on the asset.
+
+    The function receives the result and nothing else - no asset, no type - and the same points give the same verdict
+    whichever asset they belong to.
+    """
+    assert list(inspect.signature(tsh.price_series_gap).parameters) == ["result"]
+    for points, expected in (
+        ([], "no_stored_price"),
+        ([_price_point(DAY_1, "10")], None),
+        ([_price_point(DAY_1, "10", currency="EUR"), _price_point(DAY_2, "11", currency="USD")], "mixed_price_currencies"),
+    ):
+        verdicts = {tsh.price_series_gap(FAPriceQueryResult(asset_id=asset_id, prices=points)) for asset_id in (1, 2, 3)}
+        assert verdicts == {expected}, f"the same points, a different verdict by asset: {verdicts}"
