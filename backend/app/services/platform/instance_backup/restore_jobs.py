@@ -498,8 +498,18 @@ def _read_state(data_dir: Path, stage_id: str) -> RestoreCheck | None:
     if not _plain_folders(data_dir, checks_dir(data_dir)):
         return None
     try:
-        with os.fdopen(os.open(check_state_path(data_dir, stage_id), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)), encoding="utf-8") as handle:
+        descriptor = os.open(check_state_path(data_dir, stage_id), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        try:
+            handle = os.fdopen(descriptor, encoding="utf-8")
+        except BaseException:
+            # `fdopen` does not close a descriptor it refuses (a folder in the file's place): each read leaked one (B-50).
+            os.close(descriptor)
+            raise
+        with handle:
             record = json.load(handle)
+        # A document that is not a JSON object is no check's state, like the other unreadable ones (B-50).
+        if not isinstance(record, dict):
+            return None
         for key in ("created_at", "finished_at"):
             if record.get(key) is not None:
                 record[key] = datetime.fromisoformat(record[key])
