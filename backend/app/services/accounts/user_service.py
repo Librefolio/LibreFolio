@@ -249,6 +249,14 @@ async def list_users(session: AsyncSession) -> list[User]:
     return list(result.scalars().all())
 
 
+async def avatar_urls(session: AsyncSession, user_ids: list[int]) -> dict[int, Optional[str]]:
+    """The avatar of each account in ``user_ids`` that has user settings, in one query (N69-4); an account absent has none."""
+    if not user_ids:
+        return {}
+    result = await session.execute(select(UserSettings.user_id, UserSettings.avatar_url).where(UserSettings.user_id.in_(user_ids)))
+    return dict(result.tuples().all())
+
+
 async def count_users(session: AsyncSession) -> int:
     """
     Count total users in the database.

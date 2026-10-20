@@ -12,6 +12,7 @@
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
+    import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {_ as t} from '$lib/i18n';
     import type {ChartType, ViewMode} from './ChartToolbar.svelte';
@@ -122,8 +123,11 @@
         /** Measure mode: enables click-to-place measurement points */
         measureMode?: boolean;
         onMeasureClick?: (date: string, value: number) => void;
-        /** Called on mousemove during measure mode (for live preview) */
-        onMeasureHover?: (date: string, value: number) => void;
+        /**
+         * Called on mousemove during measure mode (for live preview). Answers `true` on a day the
+         * measure refuses (its start: no measure of one day), and the chart shows the not-allowed cursor.
+         */
+        onMeasureHover?: (date: string, value: number) => boolean | void;
         /** Hide the built-in toolbar (chart type + view mode toggles) */
         hideToolbar?: boolean;
         /** Externally controlled chart type (when toolbar is hidden) */
@@ -225,6 +229,16 @@
     let viewMode: ViewMode = $state('absolute');
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | null = null;
+    /**
+     * The last resolved measure hover: `blocked` over a day `onMeasureHover` refuses, `free`
+     * elsewhere, null out of measure mode. It picks the cursor, and the container publishes it.
+     */
+    let measureHover = $state<'blocked' | 'free' | null>(null);
+
+    // Out of measure mode the container publishes no hover, and the next measure starts free.
+    $effect(() => {
+        if (!measureMode) measureHover = null;
+    });
     let resizeObserver: ResizeObserver | null = null;
     let dataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
     let chartOptionSet = false;
@@ -524,7 +538,7 @@
         if (rect.width === 0 || rect.height === 0) return;
 
         if (!chartInstance) {
-            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'});
+            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, chartInitOptions(chartContainer));
             // Expose the instance for gallery/E2E tooling (deterministic tooltip control
             // without simulating a pixel-perfect hover on a scatter marker).
             (chartContainer as unknown as Record<string, unknown>).__lfChart = chartInstance;
@@ -584,11 +598,16 @@
             // Mousemove for live measure preview (throttled via rAF)
             let hoverRafPending = false;
             chartInstance.getZr().on('mousemove', (params: any) => {
-                if (!measureMode || !onMeasureHover || !chartInstance || hoverRafPending) return;
+                if (!measureMode || !onMeasureHover || !chartInstance) return;
+                // zrender puts its own default cursor back on every move, before its listeners: in
+                // measure mode the chart sets its own at once — not-allowed while the last hover was refused.
+                chartInstance.getZr().setCursorStyle(measureHover === 'blocked' ? 'not-allowed' : 'crosshair');
+                if (hoverRafPending) return;
                 hoverRafPending = true;
                 requestAnimationFrame(() => {
                     hoverRafPending = false;
-                    if (!chartInstance) return;
+                    if (!chartInstance || !measureMode || !onMeasureHover) return;
+                    let blocked = false;
                     const pointInPixel = [params.offsetX, params.offsetY];
                     if (chartInstance.containPixel({gridIndex: 0}, pointInPixel)) {
                         const pointInGrid = chartInstance.convertFromPixel({gridIndex: 0}, pointInPixel);
@@ -599,10 +618,12 @@
                                 const point = activeLineData[dateIdx];
                                 // Convert back from % to absolute if needed
                                 const baseValue = data.length > 0 ? data[0].value : undefined;
-                                onMeasureHover(point.date, toAbsoluteValue(point.value, viewMode, baseValue));
+                                blocked = onMeasureHover(point.date, toAbsoluteValue(point.value, viewMode, baseValue)) === true;
                             }
                         }
                     }
+                    measureHover = blocked ? 'blocked' : 'free';
+                    chartInstance.getZr().setCursorStyle(blocked ? 'not-allowed' : 'crosshair');
                 });
             });
 
@@ -1149,7 +1170,7 @@
             </div>
         </div>
         {#if chartType === 'line'}
-            <div bind:this={chartContainer} class="w-full" style="height: {chartHeight};" class:cursor-crosshair={measureMode}></div>
+            <div bind:this={chartContainer} class="w-full" style="height: {chartHeight};" class:cursor-crosshair={measureMode} data-measure-hover={measureHover ?? undefined}></div>
         {:else}
             <CandlestickChart
                 data={candleSeries}

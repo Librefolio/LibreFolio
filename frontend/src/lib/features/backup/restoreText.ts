@@ -44,6 +44,7 @@ export const ERROR_KEYS: Record<string, string> = {
     backup_upload_empty: 'backup.restore.errors.backup_upload_empty',
     backup_upload_incomplete: 'backup.restore.errors.backup_upload_incomplete',
     backup_too_large: 'backup.restore.errors.backup_too_large',
+    proxy_too_large: 'backup.restore.errors.proxy_too_large',
     backup_no_space: 'backup.restore.errors.backup_no_space',
     backup_upload_unavailable: 'backup.restore.errors.backup_upload_unavailable',
     backup_restore_unavailable: 'backup.restore.errors.backup_restore_unavailable',
