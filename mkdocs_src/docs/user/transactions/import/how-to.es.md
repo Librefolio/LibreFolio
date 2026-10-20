@@ -127,15 +127,17 @@ LibreFolio lee cada archivo, lo comprueba y lo resume en una tabla:
 | ✗ | Valores aún no emparejados con tus activos — los emparejas en **Revisar** |
 | 🔴 | Problemas de validación: filas que no pudieron convertirse en transacciones |
 | 🔧 | Campos por rellenar antes de guardar (en rojo cuando uno bloquea el guardado) |
-| ⚠️ | Advertencias del importador, como filas omitidas |
+| ⚠️ ℹ️ | Dos números: las advertencias (ámbar) hay que mirarlas, como las filas omitidas; las notas (azul) explican una decisión del importador, sin nada que corregir |
 
-Los mosaicos sobre la tabla cuentan lo que realmente se va a importar; **Ver todo** abre los detalles.
+Los mosaicos bajo la tabla cuentan lo que realmente se va a importar; **Ver todo**, o **Ver Detalle** en
+el menú **⋮** de una fila, abre los detalles, con las advertencias y las notas listadas aparte.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step3" alt="Paso 3 del asistente: Análisis" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-- **Advertencias**: **Continuar** las lista primero; léelas y después haz clic en **Continuar de todos modos**.
+- **Advertencias y notas**: **Continuar** lista primero las advertencias, luego las notas; léelas y
+  después haz clic en **Continuar de todos modos**.
 - **Un archivo ha fallado**: un aviso indica por qué. Corrige su plugin en **Seleccionar** y luego haz clic en
   **Reanalizar todos**.
 

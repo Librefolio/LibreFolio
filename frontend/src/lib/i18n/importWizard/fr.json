@@ -31,7 +31,7 @@
     "selectPlugin": "Choisir un plugin…",
     "extensionError": "Type de fichier non supporté : {ext}. Acceptés : .csv, .xlsx, .xls",
     "unresolvedCount": "{n, plural, one {# actif non résolu} other {# actifs non résolus}}",
-    "warningsCount": "{n} avertissements",
+    "warningsCount": "{n, plural, one {# avertissement} other {# avertissements}}",
     "importedCount": "{n} transactions importées dans l'éditeur",
     "resolveAssets": "Résoudre les actifs",
     "parsingProgress": "Analyse… {done}/{total}",
@@ -52,8 +52,6 @@
     "duplicatesSection": "État des transactions",
     "uniqueTx": "{n} uniques",
     "possibleDuplicates": "{n} possibles",
-    "warningsSection": "Avertissements",
-    "noWarnings": "Aucun avertissement",
     "validationIssues": "Problèmes de validation",
     "validationIssueCount": "{n} problèmes de validation",
     "noValidationIssues": "Aucun problème de validation",
@@ -75,7 +73,7 @@
       "unresolvedCount": "Actifs non encore associés à un instrument connu",
       "issueCount": "Problèmes de validation — transactions non créées",
       "todoCount": "Champs nécessitant une saisie manuelle (🔴 = bloquant)",
-      "warningCount": "Avertissements du parseur (lignes ignorées, données ambiguës)"
+      "noticeCount": "Avertissements (ambre) : à vérifier. Notes (bleu) : choix que l'importateur explique."
     },
     "allResolved": "Tout résolu",
     "searchAll": "Rechercher dans vos actifs…",
@@ -530,6 +528,8 @@
       "scalable_cash_by_sign": "Le signe de la colonne amount a décidé entre dépôt et retrait.",
       "fineco_not_yet_settled": "La date de valeur de ces lignes est après aujourd’hui : elles ne sont pas encore réglées.",
       "fineco_incomplete_rows": "La dernière colonne nomme le champ sans nombre ; la ligne est importée telle quelle."
-    }
+    },
+    "notesCount": "{n, plural, one {# note} many {# notes} other {# notes}}",
+    "noNotices": "Ni avertissement ni note"
   }
 }
