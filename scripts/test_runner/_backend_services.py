@@ -227,6 +227,18 @@ def services_range_ceiling(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "Date range ceiling and bulk limit tests", verbose=verbose)
 
 
+def services_price_query_sampling(verbose: bool = False, test_names: list = None) -> bool:
+    """Z-29a (N90, revised 19/10): an item of POST /assets/prices/query sampled for a compact chart — by max_points, resolution or sample_like."""
+    print_section("Services: Price Query Sampling (Z-29a)")
+    print_info("Testing: price_sampling (bucket_of, fill_counts, choose_resolution, sample_dates, SampleReferenceError), FAPriceQueryItem (key, max_points, resolution, sample_like), FAPriceQueryResult (resolution, sample_bounds), get_prices_bulk, the query route's 422")
+    print_info("Per item, on its own fill after the X-R55 ceiling: the step chosen (max_points), asked (resolution) or followed (sample_like, from the later first day); prices the last day of each ISO week or month, each the daily answer's point; sample_bounds on the first day and the cut end")
+    print_info("Wrong references refused before any read (unknown or duplicate key, chained, range mismatch: 422 sample_reference); one read per asset: a whole daily read serves its samples, else one bucket statement per range and step")
+    print_info("Day budget counts the sampled points + 2 bounds, checked before the bucket rows; no daily fill built; at most buckets + 2 price rows read per asset")
+    print_info("Case table shared with the chart: frontend/src/lib/components/charts/__tests__/compactDensityCases.json")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_price_query_sampling.py", test_names)
+    return run_command(cmd, "Price query sampling tests", verbose=verbose)
+
+
 def services_provider_registry(verbose: bool = False, test_names: list = None) -> bool:
     """Test registry dei provider (asset & fx)."""
     print_section("Services: Provider Registry")
@@ -353,6 +365,16 @@ def services_signal_annotations(verbose: bool = False, test_names: list = None) 
     print_info("Testing: extended-range crossing, gaps, observed-only, dedup and sampling")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_annotations.py", test_names)
     return run_command(cmd, "Signal annotation tests", verbose=verbose)
+
+
+def services_signal_aggregation(verbose: bool = False, test_names: list = None) -> bool:
+    """Z-29r: the one home of the signals' per-bucket selection rule (services/signals/aggregation.py) and AI Export through it."""
+    print_section("Services: Signal Aggregation (Z-29r)")
+    print_info("Testing: backend/app/services/signals/aggregation.py (Selector, SCALAR_PROFILE_SELECTORS, BAND_ENVELOPE_SELECTORS, select_point, scalar_representative, band_envelope)")
+    print_info("Parity: timeSeriesAggregation.ts (selectSignalRepresentative, bandRepresentative, the envelope) and fixtures/signals/aggregation_profiles.v1.json")
+    print_info("One home: ai_export/temporal/aggregators.py goes through the module, its outputs unchanged")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_aggregation.py", test_names)
+    return run_command(cmd, "Signal aggregation tests", verbose=verbose)
 
 
 def services_signal_plugins_core(verbose: bool = False, test_names: list = None) -> bool:
@@ -1978,6 +2000,19 @@ Note: No backend server required.
         # X-R65's handlers run the same way: the price route on a stand-in session that reads nothing, the rate route with upsert_rates_bulk replaced by an in-process writer.
         isolation="pure",
     )
+    add_test(
+        cat,
+        "price-query-sampling",
+        services_price_query_sampling,
+        name="Price Query Sampling",
+        desc="Z-29a (N90, revised 19/10): FAPriceQueryItem.key and sample_like (1 … 64 of A-Z a-z 0-9 _ . : -), max_points (1 … 10 000), resolution (daily, weekly, monthly), at most one of the three, none with signals, annotations or events; FAPriceQueryResult.resolution always, sample_bounds (FAPriceSampleBounds: first, last) on weekly and monthly answers only; price_sampling's buckets (ISO week, calendar month), counts, step, sampled dates (the last day of each bucket, the first day only when it closes its own) and SampleReferenceError; per item on its own fill after the X-R55 ceiling, daily as without the fields, else each point and bound the daily answer's, converted per point; sample_like: the card's step from the later first day, a card with nothing to fill lending its max_points or resolution; wrong references (unknown or duplicate key, chained, range mismatch) refused before any statement, the route's 422 sample_reference; the day budget counts points + 2 bounds, before the bucket rows are read; no daily fill built, at most buckets + 2 rows read; one read per asset, one bucket statement per range and step; request order kept; the case table shared with the chart (compactDensityCases.json)",
+        # PURE: no lane DB, no server, no network. The price queries run on a private SQLite file under tmp_path built
+        # with create_all, its assets on ids of their own; the X-R55 ceiling and the day budget replaced by monkeypatch in
+        # price_query; the FX rates of the conversion case are rows of that file; the route is called as a function on a
+        # session of that file; statements and ORM loads are counted by listeners the tests register and remove; the
+        # case table is a file of the repository, read only.
+        isolation="pure",
+    )
     add_test(cat, "provider-registry", services_provider_registry, name="Provider Registry", desc="Registration, lookup, priority, fallback")
     add_test(cat, "quantlib-runtime", services_quantlib_runtime, name="QuantLib Runtime", desc="Pinned version, required APIs and seeded path reproducibility")
     add_test(cat, "risk-simulation", services_risk_simulation, name="Risk Simulation", desc="Serializable contracts, sampling, moments, chunking and cache")
@@ -1998,6 +2033,17 @@ Note: No backend server required.
     add_test(cat, "signal-contracts", services_signal_contracts, name="Signal Contracts", desc="Auto-discovered test-only line, band/composite, warm-up, failure and event fixtures")
     add_test(cat, "signal-service", services_signal_service, name="Signal Service", desc="Planning, dedup, availability, one-thread batch, output validation and slicing")
     add_test(cat, "signal-annotations", services_signal_annotations, name="Signal Annotations", desc="Line crossover, threshold crossing, observed-only, dedup and sampling")
+    add_test(
+        cat,
+        "signal-aggregation",
+        services_signal_aggregation,
+        name="Signal Aggregation",
+        desc="Z-29r: the per-bucket rule of the signals' aggregation_profile in one home, services/signals/aggregation.py: Selector, the read-only profile and envelope selector maps, select_point / scalar_representative / band_envelope picking as the chart (timeSeriesAggregation.ts; ties to the earliest, any input order, any element type through keyword-only accessors, the element itself) and as the shared aggregation_profiles.v1.json; AI Export's temporal aggregators going through it (aggregation.select_point and the two maps, read at the call), their outputs unchanged",
+        # PURE: no lane DB, no server, no network. Pure functions over points built in memory; AI Export's aggregators
+        # called directly on hand-built plans; the module attributes the tests replace (select_point, the two maps) put
+        # back by monkeypatch; the shared fixture read from the repository.
+        isolation="pure",
+    )
     add_test(cat, "signal-plugins-core", services_signal_plugins_core, name="Core Signal Plugins", desc="EMA, RSI, MACD and Bollinger TA-Lib delegation and numerical regression")
     add_test(cat, "signal-plugins-close-only", services_signal_plugins_close_only, name="Close-only Signal Plugins", desc="SMA, ROC, StochRSI, KAMA and PPO delegation, warm-up and Asset/FX parity")
     add_test(cat, "signal-plugins-ohlc", services_signal_plugins_ohlc, name="OHLC Signal Plugins", desc="ATR, ADX, NATR, Aroon, Donchian and CCI strict input and numerical regression")

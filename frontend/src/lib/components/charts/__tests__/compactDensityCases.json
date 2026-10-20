@@ -1,0 +1,125 @@
+{
+  "threshold": 1.3,
+  "cases": [
+    {
+      "note": "«All» from the 2000-01-01 sentinel on a ~300 px card: monthly",
+      "first": "2000-01-01",
+      "end": "2026-10-17",
+      "plot_width_px": 290,
+      "days": 9787,
+      "weeks": 1399,
+      "max_points": 377,
+      "resolution": "monthly"
+    },
+    {
+      "note": "a history from 2020: weekly on the same card",
+      "first": "2020-03-02",
+      "end": "2026-10-17",
+      "plot_width_px": 290,
+      "days": 2421,
+      "weeks": 346,
+      "max_points": 377,
+      "resolution": "weekly"
+    },
+    {
+      "note": "one year: daily",
+      "first": "2025-10-18",
+      "end": "2026-10-17",
+      "plot_width_px": 290,
+      "days": 365,
+      "weeks": 53,
+      "max_points": 377,
+      "resolution": "daily"
+    },
+    {
+      "note": "days equal to max_points: still daily",
+      "first": "2025-10-06",
+      "end": "2026-10-17",
+      "plot_width_px": 290,
+      "days": 377,
+      "weeks": 54,
+      "max_points": 377,
+      "resolution": "daily"
+    },
+    {
+      "note": "one day more: weekly",
+      "first": "2025-10-05",
+      "end": "2026-10-17",
+      "plot_width_px": 290,
+      "days": 378,
+      "weeks": 55,
+      "max_points": 377,
+      "resolution": "weekly"
+    },
+    {
+      "note": "weeks equal to max_points: still weekly",
+      "first": "2019-07-29",
+      "end": "2026-10-17",
+      "plot_width_px": 290,
+      "days": 2638,
+      "weeks": 377,
+      "max_points": 377,
+      "resolution": "weekly"
+    },
+    {
+      "note": "one week more: monthly",
+      "first": "2019-07-22",
+      "end": "2026-10-17",
+      "plot_width_px": 290,
+      "days": 2645,
+      "weeks": 378,
+      "max_points": 377,
+      "resolution": "monthly"
+    },
+    {
+      "note": "a fractional plot width",
+      "first": "2000-01-03",
+      "end": "2026-10-17",
+      "plot_width_px": 291.5,
+      "days": 9785,
+      "weeks": 1398,
+      "max_points": 378,
+      "resolution": "monthly"
+    },
+    {
+      "note": "one wide column: weekly for «All»",
+      "first": "2000-01-03",
+      "end": "2026-10-17",
+      "plot_width_px": 1180.25,
+      "days": 9785,
+      "weeks": 1398,
+      "max_points": 1534,
+      "resolution": "weekly"
+    },
+    {
+      "note": "a fill starting on a Sunday",
+      "first": "2018-10-21",
+      "end": "2026-10-17",
+      "plot_width_px": 343.7,
+      "days": 2919,
+      "weeks": 418,
+      "max_points": 446,
+      "resolution": "weekly"
+    },
+    {
+      "note": "a fill starting on a Monday",
+      "first": "2018-10-22",
+      "end": "2026-10-17",
+      "plot_width_px": 343.7,
+      "days": 2918,
+      "weeks": 417,
+      "max_points": 446,
+      "resolution": "weekly"
+    },
+    {
+      "note": "a narrow plot: monthly, past max_points (the floor)",
+      "first": "1990-01-01",
+      "end": "2026-10-17",
+      "plot_width_px": 120,
+      "days": 13439,
+      "weeks": 1920,
+      "max_points": 156,
+      "resolution": "monthly"
+    }
+  ]
+}
