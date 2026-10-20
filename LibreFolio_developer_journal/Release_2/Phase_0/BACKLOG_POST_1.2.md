@@ -9211,6 +9211,15 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
       fuso, con l'ultimo valore salvato prima: la tabella `PRICE GAPS`, e `RATE GAPS` per i cambi (`fx.rate_ohlc` v2);
       un buco in testa senza prezzo prima ha le celle vuote.
     - Dettagli: piano 08, da «E-23» a «E-23.2».
+- **E-25 · `/verify-email` spende il link all'apertura, senza un clic** — piccolo, sicurezza; E, 16/10 (E6, lista del
+  mattino), analisi 20/10. Un filtro di posta che apre i link in un browser isolato verifica l'indirizzo al posto del
+  titolare. Proposta: uno stato «Conferma» col pulsante, solo file di E. Da decidere (sviluppatore). Dettagli:
+  [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-25 ed E-26».
+- **E-26 · Dopo la registrazione «We sent you an email» anche quando l'email è trattenuta** — minimo, chiarezza; E,
+  16/10 (E6, lista del mattino), analisi 20/10. Il messaggio non dice la via d'uscita (accedere e chiedere un nuovo
+  link). Proposta: solo il testo, una chiave di E ×4. Da decidere (sviluppatore). Dettagli: piano 08, «E-25 ed E-26».
+
+## Y · Cruscotto e grafici (fase 01)
 
 Piano: [`09_dashboardCharts`](../Phase_1/09_dashboardCharts/plan-phase01DashboardCharts.prompt.md). Sessione avviata il
 15/10 alle 11:28, solo analisi, sulla base `23f6578f3`. Codice autorizzato il 15/10 alle 12:47 (developer, via il

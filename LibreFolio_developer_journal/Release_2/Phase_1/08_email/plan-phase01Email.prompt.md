@@ -9380,3 +9380,87 @@ pagine).
 3. ✅ **I verdi** (11:57–12:10): `services ai-export-pure` **497 passed**; `services ai-export` **1133 passed**;
    `api ai-export-unpriced-asset` **9 passed**; ruff e black puliti; `mkdocs build` strict e `check-links` ok. Il
    renderer non cambia (decide il backend). Checkpoint al coordinatore.
+
+#### E-25 ed E-26 — I due residui di E6 per lo sviluppatore: analisi (2026-10-20, 13:1x–13:2x; sola lettura, base `4c6a12795`)
+> **La richiesta** (coordinatore, 13:16): checkpoint di E-23.3 in `d2388ea2c` e `4c6a12795`; l'interpretazione
+> «giorno dello snapshot = `plan.end`» va bene. Le domande di E-7 le porta ora allo sviluppatore; intanto, se nel piano
+> 08 c'è un altro lotto pronto, la sua analisi.
+
+**Cosa resta aperto di E** (sezione E del backlog e questo piano):
+- E-2, E-3, E-6: rimandate alla 1.4 dal coordinatore (16/10), toccano file condivisi.
+- E-19: resta la correzione, D1 e D2, dello sviluppatore; l'analisi del 17/10 («E-19») vale ancora, aggiornata da B-49 ed
+  E-20.
+- E-21 (dopo la 1.3, decisione (c) di C-70b) ed E-22 (idea di H, nessuna decisione).
+- In attesa di altri: E-7 (le risposte), C-70b (parcheggiata), N62 (la prova di Gmail), lo scatto della galleria
+  `settings/email` (preparato in E2b, `gallery.spec.ts:2074`, mai eseguito: G doveva metterlo nel giro di B5b e X;
+  nessuna pagina lo mostra).
+- **Due decisioni dello sviluppatore lasciate da E6** (16/10, «lista del mattino», righe ~1946-1949), mai prese e mai
+  messe nel backlog: il pulsante «Conferma» su `/verify-email` e il messaggio dopo un'email trattenuta. Sono di E e
+  piccole: le chiamo **E-25** ed **E-26**.
+
+**E-25 — Un passo «Conferma» su `/verify-email`:**
+- **Oggi**: `routes/verify-email/+page.svelte` spende il token in `onMount`, e di nuovo su `hashchange`, senza un clic.
+  Il frammento `#token=` protegge già dai controlli che non eseguono JavaScript (il frammento non arriva al server); un
+  filtro di posta che apre i link in un browser isolato per controllarli (Defender Safe Links, Proofpoint, Mimecast…)
+  esegue la pagina e spende il token.
+  - L'indirizzo risulta verificato senza il suo titolare: chi si registra con un indirizzo altrui, su un'istanza con la
+    registrazione aperta, ottiene un account attivo se il filtro della vittima apre i link. È proprio ciò che la verifica
+    deve impedire (decisione 44).
+  - Il titolare vero, cliccando dopo, legge «This link has already been used».
+- Gli altri link non hanno il problema: reset, invito e setup **ispezionano** il token all'apertura
+  (`inspectLinkToken`, nessuna spesa) e lo spendono con l'invio di un modulo.
+- **La proposta**, solo file di E, nessuna API:
+  - uno stato nuovo, `ready`: con un token la scheda chiede di confermare, con un pulsante `verify-email-confirm` e una
+    riga per chi non si è registrato; la richiesta parte solo al clic; anche il `hashchange` torna a `ready`;
+  - nessuna ispezione all'apertura: la rotta non accetta i token di verifica (`TokenInspectRequest.purpose`, di A), e
+    il nome utente non va mostrato, per la stessa regola dell'email (`messages.py:174`: niente nome utente, lo sceglie chi
+    si registra). Un link scaduto o usato dice il suo stato dopo il clic, come oggi dopo il caricamento;
+  - file: `routes/verify-email/+page.svelte`, `lib/features/email/VerifyEmailCard.svelte`, `emailText.ts`
+    (`VerifyPageStatus`, `VERIFY_PAGE_KEYS`), `i18n/email/{en,it,fr,es}.json` (tre chiavi);
+  - testi proposti (en): «Confirm your email address to activate your account.»; il pulsante «Confirm my email
+    address» (le parole del pulsante dell'email); «If you did not sign up on this instance, close this page: nothing
+    happens.»;
+  - test: `routes/verify-email/page.test.ts` (12 casi, oggi si aspettano la richiesta al caricamento: da rovesciare) e
+    `VerifyEmailCard.test.ts` (8, più lo stato `ready`). Nessuna E2E visita `/verify-email`
+    (`auth-email-verification.spec.ts` simula registrazione e accesso): un caso E2E è facoltativo, con uno slot breve;
+  - doc: `user/getting-started.en.md` («#verify-email», passo 3) e `admin/email.en.md` («Once the link is opened»);
+    `getting-started` ha le traduzioni: debito, o ritocco nelle quattro lingue se lo chiede lo sviluppatore;
+  - costo: piccolo, due ore circa.
+
+**E-26 — Il messaggio dopo la registrazione:**
+- **Oggi**: con la verifica accesa, `RegisterCard.svelte:105` (di A) mostra la chiave di E `email.verification.registered`:
+  «Account created. We sent you an email with a link to activate it: open it within 24 hours, then sign in.». Lo dice
+  anche quando l'email è trattenuta (`auth.py`, il limite di 10 l'ora per indirizzo, `registration_email_allowed`) e
+  quando fallisce dopo, in background (SMTP, il limite per casella, il budget orario: `registration_email_work` scrive
+  il log e l'account aspetta). E l'email parte dopo la risposta: «We sent» non è vero nemmeno quando il messaggio compare.
+  La via d'uscita c'è (accedere → 403 → «Send the link again») e la doc per l'utente la dice (`getting-started.en.md:80`),
+  il messaggio no.
+- Dietro un proxy senza intestazioni fidate tutti i client hanno lo stesso indirizzo: dopo 10 registrazioni in un'ora
+  ogni email è trattenuta. È il caso del proxy che il coordinatore aveva segnalato per il cloud: la configurazione è di
+  H, ma questo messaggio è ciò che vede l'utente.
+- **Le opzioni**:
+  - (a) **(consigliata)** solo il testo: «Account created. We are sending you an email with a link to activate it: open
+    it within 24 hours, then sign in. No email after a few minutes? Check the spam folder, then sign in with your
+    username and password: you will be offered a new link.». Vera in ogni caso, nessuna API, una chiave di E ×4; i test
+    leggono la chiave (`RegisterCard.verification.test.ts`, RCV-01) e non cambiano;
+  - (b) anche un campo nella risposta di `POST /auth/register` (`verification_email: "sending" | "held"`; rotta,
+    schema e `RegisterCard` di A, `api sync`): copre solo il limite per indirizzo, i fallimenti in background restano
+    invisibili. Più file, poco guadagno.
+- Doc: il messaggio citato in `user/getting-started.en.md:72` e in `admin/email.en.md:514-515`; le traduzioni di
+  `getting-started` lo citano (debito, o ritocco nelle quattro lingue).
+- Costo: (a) minimo, mezz'ora con la doc.
+
+**Insieme**: un lotto solo, piccolo, tutto in file di E (con (a)); i rossi col `test-author`, un checkpoint. Il passo
+«Conferma» cambia una rotta pubblica solo nel frontend: nessuna revisione di sicurezza del backend.
+
+**Domande per lo sviluppatore:**
+1. E-25: il passo «Conferma» nella 1.3 (consigliato) e i suoi testi;
+2. E-26: (a) solo il testo (consigliato) o (b) anche il campo, e il testo;
+3. per tutte e due: le traduzioni di `getting-started` adesso, o restano debito.
+
+> **⚠️ Fuori pista** (13:2x): mettendo E-25 ed E-26 nel backlog ho visto che manca l'intestazione
+> `## Y · Cruscotto e grafici (fase 01)`. L'ho tolta io alle 11:3x: lo script che chiudeva E-23 sostituiva un ancoraggio
+> che finiva con quell'intestazione, e il testo nuovo non la rimetteva. Il coordinatore l'ha committata in `70bc6dc03`,
+> non ancora in `dev_release2`; da allora le voci di Y si leggevano come parte della sezione E. Rimessa al suo posto, con
+> E-25 ed E-26 in fondo alla sezione E; contro `32462b543` (prima del mio errore) il file cambia solo per la chiusura di
+> E-23 e le due righe nuove. Da qui in poi controllo ogni modifica del backlog con un diff contro il commit precedente.
