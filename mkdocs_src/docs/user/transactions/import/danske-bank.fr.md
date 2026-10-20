@@ -93,7 +93,7 @@ L'export des titres ne remonte qu'à un an, importez donc **au moins une fois pa
 
 - Chaque transaction reçoit sa **date de valeur** (le jour où l'argent ou les actions ont bougé) et son montant en **euros**, tel que la banque l'a écrit.
 - Les fichiers ne donnent ni ISIN ni ticker : confirmez chaque titre dans le [mappage des actifs](index.md#asset-mapping) de l'assistant d'importation.
-- **Rien n'est écarté silencieusement** : les lignes exclues — un paiement manquant, un ordre non exécuté, une opération réglée après la fin du relevé… — sont comptées dans le détail du lot et listées dans les avis de l'importateur, en **finnois** comme les fichiers. Vérifiez les opérations appariées qu'un avis signale parce que leurs noms diffèrent.
+- **Aucune ligne ne se perd** : une ligne exclue — un paiement manquant, une opération réglée après la fin du relevé… — reste comptée dans le détail du lot, avec son motif, et les avis de l'importateur, en **finnois** comme les fichiers, listent celles à vérifier. Vérifiez les opérations appariées qu'un avis signale parce que leurs noms diffèrent.
 
 ### 💶 Les frais sont inclus dans les montants des opérations
 

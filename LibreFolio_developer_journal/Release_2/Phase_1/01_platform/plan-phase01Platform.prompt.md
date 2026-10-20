@@ -8769,3 +8769,885 @@ poi, in V1 e V3, `assignments|reported_currency|VARCHAR(8)` (in V2 e V4 nessuna 
    `services probe-rate-limit` 52, `utils dev-server-interrupt` 27, `utils dev-designer-lab-banner` 37,
    `schemas tools` 271. Ruff e black puliti sui 4 file, `git diff --check` pulito, porta 6181 libera.
 4. ✅ Checkpoint inviato (19/10, 14:40).
+
+### Lotto «H-60: errori leggibili» (19/10, 15:10) — analisi, sola lettura
+
+> Dal coordinatore (19/10, 15:07). La regola del developer, testuale: «fai in modo che le info utili vengano printate in
+> caso di errore, da ora in poi, anche in console». Il caso che l'ha fatta nascere: sulla nightly Linux
+> (`v1.2.1-2591-g5e1a7c3af`), AI Export → `portfolio.asset_history` risponde 503 `snapshot_source_failure`, con
+> `component_id: portfolio.technical_prices` e nessun `reason_code`. La causa la cerca il coordinatore; qui non la
+> inseguo. Base `5c1c4873b`; nessun codice; corsia 6181, solo un server di prova breve. L'estratto del log è privato:
+> qui ne descrivo solo la forma, nessun contenuto.
+
+#### 1. Il log del container: l'app scrive JSON, la forma dell'estratto viene da chi lo legge
+
+- **Cosa scrive l'app.** `logging_config.py` ha un solo renderer, `JSONRenderer`, sempre: non guarda se c'è un TTY e
+  non ha processori duplicati. `configure_logging()` è chiamata una volta, all'import di `main.py`, e Docker avvia
+  `uvicorn backend.app.main:app` direttamente, con la stessa configurazione.
+  - Dal 16/10 il file non è cambiato in nessun ref di questo repository, e nemmeno il lifespan e il Dockerfile.
+    Rispetto a `origin/dev_release2` (`v1.2.1-2590`) sono identici. La nightly ha 2591 commit dopo `v1.2.1`, quindi
+    porta lo stesso codice. `5e1a7c3af` però non è in questo repository: un `git show 5e1a7c3af --
+    backend/app/logging_config.py` dal lato del developer lo chiude.
+- **Prova in locale.** Ho avviato `dev.py server --test` sulla corsia 6181 (`--no-scheduler`), poi `ready`, un login e
+  un 404 (log: `files/runs/h60/devserver.log`). Risultato: ogni riga dell'app è un oggetto JSON (`event`, `logger`,
+  `level`, `timestamp` e i campi dell'evento), le righe di uvicorn sono testo (`INFO:     …`). Il login dà una sola
+  riga, `{"user_id": …, "username": …, "event": "User logged in", "logger": …, "level": "INFO", "timestamp": …}`.
+  Lo stesso evento nell'estratto ha le stesse chiavi, nello stesso ordine. **In locale il raddoppio non succede.**
+- **La forma dell'estratto è una funzione di un solo evento.** `files/h60/h60_peel.py` lo verifica su tutte le 58 righe
+  dell'app (le altre 942 sono righe di uvicorn, normali), senza stampare valori.
+  - Ogni riga si scompone esattamente come `S = X X chiave=valore`, ricorsivamente: le chiavi sono quelle del JSON,
+    nel suo ordine, e alle foglie c'è il valore di `level` (`INFO`), mentre la chiave `level` non compare.
+  - Con n chiavi, la prima compare 2^(n−1) volte. Per questo una riga dello scheduler, con 8 chiavi, arriva a 7 457
+    caratteri. «I campi che si accumulano» sono questo: nessun campo passa da un evento a un altro, quindi non è
+    un contesto che cresce (`bind`, `merge_contextvars`).
+  - Nessun renderer di structlog produce questa forma. È lo strumento con cui il log è stato letto o copiato (un
+    visualizzatore web dei container, un alias, uno script) che converte il JSON in `LEVEL chiave=valore`, con un
+    accumulatore raddoppiato a ogni chiave.
+  - **Domanda per il developer**: con che cosa ha preso l'estratto? Un `docker logs --tail 20 <container>` in un
+    terminale dovrebbe mostrare righe JSON.
+  - «Senza messaggio»: il messaggio è nella chiave `event`, quella predefinita di structlog. I visualizzatori cercano
+    `msg` o `message` e non lo trovano.
+- **Problemi veri dal lato dell'app, trovati lungo la strada.**
+  1. **`logger.exception()` scrive la traceback due volte**, e lo fa da 84 punti, 44 in `api/v1`. Prova in-process:
+     una riga JSON con `"level": "EXCEPTION"` e la traceback dentro `exception`, poi la stessa traceback in chiaro su
+     più righe. Il meccanismo:
+     - `structlog.stdlib.BoundLogger.exception` passa a `logging.Logger.exception`, che rimette `exc_info=True`;
+     - il `Formatter("%(message)s")` di `basicConfig` aggiunge la traceback dopo il JSON già reso;
+     - il nostro `add_log_level` scrive `EXCEPTION` dove structlog scriverebbe `error`.
+     Le righe in chiaro non sono JSON, e un visualizzatore le mostra come voci separate. È un difetto, non una scelta.
+  2. La docstring di `logging_config.py` promette «Human-readable formatting for development», ma il codice scrive JSON
+     anche nel terminale di `dev.py server`, con le traceback su una riga sola, piene di `\n`.
+  3. Le righe di uvicorn (avvio, accessi, «Exception in ASGI application») sono testo, con i suoi handler: nello stesso
+     flusso convivono due formati.
+
+#### 2. Le eccezioni inghiottite
+
+- **Inventario** (`files/h60/swallow_scan.py` → `swallow_scan.tsv`, AST di `backend/app`): 323 `except` larghi
+  (`Exception`, `BaseException` o nudi).
+  - 157 scrivono nel log, 27 rilanciano così com'è;
+  - 49 convertono in un'altra eccezione;
+  - **90 non lasciano traccia nel log**: 53 ritornano e 37 proseguono.
+  - Ho tolto i falsi positivi che scrivono nel log dentro un helper: `_report_unusable_key`, `_disable_pool`,
+    `_note_provider_failure`, i messaggi di `readiness` (li scrive il chiamante), la post-migrazione (`errors` finisce
+    nel log a l.182).
+- **P1: l'utente vede un errore generico e la causa non finisce in nessun log.**
+
+  | Punto | Cosa succede | Di chi |
+  |---|---|---|
+  | `services/ai_export/dependencies.py:478` (`_build`) | Ogni eccezione di un componente diventa `_ComponentOutcome(error=exc)`, senza log. Se il componente è richiesto: `RequiredComponentBuildError` → `runtime_service.py:824-836` (`_root_cause`, `reason_code` letto con `getattr`, quasi sempre None) → `api/v1/ai_export.py:171` → 503 senza log. Nel log resta solo la riga di accesso di uvicorn. | J |
+  | `dependencies.py:459` | Componente opzionale: la causa va in `BuildContext.diagnostics` (`reason=str(error)`), che **nessuno legge**. La sezione sparisce senza traccia. | J |
+  | `dependencies.py:609` (`_resolve_resource`) | Avvolge in `ResourceLoadError(key, exc)` senza `__cause__`, e `resolve()` rilancia `RequiredComponentBuildError(id, error)` senza `from`. Una traceback stampata più a valle perde la catena. | J |
+  | `services/ai_export/components/envelope.py:51` | Un payload non valido diventa `ComponentPayloadValidationError` e finisce nel `_build` qui sopra. | J |
+  | `services/tools/executor.py:273` | `except Exception: error = _error("execution_failed")`: nessun log, nessun tipo. | J |
+
+- **P2: la causa arriva all'utente come testo, ma non al log; oppure un fallback silenzioso cambia il risultato.**
+  - `assets/refresh.py:363,575,594,614,629` e `assets/metadata.py:132` (X): l'errore va nei risultati come `str(e)`.
+    Le righe 594 e 614 mettono il testo di un errore del DB (`DB upsert failed: …`) in una risposta: rischio di
+    esporre SQL e parametri.
+  - `brokers/broker_service.py:202,418,461` (W): `str(e)` per riga nella risposta, nessun log; stesso rischio.
+  - `transactions/batch_creates.py:73`, `batch_edits.py:70,221`, `transaction_batch_stages.py:390`,
+    `lone_transfer_legs.py:98` (W): il testo dell'eccezione va nelle issue, nessun log.
+  - `brim/registry.py:45,89` (W): un plugin che fallisce l'istanza sparisce dal rilevamento; l'utente vede «nessun
+    plugin compatibile». `brim/brim_provider.py:239` (W): la testa del file diventa `''` e il rilevamento fallisce
+    senza motivo.
+  - `assets/core.py:93` (X): `provider_params` illeggibili diventano `{}`, e il provider fallisce più tardi con un
+    errore che non spiega.
+  - `financial_math/portfolio/engine.py:473` (MF): la classificazione di un asset diventa None senza traccia.
+  - `signals/planning.py:197` (Y/J): tipo e messaggio vanno nei `details` della risposta (`exception_details`), nessun
+    log.
+  - `tools/worker.py:178` e `tools/registry.py:115,170` (J): codice d'errore senza causa nel log.
+  - `fx/conversion.py:283` (J/X): converte con il messaggio, nessun log.
+  - `platform/scheduler/settings.py:44` (H): un fuso illeggibile fa usare gli orari come UTC, in silenzio.
+- **P3: fallback voluti, parsing, metadati.** I 63 dei plugin BRIM (quasi tutti «questo campo è una data o un
+  numero?»), `utils/*`, `plugin_settings/service.py:103-112`, `provider_registry.py:377,395`,
+  `api/v1/fx/providers.py:50`, le prove dei provider (`provider_management.py:487,521,545`: l'errore lo vede
+  l'amministratore, che è lo scopo). `secret_masking.py:115,180` non può scrivere nel log, per costruzione. Per tutti:
+  la regola del punto 5 quando si tocca il file, non una passata.
+
+#### 3. La risposta d'errore: un codice utile, senza dati né stack
+
+- **Oggi.** Dei 48 `HTTPException` 5xx di `api/`, 39 scrivono nel log subito prima (per esempio
+  `api/v1/assets/crud.py` ×7, `logger.exception`). Dei 9 senza log, 8 sono condizioni attese con un codice proprio:
+  il timeout dei tools, la consegna dell'email, la chiave dei plugin, la sync dei cambi, un file non cancellato. Il
+  nono è il 503 dell'AI Export.
+  - Un'eccezione non gestita la manda `SecurityHeadersMiddleware` come 500 in testo, e uvicorn la scrive nel log in
+    chiaro.
+  - Nessuna risposta porta un identificativo da ritrovare nel log.
+  - `api/v1/fx/currencies.py:95` mette nel `detail` del 502 il messaggio dell'errore (`{e!s}`): un altro testo
+    interno che arriva al client.
+- **Proposta (H, piattaforma).**
+  1. **`request_id`.** Una voce nuova in `MIDDLEWARE_STACK`, la più esterna, che:
+     - genera un id per ogni richiesta;
+     - lo lega con `structlog.contextvars.bind_contextvars`, così ogni riga di log della richiesta lo porta
+       (`merge_contextvars` è già il primo processore);
+     - lo rimanda nell'header `X-Request-Id`, anche sui 500 che manda `security_headers`.
+  2. **Un gestore unico per gli `HTTPException` ≥ 500** (`api/server_errors.py`, `install_server_error_handler(app)`,
+     una riga in `main.py` come i due già presenti). Scrive una riga ERROR con `request_id`, stato, metodo,
+     percorso e la catena dei tipi. La traceback è quella della causa radice, cercata in `__cause__`/`__context__` e
+     in `.cause`.
+     - Un processore segna come scritta l'eccezione che passa da `format_exc_info`, così il gestore non ripete una
+       traceback che il punto di cattura ha già scritto, e un filtro su `uvicorn.error` non ripete la sua.
+     - Risponde come FastAPI, con un campo in più accanto a `detail`: `request_id` e, se deciso (D2), `error_type`, il
+       nome della classe della causa radice.
+     - Mai il messaggio, mai la traceback: possono contenere dati (SQL, valori, percorsi).
+  3. **AI Export (J).**
+     - `_build` scrive nel log il fallimento una volta per componente: WARNING se opzionale, ERROR se richiesto, con
+       `component_id` e `exc_info`. In alternativa basta il gestore unico per i richiesti, e i
+       `diagnostics` letti per gli opzionali.
+     - Catene con `from`.
+     - Un `reason_code` da un elenco chiuso per `snapshot_source_failure` (D5). Oggi il frontend lo ignora per questo
+       codice (`problemMessage`, `ui.ts:110`), quindi aggiungerlo non cambia ciò che si vede.
+- **Il punto 1 del lavoro di J serve subito al coordinatore.** Con il log in `_build`, la prossima nightly scrive il
+  tipo e la traceback del 503. Non cambia niente di ciò che l'utente vede.
+
+#### 4. Il frontend: le risposte d'errore in console, da un punto solo
+
+- **Il punto.** `frontend/src/lib/api/zodios-client.ts`, il ramo d'errore dell'interceptor di risposta di
+  `axiosInstance`. Copre `zodiosApi` e chi usa `axiosInstance` direttamente: tools, onboarding, upload, import,
+  prezzi live.
+  - Oggi lì c'è solo `debug.log`, che la build di produzione elimina. Delle 115 `console.error`/`warn` sparse nei
+    componenti, molte stampano l'oggetto `AxiosError` senza il `detail`.
+- **Cosa stampare.**
+  - Una riga: `[API] 503 POST /api/v1/ai-export/snapshot`, con un oggetto compatto: `code`, `reason_code`,
+    `component_id` se `detail` è un oggetto, poi `request_id` (header o corpo) ed `error_type`.
+  - Per un errore di rete o un timeout: il codice di axios.
+  - Mai i corpi delle richieste, i token o i dati personali.
+- **Il rumore** (D4). Consiglio `console.error` per ≥ 500, per gli errori di rete e per le risposte che non
+  rispettano lo schema, e niente per i 4xx: 401 (login), 404, 409 e 422 sono attesi e l'interfaccia li mostra.
+- **Le risposte che non rispettano lo schema Zod.** Oggi sono un errore generico senza nessuna traccia, e
+  l'interceptor non le vede: lancia `ZodiosError` il plugin `zod-validation`, dopo axios.
+  - In zodios 10.9.6 (`node_modules/@zodios/core/lib/index.mjs`) i plugin di risposta si agganciano in ordine inverso
+    (`interceptResponse`), e il costruttore registra la validazione per prima. Un plugin aggiunto con `use()` gira
+    quindi prima della validazione e non vede l'errore.
+  - Ma `use()` con un nome già presente sostituisce il plugin al suo posto. Un plugin chiamato `zod-validation`, che
+    delega a `zodValidationPlugin({validate: 'response', transform: true, sendDefaults: false})` (esportato) e scrive
+    endpoint e percorso del campo (`issues[].path`, mai i valori), copre il caso senza cambiare l'ordine. Da provare
+    con una Vitest.
+- **Fuori dal client.** Restano 11 `fetch` diretti, 6 verso `/api`: lo stato dei prezzi, la sonda degli indirizzi, i
+  tre del ripristino, lo stream della ricerca. Gestiscono i loro errori: li elenco, non li tocco.
+
+#### 5. La regola: testo proposto, in inglese come le istruzioni
+
+**Backend** (`backend.instructions.md`, sezione nuova «Errors: never lose the cause»):
+
+```markdown
+## Errors: never lose the cause
+
+The developer's rule (19/10/2026): when something fails, the useful information is printed, in the server log and in
+the browser console.
+
+- **Every broad `except` that turns a failure into a fallback, a result field or an HTTP error logs it once, where it
+  is caught**: `logger.warning(...)` or `logger.error(...)` with `exc_info=exc`, and the identifiers of what failed
+  (ids, codes, component), never personal data, addresses or secrets. A caught exception that only becomes
+  `str(exc)` in a response is lost to the log.
+- **Keep the chain**: `raise NewError(...) from exc`. An exception stored to be raised later gets its `__cause__`.
+- **The client gets a code, never a message or a stack**: a `reason_code` from a closed list, the `request_id` (every
+  response carries `X-Request-Id`, every log line of the request `request_id`). The message, the type and the
+  traceback go to the log.
+- **Catch what you expect.** A broad `except Exception` is an isolation boundary and says so in a comment. A parsing
+  probe whose failure *is* the answer («is this a date?») may return without logging, and says so too.
+```
+
+**Frontend** (`frontend.instructions.md`, sotto «Telling the user (and the machine) that something happened»):
+
+```markdown
+### API errors in the console
+
+The API client (`lib/api/zodios-client.ts`) writes every unexpected API failure to the console, in production too: a
+5xx, a network error, a response that does not match its schema. One line: status, method, path, the problem's
+`code`/`reason_code` and the `request_id`. Do not add a `console.*` of your own for an API error, and never print a
+request body, a token or personal data. Expected answers (401, the 404 of a lookup, the 409/422 a form shows) are not
+logged. A console line is for the human who investigates; it is never the signal a test or a component reads
+(«Publish state, do not print it»).
+```
+
+#### 6. Di chi sono i file, e quanto costa
+
+| Pezzo | File | Di chi | Costo |
+|---|---|---|---|
+| Traceback doppia e livello `EXCEPTION`; formato leggibile in opzione (D1) | `logging_config.py`, `.env.example` (sezione H), doc admin «Reading the logs» | H | 2–3 h; +2–3 h con D1 (b) |
+| `request_id` e gestore unico dei 5xx | `services/platform/middleware.py`, nuovo `services/platform/request_id.py`, nuovo `api/server_errors.py`, `main.py` (una riga) | H | 0,5 g |
+| Console del frontend e schema Zod | `lib/api/zodios-client.ts` (condiviso: c'è codice di A e di Z), Vitest | H, con l'ok di A | 0,5 g |
+| La regola | `backend.instructions.md`, `frontend.instructions.md`, `patterns/` (doc) | H | 2 h |
+| AI Export: log in `_build`, catene, `diagnostics`, `reason_code` | `ai_export/dependencies.py`, `runtime_service.py`, `api/v1/ai_export.py`, schema e `ui.ts` solo con D3/D5 | J | 0,5 g; +2 h con D3 |
+| P2 per area | assets e plugin_settings (X); brim, transactions, brokers (W); engine (MF); signals (Y/J); tools (J); scheduler (H) | ognuno | 2–4 h per area, oppure quando si tocca il file |
+
+Ordine proposto:
+1. J: il log in `_build`. Subito, perché aiuta la ricerca del 503 e non cambia l'interfaccia.
+2. H: la traceback doppia.
+3. H: `request_id` e il gestore unico.
+4. H: la console del frontend.
+5. La regola.
+6. I P2, area per area.
+
+#### Decisioni (per il developer, con il mio consiglio)
+
+- **D1. Il formato del log in console.**
+  - (a) Solo JSON com'è, più una pagina della doc su come leggerlo (`jq`).
+  - **(b), consiglio.** Una variabile `LIBREFOLIO_LOG_FORMAT`: `json` per default (il self-hosted non cambia) oppure
+    `console`, leggibile, con le traceback su più righe; il file di log resta JSON. `dev.py server` usa `console`
+    quando gira in un terminale.
+  - (c) `console` per default: cambia il self-hosted, contro la regola del cloud.
+  - In tutti i casi la chiave del messaggio resta `event`: rinominarla romperebbe chi legge il log e i test che
+    catturano gli eventi.
+- **D2. Cosa porta una risposta 5xx.**
+  - (a) Solo `request_id`.
+  - **(b), consiglio.** `request_id` ed `error_type`: il nome della classe, nessun dato.
+  - In nessun caso il messaggio o la traceback.
+- **D3. L'id nel messaggio d'errore che l'utente vede.** Per esempio la «Fonte non disponibile» dell'AI Export, con un
+  «codice: 3f9a…» piccolo, da citare in una segnalazione. **Consiglio: sì**, solo negli errori generici (A e J per
+  l'interfaccia; i18n in 4 lingue).
+- **D4. Il rumore in console del frontend.**
+  - **(a), consiglio.** ≥ 500, rete e schema.
+  - (b) Anche i 4xx tranne 401, 404, 409 e 422.
+- **D5. Il `reason_code` di `snapshot_source_failure`.** Un elenco chiuso a partire dal tipo della causa radice; lo
+  propone J. Consiglio: si parte con `internal_error` e due o tre cause note.
+- **Domanda sull'estratto.** Con quale strumento è stato preso? Serve solo per scriverlo nella doc admin come caso
+  noto.
+
+#### H-60, il via (19/10, 15:55) — decisioni e passi
+
+> Le decisioni del developer, dal coordinatore (giornale `80037ab83`, base `da3edd99f`, corsia ripopolata):
+> - **D1: no**, testuale: «i log tanto non si leggono quasi mai, meglio formattati sempre json come ora per permettere
+>   ai sw di parsarli». Resta da curare la traceback doppia di `logger.exception()`.
+> - **D2: sì**: `request_id` ed `error_type`, mai il messaggio.
+> - **D3: sì**: l'id nei messaggi d'errore generici dell'interfaccia (lo fanno A e J; io do il mezzo).
+> - **D4: cambia**, testuale: «sei sicuro? magari possiamo farlo in base al livello di log impostato». Proposta sotto.
+> - **D5: sì**: l'elenco chiuso lo propone J. E aggiunge un `reason_code` per l'asset senza prezzi in
+>   `portfolio.technical_prices` (lotto E-AI503): da allineare.
+> - Domanda del developer, testuale: «quello che printiamo non viola la sicurezza esponendo dati sensibili vero?» →
+>   sezione «Sicurezza» qui sotto, con test.
+> - Ok di scrittura su `ai_export/dependencies.py`, solo `_build`. Prima i rossi.
+
+**Il disegno, dopo aver letto i contratti già fissati dai test.**
+- **«Una volta, dove si cattura».** Il codice che risponde 5xx di proposito scrive già il suo log, e i test lo
+  fissano. AP-API-12 (H-19): «exactly one warning, nothing at error level». I test del backup di B: `api.loud(events)
+  == [("warning", …)]`.
+  - Lo schema comune è: log dentro l'`except`, poi `raise HTTPException(...) from None`.
+  - Quindi la rete di sicurezza non scrive una seconda riga quando il guasto è già stato riportato. Un'eccezione è
+    *riportata* quando una riga WARNING o più alta è stata scritta con lei in `exc_info`, o mentre la si gestiva
+    (`sys.exc_info()`).
+  - Il segno sta sull'oggetto eccezione, come attributo privato: le eccezioni non accettano `weakref`.
+  - Lo mette il wrapper di structlog, non un processore. Un processore sparirebbe sotto `capture_logs` e i test
+    vedrebbero righe in più.
+- **Il gestore dei 5xx** (`api/server_errors.py`). Per lo stato ≥ 500 aggiunge al corpo `request_id` e, se c'è una
+  causa visibile, `error_type`, cioè la classe della causa radice. La causa radice si cerca in `__cause__`, in
+  `__context__` se non soppresso, e nell'attributo `.cause` delle eccezioni dell'AI Export. Poi decide il log:
+  - causa visibile non riportata → una riga ERROR con la traceback della causa radice, poi la segna;
+  - nessuna causa (5xx voluto) e nulla riportato → una riga WARNING senza traceback. Così ogni `request_id` di una
+    5xx si trova in almeno una riga del log;
+  - altrimenti nessuna riga.
+  - Sotto 500, nessun cambiamento: la risposta di FastAPI, senza log.
+- **`request_id`** (`services/platform/request_id.py`), la prima voce di `MIDDLEWARE_STACK`:
+  - `secrets.token_hex(8)` per ogni richiesta HTTP;
+  - lo mette in `scope["state"]`;
+  - lo lega ai log della richiesta con `bound_contextvars` (`merge_contextvars` è già il primo processore);
+  - mette `X-Request-Id` su ogni risposta.
+  - Un id mandato dal client non si accetta.
+- **Il 500 non gestito** (`security_headers.py`, il ramo che già risponde quando nessuno ha risposto):
+  - risponde JSON `{"detail": "Internal Server Error", "request_id", "error_type"}`;
+  - scrive una riga ERROR in JSON con la traceback, se l'eccezione non è già riportata, e la segna;
+  - poi rilancia come oggi;
+  - un filtro su `uvicorn.error` scarta la sua «Exception in ASGI application» per un'eccezione segnata.
+- **Il 500 di `ResponseValidationError`** (H-33): JSON con `request_id` ed `error_type: ResponseValidationError`; il
+  log resta senza `input` né traceback.
+- **`logger.exception()`**: un `BoundLogger` nostro lo manda a `error` con `exc_info`. La traceback esce una sola
+  volta, nel JSON, e il livello è `ERROR`, non più `EXCEPTION`.
+- **L'header è su ogni risposta, il corpo solo dove lo costruisce la piattaforma.** I 5xx che una route restituisce
+  come `JSONResponse`, senza `raise`, hanno solo l'header. Il frontend legge prima l'header.
+
+**Passi** (ognuno: rossi col test-author, cura, verdi mirati):
+1. AI Export, `_build` (file di J, ok solo lì). Una riga WARNING per componente con `component_id`, `error_type`,
+   `reason_code` (se la causa ne ha uno) e la traceback della causa radice. Il guasto di una dipendenza, già scritto
+   dove la dipendenza è stata costruita, dà una riga corta con `dependency_id`, senza seconda traceback. Test nuovo
+   `test_ai_export_build_failure_log.py`, puro, in `AI_EXPORT_PURE_TEST_PATHS`.
+2. Il log (`logging_config.py`): la traceback unica, il livello, il segno «riportata», il filtro di uvicorn. Test
+   nuovo `test_logging_errors.py`, azione `services logging-errors`.
+3. `request_id`, il gestore dei 5xx, il 500 non gestito, il 500 di H-33. Test nuovo `test_server_errors.py`, azione
+   `services server-errors`. Si aggiornano i miei test che fissano il vecchio corpo o lo stack: AP-API-12,
+   `test_response_validation`, `test_security_headers` e il test dello stack dei middleware.
+4. Frontend: la console delle risposte d'errore in `zodios-client.ts` (interceptor e plugin `zod-validation`
+   sostituito con lo stesso nome); `requestIdOf(error)` per D3 (A, J). Vitest nuova.
+5. La regola nelle istruzioni (backend, frontend) e la doc (pattern degli errori; doc admin: `request_id` e `jq`).
+6. Backlog: i P2 per area, ai loro proprietari.
+
+#### Sicurezza (la domanda del developer)
+
+Ogni punto ha un test nei passi 2–4.
+- **La risposta 5xx** aggiunge al suo `detail` solo `request_id` (16 caratteri esadecimali, casuali) ed `error_type`
+  (il nome di una classe del codice). Mai il messaggio dell'eccezione, mai la traceback, mai i percorsi dei file.
+  - Test: un'eccezione con un messaggio canarino, un header `Authorization` e un `Cookie` canarini, una password
+    canarina nel corpo e un token canarino nella query. Nessun canarino nel corpo della risposta, né nella riga di
+    log del gestore.
+- **La console del frontend** scrive solo stato, metodo, percorso senza query (la query può portare un token),
+  `code`, `reason_code`, `component_id`, `request_id`, `error_type`. Mai il corpo della richiesta, gli header
+  (`Authorization`, cookie), il corpo della risposta (i 422 di pydantic possono ripetere un `input`: il backend
+  toglie già `input` dai 422 con `validation_errors.py`, A-35, ma un corpo costruito a mano potrebbe averlo), i
+  token, le password, i valori dei campi Zod (solo i percorsi `issues[].path`).
+  - Test: Vitest con canarini in ognuno di questi posti.
+- **Il log del server.**
+  - **Chi scrive una richiesta.** La riga di accesso di uvicorn: metodo, percorso e query, con le credenziali della
+    query mascherate (`_QueryCredentialFilter`, «credentials in access logs»). Le righe nuove (gestore dei 5xx, 500
+    non gestito): metodo e percorso senza query, mai header né corpo. Il middleware `request_id` non scrive nulla.
+  - **I processori di structlog.**
+    - `mask_event_dict` maschera i segreti in volo delle chiamate ai plugin, dopo `format_exc_info`: anche nella
+      traceback.
+    - `SecretMaskingFilter` sugli handler maschera i record della libreria standard.
+    - `merge_contextvars` aggiunge solo `request_id`: nessun altro contextvar è legato nel codice.
+  - **Il limite, da dire.** Una traceback contiene il messaggio dell'eccezione, e un messaggio può contenere dati:
+    per esempio un valore rifiutato. Il log del server è il posto giusto per questo (la regola: la causa va nel log,
+    non al client), ma non è anonimo.
+  - **I punti da sistemare a parte**, perché un dato interno arriva al client: `api/v1/fx/currencies.py:95`
+    (`{e!s}` nel 502), `assets/refresh.py:594,614` (il testo di un errore del DB nella risposta) e
+    `brokers/broker_service.py:202,418,461` (`str(e)` per riga). Vanno ai proprietari con i P2.
+
+#### D4, la proposta (il livello della console)
+
+- **(a), consiglio.** `/system/instance` pubblica un campo grezzo, `client_log_level: "error" | "debug"`, ricavato da
+  `LOG_LEVEL` del backend: `debug` se il livello è DEBUG o TRACE, altrimenti `error`. È la mia superficie (CP
+  «configurazione pubblica»). La console lo segue:
+  - con `error`: ≥ 500, rete e schema;
+  - con `debug`: anche tutti i 4xx, 401 e 404 compresi, sempre con gli stessi campi e mai l'`input`.
+  - Si pubblica un valore a due stati e non il livello, per dire il meno possibile a chi non è entrato.
+  - Costo: ~2 h, fra campo, schema, `api sync`, store e Vitest.
+- **(b)** Un interruttore del browser, senza server: `localStorage['librefolio-console'] = 'debug'`, scritto a mano
+  dagli strumenti del browser. Costo ~1 h. Serve anche nel cloud, dove l'utente non sceglie `LOG_LEVEL`, ma è nascosto
+  e vale per un solo browser.
+- **(c)** Tutti e due: (a) come default e (b) per un singolo browser.
+- Fino alla decisione si implementa il livello `error`, che è il comportamento normale in tutti i casi.
+
+> **Avanzamento H-60 (19/10, 16:40)**:
+> - Il coordinatore (16:2x): **D4 (a)**, gli ok di scrittura (`_backend_services.py`, `_frontend_utility.py`,
+>   `zodios-client.ts`, quest'ultimo anche per conto di A), E-AI503 non tocca né `dependencies.py` né
+>   `runtime_service.py`.
+> - **Il contratto** dei rossi è un file solo, `files/h60/contract.md` (§0 aiuti, §1 `_build`, §2 log, §3 `request_id`,
+>   §4 gestore dei 5xx, §5 500 non gestito, §6 H-33, §7 D4, §8 frontend). Quattro test-author lavorano in parallelo su
+>   file distinti: TA-1 `_build`; TA-2a aiuti e log; TA-2b `request_id`, 5xx, D4 e i miei test che fissano il vecchio
+>   corpo; TA-3 frontend.
+> - **⚠️ Fuori pista: due aggiunte al contratto §8**, dette a TA-3 mentre scriveva.
+>   - Un `ZodiosError` non porta lo stato della risposta: `status` null e la riga comincia con `schema <METODO>
+>     <percorso>`.
+>   - Una richiesta annullata (`ERR_CANCELED`) non è un guasto: niente riga. `code`, `reason_code` e `component_id`
+>     escono solo se hanno forma di codice. Un segmento di percorso Zod che non è un identificatore esce come `*`.
+> - **Scostamento dal disegno del piano.** Il corpo d'errore comune e la riga del 500 non gestito vivono in
+>   `services/platform/failure_report.py`, non in `api/server_errors.py`, così `security_headers.py` non importa da
+>   `api/`. Il contratto pubblico non cambia.
+> - **La cura a secco** (`files/h60/apply_h60.py`, sostituzioni asserite sul testo corrente; i file nuovi in
+>   `files/h60/dry/`) passa ruff e black. Una prova in process su un albero a parte (`git archive HEAD` più i file a
+>   secco), in `files/h60/smoke_probe.py`:
+>   - `exception()` dà 1 riga, 1 traceback, `ERROR`;
+>   - le cinque rotte (5xx non riportato, 5xx riportato, 5xx nudo, crash, 404) hanno `x-request-id` di 16 esadecimali
+>     e `nosniff`, i corpi del contratto e le righe del contratto (ERROR, nessuna, WARNING, ERROR, nessuna);
+>   - l'`X-Request-Id` del client è ignorato;
+>   - nessun canarino (Authorization, query, messaggio) fuori da `exc_info`;
+>   - lo stack è `request_id, activity, security_headers, gzip, cors`;
+>   - D4: DEBUG/trace → `debug`, INFO/WARNING/ERROR → `error`.
+
+> **Avanzamento H-60 (19/10, 17:00): i rossi, tutti provati** (log in `files/runs/h60/red-*.log`).
+> - **TA-1** `test_ai_export_build_failure_log.py` (in `AI_EXPORT_PURE_TEST_PATHS`): **17 rossi su 17**, tutti con
+>   «the module wrote []». Ci sono due barriere di presenza, cioè un fratello che fallisce nella stessa richiesta, per i
+>   casi «nessuna riga» e per l'annullamento.
+> - **TA-2a** `test_logging_errors.py` (azione `services logging-errors`): **121 rossi, 1 verde**, la guardia voluta.
+>   114 cadono sul modulo `utils/runtime/errors` mancante; 7 sull'asserzione del difetto: traceback scritta due volte,
+>   livello `EXCEPTION`, `LibreFolioBoundLogger` assente, filtro di uvicorn assente, uvicorn che riscrive la traceback.
+> - **TA-2b** `test_server_errors.py` (azione `services server-errors`): **35 rossi su 35**: `server_errors.py` (20) o
+>   `request_id.py` (5) mancanti, `client_log_level` assente (10). Più i miei test aggiornati:
+>   - `services response-validation`: 4 rossi, sul 500 `text/plain`;
+>   - `api address-probe`: AP-API-12 rosso, senza `X-Request-Id`;
+>   - `api system`: 9 rossi, sull'insieme dei campi di `/system/instance`.
+> - **TA-3** `apiErrorConsole.test.ts` (in `front_utility_unit`) e `instanceConfig.test.ts`: **68 rossi** (63 + 5); gli
+>   altri 218 file della lista restano verdi.
+> - **⚠️ Fuori pista: tre test di altri, e una correzione del contratto.**
+>   - SWA-037 di Z fissa `activity` come primo middleware (D-S1). Il contratto §3 ora vuole `request_id` **secondo**,
+>     subito dopo `activity` e prima di `security_headers`; il coordinatore è d'accordo. Non si perde nulla: il 500 non
+>     gestito passa comunque dallo strato dell'id.
+>   - A fissa l'insieme esatto dei campi di `/system/instance` in `test_registration_api.py:895` e
+>     `test_instance_config_legal_api.py:88`. Il coordinatore ha dato l'ok a una modifica additiva (TA-4).
+>   - Il mock di `createApiClient` in `zodios-client.test.ts` restituisce `{}`: con `zodiosApi.use(...)` al caricamento
+>     il file cadrebbe. Ok per `{use: vi.fn()}` (TA-4).
+> - **Sicurezza, due correzioni in più** (ok del coordinatore):
+>   - `BrokerImportFilesModal.svelte` (W) passava a `console.error` l'errore intero, la configurazione della richiesta e,
+>     per un `ZodiosError`, la risposta rifiutata. La riga si toglie e il `catch` diventa senza variabile: il client
+>     scrive già la sua riga senza dati;
+>   - il `debug.log` dell'interceptor delle richieste (solo nelle build di debug) scrive il percorso senza la query
+>     (`requestPath`).
+> - **⚠️ Fuori pista: un controllo leggero lanciato col carico a 91** (`services logging-errors`, 3 s, puro). Da qui ogni
+>   corsa passa da `files/h60/runs.sh`, che aspetta il carico sotto 50.
+
+> **Avanzamento H-60 (19/10, 17:30): cura applicata, verdi mirati; slot `all-backend` 17:37–18:10.**
+> - **Cura.** `python3 files/h60/apply_h60.py --apply`: 16 file uguali byte per byte alle copie a secco, 5 nuovi e 11
+>   cambiati. Poi `dev.py api sync`: `client_log_level` è nel client generato, nessun file tracciato toccato.
+> - **⚠️ Fuori pista: la cura metteva ancora `request_id` in prima posizione**, mentre il contratto §3 era stato
+>   corretto. `test_server_errors` l'ha visto (`['request_id', 'activity', …]`). Ora è subito dopo `activity`, in
+>   `middleware.py`, nella copia a secco e nello script; la docstring del modulo segue.
+> - **⚠️ Fuori pista: ogni corsia di test gira a DEBUG.** `dev.py server --test` mette `debug_mode = True` (riga 219), e
+>   quindi `LIBREFOLIO_LOG_LEVEL=DEBUG` (riga 348). Il server della corsia pubblica `client_log_level: "debug"`, e la
+>   console degli E2E scrive anche i 4xx: nessuno spec fallisce sulla console, perché il collettore di `fx-detail` è
+>   «diagnostics only». Il test live di `test_system_api.py` ora fissa `debug` e lo spiega; la mappatura completa è
+>   fissata in process in `test_server_errors.py`.
+> - **TA-4 (ok del coordinatore), modifiche additive in file di altri:**
+>   - `client_log_level` negli insiemi di A, `test_registration_api.py:895` e `test_instance_config_legal_api.py:88`,
+>     con le docstring allineate; TA-4 ha trattenuto con ragione una sostituzione che avrebbe reso falsa la docstring
+>     di ICL-008;
+>   - il mock `{use: vi.fn()}` in `zodios-client.test.ts`.
+> - **Verdi** (corsia 6181, `files/runs/h60/green*-*.log`):
+>   - services: `ai-export-pure` 340 (con i 17 di TA-1), `logging-errors` 122, `server-errors` 35,
+>     `response-validation` 10, `logging-access-filter` 112, `secret-masking` 68, `sleep-wake-activity` 111 (SWA-037
+>     tiene), `app-lifecycle` 53, `security-headers` 15, `ai-export` 1 093;
+>   - api: `address-probe` 28, `system` 122, `ai-export` 15, `registration` 102, `instance-legal` 19;
+>   - frontend: `front-utility core-unit` 9 447 su 220 file (rifatto dopo Prettier sulla Vitest di TA-3); `front check`
+>     con svelte-check a 0 errori e 0 warning;
+>   - statici: ruff e black puliti sui 22 file Python, Prettier sui file frontend toccati, `git diff --check`,
+>     `check-orphans` (494 backend e 568 frontend raggiungibili).
+> - **La regola**: «Errors: never lose the cause» in `backend.instructions.md`, con una riga nella tabella «Where to
+>   Find Things»; «API errors in the console» in `frontend.instructions.md`, sotto «Telling the user».
+> - **Sicurezza: verificato e fissato con i test.**
+>   - Il corpo di un 5xx porta solo `request_id` ed `error_type` oltre al suo `detail`: `server-errors`, canarini in
+>     `Authorization`, `Cookie`, nella password del corpo, nel token della query e nel messaggio.
+>   - La riga del gestore contiene metodo e percorso, mai la query, gli header o il corpo.
+>   - Nella riga di `_build` il messaggio sta solo nella traceback (`ai-export-pure`, test 9).
+>   - La console scrive solo i campi ammessi, ai due livelli (`apiErrorConsole.test.ts`: 9 guasti, 14 righe lette fino
+>     all'ultima stringa raggiungibile).
+>   - Le due stampe trovate dai test-author sono corrette: `BrokerImportFilesModal` e il `debug.log` con la query.
+> - Doc: docs-writer in corso (`files/h60/docs_writer_brief.md`).
+
+> **Avanzamento H-60 (19/10, 18:15): `all-backend` verde, doc fatta, checkpoint inviato.**
+> - **`all-backend`** nello slot del coordinatore (`files/runs/h60-allbackend.sh`, `--fresh-run --workers 2`, corsia
+>   6181, 17:37:38–18:07:41): **29 456 passati, 0 falliti, 7 saltati**, porta libera alla fine. In parallelo girava lo
+>   slot di A sulla 6182, con i suoi dati.
+>   - Nel log del server condiviso (23 387 righe) nessuna traceback in chiaro: le 2 righe che contengono «Traceback»
+>     sono JSON, warning di un provider con la traceback dentro. Nessun livello `EXCEPTION`. `request_id` è in 15 557
+>     righe dell'app. Nessuna riga «Request failed» o «Unhandled error»: in tutta la suite ogni 5xx era voluto e già
+>     riportato, e nessuna eccezione è uscita dall'app.
+> - **La doc** (docs-writer, `files/h60/docs_writer_brief.md`). `developer/architecture/security.md`:
+>   - `#error-answers` riscritta: i quattro casi, i campi, i tre test;
+>   - `#request-logs` aggiornata, e corretto il paragrafo di H-33 che diceva «plain text»;
+>   - una sezione nuova, «The Browser Console», con quello che non si scrive mai e le corsie a DEBUG, come chiesto dal
+>     coordinatore;
+>   - `#response-headers` con `X-Request-Id`; `#managed-headers` corretta, perché diceva «plain text».
+>   Altre pagine per gli sviluppatori:
+>   - `settings.md` e `frontend/state/app-state.md`: `client_log_level`;
+>   - `overview.md`: il gestore all'avvio e `request_id` nello stack;
+>   - `test-walkthrough/front-overview.md`: la corsia gira a DEBUG.
+>   Admin (solo `.en.md`):
+>   - `filesystem.en.md`: come leggere il log, con `event` e `request_id` e due esempi `jq` provati sul log vero;
+>   - `configuration.en.md`: la riga di `LOG_LEVEL`, e `LIBREFOLIO_LOG_LEVEL` impostata anche da `server --test`.
+>   `mkdocs build` stretto e `check-links` (97) puliti. Nessuno stamp: le due pagine admin avevano già un debito di
+>   traduzione dal 10/10, e lo stamp lo avrebbe congelato.
+> - **⚠️ Fuori pista: una docstring rimasta indietro.** Quella di `request_id.py` diceva ancora «outermost». Corretta
+>   dopo `all-backend`: tocca solo la docstring, e ruff e black sono puliti.
+> - **D3 resta ad A e J**, che hanno `requestIdOf(error)`. Finché l'id non compare nei messaggi, la pagina admin dice
+>   di chiederlo dalla console del browser: va aggiornata quando D3 entra.
+
+### Lotto «N70: il paragrafo su Tailscale nella guida dei controlli di connessione» (19/10, 18:10) — in corso, PAUSA
+
+> Dal coordinatore (19/10, 18:10), con le risposte del developer. Solo doc, in inglese, un commit a parte che il
+> coordinatore fa entrare presto. Il developer, testuale: «quando hai scritto la guida dimmelo così la seguo e ti dico
+> se ha funzionato». Sulla sua nightly Docker le richieste arrivano da **`172.28.0.1`**, una rete compose sua: non
+> `172.17` né `172.18`. La guida deve dire come trovare quell'indirizzo (`docker network inspect`, o il log) e cosa
+> mettere in `FORWARDED_ALLOW_IPS`; il `172.16.0.0/12` lo copre.
+> Le altre risposte, per i lotti dopo:
+> - il link della guida per ogni controllo: la mia soluzione, cioè una mappa nel frontend controllata da un test (A lo
+>   saprà dal coordinatore);
+> - i testi dei controlli: i miei, in inglese; IT/FR/ES alla fine, con Aphra.
+> - Ordine dopo N70: il piano breve aggiornato di H-55 (CSP v2), poi i lotti dei controlli.
+
+**Pausa generale alle 18:12 (il developer spegne la macchina).** HEAD `2c7fc7b8d` (H-60 entrato: `bf16865ed`,
+`2c7fc7b8d`); worktree pulito, porta 6181 libera, nessun processo della corsia. La corsia in `/tmp` va ricreata con
+`db populate --force --clean`.
+
+**Già verificato** (sul codice e sulle fonti; da non rifare):
+- **La pagina.** `mkdocs_src/docs/admin/connection_checks.en.md`, `## 🧰 Behind a Reverse Proxy {: #reverse-proxy }`
+  (l.157) e `### 🧭 The Visitor's Address {: #client-address }` (l.203). Il paragrafo «When LibreFolio does not trust
+  your proxy» (~l.266) già nomina `FORWARDED_ALLOW_IPS`, `docker network inspect` e l'esempio `172.18.0.0/16`. Il
+  paragrafo su Tailscale va lì o subito dopo.
+- **uvicorn 0.52.4.** `Config` legge `FORWARDED_ALLOW_IPS` dall'ambiente (default `127.0.0.1`, `config.py:357`); accetta
+  una lista separata da virgole, indirizzi **e reti** (`ip_network`, `middleware/proxy_headers.py:136`) e `*`. Quindi
+  `172.16.0.0/12` funziona. Il Docker parte con `uvicorn backend.app.main:app` (CLI) e legge l'ambiente; compose passa
+  `.env` con `env_file: .env`.
+- **Il log d'accesso** di uvicorn scrive l'indirizzo di `scope["client"]`, già riscritto dal middleware dei proxy. Prima
+  della correzione si vede il gateway (`172.28.0.1:porta - "GET …"`), dopo l'indirizzo del visitatore: è la verifica da
+  dare al developer.
+- **Le due configurazioni Tailscale della guida** (`service_exposure.en.md`):
+  - `tailscale serve --bg 6040` / `tailscale funnel --bg 6040` sul server: il proxy va su `http://127.0.0.1:6040`.
+    LibreFolio installato sull'host vede `127.0.0.1`, già fidato. In Docker, il proxy di Docker passa la connessione al
+    container, che vede **il gateway della sua rete**.
+  - Livello 4: un container Tailscale (`network_mode: bridge`) con socat verso `HOST_IP:HOST_PORT`, l'IP di LAN del
+    server. Anche qui il container di LibreFolio vede il gateway della sua rete (NAT a forcina).
+  - In tutti e due i casi va messo in `FORWARDED_ALLOW_IPS` il gateway (`172.28.0.1` per il developer) oppure
+    `172.16.0.0/12`.
+- **Come trovare il gateway** (container `librefolio`, `container_name` in compose):
+  - `docker inspect librefolio --format '{{range .NetworkSettings.Networks}}{{.Gateway}}{{end}}'`;
+  - oppure `docker network inspect <rete>` (`IPAM.Config[].Gateway`/`Subnet`);
+  - oppure il log d'accesso, sopra.
+- **Le avvertenze da scrivere.**
+  - Una rete compose ricreata (`down` e poi `up`) può cambiare sottorete: l'IP esatto è il più stretto, ma va
+    ricontrollato; `172.16.0.0/12` sopravvive al cambio, ma si fida di ogni rete Docker dell'host.
+  - Le reti oltre `172.31` (pool `192.168.x.x/20`) non sono coperte.
+  - Il gateway è anche l'indirizzo di ogni connessione fatta sul server stesso, e via IPv6 dal resto della rete (vedi
+    `#limits`): se Tailscale sul server è l'unica via d'ingresso, conviene pubblicare la porta solo su loopback,
+    `127.0.0.1:6040:6040`. Non vale per il livello 4, che passa dall'IP di LAN.
+- **Tailscale e gli header.** Serve e Funnel scrivono `X-Forwarded-For` con l'IP del client (codice
+  `ipn/ipnlocal/serve.go`, issue #19728). `X-Forwarded-Proto` è dubbio secondo le fonti (issue #7061, in corso). La
+  guida (riga ~174) e il livello 4 dicono già «send both»: è **da verificare sul codice di Tailscale**
+  (`ipn/ipnlocal/serve.go`) prima di scrivere, e da correggere se serve, perché il cookie `Secure` dipende da
+  `X-Forwarded-Proto`.
+
+**Prossimo passo esatto**:
+1. Verificare `X-Forwarded-Proto` nel `serve.go` di Tailscale (web_fetch del file su GitHub, versione corrente).
+2. Il brief al docs-writer con i fatti sopra: il paragrafo «Tailscale Serve and Funnel» in `#client-address` (Docker:
+   il gateway, come trovarlo, cosa mettere, la verifica nel log, le avvertenze; host: niente da fare); nessuno stamp se
+   la pagina ha già un debito di traduzione (da controllare); `mkdocs build` stretto e `check-links`.
+3. Mandare al coordinatore i percorsi per il commit a parte e il messaggio per il developer: «la guida è pronta, sezione
+   …, seguila e dimmi se ha funzionato».
+
+> **H-55 v2 confermata dal developer (19/10, 18:15, durante la pausa).** Testuale: «confermo quanto scrivi, facciamolo
+> come dici, di default attivo, e si allargano le maglie solo all'occorrenza». Sì a Q1–Q4:
+> - la sonda a immagine per l'indirizzo pubblico;
+> - l'avviso per gli script iniettati, in console e nella scheda Sicurezza;
+> - le tre regole base anche sulla documentazione;
+> - le categorie del cloud «virtuali» nel runner.
+>
+> La CSP è sempre applicata, direttiva per direttiva, senza interruttore. In coda dopo N70.
+>
+> Prima serve un **piano breve aggiornato**, perché da allora è cambiato qualcosa:
+> - H-60 ha toccato `security_headers.py` (il 500 non gestito è JSON, scritto nel log una volta) e ha messo
+>   `request_id` nello stack, subito dopo `activity`;
+> - la patch dei rossi di H-55 v1 (`files/parked/h55-csp-enforce-reds-on-d6c252ec4.patch`) va rifatta sulla base di
+>   oggi;
+> - la console del frontend ora scrive `console.error('[API]', …)`, ma la CSP non c'entra.
+>
+> Il disegno della CSP, cioè direttive, rischi e ordine, non cambia.
+
+> **N70, passo 1 fatto (20/10, 09:20, durante l'attesa dei test-author di H-60r).** Verificato nel sorgente attuale di
+> Tailscale (`ipn/ipnlocal/serve.go`, ramo `main`, ultimo cambio 25/09/2026, commit `3d62394a`), funzione
+> `addProxyForwardedHeaders`, chiamata dal `Rewrite` del reverse proxy di Serve e Funnel:
+> - `X-Forwarded-Host` è l'`Host` ricevuto;
+> - `X-Forwarded-Proto: https` c'è **solo se la richiesta arriva in TLS** (`r.In.TLS != nil`): con Serve in HTTPS (il
+>   default) e con Funnel (sempre HTTPS) c'è; con `tailscale serve --http=…` no, ma lì anche il visitatore è in http;
+> - `X-Forwarded-For` è l'indirizzo d'origine della connessione (`SrcAddr`).
+>
+> Le tre intestazioni sono scritte con `Set`, che sostituisce quelle mandate dal client. Quindi «manda entrambe» della
+> guida (`connection_checks.en.md` ~l.174, Level 4 di `service_exposure`) **è giusto per HTTPS**. Nel paragrafo nuovo
+> basta una frase: con `--http` niente `X-Forwarded-Proto`, ed è corretto così. Il consiglio sul cookie non cambia.
+
+> **N70, passo 2 fatto (20/10, 10:15–10:50)**: il docs-writer, sul brief `files/n70/docs_writer_brief.md`, ha scritto in
+> `mkdocs_src/docs/admin/connection_checks.en.md`:
+> - il grassetto «When LibreFolio does not trust your proxy» è diventato un titolo, `#### 🕵️ When LibreFolio Does Not
+>   Trust Your Proxy {: #untrusted-proxy }`, e il rimando nel testo un link;
+> - la sottosezione nuova `#### 🐳 Tailscale Serve and Funnel with Docker {: #tailscale }`, dopo «Forwarding headers
+>   from a public address», a passi: trovare il gateway (`docker inspect`, `docker network inspect`, il log
+>   d'accesso), `FORWARDED_ALLOW_IPS`, `docker compose up -d`, la verifica (`100.x.y.z:0` nel log);
+> - le tre avvertenze, compresa la porta su loopback;
+> - in seguito, su mia richiesta, nel punto «To fix it» il rimando a `#tailscale` e la nota sul gateway della rete
+>   intera.
+>
+> `mkdocs build` stretto ok; `check-links` ok, 97 validi. Nessuno stamp: testo nuovo, debito di traduzione vero.
+> - **⚠️ Fuori pista**: il brief diceva «Level 3» per `tailscale serve`, ma in `service_exposure` è il consiglio
+>   HTTPS del Livello 1 (il Livello 3 è solo Funnel). Il docs-writer l'ha corretto. In più `configuration.en.md:106`
+>   li chiama in un terzo modo («Levels 3 and 4»); lasciato com'è.
+> - **Verificato**: uvicorn 0.52.4 scrive `(host, 0)` per un indirizzo senza porta (`_parse_host_port`), quindi la
+>   riga del log dopo la correzione finisce in `:0`.
+
+#### Contratto della mappa delle guide per A (N69d), 19/10 18:20, inviato ad A prima del codice
+
+- **Modulo** (di H): `frontend/src/lib/features/instance/checkGuides.ts`.
+- **Export**:
+  - `checkGuidePath(checkId: string): string | undefined`, da usare nel bottone;
+  - `CHECK_GUIDES: Readonly<Record<string, string>>`, la mappa intera.
+- **Chiave**: il `finding.id` di A, così com'è, cioè il `check_id` del server oppure l'id del controllo del browser
+  (`accounts.openRegistration`, `OPEN_REGISTRATION_NOTICE_ID`). Lo stesso link vale per ogni stato, superati compresi.
+- **Valore**: un percorso relativo a `/mkdocs/`, senza lingua e senza `/` iniziale, nella forma URL di cartella più
+  ancora esplicita. Va passato tale e quale a `DocsLink path`, che aggiunge la lingua. `localizedFallbackPath` non
+  serve: aggiunge comunque il prefisso della lingua.
+- **`undefined`**: id sconosciuto, quindi niente bottone.
+- **Contenuto previsto** (18 voci; le ancore verificate in EN sul `2c7fc7b8d`):
+  - `platform.jwt_secret` → `admin/configuration/#secrets`;
+  - `platform.secrets_set_twice` → `#secret-files`;
+  - `platform.instance_key` → `#instance-key`;
+  - `platform.session_cookie` → `admin/connection_checks/#session-cookie` (4 lingue);
+  - `platform.client_address` → `admin/connection_checks/#untrusted-proxy` (**nuova**, da mettere col docs-writer
+    dentro N70: un titolo `####` al posto del grassetto «When LibreFolio does not trust your proxy»);
+  - `platform.frame_protection` → `admin/configuration/#frame-protection` (**nuova**);
+  - `platform.csp_report_only` → `admin/configuration/#csp-report-only` (**nuova**; con H-55 v2 diventa una
+    sottosezione di `#csp`);
+  - `platform.log_level` e `platform.test_mode` → `#startup-checks`;
+  - `platform.plugin_secrets` → `#plugin-secrets`;
+  - `accounts.login_limit` → `#login-limit`;
+  - `backup.panel_token` → `admin/hosting_providers/#panel-token`;
+  - `backup.upload_limit` e `backup.restore_limit` → `#restore-upload-limit`;
+  - `email.smtp` → `admin/email/#variables`;
+  - `email.smtp_encryption` → `#encryption-modes`;
+  - `email.links` → `#links-check`;
+  - `accounts.openRegistration` → `admin/settings/#open-registration-warning`.
+  - Con H-55 v2 si aggiunge la voce del controllo del browser «script bloccato», con id e ancora da fissare nel suo
+    piano breve.
+- **Lingue**:
+  - `email` e `hosting_providers` esistono solo in inglese. La build le pubblica anche sotto `/it/` ecc., perché
+    `fallback_to_default` del plugin i18n vale `True` di default (verificato: `mkdocs_static_i18n/config.py:88`).
+  - `configuration`, `connection_checks` e `settings` hanno traduzioni senza le sezioni della 1.3. In IT/FR/ES il link
+    apre la pagina giusta ma in cima, fino alla traduzione con Aphra di fine release.
+- **Test (H)**:
+  - un Vitest: la forma del valore, l'ancora `{: #… }` presente nella pagina `.en.md`, e un cricchetto con le ancore
+    che mancano ancora nelle traduzioni, che deve scendere a zero dopo Aphra;
+  - un pytest puro: le voci del server uguali, nei due sensi, a `CONFIG_CHECKS` più `platform.plugin_secrets`. La
+    mappa è letta come testo, una voce per riga.
+- **Ordine proposto**: N70 (con `#untrusted-proxy`), poi la mappa e le due ancore nuove (domani mattina), poi i testi
+  dei controlli. Il piano breve di H-55 v2 lo mando mentre la mappa aspetta il checkpoint. A ha bisogno del modulo
+  nella sua base: l'ingresso e l'aggiornamento di base li decide il coordinatore.
+
+### Lotto «H-60r: la cura della revisione di H-60» (20/10, 08:47) — passi
+
+> Ripresa del 20/10. Lane 6181 ripopolata (`db populate --force --clean`, exit 0). HEAD `2c7fc7b8d`; unico file sporco
+> questo piano. La revisione automatica di `bf16865ed`/`2c7fc7b8d` (accento sulla sicurezza) trova **due difetti
+> medi**, da curare prima dell'ingresso; il resto è pulito: id lato server, niente locals, niente query string nei
+> log, header conservati. Ordine approvato: (1) questa cura e il suo checkpoint; (2) N70 con l'ancora
+> `#untrusted-proxy`; (3) la mappa delle guide; (4) il piano breve di H-55 v2 mentre la mappa aspetta.
+
+**Difetto 1: il segno «reported» sta sull'oggetto eccezione, condiviso fra richieste.**
+- Chi condivide lo stesso oggetto:
+  - la build del portfolio engine (`financial_math/portfolio/engine.py`, MF-J45b/d: `flight.set_exception(error)`, e
+    chi aspetta riceve lo stesso `error`);
+  - i motori di rischio (`risk/quant/engine.py` e `optimization_engine.py`, `future.set_exception(exc)`).
+- La prima richiesta scrive la riga e mette il segno. Le altre restituiscono il loro `request_id` ma non scrivono nulla,
+  e il filtro di `uvicorn.error` toglie anche la riga di uvicorn: il loro id non compare nel log. Lo stesso succede col
+  ramo HTTPException, `chain_reported` lungo `__cause__`, quando l'oggetto condiviso è stato scritto.
+
+**Difetto 2: in `ai_export/dependencies.py:_build` lo stesso traceback viene ripetuto.**
+- Lo stesso `ResourceLoadError`, memorizzato per richiesta, arriva a ogni componente che legge quella risorsa, e ognuno
+  ripete il traceback con `exc_info=shown_error(exc)`.
+- Lo stesso succede fra due richieste che aspettano la stessa build.
+
+**Disegno della cura** (nessuna scelta di prodotto: è la definizione di H-60, «ogni id che il client vede si trova nel
+log, ogni traceback una volta sola»):
+1. **Il segno diventa per richiesta.** Sull'eccezione restano le richieste in cui una riga ne ha parlato, ciascuna col
+   suo `request_id` (`None` fuori da una richiesta) e con un flag: «quella riga ne portava il traceback».
+   - `LibreFolioBoundLogger` segna con il `request_id` della riga (keyword esplicita, poi il contesto del logger, poi i
+     contextvars di structlog).
+   - Con `exc_info` segna anche la catena che il traceback mostra (`__cause__`, poi `__context__` se non soppresso).
+2. **Rete di sicurezza** (gestore dei 5xx e 500 non gestito), per la richiesta R:
+   - già scritto **per R** → nessuna riga, come oggi (AP-API-12 e i test di B non cambiano);
+   - scritto **per un'altra richiesta**, o fuori da una richiesta → una riga corta `WARNING`, «Request failed with an
+     error already logged», con `request_id`, `status` (solo per i 5xx), `method`, `path`, `error_type` e
+     `logged_with_request_id` (la prima richiesta che l'ha scritto, se ne aveva una). Senza traceback;
+   - mai scritto → come oggi.
+3. **Il filtro di `uvicorn.error` non cambia**: `security_headers` scrive ora una riga per ogni richiesta prima di
+   rilanciare, quindi la riga di uvicorn che toglie è sempre un doppione.
+4. **`_build`**: se il traceback di `shown_error(exc)` è già nel log, la riga del componente resta (dice quale
+   componente è fallito) ma senza `exc_info`, con `logged_with_request_id` quando noto.
+
+**Aggiunta del coordinatore (20/10, 09:17)**: il formato con cui il frontend mostra l'id dell'errore, fatto una volta
+sola in un aiuto comune (funzione, chiave i18n, posizione nel messaggio), documentato nel contratto. J lo applica
+all'AI Export, al rischio e ai lotti; X al PAC.
+- **Contratto §4**:
+  - `frontend/src/lib/api/requestIdMessage.ts`, con `withRequestId(t, message, error)`;
+  - la chiave `common.errorWithRequestId`, «{message} (code: {requestId})» nelle 4 lingue;
+  - il codice in fondo, tra parentesi, sulla stessa riga;
+  - **solo per un 5xx con id**, perché H-60 garantisce una riga nel log solo per i 5xx;
+  - segue `originalError` e `cause`, al più 8 passi.
+- Inviato al coordinatore alle 09:35. La scelta «solo 5xx» è da confermare.
+
+**Passi**:
+1. ⏳ Contratto (`files/h60r/contract.md`, §0–§4) e quattro test-author, uno per file:
+   - TA-R1 `test_logging_errors.py`: **fatto**, 91 casi rossi nuovi, nessun test esistente cambiato;
+   - TA-R2 `test_server_errors.py`, il rosso della revisione (due richieste sulla stessa chiave di build): in corso;
+   - TA-R3 `test_ai_export_build_failure_log.py`: **fatto**, 4 rossi; un quinto chiesto (un loader che scrive il suo
+     traceback prima di rilanciare);
+   - TA-R4 `requestIdMessage.test.ts`, nuovo: in corso.
+
+   Poi le corse rosse.
+   > **⚠️ Fuori pista**: TA-R3 ha eseguito un comando in più, fuori regola: la lettura della versione di structlog nel
+   > venv, solo lettura e innocua. Lo ha dichiarato lui.
+   > **Nota implementazione**: la cura è pronta in `files/h60r/dry/` (`errors.py`, `logging_config.py`,
+   > `failure_report.py`, `dependencies.py`, `requestIdMessage.ts`). Il controllo da solo di `errors.py` passa
+   > (`selfcheck_errors.py`). `apply.sh` applica solo se i file del worktree sono ancora uguali alle copie.
+   > **N70, passo 1 fatto** in attesa (vedi la nota nel lotto N70).
+   ✅ **Rossi del backend, 20/10, 09:45**, corsia 6181 (`files/runs/h60r/red-*.log`):
+   - `services logging-errors`: 91 failed, 122 passed. Le 91 sono esattamente le nuove: TypeError su
+     `mark_reported(e, "r1")`, AttributeError sulle funzioni nuove.
+   - `services ai-export-pure`: 5 failed, 340 passed. Le 5 nuove; la seconda riga ha ancora `exc_info`.
+   - `services server-errors`: 8 failed, 35 passed. Le 8 nuove, che riproducono il difetto della revisione:
+     - sul ramo non gestito, l'id della seconda richiesta non è in nessuna riga;
+     - sul ramo 503, «Request failed» due o tre volte, perché H-60 marcava solo l'HTTPException e non l'errore della
+       build mostrato dal traceback.
+
+   TA-R2 ha cambiato `SERVER_ERROR_LINES`, aggiungendo la riga corta, così i controlli esistenti «nessuna riga»
+   vietano anche quella. Nessun test esistente cambia esito.
+2. ✅ **Cura del backend applicata** (`apply.sh`, 20/10, 09:50), sui file `utils/runtime/errors.py`,
+   `logging_config.py`, `services/platform/failure_report.py` e `ai_export/dependencies.py` (il `_build`, nell'OK di
+   H-60). Le descrizioni di `logging-errors` e `server-errors` nel runner sono aggiornate; `requestIdMessage.test.ts`
+   è registrato in `core-unit`.
+3. ✅ **Verdi mirati del backend** (`files/runs/h60r/green*.log`):
+   - `services logging-errors` 213 passed; `services server-errors` 43; `services ai-export-pure` 345;
+   - `services response-validation` 10; `logging-access-filter` 112; `secret-masking` 68; `security-headers` 15;
+     `app-lifecycle` 53; `sleep-wake-activity` 111;
+   - `api address-probe` 28 (AP-API-12); `api ai-export` 15; `services ai-export` 1093.
+
+   Ruff e black puliti sui 9 file. Le regole sono aggiornate:
+   - `backend.instructions.md`: il segno per richiesta, la riga corta, e un punto nuovo, «a failure handed to several
+     consumers is written with its traceback once»;
+   - `frontend.instructions.md`: `withRequestId`.
+4. ✅ **Frontend, il codice nei messaggi (§4)**, 20/10, 10:30:
+   - la Vitest di TA-R4, `requestIdMessage.test.ts`, 19 test (~70 casi);
+   - rosso: `front-utility core-unit` 57 failed, tutti in quel file (modulo e chiave assenti); gli altri 220 file
+     verdi (9447 test);
+   - la cura: `frontend/src/lib/api/requestIdMessage.ts` e la chiave `common.errorWithRequestId` nelle 4 lingue
+     (`dev.py i18n add`, in `base`);
+   - verde: `core-unit` 221 file, 9504 test; `front check` 0 errori e 0 avvisi; `i18n check` stretto ok; Prettier ok;
+     `utils gate-i18n-usage` 195 passed; `utils gate-i18n-catalog` 176 passed.
+   - Il coordinatore ha confermato il contratto, compreso «solo 5xx con id» (09:24), e lo gira a J.
+5. ✅ **Docs** (docs-writer), `security.md` +100/−34:
+   - `#error-answers`: la tabella, il caso per richiesta e la riga corta, l'eccezione non gestita, l'AI Export, i test;
+   - `#request-logs`: il segno per richiesta;
+   - `#browser-console`: la sottosezione nuova `#error-code`;
+   - le intestazioni della risposta: allineate.
+
+   `mkdocs build` stretto ok; `check-links` ok, 97 validi.
+   > **⚠️ Fuori pista**: il docs-writer ha scritto i suoi log in `/tmp`. Innocuo, si rifanno.
+   > **Nota**: l'ancora `#single-flight` di `backend/financial_math.md` sta due punti sotto la frase giusta. È fuori
+   > perimetro: per ora resta così.
+6. ⏳ Checkpoint: inviato al coordinatore, FROZEN.
+
+### H-55 v2, la CSP sempre applicata — piano breve aggiornato (20/10)
+
+> Confermata dal developer il 19/10, testuale: «confermo quanto scrivi, facciamolo come dici, di default attivo, e si
+> allargano le maglie solo all'occorrenza». Sì a Q1–Q4. Il disegno del 19/10 mattina (direttive, rischi, ordine)
+> **non cambia**; sotto ci sono solo le differenze e il piano dei passi aggiornato.
+
+**Cosa è cambiato dal 19/10 mattina**:
+1. **H-60 e H-60r**, entrati col treno 2, hanno toccato `security_headers.py`:
+   - il 500 non gestito ora è JSON, scritto nel log una volta per richiesta, poi rilanciato;
+   - `request_id` sta nello stack, subito fuori da `security_headers`.
+
+   La CSP vive nello stesso `send_with_headers` e non cambia questa parte. La risposta JSON non è un documento, quindi
+   riceve solo gli header di base. I rossi parcheggiati di `test_managed_headers.py` vanno rifatti su questo file.
+2. **La mappa delle guide** (N69d di A, lotto 3 di oggi):
+   - il nuovo controllo del browser «uno script bloccato» (Q2) entra nella metà `browser` di `checkGuides.json`, con
+     guida `admin/configuration/#csp`;
+   - la sezione «Browser Protections» della guida di configurazione nasce col lotto della mappa, con
+     `#frame-protection` e `#csp-report-only`; H-55 v2 ci aggiunge `#csp`, e il report-only diventa una sua parte.
+     Le ancore restano stabili.
+3. **Le categorie del cloud** (Q4: `cloud` virtuale e `front-cloud` con la corsia managed messa da sé) sono un lotto
+   piccolo a sé (S–M), su file condivisi del runner. Conviene **prima del passo 5**, così lo slot finale gira
+   `front-cloud all`.
+4. **I rossi parcheggiati** (`files/parked/h55-csp-enforce-reds-on-d6c252ec4.patch`): la tabella del 19/10 (cosa si
+   riusa, cosa cade) vale ancora. Cambia solo la base, oggi `311033c3c` più i lotti in volo.
+
+**Passi aggiornati** (prima i rossi, come sempre):
+
+| # | Cosa | Chi | Taglia | Dipende da |
+|---|---|---|---|---|
+| 0 | Inventario: `all-frontend` con `--lane-setting LIBREFOLIO_CSP_REPORT_ONLY=true` su una corsia self-hosted, senza codice. Il raccoglitore di H-43 elenca ciò che la policy fermerebbe | H | slot di circa 1 h | **uno slot** (la domanda 5 del 19/10, ancora aperta) |
+| 1 | Gli hash rinfrescati quando la build cambia (firma `st_mtime_ns`/`st_size`) | H | S | — |
+| 2 | La sonda per immagine (Q1): `GET /api/v1/auth/address-probe.png`, 1×1 per questa istanza e 2×1 per un'altra; `addressProbe.ts` di A, riusato da E | A con H | S | prima del 3 (sennò AUSR-E-07 diventa rosso) |
+| 3 | La policy sempre applicata; il trio su ogni documento, `/mkdocs` e la doc dell'API compresi (Q3); i testi dei controlli; la sezione `#csp`; il CHANGELOG sotto «⚠️ Breaking changes» | H | M | 1, 2 |
+| 4 | L'avviso degli script iniettati (Q2): il listener in testa ad `app.html` (serve l'OK del programma colori), un messaggio solo in console, e il controllo del browser nella scheda Sicurezza (`sessionStorage`, nessun endpoint) con la voce della mappa | H con A | S/M | entra col 3 |
+| 4b | Le categorie `cloud` e `front-cloud` (Q4) | H | S–M | via sui file condivisi del runner |
+| 5 | Slot: E2E completa, `front-cloud all` e una corsa con la copertura; poi la correzione della voce F1 della baseline | H | slot | 3, 4, 4b |
+
+**Totale**: circa 2 giorni di H e mezza giornata di A.
+
+**Cosa chiedo per partire**:
+- lo slot del passo 0;
+- il via sui file del runner per il 4b;
+- l'OK del programma colori su `app.html` per il 4. Si può chiedere già adesso: tocca solo la testa dello script inline.
+
+**H-55 v2, approvazione e condizioni (20/10, 10:39 e 11:30)**:
+- il coordinatore approva il piano breve e dà il via sui file condivisi del runner per il 4b; lo slot del passo 0
+  arriva dopo la mappa;
+- le condizioni del coordinatore dei colori per il passo 4 (`app.html`):
+  1. **L'anti-FOUC non si rompe**: l'avviso sta in un suo `try`, oppure dopo `classList.add(theme)`.
+  2. **Non si toccano**:
+     - la decisione del tema e il `classList.add`, righe 17–23;
+     - la coppia `theme-color`, righe 27 e 11;
+     - lo `<style>` dello splash, righe 39–101.
+
+     E niente `classList.contains('dark')`: lo vieta il gate `themeModeReads`.
+  3. **Prima del checkpoint** girano i gate `themeColorMeta`, `themeModeReads`, `themeComponentTokens`, `themeRoles`
+     e `themeTokens`, più `documentTitle.guard.test.ts` e `flagFont.gate.test.ts`.
+  4. **La CSP**:
+     - niente hash fissati a mano: la designer può cambiare `#1b4334`, e gli hash si calcolano all'avvio;
+     - se si tocca `style-src 'unsafe-inline'`, va detto prima, perché lo splash ne dipende. Il disegno di H-55 v2
+       non tocca `style-src`: lo `style-src` applicato non c'è.
+
+### Lotto «la guida di ogni controllo» (la mappa per il bottone «Guida» di A, N69d), 20/10, 10:40 — passi
+
+> Via del coordinatore (20/10, 10:39) dopo il commit di N70 (`564549192`). Contratto in
+> `files/guides_map/contract.md`; il contratto inviato ad A il 19/10 (percorso del modulo, export, forma del valore)
+> resta invariato.
+
+**Disegno**:
+- I dati stanno in `frontend/src/lib/features/instance/checkGuides.json`, diviso in `server` (i controlli di
+  `GET /security/checks`, nell'ordine del server) e `browser` (`accounts.openRegistration`). Il JSON lo leggono il modulo
+  TS e il test del backend: niente parsing di TS in Python.
+- Il modulo `checkGuides.ts` espone `CHECK_GUIDES`, congelato, e `checkGuidePath(id)`, che legge solo le chiavi
+  proprie.
+- 18 voci. Ci sono tre ancore nuove: `#untrusted-proxy` (N70, già entrata), `#frame-protection` e `#csp-report-only`
+  (dal docs-writer, in una sezione «Browser Protections» di `configuration.en.md`, dove H-55 v2 aggiungerà `#csp`).
+- **Test**:
+  - Vitest `checkGuides.test.ts` in `core-unit`: forma, ancore nelle pagine `.en.md` con un controllo negativo,
+    lookup, metà `browser`, il cricchetto delle traduzioni (30 coppie oggi, a zero dopo Aphra);
+  - pytest in `test_config_audit.py`: gli id di `run_config_checks()` più `platform.plugin_secrets`, in ordine,
+    uguali alle chiavi `server` del JSON.
+
+**Passi**:
+1. ✅ **Rossi** (20/10, 11:00–11:25):
+   - TA-M2 ha aggiunto `test_every_server_check_has_a_guide` in `test_config_audit.py`. Rosso: `config-audit` dà 1
+     fallito e 220 passati, perché il JSON non esiste; prima controlla che la cartella esista, quindi un percorso
+     sbagliato non passerebbe per un file mancante.
+   - TA-M1 ha scritto `checkGuides.test.ts`. Rosso: `core-unit` dà 6 falliti, tutti in quel file per modulo e JSON
+     assenti; la parte delle doc passa già. Ha un controllo negativo sul lettore delle ancore: `session-cookie` trovata
+     una volta, un'ancora inventata data per mancante.
+   - Il docs-writer ha scritto in `configuration.en.md` la sezione `## 🛡️ Browser Protections {: #browser-protections }`,
+     con `### 🖼️ Frame Protection {: #frame-protection }` e `### 📋 The Report-Only Policy {: #csp-report-only }`.
+     Ha anche messo i link dalle tabelle «Main Options» e «Startup Checks», e un paragrafo per gli sviluppatori in
+     `security.md` (`#security-checks-endpoint`). `mkdocs build` stretto ok; `check-links` ok, 97 validi.
+   - `core-unit` ha la riga di `checkGuides.test.ts`.
+   > **⚠️ Fuori pista**:
+   > - TA-M1 ha scritto e poi cancellato un file di appoggio in `/tmp`;
+   > - il mio brief per le doc nominava una «pagina per gli sviluppatori» senza dire quale; l'ho chiesta dopo.
+2. ✅ **Il JSON e il modulo applicati** dalla copia in `files/guides_map/dry/`.
+3. ✅ **Verdi**:
+   - `front-utility core-unit`: 222 file, 9510 test, ripetuto dopo Prettier sul file di TA-M1, che non poteva
+     lanciarlo;
+   - `services config-audit`: 221 passati;
+   - `front check`: 0 errori e 0 avvisi;
+   - ruff e black puliti; `git diff --check` pulito.
+4. ⏳ Checkpoint: dopo quello di W-B37, come chiede il coordinatore.
+
+### Rosso in dev dal treno 2: W-B37 (`BrokerImportFilesModal.test.ts`), 20/10, 11:30 — passi
+
+> Dal coordinatore: nel gate su `f73514a77`, `front-utility component-unit` dà 1 fallito, il controllo di W-B37 «a listed
+> file without can_delete is refused by the generated client, and nothing is listed»: `TypeError: undefined is not
+> iterable` a `:323`.
+
+- **Causa (mia, H-60)**:
+  - con l'OK del coordinatore avevo tolto da `BrokerImportFilesModal.svelte` la riga `console.error('Failed to load
+    files:', e)`. Il test la usava per leggere `err.cause.issues`;
+  - il plugin `zod-validation` rilancia lo **stesso** `ZodiosError`, quindi il comportamento non è cambiato, solo il
+    modo del test di osservarlo;
+  - in H-60 non avevo fatto girare `component-unit` dopo aver toccato un componente.
+  > **⚠️ Fuori pista (lezione)**: chi tocca un `.svelte` fa girare anche `front-utility component-unit`, non solo
+  > `core-unit`.
+- **Cura**:
+  - il test, non il plugin: il test-author riscrive il controllo **senza leggere la console**. La regola di H-60 dice
+    che una riga di console non è mai il segnale che un test legge, e questo rosso è proprio il caso che la regola
+    previene;
+  - restano il banner e la lista vuota; la prova del rifiuto diventa il `safeParse` della lista servita con lo schema
+    di risposta generato (problema in `[0, 'can_delete']`), più un gemello positivo come barriera;
+  - va informato W, il file è suo (tramite il coordinatore).
+
+**Passi**:
+1. ✅ Rosso riprodotto sul file singolo (`vitest run …BrokerImportFilesModal.test.ts`): 1 fallito, 3 passati, lo
+   stesso `TypeError` (`files/runs/w37/red-single.log`).
+2. ✅ **Il test-author ripara il controllo** (+19/−3, solo dentro quel test):
+   - lo spy della console resta solo per il silenzio: non è più in una variabile, quindi nessuno può leggerlo;
+   - l'endpoint si trova in `zodiosApi.api` con l'alias `list_files_api_v1_brokers_import_files_get`, e il test
+     verifica che sia `['get', LIST_URL]`;
+   - il gemello positivo, `can_delete: true`, passa lo schema;
+   - `route.response.safeParse(server.files)` fallisce in `[0, 'can_delete']`;
+   - il banner e la tabella assente restano;
+   - il commento spiega perché il test non legge più la console.
+3. ✅ **Verdi**: il file singolo 4/4; `front-utility component-unit` 189 file, 4989 test; `front check` 0 errori;
+   Prettier pulito.
+4. ⏳ Checkpoint, prima di quello della mappa: inviato al coordinatore, che informa W.

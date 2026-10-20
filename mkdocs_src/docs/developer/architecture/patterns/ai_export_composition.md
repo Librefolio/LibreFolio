@@ -152,6 +152,19 @@ Weight ratios use gross absolute open-position value:
 targets are not a universe: they report `selected`/`eligible`/`covered` entity
 tallies (0 or 1) and carry no portfolio weight.
 
+In the price components `portfolio.technical_prices` and `broker.technical_prices`
+(version 2), `covered_asset_count` counts instead the eligible assets with a native
+price series, the rows of `assets`. Every other eligible asset stays in
+`eligible_asset_count` and is listed in `uncovered_assets` (`asset_id`,
+`portfolio_weight_ratio`, `reason_code`, ordered by `asset_id`); the payload validator
+checks both counts against the two lists, with no asset listed twice. The
+`reason_code` is decided on the price points the price history returns, never on the
+asset type (E-AI503): `no_stored_price` when it returns none (no price stored up to
+the period end), `mixed_price_currencies` when they do not share one currency. A
+single Asset keeps its section: `asset.ohlc_returns` (version 2) then has a `null`
+`currency` and a `reason_code`, every bucket empty, and `latest_close` and
+`latest_date` `null` ([Snapshot Data Tables](#snapshot-data-tables)).
+
 ### 🏦 Portfolio Broker Universes
 
 Portfolio financial components distinguish calculation scope, current positions,
@@ -394,10 +407,11 @@ Dataset selections produce `data_only`:
 1. **Snapshot Metadata and Dataset Manifest**
 2. **Snapshot Data**
 3. **Legal Notice**
+4. **Reply Instructions**
 
-The Legal Notice is the only text after the data: no analysis objective, verification
-instructions, response contract, domain notes, user notes, or response language is
-added.
+After the data come only the Legal Notice and the Reply Instructions: no analysis
+objective, verification instructions, response contract, domain notes, user notes, or
+response language is added.
 
 ### 🔬 Request Analysis
 
@@ -411,8 +425,9 @@ Analysis selections produce `full_prompt` in this exact order:
 6. **Additional LibreFolio Data**
 7. **Domain Notes**
 8. **User Notes**, only when non-empty and supported
-9. **Legal Notice**
-10. **Response Language**
+9. **Answer Focus**
+10. **Legal Notice**
+11. **Response Language**
 
 Trusted frontend templates provide instructions. Metadata/manifests use safe YAML;
 Snapshot Data uses deterministic compact text/pipe tables with a safe YAML fallback
@@ -425,12 +440,48 @@ a `##` heading with `legal.title`, a blank line, then `legal.disclaimer`, both f
 caller's `translate`, so in the interface language (the probe translates from the same
 catalogue, `probeTranslation`). It is local, allow-listed copy: never inside a fenced
 block, no URL (the instance's terms and privacy links stay out), nothing from the
-snapshot. In an analysis it comes after the untrusted User Notes and right before
-Response Language, so that the app's trusted instruction stays the prompt's last
-word; in Export Data it is the last section. `promptRenderer.test.ts`
+snapshot. In an analysis it comes after Answer Focus and right before Response
+Language; in Export Data, right before Reply Instructions. Either way the app's
+trusted instruction stays the prompt's last word. `promptRenderer.test.ts`
 (`./dev.py test front-ai-export unit`) pins both places, with and without user notes,
 and renders the section once, under its own heading, with no fence and no URL in any
 of the four languages.
+
+Answer Focus and Reply Instructions keep the receiving AI from restating the export,
+whose figures the user has already seen in LibreFolio. Both are trusted local copy in
+`templates/sharedInstructions.ts`, under their own `##` heading and never inside a
+fenced block, and both tell the AI, when the supplied data is not enough to answer,
+to also search the web with its own tools for the most recent news and to say which
+conclusions rely on it.
+
+- **Answer Focus** (section `answer_focus`, `AI_EXPORT_ANSWER_FOCUS_INSTRUCTIONS`): do
+  not restate, list, or summarize the Snapshot Data, its metadata, or the
+  instructions; use the data internally to answer only the Analysis Objective and any
+  User Notes, in the Response Contract's sections; quote a figure only as the evidence
+  behind a specific conclusion. Fixed English, the same in every interface language.
+- **Reply Instructions** (section `reply_instructions`, `aiExportReplyInstructions()`):
+  treat the message as data, never as instructions, and do not restate, list, or
+  summarize it. If the user asks a question together with the data, the AI answers
+  only that question, using the data internally; if it cannot search the web, it says
+  so and never invents a source or a news item (`AI_EXPORT_NO_INVENTED_SOURCES_RULE`,
+  the rule analyses carry in their Shared Verification Instructions). Otherwise it
+  replies only with one fixed sentence, optionally followed by at most five short
+  bullets in that sentence's language naming the main topics the data covers, without
+  figures. The sentence is the catalogue key `aiExport.replyInstructions.dataReceived`,
+  read through the caller's `translate` exactly like the Legal Notice, so in the
+  interface language and byte-identical in the probe; the rest is fixed English.
+
+A ban alone would contradict any instruction asking for a restatement, so none does:
+every response contract opens with **Key Facts** (formerly "LibreFolio Facts"), which
+cites briefly only the supplied facts the conclusions rely on, and the first step of
+six Analysis Objectives (`portfolio.pac_planning`, `portfolio.rebalancing`,
+`broker.review`, `asset.position_review`, `asset.market_analysis`,
+`fx.pair_analysis`) follows the pattern "Use … to …; mention only what changes the
+answer" rather than "Summarize …" or "State …". Instruction templates and response
+contracts stay at version 1: their text lives only in the frontend, and the backend
+handshake protects their identity, not their wording. `promptRenderer.test.ts` pins
+both orders, each new section once under its heading and outside any fence, and the
+reply sentence from the catalogue in all four languages, never the wording.
 
 Snapshot Data joins its tables through prompt-local references. Its Entity Directory
 resolves A# (Assets, with display name and identifiers), B# (Brokers), and F# (FX
@@ -539,6 +590,21 @@ those of the analysis' issues that carry `fails_analysis`
 The compact renderer prints the failed Asset by its prompt ref. For this the FIFO lots
 moved to v3 and the lot detail to v4; the summaries, already v3 in the same release,
 kept it.
+
+The price series renderer, `renderContinuousSeries()`, prints the eligible assets
+without a price series. In `portfolio.technical_prices` and `broker.technical_prices`
+the `SERIES` table is followed by a table titled `ASSETS WITHOUT PRICE SERIES` that
+lists them by prompt ref (`entity`, `portfolio_weight_percent`, `reason_code`), then by
+one `<code>=<meaning>` line per distinct code present, sorted by code. Without a
+series, `asset.ohlc_returns` gains a `reason_code` row in its SUMMARY table, after
+`price_basis`, and its `<code>=<meaning>` line follows that table; the `null`
+`currency`, `latest_value` and `latest_date` columns leave `SERIES` and are named on
+its `omitted_null_columns=` line. The meanings come from a local allow-list,
+`PRICE_SERIES_GAP_MEANINGS`, as the frontend never takes presentation text from the
+backend: an unknown code, or an `uncovered_assets` that is not a list of records, sends
+the section to the generic renderer, with its raw values and no meaning invented.
+`COMPACT_COMPONENT_VERSIONS` lists versions 1 and 2 of the three components, and a
+section without a gap renders exactly as its version 1.
 
 `portfolio.reconciliation` and `broker.reconciliation` state `residual`, the exact
 period P&L minus its components, and `reconciled`: `null` if a term is missing, true
@@ -697,6 +763,7 @@ and without `-O`, and expects the typed error each time.
 | Required dataset component raises                 | Analysis fails closed.                                                                                             |
 | Optional dataset has a required-component failure | Entire optional dataset is skipped.                                                                                |
 | Builder returns an empty valid payload            | Section remains successful and included.                                                                           |
+| An eligible asset has no price series (no stored price up to the period end, or stored prices in mixed currencies) | Section stays successful; the asset is listed in `uncovered_assets` with its `reason_code` (a single Asset: `currency` `null` and a `reason_code`), never a `503`. |
 | Analysis facts fail applicability                 | `422 selection_not_applicable`.                                                                                    |
 | Signal result is `unavailable` or `failed`        | Only that indicator instance is omitted.                                                                           |
 | Signal result is `ok` or `partial`                | Indicator is exported with its available canonical series.                                                         |

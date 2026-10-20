@@ -82,6 +82,18 @@ A report moves from `uploaded/` to `parsed/` or `failed/`, so its original file 
     - **Troubleshooting**: `LOG_LEVEL=DEBUG` — see what the system is deciding
     - **Deep FX/price debugging**: `LOG_LEVEL=TRACE` — see every individual data point
 
+**Reading the log.** Each line LibreFolio writes is one JSON object: the message is in `event`, the level in `level`, the time (UTC) in `timestamp`, and the traceback of an error in `exception`. Every line written while the server answers a request carries that request's `request_id`. When something fails, the same id reaches the browser: in the `X-Request-Id` header of the answer, in the body of a server error, and in the `[API]` line the web app writes to the browser's console (developer tools, **Console**). Ask the user who reports an error for that id, then read its lines with [jq](https://jqlang.org/), from the `logs/` folder:
+
+```bash
+# Every line of one request
+jq -cR 'fromjson? | select(.request_id == "3f2a9c0d41b7e865")' librefolio.log
+
+# The errors, each followed by its traceback
+jq -rR 'fromjson? | select(.level == "ERROR" or .level == "CRITICAL") | "\(.timestamp) \(.request_id // "-") \(.event)", (.exception // empty)' librefolio.log
+```
+
+`fromjson?` skips the few lines that are not JSON, such as those of the libraries LibreFolio uses. For an archived week, unpack it on the way: `gzip -dc librefolio.log.2026-10-12.gz | jq -cR …`. A line about a failed request names its method and path, never its query string, its headers or its body.
+
 ### 🔐 `secrets/`
 
 - 🔑 `instance.key` holds the [instance key](configuration.md#instance-key), the secret from which LibreFolio derives its encryption keys. LibreFolio creates it the first time it needs the key. After that, a missing `instance.key` looks the same as a first use: LibreFolio creates a new key, and what the old one encrypted can no longer be read.

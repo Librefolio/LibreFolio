@@ -28,6 +28,13 @@ There is nothing else to fill in.
 Outside the US, add the exchange suffix to the ticker: `.DE` for Xetra, `.MI` for Milan, `.AS` for
 Amsterdam.
 
+Many London lines (suffix `.L`) are quoted in pence, which Yahoo reports as the currency `GBp`.
+LibreFolio stores the currency as `GBP` and the prices as Yahoo gives them, in pence, so such an
+asset needs **Units per single price** at 100, or its value comes out 100 times too high. When
+Yahoo reports `GBp`, picking the line in **Search Online** sets 100, with a note under the field,
+and **Ask Provider** proposes it if the field says otherwise
+([Check the provider's data](../create-edit.md#provider-data-comparison)).
+
 ## ⚠️ Limits
 
 - **ISIN** also works as **Identifier Type**, but only when Yahoo can match it to a ticker: prefer

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_settings
 from backend.app.db.session import get_session_generator
+from backend.app.logging_config import client_log_level
 from backend.app.schemas.auth import AccountsInstanceConfig
 from backend.app.schemas.system import InstanceConfigResponse, LegalInstanceConfig
 from backend.app.services.accounts.password_policy import password_rules_public
@@ -33,4 +34,5 @@ async def get_instance_config(session: AsyncSession = Depends(get_session_genera
         email=await asyncio.to_thread(email_instance_config),
         support_url=support_link(),
         legal=LegalInstanceConfig(terms_url=terms_link(), privacy_url=privacy_link()),
+        client_log_level=client_log_level(get_settings().LOG_LEVEL),
     )

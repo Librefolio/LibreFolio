@@ -461,6 +461,8 @@
     // =========================================================================
 
     function handleDayClick(iso: string) {
+        // A second click on the pending day would close a range of one day: it is ignored, the day stays pending.
+        if (iso === pendingDate) return;
         if (pendingDate === null) {
             pendingDate = iso;
         } else {
@@ -477,6 +479,12 @@
             discardDraft();
             onchange?.(newStart, newEnd);
         }
+    }
+
+    /** The preview follows the pointer from the pending day, but the pending day itself previews no range of one day. */
+    function handleDayHover(iso: string) {
+        if (!pendingDate) return;
+        hoveredDate = iso === pendingDate ? null : iso;
     }
 
     function goToTodayLeft() {
@@ -907,8 +915,8 @@
 
     let typedStartIso = $derived(typedStart === null ? null : parseTypedDate(typedStart));
     let typedEndIso = $derived(typedEnd === null ? null : parseTypedDate(typedEnd));
-    let startUnparseable = $derived(typedStart !== null && typedStart.trim() !== '' && !isSelectableDate(typedStartIso));
-    let endUnparseable = $derived(typedEnd !== null && typedEnd.trim() !== '' && !isSelectableDate(typedEndIso));
+    let startUnparseable = $derived(typedStart !== null && typedStart.trim() !== '' && !isAcceptableDate('start', typedStartIso));
+    let endUnparseable = $derived(typedEnd !== null && typedEnd.trim() !== '' && !isAcceptableDate('end', typedEndIso));
     // A field is invalid only once its validation is armed — i.e. once the user has
     // left it (blur/Enter). Half a date is unreadable too, and flagging it red while
     // it is still being typed correctly is noise, not help.
@@ -922,10 +930,45 @@
         return true;
     }
 
+    function otherField(which: RangeField): RangeField {
+        return which === 'start' ? 'end' : 'start';
+    }
+
+    /**
+     * Whether a typed or stepped date can go into a field: within the ceiling, and not the
+     * other end's day. A range of one day is refused like a future date, as the calendar
+     * refuses a second click on its pending day.
+     */
+    function isAcceptableDate(which: RangeField, iso: string | null): iso is string {
+        return isSelectableDate(iso) && iso !== fieldIso(otherField(which));
+    }
+
+    /** A field's end as it stands: a date, '' (blank), or the `min`/`max` sentinel. */
+    function fieldValue(which: RangeField): string {
+        return which === 'start' ? (draftStart ?? start) : (draftEnd ?? end);
+    }
+
+    /** A concrete date, or '' for the `min`/`max` sentinels and blanks. */
+    function concreteIso(value: string): string {
+        return !value || value === 'min' || value === 'max' ? '' : value;
+    }
+
     /** A concrete date for a field, or '' for the `min`/`max` sentinels and blanks. */
     function fieldIso(which: RangeField): string {
-        const iso = which === 'start' ? (draftStart ?? start) : (draftEnd ?? end);
-        return !iso || iso === 'min' || iso === 'max' ? '' : iso;
+        return concreteIso(fieldValue(which));
+    }
+
+    /**
+     * The date left typed in a field because it was the other end's day, or null. Only a
+     * date the user has walked away from (armed) and the ceiling allows: anything else is
+     * not waiting for the other end to move.
+     */
+    function waitingTypedDate(which: RangeField): string | null {
+        const typed = which === 'start' ? typedStart : typedEnd;
+        const armed = which === 'start' ? startArmed : endArmed;
+        if (typed === null || !armed) return null;
+        const parsed = parseTypedDate(typed);
+        return isSelectableDate(parsed) ? parsed : null;
     }
 
     /**
@@ -946,12 +989,26 @@
      * other. A start after its end is not a range, and refusing the edit would be the
      * worse answer: the user has said where they want that date, they simply reached
      * it from the other field. Returns whether the swap happened.
+     *
+     * A blank other end, or a `min`/`max` sentinel, stays as it is: an open range, from or
+     * up to the date. Only two real dates swap.
      */
     function applyRangeDate(which: RangeField, iso: string): boolean {
-        let nextStart = which === 'start' ? iso : fieldIso('start') || iso;
-        let nextEnd = which === 'end' ? iso : fieldIso('end') || iso;
+        const other = otherField(which);
+        // A date typed in the other field and refused only because it was this field's
+        // day goes in now that the two differ — with this one, as a pair, so the swap
+        // orders the two dates the user wrote.
+        const waiting = waitingTypedDate(other);
+        const takeWaiting = waiting !== null && waiting !== iso;
+        if (takeWaiting) {
+            if (other === 'start') typedStart = null;
+            else typedEnd = null;
+        }
+        const otherValue = takeWaiting ? waiting : fieldValue(other);
+        let nextStart = which === 'start' ? iso : otherValue;
+        let nextEnd = which === 'end' ? iso : otherValue;
         let swapped = false;
-        if (nextStart > nextEnd) {
+        if (concreteIso(nextStart) && concreteIso(nextEnd) && nextStart > nextEnd) {
             [nextStart, nextEnd] = [nextEnd, nextStart];
             swapped = true;
         }
@@ -1023,7 +1080,7 @@
         const typed = which === 'start' ? typedStart : typedEnd;
         if (typed === null) return;
         const parsed = parseTypedDate(typed);
-        if (isSelectableDate(parsed)) {
+        if (isAcceptableDate(which, parsed)) {
             // Accepted: clear the scratch text and let the committed value take over.
             if (which === 'start') typedStart = null;
             else typedEnd = null;
@@ -1045,7 +1102,15 @@
         if (stepped !== null) {
             // Arrows are a stepper, and a stepper stops at its bound rather than
             // walking past it into a date the calendar would grey out.
-            void applyAndFollow(which, !allowFuture && stepped > todayIso() ? todayIso() : stepped);
+            let next = !allowFuture && stepped > todayIso() ? todayIso() : stepped;
+            // Nor does it stop on the other end's day, a range of one day: it goes one day
+            // further the same way, and the swap still applies. When that day is a future
+            // the picker refuses, the step does nothing.
+            if (next === fieldIso(otherField(which))) {
+                next = addDays(next, e.key === 'ArrowUp' ? 1 : -1);
+                if (!isSelectableDate(next)) return;
+            }
+            void applyAndFollow(which, next);
             return;
         }
         if (e.key === 'Enter') {
@@ -1347,9 +1412,7 @@
                                     {weekdayLabels}
                                     {monthLabels}
                                     onDayClick={handleDayClick}
-                                    onDayHover={(iso) => {
-                                        if (pendingDate) hoveredDate = iso;
-                                    }}
+                                    onDayHover={handleDayHover}
                                     onPrevMonth={leftPrevMonth}
                                     onNextMonth={leftNextMonth}
                                     onSetMonth={setLeftMonth}
@@ -1365,9 +1428,7 @@
                                     {weekdayLabels}
                                     {monthLabels}
                                     onDayClick={handleDayClick}
-                                    onDayHover={(iso) => {
-                                        if (pendingDate) hoveredDate = iso;
-                                    }}
+                                    onDayHover={handleDayHover}
                                     onPrevMonth={rightPrevMonth}
                                     onNextMonth={rightNextMonth}
                                     onSetMonth={setRightMonth}
@@ -1393,9 +1454,7 @@
                                 {weekdayLabels}
                                 {monthLabels}
                                 onDayClick={handleDayClick}
-                                onDayHover={(iso) => {
-                                    if (pendingDate) hoveredDate = iso;
-                                }}
+                                onDayHover={handleDayHover}
                                 onPrevMonth={leftPrevMonth}
                                 onNextMonth={leftNextMonth}
                                 onSetMonth={setLeftMonth}
@@ -1411,9 +1470,7 @@
                                 {weekdayLabels}
                                 {monthLabels}
                                 onDayClick={handleDayClick}
-                                onDayHover={(iso) => {
-                                    if (pendingDate) hoveredDate = iso;
-                                }}
+                                onDayHover={handleDayHover}
                                 onPrevMonth={rightPrevMonth}
                                 onNextMonth={rightNextMonth}
                                 onSetMonth={setRightMonth}
