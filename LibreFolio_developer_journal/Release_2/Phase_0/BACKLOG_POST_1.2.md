@@ -7876,6 +7876,16 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   - Proposta: farla passare da `aggregation.select_point`, a uscite invariate (i test di AI Export lo dicono).
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-29a (v3) e Z-29r — lavoro»,
   passo 3 di Z-29r.
+- **Z-39 · Yahoo: `_fetch_currency` inghiotte un rifiuto per troppe richieste e tiene None per 24 h** — basso,
+  fornitori; proprietario X (il plugin di Yahoo); Z, 20/10 (docs-writer, dalla doc di Z-32 d; verificato da Z).
+  - `_fetch_currency` (`yahoo_finance/plugin.py:397-416`) legge `fast_info` senza `_yf_with_retry` e prende ogni
+    eccezione, `YFRateLimitError` compreso: mette None nella cache delle valute per 24 ore e risponde normalmente.
+  - Effetti: per un giorno, in quel processo, il simbolo non ha valuta nella ricerca e non ha suggerimento della base
+    (Z-32 d); e `core.call_provider` non vede il rifiuto, quindi non mette in pausa il fornitore (la regola della guida:
+    un rifiuto non si inghiotte). Prima di Z-32 (d) toccava già la ricerca.
+  - Proposta: nessuna voce in cache per un rifiuto, e per `suggest_quote_base` lasciarlo salire (la sonda lo prende già
+    come «nessun suggerimento»); nella ricerca, decidere se lo stesso o un risultato senza valuta.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-32 (d) — lavoro», passo 5.
 
 ## B · Backup e Docker (fase 01)
 
