@@ -377,7 +377,12 @@ When the core asks `suggest_quote_base()`:
   `quote_base_quantity` in the `FAAssetPatchItem` your `fetch_asset_metadata()` returns: the metadata refresh writes
   that patch on stored assets without asking.
 
-The web app's asset form does not read the suggestion yet.
+The web app's asset form reads both: a picked search result writes its suggestion into **Units per single price**, as
+it writes the name, and the `metadata` probe's becomes a ticked row of the **Provider Data Comparison** dialog when it
+differs from the field; without a suggestion the form proposes the type's default (100 for a `BOND`, 1 otherwise), and
+a probe of the same line whose suggestion came back `null` reuses the last one the form received for that line (R1).
+The suggestion reaches the form only by the user's hand (a pick, **Apply Selected**), and the asset only when it is
+saved: see [Asset Identity](../../frontend/components/features/asset-identity.md#quote-base-proposal).
 
 **Testing.** The test-only `mockprov` answers the search query `lf-minor-unit` (`MINOR_UNIT_QUERY`) with one `GBp`
 `STOCK`, `MOCK_MINOR_UNIT` (`MINOR_UNIT_IDENTIFIER`), carrying `{"quantity": 100, "quote_currency": "GBp"}`; its

@@ -6783,7 +6783,42 @@ lo porta a 100 (Salva lo scrive).
      proporrebbe «100 → 1» spuntata (Q-Q5 a): l'opposto dello scopo.
    - Le note delle righe: il testo di Q-Q2 per un suggerimento, l'avviso delle obbligazioni per il default di `BOND`,
      nessuna nota per il default 1 degli altri tipi (nessun testo nuovo oltre ai due approvati).
-   Rossi Vitest affidati a test-author (cinque file esistenti).
+   Rossi Vitest affidati a test-author (cinque file esistenti). R1 approvato dal coordinatore; Q-Q7 (una nota
+   per la riga del default 1 di un tipo non obbligazionario) portata al developer: intanto senza nota.
+   - ✅ 10:08 — Rossi visti (Vitest sui 5 file, binario bloccato): 65 falliti per le ragioni dette (export assenti,
+     nessuna riga, nessun testid della nota, l'autocompletamento che perde il campo, valori non sovrascritti, chiavi
+     non ancora nel catalogo), 219 verdi; ogni file carica (nessun errore d'import).
+   - ✅ 10:15 — Cura: `files/z32d-draft/apply_z32d_frontend.py`, provato su una copia di HEAD (inverso esatto),
+     applicato con la stessa impronta (`z32d_frontend_applied.md5`); `dev.py i18n add` di
+     `assets.modal.quoteBaseSuggested` e `…Plain` in quattro lingue. Verdi: i 5 file 284/284.
+   - (Interruzione 10:15–10:40: il rosso di `core-unit` da Z-29a, sezione sotto, committato `19bf858cb`.)
+   - ✅ 10:52 — Controlli: `front check` prima 4 errori di TS (lo stato del suggerimento dichiarato con l'annotazione
+     e `null` restringeva il tipo a `null` nel `$derived` in cima allo script): `let quoteBaseHint =
+     $state<QuoteBaseHint | null>(null)`, come nel resto del repo, stessa sostituzione nello script e nel worktree, di
+     nuovo dai blob di HEAD i 6 file uguali; poi `front check` 0/0, `AssetModal.test.ts` 67/67. Prettier pulito sui 16
+     file; `theme-roles --check` pulito; dieci file vicini (fra cui `AssetModal.providerLifecycle`,
+     `ImportWizardModal`, `providerComparisonQueue`, `AssetTypeSelect`) 350/350; `i18n check` stretto, `utils
+     gate-i18n-catalog` 176, `gate-i18n-usage` 195, `catalogIcuLocale.test.ts` 17.
+   - ✅ E2E: E1-002 di `tx-import-asset-inspector.spec.ts` aggiornata (test-author): dopo «Ask Provider» le
+     distribuzioni si riempiono come prima, poi il dialogo con una riga sola (`data-total-count` 1, la base, spuntata,
+     25 → 1, nessuna nota); `comparison-cancel` e il campo resta 25. E2-002 senza modifiche (deseleziona tutto prima di
+     scegliere). La galleria del confronto tiene le sue tre righe (ricerca ETF, fornitore ETF_STOCK: tutti e due 1).
+     Da lanciare nello slot chiesto (~10:55): la E2E, `component-unit` e `onboarding-component-unit`.
+   - ✅ 11:12 — Slot pesante 2 (coordinatore, dalle ~11:04, corsia 6186, uno alla volta): 11:08
+     `front-transaction tx-import-asset-inspector` 5/5 (E1-002 aggiornata compresa); 11:11 `front-utility
+     component-unit` 196 file, 5138 test; 11:11 `onboarding-component-unit` 16 file, 509 test. Porta libera, slot
+     liberato alle 11:12.
+   - ✅ 11:13 — Doc (docs-writer, solo inglese, verificata da me sul codice): `user/assets/create-edit.en.md` (il punto
+     «Units per single price» riscritto: la frase «LibreFolio proposes it when you choose **Bond**» era inesatta; un
+     punto nuovo nel confronto: proposta, mai riempita, spuntata, la nota, R1 detto per l'utente),
+     `user/assets/providers/yahoo-finance.en.md` (un paragrafo su `GBp` → 100), `asset_plugin_guide.md` (la frase «does
+     not read the suggestion yet» sostituita), `frontend/components/features/asset-identity.md` (sottosezione nuova
+     `#quote-base-proposal`; corretta una frase che dava la decisione del confronto a `fetchAndCompareMetadata`, che
+     da `fc6220d28` è in `compareMetadata`). `mkdocs build` stretto 0 avvisi, `check-links` 97 validi.
+     `translate-validate` sulle due pagine utente: 36 errori, di cui 6 miei (un link nuovo per lingua su ciascuna
+     pagina) più gli avvisi dei codici nuovi (`.L`, `GBP`, `GBp`); gli altri 30 c'erano già (le traduzioni di
+     `create-edit` non hanno le sezioni «🔎 Search Online results» e «📨 Let us know»). Nessuna marcatura: è debito di
+     traduzione vero, per la pipeline su richiesta.
 
 **Stato alla pausa (19/10 18:20).** HEAD `6510fe169`; nessun commit, nessun comando git. File sporchi: questo piano,
 `test_assets_provider.py`, `_backend_services.py` (modificati), `test_quote_base_suggestion.py` (nuovo). Nessun codice

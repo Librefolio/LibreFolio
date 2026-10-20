@@ -48,7 +48,7 @@
     import {compareMetadata, type ComparisonAction, type ComparisonSnapshot} from './assetMetadataComparison';
     import {isCurrencyChangeBlockedMessage, parseCurrencyChangeBlocker} from './currencyBlocker';
     import {buildClassificationParams, buildCreateItem, buildPatchItem, buildProviderAssignItem, type AssetFormFields, type ClassificationParams, type ProviderAssignment} from './assetPayload';
-    import {isQuoteBaseQuantityInvalid, quoteBaseQuantityErrorKey, shouldSeedBondQuoteBase, computeHasProvider, computeProviderDirty, groupImportNotices} from './assetFormState';
+    import {isQuoteBaseQuantityInvalid, quoteBaseQuantityErrorKey, defaultQuoteBaseQuantity, proposeQuoteBase, quoteBaseNote, computeHasProvider, computeProviderDirty, groupImportNotices, type QuoteBaseSource, type QuoteBaseSuggestion} from './assetFormState';
     import {ensureAssetProvidersCached, getAssetProviderName, isParametricProvider} from '$lib/utils/providerHelpers';
     import type {AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
     import {mergeAssets, invalidateAfterMutation} from '$lib/stores/reference/assetStore';
@@ -203,9 +203,18 @@
     let assetType = $state('STOCK');
     let iconUrl: string | null = $state(null);
     let quoteBaseQuantity = $state(1);
-    // Tracks whether the user manually edited the quote-base field, so the bond heuristic
-    // (default 100) never overrides an explicit choice.
-    let quoteBaseQuantityTouched = $state(false);
+    // Z-32 (d): the provider's suggestion behind the current quote base, shown under the field while it holds for the
+    // provider line it came from (`key`, that line's `providerConfigKey`); null for a typed value or a type default.
+    interface QuoteBaseHint {
+        key: string;
+        provider: string;
+        quoteCurrency: string | null;
+        quantity: number;
+    }
+    let quoteBaseHint = $state<QuoteBaseHint | null>(null);
+    // R1: the latest explicit suggestion the provider gave for a line (search or probe), for a later probe whose own
+    // suggestion failed (a timeout, a pause): it never proposes to undo it.
+    let lineQuoteBaseSuggestion: {key: string; suggestion: QuoteBaseSuggestion} | null = null;
     let active = $state(true);
     let isBenchmark = $state(false);
 
@@ -240,6 +249,7 @@
     let providerUrl = $derived(providerProbe.url);
     let providerTestStatus = $derived(providerProbe.status);
     let providerConfigKey = $derived(providerConfigurationKey(providerConfiguration()));
+    let visibleQuoteBaseHint = $derived(quoteBaseHint && quoteBaseHint.key === providerConfigKey ? {provider: quoteBaseHint.provider, currency: quoteBaseHint.quoteCurrency, quantity: quoteBaseHint.quantity} : null);
 
     function providerConfiguration(): ProviderConfiguration {
         return {providerCode, identifier: providerIdentifier, identifierType: providerIdentifierType, providerParams, noProvider: providerNoProvider};
@@ -338,11 +348,13 @@
 
     function markManualField(field: string) {
         manualFieldRevisions.set(field, (manualFieldRevisions.get(field) ?? 0) + 1);
+        if (field === 'quote_base_quantity') quoteBaseHint = null;
     }
 
     function resetDraftReads(seedUrl: string | null = null) {
         providerProbe.reset(seedUrl);
         manualFieldRevisions.clear();
+        lineQuoteBaseSuggestion = null;
         comparisonContext = null;
         comparisonIntent.clear();
         showComparisonModal = false;
@@ -564,7 +576,7 @@
         assetType = data.asset_type ?? 'STOCK';
         iconUrl = data.icon_url ?? null;
         quoteBaseQuantity = data.quote_base_quantity && data.quote_base_quantity > 0 ? data.quote_base_quantity : 1;
-        quoteBaseQuantityTouched = false;
+        quoteBaseHint = null;
         active = data.active !== false;
         isBenchmark = data.is_benchmark === true;
         identifierRows = columnsToIdentifierRows(data);
@@ -613,7 +625,7 @@
         blankAssetType = assetType;
         iconUrl = null;
         quoteBaseQuantity = 1;
-        quoteBaseQuantityTouched = false;
+        quoteBaseHint = null;
         active = true;
         isBenchmark = false;
         identifierRows = [];
@@ -648,7 +660,8 @@
         displayName = data.display_name?.trim() || data.identifier_isin?.trim() || data.identifier_ticker?.trim() || '';
         if (data.currency) currency = data.currency;
         if (data.asset_type) assetType = data.asset_type;
-        if (data.quote_base_quantity && data.quote_base_quantity > 0) quoteBaseQuantity = data.quote_base_quantity;
+        // A base the import gives stays; else the type's default (Z-32 d: 100 for a bond)
+        quoteBaseQuantity = data.quote_base_quantity && data.quote_base_quantity > 0 ? data.quote_base_quantity : defaultQuoteBaseQuantity(assetType);
         if (data.classification_params?.short_description) {
             shortDescription = data.classification_params.short_description;
             descriptionFromPrefill = true;
@@ -662,7 +675,6 @@
             prefilledIdentifiers = new Set(rows.map((r) => r.value.trim().toUpperCase()).filter((v) => v !== ''));
             moreInfoExpanded = true;
         }
-        maybeSeedBondQuoteBase();
         naLog(`prefill from import → name="${data.display_name ?? ''}" type=${data.asset_type ?? '—'} currency=${data.currency ?? '—'} qbq=${data.quote_base_quantity ?? '—'} · suggested identifiers: ${identifiersSummary()}`);
     }
 
@@ -722,6 +734,9 @@
         displayName = result.display_name || displayName;
         if (result.asset_type) assetType = searchResultAssetType(result.asset_type);
         if (result.currency) currency = result.currency;
+        // Z-32 (d): the quote base like the name — the provider's suggestion, else the type's default
+        const quoteBase = proposeQuoteBase(result.quote_base_suggestion, assetType);
+        quoteBaseQuantity = quoteBase.quantity;
 
         // Auto-fill identifier based on identifier_type
         const identifier = searchResultIdentifier(identifierRows, result.identifier_type, result.identifier);
@@ -746,6 +761,10 @@
         resetDraftReads(result.provider_url ?? null);
         // After the reset, which clears the previous selection's questions: these are this one's.
         selectionQuestions = question ? [question] : [];
+        // The new line's key: the hint and the remembered suggestion (R1) hold only for it.
+        const lineKey = providerConfigurationKey(providerConfiguration());
+        lineQuoteBaseSuggestion = quoteBase.kind === 'suggestion' ? {key: lineKey, suggestion: result.quote_base_suggestion} : null;
+        quoteBaseHint = suggestionHint(quoteBase, result.provider_code, lineKey);
 
         // Expand sections
         moreInfoExpanded = true;
@@ -762,7 +781,6 @@
         // asset, offer to reuse it (and add the search keys) instead of creating a duplicate.
         void maybePromptReuse(result.display_name);
 
-        maybeSeedBondQuoteBase();
         naLog(`search result selected → name="${result.display_name ?? ''}" provider=${result.provider_code ?? '—'} ${(result.identifier_type ?? 'ID').toUpperCase()}=${result.identifier ?? '—'} type=${result.asset_type ?? '—'} currency=${result.currency ?? '—'}`);
         naLog(`identifiers now present: ${identifiersSummary()}`);
     }
@@ -819,16 +837,14 @@
         identifierChoiceProvider = null;
     }
 
-    /**
-     * Bonds are conventionally quoted per 100 nominal (BTP/BOT and most MOT bonds). Seed 100
-     * as an *editable* default when the field is still at 1 and the user hasn't touched it; a
-     * reactive info banner reminds to verify. Never overrides an explicit value. This is a
-     * heuristic (per-100 is a market convention, not a hard rule) — hence a suggestion, not a fact.
-     */
-    function maybeSeedBondQuoteBase() {
-        if (shouldSeedBondQuoteBase(assetType, quoteBaseQuantity, quoteBaseQuantityTouched)) {
-            quoteBaseQuantity = 100;
-        }
+    /** A provider's display name, its code when unknown. */
+    function providerDisplayName(code: string | null | undefined): string {
+        return code ? getAssetProviderName(code) || code : '';
+    }
+
+    /** The hint under the quote base field for a proposal of a provider line (Z-32 d): only for its suggestion. */
+    function suggestionHint(source: QuoteBaseSource, code: string | null | undefined, key: string): QuoteBaseHint | null {
+        return source.kind === 'suggestion' ? {key, provider: providerDisplayName(code), quoteCurrency: source.quoteCurrency, quantity: source.quantity} : null;
     }
 
     /**
@@ -940,19 +956,36 @@
             if (!open || saving || !providerProbe.isMetadataCurrent(request)) return;
 
             const meta = response.metadata;
+            // R1: the provider's explicit suggestion for this line is remembered, for a later probe without one
+            const probeSuggestion: QuoteBaseSuggestion | null = meta?.quote_base_suggestion ?? null;
+            if (probeSuggestion && proposeQuoteBase(probeSuggestion, assetType).kind === 'suggestion') lineQuoteBaseSuggestion = {key: request.key, suggestion: probeSuggestion};
             if (!meta?.success || !meta.patch_data) {
                 toasts.info($t('assets.identifiers.askProviderHint') + ' — no data from provider');
                 return;
             }
             // The decision is pure (./assetMetadataComparison.ts); the writes are applied here, in order.
-            const {actions, differences, missingFields} = compareMetadata(meta.patch_data, comparisonSnapshot(), scope, manuallyChanged, {
-                name: $t('common.name'),
-                type: $t('common.type'),
-                currency: $t('common.currency'),
-                description: $t('common.description'),
-                sector: $t('common.sectorDistribution'),
-                geographic: $t('common.geoDistribution'),
-            });
+            const lineSuggestion = lineQuoteBaseSuggestion?.key === request.key ? lineQuoteBaseSuggestion.suggestion : null;
+            const providerName = providerDisplayName(request.configuration.providerCode);
+            const {actions, differences, missingFields} = compareMetadata(
+                meta.patch_data,
+                comparisonSnapshot(),
+                scope,
+                manuallyChanged,
+                {
+                    name: $t('common.name'),
+                    type: $t('common.type'),
+                    currency: $t('common.currency'),
+                    quoteBase: $t('assets.modal.quoteBaseQuantity'),
+                    quoteBaseNote: (source) => {
+                        const note = quoteBaseNote(source, providerName);
+                        return note ? $t(note.key, {values: note.values}) : undefined;
+                    },
+                    description: $t('common.description'),
+                    sector: $t('common.sectorDistribution'),
+                    geographic: $t('common.geoDistribution'),
+                },
+                lineSuggestion,
+            );
             for (const action of actions) applyComparisonAction(action);
 
             // --- RESULTS: consistent toast logic (Fix 3) ---
@@ -1019,6 +1052,7 @@
             assetType,
             currency,
             currencyUserSet,
+            quoteBaseQuantity,
             shortDescription,
             descriptionFromPrefill,
             sectorDistribution,
@@ -1061,7 +1095,9 @@
                     break;
                 case 'asset_type':
                     assetType = value;
-                    maybeSeedBondQuoteBase();
+                    break;
+                case 'quote_base_quantity':
+                    quoteBaseQuantity = Number(value);
                     break;
                 case 'currency':
                     currency = value;
@@ -1102,6 +1138,7 @@
                     } else {
                         setFieldValue(diff.field, diff.providerValue);
                     }
+                    if (diff.field === 'quote_base_quantity') quoteBaseHint = diff.quoteBaseSource ? suggestionHint(diff.quoteBaseSource, comparisonContext?.configuration.providerCode, comparisonContext?.key ?? providerConfigKey) : null;
                 } else if (diff.type === 'distribution') {
                     if (diff.field === 'sector_area') {
                         sectorDistribution = diff.providerValue?.distribution ?? diff.providerValue;
@@ -1558,7 +1595,7 @@
                 bind:displayName
                 bind:assetType
                 bind:quoteBaseQuantity
-                bind:quoteBaseQuantityTouched
+                quoteBaseSuggestion={visibleQuoteBaseHint}
                 bind:providerUserUrl
                 bind:shortDescription
                 {currency}
