@@ -254,7 +254,8 @@
       "autoCostUnknownPool": "Automatic cost unavailable: the units of this asset held on that date have no known cost to average. Choose Manual and enter what these units cost you.",
       "ledgerUnreadable": "The balances of {brokerName} can't be checked: {count, plural, one {# of its transactions holds} other {# of its transactions hold}} a value that is not a number. Ask the administrator to repair the data.",
       "costBasisNotAllowed": "❌ {type} takes no cost basis here: remove it. Only units that come in through an Adjustment or an Asset Transfer carry one.",
-      "costBasisModeIncompatible": "❌ {type} takes no cost basis here, so no Auto or Manual mode: remove it."
+      "costBasisModeIncompatible": "❌ {type} takes no cost basis here, so no Auto or Manual mode: remove it.",
+      "costBasisNegative": "The cost basis can't be negative: enter 0 or more."
     },
     "pydantic": {
       "greaterThan": "Value must be greater than {gt}",
