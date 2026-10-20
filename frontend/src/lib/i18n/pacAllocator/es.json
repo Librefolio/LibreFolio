@@ -296,7 +296,8 @@
             "wac_fx_missing": "Falta el tipo de cambio necesario para el precio medio de compra.",
             "wac_missing": "Falta el precio medio de compra.",
             "zero_selected_funding": "La liquidez seleccionada es cero.",
-            "fx_rate_inconsistent": "Este tipo de cambio no es coherente con los tipos de cambio de {source_currency} y {destination_currency} frente a {valuation_currency}: convertir {source_currency} a {destination_currency} crearía valor. Alinea los tipos de cambio o define un spread de conversión."
+            "fx_rate_inconsistent": "Este tipo de cambio no es coherente con los tipos de cambio de {source_currency} y {destination_currency} frente a {valuation_currency}: convertir {source_currency} a {destination_currency} crearía valor. Alinea los tipos de cambio o define un spread de conversión.",
+            "saved_fx_skipped": "El tipo de cambio {pair} guardado del {skipped_date} no es válido y se ha omitido: en su lugar se ha usado el del {used_date}. Corrígelo en el editor del tipo de cambio {pair} (Editar tipos de cambio); hasta entonces, los resultados pueden ser ligeramente aproximados."
           },
           "pac_allocator": {
             "initial_holding_forbidden": "Esta herramienta no acepta posiciones existentes.",

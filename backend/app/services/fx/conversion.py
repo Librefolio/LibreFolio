@@ -1,10 +1,12 @@
 """
-FX conversion: the rate of a chained route (``compute_chain_rate``) and the bulk conversion of amounts with
-backward-fill (``convert_bulk``).
+FX conversion: the rate of a chained route (``compute_chain_rate``), the bulk conversion of amounts with
+backward-fill (``convert_bulk``), and one unit's rate as steps over the days asked (``unit_rate_steps``, P3).
 """
 
 from bisect import bisect_right
 from collections import namedtuple
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
@@ -12,7 +14,7 @@ from sqlalchemy import and_, func, or_
 from sqlalchemy import select as sql_select
 
 from backend.app.db.models import FxRate
-from backend.app.db.precision import storable_fx_rate, usable_fx_rate_clause
+from backend.app.db.precision import storable_fx_rate, usable_fx_rate_bounds
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import Currency
 from backend.app.services.financial_math.fx_rates import oriented_rate
@@ -83,6 +85,47 @@ def compute_chain_rate(
 
 # Lightweight (date, rate) record used by convert_bulk's lookup.
 _RateRow = namedtuple("_RateRow", ["date", "rate"])
+
+#: One unit of a currency: what ``unit_rate_steps`` converts, as the portfolio engine and the native cash ask
+#: ``convert_bulk`` for it (P3).
+_ONE = Decimal("1")
+
+
+def _converted(amount: Decimal, rate: Decimal, direct: bool) -> Decimal:
+    """``amount`` at a stored rate: multiplied when it is in the pair's base (``direct``), divided otherwise. The one
+    arithmetic of ``convert_bulk`` and ``unit_rate_steps`` (P3, MF n1), so that a step is ``convert_bulk``'s amount to the
+    digit and the exponent."""
+    return amount * rate if direct else amount / rate
+
+
+async def _usable_rates(session, spans: Mapping[tuple[str, str], tuple[date, date]]) -> dict[tuple[str, str], tuple[list[date], list[Decimal]]]:
+    """The rows of each stored pair ``(base, quote)`` that its span ``(first, last)`` can use, as ascending dates and their
+    rates: from the backward-fill anchor — the last usable rate on or before ``first``, however old — up to ``last``.
+
+    The one read of ``convert_bulk`` and ``unit_rate_steps`` (P3, MF n2):
+    - only usable rates (X-R38), in the anchor as in the window: a legacy unusable row is skipped like a date without one;
+    - only the window the dates can use: without the lower bound every call loaded the pair's whole history, and
+      per-day portfolio conversions loaded millions of rows;
+    - at most ``FX_PAIRS_PER_QUERY`` pairs per query (R13-SEC9-2): SQLite refuses an OR of about a thousand terms
+      («Expression tree is too large», a 500);
+    - plain columns, no ORM object per row.
+    """
+    if not spans:
+        return {}
+    smallest_rate, first_refused_rate = usable_fx_rate_bounds()
+    usable = and_(FxRate.rate >= smallest_rate, FxRate.rate < first_refused_rate)
+    conditions = []
+    for (base, quote), (first, last) in spans.items():
+        anchor = sql_select(func.max(FxRate.date)).where(FxRate.base == base, FxRate.quote == quote, FxRate.date <= first, usable).scalar_subquery()
+        conditions.append(and_(FxRate.base == base, FxRate.quote == quote, FxRate.date <= last, FxRate.date >= func.coalesce(anchor, first), usable))
+    rates: dict[tuple[str, str], tuple[list[date], list[Decimal]]] = {}
+    for start in range(0, len(conditions), FX_PAIRS_PER_QUERY):
+        stmt = sql_select(FxRate.base, FxRate.quote, FxRate.date, FxRate.rate).where(or_(*conditions[start : start + FX_PAIRS_PER_QUERY])).order_by(FxRate.base, FxRate.quote, FxRate.date)
+        for rate_base, rate_quote, rate_date, rate_value in (await session.execute(stmt)).all():
+            dates, values = rates.setdefault((rate_base, rate_quote), ([], []))
+            dates.append(rate_date)
+            values.append(rate_value)
+    return rates
 
 
 async def convert_bulk(  # noqa: C901 — per-item conversion dispatch with backward-fill search
@@ -181,41 +224,8 @@ async def convert_bulk(  # noqa: C901 — per-item conversion dispatch with back
 
         pairs_needed[pair_key]["indices"].append(idx)
 
-    # OPTIMIZATION: one query for all needed rates — in chunks of pairs (R13-SEC9-2): SQLite refuses an OR of about a
-    # thousand terms («Expression tree is too large», a 500), so each query holds at most FX_PAIRS_PER_QUERY of them
-    if pairs_needed:
-        # Only the rates a conversion may use, in the anchor too: a legacy unusable rate is skipped like a date without
-        # a row (X-R38)
-        usable = usable_fx_rate_clause()
-
-        conditions = []
-        for (base, quote), info in pairs_needed.items():
-            # Only the window the conversions can use: from the last rate on/before the
-            # earliest requested date (the backward-fill anchor) up to the latest date.
-            # Without the lower bound every call loaded the pair's whole history, which
-            # made per-day portfolio conversions load millions of rows.
-            anchor = sql_select(func.max(FxRate.date)).where(FxRate.base == base, FxRate.quote == quote, FxRate.date <= info["min_date"], usable).scalar_subquery()
-            conditions.append(
-                and_(
-                    FxRate.base == base,
-                    FxRate.quote == quote,
-                    FxRate.date <= info["max_date"],
-                    FxRate.date >= func.coalesce(anchor, info["min_date"]),
-                    usable,
-                )
-            )
-
-        # Build lookup: {(base, quote): ([dates ascending], [rates])} for bisect (plain columns: no ORM object per row)
-        rates_lookup = {}
-        for start in range(0, len(conditions), FX_PAIRS_PER_QUERY):
-            stmt = sql_select(FxRate.base, FxRate.quote, FxRate.date, FxRate.rate).where(or_(*conditions[start : start + FX_PAIRS_PER_QUERY])).order_by(FxRate.base, FxRate.quote, FxRate.date)
-            result = await session.execute(stmt)
-            for rate_base, rate_quote, rate_date, rate_value in result.all():
-                dates, values = rates_lookup.setdefault((rate_base, rate_quote), ([], []))
-                dates.append(rate_date)
-                values.append(rate_value)
-    else:
-        rates_lookup = {}
+    # One read for every pair, from each pair's backward-fill anchor to its latest date, usable rates only (X-R38)
+    rates_lookup = await _usable_rates(session, {pair: (info["min_date"], info["max_date"]) for pair, info in pairs_needed.items()})
 
     # Process conversions using cached rates
     results = []
@@ -264,10 +274,7 @@ async def convert_bulk(  # noqa: C901 — per-item conversion dispatch with back
                 )
 
             # Apply conversion
-            if meta["direct"]:
-                converted_amount = meta["amount"] * rate_record.rate
-            else:
-                converted_amount = meta["amount"] / rate_record.rate
+            converted_amount = _converted(meta["amount"], rate_record.rate, meta["direct"])
 
             # Return Currency object with target currency
             result_currency = Currency(code=meta["to"], amount=converted_amount)
@@ -286,3 +293,102 @@ async def convert_bulk(  # noqa: C901 — per-item conversion dispatch with back
                 results.append(None)
 
     return results, errors
+
+
+# ============================================================================
+# UNIT RATES AS STEPS (P3)
+# ============================================================================
+
+
+@dataclass(frozen=True, slots=True)
+class UnitRateSteps:
+    """What one unit of ``source`` is worth in ``destination``, as steps (P3): from ``days[i]`` on, ``values[i]``, read
+    from the stored row of ``rate_days[i]``.
+
+    Built by ``unit_rate_steps`` on the windows asked: on every day of them ``at`` is ``convert_bulk``'s amount for one
+    unit, to the digit and the exponent, and ``rate_day_at`` its rate date; both None before the pair's first usable
+    rate. A day outside the windows reads the last step on or before it: which days a value is asked for is the
+    caller's to keep.
+    """
+
+    source: str
+    destination: str
+    days: tuple[date, ...]
+    values: tuple[Decimal, ...]
+    rate_days: tuple[date, ...]
+
+    def _step(self, day: date) -> int:
+        return bisect_right(self.days, day) - 1
+
+    def at(self, day: date) -> Decimal | None:
+        """One unit of ``source`` in ``destination`` on ``day``; None before the first step."""
+        index = self._step(day)
+        return self.values[index] if index >= 0 else None
+
+    def rate_day_at(self, day: date) -> date | None:
+        """The date of the stored row ``at(day)`` comes from; None before the first step."""
+        index = self._step(day)
+        return self.rate_days[index] if index >= 0 else None
+
+
+async def unit_rate_steps(session, requests: Mapping[tuple[str, str], Sequence[tuple[date, date]]]) -> dict[tuple[str, str], UnitRateSteps]:
+    """One unit of each ``source`` in its ``destination``, as steps on the windows asked (P3): the portfolio engine and the
+    native cash need a rate for every day of long ranges, and a rate changes only on the days a row is stored.
+
+    ``requests`` maps ``(source, destination)``, two currency codes as stored, to its windows ``(first_day, last_day)``,
+    both days included; the windows of a pair may touch, overlap or lie apart. The steps of a pair are:
+    - the first day of each window, with the rate of the backward-fill anchor, the last usable row on or before it (no
+      step when the pair has no usable row by then);
+    - every day inside a window with a usable row of the pair: two rows with the same rate are two steps.
+    So on every day of the windows ``at(day)`` and ``rate_day_at(day)`` are what ``convert_bulk`` gives for
+    ``Currency(code=source, amount=Decimal("1"))`` on that day: the same rows, filter and chunks (``_usable_rates``) and
+    the same arithmetic (``_converted``). Rows between two windows are no steps.
+
+    Every pair asked has its entry, empty when it has no usable rate in its windows. Raises ``ValueError`` for a pair of
+    one currency (``convert_bulk`` answers it with no rate at all, on the day itself, which a step cannot say) and for a
+    window whose last day comes before its first.
+    """
+    planned: list[tuple[tuple[str, str], tuple[str, str], bool, list[tuple[date, date]]]] = []
+    spans: dict[tuple[str, str], tuple[date, date]] = {}
+    for (source, destination), asked in requests.items():
+        if source == destination:
+            raise ValueError(f"unit_rate_steps: {source}/{destination} is one currency, not a pair")
+        windows = sorted(asked)
+        for first, last in windows:
+            if last < first:
+                raise ValueError(f"unit_rate_steps: the window {first} – {last} of {source}/{destination} ends before it starts")
+        stored = (min(source, destination), max(source, destination))
+        if windows:
+            first, last = windows[0][0], max(window_last for _first, window_last in windows)
+            if stored in spans:
+                first, last = min(first, spans[stored][0]), max(last, spans[stored][1])
+            spans[stored] = (first, last)
+        planned.append(((source, destination), stored, source < destination, windows))
+
+    rates = await _usable_rates(session, spans)
+    steps: dict[tuple[str, str], UnitRateSteps] = {}
+    for (source, destination), stored, direct, windows in planned:
+        dates, values = rates.get(stored, ([], []))
+        rows_by_day = _step_rows(dates, windows)
+        days = tuple(sorted(rows_by_day))
+        steps[(source, destination)] = UnitRateSteps(
+            source=source,
+            destination=destination,
+            days=days,
+            values=tuple(_converted(_ONE, values[rows_by_day[day]], direct) for day in days),
+            rate_days=tuple(dates[rows_by_day[day]] for day in days),
+        )
+    return steps
+
+
+def _step_rows(dates: list[date], windows: list[tuple[date, date]]) -> dict[date, int]:
+    """By step day, the index in ``dates`` (a pair's ascending usable rows) of the row the step reads: each window's first
+    day with its anchor, the last row on or before it, when there is one; and each row inside a window, by its own date."""
+    rows_by_day: dict[date, int] = {}
+    for first, last in windows:
+        anchor = bisect_right(dates, first) - 1
+        if anchor >= 0:
+            rows_by_day[first] = anchor
+        for index in range(anchor + 1, bisect_right(dates, last)):
+            rows_by_day[dates[index]] = index
+    return rows_by_day

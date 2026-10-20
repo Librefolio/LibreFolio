@@ -22,6 +22,7 @@ The **App & UI State** category contains stores responsible for the global user 
 | **Instance notices** | `$lib/features/instance/instanceNotices.svelte.ts` | The messages about the instance that features register, shown above every page of the app shell. See [Instance notices](#instance-notices). |
 | **Instance block** | `$lib/features/instance/instanceBlockState.ts`, `$lib/features/instance/instanceBlock.svelte.ts` | Whether the hosting provider blocked the instance: the first `423` `instance_blocked` from the API turns it on, and the `(app)` layout then shows the block page instead of the app. The plain module (no runes) holds the state, which the API client marks; the `.svelte.ts` module is its reactive face, which the layout reads. See [Instance block](#instance-block). |
 | **What's new** | `$lib/features/changelog/whatsNewStore.svelte.ts` | Whether the «What's new» window is due (lot C-54): the signed-in user's `whats_new` names released chapters of the bundled changelog, and the window was not closed on this page load. `dismiss()` hides it and posts `POST /auth/whats-new/seen`. See [What's new](../onboarding.md#whats-new). |
+| **Changelog window** | `$lib/features/changelog/changelogModalStore.svelte.ts` | Whether the app's one changelog window is open (lot A-CL1). The Sidebar mounts the only `ChangelogModal`, bound to `changelogModal.open`; the sidebar's version and the version in Settings → About open it with `show()`, its close calls `close()`, and the Sidebar closes it when it unmounts, so it lives as long as the app shell. The chapters it shows come from `localizedChangelog`, whose cache of loaded translations is a `SvelteMap`: a window waiting for a language sees the load that fills it, its own or another's. |
 | **Chart Settings** | `chartSettingsStore.svelte.ts` | Chart preferences of the FX and Assets pages: line colouring, area fill, grid lines, stale-data gradient, axis scales, the asset Calendar Return window and overlay signals. Kept per user in `localStorage` (`lf_{userId}_chartSettingsStore`), never on the server, in two separate scopes, `fx` and `assets`: each has its own global settings plus per-item overrides (pair slug, `asset-{id}`), and applying a scope's global settings clears that scope's per-item overrides. The chart period is not stored here: it lives in `sessionStorage` (Date Range, below). |
 | **Date Range** | `dateRangeStore.svelte.ts` | The date range (start, end) shared by the Dashboard (through `dateRangeController.svelte.ts`), the broker detail page, and the Assets and FX pages, list and detail. It lives in `sessionStorage` (`librefolio_dateRange`), so it belongs to the browser tab and survives a reload; on a full page load, `start` and `end` in the URL win, and it falls back to the last three months when the account changes. |
 
@@ -182,6 +183,10 @@ and readable without a session (backend side:
   ([Settings Components](../components/features/settings.md#legal-notice)), draw each link only
   while its address is set. The default has no `legal`: until the answer, the notice shows without
   links.
+- **Reader of `client_log_level`** (H-60): the store itself. Each answer that lands sets how much the
+  browser console says about failed API calls, `setApiConsoleLevel(client_log_level ?? 'error')`
+  (`lib/api/apiErrorConsole.ts`); a failed or superseded request sets nothing, so the level is `error`
+  until the first answer ([The Browser Console](../../architecture/security.md#browser-console)).
 
 ```ts
 import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
@@ -196,6 +201,7 @@ instanceConfig.config.accounts.registration_locked; // true while LIBREFOLIO_REG
 instanceConfig.config.accounts.first_account_open; // true while the instance has no account (optional: absent reads as false)
 instanceConfig.config.accounts.password_rules; // [{code, value}]: the password rules (optional: absent or empty, PasswordStrength assumes DEFAULT_PASSWORD_RULES)
 instanceConfig.config.legal?.terms_url; // the terms of service of the instance, or null (optional: absent until the answer)
+instanceConfig.config.client_log_level; // 'error' | 'debug': how much the console says about failed API calls (optional: absent reads as 'error')
 ```
 
 ## 📢 Instance notices {: #instance-notices }

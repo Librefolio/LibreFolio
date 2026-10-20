@@ -10,11 +10,13 @@ The Measure tool answers *how much did it change between these two days?* Pick t
 
 ## 🛠️ Take a measure
 
-1. Click **📏 Add measurement** at the top right of the chart: the **Measures** panel opens below it.
-2. Click the **start** point on the chart, then the **end** point.
+1. Click **📏 Add measurement** at the top right of the chart: the **Measures** panel opens below it, and over the chart the pointer becomes a crosshair.
+2. Click the **start** point on the chart: a dashed line follows the pointer from it. Then click the **end** point, on another day.
 3. The new measure opens with its table, and the chart draws it in its own colour.
 
-**+ Add measurement** in the panel's header measures the whole chart instead, from its first to its last point: handy on a phone. Each measure's header holds its colour and 🗑️ to remove it; expand the measure to change its dates.
+A measure needs two different days. Back over the start's day, the dashed line disappears and the pointer shows the *not allowed* sign (🚫): a second click there does nothing, and the start stays picked.
+
+**+ Add measurement** in the panel's header measures the whole chart instead, from its first to its last point: handy on a phone. Each measure's header holds its colour and 🗑️ to remove it; expand the measure to change its dates, again two different days.
 
 Measures are not saved: reloading the page empties the panel. **Prices** and **Rolling Return** keep separate measures.
 

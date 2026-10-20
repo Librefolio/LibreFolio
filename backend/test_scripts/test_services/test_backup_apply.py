@@ -130,6 +130,14 @@ case of (f), a copy that cannot be removed, before B-31; those of (o) before B-3
     state never written over, nothing removed) as well. Lenient, as before: ``apply_pending_restore``,
     ``finish_pending_restore`` and ``protected_stage`` give ``None``, nothing moved, an error logged. A state that is a
     folder reads as none, logged; a link and a content no restore can hold stay as (d) has them.
+(p) B-55 and B-53, the report of the checked copy (``staging.read_report``, read since lot B-53 through
+    ``paths.read_regular_file``). A confirmation takes only a report that is not there or cannot be one —
+    ``read_report``'s ``FileNotFoundError``: nothing there, a folder, a link, a special file, no permission, a content
+    that is no report — for «no checked copy» (``RestoreStageMissingError``, the route's 404, after which the tab forgets
+    the check). A transient error reading it (``os.open`` failing ``EIO`` for the report alone) reaches the caller as it
+    is, the route's 500 ``restore_confirm_failed``, which the tab retries; nothing confirmed, written or removed. A
+    report that is a folder is still no checked copy, nothing written, and twenty confirmations of it leave no
+    descriptor open on it; a report of mode 000 is still no checked copy (skipped as root).
 
 How. Real databases and archives come from ``test_backup_staging.py`` (its module fixtures, imported: two databases made
 once by ``alembic upgrade`` in a process of their own, the archives at the head and at ``OLDER``). The head archive is
@@ -157,7 +165,9 @@ which ``config.platform.instance_blocked()`` reads at each call: the one a devel
 every test (``no_inherited_block``), and each test of (m) sets its own with ``monkeypatch`` — after any spawn child it
 needs has started, so that the child never sees it. A state (o) cannot read: ``os.open`` replaced for the test, failing
 for that one file and opening every other path as it is; or a mode taken away (``Modes``: put back before the tree is
-compared, and in any case when the test ends), those cases skipped as root, which reads everything.
+compared, and in any case when the test ends), those cases skipped as root, which reads everything. (p)'s transient
+error is the global ``os.open`` failing for the report alone (``opening_fails`` of ``test_backup_archive.py``), its
+descriptors found in ``/dev/fd`` by what they are open on (``descriptors_on``, of the same module).
 
 Pure: every data directory under ``tmp_path``. This process, and the processes it starts, are configured with a
 production data directory of the test that must stay absent (``configured_data_dir`` of the staging tests, imported,
@@ -228,6 +238,7 @@ from backend.app.services.platform.instance_backup.staging import StagingReport,
 from backend.app.utils.runtime.version import get_git_version
 from backend.test_scripts.test_services import test_backup_staging as cases
 from backend.test_scripts.test_services import test_session_version as sessions
+from backend.test_scripts.test_services.test_backup_archive import close_all, descriptors_on, needs_dev_fd, opening_fails
 from backend.test_scripts.test_utils import print_section, print_success
 
 # The module fixtures of test_backup_staging.py (lot B2a), re-exported: the real databases and archives restored here.
@@ -3720,3 +3731,84 @@ def test_a_rollback_keeps_the_ticket_which_reads_rolled_back_until_it_expires(tm
     assert outcome_read(ticket, state, instance, at=expiry_of(file)) is None, "at expires_at the ticket opens nothing"
     assert not lexists(ticket_file_of(instance.root)), "expired, its file goes when its holder presents it"
     print_success(f"{reason}: the ticket read three times until it expired")
+
+
+# =============================================================================
+# (p) B-55 and B-53: the report of the checked copy, read through the one reader
+# =============================================================================
+#
+# The confirmation took any ``OSError`` reading the report for «no checked copy» (``RestoreStageMissingError``, the
+# route's 404), after which the tab forgets the check: a disk that failed once made it drop a good copy. B-55, the
+# coordinator's rule, the jobs' since B-50: only a report that is not there or cannot be one — ``read_report``'s
+# ``FileNotFoundError`` — is «no checked copy»; any other ``OSError``, a transient one, reaches the caller (the route's
+# 500 ``restore_confirm_failed``), which the tab retries. And a report that is a folder left one descriptor open per
+# confirmation (B-53).
+
+
+def report_of(instance: Instance) -> Path:
+    """The report of the instance's checked copy: ``.restore/stage/<id>/report.json``."""
+    return stage_dir(instance.root, instance.stage_id) / STAGE_REPORT_FILE
+
+
+def refusal_of(raised: Exception | None) -> tuple[str, str | None]:
+    """What a confirmation raised, as the route tells it: its class, and its stable code when it has one."""
+    return type(raised).__name__, getattr(raised, "code", None)
+
+
+def test_a_transient_error_reading_the_report_reaches_the_caller_and_nothing_is_confirmed(tmp_path, databases, checked, monkeypatch):
+    """(p) B-55 A checked copy whose report ``os.open`` fails to open with ``EIO`` (that file alone): ``confirm_restore``
+    raises that very error — the route's 500 ``restore_confirm_failed``, which the tab retries — never
+    ``RestoreStageMissingError`` (the route's 404, after which the tab forgets the check). Nothing confirmed, written or
+    removed: no state of a restore, ``.restore`` and the data directory as they were. Red before B-55:
+    ``RestoreStageMissingError``."""
+    print_section("(p) B-55, B-53: the report of the checked copy")
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    data, items = cases.fingerprint(instance.root), restore_items(instance.root)
+    refusal = opening_fails(monkeypatch, report_of(instance), EIO)
+    returned, raised = answer_of(lambda: confirm(apply, instance))
+    assert raised is refusal, f"the very EIO os.open raised reading the report, as it is; not {refusal_of(raised)}: {raised} (returned {returned!r})"
+    assert not lexists(state_file(instance.root)), "nothing confirmed: no state of a restore"
+    assert (cases.fingerprint(instance.root), restore_items(instance.root)) == (data, items), f"nothing written or removed: {cases.changed(items, restore_items(instance.root))}"
+    print_success("EIO reading the report: raised as it is, nothing confirmed")
+
+
+@needs_dev_fd
+def test_a_report_that_is_a_folder_is_no_checked_copy_and_leaves_no_descriptor_open(tmp_path, databases, checked):
+    """(p) B-53 A checked copy whose report is a folder: ``RestoreStageMissingError`` (``restore_stage_not_found``) at
+    every confirmation and nothing written, as before B-53; and, confirmed twenty times, no descriptor left open on the
+    folder. Red before B-53: twenty descriptors, one per confirmation — ``os.fdopen`` refused the folder without closing
+    the descriptor ``os.open`` gave."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    report = report_of(instance)
+    report.unlink()
+    report.mkdir(mode=0o700)
+    data, items = cases.fingerprint(instance.root), restore_items(instance.root)
+    assert descriptors_on(report) == [], "precondition: no descriptor of this process is open on the folder"
+    answers: set[tuple[str, str | None]] = set()
+    for _ in range(cases.LEAK_READS):
+        _returned, raised = answer_of(lambda: confirm(apply, instance))
+        answers.add(refusal_of(raised))
+    left_open = close_all(descriptors_on(report))
+    assert answers == {("RestoreStageMissingError", "restore_stage_not_found")}, f"a report that is a folder: no checked copy, at every confirmation: {sorted(answers, key=str)}"
+    assert (cases.fingerprint(instance.root), restore_items(instance.root)) == (data, items), f"nothing written, not even the lock: {cases.changed(items, restore_items(instance.root))}"
+    assert left_open == [], f"{len(left_open)} descriptor(s) left open on the folder by {cases.LEAK_READS} confirmations: {left_open}"
+    print_success(f"a report that is a folder: restore_stage_not_found at each of {cases.LEAK_READS} confirmations, no descriptor left open")
+
+
+@cases.needs_permission_checks
+def test_a_report_the_server_may_not_read_is_no_checked_copy(tmp_path, databases, checked, modes):
+    """(p) B-55, the guard (green before and after): a checked copy whose report is of mode 000 is no checked copy —
+    ``RestoreStageMissingError`` (``restore_stage_not_found``), as a folder, a link or a content that is no report. The
+    coordinator's rule: no permission is «no check» (the tab forgets it), only a transient error is one to retry; nothing
+    is written. Root reads it all the same: skipped."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    data, items = cases.fingerprint(instance.root), restore_items(instance.root)
+    modes.chmod(report_of(instance), 0o000)
+    _returned, raised = answer_of(lambda: confirm(apply, instance))
+    modes.put_back()
+    assert refusal_of(raised) == ("RestoreStageMissingError", "restore_stage_not_found"), f"a report of mode 000: no checked copy, not {refusal_of(raised)}: {raised}"
+    assert (cases.fingerprint(instance.root), restore_items(instance.root)) == (data, items), f"nothing written: {cases.changed(items, restore_items(instance.root))}"
+    print_success("a report of mode 000: restore_stage_not_found, nothing written")

@@ -81,6 +81,7 @@ from backend.app.services.ai_export.components.technical_payloads import (
     IndicatorOutputColumn,
     IndicatorTablePayload,
     PriceBucket,
+    PriceSeriesGapReason,
     TechnicalDatedValue,
     TechnicalEventBucket,
     TechnicalEventPayload,
@@ -797,6 +798,26 @@ def coherent_price_currency(result: FAPriceQueryResult | None) -> str | None:
     return next(iter(currencies))
 
 
+#: The reasons an eligible asset gets no technical price series (E-AI503).
+NO_STORED_PRICE: PriceSeriesGapReason = "no_stored_price"
+MIXED_PRICE_CURRENCIES: PriceSeriesGapReason = "mixed_price_currencies"
+
+
+def price_series_gap(result: FAPriceQueryResult | None) -> PriceSeriesGapReason | None:
+    """Why ``result`` gives no native price series, or None when it gives one (E-AI503).
+
+    Decided only on the price points the price history returned, never on the asset's type. ``result.prices`` is
+    already sliced to the period with its carried points, so it is empty exactly when no price is stored up to the
+    period end: ``no_stored_price``. Points that do not share one currency (``coherent_price_currency`` is None) are
+    ``mixed_price_currencies``.
+    """
+    if result is None or not result.prices:
+        return NO_STORED_PRICE
+    if coherent_price_currency(result) is None:
+        return MIXED_PRICE_CURRENCIES
+    return None
+
+
 def price_result_to_close_points(result: FAPriceQueryResult, *, start: date, end: date) -> tuple[ContinuousMultiOutputPoint, ...]:
     if coherent_price_currency(result) is None:
         return ()
@@ -1451,6 +1472,8 @@ __all__ = [
     "EVENT_SELECTION_MINIMUM_LATEST",
     "EVENT_SELECTION_RECENT_WINDOW_DAYS",
     "FX_CURATED_SIGNALS",
+    "MIXED_PRICE_CURRENCIES",
+    "NO_STORED_PRICE",
     "OHLC_BUCKET_AGGREGATOR",
     "PORTFOLIO_TECHNICAL_BUNDLE_RESOURCE",
     "PORTFOLIO_TECHNICAL_UNIVERSE_KWARGS",
@@ -1481,6 +1504,7 @@ __all__ = [
     "period_contributor_asset_count",
     "period_position_leg_count",
     "price_result_to_close_points",
+    "price_series_gap",
     "select_technical_events",
     "signal_results_to_discrete_events",
 ]

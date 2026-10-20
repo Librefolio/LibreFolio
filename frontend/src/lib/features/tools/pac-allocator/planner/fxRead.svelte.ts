@@ -7,7 +7,9 @@
 import {SvelteSet} from 'svelte/reactivity';
 import {applyAwaitingFxRates, newCopyRecord, rateAwaitsRead} from './copies';
 import type {PlannerDraft} from './draft.svelte';
+import {forgetFxPairIssues, fxPairIssues, rememberFxPairIssues} from './fxIssues';
 import {loadCopyScope, selectableIds} from './scope';
+import type {SourceIssue} from './source';
 import {SourceLoad, type SourceLoadError} from './sourceLoad.svelte';
 
 const SCOPE_ERROR: SourceLoadError = {key: 'tools.pacAllocator.planner.copy.scopeError', fallback: 'The Broker list could not be loaded. Nothing was copied.'};
@@ -61,6 +63,11 @@ export class FxRateReader {
         return memoryOf(draft).ownerless.has(pair);
     }
 
+    /** What the last read said about the pair (X-R45b): this step's read, or the re-read before «Calcola». */
+    issues(draft: PlannerDraft, pair: string): SourceIssue[] {
+        return fxPairIssues(draft, pair);
+    }
+
     /** Needed pairs never read in this session and still waiting for a rate. */
     pending(draft: PlannerDraft): string[] {
         const memory = memoryOf(draft);
@@ -80,6 +87,7 @@ export class FxRateReader {
             memory.missed.delete(pair);
             memory.ownerless.delete(pair);
         }
+        forgetFxPairIssues(draft, pairs);
         this.busy = true;
         this.error = null;
         let owners: number[];
@@ -114,6 +122,7 @@ export class FxRateReader {
         }
         const outcome = applyAwaitingFxRates(draft, source, newCopyRecord(draft, 'fx', source), wanted);
         for (const pair of outcome.missing) memory.missed.add(pair);
+        rememberFxPairIssues(draft, wanted, outcome.issues);
         for (const pair of wanted) memory.attempted.add(pair);
         this.#finish(null, []);
     }

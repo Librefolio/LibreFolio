@@ -211,8 +211,8 @@ would refuse every sign-in through it, the right passwords included, for up to 1
 remains true behind a proxy on a public address. Behind one on a local address, such as a proxy
 container in front of the Docker image, LibreFolio leaves the sign-ins through it out of the count
 per address instead, and only the limit per username or email address counts them: see
-**When LibreFolio does not trust your proxy**, below. Either way, the cure is to let LibreFolio
-learn each visitor's address, in one of the two ways that follow.
+[When LibreFolio does not trust your proxy](#untrusted-proxy), below. Either way, the cure is to
+let LibreFolio learn each visitor's address, in one of the two ways that follow.
 
 Out of the box, the address that counts is the connection's, as uvicorn, LibreFolio's web server,
 gives it. uvicorn takes the visitor's address from `X-Forwarded-For` only when the connection comes
@@ -263,8 +263,10 @@ LIBREFOLIO_CLIENT_IP_HEADER=Fly-Client-IP
 - **The indicator does not use it**: it keeps reading `X-Forwarded-For`, as
   [The Server's View](#server-view) explains.
 
-**When LibreFolio does not trust your proxy**, because it learns the visitor's address neither
-through `FORWARDED_ALLOW_IPS` nor through `LIBREFOLIO_CLIENT_IP_HEADER`, it cannot tell the visitors
+#### 🕵️ When LibreFolio Does Not Trust Your Proxy {: #untrusted-proxy }
+
+LibreFolio does not trust your proxy when it learns the visitor's address neither through
+`FORWARDED_ALLOW_IPS` nor through `LIBREFOLIO_CLIENT_IP_HEADER`: it cannot tell the visitors
 behind the proxy apart, and neither can its limits per visitor's address. It recognises such a
 proxy by its requests: they come from a local address (`loopback`, `lan` or `vpn` in
 [The Server's View](#server-view), such as `172.18.0.2` on a Docker network) and carry a forwarding
@@ -283,10 +285,13 @@ Then:
   request comes again, so it never appears among the [startup checks](configuration.md#startup-checks).
 - **To fix it**, list your proxy in `FORWARDED_ALLOW_IPS`, as «Forgotten Passwords» in
   [Email](email.md#forgot-password) explains, or name the header it sets itself in
-  `LIBREFOLIO_CLIENT_IP_HEADER`, as above, if every request crosses it. In `FORWARDED_ALLOW_IPS`,
-  give the proxy's address as LibreFolio sees it: with Docker, the proxy container's address, or
-  its Docker network, such as `FORWARDED_ALLOW_IPS=172.18.0.0/16` (`docker network inspect`, with
-  the network's name, shows both). Trust only addresses your proxy alone uses. Set either variable
+  `LIBREFOLIO_CLIENT_IP_HEADER`, as above, if every request crosses it. Behind Tailscale Serve or
+  Funnel with the Docker image, follow [Tailscale Serve and Funnel with Docker](#tailscale). In
+  `FORWARDED_ALLOW_IPS`, give the proxy's address as LibreFolio sees it: with Docker, the proxy
+  container's address, or its Docker network, such as `FORWARDED_ALLOW_IPS=172.18.0.0/16`
+  (`docker network inspect`, with the network's name, shows both), though a whole network includes
+  its gateway, which is also the address of the connections made on the server itself
+  ([see below](#tailscale)). Trust only addresses your proxy alone uses. Set either variable
   in `.env` or in the container's environment, then restart, as above: with Docker,
   `docker compose up -d`. No proxy of yours in front of LibreFolio? Then a visitor on your own
   network or VPN sent the header, or, with Docker Desktop exposed directly, any visitor, or any
@@ -298,6 +303,108 @@ with `headers` too, and in the security checks, where `platform.client_address` 
 a proxy as above was met too. Those requests keep counting with the connection's address. They are
 harmless when no proxy of yours has a public address: a visitor, or a proxy of their own, may add
 such headers.
+
+#### 🐳 Tailscale Serve and Funnel with Docker {: #tailscale }
+
+Tailscale Serve and Funnel pass the visitor's address in `X-Forwarded-For`: the Tailscale address
+of the device, `100.x.y.z`, or, through Funnel, the address of the visitor on the internet. They
+write the header themselves, in place of any the visitor sent. Over HTTPS, the default of Serve and
+the only way of Funnel, they also send `X-Forwarded-Proto: https`; with `tailscale serve --http=…`
+they send none, rightly, since the browser is on plain HTTP too.
+
+With the Docker image, LibreFolio cannot use that address out of the box. Both Tailscale setups of
+[Exposing Securely](service_exposure.md) reach its container through Docker, so their requests come
+from the gateway of the container's Docker network, such as `172.28.0.1`, which uvicorn does not
+trust:
+
+- **On the server**, `tailscale serve --bg 6040` (the HTTPS address of Level 1) or
+  `tailscale funnel --bg 6040` (Level 3) passes the requests to `http://127.0.0.1:6040`, and
+  Docker's own proxy hands them to the container;
+- **In sidecar containers** (Level 4), socat passes them to the server's LAN address and
+  LibreFolio's published port.
+
+So LibreFolio warns about a proxy it does not trust, [as above](#untrusted-proxy), and its limits
+per visitor's address leave all those requests out. Installed on the host instead, without Docker,
+LibreFolio needs nothing for `tailscale serve` or `tailscale funnel` on the same server: it sees
+their requests come from `127.0.0.1`, which uvicorn trusts by default.
+
+To let LibreFolio see each visitor, work on the server, in the folder that holds
+`docker-compose.yml` and `.env`:
+
+1. **Find the gateway** of LibreFolio's Docker network:
+
+    ```bash
+    docker inspect --format '{{range .NetworkSettings.Networks}}{{.Gateway}}{{end}}' librefolio
+    ```
+
+    It prints an address such as `172.28.0.1`; `librefolio` is the name `docker-compose.yml` gives
+    the container (`container_name`). `docker network inspect <network>` shows the same gateway
+    under `IPAM` → `Config` → `Gateway`, next to the network's `Subnet`: `docker network ls` lists
+    the networks, and a Compose project's own is `<project>_default`.
+
+    To make sure that Tailscale's requests come from it, open LibreFolio at its Tailscale address,
+    then read the last lines of its log:
+
+    ```bash
+    docker compose logs --tail 20 librefolio
+    ```
+
+    uvicorn logs each request on a line that gives the address it sees, then the request. Through
+    Tailscale, that address is the gateway's:
+
+    ```text
+    172.28.0.1:<port> - "GET … HTTP/1.1" 200 OK
+    ```
+
+    The lines for `/api/v1/system/health` are Docker's health check, made inside the container:
+    leave them aside.
+
+2. **List the gateway in `FORWARDED_ALLOW_IPS`.** Add this line to `.env`, with your own gateway:
+
+    ```bash
+    FORWARDED_ALLOW_IPS=172.28.0.1
+    ```
+
+    If `.env` already sets the variable, for another proxy, add the gateway at the end of its list,
+    after a comma.
+
+3. **Restart LibreFolio**, so that its container gets the new environment:
+
+    ```bash
+    docker compose up -d
+    ```
+
+    A plain `docker compose restart` keeps the old environment.
+
+4. **Check.** Open LibreFolio at its Tailscale address again, then read the log as in step 1. The
+   lines of your requests now show the address of the device in place of the gateway's (through
+   Funnel, the visitor's public address), followed by port `0`:
+
+    ```text
+    100.x.y.z:0 - "GET … HTTP/1.1" 200 OK
+    ```
+
+    The warning of `platform.client_address` stops coming back. That check tells what the server
+    has met since its last start, though, so it reads `ok` after the restart either way: the log
+    line is the real proof.
+
+Three things to keep in mind about trusting the gateway:
+
+- **The exact gateway is the narrowest choice**, but Compose may give the network another subnet
+  when it creates it again (`docker compose down`, then `docker compose up -d`): check the gateway
+  again after such a change.
+- **`FORWARDED_ALLOW_IPS=172.16.0.0/12` survives that**, since it covers every Docker network from
+  `172.16` to `172.31`. But it trusts every Docker network on the server, and it does not cover the
+  `192.168.x.x` networks that Docker hands out once those run out.
+- **The gateway is not Tailscale alone.** It is also the address of every connection made on the
+  server itself through the published port, and of the IPv6 visitors that Docker's proxy passes on
+  ([Limits](#limits)): trusting it lets them choose the address the limits count.
+    - If you reach LibreFolio **only** through `tailscale serve` or `tailscale funnel` on the
+      server, publish the port on the loopback only, so that nothing outside the server can reach
+      it: in `docker-compose.yml`, under `ports:`, change `"${PORT:-6040}:6040"` to
+      `"127.0.0.1:${PORT:-6040}:6040"`, then run `docker compose up -d`.
+    - Not with Level 4, nor with the plain-HTTP addresses of Levels 1 and 2: they reach the port
+      through the server's LAN or Tailscale address.
 
 ---
 

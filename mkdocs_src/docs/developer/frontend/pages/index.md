@@ -276,21 +276,24 @@ frontend/src/routes/
 
 - **Tabs** from the tab registry (`SETTINGS_TABS` and `SETTINGS_TAB_GROUPS`, see
   [Settings Components](../components/features/settings.md#tab-registry)): Profile, Preferences,
-  Plugins and About, then the **Administration** group on the right, whose tabs show in a second
-  bar: Global Settings, read by everyone, and Users, Backup, Email and Security, which only a
-  superuser sees (a regular user's group opens Global Settings directly, without a second bar).
+  Plugins and About, then, for a superuser only, the **Administration** group on the right, whose
+  tabs show in a second bar: Global Settings, Users, Backup, Email and Security (since lot N69-2 a
+  regular user has none of them, so no group).
   `?tab=<id>` opens a tab the user can see, from the first render, inside its group for a member;
-  `?tab=administration` opens the group's first tab; an unknown or hidden id is ignored, and a value
+  `?tab=administration` opens the group's first tab; an unknown or hidden id is ignored (a regular
+  user's `?tab=admin` opens Profile), and a value
   is applied once, so a page update that keeps it does not take back a tab the user clicked. The
   Security tab's badge, summed on Administration, counts the security checks that need attention
 - **ProfileTab**: Avatar editing via AssetPickerModal, username and email editing, account
   deletion through `AccountDeletionDialog`
 - **PreferencesTab**: Language, currency, theme, and the Onboarding category (guide replays —
   see [Settings Components](../components/features/settings.md))
-- **GlobalSettingsTab**: visible to every user, editable only by a superuser, behind an edit lock
+- **GlobalSettingsTab**: superusers only, behind an edit lock (see
+  [Settings Components](../components/features/settings.md#globalsettingstab-admin-only)); the
+  values stay readable through the API by every signed-in user, whose app reads them
 - **AboutTab**: Version info (from Git tag), system info
-- **UsersTab**: superusers only — the accounts of the instance and the open invitations, with the
-  invitation, reset-link and deletion dialogs (see
+- **UsersTab**: superusers only — the accounts of the instance, each with its avatar, and the open
+  invitations, with the invitation, reset-link and deletion dialogs (see
   [Settings Components](../components/features/settings.md#userstab))
 - **SecurityTab**: superusers only — the configuration checks of the instance
   (`GET /security/checks`) and the browser's open-registration check, most severe first, with

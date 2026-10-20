@@ -386,6 +386,20 @@ class FAProviderProbeRequest(FAProviderConfigBase):
     )
 
 
+class FAQuoteBaseSuggestion(StrictModel):
+    """How many units one market price refers to, as a provider suggests it (Z-32 d): the asset's quote_base_quantity
+    ("Units per single price") for the line found.
+
+    Optional wherever it appears: a plugin suggests only what its own data says (Yahoo Finance: 100 for a line it quotes
+    in pence, GBp). The web app's asset form puts it before the asset type's default (100 for a bond, 1 otherwise) when a
+    search result is chosen or the provider is asked; a stored asset changes only when the user saves. Never part of a
+    metadata patch, which the metadata refresh writes on stored assets without asking.
+    """
+
+    quantity: int = Field(..., ge=1, description="Units one price refers to: 100 for a line quoted in pence; 1 (per unit) is a suggestion too")
+    quote_currency: Optional[str] = Field(None, description="The quote currency as the provider reports it, not normalized (Yahoo's GBp): why the quantity is suggested")
+
+
 class BaseProbeOperationResult(StrictModel):
     """Base class for all probe operation results.
 
@@ -426,6 +440,7 @@ class ProbeMetadataResult(BaseProbeOperationResult):
     """Result of metadata probe operation."""
 
     patch_data: Optional[dict] = Field(None, description="Asset metadata patch (identifiers, asset_type, classification, etc.)")
+    quote_base_suggestion: Optional[FAQuoteBaseSuggestion] = Field(None, description="The plugin's quote base suggestion (Z-32 d), beside the patch and never inside it; null when it suggests nothing")
 
 
 class FAProviderProbeResponse(StrictModel):
@@ -466,6 +481,7 @@ class FAProviderSearchResultItem(StrictModel):
     asset_type: Optional[str] = Field(None, description="Asset type (ETF, stock, bond, etc.)")
     provider_url: Optional[str] = Field(None, description="URL to asset page on provider site")
     provider_params: Optional[dict[str, Any]] = Field(None, description="Provider-specific params to carry over (e.g. language)")
+    quote_base_suggestion: Optional[FAQuoteBaseSuggestion] = Field(None, description="The plugin's quote base suggestion for this line (Z-32 d); null when it suggests nothing")
     via_web: bool = Field(False, description="True if resolved via the external web link-finder (last-resort), not the provider's native on-site search")
 
 

@@ -33,8 +33,14 @@ Check these fields before saving:
 
 - **Name**: required and unique; a warning appears if another asset already uses it.
 - **Type**: see [Choose the asset type](#choosing-the-asset-type).
-- **Units per single price**: how many units one price refers to, usually 1. Bonds are quoted per
-  100: LibreFolio proposes it when you choose **Bond**.
+- **Units per single price**: how many units one price refers to, usually 1, and 100 for most
+  bonds. Picking a **Search Online** result sets it, as it sets the name: to the provider's
+  suggestion if it makes one, with a note under the field saying why
+  ([Yahoo Finance](providers/yahoo-finance.md) suggests 100 for a London line quoted in pence, for
+  example), otherwise to 100 for a **Bond** and 1 for any other type. It does so in **Edit Asset**
+  too, over the saved value, which changes only when you save. Typing in the field removes the
+  note. Choosing the **Type** yourself leaves the field as it is; for a **Bond**, a hint reminds you
+  that bonds are usually quoted per 100.
 - **Currency**: the currency the prices are quoted in. For a fund listed in euros that is EUR,
   even when the fund is denominated in another currency.
 
@@ -68,7 +74,7 @@ Where the link leads depends on your instance's support address; its tooltip tel
 | Support address | What **Let us know** does |
 |---|---|
 | An email address | Your email app opens a message with the subject and the details filled in |
-| A web page | The page opens in a new tab and the details are copied, ready to paste there; a message confirms the copy, or says it failed |
+| A web page | The page opens in a new tab with the subject and the details in its address, so a support form can fill itself in. The details are copied too, ready to paste there; a message confirms the copy, or says it failed |
 | None (the default), on a self-hosted instance | A new GitHub issue opens in a new tab, filled in. It is **public**: review it before you submit it |
 
 On a managed instance, one that a hosting provider runs for you, **Let us know** needs a support
@@ -159,6 +165,15 @@ The accepted values only fill in the form: they are stored when you save the ass
 - **Each question is asked once.** When a search result brings a different ISIN (or other code)
   from the one in the form, LibreFolio first asks which is the main one, and the comparison does
   not ask again.
+- **Units per single price is proposed, never filled in.** A check of everything (after a search
+  pick, or with **Ask Provider** at the top of **Asset Details**) compares it with the provider's
+  suggestion or, without one, with 100 for a bond and 1 for any other type (the type the provider
+  proposes, if it proposes another). A difference is a ticked row under **Asset Details**, with a
+  note giving the reason: the provider's suggestion, or that bonds are usually quoted per 100 (a
+  row proposing the usual 1 has none). Untick it to keep your value. If a check comes back without
+  the provider's suggestion (it took too long, for example), the one it gave earlier for the same
+  provider and identifier, in the search result or an earlier check, still counts: LibreFolio does
+  not propose to undo it.
 
 ## 🛠️ Edit an asset {: #editing-an-asset }
 

@@ -18,8 +18,8 @@
  *   - the active tab is always a real tab — a member or an ungrouped tab — and the top bar selects the group of an
  *     active member. A second TabBar (`scrollable`), inside `settings-subtabs`, lists the visible members of the active
  *     tab's group — each with its own test id, label, icon and badge, the active one selected — and is drawn only when
- *     that group has two visible members or more: with one (a user's Administration holds the global settings alone)
- *     there is no second bar and no button of the member's own, and the group's entry opens it directly;
+ *     that group has two visible members or more: with one (until N69-2, a user's Administration held the global
+ *     settings alone) there is no second bar and no button of the member's own, and the group's entry opens it directly;
  *   - clicking a group opens its first visible member, unless one of its members is open already: then nothing changes;
  *     clicking a member of the second bar opens it;
  *   - the body is the active tab's `component` with `props(ctx)` spread on it, and only that body; the heading a phone
@@ -47,15 +47,20 @@
  *       - crew: echo (50, administrators only, a badge), delta (55, a badge), foxtrot (60) — three members, two for a
  *         user, whose first visible one is therefore delta, echo for an administrator;
  *       - office (`alignEnd`): omega (100, `props`), sigma (110, administrators only), tau (120, administrators only, a
- *         badge, a prefetch) — the stand-in for Administration: a user sees omega alone, as the global settings;
+ *         badge, a prefetch) — the stand-in for Administration as A8b had it, a user seeing omega alone as the global
+ *         settings: a group of one visible member is still the page's to draw, whatever the real registry holds;
  *   - each synthetic body is `SettingsTabProbe`, and each icon `SettingsIconProbe` (`src/__tests__/harness`), told which
  *     tab or group it stands for; a body is handed the props object the page passed, and each call of a body is one
  *     mount, logged in `mounts`;
  *   - the counts the badges read sit in a reactive box (`reactiveBox`), as the security checks' store is reactive: a
  *     count arriving after the first render is what the page must show. The prefetches are spies; beta's reads beta's
  *     count, as the checks' `ensureLoaded()` reads the state it fills;
- *   - the real tab modules are no-ops: the real registry imports them, as the page did, and they reach the API client
- *     and the stores, none of which is the subject; so are the Security tab and the checks' store of A8b;
+ *   - the real tab modules are probes too, each named by its module (`realBodies`: `ProfileTab`, `GlobalSettingsTab`…):
+ *     the real registry imports them, as the page did, and the real ones reach the API client and the stores, none of
+ *     which is the subject; the checks' store of A8b is a no-op stand-in;
+ *   - N69-2 (decision D4 a) changes the registry, not the page: its cases render the page on the REAL registry, the
+ *     mocked module's `SETTINGS_TABS` and `SETTINGS_TAB_GROUPS` being getters that answer the real lists while a case
+ *     sets `mocks.registry.real`;
  *   - the `page` store and the auth store are writables the test holds; `$_` marks what it translated, `⟦key⟧`, so a
  *     label is proven to have gone through the translator without naming any language;
  *   - `TabBar` is the real one: what the page hands it is observed as TabBar draws it.
@@ -70,6 +75,11 @@
  * A8b` fail on their own expectation — the entries of the top bar, a group's entry and its second bar, `?tab=` naming
  * a member or a group, the badges, the prefetches, `sm:ml-auto` on a group —, and the A3 cases, which open ungrouped
  * tabs or reach omega through `?tab=` (a member is a `?tab=` value before A8b and after), stay green.
+ *
+ * And a third time in N69-2 (decision D4 a: «Administration» for administrators only). The real registry's admin entry
+ * has no `visible`, so a user's page still draws «Administration», standing for Global Settings, and `?tab=admin` or
+ * `?tab=administration` opens it, read-only: the cases marked `red until N69-2` fail on their own expectation; the
+ * administrator's N69-2 cases and every synthetic case stay green.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {tick, type Component, type ComponentType} from 'svelte';
@@ -171,29 +181,51 @@ const mocks = await vi.hoisted(async () => {
         prefetches,
         page: writable({url: new URL('http://librefolio.test/settings')}),
         auth: writable<{user: {is_superuser: boolean} | null}>({user: {is_superuser: false}}),
-        noopComponent: () => {},
+        /** The bodies of the real tab modules, each a probe named by its module: drawn only by the N69-2 cases. */
+        realBodies: {
+            profile: probeBody('ProfileTab'),
+            preferences: probeBody('PreferencesTab'),
+            about: probeBody('AboutTab'),
+            admin: probeBody('GlobalSettingsTab'),
+            users: probeBody('UsersTab'),
+            email: probeBody('EmailSettingsTab'),
+            backup: probeBody('BackupTab'),
+            plugins: probeBody('PluginSettingsTab'),
+            security: probeBody('SecurityTab'),
+        },
+        /** Which registry the page reads: the synthetic one above, or — `real`, set by the N69-2 cases — `settingsTabs.ts`'s own. */
+        registry: {real: false},
     };
 });
 
-vi.mock('$lib/features/settings/settingsTabs', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('$lib/features/settings/settingsTabs')>()),
-    SETTINGS_TABS: mocks.tabs,
-    SETTINGS_TAB_GROUPS: mocks.groups,
-}));
-vi.mock('$lib/features/settings/tabs/ProfileTab.svelte', () => ({default: mocks.noopComponent}));
-vi.mock('$lib/features/settings/tabs/PreferencesTab.svelte', () => ({default: mocks.noopComponent}));
-vi.mock('$lib/features/settings/tabs/AboutTab.svelte', () => ({default: mocks.noopComponent}));
-vi.mock('$lib/features/settings/tabs/GlobalSettingsTab.svelte', () => ({default: mocks.noopComponent}));
-vi.mock('$lib/features/settings/tabs/UsersTab.svelte', () => ({default: mocks.noopComponent}));
-vi.mock('$lib/features/email/EmailSettingsTab.svelte', () => ({default: mocks.noopComponent}));
-vi.mock('$lib/features/backup/BackupTab.svelte', () => ({default: mocks.noopComponent}));
+// The getters are read at every access, the page's included: the page rendered after a case sets `registry.real` draws
+// the real lists, and every other case the synthetic ones. `importOriginal` keeps the real helpers and the real lists.
+vi.mock('$lib/features/settings/settingsTabs', async (importOriginal) => {
+    const original = await importOriginal<typeof import('$lib/features/settings/settingsTabs')>();
+    return {
+        ...original,
+        get SETTINGS_TABS() {
+            return mocks.registry.real ? original.SETTINGS_TABS : mocks.tabs;
+        },
+        get SETTINGS_TAB_GROUPS() {
+            return mocks.registry.real ? original.SETTINGS_TAB_GROUPS : mocks.groups;
+        },
+    };
+});
+vi.mock('$lib/features/settings/tabs/ProfileTab.svelte', () => ({default: mocks.realBodies.profile}));
+vi.mock('$lib/features/settings/tabs/PreferencesTab.svelte', () => ({default: mocks.realBodies.preferences}));
+vi.mock('$lib/features/settings/tabs/AboutTab.svelte', () => ({default: mocks.realBodies.about}));
+vi.mock('$lib/features/settings/tabs/GlobalSettingsTab.svelte', () => ({default: mocks.realBodies.admin}));
+vi.mock('$lib/features/settings/tabs/UsersTab.svelte', () => ({default: mocks.realBodies.users}));
+vi.mock('$lib/features/email/EmailSettingsTab.svelte', () => ({default: mocks.realBodies.email}));
+vi.mock('$lib/features/backup/BackupTab.svelte', () => ({default: mocks.realBodies.backup}));
 // Workstream X (CP11b): reached through the real registry like the others; unmocked, its form's date formatter would
 // load the language store, which reads constants the `$lib/i18n` mock below does not provide, and the file would fail
 // on its import.
-vi.mock('$lib/features/plugin-settings/PluginSettingsTab.svelte', () => ({default: mocks.noopComponent}));
+vi.mock('$lib/features/plugin-settings/PluginSettingsTab.svelte', () => ({default: mocks.realBodies.plugins}));
 // A8b: the real registry imports the Security tab and the security checks' store; unmocked, they would reach the API
 // client and the stores. Neither exists yet: a mock of a path nobody imports changes nothing.
-vi.mock('$lib/features/settings/security/SecurityTab.svelte', () => ({default: mocks.noopComponent}));
+vi.mock('$lib/features/settings/security/SecurityTab.svelte', () => ({default: mocks.realBodies.security}));
 vi.mock('$lib/features/settings/security/securityChecks.svelte', () => ({securityChecks: {attentionCount: 0, ensureLoaded: async () => undefined}}));
 vi.mock('$app/stores', () => ({page: {subscribe: mocks.page.subscribe}}));
 vi.mock('$lib/stores/app/auth', () => ({auth: {subscribe: mocks.auth.subscribe}}));
@@ -826,5 +858,62 @@ describe('Settings page — prefetch (A8b)', () => {
 
         expect(prefetched('beta'), 'still once').toEqual([true]);
         expect(prefetched('tau'), 'still once').toEqual([true]);
+    });
+});
+
+/**
+ * N69-2 (decision D4 a): «Administration» is for administrators only. Until then the registry's admin entry — Global
+ * Settings — had no `visible`: a user saw it read-only (`props: ctx => ({canEdit: ctx.isSuperuser})`), and with it the
+ * group, standing for that one member. The registry now gives admin `visible: ctx => ctx.isSuperuser` and keeps its
+ * props; the page itself changes nothing — a group with no visible member has no entry in the bar (`settingsBar`), and a
+ * `?tab=` naming no visible tab or group falls back on the first visible tab. So these cases render the page on the
+ * REAL registry (`mocks.registry.real`), its ids the real ones — `profile`, `admin`, `administration` — and each real
+ * tab body a probe named by its module.
+ */
+describe('Settings page — the real registry: «Administration» is for administrators only (N69-2)', () => {
+    beforeEach(() => {
+        mocks.registry.real = true;
+    });
+
+    afterEach(() => {
+        // The page is unmounted before the switch back: no page reads the synthetic lists in place of the real ones.
+        cleanup();
+        mocks.registry.real = false;
+    });
+
+    // red until N69-2
+    it('SPAGE-22: a user’s page has no settings-tab-administration and no settings-tab-admin, in either bar — Profile open', async () => {
+        await mountPage();
+
+        expect(topIds(), 'premise: the bar is drawn from the real registry').toEqual(expect.arrayContaining(['profile', 'about']));
+        expect(screen.queryByTestId('settings-tab-administration'), 'no «Administration» entry: a user sees no member of the group').toBeNull();
+        expect(screen.queryByTestId('settings-tab-admin'), 'and no Global Settings tab of its own').toBeNull();
+        expect(subtabs(), 'and no second bar').toBeNull();
+        expect(selected(), 'Profile, the first visible tab, is the open one').toEqual(['profile']);
+    });
+
+    // red until N69-2
+    it.each(['?tab=admin', '?tab=administration'])('SPAGE-23: %s, for a user, opens the first visible tab — Profile — at the first render; the Global Settings body never mounts', async (query) => {
+        await mountPage({query});
+
+        expect(selected(), `${query} names no tab and no group a user sees: the first visible tab opens, and only it is selected`).toEqual(['profile']);
+        expect(body(), 'Profile’s body is drawn, with no props').toEqual({tab: 'ProfileTab', received: {}});
+        expect(
+            mocks.mounts.filter((tab) => tab !== 'ProfileTab'),
+            'no other body was ever mounted, Global Settings’ included: its read-only branch is out of a user’s reach',
+        ).toEqual([]);
+    });
+
+    it.each(['?tab=admin', '?tab=administration'])('SPAGE-24: %s, for an administrator, opens Global Settings as before — «Administration» selected in the top bar, admin in its second bar, the body editable', async (query) => {
+        await mountPage({query, isSuperuser: true});
+
+        expect(topSelected(), 'the group has its entry in the top bar, selected').toEqual(['administration']);
+        expect(subIds()?.[0], 'the group’s second bar starts with Global Settings, its first member').toBe('admin');
+        expect(subSelected(), 'which is the one selected there').toEqual(['admin']);
+        expect(body(), 'its body, which an administrator may edit').toEqual({tab: 'GlobalSettingsTab', received: {canEdit: true}});
+        expect(
+            mocks.mounts.filter((tab) => tab !== 'GlobalSettingsTab'),
+            'no other body was mounted first',
+        ).toEqual([]);
     });
 });

@@ -52,7 +52,8 @@ The public method now delegates its local work to focused helpers without changi
      as `FAHistoricalData.currency`: `GBp` for a London line quoted in pence, whose price points
      and dividends carry `GBP` (their schemas upper-case the code) with the numbers in pence. Two
      guards in `test_yahoo_finance_errors.py` pin it: no validator may fold that field, and the
-     plugin converts nothing.
+     plugin converts nothing. Such an asset needs a quote base of 100, which the plugin suggests
+     ([Quote Base Suggestion](#quote-base-suggestion)).
    - Dividend and split series are acquired independently and best-effort; one failing does not
      suppress the other or the prices.
 2. **Map — `_map_history_prices()`**
@@ -89,7 +90,15 @@ history uses `NO_DATA`, and malformed or unexpected Yahoo responses use `FETCH_E
 - Minimum query length: **2 characters**.
 - Results limited to **top 20** quotes.
 - `quoteType` is normalized to LibreFolio asset types: `equity → STOCK`, `etf → ETF`, `mutualfund → FUND`, `cryptocurrency → CRYPTO`, etc.
-- Currency is fetched per-symbol via `_fetch_currency()` (cached separately, 24-hour TTL).
+- Currency is fetched per-symbol via `_fetch_currency()` (`fast_info`), cached separately for 24
+  hours. Only an answer is cached: a currency, or Yahoo answering without one (Z-39).
+    - A refusal for too many requests (`_is_rate_limited()`) raises `AssetRateLimitedError` at once,
+      with no retry and nothing cached: the whole search leaves as rate limited at that result, the
+      remaining results' currencies are not asked, and the core pauses Yahoo.
+    - Any other error gives that result no currency and is not cached: the next search asks again.
+- A result whose currency is a minor unit carries a `quote_base_suggestion`: `GBp` gives
+  `{"quantity": 100, "quote_currency": "GBp"}`; any other currency, or none, adds no key
+  ([Quote Base Suggestion](#quote-base-suggestion)).
 
 ### 📋 Metadata (`fetch_asset_metadata`)
 
@@ -97,6 +106,26 @@ history uses `NO_DATA`, and malformed or unexpected Yahoo responses use `FETCH_E
 - Extracts: `asset_type`, `currency`, `short_description` (from `longBusinessSummary`), `sector` (single-sector distribution), `identifier_ticker`, `identifier_isin`.
 - ISIN is obtained via `ticker.isin` (not available for all markets).
 - Unknown sectors are logged as warnings and mapped to "Other".
+
+### 🔢 Quote Base Suggestion (`suggest_quote_base`) {: #quote-base-suggestion }
+
+The prices of a London line quoted in pence (`GBp`) are stored in pence as `GBP` (see Historical Data above), so its
+asset needs a quote base (`quote_base_quantity`, **Units per single price**) of 100. The plugin suggests it in two
+places, both through `_quote_base_suggestion(currency)`:
+
+- **Search**: from the currency each result already reads, as listed above.
+- **`suggest_quote_base()`**: from the currency of `fast_info`, read through `_fetch_currency(identifier)` and its
+  24-hour cache, shared with the search. A `GBp` line gives `FAQuoteBaseSuggestion(quantity=100, quote_currency="GBp")`;
+  any other currency, none, an empty identifier or a missing yfinance gives `None`. The core asks it in the probe's
+  `metadata` operation only, after `fetch_asset_metadata()` has answered, with 5 s of its own
+  ([Asset Plugin Guide](../../architecture/patterns/asset_plugin_guide.md#quote-base-suggestion)).
+
+`_quote_base_suggestion()` reads the factor from `minor_unit_factor()`, whose list is `MINOR_UNIT_FACTORS`
+(`backend/app/utils/currency_units.py`): the codes are matched as reported, whitespace stripped, so `GBP` or `gbp`
+get no suggestion. Only `GBp`, 100, is listed: `ZAC` and `ILA`, the cents of Johannesburg and the agorot of Tel Aviv,
+are not ISO 4217 codes, and the schemas refuse them (`Currency.validate_code()` and `iso_currency_code()` in
+`backend/app/schemas/common.py`). The portfolio data-quality report reads the same list
+([Data Quality Banner](../../frontend/data-quality-banner.md)).
 
 ### 🔗 `get_asset_url`
 
@@ -124,7 +153,7 @@ version stored a day early stays, beside the one a sync fetches again
 | **Core current value** | Provider code + identifier + identifier type (refresh also includes the provider-parameter hash) | 120 sec | 300 | Avoid repeated `ticker.info` calls during current-price polling and refresh. |
 | **Core history** | Provider code + identifier + identifier type + provider-parameter hash | 15 min | 500 | Reuse fetched date ranges during provider-driven refresh. |
 | **Core search query** | Provider code + normalized query | 15 min | 500 | Avoid repeating the same provider search. |
-| **Yahoo currency lookup** | `symbol` | 24 hours | 2000 | Cache the provider's `fast_info` currency sub-operation used by `search()`. |
+| **Yahoo currency lookup** | `symbol` | 24 hours | 2000 | Cache the provider's `fast_info` currency sub-operation used by `search()` and `suggest_quote_base()`. Only answers are cached, never a refusal or an error. |
 
 All are in-memory, per-process TTL caches created with `get_ttl_cache()`. The shared result caches
 are owned by `assets/core.py`; Yahoo owns only its currency sub-operation cache.

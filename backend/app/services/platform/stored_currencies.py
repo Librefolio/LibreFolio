@@ -11,7 +11,8 @@ can bring such rows back at any time. This module finds them, read-only, on a ``
 A value is canonical when it is stored as ``iso_currency_code`` stores it (``is_canonical_iso_currency``): ``"EUR"`` is,
 ``"eur"`` is not (an exact SQL comparison misses it), nor ``"978"``. Each finding carries ``suggested_iso_currency``: the
 code the value stands for, or None (no code, two codes, a subunit code). A BLOB in a column of text is a finding too,
-shown as ``X'…'`` (E-19b1).
+shown as ``X'…'`` (E-19b1), and so is a text that is not UTF-8, read as its bytes (E-20): LibreFolio writes neither, but
+a database put back by hand, another program or a damaged file can hold one.
 """
 
 from __future__ import annotations
@@ -78,8 +79,9 @@ class StoredCurrencyFinding:
 
 def _as_text(value: Any) -> str:
     """A stored value as text: a JSON number or object read out of a parameter is shown as JSON; a BLOB, which a column of
-    text can hold (a hand-made or damaged database, a crafted backup), in SQLite's own notation, ``X'455552'``: never a
-    code, so always a finding, never a crash of the check (E-19b1)."""
+    text can hold (a hand-made or damaged database, a crafted backup), or a text that is not UTF-8, which the audit reads
+    as its bytes (E-20), in SQLite's own notation, ``X'455552'``: never a code, so always a finding, never a crash of the
+    check (E-19b1)."""
     if isinstance(value, str):
         return value
     if isinstance(value, bytes):
@@ -87,22 +89,38 @@ def _as_text(value: Any) -> str:
     return json.dumps(value)
 
 
+def _lenient_text(data: bytes) -> str | bytes:
+    """A stored text as ``str`` when it is UTF-8, else its bytes (E-20): on ``sqlite3``'s default ``text_factory`` a
+    text that is not UTF-8 raises an ``OperationalError`` quoting it, which would end the check on one value."""
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data
+
+
 def find_stored_currency_findings(connection: sqlite3.Connection) -> list[StoredCurrencyFinding]:
     """Every stored currency value that is not a canonical ISO 4217 code, read-only: one finding per place and value.
 
     In the order of ``STORED_CURRENCY_PLACES``, then the most rows first, then the value. NULLs and JSON texts that are
-    not JSON are left out. A place whose table the database lacks (an older schema) is skipped.
+    not JSON are left out. A place whose table the database lacks (an older schema) is skipped. The reads go through
+    ``_lenient_text``, so a text that is not UTF-8 is a finding, ``X'…'``, and the connection's own ``text_factory`` is
+    put back when the audit returns or raises (E-20).
     """
     findings: list[StoredCurrencyFinding] = []
-    for place, query in _PLACES.items():
-        try:
-            rows = connection.execute(query).fetchall()
-        except sqlite3.OperationalError as error:
-            if "no such table" not in str(error) and "no such column" not in str(error):
-                raise
-            continue
-        found = [StoredCurrencyFinding(place, text, count, suggested_iso_currency(text)) for raw, count in rows if not is_canonical_iso_currency(text := _as_text(raw))]
-        findings.extend(sorted(found, key=lambda finding: (-finding.rows, finding.value)))
+    previous_text_factory = connection.text_factory
+    connection.text_factory = _lenient_text
+    try:
+        for place, query in _PLACES.items():
+            try:
+                rows = connection.execute(query).fetchall()
+            except sqlite3.OperationalError as error:
+                if "no such table" not in str(error) and "no such column" not in str(error):
+                    raise
+                continue
+            found = [StoredCurrencyFinding(place, text, count, suggested_iso_currency(text)) for raw, count in rows if not is_canonical_iso_currency(text := _as_text(raw))]
+            findings.extend(sorted(found, key=lambda finding: (-finding.rows, finding.value)))
+    finally:
+        connection.text_factory = previous_text_factory
     return findings
 
 
@@ -160,7 +178,8 @@ def log_stored_currency_audit(db_path: Optional[Path] = None) -> Optional[list[S
         with closing(_read_only(path)) as connection:
             findings = find_stored_currency_findings(connection)
     except Exception as error:  # noqa: BLE001 — the start never stops on a check
-        # The class and SQLite's error name only: for a stored text that is no UTF-8, sqlite3's message quotes it (E-19b1)
+        # The class and SQLite's error name only: a message may quote stored data, as sqlite3's did for a text that is
+        # not UTF-8 until E-20 (E-19b1)
         logger.warning("Stored currency codes could not be checked", error=type(error).__name__, sqlite_error=getattr(error, "sqlite_errorname", None))
         return None
     if findings:
