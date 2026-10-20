@@ -230,7 +230,7 @@ class TXCreateItem(StrictModel):
     asset_id: Optional[int] = Field(default=None, description="Asset ID. NULL for pure cash transactions")
 
     type: TransactionType = Field(..., description="Transaction type")
-    date: date_type = Field(..., description="Settlement date")
+    date: date_type = Field(..., description="Trade date: the day the operation was made")
 
     quantity: SafeDecimal = Field(default=Decimal("0"), description="Asset quantity delta (+ in, - out)")
 
@@ -519,7 +519,7 @@ class TXUpdateItem(StrictModel):
     # Sign-flip: only within the same swap group (BUY↔SELL, DEPOSIT↔WITHDRAWAL, etc.)
     type: Optional[TransactionType] = Field(default=None, description="New type (sign-flip swap only)")
 
-    date: Optional[date_type] = Field(default=None, description="New settlement date")
+    date: Optional[date_type] = Field(default=None, description="New trade date")
     quantity: Optional[SafeDecimal] = Field(default=None, description="New quantity")
 
     # Cash update using Currency class
