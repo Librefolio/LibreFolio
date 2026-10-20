@@ -8964,3 +8964,181 @@ quattro chiavi i18n, tre pin e due o tre test nuovi, due pagine EN, una sonda sm
 5. la mini-lista: «al più cinque punti, senza numeri».
 
 **Domande per J:** la posizione delle due sezioni; il bump delle versioni; L3 come seguito, con una Task Adequacy.
+
+#### E-23 — I secchi vuoti dei prezzi e il buco fuso: analisi (2026-10-20, 09:2x–09:3x; sola lettura, HEAD `6ad83492e`)
+> Scritta in sola lettura mentre ero FROZEN dopo il checkpoint delle 09:25, mandata al coordinatore insieme a E-24 e
+> copiata qui dopo il suo via (09:35, base `4df888f78`). Le domande le porta lui al developer.
+
+**Dove si formano i secchi** (`technical_shared.py`):
+- `get_prices_bulk` (`price_query.py:174-221`, `_build_backward_filled_series`) dà un punto per ogni giorno di
+  calendario del periodo. Un giorno senza prezzo salvato è un punto riportato: `backward_fill_info.actual_rate_date` è
+  la data dell'ultimo prezzo salvato e `close` il suo valore, seminato anche da prima del periodo. Prima del primo
+  prezzo salvato dell'asset non c'è nessun punto (X-R55).
+- `price_result_to_close_points` (`:821`) tiene solo i punti osservati (`days_back == 0`); `build_price_buckets`
+  (`:828`) li aggrega sul piano dei secchi (la formula razionale di `ai_export_sampling.md`, solo per dettaglio). Un
+  secchio senza osservazioni ha `observation_count == 0` e tutti i valori nulli (invariante di `PriceBucket`,
+  `technical_payloads.py:47-67`).
+- Lo usano `portfolio.technical_prices` e `broker.technical_prices` (`portfolio_broker_technical.py:70-110`) e
+  `asset.ohlc_returns` (`asset_fx_technical.py:~75-99`). Tutti e tre sono già a v2 per la 1.3 (E-AI503, non uscita):
+  per la regola «+1 al massimo sull'ultima uscita» E-23 non li riporta avanti.
+
+**Cosa succede oggi:**
+- Il renderer (`renderContinuousSeries`, `snapshotDataRenderer.ts:691-745`) salta ogni secchio vuoto in silenzio (solo
+  i contatori `empty_temporal_rows_*`). Un buco in mezzo si vede solo come un salto di date fra due righe di BUCKETS.
+- Un asset coi prezzi tutti prima del periodo passa `price_series_gap` (i punti riportati ci sono), quindi resta in
+  `assets`, contato coperto, con la valuta, tutti i secchi vuoti e `latest_close`/`latest_date` nulli: nel prompt una
+  riga SERIES vuota e nessuna riga BUCKETS. AI503-C09 lo fissa come barriera, verde oggi.
+- `portfolio.technical_coverage` invece lo dà non coperto: lì «coperto» vuol dire almeno un Signal incluso, sui punti
+  osservati (`technical_context.py`, `_universe_coverage`).
+
+**Il fine settimana** (da decidere prima di tutto):
+- Nel piano compatto a 90 giorni gli ultimi 11 secchi sono giornalieri (misurato sul mio snapshot di corsia: larghezze
+  …, 3, 2, 2, poi 1 × 11). Un sabato e una domenica sono due secchi vuoti interi, quindi un buco. Un secchio di 3 giorni
+  o più contiene sempre un giorno feriale.
+- Alla lettera, «ogni secchio vuoto» dà circa 2 righe di buco per ogni azione o ETF in ogni export, che dicono solo
+  «mercato chiuso»: per 30 asset, circa 60 righe, 3 KB. Il mio snapshot di corsia: 4 buchi, tutti ≤ 4 giorni, tutti fine
+  settimana.
+- Opzioni:
+  - (a) alla lettera, ogni secchio vuoto;
+  - (b) solo i buchi più lunghi di 4 giorni di calendario: semplice, ma arbitrario (nasconde un buco feriale di 3
+    giorni, mostra un Natale di 5);
+  - (c) **(consigliata)** solo i buchi che contengono almeno un giorno di mercato aperto: non un fine settimana, non un
+    giorno dell'unione delle festività delle borse principali. È la regola del developer del 30/09 (`market_calendar.py`,
+    «one module for risk and signals alike: the rule has one definition»), e l'insieme è già atteso in questo percorso
+    (`price_query.py:706`, `ensure_market_holidays()` quando la richiesta ha dei Signal, come quelle dell'AI Export).
+    L'unione è sicura anche qui: una borsa aperta quel giorno avrebbe un prezzo, e il secchio non sarebbe vuoto.
+
+**Come si scrive il buco fuso** (proposta):
+- Backend: i secchi vuoti contigui di una serie diventano un `PriceGap` (`start_date`, `end_date`, `calendar_days`,
+  `last_close`, `last_close_date`), in `price_gaps` di `AssetPriceSeriesPayload` e di `AssetOhlcReturnsPayload`. L'ultimo
+  prezzo è l'ultimo osservato prima del buco; per un buco all'inizio del periodo, il punto riportato (`actual_rate_date`
+  e `close`). La regola del fine settimana la applica il backend: è selezione semantica.
+- Prompt: una tabella nuova, dopo BUCKETS, solo quando c'è un buco: `PRICE GAPS` → `entity | from | to | days |
+  last_price | last_price_date`, più una riga di significato, una volta. BUCKETS resta coi soli secchi pieni.
+  L'alternativa, il buco dentro BUCKETS al suo posto, costringe a riusare colonne numeriche (`last`) per un prezzo che
+  nel secchio non c'è: sconsigliata.
+- Testo inglese proposto per la riga di significato: «a span of whole buckets with no stored price while markets were
+  open, merged: last_price is the last price stored before it, on last_price_date (empty when none is stored before
+  it); missing data, not a zero, and not proof that the price stayed the same».
+
+**La copertura:**
+- Un asset senza nessun prezzo osservato nel periodo (prezzi solo prima) diventa «assente», come dice il developer:
+  esce da `assets` e va in `uncovered_assets` con un codice nuovo, `no_price_in_period`, deciso sui punti che il DB
+  restituisce (ci sono, ma tutti riportati), mai sul tipo. `covered_asset_count` diventa «gli asset con almeno un prezzo
+  salvato nel periodo».
+- In `ASSETS WITHOUT PRICE SERIES` tre colonne in più, piene solo per quel codice: `currency`, `last_price`,
+  `last_price_date`.
+- `asset.ohlc_returns`: `reason_code = no_price_in_period`, la valuta resta (serve a leggere l'ultimo prezzo); il
+  validatore «valuta nulla se e solo se c'è un motivo» diventa «valuta nulla per `no_stored_price` e
+  `mixed_price_currencies`».
+- Testo inglese proposto, sullo schema scelto per E-AI503: «prices are stored for this asset, but none inside the
+  period: last_price is the last one, on last_price_date; so it has no price series, return or price-based indicator in
+  the technical data; its value in the positions still comes from its latest stored price or a later trade, converted
+  (valuation_source); missing data, not a zero».
+
+**Due casi di confine:**
+- Il buco iniziale **senza** prezzo prima (la storia dell'asset comincia dentro il periodo): non ha un «ultimo prezzo».
+  Proposta: la riga c'è, con `last_price` vuoto («nessun prezzo salvato prima»); oppure resta fuori, come oggi.
+- Un buco in coda (i prezzi smettono prima della fine del periodo: un asset delistato, un provider rotto) è il caso più
+  utile: «nessun prezzo dal … al …, l'ultimo è X del …».
+
+**Fuori, salvo decisione:** le serie dei cambi (`fx.rate_ohlc`, v1: stesso renderer, stessi buchi del fine settimana;
+entrarci vuol dire v1→v2, il segnaposto del catalogo e `COMPACT_COMPONENT_VERSIONS`), gli indicatori, il contesto di
+mercato focalizzato.
+
+**Test:**
+- Backend (`test_ai_export_components_technical.py`, `…technical_shared_pure.py`, `…technical_payload_invariants.py`,
+  `test_api/test_ai_export_unpriced_asset.py`): AI503-C09 si rovescia (lo «stale» diventa `no_price_in_period`, con
+  l'ultimo prezzo e la data). Casi nuovi: un buco in mezzo fuso, uno iniziale col prezzo riportato, uno iniziale senza,
+  uno in coda, un fine settimana e una festività che non fanno buco, un giorno feriale che lo fa, il singolo asset, i
+  validatori. Un ETF fra i casi: il criterio sono i punti, mai il tipo.
+- Frontend (PSG): PSG-08 passa da 2 a 3 codici; casi nuovi per `PRICE GAPS` (righe fuse, la riga di significato una
+  volta, le colonne nuove di `ASSETS WITHOUT PRICE SERIES`). PSG-01 (v2 senza buchi, byte per byte come v1) resta
+  verde: senza `price_gaps` nel payload il renderer stampa quello di oggi.
+- Sonda: un contatore nuovo nella diagnostica (`price_gap_rows_rendered`), additivo; da controllare se
+  `test_ai_export_real_prompt_probe.py` fissa l'insieme delle chiavi.
+
+**La doc:** `ai_export_sampling.md` («Recent Daily Window» e «Public Empty Temporal Rows»: «the public renderer also
+omits completely empty financial temporal rows» non vale più per i prezzi); `ai_export_composition.md` (il paragrafo
+della copertura di `*.technical_prices`, righe ~150-165, e i codici). Una riga nel CHANGELOG, accanto a E-AI503.
+
+**Costo e ordine:** circa una giornata (backend ~120 righe con modelli e validatori, frontend ~60, ~20 casi di test in
+5 file, due pagine). Va dopo l'ingresso di E-AI503, di cui estende i payload e il renderer; J lo rivede.
+
+**Domande per il developer:**
+1. il fine settimana: (c) col calendario (consigliata), (b) soglia di 4 giorni, (a) alla lettera;
+2. il buco iniziale senza prezzo prima: riga col prezzo vuoto, o fuori;
+3. i due testi inglesi (la riga di significato del buco e `no_price_in_period`);
+4. la tabella separata `PRICE GAPS` (consigliata) o i buchi dentro BUCKETS;
+5. i cambi: dentro o fuori (consiglio fuori, per ora).
+
+#### E-24.1 — Il via e il lavoro (2026-10-20, 09:4x; base `4df888f78`)
+> **Le decisioni del developer** (coordinatore, 09:4x):
+> - **Livello L2**: le due sezioni nuove («Answer Focus» per le analisi, «Reply Instructions» per l'export dei soli
+>   dati), `facts` che diventa «Key Facts», e i 6 obiettivi riscritti come «Use … to …; mention only what changes the
+>   answer».
+> - **La frase finale** fissa, dal catalogo, nelle 4 lingue proposte.
+> - **Una domanda** nello stesso messaggio dei dati: l'AI risponde a quella.
+> - **La mini-lista**: al massimo cinque punti, senza numeri.
+> - **In più**, testuale: «specifica all'ia che se i dati che gli abbiamo fornito non sono sufficienti a rispondere alla
+>   domanda, allora deve cercare anche su internet usando i suoi strumenti le notizie di giornale più recenti». In tutte
+>   e due le varianti: in Answer Focus e nel ramo «domanda» di Reply Instructions. Esempio del coordinatore: «If the
+>   supplied data is not enough to answer, also search the web with your tools for the most recent news, and say which
+>   conclusions rely on it.»
+>
+> **Il coordinatore**: lo scrivo io, il via adesso, prima di E-7; niente bump `v1→v2` (approvato: il testo vive solo nel
+> frontend); rivede J. Prima i rossi (i pin d'ordine in `promptRenderer.test.ts` e la presenza delle sezioni), poi la
+> cura; nel checkpoint i testi inglesi finali, che porta al developer. Corse leggere col carico sotto 50.
+
+1. ✅ **I rossi** (`test-author` `e24-reds`, 09:5x–10:0x; eseguiti 09:5x, `files/tools/ai503_front.sh e24red`):
+   `promptRenderer.test.ts` +207/−20. I tre pin d'ordine (analisi con e senza note, soli dati, le chiuse di tutte le 11
+   analisi e gli 8 dataset); AF-01 ×11 e AF-02 ×11 (`answer_focus` una volta, sotto il titolo, fuori dai fence, uguale
+   byte per byte in ogni lingua); RI-01 ×8, RI-02, RI-03 ×8 (`reply_instructions` una volta, l'unica chiave è
+   `aiExport.replyInstructions.dataReceived`, tra virgolette; la frase c'è nelle 4 lingue, una riga, senza `"{}|` né
+   `''`; solo la frase cambia con la lingua); guardie AF-03, RI-04 e la sonda UI/sonda byte per byte nelle 4 lingue.
+   **42 failed / 15 passed**, tutti per asserzione («exactly one answer_focus section: expected [] …», «the en
+   catalogue has aiExport.replyInstructions.dataReceived»), nessun errore di render, i casi broker compresi.
+2. ✅ **La cura** (09:5x): `files/e24/apply_cure.py` (13 sostituzioni) e `dev.py i18n add
+   aiExport.replyInstructions.dataReceived` ×4 (`aiExport/{en,it,fr,es}.json`, +4/−1 ciascuno). Apostrofo dritto in
+   «I'm», come 134 testi inglesi su 146; in ICU un apostrofo prima di una lettera resta letterale, quindi UI e sonda
+   stampano gli stessi byte.
+3. ✅ **I verdi** (09:5x–10:00):
+   - Vitest `src/lib/features/ai-export`: **15 file, 335 passed**; prettier pulito sugli 8 file; `dev.py i18n check`
+     strict (5102 chiavi); `dev.py front check`: svelte-check **0 errori, 0 avvisi**;
+   - `utils gate-i18n-catalog` **176 passed**, `utils gate-i18n-usage` **195 passed** (la chiave è un letterale in
+     `sharedInstructions.ts`);
+   - la sonda Python legge gli id delle sezioni senza elenco chiuso (`test_ai_export_real_prompt_probe.py:729`):
+     invariata;
+   - `mkdocs build` strict ok, `check-links` 97 ok; `translate-validate`: su `user/ai-export/index` il punto in più
+     (23 contro 22) è debito nuovo; il link alla nota legale mancante in it/fr/es c'era già prima;
+   - render reali (fixture, `files/tools/e24_render.sh`, file di test temporaneo rimosso): letti i prompt di soli dati
+     nelle 4 lingue e due analisi in italiano; l'ordine è quello voluto, la frase nella lingua dell'interfaccia.
+   > **⚠️ Fuori pista**: i testi finali differiscono di poco da quelli proposti alle 09:3x. Key Facts tiene «periods» e
+   > «data-quality limits» della sezione vecchia (la regola dei prompt: dire copertura e limiti); Answer Focus e Reply
+   > Instructions hanno la frase della ricerca sul web voluta dal developer; Reply Instructions apre con «This message
+   > contains only data the user has already seen in LibreFolio» e chiede i punti «in the language of that sentence».
+   > Tutto elencato nel checkpoint, per il developer.
+4. ✅ **La doc** (`docs-writer` `e24-docs`, 09:5x–10:0x; niente build: le faccio io coi verdi):
+   - `ai_export_composition.md` «Exact Prompt Order»: le due liste (Reply Instructions 4ª e ultima; Answer Focus 9ª), la
+     frase «After the data come only the Legal Notice and the Reply Instructions», il posto della nota legale, e un
+     paragrafo sulle due sezioni, su Key Facts e «Use … to …», sulle versioni ferme a 1 e su cosa fissano i test;
+   - `user/ai-export/index.en.md`: il punto di Esporta dati al passo 1, il paragrafo «Paste It» (dopo la nota legale
+     solo un'istruzione breve), il passo 2 (la domanda nello stesso messaggio), un punto nuovo in «Good to know»;
+   - io: `developer/frontend/i18n.md:324-326`, la parentesi che elenca dove la lingua dell'interfaccia entra nel prompt
+     (mancava già la nota legale; ora anche la frase di risposta). Segnalata dal docs-writer.
+   - Rivista contro la cura (stesso ordine, stessa chiusa «mention only what changes the answer»). Debito di
+     traduzione: `user/ai-export/index.{it,fr,es}.md` (quattro passaggi, un punto di elenco in più), non timbrato.
+   `user/settings/about.en.md` («near its end») resta vera.
+5. ⏳ **Il checkpoint**, coi testi inglesi finali.
+
+#### E-23.1 — Le decisioni del developer (2026-10-20, 09:5x)
+> Dal coordinatore:
+> 1. **I fine settimana**: (c), un buco conta solo se contiene almeno un giorno di mercato aperto, con
+>    `market_calendar.py`.
+> 2. **Il buco iniziale** (la storia comincia dentro il periodo): una riga, con l'ultimo prezzo vuoto.
+> 3. **I cambi**: dentro anche loro (`fx.rate_ohlc`), stessa regola, con l'ultimo tasso registrato.
+> 4. **La tabella separata `PRICE GAPS`**: approvata.
+> 5. **La copertura**: con nessun prezzo nel periodo, l'asset va fra gli `uncovered_assets` con `no_price_in_period`.
+>
+> I testi sono quelli proposti; il developer li vedrà nel checkpoint. **L'ordine**: E-24, poi E-23 (dopo l'ingresso di
+> E-AI503, nel prossimo treno), poi E-7. Rivede J.
