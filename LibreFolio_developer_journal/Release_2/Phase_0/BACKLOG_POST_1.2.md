@@ -8531,7 +8531,7 @@ sulla base `23f6578f3`.
   - Da chiarire: la regola riguarda solo chi data per valuta (Fineco) o per periodo (Danske), o quei plugin chiedono
     un seguito.
   Dettagli: piano 07, «N74 di W — revisione», F2.
-- **B-53 · Altri due lettori di `.restore/` lasciano aperto un descrittore quando il loro file è una cartella** —
+- ✅ **B-53 · Altri due lettori di `.restore/` lasciano aperto un descrittore quando il loro file è una cartella** —
   piccolo, robustezza; B, 20/10 (B-50, sonda). Precedente a B-50.
   - `outcome._read_record` (`outcome.py:141`) risponde «nessun esito» e lo registra una volta, come deve, ma ogni
     lettura dell'esito con un biglietto lascia aperto un descrittore.
@@ -8546,7 +8546,15 @@ sulla base `23f6578f3`.
     rifiuta, oppure controlla `S_ISREG` con `fstat` come `archive._add_file`; e `read_report` che risponde «nessun
     report» anche per una cartella.
   Dettagli: piano 07, «B-50».
-- **B-54 · Uno stato di controllo del ripristino illeggibile non lo toglie nessuno** — minimo, pulizia; B, 20/10
+  ✅ **Fatta il 20/10** (via del coordinatore alle 10:10, i job alle 10:39): un lettore unico,
+  `paths.read_regular_file()`, legge gli stati dei job e dei controlli, i report e il biglietto dell'esito. Non segue
+  mai un link, non aspetta mai una FIFO, chiude sempre il descrittore. Una cartella, un link o un file speciale al
+  posto di uno di quei file è illeggibile: per un job «non trovato» con un avviso (un link al posto di `state.json`
+  prima si seguiva), per un controllo «nessun controllo», per un report «nessun report» (la vista risponde senza, mai
+  un 500). Trovato dalle sonde e curato nello stesso lotto: una FIFO al posto dello stato di un job o di un controllo
+  bloccava la lettura per sempre, quindi l'avvio di un backup e la pulizia d'avvio, cioè ogni avvio.
+  Dettagli: piano 07, «B-53 + B-54 + B-55».
+- ✅ **B-54 · Uno stato di controllo del ripristino illeggibile non lo toglie nessuno** — minimo, pulizia; B, 20/10
   (B-50, domanda di test-author). Precedente a B-50.
   - `_prune_checks` lavora solo sui controlli che `_checks` sa leggere, e `_prune_unrecorded` pulisce i caricamenti e
     le copie, mai `checks/`.
@@ -8554,7 +8562,11 @@ sulla base `23f6578f3`.
     permessi. Sono pochi byte ciascuno.
   - Cura possibile: togliere da `checks/` gli stati illeggibili più vecchi del limite, quando nessun controllo gira.
   Dettagli: piano 07, «B-50».
-- **B-55 · Nel ripristino ogni `OSError` su uno stato di controllo è «nessun controllo», anche se transitorio** — da
+  ✅ **Fatta il 20/10**: `prune`, quando nessun controllo gira, toglie da `checks/` gli stati che nessun controllo
+  leggibile registra e quelli scritti a metà (`<id>.json.part`), più vecchi della durata di un controllo; mai quello
+  della copia protetta, mai i nomi che non sono suoi, mai attraverso un link. In silenzio.
+  Dettagli: piano 07, «B-53 + B-54 + B-55».
+- ✅ **B-55 · Nel ripristino ogni `OSError` su uno stato di controllo è «nessun controllo», anche se transitorio** — da
   decidere (coordinatore o developer); B, 20/10 (B-50, domanda di test-author). Precedente a B-50.
   - `restore_jobs._read_state` prende ogni `OSError`: un errore passeggero del disco (`EIO`, `EMFILE`) diventa un 404
     `restore_stage_not_found`.
@@ -8564,6 +8576,23 @@ sulla base `23f6578f3`.
   - Da decidere: la stessa regola nel ripristino (`IsADirectoryError` e `PermissionError` illeggibili, gli altri
     `OSError` che passano), oppure lasciarlo com'è.
   Dettagli: piano 07, «B-50».
+  ✅ **Fatta il 20/10** (decisione del coordinatore: la stessa regola dei job): «nessun controllo» solo per una
+  cartella, un link, un file speciale, un permesso negato o un contenuto illeggibile, ora anche una data senza fuso
+  (faceva fallire ogni `prune` con un `TypeError`). Gli altri `OSError`, transitori, arrivano a chi chiama: un 500 che
+  la scheda riprova. Lo stesso nella conferma: un errore transitorio sul report è un 500 `restore_confirm_failed`, non
+  più «copia mancante».
+  Dettagli: piano 07, «B-53 + B-54 + B-55».
+- **B-56 · Un controllo a richiesta del DB vivo** — piccolo, dopo la 1.3; B, 20/10 (domanda di E sul ripristino a
+  mano; proposta approvata dal coordinatore il 20/10).
+  - Il ripristino a mano (`#by-hand`) non passa dal controllo dell'archivio: un danno che l'avvio non vede, come un
+    testo non UTF-8 o una pagina rovinata del DB, si scopre solo quando una pagina legge quei dati.
+  - Proposta: un comando in sola lettura, a richiesta (`dev.py db check` o simile), che fa sul DB vivo i controlli del
+    ripristino: `integrity_check`, `foreign_key_check`, il testo non UTF-8 indicato con tabella e rowid (mai il
+    contenuto), la revisione conosciuta. Serve al supporto dopo un ripristino a mano o un disco rovinato; mai
+    all'avvio.
+  - Nella 1.3 c'è la frase della guida in `#by-hand`: `backup inspect` e `backup restore --dry-run` prima di
+    scompattare a mano.
+  Dettagli: piano 07, «La domanda di E sul ripristino a mano».
 
 ## E · Email (fase 01)
 
