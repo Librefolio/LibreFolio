@@ -2,8 +2,11 @@
  * AssetComparisonSignal — Overlay signal sourced from another asset's price data.
  *
  * The parent component pre-fetches data and injects it via `params._resolvedData`
- * before calling `computePoints()`. The '_' prefix ensures `_resolvedData` and
- * `_assetDisplayName` are excluded from `toConfig()` serialization.
+ * before calling `computePoints()`, with the names it shows (`_assetDisplayName`, …).
+ * Where the chart does not draw the day the comparison starts (a sampled series,
+ * Z-29), it also injects `params._basePoint`: the target's point on that day, which
+ * the percentage view measures from (Z-29d-0). `toConfig()` leaves out
+ * `_resolvedData` and `_basePoint`, data of the moment.
  *
  * Complementary to FxPairSignal: allows overlaying asset prices on any chart
  * (FX or Asset), enabling cross-asset comparison.
@@ -14,6 +17,11 @@
 import {ChartSignal, type RenderedSignal, type SignalParamDescriptor} from './ChartSignal';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+
+/** A percentage base: a finite number other than 0. */
+function isUsableBase(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value) && value !== 0;
+}
 
 export class AssetComparisonSignal extends ChartSignal {
     static override signalType = 'asset-comparison';
@@ -51,20 +59,37 @@ export class AssetComparisonSignal extends ChartSignal {
     }
 
     /**
+     * The injected base point (Z-29d-0), or null when there is none or it is unusable:
+     * not an object, `missing`, or a `value` that is not a finite number or is 0.
+     * Null leaves the percentage view as it was, measured from the own first value.
+     */
+    private basePoint(): LineDataPoint | null {
+        const point = this.params._basePoint;
+        if (point === null || typeof point !== 'object') return null;
+        const candidate = point as Partial<LineDataPoint>;
+        if (candidate.missing === true || !isUsableBase(candidate.value)) return null;
+        return point as LineDataPoint;
+    }
+
+    /**
      * Override render() for AssetComparisonSignal: in percentage mode, normalize to the
-     * signal's OWN first value (not the base chart's p0).
+     * signal's OWN first value (not the base chart's p0), or to the injected base point.
      *
      * Rationale: Asset comparison data has a completely different scale
      * (e.g. AAPL ~180 vs GOOGL ~140). Normalizing both curves to their
      * own starting point makes them start at 0% and shows relative movement,
      * which is the only meaningful comparison in percentage mode.
+     *
+     * On a sampled chart the first drawn day is not the day the comparison starts:
+     * there the page injects `_basePoint`, the target's point on that day, and the
+     * line is measured from it, as a daily chart measures from its first point (Z-29d-0).
      */
     override render(baseData: LineDataPoint[], viewMode: 'absolute' | 'percentage'): RenderedSignal {
         const absData = this.computePoints(baseData);
 
         let data = absData;
         if (viewMode === 'percentage' && absData.length > 0) {
-            const p0 = absData[0].value; // OWN first value, not base chart's
+            const p0 = this.basePoint()?.value ?? absData[0].value; // the base point, else the OWN first value
             if (p0 !== 0) {
                 data = absData.map((d) => ({
                     ...d,
@@ -105,7 +130,8 @@ export class AssetComparisonSignal extends ChartSignal {
      * values when FX conversion is active.
      *
      * - Abs mode: ghost = raw original values on yAxisIndex 0
-     * - % mode: ghost = normalized to own p0 on yAxisIndex 0
+     * - % mode: ghost = normalized to own p0 on yAxisIndex 0, or to the base point's
+     *   `originalValue` when the injected base point has a usable one (Z-29d-0)
      *
      * The ghost uses opacity 0.4 and dashed lines with 💱 label.
      */
@@ -133,8 +159,9 @@ export class AssetComparisonSignal extends ChartSignal {
                 if (origPoints.length > 0) {
                     let ghostData: LineDataPoint[];
                     if (viewMode === 'percentage') {
-                        // Normalize to own p0
-                        const origP0 = origPoints[0].value;
+                        // Normalize to the base point's original when it has a usable one, else to own p0
+                        const baseOriginal = this.basePoint()?.originalValue;
+                        const origP0 = isUsableBase(baseOriginal) ? baseOriginal : origPoints[0].value;
                         ghostData = origP0 !== 0 ? origPoints.map((d) => ({...d, value: ((d.value - origP0) / origP0) * 100})) : origPoints;
                     } else {
                         // Abs mode: raw original values

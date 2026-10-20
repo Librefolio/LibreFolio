@@ -1,13 +1,12 @@
 /**
  * Opening a tab of the Settings page, whichever bar it sits in (release 1.3, workstream A, lot A8b; decision P13 b).
  *
- * The top bar holds Profile, Preferences, Plugins, About and «Administration» (`settings-tab-administration`, on the
- * right). The group stands for its members — Global Settings (`admin`), Users, Backup, Email and Security —, which a
- * second bar inside `settings-subtabs` shows while one of them is open, when the signed-in account sees at least two of
- * them: an administrator. A member of the instance sees one, Global Settings, so «Administration» opens it directly, and
- * there is neither a second bar nor any `settings-tab-admin` element (`routes/(app)/settings/+page.svelte`,
- * `settingsTabs.ts`). A member tab is therefore never clicked from the top bar: {@link openSettingsTab} goes through the
- * group.
+ * The top bar holds Profile, Preferences, Plugins, About and, for an administrator only, «Administration»
+ * (`settings-tab-administration`, on the right). The group stands for its members — Global Settings (`admin`), Users,
+ * Backup, Email and Security —, every one of them an administrator's, which a second bar inside `settings-subtabs`
+ * shows while one of them is open. A member of the instance has no group, no second bar and no member tab (N69-2,
+ * decision D4 a; `routes/(app)/settings/+page.svelte`, `settingsTabs.ts`). A member tab is therefore never clicked
+ * from the top bar: {@link openSettingsTab} goes through the group.
  *
  * `?tab=` needs no helper: `?tab={member}` opens that member directly inside its group (the second bar drawn for an
  * administrator), and `?tab=administration` opens the group's first member.
@@ -40,8 +39,10 @@ async function selectTab(tab: Locator, testId: string, drawnMs: number): Promise
  * - Not a member (`profile`, `preferences`, `plugins`, `about`, or `administration` itself): its tab is clicked.
  * - A member: «Administration» is clicked and read selected; then, when the second bar is drawn (an administrator), the
  *   member's tab in it is clicked and read selected — `admin` too, since clicking the group while another member is open
- *   keeps that member open. Without a second bar (a member of the instance, who sees Global Settings alone) the group's
- *   click has already opened `admin`, the one member there is; any other member cannot be opened, and the helper throws.
+ *   keeps that member open. Only an administrator has the group, and sees all its members, so the second bar is always
+ *   there (N69-2, decision D4 a); without it, the helper opens nothing more for `admin`, and throws for any other
+ *   member. A member of the instance has no group at all: for any member tab, the helper fails on the group's tab,
+ *   never drawn.
  *
  * Reading the second bar once is deterministic, not a probe: the page derives the top bar's selection and the second
  * bar from the same `activeTab`, so the update that marks the group selected draws the second bar too, or leaves it
@@ -57,7 +58,7 @@ export async function openSettingsTab(page: Page, id: string): Promise<void> {
     const subtabs = page.getByTestId('settings-subtabs');
     if ((await subtabs.count()) === 0) {
         if (id !== 'admin') {
-            throw new Error(`openSettingsTab('${id}'): «Administration» drew no second bar — the signed-in account sees only Global Settings (a member of the instance, not an administrator) — so settings-tab-${id} cannot be opened`);
+            throw new Error(`openSettingsTab('${id}'): «Administration» drew no second bar, which an administrator always has since N69-2 (every member of the group is theirs), so settings-tab-${id} cannot be opened`);
         }
         return;
     }

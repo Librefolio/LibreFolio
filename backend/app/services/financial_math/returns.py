@@ -631,6 +631,31 @@ def _is_xirr_root(flows: Sequence[tuple[float, float]], rate: float, scale: floa
         return False
 
 
+def _is_bracketed_xirr_root(flows: Sequence[tuple[float, float]], rate: float, scale: float) -> bool:
+    """Whether a root the bracketing found solves the NPV equation: :func:`_is_xirr_root`, or the NPV changing sign
+    across it (:func:`_changes_sign_at`).
+
+    The second test is for an ill-conditioned NPV (P1b): where its terms are far larger than the flows and cancel, the
+    NPV at a true root is only as small as their rounding, and the first test depended on the root's last bits. A sign
+    change within ±1e-9 of the rate proves a true root that close. Newton's answer keeps the first test alone: with
+    several roots, which one the solve returns stays as it was.
+    """
+    return _is_xirr_root(flows, rate, scale) or (math.isfinite(rate) and _changes_sign_at(flows, rate))
+
+
+def _npv_noise_floor(flows: Sequence[tuple[float, float]]) -> float:
+    """The size below which an NPV's sign is rounding noise: the error of its terms where they underflow to subnormal
+    numbers, at most about one smallest subnormal per unit of amount and per term, four times over."""
+    return 4.0 * (sum(abs(amount) for _, amount in flows) + len(flows)) * math.ulp(0.0)
+
+
+def _opposite_signs(first: float, second: float, noise_floor: float) -> bool:
+    """Whether two NPVs have opposite signs, both above ``noise_floor`` (:func:`_npv_noise_floor`) and read from their
+    signs (P1b): their product can underflow to 0.0 when both are tiny, and a true sign change would be missed; and the
+    sign of a subnormal NPV is rounding noise, which a product large enough to stay nonzero would have trusted."""
+    return abs(first) > noise_floor and abs(second) > noise_floor and (first < 0.0) != (second < 0.0)
+
+
 def _solve_xirr(flows: Sequence[tuple[float, float]], x0: float) -> float | None:
     """A verified root of the NPV of ``(years, amount)`` flows, or None when there is none.
 
@@ -672,6 +697,7 @@ def _bracketed_xirr(flows: Sequence[tuple[float, float]], x0: float, scale: floa
     roots: list[float] = []
     previous_rate: float | None = None
     previous_npv: float | None = None
+    noise_floor = _npv_noise_floor(flows)
     for base in _XIRR_GRID:
         rate = base - 1.0
         try:
@@ -684,13 +710,13 @@ def _bracketed_xirr(flows: Sequence[tuple[float, float]], x0: float, scale: floa
             continue
         if npv == 0.0:
             roots.append(rate)
-        elif previous_rate is not None and previous_npv is not None and previous_npv * npv < 0.0:
+        elif previous_rate is not None and previous_npv is not None and _opposite_signs(previous_npv, npv, noise_floor):
             try:
                 roots.append(brentq(lambda r: _xirr_npv(flows, r), previous_rate, rate, xtol=1e-14, maxiter=200))
             except (OverflowError, ZeroDivisionError, RuntimeError, ValueError):
                 pass
         previous_rate, previous_npv = rate, npv
-    verified = [root for root in roots if _is_xirr_root(flows, root, scale)]
+    verified = [root for root in roots if _is_bracketed_xirr_root(flows, root, scale)]
     return min(verified, key=lambda root: abs(root - x0)) if verified else None
 
 
@@ -698,7 +724,7 @@ def _bracketed_xirr_at(flows: Sequence[tuple[float, float]], rate: float, scale:
     """The root :func:`_bracketed_xirr` finds in the one grid interval holding ``rate``, by the scan's own steps and tests.
 
     The two grid points around ``rate``, both evaluable and finite: one whose NPV is exactly 0.0 is the root, as the scan
-    keeps it; otherwise NPVs whose product is negative, the same Brent call and the same verification. None wherever the
+    keeps it; otherwise NPVs of opposite signs (:func:`_opposite_signs`), the same Brent call and the same verification. None wherever the
     scan would not find a verified root there: the caller then runs the whole scan.
     """
     from scipy.optimize import brentq  # noqa: PLC0415
@@ -717,13 +743,13 @@ def _bracketed_xirr_at(flows: Sequence[tuple[float, float]], rate: float, scale:
     if high_npv == 0.0 or low_npv == 0.0:
         exact = high if high_npv == 0.0 else low
         return exact if _is_xirr_root(flows, exact, scale) else None
-    if not low_npv * high_npv < 0.0:
+    if not _opposite_signs(low_npv, high_npv, _npv_noise_floor(flows)):
         return None
     try:
         root = brentq(lambda r: _xirr_npv(flows, r), low, high, xtol=1e-14, maxiter=200)
     except (OverflowError, ZeroDivisionError, RuntimeError, ValueError):
         return None
-    return root if _is_xirr_root(flows, root, scale) else None
+    return root if _is_bracketed_xirr_root(flows, root, scale) else None
 
 
 def _changes_sign_at(flows: Sequence[tuple[float, float]], rate: float) -> bool:
@@ -733,7 +759,7 @@ def _changes_sign_at(flows: Sequence[tuple[float, float]], rate: float) -> bool:
         below, above = _xirr_npv(flows, rate - step), _xirr_npv(flows, rate + step)
     except (OverflowError, ZeroDivisionError):
         return False
-    return math.isfinite(below) and math.isfinite(above) and below * above < 0.0
+    return math.isfinite(below) and math.isfinite(above) and _opposite_signs(below, above, _npv_noise_floor(flows))
 
 
 def _rate_decimal(rate: float) -> Decimal:

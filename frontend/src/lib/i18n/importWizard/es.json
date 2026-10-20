@@ -203,7 +203,9 @@
       "scalable_internal_transfers": "{count, plural, one {# transferencia} other {# transferencias}} entre la cuenta de valores y la cuenta remunerada: importa el archivo de la otra cuenta en su propio bróker y después une cada par en una «Transferencia de fondos» en el editor masivo.",
       "scalable_dividends_net": "{count, plural, one {# dividendo se importó tal como se abonó} other {# dividendos se importaron tal como se abonaron}}, después de la retención: el archivo no indica el impuesto.",
       "scalable_tax_refund": "{count, plural, one {# devolución de impuestos se importó como depósito} other {# devoluciones de impuestos se importaron como depósitos}}: en LibreFolio un impuesto siempre retira dinero.",
-      "scalable_cash_by_sign": "{count, plural, one {# fila de efectivo tiene un tipo que LibreFolio no conoce, o un signo inesperado: se registró como depósito o retiro} other {# filas de efectivo tienen un tipo que LibreFolio no conoce, o un signo inesperado: se registraron como depósitos o retiros}}, según el signo del importe."
+      "scalable_cash_by_sign": "{count, plural, one {# fila de efectivo tiene un tipo que LibreFolio no conoce, o un signo inesperado: se registró como depósito o retiro} other {# filas de efectivo tienen un tipo que LibreFolio no conoce, o un signo inesperado: se registraron como depósitos o retiros}}, según el signo del importe.",
+      "fineco_not_yet_settled": "{count, plural, one {# fila aún no está liquidada (su fecha valor es posterior a hoy) y no se importó: llegará con la próxima exportación.} other {# filas aún no están liquidadas (su fecha valor es posterior a hoy) y no se importaron: llegarán con la próxima exportación.}}",
+      "fineco_incomplete_rows": "La importación de Fineco está en beta, así que esta importación podría ser incorrecta: {count, plural, one {# fila no tiene} other {# filas no tienen}} un número necesario (cantidad o importe). Revisa las filas de abajo; si el archivo es correcto, probablemente sea un error de la importación, y puedes ayudarnos a corregirlo:"
     },
     "evidenceRowsTitle": "Filas del archivo",
     "evidenceRowCount": "{n} filas",
@@ -379,7 +381,8 @@
         "invalid": "no válidas",
         "not_yet_settled": "aún no liquidadas",
         "outside_cash_coverage": "liquidadas antes del inicio del extracto",
-        "superseded": "sustituidas por un archivo más reciente"
+        "superseded": "sustituidas por un archivo más reciente",
+        "reservation": "reservadas, no contabilizadas"
       },
       "downloadCombined": "Descargar el archivo combinado",
       "warning": {
@@ -524,7 +527,9 @@
       "scalable_internal_transfers": "Estas filas mueven dinero entre tus dos cuentas de Scalable (lf_subtype CASH_TRANSFER_IN o CASH_TRANSFER_OUT): cada una tiene su gemela en el archivo de la otra cuenta.",
       "scalable_dividends_net": "La columna tax está vacía en estas filas: el importe es lo que llegó a la cuenta.",
       "scalable_tax_refund": "Un importe positivo en la columna tax es dinero devuelto.",
-      "scalable_cash_by_sign": "El signo de la columna amount decidió entre depósito y retirada."
+      "scalable_cash_by_sign": "El signo de la columna amount decidió entre depósito y retirada.",
+      "fineco_not_yet_settled": "La fecha valor de estas filas es posterior a hoy: aún no están liquidadas.",
+      "fineco_incomplete_rows": "La última columna nombra el campo sin número; la fila se importa tal cual."
     }
   }
 }

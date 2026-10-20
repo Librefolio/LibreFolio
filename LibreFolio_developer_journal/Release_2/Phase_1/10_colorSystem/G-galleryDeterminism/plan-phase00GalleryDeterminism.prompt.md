@@ -1298,7 +1298,7 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
   - **Ancora senza scatto:** G-24, la modale «What's new» di C-54 (`WhatsNewModal.svelte`). Per gli utenti di test
     `whats_new` è `null`, quindi non compare in nessuno scatto.
   - **Il nuovo riferimento del rumore**, dopo A8b e A9: `diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-cd686f445`
-    (maschere e `stability.json`), al posto di `g-ref13` del 13/10.
+    (maschere e `stability.json`), al posto di `g-ref13` del 16/10, cancellato il 19/10.
 - **`settings/backup-ready` per la 1.3 ✅, 16/10 22:54–23:11.** Commit `b89985a8b`: la punta, con B (`0cd910a7e`: B3
   ripristino, B5b, B5c). Due run identiche, `g-backup-a` e `g-backup-b`, sullo stesso build, 2 worker. Il filtro
   `-f "Settings backup ready \(admin\) - all languages and themes"` seleziona solo `gallery.spec.ts:2126`.
@@ -1470,7 +1470,7 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
     - Mancano 4 immagini su 16 in ogni lato, quindi la coppia resta coerente. Ogni lato `-full` ha 2900 PNG.
     - Nessun prezzo live nelle 9 catture. Misti G-18: 0, 0, 0. Nessun rosso solo CSP.
   - **Il rumore di oggi**, dopo↔dopo2: 2081 immagini identiche su 2900. Per scatto: 27 stabili, 133 basso, 18 medio, 4
-    instabili. Rispetto a `g-ref13` (13/10) ci sono due nuovi instabili:
+    instabili. Rispetto a `g-ref13` (16/10) ci sono due nuovi instabili:
     - `auth/01-login`, una variante, al massimo 5 livelli su 255: invisibile;
     - `settings/password-modal`, su mobile spagnolo scuro: la pagina sotto la modale si ferma a uno scorrimento
       diverso, il 15,4 % dei pixel → G-26.
@@ -1507,3 +1507,30 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
   - ⚠️ **Fuori pista:** `r3.sh expected` mette `81a927681` fra la logica di cattura solo per due test: la registrazione
     di un test unitario (`_frontend_utility.py`) e un test di servizio. La spec, le fixture e i dati della galleria non
     cambiano.
+- **README di `scripts/visual_review/` al riferimento del 18/10 ✅, 19/10.** Chiesto dal coordinatore il 19/10 alle
+  15:48, solo docs, dopo la pulizia del disco del developer (era rimasto con 475 MB liberi).
+  - **La pulizia**, fatta dal coordinatore in `LibreFolio_visual_review`:
+    - cancellati 92 snapshot e 34 diff, `g-ref13` compreso; il pacchetto del 18/10, che è dentro lo zip del 19/10 già
+      inviato alla designer; `DRYRUN_round3`; la cartella della v1.2;
+    - restano il trio `g-r3-{prima,dopo,dopo2}-…-full`, i diff dopo↔dopo2 e prima↔dopo, gli zip inviati e i fogli.
+      Verificato su disco: 3 snapshot e 2 diff.
+  - **Il README:**
+    - una sezione nuova in testa ai comportamenti noti, «Known gallery behaviour (18/10/2026, the reference trio)»: il
+      trio, le maschere e la stabilità di dopo↔dopo2, le classi del rumore di oggi, il confronto del giro 3;
+    - le sezioni del 16/10 e del 15/10 restano come storia, con la nota che i loro snapshot e diff non ci sono più. Il
+      riferimento del 16/10 «era» `g-ref13-r3`;
+    - la riga sulla finestra del PAC (N26) dice che quegli snapshot sono stati cancellati, e che il trio è stato
+      catturato dalle 02:00;
+    - al passo 3b, il limite dell'etichetta del «prima» di `build_designer_round.py` (G-27).
+  - **G-27 nel backlog**, approvata dal coordinatore il 18/10 alle 04:05 per un lotto successivo.
+  - **Base:** HEAD `b04cab48c`. Sul target, `1fa64ceae`, il README e questo piano non sono cambiati da allora, e la
+    sezione G del backlog è identica: l'unione è pulita.
+  - ⚠️ **Fuori pista:** `g-ref13` è del **16/10** (r1 e r2 alle 00:02–01:31, r3 alle 05:28), non del 13/10 come avevo
+    scritto il 18/10 nella Nota, nel record del giro 3 e in G-26. Corretto nei tre punti, e nella riga dei fatti del
+    foglio per la designer (`sheets/r3-2026-10-18/index.html`).
+  - **Kit di sessione:** `r3.sh`, `night.sh`, `fe5c_verify.sh` e `cand_diff.sh` puntavano al rumore di `g-ref13`.
+    Ora puntano a dopo↔dopo2; `cand_diff.sh` chiede un riferimento dello stesso giorno invece di usare `g-ref13-r3`.
+  - **Altri documenti che nominano gli artefatti cancellati**, non di G, segnalati al coordinatore. Due sembrano
+    indicazioni correnti: il passo di Y in `09_dashboardCharts/plan-phase01DashboardCharts.prompt.md` (righe 93–95, le
+    maschere di `g-final3__r1__vs__r2`) e «Dati di riferimento» in `10_colorSystem/README.md` (`baseline-r1` e
+    `baseline-r2`). Gli altri sono registri del passato.

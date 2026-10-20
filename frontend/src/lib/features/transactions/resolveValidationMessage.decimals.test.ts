@@ -43,13 +43,14 @@
  * label), and the app's catalogue in English and Italian (today the key is missing, and the backend's English `error`
  * comes back behind the label); the French and Spanish texts of the catalogue too.
  *
- * R13-SEC7-3 (E's R13-SEC7, night decision N74). The batch checks a row's date at write, `1900-01-01 ≤ date ≤ today +
- * 1 year`, and refuses one out of range with `{code: 'dateOutOfRange', params: {min, max}, field: 'date'}` (ISO dates).
+ * R13-SEC7-3 (E's R13-SEC7, night decision N74). The batch checks a row's date at write, `1900-01-01 ≤ date ≤ tomorrow`
+ * (the server's tomorrow since lot N74, which replaced today + 1 year), and refuses one out of range with
+ * `{code: 'dateOutOfRange', params: {min, max}, field: 'date'}` (ISO dates).
  * The catalogue gains `transactions.errors.dateOutOfRange` (EN «Between {min} and {max}», IT «Tra {min} e {max}», FR
  * «Entre {min} et {max}», ES «Entre {min} y {max}»), and the code joins `FIELD_PREFIXED_CODES`: the label of
  * `transactions.fields.date` goes in front (read from the catalogue: EN «Date», IT «Data», FR «Date», ES «Fecha»), so
- * `{min: '1900-01-01', max: '2027-10-17'}` reads «Date: Between 1900-01-01 and 2027-10-17», «Data: Tra 1900-01-01 e
- * 2027-10-17». The same two halves, reds today: the resolver with the faked catalogue (the text comes back without its
+ * `{min: '1900-01-01', max: '2026-10-20'}` reads «Date: Between 1900-01-01 and 2026-10-20», «Data: Tra 1900-01-01 e
+ * 2026-10-20». The same two halves, reds today: the resolver with the faked catalogue (the text comes back without its
  * label), and the app's catalogue in every language (the key is missing: the backend's English `error` comes back
  * behind the label).
  */
@@ -277,18 +278,18 @@ describe('R13-SEC2 — the app catalogue: integerDigitsExceeded reads «label: t
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
-// R13-SEC7-3 — dateOutOfRange (night decision N74: 1900-01-01 ≤ date ≤ today + 1 year)
+// R13-SEC7-3 — dateOutOfRange (night decision N74: 1900-01-01 ≤ date ≤ tomorrow, the server's, since lot N74)
 // ---------------------------------------------------------------------------------------------------------------------
 
 /** The issue the batch's date stage writes on a create dated out of range: its English `error` differs from the catalogue's text. */
-const DATE_ISSUE: ResolvableIssue = {operation: 'create', code: 'dateOutOfRange', params: {min: '1900-01-01', max: '2027-10-17'}, field: 'date', error: 'date 1899-12-31 is outside 1900-01-01 .. 2027-10-17'};
+const DATE_ISSUE: ResolvableIssue = {operation: 'create', code: 'dateOutOfRange', params: {min: '1900-01-01', max: '2026-10-20'}, field: 'date', error: 'date 1899-12-31 is outside 1900-01-01 .. 2026-10-20'};
 
 /** The contract's texts of `transactions.errors.dateOutOfRange`, `{min}` and `{max}` filled in from `DATE_ISSUE`. */
 const DATE_TEXT: Record<Speech, string> = {
-    en: 'Between 1900-01-01 and 2027-10-17',
-    it: 'Tra 1900-01-01 e 2027-10-17',
-    fr: 'Entre 1900-01-01 et 2027-10-17',
-    es: 'Entre 1900-01-01 y 2027-10-17',
+    en: 'Between 1900-01-01 and 2026-10-20',
+    it: 'Tra 1900-01-01 e 2026-10-20',
+    fr: 'Entre 1900-01-01 et 2026-10-20',
+    es: 'Entre 1900-01-01 y 2026-10-20',
 };
 
 /** `transactions.fields.date` as the catalogue reads it (`src/lib/i18n/transactions/<lang>.json`), checked by a control in each test. */
@@ -301,7 +302,7 @@ describe('R13-SEC7-3 — the resolver puts the field label in front of dateOutOf
     });
 
     // Red today: dateOutOfRange is not in FIELD_PREFIXED_CODES, so its text comes back without the label.
-    it('dateOutOfRange on date reads «Date: Between 1900-01-01 and 2027-10-17»', () => {
+    it('dateOutOfRange on date reads «Date: Between 1900-01-01 and 2026-10-20»', () => {
         expect(resolveIssueMessage(DATE_ISSUE, t)).toBe(`${DATE_LABEL.en}: ${DATE_TEXT.en}`);
     });
 });
@@ -325,19 +326,19 @@ describe('R13-SEC7-3 — the app catalogue: dateOutOfRange reads «label: text»
     });
 
     // Red today: the key is missing, so the backend's English `error` comes back behind the label.
-    it('English: dateOutOfRange reads «Date: Between 1900-01-01 and 2027-10-17»', async () => {
+    it('English: dateOutOfRange reads «Date: Between 1900-01-01 and 2026-10-20»', async () => {
         const t = await speak('en');
         expect(t('transactions.fields.date'), 'control: the catalogue labels the date field «Date»').toBe(DATE_LABEL.en);
 
-        expect(resolveIssueMessage(DATE_ISSUE, t)).toBe('Date: Between 1900-01-01 and 2027-10-17');
+        expect(resolveIssueMessage(DATE_ISSUE, t)).toBe('Date: Between 1900-01-01 and 2026-10-20');
     });
 
     // Red today: as in English.
-    it('Italian: dateOutOfRange reads «Data: Tra 1900-01-01 e 2027-10-17»', async () => {
+    it('Italian: dateOutOfRange reads «Data: Tra 1900-01-01 e 2026-10-20»', async () => {
         const t = await speak('it');
         expect(t('transactions.fields.date'), 'control: the catalogue labels the date field «Data»').toBe(DATE_LABEL.it);
 
-        expect(resolveIssueMessage(DATE_ISSUE, t)).toBe('Data: Tra 1900-01-01 e 2027-10-17');
+        expect(resolveIssueMessage(DATE_ISSUE, t)).toBe('Data: Tra 1900-01-01 e 2026-10-20');
     });
 
     // Red today: the key is missing in French and Spanish too.

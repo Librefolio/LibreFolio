@@ -284,9 +284,27 @@ for the rows listed in red, and asks before saving the values listed in amber th
 verified (**Save anyway**). A row whose quantity has more than 10 decimal places, whose cash amount
 has more than 6, or whose per-unit cost basis has more than 12, is refused at **Save All**, with the
 maximum in the message (*Quantity: At most 10 decimal places*): LibreFolio never rounds it.
-Transaction dates go from 1 January 1900 to one year from today: a row of the report dated outside
+Transaction dates go from 1 January 1900 to tomorrow: a row of the report dated outside
 that range is refused at **Save All** too, with the range in the message (*Date: Between 1900-01-01
-and 2027-10-17* when today is 17 October 2026).
+and 2026-10-18* when today is 17 October 2026).
+
+A row that brings units in — an **Adjustment** that adds units, or the receiving side of an
+**Asset Transfer** — keeps the cost written in the report, even 0, in **Manual**. If the report
+gives none, it starts in **Auto** (💡 in the **Cost basis override** column): **Save All** saves it
+at the [average cost](../form.md#cost-basis) of the units already held, unless you switch it to
+**Manual**. If there is nothing to average, the row is refused: choose **Manual** and type its
+cost, 0 for a gift.
+
+Rows whose missing cost the importer flags are the exception: a position added by
+**Align with the bank**, a new line of a Danske Bank [demerger](danske-bank.md#demergers), an
+`ADJUSTMENT` row of a [Generic CSV](generic-csv.md) file without a cost. They are listed in red,
+and their form opens in **Manual** with the cost empty: type it by hand, even if it is 0 — choosing
+**Auto** does not take them off the list.
+
+When the rows arrive, and after **⚡ Validate now** or a refused **Save All**, the grid turns to the
+page of the first row whose [**Auto** cost was refused](../form.md#cost-basis), and highlights it:
+the oldest by date, as correcting it can let the later rows of the same asset at that broker pass.
+The automatic check that runs while you edit does not do this.
 
 ---
 
