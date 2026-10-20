@@ -3668,48 +3668,58 @@ class TestShortPositionsInThePerformanceHistory:
 
         assert _e2_history(self._shorted_then_adjusted_in(None), days, ["100", "90", "80"]) == expected
 
-    # -- a flow on a day without NAV, after the first: the capital reads the gain's flows (coordinator, 20/10: option (a)) --
+    # -- a flow on a day without NAV, after the first: on the next NAV day, in the gain and the capital (MF-E2b) --------
     #
-    # ``returns.calculate_simple_roi_series`` and ``calculate_twrr_period_series`` add only the flows dated on a snapshot, so
-    # a flow on a day without NAV after the first one is left out of the gain and of TWRR — an existing limit, long
-    # positions included, which goes to the developer as its own question (option (b)). Option (a): with a short in the
-    # scope the ROI's capital is built from those same snapshot-day flows, so gain and capital never disagree.
+    # Developer's decision A (coordinator, 20/10 10:39): «Quando il calcolo salta un giorno senza valore, i flussi di quel
+    # giorno passano al primo giorno calcolabile.» ``returns.py`` counts every flow on the first snapshot on or after it, and
+    # with a short in the scope ``_committed_capital_by_date`` reads the same moved flows: gain and capital never disagree.
+    # (Option (a) of 20/10 left such a flow out of both; before it the capital counted it and the gain did not.)
 
     @staticmethod
-    def _gap_book(shape: str) -> tuple[list[Transaction], dict[int, bool], tuple[int, ...], list[tuple]]:
-        """(rows, shorting, scope, figures of the NAV days 5 and 7 Jan): X at 100 on 5 and 7 Jan, no NAV on 6 Jan, the flow day."""
-        days = _E2_JAN[:3]
+    def _gap_book(shape: str, mark: str) -> tuple[list[Transaction], dict[int, bool], tuple[int, ...], list[tuple]]:
+        """(rows, shorting, scope, figures of the NAV days 5 and 7 Jan, the 6 Jan flows on 7 Jan): X at 100 on 5 Jan and at
+        ``mark`` on 7 Jan, no NAV on 6 Jan, the flow day."""
+        days, price = _E2_JAN[:3], D(mark)
         if shape == "S1":
             rows = [_tx(1, tx_date=days[0], quantity=D("10"), amount=D("-1000")), _tx(2, tx_type=TransactionType.SELL, tx_date=days[1], quantity=D("-15"), amount=D("1500"))]
-            return rows, {1: True}, (1,), [(days[0], 1000, -1000, 1000, -1000, 0), (days[2], -500, 0, 500, 0, 0)]
+            return rows, {1: True}, (1,), [(days[0], 1000, -1000, 1000, -1000, 0), (days[2], -5 * price, 1500, 5 * price, 1000, 500)]
         rows = [_tx(1, tx_type=TransactionType.SELL, tx_date=days[0], quantity=D("-10"), amount=D("1000"), broker_id=1), _tx(2, tx_date=days[1], quantity=D("5"), amount=D("-500"), broker_id=2)]
-        return rows, {1: True, 2: False}, (1, 2), [(days[0], -1000, 1000, 1000, 0, 1000), (days[2], -500, 0, 1500, 0, 0)]
+        return rows, {1: True, 2: False}, (1, 2), [(days[0], -1000, 1000, 1000, 0, 1000), (days[2], -5 * price, -500, 15 * price, -500, 0)]
 
-    @pytest.mark.parametrize("shape", [pytest.param("S1", id="S1-a-sale-closes-a-long-and-opens-a-short"), pytest.param("S2", id="S2-a-long-bought-beside-a-short")])
-    def test_a_flow_on_a_day_without_nav_is_left_out_of_the_capital_as_of_the_gain(self, shape):
-        """X at 100 on 5 Jan and 7 Jan, no NAV on 6 Jan (a mark without a rate), the day the flow falls on; prices flat.
+    @pytest.mark.parametrize(
+        ("shape", "mark", "roi", "twrr"),
+        [
+            pytest.param("S1", "100", "0", "0", id="S1-a-sale-closes-a-long-and-opens-a-short-flat"),
+            pytest.param("S2", "100", "0", "0", id="S2-a-long-bought-beside-a-short-flat"),
+            pytest.param("S1", "90", "0.1", "0.05", id="S1-a-sale-closes-a-long-and-opens-a-short-at-90"),
+            pytest.param("S2", "90", "0.033333", "0.05", id="S2-a-long-bought-beside-a-short-at-90"),
+        ],
+    )
+    def test_a_flow_on_a_day_without_nav_enters_the_gain_and_the_capital_on_the_next_nav_day(self, shape, mark, roi, twrr):
+        """X at 100 on 5 Jan and at ``mark`` on 7 Jan, no NAV on 6 Jan (a mark without a rate), the day the flow falls on.
 
         * S1, one broker: 10 bought at 100 on 5 Jan; on 6 Jan a SELL of 15 at 100 closes them (+1 000, the long side) and
-          opens a short of 5 (+500 of proceeds). NAV 1 000, then −500 on 7 Jan.
+          opens a short of 5 (+500 of proceeds). NAV 1 000, then −5 × ``mark`` on 7 Jan.
         * S2, two brokers: 10 sold short at 100 on 5 Jan at broker 1; on 6 Jan broker 2 buys 5 at 100 (−500, the long side).
-          NAV −1 000, then −500 on 7 Jan.
+          NAV −1 000, then −10 × ``mark`` + 5 × ``mark`` = −5 × ``mark`` on 7 Jan.
 
-        The 6 Jan flows are in neither the gain nor the capital: the oracle sees only the NAV days' figures. S1: capital 1 000
-        (the 5 Jan purchase), ROI (−500 − 1 000) / 1 000 = −150%, TWRR (−500 − 1 000) / 1 000 = −150%. S2: capital 1 000
-        (the proceeds), ROI and TWRR (−500 + 1 000) / 1 000 = 50%. The prices are flat, so these numbers are the existing
-        limit's, not a return: they move to 0 if option (b) folds the 6 Jan flows into 7 Jan. What this test pins is that
-        ROI's capital and gain read the same flows.
+        The 6 Jan flows count on 7 Jan, in the gain and in the capital: the oracle puts them on 7 Jan's figures. Flat, the
+        prices did not move and neither do the returns: 0 and 0 (S1 capital 500, the proceeds; S2 capital 1 500). At 90 the
+        short gains 10 a unit: S1 ROI 50 / 500 = 10%, TWRR (−450 + 1 500 − 1 000) / 1 000 = 5%; S2 ROI 50 / 1 500 = 3.3333%
+        (the long loses 50, the short gains 100), TWRR (−450 − 500 + 1 000) / 1 000 = 5%. The at-90 cases are what tells a
+        capital that reads the moved flows from one still built from the snapshot days' alone (S1 5%, S2 5%).
 
-        With the 6 Jan flows in the capital but not in the gain (the cure's first version, 20/10): ROI −300% (S1: capital
-        500, the proceeds alone) and 33.3333% (S2: capital 1 500), TWRR unchanged. Today (HEAD b87d5d957): S1 −50% / −50%,
-        S2 ROI 0 and TWRR 50%, the short read as owned.
+        Before MF-E2b (HEAD 2e23bd03c, option (a)) this test was ``test_a_flow_on_a_day_without_nav_is_left_out_of_the_capital_as_of_the_gain``,
+        flat only, expecting S1 −150% / −150% and S2 50% / 50% (the 6 Jan flows in neither). Today's values at 90: S1
+        −145% / −145%, S2 55% / 55%.
         """
         days = _E2_JAN[:3]
-        rows, shorting, scope, figures = self._gap_book(shape)
+        rows, shorting, scope, figures = self._gap_book(shape, mark)
         contract = _e2_contract(figures)
+        assert (contract[1][1], contract[1][2]) == (D(roi), D(twrr)), "precondition: the oracle gives the stated figures"
         expected = [contract[0], (days[1], None, None), contract[1]]
 
-        assert _e2_history(_e2_engine_book(rows, shorting), days, ["100", None, "100"], scope=scope) == expected
+        assert _e2_history(_e2_engine_book(rows, shorting), days, ["100", None, mark], scope=scope) == expected
 
     # -- D3: a day at cost with a short open, the share of its proceeds at its opening rate ------------------------------
 
@@ -3809,20 +3819,30 @@ def _long_only_book(seed: int) -> dict:
     return {"rows": rows, "marks": marks, "at_cost_until": days[at_cost_days - 1] if at_cost_days else None, "rates": rates, "scope": scope}
 
 
-# Today's series of each seed's book (HEAD b87d5d957, read 20/10/2026): one "ROI|TWRR" per day of ``_PARITY_DAYS``, each the
-# str() of the Decimal the builder returned, "-" for None.
+# Each seed's series (HEAD b87d5d957, read 20/10/2026; seeds 3, 4, 7, 10 and 47 moved by MF-E2b): one "ROI|TWRR" per day of
+# ``_PARITY_DAYS``, each the str() of the Decimal the builder returned, "-" for None.
+#
+# MF-E2b (developer's decision A, 20/10): each of seeds 3, 4, 7, 10 and 47 has a trade on a day without NAV after the first
+# (seed 3 a BUY on 8 May, 4 a SELL on 7 May, 7 a SELL on 12 May, 10 a SELL on 9 May and a BUY on 12 May, 47 a BUY on 12
+# May), which returns.py dropped and now counts on the next NAV day; every other seed has none and keeps its series bit for
+# bit. Before MF-E2b they read:
+#   3: "-0.000023|- 0.059976|0.060000 -|- 3.223161|0.814750 3.349937|0.869227 3.262723|0.831750 0.751365|0.886614 0.856454|0.999818 0.479838|0.959830 0.545087|0.920614 0.637866|1.035943 0.555965|0.934136"
+#   4: "0.000000|- -|- -0.263499|-0.315065 -0.186989|-0.315065 -0.227609|-0.349286 -0.205297|-0.310260 -0.298707|-0.324026 -0.274634|-0.324028 -0.310867|-0.357795 -0.802367|-0.357795 -|- -|-"
+#   7: "0.000000|- 0.000000|0.000000 -0.076389|-0.076389 -0.150979|-0.122593 -0.116534|-0.166466 -0.183842|-0.208134 -|- -0.493863|-0.717903 -|- -|- -0.458448|-0.698164 -0.546659|-0.704210"
+#   10: "0.000000|- -0.014342|-0.019964 0.011804|0.009437 -|- -0.035387|-0.037644 -0.054716|-0.056927 -|- -0.080648|-0.021416 -0.015747|0.007985 -0.013806|0.007985 -0.013806|0.007985 -0.033515|-0.012160"
+#   47: "0.000000|- 0.000000|0.000000 0.084112|0.084112 0.069123|0.084110 0.380625|0.116634 0.109780|0.150091 -|- 0.447963|0.500558 0.375577|0.425543 0.375577|0.425543 2.210144|0.397007 0|0.480870"
 _TODAY_LONG_ONLY_SERIES = {
     0: "0.000000|- 0.000000|0.000000 0.000000|0.000000 0.082796|0.082796 0.082796|0.082796 0.115269|0.115269 0.115269|0.115269 0.115269|0.115269 0.093011|0.093011 0.093011|0.093011 0.038387|0.038387 0.017823|0.038387",
     1: "-|- -|- -|- -|- -|- 0.000000|0.000000 -0.032694|-0.049949 -0.032694|-0.049949 -0.051991|-0.068902 -0.099435|-0.115499 -|- -|-",
     2: "0.000000|- 0.000000|0.000000 -|- 0.038778|0.038778 0.069889|0.069889 0.134111|0.134111 0.085147|0.202124 0.150242|0.274236 0.092770|0.210568 0.130920|0.210568 0.130920|0.210568 0.164864|0.246902",
-    3: "-0.000023|- 0.059976|0.060000 -|- 3.223161|0.814750 3.349937|0.869227 3.262723|0.831750 0.751365|0.886614 0.856454|0.999818 0.479838|0.959830 0.545087|0.920614 0.637866|1.035943 0.555965|0.934136",
-    4: "0.000000|- -|- -0.263499|-0.315065 -0.186989|-0.315065 -0.227609|-0.349286 -0.205297|-0.310260 -0.298707|-0.324026 -0.274634|-0.324028 -0.310867|-0.357795 -0.802367|-0.357795 -|- -|-",
+    3: "-0.000023|- 0.059976|0.060000 -|- 0.017459|0.018341 0.048003|0.048911 0.026991|0.027880 0.031281|0.058667 0.093162|0.122191 0.050333|0.099752 0.033448|0.077746 0.095504|0.142463 0.040724|0.085334",
+    4: "0.000000|- -|- -0.048968|-0.045343 -0.032040|-0.045343 -0.080401|-0.093040 -0.029334|-0.038646 -0.071323|-0.057833 -0.063908|-0.057836 -0.110667|-0.104899 -0.528291|-0.104899 -|- -|-",
     5: "0.000000|- 0.000000|0.000000 -0.013271|-0.015138 0.016327|0.014404 -0.003987|-0.005872 -|- 0.003586|0.003486 0.033681|0.033578 0.061831|0.095596 0.111456|0.073670 0.050187|0.052202 0.081686|0.083761",
     6: "0.000000|- -0.050000|-0.050000 0.007018|0.007018 0.007018|0.007018 -0.043311|-0.043311 -0.062500|-0.062500 -0.034430|-0.034430 0.023465|0.023465 0.002961|0.002961 0.001725|0.002961 0.095733|0.063158 0.149743|0.095066",
-    7: "0.000000|- 0.000000|0.000000 -0.076389|-0.076389 -0.150979|-0.122593 -0.116534|-0.166466 -0.183842|-0.208134 -|- -0.493863|-0.717903 -|- -|- -0.458448|-0.698164 -0.546659|-0.704210",
+    7: "0.000000|- 0.000000|0.000000 -0.076389|-0.076389 -0.150979|-0.122593 -0.116534|-0.166466 -0.183842|-0.208134 -|- -0.171377|-0.175622 -|- -|- -0.113396|-0.117939 -0.170706|-0.135607",
     8: "-|- -|- 0.000000|0.000000 0.059964|0.059964 0.012590|0.006955 0.043005|0.037201 0.105636|0.099484 -|- 0.116021|0.109811 0.116021|0.109811 0.149509|0.143113 0.183951|0.177363",
     9: "0.000000|- 0.000000|0.000000 0.000000|0.000000 0.022151|0.022151 0.001720|0.001720 -0.048387|-0.048387 -0.019785|-0.019785 -0.068817|-0.068817 -0.012903|-0.012903 0.016667|0.016667 0.047204|0.047204 0.078602|0.078602",
-    10: "0.000000|- -0.014342|-0.019964 0.011804|0.009437 -|- -0.035387|-0.037644 -0.054716|-0.056927 -|- -0.080648|-0.021416 -0.015747|0.007985 -0.013806|0.007985 -0.013806|0.007985 -0.033515|-0.012160",
+    10: "0.000000|- -0.014342|-0.019964 0.011804|0.009437 -|- 0.020764|0.017236 0.000310|-0.003146 -|- -0.080648|-0.023620 -0.015747|0.005715 -0.013806|0.005715 -0.013806|0.005715 -0.033515|-0.014385",
     11: "0.000000|- 0.000000|0.000000 0.000000|0.000000 0.182426|0.247444 0.253411|0.322333 0.228345|0.295889 0.302069|0.373667 0.380216|0.456111 0.311232|0.383333 -|- 0.220762|0.287889 0.257413|0.326556",
     12: "0.000000|- 0.000000|0.000000 0.000000|0.000000 -0.118158|-0.135189 -0.088267|-0.178396 -0.060944|-0.153774 -0.106047|-0.128396 -0.052443|-0.076132 -0.128851|-0.122358 -0.146268|-0.139906 -0.048886|-0.139906 -|-",
     13: "-|- -|- 0.000000|0.000000 -0.019974|-0.019974 -0.039622|-0.039622 0.008456|0.018020 -|- -0.053504|-0.002388 0.001851|0.057425 0.001851|0.057425 -0.048236|0.004559 -0.048236|0.004559",
@@ -3831,7 +3851,7 @@ _TODAY_LONG_ONLY_SERIES = {
     20: "0.000000|- -|- 0.009434|0.009434 -0.050776|-0.041038 -0.022295|-0.012264 0.007027|0.017358 -0.013143|-0.003019 -0.013143|-0.003019 -0.042518|-0.052830 -0.013812|-0.024434 -0.094330|-0.043962 -0.139640|-0.091792",
     33: "0.000000|- 0.059954|0.059954 0.038735|0.038735 0.101091|0.101091 0|0.101091 0.017628|0.101091 0.012528|0.101091 -0.038094|0.046041 -0.029883|0.046038 -0.045665|-0.006273 -0.017010|0.023565 -0.033450|0.023565",
     36: "0.000000|- 0.000000|0.000000 -0.058010|-0.121698 -0.078012|-0.165660 -|- -|- -|- -|- -|- -|- -|- -|-",
-    47: "0.000000|- 0.000000|0.000000 0.084112|0.084112 0.069123|0.084110 0.380625|0.116634 0.109780|0.150091 -|- 0.447963|0.500558 0.375577|0.425543 0.375577|0.425543 2.210144|0.397007 0|0.480870",
+    47: "0.000000|- 0.000000|0.000000 0.084112|0.084112 0.069123|0.084110 0.380625|0.116634 0.109780|0.150091 -|- 0.066843|0.130341 0.013509|0.073833 0.013509|0.073833 -0.017874|0.052338 0.134283|0.115510",
 }
 
 
@@ -3839,9 +3859,11 @@ class TestLongOnlyParity:
     """MF-E2: with no SHORT lot in the scope the performance history is today's, bit for bit — green today, green after.
 
     Seeded long-only books (``_long_only_book``) through the real engine: BUYs, SELLs that partly close, days at cost,
-    missing marks, USD flows, a flow without a rate (seeds 4, 15 and 36 stop on it), scope one broker or both; seeds 33
-    and 47 take more out than they put in on one day, where today's ROI is the bare ``0`` of calculate_simple_roi (no
-    capital) and not ``0.000000``. Each book's series is compared, as the exact str() of every ROI and TWRR — "0" and
+    missing marks, USD flows, a flow without a rate (seeds 4, 15 and 36 stop on it), scope one broker or both; seed 33
+    takes more out than it puts in on one day, where today's ROI is the bare ``0`` of calculate_simple_roi (no capital)
+    and not ``0.000000`` (seed 47 did too until MF-E2b counted its gap-day BUY); seeds 3, 4, 7, 10 and 47 trade on a day
+    without NAV, a flow that counts on the next NAV day since MF-E2b (their literals moved then; the old ones are in the
+    comment above ``_TODAY_LONG_ONLY_SERIES``). Each book's series is compared, as the exact str() of every ROI and TWRR — "0" and
     "0.000000" told apart —, with the literals today's builder gave (``_TODAY_LONG_ONLY_SERIES``).
 
     Why pinned literals. A test may not read git, so today's function cannot be loaded beside the cured one. Checking that
@@ -3877,3 +3899,36 @@ class TestLongOnlyParity:
         )
 
         assert " ".join(f"{'-' if point.roi is None else point.roi}|{'-' if point.twrr is None else point.twrr}" for point in points) == _TODAY_LONG_ONLY_SERIES[seed]
+
+
+# --------------------------------------------------------------------------- #
+# MF-E2b — a long-only trade on a day without NAV
+# --------------------------------------------------------------------------- #
+
+
+class TestGapFlowsInThePerformanceHistory:
+    """MF-E2b (developer's decision A, coordinator 20/10 10:39) on a long-only book: the flow of a day without NAV counts on
+    the next NAV day (``returns.py``), so the units it bought or sold no longer read as a gain or a loss. The rule itself is
+    pinned in ``test_financial_math/test_returns_gap_flows.py``."""
+
+    @pytest.mark.parametrize(
+        ("trade", "quantity", "amount", "figures_on_jan_7"),
+        [
+            pytest.param("BUY", "5", "-500", (1500, -500, 1500, -500, 0), id="L1-a-second-buy"),
+            pytest.param("SELL", "-5", "500", (500, 500, 500, 500, 0), id="L1-a-sale"),
+        ],
+    )
+    def test_a_long_only_trade_on_a_day_without_nav_moves_no_return(self, trade, quantity, amount, figures_on_jan_7):
+        """10 bought at 100 on 5 Jan (NAV 1 000); on 6 Jan, a day without NAV (a mark without a rate), 5 more bought at 100
+        (−500) or 5 sold at 100 (+500); X at 100 on 7 Jan (NAV 1 500 or 500). The 6 Jan flow counts on 7 Jan: ROI 0 on a
+        capital of 1 500 or 500; TWRR (1 500 − 500 − 1 000) / 1 000 = 0, or (500 + 500 − 1 000) / 1 000 = 0.
+
+        Today (HEAD 2e23bd03c): the flow is dropped while its units are in the NAV — the BUY reads ROI +50% and TWRR +50%,
+        the SELL −50% and −50% on 7 Jan.
+        """
+        days = _E2_JAN[:3]
+        rows = [_tx(1, tx_date=days[0], quantity=D("10"), amount=D("-1000")), _tx(2, tx_type=TransactionType[trade], tx_date=days[1], quantity=D(quantity), amount=D(amount))]
+        contract = _e2_contract([(days[0], 1000, -1000, 1000, -1000, 0), (days[2], *figures_on_jan_7)])
+        assert (contract[1][1], contract[1][2]) == (D("0"), D("0")), "precondition: the oracle gives the stated figures"
+
+        assert _e2_history(_e2_engine_book(rows, {1: False}), days, ["100", None, "100"]) == [contract[0], (days[1], None, None), contract[1]]

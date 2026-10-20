@@ -168,8 +168,9 @@ its conversions in batches under both (Z-27,
 
 ### 🪟 Loading only the usable rate window {: #convert-bulk-window }
 
-Portfolio reports call `convert_bulk()` with thousands of items: the engine preloads a rate for every
-non-reporting currency and every day of the range. So the function reads only the rows the batch can
+Calculations call `convert_bulk()` with thousands of items (before P3 the portfolio engine preloaded a rate
+for every non-reporting currency and every day of the range; it now reads [steps](#unit-rate-steps)). So the
+function reads only the rows the batch can
 use, in one query for up to `FX_PAIRS_PER_QUERY` (500) pairs — more pairs take several queries
 (R13-SEC9-2: SQLite refuses an `OR` of about a thousand terms, «Expression tree is too large», and a
 request of some 990 pairs answered 500; `_first_rate_days_inside()` of the fixed-period changes reads
@@ -205,11 +206,11 @@ linearly for each item (PR #30 by Martin Sova, commit `5aa267f11`).
 ### 🪜 One unit's rate as steps {: #unit-rate-steps }
 
 The [portfolio engine](../financial_math.md#portfolio-package) (`_preload_fx_rates()`) and the
-[native cash](../transactions/wac.md#compute-native-cash) (`compute_native_cash()`) ask `convert_bulk()` for one unit
-of each foreign currency on every day of long ranges, one item per currency and per day. A rate only changes on the
+[native cash](../transactions/wac.md#compute-native-cash) (`compute_native_cash()`) need one unit of each foreign
+currency on every day of long ranges: asked of `convert_bulk()`, one item per currency and per day. A rate only changes on the
 days a row is stored, so `unit_rate_steps(session, requests)`, in the same module (P3 of MF's fast-formulas plan),
-answers the same values as steps, with far fewer items. Nothing calls it yet: the engine and the native cash move to
-it in MF's lot.
+answers the same values as steps, with far fewer items. Since MF's P3 both read it: the engine in a map that answers
+on the asked days only (`financial_math/fx_rates.AskedDayRates`), the native cash through the steps themselves.
 
 `requests` maps `(source, destination)`, two currency codes as stored, whichever of them is the stored base, to its
 windows `(first_day, last_day)`, both days included; the windows of a pair may touch, overlap or lie apart. Every pair

@@ -464,6 +464,24 @@ def calculate_simple_roi(current_nav: Decimal, total_invested: Decimal) -> Decim
     return ((current_nav - total_invested) / total_invested).quantize(_PREC_PCT, rounding=ROUND_HALF_UP)
 
 
+def flows_by_snapshot_date(nav_snapshots: Sequence[NAVSnapshot], cash_flows: Iterable[CashFlowInput]) -> dict[date, Decimal]:
+    """The flows summed on the snapshot each one counts on: the first dated on or after it (MF-E2b).
+
+    A series computes only the days that have a NAV; a flow on a day without one — the transaction stays on its day —
+    counts on the first day the series computes after it, so the units it bought or sold and the money that paid for
+    them meet in the same sub-period (developer decision A, 20/10). A flow before the first snapshot counts on the first,
+    a flow after the last on none (its own date, which no snapshot reads). Sums in the order the flows are given, from
+    0, as before: a flow already on a snapshot's date is summed exactly as it was.
+    """
+    snapshot_dates = sorted(snapshot.date for snapshot in nav_snapshots)
+    by_date: dict[date, Decimal] = {}
+    for cash_flow in cash_flows:
+        index = bisect.bisect_left(snapshot_dates, cash_flow.date)
+        counted_on = snapshot_dates[index] if index < len(snapshot_dates) else cash_flow.date
+        by_date[counted_on] = by_date.get(counted_on, Decimal("0")) + cash_flow.amount
+    return by_date
+
+
 def calculate_simple_roi_series(
     nav_snapshots: list[NAVSnapshot],
     cash_flows: list[CashFlowInput],
@@ -474,6 +492,7 @@ def calculate_simple_roi_series(
 
     For each snapshot t, computes the cumulative net invested capital up to t:
     Net_Invested_t = max(0, -sum(CF_i for i <= t))  # deposits are < 0, withdrawals > 0.
+    Each flow counts on the first snapshot dated on or after it (:func:`flows_by_snapshot_date`).
 
     Then: ROI_t = (NAV_t - Net_Invested_t) / Net_Invested_t.
 
@@ -489,9 +508,7 @@ def calculate_simple_roi_series(
         return []
 
     sorted_navs = sorted(nav_snapshots, key=lambda s: s.date)
-    cf_by_date: dict[date, Decimal] = {}
-    for cf in cash_flows:
-        cf_by_date[cf.date] = cf_by_date.get(cf.date, Decimal("0")) + cf.amount
+    cf_by_date = flows_by_snapshot_date(sorted_navs, cash_flows)
 
     result: list[SimpleROIPoint] = []
     cumulative_cf = Decimal("0")
@@ -562,6 +579,9 @@ def calculate_twrr_period_series(
 ) -> list[TWRRPeriodPoint]:
     """Return exact sub-period HPR and unrounded cumulative TWRR values.
 
+    Each flow counts on the first snapshot dated on or after it (:func:`flows_by_snapshot_date`): one on a day without a
+    NAV joins the sub-period that ends on the next snapshot, with the value it bought or sold.
+
     Each sub-period's gain is divided by the NAV it starts from, or, with ``exposure_by_date`` (MF-E2, the lots'
     performance with short positions), by the exposure of its first snapshot's date: a NAV that nets a debt against a
     holding can be small or negative while the money at stake is not. A base of 0 gives a sub-period return of 0.
@@ -570,9 +590,7 @@ def calculate_twrr_period_series(
         return []
 
     sorted_navs = sorted(nav_snapshots, key=lambda snapshot: snapshot.date)
-    cf_by_date: dict[date, Decimal] = {}
-    for cash_flow in cash_flows:
-        cf_by_date[cash_flow.date] = cf_by_date.get(cash_flow.date, Decimal("0")) + cash_flow.amount
+    cf_by_date = flows_by_snapshot_date(sorted_navs, cash_flows)
 
     compound = Decimal("1")
     result: list[TWRRPeriodPoint] = []
