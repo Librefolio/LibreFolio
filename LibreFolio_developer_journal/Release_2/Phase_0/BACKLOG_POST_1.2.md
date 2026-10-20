@@ -7542,6 +7542,20 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - Da assegnare: il proprietario del promote (W), oppure J.
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «J-66 — il banner
     di promozione legge il segno dal tipo», passo 5.
+  - **20/10, coordinatore**: assegnata a J, dopo il §29 punto 2. Riporta la griglia al dato salvato: non serve una
+    domanda.
+- **J-68 · Un trasferimento in un giorno solo non nomina l'origine nelle viste dei lotti** — basso, chiarezza; J, 20/10
+  (test-author durante il §29 punto 2, verificato da J nel codice).
+  - Per un trasferimento che parte e arriva lo stesso giorno, `_build_transfer_rows` (`lots_analysis_service.py`)
+    scrive solo TRANSFER_ARRIVE, dal frammento di destinazione, con `broker_id` B ma senza `source_broker_id` né
+    `destination_broker_id`; non c'è TRANSFER_DEPART. Un trasferimento di più giorni ha invece le due righe, con
+    origine e destinazione.
+  - Effetto: lo Storico della modale scrive «In transit → B» senza dire da dove; il tooltip del grafico WAC scrive «—»
+    sia in «Da» sia in «A». Nessun numero.
+  - Da guardare insieme al §29 punto 1 (il tooltip dei marcatori vuole «Da A / A B»): l'origine sta nel frammento di
+    partenza, oppure nel motore, che può scriverla sul frammento di destinazione.
+  - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «Gantt §29, punto
+    2», passo 1.
 
 ## Z · Sospensione e risveglio (fase 01)
 
