@@ -30,6 +30,8 @@ A few rules keep entries quick:
 - **Missing broker or asset?** — **Create new** in the broker list, or **New asset** in the asset list, creates it without leaving the form.
 - **Missing event?** — **+ New event** in the **Linked Event** field creates the asset's event and links it. If the asset already has an event of that type on that date, nothing is saved: the window shows that event, to use it, or to edit it if you entered it by hand, and never overwrites it ([New event from a transaction](../assets/detail/events.md#new-event)).
 
+<div id="cost-basis"></div>
+
 ??? info "💰 Cost basis of incoming units — for Adjustments and Asset Transfers"
 
     When an **Adjustment** adds units, or on the receiving side of an **Asset Transfer**, the form asks what those units cost:
@@ -37,7 +39,7 @@ A few rules keep entries quick:
     - **Auto** — LibreFolio computes it as a [Weighted Average Cost](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md); press **⚡ Validate now** to see it.
     - **Manual** — you type it.
 
-    In **Auto**, the average is taken at the sending broker of a transfer, or at the adjustment's own broker. If that broker has no other transaction in the asset up to the date the units come in, there is nothing to average, and the cost is 0 by design: if those units did cost something, open the transaction later and type their cost in **Manual**. In **Manual**, the field cannot stay empty: LibreFolio flags the row and saves nothing until you fill it in or switch to **Auto**. Editing a saved transaction is no exception: if you empty its cost in **Manual**, the save is refused, because the transaction needs a cost basis — choose **Auto** or type a value. Type 0 only for units that really cost nothing, such as the new shares of a stock split; for a gift, type the donor's original cost. If an exchange rate is missing, the **Sync FX rates** link fetches it.
+    In **Auto**, the average is taken at the sending broker of a transfer, or at the adjustment's own broker. If that broker holds none of the asset on the day the units leave it or come in, or only units whose cost is unknown, there is nothing to average: **Auto** is refused and nothing is saved — choose **Manual** and type what those units cost you (0 for a gift). In **Manual**, the field cannot stay empty: LibreFolio flags the row and saves nothing until you fill it in or switch to **Auto**. Editing a saved transaction is no exception: if you empty its cost in **Manual**, the save is refused, because the transaction needs a cost basis — choose **Auto** or type a value. Type 0 for the new shares of a stock split. For a gift, instead of 0, you can type what the donor paid for those units: that keeps the weighted average cost, and the gain you may be taxed on, closer to the real ones. Units entered at a cost of 0 count as free, not as unknown: a later **Auto** average at their broker counts them at 0. If an exchange rate is missing, the **Sync FX rates** link fetches it.
 
 ---
 

@@ -381,7 +381,8 @@
         "invalid": "non valide",
         "not_yet_settled": "non ancora regolate",
         "outside_cash_coverage": "regolate prima dell'inizio dell'estratto",
-        "superseded": "sostituite da un file più recente"
+        "superseded": "sostituite da un file più recente",
+        "reservation": "prenotate, non contabilizzate"
       },
       "downloadCombined": "Scarica il combinato",
       "warning": {

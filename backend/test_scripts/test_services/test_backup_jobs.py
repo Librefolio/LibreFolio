@@ -53,16 +53,31 @@ Under test: ``backend/app/services/platform/instance_backup/jobs.py``.
     cannot be read (not JSON, JSON without its fields, a field of the wrong type), and what a run that ended left there.
     Whatever the lock and the job's state hold, a refused start raises ``BackupBusyError`` (the API's 409
     ``backup_busy``), never another exception, which the API would answer with a 500.
+(B-50) A job whose ``state.json`` cannot be read is «not found», never a 500: JSON that is no object (a list, null, a
+    number, a string), an empty file, not JSON, ``{}``, a field of the wrong type, a ``created_at`` that is no date,
+    bytes that are not UTF-8, a folder, a file the server may not read (mode 000, skipped as root), and a whole state
+    whose ``finished_at`` has no time zone. ``get_job``, ``job_archive`` and ``delete_job`` answer
+    ``BackupJobNotFoundError`` (caught as that base: the cure raises a subclass) and leave the folder as it is; the read
+    logs one warning, ``"A backup job's state cannot be read"``, with ``job_id`` and ``error`` (the class of the error),
+    never the content: a canary in the state reaches no logged event, and no traceback is logged. The views of the
+    routes (``job_views``, as the Backup tab and the hosting panel call them) answer 404 ``backup_job_not_found``. A
+    start, ``remove_expired_jobs`` and ``end_interrupted_jobs`` go on past such folders: the backup is made, an expired
+    job removed, a dead run ended ``backup_interrupted``, and the unreadable folder kept until it is an hour old by its
+    date, then removed; a lock that names such a job names none. Two guards, green before the cure and after it: a
+    missing state is not found without that warning; a transient ``OSError`` (the first read of a state failing with
+    ``EIO``) reaches the caller as it is (the API's 500, which the tab retries), is not logged as unreadable, and the
+    next read finds the job.
 
 Pure: every data directory is in ``tmp_path`` and every call is given its ``data_dir``; ``jobs.get_data_dir`` is
-replaced by a guard that fails the test, so the lane's data directory is never reached. ``LF_APP_VERSION`` is set, so
-no git process runs. No lane database, no server, no network. A background run ends before its test does: the test
-waits for the final state, then joins the run's thread, and an autouse fixture fails any test that would leave one
-running. Every wait polls a condition with a deadline; the cases that need a run in progress hold its build at a gate
-(an ``Event`` the test opens) instead of hoping it is slow, or, for the CLI's run in the calling thread, look from its
-first progress report, while it holds the lock. A failing disk is simulated in this process only: the ``os`` of
-``archive`` is replaced, for one test, by a stand-in that hands out the real files but one, which reads badly (``EIO``
-after its first block) or is on a disk with a few hundred bytes left (``ENOSPC``).
+replaced by a guard that fails the test, so the lane's data directory is never reached (the cases of the routes' views,
+B-50, replace it with the test's own). ``LF_APP_VERSION`` is set, so no git process runs. No lane database, no server,
+no network. A background run ends before its test does: the test waits for the final state, then joins the run's
+thread, and an autouse fixture fails any test that would leave one running. Every wait polls a condition with a
+deadline; the cases that need a run in progress hold its build at a gate (an ``Event`` the test opens) instead of
+hoping it is slow, or, for the CLI's run in the calling thread, look from its first progress report, while it holds
+the lock. A failing disk is simulated in this process only: the ``os`` of ``archive`` is replaced, for one test, by a
+stand-in that hands out the real files but one, which reads badly (``EIO`` after its first block) or is on a disk with
+a few hundred bytes left (``ENOSPC``).
 """
 
 from __future__ import annotations
@@ -83,7 +98,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
+from structlog.testing import capture_logs
 
+from backend.app.api.v1.backup import job_views
 from backend.app.services.platform.instance_backup import archive, jobs
 from backend.app.services.platform.instance_backup.archive import PartialEntryError, check_archive
 from backend.app.services.platform.instance_backup.jobs import (
@@ -95,6 +113,7 @@ from backend.app.services.platform.instance_backup.jobs import (
     archive_name,
     backup_in_progress,
     delete_job,
+    end_interrupted_jobs,
     get_job,
     job_archive,
     remove_expired_jobs,
@@ -107,8 +126,10 @@ from backend.app.utils.runtime.version import get_git_version
 from backend.test_scripts.test_utils import print_section, print_success
 
 POSIX = os.name != "nt"
+AS_ROOT = POSIX and os.geteuid() == 0
 needs_posix_modes = pytest.mark.skipif(not POSIX, reason="file modes are POSIX only")
 needs_symlinks = pytest.mark.skipif(not POSIX, reason="symbolic links need a privilege on Windows")
+needs_permission_checks = pytest.mark.skipif(not POSIX or AS_ROOT, reason="needs POSIX permissions, which root bypasses")
 
 APP_VERSION = "v0.0.0-b1-jobs-test"
 #: Seconds. Every wait of this module ends by then; a hung run fails the test instead of the session.
@@ -1401,3 +1422,382 @@ def test_the_record_of_a_run_replaces_whatever_the_lock_held(data_dir, gate):
     assert recorded == job.job_id, f"the run's record must replace the lock's old text whole: {recorded!r}"
     assert named == dict.fromkeys(named, (job.job_id, "ui", "running")), f"each start refused while the run holds the lock must name its job: {named}"
     print_success("the lock's old text replaced by the run's id")
+
+
+# =============================================================================
+# (B-50) an unreadable state is «not found», never a 500
+# =============================================================================
+# The defect (measured 19/10 and 20/10): a job's state.json that is JSON but no object ([], null, 5, "x") raises
+# AttributeError from get_job, remove_expired_jobs, end_interrupted_jobs and every start (_prepare runs
+# remove_expired_jobs first): a 500 for the Backup tab and the hosting panel, a traceback for the CLI, until someone
+# removes the folder by hand. A whole state whose finished_at has no time zone does the same with a TypeError (the
+# retention subtracts it from an aware now, outside the loops' try), end_interrupted_jobs excepted. The other unreadable
+# contents (empty, not JSON, {}, a field of the wrong type, a date that is no date, bytes that are not UTF-8) break
+# get_job only: the job's GET, file and DELETE are 500s. A state.json that is a folder (IsADirectoryError), or that the
+# server may not read (PermissionError), escapes everywhere as an OSError: every start fails (500 backup_failed, the
+# CLI's exit 1).
+# The decision (coordinator, 19/10 17:37 and 20/10 09:06), verbatim: «B-50: sì, la cura in 2 file, con il 404
+# `backup_job_not_found` per uno stato illeggibile, sia nel backup sia nel ripristino» and «Il perimetro di B-50: approvo
+# la tua proposta. Contano come «illeggibile» (cioè 404) anche lo `state.json` che è una cartella e quello senza
+# permessi di lettura. Gli altri `OSError`, quelli transitori, restano un 500 che la scheda riprova.» Added 20/10: a
+# finished_at without a time zone is unreadable too (the cure's from_json refuses it, a ValueError).
+# Red today: every case below but the two guards, green today and after the cure: a missing state (not found, no
+# warning) and a transient OSError (EIO: the caller gets that very error).
+
+
+#: The warning a read logs for a job whose state cannot be read, verbatim (B-50).
+UNREADABLE_WARNING = "A backup job's state cannot be read"
+#: Written into the states that are readable text but no job: it must reach no logged event. ``fromisoformat``'s own
+#: message quotes it (``Invalid isoformat string: 'CANARY…'``), so a log of the error's message would leak it.
+CANARY = "CANARY-B50-a-state-s-content-is-never-logged"
+#: A warning through the jobs' own logger, before each capture: it must reach the capture, or «no such warning» would
+#: prove nothing either way.
+LOG_BARRIER = "b50 jobs test: a barrier through the jobs' own logger"
+#: Added 20/10, measured with a probe: a whole state whose ``finished_at`` has no time zone. Today it blocks every start
+#: as the non-objects do (a ``TypeError``); the cure's ``from_json`` refuses it (a ``ValueError``). Pinned where the
+#: coordinator asked: the reads and their warning, a start, the removal of the expired jobs.
+WITHOUT_TIME_ZONE = "finished-at-without-time-zone"
+
+
+@contextmanager
+def jobs_logs() -> Iterator[list[dict]]:
+    """What is logged inside the block, behind a barrier: a warning through the jobs' own logger reaches the capture."""
+    with capture_logs() as events:
+        jobs.logger.warning(LOG_BARRIER)
+        assert any(event.get("event") == LOG_BARRIER for event in events), f"barrier: the jobs' logger does not reach capture_logs: {events}"
+        yield events
+
+
+def unreadable_warnings(events: list[dict]) -> list[dict]:
+    """The warnings of a state that cannot be read, among ``events``."""
+    return [event for event in events if event.get("event") == UNREADABLE_WARNING]
+
+
+def a_job_state(folder: Path, now: datetime, **changes: object) -> None:
+    """In ``folder``, a job that finished a minute before ``now``, its archive beside its state, as its run left them;
+    ``changes`` written over the state."""
+    created = now - timedelta(minutes=2)
+    name = archive_name(created)
+    (folder / name).write_bytes(b"PK the archive of job " + folder.name.encode("ascii"))
+    size, sha256 = file_digest(folder / name)
+    job = BackupJob(job_id=folder.name, origin="ui", status="done", phase=None, done_bytes=100, total_bytes=100, created_at=created, finished_at=now - timedelta(minutes=1), file_name=name, file_size=size, file_sha256=sha256)
+    (folder / STATE_FILE).write_text(json.dumps({**json.loads(job.to_json()), **changes}), encoding="utf-8")
+
+
+def holding(content: bytes) -> Callable[[Path, datetime], None]:
+    """A state of these bytes."""
+
+    def plant(folder: Path, now: datetime) -> None:
+        (folder / STATE_FILE).write_bytes(content)
+
+    return plant
+
+
+def changed(**changes: object) -> Callable[[Path, datetime], None]:
+    """A whole job's state, but for ``changes``."""
+
+    def plant(folder: Path, now: datetime) -> None:
+        a_job_state(folder, now, **changes)
+
+    return plant
+
+
+def without_time_zone(folder: Path, now: datetime) -> None:
+    """A whole job's state, but for its ``finished_at``: a minute before ``now`` in UTC, written without a time zone.
+    Read as UTC it would be a job within its retention, read as a local time one past it or not yet ended: no zone may
+    be guessed."""
+    a_job_state(folder, now, finished_at=(now - timedelta(minutes=1)).replace(tzinfo=None).isoformat())
+
+
+def a_folder(folder: Path, now: datetime) -> None:
+    """A ``state.json`` that is a folder."""
+    (folder / STATE_FILE).mkdir()
+
+
+def not_readable(folder: Path, now: datetime) -> None:
+    """A whole job's state that the server may not read: mode 000."""
+    a_job_state(folder, now)
+    (folder / STATE_FILE).chmod(0)
+
+
+#: How each shape of a state that cannot be read is planted in a job's folder, given the time the test reads at.
+PLANTS: dict[str, Callable[[Path, datetime], None]] = {
+    "json-list": holding(json.dumps([CANARY]).encode("utf-8")),
+    "json-null": holding(b"null"),
+    "json-number": holding(b"5"),
+    "json-string": holding(json.dumps(CANARY).encode("utf-8")),
+    "empty-file": holding(b""),
+    "not-json": holding(b"{not json"),
+    "empty-object": holding(b"{}"),
+    "created-at-a-number": holding(b'{"created_at": 5}'),
+    "created-at-not-a-date": changed(created_at=CANARY),
+    "not-utf-8": holding(b"\xff\xfe{"),
+    "a-folder": a_folder,
+    "mode-000": not_readable,
+    WITHOUT_TIME_ZONE: without_time_zone,
+}
+#: Every shape (``PLANTS``) with the class of the error its read meets, which the warning names: the shapes the
+#: decision names (19/10 17:37, 20/10 09:06), then the date without a time zone (20/10). JSON that is no object and
+#: that date meet the ``ValueError`` of the cure's ``from_json`` (today: an ``AttributeError``; for the date, no error
+#: from the read, the ``TypeError`` coming after it, from the retention's subtraction).
+DECIDED: dict[str, str] = {
+    "json-list": "ValueError",
+    "json-null": "ValueError",
+    "json-number": "ValueError",
+    "json-string": "ValueError",
+    "empty-file": "JSONDecodeError",
+    "not-json": "JSONDecodeError",
+    "empty-object": "KeyError",
+    "created-at-a-number": "TypeError",
+    "created-at-not-a-date": "ValueError",
+    "not-utf-8": "UnicodeDecodeError",
+    "a-folder": "IsADirectoryError",
+    "mode-000": "PermissionError",
+    WITHOUT_TIME_ZONE: "ValueError",
+}
+#: The shapes that stop, besides ``get_job``, every loop over the jobs today: JSON that is no object, a folder, mode 000.
+BLOCKING = ("json-list", "json-null", "json-number", "json-string", "a-folder", "mode-000")
+#: The shapes whose state is text holding ``CANARY``.
+HOLDS_THE_CANARY = ("json-list", "json-string", "created-at-not-a-date")
+
+
+def shapes(*names: str) -> list:
+    """The parameters of the shapes ``names``, each its own id; ``mode-000`` skipped as root, who reads it all the same,
+    and off POSIX."""
+    return [pytest.param(name, id=name, marks=needs_permission_checks if name == "mode-000" else ()) for name in names]
+
+
+def job_whose_state_cannot_be_read(data_dir: Path, shape: str, *, now: datetime, dated: datetime) -> str:
+    """The id of a new job folder whose ``state.json`` has ``shape`` (``PLANTS``), planted as of ``now``; the folder
+    dated ``dated`` once planted, its date being all ``remove_expired_jobs`` can go by."""
+    job_id = uuid.uuid4().hex
+    folder = ensure_private_dir(job_dir(data_dir, job_id), data_dir)
+    PLANTS[shape](folder, now)
+    date_folder(folder, dated)
+    return job_id
+
+
+@pytest.fixture
+def plant_unreadable(data_dir) -> Iterator[Callable[..., str]]:
+    """``job_whose_state_cannot_be_read`` in the test's data directory. Afterwards every state left at mode 000 gets its
+    mode back, so that ``tmp_path`` can be removed whatever the test left."""
+
+    def plant(shape: str, *, now: datetime, dated: datetime) -> str:
+        return job_whose_state_cannot_be_read(data_dir, shape, now=now, dated=dated)
+
+    yield plant
+    for state in data_dir.rglob(STATE_FILE):
+        if state.is_file() and not state.is_symlink() and mode(state) == 0:
+            state.chmod(0o600)
+
+
+def job_answer(call: Callable[..., object], job_id: str, data_dir: Path) -> str:
+    """What ``call`` of the job answers: ``not found`` for ``BackupJobNotFoundError`` (the cure's subclass included),
+    otherwise what it returned or raised instead; any other exception reaches the API as a 500."""
+    try:
+        value = call(job_id, data_dir=data_dir)
+    except BackupJobNotFoundError:
+        return "not found"
+    except Exception as exc:  # noqa: BLE001 — named by the caller's assertion: the API would answer it with a 500
+        return f"raised {type(exc).__name__} ({exc})"
+    return f"returned {value!r}"
+
+
+def returned_or_raised(call: Callable[..., object], *args: object, **kwargs: object) -> object:
+    """What ``call`` returns, or a sentence naming what it raised instead, for the caller's assertion to show."""
+    try:
+        return call(*args, **kwargs)
+    except Exception as exc:  # noqa: BLE001 — named by the caller's assertion, beside what was expected
+        return f"{call.__name__} raised {type(exc).__name__} ({exc})"
+
+
+def route_answer(view: Callable[..., object], job_id: str, origin: str | None) -> tuple[int, object] | str:
+    """What the route of ``view`` answers for the job: the status and the ``code`` of the ``HTTPException`` the view
+    raises, or what it returned or raised instead (any other exception reaches the client as a 500)."""
+    try:
+        value = view(job_id, origin=origin)
+    except HTTPException as exc:
+        code = exc.detail.get("code") if isinstance(exc.detail, dict) else exc.detail
+        return exc.status_code, code
+    except Exception as exc:  # noqa: BLE001 — named by the caller's assertion: the API would answer it with a 500
+        return f"raised {type(exc).__name__} ({exc})"
+    return f"returned {value!r}"
+
+
+def backup_made(start: Callable[..., object], data_dir: Path) -> BackupJob | str:
+    """The end state of the backup ``start`` makes (``start_backup``'s run followed to its end), or a sentence naming
+    what the start raised instead: the API's 500 (``start_job``), the CLI's traceback or exit 1."""
+    try:
+        started = start(data_dir=data_dir)
+    except Exception as exc:  # noqa: BLE001 — named by the caller's assertion
+        return f"{start.__name__} raised {type(exc).__name__} ({exc})"
+    return started[0] if isinstance(started, tuple) else wait_until_finished(started.job_id, data_dir)
+
+
+def a_disk_that_fails_once(monkeypatch, state: Path, error: OSError) -> list[str]:
+    """The first read of ``state`` fails with ``error``, as a disk fails for an instant (through ``Path.read_text`` or
+    ``Path.read_bytes``: how a state is read); every other file, and ``state`` after that, reads as it is. How the
+    failed read was made, kept: an empty list is a read that never came this way."""
+    failed: list[str] = []
+    for name in ("read_text", "read_bytes"):
+        real = getattr(Path, name)
+
+        def fail_once(self: Path, *args, _real=real, _name=name, **kwargs):
+            if self == state and not failed:
+                failed.append(_name)
+                raise error
+            return _real(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, name, fail_once)
+    return failed
+
+
+@pytest.mark.parametrize("shape", shapes(*DECIDED))
+def test_a_job_whose_state_cannot_be_read_is_not_found_and_left_as_it_is(data_dir, plant_unreadable, shape):
+    """(B-50) ``get_job``, ``job_archive`` and ``delete_job`` of a job whose state cannot be read answer
+    ``BackupJobNotFoundError`` (the API's 404 ``backup_job_not_found``) whatever the state holds, never another
+    exception (the API's 500); and its folder is left as it is, by ``delete_job`` too: it expires by its date."""
+    print_section(f"B-50: a job whose state cannot be read ({shape})")
+    now = datetime.now(UTC)
+    job_id = plant_unreadable(shape, now=now, dated=now)
+    folder = job_dir(data_dir, job_id)
+    before = everything_below(folder)
+    answers = {call.__name__: job_answer(call, job_id, data_dir) for call in (get_job, job_archive, delete_job)}
+    assert answers == dict.fromkeys(answers, "not found"), f"a job whose state is {shape} must be not found (the API's 404), never a crash (the API's 500): {answers}"
+    assert folder.is_dir() and everything_below(folder) == before, f"its folder must be left as it is, by delete_job too: {everything_below(folder) if folder.is_dir() else 'removed'}, before {before}"
+    print_success(f"{shape}: not found three times, its folder left as it is")
+
+
+@pytest.mark.parametrize("shape", shapes(*DECIDED))
+def test_reading_a_state_that_cannot_be_read_logs_one_warning_with_the_job_id_and_the_error_class(data_dir, plant_unreadable, shape):
+    """(B-50) The read (``get_job``) of a job whose state cannot be read logs one warning,
+    ``"A backup job's state cannot be read"``, with the job's id (``job_id``) and the class of the error its read met
+    (``error``), never the file's content: no traceback (the error's message may quote the file), and the canary a
+    readable state holds reaches no logged event."""
+    now = datetime.now(UTC)
+    job_id = plant_unreadable(shape, now=now, dated=now)
+    if shape in HOLDS_THE_CANARY:
+        assert CANARY.encode("ascii") in (job_dir(data_dir, job_id) / STATE_FILE).read_bytes(), "precondition: the state holds the canary"
+    with jobs_logs() as events:
+        read = job_answer(get_job, job_id, data_dir)
+    warned = unreadable_warnings(events)
+    assert [(event.get("log_level"), event.get("job_id"), event.get("error")) for event in warned] == [("warning", job_id, DECIDED[shape])], f"the read of a job whose state is {shape} must log one warning {UNREADABLE_WARNING!r} with its id and {DECIDED[shape]}: {warned} (get_job {read})"
+    assert not [event for event in warned if {"exc_info", "exception"} & set(event)], f"the warning names the error's class, never its message nor a traceback, which may quote the file: {warned}"
+    assert CANARY not in repr(events), f"the content of the state must reach no logged event: {[event for event in events if CANARY in repr(event)]}"
+    print_success(f"{shape}: one warning, error {DECIDED[shape]}, no content")
+
+
+@pytest.mark.parametrize("missing", ["no-state", "no-folder"])
+def test_a_job_whose_state_is_missing_is_not_found_and_not_logged_as_unreadable(data_dir, missing):
+    """(B-50) Guard, green before the cure and after it: a job folder without a state, or no folder at all, is not
+    found, as it always was, and is not logged as a state that cannot be read: there was nothing to read."""
+    job_id = unreadable_job(data_dir, None, datetime.now(UTC)) if missing == "no-state" else uuid.uuid4().hex
+    with jobs_logs() as events:
+        answers = {call.__name__: job_answer(call, job_id, data_dir) for call in (get_job, job_archive, delete_job)}
+    assert answers == dict.fromkeys(answers, "not found"), f"a job with {missing} must be not found: {answers}"
+    assert unreadable_warnings(events) == [], f"a missing state is no state that cannot be read: {unreadable_warnings(events)}"
+    print_success(f"{missing}: not found, no warning")
+
+
+def test_a_transient_error_reading_a_state_reaches_the_caller_as_it_is_never_as_not_found(data_dir, monkeypatch):
+    """(B-50) Guard, green before the cure and after it: a read of a job's state that fails for an instant (``EIO``) is
+    no state that cannot be read. ``get_job`` lets that very ``OSError`` through (the API's 500, which the Backup tab
+    retries: «not found» would make the tab forget a job that runs), logs no warning of an unreadable state, and the
+    next read finds the job as it was written."""
+    job, folder = finished_job(data_dir, finished=datetime.now(UTC) - timedelta(minutes=1))
+    eio = OSError(errno.EIO, os.strerror(errno.EIO))
+    failed = a_disk_that_fails_once(monkeypatch, folder / STATE_FILE, eio)
+    with jobs_logs() as events:
+        try:
+            first = get_job(job.job_id, data_dir=data_dir)
+        except Exception as exc:  # noqa: BLE001 — asserted below: that very OSError, nothing else
+            first = exc
+    assert failed, "precondition: get_job read the state through Path.read_text or Path.read_bytes, where the disk failed"
+    assert first is eio, f"an EIO reading the state must reach the caller as that very OSError, never as not found: {first!r}"
+    assert unreadable_warnings(events) == [], f"a transient error is no state that cannot be read: {unreadable_warnings(events)}"
+    assert get_job(job.job_id, data_dir=data_dir) == job, "the next read (the tab retries) finds the job as it was written"
+    print_success("EIO: the OSError itself, no warning, the job read again")
+
+
+@pytest.mark.parametrize("origin", [pytest.param(None, id="backup-tab"), pytest.param("panel", id="hosting-panel")])
+@pytest.mark.parametrize("shape", shapes("json-list", "a-folder", "empty-object"))
+def test_the_routes_of_a_job_whose_state_cannot_be_read_answer_404_backup_job_not_found(data_dir, monkeypatch, plant_unreadable, shape, origin):
+    """(B-50) The views of a job's routes (``job_views``: its state, its file, its deletion), as the Backup tab
+    (``origin`` None) and the hosting panel (``origin`` panel) call them, each answer 404 ``backup_job_not_found`` for a
+    job whose state cannot be read, never a 500; the deletion removes nothing. Called as functions, no server: the jobs'
+    data directory (``jobs.get_data_dir``) is this test's."""
+    assert job_views.jobs is jobs, "precondition: the views call the very module whose data directory is replaced here"
+    monkeypatch.setattr(jobs, "get_data_dir", lambda: data_dir)
+    now = datetime.now(UTC)
+    job_id = plant_unreadable(shape, now=now, dated=now)
+    folder = job_dir(data_dir, job_id)
+    before = everything_below(folder)
+    answers = {view.__name__: route_answer(view, job_id, origin) for view in (job_views.read_job, job_views.job_file, job_views.remove_job)}
+    assert answers == dict.fromkeys(answers, (404, "backup_job_not_found")), f"each route of a job whose state is {shape} must answer 404 backup_job_not_found, never a 500: {answers}"
+    assert folder.is_dir() and everything_below(folder) == before, "the deletion must remove nothing of it"
+    print_success(f"{shape}, {origin or 'ui'}: 404 backup_job_not_found three times")
+
+
+@pytest.mark.parametrize("start", [start_backup, run_backup], ids=["start_backup", "run_backup"])
+@pytest.mark.parametrize("shape", shapes("json-list", "a-folder", "mode-000", WITHOUT_TIME_ZONE))
+def test_a_backup_starts_past_a_job_whose_state_cannot_be_read_and_its_folder_expires_by_its_date(data_dir, plant_unreadable, shape, start):
+    """(B-50) Every start removes the expired jobs first (``_prepare`` → ``remove_expired_jobs``): two job folders whose
+    state cannot be read, one dated 5 minutes ago and one 2 hours ago, stop it no more. The backup is made, done; the
+    younger folder is kept, the older removed, by its date: a state that cannot be read has no end to go by."""
+    now = datetime.now(UTC)
+    young = plant_unreadable(shape, now=now, dated=now - timedelta(minutes=5))
+    old = plant_unreadable(shape, now=now, dated=now - 2 * JOB_RETENTION)
+    made = backup_made(start, data_dir)
+    assert isinstance(made, BackupJob) and made.status == "done", f"{start.__name__} must make a backup past a job whose state is {shape}: {made}"
+    assert job_folders(data_dir) == sorted([young, made.job_id]), f"the start keeps the unreadable folder dated 5 min ago ({young}) and removes the one dated 2 h ago ({old}): {job_folders(data_dir)}"
+    print_success(f"{shape}, {start.__name__}: done; the unreadable folder kept until it is an hour old")
+
+
+@pytest.mark.parametrize("shape", shapes(*BLOCKING, WITHOUT_TIME_ZONE))
+def test_the_removal_of_expired_jobs_goes_on_past_a_state_it_cannot_read(data_dir, plant_unreadable, shape):
+    """(B-50) ``remove_expired_jobs`` raises nothing for folders whose state cannot be read, and does its work on the
+    others: the job that finished 2 hours ago is removed, the one that finished 5 minutes ago kept; the unreadable
+    folders go by their date, the one dated 2 hours ago removed, the one dated 5 minutes ago kept."""
+    hour = JOB_RETENTION
+    expired = write_job(data_dir, status="done", created=NOW - 3 * hour, finished=NOW - 2 * hour).job_id
+    kept = write_job(data_dir, status="done", created=NOW - timedelta(minutes=10), finished=NOW - timedelta(minutes=5)).job_id
+    young = plant_unreadable(shape, now=NOW, dated=NOW - timedelta(minutes=5))
+    old = plant_unreadable(shape, now=NOW, dated=NOW - 2 * hour)
+    removed = returned_or_raised(remove_expired_jobs, data_dir, now=NOW)
+    assert removed == 2, f"remove_expired_jobs must go past the folders whose state is {shape} and remove two (the job finished 2 h ago, the unreadable folder dated 2 h ago): {removed}"
+    assert job_folders(data_dir) == sorted([kept, young]), f"left: the job finished 5 min ago ({kept}) and the unreadable folder dated 5 min ago ({young}); gone: {expired}, {old}: {job_folders(data_dir)}"
+    print_success(f"{shape}: 2 removed, 2 kept")
+
+
+@pytest.mark.parametrize("shape", shapes(*BLOCKING))
+def test_the_end_of_dead_runs_goes_on_past_a_state_it_cannot_read(data_dir, plant_unreadable, shape):
+    """(B-50) ``end_interrupted_jobs`` (the sweep at the application's start) raises nothing for a folder whose state
+    cannot be read, and still ends the dead run beside it: failed, ``backup_interrupted``, written down. The unreadable
+    folder is left as it is, to ``remove_expired_jobs``."""
+    now = datetime.now(UTC)
+    dead = write_job(data_dir, status="running", created=now - timedelta(minutes=5))
+    job_id = plant_unreadable(shape, now=now, dated=now)
+    folder = job_dir(data_dir, job_id)
+    before = everything_below(folder)
+    ended = returned_or_raised(end_interrupted_jobs, data_dir)
+    stored = BackupJob.from_json((job_dir(data_dir, dead.job_id) / STATE_FILE).read_text(encoding="utf-8"))
+    assert ended == 1, f"end_interrupted_jobs must go past the folder whose state is {shape} and end the one dead run: {ended}"
+    assert (stored.status, stored.error_code) == ("failed", "backup_interrupted"), f"the dead run is ended, and that is written down: {stored}"
+    assert folder.is_dir() and everything_below(folder) == before, "the folder whose state cannot be read is left as it is"
+    print_success(f"{shape}: the dead run ended, the unreadable folder left")
+
+
+@pytest.mark.parametrize("shape", shapes("json-list", "a-folder", "mode-000"))
+def test_a_lock_that_holds_the_id_of_a_job_whose_state_cannot_be_read_names_no_job(data_dir, plant_unreadable, shape):
+    """(B-50, after B-8) The lock is held and a job's state says running, but the lock holds the id of a job whose state
+    cannot be read: JSON that is no object, a folder, a file the server may not read. Both starts are refused with
+    ``BackupBusyError`` (the API's 409 ``backup_busy``) naming no job: neither their removal of the expired jobs nor the
+    read of the job the lock names may turn the refusal into a crash (the API's 500)."""
+    running = running_elsewhere(data_dir)
+    now = datetime.now(UTC)
+    stale_id = plant_unreadable(shape, now=now, dated=now)
+    with lock_held(data_dir):
+        lock_path(data_dir).write_bytes(stale_id.encode("ascii"))
+        named = refusals(data_dir)
+    assert named == dict.fromkeys(named, None), f"a lock holding the id of a job whose state is {shape} must name no job, though the state of {running.job_id} says running: {named}"
+    print_success(f"{shape}: refused, no job named")

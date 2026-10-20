@@ -849,9 +849,5 @@ def adjustment_cash_flow_cost(
     return fx_resolver.convert(amount, currency, tx.date)
 
 
-def trim_dates(rows: Sequence, start_date: date_type, end_date: date_type) -> list:
-    return [row for row in rows if start_date <= row.date <= end_date]
-
-
 def fragment_active_on_date(fragment: FragmentInterval, query_date: date_type) -> bool:
     return fragment.start_date <= query_date and (fragment.end_date is None or query_date < fragment.end_date)

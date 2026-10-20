@@ -28,7 +28,9 @@ Instance backup, the command line (workstream B, lot B1): ``scripts/backup_cli.p
     leave its job folder stays there, said with its path and the hour it is kept, exit 1. Backups of the same second
     into one folder (``backups/``, or an ``--output`` folder) keep their own names, ``-2``, ``-3``, and exit 0.
 (f) The script: ``python scripts/backup_cli.py create``, then ``inspect`` on the archive it wrote, both exit 0;
-    without a command, exit 1.
+    without a command, exit 1. B-50: ``create`` with a job folder in ``backups/.jobs`` whose state cannot be read
+    (JSON that is no object, a folder) exits 0 all the same, one archive written, no traceback, that folder (younger
+    than an hour by its date) kept.
 (g) ``_check_output``: an existing folder is accepted, even one holding a ``librefolio-backup.zip``; a new file path is
     accepted when the nearest folder of it that exists is a folder this process can write into, and nothing is
     created. A file, a link to a file or a dangling link at the path: "already exists"; a file where a folder of the
@@ -100,7 +102,7 @@ from backend.app.config import get_data_dir
 from backend.app.services.platform.instance_backup import jobs
 from backend.app.services.platform.instance_backup.archive import build_archive, check_archive
 from backend.app.services.platform.instance_backup.manifest import BackupManifest
-from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, MANIFEST_ENTRY, STAGE_LOCK_FILE, backups_dir, ensure_private_dir, job_dir, jobs_dir, restore_dir, stages_dir
+from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, MANIFEST_ENTRY, STAGE_LOCK_FILE, STATE_FILE, backups_dir, ensure_private_dir, job_dir, jobs_dir, restore_dir, stages_dir
 from backend.app.services.platform.instance_backup.staging import ALEMBIC_INI, AppliedMigration, StagedBackup, StagingReport, TableRows
 from backend.app.utils.runtime.version import get_git_version
 from backend.test_scripts.test_utils import print_section, print_success
@@ -854,6 +856,30 @@ def test_the_script_creates_an_archive_then_inspects_it(tmp_path):
     inspected = script("inspect", str(written[0]), env=env, cwd=tmp_path)
     assert inspected.returncode == 0 and "Every entry matches the manifest" in inspected.stdout, f"inspect must exit 0 on it\n--- stdout\n{inspected.stdout[-TAIL:]}\n--- stderr\n{inspected.stderr[-TAIL:]}"
     print_success(f"create → {written[0].name}, inspect → 0")
+
+
+#: A job folder left in ``backups/.jobs`` whose state cannot be read (B-50): its ``state.json`` JSON that is no object, or
+#: a folder. Every ``create`` removes the expired jobs first, reading the state of each job folder.
+UNREADABLE_JOB_STATES = {
+    "state-not-an-object": lambda state: state.write_bytes(b"[]"),
+    "state-is-a-folder": lambda state: state.mkdir(),
+}
+
+
+@pytest.mark.parametrize("shape", sorted(UNREADABLE_JOB_STATES))
+def test_the_script_creates_a_backup_past_a_job_whose_state_cannot_be_read(tmp_path, shape):
+    """(f) B-50: a job folder whose state cannot be read (JSON that is no object, a folder) stops ``create`` no more:
+    exit 0, one archive in ``backups/``, no traceback. The unreadable folder, younger than an hour by its date, is kept
+    (the next backup after its hour removes it)."""
+    data = make_data_dir(tmp_path / "data").resolve()
+    UNREADABLE_JOB_STATES[shape](ensure_private_dir(job_dir(data, VALID_ID), data) / STATE_FILE)
+    created = script("create", env=child_env(data), cwd=tmp_path)
+    output = f"\n--- stdout\n{created.stdout[-TAIL:]}\n--- stderr\n{created.stderr[-TAIL:]}"
+    assert (created.returncode, "Traceback" in created.stderr) == (0, False), f"create must exit 0, without a traceback, past a job whose state is {shape}: exit {created.returncode}{output}"
+    written = sorted(backups_dir(data).glob("*.zip"))
+    assert len(written) == 1 and check_archive(written[0]).ok, f"create writes one archive in <data dir>/backups/, which checks ok: {[path.name for path in written]}{output}"
+    assert job_folders(data) == [VALID_ID], f"the unreadable job's folder, younger than an hour, is kept, and the new job's folder removed: {job_folders(data)}"
+    print_success(f"{shape}: exit 0, {written[0].name}, the unreadable job kept")
 
 
 def test_the_script_without_a_command_exits_1(tmp_path):

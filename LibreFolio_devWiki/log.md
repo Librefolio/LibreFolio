@@ -3924,3 +3924,12 @@ finding, verified with a jsdom 30.0.1 probe: a dispatched click reaches a disabl
 Filed: [[decisions/no-range-of-a-single-day]], [[problems/zrender-resets-cursor-on-every-move]],
 [[problems/dispatched-click-reaches-disabled-button-in-jsdom]]; section and history row in [[features/F-045]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-19] file | The lots computed on their change days (L1a): self-parity and RealDecimal
+L1a computes the lots' daily series only on the days an input changes and re-dates them over the window,
+byte-identical (0 differences on four DB copies, the real data included). Two lessons: a battery that compares the
+code with itself cannot see a bug in a step both runs share, and equal closes read back alike through `RealDecimal`
+(only a trade mark differs in form).
+Filed: [[concepts/self-parity-needs-the-shared-step-pinned]], [[problems/equal-closes-read-back-alike-through-realdecimal]];
+revision of [[entities/lots-analysis-service]].
+Graph: not updated; graphify is not available in this worktree.

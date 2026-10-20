@@ -533,22 +533,28 @@ eToro itself downloads the statement as XLS.
 - **Detection**: within the first 15 lines, `operazione`, `data valuta`, `isin`, `controvalore`
   and the `dossier` metadata marker. The header is the first row whose first cell is `Operazione`;
   the metadata above it (`Dossier:`, `Intestatario:`, `Titoli e operazioni`) is skipped.
-- **Columns by position**: 0 `Operazione` (trade date) · 1 `Data valuta` · 2 `Descrizione` ·
-  3 `Titolo` · 4 `Isin` · 5 `Segno` · 6 `Quantita` · 7 `Divisa` · 8 `Prezzo` · 9 `Cambio`
-  (ignored) · 10 `Controvalore`. A header longer than 11 cells is the layout with commissions:
+- **Columns by position**: 0 `Operazione` (trade date) · 1 `Data valuta` (value date) ·
+  2 `Descrizione` · 3 `Titolo` · 4 `Isin` · 5 `Segno` · 6 `Quantita` · 7 `Divisa` · 8 `Prezzo` ·
+  9 `Cambio` (ignored) · 10 `Controvalore`. A header longer than 11 cells is the layout with commissions:
   columns 11 to 14 are summed (absolute values) into one `FEE` in EUR (`FEE_CURRENCY`, tag `fee`)
   when the sum is positive. A data row shorter than 11 cells is skipped with a warning.
 - **Type**, by lower-cased substring of `Descrizione`: `compravendita` with `Segno` `A` or `V` →
   `BUY` or `SELL` (another `Segno` → warning), `dividendo` → `DIVIDEND`, `cedol` → `INTEREST`,
   `rimborso` → `SELL`, `aumento capitale` → cashless `ADJUSTMENT`; anything else → warning.
-- **Date**: `Data valuta`, else `Operazione` (`DD/MM/YYYY`). **Currency**: `Divisa`, EUR when
-  empty. **Numbers**: a value containing `,` is Italian (`.` thousands), otherwise a dot decimal.
-- **Only settled rows** (N74, the plugin guide's rule *Only safe rows* under
+- **Date: the operation date** (B-52, the plugin guide's rule *The operation date, and only
+  settled rows* under
   [Import philosophy](../../architecture/patterns/brim_plugin_guide.md#import-philosophy-currency-rules)):
-  a row whose date comes after the server's today (`server_today()`) has not settled yet,
-  typically a trade of the last one or two working days, whose value date (T+2) is still
-  ahead at export time. It is left out **whole**, before its type is even read: no
-  transaction, no commission `FEE`, no maturity `INTEREST`, and no asset extracted from it.
+  every transaction of a row is dated with `Operazione`, or with `Data valuta` when `Operazione`
+  is empty or unreadable (`DD/MM/YYYY`). The commission `FEE` and the maturity `INTEREST` take
+  the same date as the row's main transaction. A row with neither date readable is skipped with a
+  warning. **Currency**: `Divisa`, EUR when empty. **Numbers**: a value containing `,` is Italian
+  (`.` thousands), otherwise a dot decimal.
+- **Only settled rows** (N74): `Data valuta` only decides whether the row has settled. A row
+  whose `Data valuta` — or its `Operazione`, when `Data valuta` is empty or unreadable — comes
+  after the server's today (`server_today()`) has not settled yet, typically a trade of the last
+  one or two working days, whose value date (T+2) is still ahead at export time. It is left out
+  **whole**, before its type is even read: no transaction, no commission `FEE`, no maturity
+  `INTEREST`, and no asset extracted from it.
   One `info` notice, `fineco_not_yet_settled`, `context` `{"count": n}`, lists those rows as
   evidence (the file's header, their line numbers, an empty title so the wizard shows its
   own). It is no warning: the rows arrive with the next export, once settled. A file that
@@ -580,8 +586,16 @@ eToro itself downloads the statement as XLS.
   their codes (`importWizard.brimNotice.<code>`, `importWizard.brimEvidence.<code>`). The
   descriptions of the generated legs (`Commissioni: …`,
   `Rimborso a scadenza — premio/rivalutazione oltre la pari: …`) are Italian too.
-- **`plugin_version`** 1.2.0: the two notices above (1.1.0 brought the split above par). A
-  file parsed by an older version shows as stale (`parse_is_stale`) until it is parsed again.
+- **`plugin_version`** 1.3.0: the operation date (B-52). 1.2.0 brought the two notices above,
+  1.1.0 the split above par. A file parsed by an older version shows as stale
+  (`parse_is_stale`) until it is parsed again.
+- **Files imported before 1.3.0.** Their transactions are dated with `Data valuta`. The
+  duplicate check compares exact dates ([Deduplication Logic](#deduplication-logic)), so the
+  same rows imported again with 1.3.0 come back with their earlier `Operazione` date and are
+  not recognised as duplicates. No code bridges the two (the developer, 19/10/2026: the next
+  imports carry the new date, so after the switch everything settles). The transition, once:
+  delete the Fineco transactions those files created and import the files again, or import
+  only from the day after the last imported day. The user page says the same.
 
 ---
 

@@ -221,7 +221,7 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
 | | User Settings | Global Settings |
 |---|---|---|
 | Storage | **Typed columns** on the per-user `UserSettings` row | **Key-value rows** in the `GlobalSetting` table |
-| Who reads | The user themselves (`GET /api/v1/settings/user`) | Any signed-in user (`GET /api/v1/settings/global`, `GET /api/v1/settings/global/{key}`): `401` without a session. The login page reads none of them: what it needs before sign-in is in [`GET /system/instance`](#public-instance-configuration) |
+| Who reads | The user themselves (`GET /api/v1/settings/user`) | Any signed-in user (`GET /api/v1/settings/global`, `GET /api/v1/settings/global/{key}`): `401` without a session. The app reads them for every user — the `globalSettings` store loaded at bootstrap (the default currency, the upload limit of the Files page), the instance defaults of the Preferences tab — although only administrators have the **Global Settings** tab since lot N69-2. The login page reads none of them: what it needs before sign-in is in [`GET /system/instance`](#public-instance-configuration) |
 | Who writes | The user themselves (`PUT /api/v1/settings/user`) | Admins only (**Global Settings** tab of Settings › Administration, or `PATCH /api/v1/settings/global/bulk`) |
 | Examples | `language`, `base_currency`, `theme`, `avatar_url` | `session_ttl_hours`, `registration_mode`, `scheduler_*`, `default_currency` … |
 
@@ -245,9 +245,10 @@ building `UserSettingsRead` raised, and the answer was a `500`: at sign-in, afte
 cookie, so the user could not sign in. Tests: `./dev.py test api settings`,
 `TestStoredThemeUnknownToTheApp` (SET-A11-01 to SET-A11-07, in-process on a private database).
 
-Admins manage global settings from the **Global Settings** tab of Settings › Administration
-(`GlobalSettingsTab.svelte`: lock-gated, with the scheduler dialogs and `CachePanel`, writing through
-the bulk-update endpoint).
+Admins manage global settings from the **Global Settings** tab of Settings › Administration, which
+only administrators see (`GlobalSettingsTab.svelte`: lock-gated, with the scheduler dialogs and
+`CachePanel`, writing through the bulk-update endpoint; see
+[GlobalSettingsTab](../frontend/components/features/settings.md#globalsettingstab-admin-only)).
 Missing rows are seeded at every startup by the `global-settings` step of the lifespan
 (`_initialize_global_settings()` in `backend/app/services/platform/app_lifespan.py`); the same
 idempotent seeding is available from the CLI:
@@ -377,7 +378,7 @@ ISO Codes»).
 instance before anyone signs in. The app reads it at startup: the `(app)` layout calls
 `instanceConfig.load()` when it mounts, before the auth check, and works with a self-hosted default
 until the server answers (see [Instance configuration](../frontend/state/app-state.md#instance-config)).
-Its response is `InstanceConfigResponse` (`backend/app/schemas/system.py`), and today it has five fields:
+Its response is `InstanceConfigResponse` (`backend/app/schemas/system.py`), and today it has six fields:
 
 | Field | Values | Source |
 |-------|--------|--------|
@@ -386,6 +387,7 @@ Its response is `InstanceConfigResponse` (`backend/app/schemas/system.py`), and 
 | `email` | `{available, links}` (`EmailInstanceConfig`, `backend/app/schemas/email.py`): `available`, whether the instance can send emails now, an SMTP server set and every `LIBREFOLIO_SMTP_*` variable usable; `links`, whether emails with a link can go out too, `LIBREFOLIO_PUBLIC_URL` set to an http(s) address; never the configuration itself | `email_instance_config()` (workstream E, `services/email/links.py`), run in a worker thread since it may read the password file. Both booleans default to `false`, so the field is optional in the schema. Details: [Email Service](../backend/email.md#instance-email). |
 | `support_url` | Where the users ask for help: an `http(s)` page, or `mailto:` and one email address; `null` when unset or invalid | `support_link()` (workstream H, `services/platform/instance_links.py`), from `LIBREFOLIO_SUPPORT_URL` through `support_url()` (`config/platform.py`, above). Optional in the schema, default `null`. Its reader is the asset search's «Let us know» row: [Asset Search & Link-Finder](../backend/assets/search_link_finder.md). |
 | `legal` | `{terms_url, privacy_url}` (`LegalInstanceConfig`, `backend/app/schemas/system.py`): the instance's own terms of service and privacy policy, each an `http(s)` page or `null` | `terms_link()` and `privacy_link()` (workstream A, F09, `services/platform/instance_links.py`), from `LIBREFOLIO_TOS_URL` and `LIBREFOLIO_PRIVACY_URL` through `tos_url()` and `privacy_url()` (`config/platform.py`: the rule of `env_url()`, no `mailto:`). They never raise: a value they cannot use is logged once per process, `Invalid instance link` with its `consequence`, and published as `null`, as an unset one is. Both default to `null`, so the field is optional in the schema. Its readers are the two components of the legal notice, `LegalNotice` and `LegalLinks` ([Settings Components](../frontend/components/features/settings.md#legal-notice)). Admin side: [Hosting for Others](../../admin/hosting_providers.md#legal-pages). |
+| `client_log_level` | How much the web app writes to the browser console about failed API calls: `error`, the server errors, the network failures and the answers that break their schema; `debug`, every `4xx` too. Two states, never the level itself | `client_log_level()` (workstream H, H-60, `backend/app/logging_config.py`), from the backend's `LOG_LEVEL`, which `LIBREFOLIO_LOG_LEVEL` replaces: `debug` when it is `DEBUG` or `TRACE`, in any case, `error` otherwise. Optional in the schema, default `error`. Its reader is `instanceConfig.load()`, which hands it to `setApiConsoleLevel()`: see [The Browser Console](security.md#browser-console). |
 
 The rule for a workstream that owns part of the public configuration:
 

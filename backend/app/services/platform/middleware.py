@@ -2,7 +2,8 @@
 
 Owner: workstream H (platform), CP2b. ``MIDDLEWARE_STACK`` lists every middleware of the app in order: the first entry
 is the outermost, the first to see a request and the last to see its response. A workstream adds one entry where its
-middleware belongs. Today: the activity tracking of sleep and wake, the security headers, GZip, CORS.
+middleware belongs. Today: the activity tracking of sleep and wake, the request id (H-60), the security headers,
+GZip, CORS.
 """
 
 from collections.abc import Mapping, Sequence
@@ -13,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
+from backend.app.services.platform.request_id import RequestIdMiddleware
 from backend.app.services.platform.security_headers import SecurityHeadersMiddleware
 from backend.app.services.platform.sleep_wake.activity import ActivityMiddleware
 
@@ -30,6 +32,9 @@ MIDDLEWARE_STACK: tuple[MiddlewareEntry, ...] = (
     # The user's presence and the requests in flight (workstream Z, decision D-S1): outermost, so it sees every
     # request first and counts the compression of a response as in flight; the probes are not counted.
     MiddlewareEntry("activity", ActivityMiddleware),
+    # An id for every request (H-60): in scope state, in every log line of the request, in X-Request-Id. Right inside
+    # activity and outside the security headers, so every response gets it, the 500 of an unhandled exception included.
+    MiddlewareEntry("request_id", RequestIdMiddleware),
     # nosniff and Referrer-Policy on every response, the 500s and the compressed ones included; with their switches on
     # (the managed profile), frame protection and the report-only CSP of the web app's pages (D5)
     MiddlewareEntry("security_headers", SecurityHeadersMiddleware),

@@ -146,7 +146,8 @@
         "other": "rifiutato dal server"
       },
       "tooManyItems": "Non è stato salvato nulla: il server accetta al massimo {max, number} valori per salvataggio, e questo ne conteneva {count, number}. Salvali in più parti."
-    }
+    },
+    "errorWithRequestId": "{message} (codice: {requestId})"
   },
   "csvImport": {
     "title": "Importa dati CSV",
