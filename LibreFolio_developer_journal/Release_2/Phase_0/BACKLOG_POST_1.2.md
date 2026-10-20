@@ -7677,6 +7677,17 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     cambia. Dopo J-48.
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «Revisione della
     voce 1 di J-1 di MF».
+- **J-63 · L1 delle «formule veloci» di MF: i lotti calcolati sui giorni di cambiamento** — medio, prestazioni (numeri
+  identici); coordinatore, 19/10 (il piano «formule veloci» di MF entra nella 1.3).
+  - ✅ **L1a** 19/10 (checkpoint L1a; commit del coordinatore). I sette costruttori giornalieri dei lotti girano solo
+    sui giorni in cui un ingresso cambia, e `expand_to_days` riempie la finestra
+    (`financial_math/lots/change_days.py`). Uscita identica al byte: 0 differenze su quattro copie di DB, dati veri
+    compresi. Col 1900 il tempo si dimezza.
+  - **L1b**, dopo P3 di MF: i giorni del mercato presi dai gradini di P3 invece che dalla scansione di ogni giorno.
+    Restano giornalieri la conversione del segno, i cambi chiesti giorno per giorno e la scansione stessa: è il resto
+    del tempo col 1900. Da coordinare con Y per i grafici.
+  - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «L1a — i lotti
+    calcolati solo nei giorni in cui cambia qualcosa».
 
 ## Z · Sospensione e risveglio (fase 01)
 
