@@ -90,6 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Errors you can trace.** Every answer of the server carries an `X-Request-Id`, and every log line of that request carries the same `request_id`. A server error (5xx) answers with that id and the type of its cause, never its message, and its cause reaches the log once, as one JSON line with its traceback. Where the app shows a generic error for a server failure, it adds that code, for example «(code: 3f9a…)», so an administrator can find it in the log.
 - **Failed API calls in the browser console.** The web app writes one line per unexpected API failure: status, path, request id, never the data of the request. With `LOG_LEVEL` at `DEBUG` or `TRACE` it writes the 4xx answers too (`client_log_level` in `GET /api/v1/system/instance`).
 - **Units per single price, proposed by the provider.** Picking a **Search Online** result sets it like the name: Yahoo Finance's 100 for a London line quoted in pence (`GBp`), otherwise 100 for a bond and 1 for any other type, with a note under the field. **Ask Provider** proposes it as a ticked row when it differs. Nothing changes until you save.
+- **Administrators see the security warnings from every page.** When Settings › Security has warnings or errors, a dot appears on the connection line of the sidebar (and on the menu button on a phone); its details link to the list.
 
 ### 🔄 Changed
 
@@ -156,6 +157,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A refused Auto cost says what to do, and the import grid takes you there.** When there is nothing to average, the message asks you to choose Manual and type what the units cost you (0 for a gift). After the rows arrive, after ⚡ Validate now and after a refused Save All, the grid turns to the oldest refused row.
 - **AI Export: pasted prompts no longer make the AI restate your figures.** An analysis answers its question from them; Export Data ends with the AI confirming it has the data, in your language, or answering the question you add with it. When the data is not enough, the AI is asked to look for recent news.
 - Signals: in the comparison-asset selector a long asset name now scrolls, in the field and in the list, instead of being cut off.
+- **AI Export: missing prices are shown, not hidden.** A held asset whose prices all predate the period is listed with its last stored price instead of counting as covered, and runs of missing prices or exchange rates on market days are shown as merged gaps with the last value stored before them.
+- **Faster portfolio reports on long histories.** The exchange rates a report needs are now read only on the days they change, not one day at a time: on a history that starts in 1900, a one-month report takes about 1.4 s instead of 3–6 s, with the same numbers.
 
 #### 🎨 A new colour palette
 
@@ -368,6 +371,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Lot detail: a sale names the broker the units left.** In a lot's history, a sale (or a transfer out of the brokers you are viewing) of units that had been moved to another broker now names the broker they left, not the one where the lot was bought.
 - Import, step 3: an importer's blue notes are no longer counted as warnings. The results table and the summary show ⚠️ warnings and ℹ️ notes apart, the file detail lists them under two headings, and the confirmation counts only the warnings when it speaks of warnings.
 - **Lots analysis: performance history with short positions.** An open short was counted as if it were owned and its sale was missing, so the history showed a loss on a profitable short; it now counts the short as a debt and its sale as money out, and measures returns on the gross exposure.
+- **Bulk editor: a merge with a saved transaction shows the pair the right way round, and «Split pair» undoes it.** After merging a saved withdrawal with a deposit, or a saved deposit with a new withdrawal, the merged row could show the deposit as its *From* side and both amounts as positive until saved. Splitting such a merge again before saving swapped the two transactions' types, and the save was refused: the split now gives each transaction back as it was.
+- **Lots analysis: a trade on a day without a value now counts.** A purchase or a sale on a day the performance history could not value (a price without an exchange rate) was left out of its ROI and TWRR, while its units were in the next day's value; it now counts on the next day that has one.
 
 #### 🔒 Security
 
