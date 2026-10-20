@@ -96,6 +96,7 @@ backend/app/services/financial_math/
     ├── conversions.py       FxRateResolver, a closure's legs at their own dates, and the conversions each view needs
     ├── economic_events.py   income and FEE/TAX as engine inputs, their outputs, what is withheld
     ├── histories.py         value, return, price, market price and performance histories
+    ├── change_days.py       the days the daily series can change on, and their expansion to every day of the window
     ├── summary.py           a lot's figures: the cost of its open quantity, value and P&L by direction, the lot summary
     ├── scope_boundary.py    transfer legs whose partner sits outside the scope, read at its edge: in at their cost, out at market
     └── average_cost_lines.py  per-broker and cumulative WAC history points
@@ -207,6 +208,14 @@ arrival and the cost the sender moved: the Performance table's transfer split (`
 Callers derive their views from the result with `DerivedViewsBuilder` (`derived_views.py`) —
 history, per-broker P&L, candles, acquisition funding, performance inputs, allocation — and the
 data-quality report with `build_data_quality_report()` (`data_quality.py`).
+
+The daily states always start at t=0, so one cached result serves every window; the views take the window and build
+only its days (lot P2). `build_history()`, `build_broker_pnl_history()` and `build_pnl_candles()` cover
+`[date_from, date_to]`, `build_acquisition_funding()` `(date_from, date_to]` (a flow series: a BUY dated `date_from`
+belongs to the period before), both found by bisection on the states' dates. `build_performance_inputs(date_from)`
+returns only what `rebase_to_period()` keeps: the snapshots from the period's opening state on and the flows after it,
+so the rebased period is the same as from the whole history. On a history of tens of thousands of days the views of a
+one-year report no longer pay for the days before it (the engine's daily states still do); the numbers are identical.
 
 #### 🧵 Off the Event Loop {: #off-the-event-loop }
 

@@ -45,6 +45,30 @@ from backend.app.utils.datetime_utils import utcnow
 logger = structlog.get_logger(__name__)
 
 
+#: What a provider's day is discarded for (N92), in the result's note and the warning.
+SIGN_DISCARD_RULE = "a close not above 0 or a negative open, high, low or volume"
+
+
+def _sign_issue(point: dict) -> str | None:
+    """The fields of a provider's point LibreFolio does not keep (N92), as ``name=value``, or None: a close of 0 or less,
+    a negative open, high, low or volume (``volume=-10``; every field at fault, comma-separated), as
+    ``_unstorable_provider_point`` names a value no column keeps (W-B58). A value that is not a finite number is left to
+    that one."""
+
+    def number(value: object) -> Decimal | None:
+        if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
+            return None
+        as_decimal = value if isinstance(value, Decimal) else Decimal(str(value))
+        return as_decimal if as_decimal.is_finite() else None
+
+    at_fault = []
+    close = number(point.get("close"))
+    if close is not None and close <= 0:
+        at_fault.append(f"close={close}")
+    at_fault.extend(f"{name}={value}" for name in ("open", "high", "low", "volume") if (value := number(point.get(name))) is not None and value < 0)
+    return ", ".join(at_fault) or None
+
+
 @dataclass(frozen=True)
 class _PreparedRefreshItem:
     assignment_id: int | None
@@ -503,15 +527,26 @@ async def _persist_refresh_item(  # noqa: C901 — sequential guarded persist st
     errors: list[str] = []
     accepted_prices: list[dict] = []
     mismatch_buckets: dict[str, int] = {}
+    # N92: LibreFolio keeps no close of 0 or less, nor a negative open, high, low or volume. A provider's day with one
+    # is discarded here and named with its fields, instead of making the whole history fail: the plugin no longer
+    # refuses to build the point
+    sign_discards: list[str] = []
     for p in prices:
         p_currency = p.get("currency") or asset_currency
         if p_currency != asset_currency:
             mismatch_buckets[p_currency] = mismatch_buckets.get(p_currency, 0) + 1
             continue
+        if (sign_issue := _sign_issue(p)) is not None:
+            sign_discards.append(f"{p['date']} ({sign_issue})")
+            continue
         accepted_prices.append(p)
     if mismatch_buckets:
         detail = ", ".join(f"{cnt} {code}" for code, cnt in sorted(mismatch_buckets.items()))
         errors.append(f"{sum(mismatch_buckets.values())} points discarded: currency mismatch " f"(got {detail}, expected {asset_currency})")
+    if sign_discards:
+        shown = ", ".join(sign_discards[:5]) + (f" (+ {len(sign_discards) - 5} more)" if len(sign_discards) > 5 else "")
+        errors.append(f"{len(sign_discards)} points discarded: {SIGN_DISCARD_RULE} ({shown})")
+        logger.warning(f"Provider prices discarded: {SIGN_DISCARD_RULE}", asset_id=asset_id, provider=provider_code, days=sign_discards[:5], count=len(sign_discards))
     # A refused current value is reported like a date the upsert rejects: the result is partial, and says why (X-R51)
     errors.extend(remote_data.notes)
 
@@ -521,7 +556,7 @@ async def _persist_refresh_item(  # noqa: C901 — sequential guarded persist st
     # validation, not 0"), instead of the meaningful "N points discarded: currency mismatch …"
     # message we just collected in ``errors``. Returning FAILED here with that message
     # mirrors the "No prices returned from provider" short-circuit above.
-    if not accepted_prices and mismatch_buckets:
+    if not accepted_prices and (mismatch_buckets or sign_discards):
         elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
         return FARefreshResult(
             asset_id=asset_id,
@@ -550,7 +585,11 @@ async def _persist_refresh_item(  # noqa: C901 — sequential guarded persist st
         )
         for p in accepted_prices
     ]
-    upsert_obj = FAUpsert(asset_id=asset_id, prices=price_items)
+    # Not validated again as write points: they are ``FAPricePoint`` the plugin and the line above built, filtered for
+    # currency and sign, and ``FAPriceWritePoint`` adds no check they could fail (it checks no digits: a value no column
+    # keeps reaches ``_unstorable_provider_point``, W-B58, either way). Validating them would cost about 0.23 s on the
+    # event loop for a full history of 45 000 points (measured 19/10), for nothing (N92, review of Z)
+    upsert_obj = FAUpsert.model_construct(asset_id=asset_id, prices=price_items)
 
     fetched_count = len(accepted_prices)
     inserted_count = 0

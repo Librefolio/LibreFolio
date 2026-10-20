@@ -503,19 +503,22 @@ navigazione (testo proposto). **Migrazioni: nessuna.**
 
 ## 7. Lotti e checkpoint (ognuno con il suo FROZEN)
 
-| Lotto | Contenuto | Dipende da |
-|---|---|---|
-| **B0** | divisione C2 di `backup.py` (rinomina, poi taglio; `api schema` identico, rotte identiche); facoltativa la rinomina di `backup_service.py` | via del coordinatore; E1 di W |
-| **B1** | backup dell'istanza, backend e CLI, zip senza cifratura: `config/backup.py`, `paths`, `manifest`, `snapshot`, `archive`, `jobs`, endpoint dei job, `dev.py backup create|inspect`, `.env.example` | B0 per gli endpoint (servizio e CLI no) |
-| **B2** | caricamento e prova su copia: estrazione con i controlli, decisione sulla revisione, migrazione della copia, controlli, report, archivi a mano, `restore --dry-run` | base con CP5a |
-| **B3** | ripristino definitivo: conferma, backup automatico, `apply.py` (lock, giornale, scambio, ritorno indietro), `restart.py`, stato e annullamento, sessioni, `restore` a server spento; `security-review` di metà percorso | CP2b di H, o le due righe |
-| **B4** | password e chiave: `envelope.py`, regola della chiave, `decrypt`, contratto H-3; la ricifratura quando c'è il CP10 di X (altrimenti B4b) | `cryptography` |
-| **B5** | scheda Backup: feature, riga nel registro, i18n, Vitest, E2E, galleria, `api sync` | B1-B3 (B4 per il campo della password); `npm ci`; via per la riga di A |
-| **B6** | guida e doc | con B5, o subito dopo |
-| **B7** | Litestream: immagine, avviatore, variabili, compose, doc, prove Docker, spike della replica | CP7a di H; daemon Docker acceso |
-| **B8** | token del pannello | B1; può entrare in B3 |
-| **B9** | M-1, arm64 | facoltativo |
-| **BZ** | revisione di sicurezza finale e handoff | tutto |
+| Lotto | Contenuto | Dipende da | Stato (19/10) |
+|---|---|---|---|
+| **B0** | divisione C2 di `backup.py` (rinomina, poi taglio; `api schema` identico, rotte identiche); facoltativa la rinomina di `backup_service.py` | via del coordinatore; E1 di W | ✅ in dev `629d63306` (15/10 19:06) |
+| **B1** | backup dell'istanza, backend e CLI, zip senza cifratura: `config/backup.py`, `paths`, `manifest`, `snapshot`, `archive`, `jobs`, endpoint dei job, `dev.py backup create|inspect`, `.env.example` | B0 per gli endpoint (servizio e CLI no) | ✅ in dev `629d63306` (15/10 19:06), con B1-fix |
+| **B2** | caricamento e prova su copia: estrazione con i controlli, decisione sulla revisione, migrazione della copia, controlli, report, archivi a mano, `restore --dry-run` | base con CP5a | ✅ B2a e B2b, in dev `5441b96ed` (16/10 02:48) |
+| **B3** | ripristino definitivo: conferma, backup automatico, `apply.py` (lock, giornale, scambio, ritorno indietro), `restart.py`, stato e annullamento, sessioni, `restore` a server spento; `security-review` di metà percorso | CP2b di H, o le due righe | ✅ in dev `0cd910a7e` (16/10 21:35) |
+| **B4** | password e chiave: `envelope.py`, regola della chiave, `decrypt`, contratto H-3; la ricifratura quando c'è il CP10 di X (altrimenti B4b) | `cryptography` | ✅ in dev `339a59142` (17/10 03:28); B4b in dev `c7dd3934a` (17/10 04:50) |
+| **B5** | scheda Backup: feature, riga nel registro, i18n, Vitest, E2E, galleria, `api sync` | B1-B3 (B4 per il campo della password); `npm ci`; via per la riga di A | ✅ B5a con `629d63306`, B5b e B5c con `0cd910a7e`, lo scatto `settings/backup-ready` con `ab2ddf86e`; ⏳ lo scatto di B5b, passato ai colori (17/10) |
+| **B6** | guida e doc | con B5, o subito dopo | ✅ B6a con `629d63306`, B6a-bis con `0cd910a7e`, la doc dell'archivio sicuro con B4; ⏳ la doc di Docker e Litestream (B7d) |
+| **B7** | Litestream: immagine, avviatore, variabili, compose, doc, prove Docker, spike della replica | CP7a di H; daemon Docker acceso | 🧊 analisi ✅ (17/10 08:55); lo spike B7a approvato ma non girato (Docker spento); B7b–B7d aspettano le risposte D1–D10 del developer |
+| **B8** | token del pannello | B1; può entrare in B3 | ✅ in dev `56d3d3182` (15/10 20:23) |
+| **B9** | M-1, arm64 | facoltativo | ⏳ non iniziato |
+| **BZ** | revisione di sicurezza finale e handoff | tutto | parte 1 ✅ (17/10, F1–F5 → B-35…B-39, i record in dev `279c1bc1c`); parte 2 dopo B7 e B9 |
+
+La colonna «Stato» è del 19/10, con ogni merge verificato in `dev_release2`. Le voci B-n hanno il loro stato nella
+sezione B del backlog; il lavoro di ogni lotto è nel §13.
 
 Percorso minimo per il cloud: B1 → B2 → B3 → B5 (più B4 se approvata) → B7.
 
@@ -621,6 +624,11 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 
 ## 13. Avanzamento
 
+> **Come leggere questa sezione** (riordinata il 19/10): le sezioni vanno in ordine d'inizio, la più vecchia in
+> alto; un checkpoint precede il merge che lo segue. Un'intestazione dice lo stato di quando è stata scritta; dove
+> diceva un lavoro aperto («in corso», «bozza», «in attesa del via» o «del commit») porta l'esito. Lo stato di oggi
+> dei lotti è nel §7, quello delle voci nella sezione B del backlog.
+
 ### Analisi ✅ (2026-10-15)
 
 > Consegnata al coordinatore. Nessun file del repo modificato, nessun test lanciato.
@@ -660,7 +668,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   immagini e i container creati, con nomi riconoscibili (`librefolio:b-…`); mai quelli degli altri.
 > - **Checkpoint**: FROZEN a fine B0 e a fine B1.
 
-### B0 — divisione di `api/v1/backup.py` (C2) e rinomina di `backup_service.py` (D-B8) — in corso
+### B0 — divisione di `api/v1/backup.py` (C2) e rinomina di `backup_service.py` (D-B8) (2026-10-15, 11:35-13:20) — ✅ committato alle 13:36, in dev `629d63306`
 
 > **Disegno**, in tre commit:
 >
@@ -762,7 +770,72 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > **Fuori pista**: alle 13:20 il coordinatore apre la finestra delle dipendenze (`cryptography`): niente comandi
 > Python fino al suo avviso.
 
-### Checkpoint B0 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore
+### B1 — backup dell'istanza, backend e CLI — la bozza e il passo 1 (2026-10-15, fino alle 12:55) ✅ — B1 committato alle 14:14 (`e35388306`), in dev `629d63306`
+
+> **Metodo**: per non mescolare B1 con il checkpoint di B0, la bozza sta in una copia dell'albero di B0 in `/tmp`
+> (`/tmp/librefolio-r13-b-b1/tree`), mai nel worktree. Entra nel worktree dopo il commit di B0, poi test-author scrive i
+> test e i verdi girano sulla corsia.
+>
+> **Disegno della bozza** (fatti verificati con una prova in `/tmp`: `VACUUM INTO` mentre un altro processo scrive in
+> WAL non blocca lo scrittore, 3 756 commit durante la copia, e la copia è integra, in modalità rollback, senza file
+> accanto):
+>
+> - `services/platform/instance_backup/`: `paths` (cosa entra: `sqlite/app.db`, `custom-uploads/`,
+>   `broker_reports/`, `scenario_catalog/`; dove si scrive: `backups/`, `backups/.jobs/<id>/`; cartelle 0700, mai
+>   attraverso un link), `snapshot` (`VACUUM INTO` e descrizione della copia: integrità, chiavi esterne, righe per
+>   tabella, revisione), `manifest` (pydantic, `format_version` 1, campi sconosciuti ignorati, percorsi controllati),
+>   `archive` (zip 0600 scritto come `.part` e rinominato, file in streaming con lo SHA-256, link mai seguiti, controllo
+>   dello spazio prima; `check_archive` per `inspect` e per B2, che non legge mai un'entrata oltre la dimensione
+>   dichiarata), `jobs` (un thread per job, `flock` su `backups/.jobs/.lock`, stato su file scritto in modo atomico,
+>   «interrotto» se lo stato dice in corso e il lock è libero, conservazione di un'ora).
+> - `schemas/backup.py`: `InstanceBackupJob`.
+> - `api/v1/backup/instance.py`: `POST /backup/instance` (202), `GET` e `DELETE /backup/instance/jobs/{id}`,
+>   `GET /backup/instance/jobs/{id}/file` (`Cache-Control: no-store`); solo admin (`require_admin`); errori con
+>   `detail.code`: `backup_busy`, `backup_job_not_found`, `backup_job_not_ready`, `backup_job_running`. Via i 4
+>   segnaposto e i loro 6 schemi (D-B7).
+> - `scripts/backup_cli.py` e due righe in `dev.py`: `backup [--test-db] create [-o PATH]` e `backup inspect FILE
+>   [--no-verify]`. Avviato come root (un `docker compose exec` senza utente), il comando passa all'utente proprietario
+>   della cartella dati prima di scrivere, come fa `gosu` nell'entrypoint: archivio, lock e file di SQLite restano del
+>   server.
+> - La docstring di `backup_asset_prices` ora cita `series_export.PRICE_COLUMNS` (B-3).
+>
+> **Prove della bozza** (12:00, solo `/tmp`): uno smoke test su una cartella dati sintetica con un link a
+> `secrets/instance.key` e uno a `secrets/` dentro le cartelle archiviate. Archivio 0600, cartella del job 0700; dentro
+> solo il DB (primo), i file e il manifest (ultimo); fuori log, segreti, stato dello scheduler e i due link (avviso
+> `files_skipped`, elencati dalla CLI); `check_archive` verde, e rosso su un file alterato e su un'entrata in più; job in
+> background, secondo avvio rifiutato mentre gira, stato «interrotto» con il lock libero, pulizia dopo un'ora, id non
+> validi mai trasformati in percorsi; CLI `create`, `inspect` (0 e 1), `--help` con il gruppo. ruff e black puliti.
+> OpenAPI rispetto alla base: via i 4 percorsi e i 6 schemi dei segnaposto, +3 percorsi (4 rotte) e
+> `InstanceBackupJob`; cambia solo la descrizione dei prezzi (B-3).
+>
+> **Passo 1 ✅ — i file nuovi nel worktree e i test puri** (12:05-12:55):
+>
+> - Via del coordinatore (12:03): «B1 intanto va avanti»; `npm ci` solo dopo l'avviso di fine finestra, spostata alle
+>   13:30. Nel worktree entrano **solo i file nuovi** di B1 (`services/platform/instance_backup/`,
+>   `schemas/backup.py`, `scripts/backup_cli.py`), che nessuno importa ancora: il codice di B0 resta quello delle tre
+>   suite `api` da far girare dopo la finestra. Le modifiche di B1 ai file condivisi (`instance.py`, `__init__.py`,
+>   `exports.py`, `dev.py`, catalogo, istruzioni, devWiki) restano pronte in `/tmp` fino al commit di B0.
+> - **Test** (test-author): `test_services/test_backup_archive.py` (126), `test_services/test_backup_jobs.py` (31),
+>   `test_utilities/test_backup_cli.py` (26); tre voci pure nel catalogo (`services backup-archive`,
+>   `services backup-jobs`, `utils backup-cli`). Una prova di mutazione per file, ognuna rossa e poi ripristinata con
+>   lo stesso sha256.
+> - **⚠️ Fuori pista — 8 rossi, 6 difetti veri della bozza**, tutti corretti nel codice (i test non cambiano):
+>   1. un'entrata danneggiata (CRC, deflate) faceva uscire da `check_archive` un `BadZipFile` grezzo, e `inspect`
+>      andava in traceback: ora è «mismatched», e un manifest danneggiato è `manifest_unreadable`;
+>   2. il manifest si leggeva per la dimensione dichiarata dallo zip (68 MB gonfiati da un archivio sotto 1 MB): ora si
+>      rifiuta oltre `MANIFEST_MAX_BYTES` senza leggerlo, e non si legge mai oltre `MANIFEST_MAX_BYTES + 1`;
+>   3. senza `fcntl` un job vivo risultava interrotto: il controllo del lock non dipende più dall'esistenza del file;
+>   4. una sottocartella illeggibile spariva in silenzio: `os.walk` ha un `onerror` che la segnala (`files_skipped`);
+>   5. un file datato dopo il 2107 bloccava ogni backup: la data dello zip è limitata anche in alto;
+>   6. una tabella con `"` nel nome rompeva la descrizione: il nome si cita raddoppiando le virgolette.
+>
+>   E due osservazioni di test-author: un job finito da oltre un'ora ora si toglie anche alla lettura (risponde «non
+>   trovato»), come diceva la docstring; il file si apre con `O_NONBLOCK`, così un file diventato una FIFO dopo la
+>   raccolta non blocca il backup.
+> - **Verdi** (pytest diretto, puro, `nice`): 182 passati, 1 saltato (nomi non UTF-8: macOS li rifiuta, il test gira su
+>   Linux). ruff e black puliti.
+
+### Checkpoint B0 🧊 (2026-10-15) — FROZEN; committato dal coordinatore alle 13:36
 
 > Handoff inviato. Tre commit di codice dalle patch (R, C, S, da applicare in ordine con `git apply --cached`) e il
 > journal (questo piano, la sezione B del backlog). Il lavoro di B1 nel worktree (file nuovi non tracciati, tre voci nei
@@ -777,7 +850,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > uno alla volta, con `nice -n 10`; build, svelte-check, `mkdocs build` ed E2E su richiesta; le prove pesanti le assegna
 > lui, al massimo 2 su tutta la macchina.
 
-### B1 passo 2 — i file condivisi e la seconda tornata di test (2026-10-15, dalle 13:38) — in corso
+### B1 passo 2 — i file condivisi e la seconda tornata di test (2026-10-15, 13:38-14:12) ✅
 
 > **Note implementazione**:
 >
@@ -850,7 +923,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - **B4**: il punto 39 non è deciso. Il developer è al 30; i punti 38 e 39 vengono dopo quelli di Z.
 > - **Corsia**: solo prove leggere di file singoli; le medie su richiesta (la macchina era a 110–139 alle 13:45).
 
-### Accordo con J — totali di controllo (2026-10-15, 14:20) — in attesa della firma
+### Accordo con J — totali di controllo (2026-10-15, 14:20) — firma di J alle 14:35 (CP-15)
 
 > Richiesta mandata a J (`4c677a01`, in coda): una funzione in sola lettura per i totali di controllo.
 >
@@ -1000,67 +1073,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - dopo il blocco di «📦 Simple Backup»: «The copy also takes `backups/`, with every archive `backup create` wrote
 >   there: delete the old ones first, or leave the folder out.»
 
-### B1-fix — test delle correzioni di B6a (2026-10-15, 14:55-16:10) ✅
-
-> **Test** (test-author, backend):
->
-> - `utils backup-cli` +44 test, più uno riparato e rinominato: `test_inspect_without_verification_reads_no_entry`,
->   prima `…_reads_the_manifest_only`;
-> - `services backup-archive` +14; `services backup-jobs` +24;
-> - nuovo `test_api/test_backup_instance_errors.py` (selettore `api backup-instance-errors`, puro, 6 test, con
->   `httpx.ASGITransport`), registrato in `_backend_api.py`, 18 righe in aggiunta;
-> - 32 mutazioni rosse, ogni file ripristinato con lo stesso sha256; `check-orphans` pulito.
->
-> **⚠️ Fuori pista — altri due difetti**, trovati dai test e corretti (15:45):
->
-> 1. **Cartelle create per `-o` e rimaste vuote.** Se l'archivio ripiegava su `backups/` (spazio scarso su un altro
->    disco, spostamento fallito), le cartelle create per `-o` restavano vuote: `target.parent.mkdir(parents=True)`
->    veniva prima del controllo.
->    - Ora il controllo di disco e spazio si fa sulla cartella esistente più vicina.
->    - Le cartelle mancanti si creano solo prima dello spostamento, e se fallisce si tolgono (dalla più profonda, se
->      vuote).
->    - `_place_archive` è diviso in `_folders_to_create`, `_move_to` e il resto, per C901.
->    - Uno spostamento che alza un errore quando l'archivio è già arrivato intero (sorgente sparita, destinazione
->      presente) è un successo: prima la CLI diceva che l'archivio era rimasto nella cartella del job, dove non c'era
->      più.
-> 2. **Descrittore perso in `_add_file`.** Se al posto di un file raccolto c'era una cartella, `os.fdopen` alzava
->    `IsADirectoryError` e il descrittore restava aperto nel processo del server (5 chiamate, 5 descrittori). Ora
->    `fstat` si fa sul descrittore grezzo, che si chiude a ogni errore finché il file non lo possiede.
->
-> In più: la descrizione di `utils backup-cli` nel catalogo dice il comportamento nuovo.
->
-> **Verdi** (corsia 6187, `nice -n 10`, uno alla volta):
->
-> - `services backup-archive`: 139 passati, 1 saltato;
-> - `services backup-jobs`: 63;
-> - `api backup-instance-errors`: 6;
-> - `api backup`: 23;
-> - `utils backup-cli`: 68 su 70. I 2 rossi fissano le due scelte qui sopra (successo dopo l'arrivo; controllo sulla
->   cartella esistente). test-author li aggiorna e aggiunge il test di regressione del descrittore.
->
-> Porta 6187 libera.
->
-> **Seconda tornata di test-author** (16:00): i due test aggiornati alle scelte.
->
-> - Il test delle cartelle usa due livelli mancanti (`nas/2026/10`), così si prova anche l'ordine dal più profondo.
->   Fissa il messaggio esatto dello spazio, misurato su `nas`.
-> - Nuovo `test_a_file_refused_before_its_entry_starts_leaves_no_descriptor_open[folder|fifo]`: 16 chiamate, nessun
->   descrittore aperto, cercato per dispositivo e inode in `/dev/fd`.
-> - 7 mutazioni rosse, file ripristinati con lo stesso sha256.
-> - In più aggiorno le descrizioni di `services backup-archive` e `services backup-jobs` nel catalogo (righe di B1).
->
-> **Verifica finale** (16:07-16:12, corsia 6187, `nice -n 10`, uno alla volta), tutto verde:
->
-> - `utils backup-cli` 70; `services backup-archive` 141 più 1 saltato (nomi non UTF-8, che macOS rifiuta);
->   `services backup-jobs` 63; `api backup-instance-errors` 6; `api backup` 23; `utils dev-cli-image` 48;
->   `services config-package` 602;
-> - `check-orphans`: 281 test backend, 379 unitari e 118 spec E2E del frontend, tutti raggiungibili da un `all`;
-> - Vitest, rilanciati da me: `backupApi.test.ts` 51, `backupJob.test.ts` 131, `BackupDownloadCard.test.ts` 51. I due
->   ultimi passati da Prettier: solo formato, poi di nuovo verdi;
-> - ruff e black puliti sui 13 file Python; Prettier pulito; `theme-roles.mjs --check` pulito; `i18n check` strict;
->   `git diff --check` pulito; porta 6187 libera.
-
-### B5a — scheda Backup, solo scaricamento (2026-10-15, dalle 14:25) — componente ✅, riga del registro dopo A5
+### B5a — scheda Backup, solo scaricamento (2026-10-15, dalle 14:25) — componente ✅; la riga del registro con `b7a4d35e6` (17:04)
 
 > **Disegno**:
 >
@@ -1163,6 +1176,66 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - **i18n**: `backup.tab` non ha lettori finché non c'è la riga. `i18n audit` lo segna «dead», e le chiavi della
 >   scheda «📦» (vive solo per sorgenti non raggiungibili da una rotta). Nessun cancello fallisce: `gate-i18n-usage`
 >   prova il classificatore, non il catalogo vero. knip vede i file nuovi raggiungibili dai test.
+
+### B1-fix — test delle correzioni di B6a (2026-10-15, 14:55-16:10) ✅
+
+> **Test** (test-author, backend):
+>
+> - `utils backup-cli` +44 test, più uno riparato e rinominato: `test_inspect_without_verification_reads_no_entry`,
+>   prima `…_reads_the_manifest_only`;
+> - `services backup-archive` +14; `services backup-jobs` +24;
+> - nuovo `test_api/test_backup_instance_errors.py` (selettore `api backup-instance-errors`, puro, 6 test, con
+>   `httpx.ASGITransport`), registrato in `_backend_api.py`, 18 righe in aggiunta;
+> - 32 mutazioni rosse, ogni file ripristinato con lo stesso sha256; `check-orphans` pulito.
+>
+> **⚠️ Fuori pista — altri due difetti**, trovati dai test e corretti (15:45):
+>
+> 1. **Cartelle create per `-o` e rimaste vuote.** Se l'archivio ripiegava su `backups/` (spazio scarso su un altro
+>    disco, spostamento fallito), le cartelle create per `-o` restavano vuote: `target.parent.mkdir(parents=True)`
+>    veniva prima del controllo.
+>    - Ora il controllo di disco e spazio si fa sulla cartella esistente più vicina.
+>    - Le cartelle mancanti si creano solo prima dello spostamento, e se fallisce si tolgono (dalla più profonda, se
+>      vuote).
+>    - `_place_archive` è diviso in `_folders_to_create`, `_move_to` e il resto, per C901.
+>    - Uno spostamento che alza un errore quando l'archivio è già arrivato intero (sorgente sparita, destinazione
+>      presente) è un successo: prima la CLI diceva che l'archivio era rimasto nella cartella del job, dove non c'era
+>      più.
+> 2. **Descrittore perso in `_add_file`.** Se al posto di un file raccolto c'era una cartella, `os.fdopen` alzava
+>    `IsADirectoryError` e il descrittore restava aperto nel processo del server (5 chiamate, 5 descrittori). Ora
+>    `fstat` si fa sul descrittore grezzo, che si chiude a ogni errore finché il file non lo possiede.
+>
+> In più: la descrizione di `utils backup-cli` nel catalogo dice il comportamento nuovo.
+>
+> **Verdi** (corsia 6187, `nice -n 10`, uno alla volta):
+>
+> - `services backup-archive`: 139 passati, 1 saltato;
+> - `services backup-jobs`: 63;
+> - `api backup-instance-errors`: 6;
+> - `api backup`: 23;
+> - `utils backup-cli`: 68 su 70. I 2 rossi fissano le due scelte qui sopra (successo dopo l'arrivo; controllo sulla
+>   cartella esistente). test-author li aggiorna e aggiunge il test di regressione del descrittore.
+>
+> Porta 6187 libera.
+>
+> **Seconda tornata di test-author** (16:00): i due test aggiornati alle scelte.
+>
+> - Il test delle cartelle usa due livelli mancanti (`nas/2026/10`), così si prova anche l'ordine dal più profondo.
+>   Fissa il messaggio esatto dello spazio, misurato su `nas`.
+> - Nuovo `test_a_file_refused_before_its_entry_starts_leaves_no_descriptor_open[folder|fifo]`: 16 chiamate, nessun
+>   descrittore aperto, cercato per dispositivo e inode in `/dev/fd`.
+> - 7 mutazioni rosse, file ripristinati con lo stesso sha256.
+> - In più aggiorno le descrizioni di `services backup-archive` e `services backup-jobs` nel catalogo (righe di B1).
+>
+> **Verifica finale** (16:07-16:12, corsia 6187, `nice -n 10`, uno alla volta), tutto verde:
+>
+> - `utils backup-cli` 70; `services backup-archive` 141 più 1 saltato (nomi non UTF-8, che macOS rifiuta);
+>   `services backup-jobs` 63; `api backup-instance-errors` 6; `api backup` 23; `utils dev-cli-image` 48;
+>   `services config-package` 602;
+> - `check-orphans`: 281 test backend, 379 unitari e 118 spec E2E del frontend, tutti raggiungibili da un `all`;
+> - Vitest, rilanciati da me: `backupApi.test.ts` 51, `backupJob.test.ts` 131, `BackupDownloadCard.test.ts` 51. I due
+>   ultimi passati da Prettier: solo formato, poi di nuovo verdi;
+> - ruff e black puliti sui 13 file Python; Prettier pulito; `theme-roles.mjs --check` pulito; `i18n check` strict;
+>   `git diff --check` pulito; porta 6187 libera.
 
 ### Checkpoint B1-fix + B6a + B5a 🧊 (2026-10-15, 16:15) — committato
 
@@ -1343,7 +1416,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > colori che il coordinatore dichiara. Nello slot: l'E2E, poi knip. La galleria la chiede il coordinatore ai colori,
 > dopo Y2. La scheda sulla pagina di blocco il coordinatore la propone ad H.
 
-### B8 — il token del pannello (via del coordinatore, 2026-10-15 alle 17:15) — in corso
+### B8 — il token del pannello (via del coordinatore, 2026-10-15 alle 17:15) — messo da parte alle 17:22, continua sotto; in dev `56d3d3182`
 
 > **Via**: «B8: via». Le rotte del pannello vanno in `ALLOWED_WHEN_BLOCKED`: un'istanza bloccata, per esempio per un
 > mancato pagamento, e chi ospita che restituisce i dati al cliente. Le rotte sono autenticate dal token, non da una
@@ -1385,36 +1458,6 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - I 6 file modificati tornano al contenuto di HEAD (`git show HEAD:<file>`); i 3 nuovi vengono tolti.
 > - Si rimettono dopo lo slot, controllati con lo sha256.
 
-### Accordo con H sui passi d'avvio di CP2b (2026-10-15, 17:48)
-
-> H, su richiesta del coordinatore: con CP2b i passi d'avvio escono da `main.py` e vanno in
-> `services/platform/app_lifespan.py`, nella tupla ordinata `STARTUP_STEPS` (`Step(name, run, blocking=False)` di
-> `services/platform/lifecycle.py`). `run()` restituisce `None` o un awaitable; un'eccezione ferma l'avvio. H proponeva
-> un passo subito prima del DB.
->
-> **Risposta di B**: i passi sono due.
->
-> - **`pending-restore`** (`asyncio.to_thread(apply_pending_restore)`) va prima del primo passo che tocca la cartella
->   dati, cioè subito prima di `ensure_data_dirs()`:
->   - il catalogo degli scenari carica `scenario_catalog/` in memoria;
->   - gli avatar scrivono in `custom-uploads/`;
->   - audit, segnali e Tool possono restare prima: toccano solo `logs/` e `secrets/`, che non si scambiano.
-> - **`restore-commit`** (`asyncio.to_thread(commit_restore)`) va dopo DB, fix post-migrazione e impostazioni globali,
->   e prima di prewarm, festività e scheduler.
-> - Le righe le aggiungo io, in B3, quando CP2b è nella mia base.
-> - Nessun passo di spegnimento: il riavvio è un SIGTERM, e Litestream avvolge uvicorn da fuori.
-> - Ho chiesto ad H che cosa cambia fra `blocking=True` e `blocking=False`.
->
-> **Conferma di H** (17:50):
->
-> - CP2b non cambia l'ordine dei passi. `pending-restore` va fra `Step("tool-catalog", …)` e
->   `Step("data-directories", …)`; `restore-commit` fra `Step("global-settings", …)` e `Step("provider-prewarm", …)`.
-> - `blocking` all'avvio non cambia niente: `run_startup_steps` attende la coroutine, e un'eccezione ferma l'avvio.
->   `blocking=True` conta solo allo spegnimento con una scadenza. Quindi il default, con lambda `asyncio.to_thread`,
->   come il suo `post-migration-fixes`.
-> - Il test puro `services app-lifecycle` fissa solo l'ordine relativo dei passi di oggi e i nomi unici. I miei due
->   vincoli vanno in una funzione di test mia. H manda il nome del file e lo SHA quando CP2b entra.
-
 ### Slot pesante 1 — E2E della scheda e knip (2026-10-15, 17:21-17:51) ✅ — committato
 
 > - **knip** (`dev.py lint --dead-code --scope frontend`, 17:23, 9 s): nessun file di B fra i risultati
@@ -1450,6 +1493,36 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > **Committato dal coordinatore** (17:52): `d7b57002a` (test E2E) e `c24466527` (journal). **⚠️ Fuori pista — orario
 > sbagliato**: nel journal e nell'handoff avevo scritto che lo slot si era liberato «alle 18:20». È andato dalle 17:21
 > alle 17:51: lo dicono i log (knip 17:23, `check-orphans` 17:50). Il titolo è corretto qui sopra.
+
+### Accordo con H sui passi d'avvio di CP2b (2026-10-15, 17:48)
+
+> H, su richiesta del coordinatore: con CP2b i passi d'avvio escono da `main.py` e vanno in
+> `services/platform/app_lifespan.py`, nella tupla ordinata `STARTUP_STEPS` (`Step(name, run, blocking=False)` di
+> `services/platform/lifecycle.py`). `run()` restituisce `None` o un awaitable; un'eccezione ferma l'avvio. H proponeva
+> un passo subito prima del DB.
+>
+> **Risposta di B**: i passi sono due.
+>
+> - **`pending-restore`** (`asyncio.to_thread(apply_pending_restore)`) va prima del primo passo che tocca la cartella
+>   dati, cioè subito prima di `ensure_data_dirs()`:
+>   - il catalogo degli scenari carica `scenario_catalog/` in memoria;
+>   - gli avatar scrivono in `custom-uploads/`;
+>   - audit, segnali e Tool possono restare prima: toccano solo `logs/` e `secrets/`, che non si scambiano.
+> - **`restore-commit`** (`asyncio.to_thread(commit_restore)`) va dopo DB, fix post-migrazione e impostazioni globali,
+>   e prima di prewarm, festività e scheduler.
+> - Le righe le aggiungo io, in B3, quando CP2b è nella mia base.
+> - Nessun passo di spegnimento: il riavvio è un SIGTERM, e Litestream avvolge uvicorn da fuori.
+> - Ho chiesto ad H che cosa cambia fra `blocking=True` e `blocking=False`.
+>
+> **Conferma di H** (17:50):
+>
+> - CP2b non cambia l'ordine dei passi. `pending-restore` va fra `Step("tool-catalog", …)` e
+>   `Step("data-directories", …)`; `restore-commit` fra `Step("global-settings", …)` e `Step("provider-prewarm", …)`.
+> - `blocking` all'avvio non cambia niente: `run_startup_steps` attende la coroutine, e un'eccezione ferma l'avvio.
+>   `blocking=True` conta solo allo spegnimento con una scadenza. Quindi il default, con lambda `asyncio.to_thread`,
+>   come il suo `post-migration-fixes`.
+> - Il test puro `services app-lifecycle` fissa solo l'ordine relativo dei passi di oggi e i nomi unici. I miei due
+>   vincoli vanno in una funzione di test mia. H manda il nome del file e lo SHA quando CP2b entra.
 
 ### Aggiornamento di base — merge di `dev_release2` `9c8ee20c3` (2026-10-15, 17:52-17:55) ✅
 
@@ -2219,7 +2292,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - **Da fare**: i test in `test_backup_jobs.py` con test-author, dopo B2b; lo SHA a Z quando il coordinatore committa.
 >   `restore_jobs._a_check_runs` può usare `_lock_held`: lo unisco quando test-author ha finito con `restore_jobs.py`.
 
-### Aggiornamento di base — merge di `dev_release2` `84a18fb4c` (2026-10-15, 23:20-23:35) ✅ — in attesa del commit
+### Aggiornamento di base — merge di `dev_release2` `84a18fb4c` (2026-10-15, 23:20-23:35) ✅ — committato dal coordinatore: `abb81e702`
 
 > - **B2 committato dal coordinatore**: `80b8f8c39` (B2a), `22c116679` (B2b), `6a7fae5bf` (doc), `e3a9d2251` (journal).
 >   `backup_in_progress()` è in `22c116679`: lo SHA è mandato a Z.
@@ -2244,7 +2317,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   vecchio avviserebbe senza motivo. La regola diventa `(before or 0) != (after or 0)`, anche per l'elenco della CLI.
 > - **`all-backend`** dopo le 01:15 (slot 1 di A fino alle 23:50, poi la finestra di G-13 dalle 00:00 alle 01:15).
 
-### B3 — il ripristino: analisi (2026-10-15, 23:20-23:45) — 🧊 FROZEN, in attesa del via
+### B3 — il ripristino: analisi (2026-10-15, 23:20-23:45) — 🧊 FROZEN; via alle 23:45
 
 > **Stato reale** (letto sul codice, base con CP2b):
 >
@@ -2323,7 +2396,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - un supervisore assente (la UI lo dice: B5b);
 > - il riavvio della corsia nei test: mai un vero SIGTERM.
 
-### Merge `abb81e702` committato; via per B3 e decisione sulle sessioni (2026-10-15, 23:45) — in corso
+### Merge `abb81e702` committato; via per B3 e decisione sulle sessioni (2026-10-15, 23:45) — B3 continua sotto; in dev `0cd910a7e`
 
 > - **Coordinatore**: merge della base committato, `abb81e702`, con la mia risoluzione e la correzione dei due test
 >   (`OLDER` fissato a `005_accounts_invites`); journal di B3 in `f0b76e81d`; worktree pulito.
@@ -2393,7 +2466,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   (`_suites.run_all_backend_tests`, nessun glob) e non fa il controllo degli orfani: i file di B3 non registrati non
 >   entrano nella run d'ingresso di B2.
 
-### Checkpoint `rows_changed` committato; la formula delle sessioni (2026-10-16, 00:17) — B3 in corso
+### Checkpoint `rows_changed` committato; la formula delle sessioni (2026-10-16, 00:17) — B3 continua sotto; in dev `0cd910a7e`
 
 > - **Coordinatore**: `484b75231` `fix(backup): rows_changed ignores tables created or dropped empty` e `94a95284d`
 >   (journal). HEAD verificato `94a95284d`; fuori, non tracciati, solo i due file nuovi di B3. `all-backend` verso le
@@ -2773,6 +2846,25 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   segnaposto tolti (BACKUP-010) non si scontrano con i percorsi nuovi.
 > - **Prossimo**: dopo le 06:45 `api backup`, poi l'handoff FROZEN.
 
+### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — superato: B4 riparte dall'analisi delle 22:36, in dev `339a59142`
+
+> Mentre l'`all-backend` di B3 aspetta lo slot (coordinatore: «continua con B4 in sola lettura»). Bozza del contratto
+> nei file della sessione (`b4-contract.md`).
+>
+> - **In base** (`62004e530`): `cryptography` 50.0.2; le funzioni di X per la copia (`count_unreadable_secrets`,
+>   `rekey_plugin_secrets`). Lo scopo persistito della chiave d'istanza è uno solo, `plugins.settings.v1`: il
+>   `key_id` di ogni riga di X fa già da valore di controllo H-3, nella copia non c'è altro da scrivere.
+> - **Manca ancora in `dev_release2`** (`2c485d3d4`, 03:56): `derive_key_from` di H (annunciata con CP7b) e una lettura
+>   pubblica della chiave generata. Quindi **B4a** (busta, creazione e ripristino con password, `decrypt`, conteggio dei
+>   segreti illeggibili nel report) non dipende da nessuno; **B4b** (la chiave nell'archivio e la ricifratura) aspetta
+>   le due funzioni di H.
+> - **Misura**: `Scrypt` di `cryptography` con `n = 2^17, r = 8` impiega 0,42 s e 128 MiB su questo Mac (carico ~30);
+>   `2^15` 0,10 s e 32 MiB. `hashlib.scrypt` rifiuta `2^17` col `maxmem` predefinito di OpenSSL: solo `cryptography`.
+>   Aggiunta al punto 1 della lista di domattina (una macchina cloud da 256 MB e il picco di 128 MiB).
+> - **Decisione notturna, da rivedere**: nell'intestazione (52 byte) un valore di verifica della password (byte 32-47
+>   dell'uscita di scrypt, lo schema di WinZip AES), così una password sbagliata (`wrong_password`) si distingue da un
+>   file rovinato (`envelope_damaged`) senza aiutare chi prova le password più del tag del primo blocco.
+
 ### B3 committato; B-13 e B6a-bis approvati (2026-10-16, 05:19-05:30) — fermo della macchina 05:30-06:45
 
 > - **B3 committato dal coordinatore** come checkpoint intermedio (non è un ingresso): `5f1543e81`
@@ -2894,7 +2986,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - **Verifiche della doc** (08:31-08:34): `mkdocs build` stretta 0 avvisi, `check-links` 96, `utils gate-docs-links` 63.
 > - **Backlog**: B-13 chiusa ✅.
 
-### B5b — la scheda del ripristino (2026-10-16, dalle 08:35) — rossi in scrittura
+### B5b — la scheda del ripristino (2026-10-16, dalle 08:35) — continua sotto; in dev `0cd910a7e`
 
 > - **B-13 committato** dal coordinatore: `c374313c0` feat, `36bccad06` docs, `1ca7a52c6` journal (HEAD); entra con B3.
 > - **Via per B5** (coordinatore, 08:35): le tre raccomandazioni di P8, ognuna «da rivedere» e facile da cambiare;
@@ -3394,7 +3486,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - **Committato** dal coordinatore: `465c27939` feat (le righe di H), `78023380c` test (l'E2E del ripristino),
 >   `283466abb` journal.
 
-### Aggiornamento di base — merge di `dev_release2` `0c79932a7` (2026-10-16, 19:57-20:30) ✅ — 🧊 FROZEN, in attesa del commit
+### Aggiornamento di base — merge di `dev_release2` `0c79932a7` (2026-10-16, 19:57-20:30) ✅ — 🧊 FROZEN; committato dal coordinatore: `92a190efa`
 
 > - Merge aperto dal coordinatore nel mio worktree (HEAD `283466abb`, MERGE_HEAD `0c79932a7`, base comune `62004e530`;
 >   oltre 446 commit: C-97a, H-12/21, MF, Y, X, i colori; non ancora P18 di A). Sei conflitti, risolti per somma; in
@@ -3449,7 +3541,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - **Committato** dal coordinatore: `92a190efa` (il merge), `618fe8be4` (questo piano). L'ordine dei passi lo passa lui
 >   a H; B-14 nel prossimo checkpoint, d'accordo.
 
-### Secondo aggiornamento di base — merge di `dev_release2` `979d0a151` (2026-10-16, dalle 20:26) — in corso
+### Secondo aggiornamento di base — merge di `dev_release2` `979d0a151` (2026-10-16, 20:26-20:39) ✅ — committato dal coordinatore: `4e866cead`
 
 > - Nel frattempo in `dev_release2` sono entrati A (P18/A-27, la migrazione 009 e F02) e W-B53 (il passo
 >   `brim-parse-pool`). Merge aperto dal coordinatore (HEAD `618fe8be4`, MERGE_HEAD `979d0a151`, base `0c79932a7`).
@@ -3562,7 +3654,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - **Committato** dal coordinatore: `fix(backup)` H-17, `docs(backup)`, `docs(journal)`; HEAD `e3a96d9da`. La nota del
 >   test-author (un valore di prova nella tabella di H, la funzione che lo segue): **sì**, nel prossimo lotto.
 
-### Terzo aggiornamento di base — merge di `dev_release2` `cd617824e` (2026-10-16, 22:32-23:04) ✅ — handoff, in attesa del commit
+### Terzo aggiornamento di base — merge di `dev_release2` `cd617824e` (2026-10-16, 22:32-23:04) ✅ — committato dal coordinatore: `6c72f0efe`
 
 > - Merge aperto dal coordinatore (HEAD `e3a96d9da`, MERGE_HEAD `cd617824e`): la decisione 47 di W aggiunge il passo
 >   `lone-transfer-legs` (dopo `post-migration-fixes`, prima di `global-settings`) e la sua voce nella lista numerata di
@@ -5366,104 +5458,1014 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
 > `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
-### B-49 — un testo non UTF-8 nei dati di un backup: la verifica lo rifiuta (2026-10-17, 20:2x-21:26) — ✅ 🧊 FROZEN (checkpoint delle 21:26)
+### B-32 — dopo un annullamento rifiutato: la scheda, la CLI e uno stato illeggibile (2026-10-17, 09:25-10:29) — ✅ 🧊 FROZEN (checkpoint delle 10:29)
 
-> **Assegnazione** (coordinatore, 20:2x, dopo l'ingresso di X-R79 in dev `6f11a6790`): B-49, analisi e decisione mia
-> («rifiutare alla verifica, `database_damaged`, nulla applicato, o avvisare come E-19b1?»; il coordinatore tende a
-> rifiutare). Prima provare in processo che le letture del server falliscono dopo il ripristino, e misurare il costo
-> della scansione su un archivio grande, come per l'audit di E. Poi B-15 + B-8.
-> Nello stesso giro: la riga X-R79 (sezione di X, su richiesta del coordinatore) aggiornata coi tre residui e chiusa (✅).
+> **B-19 entrato** (coordinatore, 09:25): dev `e96158e9b`, CHANGELOG 🐛 `67dd18676`; HEAD portata in avanti a
+> **`67dd18676`**, pulita, con A8b dentro. La revisione di `backup.spec.ts` di A8b è presa per buona. Ordine: B-32 →
+> B-18 → B-20, ognuno col suo checkpoint. Lo spike B7a passa **alla mattina, col developer presente**: Docker non lo
+> avvio io.
 >
-> **Analisi** (20:2x-20:45; `files/b49-analysis.md`, sonda `files/b49-wip/probe_b49.py`, solo file usa e getta in
-> `/tmp/lf_b49_probe`, il DB della corsia copiato in sola lettura con l'API di backup di SQLite):
-> - ✅ **La rottura dopo il ripristino, provata in processo**: un valore `CAST(x'45ff52' AS TEXT)` in
->   `transactions.description`, `assets.display_name`, `brokers.name`, `price_history.currency` e `fx_rates.date` (una
->   colonna DATE: affinità NUMERIC, valori di testo), letto col motore dell'app (`sqlite+aiosqlite`, il listener di
->   `session.py`, NullPool). Ogni `select(Model)` fallisce: `sqlalchemy.exc.OperationalError` ←
->   `sqlite3.OperationalError: Could not decode to UTF-8 column … with text 'E�R'`. È la lettura intera a fallire, non la
->   riga; `select(Model.id)` funziona ancora. Quindi ogni elenco di quelle righe risponde 500, e il messaggio cita i
->   byte. Prima della modifica, le cinque letture rendono 76, 17, 8, 2 733 e 4 185 righe (`b49_probe_read.log`).
-> - ✅ **Il costo**, su una copia cresciuta a **488 MB** (2 040 000 prezzi, 1 004 185 cambi, 200 076 transazioni; carico
->   45-66, tempi alti):
->   - (d), per tabella una passata per finestra di 200 000 righe, ogni colonna concatenata da SQLite in una riga:
->     **3,6 s** pulita, **2,4 s** con un valore cattivo in fondo a `price_history`;
->   - (b), per colonna: 4,8 s; (c), byte decodificati in Python: 11,3 s; (a), riga per riga: 13,8 s;
->   - l'audit E-19a sulla stessa copia: 2,0 s; `PRAGMA integrity_check`: 8,6 s (la verifica lo fa due volte).
->   - **⚠️ Fuori pista**: la prima misura di (c) dava 0,00 s, per un errore della sonda: con `text_factory = bytes` i nomi
->     delle tabelle tornano come byte, e non si leggeva nulla. Corretto e rimisurato (`b49_probe_rescan.log`).
-> - **Decisione (mia): rifiutare**, con `database_damaged`:
->   - nessun codice nuovo, quindi niente `RestoreErrorCode`, i18n o CLI da cambiare; la frase della UI è giusta;
->   - un messaggio inglese proprio, e un avviso nel log col solo numero di tabelle;
->   - un passo nuovo nell'involucro di B-43, dopo `_check_against_manifest` e prima dell'upgrade;
->   - il metodo (d) su ogni tabella tranne `sqlite_%`, per classe di memorizzazione del valore;
->   - un `text_factory` severo, che fa lanciare `UnicodeDecodeError`;
->   - la connessione in `staging.py`, `mode=ro`, `trusted_schema=OFF` per primo.
->   - Perché non avvisare: l'istanza ripristinata fallirebbe quegli elenchi, e la UI non può riparare righe che non
->     legge. LibreFolio scrive solo UTF-8, e le checksum fermano un archivio danneggiato.
-> - **Cambia RNW-109 di E**: i suoi archivi finirebbero in `database_damaged` prima della lettura E-19a; la nota di E
->   (BACKLOG l.7942) lo prevede già. Da concordare chi lo riscrive.
-> - Mandata al coordinatore alle 20:45. 🧊 Nessun codice prima del via.
-> - **Via del coordinatore** (20:5x): **rifiutare**, come disegnato. `database_damaged`, un passo nell'involucro di B-43
->   dopo `_check_against_manifest` e prima dell'upgrade; `text_factory` severo, connessione propria `mode=ro` +
->   `trusted_schema=OFF`; nel log solo conteggi; BLOB fuori; **nessuna riga di CHANGELOG** (il ripristino è nuovo nella
->   1.3). **RNW-109 lo riscrivo io** nei rossi: ora si aspetta `database_damaged` prima dell'audit, nessuna riga
->   dell'audit; il ramo del guasto resta coperto da RNW-107. Doc: `backup_restore.en.md` è mio; **`security.md` è aperto
->   da H (H-52)**: non lo tocco, il paragrafo va al coordinatore col checkpoint.
-> - **Contratto** (`files/b49-contract.md`); **patch** `files/b49-wip/apply_b49.py` (4 operazioni in `staging.py`: la
->   docstring del modulo, l'import di `_identifier` da `snapshot`, il passo in `_stage`, la scansione).
-> - ✅ **Rossi scritti** (TA-B49, 20:5x-21:03), sezione (o) di `test_backup_staging.py` (la (n) era già B-43):
->   - rossi: 4 posti (colonna TEXT, colonna DATE, tabella sconosciuta, i tre insieme), l'archivio più vecchio rifiutato
->     prima dell'upgrade, il log (un avviso, solo interi, niente testo, byte, nomi o percorsi), un carattere spezzato su
->     due righe, i rowid ai due estremi (con un limite di 60 s), la connessione della scansione (`mode=ro`,
->     `trusted_schema=OFF` per primo, `typeof(` e `'text'`);
->   - guardie: testo valido oltre l'ASCII (`é`, `日本`, `💶`, `𝄞`), gli stessi byte come BLOB, il manifest sbagliato
->     ancora `manifest_mismatch`;
->   - RNW-109 riscritto (`test_restore_non_iso_warning.py`): `database_damaged`, l'audit mai chiamato, nessun report.
-> - ✅ **Rossi** (corsia 6187, 21:04-21:05, carico 10): `services backup-staging` **13 falliti**, 187 passati
->   (`b49_red_staging.log`); `services restore-non-iso-warning` **4 falliti**, 42 passati (`b49_red_rnw.log`). Sono
->   esattamente i casi nuovi, ognuno alla sua ragione: il controllo arriva alle correzioni o all'upgrade, «DID NOT RAISE»,
->   nessuna connessione che legga per classe.
-> - **⚠️ Fuori pista — due buchi della mia scansione, trovati prima di applicarla**:
->   - il test del carattere spezzato (TA-B49): unire i valori con `''` ricompone `C3` + `A9` in `é`, e i due valori
->     sbagliati passano. Ora li unisce una virgola, un byte suo (provato: `''` passa, `','` trova);
->   - `pragma_table_info` nasconde le colonne generate (provato: `table_xinfo` le mostra, `hidden` = 2). Una colonna
->     generata con un valore non UTF-8, chiamata come una colonna che il server legge, sfuggirebbe. Ora `table_xinfo`;
->     il rosso relativo chiesto a TA-B49;
->   - in più: una finestra oltre il limite di lunghezza di SQLite (`DataError`, provato) continua riga per riga.
-> - ✅ **La scansione provata a parte** (`files/b49-wip/harness_b49.py`, sul codice emesso, prima di applicarlo): la
->   copia pulita passa; tutti i casi limite validi passano (rowid −2⁶³ e 2⁶³−1, i tre nomi del rowid coperti, `WITHOUT
->   ROWID`, nomi con virgolette); ogni caso con testo cattivo è rifiutato, compresi il carattere spezzato e la colonna
->   generata; il log ha solo `tables=5`. Sulla copia da 488 MB: **3,3 s** pulita, 2,7 s con un valore cattivo, contro
->   5,5 s per un `integrity_check` (carico 9-10).
-> - ✅ **Il rosso della colonna generata** (TA-B49, due varianti, VIRTUAL e STORED, in una tabella sconosciuta, con le
->   precondizioni: `table_info` non la elenca, `table_xinfo` sì; né B-28 né B-43 la fermano; `VACUUM INTO` la copia):
->   **2 falliti** alla ragione attesa (21:16; `b49_red_generated.log`).
-> - ✅ **Patch applicata** (21:17): 4 operazioni in `staging.py` (+76 righe).
-> - ✅ **Verdi** (21:17-21:21, carico 12-24):
->   - `services backup-staging` **202** e `services restore-non-iso-warning` **46**;
->   - `services backup-secure` 77, `services backup-apply` 255, `utils backup-cli` 102, `utils backup-cli-restore` 109,
->     `utils backup-cli-secure` 106, `utils dev-cli-db-path` 17;
->   - ruff e black puliti sui 3 file Python;
->   - doc: build stretta, `check-links`, `utils gate-docs-links` 63. `git diff --check` pulito; porta 6187 libera.
+> **Stato reale** (lettura, 09:25-09:35):
+>
+> - `restoreFlow.cancelPending()`: `state = 'pending'` seguito da `#fail(...)`, che mette subito `failed`. La riga è
+>   morta: un annullamento rifiutato finisce sulla schermata d'errore. Il riavvio rifiutato resta invece su `pending`
+>   con l'errore (`#setError`), e la scheda sa già mostrare il blocco in attesa con l'errore accanto.
+> - `cmd_pending --cancel` prende solo `RestoreNotPendingError`. `cancel_restore` rende lo stato, non `copy_dropped`
+>   (i test fissano `cancel_restore(...) == pending`).
+> - `_read_state` rende `None` per ogni `OSError`. Lo leggono in 10 punti:
+>   - stato, annullamento, riavvio, conferma;
+>   - i due passi d'avvio;
+>   - l'esito;
+>   - `protected_stage` (pulizia, `remove_check`);
+>   - la CLI (`pending` e il controllo prima di `restore`).
+>   Con `O_NOFOLLOW`, uno stato che è un link dà ELOOP: oggi «nessun ripristino», e §10 lo fissa (`UNTRUSTED`, la
+>   conferma che sostituisce un link). Il contenuto non valido (`ValidationError`) è lo «stato illeggibile» dei test
+>   esistenti: resta «none».
+>
+> **Contratto congelato** (`b32-contract.md` nella cartella della sessione, 09:38):
+>
+> 1. Un annullamento rifiutato (tranne il 404 `restore_not_pending`) resta su **`pending`**. L'errore sta accanto
+>    (`failure` `cancel`), con lo stato invariato e un solo evento `failed`, e si può annullare o riavviare di nuovo:
+>    come il riavvio rifiutato.
+> 2. Le uscite di `pending --cancel`:
+>    - un `OSError` → `❌ The restore could not be cancelled: <strerror>. It still waits for the next start
+>      (restore_cancel_failed)`, uscita 1, senza traceback;
+>    - copia rimasta → `✅ …dropped: the data stays as it is` + `⚠️  Its checked copy could not be removed: it goes
+>      when its check expires`, uscita 0. La CLI lo capisce dalla cartella della copia ancora presente.
+> 3. Nuovo `RestoreStateUnreadableError`, codice `restore_state_unreadable`, con `reason` (lo `strerror`, mai un
+>    percorso). `_read_state` fa prima un `lstat`:
+>    - nessun file → `None`;
+>    - non un file regolare (link, cartella) → `None` registrato, come oggi;
+>    - ogni altro `OSError` → registrato e sollevato;
+>    - il contenuto non valido resta `None`.
+>    **Rigidi**:
+>    - status, `DELETE /pending`, riavvio e conferma → 500. La conferma rifiuta invece di scrivere sopra: dietro può
+>      esserci un ripristino applicato a metà;
+>    - la CLI `pending`, `pending --cancel` e il controllo prima di `restore` → ❌, uscita 1.
+>    `cancel_restore` legge prima senza lock, come `prepare_restart`: un `.restore/` che il server non può
+>    attraversare non passa più per «nessuno stato».
+>    **Indulgenti, come oggi**: i due passi d'avvio (con un helper), l'esito, `protected_stage`.
+> 4. Una chiave × 4 lingue, più `ERROR_KEYS`.
+> 5. I commenti «Settings › Administration › Backup»:
+>    - in `BackupTab.svelte`, `apply.py`, `backup_cli.py`, `RestoreCard.test.ts`;
+>    - e due descrizioni del runner di B5a.
+>
+> - **Coordinatore** (09:40): nessun veto su 1-4. Il residuo (un avvio che trova uno stato illeggibile va avanti) va
+>   nella lista del developer. Slot 2 di ~12 min in coda dopo E → J → Y.
+> - **Rossi in scrittura** (09:38), file distinti:
+>   - TA-S `test_backup_apply.py`;
+>   - TA-B `test_backup_restore_apply.py`;
+>   - TA-E `test_backup_cli_restore.py`;
+>   - TA-F `restoreFlow.test.ts`, `RestoreCard.test.ts`, `restoreI18n.test.ts`.
+> - **Codice pronto** in `b32-wip/apply_b32.py` (09:41): 31 operazioni in 8 file + 4 cataloghi, `--part front|back`.
+>   Sulla copia emessa:
+>   - ruff (con la configurazione del repo, `--stdin-filename`) e black puliti. `_RESTART_NOT_PREPARED` è scritto
+>     nella forma di black: oltre 300 caratteri;
+>   - prettier pulito sui 4 file del frontend e sui 4 cataloghi.
+> - ✅ **Rossi scritti** (09:38-09:53), file distinti, nessuno lanciato dagli autori:
+>   - **TA-S**, sezione (o) di `test_backup_apply.py`: 7 funzioni, 24 casi (14 rossi, 10 guardie). Tre modi di
+>     rendere illeggibile: `os.open` che rifiuta EACCES o EIO, e un vero `chmod 000`, saltato da root.
+>   - **TA-B**, sezione (j) di `test_backup_restore_apply.py`: 6 test, 16 casi (13 rossi; la guardia dell'esito ×3).
+>   - **TA-E**, sezione (g) di `test_backup_cli_restore.py`: 8 funzioni, 15 casi (13 rossi, 2 guardie).
+>   - **TA-F**: 11 casi rossi fra `restoreFlow.test.ts`, `RestoreCard.test.ts` e `restoreI18n.test.ts`. Ha girato anche
+>     la vecchia tabella di B5b, che fissava `failed` per un annullamento rifiutato, e ha allineato l'intestazione di
+>     `RestoreCard.test.ts`.
+>   - **Docs-writer**:
+>     - `backup_restore.en.md`: la riga dell'annullamento e la nuova riga `restore_state_unreadable`;
+>     - `cli_tools.en.md` l.538, 555 e 581 (debito di traduzione, niente stamp);
+>     - `security.md`: quattro righe della tabella e il punto «What cannot be read is not none».
+> - **⚠️ Fuori pista — `lexists` (09:55)**, da TA-E: `os.path.lexists` inghiotte EACCES. Con `.restore/stage` non
+>   attraversabile, la CLI direbbe «with its copy» mentre la copia resta. E `rmtree(ignore_errors=True)` di
+>   `remove_stage` può lasciare una copia in sola lettura senza sollevare nulla: il `copy_dropped` di B-31 non basta.
+>   Contratto §2 e patch corretti: un helper `_copy_left` fa `os.lstat`. `FileNotFoundError` vuol dire sparita; ogni
+>   altro `OSError` conta come ancora lì. TA-E ha aggiunto il caso `stage-folder-not-searchable`.
+> - **Note degli autori, già nella patch**:
+>   - TA-B: la conferma ha bisogno del suo `except` prima di quello generico, altrimenti risponderebbe 409 con le
+>     parole del sistema; l'esito deve leggere in modo indulgente.
+>   - TA-S: il `lstat` prima toglie anche una perdita di descrittore (uno stato che è una cartella: `os.fdopen` solleva
+>     senza chiudere) e un blocco su una FIFO. La FIFO non ha test: oggi resterebbe appesa.
+> - ✅ **Rossi** (corsia 6187):
+>   - `services backup-apply` (09:48-09:49, carico 18): **14 falliti**, 241 passati. I 14 sono i casi rigidi, per i
+>     motivi attesi (`None`, `restore_not_pending`, una conferma che scrive sopra); le guardie verdi;
+>   - Vitest, i 3 file (09:49-09:50): **11 falliti**, 394 passati, gli 11 attesi;
+>   - `utils backup-cli-restore` (09:50-09:51): **13 falliti**, 79 passati, i 13 attesi.
+>   - `api backup-restore-apply` aspetta lo slot: lì rosso, poi la metà backend, poi verde.
+> - ✅ **Metà frontend applicata** (09:51:27): `--part front`, 5 operazioni in 4 file più i 4 cataloghi.
+>   - `i18n build` (5014 chiavi) e `i18n check` strict puliti;
+>   - Vitest (09:52) sui 3 file: **405 su 405**;
+>   - Vitest su tutta la cartella `features/backup` (09:53): **867 su 867**, 8 file.
+> - **⚠️ Fuori pista — una frase della doc (09:54)**: in `cli_tools.en.md`, «The log above them has the warning…» non
+>   è sempre vero. Una copia lasciata senza errore (`rmtree(ignore_errors=True)` davanti a una cartella in sola lettura)
+>   non registra nessun avviso, e la pulizia allora riprova soltanto. Corretto io stesso: l'avviso c'è quando la
+>   rimozione ha sollevato un errore; LibreFolio «tries again» alla prima partenza dopo 24 ore.
+> - ✅ **Doc** (09:55-09:56, carico 32): `mkdocs build` strict pulito (55 s), `check-links` pulito,
+>   `utils gate-docs-links` 63 passati; porta 6187 libera.
+> - **Coordinatore** (09:57):
+>   - B-18, D1: vince la chiave dell'archivio, con la riga ℹ️. D2: la riga ⚠️ quando la chiave data non legge nessun
+>     segreto;
+>   - B-18 parte dopo il checkpoint di B-32, solo run leggeri, con H in revisione al checkpoint (consuma
+>     `derive_key_from` e `read_secret_file`);
+>   - lo slot di B-32 viene dopo Y-27.
+>   Contratto di B-18 pronto nella cartella della sessione (`b18-contract.md`); lo script dello slot di B-32 è
+>   `b32-wip/slot_after_red.sh`.
+> - ✅ **Slot 2** (coordinatore, 10:04; accanto girava l'E2E di Y):
+>   - **Rosso** `api backup-restore-apply` (10:04:51-10:09:28; il build del frontend rifatto con la metà frontend
+>     dentro, svelte-check 0 errori): **13 falliti**, 157 passati. Sono i 13 di TA-B: 200 `none`, 404, 409, 202 e
+>     l'OpenAPI.
+>   - **Metà backend applicata** (10:09:39): `--part back`, 26 operazioni in 4 file. Ruff e black puliti sui file veri.
+>   - **Verdi**:
+>     - `api backup-restore-apply` (10:09-10:10): **170 passati**;
+>     - `api backup-restore`: 146; `api security-checks`: 3;
+>     - lo script ha aspettato il carico ≥ 50 dalle 10:11 alle 10:14 (picco 104).
+>   - `api sync` (10:16-10:17), uscita 0: `openapi.json` e `generated.ts`, ignorati da git, nominano
+>     `restore_state_unreadable`.
+>   - Slot liberato alle 10:17:47; porta 6187 libera.
+> - ✅ **Verdi leggeri** (10:19-10:26, nella mia corsia; attesa del carico dalle 10:21 alle 10:25):
+>   - `services backup-apply` 255, `services backup-outcome` 97, `services backup-leftovers` 44;
+>   - `utils backup-cli-restore` 92, `utils backup-cli` 102, `utils backup-cli-secure` 66.
+>   Porta 6187 libera.
+> - ✅ **Controlli statici** (10:27): ruff e black puliti su tutti i 10 file Python cambiati, prettier pulito su tutti i
+>   file del frontend cambiati, `git diff --check` pulito.
+> - Lasciato com'è: il messaggio del `throw` in `RestoreCard.test.ts:180`, «Settings › Backup has no restore card».
+>   È il messaggio rosso di B5b per una scheda che non può più mancare; non tocco un test dopo il verde.
+> - Non eseguiti: `e2e` (lo slot non lo chiedeva; la scheda è coperta dai casi Vitest della carta e del flusso),
+>   `front check` separato (lo svelte-check del build del rosso API era pulito, con la metà frontend dentro).
+> - **Backlog**: B-32 ✅; **B-33** nuovo, i residui dichiarati, con la decisione del developer sul fail closed.
+
+### B-18 — `restore --instance-key-file`: i segreti di un archivio in chiaro con la chiave vecchia (2026-10-17, 10:29-10:51) — ✅ 🧊 FROZEN (checkpoint delle 10:51)
+
+> **B-32 entrato** (coordinatore, 10:29): dev `7af21a5c1` (commit `ca1343d6d`), CHANGELOG 🐛 `d11ac04d3`. HEAD portata
+> in avanti a **`d11ac04d3`**, pulita. Via a B-18 con D1 e D2 come decisi; solo run leggeri, revisione di H al
+> checkpoint.
+>
+> **Stato reale** (lettura, 09:45-10:35):
+>
+> - `staging._stage` ricifra i segreti dei plugin soltanto con la chiave che un archivio sicuro porta:
+>   `archive_key = … if INSTANCE_KEY_ENTRY in entries else None` → `_plugin_secrets` → `_archive_subkey` →
+>   `rekey_plugin_secrets(conn, old, current)`.
+> - `rekey_plugin_secrets` lascia stare le righe già sotto la chiave di questa istanza (contate `already_current`, non
+>   illeggibili). Ricifra quelle sotto la chiave vecchia e conta illeggibili le altre.
+> - Se la chiave di questa istanza non si può usare (`settings_subkey` solleva `InstanceKeyError`), la verifica non
+>   ricifra nulla e conta tutto illeggibile (test B4 «without a usable key of its own»).
+>   `instance_key_status().problem` lo dice senza sollevare e senza creare il file.
+> - La docstring di `derive_key_from` (H) descrive già questa strada: la copia dell'amministratore di
+>   `secrets/instance.key`, letta con `read_secret_file()`, o il vecchio `LIBREFOLIO_INSTANCE_KEY`.
+> - I test di ricifratura di B4 stanno in `test_backup_secure.py` (`services backup-secure`), non in
+>   `test_backup_staging.py`.
+> - La doc (`backup_restore.en.md` l.36) dà una sola strada: rimettere la chiave vecchia al posto di quella nuova. Non
+>   va bene per un'installazione che tiene la sua chiave, come un'istanza ospitata o una con segreti suoi.
+>
+> **Contratto congelato** (`b18-contract.md` nella cartella della sessione, 10:36):
+>
+> 1. `stage_archive(..., instance_key=None)` controlla la chiave per prima, prima del lock e di ogni cartella:
+>    `derive_key_from` → `StagingError("instance_key_invalid")`, senza mai il testo della chiave. In `_stage` vince
+>    la chiave dell'archivio; altrimenti si usa quella data. Le rotte API non cambiano, il report nemmeno (nessun
+>    OpenAPI).
+> 2. CLI `restore --instance-key-file FILE`, anche con `--dry-run`:
+>    - letto con `read_secret_file` da root, prima del cambio di utente e prima della password;
+>    - errori ❌ `instance_key_unreadable` e `instance_key_invalid`, uscita 1;
+>    - la riga «Instance key: not included; given with --instance-key-file».
+>    - **D1**: vince la chiave dell'archivio, con la riga ℹ️.
+>    - **D2**: la riga ⚠️ se la chiave data non ricifra nulla. Se invece è la chiave di questa istanza a non funzionare,
+>      un'altra ⚠️ che lo dice (raffinamento mio: la riga D2 accuserebbe la chiave sbagliata).
+> 3. Doc: `cli_tools.en.md` e `backup_restore.en.md`. Proposta di CHANGELOG ✨.
+>
+> - **Rossi in scrittura** (10:37):
+>   - TA-S: `test_backup_secure.py`, k1-k6;
+>   - TA-E: `test_backup_cli_restore.py` (h), con c8 accanto al finto root di B-19 se conviene;
+>   - docs-writer: le due pagine.
+> - **Codice pronto** (10:40) in `b18-wip/apply_b18.py`: 17 operazioni in 2 file.
+>   - `staging.py`: `instance_key`, `_refuse_unusable_instance_key` prima della cartella e del lock, e
+>     `archive_key = … else instance_key`.
+>   - `backup_cli.py`:
+>     - `_restore_keys`: prima il file della chiave, poi la password. Tiene `cmd_restore` sotto C901;
+>     - `_instance_key_from_file`;
+>     - `_print_given_key` per D1, D2 e l'eccezione;
+>     - l'opzione, una riga d'uso, un esempio.
+>   Ruff e black puliti sulla copia emessa, dopo aver rimesso la firma di `stage_archive` su una riga sola, come vuole
+>   black.
+> - ✅ **Rossi dei servizi scritti** (TA-S, 10:44): sezione (i) di `test_backup_secure.py`, 6 funzioni e 9 casi (7
+>   rossi, 2 guardie). k3 prova `""` e 31 caratteri, con e senza un `.restore` lasciato da una verifica precedente.
+>   `new_parameter` ha un argomento `by` facoltativo, che nomina B-18 nel messaggio.
+> - **⚠️ Fuori pista — `TypeError` (10:45)**, da TA-S: il contratto §1 mandava anche un `TypeError` (una chiave che non
+>   è un testo) su `instance_key_invalid`, con la frase «too short», che lì sarebbe falsa. La CLI passa sempre un testo:
+>   il contratto ora lascia il `TypeError` di `derive_key_from`, come fa la patch. Il controllo usa `is not None`, mai
+>   la verità del valore: `""` è rifiutato.
+> - ✅ **Doc scritta** (docs-writer, 10:50):
+>   - `cli_tools.en.md`: l.393, 441, 448 e 475; la nuova sottosezione «🗝️ The Instance Key of Another Installation»
+>     (`#backup-restore-instance-key`, l.546-561); debito di traduzione, niente stamp;
+>   - `backup_restore.en.md`: l.36, e i passi 1, 3 e 4 di «From a Hosted Instance to Your Server».
+>   Rivista contro la patch: le righe esatte, i messaggi di `read_secret_file` (il limite di 65536 byte), il percorso
+>   dei dati dell'immagine.
+>   Lasciato fuori dal docs-writer, da decidere: una clausola in `configuration.en.md` («Saved Secrets and the Instance
+>   Key», pagina tradotta).
+> - ✅ **Rossi della CLI scritti** (TA-E, 10:42): sezione (h) di `test_backup_cli_restore.py`, 8 funzioni e 10 casi.
+>   - c8, il caso da root, sta in (h) e importa il finto root di B-19 da `test_backup_cli_secure.py`;
+>   - l'archivio con i segreti viene dagli helper di `test_backup_secure.py`;
+>   - c3 vuole il file della chiave letto prima della password, come fa la patch.
+> - ✅ **Rossi** (corsia 6187, 10:43-10:44, carico 36):
+>   - `services backup-secure`: **7 falliti** e 70 passati; il motivo è il parametro mancante (`new_parameter`);
+>   - `utils backup-cli-restore`: **10 falliti** e 92 passati; argparse rifiuta l'opzione.
+> - ✅ **Codice applicato** (10:44:11): 17 operazioni in 2 file; ruff (con C901) e black puliti sui file veri.
+> - ✅ **Verdi** (10:44-10:47): `services backup-secure` 77, `utils backup-cli-restore` 102,
+>   `utils backup-cli-secure` 66, `utils backup-cli` 102, `services backup-staging` 161; porta 6187 libera.
+>   `dev.py backup restore --help` mostra l'opzione.
+> - ✅ **Doc** (10:47-10:49): `mkdocs build` strict pulito (80 s), `check-links` pulito, `utils gate-docs-links` 63.
+> - ✅ **Controlli statici** (10:49): ruff e black su tutti i 6 file Python cambiati; `git diff --check` pulito.
+> - Non eseguiti:
+>   - `api backup-restore`: nessuno slot chiesto. L'API non passa nessuna chiave, e `instance_key=None` è la strada di
+>     prima: la coprono `services backup-staging` (161) e `services backup-secure` (77);
+>   - `api sync`: il report non cambia, quindi l'OpenAPI nemmeno.
+> - Proposta di CHANGELOG ✨ (docs-writer): «**The old instance key at a restore** — `./dev.py backup restore ARCHIVE
+>   --instance-key-file FILE` takes the instance key of the installation that made a clear backup…».
+> - **Backlog**: B-18 ✅.
+
+### B-20 — knip e `RESTORE_TICKET_HEADER` (2026-10-17, 10:50-10:54) — ✅ 🧊 FROZEN (checkpoint delle 10:54)
+
+> **B-18 committato** (coordinatore, 10:50): `7b1911fd6`, albero pulito, merge-tree con dev pulito. Il testo del
+> CHANGELOG è salvato; l'entrata aspetta la revisione di H. Via a B-20.
+>
+> **Stato reale**:
+> - `RESTORE_TICKET_HEADER` (`backupApi.ts:190`) è usato in produzione soltanto dentro il suo modulo (l.204).
+> - Il suo test (`backupApi.test.ts:815`, di B5c) lo legge con un cast sull'import a namespace, scritto quando era
+>   ancora rosso, e knip non lo conta come uso.
+> - **knip prima** (10:50:56-10:51:02, `frontend/node_modules/.bin/knip --no-progress`): uscita 1, «Unused exports
+>   (20)», con `RESTORE_TICKET_HEADER` fra loro. Era già rosso per voci di altri; non è un gate.
+>
+> **Correzione** (solo il test, a TA-F): `RESTORE_TICKET_HEADER` nell'import per nome (l.99), e l'asserzione diretta su
+> di esso. Nessun cambio di prodotto, nessuna riga di CHANGELOG.
+>
+> - ✅ **Test cambiato** (TA-F, 10:51): l.99 e l.815 di `backupApi.test.ts`; l'import a namespace resta per le ricerche
+>   della fase rossa degli altri casi. `prettier --check` pulito.
+> - ✅ **Vitest** su `backupApi.test.ts` (10:51:57): **198 su 198**.
+> - ✅ **knip dopo** (10:52:04): uscita 1 come prima. «Unused exports» passa da 20 a **19**. Il diff dei due log toglie
+>   soltanto la riga di `RESTORE_TICKET_HEADER`; il resto sono orari e il consiglio di dotenv.
+> - **Backlog**: B-20 ✅.
+
+### BZ, parte 1 — revisione di sicurezza di ciò che è consegnato (2026-10-17, 10:55-11:58) — ✅ inviata al coordinatore, sola lettura
+
+> **Coordinatore** (10:53):
+> - B-20 committato, `7b13e4d43`, sopra B-18 `7b1911fd6`; entrano insieme dopo la revisione di H su B-18.
+> - Ora la **parte 1 di BZ**, in sola lettura: le superfici di backup e ripristino consegnate in dev (B-9, B-16, B-19,
+>   B-28…B-32) e B-18/B-20 sul mio ramo, cioè rotte, CLI da root, biglietti, staging, lettura degli archivi, segreti.
+> - Le scoperte vanno nella mia sezione del backlog come voci B nuove, ognuna con gravità e cura proposta. **Niente
+>   codice prima del suo OK.** La parte 2 (la consegna finale) viene alla fine, dopo B7 e B9.
+>
+> Base: HEAD `7b13e4d43`, albero pulito. Superficie: circa 6800 righe:
+> - `instance_backup/*.py` e `api/v1/backup/*.py`;
+> - `scripts/backup_cli.py`;
+> - `instance_key.py` e `plugin_settings/crypto.py`, solo come consumatore.
+> Delegata all'agente `security-review`.
+>
+> - **B-18 e B-20 entrati** (coordinatore, 10:56): dev `5c4d7456a`, CHANGELOG ✨ `582cfb6b0`; HEAD portata in avanti.
+>   La revisione di H su B-18 è OK, con un LOW-1 e due appunti della doc, registrati come **B-34**.
+> - **⚠️ Fuori pista — l'agente non parte (10:56)**: la sua richiesta portava con sé il contesto della sessione,
+>   243 035 token contro un limite di 128 000. Nessuna lettura è stata fatta. Riprovo dopo la compattazione del contesto.
+>   Secondo tentativo (11:00), con un prompt corto e il brief in un file (`bz-security-brief.md` nella cartella della
+>   sessione): stesso errore, 293 779 token. L'agente eredita il contesto della mia sessione, e un prompt più corto non
+>   basta. Chiesto al coordinatore come procedere (tier a contesto lungo, o lancio da una sessione fresca).
+> - **Coordinatore** (11:35):
+>   - né l'opzione 1 né la 3: il permesso per il contesto lungo può darlo solo il developer, e la domanda va nella sua
+>     lista;
+>   - la revisione la faccio **io, direttamente**, in sola lettura, dal brief, area per area (rotte, CLI da root,
+>     biglietti e staging, lettura degli archivi, segreti), con un agente `explore` per un'area stretta se parte.
+>   Le scoperte diventano voci B con gravità e cura; niente codice prima del suo OK. Registro in corso nella cartella
+>   della sessione: `bz-findings.md`.
+> - **Metodo** (11:36-11:58): revisione diretta, area per area.
+>   - Un agente `explore` (partito senza problemi) ha raccolto i fatti della lettura degli archivi: nomi, estrazione,
+>     limiti, manifest, chiave, SQLite, Alembic, involucro, fughe. Ho verificato io i punti decisivi: `env.py` fa vincere
+>     l'URL di `-x`; `_row_counts` di post_migration.
+>   - Le altre aree le ho lette io: rotte e autenticazione, upload, download, pannello, biglietto dell'esito, CLI da
+>     root, password e KDF dei backup sicuri, controlli di B-9, esportazioni.
+>   - **Garanzia più bassa** di un agente `security-review` dedicato. La domanda sul contesto lungo è nella lista del
+>     developer, se vuole un secondo passaggio.
+> - **Scoperte** (5), registrate come voci B nel backlog:
+>   - 🟡 **B-35** (F3): lo scompattamento non è limitato dal tetto di caricamento. MEDIO nel cloud;
+>   - ⚪ **B-36** (F1): nomi di tabella non quotati in `post_migration._row_counts`; proprietario fuori da B;
+>   - ⚪ **B-37** (F2): `trusted_schema` acceso sulle connessioni di post_migration e di Alembic alla copia; fuori da B;
+>   - ⚪ **B-38** (F4): la CLI da root legge i file dei segreti attraverso link e FIFO, mentre la guida mette la chiave in
+>     `backups/`;
+>   - ⚪ **B-39** (F5): formule nei CSV esportati (le `notes` degli eventi).
+>   Nessuna critica né alta. Niente codice prima del via del coordinatore.
+> - **Sano**: l'elenco con le righe sta in `bz-findings.md`, sezione «Checked and sound».
+
+### B-18, riparazione — il cancello G rosso: `instance_key_invalid` non dichiarato (2026-10-17, 11:40-11:52) — ✅ 🧊 FROZEN
+
+> **Coordinatore, urgente prima di BZ** (11:40): il cancello G (`api backup-restore`) è rosso su
+> `test_backup_restore.py::test_every_code_a_check_can_end_with_is_one_the_api_declares`, con
+> `(produced, not declared): ['instance_key_invalid']`.
+>
+> **Causa**: la guardia legge con l'AST ogni `StagingError("<codice>")` di `staging.py` e vuole lo stesso insieme di
+> `RestoreErrorCode`, nei due versi. B-18 ha aggiunto `StagingError("instance_key_invalid", …)` senza dichiararlo. Non
+> l'avevo visto perché nessun run `api` faceva parte del lotto: niente slot, e i servizi non bastavano.
+>
+> **Scelta: dichiararlo** (la prima cura proposta dal coordinatore). Nessun test cambia, e la guardia resta stretta: se
+> un giorno l'API desse una chiave alla verifica, il codice sarebbe già dichiarato.
+> - Oggi non può arrivare da un GET: l'API non passa mai `instance_key`, e la CLI chiama `stage_archive` direttamente,
+>   senza registro della verifica.
+> - Il commento sopra `RestoreErrorCode` lo dice.
+> - La scheda non lo mostra: le liste del frontend sono scritte a mano, non derivate dall'enum generato, e
+>   `restoreErrorKey` prende una stringa. Quindi niente chiave i18n e niente `ERROR_KEYS`.
+>
+> - ✅ `backend/app/schemas/backup.py`: `instance_key_invalid` in coda a `RestoreErrorCode`, con il commento. Ruff e
+>   black puliti.
+> - ✅ `api backup-restore` (11:44:59-11:51:07, attesa del carico; svelte-check 0 errori nel build): **146 passati**,
+>   la guardia compresa.
+> - ✅ `api sync` (11:51:07-11:51:42), uscita 0: `openapi.json` e `generated.ts`, ignorati da git, lo contengono.
+> - Porta 6187 libera. Nessun tipo del frontend è esaustivo su `RestoreErrorCode` (grep), quindi niente `front check`
+>   a parte.
+> - **Lezione**: un codice nuovo di `StagingError` richiede `api backup-restore`, anche in un lotto «solo CLI».
+
+### B-35 — un tetto a quello che un archivio scompatta (2026-10-17, 11:59-12:36) — ✅ 🧊 FROZEN (checkpoint delle 12:36)
+
+> **Coordinatore** (11:59): BZ parte 1 va bene. Ordine:
+> 1. B-35 (da solo, prima);
+> 2. B-39;
+> 3. B-36 e B-37 (scrittura permessa su `db/post_migration/__init__.py` e su `env.py` di Alembic, solo per le virgolette
+>    e `trusted_schema=OFF`; H rivede);
+> 4. B-38 lato CLI;
+> 5. B-34, poi le righe di «What It Lists» (B-40).
+>
+> Forma di B-35: `LIBREFOLIO_BACKUP_MAX_RESTORE_MB`, sul totale dichiarato, prima di `_check_space`.
+> - Self-hosted: nessun default.
+> - Profilo ospitato: K volte il limite di caricamento, con K scelto e giustificato da me.
+> - Un valore esplicito vince sempre.
+> - Decisione N82, nella lista del developer.
+>
+> - **K = 8, misurato** (12:05): l'archivio comprime con deflate livello 6. Il database di test passa 4,1:1, una storia
+>   di prezzi sintetica di 52 MB 3,9:1; immagini e PDF restano vicini a 1:1.
+>   - Con K = 4 un archivio pesante di database verrebbe rifiutato proprio al limite di caricamento.
+>   - 8 lascia il doppio di margine e taglia comunque il caso peggiore di deflate (circa 1000:1) di oltre 100 volte.
+>   - Ospitato: 500 MB → 4000 MB. Approvato dal coordinatore (12:15).
+> - **Contratto** (`b35-contract.md`, 12:10, con §1b alle 12:16):
+>   - il lettore `backup_max_restore_mb()` in `config/backup.py`: nel profilo ospitato, se non impostato, vale
+>     `8 × backup_max_upload_mb()`. Eredita da lì il `ProfileDefaultError`, quindi fallisce chiuso; non va nella tabella
+>     di H, perché è un multiplo che segue il limite del fornitore;
+>   - in staging, `max_unpacked` → `unpacked_too_large`, prima dello spazio, dichiarato in `RestoreErrorCode`;
+>   - l'avvio della verifica risponde 503 `backup_restore_unavailable`;
+>   - la CLI segue la stessa regola, con `=0` per un comando;
+>   - 2 codici × 4 lingue;
+>   - una riga in `.env.example`;
+>   - **§1b**: il controllo della configurazione `backup.restore_limit`, chiesto subito dal coordinatore, con il
+>     permesso di ritoccare la tupla in `test_config_audit.py` di H. Se il limite di caricamento non si legge, il
+>     controllo nomina comunque la variabile giusta (`{variable}`);
+>   - doc: anche le tre righe di B in `settings.en.md` «What It Lists» (B-40).
+> - **Codice pronto** in `b35-wip/apply_b35.py`: 30 operazioni in 9 file più i 4 cataloghi; ruff, black e prettier
+>   puliti sulla copia emessa.
+> - **Rossi in scrittura**:
+>   - TA-S: il lettore e il controllo in `test_backup_checks.py`, la mappa in `test_config_audit.py`, staging;
+>   - TA-B: l'API in `test_backup_restore.py`;
+>   - TA-E: la CLI, sezione (i);
+>   - TA-F: Vitest, 7 casi rossi, scritti;
+>   - docs-writer: 5 pagine più `settings`.
+> - ✅ **Rossi scritti** (12:00-12:08):
+>   - **TA-S**:
+>     - `test_backup_checks.py` (h): il lettore e il controllo; (c), (e) a tre, (f) e (g) aggiornati;
+>     - `test_config_audit.py` (di H): l'import e la voce della mappa, nient'altro. L'ordine resta simbolico;
+>     - `test_backup_staging.py` (m).
+>   - **TA-B**: `test_backup_restore.py` (h), con archivi di dimensione esatta (8 MiB, e 8 MiB + 1 byte) che fissano
+>     K = 8 e i MiB; la fixture `instance` pulisce la nuova variabile.
+>   - **TA-E**: (i), 5 casi, con `no_inherited_restore_limit`.
+>   - **TA-F**: 6 casi.
+>   - **Docs-writer**: le 6 pagine più «Startup Checks».
+> - **⚠️ Fuori pista — `{variable}` (12:20)**: nel profilo ospitato, con la variabile non impostata, un
+>   `BackupConfigError` può venire dalla variabile del caricamento. Il controllo prende quindi il nome da
+>   `exc.variable`, nel messaggio e nel riassunto. Contratto §1b corretto, TA-S e il docs-writer avvisati. Il
+>   riassunto `profileTable` sta in una costante: la riga superava 300 caratteri.
+> - ✅ **Rossi** (corsia 6187):
+>   - `services backup-checks`: 45 falliti e 48 passati;
+>   - `services backup-staging`: 7 falliti e 161 passati;
+>   - `services config-audit`: errore di raccolta, atteso, perché il file di H importa il nuovo controllo in cima;
+>   - `utils backup-cli-restore`: 5 falliti e 102 passati;
+>   - Vitest: 6 falliti e 350 passati;
+>   - `api backup-restore` (slot 2, 12:11-12:17): **10 falliti** e 151 passati.
+> - ✅ **Patch applicata** (12:17:49): 30 operazioni in 9 file più 4 cataloghi. `i18n build` 5033 chiavi e
+>   `i18n check` strict puliti; ruff e black puliti.
+> - **⚠️ Fuori pista — un sostituto di `stage_archive` (12:22)**: il primo verde di `api backup-restore` dava
+>   1 fallito. Il sostituto in `test_a_check_that_fails_otherwise_ends_failed_with_its_code` non aveva la keyword
+>   nuova: `TypeError`, poi `stage_failed`. TA-B ci ha aggiunto `instance_key=None, max_unpacked=None`; l'altro
+>   sostituto prende già `**kwargs`.
+> - ✅ **Verdi**:
+>   - API: `api backup-restore` **161** (12:24) e `api backup-restore-apply` **170**; `api sync` uscita 0. Slot
+>     liberato alle 12:24:26;
+>   - servizi (12:24-12:28): `backup-checks` 93, `backup-staging` 168, `config-audit` 156, `config-env-example` 38,
+>     `profile-defaults` 112, `accounts-checks` 76, `email-checks` 87, `backup-secure` 77;
+>   - utils (12:28-12:30): `backup-cli-restore` 107, `backup-cli` 102, `backup-cli-secure` 66;
+>   - Vitest (12:32): la cartella `backup` più `GlobalSettingsTab.test.ts`, **982 su 982**.
+> - ✅ **Doc** (12:32-12:34): `mkdocs build` strict (66 s), `check-links`, gate 63.
+> - ✅ **Controlli statici**: ruff e black su tutti i 15 file Python cambiati; prettier sui file del frontend;
+>   `git diff --check` pulito. Porta 6187 libera.
+> - **Per H** (revisione dopo l'entrata):
+>   - il lettore non passa da `profile_default`: segue il limite di caricamento, che ci passa;
+>   - la voce nella mappa di `test_config_audit.py`;
+>   - `developer/architecture/settings.md` l.79-84: inoltrato al coordinatore.
+> - **Backlog**: B-35 ✅, B-40 ✅ (le righe di B in «What It Lists»).
+> - **Merge di dev in B-35** (coordinatore, 12:36): dev `9e8f6e8dc` dentro `32739feaa`, con 3 conflitti di doc
+>   risolti tenendo entrambe le parti:
+>   - `configuration.en.md`, la riga `LIBREFOLIO_PROFILE`: quella di dev più la mia frase, verificata contro la base
+>     (stage 1);
+>   - `settings.en.md`, «What It Lists»: «Test mode» di H, poi le tre righe di B, nell'ordine del `CONFIG_CHECKS`
+>     fuso;
+>   - `security.md`, la riga `i18n_key`: il 4 → 7 di dev più il mio nine → thirteen.
+>   Cancelli sulla revisione combinata (12:37-12:42): `services config-audit` 204, `backup-checks` 93, `mkdocs build`
+>   strict (123 s), `check-links`, gate 63. Merge `d7efb5805` → dev `9fafc79b5`; CHANGELOG 🔒 dentro.
+
+### B-39 — formule nei CSV esportati, con un ritorno esatto (2026-10-17, 12:43-13:09) — ✅ 🧊 FROZEN (checkpoint delle 13:09)
+
+> **B-35 entrato** (coordinatore, 12:43): merge `d7efb5805` → dev `9fafc79b5`, CHANGELOG 🔒; HEAD portata in avanti
+> a `e3ef5c9a6`. Via a B-39.
+>
+> **Stato reale** (12:44-12:52):
+> - `series_export.stream_rows_as_csv` scrive le celle così come sono: un testo che comincia con `=` diventa una
+>   formula in un foglio di calcolo. Le uniche colonne di testo libero sono le `notes` degli eventi; le altre sono
+>   codici, date e numeri.
+> - **L'export degli eventi è fatto per tornare indietro**: `EventDataImportModal` legge `value` come alias di `amount`
+>   e legge `notes`. Un `'` aggiunto solo all'export resterebbe nella nota dopo una reimportazione.
+> - `CsvColumnDef` ha già un `parse` per colonna, che `CsvEditor` chiama sulle celle non vuote e senza spazi ai bordi.
+> - L'altro scrittore di CSV (`brim_provider.write_combined_csv`) non è di B: contiene i dati del broker dell'utente
+>   stesso, quindi al più un danno a sé. Solo una nota.
+>
+> **Contratto** (approvato dal coordinatore, 12:55, con il permesso di scrivere sul modale per l'hook di `notes`;
+> rivede X):
+> 1. All'export, un testo che corrisponde a `'*[=+\-@\t\r]` all'inizio riceve un `'` in più, salvo un numero puro
+>    (`[+-]?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?`), di qualunque tipo. Il JSON non cambia.
+> 2. All'import, `notes` toglie esattamente un `'` iniziale davanti a quel motivo (`unescapeFormulaText`, nello script
+>    di modulo del modale). Il ritorno è esatto, anche per una nota che comincia già con apostrofi (`'=x` →
+>    `''=x` → `'=x`).
+>
+> - **Codice pronto** in `b39-wip/apply_b39.py`: 5 operazioni in 2 file; ruff, black e prettier puliti.
+>   Prova a mano sulla copia emessa: `=1+1` → `'=1+1`, `'=x` → `''=x`, `-1.5` resta, `a = b` resta.
+> - **Rossi in scrittura**:
+>   - TA-S: un file nuovo, `test_series_export_csv.py`, con la sua voce `services series-export-csv`;
+>   - TA-F: i casi di Vitest (finiti in `DataEditor.test.ts`, vedi sotto);
+>   - docs-writer: le pagine della doc.
+> - ✅ **Rossi scritti** (12:44-12:54):
+>   - **TA-S**: `test_series_export_csv.py`, nuovo, registrato come `services series-export-csv` (isolamento pure):
+>     6 funzioni e 30 casi (11 rossi, 19 guardie). Asserisce sulle celle rilette da `csv.reader`; un valore non di
+>     testo il cui testo sembra una formula viene scappato anche lui.
+>   - **TA-F**: 22 casi in `DataEditor.test.ts`, non in un file nuovo. Quel file è già registrato, e ha già il blocco
+>     del modale degli eventi; un file nuovo avrebbe chiesto una riga in `_frontend_utility.py`. I casi: la funzione,
+>     la tabella del ritorno (con anche `'\r=1`), e il modale che reimporta tre note.
+>   - **Docs-writer**:
+>     - `data-editor.md` (dev) l.123-128;
+>     - `user/assets/detail/data-editor.en.md` l.80, perché `events.en.md` non descrive il formato (debito di
+>       traduzione);
+>     - `security.md` «🧼 Output Escaping», l.2256-2267.
+> - **⚠️ Fuori pista — gli apostrofi già presenti (12:58)**: una nota che comincia già con `'=x` sarebbe tornata
+>   `=x`. L'export scappa ora anche una serie di apostrofi davanti a un carattere di formula (`'*[=+\-@\t\r]`, `'=x`
+>   → `''=x`), e l'import ne toglie esattamente uno: il ritorno è esatto per ogni testo.
+> - ✅ **Rossi** (corsia 6187, 12:54-12:55): `services series-export-csv` **11 falliti** e 19 passati; Vitest
+>   `DataEditor.test.ts` **22 falliti** e 88 passati.
+> - ✅ **Codice applicato** (12:55:44): 5 operazioni in 2 file.
+>   - `series_export.py`: `_FORMULA_LIKE`, `_PLAIN_NUMBER`, `_csv_cell`;
+>   - `EventDataImportModal.svelte`: `<script module>` con `unescapeFormulaText`, e `parse:` su `notes`.
+>   Ruff, black e prettier puliti.
+> - ✅ **Verdi**: `services series-export-csv` 30; Vitest su `ui/data-editor/` e `components/assets/`, **1560 su
+>   1560** in 38 file.
+> - ✅ **Doc** (12:57-12:59): `mkdocs build` strict (70 s), `check-links`, gate 63. Controlli statici puliti, porta
+>   6187 libera.
+> - ✅ **Slot 2** (coordinatore, 13:04), regressione API:
+>   - `api backup-export-extras` **8 passati** (13:04-13:07; il frontend ricostruito, svelte-check 0 errori con lo
+>     script di modulo del modale);
+>   - `api asset-prices-export` **5 passati**.
+>   Porta 6187 libera.
+> - Proposta di CHANGELOG 🔒 (docs-writer): «CSV exports are safe to open in a spreadsheet…».
+> - **Backlog**: B-39 ✅.
+
+### B-36 + B-37 — nomi quotati e `trusted_schema` spento anche nelle correzioni e nell'upgrade (2026-10-17, 13:09-13:33) — ✅ 🧊 FROZEN (checkpoint delle 13:33)
+
+> **B-39 entrato** (coordinatore, 13:09): `c8fc32bfa` → dev `25d00f192`, CHANGELOG 🔒 `bbfb76e38`; HEAD portata in
+> avanti. Via a B-36 + B-37; rivede H.
+> - Permesso di scrittura (11:59) su `db/post_migration/__init__.py` e su `env.py` di Alembic, solo per le virgolette e
+>   per `trusted_schema=OFF`.
+>
+> **Stato reale** (13:00-13:10):
+> - Solo `_row_counts` costruisce SQL con nomi che vengono dall'archivio. `autoincrement.py` usa la tupla costante
+>   `AUTOINCREMENT_TABLES`; la connessione di `_backup` scrive un file `.bak` nuovo.
+> - Il test di B-28 «every connection … trusted_schema off first» lascia fuori apposta le correzioni e l'upgrade (§2):
+>   «not recorded».
+> - `security.md` l.1821-1827 lo dice.
+>
+> **Contratto** (`b36-37-contract.md`):
+> 1. **B-36**: un `_quoted()` locale, che raddoppia `"`, in `_row_counts`.
+> 2. **B-37**: `PRAGMA trusted_schema=OFF` subito dopo la connessione di `run_post_migration_fixes`, dentro il `try`,
+>    anche sul database vivo: lo schema di LibreFolio contiene solo tabelle e indici, e le funzioni predefinite di
+>    SQLite sono innocue.
+> 3. **B-37**: un listener `connect` (`_schema_untrusted`) in `env.py`, registrato prima di `connectable.connect()`, per
+>    ogni URL.
+>
+> - **Codice pronto** in `b36-wip/apply_b36.py`: 5 operazioni in 2 file; ruff e black puliti sulla copia emessa.
+> - **Rossi in scrittura** (TA-S):
+>   - `test_post_migration.py` (`db post-migration`);
+>   - il registratore di (l) esteso a `post_migration` (`services backup-staging`);
+>   - un controllo statico di `env.py` (`utils dev-cli-db-path`).
+>   Doc: `security.md` l.1821-1827 (docs-writer).
+> - ✅ **Rossi scritti** (TA-S, 13:10-13:15):
+>   - `test_post_migration.py` §17: un 1.1 portato all'ultima migrazione (correzione autoincrement pendente), più le
+>     tabelle `x"y` e `a" WHERE 1 --`, che oggi diventa `FROM "a" WHERE 1 --"` («no such table: a»). Una spia su
+>     `_row_counts`;
+>   - il registratore (l) di `test_backup_staging.py` registra anche `post_migration`; la copia `.bak` resta fuori per il
+>     filtro del percorso;
+>   - DBP-j in `test_dev_cli_db_path.py`: un controllo AST di `env.py`. Un'esecuzione vera di Alembic non può mostrare
+>     il pragma: è uno stato della connessione, dentro un processo che finisce.
+> - ✅ **Rossi** (corsia 6187, 13:15-13:19): `db post-migration` **1 fallito** (44 passati), `services backup-staging`
+>   **1 fallito** (167), `utils dev-cli-db-path` **2 falliti** (15). Sono esattamente i 4 attesi.
+> - ✅ **Patch applicata** (13:19:19): 5 operazioni in 2 file; ruff e black puliti.
+> - ✅ **Verdi** (13:19-13:23):
+>   - `db`: `post-migration` 45, `post-migration-event-types` 36, `post-migration-orphan-pairs` 47,
+>     `autoincrement-schema` 4, `migration-008` 23, `migration-009` 11;
+>   - `services backup-staging` 168, che comprende l'upgrade vero in un processo a parte;
+>   - utils: `dev-cli-db-path` 17, `backup-cli-restore` 107.
+>   Porta libera.
+> - ✅ **Doc** (13:30-13:32): `security.md` l.1821-1832 e il paragrafo dei test l.1838-1841 (docs-writer); `mkdocs
+>   build` strict (61 s), `check-links`, gate 63.
+> - ✅ **Controlli statici**: ruff e black sui 7 file Python, tranne `_backend_db.py`, che era già sporco prima di B (tre
+>   `PLC0415`, e black che lo riformatterebbe), con una sola riga di desc aggiunta. `git diff --check` pulito.
+> - **Per H**:
+>   - le due modifiche nei suoi file (`post_migration/__init__.py`, `env.py`);
+>   - `database/index.md` l.203-204, che potrebbe dire «with `trusted_schema` off first» (nota del docs-writer).
+> - **Backlog**: B-36 ✅, B-37 ✅.
+
+### B-38 — i file dei segreti letti da root: regolari, mai attraverso un link nella cartella dei dati (2026-10-17, 13:36-13:58) — ✅ 🧊 FROZEN (checkpoint delle 13:58)
+
+> **B-36/B-37 entrati** (coordinatore, 13:39): `2eff9e623` più il merge `05d1dc76a` → dev `d1976bca8`. Un conflitto
+> nella desc del runner `post-migration` (Z-28), risolto dal coordinatore tenendo entrambe le frasi. HEAD portata in
+> avanti.
+>
+> - **⚠️ Fuori pista — Kubernetes (13:36)**: rifiutare ogni link con `O_NOFOLLOW`, come concordato, romperebbe
+>   Kubernetes, che monta ogni segreto attraverso un symlink (`/etc/secret/pw` → `..data/pw`). Proposta di rifinitura,
+>   **approvata dal coordinatore (13:40, opzione a)**:
+>   - ovunque, un file regolare aperto con `O_NONBLOCK`: una FIFO non blocca più il comando, e una cartella o un
+>     dispositivo non vengono letti;
+>   - i link sono rifiutati solo da root e solo dentro la cartella dei dati;
+>   - la guida sposta la chiave fuori dalla cartella dei dati;
+>   - la corsa residua va nella riga H-47 di H.
+> - **Altri due punti miei** (13:42):
+>   - il controllo percorre **ogni componente**, dalla cartella dei dati in giù: un `backups` sostituito da un link verso
+>     `/root` sarebbe sfuggito controllando solo l'ultimo componente;
+>   - la guida usa **`/root`** del container, non `/tmp`: in `/tmp` l'utente del server può creare il nome per primo
+>     come link, e `docker compose cp` ci scriverebbe attraverso.
+> - **Contratto**: `b38-contract.md`. Il codice: `_secret_path(args, path, label)` prima di ogni `read_secret_file`
+>   della CLI, con `_data_dir_setting` (come `_decrypt_as_owner`) e `_link_inside`. Le eccezioni sono
+>   `SecretFileError`, quindi i ❌ restano quelli di oggi (`password_unreadable`, `instance_key_unreadable`).
+> - **Codice pronto** in `b38-wip/apply_b38.py`: 4 operazioni, ruff e black puliti. Prova a mano sulla copia emessa:
+>   - una FIFO e una cartella sono rifiutate subito;
+>   - un file normale passa, e uno mancante è lasciato a `read_secret_file`;
+>   - il link di una cartella madre dentro i dati viene preso, fuori no.
+> - **Rossi in scrittura** (TA-E, sezione (n) di `test_backup_cli_secure.py`); doc (docs-writer): la guida, `cli_tools`
+>   e `security.md`.
+> - ✅ **Rossi scritti** (TA-E, 13:42-13:50): sezione (n), 3 funzioni e 40 casi sui 4 comandi che leggono un segreto
+>   (`decrypt` compreso).
+>   - Una FIFO o una cartella, da root finto e non: 16 casi rossi. Un watchdog di 10 s apre la FIFO, così il run non
+>     resta appeso.
+>   - Un link dentro i dati, su `backups/key` o su `backups/` stesso: 8 rossi. Il bersaglio non viene mai aperto.
+>   - 16 guardie.
+>   - Due vincoli fissati: il controllo dei link viene **prima** di ogni apertura, e lavora sul percorso **come è
+>     dato**, non risolto.
+>   - Trovato da TA-E: oggi `create` e `inspect` rifiutano un `backups/` che è un link solo **dopo** che root ha già
+>     letto il segreto attraverso quel link.
+> - ✅ **Doc scritta** (docs-writer, 13:44):
+>   - `backup_restore.en.md` l.308 e l.320-328: la chiave passa da `/root` del container;
+>   - `cli_tools.en.md` l.363-364, 378, 564, 569: la regola detta una volta sola (debito di traduzione);
+>   - `security.md` l.856-870: il punto «Secret files read as root», con il residuo H-47.
+>   - Da passare ad H: «The Instance Key» in `security.md` l.706-708 dice ancora che B-18 è nel backlog.
+> - ✅ **Rosso** (corsia 6187, 13:50-13:52): `utils backup-cli-secure` **24 falliti** e 82 passati, come previsto.
+> - ✅ **Patch applicata** (13:52:44): 4 operazioni in `scripts/backup_cli.py`; ruff e black puliti.
+> - ✅ **Verdi** (13:52-13:54): `backup-cli-secure` **106** (37 s: nessuna attesa su una FIFO), `backup-cli-restore`
+>   107, `backup-cli` 102.
+> - ✅ **Doc** (13:55-13:57): `mkdocs build` strict (54 s), `check-links`, gate 63. Controlli statici puliti, porta
+>   6187 libera.
+> - **Backlog**: B-38 ✅. Il residuo (due aperture) è nella riga H-47 di H.
+
+### B-34 — la causa giusta quando l'istanza non ha ancora una chiave, e le frasi della doc (2026-10-17, 14:00-14:10) — ✅ 🧊 FROZEN (checkpoint delle 14:10)
+
+> **B-38 entrato** (coordinatore, 14:00): `1ed071c2f` → dev `c2a09b960`, CHANGELOG 🔒 `9b02120a7`; HEAD portata in
+> avanti. La correzione di `security.md` l.706-708 e il residuo H-47 vanno ad H. Via a B-34.
+>
+> - **LOW-1 di H**:
+>   - Su un'istanza senza chiave, dove la verifica non può crearla, `instance_key_status()` dice `not_created` e
+>     `problem=None`, e la riga D2 accusa la chiave data.
+>   - Cura: il ramo dell'eccezione prende anche `not_created`, e la riga dice «`<path>`: there is no instance key yet,
+>     and it could not be created».
+>   - Patch: `b34-wip/apply_b34.py`, 1 operazione; ruff e black puliti.
 > - **Doc**:
->   - `admin/backup_restore.en.md`, la riga di `database_damaged` della tabella dei rifiuti (pagina senza traduzioni);
->   - `admin/cli_tools.en.md`, il passo 4 della prova su copia e la riga di `database_damaged`. Debito di traduzione
->     vero, niente stamp, come per B-38.
->   - `security.md`: non toccato (H-52). Il paragrafo è in `files/b49-security-paragraph.md`, mandato col checkpoint.
-> - **Non fatti**: `api backup-restore` e `api backup-restore-apply` (serve la corsia col server); la `desc` di
->   `backup-staging` nel runner non nomina B-49 (file condiviso, non assegnato).
-> - File della sonda (`/tmp/lf_b49_probe`, 488 MB) cancellati.
-> - 🧊 **CHECKPOINT READY** (21:26): 7 file tracciati, nessun file nuovo; FROZEN.
-> - **Entrato in dev** (coordinatore, 21:34): `709dfb1e4`, dopo l'unione di dev nel mio ramo (`74c08dafe`; conflitto
->   solo nel backlog, X-R79 contro X-R80 di X, tenuti entrambi). Sull'albero unito il coordinatore ha fatto girare
->   `backup-staging` 202, `restore-non-iso-warning` 46, `api backup-restore` 161, `api backup-restore-apply` 215: verdi.
-> - ✅ **Coda** (coordinatore, 21:34; H-52 entrato, `security.md` libero; 21:34-21:37):
->   - `developer/architecture/security.md`: il paragrafo di B-49 dopo «What the check cannot read», e
->     `_refuse_undecodable_text()` nell'elenco delle connessioni del punto `trusted_schema`. Nello stesso elenco mancava
->     la lettura E-19b1 (`_holds_non_iso_currencies()`, `mode=ro`, `trusted_schema=OFF` per primo): aggiunta, detto al
->     coordinatore;
->   - la `desc` di `backup-staging` nel runner nomina B-49 (o); ruff e black puliti, il runner si carica;
->   - doc: build stretta, `check-links`, `utils gate-docs-links` 63; `git diff --check` pulito. CHECKPOINT READY 21:37.
+>   - in `cli_tools`, un vecchio `LIBREFOLIO_INSTANCE_KEY` va nel file così com'è, spazi compresi;
+>   - la riga dell'eccezione copre anche il caso nuovo;
+>   - il `chmod 600` non serve più: B-38 ha spostato la chiave in `/root`. Da controllare che nessuna pagina la metta
+>     ancora in `backups/`.
+> - **Rossi in scrittura** (TA-E, accanto a c7); doc (docs-writer).
+> - ✅ **Rosso scritto** (TA-E): in `test_backup_cli_restore.py`, dopo c7,
+>   `test_when_this_instance_has_no_key_yet_and_none_can_be_created_it_is_said_instead_of_blaming_the_key_given`.
+>   - Un'istanza senza chiave, con `secrets/` a 0o500 (un aiuto rimette i permessi nel `finally`), e una chiave data.
+>   - Atteso: la riga «This instance's own key cannot be used…», con `there is no instance key yet, and it could not be
+>     created`; mai la riga che accusa la chiave data.
+>   - Desc del runner (`_backend_utils.py`, `backup-cli-restore`) allungata, in aggiunta.
+> - ✅ **Rosso** (corsia 6187): `utils backup-cli-restore` **1 fallito** e 107 passati, esattamente il caso nuovo
+>   (`files/logs/b34_red.log`).
+> - ✅ **Patch applicata** (14:03:03): 1 operazione in `_print_given_key` di `scripts/backup_cli.py`; ruff e black
+>   puliti.
+> - ✅ **Verdi**: `backup-cli-restore` **108**, `backup-cli-secure` **106**; porta 6187 libera.
+> - ✅ **Doc** (docs-writer, più una frase mia):
+>   - `cli_tools.en.md` l.563: il valore di un vecchio `LIBREFOLIO_INSTANCE_KEY` va nel file «as written in the
+>     variable, spaces included»; il file di `LIBREFOLIO_INSTANCE_KEY_FILE` «as it is»;
+>   - `cli_tools.en.md` l.568: la riga dell'eccezione copre anche un'istanza senza chiave, con il testo del problema;
+>   - il secondo appunto di H (`chmod 600` sulla chiave vecchia in `backups/`) non vale più alla lettera: dopo B-38 la
+>     chiave non passa più dai dati, e nessuna pagina la mette in `backups/` o in `LibreFolio-data/` (grep). Il senso
+>     vale ancora sull'host: in `backup_restore.en.md` l.320 il file `old-instance.key` accanto a `docker-compose.yml`
+>     è «kept private (`chmod 600 old-instance.key`)», come il file della password a l.96. Pagina solo inglese.
+>   - Traduzioni di `cli_tools`: debito vero (due frasi cambiate di senso), nessun `translate-stamp`, come in B-38.
+> - ✅ **Controlli** (14:05-14:10, ripetuti dopo la frase di l.320): `mkdocs build` strict, `check-links`, gate 63; ruff e black puliti sui 3 file
+>   Python; `git diff --check` pulito; porta 6187 libera.
+> - **Backlog**: B-34 ✅. CHANGELOG: nessuna voce (un messaggio della CLI più preciso, dentro B-18 della stessa
+>   release).
+
+### B-41 + B-42 — l'esito anonimo controlla il biglietto prima dello stato, e un file del biglietto rotto si registra una volta (2026-10-17, 14:10-14:56) — ✅ 🧊 FROZEN (checkpoint delle 14:56)
+
+> **B-34 entrato** (coordinatore, 14:10): `731337a5a` → dev `202849800`; HEAD portata in avanti. Via a B-41 nella 1.3
+> («cheap: check the ticket before reading the state»). Dopo, se B-33 e B7 aspettano ancora il developer, il
+> coordinatore trova lavoro in un'altra sezione.
+>
+> **Stato reale** (14:10-14:20):
+> - `get_restore_outcome` (`restore.py:443-447`) legge lo stato (`read_restore`) prima di `outcome.read_outcome`. Con uno
+>   stato che il file system rifiuta, `_read_state` registra un errore a ogni chiamata, qualunque biglietto: nessuno,
+>   malformato, 43 caratteri qualsiasi.
+> - `read_outcome` usa lo stato solo dopo forma, cartella, registro, impronta e scadenza: basta passargli il modo di
+>   leggerlo.
+> - **⚠️ Fuori pista — B-42**: `_read_record` registra un errore a ogni chiamata con un biglietto ben formato quando il
+>   file del biglietto è rotto (illeggibile, un link, spazzatura, troppo grande). Stessa classe di rumore, dal B5c.
+>   Chiesto al coordinatore; **dentro questo lotto** (coordinatore, 14:24).
+> - **Nota per B-33** (nella sua riga, coordinatore 14:24): con uno stato illeggibile dopo un riavvio, il ripiego della
+>   pagina su `/status` riceve 500, che `readStatusWithSession` prende per «server giù». L'overlay interroga ogni secondo
+>   per sempre, senza dire perché.
+>
+> **Contratto** (`b41-contract.md`):
+> 1. **B-41**: `read_outcome(ticket, state, …)` accetta come `state` anche la funzione che lo legge, chiamata una volta
+>    e solo per il biglietto di un riavvio non scaduto. La rotta le passa `lambda: _state_for_outcome(data_dir)`, la
+>    lettura indulgente di oggi.
+> 2. **B-42**: `_report` registra un errore la prima volta per cartella dati, poi `debug` finché dura lo stesso errore;
+>    `_forget` lo dimentica quando il file viene scritto, tolto o letto. Un lock rende esatto il controllo.
+> 3. Invariati: ogni risposta (la sola 404), il titolare del biglietto giusto (guardia b5), le rotte dell'admin.
+>
+> - **Codice pronto** in `b41-wip/apply_b41.py`: 11 operazioni in 2 file; ruff e black puliti sulla copia emessa.
+>   Prova a mano (`probe_b41.py`) sulla copia emessa: 15/15.
+> - **Rossi in scrittura** (TA-B41): (j) B-41 in `test_backup_restore_apply.py`; (c) B-41 e B-42 in
+>   `test_backup_outcome.py`. Doc (DW-B41): `security.md`, tre punti.
+> - ✅ **Doc scritta** (DW-B41, 14:30): `security.md`
+>   - l.2052-2055, «What cannot be read is not none»: l'esito legge lo stato solo per il biglietto di un riavvio non
+>     scaduto (lot B-41);
+>   - l.2168-2172, «Kept as a hash.»: un file del biglietto illeggibile o non valido, un errore una volta per cartella
+>     dati, poi `debug` finché dura lo stesso errore (lot B-42);
+>   - l.2186-2187, «One answer for every miss.»: il biglietto prima dello stato (lot B-41).
+>   - Pagina solo inglese (`developer/`): nessun debito di traduzione.
+> - ✅ **Rossi scritti** (TA-B41, 14:15-14:35):
+>   - API (j), dopo b5 (b5 invariata): `test_a_ticket_that_does_not_open_the_outcome_never_reads_the_state_nor_logs_it`.
+>     - I 15 casi di `NOT_OPENING` decisi dal biglietto: tutti tranne `no-restore` e `a-restore-of-another-stage`.
+>       Esclusi per id, con una barriera che li trova in `NOT_OPENING`. Per i 3 modi di `unreadable`: 45 casi.
+>     - Asserzioni: la sola 404; il file dello stato mai aperto; nessun evento «The state of the restore cannot be read».
+>     - Barriera: dopo la risposta, `read_restore` a mano è rifiutato e registrato, quindi `capture_logs` sente il
+>       logger di `apply`.
+>   - Servizi (c), B-41: il lettore chiamato una volta per il biglietto giusto, 3 casi (rosso). Guardie, il lettore mai
+>     chiamato: 32 casi in 4 test (`NOT_THE_TICKET`, `UNTRUSTED_FILES`, senza file, scaduto).
+>   - Servizi (g), B-42, 32 casi rossi in 4 test, su 5 modi di rompere il file (non un biglietto, oltre 4096 byte, un
+>     link, modo 000, EIO):
+>     - letto 3 volte: un solo errore;
+>     - di nuovo un errore dopo una scrittura, una lettura valida, una rimozione, o un file trovato mancante (20 casi);
+>     - un errore diverso conta come nuovo, anche tornando al primo (2 sequenze);
+>     - una memoria per cartella dati.
+>   - (e): il biglietto vero presentato al file rotto in 4 modi, mai nei log.
+>   - Desc dei runner, in aggiunta: `backup-restore-apply` e `backup-outcome`.
+> - ✅ **Rosso dei servizi** (corsia 6187, 14:38): `services backup-outcome` **35 falliti** e 129 passati, esattamente i
+>   3 + 32 attesi: l'`AttributeError` del lettore, e gli errori ripetuti di B-42 (`files/logs/b41_red_services.log`).
+> - ⏳ Rosso dell'API: aspetta uno slot breve (chiesto alle 14:36).
+> - ✅ **Rosso dell'API** (slot del coordinatore, 14:38-14:47): `api backup-restore-apply` **45 falliti** e 170
+>   passati, esattamente i casi nuovi: «the state file never opened for a ticket that does not open the outcome»
+>   (`files/logs/b41_red_api.log`).
+>   - **⚠️ Fuori pista**: 8 minuti invece di 1-2. I merge di dev avevano reso vecchia la build di debug del frontend
+>     della corsia, quindi il runner l'ha rifatta (vite) prima del server. Detto al coordinatore durante lo slot.
+> - ✅ **Patch applicata** (14:47:00): 11 operazioni in 2 file; ruff e black puliti.
+> - ✅ **Verdi** (14:47-14:49): `api backup-restore-apply` **215** (170 + 45), `services backup-outcome` **164**
+>   (129 + 35), `services backup-apply` **255** (regressione: chi chiama `read_outcome` con uno stato). Slot liberato
+>   alle 14:49.
+> - ✅ **Controlli** (14:50-14:54):
+>   - `schemas openapi-client-text` 78: la docstring della rotta finisce nella descrizione OpenAPI, senza `${` né `\`;
+>   - ruff e black puliti sui 6 file Python; `git diff --check` pulito;
+>   - `lint --dead-code --scope backend`: nessun simbolo nuovo; l'uscita 1 viene da voci di altri pacchetti, già
+>     presenti;
+>   - client generato: ignorato da git, niente da fare;
+>   - `mkdocs build` strict, `check-links`, gate 63; porta 6187 libera.
+> - **Una precisazione mia nella doc**: `_REPORTED` è memoria di processo. Con più worker ognuno registra il suo errore
+>   una volta: «once per data directory in each server process».
+> - **Backlog**: B-41 ✅, B-42 ✅; la nota della pagina è nella riga B-33. CHANGELOG: una riga 🔒 proposta nell'handoff
+>   (meno rumore nei log per una rotta anonima).
+
+### X-R71 (per X) — il caricamento manuale dei prezzi, tutto o niente; più le due note di H su B-36/B-37 (2026-10-17, 14:58-15:52) — ✅ 🧊 FROZEN (checkpoint delle 15:52)
+
+> **Assegnazione** (coordinatore, 14:58, dalla sezione di X): «a manual price upload (`POST /assets/prices` →
+> `price_store.bulk_upsert_prices`, MANUAL) checks the currency asset by asset. When asset 3 of 5 has a currency
+> mismatch, assets 1–2 are already written before the refusal. The upload must be all or nothing: every check before the
+> first write, as X-R65 now does for dates.» File: `api/v1/assets/prices.py`, `services/assets/price_store.py`; rivede X.
+> Origine: la nota di Z per X nel piano 06, X-R65 passo 6.
+>
+> **Analisi** (14:58-15:10, sola lettura; `files/xr71-analysis.md`):
+> - Una chiamata manuale: le cifre (`ValueError` → 400, solo il primo asset) e le date (X-R65, 422) prima di ogni
+>   istruzione. Poi, asset per asset: lettura, valuta, scrittura a fette di 1000 date con un `commit` per fetta
+>   (`:400`), voluto per il lock di scrittura di SQLite. Il controllo della valuta (`:251-259`) rifiuta tutto **dopo**
+>   che gli asset precedenti sono già scritti: è l'unico rifiuto dell'intera chiamata che viene dopo una scrittura.
+> - Morbidi per scelta: l'asset che non esiste («Asset N not found») e il controllo OHLC, data per data (W-B52 per la
+>   sentinella).
+> - **Il refresh dei fornitori non c'entra**: un asset per chiamata, controllato prima della sua prima fetta, e il
+>   refresh scarta da sé i punti in un'altra valuta. La web app manda un asset e nessuna valuta: lo vede solo un client
+>   dell'API.
+> - Scartata: una transazione unica per la chiamata manuale, come gli eventi. Riporterebbe il lock lungo che le fette
+>   evitano.
+> - **Fratello per X**: l'editor conta come salvata ogni riga mandata (`AssetDataEditorSection.svelte:316`) e non legge
+>   `results[].message`. Una data saltata dal controllo OHLC risulta salvata. Va ad X, nella sua X-R46.
+>
+> **Decisioni** (coordinatore, 15:15): **GO**. D1 il 422 codificato `price_currency_mismatch`; D2 (il rifiuto delle
+> cifre) e D3 (gli asset sconosciuti) invariati. Il permesso di scrittura copre `schemas/prices.py`, solo la riga della
+> descrizione. X aggiunge X-R71 (proprietario B) e il fratello al backlog; il diario sta qui. Nessun altro worktree ha i
+> tre file di test né i tre file di prodotto.
+>
+> **Contratto** (`files/xr71-contract.md`):
+> - `price_store.PriceCurrencyMismatchError(items, count)`, un'`Exception` come `DateOutOfRangeError`;
+>   `price_currency_mismatch_detail()` → `{code, message, items (≤ 10), count}`.
+> - `_reject_currency_mismatches(session, data)`, solo per MANUAL, dopo le date e prima del ciclo. Legge le valute di
+>   tutti gli asset a fette di 500, nient'altro sulla sessione. Una voce per elemento in difetto: `asset_id`,
+>   `expected`, `found` (nell'ordine in cui compaiono), `dates` (≤ 10, in ordine di richiesta). Un asset sconosciuto
+>   resta al ciclo.
+> - La rotta: 422 prima del `ValueError` generico. Il controllo nel ciclo resta: i fornitori come oggi; per MANUAL una
+>   rete di sicurezza.
+>
+> - **Codice pronto** in `xr71-wip/apply_xr71.py`: 8 operazioni in 3 file. ruff (C416 corretto: `update(rows.all())`) e
+>   black puliti sulla copia emessa. Prova a mano `probe_xr71.py` su una sessione finta: 9/9.
+> - **Rossi in scrittura** (TA-XR71): `api prices-currency-coherence`, `api assets-price` (15-16),
+>   `services asset-source-guards`, la guardia di `bulk-writes-chunked`.
+> - ✅ **Rossi scritti** (TA-XR71, 15:05-15:18):
+>   - `api prices-currency-coherence`: il caricamento di A (pulito), B (in difetto) e C (pulito) è rifiutato con 422 e
+>     non scrive nessun asset; ogni asset in difetto nominato, in ordine, con `found` nell'ordine in cui compaiono.
+>     G.5.1, G.5.2 e G.5.5 passano a 422, G.5.5 con 10 date e `count` 12. Guardie: G.5.3, G.5.4, e un asset sconosciuto
+>     fra due puliti (200, «Asset N not found», gli altri scritti: D3).
+>   - `api assets-price`: i test 15-16 diventano `…_rejects_422`.
+>   - `services asset-source-guards`:
+>     - il rifiuto arriva dopo una sola lettura, nient'altro sulla sessione e niente scritto;
+>     - i numeri su 12 asset veri (fixture `xr71_assets`), con un asset sconosciuto in mezzo, non contato;
+>     - guardie: il fornitore ha ancora il suo `ValueError`; le date sono controllate prima delle valute.
+>   - `bulk-writes-chunked:875`: l'esempio diventa il rifiuto delle cifre.
+> - ✅ **Doc** (DW-XR71, 15:10-15:16, più tre ritocchi miei):
+>   - `developer/backend/assets/architecture.md`: un rimando dopo il controllo delle cifre (l.221-223); la sezione
+>     nuova `#price-currency-coherence` dopo quella delle date; la riga della rotta; e, mio, la riga di `price_store.py`
+>     nella tabella dei moduli;
+>   - `developer/frontend/components/core-ui/data-editor.md` l.82: diceva «HTTP 400» per un prezzo in un'altra
+>     valuta; ora 422 `price_currency_mismatch` per i prezzi, 400 per gli eventi;
+>   - da DW, aggiunto alla patch: il commento di `_reject_prices_over_the_limit` («as it does a currency mismatch»),
+>     operazione 1b. Patch a 9 operazioni.
+>   - Da DW, **per X** (di prima, non mio): il commento di `refresh.py:497-500` dice che l'upsert rifiuterebbe con
+>     `HTTPException(400)`. Era già sbagliato: sotto la chiave di un fornitore il refresh prende un `ValueError`.
+>   - Pagine solo inglesi: nessun debito di traduzione. `mkdocs build` stretto, `check-links` e il gate dei link (63)
+>     verdi alle 15:16-15:18.
+> - ✅ **Rossi dei servizi** (corsia 6187, 15:18-15:19): `services asset-source-guards` **2 falliti** e 41 passati,
+>   esattamente i due nuovi; la guardia di `bulk-writes-chunked` 42 passati.
+> - ✅ **Rossi dell'API** (slot del coordinatore, 15:20-15:29):
+>   - `api prices-currency-coherence`: **5 falliti** e 3 passati;
+>   - `api assets-price`: **2 falliti** e 20 passati.
+>   - Esattamente i casi nuovi (`files/logs/xr71_red_*.log`).
+>   - **⚠️ Fuori pista**: il primo rosso ha rifatto la build di debug del frontend della corsia. Il merge di B-41 in
+>     dev aveva portato modifiche al frontend di altri: avevo detto al coordinatore che la build era fresca, e non lo
+>     era.
+> - ✅ **Patch applicata** (15:29:22): 9 operazioni in 3 file; ruff e black puliti; `import backend.app.main` riuscito.
+> - ✅ **Verdi dell'API** (15:36-15:42): `api prices-currency-coherence` **8**, `api assets-price` **22**.
+>   - **⚠️ Fuori pista**: il verde ha aspettato dalle 15:29 alle 15:36: lo slot E2E di Y ha portato il carico a
+>     85-106. Slot liberato alle 15:42.
+> - ✅ **Regressioni leggere** (15:42-15:47), tutte verdi:
+>   - `services asset-source-guards` 43, `bulk-writes-chunked` 42, `asset-digit-limits` 79;
+>   - `services asset-source` 61, `asset-source-refresh` 18, `current-price-storable` 27, `range-ceiling` 57;
+>   - `schemas openapi-client-text` 78: la nuova descrizione di `FAPricePoint.currency` e la docstring della rotta.
+>   - Porta 6187 libera.
+> - ✅ **Testi del runner** (dopo i verdi, solo testo): il `print_info` e la desc di `prices-currency-coherence` dicevano
+>   «hard-400»; il commento d'isolamento di `asset-source-guards` ora conta anche i 12 asset di X-R71. Il runner si
+>   carica.
+> - ✅ **Controlli** (15:48-15:50): ruff e black puliti sui 10 file Python; `git diff --check` pulito.
+> - **Backlog**: X aggiunge X-R71 (proprietario B) e il fratello dell'editor nella sua sezione; io non la tocco. Nel
+>   backlog, la mia sola modifica è la frase di B-37 e la riga B-36 (le note di H). CHANGELOG: la riga 🐛 proposta
+>   nell'handoff.
+>
+> **Le due note di H su B-36/B-37** (coordinatore, 14:54; commit a parte, approvato alle 15:15):
+> - **La frase di B-37** nel backlog («nessuna funzione dell'app è registrata lì») era sbagliata per il motore di
+>   Alembic: SQLAlchemy (dialetto pysqlite, 2.0.52) registra `regexp` e `floor` in Python a ogni connessione. Il
+>   listener di `env.py` è quindi una cura vera. Riscritta. Il piano 07 e `security.md` non ripetono l'errore: il
+>   piano dice solo che le funzioni predefinite di SQLite sono innocue, ed è vero per la connessione `sqlite3` delle
+>   correzioni.
+> - **Due `_quoted` con contratti diversi**: `snapshot._quoted` diventa `_identifier`, che dà l'identificatore intero
+>   fra virgolette, come `post_migration._quoted`; il suo unico chiamante produce lo stesso SQL. `post_migration` non
+>   è toccato. Anche la riga B-36 del backlog nomina il nuovo nome.
+> - ✅ Applicata alle 15:07:05 (`h37-wip/apply_h37.py`, 4 operazioni in 2 file); ruff e black puliti. Verdi, i file che
+>   usano `snapshot`: `services backup-archive` 155 (1 saltato, come prima), `backup-jobs` 69, `backup-secure` 77,
+>   `backup-staging` 168. Porta 6187 libera.
+>   - **⚠️ Fuori pista**: `services backup-snapshot` non esiste (nome della mia proposta del §8). I test di `snapshot`
+>     sono in archive, jobs, secure e staging.
+
+### B-43 + B-44 — una funzione sconosciuta nello schema dell'archivio diventa `database_damaged`; i testi di `trusted_schema` dopo H-51 (2026-10-17, 16:01-16:45) — ✅ 🧊 FROZEN (checkpoint delle 16:45)
+
+> **Assegnazione** (coordinatore, 15:50, dalla revisione H-51 di H): (1) un archivio il cui CHECK o indice chiama una
+> funzione sconosciuta si ferma come `sqlite3.OperationalError` grezzo, non come `StagingError`: l'API dice
+> `stage_failed`, la CLI finisce probabilmente in un traceback. «Translate it into `database_damaged`, as
+> `_refuse_foreign_objects` already does. Reds first; file it with an ID.» (2) Dopo l'ingresso di H-51: allineare la
+> docstring di `env.py` («before anything else») e il punto «`trusted_schema` off on every connection to the copy» a
+> `security.md#trusted-schema-server`.
+>
+> **Analisi** (15:52-16:15, in sola lettura mentre ero FROZEN; `files/b43-contract.md`):
+> - **Misura su SQLite 3.54.0** (`b43-wip/sqlite_probe*.py`, log `b43_sqlite_probe*.log`):
+>   - un'espressione di un indice o una colonna generata che chiama una funzione sconosciuta: `integrity_check` lancia
+>     `OperationalError: unknown function`, anche in sola lettura → `describe_database()` (`mode=ro`) lo lascia uscire;
+>   - un **CHECK**: in sola lettura SQLite **salta i vincoli `CHECK`** («ok», anche per un CHECK violato su una funzione
+>     predefinita). La descrizione passa; fallisce il primo `integrity_check` in lettura e scrittura, quello di
+>     `run_post_migration_fixes()._integrity_ok()`, e così pure una scrittura su quella tabella.
+>   - La frase nuova di H in `#trusted-schema-server` («A `CHECK` or an index's expression … stops the check at the
+>     `PRAGMA integrity_check` of `describe_database()`») è vera per indici e colonne generate, non per i CHECK.
+> - **Cura**: in `_stage`, tutta la fase del database (da `_refuse_foreign_objects` al report) dentro
+>   `except sqlite3.DatabaseError`, tranne `ProgrammingError` (un nostro difetto, che deve restare visibile) →
+>   `StagingError("database_damaged")`. Nel log solo la classe e `sqlite_errorname` (regola di B-28). Gli
+>   `StagingError` interni passano com'erano.
+> - **B-44**: gli import di `env.py` caricano `db/session.py`, quindi sulle connessioni di Alembic l'ordine è il
+>   listener di classe (H-51: `trusted_schema` spento per primo, `writable_schema=RESET` per ultimo), poi il dialetto
+>   (`regexp`, `floor`), poi `_schema_untrusted`. Il suo «before anything else» non è mai stato letterale.
+>
+> **Decisioni** (coordinatore, 15:58): **GO** dopo l'ingresso di X-R71. La frase di H si corregge nella doc di B-43, e H
+> la rivede. B-44 nello stesso checkpoint.
+>
+> **X-R71 entrato** (coordinatore, 16:01): combinato verde su `f0645ff98`, dev `1c7937984`, CHANGELOG 🐛 `e9746b959`;
+> HEAD portata in avanti. Nel merge, il conflitto della desc del runner con MF-SEC9e risolto dal coordinatore: il testo
+> di dev più la mia clausola sulla guardia del `ValueError`.
+>
+> - **Codice pronto**: `b43-wip/apply_b43.py` (2 operazioni in `staging.py`) e `apply_b44.py` (la docstring di `env.py`).
+>   ruff e black puliti sulle copie emesse; si applicano su `e9746b959`.
+> - **Rossi in scrittura** (TA-B43): `services backup-staging` (indice, colonna generata, CHECK; guardie: un CHECK su
+>   `abs`, nessun nome di funzione nei log) e `utils backup-cli-restore` (nessun traceback). Doc (DW-B43): la frase di H,
+>   le cause di `database_damaged`, il punto di B-44.
+> - **Backlog**: B-43 e B-44 registrate nella sezione B.
+> - ✅ **Rossi scritti** (TA-B43, 16:01-16:18), sezione (n) di `test_backup_staging.py` e (j) di
+>   `test_backup_cli_restore.py`:
+>   - **rossi**: indice, colonna generata (tipizzata, VIRTUAL), CHECK → `database_damaged`, senza resti. Il CHECK ha
+>     una barriera: `describe_database()` risponde «ok». Il log ha un solo avviso, con la classe e `sqlite_errorname`,
+>     e nessuna riga nomina la funzione. Più la CLI: `restore --dry-run` → ❌ `(database_damaged)`, uscita 1, nessun
+>     traceback;
+>   - **guardia**: un CHECK su `abs()` verificato come sempre.
+>   - Il costruttore: un backup vero alla head, il database modificato con la funzione registrata e
+>     `trusted_schema=ON`, il manifest aggiornato; precondizioni che non si confondono con il rosso.
+> - ✅ **Doc** (DW-B43, 16:01-16:15, più due ritocchi miei):
+>   - `security.md`: il punto nuovo «What the check cannot read.» (B-43), il punto di B-44 (sulle connessioni
+>     dell'upgrade, prima il listener di classe, poi `_schema_untrusted` dopo il dialetto), la frase di H corretta in
+>     `#trusted-schema-server`, la frase dei test.
+>   - **⚠️ Fuori pista**: DW ha misurato che una colonna generata semplice passa `integrity_check`. Rimisurato
+>     (`b43_sqlite_probe_generated.log`): falliscono solo una colonna VIRTUAL con un tipo dichiarato (INTEGER o TEXT) e
+>     una `NOT NULL`; una non tipizzata o una STORED passano. Le due frasi ora lo dicono così.
+>   - **⚠️ Fuori pista, la scoperta più grande di DW**: da H-51 alcuni schemi passano tutta la verifica e poi rompono il
+>     server. Misurato con segnaposto deterministici (`b43_sqlite_probe_standins.log`):
+>     - una colonna generata che chiama `regexp`, o un indice su `floor`, rendono illeggibile lo schema sulle
+>       connessioni del server, e così tutte le connessioni falliscono;
+>     - un `CHECK` o un `DEFAULT` passano anche la lettura con i segnaposto.
+>   - **Decisione** (coordinatore, 16:25): la parte 1 dentro B-43, con due rossi in più. Il resto in backlog, dopo la
+>     1.3: la parte 2 è **B-45**, il testo dell'archivio nel log dell'upgrade è **B-46**.
+> - **Patch** `apply_b43.py`, ora a 4 operazioni. `_refuse_foreign_objects()` registra i segnaposto
+>   (`_SERVER_FUNCTIONS`, `_register_server_functions`, `_stand_in`) e perde il suo `except`: ogni errore `sqlite3`
+>   della fase passa dall'involucro di B-43, con un solo avviso. ruff e black puliti sulla copia emessa.
+> - ✅ **I due rossi della parte 1** (TA-B43, seguito, 16:25-16:32):
+>   - `regexp` in una colonna generata non tipizzata e `floor` in un indice → `database_damaged`, rifiutati prima che
+>     `describe_database()` apra la copia (`never_described`);
+>   - il test del log esteso ai due casi;
+>   - una guardia: l'indice di LibreFolio su `lower()` si legge con i segnaposto, e il suo backup si verifica come
+>     sempre;
+>   - le precondizioni dicono che un lettore semplice passa i due schemi, e uno con i segnaposto no.
+> - ✅ **Rossi** (corsia 6187, 16:33-16:34): `services backup-staging` **11 falliti** e 170 passati, `utils
+>   backup-cli-restore` **1 fallito** e 108 passati. Esattamente i casi nuovi (`files/logs/b43_red_*.log`).
+> - ✅ **Patch applicate** (16:34:21): `apply_b43.py` (4 operazioni in `staging.py`) e `apply_b44.py` (la docstring di
+>   `env.py`); ruff e black puliti.
+> - ✅ **Verdi** (16:34-16:38):
+>   - `services backup-staging` **181**, `utils backup-cli-restore` **109**;
+>   - le regressioni: `utils dev-cli-db-path` 17 (il controllo AST di `env.py`), `services backup-secure` 77,
+>     `backup-apply` 255, `utils backup-cli` 102.
+>   - Porta 6187 libera.
+> - ✅ **La guardia dei codici**, senza slot: lo stesso confronto AST di `test_every_code_a_check_can_end_with…`, fatto a
+>   mano. Nessun codice prodotto da `staging.py` manca da `RestoreErrorCode`; `database_damaged` c'era già.
+> - ✅ **Doc e controlli** (16:38-16:44):
+>   - la frase dei test di `security.md` estesa alla parte 1;
+>   - `mkdocs build` strict, `check-links`, gate 63;
+>   - ruff e black puliti sui 6 file Python, `git diff --check` pulito;
+>   - una riga mia oltre i 120 caratteri, riavvolta dopo la build (solo a capo); la riga 2017 lunga è di H.
+> - **Backlog**: B-43 ✅, B-44 ✅; B-45 e B-46 aperte, dopo la 1.3. CHANGELOG: una riga 🔒 proposta nell'handoff.
+
+### X-R75 (per X) — il modale delle rotte di cambio cancella prima di salvare; e togliere ogni rotta cancella la coppia (2026-10-17, 16:42-18:33) — ✅ 🧊 FROZEN (checkpoint delle 18:33)
+
+> **Assegnazione** (coordinatore, 16:42; trovata da E): «the FX route modal deletes before it posts
+> (`FxPairAddModal.svelte` ~325-339)… If the POST fails (a 422, a network error, a server restart), the routes are
+> lost.» Prima l'analisi; il frontend FX è di X, X rivede. Corsia 6187.
+>
+> **Analisi** (16:42-16:58, sola lettura; `files/xr75-analysis.md`):
+> - In modifica (il pulsante «Providers» della pagina della coppia) il modale fa due chiamate:
+>   1. `DELETE` di tutta la coppia, che si conferma da sola (`:326`);
+>   2. `POST` delle rotte nuove (`:339`).
+> - Un `DELETE` di tutta la coppia **non rimette la sentinella MANUAL** (`providers.py:434-478`, Test 17). Così, se il
+>   `POST` fallisce (400, 422, 409, 500, rete, riavvio), o non parte (sessione cambiata `:327`, scheda chiusa), o fallisce
+>   per una coppia intermedia, la coppia resta senza nessuna rotta.
+> - **Difetto 2**: togliere ogni rotta cancella la coppia. Il modale salta il `POST` credendo che la MANUAL torni da sé
+>   (`:333`), come dice `configuration.md:201`; il codice e il Test 17 dicono il contrario. La guida utente
+>   (`provider.en.md:44`) promette invece «The pair becomes manual».
+> - **Chi legge le rotte mentre mancano**:
+>   - le conversioni no: leggono i tassi salvati, e il motore usa le rotte solo nell'impronta della cache;
+>   - la sincronizzazione sì: né `sync_pairs_bulk` né il job dello scheduler vedono più la coppia, e i suoi tassi
+>     invecchiano;
+>   - la qualità dei dati segna la coppia come «non configurata»;
+>   - il frontend la toglie dalla lista dei cambi, e il PAC chiede di crearla.
+>
+> **Decisioni** (coordinatore, 16:47): **D1 = A**, il `replace=true` atomico sul server; **D2 = sì**, nello stesso
+> lotto. GO, rossi prima. Permesso di scrittura su `FxPairAddModal.svelte` (solo logica) e su `api/v1/fx/providers.py`,
+> **ma** `providers.py` solo dopo l'ingresso di X-R74, che lo sta cambiando ora. Da correggere `configuration.md:201`. La
+> riga del CHANGELOG nel checkpoint. Slot API ed E2E a richiesta.
+>
+> **Contratto** (`files/xr75-contract.md`):
+> - `POST …/routes?replace=true`: ogni coppia nominata tiene esattamente le priorità mandate, le altre cancellate nella
+>   stessa transazione, dopo la validazione e l'upsert. Le regole della MANUAL restano.
+> - Il modale in modifica fa un solo `POST` con `replace`. Senza rotte manda la voce MANUAL (priorità 999).
+>
+> - **Patch pronte**:
+>   - `xr75-wip/apply_xr75_fe.py`: 1 operazione nel modale; prettier non cambia nulla;
+>   - `apply_xr75_be.py`: 3 operazioni in `providers.py`, ruff e black puliti sulla copia. Da applicare dopo X-R74.
+> - **Doc** (mia):
+>   - `developer/backend/fx/configuration.md`: una nota «Replacing a pair's routes: `?replace=true`», e la frase del
+>     `DELETE` corretta (un `DELETE` di tutta la coppia non rimette la MANUAL; uno con la priorità sì);
+>   - `developer/frontend/fx-chain-algorithm.md:353`: il modo di salvare del modale. Anche questa diceva che la
+>     MANUAL torna sola.
+>   - Tutte e due solo inglesi.
+> - **Rossi in scrittura**: TA-XR75-BE (`api fx`) e TA-XR75-FE (Vitest del modale, E2E `front-fx fx-detail`).
+> - ✅ **Rossi scritti** (16:50-17:19):
+>   - **TA-XR75-BE**, `test_fx_api.py` 18a-18f, su coppie di valuta che nessun altro usa:
+>     - rossi: 18a, il replace tiene esattamente le priorità mandate (anche la coppia scritta al contrario); 18b, la sola
+>       voce MANUAL lascia la coppia manuale (e il ritorno a una rotta vera toglie la MANUAL); 18c, l'OpenAPI documenta
+>       `replace`;
+>     - guardie: 18d, un replace rifiutato (400, 422) non cambia nulla; 18e, senza `replace`, o con `replace=false`,
+>       l'upsert come prima; 18f, una coppia intermedia, e una coppia attraversata dalla catena ma non nominata resta
+>       intatta.
+>   - **TA-XR75-FE**:
+>     - Vitest: 8 rossi. Un solo `POST` con `replace`, mai un `DELETE`; senza rotte, la voce MANUAL; un `POST` rifiutato
+>       (503, 409) lascia l'errore sul modale aperto. Più tre casi riscritti che fissavano il `DELETE` prima del `POST`.
+>       E 3 guardie: la creazione non chiede `replace`.
+>     - E2E (`fx-detail.spec.ts`): un salvataggio fallito tiene la rotta della coppia; togliere ogni rotta la lascia
+>       manuale. La lista dei provider è risposta nel browser con MOCKFX, che quella reale nasconde.
+> - ✅ **Rosso Vitest** (corsia 6187, 17:19-17:20): `FxPairAddModal.test.ts` **8 falliti** e 16 passati, esattamente i
+>   casi nuovi (`files/logs/b_vitest_xr75_red.log`).
+> - **X-R74 entrato** (coordinatore, 17:01): `providers.py` libero. Il merge di dev lo fa il coordinatore: a quel punto
+>   gli mando «FROZEN for base update» (17:03, correzione del coordinatore: i figli non toccano la storia di git).
+> - ⏳ Rossi API ed E2E: slot chiesto alle 17:22.
+> - ✅ **Rosso API** (slot del coordinatore, 17:21-17:29): `api fx -k replace` **3 falliti** (18a, 18b, 18c) e 3 passati
+>   (le guardie), esattamente come previsto (`files/logs/xr75_red_api_fx.log`).
+> - **⚠️ Fuori pista — il rosso E2E per la ragione sbagliata** (17:29-17:31): i due test cadono nel loro aiuto
+>   `openProviderEditor`, prima del difetto. Lo screenshot mostra il modale con «Failed to load conversion routes»: con
+>   la lista dei provider risposta dal test, `FxProviderSelect.computeRoutes()` prende un'eccezione. Slot liberato
+>   alle 17:33. Il test torna a TA-XR75-FE: trovare la causa e mettere nel messaggio gli errori della console del
+>   browser. Poi un breve slot per rifare solo il rosso E2E.
+>   - La patch del frontend aspetta quel rosso: con lei sola, «a failed save keeps the route» passerebbe senza aver mai
+>     mostrato il suo rosso.
+> - ✅ **La causa vera** (TA-XR75-FE, 17:35-17:45): **un difetto latente del prodotto**, non soltanto il test.
+>   - `currencyGraph.ts` fa `import MultiDirectedGraph from 'graphology'`, ma l'export di default è il `Graph` semplice
+>     (`multi: false`, `type: 'mixed'`; misurato in Node).
+>   - Così due provider sulla stessa direzione (MOCKFX e MOCKFX_FAIL, tutti e due EUR→X) fanno lanciare
+>     `addDirectedEdge`, e il selettore delle rotte dice solo «Failed to load conversion routes». Il catalogo reale
+>     oggi lo evita solo perché ECB, FED, BOE e SNB hanno basi diverse.
+>   - Il test ora usa direzioni opposte, e le sue precondizioni riportano gli errori della console del browser.
+> - **Decisione** (coordinatore, 17:48): l'import con nome dentro X-R75, con il suo rosso Vitest; X rivede.
+> - ✅ **Rossi E2E di nuovo** (slot, 17:50-17:54): tutti e due cadono sul difetto. Dopo il salvataggio fallito la coppia
+>   non ha più rotte («what the save sent: DELETE (no query), POST (no query)»); togliere ogni rotta cancella la
+>   coppia (`files/logs/xr75_red_e2e2.log`).
+> - ✅ **Patch del modale applicata** (17:55:08); Vitest `FxPairAddModal.test.ts` **24 passati**.
+> - ✅ **Il grafo**:
+>   - TA-XR75-FE ha scritto il file nuovo `src/lib/utils/currency/currencyGraph.test.ts`: 2 rossi (due provider sulla
+>     stessa direzione) e 6 guardie. È registrato in `front-utility core-unit` (`_frontend_utility.py` l.129, più una
+>     frase nella desc).
+>   - Rosso (18:00): **2 falliti** e 6 passati, su «UsageGraphError … an edge linking "EUR" to "NIO" already exists».
+>   - Patch `apply_xr75_graph.py` applicata (18:00:37): l'import con nome, con un commento. Prettier non cambia nulla.
+>   - Verdi: i due file **32 passati**; i vicini che toccano il grafo (`FxProviderSelect`, `PageSyncModal`,
+>     `FxSyncModal`, `FxMissingRate`, `fxCreationSync`, `sanitizeHtml`) **97 passati**.
+> - ✅ **Controlli** (18:04): ruff e black puliti sui 3 file Python; prettier pulito sui 5 file del frontend;
+>   `git diff --check` pulito; porta libera.
+> - 🧊 **FROZEN for base update** (18:05): il frontend è finito. Il backend (`providers.py`) aspetta il merge di dev con
+>   X-R74, che fa il coordinatore.
+> - **Base aggiornata** (coordinatore, 18:04): il mio checkpoint `5cbc60844` più il diario, fino a `73627df26`; dev
+>   `1eeb297b2` entrato pulito, `087db9be5`. Porta X-R74 (`providers.py`: quattro 500 generici).
+> - ✅ **Patch del backend applicata** (18:05:18): `apply_xr75_be.py`, 3 operazioni in `providers.py`, ricontrollata dopo
+>   X-R74 (che non tocca i punti della patch). ruff e black puliti; `import backend.app.main` riuscito.
+> - ✅ **`api sync`** (18:10, nessun file tracciato cambiato: il client generato è ignorato da git) e **`front check`**
+>   (18:11): 0 errori, 0 avvisi. Il tipo di `{queries: {replace: true}}` ora esiste.
+> - ⏳ I verdi `api fx` ed E2E: slot chiesto alle 18:12.
+> - ✅ **Doc** (18:14-18:17, mentre lo slot era in coda): `mkdocs build` strict, `check-links`, gate 63.
+> - ✅ **Verdi** (slot del coordinatore, via libera alle 18:15 dopo la finestra di X; 18:18-18:31,
+>   `files/scripts/xr75_green_slot.sh`, ogni corsa ad attesa del carico a 5 minuti sotto 50):
+>   - `api fx`, tutto il file: **33 passati** (i 6 di X-R75 e le prove delle rotte 15-17);
+>   - `front-fx fx-detail`, i 2 test di X-R75: **2 passati**;
+>   - `front-fx fx-add-pair`, tutta la spec, per regressione (la chiamata di creazione condivide la riga cambiata):
+>     **11 passati**.
+>   - Porta 6187 libera.
+> - **Backlog**: X-R75 e il fratello dell'editor (che conta come salvate le date scartate) li scrive X nella sua
+>   sezione; il grafo non multiplo è entrato in X-R75 (coordinatore, 17:48). CHANGELOG: la riga 🐛 nell'handoff.
 
 ### W-B64 + W-B65 (per W) — il budget delle cifre contato come il backend; e un «Applica» senza modifiche nel Bulk (2026-10-17, 18:31-19:56) — ✅ 🧊 FROZEN (checkpoint delle 19:56)
 
@@ -5666,1095 +6668,690 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >     uguali (idempotente).
 > - 🧊 **CHECKPOINT READY** (20:21): 6 file tracciati, nessun file nuovo; FROZEN.
 
-### X-R75 (per X) — il modale delle rotte di cambio cancella prima di salvare; e togliere ogni rotta cancella la coppia (2026-10-17, 16:42-18:33) — ✅ 🧊 FROZEN (checkpoint delle 18:33)
+### B-49 — un testo non UTF-8 nei dati di un backup: la verifica lo rifiuta (2026-10-17, 20:2x-21:26) — ✅ 🧊 FROZEN (checkpoint delle 21:26)
 
-> **Assegnazione** (coordinatore, 16:42; trovata da E): «the FX route modal deletes before it posts
-> (`FxPairAddModal.svelte` ~325-339)… If the POST fails (a 422, a network error, a server restart), the routes are
-> lost.» Prima l'analisi; il frontend FX è di X, X rivede. Corsia 6187.
+> **Assegnazione** (coordinatore, 20:2x, dopo l'ingresso di X-R79 in dev `6f11a6790`): B-49, analisi e decisione mia
+> («rifiutare alla verifica, `database_damaged`, nulla applicato, o avvisare come E-19b1?»; il coordinatore tende a
+> rifiutare). Prima provare in processo che le letture del server falliscono dopo il ripristino, e misurare il costo
+> della scansione su un archivio grande, come per l'audit di E. Poi B-15 + B-8.
+> Nello stesso giro: la riga X-R79 (sezione di X, su richiesta del coordinatore) aggiornata coi tre residui e chiusa (✅).
 >
-> **Analisi** (16:42-16:58, sola lettura; `files/xr75-analysis.md`):
-> - In modifica (il pulsante «Providers» della pagina della coppia) il modale fa due chiamate:
->   1. `DELETE` di tutta la coppia, che si conferma da sola (`:326`);
->   2. `POST` delle rotte nuove (`:339`).
-> - Un `DELETE` di tutta la coppia **non rimette la sentinella MANUAL** (`providers.py:434-478`, Test 17). Così, se il
->   `POST` fallisce (400, 422, 409, 500, rete, riavvio), o non parte (sessione cambiata `:327`, scheda chiusa), o fallisce
->   per una coppia intermedia, la coppia resta senza nessuna rotta.
-> - **Difetto 2**: togliere ogni rotta cancella la coppia. Il modale salta il `POST` credendo che la MANUAL torni da sé
->   (`:333`), come dice `configuration.md:201`; il codice e il Test 17 dicono il contrario. La guida utente
->   (`provider.en.md:44`) promette invece «The pair becomes manual».
-> - **Chi legge le rotte mentre mancano**:
->   - le conversioni no: leggono i tassi salvati, e il motore usa le rotte solo nell'impronta della cache;
->   - la sincronizzazione sì: né `sync_pairs_bulk` né il job dello scheduler vedono più la coppia, e i suoi tassi
->     invecchiano;
->   - la qualità dei dati segna la coppia come «non configurata»;
->   - il frontend la toglie dalla lista dei cambi, e il PAC chiede di crearla.
->
-> **Decisioni** (coordinatore, 16:47): **D1 = A**, il `replace=true` atomico sul server; **D2 = sì**, nello stesso
-> lotto. GO, rossi prima. Permesso di scrittura su `FxPairAddModal.svelte` (solo logica) e su `api/v1/fx/providers.py`,
-> **ma** `providers.py` solo dopo l'ingresso di X-R74, che lo sta cambiando ora. Da correggere `configuration.md:201`. La
-> riga del CHANGELOG nel checkpoint. Slot API ed E2E a richiesta.
->
-> **Contratto** (`files/xr75-contract.md`):
-> - `POST …/routes?replace=true`: ogni coppia nominata tiene esattamente le priorità mandate, le altre cancellate nella
->   stessa transazione, dopo la validazione e l'upsert. Le regole della MANUAL restano.
-> - Il modale in modifica fa un solo `POST` con `replace`. Senza rotte manda la voce MANUAL (priorità 999).
->
-> - **Patch pronte**:
->   - `xr75-wip/apply_xr75_fe.py`: 1 operazione nel modale; prettier non cambia nulla;
->   - `apply_xr75_be.py`: 3 operazioni in `providers.py`, ruff e black puliti sulla copia. Da applicare dopo X-R74.
-> - **Doc** (mia):
->   - `developer/backend/fx/configuration.md`: una nota «Replacing a pair's routes: `?replace=true`», e la frase del
->     `DELETE` corretta (un `DELETE` di tutta la coppia non rimette la MANUAL; uno con la priorità sì);
->   - `developer/frontend/fx-chain-algorithm.md:353`: il modo di salvare del modale. Anche questa diceva che la
->     MANUAL torna sola.
->   - Tutte e due solo inglesi.
-> - **Rossi in scrittura**: TA-XR75-BE (`api fx`) e TA-XR75-FE (Vitest del modale, E2E `front-fx fx-detail`).
-> - ✅ **Rossi scritti** (16:50-17:19):
->   - **TA-XR75-BE**, `test_fx_api.py` 18a-18f, su coppie di valuta che nessun altro usa:
->     - rossi: 18a, il replace tiene esattamente le priorità mandate (anche la coppia scritta al contrario); 18b, la sola
->       voce MANUAL lascia la coppia manuale (e il ritorno a una rotta vera toglie la MANUAL); 18c, l'OpenAPI documenta
->       `replace`;
->     - guardie: 18d, un replace rifiutato (400, 422) non cambia nulla; 18e, senza `replace`, o con `replace=false`,
->       l'upsert come prima; 18f, una coppia intermedia, e una coppia attraversata dalla catena ma non nominata resta
->       intatta.
->   - **TA-XR75-FE**:
->     - Vitest: 8 rossi. Un solo `POST` con `replace`, mai un `DELETE`; senza rotte, la voce MANUAL; un `POST` rifiutato
->       (503, 409) lascia l'errore sul modale aperto. Più tre casi riscritti che fissavano il `DELETE` prima del `POST`.
->       E 3 guardie: la creazione non chiede `replace`.
->     - E2E (`fx-detail.spec.ts`): un salvataggio fallito tiene la rotta della coppia; togliere ogni rotta la lascia
->       manuale. La lista dei provider è risposta nel browser con MOCKFX, che quella reale nasconde.
-> - ✅ **Rosso Vitest** (corsia 6187, 17:19-17:20): `FxPairAddModal.test.ts` **8 falliti** e 16 passati, esattamente i
->   casi nuovi (`files/logs/b_vitest_xr75_red.log`).
-> - **X-R74 entrato** (coordinatore, 17:01): `providers.py` libero. Il merge di dev lo fa il coordinatore: a quel punto
->   gli mando «FROZEN for base update» (17:03, correzione del coordinatore: i figli non toccano la storia di git).
-> - ⏳ Rossi API ed E2E: slot chiesto alle 17:22.
-> - ✅ **Rosso API** (slot del coordinatore, 17:21-17:29): `api fx -k replace` **3 falliti** (18a, 18b, 18c) e 3 passati
->   (le guardie), esattamente come previsto (`files/logs/xr75_red_api_fx.log`).
-> - **⚠️ Fuori pista — il rosso E2E per la ragione sbagliata** (17:29-17:31): i due test cadono nel loro aiuto
->   `openProviderEditor`, prima del difetto. Lo screenshot mostra il modale con «Failed to load conversion routes»: con
->   la lista dei provider risposta dal test, `FxProviderSelect.computeRoutes()` prende un'eccezione. Slot liberato
->   alle 17:33. Il test torna a TA-XR75-FE: trovare la causa e mettere nel messaggio gli errori della console del
->   browser. Poi un breve slot per rifare solo il rosso E2E.
->   - La patch del frontend aspetta quel rosso: con lei sola, «a failed save keeps the route» passerebbe senza aver mai
->     mostrato il suo rosso.
-> - ✅ **La causa vera** (TA-XR75-FE, 17:35-17:45): **un difetto latente del prodotto**, non soltanto il test.
->   - `currencyGraph.ts` fa `import MultiDirectedGraph from 'graphology'`, ma l'export di default è il `Graph` semplice
->     (`multi: false`, `type: 'mixed'`; misurato in Node).
->   - Così due provider sulla stessa direzione (MOCKFX e MOCKFX_FAIL, tutti e due EUR→X) fanno lanciare
->     `addDirectedEdge`, e il selettore delle rotte dice solo «Failed to load conversion routes». Il catalogo reale
->     oggi lo evita solo perché ECB, FED, BOE e SNB hanno basi diverse.
->   - Il test ora usa direzioni opposte, e le sue precondizioni riportano gli errori della console del browser.
-> - **Decisione** (coordinatore, 17:48): l'import con nome dentro X-R75, con il suo rosso Vitest; X rivede.
-> - ✅ **Rossi E2E di nuovo** (slot, 17:50-17:54): tutti e due cadono sul difetto. Dopo il salvataggio fallito la coppia
->   non ha più rotte («what the save sent: DELETE (no query), POST (no query)»); togliere ogni rotta cancella la
->   coppia (`files/logs/xr75_red_e2e2.log`).
-> - ✅ **Patch del modale applicata** (17:55:08); Vitest `FxPairAddModal.test.ts` **24 passati**.
-> - ✅ **Il grafo**:
->   - TA-XR75-FE ha scritto il file nuovo `src/lib/utils/currency/currencyGraph.test.ts`: 2 rossi (due provider sulla
->     stessa direzione) e 6 guardie. È registrato in `front-utility core-unit` (`_frontend_utility.py` l.129, più una
->     frase nella desc).
->   - Rosso (18:00): **2 falliti** e 6 passati, su «UsageGraphError … an edge linking "EUR" to "NIO" already exists».
->   - Patch `apply_xr75_graph.py` applicata (18:00:37): l'import con nome, con un commento. Prettier non cambia nulla.
->   - Verdi: i due file **32 passati**; i vicini che toccano il grafo (`FxProviderSelect`, `PageSyncModal`,
->     `FxSyncModal`, `FxMissingRate`, `fxCreationSync`, `sanitizeHtml`) **97 passati**.
-> - ✅ **Controlli** (18:04): ruff e black puliti sui 3 file Python; prettier pulito sui 5 file del frontend;
->   `git diff --check` pulito; porta libera.
-> - 🧊 **FROZEN for base update** (18:05): il frontend è finito. Il backend (`providers.py`) aspetta il merge di dev con
->   X-R74, che fa il coordinatore.
-> - **Base aggiornata** (coordinatore, 18:04): il mio checkpoint `5cbc60844` più il diario, fino a `73627df26`; dev
->   `1eeb297b2` entrato pulito, `087db9be5`. Porta X-R74 (`providers.py`: quattro 500 generici).
-> - ✅ **Patch del backend applicata** (18:05:18): `apply_xr75_be.py`, 3 operazioni in `providers.py`, ricontrollata dopo
->   X-R74 (che non tocca i punti della patch). ruff e black puliti; `import backend.app.main` riuscito.
-> - ✅ **`api sync`** (18:10, nessun file tracciato cambiato: il client generato è ignorato da git) e **`front check`**
->   (18:11): 0 errori, 0 avvisi. Il tipo di `{queries: {replace: true}}` ora esiste.
-> - ⏳ I verdi `api fx` ed E2E: slot chiesto alle 18:12.
-> - ✅ **Doc** (18:14-18:17, mentre lo slot era in coda): `mkdocs build` strict, `check-links`, gate 63.
-> - ✅ **Verdi** (slot del coordinatore, via libera alle 18:15 dopo la finestra di X; 18:18-18:31,
->   `files/scripts/xr75_green_slot.sh`, ogni corsa ad attesa del carico a 5 minuti sotto 50):
->   - `api fx`, tutto il file: **33 passati** (i 6 di X-R75 e le prove delle rotte 15-17);
->   - `front-fx fx-detail`, i 2 test di X-R75: **2 passati**;
->   - `front-fx fx-add-pair`, tutta la spec, per regressione (la chiamata di creazione condivide la riga cambiata):
->     **11 passati**.
->   - Porta 6187 libera.
-> - **Backlog**: X-R75 e il fratello dell'editor (che conta come salvate le date scartate) li scrive X nella sua
->   sezione; il grafo non multiplo è entrato in X-R75 (coordinatore, 17:48). CHANGELOG: la riga 🐛 nell'handoff.
-
-### B-43 + B-44 — una funzione sconosciuta nello schema dell'archivio diventa `database_damaged`; i testi di `trusted_schema` dopo H-51 (2026-10-17, 16:01-16:45) — ✅ 🧊 FROZEN (checkpoint delle 16:45)
-
-> **Assegnazione** (coordinatore, 15:50, dalla revisione H-51 di H): (1) un archivio il cui CHECK o indice chiama una
-> funzione sconosciuta si ferma come `sqlite3.OperationalError` grezzo, non come `StagingError`: l'API dice
-> `stage_failed`, la CLI finisce probabilmente in un traceback. «Translate it into `database_damaged`, as
-> `_refuse_foreign_objects` already does. Reds first; file it with an ID.» (2) Dopo l'ingresso di H-51: allineare la
-> docstring di `env.py` («before anything else») e il punto «`trusted_schema` off on every connection to the copy» a
-> `security.md#trusted-schema-server`.
->
-> **Analisi** (15:52-16:15, in sola lettura mentre ero FROZEN; `files/b43-contract.md`):
-> - **Misura su SQLite 3.54.0** (`b43-wip/sqlite_probe*.py`, log `b43_sqlite_probe*.log`):
->   - un'espressione di un indice o una colonna generata che chiama una funzione sconosciuta: `integrity_check` lancia
->     `OperationalError: unknown function`, anche in sola lettura → `describe_database()` (`mode=ro`) lo lascia uscire;
->   - un **CHECK**: in sola lettura SQLite **salta i vincoli `CHECK`** («ok», anche per un CHECK violato su una funzione
->     predefinita). La descrizione passa; fallisce il primo `integrity_check` in lettura e scrittura, quello di
->     `run_post_migration_fixes()._integrity_ok()`, e così pure una scrittura su quella tabella.
->   - La frase nuova di H in `#trusted-schema-server` («A `CHECK` or an index's expression … stops the check at the
->     `PRAGMA integrity_check` of `describe_database()`») è vera per indici e colonne generate, non per i CHECK.
-> - **Cura**: in `_stage`, tutta la fase del database (da `_refuse_foreign_objects` al report) dentro
->   `except sqlite3.DatabaseError`, tranne `ProgrammingError` (un nostro difetto, che deve restare visibile) →
->   `StagingError("database_damaged")`. Nel log solo la classe e `sqlite_errorname` (regola di B-28). Gli
->   `StagingError` interni passano com'erano.
-> - **B-44**: gli import di `env.py` caricano `db/session.py`, quindi sulle connessioni di Alembic l'ordine è il
->   listener di classe (H-51: `trusted_schema` spento per primo, `writable_schema=RESET` per ultimo), poi il dialetto
->   (`regexp`, `floor`), poi `_schema_untrusted`. Il suo «before anything else» non è mai stato letterale.
->
-> **Decisioni** (coordinatore, 15:58): **GO** dopo l'ingresso di X-R71. La frase di H si corregge nella doc di B-43, e H
-> la rivede. B-44 nello stesso checkpoint.
->
-> **X-R71 entrato** (coordinatore, 16:01): combinato verde su `f0645ff98`, dev `1c7937984`, CHANGELOG 🐛 `e9746b959`;
-> HEAD portata in avanti. Nel merge, il conflitto della desc del runner con MF-SEC9e risolto dal coordinatore: il testo
-> di dev più la mia clausola sulla guardia del `ValueError`.
->
-> - **Codice pronto**: `b43-wip/apply_b43.py` (2 operazioni in `staging.py`) e `apply_b44.py` (la docstring di `env.py`).
->   ruff e black puliti sulle copie emesse; si applicano su `e9746b959`.
-> - **Rossi in scrittura** (TA-B43): `services backup-staging` (indice, colonna generata, CHECK; guardie: un CHECK su
->   `abs`, nessun nome di funzione nei log) e `utils backup-cli-restore` (nessun traceback). Doc (DW-B43): la frase di H,
->   le cause di `database_damaged`, il punto di B-44.
-> - **Backlog**: B-43 e B-44 registrate nella sezione B.
-> - ✅ **Rossi scritti** (TA-B43, 16:01-16:18), sezione (n) di `test_backup_staging.py` e (j) di
->   `test_backup_cli_restore.py`:
->   - **rossi**: indice, colonna generata (tipizzata, VIRTUAL), CHECK → `database_damaged`, senza resti. Il CHECK ha
->     una barriera: `describe_database()` risponde «ok». Il log ha un solo avviso, con la classe e `sqlite_errorname`,
->     e nessuna riga nomina la funzione. Più la CLI: `restore --dry-run` → ❌ `(database_damaged)`, uscita 1, nessun
->     traceback;
->   - **guardia**: un CHECK su `abs()` verificato come sempre.
->   - Il costruttore: un backup vero alla head, il database modificato con la funzione registrata e
->     `trusted_schema=ON`, il manifest aggiornato; precondizioni che non si confondono con il rosso.
-> - ✅ **Doc** (DW-B43, 16:01-16:15, più due ritocchi miei):
->   - `security.md`: il punto nuovo «What the check cannot read.» (B-43), il punto di B-44 (sulle connessioni
->     dell'upgrade, prima il listener di classe, poi `_schema_untrusted` dopo il dialetto), la frase di H corretta in
->     `#trusted-schema-server`, la frase dei test.
->   - **⚠️ Fuori pista**: DW ha misurato che una colonna generata semplice passa `integrity_check`. Rimisurato
->     (`b43_sqlite_probe_generated.log`): falliscono solo una colonna VIRTUAL con un tipo dichiarato (INTEGER o TEXT) e
->     una `NOT NULL`; una non tipizzata o una STORED passano. Le due frasi ora lo dicono così.
->   - **⚠️ Fuori pista, la scoperta più grande di DW**: da H-51 alcuni schemi passano tutta la verifica e poi rompono il
->     server. Misurato con segnaposto deterministici (`b43_sqlite_probe_standins.log`):
->     - una colonna generata che chiama `regexp`, o un indice su `floor`, rendono illeggibile lo schema sulle
->       connessioni del server, e così tutte le connessioni falliscono;
->     - un `CHECK` o un `DEFAULT` passano anche la lettura con i segnaposto.
->   - **Decisione** (coordinatore, 16:25): la parte 1 dentro B-43, con due rossi in più. Il resto in backlog, dopo la
->     1.3: la parte 2 è **B-45**, il testo dell'archivio nel log dell'upgrade è **B-46**.
-> - **Patch** `apply_b43.py`, ora a 4 operazioni. `_refuse_foreign_objects()` registra i segnaposto
->   (`_SERVER_FUNCTIONS`, `_register_server_functions`, `_stand_in`) e perde il suo `except`: ogni errore `sqlite3`
->   della fase passa dall'involucro di B-43, con un solo avviso. ruff e black puliti sulla copia emessa.
-> - ✅ **I due rossi della parte 1** (TA-B43, seguito, 16:25-16:32):
->   - `regexp` in una colonna generata non tipizzata e `floor` in un indice → `database_damaged`, rifiutati prima che
->     `describe_database()` apra la copia (`never_described`);
->   - il test del log esteso ai due casi;
->   - una guardia: l'indice di LibreFolio su `lower()` si legge con i segnaposto, e il suo backup si verifica come
->     sempre;
->   - le precondizioni dicono che un lettore semplice passa i due schemi, e uno con i segnaposto no.
-> - ✅ **Rossi** (corsia 6187, 16:33-16:34): `services backup-staging` **11 falliti** e 170 passati, `utils
->   backup-cli-restore` **1 fallito** e 108 passati. Esattamente i casi nuovi (`files/logs/b43_red_*.log`).
-> - ✅ **Patch applicate** (16:34:21): `apply_b43.py` (4 operazioni in `staging.py`) e `apply_b44.py` (la docstring di
->   `env.py`); ruff e black puliti.
-> - ✅ **Verdi** (16:34-16:38):
->   - `services backup-staging` **181**, `utils backup-cli-restore` **109**;
->   - le regressioni: `utils dev-cli-db-path` 17 (il controllo AST di `env.py`), `services backup-secure` 77,
->     `backup-apply` 255, `utils backup-cli` 102.
->   - Porta 6187 libera.
-> - ✅ **La guardia dei codici**, senza slot: lo stesso confronto AST di `test_every_code_a_check_can_end_with…`, fatto a
->   mano. Nessun codice prodotto da `staging.py` manca da `RestoreErrorCode`; `database_damaged` c'era già.
-> - ✅ **Doc e controlli** (16:38-16:44):
->   - la frase dei test di `security.md` estesa alla parte 1;
->   - `mkdocs build` strict, `check-links`, gate 63;
->   - ruff e black puliti sui 6 file Python, `git diff --check` pulito;
->   - una riga mia oltre i 120 caratteri, riavvolta dopo la build (solo a capo); la riga 2017 lunga è di H.
-> - **Backlog**: B-43 ✅, B-44 ✅; B-45 e B-46 aperte, dopo la 1.3. CHANGELOG: una riga 🔒 proposta nell'handoff.
-
-### X-R71 (per X) — il caricamento manuale dei prezzi, tutto o niente; più le due note di H su B-36/B-37 (2026-10-17, 14:58-15:52) — ✅ 🧊 FROZEN (checkpoint delle 15:52)
-
-> **Assegnazione** (coordinatore, 14:58, dalla sezione di X): «a manual price upload (`POST /assets/prices` →
-> `price_store.bulk_upsert_prices`, MANUAL) checks the currency asset by asset. When asset 3 of 5 has a currency
-> mismatch, assets 1–2 are already written before the refusal. The upload must be all or nothing: every check before the
-> first write, as X-R65 now does for dates.» File: `api/v1/assets/prices.py`, `services/assets/price_store.py`; rivede X.
-> Origine: la nota di Z per X nel piano 06, X-R65 passo 6.
->
-> **Analisi** (14:58-15:10, sola lettura; `files/xr71-analysis.md`):
-> - Una chiamata manuale: le cifre (`ValueError` → 400, solo il primo asset) e le date (X-R65, 422) prima di ogni
->   istruzione. Poi, asset per asset: lettura, valuta, scrittura a fette di 1000 date con un `commit` per fetta
->   (`:400`), voluto per il lock di scrittura di SQLite. Il controllo della valuta (`:251-259`) rifiuta tutto **dopo**
->   che gli asset precedenti sono già scritti: è l'unico rifiuto dell'intera chiamata che viene dopo una scrittura.
-> - Morbidi per scelta: l'asset che non esiste («Asset N not found») e il controllo OHLC, data per data (W-B52 per la
->   sentinella).
-> - **Il refresh dei fornitori non c'entra**: un asset per chiamata, controllato prima della sua prima fetta, e il
->   refresh scarta da sé i punti in un'altra valuta. La web app manda un asset e nessuna valuta: lo vede solo un client
->   dell'API.
-> - Scartata: una transazione unica per la chiamata manuale, come gli eventi. Riporterebbe il lock lungo che le fette
->   evitano.
-> - **Fratello per X**: l'editor conta come salvata ogni riga mandata (`AssetDataEditorSection.svelte:316`) e non legge
->   `results[].message`. Una data saltata dal controllo OHLC risulta salvata. Va ad X, nella sua X-R46.
->
-> **Decisioni** (coordinatore, 15:15): **GO**. D1 il 422 codificato `price_currency_mismatch`; D2 (il rifiuto delle
-> cifre) e D3 (gli asset sconosciuti) invariati. Il permesso di scrittura copre `schemas/prices.py`, solo la riga della
-> descrizione. X aggiunge X-R71 (proprietario B) e il fratello al backlog; il diario sta qui. Nessun altro worktree ha i
-> tre file di test né i tre file di prodotto.
->
-> **Contratto** (`files/xr71-contract.md`):
-> - `price_store.PriceCurrencyMismatchError(items, count)`, un'`Exception` come `DateOutOfRangeError`;
->   `price_currency_mismatch_detail()` → `{code, message, items (≤ 10), count}`.
-> - `_reject_currency_mismatches(session, data)`, solo per MANUAL, dopo le date e prima del ciclo. Legge le valute di
->   tutti gli asset a fette di 500, nient'altro sulla sessione. Una voce per elemento in difetto: `asset_id`,
->   `expected`, `found` (nell'ordine in cui compaiono), `dates` (≤ 10, in ordine di richiesta). Un asset sconosciuto
->   resta al ciclo.
-> - La rotta: 422 prima del `ValueError` generico. Il controllo nel ciclo resta: i fornitori come oggi; per MANUAL una
->   rete di sicurezza.
->
-> - **Codice pronto** in `xr71-wip/apply_xr71.py`: 8 operazioni in 3 file. ruff (C416 corretto: `update(rows.all())`) e
->   black puliti sulla copia emessa. Prova a mano `probe_xr71.py` su una sessione finta: 9/9.
-> - **Rossi in scrittura** (TA-XR71): `api prices-currency-coherence`, `api assets-price` (15-16),
->   `services asset-source-guards`, la guardia di `bulk-writes-chunked`.
-> - ✅ **Rossi scritti** (TA-XR71, 15:05-15:18):
->   - `api prices-currency-coherence`: il caricamento di A (pulito), B (in difetto) e C (pulito) è rifiutato con 422 e
->     non scrive nessun asset; ogni asset in difetto nominato, in ordine, con `found` nell'ordine in cui compaiono.
->     G.5.1, G.5.2 e G.5.5 passano a 422, G.5.5 con 10 date e `count` 12. Guardie: G.5.3, G.5.4, e un asset sconosciuto
->     fra due puliti (200, «Asset N not found», gli altri scritti: D3).
->   - `api assets-price`: i test 15-16 diventano `…_rejects_422`.
->   - `services asset-source-guards`:
->     - il rifiuto arriva dopo una sola lettura, nient'altro sulla sessione e niente scritto;
->     - i numeri su 12 asset veri (fixture `xr71_assets`), con un asset sconosciuto in mezzo, non contato;
->     - guardie: il fornitore ha ancora il suo `ValueError`; le date sono controllate prima delle valute.
->   - `bulk-writes-chunked:875`: l'esempio diventa il rifiuto delle cifre.
-> - ✅ **Doc** (DW-XR71, 15:10-15:16, più tre ritocchi miei):
->   - `developer/backend/assets/architecture.md`: un rimando dopo il controllo delle cifre (l.221-223); la sezione
->     nuova `#price-currency-coherence` dopo quella delle date; la riga della rotta; e, mio, la riga di `price_store.py`
->     nella tabella dei moduli;
->   - `developer/frontend/components/core-ui/data-editor.md` l.82: diceva «HTTP 400» per un prezzo in un'altra
->     valuta; ora 422 `price_currency_mismatch` per i prezzi, 400 per gli eventi;
->   - da DW, aggiunto alla patch: il commento di `_reject_prices_over_the_limit` («as it does a currency mismatch»),
->     operazione 1b. Patch a 9 operazioni.
->   - Da DW, **per X** (di prima, non mio): il commento di `refresh.py:497-500` dice che l'upsert rifiuterebbe con
->     `HTTPException(400)`. Era già sbagliato: sotto la chiave di un fornitore il refresh prende un `ValueError`.
->   - Pagine solo inglesi: nessun debito di traduzione. `mkdocs build` stretto, `check-links` e il gate dei link (63)
->     verdi alle 15:16-15:18.
-> - ✅ **Rossi dei servizi** (corsia 6187, 15:18-15:19): `services asset-source-guards` **2 falliti** e 41 passati,
->   esattamente i due nuovi; la guardia di `bulk-writes-chunked` 42 passati.
-> - ✅ **Rossi dell'API** (slot del coordinatore, 15:20-15:29):
->   - `api prices-currency-coherence`: **5 falliti** e 3 passati;
->   - `api assets-price`: **2 falliti** e 20 passati.
->   - Esattamente i casi nuovi (`files/logs/xr71_red_*.log`).
->   - **⚠️ Fuori pista**: il primo rosso ha rifatto la build di debug del frontend della corsia. Il merge di B-41 in
->     dev aveva portato modifiche al frontend di altri: avevo detto al coordinatore che la build era fresca, e non lo
->     era.
-> - ✅ **Patch applicata** (15:29:22): 9 operazioni in 3 file; ruff e black puliti; `import backend.app.main` riuscito.
-> - ✅ **Verdi dell'API** (15:36-15:42): `api prices-currency-coherence` **8**, `api assets-price` **22**.
->   - **⚠️ Fuori pista**: il verde ha aspettato dalle 15:29 alle 15:36: lo slot E2E di Y ha portato il carico a
->     85-106. Slot liberato alle 15:42.
-> - ✅ **Regressioni leggere** (15:42-15:47), tutte verdi:
->   - `services asset-source-guards` 43, `bulk-writes-chunked` 42, `asset-digit-limits` 79;
->   - `services asset-source` 61, `asset-source-refresh` 18, `current-price-storable` 27, `range-ceiling` 57;
->   - `schemas openapi-client-text` 78: la nuova descrizione di `FAPricePoint.currency` e la docstring della rotta.
->   - Porta 6187 libera.
-> - ✅ **Testi del runner** (dopo i verdi, solo testo): il `print_info` e la desc di `prices-currency-coherence` dicevano
->   «hard-400»; il commento d'isolamento di `asset-source-guards` ora conta anche i 12 asset di X-R71. Il runner si
->   carica.
-> - ✅ **Controlli** (15:48-15:50): ruff e black puliti sui 10 file Python; `git diff --check` pulito.
-> - **Backlog**: X aggiunge X-R71 (proprietario B) e il fratello dell'editor nella sua sezione; io non la tocco. Nel
->   backlog, la mia sola modifica è la frase di B-37 e la riga B-36 (le note di H). CHANGELOG: la riga 🐛 proposta
->   nell'handoff.
->
-> **Le due note di H su B-36/B-37** (coordinatore, 14:54; commit a parte, approvato alle 15:15):
-> - **La frase di B-37** nel backlog («nessuna funzione dell'app è registrata lì») era sbagliata per il motore di
->   Alembic: SQLAlchemy (dialetto pysqlite, 2.0.52) registra `regexp` e `floor` in Python a ogni connessione. Il
->   listener di `env.py` è quindi una cura vera. Riscritta. Il piano 07 e `security.md` non ripetono l'errore: il
->   piano dice solo che le funzioni predefinite di SQLite sono innocue, ed è vero per la connessione `sqlite3` delle
->   correzioni.
-> - **Due `_quoted` con contratti diversi**: `snapshot._quoted` diventa `_identifier`, che dà l'identificatore intero
->   fra virgolette, come `post_migration._quoted`; il suo unico chiamante produce lo stesso SQL. `post_migration` non
->   è toccato. Anche la riga B-36 del backlog nomina il nuovo nome.
-> - ✅ Applicata alle 15:07:05 (`h37-wip/apply_h37.py`, 4 operazioni in 2 file); ruff e black puliti. Verdi, i file che
->   usano `snapshot`: `services backup-archive` 155 (1 saltato, come prima), `backup-jobs` 69, `backup-secure` 77,
->   `backup-staging` 168. Porta 6187 libera.
->   - **⚠️ Fuori pista**: `services backup-snapshot` non esiste (nome della mia proposta del §8). I test di `snapshot`
->     sono in archive, jobs, secure e staging.
-
-### B-41 + B-42 — l'esito anonimo controlla il biglietto prima dello stato, e un file del biglietto rotto si registra una volta (2026-10-17, 14:10-14:56) — ✅ 🧊 FROZEN (checkpoint delle 14:56)
-
-> **B-34 entrato** (coordinatore, 14:10): `731337a5a` → dev `202849800`; HEAD portata in avanti. Via a B-41 nella 1.3
-> («cheap: check the ticket before reading the state»). Dopo, se B-33 e B7 aspettano ancora il developer, il
-> coordinatore trova lavoro in un'altra sezione.
->
-> **Stato reale** (14:10-14:20):
-> - `get_restore_outcome` (`restore.py:443-447`) legge lo stato (`read_restore`) prima di `outcome.read_outcome`. Con uno
->   stato che il file system rifiuta, `_read_state` registra un errore a ogni chiamata, qualunque biglietto: nessuno,
->   malformato, 43 caratteri qualsiasi.
-> - `read_outcome` usa lo stato solo dopo forma, cartella, registro, impronta e scadenza: basta passargli il modo di
->   leggerlo.
-> - **⚠️ Fuori pista — B-42**: `_read_record` registra un errore a ogni chiamata con un biglietto ben formato quando il
->   file del biglietto è rotto (illeggibile, un link, spazzatura, troppo grande). Stessa classe di rumore, dal B5c.
->   Chiesto al coordinatore; **dentro questo lotto** (coordinatore, 14:24).
-> - **Nota per B-33** (nella sua riga, coordinatore 14:24): con uno stato illeggibile dopo un riavvio, il ripiego della
->   pagina su `/status` riceve 500, che `readStatusWithSession` prende per «server giù». L'overlay interroga ogni secondo
->   per sempre, senza dire perché.
->
-> **Contratto** (`b41-contract.md`):
-> 1. **B-41**: `read_outcome(ticket, state, …)` accetta come `state` anche la funzione che lo legge, chiamata una volta
->    e solo per il biglietto di un riavvio non scaduto. La rotta le passa `lambda: _state_for_outcome(data_dir)`, la
->    lettura indulgente di oggi.
-> 2. **B-42**: `_report` registra un errore la prima volta per cartella dati, poi `debug` finché dura lo stesso errore;
->    `_forget` lo dimentica quando il file viene scritto, tolto o letto. Un lock rende esatto il controllo.
-> 3. Invariati: ogni risposta (la sola 404), il titolare del biglietto giusto (guardia b5), le rotte dell'admin.
->
-> - **Codice pronto** in `b41-wip/apply_b41.py`: 11 operazioni in 2 file; ruff e black puliti sulla copia emessa.
->   Prova a mano (`probe_b41.py`) sulla copia emessa: 15/15.
-> - **Rossi in scrittura** (TA-B41): (j) B-41 in `test_backup_restore_apply.py`; (c) B-41 e B-42 in
->   `test_backup_outcome.py`. Doc (DW-B41): `security.md`, tre punti.
-> - ✅ **Doc scritta** (DW-B41, 14:30): `security.md`
->   - l.2052-2055, «What cannot be read is not none»: l'esito legge lo stato solo per il biglietto di un riavvio non
->     scaduto (lot B-41);
->   - l.2168-2172, «Kept as a hash.»: un file del biglietto illeggibile o non valido, un errore una volta per cartella
->     dati, poi `debug` finché dura lo stesso errore (lot B-42);
->   - l.2186-2187, «One answer for every miss.»: il biglietto prima dello stato (lot B-41).
->   - Pagina solo inglese (`developer/`): nessun debito di traduzione.
-> - ✅ **Rossi scritti** (TA-B41, 14:15-14:35):
->   - API (j), dopo b5 (b5 invariata): `test_a_ticket_that_does_not_open_the_outcome_never_reads_the_state_nor_logs_it`.
->     - I 15 casi di `NOT_OPENING` decisi dal biglietto: tutti tranne `no-restore` e `a-restore-of-another-stage`.
->       Esclusi per id, con una barriera che li trova in `NOT_OPENING`. Per i 3 modi di `unreadable`: 45 casi.
->     - Asserzioni: la sola 404; il file dello stato mai aperto; nessun evento «The state of the restore cannot be read».
->     - Barriera: dopo la risposta, `read_restore` a mano è rifiutato e registrato, quindi `capture_logs` sente il
->       logger di `apply`.
->   - Servizi (c), B-41: il lettore chiamato una volta per il biglietto giusto, 3 casi (rosso). Guardie, il lettore mai
->     chiamato: 32 casi in 4 test (`NOT_THE_TICKET`, `UNTRUSTED_FILES`, senza file, scaduto).
->   - Servizi (g), B-42, 32 casi rossi in 4 test, su 5 modi di rompere il file (non un biglietto, oltre 4096 byte, un
->     link, modo 000, EIO):
->     - letto 3 volte: un solo errore;
->     - di nuovo un errore dopo una scrittura, una lettura valida, una rimozione, o un file trovato mancante (20 casi);
->     - un errore diverso conta come nuovo, anche tornando al primo (2 sequenze);
->     - una memoria per cartella dati.
->   - (e): il biglietto vero presentato al file rotto in 4 modi, mai nei log.
->   - Desc dei runner, in aggiunta: `backup-restore-apply` e `backup-outcome`.
-> - ✅ **Rosso dei servizi** (corsia 6187, 14:38): `services backup-outcome` **35 falliti** e 129 passati, esattamente i
->   3 + 32 attesi: l'`AttributeError` del lettore, e gli errori ripetuti di B-42 (`files/logs/b41_red_services.log`).
-> - ⏳ Rosso dell'API: aspetta uno slot breve (chiesto alle 14:36).
-> - ✅ **Rosso dell'API** (slot del coordinatore, 14:38-14:47): `api backup-restore-apply` **45 falliti** e 170
->   passati, esattamente i casi nuovi: «the state file never opened for a ticket that does not open the outcome»
->   (`files/logs/b41_red_api.log`).
->   - **⚠️ Fuori pista**: 8 minuti invece di 1-2. I merge di dev avevano reso vecchia la build di debug del frontend
->     della corsia, quindi il runner l'ha rifatta (vite) prima del server. Detto al coordinatore durante lo slot.
-> - ✅ **Patch applicata** (14:47:00): 11 operazioni in 2 file; ruff e black puliti.
-> - ✅ **Verdi** (14:47-14:49): `api backup-restore-apply` **215** (170 + 45), `services backup-outcome` **164**
->   (129 + 35), `services backup-apply` **255** (regressione: chi chiama `read_outcome` con uno stato). Slot liberato
->   alle 14:49.
-> - ✅ **Controlli** (14:50-14:54):
->   - `schemas openapi-client-text` 78: la docstring della rotta finisce nella descrizione OpenAPI, senza `${` né `\`;
->   - ruff e black puliti sui 6 file Python; `git diff --check` pulito;
->   - `lint --dead-code --scope backend`: nessun simbolo nuovo; l'uscita 1 viene da voci di altri pacchetti, già
->     presenti;
->   - client generato: ignorato da git, niente da fare;
->   - `mkdocs build` strict, `check-links`, gate 63; porta 6187 libera.
-> - **Una precisazione mia nella doc**: `_REPORTED` è memoria di processo. Con più worker ognuno registra il suo errore
->   una volta: «once per data directory in each server process».
-> - **Backlog**: B-41 ✅, B-42 ✅; la nota della pagina è nella riga B-33. CHANGELOG: una riga 🔒 proposta nell'handoff
->   (meno rumore nei log per una rotta anonima).
-
-### B-34 — la causa giusta quando l'istanza non ha ancora una chiave, e le frasi della doc (2026-10-17, 14:00-14:10) — ✅ 🧊 FROZEN (checkpoint delle 14:10)
-
-> **B-38 entrato** (coordinatore, 14:00): `1ed071c2f` → dev `c2a09b960`, CHANGELOG 🔒 `9b02120a7`; HEAD portata in
-> avanti. La correzione di `security.md` l.706-708 e il residuo H-47 vanno ad H. Via a B-34.
->
-> - **LOW-1 di H**:
->   - Su un'istanza senza chiave, dove la verifica non può crearla, `instance_key_status()` dice `not_created` e
->     `problem=None`, e la riga D2 accusa la chiave data.
->   - Cura: il ramo dell'eccezione prende anche `not_created`, e la riga dice «`<path>`: there is no instance key yet,
->     and it could not be created».
->   - Patch: `b34-wip/apply_b34.py`, 1 operazione; ruff e black puliti.
+> **Analisi** (20:2x-20:45; `files/b49-analysis.md`, sonda `files/b49-wip/probe_b49.py`, solo file usa e getta in
+> `/tmp/lf_b49_probe`, il DB della corsia copiato in sola lettura con l'API di backup di SQLite):
+> - ✅ **La rottura dopo il ripristino, provata in processo**: un valore `CAST(x'45ff52' AS TEXT)` in
+>   `transactions.description`, `assets.display_name`, `brokers.name`, `price_history.currency` e `fx_rates.date` (una
+>   colonna DATE: affinità NUMERIC, valori di testo), letto col motore dell'app (`sqlite+aiosqlite`, il listener di
+>   `session.py`, NullPool). Ogni `select(Model)` fallisce: `sqlalchemy.exc.OperationalError` ←
+>   `sqlite3.OperationalError: Could not decode to UTF-8 column … with text 'E�R'`. È la lettura intera a fallire, non la
+>   riga; `select(Model.id)` funziona ancora. Quindi ogni elenco di quelle righe risponde 500, e il messaggio cita i
+>   byte. Prima della modifica, le cinque letture rendono 76, 17, 8, 2 733 e 4 185 righe (`b49_probe_read.log`).
+> - ✅ **Il costo**, su una copia cresciuta a **488 MB** (2 040 000 prezzi, 1 004 185 cambi, 200 076 transazioni; carico
+>   45-66, tempi alti):
+>   - (d), per tabella una passata per finestra di 200 000 righe, ogni colonna concatenata da SQLite in una riga:
+>     **3,6 s** pulita, **2,4 s** con un valore cattivo in fondo a `price_history`;
+>   - (b), per colonna: 4,8 s; (c), byte decodificati in Python: 11,3 s; (a), riga per riga: 13,8 s;
+>   - l'audit E-19a sulla stessa copia: 2,0 s; `PRAGMA integrity_check`: 8,6 s (la verifica lo fa due volte).
+>   - **⚠️ Fuori pista**: la prima misura di (c) dava 0,00 s, per un errore della sonda: con `text_factory = bytes` i nomi
+>     delle tabelle tornano come byte, e non si leggeva nulla. Corretto e rimisurato (`b49_probe_rescan.log`).
+> - **Decisione (mia): rifiutare**, con `database_damaged`:
+>   - nessun codice nuovo, quindi niente `RestoreErrorCode`, i18n o CLI da cambiare; la frase della UI è giusta;
+>   - un messaggio inglese proprio, e un avviso nel log col solo numero di tabelle;
+>   - un passo nuovo nell'involucro di B-43, dopo `_check_against_manifest` e prima dell'upgrade;
+>   - il metodo (d) su ogni tabella tranne `sqlite_%`, per classe di memorizzazione del valore;
+>   - un `text_factory` severo, che fa lanciare `UnicodeDecodeError`;
+>   - la connessione in `staging.py`, `mode=ro`, `trusted_schema=OFF` per primo.
+>   - Perché non avvisare: l'istanza ripristinata fallirebbe quegli elenchi, e la UI non può riparare righe che non
+>     legge. LibreFolio scrive solo UTF-8, e le checksum fermano un archivio danneggiato.
+> - **Cambia RNW-109 di E**: i suoi archivi finirebbero in `database_damaged` prima della lettura E-19a; la nota di E
+>   (BACKLOG l.7942) lo prevede già. Da concordare chi lo riscrive.
+> - Mandata al coordinatore alle 20:45. 🧊 Nessun codice prima del via.
+> - **Via del coordinatore** (20:5x): **rifiutare**, come disegnato. `database_damaged`, un passo nell'involucro di B-43
+>   dopo `_check_against_manifest` e prima dell'upgrade; `text_factory` severo, connessione propria `mode=ro` +
+>   `trusted_schema=OFF`; nel log solo conteggi; BLOB fuori; **nessuna riga di CHANGELOG** (il ripristino è nuovo nella
+>   1.3). **RNW-109 lo riscrivo io** nei rossi: ora si aspetta `database_damaged` prima dell'audit, nessuna riga
+>   dell'audit; il ramo del guasto resta coperto da RNW-107. Doc: `backup_restore.en.md` è mio; **`security.md` è aperto
+>   da H (H-52)**: non lo tocco, il paragrafo va al coordinatore col checkpoint.
+> - **Contratto** (`files/b49-contract.md`); **patch** `files/b49-wip/apply_b49.py` (4 operazioni in `staging.py`: la
+>   docstring del modulo, l'import di `_identifier` da `snapshot`, il passo in `_stage`, la scansione).
+> - ✅ **Rossi scritti** (TA-B49, 20:5x-21:03), sezione (o) di `test_backup_staging.py` (la (n) era già B-43):
+>   - rossi: 4 posti (colonna TEXT, colonna DATE, tabella sconosciuta, i tre insieme), l'archivio più vecchio rifiutato
+>     prima dell'upgrade, il log (un avviso, solo interi, niente testo, byte, nomi o percorsi), un carattere spezzato su
+>     due righe, i rowid ai due estremi (con un limite di 60 s), la connessione della scansione (`mode=ro`,
+>     `trusted_schema=OFF` per primo, `typeof(` e `'text'`);
+>   - guardie: testo valido oltre l'ASCII (`é`, `日本`, `💶`, `𝄞`), gli stessi byte come BLOB, il manifest sbagliato
+>     ancora `manifest_mismatch`;
+>   - RNW-109 riscritto (`test_restore_non_iso_warning.py`): `database_damaged`, l'audit mai chiamato, nessun report.
+> - ✅ **Rossi** (corsia 6187, 21:04-21:05, carico 10): `services backup-staging` **13 falliti**, 187 passati
+>   (`b49_red_staging.log`); `services restore-non-iso-warning` **4 falliti**, 42 passati (`b49_red_rnw.log`). Sono
+>   esattamente i casi nuovi, ognuno alla sua ragione: il controllo arriva alle correzioni o all'upgrade, «DID NOT RAISE»,
+>   nessuna connessione che legga per classe.
+> - **⚠️ Fuori pista — due buchi della mia scansione, trovati prima di applicarla**:
+>   - il test del carattere spezzato (TA-B49): unire i valori con `''` ricompone `C3` + `A9` in `é`, e i due valori
+>     sbagliati passano. Ora li unisce una virgola, un byte suo (provato: `''` passa, `','` trova);
+>   - `pragma_table_info` nasconde le colonne generate (provato: `table_xinfo` le mostra, `hidden` = 2). Una colonna
+>     generata con un valore non UTF-8, chiamata come una colonna che il server legge, sfuggirebbe. Ora `table_xinfo`;
+>     il rosso relativo chiesto a TA-B49;
+>   - in più: una finestra oltre il limite di lunghezza di SQLite (`DataError`, provato) continua riga per riga.
+> - ✅ **La scansione provata a parte** (`files/b49-wip/harness_b49.py`, sul codice emesso, prima di applicarlo): la
+>   copia pulita passa; tutti i casi limite validi passano (rowid −2⁶³ e 2⁶³−1, i tre nomi del rowid coperti, `WITHOUT
+>   ROWID`, nomi con virgolette); ogni caso con testo cattivo è rifiutato, compresi il carattere spezzato e la colonna
+>   generata; il log ha solo `tables=5`. Sulla copia da 488 MB: **3,3 s** pulita, 2,7 s con un valore cattivo, contro
+>   5,5 s per un `integrity_check` (carico 9-10).
+> - ✅ **Il rosso della colonna generata** (TA-B49, due varianti, VIRTUAL e STORED, in una tabella sconosciuta, con le
+>   precondizioni: `table_info` non la elenca, `table_xinfo` sì; né B-28 né B-43 la fermano; `VACUUM INTO` la copia):
+>   **2 falliti** alla ragione attesa (21:16; `b49_red_generated.log`).
+> - ✅ **Patch applicata** (21:17): 4 operazioni in `staging.py` (+76 righe).
+> - ✅ **Verdi** (21:17-21:21, carico 12-24):
+>   - `services backup-staging` **202** e `services restore-non-iso-warning` **46**;
+>   - `services backup-secure` 77, `services backup-apply` 255, `utils backup-cli` 102, `utils backup-cli-restore` 109,
+>     `utils backup-cli-secure` 106, `utils dev-cli-db-path` 17;
+>   - ruff e black puliti sui 3 file Python;
+>   - doc: build stretta, `check-links`, `utils gate-docs-links` 63. `git diff --check` pulito; porta 6187 libera.
 > - **Doc**:
->   - in `cli_tools`, un vecchio `LIBREFOLIO_INSTANCE_KEY` va nel file così com'è, spazi compresi;
->   - la riga dell'eccezione copre anche il caso nuovo;
->   - il `chmod 600` non serve più: B-38 ha spostato la chiave in `/root`. Da controllare che nessuna pagina la metta
->     ancora in `backups/`.
-> - **Rossi in scrittura** (TA-E, accanto a c7); doc (docs-writer).
-> - ✅ **Rosso scritto** (TA-E): in `test_backup_cli_restore.py`, dopo c7,
->   `test_when_this_instance_has_no_key_yet_and_none_can_be_created_it_is_said_instead_of_blaming_the_key_given`.
->   - Un'istanza senza chiave, con `secrets/` a 0o500 (un aiuto rimette i permessi nel `finally`), e una chiave data.
->   - Atteso: la riga «This instance's own key cannot be used…», con `there is no instance key yet, and it could not be
->     created`; mai la riga che accusa la chiave data.
->   - Desc del runner (`_backend_utils.py`, `backup-cli-restore`) allungata, in aggiunta.
-> - ✅ **Rosso** (corsia 6187): `utils backup-cli-restore` **1 fallito** e 107 passati, esattamente il caso nuovo
->   (`files/logs/b34_red.log`).
-> - ✅ **Patch applicata** (14:03:03): 1 operazione in `_print_given_key` di `scripts/backup_cli.py`; ruff e black
->   puliti.
-> - ✅ **Verdi**: `backup-cli-restore` **108**, `backup-cli-secure` **106**; porta 6187 libera.
-> - ✅ **Doc** (docs-writer, più una frase mia):
->   - `cli_tools.en.md` l.563: il valore di un vecchio `LIBREFOLIO_INSTANCE_KEY` va nel file «as written in the
->     variable, spaces included»; il file di `LIBREFOLIO_INSTANCE_KEY_FILE` «as it is»;
->   - `cli_tools.en.md` l.568: la riga dell'eccezione copre anche un'istanza senza chiave, con il testo del problema;
->   - il secondo appunto di H (`chmod 600` sulla chiave vecchia in `backups/`) non vale più alla lettera: dopo B-38 la
->     chiave non passa più dai dati, e nessuna pagina la mette in `backups/` o in `LibreFolio-data/` (grep). Il senso
->     vale ancora sull'host: in `backup_restore.en.md` l.320 il file `old-instance.key` accanto a `docker-compose.yml`
->     è «kept private (`chmod 600 old-instance.key`)», come il file della password a l.96. Pagina solo inglese.
->   - Traduzioni di `cli_tools`: debito vero (due frasi cambiate di senso), nessun `translate-stamp`, come in B-38.
-> - ✅ **Controlli** (14:05-14:10, ripetuti dopo la frase di l.320): `mkdocs build` strict, `check-links`, gate 63; ruff e black puliti sui 3 file
->   Python; `git diff --check` pulito; porta 6187 libera.
-> - **Backlog**: B-34 ✅. CHANGELOG: nessuna voce (un messaggio della CLI più preciso, dentro B-18 della stessa
->   release).
+>   - `admin/backup_restore.en.md`, la riga di `database_damaged` della tabella dei rifiuti (pagina senza traduzioni);
+>   - `admin/cli_tools.en.md`, il passo 4 della prova su copia e la riga di `database_damaged`. Debito di traduzione
+>     vero, niente stamp, come per B-38.
+>   - `security.md`: non toccato (H-52). Il paragrafo è in `files/b49-security-paragraph.md`, mandato col checkpoint.
+> - **Non fatti**: `api backup-restore` e `api backup-restore-apply` (serve la corsia col server); la `desc` di
+>   `backup-staging` nel runner non nomina B-49 (file condiviso, non assegnato).
+> - File della sonda (`/tmp/lf_b49_probe`, 488 MB) cancellati.
+> - 🧊 **CHECKPOINT READY** (21:26): 7 file tracciati, nessun file nuovo; FROZEN.
+> - **Entrato in dev** (coordinatore, 21:34): `709dfb1e4`, dopo l'unione di dev nel mio ramo (`74c08dafe`; conflitto
+>   solo nel backlog, X-R79 contro X-R80 di X, tenuti entrambi). Sull'albero unito il coordinatore ha fatto girare
+>   `backup-staging` 202, `restore-non-iso-warning` 46, `api backup-restore` 161, `api backup-restore-apply` 215: verdi.
+> - ✅ **Coda** (coordinatore, 21:34; H-52 entrato, `security.md` libero; 21:34-21:37):
+>   - `developer/architecture/security.md`: il paragrafo di B-49 dopo «What the check cannot read», e
+>     `_refuse_undecodable_text()` nell'elenco delle connessioni del punto `trusted_schema`. Nello stesso elenco mancava
+>     la lettura E-19b1 (`_holds_non_iso_currencies()`, `mode=ro`, `trusted_schema=OFF` per primo): aggiunta, detto al
+>     coordinatore;
+>   - la `desc` di `backup-staging` nel runner nomina B-49 (o); ruff e black puliti, il runner si carica;
+>   - doc: build stretta, `check-links`, `utils gate-docs-links` 63; `git diff --check` pulito. CHECKPOINT READY 21:37.
 
-### B-38 — i file dei segreti letti da root: regolari, mai attraverso un link nella cartella dei dati (2026-10-17, 13:36-13:58) — ✅ 🧊 FROZEN (checkpoint delle 13:58)
+### B-15 + B-8 — rossi scritti, poi il fermo e il parcheggio (2026-10-17, 21:27 → 2026-10-19, 11:10) — ⏸️ parcheggiati; ripresi il 19/10 alle 11:42 (sezione «la ripresa»)
 
-> **B-36/B-37 entrati** (coordinatore, 13:39): `2eff9e623` più il merge `05d1dc76a` → dev `d1976bca8`. Un conflitto
-> nella desc del runner `post-migration` (Z-28), risolto dal coordinatore tenendo entrambe le frasi. HEAD portata in
-> avanti.
+> **Contratto** (21:27, nei file della sessione, `b15-b8-contract.md`), poi il via del coordinatore dopo l'ingresso
+> del seguito di B-49 in dev `739bf08e0` (21:40): «GO for B-15 + B-8, reds first, per your contract».
 >
-> - **⚠️ Fuori pista — Kubernetes (13:36)**: rifiutare ogni link con `O_NOFOLLOW`, come concordato, romperebbe
->   Kubernetes, che monta ogni segreto attraverso un symlink (`/etc/secret/pw` → `..data/pw`). Proposta di rifinitura,
->   **approvata dal coordinatore (13:40, opzione a)**:
->   - ovunque, un file regolare aperto con `O_NONBLOCK`: una FIFO non blocca più il comando, e una cartella o un
->     dispositivo non vengono letti;
->   - i link sono rifiutati solo da root e solo dentro la cartella dei dati;
->   - la guida sposta la chiave fuori dalla cartella dei dati;
->   - la corsa residua va nella riga H-47 di H.
-> - **Altri due punti miei** (13:42):
->   - il controllo percorre **ogni componente**, dalla cartella dei dati in giù: un `backups` sostituito da un link verso
->     `/root` sarebbe sfuggito controllando solo l'ultimo componente;
->   - la guida usa **`/root`** del container, non `/tmp`: in `/tmp` l'utente del server può creare il nome per primo
->     come link, e `docker compose cp` ci scriverebbe attraverso.
-> - **Contratto**: `b38-contract.md`. Il codice: `_secret_path(args, path, label)` prima di ogni `read_secret_file`
->   della CLI, con `_data_dir_setting` (come `_decrypt_as_owner`) e `_link_inside`. Le eccezioni sono
->   `SecretFileError`, quindi i ❌ restano quelli di oggi (`password_unreadable`, `instance_key_unreadable`).
-> - **Codice pronto** in `b38-wip/apply_b38.py`: 4 operazioni, ruff e black puliti. Prova a mano sulla copia emessa:
->   - una FIFO e una cartella sono rifiutate subito;
->   - un file normale passa, e uno mancante è lasciato a `read_secret_file`;
->   - il link di una cartella madre dentro i dati viene preso, fuori no.
-> - **Rossi in scrittura** (TA-E, sezione (n) di `test_backup_cli_secure.py`); doc (docs-writer): la guida, `cli_tools`
->   e `security.md`.
-> - ✅ **Rossi scritti** (TA-E, 13:42-13:50): sezione (n), 3 funzioni e 40 casi sui 4 comandi che leggono un segreto
->   (`decrypt` compreso).
->   - Una FIFO o una cartella, da root finto e non: 16 casi rossi. Un watchdog di 10 s apre la FIFO, così il run non
->     resta appeso.
->   - Un link dentro i dati, su `backups/key` o su `backups/` stesso: 8 rossi. Il bersaglio non viene mai aperto.
->   - 16 guardie.
->   - Due vincoli fissati: il controllo dei link viene **prima** di ogni apertura, e lavora sul percorso **come è
->     dato**, non risolto.
->   - Trovato da TA-E: oggi `create` e `inspect` rifiutano un `backups/` che è un link solo **dopo** che root ha già
->     letto il segreto attraverso quel link.
-> - ✅ **Doc scritta** (docs-writer, 13:44):
->   - `backup_restore.en.md` l.308 e l.320-328: la chiave passa da `/root` del container;
->   - `cli_tools.en.md` l.363-364, 378, 564, 569: la regola detta una volta sola (debito di traduzione);
->   - `security.md` l.856-870: il punto «Secret files read as root», con il residuo H-47.
->   - Da passare ad H: «The Instance Key» in `security.md` l.706-708 dice ancora che B-18 è nel backlog.
-> - ✅ **Rosso** (corsia 6187, 13:50-13:52): `utils backup-cli-secure` **24 falliti** e 82 passati, come previsto.
-> - ✅ **Patch applicata** (13:52:44): 4 operazioni in `scripts/backup_cli.py`; ruff e black puliti.
-> - ✅ **Verdi** (13:52-13:54): `backup-cli-secure` **106** (37 s: nessuna attesa su una FIFO), `backup-cli-restore`
->   107, `backup-cli` 102.
-> - ✅ **Doc** (13:55-13:57): `mkdocs build` strict (54 s), `check-links`, gate 63. Controlli statici puliti, porta
->   6187 libera.
-> - **Backlog**: B-38 ✅. Il residuo (due aperture) è nella riga H-47 di H.
+> - **B-15**: il 413 di un proxy (corpo non JSON) diventa `proxy_too_large`, in 4 lingue, con il suo caso in
+>   `restoreFlow.test.ts`.
+> - **B-8**: `backup_busy` porta l'id del job in corso, così la scheda lo segue.
+> - **Codice**: le patch in `b15-b8-wip/` (21:42-21:44), mai applicate.
+> - **Rossi**, da due test-author, scritti e mai eseguiti:
+>   - backend: 25 rossi e 5 guardie in `test_backup_jobs.py`, `test_backup_instance_errors.py`,
+>     `test_backup_panel.py`;
+>   - frontend: 60 rossi e 20 guardie in `backupApi.test.ts`, `backupJob.test.ts`, `restoreFlow.test.ts`,
+>     `restoreI18n.test.ts`.
+> - **Doc** modificate: `backup_restore.en.md`, `hosting_providers.en.md`, `security.md`.
+> - **⚠️ Fuori pista — il fermo del developer**: congelato subito, senza test, server, Git o agenti nuovi; i due
+>   test-author già partiti lasciati finire. Al coordinatore una riga con lo stato.
+> - **Parcheggio** (19/10, fase 1 della ripartenza, fino alle 11:10): i 10 file modificati (7 di test, 3 di doc)
+>   salvati in `files/parked/b15-b8-reds-docs-on-739bf08e0.patch` (+856/−13), con un `README.md` e 5 domande per
+>   il developer; tolti dal worktree con `git apply -R`; la patch rientra pulita su `739bf08e0` (`git apply
+>   --check`); `git status --porcelain` vuoto.
+> - **Stato**: ⏸️. Le 5 domande le porta il coordinatore al developer; si riprende solo col suo via.
 
-### B-36 + B-37 — nomi quotati e `trusted_schema` spento anche nelle correzioni e nell'upgrade (2026-10-17, 13:09-13:33) — ✅ 🧊 FROZEN (checkpoint delle 13:33)
+### Ripartenza del 19/10 — pulizia e contabilità (2026-10-19, fino alle 11:30) — 🧊 FROZEN
 
-> **B-39 entrato** (coordinatore, 13:09): `c8fc32bfa` → dev `25d00f192`, CHANGELOG 🔒 `bbfb76e38`; HEAD portata in
-> avanti. Via a B-36 + B-37; rivede H.
-> - Permesso di scrittura (11:59) su `db/post_migration/__init__.py` e su `env.py` di Alembic, solo per le virgolette e
->   per `trusted_schema=OFF`.
+> **Coordinatore** (19/10): il developer ha letto il resoconto. Per B non c'è lavoro nuovo: Litestream aspetta
+> le risposte D1–D10, e B-15/B-8 sono fra i lotti piccoli che sta ancora leggendo. **Regole nuove**: nessuna
+> decisione di prodotto da parte mia, solo domande; si implementa solo dopo il via del coordinatore.
 >
-> **Stato reale** (13:00-13:10):
-> - Solo `_row_counts` costruisce SQL con nomi che vengono dall'archivio. `autoincrement.py` usa la tupla costante
->   `AUTOINCREMENT_TABLES`; la connessione di `_backup` scrive un file `.bak` nuovo.
-> - Il test di B-28 «every connection … trusted_schema off first» lascia fuori apposta le correzioni e l'upgrade (§2):
->   «not recorded».
-> - `security.md` l.1821-1827 lo dice.
->
-> **Contratto** (`b36-37-contract.md`):
-> 1. **B-36**: un `_quoted()` locale, che raddoppia `"`, in `_row_counts`.
-> 2. **B-37**: `PRAGMA trusted_schema=OFF` subito dopo la connessione di `run_post_migration_fixes`, dentro il `try`,
->    anche sul database vivo: lo schema di LibreFolio contiene solo tabelle e indici, e le funzioni predefinite di
->    SQLite sono innocue.
-> 3. **B-37**: un listener `connect` (`_schema_untrusted`) in `env.py`, registrato prima di `connectable.connect()`, per
->    ogni URL.
->
-> - **Codice pronto** in `b36-wip/apply_b36.py`: 5 operazioni in 2 file; ruff e black puliti sulla copia emessa.
-> - **Rossi in scrittura** (TA-S):
->   - `test_post_migration.py` (`db post-migration`);
->   - il registratore di (l) esteso a `post_migration` (`services backup-staging`);
->   - un controllo statico di `env.py` (`utils dev-cli-db-path`).
->   Doc: `security.md` l.1821-1827 (docs-writer).
-> - ✅ **Rossi scritti** (TA-S, 13:10-13:15):
->   - `test_post_migration.py` §17: un 1.1 portato all'ultima migrazione (correzione autoincrement pendente), più le
->     tabelle `x"y` e `a" WHERE 1 --`, che oggi diventa `FROM "a" WHERE 1 --"` («no such table: a»). Una spia su
->     `_row_counts`;
->   - il registratore (l) di `test_backup_staging.py` registra anche `post_migration`; la copia `.bak` resta fuori per il
->     filtro del percorso;
->   - DBP-j in `test_dev_cli_db_path.py`: un controllo AST di `env.py`. Un'esecuzione vera di Alembic non può mostrare
->     il pragma: è uno stato della connessione, dentro un processo che finisce.
-> - ✅ **Rossi** (corsia 6187, 13:15-13:19): `db post-migration` **1 fallito** (44 passati), `services backup-staging`
->   **1 fallito** (167), `utils dev-cli-db-path` **2 falliti** (15). Sono esattamente i 4 attesi.
-> - ✅ **Patch applicata** (13:19:19): 5 operazioni in 2 file; ruff e black puliti.
-> - ✅ **Verdi** (13:19-13:23):
->   - `db`: `post-migration` 45, `post-migration-event-types` 36, `post-migration-orphan-pairs` 47,
->     `autoincrement-schema` 4, `migration-008` 23, `migration-009` 11;
->   - `services backup-staging` 168, che comprende l'upgrade vero in un processo a parte;
->   - utils: `dev-cli-db-path` 17, `backup-cli-restore` 107.
->   Porta libera.
-> - ✅ **Doc** (13:30-13:32): `security.md` l.1821-1832 e il paragrafo dei test l.1838-1841 (docs-writer); `mkdocs
->   build` strict (61 s), `check-links`, gate 63.
-> - ✅ **Controlli statici**: ruff e black sui 7 file Python, tranne `_backend_db.py`, che era già sporco prima di B (tre
->   `PLC0415`, e black che lo riformatterebbe), con una sola riga di desc aggiunta. `git diff --check` pulito.
-> - **Per H**:
->   - le due modifiche nei suoi file (`post_migration/__init__.py`, `env.py`);
->   - `database/index.md` l.203-204, che potrebbe dire «with `trusted_schema` off first» (nota del docs-writer).
-> - **Backlog**: B-36 ✅, B-37 ✅.
+> - **Fase 1, pulizia** (fino alle 11:10): B-15 + B-8 parcheggiati (sezione sopra). Risposto con il percorso
+>   della patch, `git status --porcelain` vuoto e FROZEN.
+> - **Fase 2, contabilità**, sulla base `ede7adf75` (avanzamento veloce del coordinatore; HEAD verificato,
+>   pulito):
+>   - §7: la colonna «Stato (19/10)», con ogni merge verificato in `dev_release2`;
+>   - §13: le 85 sezioni in ordine d'inizio, con la nota in alto. Al loro posto la bozza di B1 (dopo
+>     B0), quella di B4 (dopo il verde finale di B3), B5a (prima di B1-fix), lo slot pesante 1 (prima
+>     dell'accordo con H) e il blocco del 17/10, che andava dal più nuovo al più vecchio;
+>   - 16 intestazioni che dicevano un lavoro aperto ora portano l'esito;
+>   - backlog, sezione B: 32 righe «In dev» col merge d'ingresso; la riga «Fatto» di B-36; B-4 e B-5 chiuse,
+>     perché le aveva già fatte H nel lotto «b-doc-notes» (`d7eb9c5f3`, in dev `0ecc5ed27`); B-8 e B-15
+>     «⏸️ Parcheggiata»; nella riga di B-49, la frase su `security.md` (il paragrafo l'ho aggiunto io dopo
+>     H-52).
+> - **Prove**: gli script (`bookkeeping-1910/` nei file della sessione) verificano ogni voce e ogni sezione
+>   prima di scrivere: nel §13 ogni sezione una volta sola, nessuna riga persa; fuori dal §13 cambia solo la
+>   tabella del §7. `git diff --check` pulito.
+> - **Stato**: 🧊 FROZEN. Aspettano il developer: D1–D10 (B7), le 5 domande di B-15/B-8, la scelta di B-33.
+>   B9 e la parte 2 di BZ vengono dopo B7.
 
-### B-39 — formule nei CSV esportati, con un ritorno esatto (2026-10-17, 12:43-13:09) — ✅ 🧊 FROZEN (checkpoint delle 13:09)
+### B-15 + B-8 — la ripresa: rossi, cura, verdi (2026-10-19, 11:42-12:40) — ✅ 🧊 FROZEN (checkpoint delle 12:40)
 
-> **B-35 entrato** (coordinatore, 12:43): merge `d7efb5805` → dev `9fafc79b5`, CHANGELOG 🔒; HEAD portata in avanti
-> a `e3ef5c9a6`. Via a B-39.
+> **Via del coordinatore** (11:42): «VIA per **B-15 e B-8**: il developer ha detto «ok procedi»». Le quattro scelte
+> del README del parcheggio, approvate:
 >
-> **Stato reale** (12:44-12:52):
-> - `series_export.stream_rows_as_csv` scrive le celle così come sono: un testo che comincia con `=` diventa una
->   formula in un foglio di calcolo. Le uniche colonne di testo libero sono le `notes` degli eventi; le altre sono
->   codici, date e numeri.
-> - **L'export degli eventi è fatto per tornare indietro**: `EventDataImportModal` legge `value` come alias di `amount`
->   e legge `notes`. Un `'` aggiunto solo all'export resterebbe nella nota dopo una reimportazione.
-> - `CsvColumnDef` ha già un `parse` per colonna, che `CsvEditor` chiama sulle celle non vuote e senza spazi ai bordi.
-> - L'altro scrittore di CSV (`brim_provider.write_combined_csv`) non è di B: contiene i dati del broker dell'utente
->   stesso, quindi al più un danno a sé. Solo una nota.
+> 1. la scheda **tiene l'archivio in offerta** (com'è oggi);
+> 2. un backup seguito già finito alla prima lettura: **sì**, se ne annuncia la fine;
+> 3. **sì**, la scheda ricorda l'id prima della prima lettura;
+> 4. il testo di B-15 così com'è, in 4 lingue.
 >
-> **Contratto** (approvato dal coordinatore, 12:55, con il permesso di scrivere sul modale per l'hook di `notes`;
-> rivede X):
-> 1. All'export, un testo che corrisponde a `'*[=+\-@\t\r]` all'inizio riceve un `'` in più, salvo un numero puro
->    (`[+-]?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?`), di qualunque tipo. Il JSON non cambia.
-> 2. All'import, `notes` toglie esattamente un `'` iniziale davanti a quel motivo (`unescapeFormulaText`, nello script
->    di modulo del modale). Il ritorno è esatto, anche per una nota che comincia già con apostrofi (`'=x` →
->    `''=x` → `'=x`).
+> Codice e controlli leggeri subito, con carico sotto 50; le suite pesanti e gli E2E dopo le 14:00, nello slot del
+> coordinatore. La domanda 5 del README era solo informativa (l'E2E `createBackup`).
 >
-> - **Codice pronto** in `b39-wip/apply_b39.py`: 5 operazioni in 2 file; ruff, black e prettier puliti.
->   Prova a mano sulla copia emessa: `=1+1` → `'=1+1`, `'=x` → `''=x`, `-1.5` resta, `a = b` resta.
-> - **Rossi in scrittura**:
->   - TA-S: un file nuovo, `test_series_export_csv.py`, con la sua voce `services series-export-csv`;
->   - TA-F: i casi di Vitest (finiti in `DataEditor.test.ts`, vedi sotto);
->   - docs-writer: le pagine della doc.
-> - ✅ **Rossi scritti** (12:44-12:54):
->   - **TA-S**: `test_series_export_csv.py`, nuovo, registrato come `services series-export-csv` (isolamento pure):
->     6 funzioni e 30 casi (11 rossi, 19 guardie). Asserisce sulle celle rilette da `csv.reader`; un valore non di
->     testo il cui testo sembra una formula viene scappato anche lui.
->   - **TA-F**: 22 casi in `DataEditor.test.ts`, non in un file nuovo. Quel file è già registrato, e ha già il blocco
->     del modale degli eventi; un file nuovo avrebbe chiesto una riga in `_frontend_utility.py`. I casi: la funzione,
->     la tabella del ritorno (con anche `'\r=1`), e il modale che reimporta tre note.
->   - **Docs-writer**:
->     - `data-editor.md` (dev) l.123-128;
->     - `user/assets/detail/data-editor.en.md` l.80, perché `events.en.md` non descrive il formato (debito di
->       traduzione);
->     - `security.md` «🧼 Output Escaping», l.2256-2267.
-> - **⚠️ Fuori pista — gli apostrofi già presenti (12:58)**: una nota che comincia già con `'=x` sarebbe tornata
->   `=x`. L'export scappa ora anche una serie di apostrofi davanti a un carattere di formula (`'*[=+\-@\t\r]`, `'=x`
->   → `''=x`), e l'import ne toglie esattamente uno: il ritorno è esatto per ogni testo.
-> - ✅ **Rossi** (corsia 6187, 12:54-12:55): `services series-export-csv` **11 falliti** e 19 passati; Vitest
->   `DataEditor.test.ts` **22 falliti** e 88 passati.
-> - ✅ **Codice applicato** (12:55:44): 5 operazioni in 2 file.
->   - `series_export.py`: `_FORMULA_LIKE`, `_PLAIN_NUMBER`, `_csv_cell`;
->   - `EventDataImportModal.svelte`: `<script module>` con `unescapeFormulaText`, e `parse:` su `notes`.
->   Ruff, black e prettier puliti.
-> - ✅ **Verdi**: `services series-export-csv` 30; Vitest su `ui/data-editor/` e `components/assets/`, **1560 su
->   1560** in 38 file.
-> - ✅ **Doc** (12:57-12:59): `mkdocs build` strict (70 s), `check-links`, gate 63. Controlli statici puliti, porta
->   6187 libera.
-> - ✅ **Slot 2** (coordinatore, 13:04), regressione API:
->   - `api backup-export-extras` **8 passati** (13:04-13:07; il frontend ricostruito, svelte-check 0 errori con lo
->     script di modulo del modale);
->   - `api asset-prices-export` **5 passati**.
->   Porta 6187 libera.
-> - Proposta di CHANGELOG 🔒 (docs-writer): «CSV exports are safe to open in a spreadsheet…».
-> - **Backlog**: B-39 ✅.
+> - ✅ **Patch riapplicata** (11:43): HEAD `ca9dbe9e5` (la contabilità committata), pulito. Fra `739bf08e0` e HEAD
+>   cambiano 121 file, nessuno dei percorsi del lotto (backup, i18n, E2E delle impostazioni, le tre doc):
+>   `git apply --check` pulito, poi `git apply` (10 file, +856/−13, sha256 `a7999e36631fa781…` come al parcheggio).
+>   Le due patch di prodotto (`apply_b8_be.py`, `apply_b15_b8_fe.py`) passano `--check` sulla base nuova.
+> - ✅ **Rossi** (11:47-11:48, carico 10-12, uno alla volta):
+>   - `services backup-jobs`: **19 falliti**, 69 passati. Ragioni giuste: il lock non contiene l'id del job
+>     (`''`), e `BackupBusyError has no running`;
+>   - Vitest `backupApi.test.ts`, `restoreFlow.test.ts`, `restoreI18n.test.ts`: **53 falliti**, 562 passati. 48 in
+>     `backupApi` (non esistono `uploadFailureCode()` né `backupBusyJob()`), 4 in `restoreFlow` (`unexpected` al
+>     posto di `proxy_too_large`), 1 in `restoreI18n` (manca la voce di `ERROR_KEYS`);
+>   - i rossi API (`api backup-instance-errors`, `api backup-panel`) vogliono il server della corsia, quindi la build
+>     di debug: nello slot, con la cura backend tolta per un momento (`git apply -R` delle mie modifiche).
+> - **Scelta 3 senza un test**: la cura del 17/10 metteva `#watched` ma non chiamava `#remember()` prima della prima
+>   lettura. Se quella lettura fallisce, «Check again» non compare (nessun `followedJobId`), oppure rilegge un id
+>   seguito prima. Cura corretta nella patch (`#remember(running.jobId)` prima di `#read`). Rossi chiesti a
+>   test-author (TA-B8-Q3, solo `backupJob.test.ts`): l'id ricordato già durante `loading`; una prima lettura senza
+>   risposta lascia `canRecheck`, e «Check again» legge quel job; un job sparito si dimentica. Più i testi delle
+>   scelte 1 e 2, ora decisioni del developer.
+> - ✅ **Cura backend** (11:49): `apply_b8_be.py`, 7 operazioni in `jobs.py` e `job_views.py`.
+>   `services backup-jobs` **88 passati**; ruff e black puliti sui 5 file backend.
+> - **⚠️ Fuori pista — un 409 che diventerebbe un 500**: `_running_job` prende `(BackupJobNotFoundError, OSError,
+>   ValueError)`. Uno stato JSON valido ma malformato (`{}` → `KeyError`; `created_at` numerico → `TypeError`) esce
+>   da `_prepare`, e la partenza rifiutata diventa un errore 500. Il modulo, altrove, legge gli stati con
+>   `(BackupJobNotFoundError, ValueError, TypeError, KeyError)`. Rosso chiesto a test-author (TA-B8-STATE, due righe
+>   in `test_backup_jobs.py`), poi l'`except` allineato.
+> - ✅ **Guida, scelta 1**: in «Good to know» di `backup_restore.en.md`, dopo la frase di B-8, «A card that already
+>   offers an archive keeps offering it, and only says that another backup runs.»
+> - ✅ **Domanda 5, l'E2E** (lettura): con B-8 il clic di `createBackup` potrebbe seguire un backup `ui` lasciato in
+>   corso da un altro test. Il test però confronta il job annunciato con quelli avviati dal clic (`owned.jobs`, presi
+>   solo dal `job_id` in cima alla risposta del `POST`, mai dal `detail` di un 409): fallirebbe con un messaggio chiaro,
+>   come oggi fallisce con `backup_busy`. Con `mode: 'serial'` e la pulizia dell'`afterEach` non resta nessun backup
+>   fra un test e l'altro. Nessuna modifica.
+> - ✅ **La chiave di B-15** (11:51): `dev.py i18n add backup.restore.errors.proxy_too_large`, nella sorgente
+>   `backup/`. Il testo inglese è quello del contratto; IT, FR ed ES usano il registro delle frasi sorelle (tu, vous,
+>   tú) e le loro parole («caricamenti», «téléversements», «subidas»). `i18n check` stretto pulito: 5099 chiavi; il
+>   diff delle sorgenti è +8/−4.
+> - ✅ **Doc** (11:52-11:53, carico 20-28): `mkdocs build` stretta exit 0 (3085 URL risolti), `check-links` pulito,
+>   `utils gate-docs-links` 63. Nessun timbro di traduzione: il debito delle tre pagine è vero.
+> - ✅ **Rossi della scelta 3** (TA-B8-Q3, solo `backupJob.test.ts`): un gruppo nuovo con 9 righe (3 + 4 + 2).
+>   - L'id del job nominato è nello storage già durante `loading`, al posto di un id seguito prima. Mentre la prima
+>     lettura è fuori, la scheda non mostra job, errore o fallimento.
+>   - Una prima lettura senza risposta (`network`) o senza codice (`unexpected`) lascia `canRecheck`, e «Check again»
+>     legge quel job, mai l'altro.
+>   - Un job sparito alla prima lettura si dimentica, per la regola di ogni lettura.
+>   - I testi delle scelte 1 e 2 dicono ora «deciso dal developer il 19/10».
+>   - Le 4 domande di test-author sono risolte da regole che ci sono già: la prima lettura fallita si annuncia
+>     (`onFailed` copre ogni richiesta fatta dalla scheda; tace solo `resume()`); non si ritenta (una lettura in
+>     `loading` fallisce subito, come in `recheck()`: è il caso della scelta 3); l'id sostituito si perde, come per
+>     un avvio riuscito da `failed` («come se l'avesse avviato»), e già con la cura del 17/10; durante la prima
+>     lettura nessun errore a schermo (fissato).
+> - ✅ **Rosso di `backupJob.test.ts`** (12:00): **16 falliti**, 149 passati: le 9 righe nuove e 7 del 17/10, tutte
+>   per la stessa ragione («the job the refusal names must be read»: `[]`). Le 13 guardie sono verdi.
+> - ✅ **Rossi dello stato malformato** (TA-B8-STATE, solo `test_backup_jobs.py`): `state-without-fields` (`{}`) e
+>   `state-of-wrong-types` (`created_at` numerico) fra le situazioni «non più in corso». L'aiuto `refusals` ora
+>   registra un'eccezione diversa da `BackupBusyError` invece di fermarsi. Rosso (12:00): **2 falliti**, 88
+>   passati, con `KeyError`/`TypeError` invece del rifiuto.
+> - ✅ **Cura** (12:00-12:01): l'`except` di `_running_job` prende anche `TypeError` e `KeyError`, come gli altri
+>   lettori del modulo (nella patch e nel worktree). Poi `apply_b15_b8_fe.py`: 6 operazioni in 4 file.
+> - ✅ **Verdi leggeri** (12:01-12:05, carico 17-25):
+>   - Vitest di tutta la feature `backup`: 9 file, **971 passati**;
+>   - `services backup-jobs` **90**, `services backup-leftovers` 44, `services backup-secure` 77,
+>     `utils backup-cli` 102, `utils gate-i18n-catalog` 176;
+>   - ruff e black puliti sui 5 file backend; prettier pulito sui 12 file frontend (8 `.ts`, 4 `.json`);
+>   - `api sync` exit 0: la descrizione del 409 nell'OpenAPI; `front check` 0 errori e 0 avvisi.
+> - **⚠️ Fuori pista — B-50**, difetto precedente a B-8 trovato da TA-B8-STATE: uno `state.json` che è JSON ma non un
+>   oggetto fa alzare `AttributeError` a `remove_expired_jobs` a ogni partenza (500); `get_job` lascia passare
+>   `KeyError`/`TypeError` (il GET di quel job è un 500). Ci si arriva solo manomettendo il file o con un disco
+>   rovinato. Fuori dal lotto: riga B-50 nel backlog.
+> - **Domanda per il developer** (non decido io): per il contratto del 17/10, fissato dal test API (d), il 409 della
+>   scheda nomina il job in corso **di qualunque origine** (`ui`, `panel`, `cli`, `pre-restore`). Il frontend segue
+>   solo `ui`, ma un admin che legge la risposta impara l'id di un backup del pannello. Finché gira non lo può
+>   cancellare; finito, può scaricarlo o cancellarlo con le rotte della scheda. Prima di B-8 quell'id non era mai
+>   visibile all'admin. L'alternativa è nominare solo i job della stessa origine di chi chiede (scheda → `ui`): la UI
+>   è identica, e costa una riga, i parametri del test (d) e una frase di `security.md`. Resta com'è finché il
+>   developer non sceglie.
+> - **Slot** (dopo le 14:00, chiesto al coordinatore): `b15b8_slot.sh red`, poi `green`.
+>   - `red`: la cura backend tolta per la durata (`b8-backend-cure.patch`, 123 righe, rimessa da un `trap`), poi
+>     `api backup-instance-errors` e `api backup-panel`. Il primo avvio costruisce una volta il frontend di debug.
+>   - `green`: quelle due, `api backup`, `api backup-secure`, `api instance-block`, `e2e backup-roundtrip`,
+>     `front-utility backup`.
+> - **Coordinatore** (12:08): porta la domanda sul 409 al developer, con il suo consiglio di nominare solo la stessa
+>   origine; intanto resta com'è. Lo slot viene dopo quello di X (12:08 – 13:00 circa), al suo «slot tuo».
+> - **Variante pronta, non applicata**: `b15-b8-wip/apply_b8_same_origin.py` (`--check` OK, 3 operazioni):
+>   - la condizione di `start_job` diventa `running.origin == origin`, con il suo commento;
+>   - la descrizione OpenAPI del 409;
+>   - il paragrafo di `security.md`.
+>
+>   Se il developer la sceglie, prima i rossi: test-author cambia il caso (d) di `test_backup_instance_errors.py`
+>   (`ui` nominato; `panel`, `cli` e `pre-restore` col solo `{code, message}`), poi la variante.
+> - ✅ **Slot** (coordinatore, «slot tuo» 12:23, fino alle 13:15; ogni corsa col carico a 1 minuto sotto 50):
+>   - `red` (12:22-12:26): cura backend tolta (`backend cure: removed`). `api backup-instance-errors` **5 falliti**, 11
+>     passati: il 409 senza `job_id`/`origin` per `ui`, `panel`, `cli` e `pre-restore`, e l'OpenAPI senza la frase.
+>     `api backup-panel` **1 fallito** (PANEL-023), 65 passati. Il primo avvio ha costruito il frontend di debug
+>     (svelte-check 0/0). Poi la cura è stata rimessa: sha256 della patch e del diff uguali (`9c38907c…`).
+>   - `green` (12:26-12:32):
+>     - `api backup-instance-errors` 16, `api backup-panel` 66, `api backup` 23;
+>     - `api backup-secure` 24, `api instance-block` 62;
+>     - `e2e backup-roundtrip` 3, `front-utility backup` **14** (1,4 min), senza instabili né saltati.
+>   - Porta 6187 libera. Nella cartella dati restano solo lo scheletro di `.restore` (i lock, cartelle vuote) e
+>     `backups/.jobs/.lock`, che contiene l'id dell'ultimo job: l'E2E l'ha cancellato, quindi non nomina niente.
+> - ✅ **Backlog**: B-8 e B-15 ✅ (fatte il 19/10); B-50 nuova.
+> - **CHANGELOG**: nessuna riga proposta. Backup e ripristino sono nuovi nella 1.3, come per B-49.
+> - ✅ **Checkpoint** (12:40), 🧊 FROZEN.
+>   - Commit proposti:
+>     - `fix(backup): B-8 busy job id, B-15 proxy 413`: codice, test, i18n e doc, 20 file;
+>     - `docs(journal): B-15 + B-8 done, B-50 filed`: questo piano e il backlog.
+>   - Aperte: la domanda sul 409 di qualunque origine (variante pronta, non applicata) e B-50.
 
-### B-35 — un tetto a quello che un archivio scompatta (2026-10-17, 11:59-12:36) — ✅ 🧊 FROZEN (checkpoint delle 12:36)
+### N74 di W — revisione: Fineco tiene solo le righe regolate, il batch arriva a domani (2026-10-19, 16:05-16:38) — ✅ 🧊 FROZEN
 
-> **Coordinatore** (11:59): BZ parte 1 va bene. Ordine:
-> 1. B-35 (da solo, prima);
-> 2. B-39;
-> 3. B-36 e B-37 (scrittura permessa su `db/post_migration/__init__.py` e su `env.py` di Alembic, solo per le virgolette
->    e `trusted_schema=OFF`; H rivede);
-> 4. B-38 lato CLI;
-> 5. B-34, poi le righe di «What It Lists» (B-40).
+> **Richiesta** (coordinatore, 16:05): revisione di **N74 di W**, commit `8a86011ce` sul ramo
+> `e-alfy-w-import-e-transazioni`, fuso con dev in `a68a26a75`. Da verificare: che «oggi» e «domani» vengano dal
+> server, mai dal browser; che una riga esclusa porti con sé FEE e premio, senza cassa orfana; che la nota non sia un
+> avviso (ambra contro blu); che il cambio di versione dei due plugin faccia proporre la rilettura; le date del batch
+> contro `range-ceiling` (N83) e J-49. Solo lettura e test leggeri, carico sotto 50. La mia base: `8cc416905`.
 >
-> Forma di B-35: `LIBREFOLIO_BACKUP_MAX_RESTORE_MB`, sul totale dichiarato, prima di `_check_space`.
-> - Self-hosted: nessun default.
-> - Profilo ospitato: K volte il limite di caricamento, con K scelto e giustificato da me.
-> - Un valore esplicito vince sempre.
-> - Decisione N82, nella lista del developer.
+> **Metodo**:
 >
-> - **K = 8, misurato** (12:05): l'archivio comprime con deflate livello 6. Il database di test passa 4,1:1, una storia
->   di prezzi sintetica di 52 MB 3,9:1; immagini e PDF restano vicini a 1:1.
->   - Con K = 4 un archivio pesante di database verrebbe rifiutato proprio al limite di caricamento.
->   - 8 lascia il doppio di margine e taglia comunque il caso peggiore di deflate (circa 1000:1) di oltre 100 volte.
->   - Ospitato: 500 MB → 4000 MB. Approvato dal coordinatore (12:15).
-> - **Contratto** (`b35-contract.md`, 12:10, con §1b alle 12:16):
->   - il lettore `backup_max_restore_mb()` in `config/backup.py`: nel profilo ospitato, se non impostato, vale
->     `8 × backup_max_upload_mb()`. Eredita da lì il `ProfileDefaultError`, quindi fallisce chiuso; non va nella tabella
->     di H, perché è un multiplo che segue il limite del fornitore;
->   - in staging, `max_unpacked` → `unpacked_too_large`, prima dello spazio, dichiarato in `RestoreErrorCode`;
->   - l'avvio della verifica risponde 503 `backup_restore_unavailable`;
->   - la CLI segue la stessa regola, con `=0` per un comando;
->   - 2 codici × 4 lingue;
->   - una riga in `.env.example`;
->   - **§1b**: il controllo della configurazione `backup.restore_limit`, chiesto subito dal coordinatore, con il
->     permesso di ritoccare la tupla in `test_config_audit.py` di H. Se il limite di caricamento non si legge, il
->     controllo nomina comunque la variabile giusta (`{variable}`);
->   - doc: anche le tre righe di B in `settings.en.md` «What It Lists» (B-40).
-> - **Codice pronto** in `b35-wip/apply_b35.py`: 30 operazioni in 9 file più i 4 cataloghi; ruff, black e prettier
->   puliti sulla copia emessa.
-> - **Rossi in scrittura**:
->   - TA-S: il lettore e il controllo in `test_backup_checks.py`, la mappa in `test_config_audit.py`, staging;
->   - TA-B: l'API in `test_backup_restore.py`;
->   - TA-E: la CLI, sezione (i);
->   - TA-F: Vitest, 7 casi rossi, scritti;
->   - docs-writer: 5 pagine più `settings`.
-> - ✅ **Rossi scritti** (12:00-12:08):
->   - **TA-S**:
->     - `test_backup_checks.py` (h): il lettore e il controllo; (c), (e) a tre, (f) e (g) aggiornati;
->     - `test_config_audit.py` (di H): l'import e la voce della mappa, nient'altro. L'ordine resta simbolico;
->     - `test_backup_staging.py` (m).
->   - **TA-B**: `test_backup_restore.py` (h), con archivi di dimensione esatta (8 MiB, e 8 MiB + 1 byte) che fissano
->     K = 8 e i MiB; la fixture `instance` pulisce la nuova variabile.
->   - **TA-E**: (i), 5 casi, con `no_inherited_restore_limit`.
->   - **TA-F**: 6 casi.
->   - **Docs-writer**: le 6 pagine più «Startup Checks».
-> - **⚠️ Fuori pista — `{variable}` (12:20)**: nel profilo ospitato, con la variabile non impostata, un
->   `BackupConfigError` può venire dalla variabile del caricamento. Il controllo prende quindi il nome da
->   `exc.variable`, nel messaggio e nel riassunto. Contratto §1b corretto, TA-S e il docs-writer avvisati. Il
->   riassunto `profileTable` sta in una costante: la riga superava 300 caratteri.
-> - ✅ **Rossi** (corsia 6187):
->   - `services backup-checks`: 45 falliti e 48 passati;
->   - `services backup-staging`: 7 falliti e 161 passati;
->   - `services config-audit`: errore di raccolta, atteso, perché il file di H importa il nuovo controllo in cima;
->   - `utils backup-cli-restore`: 5 falliti e 102 passati;
->   - Vitest: 6 falliti e 350 passati;
->   - `api backup-restore` (slot 2, 12:11-12:17): **10 falliti** e 151 passati.
-> - ✅ **Patch applicata** (12:17:49): 30 operazioni in 9 file più 4 cataloghi. `i18n build` 5033 chiavi e
->   `i18n check` strict puliti; ruff e black puliti.
-> - **⚠️ Fuori pista — un sostituto di `stage_archive` (12:22)**: il primo verde di `api backup-restore` dava
->   1 fallito. Il sostituto in `test_a_check_that_fails_otherwise_ends_failed_with_its_code` non aveva la keyword
->   nuova: `TypeError`, poi `stage_failed`. TA-B ci ha aggiunto `instance_key=None, max_unpacked=None`; l'altro
->   sostituto prende già `**kwargs`.
-> - ✅ **Verdi**:
->   - API: `api backup-restore` **161** (12:24) e `api backup-restore-apply` **170**; `api sync` uscita 0. Slot
->     liberato alle 12:24:26;
->   - servizi (12:24-12:28): `backup-checks` 93, `backup-staging` 168, `config-audit` 156, `config-env-example` 38,
->     `profile-defaults` 112, `accounts-checks` 76, `email-checks` 87, `backup-secure` 77;
->   - utils (12:28-12:30): `backup-cli-restore` 107, `backup-cli` 102, `backup-cli-secure` 66;
->   - Vitest (12:32): la cartella `backup` più `GlobalSettingsTab.test.ts`, **982 su 982**.
-> - ✅ **Doc** (12:32-12:34): `mkdocs build` strict (66 s), `check-links`, gate 63.
-> - ✅ **Controlli statici**: ruff e black su tutti i 15 file Python cambiati; prettier sui file del frontend;
->   `git diff --check` pulito. Porta 6187 libera.
-> - **Per H** (revisione dopo l'entrata):
->   - il lettore non passa da `profile_default`: segue il limite di caricamento, che ci passa;
->   - la voce nella mappa di `test_config_audit.py`;
->   - `developer/architecture/settings.md` l.79-84: inoltrato al coordinatore.
-> - **Backlog**: B-35 ✅, B-40 ✅ (le righe di B in «What It Lists»).
-> - **Merge di dev in B-35** (coordinatore, 12:36): dev `9e8f6e8dc` dentro `32739feaa`, con 3 conflitti di doc
->   risolti tenendo entrambe le parti:
->   - `configuration.en.md`, la riga `LIBREFOLIO_PROFILE`: quella di dev più la mia frase, verificata contro la base
->     (stage 1);
->   - `settings.en.md`, «What It Lists»: «Test mode» di H, poi le tre righe di B, nell'ordine del `CONFIG_CHECKS`
->     fuso;
->   - `security.md`, la riga `i18n_key`: il 4 → 7 di dev più il mio nine → thirteen.
->   Cancelli sulla revisione combinata (12:37-12:42): `services config-audit` 204, `backup-checks` 93, `mkdocs build`
->   strict (123 s), `check-links`, gate 63. Merge `d7efb5805` → dev `9fafc79b5`; CHANGELOG 🔒 dentro.
+> - `a68a26a75` non è nella mia base: letto con `git show` e `git grep` (28 file, +980/−150). Il merge tocca uno solo
+>   dei file di N74, `assets/architecture.md`, dal lato di dev. Migrazioni e `backend/app/db` uguali alla mia base.
+> - Corsia ripopolata come chiesto: `db populate --force --clean` (16:13, exit 0, 22 s).
+> - Test leggeri dall'albero di `a68a26a75`, estratto con `git archive` nella cartella di sessione (`review-n74/tree`,
+>   fuori da git): `node_modules` in copia APFS di quelli del mio worktree (`cp -c`), poi `svelte-kit sync` e
+>   `api sync` nell'albero. Script `files/scripts/n74_review.sh`, un passo alla volta, carico fra 17 e 48.
+> - **⚠️ Fuori pista**: il primo Vitest falliva prima di raccogliere (mancava `.svelte-kit/tsconfig.json`, e Vite non
+>   carica un `node_modules` raggiunto con un link simbolico). Infrastruttura: risolta con la copia e `svelte-kit
+>   sync`, nessun test di prodotto coinvolto.
+>
+> **Esito per punto**, tutti ✅:
+>
+> 1. **Oggi e domani dal server.**
+>    - Fineco legge `server_today()` (`date.today()` del processo che legge il file, nel pool del server) una volta
+>      per lettura. Il wizard rilegge a ogni analisi (`POST /files/{id}/parse`) e non usa la cache del backend: una
+>      riga regolata entra alla lettura successiva.
+>    - Il batch: `transaction_date_bounds()` vale 1900-01-01 … `latest_range_end()`, cioè `server_today()` più un
+>      giorno, letto una volta per batch. Prima era l'oggi UTC più un anno: ora c'è un solo calendario, quello del
+>      server, lo stesso di X-R55 e N83.
+>    - Il frontend non ha copie del limite: il messaggio usa il `params.max` del server, e `SingleDatePicker` resta
+>      fermo all'oggi del browser, come prima. I test fissano `server_today` sul modulo del plugin, mai l'orologio.
+> 2. **FEE e premio, nessuna cassa orfana.** Il controllo `tx_date > today` viene subito dopo la data, prima della
+>    descrizione, del tipo, dell'asset e di ogni transazione. Così una riga resta fuori intera: niente BUY o SELL,
+>    niente FEE (le colonne delle commissioni sono della stessa riga), niente INTEREST del rimborso sopra la pari,
+>    nessun asset estratto. L'export dei titoli di Fineco non ha righe di cassa separate. Per Danske cambia solo la
+>    gravità: le operazioni con la valuta dopo l'ultimo giorno dell'estratto conto non hanno ancora la loro cassa in
+>    quel file (il caso simmetrico è `deferred_rows`).
+> 3. **Una nota, non un avviso.**
+>    - `severity="info"` per `fineco_not_yet_settled`, `fineco_incomplete_rows` ed `excluded_not_yet_settled` di
+>      Danske; gli altri `excluded_*` restano avvisi (una guardia di W lo fissa).
+>    - `BrimNoticeList`: icona Info e `text-lf-info`, il blu; il link «open an issue» prende il tono della nota.
+>    - La conferma del passo 3 mette le note sotto «Informational notes» (`lf-info-*`), e il pulsante è blu se ci
+>      sono solo note.
+>    - Nel dettaglio di una lettura ogni nota ha il suo colore.
+> 4. **La rilettura.** `parse_is_stale` confronta la versione del registro con `parsed_plugin_version`, scritta a ogni
+>    lettura riuscita: Fineco passa da 1.1.0 a 1.2.0, e il file mostra «Stale» al passo 2. Per i set di Danske
+>    (1.0.0 → 1.0.1) c'è `combine_is_stale`: il badge «To re-combine» («Built by an older version of the plugin…»).
+>    In più, ogni analisi rilegge comunque: la versione nuova vale dalla prima analisi.
+> 5. **Le date del batch, N83 e J-49.**
+>    - L'ultimo giorno è lo stesso di prezzi e cambi (X-R65 e N83: domani). Il primo è diverso di proposito:
+>      1900-01-01 per le transazioni; per prezzi e cambi nessuno, dalla revisione di N83 del 19/10. Il merge lo dice
+>      giusto in `assets/architecture.md` («Transactions keep their own floor, 1900-01-01 since N74, and the same
+>      last date»).
+>    - J-49: `transaction_batch_stages` ora legge `latest_range_end` per nome ed è in `RANGE_BOUND_CONSUMERS`.
+>      `TestRangeBoundSeamCoversEveryReader` è verde (11).
+>    - Le dieci suite «far-future» (dati fra il 2032 e il 2091) con `lift_range_bound` scrivono le righe direttamente,
+>      senza il batch: non toccate.
+>    - Chi crea transazioni future passando dal batch: solo `test_brokers_api` (una riga a domani, che passa).
+>      `populate_mock_data` scrive senza batch e nel passato; nessuna E2E usa date future.
+>    - Una riga già salvata con una data oltre domani resta modificabile: il frontend manda solo i campi cambiati
+>      (`buildUpdateDiff`), e `check_dates()` controlla un aggiornamento solo se porta una data.
+>
+> **F1, da correggere: il CHANGELOG** (è del coordinatore). In `[Unreleased]` › 🐛 Fixed, la riga 288 dice ancora
+> «…transaction dates outside 1 January 1900 – one year from today are refused…»: ora è «– tomorrow». N74 non porta
+> righe sue. Quelle visibili all'utente: Fineco lascia fuori le righe non ancora regolate, con una nota blu, e
+> segnala le righe senza un numero necessario, con un link per aprire una issue; per Danske le operazioni non ancora
+> regolate sono una nota, non più un avviso.
+>
+> **F2, una domanda** (per W o il developer: non decido io). La regola 9 della skill e della guida dice che una riga
+> «con la data valuta o di regolamento dopo oggi» è provvisoria e resta fuori.
+>
+> - Cinque plugin hanno una colonna di regolamento ma datano per operazione e importano tutto:
+>   - Directa (`Data valuta`), Saxo (`Value Date`), InvestEngine (`Settlement Date`);
+>   - Degiro (la data valuta), Disnat (`Date de règlement`, che usa solo quando manca la data dell'operazione).
+>
+>   Le loro righe passano il batch (data fino a oggi), ma alla lettera della regola sarebbero provvisorie.
+> - Il generic CSV accetta `settlement_date` e `value_date` come colonna della data. Una data di regolamento oltre
+>   domani ora fa rifiutare il salvataggio (`dateOutOfRange`); prima passava fino a un anno.
+> - Da chiarire: la regola vale per chi data per valuta (Fineco) o per periodo (Danske), oppure quei plugin chiedono
+>   un seguito.
+>
+> **Residui**, nessuno blocca:
+>
+> - R1, precedente a N74: la colonna «⚠️» della tabella dei risultati conta tutte le note, anche quelle informative
+>   (tooltip «Parser warnings…»). Un file Fineco con solo righe non regolate mostra «⚠️ 1»; e nel dettaglio la sezione
+>   s'intitola «Warnings».
+> - R2: il testo di `fineco_not_yet_settled` parla di «data valuta», ma la regola usa la data dell'operazione quando
+>   la valuta manca. È un dettaglio di parole.
+> - R3: le pagine IT, FR ed ES del form e dell'import danno ancora l'esempio di un anno (`2027-10-17`). È debito di
+>   traduzione normale: non va timbrato.
+> - R4, fuori da N74: `scripts/test_runner/_frontend_transaction.py` non passa ruff (4 PLC0415) né black già sulla mia
+>   base. `scripts/` è fuori dal cancello di `dev.py lint`.
+>
+> **Prove**, tutte sull'albero di `a68a26a75`, verdi:
+>
+> - Vitest `BrimNoticeList`, `resolveValidationMessage.decimals`, `ParseDetailModal`: 3 file, 65 test;
+> - `utils datetime` 44; `external brim-providers` 750 (1 saltato); `external brim-danske-bank` 325;
+> - `services range-ceiling` 74; J-49 (`roi-fifo-utils TestRangeBoundSeamCoversEveryReader`) 11;
+> - `services transaction-decimal-places` (le due classi delle date) 16; `services edge-cases` (le due date) 2;
+> - ruff e black puliti sui 10 file backend; prettier pulito sui 7 file frontend;
+> - `i18n check` stretto (5105 chiavi); `front check` 0 errori e 0 avvisi;
+> - le ancore delle doc nuove esistono tutte. Porta 6187 libera.
+>
+> - **Backlog**: B-51 (R1) e B-52 (F2) nuove, area di W.
+> - **Pulizia**: l'albero estratto è tolto alla fine; gli script e i log restano nella cartella di sessione.
+> - **Commit proposto**: `docs(journal): B review of W N74`. 🧊 FROZEN.
 
-### B-18, riparazione — il cancello G rosso: `instance_key_invalid` non dichiarato (2026-10-17, 11:40-11:52) — ✅ 🧊 FROZEN
+### B-8, seguito — la scheda dice solo «occupato», la console nomina il job (2026-10-19, 16:38-17:15) — ✅ 🧊 FROZEN (checkpoint delle 17:15)
 
-> **Coordinatore, urgente prima di BZ** (11:40): il cancello G (`api backup-restore`) è rosso su
-> `test_backup_restore.py::test_every_code_a_check_can_end_with_is_one_the_api_declares`, con
-> `(produced, not declared): ['instance_key_invalid']`.
+> **Il developer** (relayed dal coordinatore alle 16:38, testuale): «farei che a schermo compare solo "occupato", in
+> console magari più dettagli per permetterci di backuppare se serve, non è in vista ma se venisse letto da un utente
+> non sarebbe grave». **Coordinatore**: la risposta 409 resta com'è (id e origine del job); la scheda mostra solo
+> «occupato», senza nominare il backup, qualunque sia l'origine; in console id, origine e stato del job, sempre (non
+> al livello di log di H-60); nessun dato personale. Poi il lotto aggiornato sul ramo, con i rossi e un checkpoint
+> nuovo.
 >
-> **Causa**: la guardia legge con l'AST ogni `StagingError("<codice>")` di `staging.py` e vuole lo stesso insieme di
-> `RestoreErrorCode`, nei due versi. B-18 ha aggiunto `StagingError("instance_key_invalid", …)` senza dichiararlo. Non
-> l'avevo visto perché nessun run `api` faceva parte del lotto: niente slot, e i servizi non bastavano.
->
-> **Scelta: dichiararlo** (la prima cura proposta dal coordinatore). Nessun test cambia, e la guardia resta stretta: se
-> un giorno l'API desse una chiave alla verifica, il codice sarebbe già dichiarato.
-> - Oggi non può arrivare da un GET: l'API non passa mai `instance_key`, e la CLI chiama `stage_archive` direttamente,
->   senza registro della verifica.
-> - Il commento sopra `RestoreErrorCode` lo dice.
-> - La scheda non lo mostra: le liste del frontend sono scritte a mano, non derivate dall'enum generato, e
->   `restoreErrorKey` prende una stringa. Quindi niente chiave i18n e niente `ERROR_KEYS`.
->
-> - ✅ `backend/app/schemas/backup.py`: `instance_key_invalid` in coda a `RestoreErrorCode`, con il commento. Ruff e
->   black puliti.
-> - ✅ `api backup-restore` (11:44:59-11:51:07, attesa del carico; svelte-check 0 errori nel build): **146 passati**,
->   la guardia compresa.
-> - ✅ `api sync` (11:51:07-11:51:42), uscita 0: `openapi.json` e `generated.ts`, ignorati da git, lo contengono.
-> - Porta 6187 libera. Nessun tipo del frontend è esaustivo su `RestoreErrorCode` (grep), quindi niente `front check`
->   a parte.
-> - **Lezione**: un codice nuovo di `StagingError` richiede `api backup-restore`, anche in un lotto «solo CLI».
+> - ✅ **Base**: HEAD `05dc41906` (la revisione di N74 committata alle 16:38), pulito; B-15 + B-8 (`0b8037b75`) è sul
+>   ramo, non ancora in dev.
+> - ✅ **Lettura** (16:38-16:41):
+>   - la card non nomina mai il job: per un `backup_busy` mostra solo «Another backup is running: try again when it
+>     ends.» (`backup.download.errors.backup_busy`), anche nel toast; seguendo un job `ui` ne mostra l'avanzamento e
+>     poi l'archivio, mai id né origine. Quindi «la scheda non nomina» è già vero: una guardia, non un rosso; il rosso
+>     è la riga in console;
+>   - `$lib/debug` scrive solo nelle build di debug (un no-op tolto dal minificatore in produzione): non va. H-60 non
+>     è in dev. Nessuna regola contro `console.*` (nessun ESLint, Vitest non fallisce sulla console; 117 usi nel
+>     codice di prodotto): un `console.warn` mirato;
+>   - lo stato non è nella risposta, che resta com'è: il server nomina un job solo mentre il suo stato dice che gira
+>     (`jobs._running_job`), quindi la riga dice `running`.
+> - ✅ **Domanda al coordinatore** (16:41): per un job `ui` nominato senza archivio in offerta, la scheda continua a
+>   seguirlo o mostra solo «occupato»? **Risposta** (16:43): **continua a seguirlo** — il «solo occupato» del
+>   developer riguardava il nominare i backup degli altri (gli id del pannello); seguire il proprio `ui`, senza
+>   mostrare id né origine, è la scelta 1–3 di stamattina. Il resto come proposto. Via, con i rossi.
+> - **Contratto** (`files/b8-console-contract.md`): un solo `console.warn` per ogni partenza rifiutata `backup_busy`
+>   che nomina un job, seguito o no: una stringa (testo libero), poi esattamente
+>   `{job_id, origin, status: 'running'}`; nessuna riga per un rifiuto che non nomina un job, per gli altri errori,
+>   per le letture successive. Rossi e guardie a TA-B8-CONSOLE (`backupJob.test.ts`, `BackupDownloadCard.test.ts`,
+>   sola scrittura). La cura: `apply_b8_console.py` (2 operazioni in `backupJob.svelte.ts`: il commento del modulo e
+>   la riga; `--check` OK, non applicata).
+> - ✅ **Doc** (16:44): `security.md`, nel paragrafo della partenza, «la scheda non nomina; la risposta sì» (la card
+>   dice solo che un altro backup gira, o segue il suo; id, origine e stato `running` vanno in console con un
+>   `console.warn` per rifiuto, a ogni livello di log; nessuno dei tre è un dato personale); `backup_restore.en.md`,
+>   la riga 🚦: la card non dice quale backup gira, la console del browser sì (l'id e da dove è partito).
+> - ✅ **Doc, i controlli** (16:49-16:51, carico 30-40): `mkdocs build` stretta exit 0 (3085 URL risolti),
+>   `check-links` pulito, `utils gate-docs-links` 63.
+> - ✅ **Rossi** (TA-B8-CONSOLE, 16:45-17:07, sola scrittura):
+>   - `backupJob.test.ts`, 16 rossi:
+>     - ogni origine, senza archivio in offerta (il job `ui` seguito compreso);
+>     - un job `ui` trovato già finito, fallito, sparito o senza risposta alla prima lettura;
+>     - ogni origine con un archivio in offerta;
+>     - tre rifiuti di fila danno tre righe;
+>     - la riga scritta una volta sola, al rifiuto: né il seguito, né una lettura fallita, né `recheck()` o `resume()`
+>       ne aggiungono altre.
+>   - Più 20 guardie: nessuna riga per un rifiuto che non nomina un job (o con id o origine non validi), per gli altri
+>     errori, per una partenza riuscita, per `resume()`, per «Check again».
+>   - Nei quattro gruppi B-8 di prima, `console.warn` è zittita, senza cambiare nessuna asserzione.
+>   - `BackupDownloadCard.test.ts`, 10 rossi (la riga attraverso la card) e guardie a schermo, per ogni origine:
+>     - con niente in offerta, solo la frase «occupato» nell'avviso;
+>     - con un archivio in offerta, l'archivio e la frase;
+>     - un job `ui` seguito fino all'archivio senza id né `ui` nel testo; il toast dice la frase.
+>     - Le «needle» (l'id ovunque, l'origine come parola intera) hanno una premessa verificata: assenti nella card
+>       «occupato» semplice, presenti in una frase o una chiave che nomina il job, assenti in `build`, `ui_`,
+>       `panels`, `pre-restored`.
+> - ✅ **Rosso** (17:08, carico 37): **26 falliti**, 259 passati. Gli 11 messaggi distinti (Vitest raggruppa quelli
+>   uguali) dicono tutti `expected "warn" to be called N times, but got 0 times`; nessun fallimento ha un'altra
+>   causa.
+> - ✅ **Cura** (17:09): `apply_b8_console.py`, 2 operazioni in `backupJob.svelte.ts` (+7 righe).
+> - ✅ **Verdi** (17:09-17:14):
+>   - Vitest di tutta la feature `backup`: 9 file, **1028 passati**;
+>   - prettier pulito sui 3 file;
+>   - `front check` 0 errori e 0 avvisi.
+> - **⚠️ Fuori pista**: il primo `front check` (17:11) trovava 4 errori su `scope_boundary` nei file dei lotti (non
+>   miei). Il client generato era delle 12:23, di prima del merge di dev delle 15:16, che ha portato il campo. Dopo
+>   `api sync` (exit 0): 0 errori.
+> - **Le 8 domande di test-author**, chiuse dal contratto o dalla cura, senza decisioni nuove:
+>   - la riga ha due argomenti, e i test fissano solo quelli;
+>   - un rifiuto arrivato dopo `dispose()` o `reset()` è scartato prima della riga (il controllo `#stale`);
+>   - la riga c'è già prima che la prima lettura risponda;
+>   - nessuna deduplica: due rifiuti dello stesso job danno due righe;
+>   - lo stato è quello del rifiuto, `running`, anche se la prima lettura trova il job finito;
+>   - «a schermo» è il testo: l'`href` del link di un archivio in offerta contiene il suo id per costruzione, come
+>     prima di B-8;
+>   - un avviso di Svelte in dev romperebbe il conteggio, e la precondizione «niente scritto prima» lo mostrerebbe;
+>   - un `backup_no_space` con `job_id` non scrive righe (il server non lo manda).
+> - ✅ **Backlog**: nella riga di B-8, la domanda sul 409 è chiusa dal developer.
+> - **CHANGELOG**: nessuna riga (backup e ripristino sono nuovi nella 1.3).
+> - ✅ **Checkpoint** (17:15), 🧊 FROZEN. Commit proposti:
+>   - `fix(backup): busy card stays silent, console names job`: `backupJob.svelte.ts`, i due test, le due doc;
+>   - `docs(journal): B-8 busy console, developer decision`: questo piano e il backlog.
 
-### BZ, parte 1 — revisione di sicurezza di ciò che è consegnato (2026-10-17, 10:55-11:58) — ✅ inviata al coordinatore, sola lettura
+### B-50 + B-51 — analisi (2026-10-19, 17:17-17:22) — 🧊 inviata al coordinatore, prima del codice
 
-> **Coordinatore** (10:53):
-> - B-20 committato, `7b13e4d43`, sopra B-18 `7b1911fd6`; entrano insieme dopo la revisione di H su B-18.
-> - Ora la **parte 1 di BZ**, in sola lettura: le superfici di backup e ripristino consegnate in dev (B-9, B-16, B-19,
->   B-28…B-32) e B-18/B-20 sul mio ramo, cioè rotte, CLI da root, biglietti, staging, lettura degli archivi, segreti.
-> - Le scoperte vanno nella mia sezione del backlog come voci B nuove, ognuna con gravità e cura proposta. **Niente
->   codice prima del suo OK.** La parte 2 (la consegna finale) viene alla fine, dopo B7 e B9.
+> **Richiesta** (coordinatore, 17:17, dopo il commit di B-8 `a3e0f4c8e` + `ae59f158a`): niente in coda per B, quindi
+> un'analisi breve di B-50 (il 500 vicino) e di B-51 (la colonna «⚠️» conta anche le note blu). Sola lettura.
 >
-> Base: HEAD `7b13e4d43`, albero pulito. Superficie: circa 6800 righe:
-> - `instance_backup/*.py` e `api/v1/backup/*.py`;
-> - `scripts/backup_cli.py`;
-> - `instance_key.py` e `plugin_settings/crypto.py`, solo come consumatore.
-> Delegata all'agente `security-review`.
+> **B-50, misurato** con due sonde pure in una cartella temporanea, tolta alla fine (`files/b50-analysis/`):
 >
-> - **B-18 e B-20 entrati** (coordinatore, 10:56): dev `5c4d7456a`, CHANGELOG ✨ `582cfb6b0`; HEAD portata in avanti.
->   La revisione di H su B-18 è OK, con un LOW-1 e due appunti della doc, registrati come **B-34**.
-> - **⚠️ Fuori pista — l'agente non parte (10:56)**: la sua richiesta portava con sé il contesto della sessione,
->   243 035 token contro un limite di 128 000. Nessuna lettura è stata fatta. Riprovo dopo la compattazione del contesto.
->   Secondo tentativo (11:00), con un prompt corto e il brief in un file (`bz-security-brief.md` nella cartella della
->   sessione): stesso errore, 293 779 token. L'agente eredita il contesto della mia sessione, e un prompt più corto non
->   basta. Chiesto al coordinatore come procedere (tier a contesto lungo, o lancio da una sessione fresca).
-> - **Coordinatore** (11:35):
->   - né l'opzione 1 né la 3: il permesso per il contesto lungo può darlo solo il developer, e la domanda va nella sua
->     lista;
->   - la revisione la faccio **io, direttamente**, in sola lettura, dal brief, area per area (rotte, CLI da root,
->     biglietti e staging, lettura degli archivi, segreti), con un agente `explore` per un'area stretta se parte.
->   Le scoperte diventano voci B con gravità e cura; niente codice prima del suo OK. Registro in corso nella cartella
->   della sessione: `bz-findings.md`.
-> - **Metodo** (11:36-11:58): revisione diretta, area per area.
->   - Un agente `explore` (partito senza problemi) ha raccolto i fatti della lettura degli archivi: nomi, estrazione,
->     limiti, manifest, chiave, SQLite, Alembic, involucro, fughe. Ho verificato io i punti decisivi: `env.py` fa vincere
->     l'URL di `-x`; `_row_counts` di post_migration.
->   - Le altre aree le ho lette io: rotte e autenticazione, upload, download, pannello, biglietto dell'esito, CLI da
->     root, password e KDF dei backup sicuri, controlli di B-9, esportazioni.
->   - **Garanzia più bassa** di un agente `security-review` dedicato. La domanda sul contesto lungo è nella lista del
->     developer, se vuole un secondo passaggio.
-> - **Scoperte** (5), registrate come voci B nel backlog:
->   - 🟡 **B-35** (F3): lo scompattamento non è limitato dal tetto di caricamento. MEDIO nel cloud;
->   - ⚪ **B-36** (F1): nomi di tabella non quotati in `post_migration._row_counts`; proprietario fuori da B;
->   - ⚪ **B-37** (F2): `trusted_schema` acceso sulle connessioni di post_migration e di Alembic alla copia; fuori da B;
->   - ⚪ **B-38** (F4): la CLI da root legge i file dei segreti attraverso link e FIFO, mentre la guida mette la chiave in
->     `backups/`;
->   - ⚪ **B-39** (F5): formule nei CSV esportati (le `notes` degli eventi).
->   Nessuna critica né alta. Niente codice prima del via del coordinatore.
-> - **Sano**: l'elenco con le righe sta in `bz-findings.md`, sezione «Checked and sound».
+> | `state.json` di un job | `get_job` | `remove_expired_jobs` | `end_interrupted_jobs` | una partenza (`_prepare`) |
+> |---|---|---|---|---|
+> | `[]`, `null`, `5`, `"x"` | `AttributeError` | `AttributeError` | `AttributeError` | `AttributeError` |
+> | vuoto, JSON non valido | `JSONDecodeError` | ok | ok | ok |
+> | `{}`, `created_at` numerico o non data | `KeyError`, `TypeError`, `ValueError` | ok | ok | ok |
+>
+> - Un JSON che non è un oggetto blocca ogni nuova partenza: scheda e pannello ricevono un 500 senza codice
+>   (`start_job` prende solo `BackupBusyError`, `BackupPathError`, `OSError`), la CLI un traceback. Dura finché
+>   qualcuno toglie la cartella a mano. All'avvio la pulizia dei job si ferma lì; `sweep_backup_leftovers` lo
+>   registra e prosegue.
+> - **Lo stesso buco c'è nel ripristino**: `restore_jobs._read_state` fa `record.get(...)` su un JSON non oggetto.
+>   L'`AttributeError` non è preso (`OSError, ValueError, TypeError`), quindi `_checks()` e `prune()` falliscono, e
+>   con loro ogni nuova verifica (`start_check` → `prune`) e ogni fine di caricamento (`_remove_replaced_uploads`).
+>   Un file vuoto o `{}` invece è ignorato. I lettori basati su pydantic (`apply`, `outcome`, `staging`,
+>   `manifest`) sono sani.
+> - Gli altri stati rovinati rompono solo `get_job`: GET, file e DELETE di quel job rispondono 500. La cartella
+>   scade dopo un'ora (mtime), quindi la cosa si risolve da sola.
+> - Come ci si arriva: a mano, o con un disco rovinato. Un file vuoto anche da un'interruzione di corrente:
+>   `_write_state` non fa `fsync`, e durante un job scrive ogni 0,5 s.
+> - **Cura proposta**, piccola (circa 10 righe in 2 file, nessuna migrazione né i18n):
+>   1. `BackupJob.from_json` e `restore_jobs._read_state`: un documento che non è un oggetto diventa l'errore che i
+>      chiamanti già prendono (`ValueError`, `None`);
+>   2. `get_job`: uno stato illeggibile è «non trovato» (404 `backup_job_not_found`, che scheda e pannello sanno già
+>      trattare), con un log dell'id e della classe dell'errore. La cartella resta fino alla scadenza. È quello che fa
+>      già il ripristino con un controllo illeggibile.
+>
+>   Niente `fsync`: costerebbe a ogni progresso.
+> - **Domanda** (non decido io): va bene il 404 per uno stato illeggibile? L'alternativa è un 500 con un codice suo,
+>   che la scheda mostrerebbe come errore inatteso e che «Check again» ripeterebbe.
+> - Test: righe pure nelle suite dei job e del ripristino; un caso API (GET → 404) nello slot.
+>
+> **B-51, lettura su dev** (area di W):
+>
+> - `ImportWizardModal.svelte`, colonna `warningCount`: intestazione «⚠️», tooltip «Parser warnings (skipped rows,
+>   ambiguous data)», cella `row.response.warnings.length`. Conta ogni nota, anche le `info`.
+> - Note `info` su dev: Scalable e Scalable deposit (5 codici), Danske (4), Fineco (2), Crédit Agricole (2). Non
+>   riguarda solo Fineco: un file Scalable con dividendi netti mostra «⚠️ 1».
+> - Il dettaglio di una lettura (`ParseDetailModal`) mette le note sotto «Warnings» («No warnings» quando non ce ne
+>   sono), ognuna col suo colore. La conferma del passo 3 invece separa già «Informational notes» e «Needs your
+>   attention».
+> - C'è un precedente: `DataQualityBanner` e `LotDataQualityBanner` contano gli avvisi a parte e hanno un titolo per
+>   le sole note (`dataQuality.headerInfoOnly`).
+> - **Opzioni** (UI, per W o il developer):
+>   - (a) la colonna conta solo gli avvisi;
+>   - (b) due numeri nella cella, ⚠️ ambra per gli avvisi e ℹ️ blu per le note, quando ci sono;
+>   - (c) l'icona del livello più grave, con il totale.
+>
+>   Consiglio (b), e nel dettaglio due sottosezioni come nella conferma del passo 3.
+> - Costo piccolo, solo frontend: la cella, il tooltip e il titolo in 4 lingue. Oggi nessun test tocca la colonna né
+>   la sezione: conviene estrarre il conteggio in una funzione pura con un suo test Vitest. Il file è di W.
 
-### B-20 — knip e `RESTORE_TICKET_HEADER` (2026-10-17, 10:50-10:54) — ✅ 🧊 FROZEN (checkpoint delle 10:54)
+### B-8, difetto della revisione automatica — una richiesta sicura che segue il backup in chiaro di un altro (2026-10-19, 17:22-18:10) — ✅ 🧊 FROZEN (checkpoint delle 18:10)
 
-> **B-18 committato** (coordinatore, 10:50): `7b1911fd6`, albero pulito, merge-tree con dev pulito. Il testo del
-> CHANGELOG è salvato; l'entrata aspetta la revisione di H. Via a B-20.
+> **Il difetto** (revisione automatica prima dell'ingresso di B-15 + B-8, girata dal coordinatore):
 >
-> **Stato reale**:
-> - `RESTORE_TICKET_HEADER` (`backupApi.ts:190`) è usato in produzione soltanto dentro il suo modulo (l.204).
-> - Il suo test (`backupApi.test.ts:815`, di B5c) lo legge con un cast sull'import a namespace, scritto quando era
->   ancora rosso, e knip non lo conta come uso.
-> - **knip prima** (10:50:56-10:51:02, `frontend/node_modules/.bin/knip --no-progress`): uscita 1, «Unused exports
->   (20)», con `RESTORE_TICKET_HEADER` fra loro. Era già rosso per voci di altri; non è un gate.
+> - Se `start(password)` riceve un 409 che nomina un job `ui` in corso, la scheda lo segue senza guardare la
+>   modalità (`backupJob.svelte.ts:151-157`). Il job può essere di un'altra scheda o di un altro admin, in chiaro.
+> - `create()` ha già svuotato i campi della password (`BackupDownloadCard.svelte:100-102`). Alla fine la scheda
+>   mostra «Archive ready» per uno `.zip` in chiaro, e `onDone` lancia `backup.created` come se fosse il backup di B.
+> - L'avviso di privacy compare solo con `mode === 'clear'` (`:127`): B può salvarlo credendolo cifrato. Al
+>   contrario, chi chiede in chiaro riceve un `.lfbk` con la password di A.
+> - Il client non può controllare prima: `encrypted` resta `False` fino alla fine (`jobs.py:291`). Nessun test di
+>   B-8 partiva con una password.
 >
-> **Correzione** (solo il test, a TA-F): `RESTORE_TICKET_HEADER` nell'import per nome (l.99), e l'asserzione diretta su
-> di esso. Nessun cambio di prodotto, nessuna riga di CHANGELOG.
+> **Cura del coordinatore**: alla fine del job seguito, confrontare `job.encrypted` con la modalità richiesta; se non
+> coincidono, niente presentazione e niente `onDone`, e «occupato». Chiede se preferisco non seguire affatto da un 409
+> quando c'è una password, e perché.
 >
-> - ✅ **Test cambiato** (TA-F, 10:51): l.99 e l.815 di `backupApi.test.ts`; l'import a namespace resta per le ricerche
->   della fase rossa degli altri casi. `prettier --check` pulito.
-> - ✅ **Vitest** su `backupApi.test.ts` (10:51:57): **198 su 198**.
-> - ✅ **knip dopo** (10:52:04): uscita 1 come prima. «Unused exports» passa da 20 a **19**. Il diff dei due log toglie
->   soltanto la riga di `RESTORE_TICKET_HEADER`; il resto sono orari e il consiglio di dotenv.
-> - **Backlog**: B-20 ✅.
+> **Verificato** (17:23): i campi di `BackupJob` non hanno né utente né sessione, quindi il server non sa chi ha
+> avviato un job. `encrypted` (righe 291 e 297) dice la modalità, non la chiave; la fase `encrypting` c'è solo per un
+> sicuro. La card mostra `backup-encrypted-note` quando `job.encrypted`.
+>
+> **La mia risposta** (17:24): non seguire con una password; per le richieste in chiaro, il controllo alla fine.
+>
+> - Il controllo da solo lascia aperto «sicuro → sicuro» di un altro admin: offerto a B come suo, ma la password di
+>   B non lo apre. Per una richiesta sicura va bene solo il suo job, e nulla prova che quello del 409 lo sia.
+> - Il costo: un backup sicuro la cui risposta si è persa resta «occupato» finché il job non finisce, come prima di
+>   B-8; il suo archivio scade dopo un'ora.
+> - Proposta:
+>   - `start(password)` con un 409 che nomina un job `ui`: niente seguito, `failed` con `backup_busy`;
+>   - `start()` in chiaro: seguito, ma un job che finisce con `encrypted: true` (sondaggio, prima lettura già finita,
+>     «Check again») non viene presentato. Niente `onDone`, l'id adottato si dimentica, `failed` con `backup_busy` e
+>     `onFailed` una volta.
+> - Cura esatta, dopo la 1.3: un id di richiesta salvato nel job e confrontato nel 409.
+> - I rossi aspettano la decisione: i casi «sicuro» cambiano fra le due cure.
+> - ✅ **Decisione** (coordinatore, 17:37): «confermo la tabella di destra. Con una password, dal 409 nessun seguito;
+>   in chiaro, il controllo alla fine (`encrypted: true`, quindi non presentato, id dimenticato, `backup_busy`)».
+>   Via ai rossi e alla cura, commit a parte. L'id di richiesta generato dal client va in `PROSSIMI_LAVORI.md`, dopo
+>   la 1.3. Nello stesso messaggio: B-50 sì (404 `backup_job_not_found` per uno stato illeggibile, nel backup e nel
+>   ripristino), dopo B-8; B-51 a W, con la proposta dei due numeri.
+> - ✅ **Contratto** (`files/b8-mode-contract.md`, 17:40). Un dettaglio mio, di completezza e non di prodotto:
+>   l'adozione (un job seguito da un 409 per una richiesta in chiaro) si ricorda anche in `sessionStorage`, chiave
+>   nuova `librefolio.backup.adopted`. Senza, un ricaricamento durante il seguito la perde: `resume()` riprende l'id
+>   (la scelta 3 lo salva proprio per questo) e alla fine offrirebbe un `.lfbk` altrui. I percorsi che non adottano
+>   non toccano lo storage più di oggi. Rossi a TA-B8-MODE (`backupJob.test.ts`, `BackupDownloadCard.test.ts`, sola
+>   scrittura).
+> - **Cura pronta, non applicata**: `apply_b8_mode.py`, 8 operazioni in `backupJob.svelte.ts` (`--check` OK):
+>   - la condizione del seguito più `password === undefined`;
+>   - `#adopted`, con `#adopt()`, `#unadopt()` e la lettura del segno nel costruttore (un segno che nomina un altro
+>     id si scarta); `#forget()` toglie anche l'adozione;
+>   - in `#settle()`, un `done` adottato e `encrypted` → `#forget()` e `#fail('backup_busy', 'start', null, news)`;
+>   - un avvio riuscito toglie un'adozione rimasta;
+>   - il commento del modulo.
+> - ✅ **Doc** (17:42):
+>   - `security.md`: nella frase di B-8, il seguito solo per una richiesta in chiaro e solo se finisce in chiaro,
+>     l'adozione tenuta fra i ricaricamenti, una richiesta sicura mai. Riavvolte solo le righe cambiate (5 → 8);
+>   - `backup_restore.en.md`, la riga 🚦: vale solo per un backup in chiaro, e negli altri casi la card dice che un
+>     altro backup gira.
+> - ✅ **Rossi** (TA-B8-MODE, 17:43-18:04, sola scrittura):
+>   - `backupJob.test.ts`, 5 gruppi, 25 rossi e 16 guardie:
+>     - una richiesta sicura non segue mai, ed è rossa anche quando il job nominato è il suo, che resta da rileggere
+>       con «Check again»;
+>     - l'adozione si ricorda dal primo momento;
+>     - la fine di un job adottato: cifrata → non presentata; fallita o sparita → come oggi, con la chiave tolta;
+>     - il ricaricamento (`resume()` fa lo stesso controllo);
+>     - la pulizia: un avvio riuscito toglie un'adozione rimasta, un segno che non nomina il job seguito si scarta;
+>   - le guardie: un sicuro avviato qui che finisce cifrato è offerto come oggi; nei percorsi senza adozione
+>     nessuna chiamata in più allo storage;
+>   - `BackupDownloadCard.test.ts`: 2 rossi (sicuro → «occupato» senza seguito; chiaro → fine cifrata non
+>     presentata) e una guardia (chiaro → fine in chiaro offerta, con l'avviso di privacy);
+>   - la chiave nuova si legge come stringa, più un solo test sull'export per `Reflect.get`: nessun rosso cade su un
+>     import.
+> - ✅ **Rosso** (18:05, carico 15): **27 falliti**, 302 passati. Le ragioni sono quelle attese: la richiesta sicura
+>   seguita (`api.get` chiamato), la chiave di adozione assente, l'archivio cifrato offerto (`done` al posto di
+>   `failed`). Nessun errore di import o di sintassi.
+> - ✅ **Cura** (18:06): `apply_b8_mode.py`, 8 operazioni in `backupJob.svelte.ts` (+56/−1).
+> - ✅ **Verdi** (18:06-18:08):
+>   - Vitest dell'intera feature `backup`: 9 file, **1072 passati**;
+>   - prettier pulito sui 3 file; `front check` 0 errori e 0 avvisi;
+>   - `mkdocs build` stretta, `check-links`, `utils gate-docs-links` 63.
+> - **Le domande di test-author**, risolte dalle regole che ci sono già, senza decisioni nuove:
+>   - un archivio adottato e offerto in chiaro tiene il segno, che si toglie con il job (o con un avvio nuovo);
+>   - dopo un ricaricamento, una prima lettura senza risposta e poi «Check again» che trova il job cifrato: non
+>     presentato e non annunciato, perché il job non era stato visto girare (la regola di sempre).
+> - **Caso limite, da sapere (una domanda per il coordinatore):** una richiesta in chiaro rifiutata dal backup
+>   sicuro della scheda stessa (avviato qui, con il sondaggio che si era arreso) lo adotta. Alla fine è cifrato,
+>   quindi non presentato e dimenticato, anche se è il suo. Con «Check again» al posto di «Create» lo si ritrova.
+>   Rifinitura possibile: non adottare il job che la scheda segue già senza averlo adottato. Cambia la tabella
+>   decisa, quindi non l'ho fatta.
+> - **Fuori dal lotto**: il backend non cambia, quindi niente API ed E2E. Nessuna riga di CHANGELOG (backup nuovo
+>   nella 1.3).
+> - ✅ **Checkpoint** (18:10), 🧊 FROZEN. Commit proposti:
+>   - `fix(backup): secure start never follows another backup`: `backupJob.svelte.ts`, i due test, le due doc;
+>   - `docs(journal): B-8 mode defect, B-50/B-51 analysis`: questo piano e il backlog.
 
-### B-18 — `restore --instance-key-file`: i segreti di un archivio in chiaro con la chiave vecchia (2026-10-17, 10:29-10:51) — ✅ 🧊 FROZEN (checkpoint delle 10:51)
+### B-8, rifinitura — il job che la scheda segue già da sé non si adotta (2026-10-19 18:10 → 2026-10-20 09:05) — ✅ 🧊 FROZEN (checkpoint delle 09:05)
 
-> **B-32 entrato** (coordinatore, 10:29): dev `7af21a5c1` (commit `ca1343d6d`), CHANGELOG 🐛 `d11ac04d3`. HEAD portata
-> in avanti a **`d11ac04d3`**, pulita. Via a B-18 con D1 e D2 come decisi; solo run leggeri, revisione di H al
-> checkpoint.
+> **Coordinatore** (18:10): B-8 committato, `adedb0c9c` (`fix(backup): secure start never follows another backup`) e
+> `bc913e487` (il giornale); la memoria dell'adozione in `sessionStorage` va bene. «Il caso limite: sì alla
+> rifinitura, decisione mia, perché è nello spirito della tabella («si segue solo il proprio»): non adottare un job
+> che la scheda sta già seguendo da sé. Commit a parte con un rosso, piccolo, prima di B-50.» B-15 + B-8 entra in dev
+> fino a `bc913e487`, con un gate; la rifinitura dopo.
 >
-> **Stato reale** (lettura, 09:45-10:35):
->
-> - `staging._stage` ricifra i segreti dei plugin soltanto con la chiave che un archivio sicuro porta:
->   `archive_key = … if INSTANCE_KEY_ENTRY in entries else None` → `_plugin_secrets` → `_archive_subkey` →
->   `rekey_plugin_secrets(conn, old, current)`.
-> - `rekey_plugin_secrets` lascia stare le righe già sotto la chiave di questa istanza (contate `already_current`, non
->   illeggibili). Ricifra quelle sotto la chiave vecchia e conta illeggibili le altre.
-> - Se la chiave di questa istanza non si può usare (`settings_subkey` solleva `InstanceKeyError`), la verifica non
->   ricifra nulla e conta tutto illeggibile (test B4 «without a usable key of its own»).
->   `instance_key_status().problem` lo dice senza sollevare e senza creare il file.
-> - La docstring di `derive_key_from` (H) descrive già questa strada: la copia dell'amministratore di
->   `secrets/instance.key`, letta con `read_secret_file()`, o il vecchio `LIBREFOLIO_INSTANCE_KEY`.
-> - I test di ricifratura di B4 stanno in `test_backup_secure.py` (`services backup-secure`), non in
->   `test_backup_staging.py`.
-> - La doc (`backup_restore.en.md` l.36) dà una sola strada: rimettere la chiave vecchia al posto di quella nuova. Non
->   va bene per un'installazione che tiene la sua chiave, come un'istanza ospitata o una con segreti suoi.
->
-> **Contratto congelato** (`b18-contract.md` nella cartella della sessione, 10:36):
->
-> 1. `stage_archive(..., instance_key=None)` controlla la chiave per prima, prima del lock e di ogni cartella:
->    `derive_key_from` → `StagingError("instance_key_invalid")`, senza mai il testo della chiave. In `_stage` vince
->    la chiave dell'archivio; altrimenti si usa quella data. Le rotte API non cambiano, il report nemmeno (nessun
->    OpenAPI).
-> 2. CLI `restore --instance-key-file FILE`, anche con `--dry-run`:
->    - letto con `read_secret_file` da root, prima del cambio di utente e prima della password;
->    - errori ❌ `instance_key_unreadable` e `instance_key_invalid`, uscita 1;
->    - la riga «Instance key: not included; given with --instance-key-file».
->    - **D1**: vince la chiave dell'archivio, con la riga ℹ️.
->    - **D2**: la riga ⚠️ se la chiave data non ricifra nulla. Se invece è la chiave di questa istanza a non funzionare,
->      un'altra ⚠️ che lo dice (raffinamento mio: la riga D2 accuserebbe la chiave sbagliata).
-> 3. Doc: `cli_tools.en.md` e `backup_restore.en.md`. Proposta di CHANGELOG ✨.
->
-> - **Rossi in scrittura** (10:37):
->   - TA-S: `test_backup_secure.py`, k1-k6;
->   - TA-E: `test_backup_cli_restore.py` (h), con c8 accanto al finto root di B-19 se conviene;
->   - docs-writer: le due pagine.
-> - **Codice pronto** (10:40) in `b18-wip/apply_b18.py`: 17 operazioni in 2 file.
->   - `staging.py`: `instance_key`, `_refuse_unusable_instance_key` prima della cartella e del lock, e
->     `archive_key = … else instance_key`.
->   - `backup_cli.py`:
->     - `_restore_keys`: prima il file della chiave, poi la password. Tiene `cmd_restore` sotto C901;
->     - `_instance_key_from_file`;
->     - `_print_given_key` per D1, D2 e l'eccezione;
->     - l'opzione, una riga d'uso, un esempio.
->   Ruff e black puliti sulla copia emessa, dopo aver rimesso la firma di `stage_archive` su una riga sola, come vuole
->   black.
-> - ✅ **Rossi dei servizi scritti** (TA-S, 10:44): sezione (i) di `test_backup_secure.py`, 6 funzioni e 9 casi (7
->   rossi, 2 guardie). k3 prova `""` e 31 caratteri, con e senza un `.restore` lasciato da una verifica precedente.
->   `new_parameter` ha un argomento `by` facoltativo, che nomina B-18 nel messaggio.
-> - **⚠️ Fuori pista — `TypeError` (10:45)**, da TA-S: il contratto §1 mandava anche un `TypeError` (una chiave che non
->   è un testo) su `instance_key_invalid`, con la frase «too short», che lì sarebbe falsa. La CLI passa sempre un testo:
->   il contratto ora lascia il `TypeError` di `derive_key_from`, come fa la patch. Il controllo usa `is not None`, mai
->   la verità del valore: `""` è rifiutato.
-> - ✅ **Doc scritta** (docs-writer, 10:50):
->   - `cli_tools.en.md`: l.393, 441, 448 e 475; la nuova sottosezione «🗝️ The Instance Key of Another Installation»
->     (`#backup-restore-instance-key`, l.546-561); debito di traduzione, niente stamp;
->   - `backup_restore.en.md`: l.36, e i passi 1, 3 e 4 di «From a Hosted Instance to Your Server».
->   Rivista contro la patch: le righe esatte, i messaggi di `read_secret_file` (il limite di 65536 byte), il percorso
->   dei dati dell'immagine.
->   Lasciato fuori dal docs-writer, da decidere: una clausola in `configuration.en.md` («Saved Secrets and the Instance
->   Key», pagina tradotta).
-> - ✅ **Rossi della CLI scritti** (TA-E, 10:42): sezione (h) di `test_backup_cli_restore.py`, 8 funzioni e 10 casi.
->   - c8, il caso da root, sta in (h) e importa il finto root di B-19 da `test_backup_cli_secure.py`;
->   - l'archivio con i segreti viene dagli helper di `test_backup_secure.py`;
->   - c3 vuole il file della chiave letto prima della password, come fa la patch.
-> - ✅ **Rossi** (corsia 6187, 10:43-10:44, carico 36):
->   - `services backup-secure`: **7 falliti** e 70 passati; il motivo è il parametro mancante (`new_parameter`);
->   - `utils backup-cli-restore`: **10 falliti** e 92 passati; argparse rifiuta l'opzione.
-> - ✅ **Codice applicato** (10:44:11): 17 operazioni in 2 file; ruff (con C901) e black puliti sui file veri.
-> - ✅ **Verdi** (10:44-10:47): `services backup-secure` 77, `utils backup-cli-restore` 102,
->   `utils backup-cli-secure` 66, `utils backup-cli` 102, `services backup-staging` 161; porta 6187 libera.
->   `dev.py backup restore --help` mostra l'opzione.
-> - ✅ **Doc** (10:47-10:49): `mkdocs build` strict pulito (80 s), `check-links` pulito, `utils gate-docs-links` 63.
-> - ✅ **Controlli statici** (10:49): ruff e black su tutti i 6 file Python cambiati; `git diff --check` pulito.
-> - Non eseguiti:
->   - `api backup-restore`: nessuno slot chiesto. L'API non passa nessuna chiave, e `instance_key=None` è la strada di
->     prima: la coprono `services backup-staging` (161) e `services backup-secure` (77);
->   - `api sync`: il report non cambia, quindi l'OpenAPI nemmeno.
-> - Proposta di CHANGELOG ✨ (docs-writer): «**The old instance key at a restore** — `./dev.py backup restore ARCHIVE
->   --instance-key-file FILE` takes the instance key of the installation that made a clear backup…».
-> - **Backlog**: B-18 ✅.
-
-### B-32 — dopo un annullamento rifiutato: la scheda, la CLI e uno stato illeggibile (2026-10-17, 09:25-10:29) — ✅ 🧊 FROZEN (checkpoint delle 10:29)
-
-> **B-19 entrato** (coordinatore, 09:25): dev `e96158e9b`, CHANGELOG 🐛 `67dd18676`; HEAD portata in avanti a
-> **`67dd18676`**, pulita, con A8b dentro. La revisione di `backup.spec.ts` di A8b è presa per buona. Ordine: B-32 →
-> B-18 → B-20, ognuno col suo checkpoint. Lo spike B7a passa **alla mattina, col developer presente**: Docker non lo
-> avvio io.
->
-> **Stato reale** (lettura, 09:25-09:35):
->
-> - `restoreFlow.cancelPending()`: `state = 'pending'` seguito da `#fail(...)`, che mette subito `failed`. La riga è
->   morta: un annullamento rifiutato finisce sulla schermata d'errore. Il riavvio rifiutato resta invece su `pending`
->   con l'errore (`#setError`), e la scheda sa già mostrare il blocco in attesa con l'errore accanto.
-> - `cmd_pending --cancel` prende solo `RestoreNotPendingError`. `cancel_restore` rende lo stato, non `copy_dropped`
->   (i test fissano `cancel_restore(...) == pending`).
-> - `_read_state` rende `None` per ogni `OSError`. Lo leggono in 10 punti:
->   - stato, annullamento, riavvio, conferma;
->   - i due passi d'avvio;
->   - l'esito;
->   - `protected_stage` (pulizia, `remove_check`);
->   - la CLI (`pending` e il controllo prima di `restore`).
->   Con `O_NOFOLLOW`, uno stato che è un link dà ELOOP: oggi «nessun ripristino», e §10 lo fissa (`UNTRUSTED`, la
->   conferma che sostituisce un link). Il contenuto non valido (`ValidationError`) è lo «stato illeggibile» dei test
->   esistenti: resta «none».
->
-> **Contratto congelato** (`b32-contract.md` nella cartella della sessione, 09:38):
->
-> 1. Un annullamento rifiutato (tranne il 404 `restore_not_pending`) resta su **`pending`**. L'errore sta accanto
->    (`failure` `cancel`), con lo stato invariato e un solo evento `failed`, e si può annullare o riavviare di nuovo:
->    come il riavvio rifiutato.
-> 2. Le uscite di `pending --cancel`:
->    - un `OSError` → `❌ The restore could not be cancelled: <strerror>. It still waits for the next start
->      (restore_cancel_failed)`, uscita 1, senza traceback;
->    - copia rimasta → `✅ …dropped: the data stays as it is` + `⚠️  Its checked copy could not be removed: it goes
->      when its check expires`, uscita 0. La CLI lo capisce dalla cartella della copia ancora presente.
-> 3. Nuovo `RestoreStateUnreadableError`, codice `restore_state_unreadable`, con `reason` (lo `strerror`, mai un
->    percorso). `_read_state` fa prima un `lstat`:
->    - nessun file → `None`;
->    - non un file regolare (link, cartella) → `None` registrato, come oggi;
->    - ogni altro `OSError` → registrato e sollevato;
->    - il contenuto non valido resta `None`.
->    **Rigidi**:
->    - status, `DELETE /pending`, riavvio e conferma → 500. La conferma rifiuta invece di scrivere sopra: dietro può
->      esserci un ripristino applicato a metà;
->    - la CLI `pending`, `pending --cancel` e il controllo prima di `restore` → ❌, uscita 1.
->    `cancel_restore` legge prima senza lock, come `prepare_restart`: un `.restore/` che il server non può
->    attraversare non passa più per «nessuno stato».
->    **Indulgenti, come oggi**: i due passi d'avvio (con un helper), l'esito, `protected_stage`.
-> 4. Una chiave × 4 lingue, più `ERROR_KEYS`.
-> 5. I commenti «Settings › Administration › Backup»:
->    - in `BackupTab.svelte`, `apply.py`, `backup_cli.py`, `RestoreCard.test.ts`;
->    - e due descrizioni del runner di B5a.
->
-> - **Coordinatore** (09:40): nessun veto su 1-4. Il residuo (un avvio che trova uno stato illeggibile va avanti) va
->   nella lista del developer. Slot 2 di ~12 min in coda dopo E → J → Y.
-> - **Rossi in scrittura** (09:38), file distinti:
->   - TA-S `test_backup_apply.py`;
->   - TA-B `test_backup_restore_apply.py`;
->   - TA-E `test_backup_cli_restore.py`;
->   - TA-F `restoreFlow.test.ts`, `RestoreCard.test.ts`, `restoreI18n.test.ts`.
-> - **Codice pronto** in `b32-wip/apply_b32.py` (09:41): 31 operazioni in 8 file + 4 cataloghi, `--part front|back`.
->   Sulla copia emessa:
->   - ruff (con la configurazione del repo, `--stdin-filename`) e black puliti. `_RESTART_NOT_PREPARED` è scritto
->     nella forma di black: oltre 300 caratteri;
->   - prettier pulito sui 4 file del frontend e sui 4 cataloghi.
-> - ✅ **Rossi scritti** (09:38-09:53), file distinti, nessuno lanciato dagli autori:
->   - **TA-S**, sezione (o) di `test_backup_apply.py`: 7 funzioni, 24 casi (14 rossi, 10 guardie). Tre modi di
->     rendere illeggibile: `os.open` che rifiuta EACCES o EIO, e un vero `chmod 000`, saltato da root.
->   - **TA-B**, sezione (j) di `test_backup_restore_apply.py`: 6 test, 16 casi (13 rossi; la guardia dell'esito ×3).
->   - **TA-E**, sezione (g) di `test_backup_cli_restore.py`: 8 funzioni, 15 casi (13 rossi, 2 guardie).
->   - **TA-F**: 11 casi rossi fra `restoreFlow.test.ts`, `RestoreCard.test.ts` e `restoreI18n.test.ts`. Ha girato anche
->     la vecchia tabella di B5b, che fissava `failed` per un annullamento rifiutato, e ha allineato l'intestazione di
->     `RestoreCard.test.ts`.
->   - **Docs-writer**:
->     - `backup_restore.en.md`: la riga dell'annullamento e la nuova riga `restore_state_unreadable`;
->     - `cli_tools.en.md` l.538, 555 e 581 (debito di traduzione, niente stamp);
->     - `security.md`: quattro righe della tabella e il punto «What cannot be read is not none».
-> - **⚠️ Fuori pista — `lexists` (09:55)**, da TA-E: `os.path.lexists` inghiotte EACCES. Con `.restore/stage` non
->   attraversabile, la CLI direbbe «with its copy» mentre la copia resta. E `rmtree(ignore_errors=True)` di
->   `remove_stage` può lasciare una copia in sola lettura senza sollevare nulla: il `copy_dropped` di B-31 non basta.
->   Contratto §2 e patch corretti: un helper `_copy_left` fa `os.lstat`. `FileNotFoundError` vuol dire sparita; ogni
->   altro `OSError` conta come ancora lì. TA-E ha aggiunto il caso `stage-folder-not-searchable`.
-> - **Note degli autori, già nella patch**:
->   - TA-B: la conferma ha bisogno del suo `except` prima di quello generico, altrimenti risponderebbe 409 con le
->     parole del sistema; l'esito deve leggere in modo indulgente.
->   - TA-S: il `lstat` prima toglie anche una perdita di descrittore (uno stato che è una cartella: `os.fdopen` solleva
->     senza chiudere) e un blocco su una FIFO. La FIFO non ha test: oggi resterebbe appesa.
-> - ✅ **Rossi** (corsia 6187):
->   - `services backup-apply` (09:48-09:49, carico 18): **14 falliti**, 241 passati. I 14 sono i casi rigidi, per i
->     motivi attesi (`None`, `restore_not_pending`, una conferma che scrive sopra); le guardie verdi;
->   - Vitest, i 3 file (09:49-09:50): **11 falliti**, 394 passati, gli 11 attesi;
->   - `utils backup-cli-restore` (09:50-09:51): **13 falliti**, 79 passati, i 13 attesi.
->   - `api backup-restore-apply` aspetta lo slot: lì rosso, poi la metà backend, poi verde.
-> - ✅ **Metà frontend applicata** (09:51:27): `--part front`, 5 operazioni in 4 file più i 4 cataloghi.
->   - `i18n build` (5014 chiavi) e `i18n check` strict puliti;
->   - Vitest (09:52) sui 3 file: **405 su 405**;
->   - Vitest su tutta la cartella `features/backup` (09:53): **867 su 867**, 8 file.
-> - **⚠️ Fuori pista — una frase della doc (09:54)**: in `cli_tools.en.md`, «The log above them has the warning…» non
->   è sempre vero. Una copia lasciata senza errore (`rmtree(ignore_errors=True)` davanti a una cartella in sola lettura)
->   non registra nessun avviso, e la pulizia allora riprova soltanto. Corretto io stesso: l'avviso c'è quando la
->   rimozione ha sollevato un errore; LibreFolio «tries again» alla prima partenza dopo 24 ore.
-> - ✅ **Doc** (09:55-09:56, carico 32): `mkdocs build` strict pulito (55 s), `check-links` pulito,
->   `utils gate-docs-links` 63 passati; porta 6187 libera.
-> - **Coordinatore** (09:57):
->   - B-18, D1: vince la chiave dell'archivio, con la riga ℹ️. D2: la riga ⚠️ quando la chiave data non legge nessun
->     segreto;
->   - B-18 parte dopo il checkpoint di B-32, solo run leggeri, con H in revisione al checkpoint (consuma
->     `derive_key_from` e `read_secret_file`);
->   - lo slot di B-32 viene dopo Y-27.
->   Contratto di B-18 pronto nella cartella della sessione (`b18-contract.md`); lo script dello slot di B-32 è
->   `b32-wip/slot_after_red.sh`.
-> - ✅ **Slot 2** (coordinatore, 10:04; accanto girava l'E2E di Y):
->   - **Rosso** `api backup-restore-apply` (10:04:51-10:09:28; il build del frontend rifatto con la metà frontend
->     dentro, svelte-check 0 errori): **13 falliti**, 157 passati. Sono i 13 di TA-B: 200 `none`, 404, 409, 202 e
->     l'OpenAPI.
->   - **Metà backend applicata** (10:09:39): `--part back`, 26 operazioni in 4 file. Ruff e black puliti sui file veri.
->   - **Verdi**:
->     - `api backup-restore-apply` (10:09-10:10): **170 passati**;
->     - `api backup-restore`: 146; `api security-checks`: 3;
->     - lo script ha aspettato il carico ≥ 50 dalle 10:11 alle 10:14 (picco 104).
->   - `api sync` (10:16-10:17), uscita 0: `openapi.json` e `generated.ts`, ignorati da git, nominano
->     `restore_state_unreadable`.
->   - Slot liberato alle 10:17:47; porta 6187 libera.
-> - ✅ **Verdi leggeri** (10:19-10:26, nella mia corsia; attesa del carico dalle 10:21 alle 10:25):
->   - `services backup-apply` 255, `services backup-outcome` 97, `services backup-leftovers` 44;
->   - `utils backup-cli-restore` 92, `utils backup-cli` 102, `utils backup-cli-secure` 66.
->   Porta 6187 libera.
-> - ✅ **Controlli statici** (10:27): ruff e black puliti su tutti i 10 file Python cambiati, prettier pulito su tutti i
->   file del frontend cambiati, `git diff --check` pulito.
-> - Lasciato com'è: il messaggio del `throw` in `RestoreCard.test.ts:180`, «Settings › Backup has no restore card».
->   È il messaggio rosso di B5b per una scheda che non può più mancare; non tocco un test dopo il verde.
-> - Non eseguiti: `e2e` (lo slot non lo chiedeva; la scheda è coperta dai casi Vitest della carta e del flusso),
->   `front check` separato (lo svelte-check del build del rosso API era pulito, con la metà frontend dentro).
-> - **Backlog**: B-32 ✅; **B-33** nuovo, i residui dichiarati, con la decisione del developer sul fail closed.
-
-### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
-
-> Mentre l'`all-backend` di B3 aspetta lo slot (coordinatore: «continua con B4 in sola lettura»). Bozza del contratto
-> nei file della sessione (`b4-contract.md`).
->
-> - **In base** (`62004e530`): `cryptography` 50.0.2; le funzioni di X per la copia (`count_unreadable_secrets`,
->   `rekey_plugin_secrets`). Lo scopo persistito della chiave d'istanza è uno solo, `plugins.settings.v1`: il
->   `key_id` di ogni riga di X fa già da valore di controllo H-3, nella copia non c'è altro da scrivere.
-> - **Manca ancora in `dev_release2`** (`2c485d3d4`, 03:56): `derive_key_from` di H (annunciata con CP7b) e una lettura
->   pubblica della chiave generata. Quindi **B4a** (busta, creazione e ripristino con password, `decrypt`, conteggio dei
->   segreti illeggibili nel report) non dipende da nessuno; **B4b** (la chiave nell'archivio e la ricifratura) aspetta
->   le due funzioni di H.
-> - **Misura**: `Scrypt` di `cryptography` con `n = 2^17, r = 8` impiega 0,42 s e 128 MiB su questo Mac (carico ~30);
->   `2^15` 0,10 s e 32 MiB. `hashlib.scrypt` rifiuta `2^17` col `maxmem` predefinito di OpenSSL: solo `cryptography`.
->   Aggiunta al punto 1 della lista di domattina (una macchina cloud da 256 MB e il picco di 128 MiB).
-> - **Decisione notturna, da rivedere**: nell'intestazione (52 byte) un valore di verifica della password (byte 32-47
->   dell'uscita di scrypt, lo schema di WinZip AES), così una password sbagliata (`wrong_password`) si distingue da un
->   file rovinato (`envelope_damaged`) senza aiutare chi prova le password più del tag del primo blocco.
-
-### B1 — backup dell'istanza, backend e CLI — bozza (2026-10-15, in attesa del commit di B0)
-
-> **Metodo**: per non mescolare B1 con il checkpoint di B0, la bozza sta in una copia dell'albero di B0 in `/tmp`
-> (`/tmp/librefolio-r13-b-b1/tree`), mai nel worktree. Entra nel worktree dopo il commit di B0, poi test-author scrive i
-> test e i verdi girano sulla corsia.
->
-> **Disegno della bozza** (fatti verificati con una prova in `/tmp`: `VACUUM INTO` mentre un altro processo scrive in
-> WAL non blocca lo scrittore, 3 756 commit durante la copia, e la copia è integra, in modalità rollback, senza file
-> accanto):
->
-> - `services/platform/instance_backup/`: `paths` (cosa entra: `sqlite/app.db`, `custom-uploads/`,
->   `broker_reports/`, `scenario_catalog/`; dove si scrive: `backups/`, `backups/.jobs/<id>/`; cartelle 0700, mai
->   attraverso un link), `snapshot` (`VACUUM INTO` e descrizione della copia: integrità, chiavi esterne, righe per
->   tabella, revisione), `manifest` (pydantic, `format_version` 1, campi sconosciuti ignorati, percorsi controllati),
->   `archive` (zip 0600 scritto come `.part` e rinominato, file in streaming con lo SHA-256, link mai seguiti, controllo
->   dello spazio prima; `check_archive` per `inspect` e per B2, che non legge mai un'entrata oltre la dimensione
->   dichiarata), `jobs` (un thread per job, `flock` su `backups/.jobs/.lock`, stato su file scritto in modo atomico,
->   «interrotto» se lo stato dice in corso e il lock è libero, conservazione di un'ora).
-> - `schemas/backup.py`: `InstanceBackupJob`.
-> - `api/v1/backup/instance.py`: `POST /backup/instance` (202), `GET` e `DELETE /backup/instance/jobs/{id}`,
->   `GET /backup/instance/jobs/{id}/file` (`Cache-Control: no-store`); solo admin (`require_admin`); errori con
->   `detail.code`: `backup_busy`, `backup_job_not_found`, `backup_job_not_ready`, `backup_job_running`. Via i 4
->   segnaposto e i loro 6 schemi (D-B7).
-> - `scripts/backup_cli.py` e due righe in `dev.py`: `backup [--test-db] create [-o PATH]` e `backup inspect FILE
->   [--no-verify]`. Avviato come root (un `docker compose exec` senza utente), il comando passa all'utente proprietario
->   della cartella dati prima di scrivere, come fa `gosu` nell'entrypoint: archivio, lock e file di SQLite restano del
->   server.
-> - La docstring di `backup_asset_prices` ora cita `series_export.PRICE_COLUMNS` (B-3).
->
-> **Prove della bozza** (12:00, solo `/tmp`): uno smoke test su una cartella dati sintetica con un link a
-> `secrets/instance.key` e uno a `secrets/` dentro le cartelle archiviate. Archivio 0600, cartella del job 0700; dentro
-> solo il DB (primo), i file e il manifest (ultimo); fuori log, segreti, stato dello scheduler e i due link (avviso
-> `files_skipped`, elencati dalla CLI); `check_archive` verde, e rosso su un file alterato e su un'entrata in più; job in
-> background, secondo avvio rifiutato mentre gira, stato «interrotto» con il lock libero, pulizia dopo un'ora, id non
-> validi mai trasformati in percorsi; CLI `create`, `inspect` (0 e 1), `--help` con il gruppo. ruff e black puliti.
-> OpenAPI rispetto alla base: via i 4 percorsi e i 6 schemi dei segnaposto, +3 percorsi (4 rotte) e
-> `InstanceBackupJob`; cambia solo la descrizione dei prezzi (B-3).
->
-> **Passo 1 ✅ — i file nuovi nel worktree e i test puri** (12:05-12:55):
->
-> - Via del coordinatore (12:03): «B1 intanto va avanti»; `npm ci` solo dopo l'avviso di fine finestra, spostata alle
->   13:30. Nel worktree entrano **solo i file nuovi** di B1 (`services/platform/instance_backup/`,
->   `schemas/backup.py`, `scripts/backup_cli.py`), che nessuno importa ancora: il codice di B0 resta quello delle tre
->   suite `api` da far girare dopo la finestra. Le modifiche di B1 ai file condivisi (`instance.py`, `__init__.py`,
->   `exports.py`, `dev.py`, catalogo, istruzioni, devWiki) restano pronte in `/tmp` fino al commit di B0.
-> - **Test** (test-author): `test_services/test_backup_archive.py` (126), `test_services/test_backup_jobs.py` (31),
->   `test_utilities/test_backup_cli.py` (26); tre voci pure nel catalogo (`services backup-archive`,
->   `services backup-jobs`, `utils backup-cli`). Una prova di mutazione per file, ognuna rossa e poi ripristinata con
->   lo stesso sha256.
-> - **⚠️ Fuori pista — 8 rossi, 6 difetti veri della bozza**, tutti corretti nel codice (i test non cambiano):
->   1. un'entrata danneggiata (CRC, deflate) faceva uscire da `check_archive` un `BadZipFile` grezzo, e `inspect`
->      andava in traceback: ora è «mismatched», e un manifest danneggiato è `manifest_unreadable`;
->   2. il manifest si leggeva per la dimensione dichiarata dallo zip (68 MB gonfiati da un archivio sotto 1 MB): ora si
->      rifiuta oltre `MANIFEST_MAX_BYTES` senza leggerlo, e non si legge mai oltre `MANIFEST_MAX_BYTES + 1`;
->   3. senza `fcntl` un job vivo risultava interrotto: il controllo del lock non dipende più dall'esistenza del file;
->   4. una sottocartella illeggibile spariva in silenzio: `os.walk` ha un `onerror` che la segnala (`files_skipped`);
->   5. un file datato dopo il 2107 bloccava ogni backup: la data dello zip è limitata anche in alto;
->   6. una tabella con `"` nel nome rompeva la descrizione: il nome si cita raddoppiando le virgolette.
->
->   E due osservazioni di test-author: un job finito da oltre un'ora ora si toglie anche alla lettura (risponde «non
->   trovato»), come diceva la docstring; il file si apre con `O_NONBLOCK`, così un file diventato una FIFO dopo la
->   raccolta non blocca il backup.
-> - **Verdi** (pytest diretto, puro, `nice`): 182 passati, 1 saltato (nomi non UTF-8: macOS li rifiuta, il test gira su
->   Linux). ruff e black puliti.
+> - **Avviso di A** (coordinatore, 18:09): per N69, A cambia la barriera di FBKP-001 in `e2e/settings/backup.spec.ts`
+>   (riga 264). Un utente normale non vede più «Amministrazione»: la barriera diventa «About visible, administration
+>   count 0». Ha l'ok del coordinatore. B-8 non tocca quella spec.
+> - **La rifinitura**: una richiesta in chiaro rifiutata da un 409 che nomina il job `ui` che la scheda segue già da
+>   sé (`followedJobId`, non adottato) lo segue come suo: niente adozione, quindi alla fine è offerto qualunque sia la
+>   modalità. La strada sicura non cambia: una richiesta sicura non segue mai, il suo job compreso; si torna con
+>   «Check again», come fissa il gruppo 1.
+> - **Cura pronta, non applicata**: `apply_b8_own.py`, 1 operazione: si adotta solo se il job nominato non è quello
+>   seguito, o se quello seguito è già un'adozione. `--check` OK.
+> - **Rossi** a TA-B8-OWN (solo `backupJob.test.ts`, sola scrittura):
+>   - due rossi: il proprio backup sicuro, avviato qui o ricordato da una pagina precedente, che finisce cifrato
+>     viene offerto;
+>   - due guardie: un job che non è quello seguito, o quello seguito come adozione, resta adottato.
+> - ✅ **Doc** (18:12):
+>   - `security.md`: il backup che la scheda segue da sé si segue come suo, mai adottato (3 righe al posto di 1);
+>   - `backup_restore.en.md`, la riga 🚦: «…is not offered, unless the card had started it itself».
+> - **⏸️ PAUSA GENERALE del developer** (coordinatore, 18:12): la macchina si spegne e /tmp verrà ripulito. Fermare
+>   corse e server, mettere per iscritto lo stato, niente git. **Stato al fermo (18:16):**
+>   - porta 6187 libera; nessuna corsa né server della corsia attivi;
+>   - HEAD `bc913e487`; **sporchi 3 file**: questo piano, `security.md`, `backup_restore.en.md` (le doc della
+>     rifinitura). Codice di prodotto intatto: la rifinitura non è applicata;
+>   - **TA-B8-OWN fermato a metà**: gli ho chiesto di non scrivere più. Alle 18:15 `backupJob.test.ts` era ancora
+>     pulito. Domani controllare `git status`: se ha scritto un gruppo parziale, completarlo o rifarlo, mai lanciarlo
+>     a metà.
+> - **Per ripartire, nell'ordine** (tutto nella cartella di sessione, niente in /tmp):
+>   1. Rossi della rifinitura: brief di TA-B8-OWN qui sopra, oppure un test-author nuovo con lo stesso brief: due
+>      rossi più due guardie, solo `backupJob.test.ts`, dopo i 5 gruppi «B-8, review 19/10».
+>   2. Il rosso: `files/scripts/b_vitest.sh red-b8-own src/lib/features/backup/backupJob.test.ts`. Atteso: le due
+>      righe nuove falliscono perché il job viene adottato (la fine cifrata non è offerta); il resto verde.
+>   3. La cura: `python3 files/b15-b8-wip/apply_b8_own.py <worktree>` (1 operazione; `--check` era OK su
+>      `bc913e487`).
+>   4. I verdi: Vitest dell'intera feature `backup`, prettier sui 2 file, `front check` (prima `api sync` se il client
+>      è più vecchio della base), le doc (`files/scripts/b_docs.sh`).
+>   5. Il checkpoint: commit a parte (`fix(backup): a tab's own backup is never adopted`), più il giornale.
+>   6. **Poi B-50**: il contratto è in `files/b50-contract.md`, le sonde in `files/b50-analysis/`. Decisione (17:37):
+>      uno stato illeggibile è «non trovato» (404 `backup_job_not_found`; nel ripristino `restore_stage_not_found`),
+>      JSON non oggetto compreso, nel backup e nel ripristino. Rossi prima.
+> - **La corsia**: `/tmp/librefolio-r13-b` sparisce con /tmp. Prima di un test con server o DB, ricrearla con
+>   `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6187 --data-dir
+>   /tmp/librefolio-r13-b db populate --force --clean`. Per i Vitest e le doc non serve.
+> - 🧊 **FROZEN** (18:16).
+> - **▶️ Ripresa del 20/10** (coordinatore, 08:47): il riavvio ha svuotato /tmp; le corse leggere sulla corsia 6187
+>   solo con il carico a 1 minuto sotto 50. Ordine: i rossi della rifinitura, la cura e il checkpoint, poi B-50. Il
+>   gate di B-15 + B-8 su `dev_release2` lo lancia il coordinatore nella sua corsia.
+>   - ✅ Verificato (08:47): HEAD `bc913e487`, gli stessi 3 file sporchi, porta libera, carico 27. I file di sessione
+>     ci sono tutti; `apply_b8_own.py --check` OK. La corsia in /tmp non c'è più: per i Vitest e le doc non serve.
+>   - Il test-author di ieri non esiste più: ne lancio uno nuovo con lo stesso brief.
+> - ✅ **Rossi** (TA-B8-OWN-2, 08:50-09:00, sola scrittura; solo `backupJob.test.ts`):
+>   - un gruppo nuovo dopo i cinque della revisione: 2 rossi (il proprio backup sicuro, avviato qui con il sondaggio
+>     arreso, oppure ricordato da una pagina precedente con la lettura di `resume()` senza risposta; poi una
+>     richiesta in chiaro rifiutata che lo nomina) e 2 guardie (un job che non è quello seguito, oppure quello seguito
+>     come adozione, resta adottato e la sua fine cifrata non si presenta);
+>   - nei rossi: nessuna scrittura né rimozione della chiave di adozione su tutto il percorso (risposta mia alla sua
+>     domanda 1, come la regola delle guardie di pulizia), la fine cifrata offerta, `onDone` una volta, la chiave del
+>     job tenuta. Non fissate, di proposito: la riscrittura della chiave del job con lo stesso id, e la guardia (b)
+>     che riscrive l'adozione che ha già;
+>   - aggiornata la frase superata nel commento del primo gruppo della revisione (rimanda al gruppo nuovo).
+> - ✅ **Rosso** (09:01, carico 19): **2 falliti**, 244 passati, tutti e due perché il job seguito da sé viene adottato
+>   al rifiuto. Le guardie sono verdi.
+> - ✅ **Cura** (09:01): `apply_b8_own.py`, 1 operazione in `backupJob.svelte.ts` (+3/−1).
+> - ✅ **Verdi** (09:01-09:04):
+>   - Vitest dell'intera feature `backup`: 9 file, **1076 passati**;
+>   - prettier pulito sui 2 file; `front check` 0 errori e 0 avvisi. Il client generato è delle 17:12 di ieri, dopo
+>     l'ultimo merge, e da allora backend e schemi non sono cambiati: niente `api sync`;
+>   - `mkdocs build` stretta, `check-links`, `utils gate-docs-links` 63.
+> - ✅ **Backlog**: nella riga di B-8, la rifinitura.
+> - ✅ **Checkpoint** (09:05), 🧊 FROZEN. Commit proposti:
+>   - `fix(backup): a tab's own backup is never adopted`: `backupJob.svelte.ts`, `backupJob.test.ts`, le due doc;
+>   - `docs(journal): B-8 own-job refinement`: questo piano e il backlog.
+> - **Poi B-50**: il contratto è pronto (`files/b50-contract.md`), con una domanda sul perimetro (sotto).

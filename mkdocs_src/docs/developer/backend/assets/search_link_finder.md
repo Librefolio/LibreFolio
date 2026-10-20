@@ -327,11 +327,14 @@ they show (`reportPlacement`). `assetSearchReport.ts` holds its logic.
 (`GET /api/v1/system/instance`, through `instanceConfig`) into a channel, checking it again although
 the backend validated it, so that nothing but http(s) and `mailto:` with one address becomes a link:
 `mailto` (subject and CRLF body in the link), or `page` for an address that `new URL()` parses as
-http(s) with a host name and no user name or password (the page opens in a new tab and the body
-goes to the clipboard, with a toast either way). A `page` carries the parsed `url.href`, normalized
-and absolute, never the raw value: a spelling such as `https:host` would otherwise resolve, as an
-href, to a path on the instance itself. Anything else, user info included, counts as missing, like
-an unset value: `github` (a prefilled new issue) with `githubFallback`, `null` without it.
+http(s) with a host name and no user name or password (the page opens in a new tab, with the report
+in its query as `title` and `body`, encoded as for a GitHub issue, and the body still goes to the
+clipboard, with a toast either way: the format is in
+[Hosting for Others](../../../admin/hosting_providers.md#support-form)). A `page` carries the parsed
+`url.href`, normalized and absolute, never the raw value: a spelling such as `https:host` would
+otherwise resolve, as an href, to a path on the instance itself. Anything else, user info included,
+counts as missing, like an unset value: `github` (a prefilled new issue) with `githubFallback`,
+`null` without it.
 
 N61: `AssetSearchAutocomplete.svelte` passes `githubFallback = selfHostedConfirmed()` (the helper of
 `lib/features/instance/profile.ts`: `loaded`, and `profile` is `selfhosted`; see

@@ -1061,10 +1061,12 @@ def services_quote_base_suggestion(verbose: bool = False, test_names: list = Non
 
 def services_bulk_reads_chunked(verbose: bool = False, test_names: list = None) -> bool:
     """MF-SEC9a (rest): bulk reads of the BRIM candidate search and of the WAC FX evidence in statements SQLite can parse (private in-memory DB)."""
-    print_section("Services: Bulk Reads Chunked (MF-SEC9a)")
-    print_info("Testing: services/brim/brim_provider.py (search_asset_candidates_bulk, _classify_candidates, _contains_matcher vs search_asset_candidates), services/pac_allocator/source/wac.py (_load_wac_fx_rows)")
+    print_section("Services: Bulk Reads Chunked (MF-SEC9a, X-R45 reverted, X-R45b)")
     print_info(
-        "Tests: 300 isin+symbol+name and 150 name-only triples without «Expression tree is too large», each answer == the per-asset search (ids, confidences, order, auto-select), 50 triples guard; 1 500 WAC keys + 10 missing exact (500/501 at the chunk edge); barriers: one OR of 1 500 refused, a nested OR counts every term; MF-SEC9g: classification off the loop (thread + loop handshake), compiles ≤ needles and dumps ≤ assets, 300×1 011 parity guard, exact-hit order guard"
+        "Testing: services/brim/brim_provider.py (search_asset_candidates_bulk, _classify_candidates, _contains_matcher vs search_asset_candidates), services/pac_allocator/source/wac.py (_load_wac_fx_rows), services/pac_allocator/source/fx_quotes.py (_load_latest_planner_fx_rows, build_planner_fx_quotes), services/fx/conversion.py (convert_bulk), services/fx/period_changes.py (_first_rate_days_inside), schemas/portfolio.py (PortfolioPlannerSourceIssueCode), schemas/pac_allocator/base.py (PlannerIssueCode)"
+    )
+    print_info(
+        "Tests: 300 isin+symbol+name and 150 name-only triples without «Expression tree is too large», each answer == the per-asset search (ids, confidences, order, auto-select), 50 triples guard; 1 500 WAC keys + 10 missing exact (500/501 at the chunk edge); barriers: one OR of 1 500 refused, a nested OR counts every term; MF-SEC9g: classification off the loop (thread + loop handshake), compiles ≤ needles and dumps ≤ assets, 300×1 011 parity guard, exact-hit order guard; X-R45 reverted: the planner's latest saved FX row and the WAC row of its exact date are read as stored (a legacy 0, inf or 1E+14); X-R45b: a latest saved rate of 0 or inf falls back to the previous valid one with one allocation.saved_fx_skipped warning (pair, skipped_date, used_date), over a run of two too; no valid rate before → the latest row's quote with no rate and allocation.saved_fx_invalid; 1E+14 quoted as read back; the code a source issue code, not a tool one; guards: the latest usable rate wins, convert_bulk and _first_rate_days_inside still skip unusable rates"
     )
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_bulk_reads_chunked.py", test_names)
     return run_command(cmd, "Bulk reads chunked tests", verbose=verbose)
@@ -1159,7 +1161,7 @@ def services_asset_digit_limits(verbose: bool = False, test_names: list = None) 
 
 
 def services_current_price_storable(verbose: bool = False, test_names: list = None) -> bool:
-    """Run X-R40 + W-B62: the current price and the price refresh serve, cache and announce only what the database can keep."""
+    """Run X-R40 + W-B62 + N92: the current price and the price refresh serve, cache and announce only what the database can keep."""
     print_section("Services: Current Price Storable")
     print_info("Testing: backend/app/services/assets/price_query.py (get_current_prices_bulk), refresh.py (bulk_refresh_prices)")
     print_info("Tests: an unstorable quote never served nor cached (database fallback) and logged once per value, a valid one served and cached as the database keeps it, a refresh's changed_points and current-value cache limited to what is stored, a fallback past an unreadable close")
@@ -1736,10 +1738,10 @@ def services_scheduler_jobs(verbose: bool = False, test_names: list = None) -> b
 
 
 def services_scheduler_last_fx_dates(verbose: bool = False, test_names: list = None) -> bool:
-    """Test X-R45 on the history sync's lookup: the real _last_fx_dates skips a stored rate no read may use (lane DB)."""
-    print_section("Services: Scheduler Last FX Dates (X-R45)")
+    """Test the X-R45 revert on the history sync's lookup: the real _last_fx_dates answers the latest stored rate's date, whatever its value (lane DB)."""
+    print_section("Services: Scheduler Last FX Dates (X-R45 reverted)")
     print_info("Testing: backend/app/services/platform/scheduler/jobs.py (_last_fx_dates, _history_sync_start) on the lane database")
-    print_info("Tests: 1.5 on D1 and a legacy 0 / inf / 1E+14 on D2 → D1 for both slugs, the sync starting the day after D1; a legacy rate alone → nothing; guard: a usable latest rate (2, 1E-10, 99999999999999) → D2")
+    print_info("Tests: 1.5 on D1 and a legacy 0 / inf / 1E+14 on D2 → D2 for both slugs, the sync starting the day after D2 (not fetched again); a legacy rate alone → its date, D2; guard: a usable latest rate (2, 1E-10, 99999999999999) → D2")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_last_fx_dates.py", test_names)
     return run_command(cmd, "Scheduler last FX dates tests", verbose=verbose)
 
@@ -2000,7 +2002,7 @@ Note: No backend server required.
         "range-ceiling",
         services_range_ceiling,
         name="Date Range Ceiling",
-        desc="X-R55 (N75): date_range_limits (100-year span, ceiling today+1 by the server calendar, floor); price queries end at the ceiling (series, signal input, events), an item past it empty in its place; the builder walks from the first price; FX conversions clamped to [floor, ceiling], warm-up included, a conversion past it empty with its signals on an empty series; the sync walk bounded to the span, never asking the provider less; 0001-01-01 … 9999-12-31 guards under a wall clock and in-loop fuses. Z-25 (N77): 1 000 items per price/FX request, refused before any read; 1 M item-days (R13-SEC9-2), counted as the span the price fill emits (warm-up and comparison series included) and as the daily + signal items a conversion builds, all counted before any is built; X-R65 (N83): stored_date_bounds (1900-01-01 … the ceiling, read at the call), DateOutOfRangeError and the 422 date_out_of_range detail; POST /assets/prices and POST /fx/currencies/rate refuse a date outside before any statement or write. Z-30: a full-history price item loads from the earlier of 1900-01-01 and the start of its finite warm-up; a row stored before 1900 only seeds that fill, and the count follows",
+        desc="X-R55 (N75): date_range_limits (100-year span, ceiling today+1 by the server calendar, floor); price queries end at the ceiling (series, signal input, events), an item past it empty in its place; the builder walks from the first price; FX conversions clamped to [floor, ceiling], warm-up included, a conversion past it empty with its signals on an empty series; the sync walk bounded to the span, never asking the provider less; 0001-01-01 … 9999-12-31 guards under a wall clock and in-loop fuses. Z-25 (N77): 1 000 items per price/FX request, refused before any read; 1 M item-days (R13-SEC9-2), counted as the span the price fill emits (warm-up and comparison series included) and as the daily + signal items a conversion builds, all counted before any is built; X-R65 (N83): latest_stored_date (the ceiling, read at the call; no floor since N83's revision), DateOutOfRangeError and the 422 date_out_of_range detail; POST /assets/prices and POST /fx/currencies/rate refuse a date after it before any statement or write. Z-30: a full-history price item loads from the earlier of 1900-01-01 and the start of its finite warm-up; a row stored before 1900 only seeds that fill, and the count follows",
         # PURE: no lane DB, no server, no network. The price queries run on a private SQLite file under tmp_path built
         # with create_all (or on a stand-in session that reads nothing); the FX handler is called directly with
         # convert_bulk replaced by an in-process converter; the sync step runs with an in-process provider double and
@@ -2528,8 +2530,8 @@ Note: No backend server required.
         cat,
         "bulk-reads-chunked",
         services_bulk_reads_chunked,
-        name="Bulk Reads Chunked (MF-SEC9a)",
-        desc="search_asset_candidates_bulk over 100 (first size past HEAD's 91) and 300 isin+symbol+name and 150 name-only triples (1 100 / 3 300 / 1 200 OR terms) == search_asset_candidates per triple, 50/90-triple guards; _load_wac_fx_rows with 500, 501 and 1 510 keys exact; barriers: one OR of 1 500 refused, a nested OR's terms counted; MF-SEC9g: the candidate classification's LIKE matching runs off the event loop's thread and the loop answers a coroutine mid-classification (100 generic names × 300 funds); ≤ 1 LIKE compile per needle and ≤ 1 identifier_other dump per stored asset (counted, not timed); 300 extractions over 1 011 assets == search_asset_candidates (wildcard bond names, codes stored in either case, duplicate holders); exact ISIN/ticker hits in display-name order",
+        name="Bulk Reads Chunked (MF-SEC9a, X-R45 reverted, X-R45b)",
+        desc="search_asset_candidates_bulk over 100 (first size past HEAD's 91) and 300 isin+symbol+name and 150 name-only triples (1 100 / 3 300 / 1 200 OR terms) == search_asset_candidates per triple, 50/90-triple guards; _load_wac_fx_rows with 500, 501 and 1 510 keys exact; barriers: one OR of 1 500 refused, a nested OR's terms counted; MF-SEC9g: the candidate classification's LIKE matching runs off the event loop's thread and the loop answers a coroutine mid-classification (100 generic names × 300 funds); ≤ 1 LIKE compile per needle and ≤ 1 identifier_other dump per stored asset (counted, not timed); 300 extractions over 1 011 assets == search_asset_candidates (wildcard bond names, codes stored in either case, duplicate holders); exact ISIN/ticker hits in display-name order; X-R45 reverted: _load_latest_planner_fx_rows answers the latest stored row (a legacy 0, inf or 1E+14 on D2 over 2.5 on D1, as of D2 and later, and alone), _load_wac_fx_rows reads the exact key's stored row whatever its rate; X-R45b: build_planner_fx_quotes skips a latest saved rate of 0 or inf for the pair's previous valid one (finite, > 0), with one warning allocation.saved_fx_skipped about the used row's quote (params pair, skipped_date = the most recent skipped, used_date): 0 or inf on D2 over 2.5 on D1 (as of D2 and later) and a run of two on D2 and D3 (0 then inf, inf then 0; as of D3 and later) quoted from D1, never from the valid ERN/SZL and BBD/STN rates planted between; no valid rate before (inf alone, 0 then inf; guards: 0 alone, inf then 0) → the latest row's quote with no rate and allocation.saved_fx_invalid, no warning; guard: 1E+14 on D2, over 2.5 and alone, quoted as read back, no issue; allocation.saved_fx_skipped in PortfolioPlannerSourceIssueCode, not in PlannerIssueCode; guards: the latest usable rate wins (4, 1E-10, 99999999999999), a usable WAC rate on its exact date, convert_bulk (backward-fill anchor and window) and _first_rate_days_inside read 1E-10, 1.5, 99999999999999 and skip 0, 1E-11, -1.5, inf, 1E+14, 1E+19",
         # PURE: one private in-memory SQLite per test (create_all), disposed at teardown; no service replaced.
         isolation="pure",
     )
@@ -2615,7 +2617,7 @@ Note: No backend server required.
         "asset-digit-limits",
         services_asset_digit_limits,
         name="Asset Digit Limits",
-        desc="C-97a: a manual price whose open/high/low/close exceeds 12 decimals or 15 significant digits refused (ValueError naming the asset, the maximum and the dates) before anything of the call is written, for every asset and every chunk; the -1 sentinel, trailing zeros and values at the limits accepted; a provider price truncated (12 decimals, 15 significant digits, ROUND_DOWN) and stored; a manual event beyond 6 decimals or 15 significant digits refused with EVENT_TOO_MANY_DIGITS (HTTP 400), nothing written; what fits read back exactly and in today's form",
+        desc="C-97a: a manual price whose open/high/low/close exceeds 12 decimals or 15 significant digits refused (ValueError naming the asset, the maximum and the dates) before anything of the call is written, for every asset and every chunk; the 'clear' marker (N92), trailing zeros and values at the limits accepted; a provider price truncated (12 decimals, 15 significant digits, ROUND_DOWN) and stored; a manual event beyond 6 decimals or 15 significant digits refused with EVENT_TOO_MANY_DIGITS (HTTP 400), nothing written; what fits read back exactly and in today's form",
         # WRITE-SCOPED, the category default, as asset-source: every row is this unit's own -- two assets
         # created under a unique name, and only their prices and events, written, read and wiped by asset id.
         # Nothing here counts or reads a row it did not write.
@@ -2625,7 +2627,7 @@ Note: No backend server required.
         "current-price-storable",
         services_current_price_storable,
         name="Current Price Storable",
-        desc="X-R40 + W-B62: a current quote no price column keeps (storable_price None: 1E+50000000, 1E+60, 1E-13, a float inf) never served nor cached -- the item falls back to the latest stored close that reads a number (db:last_known) or to an error, the next call asks the provider again -- and its refusal logged once per (asset, provider, value), never at every poll; a valid quote served and cached as the database keeps it (65432.1234567890999 -> 65432.123456789), one that already fits served in its own form; a refresh leaves out of changed_points a date no column keeps, and neither caches nor stores nor announces an unstorable current value, while it caches a valid one as stored; the database fallback passes over a close that reads None and never raises",
+        desc="X-R40 + W-B62: a current quote no price column keeps (storable_price None: 1E+50000000, 1E+60, 1E-13, a float inf) never served nor cached -- the item falls back to the latest stored close that reads a number (db:last_known) or to an error, the next call asks the provider again -- and its refusal logged once per (asset, provider, value), never at every poll; a valid quote served and cached as the database keeps it (65432.1234567890999 -> 65432.123456789), one that already fits served in its own form; a refresh leaves out of changed_points a date no column keeps, and neither caches nor stores nor announces an unstorable current value, while it caches a valid one as stored; the database fallback passes over a close that reads None and never raises; N92: a provider's day with a close not above 0 or a negative open, high, low or volume discarded before the upsert, named in the result (PARTIAL; FAILED when every day is) and logged, a zero open or volume kept; a current value not above 0 refused as an unstorable one, named as written",
         # WRITE-SCOPED, the category default, as asset-digit-limits: every row is this unit's own -- two assets
         # created under a unique name, and only their prices, events and provider assignment, written, read and
         # wiped by asset id. The provider codes are unique per test, so the current-value cache entries and the
@@ -2788,8 +2790,8 @@ Note: No backend server required.
         cat,
         "scheduler-last-fx-dates",
         services_scheduler_last_fx_dates,
-        name="Scheduler Last FX Dates (X-R45)",
-        desc="jobs._last_fx_dates, the real one on the lane database: a usable rate on D1 and a legacy 0, inf or 1E+14 on D2 answer D1 for both slugs of the pair, and the history sync (horizon a week) starts the day after D1, so D2 is fetched again; a pair whose only rate is unusable answers nothing; guard: a usable latest rate (2, 1E-10, 99999999999999) answers D2",
+        name="Scheduler Last FX Dates (X-R45 reverted)",
+        desc="jobs._last_fx_dates, the real one on the lane database, after the X-R45 revert: a usable rate on D1 and a legacy 0, inf or 1E+14 on D2 answer D2 for both slugs of the pair, and the history sync (horizon a week) starts the day after D2, so D2 is not fetched again; a pair whose only rate is a legacy one answers that rate's date; guard: a usable latest rate (2, 1E-10, 99999999999999) answers D2",
         # WRITE_SCOPED: each test writes rows of its own pair XQD/XQE (used by no other test, checked free before writing)
         # with raw SQL in its own session and never commits: the session rolls them back, no other connection sees them.
         isolation="write-scoped",

@@ -223,7 +223,8 @@
         "wrong_password": "Mot de passe erroné, ou le fichier a été modifié : saisissez à nouveau le mot de passe.",
         "password_required": "C'est une sauvegarde sécurisée : saisissez son mot de passe.",
         "envelope_damaged": "La sauvegarde sécurisée est endommagée ou a été modifiée : elle ne peut pas être ouverte.",
-        "envelope_unsupported": "La sauvegarde sécurisée provient d'un LibreFolio plus récent : mettez d'abord LibreFolio à jour."
+        "envelope_unsupported": "La sauvegarde sécurisée provient d'un LibreFolio plus récent : mettez d'abord LibreFolio à jour.",
+        "proxy_too_large": "Un proxy placé devant LibreFolio a refusé une archive aussi grande : demandez à la personne qui le gère d'accepter des téléversements plus volumineux, ou restaurez depuis la ligne de commande."
       },
       "password": {
         "intro": "Une sauvegarde sécurisée : saisissez le mot de passe avec lequel elle a été faite.",

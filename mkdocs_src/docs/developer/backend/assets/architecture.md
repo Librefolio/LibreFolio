@@ -175,6 +175,54 @@ Persistence intentionally does **not** claim one atomic transaction for the whol
 and preserves truthful partial results when one step fails. Provider-generated events remain
 scoped by `provider_assignment_id`, so manual events are not replaced.
 
+`bulk_upsert_prices()` merges each point with the stored row of its date, field by field (the
+F.4 merge, `_merge_field()`): for `open`, `high`, `low` and `volume`, `None` keeps the stored
+value, a number is written, and `"clear"` (`CLEAR` in `backend/app/schemas/prices.py`) writes
+NULL; `close` is always written. Only a manual write sends `"clear"` (N92): `POST /assets/prices`
+reads its points as `FAPriceWritePoint` (`FAUpsert.prices`), whose `open`, `high`, `low` and
+`volume` are each a `PriceWriteValue` (`"clear"`, a number or `None`, tried in that order,
+`union_mode="left_to_right"`, so that `"clear"` is never taken for a number):
+{: #price-write-merge }
+
+- a number of 0 or more is written; `"clear"` empties the stored value (NULL); `null`, or no
+  field at all, leaves the stored value as it is, as before N92, for a provider as for a client;
+- a negative number, `-1` included, a text that is neither `"clear"` nor a number (`"d"`,
+  `"Clear"`, `""`), a value that is not finite and a boolean are refused with a 422 located on
+  the field (the `open` of the first asset's first point: a `loc` that starts
+  `["body", 0, "prices", 0, "open"]`), and so is a `close` not above 0: nothing of the request
+  is written. Before N92, `-1` was the F.4 sentinel that wrote NULL; a client that still sends
+  it gets the 422;
+- `"clear"` has no digits: the digit check of a manual call, below, skips it
+  (`_price_limit_issue()`);
+- its JSON schema carries `enum: ["clear"]` beside pydantic's `const`, so that the generated
+  client reads `z.literal('clear')`: `openapi-zod-client` 1.18.3 ignores `const`, and
+  `schemas/signals.py` pins its literals the same way.
+
+`FAPricePoint`, the model of a provider's history, of the query answers and of a sync's
+`changed_points`, checks no sign since N92: the refresh decides about a provider's day. Before
+the change count and the upsert, PERSIST (`_persist_refresh_item()` in `refresh.py`) sets aside
+the points LibreFolio does not keep: a point in another currency than the asset's (#R3-2,
+*N points discarded: currency mismatch (got …, expected …)*), and, since N92, a day with a close
+of 0 or less or a negative open, high, low or volume (`_sign_issue()`). A zero open or
+volume is a value, and is kept; a value that is not a finite number is left to
+`_unstorable_provider_point()` (W-B58, below). The discarded days are named in one error,
+*N points discarded: a close not above 0 or a negative open, high, low or volume (…)*, each day
+with its ISO date and the fields at fault, `2026-01-02 (volume=-10)`, as W-B58 names a value no
+column keeps, the first five then *(+ N more)*; and a warning is logged, *Provider prices
+discarded: …* with the same rule, with `asset_id`, `provider`, the first five `days` and the
+`count`. `points_fetched` counts only the
+points kept. With other points left the item is `partial`, the first of its errors its
+`message`; when every point is discarded it is `failed`, with `points_fetched` 0 and nothing
+written, as after a currency mismatch (#R4-1). The points kept reach the upsert through
+`FAUpsert.model_construct()`, not validated again as write points: they are `FAPricePoint`
+already built and filtered, and `FAPriceWritePoint` checks no digits (a value no column keeps
+reaches `_unstorable_provider_point()` either way), so a full validation of a 45 000-point history
+would cost about 0.23 s on the event loop for nothing. Before N92, the plugin's
+own `FAPricePoint` refused such a day, so its whole history download failed (with no current
+value either, the item failed with *No price data available from provider*), and an open, high,
+low or volume of exactly `-1` was stored as an erased value.
+{: #discarded-provider-days }
+
 `bulk_upsert_prices()` writes `open`, `high`, `low` and `close` through
 `truncate_priceHistory()` (`backend/app/db/precision.py`): 12 decimal places, then 15
 significant digits, both rounded down — what a `RealDecimal(24, 12)` column reads back (see
@@ -184,8 +232,8 @@ decimal point than its column (12 for a price, 24 for the volume), fits no trunc
 provider's call drops every date holding one before any slice is written (W-B58: a value
 that raised in the truncation of a later slice left the earlier ones committed). That is a
 price `storable_price()` cannot keep (not finite, past 12 digits before the point, or a
-non-zero close truncated to 0), or a volume past 24 digits (`_unstorable_provider_point()`;
-the `-1` sentinel is no value). The call logs a warning, writes the other dates, and reports
+non-zero close truncated to 0), or a volume past 24 digits (`_unstorable_provider_point()`).
+The call logs a warning, writes the other dates, and reports
 the dropped ones in the asset's result message (*rejected N date(s) with a value no price
 column can keep*, the first five dates with the field and value), which the sync adds to
 the asset's errors as it does the OHLC rejections. The sync's change count, which runs
@@ -200,17 +248,19 @@ fetched close of a date already stored raised from `1E+48` up, or on a close not
 fallback then announced every fetched point. The current value a refresh adds as today's
 point, when the range reaches today, goes through the check of the
 [live price](#current-quotes-and-todays-ohlc), `storable_current_value()`, in FETCH, before the
-shared current-value cache: a value no price column can keep is neither cached nor added as a
-point, so the sync neither counts nor announces it, but the result names it, as the upsert names
-a date it skips (`unstorable_quote_reason()`, X-R51): *Current price 1E+60 not saved: a price
-keeps at most 12 digits before the decimal point, and is never 0 once cut to 12 decimal places*,
-the value cut as in the log. With other points the item is `partial`, that reason in its
-`errors` after a currency-mismatch error, if any, and the first of them its `message`; with no
-other point, as for a provider without history such as the CSS Scraper, the item is `failed`,
-that reason its one error instead of *No price data available from provider*. The refusal is
-still logged once. A kept value is cached as stored, so the live price then comes from
-the cache already truncated. An open, high, low or
-volume the F.4 merge keeps from the stored row, written by an older release past its
+shared current-value cache: a value no price column can keep, or one of 0 or less (N92), is
+neither cached nor added as a point, so the sync neither counts nor announces it, but the result
+names it, as the upsert names a date it skips (`unstorable_quote_reason()`, X-R51): *Current
+price 1E+60 not saved: a price is above 0, keeps at most 12 digits before the decimal point, and
+is never 0 once cut to 12 decimal places*, the value cut as in the log (*Current price -5 not
+saved: …* for a negative one). With other points the item is `partial`, that reason in its
+`errors` after those of the [discarded days](#discarded-provider-days), if any, and the first of
+them its `message`; with no other point, as for a provider without history such as the CSS
+Scraper, the item is `failed`, that reason its one error instead of *No price data available
+from provider*. The refusal is still logged once. Before N92, a current value of 0 was dropped
+here in silence, and a negative one made the refresh raise. A kept value is cached as stored, so
+the live price then comes from the cache already truncated. An open, high, low or
+volume the [F.4 merge](#price-write-merge) keeps from the stored row, written by an older release past its
 column's digits, is written as NULL (`_kept_price()`, `_kept_volume()`) instead of raising
 mid-slices. A manual
 call (`source_plugin_key="MANUAL"`, the default, used by `POST /assets/prices`) is checked
@@ -254,7 +304,7 @@ A risk range starts no earlier than `range_span_floor()`, 100 years before its e
   point, before 1900 included, is stored and counted.
 
 The [FX rate writes](../fx/architecture.md#stored-rate-dates) keep to the same last date.
-Transactions keep their own floor, 1900-01-01 since N74, with an end a year ahead
+Transactions keep their own floor, 1900-01-01 since N74, and the same last date
 ([Transaction dates](../transactions/service.md#transaction-dates), where the code is
 `dateOutOfRange`). The web app's data editors tell these 422s in the interface language, naming
 the dates refused and the last day a date may carry (*N dates are after …*,
@@ -302,20 +352,21 @@ when it holds *rejected* (`_persist_refresh_item()` in `refresh.py`). A manual c
 
 | `reason` | The date is left out because | Met by |
 |---|---|---|
-| `ohlc_inconsistent` | Its point carries two real bounds, a `low` and a `high` that are not the `-1` erase, and `low > high` or its close lies outside `[low, high]`, the values compared as sent; its stored row is kept | Manual and provider calls |
+| `ohlc_inconsistent` | Its point carries two real bounds, a `low` and a `high` that are not the `"clear"` erase, and `low > high` or its close lies outside `[low, high]`, the values compared as sent; its stored row is kept | Manual and provider calls |
 | `date_out_of_range` | It lies after tomorrow, the [last storable date](#stored-date-bounds) | Provider calls; a manual call is refused whole (422 `date_out_of_range`) |
 | `value_not_storable` | It holds a value no price column can keep (`_unstorable_provider_point()`) | Provider calls; a manual call is refused whole (400) |
 
 The integrity guard behind `ohlc_inconsistent` runs in the upsert loop and skips one date, never
-the call. Only two real incoming bounds are held to the close: a bound sent as `-1` is erased (the
-F.4 sentinel, written as NULL) and is no bound, so it is not checked (X-R46). A point without two
+the call. Only two real incoming bounds are held to the close: a bound sent as `"clear"` is erased
+(written as NULL by the [F.4 merge](#price-write-merge)) and is no bound, so it is not checked
+(X-R46; the erase was `-1` until N92). A point without two
 real bounds is never refused: when the merged `[low, high]` has both, it is widened to include the
 new close, so that a close-only update (the justETF and scheduled-investment case) does not fail
 on the bounds an older flat candle left; otherwise the row is written as sent, a single real bound
 unchecked even on the wrong side of the close. The web app's asset data editor sends a row's Low
-and High with its close, and `-1` for an erased cell: a close typed outside two real bounds comes
+and High with its close, and `"clear"` for an erased cell: a close typed outside two real bounds comes
 back as `ohlc_inconsistent`, while erasing High, Low or both saves the row with those bounds NULL.
-Before X-R46, the guard took an erased bound for a bound of `-1`, so erasing High (with a Low) or
+Before X-R46, the guard took an erased bound (sent as `-1` at the time) for a real bound of -1, so erasing High (with a Low) or
 both left the date out. The editor counts `count` as saved and names the refused dates (up to
 five, then a count) with their reasons in a warning (`rejectedMessage()` in
 `frontend/src/lib/api/writeRefusal.ts`).
@@ -718,13 +769,16 @@ That check, `storable_current_value()` in `price_store.py`, is the one check of 
   nothing);
 - a quote no price column can keep — not finite, more than 12 digits before the decimal point,
   or non-zero but 0 once truncated to 12 decimal places (`1E-13`) — is refused: never served,
-  cached or written. The asset falls back exactly as after a provider failure, and the next poll
+  cached or written. So is a quote of 0 or less (N92, checked once `storable_price()` has
+  passed it): the history keeps no such price either. The asset falls back exactly as after a provider failure, and the next poll
   asks the provider again. A value that is no number at all, from a plugin that skips the
   schema, is refused too: the check never raises. Before, the quote was served as the provider
   gave it, a finite `1E+50000000` included, which `SafeDecimal` writes out in full (about 50 MB
-  per response), and from the cache for two minutes: W-B58 only kept it out of the database;
+  per response), and from the cache for two minutes: W-B58 only kept it out of the database.
+  Before N92, a quote of `-5` or `0.00` passed the check: it was served, cached and written as
+  today's row;
 - a refusal is logged at warning level once per process for each asset, provider and value,
-  *Live quote refused: no price column can keep it, the last stored price stands*, the value cut
+  *Live quote refused: not above 0 or no price column can keep it, the last stored price stands*, the value cut
   to about 40 characters (`_quote_text()`). `_report_unstorable_quote()` remembers what it
   logged in a `functools.lru_cache(maxsize=1024)`, bounded so that a provider answering a new
   absurd value at every poll cannot grow it. Before, only the write-back warned, at every poll
@@ -1013,7 +1067,7 @@ cost unknown it stays `MISSING`.
 | `DELETE /api/v1/assets/provider` | DELETE | Bulk remove providers (`asset_ids` in the query): deletes each assignment and the events it generated, manual events staying; a 409 `PROVIDER_REMOVAL_LINKED_TRANSACTIONS`, nothing of the request removed, while a transaction is linked to one of those events, whatever its type; `params` names the refused asset (`asset_id`, `item_index`) and, in `events`, only the transactions the caller can see; a 409 `PROVIDER_REMOVAL_CONFLICT`, nothing removed and no SQL in the answer, when a link appears between the check and the delete ([Provider Removal](events.md#provider-removal)) |
 | `GET /api/v1/assets/provider/assignments` | GET | Read provider assignments |
 | `POST /api/v1/assets/provider/refresh` | POST | Refresh metadata from provider |
-| `POST /api/v1/assets/prices` | POST | Bulk upsert prices; a manual price over 12 digits before the decimal point, 12 decimal places or 15 significant digits, or a volume over 24 digits before the point, refuses the whole call (400), and so does a date after tomorrow (422 `date_out_of_range`, see [the last storable date](#stored-date-bounds)), or a price in a currency other than its asset's, on any asset of the request (422 `price_currency_mismatch`, see [price currency](#price-currency-coherence)); every refusal comes before anything is written; a date left out of a written call is named, with its reason, in its asset's `results[].rejected` (see [dates left out](#rejected-price-dates)) |
+| `POST /api/v1/assets/prices` | POST | Bulk upsert prices, each point an `FAPriceWritePoint` (N92): `open`, `high`, `low` and `volume` take a number of 0 or more, `"clear"` to empty the stored value, or `null` (or no field) to keep it, and `close` a number above 0; a negative number (`-1` included), a text that is neither `"clear"` nor a number, a value that is not finite or a boolean is a 422 on its field (see [the F.4 merge](#price-write-merge)); a manual price over 12 digits before the decimal point, 12 decimal places or 15 significant digits, or a volume over 24 digits before the point, refuses the whole call (400), and so does a date after tomorrow (422 `date_out_of_range`, see [the last storable date](#stored-date-bounds)), or a price in a currency other than its asset's, on any asset of the request (422 `price_currency_mismatch`, see [price currency](#price-currency-coherence)); every refusal comes before anything is written; a date left out of a written call is named, with its reason, in its asset's `results[].rejected` (see [dates left out](#rejected-price-dates)) |
 | `DELETE /api/v1/assets/prices` | DELETE | Bulk delete price ranges |
 | `POST /api/v1/assets/prices/query` | POST | Bulk price query (DB-only, backward-fill) |
 | `POST /api/v1/assets/prices/period-changes` | POST | Bulk fixed-period changes, 1D … 5Y, of the Assets table (DB-only, backward-fill, optional `target_currency`), and the whole-range change with an optional `range_start` |

@@ -90,22 +90,9 @@ vi.mock('$lib/charts/signals/registry', () => ({getRegisteredSignalTypes: () => 
 // pass-through keeps this file honest about which contract it is checking.
 vi.mock('$lib/charts/signals/catalogMapper', () => ({mapBackendSignalDefinition: (raw: unknown) => raw}));
 
-// ChangelogModal pulls the bundled CHANGELOG.md via a `?raw` import that the
-// test environment denies. Mocking the feature module (as ChangelogModal's own
-// tests do) keeps the real modal component loadable without the raw file. The
-// stub answers every export the modal imports — `baseLanguage`,
-// `localizedChangelog`, `CHANGELOG_REMOTE_URL` — because a vitest mock throws on
-// any export it lacks; English and an empty changelog are enough here, where no
-// test opens the modal.
-vi.mock('$lib/features/changelog/changelog', () => ({
-    changelogChapters: [],
-    baseLanguage: () => 'en',
-    localizedChangelog: {peek: () => [], load: () => Promise.resolve([])},
-    CHANGELOG_REMOTE_URL: 'https://example.invalid/CHANGELOG.md',
-}));
-
 import AboutTab from './AboutTab.svelte';
 import {zodiosApi} from '$lib/api';
+import {changelogModal} from '$lib/features/changelog/changelogModalStore.svelte';
 
 // --- Fixtures -----------------------------------------------------------
 
@@ -324,6 +311,32 @@ describe('AboutTab — loading and the version header', () => {
         for (const system of ['asset', 'fx', 'brim', 'signals']) {
             expect(diagnosticsFor(system)).toHaveAttribute('data-status', 'ok');
         }
+    });
+});
+
+// =========================================================================
+describe("AboutTab — the version opens the app's changelog window (A-CL1)", () => {
+    // The developer's decision (A-CL1): one changelog window for the whole app, the one the Sidebar mounts, and two
+    // entry points that open it through the shared `changelogModal` state — the sidebar's version and this tab's. The
+    // tab used to draw a second window of its own, which could stay «loading» for good. That the Sidebar draws the
+    // window the shared state opens is `Sidebar.changelog.test.ts`. The shared state is the real store, put back closed
+    // after each case.
+    afterEach(() => {
+        changelogModal.close();
+    });
+
+    // red until A-CL1
+    it("a click on the version opens the app's changelog window, and the tab draws none of its own", async () => {
+        await mount();
+        expect(changelogModal.open, 'precondition: the shared changelog window starts closed').toBe(false);
+
+        await fireEvent.click(screen.getByTestId('about-version'));
+
+        // Soft: the red must show both halves — the shared state that stays closed, and the tab's own window.
+        expect.soft(changelogModal.open, "the version opens the app's changelog window").toBe(true);
+        // The window belongs to the app shell: the tab, drawn and clicked, holds none.
+        expect(screen.getByTestId('about-tab')).toBeInTheDocument();
+        expect(screen.queryByTestId('changelog-modal'), 'the About tab draws no changelog window of its own').not.toBeInTheDocument();
     });
 });
 

@@ -26,8 +26,10 @@ Switch with **Abs** / **%** in the chart's top-left corner; the page opens in % 
 | **Pan** | Click and drag | Drag with two fingers (one finger scrolls the page) |
 
 - **Period**: the presets **1W** to **2Y**, **YTD** and **All**, or **Custom** (a number of days,
-  weeks, months or years back from today); click the dates to pick them on a calendar. More presets
-  appear when the toolbar has room. The pages of the same browser tab share the period.
+  weeks, months or years back from today); click the dates to pick them on a calendar. The two ends
+  must be different days: the day you click first cannot be clicked again, and a typed date equal to
+  the other end turns red. More presets appear when the toolbar has room. The pages of the same
+  browser tab share the period.
 - On a long period the chart groups the rates by week or month and shows a **Weekly** or
   **Monthly** badge: zoom in for daily rates.
 - On a narrow screen the axis shows fewer, shorter dates; the first and the last always stay.

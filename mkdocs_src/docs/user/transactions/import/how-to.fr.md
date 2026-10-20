@@ -255,9 +255,9 @@ les lignes listées en rouge, et demande confirmation avant d'enregistrer les va
 vérifiées (**Enregistrer quand même**). Une ligne dont la quantité a plus de 10 décimales, dont le montant en a
 plus de 6, ou dont le prix de revient unitaire en a plus de 12, est refusée à **Enregistrer Tout**, avec le
 maximum dans le message (*Quantité : Au maximum 10 décimales*) : LibreFolio ne l'arrondit jamais.
-Les dates des transactions vont du 1er janvier 1900 à un an après aujourd'hui : une ligne du relevé datée hors
+Les dates des transactions vont du 1er janvier 1900 à demain : une ligne du relevé datée hors
 de cet intervalle est elle aussi refusée à **Enregistrer Tout**, avec l'intervalle dans le message (*Date : Entre
-1900-01-01 et 2027-10-17* si nous sommes le 17 octobre 2026).
+1900-01-01 et 2026-10-18* si nous sommes le 17 octobre 2026).
 
 ---
 

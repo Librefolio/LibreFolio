@@ -21,9 +21,11 @@
  *   - `SETTINGS_TABS`: profile, preferences, plugins and about in no group; admin, users, backup, email and security, in
  *     that order, the members of `administration`. Plugins is everyone's: each user's own plugin settings, the
  *     instance's read-only unless an administrator (the API says which field each caller may write, so the tab takes no
- *     props). Admin stays visible to everyone and editable only by an administrator (`props: ctx => ({canEdit:
- *     ctx.isSuperuser})`), now labelled `settings.globalSettings` and drawn with `Settings2`: the group took its label and
- *     its icon. Users, backup and email are administrators-only and take no props, as before. Security is new —
+ *     props). Admin is labelled `settings.globalSettings` and drawn with `Settings2`: the group took its label and its
+ *     icon. Since N69-2 (decision D4 a) it is for administrators only, like every other member of its group (`visible:
+ *     ctx => ctx.isSuperuser`), so a user's bar has no «Administration» at all; it keeps `props: ctx => ({canEdit:
+ *     ctx.isSuperuser})`, whose read-only branch no user reaches any more. Users, backup and email are
+ *     administrators-only and take no props, as before. Security is new —
  *     administrators only, `settings.security`, `ShieldCheck`, the body of `security/SecurityTab.svelte`, no props — and
  *     the only tab with a badge and a prefetch, both delegated to the security checks' store
  *     (`security/securityChecks.svelte`, the singleton `securityChecks`): the badge is its `attentionCount`, the prefetch
@@ -64,6 +66,11 @@
  * down with it, and the type check does not wait for A8b either — the A8b shapes are written out below (`GroupedTab`,
  * `TabGroup`, `BarEntry`). `SecurityTab.svelte` and the store are mocked by their paths, so their absence alone breaks
  * nothing.
+ *
+ * And a fourth time in N69-2 (decision D4 a: «Administration» for administrators only). The admin entry has no
+ * `visible`, so a user still sees Global Settings, read-only, and the group with it: every case marked `red until
+ * N69-2` — a user's tabs and bar (`CONTEXTS`, `BARS`), admin's visibility, STAB-14 — fails on its own expectation, and
+ * the others stay green.
  */
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 import type {Component, ComponentType} from 'svelte';
@@ -134,13 +141,15 @@ const USER: SettingsTabContext = {isSuperuser: false};
 const ADMIN: SettingsTabContext = {isSuperuser: true};
 /** Who is signed in, the ids of the tabs they see, by order, and their context. */
 const CONTEXTS: [string, string[], SettingsTabContext][] = [
-    ['a user', ['profile', 'preferences', 'plugins', 'about', 'admin'], USER],
+    // red until N69-2: admin, an administrator's like the rest of its group
+    ['a user', ['profile', 'preferences', 'plugins', 'about'], USER],
     // red until A8b: security, the administrators' new tab
     ['an administrator', ['profile', 'preferences', 'plugins', 'about', 'admin', 'users', 'backup', 'email', 'security'], ADMIN],
 ];
 /** Who is signed in, the entries of their top bar — a tab's id, or a group's id with its members' — and their context. */
 const BARS: [string, string[], SettingsTabContext][] = [
-    ['a user', ['profile', 'preferences', 'plugins', 'about', 'administration[admin]'], USER],
+    // red until N69-2: a user sees no member of Administration, so the group has no entry
+    ['a user', ['profile', 'preferences', 'plugins', 'about'], USER],
     ['an administrator', ['profile', 'preferences', 'plugins', 'about', 'administration[admin,users,backup,email,security]'], ADMIN],
 ];
 /** The members of the administration group, by order. */
@@ -237,11 +246,11 @@ describe('SETTINGS_TABS — today’s tabs, and nothing else', () => {
         expect(SETTINGS_TABS.map((tab) => tab.id).sort(), 'the registry is today’s tabs: a tab added (or lost) on the way changes what users see').toEqual(TODAY.map((tab) => tab.id).sort());
     });
 
-    // red until A8b: the administrator's row (security)
+    // red until A8b: the administrator's row (security); red until N69-2: the user's row (admin)
     it.each(CONTEXTS)('%s sees %j, in this order', (_label, expected, ctx) => {
         expect(
             visibleSettingsTabs(SETTINGS_TABS, ctx).map((tab) => tab.id),
-            'today’s tabs, by order: plugins and admin are visible to everyone, users, backup, email and security to administrators only',
+            'today’s tabs, by order: plugins is visible to everyone, admin, users, backup, email and security to administrators only',
         ).toEqual(expected);
     });
 
@@ -258,12 +267,14 @@ describe('SETTINGS_TABS — today’s tabs, and nothing else', () => {
         expect(missingSentences(SETTINGS_TABS), 'a label one catalogue lacks is drawn as its key in that language').toEqual([]);
     });
 
-    it('admin is visible to everyone and editable only by an administrator: {canEdit: isSuperuser}', () => {
+    // red until N69-2: the visibility half (decision D4 a) — until then admin was everyone's, read-only for a user
+    it('admin is for administrators only — hidden from a user, shown to an administrator — and editable by them: {canEdit: isSuperuser}', () => {
         const admin = registryTab('admin');
 
-        expect(admin.visible?.(USER) ?? true, 'a user sees the admin tab, read-only').toBe(true);
-        expect(admin.visible?.(ADMIN) ?? true, 'an administrator sees the admin tab').toBe(true);
-        expect(admin.props?.(USER), 'a user may read the global settings, not change them').toEqual({canEdit: false});
+        expect(admin.visible, 'admin says who may see it: without visible() every signed-in user gets the global settings, read-only').toBeTypeOf('function');
+        expect(admin.visible?.(USER) ?? true, 'a user is not shown the global settings of the instance').toBe(false);
+        expect(admin.visible?.(ADMIN) ?? true, 'an administrator is').toBe(true);
+        expect(admin.props?.(USER), 'the props stay {canEdit: isSuperuser}: false for a user, a branch the page no longer reaches').toEqual({canEdit: false});
         expect(admin.props?.(ADMIN), 'an administrator may change them').toEqual({canEdit: true});
     });
 
@@ -379,7 +390,7 @@ describe('SETTINGS_TAB_GROUPS — the administration group, and what its tabs ca
     it('STAB-06: admin, users, backup, email and security make the administration group; profile, preferences, plugins and about belong to none', () => {
         const tabs: readonly GroupedTab[] = SETTINGS_TABS;
 
-        expect(Object.fromEntries(tabs.map((tab) => [tab.id, tab.group ?? null])), 'the administrators’ tabs, and the global settings everyone reads, gather under Administration; a personal tab stays on the bar').toEqual(
+        expect(Object.fromEntries(tabs.map((tab) => [tab.id, tab.group ?? null])), 'the administrators’ tabs — the global settings among them — gather under Administration; a personal tab stays on the bar').toEqual(
             Object.fromEntries(TODAY.map(({id}) => [id, ADMINISTRATION.includes(id) ? 'administration' : null])),
         );
     });
@@ -456,9 +467,29 @@ describe('SETTINGS_TAB_GROUPS — the administration group, and what its tabs ca
         ).toEqual(['security']);
     });
 
-    // red until A8b
+    // red until A8b; red until N69-2: the user's row
     it.each(BARS)('STAB-13: settingsBar on the registry — %s sees %j', (_label, expected, ctx) => {
-        expect(settingsBar(SETTINGS_TABS, registryGroups(), ctx).map(describeEntry), 'the personal tabs, then Administration: the global settings alone for a user, every administrators’ tab for an administrator').toEqual(expected);
+        expect(settingsBar(SETTINGS_TABS, registryGroups(), ctx).map(describeEntry), 'the personal tabs, then — for an administrator only — Administration with every administrators’ tab').toEqual(expected);
+    });
+
+    // red until N69-2: the user's half (decision D4 a)
+    it('STAB-14: settingsBar on the registry — a user’s bar has no administration entry, nor any member of the group; an administrator’s has the entry, admin first among its members', () => {
+        const groups = registryGroups();
+        const isAdministration = (entry: BarEntry) => entry.kind === 'group' && entry.group.id === 'administration';
+        const tabIdsOf = (entry: BarEntry) => (entry.kind === 'tab' ? [entry.tab.id] : entry.members.map((member) => member.id));
+        const userBar = settingsBar(SETTINGS_TABS, groups, USER);
+
+        expect(userBar.length, 'premise: a user’s bar has entries').toBeGreaterThan(0);
+        expect(userBar.filter(isAdministration).map(describeEntry), 'a user sees no member of Administration, so the group has no entry in the bar').toEqual([]);
+        expect(
+            userBar.flatMap(tabIdsOf).filter((id) => ADMINISTRATION.includes(id)),
+            'and no member of it stands anywhere else in the bar',
+        ).toEqual([]);
+
+        const administration = settingsBar(SETTINGS_TABS, groups, ADMIN).filter(isAdministration);
+        expect(administration.map(describeEntry), 'an administrator’s bar has the administration entry, once').toHaveLength(1);
+        const [entry] = administration;
+        expect(entry.kind === 'group' ? entry.members[0]?.id : undefined, 'admin — Global Settings — is its first member: the group opens on it').toBe('admin');
     });
 });
 
