@@ -1761,6 +1761,30 @@ class TestPerformanceHistoryAtCost:
 # --------------------------------------------------------------------------- #
 
 
+def _s29_moved_lot(*, transit: bool = False) -> list[FragmentInterval]:
+    """§29 point 2: the fragments of lot 1, opened at broker 1 on 10 Jan 2024 — ``frag-1`` at broker 1 until 20 Jan, then
+    ``frag-1b`` at broker 2. With ``transit``, ``frag-1b`` ends on 25 Jan and the units are in transit from broker 2 to
+    broker 3 since then (``frag-1c``: IN_TRANSIT, no broker)."""
+    fragments = [
+        _fragment(1, fragment_id="frag-1", broker_id=1, end_date=date(2024, 1, 20)),
+        _fragment(1, fragment_id="frag-1b", broker_id=2, start_date=date(2024, 1, 20), end_date=date(2024, 1, 25) if transit else None),
+    ]
+    if transit:
+        fragments.append(_fragment(1, fragment_id="frag-1c", custody_type="IN_TRANSIT", broker_id=None, start_date=date(2024, 1, 25), source_broker_id=2, destination_broker_id=3))
+    return fragments
+
+
+def _s29_closure_rows(closure: LotClosure, fragments: list[FragmentInterval]) -> list[dict]:
+    """§29 point 2: (kind, fragment, broker) of the lot history's rows of ``closure``'s transaction, as
+    ``_build_lot_event_rows`` builds them from a replay double — lot 1, opened at broker 1, its ``fragments`` and that one
+    closure. Through the builder the service calls, never ``_build_closure_rows``, whose private signature the cure
+    extends."""
+    lot = _lot(1, opening_broker_id=1)
+    result = _engine_result(lots=[lot], fragments=fragments, closures=[closure])
+    rows = _svc()._build_lot_event_rows(engine_result=result, selected_ids=[1], fx_resolver=_resolver("EUR"), lots_by_id={1: lot})
+    return [{"kind": str(row.kind), "fragment_id": row.fragment_id, "broker_id": row.broker_id} for row in rows if row.transaction_id == closure.transaction_id]
+
+
 class TestSmallBuilders:
     def test_known_cumulative_proceeds_of_a_short_lot_uses_the_lot_total(self):
         """A short's proceeds arrived at opening, not at each closure."""
@@ -1805,6 +1829,40 @@ class TestSmallBuilders:
     def test_closure_rows_ignore_closures_of_unselected_lots(self):
         rows = _svc()._build_closure_rows([_closure(1), _closure(2)], {1}, {1: _lot(1), 2: _lot(2)}, _resolver("EUR"))
         assert {row.lot_id for row in rows} == {1}
+
+    # -- §29 point 2: the broker a closure row names ------------------------- #
+    # The rule (developer, 19/10): a closure row names the broker its units leave, the broker of the fragment it closes
+    # (LotClosure.fragment_id -> FragmentInterval.broker_id); a fragment without a broker, or one the replay does not
+    # hold, keeps the lot's opening broker. The service-level reds and guards: test_financial/test_lots_closure_broker.py.
+
+    def test_s29_p1_a_closure_row_names_the_broker_of_the_fragment_it_closes(self):
+        """§29 point 2, P1 — RED until the cure. Lot 1 opened at broker 1 and sits at broker 2 from 20 Jan (``frag-1b``). A
+        SELL of 40 on 1 Feb closes ``frag-1b``: its row names broker 2, the broker the units leave.
+
+        Today: broker 1, the lot's opening broker (``_build_closure_rows`` writes ``lot.opening_broker_id``).
+        """
+        rows = _s29_closure_rows(_closure(1, fragment_id="frag-1b"), _s29_moved_lot())
+
+        assert rows == [{"kind": "SELL", "fragment_id": "frag-1b", "broker_id": 2}]
+
+    def test_s29_p2_guard_a_closure_of_the_opening_fragment_names_the_opening_broker(self):
+        """§29 point 2, P2 — GUARD (green today and after). The same lot; a SELL of 40 on 15 Jan closes ``frag-1``, at
+        broker 1: its row names broker 1 — the broker of the fragment it closes, not broker 2, where the lot sits
+        afterwards."""
+        rows = _s29_closure_rows(_closure(1, close_date=date(2024, 1, 15), fragment_id="frag-1"), _s29_moved_lot())
+
+        assert rows == [{"kind": "SELL", "fragment_id": "frag-1", "broker_id": 1}]
+
+    @pytest.mark.parametrize("transit", [False, True], ids=["fragment-not-in-the-replay", "fragment-in-transit"])
+    def test_s29_p3_guard_a_closure_without_a_broker_to_read_keeps_the_opening_broker(self, transit):
+        """§29 point 2, P3 — GUARD (green today and after): the cure's fallback. A SELL of 40 on 1 Feb closes ``frag-1c``,
+        which is either not in the replay (lot 1's fragments are ``frag-1`` at broker 1 and ``frag-1b`` at broker 2) or the
+        lot in transit from broker 2 to broker 3 since 25 Jan, a fragment without a broker (the engine closes no transit
+        fragment: this is the safety net). Its row keeps the lot's opening broker, 1 — not 2, the last broker the lot was
+        held at and the transit's source, nor 3, its destination."""
+        rows = _s29_closure_rows(_closure(1, fragment_id="frag-1c"), _s29_moved_lot(transit=transit))
+
+        assert rows == [{"kind": "SELL", "fragment_id": "frag-1c", "broker_id": 1}]
 
     def test_income_events_skip_a_transaction_with_no_asset(self):
         """A broker-level dividend not attributed to an asset cannot be allocated to a lot."""
