@@ -231,14 +231,19 @@ engine, the summary and the history endpoints all read it. Below, **T** is
 | `effective_share(role, share_percentage)` | The share a user counts: an `OWNER` its `share_percentage` (`None` counts the whole broker, a zero share is kept), any other role — editor, viewer — the whole broker |
 | `rates_until` | The last day the balances are valued on; `None` means each currency's last movement |
 
-### 💱 One Conversion Call
+### 💱 Two Conversion Calls
 
-All the conversions go to the FX service in **one**
-`convert_bulk(..., raise_on_error=False)` call:
+The conversions go to the FX service in two calls:
 
-- every non-zero movement in a currency other than T, at its own date — for the flows;
+- every non-zero movement in a currency other than T, at its own date — for the flows — in one
+  `convert_bulk(..., raise_on_error=False)` call;
 - one unit of each foreign currency on every day from its first movement through
-  `rates_until` — for the balances. The days start on `EARLIEST_RANGE_START`
+  `rates_until` — for the balances — in one
+  [`unit_rate_steps()`](../fx/architecture.md#unit-rate-steps) call (P3): the windows of days of each
+  currency (`_unit_windows()`) give the same rates as a request a day, kept as the days a stored rate
+  changes. `NativeCash.unit_rates` is a view on them (`financial_math/fx_rates.AskedDayRates`): a key
+  answers on an asked day only, as the day-by-day map did, and `_rate_at()` and the calendar of the days a
+  rate changes read the steps, never every day. The days start on `EARLIEST_RANGE_START`
   (1 January 1900, `utils/datetime_utils.py`) when the first movement is earlier: a
   movement stored centuries back would otherwise ask one rate per day since
   (R13-SEC8). Before the floor only the movements' own days are asked, so a balance
