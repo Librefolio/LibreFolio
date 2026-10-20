@@ -41,7 +41,7 @@ from backend.app.logging_config import get_logger
 from backend.app.services.platform.instance_backup.archive import BackupNoSpaceError, build_archive
 from backend.app.services.platform.instance_backup.envelope import FILE_SUFFIX, EncryptedFile, encrypt_file
 from backend.app.services.platform.instance_backup.manifest import BackupOrigin
-from backend.app.services.platform.instance_backup.paths import STAGE_LOCK_FILE, STATE_FILE, backups_dir, ensure_private_dir, is_job_id, is_plain_dir, job_dir, jobs_dir, lock_path, stages_dir
+from backend.app.services.platform.instance_backup.paths import STAGE_LOCK_FILE, STATE_FILE, NotRegularFileError, backups_dir, ensure_private_dir, is_job_id, is_plain_dir, job_dir, jobs_dir, lock_path, read_regular_file, stages_dir
 from backend.app.services.platform.instance_backup.secure import exportable_instance_key, generated_key_unusable
 
 logger = get_logger(__name__)
@@ -81,8 +81,9 @@ class BackupJobNotFoundError(LookupError):
 
 
 class BackupJobUnreadableError(BackupJobNotFoundError):
-    """The job's state cannot be read: a content that is no job's state, a folder in its place, or no permission to read
-    it (B-50). Not found to every caller, never a 500; ``error`` is the cause's class name, for the log."""
+    """The job's state cannot be read: a content that is no job's state, a folder, a link or a special file in its place,
+    or no permission to read it (B-50, B-53). Not found to every caller, never a 500; ``error`` is the cause's class
+    name, for the log."""
 
     def __init__(self, error: str):
         super().__init__("The backup job's state cannot be read")
@@ -233,13 +234,14 @@ def _write_state(folder: Path, job: BackupJob) -> None:
 
 
 def _read_state(folder: Path) -> BackupJob:
-    """The state of the job in ``folder``. ``BackupJobNotFoundError`` when there is none; ``BackupJobUnreadableError``
-    (one) when it cannot be read (B-50); any other ``OSError`` (a transient one) as it came."""
+    """The state of the job in ``folder``, read without following a link nor waiting on a FIFO (B-53).
+    ``BackupJobNotFoundError`` when there is none; ``BackupJobUnreadableError`` (one) when it cannot be read (B-50,
+    B-53); any other ``OSError`` (a transient one) as it came."""
     try:
-        return BackupJob.from_json((folder / STATE_FILE).read_text(encoding="utf-8"))
+        return BackupJob.from_json(read_regular_file(folder / STATE_FILE).decode("utf-8"))
     except (FileNotFoundError, NotADirectoryError):
         raise BackupJobNotFoundError("No such backup job") from None
-    except (ValueError, TypeError, KeyError, IsADirectoryError, PermissionError) as exc:
+    except (ValueError, TypeError, KeyError, IsADirectoryError, PermissionError, NotRegularFileError) as exc:
         raise BackupJobUnreadableError(type(exc).__name__) from None
 
 

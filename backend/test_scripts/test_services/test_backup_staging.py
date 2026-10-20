@@ -99,6 +99,15 @@ Under test, in ``backend/app/services/platform/instance_backup/``:
     that does not describe the database is still refused for that, first. The guards: valid UTF-8 beyond ASCII
     (characters of two to four bytes) in the same places, and the same bytes stored as a BLOB, are checked as usual,
     and the copy keeps them as they are.
+(p) Lot B-53, a report that is no file to read. The report of a finished check whose ``report.json`` is a folder, a
+    link to a valid report elsewhere (never followed), a FIFO (``read_report`` answers at once, never waiting for a
+    writer), a file of mode 000, or whose stage folder is a file: ``read_report`` raises ``FileNotFoundError``, «no
+    readable report», as for nothing there and for a content that is no report (empty, truncated). Twenty reads of a
+    folder in its place leave no descriptor open on it. Any other ``OSError`` (``os.open`` failing ``EIO``) reaches the
+    caller as it is; a valid report reads back as the check wrote it. The check's view, ``GET
+    /backup/restore/stage/{stage_id}`` (its route function, called directly), answers a finished check whose report is
+    a folder, ``done``, without its report, with one warning «A finished restore check has no readable report» naming
+    its stage: never a 500.
 
 Real databases: two, made once for the module by ``alembic upgrade`` in a process of their own (at the head, and at
 ``OLDER``), then copied for every data directory and given accounts by SQL. Two more ``alembic`` processes
@@ -130,12 +139,19 @@ real backups whose database got its text by SQL (a ``CAST`` of bytes, stored, or
 before the backup: the snapshot copies the bytes as they are, and nothing of the build reads them. Its check of a table
 whose rowids are far apart runs in a thread, joined with a deadline: a scan that never ends fails the test instead of
 holding it.
+(p) checks the module's head archive once more, for the module (``finished_check``), and copies its stage into each
+test's data directory, where the test spoils its report. ``descriptors_on``, ``close_all``, ``answered_within`` (a read
+in a thread waited for a deadline, a read still waiting released by a writer that appears and leaves on the FIFO) and
+``opening_fails`` (the global ``os.open`` failing for one path) are ``test_backup_archive.py``'s. The routes module
+``api/v1/backup/restore`` and ``restore_jobs`` are imported by the one test that reads through them, their
+``get_data_dir`` pointed at the test's data directory, the check's state written as ``restore_jobs`` writes it.
 
 Pure: every data directory, database and archive lives in ``tmp_path``. This process and every process it starts are
 configured with a production data directory of the test (``LIBREFOLIO_TEST_*`` removed, ``LIBREFOLIO_DATA_DIR`` set and
 checked) that must stay absent: a check writing in the configured data directory instead of the one it is given fails
 the test, and the lane's is never reached. ``LF_APP_VERSION`` is set, so no git process runs. No lane database, no
-server, no network. Every wait is an ``Event`` or a ``join`` with a deadline. Modes, links and the lock are POSIX-only.
+server, no network. Every wait is an ``Event`` or a ``join`` with a deadline. Modes, links, FIFOs, ``/dev/fd`` and the
+lock are POSIX-only.
 """
 
 from __future__ import annotations
@@ -159,7 +175,7 @@ import unicodedata
 import warnings
 import zipfile
 from collections.abc import Callable, Iterator
-from contextlib import closing, contextmanager
+from contextlib import closing, contextmanager, suppress
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -188,6 +204,7 @@ from backend.app.services.platform.instance_backup.paths import (
     STAGE_LOCK_FILE,
     STAGE_REPORT_FILE,
     BackupPathError,
+    checks_dir,
     ensure_private_dir,
     restore_dir,
     stage_dir,
@@ -213,6 +230,7 @@ from backend.app.services.platform.instance_backup.staging import (
     stage_archive,
 )
 from backend.app.utils.runtime.version import get_git_version
+from backend.test_scripts.test_services.test_backup_archive import answered_within, close_all, descriptors_on, needs_dev_fd, needs_fifo, opening_fails
 from backend.test_scripts.test_utils import print_section, print_success
 
 POSIX = os.name != "nt"
@@ -3625,3 +3643,215 @@ def test_a_manifest_that_does_not_describe_the_database_is_refused_for_that_firs
     error, progress = refused(archive, instance)
     assert (error.code, progress.phases) == ("manifest_mismatch", UNPACKED), f"the manifest's mismatch first, the text never read: {error.code}: {error}, {progress.phases}"
     print_success("manifest_mismatch, before the text is read")
+
+
+# =============================================================================
+# (p) Lot B-53: a report that is no file to read
+# =============================================================================
+#
+# ``read_report`` opened ``report.json`` with ``os.open`` (``O_NOFOLLOW``, without ``O_NONBLOCK``) and wrapped it with
+# ``os.fdopen``. A folder in its place raised ``IsADirectoryError`` and left its descriptor open (``os.fdopen`` refuses a
+# folder without closing the descriptor it is handed: measured, twenty reads, twenty descriptors); a link raised an
+# ``OSError`` (``ELOOP``), mode 000 a ``PermissionError``, a stage that is a file a ``NotADirectoryError``: none of them
+# the ``FileNotFoundError`` the check's view (``_stage_view``) takes for «no readable report», so each was a 500 on the
+# read the tab polls. A FIFO held the read for good. Lot B-53 reads the report through ``paths.read_regular_file``: each
+# of them is «no readable report», and any other ``OSError`` (a transient one) reaches the caller, which the
+# confirmation lets through (B-55, ``test_backup_apply.py`` (p)).
+
+#: Reads of a report that is a folder: as many descriptors were left open before B-53 (measured: twenty, twenty).
+LEAK_READS = 20
+#: What the check's view logs for a finished check without a readable report (``api/v1/backup/restore.py``).
+NO_READABLE_REPORT = "A finished restore check has no readable report"
+#: A canary through the logger of the restore routes: the capture must see it, or «one warning» proves nothing.
+ROUTE_CANARY = "b53 staging test: a canary through the restore routes' logger"
+
+
+@dataclass(frozen=True)
+class FinishedCheck:
+    """The module's head archive checked once for (p), as a check leaves it: its stage folder (``data/`` and
+    ``report.json``) and its report."""
+
+    stage: Path
+    report: StagingReport
+
+
+@pytest.fixture(scope="module")
+def finished_check(head_archive, tmp_path_factory) -> FinishedCheck:
+    """(p) A finished check of the module's head archive, made once for the module under its configuration (a data
+    directory of its own, the configured one absent); each test copies its stage (``a_finished_check_in``), never
+    changes it."""
+    root = tmp_path_factory.mktemp("b53-finished-check")
+    data_dir = root / "instance"
+    data_dir.mkdir()
+    with pytest.MonkeyPatch.context() as patch:
+        configure(patch, root / "configured-data-dir")
+        try:
+            report = stage_archive(head_archive.path, data_dir)
+        finally:
+            get_git_version.cache_clear()
+    stage = stage_dir(data_dir, report.stage_id)
+    assert report.restorable and (stage / STAGE_REPORT_FILE).is_file(), f"precondition: a finished check, restorable, its report beside its copy: {report.blockers}, {listing(stage)[:6]}"
+    assert not (root / "configured-data-dir").exists(), f"the check wrote in the configured data directory: {listing(root / 'configured-data-dir')}"
+    return FinishedCheck(stage=stage, report=report)
+
+
+def a_finished_check_in(root: Path, finished: FinishedCheck) -> Path:
+    """The data directory ``root``, new, holding the module's finished check, its stage copied as the check left it: the
+    path of its ``report.json``."""
+    root.mkdir()
+    ensure_private_dir(stages_dir(root), root)
+    stage = stage_dir(root, finished.report.stage_id)
+    shutil.copytree(finished.stage, stage, symlinks=True)
+    return stage / STAGE_REPORT_FILE
+
+
+def _report_a_folder(report: Path, elsewhere: Path) -> None:
+    report.unlink()
+    report.mkdir(mode=0o700)
+
+
+def _report_a_link_to_a_valid_report(report: Path, elsewhere: Path) -> None:
+    """The check's own report moved out of its stage, a link to it in its place: followed, it would read as valid."""
+    target = elsewhere / STAGE_REPORT_FILE
+    report.rename(target)
+    report.symlink_to(target)
+    assert StagingReport.model_validate_json(target.read_bytes()).stage_id == report.parent.name, "precondition: the link points to a valid report of this very check"
+
+
+def _report_a_fifo(report: Path, elsewhere: Path) -> None:
+    report.unlink()
+    os.mkfifo(report, 0o600)
+
+
+def _report_of_mode_000(report: Path, elsewhere: Path) -> None:
+    """A valid report nobody may read (root reads it all the same: skipped); the test puts its mode back."""
+    report.chmod(0o000)
+
+
+def _the_stage_a_file(report: Path, elsewhere: Path) -> None:
+    """The stage's folder a file: the report's path goes through a file (``ENOTDIR``)."""
+    shutil.rmtree(report.parent)
+    report.parent.write_bytes(b"a file where the stage's folder belongs")
+
+
+def _report_empty(report: Path, elsewhere: Path) -> None:
+    """What a check killed while it wrote its report leaves: the file, empty."""
+    report.write_bytes(b"")
+
+
+def _report_truncated(report: Path, elsewhere: Path) -> None:
+    """The first half of a valid report: a disk that filled while it was written."""
+    raw = report.read_bytes()
+    report.write_bytes(raw[: len(raw) // 2])
+
+
+#: A finished check's report that is no file to read, or no report: each «no readable report», ``FileNotFoundError``.
+#: Before B-53 the first five raised something else, or waited; the last two are guards, «no readable report» already.
+NOT_A_READABLE_REPORT = [
+    pytest.param(_report_a_folder, id="a-folder"),
+    pytest.param(_report_a_link_to_a_valid_report, id="a-link-to-a-valid-report", marks=needs_symlinks),
+    pytest.param(_report_a_fifo, id="a-fifo", marks=needs_fifo),
+    pytest.param(_report_of_mode_000, id="mode-000", marks=needs_permission_checks),
+    pytest.param(_the_stage_a_file, id="the-stage-a-file"),
+    pytest.param(_report_empty, id="empty"),
+    pytest.param(_report_truncated, id="truncated"),
+]
+
+
+@pytest.mark.parametrize("spoil", NOT_A_READABLE_REPORT)
+def test_a_report_that_is_no_file_to_read_is_no_readable_report(tmp_path, finished_check, spoil):
+    """(p) B-53 A finished check whose ``report.json`` is a folder, a link to a valid report elsewhere, a FIFO, a file of
+    mode 000, or whose stage folder is a file: ``read_report`` raises ``FileNotFoundError``, «no readable report», which
+    the check's view answers without its report — at once: the read runs in a thread waited for a deadline, and one still
+    waiting on the FIFO then is released and fails the test. A link is never followed: the valid report it points to is
+    neither returned nor changed. Red before B-53: ``IsADirectoryError``, ``OSError`` (``ELOOP``), a read waiting for
+    ever, ``PermissionError``, ``NotADirectoryError``: each a 500 of the view. The guards, green before and after: an
+    empty and a truncated report."""
+    print_section("(p) B-53: a report that is no file to read")
+    root = tmp_path / "instance"
+    report = a_finished_check_in(root, finished_check)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    spoil(report, elsewhere)
+    pointed = fingerprint(elsewhere)
+    try:
+        answer = answered_within(lambda: read_report(root, finished_check.report.stage_id), report)
+    finally:
+        if spoil is _report_of_mode_000:
+            report.chmod(0o600)
+    case = spoil.__name__
+    assert not answer.blocked, f"{case}: read_report was still waiting after {answer.deadline}s: it opened the FIFO without O_NONBLOCK, and waited for a writer that never comes"
+    assert isinstance(answer.raised, FileNotFoundError), f"{case}: no readable report (FileNotFoundError), which the check's view answers without its report; not {answer}"
+    assert fingerprint(elsewhere) == pointed, f"{case}: nothing changed where a link points"
+    print_success(f"{case}: FileNotFoundError")
+
+
+@needs_dev_fd
+def test_reads_of_a_report_that_is_a_folder_leave_no_descriptor_open(tmp_path, finished_check):
+    """(p) B-53 ``read_report`` of a finished check whose ``report.json`` is a folder, twenty times, as the tab polls the
+    check: no descriptor left open on the folder. Red before B-53: twenty, one per read — ``os.fdopen`` refused the
+    folder without closing the descriptor ``os.open`` gave — for as long as the server ran."""
+    root = tmp_path / "instance"
+    report = a_finished_check_in(root, finished_check)
+    _report_a_folder(report, tmp_path)
+    assert descriptors_on(report) == [], "precondition: no descriptor of this process is open on the folder"
+    for _ in range(LEAK_READS):
+        with suppress(OSError):
+            read_report(root, finished_check.report.stage_id)
+    left_open = close_all(descriptors_on(report))
+    assert left_open == [], f"{len(left_open)} descriptor(s) left open on the folder by {LEAK_READS} reads of the report: {left_open}"
+    print_success(f"{LEAK_READS} reads of a folder: no descriptor left open")
+
+
+def test_a_transient_error_reading_a_report_reaches_the_caller_as_it_is(tmp_path, finished_check, monkeypatch):
+    """(p) B-53, the guard (green before and after): ``os.open`` failing ``EIO`` for the report alone — a disk that fails,
+    not a report that is missing — reaches the caller as it is, never «no readable report»: the confirmation lets it
+    through, a 500 the tab retries (B-55, ``test_backup_apply.py`` (p))."""
+    root = tmp_path / "instance"
+    report = a_finished_check_in(root, finished_check)
+    refusal = opening_fails(monkeypatch, report, errno.EIO)
+    with pytest.raises(OSError) as raised:
+        read_report(root, finished_check.report.stage_id)
+    assert raised.value is refusal, f"the very EIO os.open raised, as it is: not {type(raised.value).__name__}: {raised.value}"
+    print_success("os.open EIO: raised as it is")
+
+
+def test_a_finished_check_s_report_reads_back_as_the_check_wrote_it(tmp_path, finished_check):
+    """(p) B-53, the guard (green before and after): the report of a finished check, read by ``read_report``, is the
+    report the check returned."""
+    root = tmp_path / "instance"
+    a_finished_check_in(root, finished_check)
+    assert read_report(root, finished_check.report.stage_id) == finished_check.report, "the report, as the check wrote it"
+    print_success("a valid report: read back equal")
+
+
+def test_the_view_of_a_finished_check_whose_report_is_a_folder_answers_it_without_its_report(tmp_path, finished_check, monkeypatch):
+    """(p) B-53 ``GET /backup/restore/stage/{stage_id}``, which the tab polls, for a finished check whose ``report.json``
+    is a folder: the route function (``get_restore_check``, called directly) answers the check, ``done``, without its
+    report, and logs one warning, «A finished restore check has no readable report», with its stage id; nothing raised.
+    Red before B-53: ``read_report`` raised ``IsADirectoryError``, which ``_stage_view`` does not take: a 500."""
+    from backend.app.api.v1.backup import restore as restore_routes  # noqa: PLC0415 — the routes, imported by the one test that reads through them
+    from backend.app.services.platform.instance_backup import restore_jobs  # noqa: PLC0415 — the check's state the route reads, imported by the same test
+
+    root = tmp_path / "instance"
+    report = a_finished_check_in(root, finished_check)
+    checked = finished_check.report
+    ensure_private_dir(checks_dir(root), root)
+    state = restore_jobs.RestoreCheck(stage_id=checked.stage_id, upload_id=new_stage_id(), status="done", phase=None, done_bytes=checked.files_size, total_bytes=checked.files_size, created_at=checked.staged_at, finished_at=checked.staged_at)
+    restore_jobs._write_state(root, state)
+    _report_a_folder(report, tmp_path)
+    monkeypatch.setattr(restore_routes, "get_data_dir", lambda: root)
+    monkeypatch.setattr(restore_jobs, "get_data_dir", lambda: root)
+    answered, raised = None, None
+    with capture_logs() as events:
+        restore_routes.logger.warning(ROUTE_CANARY)
+        assert any(event.get("event") == ROUTE_CANARY for event in events), f"barrier: the routes' logger does not reach capture_logs: {events}"
+        try:
+            answered = restore_routes.get_restore_check(checked.stage_id, None)
+        except Exception as exc:  # reported below: before B-53, a 500
+            raised = exc
+    assert raised is None, f"the view of the check raised {type(raised).__name__}: {raised} — a 500 on the read the tab polls"
+    assert (answered.stage_id, answered.status, answered.report) == (checked.stage_id, "done", None), f"the check, done, without its report: {answered}"
+    warned = [(event.get("log_level"), event.get("event"), event.get("stage_id")) for event in events if event.get("event") != ROUTE_CANARY and event.get("log_level") in ("warning", "error", "critical")]
+    assert warned == [("warning", NO_READABLE_REPORT, checked.stage_id)], f"one warning, naming the check's stage: {warned}"
+    print_success("a report that is a folder: the check answered without it, one warning")
