@@ -9238,3 +9238,113 @@ pagine).
 2. i testi del badge e del suggerimento;
 3. il comando `user list` non mostra né questa attesa né quella del setup: lasciarlo com'è (consigliato) o un segno
    anche lì, come seguito.
+
+#### E-23.2 — Il via e il contratto (2026-10-20, 10:39; base `1ef19d8dc`, merge di `dev_release2` `f73514a77` con E-AI503, E-20 ed E-24)
+> **Il coordinatore** (10:39): checkpoint di E-24.2 in `d44210b59`; base aggiornata a `dev_release2` (`f73514a77`),
+> merge pulito, HEAD `1ef19d8dc`. **Via a E-23**, con le decisioni di E-23.1. Prima i rossi. Le domande di E-7 le porta
+> lui al developer.
+>
+> **Il merge** tocca la strada di E-23 solo in modo neutro: `temporal/aggregators.py` (Z-29r: le stesse statistiche,
+> da `signals.aggregation`) e `price_query.py` (Z-29: il campionamento vale solo per gli item con `max_points`,
+> `resolution` o `sample_like`, che l'AI Export non usa; il riempimento giornaliero resta quello: un punto riportato porta
+> `actual_rate_date` e il prezzo dell'ultimo salvato). `get_prices_bulk` non marca i ripetuti del fine settimana in
+> `result.prices` (solo nelle serie preparate per i segnali) e, con i segnali, attende già la tabella delle festività.
+
+**Il contratto** (rossi e cura lo seguono alla lettera):
+
+1. **Il buco** (`technical_payloads.py`, modello nuovo `SeriesGap`): `start_date`, `end_date`, `calendar_days` (≥ 1,
+   uguale ai giorni inclusi), `last_value: float | None`, `last_value_date: date | None` (nulli insieme; la data, quando
+   c'è, prima di `start_date`). Un buco è una sequenza **massima** di secchi contigui **vuoti** (nessun punto osservato,
+   `observation_count == 0`) che contiene **almeno un giorno di mercato aperto**: un giorno da lunedì a venerdì che non
+   sta nell'unione delle festività di `market_calendar.ensure_market_holidays()`. Sabati, domeniche e festività da soli
+   non fanno un buco. I secchi del buco si fondono: dal primo inizio all'ultima fine.
+2. **L'ultimo valore** prima del buco: l'ultimo punto **osservato** prima del suo inizio; per un buco in testa al
+   periodo, l'ultimo prezzo salvato prima del periodo, cioè il punto riportato che apre `result.prices`
+   (`backward_fill_info.actual_rate_date` e il suo `close`); per i cambi, la prima osservazione del periodo riportata
+   (`actual_date` e `rate`). Se la storia comincia dentro il periodo, il buco in testa ha `last_value` e la data nulli.
+3. **I payload** (nessun bump per i tre componenti dei prezzi, già v2 in questa release; `fx.rate_ohlc` passa da 1 a 2,
+   con il segnaposto di `components/catalog.py` e `COMPACT_COMPONENT_VERSIONS`):
+   - `AssetPriceSeriesPayload.price_gaps` e `AssetOhlcReturnsPayload.price_gaps`: `tuple[SeriesGap, ...] = ()`;
+   - `FxRateOhlcPayload.rate_gaps`: `tuple[SeriesGap, ...] = ()`;
+   - in ordine di data, senza sovrapposizioni, e mai sopra un secchio popolato (validatori).
+4. **La copertura** (`technical_shared.price_series_gap`): un terzo codice, `no_price_in_period`, quando
+   `result.prices` ha punti di una sola valuta ma nessuno osservato (solo riportati). L'ordine dei controlli: nessun
+   punto → `no_stored_price`; valute miste → `mixed_price_currencies`; nessun punto osservato → `no_price_in_period`.
+   Sempre sui punti, mai sul tipo.
+   - Portafoglio e broker: l'asset va in `uncovered_assets`; `AssetPriceSeriesGapPayload` prende `currency`,
+     `last_close`, `last_close_date`, valorizzati **esattamente** per `no_price_in_period` (l'ultimo prezzo salvato prima
+     del periodo) e nulli per gli altri due codici.
+   - Asset singolo: `reason_code = no_price_in_period`, la valuta resta; secchi tutti vuoti, `latest_*` nulli; il
+     buco dell'intero periodo (se contiene un giorno aperto) in `price_gaps`, con l'ultimo prezzo salvato. Il
+     validatore: valuta nulla esattamente per `no_stored_price` e `mixed_price_currencies`.
+5. **Le festività nei builder**: caricate solo quando c'è almeno una sequenza di secchi vuoti da giudicare, attraverso
+   `technical_shared.ensure_market_holidays` (importato in quel modulo), così i test lo sostituiscono con
+   `monkeypatch.setattr(technical_shared, "ensure_market_holidays", …)`. Le funzioni pure ricevono l'insieme.
+6. **Il renderer** (`snapshotDataRenderer.ts`):
+   - dopo BUCKETS, solo se c'è un buco: `PRICE GAPS` (`entity | from | to | days | last_price | last_price_date`) per
+     i prezzi, `RATE GAPS` (`… | last_rate | last_rate_date`) per i cambi, e una riga di significato
+     (`price_gap=…`, `rate_gap=…`), una volta;
+   - `ASSETS WITHOUT PRICE SERIES` prende `currency | last_price | last_price_date`;
+   - le celle «non applicabili» il renderer le passa come `undefined`, mai `null`: le tre colonne nuove di
+     `ASSETS WITHOUT PRICE SERIES` per i codici che non sono `no_price_in_period`, e l'ultimo valore di un buco in testa
+     senza prezzo prima. Una colonna così, vuota in ogni riga, sparisce in silenzio (nessuna riga «omitted null
+     columns»), e in una colonna con valori la cella resta vuota. Così i render di oggi (senza buchi, o solo
+     `no_stored_price` e `mixed_price_currencies`) restano byte per byte, `NULL_MEANS_NONE_COLUMNS` non cambia (il suo
+     elenco esatto è fissato in `snapshotDataRenderer.test.ts:3535`) e il testo approvato «(empty when none is stored
+     before it)» resta esatto;
+   - `no_price_in_period` entra in `PRICE_SERIES_GAP_MEANINGS`; una mappa esportata nuova, `SERIES_GAP_MEANINGS`
+     (`price_gap`, `rate_gap`), tiene le righe di significato dei buchi; una forma di buco che il renderer non conosce
+     manda la sezione al renderer generico, come per un codice sconosciuto;
+   - i testi: quelli approvati; per i cambi lo stesso testo coi tassi («no stored rate», `last_rate`, «the rate stayed
+     the same»).
+7. **I nomi** (`technical_shared.py`): `NO_PRICE_IN_PERIOD`; `is_market_open(day, holidays)`;
+   `series_gaps(points, plan, *, key, seed, holidays) -> tuple[SeriesGap, ...]` (pura: `points` sono i punti osservati
+   del periodo, `plan` il `BucketPlan`, `seed` l'ultimo valore prima del periodo o None);
+   `price_series_seed(result) -> tuple[date, float] | None`; `rate_series_seed(rate_series, start) -> tuple[date, float]
+   | None`; `async load_series_gaps(points, plan, *, key, seed)`, che chiama `ensure_market_holidays()` solo se c'è una
+   sequenza di secchi vuoti.
+
+**I passi:**
+1. ✅ **I rossi** (10:5x–11:2x), tre `test-author` in parallelo, file distinti, nessuna corsa loro:
+   - `e23-reds-renderer` — `snapshotDataRenderer.priceSeriesGap.test.ts`: PSG-08 (tre codici), PSG-09 (`fx.rate_ohlc`
+     v2 → v3, più v2 con schema 2), PSG-10…20 (le due mappe, PRICE GAPS e RATE GAPS, l'ordine delle serie, le celle
+     vuote, le colonne nuove decise dal codice, la caduta al renderer generico, le guardie byte per byte). Corsa
+     (11:0x): **21 failed / 27 passed**, come previsto, tutti per asserzione;
+   - `e23-reds-pure` — `test_ai_export_technical_shared_pure.py` (E23-S00…S16) e
+     `test_ai_export_technical_payload_invariants.py` (E23-P01…P16); AI503-S01 perde il caso «solo punti riportati →
+     None», che il contratto rovescia (ora in E23-S16). `services ai-export-pure` (11:12): **101 failed / 379
+     passed**, nessun rosso fuori dai `test_e23_*`;
+   - `e23-reds-components` — `test_ai_export_components_technical.py`: AI503-C09 e C10 ×2 rovesciati, E23-C01…C15
+     (portafoglio, broker, asset, cambi, festività, laziness), una fixture autouse che sostituisce
+     `technical_shared.ensure_market_holidays` (`raising=False`); AI503-C01/C02/C04 ristretti ai tre campi di E-AI503;
+     `test_api/test_ai_export_unpriced_asset.py`: UPA-06 e UPA-07 ×2 (un ETF e un CROWDFUND con prezzi solo prima del
+     periodo). `services ai-export` (11:19): **24 failed / 1103 passed**; `api ai-export-unpriced-asset`: **3 failed /
+     6 passed**. Tutti per asserzione sul comportamento mancante (campi dei buchi assenti, l'asset vecchio ancora in
+     `assets`, la versione 1, le festività mai lette); il piano dei secchi calcolato a mano regge.
+   > **⚠️ Fuori pista**: AI503-P09 vuole «reason_code» nel messaggio del primo controllo che scatta: corretto il
+   > messaggio della cura preparata prima di applicarla («currency is null exactly when reason_code is …»).
+2. ⏳ **La cura** backend (`files/e23/apply_backend.py`), poi frontend (`files/e23/apply_frontend.py`), provate a secco.
+2. ✅ **La cura** (11:2x): `files/e23/apply_backend.py` (5 file: `technical_payloads.py`, `technical_shared.py`,
+   `portfolio_broker_technical.py`, `asset_fx_technical.py`, `catalog.py`) e `files/e23/apply_frontend.py`
+   (`snapshotDataRenderer.ts`). `ruff --fix` ha riordinato due blocchi di import (I001: `NO_PRICE_IN_PERIOD` fuori
+   ordine); prettier ha rifluito tre righe del renderer allungate dalla cura.
+3. ✅ **I verdi** (11:20–11:3x, corsia 6188):
+   - `services ai-export-pure` **480 passed**; Vitest `src/lib/features/ai-export` **15 file, 362 passed**;
+   - `services ai-export` **1127 passed**; `api ai-export-unpriced-asset` **9 passed**; `api ai-export` **15
+     passed**; `utils ai-export-probe-helpers` **73 passed**;
+   - `ruff` e `black` puliti sui 5 file; prettier pulito; `front check` **0 errori, 0 avvisi**.
+   > **⚠️ Fuori pista**: il primo `front check` dava 1 errore in `instanceConfig.svelte.ts` (`client_log_level`,
+   > campo di H-60 arrivato col merge): il client generato e ignorato era del 19/10. `dev.py api sync` lo ha rigenerato
+   > (nessun file tracciato cambiato), poi 0/0. Le strutture dei payload dell'AI Export non stanno nell'OpenAPI: E-23
+   > non chiede un `api sync` suo.
+   - **I prompt letti** (`files/tools/e23_dump_snapshots.py` sul libro del test API in un SQLite privato, festività
+     vuote; `files/tools/e23_render.sh`): il portafoglio B1+B2+B3 (2 coperti su 6; A5 e A6 `no_price_in_period` con
+     EUR, 101.75, 2024-03-15; il buco di A1 dal 22 al 30 giugno dopo il 21); l'ETF vecchio da solo (`no_price_in_period`,
+     un buco di 91 giorni dopo il 15 marzo); l'ETF col buco dal 24 al 28 giugno (un buco solo, dal 22 al 30, perché i
+     due fine settimana ai bordi stanno nella sequenza). Tutto come da contratto.
+4. ✅ **La doc** (`docs-writer` `e23-docs`, 11:3x–11:4x): `ai_export_composition.md` (il paragrafo della copertura con il
+   terzo codice; la sezione nuova «🕳️ Price and Rate Gaps», ancora `#series-gaps`; il renderer delle serie; una riga
+   della tabella dei fallimenti che diventava falsa) e `ai_export_sampling.md` («Recent Daily Window», «Public Empty
+   Temporal Rows»). Rivista contro il codice. `mkdocs build` strict ok, `check-links` 97 ok. Pagine solo inglesi.
+   Backlog: E-23 ✅ nella mia sezione.
+5. ⏳ **Il checkpoint** (11:4x), coi testi finali per il developer e una domanda: il buco del giorno dello snapshot.
