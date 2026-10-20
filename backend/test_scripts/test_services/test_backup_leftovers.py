@@ -15,7 +15,8 @@ Under test: ``backend/app/services/platform/instance_backup/leftovers.py`` (new:
 ``app_lifespan.py``. The frozen contract: ``b4b-test-brief.md`` §1, with its revision of 03:58. And B-50, (h): what
 ``restore_jobs`` and ``jobs`` make of a state no reader can take, through ``restore_jobs._checks``, ``prune``,
 ``read_check``, ``remove_check``, ``confirm_check``, ``start_check``, ``UploadWriter.finish`` and the sweep; its contract:
-``b50-contract.md``.
+``b50-contract.md``. And B-53, B-54, B-55, (i): one reader of the check states, through the same functions; its contract:
+``b53-contract.md``.
 
 (a) The restore's folder. A check recorded ``running`` while the lock of the checks is free was left by a stopped
     server: ``prune`` ends it ``failed``/``restore_interrupted``, its stage and its upload removed, as before, and now
@@ -79,6 +80,19 @@ Under test: ``backend/app/services/platform/instance_backup/leftovers.py`` (new:
     already is: the sweep logs no error, ends the run that died, removes the job that ended two hours ago, keeps the
     one that ended ten minutes ago, and dates the unreadable folder by its modification time — kept ten minutes on,
     removed two hours on, whatever a state of mode 000 would say were it read.
+(i) B-53, B-54, B-55 (the coordinator, 20/10 10:10). A transient error (EIO) on a valid check's state is never «no
+    check»: ``read_check``, ``_checks`` and ``prune`` raise it, and ``prune`` removes nothing, not even an ended check a
+    day old beside it; a check's start raises it, nothing started, its upload kept; an upload that finishes raises it,
+    no upload removed; the sweep logs one error for its ``restore`` part and does the work of the two others; readable
+    again, the check answers as it was. In a state's place, a link (to a valid state of that id, or to nothing), a FIFO,
+    a done check's state whose ``created_at`` or ``finished_at`` has no time zone: no check, in silence, within a
+    deadline, no descriptor left on the FIFO. While no check runs, ``prune`` removes from ``checks/`` an unreadable
+    ``<id>.json`` or ``<id>.json.part`` older than ``STAGE_LIFETIME`` by its own modification time — a file whatever
+    its content or mode, a folder with its content, a link (never its target), a FIFO —, in silence, its usual work on
+    the readable checks unchanged; kept: everything while a check runs, the protected stage's, the names that are no
+    state's. The startup sweep returns in time beside a FIFO in a check state's place, and (point 7, 10:39) beside a FIFO
+    in place of a job's ``state.json``: the jobs part does its usual work, dates such a folder by its modification time,
+    and logs no error.
 
 How. Every data directory is a folder of ``tmp_path`` built file by file: the sweep never opens a database nor reads
 an archive, and none is made. A check's state is written as ``restore_jobs`` writes it (a ``RestoreCheck`` as JSON in
@@ -97,6 +111,10 @@ barrier (``logs`` of ``test_backup_apply.py``: a warning through a logger of the
 upload that is no archive: the check stops at its first bytes, before any copy is made or any database opened. The
 descriptors left open on a folder are found in ``/dev/fd`` by its device and inode (``descriptors_on`` of
 ``test_backup_archive.py``, imported, with its ``needs_dev_fd``), behind a barrier: one the test opens itself is found.
+(i) makes the global ``os.open`` refuse one path (``refuse_open``, as ``refused_for`` of ``test_backup_cli_restore.py``),
+checked, for as long as a ``monkeypatch.context`` lasts; runs every call that may meet a FIFO in a thread of its own,
+given a deadline (``within_deadline``), and lets a reader left waiting go before it returns (``let_readers_go``: a
+writer opened without waiting, closed at once), so that a red run never hangs the suite.
 
 Pure: every path under ``tmp_path``. This process's production data directory is a folder of the test that must stay
 absent but where a test configures its own (``configured_data_dir`` of the staging tests, imported, autouse): the lane's
@@ -116,6 +134,13 @@ catches them, and the rows of (h) that hold one fail on it. A check state that i
 read leaves a descriptor open on it (``os.fdopen`` refuses a folder without closing the descriptor it is handed): the
 test that looks for them fails, 20 reads leaving 20. The other rows of (h), what the readers already take for no state,
 are guards, green today.
+
+Written RED again for B-53, B-54 and B-55, before their cure: ``restore_jobs._read_state`` takes every ``OSError`` for
+«no check», EIO included; waits forever on a FIFO; reads a date without a time zone, which ``prune`` then compares with
+an aware one (``TypeError``) or uses to remove the check; and ``prune`` never removes an unreadable entry of ``checks/``.
+The jobs' reader, too, waits forever on a FIFO in place of a job's ``state.json``. The rows of (i) that meet one of those
+fail on it; the links, the names that are no state's and most rows of the keepers are guards, green today. Each test of
+(i) names its red rows.
 """
 
 from __future__ import annotations
@@ -150,6 +175,7 @@ from backend.app.services.platform.instance_backup.paths import (
     check_state_path,
     checks_dir,
     ensure_private_dir,
+    is_plain_dir,
     job_dir,
     jobs_dir,
     restore_dir,
@@ -160,7 +186,7 @@ from backend.app.services.platform.instance_backup.paths import (
     uploads_dir,
 )
 from backend.app.services.platform.instance_backup.restore_jobs import RestoreCheck
-from backend.app.services.platform.instance_backup.staging import new_stage_id
+from backend.app.services.platform.instance_backup.staging import STAGE_LIFETIME, new_stage_id
 from backend.test_scripts.test_services import test_backup_apply as apply_cases
 from backend.test_scripts.test_services import test_backup_archive as archive_cases
 from backend.test_scripts.test_services import test_backup_jobs as jobs_cases
@@ -1248,9 +1274,10 @@ def mode_000() -> Iterator[Mode000]:
 
 
 def as_left(path: Path) -> dict[str, tuple[int, int, int, int]]:
-    """``path`` and everything below it, read without opening a file nor following a link — a file of mode 000 too, whose
-    bytes ``entries`` would have to read: each entry's kind, mode, size and modification time."""
-    below = [Path(folder, name) for folder, folders, files in os.walk(path) for name in (*folders, *files)]
+    """``path`` and, when it is a folder itself (never one a link points to), everything below it, read without opening a
+    file nor following a link — a file of mode 000 or a FIFO too, whose bytes ``entries`` would have to read: each
+    entry's kind, mode, size and modification time."""
+    below = [Path(folder, name) for folder, folders, files in os.walk(path) for name in (*folders, *files)] if stat.S_ISDIR(path.lstat().st_mode) else []
     found: dict[str, tuple[int, int, int, int]] = {}
     for entry in (path, *below):
         info = entry.lstat()
@@ -1268,11 +1295,31 @@ def logged_at(events: list[dict[str, Any]], levels: set[str]) -> list[dict[str, 
 # The restore's checks
 # -----------------------------------------------------------------------------
 
+#: The suffix of a check's state being written (``_write_state``): ``<id>.json.part``, renamed once whole.
+PARTIAL_STATE = ".part"
+#: What a ``<id>.json.part`` holds when its writer was killed half-way: half a state.
+HALF_WRITTEN = b'{"stage_id": "0123456789abcdef0123456789abcdef", "upload_id": "0123'
 
-def unreadable_check_state(root: Path, how: str, mode_000: Mode000) -> str:
-    """A check's state no reader can take for one, ``.restore/checks/<id>.json``, as ``how`` says (``CHECK_STATES``): a
+
+def outside_checks(root: Path) -> Path:
+    """A folder beside the data directory, never in it: where a link in a check state's place points (i-2)."""
+    return root.parent / "outside-checks"
+
+
+def without_time_zone(path: Path, key: str) -> None:
+    """The date ``key`` of the check state at ``path`` written again without its time zone, the rest as it was."""
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record[key] = datetime.fromisoformat(record[key]).replace(tzinfo=None).isoformat()
+    path.write_text(json.dumps(record), encoding="utf-8")
+
+
+def unreadable_check_state(root: Path, how: str, mode_000: Mode000, *, says_ended: timedelta = RECENTLY) -> str:
+    """A check's state no reader can take for one, ``.restore/checks/<id>.json``, as ``how`` says. ``CHECK_STATES``: a
     content of ``CONTENTS``, 0600 as the checks write theirs; a folder where the file belongs; or the state of a check
-    that ended ten minutes ago, made mode 000. Its id."""
+    that ended ten minutes ago, made mode 000. ``NEW_SHAPES`` (i-2): a link to such a state of that very id, moved to
+    ``outside_checks`` — followed, it would answer a check —, or a link to nothing there; a FIFO; the state of a check
+    that ended ``says_ended`` ago, its ``created_at`` or its ``finished_at`` (``naive-<key>``) written without a time
+    zone. ``half-written-part`` (i-3): no state, but a ``<id>.json.part`` holding ``HALF_WRITTEN``. Its id."""
     stage_id = new_stage_id()
     path = check_state_path(root, stage_id)
     if how == "a-folder":
@@ -1280,6 +1327,22 @@ def unreadable_check_state(root: Path, how: str, mode_000: Mode000) -> str:
     elif how == "mode-000":
         recorded_check(root, stage_id, new_stage_id(), status="done")
         mode_000.make(path)
+    elif how in ("link-to-a-check", "dangling-link"):
+        target = outside_checks(root) / path.name
+        if how == "link-to-a-check":
+            target.parent.mkdir(exist_ok=True)
+            recorded_check(root, stage_id, new_stage_id(), status="done")
+            path.replace(target)
+        path.symlink_to(target)
+    elif how == "fifo":
+        os.mkfifo(path, 0o600)
+    elif how.startswith("naive-"):
+        recorded_check(root, stage_id, new_stage_id(), status="done", ended_ago=says_ended)
+        without_time_zone(path, how.removeprefix("naive-"))
+    elif how == "half-written-part":
+        part = path.with_name(path.name + PARTIAL_STATE)
+        part.write_bytes(HALF_WRITTEN)
+        part.chmod(0o600)
     else:
         path.write_bytes(CONTENTS[how])
         path.chmod(0o600)
@@ -1298,9 +1361,10 @@ class ChecksBeside:
     unreadable: str
 
 
-def checks_beside(root: Path, how: str, mode_000: Mode000) -> ChecksBeside:
+def checks_beside(root: Path, how: str, mode_000: Mode000, *, says_ended: timedelta = RECENTLY) -> ChecksBeside:
     """``ChecksBeside`` in ``root``, the lock of the checks there and free; the unreadable state made last, as ``how``
-    says, once the running check was read as running while its lock was held (``interrupted_checks``)."""
+    says (``says_ended``: what the dates of a ``naive-*`` one say), once the running check was read as running while its
+    lock was held (``interrupted_checks``)."""
     restore_folders(root)
     old_id, recent_id = new_stage_id(), new_stage_id()
     stage_holding(root, old_id, archive=None, report=True)
@@ -1308,7 +1372,7 @@ def checks_beside(root: Path, how: str, mode_000: Mode000) -> ChecksBeside:
     stage_holding(root, recent_id, archive=None, report=True)
     recent = recorded_check(root, recent_id, new_stage_id(), status="done")
     [interrupted] = interrupted_checks(root, 1)
-    return ChecksBeside(old=old, recent=recent, interrupted=interrupted, unreadable=unreadable_check_state(root, how, mode_000))
+    return ChecksBeside(old=old, recent=recent, interrupted=interrupted, unreadable=unreadable_check_state(root, how, mode_000, says_ended=says_ended))
 
 
 def readable_checks(root: Path) -> dict[str, str]:
@@ -1317,17 +1381,24 @@ def readable_checks(root: Path) -> dict[str, str]:
     return {check.stage_id: check.status for check in restore_jobs._checks(root)}
 
 
-def assert_prune_did_its_work(root: Path, world: ChecksBeside, unreadable: dict[str, tuple[int, int, int, int]]) -> None:
+def assert_prune_did_its_usual_work(root: Path, world: ChecksBeside) -> None:
     """``prune``'s usual work on the checks it reads: the one a stopped server left running ended ``restore_interrupted``,
     its stage and its upload removed; the one that ended 25 hours ago removed with its copy; the one that ended ten
-    minutes ago kept as it was, with its copy. The unreadable state, just made, left as it was (``unreadable``: its
-    ``as_left`` before)."""
+    minutes ago kept as it was, with its copy."""
     assert ended_interrupted(root, world.interrupted), f"the check a stopped server left running is ended restore_interrupted, its stage and its upload removed: {check_state(root, world.interrupted.stage_id)}"
     old = (check_state(root, world.old.stage_id), os.path.lexists(stage_dir(root, world.old.stage_id)))
     assert old == (None, False), f"the check that ended 25 hours ago is removed with its copy: its state {old[0]}, its copy there {old[1]}"
     recent = restore_jobs.read_check(world.recent.stage_id, data_dir=root)
     assert (recent, stage_dir(root, world.recent.stage_id).is_dir()) == (world.recent, True), f"the check that ended ten minutes ago is kept as it was, with its copy: {recent}"
-    assert as_left(check_state_path(root, world.unreadable)) == unreadable, "the unreadable state, just made, is left as it was"
+
+
+def assert_prune_did_its_work(root: Path, world: ChecksBeside, unreadable: dict[str, tuple[int, int, int, int]]) -> None:
+    """``prune``'s usual work (``assert_prune_did_its_usual_work``), and the unreadable state, just made, left as it was
+    (``unreadable``: its ``as_left`` before)."""
+    assert_prune_did_its_usual_work(root, world)
+    path = check_state_path(root, world.unreadable)
+    assert os.path.lexists(path), "the unreadable state, just made, is left: it was removed"
+    assert as_left(path) == unreadable, "the unreadable state, just made, is left as it was"
 
 
 @pytest.mark.parametrize("how", CHECK_STATES)
@@ -1540,8 +1611,9 @@ def unreadable_job_folder(root: Path, how: str, mode_000: Mode000, *, age: timed
     """A job folder, ``backups/.jobs/<id>/``, whose ``state.json`` no reader can take for a state, as ``how`` says
     (``JOB_STATES``): a content of ``CONTENTS``; a folder; none at all; or the state of a finished job, beside its
     archive, made mode 000 — a state that says the opposite of the folder's age (ended two hours ago in a folder ten
-    minutes old, and the reverse), so that only the folder's modification time can decide. The folder, last modified
-    ``age`` ago once everything in it is made."""
+    minutes old, and the reverse), so that only the folder's modification time can decide. And (i-5) a FIFO (``fifo``),
+    never in ``JOB_STATES``: a sweep that waits on it must run within a deadline. The folder, last modified ``age`` ago
+    once everything in it is made."""
     if how == "mode-000":
         _job, folder = finished_job(root, ended=RECENTLY if age > jobs.JOB_RETENTION else LONG_AGO)
         mode_000.make(folder / STATE_FILE)
@@ -1549,6 +1621,8 @@ def unreadable_job_folder(root: Path, how: str, mode_000: Mode000, *, age: timed
         folder = ensure_private_dir(job_dir(root, new_stage_id()), root)
         if how == "a-folder":
             (folder / STATE_FILE).mkdir(mode=0o700)
+        elif how == "fifo":
+            os.mkfifo(folder / STATE_FILE, 0o600)
         elif how != "no-state-file":
             (folder / STATE_FILE).write_bytes(CONTENTS[how])
     return cli_secure.aged(folder, age.total_seconds())
@@ -1588,3 +1662,556 @@ def test_the_sweep_cleans_the_jobs_beside_an_unreadable_job_state_and_logs_no_er
     counts = summary_counts(events)
     assert counts == {**dict.fromkeys(COUNTS, 0), "jobs_interrupted": 1, "jobs_expired": 2}, f"the sweep says what it did, and nothing else: {counts}"
     print_success(f"{how}: no error; 1 job ended, the expired job and the unreadable folder two hours old removed")
+
+
+# =============================================================================
+# (i) B-53, B-54, B-55: one reader of the check states; a transient error is no «no check»; old unreadable states pruned
+# =============================================================================
+#
+# The coordinator, 20/10 10:10 (``b53-contract.md``). B-55: the restore follows the jobs' rule of B-50 — a folder, a file
+# the server may not read and a content that is no check's state are «no check»; any other ``OSError``, a transient one
+# (EIO), goes through: an error the tab retries, never a check forgotten. B-53: a check's state is read through
+# ``paths.read_regular_file``, never through a link nor waiting on a FIFO, its descriptor always closed; a date without a
+# time zone is a content that is no check's state. B-54: while no check runs, ``prune`` also removes from ``checks/`` the
+# ``<id>.json`` and ``<id>.json.part`` no readable check records, older than ``STAGE_LIFETIME`` by their own modification
+# time, but the protected stage's; in silence. Point 7 (10:39): the jobs' reader goes through the same helper, so a FIFO
+# in place of a job's ``state.json`` is a state no reader can take, never one the start of the server waits on. Each
+# list and each test says which of its rows are red until the cure.
+
+#: Older than a check is kept, by an hour's margin: what B-54 removes when no readable check records it.
+PAST_LIFETIME = STAGE_LIFETIME + timedelta(hours=1)
+#: Seconds a call that reads check states may take before it is said to wait: one that waits on nothing ends in
+#: milliseconds, on a loaded machine too. A red run waits this long once per case, then lets its reader go.
+READ_DEADLINE_S = 10
+#: Seconds between two attempts to let a waiting reader go, and how long the attempts go on at most.
+RELEASE_POLL_S = 0.05
+RELEASE_DEADLINE_S = 30
+#: (i-2) The shapes a state's place may take beside those of (h). A link, to a valid state of that very id or to nothing:
+#: guards, ``O_NOFOLLOW`` already refuses both. A FIFO: red, the read waits for a writer forever today. A done check whose
+#: ``created_at``, or whose ``finished_at``, has no time zone: red, it is read as a check today.
+LINK_SHAPES = [pytest.param("link-to-a-check", id="link-to-a-check"), pytest.param("dangling-link", id="dangling-link")]
+FIFO_SHAPE = [pytest.param("fifo", id="fifo", marks=[archive_cases.needs_fifo, archive_cases.needs_dev_fd])]
+NAIVE_SHAPES = [pytest.param(f"naive-{key}", id=f"naive-{key}") for key in ("created_at", "finished_at")]
+NEW_SHAPES = [*LINK_SHAPES, *FIFO_SHAPE, *NAIVE_SHAPES]
+#: (i-3) Every unreadable entry B-54 ages: the shapes of (h) and of (i-2), and a half-written ``<id>.json.part``.
+OLD_SHAPES = [*CHECK_STATES, *NEW_SHAPES, pytest.param("half-written-part", id="half-written-part")]
+#: (i-3) What ``checks/`` may hold that is no check's state nor one being written: never removed, however old.
+OTHER_NAMES = ("notes.txt", "abc.json", "{id}.yaml")
+
+
+@dataclass(frozen=True)
+class Outcome:
+    """What a call given a deadline did: whether it ended in time, then what it answered or raised (once let go, when it
+    did not end in time)."""
+
+    in_time: bool
+    value: Any = None
+    raised: Exception | None = None
+
+
+def let_readers_go(fifos: tuple[Path, ...], thread: threading.Thread) -> None:
+    """Let the readers waiting on any of ``fifos`` go, one after the other, until ``thread`` ends (``RELEASE_DEADLINE_S``
+    at most): a writer opened without waiting (``O_NONBLOCK``) completes a reader's open, and its close at once ends the
+    reader's read (end of file). ``ENXIO``: no reader has that FIFO open, not yet or no longer; ``ENOENT``: it is gone."""
+    deadline = time.monotonic() + RELEASE_DEADLINE_S
+    while thread.is_alive() and time.monotonic() < deadline:
+        for fifo in fifos:
+            try:
+                os.close(os.open(fifo, os.O_WRONLY | os.O_NONBLOCK))
+            except OSError as exc:
+                if exc.errno not in (errno.ENXIO, errno.ENOENT):
+                    raise
+        thread.join(RELEASE_POLL_S)
+
+
+def within_deadline(call: Callable[[], Any], *, fifos: tuple[Path, ...] = ()) -> Outcome:
+    """``call`` in a thread of its own, given ``READ_DEADLINE_S`` to end: whether it did, then what it answered or raised.
+    Before this returns, the readers left waiting on ``fifos`` are let go (``let_readers_go``), so that a red run never
+    hangs the suite; the thread is a daemon all the same."""
+    ended: dict[str, Any] = {}
+
+    def run() -> None:
+        try:
+            ended["value"] = call()
+        except Exception as exc:
+            ended["raised"] = exc
+
+    thread = threading.Thread(target=run, name="b53-check-reader", daemon=True)
+    thread.start()
+    try:
+        thread.join(READ_DEADLINE_S)
+        in_time = not thread.is_alive()
+    finally:
+        if fifos:
+            let_readers_go(fifos, thread)
+    return Outcome(in_time=in_time, value=ended.get("value"), raised=ended.get("raised"))
+
+
+def fifos_of(how: str, entry: Path) -> tuple[Path, ...]:
+    """``entry`` when the row is the FIFO's: the FIFO a waiting reader must be let go from; none otherwise."""
+    return (entry,) if how == "fifo" else ()
+
+
+def closed_descriptors_on(path: Path) -> list[int]:
+    """The descriptors of this process left open on ``path`` (``descriptors_on``, by its device and inode), closed: a red
+    run carries none into the tests that follow."""
+    left_open = archive_cases.descriptors_on(path)
+    for fd in left_open:
+        os.close(fd)
+    return left_open
+
+
+def said_of(events: list[dict[str, Any]], stage_id: str) -> list[dict[str, Any]]:
+    """The events that name ``stage_id``, in any field: what was said of that state."""
+    return [event for event in events if stage_id in repr(event)]
+
+
+def raised_by(call: Callable[[], Any]) -> Exception | None:
+    """What ``call`` raised; ``None`` when it returned."""
+    try:
+        call()
+    except Exception as exc:
+        return exc
+    return None
+
+
+def the_eio(raised: Exception | None) -> bool:
+    """Whether ``raised`` is the transient error the tests inject: an ``OSError``, errno EIO."""
+    return isinstance(raised, OSError) and raised.errno == errno.EIO
+
+
+def what_it_did(raised: Exception | None) -> str:
+    return "it returned" if raised is None else f"it raised {raised!r}"
+
+
+def refused_open(path: Path, error: int, real: Callable[..., int]) -> Callable[..., int]:
+    """``os.open`` refusing ``path`` with ``error``, as a file system refuses a file it cannot read now, the real one for
+    every other path: matched by its real path, or by its name when relative to a folder's descriptor (``refused_for``
+    of ``test_backup_cli_restore.py``)."""
+    wanted = os.path.realpath(path)
+
+    def refusing(target: Any, *args: Any, dir_fd: int | None = None, **kwargs: Any) -> int:
+        name = os.fsdecode(target)
+        if (dir_fd is None and os.path.realpath(name) == wanted) or (dir_fd is not None and name == path.name):
+            raise OSError(error, os.strerror(error), name)
+        return real(target, *args, dir_fd=dir_fd, **kwargs)
+
+    return refusing
+
+
+def refuse_open(patch: pytest.MonkeyPatch, path: Path, error: int) -> None:
+    """The global ``os.open`` made to refuse ``path`` with ``error`` while ``patch`` lasts, the file on disk as it was.
+    Checked: the precondition that whoever opens it meets that error."""
+    patch.setattr(os, "open", refused_open(path, error, os.open))
+    try:
+        os.close(os.open(path, os.O_RDONLY))
+    except OSError as exc:
+        assert exc.errno == error, f"precondition: os.open refuses {path.name} with {errno.errorcode[error]}, not {exc!r}"
+    else:
+        pytest.fail(f"precondition: os.open must refuse {path.name} with {errno.errorcode[error]}")
+
+
+def by_read_check(root: Path, stage_id: str) -> object:
+    """``read_check`` of the state's id: what the routes call."""
+    return restore_jobs.read_check(stage_id, data_dir=root)
+
+
+def by_checks(root: Path, stage_id: str) -> object:
+    """``restore_jobs._checks``: every check at once, as ``prune``, an upload that finishes and a check's start read them."""
+    return restore_jobs._checks(root)
+
+
+def by_prune(root: Path, stage_id: str) -> object:
+    """``restore_jobs.prune``: at every check's start and at every start of the server."""
+    return prune(root)
+
+
+#: The readers of a check's state: by its id, every check at once, and ``prune``.
+READERS = [pytest.param(by_read_check, id="read_check"), pytest.param(by_checks, id="_checks"), pytest.param(by_prune, id="prune")]
+
+
+# -----------------------------------------------------------------------------
+# (i-1) B-55 A transient error is no «no check»
+# -----------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class RefusedBeside:
+    """``.restore/`` with two checks, each with its copy: one that ended ten minutes ago, whose state the tests make the
+    file system refuse (``refused``); one that ended 25 hours ago, which ``prune`` removes (``old``)."""
+
+    refused: RestoreCheck
+    old: RestoreCheck
+
+
+def refused_beside_old(root: Path) -> RefusedBeside:
+    """``RefusedBeside`` in ``root``, the lock of the checks there and free. Checked: the state to refuse is a valid
+    check's, read back as written."""
+    restore_folders(root)
+    refused_id, old_id = new_stage_id(), new_stage_id()
+    stage_holding(root, refused_id, archive=None, report=True)
+    refused = recorded_check(root, refused_id, new_stage_id(), status="done")
+    stage_holding(root, old_id, archive=None, report=True)
+    old = recorded_check(root, old_id, new_stage_id(), status="done", ended_ago=timedelta(hours=25))
+    assert restore_jobs.read_check(refused_id, data_dir=root) == refused, "precondition: the state to refuse is a valid check's, read back as written"
+    return RefusedBeside(refused=refused, old=old)
+
+
+@pytest.mark.parametrize("reader", READERS)
+def test_a_transient_error_on_a_check_state_goes_through_never_taken_for_no_check(tmp_path, monkeypatch, reader):
+    """(i-1) B-55. The file system refuses a valid check's state with EIO, as a failing disk or a network file system
+    does for a while: ``read_check`` of its id, ``_checks`` and ``prune`` raise that very error — the routes' 500, which
+    the tab retries —, never «no check», which would forget a check that may run; ``prune`` removes nothing, not even the
+    check that ended 25 hours ago beside it: nothing in ``.restore/`` written or removed. Readable again, the check
+    answers as it was, and ``prune`` then removes the old one (the barrier: there was work it did not do). Red until the
+    cure, every row: today ``_read_state`` takes any ``OSError`` for «no check» — ``read_check`` raises
+    ``CheckNotFoundError``, ``_checks`` answers the old check alone, ``prune`` answers 0 and removes the old check."""
+    print_section(f"(i-1) B-55 EIO on a check state: {reader.__name__}")
+    root = data_root(tmp_path)
+    world = refused_beside_old(root)
+    before = as_left(restore_dir(root))
+    with monkeypatch.context() as patch:
+        refuse_open(patch, check_state_path(root, world.refused.stage_id), errno.EIO)
+        raised = raised_by(lambda: reader(root, world.refused.stage_id))
+    after = as_left(restore_dir(root))
+    assert the_eio(raised), f"{reader.__name__}: the EIO it met goes through, an error the tab retries, never «no check»: {what_it_did(raised)}"
+    assert after == before, f"nothing in .restore/ is written or removed: {cli_secure.differences(before, after)}"
+    again = restore_jobs.read_check(world.refused.stage_id, data_dir=root)
+    assert again == world.refused, f"readable again, the check answers as it was: {again}"
+    answer, old = prune(root), (check_state(root, world.old.stage_id), os.path.lexists(stage_dir(root, world.old.stage_id)))
+    assert (answer, old, stage_dir(root, world.refused.stage_id).is_dir()) == (0, (None, False), True), f"barrier: readable again, prune removes the check that ended 25 hours ago with its copy, and keeps the other: {answer}, {old}"
+    print_success(f"{reader.__name__}: EIO raised, nothing touched; readable again, as it was")
+
+
+def test_a_check_does_not_start_past_a_transient_error_on_a_check_state(tmp_path, monkeypatch):
+    """(i-1) B-55. A check's start prunes first: the file system refusing a valid check's state with EIO, the start
+    raises that error, and nothing starts — no thread, no state written, the lock of the checks free, the upload kept
+    for the next try, nothing in ``.restore/`` written or removed. Red until the cure: today ``prune`` takes the state for
+    no check, removes the check that ended 25 hours ago, and the check starts — here, inline, to its end
+    (``not_a_backup``), its upload removed."""
+    root = data_root(tmp_path)
+    world = refused_beside_old(root)
+    upload_id = new_stage_id()
+    upload = upload_path(root, upload_id)
+    upload.write_bytes(NOT_A_BACKUP)
+    upload.chmod(0o600)
+    threads = InlineThreads()
+    monkeypatch.setattr(restore_jobs, "threading", threads)
+    before = as_left(restore_dir(root))
+    with monkeypatch.context() as patch:
+        refuse_open(patch, check_state_path(root, world.refused.stage_id), errno.EIO)
+        raised = raised_by(lambda: restore_jobs.start_check(upload_id, data_dir=root))
+    after = as_left(restore_dir(root))
+    assert the_eio(raised), f"the start raises the EIO its prune met, never past it: {what_it_did(raised)}"
+    assert (threads.started, upload.is_file(), cases.lock_is_free(root)) == ([], True, True), f"nothing starts, the upload is kept, the lock of the checks is free: {threads.started}"
+    assert after == before, f"nothing in .restore/ is written or removed: {cli_secure.differences(before, after)}"
+    print_success("start_check: EIO raised, nothing started, the upload kept")
+
+
+def test_an_upload_that_finishes_past_a_transient_error_on_a_check_state_removes_no_upload(tmp_path, monkeypatch):
+    """(i-1) B-55. An upload that finishes drops the uploads it replaces but those a running check reads, which it learns
+    from every check's state. A check runs (its lock held) on an upload, and the file system refuses its state with EIO:
+    the end of the next upload raises that error, and no upload is removed — neither the one the running check reads nor
+    the one before. Red until the cure: today the running check is taken for no check, ``finish`` returns, and both
+    uploads are removed, the running check's included."""
+    root = data_root(tmp_path)
+    restore_folders(root)
+    read = an_upload(root, new_stage_id())
+    refused_id = new_stage_id()
+    recorded_check(root, refused_id, read.name)
+    read_as_running(root, refused_id)
+    earlier = an_upload(root, new_stage_id())
+    holder = cases.hold_the_lock(root)
+    try:
+        with monkeypatch.context() as patch:
+            refuse_open(patch, check_state_path(root, refused_id), errno.EIO)
+            writer = restore_jobs.UploadWriter(root, max_bytes=None, declared=None)
+            writer.write(CLEAR)
+            raised = raised_by(writer.finish)
+    finally:
+        holder.release()
+    assert the_eio(raised), f"the end of the upload raises the EIO it met reading the checks, never past it: {what_it_did(raised)}"
+    assert (read.is_file(), earlier.is_file()) == (True, True), "no upload is removed: neither the one the running check reads nor the one before"
+    print_success("UploadWriter.finish: EIO raised, no upload removed")
+
+
+def test_the_startup_sweep_logs_a_transient_error_on_a_check_state_and_goes_on(tmp_path, monkeypatch):
+    """(i-1) B-55. Every part of the sweep has work (``everything_left``), and the file system refuses a valid check's
+    state with EIO: one error is logged, «A cleanup of backup leftovers failed», for the part ``restore``, naming
+    ``OSError``; that part's work is left undone — its ``prune`` raised before it ended any check, and the decrypted
+    archive it removes after stays —; the two other parts do theirs. Readable again, the check answers as it was. Red
+    until the cure: today no error is logged and the restore part does its whole work, past the state it could not
+    read."""
+    leftovers = leftovers_module()
+    root = data_root(tmp_path)
+    world = everything_left(root, tmp_path)
+    refused_id = new_stage_id()
+    refused = recorded_check(root, refused_id, new_stage_id(), status="done")
+    assert restore_jobs.read_check(refused_id, data_dir=root) == refused, "precondition: the state to refuse is a valid check's, read back as written"
+    with monkeypatch.context() as patch:
+        refuse_open(patch, check_state_path(root, refused_id), errno.EIO)
+        with apply_cases.logs(LEFTOVERS) as events:
+            outcome = leftovers.sweep_backup_leftovers(root)
+    assert outcome is None, f"the sweep answers None, whatever failed: {outcome!r}"
+    failures = [event for event in events if event.get("event") == FAILURE]
+    assert [(event.get("log_level"), event.get("part")) for event in failures] == [("error", "restore")], f"one error, for the part restore: {apply_cases.logged(events)}"
+    assert "OSError" in [value for key, value in failures[0].items() if key not in ("event", "log_level", "part")], f"the error names the exception's type, OSError: {failures[0]}"
+    assert work_done(world) == {"restore": False, "decrypt_folders": True, "jobs": True}, f"the two other parts do their whole work, restore none: {work_done(world)}"
+    assert work_untouched(world)["restore"], "the restore part's work is left as it was: the checks still recorded running, the decrypted archive there"
+    assert restore_jobs.read_check(refused_id, data_dir=root) == refused, "readable again, the check answers as it was"
+    print_success("restore: OSError logged once; decrypt_folders and jobs done")
+
+
+# -----------------------------------------------------------------------------
+# (i-2) B-53 A link, a FIFO, a date without a time zone: no check, in silence
+# -----------------------------------------------------------------------------
+
+
+def assert_no_check(reader: Callable[..., object], outcome: Outcome, root: Path, world: ChecksBeside, unreadable: dict[str, tuple[int, int, int, int]]) -> None:
+    """What ``reader`` answers beside a check state that is no check's: ``read_check`` of its id ``CheckNotFoundError``
+    (the routes' 404 ``restore_stage_not_found``); ``_checks`` the three checks it reads; ``prune`` 1, its usual work done,
+    the state left as it was (just made: B-54 leaves it)."""
+    if reader is by_read_check:
+        assert isinstance(outcome.raised, restore_jobs.CheckNotFoundError), f"read_check of its id: no check, not {outcome}"
+        return
+    assert outcome.raised is None, f"{reader.__name__} reads past it, and raises nothing: {outcome.raised!r}"
+    if reader is by_checks:
+        found = {check.stage_id: check.status for check in outcome.value}
+        expected = {world.old.stage_id: "done", world.recent.stage_id: "done", world.interrupted.stage_id: "running"}
+        assert found == expected, f"_checks answers the three checks it reads, and skips the state: {found}"
+        return
+    assert outcome.value == 1, f"prune ends the check a stopped server left running, and answers 1, not {outcome.value!r}"
+    assert_prune_did_its_work(root, world, unreadable)
+
+
+@pytest.mark.parametrize("reader", READERS)
+@pytest.mark.parametrize("how", NEW_SHAPES)
+def test_a_link_a_fifo_or_a_date_without_time_zone_as_a_check_state_is_no_check_in_silence(tmp_path, mode_000, how, reader):
+    """(i-2) B-53, B-55. In a check state's place: a link — to a valid state of that very id elsewhere, which would answer
+    a check were it followed, or to nothing —, a FIFO, a done check's state one of whose dates has no time zone (its
+    dates say it ended 25 hours ago: read as a check, ``prune`` would remove it). Each is no check, through
+    ``read_check``, ``_checks`` and ``prune``, which return within ``READ_DEADLINE_S``; nothing is said of it, nothing
+    logged as a warning; the link's target stays as it was; no descriptor is left open on the FIFO. Guards, green today:
+    the links (``O_NOFOLLOW``). Red until the cure: the FIFO, every reader waits on it for a writer (let go, past the
+    deadline, by the test); the dates without a time zone — ``read_check`` returns the check, ``_checks`` lists it,
+    ``prune`` raises ``TypeError`` comparing a naive ``finished_at`` with an aware time, or, the ``created_at`` naive,
+    removes the check by what its ``finished_at`` says and logs it."""
+    print_section(f"(i-2) B-53 {how} as a check state: {reader.__name__}")
+    root = data_root(tmp_path)
+    world = checks_beside(root, how, mode_000, says_ended=PAST_LIFETIME)
+    entry = check_state_path(root, world.unreadable)
+    unreadable = as_left(entry)
+    outside = cli_secure.entries(outside_checks(root)) if outside_checks(root).is_dir() else None
+    fifos = fifos_of(how, entry)
+    with apply_cases.logs(restore_jobs.__name__) as events:
+        outcome = within_deadline(lambda: reader(root, world.unreadable), fifos=fifos)
+    left_open = [fd for fifo in fifos for fd in closed_descriptors_on(fifo)]
+    assert outcome.in_time, f"{reader.__name__} returns within {READ_DEADLINE_S} s: it waited on the {how} (then let go: {outcome})"
+    assert left_open == [], f"{len(left_open)} descriptor(s) left open on the FIFO: {left_open}"
+    assert_no_check(reader, outcome, root, world, unreadable)
+    assert outside is None or cli_secure.entries(outside_checks(root)) == outside, "the link's target stays as it was"
+    said = said_of(events, world.unreadable) + logged_at(events, WARNED_LEVELS)
+    assert said == [], f"no check, in silence: {said}"
+    print_success(f"{how}, {reader.__name__}: no check, in time, nothing said")
+
+
+# -----------------------------------------------------------------------------
+# (i-3) B-54 Old unreadable states pruned while no check runs
+# -----------------------------------------------------------------------------
+
+
+def entry_of(root: Path, how: str, stage_id: str) -> Path:
+    """The entry ``unreadable_check_state`` made in ``checks/``: ``<id>.json``, or ``<id>.json.part``."""
+    path = check_state_path(root, stage_id)
+    return path.with_name(path.name + PARTIAL_STATE) if how == "half-written-part" else path
+
+
+def made_old(entry: Path) -> Path:
+    """``entry`` last modified ``PAST_LIFETIME`` ago, by its own modification time — a link's own, never its target's; a
+    folder with a file put in it first, both aged, so that it is removed with what it holds. Checked."""
+    seconds = PAST_LIFETIME.total_seconds()
+    if is_plain_dir(entry):
+        inside = entry / "left-inside.bin"
+        inside.write_bytes(CLEAR)
+        cli_secure.aged(inside, seconds)
+    cli_secure.aged(entry, seconds)
+    age = time.time() - entry.lstat().st_mtime
+    assert age > STAGE_LIFETIME.total_seconds(), f"precondition: {entry.name} last modified longer ago than STAGE_LIFETIME, by its own time: {age:.0f} s"
+    return entry
+
+
+def other_names_made_old(root: Path) -> list[Path]:
+    """The ``OTHER_NAMES`` in ``checks/`` (``{id}`` a stage id), files of a few bytes (0600), each ``PAST_LIFETIME`` old."""
+    made = []
+    for name in OTHER_NAMES:
+        path = checks_dir(root) / name.format(id=new_stage_id())
+        path.write_bytes(b"not a check's state")
+        path.chmod(0o600)
+        made.append(cli_secure.aged(path, PAST_LIFETIME.total_seconds()))
+    return made
+
+
+@pytest.mark.parametrize("how", OLD_SHAPES)
+def test_prune_removes_an_unreadable_check_state_older_than_its_lifetime_while_no_check_runs(tmp_path, mode_000, how):
+    """(i-3) B-54. While no check runs, an entry of ``checks/`` no readable check records — ``<id>.json`` or
+    ``<id>.json.part`` — older than ``STAGE_LIFETIME`` by its own modification time is removed by ``prune``: a file
+    whatever its content or mode, a folder with its content, a link (never its target), a FIFO; its content never read
+    for its age (a ``naive-*`` one says it ended ten minutes ago). In silence: nothing said of it, no warning. ``prune``
+    answers 1 and does its usual work on the readable checks; the old names that are no state's stay as they were. Red
+    until the cure, every row: today ``prune`` leaves every unreadable entry forever — and ``naive-finished_at`` raises
+    ``TypeError``, ``fifo`` waits on its FIFO, ``naive-created_at`` is kept as the recent check its dates say."""
+    print_section(f"(i-3) B-54 An unreadable check state older than STAGE_LIFETIME, {how}: prune")
+    root = data_root(tmp_path)
+    world = checks_beside(root, how, mode_000)
+    entry = made_old(entry_of(root, how, world.unreadable))
+    others = {path: as_left(path) for path in other_names_made_old(root)}
+    outside = cli_secure.entries(outside_checks(root)) if outside_checks(root).is_dir() else None
+    with apply_cases.logs(restore_jobs.__name__) as events:
+        outcome = within_deadline(lambda: prune(root), fifos=fifos_of(how, entry))
+    assert outcome.in_time, f"prune returns within {READ_DEADLINE_S} s: it waited on the {how} (then let go: {outcome})"
+    assert (outcome.raised, outcome.value) == (None, 1), f"prune works, and answers the check it ended as interrupted: {outcome}"
+    assert_prune_did_its_usual_work(root, world)
+    assert not os.path.lexists(entry), f"the unreadable {entry.name}, {how}, older than STAGE_LIFETIME, is removed"
+    gone = sorted(path.name for path in others if not os.path.lexists(path))
+    assert gone == [], f"what is no check's state stays, however old: {gone} removed"
+    assert {path: as_left(path) for path in others} == others, "what is no check's state is left as it was"
+    assert outside is None or cli_secure.entries(outside_checks(root)) == outside, "a link is removed itself, never its target"
+    said = said_of(events, world.unreadable) + logged_at(events, WARNED_LEVELS)
+    assert said == [], f"removed in silence: {said}"
+    print_success(f"{how}: removed, in silence; prune's usual work done")
+
+
+#: (i-3) Who keeps an old unreadable state: a check that runs (the lock of the checks held), a restore waiting on the
+#: stage of its id (the protected stage).
+KEEPERS = [pytest.param("a-check-runs", id="while-a-check-runs"), pytest.param("a-restore-waits", id="a-restore-waits-on-its-stage")]
+
+
+@pytest.mark.parametrize("how", OLD_SHAPES)
+@pytest.mark.parametrize("keeper", KEEPERS)
+def test_an_old_unreadable_check_state_stays_while_a_check_runs_or_a_restore_waits_on_its_stage(tmp_path, mode_000, keeper, how):
+    """(i-3) B-54. An unreadable entry of ``checks/`` older than ``STAGE_LIFETIME`` stays while a check runs — nothing in
+    ``checks/`` is removed then, however old — and when its id is the stage a restore waits on: ``prune`` answers 0,
+    returns within ``READ_DEADLINE_S``, ``checks/`` as it was, nothing logged. Guards, green today (``prune`` never
+    touches an unreadable entry), but three rows red until the cure for (i-2)'s reasons: ``fifo`` under both keepers (the
+    read waits on it), and ``naive-finished_at`` while a check runs (``TypeError``; the protected one is skipped before
+    its dates are compared)."""
+    root = data_root(tmp_path)
+    restore_folders(root)
+    stage_id = unreadable_check_state(root, how, mode_000)
+    entry = made_old(entry_of(root, how, stage_id))
+    if keeper == "a-restore-waits":
+        pending_restore(root, stage_id)
+    before = as_left(checks_dir(root))
+    holder = cases.hold_the_lock(root) if keeper == "a-check-runs" else None
+    try:
+        with apply_cases.logs(restore_jobs.__name__) as events:
+            outcome = within_deadline(lambda: prune(root), fifos=fifos_of(how, entry))
+    finally:
+        if holder is not None:
+            holder.release()
+    assert outcome.in_time, f"prune returns within {READ_DEADLINE_S} s: it waited on the {how} (then let go: {outcome})"
+    assert (outcome.raised, outcome.value) == (None, 0), f"prune works, and ends no check: {outcome}"
+    after = as_left(checks_dir(root))
+    assert after == before, f"{keeper}: nothing in checks/ is removed, however old: {cli_secure.differences(before, after)}"
+    assert apply_cases.logged(events) == [], f"nothing logged: {apply_cases.logged(events)}"
+    print_success(f"{keeper}, {how}: kept")
+
+
+def test_prune_leaves_what_is_not_a_check_state_in_the_checks_folder_however_old(tmp_path, mode_000):
+    """(i-3) B-54. Only ``<id>.json`` and ``<id>.json.part`` with a stage id are a check's state or one being written:
+    ``notes.txt``, ``abc.json`` and ``<id>.yaml``, older than ``STAGE_LIFETIME``, stay as they were while ``prune`` does
+    its usual work beside them and leaves the state of (h) just made; nothing is said of them. Guard, green today."""
+    root = data_root(tmp_path)
+    world = checks_beside(root, "empty-file", mode_000)
+    unreadable = as_left(check_state_path(root, world.unreadable))
+    others = {path: as_left(path) for path in other_names_made_old(root)}
+    with apply_cases.logs(restore_jobs.__name__) as events:
+        answer = prune(root)
+    assert answer == 1, f"prune ends the check a stopped server left running, and answers 1, not {answer!r}"
+    assert_prune_did_its_work(root, world, unreadable)
+    gone = sorted(path.name for path in others if not os.path.lexists(path))
+    assert gone == [], f"what is no check's state stays, however old: {gone} removed"
+    assert {path: as_left(path) for path in others} == others, "what is no check's state is left as it was"
+    said = [event for event in events if any(path.name in repr(event) for path in others)] + logged_at(events, WARNED_LEVELS)
+    assert said == [], f"nothing said of them: {said}"
+    print_success(f"{[path.name for path in others]}: kept")
+
+
+# -----------------------------------------------------------------------------
+# (i-4) B-53 The startup sweep beside a FIFO
+# -----------------------------------------------------------------------------
+
+
+@archive_cases.needs_fifo
+@archive_cases.needs_dev_fd
+def test_the_startup_sweep_returns_in_time_beside_a_fifo_as_a_check_state(tmp_path, mode_000):
+    """(i-4) B-53. A FIFO in a check state's place, the sweep at startup: it returns within ``READ_DEADLINE_S``, raises
+    nothing, logs neither an error nor a warning, leaves no descriptor open on the FIFO, and does the whole work of its
+    ``restore`` part — ``prune``'s (the FIFO, just made, left as it was), then the decrypted archive a killed check left —,
+    its INFO line saying so. Red until the cure: today ``prune`` waits on the FIFO for a writer, and with it the start of
+    the server (let go, past the deadline, by the test)."""
+    print_section("(i-4) B-53 The startup sweep beside a FIFO as a check state")
+    root = data_root(tmp_path)
+    world = checks_beside(root, "fifo", mode_000)
+    stray = stage_holding(root) / STAGE_DECRYPTED_ARCHIVE
+    fifo = check_state_path(root, world.unreadable)
+    unreadable = as_left(fifo)
+    with apply_cases.logs(LEFTOVERS) as events:
+        outcome = within_deadline(lambda: sweep(root), fifos=(fifo,))
+    left_open = closed_descriptors_on(fifo)
+    assert outcome.in_time, f"the sweep returns within {READ_DEADLINE_S} s: it waited on the FIFO (then let go: {outcome})"
+    assert outcome.raised is None, f"the sweep raises nothing: {outcome.raised!r}"
+    assert left_open == [], f"{len(left_open)} descriptor(s) left open on the FIFO: {left_open}"
+    warned = logged_at(events, WARNED_LEVELS)
+    assert warned == [], f"the restore part does not fail, and nothing is said of the FIFO: {warned}"
+    assert_prune_did_its_work(root, world, unreadable)
+    assert not os.path.lexists(stray), "the decrypted archive a killed check left in a copy is removed, after prune, in the same part"
+    counts = summary_counts(events)
+    assert counts == {**dict.fromkeys(COUNTS, 0), "checks_interrupted": 1, "decrypted_archives": 1}, f"the sweep says what it did, and nothing else: {counts}"
+    print_success("the sweep returned in time; nothing logged above INFO")
+
+
+# -----------------------------------------------------------------------------
+# (i-5) B-53, point 7: the startup sweep beside a FIFO as a job's state
+# -----------------------------------------------------------------------------
+
+
+@archive_cases.needs_fifo
+@archive_cases.needs_dev_fd
+def test_the_startup_sweep_returns_in_time_beside_a_fifo_as_a_job_state(tmp_path, mode_000):
+    """(i-5) B-53, point 7 of its contract (the coordinator, 10:39: the jobs' reader goes through the same helper). A
+    FIFO in place of the ``state.json`` of two job folders, one last modified ten minutes ago, one two hours ago, beside
+    the jobs of (h)'s jobs sweep: the sweep returns within ``READ_DEADLINE_S`` and raises nothing; no error logged; the
+    jobs part does its usual work — the run a stopped server left running ended ``backup_interrupted``, its state alone
+    left; the job that ended two hours ago removed; the one that ended ten minutes ago kept as it was —, and dates the
+    folders whose state is a FIFO by their modification time, as any unreadable one: the one ten minutes old kept as it
+    was, the one two hours old removed. Its INFO line says so: ``jobs_interrupted`` 1, ``jobs_expired`` 2. No
+    descriptor left open on the FIFO that stays. Red until the cure: ``end_interrupted_jobs``, then
+    ``remove_expired_jobs``, wait on each FIFO for a writer (``read_text``), and with them the start of the server (let
+    go, past the deadline, by the test, one reader after the other)."""
+    print_section("(i-5) B-53 The startup sweep beside a FIFO as a job's state")
+    root = data_root(tmp_path)
+    job, folder = running_job(root)
+    _expired_job, expired = finished_job(root, ended=LONG_AGO)
+    _recent_job, recent = finished_job(root, ended=RECENTLY)
+    young = unreadable_job_folder(root, "fifo", mode_000, age=RECENTLY)
+    old = unreadable_job_folder(root, "fifo", mode_000, age=LONG_AGO)
+    free_run_lock(root)
+    kept, young_before = cli_secure.entries(recent), as_left(young)
+    started = datetime.now(UTC)
+    with apply_cases.logs(LEFTOVERS) as events:
+        outcome = within_deadline(lambda: sweep(root), fifos=(young / STATE_FILE, old / STATE_FILE))
+    left_open = closed_descriptors_on(young / STATE_FILE)
+    assert outcome.in_time, f"the sweep returns within {READ_DEADLINE_S} s: it waited on a FIFO as a job's state (then let go: {outcome})"
+    assert outcome.raised is None, f"the sweep raises nothing: {outcome.raised!r}"
+    assert left_open == [], f"{len(left_open)} descriptor(s) left open on the FIFO: {left_open}"
+    errors = logged_at(events, ERROR_LEVELS)
+    assert errors == [], f"a FIFO as a job's state is no state: the jobs part does not fail: {errors}"
+    assert_ended_interrupted(job, folder, started, datetime.now(UTC))
+    assert not os.path.lexists(expired), "the job that ended two hours ago is removed, with its archive"
+    assert cli_secure.entries(recent) == kept, "the job that ended ten minutes ago is kept as it was"
+    assert as_left(young) == young_before, "the folder whose state is a FIFO, last modified ten minutes ago, is kept as it was"
+    assert not os.path.lexists(old), "the folder whose state is a FIFO, last modified two hours ago, is removed: its modification time dates it"
+    counts = summary_counts(events)
+    assert counts == {**dict.fromkeys(COUNTS, 0), "jobs_interrupted": 1, "jobs_expired": 2}, f"the sweep says what it did, and nothing else: {counts}"
+    print_success("the sweep returned in time; 1 job ended, the expired job and the FIFO folder two hours old removed")
