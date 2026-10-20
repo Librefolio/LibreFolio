@@ -20,7 +20,7 @@ function contract(analysisId: AiExportAnalysisId, sections: readonly AiExportRes
     return {id: `${analysisId}.response`, version: 1, analysisId, sections};
 }
 
-const facts = section('LibreFolio Facts', 'State the relevant supplied facts, units, currencies, signs, dates, periods, scope, methodologies, coverage, and data-quality status before interpreting them.');
+const facts = section('Key Facts', 'Cite only the supplied facts your conclusions rely on, briefly, with their units, currencies, signs, dates, periods, scope, coverage, and data-quality limits where they matter. Do not restate or summarize the rest of the Snapshot Data.');
 const evidence = section('Evidence and Interpretation', 'Connect conclusions to supplied evidence. Separate observation, calculation, interpretation, assumption, and uncertainty; never invent missing evidence.');
 const limits = section('Assumptions, Limits, and Questions', 'List material data gaps, assumptions, unresolved user inputs, and interpretation limits. Ask only questions that could change the result.');
 const scenarioThesis = section(

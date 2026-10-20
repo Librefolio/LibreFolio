@@ -68,7 +68,7 @@ Where the link leads depends on your instance's support address; its tooltip tel
 | Support address | What **Let us know** does |
 |---|---|
 | An email address | Your email app opens a message with the subject and the details filled in |
-| A web page | The page opens in a new tab and the details are copied, ready to paste there; a message confirms the copy, or says it failed |
+| A web page | The page opens in a new tab with the subject and the details in its address, so a support form can fill itself in. The details are copied too, ready to paste there; a message confirms the copy, or says it failed |
 | None (the default), on a self-hosted instance | A new GitHub issue opens in a new tab, filled in. It is **public**: review it before you submit it |
 
 On a managed instance, one that a hosting provider runs for you, **Let us know** needs a support

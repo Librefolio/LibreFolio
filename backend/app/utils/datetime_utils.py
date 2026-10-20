@@ -110,7 +110,7 @@ def server_today() -> date:
     """Today by the server's calendar: its local date, as ``date.today()`` reads it (``today_date()`` above is UTC's).
 
     The day ``latest_range_end()`` follows. A broker import that keeps only settled rows compares with it (N74, the plugin
-    guide's rule «only safe rows»): a row whose value date comes after it has not settled yet, and arrives with the next
+    guide's rule «the operation date, and only settled rows»): a row whose value date comes after it has not settled yet, and arrives with the next
     export.
     """
     return date.today()

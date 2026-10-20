@@ -381,7 +381,8 @@
         "invalid": "invalides",
         "not_yet_settled": "pas encore réglées",
         "outside_cash_coverage": "réglées avant le début du relevé",
-        "superseded": "remplacées par un fichier plus récent"
+        "superseded": "remplacées par un fichier plus récent",
+        "reservation": "réservées, non comptabilisées"
       },
       "downloadCombined": "Télécharger le fichier combiné",
       "warning": {

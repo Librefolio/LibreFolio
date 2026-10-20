@@ -13,17 +13,17 @@ the OpenAPI document of the application. The readers and the links behind the bl
 2. An invalid address (another scheme, ``mailto:`` included, or none) is ``null``, beside the other link when that one is
    valid, and the answer is still 200: an invalid address never breaks what the app reads at startup. An address with
    user info is ``null``, and the answer holds neither its user name nor its password.
-3. Unchanged: the other fields. The answer is exactly ``profile``, ``accounts``, ``email``, ``support_url`` and now
-   ``legal``; the profile is still the one ``LIBREFOLIO_PROFILE`` sets; ``support_url`` is still the support address
-   alone, never a legal one, and no legal link is ever the support address.
+3. Unchanged: the other fields. The answer is exactly ``profile``, ``accounts``, ``email``, ``support_url``, ``legal``
+   and (H-60) ``client_log_level``; the profile is still the one ``LIBREFOLIO_PROFILE`` sets; ``support_url`` is still
+   the support address alone, never a legal one, and no legal link is ever the support address.
 4. ``LegalInstanceConfig``, in ``backend/app/schemas/system.py``: exactly ``terms_url`` and ``privacy_url``, each a
    string or ``null``. ``InstanceConfigResponse.legal`` is typed with it and defaults to both ``null``: an answer built
    without it says that no legal link is set.
 5. The OpenAPI document of the application (``backend.app.main.app.openapi()``, what ``./dev.py api sync`` exports to
    the frontend) declares it: the 200 of ``GET /api/v1/system/instance`` is ``InstanceConfigResponse``, whose properties
-   are the fields of before and ``legal``; ``legal`` refers to ``LegalInstanceConfig`` and is not required (it has a
-   default, as ``email`` has); ``LegalInstanceConfig``'s properties are exactly ``terms_url`` and ``privacy_url``, each a
-   string or null.
+   are the fields of before, ``legal`` and ``client_log_level``; ``legal`` refers to ``LegalInstanceConfig`` and is not
+   required (it has a default, as ``email`` has); ``LegalInstanceConfig``'s properties are exactly ``terms_url`` and
+   ``privacy_url``, each a string or null.
 6. Live, on the lane's backend: the lane sets neither variable (the runner drops every ``LIBREFOLIO_*`` setting), so an
    anonymous request reads ``legal`` with both ``null``.
 
@@ -84,8 +84,8 @@ LEGAL_SCHEMA = "LegalInstanceConfig"
 LEGAL_FIELD = "legal"
 LEGAL_KEYS = {"terms_url", "privacy_url"}
 NO_LEGAL_LINK = {"terms_url": None, "privacy_url": None}
-#: The public configuration after A9: the fields of before, and legal.
-INSTANCE_KEYS = {"profile", "accounts", "email", "support_url", LEGAL_FIELD}
+#: The public configuration after A9 and H-60: the fields of before, legal, and client_log_level.
+INSTANCE_KEYS = {"profile", "accounts", "email", "support_url", LEGAL_FIELD, "client_log_level"}
 
 TERMS_ADDRESS = "https://legal.example.org/terms"
 PRIVACY_ADDRESS = "https://legal.example.org/privacy"
@@ -181,11 +181,11 @@ async def _anonymous_get(app: FastAPI) -> httpx.Response:
 
 
 def _body_and_legal(response: httpx.Response) -> tuple[dict[str, Any], dict[str, Any]]:
-    """The answer and its ``legal`` block, behind the barriers: 200, the block present, the fields of before and ``legal``, the block exactly its two keys."""
+    """The answer and its ``legal`` block, behind the barriers: 200, the block present, the fields of before, ``legal`` and ``client_log_level``, the block exactly its two keys."""
     assert response.status_code == 200, f"GET /system/instance is public and never breaks on a link: expected 200, got {response.status_code}: {response.text}"
     body = response.json()
     assert LEGAL_FIELD in body, f"red until A9: GET /system/instance answers no {LEGAL_FIELD} block: {response.text}"
-    assert set(body) == INSTANCE_KEYS, f"the public configuration must be exactly the fields of before and {LEGAL_FIELD}: missing {INSTANCE_KEYS - set(body)}, extra {set(body) - INSTANCE_KEYS}"
+    assert set(body) == INSTANCE_KEYS, f"the public configuration must be exactly the fields of before, {LEGAL_FIELD} and client_log_level: missing {INSTANCE_KEYS - set(body)}, extra {set(body) - INSTANCE_KEYS}"
     legal = body[LEGAL_FIELD]
     assert isinstance(legal, dict) and set(legal) == LEGAL_KEYS, f"{LEGAL_FIELD} must be exactly {sorted(LEGAL_KEYS)}: {legal!r}"
     return body, legal
@@ -368,7 +368,7 @@ def test_an_answer_built_without_legal_says_no_legal_link_is_set() -> None:
 
 # red until A9: backend/app/schemas/system.py has no LegalInstanceConfig
 def test_the_openapi_document_of_the_application_declares_legal() -> None:
-    """ICL-008 (5): in ``app.openapi()`` the 200 of ``GET /system/instance`` declares the fields of before and ``legal``, not required, referring to ``LegalInstanceConfig``, exactly ``terms_url`` and ``privacy_url``, each a string or null."""
+    """ICL-008 (5): in ``app.openapi()`` the 200 of ``GET /system/instance`` declares the fields of before, ``client_log_level`` and ``legal``, not required, referring to ``LegalInstanceConfig``, exactly ``terms_url`` and ``privacy_url``, each a string or null."""
     print_section(f"ICL-008: {LEGAL_FIELD} in the OpenAPI document of the application")
     _legal_model()
     from backend.app.main import app  # noqa: PLC0415 — only this test pays for importing the application, and after the lookup above
@@ -377,7 +377,7 @@ def test_the_openapi_document_of_the_application_declares_legal() -> None:
 
     response_schema = document["paths"][INSTANCE_PATH]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
     _, instance_schema = _component(document, response_schema)
-    assert set(instance_schema["properties"]) == INSTANCE_KEYS, f"the 200 of GET /system/instance must declare exactly the fields of before and {LEGAL_FIELD}: {sorted(instance_schema['properties'])}"
+    assert set(instance_schema["properties"]) == INSTANCE_KEYS, f"the 200 of GET /system/instance must declare exactly the fields of before, {LEGAL_FIELD} and client_log_level: {sorted(instance_schema['properties'])}"
     assert LEGAL_FIELD not in instance_schema.get("required", []), f"{LEGAL_FIELD} has a default, both null: it must not be required, as email is not; required: {instance_schema.get('required')}"
     legal_name, legal_schema = _component(document, instance_schema["properties"][LEGAL_FIELD])
     assert legal_name.split("-")[0] == LEGAL_SCHEMA, f"{LEGAL_FIELD} must refer to {LEGAL_SCHEMA}, refers to {legal_name}"
