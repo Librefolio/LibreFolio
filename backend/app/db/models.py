@@ -297,7 +297,7 @@ class TransactionType(StrEnum):
     Impact:
     - TRANSFER, FX_CONVERSION and CASH_TRANSFER require related_transaction_id
     - Validation ensures sign rules are followed
-    - All calculations based on settlement date
+    - All calculations based on the trade date: the day the operation was made (B-52)
     """
 
     BUY = "BUY"
@@ -854,7 +854,7 @@ class Transaction(SQLModel, table=True):
     Field semantics:
     - quantity: Asset delta (positive = buy/in, negative = sell/out)
     - amount: Cash delta (positive = receive, negative = spend)
-    - date: Settlement date (when transaction is finalized)
+    - date: Trade date (the day the operation was made, not the day its cash settles; B-52)
 
     Relationship rules:
     - TRANSFER: quantity != 0, amount = 0, related_transaction_id REQUIRED
@@ -881,7 +881,7 @@ class Transaction(SQLModel, table=True):
     )
 
     type: TransactionType = Field(nullable=False)
-    date: date_type = Field(nullable=False, description="Settlement date")
+    date: date_type = Field(nullable=False, description="Trade date: the day the operation was made")
 
     # Signed values: + in, - out. Default 0, NOT NULL for SUM calculations
     quantity: Decimal = Field(
