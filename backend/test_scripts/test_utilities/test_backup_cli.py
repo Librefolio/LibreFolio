@@ -30,7 +30,9 @@ Instance backup, the command line (workstream B, lot B1): ``scripts/backup_cli.p
 (f) The script: ``python scripts/backup_cli.py create``, then ``inspect`` on the archive it wrote, both exit 0;
     without a command, exit 1. B-50: ``create`` with a job folder in ``backups/.jobs`` whose state cannot be read
     (JSON that is no object, a folder) exits 0 all the same, one archive written, no traceback, that folder (younger
-    than an hour by its date) kept.
+    than an hour by its date) kept. B-53: the same with a ``state.json`` that is no regular file, within the child's
+    timeout: a FIFO without a writer (never waited on), a link to the state of a job that expired (never followed:
+    the folder goes by its own date, and what the link points to is left as it is).
 (g) ``_check_output``: an existing folder is accepted, even one holding a ``librefolio-backup.zip``; a new file path is
     accepted when the nearest folder of it that exists is a folder this process can write into, and nothing is
     created. A file, a link to a file or a dangling link at the path: "already exists"; a file where a folder of the
@@ -113,6 +115,7 @@ AS_ROOT = POSIX and os.geteuid() == 0
 needs_posix_modes = pytest.mark.skipif(not POSIX, reason="file modes are POSIX only")
 needs_symlinks = pytest.mark.skipif(not POSIX, reason="symbolic links need a privilege on Windows")
 needs_permission_checks = pytest.mark.skipif(not POSIX or AS_ROOT, reason="needs POSIX permissions, which root bypasses")
+needs_fifos = pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFOs are POSIX only")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = PROJECT_ROOT / "scripts" / "backup_cli.py"
@@ -880,6 +883,57 @@ def test_the_script_creates_a_backup_past_a_job_whose_state_cannot_be_read(tmp_p
     assert len(written) == 1 and check_archive(written[0]).ok, f"create writes one archive in <data dir>/backups/, which checks ok: {[path.name for path in written]}{output}"
     assert job_folders(data) == [VALID_ID], f"the unreadable job's folder, younger than an hour, is kept, and the new job's folder removed: {job_folders(data)}"
     print_success(f"{shape}: exit 0, {written[0].name}, the unreadable job kept")
+
+
+def fifo_in_place(state: Path, elsewhere: Path) -> None:
+    """A FIFO without a writer: a plain read of it waits for one, forever."""
+    os.mkfifo(state, 0o600)
+
+
+def link_in_place(state: Path, elsewhere: Path) -> None:
+    """A link to a whole state outside the data directory, of a job that finished two hours ago: followed, it makes the
+    folder an expired job's, removed at once; never followed, the folder goes by its own date (just made: kept)."""
+    finished = datetime.now(UTC) - timedelta(hours=2)
+    expired = jobs.BackupJob(job_id=VALID_ID, origin="ui", status="done", phase=None, done_bytes=1, total_bytes=1, created_at=finished - timedelta(minutes=1), finished_at=finished)
+    target = elsewhere / STATE_FILE
+    target.write_text(expired.to_json(), encoding="utf-8")
+    state.symlink_to(target)
+
+
+#: A job folder left in ``backups/.jobs`` whose ``state.json`` is no regular file (B-53), made from the state's path and
+#: a folder outside the data directory. Every ``create`` removes the expired jobs first, reading the state of each job.
+NOT_REGULAR_JOB_STATES = {
+    "state-is-a-fifo": fifo_in_place,
+    "state-is-a-link": link_in_place,
+}
+
+
+@pytest.mark.parametrize("shape", [pytest.param("state-is-a-fifo", id="state-is-a-fifo", marks=needs_fifos), pytest.param("state-is-a-link", id="state-is-a-link", marks=needs_symlinks)])
+def test_the_script_creates_a_backup_past_a_job_whose_state_is_no_regular_file(tmp_path, shape):
+    """(f) B-53: a job folder whose ``state.json`` is no regular file stops ``create`` no more. A FIFO without a writer:
+    a read that waits on it never ends, and the child's timeout (``CLI_TIMEOUT``) kills it. A link to the state of a
+    job that finished two hours ago, outside the data directory: a read that follows it removes the folder as expired.
+    Exit 0 within the timeout, one archive in ``backups/``, no traceback; the folder, made just now, kept by its own
+    date; what the link points to left as it is. The FIFO is removed at the end, whatever the outcome."""
+    data = make_data_dir(tmp_path / "data").resolve()
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    state = ensure_private_dir(job_dir(data, VALID_ID), data) / STATE_FILE
+    NOT_REGULAR_JOB_STATES[shape](state, elsewhere)
+    outside = {path.name: path.read_bytes() for path in elsewhere.iterdir()}
+    try:
+        created = script("create", env=child_env(data), cwd=tmp_path)
+    finally:
+        if shape == "state-is-a-fifo":
+            # The child has ended, exited or killed at its timeout: nothing waits on the FIFO, and nothing may later.
+            state.unlink(missing_ok=True)
+    output = f"\n--- stdout\n{created.stdout[-TAIL:]}\n--- stderr\n{created.stderr[-TAIL:]}"
+    assert (created.returncode, "Traceback" in created.stderr) == (0, False), f"create must exit 0, without a traceback, past a job whose state is {shape}: exit {created.returncode}{output}"
+    written = sorted(backups_dir(data).glob("*.zip"))
+    assert len(written) == 1 and check_archive(written[0]).ok, f"create writes one archive in <data dir>/backups/, which checks ok: {[path.name for path in written]}{output}"
+    assert job_folders(data) == [VALID_ID], f"the folder of the job whose state is {shape}, made just now, is kept by its own date (never by the date of what a link points to), and the new job's folder removed: {job_folders(data)}"
+    assert {path.name: path.read_bytes() for path in elsewhere.iterdir()} == outside, "what the link points to is never written nor removed"
+    print_success(f"{shape}: exit 0, {written[0].name}, the job's folder kept by its own date")
 
 
 def test_the_script_without_a_command_exits_1(tmp_path):
