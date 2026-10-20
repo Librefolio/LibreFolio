@@ -9699,8 +9699,8 @@ punto di partenza, l'audit dello stesso giorno:
 - **MF-E · Sintesi del lotto nella casa, segno dei corti nella storia di performance, T-B8** — medio, numeri (corti
   aperti); audit 16/10, riverifica MF (`histories.py:63-72`). Dettagli: piano MF, sezione «MF-E».
   **E1 entrato** il 17/10: dev `e43dfae68`. **E2** (corti nella storia di performance): il 19/10 il developer approva
-  l'esposizione lorda con le D1–D3 di MF; in coda dopo P2 e MF-P1b, prima il piano breve (`lots/histories.py` è aperto da
-  J con L1a: ordine e merge dal coordinatore), poi il via.
+  l'esposizione lorda con le D1–D3 di MF; via il 20/10 (E2-Q1: capitale = incassi cumulati, coordinatore); codice e test
+  pronti il 20/10 (232 + 1 test, 17 + 1 rossi prima), in attesa dello slot e del checkpoint; la parità si rifà dopo L1a.
 - ✅ **MF-F · Segno del reddito nei lotti e nella timeline dei redditi dell'AI Export** (O3, B9) — piccolo, numeri; audit
   16/10. Decisione D-MF3. Dettagli: piano MF, sezione «MF-F».
   **Entrato** il 16/10: F1 e F2 in dev `8d244d1c6`.
@@ -9986,3 +9986,9 @@ punto di partenza, l'audit dello stesso giorno:
   a zero; (2) `_is_xirr_root` scarta radici vere quando il VAN è mal condizionato (termini enormi che si annullano). P1
   le ha conservate al bit, fissate nei test con un commento. I valori che cambiano si dichiarano prima, come domanda se
   toccano numeri mostrati. Dettagli: piano MF, voce P1.
+- **MF-E2b · Lo storico di performance dei lotti perde i flussi dei giorni senza valore** — piccolo, numeri (rari);
+  test-author di MF, 20/10 (E2). `calculate_simple_roi_series` e `calculate_twrr_period_series` contano solo i flussi
+  datati in un giorno con NAV: un acquisto o una vendita in un giorno senza valore dopo il primo (nel servizio, un prezzo
+  senza cambio verso la valuta del rapporto) non entra mai in ROI e TWRR, mentre le sue quote sono nel valore del giorno
+  dopo; vale anche per i soli lunghi (esempio: +50 %/+50 % dove il vero è 0 %). Cura proposta: spostare il flusso al primo
+  giorno con valore successivo; domanda al developer. Dettagli: piano MF, «MF-E2 — via», domanda MF-E2b.

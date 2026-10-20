@@ -21,9 +21,10 @@ than by running the engine, so each test states exactly the one situation it is
 about and nothing else can drift into it.
 """
 
+import random
 from dataclasses import replace
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from types import SimpleNamespace
 
 import pytest
@@ -570,15 +571,21 @@ class TestCollectPerformanceFxNeeds:
         )
         assert resolver._needs == [("USD", date(2024, 1, 10))]
 
-    def test_a_closure_of_a_short_lot_needs_no_proceeds_fx(self):
-        """Only LONG sells produce an external inflow in the performance series."""
+    def test_a_short_lot_needs_its_currency_at_its_opening_date_and_its_closure_no_proceeds_rate(self):
+        """MF-E2: a SHORT lot's opening sale is an external inflow of the performance series — its cumulative proceeds,
+        converted from the lot's currency at its opening date (USD on 10 Jan 2024) —, so that rate is asked; its closure,
+        in the report currency (``close_currency`` None), still asks for nothing.
+
+        Before MF-E2 (read 20/10/2026) this test was ``test_a_closure_of_a_short_lot_needs_no_proceeds_fx`` and asserted
+        ``[]`` («Only LONG sells produce an external inflow»): no flow read a short's proceeds.
+        """
         resolver = _resolver("EUR")
         self._call(
             resolver,
             closures=[_closure(1)],
             lots_by_id={1: _lot(1, direction="SHORT", currency="USD")},
         )
-        assert resolver._needs == []
+        assert resolver._needs == [("USD", date(2024, 1, 10))]
 
     def test_a_closure_whose_lot_is_unknown_is_skipped(self):
         resolver = _resolver("EUR")
@@ -1518,7 +1525,8 @@ class TestPerformanceHistoryAtCost:
 
     ``at_cost_until`` is the last day with no observation on or before it (J-17 decision (a)). Up to it, a day without a
     mark gets a NAV at cost: the sum, over the in-scope fragments active that day, of ``residual_cost`` (the lot's cost at
-    its opening rate, the fragment's quantity, the lot's original quantity) — no NAV when one of them is SHORT or its cost
+    its opening rate, the fragment's quantity, the lot's original quantity) — a SHORT fragment minus its share of the lot's
+    opening proceeds at the lot's opening rate (MF-E2, D3; before it a SHORT left the day without NAV) — no NAV when a cost
     has no rate. After it, a day without a mark (a mark without a rate) still gets none. A transfer crossing the scope on
     such a day moves cost, not market value: an incoming edge leg its own cost, an outgoing one
     (``hands_over_at_own_cost``) the cost of its closures, a replayed pair the cost of the pieces it moves.
@@ -1630,22 +1638,35 @@ class TestPerformanceHistoryAtCost:
         assert self._history(self._v2_book()) == [(days[0], _ZERO, None), *[(day, _ZERO, _ZERO) for day in days[1:]]]
 
     # -- GUARDS: the days at cost that still get no point --------------------- #
+    #
+    # (MF-E2, D3: the first of them, a day at cost with a short open, now gets a point — test_d3_… below.)
 
     def _short_book(self) -> dict:
+        """Beside the 10 at 1 000 of d0, 5 sold short at 100 EUR on d2 (proceeds 500): the SHORT lot, its fragment and its
+        opening SELL — the row the engine opens such a lot from."""
         days = self._DAYS[:5]
-        short = (self._long_lot(2, day=days[2], quantity="5", direction="SHORT"), self._open_fragment(2, day=days[2], quantity="5", direction="SHORT"))
-        return self._adjusted_book(days, dict.fromkeys(days), days[-1], extra_lots={2: short})
+        short_lot = replace(self._long_lot(2, day=days[2], quantity="5", direction="SHORT"), cumulative_proceeds=D("500"))
+        short = (short_lot, self._open_fragment(2, day=days[2], quantity="5", direction="SHORT"))
+        book = self._adjusted_book(days, dict.fromkeys(days), days[-1], extra_lots={2: short})
+        rows = [*book["context"].transactions, _tx(2, tx_type=TransactionType.SELL, tx_date=days[2], quantity=D("-5"), amount=D("500"))]
+        book["context"] = replace(book["context"], transactions=rows, tx_by_id={row.id: row for row in rows})
+        return book
 
-    def test_guard_a_day_at_cost_with_a_short_lot_open_gets_no_point(self):
-        """GUARD: beside the 10 at 1 000 of d0, a SHORT lot of 5 open from d2, no mark on d0–d4, at cost until d4. A short is
-        never valued at cost: d2–d4 get no point, as today. d0 and d1, the long alone, are at cost (ROI 0, TWRR 0 from d1):
-        the presence barrier that makes the absence mean something.
+    def test_d3_a_day_at_cost_with_a_short_lot_open_counts_minus_its_share_of_the_proceeds(self):
+        """MF-E2, D3 (was the GUARD ``test_guard_a_day_at_cost_with_a_short_lot_open_gets_no_point``): beside the 10 at 1 000
+        of d0, 5 sold short at 100 on d2 (proceeds 500), no mark on d0–d4, at cost until d4. On a day at cost a SHORT
+        fragment counts minus its share of the lot's opening proceeds (here all 500), and the opening sale is a flow of +500
+        on d2: NAV 1 000 on d0–d1, 500 on d2–d4. d2: TWRR (500 + 500 − 1 000) / 1 000 = 0; ROI (500 − 1 000 + 500) / capital
+        1 500 (1 000 long + 500 short proceeds) = 0. So ROI 0 every day, TWRR 0 from d1 — a point on d2–d4 where there was
+        none. d0 and d1, the long alone, are the presence barrier, unchanged.
 
-        Today (read 17/10/2026): no point at all — no mark. The absence on d2–d4 is today's; the barrier is new.
+        Before MF-E2 (read 20/10/2026), the guard's book had no proceeds on the short (the FifoLot default 0) and no SELL row,
+        and asserted no point on d2–d4: [(d0, 0, None), (d1, 0, 0), (d2–d4, None, None)]. Today's builder gives that on this
+        book too. The proceeds were added because with 0 the new rule could not be told from ignoring the short.
         """
         days = self._DAYS[:5]
 
-        assert self._history(self._short_book()) == [(days[0], _ZERO, None), (days[1], _ZERO, _ZERO), *[(day, None, None) for day in days[2:]]]
+        assert self._history(self._short_book()) == [(days[0], _ZERO, None), *[(day, _ZERO, _ZERO) for day in days[1:]]]
 
     def _cost_without_rate_book(self) -> dict:
         days = self._DAYS[:5]
@@ -1739,17 +1760,21 @@ class TestPerformanceHistoryAtCost:
 
     # -- P4: the rates the days at cost need ---------------------------------- #
 
-    @pytest.mark.parametrize(("cut", "expected"), [("d4", [("CHF", date(2024, 3, 6)), ("USD", date(2024, 3, 4))]), (None, [])], ids=["days-at-cost", "no-day-at-cost"])
+    @pytest.mark.parametrize(("cut", "expected"), [("d4", [("CHF", date(2024, 3, 6)), ("GBP", date(2024, 3, 5)), ("USD", date(2024, 3, 4))]), (None, [("GBP", date(2024, 3, 5))])], ids=["days-at-cost", "no-day-at-cost"])
     def test_p4_the_days_at_cost_need_each_long_lots_currency_at_its_opening_date(self, cut, expected):
-        """P4: a USD LONG lot opened on d0, a GBP SHORT lot on d1, a CHF LONG lot on d2, report EUR, no transaction. With days
+        """P4: a USD LONG lot opened on d0, a GBP SHORT lot on d1 (sold for 1 000 GBP), a CHF LONG lot on d2, report EUR, no
+        transaction. With days
         at cost (``at_cost_until`` d4) each LONG lot's cost is converted at its opening date: (USD, d0) and (CHF, d2) are
-        asked, never the short's GBP. With no day at cost (None), nothing is asked.
+        asked. MF-E2: the SHORT lot's opening proceeds are a flow converted at its opening date, and on a day at cost its open
+        units count minus their share of them at that same rate (D3), so (GBP, d1) is asked with or without days at cost.
+        With no day at cost (None) nothing else is asked.
 
-        Today: TypeError on ``at_cost_until``; without it nothing is asked — the no-day-at-cost case's value.
+        Before MF-E2 (read 20/10/2026) the expectations were [(CHF, d2), (USD, d0)] and [] — «never the short's GBP» — and the
+        short carried the FifoLot default proceeds, 0. (Before J-33: TypeError on ``at_cost_until``.)
         """
         days = self._DAYS
         resolver = _resolver("EUR")
-        lots = {1: self._long_lot(1, day=days[0], currency="USD"), 2: self._long_lot(2, day=days[1], currency="GBP", direction="SHORT"), 3: self._long_lot(3, day=days[2], currency="CHF")}
+        lots = {1: self._long_lot(1, day=days[0], currency="USD"), 2: replace(self._long_lot(2, day=days[1], currency="GBP", direction="SHORT"), cumulative_proceeds=D("1000")), 3: self._long_lot(3, day=days[2], currency="CHF")}
 
         collect_performance_fx_needs(fx_resolver=resolver, analyses=[LotAnalysisType.PERFORMANCE_HISTORY], transactions=[], closures=[], lots_by_id=lots, asset_currency="EUR", at_cost_until=days[4] if cut == "d4" else None)
 
@@ -3315,3 +3340,540 @@ class TestTheMarketPriceLineAtTheFloor:
 
         line = [(point.date, point.market_price, point.estimated) for point in response.market_price_history]
         assert line == [(day, D("150"), False) for day in _days(_SEC8_QUOTED, 6)]
+
+
+# =========================================================================== #
+# MF-E2 — short positions in the lots' performance history
+# =========================================================================== #
+#
+# Workstream MF, lot E2. The developer's decision — option (b), convention (1) «gross exposure», D2 and D3 yes, E2-Q1 yes —
+# «se i numeri vanno in negativo, bisogna mostrarli e comunicarli perché è la scelta dell'utente». After the cure,
+# ``build_performance_history`` (lots/histories.py):
+#
+# * NAV of a day: Σ over the scope's open fragments, a LONG +q·p, a SHORT −q·p (p the day's converted mark). On a day at
+#   cost a LONG its cost share, as today, and a SHORT minus its share of the opening proceeds — cumulative_proceeds · q /
+#   original_quantity, converted at the lot's opening date (D3).
+# * Flows: today's, plus, for every SHORT lot opened in the scope, +its proceeds (cumulative_proceeds at the opening rate)
+#   on its opening date: money out of the position, like a long sale's proceeds. Without a rate the series stops from that
+#   day (``invalid_external_flow_from``), as for the other flows.
+# * Gross exposure of a day: Σ |value| of the open fragments.
+# * TWRR compounds r_t = (NAV_t + CF_t − NAV_{t−1}) / exposure_{t−1}, 0 when that exposure is 0. ROI_t = (NAV_t + ΣCF≤t) /
+#   capital_t, capital_t = max(0, −Σ long-leg flows ≤ t) + Σ short proceeds ≤ t (cumulative, E2-Q1), 0 when the capital
+#   is 0. Short-leg flows are the opening proceeds and the buy-back costs (the closures of SHORT lots, by a BUY or by an
+#   ADJUSTMENT-in with a cost); the rest of a BUY that covers a short and opens a long is long-leg. Both quantized as today.
+# * No SHORT lot in the scope: exactly today's calculate_twrr_series / calculate_simple_roi_series, bit for bit.
+#
+# Today (HEAD b87d5d957, read 20/10/2026) a short's fragment counts +q·p, as if owned; a day at cost with a short open has
+# no point; the opening sale is no flow, so a line starts on the buy-back: the worked example reads ROI −100% and TWRR
+# −180% on its last day. Each docstring says what today's builder gives for its book.
+#
+# The expected values come from ``_e2_contract``: plain Decimal arithmetic on the contract, over figures each test reads
+# off its book by hand — never from the module under test. Lots, fragments and closures come from the real engine (pure)
+# except in the D3 double, which needs a state the engine never produces. Values are compared as Decimals (0 and 0.000000
+# are one value), except in ``TestLongOnlyParity``, whose point is the exact representation.
+#
+# No scope sees a buy-back without its opening sale: a BUY covers only its own broker's short, and a shorted position never
+# transfers — the engine refuses it (SHORT_TRANSFER_NOT_SUPPORTED, a FAILED analysis without performance history; pinned
+# by test_financial/test_lots_failed_analysis_withholding.py::test_s4_transfer_issue_names_the_giving_leg[short] and
+# test_financial_math/test_fifo_transfer_issue_names_the_giving_leg.py). That case does not exist, so it has no test.
+
+_E2_PCT = D("0.000001")  # returns.py's _PREC_PCT, restated: the oracle reads nothing from the module under test
+
+
+def _e2_contract(figures: list[tuple]) -> list[tuple[date, Decimal | None, Decimal | None]]:
+    """(date, ROI, TWRR) of each day by the MF-E2 contract, in plain Decimal, independent of lots/histories.py.
+
+    ``figures`` holds, for each day with a NAV, (day, NAV, flow, gross exposure, long-leg flow, short proceeds), read off
+    the book by hand. ROI_t = (NAV_t + ΣCF≤t) / capital_t, capital_t = max(0, −Σ long-leg flows ≤ t) + Σ short proceeds ≤ t,
+    0 when the capital is 0. TWRR compounds (NAV_t + CF_t − NAV_{t−1}) / exposure_{t−1}, 0 when that exposure is 0, and
+    has no value on the first day. A day before the first flow has no point. Six places, half up, as returns.py rounds.
+    """
+    first_flow = min(row[0] for row in figures if D(row[2]) != 0)
+    points: list[tuple[date, Decimal | None, Decimal | None]] = []
+    compound, flows, long_leg, proceeds = D(1), D(0), D(0), D(0)
+    previous: tuple[Decimal, Decimal] | None = None
+    for day, nav, flow, exposure, long_leg_flow, short_proceeds in figures:
+        nav, flow, exposure = D(nav), D(flow), D(exposure)
+        flows += flow
+        long_leg += D(long_leg_flow)
+        proceeds += D(short_proceeds)
+        capital = max(D(0), -long_leg) + proceeds
+        roi = D(0) if capital == 0 else ((nav + flows) / capital).quantize(_E2_PCT, rounding=ROUND_HALF_UP)
+        twrr = None
+        if previous is not None:
+            previous_nav, previous_exposure = previous
+            compound *= 1 + (D(0) if previous_exposure == 0 else (nav + flow - previous_nav) / previous_exposure)
+            twrr = (compound - 1).quantize(_E2_PCT, rounding=ROUND_HALF_UP)
+        previous = (nav, exposure)
+        points.append((day, roi, twrr) if day >= first_flow else (day, None, None))
+    return points
+
+
+def _e2_engine_book(rows: list[Transaction], shorting: dict[int, bool]) -> PerformanceSourceContext:
+    """The performance context of ``rows`` as the engine replays them, report currency EUR, each broker's shorting as given."""
+    result = run_fifo_lot_engine(rows, shorting, target_currency="EUR")
+    assert result.analysis_status != "FAILED", f"precondition: the engine replays the book, got {result.issues}"
+    return PerformanceSourceContext(
+        transactions=rows,
+        engine_result=result,
+        lots_by_id={lot.lot_id: lot for lot in result.lots},
+        fragments_by_lot=group_fragments(result.fragment_intervals),
+        closures_by_lot=group_closures(result.closures),
+        tx_by_id={row.id: row for row in rows},
+    )
+
+
+def _e2_history(context: PerformanceSourceContext, days: list[date], marks: list[str | None], *, scope: tuple[int, ...] = (1,), rates: dict | None = None, at_cost_until: date | None = None) -> list[tuple]:
+    """(date, ROI, TWRR) of each day, as Decimals (None for no point); ``marks`` are the days' prices in EUR, None for none."""
+    points = build_performance_history(
+        scope_broker_ids=list(scope),
+        history_dates=days,
+        market_prices={day: None if mark is None else D(mark) for day, mark in zip(days, marks, strict=True)},
+        asset_currency="EUR",
+        fx_resolver=_resolver("EUR", rates),
+        context=context,
+        quote_base_quantity=1,
+        at_cost_until=at_cost_until,
+    )
+    return [(point.date, point.roi, point.twrr) for point in points]
+
+
+_E2_JAN = _days(date(2025, 1, 5), 4)  # the worked example: 5–8 Jan 2025
+_E2_MAR = _days(date(2025, 3, 3), 5)  # two brokers: 3–7 Mar 2025
+_E2_APR = _days(date(2025, 4, 7), 5)  # the flips: 7–11 Apr 2025
+_E2_FX = _days(date(2025, 1, 5), 3)  # the USD short: 5–7 Jan 2025
+_E2_FEB = _days(date(2025, 2, 3), 5)  # the short without a rate: 3–7 Feb 2025
+
+
+class TestShortPositionsInThePerformanceHistory:
+    """MF-E2: ``build_performance_history`` with SHORT lots in the scope (the contract is in the section's header)."""
+
+    # -- the worked example (approved by the developer) ---------------------------------------------------------------
+
+    def test_the_worked_example(self):
+        """10 sold short at 100 on 5 Jan (proceeds 1 000), X at 90 on 6 Jan and 80 on 7 Jan, 10 bought back at 80 on 8 Jan
+        (pays 800): a gain of 200. NAV −1 000, −900, −800, 0; flows +1 000 on 5 Jan (the opening sale) and −800 on 8 Jan
+        (the buy-back, short-leg); exposure 1 000, 900, 800, 0; capital 1 000 every day (no long leg, 1 000 of proceeds).
+        ROI 0, 10%, 20%, 20%; TWRR none on 5 Jan (the first day), 10%, 1.1 × 1.1111… − 1 = 22.2222%, and 22.2222% on 8 Jan
+        ((0 − 800 + 800) / 800 = 0).
+
+        Today (read 20/10/2026): no point on 5–7 Jan — the first flow is the buy-back — and on 8 Jan ROI −1 (−100%), TWRR −1.8
+        (−180%): NAV +1 000, +900, +800, 0, the 800 a deposit, so 0.9 × 0.8889 × (1 + (0 − 800 − 800) / 800) − 1.
+        """
+        days = _E2_JAN
+        rows = [_tx(1, tx_type=TransactionType.SELL, tx_date=days[0], quantity=D("-10"), amount=D("1000")), _tx(2, tx_date=days[3], quantity=D("10"), amount=D("-800"))]
+        expected = _e2_contract([(days[0], -1000, 1000, 1000, 0, 1000), (days[1], -900, 0, 900, 0, 0), (days[2], -800, 0, 800, 0, 0), (days[3], 0, -800, 0, 0, 0)])
+        assert expected == [(days[0], D("0"), None), (days[1], D("0.1"), D("0.1")), (days[2], D("0.2"), D("0.222222")), (days[3], D("0.2"), D("0.222222"))], "precondition: the oracle gives the approved figures"
+
+        assert _e2_history(_e2_engine_book(rows, {1: True}), days, ["100", "90", "80", "80"]) == expected
+
+    # -- a long and a short at two brokers ------------------------------------------------------------------------------
+
+    @staticmethod
+    def _two_brokers() -> PerformanceSourceContext:
+        """Broker 1 (no shorting) buys 10 at 100 on 3 Mar; broker 2 (shorting) sells 5 short at 110 on 4 Mar (proceeds 550)
+        and buys them back at 90 on 6 Mar (pays 450). X at 100, 110, 100, 90, 95 from 3 to 7 Mar."""
+        days = _E2_MAR
+        rows = [
+            _tx(1, tx_date=days[0], quantity=D("10"), amount=D("-1000"), broker_id=1),
+            _tx(2, tx_type=TransactionType.SELL, tx_date=days[1], quantity=D("-5"), amount=D("550"), broker_id=2),
+            _tx(3, tx_date=days[3], quantity=D("5"), amount=D("-450"), broker_id=2),
+        ]
+        return _e2_engine_book(rows, {1: False, 2: True})
+
+    @pytest.mark.parametrize(
+        ("scope", "figures"),
+        [
+            pytest.param(
+                (1, 2),
+                [(_E2_MAR[0], 1000, -1000, 1000, -1000, 0), (_E2_MAR[1], 550, 550, 1650, 0, 550), (_E2_MAR[2], 500, 0, 1500, 0, 0), (_E2_MAR[3], 900, -450, 900, 0, 0), (_E2_MAR[4], 950, 0, 950, 0, 0)],
+                id="scope-all",
+            ),
+            pytest.param(
+                (1,),
+                [(_E2_MAR[0], 1000, -1000, 1000, -1000, 0), (_E2_MAR[1], 1100, 0, 1100, 0, 0), (_E2_MAR[2], 1000, 0, 1000, 0, 0), (_E2_MAR[3], 900, 0, 900, 0, 0), (_E2_MAR[4], 950, 0, 950, 0, 0)],
+                id="PARITY-the-long-broker-alone",
+            ),
+            pytest.param(
+                (2,),
+                [(_E2_MAR[0], 0, 0, 0, 0, 0), (_E2_MAR[1], -550, 550, 550, 0, 550), (_E2_MAR[2], -500, 0, 500, 0, 0), (_E2_MAR[3], 0, -450, 0, 0, 0), (_E2_MAR[4], 0, 0, 0, 0, 0)],
+                id="the-short-broker-alone",
+            ),
+        ],
+    )
+    def test_a_long_and_a_short_at_two_brokers(self, scope, figures):
+        """The book of ``_two_brokers`` read in three scopes; the replay holds both brokers' lots every time, as the service's
+        performance re-run over the accessible brokers does.
+
+        * Both brokers: NAV 1 000, 1 100 − 550, 1 000 − 500, 900, 950; exposure 1 000, 1 650, 1 500, 900, 950; flows −1 000
+          (long-leg), +550 (short proceeds), −450 (the buy-back, short-leg); capital 1 000, then 1 550. ROI 0, 6.4516%,
+          3.2258%, 0, 3.2258% (+50 on 1 550 on 7 Mar: −50 on the long, +100 on the short); TWRR —, 10%, 6.6667%, 3.1111%,
+          8.8395%. Today: ROI 0, 65%, 50%, −37.931%, −34.4828%; TWRR —, 65%, 50%, −55%, −52.5% (the short read as owned).
+        * The long broker alone — PARITY, green today and after: no SHORT lot in the scope (broker 2's lots are in the
+          replay, out of the scope), so today's series: ROI = TWRR = 0, 10%, 0, −10%, −5%; TWRR none on 3 Mar.
+        * The short broker alone: NAV 0 on 3 Mar (nothing open yet: TWRR's base for 4 Mar, exposure 0, so 0), then −550,
+          −500, 0, 0; capital 550. ROI —, 0, 9.0909%, 18.1818%, 18.1818% (100 on 550); TWRR —, 0, 9.0909%, 20%, 20% (the
+          6 Mar sub-period on the exposure of 5 Mar, 500). Today: no point until 6 Mar, then ROI −100% and TWRR −181.8182%
+          on 6 and 7 Mar.
+        """
+        assert _e2_history(self._two_brokers(), _E2_MAR, ["100", "110", "100", "90", "95"], scope=scope) == _e2_contract(figures)
+
+    # -- a SELL that closes a long and opens a short; a BUY that covers a short and opens a long -----------------------
+
+    def test_a_sell_that_closes_a_long_and_opens_a_short_then_a_buy_that_covers_it_and_opens_a_long(self):
+        """Broker 1 (shorting) buys 5 at 100 on 7 Apr; on 8 Apr sells 8 at 110 — 5 close the long (550, long-leg proceeds),
+        3 open a short (330, short proceeds); on 10 Apr buys 5 at 100 — 3 cover the short (300, short-leg), 2 open a long
+        (200, long-leg). X at 100, 110, 120, 100, 105 from 7 to 11 Apr.
+
+        NAV 500, −330, −360, 200, 210; exposure 500, 330, 360, 200, 210; flows −500, +880, 0, −500, 0. Long leg −500, +50,
+        +50, −150: capital 500, then max(0, −50) + 330 = 330, then 150 + 330 = 480. ROI 0, 15.1515%, 6.0606%, 16.6667%,
+        18.75% (+50 on the first long, +30 on the short, +10 on the second long: 90 on 480); TWRR —, 10%, 0, 16.6667%, 22.5%
+        (1.1 × (1 − 30/330) × (1 + 60/360) × 1.05).
+
+        Today (read 20/10/2026): ROI 0, 0, 0 (the 550 out exceeds the 500 in: no capital), −55.5556%, −53.3333%; TWRR —, 76%,
+        92%, −260%, −268%.
+        """
+        days = _E2_APR
+        rows = [
+            _tx(1, tx_date=days[0], quantity=D("5"), amount=D("-500")),
+            _tx(2, tx_type=TransactionType.SELL, tx_date=days[1], quantity=D("-8"), amount=D("880")),
+            _tx(3, tx_date=days[3], quantity=D("5"), amount=D("-500")),
+        ]
+        context = _e2_engine_book(rows, {1: True})
+        lots = sorted((lot.lot_id, lot.direction, lot.original_quantity, lot.cumulative_proceeds) for lot in context.lots_by_id.values())
+        assert lots == [(1, "LONG", D("5"), D("550")), (2, "SHORT", D("3"), D("330")), (3, "LONG", D("2"), D("0"))], "precondition: the SELL closes the long and opens a short, the BUY covers it and opens a long"
+        figures = [(days[0], 500, -500, 500, -500, 0), (days[1], -330, 880, 330, 550, 330), (days[2], -360, 0, 360, 0, 0), (days[3], 200, -500, 200, -200, 0), (days[4], 210, 0, 210, 0, 0)]
+
+        assert _e2_history(context, days, ["100", "110", "120", "100", "105"]) == _e2_contract(figures)
+
+    # -- a short in another currency than the report ---------------------------------------------------------------------
+
+    @staticmethod
+    def _usd_short_rows() -> list[Transaction]:
+        """10 sold short at 100 USD on 5 Jan (1 000 USD; USD→EUR 0.9 that day), bought back at 80 USD on 7 Jan (800 USD;
+        1.0 that day)."""
+        days = _E2_FX
+        return [_tx(1, tx_type=TransactionType.SELL, tx_date=days[0], quantity=D("-10"), amount=D("1000"), currency="USD"), _tx(2, tx_date=days[2], quantity=D("10"), amount=D("-800"), currency="USD")]
+
+    def test_a_short_sold_in_another_currency_converts_its_proceeds_at_its_opening_rate(self):
+        """The USD short of ``_usd_short_rows``, the report in EUR, X marked 90, 85 and 80 EUR. The proceeds flow at the
+        opening date's rate, 1 000 × 0.9 = 900 — not at the buy-back's, 1.0, nor unconverted —, the buy-back at its own,
+        −800. NAV −900, −850, 0; capital 900. ROI 0, 5.5556%, 11.1111% (100 on 900); TWRR —, 5.5556%, 11.7647% (19/18 ×
+        18/17 − 1).
+
+        Today (read 20/10/2026): no point on 5–6 Jan, and on 7 Jan ROI −100%, TWRR −188.8889%.
+        """
+        days = _E2_FX
+        rates = {("USD", days[0]): D("0.9"), ("USD", days[2]): D("1.0")}
+        figures = [(days[0], -900, 900, 900, 0, 900), (days[1], -850, 0, 850, 0, 0), (days[2], 0, -800, 0, 0, 0)]
+
+        assert _e2_history(_e2_engine_book(self._usd_short_rows(), {1: True}), days, ["90", "85", "80"], rates=rates) == _e2_contract(figures)
+
+    def test_the_performance_history_asks_for_a_shorts_currency_on_its_opening_date(self):
+        """``collect_performance_fx_needs`` for the USD short, no day at cost: (USD, 5 Jan) — the proceeds, at the opening
+        rate — and (USD, 7 Jan) — the buy-back — are among the needs.
+
+        Today (read 20/10/2026): (USD, 7 Jan) alone, for the BUY; the opening sale needs no rate.
+        """
+        rows = self._usd_short_rows()
+        context = _e2_engine_book(rows, {1: True})
+        resolver = _resolver("EUR")
+
+        collect_performance_fx_needs(fx_resolver=resolver, analyses=[LotAnalysisType.PERFORMANCE_HISTORY], transactions=rows, closures=context.engine_result.closures, lots_by_id=context.lots_by_id, asset_currency="EUR", at_cost_until=None)
+
+        assert {("USD", _E2_FX[0]), ("USD", _E2_FX[2])} - set(resolver._needs) == set()
+
+    # -- a short whose proceeds have no rate ---------------------------------------------------------------------------
+
+    def test_a_short_whose_proceeds_have_no_rate_stops_the_series_from_its_opening_day(self):
+        """Broker 1 buys 10 at 100 EUR on 3 Feb; broker 2 (shorting) sells 5 short at 100 USD on 5 Feb, with no USD rate that
+        day, and buys them back at 90 USD on 7 Feb (rate 1.0). Scope both, X at 100, 110, 100, 95, 90. The proceeds are
+        unknown in EUR, so ROI and TWRR stop from 5 Feb, as for any flow without a rate; 3 and 4 Feb, the long alone, are the
+        presence barrier: ROI 0 and 10%, TWRR — and 10%.
+
+        Today (read 20/10/2026): the opening sale is no flow, so the series goes on: ROI 50%, 42.5%, −37.931% and TWRR 50%,
+        42.5%, −55% on 5–7 Feb.
+        """
+        days = _E2_FEB
+        rows = [
+            _tx(1, tx_date=days[0], quantity=D("10"), amount=D("-1000"), broker_id=1),
+            _tx(2, tx_type=TransactionType.SELL, tx_date=days[2], quantity=D("-5"), amount=D("500"), currency="USD", broker_id=2),
+            _tx(3, tx_date=days[4], quantity=D("5"), amount=D("-450"), currency="USD", broker_id=2),
+        ]
+        expected = _e2_contract([(days[0], 1000, -1000, 1000, -1000, 0), (days[1], 1100, 0, 1100, 0, 0)]) + [(day, None, None) for day in days[2:]]
+
+        assert _e2_history(_e2_engine_book(rows, {1: False, 2: True}), days, ["100", "110", "100", "95", "90"], scope=(1, 2), rates={("USD", days[4]): D("1.0")}) == expected
+
+    # -- proceeds carried onto the first NAV keep their side (coordinator, 20/10: open point 1 of the reds) ---------------
+
+    def test_a_shorts_proceeds_carried_onto_the_first_nav_stay_on_the_short_side(self):
+        """10 sold short at 100 on 5 Jan, a day without a mark (a mark without a rate: no NAV), X at 90 on 6 Jan, 10 bought back
+        at 80 on 7 Jan. The proceeds come before the first NAV, so they are carried onto it, 6 Jan — and stay the short side's:
+        capital 1 000. 5 Jan no point; 6 Jan NAV −900, ROI (−900 + 1 000) / 1 000 = 10%, no TWRR (the first NAV); 7 Jan NAV 0,
+        ROI 200 / 1 000 = 20%, TWRR (0 − 800 + 900) / 900 = 11.1111%. Merged into the long side, the carried +1 000 would leave
+        no capital: ROI 0 on both days.
+
+        Today (HEAD b87d5d957, read 20/10/2026): no point on 5–6 Jan, and on 7 Jan ROI −100%, TWRR −188.8889%.
+        """
+        days = _E2_JAN[:3]
+        rows = [_tx(1, tx_type=TransactionType.SELL, tx_date=days[0], quantity=D("-10"), amount=D("1000")), _tx(2, tx_date=days[2], quantity=D("10"), amount=D("-800"))]
+        expected = [(days[0], None, None), *_e2_contract([(days[1], -900, 1000, 900, 0, 1000), (days[2], 0, -800, 0, 0, 0)])]
+
+        assert _e2_history(_e2_engine_book(rows, {1: True}), days, [None, "90", "80"]) == expected
+
+    # -- an ADJUSTMENT-in that covers a short (coordinator, 20/10: open point 2 of the reds) --------------------------------
+    #
+    # The engine closes a short on an ADJUSTMENT-in as on a BUY (fifo/engine.py ``_apply_adjustment_in``, close_reason BUY,
+    # at the ADJUSTMENT's cost basis). With a cost, that cost is the flow an ADJUSTMENT-in always was, and the part of it that
+    # covers shorts is the short side's, like a BUY's buy-back. Without a cost it moves no money: no flow, and the debt is
+    # gone — the quantity-correction reading.
+
+    @staticmethod
+    def _shorted_then_adjusted_in(cost: str | None) -> PerformanceSourceContext:
+        """10 sold short at 100 on 5 Jan (proceeds 1 000); on 7 Jan an ADJUSTMENT +10, at a cost basis of ``cost`` EUR a unit
+        or with none, as the app stores one: no amount, no currency of its own."""
+        days = _E2_JAN[:3]
+        adjustment = _tx(2, tx_type=TransactionType.ADJUSTMENT, tx_date=days[2], quantity=D("10"), amount=D("0"), currency=None, cost_basis_override=None if cost is None else D(cost), cost_basis_currency=None if cost is None else "EUR")
+        context = _e2_engine_book([_tx(1, tx_type=TransactionType.SELL, tx_date=days[0], quantity=D("-10"), amount=D("1000")), adjustment], {1: True})
+        closures = [(closure.lot_id, closure.transaction_id, closure.quantity, closure.close_reason) for closure in context.engine_result.closures]
+        assert (closures, sorted(context.lots_by_id)) == ([(1, 2, D("10"), "BUY")], [1]), "precondition: the ADJUSTMENT closes the whole short and opens no lot"
+        return context
+
+    def test_an_adjustment_in_with_a_cost_that_covers_a_short_is_a_flow_of_the_short_side(self):
+        """The ADJUSTMENT +10 at 80 of ``_shorted_then_adjusted_in``, X at 100, 90, 80. Its cost, 10 × 80 = 800, flows out on
+        7 Jan and covers the short, so it is the short side's: the capital stays the 1 000 of proceeds. NAV −1 000, −900, 0;
+        ROI 0, 10%, 20%; TWRR —, 10%, 22.2222% — the worked example with the ADJUSTMENT in place of the BUY. Counted on the
+        long side, the 800 would join the capital: ROI 200 / 1 800 = 11.1111% on 7 Jan.
+
+        Today (HEAD b87d5d957, read 20/10/2026): no point on 5–6 Jan — the first flow is the ADJUSTMENT's — and on 7 Jan ROI
+        −100%, TWRR −180%.
+        """
+        days = _E2_JAN[:3]
+        figures = [(days[0], -1000, 1000, 1000, 0, 1000), (days[1], -900, 0, 900, 0, 0), (days[2], 0, -800, 0, 0, 0)]
+
+        assert _e2_history(self._shorted_then_adjusted_in("80"), days, ["100", "90", "80"]) == _e2_contract(figures)
+
+    def test_an_adjustment_in_without_a_cost_that_covers_a_short_moves_no_money_and_clears_the_debt(self):
+        """The ADJUSTMENT +10 of ``_shorted_then_adjusted_in`` without a cost, X at 100, 90, 80. It moves no money — no flow on
+        7 Jan — and the short is closed, so the debt is gone: NAV −1 000, −900, 0, the one flow the proceeds, capital 1 000.
+        ROI 0, 10%, (0 + 1 000) / 1 000 = 100%; TWRR —, 10%, 1.1 × (1 + 900 / 900) − 1 = 120%. A flow for the ADJUSTMENT would
+        move the 7 Jan ROI off 100%; a debt left open (NAV −800) would read 20%.
+
+        Today (HEAD b87d5d957, read 20/10/2026): no point at all — no flow, the short's sale being none.
+        """
+        days = _E2_JAN[:3]
+        figures = [(days[0], -1000, 1000, 1000, 0, 1000), (days[1], -900, 0, 900, 0, 0), (days[2], 0, 0, 0, 0, 0)]
+        expected = _e2_contract(figures)
+        assert expected[2] == (days[2], D("1"), D("1.2")), "precondition: the oracle reads the debt cleared at no cost as the whole proceeds kept"
+
+        assert _e2_history(self._shorted_then_adjusted_in(None), days, ["100", "90", "80"]) == expected
+
+    # -- a flow on a day without NAV, after the first: the capital reads the gain's flows (coordinator, 20/10: option (a)) --
+    #
+    # ``returns.calculate_simple_roi_series`` and ``calculate_twrr_period_series`` add only the flows dated on a snapshot, so
+    # a flow on a day without NAV after the first one is left out of the gain and of TWRR — an existing limit, long
+    # positions included, which goes to the developer as its own question (option (b)). Option (a): with a short in the
+    # scope the ROI's capital is built from those same snapshot-day flows, so gain and capital never disagree.
+
+    @staticmethod
+    def _gap_book(shape: str) -> tuple[list[Transaction], dict[int, bool], tuple[int, ...], list[tuple]]:
+        """(rows, shorting, scope, figures of the NAV days 5 and 7 Jan): X at 100 on 5 and 7 Jan, no NAV on 6 Jan, the flow day."""
+        days = _E2_JAN[:3]
+        if shape == "S1":
+            rows = [_tx(1, tx_date=days[0], quantity=D("10"), amount=D("-1000")), _tx(2, tx_type=TransactionType.SELL, tx_date=days[1], quantity=D("-15"), amount=D("1500"))]
+            return rows, {1: True}, (1,), [(days[0], 1000, -1000, 1000, -1000, 0), (days[2], -500, 0, 500, 0, 0)]
+        rows = [_tx(1, tx_type=TransactionType.SELL, tx_date=days[0], quantity=D("-10"), amount=D("1000"), broker_id=1), _tx(2, tx_date=days[1], quantity=D("5"), amount=D("-500"), broker_id=2)]
+        return rows, {1: True, 2: False}, (1, 2), [(days[0], -1000, 1000, 1000, 0, 1000), (days[2], -500, 0, 1500, 0, 0)]
+
+    @pytest.mark.parametrize("shape", [pytest.param("S1", id="S1-a-sale-closes-a-long-and-opens-a-short"), pytest.param("S2", id="S2-a-long-bought-beside-a-short")])
+    def test_a_flow_on_a_day_without_nav_is_left_out_of_the_capital_as_of_the_gain(self, shape):
+        """X at 100 on 5 Jan and 7 Jan, no NAV on 6 Jan (a mark without a rate), the day the flow falls on; prices flat.
+
+        * S1, one broker: 10 bought at 100 on 5 Jan; on 6 Jan a SELL of 15 at 100 closes them (+1 000, the long side) and
+          opens a short of 5 (+500 of proceeds). NAV 1 000, then −500 on 7 Jan.
+        * S2, two brokers: 10 sold short at 100 on 5 Jan at broker 1; on 6 Jan broker 2 buys 5 at 100 (−500, the long side).
+          NAV −1 000, then −500 on 7 Jan.
+
+        The 6 Jan flows are in neither the gain nor the capital: the oracle sees only the NAV days' figures. S1: capital 1 000
+        (the 5 Jan purchase), ROI (−500 − 1 000) / 1 000 = −150%, TWRR (−500 − 1 000) / 1 000 = −150%. S2: capital 1 000
+        (the proceeds), ROI and TWRR (−500 + 1 000) / 1 000 = 50%. The prices are flat, so these numbers are the existing
+        limit's, not a return: they move to 0 if option (b) folds the 6 Jan flows into 7 Jan. What this test pins is that
+        ROI's capital and gain read the same flows.
+
+        With the 6 Jan flows in the capital but not in the gain (the cure's first version, 20/10): ROI −300% (S1: capital
+        500, the proceeds alone) and 33.3333% (S2: capital 1 500), TWRR unchanged. Today (HEAD b87d5d957): S1 −50% / −50%,
+        S2 ROI 0 and TWRR 50%, the short read as owned.
+        """
+        days = _E2_JAN[:3]
+        rows, shorting, scope, figures = self._gap_book(shape)
+        contract = _e2_contract(figures)
+        expected = [contract[0], (days[1], None, None), contract[1]]
+
+        assert _e2_history(_e2_engine_book(rows, shorting), days, ["100", None, "100"], scope=scope) == expected
+
+    # -- D3: a day at cost with a short open, the share of its proceeds at its opening rate ------------------------------
+
+    def test_d3_a_day_at_cost_reads_a_short_at_its_share_of_the_proceeds_at_its_opening_rate(self):
+        """A contract double (``TestPerformanceHistoryAtCost``'s days, 4–8 Mar 2024, no mark at all, at cost until 8 Mar): the
+        10 adjusted in at 1 000 EUR on d0; a USD SHORT lot of 10 sold on d1 for 1 000 USD (USD→EUR 0.9 on d1, 1.0 on d2, 1.1
+        on d3, 1.2 on d4), 6 of it bought back on d3 at 100 USD (660 EUR). On a day at cost the open short counts −1 000 USD ×
+        open / 10 at d1's 0.9: −900 on d1–d2, −360 on d3–d4 — never at the day's rate. NAV 1 000, 100, 100, 640, 640;
+        exposure 1 000, 1 900, 1 900, 1 360, 1 360; flows −1 000, +900, 0, −660, 0; capital 1 900 from d1. ROI and TWRR 0
+        until d2, then −6.3158% (−120 on 1 900: the 6 cost 660 against the 540 of proceeds they held).
+
+        The double's cost, 800 USD, differs from its proceeds only so that the share reads the proceeds: the engine sets a
+        short's cost to its proceeds, and in the service a day at cost has no trade (a SELL or a BUY is an observation), so
+        none of this reaches it — the contract's D3 formula, stated where it can be told apart.
+
+        Today (read 20/10/2026): (d0, 0, —), then no point on d1–d4 — a short open on a day at cost leaves it without NAV.
+        """
+        at_cost = TestPerformanceHistoryAtCost
+        days = at_cost._DAYS[:5]
+        long_lot = at_cost._long_lot(1, day=days[0])
+        short_lot = _lot(2, direction="SHORT", opening_date=days[1], original_quantity=D("10"), opening_unit_price=D("100"), original_cost=D("800"), currency="USD", open_quantity=D("4"), realized_quantity=D("6"), cumulative_proceeds=D("1000"))
+        fragments = [
+            at_cost._open_fragment(1, day=days[0]),
+            _fragment(2, fragment_id="frag-2", direction="SHORT", quantity=D("10"), unit_price=D("100"), start_date=days[1], end_date=days[3]),
+            _fragment(2, fragment_id="frag-2b", direction="SHORT", quantity=D("4"), unit_price=D("100"), start_date=days[3]),
+        ]
+        buy_back = _closure(2, transaction_id=3, quantity=D("6"), close_date=days[3], close_reason="BUY", fragment_id="frag-2", open_unit_price=D("100"), close_unit_price=D("100"), realized_pnl=D("0"), proceeds=D("0"), close_currency="USD")
+        rows = [
+            at_cost._adjusted_in(1, day=days[0]),
+            _tx(2, tx_type=TransactionType.SELL, tx_date=days[1], quantity=D("-10"), amount=D("1000"), currency="USD"),
+            _tx(3, tx_date=days[3], quantity=D("6"), amount=D("-600"), currency="USD"),
+        ]
+        context = _perf_context(
+            transactions=rows,
+            engine_result=_engine_result(lots=[long_lot, short_lot], fragments=fragments, closures=[buy_back]),
+            lots_by_id={1: long_lot, 2: short_lot},
+            fragments_by_lot=group_fragments(fragments),
+            closures_by_lot={2: [buy_back]},
+        )
+        rates = {("USD", days[1]): D("0.9"), ("USD", days[2]): D("1.0"), ("USD", days[3]): D("1.1"), ("USD", days[4]): D("1.2")}
+        figures = [(days[0], 1000, -1000, 1000, -1000, 0), (days[1], 100, 900, 1900, 0, 900), (days[2], 100, 0, 1900, 0, 0), (days[3], 640, -660, 1360, 0, 0), (days[4], 640, 0, 1360, 0, 0)]
+
+        assert _e2_history(context, days, [None] * 5, rates=rates, at_cost_until=days[4]) == _e2_contract(figures)
+
+
+# --------------------------------------------------------------------------- #
+# MF-E2 parity: a long-only book keeps today's series, bit for bit
+# --------------------------------------------------------------------------- #
+
+_PARITY_DAYS = _days(date(2024, 5, 6), 12)  # 6–17 May 2024
+
+
+def _long_only_book(seed: int) -> dict:
+    """A long-only book drawn from ``seed`` (``random.Random``, stable across Python 3 versions), over ``_PARITY_DAYS``.
+
+    Brokers 1 and 2, neither shorting. 0, 2 or 3 days at cost first (no mark, an ADJUSTMENT-in with a cost on the first);
+    then a mark a day, moving −5% … +6%, missing (None, after the cut) on about one day in eight; BUYs (one in five in
+    USD, 0.9 EUR a USD) and SELLs that partly close what the broker holds; on about one book in three a day without a USD
+    rate, which voids the series when a USD BUY falls on it. The scope is broker 1, or both.
+    """
+    rng = random.Random(seed)
+    days = _PARITY_DAYS
+    at_cost_days = rng.choice((0, 0, 2, 3))
+    no_rate_day = days[rng.randint(4, len(days) - 1)] if rng.random() < 0.35 else None
+    marks: dict[date, Decimal | None] = {}
+    price = D(rng.randint(80, 120))
+    for index, day in enumerate(days):
+        if index < at_cost_days:
+            marks[day] = None
+            continue
+        price = (price * D(rng.choice(("0.95", "0.98", "1", "1.03", "1.06")))).quantize(D("0.01"))
+        marks[day] = None if index > at_cost_days and rng.random() < 0.12 else price
+    rows: list[Transaction] = []
+    held = {1: D(0), 2: D(0)}
+    for index, day in enumerate(days):
+        broker_id = rng.choice((1, 2))
+        if index < at_cost_days:
+            if index == 0:
+                quantity = D(rng.randint(5, 15))
+                rows.append(_tx(len(rows) + 1, tx_type=TransactionType.ADJUSTMENT, tx_date=day, quantity=quantity, amount=D(0), currency=None, broker_id=broker_id, cost_basis_override=D(rng.randint(90, 110)), cost_basis_currency="EUR"))
+                held[broker_id] += quantity
+            continue
+        roll = rng.random()
+        unit_price = marks[day] if marks[day] is not None else price
+        if index == 0 or roll < 0.35 or held[broker_id] == 0 and roll < 0.6:
+            quantity = D(rng.randint(1, 10))
+            currency = "USD" if day == no_rate_day or rng.random() < 0.2 else "EUR"
+            native = unit_price if currency == "EUR" else (unit_price / D("0.9")).quantize(D("0.01"))
+            rows.append(_tx(len(rows) + 1, tx_date=day, quantity=quantity, amount=-(quantity * native), currency=currency, broker_id=broker_id))
+            held[broker_id] += quantity
+        elif roll < 0.6:
+            quantity = D(rng.randint(1, int(held[broker_id])))
+            rows.append(_tx(len(rows) + 1, tx_type=TransactionType.SELL, tx_date=day, quantity=-quantity, amount=quantity * unit_price, currency="EUR", broker_id=broker_id))
+            held[broker_id] -= quantity
+    rates = {("USD", day): D("0.9") for day in days if day != no_rate_day}
+    scope = rng.choice(((1,), (1, 2)))
+    return {"rows": rows, "marks": marks, "at_cost_until": days[at_cost_days - 1] if at_cost_days else None, "rates": rates, "scope": scope}
+
+
+# Today's series of each seed's book (HEAD b87d5d957, read 20/10/2026): one "ROI|TWRR" per day of ``_PARITY_DAYS``, each the
+# str() of the Decimal the builder returned, "-" for None.
+_TODAY_LONG_ONLY_SERIES = {
+    0: "0.000000|- 0.000000|0.000000 0.000000|0.000000 0.082796|0.082796 0.082796|0.082796 0.115269|0.115269 0.115269|0.115269 0.115269|0.115269 0.093011|0.093011 0.093011|0.093011 0.038387|0.038387 0.017823|0.038387",
+    1: "-|- -|- -|- -|- -|- 0.000000|0.000000 -0.032694|-0.049949 -0.032694|-0.049949 -0.051991|-0.068902 -0.099435|-0.115499 -|- -|-",
+    2: "0.000000|- 0.000000|0.000000 -|- 0.038778|0.038778 0.069889|0.069889 0.134111|0.134111 0.085147|0.202124 0.150242|0.274236 0.092770|0.210568 0.130920|0.210568 0.130920|0.210568 0.164864|0.246902",
+    3: "-0.000023|- 0.059976|0.060000 -|- 3.223161|0.814750 3.349937|0.869227 3.262723|0.831750 0.751365|0.886614 0.856454|0.999818 0.479838|0.959830 0.545087|0.920614 0.637866|1.035943 0.555965|0.934136",
+    4: "0.000000|- -|- -0.263499|-0.315065 -0.186989|-0.315065 -0.227609|-0.349286 -0.205297|-0.310260 -0.298707|-0.324026 -0.274634|-0.324028 -0.310867|-0.357795 -0.802367|-0.357795 -|- -|-",
+    5: "0.000000|- 0.000000|0.000000 -0.013271|-0.015138 0.016327|0.014404 -0.003987|-0.005872 -|- 0.003586|0.003486 0.033681|0.033578 0.061831|0.095596 0.111456|0.073670 0.050187|0.052202 0.081686|0.083761",
+    6: "0.000000|- -0.050000|-0.050000 0.007018|0.007018 0.007018|0.007018 -0.043311|-0.043311 -0.062500|-0.062500 -0.034430|-0.034430 0.023465|0.023465 0.002961|0.002961 0.001725|0.002961 0.095733|0.063158 0.149743|0.095066",
+    7: "0.000000|- 0.000000|0.000000 -0.076389|-0.076389 -0.150979|-0.122593 -0.116534|-0.166466 -0.183842|-0.208134 -|- -0.493863|-0.717903 -|- -|- -0.458448|-0.698164 -0.546659|-0.704210",
+    8: "-|- -|- 0.000000|0.000000 0.059964|0.059964 0.012590|0.006955 0.043005|0.037201 0.105636|0.099484 -|- 0.116021|0.109811 0.116021|0.109811 0.149509|0.143113 0.183951|0.177363",
+    9: "0.000000|- 0.000000|0.000000 0.000000|0.000000 0.022151|0.022151 0.001720|0.001720 -0.048387|-0.048387 -0.019785|-0.019785 -0.068817|-0.068817 -0.012903|-0.012903 0.016667|0.016667 0.047204|0.047204 0.078602|0.078602",
+    10: "0.000000|- -0.014342|-0.019964 0.011804|0.009437 -|- -0.035387|-0.037644 -0.054716|-0.056927 -|- -0.080648|-0.021416 -0.015747|0.007985 -0.013806|0.007985 -0.013806|0.007985 -0.033515|-0.012160",
+    11: "0.000000|- 0.000000|0.000000 0.000000|0.000000 0.182426|0.247444 0.253411|0.322333 0.228345|0.295889 0.302069|0.373667 0.380216|0.456111 0.311232|0.383333 -|- 0.220762|0.287889 0.257413|0.326556",
+    12: "0.000000|- 0.000000|0.000000 0.000000|0.000000 -0.118158|-0.135189 -0.088267|-0.178396 -0.060944|-0.153774 -0.106047|-0.128396 -0.052443|-0.076132 -0.128851|-0.122358 -0.146268|-0.139906 -0.048886|-0.139906 -|-",
+    13: "-|- -|- 0.000000|0.000000 -0.019974|-0.019974 -0.039622|-0.039622 0.008456|0.018020 -|- -0.053504|-0.002388 0.001851|0.057425 0.001851|0.057425 -0.048236|0.004559 -0.048236|0.004559",
+    14: "-|- -|- -|- 0.000026|0.000000 0.030011|0.029984 -0.021454|-0.021480 -0.021454|-0.021480 -0.021454|-0.021480 0.037288|0.037261 0.072850|0.099521 0.072850|0.099521 0.019212|0.044549",
+    15: "0.000000|- -|- -0.081729|-0.069048 -0.081729|-0.069048 -|- -|- -|- -|- -|- -|- -|- -|-",
+    20: "0.000000|- -|- 0.009434|0.009434 -0.050776|-0.041038 -0.022295|-0.012264 0.007027|0.017358 -0.013143|-0.003019 -0.013143|-0.003019 -0.042518|-0.052830 -0.013812|-0.024434 -0.094330|-0.043962 -0.139640|-0.091792",
+    33: "0.000000|- 0.059954|0.059954 0.038735|0.038735 0.101091|0.101091 0|0.101091 0.017628|0.101091 0.012528|0.101091 -0.038094|0.046041 -0.029883|0.046038 -0.045665|-0.006273 -0.017010|0.023565 -0.033450|0.023565",
+    36: "0.000000|- 0.000000|0.000000 -0.058010|-0.121698 -0.078012|-0.165660 -|- -|- -|- -|- -|- -|- -|- -|-",
+    47: "0.000000|- 0.000000|0.000000 0.084112|0.084112 0.069123|0.084110 0.380625|0.116634 0.109780|0.150091 -|- 0.447963|0.500558 0.375577|0.425543 0.375577|0.425543 2.210144|0.397007 0|0.480870",
+}
+
+
+class TestLongOnlyParity:
+    """MF-E2: with no SHORT lot in the scope the performance history is today's, bit for bit — green today, green after.
+
+    Seeded long-only books (``_long_only_book``) through the real engine: BUYs, SELLs that partly close, days at cost,
+    missing marks, USD flows, a flow without a rate (seeds 4, 15 and 36 stop on it), scope one broker or both; seeds 33
+    and 47 take more out than they put in on one day, where today's ROI is the bare ``0`` of calculate_simple_roi (no
+    capital) and not ``0.000000``. Each book's series is compared, as the exact str() of every ROI and TWRR — "0" and
+    "0.000000" told apart —, with the literals today's builder gave (``_TODAY_LONG_ONLY_SERIES``).
+
+    Why pinned literals. A test may not read git, so today's function cannot be loaded beside the cured one. Checking that
+    a long-only book still goes through calculate_twrr_series / calculate_simple_roi_series would say which functions are
+    called, not that the NAVs and flows handed to them are unchanged; the literals pin the whole output — NAV, flows, the
+    line's start, the invalidation, the quantization. The wider comparison, the cured builder against a frozen copy of
+    today's over thousands of seeds, is a one-off run outside the suite.
+    """
+
+    @pytest.mark.parametrize("seed", sorted(_TODAY_LONG_ONLY_SERIES))
+    def test_a_long_only_book_keeps_todays_series(self, seed):
+        book = _long_only_book(seed)
+        result = run_fifo_lot_engine(book["rows"], {1: False, 2: False}, target_currency="EUR")
+        assert [lot.lot_id for lot in result.lots if lot.direction != "LONG"] == [] and result.analysis_status != "FAILED", "precondition: a long-only book the engine replays"
+        context = PerformanceSourceContext(
+            transactions=book["rows"],
+            engine_result=result,
+            lots_by_id={lot.lot_id: lot for lot in result.lots},
+            fragments_by_lot=group_fragments(result.fragment_intervals),
+            closures_by_lot=group_closures(result.closures),
+            tx_by_id={row.id: row for row in book["rows"]},
+        )
+
+        points = build_performance_history(
+            scope_broker_ids=list(book["scope"]),
+            history_dates=_PARITY_DAYS,
+            market_prices=book["marks"],
+            asset_currency="EUR",
+            fx_resolver=_resolver("EUR", book["rates"]),
+            context=context,
+            quote_base_quantity=1,
+            at_cost_until=book["at_cost_until"],
+        )
+
+        assert " ".join(f"{'-' if point.roi is None else point.roi}|{'-' if point.twrr is None else point.twrr}" for point in points) == _TODAY_LONG_ONLY_SERIES[seed]

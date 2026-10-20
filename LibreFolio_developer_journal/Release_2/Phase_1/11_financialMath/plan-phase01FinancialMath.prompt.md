@@ -4264,3 +4264,112 @@ mostra; nessuno short nei dati veri). L'esempio del 19/10, vendo allo scoperto 1
   il versato), **non** l'incasso dei soli corti ancora aperti: dopo il riacquisto il ROI resta +20 % (con i soli corti
   aperti la base diventerebbe 0 e il ROI sparirebbe, o +100 % con l'incasso meno il riacquisto). Consiglio: **sì,
   incasso cumulato**, è la stessa logica del capitale versato dei lunghi e dà il +20 % approvato nell'esempio.
+
+#### Revisione della firma della funzione «a gradini» di X per P3 (20/10, sola lettura) — ✅ OK, con note
+- Fonte: la firma riportata dal coordinatore (la sezione «P3, la funzione a gradini» del piano 03 non è ancora committata
+  sul ramo di X, `2fb8e3707`; l'altro worktree non lo leggo). `unit_rate_steps(session, {(src, dst): [(first, last), …]})`
+  → `UnitRateSteps(days, values, rate_days, at(day))`, uguale a `convert_bulk(Currency(1))` su ogni giorno chiesto.
+- **Decisione 1 di X (nessuna unione delle gambe): giusta, corregge il mio piano.** `convert_bulk` legge solo le righe
+  salvate della coppia in ordine alfabetico, mai le gambe: le coppie a catena hanno righe salvate solo dove ogni gamba ne
+  ha una (`compute_chain_rate` alla sincronizzazione). La riga P3 della tabella «formule veloci» («rotte a più gambe =
+  unione dei gradini delle gambe») è **sbagliata**: vale la riga salvata della coppia.
+- **Il giorno non chiesto** (`daily_state.py:802`, `:818`, `:932`, `:1084`; `fx_rate_map.get` → None): a mio carico, come
+  deciso. Nel consumo P3 tengo il dominio chiesto: una lettura fuori dagli intervalli chiesti per quella valuta dà None,
+  come oggi; la parità sull'uscita intera (P2: `get_report` campo per campo, copie del DB, caso 1900) lo verifica.
+- Note per X (nessuna bloccante):
+  (n1) **gli stessi conti di `convert_bulk`**: il valore è `Decimal("1") * rate` o `Decimal("1") / rate` (non
+  `rate` e non `oriented_rate`: oggi `convert_bulk` divide con `amount / rate`; il valore coincide, ma la stessa espressione
+  toglie ogni dubbio sulla rappresentazione), calcolato nello stesso contesto `decimal` (sul ciclo d'eventi, non nel
+  thread del motore); meglio ancora una sola funzione che `convert_bulk` e i gradini usano tutte e due, così non si
+  separano;
+  (n2) **lo stesso filtro delle righe** (i limiti in linea di X-R38, `usable_fx_rate_bounds()`, nell'àncora e nella
+  finestra) e lo stesso **spezzettamento** a `FX_PAIRS_PER_QUERY` coppie (R13-SEC9): un'unica condizione condivisa con
+  `convert_bulk`;
+  (n3) `rate_days` = la data della riga usata (`results[i][1]` di `convert_bulk`), il primo gradino d'un intervallo
+  parte dal primo giorno chiesto con la riga dell'àncora; prima della prima riga usabile → None;
+  (n4) due righe consecutive con lo stesso valore restano due gradini: va bene, i giorni di cambiamento del motore e della
+  cassa nativa confrontano i **valori** (`native_cash.change_days`) e io li tengo così;
+  (n5) coppia identica (`src == dst`): `convert_bulk` dà `Decimal("1")`; né il motore né la cassa nativa la chiedono:
+  rifiutarla con un errore, o dare `Decimal("1")`, purché scritto;
+  (n6) l'oracolo dei test di X: per ogni giorno di ogni intervallo, `at(day)` contro `convert_bulk` **al bit**
+  (`as_tuple()`) e `rate_days` contro la data restituita; con coppia diretta e inversa, righe inutilizzabili in mezzo
+  (0, `inf`, ≥ 10¹⁴), buchi, àncora prima del primo giorno, giorni prima della prima riga, valori uguali consecutivi,
+  intervalli disgiunti e sovrapposti della stessa coppia, più di `FX_PAIRS_PER_QUERY` coppie.
+
+#### MF-E2 — via (coordinatore, 20/10 09:14; base `ea0fd0346`)
+- «E2: hai il via. Per E2-Q1 decido io, e la risposta è sì: la base sono i ricavi cumulati, perché è l'unica lettura che
+  dà il +20 % già approvato.» Rossi prima, poi il codice; la parità si rifà dopo L1a (base aggiornata dal coordinatore).
+- **Contratto per i test** (da `build_performance_history`, `lots/histories.py`):
+  - NAV del giorno = Σ frammenti aperti dello scope: LONG +q·p, SHORT **−q·p** (p il prezzo convertito del giorno, scala
+    `compute_holding_value`); nei giorni al costo LONG +quota di costo (oggi), SHORT **−quota dell'incasso d'apertura**
+    (`cumulative_proceeds · q / original_quantity`, al cambio della data d'apertura);
+  - flussi: quelli di oggi **più**, per ogni lotto SHORT aperto nello scope, **+incasso** nel giorno d'apertura al cambio
+    di quel giorno (senza cambio: `invalid_external_flow_from`, come gli altri);
+  - esposizione lorda = Σ |valori| dei frammenti; TWRR: `r_t = (NAV_t + CF_t − NAV_{t−1}) / esposizione_{t−1}`, 0 quando
+    l'esposizione del giorno prima è 0;
+  - ROI: `(NAV_t + Σ CF≤t) / capitale_t`, capitale = `max(0, −Σ flussi dei lunghi ≤ t)` + `Σ incassi dei corti ≤ t`
+    (E2-Q1); i flussi dei corti sono l'incasso d'apertura e il costo di riacquisto (le chiusure dei lotti SHORT); il resto
+    d'un BUY che riacquista e apre un lungo è un flusso dei lunghi; capitale 0 → ROI 0, come `calculate_simple_roi`;
+  - **senza alcun lotto SHORT nello scope: le funzioni di oggi, invariate** (parità al bit per costruzione);
+  - quantizzazione e date delle linee come oggi (dal primo flusso).
+- ✅ **Slot pesante 2, P1b** (09:35–09:37; HEAD `b87d5d957` = `ea0fd0346` + il giornale): `financial-math` **2204**, `utils
+  roi-utils` 9, `roi-fifo-utils` **1509** (1 deselezionato: il file rosso nuovo di E2 di test-author,
+  `-k "not test_lots_performance_history_short"`), `portfolio-engine` 41, `api portfolio` **55**; carico 18–27; porta 6190
+  libera (`files/p1b_slot.sh`, log in `files/logs/p1b_slot/`). Slot liberato.
+- ✅ **Rossi E2** (test-author `e2-tests`): `test_lots_analysis_pure.py` (227 = 198 + 29: classe
+  `TestShortPositionsInThePerformanceHistory`, 9, con un oracolo `Decimal` indipendente, e `TestLongOnlyParity`, 20 semi
+  fissati come letterali, che `"0"` e `"0.000000"` distinguono) e `test_financial/test_lots_performance_history_short.py`
+  (1, attraverso `get_lots_analysis`, un broker con scoperto e uno senza). Test esistenti cambiati, con il motivo
+  (cambiano apposta per D3 e per il cambio d'apertura): `TestCollectPerformanceFxNeeds::…short…` (ora chiede la valuta del
+  corto alla data d'apertura), `TestPerformanceHistoryAtCost::test_guard_…short…` → `test_d3_…` (−quota d'incasso),
+  `test_p4_…` ×2 (il GBP corto ora conta). Esempio misurato oggi: nessun punto fino all'8/1, poi ROI −1, TWRR −1,8.
+- ✅ **Codice E2**: `returns.calculate_twrr_series`/`calculate_twrr_period_series` con `exposure_by_date=` e
+  `calculate_simple_roi_series` con `capital_by_date=` (solo per nome, None di base: il percorso di oggi non cambia);
+  `lots/histories.py`: `build_performance_history` passa al ramo dei corti solo con un lotto SHORT aperto nello scope
+  (`_signed_nav_on_date`, `_proceeds_at_opening` con `residual_cost`, `_record_buyback` per BUY e ADJUSTMENT-in che chiudono
+  corti, `_committed_capital_by_date` lineare), l'incasso d'apertura come flusso, le parti del corto conservate quando si
+  portano sul primo NAV; `lots/conversions._need_short_proceeds_rates`. Doc: `lots_analysis_service.md` (il punto di
+  `build_performance_history()`, corretto anche il «nessun ripiego al costo» superato da J-33, e la riga dei cambi),
+  `financial_math.md` (la mappa). **⚠️ Fuori pista**: un ADJUSTMENT-in chiude i corti come un BUY (motore FIFO,
+  `close_reason="BUY"` al suo costo): per il contratto la sua parte che copre un corto è del lato corto; senza costo
+  nessun flusso e il debito sparisce (correzione di quantità), coerente con l'ADJUSTMENT-out senza costo.
+- ✅ **Corsia** (09:51–09:53, carico 30–39; prodotto tolto i tre file, sha `3dd0cef8…` uguale dopo): `lots-analysis-pure`
+  **12 rossi** / 215, `roi-fifo-utils test_lots_performance_history_short` **1 rosso**; verdi: `lots-analysis-pure` 227,
+  il test DB 1, `financial-math` **2204**, `utils roi-utils` 9, `roi-fifo-utils` **1510**, `portfolio-engine` 41. ruff,
+  black, diff-check; `mkdocs build` stretto e `check-links` verdi. In corso: i mutanti sulla mia cura, i test
+  dell'ADJUSTMENT-in, il confronto con la cura di riferimento di test-author. Slot `api portfolio` da chiedere.
+- ✅ **Mutanti sulla cura e confronto** (test-author, 3° giro): tutti presi salvo due equivalenti; 3 test nuovi
+  (ADJUSTMENT-in con costo che copre un corto = lato corto; senza costo nessun flusso e debito estinto; incasso portato sul
+  primo NAV resta del lato corto) → `lots-analysis-pure` **230**. **⚠️ Fuori pista — un'incoerenza della mia cura**: il
+  capitale contava ogni flusso ≤ t, il guadagno (`calculate_simple_roi_series`) e il TWRR solo i flussi datati in un giorno
+  con NAV: con un corto e un flusso in un giorno senza NAV, capitale e guadagno su flussi diversi (660 libri su 3 000 del
+  corpus di test-author). **Scelta (a)**, nel perimetro: il capitale conta solo i flussi dei giorni con NAV, gli stessi del
+  guadagno (`_committed_capital_by_date`). **Difetto preesistente scoperto**: un flusso in un giorno senza NAV dopo il
+  primo è perso da ROI e TWRR, **anche per i soli lunghi** (oggi; nel servizio serve un giorno con prezzo ma senza cambio,
+  raro): curarlo (b) cambia numeri mostrati → domanda al developer, lotto a parte (MF-E2b). Nota: un ADJUSTMENT-in di vecchia
+  forma (importo senza costo) che copre un corto è chiuso dal motore a prezzo 0, quindi l'importo resta del lato lungo
+  (forma che l'app oggi non scrive).
+- ✅ **(a) fissata** (test-author, 4° giro): `test_a_flow_on_a_day_without_nav_is_left_out_of_the_capital_as_of_the_gain`
+  [S1, S2] → `lots-analysis-pure` **232**; i mutanti «ridatazione tolta» e «capitale con i flussi dei giorni senza NAV»
+  ora presi; «smistamento tolto» diventa equivalente (sui soli lunghi il ramo nuovo legge gli stessi flussi: 0 su 1 000
+  semi), lo smistamento torna una rete di sicurezza; confronto con la cura di riferimento su (a): **0 differenze** su 2 057
+  libri con corti e su 1 000 solo lunghi. Esempio del difetto preesistente sui soli lunghi: `files/e2/gap_defect_long_only.py`.
+- ✅ **Corsia finale** (10:05–10:07, carico 11–45; prodotto tolto i tre file, sha `9a493888…` uguale dopo):
+  `lots-analysis-pure` **17 rossi** / 215, il test DB **1 rosso**; verdi: `lots-analysis-pure` **232**, il test DB 1,
+  `financial-math` **2204**, `utils roi-utils` 9, `roi-fifo-utils` **1510**, `portfolio-engine` 41. Porta libera.
+  Slot `api portfolio` chiesto al coordinatore.
+- **Riga di CHANGELOG 🐛 proposta** (la scrive il coordinatore): «**Lots analysis: performance history with short
+  positions.** An open short was counted as if it were owned and its sale was missing, so the history showed a loss on a
+  profitable short; it now counts the short as a debt and its sale as money out, and measures returns on the gross
+  exposure.»
+- **Domanda per il developer, MF-E2b** (difetto preesistente, lotto a parte): nello storico di performance dei lotti un
+  acquisto o una vendita in un giorno senza valore (nel servizio: un giorno il cui prezzo non ha cambio verso la valuta del
+  rapporto), dopo il primo giorno con valore, non entra mai in ROI e TWRR, mentre le sue quote sono nel valore del giorno
+  dopo. Esempio, solo lunghi, prezzo fermo a 100 il 5 e il 7/1, nessun valore il 6/1; acquisto di 10 il 5/1 e di altri 5 il
+  6/1: oggi ROI +50 % e TWRR +50 % il 7/1 (il vero è 0 %); con una vendita di 5 il 6/1: −50 % / −50 %. Opzioni: (A,
+  consigliata) spostare il flusso al primo giorno con valore successivo, in `calculate_simple_roi_series` e
+  `calculate_twrr_period_series` (cambia solo storie con un giorno così; la Dashboard ha un NAV ogni giorno, va verificato
+  che non cambi); (B) lasciare com'è.
+- ✅ **Slot 1 del coordinatore** (10:11–10:15, atteso il carico sotto 50; HEAD `b87d5d957`): `api portfolio` **55**; porta
+  6190 libera. MF-E2b la porta il coordinatore al developer. **CHECKPOINT READY** inviato, FROZEN. La parità di E2 si rifà
+  dopo L1a (base aggiornata dal coordinatore).
