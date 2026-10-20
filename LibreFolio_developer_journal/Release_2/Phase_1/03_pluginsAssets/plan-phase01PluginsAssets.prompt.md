@@ -8231,3 +8231,141 @@ conversione.
 **Prove** (cartella di sessione `files/checks/logs/`): `z29a_mt_head.log`, `z29a_mt_dev.log`,
 `z29a_merged_proof.log`, `z29a_merged_schema_probe.log`, `z29a_merged_api_sync.log`, `z29a_merged_front_check.log`.
 Cartella di prova in `/tmp` cancellata.
+
+### Nota di MF sul rovescio di X-R45 — analisi (20/10)
+
+- MF, rivedendo `c720e25cb` da solo: un `inf` salvato supera il `rate > 0` di `fx_quotes`. È **già chiusa da X-R45b**
+  (`292d7e55e`, in dev): `_usable_rate` = finito e > 0 in `fx_quotes.py:32`, `:121`, `:124`. Lo fissano i casi `inf`,
+  `0-then-inf`, `inf-then-0` di `test_bulk_reads_chunked.py`.
+- **L'unico `rate > 0` rimasto nei lettori del PAC è `wac.py:154`**, che rilegge la riga esatta scelta da
+  `convert_bulk`. `convert_bulk` esclude gli `inf`, quindi in pratica un `inf` lì non arriva. Se arrivasse:
+  - `_rates_match(inf, x)` direbbe «uguale», perché la scala diventa infinita (provato);
+  - `SafeDecimal` rifiuta gli infiniti, quindi la prova fallirebbe con un 500.
+- **Proposta** mandata al coordinatore, in attesa del via:
+  - `_usable_rate` passa in `pac_allocator/source/keys.py` e la usano `fx_quotes` e `wac.py`;
+  - una riga infinita dà la prova «missing» e `allocation.wac_fx_missing`;
+  - il rosso va in `test_portfolio_allocation_source.py`, con `compute_wac_iterative` sostituito.
+
+### wac-inf — una sola regola per i tassi salvati del PAC ✅ 20/10 (via del coordinatore 09:14, base `2fb8e3707`)
+
+- **Via**: «Una sola regola `_usable_rate` in `pac_allocator/source/keys.py`, usata da `fx_quotes` e da `wac.py:154`.
+  Prima il rosso, poi la cura e il checkpoint.»
+- **Rosso** ✅ (test-author `e388de9d`): `test_wac_fx_row_at_the_rate_date_with_an_unusable_rate_fails_closed`, in
+  `test_portfolio_allocation_source.py` (azione `pure`, solo finti).
+  - Quattro casi: `direct-usable` (guardia, la barriera positiva), `direct-inf` (ROSSO), `direct-zero` e
+    `inverted-inf` (guardie).
+  - Controlla anche la chiave chiesta al lettore e che la prova abbia una sola riga.
+  - `_converted_wac_result` ha preso dei parametri con le stesse costanti di prima come valori di default: i
+    chiamanti esistenti non cambiano.
+  - Rieseguito da me, a carico 14,7: **1 rosso, 3 verdi**. Il rosso è una `ValidationError` di pydantic in `wac.py:168`
+    («Input should be a finite number», `Decimal('Infinity')`): il 500 descritto sopra.
+- **Cura** ✅ (`files/checks/wacinf_code.py`, a secco pulita con black e ruff):
+  - `keys.py`: `usable_rate`, finito e > 0, presa da `fx_quotes._usable_rate`. Il nome è pubblico, senza trattino
+    basso, come ogni altro aiuto di `keys.py`, perché la importano due moduli.
+  - `fx_quotes.py`: la usa nei 3 punti, la sua copia e l'import di `Decimal` ora inutile se ne vanno.
+  - `wac.py:154`: `usable_rate(saved_row.rate)` al posto di `rate > 0`, con una riga di commento.
+  - Le due docstring di test che nominavano `_usable_rate` (`test_portfolio_allocation_source.py`,
+    `test_bulk_reads_chunked.py`).
+- **Verdi**:
+  - `services portfolio-allocation-source` 102/102;
+  - `services bulk-reads-chunked` 65/65: i test di X-R45b sulle quotazioni;
+  - black e ruff puliti sui 5 file; porta 6183 libera.
+- **Nessuna voce nel CHANGELOG**: il caso non arriva all'utente. Il costo converte con un solo `convert_bulk`
+  (`financial_math/average_cost.py`, `compute_average_costs`), che salta le righe inutilizzabili, quindi la riga
+  riletta alla data del costo è sempre usabile, salvo una modifica del DB fra le due letture. Nessuna doc nomina la
+  regola.
+
+### P3, la funzione «a gradini» — analisi (20/10, sola lettura, HEAD `5a53e00ad`)
+
+**Chi la usa e come** (oggi un `convert_bulk(Currency(1, ccy) → target)` per ogni giorno):
+- il motore, `engine._preload_fx_rates` (`:596-708`):
+  - tiene solo `results[i][0].amount`, mai `rate_date` né il riempimento all'indietro;
+  - i lettori del motore leggono il giorno esatto: `daily_state.py:802`, `:818`, `:932`, `:1084`;
+- la cassa nativa, `compute_native_cash` e `_unit_requests` (`:456-517`):
+  - chiede ogni giorno dal primo movimento, da `EARLIEST_RANGE_START` in poi;
+  - prima del pavimento, solo i giorni dei movimenti;
+  - legge l'ultimo tasso ≤ giorno con una bisezione (`_rate_at`);
+  - calcola i «giorni di cambio» sul calendario dei suoi punti (`change_days`, `rate_change_days`, pubblico).
+
+**La regola da riprodurre** (`fx/conversion.py:88-289`):
+- per coppia ordinata, la finestra va dall'ancora (l'ultimo tasso usabile ≤ il primo giorno) all'ultimo giorno;
+- solo righe usabili (`usable_fx_rate_bounds`), anche per l'ancora;
+- per ogni giorno, l'ultima riga ≤ giorno (`bisect_right`), senza limite all'indietro;
+- se diretta `1 * rate`, se inversa `1 / rate`; nessuna riga dà `None`;
+- **nessuna unione delle gambe**: `convert_bulk` legge solo le righe della coppia. Le coppie a catena le salva la
+  sincronizzazione, solo nei giorni in cui ogni gamba ha un tasso (`fx/sync.py:87-90`).
+- Il piano di MF dice «rotte a più gambe = unione dei gradini delle gambe»: va corretto. Altrimenti i valori non sono
+  identici, perché comparirebbero tassi in giorni dove la catena non ne ha.
+
+**Proposta**, in `fx/conversion.py`:
+- `UnitRateSteps` (frozen): `source`, `destination`, `days`, `values`, `rate_days`, `at(day)`.
+- `async unit_rate_steps(session, requests: Mapping[(source, destination), Sequence[(first_day, last_day)]])`, che
+  restituisce un `UnitRateSteps` per ogni coppia orientata.
+- Su ogni giorno chiesto `at(day)` è identico a `convert_bulk(Currency(1, source), destination, day).amount`, e
+  `rate_days` a `rate_date`.
+- **Il calendario è tagliato alle finestre chieste**: un gradino al primo giorno di ogni finestra, col valore
+  dell'ancora, più uno per ogni riga usabile dentro la finestra.
+  - Partire dalla data dell'ancora cambierebbe i «giorni di cambio» della cassa nativa: il primo movimento non
+    sarebbe più un giorno di cambio, la data dell'ancora sì.
+  - Più finestre per coppia servono alla cassa nativa per restare identica: i giorni prima del pavimento come
+    finestre di un giorno, più la finestra principale.
+- I valori li dà `oriented_rate` (`financial_math/fx_rates.py`), che è il `1 / rate` di `convert_bulk`. Le prove
+  confrontano anche l'esponente (`as_tuple()`).
+- **Una sola regola di lettura**: la query di `convert_bulk` (ancora, finestra, filtro usabile, blocchi da
+  `FX_PAIRS_PER_QUERY`) diventa un helper privato usato da entrambi. Il comportamento di `convert_bulk` non cambia,
+  e lo tengono fermo `services fx-conversion` e i test che già lo usano.
+- La coppia di una sola valuta si rifiuta con un `ValueError`: `convert_bulk` dà come `rate_date` il giorno stesso,
+  che un gradino non sa dire, e i due chiamanti la saltano già.
+
+**Cosa resta a MF** quando passa i consumatori ai gradini, cioè P3 vero e proprio:
+- i lettori del motore oggi leggono il giorno esatto e danno `None` per un giorno che nessuno ha chiesto; `at(day)`
+  darebbe un valore. I risultati sono identici solo se il motore legge i giorni che chiede oggi: lo dica la parità
+  sull'uscita intera;
+- la cassa nativa può dare a `NativeCash` i gradini al posto della mappa per giorno: `_rate_at` e `change_days`
+  restano identici con il calendario tagliato descritto sopra.
+
+**Rossi** (un test-author), in `test_fx_rate_steps.py`, registrati come `services fx-rate-steps`:
+- parità giorno per giorno con `convert_bulk(Currency(1))`, sul valore con esponente e su `rate_date`;
+- i casi: coppia diretta e inversa, buchi, ancora prima della finestra, nessuna riga prima del primo giorno, nessuna
+  riga del tutto, righe inutilizzabili (0, `inf`, ≥ 1E+14, < 1E-10) come ancora e dentro la finestra, finestra di un
+  giorno, più finestre, più coppie di `FX_PAIRS_PER_QUERY`;
+- il calendario: il primo giorno di ogni finestra più le righe usabili dentro;
+- il `ValueError` sulla coppia di una sola valuta.
+
+**Peso**: piccolo-medio, circa 80 righe di codice tra funzione e helper, più la matrice di parità.
+- Rischi: l'esponente dei `Decimal`, gestito con `oriented_rate` e `as_tuple()`; lo spostamento della query di
+  `convert_bulk`, coperto dai test esistenti.
+- Conflitti: `fx/conversion.py` oggi non lo tocca nessun altro; `_backend_services.py` è condiviso, ma l'aggiunta è
+  additiva. Nessuna sovrapposizione con Z-29a (`price_query.py`).
+- Riuso: con `rate_days` la stessa funzione serve a Q2 e Q3 (la freschezza del cambio, `fx_rate_date` e
+  `fx_days_back`).
+
+### N64 — aggiornamento dell'analisi (20/10, sola lettura, prima del via)
+
+- **Il punto di partenza**: l'analisi del 19/10 («N64 — la cache della pagina dell'asset», più in alto). Il developer
+  l'ha approvata: «la cache dei segnali come quella dei prezzi», lotto di X, dopo i «gradini».
+- **Cosa è cambiato da allora**: nei file che N64 tocca, solo X-R16 (`299393b19`, 19/10 12:28). Sono le due pagine,
+  `routes/(app)/assets/[id]/+page.svelte` e `routes/(app)/fx/[pair]/+page.svelte`. I registri dei prezzi e dei cambi
+  non sono cambiati.
+  - **X-R16 è chiusa**: la precondizione del punto 6 è soddisfatta. Anche la pagina di una coppia legge con
+    l'isolamento dei segnali (`fxDetailConvertQuery`), quindi una lettura non valida non blocca i tassi e non entrerà
+    nella cache.
+  - X-R83 è un ramo morto, dopo la 1.3: la cache dei segnali non lo tocca.
+- **Le tre domande del 19/10**: il «come quella dei prezzi» del developer risponde alla 1 (un colpo nella cache non
+  chiede nulla: niente gettone, niente rotellina) e alla 2 (dopo un recupero in background, la stessa regola dei
+  prezzi). La 3 la decide la coda del coordinatore. Da confermare al via.
+- **Il disegno resta quello del 19/10**:
+  - un registro dei risultati dei segnali accanto a quello dei prezzi, con la chiave esatta della richiesta;
+  - si tengono solo risultati validati, con i loro eventi;
+  - l'invalidazione passa da `invalidateAssetPriceStore`, `markStale` e `removeAssetPriceStore`, e dagli store dei
+    cambi per le serie convertite;
+  - un LRU;
+  - il contratto dei bottoni.
+  - Sulla pagina di una coppia, in più, i tassi con un segnale smettono di riscaricare tutto l'intervallo: vengono
+    dalla cache dei cambi, e i segnali dalla loro cache.
+- **Rossi, quando sarà il suo turno**:
+  - Vitest del registro nuovo, in `core-unit`: chiave, invalidazioni, LRU;
+  - due E2E sulla sequenza del developer (prezzi → rendimenti → prezzi → rendimenti: la seconda volta nessuna
+    richiesta), una sulla pagina dell'asset (`front-asset asset-detail`) e una su quella della coppia
+    (`front-fx fx-detail`), in uno slot.
+- **Peso**: medio, solo frontend, nessun cambio di API.
