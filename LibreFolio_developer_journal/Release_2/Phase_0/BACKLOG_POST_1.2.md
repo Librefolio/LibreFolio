@@ -2834,7 +2834,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
   Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
   «Galleria del giro 3» e «README di `scripts/visual_review/` al riferimento del 18/10».
-- **G-28 · N69b nella galleria: i controlli di sicurezza «ok» in ogni scena** — medio, con una scadenza; coordinatore,
+- ✅ **G-28 · N69b nella galleria: i controlli di sicurezza «ok» in ogni scena** — medio, con una scadenza; coordinatore,
   20/10 13:35. Deve entrare prima che la 1.3 rigeneri la galleria, alla fine di Y-39.
   - Da N69b (`1e711253a`) ogni pagina che un admin apre legge `GET /api/v1/security/checks`. Con un errore o un avviso
     compaiono:
@@ -2874,6 +2874,14 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - `prettier --check` e `tsc -p tsconfig.e2e.json`;
     - poi un doppio a/b filtrato nella corsia 6153: la scena, `main dashboard`, `mobile menu open`, Settings admin,
       `plugins` e `users`.
+
+  - **✅ Fatto il 20/10, entra col checkpoint di G** (via del coordinatore alle 13:48):
+    - test-author ha scritto la fixture e le asserzioni della scena; `prettier --check` e `tsc -p tsconfig.e2e.json`
+      puliti;
+    - due catture filtrate degli stessi 7 test, a e b, nella corsia 6153: tutte verdi, 136 PNG ciascuna;
+      `security/connection-indicator` identica in ogni immagine, il resto nel rumore noto;
+    - a occhio contro il 18/10: nessun pallino, e il badge sparito;
+    - foglio: `LibreFolio_visual_review/sheets/g28-2026-10-20/`. Il valore della fixture lo guarda A, tramite la 1.3.
 
   Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
   «Nota per la prossima galleria completa», N69b, e «N69 nella galleria».
