@@ -40,14 +40,16 @@ it draws its two bars and the active body from that list. Each entry is a `Setti
 | `preferences` | 20 | `PreferencesTab` | everyone | — | — |
 | `plugins` | 25 | `PluginSettingsTab` | everyone | — | — |
 | `about` | 30 | `AboutTab` | everyone | — | — |
-| `admin` | 100 | `GlobalSettingsTab` | everyone | `administration` | Label `settings.globalSettings` (*Global Settings*), icon `Settings2`; `props: (ctx) => ({canEdit: ctx.isSuperuser})` |
+| `admin` | 100 | `GlobalSettingsTab` | administrators | `administration` | Label `settings.globalSettings` (*Global Settings*), icon `Settings2`; `visible: (ctx) => ctx.isSuperuser` (lot N69-2, decision D4 a); `props: (ctx) => ({canEdit: ctx.isSuperuser})`, kept: see [GlobalSettingsTab](#globalsettingstab-admin-only) |
 | `users` | 110 | [`UsersTab`](#userstab) | administrators | `administration` | `visible: (ctx) => ctx.isSuperuser` |
 | `backup` | 120 | `BackupTab` | administrators | `administration` | `visible: (ctx) => ctx.isSuperuser` |
 | `email` | 130 | `EmailSettingsTab` | administrators | `administration` | `visible: (ctx) => ctx.isSuperuser` |
 | `security` | 140 | [`SecurityTab`](#securitytab) | administrators | `administration` | `visible: (ctx) => ctx.isSuperuser`; `badge: () => securityChecks.attentionCount`; `prefetch: (ctx) => { if (ctx.isSuperuser) void securityChecks.ensureLoaded(); }` |
 
 The `admin` id stays as it was, so `?tab=admin`, the link of the
-[open-registration warning](auth.md#open-registration-notice), still opens the global settings;
+[open-registration warning](auth.md#open-registration-notice), still opens the global settings (the
+warning shows to administrators only, as the tab does; for a regular user, `?tab=admin` names a
+hidden tab and opens `profile`, the first visible one);
 lot A8b changed only its label and its icon, the group having taken the `Shield`, and removed the
 key `settings.admin` (*Admin*) from the catalogues. Five bodies are in `lib/features/settings/tabs/`,
 the Security tab's in `lib/features/settings/security/` ([SecurityTab](#securitytab)). The Plugins
@@ -74,8 +76,9 @@ by `order`, each a `{kind: 'tab', tab}` entry, except the visible members of a g
 one `{kind: 'group', group, members}` entry placed where its first visible member would be,
 `members` being its visible members by `order`. A group without a visible member has no entry, and a
 tab whose `group` names none of `groups` stays a tab entry. A regular user's bar is `profile`,
-`preferences`, `plugins`, `about`, and `administration` with `admin` alone; an administrator's ends
-with `administration` and its five members.
+`preferences`, `plugins` and `about`: every member of `administration` is an administrator's (since
+lot N69-2), so the group has no entry for them; an administrator's ends with `administration` and
+its five members.
 
 #### The page {: #settings-page }
 
@@ -91,8 +94,10 @@ The page is the runtime of the registry, written in Svelte 5 runes:
   second `TabBar`, inside `data-testid="settings-subtabs"`, lists those members, each with its own
   `settings-tab-{id}`, icon, label (hidden on a phone too) and badge, the open one selected. It
   takes the same props (`hideLabelOnMobile`, `scrollable`) and the same colour roles as the top bar.
-  A regular user's `administration` has one visible member, so no second bar: the group's entry
-  opens `admin` directly, and `settings-tab-admin` is not drawn for them.
+  A group with one visible member gets no second bar: its entry opens that member directly, and
+  the member has no `settings-tab-{id}` of its own. No context of today's registry makes such a
+  group since lot N69-2 (a regular user sees no member of `administration`, an administrator all
+  five), but the page still handles it, on a registry of the test's own (see the tests below).
 - **Clicks** (`selectTop()`): a tab entry opens its tab; a group entry opens the group's first
   visible member, unless one of its members is open already, which stays, its body not mounted
   again. A member of the second bar opens that member.
@@ -107,13 +112,15 @@ The page is the runtime of the registry, written in Svelte 5 runes:
 - **Active tab**: always a tab, never a group. The first visible tab, unless `?tab=` names a visible
   tab or a group: a member's `id` opens that member inside its group (with the second bar when the
   group has two visible members or more), a group's `id` its first visible member
-  (`?tab=administration` opens `admin`). The choice runs in `$effect.pre`, so the tab that `?tab=`
-  names is the first body mounted: the default body never mounts, not even for an instant. Clicking
-  a tab does not rewrite the URL, so a `?tab=` value is applied once: a later page update that keeps
-  it does not take back the tab the user picked, while a new value is applied again. An unknown id,
-  or the id of a tab this user cannot see, is ignored; a `?tab=` naming a tab that becomes visible
-  later (the user is promoted while on the page) is applied when the tab appears, inside its group.
-  If the active tab stops being visible, the first visible tab opens.
+  (`?tab=administration` opens `admin`, for an administrator). The choice runs in `$effect.pre`, so
+  the tab that `?tab=` names is the first body mounted: the default body never mounts, not even for
+  an instant. Clicking a tab does not rewrite the URL, so a `?tab=` value is applied once: a later
+  page update that keeps it does not take back the tab the user picked, while a new value is
+  applied again. An unknown id, the id of a tab this user cannot see, or that of a group with no
+  visible member, is ignored: a regular user's `?tab=admin` or `?tab=administration` opens
+  `profile`, and the body of Global Settings never mounts for them. A `?tab=` naming a tab that
+  becomes visible later (the user is promoted while on the page) is applied when the tab appears,
+  inside its group. If the active tab stops being visible, the first visible tab opens.
 - **Badges**: a tab entry shows its `badge(ctx)`, a group entry the sum of its visible members',
   and `TabBar` draws none for `0`. They are read while the bars are derived, so a badge follows the
   reactive state it reads: a count that arrives after the first render shows at once.
@@ -148,7 +155,10 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
   and a `?tab=` naming it is ignored for them. Leave `visible` out for a tab everyone sees.
 - **`group`**: `'administration'` for a tab that looks after the instance: it has no button of its
   own in the top bar, and shows in the group's second bar. Leave it out for a tab of the top bar.
-- **`props`**: only when the body depends on the context, as `admin` does for `canEdit`.
+- **`props`**: only when the body depends on the context, as `admin` does for `canEdit`. Since lot
+  N69-2 only administrators see that tab, so `canEdit` is always `true` on screen: the read-only
+  branch, `canEdit: false`, stays in `GlobalSettingsTab`, unreached from the interface, until a
+  cleanup.
 - **`badge` and `prefetch`**: only for a tab whose button counts something, today `security` alone.
   `badge` reads a reactive count synchronously, `0` until there is one; `prefetch` starts what the
   count needs, does nothing for a context the tab is not for, and nothing again once loaded, as
@@ -162,17 +172,28 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
   and `BARS` lists of those who see it and, when it joins the group, to `ADMINISTRATION`, with a
   `vi.mock` of its body module like the others; the cases that list today's tabs by name follow it
   (`users` also has two cases of its own: STAB-01, hidden from a regular user, and STAB-02, order
-  110 after `admin`, both members of the group). The same file checks the ids, the orders and the
-  labels in the four catalogues, the group and what its tabs carry (STAB-03 to STAB-13: one group,
-  its label, icon and members, no tab with `alignEnd`, `security` the only tab with a badge and a
-  prefetch, the bar of each context), and `settingsBar()` on lists of its own (SBAR-01 to SBAR-05).
-  `routes/(app)/settings/page.tabs.test.ts` tests the page on a registry of its own, with two groups
-  (`crew`, and `office`, the stand-in for Administration) and counts in a reactive box (SPAGE-01 to
-  SPAGE-21: the top bar, the second bar and its clicks, `?tab=` naming a member or a group, the
-  badges and their sums, the prefetch at the start, again for a new context and never otherwise);
-  it only gains a no-op `vi.mock` of the new body module (and of a store the registry imports, as
-  `securityChecks` is), as it loads the real `settingsTabs` module (`importOriginal`), which
-  imports every body. `./dev.py test front-utility core-unit` runs `settingsTabs.test.ts`,
+  110 after `admin`, both members of the group; `admin` has one, rewritten by lot N69-2: hidden
+  from a regular user, shown to an administrator, its `props` still `{canEdit: isSuperuser}`). The
+  same file checks the ids, the orders and the labels in the four catalogues, the group and what
+  its tabs carry (STAB-03 to STAB-14: one group, its label, icon and members, no tab with
+  `alignEnd`, `security` the only tab with a badge and a prefetch, the bar of each context;
+  STAB-14, lot N69-2: no `administration` entry nor any of its members in a regular user's bar,
+  the entry once in an administrator's, `admin` its first member), and `settingsBar()` on lists of
+  its own (SBAR-01 to SBAR-05). `routes/(app)/settings/page.tabs.test.ts` tests the page on a
+  registry of its own, with two groups (`crew`, and `office`, the stand-in for Administration as
+  lot A8b had it, with one visible member for a regular user) and counts in a reactive box
+  (SPAGE-01 to SPAGE-21: the top bar, the second bar and its clicks, `?tab=` naming a member or a
+  group, the badges and their sums, the prefetch at the start, again for a new context and never
+  otherwise). SPAGE-22 to SPAGE-24 (lot N69-2) render the page on the real registry: a regular
+  user's page with neither `settings-tab-administration` nor `settings-tab-admin`, **Profile**
+  open; `?tab=admin` and `?tab=administration` opening **Profile** for a regular user, the Global
+  Settings body never mounted, and Global Settings, with `canEdit: true`, inside its group for an
+  administrator. The file loads the real `settingsTabs` module (`importOriginal`), which imports
+  every body: the mocked module's `SETTINGS_TABS` and `SETTINGS_TAB_GROUPS` are getters, answering
+  the real lists while a case sets `mocks.registry.real` and the synthetic ones otherwise, and each
+  real body is a probe named by its module (`mocks.realBodies`). A new tab adds its body there,
+  with its `vi.mock` (a store the registry imports gets a no-op stand-in, as `securityChecks`
+  does). `./dev.py test front-utility core-unit` runs `settingsTabs.test.ts`,
   `./dev.py test front-utility component-unit` runs `page.tabs.test.ts`.
 
 ### 📐 SettingsLayout
@@ -360,7 +381,7 @@ the server, the refusals with `PASSWORD_TOO_WEAK` among them, the rules taken fr
 `PasswordStrength`, and the limit's `429`: the key, never the server's sentence, the fields kept and
 usable, no success and no toast).
 
-### 🌍 GlobalSettingsTab (read by everyone, edited by administrators) {: #globalsettingstab-admin-only }
+### 🌍 GlobalSettingsTab (administrators only) {: #globalsettingstab-admin-only }
 
 <div class="screenshot-container" style="margin: 1rem 0 2rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 600px;">
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Global Settings" style="width: 100%; display: block;">
@@ -374,12 +395,17 @@ System-wide configuration with lock toggle:
 - Scheduler configuration and new-user defaults
 - Other app-wide settings
 
-The Settings page shows this tab to every user, but only a superuser can change it: its entry in
-the [tab registry](#tab-registry) (`admin`, labelled *Global Settings*) has no `visible` and passes
-`canEdit` through `props: (ctx) => ({canEdit: ctx.isSuperuser})`, and without `canEdit` the tab shows
-a read-only indicator (`settings-readonly-indicator`) instead of the lock toggle
-(`settings-lock-toggle`) and the bulk Save/Undo/Reset actions. It is the first member of the
-`administration` [group](#tab-groups), and the only one a regular user sees there.
+Only a superuser has this tab (lot N69-2, decision D4 a): its entry in the
+[tab registry](#tab-registry) (`admin`, labelled *Global Settings*) has
+`visible: (ctx) => ctx.isSuperuser`, like every other member of the `administration`
+[group](#tab-groups), of which it is the first. A regular user has no group at all, and a
+`?tab=admin` opens their `profile` ([The page](#settings-page)). The entry still passes `canEdit`
+through `props: (ctx) => ({canEdit: ctx.isSuperuser})`, so the tab always gets `canEdit: true` on
+screen; without `canEdit` it would show a read-only indicator (`settings-readonly-indicator`)
+instead of the lock toggle (`settings-lock-toggle`) and the bulk Save/Undo/Reset actions, a branch
+no longer reached from the interface and kept until a cleanup. Hiding the tab hides no value: the
+app still reads the global settings for every signed-in user, through `GET /api/v1/settings/global`
+([Settings System](../../../architecture/settings.md)).
 
 For the three *display* defaults (`default_language`, `default_currency`, `default_theme`) the
 tab reuses the **same shared `Setting*` wrappers as the PreferencesTab**, passing the
@@ -410,8 +436,10 @@ it from the [instance configuration](../../state/app-state.md#instance-config),
 ### 🧹 CachePanel
 
 `CachePanel.svelte` shows the status of every named backend cache (the theine registry): name,
-`current_size / maxsize`, and a human-formatted TTL, refreshed on demand. Status is visible to
-any authenticated user; the per-cache **Clear** and **Clear all** buttons appear only when the
+`current_size / maxsize`, and a human-formatted TTL, refreshed on demand. It sits in the Memory
+category of the [Global Settings tab](#globalsettingstab-admin-only), so only administrators see it
+since lot N69-2, although `GET /api/v1/settings/cache/status` still answers any authenticated user;
+the per-cache **Clear** and **Clear all** buttons appear only when the
 `canEdit` prop is set (it mirrors the Global-settings lock). Both clear actions pass through a
 danger confirmation modal — after a clear, the next fetch hits the providers again. Backend
 contract: [Cache Registry & Admin](../../../architecture/settings_cache.md).
@@ -502,15 +530,21 @@ toast, when there is one, is a field of the same call.
 #### UserRow {: #userrow }
 
 `lib/features/settings/users/UserRow.svelte`. Props: `account` (`AdminAccount`, the `GET /users`
-item, with `holds_place` and `pending_setup` when they are sent: both optional in
-`users/types.ts`), `isSelf`, `isOnlyActiveAdmin`, `full`, `onAction(action, account)`.
+item, with `holds_place`, `pending_setup` and `avatar_url` when they are sent: all three optional
+in `users/types.ts`), `isSelf`, `isOnlyActiveAdmin`, `full`, `onAction(action, account)`.
 
 - The `<li>` is `users-row`, with `data-user-id`, `data-username`, `data-active`, `data-admin`,
   `data-pending-setup`, `data-protected` and `data-self` (`"true"` or `"false"`; `data-pending-setup`
   is `"false"` when the field is absent, the answer of an older server).
-- `users-row-toggle`, a button with `aria-expanded` and `aria-controls`, shows the username, the
-  badges (`settings.usersTab.badges.you`, `admin`, `inactive`, `protected`), the email and
-  `settings.usersTab.createdOn`, and opens or closes the panel of actions under the row.
+- `users-row-toggle`, a button with `aria-expanded` and `aria-controls`, shows the chevron, the
+  account's avatar, the username, the badges (`settings.usersTab.badges.you`, `admin`, `inactive`,
+  `protected`), the email and `settings.usersTab.createdOn`, and opens or closes the panel of
+  actions under the row.
+- **The avatar** (lot N69-4, decision D8 a): a [`UserAvatar`](../core-ui/file-upload.md#useravatar)
+  right after the chevron, given `account.avatar_url ?? null`, its root `users-row-avatar` with
+  `data-avatar="image"` or `"initial"`: an image uploaded to the app asked for as its 48×48
+  preview, an address elsewhere as it is, and the username's initial in a neutral circle for an
+  account without one, `avatar_url` null or absent.
 - The own row (`isSelf`) has no action: `users-self-hint`, with a link to `/settings?tab=profile`.
 - The buttons: `users-action-deactivate` for an active account or `users-action-reactivate` for an
   inactive one, `users-action-cancel-setup` in its place for an account with `pending_setup`;
@@ -730,7 +764,9 @@ own from [ProfileTab](#profiletab) or another's from [UsersTab](#userstab). A `M
   **Reactivate** and no `limit` reason, the hint; since lot A-43, UPS-12 to UPS-23:
   `users-action-cancel-setup` in its place, turned off with `protected` on a protected account
   (UPS-23), `users-action-demote` off with `pending-setup`, `users-action-delete` enabled; every
-  other row unchanged),
+  other row unchanged), `users/UserRow.avatar.test.ts` (URA-01 to URA-04, lot N69-4: the avatar
+  in the toggle, between the chevron and the username, an uploaded image asked for as its 48×48
+  preview, an address as it is, the initial without one, and the toggle still opening its panel),
   `AccountDeletionDialog.test.ts` (both modes; ADEL-28 and ADEL-29, lot A-16: a refused own
   deletion worded in the interface language, the `400` `LAST_ADMIN` as `LAST_ADMIN_DELETION` with the
   dialog left open, the `500` as `DELETION_FAILED`) and `tabs/ProfileTab.test.ts`.

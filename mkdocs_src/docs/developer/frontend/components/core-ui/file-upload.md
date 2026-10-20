@@ -131,6 +131,27 @@ Wraps the full AssetPicker → ImageEdit flow:
 - If upload selected → opens ImageEditModal, with its default scope `common`
 - Returns final URL to parent
 
+### 👤 UserAvatar (`ui/media/UserAvatar.svelte`) {: #useravatar }
+
+An account's avatar in a 24 px circle, or its initial when it has none (lot N69-4, decision D8 a).
+Its one host today is the [UserRow](../features/settings.md#userrow) of the Users tab.
+
+- **Props**: `username`, `avatarUrl` (`string | null`, the account's `avatar_url`) and `testId`,
+  the `data-testid` of its root. The root carries `data-avatar="image"` or `data-avatar="initial"`.
+- **An image uploaded to the app**, an `avatarUrl` starting with `/api/v1/uploads/`, is asked for as
+  its 48×48 preview, sharp on a 2× screen: `img_preview=48x48` is appended after `?`, or after `&`
+  when the address already has a query. Any other address is used as it is. The image is a
+  `LazyImage` (`circle`, `placeholder="avatar"`, the username as `alt`), so the preview of an
+  uploaded file goes through the preview cache (`imagePreviewCache`).
+- **Without an avatar** (`null` or empty): the first character of the trimmed username, upper-cased
+  (`?` for an empty name), on a neutral disc: the scheme of the user pickers (`UserSearchSelect`),
+  the roles `bg-lf-neutral` and `text-lf-muted`, with no colour of its own per user; the letter is
+  `aria-hidden`.
+- **Tests**: `lib/features/settings/users/UserRow.avatar.test.ts` (URA-01 to URA-04, in
+  `./dev.py test front-utility component-unit`) mounts it through the row, with the real
+  `LazyImage` and a `fetch` that never answers: the image asked for, the initial, and the toggle
+  still opening its panel.
+
 ### 📁 FileGrid (`files/FileGrid.svelte`) {: #filegrid }
 
 <div class="screenshot-container" style="margin: 1rem 0 2rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 600px;">
@@ -233,19 +254,19 @@ of `frontend/src/lib/i18n/files/<lang>.json`.
 ## 📂 Files
 
 ```
-frontend/src/lib/components/
-├── files/
+frontend/src/lib/
+├── features/files/
 │   ├── FileGrid.svelte
 │   └── FilesTable.svelte
-└── ui/media/
+└── components/ui/media/
     ├── AssetPickerModal.svelte
     ├── FileEditModal.svelte
     ├── FileUploader.svelte
     ├── ImageCropper.svelte
     ├── ImageEditModal.svelte
     ├── ImagePickerWrapper.svelte
-    ├── ImageUploader.svelte
     ├── LazyImage.svelte
+    ├── UserAvatar.svelte
     └── index.ts
 ```
 
