@@ -4373,3 +4373,58 @@ mostra; nessuno short nei dati veri). L'esempio del 19/10, vendo allo scoperto 1
 - ✅ **Slot 1 del coordinatore** (10:11–10:15, atteso il carico sotto 50; HEAD `b87d5d957`): `api portfolio` **55**; porta
   6190 libera. MF-E2b la porta il coordinatore al developer. **CHECKPOINT READY** inviato, FROZEN. La parità di E2 si rifà
   dopo L1a (base aggiornata dal coordinatore).
+
+#### MF-E2b — i flussi dei giorni senza valore (20/10, via 10:39; base `2e23bd03c` = E2 `1c8a63b72` + `dev_release2` `f73514a77`, con L1a)
+- **Decisione del developer, A** (dal coordinatore, testuale): «Il difetto è nel calcolo, non nella transazione, che resta
+  al suo giorno. Quando il calcolo salta un giorno senza valore, i flussi di quel giorno passano al primo giorno
+  calcolabile. Nell'esempio: il 7/1 dà (1500 − 500) / 1000 − 1 = 0 %, e il ROI ha capitale 1500 e guadagno 0.»
+- ✅ **Base dopo il merge, corse leggere** (10:40, carico 33–50): `lots-analysis-pure` 232, `financial-math
+  test_lot_change_days` 66, `roi-fifo-utils test_lots_change_days_parity` 180, il test DB degli short 1: verdi.
+- **Disegno**: una regola in `returns.py` per `calculate_simple_roi_series` e `calculate_twrr_period_series` (e quindi
+  `calculate_twrr`, `calculate_twrr_series`): ogni flusso conta sul primo snapshot datato quel giorno o dopo; dopo l'ultimo
+  non conta, come oggi. `_committed_capital_by_date` (E2) usa la stessa regola al posto del filtro `snapshot_dates`. I
+  chiamanti: la Dashboard (`portfolio_service` card e storia: uno snapshot per ogni giorno, i flussi solo in quei giorni →
+  nessun cambio, prova sulle copie del DB) e i lotti. Con L1a la regola regge: un giorno di cambiamento senza NAV ha il
+  giorno dopo tra i giorni di cambiamento, e il prossimo giorno con NAV è lo stesso nei due calcoli (ogni giorno / solo i
+  giorni di cambiamento), perché un cambio che torna disponibile è a sua volta un giorno di cambiamento.
+- ✅ **Prova della Dashboard pronta** (`files/e2b/dashboard_parity.py`, `returns.py` di HEAD contro il nuovo sugli ingressi
+  di `get_summary`/`get_history`); collaudo HEAD contro HEAD sulla copia base: 648 serie, 209 816 punti, 324 card, 0
+  differenze.
+- In corso: test-author (A: la parità di L1a con un libro con uno short; B: i rossi di E2b).
+- ✅ **Job A, la parità di L1a con un corto** (test-author): `test_l1a_parity_a_short_bought_back_in_part_across_days_without_a_rate`
+  in `test_lots_performance_history_short.py` (gli aiuti di J importati, il suo file non toccato), 18 casi (6 finestre di J
+  × 3 ambiti), verdi oggi; un corto venduto di mercoledì e ricomprato in parte, prezzi lun/mer/ven con una settimana
+  vuota, chiusure in VND senza cambio dal 21 al 25/2. Il mutante «senza le date d'apertura dei lotti» letto alla lettera
+  non può diventare rosso (le transazioni e i frammenti nominano gli stessi giorni, come nota J in `change_days.py`); tolte
+  dal risultato: 9/18 rossi; senza le chiusure 10/18; senza «il giorno dopo» 6/18; cieco ai prezzi 15/18.
+- ✅ **Rossi E2b** (test-author): `test_financial_math/test_returns_gap_flows.py` nuovo (22: 10 rossi, 12 verdi — il dopo
+  l'ultimo snapshot e la garanzia della Dashboard, 10 lotti di 40 serie casuali con ogni flusso in un giorno con snapshot,
+  cifra per cifra); in `test_lots_analysis_pure.py` `TestGapFlowsInThePerformanceHistory` (L1, acquisto e vendita: 0 %/0 %)
+  e S1/S2 ripensati (piatti 0/0, più due casi a 90: S1 10 %/5 %, S2 3,3333 %/5 %, che distinguono un capitale ancora
+  filtrato); i letterali di parità dei semi 3, 4, 7, 10, 47 aggiornati (ognuno ha uno scambio in un giorno senza NAV; i vecchi
+  in commento); `test_financial/test_roi_utils.py::TestSimpleROISeries::test_cf_between_snapshots_is_missed` →
+  `…_counts_on_the_next_snapshot` (ROI [0, 0] → [0, 0,05]). Totale rossi oggi: 22, tutti per asserzione.
+- ✅ **Codice E2b**: `returns.flows_by_snapshot_date` (pubblica, nella casa): ogni flusso sommato, nell'ordine dato e da 0,
+  sul primo snapshot datato quel giorno o dopo (`bisect_left`), dopo l'ultimo sulla sua data (nessuno la legge);
+  `calculate_simple_roi_series` e `calculate_twrr_period_series` la usano; `_committed_capital_by_date` somma per snapshot da
+  tre mappe della stessa funzione. Doc: `lots_analysis_service.md` (il punto di `build_performance_history()`),
+  `financial_math.md` (la mappa).
+- ✅ **Corsia** (11:01–11:04, carico 21–26; prodotto tolto `returns.py` + `histories.py`, sha `4ba0f024…` uguale dopo):
+  rossi `lots-analysis-pure` **11** / 225, `financial-math test_returns_gap_flows` **10** / 12, `roi-fifo-utils
+  test_roi_utils` **1** / 59; verdi `lots-analysis-pure` **236**, `financial-math` **2293**, `utils roi-utils` 9,
+  `roi-fifo-utils` **1708**, `portfolio-engine` 41. ruff, black, diff-check; `mkdocs build` e `check-links` verdi.
+- ✅ **Dashboard invariata** (`files/e2b/dashboard_parity.py`, `returns.py` di HEAD contro il nuovo sugli ingressi di
+  `get_summary`/`get_history`, ogni utente × EUR/USD × 9 finestre): copie base, 1900 EUR, 1900 USD, 1900 BUY — 2 592 serie,
+  20 128 604 punti, 1 296 card, **0 differenze**.
+- In corso: i mutanti sulla cura (test-author); poi lo slot `api portfolio` e il checkpoint.
+- ✅ **Mutanti sulla cura E2b** (test-author): nessuno scarto dalla sua tabella; nuovo `bisect_right` al posto di
+  `bisect_left` preso da 75 test (i 20 semi di parità, i 10 lotti della Dashboard cifra per cifra…). Batteria di L1a (178 di
+  J + 18) sulla cura: **0 rossi**; corsa leggera `test_returns_gap_flows` 22, test DB degli short 19. **⚠️ Fuori pista**: le
+  due righe di E2 che ridatavano sul primo NAV i flussi del lato corto erano tornate superflue (`flows_by_snapshot_date`
+  mette già un flusso prima del primo NAV sul primo): tolte, un commento al loro posto; corse leggere rifatte (11:22, carico
+  9): `lots-analysis-pure` 236, `test_lot_change_days` 66, parità di L1a 180, test DB degli short 19.
+- **Riga di CHANGELOG 🐛 proposta**: «**Lots analysis: a trade on a day without a value now counts.** A purchase or a sale
+  on a day the performance history could not value (a price without an exchange rate) was left out of its ROI and TWRR,
+  while its units were in the next day's value; it now counts on the next day that has one.»
+- ✅ **Slot pesante 2** (11:31, HEAD `2e23bd03c`, carico 9): `api portfolio` **55**; porta 6190 libera. **CHECKPOINT READY**
+  inviato, FROZEN. Poi P3, dopo l'aggiornamento della base con la funzione «a gradini» di X (`b8c2f614b`, treno 3).

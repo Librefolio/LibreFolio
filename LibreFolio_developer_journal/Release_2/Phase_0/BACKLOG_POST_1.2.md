@@ -9919,3 +9919,5 @@ punto di partenza, l'audit dello stesso giorno:
   senza cambio verso la valuta del rapporto) non entra mai in ROI e TWRR, mentre le sue quote sono nel valore del giorno
   dopo; vale anche per i soli lunghi (esempio: +50 %/+50 % dove il vero è 0 %). Cura proposta: spostare il flusso al primo
   giorno con valore successivo; domanda al developer. Dettagli: piano MF, «MF-E2 — via», domanda MF-E2b.
+  **Il developer sceglie A** il 20/10; codice e test pronti il 20/10 (`returns.flows_by_snapshot_date`; 22 rossi prima;
+  Dashboard invariata su 4 copie), in attesa del checkpoint. Dettagli: piano MF, «MF-E2b».
