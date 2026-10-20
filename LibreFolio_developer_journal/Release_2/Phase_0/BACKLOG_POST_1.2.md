@@ -4623,6 +4623,13 @@ A-21b, A-31, A-41, A-49 e A-58 aspettano una decisione; A-4 e A-10 sono lavoro d
     in ogni lingua (oggi le pagine inglesi linkano `cli_tools.md` per nome di sezione, senza ancora); una frase in
     `admin/docker_advanced` (un riavvio non aiuta finché gli account non sono separati); in `user/settings/profile`
     «Changing Your Email» (un punto cambiato, uno nuovo: le maiuscole).
+  - Da N69a (20/10), nessun timbro; le traduzioni ora dicono cose false:
+    - `user/settings/index` dice ancora che «Administration» è visibile a tutti; da N69-2 è solo degli admin;
+    - `admin/settings`, in tre passaggi: l'introduzione («everyone can read them»), «everyone else gets a read-only
+      view» ed «Everyone can see the panel»;
+    - `user/settings/profile`: l'avatar si vede anche nella scheda Utenti, con un link nuovo `admin/users.md#accounts`
+      che manca alle traduzioni;
+    - `community/faq`: «Scheduler Enabled» lo controlla un amministratore, nelle due voci di prezzi e cambi.
 
   Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.5».
 - ✅ **A-11 · Un tema non valido in `user_settings` blocca l'accesso** — basso; chiusa il 17/10 (commit del
@@ -5034,6 +5041,21 @@ A-21b, A-31, A-41, A-49 e A-58 aspettano una decisione; A-4 e A-10 sono lavoro d
   scartava il risultato, e alla riapertura leggeva una cache non reattiva. Verde con Vitest (M1, M2, About, Sidebar
   1–4) e con l'E2E E1/E2 di `changelog-locale.spec.ts`, rosso prima della cura. Dettagli: [piano
   02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-CL1» e «CL1.1»–«CL1.7».
+- **A-59 · Il ramo in sola lettura di `GlobalSettingsTab` non si raggiunge più** — minimo, pulizia; A, 20/10 (N69a).
+  Da N69-2 la scheda è solo degli admin, quindi `canEdit` è sempre vero sullo schermo. Il ramo in sola lettura
+  (`settings-readonly-indicator`, i controlli disattivati, le `props` `{canEdit}` del registro) e i suoi test restano
+  per ora. Cura: toglierli insieme, con la doc per sviluppatori di `GlobalSettingsTab`. Dettagli: [piano
+  02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «N69 — L'amministrazione: via al lotto».
+- **A-60 · Due altri cerchi d'avatar non usano `UserAvatar`** — minimo, fattorizzazione; A, 20/10 (N69a).
+  - Hanno ognuno la sua copia di `getAvatarInitial`: `components/ui/select/UserSearchSelect.svelte` (i selettori
+    di utenti) e `features/brokers/BrokerSharingPanel.svelte` (iniziali ambra su classi di palette, del programma
+    colori).
+  - `UserAvatar` (N69-4) ha lo schema dei selettori: `bg-lf-neutral` con `text-lf-muted`, per condizione del
+    programma colori (19/10).
+  - Quella coppia non è fra quelle che il cancello del contrasto misura (regola 5 della skill `design-system`: un
+    testo su `neutral` non è promesso). La decide il programma colori.
+  - Cura: i due cerchi passano a `UserAvatar`, con i loro proprietari. Dettagli: [piano
+    02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «N69a.3».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
