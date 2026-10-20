@@ -6703,6 +6703,13 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   avviso in cui si evidenzia il fatto all'utente e gli si dice di aprire la issue per far gestire il caso, con link a github». Per
   Danske: «Varaus» in silenzio con il log; ogni altro stato non contabilizzato con un avviso e `report_issue`; versione 1.0.2. Il
   lotto è in analisi. Dettagli: piano 04, «W-B85 · «Noto in silenzio, ignoto con avviso»: analisi».
+  ✅ 19/10, la parte decisa (via del coordinatore 16:23):
+  - Danske: «Varaus» → `reservation`, in silenzio con il log e nel conto del set; `excluded_status` → avviso con `report_issue`;
+    versione 1.0.2;
+  - la regola 10 della skill `brim-plugin`, e la guida dei plugin.
+  Restano aperte D-W85-1…4: gli altri motivi di Danske, le note delle righe non regolate, gli altri plugin (W-B86), i salti con
+  effetto economico (W-B87). Commit: il checkpoint W-B85 del coordinatore. Dettagli: piano 04, «W-B85 · Danske Bank, «noto in
+  silenzio, ignoto con avviso»: cura».
 - **W-B86 · Gli altri plugin BRIM col principio «noto in silenzio, ignoto con avviso»** — medio, chiarezza (cloud); W, 19/10
   (inventario di W-B85). Oggi 25 plugin saltano le righe ignote o illeggibili con un avviso a stringa per riga, che diventa
   `generic` e non può portare il link «apri una issue». DEGIRO, Scalable e Crédit Agricole hanno già note a codice: basta
@@ -6718,6 +6725,18 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   Quantità dopo uno split, costi e tasse escono sbagliati senza che l'utente lo sappia. Proposta: per la 1.3 almeno l'avviso con
   `report_issue`; l'import vero, per plugin, dopo. Dettagli: piano 04, «W-B85 · «Noto in silenzio, ignoto con avviso»: analisi»,
   punto 4.
+- **W-B88 · Quale data registra ogni plugin BRIM, contro il principio di B-52** — medio, numeri; W, 19/10 (analisi di B-52). Il
+  principio del developer: registrare la data dell'operazione; usare la data valuta, o lo stato, solo per decidere se la riga è
+  regolata. Nel lotto B-52 ci sono Fineco, Danske e il CSV generico. Altri 10 plugin nominano una data valuta o di regolamento:
+  Avanza, Crédit Agricole, DEGIRO, Directa, Disnat, Intesa, InvestEngine, Rabobank, Saxo, Schwab. Va fatto l'inventario di quale data
+  registra ciascuno; si correggono quelli che datano con la valuta. Proposta: dopo lo sprint, come W-B86. Dettagli: piano 04,
+  «B-52 · La data dell'operazione: analisi», punto 9.
+- **W-B89 · La data di una transazione è ancora descritta come «settlement date»** — minimo, chiarezza; W, 20/10 (docs-writer di
+  B-52). Col principio di B-52 il campo è la data dell'operazione, ma lo descrivono ancora come data di regolamento:
+  `backend/app/db/models.py:300, 857, 884`, `schemas/transactions/transactions.py:233, 522`, `schemas/transactions/batch.py:202` e la
+  pagina `developer/backend/database/brokers_transactions.md:99`. Le descrizioni degli schemi finiscono nell'OpenAPI e nel client
+  generato. Sono file condivisi: decide il coordinatore (proposta: «the operation date, the day the operation was made»). Dettagli:
+  piano 04, «B-52 · La data dell'operazione: cura», passo 4.
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
