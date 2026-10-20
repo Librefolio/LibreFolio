@@ -9347,4 +9347,36 @@ pagine).
    della tabella dei fallimenti che diventava falsa) e `ai_export_sampling.md` («Recent Daily Window», «Public Empty
    Temporal Rows»). Rivista contro il codice. `mkdocs build` strict ok, `check-links` 97 ok. Pagine solo inglesi.
    Backlog: E-23 ✅ nella mia sezione.
-5. ⏳ **Il checkpoint** (11:4x), coi testi finali per il developer e una domanda: il buco del giorno dello snapshot.
+5. ✅ **Il checkpoint** (11:4x), coi testi finali per il developer e una domanda: il buco del giorno dello snapshot.
+   Committato dal coordinatore (11:43): `32462b543` `feat(ai-export): merged price and rate gaps, no_price_in_period`,
+   `70bc6dc03` (il giornale).
+
+#### E-23.3 — Il buco finale del giorno dello snapshot (2026-10-20, 11:43; base `70bc6dc03`)
+> **La decisione del coordinatore** (11:43): «Una sequenza finale il cui unico giorno aperto è quello dello snapshot non
+> è un buco: è il prezzo di oggi non ancora sincronizzato, e un buco così in ogni asset sarebbe solo rumore, contro lo
+> spirito della regola del developer.» Prima il rosso, poi la cura e il checkpoint. Sì anche alla riga cosmetica del
+> runner per `api ai-export-unpriced-asset`. Poi E-7 (le domande le porta lui al developer).
+>
+> **Il giorno dello snapshot** nel codice: `snapshot_as_of`, che il runtime vuole uguale alla fine del periodo
+> esportato (`ai_export_runtime.py:414`) e che `technical_shared.py:1395` legge già come `plan.end`. Nessun orologio nei
+> builder né nei test. Conseguenza da dire nel checkpoint: anche un periodo storico che finisce in un giorno feriale
+> senza prezzo perde quel buco di un giorno.
+
+1. ✅ **Il rosso** (`test-author` `e23-3-red`, 11:4x–11:5x; corse 11:57): 23 casi. E23-S17 (la sequenza finale col solo
+   `plan.end` aperto: venerdì da solo; sab→lun; un secchio dom–lun; venerdì festivo + fine settimana → lunedì),
+   E23-S19 (resta un buco ogni sequenza che non arriva a `plan.end`), E23-S21 (lo stesso coi tassi), E23-C16
+   (portafoglio, asset e cambi col solo giorno dello snapshot mancante) rossi; barriere E23-S18 (un altro giorno
+   aperto: il buco resta, fuso fino a `plan.end`), E23-S20 (un periodo senza punti osservati resta un buco), il resto
+   di S21 e C16. Nessuna attesa di E-23 cambia: i piani dei test esistenti finiscono di sabato o di domenica.
+   `services ai-export-pure` **8 failed / 489 passed**; `services ai-export TestEmptyBucketGaps` **3 failed / 25
+   passed**: gli 11 rossi previsti, e nient'altro.
+   > Caso di confine lasciato senza pin e accettato: un periodo senza nessun prezzo il cui solo giorno aperto è
+   > `plan.end` (un giorno feriale da solo, o sab–lun) dà `no_price_in_period` senza riga di buco, quindi senza
+   > ultimo prezzo. Le esportazioni usano periodi di settimane o mesi.
+2. ✅ **La cura** (11:57, `files/e23/apply_e23_3.py`): in `series_gaps` i giorni aperti della sequenza; si salta una
+   sequenza senza giorni aperti, o che finisce a `plan.end` col solo `plan.end` aperto; la docstring. Una frase in
+   `ai_export_composition.md` («Price and Rate Gaps», col periodo storico che perde il buco di un giorno) e in
+   `ai_export_sampling.md`; la descrizione del runner di `api ai-export-unpriced-asset` (E-AI503, E-23).
+3. ✅ **I verdi** (11:57–12:10): `services ai-export-pure` **497 passed**; `services ai-export` **1133 passed**;
+   `api ai-export-unpriced-asset` **9 passed**; ruff e black puliti; `mkdocs build` strict e `check-links` ok. Il
+   renderer non cambia (decide il backend). Checkpoint al coordinatore.
