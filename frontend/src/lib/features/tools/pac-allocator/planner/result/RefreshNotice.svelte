@@ -2,19 +2,29 @@
     import {RefreshCw} from 'lucide-svelte';
     import {t} from '$lib/i18n';
     import type {RefreshSummary} from '../copies';
+    import type {PlannerDraft} from '../draft.svelte';
     import {formatCopyStamp} from '../format';
+    import {presentSourceIssues} from '../issues';
+    import {listIssue} from '../labels';
+    import IssueList from '../shared/IssueList.svelte';
+    import type {PlannerSource} from '../source';
     import {BADGE, NOTICE} from '../ui';
     const KEY = 'tools.pacAllocator.planner.refresh.notice';
 
     interface Props {
         summary: RefreshSummary;
         asOf: string;
+        /** For the issues' labels (X-R45b): the draft, and the source the re-read loaded. */
+        draft: PlannerDraft;
+        source: PlannerSource | null;
         testid?: string;
     }
 
-    let {summary, asOf, testid = 'pac-planner-refresh-notice'}: Props = $props();
+    let {summary, asOf, draft, source, testid = 'pac-planner-refresh-notice'}: Props = $props();
 
     const stamp = $derived(formatCopyStamp(asOf, summary.readAt));
+    const issues = $derived(presentSourceIssues(summary.issues, draft, source).map(listIssue));
+    const warn = $derived(summary.missing.length > 0 || issues.some((item) => item.severity !== 'info'));
     /** Counts and names only: no amount is shown here. */
     const changes = $derived.by(() => {
         const parts = [
@@ -26,12 +36,15 @@
     });
 </script>
 
-<div class={summary.missing.length > 0 ? NOTICE.warning : NOTICE.info} role="status" data-testid={testid} data-prices={summary.prices} data-fx={summary.fx} data-cash={summary.cash} data-unchanged={summary.unchanged} data-missing={summary.missing.length}>
+<div class={warn ? NOTICE.warning : NOTICE.info} role="status" data-testid={testid} data-prices={summary.prices} data-fx={summary.fx} data-cash={summary.cash} data-unchanged={summary.unchanged} data-missing={summary.missing.length} data-issues={issues.length}>
     <p class="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span class={BADGE.neutral} data-testid="{testid}-stamp"><RefreshCw size={12} aria-hidden="true" />{stamp}</span>
         <span>{$t(`${KEY}.summary`, {default: 'Copied data read again from LibreFolio: {changes}.', values: {changes}})}</span>
     </p>
     {#if summary.missing.length > 0}
         <p class="mt-1" data-testid="{testid}-missing">{$t(`${KEY}.missing`, {default: 'Not found, the copied value stays: {names}.', values: {names: summary.missing.join(', ')}})}</p>
+    {/if}
+    {#if issues.length > 0}
+        <div class="mt-2"><IssueList items={issues} testid="{testid}-issues" /></div>
     {/if}
 </div>
