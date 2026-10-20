@@ -600,6 +600,35 @@ what it writes, and returns a `BootstrapResult` whose `action` (`BootstrapAction
   delivers nothing. On a restart, a worker that finds the lock taken while another re-arms or
   renames answers `pending`, and lets that one apply the change.
 
+**The setup's status, for a hosting panel** (lot H-61). `admin_setup_status(session, *, now=None)`
+tells the status route of a hosting panel where the setup of the initial administrator stands. It
+answers an `AdminSetupStatus`, a frozen dataclass: `state`, an `AdminSetupState` (a `StrEnum`, so it
+formats and serialises as its value: `none`, `pending`, `done` or `expired`), and `setup_expires_at`,
+in UTC, for `pending` only, `None` otherwise. It reads the `admin_setup` links of every account,
+though only the F02 administrator ever gets one; the links of the other purposes (invitations,
+password resets, email verifications) never count. The status is not «waiting» (`pending_admin()`,
+above): an administrator whose link ran out or was [cancelled](#setup-cancel) still waits, and its
+setup reads `expired`. The rule, in this order («done wins»):
+{: #setup-status }
+
+1. No `admin_setup` link stored: `none`. None was ever issued, or the account that held them was
+   deleted: `account_tokens.user_id` is `ON DELETE CASCADE`, and its links went with it
+   ([Deleting an Account](#admin-account-deletion)).
+2. Any `admin_setup` link consumed: `done`. Spent by the setup (`complete_admin_setup()`, below), or
+   retired because the account was activated or given a password another way (A-32, below). A
+   consumption is final: no link is issued after one (`pending_admin()` wants none consumed), so a
+   stray newer link, which a setup through an older one leaves revoked, never makes a set-up
+   instance read `expired`.
+3. Otherwise the latest link, by `created_at` then `id`, decides. Revoked without use — the setup
+   [cancelled](#setup-cancel) (A-43), the address changed (A-33, above) — or past its expiry
+   (`expires_at <= now`): `expired`. Otherwise `pending`, with that link's `expires_at` as
+   `setup_expires_at`. A link replaced by a newer one (`issue_setup_link()`, a re-arm) is revoked
+   too, but the newer one is then the latest, and decides.
+
+`now`, the moment the expiry is compared with, is the clock (`utcnow()`) when left out. The function
+only reads: it writes and commits nothing, leaves nothing in the session for its caller to commit,
+and never takes SQLite's write lock.
+
 **The setup.** `POST /api/v1/auth/setup` `{token, new_password}` (`AdminSetupRequest`, `token` of at
 most 200 characters) is public:
 
@@ -782,4 +811,12 @@ works as before, `cancel_setup` without `is_active: false` is `422`, a plain dea
 window deactivates the administrator just set up and says so, a deletion in it answers
 `DEMOTE_FIRST`) and A51-007 and A51-008 to `admin-bootstrap` (`user deactivate` and `user demote`
 of the only administrator of a new instance while its setup completes, both refused as the last
-active administrator).
+active administrator). Lot H-61 adds H61-001 to H61-018 to `admin-bootstrap`, for
+[`admin_setup_status()`](#setup-status): the two types and the signature; `none` without any setup
+link, the tokens of the other purposes counting for nothing, and once the administrator was
+deleted; `pending` after the creation, until the expiry to the microsecond; `done` through the
+link, another way, and through the older of two links; `expired` once the link was withdrawn; the
+link that replaced another; of two links, a consumed one first, otherwise the newer; the order by
+`created_at` then `id`; the links of every account; nothing written in any state; the clock without
+`now`. Every test name holds `setup_status`, so `./dev.py test services admin-bootstrap setup_status`
+runs them alone.
