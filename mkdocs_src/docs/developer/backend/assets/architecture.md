@@ -821,7 +821,10 @@ Operations (selectable per request):
 | `history` | Fetches the last 7 days of data → validates historical data availability |
 | `metadata` | Fetches asset metadata → validates identifier resolution |
 
-Each operation returns `success`, `execution_time_ms`, and operation-specific data. The response's
+Each operation returns `success`, `execution_time_ms`, and operation-specific data. The `metadata` result also
+carries `quote_base_suggestion`, beside `patch_data` and never inside it: the plugin's
+[quote base suggestion](../../architecture/patterns/asset_plugin_guide.md#quote-base-suggestion), asked once
+`fetch_asset_metadata()` has answered (with 5 s of its own), `null` when there is none. The response's
 `provider_url` is the plugin's `get_asset_url()`, withheld (`null`) when it shows one of the
 provider's secrets: `core.public_asset_url()` drops it and logs a warning naming the provider
 ([Plugin Settings](../../architecture/patterns/plugin_settings.md#secrets)). The frontend
