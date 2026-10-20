@@ -221,7 +221,7 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
 | | User Settings | Global Settings |
 |---|---|---|
 | Storage | **Typed columns** on the per-user `UserSettings` row | **Key-value rows** in the `GlobalSetting` table |
-| Who reads | The user themselves (`GET /api/v1/settings/user`) | Any signed-in user (`GET /api/v1/settings/global`, `GET /api/v1/settings/global/{key}`): `401` without a session. The login page reads none of them: what it needs before sign-in is in [`GET /system/instance`](#public-instance-configuration) |
+| Who reads | The user themselves (`GET /api/v1/settings/user`) | Any signed-in user (`GET /api/v1/settings/global`, `GET /api/v1/settings/global/{key}`): `401` without a session. The app reads them for every user — the `globalSettings` store loaded at bootstrap (the default currency, the upload limit of the Files page), the instance defaults of the Preferences tab — although only administrators have the **Global Settings** tab since lot N69-2. The login page reads none of them: what it needs before sign-in is in [`GET /system/instance`](#public-instance-configuration) |
 | Who writes | The user themselves (`PUT /api/v1/settings/user`) | Admins only (**Global Settings** tab of Settings › Administration, or `PATCH /api/v1/settings/global/bulk`) |
 | Examples | `language`, `base_currency`, `theme`, `avatar_url` | `session_ttl_hours`, `registration_mode`, `scheduler_*`, `default_currency` … |
 
@@ -245,9 +245,10 @@ building `UserSettingsRead` raised, and the answer was a `500`: at sign-in, afte
 cookie, so the user could not sign in. Tests: `./dev.py test api settings`,
 `TestStoredThemeUnknownToTheApp` (SET-A11-01 to SET-A11-07, in-process on a private database).
 
-Admins manage global settings from the **Global Settings** tab of Settings › Administration
-(`GlobalSettingsTab.svelte`: lock-gated, with the scheduler dialogs and `CachePanel`, writing through
-the bulk-update endpoint).
+Admins manage global settings from the **Global Settings** tab of Settings › Administration, which
+only administrators see (`GlobalSettingsTab.svelte`: lock-gated, with the scheduler dialogs and
+`CachePanel`, writing through the bulk-update endpoint; see
+[GlobalSettingsTab](../frontend/components/features/settings.md#globalsettingstab-admin-only)).
 Missing rows are seeded at every startup by the `global-settings` step of the lifespan
 (`_initialize_global_settings()` in `backend/app/services/platform/app_lifespan.py`); the same
 idempotent seeding is available from the CLI:

@@ -1,27 +1,31 @@
 # ⚙️ Global Settings
 
-Global settings apply to the whole instance and to every user. They are stored in the database:
-every signed-in user can read them, only administrators can change them.
+Global settings apply to the whole instance and to every user. They are stored in the database, and
+only administrators have their tab, to see and change them. They are not secret, though: the app
+reads them for every signed-in user, to apply them (the upload limit, the defaults of the
+[Preferences](../user/settings/preferences.md)…), and any signed-in user can read them through the
+API.
 
 ---
 
 ## 🗂️ Settings › Administration {: #administration }
 
 **Global Settings** is the first tab of **Administration**, the group of tabs that look after the
-instance, at the right end of the **Settings** tab bar on a wide screen. Click **Administration**: it
-opens **Global Settings** and, for an administrator, a second row of tabs under the first one, with
-the tabs of the group.
+instance, at the right end of the **Settings** tab bar on a wide screen. Only administrators have
+the group. Click **Administration**: it opens **Global Settings** and a second row of tabs under the
+first one, with the tabs of the group.
 
 | Tab | Who has it | What it is for |
 |---|---|---|
-| ⚙️ **Global Settings** | Everyone, read-only unless you are an administrator | The settings of this page |
+| ⚙️ **Global Settings** | Administrators | The settings of this page |
 | 👥 **Users** | Administrators | The accounts, invitations and password-reset links: [Users & Invitations](users.md) |
 | 💾 **Backup** | Administrators | The whole instance in one archive, and its restore: [Backup, Restore & Moving](backup_restore.md) |
 | ✉️ **Email** | Administrators | Whether LibreFolio can send emails, and a test email: [Email](email.md) |
 | 🛡️ **Security** | Administrators | How the instance is configured, and what needs your attention: [Security](#security-tab), below |
 
-- 👤 A user who is not an administrator has **Global Settings** alone in the group: **Administration**
-  opens it straight away, without a second row.
+- 👤 A user who is not an administrator has no **Administration** group, nor any of its tabs: their
+  **Settings** end with **About**, and a link to one of the group's tabs opens their **Profile**
+  instead.
 - 🔁 Clicking **Administration** while one of its tabs is open keeps that tab open.
 - 🔢 A number on **Security**, repeated on **Administration**, counts the errors and warnings of the
   [security checks](#security-tab).
@@ -35,8 +39,7 @@ the tabs of the group.
 
 Open **Settings** (gear icon in the sidebar), then **Administration**, which opens on
 **Global Settings**: its panel groups the settings by category. Click the **lock icon** (🔒) in the
-header to unlock it. Only administrators (superusers) have the lock; everyone else gets a read-only
-view.
+header to unlock it. Only administrators (superusers) have this tab.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Global Settings" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -254,9 +257,9 @@ To stay fast, LibreFolio keeps recent provider answers and computed results in m
     <img class="gallery-img" data-category="settings" data-name="cache-panel" alt="Server caches panel in Global Settings (Memory category)">
 </div>
 
-Everyone can see the panel. An administrator, with the tab unlocked, can empty one cache with
-**Clear** or all of them with **Clear all**, to force fresh data without a restart. A restart
-empties every cache too.
+The panel shows its numbers whether the tab is locked or not. With the tab unlocked, you can empty
+one cache with **Clear** or all of them with **Clear all**, to force fresh data without a restart.
+A restart empties every cache too.
 
 !!! warning "Clearing a cache slows down the next fetch"
 
