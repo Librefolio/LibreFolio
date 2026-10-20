@@ -45,6 +45,9 @@
  *   - RED until X-R45b-ui: the CHF/USD card lists one item, the invalid-rate error.
  *   - RED until X-R45b-ui: the GBP/USD card lists nothing (`saved_fx_missing` left out), and keeps its «no rate» status.
  *   - RED until X-R45b-ui: switched to Manual, the EUR/USD card lists nothing.
+ *
+ * The review of X-R45b-ui (D2) adds the last block: back on the step after «Calcola» read the corrected D2, the card
+ * no longer lists the warning about D2.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {get} from 'svelte/store';
@@ -81,9 +84,10 @@ vi.mock('../scope', async (importOriginal) => ({
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {_} from '$lib/i18n';
 import {getClientSessionGeneration, transitionClientSession} from '$lib/stores/app/clientSession';
+import {refreshCopiedFacts, refreshPlan, refreshQuery} from '../copies';
 import {PlannerDraft} from '../draft.svelte';
 import {formatPlannerFxRate} from '../format';
-import type {SourceIssue} from '../source';
+import {fetchPlannerSource, type SourceIssue} from '../source';
 import FxStep from './FxStep.svelte';
 
 const EUR_USD = 'EUR/USD';
@@ -155,8 +159,8 @@ const CHF_USD_ROW = quoteRow(CHF_USD, null, SKIPPED_DATE, quoteId(CHF_USD, SKIPP
 const EUR_USD_ROW = quoteRow(EUR_USD, USED.rate, USED.date, quoteId(EUR_USD, USED.date));
 const GBP_USD_ROW = quoteRow(GBP_USD, null, null, quoteId(GBP_USD, AS_OF, MISSING_TOKEN));
 
-/** The answer to the step's read, as the backend serialises it: the parser drops `message_key`. */
-function response() {
+/** An answer to a read of the FX quotes, as the backend serialises it: the parser drops `message_key`. By default, the step's read of the three pairs. */
+function response(quotes: readonly ReturnType<typeof quoteRow>[] = [CHF_USD_ROW, EUR_USD_ROW, GBP_USD_ROW], issues: readonly SourceIssue[] = [SKIPPED, INVALID, MISSING, PRICE]) {
     const generatedAt = `${AS_OF}T09:30:00Z`;
     return {
         snapshot: {as_of: AS_OF, target_currency: 'USD', generated_at: generatedAt},
@@ -170,9 +174,9 @@ function response() {
         cash_balances: [],
         prices: [],
         classifications: [],
-        fx_quotes: [CHF_USD_ROW, EUR_USD_ROW, GBP_USD_ROW],
+        fx_quotes: [...quotes],
         current_distribution: null,
-        issues: [SKIPPED, INVALID, MISSING, PRICE].map((issue) => ({...issue, message_key: issue.code})),
+        issues: issues.map((issue) => ({...issue, message_key: issue.code})),
     };
 }
 
@@ -295,5 +299,98 @@ describe('FxStep — the issues of the Auto read, in each pair card (X-R45b-ui)'
         expect(within(card(EUR_USD)).getByTestId('pac-planner-fx-rate-manual'), 'barrier: and shows the manual rate field').toBeInTheDocument();
         expect(listedIn(CHF_USD), 'barrier: the CHF/USD card, still in Auto, keeps its list').toHaveLength(1);
         expect(within(card(EUR_USD)).queryByTestId('pac-planner-fx-issues')).toBeNull();
+    });
+});
+
+// -- The review of X-R45b-ui, D2: back on the step after «Calcola» ----------------------------------------------------
+
+/*
+ * D2 on screen, the reviewer's scenario.
+ *   - The step's read finds CHF/USD's latest saved rate D2 (2026-01-05) not valid and quotes D1 (2026-01-02): the card
+ *     lists «D2 skipped, D1 used».
+ *   - The user corrects D2 in LibreFolio and presses «Calcola»: `refreshCopiedFacts` reads the corrected D2 into the
+ *     pair, as `PacPlannerTool.refreshCopies` does (`refreshPlan`, `refreshQuery` for the owned Broker, one load).
+ *   - Back on the step, the card shows D2's rate beside the warning about D2: the re-read never touched what the step
+ *     remembers of the pair (`FxRateReader.issues`, kept per draft).
+ *
+ * The cure: the re-read replaces what is remembered of every pair it reads again (see `../fxRead.test.ts`, D2).
+ *
+ * Leaving the step is an unmount and coming back a new mount, as when `PacPlannerTool` shows the result and the user
+ * returns to the step. Every pair has been read once by then, so the new mount reads nothing: what it lists is memory.
+ *
+ * Absence. EUR/USD has the same skip at both reads, still true after «Calcola»: its list, before and after the cure, is
+ * the presence barrier of the CHF/USD list that must be gone.
+ */
+
+/** CHF/USD: D2, its latest saved rate, and D1, the previous valid one. */
+const CHF_D1 = {rate: '1.1250', date: USED.date};
+const CHF_D2 = {rate: '1.1310', date: SKIPPED_DATE};
+const CHF_AT_D1 = quoteRow(CHF_USD, CHF_D1.rate, CHF_D1.date, quoteId(CHF_USD, CHF_D1.date));
+const CHF_AT_D2 = quoteRow(CHF_USD, CHF_D2.rate, CHF_D2.date, quoteId(CHF_USD, CHF_D2.date));
+
+/** `saved_fx_skipped` of CHF/USD: D2 skipped, D1 used, on the quote of D1. */
+const CHF_SKIPPED: SourceIssue = {
+    code: SKIPPED_CODE,
+    kind: 'invalid',
+    severity: 'warning',
+    path: {kind: 'field', section: 'fx_quotes', entity_kind: 'fx_quote', entity_id: quoteId(CHF_USD, CHF_D1.date), field: 'rate'},
+    params: [
+        {kind: 'text', name: 'pair', value: CHF_USD},
+        {kind: 'date', name: 'skipped_date', value: CHF_D2.date},
+        {kind: 'date', name: 'used_date', value: CHF_D1.date},
+    ],
+};
+
+/** Valuation USD; a contribution in CHF and one in EUR: CHF/USD and EUR/USD, both waiting for their first rate. */
+function chfAndEur(): PlannerDraft {
+    const draft = new PlannerDraft('USD');
+    for (const currency of ['CHF', 'EUR']) draft.addContribution(currency, `${currency} savings`);
+    expect(draft.requiredPairs, 'precondition: the scenario needs CHF/USD and EUR/USD').toEqual([CHF_USD, EUR_USD]);
+    return draft;
+}
+
+/** The codes the card of `pair` lists. */
+function codesIn(pair: string): (string | undefined)[] {
+    return listedIn(pair).map((item) => item.dataset.code);
+}
+
+describe('FxStep — back on the step after the re-read before «Calcola» (X-R45b-ui review, D2)', () => {
+    it('RED until the X-R45b-ui review (D2): the CHF/USD card shows the corrected D2 rate and no longer the warning about D2', async () => {
+        const accountGeneration = getClientSessionGeneration();
+        const draft = chfAndEur();
+
+        // The step opens and reads: D2 skipped for D1 on CHF/USD, and the same on EUR/USD.
+        allocationSource.mockResolvedValueOnce(response([CHF_AT_D1, EUR_USD_ROW], [CHF_SKIPPED, SKIPPED]));
+        const step = render(FxStep, {draft, accountGeneration});
+        await waitFor(
+            () => {
+                expect(allocationSource, 'the step’s read loaded its snapshot').toHaveBeenCalledTimes(1);
+                expect(screen.getByTestId('pac-planner-fx')).toHaveAttribute('data-busy', 'false');
+                expect(card(CHF_USD)).toHaveAttribute('data-rate', 'set');
+                expect(card(EUR_USD)).toHaveAttribute('data-rate', 'set');
+            },
+            {timeout: 3_000},
+        );
+        expect(codesIn(CHF_USD), 'barrier: before «Calcola» the CHF/USD card lists the skip of D2').toEqual([SKIPPED_CODE]);
+
+        // The user leaves the step, corrects D2 in LibreFolio and presses «Calcola»: the copied rates are read again.
+        step.unmount();
+        const plan = refreshPlan(draft);
+        expect(plan?.fxPairs, 'precondition: both copied rates are read again').toEqual([CHF_USD, EUR_USD]);
+        if (!plan) throw new Error('unreachable: the plan was asserted above');
+        allocationSource.mockResolvedValueOnce(response([CHF_AT_D2, EUR_USD_ROW], [SKIPPED]));
+        const source = await fetchPlannerSource(refreshQuery(draft, plan, [OWNED.id]), accountGeneration);
+        refreshCopiedFacts(draft, source, plan);
+        expect(draft.fx(CHF_USD), 'barrier: the re-read put the corrected D2 into the pair, still Auto').toMatchObject({rate: CHF_D2.rate, referenceDate: CHF_D2.date, manual: false});
+
+        // The user comes back to the step.
+        render(FxStep, {draft, accountGeneration});
+        expect(screen.getByTestId('pac-planner-fx'), 'barrier: the step reads nothing on its own, every pair was read').toHaveAttribute('data-busy', 'false');
+        expect(allocationSource, 'barrier: no third load').toHaveBeenCalledTimes(2);
+        expect(card(CHF_USD)).toHaveAttribute('data-mode', 'auto');
+        expect(within(card(CHF_USD)).getByTestId('pac-planner-fx-rate-value').textContent, 'the card shows the rate of D2').toContain(formatPlannerFxRate(CHF_D2.rate));
+        expect(codesIn(EUR_USD), 'barrier: the EUR/USD card, whose skip is still true, lists it').toEqual([SKIPPED_CODE]);
+
+        expect(within(card(CHF_USD)).queryByTestId('pac-planner-fx-issues')).toBeNull();
     });
 });
