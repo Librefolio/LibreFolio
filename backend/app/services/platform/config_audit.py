@@ -20,7 +20,9 @@ from typing import Literal
 
 from backend.app.config import SecretFileError, get_data_dir, get_settings, is_test_mode, secrets_set_twice
 from backend.app.config.accounts import admin_bootstrap_config, login_limit_enabled
+from backend.app.config.hosting_panel import PANEL_STATUS_TOKEN_VARIABLE, HostingPanelConfigError, panel_status_token
 from backend.app.config.platform import TEST_LANE_ID_MAX_LENGTH, TEST_LANE_ID_MIN_LENGTH, configured_jwt_secret, configured_jwt_secret_origin, instance_blocked, instance_deletion_date, owning_test_lane_id
+from backend.app.config.sleep_wake import WAKE_TOKEN_VARIABLE, SleepWakeConfigError, wake_token
 from backend.app.logging_config import get_logger
 from backend.app.services.accounts.checks import ACCOUNTS_CONFIG_CHECKS
 from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS
@@ -209,6 +211,38 @@ def check_log_level() -> ConfigCheck:
     return ConfigCheck(check_id, "ok", "instance.checks.logLevel.ok")
 
 
+#: The hosting panel's tokens ``check_hosting_panel`` reads, in the order its detail names them (H-61); the backup token
+#: has its own check, ``backup.panel_token`` (workstream B).
+_PANEL_TOKENS: tuple[tuple[str, Callable[[], str | None]], ...] = ((WAKE_TOKEN_VARIABLE, wake_token), (PANEL_STATUS_TOKEN_VARIABLE, panel_status_token))
+
+
+def check_hosting_panel() -> ConfigCheck:
+    """The hosting panel's tokens of the scheduled wake-up and of the status route (H-61, L1): unset, their routes are
+    off (ok, nothing logged at startup); one that cannot be used, its route answers 503 to every call (error).
+
+    The detail names the unusable variables, never a value; the summary adds why each is refused (its error code).
+    """
+    check_id = "platform.hosting_panel"
+    unusable: list[tuple[str, str]] = []
+    configured = False
+    for variable, read in _PANEL_TOKENS:
+        try:
+            token = read()
+        except SecretFileError:
+            unusable.append((variable, "FILE_UNREADABLE"))
+            continue
+        except (SleepWakeConfigError, HostingPanelConfigError) as exc:
+            unusable.append((variable, exc.code))
+            continue
+        if token is not None:
+            configured = True
+    if unusable:
+        names = ", ".join(variable for variable, _ in unusable)
+        reasons = ", ".join(f"{variable} ({code})" for variable, code in unusable)
+        return ConfigCheck(check_id, "error", "instance.checks.hostingPanel.unusable", {"variables": names}, f"A hosting panel token cannot be used, and its route answers 503 to every call: {reasons}")
+    return ConfigCheck(check_id, "ok", "instance.checks.hostingPanel.ok" if configured else "instance.checks.hostingPanel.off")
+
+
 #: The summary of ``platform.test_mode`` outside a test lane (H-46): ``{data_dir}`` is the test data directory in use.
 TEST_MODE_OUTSIDE_LANE_SUMMARY = "LIBREFOLIO_TEST_MODE is on outside a test lane: test-only providers are served, the data are kept in the test data directory {data_dir} and .env is not read; unset it on a production instance"
 
@@ -249,6 +283,8 @@ CONFIG_CHECKS: tuple[Callable[[], ConfigCheck], ...] = (
     check_frame_protection,
     check_csp_report_only,
     check_log_level,
+    # The hosting panel's wake-up and status tokens (H-61); the backup token has B's own check below
+    check_hosting_panel,
     check_test_mode,
     # Workstream B: the hosting panel's backup token and the restore's upload limit (instance_backup/checks.py, B-9)
     *BACKUP_CONFIG_CHECKS,
