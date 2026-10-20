@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from datetime import date as date_type
+from decimal import Decimal
 
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import (
@@ -117,3 +118,11 @@ def normalized_fx_pair(
     if source_currency < destination_currency:
         return source_currency, destination_currency, False
     return destination_currency, source_currency, True
+
+
+def usable_rate(rate: Decimal | None) -> bool:
+    """A saved FX rate the planner may use (X-R45b): finite and above 0. A 0 or an infinity is what an older version
+    could store; a finite rate past the column's limits stays a value (developer, 19/10). The one rule of every saved rate
+    the planner source reads: the quotes (``fx_quotes``) and the evidence of the average cost's rates (``wac``; MF's
+    review of the X-R45 revert, 20/10)."""
+    return rate is not None and rate.is_finite() and rate > 0
