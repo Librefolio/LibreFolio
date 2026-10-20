@@ -70,16 +70,32 @@ def build_performance_history(  # noqa: C901 — cash-flow collection loops with
     A day with a mark values the open fragments at it. A day with no observation on or before it (``<= at_cost_until``)
     values them at cost, as the value history and the Dashboard do (J-17, J-33), and a transfer that day moves the cost
     of its units; any other day without a mark has no point.
+
+    Short positions (MF-E2, developer decision of 19/10: «se i numeri vanno in negativo, bisogna mostrarli e
+    comunicarli»): an open short is a debt, −quantity × price (on a day at cost, −its share of the opening sale's
+    proceeds, D3), and the sale that opens it takes its proceeds out of the position, a flow on its date at that day's
+    rate. With a short in the scope the returns are read on the gross exposure: the TWRR divides each day by the sum of
+    the long and short values' sizes, the ROI the gain by the capital committed — the net deposit of the long side plus
+    the proceeds of every short sale so far (E2-Q1). Without a short the series are exactly the ones before MF-E2.
     """
     scope_set = set(scope_broker_ids)
     scoped_fragments_by_lot = {lot_id: [fragment for fragment in fragments if _fragment_in_scope(fragment, scope_set)] for lot_id, fragments in context.fragments_by_lot.items()}
+    # MF-E2: the short lots opened in the scope; a short never moves between brokers (SHORT_TRANSFER_NOT_SUPPORTED)
+    short_lots = sorted((lot for lot in context.lots_by_id.values() if lot.direction == "SHORT" and lot.opening_broker_id in scope_set), key=lambda lot: (lot.opening_date, lot.lot_id))
 
     def at_cost(day: date_type) -> bool:
         return at_cost_until is not None and day <= at_cost_until
 
     nav_snapshots: list[NAVSnapshot] = []
+    exposure_by_date: dict[date_type, Decimal] = {}
     for current_date in history_dates:
         market_price = market_prices.get(current_date)
+        if short_lots:
+            valued = _signed_nav_on_date(scoped_fragments_by_lot, context.lots_by_id, fx_resolver, market_price, current_date, quote_base_quantity, at_cost=at_cost(current_date))
+            if valued is not None:
+                nav_snapshots.append(NAVSnapshot(date=current_date, nav=valued[0]))
+                exposure_by_date[current_date] = valued[1]
+            continue
         if market_price is not None:
             nav_amount: Decimal | None = sum((_open_value_on_date(fragments, market_price, current_date, quote_base_quantity) for fragments in scoped_fragments_by_lot.values() if fragments), Decimal("0"))
         elif at_cost(current_date):
@@ -90,6 +106,10 @@ def build_performance_history(  # noqa: C901 — cash-flow collection loops with
             nav_snapshots.append(NAVSnapshot(date=current_date, nav=nav_amount))
 
     cash_flows: list[CashFlowInput] = []
+    # MF-E2: the short side's flows, also in cash_flows — the proceeds of the short sales and the cost of the purchases
+    # that close them — which the ROI's capital tells from the long side's
+    short_proceeds: list[CashFlowInput] = []
+    short_buybacks: list[CashFlowInput] = []
     invalid_external_flow_from: date_type | None = None
 
     for tx in sorted(context.transactions, key=lambda row: (row.date, row.id or 0)):
@@ -120,6 +140,8 @@ def build_performance_history(  # noqa: C901 — cash-flow collection loops with
                 invalid_external_flow_from = tx.date if invalid_external_flow_from is None else min(invalid_external_flow_from, tx.date)
             else:
                 cash_flows.append(CashFlowInput(date=tx.date, amount=-buy_amount))
+                if short_lots and not _record_buyback(tx, context, fx_resolver, short_buybacks):
+                    invalid_external_flow_from = tx.date if invalid_external_flow_from is None else min(invalid_external_flow_from, tx.date)
             continue
         # An ADJUSTMENT with a cost moves that cost across the scope: money brought in by an ADJUSTMENT-in, money taken
         # out by one that hands units over at cost (its signed cost is negative). An ADJUSTMENT-out without a cost basis
@@ -130,6 +152,9 @@ def build_performance_history(  # noqa: C901 — cash-flow collection loops with
                 invalid_external_flow_from = tx.date if invalid_external_flow_from is None else min(invalid_external_flow_from, tx.date)
             elif adjustment_cost != Decimal("0"):
                 cash_flows.append(CashFlowInput(date=tx.date, amount=-adjustment_cost))
+                # An ADJUSTMENT-in closes the shorts at its broker as a BUY does, at its cost basis (fifo/engine.py)
+                if short_lots and tx.quantity > 0 and not _record_buyback(tx, context, fx_resolver, short_buybacks):
+                    invalid_external_flow_from = tx.date if invalid_external_flow_from is None else min(invalid_external_flow_from, tx.date)
 
     for closure in sorted(context.engine_result.closures, key=lambda row: (row.close_date, row.transaction_id, row.lot_id)):
         if closure.close_reason != "SELL":
@@ -173,9 +198,20 @@ def build_performance_history(  # noqa: C901 — cash-flow collection loops with
             continue
         cash_flows.append(CashFlowInput(date=event.date, amount=amount if source_in_scope else -amount))
 
+    # MF-E2: the sale that opens a short takes its proceeds out of the position, on its date at that day's rate
+    for lot in short_lots:
+        proceeds = fx_resolver.convert(lot.cumulative_proceeds, lot.currency, lot.opening_date) if lot.cumulative_proceeds is not None else None
+        if proceeds is None:
+            invalid_external_flow_from = lot.opening_date if invalid_external_flow_from is None else min(invalid_external_flow_from, lot.opening_date)
+            continue
+        cash_flows.append(CashFlowInput(date=lot.opening_date, amount=proceeds))
+        short_proceeds.append(CashFlowInput(date=lot.opening_date, amount=proceeds))
+
     if invalid_external_flow_from is not None:
         nav_snapshots = [snapshot for snapshot in nav_snapshots if snapshot.date < invalid_external_flow_from]
         cash_flows = [flow for flow in cash_flows if flow.date < invalid_external_flow_from]
+        short_proceeds = [flow for flow in short_proceeds if flow.date < invalid_external_flow_from]
+        short_buybacks = [flow for flow in short_buybacks if flow.date < invalid_external_flow_from]
 
     if nav_snapshots:
         first_nav_date = nav_snapshots[0].date
@@ -183,13 +219,23 @@ def build_performance_history(  # noqa: C901 — cash-flow collection loops with
         cash_flows = [flow for flow in cash_flows if flow.date >= first_nav_date]
         if carried_cash_flow != Decimal("0"):
             cash_flows.insert(0, CashFlowInput(date=first_nav_date, amount=carried_cash_flow))
+        # The short side's flows carried onto the first NAV keep their side (MF-E2)
+        short_proceeds = [CashFlowInput(date=max(flow.date, first_nav_date), amount=flow.amount) for flow in short_proceeds]
+        short_buybacks = [CashFlowInput(date=max(flow.date, first_nav_date), amount=flow.amount) for flow in short_buybacks]
 
     first_cash_flow_date = min((flow.date for flow in cash_flows), default=None)
     roi_map: dict[date_type, Decimal] = {}
     twrr_map: dict[date_type, Decimal] = {}
     if first_cash_flow_date is not None and nav_snapshots:
-        roi_map = {point.date: point.roi for point in calculate_simple_roi_series(nav_snapshots, cash_flows) if point.date >= first_cash_flow_date}
-        twrr_map = {point.date: point.twrr for point in calculate_twrr_series(nav_snapshots, cash_flows) if point.date >= first_cash_flow_date}
+        if short_lots:
+            capital_by_date = _committed_capital_by_date(nav_snapshots, cash_flows, short_proceeds, short_buybacks)
+            roi_series = calculate_simple_roi_series(nav_snapshots, cash_flows, capital_by_date=capital_by_date)
+            twrr_series = calculate_twrr_series(nav_snapshots, cash_flows, exposure_by_date=exposure_by_date)
+        else:
+            roi_series = calculate_simple_roi_series(nav_snapshots, cash_flows)
+            twrr_series = calculate_twrr_series(nav_snapshots, cash_flows)
+        roi_map = {point.date: point.roi for point in roi_series if point.date >= first_cash_flow_date}
+        twrr_map = {point.date: point.twrr for point in twrr_series if point.date >= first_cash_flow_date}
 
     return [
         PerformanceHistoryPoint(
@@ -222,6 +268,93 @@ def _nav_at_cost(scoped_fragments_by_lot: Mapping[int, Sequence[FragmentInterval
             return None
         nav += cost
     return nav
+
+
+def _proceeds_at_opening(lot: FifoLot, quantity: Decimal, fx_resolver: FxRateResolver) -> Decimal | None:
+    """What ``quantity`` units of a SHORT ``lot`` weigh on a day valued at cost (MF-E2, D3): their share of the opening
+    sale's proceeds, converted at its opening date. None for a lot of no quantity or proceeds with no rate."""
+    if lot.original_quantity == Decimal("0") or lot.cumulative_proceeds is None:
+        return None
+    return residual_cost(fx_resolver.convert(lot.cumulative_proceeds, lot.currency, lot.opening_date), quantity, lot.original_quantity)
+
+
+def _signed_nav_on_date(
+    scoped_fragments_by_lot: Mapping[int, Sequence[FragmentInterval]],
+    lots_by_id: Mapping[int, FifoLot],
+    fx_resolver: FxRateResolver,
+    market_price: Decimal | None,
+    current_date: date_type,
+    quote_base_quantity: int,
+    *,
+    at_cost: bool,
+) -> tuple[Decimal, Decimal] | None:
+    """(NAV, gross exposure) of the in-scope open fragments on a day of a scope with short positions (MF-E2).
+
+    A long fragment adds its value, a short one takes it away: at the day's mark, or on a day at cost the long's cost
+    share (``_cost_at_opening``) and the short's proceeds share (``_proceeds_at_opening``). The exposure adds their sizes.
+    None for a day without a mark that is not at cost, or at cost with a part that cannot be valued.
+    """
+    if market_price is None and not at_cost:
+        return None
+    nav = exposure = Decimal("0")
+    for lot_id, fragments in scoped_fragments_by_lot.items():
+        if not fragments:
+            continue
+        lot = lots_by_id.get(lot_id)
+        short = lot is not None and lot.direction == "SHORT"
+        if market_price is not None:
+            value: Decimal | None = _open_value_on_date(fragments, market_price, current_date, quote_base_quantity)
+        else:
+            open_quantity = _open_quantity_on_date(fragments, current_date)
+            if open_quantity == Decimal("0"):
+                continue
+            value = _proceeds_at_opening(lot, open_quantity, fx_resolver) if short and lot is not None else _cost_at_opening(lot, open_quantity, fx_resolver)
+            if value is None:
+                return None
+        nav += -value if short else value
+        exposure += abs(value)
+    return nav, exposure
+
+
+def _record_buyback(tx: Transaction | FifoInputTransaction, context: PerformanceSourceContext, fx_resolver: FxRateResolver, short_buybacks: list[CashFlowInput]) -> bool:
+    """Record the part of a purchase that closes shorts (MF-E2): the cost of each SHORT lot's closure by ``tx``, a flow of
+    the short side. False when one of them has no rate."""
+    for closure in context.engine_result.closures:
+        lot = context.lots_by_id.get(closure.lot_id)
+        if closure.transaction_id != tx.id or lot is None or lot.direction != "SHORT":
+            continue
+        cost = convert_closure(closure, lot, fx_resolver).cost
+        if cost is None:
+            return False
+        short_buybacks.append(CashFlowInput(date=closure.close_date, amount=-cost))
+    return True
+
+
+def _committed_capital_by_date(nav_snapshots: Sequence[NAVSnapshot], cash_flows: Sequence[CashFlowInput], short_proceeds: Sequence[CashFlowInput], short_buybacks: Sequence[CashFlowInput]) -> dict[date_type, Decimal]:
+    """The capital each snapshot's date commits, in a scope with short positions (MF-E2, E2-Q1): the net deposit of the
+    long side, ``max(0, −its flows so far)``, plus the proceeds of every short sale so far.
+
+    Only the flows dated on a snapshot count, as in the gain ``calculate_simple_roi_series`` divides (its cumulative
+    flows read the snapshots' dates): capital and gain stay on the same flows. A flow on a day with no NAV after the
+    first one is left out of both — an existing limit of the performance history, long positions included.
+    """
+    snapshot_dates = {snapshot.date for snapshot in nav_snapshots}
+    # Each flow by side: the long side is every flow that is neither a short sale's proceeds nor a short's buy-back
+    tagged = sorted(
+        [(flow.date, flow.amount, "all") for flow in cash_flows if flow.date in snapshot_dates] + [(flow.date, flow.amount, "proceeds") for flow in short_proceeds if flow.date in snapshot_dates] + [(flow.date, flow.amount, "buyback") for flow in short_buybacks if flow.date in snapshot_dates],
+        key=lambda item: item[0],
+    )
+    sums = {"all": Decimal("0"), "proceeds": Decimal("0"), "buyback": Decimal("0")}
+    capital: dict[date_type, Decimal] = {}
+    position = 0
+    for snapshot in sorted(nav_snapshots, key=lambda item: item.date):
+        while position < len(tagged) and tagged[position][0] <= snapshot.date:
+            _day, amount, side = tagged[position]
+            sums[side] += amount
+            position += 1
+        long_side = sums["all"] - sums["proceeds"] - sums["buyback"]
+        capital[snapshot.date] = max(Decimal("0"), -long_side) + sums["proceeds"]
+    return capital
 
 
 def _boundary_leg_cost(tx: Transaction | FifoInputTransaction, direction: str, context: PerformanceSourceContext, fx_resolver: FxRateResolver, asset_currency: str) -> Decimal | None:
