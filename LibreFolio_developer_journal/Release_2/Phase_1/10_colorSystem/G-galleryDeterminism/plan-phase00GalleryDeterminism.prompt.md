@@ -1290,8 +1290,8 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
     - i banner della qualità dei dati e le pillole del rischio parziale (§2). Nessun toast: nessuno scatto ne fotografa
       uno.
   - **Aperte, dipendono dalla corsia o dall'inquadratura, non dal colore:**
-    - G-22: il badge «1» su «Amministrazione» e Security, il conto dei controlli della corsia, finché una fixture non
-      lo serve;
+    - G-22 e G-28: il conto dei controlli di sicurezza della corsia (il badge «1» su «Amministrazione» e Security, e da
+      N69b il pallino), finché la fixture di G-28 non li serve tutti «ok»;
     - G-23: lo stato delle cache in memoria nel pannello della cache;
     - G-25: `onboarding/welcome-setup` su mobile, in francese e spagnolo, dopo A9;
     - G-26: `settings/password-modal` su mobile, lo scorrimento della pagina sotto la modale.
@@ -1299,6 +1299,34 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
     `whats_new` è `null`, quindi non compare in nessuno scatto.
   - **Il nuovo riferimento del rumore**, dopo A8b e A9: `diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-cd686f445`
     (maschere e `stability.json`), al posto di `g-ref13` del 16/10, cancellato il 19/10.
+  - **N69a**, entrato in `3e82ed2e0` (20/10 09:17): il gruppo «Amministrazione» è solo degli admin, e la lista utenti
+    ha gli avatar. Cambi voluti, non di colore:
+    - `settings/plugins`, la vista del membro (e2e_test_user): nella barra in alto non c'è più «Amministrazione»;
+      restano Profilo, Preferenze, Plugin e Informazioni;
+    - `settings/users`: dopo la freccia di ogni riga c'è l'avatar, in un cerchio di 24 px. Le quattro righe della
+      fixture della scena non hanno `avatar_url`, che il backend di N69a rende facoltativo. Ogni riga mostra quindi la
+      sua iniziale, «E», «A», «M» e «G», su `bg-lf-neutral` con `text-lf-muted`: nessuna immagine da caricare, niente
+      di asincrono;
+    - nella vista dell'admin il gruppo c'era già: nient'altro cambia.
+    - **N69c, non ancora entrato** (il coordinatore avvisa): la modalità d'iscrizione passa nella scheda Utenti.
+      Cambieranno `settings/global-settings`, che perde quella sezione, e `settings/users`, che la guadagna.
+  - **N69b**, entrato in `1e711253a` (20/10 13:34): il pallino dei controlli di sicurezza per gli admin. Ogni pagina
+    che un admin apre legge `GET /api/v1/security/checks`. Con un errore o un avviso compaiono:
+    - un pallino di 8 px, ambra o rosso, sullo scudo della riga della connessione nella barra laterale;
+    - nei dettagli della riga, un link «N security warnings»;
+    - sul telefono, un pallino di 10 px sul pulsante del menu.
+
+    Senza cura lo mostrerebbe ogni scena da admin, cioè quasi tutta la galleria, perché la corsia ha il limite dei
+    login spento (`accounts.login_limit`, avviso `auth.checks.loginLimit.off`). In `security/connection-indicator` ci
+    sarebbe anche il link, coi dettagli più alti: sul telefono rischia il controllo «tutta la riga sullo schermo». E il
+    pallino arriva dopo una lettura asincrona, quindi con un rischio di a≠b.
+    - **La cura è G-28:** i controlli simulati, tutti «ok», per ogni test della galleria. Con la cura:
+      - nessun pallino e nessun link in nessuna scena. `security/connection-indicator` resta com'era, e il suo testo
+        alternativo resta vero;
+      - il badge «1» su «Amministrazione» e su «Security» sparisce da tutti gli scatti admin della pagina Settings
+        (l'elenco di A8b qui sopra): è il cambio atteso;
+      - lo scudo della riga della connessione ora sta in un contenitore, per il pallino: atteso identico, da guardare a
+        occhio nella coppia di verifica.
 - **`settings/backup-ready` per la 1.3 ✅, 16/10 22:54–23:11.** Commit `b89985a8b`: la punta, con B (`0cd910a7e`: B3
   ripristino, B5b, B5c). Due run identiche, `g-backup-a` e `g-backup-b`, sullo stesso build, 2 worker. Il filtro
   `-f "Settings backup ready \(admin\) - all languages and themes"` seleziona solo `gallery.spec.ts:2126`.
@@ -1534,3 +1562,37 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
     indicazioni correnti: il passo di Y in `09_dashboardCharts/plan-phase01DashboardCharts.prompt.md` (righe 93–95, le
     maschere di `g-final3__r1__vs__r2`) e «Dati di riferimento» in `10_colorSystem/README.md` (`baseline-r1` e
     `baseline-r2`). Gli altri sono registri del passato.
+- **N69 nella galleria: analisi e cura (G-28), 20/10 — ⏳ in attesa dell'OK per il codice.** Chiesta dal coordinatore
+  alle 13:35, solo analisi; base `15fa228ef`, per fast-forward, pulita. Alle 13:4x il coordinatore ha aggiunto che il
+  pallino vale per tutte le scene da admin, e che E scrive le voci di `settings/email` nelle 8 pagine della galleria.
+  - **Quello che ho verificato nel codice:**
+    - la riga della connessione è nella barra laterale di ogni pagina dell'app (`Sidebar.svelte`), e il pulsante del
+      menu nell'intestazione (`Header.svelte`);
+    - N69b legge i controlli una volta per caricamento, per ogni admin (`ConnectionSecurityIndicator.svelte`,
+      `securityChecks.ensureLoaded()`). Il conto è `attentionCount`, lo stesso del badge di Settings;
+    - nella corsia l'unico avviso è `accounts.login_limit` (`services/accounts/checks.py`): le corsie di test girano
+      col limite spento. Gli altri 16 controlli sono `ok`;
+    - la voce del browser (la registrazione aperta) non c'è: `localhost` e `lf-e2e.lan` sono locali per
+      `isLocalHost` (`features/auth/localHost.ts`, il suffisso `.lan`);
+    - quasi tutta la galleria entra come admin, `TEST_ADMIN`, nel test o nel `beforeEach` del suo gruppo. Non lo sono
+      le pagine d'accesso (nessun accesso), le scene di onboarding (un account appena registrato, membro), `plugins`
+      (`TEST_USER`) e lo stato vuoto della Dashboard (`TEST_EMPTY`).
+  - **La scelta:** i controlli tutti «ok» per ogni test, non lo scatto da utente normale.
+    - Il secondo curerebbe solo `security/connection-indicator`, e la pagina dell'utente resterebbe giusta; ma il
+      pallino resterebbe in ogni altra scena da admin.
+    - I controlli «ok» sono un'istanza configurata bene, cioè «valori realistici» come per G-22. Tolgono un avviso
+      che è della corsia di test e non di un'installazione, e una lettura asincrona che darebbe rumore.
+  - **Il testo alternativo:** nessuna modifica. Con la cura lo scatto mostra quello che il testo descrive.
+  - **Cosa serve per verificarla:** l'OK; test-author per il codice; A per i valori della fixture; `prettier --check`
+    e `tsc -p tsconfig.e2e.json` coi binari bloccati, a carico sotto 50. Poi la corsia:
+    - `dev.py server --test --build-only`: il frontend è cambiato dal 18/10;
+    - `dev.py test --test-port 6153 --data-dir /tmp/librefolio-r2-g db populate --force --clean` prima di ogni cattura;
+    - un doppio a/b filtrato a 4 worker: `connection indicator on a local network`, `main dashboard`,
+      `mobile menu open`, `global settings (admin)`, `email (admin)`, `plugins`, `users`. Sono 7 test e 13 esecuzioni
+      di progetto, circa 25 minuti per la coppia, build compreso.
+  - **Definition of done:**
+    - tutto verde nei due schermi, la scena compresa;
+    - a = b sugli scatti toccati;
+    - le asserzioni provano che la fixture ha risposto e che non c'è pallino, link o badge;
+    - a occhio contro il trio del 18/10 («giorno diverso»): la riga della connessione uguale, il badge sparito, le
+      iniziali in `users`, `plugins` senza «Amministrazione».
