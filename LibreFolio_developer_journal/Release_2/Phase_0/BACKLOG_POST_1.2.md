@@ -9978,8 +9978,9 @@ punto di partenza, l'audit dello stesso giorno:
   ripiego in una query sola dopo il `gather`. Dettagli: piano MF, sezione «R13-SEC9».
 - **MF-FV · Piano «formule veloci»: togliere i pavimenti all'indietro senza pagarli** — grande, nessun valore (parità al
   bit); developer, 19/10 (D1 un punto al giorno, D2 i pavimenti alla fine, uno per lotto, tutto nella 1.3). Lotti di MF:
-  P1 ✅ (la linea del MWRR a partenza calda, codice `af479abe7`, giornale `bbbc085d2`), P2 in corso (storia e viste solo
-  per la finestra), P3 (i cambi a gradini, con la funzione di X), P4 (il motore a segmenti); poi i pavimenti. Dettagli:
+  P1 ✅ (la linea del MWRR a partenza calda, codice `af479abe7`, giornale `bbbc085d2`), P2 ✅ (storia e viste solo per la
+  finestra, `82e9454eb`), P3 pronto il 20/10 (i cambi a gradini nel motore e nella cassa nativa, con `unit_rate_steps` di X;
+  0 differenze su tutto `get_report`), P4 (il motore a segmenti); poi i pavimenti. Dettagli:
   piano MF, «Piano «formule veloci»» e le voci P1, P2.
 - **MF-P1b · Le due debolezze del MWRR già presenti** — piccolo, valori da dichiarare; MF, 19/10 (test di P1), via del
   developer il 19/10 come lotto a parte, dopo P2. (1) Il test del segno moltiplica i VAN e il prodotto va in underflow
