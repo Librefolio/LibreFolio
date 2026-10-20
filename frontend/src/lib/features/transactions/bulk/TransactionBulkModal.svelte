@@ -922,8 +922,40 @@
     /** Split a paired row in the BulkModal.
      *  Saved paired → backend split + 2 editable preview rows (DD-R2.1).
      *  New paired (link_uuid shared or pairedWith) → local transformation only. */
+    /** «Split pair» on a merge still waiting for the save (`pendingPromotes`: two saved rows, or a saved and a new one):
+     *  undo it, whichever row the pair shows (J-67). Each row gets its own type back — a saved row's from the store, a
+     *  new row's `promoteFromType` — with its amount in the editor's convention (a withdrawal as its magnitude, as
+     *  `fieldsFromTx` reads it); the new row loses the promote's link; both rows are visible; the merge leaves the
+     *  queue, so the save sends neither it nor a split. False for any other pair: one saved as such (Case A), two new
+     *  rows merged locally (Case B/C). */
+    function undoPendingPromote(a: PendingOp, b: PendingOp): boolean {
+        const saved = [a, b].filter((op) => op.op === 'edit').map((op) => (op as any).txId as number);
+        const created = [a, b].find((op) => op.op === 'create');
+        const index = pendingPromotes.findIndex((promote) =>
+            saved.length === 2 ? (promote.id_a === saved[0] && promote.id_b === saved[1]) || (promote.id_a === saved[1] && promote.id_b === saved[0]) : saved.length === 1 && !!created?.link_uuid && promote.id_a === saved[0] && promote.link_uuid_b === created.link_uuid,
+        );
+        if (index < 0) return false;
+        pendingPromotes = pendingPromotes.filter((_, at) => at !== index);
+        for (const op of [a, b]) {
+            const sourceType = op.op === 'edit' ? txStoreGet((op as any).txId)?.type : op.promoteFromType;
+            if (sourceType) {
+                const rule = getTypeRule(sourceType);
+                op.fields.type = sourceType as TransactionTypeCode;
+                op.fields.quantity = magnitudeForRule(op.fields.quantity, rule.quantityRule);
+                if (op.fields.cash) op.fields.cash = {code: op.fields.cash.code, amount: magnitudeForRule(op.fields.cash.amount, rule.cashSign)};
+            }
+            op.promoteFromType = null;
+            if (op.op === 'create') op.link_uuid = null;
+            op.pairedWith = undefined;
+        }
+        ops = [...ops];
+        lastSuggestKey = ''; // B9: invalidate suggest
+        return true;
+    }
+
     function handleSplitRow(row: PendingOp) {
         const partnerOp = getPartnerOp(row.tempId);
+        if (partnerOp && undoPendingPromote(row, partnerOp)) return;
 
         // Splitting undoes the pairing, so any pre-promote type kept for the wire is
         // now stale — left behind it would silently override the standalone type each
@@ -2655,6 +2687,17 @@
             if (resolved.cost_basis_override != null) op.fields.cost_basis_override = resolved.cost_basis_override as any;
         }
 
+        // The editor shows a magnitude and lets the type carry the sign (fieldsFromTx, txCreateItemToPendingOp, the
+        // form). The target type is free-sign (CASH_TRANSFER, FX_CONVERSION), so in every branch the sign moves into the
+        // amount before the type changes, or the pair is shown, ordered and split as if the withdrawal were a deposit
+        // (J-67). The save is unchanged: a promoted saved row is not sent as an update, and a new row's create signs by
+        // its source type (`promoteFromType`), on which applySign is idempotent.
+        for (const op of [opA, opB]) {
+            const {signedQty, signedCash} = applySignRules(op.fields.quantity, op.fields.cash, getTypeRule(op.fields.type));
+            op.fields.quantity = signedQty;
+            op.fields.cash = signedCash;
+        }
+
         if (opA.op === 'edit' && opB.op === 'edit') {
             // 2 saved → batch promotes
             pendingPromotes = [
@@ -2671,12 +2714,6 @@
             // 2 new → local transformation (assign shared link_uuid)
             const sharedUuid = generateUUID();
             for (const op of [opA, opB]) {
-                // The editor shows a magnitude and lets the type carry the sign (txCreateItemToPendingOp,
-                // the form). The target type is free-sign (CASH_TRANSFER, FX_CONVERSION), so the sign has
-                // to move into the amount before the type changes, or the withdrawal leaves as a deposit.
-                const {signedQty, signedCash} = applySignRules(op.fields.quantity, op.fields.cash, getTypeRule(op.fields.type));
-                op.fields.quantity = signedQty;
-                op.fields.cash = signedCash;
                 op.link_uuid = sharedUuid;
                 op.fields.type = match.targetType as TransactionTypeCode;
             }
