@@ -9,6 +9,8 @@
     import {getDocumentScrollY} from '$lib/utils/layout/headerScroll';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {connectionSecurity} from '$lib/stores/app/connectionSecurityStore';
+    import {auth} from '$lib/stores/app/auth';
+    import {securityChecks} from '$lib/features/settings/security/securityChecks.svelte';
     import {donationsVisible} from '$lib/features/support/donations.svelte';
 
     type ScrollState = 'visible' | 'hidden' | 'pinned';
@@ -22,6 +24,13 @@
     }
 
     let {onToggleSidebar = () => {}, sidebarOpen = false, routeKey = '', keepVisible = false, guideActive = false}: Props = $props();
+
+    // On a phone the burger stands for the sidebar's connection line: an insecure connection (plan 36) or an
+    // administrator's security warnings (N69-1) mark it, the worse first. The sidebar's line loads the checks.
+    const insecure = $derived($connectionSecurity.level === 'insecure');
+    const menuAttention = $derived($auth.user?.is_superuser === true ? securityChecks.attentionCount : 0);
+    const menuDot = $derived(insecure || (menuAttention > 0 && securityChecks.attentionSeverity === 'error') ? 'error' : menuAttention > 0 ? 'warning' : null);
+    const menuLabel = $derived(['Toggle menu', insecure ? $_('connectionSecurity.level.insecure') : null, menuAttention > 0 ? $_('connectionSecurity.attention', {values: {count: menuAttention}}) : null].filter(Boolean).join(' — '));
 
     const HIDE_SCROLL_THRESHOLD = 8;
     const SHOW_SCROLL_THRESHOLD = 4;
@@ -236,17 +245,12 @@
     data-guide-active={guideActive ? 'true' : 'false'}
 >
     <div class="flex items-center justify-between">
-        <!-- The sidebar's connection line hides behind the burger on a phone: an insecure level marks it (plan 36). -->
-        <button
-            aria-label={$connectionSecurity.level === 'insecure' ? `Toggle menu — ${$_('connectionSecurity.level.insecure')}` : 'Toggle menu'}
-            class="relative lg:hidden p-2 rounded-lg transition-colors hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
-            data-testid="mobile-menu-toggle"
-            use:guideAnchor={'nav.toggle.mobile'}
-            onclick={onToggleSidebar}
-        >
+        <!-- The sidebar's connection line hides behind the burger on a phone: an insecure level, or an administrator's
+             security warnings, mark it (plan 36, N69-1). -->
+        <button aria-label={menuLabel} class="relative lg:hidden p-2 rounded-lg transition-colors hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus" data-testid="mobile-menu-toggle" use:guideAnchor={'nav.toggle.mobile'} onclick={onToggleSidebar}>
             <Menu class="text-lf-primary" size={24} />
-            {#if $connectionSecurity.level === 'insecure'}
-                <span class="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-lf-danger ring-2 ring-lf-header" data-testid="mobile-menu-security-dot" aria-hidden="true"></span>
+            {#if menuDot}
+                <span class="absolute top-1 right-1 h-2.5 w-2.5 rounded-full ring-2 ring-lf-header {menuDot === 'error' ? 'bg-lf-danger' : 'bg-lf-warning'}" data-testid="mobile-menu-security-dot" data-severity={menuDot} aria-hidden="true"></span>
             {/if}
         </button>
 
