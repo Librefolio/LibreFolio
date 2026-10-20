@@ -9195,7 +9195,7 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   - L'idea di H: un piccolo segno nella cartella dei dati, legato alla versione dell'app e alla testa di alembic e
     cancellato dal commit di un ripristino, con cui i risvegli normali saltano la scansione.
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-19a.4».
-- **E-23 · AI Export: un asset con prezzi solo prima del periodo risulta coperto con una serie vuota** — piccolo,
+- ✅ **E-23 · AI Export: un asset con prezzi solo prima del periodo risulta coperto con una serie vuota** — piccolo,
   chiarezza; E, 19/10 (analisi di E-AI503). Preesistente, fuori da E-AI503: aperta, nessuna decisione (per J e lo
   sviluppatore).
   - Se l'ultimo prezzo salvato è anteriore al periodo, i punti del periodo sono solo riportati in avanti.
@@ -9204,8 +9204,13 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   - Con la regola dello sviluppatore («il calcolo … sul ritorno di punti che il db dà») potrebbe passare fra gli
     `uncovered_assets` con un motivo suo; oggi il prompt non dice perché la serie è vuota.
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-AI503.0» e «E-AI503.5».
-
-## Y · Cruscotto e grafici (fase 01)
+  - 20/10, E: fatta nella 1.3 (J chiude il suo J-65 come doppione), con le decisioni dello sviluppatore (E-23.1):
+    - un asset senza prezzi nel periodo, ma con prezzi prima, va fra gli `uncovered_assets` con `no_price_in_period`,
+      la valuta, l'ultimo prezzo salvato e la sua data; da solo, `asset.ohlc_returns` dice lo stesso codice;
+    - ogni sequenza di secchi vuoti con almeno un giorno di mercato aperto (`market_calendar.py`) diventa un buco
+      fuso, con l'ultimo valore salvato prima: la tabella `PRICE GAPS`, e `RATE GAPS` per i cambi (`fx.rate_ohlc` v2);
+      un buco in testa senza prezzo prima ha le celle vuote.
+    - Dettagli: piano 08, da «E-23» a «E-23.2».
 
 Piano: [`09_dashboardCharts`](../Phase_1/09_dashboardCharts/plan-phase01DashboardCharts.prompt.md). Sessione avviata il
 15/10 alle 11:28, solo analisi, sulla base `23f6578f3`. Codice autorizzato il 15/10 alle 12:47 (developer, via il
