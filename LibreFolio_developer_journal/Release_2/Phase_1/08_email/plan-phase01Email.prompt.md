@@ -8570,3 +8570,189 @@ non sposti il registro.
   2. Un'email di prova mandata allo stesso indirizzo Gmail potrebbe comparire solo in «Inviati». Non è verificato.
   3. Rifiniture possibili: Google mostra la password per le app una volta sola; un link a dove si accende la verifica in
      due passaggi.
+
+### Pausa generale (2026-10-19, 18:12)
+> **La richiesta** (coordinatore, 18:12): lo sviluppatore spegne la macchina e /tmp verrà ripulito. Fermare corse, sonde
+> e server della corsia; scrivere qui lo stato; copiare nella cartella della sessione ciò che serve e sta in /tmp; nessun
+> commit e nessun comando git.
+> - **Fermo, verificato** (18:1x): nessuna shell attiva, nessun processo della corsia, la porta 6188 è libera; gli agenti
+>   di E-AI503 e N62 hanno finito.
+> - **HEAD**: `224f607cd` (il giornale di N62), visto con l'ultimo comando git, alle 17:2x, ad albero pulito; durante la
+>   pausa nessun comando git. Ora è sporco solo questo piano, per questa nota.
+> - **Cosa sta in /tmp**: della mia corsia, soltanto la data-dir `/tmp/librefolio-r13-e`, un DB di prova di 280 KiB
+>   scritto dalle suite alle 16:50, con dati finti. Non serve copiarla. Gli altri file `libreFolio_*` di /tmp sono di
+>   altri lavori.
+>   - Alla ripresa, prima di ogni prova sul DB della corsia, la si ripopola, col carico sotto 50:
+>     `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6188 --data-dir
+>     /tmp/librefolio-r13-e db populate --force --clean`.
+>   - Ciò che serve è già fuori da /tmp, nella cartella della sessione (`files/`): gli script in `tools/`, i log in
+>     `logs/`, la patch di C-70b in `parked/`, i render di E-AI503 in `ai503_render/`. L'archivio dei DB di prova sta in
+>     `.testLog/00_archive/` del worktree, ignorato da git.
+> - **Dove si è fermato il lavoro**: dopo N62.
+>   - E-AI503 è entrato (`48b44ee64`, giornale `6623aba7b`) e aspetta la revisione di J, dopo J-57.
+>   - N62 è entrato (`67d402b97`, giornale `224f607cd`); la pagina è anche in `dev_release2` (`98bee0d2b`).
+> - **In attesa di altri**, nessun lavoro finché non arriva:
+>   - E-AI503: la revisione di J; dallo sviluppatore, le due frasi di `PRICE_SERIES_GAP_MEANINGS` ed E-23. Se le frasi
+>     cambiano, si tocca solo la mappa: i test le leggono da lì. La riga 🐛 del CHANGELOG è proposta, non scritta.
+>   - N62: la prova della guida Gmail da parte dello sviluppatore, e le rifiniture che ne usciranno.
+> - **Decisioni ricevute e non ancora applicate**, ognuna col via del coordinatore:
+>   - **C-70b** (K2b di W): le decisioni (a) `{code, message, context}`, (b) `files.preview.error.*` e (c) `parse_failed`
+>     con la frase inglese del plugin in una cornice tradotta.
+>     - Il backend è parcheggiato in `files/parked/c70b-k2b-20261019.patch`.
+>     - Mancano il frontend, le chiavi ×4, la registrazione dei file nuovi nel runner, i documenti e la riga del
+>       CHANGELOG.
+>     - Le tre domande della ripresa sono in «C-70b.2».
+>     - Aspetta che lo sviluppatore legga i lotti piccoli.
+>   - **E-20**: dopo l'ingresso di B-49, ridotto alla metà dell'avvio, perché B-49 rifiuta gli archivi non UTF-8 al
+>     controllo del ripristino. Con la revisione di B-49 dopo il suo ingresso.
+>   - **E-7**: il badge «in attesa di verifica» in Utenti, dopo il lotto del lock di A.
+>   - **Le regole della ripartenza del 19/10**: nessuna decisione di prodotto da parte mia, solo domande; si implementa
+>     solo dopo il via.
+> - **Aperte nel backlog, senza decisione**: E-21, E-22, E-23. D1 e D2 di E-19 sono dello sviluppatore.
+> - **Avviso, nessuna azione**: per N69, A toglie la barriera di presenza di `settings-tab-administration` in
+>   `e2e/settings/email-tab.spec.ts:167`, col suo commento. Il test prova ancora l'assenza della scheda Email: la scheda
+>   Profilo selezionata resta la sua barriera.
+> - **Alla ripresa**: controllare HEAD, l'albero e la porta 6188; ripopolare la corsia solo se servono prove; poi
+>   aspettare l'assegnazione del coordinatore, per prima la revisione di J su E-AI503.
+
+### La ripresa del 20/10 (08:4x)
+> **Il coordinatore** (08:46): J sta rivedendo E-AI503; le due frasi del prompt ed E-23 le porta lui allo sviluppatore.
+> Se nel piano 08 c'è un lotto già autorizzato, proseguire con quello; altrimenti l'analisi del prossimo, senza codice.
+> Corse leggere solo col carico a 1 minuto sotto 50, nella corsia 6188, da ripopolare.
+> - **Lo stato**:
+>   - HEAD `224f607cd`; sporco solo questo piano: la nota della pausa e queste sezioni;
+>   - `dev_release2` è a `ecc7ac667`, 78 commit avanti, e non contiene il mio ramo (E-AI503 è in revisione);
+>   - `/tmp/librefolio-r13-e` non c'è più dopo il riavvio; la porta 6188 è libera; il carico a 1 minuto era 29,6.
+> - **Nessun lotto autorizzato per il codice**:
+>   - C-70b aspetta la lettura dello sviluppatore;
+>   - E-20 ed E-7 aspettavano B-49 e il lotto del lock di A, ora entrambi in `dev_release2` e già nella mia base: B-49
+>     (`0eef55599`, merge `709dfb1e4`) e A-52…A-56 (merge `119230f9f`).
+>
+>   Nell'ordine della coda del 17/10 viene prima E-20. Dentro c'è la revisione di B-49 dopo l'ingresso, annunciata dal
+>   coordinatore il 17/10, perché tocca le stesse righe.
+
+### B-49 — La revisione dopo l'ingresso (2026-10-20, 08:5x; sola lettura, `0eef55599`, merge `709dfb1e4`)
+> **OK, nessun rilievo che blocchi.** Tre note informative.
+> - **Verificato**:
+>   - **Il posto**: `_refuse_undecodable_text` gira dopo il controllo contro il manifest e prima dell'upgrade, dentro
+>     la cornice `sqlite3.DatabaseError` di `_stage`.
+>   - **La lettura**:
+>     - in sola lettura, con `trusted_schema=OFF` per primo;
+>     - ogni tabella tranne quelle di SQLite, ogni colonna (`table_xinfo`, anche le generate), solo i valori di testo
+>       (`typeof = 'text'`), attraverso un `text_factory` stretto;
+>     - il `UnicodeDecodeError` del factory risale com'è, perché CPython chiama il callable direttamente: il controllo
+>       non dipende dal messaggio di sqlite3, e il log porta solo il numero delle tabelle.
+>   - **L'unione** con `group_concat(…, ',')`: la virgola (0x2C) non è un byte di continuazione, quindi nessuna
+>     sequenza non valida diventa valida fra due valori. Coperti anche:
+>     - le finestre per rowid (200 000 righe a query);
+>     - la lettura riga per riga per una tabella senza rowid, o con colonne che prendono tutti i nomi del rowid;
+>     - il `DataError` di un testo unito troppo lungo.
+>   - **Un nome di tabella non UTF-8**: si legge prima del factory stretto (`pragma_table_list`, e prima ancora
+>     `_refuse_foreign_objects` e `describe_database`). Ne viene un `OperationalError`, che la cornice registra solo con
+>     la classe e il nome dell'errore di SQLite, e poi `database_damaged`: nel log non finisce nessun testo.
+>   - **RNW-109**, riscritto da B:
+>     - il rifiuto, e l'audit mai chiamato;
+>     - la copia rimossa, nessun rapporto, l'archivio solo letto;
+>     - nel log nessun testo, nessuna parola di un errore di decodifica, nessun percorso;
+>     - il gemello passa.
+>
+>     RNW-107 tiene ancora il ramo del guasto dell'audit con errori iniettati.
+>   - **Documenti e costo**: `backup_restore.en.md` e `cli_tools.en.md` allineati. Il costo l'ha misurato B: 3,3 s
+>     su 488 MB, contro 5,5 s di un `integrity_check`.
+> - **Note**:
+>   1. `_identifier` si importa come nome privato da `snapshot`: solo cosmetica.
+>   2. Il ripristino a mano (`backup_restore.en.md`, `#by-hand`) non passa da questo controllo: un testo non UTF-8 vi
+>      arriverebbe nel DB vivo, e le letture del server di quelle righe fallirebbero, come dice la docstring di B.
+>      - Dopo E-20 l'audit d'avvio lo elencherebbe, ma solo nei 14 posti delle valute.
+>      - Un controllo di tutto il DB vivo (per esempio la scansione di B-49 come comando) sarebbe una scelta di B: una
+>        domanda, non una mia proposta.
+>   3. La docstring di `_holds_non_iso_currencies` (la mia funzione di E-19b1, nel file di B) dice ancora che per un
+>      testo non UTF-8 il messaggio di sqlite3 cita i byte dell'archivio. Da B-49 lì non può più succedere; la regola
+>      (solo la classe) resta giusta. Una riga facoltativa, nel file di B.
+
+### E-20 — L'analisi della metà d'avvio (2026-10-20, 08:5x–09:1x; sola lettura, HEAD `224f607cd`, dev `ecc7ac667`)
+> **La richiesta** (coordinatore, 17/10): E-20 dopo l'ingresso di B-49. B-49 rifiuta al controllo del ripristino gli
+> archivi con testo non UTF-8, quindi resta solo la metà d'avvio.
+#### E-20.0 — Lo stato vero
+> - **La metà del ripristino è chiusa da B-49**: il controllo rifiuta l'archivio prima che il mio audit (E-19b1) lo
+>   legga, e RNW-109 lo fissa.
+> - **La metà d'avvio c'è ancora** (`stored_currencies.py`, identico in HEAD e in dev).
+>   - Un solo valore TEXT non UTF-8, in uno dei 14 posti, fa alzare a sqlite3 un `OperationalError` al `fetchall`,
+>     col `text_factory` di default, e l'audit intero cade:
+>     - l'avvio scrive «could not be checked», con la sola classe, e non elenca nulla;
+>     - `./dev.py db currencies` esce con 2, e su stderr il messaggio di sqlite3 cita il testo («Could not decode to
+>       UTF-8 column 'currency' with text 'E�R …'»), con la colonna ma senza la tabella.
+>   - **Da dove può arrivare un testo così nel DB vivo**: mai da LibreFolio, perché Python scrive solo UTF-8 e le
+>     scritture passano dai validatori. Un ripristino controllato dalla 1.3 lo rifiuta (B-49). Restano un DB rimesso a
+>     mano, un altro programma che scrive nel file, o un file danneggiato.
+>   - Allora anche le letture del server di quelle righe falliscono: l'audit è lo strumento dell'admin per trovare dove.
+> - **Il confronto «no such table / no such column» su `str(error)`**: l'unico messaggio che cita dati è quello
+>   dell'errore di decodifica. Senza quell'errore, il confronto vede solo i messaggi di SQLite.
+> - **La prova** (`files/tools/e20_probe.py`, log `files/logs/e20_probe.log`): un SQLite della cartella della sessione,
+>   l'audit vero; nessun DB della corsia, nessun server, nessuna modifica al repository. Un `E\xffR` sta in
+>   `assets.currency`, accanto a `978` ed `EURO`; un `G\xffP` nei parametri di un provider; un `E\xffR` nei passi di una
+>   rotta.
+>   - **HEAD**: l'audit alza `OperationalError`, il cui messaggio cita il testo; l'avvio «could not be checked» (senza
+>     il testo nel log); la CLI esce con 2 e stderr cita il testo.
+>   - **La cura, applicata in memoria**: **5 reperti**.
+>     - Fra questi `assets.currency` `X'45FF5220…'`, senza suggerimento, e i due posti JSON (`X'47FF50'`, `X'45FF52'`):
+>       `json_valid` dà 1 su quei testi, e `json_extract` restituisce i byte.
+>     - L'avvio scrive l'avviso normale dei reperti (5), senza il testo in nessuna riga.
+>     - La CLI li elenca, ognuno col suo posto, ed esce con 1.
+>     - Il `text_factory` della connessione è lo stesso dopo la chiamata.
+
+#### E-20.1 — La cura proposta, e le alternative
+> **L'esito** è quello scritto il 17/10 nel backlog: un testo non UTF-8 diventa un reperto `X'…'`, come un BLOB. **Il
+> meccanismo** è più semplice del CTE con `typeof()` e `hex()` proposto allora.
+> - **`stored_currencies.py`**:
+>   - una `_lenient_text(value: bytes) -> str | bytes`: il testo decodificato in UTF-8, altrimenti i suoi byte;
+>   - in `find_stored_currency_findings`, messa sulla connessione intorno alle letture, e in `finally` si rimette il
+>     factory di prima;
+>   - `_as_text` scrive già i byte come `X'…'`, e il suggerimento è None («no ISO code»);
+>   - le docstring del modulo e di `_as_text`: «o un testo che non è UTF-8».
+> - **Gli effetti**:
+>   - l'avvio elenca tutti i reperti, quello non decodificabile come `X'…'`;
+>   - `db currencies` lo elenca col suo posto ed esce con 1;
+>   - il controllo del ripristino non cambia: B-49 rifiuta prima, e la connessione di staging è sua;
+>   - il confronto «no such table» non richiede codice.
+> - **Le alternative**:
+>   - (a) **chiudere la metà d'avvio**: costo zero, ma l'avvio resta cieco e l'uscita 2 della CLI cita il testo;
+>   - (b) **il CTE del 17/10**: lo stesso esito, ma riscrive le 14 query;
+>   - (c) **il factory permissivo**: è la mia raccomandazione.
+> - **Il `GBp` del suggerimento**: nessun percorso di LibreFolio salva `GBp`, quindi propongo di chiudere la voce senza
+>   codice.
+>   - Verificato su HEAD: `iso_currency_code("GBp")` (le scritture) dà `GBP`, e lo stesso `Currency.validate_code`
+>     (le letture, e il validatore dell'ORM `_validate_currency_field`, quindi anche i prezzi dei provider).
+>   - Un `GBp` salvato può venire solo da fuori. Il `GBP` del selettore è quello che un salvataggio scriverebbe comunque.
+
+#### E-20.2 — Rossi, documenti, dimensione
+> - **I rossi** (`test-author`), in `test_stored_currency_audit.py`, `services stored-currencies` (puro: ogni test ha il
+>   suo SQLite sotto `tmp_path`):
+>   - **SCA-036 riscritto**, rosso fino a E-20. Su `_not_utf8_database`:
+>     - il valore non decodificabile è un reperto `X'…'` senza suggerimento, e il `978` accanto si trova;
+>     - l'avvio scrive l'avviso dei reperti, col sommario che nomina `X'…'`;
+>     - nessuna riga porta il testo, o le parole di un errore di decodifica.
+>   - **La precondizione di `_not_utf8_database`**: oggi dice «l'audit cade con un `OperationalError` che lo cita».
+>     Diventa la stessa prova fatta con un lettore sqlite3 semplice, cioè come legge il server, non con l'audit.
+>   - **Un SCA-036b nuovo**, guardia verde oggi: un controllo che cade (un `OperationalError` iniettato, col suo
+>     segnale nel messaggio) scrive «could not be checked», nomina la classe, mai il segnale. È la regola di SCA-036,
+>     tenuta senza il suo vecchio innesco.
+>   - **Nuovi, rossi**:
+>     - `main --db-file` su quel DB elenca la riga `X'…'` col suo posto ed esce con 1 (oggi 2);
+>     - i due posti JSON con un codice non decodificabile sono reperti `X'…'`.
+>   - **Una guardia**: il `text_factory` della connessione è lo stesso dopo la chiamata.
+>   - RNW-107 e RNW-109 non cambiano: `services restore-non-iso-warning` gira come barriera.
+> - **I documenti**: in `admin/cli_tools.en.md` il punto 🧱 diventa «… raw bytes rather than text, or text that is not
+>   UTF-8 …».
+>   - Le pagine it/fr/es non hanno quella sezione (è un debito che c'è già): non c'è niente da tradurre.
+>   - Nessun CHANGELOG: E-19a non è ancora uscito, e la riga ✨ che c'è copre il comando.
+> - **La dimensione**: piccola. Circa 10 righe di codice più le docstring, circa 120 righe di test, una frase di
+>   documentazione.
+>   - La base non va aggiornata: HEAD contiene B-49, e i tre file non sono cambiati in dev dopo `47af95978`.
+>   - Prima delle corse, la corsia si ripopola.
+> - **Domande** (nessuna decisa da me):
+>   1. il via a E-20 col factory permissivo, oppure chiudere la metà d'avvio;
+>   2. chiudere senza codice la voce del `GBp`;
+>   3. la riga facoltativa della docstring nel file di B (nota 3 di B-49);
+>   4. la nota 2 di B-49, il ripristino a mano, per B.
+> - **Dopo**: E-7, il cui prerequisito (il lotto del lock di A) è entrato. La sua analisi può seguire.
