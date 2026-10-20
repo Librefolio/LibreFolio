@@ -318,13 +318,20 @@ number, so you see it from every tab of Settings. Information is listed but neve
 information only, there is no number, and the tab does not say *Nothing needs your attention.*
 either.
 
+Outside Settings, the same count follows you on every page, as a dot on the connection line at the
+bottom of the sidebar: red with at least one error, amber with warnings only, none with information
+only. Click the line: after its reason, its details link to this tab with the count, such as
+**2 security warnings**, errors included. On a phone, the menu button carries the dot too. What it
+looks like: [Security Warnings for Administrators](../user/connection-security.md#security-warnings).
+
 ### 🔄 When It Checks {: #security-refresh }
 
-LibreFolio reads the checks the first time you open **Settings** after the app loads in your
-browser, before you open the tab, so that its number is already there. It keeps them while you use
-the app: after you change the server's configuration and restart it, click **Check again**, at the
-top of the tab, or reload the page. The open-registration finding follows **Registration** at once:
-saving it in Global Settings updates the list and the number.
+LibreFolio reads the checks once, as soon as it opens in your browser, whatever the page: the
+sidebar's connection line asks for them, so its dot, and the number on the tab, are already there
+when you open **Settings**. If that read fails, opening **Settings** tries again. LibreFolio keeps
+the checks while you use the app: after you change the server's configuration and restart it, click
+**Check again**, at the top of the tab, or reload the page. The open-registration finding follows
+**Registration** at once: saving it in Global Settings updates the list, the number and the dot.
 
 - ⏳ Until the first answer, the tab shows placeholder rows.
 - ⚠️ When the checks cannot be read, the tab says *The security checks could not be loaded.*, with

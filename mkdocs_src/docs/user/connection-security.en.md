@@ -3,7 +3,8 @@
 The connection security indicator in LibreFolio's sidebar tells you whether what you type — your
 password, your figures — travels encrypted between your device and your server. It shows one of
 three levels, **secure**, **local network** or **not secure**, depending on the address you opened
-and the network you are on.
+and the network you are on. Administrators also see there when the security checks of the instance
+need their attention: see [Security Warnings for Administrators](#security-warnings).
 
 For maximum security, give LibreFolio an HTTPS address and use it everywhere, even on your home
 network.
@@ -140,6 +141,34 @@ Then follow a few good habits:
 
 If you run the server, [Checking Connection Security](../admin/connection_checks.md) shows how to
 verify the result.
+
+---
+
+## 🛡️ Security Warnings for Administrators {: #security-warnings }
+
+If you are an administrator, the same line also tells you, on every page, when the security checks
+of your instance need your attention: the errors and warnings that **Settings** →
+**Administration** → **Security** lists, and counts on its tab.
+
+- **A dot on the icon.** A small dot sits on the corner of the line's shield, with the sidebar
+  expanded or collapsed: red when at least one check is an error, amber when there are only
+  warnings.
+- **A link in the details.** Click the line: after the reason, a link gives the count, such as
+  **2 security warnings**, errors included. It opens the **Security** tab, where each finding says
+  what is wrong, and closes the details.
+- **The count in words.** With the sidebar collapsed, pointing at the shield shows the level and the
+  count, such as *Connection: secure — 2 security warnings*. A screen reader reads the same, with the
+  sidebar expanded or collapsed.
+- **On a phone**, the sidebar hides behind the menu button, so the button carries the dot too: red
+  with an error, or when the connection is [not secure](#connection-not-secure), amber with warnings
+  only. Open the menu to see the line.
+
+The dot follows the **Security** tab: information is never counted, so with only information, or
+nothing at all, there is no dot. LibreFolio reads the checks once, when it opens in your browser:
+after you fix something on the server and restart it, reload the page, or click **Check again** on
+the tab. Other users never see the dot or the link, and their browser never asks for the checks.
+What each check means, and how to fix it: «Security» in
+[Global Settings](../admin/settings.md#security-tab).
 
 ---
 

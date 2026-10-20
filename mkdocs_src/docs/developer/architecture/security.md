@@ -1302,11 +1302,14 @@ included, so that a page can show what is not:
 | `SecurityCheckRead` | `check_id`; `severity`, `ok`, `info`, `warning` or `error`; `i18n_key`; `detail`, the parameters of the message |
 
 An item never carries the English `summary`, which may name a host or a path (nor does
-[`GET /email/status`](../backend/email.md#api-status)), and never a secret value. The «Security» tab of
-Settings › Administration reads it (lot A8b, [SecurityTab](../frontend/components/features/settings.md#securitytab)):
-once per page load, when an administrator first opens Settings, so that the tab's badge counts before the tab is
-opened, and again on «check again». On a [blocked instance](#instance-block) the route is not on the allow-list: an
-administrator gets `423`.
+[`GET /email/status`](../backend/email.md#api-status)), and never a secret value. The web app reads it
+through one store, once per page load, for the «Security» tab of Settings › Administration (lot A8b,
+[SecurityTab](../frontend/components/features/settings.md#securitytab)). Since lot N69b the sidebar's
+connection line asks first, on the first page an administrator opens, to show the tab's count as a dot
+on every page ([The sidebar's dot](../frontend/components/features/settings.md#security-attention-dot));
+the Settings page, which asks before the tab is opened so that its badge counts, shares that read; the
+tab reads again on «check again». A member's app never asks. On a [blocked instance](#instance-block)
+the route is not on the allow-list: an administrator gets `423`.
 
 Tests: `./dev.py test api login-throttle` (in-process: `401` and `403`, every check once, as `run_config_checks()` and
 `check_plugin_secrets()` evaluate them, `accounts.login_limit` `ok` with the limit on and a `warning` with `off`, no
