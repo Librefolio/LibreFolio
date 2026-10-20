@@ -875,7 +875,9 @@ the running backup, `job_id` and `origin`, to a caller that can read it: the Bac
 a backup of its own (lot B-8). A run records its job id in the lock it holds (`backups/.jobs/.lock`, its content), once
 its first state is written; a refused start reads it back, never through a link, and names the job only while its state
 says it runs. A clear start of the tab follows a backup of its own kind (`ui`) whose start answer was lost, and offers
-it only if it ends clear; it keeps that adoption across a reload (`librefolio.backup.adopted`). A secure start never
+it only if it ends clear; it keeps that adoption across a reload (`librefolio.backup.adopted`). The backup the tab
+already follows by itself (its own, started there) is followed as its own, never adopted: its end is offered whatever
+its mode. A secure start never
 follows one: a job records no user, so nothing tells whether that backup carries this password (defect of the
 automatic review, 19/10). One of the command line or of the panel is never followed. The tab does not name the backup
 that runs; the answer does (developer, 19/10). Whatever its origin, the card says only that another backup runs, or
