@@ -797,8 +797,9 @@ def _administrators(database: Path) -> list[str]:
 def _holds_non_iso_currencies(database: Path, stage_id: str) -> bool:
     """Whether the upgraded copy holds stored currency values that are not ISO 4217 codes (E-19b1): E-19a's audit
     (``find_stored_currency_findings``), read only. Whatever it raises never ends the check, as the control totals' read
-    (B-29): the warning is left out, and the log names the error's class, never its text or a path — for a stored text
-    that is no UTF-8, sqlite3's message quotes the archive's bytes."""
+    (B-29): the warning is left out, and the log names the error's class, never its text or a path — a message may quote
+    what the archive stores (a text that is not UTF-8 no longer gets here: B-49 refuses it first, and since E-20 the
+    audit reads one as its bytes)."""
     try:
         with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as conn:
             conn.execute("PRAGMA trusted_schema=OFF")
