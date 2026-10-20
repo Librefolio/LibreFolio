@@ -19,9 +19,11 @@ You need an administrator account and, for the last two checks, a phone on mobil
 
 1. **Open the HTTPS address and sign in.** The indicator shows 🟢 **Connection: secure**, and its
    details say that the connection is encrypted with HTTPS.
-2. **Look for the cookie line.** Signed in as an administrator, the details show only that reason
-   and the **How to connect securely** link. One more line, about the session cookie, means that
-   LibreFolio does not know about the HTTPS: see [Behind a reverse proxy](#reverse-proxy).
+2. **Look for the cookie line.** Signed in as an administrator, the details show that reason and the
+   **How to connect securely** link, plus, when the [security checks](settings.md#security-tab) list
+   errors or warnings, a link to them, such as **2 security warnings**. One more line, about the
+   session cookie, means that LibreFolio does not know about the HTTPS: see
+   [Behind a reverse proxy](#reverse-proxy).
 3. **Ask the server.** In a new tab, open `https://<your address>/api/v1/system/connection`: the
    answer contains `"cookie_secure":true` ([The server's view](#server-view)).
 4. **Look at the cookie.** In the browser's developer tools, the `session` cookie is

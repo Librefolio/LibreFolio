@@ -16,6 +16,9 @@
  *      (`settings.securityTab.openPlugins`, `/settings?tab=plugins`); any other check has none.
  *   5. `attentionCount({attention})` counts the attention findings that are errors or warnings: an `info` is listed,
  *      not counted.
+ *   6. (N69b, the security-attention dot) `attentionSeverity({attention})` says how serious the attention is: `'error'`
+ *      when any attention finding is an error, else `'warning'` when any is a warning, else `null`; an `info` never
+ *      counts, as in `attentionCount`, so it is `null` exactly when the badge counts nothing.
  *
  * How the cases read it. The expected findings are written from the fixtures with the contract's own mapping (`server()`
  * below), never read from the module under test. The browser's finding is compared with literals for the two notices of
@@ -113,6 +116,18 @@ async function loadFindings(): Promise<FindingsModule> {
         expect(typeof module[name], `securityFindings.ts exports no ${name}()`).toBe('function');
     }
     return module as unknown as FindingsModule;
+}
+
+type AttentionSeverity = (findings: {attention: SecurityFinding[]}) => 'error' | 'warning' | null;
+
+/**
+ * `attentionSeverity` (N69b), read from the module's namespace rather than imported by name: until it lands, each case
+ * fails on this assertion, and the cases of A8b above keep running.
+ */
+async function loadAttentionSeverity(): Promise<AttentionSeverity> {
+    const module = (await loadFindings()) as unknown as Record<string, unknown>;
+    expect(typeof module.attentionSeverity, 'securityFindings.ts exports no attentionSeverity(): nothing says how serious the attention findings are (red until N69b)').toBe('function');
+    return module.attentionSeverity as AttentionSeverity;
 }
 
 // --- The contract's literals, never read from the module under test --------------------------------------------------
@@ -442,5 +457,84 @@ describe('attentionCount — what needs doing', () => {
 
         expect(attentionCount({attention: []})).toBe(0);
         expect(attentionCount({attention: [finding('a', 'info'), finding('b', 'warning'), finding('c', 'error'), finding('d', 'info'), finding('e', 'warning')]})).toBe(3);
+    });
+});
+
+/**
+ * attentionSeverity (N69b): the colour of the dot an administrator sees on the sidebar's connection line and on the
+ * phone's menu button. It reads the attention list alone, like `attentionCount`, and is passed lists in any order: the
+ * error is placed after the warnings on purpose, so that «the first one decides» cannot pass.
+ */
+describe('attentionSeverity — how serious the attention is (N69b)', () => {
+    const finding = (id: string, severity: FindingSeverity): SecurityFinding => ({id, severity, messageKey: `test.${id}`, params: {}, source: 'server'});
+
+    // red until N69b
+    it('an error beats any number of warnings, wherever it sits in the list', async () => {
+        const attentionSeverity = await loadAttentionSeverity();
+
+        expect(attentionSeverity({attention: [finding('a', 'warning'), finding('b', 'warning'), finding('c', 'error'), finding('d', 'info')]}), 'two warnings, then an error').toBe('error');
+        expect(attentionSeverity({attention: [finding('d', 'info'), finding('c', 'error')]}), 'an info, then an error').toBe('error');
+        expect(attentionSeverity({attention: [finding('c', 'error')]}), 'an error alone').toBe('error');
+    });
+
+    // red until N69b
+    it('warnings and no error: warning, with or without infos around them', async () => {
+        const attentionSeverity = await loadAttentionSeverity();
+
+        expect(attentionSeverity({attention: [finding('a', 'warning')]}), 'one warning').toBe('warning');
+        expect(attentionSeverity({attention: [finding('d', 'info'), finding('a', 'warning'), finding('e', 'info'), finding('b', 'warning')]}), 'warnings among infos').toBe('warning');
+    });
+
+    // red until N69b
+    it('infos only: null — an info is listed, never counted', async () => {
+        const attentionSeverity = await loadAttentionSeverity();
+
+        expect(attentionSeverity({attention: [finding('d', 'info')]})).toBeNull();
+        expect(attentionSeverity({attention: [finding('d', 'info'), finding('e', 'info')]})).toBeNull();
+    });
+
+    // red until N69b
+    it('nothing to look at: null', async () => {
+        const attentionSeverity = await loadAttentionSeverity();
+
+        expect(attentionSeverity({attention: []})).toBeNull();
+    });
+
+    // red until N69b
+    it('on what securityFindings lists: the browser’s warning counts like the server’s, and it is null exactly when attentionCount is 0', async () => {
+        const {securityFindings, attentionCount} = await loadFindings();
+        const attentionSeverity = await loadAttentionSeverity();
+        const CASES: Array<[label: string, checks: SecurityCheck[], browser: BrowserState, expected: 'error' | 'warning' | null]> = [
+            ['the ten of today, every severity', MIXED, SILENT, 'error'],
+            ['the same, the browser warning too', MIXED, OPEN_EXTERNAL, 'error'],
+            ['every check ok, open registration reached from outside', ALL_OK, OPEN_EXTERNAL, 'warning'],
+            ['every check ok, open registration pinned', ALL_OK, OPEN_LOCKED_EXTERNAL, 'warning'],
+            ['a warning and an info', [SMTP_PLAIN, LOG_VERBOSE], SILENT, 'warning'],
+            ['an error alone', [KEY_UNUSABLE], SILENT, 'error'],
+            ['infos only', [LOG_VERBOSE, LINKS_MISSING], SILENT, null],
+            ['every check ok, nothing to warn about', ALL_OK, SILENT, null],
+            ['no check at all', [], SILENT, null],
+        ];
+
+        for (const [label, checks, browser, expected] of CASES) {
+            const findings = securityFindings(structuredClone(checks), browser);
+            expect(attentionSeverity(findings), label).toBe(expected);
+            expect(attentionSeverity(findings) === null, `${label}: null exactly when the badge counts nothing`).toBe(attentionCount(findings) === 0);
+        }
+    });
+
+    // red until N69b
+    it('changes nothing it reads: a frozen list, the error last, comes out as it went in', async () => {
+        const attentionSeverity = await loadAttentionSeverity();
+        const attention = deepFreeze([finding('a', 'warning'), finding('d', 'info'), finding('c', 'error')]);
+        const before = structuredClone(attention);
+
+        let severity: 'error' | 'warning' | null | undefined;
+        expect(() => {
+            severity = attentionSeverity({attention});
+        }, 'a sort in place throws on a frozen list').not.toThrow();
+
+        expect(severity).toBe('error');
+        expect(attention).toEqual(before);
     });
 });
