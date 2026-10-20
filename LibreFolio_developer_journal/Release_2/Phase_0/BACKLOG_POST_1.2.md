@@ -7728,6 +7728,40 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     del tempo col 1900. Da coordinare con Y per i grafici.
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «L1a — i lotti
     calcolati solo nei giorni in cui cambia qualcosa».
+- **J-64 · Il CSV generico chiede il costo dove c'è già o dove non si può dare** — basso, dati e chiarezza; docs-writer
+  di J, 19/10 (durante J-57 completo). Il plugin `broker_generic_csv` mette il todo bloccante `corporate_action` su ogni
+  `ADJUSTMENT` senza costo (`plugin.py:455-470`, `has_cbo`), con due difetti:
+  - un costo **0 scritto nel file** conta come mancante (`float(...) == 0`). Un regalo registrato a 0 arriva col todo,
+    e l'utente deve riscrivere 0: va contro «lo 0 è un costo vero» (decisione Q-J57-3);
+  - il controllo non guarda il segno. Una rettifica in uscita non prende un costo (`required_qty_pos`), quindi il suo
+    todo non si chiude mai e **Save All** resta bloccato. Questo l'ha visto il docs-writer leggendo il codice: è da
+    provare.
+  - Esisteva già prima di J-57; tocca il plugin, non il mio perimetro. Da assegnare: il proprietario dei plugin BRIM.
+  - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «J-57 completo —
+    esecuzione», passo 3.
+- ✅ **J-65 · Due definizioni di «coperto» per i prezzi dell'AI Export** — basso, numeri (chiarezza del prompt); E, 19/10
+  (analisi di E-AI503, «per J»), confermata da J nella revisione del 20/10.
+  - **Chiusa il 20/10 come doppione di E-23** (coordinatore): stesso caso, l'asset con prezzi solo prima del periodo.
+    Il developer l'ha deciso in E-23, assegnato a E.
+  - Una serie stantia (prezzi salvati solo prima del periodo), o fatta solo di righe senza `close`, resta in `assets`
+    di `portfolio/broker.technical_prices` con la sua valuta e tutti i secchi vuoti, ed è contata in
+    `covered_asset_count`. `technical_coverage`, nello stesso dataset, la dà invece con 0 osservazioni.
+  - Preesistente: E-AI503 non la tocca. Da decidere se chiamarla «non coperta» (un terzo `reason_code`, per esempio
+    «nessun prezzo nel periodo») o dichiararla nel testo.
+  - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «Ripresa del 20/10
+    e revisione di E-AI503», nota 2.
+- **J-66 · Il banner di promozione del bulk mostra coppia FX e tasso implicito al contrario** — medio, numeri (un tasso
+  mostrato invertito); J, 20/10 (slot di J-57, `front-transaction all`).
+  - Da W-B65 (`2b3c9e8d7`, 17/10) il bulk tiene come valore assoluto il contante dei tipi con regola
+    `cashSign: 'negative'`, per esempio il prelievo. `TxBulkBanners.svelte:272` e `:327` scelgono invece il lato «da»
+    dal segno del valore. Con un prelievo di 1000 EUR e un deposito di 1100 USD il banner scrive «USD → EUR @ 0.9091»
+    invece di «EUR → USD @ 1.1000», e mette il deposito per primo.
+  - Si vede in `tx-fx-implied-rate.spec.ts`, Scenario A e A2: rossi e deterministici sulla base `2534c71fd`, anche in
+    una corsa da sola. J-57 non c'entra.
+  - Rimedio possibile: il lato «da» dalla regola del tipo (`getTypeRule(type).cashSign`), non dal segno del valore
+    tenuto. Da assegnare: il proprietario del bulk (W), oppure J se il coordinatore lo affida.
+  - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «J-57 v3 e slot
+    pesante, parte 2».
 
 ## Z · Sospensione e risveglio (fase 01)
 
