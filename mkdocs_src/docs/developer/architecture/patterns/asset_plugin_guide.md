@@ -609,10 +609,10 @@ The plugin's part is only to report the refusal:
   wait. Other transient errors (a timeout, a reset connection) may still be retried.
 - **Never swallow a refusal** in a handler that otherwise returns `[]` or `None`, such as a
   best-effort `search()` or `fetch_asset_metadata()`: the refusal would read as "no result", and the
-  provider would never be paused. Yahoo Finance's search and metadata, justETF's metadata, and
-  Borsa Italiana's metadata and `resolve_url` had to be fixed for this; the two Borsa Italiana
-  enrichments that still swallow one, on purpose, are listed on
-  [its page](../../backend/assets/provider_borsa_italiana.md#error-handling).
+  provider would never be paused. Yahoo Finance's search (with the currency lookup it makes for each
+  result, Z-39) and metadata, justETF's metadata, and Borsa Italiana's metadata and `resolve_url`
+  had to be fixed for this; the two Borsa Italiana enrichments that still swallow one, on purpose,
+  are listed on [its page](../../backend/assets/provider_borsa_italiana.md#error-handling).
 
 ### 🧰 Helpers
 
