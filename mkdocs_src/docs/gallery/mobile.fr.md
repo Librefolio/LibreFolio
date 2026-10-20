@@ -321,6 +321,14 @@ Configuration à l'échelle du système sur mobile.
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Paramètres globaux">
 </div>
 
+### 📧 E-mail (Admin)
+
+L'état de l'e-mail de l'instance et l'e-mail de test sur mobile.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="settings" data-name="email" alt="E-mail">
+</div>
+
 ### 🕐 Planificateur de données de marché — Config
 
 Configurez le démon de synchronisation automatique des données de marché sur mobile.
