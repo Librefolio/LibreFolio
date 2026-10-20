@@ -8902,3 +8902,159 @@ lettura di Q1 nelle date comuni. Con Y, per un'uscita a gradini: solo se il deve
    > - La domanda va al coordinatore nel checkpoint. Lo stato attuale non è peggiore di prima: prima il salvataggio
    >   veniva rifiutato.
    - ✅ **Checkpoint mandato** (~12:33), poi FROZEN.
+   - ✅ 20/10 13:16 — **Commit del coordinatore**: `fb073f919` (codice) e `ac8e22626` (giornale), col treno 4.
+     **Q-J67-1: (a)**, decisione sua: le note scelte nel merge restano dopo lo split, come per due righe nuove. J-69 non
+     serve.
+
+#### Dopo J-67 — l'ordine, e l'analisi breve di J-60 (20/10 ~13:20, sola lettura; base `ac8e22626`)
+
+> Coordinatore (13:16): «Prossimo passo: l'analisi breve di J-60 nel batch (N74 è in dev da ieri), oppure TC-23, che
+> ora ha T2 in dev. Scegli tu l'ordine, e dimmelo.»
+
+- **L'ordine: J-60, poi TC-23.**
+  - J-60 tocca i dati: oggi un costo di carico negativo scritto a mano si salva, e falsa WAC, costo e P&L dei lotti. È
+    nel perimetro del developer (numeri e dati). TC-23 è un allineamento di navigazione, a priorità bassa.
+  - J-60 è deciso:
+    - si rifiuta, lo 0 resta (coordinatore, 19/10, «salvo un no del developer»);
+    - il developer ha approvato i 4 testi di J-57, compreso `costBasisNegative`;
+    - N92 (i) ha poi deciso che i prezzi negativi non si accettano (`plan-phase01PluginsAssets`, ~7168): la
+      sfumatura del reperto n. 8 è chiusa.
+  - TC-23 aspetta ancora la forma: Q-TC23-1 è dal developer.
+  - Tutti e due chiedono lo stesso aggiornamento di base. Né N74 (`b38754cc7`) né T2 (`ccc2a4141`) sono nella mia
+    HEAD; `dev_release2` (`6e1761121`) è 173 commit avanti. Un merge solo li porta entrambi.
+- **Analisi di J-60**, letta su `dev_release2`, quindi sul codice che avrò dopo l'aggiornamento.
+  - **Dove**: `transaction_batch_stages.py`, `check_decimal_limits` (C-97). Passa già da ogni costo che l'utente
+    scrive:
+    - il costo manuale di una creazione e di un aggiornamento (`_decimal_limit_values`; l'Auto è escluso, perché lo
+      ricalcola il batch);
+    - il costo che una promozione risolve (`_promote_cost_amount`).
+    J-60 riusa i due iteratori in un controllo suo, `check_cost_basis_sign`, chiamato accanto a `check_decimal_limits`
+    e `check_dates` (`transaction_service.py:151`).
+  - **Cosa**: costo < 0 → l'issue `costBasisNegative` su `cost_basis_override`, senza parametri, e il batch non si
+    salva. È un codice nuovo, `TXValidationCode.COST_BASIS_NEGATIVE` in `schemas/transactions/batch.py`. Lo 0 resta,
+    `-0` compreso (`Decimal('-0') < 0` è falso).
+  - **Non ferma il batch subito**, a differenza delle cifre intere e delle date. Un costo negativo non fa traboccare i
+    passi successivi (oggi si salva), quindi l'utente riceve nello stesso giro anche gli altri rifiuti.
+  - **Non in `validate_cost_basis`** (`batch_costs.py`): gira dopo l'applicazione e legge anche il costo Auto
+    calcolato. Una media negativa da dati vecchi darebbe «scrivi 0 o più» su una riga Auto.
+  - **Gli aggiornamenti**: si controllano solo se mandano il costo, come per le cifre.
+    - L'app manda solo le differenze (`buildUpdateDiff`): una riga vecchia con costo negativo resta modificabile
+      nelle note, e va corretta solo quando si tocca il costo.
+    - Da dichiarare: un client dell'API che rimanda la riga intera, senza cambiarla, viene rifiutato.
+  - **Le importazioni dei broker** confermano attraverso il batch (decisione D2): una riga con costo negativo letta da
+    un file viene rifiutata alla conferma.
+  - **Le scritture degli utenti** passano tutte dal batch (`api/v1/transactions.py`). `auto_cost.py` scrive la media
+    calcolata, che non si controlla, come per le cifre.
+  - **Frontend: nessun codice.** `resolveIssueMessage` traduce `transactions.errors.<code>`. Il testo approvato
+    nomina già il campo, quindi niente prefisso (`FIELD_PREFIXED_CODES`). Il banner del form lo mostra con
+    `data-code`.
+  - **i18n**: `transactions.errors.costBasisNegative`, con i testi approvati (`files/j/j57c/approved_texts.md`) e
+    `dev.py i18n add`.
+- **Prove**: i rossi in `test_transaction_cost_basis_rule.py` (azione `services transaction-cost-basis-rule`, nessuna
+  registrazione nuova).
+  - Rossi, tutti con costo −1:
+    - la creazione di un ADJUSTMENT +q;
+    - la creazione della gamba che riceve un TRANSFER;
+    - un aggiornamento che mette il costo;
+    - una promozione col costo risolto.
+  - Guardie:
+    - 0 accettato;
+    - Auto con un importo negativo non controllato;
+    - l'aggiornamento delle sole note di una riga salvata con costo negativo, accettato.
+  - Poi i vicini: `services transaction-decimal-places`, le API delle transazioni, `i18n check`, `front check`.
+    Nessun E2E nuovo: il percorso del frontend è generico, e `tx-auto-cost-refusal` E1 fissa già `data-code`.
+- **Documentazione**:
+  - `developer/backend/transactions/service.md`: la tabella degli stadi (~63) e una frase accanto a
+    `check_decimal_limits` (~192). Il piano diceva «`wac.md`», che non esiste;
+  - forse una frase nella guida dei plugin BRIM (~255, «every figure … must fit its column») e in
+    `user/transactions/form.en.md` (#cost-basis, «mai negativo»), con timbro: li valuta il docs-writer.
+- **Superfici**:
+  - `transaction_batch_stages.py`, `transaction_service.py` (una riga) e `schemas/transactions/batch.py` (una riga
+    dell'enum): file di W, appena toccati da N74;
+  - le mie chiavi `transactions.*`, il file di test, i documenti.
+- **Peso**: circa 2 ore, corse leggere.
+- **Residuo**: le righe già salvate con un costo negativo restano. Contarle chiederebbe una copia dei dati reali
+  (`real-data-copy`), solo col via del coordinatore.
+
+#### J-60 — un costo di carico negativo si rifiuta nel batch (via del 20/10 13:34; base `fe54c7f5d`)
+
+> Coordinatore (13:34): base aggiornata a `dev_release2` (`6e1761121`, con N74 e T2), merge pulito, HEAD `fe54c7f5d`;
+> il piano 05, sporco, intatto. «J-60: hai il via, come da analisi». W non ha lavori aperti su
+> `transaction_batch_stages.py`, `transaction_service.py` né `batch.py`: ha finito B-51 e lavora con MF su N78-1.
+> Prima i rossi. Q-TC23-1 non era ancora stata chiesta al developer: la porta lui.
+
+**Verifica sulla base nuova (13:36, sola lettura).**
+- HEAD `fe54c7f5d`; N74 (`b38754cc7`) e T2 (`ccc2a4141`) dentro. Sporco solo il piano 05. Porta 6185 libera.
+- Il merge cambia `models.py` solo nelle descrizioni della data (B-52, la data è quella dell'operazione); nessuna
+  migrazione. La corsia (popolata stamattina) resta valida: niente `--force --clean`.
+- `TXValidationIssue.code` è `Optional[str]`, quindi un codice nuovo non cambia lo schema OpenAPI. Il codice entra in
+  `VALIDATION_CODE_METADATA` (servito da `transactions/types`). `openapi.json` e `generated.ts` sono ignorati.
+- `finalize_response` risponde `committed=False` per qualunque issue in `context.issues`. Il controllo nuovo quindi
+  aggiunge l'issue e lascia proseguire il batch, come avevo proposto.
+- C'è già una guardia: ogni `TXValidationCode` deve avere `transactions.errors.<code>` nelle 4 lingue, senza ripiego
+  sull'inglese (`TestWB69TheCodeAndItsMessages`, `TestN78TheMessages`). Il codice e la chiave entrano insieme.
+
+**Passi.**
+1. ✅ 20/10 ~13:38–13:54 — **Rossi** (test-author): 6 classi `TestJ60…` in `test_transaction_cost_basis_rule.py`, 53
+   test, 31 rossi e 22 guardie. Al docstring del modulo si aggiungono un paragrafo J-60 e `J60` nella riga «Run:».
+   Nuovo aiutante `_j60_as_the_endpoint`, che accetta anche le promozioni.
+   > **Note implementazione**:
+   > - Rossi:
+   >   - creazioni: ADJUSTMENT +q, la gamba che riceve un TRANSFER, ADJUSTMENT −q con costo di cessione; senza modo e
+   >     «manual»; con /commit e /validate;
+   >   - aggiornamenti che mettono −1, e uno che rimanda lo stesso −1 salvato;
+   >   - una promozione col costo risolto −1;
+   >   - due righe che chiedono la risposta insieme a un altro rifiuto della stessa riga: `decimalPlacesExceeded`, e
+   >     `balanceAssetNegative` dell'ultimo stadio. Questo prova che il batch non si ferma prima;
+   >   - il codice, il suo elenco in `validation_codes`, il messaggio nelle 4 lingue senza ripiego.
+   > - Guardie:
+   >   - lo 0 e «-0» accettati;
+   >   - l'Auto con un importo negativo nella richiesta prende la sua media (creazione e aggiornamento, `auto` e
+   >     `auto-detail`);
+   >   - un'Auto su un insieme che fa una media sotto lo 0 non riceve `costBasisNegative`: la cura non legge il valore
+   >     calcolato;
+   >   - la modifica delle sole note o dei soli tag di una riga salvata a −1 passa, e il costo resta.
+   >
+   > Prova sul codice di prima (`services transaction-cost-basis-rule J60`, 13:55, carico 16): **31 failed, 22
+   > passed**. Ogni rosso cade sull'asserzione prevista: nessun `costBasisNegative`, il batch salva o valida pulito,
+   > nessun messaggio nelle 4 lingue. Log: `files/j/j60/reds.log`.
+   >
+   > **⚠️ Fuori pista — tre osservazioni del test-author**, verificate o da verificare, tutte fuori perimetro. Vanno
+   > nella voce J-60 del backlog come residui:
+   > - le righe già salvate con un costo negativo restano, e una riga Auto su un insieme che le contiene può ancora
+   >   prendere una media negativa (N88 reagisce solo allo 0 esatto);
+   > - `POST /transfers/promote` (H.4, `promotion.py`) appiattisce le issue del batch in `errors: [str]`. Lì il
+   >   rifiuto arriva come testo inglese, per ogni codice. Verificato; il frontend non chiama quella rotta;
+   > - un'issue che non è di saldo salta il calcolo Auto di tutto il batch, quindi `wac_results` resta vuoto per le
+   >   altre righe Auto. È già così per `decimalPlacesExceeded`.
+2. ✅ 20/10 13:56 — **Cura** (`files/j/j60/patch_j60_cure.py`, a secco pulita, 4 modifiche in 3 file, poi applicata):
+   - `TXValidationCode.COST_BASIS_NEGATIVE`;
+   - in `transaction_batch_stages.py`, `check_cost_basis_sign` e `_cost_basis_negative`, dopo `_check_limit`;
+   - in `transaction_service.py`, l'import e la chiamata dopo `check_dates`;
+   - la chiave i18n con `files/j/j60/i18n_add.sh` (`dev.py i18n add`, i testi approvati): 4 file sorgente,
+     `transactions/{en,it,fr,es}.json`, +1 chiave.
+   black e ruff puliti.
+3. ✅ 20/10 13:56–14:01 — **Verdi** (corse leggere, una alla volta, carico 16–36; `files/j/j60/greens_driver.log`):
+   - servizi: `transaction-cost-basis-rule` **244/244**, `transaction-decimal-places` **202/202**, `transaction`
+     **130/130**, `auto-cost-unreadable-pool` **17/17**;
+   - API: `transactions-validate` **12/12**, `tx-balance-walk` **9/9**, `batch-split-promote` **38/38**,
+     `transactions` **26/26**;
+   - `i18n check` stretto pulito (5113 chiavi); Prettier pulito sui 4 JSON; porta 6185 libera.
+4. ✅ 20/10 ~14:02–14:15 — **Documentazione** (docs-writer).
+   - `developer/backend/transactions/service.md`:
+     - la riga del modulo e la riga 1 della tabella degli stadi;
+     - una sezione nuova «➖ Cost basis sign» (`#cost-basis-sign`), tra «Decimal limits» e «Transaction dates»: la
+       regola, il codice, il batch che non si ferma, gli aggiornamenti, l'import.
+   - `developer/architecture/patterns/brim_plugin_guide.md`, «Decimal places»: una frase che dice che un
+     `cost_basis_override` non è mai negativo, col link alla sezione.
+   - `user/transactions/form.en.md`: una frase nel blocco del costo («a negative cost is refused the same way — type 0
+     or more»).
+   - **Nessun timbro, giustamente.** La pagina utente aveva già un debito di traduzione: la cache era ferma a
+     `532a1fd9c` (15/10), con cinque commit EN dopo. IT, FR ed ES dicono ancora «0 by design». Un timbro l'avrebbe
+     nascosto. La frase nuova si traduce con il resto alla prossima corsa che il coordinatore lancia.
+   - `mkdocs build` stretto: exit 0, 3085 URL. `check-links`: 97 validi.
+   > **⚠️ Fuori pista**: il docs-writer ha visto che il docstring di `execute_batch` (`transaction_service.py`) elencava
+   > gli stadi senza il controllo nuovo. Corretto: la riga «Order:» e una frase su J-60, che non ferma il batch.
+   > Prove: black e ruff puliti; `services transaction-cost-basis-rule` **244/244** (14:16); `git diff --check`
+   > pulito; porta libera.
+   - ✅ **Checkpoint mandato** (~14:17), poi FROZEN.
