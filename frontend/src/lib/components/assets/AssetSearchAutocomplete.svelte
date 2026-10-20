@@ -48,6 +48,8 @@
         asset_type?: string | null;
         provider_url?: string | null;
         provider_params?: Record<string, any> | null;
+        /** The provider's quote base suggestion for this line (Z-32 d), handed to `onselect`. */
+        quote_base_suggestion?: {quantity: number; quote_currency?: string | null} | null;
         via_web?: boolean;
     }
 
@@ -352,6 +354,7 @@
                                 asset_type: r.asset_type,
                                 provider_url: r.provider_url,
                                 provider_params: r.provider_params,
+                                quote_base_suggestion: r.quote_base_suggestion ?? null,
                                 via_web: r.via_web ?? false,
                             }));
                             results = [...results, ...newItems];
@@ -413,6 +416,7 @@
                     asset_type: r.asset_type,
                     provider_url: r.provider_url,
                     provider_params: r.provider_params,
+                    quote_base_suggestion: r.quote_base_suggestion ?? null,
                     via_web: r.via_web ?? false,
                 }));
                 outcomes = restOutcomes(response, results, notConfigured);

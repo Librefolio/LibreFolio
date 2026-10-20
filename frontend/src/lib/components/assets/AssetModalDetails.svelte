@@ -17,8 +17,8 @@
         displayName: string;
         assetType: string;
         quoteBaseQuantity: number;
-        /** Set once the user edits the quote base by hand, so the bond default never overrides it. */
-        quoteBaseQuantityTouched: boolean;
+        /** The provider's suggestion behind the quote base (Z-32 d), shown under the field; null for none. */
+        quoteBaseSuggestion?: {provider: string; currency: string | null; quantity: number} | null;
         providerUserUrl: string;
         shortDescription: string;
         currency: string;
@@ -29,7 +29,7 @@
         quoteBaseQuantityInvalid: boolean;
         /** i18n key of the quote base error. */
         quoteBaseQuantityError: string;
-        /** A field the user edited by hand (`display_name`, `asset_type`). */
+        /** A field the user edited by hand (`display_name`, `asset_type`, `quote_base_quantity`). */
         onmanualedit: (field: string) => void;
         onaskprovider: () => void;
         onpickicon: () => void;
@@ -41,7 +41,6 @@
         displayName = $bindable(),
         assetType = $bindable(),
         quoteBaseQuantity = $bindable(),
-        quoteBaseQuantityTouched = $bindable(),
         providerUserUrl = $bindable(),
         shortDescription = $bindable(),
         currency,
@@ -51,6 +50,7 @@
         duplicateAssetName,
         quoteBaseQuantityInvalid,
         quoteBaseQuantityError,
+        quoteBaseSuggestion = null,
         onmanualedit,
         onaskprovider,
         onpickicon,
@@ -64,6 +64,13 @@
         const truncated = Math.trunc(quoteBaseQuantity);
         if (truncated !== quoteBaseQuantity) quoteBaseQuantity = truncated;
     }
+
+    /** The hint under the quote base field (Z-32 d): the provider's suggestion, with its quote currency when known. */
+    let quoteBaseSuggestionText = $derived.by(() => {
+        if (!quoteBaseSuggestion) return '';
+        const {provider, currency: quoteCurrency, quantity} = quoteBaseSuggestion;
+        return quoteCurrency ? $t('assets.modal.quoteBaseSuggested', {values: {provider, currency: quoteCurrency, quantity}}) : $t('assets.modal.quoteBaseSuggestedPlain', {values: {provider, quantity}});
+    });
 </script>
 
 <!-- Asset Details -->
@@ -171,7 +178,7 @@
                         min="1"
                         step="1"
                         bind:value={quoteBaseQuantity}
-                        oninput={() => (quoteBaseQuantityTouched = true)}
+                        oninput={() => onmanualedit('quote_base_quantity')}
                         onblur={truncateQuoteBaseQuantity}
                         data-testid="asset-modal-quote-base-quantity"
                         class="w-full px-3 py-2 text-sm border rounded-lg
@@ -180,6 +187,12 @@
                     />
                     {#if quoteBaseQuantityInvalid}
                         <p class="mt-1 text-[11px] text-lf-danger" data-testid="asset-modal-quote-base-quantity-error">{$t(quoteBaseQuantityError)}</p>
+                    {/if}
+                    {#if quoteBaseSuggestion}
+                        <p class="mt-1 flex items-start gap-1 text-[11px] text-lf-info" data-testid="asset-modal-qbq-suggestion-hint">
+                            <Info size={12} class="mt-0.5 shrink-0" />
+                            <span>{quoteBaseSuggestionText}</span>
+                        </p>
                     {/if}
                     {#if assetType === 'BOND'}
                         <p class="mt-1 flex items-start gap-1 text-[11px] text-lf-info" data-testid="asset-modal-bond-qbq-hint">
