@@ -8746,7 +8746,7 @@ sulla base `23f6578f3`.
   Dettagli: piano 07, «B-49».
   **In dev**: `709dfb1e4` (17/10 21:29), il codice in `0eef55599`; il paragrafo di `security.md` e la descrizione
   del runner con `739bf08e0` (`08d58c6d3`).
-- **B-50 · Uno `state.json` di un job leggibile come JSON ma malformato fa rispondere 500** — minimo, robustezza;
+- ✅ **B-50 · Uno `state.json` di un job leggibile come JSON ma malformato fa rispondere 500** — minimo, robustezza;
   B, 19/10 (TA-B8-STATE, durante B-8). Precedente a B-8.
   - Uno stato che è JSON ma non un oggetto (`[]`, `null`, `5`) fa alzare `AttributeError` a `BackupJob.from_json`.
     `remove_expired_jobs` non lo prende, e gira a ogni partenza (`_prepare`): ogni nuovo backup, dalla scheda, dal
@@ -8760,6 +8760,16 @@ sulla base `23f6578f3`.
     `get_job` (job non trovato, o fallito).
   - B-8 ha già allineato `_running_job` agli altri lettori (`TypeError` e `KeyError`): un 409 non diventa un 500.
   Dettagli: piano 07, «B-15 + B-8 — la ripresa».
+  ✅ **Fatta il 20/10** (via del coordinatore alle 09:06, con il perimetro approvato):
+  - uno stato di job illeggibile è «non trovato»: un documento che non è un oggetto JSON, una data senza fuso (trovata
+    dalla sonda: faceva fallire ogni avvio), una cartella al suo posto, un file senza permesso di lettura;
+  - le rotte rispondono 404 `backup_job_not_found`, mai 500, e `get_job` scrive un avviso con l'id e la classe
+    dell'errore, mai il contenuto; un avvio va avanti, e la cartella scade per la sua data;
+  - gli altri errori del disco, transitori, restano un 500 che la scheda riprova;
+  - nel ripristino uno stato di controllo che non è un oggetto è «nessun controllo», come gli altri illeggibili, e il
+    lettore chiude il descrittore che `fdopen` rifiuta (una cartella al posto dello stato ne lasciava aperto uno a
+    ogni lettura).
+  Dettagli: piano 07, «B-50».
 - **B-51 · La colonna «⚠️» dei risultati di una lettura conta anche le note** — minimo, chiarezza; B, 19/10 (revisione
   di N74; area di W). Precedente a N74.
   - Nella tabella del passo di analisi, la colonna «⚠️» (tooltip «Parser warnings (skipped rows, ambiguous data)»)
@@ -8779,6 +8789,39 @@ sulla base `23f6578f3`.
   - Da chiarire: la regola riguarda solo chi data per valuta (Fineco) o per periodo (Danske), o quei plugin chiedono
     un seguito.
   Dettagli: piano 07, «N74 di W — revisione», F2.
+- **B-53 · Altri due lettori di `.restore/` lasciano aperto un descrittore quando il loro file è una cartella** —
+  piccolo, robustezza; B, 20/10 (B-50, sonda). Precedente a B-50.
+  - `outcome._read_record` (`outcome.py:141`) risponde «nessun esito» e lo registra una volta, come deve, ma ogni
+    lettura dell'esito con un biglietto lascia aperto un descrittore.
+  - `staging.read_report` (`staging.py:262`) ne lascia uno a ogni lettura e alza `IsADirectoryError`, che
+    `_stage_view` (`api/v1/backup/restore.py:211-215`) non prende: prende solo `FileNotFoundError`. A lettura del
+    codice è un 500 sulla lettura del controllo, che la scheda ripete. La conferma (`apply.py:469`) lo prende, ma il
+    descrittore resta.
+  - Misurato il 20/10: 20 letture di una cartella lasciano 20 descrittori aperti su di essa, per ciascuno dei due.
+  - `apply.py:329` è al riparo: controlla `S_ISREG` con `lstat` prima di aprire (resta solo una corsa).
+  - Ci si arriva solo manomettendo `.restore/`, o con un disco rovinato.
+  - Cura possibile: un aiuto unico che apre un file privato in lettura e chiude il descrittore se `fdopen` lo
+    rifiuta, oppure controlla `S_ISREG` con `fstat` come `archive._add_file`; e `read_report` che risponde «nessun
+    report» anche per una cartella.
+  Dettagli: piano 07, «B-50».
+- **B-54 · Uno stato di controllo del ripristino illeggibile non lo toglie nessuno** — minimo, pulizia; B, 20/10
+  (B-50, domanda di test-author). Precedente a B-50.
+  - `_prune_checks` lavora solo sui controlli che `_checks` sa leggere, e `_prune_unrecorded` pulisce i caricamenti e
+    le copie, mai `checks/`.
+  - Restano lì per sempre: un file vuoto, `{}`, un documento che non è un oggetto, una cartella, un file senza
+    permessi. Sono pochi byte ciascuno.
+  - Cura possibile: togliere da `checks/` gli stati illeggibili più vecchi del limite, quando nessun controllo gira.
+  Dettagli: piano 07, «B-50».
+- **B-55 · Nel ripristino ogni `OSError` su uno stato di controllo è «nessun controllo», anche se transitorio** — da
+  decidere (coordinatore o developer); B, 20/10 (B-50, domanda di test-author). Precedente a B-50.
+  - `restore_jobs._read_state` prende ogni `OSError`: un errore passeggero del disco (`EIO`, `EMFILE`) diventa un 404
+    `restore_stage_not_found`.
+  - La scheda, mentre segue un controllo, a quel 404 lo dimentica (`restoreFlow.svelte.ts:593-597`); a un 500
+    invece riprova.
+  - Per i job B-50 ha deciso il contrario: i transitori restano un 500 che la scheda riprova.
+  - Da decidere: la stessa regola nel ripristino (`IsADirectoryError` e `PermissionError` illeggibili, gli altri
+    `OSError` che passano), oppure lasciarlo com'è.
+  Dettagli: piano 07, «B-50».
 
 ## E · Email (fase 01)
 

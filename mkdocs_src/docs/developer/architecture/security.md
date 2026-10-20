@@ -1073,6 +1073,14 @@ The startup step `backup-leftovers`, right after `restore-commit` (decision N66;
 A read of a job, through `get_job()` (the Backup tab and the hosting panel following their jobs, the downloads), ends
 a dead run the same way, its work files included, without waiting for a restart.
 
+A state that cannot be read is no job, to that read and to every cleanup (lot B-50): a content that is no job's state
+(a document that is not a JSON object, or a date without a time zone, included), a folder in its place, or a file the
+server may not read. `get_job()` answers `BackupJobNotFoundError`, so the routes answer `404` `backup_job_not_found`,
+never a `500`, and log one warning, `A backup job's state cannot be read`, with the job's id and the error's type
+name, never its content. A start goes on, and the folder expires by its date. The other errors of the disk, transient,
+stay as they come: a `500` the tab retries, which a «not found» would make it forget. A restore check whose state
+cannot be read is likewise none: `restore_stage_not_found`.
+
 - **Nothing a running process holds**: the run lock of the backups (a `dev.py backup create` running while the server
   starts keeps its job), the lock of the checks (a check of the command line or of the app), an `inspect` younger than
   an hour. **Nothing through a link**: a folder is acted on only when `lstat` finds a folder itself (`is_plain_dir()`),
