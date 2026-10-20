@@ -25,7 +25,7 @@ from backend.app.services.financial_math.lots.prices import opening_reference_pr
 from backend.app.services.financial_math.lots.scope_boundary import BoundaryLeg
 from backend.app.services.financial_math.lots.summary import lot_value, residual_cost
 from backend.app.services.financial_math.price_marks import AssetPriceSeries
-from backend.app.services.financial_math.returns import CashFlowInput, NAVSnapshot, calculate_simple_roi_series, calculate_twrr_series
+from backend.app.services.financial_math.returns import CashFlowInput, NAVSnapshot, calculate_simple_roi_series, calculate_twrr_series, flows_by_snapshot_date
 from backend.app.services.financial_math.valuation import compute_holding_value
 
 
@@ -219,9 +219,8 @@ def build_performance_history(  # noqa: C901 — cash-flow collection loops with
         cash_flows = [flow for flow in cash_flows if flow.date >= first_nav_date]
         if carried_cash_flow != Decimal("0"):
             cash_flows.insert(0, CashFlowInput(date=first_nav_date, amount=carried_cash_flow))
-        # The short side's flows carried onto the first NAV keep their side (MF-E2)
-        short_proceeds = [CashFlowInput(date=max(flow.date, first_nav_date), amount=flow.amount) for flow in short_proceeds]
-        short_buybacks = [CashFlowInput(date=max(flow.date, first_nav_date), amount=flow.amount) for flow in short_buybacks]
+        # The short side's flows before the first NAV count on it too, by the rule of every flow
+        # (returns.flows_by_snapshot_date, MF-E2b): they keep their side there
 
     first_cash_flow_date = min((flow.date for flow in cash_flows), default=None)
     roi_map: dict[date_type, Decimal] = {}
@@ -334,26 +333,21 @@ def _committed_capital_by_date(nav_snapshots: Sequence[NAVSnapshot], cash_flows:
     """The capital each snapshot's date commits, in a scope with short positions (MF-E2, E2-Q1): the net deposit of the
     long side, ``max(0, −its flows so far)``, plus the proceeds of every short sale so far.
 
-    Only the flows dated on a snapshot count, as in the gain ``calculate_simple_roi_series`` divides (its cumulative
-    flows read the snapshots' dates): capital and gain stay on the same flows. A flow on a day with no NAV after the
-    first one is left out of both — an existing limit of the performance history, long positions included.
+    Each flow counts on the first snapshot dated on or after it, as in the gain ``calculate_simple_roi_series`` divides
+    (``returns.flows_by_snapshot_date``, MF-E2b): capital and gain read the same flows on the same days.
     """
-    snapshot_dates = {snapshot.date for snapshot in nav_snapshots}
-    # Each flow by side: the long side is every flow that is neither a short sale's proceeds nor a short's buy-back
-    tagged = sorted(
-        [(flow.date, flow.amount, "all") for flow in cash_flows if flow.date in snapshot_dates] + [(flow.date, flow.amount, "proceeds") for flow in short_proceeds if flow.date in snapshot_dates] + [(flow.date, flow.amount, "buyback") for flow in short_buybacks if flow.date in snapshot_dates],
-        key=lambda item: item[0],
-    )
-    sums = {"all": Decimal("0"), "proceeds": Decimal("0"), "buyback": Decimal("0")}
+    all_flows = flows_by_snapshot_date(nav_snapshots, cash_flows)
+    proceeds_flows = flows_by_snapshot_date(nav_snapshots, short_proceeds)
+    buyback_flows = flows_by_snapshot_date(nav_snapshots, short_buybacks)
+    total = proceeds = buybacks = Decimal("0")
     capital: dict[date_type, Decimal] = {}
-    position = 0
-    for snapshot in sorted(nav_snapshots, key=lambda item: item.date):
-        while position < len(tagged) and tagged[position][0] <= snapshot.date:
-            _day, amount, side = tagged[position]
-            sums[side] += amount
-            position += 1
-        long_side = sums["all"] - sums["proceeds"] - sums["buyback"]
-        capital[snapshot.date] = max(Decimal("0"), -long_side) + sums["proceeds"]
+    for snapshot_date in sorted(snapshot.date for snapshot in nav_snapshots):
+        total += all_flows.get(snapshot_date, Decimal("0"))
+        proceeds += proceeds_flows.get(snapshot_date, Decimal("0"))
+        buybacks += buyback_flows.get(snapshot_date, Decimal("0"))
+        # The long side is every flow that is neither a short sale's proceeds nor a short's buy-back
+        long_side = total - proceeds - buybacks
+        capital[snapshot_date] = max(Decimal("0"), -long_side) + proceeds
     return capital
 
 
