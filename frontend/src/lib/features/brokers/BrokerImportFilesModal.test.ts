@@ -307,8 +307,16 @@ describe('BrokerImportFilesModal bulk delete — the files the user may not dele
     });
 
     // Green today, and after the cure: proves the list answer goes through the generated schema in this harness.
+    // It reads no console line: until H-60 it read the refusal's issues off the error the modal printed,
+    // `console.error('Failed to load files:', e)`, a line H-60 took out (an API error holds the request, a
+    // ZodiosError's message the whole refused answer). The client's own sanitised `[API]` line is for the human who
+    // investigates, never a signal a test reads (frontend.instructions.md, «API errors in the console»). The refusal
+    // is proved where the client decides it: the list the harness served fails the response schema the generated
+    // client applies to the modal's operation, at the missing flag, and the same item with its flag passes it.
     it('control: a listed file without can_delete is refused by the generated client, and nothing is listed', async () => {
-        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        // Only to keep the output quiet: the client writes its `[API] schema …` line for the refused answer.
+        // Never read; restored by vi.restoreAllMocks() in afterEach, like every spy of this file.
+        vi.spyOn(console, 'error').mockImplementation(() => {});
         const incomplete: Partial<ListedFile> = listed(DELETABLE_1, true);
         delete incomplete.can_delete;
         server.files = [incomplete];
@@ -316,9 +324,17 @@ describe('BrokerImportFilesModal bulk delete — the files the user may not dele
 
         await waitFor(() => expect(within(modal).getByTestId('info-banner-error')).toBeInTheDocument(), {timeout: 3_000});
         expect(within(modal).queryByTestId('files-table-brim'), 'nothing listed').toBeNull();
-        const failure = consoleError.mock.calls.find(([label]) => label === 'Failed to load files:')?.[1] as {cause?: {issues?: Array<{path: unknown[]}>}} | undefined;
+
+        // The schema the client validated that answer with: the response of the operation the modal calls, in the
+        // client's own API definition, on the route the harness answered (the validation finds it by method and path).
+        const route = zodiosApi.api.find((endpoint) => endpoint.alias === 'list_files_api_v1_brokers_import_files_get');
+        expect([route?.method, route?.path], 'the operation the modal calls, on the list route the harness answers').toEqual(['get', LIST_URL]);
+        // The barrier: the same item with its flag passes that schema, so the refusal below is the flag's alone.
+        expect(route?.response.safeParse([{...incomplete, can_delete: true}]).success, 'the same item with can_delete passes the generated schema').toBe(true);
+        const served = route?.response.safeParse(server.files);
+        expect(served?.success, 'the list the harness served is refused by the generated schema').toBe(false);
         expect(
-            failure?.cause?.issues?.map((issue) => issue.path),
+            served?.error?.issues.map((issue) => issue.path),
             'refused by BRIMFileListItem, for the missing flag',
         ).toContainEqual([0, 'can_delete']);
     });
