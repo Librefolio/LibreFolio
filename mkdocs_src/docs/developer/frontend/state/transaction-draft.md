@@ -179,8 +179,21 @@ The workspace looks for the two halves of a transfer or an exchange and offers t
   (`assetQuantitiesCancel`, in `promoteSuggest.ts`). Both helpers give each value the sign its
   type implies, then compare the decimal strings exactly, as the backend compares `Decimal`s: a
   relative tolerance of 1e-9 would let a one-cent difference through above about 10 million, a
-  pair the backend refuses. It shows the first five pairs, the paying row first when both rows
-  carry cash. `executePromote` asks `findPromoteMatch` again before it promotes, so its refusals
+  pair the backend refuses. It shows the first five pairs, and `promotePairOrder`
+  (`promoteHelpers.ts`, J-66) tells which row of a pair pays: the one whose cash, signed by its type
+  (`buildSignedCash`, its sign read exactly by `exactDecimalSign`, as `cashAmountsCancel` reads it),
+  is negative — a `WITHDRAWAL` pays whether the workspace holds its cash as its magnitude (the sign
+  convention above: `fieldsFromTx`, `txCreateItemToPendingOp`, and since W-B65 `applyFormPayload()`)
+  or signed — and never a row without cash, or whose amount is no plain decimal. Five readers share
+  that answer: the banner's order, the paying row first when the other one receives (`swapped`); the
+  implied rate shown for an exchange, from that row to the other (`from` → `to`, `to` ÷ `from` in
+  `computeFxConversionInfo`); the market rate it is compared with, fetched in the same direction on
+  the paying row's date (the `fxMarketCache` effect); the `left` of **Merge all** (*All left*), the
+  row the banner lists first (`mergeAllSuggestions`); and the **Merge** dialog, which shows that row
+  first, its text first in the combined description it opens with (`triggerPromoteFromSuggestion`;
+  `executePromote` still gets the rows in the suggestion's order) — all but the dialog used to read
+  the stored amount, where a `WITHDRAWAL` held as its magnitude never paid and the pair could show
+  backwards. `executePromote` asks `findPromoteMatch` again before it promotes, so its refusals
   hold for every promote of the workspace: **Merge**, **Merge all**, and the selection toolbar's
   promote button (`selectedForPromote`, `promote-toolbar-confirm`), which also asks
   `cashAmountsCancel` of a cash transfer and `assetQuantitiesCancel` of an asset transfer.
@@ -201,10 +214,10 @@ The workspace looks for the two halves of a transfer or an exchange and offers t
   from merging. The 💡 opens `TransactionPickerModal` on those candidates; once one is added, the
   banner offers the pair.
 * **Merge** (`promote-suggest-link-<idx>`) promotes one pair: `executePromote` at once, or
-  `PromoteMergeModal` first when the two rows differ in description or tags. Where the
-  descriptions differ, the dialog counts the merged one under its textarea
-  (`promote-merge-desc-counter`, `data-state` `ok` or `over`), in code points as Python's
-  `len()` counts them (`textLength()` and `TX_DESCRIPTION_MAX_LENGTH`, 500, in
+  `PromoteMergeModal` first, showing the two rows in the banner's order (`promotePairOrder`), when
+  they differ in description or tags. Where the descriptions differ, the dialog counts the merged
+  one under its textarea (`promote-merge-desc-counter`, `data-state` `ok` or `over`), in code points
+  as Python's `len()` counts them (`textLength()` and `TX_DESCRIPTION_MAX_LENGTH`, 500, in
   `promoteHelpers.ts`). Past 500 — 500 itself fits — the textarea is `aria-invalid`, a message
   names the limit (`promote-merge-desc-too-long`) and **Confirm promotion**
   (`promote-merge-confirm`) is disabled: the backend would refuse the merged notes with

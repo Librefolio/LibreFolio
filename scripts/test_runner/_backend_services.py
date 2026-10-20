@@ -188,6 +188,15 @@ def services_fx_conversion(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "FX conversion service tests", verbose=verbose)
 
 
+def services_fx_rate_steps(verbose: bool = False, test_names: list = None) -> bool:
+    """P3: unit_rate_steps, one unit of a currency in another as steps, == convert_bulk on every window day (private in-memory DB)."""
+    print_section("Services: FX Rate Steps (P3)")
+    print_info("Testing: backend/app/services/fx/conversion.py (unit_rate_steps, UnitRateSteps; convert_bulk the oracle)")
+    print_info("Tests: at/rate_day_at == convert_bulk(Currency(1)) bit for bit on every window day, direct and inverse; the step calendar; unusable rates skipped; 501/1 035 pairs in convert_bulk's chunks; ValueError cases")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_rate_steps.py", test_names)
+    return run_command(cmd, "FX rate steps tests", verbose=verbose)
+
+
 def services_asset_source(verbose: bool = False, test_names: list = None) -> bool:
     """Test Asset Source service logic."""
     print_section("Services: Asset Source Logic")
@@ -1939,6 +1948,15 @@ Note: No backend server required.
         desc="Currency conversion algorithms",
         prereq="Database created",
         exclusive_because="its assertions are about the oldest and newest EUR/USD row in the whole fx_rates table (backward fill, missing-rate boundary), and the service under test queries that table without a source filter, so a neighbour inserting any EUR/USD rate moves the boundary this unit measures",
+    )
+    add_test(
+        cat,
+        "fx-rate-steps",
+        services_fx_rate_steps,
+        name="FX Rate Steps (P3)",
+        desc="unit_rate_steps: at/rate_day_at == convert_bulk(Currency(1)) bit for bit (as_tuple) and its rate date on every window day, direct and inverse; steps = each window's first day with its anchor + usable rows inside; unusable rates skipped; disjoint, overlapping, touching windows; 501 and 1 035 pairs in ⌈n/500⌉ statements; ValueError on a one-currency pair or a backward window",
+        # PURE: one private in-memory SQLite per test (create_all), disposed at teardown; no service replaced.
+        isolation="pure",
     )
     add_test(
         cat,

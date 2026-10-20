@@ -395,26 +395,27 @@ class YahooFinanceProvider(AssetSourceProvider):
         self._currency_cache = get_ttl_cache("yfinance_currency", maxsize=2000, ttl=86400)
 
     def _fetch_currency(self, symbol: str) -> str | None:
-        """
-        Fetch currency for a symbol using yfinance fast_info.
-        Uses cache to avoid repeated API calls.
+        """The currency Yahoo gives for ``symbol`` (``fast_info``), e.g. ``USD`` or ``GBp``; None when Yahoo has none or
+        the read failed.
 
-        Returns:
-            Currency code (e.g., 'USD', 'EUR') or None if not available
+        Only an answer is cached, 24 h: a currency, or Yahoo answering without one. A refusal for too many requests is
+        raised at once as ``AssetRateLimitedError``, with no retry and nothing cached, so that the call boundary pauses
+        the provider («never swallow a refusal»): the whole search leaves as rate limited. Any other error gives None,
+        not cached, so the next call asks again (Z-39).
         """
         cached, ok = self._currency_cache.get(symbol)
         if ok:
             return cached
 
         try:
-            ticker = yf.Ticker(symbol)
-            currency = ticker.fast_info.get("currency")
-            self._currency_cache.set(symbol, currency)
-            return currency
+            currency = yf.Ticker(symbol).fast_info.get("currency")
         except Exception as e:
+            if _is_rate_limited(e):
+                raise AssetRateLimitedError(f"Yahoo Finance refused for too many requests (currency({symbol}))") from e
             logger.debug(f"Could not fetch currency for {symbol}: {e}")
-            self._currency_cache.set(symbol, None)
             return None
+        self._currency_cache.set(symbol, currency)
+        return currency
 
     @property
     def provider_code(self) -> str:

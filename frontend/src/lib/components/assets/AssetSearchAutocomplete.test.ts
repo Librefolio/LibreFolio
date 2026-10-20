@@ -63,6 +63,12 @@
  * `assets.search.failed` in the language in force — never the error's own message,
  * which still goes to `console.error` (spied, and silenced, for that case) — and the
  * time cap keeps its own `assets.search.timeout`.
+ *
+ * After it, Z-32 (d): a result may carry the quote base its provider suggests for
+ * the line (`quote_base_suggestion`: `{quantity, quote_currency}`). Both mappings —
+ * the stream's `provider_results` and the REST fallback — hand it to `onselect` as
+ * sent, and `null` for a result without one. RED until both mappings copy it: today
+ * they drop the field.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
@@ -1433,5 +1439,70 @@ describe('AssetSearchAutocomplete — a failed search says so in the UI’s lang
         expect(restSearch, 'the time cap does not fall back to REST').not.toHaveBeenCalled();
 
         expect(normalize(screen.getByTestId('asset-search-results').textContent)).toContain(normalize(timeout));
+    });
+});
+
+// =========================================================================
+// Z-32 (d): the quote base a provider suggests for a line reaches onselect — see the header
+// =========================================================================
+describe('AssetSearchAutocomplete — the quote base a provider suggests reaches onselect (Z-32 d)', () => {
+    /** A line quoted in pence: its provider suggests one price per 100 shares, in GBp, as Yahoo does for VOD.L. */
+    const PENCE = {identifier: 'GB00BH4HKS39', identifier_type: 'isin', display_name: 'Vodafone Group', provider_code: 'alpha', currency: 'GBP', asset_type: 'STOCK', via_web: false, quote_base_suggestion: {quantity: 100, quote_currency: 'GBp'}};
+    /** A result whose provider says it has nothing to suggest. (`R2` says nothing by leaving the field out.) */
+    const SILENT = {...R1, quote_base_suggestion: null};
+
+    afterEach(() => {
+        // A REST answer a case did not consume must not reach the next one.
+        restSearch.mockReset();
+    });
+
+    /** Clicks the result `identifier` once the search lists it, and returns what onselect received for it. */
+    async function pick(onselect: ReturnType<typeof vi.fn>, identifier: string): Promise<Record<string, unknown>> {
+        const row = await waitFor(() => {
+            const found = document.querySelector<HTMLElement>(`[data-testid^="asset-search-result-"][data-identifier="${identifier}"]`);
+            expect(found, `the search lists ${identifier}`).not.toBeNull();
+            return found!;
+        });
+        await fireEvent.click(row);
+        expect(onselect).toHaveBeenCalledTimes(1);
+        return onselect.mock.calls[0][0];
+    }
+
+    it('ASA-Q1: a streamed result hands onselect the quote base its provider suggests, as sent', async () => {
+        global.fetch = vi.fn(async () => sseResponse([answered('alpha', [PENCE]), answered('beta', [R2]), DONE])) as never;
+        const {onselect} = await mountReady();
+        await type('vodafone');
+        await waitFor(() => expect(state()).toBe('results'));
+
+        // RED today: the stream's mapping drops the field.
+        expect(await pick(onselect, PENCE.identifier)).toEqual(expect.objectContaining({identifier: PENCE.identifier, provider_code: 'alpha', quote_base_suggestion: {quantity: 100, quote_currency: 'GBp'}}));
+    });
+
+    it.each([
+        {label: 'leaves the field out', result: R2},
+        {label: 'sends null', result: SILENT},
+    ])('ASA-Q2: a streamed result whose provider $label hands onselect null', async ({result}) => {
+        global.fetch = vi.fn(async () => sseResponse([answered(result.provider_code, [result]), DONE])) as never;
+        const {onselect} = await mountReady();
+        await type('apple');
+        await waitFor(() => expect(state()).toBe('results'));
+
+        // RED today: the field is not there at all, not even as null.
+        expect(await pick(onselect, result.identifier)).toHaveProperty('quote_base_suggestion', null);
+    });
+
+    it.each([
+        {label: 'the quote base its provider suggests', result: PENCE, suggestion: {quantity: 100, quote_currency: 'GBp'}},
+        {label: 'null, for a result without one', result: R2, suggestion: null},
+    ])('ASA-Q3: on the REST fallback, a result hands onselect $label', async ({result, suggestion}) => {
+        global.fetch = vi.fn(async () => sseResponse([], {ok: false})) as never;
+        restSearch.mockResolvedValue({results: [PENCE, R2]} as never);
+        const {onselect} = await mountReady();
+        await type('vodafone');
+        await waitFor(() => expect(state()).toBe('results'));
+        expect(restSearch, 'precondition: the stream was unavailable, so the search fell back to REST').toHaveBeenCalledTimes(1);
+
+        // RED today: the REST mapping drops the field too.
+        expect(await pick(onselect, result.identifier)).toHaveProperty('quote_base_suggestion', suggestion);
     });
 });
