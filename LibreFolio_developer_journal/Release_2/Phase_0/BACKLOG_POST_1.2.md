@@ -2750,6 +2750,13 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Il test lo scrive test-author, nel perimetro di G: `gallery.spec.ts` e una fixture in
     `frontend/e2e/fixtures/gallerySecurity.ts`. Poi un doppio a/b filtrato, e le righe di
     `mkdocs_src/docs/gallery/*.en.md` scritte da docs-writer.
+  - **Da G-28 (20/10):** il file `gallerySecurity.ts` e la risposta di base per ogni scena, tutti i controlli «ok»,
+    vengono da G-28. La domanda sulla voce del browser ha la sua risposta: gli host della galleria, `localhost` e
+    `lf-e2e.lan`, sono locali, quindi la voce non compare. A G-22 restano gli scatti con dei controlli da guardare,
+    ognuno col suo instradamento registrato nel test, dopo quello di base:
+    - la scheda Security, come sopra;
+    - la riga della connessione col pallino e il link dei controlli, per la sezione «Security Warnings for
+      Administrators» di `user/connection-security` (N69b), che oggi non ha un'immagine.
 
   Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
   «Dopo G-18», «Punto 33 della designer».
@@ -2827,6 +2834,49 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
   Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
   «Galleria del giro 3» e «README di `scripts/visual_review/` al riferimento del 18/10».
+- **G-28 · N69b nella galleria: i controlli di sicurezza «ok» in ogni scena** — medio, con una scadenza; coordinatore,
+  20/10 13:35. Deve entrare prima che la 1.3 rigeneri la galleria, alla fine di Y-39.
+  - Da N69b (`1e711253a`) ogni pagina che un admin apre legge `GET /api/v1/security/checks`. Con un errore o un avviso
+    compaiono:
+    - un pallino sullo scudo della riga della connessione, nella barra laterale;
+    - un link «N security warnings» nei suoi dettagli;
+    - sul telefono, un pallino sul pulsante del menu (`mobile-menu-security-dot`).
+  - La corsia ha il limite dei login spento (`accounts.login_limit`, avviso `auth.checks.loginLimit.off`). Senza cura:
+    - il pallino è in ogni scena da admin, cioè quasi tutta la galleria, ed è l'avviso di una corsia di test, non di
+      un'installazione;
+    - in `security/connection-indicator` il link in più allunga i dettagli, e sul telefono rischia il controllo «tutta
+      la riga sullo schermo»;
+    - il pallino arriva dopo una lettura asincrona: rischio di a≠b.
+  - La voce del browser non conta: i due host della galleria, `localhost` e `lf-e2e.lan`, sono locali (`isLocalHost`),
+    quindi la registrazione aperta non aggiunge niente.
+  - **La cura, decisa da G il 20/10:** i controlli simulati «ok» per ogni test. Lo scatto da utente normale curerebbe
+    una sola scena.
+    - `frontend/e2e/fixtures/gallerySecurity.ts`, come `galleryEmail.ts`. Contiene i 17 controlli della lista della
+      piattaforma (`config_audit.CONFIG_CHECKS` e `platform.plugin_secrets`), nel suo ordine, ognuno `ok` con la
+      chiave del suo ramo `ok` nel backend.
+      - È tipata col client generato e controllata con `schemas.SecurityChecksResponse` alla registrazione.
+      - Risponde solo a `GET` su quel percorso, il resto ricade alle regole di prima, e conta le letture.
+    - È installata nel `beforeEach` esterno di `gallery.spec.ts`, dopo `guardGalleryOffline`: vale per ogni pagina di
+      ogni test, anche sotto `lf-e2e.lan`. Un test che vuole altri controlli registra il suo instradamento dopo (G-22).
+    - Nella scena `security/connection-indicator`, prima dello scatto:
+      - la prova che la fixture ha risposto su quel caricamento;
+      - `data-security-attention="0"` e `data-security-severity="none"`;
+      - nessun `connection-security-attention-link`;
+      - sul telefono, nessun `mobile-menu-security-dot`.
+    - Testo alternativo: nessuna modifica. Quello di `user/connection-security` e delle 8 pagine della galleria
+      descrive la riga aperta su «rete locale», con la ragione e il link «How to connect securely», ed è quello che lo
+      scatto mostra.
+  - **Cambi attesi con la cura:** il badge «1» su «Amministrazione» e su «Security» sparisce dagli scatti admin di
+    Settings. Nient'altro di N69b.
+  - Il codice lo scrive test-author, nel perimetro di G; A rivede i valori della fixture, perché è il proprietario di
+    Security.
+  - Verifica:
+    - `prettier --check` e `tsc -p tsconfig.e2e.json`;
+    - poi un doppio a/b filtrato nella corsia 6153: la scena, `main dashboard`, `mobile menu open`, Settings admin,
+      `plugins` e `users`.
+
+  Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
+  «Nota per la prossima galleria completa», N69b, e «N69 nella galleria».
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
