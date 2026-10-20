@@ -482,7 +482,8 @@ antenato della base il 19/10. I titoli ⏳ del §7 sono il registro del momento:
 | Y-N65 | N65: nessun intervallo di un giorno in tutti i selettori; il righello; il cursore del grafico (N65-7) | ✅ 19/10 | `5cb47395f` (treno da annotare) | «19/10 · Y-N65», «Il lotto Y-N65» (passo 7) |
 | Z-29d-0 | `AssetComparisonSignal._basePoint`: la base in % del confronto dal punto iniettato (per Z-29b e Z-29d) | ⏳ checkpoint 20/10 | — | «20/10 · Z-29d», «Risposte del coordinatore (20/10 09:01) e il lotto Z-29d-0» |
 | Z-29d | il dialogo chiede la serie allineata del bersaglio | ⏸ aspetta Z-29a in dev e Z-29b sulla base | — | «20/10 · Z-29d» |
-| Y-38 | il selettore dell'asset di confronto fa scorrere il nome lungo | ⏳ analisi 20/10, domanda aperta | — | «20/10 · Y-38» |
+| Y-38 | il selettore dell'asset di confronto fa scorrere il nome lungo | ⏳ checkpoint 20/10 | — | «20/10 · Y-38» |
+| Y-39 | la scheda e la sua anteprima: un grafico solo, una funzione dei segnali (proposta) | ⏳ analisi 20/10, domande F-1…F-3 | — | «20/10 · La scheda e l'anteprima» |
 
 Fuori dai lotti:
 - **Le voci Y-N** della mia sezione del backlog: ognuna ✅ porta il suo commit d'ingresso (rimesse in pari il 19/10). Aperte,
@@ -7508,7 +7509,20 @@ Ogni lotto si chiude con un checkpoint FROZEN.
     - se il dettaglio mostra già nella card un confronto fallito. `ChartSignalsSection` ha già una diagnostica del
       confronto (`_conversionFailed`, `comparisonStatus`, i problemi tipizzati); manca forse il caso «richiesta
       fallita». Se manca, è lavoro nuovo da proporre.
-- **D-Z29d-3 e D-Z29d-4**: in arrivo.
+- **D-Z29d-3: (a)**, l'anteprima salta il confronto con l'asset stesso, come la card.
+- **D-Z29d-4: sì, riallineare** (developer, 20/10), testuale: «si dobbiamo riallinearle, giusto per sicurezza mi
+  ripeto, lo 0 deve essere rispetto allo stesso giorno, se presente, se il segnale inizia con il suo primo punto
+  assoluto dopo, allora lo 0 di quel segnale di confronto è calcolato rispetto al suo primo punto, anche se nella vista
+  aggregata settimanalmente il punto richiesto è un martedì ma noi mostriamo nei punti il venerdì, significa che lo 0 è
+  rispetto al valore di martedì, e il primo punto è il venerdì scalato rispetto a martedì, tutto chiaro? questo vale per
+  entrambe, anzi in realtà è strano che siano 2 componenti, in origine erano lo stesso! c'è stata duplicazione di
+  codice? riesci a fonderle e riportarle ad essere un unico componente mergiando il meglio dei 2?»
+  - **La regola dello 0**, contratto di Z-29b e Z-29d:
+    - la linea si misura dal valore del giorno F, il primo giorno vero del periodo;
+    - un confronto si misura dal suo valore in F, oppure dal suo primo punto se comincia dopo F;
+    - i punti disegnati (per esempio i venerdì di una vista settimanale) si scalano da quel valore;
+    - vale per la scheda e per l'anteprima. Per i confronti è `_basePoint` (Z-29d-0); per la linea, il `first`.
+  - **La fusione**: analisi nella sezione «20/10 · La scheda e l'anteprima», prima di Z-29d.
 
 ## 20/10 · Y-38 — il selettore dell'asset di confronto fa scorrere il nome lungo: analisi breve (sola lettura)
 
@@ -7573,3 +7587,131 @@ altri 25 posti. La catena delle larghezze c'è già: `SearchSelect` mette gli sn
 CHANGELOG, una riga 🔄.
 
 **Ordine**: dopo il commit di Z-29d-0. Prima i rossi (`test-author`), poi la cura, le prove leggere e il checkpoint.
+
+> **Decisione** (coordinatore, 20/10 09:35): **(a)**, scorrono anche le righe della tendina, «come nel resto del
+> progetto». Z-29d-0 committato (`bccf05cbb`, giornale `c19d808fe`). **Via a Y-38**: prima i rossi.
+
+**Il lotto Y-38.**
+1. ✅ 20/10 — Rossi (`test-author` `87d78b6d`, in sottofondo), describe «ChartSignalsSection — the asset-comparison
+   selector scrolls a long asset name with the project marquee (Y-38)».
+   - 2 rossi: il campo chiuso e le righe della tendina tengono ognuno un solo elemento dello scorrimento
+     (`OVERFLOW_MARQUEE_SELECTOR`), con testo e `title` uguali all'etichetta intera, cioè nome e suffisso (`✓`, `📌`).
+   - 1 guardia: il nome intero compare una volta sola nel campo.
+   - Visti rossi da me (carico 18): 2 falliti su 24, ognuno sulla sua asserzione («the closed field holds no marquee
+     with the whole label…»).
+   > **Note implementazione**: non è fissato l'ordine dell'icona, che non ha un `data-testid`: per selezionarla
+   > servirebbe il suo `src`. Non è fissato `👑`, perché in produzione non arriva in questa lista: la pagina toglie il
+   > suo asset da `availableAssets`.
+2. ✅ 20/10 — La cura, in `ChartSignalsSection.svelte`, nei due snippet:
+   - il contenitore passa da `truncate` a `min-w-0`;
+   - il nome diventa `<span use:scrollOnOverflow class="{overflowScrollTextClass} text-xs" title={option.label}>`;
+   - in più, due import.
+3. ✅ 20/10 — Prove leggere, con il carico a 21:
+   - il file: 24/24;
+   - i vicini, `files/scripts/y38_vitest_batch.sh`: 30 file in un solo processo, cioè i gate `src/*.gate.test.ts`, i
+     test di `ui/select`, `SignalTreeSelect`, `chartCoreHelpers`, `comparisonSignals`, `loadComparisonData` e tutti i
+     test che usano lo scorrimento: 1364/1364;
+   - `npm run check` 0/0; Prettier, `theme-roles --check` e `git diff --check` puliti.
+   - **Le E2E**, lette e non lanciate: `asset-detail.spec.ts:2816-2830` e `fx-detail.spec.ts:1952-1962` guidano il
+     selettore con i `data-testid` (`…-trigger`, `ArrowDown`, `search-select-option-<id>`), che non cambiano.
+   - **La galleria**: col movimento ridotto lo scorrimento non parte. Nello scatto del dettaglio con un confronto
+     (`gallery.spec.ts:5389`) un nome lungo finisce tagliato netto, senza i «…».
+   - **Doc**: nessuna pagina descrive il selettore.
+4. ⏳ CHECKPOINT READY, con una riga 🔄 nel CHANGELOG.
+
+## 20/10 · La scheda e l'anteprima: due componenti? Analisi della fusione (sola lettura)
+
+> **Richiesta del coordinatore** (20/10 09:35), dopo la risposta del developer a D-Z29d-4: «card e anteprima usano due
+> componenti diversi? Trova dove si sono separati, cosa ha in più ognuno e quanto costa fonderli in un componente
+> solo, "il meglio dei due". Senza codice: mandami l'analisi.»
+>
+> - **Base:** `c19d808fe`.
+> - **Metodo:** il codice di oggi e la storia di git, in sola lettura.
+
+**Sì, si sono separati, su due livelli.**
+
+1. **Il grafico.**
+   - Le schede (`AssetCard`, `FxCard`) disegnano con `PriceChartCompact.svelte`: 42 righe sopra un `LineChart`
+     compatto.
+   - L'anteprima è nata sullo stesso componente: `4f3ee08b5`, 9/3 11:20, «preview chart». L'intestazione di
+     `PriceChartCompact` lo dice ancora: «Used by FxCard, AssetCard, ChartSettingsModal preview».
+   - Sette ore dopo, `5487096df` (9/3 18:15: MACD su due assi, le bande, il selettore delle coppie) la porta su un
+     `LineChart` diretto e non compatto, con il suo interruttore Abs/%. Sposta anche la conversione in % nel dialogo
+     (`previewDataAbs`, il «Problema 1» del suo piano).
+   - Il 10/3 `e57408376` toglie l'import. Da allora sono due grafici.
+2. **I segnali: tre copie della stessa logica.** Per ogni segnale locale: crea l'istanza, inietta i dati del
+   confronto o del cambio, poi `renderMulti`; e i risultati del backend.
+   - `getRenderedSignals` della pagina dei cambi (`fx/+page.svelte:692`, dal 9/3, `099d252de`);
+   - `getRenderedSignals` della pagina Asset (`assets/+page.svelte:1276`, dal 4/4, `2c1ab6e24`, la «parità della
+     lista Asset»);
+   - `renderLocalPreview` del dialogo (`ChartSettingsModal.svelte:287`, dal 23/7, `5b9dddb45`, insieme ai segnali del
+     backend).
+   - Anche `resolveGlobalBackendPreview`, cioè i segnali del backend dal vivo sulla curva sintetica, è scritta due
+     volte. Le due copie sono uguali, salvo il dominio.
+
+**Cosa ha in più ognuno, oggi.**
+- **La scheda:**
+  - il nome del bersaglio nel confronto (`_assetDisplayName`), mentre l'anteprima mostra «Asset #id»;
+  - salta il confronto con sé stessa; D-Z29d-3 lo porta anche nell'anteprima;
+  - i cambi presi dal negozio dei cambi, sempre nel verso salvato. Nella lista dei cambi, invece, l'anteprima legge
+    `pairsDataMap`, che inverte la coppia bersaglio se è invertita sulla SUA scheda
+    (`isCardInverted(p.config.slug)`). Una coppia mostrata invertita arriva quindi invertita nell'anteprima e diritta
+    sulla scheda. Lo dice il codice; non l'ho ancora provato con un caso;
+  - il grafico compatto: l'asse mini, la riduzione per densità (`chooseStaticResolution`), 80 px.
+- **L'anteprima:**
+  - le configurazioni che si stanno modificando, non ancora salvate;
+  - in modalità globale, la curva sintetica con i segnali del backend dal vivo;
+  - gli stati dei segnali del backend: da applicare, serve un asset vero, non disponibile;
+  - il suo interruttore Abs/%, 140 px, le righe degli assi secondari;
+  - **il colore per la linea di base.** Il grafico non compatto lo applica, quello compatto mai: `LineChart.svelte:450`,
+    `colorByBaseline && !compact`, dal 3/3 (`0a551f1cb`, prima che l'anteprima esistesse). Così l'opzione «colora per
+    la linea di base» si vede nell'anteprima e non sulle schede. È la differenza più visibile.
+- **Uguale nelle due**: `normalizeToPercentage` sul primo punto disegnato. Dopo Z-29b deve passare a F (n3, D-Z29d-4).
+
+**La proposta: il meglio dei due.**
+1. **Una sola funzione per i segnali di una scheda**, pura, in `lib/charts/` (per esempio `renderCardSignals`).
+   - Riceve le configurazioni, i dati assoluti, la base F, la vista e un contesto: i risolutori del cambio e del
+     confronto (dati, nome, `_basePoint`), i risultati del backend, l'asset della scheda (per saltare sé stesso).
+   - La usano la scheda Asset, la scheda del cambio e l'anteprima: stesse configurazioni, stessi segnali.
+   - Le due `resolveGlobalBackendPreview` diventano una, con il dominio come parametro.
+2. **Un solo componente del grafico.** `PriceChartCompact` riceve i dati assoluti e la base F, e fa lui la
+   percentuale: la regola dello 0 sta in un posto solo. L'anteprima torna a montarlo, con l'altezza, l'interruttore e
+   le righe degli assi che ha oggi.
+3. **La regola dello 0 (D-Z29d-4) dentro quei due pezzi**: `first` per la linea, `_basePoint` per i confronti
+   (Z-29d-0, già fatto).
+
+**Domande** (di prodotto, consiglio in neretto).
+- **F-1 · L'aspetto dell'anteprima:**
+  - (a) **come la scheda, più grande**: grafico compatto con asse mini e riduzione per densità. È «un componente
+    solo», e l'anteprima mostra davvero la scheda;
+  - (b) grande con gli assi completi, come oggi, ma con gli stessi dati, la stessa base e gli stessi segnali della
+    scheda.
+- **F-2 · Il colore per la linea di base:**
+  - (a) **anche sulle schede, come dice l'opzione**: in % rosso sotto lo 0 e verde sopra; in valore assoluto, rispetto
+    al giorno F (n3);
+  - (b) solo nell'anteprima, come oggi, e l'opzione lo dice;
+  - (c) toglierlo anche dall'anteprima.
+- **F-3 · Il verso delle coppie nell'anteprima della lista dei cambi**: con la funzione comune, (a) **lo stesso della
+  scheda** (il verso salvato, più il `_inverted` del segnale). Si risolve da sé.
+
+**Costo: circa 2 giorni.**
+- La funzione comune e i suoi tre usi, con i Vitest di parità (scheda e anteprima danno gli stessi segnali): 1 giorno.
+- Il componente con la base F e l'anteprima che lo monta: 0,5 giorni.
+- E2E, cioè `asset-list`, `fx-chart-settings` e `fx-list`, e la doc: 0,5 giorni.
+- La galleria, in più: se cambia l'aspetto dell'anteprima (F-1 a) o il colore delle schede (F-2 a), cambiano gli
+  scatti `assets/chart-settings`, `fx/chart-settings` e quelli delle schede. Serve un cancello della galleria, cioè
+  una pausa della macchina.
+
+**Ordine e conflitti.**
+- **Prima di Z-29b (consiglio).** Così Z-29b mette `first` e `_basePoint` in un posto solo, e l'anteprima resta
+  allineata da sé. Z-29d si riduce al risolutore asincrono per un bersaglio nuovo: da circa 1,25 a circa 0,75 giorni.
+  Dopo Z-29b, invece, Z-29b scrive la sua logica in `getRenderedSignals` e la fusione deve spostarla.
+- **File toccati:**
+  - un modulo nuovo in `lib/charts/`;
+  - `PriceChartCompact.svelte`, `ChartSettingsModal.svelte`;
+  - `AssetCard.svelte` e `FxCard.svelte`: la percentuale passa al componente;
+  - `assets/+page.svelte`, il file principale di Z-29b;
+  - `fx/+page.svelte`, la lista dei cambi: va chiesto a X e al coordinatore;
+  - `LineChart.svelte`, solo con F-2 (a): ci lavora Z-29b, e c'entra il programma colori.
+- **Colori**: nessun ruolo nuovo. F-2 (a) usa il verde e il rosso che il grafico ha già.
+- **Lotto proposto**: Y-39, «una scheda e la sua anteprima: un grafico solo, una funzione dei segnali», di Y.
