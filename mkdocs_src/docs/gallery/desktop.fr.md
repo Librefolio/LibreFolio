@@ -309,6 +309,14 @@ Les administrateurs peuvent configurer les paramètres à l'échelle du système
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Paramètres globaux">
 </div>
 
+### 📧 E-mail (administrateur)
+
+Les administrateurs vérifient l'e-mail de l'instance : s'il peut partir, combien d'e-mails restent pour cette heure, les contrôles de la configuration et un e-mail de test vers leur propre adresse.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="email" alt="E-mail">
+</div>
+
 ### 🕐 Planificateur de données de marché — Configuration
 
 Configurez le démon de synchronisation automatique des données de marché : fréquence de mise à jour, heures de synchronisation de l'historique et jours actifs.

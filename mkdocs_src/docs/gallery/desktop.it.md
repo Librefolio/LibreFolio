@@ -309,6 +309,14 @@ Gli amministratori possono configurare le impostazioni a livello di sistema.
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Impostazioni globali">
 </div>
 
+### 📧 Email (Admin)
+
+Gli amministratori controllano l'email dell'istanza: se può spedire, quante email restano in quest'ora, i controlli della configurazione e un'email di prova al proprio indirizzo.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="email" alt="Email">
+</div>
+
 ### 🕐 Scheduler dati di mercato — Configurazione
 
 Configura il daemon di sincronizzazione automatica dei dati di mercato: frequenza di aggiornamento, orari di sincronizzazione della cronologia e giorni attivi.
