@@ -202,6 +202,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/settings/users/addressProbe.test.ts",
             "src/lib/features/settings/users/accountErrors.test.ts",
             "src/lib/features/instance/instanceConfig.test.ts",
+            "src/lib/features/instance/checkGuides.test.ts",
             "src/lib/features/instance/profile.test.ts",
             "src/lib/features/instance/instanceNotices.test.ts",
             "src/lib/features/auth/authFlash.test.ts",
