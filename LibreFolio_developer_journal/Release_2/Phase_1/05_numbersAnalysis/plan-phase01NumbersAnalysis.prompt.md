@@ -8795,3 +8795,110 @@ lettura di Q1 nelle date comuni. Con Y, per un'uscita a gradini: solo se il deve
    - ✅ **Checkpoint mandato** (~11:33), poi FROZEN:
      - commit `fix(lots): closure rows name the selling broker` e `docs(journal): §29 point 2 done, J-68 found`;
      - riga 🐛 proposta: «Lot detail: a sale names the broker the units left».
+
+#### J-67 — un merge di righe salvate, o misto, sposta il segno nell'importo (via del 20/10 11:33; base `c333243c0`)
+
+> Coordinatore (11:04): J-67 è mio, dopo il §29 punto 2. Riporta la griglia al dato salvato, quindi non serve una
+> domanda.
+> Coordinatore (11:33): §29 punto 2 committato (`448c34353` codice, `c333243c0` giornale), già in dev con il treno 3
+> (`c4f037f62`). «J-67: hai il via, nell'ordine che proponi»:
+> 1. prima l'E2E rossa della terza faccia, in un file nuovo mio, `frontend/e2e/transactions/tx-bulk-promote-split.spec.ts`,
+>    registrato in `front-transaction`. **Se salva dati sbagliati, fermarsi e avvisarlo prima di curare**: allora
+>    diventa la priorità;
+> 2. poi la cura: il segno nell'importo anche nei rami dei salvati e dei misti.
+> Corse leggere, uno spec alla volta; l'intero `front-transaction` lo copre il suo cancello.
+
+**Analisi (20/10 ~11:35–11:40, sola lettura, scritta nella cartella di sessione durante il FROZEN;
+`files/j/j67/analysis_notes.md`).**
+- **I rami di `executePromote`** (`TransactionBulkModal.svelte` ~2636–2710):
+  - due righe nuove: il segno passa nell'importo prima del cambio di tipo (`applySignRules`; il commento lo dice:
+    «The target type is free-sign … or the withdrawal leaves as a deposit»);
+  - due salvate (`pendingPromotes {id_a, id_b}`) e il misto (`{id_a, link_uuid_b}`, `newOp.promoteFromType`): il tipo
+    cambia senza spostare il segno. Il prelievo resta un valore assoluto sotto un tipo a segno libero (`nonzero`).
+- **Le regole di promozione** (backend `schemas/transactions/type_metadata.py` ~285–390):
+  - TRANSFER da ADJUSTMENT+ADJUSTMENT: decide la quantità, il cui segno è tenuto com'è: corretto;
+  - FX_CONVERSION e CASH_TRANSFER da WITHDRAWAL+DEPOSIT: decide il contante. J-67 riguarda queste due.
+- **Il salvataggio è giusto per il merge in sé.**
+  - Le righe salvate promosse non partono come aggiornamenti (`resolveOps({splitTxIds, promoteTxIds})`, ~1490).
+  - La riga nuova di un misto parte col suo tipo di partenza e la sua regola (`opToTxFields` ~1127, `collectCreate`
+    ~1004). I lati li ricava il backend dai tipi di partenza.
+- **Tre facce:**
+  1. la riga visibile: `collapseIntoPaired` (~739–754) sceglie `from` da `Number(cash)` dopo il cambio di tipo, quindi
+     resta `opA`, che paghi o no. È J-67 com'era registrato;
+  2. la cella del contante (~1754–1767) ricostruisce il segno dalla regola del tipo attuale, `nonzero` dopo il
+     merge: «From: +1000 / To: +1000»;
+  3. **ipotesi, con un possibile effetto sui dati**: «Split pair» (~1994–2004) si offre su ogni riga con un partner
+     nascosto, quindi anche su un merge non ancora salvato.
+     - In un misto `opA` è la riga nuova (~2957), che resta visibile. Lo split passa dal caso B/C di `handleSplitRow`
+       (~925–990), che sceglie i tipi da `cashAmt < 0` della riga visibile.
+     - Se la riga nuova è il prelievo, prende il tipo DEPOSIT e il deposito salvato WITHDRAWAL.
+     - In più il caso B/C non toglie la promozione da `pendingPromotes` e azzera il `link_uuid` della riga nuova.
+     - L'esito del salvataggio non si sa: un batch rifiutato, oppure un deposito salvato al posto di un prelievo.
+- **Il rimedio proposto** (b): il segno nell'importo anche nei rami dei salvati e dei misti, come per le righe nuove.
+  Risolve le tre facce. Ciò che si salva non cambia: le righe salvate promosse non partono come aggiornamenti, e
+  `applySign` è idempotente sulla riga nuova.
+
+**Passi.**
+1. ✅ 20/10 ~11:45–11:58 — **E2E rossi** (test-author): nuovo `frontend/e2e/transactions/tx-bulk-promote-split.spec.ts`,
+   azione `front-transaction tx-bulk-promote-split`, registrata in `scripts/test_runner/_frontend_transaction.py`
+   (funzione dopo `front_tx_bulk_promote_exec`, `add_test` dopo `tx-bulk-promote-exec`; «all» la prende dal registro).
+   > **Note implementazione**: ogni test su un account usa e getta con i suoi broker A e B; una «float» (DEPOSIT 5000 su
+   > A, il giorno prima) fa passare i prelievi al controllo del saldo.
+   > - F3 (rosso): split subito dopo un merge misto. Asserzioni morbide in tre parti (griglia, richiesta, risposta e
+   >   conto), con un'annotazione «J-67 F3 verdict».
+   > - F1 (rosso): il merge misto mostra la riga che paga.
+   > - F2 (rosso): il contante della coppia legge −X / +X.
+   > - G (guardia): due righe nuove, merge, split e salvataggio.
+   >
+   > I testid mancanti (celle di tipo, contante e broker, le metà From/To) sono sostituiti dagli attributi
+   > `td[data-column-id]` di DataTable, già usati da altre specifiche. Il tipo si legge dall'icona, il contante dai
+   > numeri con segno. Prettier e `tsc -p tsconfig.e2e.json` puliti.
+2. ✅ 20/10 12:00–12:04 — **Corse rosse** (da sole, carico 23–46).
+   - F3 da sola (`… tx-bulk-promote-split F3`): **verdetto «REFUSED, nothing written»** (log `files/j/j67/e2e_f3_red.log`):
+     1. griglia: la riga nuova è diventata DEPOSIT +731 e quella salvata WITHDRAWAL −731, «edited»;
+     2. richiesta: crea un DEPOSIT +731 senza link e manda una promozione rimasta (`{id_a: 78, link_uuid_b: …}`), nessun
+        aggiornamento;
+     3. risposta: HTTP 200, `committed: false`, `promoteRefNotFound`. Il conto non è cambiato.
+   - Nessun dato sbagliato salvato, quindi niente fermo. Le due cause però si coprono a vicenda: curando solo la
+     promozione rimasta, i tipi scambiati sarebbero stati salvati. Coordinatore avvisato (~12:05) col perimetro della
+     cura.
+   - Tutto lo spec: **3 failed, 1 passed**.
+     - F1: la coppia si mostra come il deposito nuovo.
+     - F2: «From: +642 / To: +642».
+     - G verde.
+3. ✅ 20/10 12:05–12:06 — **Cura** (`files/j/j67/patch_j67_cure.py`, a secco pulita, 4 modifiche, poi applicata):
+   - `executePromote`: lo spostamento del segno (`applySignRules` con la regola del tipo di partenza) è sollevato prima
+     dei tre rami e tolto dal ramo delle due nuove;
+   - `undoPendingPromote(a, b)`, chiamata per prima da `handleSplitRow`. Per un merge in `pendingPromotes` (due salvate
+     `{id_a, id_b}`, oppure misto `{id_a, link_uuid_b}`), qualunque riga mostri:
+     - ridà il tipo di partenza (dallo store, oppure `promoteFromType`), con l'importo nella convenzione
+       dell'editor (`magnitudeForRule`);
+     - toglie il link della riga nuova, rende visibili le due righe e toglie il merge dalla coda.
+   - Le coppie salvate come tali (caso A) e le due nuove (caso B/C) restano com'erano.
+   > **Note implementazione**: Prettier `--write` ha solo raccolto su una riga il ternario di `undoPendingPromote`
+   > (printWidth 300). `front check`: svelte-check 0 errori (12:06).
+4. ✅ 20/10 12:06–12:18 — **Verdi** (da soli, una corsa alla volta; carico fino a 70 in attesa, poi 23–49):
+   - `tx-bulk-promote-split` **4/4**;
+   - `tx-bulk-promote-exec` **9/9**, `tx-split-promote` **6/6**, `tx-bulk-promote-cost-basis` **9/9**,
+     `tx-import-scalable-transfers` **4/4**, `tx-bulk-suggest-ux` **8/8**, `tx-fx-implied-rate` **3/3**;
+   - Vitest del bulk **221/221**.
+   - Log in `files/j/j67/`.
+   - Non ripetuto: tutto `front-transaction`, che è del cancello del coordinatore.
+5. ✅ 20/10 ~12:20–12:31 — **Documentazione** (docs-writer).
+   - `developer/frontend/state/transaction-draft.md`, sezione «✂️ Split & Promote Integration». Il punto **Promote**
+     dice ora che il segno passa nell'importo in ogni ramo. Il punto **Split** ha un sottopunto per il merge non
+     salvato (`undoPendingPromote`). Un paragrafo nomina lo spec che lo fissa.
+   - La pagina utente non dice come si mostra un merge né cosa fa lo split prima del salvataggio: niente modifiche,
+     niente timbro.
+   - `mkdocs build` stretto: exit 0, 3085 URL. `check-links`: 97 validi.
+   > **⚠️ Fuori pista — una domanda dal docs-writer, Q-J67-1.** `undoPendingPromote` ridà tipo e importi, ma tiene
+   > descrizione e tag scelti nel dialogo del merge. Una riga salvata con le note unite resta quindi «edited», e il
+   > salvataggio la manda come aggiornamento con quelle note.
+   > - Opzione (a), il mio consiglio: tenerle, come fa già oggi lo split di due righe nuove. La riga si vede «edited»
+   >   prima del salvataggio, e l'utente può correggerla.
+   > - Opzione (b): uno split che annulla tutto, con un'istantanea dei campi presa al momento del merge (non dallo
+   >   store, che perderebbe le modifiche fatte prima). Per coerenza varrebbe anche per due righe nuove: diventerebbe una
+   >   voce nuova, J-69.
+   > - La domanda va al coordinatore nel checkpoint. Lo stato attuale non è peggiore di prima: prima il salvataggio
+   >   veniva rifiutato.
+   - ✅ **Checkpoint mandato** (~12:33), poi FROZEN.
