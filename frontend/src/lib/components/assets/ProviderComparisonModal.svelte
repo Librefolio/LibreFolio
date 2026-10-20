@@ -18,10 +18,11 @@
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
-    import {X} from 'lucide-svelte';
+    import {Info, X} from 'lucide-svelte';
     import {assetTypeBadgeClass, assetTypeBadgeDotClass, getAssetTypeIconUrl, sectorI18nKey} from '$lib/utils/assetTypes';
     import IdentifierPrimaryChooser, {type IdentifierChoice} from './IdentifierPrimaryChooser.svelte';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import type {QuoteBaseSource} from './assetFormState';
 
     // =========================================================================
     // Types
@@ -34,6 +35,10 @@
         currentValue: any;
         providerValue: any;
         selected: boolean; // Checkbox state
+        /** Why the value is proposed, shown under the row (Z-32 d: the quote base's suggestion or convention). */
+        note?: string;
+        /** The quote base row's proposal, for the modal that applies it (not rendered). */
+        quoteBaseSource?: QuoteBaseSource;
         /**
          * Present only for `identifier_*` fields (P3/B-04).
          *
@@ -79,7 +84,7 @@
         },
         {
             titleKey: 'assets.modal.assetDetails',
-            fields: ['display_name', 'asset_type', 'currency'],
+            fields: ['display_name', 'asset_type', 'currency', 'quote_base_quantity'],
         },
         {
             titleKey: 'common.classification',
@@ -373,6 +378,12 @@
                                 {/if}
                             </div>
                         </div>
+                    {/if}
+                    {#if item.note}
+                        <p class="mt-2 flex items-start gap-1 text-[11px] text-lf-info" data-testid="comparison-note-{item.field}">
+                            <Info size={12} class="mt-0.5 shrink-0" />
+                            <span>{item.note}</span>
+                        </p>
                     {/if}
                 </div>
             {/each}
