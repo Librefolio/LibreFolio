@@ -163,7 +163,9 @@ export class BackupJobController {
             // carries its password — a job records no user — so it says «busy», as for the other origins.
             if (running !== null && running.origin === 'ui' && offered === null && password === undefined) {
                 this.#watched = running.jobId;
-                this.#adopt(running.jobId);
+                // The job this tab already follows by itself (started here, its polling given up, say) is its own: followed
+                // as such, never adopted, so its end is offered whatever its mode (coordinator, 19/10).
+                if (running.jobId !== this.followedJobId || running.jobId === this.#adopted) this.#adopt(running.jobId);
                 // Remembered before its first read (developer, 19/10): when that read fails, «Check again» reads it.
                 this.#remember(running.jobId);
                 this.state = 'loading';

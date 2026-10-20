@@ -7276,3 +7276,82 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > - ✅ **Checkpoint** (18:10), 🧊 FROZEN. Commit proposti:
 >   - `fix(backup): secure start never follows another backup`: `backupJob.svelte.ts`, i due test, le due doc;
 >   - `docs(journal): B-8 mode defect, B-50/B-51 analysis`: questo piano e il backlog.
+
+### B-8, rifinitura — il job che la scheda segue già da sé non si adotta (2026-10-19 18:10 → 2026-10-20 09:05) — ✅ 🧊 FROZEN (checkpoint delle 09:05)
+
+> **Coordinatore** (18:10): B-8 committato, `adedb0c9c` (`fix(backup): secure start never follows another backup`) e
+> `bc913e487` (il giornale); la memoria dell'adozione in `sessionStorage` va bene. «Il caso limite: sì alla
+> rifinitura, decisione mia, perché è nello spirito della tabella («si segue solo il proprio»): non adottare un job
+> che la scheda sta già seguendo da sé. Commit a parte con un rosso, piccolo, prima di B-50.» B-15 + B-8 entra in dev
+> fino a `bc913e487`, con un gate; la rifinitura dopo.
+>
+> - **Avviso di A** (coordinatore, 18:09): per N69, A cambia la barriera di FBKP-001 in `e2e/settings/backup.spec.ts`
+>   (riga 264). Un utente normale non vede più «Amministrazione»: la barriera diventa «About visible, administration
+>   count 0». Ha l'ok del coordinatore. B-8 non tocca quella spec.
+> - **La rifinitura**: una richiesta in chiaro rifiutata da un 409 che nomina il job `ui` che la scheda segue già da
+>   sé (`followedJobId`, non adottato) lo segue come suo: niente adozione, quindi alla fine è offerto qualunque sia la
+>   modalità. La strada sicura non cambia: una richiesta sicura non segue mai, il suo job compreso; si torna con
+>   «Check again», come fissa il gruppo 1.
+> - **Cura pronta, non applicata**: `apply_b8_own.py`, 1 operazione: si adotta solo se il job nominato non è quello
+>   seguito, o se quello seguito è già un'adozione. `--check` OK.
+> - **Rossi** a TA-B8-OWN (solo `backupJob.test.ts`, sola scrittura):
+>   - due rossi: il proprio backup sicuro, avviato qui o ricordato da una pagina precedente, che finisce cifrato
+>     viene offerto;
+>   - due guardie: un job che non è quello seguito, o quello seguito come adozione, resta adottato.
+> - ✅ **Doc** (18:12):
+>   - `security.md`: il backup che la scheda segue da sé si segue come suo, mai adottato (3 righe al posto di 1);
+>   - `backup_restore.en.md`, la riga 🚦: «…is not offered, unless the card had started it itself».
+> - **⏸️ PAUSA GENERALE del developer** (coordinatore, 18:12): la macchina si spegne e /tmp verrà ripulito. Fermare
+>   corse e server, mettere per iscritto lo stato, niente git. **Stato al fermo (18:16):**
+>   - porta 6187 libera; nessuna corsa né server della corsia attivi;
+>   - HEAD `bc913e487`; **sporchi 3 file**: questo piano, `security.md`, `backup_restore.en.md` (le doc della
+>     rifinitura). Codice di prodotto intatto: la rifinitura non è applicata;
+>   - **TA-B8-OWN fermato a metà**: gli ho chiesto di non scrivere più. Alle 18:15 `backupJob.test.ts` era ancora
+>     pulito. Domani controllare `git status`: se ha scritto un gruppo parziale, completarlo o rifarlo, mai lanciarlo
+>     a metà.
+> - **Per ripartire, nell'ordine** (tutto nella cartella di sessione, niente in /tmp):
+>   1. Rossi della rifinitura: brief di TA-B8-OWN qui sopra, oppure un test-author nuovo con lo stesso brief: due
+>      rossi più due guardie, solo `backupJob.test.ts`, dopo i 5 gruppi «B-8, review 19/10».
+>   2. Il rosso: `files/scripts/b_vitest.sh red-b8-own src/lib/features/backup/backupJob.test.ts`. Atteso: le due
+>      righe nuove falliscono perché il job viene adottato (la fine cifrata non è offerta); il resto verde.
+>   3. La cura: `python3 files/b15-b8-wip/apply_b8_own.py <worktree>` (1 operazione; `--check` era OK su
+>      `bc913e487`).
+>   4. I verdi: Vitest dell'intera feature `backup`, prettier sui 2 file, `front check` (prima `api sync` se il client
+>      è più vecchio della base), le doc (`files/scripts/b_docs.sh`).
+>   5. Il checkpoint: commit a parte (`fix(backup): a tab's own backup is never adopted`), più il giornale.
+>   6. **Poi B-50**: il contratto è in `files/b50-contract.md`, le sonde in `files/b50-analysis/`. Decisione (17:37):
+>      uno stato illeggibile è «non trovato» (404 `backup_job_not_found`; nel ripristino `restore_stage_not_found`),
+>      JSON non oggetto compreso, nel backup e nel ripristino. Rossi prima.
+> - **La corsia**: `/tmp/librefolio-r13-b` sparisce con /tmp. Prima di un test con server o DB, ricrearla con
+>   `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6187 --data-dir
+>   /tmp/librefolio-r13-b db populate --force --clean`. Per i Vitest e le doc non serve.
+> - 🧊 **FROZEN** (18:16).
+> - **▶️ Ripresa del 20/10** (coordinatore, 08:47): il riavvio ha svuotato /tmp; le corse leggere sulla corsia 6187
+>   solo con il carico a 1 minuto sotto 50. Ordine: i rossi della rifinitura, la cura e il checkpoint, poi B-50. Il
+>   gate di B-15 + B-8 su `dev_release2` lo lancia il coordinatore nella sua corsia.
+>   - ✅ Verificato (08:47): HEAD `bc913e487`, gli stessi 3 file sporchi, porta libera, carico 27. I file di sessione
+>     ci sono tutti; `apply_b8_own.py --check` OK. La corsia in /tmp non c'è più: per i Vitest e le doc non serve.
+>   - Il test-author di ieri non esiste più: ne lancio uno nuovo con lo stesso brief.
+> - ✅ **Rossi** (TA-B8-OWN-2, 08:50-09:00, sola scrittura; solo `backupJob.test.ts`):
+>   - un gruppo nuovo dopo i cinque della revisione: 2 rossi (il proprio backup sicuro, avviato qui con il sondaggio
+>     arreso, oppure ricordato da una pagina precedente con la lettura di `resume()` senza risposta; poi una
+>     richiesta in chiaro rifiutata che lo nomina) e 2 guardie (un job che non è quello seguito, oppure quello seguito
+>     come adozione, resta adottato e la sua fine cifrata non si presenta);
+>   - nei rossi: nessuna scrittura né rimozione della chiave di adozione su tutto il percorso (risposta mia alla sua
+>     domanda 1, come la regola delle guardie di pulizia), la fine cifrata offerta, `onDone` una volta, la chiave del
+>     job tenuta. Non fissate, di proposito: la riscrittura della chiave del job con lo stesso id, e la guardia (b)
+>     che riscrive l'adozione che ha già;
+>   - aggiornata la frase superata nel commento del primo gruppo della revisione (rimanda al gruppo nuovo).
+> - ✅ **Rosso** (09:01, carico 19): **2 falliti**, 244 passati, tutti e due perché il job seguito da sé viene adottato
+>   al rifiuto. Le guardie sono verdi.
+> - ✅ **Cura** (09:01): `apply_b8_own.py`, 1 operazione in `backupJob.svelte.ts` (+3/−1).
+> - ✅ **Verdi** (09:01-09:04):
+>   - Vitest dell'intera feature `backup`: 9 file, **1076 passati**;
+>   - prettier pulito sui 2 file; `front check` 0 errori e 0 avvisi. Il client generato è delle 17:12 di ieri, dopo
+>     l'ultimo merge, e da allora backend e schemi non sono cambiati: niente `api sync`;
+>   - `mkdocs build` stretta, `check-links`, `utils gate-docs-links` 63.
+> - ✅ **Backlog**: nella riga di B-8, la rifinitura.
+> - ✅ **Checkpoint** (09:05), 🧊 FROZEN. Commit proposti:
+>   - `fix(backup): a tab's own backup is never adopted`: `backupJob.svelte.ts`, `backupJob.test.ts`, le due doc;
+>   - `docs(journal): B-8 own-job refinement`: questo piano e il backlog.
+> - **Poi B-50**: il contratto è pronto (`files/b50-contract.md`), con una domanda sul perimetro (sotto).
