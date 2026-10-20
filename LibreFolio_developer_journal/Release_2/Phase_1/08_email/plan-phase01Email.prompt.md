@@ -8808,7 +8808,9 @@ non sposti il registro.
      sezione `db currencies` (debito di E-19a): nessun timbro, il debito resta vero.
    - `dev.py mkdocs build` (strict) ok; `dev.py mkdocs check-links` 97 link validi.
    - Backlog: E-20 ✅, con la metà d'avvio, quella del ripristino chiusa da B-49 e il `GBp` chiuso col motivo verificato.
-7. ⏳ **Il checkpoint**, insieme al testo di E-AI503 (sotto), così entrano insieme.
+7. ✅ **Il checkpoint** (09:25), insieme al testo di E-AI503: committato dal coordinatore (09:35), `f15d8c60c`
+   `fix(platform): currency audit reads text that is not UTF-8`, `f7be98971` (il testo di E-AI503), `4df888f78` (il
+   giornale). Entrano in dev col treno 2, insieme a E-AI503 ed E-24.
 
 > **Il nuovo ordine** (coordinatore, 09:06 e 09:1x): E-20, il testo di E-AI503, l'analisi di E-24, l'analisi di E-23
 > (le due analisi anche in un messaggio solo). E-7 slitta dopo.
@@ -9129,7 +9131,35 @@ della copertura di `*.technical_prices`, righe ~150-165, e i codici). Una riga n
    - Rivista contro la cura (stesso ordine, stessa chiusa «mention only what changes the answer»). Debito di
      traduzione: `user/ai-export/index.{it,fr,es}.md` (quattro passaggi, un punto di elenco in più), non timbrato.
    `user/settings/about.en.md` («near its end») resta vera.
-5. ⏳ **Il checkpoint**, coi testi inglesi finali.
+5. ✅ **Il checkpoint** (10:0x), coi testi inglesi finali: committato dal coordinatore (10:1x), `3c064de75`
+   `feat(ai-export): prompts answer from the data, never restate it`, `badc30832` (il giornale).
+   > **Le risposte del coordinatore** (10:10):
+   > - «If you cannot search, say so; never invent a source or a news item.»: sì, in Reply Instructions; decisione
+   >   sua, nello spirito delle istruzioni condivise. Piccolo seguito: un rosso, la cura, il checkpoint (E-24.2).
+   > - Il debito delle traduzioni di `user/ai-export/index.{it,fr,es}.md` resta debito, senza timbro: le traduzioni
+   >   si fanno solo su richiesta del developer.
+   > - E-AI503, E-20 ed E-24 entrano col treno 2; quando sono in dev aggiorna la mia base e parto con E-23.
+   >   Intanto l'analisi di E-7.
+
+#### E-24.2 — Il divieto di inventare fonti nei soli dati (2026-10-20, 10:1x; base `badc30832`)
+> Le analisi lo hanno già nelle istruzioni condivise («never fabricate sources or current events»); l'export dei soli
+> dati no. La frase del coordinatore va in Reply Instructions, dopo quella della ricerca sul web, come costante
+> esportata (`AI_EXPORT_NO_INVENTED_SOURCES_RULE`): il test ne fissa la presenza, non le parole.
+
+1. ✅ **Il rosso** (`test-author` `e24-2-red`, 10:1x; eseguito 10:2x): RI-05 in `promptRenderer.test.ts`. Legge la
+   costante dal namespace del modulo (`Reflect.get`), così il file si carica anche prima della cura; ne controlla la
+   forma (stringa, una riga, niente backtick né `"`), la vuole una volta in `reply_instructions` di tutti gli 8 dataset
+   (chiavi marcate e le 4 lingue) e mai in `answer_focus` delle 11 analisi (con e senza note). Le parole non sono
+   fissate. **1 failed / 57 passed**: «sharedInstructions exports AI_EXPORT_NO_INVENTED_SOURCES_RULE … (found:
+   undefined)».
+2. ✅ **La cura** (10:2x, `files/e24/apply_cure_2.py`): la costante `AI_EXPORT_NO_INVENTED_SOURCES_RULE` («If you cannot
+   search, say so; never invent a source or a news item.») in `sharedInstructions.ts`, interpolata in Reply
+   Instructions subito dopo la frase della ricerca sul web; il punto Reply Instructions di `ai_export_composition.md`,
+   rifluito alla larghezza della pagina (87).
+3. ✅ **I verdi** (10:2x): Vitest `src/lib/features/ai-export` **15 file, 336 passed**; prettier pulito; `front check`
+   **0 errori, 0 avvisi** (il `Reflect.get` del test regge prima e dopo); `mkdocs build` strict ok; `check-links` 97
+   ok. Letto il render francese: la regola sta dopo la ricerca sul web e prima della frase di risposta. Nessun debito di
+   traduzione (pagina per sviluppatori). Checkpoint al coordinatore.
 
 #### E-23.1 — Le decisioni del developer (2026-10-20, 09:5x)
 > Dal coordinatore:
@@ -9142,3 +9172,69 @@ della copertura di `*.technical_prices`, righe ~150-165, e i codici). Una riga n
 >
 > I testi sono quelli proposti; il developer li vedrà nel checkpoint. **L'ordine**: E-24, poi E-23 (dopo l'ingresso di
 > E-AI503, nel prossimo treno), poi E-7. Rivede J.
+
+#### E-7 — Il segno «in attesa di verifica» nella scheda Users: analisi (2026-10-20, 09:3x–10:1x; sola lettura, base `badc30832`)
+> **La voce** (backlog E-7, coordinatore 15/10, E5 domanda 7): con la verifica dell'email accesa, chi si è registrato e
+> non ha ancora aperto il link compare in Users come un account disattivo qualunque. Fuori dalla 1.3 allora; ora in
+> coda dopo E-23 (coordinatore, 09:5x). Il prerequisito (il lotto del lock di A, A-52…A-56) è nella base.
+
+**Cosa c'è già:**
+- `AdminUserRead.holds_place` (E5b, patch facoltativa accettata il 16/10): inattivo e con un link di verifica **vivo**,
+  quindi il suo posto è già contato. `UserRow` lo usa solo per lasciare acceso **Reactivate** su un'istanza piena.
+  Lo calcolano `verification.place_holders()` (una query, per la lista) e `holds_place()` (la risposta del PATCH).
+- Il criterio dell'attesa vera è un altro: `verification.awaiting_verification()` (`verification.py:137`), inattivo con
+  un token di verifica non usato e non revocato, **vivo o scaduto**. Il login lo usa per il 403 `EMAIL_NOT_VERIFIED` e
+  per offrire «Send the link again». Nessuno pulisce i token scaduti: l'attesa finisce solo con il clic sul link, o con
+  un cambio di stato dato dall'admin (`user_service._apply_active_flag`, che revoca i token di verifica).
+- Il precedente di A (F02): `pending_setup`, il badge «Waiting for setup» **al posto** di «Deactivated», anche dopo che
+  il link è scaduto (`users.en.md`, «Waiting for Its Setup Link»), il suggerimento `pendingSetupHint` nel pannello, e
+  `data-pending-setup` sulla riga.
+- Oggi la doc dice il buco due volte: `admin/users.en.md` («its row shows **Deactivated**: this version has no badge of
+  its own for a waiting account») e `admin/email.en.md:560-561`. Tutte e due le pagine sono solo in inglese.
+
+**La proposta:**
+- **Backend** (file di A): `AdminUserRead.pending_verification: bool = False`, «inactive and waiting for its email
+  verification: a link not used, live or expired (`holds_place` says whether it still holds a place)». Per la lista una
+  query nuova, `verification.waiting_ids(session)` (come `place_holders()`, senza la condizione di scadenza); per il PATCH
+  `awaiting_verification()`. Tre righe in `api/v1/users.py`, come per `holds_place`.
+- **Frontend** (file di A): `types.ts`; `UserRow.svelte` col badge `users-badge-pending-verification` nella catena
+  `pendingSetup → pendingVerification → inactive`, `data-pending-verification` sulla riga, il suggerimento
+  `users-pending-verification-hint` nel pannello. Nessuna azione cambia: **Reactivate** resta, col motivo `limit` di oggi
+  quando il link è scaduto e l'istanza è piena.
+- **i18n** (`settings/`, ×4), testi proposti:
+  - badge: en «Waiting for verification», it «In attesa di verifica», fr «En attente de vérification», es «Pendiente de
+    verificación» (sullo schema di «Waiting for setup»);
+  - suggerimento: en «Its owner has not opened the verification link yet: signing in offers to send a new one.
+    Reactivate lets the account in at once, without the email.»; it «Il titolare non ha ancora aperto il link di verifica:
+    accedendo può farsene mandare uno nuovo. Riattiva lo fa entrare subito, senza l'email.»; fr «Son titulaire n'a pas
+    encore ouvert le lien de vérification : en se connectant, il peut s'en faire envoyer un nouveau. Réactiver le laisse
+    entrer tout de suite, sans l'e-mail.»; es «Su titular aún no ha abierto el enlace de verificación: al iniciar sesión
+    puede pedir uno nuevo. Reactivar le deja entrar de inmediato, sin el correo.»
+- **La doc**: `admin/users.en.md` (la riga della tabella dei badge, il punto di «Accounts Waiting for Their Email») e
+  `admin/email.en.md` «Waiting Accounts». Una riga nel CHANGELOG (proposta, non scritta).
+
+**I test:**
+- miei, file di E: `test_api/test_email_verification_hooks_api.py` (EVH) per la lista e il PATCH: in attesa col link
+  vivo (`pending_verification` e `holds_place` veri), col link scaduto (solo `pending_verification`), dopo **Reactivate**,
+  dopo la disattivazione dell'admin, un account disattivato qualunque, l'admin iniziale in attesa del setup;
+  `UserRow.verification.test.ts` (UVR) per il badge al posto di «Deactivated», la precedenza di `pendingSetup`, il
+  suggerimento, nessun badge per un account attivo;
+- di A: `test_users_admin_api.py` e `admin-users.spec.ts` non fissano il badge di un account in attesa (letti); nessuna
+  E2E nuova necessaria.
+
+**Superfici e conflitti:**
+- `api/v1/users.py`, `schemas/users.py`, `UserRow.svelte`, `types.ts`, `i18n/settings/*` e `admin/users.en.md` sono di
+  A: righe mie dichiarate, A rivede (il precedente di E5b).
+- N69-4 di A (gli avatar, `ac24fdf92`, in `dev_release2`) tocca le stesse righe: la firma di `_admin_user_read`, la
+  lista, la risposta del PATCH, `AdminUserRead`, `types.ts`, `UserRow.svelte`. Il codice va scritto dopo
+  l'aggiornamento della base col treno 2, non prima.
+- Nessuna migrazione: l'attesa non ha una colonna, si legge dai token.
+
+**Costo**: piccolo, circa mezza giornata (backend ~25 righe, frontend ~15, 2 chiavi ×4, ~10 casi in due file miei, due
+pagine).
+
+**Domande per il developer:**
+1. il badge anche quando il link è scaduto (consigliato, come «Waiting for setup»), o solo col link vivo;
+2. i testi del badge e del suggerimento;
+3. il comando `user list` non mostra né questa attesa né quella del setup: lasciarlo com'è (consigliato) o un segno
+   anche lì, come seguito.
