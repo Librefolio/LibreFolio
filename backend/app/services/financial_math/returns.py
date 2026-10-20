@@ -467,6 +467,8 @@ def calculate_simple_roi(current_nav: Decimal, total_invested: Decimal) -> Decim
 def calculate_simple_roi_series(
     nav_snapshots: list[NAVSnapshot],
     cash_flows: list[CashFlowInput],
+    *,
+    capital_by_date: Mapping[date, Decimal] | None = None,
 ) -> list[SimpleROIPoint]:
     """Cumulative Simple ROI series — one point per NAV snapshot.
 
@@ -474,6 +476,11 @@ def calculate_simple_roi_series(
     Net_Invested_t = max(0, -sum(CF_i for i <= t))  # deposits are < 0, withdrawals > 0.
 
     Then: ROI_t = (NAV_t - Net_Invested_t) / Net_Invested_t.
+
+    With ``capital_by_date`` (MF-E2, the lots' performance with short positions) the capital of each snapshot's date is
+    given, and the return is the gain on it: ROI_t = (NAV_t + sum(CF_i for i <= t)) / Capital_t, 0 where the capital is 0.
+    A short's NAV is negative and its sale a withdrawal, so the gain stays NAV plus the net flows; the capital it
+    commits is not the net deposit.
 
     Returns:
         List of SimpleROIPoint, one per snapshot.
@@ -497,6 +504,11 @@ def calculate_simple_roi_series(
 
         # Net invested is the opposite of cumulative CF (since deposits are negative)
         # If cumulative_cf is positive, we've withdrawn more than deposited, so invested is 0.
+        if capital_by_date is not None:
+            capital = capital_by_date[snap.date]
+            roi = Decimal("0") if capital == Decimal("0") else ((snap.nav + cumulative_cf) / capital).quantize(_PREC_PCT, rounding=ROUND_HALF_UP)
+            result.append(SimpleROIPoint(date=snap.date, roi=roi))
+            continue
         net_invested = -cumulative_cf if cumulative_cf < Decimal("0") else Decimal("0")
 
         roi = calculate_simple_roi(snap.nav, net_invested)
@@ -545,8 +557,15 @@ def calculate_twrr(
 def calculate_twrr_period_series(
     nav_snapshots: list[NAVSnapshot],
     cash_flows: list[CashFlowInput],
+    *,
+    exposure_by_date: Mapping[date, Decimal] | None = None,
 ) -> list[TWRRPeriodPoint]:
-    """Return exact sub-period HPR and unrounded cumulative TWRR values."""
+    """Return exact sub-period HPR and unrounded cumulative TWRR values.
+
+    Each sub-period's gain is divided by the NAV it starts from, or, with ``exposure_by_date`` (MF-E2, the lots'
+    performance with short positions), by the exposure of its first snapshot's date: a NAV that nets a debt against a
+    holding can be small or negative while the money at stake is not. A base of 0 gives a sub-period return of 0.
+    """
     if len(nav_snapshots) < 2:
         return []
 
@@ -564,7 +583,11 @@ def calculate_twrr_period_series(
     ):
         cash_flow = cf_by_date.get(current.date, Decimal("0"))
         value_before_cash_flow = current.nav + cash_flow
-        period_return = Decimal("0") if previous.nav == Decimal("0") else (value_before_cash_flow - previous.nav) / previous.nav
+        if exposure_by_date is None:
+            period_return = Decimal("0") if previous.nav == Decimal("0") else (value_before_cash_flow - previous.nav) / previous.nav
+        else:
+            base = exposure_by_date[previous.date]
+            period_return = Decimal("0") if base == Decimal("0") else (value_before_cash_flow - previous.nav) / base
         compound *= Decimal("1") + period_return
         result.append(
             TWRRPeriodPoint(
@@ -580,10 +603,13 @@ def calculate_twrr_period_series(
 def calculate_twrr_series(
     nav_snapshots: list[NAVSnapshot],
     cash_flows: list[CashFlowInput],
+    *,
+    exposure_by_date: Mapping[date, Decimal] | None = None,
 ) -> list[TWRRPoint]:
     """Cumulative TWRR series — one point per NAV snapshot (O(N) iterative).
 
-    At each snapshot the TWRR is the geometric product from t0 to that point.
+    At each snapshot the TWRR is the geometric product from t0 to that point. ``exposure_by_date``: the base of each
+    sub-period, as :func:`calculate_twrr_period_series` reads it.
 
     Returns:
         List of TWRRPoint, one per snapshot (excluding the first).
@@ -596,7 +622,7 @@ def calculate_twrr_series(
             date=point.date,
             twrr=point.cumulative_twrr.quantize(_PREC_PCT, rounding=ROUND_HALF_UP),
         )
-        for point in calculate_twrr_period_series(nav_snapshots, cash_flows)
+        for point in calculate_twrr_period_series(nav_snapshots, cash_flows, exposure_by_date=exposure_by_date)
     ]
 
 
