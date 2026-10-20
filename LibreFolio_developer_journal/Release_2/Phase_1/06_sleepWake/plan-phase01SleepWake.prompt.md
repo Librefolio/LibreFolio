@@ -6494,3 +6494,292 @@ cambia, e il pianificatore dei lotti tiene insieme la scheda e i suoi bersagli c
    Fuori portata, per J: `ai_export/temporal/uniform.py` (`uniform_observed_buckets`) ha una sua copia di primo,
    minimo, massimo e ultimo con la stessa regola del pari valore (riga Z-38 nel backlog).
 4. ✅ 19/10 17:15 — Checkpoint insieme a Z-29a (revisore J). Nello slot `services ai-export` intero, 1093/1093.
+
+**Revisioni** (dal coordinatore, 20/10 ~09:00). Z-29a v3: OK da MF (semantica, nessun blocco sul backend) e da J
+(`aggregation.py`); manca X (contratto), poi entra. J conferma Z-38: oggi la regola di `uniform.py` è la stessa,
+passare da `select_point` sarebbe solo un riordino. Y fa subito Z-29d-0 (la classe `_basePoint` in
+`AssetComparisonSignal`), indipendente: Z-29b la trova pronta.
+Note di MF per chi consuma la serie, **da applicare in Z-29b**:
+- (n1) il Vitest legge `compactDensityCases.json` con la regola del browser e i `max_points` che la pagina manda;
+- (n2) se un ridimensionamento cambia il passo, si rilegge: niente ri-aggregazione di un campione settimanale in mesi,
+  niente ritorno al giornaliero partendo da un campione;
+- (n3) la base della percentuale e il colore della linea leggono `sample_bounds.first` (il giorno F), non
+  `prices[0]`.
+
+Z-29a v3 con tutte e tre le revisioni OK (coordinatore, 20/10 ~09:10): entra in dev col prossimo treno, prima di Q1
+di X (costruito su `_fill_point` e `_sample_series`). Note di X:
+- **Lotto Z-29a-f, piccolo, subito dopo Z-32 (d).** Con `include_price: false` le righe dei secchi si leggono e
+  contano nel budget lo stesso: una voce che non restituisce prezzi può dare `bulk_too_many_days` (l'avevano visto
+  anche Y e MF). Proposta di X: saltare la lettura (la `resolution` viene dal solo piano); e nella descrizione di
+  `sample_bounds` aggiungere «or without prices».
+- **Requisito di Z-29b.** `bulkBatches.ts` taglia i lotti in fette contigue: un `sample_like` il cui capo finisce in un
+  altro lotto fa fallire il lotto intero (422 `unknown_key`). La voce della scheda e il suo bersaglio restano insieme,
+  anche nel nuovo taglio dopo un `bulk_too_many_days`.
+- Facoltative, non bloccanti: gli apici inversi in Swagger; l'import di `SampleResolution` da un servizio puro.
+
+### Z-32 (d) — la base suggerita dal plugin, con la scaletta: analisi (19/10 ~17:40, sola lettura, `6510fe169`)
+
+> **Risposte del developer** (dal coordinatore, 19/10 ~17:14). Q-Q1, testuale: «una lista espandibile, se per ora
+> solo GBp è ritornato, allora solo lui verrà convertito, se trovi altri asset in altre valute estendi subito o in
+> futuro quando capiteranno». Q-Q2: il messaggio specifico, con la valuta. Q-Q3: nella ricerca e in «chiedi al
+> provider». Q-Q4, la regola generale per tutti i provider: «unità per prezzo» ha un default per tipo (1 per tutto,
+> 100 per le obbligazioni, per ora unica eccezione); a ogni ricerca o «chiedi al provider» si ricalcola con la
+> scaletta, il suggerimento esplicito del plugin se c'è, altrimenti il default del tipo; in «chiedi al provider», se il
+> risultato è diverso dal valore attuale, compare nella modale come campo che migra e l'utente conferma; in creazione
+> la scelta di un risultato sovrascrive come per il nome (developer, testuale: «mi aspetto avvenga lo stesso»); gli
+> asset esistenti cambiano solo se l'utente conferma nella modale. Il coordinatore: verificare la regola delle
+> obbligazioni di oggi (il 100 che «resta») e allinearla; lotto piccolo dopo il checkpoint di Z-29a (`37c3ec3ee`,
+> `6510fe169`), prima di Z-29s; revisore X.
+
+**Oggi, la regola delle obbligazioni** (letta a `6510fe169`, `frontend/src/lib/components/assets/`):
+1. `shouldSeedBondQuoteBase` (`assetFormState.ts:28`) mette 100 solo a un `BOND` col campo esattamente a 1 e non
+   toccato (`quoteBaseQuantityTouched`).
+2. La chiama `maybeSeedBondQuoteBase` (`AssetModal.svelte:828`) in tre punti: il precompilato dell'import (`:665`;
+   l'import non manda né tipo né base, `ImportWizardModal.svelte:4836`, `:4915`: in pratica mai), la scelta di un
+   risultato di ricerca (`:765`, dopo che `applySearchResult`, `:718`, ha sovrascritto nome, tipo e valuta) e un tipo
+   scritto dal confronto (`setFieldValue('asset_type')`, `:1064`: quando l'utente applica la riga del tipo).
+3. Il cambio di tipo a mano non la chiama (`AssetModalDetails.svelte:151`, solo `onmanualedit`): compare l'avviso
+   delle obbligazioni (`:185-190`, a ogni `BOND`), il valore resta.
+4. Va in un senso solo, il «100 che resta»: un risultato `BOND` e poi uno `STOCK` lasciano 100; una riga del tipo
+   `BOND → STOCK` applicata anche.
+5. Un tasto nel campo (`AssetModalDetails.svelte:174`) la spegne per la sessione, una ricerca dopo compresa:
+   `quoteBaseQuantityTouched` torna falso solo al caricamento (`AssetModal.svelte:567`, `:616`).
+6. Non guarda `editMode`: in modifica, un risultato scelto o una riga del tipo applicata portano a 100 un asset
+   esistente a 1 (si vede nel modulo, lo scrive Salva).
+
+Il backend non ha un default per tipo: la creazione via API mette 1 a ogni tipo (`schemas/assets/assets.py:69`,
+`:209`). Resta così: è un contratto pubblico, e la scaletta riguarda la modale.
+
+**La proposta, allineata alla scaletta.**
+- Una regola sola, pura: `proposedQuoteBase(suggestion, type)` = `suggestion.quantity` se c'è, altrimenti
+  `defaultQuoteBaseQuantity(type)` (`BOND` 100, ogni altro 1, una riga per eccezione), in `assetFormState.ts` al
+  posto di `shouldSeedBondQuoteBase`.
+- Ricerca, in creazione: la scelta scrive sempre `proposedQuoteBase(suggerimento del risultato, tipo del risultato o
+  quello del modulo)`, come il nome, anche su un valore battuto prima. Il «100 che resta» sparisce: un `BOND` e poi
+  uno `STOCK` danno 100 e poi 1.
+- «Chiedi al provider», in creazione e in modifica, anche quello automatico dopo una scelta: un campo in più di
+  `compareMetadata` (`assetMetadataComparison.ts:82`, ambito `all`), con la proposta `proposedQuoteBase(suggerimento
+  della sonda, tipo del provider o quello del modulo)`. Uguale al valore → niente. Diversa → una riga del confronto
+  «Unità per singolo prezzo: 1 → 100», con sotto il perché (il messaggio di Q-Q2, o l'avviso delle obbligazioni);
+  scritta solo se l'utente la applica. Nessun riempimento silenzioso: il campo non è mai vuoto. Prende il posto della
+  semina dentro `setFieldValue('asset_type')`. Se il provider propone anche un altro tipo, le due righe stanno insieme
+  nel confronto, e la nota dice il legame.
+- Ricerca, in modifica: Q-Q6.
+- Precompilato dell'import: la base dell'import se c'è, altrimenti il default del tipo. Oggi un 1 esplicito per un
+  `BOND` diventava 100; l'import non lo manda, quindi nessun effetto visibile.
+- Cambio di tipo a mano: invariato (nessuna semina, l'avviso delle obbligazioni resta). La scaletta parla di ricerca e
+  provider; cambiarlo sarebbe un'altra decisione.
+- L'avviso nel modulo: finché il valore è quello suggerito dal plugin, sotto il campo il messaggio di Q-Q2; via al
+  primo tasto o quando un'altra scelta o riga lo cambia. Quello delle obbligazioni resta com'è.
+
+**Il contratto (backend, generico, facoltativo).**
+- `FAQuoteBaseSuggestion` (`schemas/provider.py`): `quantity: int ≥ 1` e `quote_currency: Optional[str]`, la valuta
+  di quotazione come la riporta il provider (`GBp`, non normalizzata, come `FAHistoricalData.currency`): serve al
+  messaggio, e la sonda dei metadati non ha altro modo di dirla.
+- `FAProviderSearchResultItem.quote_base_suggestion` (`schemas/provider.py:453`), letto dalla chiave omonima del dict
+  del plugin in `services/assets/search.py:324`. Un suggerimento non valido si scarta con un avviso nel log: la
+  ricerca non fallisce.
+- `ProbeMetadataResult.quote_base_suggestion` (`:425`), **accanto a `patch_data`, mai dentro**: il rinfresco dei
+  metadati scrive la patch sugli asset esistenti senza chiedere (`services/assets/metadata.py:127`, `:190`).
+- Un metodo facoltativo nuovo dei plugin asset, `suggest_quote_base(identifier, identifier_type, provider_params) ->
+  FAQuoteBaseSuggestion | None` (`services/assets/base.py`, accanto a `fetch_asset_metadata`, `:719`), predefinito
+  `None` senza rete. Lo chiama solo l'operazione dei metadati della sonda (`provider_management.py:529`), dopo la
+  patch, nello stesso tempo massimo; mai il rinfresco dei metadati, mai quello dei prezzi.
+- Yahoo: il suggerimento è `minor_unit_factor(valuta)` (`utils/currency_units.py`). Nella ricerca, dalla valuta già
+  letta per ogni risultato (`yahoo_finance/plugin.py:707`); nel metodo nuovo, da `_fetch_currency` (`:389`, in cache
+  24 h). Valuta normale o sconosciuta: nessun suggerimento.
+- `mockprov` (il plugin dei test): un suggerimento per un identificativo di prova, così API e componente si provano
+  senza rete.
+- La lista espandibile di Q-Q1 è `MINOR_UNIT_FACTORS` (`utils/currency_units.py`), già letta dalla qualità dei dati
+  (E-19b): `GBp` → 100, una riga per sottounità.
+
+**Q-Q1: `ZAc` e `ILA` non costano poco.** Oggi non si creano: `iso_currency_code` le rifiuta, e `ZAC` e `ILA` sono
+fra i codici mai rietichettati (`schemas/common.py:403`, `:468`). Né si costruiscono i loro prezzi: ogni punto di
+Yahoo porta la valuta del provider (`_map_history_prices`, `yahoo_finance/plugin.py:243`), e `Currency.validate_code`
+rifiuta `ZAC` e `ILA` (provato: «Must be ISO 4217 currency»). Un suggerimento da solo comparirebbe su una linea che
+poi fallisce. Farle funzionare vuol dire piegare `ZAc` → `ZAR` e `ILA` → `ILS` nei prezzi, nel valore corrente e nella
+valuta della ricerca di Yahoo: è Z-32 (a)/(b) del backlog, da mezza giornata a una in più, con un rischio sul cammino
+dei prezzi. Consiglio: solo `GBp` ora, le altre quando capita un asset, come dice il developer. Gli altri plugin non
+quotano in sottounità: justETF converte in EUR, USD, CHF o GBP (`justetf/plugin.py:250`), Borsa Italiana dà EUR o la
+valuta della sua API dei prezzi (`borsa_italiana/plugin.py:295`).
+
+**Q-Q2: il messaggio.** Proposta EN: «{provider} quotes this line in {currency}: one price per {quantity} units.
+Check it before saving.» IT: «{provider} quota questa linea in {currency}: un prezzo ogni {quantity} unità. Verifica
+prima di salvare.» Senza `quote_currency` (nessun plugin oggi): «{provider} quotes this line per {quantity} units.
+Check it before saving.» Due chiavi nuove in `assets.modal.*`, quattro lingue; lo stesso testo sotto la riga del
+confronto.
+
+**Domande nuove (cambiano ciò che si vede).**
+- **Q-Q5 — la spunta della riga.** Ogni riga del confronto oggi parte spuntata (`assetMetadataComparison.ts:109`,
+  `ProviderComparisonModal.svelte:118-121`). La proposta può venire dal plugin, che conosce l'unità della quotazione,
+  o solo dal default del tipo, una convenzione. Esempio: un `BOND` esistente a 1 apposta (un provider che lo quota
+  per unità), nessun suggerimento: la riga «1 → 100» spuntata, e un «Applica» senza guardare sposta le valutazioni di
+  100 volte. (a) spuntata come ogni riga (la regola alla lettera); (b) **non spuntata solo in modifica, quando la
+  proposta è il default del tipo che l'asset ha già (nessun suggerimento, nessun cambio di tipo nel confronto): il
+  valore salvato può essere voluto (consiglio)**. In creazione, e quando segue un cambio di tipo, spuntata.
+- **Q-Q6 — un risultato scelto in modifica.** Oggi, dopo la conferma del cambio d'identificativo, la scelta
+  sovrascrive nome, tipo e valuta anche in modifica. Per la base: (a) **non la scrive; la propone come riga il
+  confronto automatico che segue la scelta (consiglio)**: un asset esistente cambia solo con una conferma, e il campo
+  si perde facilmente di vista (per la valuta c'è già una conferma al salvataggio, `AssetCurrencyChangeModal`); (b) la
+  sovrascrive come il nome, e Salva è la conferma.
+
+**Chi tocca cosa.** Tutto in superfici di X, che rivede.
+- Backend: `schemas/provider.py`, `services/assets/search.py`, `services/assets/provider_management.py`,
+  `services/assets/base.py`, `asset_source_providers/yahoo_finance/plugin.py`, `asset_source_providers/mockprov/`.
+- Frontend: `assetFormState.ts`, `assetSearchSelection.ts`, `assetMetadataComparison.ts`, `AssetModal.svelte`,
+  `AssetModalDetails.svelte`, `ProviderComparisonModal.svelte` (la nota sotto la riga; con Q-Q5 (b), la spunta di
+  ogni riga invece di `true` per tutte). I tre `.svelte` vanno annunciati al coordinatore colori: l'avviso nuovo copia
+  i ruoli di quello delle obbligazioni (`text-lf-info`), `theme-roles --check` pulito.
+- i18n (`assets`), `api sync`. Doc: la guida dei plugin asset, la pagina di Yahoo (sviluppatore e utente),
+  `user/assets/create-edit` (con traduzioni: pipeline o quattro lingue a mano, da decidere col coordinatore).
+
+**Rossi prima (test-author).**
+- Backend PURE: lo schema e l'OpenAPI; la ricerca col dict del plugin (con, senza, non valido); la sonda (predefinito
+  `None`, un plugin che suggerisce, mai dentro `patch_data`); il rinfresco dei metadati che non lo chiama; Yahoo con
+  `_fetch_currency` sostituito (`GBp` → 100; `GBP`, `USD`, `None` → niente). API: `assets-provider` con `mockprov`.
+- Vitest: `assetFormState` (la scaletta), `assetSearchSelection`, `assetMetadataComparison` (uguale, riga, nota,
+  spunta per Q-Q5), `AssetModal.test.ts` (in creazione: GBp → 100 e avviso, poi `STOCK` → 1, `BOND` → 100, un valore
+  battuto sovrascritto; in modifica secondo Q-Q6).
+- Un E2E con ricerca e sonda finte (`frontend/e2e/assets/`) solo se X lo chiede, nello slot.
+
+**Costo.** Circa un giorno e mezzo: backend mezza giornata, frontend tre quarti, doc un quarto; più la revisione di
+X. Il 19/10 alle 13:00 era mezza giornata: in più la scaletta nel confronto, la modifica e la nota della riga.
+
+### Z-32 (d) — lavoro (19/10 dalle 17:50, base `6510fe169`)
+
+> **Via** (coordinatore, 19/10 ~17:40), con le risposte del developer: Q-Q1 solo `GBp` (la lista è
+> `MINOR_UNIT_FACTORS`); Q-Q2 il testo proposto; Q-Q5 **(a)**, la riga spuntata come le altre, anche quando la
+> proposta viene solo dal default del tipo; Q-Q6, testuale: «ti direi opzione a, ma anche qui la risposta giusta per
+> me è che si deve comportare come fanno già gli altri campi in quello scenario». Rossi del backend subito, poi quelli
+> del frontend. Revisore X. Colori (coordinatore colori, 19/10 ~17:50): via libera sui tre `.svelte`, nessun lavoro
+> aperto, nessuno nel baseline; l'avviso nuovo come quello delle obbligazioni (`text-lf-info` + `Info`); **non
+> toccare** in `ProviderComparisonModal.svelte` il badge del tipo col pallino (righe ~266-271, `assetTypeBadgeClass`,
+> `assetTypeBadgeDotClass`, `data-testid="asset-type-dot"`).
+
+**Q-Q6, verificato: gli altri campi si sovrascrivono, quindi la base si sovrascrive.** In modifica, a `6510fe169`:
+1. La scelta (`AssetModal.svelte:708`) con un identificativo diverso da quello salvato (`:710`) chiede prima la
+   conferma del cambio d'identificativo (`assets.confirm.identifierChanged`,
+   `AssetModalSelectionPrompts.svelte:100-103`). Confermata (`:1695`), oppure senza cambio, passa ad
+   `applySearchResult` (`:718`).
+2. Nome (`:722`), tipo (`:723`) e valuta (`:724`) vengono sovrascritti nel modulo senza guardare `editMode`, come in
+   creazione.
+3. Il confronto automatico (`:759`, dopo `resetDraftReads`, `:746`) confronta i metadati con il modulo già
+   sovrascritto: per quei campi fa una riga solo se il provider dice altro dal risultato scelto.
+4. Al salvataggio (`saveEdit`, `:1340`), nome e tipo passano senza finestre. La finestra della valuta
+   (`AssetCurrencyChangeModal`, `:1367-1374`) non conferma la scelta: risponde al rifiuto del backend di cambiare la
+   valuta di un asset con dati di mercato (`CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA`, `api/v1/assets/crud.py:140`). Per
+   la base il backend non rifiuta nulla, quindi nessuna finestra, come nome e tipo.
+
+Quindi, in creazione e in modifica, la scelta scrive la scaletta come il nome; poi il confronto automatico fa una riga
+solo se la sonda dice altro. Vale la nota del 19/10 ~17:40: la scelta di un risultato `BOND` su un asset esistente a 1
+lo porta a 100 (Salva lo scrive).
+
+**Il contratto, per i rossi.**
+- `FAQuoteBaseSuggestion` (`schemas/provider.py`, `StrictModel`): `quantity: int` ≥ 1 (1 è un suggerimento valido:
+  «per unità», sopra il default del tipo); `quote_currency: Optional[str]`, la valuta come la riporta il provider,
+  non normalizzata (`GBp`).
+- `FAProviderSearchResultItem.quote_base_suggestion` e `ProbeMetadataResult.quote_base_suggestion`:
+  `Optional[FAQuoteBaseSuggestion] = None`.
+- La ricerca legge la chiave `quote_base_suggestion` del dict di ogni risultato del plugin (un dict o un
+  `FAQuoteBaseSuggestion`). Non valida: scartata con un avviso nel log; il risultato e la ricerca restano.
+- `AssetSourceProvider.suggest_quote_base(identifier, identifier_type, provider_params=None) ->
+  FAQuoteBaseSuggestion | None`, asincrono, predefinito `None` senza I/O (`services/assets/base.py`).
+- La sonda dei metadati lo chiama attraverso `core.call_provider` **dopo** la risposta di `fetch_asset_metadata` (una
+  patch o None), con un tempo massimo suo di 5 s; se i metadati falliscono (errore, pausa, tempo scaduto) non lo
+  chiama. Il suo esito non cambia mai quello dei metadati: errore, pausa o tempo scaduto danno `None`, e la patch
+  resta com'è. La patch non contiene mai la base. Il rinfresco dei metadati non lo chiama.
+  > **⚠️ Fuori pista** (19/10 ~17:58, prima del codice): l'analisi diceva «in parallelo, stesso tempo massimo». Una
+  > chiamata parallela può prendersi la sola prova che `core.call_provider` concede alla fine di una pausa
+  > (`utils/runtime/cooldown.py`, `check`) e far rispondere «in pausa» ai metadati stessi. Una risposta durante una
+  > pausa in corso, invece, non la toglie (`succeeded`, `:214`). Quindi in sequenza; brief di test-author corretto
+  > prima dei rossi.
+- Yahoo: `minor_unit_factor` della valuta. Nella ricerca dalla valuta di ogni risultato; in `suggest_quote_base` da
+  `_fetch_currency`. Con `GBp` → `{quantity: 100, quote_currency: "GBp"}`; con `GBP`, `USD`, nessuna o vuota →
+  niente.
+- `mockprov`: la ricerca `lf-minor-unit` dà un risultato `MOCK_MINOR_UNIT` in `GBp` col suggerimento 100;
+  `suggest_quote_base("MOCK_MINOR_UNIT")` lo stesso, ogni altro identificativo `None`.
+
+**Passi.**
+1. ✅ 20/10 08:49 — Rossi del backend (test-author), scritti il 19/10 prima della pausa (18:12), tutti completi:
+   - nuovo `backend/test_scripts/test_services/test_quote_base_suggestion.py`, PURE, 25 funzioni: QBS-S01…S08
+     (schema, OpenAPI su un'app propria), R01…R03 (ricerca), B01 (base), P01…P07 (sonda), Y01, Y02 (Yahoo), M01…M04
+     (`mockprov`);
+   - `backend/test_scripts/test_api/test_assets_provider.py`: QBS-A01…A06 in coda (`import uuid`, un paragrafo nella
+     docstring del modulo; le costanti di `mockprov` scritte come stringhe, così il modulo si carica oggi);
+   - `scripts/test_runner/_backend_services.py`: `services quote-base-suggestion`, `isolation="pure"`, dopo
+     `probe-rate-limit`.
+   Ripresa (20/10): HEAD `6510fe169`, gli stessi 4 file sporchi; corsia ripopolata (08:47, `db populate --force
+   --clean`, 0 anomalie). Lint: ruff pulito; black chiedeva di spezzare una riga del runner oltre i 300 caratteri,
+   divisa in due `print_info` come nei vicini. `check-orphans` verde (08:48). Visti: 08:48
+   `services quote-base-suggestion` 44 rossi per le ragioni dette (modello, campi, metodo e costanti di `mockprov`
+   assenti; Yahoo senza suggerimento), 2 verdi per costruzione (P05, M03); 08:49 `api assets-provider` su `test_qbs`
+   5 rossi (`mockprov` senza la linea in pence, campi assenti), A05 verde per costruzione.
+   Punti aperti di test-author:
+   - (1) **lo stream della ricerca** (`search_stream`, `GET /assets/provider/search/stream`, `providers.py:206`):
+     l'autocompletamento del modulo usa lo stream, che costruisce dict a mano (`search.py:452-464`), non la ricerca
+     semplice: il suggerimento deve passare anche di lì. Dopo la cura, con un rosso in più (ordine del coordinatore);
+   - (4) metadati che rispondono None: il suggerimento si chiede lo stesso (successo falso, suggerimento presente),
+     come fa il codice;
+   - (5) «nessun suggerimento» nell'API = chiave presente e null: le due rotte non tolgono i campi non impostati
+     (nessun `response_model_exclude_*`, `providers.py:146`, `:240`), quindi vale anche sui rami d'errore della sonda;
+   - (2), (3), (6), (7), (8): annotati, nessuna azione (coercizioni di Pydantic; `patch_data` con
+     `quote_base_quantity: null` fissato come «null o assente»; scope e pausa del suggerimento non fissati; avviso con
+     il codice del provider; QBS-S08 su un'app propria, QBS-A06 sul documento del server).
+2. ✅ 20/10 09:07 — Codice del backend: `files/z32d-draft/apply_z32d_backend.py` (schema, metodo della base, ricerca,
+   sonda in sequenza con 5 s e salto per chi non sovrascrive, Yahoo, `mockprov`), provato il 19/10 su una copia di
+   `HEAD` (ruff e black puliti, `smoke_z32d_backend.py` verde, inverso uguale a HEAD). 20/10 08:50 applicato: i 6 file
+   erano a HEAD, dopo uguali all'impronta della copia; ruff e black puliti. Verdi: 08:50
+   `services quote-base-suggestion` 46/46; 08:54 `api assets-provider` intero 30/30 (24 di prima, 6 nuovi). Vicini
+   (08:54–08:56): `probe-rate-limit` 52, `rate-limit-results` 23, `provider-policy` 52, `plugin-settings-runtime` 127,
+   `provider-errors` 212 (con gli errori di Yahoo), `test-only-providers` 31, `asset-source` 61, `web-link-finder` 29,
+   `api plugin-settings` 16.
+   **Lo stream** (punto 1 di test-author): rosso QBS-R04 (test-author, un test in più nel file PURE, 26 funzioni e 47
+   casi), visto 09:04 rosso per la ragione detta (i risultati dello stream non hanno la chiave). Cura: due coppie in più
+   nello script (`search_stream` passa da `_quote_base_suggestion` e scrive il modello come JSON). Di nuovo su una copia
+   pulita di HEAD con lo script intero: ruff, black e smoke verdi, inverso uguale a HEAD; nel worktree applicate solo le
+   due coppie nuove (`files/z32d-draft/apply_z32d_stream_only.py`), i 6 file uguali all'impronta
+   (`z32d_backend_applied.md5`). Verdi: 09:05 `services quote-base-suggestion` 47/47, `rate-limit-results` 23,
+   `provider-policy` 52, `plugin-settings-runtime` 127 (tutti e tre leggono lo stream); 09:06 `api http-compression`
+   10; `api sync` ok, `generated.ts` si legge (0 errori di sintassi), `FAQuoteBaseSuggestion` presente; 09:07
+   `front check` 0 errori, 0 avvisi. Porta libera.
+   Doc per sviluppatori (docs-writer, in corso): la guida dei plugin asset e la pagina di Yahoo. Le pagine utente
+   vanno col frontend.
+3. Rossi del frontend (test-author), con Q-Q5 (a) e Q-Q6 come sopra: il contratto è pronto in
+   `files/z32d-draft/FRONTEND_CONTRACT.md` (scaletta in `assetFormState.ts`, riga e nota nel confronto, avviso sotto il
+   campo, testi in quattro lingue). In più (20/10, sola lettura): `AssetSearchAutocomplete.svelte` copia nove chiavi
+   fisse in entrambi i percorsi (stream `:346`, ricerca semplice `:408`), quindi il suggerimento va aggiunto lì,
+   altrimenti non arriva ad `applySearchResult`. Solo logica: un quarto file da annunciare al coordinatore colori.
+4. Codice del frontend; i18n (due chiavi, quattro lingue); verdi leggeri; `front check`; `theme-roles --check`.
+5. ⏳ Doc. Per sviluppatori, ✅ 20/10 09:21 (docs-writer, solo inglese, verificata da me sul codice):
+   `architecture/patterns/asset_plugin_guide.md` (la riga di `search()`, il metodo `suggest_quote_base` fra quelli
+   facoltativi, la chiave nei risultati e nello stream, la sezione nuova «🔢 Quote Base Suggestion»
+   `#quote-base-suggestion`: modello, i due posti, «suggerisci solo ciò che dicono i tuoi dati», quando il nucleo lo
+   chiede e quando no, il collaudo con `mockprov`); `backend/assets/provider_yahoo_finance.md` (la riga `GBp` della
+   storia, la ricerca, la sezione nuova `#quote-base-suggestion`, la cache delle valute);
+   `backend/assets/architecture.md` (una frase nella sonda). 09:21 `mkdocs build` stretto 0 avvisi, `check-links` 97
+   validi.
+   > **⚠️ Fuori pista** (trovato da docs-writer, verificato da me): `_fetch_currency` di Yahoo inghiotte anche un
+   > rifiuto per troppe richieste e tiene None per 24 h; c'era già per la ricerca, ora tocca anche il suggerimento. Non
+   > lo curo (fuori portata, plugin di X): riga **Z-39** nel backlog.
+   Suggerimenti di docs-writer per superfici comuni, non toccate:
+   `.github/instructions/backend-providers-asset.instructions.md:13` e la skill `asset-plugin` (`SKILL.md:67`)
+   elencano i metodi facoltativi principali. Le pagine utente
+   (`user/assets/create-edit`, `user/assets/providers/yahoo-finance`) vanno col frontend.
+6. Checkpoint del backend: ✅ 20/10 09:25, dopo di nuovo sul codice finale `api assets-provider` 30/30 (09:22) e
+   `api plugin-settings` 16 (09:23). FROZEN. Il frontend (passi 3 e 4, il via c'è già) dopo il commit del coordinatore;
+   poi Z-29a-f.
+
+**Stato alla pausa (19/10 18:20).** HEAD `6510fe169`; nessun commit, nessun comando git. File sporchi: questo piano,
+`test_assets_provider.py`, `_backend_services.py` (modificati), `test_quote_base_suggestion.py` (nuovo). Nessun codice
+di prodotto nel worktree. Nessuna corsa né server della corsia; porta 6186 libera. Le bozze sono tutte in
+`files/z32d-draft/` (nulla solo in /tmp). La data-dir `/tmp/librefolio-r13-z` sparisce col riavvio.
+
+**Ripresa, nell'ordine** (fatta il 20/10: punti 1–5, vedi i passi 1 e 2).
+1. Controllare HEAD e la base: il coordinatore la aggiorna al prossimo checkpoint.
+2. Ripopolare la corsia: `db populate --force --clean` sulla 6186.
+3. Lanciare i rossi: `services quote-base-suggestion`, poi `api assets-provider` filtrato su `qbs`. Leggerli: tutti
+   rossi per le ragioni dette, tranne le guardie.
+4. Lo stream: un rosso in più (test-author), poi la bozza estesa e di nuovo provata su una copia.
+5. `apply`, verdi, i vicini (`probe-rate-limit`, `rate-limit-results`, `provider-policy`, `asset-source`,
+   `test-only-providers`), `api sync`.
+6. Passo 3 (rossi del frontend) e seguenti.
