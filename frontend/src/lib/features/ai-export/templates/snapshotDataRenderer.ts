@@ -751,8 +751,9 @@ function renderContinuousSeries(payload: JsonRecord, directory: EntityDirectory,
  * presentation text from the backend.
  */
 export const PRICE_SERIES_GAP_MEANINGS = {
-    no_stored_price: 'no price is stored for this asset up to the end of the period, so it has no price series here: no price, return or price-based indicator can be read for it; missing data, not a zero',
-    mixed_price_currencies: 'the prices stored for this asset are not all in one currency, so they do not form a price series here: no price, return or price-based indicator can be read for it; missing data, not a zero',
+    no_stored_price: 'no price is stored for this asset up to the end of the period, so it has no price series, return or price-based indicator in the technical data; its value in the positions comes from its last trade or its cost (valuation_source); missing data, not a zero',
+    mixed_price_currencies:
+        'the prices stored for this asset are not all in one currency, so they do not form a price series in the technical data: no return or price-based indicator for it here; its value in the positions still comes from its latest stored price or a later trade, converted (valuation_source); missing data, not a zero',
 } as const satisfies Readonly<Record<string, string>>;
 
 type PriceSeriesGapCode = keyof typeof PRICE_SERIES_GAP_MEANINGS;
