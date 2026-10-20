@@ -6641,6 +6641,12 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   Avanza, Crédit Agricole, DEGIRO, Directa, Disnat, Intesa, InvestEngine, Rabobank, Saxo, Schwab. Va fatto l'inventario di quale data
   registra ciascuno; si correggono quelli che datano con la valuta. Proposta: dopo lo sprint, come W-B86. Dettagli: piano 04,
   «B-52 · La data dell'operazione: analisi», punto 9.
+- **W-B89 · La data di una transazione è ancora descritta come «settlement date»** — minimo, chiarezza; W, 20/10 (docs-writer di
+  B-52). Col principio di B-52 il campo è la data dell'operazione, ma lo descrivono ancora come data di regolamento:
+  `backend/app/db/models.py:300, 857, 884`, `schemas/transactions/transactions.py:233, 522`, `schemas/transactions/batch.py:202` e la
+  pagina `developer/backend/database/brokers_transactions.md:99`. Le descrizioni degli schemi finiscono nell'OpenAPI e nel client
+  generato. Sono file condivisi: decide il coordinatore (proposta: «the operation date, the day the operation was made»). Dettagli:
+  piano 04, «B-52 · La data dell'operazione: cura», passo 4.
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
