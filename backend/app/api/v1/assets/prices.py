@@ -167,7 +167,8 @@ async def query_prices_bulk(
     weekly or monthly, said by the result's ``resolution``. A weekly or monthly result holds one point per bucket, with
     the fill's first and last points in ``sample_bounds``; it reads one row per bucket, and its points count against the
     day budget. A comparison's target follows its card's buckets with ``sample_like``. A ``sample_like`` that names no
-    item, a repeated ``key``, a chain or another range: 422 ``sample_reference``.
+    item, a repeated ``key``, a chain or another range: 422 ``sample_reference``. Sent with ``include_price: false``,
+    such an item only gives its step: it reads no price row past its plan and counts nothing (Z-29a-f).
     """
     if len(requests) > MAX_BULK_ITEMS:
         raise HTTPException(status_code=422, detail=bulk_too_many_items_detail(len(requests), MAX_BULK_ITEMS))
