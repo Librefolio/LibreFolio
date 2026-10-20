@@ -40,11 +40,19 @@ their name (BTP, BOT, CCT…). Bonds repaid at or below par, and other redemptio
   own.
 - **Amounts as written.** Each row keeps its own currency (**Divisa**), with no conversion; the
   **Cambio** column is ignored.
-- **Dates.** LibreFolio uses the value date (**Data valuta**), or the trade date when it is missing.
-- **Only settled operations.** An operation whose date is after today has not settled yet:
-  typically one of the last one or two working days, whose value date is still ahead when you
-  export. It is not imported this time, commission included, and a blue note says how many.
-  Nothing to do: it arrives with your next export, once settled.
+- **Dates.** Each operation is recorded on the day you made it (**Operazione**): a purchase you
+  made on the 27th is a purchase of the 27th, even if the money moves a couple of days later.
+  When **Operazione** is missing, LibreFolio uses the value date (**Data valuta**).
+- **Only settled operations.** An operation whose value date (**Data valuta**) is after today has
+  not settled yet: typically one of the last one or two working days. It is not imported this
+  time, commission included, and a blue note says how many. Nothing to do: it arrives with your
+  next export, once settled, still on the day you made it.
+- **Files imported with LibreFolio 1.2 or earlier.** Those versions recorded each operation on its
+  value date. Imported again, the same operations now come with the day you made them, a day or
+  two earlier, so LibreFolio does not recognise them as [duplicates](index.md#duplicate-detection)
+  and they would count twice. So, once: delete the Fineco transactions those files created and
+  import the files again, or import only the operations after the last day you already imported.
+  From then on, importing a period again finds its duplicates as usual.
 - **Rows with a missing number.** If a row has no quantity or no amount, LibreFolio reads it as
   it is: a missing amount counts as 0, and an operation that needs a quantity cannot be
   imported without one. A blue note lists these rows and asks you to check them. The importer

@@ -191,20 +191,39 @@ mandatory for every new plugin:
 - **One source row may emit several transactions.** Keep economic legs explicit: securities-only buys can be `DEPOSIT + BUY`, sells can be `SELL + WITHDRAWAL`, maturities can be `SELL at par + INTEREST`, and snapshots can be `DEPOSIT + ADJUSTMENT` seeds.
 - **Fake asset IDs.** Emit high positive fake asset IDs (keyed by ISIN/ticker) plus
   `BRIMExtractedAssetInfo` so the core can drive the asset-matching UI.
-- **Only safe rows.** Import only rows whose date the broker will not change any more:
-  movements already settled, executed and booked. A provisional row — its value or
-  settlement date after the server's today (`server_today()` in
-  `backend/app/utils/datetime_utils.py`, never the browser's date) — is left out **whole**,
-  with every transaction it would have produced (its fee, its premium), and arrives with the
-  next import. Say so with one `severity="info"` notice per reason (a `code`,
-  `context.count`, the rows as [evidence](#brim-evidence)), never a warning: nothing is
-  wrong, the rows are simply not final yet. When the report holds no export date and no
-  status, compare the row's own date with `server_today()`: Fineco, notice
-  `fineco_not_yet_settled` ([Fineco notes](../../backend/brim/architecture.md#plugin-fineco)).
-  When it covers a known period, compare with the period's end: Danske Bank, notice
-  `excluded_not_yet_settled`, for the custody trades valued after the cash statement's last
-  day ([Finnish notices](../../backend/brim/danske_bank.md#finnish-notices)). A row the
-  broker marks by its status (reserved, cancelled, pending) follows the next rule.
+- **The operation date, and only settled rows.** Record every transaction on its
+  **operation date**, the day the operation was made (the trade date), never on the
+  settlement or value date (the developer's principle, 19/10/2026): a purchase made on the
+  27th is a `BUY` dated the 27th, whenever its cash moves. The report's other dates only
+  tell whether the row is stable and booked, read from the columns the report has:
+    - a **status** column, when there is one, decides; what it says follows the next rule
+      (reserved, cancelled or pending are known; a word the plugin does not know is
+      unknown);
+    - otherwise a **value or settlement date** after the server's today (`server_today()`
+      in `backend/app/utils/datetime_utils.py`, never the browser's date) marks a
+      provisional row: Fineco, notice `fineco_not_yet_settled`
+      ([Fineco notes](../../backend/brim/architecture.md#plugin-fineco));
+    - a report that covers a known period compares with its end instead: Danske Bank,
+      notice `excluded_not_yet_settled`, for the custody trades valued after the cash
+      statement's last day
+      ([Finnish notices](../../backend/brim/danske_bank.md#finnish-notices));
+    - with neither, the operation date itself must not be after today.
+    - A provisional row is left out **whole**, with every transaction it would have
+      produced (its fee, its premium), and arrives with the next import. Say so with one
+      `severity="info"` notice per reason (a `code`, `context.count`, the rows as
+      [evidence](#brim-evidence)), never a warning: nothing is wrong, the rows are simply
+      not final yet.
+    - A report set that compares balances with the bank's, as Danske Bank does, compares
+      them in operation-date terms. A truth on a day adds what is still **in flight** then:
+      the cash and the quantities of the trades the set imports with an operation date up to
+      that day and a value date after it (`_Analysis.in_flight`). The set opens on the eve of
+      the oldest operation date of the export, even when the cash statement starts later: the
+      statement's first balance then stands for the opening
+      ([Danske Bank → Truth points](../../backend/brim/danske_bank.md#truth-points)).
+    - **The one exception is the Generic CSV**: its files are the user's own, so the date
+      column the user maps is the transaction date, whatever it means (`trade_date`,
+      `value_date` and `settlement_date` are all aliases of its `date` column,
+      [Generic CSV](../../backend/brim/generic_csv.md)).
 - **Known rows quietly, unknown rows loudly.** Leave a row out only for a reason the plugin
   can name (lot W-B85, the developer's principle of 19/10/2026):
     - **Known and safe to leave out** — a blank, header or total row, a reservation, a row
@@ -225,7 +244,8 @@ mandatory for every new plugin:
     - **Never silently** leave out a row that may carry an economic effect (a split, a fee, a
       tax, a currency conversion) unless the plugin knows that is safe: a row it cannot
       import is unknown.
-    - The provisional rows of *Only safe rows* are neither: they keep their info note.
+    - The provisional rows of *The operation date, and only settled rows* are neither: they
+      keep their info note.
     - `report_issue` also serves a plugin in beta that imports a row but doubts its own
       reading, on an info note: Fineco's `fineco_incomplete_rows` imports the rows missing a
       required number and asks the user to open an issue if the file is right.
@@ -915,7 +935,8 @@ warnings.append(
 - `severity="info"` — *the plugin did something correct and non-obvious*: explain it. An
   unknown transaction code booked by sign, a succession row turned into a cashless
   `ADJUSTMENT`, rows left for the next import because they have not settled yet (the rule
-  *Only safe rows*, under [Import philosophy](#import-philosophy-currency-rules)). Blue,
+  *The operation date, and only settled rows*, under
+  [Import philosophy](#import-philosophy-currency-rules)). Blue,
   still surfaced in the confirmation modal.
 - `severity="warning"` — *the plugin had to fall back or guess*: look at it. Also a row left
   out because the plugin does not know it, with `context.report_issue` (the rule *Known rows
@@ -1172,7 +1193,7 @@ return info !== null && txDate !== '' && txDate < info.openedAt;
 
 Rows before the broker opening date are deselected and non-importable; rows on the opening day remain importable. The wizard offers **Edit broker date** and re-checks after broker data refresh.
 
-Do not re-check the batch's date range either: the import confirms through the transaction batch, which checks every row's date (`check_dates()`, decision N74): from 1900-01-01 to tomorrow by the server's calendar (`latest_range_end()`). A row outside it gets `dateOutOfRange` on `date` and the batch is not saved (see [Transaction dates](../../backend/transactions/service.md#transaction-dates)). For the rows it keeps, a plugin emits the date the report states. A row dated after the server's today (`server_today()`) is provisional: leave it out, with an info notice, under the rule *Only safe rows* ([Import philosophy](#import-philosophy-currency-rules)), rather than emit it. The batch would refuse anything after tomorrow with `dateOutOfRange` anyway.
+Do not re-check the batch's date range either: the import confirms through the transaction batch, which checks every row's date (`check_dates()`, decision N74): from 1900-01-01 to tomorrow by the server's calendar (`latest_range_end()`). A row outside it gets `dateOutOfRange` on `date` and the batch is not saved (see [Transaction dates](../../backend/transactions/service.md#transaction-dates)). For the rows it keeps, a plugin emits the operation date the report states. A row whose value or settlement date is after the server's today (`server_today()`) — or whose operation date is, when the report has no other date — is provisional: leave it out, with an info notice, under the rule *The operation date, and only settled rows* ([Import philosophy](#import-philosophy-currency-rules)), rather than emit it. The batch would refuse anything after tomorrow with `dateOutOfRange` anyway.
 
 ## 🔀 One plugin, several export formats
 
@@ -1413,6 +1434,12 @@ Danske places every row on the **value-date** axis:
 - **before** is up to the first checkpoint, a **gap** lies between a window and the next
   checkpoint, and **after** is beyond the last window.
 
+The axis places the rows; it does not date them. The parse records each transaction on its
+operation date, under the rule *The operation date, and only settled rows*
+([Import philosophy](#import-philosophy-currency-rules)): the custody trade date, or the `Pvm` of
+a cash-only row, its only date. Pairing, zones, `not_yet_settled` and `deferred` read the value
+date, because the bank moves the cash on that day.
+
 Every row gets exactly one outcome, with a reason when it is excluded: no row leaves the set's
 accounting, not even one left out without a notice (`reservation`).
 
@@ -1450,17 +1477,27 @@ A truth point is what the bank states at a date. The plugin returns two kinds in
   and proposes corrections.
 - **`BRIMVerification`** — `as_of`, `cash`, `evidence`: compared, never corrected.
 
-Danske puts a checkpoint on the eve of each segment (for the first one, the eve of the first day
-both files cover). Its cash is the statement's running balance at the end of that day plus the
-cash of the segment's border rows. Its positions come from proofs inside the segment, each brought
-back to the checkpoint by removing the movements imported in between:
+Danske puts a checkpoint on the eve of each segment, the day before its oldest trade date — the
+first segment's too, even when the cash statement starts after the custody export. Its cash is
+the statement's running balance at the end of that day plus the cash of the segment's border
+rows; for an opening that precedes the statement, that balance is the statement's first balance,
+the balance before its first booked row. Its positions come from proofs inside the segment, each
+brought back to the checkpoint by removing the movements imported in between:
 
 - **E1** — a `Tuotto` (income) states the shares held: exact, unless a movement of that security
   falls in the 30 days before it;
 - **E2** — the old line of a demerger states the whole holding: exact;
 - **E3** — selling more than was bought since the segment started proves **at least** the largest
   shortfall;
-- **E4** — an excluded row of the same security between the checkpoint and the proof discards it.
+- **E4** — an excluded row of the same security between the checkpoint and the proof discards it,
+  except a trade settled before the cash statement starts (`outside_cash_coverage`): that one
+  belongs to the opening.
+
+Every truth — a checkpoint's cash and positions, every verification — also adds what is **in
+flight** on its day: the cash and, for a position, the quantity of the trades the set imports
+with a trade date up to that day and a value date after it. LibreFolio records them on their
+trade date and the bank books them on their value date, so both sides compare in operation-date
+terms.
 
 Discarded proofs are reported (`proof_discarded`). A final verification compares the cash at the
 end of the last segment, or of the cash statement if it ends first. The running balance is checked
@@ -1472,7 +1509,9 @@ day by day: when it does not add up, the cash of every checkpoint becomes a veri
     A truth point may become a **checkpoint** — that is, produce corrections — only if **no future
     import will bring, one by one, the rows it summarises**. Otherwise it must be a
     **verification**. Danske's eve of a segment qualifies: it summarises only trades that no custody
-    file of the set covers. The end of the last segment does not: the next import brings its
+    file of the set covers — and, when the cash statement starts after the custody export, the
+    trades settled before the statement's first day, which the set leaves out
+    (`outside_cash_coverage`). The end of the last segment does not: the next import brings its
     `not_yet_settled` and `deferred` trades, and a correction there would count them twice.
 
 ### ⏮️ The history start (H0) {: #report-set-history }

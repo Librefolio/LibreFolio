@@ -27,14 +27,30 @@ What is pinned (B0, and design v5.3 §3.4.2–§3.4.4, §3.5, §7.1):
   ``reservation``, left out with no notice and one backend log line; every other row not
   booked stays ``status``, and its notice asks the user to open an issue (``report_issue``);
   every other notice is left as it is;
+- lot B-52, the operation date (developer's decision, 19/10/2026): a paired trade, a paired
+  ``Tuotto`` and a demerger line are recorded on the custody ``Kauppapäivä``; a cash-only
+  row keeps its ``Pvm``. Pairing, zones, ``not_yet_settled`` and ``deferred_rows`` stay on
+  the value date. Every truth at a day D is stated in operation-date terms: it adds what is
+  in flight at D, meaning the trades imported as pairs that are traded on or before D and
+  settled after it. The cash truth adds their cash, a position adds their quantity, a
+  verification adds their cash. The plugin is 1.1.0 (``TestOperationDateTruths`` and the
+  updated pins);
+- lot B-52, the A13 sets (developer's decision, 20/10/2026): a set whose cash statement
+  starts after its custody export opens like any other, on the eve of the custody export,
+  and the opening's cash is the statement's first balance. A trade straddling the
+  statement's start is imported on its trade date, after the opening, which subtracts it
+  from its positions; a trade settled before the statement stays left out
+  (``outside_cash_coverage``), its cash in that balance and its shares in the opening;
 - the exact facts of the two synthetic sample sets, "main" and "gap".
 
 Edge cases are built in temporary folders by two small writers: an XLSX custody export
 (dates as text unless asked otherwise) and a cash statement written the way the bank
 writes it (Latin-1, ``;``, LF, newest first, the running ``Saldo`` computed from the
-rows). Every value is invented. No server, no database: this module is pure. The one log
-it reads is read with ``structlog.testing.capture_logs``, behind a barrier: a canary
-through the plugin module's own logger must reach it.
+rows). Every value is invented. No server, no shared database. The module is pure, except
+for the end-to-end proofs of lot B-52: they run the gap-fix (``brim_gap_fix``) on a private
+in-memory SQLite database of their own, never the lane's. The one log it reads is read with
+``structlog.testing.capture_logs``, behind a barrier: a canary through the plugin module's
+own logger must reach it.
 
 Design: LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/design-phase00BrimReportSets.md (v5.3)
 Plan: LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md, §4 B0
@@ -55,11 +71,16 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 import openpyxl
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlmodel import SQLModel
 from structlog.testing import capture_logs
 
+import backend.app.db.models  # noqa: F401 — registers the app tables on SQLModel.metadata (the B-52 end-to-end proofs)
 from backend.app.config import PROJECT_ROOT
-from backend.app.schemas.brim import COMBINED_REQUIRED_HEADERS, BRIMCombinedTable, BRIMCoverage, BRIMParseOutput, BRIMReportRole, BRIMSetShape, is_fake_asset_id
+from backend.app.schemas.brim import COMBINED_REQUIRED_HEADERS, BRIMCombinedTable, BRIMCoverage, BRIMGapFixRequest, BRIMParseOutput, BRIMReportRole, BRIMSetShape, is_fake_asset_id
 from backend.app.schemas.common import DateRangeModel
+from backend.app.services.brim import brim_report_sets
+from backend.app.services.brim.brim_gap_fix import compute_gap_fix
 from backend.app.services.brim.brim_provider import BRIMProvider, BRIMSetRequiredError, write_combined_csv
 from backend.app.services.brim.registry import BRIMProviderRegistry
 
@@ -173,6 +194,13 @@ def _fi_date(day: date) -> str:
 
 def _from_fi_date(text: str) -> date:
     return datetime.strptime(text, "%d.%m.%Y").date()
+
+
+def _fi_date_or_none(text: str) -> Optional[date]:
+    try:
+        return _from_fi_date(text)
+    except ValueError:
+        return None
 
 
 def _business_days_after(day: date, count: int) -> date:
@@ -424,7 +452,10 @@ def _cash_type(label: str) -> str:
 
 def _owed_transactions(records: List[Dict[str, str]]) -> List[Tuple[Any, ...]]:
     """What the parse owes for each pair and standalone row, in file order:
-    ``(type, date, quantity, cash, title, description, tags)``."""
+    ``(type, date, quantity, cash, title, description, tags)``.
+
+    Lot B-52: a pair (a trade, or a ``Tuotto``) and a demerger line are dated on the custody ``Kauppapäivä`` (the trade
+    date). A cash-only row keeps its ``Pvm``, the only date it has."""
     owed = []
     for record in records:
         kind = record["lf_row_kind"]
@@ -432,13 +463,13 @@ def _owed_transactions(records: List[Dict[str, str]]) -> List[Tuple[Any, ...]]:
             order = record["custody:Toimeksiantotyyppi"]
             quantity = _number(record["custody:Määrä"])
             tx_type = "DIVIDEND" if order == "Tuotto" else ("BUY" if quantity > 0 else "SELL")
-            owed.append((tx_type, _from_fi_date(record["cash:Pvm"]), Decimal(0) if tx_type == "DIVIDEND" else quantity, _number(record["cash:Määrä"]), record["custody:Sijoituskohde"], f"{record['cash:Saaja/Maksaja']} ({order})", TAGS))
+            owed.append((tx_type, _from_fi_date(record["custody:Kauppapäivä"]), Decimal(0) if tx_type == "DIVIDEND" else quantity, _number(record["cash:Määrä"]), record["custody:Sijoituskohde"], f"{record['cash:Saaja/Maksaja']} ({order})", TAGS))
         elif kind == "standalone" and record["cash:Pvm"]:
             label = record["cash:Saaja/Maksaja"]
             owed.append((_cash_type(label), _from_fi_date(record["cash:Pvm"]), Decimal(0), _number(record["cash:Määrä"]), None, label, TAGS))
         elif kind == "standalone":
             title = record["custody:Sijoituskohde"]
-            owed.append(("ADJUSTMENT", _from_fi_date(record["custody:Arvopäivä"]), _number(record["custody:Määrä"]), None, title, f"{record['custody:Toimeksiantotyyppi']}: {title}", DEMERGER_TAGS))
+            owed.append(("ADJUSTMENT", _from_fi_date(record["custody:Kauppapäivä"]), _number(record["custody:Määrä"]), None, title, f"{record['custody:Toimeksiantotyyppi']}: {title}", DEMERGER_TAGS))
     return owed
 
 
@@ -692,7 +723,8 @@ def _merged(builder: _Builder) -> None:
 
 @scenario("late")
 def _late(builder: _Builder) -> None:
-    """A13: the cash statement starts on 03-10, after the custody export (03-01): C1 moves to 03-09.
+    """A13: the cash statement starts on 03-10, after the custody export (03-01). C1 stays on the eve of the custody
+    export, 02-28, and its cash is the statement's first balance (the developer, 20/10/2026).
 
     The statement opens with the income of a ``Tuotto``: the 30 days before it are all
     before the statement, so its proof cannot be checked (E1 ``window_not_covered``).
@@ -1046,12 +1078,12 @@ class TestIdentity:
         assert type(plugin).__module__ == PLUGIN_MODULE
 
     def test_metadata(self) -> None:
-        """Name, extensions, priority, version, icon and docs page. The version is 1.0.2 (lot W-B85) — red until the plugin
-        bumps it from 1.0.1."""
+        """Name, extensions, priority, version, icon and docs page. The version is 1.1.0 (lot B-52, the operation date) —
+        red until the plugin bumps it from 1.0.2."""
         plugin = _danske()
 
-        # 1.0.2: lot W-B85, a «Varaus» row is left out in silence and excluded_status asks for an issue (1.0.1: lot N74).
-        assert (plugin.provider_name, plugin.supported_extensions, plugin.detection_priority, plugin.plugin_version) == ("Danske Bank", [".xlsx", ".csv"], 100, "1.0.2")
+        # 1.1.0: lot B-52, trades on Kauppapäivä and truths in operation-date terms (1.0.2: lot W-B85; 1.0.1: lot N74).
+        assert (plugin.provider_name, plugin.supported_extensions, plugin.detection_priority, plugin.plugin_version) == ("Danske Bank", [".xlsx", ".csv"], 100, "1.1.0")
         assert plugin.description and plugin.description.strip()
         assert (plugin.icon_url, plugin.docs_url) == ("https://danskebank.fi/favicon.ico", "/mkdocs/user/transactions/import/danske-bank/")
         assert plugin.test_file_pattern == "danske_bank"
@@ -1071,15 +1103,15 @@ class TestIdentity:
         assert all(role.description.strip() for role in roles)
 
     def test_plugin_catalogue_shows_the_roles(self) -> None:
-        """The catalogue entry: identity, version 1.0.2 (lot W-B85) — red until the plugin bumps it from 1.0.1 — and the
+        """The catalogue entry: identity, version 1.1.0 (lot B-52) — red until the plugin bumps it from 1.0.2 — and the
         two roles."""
         plugin = _danske()
 
         info = plugin.to_plugin_info()
         catalogue = {item.code: item for item in BRIMProviderRegistry.list_plugin_info()}
 
-        # 1.0.2: lot W-B85, a «Varaus» row is left out in silence and excluded_status asks for an issue (1.0.1: lot N74).
-        assert (info.code, info.name, info.plugin_version, info.detection_priority, info.icon_url, info.docs_url) == (PLUGIN_CODE, "Danske Bank", "1.0.2", 100, plugin.icon_url, plugin.docs_url)
+        # 1.1.0: lot B-52, trades on Kauppapäivä and truths in operation-date terms (1.0.2: lot W-B85; 1.0.1: lot N74).
+        assert (info.code, info.name, info.plugin_version, info.detection_priority, info.icon_url, info.docs_url) == (PLUGIN_CODE, "Danske Bank", "1.1.0", 100, plugin.icon_url, plugin.docs_url)
         assert info.report_roles == plugin.report_roles
         assert [role.code for role in catalogue[PLUGIN_CODE].report_roles] == ["custody", "cash"]
 
@@ -1346,7 +1378,7 @@ class TestDescribeSet:
         assert "gap" not in _codes(shape.notices)
 
     def test_a_late_cash_statement_does_not_move_the_segment(self, tmp_path_factory: pytest.TempPathFactory) -> None:
-        """A13 moves the checkpoint, not the segment: the segment is the custody coverage."""
+        """A13: the segment is the custody coverage, whatever the cash statement covers."""
         shape = _danske().describe_set(_scenario_files("late", tmp_path_factory).members())
 
         assert shape.segments == [DateRangeModel(start=_d("2021-03-01"), end=_d("2021-03-31"))]
@@ -1821,7 +1853,8 @@ class TestPairing:
         assert pair["lf_row_kind"] == "pair" and pair is builder.row(records, "c")
         notices = [notice for notice in output.warnings if notice.code == "name_mismatch"]
         assert notices and all(notice.severity == "warning" for notice in notices)
-        [buy] = [tx for tx in output.transactions if tx.type.value == "BUY" and tx.date == _d("2021-03-03")]
+        # Found by its cash, not by its date: lot B-52 moves the date of a pair from the value date to the trade date.
+        [buy] = [tx for tx in output.transactions if tx.type.value == "BUY" and tx.cash is not None and tx.cash.amount == Decimal("-208")]
         assert (_names(output)[buy.asset_id], buy.description) == ("Aurora Metsä Oyj", "Osto Revontuli Oyj (Rajakurssi)")
 
     def test_names_sort_out_two_titles_with_the_same_key(self, tmp_path_factory: pytest.TempPathFactory) -> None:
@@ -1929,17 +1962,21 @@ class TestZones:
         _assert_each_source_row_once(builder.row_counts, _records(table))
 
     def test_truth_points(self, tmp_path_factory: pytest.TempPathFactory) -> None:
-        """C1: 4746.50 at the end of 02-28 plus the border orphan (−120); C2: 4557.00 at the end of 05-31 plus its orphan (−150)."""
+        """C1: 4746.50 at the end of 02-28 plus the border orphan (−120); C2: 4557.00 at the end of 05-31 plus its orphan (−150).
+
+        Nothing is in flight at either checkpoint. The verification on 06-30 is in operation-date terms (lot B-52): the
+        bank's 4305.50 at the end of the day, plus the purchase b2, traded that day and settled on 07-02 (−38), gives
+        4267.50. Red until the plugin counts the trades in flight."""
         _builder, table, _path, output = _scenario_parse("zones", tmp_path_factory)
         records = _records(table)
 
         assert [(row["lf_checkpoint"], row["lf_value"], row["lf_currency"], row["lf_zone"]) for row in _truth(records, "truth_cash")] == [("2021-02-28", "4626.50", "EUR", "before"), ("2021-05-31", "4407.00", "EUR", "gap")]
-        assert [(row["lf_checkpoint"], row["lf_value"], row["lf_currency"]) for row in _truth(records, "verification")] == [("2021-06-30", "4305.50", "EUR")]
+        assert [(row["lf_checkpoint"], row["lf_value"], row["lf_currency"]) for row in _truth(records, "verification")] == [("2021-06-30", "4267.50", "EUR")]
         assert _truth(records, "truth_position") == []
         opening, gap = _checkpoint(output, "2021-02-28"), _checkpoint(output, "2021-05-31")
         assert (opening.kind, _money(opening.cash), opening.absorbed.count, _money(opening.absorbed.opening_cash)) == ("opening", {"EUR": Decimal("4626.50")}, 5, {"EUR": Decimal("0")})
         assert (gap.kind, _money(gap.cash), gap.absorbed.count, _money(gap.absorbed.cash), gap.absorbed.opening_cash) == ("gap", {"EUR": Decimal("4407.00")}, 3, {"EUR": Decimal("-300")}, [])
-        assert [(item.as_of, _money(item.cash)) for item in output.verifications] == [(_d("2021-06-30"), {"EUR": Decimal("4305.50")})]
+        assert [(item.as_of, _money(item.cash)) for item in output.verifications] == [(_d("2021-06-30"), {"EUR": Decimal("4267.50")})]
 
 
 # =============================================================================
@@ -1950,19 +1987,28 @@ class TestZones:
 class TestTruthPoints:
     """B0 "Punti di verità": where the checkpoints are, their cash, what they absorb, the final verification, the chain."""
 
-    def test_a_late_cash_statement_moves_the_opening(self, tmp_path_factory: pytest.TempPathFactory) -> None:
-        """A13: C1 is the eve of the first cash row (03-10), its cash the balance before that row; a trade settled before is outside the coverage."""
+    def test_a_late_cash_statement_opens_on_the_eve_of_the_custody_export(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Red today: the opening is on the eve of the statement, 03-09, and k1 lies before it.
+
+        A13, the developer's decision (20/10/2026). The cash statement starts on 03-10, after the custody export (03-01).
+        The opening is on the eve of the custody export, 02-28, as for a normal set. Its cash is the statement's first
+        balance, the balance before its first row: 1000.00. It absorbs no row. The purchase k1, settled on 03-03 before
+        the statement, stays left out (``outside_cash_coverage``). It is settled after the opening, so its zone is the
+        window, like a trade settled in a hole between two statements."""
         builder, table, _path, output = _scenario_parse("late", tmp_path_factory)
         records = _records(table)
-
-        assert [(row["lf_checkpoint"], row["lf_value"], row["lf_currency"]) for row in _truth(records, "truth_cash")] == [("2021-03-09", "1000.00", "EUR")]
-        opening = _checkpoint(output, "2021-03-09")
-        assert (opening.kind, _money(opening.cash), opening.absorbed.count, opening.absorbed.rows) == ("opening", {"EUR": Decimal("1000.00")}, 0, [])
-        assert _money(opening.absorbed.opening_cash) == {"EUR": Decimal("1000.00")}
         early = builder.row(records, "k1")
-        assert (early["lf_row_kind"], early["lf_reason"]) == ("excluded", "outside_cash_coverage")
+
+        assert _member_starts(builder.members()) == (_d("2021-03-01"), _d("2021-03-10")), "premise: A13, the cash statement starts after the custody export"
+        assert (early["lf_row_kind"], early["lf_reason"]) == ("excluded", "outside_cash_coverage"), "premise: k1, settled before the statement, is left out"
         assert builder.row(records, "t") is builder.row(records, "e1")
         assert builder.row(records, "k2") is builder.row(records, "e2")
+
+        assert [(row["lf_checkpoint"], row["lf_value"], row["lf_currency"]) for row in _truth(records, "truth_cash")] == [("2021-02-28", "1000.00", "EUR")], "A13 (20/10): the opening on the eve of the custody export"
+        opening = _checkpoint(output, "2021-02-28")
+        assert (opening.kind, _money(opening.cash), opening.absorbed.count, opening.absorbed.rows) == ("opening", {"EUR": Decimal("1000.00")}, 0, [])
+        assert _money(opening.absorbed.opening_cash) == {"EUR": Decimal("1000.00")}
+        assert early["lf_zone"] == "window", "k1 is settled after the opening"
 
     def test_a_trade_settled_in_a_hole_between_cash_statements(self, tmp_path_factory: pytest.TempPathFactory) -> None:
         builder, table = _scenario("hole", tmp_path_factory)
@@ -1994,13 +2040,19 @@ class TestTruthPoints:
     @pytest.mark.parametrize(
         ("source", "name", "as_of", "amount"),
         [
-            pytest.param("sample", "main", "2020-06-26", "1994.46", id="segment-ends-first"),
+            # 1994.46 at the end of 2020-06-26, minus the Tunturi purchase traded that day and settled on 06-30 (−218).
+            pytest.param("sample", "main", "2020-06-26", "1776.46", id="segment-ends-first"),
+            # Nothing in flight: the last trade (03-31) is after V, and it is left out anyway (not_yet_settled).
             pytest.param("scenario", "early_end", "2021-03-25", "1288.50", id="cash-ends-first"),
-            pytest.param("scenario", "late", "2021-03-31", "1015.00", id="late-cash-statement"),
+            # 1015.00 at the end of 2021-03-31, minus the Kaamos purchase traded that day and settled on 04-02 (−38).
+            pytest.param("scenario", "late", "2021-03-31", "977.00", id="late-cash-statement"),
         ],
     )
     def test_the_verification_is_at_the_earlier_end(self, source: str, name: str, as_of: str, amount: str, tmp_path_factory: pytest.TempPathFactory) -> None:
-        """V = min(end of the last segment, last cash row), with the cash at the end of that day."""
+        """V = min(end of the last segment, last cash row). Its cash is in operation-date terms (lot B-52): the bank's
+        balance at the end of that day plus the cash of the trades in flight on it, meaning the pairs traded on or before V
+        and settled after it. Red until the plugin counts them, for main and late, whose last trade settles after V. Green
+        for early_end, which has nothing in flight."""
         table, _path, output = _combined(source, name, tmp_path_factory)
 
         assert [(row["lf_checkpoint"], row["lf_value"], row["lf_currency"]) for row in _truth(_records(table), "verification")] == [(as_of, amount, "EUR")]
@@ -2053,11 +2105,14 @@ class TestProofs:
         assert "proof_discarded" in _codes(output.warnings)
 
     def test_e1_is_discarded_when_the_30_days_fall_before_the_cash_statement(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """The ``Tuotto`` of "late" (03-10) is the statement's first row, so the 30 days before it are not covered. Its title
+        has no position at the opening, which is on the eve of the custody export, 02-28 (A13, 20/10/2026). Red today
+        only for that date: the opening is on 03-09."""
         _builder, table, _path, output = _scenario_parse("late", tmp_path_factory)
 
         assert [row["lf_proof"] for row in _positions_by_title(_records(table), "Aurora Metsä Oyj")] == ["discarded:E1:window_not_covered"]
-        assert "Aurora Metsä Oyj" not in _positions(output, _checkpoint(output, "2021-03-09"))
         assert "proof_discarded" in _codes(output.warnings)
+        assert "Aurora Metsä Oyj" not in _positions(output, _checkpoint(output, "2021-02-28"))
 
     def test_e2_is_discarded_by_another_movement_the_same_day(self, tmp_path_factory: pytest.TempPathFactory) -> None:
         """Without an exact proof E3 applies: a sale of 10 and the old line of 100 prove at least 110."""
@@ -2096,6 +2151,624 @@ class TestProofs:
         assert not [proof for proof in proofs if proof.startswith("exact:")]
         assert _positions(output, _checkpoint(output, "2021-02-28"))["Lumi Holding Oyj"] == (Decimal("120"), "at_least")
         assert "proof_discarded" in _codes(output.warnings)
+
+
+# =============================================================================
+# 10b. TRUTHS IN OPERATION-DATE TERMS (lot B-52, the condition of the lot)
+# =============================================================================
+#
+# Lot B-52 records a paired trade on its trade date T (custody Kauppapäivä), while the bank moves its cash on the value date
+# V (cash Pvm). Every truth at a day D is therefore stated in operation-date terms: it adds what is in flight at D, the
+# trades imported as pairs with T <= D < V. Two scenarios have a trade straddling a truth point (the final verification, a
+# gap checkpoint), and one has the normal opening, where nothing can straddle.
+#
+# The A13 sets, whose cash statement starts after the custody export, follow the developer's decision of 20/10/2026. They
+# open on the eve of the custody export, like any other set, so nothing straddles their opening either. A trade straddling
+# the statement's start is imported on its trade date, after the opening. Four scenarios pin them, two as guards.
+#
+# Every scenario starts from the usual 1000 (OPENING). The straddling ones and the A13 opening are proven end to end too,
+# with the gap-fix of a first import (``_first_import_gap_fix``).
+
+#: The real asset ids the B-52 end-to-end proofs give the fake ones, as the user does in the wizard (any id that is not fake).
+REAL_ASSET_BASE = 101
+
+
+@scenario("b52_verification")
+def _b52_verification(builder: _Builder) -> None:
+    """A sale and a purchase traded on the last custody day (03-31) settle on 04-02. The cash statement runs to 04-30, so
+    the final verification is on 03-31, between their two dates."""
+    builder.add_custody(
+        [
+            ("a", _trade("2021-03-01", "Aurora Metsä Oyj", 10, 20, -208)),  # value 03-03
+            ("s", _trade("2021-03-31", "Aurora Metsä Oyj", -4, 25, 92, kind="Päivän kurssi")),  # value 04-02
+            ("k", _kaamos("2021-03-31")),  # value 04-02
+        ]
+    )
+    builder.add_cash(
+        [
+            DEPOSIT,
+            _Cash("2021-03-03", "Osto Aurora Metsä Oyj", "-208", "ca"),
+            _Cash("2021-04-02", "Myynti Aurora Metsä Oyj", "92", "cs"),
+            _Cash("2021-04-02", "Osto Kaamos Robotics AB", "-38", "ck"),
+            _Cash("2021-04-30", "Palvelumaksut 04/2021", "-3.5", "fee"),
+        ],
+        opening=OPENING,
+    )
+
+
+@scenario("b52_a13")
+def _b52_a13(builder: _Builder) -> None:
+    """A13 with a trade straddling the start of the cash statement. The custody export starts on 03-01 and the cash
+    statement on 03-10. The Aurora purchase x, traded on 03-08, settles on 03-10, the statement's first row: it pairs. The
+    Tuotto of 04-20 (60 shares) proves Aurora's position. Two trades are left out: k1, settled on 03-03 before the
+    statement (``outside_cash_coverage``), and n, traded on 03-08 and due on 03-10 with no cash row (``no_counterpart``)."""
+    builder.add_custody(
+        [
+            ("k1", _trade("2021-03-01", "Kaamos Robotics AB", 2, 30, -68)),  # value 03-03, before the statement
+            ("x", _trade("2021-03-08", "Aurora Metsä Oyj", 10, 20, -208)),  # value 03-10
+            ("n", _trade("2021-03-08", "Lumi Holding Oyj", 5, 10, -58)),  # value 03-10, no cash row
+            ("t", _tuotto("2021-04-20", "Aurora Metsä Oyj", 60, 9)),
+        ]
+    )
+    builder.add_cash([_Cash("2021-03-10", "Osto Aurora Metsä Oyj", "-208", "cx"), _Cash("2021-04-20", "Aurora Metsä 1234567890", "9", "ct"), _Cash("2021-04-30", "Palvelumaksut 04/2021", "-3.5", "fee")], opening=OPENING)
+
+
+@scenario("b52_gap")
+def _b52_gap(builder: _Builder) -> None:
+    """Two custody exports one business day apart: trades 03-01…03-31 and 04-02…05-03, so C2 = 04-01. The Kaamos purchase
+    k, traded on 03-31, settles on 04-02: it is in flight at C2. A Saimaa purchase and a Saimaa sale on 04-01 (no custody
+    row) prove the gap and cancel out, so the gap checkpoint has nothing of its own to correct. The Tuotto of 05-03 (3
+    shares) proves Kaamos's position at C2."""
+    builder.add_custody(
+        [
+            ("a", _trade("2021-03-01", "Aurora Metsä Oyj", 10, 20, -208)),  # value 03-03
+            ("k0", _trade("2021-03-10", "Kaamos Robotics AB", 2, 30, -68)),  # value 03-12
+            ("k", _kaamos("2021-03-31")),  # value 04-02
+        ]
+    )
+    builder.add_custody([("b", _trade("2021-04-02", "Lumi Holding Oyj", 5, 10, -58)), ("t", _tuotto("2021-05-03", "Kaamos Robotics AB", 3, 1.5))])  # b: value 04-06
+    builder.add_cash(
+        [
+            DEPOSIT,
+            _Cash("2021-03-03", "Osto Aurora Metsä Oyj", "-208", "ca"),
+            _Cash("2021-03-12", "Osto Kaamos Robotics AB", "-68", "ck0"),
+            _Cash("2021-04-01", "Osto Saimaa Energia Oyj", "-300", "gb"),
+            _Cash("2021-04-01", "Myynti Saimaa Energia Oyj", "300", "gs"),
+            _Cash("2021-04-02", "Osto Kaamos Robotics AB", "-38", "ck"),
+            _Cash("2021-04-06", "Osto Lumi Holding Oyj", "-58", "cb"),
+            _Cash("2021-05-03", "Kaamos Robotics 1234567890", "1.5", "ct"),
+            _Cash("2021-05-31", "Palvelumaksut 05/2021", "-3.5", "fee"),
+        ],
+        opening=OPENING,
+    )
+
+
+@scenario("b52_opening")
+def _b52_opening(builder: _Builder) -> None:
+    """The normal opening: the cash statement starts before the custody export, so every trade is after C1 = 02-28 and
+    none can be in flight there. The segment ends with a Tuotto (both dates equal), so nothing is in flight at the
+    verification either."""
+    builder.add_custody([("a", _trade("2021-03-01", "Aurora Metsä Oyj", 10, 20, -208)), ("t", _tuotto("2021-04-20", "Aurora Metsä Oyj", 60, 9))])
+    builder.add_cash([DEPOSIT, _Cash("2021-03-03", "Osto Aurora Metsä Oyj", "-208", "ca"), _Cash("2021-04-20", "Aurora Metsä 1234567890", "9", "ct"), _Cash("2021-04-30", "Palvelumaksut 04/2021", "-3.5", "fee")], opening=OPENING)
+
+
+@scenario("b52_a13_broken")
+def _b52_a13_broken(builder: _Builder) -> None:
+    """An A13 set like "b52_a13", without k1 and n. The custody export starts on 03-08 with the Aurora purchase x, which
+    settles on 03-10, the statement's first row. A fee booked on 04-15 is missing from the statement, so the running
+    balance breaks (on 04-20) and the checkpoint's cash becomes a verification."""
+    builder.add_custody([("x", _trade("2021-03-08", "Aurora Metsä Oyj", 10, 20, -208)), ("t", _tuotto("2021-04-20", "Aurora Metsä Oyj", 60, 9))])
+    builder.add_cash(
+        [
+            _Cash("2021-03-10", "Osto Aurora Metsä Oyj", "-208", "cx"),
+            _Cash("2021-04-15", "Palvelumaksut 03/2021", "-40", hidden=True),
+            _Cash("2021-04-20", "Aurora Metsä 1234567890", "9", "ct"),
+            _Cash("2021-04-30", "Palvelumaksut 04/2021", "-3.5", "fee"),
+        ],
+        opening=OPENING,
+    )
+
+
+@scenario("b52_a13_settled_before")
+def _b52_a13_settled_before(builder: _Builder) -> None:
+    """A13 with a trade settled before the cash statement starts, and a proof of its title. The custody export starts on
+    03-01 with the Kaamos purchase k1 (2 shares), settled on 03-03; the cash statement starts on 03-10 with a fee. k1 is
+    left out (``outside_cash_coverage``): its cash is in the statement's first balance and its shares belong to the opening.
+    The Tuotto of 04-20 states those 2 Kaamos shares."""
+    builder.add_custody([("k1", _trade("2021-03-01", "Kaamos Robotics AB", 2, 30, -68)), ("t", _tuotto("2021-04-20", "Kaamos Robotics AB", 2, 3))])  # k1: value 03-03
+    builder.add_cash([_Cash("2021-03-10", "Palvelumaksut 02/2021", "-3.5", "fee1"), _Cash("2021-04-20", "Kaamos Robotics 1234567890", "3", "ct"), _Cash("2021-04-30", "Palvelumaksut 04/2021", "-3.5", "fee2")], opening=OPENING)
+
+
+@scenario("b52_a13_sell")
+def _b52_a13_sell(builder: _Builder) -> None:
+    """A13 with a sale straddling the start of the cash statement, for a title with no exact proof. The custody export
+    starts on 03-08 with the Saimaa sale s (5 shares), which settles on 03-10, the statement's first row, and ends with the
+    Kaamos purchase k of 03-31. Saimaa has no Tuotto and no demerger, so only E3 can tell the opening that at least the 5
+    shares sold were there."""
+    builder.add_custody([("s", _trade("2021-03-08", "Saimaa Energia Oyj", -5, 20, 92, kind="Päivän kurssi")), ("k", _kaamos("2021-03-31"))])  # s: value 03-10; k: value 04-02
+    builder.add_cash([_Cash("2021-03-10", "Myynti Saimaa Energia Oyj", "92", "cs"), _Cash("2021-04-02", "Osto Kaamos Robotics AB", "-38", "ck"), _Cash("2021-04-30", "Palvelumaksut 04/2021", "-3.5", "fee")], opening=OPENING)
+
+
+@scenario("b52_events")
+def _b52_events(builder: _Builder) -> None:
+    """A Tuotto and a demerger whose two dates differ. In the bank's exports they are equal; here they differ only to tell
+    the columns apart. The Tuotto is traded on 03-10 with value 03-12; the demerger lines are traded on 03-15 with value
+    03-17."""
+    tuotto = _tuotto("2021-03-10", "Aurora Metsä Oyj", 60, 9)
+    tuotto[1] = _d("2021-03-12")
+    old_line = _demerger("2021-03-15", "Lumi Holding Oyj", -100, old=True)
+    new_line = _demerger("2021-03-15", "Lumi Uusi Oyj", 100, old=False)
+    old_line[1] = new_line[1] = _d("2021-03-17")
+    builder.add_custody([("k1", _kaamos("2021-03-01")), ("t", tuotto), ("v", old_line), ("u", new_line), ("k2", _kaamos("2021-03-31"))])
+    builder.add_cash(_proof_cash(_Cash("2021-03-12", "Aurora Metsä 1234567890", "9", "ct"), last="2021-04-02"), opening=OPENING)
+
+
+def _in_flight(records: List[Dict[str, str]], day: str) -> Tuple[Decimal, Dict[str, Decimal]]:
+    """What is in flight at the end of ``day``, read from the combined table: the cash and the quantity per title of the
+    pairs that are a purchase or a sale (never a ``Tuotto``), traded on or before ``day`` (``custody:Kauppapäivä``) and
+    settled after it (``cash:Pvm``). Only a pair is imported, so only a pair can be in flight."""
+    cash, quantities = Decimal(0), defaultdict(Decimal)
+    for record in records:
+        if record["lf_row_kind"] != "pair" or record["custody:Toimeksiantotyyppi"] == "Tuotto":
+            continue
+        if _from_fi_date(record["custody:Kauppapäivä"]) <= _d(day) < _from_fi_date(record["cash:Pvm"]):
+            cash += _number(record["cash:Määrä"])
+            quantities[record["custody:Sijoituskohde"]] += _number(record["custody:Määrä"])
+    return cash, dict(quantities)
+
+
+async def _first_import_gap_fix(output: BRIMParseOutput) -> Tuple[Any, date, List[Any], Dict[str, int]]:
+    """The gap-fix of a first import, end to end, run as the wizard runs it, on a private in-memory database (never the
+    lane's).
+
+    ``apply_history`` gives the checkpoints, the verifications and H0. On a broker without a Danske history, H0 is the day
+    after the opening. The selection is every transaction dated on or after H0: the wizard hides the earlier ones, because
+    the opening already brings them. Every fake asset is resolved to a real id, as the user does in the wizard. Returns
+    the gap-fix response, H0, the selection and ``{title: real asset id}``.
+    """
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(SQLModel.metadata.create_all)
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            checkpoints, verifications, history_start = await brim_report_sets.apply_history(session, broker_id=BROKER_ID, plugin=_danske(), output=output)
+            assert history_start is not None, "premise: a first import has an H0, the day after its opening"
+            real = {fake: REAL_ASSET_BASE + index for index, fake in enumerate(sorted(output.extracted_assets))}
+            selection = [tx.model_copy(update={"asset_id": real.get(tx.asset_id, tx.asset_id)}) for tx in output.transactions if tx.date >= history_start]
+            resolved = [checkpoint.model_copy(update={"positions": [position.model_copy(update={"asset_id": real[position.asset_id]}) for position in checkpoint.positions]}) for checkpoint in checkpoints]
+            request = BRIMGapFixRequest(broker_id=BROKER_ID, plugin_code=PLUGIN_CODE, checkpoints=resolved, verifications=verifications, selection=selection)
+            response = await compute_gap_fix(session, request)
+    finally:
+        await engine.dispose()
+    names = _names(output)
+    return response, history_start, selection, {names[fake]: real_id for fake, real_id in real.items()}
+
+
+def _gap_fix_at(response: Any, as_of: str) -> Any:
+    """The gap-fix result of the checkpoint dated ``as_of``: exactly one."""
+    found = [result for result in response.checkpoints if result.as_of == _d(as_of)]
+    assert len(found) == 1, f"one gap-fix result expected at {as_of}, got {[result.as_of.isoformat() for result in response.checkpoints]}"
+    return found[0]
+
+
+def _gap_fix_verified(response: Any, as_of: str) -> Any:
+    """The gap-fix result of the verification dated ``as_of``: exactly one."""
+    found = [result for result in response.verifications if result.as_of == _d(as_of)]
+    assert len(found) == 1, f"one verification result expected at {as_of}, got {[result.as_of.isoformat() for result in response.verifications]}"
+    return found[0]
+
+
+def _gap_fix_cash(result: Any) -> Dict[str, Tuple[Decimal, Decimal, Decimal]]:
+    """``{currency: (bank, librefolio, difference)}`` of a gap-fix checkpoint or verification result."""
+    return {row.currency: (row.bank, row.librefolio, row.difference) for row in result.cash}
+
+
+def _gap_fix_positions(result: Any, titles: Dict[str, int]) -> Dict[str, Tuple[str, Decimal, Decimal, Decimal]]:
+    """``{title: (exactness, bank, librefolio, difference)}`` of a gap-fix checkpoint result."""
+    by_id = {real_id: title for title, real_id in titles.items()}
+    return {by_id[row.asset_id]: (row.exactness, row.bank, row.librefolio, row.difference) for row in result.positions}
+
+
+def _gap_fix_proposals(result: Any, titles: Dict[str, int]) -> List[Tuple[str, Optional[Decimal], Optional[str], Decimal]]:
+    """``(type, cash, title, quantity)`` of the corrections a gap-fix checkpoint result proposes, sorted by type and title."""
+    by_id = {real_id: title for title, real_id in titles.items()}
+    proposals = [(item.type.value, None if item.cash is None else item.cash.amount, by_id.get(item.asset_id), item.quantity) for item in result.proposals]
+    return sorted(proposals, key=lambda item: (item[0], item[2] or ""))
+
+
+def _ledger_quantity(response: Any, selection: Sequence[Any], asset_id: int, day: date) -> Decimal:
+    """The quantity of an asset LibreFolio holds at the end of ``day`` once the selection and every proposal are saved."""
+    rows = [*selection, *(proposal for result in response.checkpoints for proposal in result.proposals)]
+    return sum((row.quantity for row in rows if row.asset_id == asset_id and row.date <= day and row.quantity is not None), Decimal(0))
+
+
+def _ledger_cash(response: Any, selection: Sequence[Any], day: date) -> Decimal:
+    """The cash (EUR) LibreFolio holds at the end of ``day`` once the selection and every proposal are saved."""
+    rows = [*selection, *(proposal for result in response.checkpoints for proposal in result.proposals)]
+    return sum((row.cash.amount for row in rows if row.date <= day and row.cash is not None), Decimal(0))
+
+
+def _cell_day(value: Any) -> Optional[date]:
+    """A custody date cell as a date: text ``dd.mm.yyyy`` or a date cell; anything else is None."""
+    if isinstance(value, datetime):
+        return value.date()
+    return _fi_date_or_none(value) if isinstance(value, str) else None
+
+
+def _member_starts(members: Dict[str, List[Path]]) -> Tuple[Optional[date], Optional[date]]:
+    """``(custody start, first cash day)`` of a set, read from its files as written, not through the plugin.
+
+    The custody start is the first valid ``Kauppapäivä`` of the custody exports. The first cash day is the first day of a
+    posted row of the cash statements (``Toteutunut``, no «Varaus», a valid date and amount), as the running balance reads
+    them."""
+    trade_days: List[date] = []
+    for path in members.get("custody", []):
+        header, *rows = [list(row) for row in openpyxl.load_workbook(path).active.iter_rows(values_only=True)]
+        column = header.index("Kauppapäivä")
+        trade_days += [day for day in (_cell_day(row[column]) for row in rows) if day is not None]
+    cash_days: List[date] = []
+    for path in members.get("cash", []):
+        for line in path.read_bytes().decode("latin-1").split("\n")[1:]:
+            cells = line.split(";")
+            if len(cells) != len(CASH_HEADER) or cells[4] != "Toteutunut" or cells[1].startswith("Varaus"):
+                continue
+            try:
+                day, _amount = _from_fi_date(cells[0]), _number(cells[2])
+            except (ValueError, InvalidOperation):
+                continue
+            cash_days.append(day)
+    return (min(trade_days) if trade_days else None, min(cash_days) if cash_days else None)
+
+
+def _a13_shaped(members: Dict[str, List[Path]]) -> bool:
+    """A13: the set's cash statement starts after its custody export."""
+    custody_start, first_cash_day = _member_starts(members)
+    return custody_start is not None and first_cash_day is not None and first_cash_day > custody_start
+
+
+class TestOperationDateTruths:
+    """Lot B-52, the condition of the lot: the truths in operation-date terms.
+
+    A pair is recorded on its trade date T, while the bank moves its cash on the value date V. So every truth at a day D
+    adds what is in flight at D: the trades imported as pairs with T <= D < V (``_in_flight`` reads them from the combined
+    table).
+    - The cash truth of a checkpoint adds their cash (a purchase negative, a sale positive).
+    - A truth position adds their quantity, for its title.
+    - A verification adds their cash.
+    Rows that are not imported (excluded, summarized) never count. Pairing, zones, ``not_yet_settled`` and
+    ``deferred_rows`` stay on the value date.
+
+    The A13 sets follow the developer's decision of 20/10/2026. When the cash statement starts after the custody export, the
+    set opens like any other, on the eve of the custody export, where nothing is in flight. H0 is the custody export's
+    first day.
+    - The opening's cash is the statement's first balance, the balance before its first row.
+    - A trade straddling the statement's start is imported on its trade date, after the opening, and the opening's
+      positions subtract it.
+    - A trade settled before the statement stays left out (``outside_cash_coverage``): its cash is in that balance, its
+      shares belong to the opening.
+
+    Each straddling scenario is pinned twice:
+    - on the plugin's own output: the truth lines of the combined table, and the checkpoints and verifications of the parse;
+    - end to end: the gap-fix of a first import, run as the wizard runs it (``_first_import_gap_fix``). It finds nothing to
+      correct beyond the opening itself, explains every cent of the opening, and the verification is ok.
+    Both are red today, on the operation-date value, after premises that hold today. The end-to-end harness is consistent
+    today too, in value-date terms: ``test_guard_the_normal_opening_has_nothing_in_flight`` shows it on a scenario B-52 does
+    not change.
+    """
+
+    # --- 1. a trade straddling the final verification ---
+
+    def test_a_trade_straddling_the_final_verification_is_in_its_cash(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Red today: the verification is the bank's balance alone, 1292.00.
+
+        Scenario "b52_verification". The cash statement runs beyond the last custody trade (03-31), so the final
+        verification is on 03-31. The sale s (+92) and the purchase k (−38) are both traded on 03-31 and settled on 04-02,
+        so they are in flight then. The verification is 1292.00 + 92 − 38 = 1346.00, on the combined table and in the
+        parse. The trades are recorded on their trade dates (s and k on 03-31, the first purchase on 03-01). So the
+        opening (1500.00) plus the transactions dated after it, up to 03-31, gives exactly the verification."""
+        builder, table, _path, output = _scenario_parse("b52_verification", tmp_path_factory)
+        records = _records(table)
+
+        assert [builder.row(records, key)["lf_row_kind"] for key in ("a", "s", "k")] == ["pair"] * 3, "premise: the three trades pair"
+        assert [(row["lf_checkpoint"], row["lf_value"]) for row in _truth(records, "truth_cash")] == [("2021-02-28", "1500.00")], "premise: the normal opening, nothing in flight"
+        assert [row["lf_checkpoint"] for row in _truth(records, "verification")] == ["2021-03-31"], "premise: the verification is on the last custody day"
+        assert _in_flight(records, "2021-03-31") == (Decimal("54"), {"Aurora Metsä Oyj": Decimal("-4"), "Kaamos Robotics AB": Decimal("1")}), "premise: s and k are in flight on 03-31"
+
+        assert [(row["lf_checkpoint"], row["lf_value"], row["lf_currency"]) for row in _truth(records, "verification")] == [("2021-03-31", "1346.00", "EUR")], "B-52: the verification adds the trades in flight"
+        assert [(item.as_of, _money(item.cash)) for item in output.verifications] == [(_d("2021-03-31"), {"EUR": Decimal("1346.00")})]
+        assert [(tx[0], tx[1], tx[4]) for tx in _transactions(output) if tx[0] in ("BUY", "SELL")] == [
+            ("BUY", _d("2021-03-01"), "Aurora Metsä Oyj"),
+            ("SELL", _d("2021-03-31"), "Aurora Metsä Oyj"),
+            ("BUY", _d("2021-03-31"), "Kaamos Robotics AB"),
+        ], "B-52: a trade is recorded on its trade date"
+        ledger = Decimal("1500.00") + sum((tx.cash.amount for tx in output.transactions if tx.cash is not None and _d("2021-02-28") < tx.date <= _d("2021-03-31")), Decimal(0))
+        assert ledger == Decimal("1346.00"), "the opening plus the transactions dated up to the verification day is the verification"
+
+    @pytest.mark.asyncio
+    async def test_gap_fix_of_the_final_verification_finds_nothing_to_correct(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Red today: the gap-fix finds 1292.00 on both sides, which is consistent, but in value-date terms.
+
+        Scenario "b52_verification", through the gap-fix of a first import (H0 = 03-01). The opening proposes its cash,
+        1500.00, and nothing else. Every cent is explained: the deposit it absorbs (500) and the balance the statement
+        starts from (1000). The verification on 03-31 is ok, with 1346.00 on both sides: the bank's balance plus the two
+        trades in flight, and LibreFolio's ledger, where they are recorded on 03-31."""
+        _builder, _table, _path, output = _scenario_parse("b52_verification", tmp_path_factory)
+
+        response, history_start, _selection, titles = await _first_import_gap_fix(output)
+
+        assert history_start == _d("2021-03-01"), "premise: H0 is the day after the opening"
+        opening = _gap_fix_at(response, "2021-02-28")
+        assert (_gap_fix_proposals(opening, titles), opening.positions, opening.explanation.unexplained_cash) == ([("DEPOSIT", Decimal("1500.00"), None, Decimal(0))], [], []), "premise: the opening proposes its cash, all explained"
+
+        verified = _gap_fix_verified(response, "2021-03-31")
+        assert (verified.ok, _gap_fix_cash(verified)) == (True, {"EUR": (Decimal("1346.00"), Decimal("1346.00"), Decimal(0))}), "B-52: ok in operation-date terms"
+
+    # --- 2. an A13 set: the opening on the eve of the custody export (the developer, 20/10/2026) ---
+
+    def test_an_a13_set_opens_on_the_eve_of_the_custody_export(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Red today: the opening is on the eve of the statement, 03-09, and x is recorded on its value date, 03-10.
+
+        Scenario "b52_a13". The custody export starts on 03-01, the cash statement on 03-10 (A13). The developer decided
+        (20/10/2026) that the opening goes back to the eve of the custody export, 02-28, as for a normal set. Nothing is in
+        flight then: every trade comes after it.
+        - The opening's cash is the statement's first balance, the balance before its first row: 1000.00. It absorbs no
+          row.
+        - Aurora's position, proven by the Tuotto (exact:E1), is the 60 shares it holds minus the moves imported between
+          the opening and the Tuotto, by value date: 60 − 10 = 50.
+        - The purchase x, traded on 03-08 and settled on 03-10, is imported as a BUY on 03-08 (10 shares, −208), its true
+          cost. It is not left out, and it brings no new notice.
+        - k1, settled on 03-03 before the statement, stays left out (``outside_cash_coverage``). It is settled after the
+          opening, so its zone is the window. n stays left out too (``no_counterpart``).
+        - The verification (04-20) has nothing in flight and stays 801.00."""
+        builder, table, _path, output = _scenario_parse("b52_a13", tmp_path_factory)
+        records = _records(table)
+
+        assert _member_starts(builder.members()) == (_d("2021-03-01"), _d("2021-03-10")), "premise: A13, the cash statement starts after the custody export"
+        assert (builder.row(records, "x")["lf_row_kind"], builder.row(records, "x") is builder.row(records, "cx")) == ("pair", True), "premise: x pairs with the statement's first row"
+        assert [(builder.row(records, key)["lf_row_kind"], builder.row(records, key)["lf_reason"]) for key in ("k1", "n")] == [("excluded", "outside_cash_coverage"), ("excluded", "no_counterpart")], "premise: k1 and n are left out"
+        assert _in_flight(records, "2021-02-28") == (Decimal(0), {}), "premise: nothing is in flight on the eve of the custody export"
+        assert sorted(_codes(output.warnings)) == ["excluded_no_counterpart", "excluded_outside_cash_coverage"], "x is imported: no new notice"
+        assert [(row["lf_checkpoint"], row["lf_value"]) for row in _truth(records, "verification")] == [("2021-04-20", "801.00")]
+
+        assert [(row["lf_checkpoint"], row["lf_value"], row["lf_zone"]) for row in _truth(records, "truth_cash")] == [("2021-02-28", "1000.00", "before")], "A13 (20/10): the opening on the eve of the custody export, with the statement's first balance"
+        assert [(row["custody:Sijoituskohde"], row["lf_value"], row["lf_proof"]) for row in _truth(records, "truth_position", "2021-02-28")] == [("Aurora Metsä Oyj", "50", "exact:E1")], "A13 (20/10): Aurora's position at the opening, x subtracted"
+        opening = _checkpoint(output, "2021-02-28")
+        assert (opening.kind, _money(opening.cash), _positions(output, opening), opening.absorbed.count, _money(opening.absorbed.opening_cash)) == ("opening", {"EUR": Decimal("1000.00")}, {"Aurora Metsä Oyj": (Decimal("50"), "exact")}, 0, {"EUR": Decimal("1000.00")})
+        assert builder.row(records, "k1")["lf_zone"] == "window", "k1 is settled after the opening"
+        assert [tx[:5] for tx in _transactions(output) if tx[0] in ("BUY", "SELL")] == [("BUY", _d("2021-03-08"), Decimal("10"), Decimal("-208"), "Aurora Metsä Oyj")], "B-52: x is imported on its trade date"
+
+    @pytest.mark.asyncio
+    async def test_gap_fix_of_the_a13_opening_finds_nothing_to_correct(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Red today: the opening is on 03-09, H0 on 03-10, and x reaches LibreFolio as a BUY dated 03-10.
+
+        Scenario "b52_a13", through the gap-fix of a first import. The opening is on 02-28, so H0 is 03-01, the custody
+        export's first day: the wizard shows every custody trade.
+        - The opening proposes the statement's first balance (1000.00) and Aurora's 50 shares. Nothing is unexplained.
+        - x is selected as a BUY on 03-08, at its true cost (−208, 10 shares). After it LibreFolio holds 792.00 and 60
+          Aurora shares, as the bank says: the balance after x, and the shares the Tuotto of 04-20 states.
+        - The verification on 04-20 is ok (801.00).
+        The amounts are the ones of today; the dates are not."""
+        _builder, _table, _path, output = _scenario_parse("b52_a13", tmp_path_factory)
+
+        response, history_start, selection, titles = await _first_import_gap_fix(output)
+
+        assert [result.kind for result in response.checkpoints] == ["opening"], "premise: one checkpoint, the opening"
+        opening = response.checkpoints[0]
+        assert opening.explanation.unexplained_cash == [], "premise: the opening is explained to the cent"
+        verified = _gap_fix_verified(response, "2021-04-20")
+        assert (verified.ok, _gap_fix_cash(verified)) == (True, {"EUR": (Decimal("801.00"), Decimal("801.00"), Decimal(0))}), "premise: the verification is ok"
+        assert _ledger_quantity(response, selection, titles["Aurora Metsä Oyj"], _d("2021-04-20")) == Decimal("60"), "premise: LibreFolio holds the 60 shares the Tuotto states"
+        assert _gap_fix_proposals(opening, titles) == [("ADJUSTMENT", None, "Aurora Metsä Oyj", Decimal("50")), ("DEPOSIT", Decimal("1000.00"), None, Decimal(0))], "the opening proposes the statement's first balance and Aurora 50"
+        assert _gap_fix_positions(opening, titles) == {"Aurora Metsä Oyj": ("exact", Decimal("50"), Decimal(0), Decimal("50"))}
+
+        assert (opening.as_of, history_start) == (_d("2021-02-28"), _d("2021-03-01")), "A13 (20/10): the opening on the eve of the custody export, H0 its first day"
+        assert [(tx.date, tx.quantity, tx.cash.amount) for tx in selection if tx.type.value == "BUY"] == [(_d("2021-03-08"), Decimal("10"), Decimal("-208"))], "B-52: x is selected on its trade date, at its true cost"
+        after_x = (_ledger_cash(response, selection, _d("2021-03-08")), _ledger_quantity(response, selection, titles["Aurora Metsä Oyj"], _d("2021-03-08")))
+        assert after_x == (Decimal("792.00"), Decimal("60")), "after x LibreFolio holds what the bank says: 792.00 and 60 Aurora shares"
+
+    # --- 2b. A13: the rows around the statement's start (guards, green today and after) ---
+
+    @pytest.mark.asyncio
+    async def test_guard_a_trade_settled_before_the_statement_leaves_its_title_proven(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Guard, green today and after the A13 decision (20/10/2026).
+
+        Scenario "b52_a13_settled_before". k1 is traded on 03-01 and settled on 03-03, before the cash statement (03-10…).
+        - It stays left out (``outside_cash_coverage``), with the same warning as today.
+        - Its cash is in the statement's first balance, the opening's 1000.00.
+        - Its 2 shares belong to the opening, so it never discards the proof of its title. The Tuotto of 04-20 proves 2
+          Kaamos shares at the opening (exact:E1).
+        - Through the gap-fix the opening brings them: LibreFolio then holds the 2 shares the Tuotto states.
+        Read whatever the opening's date. Today it is the eve of the statement (03-09), and k1 lies before it. After the
+        decision it is the eve of the custody export (02-28), and k1 lies between the opening and the proof."""
+        builder, table, _path, output = _scenario_parse("b52_a13_settled_before", tmp_path_factory)
+        records = _records(table)
+        early = builder.row(records, "k1")
+        opening_days = [row["lf_checkpoint"] for row in _truth(records, "truth_cash")]
+        assert len(opening_days) == 1, f"premise: one checkpoint, the opening: {opening_days}"
+        opening_day = opening_days[0]
+
+        assert _member_starts(builder.members()) == (_d("2021-03-01"), _d("2021-03-10")), "premise: A13, the cash statement starts after the custody export"
+        assert builder.row(records, "t") is builder.row(records, "ct"), "premise: the Tuotto pairs"
+        assert (early["lf_row_kind"], early["lf_reason"]) == ("excluded", "outside_cash_coverage")
+        left_out = _one_notice(output, "excluded_outside_cash_coverage")
+        assert (left_out.severity, left_out.context, sorted(_shown(left_out))) == ("warning", {"count": 1, "reason": "outside_cash_coverage"}, [_line_of(records, early)]), "the same warning as today, showing k1"
+
+        assert [(row["lf_value"], row["lf_zone"]) for row in _truth(records, "truth_cash")] == [("1000.00", "before")], "the opening's cash is the statement's first balance, k1's cash inside it"
+        assert [(row["custody:Sijoituskohde"], row["lf_value"], row["lf_proof"]) for row in _truth(records, "truth_position", opening_day)] == [("Kaamos Robotics AB", "2", "exact:E1")], "k1 does not discard the proof of its title"
+        assert _positions(output, _checkpoint(output, opening_day)) == {"Kaamos Robotics AB": (Decimal("2"), "exact")}
+        assert "proof_discarded" not in _codes(output.warnings)
+
+        response, _history_start, selection, titles = await _first_import_gap_fix(output)
+
+        assert _gap_fix_proposals(_gap_fix_at(response, opening_day), titles) == [("ADJUSTMENT", None, "Kaamos Robotics AB", Decimal("2")), ("DEPOSIT", Decimal("1000.00"), None, Decimal(0))]
+        assert _ledger_quantity(response, selection, titles["Kaamos Robotics AB"], _d("2021-04-20")) == Decimal("2"), "LibreFolio holds the 2 shares the Tuotto states"
+
+    @pytest.mark.asyncio
+    async def test_guard_a_sale_straddling_the_statement_start_leaves_no_negative_position(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Guard, green today and after the A13 decision (20/10/2026).
+
+        Scenario "b52_a13_sell". The Saimaa sale s (5 shares) is traded on 03-08 and settled on 03-10, the cash statement's
+        first row, and it is imported. Saimaa has no exact proof (no Tuotto, no demerger).
+        - The E3 fallback tells the opening that at least the 5 shares sold were there: Saimaa's position at the opening is
+          at_least:E3, never below 5, and never missing.
+        - Through the gap-fix the opening brings them, so LibreFolio never holds a negative quantity of Saimaa, the day of
+          the sale included.
+        Read whatever the opening's date: today 03-09, after the decision 03-07."""
+        builder, table, _path, output = _scenario_parse("b52_a13_sell", tmp_path_factory)
+        records = _records(table)
+        sale = builder.row(records, "s")
+        sold = -_number(sale["custody:Määrä"])
+        opening_days = [row["lf_checkpoint"] for row in _truth(records, "truth_cash")]
+        assert len(opening_days) == 1, f"premise: one checkpoint, the opening: {opening_days}"
+        opening_day = opening_days[0]
+
+        assert _member_starts(builder.members()) == (_d("2021-03-08"), _d("2021-03-10")), "premise: A13, the cash statement starts after the custody export"
+        assert (sale["lf_row_kind"], sale is builder.row(records, "cs"), sold) == ("pair", True, Decimal("5")), "premise: the sale of 5 pairs with the statement's first row"
+        assert [row["lf_proof"] for row in _positions_by_title(records, "Saimaa Energia Oyj") if not row["lf_proof"].startswith("at_least:")] == [], "premise: Saimaa has no exact proof"
+
+        assert [(row["lf_checkpoint"], row["lf_proof"]) for row in _positions_by_title(records, "Saimaa Energia Oyj")] == [(opening_day, "at_least:E3")], "the E3 fallback states Saimaa at the opening"
+        assert Decimal(_positions_by_title(records, "Saimaa Energia Oyj")[0]["lf_value"]) >= sold
+        quantity, exactness = _positions(output, _checkpoint(output, opening_day))["Saimaa Energia Oyj"]
+        assert (exactness, quantity >= sold) == ("at_least", True), f"the opening holds at least the {sold} shares sold, not {quantity}"
+
+        response, _history_start, selection, titles = await _first_import_gap_fix(output)
+        saimaa = titles["Saimaa Energia Oyj"]
+        proposals = [proposal for result in response.checkpoints for proposal in result.proposals]
+
+        assert [(tx.type.value, tx.quantity) for tx in selection if tx.asset_id == saimaa] == [("SELL", -sold)], "premise: the sale is selected"
+        brought = [item for item in _gap_fix_proposals(_gap_fix_at(response, opening_day), titles) if item[2] == "Saimaa Energia Oyj"]
+        assert [(item[0], item[3] >= sold) for item in brought] == [("ADJUSTMENT", True)], f"the opening brings at least the {sold} shares sold: {brought}"
+        holdings = {day.isoformat(): _ledger_quantity(response, selection, saimaa, day) for day in sorted({row.date for row in [*selection, *proposals] if row.asset_id == saimaa})}
+        assert min(holdings.values()) >= 0, f"LibreFolio holds a negative quantity of Saimaa: {holdings}"
+        assert _ledger_quantity(response, selection, saimaa, _d("2021-03-10")) >= 0, "after the sale (recorded on or before its value date, 03-10)"
+
+    # --- 3. a trade straddling a gap checkpoint ---
+
+    def test_a_trade_straddling_a_gap_checkpoint_is_in_its_truths(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Red today: the gap checkpoint's cash is 1224.00 and Kaamos's position 2, in value-date terms.
+
+        Scenario "b52_gap". The two custody exports end on 03-31 and start on 04-02, closer than the settlement lag (5
+        business days). A Saimaa purchase and a Saimaa sale on 04-01 prove the gap, so C2 = 04-01. The Kaamos purchase k,
+        traded on 03-31 and settled on 04-02, is in flight at C2.
+        - C2's cash is 1224.00 − 38 = 1186.00.
+        - Kaamos's position, proven by the Tuotto of 05-03 (exact:E1), is 2 + 1 = 3, the shares the Tuotto holds.
+        - k is recorded on 03-31.
+        - Nothing is in flight at the opening (1500.00) or at the verification (05-03, 1129.50)."""
+        builder, table, _path, output = _scenario_parse("b52_gap", tmp_path_factory)
+        records = _records(table)
+
+        assert table.summary["gaps"] == [{"start": "2021-04-01", "end": "2021-04-01"}], "premise: a proven gap of one day"
+        assert [(builder.row(records, key)["lf_row_kind"], builder.row(records, key)["lf_checkpoint"]) for key in ("gb", "gs")] == [("summarized", "2021-04-01")] * 2, "premise: the gap's trades are summarized into C2"
+        assert builder.row(records, "k") is builder.row(records, "ck"), "premise: k pairs"
+        assert _in_flight(records, "2021-04-01") == (Decimal("-38"), {"Kaamos Robotics AB": Decimal("1")}), "premise: k alone is in flight at C2"
+
+        assert [(row["lf_checkpoint"], row["lf_value"], row["lf_zone"]) for row in _truth(records, "truth_cash")] == [("2021-02-28", "1500.00", "before"), ("2021-04-01", "1186.00", "gap")], "B-52: C2's cash adds k"
+        assert [(row["custody:Sijoituskohde"], row["lf_value"], row["lf_proof"]) for row in _truth(records, "truth_position", "2021-04-01")] == [("Kaamos Robotics AB", "3", "exact:E1")], "B-52: Kaamos's position adds k"
+        gap = _checkpoint(output, "2021-04-01")
+        assert (gap.kind, _money(gap.cash), _positions(output, gap)) == ("gap", {"EUR": Decimal("1186.00")}, {"Kaamos Robotics AB": (Decimal("3"), "exact")})
+        assert [(tx[1], tx[2]) for tx in _transactions(output) if tx[0] == "BUY" and tx[4] == "Kaamos Robotics AB"] == [(_d("2021-03-10"), Decimal("2")), (_d("2021-03-31"), Decimal("1"))], "B-52: k0 and k on their trade dates"
+        assert [(row["lf_checkpoint"], row["lf_value"]) for row in _truth(records, "verification")] == [("2021-05-03", "1129.50")]
+
+    @pytest.mark.asyncio
+    async def test_gap_fix_of_the_gap_checkpoint_finds_nothing_to_correct(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Red today: at C2 the gap-fix finds 1224.00 and 2 Kaamos on both sides, which is consistent, but in value-date
+        terms.
+
+        Scenario "b52_gap", through the gap-fix of a first import (H0 = 03-01). The opening proposes its 1500.00, all
+        explained. At C2 (04-01) nothing is proposed and nothing is unexplained, because the gap's two summarized trades
+        cancel out. Both sides say 1186.00 and 3 Kaamos: on the bank's side k is in flight, on LibreFolio's side k is
+        recorded on 03-31. The verification on 05-03 is ok (1129.50)."""
+        _builder, _table, _path, output = _scenario_parse("b52_gap", tmp_path_factory)
+
+        response, history_start, _selection, titles = await _first_import_gap_fix(output)
+
+        assert history_start == _d("2021-03-01"), "premise: H0 is the day after the opening"
+        opening, gap = _gap_fix_at(response, "2021-02-28"), _gap_fix_at(response, "2021-04-01")
+        assert (_gap_fix_proposals(opening, titles), opening.explanation.unexplained_cash) == ([("DEPOSIT", Decimal("1500.00"), None, Decimal(0))], []), "premise: the opening proposes its cash, all explained"
+        assert (gap.proposals, gap.explanation.unexplained_cash) == ([], []), "premise: nothing to correct at the gap checkpoint"
+        verified = _gap_fix_verified(response, "2021-05-03")
+        assert (verified.ok, _gap_fix_cash(verified)) == (True, {"EUR": (Decimal("1129.50"), Decimal("1129.50"), Decimal(0))}), "premise: the verification is ok"
+
+        assert _gap_fix_cash(gap) == {"EUR": (Decimal("1186.00"), Decimal("1186.00"), Decimal(0))}, "B-52: C2 in operation-date terms"
+        assert _gap_fix_positions(gap, titles) == {"Kaamos Robotics AB": ("exact", Decimal("3"), Decimal("3"), Decimal(0))}
+
+    # --- 4. the normal opening (guard) ---
+
+    @pytest.mark.asyncio
+    async def test_guard_the_normal_opening_has_nothing_in_flight(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Guard, green today and after B-52.
+
+        Scenario "b52_opening". The cash statement starts before the custody export, so every trade is after C1 = 02-28
+        and nothing is in flight there. The segment ends with a Tuotto, so nothing is in flight at the verification
+        (04-20) either. The truths stay as they are: 1500.00 and 50 Aurora at the opening, 1301.00 at the verification.
+        The gap-fix of the first import proposes the opening and nothing else, all explained, and the verification is
+        ok. So the end-to-end harness of this class is consistent today."""
+        _builder, table, _path, output = _scenario_parse("b52_opening", tmp_path_factory)
+        records = _records(table)
+
+        assert (_in_flight(records, "2021-02-28"), _in_flight(records, "2021-04-20")) == ((Decimal(0), {}), (Decimal(0), {})), "premise: nothing in flight"
+        assert [(row["lf_checkpoint"], row["lf_value"]) for row in _truth(records, "truth_cash")] == [("2021-02-28", "1500.00")]
+        assert [(row["custody:Sijoituskohde"], row["lf_value"], row["lf_proof"]) for row in _truth(records, "truth_position")] == [("Aurora Metsä Oyj", "50", "exact:E1")]
+        assert [(row["lf_checkpoint"], row["lf_value"]) for row in _truth(records, "verification")] == [("2021-04-20", "1301.00")]
+
+        response, history_start, _selection, titles = await _first_import_gap_fix(output)
+
+        assert history_start == _d("2021-03-01")
+        opening = _gap_fix_at(response, "2021-02-28")
+        assert _gap_fix_proposals(opening, titles) == [("ADJUSTMENT", None, "Aurora Metsä Oyj", Decimal("50")), ("DEPOSIT", Decimal("1500.00"), None, Decimal(0))]
+        assert opening.explanation.unexplained_cash == []
+        verified = _gap_fix_verified(response, "2021-04-20")
+        assert (verified.ok, _gap_fix_cash(verified)) == (True, {"EUR": (Decimal("1301.00"), Decimal("1301.00"), Decimal(0))})
+
+    # --- what never counts, and the other truths at a day ---
+
+    def test_guard_a_trade_left_out_is_never_in_flight(self) -> None:
+        """Guard, green today and after B-52. In the gap sample, the last Saimaa purchase is traded on 2021-02-26, the day of
+        the final verification, and settles on 03-02, after the statement's last row. It is left out
+        (``not_yet_settled``), so it is not in flight, and the verification stays the bank's balance, 4363.42."""
+        records = _records(_sample_table("gap"))
+        straddling = _data_row(records, "custody", 2, 5)
+
+        assert (straddling["lf_row_kind"], straddling["lf_reason"], straddling["custody:Kauppapäivä"], straddling["custody:Arvopäivä"]) == ("excluded", "not_yet_settled", "26.02.2021", "02.03.2021"), "premise: a trade straddling the verification, left out"
+        assert _in_flight(records, "2021-02-26") == (Decimal(0), {})
+        assert [(row["lf_checkpoint"], row["lf_value"]) for row in _truth(records, "verification")] == [("2021-02-26", "4363.42")]
+
+    def test_a_broken_chain_verification_at_the_a13_opening_is_the_statements_first_balance(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Red today: the checkpoint and its verification are on the eve of the statement, 03-09.
+
+        Scenario "b52_a13_broken". It is an A13 set whose custody export starts on 03-08 with the purchase x (settled on
+        03-10, the statement's first row). A fee missing from the statement breaks the running balance. With the chain
+        broken, the plugin states no cash at the opening, and a verification there instead.
+        - The opening is on the eve of the custody export (A13, 20/10/2026): 03-07.
+        - Nothing is in flight then, so the opening's verification is the statement's first balance, 1000.00.
+        - The final verification (04-20) is the bank's balance after the break, 761.00, with nothing in flight."""
+        builder, table, _path, output = _scenario_parse("b52_a13_broken", tmp_path_factory)
+        records = _records(table)
+
+        assert _member_starts(builder.members()) == (_d("2021-03-08"), _d("2021-03-10")), "premise: A13, the cash statement starts after the custody export"
+        assert (builder.row(records, "x")["lf_row_kind"], builder.row(records, "x") is builder.row(records, "cx")) == ("pair", True), "premise: x pairs with the statement's first row"
+        assert (table.summary["balance_chain"], [(row["lf_value"], row["lf_reason"]) for row in _truth(records, "truth_cash")]) == ("broken", [("", "balance_chain_broken")]), "premise: the chain is broken, the opening states no cash"
+        assert _in_flight(records, "2021-03-07") == (Decimal(0), {}), "premise: nothing is in flight on the eve of the custody export"
+
+        assert [row["lf_checkpoint"] for row in _truth(records, "truth_cash")] == ["2021-03-07"], "A13 (20/10): the opening on the eve of the custody export"
+        assert [(row["lf_checkpoint"], row["lf_value"]) for row in _truth(records, "verification")] == [("2021-03-07", "1000.00"), ("2021-04-20", "761.00")], "the opening's verification is the statement's first balance"
+        assert _checkpoint(output, "2021-03-07").cash == []
+        assert [(item.as_of, _money(item.cash)) for item in output.verifications] == [(_d("2021-03-07"), {"EUR": Decimal("1000.00")}), (_d("2021-04-20"), {"EUR": Decimal("761.00")})]
+
+    def test_a_tuotto_and_a_demerger_are_recorded_on_their_trade_date(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Red today: the DIVIDEND is dated 03-12 (the cash ``Pvm``) and the demerger lines 03-17 (``Arvopäivä``).
+
+        Contract (B-52): a paired ``Tuotto`` and a demerger line are recorded on ``custody:Kauppapäivä``, like a trade. In
+        the bank's exports their two dates are equal. Scenario "b52_events" makes them differ only to tell the columns
+        apart: the DIVIDEND is recorded on 03-10 and both demerger lines on 03-15."""
+        builder, table, _path, output = _scenario_parse("b52_events", tmp_path_factory)
+        records = _records(table)
+
+        assert (builder.row(records, "t")["lf_row_kind"], builder.row(records, "t") is builder.row(records, "ct")) == ("pair", True), "premise: the Tuotto pairs on its value date"
+        assert [builder.row(records, key)["lf_row_kind"] for key in ("v", "u")] == ["standalone"] * 2, "premise: the demerger lines are standalone"
+
+        events = [(tx[0], tx[1], tx[4]) for tx in _transactions(output) if tx[0] in ("DIVIDEND", "ADJUSTMENT")]
+        assert events == [("DIVIDEND", _d("2021-03-10"), "Aurora Metsä Oyj"), ("ADJUSTMENT", _d("2021-03-15"), "Lumi Holding Oyj"), ("ADJUSTMENT", _d("2021-03-15"), "Lumi Uusi Oyj")], "B-52: events on Kauppapäivä"
 
 
 # =============================================================================
@@ -2283,7 +2956,10 @@ class TestParseContract:
 
     @pytest.mark.parametrize(("source", "name"), PARSED_SETS)
     def test_transactions_follow_the_combined_rows(self, source: str, name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
-        """One per pair and standalone row, in file order: type, value date, quantity, cash, title, description and tags."""
+        """One per pair and standalone row, in file order: type, date, quantity, cash, title, description and tags.
+
+        Lot B-52: a pair and a demerger line are dated on the trade date (``custody:Kauppapäivä``), a cash-only row on its
+        ``Pvm``. Red until the plugin dates the pairs that way: every set here has a pair whose two dates differ."""
         table, _path, output = _combined(source, name, tmp_path_factory)
 
         assert _transactions(output) == _owed_transactions(_records(table))
@@ -2331,7 +3007,10 @@ class TestParseContract:
 
     @pytest.mark.parametrize(("source", "name"), PARSED_SETS)
     def test_charges_todo_context(self, source: str, name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
-        """The split channel: row (a line of the combined file), cash, currency, no nominal, the hint, suggestions — and the charges when plausible in EUR."""
+        """The split channel: row (a line of the combined file), cash, currency, no nominal, the hint, suggestions — and the charges when plausible in EUR.
+
+        The row is the pair the trade comes from: same title, and (lot B-52) its trade date ``custody:Kauppapäivä`` is the
+        transaction's date. Red until the plugin dates the trades that way."""
         table, _path, output = _combined(source, name, tmp_path_factory)
         records = _records(table)
         names = _names(output)
@@ -2345,7 +3024,7 @@ class TestParseContract:
             assert set(CHARGES_CONTEXT) <= set(context), where
             assert isinstance(context["row"], int) and 2 <= context["row"] <= len(records) + 1, where
             record = records[context["row"] - 2]
-            assert (record["lf_row_kind"], _from_fi_date(record["cash:Pvm"]), record["custody:Sijoituskohde"]) == ("pair", tx.date, names[tx.asset_id]), where
+            assert (record["lf_row_kind"], _from_fi_date(record["custody:Kauppapäivä"]), record["custody:Sijoituskohde"]) == ("pair", tx.date, names[tx.asset_id]), where
             assert context["cash"] == f"{abs(tx.cash.amount):.2f}", f"{where}: cash is the absolute amount with two decimals"
             assert (context["currency"], context["compare_nominal"], context["split_hint"]) == ("EUR", False, "trade_charges"), where
             suggestions = context["split_suggestions"]
@@ -2445,7 +3124,9 @@ class TestParseContract:
 # 13. THE MAIN SAMPLE SET
 # =============================================================================
 
-# (type, value date, quantity, cash, title, description), in the order of the combined file.
+# (type, date, quantity, cash, title, description), in the order of the combined file (by value date). Lot B-52: a paired
+# trade is dated on its trade date (custody Kauppapäivä), two business days before its cash row here; a Tuotto and a
+# demerger have both dates equal; a cash-only row keeps its Pvm.
 MAIN_TRANSACTIONS = [
     ("DEPOSIT", "2019-01-07", "0", "6000", None, "Matti Meikäläinen"),
     ("FEE", "2019-03-29", "0", "-3.5", None, "Palvelumaksut 03/2019"),
@@ -2454,25 +3135,25 @@ MAIN_TRANSACTIONS = [
     ("TAX", "2019-11-04", "0", "-21.3", None, "Vero osakesäästötililtä"),
     ("WITHDRAWAL", "2019-11-04", "0", "-300", None, "Nosto osakesäästötililtä"),
     ("FEE", "2019-12-31", "0", "-3.5", None, "Palvelumaksut 12/2019"),
-    ("BUY", "2020-02-05", "300", "-1181.04", "Kaamos Robotics AB", "Osto Kaamos Robotics AB (Rajakurssi)"),
-    ("BUY", "2020-02-12", "50", "-718", "Aurora Metsä Oyj", "Osto Aurora Metsä Oyj (Rajakurssi)"),
-    ("BUY", "2020-03-04", "40", "-402", "Lumi Holding Oyj", "Osto Lumi Holding Oyj (Pikakauppa)"),
-    ("SELL", "2020-03-12", "-120", "724", "Pohjola Tekniikka Oyj", "Myynti Pohjola Tekniikka (Päivän kurssi)"),
+    ("BUY", "2020-02-03", "300", "-1181.04", "Kaamos Robotics AB", "Osto Kaamos Robotics AB (Rajakurssi)"),
+    ("BUY", "2020-02-10", "50", "-718", "Aurora Metsä Oyj", "Osto Aurora Metsä Oyj (Rajakurssi)"),
+    ("BUY", "2020-03-02", "40", "-402", "Lumi Holding Oyj", "Osto Lumi Holding Oyj (Pikakauppa)"),
+    ("SELL", "2020-03-10", "-120", "724", "Pohjola Tekniikka Oyj", "Myynti Pohjola Tekniikka (Päivän kurssi)"),
     ("DEPOSIT", "2020-03-20", "0", "1000", None, "Matti Meikäläinen"),
-    ("BUY", "2020-03-27", "25", "-318", "Saimaa Energia Oyj", "Osto Saimaa Energia Oyj (Rajakurssi)"),
-    ("BUY", "2020-03-27", "25", "-318", "Saimaa Energia Oyj", "Osto Saimaa Energia Oyj (Rajakurssi)"),
+    ("BUY", "2020-03-25", "25", "-318", "Saimaa Energia Oyj", "Osto Saimaa Energia Oyj (Rajakurssi)"),
+    ("BUY", "2020-03-25", "25", "-318", "Saimaa Energia Oyj", "Osto Saimaa Energia Oyj (Rajakurssi)"),
     ("FEE", "2020-03-31", "0", "-3.5", None, "Palvelumaksut 03/2020"),
-    ("BUY", "2020-04-03", "20", "-116", "Pohjola Tekniikka Oyj", "Osto Pohjola Tekniikka O (Rajakurssi)"),
+    ("BUY", "2020-04-01", "20", "-116", "Pohjola Tekniikka Oyj", "Osto Pohjola Tekniikka O (Rajakurssi)"),
     ("DIVIDEND", "2020-04-15", "0", "22.5", "Aurora Metsä Oyj", "Aurora Metsä 4820193756 (Tuotto)"),
-    ("SELL", "2020-05-07", "-80", "532", "Pohjola Tekniikka Oyj", "Myynti Pohjola Tekniikka (Päivän kurssi)"),
-    ("SELL", "2020-05-22", "-30", "466", "Aurora Metsä Oyj", "Myynti Aurora Metsä Oyj (Rajakurssi)"),
+    ("SELL", "2020-05-05", "-80", "532", "Pohjola Tekniikka Oyj", "Myynti Pohjola Tekniikka (Päivän kurssi)"),
+    ("SELL", "2020-05-20", "-30", "466", "Aurora Metsä Oyj", "Myynti Aurora Metsä Oyj (Rajakurssi)"),
     ("ADJUSTMENT", "2020-06-01", "-100", None, "Lumi Holding Oyj", "Jakautuminen, vanha: Lumi Holding Oyj"),
     ("ADJUSTMENT", "2020-06-01", "100", None, "Lumi Kiinteistöt Oyj", "Jakautuminen, uusi: Lumi Kiinteistöt Oyj"),
     ("ADJUSTMENT", "2020-06-01", "100", None, "Lumi Palvelut Oyj", "Jakautuminen, uusi: Lumi Palvelut Oyj"),
     ("TAX", "2020-06-10", "0", "-45", None, "Vero osakesäästötililtä"),
     ("WITHDRAWAL", "2020-06-10", "0", "-500", None, "Nosto osakesäästötililtä"),
-    ("SELL", "2020-06-17", "-50", "152", "Lumi Palvelut Oyj", "Myynti Lumi Palvelut Oyj (Päivän kurssi)"),
-    ("BUY", "2020-06-30", "10", "-218", "Tunturi Pankki Oyj", "Osto Tunturi Pankki Oyj (Rajakurssi)"),
+    ("SELL", "2020-06-15", "-50", "152", "Lumi Palvelut Oyj", "Myynti Lumi Palvelut Oyj (Päivän kurssi)"),
+    ("BUY", "2020-06-26", "10", "-218", "Tunturi Pankki Oyj", "Osto Tunturi Pankki Oyj (Rajakurssi)"),
     ("FEE", "2020-06-30", "0", "-3.5", None, "Palvelumaksut 06/2020"),
 ]
 # custody line -> cash line of every pair but the two identical partial fills (custody 14 and 15, cash 13 and 14).
@@ -2569,7 +3250,12 @@ class TestMainSampleFacts:
         assert (row["lf_reason"], row["lf_checkpoint"]) == ("", checkpoint)
 
     def test_truth_rows(self) -> None:
-        """C1 = 2020-02-02: 2819.50 at the end of the day, minus the border orphan (−120 settled 2020-02-03)."""
+        """C1 = 2020-02-02: 2819.50 at the end of the day, minus the border orphan (−120 settled 2020-02-03). Nothing is in
+        flight at C1: the first trade is on 2020-02-03.
+
+        The verification on 2020-06-26 is in operation-date terms (lot B-52): the bank's 1994.46 at the end of the day,
+        plus the Tunturi purchase traded that day and settled on 06-30 (−218), gives 1776.46. Red until the plugin counts
+        the trades in flight."""
         records = _records(_sample_table("main"))
 
         assert [(row["lf_checkpoint"], row["lf_value"], row["lf_currency"], row["lf_zone"]) for row in _truth(records, "truth_cash")] == [("2020-02-02", "2699.50", "EUR", "before")]
@@ -2578,9 +3264,11 @@ class TestMainSampleFacts:
             ("Lumi Holding Oyj", "60", "exact:E2", "2020-02-02", "before"),
             ("Pohjola Tekniikka Oyj", "180", "at_least:E3", "2020-02-02", "before"),
         ]
-        assert [(row["lf_checkpoint"], row["lf_value"], row["lf_currency"]) for row in _truth(records, "verification")] == [("2020-06-26", "1994.46", "EUR")]
+        assert [(row["lf_checkpoint"], row["lf_value"], row["lf_currency"]) for row in _truth(records, "verification")] == [("2020-06-26", "1776.46", "EUR")]
 
     def test_transactions(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Every transaction in file order. Lot B-52: each paired trade dated on its trade date. Red until the plugin does
+        so."""
         _table, _path, output = _sample_parse("main", tmp_path_factory)
 
         assert _transactions(output) == [_expected_tx(*row) for row in MAIN_TRANSACTIONS]
@@ -2607,6 +3295,8 @@ class TestMainSampleFacts:
         assert sorted(set(_codes(output.warnings))) == ["deferred_rows", "deposit_assumed"]
 
     def test_checkpoint_and_verification(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """The opening as it is (nothing in flight on 2020-02-02); the verification in operation-date terms, 1776.46 (lot
+        B-52: the Tunturi purchase of 2020-06-26 is in flight). Red until the plugin counts it."""
         _table, _path, output = _sample_parse("main", tmp_path_factory)
 
         assert len(output.checkpoints) == 1
@@ -2618,24 +3308,25 @@ class TestMainSampleFacts:
         assert (absorbed.count, len(absorbed.rows), _money(absorbed.cash), _money(absorbed.opening_cash)) == (14, 14, {"EUR": Decimal("2699.50")}, {"EUR": Decimal("0")})
         assert (_d("2020-02-03"), "EUR", Decimal("-120"), "Osto Pohjola Tekniikka O") in [(row.as_of, row.currency, row.amount, row.label) for row in absorbed.rows]
         assert (min(row.as_of for row in absorbed.rows), max(row.as_of for row in absorbed.rows)) == (_d("2019-01-07"), _d("2020-02-03"))
-        assert [(item.as_of, _money(item.cash)) for item in output.verifications] == [(_d("2020-06-26"), {"EUR": Decimal("1994.46")})]
+        assert [(item.as_of, _money(item.cash)) for item in output.verifications] == [(_d("2020-06-26"), {"EUR": Decimal("1776.46")})]
 
 
 # =============================================================================
 # 14. THE GAP SAMPLE SET
 # =============================================================================
 
+# Lot B-52: a paired trade dated on its trade date (custody Kauppapäivä); the Tuotto has both dates equal.
 GAP_TRANSACTIONS = [
     ("DEPOSIT", "2020-08-03", "0", "2000", None, "Matti Meikäläinen"),
     ("FEE", "2020-08-31", "0", "-3.5", None, "Palvelumaksut 08/2020"),
-    ("BUY", "2020-09-03", "40", "-652", "Aurora Metsä Oyj", "Osto Aurora Metsä Oyj (Rajakurssi)"),
-    ("SELL", "2020-09-16", "-50", "644.5", "Saimaa Energia Oyj", "Myynti Saimaa Energia Oy (Päivän kurssi)"),
+    ("BUY", "2020-09-01", "40", "-652", "Aurora Metsä Oyj", "Osto Aurora Metsä Oyj (Rajakurssi)"),
+    ("SELL", "2020-09-14", "-50", "644.5", "Saimaa Energia Oyj", "Myynti Saimaa Energia Oy (Päivän kurssi)"),
     ("FEE", "2020-09-30", "0", "-3.5", None, "Palvelumaksut 09/2020"),
-    ("BUY", "2020-11-03", "10", "-231", "Tunturi Pankki Oyj", "Osto Tunturi Pankki Oyj (Rajakurssi)"),
+    ("BUY", "2020-10-30", "10", "-231", "Tunturi Pankki Oyj", "Osto Tunturi Pankki Oyj (Rajakurssi)"),
     ("DEPOSIT", "2020-12-15", "0", "500", None, "Matti Meikäläinen"),
     ("FEE", "2020-12-31", "0", "-3.5", None, "Palvelumaksut 12/2020"),
-    ("SELL", "2021-01-07", "-100", "428.56", "Kaamos Robotics AB", "Myynti Kaamos Robotics A (Päivän kurssi)"),
-    ("SELL", "2021-01-22", "-60", "424", "Pohjola Tekniikka Oyj", "Myynti Pohjola Tekniikka (Päivän kurssi)"),
+    ("SELL", "2021-01-05", "-100", "428.56", "Kaamos Robotics AB", "Myynti Kaamos Robotics A (Päivän kurssi)"),
+    ("SELL", "2021-01-20", "-60", "424", "Pohjola Tekniikka Oyj", "Myynti Pohjola Tekniikka (Päivän kurssi)"),
     ("DIVIDEND", "2021-02-15", "0", "28.5", "Aurora Metsä Oyj", "Aurora Metsä 5930284716 (Tuotto)"),
     ("FEE", "2021-03-01", "0", "-3.5", None, "Palvelumaksut 02/2021"),
 ]
@@ -2681,6 +3372,9 @@ class TestGapSampleFacts:
         assert (row["lf_row_kind"], row["lf_zone"], row["lf_reason"], row["lf_checkpoint"]) == (kind, zone, "", checkpoint)
 
     def test_truth_rows(self) -> None:
+        """Lot B-52 leaves every truth of this set as it is, green today and after. Nothing is in flight at C1 (2020-08-31)
+        or C2 (2021-01-04). On the verification day (2021-02-26) the last purchase is traded but not settled, and it is
+        left out (``not_yet_settled``). A trade that is not imported is never in flight."""
         records = _records(_sample_table("gap"))
 
         assert [(row["lf_checkpoint"], row["lf_value"], row["lf_currency"], row["lf_zone"]) for row in _truth(records, "truth_cash")] == [("2020-08-31", "3519.86", "EUR", "before"), ("2021-01-04", "3482.36", "EUR", "gap")]
@@ -2690,6 +3384,8 @@ class TestGapSampleFacts:
         assert [(row["lf_checkpoint"], row["lf_value"], row["lf_currency"]) for row in _truth(records, "verification")] == [("2021-02-26", "4363.42", "EUR")]
 
     def test_transactions(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Every transaction in file order. Lot B-52: each paired trade dated on its trade date. Red until the plugin does
+        so."""
         _table, _path, output = _sample_parse("gap", tmp_path_factory)
 
         assert _transactions(output) == [_expected_tx(*row) for row in GAP_TRANSACTIONS]
@@ -2716,7 +3412,10 @@ class TestGapSampleFacts:
         assert sorted({(notice.code, notice.severity) for notice in output.warnings}) == [("deposit_assumed", "info"), ("excluded_not_yet_settled", "info")]
 
     def test_checkpoints_and_verification(self, tmp_path_factory: pytest.TempPathFactory) -> None:
-        """The opening absorbs the two rows before 2020-09-01 over an opening balance of 1523.36; the gap checkpoint the two trades of the gap."""
+        """The opening absorbs the two rows before 2020-09-01 over an opening balance of 1523.36; the gap checkpoint the two trades of the gap.
+
+        Lot B-52 changes none of these values: nothing is in flight at either checkpoint, and the purchase that straddles
+        the verification is left out (green today and after)."""
         _table, _path, output = _sample_parse("gap", tmp_path_factory)
 
         opening, gap = _checkpoint(output, "2020-08-31"), _checkpoint(output, "2021-01-04")
@@ -2793,11 +3492,22 @@ class TestFixtureGuards:
         assert written[3] == list(CUSTODY_HEADER)
 
     def test_fixture_guard_scenario_statements_keep_their_chain(self, tmp_path_factory: pytest.TempPathFactory) -> None:
-        """Every synthetic statement holds its running balance, except the one built to break it (on 2021-03-15)."""
+        """Every synthetic statement holds its running balance, except the two built to break it: "chain" (on 2021-03-15) and
+        "b52_a13_broken" (on 2021-04-20, after its hidden fee of 04-15)."""
         breaks = {(name, path.name): _chain_breaks(path) for name in sorted(SCENARIOS) for path in _scenario_files(name, tmp_path_factory).cash}
 
-        assert {key: days for key, days in breaks.items() if days} == {("chain", "cash-1.csv"): [_d("2021-03-15")]}
+        assert {key: days for key, days in breaks.items() if days} == {("chain", "cash-1.csv"): [_d("2021-03-15")], ("b52_a13_broken", "cash-1.csv"): [_d("2021-04-20")]}
         assert _chain_breaks(SAMPLE_DIR / "danske_bank-cash.csv") == [] and _chain_breaks(SAMPLE_DIR / "danske_bank-gap-cash.csv") == []
+
+    def test_fixture_guard_the_a13_shaped_sets(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Fixture guard: the sets whose cash statement starts after their custody export (A13), read from the files as
+        written, are exactly the five the tests read as A13 sets. They are "late" and four B-52 scenarios, and neither
+        sample is one. A new A13-shaped scenario must join this list, and its tests must read its opening on the eve of the
+        custody export (the developer, 20/10/2026)."""
+        shaped = sorted(name for name in SCENARIOS if _a13_shaped(_scenario_files(name, tmp_path_factory).members()))
+
+        assert shaped == ["b52_a13", "b52_a13_broken", "b52_a13_sell", "b52_a13_settled_before", "late"]
+        assert [name for name in sorted(SAMPLE_SETS) if _a13_shaped(_members(SAMPLE_SETS[name]))] == []
 
     def test_fixture_guard_keyed_rows_land_where_the_tests_look(self, tmp_path_factory: pytest.TempPathFactory) -> None:
         """Newest first: the Saimaa row written after the Aurora row lands above it, so file order alone would cross the pairs."""
