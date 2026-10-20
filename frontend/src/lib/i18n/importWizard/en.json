@@ -31,7 +31,7 @@
     "selectPlugin": "Select plugin…",
     "extensionError": "Unsupported file type: {ext}. Accepted: .csv, .xlsx, .xls",
     "unresolvedCount": "{n, plural, one {# asset unresolved} other {# assets unresolved}}",
-    "warningsCount": "{n} warnings",
+    "warningsCount": "{n, plural, one {# warning} other {# warnings}}",
     "importedCount": "{n} transactions imported to editor",
     "resolveAssets": "Resolve Assets",
     "parsingProgress": "Parsing… {done}/{total}",
@@ -52,8 +52,6 @@
     "duplicatesSection": "Transaction Status",
     "uniqueTx": "{n} unique",
     "possibleDuplicates": "{n} possible",
-    "warningsSection": "Warnings",
-    "noWarnings": "No warnings",
     "validationIssues": "Validation Issues",
     "validationIssueCount": "{n} validation issues",
     "noValidationIssues": "No validation issues",
@@ -75,7 +73,7 @@
       "unresolvedCount": "Assets not yet matched to a known instrument",
       "issueCount": "Validation issues — transactions that could not be created",
       "todoCount": "Fields requiring manual input (🔴 = blocker)",
-      "warningCount": "Parser warnings (skipped rows, ambiguous data)"
+      "noticeCount": "Warnings (amber): they need your attention. Notes (blue): choices the importer explains."
     },
     "allResolved": "All resolved",
     "searchAll": "Search your assets…",
@@ -530,6 +528,8 @@
       "scalable_cash_by_sign": "The sign of the amount column decided between deposit and withdrawal.",
       "fineco_not_yet_settled": "The value date of these rows is after today: they have not settled yet.",
       "fineco_incomplete_rows": "The last column names the field without a number; the row is imported as it is."
-    }
+    },
+    "notesCount": "{n, plural, one {# note} other {# notes}}",
+    "noNotices": "No warnings or notes"
   }
 }

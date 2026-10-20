@@ -127,15 +127,17 @@ LibreFolio reads each file, checks it and sums it up in a table:
 | ✗ | Securities not matched to your assets yet — you match them in **Review** |
 | 🔴 | Validation issues: rows that could not become transactions |
 | 🔧 | Fields to fill in before saving (red when one blocks the save) |
-| ⚠️ | Importer warnings, such as skipped rows |
+| ⚠️ ℹ️ | Two numbers: warnings (amber) need a look, such as skipped rows; notes (blue) explain a choice the importer made, with nothing to fix |
 
-The tiles above the table count what will really be imported; **View All** opens the details.
+The tiles below the table count what will really be imported; **View All**, or **View Detail** in
+a row's **⋮** menu, opens the details, with the warnings and the notes listed apart.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step3" alt="Wizard Step 3: Analysis" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-- **Warnings**: **Continue** lists them first; read them, then click **Continue anyway**.
+- **Warnings and notes**: **Continue** lists the warnings first, then the notes; read them, then
+  click **Continue anyway**.
 - **A file failed**: a banner says why. Fix its plugin in **Select Files**, then click
   **Re-parse all**.
 
