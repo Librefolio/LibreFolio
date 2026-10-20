@@ -7529,7 +7529,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     cinque i punti: i quattro di prima più il dialogo del «Merge» singolo (Q-J66-1 (a), decisione del coordinatore).
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «J-57 v3 e slot
     pesante, parte 2» e «J-66 — il banner di promozione legge il segno dal tipo».
-- **J-67 · Dopo un merge di righe salvate, la griglia può mostrare la coppia al contrario fino al salvataggio** — basso,
+- ✅ **J-67 · Dopo un merge di righe salvate, la griglia può mostrare la coppia al contrario fino al salvataggio** — basso,
   chiarezza (nessun dato salvato sbagliato); J, 20/10 (docs-writer durante J-66, verificato da J).
   - `collapseIntoPaired` (`TransactionBulkModal.svelte` ~`:739-754`) sceglie la riga visibile, il «From:» della
     griglia, da `Number(cash)`, dopo che `executePromote` ha già cambiato il tipo. Per due righe salvate, o una salvata
@@ -7544,6 +7544,14 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     di promozione legge il segno dal tipo», passo 5.
   - **20/10, coordinatore**: assegnata a J, dopo il §29 punto 2. Riporta la griglia al dato salvato: non serve una
     domanda.
+  - **Chiusa il 20/10 da J** (checkpoint J-67). Le facce erano tre, con una causa sola: i rami dei salvati e dei misti di
+    `executePromote` cambiavano il tipo senza spostare il segno nell'importo.
+    - La riga visibile era sbagliata, e il contante si leggeva «+X / +X».
+    - Uno split prima del salvataggio scambiava i tipi delle due righe e lasciava la promozione in coda: il
+      salvataggio veniva rifiutato (`promoteRefNotFound`). L'E2E l'ha provato: rifiutato, nulla scritto.
+    - Con la riga salvata in vista, lo split non faceva nulla.
+  - Cura: il segno passa nell'importo in tutti i rami. «Split pair» su un merge non salvato lo annulla
+    (`undoPendingPromote`). Spec nuovo `tx-bulk-promote-split` (F1–F3, guardia G).
 - **J-68 · Un trasferimento in un giorno solo non nomina l'origine nelle viste dei lotti** — basso, chiarezza; J, 20/10
   (test-author durante il §29 punto 2, verificato da J nel codice).
   - Per un trasferimento che parte e arriva lo stesso giorno, `_build_transfer_rows` (`lots_analysis_service.py`)
