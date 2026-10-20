@@ -2496,9 +2496,9 @@ describe('B-8, developer 19/10 — no line otherwise: no job named, any other fa
  * the import.
  *
  * Not pinned, the contract being silent: the adoption key once a clear end is offered (kept, or removed); a reload whose
- * `resume()` gets no answer, then «Check again» finds the adopted job sealed (not presented, but announced or not?); a
- * clear request whose 409 names a job this very controller started as a secure one (the 409 says nothing of the mode:
- * adopted, so its sealed end would not be presented).
+ * `resume()` gets no answer, then «Check again» finds the adopted job sealed (not presented, but announced or not?). A
+ * clear request whose 409 names the job this tab already follows by itself (a secure one started here, say) has since
+ * been pinned by «B-8, review 19/10, refinement»: followed as its own, never adopted, its sealed end offered.
  *
  * Red today: a secure request follows the job named — its read is where each of those cases fails first —; a clear
  * request never writes the adoption key, and offers a sealed end (`done`, `onDone`); `resume()` offers a sealed end too,
@@ -3118,5 +3118,133 @@ describe('B-8, review 19/10 — housekeeping: a start that succeeds ends an adop
 
         expect(storage.removeItem.mock.calls, 'precondition: the job key was removed').toContainEqual([KEY]);
         expect(adoptionCalls(storage), 'a path that adopts nothing wrote or removed the adoption key').toEqual([]);
+    });
+});
+
+// --- B-8, review 19/10, refinement: a tab's own backup is never adopted ---------------------------------------------
+
+/*
+ * The coordinator's refinement of the review's decision (19/10 18:10), verbatim: «sì alla rifinitura, decisione mia,
+ * perché è nello spirito della tabella («si segue solo il proprio»): non adottare un job che la scheda sta già seguendo
+ * da sé» (yes to the refinement, my decision, as it is in the spirit of the table — «one follows only one's own»: do
+ * not adopt a job the tab is already following by itself). The contract under test, a clear start (`start()`), nothing
+ * on offer, refused `409 backup_busy` naming a running job of origin `ui`:
+ *   - the job this tab already follows by itself — `followedJobId` is its id, and no adoption key names it: a secure
+ *     backup started here whose polling gave up, or the job a previous page of this tab followed (the job key only),
+ *     its read by `resume()` unanswered — is followed as its own: never adopted, no adoption key written or removed,
+ *     its end offered whatever its mode. Sealed (`done`, `encrypted: true`): `done`, the archive on offer, `onDone`
+ *     once (its end is news: the refusal makes it watched again), the job key kept, no `onFailed` after the refusal;
+ *   - the guards, as the review decided: a job that is not the one followed is adopted (the second and third review
+ *     groups pin it), and so is the job this tab follows as an adoption (both keys left by a previous page): their
+ *     sealed end is not presented.
+ * The secure path does not change: a secure start never follows, its own job included — «Check again» stays the way
+ * back (the first review group). The planned cure, not applied yet: adopt only when the job named is not the one
+ * followed, or when the one followed is already an adoption.
+ *
+ * Red today: a clear start adopts every running `ui` job its 409 names, this tab's own included — the adoption key is
+ * written at the refusal, where both red cases fail first —, so the sealed end is not presented: `failed`,
+ * `backup_busy`, failure `start`, no job, both keys removed, `onDone` never, `onFailed('backup_busy', 'start', null)`.
+ * Green today, and to stay so: the two guards.
+ */
+describe('B-8, review 19/10, refinement — a clear start refused by the job this tab already follows by itself: followed as its own, never adopted, its end offered whatever its mode (red today)', () => {
+    // Every refusal here names a running job: one console.warn each since 19/10, kept quiet here.
+    spyOnConsoleWarn();
+
+    it.each<[string, () => Promise<ReturnType<typeof setup>>]>([
+        [
+            'a secure backup started here, its polling given up',
+            async () => {
+                const context = setup();
+                context.api.start.mockResolvedValueOnce(running());
+                context.api.get.mockRejectedValue(noAnswer());
+                await context.controller.start(PASSWORD);
+                await vi.advanceTimersByTimeAsync((1 + 2 + 3) * POLL_MS);
+                expect(context.api.start.mock.lastCall, 'precondition: a secure backup, its password sent').toEqual([PASSWORD]);
+                expect(context.api.get, 'precondition: its reads unanswered until maxPollFailures').toHaveBeenCalledTimes(MAX_FAILURES);
+                context.api.get.mockReset();
+                context.onFailed.mockClear();
+                return context;
+            },
+        ],
+        [
+            'the job a previous page of this tab followed (the job key only), its read by resume() unanswered',
+            async () => {
+                const context = setup({stored: JOB_ID});
+                context.api.get.mockRejectedValueOnce(noAnswer());
+                await context.controller.resume();
+                expect(context.api.get.mock.calls, 'precondition: resume() read the job the previous page left').toEqual([[JOB_ID]]);
+                context.api.get.mockReset();
+                return context;
+            },
+        ],
+    ])('%s: a clear start refused naming that very job follows it as its own — never adopted, no adoption key at any point; its end, done with encrypted: true, offered: the sealed archive on offer, onDone once, the job key kept, no onFailed (red today)', async (_case, arrive) => {
+        const {controller, api, storage, onDone, onFailed} = await arrive();
+        expect(controller.state, 'precondition: nothing on offer, its reads unanswered').toBe('failed');
+        expect(controller.failure, 'precondition: what failed is a read of the job').toBe('read');
+        expect(controller.followedJobId, 'precondition: this tab follows the job by itself').toBe(JOB_ID);
+        expect(storage.items.get(KEY), 'precondition: the job key names it').toBe(JOB_ID);
+        expect(storage.items.has(ADOPTED_KEY), 'precondition: no adoption key names it').toBe(false);
+        const first = deferred<InstanceBackupJob>();
+        api.start.mockRejectedValueOnce(busyRefusal({job_id: JOB_ID, origin: 'ui'}));
+        answerReads(api, [() => first.promise, ok(sealed())]);
+
+        void controller.start();
+        await settle();
+
+        expect(api.start.mock.lastCall, 'precondition: a clear request, no password').toEqual([]);
+        expect(api.get.mock.calls, 'the job the refusal names must be read').toEqual([[JOB_ID]]);
+        expect(controller.state, 'its first read is out').toBe('loading');
+        expect(storage.items.has(ADOPTED_KEY), 'the job this tab already follows by itself was adopted at the refusal: it is followed as its own, never adopted').toBe(false);
+        expect(controller.followedJobId).toBe(JOB_ID);
+        expect(storage.items.get(KEY)).toBe(JOB_ID);
+
+        first.resolve(running());
+        await settle();
+
+        expect(controller.state, 'followed while it runs').toBe('running');
+        expect(storage.items.has(ADOPTED_KEY), 'adopted while it runs').toBe(false);
+
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+
+        expect(api.get.mock.calls, 'only the job named was read').toEqual([[JOB_ID], [JOB_ID]]);
+        expect(controller.state, "the sealed end of this tab's own backup was not offered: followed as its own, its end is offered whatever its mode").toBe('done');
+        expect(controller.busy).toBe(false);
+        expect(controller.job, 'the sealed archive on offer').toEqual(sealed());
+        expect(controller.errorCode).toBeNull();
+        expect(controller.failure).toBeNull();
+        expect(controller.followedJobId).toBe(JOB_ID);
+        expect(storage.items.get(KEY), 'the archive must stay downloadable after a reload: the job key kept').toBe(JOB_ID);
+        expect(onDone.mock.calls, 'its end is news here (the refusal makes it watched again): once').toEqual([[sealed()]]);
+        expect(onFailed, 'nothing failed after the refusal').not.toHaveBeenCalled();
+        expect(storage.items.has(ADOPTED_KEY), 'an adoption key left at the end').toBe(false);
+        expect(adoptionCalls(storage), 'the adoption key was written or removed: the job this tab follows by itself is never adopted, and a path that adopts nothing touches no adoption key').toEqual([]);
+        expect(vi.getTimerCount(), 'a timer outlived the job').toBe(0);
+    });
+
+    it.each<[string, () => Promise<ReturnType<typeof setup>>]>([
+        ['a job that is not the one followed (another job followed, whose id a previous page left)', async () => setup({stored: OTHER_JOB_ID})],
+        [
+            'the job this tab follows as an adoption (both keys left by a previous page), its read by resume() unanswered',
+            async () => {
+                const context = setupWith({[KEY]: JOB_ID, [ADOPTED_KEY]: JOB_ID});
+                context.api.get.mockRejectedValueOnce(noAnswer());
+                await context.controller.resume();
+                expect(context.controller.failure, 'precondition: its read by resume() unanswered').toBe('read');
+                expect(context.storage.items.get(ADOPTED_KEY), 'precondition: followed as an adoption, kept at construction').toBe(JOB_ID);
+                context.api.get.mockReset();
+                return context;
+            },
+        ],
+    ])('a clear start refused naming %s: adopted, and its end, done with encrypted: true, not presented — as the review decided (green today: the guard)', async (_case, arrive) => {
+        const context = await arrive();
+        const first = await adoptedFirstReadOut(context, [ok(sealed())]);
+
+        expect(context.storage.items.get(ADOPTED_KEY), 'adopted: the job named is not one this tab follows by itself').toBe(JOB_ID);
+
+        first.resolve(running());
+        await settle();
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+
+        expect(outcome(context.controller), 'its sealed end not presented, as the review decided').toEqual({state: 'failed', errorCode: 'backup_busy', failure: 'start', job: null});
     });
 });
