@@ -15,7 +15,7 @@
  *     the guide of an own key only (`Object.hasOwn`), so `undefined` for an unknown id and for `constructor`,
  *     `__proto__`, `toString` and `hasOwnProperty`.
  *   - A guide is `admin/<page>/#<anchor>`, matching `^admin/[a-z0-9_]+/#[a-z0-9-]+$`: no language prefix (`DocsLink`
- *     adds it), no leading `/`, no `.md`, a folder URL, an explicit anchor. The 18 guides are `EXPECTED_GUIDES` below.
+ *     adds it), no leading `/`, no `.md`, a folder URL, an explicit anchor. The 19 guides are `EXPECTED_GUIDES` below.
  *
  * The cases: §2's five — the shape, the anchors exist, the lookup, the browser half, the translation ratchet — and §1's
  * table pinned whole, so that a changed guide is a visible change of this file.
@@ -47,6 +47,12 @@
  * anchors case also names `frame-protection` and `csp-report-only` for as long as `configuration.en.md` lacks them (the
  * docs step of the lot, §4). Its place in the runner: `front_utility_unit` (`scripts/test_runner/_frontend_utility.py`,
  * action `core-unit`).
+ *
+ * H-61 (checkpoint 1, contract §5, 20/10): the new startup check of the hosting panel's tokens, `platform.hosting_panel`,
+ * has its guide, `admin/hosting_providers/#panel-api`, in the table between `platform.log_level` and `platform.test_mode`,
+ * its place among the checks. Red until `checkGuides.json` holds it (§1 pinned whole) and `hosting_providers.en.md`
+ * writes `{: #panel-api }` (§2.2, the docs step of the lot). `hosting_providers` has no translation, so the ratchet does
+ * not move.
  */
 import {existsSync, readFileSync} from 'node:fs';
 import {describe, expect, it, vi} from 'vitest';
@@ -80,7 +86,7 @@ vi.mock('$lib/api', () => {
 // =============================================================================
 
 /**
- * The 18 guides of §1, whole: check id → guide. A changed guide is a change of this table. Written in the order of the
+ * The 19 guides of §1, whole: check id → guide. A changed guide is a change of this table. Written in the order of the
  * checks (`CONFIG_CHECKS`, then `platform.plugin_secrets`), then the browser's finding, and compared as a record: the
  * order is pinned by §3, against the checks themselves.
  */
@@ -93,6 +99,8 @@ const EXPECTED_GUIDES: Readonly<Record<string, string>> = {
     'platform.frame_protection': 'admin/configuration/#frame-protection',
     'platform.csp_report_only': 'admin/configuration/#csp-report-only',
     'platform.log_level': 'admin/configuration/#startup-checks',
+    // H-61: the hosting panel's wake-up and status tokens, right before the test mode check
+    'platform.hosting_panel': 'admin/hosting_providers/#panel-api',
     'platform.test_mode': 'admin/configuration/#startup-checks',
     'backup.panel_token': 'admin/hosting_providers/#panel-token',
     'backup.upload_limit': 'admin/hosting_providers/#restore-upload-limit',
@@ -365,6 +373,7 @@ describe('checkGuides — the guide of each finding of the Security tab (N69d)',
     });
 
     // red until N69d §1: checkGuides.ts does not exist — and §4, for as long as configuration.en.md lacks frame-protection and csp-report-only
+    // H-61: red until hosting_providers.en.md writes {: #panel-api } (the docs step of contract §5)
     it('§2.2 the anchors exist: the English page of each guide writes its anchor exactly once, as {: #<anchor> }', async () => {
         expectReaderSees(['en']);
         expect(englishProblems(guideTo(KNOWN_SECTION)), 'Control: the check passes a section its page has').toEqual([]);
@@ -425,7 +434,8 @@ describe('checkGuides — the guide of each finding of the Security tab (N69d)',
     });
 
     // red until N69d §1: checkGuides.ts does not exist
-    it('§1 pinned whole: CHECK_GUIDES is the table of the 18 guides — a changed guide is a change of this file', async () => {
+    // H-61: red until checkGuides.json holds platform.hosting_panel (contract §5)
+    it('§1 pinned whole: CHECK_GUIDES is the table of the 19 guides — a changed guide is a change of this file', async () => {
         expect((await checkGuides()).CHECK_GUIDES, 'CHECK_GUIDES, check id → guide').toEqual(EXPECTED_GUIDES);
     });
 });

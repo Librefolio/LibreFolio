@@ -8,6 +8,7 @@
     "platform.frame_protection": "admin/configuration/#frame-protection",
     "platform.csp_report_only": "admin/configuration/#csp-report-only",
     "platform.log_level": "admin/configuration/#startup-checks",
+    "platform.hosting_panel": "admin/hosting_providers/#panel-api",
     "platform.test_mode": "admin/configuration/#startup-checks",
     "backup.panel_token": "admin/hosting_providers/#panel-token",
     "backup.upload_limit": "admin/hosting_providers/#restore-upload-limit",

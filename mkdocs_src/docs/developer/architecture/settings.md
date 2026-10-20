@@ -157,7 +157,7 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
     - `backend/app/config/` is a package; the import path is still `backend.app.config`.
       `__init__.py` is the base: constants, data directories, test mode, the secret reader
       `env_secret()`, the address reader `env_url()`, `Settings` and `get_settings()`. New variables
-      go into one section module per topic, owned by the workstream of that area. Seven exist today:
+      go into one section module per topic, owned by the workstream of that area. Eight exist today:
       `platform.py` (H: `scheduler_disabled()`, `configured_jwt_secret()`, `configured_jwt_secret_origin()`,
       `configured_instance_key()`, `configured_instance_key_origin()`, `owning_test_lane_id()`,
       `frozen_app_version()`, `instance_blocked()`, `instance_deletion_date()`, `support_url()`, and
@@ -186,9 +186,12 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       `idle_suspend_mode()` and `idle_suspend_minutes()`; see
       [Idle Suspension](../../admin/sleep_wake.md#idle-suspend)), `backup.py` (B:
       `backup_download_token()`, the token a hosting panel presents to download the instance's
-      backups, also as `_FILE`) and `brim.py` (W: `brim_prewarm_enabled()`, the opt-in
+      backups, also as `_FILE`), `brim.py` (W: `brim_prewarm_enabled()`, the opt-in
       [warm-up of the BRIM parse pool](../backend/brim/architecture.md#parse-pool-warm-up), which
-      raises `BrimConfigError` on a value it cannot use). Unlike a `Settings` field, an
+      raises `BrimConfigError` on a value it cannot use) and `hosting_panel.py` (H:
+      `panel_status_token()`, the token of the hosting panel's status route, also as `_FILE`, with
+      the rules of the backup token, raising `HostingPanelConfigError`; see
+      [Hosting Panel API](../../admin/hosting_providers.md#panel-api)). Unlike a `Settings` field, an
       invalid `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL` or
       `LIBREFOLIO_BILLING_URL` never stops the startup: its accessor raises `ValueError`, and
       `registration_service.py` logs it and falls back safely — registration closed for the first

@@ -50,6 +50,11 @@
         "off": "El modo de prueba está desactivado.",
         "testLane": "El modo de prueba está activado, en una vía del ejecutor de pruebas.",
         "outsideTestLane": "El modo de prueba está activado fuera del ejecutor de pruebas: se ofrecen los proveedores de datos hechos para las pruebas, los datos se guardan en {data_dir} y el archivo .env no se lee. Quita LIBREFOLIO_TEST_MODE."
+      },
+      "hostingPanel": {
+        "off": "No hay ningún token para el despertar programado ni para la ruta de estado del panel del proveedor: esas rutas están desactivadas.",
+        "ok": "Los tokens del panel del proveedor que están definidos (despertar programado, ruta de estado) se pueden usar.",
+        "unusable": "{variables}: estos tokens del panel del proveedor no se pueden usar (un archivo que no se puede leer, demasiado cortos o con caracteres que una cabecera de solicitud no transporta): sus rutas responden 503 hasta que se corrija."
       }
     },
     "block": {

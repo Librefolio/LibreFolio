@@ -9,7 +9,8 @@ them are the **hosting provider**. A few settings exist for them:
   you name, who activates it with a single-use link;
 - the **instance block** closes the app but keeps the data, for example when a subscription is not
   paid;
-- the **panel token** lets your hosting panel take backups of the instance;
+- the **panel tokens** let your hosting panel take backups of the instance, run its scheduled
+  wake-up and follow the setup of its administrator, each with a token of its own;
 - the **upload limit** caps the size of the archives uploaded for a restore;
 - the **legal pages** are your terms of service and privacy policy, linked by the legal notice
   every user sees.
@@ -145,6 +146,8 @@ your users sign in again after each restart. See
 - Optionally, a wake-up token of its own, `LIBREFOLIO_WAKE_TOKEN`, if your panel brings the
   instance's prices and exchange rates up to date on its own schedule, for example right after it
   wakes the instance: see [Scheduled Wake-up](sleep_wake.md#wake-sync).
+- Optionally, a status token of its own, `LIBREFOLIO_PANEL_STATUS_TOKEN`, if your panel follows the
+  setup of the instance's administrator: see [The Setup Status](#panel-status).
 - If your hosting panel shows the app inside a frame: `LIBREFOLIO_FRAME_PROTECTION=false`, since the
   managed profile turns frame protection on.
 - Your own support page or email address, `LIBREFOLIO_SUPPORT_URL` (`https://…` or `mailto:…`):
@@ -230,6 +233,8 @@ minute.
   link once in its log, and emails it to `LIBREFOLIO_ADMIN_EMAIL` when its [email](email.md) works
   and `LIBREFOLIO_PUBLIC_URL` is set. A token of your own lets your panel know the link before the
   instance starts, without reading its log.
+- 📊 Your panel can follow the setup without reading the log either: whether the link waits, was
+  used or expired, in [The Setup Status](#panel-status).
 
 ### 🖥️ What Your Customer Sees {: #initial-admin-setup-page }
 
@@ -420,6 +425,7 @@ On a blocked instance, only these API calls answer as usual:
 | The block page | `GET /api/v1/system/block` (signed-in users only), `GET /api/v1/system/instance` |
 | Probes and version | `GET /api/v1/system/health`, `GET /api/v1/system/ready`, `GET /api/v1/system/info` |
 | The [scheduled wake-up](sleep_wake.md#wake-sync), with its own token: it answers `blocked` and runs no job | `POST /api/v1/system/wake-sync` |
+| Your panel's [setup status](#panel-status), with its own token | `GET /api/v1/panel/status` |
 
 - Your monitoring keeps working: `/system/health` and `/system/ready` answer as on any other
   instance.
@@ -463,11 +469,177 @@ every start, blocked or not, but users see it only on the block page.
 
 ---
 
+## 🔌 Hosting Panel API {: #panel-api }
+
+Your hosting panel calls the instance without a user's session. Each of its calls belongs to a
+**scope**, and each scope has a token of its own, which opens that scope and nothing else:
+
+| Scope | For | Routes | Token |
+| --- | --- | --- | --- |
+| `backup` | Back up the whole instance and download the archive: [Backups for Your Hosting Panel](#panel-backups) | `POST /api/v1/backup/panel/jobs`, then `GET`, `GET …/file` and `DELETE` on `/api/v1/backup/panel/jobs/{job_id}` | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` |
+| `wake` | Run the price and exchange rate updates that are due, for example right after your panel wakes the instance: [Scheduled Wake-up](sleep_wake.md#wake-sync) | `POST /api/v1/system/wake-sync` | `LIBREFOLIO_WAKE_TOKEN` |
+| `status` | Follow the setup of the [initial administrator](#initial-admin): [The Setup Status](#panel-status) | `GET /api/v1/panel/status` | `LIBREFOLIO_PANEL_STATUS_TOKEN` |
+
+The rules of this section hold for the three scopes alike. None of your panel's calls counts as a
+visit for the [idle suspension](sleep_wake.md#idle-suspend-activity): each keeps the machine awake
+only while it runs.
+
+### 🗝️ A Token per Scope {: #panel-api-tokens }
+
+- **No token, no scope.** A scope whose token is not set is off: its routes answer `404`, as a path
+  that does not exist, and LibreFolio writes no line of its own about them. Set only the tokens your
+  panel uses.
+- **Each token opens its own scope only.** Each scope compares a call with its own token alone: sent
+  to another scope, a token is a wrong one. Generate a different token for each scope and for each
+  instance, so that a token that leaks opens one scope of one instance.
+- **At least 32 visible ASCII characters**: letters, digits and punctuation; no space, no tab, no
+  accented letter. `openssl rand -hex 32` prints 64:
+
+    ```bash
+    openssl rand -hex 32
+    ```
+
+- **In a file, if you prefer.** Each variable has its `_FILE` twin, such as
+  `LIBREFOLIO_PANEL_STATUS_TOKEN_FILE`: the path of a file that holds the token, as Docker mounts
+  its secrets (see «Secrets in Files» in [Environment Variables](configuration.md)).
+  When both are set, the variable itself wins.
+- **Set them in the container's environment or in `.env`**, then restart LibreFolio. With Docker
+  Compose, run `docker compose up -d`: `docker compose restart` keeps the old values.
+- **A token LibreFolio cannot use does not stop the server**: the
+  [startup check](#panel-api-check) names it, and its routes answer `503` until you fix it.
+
+### 📨 How a Call Proves Itself {: #panel-api-auth }
+
+Today, a call proves itself with its scope's token, in one header:
+
+```text
+Authorization: Bearer <the scope's token>
+```
+
+- **Only in that header**, never in the URL, where the access logs of servers and proxies would
+  keep it: a token in the query string is not read, and the call gets a `401`.
+- **Compared in constant time** with the scope's token, so that how long LibreFolio takes to answer
+  tells nothing about the token.
+- **Over HTTPS only**: whoever reads a token on the way can use it.
+
+### 🚫 Refused Calls {: #panel-api-refusals }
+
+| Answer | When | `code` |
+| --- | --- | --- |
+| `404` | The scope is off: its token is not set. The body is `{"detail": "Not Found"}`, as for a path that does not exist | — |
+| `401` | No token, or not the scope's token, another scope's token included. The answer carries `WWW-Authenticate: Bearer` | `backup_panel_unauthorized`, `wake_unauthorized` or `panel_status_unauthorized`, by scope |
+| `429` | Too many refused tokens from your panel's address: see [The Limit on Refused Tokens](#panel-api-limit). The answer carries `Retry-After`, the seconds to wait | `panel_too_many_attempts`, in every scope |
+| `503` | The scope's token is set but cannot be used: shorter than 32 characters, a character that is not visible ASCII, or a `_FILE` that cannot give it. Each call logs an error that names the variable, never the token | `backup_panel_unavailable`, `wake_unavailable` or `panel_status_unavailable`, by scope |
+
+A scope that is off, or whose token cannot be used, answers before anything else: the token of the
+call is not read, and nothing is counted. The `code` comes in the `detail` of the answer, with a
+`message` in English:
+
+```json
+{"detail": {"code": "panel_too_many_attempts", "message": "Too many refused panel credentials from this address"}}
+```
+
+### 🚦 The Limit on Refused Tokens {: #panel-api-limit }
+
+LibreFolio counts the tokens it refuses, per address:
+
+- **20 refused tokens in 10 minutes**, and every call from that address gets `429`, to every scope,
+  until fewer than 20 of its refusals are less than 10 minutes old: `Retry-After` gives the seconds
+  to wait. LibreFolio does not read the token of a call it answers `429`, so the right token waits
+  too.
+- **Every `401` counts**, whatever its scope: no token, a wrong one, another scope's. The three
+  scopes share one count: a panel that keeps sending a wrong backup token also waits for its
+  wake-up and its status calls.
+- **Nothing else counts**: not a call with the right token, not a `429`, not the `404` of a scope
+  that is off, nor the `503` of a token that cannot be used.
+- **One address, one count**: an IPv6 address counts by its `/64`. Behind a reverse proxy that
+  LibreFolio does not trust, every caller has the proxy's address: LibreFolio then counts nothing,
+  rather than let one caller's refusals make every caller wait. See «When LibreFolio Does Not Trust
+  Your Proxy» in [Checking Connection Security](connection_checks.md#reverse-proxy).
+- **In memory**: each server process keeps its own count, and a restart forgets it.
+
+### 📋 In the Log {: #panel-api-log }
+
+Every call to a scope that is on writes one line, `Hosting panel request`:
+
+| Level | `outcome` | When | With |
+| --- | --- | --- | --- |
+| ℹ️ `info` | `accepted` | The right token: the route then answers as usual | — |
+| ⚠️ `warning` | `refused` | The `401` | `reason`: `missing`, no token in the header; `mismatch`, another token |
+| ⚠️ `warning` | `limited` | The `429` | `retry_after`, the seconds of `Retry-After` |
+| ⚠️ `warning` | `unavailable` | The `503` | `reason`: `unusable`. Just before it, an error line names the variable and what is wrong |
+
+- Every line also carries `scope` (`backup`, `wake` or `status`), `method`, `path` (without the
+  query string), `credential`, the kind of credential the call presented (`token`), and the
+  `request_id` of the request.
+- It never carries the token, the value sent, a header, the query string or your panel's address:
+  uvicorn's access line, which the web server writes for every request, has the address.
+- The error line before an `unavailable` one is the scope's own:
+  `The hosting panel's backup token cannot be used: its routes refuse every request`
+  ([The Token](#panel-token)),
+  `The wake-up token cannot be used: the scheduled wake-up refuses every request`
+  ([Turning It On](sleep_wake.md#wake-sync-token)), or
+  `The panel status token cannot be used: the status route refuses every request`.
+- A call to a scope that is off writes no such line.
+
+### 🩺 The Startup Check {: #panel-api-check }
+
+At every start, LibreFolio checks the tokens of the three scopes, in two checks, and logs an error
+for each one that fails. The **Security** tab of Settings › Administration shows the same checks
+(«Security» in [Global Settings](settings.md)).
+
+| `check` | Tokens | Passed | An error |
+| --- | --- | --- | --- |
+| `platform.hosting_panel` | `LIBREFOLIO_WAKE_TOKEN` and `LIBREFOLIO_PANEL_STATUS_TOKEN` | Neither is set: both scopes are off. Or each one that is set can be used | One or both cannot be used: their routes answer `503` to every call until you fix them. The line names the variables and why, never a token: `A hosting panel token cannot be used, and its route answers 503 to every call: LIBREFOLIO_PANEL_STATUS_TOKEN (PANEL_STATUS_TOKEN_TOO_SHORT)` |
+| `backup.panel_token` | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` | Not set: the backup scope is off. Or it can be used | It cannot be used: see [The Token](#panel-token) |
+
+- The reasons of `platform.hosting_panel` are `…_TOO_SHORT`, fewer than 32 characters;
+  `…_NOT_VISIBLE_ASCII`, a space, a tab or another character outside visible ASCII; and
+  `FILE_UNREADABLE`, a `_FILE` that cannot give the token.
+- A check that passes writes nothing in the log.
+
+### 📊 The Setup Status {: #panel-status }
+
+`GET /api/v1/panel/status` tells your panel where the setup of the
+[initial administrator](#initial-admin) stands: whether your customer has used the setup link, and
+until when the link works. Turn it on with a token of its own in `LIBREFOLIO_PANEL_STATUS_TOKEN`, as
+in [A Token per Scope](#panel-api-tokens), then:
+
+```bash
+curl -sS -H "Authorization: Bearer $LIBREFOLIO_PANEL_STATUS_TOKEN" \
+  https://librefolio.example.com/api/v1/panel/status
+```
+
+```json
+{"admin_setup": "pending", "setup_expires_at": "2026-10-23T09:12:44.512312Z"}
+```
+
+| `admin_setup` | What it means | `setup_expires_at` |
+| --- | --- | --- |
+| `none` | No setup link was ever issued, as on an instance started without `LIBREFOLIO_ADMIN_EMAIL`; or the account it was for has been deleted since | `null` |
+| `pending` | The latest setup link is still valid: not used, not withdrawn and not expired | When the link stops working |
+| `done` | The setup is complete: your customer chose the password through the link, or the account was set up another way ([Once the Account Is Active](#initial-admin-active)) | `null` |
+| `expired` | The latest link is more than 72 hours old, or was withdrawn: cancelled, or the administrator's address changed. A new link makes it `pending` again: [A New Link](#initial-admin-new-link) | `null` |
+
+- The answer holds these two keys and nothing else: no username, no email address, no count of
+  accounts.
+- `setup_expires_at` is an ISO 8601 date and time in UTC, given only while the state is `pending`.
+- It answers on a [blocked instance](#instance-block) too, as on any other. A `pending` link there
+  still waits for the unblock: the setup is refused until then, and its 72 hours keep running.
+- Without `LIBREFOLIO_PANEL_STATUS_TOKEN` it answers `404`. Its other refusals are those of every
+  scope ([Refused Calls](#panel-api-refusals)), with the codes `panel_status_unauthorized` and
+  `panel_status_unavailable`.
+
+---
+
 ## 💾 Backups for Your Hosting Panel {: #panel-backups }
 
 Your hosting panel can back up the whole instance and download the archive, with a token instead of
 a user's session. It is the same archive as `backup create` on the [command line](cli_tools.md): the
 database, the uploaded files, the broker reports and the stress scenarios of every user.
+
+These routes are the `backup` scope of the [Hosting Panel API](#panel-api), which holds the rules
+the three scopes share: the header, the `401`, the `429` and the log line.
 
 ### 🔑 The Token {: #panel-token }
 
@@ -554,6 +726,7 @@ curl -sS -X DELETE -H "Authorization: Bearer $TOKEN" "$JOBS/<job_id>"
 | --- | --- | --- |
 | `404` | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` is not set: every route answers as a path that does not exist | — |
 | `401` | No token, or not the token of this instance | `backup_panel_unauthorized` |
+| `429` | Too many refused tokens from your panel's address: see [The Limit on Refused Tokens](#panel-api-limit) | `panel_too_many_attempts` |
 | `503` | The token is set but cannot be used: shorter than 32 characters, a character that is not visible ASCII, or a `_FILE` that cannot give it. The start log names it already (`check` is `backup.panel_token`), and each call logs it | `backup_panel_unavailable` |
 | `404` | A job your panel did not start, or one that does not exist, or no longer does | `backup_job_not_found` |
 | `409` | A start while another backup runs | `backup_busy` |
@@ -701,6 +874,8 @@ LIBREFOLIO_PRIVACY_URL=https://hosting.example.com/privacy
 - 🐳 **[Advanced Docker](docker_advanced.md)** — Compose file, health check and monitoring
 - 🔒 For developers: **[Instance Block](../developer/architecture/security.md#instance-block)** —
   The guard on the API and its list
+- 🔌 For developers: **[The Hosting Panel's Access](../developer/architecture/security.md#panel-access)** —
+  The dependency of the panel's routes, its limit and its log line
 - 🖼️ For developers: **[Frame Protection and the Report-Only Policy](../developer/architecture/security.md#managed-headers)** —
   The headers of the managed profile, directive by directive
 - 👑 For developers: **[The Initial Administrator](../developer/architecture/access_control.md#initial-admin)** —
