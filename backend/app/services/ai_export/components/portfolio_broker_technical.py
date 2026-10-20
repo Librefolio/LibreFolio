@@ -44,6 +44,7 @@ from backend.app.services.ai_export.components.technical_payloads import (
 )
 from backend.app.services.ai_export.components.technical_shared import (
     BROKER_TECHNICAL_UNIVERSE_KWARGS,
+    NO_PRICE_IN_PERIOD,
     OHLC_BUCKET_AGGREGATOR,
     PORTFOLIO_TECHNICAL_UNIVERSE_KWARGS,
     SIGNAL_PROFILE_BUCKET_AGGREGATOR,
@@ -54,9 +55,11 @@ from backend.app.services.ai_export.components.technical_shared import (
     build_price_buckets,
     coherent_price_currency,
     latest_point_value,
+    load_series_gaps,
     load_technical_universe_bundle,
     price_result_to_close_points,
     price_series_gap,
+    price_series_seed,
     signal_results_to_discrete_events,
 )
 from backend.app.services.ai_export.components.types import Domain, PeriodBehavior
@@ -81,12 +84,24 @@ async def _build_universe_technical_prices(context: BuildContext, *, universe_kw
         weight_ratio = float(weight) if weight is not None else None
         gap = price_series_gap(result)
         if gap is not None:
-            # E-AI503: decided on the price points returned, never on the asset type; the asset stays eligible.
-            uncovered_assets.append(AssetPriceSeriesGapPayload(asset_id=asset_id, portfolio_weight_ratio=weight_ratio, reason_code=gap))
+            # E-AI503: decided on the price points returned, never on the asset type; the asset stays eligible. No price
+            # inside the period (E-23): the last one stored before it, with its currency.
+            seed = price_series_seed(result) if gap == NO_PRICE_IN_PERIOD else None
+            uncovered_assets.append(
+                AssetPriceSeriesGapPayload(
+                    asset_id=asset_id,
+                    portfolio_weight_ratio=weight_ratio,
+                    reason_code=gap,
+                    currency=coherent_price_currency(result) if seed is not None else None,
+                    last_close=seed[1] if seed is not None else None,
+                    last_close_date=seed[0] if seed is not None else None,
+                )
+            )
             continue
         points = price_result_to_close_points(result, start=scope.period_start, end=scope.period_end)
         buckets = build_price_buckets(points, context.bucket_plan, key="close")
         latest_close, latest_date = latest_point_value(points, key="close")
+        price_gaps = await load_series_gaps(points, context.bucket_plan, key="close", seed=price_series_seed(result))
         assets.append(
             AssetPriceSeriesPayload(
                 asset_id=asset_id,
@@ -95,6 +110,7 @@ async def _build_universe_technical_prices(context: BuildContext, *, universe_kw
                 buckets=buckets,
                 latest_close=latest_close,
                 latest_date=latest_date,
+                price_gaps=price_gaps,
             )
         )
     assets.sort(key=lambda payload: payload.asset_id)

@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import math
 from collections import Counter
+from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -349,6 +350,27 @@ def _daterange(start: date, end: date):
         current += timedelta(days=1)
 
 
+@dataclass(frozen=True)
+class _HistoryHoles:
+    """The days a synthetic price or rate history has no stored value on (E-23).
+
+    A `_gap_series` mode for the price query, or ``_patch_convert_bulk(holes=...)`` for the FX rates. ``weekends``: no
+    value on Saturdays and Sundays, as for an exchange-traded fund's closes or a central bank's rates. ``spans``: no value
+    on any day of these inclusive ``(first, last)`` spans, ``None`` leaving a span open - ``(None, day)``: the history
+    begins after ``day``; ``(day, None)``: it ends before ``day``. The fakes answer as production backward-fills: a day
+    without a stored value carries the last stored one before it, and a day before the first stored value has none.
+    """
+
+    weekends: bool = False
+    spans: tuple[tuple[date | None, date | None], ...] = ()
+
+    def stored(self, day: date) -> bool:
+        """Whether a value is stored on ``day``."""
+        if self.weekends and day.weekday() >= 5:
+            return False
+        return not any((first is None or first <= day) and (last is None or day <= last) for first, last in self.spans)
+
+
 def _make_fake_get_prices_bulk(*, source_plugin_key: str | None = "yfinance", with_volume: bool = True):
     """Builds a fake `AssetSourceManager.get_prices_bulk` driving the real signal engine.
 
@@ -408,21 +430,66 @@ def _synthetic_fx_rate(day: date) -> Decimal:
     return Decimal(str(round(1.1 + (ordinal % 20) * 0.005 + 0.05 * math.sin(ordinal / 5.0), 6)))
 
 
-def _patch_convert_bulk(monkeypatch: pytest.MonkeyPatch) -> list[int]:
-    """Monkeypatches `technical_shared.convert_bulk` with a deterministic synthetic FX rate function."""
+def _patch_convert_bulk(monkeypatch: pytest.MonkeyPatch, *, holes: _HistoryHoles | None = None) -> list[int]:
+    """Monkeypatches `technical_shared.convert_bulk` with a deterministic synthetic FX rate function.
+
+    With ``holes`` (E-23), a day without a stored rate answers the last stored rate before it, with that rate's date and
+    ``backward_filled`` True, as the real `convert_bulk` backward-fills; a day before the first stored rate answers None.
+    Without, every day has its own rate.
+    """
     calls: list[int] = []
 
     async def _fake_convert_bulk(session, conversions, raise_on_error=True):  # noqa: ARG001
         calls.append(len(conversions))
+        rate_dates: dict[date, date | None] = {}
+        last_stored: date | None = None
+        for day in sorted({as_of_date for _amount, _to_currency, as_of_date in conversions}):
+            if holes is None or holes.stored(day):
+                last_stored = day
+            rate_dates[day] = last_stored
         results = []
         for amount_currency, to_currency, as_of_date in conversions:
-            rate = _synthetic_fx_rate(as_of_date)
-            converted = Currency(code=to_currency, amount=amount_currency.amount * rate)
-            results.append((converted, as_of_date, False))
+            rate_date = rate_dates[as_of_date]
+            if rate_date is None:
+                results.append(None)
+                continue
+            converted = Currency(code=to_currency, amount=amount_currency.amount * _synthetic_fx_rate(rate_date))
+            results.append((converted, rate_date, rate_date != as_of_date))
         return results, []
 
     monkeypatch.setattr(technical_shared, "convert_bulk", _fake_convert_bulk)
     return calls
+
+
+# =============================================================================
+# Market holidays (E-23)
+# =============================================================================
+
+
+def _patch_market_holidays(monkeypatch: pytest.MonkeyPatch, holidays: frozenset[date] = frozenset()) -> list[int]:
+    """Replaces `technical_shared.ensure_market_holidays` with a stub serving ``holidays``; returns the log of its calls.
+
+    E-23 (plan, «E-23.2» item 5): the technical builders read the market holiday table through that name, and only when a
+    run of empty buckets has to be judged; the real one builds the table in a QuantLib process. ``raising=False``: the
+    module has no such name until E-23, and the patch must not turn every test of this file into an error meanwhile.
+    """
+    calls: list[int] = []
+
+    async def _serve_market_holidays() -> frozenset[date]:
+        calls.append(1)
+        return holidays
+
+    monkeypatch.setattr(technical_shared, "ensure_market_holidays", _serve_market_holidays, raising=False)
+    return calls
+
+
+@pytest.fixture(autouse=True)
+def weekends_only_market_holidays(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every test of this module: an empty holiday table (weekends alone close the market), never a QuantLib process.
+
+    A test that needs a holiday, or the log of the calls, patches it again with `_patch_market_holidays`.
+    """
+    _patch_market_holidays(monkeypatch)
 
 
 # =============================================================================
@@ -2789,10 +2856,33 @@ class TestQuoteDayWarmup:
 #
 # The contract's new names are read through their modules inside the tests, so
 # today only the tests that use them are red, never this file's collection.
+#
+# E-23 (section 14) adds three fields to an uncovered row (`currency`,
+# `last_close`, `last_close_date`): the E-AI503 cases read their rows on the
+# E-AI503 fields (`_ai503_fields`), and AI503-C09/C10, barriers for the stale
+# series until E-23, now pin it as `no_price_in_period`.
 # =============================================================================
 
 
-def _gap_series(mode: str | None, points: list[FAPricePoint], *, visible_start: date, visible_end: date) -> tuple[list[FAPricePoint], list[FAPricePoint]]:
+def _carry_over(points: list[FAPricePoint], holes: _HistoryHoles) -> list[FAPricePoint]:
+    """``points`` as `get_prices_bulk` returns them with ``holes`` in the stored history (`_build_backward_filled_series`).
+
+    A day with a stored price keeps its point; a day without one carries the last stored point before it, on that day,
+    with its `backward_fill_info`; before the first stored price there is no point at all (X-R55).
+    """
+    series: list[FAPricePoint] = []
+    last_stored: FAPricePoint | None = None
+    for point in points:
+        if holes.stored(point.date):
+            last_stored = point
+            series.append(point)
+        elif last_stored is not None:
+            carry = AssetBackwardFillInfo(actual_rate_date=last_stored.date, days_back=(point.date - last_stored.date).days)
+            series.append(last_stored.model_copy(update={"date": point.date, "backward_fill_info": carry}))
+    return series
+
+
+def _gap_series(mode: str | _HistoryHoles | None, points: list[FAPricePoint], *, visible_start: date, visible_end: date) -> tuple[list[FAPricePoint], list[FAPricePoint]]:
     """(the points the price query returns, the points its signals compute on) for one gap mode.
 
     - ``None``: the full synthetic series, as `_make_fake_get_prices_bulk` returns it;
@@ -2800,10 +2890,15 @@ def _gap_series(mode: str | None, points: list[FAPricePoint], *, visible_start: 
     - ``"mixed"``: closes alternating between USD and EUR. The production query, asked for the native series
       (``target_currency=None``), computes no signal on a mixed series, so its signals see an empty one;
     - ``"stale"``: the stored prices end ten days before the period, so inside it there are only backward-filled
-      carries, in the asset's own currency.
+      carries, in the asset's own currency;
+    - a `_HistoryHoles` (E-23): no price stored on its days; each of them carries the last stored price before it, a day
+      before the first stored price has no point, and the signals compute on the same series.
     """
     if mode is None:
         return points, points
+    if isinstance(mode, _HistoryHoles):
+        series = _carry_over(points, mode)
+        return series, series
     if mode == "empty":
         return [], []
     if mode == "mixed":
@@ -2817,7 +2912,7 @@ def _gap_series(mode: str | None, points: list[FAPricePoint], *, visible_start: 
     raise ValueError(f"unknown price gap mode: {mode!r}")
 
 
-def _patch_get_prices_bulk_with_gaps(monkeypatch: pytest.MonkeyPatch, gaps: dict[int, str]) -> None:
+def _patch_get_prices_bulk_with_gaps(monkeypatch: pytest.MonkeyPatch, gaps: dict[int, str | _HistoryHoles]) -> None:
     """`_patch_get_prices_bulk`, with the asset ids of ``gaps`` given a price-history gap (see `_gap_series`).
 
     Drives the real `SignalService` per asset exactly as `_make_fake_get_prices_bulk` does - warm-up from the real plan,
@@ -2855,6 +2950,27 @@ def _three_asset_context(monkeypatch: pytest.MonkeyPatch) -> BuildContext:
     return _make_context(scope)
 
 
+def _three_asset_universe(monkeypatch: pytest.MonkeyPatch, component_id: str) -> BuildContext:
+    """`_three_asset_context` for ``portfolio.technical_prices``; for ``broker.technical_prices``, the same three positions
+    held at broker 7 (the same weights in the broker)."""
+    if component_id == "portfolio.technical_prices":
+        return _three_asset_context(monkeypatch)
+    scope = _broker_scope(broker_id=7)
+    positions = [_contribution(3, end_value=200, broker_id=7), _contribution(1, end_value=500, broker_id=7), _contribution(2, end_value=300, broker_id=7)]
+    _patch_get_report(monkeypatch, _report(scope, positions))
+    return _make_context(scope)
+
+
+#: The fields E-AI503 gave a row of `uncovered_assets`. E-23 adds `currency`, `last_close` and `last_close_date`,
+#: pinned by E23-C06 and AI503-C09: the E-AI503 cases compare their rows on these fields only, so they stay green.
+_AI503_GAP_FIELDS = ("asset_id", "portfolio_weight_ratio", "reason_code")
+
+
+def _ai503_fields(gap: dict) -> dict:
+    """A row of `uncovered_assets` restricted to `_AI503_GAP_FIELDS`."""
+    return {key: gap[key] for key in _AI503_GAP_FIELDS}
+
+
 class TestPriceSeriesGaps:
     """E-AI503: the technical price components beside an eligible held asset with no coherent price series."""
 
@@ -2871,7 +2987,8 @@ class TestPriceSeriesGaps:
 
         Guards: `portfolio.technical_prices` builds; asset 2 leaves `assets` for `uncovered_assets`, with its NAV
         weight (computed as for the others) and its reason; assets 1 and 3 keep their series and weights; 3 eligible,
-        2 covered. Red until E-AI503 (today RequiredComponentBuildError, the 503).
+        2 covered. Red until E-AI503 (today RequiredComponentBuildError, the 503). The row is read on its E-AI503
+        fields: the three E-23 adds are E23-C06's.
         """
         _patch_get_prices_bulk_with_gaps(monkeypatch, {2: mode})
         context = _three_asset_context(monkeypatch)
@@ -2881,7 +2998,7 @@ class TestPriceSeriesGaps:
         assert [asset["asset_id"] for asset in payload["assets"]] == [1, 3]
         assert [asset["currency"] for asset in payload["assets"]] == [CURRENCY, CURRENCY]
         assert [asset["portfolio_weight_ratio"] for asset in payload["assets"]] == pytest.approx([0.5, 0.2])
-        assert payload["uncovered_assets"] == [{"asset_id": 2, "portfolio_weight_ratio": pytest.approx(0.3), "reason_code": reason_code}]
+        assert [_ai503_fields(gap) for gap in payload["uncovered_assets"]] == [{"asset_id": 2, "portfolio_weight_ratio": pytest.approx(0.3), "reason_code": reason_code}]
         assert (payload["eligible_asset_count"], payload["covered_asset_count"]) == (3, 2)
 
     @pytest.mark.asyncio
@@ -2908,7 +3025,7 @@ class TestPriceSeriesGaps:
 
         Guards: `broker.technical_prices` (the same builder on the broker's universe) builds; asset 1 in `assets`,
         asset 2 in `uncovered_assets` with its weight in the broker (0.25) and `no_stored_price`; 1 covered of 2
-        eligible. Red until E-AI503.
+        eligible. Red until E-AI503. The row is read on its E-AI503 fields: the three E-23 adds are E23-C06's.
         """
         scope = _broker_scope(broker_id=7)
         _patch_get_prices_bulk_with_gaps(monkeypatch, {2: "empty"})
@@ -2917,7 +3034,7 @@ class TestPriceSeriesGaps:
         payload = _envelope_payload(await _make_context(scope).resolve("broker.technical_prices", required=True))
 
         assert [asset["asset_id"] for asset in payload["assets"]] == [1]
-        assert payload["uncovered_assets"] == [{"asset_id": 2, "portfolio_weight_ratio": pytest.approx(0.25), "reason_code": "no_stored_price"}]
+        assert [_ai503_fields(gap) for gap in payload["uncovered_assets"]] == [{"asset_id": 2, "portfolio_weight_ratio": pytest.approx(0.25), "reason_code": "no_stored_price"}]
         assert (payload["eligible_asset_count"], payload["covered_asset_count"]) == (2, 1)
 
     @pytest.mark.asyncio
@@ -2980,39 +3097,59 @@ class TestPriceSeriesGaps:
         assert {spec.component_id: (spec.version, spec.schema_version) for spec in specs} == expected
         assert {component_id: (registry.get(component_id).version, registry.get(component_id).schema_version) for component_id in expected} == expected
 
+    # red until E-23
     @pytest.mark.asyncio
-    async def test_barrier_a_stale_series_stays_a_covered_asset(self, monkeypatch):
-        """AI503-C09 — barrier, green today: asset 2's stored prices end ten days before the period.
+    async def test_a_stale_series_is_uncovered_with_its_last_close(self, monkeypatch):
+        """AI503-C09 — flipped by E-23. Until E-23 a barrier, «a stale series stays a covered asset», green.
 
-        Guards the case left out of the lot: inside the period only carries, in the asset's currency. Asset 2 stays in
-        `assets` with currency USD, every bucket empty and no latest close, and counts as covered: 3 of 3. Only
-        today's fields are read.
+        Asset 2's stored prices end ten days before the period, on 22 December 2025: inside the period the price history
+        returns only carries of that close, in USD, and no observed price. Pins: asset 2 leaves `assets` and its row in
+        `uncovered_assets` is exactly its NAV weight, ``no_price_in_period``, its currency (USD), the last close stored
+        before the period and that close's date. Red until E-23: today asset 2 stays in `assets`, covered, with every
+        bucket empty, and `uncovered_assets` is empty.
         """
         _patch_get_prices_bulk_with_gaps(monkeypatch, {2: "stale"})
         context = _three_asset_context(monkeypatch)
+        last_stored = context.scope.period_start - timedelta(days=10)  # the "stale" mode's last stored day
 
         payload = _envelope_payload(await context.resolve("portfolio.technical_prices", required=True))
 
-        assert [asset["asset_id"] for asset in payload["assets"]] == [1, 2, 3]
-        stale = next(asset for asset in payload["assets"] if asset["asset_id"] == 2)
-        assert stale["currency"] == CURRENCY
-        assert stale["latest_close"] is None
-        assert all(bucket["observation_count"] == 0 for bucket in stale["buckets"])
-        assert (payload["eligible_asset_count"], payload["covered_asset_count"]) == (3, 3)
+        assert 2 not in [asset["asset_id"] for asset in payload["assets"]], "asset 2 has no price in the period: no series"
+        assert payload["uncovered_assets"] == [
+            {
+                "asset_id": 2,
+                "portfolio_weight_ratio": pytest.approx(0.3),
+                "reason_code": "no_price_in_period",
+                "currency": CURRENCY,
+                "last_close": pytest.approx(float(_synthetic_close(2, last_stored))),
+                "last_close_date": last_stored.isoformat(),
+            }
+        ]
 
+    # red until E-23
     @pytest.mark.asyncio
-    async def test_a_stale_series_is_not_listed_as_uncovered(self, monkeypatch):
-        """AI503-C10 — the stale universe of AI503-C09 has no uncovered asset.
+    @pytest.mark.parametrize(
+        "component_id",
+        [
+            pytest.param("portfolio.technical_prices", id="AI503-C10-portfolio"),
+            pytest.param("broker.technical_prices", id="AI503-C10-broker"),
+        ],
+    )
+    async def test_a_stale_series_counts_as_eligible_but_not_covered(self, monkeypatch, component_id):
+        """AI503-C10 — flipped by E-23. Until E-23 «the stale universe of AI503-C09 has no uncovered asset», green.
 
-        Guards: carries in the asset's own currency are points the history returns, so no gap: `uncovered_assets` is
-        empty (the stale case keeps today's behaviour). Red until E-AI503: today the payload has no `uncovered_assets`.
+        The same universe, for the portfolio and the broker builder alike. Pins: assets 1 and 3 keep their series; asset
+        2 is the one uncovered asset, ``no_price_in_period``; it still counts in `eligible_asset_count` (3) and no longer
+        in `covered_asset_count` (2). Red until E-23: today 3 of 3 are covered and `uncovered_assets` is empty.
         """
         _patch_get_prices_bulk_with_gaps(monkeypatch, {2: "stale"})
-        context = _three_asset_context(monkeypatch)
+        context = _three_asset_universe(monkeypatch, component_id)
 
-        payload = _envelope_payload(await context.resolve("portfolio.technical_prices", required=True))
+        payload = _envelope_payload(await context.resolve(component_id, required=True))
 
-        assert payload.get("uncovered_assets") == []
+        assert [asset["asset_id"] for asset in payload["assets"]] == [1, 3]
+        assert [(gap["asset_id"], gap["reason_code"]) for gap in payload["uncovered_assets"]] == [(2, "no_price_in_period")]
+        assert (payload["eligible_asset_count"], payload["covered_asset_count"]) == (3, 2)
 
     @pytest.mark.asyncio
     async def test_a_fully_priced_universe_has_no_uncovered_asset(self, monkeypatch):
@@ -3028,3 +3165,532 @@ class TestPriceSeriesGaps:
 
         assert [asset["asset_id"] for asset in payload["assets"]] == [1, 2, 3]
         assert payload.get("uncovered_assets") == []
+
+
+# =============================================================================
+# 14. E-23 - empty price and rate buckets: one merged gap, the value before it,
+#     and the asset with no price in the period
+#
+# The contract (plan, «E-23.2», items 1-7). `{portfolio,broker}.technical_prices`
+# (each entry of `assets`) and `asset.ohlc_returns` list the gaps of their series
+# in `price_gaps`, `fx.rate_ohlc` (version 1 -> 2) in `rate_gaps`. A gap is a
+# MAXIMAL run of contiguous empty buckets (no observed point) holding at least one
+# day of open market - Monday to Friday, not in the holiday table - merged from
+# its first bucket's start to its last bucket's end. Its `last_value` and
+# `last_value_date` are the last OBSERVED value before it; for a gap at the period
+# start, the last value stored before the period (the carry that opens the
+# series); both None when the history begins inside the period. Weekends and
+# holidays alone never make a gap. An asset whose points in the period are all
+# carries, in one currency, is uncovered as `no_price_in_period`.
+#
+# The builders read the holiday table through
+# `technical_shared.ensure_market_holidays`, and only when a run of empty buckets
+# has to be judged: this module's autouse fixture serves an empty one (weekends
+# only); a test that needs a holiday, or the log of the calls, patches it again
+# (`_patch_market_holidays`).
+#
+# Every scenario is a `_HistoryHoles` history on `_scope()`'s period, whose plan
+# (`_DEFAULT_PLAN_SPANS`) the test checks first, with the empty buckets it
+# expects. The new fields are read with `.get`: before E-23 a test fails on its
+# assertion, never on a KeyError.
+#
+# E-23.3 (coordinator's decision of 20/10/2026, 11:43): a trailing run - one that
+# ends on the plan's end, the snapshot day (`snapshot_as_of`) - whose only open
+# day is that day is no gap: the snapshot day's value is not synchronized yet.
+# `_scope()`'s period ends on Saturday 28 February, never open, so no scenario on
+# it changes (E23-C01-C15); E23-C16 cuts the period one day short, to end on
+# Friday 27 February.
+# =============================================================================
+
+#: The STANDARD bucket plan of `_scope()`'s period, Thursday 1 January to Saturday 28 February 2026, oldest first: the
+#: rational widths 5, 9, 8, 6, 5, 4, 3, 2, 2 and 2 days, then one bucket a day from Monday 16 February.
+_DEFAULT_PLAN_SPANS: tuple[tuple[date, date], ...] = (
+    (date(2026, 1, 1), date(2026, 1, 5)),
+    (date(2026, 1, 6), date(2026, 1, 14)),
+    (date(2026, 1, 15), date(2026, 1, 22)),
+    (date(2026, 1, 23), date(2026, 1, 28)),
+    (date(2026, 1, 29), date(2026, 2, 2)),
+    (date(2026, 2, 3), date(2026, 2, 6)),
+    (date(2026, 2, 7), date(2026, 2, 9)),
+    (date(2026, 2, 10), date(2026, 2, 11)),
+    (date(2026, 2, 12), date(2026, 2, 13)),
+    (date(2026, 2, 14), date(2026, 2, 15)),
+    *((date(2026, 2, day), date(2026, 2, day)) for day in range(16, 29)),
+)
+
+#: The buckets of that plan a history without weekend values leaves empty: Saturday and Sunday 14-15, Saturday 21,
+#: Sunday 22 and Saturday 28 February. Not one of them holds a weekday.
+_WEEKEND_BUCKETS: tuple[tuple[date, date], ...] = (
+    (date(2026, 2, 14), date(2026, 2, 15)),
+    (date(2026, 2, 21), date(2026, 2, 21)),
+    (date(2026, 2, 22), date(2026, 2, 22)),
+    (date(2026, 2, 28), date(2026, 2, 28)),
+)
+
+#: A value on every weekday and none on weekends: an exchange-traded fund's closes, a central bank's rates.
+_WEEKDAYS_ONLY = _HistoryHoles(weekends=True)
+
+#: `_WEEKDAYS_ONLY`, and no value from Tuesday 10 to Friday 13 February: the buckets 10-11 and 12-13 empty, right before
+#: the empty weekend 14-15.
+_WEEKDAY_HOLE = _HistoryHoles(weekends=True, spans=((date(2026, 2, 10), date(2026, 2, 13)),))
+
+#: The empty buckets of a `_WEEKDAY_HOLE` series, in plan order.
+_HOLE_BUCKETS: tuple[tuple[date, date], ...] = ((date(2026, 2, 10), date(2026, 2, 11)), (date(2026, 2, 12), date(2026, 2, 13)), *_WEEKEND_BUCKETS)
+
+
+def _assert_default_plan(context: BuildContext) -> None:
+    """Premise of every E-23 scenario: ``context`` buckets `_scope()`'s period as `_DEFAULT_PLAN_SPANS` says."""
+    spans = tuple((bucket.start_date, bucket.end_date) for bucket in context.bucket_plan.buckets)
+    assert spans == _DEFAULT_PLAN_SPANS, f"premise: the STANDARD plan of 2026-01-01..2026-02-28 is not the one the E-23 scenarios empty: {spans}"
+
+
+def _close(asset_id: int, day: date) -> tuple[date, float]:
+    """(``day``, the synthetic close of ``asset_id`` stored on it)."""
+    return day, float(_synthetic_close(asset_id, day))
+
+
+def _rate(day: date) -> tuple[date, float]:
+    """(``day``, the synthetic USD/EUR rate stored on it)."""
+    return day, float(_synthetic_fx_rate(day))
+
+
+def _gap(first: date, last: date, value_before: tuple[date, float] | None) -> dict:
+    """A gap as the payload dumps it: from ``first`` to ``last``, after ``value_before`` (None: nothing stored before it)."""
+    value_date, value = value_before if value_before is not None else (None, None)
+    return {
+        "start_date": first.isoformat(),
+        "end_date": last.isoformat(),
+        "calendar_days": (last - first).days + 1,
+        "last_value": (pytest.approx(value) if value is not None else None),
+        "last_value_date": (value_date.isoformat() if value_date is not None else None),
+    }
+
+
+def _empty_buckets(series: dict) -> tuple[tuple[date, date], ...]:
+    """The (start, end) of the buckets of ``series`` without an observation, in plan order."""
+    return tuple((date.fromisoformat(bucket["start_date"]), date.fromisoformat(bucket["end_date"])) for bucket in series["buckets"] if bucket["observation_count"] == 0)
+
+
+def _series_of(payload: dict, asset_id: int) -> dict:
+    """The entry of ``asset_id`` in the `assets` of a universe payload."""
+    return next(asset for asset in payload["assets"] if asset["asset_id"] == asset_id)
+
+
+def _price_gaps_by_asset(payload: dict) -> dict[int, object]:
+    """`price_gaps` of each entry of `assets`, by asset id (None where the field is missing, as before E-23)."""
+    return {asset["asset_id"]: asset.get("price_gaps") for asset in payload["assets"]}
+
+
+def _context_with_holes(monkeypatch: pytest.MonkeyPatch, component_id: str, holes: _HistoryHoles) -> BuildContext:
+    """A context for ``component_id`` whose series has ``holes``: asset 2 of `_three_asset_universe` (assets 1 and 3 have
+    a close every day), the single asset 1, or the USD/EUR rate."""
+    if component_id == "fx.rate_ohlc":
+        _patch_convert_bulk(monkeypatch, holes=holes)
+        return _make_context(_fx_scope())
+    if component_id == "asset.ohlc_returns":
+        _patch_get_prices_bulk_with_gaps(monkeypatch, {1: holes})
+        return _make_context(_asset_scope(asset_id=1))
+    _patch_get_prices_bulk_with_gaps(monkeypatch, {2: holes})
+    return _three_asset_universe(monkeypatch, component_id)
+
+
+#: E23-C16's snapshot day: `_scope()`'s period cut one day short ends on Friday 27 February 2026, a weekday; and the
+#: two weekdays before it.
+_SNAPSHOT_FRIDAY = date(2026, 2, 27)
+_THURSDAY_BEFORE = date(2026, 2, 26)
+_WEDNESDAY_BEFORE = date(2026, 2, 25)
+
+
+def _context_with_holes_ending_on(monkeypatch: pytest.MonkeyPatch, component_id: str, holes: _HistoryHoles, period_end: date) -> BuildContext:
+    """`_context_with_holes` on `_scope()`'s period ending on ``period_end`` instead: asset 2 of `_three_asset_context`'s
+    portfolio (assets 1 and 3 have a close every day), the single asset 1, or the USD/EUR rate."""
+    if component_id == "fx.rate_ohlc":
+        _patch_convert_bulk(monkeypatch, holes=holes)
+        return _make_context(_fx_scope(period_end=period_end))
+    if component_id == "asset.ohlc_returns":
+        _patch_get_prices_bulk_with_gaps(monkeypatch, {1: holes})
+        return _make_context(_asset_scope(asset_id=1, period_end=period_end))
+    scope = _scope(period_end=period_end)
+    _patch_get_prices_bulk_with_gaps(monkeypatch, {2: holes})
+    _patch_get_report(monkeypatch, _report(scope, [_contribution(3, end_value=200), _contribution(1, end_value=500), _contribution(2, end_value=300)]))
+    return _make_context(scope)
+
+
+def _holed_series_and_gaps(payload: dict, component_id: str) -> tuple[dict, object]:
+    """(the series given the holes, its gaps) in a payload of `_context_with_holes_ending_on`: asset 2's entry of
+    `assets` and its `price_gaps`, or the payload with its `price_gaps` (`asset.ohlc_returns`) or `rate_gaps`
+    (`fx.rate_ohlc`). The gaps are None where the field is missing."""
+    series = _series_of(payload, 2) if component_id == "portfolio.technical_prices" else payload
+    return series, series.get("rate_gaps" if component_id == "fx.rate_ohlc" else "price_gaps")
+
+
+class TestEmptyBucketGaps:
+    """E-23: the gaps of the price and rate series, and the asset with no price in the period."""
+
+    # red until E-23
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "component_id",
+        [
+            pytest.param("portfolio.technical_prices", id="E23-C01-portfolio"),
+            pytest.param("broker.technical_prices", id="E23-C01-broker"),
+        ],
+    )
+    async def test_a_run_of_missing_weekdays_is_one_merged_gap_after_the_last_close(self, monkeypatch, component_id):
+        """E23-C01 — asset 2 has a close on weekdays only, and none from Tuesday 10 to Friday 13 February.
+
+        Pins, for the portfolio and the broker builder alike: the empty buckets 10-11 and 12-13 and the empty weekend
+        14-15 right after them are ONE gap, from 10 to 15 February (6 days), whose last value is the close of Monday 9
+        February, the last observed before it; asset 2's other empty buckets (weekends only) are no gap; assets 1 and
+        3, with a close every day, have none; asset 2 keeps its series (3 of 3 covered). Red until E-23: no
+        `price_gaps`.
+        """
+        context = _context_with_holes(monkeypatch, component_id, _WEEKDAY_HOLE)
+        _assert_default_plan(context)
+
+        payload = _envelope_payload(await context.resolve(component_id, required=True))
+
+        assert _empty_buckets(_series_of(payload, 2)) == _HOLE_BUCKETS, "premise: the hole and the weekends empty these buckets"
+        assert (payload["eligible_asset_count"], payload["covered_asset_count"]) == (3, 3)
+        assert _price_gaps_by_asset(payload) == {1: [], 2: [_gap(date(2026, 2, 10), date(2026, 2, 15), _close(2, date(2026, 2, 9)))], 3: []}
+
+    # red until E-23
+    @pytest.mark.asyncio
+    async def test_empty_weekend_buckets_alone_are_no_gap(self, monkeypatch):
+        """E23-C02 — asset 2 has a close on every weekday and none on weekends: an exchange-traded fund's history.
+
+        Pins: there ARE runs of empty buckets to judge - the weekend 14-15, Saturday 21, Sunday 22 and Saturday 28
+        February (checked) - and since none holds an open day, `price_gaps` is present and empty for every asset. Red
+        until E-23: no `price_gaps`.
+        """
+        context = _context_with_holes(monkeypatch, "portfolio.technical_prices", _WEEKDAYS_ONLY)
+        _assert_default_plan(context)
+
+        payload = _envelope_payload(await context.resolve("portfolio.technical_prices", required=True))
+
+        assert _empty_buckets(_series_of(payload, 2)) == _WEEKEND_BUCKETS, "premise: the weekends empty these buckets"
+        assert _price_gaps_by_asset(payload) == {1: [], 2: [], 3: []}
+
+    # red until E-23
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("holidays", "asset_2_gaps"),
+        [
+            pytest.param(frozenset({date(2026, 2, 16)}), [], id="E23-C03-a-holiday-is-no-gap"),
+            pytest.param(frozenset(), [_gap(date(2026, 2, 14), date(2026, 2, 16), _close(2, date(2026, 2, 13)))], id="E23-C03-the-same-day-open-is-a-gap"),
+        ],
+    )
+    async def test_a_missing_weekday_in_the_holiday_table_is_no_gap(self, monkeypatch, holidays, asset_2_gaps):
+        """E23-C03 — asset 2 has a close on weekdays only, and none on Monday 16 February (a US market holiday).
+
+        The weekend 14-15 and Monday 16 are one run of empty buckets. Pins: with Monday 16 in the holiday table the run
+        holds no open day, so no gap; with weekends only, the very same series has one gap, from 14 to 16 February (3
+        days), after the close of Friday 13. The holiday table decides, and it is read through `technical_shared`. Red
+        until E-23: no `price_gaps`.
+        """
+        _patch_market_holidays(monkeypatch, holidays)
+        context = _context_with_holes(monkeypatch, "portfolio.technical_prices", _HistoryHoles(weekends=True, spans=((date(2026, 2, 16), date(2026, 2, 16)),)))
+        _assert_default_plan(context)
+
+        payload = _envelope_payload(await context.resolve("portfolio.technical_prices", required=True))
+
+        expected_empty = ((date(2026, 2, 14), date(2026, 2, 15)), (date(2026, 2, 16), date(2026, 2, 16)), *_WEEKEND_BUCKETS[1:])
+        assert _empty_buckets(_series_of(payload, 2)) == expected_empty, "premise: the weekends and Monday 16 empty these buckets"
+        assert _price_gaps_by_asset(payload) == {1: [], 2: asset_2_gaps, 3: []}
+
+    # red until E-23
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("holes", "value_before"),
+        [
+            pytest.param(_HistoryHoles(weekends=True, spans=((date(2025, 12, 22), date(2026, 1, 14)),)), _close(2, date(2025, 12, 19)), id="E23-C04-after-the-close-stored-before-the-period"),
+            pytest.param(_HistoryHoles(weekends=True, spans=((None, date(2026, 1, 14)),)), None, id="E23-C04-history-begins-inside-the-period"),
+        ],
+    )
+    async def test_a_gap_at_the_period_start_reports_the_close_stored_before_the_period(self, monkeypatch, holes, value_before):
+        """E23-C04 — asset 2 has a close on weekdays only, and none from the period start to Wednesday 14 January.
+
+        Either its closes stop on Friday 19 December 2025 and resume on Thursday 15 January, or its history begins that
+        Thursday. Pins: the empty buckets 1-5 and 6-14 January are one gap, from 1 to 14 January (14 days); its last
+        value is the close stored before the period - the carry that opens the series, from 19 December 2025 - or,
+        when the history begins inside the period, none at all (value and date None). Asset 2 keeps its series. Red
+        until E-23: no `price_gaps`.
+        """
+        context = _context_with_holes(monkeypatch, "portfolio.technical_prices", holes)
+        _assert_default_plan(context)
+
+        payload = _envelope_payload(await context.resolve("portfolio.technical_prices", required=True))
+
+        expected_empty = ((date(2026, 1, 1), date(2026, 1, 5)), (date(2026, 1, 6), date(2026, 1, 14)), *_WEEKEND_BUCKETS)
+        assert _empty_buckets(_series_of(payload, 2)) == expected_empty, "premise: the hole and the weekends empty these buckets"
+        assert (payload["eligible_asset_count"], payload["covered_asset_count"]) == (3, 3)
+        assert _price_gaps_by_asset(payload) == {1: [], 2: [_gap(date(2026, 1, 1), date(2026, 1, 14), value_before)], 3: []}
+
+    # red until E-23
+    @pytest.mark.asyncio
+    async def test_prices_stopping_before_the_period_end_leave_a_trailing_gap(self, monkeypatch):
+        """E23-C05 — asset 2 has a close on weekdays only, and none after Tuesday 17 February: delisted, or its provider broke.
+
+        Pins: the eleven daily buckets 18-28 February, weekends included, are one gap to the period end, after the close
+        of Tuesday 17, its latest close (checked); the empty weekend 14-15 before it is no gap; asset 2 keeps its
+        series. Red until E-23: no `price_gaps`.
+        """
+        context = _context_with_holes(monkeypatch, "portfolio.technical_prices", _HistoryHoles(weekends=True, spans=((date(2026, 2, 18), None),)))
+        _assert_default_plan(context)
+
+        payload = _envelope_payload(await context.resolve("portfolio.technical_prices", required=True))
+
+        assert _series_of(payload, 2)["latest_date"] == "2026-02-17", "premise: the closes stop on Tuesday 17 February"
+        assert (payload["eligible_asset_count"], payload["covered_asset_count"]) == (3, 3)
+        assert _price_gaps_by_asset(payload) == {1: [], 2: [_gap(date(2026, 2, 18), date(2026, 2, 28), _close(2, date(2026, 2, 17)))], 3: []}
+
+    # red until E-23
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("mode", "reason_code"),
+        [
+            pytest.param("empty", "no_stored_price", id="E23-C06-no-stored-price"),
+            pytest.param("mixed", "mixed_price_currencies", id="E23-C06-mixed-currencies"),
+        ],
+    )
+    async def test_the_e_ai503_reasons_carry_no_currency_and_no_last_close(self, monkeypatch, mode, reason_code):
+        """E23-C06 — AI503-C01/C02's universe: asset 2 has no stored price, or closes in USD and EUR.
+
+        Pins the whole uncovered row under E-23: the three fields E-23 adds are present and null - no currency, no last
+        close, no date - since they are filled exactly for ``no_price_in_period``. Red until E-23: today the row has
+        three fields.
+        """
+        _patch_get_prices_bulk_with_gaps(monkeypatch, {2: mode})
+        context = _three_asset_context(monkeypatch)
+
+        payload = _envelope_payload(await context.resolve("portfolio.technical_prices", required=True))
+
+        assert payload["uncovered_assets"] == [{"asset_id": 2, "portfolio_weight_ratio": pytest.approx(0.3), "reason_code": reason_code, "currency": None, "last_close": None, "last_close_date": None}]
+
+    # red until E-23
+    @pytest.mark.asyncio
+    async def test_asset_ohlc_returns_of_a_stale_series_says_no_price_in_period(self, monkeypatch):
+        """E23-C07 — the single target's stored prices end ten days before the period, on 22 December 2025.
+
+        Pins: `asset.ohlc_returns` (version 2) keeps its currency, USD, with ``no_price_in_period``; every bucket empty
+        and no latest close or date; `price_gaps` is one gap over the whole period (1 January - 28 February, 59 days)
+        after the close of 22 December 2025, the last stored before the period. `asset.indicators` and
+        `asset.states_events` still build. Red until E-23: today the reason is None and there is no `price_gaps`.
+        """
+        _patch_get_prices_bulk_with_gaps(monkeypatch, {1: "stale"})
+        context = _make_context(_asset_scope(asset_id=1))
+        last_stored = context.scope.period_start - timedelta(days=10)  # the "stale" mode's last stored day
+
+        envelope = await context.resolve("asset.ohlc_returns", required=True)
+        payload = _envelope_payload(envelope)
+
+        assert envelope.component_version == 2
+        assert (payload["currency"], payload["reason_code"]) == (CURRENCY, "no_price_in_period")
+        assert payload["buckets"], "the bucket plan still covers the period"
+        assert all(bucket["observation_count"] == 0 for bucket in payload["buckets"])
+        assert (payload["latest_close"], payload["latest_date"]) == (None, None)
+        assert payload.get("price_gaps") == [_gap(context.scope.period_start, context.scope.period_end, _close(1, last_stored))]
+        for component_id in ("asset.indicators", "asset.states_events"):
+            _envelope_payload(await context.resolve(component_id, required=True))
+
+    # red until E-23
+    @pytest.mark.asyncio
+    async def test_asset_ohlc_returns_lists_a_run_of_missing_weekdays_as_one_gap(self, monkeypatch):
+        """E23-C08 — the single target has a close on weekdays only, and none from Tuesday 10 to Friday 13 February.
+
+        Pins: `asset.ohlc_returns` keeps its series (currency USD, no reason) and its `price_gaps` is E23-C01's one gap,
+        from 10 to 15 February, after the close of Monday 9 February. Red until E-23: no `price_gaps`.
+        """
+        context = _context_with_holes(monkeypatch, "asset.ohlc_returns", _WEEKDAY_HOLE)
+        _assert_default_plan(context)
+
+        payload = _envelope_payload(await context.resolve("asset.ohlc_returns", required=True))
+
+        assert _empty_buckets(payload) == _HOLE_BUCKETS, "premise: the hole and the weekends empty these buckets"
+        assert (payload["currency"], payload["reason_code"]) == (CURRENCY, None)
+        assert payload.get("price_gaps") == [_gap(date(2026, 2, 10), date(2026, 2, 15), _close(1, date(2026, 2, 9)))]
+
+    # red until E-23
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("mode", "reason_code"),
+        [
+            pytest.param("empty", "no_stored_price", id="E23-C09-no-stored-price"),
+            pytest.param("mixed", "mixed_price_currencies", id="E23-C09-mixed-currencies"),
+        ],
+    )
+    async def test_asset_ohlc_returns_without_a_series_has_no_gap(self, monkeypatch, mode, reason_code):
+        """E23-C09 — AI503-C06/C07's target: no stored price, or closes in USD and EUR.
+
+        Pins: their E-AI503 behaviour stands (no currency, the reason) and `price_gaps` is present and empty - a gap
+        belongs to a price series, and they have none, although every bucket is empty. Red until E-23: no `price_gaps`.
+        """
+        _patch_get_prices_bulk_with_gaps(monkeypatch, {1: mode})
+        context = _make_context(_asset_scope(asset_id=1))
+
+        payload = _envelope_payload(await context.resolve("asset.ohlc_returns", required=True))
+
+        assert (payload["currency"], payload["reason_code"]) == (None, reason_code)
+        assert payload.get("price_gaps") == []
+
+    # red until E-23
+    @pytest.mark.asyncio
+    async def test_asset_ohlc_returns_lists_every_gap_of_its_series_in_date_order(self, monkeypatch):
+        """E23-C15 — the single target has a close on weekdays only; its history begins on Thursday 15 January, it has no
+        close from Tuesday 10 to Friday 13 February, and none after Tuesday 24 February.
+
+        Pins: three gaps, in date order, each with its own value before it - 1-14 January with none (the history begins
+        inside the period), 10-15 February after the close of Monday 9, 25-28 February after the close of Tuesday 24 -
+        and the empty weekends between them (21 and 22 February) are no gap. Red until E-23: no `price_gaps`.
+        """
+        holes = _HistoryHoles(weekends=True, spans=((None, date(2026, 1, 14)), (date(2026, 2, 10), date(2026, 2, 13)), (date(2026, 2, 25), None)))
+        context = _context_with_holes(monkeypatch, "asset.ohlc_returns", holes)
+        _assert_default_plan(context)
+
+        payload = _envelope_payload(await context.resolve("asset.ohlc_returns", required=True))
+
+        expected_empty = (
+            (date(2026, 1, 1), date(2026, 1, 5)),
+            (date(2026, 1, 6), date(2026, 1, 14)),
+            *_HOLE_BUCKETS[:-1],
+            *((date(2026, 2, day), date(2026, 2, day)) for day in range(25, 29)),
+        )
+        assert _empty_buckets(payload) == expected_empty, "premise: the three holes and the weekends empty these buckets"
+        assert (payload["currency"], payload["reason_code"]) == (CURRENCY, None)
+        assert payload.get("price_gaps") == [
+            _gap(date(2026, 1, 1), date(2026, 1, 14), None),
+            _gap(date(2026, 2, 10), date(2026, 2, 15), _close(1, date(2026, 2, 9))),
+            _gap(date(2026, 2, 25), date(2026, 2, 28), _close(1, date(2026, 2, 24))),
+        ]
+
+    # red until E-23
+    @pytest.mark.asyncio
+    async def test_fx_rate_ohlc_lists_a_run_of_missing_weekday_rates_as_one_gap(self, monkeypatch):
+        """E23-C10 — USD/EUR has a rate on weekdays only, as a central bank publishes, and none from 10 to 13 February.
+
+        The same rule on the rate observations (a carried rate is no observation). Pins: `fx.rate_ohlc` (version 2) has
+        one `rate_gaps` entry, from 10 to 15 February, whose last value is the rate of Monday 9 February, the last
+        observed before it; its empty weekend buckets are no gap. Red until E-23: no `rate_gaps`, version 1.
+        """
+        context = _context_with_holes(monkeypatch, "fx.rate_ohlc", _WEEKDAY_HOLE)
+        _assert_default_plan(context)
+
+        envelope = await context.resolve("fx.rate_ohlc", required=True)
+        payload = _envelope_payload(envelope)
+
+        assert _empty_buckets(payload) == _HOLE_BUCKETS, "premise: the hole and the weekends empty these buckets"
+        assert payload.get("rate_gaps") == [_gap(date(2026, 2, 10), date(2026, 2, 15), _rate(date(2026, 2, 9)))]
+        assert envelope.component_version == 2
+
+    # red until E-23
+    @pytest.mark.asyncio
+    async def test_fx_rate_ohlc_empty_weekend_buckets_alone_are_no_gap(self, monkeypatch):
+        """E23-C11 — USD/EUR has a rate on every weekday and none on weekends.
+
+        Pins: its weekend buckets are empty (checked) and `rate_gaps` is present and empty. Red until E-23: no
+        `rate_gaps`.
+        """
+        context = _context_with_holes(monkeypatch, "fx.rate_ohlc", _WEEKDAYS_ONLY)
+        _assert_default_plan(context)
+
+        payload = _envelope_payload(await context.resolve("fx.rate_ohlc", required=True))
+
+        assert _empty_buckets(payload) == _WEEKEND_BUCKETS, "premise: the weekends empty these buckets"
+        assert payload.get("rate_gaps") == []
+
+    # red until E-23
+    def test_fx_rate_ohlc_moves_to_version_2(self):
+        """E23-C12 — the builder and payload of `fx.rate_ohlc` change (`rate_gaps`), so its version goes 1 -> 2.
+
+        Pins: version 2 in its spec and in the registry the runtime builds from the catalog (whose placeholder must
+        agree); the payload `schema_version` stays 1. The three price components stay at 2, bumped once in this release
+        by E-AI503 (AI503-C08). Red until E-23.
+        """
+        registry = build_component_registry()
+
+        assert (asset_fx_technical.FX_RATE_OHLC_SPEC.version, asset_fx_technical.FX_RATE_OHLC_SPEC.schema_version) == (2, 1)
+        assert (registry.get("fx.rate_ohlc").version, registry.get("fx.rate_ohlc").schema_version) == (2, 1)
+
+    # barrier: green today (nothing reads the holiday table yet), and after E-23 only if the builders read it lazily
+    @pytest.mark.asyncio
+    async def test_fully_observed_series_never_load_the_market_holidays(self, monkeypatch):
+        """E23-C13 — every asset priced and every rate observed, every day: no empty bucket anywhere (checked).
+
+        Pins the laziness of item 5: with no run of empty buckets to judge, building `portfolio.technical_prices`,
+        `asset.ohlc_returns` and `fx.rate_ohlc` never calls `ensure_market_holidays` - in production a QuantLib build
+        process on the request path. E23-C14 is its presence half: it proves the stub is the name the builders read.
+        """
+        holiday_calls = _patch_market_holidays(monkeypatch)
+        _patch_get_prices_bulk(monkeypatch)
+        _patch_convert_bulk(monkeypatch)
+
+        universe = _envelope_payload(await _three_asset_context(monkeypatch).resolve("portfolio.technical_prices", required=True))
+        asset = _envelope_payload(await _make_context(_asset_scope(asset_id=1)).resolve("asset.ohlc_returns", required=True))
+        rate = _envelope_payload(await _make_context(_fx_scope()).resolve("fx.rate_ohlc", required=True))
+
+        assert [_empty_buckets(series) for series in (*universe["assets"], asset, rate)] == [()] * 5, "premise: every bucket of the five series is observed"
+        assert holiday_calls == []
+
+    # red until E-23
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "component_id",
+        [
+            pytest.param("portfolio.technical_prices", id="E23-C14-portfolio"),
+            pytest.param("asset.ohlc_returns", id="E23-C14-asset"),
+            pytest.param("fx.rate_ohlc", id="E23-C14-fx"),
+        ],
+    )
+    async def test_a_run_of_empty_weekday_buckets_reads_the_market_holidays_through_technical_shared(self, monkeypatch, component_id):
+        """E23-C14 — a `_WEEKDAY_HOLE` series: a run of empty buckets holding weekdays, 10-15 February.
+
+        Pins: judging it needs the holiday table, and each of the three builders asks for it, at least once, through
+        `technical_shared.ensure_market_holidays` - the name this module's autouse fixture replaces, so that no test
+        ever starts the QuantLib build. Red until E-23: nothing asks for it today.
+        """
+        holiday_calls = _patch_market_holidays(monkeypatch)
+        context = _context_with_holes(monkeypatch, component_id, _WEEKDAY_HOLE)
+
+        _envelope_payload(await context.resolve(component_id, required=True))
+
+        assert len(holiday_calls) >= 1, f"{component_id} judged a run of empty weekday buckets without reading the holiday table through technical_shared"
+
+    # red until E-23.3: the three snapshot-day-alone cases; the three day-before-too cases are barriers
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("component_id", "first_missing", "expected_gaps"),
+        [
+            # red until E-23.3: today one gap, the snapshot Friday alone, after Thursday's close
+            pytest.param("portfolio.technical_prices", _SNAPSHOT_FRIDAY, [], id="E23-C16-portfolio-the-snapshot-day-alone"),
+            # E-23.3 barrier: green today, and after E-23.3
+            pytest.param("portfolio.technical_prices", _THURSDAY_BEFORE, [_gap(_THURSDAY_BEFORE, _SNAPSHOT_FRIDAY, _close(2, _WEDNESDAY_BEFORE))], id="E23-C16-portfolio-the-day-before-too"),
+            # red until E-23.3: today one gap, the snapshot Friday alone, after Thursday's close
+            pytest.param("asset.ohlc_returns", _SNAPSHOT_FRIDAY, [], id="E23-C16-asset-the-snapshot-day-alone"),
+            # E-23.3 barrier: green today, and after E-23.3
+            pytest.param("asset.ohlc_returns", _THURSDAY_BEFORE, [_gap(_THURSDAY_BEFORE, _SNAPSHOT_FRIDAY, _close(1, _WEDNESDAY_BEFORE))], id="E23-C16-asset-the-day-before-too"),
+            # red until E-23.3: today one gap, the snapshot Friday alone, after Thursday's rate
+            pytest.param("fx.rate_ohlc", _SNAPSHOT_FRIDAY, [], id="E23-C16-fx-the-snapshot-day-alone"),
+            # E-23.3 barrier: green today, and after E-23.3
+            pytest.param("fx.rate_ohlc", _THURSDAY_BEFORE, [_gap(_THURSDAY_BEFORE, _SNAPSHOT_FRIDAY, _rate(_WEDNESDAY_BEFORE))], id="E23-C16-fx-the-day-before-too"),
+        ],
+    )
+    async def test_a_value_missing_on_the_snapshot_day_alone_is_no_gap(self, monkeypatch, component_id, first_missing, expected_gaps):
+        """E23-C16 — red until E-23.3 for the snapshot day alone; a barrier, green today and after, for the day before too.
+
+        The period is `_scope()`'s cut one day short: it ends on Friday 27 February 2026, its snapshot day, a weekday;
+        the holiday table is this module's weekends-only stub. The series has a value on every day, weekends included,
+        and none from ``first_missing`` on. Pins, for the portfolio's asset 2, the single asset and the USD/EUR rate
+        alike: missing on the snapshot Friday alone - its value not synchronized yet - the empty daily bucket of Friday
+        27 is no gap, and the gaps list is present and empty; missing on Thursday 26 too, Thursday's missing value is
+        real, and the two empty daily buckets are ONE gap, Thursday to Friday (2 days), after Wednesday 25's value. Red
+        until E-23.3: today the snapshot Friday alone is a gap of one day, after Thursday's value.
+        """
+        assert (_WEDNESDAY_BEFORE.weekday(), _THURSDAY_BEFORE.weekday(), _SNAPSHOT_FRIDAY.weekday()) == (2, 3, 4), "premise: the days are the weekdays they are named after"
+        context = _context_with_holes_ending_on(monkeypatch, component_id, _HistoryHoles(spans=((first_missing, None),)), _SNAPSHOT_FRIDAY)
+        assert context.bucket_plan.end == context.scope.snapshot_as_of == _SNAPSHOT_FRIDAY, "premise: the plan ends on the snapshot day"
+
+        payload = _envelope_payload(await context.resolve(component_id, required=True))
+
+        series, gaps = _holed_series_and_gaps(payload, component_id)
+        assert _empty_buckets(series) == tuple((day, day) for day in _daterange(first_missing, _SNAPSHOT_FRIDAY)), "premise: the missing days, and only they, empty a daily bucket each"
+        assert gaps == expected_gaps
