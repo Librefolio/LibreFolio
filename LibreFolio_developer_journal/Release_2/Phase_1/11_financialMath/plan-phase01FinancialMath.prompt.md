@@ -4428,3 +4428,73 @@ mostra; nessuno short nei dati veri). L'esempio del 19/10, vendo allo scoperto 1
   while its units were in the next day's value; it now counts on the next day that has one.»
 - ✅ **Slot pesante 2** (11:31, HEAD `2e23bd03c`, carico 9): `api portfolio` **55**; porta 6190 libera. **CHECKPOINT READY**
   inviato, FROZEN. Poi P3, dopo l'aggiornamento della base con la funzione «a gradini» di X (`b8c2f614b`, treno 3).
+
+#### P3 — i cambi a gradini nel motore e nella cassa nativa (20/10, via 11:39; base `2f4ab1962` = E2b `bf748bbc3` + giornale `636dc8db2` + `dev_release2` `6e1761121`, con la funzione di X `b8c2f614b`)
+- ✅ **Revisione combinata, corse leggere** (11:39–11:41, carico 19–41): `lots-analysis-pure` 240, `financial-math` 2293,
+  `utils roi-utils` 9, `roi-fifo-utils` 1713, `portfolio-engine` 41.
+- **La funzione di X** (`fx/conversion.py`): `unit_rate_steps(session, {(src, dst): [(primo, ultimo), …]})` →
+  `UnitRateSteps(days, values, rate_days)` con `at(day)`: su ogni giorno delle finestre il valore di
+  `convert_bulk(Currency(1))` al bit; fuori dalle finestre l'ultimo gradino ≤ giorno (il dominio è del chiamante).
+- **Disegno del lato consumatore**:
+  - **motore** (`portfolio/engine.py::_preload_fx_rates`): le stesse necessità di oggi, come **finestre** per valuta
+    (`[date_from, date_to]` per le valute dei prezzi e degli asset, un giorno per ogni data di transazione, flusso esterno,
+    gamba di trasferimento prima dell'intervallo, arrivo; i giorni del transito dal pavimento di oggi), una chiamata a
+    `unit_rate_steps`, e al posto del dizionario per giorno una **vista** (`financial_math/fx_rates.AskedDayRates`): `get`
+    dà il gradino solo in un giorno chiesto, None altrove — il dominio di oggi per costruzione; i lettori di `daily_state.py`
+    (`.get`) non cambiano;
+  - **cassa nativa** (`native_cash.compute_native_cash`): i movimenti ancora con `convert_bulk`; le quote unitarie con
+    `unit_rate_steps` sulle finestre di `_unit_requests` (i giorni dei movimenti prima del pavimento, poi
+    `[max(primo, pavimento), fine]`), e `NativeCash.unit_rates` la stessa vista per `(valuta, giorno)`: `_rate_at` (l'ultimo
+    valore ≤ giorno) e il calendario dei giorni di cambiamento leggono i **gradini**, non ogni giorno. Equivalenza: tra due
+    gradini il valore non cambia, quindi l'ultimo valore ≤ giorno e il confronto col giorno di calendario precedente danno
+    lo stesso risultato sul calendario sparso;
+  - le viste restano `Mapping` interi (i test costruiscono `DailyStateBuilder(fx_rate_map={…})` e `NativeCash(unit_rates={…})`
+    con dizionari; il test 8a di J-1 itera `.items()`): l'iterazione cammina i giorni, ma la usano solo i test.
+- Prove previste: rossi strutturali (nessuna richiesta per giorno; i gradini letti al posto dei giorni), parità della vista
+  col dizionario di oggi in ogni giorno chiesto e None fuori, `NativeCash` con i gradini = con il dizionario (valori, giorni
+  di cambiamento, `value_at`), e **parità su tutta l'uscita** di `get_report` (albero di HEAD da `git archive` contro il
+  nuovo, processi separati, JSON confrontato) sulle 4 copie del DB, con i tempi del caso 1900.
+- ✅ **Rossi P3** (test-author `p3-tests`): `test_financial_math/test_asked_day_rates.py` nuovo (187, puro: la vista contro il
+  dizionario di oggi chiave per chiave e cifra per cifra su 30 semi e 9 forme di finestre, `.get` None fuori dalle finestre,
+  `fixed_destination`, `step_series`; `NativeCash(vista)` = `NativeCash(dizionario)` su `value_at` ogni giorno,
+  `rate_change_days`, `exchange_results`, saldi; il costo: `_rate_days` non più lunghi dei gradini) e
+  `test_financial/test_fx_steps_service_parity.py` (15, SQLite privata per test: la mappa del motore = `convert_bulk` sulle
+  necessità di oggi, nulla negli altri giorni; righe legacy 0 / 1E-19 / 1E+19 / inf, coppie salvate invertite, un buco oltre
+  l'àncora; transito prima del 1900; cassa nativa = dizionario denso; **tutto `get_report` al bit** con i lettori densi di
+  HEAD sostituiti; i 5 rossi di costo: oggi il precarico dà 189 voci a `convert_bulk`, 62 → 6 002 voci da 30 a 3 000 giorni,
+  la cassa nativa 273 voci per 7 movimenti, 530 → 18 350). Rossi su HEAD: **160** (155 per assenza, 5 di costo). Decisione
+  sul contratto: il precarico **non chiama più** `convert_bulk`; la cassa nativa sì, per gli importi dei movimenti
+  (`importo / tasso` non è `importo × (1/tasso)` all'ultima cifra). 14 test esistenti stubbano `convert_bulk` con una sessione
+  finta e fissano i giorni chiesti: vanno portati alle finestre (meccanica, non valori).
+- ✅ **Codice P3** (il disegno sopra, con i punti 1–8 di test-author): `fx_rates.AskedDayRates` (+ `merged_windows`, che
+  lascia fuori una finestra rovesciata; `step_series` solo con una destinazione fissa, con la precondizione scritta; un giorno
+  d'altro tipo → assente; con `fixed_destination` le altre coppie ignorate; sola lettura); `engine._preload_fx_rates` a
+  finestre con una chiamata `unit_rate_steps`, niente `convert_bulk`; `native_cash.compute_native_cash` con `_unit_windows` e
+  la vista, `NativeCash.__post_init__` legge i gradini (`_step_rate_series`) da una vista, `_rate_series` da un dizionario.
+  Docstring del modulo della cassa nativa e di `_preload_fx_rates` aggiornate. Sui nuovi test: 187 + 15 verdi, 8a 5 verdi; i
+  14 vecchi rossi come previsto (9 + 2 + 2 + 1). In corso: i 14 portati alle finestre, la docstring di 8a, i mutanti (test-author);
+  la parità di tutto `get_report` sulle copie del DB (albero di HEAD contro il nuovo).
+- ✅ **Parità di tutto `get_report`** (`files/p3/report_dump.py`; l'albero di HEAD `2f4ab1962` da `git archive` contro il
+  worktree, processi separati, ogni sezione in JSON; ogni utente × valuta di base e USD × 5 finestre sulla copia base, l'utente
+  degli errori di battitura sulle copie del 1900): **330 rapporti, 0 differenze**. Tempi, somma dei 10 rapporti per copia del
+  1900: 54,5 → 42,8 s, 56,9 → 40,7 s, 53,9 → 40,9 s (finestra 1M: 3,0 → 1,3 s, 6,0 → 1,4 s); «tutto» 27–29 → 23–26 s; copia base
+  22,3 → 21,4 s. Il resto del costo del caso 1900 non è nei cambi: è il terreno di P4.
+- ✅ **I 14 test esistenti portati alle finestre** (test-author): `test_native_cash.py` 9 (il doppio `FakeSteps` con gli stessi
+  tassi di `FakeFx`; `forbidden_fx` blocca anche `unit_rate_steps`), `test_portfolio_engine_vnext.py::TestPreloadFxRates` 2,
+  `test_engine_replay_floor.py::TestTransitRatesStartAtTheFloor` 2, `test_broker_internal_flows.py::TestPreloadTransferLegRates`
+  1, con l'aiuto condiviso `test_services/_unit_steps_double.py`: gli stessi giorni scritti come finestre, ogni asserzione di
+  valore conservata. 8a: solo la docstring (il nuovo flusso; i mutanti rimisurati: (a) riespresso 3 rossi, (b)/(e) non più
+  mascherati 2, (c) 5, (d) 3 con la sua seconda porta (d′) in `unit_rate_steps` 5). +10 test per i punti 1–8 del contratto
+  (`test_asked_day_rates.py` 197). Mutanti M1–M8 sulla mia cura: nessuno scarto; il filtro della destinazione fissa sulle sole
+  finestre è un mutante equivalente (tenuto come cintura).
+- ✅ **Corsia** (12:52–12:54, carico 16–20; prodotto tolto i tre file, sha `7467b3e5…` uguale dopo): `test_asked_day_rates`
+  **165 rossi** / 32, `test_fx_steps_service_parity` **5 rossi** / 10; verdi `financial-math` **2490**, `utils roi-utils` 9,
+  `roi-fifo-utils` **1728**, `portfolio-engine` 41; dopo le note di doc: `test_asked_day_rates` 197, il DB 15, 8a 5,
+  `test_layer_boundaries` verde. Doc: `fx/architecture.md` (il paragrafo dei gradini, il caricamento della finestra),
+  `transactions/wac.md` (due chiamate), `transactions/price_resolver.md`, `financial_math.md` (pipeline, `_read_rate`, la mappa,
+  i moduli che leggono `convert_bulk`), `backend.instructions.md` (la mappa della casa), `financial_math/__init__.py`;
+  `mkdocs build` stretto e `check-links` verdi. Slot `api portfolio` da chiedere.
+- ✅ **Slot 1** (13:16, HEAD `2f4ab1962`, carico 14): `api portfolio` **55**; porta 6190 libera. **CHECKPOINT READY** inviato,
+  FROZEN. Riga ⚡ proposta: «**Faster portfolio reports on long histories.** The exchange rates a report needs are read as
+  the days they change, not one day at a time: on a history that starts in 1900 a one-month report now takes about 1.4 s
+  instead of 3–6 s, with the same numbers.»
