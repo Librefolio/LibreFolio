@@ -9507,3 +9507,147 @@ all'AI Export, al rischio e ai lotti; X al PAC.
    > **Nota**: l'ancora `#single-flight` di `backend/financial_math.md` sta due punti sotto la frase giusta. È fuori
    > perimetro: per ora resta così.
 6. ⏳ Checkpoint: inviato al coordinatore, FROZEN.
+
+### H-55 v2, la CSP sempre applicata — piano breve aggiornato (20/10)
+
+> Confermata dal developer il 19/10, testuale: «confermo quanto scrivi, facciamolo come dici, di default attivo, e si
+> allargano le maglie solo all'occorrenza». Sì a Q1–Q4. Il disegno del 19/10 mattina (direttive, rischi, ordine)
+> **non cambia**; sotto ci sono solo le differenze e il piano dei passi aggiornato.
+
+**Cosa è cambiato dal 19/10 mattina**:
+1. **H-60 e H-60r**, entrati col treno 2, hanno toccato `security_headers.py`:
+   - il 500 non gestito ora è JSON, scritto nel log una volta per richiesta, poi rilanciato;
+   - `request_id` sta nello stack, subito fuori da `security_headers`.
+
+   La CSP vive nello stesso `send_with_headers` e non cambia questa parte. La risposta JSON non è un documento, quindi
+   riceve solo gli header di base. I rossi parcheggiati di `test_managed_headers.py` vanno rifatti su questo file.
+2. **La mappa delle guide** (N69d di A, lotto 3 di oggi):
+   - il nuovo controllo del browser «uno script bloccato» (Q2) entra nella metà `browser` di `checkGuides.json`, con
+     guida `admin/configuration/#csp`;
+   - la sezione «Browser Protections» della guida di configurazione nasce col lotto della mappa, con
+     `#frame-protection` e `#csp-report-only`; H-55 v2 ci aggiunge `#csp`, e il report-only diventa una sua parte.
+     Le ancore restano stabili.
+3. **Le categorie del cloud** (Q4: `cloud` virtuale e `front-cloud` con la corsia managed messa da sé) sono un lotto
+   piccolo a sé (S–M), su file condivisi del runner. Conviene **prima del passo 5**, così lo slot finale gira
+   `front-cloud all`.
+4. **I rossi parcheggiati** (`files/parked/h55-csp-enforce-reds-on-d6c252ec4.patch`): la tabella del 19/10 (cosa si
+   riusa, cosa cade) vale ancora. Cambia solo la base, oggi `311033c3c` più i lotti in volo.
+
+**Passi aggiornati** (prima i rossi, come sempre):
+
+| # | Cosa | Chi | Taglia | Dipende da |
+|---|---|---|---|---|
+| 0 | Inventario: `all-frontend` con `--lane-setting LIBREFOLIO_CSP_REPORT_ONLY=true` su una corsia self-hosted, senza codice. Il raccoglitore di H-43 elenca ciò che la policy fermerebbe | H | slot di circa 1 h | **uno slot** (la domanda 5 del 19/10, ancora aperta) |
+| 1 | Gli hash rinfrescati quando la build cambia (firma `st_mtime_ns`/`st_size`) | H | S | — |
+| 2 | La sonda per immagine (Q1): `GET /api/v1/auth/address-probe.png`, 1×1 per questa istanza e 2×1 per un'altra; `addressProbe.ts` di A, riusato da E | A con H | S | prima del 3 (sennò AUSR-E-07 diventa rosso) |
+| 3 | La policy sempre applicata; il trio su ogni documento, `/mkdocs` e la doc dell'API compresi (Q3); i testi dei controlli; la sezione `#csp`; il CHANGELOG sotto «⚠️ Breaking changes» | H | M | 1, 2 |
+| 4 | L'avviso degli script iniettati (Q2): il listener in testa ad `app.html` (serve l'OK del programma colori), un messaggio solo in console, e il controllo del browser nella scheda Sicurezza (`sessionStorage`, nessun endpoint) con la voce della mappa | H con A | S/M | entra col 3 |
+| 4b | Le categorie `cloud` e `front-cloud` (Q4) | H | S–M | via sui file condivisi del runner |
+| 5 | Slot: E2E completa, `front-cloud all` e una corsa con la copertura; poi la correzione della voce F1 della baseline | H | slot | 3, 4, 4b |
+
+**Totale**: circa 2 giorni di H e mezza giornata di A.
+
+**Cosa chiedo per partire**:
+- lo slot del passo 0;
+- il via sui file del runner per il 4b;
+- l'OK del programma colori su `app.html` per il 4. Si può chiedere già adesso: tocca solo la testa dello script inline.
+
+**H-55 v2, approvazione e condizioni (20/10, 10:39 e 11:30)**:
+- il coordinatore approva il piano breve e dà il via sui file condivisi del runner per il 4b; lo slot del passo 0
+  arriva dopo la mappa;
+- le condizioni del coordinatore dei colori per il passo 4 (`app.html`):
+  1. **L'anti-FOUC non si rompe**: l'avviso sta in un suo `try`, oppure dopo `classList.add(theme)`.
+  2. **Non si toccano**:
+     - la decisione del tema e il `classList.add`, righe 17–23;
+     - la coppia `theme-color`, righe 27 e 11;
+     - lo `<style>` dello splash, righe 39–101.
+
+     E niente `classList.contains('dark')`: lo vieta il gate `themeModeReads`.
+  3. **Prima del checkpoint** girano i gate `themeColorMeta`, `themeModeReads`, `themeComponentTokens`, `themeRoles`
+     e `themeTokens`, più `documentTitle.guard.test.ts` e `flagFont.gate.test.ts`.
+  4. **La CSP**:
+     - niente hash fissati a mano: la designer può cambiare `#1b4334`, e gli hash si calcolano all'avvio;
+     - se si tocca `style-src 'unsafe-inline'`, va detto prima, perché lo splash ne dipende. Il disegno di H-55 v2
+       non tocca `style-src`: lo `style-src` applicato non c'è.
+
+### Lotto «la guida di ogni controllo» (la mappa per il bottone «Guida» di A, N69d), 20/10, 10:40 — passi
+
+> Via del coordinatore (20/10, 10:39) dopo il commit di N70 (`564549192`). Contratto in
+> `files/guides_map/contract.md`; il contratto inviato ad A il 19/10 (percorso del modulo, export, forma del valore)
+> resta invariato.
+
+**Disegno**:
+- I dati stanno in `frontend/src/lib/features/instance/checkGuides.json`, diviso in `server` (i controlli di
+  `GET /security/checks`, nell'ordine del server) e `browser` (`accounts.openRegistration`). Il JSON lo leggono il modulo
+  TS e il test del backend: niente parsing di TS in Python.
+- Il modulo `checkGuides.ts` espone `CHECK_GUIDES`, congelato, e `checkGuidePath(id)`, che legge solo le chiavi
+  proprie.
+- 18 voci. Ci sono tre ancore nuove: `#untrusted-proxy` (N70, già entrata), `#frame-protection` e `#csp-report-only`
+  (dal docs-writer, in una sezione «Browser Protections» di `configuration.en.md`, dove H-55 v2 aggiungerà `#csp`).
+- **Test**:
+  - Vitest `checkGuides.test.ts` in `core-unit`: forma, ancore nelle pagine `.en.md` con un controllo negativo,
+    lookup, metà `browser`, il cricchetto delle traduzioni (30 coppie oggi, a zero dopo Aphra);
+  - pytest in `test_config_audit.py`: gli id di `run_config_checks()` più `platform.plugin_secrets`, in ordine,
+    uguali alle chiavi `server` del JSON.
+
+**Passi**:
+1. ✅ **Rossi** (20/10, 11:00–11:25):
+   - TA-M2 ha aggiunto `test_every_server_check_has_a_guide` in `test_config_audit.py`. Rosso: `config-audit` dà 1
+     fallito e 220 passati, perché il JSON non esiste; prima controlla che la cartella esista, quindi un percorso
+     sbagliato non passerebbe per un file mancante.
+   - TA-M1 ha scritto `checkGuides.test.ts`. Rosso: `core-unit` dà 6 falliti, tutti in quel file per modulo e JSON
+     assenti; la parte delle doc passa già. Ha un controllo negativo sul lettore delle ancore: `session-cookie` trovata
+     una volta, un'ancora inventata data per mancante.
+   - Il docs-writer ha scritto in `configuration.en.md` la sezione `## 🛡️ Browser Protections {: #browser-protections }`,
+     con `### 🖼️ Frame Protection {: #frame-protection }` e `### 📋 The Report-Only Policy {: #csp-report-only }`.
+     Ha anche messo i link dalle tabelle «Main Options» e «Startup Checks», e un paragrafo per gli sviluppatori in
+     `security.md` (`#security-checks-endpoint`). `mkdocs build` stretto ok; `check-links` ok, 97 validi.
+   - `core-unit` ha la riga di `checkGuides.test.ts`.
+   > **⚠️ Fuori pista**:
+   > - TA-M1 ha scritto e poi cancellato un file di appoggio in `/tmp`;
+   > - il mio brief per le doc nominava una «pagina per gli sviluppatori» senza dire quale; l'ho chiesta dopo.
+2. ✅ **Il JSON e il modulo applicati** dalla copia in `files/guides_map/dry/`.
+3. ✅ **Verdi**:
+   - `front-utility core-unit`: 222 file, 9510 test, ripetuto dopo Prettier sul file di TA-M1, che non poteva
+     lanciarlo;
+   - `services config-audit`: 221 passati;
+   - `front check`: 0 errori e 0 avvisi;
+   - ruff e black puliti; `git diff --check` pulito.
+4. ⏳ Checkpoint: dopo quello di W-B37, come chiede il coordinatore.
+
+### Rosso in dev dal treno 2: W-B37 (`BrokerImportFilesModal.test.ts`), 20/10, 11:30 — passi
+
+> Dal coordinatore: nel gate su `f73514a77`, `front-utility component-unit` dà 1 fallito, il controllo di W-B37 «a listed
+> file without can_delete is refused by the generated client, and nothing is listed»: `TypeError: undefined is not
+> iterable` a `:323`.
+
+- **Causa (mia, H-60)**:
+  - con l'OK del coordinatore avevo tolto da `BrokerImportFilesModal.svelte` la riga `console.error('Failed to load
+    files:', e)`. Il test la usava per leggere `err.cause.issues`;
+  - il plugin `zod-validation` rilancia lo **stesso** `ZodiosError`, quindi il comportamento non è cambiato, solo il
+    modo del test di osservarlo;
+  - in H-60 non avevo fatto girare `component-unit` dopo aver toccato un componente.
+  > **⚠️ Fuori pista (lezione)**: chi tocca un `.svelte` fa girare anche `front-utility component-unit`, non solo
+  > `core-unit`.
+- **Cura**:
+  - il test, non il plugin: il test-author riscrive il controllo **senza leggere la console**. La regola di H-60 dice
+    che una riga di console non è mai il segnale che un test legge, e questo rosso è proprio il caso che la regola
+    previene;
+  - restano il banner e la lista vuota; la prova del rifiuto diventa il `safeParse` della lista servita con lo schema
+    di risposta generato (problema in `[0, 'can_delete']`), più un gemello positivo come barriera;
+  - va informato W, il file è suo (tramite il coordinatore).
+
+**Passi**:
+1. ✅ Rosso riprodotto sul file singolo (`vitest run …BrokerImportFilesModal.test.ts`): 1 fallito, 3 passati, lo
+   stesso `TypeError` (`files/runs/w37/red-single.log`).
+2. ✅ **Il test-author ripara il controllo** (+19/−3, solo dentro quel test):
+   - lo spy della console resta solo per il silenzio: non è più in una variabile, quindi nessuno può leggerlo;
+   - l'endpoint si trova in `zodiosApi.api` con l'alias `list_files_api_v1_brokers_import_files_get`, e il test
+     verifica che sia `['get', LIST_URL]`;
+   - il gemello positivo, `can_delete: true`, passa lo schema;
+   - `route.response.safeParse(server.files)` fallisce in `[0, 'can_delete']`;
+   - il banner e la tabella assente restano;
+   - il commento spiega perché il test non legge più la console.
+3. ✅ **Verdi**: il file singolo 4/4; `front-utility component-unit` 189 file, 4989 test; `front check` 0 errori;
+   Prettier pulito.
+4. ⏳ Checkpoint, prima di quello della mappa: inviato al coordinatore, che informa W.
