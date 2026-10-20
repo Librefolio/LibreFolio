@@ -9464,3 +9464,34 @@ pagine).
 > non ancora in `dev_release2`; da allora le voci di Y si leggevano come parte della sezione E. Rimessa al suo posto, con
 > E-25 ed E-26 in fondo alla sezione E; contro `32462b543` (prima del mio errore) il file cambia solo per la chiusura di
 > E-23 e le due righe nuove. Da qui in poi controllo ogni modifica del backlog con un diff contro il commit precedente.
+
+#### Lo scatto `settings/email` della galleria — la domanda a G (2026-10-20, 13:3x; base `e1c4ab230`)
+> **Il coordinatore** (13:34): checkpoint `e1c4ab230` (il giornale con il titolo di Y ripristinato, verificato). E-25 ed
+> E-26 le porta lui allo sviluppatore. Intanto chiudere con G lo scatto `settings/email`: chiedere al coordinatore dei
+> colori («UI color analysis»), che coordina G, se lo mette nel prossimo blocco della galleria.
+
+- **Riverificato a lettura** su `e1c4ab230`: il test `gallery.spec.ts:2074` (nel `describe('Settings')`, fra
+  `global-settings` e `plugins`) regge ancora. `settings-tab-email` viene da `settings/+page.svelte:84`; `email-tab` ha
+  `data-busy`; `settings-page` c'è; i quattro testid di `expectGalleryEmailStatus` stanno in `EmailSettingsTab.svelte`.
+  La fixture valida il suo stato contro lo Zod generato. Senza `links`, `linksBase` è nullo: niente sezione dei link,
+  niente URL esterno, niente sonda. Non eseguito: la galleria va in uno slot, ed è di G.
+- **Manca, oltre alla corsa**: le voci nelle pagine della galleria (`gallery/{desktop,mobile}.{en,it,fr,es}.md`, accanto
+  a `global-settings`): senza, lo scatto non compare. Le hanno sempre scritte i workstream dei loro scatti
+  (`c8d23c544`, `dbf4263e9`).
+- **Chiesto** (13:3x, a «UI color analysis»): se lo scatto va nel prossimo blocco, e se le voci delle pagine le scrivo io a
+  immagini fatte o le scrive G nel blocco.
+- **La risposta** (13:38): lo scatto **c'è già**. G l'ha preso in tutte e tre le gallerie di riferimento del 18/10 (su
+  `ba8e06763` e `cd686f445`), 16 immagini per giro, tutto verde; ogni blocco gira tutto lo spec. Da N69b le scene da admin
+  mostrano un avviso di sicurezza (la corsia della galleria ha il limite dei login spento): G sceglie la cura, per me
+  niente. Le voci delle pagine: le scrivo io, anche subito (i PNG sono ignorati da git, la build stretta regge); poi il
+  timbro dei due `.en.md`.
+  > **⚠️ Fuori pista**: «mai eseguito» era falso. Lo avevo preso dalle note di E6 (16/10) senza chiederlo a G.
+- ✅ **Le voci** (13:4x): dopo `global-settings`, negli 8 file `gallery/{desktop,mobile}.{en,it,fr,es}.md`, scritte nelle
+  4 lingue coi termini dell'app (`email.tab.label`: Email, Email, E-mail, Correo; l'email di prova). `mkdocs build`
+  stretto ok, `check-links` ok.
+- **Il timbro, non fatto** (13:4x): `translate-stamp --file gallery/desktop.en.md gallery/mobile.en.md` l'ho lanciato e
+  poi tolto (il cache rimesso da `HEAD`). Le voci inglesi del cache erano già scadute rispetto a `HEAD` (md5 di
+  `desktop.en.md` a `HEAD` `5e3230dd…`, nel cache `7cd49d23…` del 13/10): la voce «🧩 Plugin Settings» di X
+  (`c8d23c544`, 16/10) c'è solo in inglese, in desktop e mobile (`translate-validate`: 133 titoli contro 132, prima della
+  mia voce 132 contro 131). Timbrare avrebbe nascosto quel debito vero. Il timbro va fatto dopo che quella voce è
+  tradotta.
