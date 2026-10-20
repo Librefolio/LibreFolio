@@ -13,6 +13,8 @@ export interface AdminAccount {
     holds_place?: boolean;
     /** The initial administrator of LIBREFOLIO_ADMIN_EMAIL waiting for its setup link (F02): never reactivated here. */
     pending_setup?: boolean;
+    /** The account's avatar (an uploaded image or an address), drawn after the row's chevron (N69-4); null without one. */
+    avatar_url?: string | null;
 }
 
 export interface OpenInvite {
