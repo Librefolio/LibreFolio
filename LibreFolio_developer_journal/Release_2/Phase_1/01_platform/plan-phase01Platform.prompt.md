@@ -244,17 +244,38 @@ Il lotto si divide in due:
 
 ## 4. Checkpoint e passi (lotti piccoli)
 
-| CP | Contenuto | Sblocca | Dipende da |
-|---|---|---|---|
-| CP1 | **Rinomina** (`git mv`) verso `services/platform/` e `services/files/`, più gli import, le patch dei test, le stringhe del runner, `coverage_analysis.py:71`, la doc per sviluppatori, la mappa in `backend.instructions.md` e le tabelle delle fonti della wiki (17 pagine, 35 citazioni) | Z (scheduler), B (backup), percorsi stabili per tutti | niente (né il commit del coordinatore su `main.py` né npm) |
-| CP2 | **Taglio di `main.py`**: lifecycle, database_bootstrap, middleware, static_site. Configurazione unica (pacchetto `config/`, D2) con le letture spostate e la guardia su `os.environ`. Patch dei test su `lifecycle` con `raising=True` | A, Z, B, X (agganci senza toccare `main.py`, sezioni di config) | il commit del coordinatore su `main.py` + aggiornamento di base |
-| CP3 | **Segreti (F03)**: sorgente `_FILE`, `JWT_SECRET_FILE` (e `dev.py`), `instance_key`, `config_audit` nei log, `.env.example` completo e a sezioni con la guardia «ogni variabile è in `.env.example`», doc admin (configuration, filesystem) | B, X (chiave), E | CP2 |
-| CP4 | **Config pubblica e avvisi**: due endpoint, `features/instance/`, layout, interceptor, i18n, Vitest, `api sync` | A (login, link), Z, X | CP3; `npm ci` approvato |
-| CP5 | **Prontezza e versione (F08)**: `/system/ready`, `/system/info` minimo senza sessione (D14 modificata), R2, C-84. CP5a backend, CP5b frontend | pannello di controllo | CP2a |
-| CP6 | **Blocco dell'istanza (D4)**: variabili, guardia sul router v1 con un elenco corto di permessi, `/system/block`, pagina di blocco; (C) `JWT_SECRET` corto fatale nel profilo gestito; pagina admin per gli hoster | il pannello del cloud (blocco) | CP4, CP5 |
-| CP7a | **Lotto Docker**: P-4, M-25, C-37, N-8, 32-3, istruzioni per C-26. Poi i file Docker passano a B | B (Litestream) | Docker acceso; anticipabile subito dopo CP3 |
-| CP7b | **Lotto HTTP**: cache di `/_app` (F28), default di 60 s nel profilo gestito (F27), header con CSP in sola segnalazione (F15) | — | CP6 |
-| TS1 | Decisione sui test speculari, con i numeri (§13) | — | riordino del backend finito |
+| CP | Contenuto | Sblocca | Dipende da | Stato (19/10) |
+|---|---|---|---|---|
+| CP1 | **Rinomina** (`git mv`) verso `services/platform/` e `services/files/`, più gli import, le patch dei test, le stringhe del runner, `coverage_analysis.py:71`, la doc per sviluppatori, la mappa in `backend.instructions.md` e le tabelle delle fonti della wiki (17 pagine, 35 citazioni) | Z (scheduler), B (backup), percorsi stabili per tutti | niente (né il commit del coordinatore su `main.py` né npm) | ✅ in dev `6a605904c` |
+| CP2 | **Taglio di `main.py`**: lifecycle, database_bootstrap, middleware, static_site. Configurazione unica (pacchetto `config/`, D2) con le letture spostate e la guardia su `os.environ`. Patch dei test su `lifecycle` con `raising=True` | A, Z, B, X (agganci senza toccare `main.py`, sezioni di config) | il commit del coordinatore su `main.py` + aggiornamento di base | ✅ CP2a `60f8a35ce`, CP2b `4fb017a9a` |
+| CP3 | **Segreti (F03)**: sorgente `_FILE`, `JWT_SECRET_FILE` (e `dev.py`), `instance_key`, `config_audit` nei log, `.env.example` completo e a sezioni con la guardia «ogni variabile è in `.env.example`», doc admin (configuration, filesystem) | B, X (chiave), E | CP2 | ✅ `d08d9358f` |
+| CP4 | **Config pubblica e avvisi**: due endpoint, `features/instance/`, layout, interceptor, i18n, Vitest, `api sync` | A (login, link), Z, X | CP3; `npm ci` approvato | ✅ `1b3eb54c7` |
+| CP5 | **Prontezza e versione (F08)**: `/system/ready`, `/system/info` minimo senza sessione (D14 modificata), R2, C-84. CP5a backend, CP5b frontend | pannello di controllo | CP2a | ✅ CP5a `9deb0ea08`; CP5b con CP6, `83eaa5a28` |
+| CP6 | **Blocco dell'istanza (D4)**: variabili, guardia sul router v1 con un elenco corto di permessi, `/system/block`, pagina di blocco; (C) `JWT_SECRET` corto fatale nel profilo gestito; pagina admin per gli hoster | il pannello del cloud (blocco) | CP4, CP5 | ✅ `83eaa5a28` |
+| CP7a | **Lotto Docker**: P-4, M-25, C-37, N-8, 32-3, istruzioni per C-26. Poi i file Docker passano a B | B (Litestream) | Docker acceso; anticipabile subito dopo CP3 | 🟡 `744f5a0ee`; manca la prova dell'immagine a runtime (Docker spento, H-11) |
+| CP7b | **Lotto HTTP**: cache di `/_app` (F28), default di 60 s nel profilo gestito (F27), header con CSP in sola segnalazione (F15) | — | CP6 | ✅ CP7b-1 `1f4c5aeca`, CP7b-2 `d8549c69a` |
+| TS1 | Decisione sui test speculari, con i numeri (§13) | — | riordino del backend finito | ⏳ aspetta la decisione P23 del developer |
+
+**Lotti dopo i CP** (§14), entrati in dev (riconciliazione del 19/10; gli SHA delle singole voci H-NN sono nel backlog):
+
+| Lotti | In dev |
+|---|---|
+| `web_link_finder` (le ultime letture d'ambiente in `config/`) | `9dda5ccd9` |
+| C-96 (le corsie ignorano la configurazione dell'istanza), filtro delle credenziali nel log d'accesso, G-10 | `744f5a0ee` (con CP7a) |
+| `billing_url` e rotte dei link nel blocco, H-12 (porta), l'anteprima della cancellazione da bloccata (A6a) | `eacc34784` |
+| Scopo dei file caricati: CP-U1, CP-U2 | `6a3a2a1cc`, `2d1eee33a` |
+| H-17, b-doc-notes (B-4, B-5), H-1, H-4, H-6, H-9, H-3 opzione B | `0ecc5ed27` |
+| P17 (l'indirizzo del client dietro un proxy fidato); TC-16 | `b1df87bd4`; `65fc63e7e` |
+| H-12 (log condiviso), H-21, H-22, la docstring di `instance_block.py`, H-23, H-24, H-25 | `7ac8b17de`, `946e02d55`, `fa16ce787`, `3f561e204`, `9eb934218`, `4bf824362`, `9839ea00b` |
+| H-26 con il residuo di H-24 e H-28; H-27; H-29 e H-30 | `40a76bf1a`; `bfdc1f72c`; `1b11869f7` |
+| H-32, H-33, il wiki-file della notte, H-36, H-37 | `ec6aa2007`, `5bba93280`, `1937e6cf4`, `d107b6f26`, `b37e926af` |
+| Z-24 con la regola di review di H-39; H-34; H-39; H-35 | `36a487e84`; `75bfac237`; `0403b5eb7`; `d28a6d7df` |
+| H-19; H-42; H-46; H-45; H-49 | `9b23bdbfe`; `3b0af4094`; `b7dcd3a25`; `d617cb406`; `96da36422` |
+| X-R62 (dalla coda di X); W-B75 (dalla coda di W); H-51; H-47, solo il disegno | `907fb3b97`; `9ba7ef9d3`; `70ab2fcc6`; `13b6cfde1` |
+| H-43, fase 1; H-52; H-54 | `d3212e9f2` e `a6adb0066`; `ca7ba117c`; `d6c252ec4` |
+
+Aperti: TS1 (P23), la prova dell'immagine di CP7a (H-11), H-55 (sospesa, §14), H-53 (con H-55); dopo la 1.3: H-47 (il
+codice), H-48, H-50, H-56. Il resto delle voci aperte è nella sezione H del backlog.
 
 **Primo treno (M3)**: H CP1 → X CP1 → A A1, integrati in quest'ordine, con gli aggiornamenti di base in mezzo. CP2
 segue appena il commit del coordinatore su `main.py` è in `dev_release2`. Insieme danno
@@ -7775,3 +7796,976 @@ della build (`dev.py:712`) e registrata dopo una build riuscita (`record_tool_co
    anche `src/` e `static/`; senza marcatore, solo le date) e `dev_workflow.en.md` (passo 3). `i18n.md` era già giusta.
    `mkdocs build` stretto 0 avvisi, `check-links` 97 validi, `git diff --check` pulito.
 5. ✅ (21:41) Checkpoint inviato (sotto).
+
+### Lotto «H-55: la CSP applicata, `LIBREFOLIO_CSP_ENFORCE`» (2026-10-17, 21:55) — analisi
+
+> Via del coordinatore (21:50, dopo l'entrata di H-54, dev `d6c252ec4`): «GO for the CSP-enforcement lot (E1–E6 as
+> decided): analysis to reds». Il nit di B-43 (le frasi «such as `regexp`» in `security.md`) va nel giro di
+> `security.md` di questo lotto, sopra il paragrafo B-49 appena entrato.
+
+**Stato vero** (HEAD `d6c252ec4`):
+- `LIBREFOLIO_CSP_REPORT_ONLY` e `LIBREFOLIO_FRAME_PROTECTION`: campi bool in `config/__init__.py`, default spenti, accesi
+  in `PROFILE_DEFAULTS` managed; righe commentate in `.env.example` (r. 61–64); controlli
+  `platform.frame_protection` e `platform.csp_report_only` in `config_audit.py` (chiavi i18n `instance.checks.*`,
+  sottosistema `instance`, di H).
+- `SecurityHeadersMiddleware`: a protezione accesa i documenti HTML ricevono `PAGE_POLICY` (applicata, H-42); con la
+  report-only accesa le pagine della web app ricevono `report_only_policy(hashes)` (H-52), costruita una volta.
+- Il controllo degli aggiornamenti: solo nel browser, solo con `selfHostedConfirmed()`, verso `api.github.com`; la sonda
+  dell'immagine passa dal backend (stessa origine). `LIBREFOLIO_PUBLIC_URL`: `config/accounts.py::public_url()` (A).
+- Riferimenti alla variabile: doc `settings.md`, `overview.md`, `security.md`, `test-walkthrough/{e2e,index,front-utility}.md`,
+  admin `hosting_providers.en.md`, `settings.en.md`, `configuration.en.md` (le pagine admin con traduzioni: debito
+  vero, nessun timbro); test `test_runtime_isolation.py`, `test_managed_headers.py`, `test_config_audit.py`.
+
+**Disegno** (E1–E6 come deciso; i dettagli sono miei, nel perimetro):
+- **E1**: `LIBREFOLIO_CSP_ENFORCE: bool = False`, **nessuna voce in `PROFILE_DEFAULTS`** (spento ovunque, decide il
+  developer). Acceso, le pagine HTML della web app ricevono un secondo header `Content-Security-Policy`: la policy della
+  web app con gli hash, **senza `frame-ancestors`**. I frame li decide sempre `LIBREFOLIO_FRAME_PROTECTION`, che resta
+  com'è (`PAGE_POLICY` e `X-Frame-Options`), così applicare la CSP non accende di nascosto la protezione dai frame.
+  - Il browser applica entrambe le policy (l'intersezione).
+  - Niente header report-only quando si applica.
+  - Restano invariati il 304, l'header di una rotta che lo mette da sé, `/mkdocs` e `/api/`.
+- **E3 + E6**: `connect-src` aggiunge le sorgenti calcolate alla costruzione del middleware, nella report-only (che resta
+  l'anteprima fedele) e in quella applicata:
+  - l'origine di `LIBREFOLIO_PUBLIC_URL`, se c'è;
+  - `https://api.github.com` nel profilo self-hosted, dove il controllo degli aggiornamenti può girare.
+  - `report_only_policy(hashes, connect_sources=())`, con l'argomento nuovo facoltativo (H-52 resta valida), più
+    `enforced_policy(...)`.
+- **E2 (b)**: F1 resta una voce documentata della baseline (con la policy applicata cheetah-grid ripiega su `window`).
+- **E4**: gli hash solo all'avvio; nella doc, «dopo una build nuova, riavvia».
+- **E5**: nessun endpoint.
+- **Audit**: un controllo `platform.csp_enforce`, ok acceso («applicata») e ok spento («solo segnalazione o nessuna:
+  il default»). Due chiavi i18n in quattro lingue (sottosistema `instance`), la riga nel `.env.example` sotto la
+  report-only.
+- **Corsia**: `TEST_LANE_SETTABLE` += `LIBREFOLIO_CSP_ENFORCE`. `front-utility cloud-smoke` rifiuta `--coverage`
+  quando la corsia applica la CSP: il preambolo di istanbul (`new Function`) si romperebbe.
+- **E2E**: la spec del raccoglitore, su una corsia con la policy applicata, confronta l'header `Content-Security-Policy`
+  della corsia (quello con `script-src`) con la sua copia più gli hash, senza `frame-ancestors`. AUSR-E-07 (A, dopo
+  A-57) cambierà le sue attese. Uno slot per un cloud smoke managed con la policy applicata, senza copertura: finché A
+  non adatta AUSR-E-07, quel test è il solo rosso atteso.
+- **Doc**: `security.md` (una sezione sulla policy applicata, più il nit di B-43), `hosting_providers.en.md`,
+  `configuration.en.md` e `settings.en.md` (admin, debito di traduzione), `settings.md`, `e2e.md`, `front-utility.md`,
+  `index.md` (impostazioni di corsia).
+
+**Passi**: 1. rossi (test-author: backend headers, config e audit, corsia; E2E del raccoglitore); 2. cura (script a
+secco); 3. verdi leggeri; 4. doc; 5. slot (cloud smoke con la policy applicata); 6. checkpoint.
+
+> **Stato al 17/10, 22:00**: il passo 1 (i rossi) era scritto e non ancora eseguito quando il developer ha fermato
+> tutte le sessioni. Il coordinatore ha avuto subito la richiesta del controllo audit `cspReportOnly.enforced` (scelta
+> 3) e l'ok sulle quattro scelte (17/10, 22:00).
+
+> **⏸️ Sospeso il 19/10, 11:10** (ripartenza del coordinatore): H-55 è tra gli ampliamenti che il developer sta
+> leggendo, interruttore della CSP compreso. Niente cura, niente verdi e niente slot fino al suo via.
+> - I rossi, mai eseguiti, sono parcheggiati come patch nella cartella della sessione (`files/parked/`, file
+>   `h55-csp-enforce-reds-on-d6c252ec4.patch`, sha256 `d912356d…fc88`), con una copia intera dei quattro file:
+>   `test_config_audit.py` (+273), `test_managed_headers.py` (+542), `test_runtime_isolation.py` (+138) e
+>   `csp-collector.spec.ts` (+695/−185).
+> - Verifiche: `git apply --check --cached` prima, `git apply --check` dopo il ripristino; il risultato della patch su
+>   HEAD è uguale byte per byte alle copie. Il worktree è tornato al commit, tranne questo piano.
+
+> **⚠️ Fuori pista** (da rivedere alla ripresa, prima di ogni cura):
+> 1. **Il rifiuto di `--coverage` poggia su una premessa sbagliata.** `vite-plugin-istanbul` crea l'instrumenter con
+>    `coverageGlobalScopeFunc: false` e `coverageGlobalScope: "globalThis"`: il preambolo legge `globalThis` e non fa
+>    `new Function`. Una build con la copertura dovrebbe quindi partire anche con la policy applicata, da misurare.
+>    Ne dipendono:
+>    - i casi del rifiuto in `test_runtime_isolation.py`;
+>    - i due `skip` sotto copertura della spec E2E (test 7 e 8);
+>    - la scelta 4, approvata dal coordinatore su quella premessa, che va riproposta.
+> 2. **Un `LIBREFOLIO_PUBLIC_URL` non valido**: `public_url()` solleva `ValueError`, e il middleware si costruisce alla
+>    prima richiesta. Proposta: registrarlo nel log e non aggiungere l'origine, come fanno gli altri lettori. Oggi
+>    nessun test lo copre.
+> 3. **Scelte dei test-author da confermare alla ripresa**:
+>    - gli hash della build letti una volta sola anche con le due policy accese;
+>    - accanto a un header report-only messo dalla rotta, la policy applicata si aggiunge lo stesso;
+>    - l'ordine degli header: `PAGE_POLICY` prima, la policy applicata dopo.
+> 4. **Segnalati dal test-author E2E**:
+>    - `page.waitForFunction` (test 9) sotto la policy applicata potrebbe segnalare un `eval`: in quel caso, rimedio
+>      con `expect.poll`;
+>    - la rotta di `page-policy.spec.ts` sostituisce tutto l'header e così toglie la policy applicata: su una corsia
+>      che applica, quella spec non la prova;
+>    - la descrizione di `csp-collector` in `_frontend_utility.py` è da aggiornare.
+
+### Ripartenza del 19/10: pulizia, contabilità, due analisi
+
+> Regole nuove del coordinatore (19/10, 11:08), valide da ora:
+> - nessuna decisione di prodotto da parte mia: ogni scelta che cambia ciò che l'utente vede, i numeri o i dati è una
+>   domanda, con le opzioni e il mio consiglio;
+> - si implementa solo dopo il suo via esplicito;
+> - niente carichi pesanti senza uno slot.
+
+- **Fase 1, pulizia ✅** (11:10): H-55 parcheggiato (note «Sospeso» qui sopra). Il coordinatore ha committato il giornale
+  in `e48c7de39` e aggiornato la base a `36fe568e3`.
+- **La review del fix di Z (`b5da2277d`)**: annullata dal coordinatore. La riparazione D″ esce per decisione del
+  developer: resta solo la correzione del plugin.
+- **Contabilità ✅** (11:20):
+  - backlog: ✅ con i commit su H-43 (la fase 2 resta al cancello della RC), H-51, H-52 e H-54; H-47 ✅ solo il disegno,
+    il codice resta aperto;
+  - righe nuove: H-55 (sospesa) e H-56 (lo spegnimento non aspetta i compiti in background, nota di E);
+  - §4: la colonna dello stato nei CP e la tabella dei lotti dopo i CP, con gli SHA d'ingresso.
+
+#### Analisi: gli indici del DB (19/10, sola lettura) ✅
+
+> La domanda del developer, testuale: «abbiamo creato vari index nel DB per aiutare le query, puoi verificare che servono
+> tutte? o al contrario se ne servirebbero altre?»
+
+**Come** (script e uscite nella cartella della sessione, `files/idx/`):
+- un DB di test fresco nella corsia (`db populate --force --clean`, 8 s), revisione `011`: 44 indici, autoindex dei
+  vincoli compresi;
+- un giro in-process, senza server e senza porta, con un listener di SQLAlchemy:
+  - 67 endpoint, 150 chiamate, 149 riuscite. Il 503 è il dataset `portfolio.asset_history` di AI Export: nei dati di
+    prova c'è un asset in KRW senza cambio;
+  - 1727 statement catturati, 192 distinti;
+- `EXPLAIN QUERY PLAN` di ciascuno sulla copia intatta del DB;
+- un «what-if»: gli indici candidati tolti su una copia, e i 191 piani confrontati;
+- un volume sintetico su una copia (200 asset × 5000 giorni = 1 milione di prezzi): pesi (`dbstat`) e tempi;
+- grep statici per i percorsi che il giro non tocca: suggerimento degli eventi, split, sentinella delle date, audit di E,
+  scheduler.
+- Il codice non lancia mai `ANALYZE` né `PRAGMA optimize`. I piani senza statistiche sono quindi quelli dei DB degli
+  utenti.
+
+**Doppioni esatti** (stesse colonne, stesso ordine; si toglie l'indice esplicito, il vincolo resta):
+
+| Tabella | Si toglie | Resta | Nota |
+|---|---|---|---|
+| `price_history` | `idx_price_history_asset_date` | `UNIQUE (asset_id, date)` | il caso visto dal developer; il vincolo serve anche l'`ON CONFLICT` dell'upsert |
+| `asset_provider_assignments` | `idx_asset_provider_asset_id` | `UNIQUE (asset_id)` | |
+| `assets` | `uq_assets_display_name` (indice) | `UNIQUE (display_name)` | `001` crea sia il vincolo sia un indice con lo stesso nome |
+| `brokers` | `ix_brokers_name` | `UNIQUE (name)` | |
+| `users` | `ix_users_username` | `UNIQUE (username)` | |
+| `users` | `ix_users_email` | `UNIQUE (email)` e `ux_users_email_lower` | nessuna query cerca l'email esatta; l'unicità senza maiuscole è già più forte |
+
+**Prefissi a sinistra di un altro indice** (ogni query li sostituisce con l'indice più lungo):
+
+| Tabella | Si toglie | Coperto da |
+|---|---|---|
+| `transactions` | `ix_transactions_broker_id` | `idx_transactions_broker_date (broker_id, date, id)` |
+| `transactions` | `ix_transactions_asset_id` | `idx_transactions_asset_date (asset_id, date)` |
+| `broker_user_access` | `ix_broker_user_access_user_id` | `UNIQUE (user_id, broker_id)` |
+| `fx_conversion_routes` | `idx_route_base_quote`, `ix_fx_conversion_routes_base` | `UNIQUE (base, quote, priority)` |
+
+**Senza lettori**:
+- `ix_transactions_date`: ogni query sulle transazioni è filtrata per broker o per asset, per il controllo d'accesso;
+  la sentinella delle date (`min`/`max`) usa `idx_transactions_broker_date`;
+- `ix_fx_conversion_routes_quote`: la coppia si cerca sempre con la base. Solo l'audit di E fa un `GROUP BY quote`, su
+  una tabella di poche decine di righe.
+
+**Restano, e servono** (con chi li usa):
+- `transactions`: `idx_transactions_broker_date` (21 statement: lista, riepilogo del broker, portafoglio, AI Export) e
+  `idx_transactions_asset_date` (lotti, WAC, AI Export); `idx_transactions_asset_event` e `idx_transactions_related`
+  (collegamenti e chiavi esterne);
+- `asset_events`:
+  - `idx_asset_event_asset_date` (grafici ed eventi);
+  - `idx_asset_event_asset_type_date`: il giro non lo tocca, ma lo usano il suggerimento degli eventi
+    (`event_suggestions.py:67`, asset + tipo + intervallo) e le ricerche per tipo;
+  - `idx_asset_event_provider_assignment` (il `CASCADE` dalla tabella delle assegnazioni);
+- `fx_rates`: tutti e due. `UNIQUE (date, base, quote)` serve l'upsert e le letture per data; `(base, quote, date)` serve
+  gli intervalli di una coppia (613 esecuzioni nel giro). Unirli vorrebbe ricostruire la tabella: non lo propongo;
+- `assets`: `ix_assets_identifier_isin` e `ix_assets_identifier_ticker` (ricerca, candidati BRIM);
+- `broker_user_access`: `ix_broker_user_access_broker_id` (accessi del broker, chiave esterna);
+- `account_tokens`: tutti e tre; gli autoindex dei vincoli `UNIQUE`; `ux_users_email_lower` (accesso per email).
+
+**Verifiche**:
+- What-if, togliendo tutti i 13 indici: 50 piani cambiano solo nel nome dell'indice scelto, nessuno peggiora (nessuna
+  scansione nuova, nessun B-tree temporaneo in più, nessun indice automatico).
+- Le chiavi esterne restano coperte: per ogni colonna figlia resta un indice che comincia con lei. Il controllo di
+  SQLite su un `DELETE` del padre non diventa una scansione.
+- **Il peso**: a 1 milione di prezzi la tabella occupa 69,3 MB e ciascuno dei due indici gemelli 24,7 MB.
+  - Togliere il doppione ne libera circa il 21 % (da 118,7 a 94,0 MB): a 3 milioni di prezzi sono circa 75 MB.
+  - Ogni prezzo scritto aggiorna un indice in meno, e il backup e Litestream copiano meno pagine.
+  - `DROP INDEX` dura 9 ms.
+
+**Indici mancanti: nessuno.** Nel giro nessuna tabella grande viene scansionata per intero, tranne un caso voluto: la
+lista degli asset legge tutte le transazioni con un asset (`assets/crud.py:284`, «detenuto da me / da altri»), e un
+indice non lo eviterebbe. Il costo sta invece nella **forma** di due query, che leggono tutto lo storico:
+- **«L'ultima data per asset (o per coppia)» con `GROUP BY` e `max`.** Legge ogni voce dell'indice dell'asset fino alla
+  data, e non salta all'ultima.
+  - Misura: 143 ms per 200 asset su 1 milione di prezzi; 0,8 ms con un `max` scalare per asset nella stessa query, con
+    le stesse 200 righe (verificato uguale).
+  - Dove:
+    - X: `assets/price_query.py:93`, `assets/period_changes.py:37` e `:44`, `assets/refresh.py:103`;
+    - W: `brokers/summary.py:245`;
+    - J: `pac_allocator/source/loaders.py:55` e `fx_quotes.py:34`;
+    - H: `platform/scheduler/jobs.py:87` e `:102` (Z lavora anche sullo scheduler).
+- **Le valute distinte dei prezzi** (`financial_math/portfolio/engine.py:134`, MF/J): legge ogni riga fino alla data.
+  - 23,6 ms per 50 asset × 5000 giorni.
+  - Un indice coprente `(asset_id, date, currency)` lo porta a 14 ms, ma pesa 25,6 MB per milione di prezzi: non ne
+    vale la pena.
+
+**Proposte** (domande per il developer, tramite il coordinatore; niente implementato):
+- **P-IDX-1, una migrazione incrementale `0NN_drop_redundant_indexes`.**
+  - Il numero è il primo libero quando si fa: dipende dal destino di 010 e 011 di Z (D″ esce).
+  - `upgrade()`: `DROP INDEX IF EXISTS` dei 13 indici. `downgrade()`: li ricrea con le definizioni esatte
+    (`IF NOT EXISTS`). Quelli unici non possono fallire, perché i vincoli restano.
+  - I modelli si allineano in `db/models.py`, condiviso:
+    - via `index=True` da `transactions.broker_id`, `transactions.asset_id`, `transactions.date`,
+      `broker_user_access.user_id`, `fx_conversion_routes.base` e `fx_conversion_routes.quote`;
+    - via gli `Index(...)` dei doppioni;
+    - `unique=True, index=True` diventa `unique=True` per `users.username`, `users.email` e `brokers.name`.
+  - Niente `VACUUM`: le pagine liberate tornano nella lista libera e si riusano. Il file si accorcia solo con un
+    `VACUUM`, che riscriverebbe tutto il DB.
+  - Test:
+    - la migrazione su un DB usa e getta, in su e in giù;
+    - l'unicità ancora applicata sui sei gemelli;
+    - le chiavi esterne ancora coperte;
+    - una guardia nuova in `db validate`: nessun indice uguale a un altro, o prefisso a sinistra di un altro, nella
+      stessa tabella, autoindex compresi. Oggi `test_indexes` controlla solo che gli indici dei modelli esistano nel
+      DB, ed è così che i gemelli creati dal SQL di `001` sono passati.
+  - Taglia S, rischio basso.
+- **P-IDX-2, un solo helper per «l'ultima data per asset/coppia»**, e i 9 punti sopra passati a lui. Nessun indice,
+  risultati identici.
+  - Proprietari: X, W, J e H.
+  - Prima conviene misurarlo sui dati veri del developer (copia di lavoro, skill `real-data-copy`).
+- **Opzioni**:
+  - A) P-IDX-1 nella 1.3, P-IDX-2 dopo (**il mio consiglio**: il guadagno di spazio e di scrittura è sicuro, il rischio
+    è basso);
+  - B) nella 1.3 solo il doppione di `price_history`;
+  - C) tutto dopo la 1.3.
+- **Limiti**: il giro copre dell'import BRIM i doppioni (`idx_transactions_broker_date`, broker + data) e i candidati
+  degli asset, non il parse. Non tocca lo scheduler, che ho controllato con grep (le due query in `jobs.py`, sopra), né
+  il rischio, che legge prezzi e cambi da `market_series.py` e `assets/price_query.py`, come i grafici.
+
+#### Analisi: i testi dei controlli d'istanza e le ancore della guida (19/10, sola lettura) ✅
+
+> Il developer non ha capito l'avviso del reverse proxy («Le richieste passano da un reverse proxy di cui LibreFolio non
+> si fida (X-Forwarded-For): i limiti per indirizzo del visitatore non si applicano…»). Chiede un testo più chiaro, che
+> dica cosa significa e cosa fare, e un bottone «Guida» su ogni controllo, anche su quelli superati. L'interfaccia è di
+> A: ci si accorda tramite il coordinatore.
+
+**Stato vero**:
+- I testi sono chiavi `instance.checks.*` nel sottosistema i18n `instance` (mio), in quattro lingue; quelli di A, B ed E
+  stanno nei loro sottosistemi (`auth.checks.*`, `backup.checks.*`, `email.checks.*`).
+- La scheda Sicurezza è di A (`features/settings/security/`). `securityFindings.ts` ha già una mappa per controllo,
+  `SERVER_ACTIONS`, per i link dentro l'app («Apri la scheda Email», «Apri le impostazioni dei plugin»).
+- Il frontend costruisce già link localizzati alla guida (`AboutTab.svelte`, `mkdocsUrl()`); i segnali e gli eventi
+  tengono il percorso della pagina in una mappa del frontend (`docsPath`).
+- La guida admin usa già ancore esplicite (`{: #client-address }`, `{: #security-passed }`…), stabili fra le lingue. Ma
+  le sezioni scritte nella 1.3 ci sono **solo nelle pagine inglesi**: le traduzioni IT/FR/ES di `configuration`,
+  `connection_checks` e `settings` sono indietro. Così un link localizzato oggi atterra in cima a una pagina che non ha
+  la sezione. Fanno eccezione `#session-cookie` e `#reverse-proxy` (`connection_checks`) e `#session-persistence`
+  (`index`), presenti in tutte e quattro.
+- Perché il testo non si capisce: «di cui non si fida», «header di inoltro» e «limiti per indirizzo del visitatore» sono
+  gergo; la conseguenza non è detta in parole semplici; l'azione (dove si scrive la variabile, quale valore) non c'è.
+
+**Proposta di testo** (EN, la fonte, e IT; FR ed ES all'implementazione):
+
+| Chiave | EN | IT |
+|---|---|---|
+| `clientAddress.untrustedProxy` (⚠️) | Some requests reach LibreFolio through a proxy it was not told about (it sent {headers}). LibreFolio therefore sees every visitor behind it with the same address, and cannot slow down someone who tries many passwords, or asks for many emails, from one address: for those requests only the limits per account and per email address still apply. To fix it, add the proxy's address to FORWARDED_ALLOW_IPS in the .env file (with Docker, the proxy's network, such as 172.18.0.0/16), then restart LibreFolio. No proxy of yours in front of LibreFolio? Then there is nothing to do. | Alcune richieste arrivano a LibreFolio attraverso un proxy che non gli è stato indicato (ha inviato {headers}). Così LibreFolio vede tutti i visitatori dietro di lui con lo stesso indirizzo, e non può frenare chi prova molte password, o chiede molte email, da uno stesso indirizzo: per quelle richieste restano solo i limiti per account e per indirizzo email. Per sistemare, aggiungi l'indirizzo del proxy a FORWARDED_ALLOW_IPS nel file .env (con Docker, la rete del proxy, per esempio 172.18.0.0/16), poi riavvia LibreFolio. Davanti a LibreFolio non hai un tuo proxy? Allora non c'è nulla da fare. |
+| `clientAddress.publicForwarding` (ℹ️) | Some requests from the internet carried proxy headers ({headers}), and LibreFolio ignored them, as it should. If your own proxy has a public address, add it to FORWARDED_ALLOW_IPS in the .env file and restart; otherwise there is nothing to do: a visitor's browser, or a proxy of their own, can add these headers. | Alcune richieste da internet avevano intestazioni da proxy ({headers}), e LibreFolio le ha ignorate, com'è giusto. Se il tuo proxy ha un indirizzo pubblico, aggiungilo a FORWARDED_ALLOW_IPS nel file .env e riavvia; altrimenti non c'è nulla da fare: il browser di un visitatore, o un suo proxy, può aggiungere queste intestazioni. |
+| `clientAddress.ok` (✅) | Since the last start, no request has arrived through a proxy LibreFolio does not know about. | Dall'ultimo avvio nessuna richiesta è arrivata da un proxy che LibreFolio non conosce. |
+
+- Il testo nomina solo `FORWARDED_ALLOW_IPS`, la cura del caso comune. L'altra strada, `LIBREFOLIO_CLIENT_IP_HEADER`
+  (proxy che scrivono un header proprio, come Fly.io), resta nella guida dietro il bottone.
+- `ok` non promette «ogni visitatore ha il suo indirizzo»: un proxy che non manda nessuna intestazione non si vede.
+- Lo stesso difetto, cioè nessuna azione nel testo, c'è in altri due testi, su cui propongo una frase in più:
+  - `sessionCookie.never`: «Set SESSION_COOKIE_SECURE back to auto, unless your proxy really needs never.» / «Rimettilo
+    su auto, a meno che il tuo proxy non abbia davvero bisogno di never.»;
+  - `jwtSecret.ephemeral`: «To keep users signed in, set JWT_SECRET to 32 or more random characters.» / «Per tenerli
+    collegati, imposta JWT_SECRET con almeno 32 caratteri casuali.».
+- Variante V2, da decidere: ogni messaggio non `ok` diviso in due chiavi, cosa significa (`…`) e cosa fare
+  (`…Action`), e A mostra «Cosa fare» su una riga sua. È più leggibile, ma cambia lo schema per tutti i controlli,
+  compresi quelli di A, B ed E.
+
+**Le ancore del bottone «Guida»** (una per controllo, uguale per ogni stato, superato compreso):
+
+| Controllo | Pagina e ancora | Lingue |
+|---|---|---|
+| `platform.jwt_secret` | `admin/configuration/#secrets` | solo EN |
+| `platform.secrets_set_twice` | `admin/configuration/#secret-files` | solo EN |
+| `platform.instance_key` | `admin/configuration/#instance-key` | solo EN |
+| `platform.session_cookie` | `admin/connection_checks/#session-cookie` | 4 |
+| `platform.client_address` | `admin/connection_checks/#client-address`; meglio un'ancora nuova `#untrusted-proxy` sul paragrafo «When LibreFolio does not trust your proxy», che oggi è solo grassetto | solo EN |
+| `platform.frame_protection` | **ancora nuova** `admin/configuration/#frame-protection` (oggi è solo una riga di tabella) | — |
+| `platform.csp_report_only` | **ancora nuova** `admin/configuration/#csp-report-only` | — |
+| `platform.log_level`, `platform.test_mode` | `admin/configuration/#startup-checks` | solo EN |
+| `platform.plugin_secrets` | `admin/configuration/#plugin-secrets` | solo EN |
+| `backup.panel_token` | `admin/hosting_providers/#panel-token` | pagina solo EN |
+| `backup.upload_limit`, `backup.restore_limit` | `admin/hosting_providers/#restore-upload-limit` | pagina solo EN |
+| `accounts.login_limit` | `admin/configuration/#login-limit` | solo EN |
+| `email.smtp` | `admin/email/#variables` | pagina solo EN |
+| `email.smtp_encryption` | `admin/email/#encryption-modes` | pagina solo EN |
+| `email.links` | `admin/email/#links-check` | pagina solo EN |
+| la registrazione aperta (dal browser) | `admin/settings/#open-registration-warning` | solo EN |
+
+**Domande** (per il developer, tramite il coordinatore):
+1. **Il testo**: V1, i tre testi sopra più le due frasi in più (**il mio consiglio**), oppure V2, il «Cosa fare» su una
+   riga sua per tutti i controlli.
+2. **La lingua dei link «Guida»**, finché le pagine admin non sono tradotte:
+   - L1: la pagina nella lingua dell'app. Funziona dopo una traduzione delle pagine admin; prima atterra in cima a una
+     pagina vecchia;
+   - L2: sempre la pagina inglese, poi L1 dopo la traduzione.
+   - **Il mio consiglio**: L1 se la traduzione delle pagine admin è prevista per la 1.3, altrimenti L2. Più un test
+     che fallisce se l'ancora di un controllo manca nella pagina che il link apre.
+3. **Dove sta la mappa** (da decidere con A):
+   - a) nel frontend, accanto a `SERVER_ACTIONS`, con un test Vitest che legge le pagine `.en.md` e verifica ogni
+     ancora. È lo schema che la scheda usa già e non cambia l'API (**il mio consiglio**);
+   - b) un campo nuovo nella risposta di `GET /security/checks`, scritto da chi possiede ogni controllo (H, A, B, E):
+     cambio di schema e `api sync`.
+
+**Lavoro di H, se approvato** (piccolo):
+- i testi nelle quattro lingue (`instance/<lang>.json`);
+- le tre ancore nuove (`#untrusted-proxy`, `#frame-protection`, `#csp-report-only`), con il docs-writer: in inglese, e
+  nelle traduzioni, dove la sezione c'è già, solo la riga dell'ancora;
+- la tabella della scheda Sicurezza in `settings.en.md`, con le parole nuove;
+- se si sceglie b), il campo in `ConfigCheck`.
+- A fa il bottone, il link e il suo test.
+
+#### Analisi: H-55 v2, la CSP sempre applicata, senza interruttore (19/10, sola lettura) ✅
+
+> Decisione del developer (19/10, via coordinatore), testuale: «di default ti direi di averlo sempre attivo, da subito,
+> e lavorare ad allargare le maglie solo dove serve, se serve davvero, e non avere questa sicurezza disattivabile».
+> Quindi niente `LIBREFOLIO_CSP_ENFORCE`: la CSP si applica in ogni profilo. La regola «default invariato per il
+> self-hosted» qui la supera il developer stesso.
+
+**Cosa si applica sempre**, in un solo header `Content-Security-Policy` per risposta:
+
+| Risposte | Direttive applicate |
+|---|---|
+| ogni documento (HTML, XHTML, SVG, XML; non i PDF), `/mkdocs` e la doc dell'API comprese | `object-src 'none'; base-uri 'self'; form-action 'self'`: il trio di H-42, oggi solo con la protezione dai frame, ora sempre |
+| le pagine della web app (`text/html`, non `/mkdocs`, non `/api/`) | in più `script-src 'self' 'wasm-unsafe-eval' 'report-sample' <hash>`, `worker-src 'self' blob:` e `connect-src 'self' <origine di LIBREFOLIO_PUBLIC_URL> <https://api.github.com nel self-hosted>` |
+| ogni risposta, con `LIBREFOLIO_FRAME_PROTECTION` accesa | `frame-ancestors 'self'` e `X-Frame-Options`, come oggi |
+
+- **Perché `worker-src`**: senza, i worker usano le regole di `script-src`, che non ammette `blob:`, e i worker del
+  visore PDF si bloccano.
+- **I frame restano fuori di proposito**: incorporare l'app (i pannelli di Home Assistant) è un uso legittimo del
+  self-hosted, non una maglia allargata.
+- **Niente `default-src` nell'header applicato.** Così stili, immagini, font e frame restano liberi:
+  - `img-src` ha già `https:`, quindi le icone esterne non si rompono;
+  - la privacy delle icone (D-SEC3-1) è un'altra questione.
+- **Resta solo segnalato** (report-only, dove `LIBREFOLIO_CSP_REPORT_ONLY` è accesa, nel managed per default): la policy
+  intera di oggi, con le sorgenti di `connect-src` aggiunte. Il report-only tiene anche `script-src` con gli hash:
+  senza, la sua `default-src 'self'` segnalerebbe a torto gli script inline.
+- `api.github.com`: il controllo degli aggiornamenti gira nel browser degli admin di ogni istanza self-hosted, e il
+  server non può sapere se è attivo. Quindi va ammesso per profilo, non per impostazione.
+- **Il premio**: tutte le corse E2E e la galleria girano sotto la policy applicata, perché ogni corsia la manda. Il
+  raccoglitore di H-43 diventa la prova di ogni spec.
+
+**I tre rischi, come lavori (nessun interruttore)**:
+1. **Script iniettati da un proxy, da una CDN o da un'estensione del browser**: vengono bloccati, e la pagina si rompe
+   o perde pezzi. Esempi: Rocket Loader, Email Address Obfuscation e Web Analytics automatico di Cloudflare; un
+   `sub_filter` di Nginx.
+   - **Doc**: una sezione nuova della guida admin, «🛡️ La Content-Security-Policy», con l'ancora `#csp`: cosa si
+     applica e perché, come si riconosce il problema, come si spegne l'iniezione per l'host di LibreFolio, e che la
+     policy non si allarga.
+   - **Avviso nella console**: un listener `securitypolicyviolation` in testa allo script inline di `app.html`, che
+     prende le violazioni presto. In più un `ReportingObserver` con `buffered: true` nel bundle, che in Chromium
+     dovrebbe recuperare anche quelle avvenute prima del listener (da provare).
+     - Una violazione applicata che LibreFolio non conosce (fuori da F1, il campione di cheetah-grid) dà un solo
+       messaggio chiaro: «LibreFolio ha bloccato uno script che non ha inviato (<origine o inline>): lo aggiunge un
+       proxy, una CDN o un'estensione del browser. Guida: …».
+     - `app.html` è vicino al programma colori: serve il suo OK. L'hash dello script cambia da solo, perché si calcola
+       all'avvio.
+   - **Nei controlli**: un controllo del browser nella scheda Sicurezza (A), come quello della registrazione aperta.
+     Il browser dell'admin conserva in `sessionStorage` le origini bloccate. Nessun endpoint di segnalazione (E5).
+2. **Gli hash riletti quando la build cambia**. Oggi si leggono alla costruzione del middleware (E4), quindi una build
+   a server acceso lascia una pagina bianca.
+   - Cura: una cache legata alla firma (`st_mtime_ns`, `st_size`) delle pagine `*.html` della build. Un `stat` di tre
+     file per risposta HTML della web app, nessuna lettura se la firma non cambia.
+   - Se una pagina manca a metà della scrittura della build, restano gli ultimi hash buoni.
+   - L'immagine Docker non cambia (è immutabile); la doc toglie «dopo una build, riavvia».
+3. **La verifica dell'indirizzo** (`addressProbe.ts` di A, riusato da E in `emailLinks.ts`). Oggi fa `fetch` di
+   `<indirizzo>/api/v1/auth/address-probe`: con `connect-src` applicata, ogni origine diversa da quella della pagina e
+   da `LIBREFOLIO_PUBLIC_URL` dà «non verificabile».
+   - Proposta, consigliata: la sonda **per immagine**. `GET /api/v1/auth/address-probe.png?nonce=…` risponde con
+     un'immagine 1×1 se il nonce è di questa istanza e 2×1 se no; il browser legge `naturalWidth` anche da un'altra
+     origine.
+     - Restano i tre verdetti: `match`, `mismatch` e `unverifiable` (con `onerror` o il timeout).
+     - `img-src` non è applicata, quindi nessuna maglia allargata.
+     - La rotta va nell'elenco di quelle che rispondono anche a istanza bloccata.
+   - Alternativa: solo l'origine pubblica (E3), e «non verificabile» spiegato meglio da A.
+   - Lavoro di A (sonda, rotta, AUSR-E-07) e di H (la policy). Tolta la voce F3 dalla baseline.
+
+**I rossi parcheggiati** (`files/parked/h55-csp-enforce-reds-on-d6c252ec4.patch`):
+
+| File | Cosa si riusa | Cosa cade o cambia |
+|---|---|---|
+| `test_managed_headers.py` (+542) | la sezione (k), circa a metà: header sulle pagine della web app, hash, sorgenti di `connect-src`, esclusioni (304, `/mkdocs`, `/api`, header della rotta) | l'interruttore on/off; il contenuto dell'header applicato (solo le direttive scelte più `worker-src`); il report-only, che ora resta accanto; «letto una volta», che diventa «riletto se la build cambia» |
+| `test_config_audit.py` (+273) | la verifica delle chiavi nel catalogo | il controllo `platform.csp_enforce` (cade); al suo posto il testo nuovo di `cspReportOnly.on`, che oggi dice «non blocca nulla» |
+| `test_runtime_isolation.py` (+138) | niente | cade tutto: nessuna impostazione di corsia nuova, nessuna guardia della copertura |
+| `csp-collector.spec.ts` (+695/−185) | circa il 40 %: il controllo che dà `EvalError`, le pagine, i calcoli | il riconoscimento delle tre corsie diventa «ogni corsia applica»; niente iniezione della policy applicata |
+
+Il test-author li rifà in circa mezza giornata.
+
+**Ordine e costo**:
+0. **Inventario prima di cambiare**, senza codice, in uno slot di circa un'ora: `all-frontend` con
+   `--lane-setting LIBREFOLIO_CSP_REPORT_ONLY=true` su una corsia self-hosted. Il raccoglitore elenca tutto ciò che la
+   policy fermerebbe negli spec fuori dalla Cloud Smoke (designer lab, galleria, import, AI Export…).
+1. H: gli hash riletti quando la build cambia (S). È indipendente e va prima, altrimenti la policy applicata rompe chi
+   ricostruisce a server acceso.
+2. A con H: la sonda per immagine (S). Va prima del passo 3, altrimenti AUSR-E-07 diventa rosso in ogni corsa.
+3. H: la policy sempre applicata, il trio su ogni documento, i testi dei controlli, la doc, il CHANGELOG (M). Il
+   CHANGELOG va sotto «⚠️ Breaking changes», per chi ha una CDN che inietta script.
+4. H con A: l'avviso nella console e il controllo del browser, più la sezione della guida (S/M). Entra con il 3.
+5. Uno slot: E2E completa, Cloud Smoke e una corsa con la copertura. La copertura non rischia: istanbul usa
+   `globalThis` e non `new Function`; il motivo scritto nella voce F1 della baseline va corretto.
+
+Totale: circa 1,5–2 giorni di H e 0,5–1 di A.
+
+#### Analisi: le categorie del cloud nel runner (19/10, sola lettura) ✅
+
+> Decisione del developer: una o più categorie apposite, sia per i test backend del profilo gestito
+> (`managed-headers`, `donation-managed`, i default del profilo, l'header IP del client…) sia per le E2E della Cloud
+> Smoke.
+
+**Stato vero**:
+- Le categorie backend sono cartelle (`BACKEND_TEST_PATHS` in `_suites.py`: `external`, `db`, `services`, `utils`,
+  `schemas`, `api`, `e2e`). `all-backend` fa girare il loro `all`, consolidato in una sola chiamata di pytest per
+  categoria.
+- I test del profilo gestito sono 17 file, sparsi fra `services` e `api`. Tutti girano **dentro il processo**: ciascuno
+  si mette il profilo che gli serve, quindi non serve una corsia gestita.
+- La Cloud Smoke è `front-utility cloud-smoke` (13 spec, `named_only`) e rifiuta una corsia che non sia managed. Il
+  runner non riusa mai un server già acceso, quindi ogni corsa parte con le impostazioni della sua corsia.
+
+**Proposta**:
+- **`cloud`**, una categoria backend **virtuale**: le sue azioni richiamano le funzioni che già esistono, e nessun file
+  si sposta.
+  - Contenuto:
+    - `services`: `managed-headers`, `profile-defaults`, `donation-managed`, `client-address` (anche l'header IP del
+      client), `config-audit`, `config-misc`, `accounts-checks`, `backup-checks`, `email-checks`,
+      `plugin-settings-guards`, `plugin-settings-service`;
+    - `api`: `instance-block`, `system`, `instance-legal`, `backup-secure`, `backup-restore`;
+    - `utils`: `backup-cli-restore`.
+  - Sono le azioni dei 17 file (nomi verificati nel registro).
+  - Si lancia con `dev.py test … cloud all`, su qualunque corsia.
+  - **Effetto su `all-backend`: nessuno.** `cloud` non entra in `_BACKEND_CATEGORIES`: gli stessi file girano una volta
+    sola, nella loro categoria.
+  - Una guardia: ogni file di test che mette il profilo managed è in `cloud`, o in un elenco di esclusioni con il
+    motivo (oggi i due file degli strumenti del runner). Così un test managed nuovo non sfugge.
+  - Alternativa, sconsigliata: una cartella `test_cloud/` con i file spostati dentro. Sposta file di A, B ed E, e molti
+    provano entrambi i profili.
+- **`front-cloud`**, una categoria E2E vera (`_frontend_cloud.py`):
+  - `smoke`: i 13 spec di oggi, tolti da `front-utility`;
+  - posto per le E2E che chiedono una corsia managed: per esempio i casi managed di `legal-and-managed.spec.ts`, se A
+    li divide.
+  - **Corsia**: la categoria dichiara il profilo managed, e `_configure_runtime` aggiunge da sé
+    `LIBREFOLIO_PROFILE=managed`. Rifiuta `--lane-setting LIBREFOLIO_PROFILE=selfhosted` e una corsa che la mescoli con
+    altre categorie.
+  - Fuori da `all-frontend` e da `all`: `named_only` non serve più, ci pensa la categoria.
+- **Cancelli** (§9 del piano generale):
+  - checkpoint: `cloud all` per i lotti che toccano piattaforma, profilo o sicurezza. È leggero e gira comunque in
+    `all-backend`;
+  - prima dell'integrazione: `front-cloud all` in uno slot per i lotti che toccano header, CSP, configurazione
+    dell'istanza o le schermate managed;
+  - rilascio: `front-cloud all`, più la fase 2 di H-43 (`all-frontend` una volta su una corsia managed).
+- **Superfici**: `_suites.py`, `_registry.py`, `_cli.py`, `_frontend_utility.py` (togliere `cloud-smoke`), un modulo
+  nuovo per categoria, i test `test-runner-cli` e `runtime-isolation`, la doc `test-walkthrough` e gli skill
+  `testing-backend`/`testing-frontend`. Sono file condivisi, quindi serve il via del coordinatore.
+- Costo: S–M, circa mezza giornata o una, con test e doc.
+
+**Domande** (per il developer, tramite il coordinatore):
+1. La verifica dell'indirizzo: sonda per immagine, con i tre verdetti (**consiglio**), oppure solo l'origine pubblica
+   e «non verificabile» per le altre.
+2. Gli script iniettati: avviso nella console più un controllo del browser nella scheda Sicurezza (**consiglio**),
+   oppure solo la console.
+3. Il trio `object-src`, `base-uri` e `form-action` sempre su ogni documento, anche `/mkdocs` e la doc dell'API, come
+   segue dalla direzione: confermi?
+4. Le categorie: `cloud` virtuale e `front-cloud` con la corsia managed messa da sé (**consiglio**), oppure le cartelle
+   spostate.
+5. Lo slot del passo 0 (inventario, circa un'ora), prima di ogni codice.
+
+#### Analisi: le migrazioni della 1.3 in una sola `005_release_1_3_0_schema` (19/10, sola lettura, con un prototipo) ✅
+
+> Il developer, testuale: «come siamo arrivati alla migrazione 010?! … bisogna fattorizzare e scendere solo a 1 con la
+> 005». Lavoro prioritario. La 011 la toglie Z-33r (`065c9df77`, sul ramo di Z, non ancora in dev). Nessuna delle
+> 005–011 è in un tag rilasciato: l'ultimo è `v1.2.1`, e `git cat-file -e` lo conferma su ogni file.
+
+**1. Cosa fanno, e la 005 unica.**
+
+| Oggi | Schema | Dati |
+|---|---|---|
+| `005_accounts_invites` | `users` + 3 colonne (`session_version INTEGER NOT NULL DEFAULT 0`, `email_verified_at DATETIME`, `last_seen_version VARCHAR(40)`), con `ADD COLUMN` e mai un batch; la tabella `account_tokens` (CHECK su `purpose`, `UNIQUE (token_hash)`, 3 chiavi esterne: `CASCADE` per l'account, `SET NULL` per chi crea e chi consuma) con 2 indici | — |
+| `006_registration_mode` | — | `enable_registration` diventa `registration_mode`: `open` se il valore era vero, altrimenti `disabled`; restano data e autore; la riga vecchia si cancella |
+| `007_plugin_settings` | `plugin_system_settings` e `plugin_user_settings` (unici per campo, 2 CHECK ciascuna, `SET NULL` / `CASCADE`) | — |
+| `008_registration_invite_default` | — | `registration_mode = open` dove manca e ci sono account (decisione 36); il downgrade non fa nulla |
+| `009_email_unique_ignoring_case` | `CREATE UNIQUE INDEX ux_users_email_lower ON users (lower(email))` | prima controlla i doppioni a meno delle maiuscole, e si ferma nominando gli account per id e username |
+| `010_provider_reported_currency` | `asset_provider_assignments.reported_currency VARCHAR(8)` | — (NULL, si impara al fetch) |
+| `011_provider_exchange_timezone` | (la toglie Z-33r) | — |
+
+- La 005 unica fa gli stessi passi, nello stesso ordine, con una sola differenza: il controllo dei doppioni di 009 va
+  **in testa**.
+  - Oggi, su un DB con doppioni, 005–008 sono già passate quando la 009 si ferma.
+  - Nella 005 unica ci si ferma prima di scrivere qualunque cosa.
+- È rieseguibile come la 004: ogni passo controlla prima di agire. Il downgrade va all'indietro, come i downgrade di oggi.
+- Il prototipo è nella cartella della sessione: `files/squash/proto/alembic/versions/005_release_1_3_0_schema.py`. È
+  composto dai corpi delle sei migrazioni, con le varianti come opzioni.
+
+**2. La prova di equivalenza** (`files/squash/squash_check.py` e `squash_check_v4.py`, su DB temporanei; nulla nel repo
+e nulla nel DB della corsia). Tutti verdi:
+
+| Scenario | Confronto | Esito |
+|---|---|---|
+| S1, S2, S3, S3b: DB nuovi | catena 004→010 (o →009, con o senza i 13 `DROP INDEX`) contro la 005 unica nella variante corrispondente: struttura (colonne, CHECK, indici, chiavi esterne, `AUTOINCREMENT`), **testo SQL** e righe | identici |
+| S4: un DB 1.2 con dati (la copia popolata della corsia, riportata a 004; `enable_registration = true`, 11 account) | catena 004→010 contro la 005 unica: struttura, testo e **righe** | identici |
+| S5 (quattro varianti): un DB alla 011 | la conversione (sotto) contro una 005 nuova | struttura identica, righe tutte conservate |
+| S6: un DB alla 006 (rimasto indietro) | la conversione contro una 005 nuova | struttura identica: la 005 rieseguibile completa ciò che manca |
+| S7: due account con email uguali a meno delle maiuscole | la 005 unica | si ferma, nessuna modifica, resta alla 004 |
+| D1 | il downgrade della 005 unica contro una 004 nuova | struttura identica |
+
+- Nel lotto la prova diventa un test.
+  - Si conserva un'istantanea dello schema prodotto dalla catena vecchia (JSON, generato prima di cancellare i file) e
+    la si confronta con la 005 unica.
+  - Lo scenario S4 resta come fixture.
+  - Dopo la cancellazione la catena vecchia non si può più eseguire: la prova vera si fa una volta, quando si fonde.
+
+**3. Il comando unico per i DB a una revisione ritirata.**
+- **Perché serve.** All'avvio `ensure_database_exists()` lancia `alembic upgrade head`. Con una revisione che Alembic
+  non trova più, l'upgrade fallisce e il server esce (`sys.exit(1)`).
+  - Vale per ogni DB a 005–011. Per la 011 vale già con Z-33r da sola: per questo devono entrare insieme.
+  - Il ripristino di B rifiuta oggi un archivio così con `revision_unknown`, «viene da un LibreFolio più recente»: un
+    messaggio sbagliato.
+- **Il disegno.** `RETIRED_1_3_REVISIONS`, i sette id, e `reconcile_retired_revision(db)`:
+  1. **Su una copia**:
+     - toglie le colonne ritirate presenti: `exchange_timezone`, e `reported_currency` se la 010 esce;
+     - `stamp --purge 004`, poi `upgrade head`: la 005 unica completa ciò che manca (S6);
+     - poi verifica.
+  2. **La verifica è mirata**, non «uguale a un DB nuovo».
+     - I DB della 1.2 tengono i tipi dichiarati del loro tempo: `NUMERIC(18, 6)` per prezzi e quantità, mentre la
+       `001` di oggi dice `24, 12` e `22, 10`, cambiati dopo `v1.2.1`.
+     - Un confronto completo rifiuterebbe quindi ogni DB vero.
+     - Si verifica che:
+       - la differenza fra prima e dopo sia solo quella attesa: colonne tolte, oggetti creati solo dove mancavano,
+         gli indici della variante;
+       - gli oggetti della 1.3 (le tre colonne, `account_tokens`, `plugin_*`, `ux_users_email_lower`,
+         `reported_currency`, l'insieme degli indici) siano identici a quelli di un DB nuovo;
+       - `integrity_check` e `foreign_key_check` siano puliti.
+  3. **Solo se la copia passa**, gli stessi passi sull'originale, sul posto (nessun file sostituito: va bene con
+     Litestream e con i permessi dell'immagine Docker), con un controllo rapido alla fine. Altrimenti si ferma:
+     l'originale non è toccato e il log elenca le differenze.
+     - Se si interrompe a metà, il passo dopo riprende: la revisione è ancora ritirata (si ripete), oppure è già 004
+       (upgrade normale), e le colonne sono già state tolte prima dello `stamp`.
+  4. Sotto il lock che esiste già, `<db>.post-migration.lock`: il lifespan parte in ogni worker.
+- **Dove**: in automatico in `ensure_database_exists()`, prima dell'upgrade (H); a mano con
+  `./dev.py db reconcile-retired [--dry-run]`; nel ripristino di B, sulla copia di stage (`_revision_plan`, codice di B).
+  L'elenco resta fino alla 1.4, documentato, poi si toglie.
+- **I casi**:
+  - il DB di produzione del developer sul Mac, alla 011:
+    - il coordinatore ferma il server;
+    - al primo avvio dopo l'aggiornamento la conversione è automatica, oppure prima la CLI con `--dry-run`;
+    - **consiglio una prova su una copia di lavoro dei suoi dati** (skill `real-data-copy`): è l'unica prova vera sui
+      tipi del suo DB;
+  - la nightly Docker del developer, e quella pubblica di chiunque l'abbia usata: in automatico al primo avvio
+    dell'immagine nuova, oppure con `docker compose run --rm librefolio python dev.py db reconcile-retired`;
+  - le corsie di test: sono usa e getta, quindi basta `db populate --force --clean` (o `db create`). La via automatica
+    copre anche quelle non ricreate.
+
+**4. Le varianti** (tutte e quattro provate):
+- V1: 010 dentro, indici invariati;
+- V2: 010 fuori;
+- V3: 010 dentro, i 13 indici tolti;
+- V4: 010 fuori, indici tolti.
+
+Con V2 e V4, Z toglie il codice di Z-32 (c): la scrittura di `reported_currency` nel refresh e l'avviso
+`QUOTE_IN_MINOR_UNIT`. Con V3 e V4 si allineano le 13 dichiarazioni di `db/models.py` e si aggiunge la guardia in
+`db validate`: la proposta P-IDX-1 entra qui, senza una migrazione `0NN` separata.
+
+**5. Effetti**:
+- **Test**: i sei file `test_migration_005…010` (3933 righe; quello della 011 lo toglie Z-33r) diventano:
+  - un solo `test_migration_005_release_1_3.py`, con gli stessi scenari di dati verso un unico obiettivo;
+  - `test_retired_revisions.py`, per la conversione;
+  - l'istantanea dell'equivalenza.
+  - Circa un giorno di test-author.
+- **Runner**: in `_backend_db.py` le azioni `migration-005…011` diventano `migration-005` e `retired-revisions` (anche
+  l'elenco alla r. 376).
+- **`db validate`**: la head unica c'è già; il controllo degli indici legge i modelli (V3/V4); il commento alla r. 553.
+- **Backup**:
+  - `test_backup_staging.py` fissa `OLDER = "005_accounts_invites"`, che diventa la 004 rilasciata;
+  - anche `test_restore_non_iso_warning.py` cambia;
+  - un archivio a una revisione ritirata si accetta con la stessa conversione sulla copia (consiglio), oppure si
+    rifiuta con un messaggio giusto.
+- **Doc**:
+  - `database/index.md` (elenco delle migrazioni), `users_access.md`, `assets_pricing.md`,
+    `patterns/plugin_settings.md`, `settings.md`, `access_control.md`, `backend/assets/architecture.md`;
+  - `patterns/alembic.md`: la regola della fusione e le revisioni ritirate;
+  - `.github/instructions/backend-db.instructions.md` (gli esempi dei nomi), che è condiviso.
+- **CHANGELOG**: per chi viene dalla 1.2 non cambia nulla, vede una sola migrazione. Una riga per chi ha usato una
+  nightly è da decidere.
+
+**6. Costo e ordine.**
+- Prerequisito: Z-33r nella mia base.
+- Passi:
+  1. la 005 unica dal prototipo, nella variante decisa; via i file 005–010; i modelli per V3/V4 (S);
+  2. la conversione, l'aggancio all'avvio e la CLI (M);
+  3. l'aggancio nel ripristino (B, o io con il suo OK) (S);
+  4. i test (M);
+  5. la doc (S);
+  6. le verifiche: la categoria `db`, le suite del backup, `all-backend` in uno slot, e la prova sulla copia dei dati
+     del developer **prima** che riavvii la produzione.
+- Circa 2 giorni di H più una parte piccola di B.
+- Entra nello stesso treno di Z-33r, con il server di produzione fermato prima.
+
+**Domande** (per il developer):
+1. La 010: dentro o fuori (D8 di Z). Non do consigli: è il dominio di Z.
+2. I 13 indici nella stessa 005 (V3/V4): **consiglio sì**, una migrazione invece di due, già provata.
+3. La conversione: automatica all'avvio (**consiglio**) o solo da CLI.
+4. Gli archivi a una revisione ritirata: accettarli (**consiglio**) o rifiutarli.
+5. La prova su una copia di lavoro dei dati veri del developer, prima di riavviare la produzione (**consiglio sì**):
+   serve la copia, dal coordinatore.
+
+#### Decisione del developer sulla fusione: niente codice una tantum (19/10, 12:20)
+
+> Testuale: «non voglio sporcare il codice con cose una tantum».
+> - Niente conversione automatica all'avvio, niente `./dev.py db reconcile-retired`, niente eccezione nel ripristino.
+> - Un archivio a una revisione ritirata resta rifiutato com'è oggi (`revision_unknown`).
+> - Al loro posto, una procedura manuale con le righe SQL esatte.
+> - Le corsie di test si ricreano.
+> - Restano aperte presso il developer la 010 e i 13 indici, quindi la procedura copre le quattro varianti.
+
+- **Superati**: il punto 3 dell'analisi qui sopra (la conversione nel codice) e le domande 3 e 4.
+- **Restano validi**: la 005 unica (punto 1), l'equivalenza come test (punto 2), le varianti (punto 4) e gli effetti
+  (punto 5), tranne i test e l'azione della conversione. Il ripristino di B non cambia; cambia solo la revisione
+  «vecchia» fissata in `test_backup_staging.py`, che diventa la 004.
+- Costo: circa 1–1,5 giorni di H.
+
+#### Procedura manuale: un DB alla 011 o alla 010 portato alla 005 unica (provata il 19/10)
+
+**Quando.** Una volta sola, al passaggio dal codice con 005–011 a quello con la 005 unica, a server fermo, prima di
+riavviarlo. Senza, il codice nuovo non parte («Can't locate revision identified by …»), ma non tocca nulla.
+
+| Dove | Il DB | Ogni comando comincia con |
+|---|---|---|
+| Il Mac (produzione del developer; dal checkout principale, porta 6040 libera) | `backend/data/prod/sqlite/app.db` | `sqlite3` |
+| La nightly Docker (compose, servizio `librefolio`, dati in `./LibreFolio-data`) | `/app/backend/data/prod-docker/sqlite/app.db` | `docker compose run --rm -T librefolio sqlite3` (`-T`: senza terminale, le righe escono senza `\r`) |
+
+Qui sotto `<db>` sta per il percorso della colonna «Il DB».
+
+1. **Fermare il server.** Sul Mac `./dev.py server` (lo ferma il coordinatore); con Docker
+   `docker compose stop librefolio`.
+2. **Aggiornare il codice.** Sul Mac il checkout; con Docker `docker compose pull`. Non riavviare ancora.
+3. **Copia di sicurezza** (comprende anche ciò che è ancora nel WAL):
+   - Mac: `sqlite3 backend/data/prod/sqlite/app.db ".backup 'backend/data/prod/sqlite/app.db.before-1.3-squash'"`
+   - Docker: `docker compose run --rm -T librefolio sqlite3 /app/backend/data/prod-docker/sqlite/app.db ".backup '/app/backend/data/prod-docker/sqlite/app.db.before-1.3-squash'"`
+4. **La revisione:** `sqlite3 <db> "SELECT version_num FROM alembic_version;"`. Deve rispondere
+   `011_provider_exchange_timezone` oppure `010_provider_reported_currency`, e decide il blocco del passo 5. Per un
+   altro valore vedi le note.
+5. **Il blocco** della variante decisa e della revisione, una riga sola: `sqlite3 -bail <db> "<blocco>"`.
+   - Le prime istruzioni rifiutano un DB a un'altra revisione (`CHECK constraint failed: at_011 = 1`).
+   - Con `-bail` un errore annulla la transazione: non cambia nulla.
+6. **La verifica:** `sqlite3 <db> "<verifica>"` (sotto), da confrontare con le righe attese della variante.
+7. **Riavviare.** Sul Mac `./dev.py server`; con Docker `docker compose up -d`. Nel log c'è «schema up to date»: non
+   c'è nessuna migrazione da applicare.
+8. **I backup fatti prima** sono a una revisione ritirata: il ripristino li rifiuta, per decisione del developer. Farne uno
+   nuovo dopo il riavvio.
+
+**I blocchi** (V1: 010 dentro, indici invariati; V2: 010 fuori; V3: 010 dentro e i 13 indici tolti; V4: 010 fuori e
+indici tolti):
+
+- V1 da 011:
+  ```sql
+  BEGIN; CREATE TEMP TABLE squash_guard (at_011 INTEGER CHECK (at_011 = 1)); INSERT INTO squash_guard SELECT version_num = '011_provider_exchange_timezone' FROM alembic_version; ALTER TABLE asset_provider_assignments DROP COLUMN exchange_timezone; UPDATE alembic_version SET version_num = '005_release_1_3_0_schema'; COMMIT;
+  ```
+- V1 da 010:
+  ```sql
+  BEGIN; CREATE TEMP TABLE squash_guard (at_010 INTEGER CHECK (at_010 = 1)); INSERT INTO squash_guard SELECT version_num = '010_provider_reported_currency' FROM alembic_version; UPDATE alembic_version SET version_num = '005_release_1_3_0_schema'; COMMIT;
+  ```
+- V2 da 011:
+  ```sql
+  BEGIN; CREATE TEMP TABLE squash_guard (at_011 INTEGER CHECK (at_011 = 1)); INSERT INTO squash_guard SELECT version_num = '011_provider_exchange_timezone' FROM alembic_version; ALTER TABLE asset_provider_assignments DROP COLUMN exchange_timezone; ALTER TABLE asset_provider_assignments DROP COLUMN reported_currency; UPDATE alembic_version SET version_num = '005_release_1_3_0_schema'; COMMIT;
+  ```
+- V2 da 010:
+  ```sql
+  BEGIN; CREATE TEMP TABLE squash_guard (at_010 INTEGER CHECK (at_010 = 1)); INSERT INTO squash_guard SELECT version_num = '010_provider_reported_currency' FROM alembic_version; ALTER TABLE asset_provider_assignments DROP COLUMN reported_currency; UPDATE alembic_version SET version_num = '005_release_1_3_0_schema'; COMMIT;
+  ```
+- V3 da 011:
+  ```sql
+  BEGIN; CREATE TEMP TABLE squash_guard (at_011 INTEGER CHECK (at_011 = 1)); INSERT INTO squash_guard SELECT version_num = '011_provider_exchange_timezone' FROM alembic_version; ALTER TABLE asset_provider_assignments DROP COLUMN exchange_timezone; DROP INDEX idx_price_history_asset_date; DROP INDEX idx_asset_provider_asset_id; DROP INDEX uq_assets_display_name; DROP INDEX ix_brokers_name; DROP INDEX ix_users_username; DROP INDEX ix_users_email; DROP INDEX ix_transactions_broker_id; DROP INDEX ix_transactions_asset_id; DROP INDEX ix_transactions_date; DROP INDEX ix_broker_user_access_user_id; DROP INDEX idx_route_base_quote; DROP INDEX ix_fx_conversion_routes_base; DROP INDEX ix_fx_conversion_routes_quote; UPDATE alembic_version SET version_num = '005_release_1_3_0_schema'; COMMIT;
+  ```
+- V3 da 010:
+  ```sql
+  BEGIN; CREATE TEMP TABLE squash_guard (at_010 INTEGER CHECK (at_010 = 1)); INSERT INTO squash_guard SELECT version_num = '010_provider_reported_currency' FROM alembic_version; DROP INDEX idx_price_history_asset_date; DROP INDEX idx_asset_provider_asset_id; DROP INDEX uq_assets_display_name; DROP INDEX ix_brokers_name; DROP INDEX ix_users_username; DROP INDEX ix_users_email; DROP INDEX ix_transactions_broker_id; DROP INDEX ix_transactions_asset_id; DROP INDEX ix_transactions_date; DROP INDEX ix_broker_user_access_user_id; DROP INDEX idx_route_base_quote; DROP INDEX ix_fx_conversion_routes_base; DROP INDEX ix_fx_conversion_routes_quote; UPDATE alembic_version SET version_num = '005_release_1_3_0_schema'; COMMIT;
+  ```
+- V4 da 011:
+  ```sql
+  BEGIN; CREATE TEMP TABLE squash_guard (at_011 INTEGER CHECK (at_011 = 1)); INSERT INTO squash_guard SELECT version_num = '011_provider_exchange_timezone' FROM alembic_version; ALTER TABLE asset_provider_assignments DROP COLUMN exchange_timezone; ALTER TABLE asset_provider_assignments DROP COLUMN reported_currency; DROP INDEX idx_price_history_asset_date; DROP INDEX idx_asset_provider_asset_id; DROP INDEX uq_assets_display_name; DROP INDEX ix_brokers_name; DROP INDEX ix_users_username; DROP INDEX ix_users_email; DROP INDEX ix_transactions_broker_id; DROP INDEX ix_transactions_asset_id; DROP INDEX ix_transactions_date; DROP INDEX ix_broker_user_access_user_id; DROP INDEX idx_route_base_quote; DROP INDEX ix_fx_conversion_routes_base; DROP INDEX ix_fx_conversion_routes_quote; UPDATE alembic_version SET version_num = '005_release_1_3_0_schema'; COMMIT;
+  ```
+- V4 da 010:
+  ```sql
+  BEGIN; CREATE TEMP TABLE squash_guard (at_010 INTEGER CHECK (at_010 = 1)); INSERT INTO squash_guard SELECT version_num = '010_provider_reported_currency' FROM alembic_version; ALTER TABLE asset_provider_assignments DROP COLUMN reported_currency; DROP INDEX idx_price_history_asset_date; DROP INDEX idx_asset_provider_asset_id; DROP INDEX uq_assets_display_name; DROP INDEX ix_brokers_name; DROP INDEX ix_users_username; DROP INDEX ix_users_email; DROP INDEX ix_transactions_broker_id; DROP INDEX ix_transactions_asset_id; DROP INDEX ix_transactions_date; DROP INDEX ix_broker_user_access_user_id; DROP INDEX idx_route_base_quote; DROP INDEX ix_fx_conversion_routes_base; DROP INDEX ix_fx_conversion_routes_quote; UPDATE alembic_version SET version_num = '005_release_1_3_0_schema'; COMMIT;
+  ```
+
+**La verifica** (la stessa per tutte):
+
+```sql
+SELECT 'version', version_num FROM alembic_version; SELECT 'objects 1.3', lower(hex(sha3_query('SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name IN (''account_tokens'', ''ix_account_tokens_purpose_expires_at'', ''ix_account_tokens_user_id'', ''plugin_system_settings'', ''plugin_user_settings'', ''ux_users_email_lower'') ORDER BY name', 256))); SELECT 'users', name, type, [notnull], dflt_value FROM pragma_table_info('users') WHERE name IN ('session_version', 'email_verified_at', 'last_seen_version') ORDER BY cid; SELECT 'assignments', name, type FROM pragma_table_info('asset_provider_assignments') WHERE name IN ('reported_currency', 'exchange_timezone'); SELECT 'redundant indexes', count(*) FROM sqlite_master WHERE type = 'index' AND name IN ('idx_price_history_asset_date', 'idx_asset_provider_asset_id', 'uq_assets_display_name', 'ix_brokers_name', 'ix_users_username', 'ix_users_email', 'ix_transactions_broker_id', 'ix_transactions_asset_id', 'ix_transactions_date', 'ix_broker_user_access_user_id', 'idx_route_base_quote', 'ix_fx_conversion_routes_base', 'ix_fx_conversion_routes_quote'); SELECT 'integrity', integrity_check FROM pragma_integrity_check; SELECT 'foreign keys', count(*) FROM pragma_foreign_key_check;
+```
+
+Righe attese: le stesse di un DB nuovo della variante. Sono comuni:
+
+```text
+version|005_release_1_3_0_schema
+objects 1.3|eeba1a55c8be8f71236eb734e05c036716c9d67d71b13cf5943a38546960112c
+users|session_version|INTEGER|1|0
+users|email_verified_at|DATETIME|0|NULL
+users|last_seen_version|VARCHAR(40)|0|NULL
+```
+
+poi, in V1 e V3, `assignments|reported_currency|VARCHAR(8)` (in V2 e V4 nessuna riga `assignments`); poi
+`redundant indexes|13` in V1 e V2, `redundant indexes|0` in V3 e V4; e alla fine `integrity|ok` e `foreign keys|0`.
+
+**Note**:
+- `objects 1.3` è l'impronta SHA3 di tipo, nome e SQL degli oggetti della 1.3: `account_tokens`, i suoi due indici, le
+  due tabelle dei plugin e `ux_users_email_lower`.
+  - Se solo l'impronta è diversa, il testo DDL di uno di quegli oggetti è scritto in un altro modo, per esempio da
+    un'altra versione di SQLAlchemy.
+  - Allora si confronta il testo: la stessa `SELECT` senza `sha3_query`, sul DB e su un DB nuovo.
+- Un DB a una revisione fra 005 e 009: prima si avvia una volta il codice di prima della fusione, che lo porta alla
+  011; poi lo si ferma e si usa il blocco «da 011». Oppure lo si ricrea.
+- Se Z-33r entra da solo prima della fusione: la guida di Z porta il DB dalla 011 alla 010, e qui si usa il blocco
+  «da 010».
+- Le corsie di test: `db populate --force --clean` col codice nuovo. Senza, i loro server di test non partono.
+- **Provata** su copie del DB popolato della corsia (alla 011, e riportato alla 010 con Alembic), con il `sqlite3` del
+  Mac (3.51):
+  - tutte le 8 combinazioni danno una verifica identica a quella di un DB nuovo della variante;
+  - le righe restano le stesse (11 account, 76 transazioni, 2744 prezzi, 14 assegnazioni);
+  - dopo, `alembic upgrade head` non ha nulla da fare;
+  - il blocco di un'altra revisione è rifiutato senza cambiare nulla.
+  - Script: `files/squash/procedure/` nella cartella della sessione.
+- **Non provati**:
+  - l'involucro Docker: la SQL è la stessa; `sqlite3` nell'immagine deve essere almeno 3.35 per `DROP COLUMN`;
+  - i dati veri del developer. **Consiglio**: prima su una copia di lavoro del suo DB (skill `real-data-copy`), per
+    vedere davvero la sua impronta.
+
+### Lotto «H-57: le migrazioni della 1.3 in una sola `005_release_1_3_0_schema`, variante V4» (19/10, 12:27) — passi
+
+> Via del coordinatore, con le decisioni del developer (19/10, 12:27).
+> - La 010 esce, testuale: «nessuna colonna nel db, sono certo». Il codice di Z-32 (c) lo toglie Z sul suo ramo.
+> - I 13 indici inutili si tolgono nella 005, con `DROP INDEX IF EXISTS`. La 001 non si tocca: gli oggetti sono già
+>   rilasciati.
+> - I modelli si allineano, così gli indici non tornano.
+> - Una regola nuova nelle istruzioni del DB e in `patterns/alembic.md`. Testuale: «segna anche nelle skill del backend
+>   quando tocca il DB di stare attento a creare solo gli indici utili».
+> - Una guardia in `db validate` contro i doppioni.
+> - La procedura manuale V4 (da 011 e da 010) nel piano.
+> - Prima i rossi, poi la cura. L'equivalenza diventa un test, e i test vecchi delle migrazioni si sostituiscono
+>   (test-author).
+> - Entra nello stesso treno di Z-33r e della rimozione di Z-32 (c), con la produzione del developer ferma.
+>
+> Base: `884f32d1f` (merge di Z-33r, `065c9df77`; la 011 e il suo test sono già via). La rimozione di Z-32 (c) arriverà
+> con un altro aggiornamento di base. Fino ad allora `db/models.py` ha ancora `reported_currency` e il DB no: i test
+> che leggono le assegnazioni non possono andare a verde. `db/models.py` è condiviso con Z, su parti diverse; il merge è
+> additivo e lo fa il coordinatore.
+
+**Passi**:
+0. ✅ L'istantanea dello schema lasciato dalla catena vecchia, variante V4: 004→009, poi i 13 `DROP INDEX`.
+   - File `files/squash/schema_1_3_retired_chain_v4.json`: 50 oggetti (19 tabelle, 31 indici), nessuna riga.
+   - Generata prima di cancellare i file e rigenerata sulla base nuova: identica.
+   - Il prototipo V4 la riproduce esattamente.
+1. Rossi (test-author, due in parallelo):
+   - A: `test_migration_005_release_1_3.py` al posto di `test_migration_005…010`, l'harness in un modulo comune,
+     l'istantanea come fixture;
+   - B: la guardia contro i doppioni in `db_schema_validate.py`; la revisione «vecchia» dei test del ripristino, che
+     diventa la 004.
+2. Cura:
+   - la 005 (dal prototipo, V4, senza varianti);
+   - via `005_accounts_invites.py` … `010_provider_reported_currency.py`;
+   - le 13 dichiarazioni di `db/models.py`;
+   - le azioni `migration-0xx` in `_backend_db.py`;
+   - la regola in `.github/instructions/backend-db.instructions.md`.
+3. Doc (docs-writer): le pagine del DB, `patterns/alembic.md` con la regola degli indici.
+4. Verdi, dopo che la rimozione di Z-32 (c) è nella base:
+   - la categoria `db`, ricreando la corsia con `db populate --force --clean`;
+   - le suite del backup;
+   - `all-backend` in uno slot.
+5. Checkpoint, con la procedura V4 confermata.
+
+> **Avanzamento H-57 (19/10, 12:45)**:
+> - Passo 1 avviato: i due test-author lavorano in parallelo, su file distinti.
+> - Passo 2 pronto a secco: `files/h57/apply_h57.py`.
+>   - La migrazione definitiva (`files/h57/dry/005_release_1_3_0_schema.py`) dà, su un DB nuovo, oggetti e righe
+>     **identici** all'istantanea della catena ritirata. Il suo downgrade dà una 004 identica a una nuova, testo SQL
+>     compreso.
+>   - I modelli: 12 righe; `broker_id` solo in `transactions`, perché quello di `broker_user_access` tiene il suo
+>     indice.
+>   - Il runner: un'azione `migration-005`.
+>   - La regola: nelle istruzioni del DB e nello skill `devpy-server`, come chiesto dal developer («nelle skill del
+>     backend»).
+> - `create_all` dei modelli di oggi: `unique=True, index=True` dà un indice unico e nessun vincolo. Con `unique=True`
+>   da solo dà il vincolo, come il DB migrato.
+
+> **Avanzamento H-57 (19/10, 13:20)**:
+> - Basi: `11fcfa626` (merge di Z-32cr, `4eccb5d43`): il modello non ha più `reported_currency`. Rivista la parte di Z
+>   su `db/models.py`: OK.
+> - **Passo 1, B ✅**: la guardia `test_no_redundant_indexes` in `db_schema_validate.py` e la revisione «vecchia» dei
+>   test del ripristino portata alla 004.
+>   - Rosso provato, per la ragione giusta: prima ho ricreato la corsia sulla catena di oggi (`db populate --force
+>     --clean`, revisione `010_provider_reported_currency`), perché alla 011 ritirata il rosso sarebbe stato un altro.
+>   - `db validate`: **1 fallito, 17 passati**. Il fallito è `test_no_redundant_indexes`: 12 coppie su 11 indici
+>     (`ix_fx_conversion_routes_base` è prefisso di due). I due indici senza lettore (`ix_transactions_date`,
+>     `ix_fx_conversion_routes_quote`) non si vedono con regole sul catalogo: li toglie la 005, e nessuna guardia li
+>     può trovare. Log: `files/runs/h57-red-validate.log`.
+>   - I 12 moduli del backup cadono alla raccolta fino alla cura: il modulo di staging fissa
+>     `005_release_1_3_0_schema`, che ancora non esiste.
+> - **Passo 1, A**: prima stesura fatta (49 test, 104 casi; `alembic_harness.py`, l'istantanea come fixture). Ora riscrive
+>   i test del controllo dei doppioni, vedi sotto.
+> - **⚠️ Fuori pista: il controllo delle email doppie torna dove stava la 009.**
+>   - Nella prima stesura della 005 l'avevo messo in testa («niente scritto»). A ha trovato il problema: il rimedio che
+>     il messaggio nomina, `./dev.py user set-email` (`scripts/user_cli.py`, `cmd_set_email`), legge e scrive gli
+>     account col modello 1.3 (`session_version`…). Su una 004 nuda fallisce con «no such column».
+>   - Cura: il controllo va dopo i passi 1–5 (colonne, `account_tokens`, `registration_mode`, tabelle dei plugin,
+>     default degli inviti) e prima di `ux_users_email_lower`. È il comportamento della catena ritirata. Docstring
+>     rinumerata, 7 passi.
+>   - Provato su una 004 con due account `dup@example.com`/`Dup@Example.com`: rc 1; il messaggio nomina `#1 'user0'`,
+>     `#2 'user1'`; la versione resta 004; ci sono le 3 colonne e `account_tokens`; `ux` assente; gli indici inutili
+>     ancora lì. Dopo il rimedio, il secondo giro arriva alla 005 e gli oggetti sono uguali all'istantanea.
+>   - Lo stato parziale dipende dalla transazione. Il DDL prima del primo DML va in autocommit (controllo legacy delle
+>     transazioni di pysqlite); il primo DML (passo 3 o 5) apre la transazione che il fallimento annulla. Per questo
+>     i test fissano solo il garantito: versione, `ux` assente, righe degli account invariate, colonne e token
+>     presenti.
+>   - Verifiche ripetute sulla migrazione nuova: DB nuovo uguale all'istantanea; downgrade uguale a una 004 nuova.
+> - **Via del coordinatore (19/10) su due file di A, solo per l'effetto della fusione**:
+>   - `test_email_case.py`: ECASE-010 verificava `ix_users_email` su un DB di `create_all`. Lo riscrive A (test-author)
+>     perché verifichi l'unicità, non il nome dell'indice;
+>   - `scripts/user_cli.py`: solo la docstring di `cmd_set_email` («stops migration 009» → la 005 prima del suo
+>     indice), dentro `apply_h57.py`.
+> - Il runner: la descrizione dice «duplicate addresses stop it before the unique index, as the retired 009 did, and
+>   the remedy works».
+> - **Superficie della doc** (grep degli id ritirati fuori dal giornale, 47 righe):
+>   - il runner (23), dalla cura;
+>   - `database/users_access.md` (10). Riga 169: «stays at `008_registration_invite_default`, where `set-email` works»
+>     diventa «resta alla 004 con le colonne e i token della 1.3 già aggiunti»;
+>   - `database/index.md` (6 righe della tabella delle migrazioni → una);
+>   - `patterns/plugin_settings.md` (2, compresa l'azione `migration-007`), `settings.md` (1), `access_control.md` (1);
+>   - devWiki `domains/auth.md` (4): due percorsi della tabella delle fonti, che `check_source_paths.py` segnalerebbe.
+
+> **Avanzamento H-57 (19/10, 14:05): passi 1, 2, 3 e 5 ✅; del passo 4 manca solo `all-backend` (slot)**.
+> - **Passo 1, A ✅**. Il test del rifiuto dei doppioni segue il contratto della vecchia 009: si ferma prima
+>   dell'indice; la versione resta 004; `ux` assente; gli account invariati; colonne e `account_tokens` presenti, con
+>   lo stesso SQL dell'istantanea. Il rimedio `set-email` va a verde.
+>   - ECASE-010 (`test_email_case.py`, via del coordinatore) verifica la proprietà: un doppione esatto è rifiutato dal
+>     DB, via ORM e in SQL puro. Non verifica più il nome `ix_users_email`.
+>   - Il filtro mirato del warning SQLAlchemy in `test_unique_constraints` (vedi sotto).
+> - **La registrazione nel runner è andata con i rossi** (fa parte della definizione di fatto del test-author: senza,
+>   il rosso non si lancia). `apply_h57.py` ora legge il runner da `HEAD`, così la cura riscrive gli stessi byte.
+> - **Rosso `db migration-005`** (`files/runs/h57-red-migration-005.log`): 99 falliti e 5 passati. Le 99 sezioni di
+>   errore dicono tutte «red until H-57» (revisione assente, DB non alla revisione, file ritirati ancora lì). I 5
+>   verdi sono le autoverifiche dell'istantanea e dell'helper `shape`.
+> - **Rosso `services backup-staging`**: errore di raccolta, «the revision '005_release_1_3_0_schema' this module pins
+>   is not among this LibreFolio's migrations».
+> - **Passo 2, la cura ✅**: `python3 files/h57/apply_h57.py --apply`. Sei file scritti, uguali byte per byte alle
+>   copie a secco: la 005, `models.py`, il runner, le istruzioni del DB, lo skill `devpy-server`, la docstring di
+>   `cmd_set_email`. Via i sei file 005–010; `alembic heads` = `005_release_1_3_0_schema (head)`.
+>   - Docstring della 005: la parte «Not a step» porta il ragionamento di C-97 della vecchia 009 (a cui
+>     `database/index.md` rimanda); i dettagli di `account_tokens` (censimento D1, riuso degli id) vengono dalla
+>     vecchia 005. Rifatte sul file definitivo: equivalenza con l'istantanea (oggetti e righe) e downgrade uguale a
+>     una 004 nuova; ruff e black puliti.
+>   - Il commento di `models.py` su `ux_users_email_lower` («migration 009» → «migration 005, step 6»).
+> - **Passo 3, la doc ✅** (docs-writer): `database/index.md` (una riga al posto di sei; l'avviso «Retired revision
+>   ids»; la riga della 001), `users_access.md` (il paragrafo dei doppioni riscritto: resta alla 004 con colonne e
+>   token), `patterns/plugin_settings.md`, `settings.md`, `access_control.md`, `security.md`, `patterns/alembic.md`
+>   (due sezioni nuove: «One Migration per Release» e «Indexes: Only the Ones a Query Uses», con un `EXPLAIN QUERY
+>   PLAN` provato). `mkdocs build` stretto e `check-links` (97) puliti. La devWiki `domains/auth.md`: la tabella
+>   delle fonti punta alla 005 (`check_source_paths.py`: 7 percorsi su 4247, nessuno di H-57).
+> - **Passo 4, verdi** (corsia 6181, DB ricreato con `db populate --force --clean`: revisione 005, 31 indici,
+>   `integrity_check` ok, nessuna violazione di FK):
+>   - `db migration-005` 104/104, `db validate` 18/18, `db session-pragmas` 15/15;
+>   - `db post-migration` 45, `post-migration-event-types` 36, `post-migration-orphan-pairs` 47;
+>   - services `backup-staging` 202, `restore-non-iso-warning` 46, `backup-totals` 91, `backup-apply` 255,
+>     `backup-secure` 77, `stored-currencies` 38, `backup-leftovers` 44, `backup-outcome` 164, `email-case` 67,
+>     `registration` 151, `account-tokens` 76; utils `backup-cli-restore` 109;
+>   - api `backup-restore` 161, `backup-restore-apply` 215, `backup-secure` 24; e2e `backup-roundtrip` 3;
+>   - `check-orphans`: 486 file backend, tutti raggiungibili;
+>   - porta 6181 libera alla fine.
+>   - Manca `all-backend`: chiesto lo slot al coordinatore.
+> - **⚠️ Fuori pista: un warning nuovo in `db validate`**. Con `unique=True` da solo, `username` ed `email` diventano un
+>   `UniqueConstraint` del modello, e `test_unique_constraints` riflette `users`. Il `get_unique_constraints` di
+>   SQLAlchemy salta l'indice sull'espressione `ux_users_email_lower` con un `SAWarning`, lo stesso limite che la
+>   docstring di `test_indexes` descrive. Cura del test-author: `filterwarnings` su quel solo messaggio, in quel solo
+>   test. Rieseguito: 18/18, nessun warning.
+> - **⚠️ Fuori pista: black su `models.py`**. Togliere un `Index(...)` lascia una tupla di un elemento, che black
+>   compatta su una riga (2 punti). `models.py` era pulito a `HEAD`, quindi black sul file tocca solo quei due punti.
+>   - `_backend_db.py` non segue black già a `HEAD` (5 punti, lo stile del runner): niente riformattazione. La mia
+>     riga troppo lunga (354 caratteri) è accorciata a 255.
+>   - I 3 `PLC0415` di ruff su `_backend_db.py` c'erano già a `HEAD`.
+> - **⚠️ Fuori pista: il primo grep degli id ritirati usava `\b`**, che il `git grep -E` di questo Mac non capisce.
+>   Rifatto senza: restano menzioni solo nei commenti, in file di A (`user_service.py:141`,
+>   `test_registration_api.py:1087`, `test_registration_service.py:9` e `:411`, il blocco P18 di
+>   `test_dev_cli_image.py:2030`, `emailCase.test.ts:5`) e nella pagina storica `F-001.md:60` della devWiki. Chiesto
+>   al coordinatore il via per i soli commenti. Le pagine di Z sulla 011 sono storia e restano.
+> - **Passo 5 ✅: la procedura manuale V4, confermata sulla 005 definitiva** (`files/squash/procedure/confirm_v4.sh`).
+>   - Il DB di riferimento si fa con la catena vera del worktree. Per avere un DB alla 010, la catena ritirata viene
+>     dalla storia (`git archive 742b4c5ff`), in una cartella temporanea, e scende dalla 011 alla 010.
+>   - «da 011» e «da 010»: rc 0. La riga di verifica è uguale a quella di un DB nuovo (impronta
+>     `eeba1a55c8be8f71236eb734e05c036716c9d67d71b13cf5943a38546960112c`, quella del piano). Le righe sono invariate
+>     (11/76/2744/14). Poi `alembic upgrade head` con la catena vera trova il DB già alla 005.
+> - Backlog: H-57 (fatto, in attesa del treno) e H-58 (due lacune vecchie della doc del DB, viste dal docs-writer).
+
+> **Avanzamento H-57 (19/10, 14:20): `all-backend` nello slot del coordinatore (13:48–14:30)**.
+> - Comando: `files/runs/h57-allbackend.sh` (`--fresh-run --workers 2`, corsia 6181), sull'albero di H-57 prima delle
+>   modifiche ai commenti. Durata 13:48:38–14:12:41; porta libera alla fine; il backend condiviso è partito due volte
+>   (la pausa per `db create`) e si è fermato pulito tutte e due le volte.
+> - **28 771 passati, 10 falliti, 7 saltati.** Nessuno dei 10 viene da H-57:
+>   - i test che falliscono e il codice che provano sono identici a `HEAD`;
+>   - rifatti su una copia pulita di `HEAD` `11fcfa626` (`git archive`, senza il lavoro di H-57;
+>     `files/h57/base_repro.sh`), i 9 che non vogliono un server falliscono uguali, con gli stessi errori. Il decimo è
+>     il gemello API di EMF-009, con lo stesso errore.
+> - **Sono rossi della base**, e quindi di `dev_release2`. Mandati al coordinatore con le origini:
+>   1. **H-43 (`cd04b17b0`), miei**: `cmd_server` passa sempre `lane_settings=` a `configure_test_runtime`, e i
+>      sostituti dei test non lo accettano (`TypeError`). Sono 5 test: `test_probe_rate_limit.py` ×1,
+>      `test_dev_server_interrupt.py` ×3, `test_dev_designer_lab_banner.py` ×1. Cura proposta, H-59: i sostituti
+>      accettano `lane_settings=None` (test-author, 3 file non miei, serve il via).
+>   2. **A, `9e9dff30c`**: `LIBREFOLIO_DISABLE_WHATS_NEW` (`config/accounts.py:25`) manca in `.env.example`
+>      (`test_env_example`).
+>   3. **Tools, `a8299354f`**: `worker_exit_code` manca nei dizionari attesi di `test_tools_schemas.py` (2 test).
+>   4. **E, dopo `3e12b09ae`**: `get_user_settings` non rifiuta più un tema sconosciuto, e la precondizione di EMF-009
+>      cade (`test_email_flows.py`, `test_email_api.py`: «DID NOT RAISE ValidationError»).
+> - **⚠️ Fuori pista: un `DROP INDEX` non rimpicciolisce il file.** Con `auto_vacuum` a 0 le pagine liberate restano
+>   nel file e vengono riusate dalle scritture successive: sulla copia della procedura V4, 321 pagine prima e dopo,
+>   28 libere. Il backup usa `VACUUM INTO`, quindi gli archivi escono compatti. Da dire nel testo del CHANGELOG
+>   proposto; un `VACUUM` dopo l'upgrade sarebbe una scelta di prodotto, e non la faccio io.
+
+> **Avanzamento H-57 (19/10, 14:45): i commenti nei file di A, poi il checkpoint**.
+> - Via del coordinatore (13:47), solo docstring e commenti che nominavano revisioni ritirate:
+>   - test-author: `test_registration_api.py:1087`, `test_registration_service.py:9,412`, `test_dev_cli_image.py:2030`
+>     (blocco P18), `emailCase.test.ts:5`;
+>   - io: `user_service.py:141`, devWiki `features/F-001.md:60`.
+> - Prova che cambiano solo i commenti: `files/h57/verify_comment_only.py` confronta i file con la copia presa prima
+>   delle modifiche, cioè l'albero su cui ha girato `all-backend`. Per Python confronta l'AST senza docstring, per il
+>   TS il codice senza commenti. Risultato: codice identico in tutti e 5 i file di codice. Ruff e black puliti con la
+>   configurazione del repo; `git diff --check` pulito.
+> - Suite rieseguite sui file toccati: `services registration` 151, `api registration` 102, `utils dev-cli-image` 95,
+>   Vitest `emailCase.test.ts` 23 (binario locked). Porta 6181 libera.
+> - **H-59**, via del coordinatore, commit a parte dopo il checkpoint di H-57:
+>   - (1) le funzioni finte in 2 file accettano `lane_settings=None`; `test_probe_rate_limit` usa quella di
+>     `test_dev_designer_lab_banner`;
+>   - (2) `LIBREFOLIO_DISABLE_WHATS_NEW` va in `UNDOCUMENTED_ON_PURPOSE` di `test_env_example.py`. È la scelta (a), per
+>     D-A7: A la tiene nascosta, e `.env.example` non cambia;
+>   - (3) `worker_exit_code` nelle attese di `test_tools_schemas.py` (J-19).
+>   - EMF-009 va a E. Il brief del test-author è in `files/h59/test_author_prompt.md`.
+> - Fixture `schema_1_3_retired_chain_v4.json`: 50 oggetti, uguali all'istantanea, nessuna riga di dati.
+
+### Lotto «H-59: tre rossi della base trovati da `all-backend` di H-57» (19/10, 14:30) — passi
+
+> Via del coordinatore (19/10, 14:26), da `964be55a0`. H-57 è committato: `330e75f83`
+> (`refactor(db): fold 1.3 migrations, drop 13 indexes`) e `964be55a0` (il giornale). È un commit a parte, e il treno
+> porta H-57 e H-59 insieme, così il cancello dopo l'ingresso parte dal verde.
+> - (1) Le funzioni che nei test fanno le veci di `configure_test_runtime` accettano `lane_settings=None`, come la
+>   firma vera. La causa è H-43 (`cd04b17b0`), mia. Sono 2 file: `test_dev_server_interrupt.py` (di Z, fermo) e
+>   `test_dev_designer_lab_banner.py`; `test_probe_rate_limit.py` usa la funzione del secondo.
+> - (2) `LIBREFOLIO_DISABLE_WHATS_NEW` in `UNDOCUMENTED_ON_PURPOSE` di `test_env_example.py`: scelta (a), D-A7, A la
+>   tiene nascosta. `.env.example` non cambia; il coordinatore aveva scritto (b), poi ha corretto.
+> - (3) `worker_exit_code` nelle attese di `test_tools_schemas.py`: J-19 (`a8299354f`, entrato con `635b50537`), voluto.
+> - EMF-009 (`test_email_flows.py`, `test_email_api.py`) va a E.
+> - Il coordinatore porta al developer la domanda sul `VACUUM` dopo l'upgrade, e scrive lui la riga del CHANGELOG di
+>   H-57 all'ingresso. La procedura V4 l'ha provata sulla copia di riferimento dei dati del developer (revisione 011):
+>   impronta `eeba1a55…`, `redundant indexes|0`, integrità ok, righe invariate, `alembic current` =
+>   `005_release_1_3_0_schema (head)`. Il server 6040 è fermo dalle 13:49.
+
+**Passi**:
+1. ✅ Rossi su `964be55a0` (`files/runs/h59/red-*.log`): `services config-env-example` 1 fallito su 38,
+   `services probe-rate-limit` 1 su 52, `utils dev-server-interrupt` 3 su 27, `utils dev-designer-lab-banner` 1 su 37,
+   `schemas tools` 2 su 271. Sono gli 8 di `all-backend` (i 2 di EMF-009 vanno a E).
+2. ✅ Cura (test-author, brief `files/h59/test_author_prompt.md`): 4 file di test, nessun file dell'app.
+   - Le due funzioni finte prendono la firma vera di `configure_test_runtime`:
+     `(port=None, data_dir=None, lane_settings=None)`.
+   - `UNDOCUMENTED_ON_PURPOSE` ha `LIBREFOLIO_DISABLE_WHATS_NEW`, con la ragione D-A7 e C-54. Il test parametrico
+     della lista guadagna un caso, ed è verde.
+   - `worker_exit_code: None` nelle due attese. Non va in `_METRIC_PHASES`: quella lista parametrizza il test che
+     rifiuta `-1` per ogni durata, mentre un codice d'uscita negativo è il segnale che ha fermato il worker.
+   > **Note implementazione**: la funzione finta è condivisa fra `configure_test_runtime` e
+   > `configure_server_runtime` (il ciclo `for name in (...)`), quindi per il secondo nome accetta una parola chiave in
+   > più, `lane_settings`. Ho tenuto la cura minima: la via di produzione rifiuta `--lane-setting` prima di qualsiasi
+   > chiamata (`dev.py:203-206`), e se un giorno passasse `lane_settings` alla funzione vera, un avvio reale
+   > fallirebbe subito. Due funzioni finte, una per firma, costerebbero 4 righe per file: le ho proposte, non le ho
+   > messe.
+3. ✅ Verdi (`files/runs/h59/green-*.log`): `services config-env-example` 39 (38 + il caso nuovo),
+   `services probe-rate-limit` 52, `utils dev-server-interrupt` 27, `utils dev-designer-lab-banner` 37,
+   `schemas tools` 271. Ruff e black puliti sui 4 file, `git diff --check` pulito, porta 6181 libera.
+4. ✅ Checkpoint inviato (19/10, 14:40).

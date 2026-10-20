@@ -41,15 +41,28 @@ Under test: ``backend/app/services/platform/instance_backup/jobs.py``.
     run lock (``backups/.jobs/.lock``) or the lock of the restore checks (``.restore/stage/.stage.lock``), false
     otherwise. Read only: without the lock files it creates nothing; with them free, it leaves them free. Without
     ``fcntl`` it follows the locks of the process. Without ``data_dir``, the configured data directory.
+(k) B-8, the running job named by its lock: a run writes its job id into the run lock it holds, right after taking it
+    (the content of ``backups/.jobs/.lock``), replacing whatever the file held; the CLI's ``run_backup`` as the API's
+    ``start_backup``. While it runs, every start refused (``BackupBusyError``, from ``start_backup`` as from
+    ``run_backup``) carries that job as ``running``: its id, its origin, running; neither a read of the job nor a refused
+    start erases the record. Another worker knows the run only by the file: a lock held elsewhere (here by the test,
+    through ``_RunLock``) whose content is the id of a job whose state says running names that job. Anything else names
+    none (``running`` None) though a job's state says running: an empty lock, garbage, bytes that are not text, the id
+    in capitals, a path to the running job's folder (the content is never a path, never bent into an id, and no job is
+    guessed from a running state), the id of a job that is gone, finished (done, failed, interrupted) or whose state
+    cannot be read (not JSON, JSON without its fields, a field of the wrong type), and what a run that ended left there.
+    Whatever the lock and the job's state hold, a refused start raises ``BackupBusyError`` (the API's 409
+    ``backup_busy``), never another exception, which the API would answer with a 500.
 
 Pure: every data directory is in ``tmp_path`` and every call is given its ``data_dir``; ``jobs.get_data_dir`` is
 replaced by a guard that fails the test, so the lane's data directory is never reached. ``LF_APP_VERSION`` is set, so
 no git process runs. No lane database, no server, no network. A background run ends before its test does: the test
 waits for the final state, then joins the run's thread, and an autouse fixture fails any test that would leave one
 running. Every wait polls a condition with a deadline; the cases that need a run in progress hold its build at a gate
-(an ``Event`` the test opens) instead of hoping it is slow. A failing disk is simulated in this process only: the
-``os`` of ``archive`` is replaced, for one test, by a stand-in that hands out the real files but one, which reads badly
-(``EIO`` after its first block) or is on a disk with a few hundred bytes left (``ENOSPC``).
+(an ``Event`` the test opens) instead of hoping it is slow, or, for the CLI's run in the calling thread, look from its
+first progress report, while it holds the lock. A failing disk is simulated in this process only: the ``os`` of
+``archive`` is replaced, for one test, by a stand-in that hands out the real files but one, which reads badly (``EIO``
+after its first block) or is on a disk with a few hundred bytes left (``ENOSPC``).
 """
 
 from __future__ import annotations
@@ -62,7 +75,7 @@ import stat
 import threading
 import time
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import closing, contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta, timezone
@@ -216,11 +229,11 @@ def lock_held(data_dir: Path) -> Iterator[jobs._RunLock]:
         holder.release()
 
 
-def write_job(data_dir: Path, *, status: str, created: datetime, finished: datetime | None = None, error_code: str | None = None, job_id: str | None = None) -> BackupJob:
+def write_job(data_dir: Path, *, status: str, created: datetime, finished: datetime | None = None, error_code: str | None = None, job_id: str | None = None, origin: str = "ui") -> BackupJob:
     """A job's state as a run of another process left it on disk."""
     job = BackupJob(
         job_id=job_id or uuid.uuid4().hex,
-        origin="ui",
+        origin=origin,
         status=status,
         phase="files" if status == "running" else None,
         done_bytes=10,
@@ -1181,3 +1194,210 @@ def test_without_fcntl_backup_in_progress_follows_the_locks_of_the_process(data_
         lock.release()
     assert (idle, held, backup_in_progress(data_dir=data_dir)) == (False, True, False), f"{holder}: (before, held, released): {(idle, held)}"
     assert everything_below(data_dir) == before, "the locks of the process are no files: nothing created"
+
+
+# =============================================================================
+# (k) the running job, named by its lock (B-8)
+# =============================================================================
+
+
+def lock_record(data_dir: Path) -> str:
+    """What the run lock holds (B-8: the job id of the run that holds it), read as another worker reads it: from the
+    file, never from its holder. The spaces and line breaks around it are not part of the record."""
+    return lock_path(data_dir).read_bytes().decode("ascii", errors="replace").strip()
+
+
+def named_job(error: BackupBusyError) -> tuple[str, str, str] | str | None:
+    """What a refusal says of the running job (``BackupBusyError.running``, B-8): ``(job_id, origin, status)`` of the job
+    it carries, None when it carries none, and a sentence when it has no ``running`` at all (before B-8) or holds
+    something else than a job."""
+    if not hasattr(error, "running"):
+        return "BackupBusyError has no running: the refusal names no job"
+    running = error.running
+    if running is None:
+        return None
+    if not isinstance(running, BackupJob):
+        return f"BackupBusyError.running is not a BackupJob: {running!r}"
+    return (running.job_id, running.origin, running.status)
+
+
+def refusals(data_dir: Path) -> dict[str, tuple[str, str, str] | str | None]:
+    """Both starts while the run lock is held, the API's (``start_backup``) and the CLI's (``run_backup``): each must be
+    refused, with ``BackupBusyError`` (the API's 409 ``backup_busy``); what each refusal says of the running job. A start
+    that raises anything else instead is no refusal but a crash, which the API would answer with a 500: it is kept as a
+    sentence naming the exception, for the caller's assertion to show, and the other start is still tried."""
+    named: dict[str, tuple[str, str, str] | str | None] = {}
+    for start in (start_backup, run_backup):
+        try:
+            start(data_dir=data_dir)
+        except BackupBusyError as refused:
+            named[start.__name__] = named_job(refused)
+        except Exception as exc:  # noqa: BLE001 — kept and asserted by the caller: raised from here, it would hide what the other start does
+            named[start.__name__] = f"raised {type(exc).__name__} ({exc}) instead of BackupBusyError: a crash, not a refusal (the API would answer 500, not 409 backup_busy)"
+        else:
+            pytest.fail(f"{start.__name__} was not refused while the run lock was held")
+    return named
+
+
+def running_elsewhere(data_dir: Path, origin: str = "ui") -> BackupJob:
+    """The state of a job in progress, as the run that holds the lock in another worker or process wrote it."""
+    return write_job(data_dir, status="running", created=datetime.now(UTC) - timedelta(minutes=1), origin=origin)
+
+
+def ended_a_minute_ago(data_dir: Path, status: str, error_code: str | None = None) -> str:
+    """The id of a job that ended a minute ago, as its run left it on disk: well within the retention."""
+    now = datetime.now(UTC)
+    return write_job(data_dir, status=status, error_code=error_code, created=now - timedelta(minutes=2), finished=now - timedelta(minutes=1)).job_id
+
+
+#: What a run lock may hold that is no job id, while a job's state says running and the lock is held. The spellings and
+#: the paths are built from that running job: each would reach it, were it taken for an id.
+NOT_A_JOB_ID: dict[str, Callable[[Path, BackupJob], bytes]] = {
+    "empty": lambda data_dir, running: b"",
+    "garbage": lambda data_dir, running: b"not a job id",
+    "bytes-not-text": lambda data_dir, running: b"\xff\xfe\x00\x9c",
+    "the-id-in-capitals": lambda data_dir, running: running.job_id.upper().encode("ascii"),
+    "relative-path-to-the-job": lambda data_dir, running: f"../{jobs_dir(data_dir).name}/{running.job_id}".encode("ascii"),
+    "absolute-path-to-the-job": lambda data_dir, running: os.fsencode(job_dir(data_dir, running.job_id)),
+}
+
+#: Job ids a run lock may still hold once their job no longer runs, by what became of the job: built in ``data_dir``.
+#: The ``state-*`` jobs have a state that cannot be read as a job, each in its own way, so that every exception such a
+#: read raises (``ValueError``, ``KeyError``, ``TypeError``) is met once by a refused start.
+NO_LONGER_RUNNING: dict[str, Callable[[Path], str]] = {
+    "gone": lambda data_dir: uuid.uuid4().hex,
+    "done": lambda data_dir: ended_a_minute_ago(data_dir, "done"),
+    "failed": lambda data_dir: ended_a_minute_ago(data_dir, "failed", "backup_failed"),
+    "interrupted": lambda data_dir: ended_a_minute_ago(data_dir, "failed", "backup_interrupted"),
+    "state-unreadable": lambda data_dir: unreadable_job(data_dir, b"{not json", datetime.now(UTC)),
+    "state-without-fields": lambda data_dir: unreadable_job(data_dir, b"{}", datetime.now(UTC)),
+    "state-of-wrong-types": lambda data_dir: unreadable_job(data_dir, b'{"created_at": 5}', datetime.now(UTC)),
+}
+
+
+@pytest.mark.parametrize("origin", ["ui", "panel"])
+def test_while_a_run_holds_the_lock_the_lock_holds_its_id_and_each_refused_start_names_its_job(data_dir, gate, origin):
+    """(k) B-8: a run in progress, held at the gate (its lock taken by its own thread): the lock holds its job id, and each
+    start refused meanwhile names that job (its id, its origin, running). A read of the job (a probe of the lock) and the
+    refused starts leave the record as it was, and create nothing."""
+    print_section(f"B-8: the running job named by its lock (origin {origin})")
+    job = start_backup(origin=origin, data_dir=data_dir)
+    assert gate.entered.wait(DEADLINE_S), "precondition: the run reached its build"
+    assert get_job(job.job_id, data_dir=data_dir).status == "running", "precondition: the run reads as running"
+    recorded = lock_record(data_dir)
+    named = refusals(data_dir)
+    kept, created = lock_record(data_dir), job_folders(data_dir)
+    gate.opened.set()
+    assert wait_until_finished(job.job_id, data_dir).status == "done", "once the gate opens, the run ends done"
+    assert recorded == job.job_id, f"while the run holds the lock, the lock must hold its job id {job.job_id}: {recorded!r}"
+    assert named == dict.fromkeys(named, (job.job_id, origin, "running")), f"each start refused while the run holds the lock must name its job (id, origin, running): {named}"
+    assert kept == job.job_id, f"a read of the job and the refused starts must leave the record as it was: {kept!r}"
+    assert created == [job.job_id], f"the refused starts created nothing: {created}"
+    print_success(f"the lock holds the run's id; both refusals name its job, origin {origin}")
+
+
+def test_the_cli_run_records_its_id_too_and_a_start_refused_meanwhile_names_it(data_dir):
+    """(k) B-8: the CLI's run (``run_backup`` in the calling thread, as ``scripts/backup_cli.py`` runs it) takes the lock
+    as the API's runs do. Seen from its first progress report, while it holds the lock: the lock holds its id, and a start
+    of the Backup tab refused meanwhile names it, origin ``cli``."""
+    seen: dict[str, object] = {}
+
+    def progress(phase: str, done: int, total: int) -> None:
+        if seen:
+            return
+        try:
+            seen["record"] = lock_record(data_dir)
+            start_backup(origin="ui", data_dir=data_dir)
+        except BackupBusyError as refused:
+            seen["named"] = named_job(refused)
+        except Exception as exc:  # noqa: BLE001 — kept and asserted below: raised from here, it would fail the run, not the test
+            seen["named"] = f"the probe raised {type(exc).__name__}: {exc}"
+        else:
+            seen["named"] = "start_backup was not refused while the CLI's run held the lock"
+
+    job, _ = run_backup(origin="cli", data_dir=data_dir, progress=progress)
+    assert job.status == "done", f"precondition: the CLI's run ends done: {job}"
+    assert seen, "precondition: the CLI's run reported its progress"
+    assert seen.get("record") == job.job_id, f"while the CLI's run holds the lock, the lock must hold its job id {job.job_id}: {seen.get('record')!r}"
+    assert seen["named"] == (job.job_id, "cli", "running"), f"a start refused while the CLI's run holds the lock must name it (id, origin cli, running): {seen['named']}"
+    print_success("the CLI's run: its id in the lock, named by a refused start")
+
+
+@pytest.mark.parametrize("origin", ["ui", "panel", "cli"])
+def test_a_lock_held_elsewhere_names_the_running_job_whose_id_it_holds(data_dir, origin):
+    """(k) B-8, across workers: the run that holds the lock runs in another worker or process (here the test holds it),
+    and the file is all this process can know of it. The lock holds the id of a job whose state says running: both
+    starts refused name that job, with its origin, and create nothing."""
+    running = running_elsewhere(data_dir, origin)
+    with lock_held(data_dir):
+        lock_path(data_dir).write_bytes(running.job_id.encode("ascii"))
+        named = refusals(data_dir)
+    assert named == dict.fromkeys(named, (running.job_id, origin, "running")), f"a lock held elsewhere, holding the id of a running job of origin {origin}, must name that job: {named}"
+    assert job_folders(data_dir) == [running.job_id], f"the refused starts created nothing: {job_folders(data_dir)}"
+    print_success(f"lock held elsewhere: both refusals name the running job of origin {origin}")
+
+
+@pytest.mark.parametrize("content", sorted(NOT_A_JOB_ID))
+def test_a_lock_that_holds_no_job_id_names_no_job_though_one_runs(data_dir, content):
+    """(k) B-8: the lock is held and a job's state says running, but the lock holds no job id (``NOT_A_JOB_ID``): empty,
+    as in the instant before a run records its id; garbage; bytes that are not text; the running job's id in capitals; a
+    path, relative or absolute, to the running job's folder. Both starts are refused naming no job, ``running`` None: the
+    content is never taken as a path nor bent into an id, and no job is guessed from a running state."""
+    running = running_elsewhere(data_dir)
+    with lock_held(data_dir):
+        lock_path(data_dir).write_bytes(NOT_A_JOB_ID[content](data_dir, running))
+        named = refusals(data_dir)
+    assert named == dict.fromkeys(named, None), f"a lock holding {content} must name no job, though the state of {running.job_id} says running: {named}"
+    print_success(f"{content}: refused, no job named")
+
+
+@pytest.mark.parametrize("stale", sorted(NO_LONGER_RUNNING))
+def test_a_lock_that_holds_the_id_of_a_job_no_longer_running_names_no_job(data_dir, stale):
+    """(k) B-8: the lock is held and a job's state says running, but the lock holds the id of another job, one that no
+    longer runs (``NO_LONGER_RUNNING``), as a run that ended may leave the lock:
+
+    - ``gone``: there is no such job;
+    - ``done``, ``failed``, ``interrupted``: it ended a minute ago;
+    - ``state-unreadable``: its state is not JSON (``ValueError``);
+    - ``state-without-fields``: its state is ``{}``, JSON without a field (``KeyError`` in ``BackupJob.from_json``);
+    - ``state-of-wrong-types``: its state's ``created_at`` is a number (``TypeError`` in ``BackupJob.from_json``).
+
+    Both starts are refused naming no job, ``running`` None. A refusal reads the job its lock names, so the three states
+    that cannot be read matter: whatever their read raises, a refused start must still raise ``BackupBusyError``, the
+    API's 409 ``backup_busy``; any other exception would reach the API as a 500, for a start that only had to wait."""
+    running = running_elsewhere(data_dir)
+    stale_id = NO_LONGER_RUNNING[stale](data_dir)
+    assert is_job_id(stale_id) and stale_id != running.job_id, f"precondition: the lock holds a job id, not the running job's: {stale_id!r}"
+    with lock_held(data_dir):
+        lock_path(data_dir).write_bytes(stale_id.encode("ascii"))
+        named = refusals(data_dir)
+    assert named == dict.fromkeys(named, None), f"a lock holding the id of a job {stale} must name no job, though the state of {running.job_id} says running: {named}"
+    print_success(f"{stale}: refused, no job named")
+
+
+def test_what_a_run_that_ended_left_in_the_lock_names_no_job_to_the_next_holder(data_dir):
+    """(k) B-8: a run ends and frees the lock, leaving in the file whatever it leaves there; the next holder (here the
+    test, as a run in the instant before it records its own id) is named by none of it: both starts refused name no
+    job, the job of the run that ended being done."""
+    ended, _ = run_backup(data_dir=data_dir)
+    assert ended.status == "done", f"precondition: the first run ended done: {ended}"
+    with lock_held(data_dir):
+        named = refusals(data_dir)
+    assert named == dict.fromkeys(named, None), f"what the run {ended.job_id} left in the lock must not name its job, done, to the refusals of the next holder: {named}"
+    print_success("what a run that ended left: no job named")
+
+
+def test_the_record_of_a_run_replaces_whatever_the_lock_held(data_dir, gate):
+    """(k) B-8: a lock file that already holds more than an id (three ids, one per line) is rewritten whole by the run
+    that takes it: while it runs, the lock holds its id and nothing of the old text, and a refused start names its job."""
+    ensure_private_dir(jobs_dir(data_dir), data_dir)
+    lock_path(data_dir).write_bytes(f"{VALID_ID}\n".encode("ascii") * 3)
+    job = start_backup(data_dir=data_dir)
+    assert gate.entered.wait(DEADLINE_S), "precondition: the run reached its build"
+    recorded = lock_record(data_dir)
+    named = refusals(data_dir)
+    gate.opened.set()
+    assert wait_until_finished(job.job_id, data_dir).status == "done", "once the gate opens, the run ends done"
+    assert recorded == job.job_id, f"the run's record must replace the lock's old text whole: {recorded!r}"
+    assert named == dict.fromkeys(named, (job.job_id, "ui", "running")), f"each start refused while the run holds the lock must name its job: {named}"
+    print_success("the lock's old text replaced by the run's id")

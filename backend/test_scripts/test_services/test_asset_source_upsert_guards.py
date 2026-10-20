@@ -950,45 +950,50 @@ async def test_two_manual_events_sharing_a_key_are_edited_by_id(event_rows):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# X-R65 (night decision N83): a stored price is dated within [1900-01-01, latest_range_end()]
+# X-R65 (night decision N83, revised 19/10): a stored price is dated no later than latest_range_end()
 #
-# J's SEC8-1b: one price dated 0001-01-01 makes a backward fill or a risk replay walk about 740 000 days for its asset.
-# A transaction refuses such a date since N74 (``transaction_date_bounds``, ``dateOutOfRange``); a price did not:
-# ``bulk_upsert_prices`` stored whatever date it was given, a manual one (``POST /assets/prices``) as a provider's (the
-# refresh, ``refresh.py``, under the provider's key).
+# J's SEC8-1b: one price dated 0001-01-01 made a backward fill or a risk replay walk about 740 000 days for its asset,
+# and X-R65 (17/10) bounded every stored price to [1900-01-01, latest_range_end()]. N83's revision (developer, 19/10:
+# «se voglio leggere e salvare più indietro devo poterlo fare») takes the 1900 floor off every write, a provider's
+# points included, and keeps the ceiling alone; the walks stay bounded where they read (N75's 100 years, R13-SEC8's
+# replay floors, Z-30's full-history load from 1900).
 #
-# Contract (coordinator decisions D1–D3, 17/10):
-# * MANUAL: every point's date is checked against ``date_range_limits.stored_date_bounds()`` --
-#   ``(EARLIEST_RANGE_START, latest_range_end())``, both bounds included -- before any database statement. One date
-#   outside raises ``date_range_limits.DateOutOfRangeError``, not a ``ValueError``: ``items`` one entry per asset holding
-#   such dates, in input order, ``{"asset_id": id, "dates": its offending dates as ISO strings, in input order, ten at
-#   most}``; ``count`` every offending date of the request; ``earliest`` and ``latest`` the bounds. Nothing is written,
-#   for any asset of the request.
-# * Any other key (a provider's): the points outside are dropped before any write, like the ones no column can keep
-#   (W-B58) -- a warning logged, the asset's result message saying so («rejected N date(s) …», the dates listed) -- and
-#   every other point is written.
+# Contract (N83, revised):
+# * MANUAL: every point's date is checked against ``date_range_limits.latest_stored_date()`` -- ``latest_range_end()``,
+#   included -- before any database statement. One date after it raises ``date_range_limits.DateOutOfRangeError``, not
+#   a ``ValueError``: ``items`` one entry per asset holding such dates, in input order, ``{"asset_id": id, "dates": its
+#   offending dates as ISO strings, in input order, ten at most}``; ``count`` every offending date of the request;
+#   ``latest`` the ceiling, and no ``earliest``. Nothing is written, for any asset of the request. A date before 1900 --
+#   1899-12-31, 1850-06-01, 0001-01-01 -- is stored like any other.
+# * Any other key (a provider's): the points after the ceiling are dropped before any write, like the ones no column can
+#   keep (W-B58) -- a warning logged, the asset's result message saying so («rejected N date(s) …», the dates listed) --
+#   and every other point is written, the ones before 1900 included.
 # * The refresh counts its changes, and lists them in ``changed_points`` for the chart, before it upserts (follow-up,
-#   17/10): a date the upsert drops for lying outside the bounds is neither counted nor announced, like a value no
-#   column can keep (W-B62).
+#   17/10): a date the upsert drops for lying after the ceiling is neither counted nor announced, like a value no column
+#   can keep (W-B62); a date before 1900, which the upsert now keeps, is counted and announced like any other.
 #
-# The ceiling is frozen (``frozen_stored_ceiling``) where ``stored_date_bounds`` reads it: the name ``latest_range_end``
-# imported into ``date_range_limits`` (that seam is RC-W01's, services range-ceiling). Frozen at ``XR65_CEILING``, a day
-# of this unit's window and long past: a check reading tomorrow some other way lets the day after it through, and fails
-# here. The prices go on this unit's own assets; the shape of a refusal is read on no database at all -- a refusal before
-# any statement needs none (``_SessionSpy()``).
+# The ceiling is frozen (``frozen_stored_ceiling``) where ``latest_stored_date`` reads it: the name
+# ``latest_range_end`` imported into ``date_range_limits`` (that seam is RC-W01's, services range-ceiling). Frozen at
+# ``XR65_CEILING``, a day of this unit's window and long past: a check reading tomorrow some other way lets the day after
+# it through, and fails here. The dates before 1900 need no freeze: they lie before every ceiling. The prices go on this
+# unit's own assets; the shape of a refusal is read on no database at all -- a refusal before any statement needs none
+# (``_SessionSpy()``).
+#
+# Red before N83's revision (HEAD f5135c9a1), each for the reason its docstring gives ("Red before N83's revision"); the
+# others are guards, green before it and after.
 # ─────────────────────────────────────────────────────────────────────────────
 
-XR65_FLOOR = date(1900, 1, 1)  # EARLIEST_RANGE_START: the contract's floor, written here and not read from the code
+XR65_OLD_FLOOR = date(1900, 1, 1)  # EARLIEST_RANGE_START: the floor X-R65 gave a stored price and N83's revision took away
 XR65_CEILING = BASE_DATE + timedelta(days=44)  # 1994-07-15: latest_range_end(), frozen
 XR65_AFTER = XR65_CEILING + timedelta(days=1)  # the day after the ceiling
-XR65_BEFORE = date(1899, 12, 31)  # the day before the floor
+XR65_BEFORE = date(1899, 12, 31)  # the day before the old floor
 XR65_PROVIDER = "fake_provider_for_tests"
 _XR65_BARRIER = "X-R65 capture barrier"
 
 
 @pytest.fixture
 def frozen_stored_ceiling(monkeypatch: pytest.MonkeyPatch) -> date:
-    """``latest_range_end()`` answers ``XR65_CEILING`` where ``stored_date_bounds`` reads it: the name in
+    """``latest_range_end()`` answers ``XR65_CEILING`` where ``latest_stored_date`` reads it: the name in
     ``date_range_limits``.
 
     Set even where the name is missing (``raising=False``): on code without X-R65 the upsert then runs as it always did,
@@ -1065,6 +1070,19 @@ async def _refused_out_of_range(spy: _SessionSpy, data: list[FAUpsert]):
     pytest.fail(f"no DateOutOfRangeError: the upsert answered {result}, after reaching the session for {spy.used}")
 
 
+async def _accepted(data: list[FAUpsert], key: str = "MANUAL") -> dict:
+    """The result of ``bulk_upsert_prices`` of ``data`` under ``key``, on a session of the lane database; a
+    ``DateOutOfRangeError`` instead fails the test, naming what it refused."""
+    error_class = getattr(date_range_limits, "DateOutOfRangeError", None)
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        try:
+            return await AssetSourceManager.bulk_upsert_prices(data, session, source_plugin_key=key)
+        except Exception as error:
+            if error_class is not None and isinstance(error, error_class):
+                pytest.fail(f"the upsert was refused with DateOutOfRangeError: items {error.items}, count {error.count}")
+            raise
+
+
 async def _stored_days(asset_id: int) -> list[date]:
     """The days the asset has a price on, in order, read by a session of their own."""
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
@@ -1089,19 +1107,18 @@ def _names(said: object, *values: object) -> bool:
 @pytest.mark.parametrize(
     "day",
     [
-        pytest.param(XR65_BEFORE, id="1899-12-31-the-day-before-the-floor"),
-        pytest.param(date(1, 1, 1), id="0001-01-01-SEC8-1b"),
         pytest.param(XR65_AFTER, id="the-day-after-the-ceiling"),
         pytest.param(date.max, id="9999-12-31"),
     ],
 )
-async def test_a_manual_price_outside_the_bounds_refuses_the_upsert_before_any_statement(clean_prices, frozen_stored_ceiling, day):
-    """X-R65: one manual price outside [1900-01-01, the ceiling], between two valid ones, refuses the whole upsert.
+async def test_a_manual_price_after_the_ceiling_refuses_the_upsert_before_any_statement(clean_prices, frozen_stored_ceiling, day):
+    """X-R65 guard, green before N83's revision and after: one manual price after the ceiling, between two valid ones,
+    refuses the whole upsert.
 
-    Before the fix: the upsert reads the asset and stores the three prices, ``day`` among them.
-    Contract: ``DateOutOfRangeError`` with ``items`` ``[{"asset_id": the asset, "dates": [day]}]``, ``count`` 1,
-    ``earliest`` 1900-01-01 and ``latest`` the ceiling; raised before the session is reached at all; the asset has no
-    price, not even on the two valid days.
+    Red before X-R65: the upsert reads the asset and stores the three prices, ``day`` among them.
+    Contract: ``DateOutOfRangeError`` with ``items`` ``[{"asset_id": the asset, "dates": [day]}]``, ``count`` 1 and
+    ``latest`` the ceiling; raised before the session is reached at all; the asset has no price, not even on the two
+    valid days. (That the error carries no ``earliest`` is RC-W03's, services range-ceiling.)
     """
     data = [FAUpsert(asset_id=clean_prices, prices=[_on(BASE_DATE, "10"), _on(day, "11"), _on(BASE_DATE + timedelta(days=1), "12")])]
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
@@ -1110,43 +1127,72 @@ async def test_a_manual_price_outside_the_bounds_refuses_the_upsert_before_any_s
 
     assert spy.used == [], f"the session was reached for {spy.used} before the refusal"
     assert (error.items, error.count) == ([{"asset_id": clean_prices, "dates": [day.isoformat()]}], 1)
-    assert (error.earliest, error.latest) == (XR65_FLOOR, XR65_CEILING)
+    assert error.latest == XR65_CEILING
     assert await _stored_days(clean_prices) == []
 
 
 @pytest.mark.asyncio
-async def test_manual_prices_on_both_bounds_are_stored(clean_prices, frozen_stored_ceiling):
-    """X-R65 guard, green before the fix and after: the bounds belong to the window.
+@pytest.mark.parametrize(
+    "day",
+    [
+        pytest.param(XR65_BEFORE, id="1899-12-31-the-day-before-the-old-floor"),
+        pytest.param(date(1850, 6, 1), id="1850-06-01"),
+        pytest.param(date.min, id="0001-01-01-SEC8-1b"),
+    ],
+)
+async def test_a_manual_price_before_1900_is_stored(clean_prices, day):
+    """N83 (revised 19/10): one manual price before 1900-01-01, between two valid ones, is stored like them.
+
+    Red before N83's revision: ``DateOutOfRangeError`` (``items`` ``[{"asset_id": the asset, "dates": [day]}]``), raised
+    before the session is reached; nothing stored.
+    Contract: no refusal; the asset's result counts 3 and lists no rejection; the three days are stored at their closes,
+    ``day`` among them -- 0001-01-01 too: the walks that read it are bounded where they read.
+    """
+    data = [FAUpsert(asset_id=clean_prices, prices=[_on(BASE_DATE, "10"), _on(day, "11"), _on(BASE_DATE + timedelta(days=1), "12")])]
+
+    result = await _accepted(data)
+
+    row = next(entry for entry in result["results"] if entry["asset_id"] == clean_prices)
+    assert (row["count"], row.get("rejected")) == (3, []), row
+    assert await _stored_closes(clean_prices) == {day: Decimal("11"), BASE_DATE: Decimal("10"), BASE_DATE + timedelta(days=1): Decimal("12")}
+
+
+@pytest.mark.asyncio
+async def test_a_manual_price_on_the_ceiling_is_stored(clean_prices, frozen_stored_ceiling):
+    """X-R65 guard, green before N83's revision and after: the ceiling belongs to the window, and 1900-01-01 -- the old
+    floor, a bound until the revision -- is a day like any other.
 
     Contract: a manual price on 1900-01-01 and one on the ceiling itself are stored like any other.
     """
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
-        result = await AssetSourceManager.bulk_upsert_prices([FAUpsert(asset_id=clean_prices, prices=[_on(XR65_FLOOR, "10"), _on(XR65_CEILING, "11")])], session)
+        result = await AssetSourceManager.bulk_upsert_prices([FAUpsert(asset_id=clean_prices, prices=[_on(XR65_OLD_FLOOR, "10"), _on(XR65_CEILING, "11")])], session)
 
     row = next(entry for entry in result["results"] if entry["asset_id"] == clean_prices)
     assert row["count"] == 2, row
-    assert await _stored_days(clean_prices) == [XR65_FLOOR, XR65_CEILING]
+    assert await _stored_days(clean_prices) == [XR65_OLD_FLOOR, XR65_CEILING]
 
 
 @pytest.mark.asyncio
 async def test_an_offending_asset_refuses_the_clean_asset_before_it(clean_prices, xr65_second_asset, frozen_stored_ceiling):
-    """X-R65: a clean asset first, then one with a price on 1899-12-31: neither is written.
+    """X-R65 guard, green before N83's revision and after: a clean asset first, then one with a price on the day after
+    the ceiling: neither is written.
 
-    Before the fix: the upsert works asset by asset and commits as it goes: the first asset's two prices, then the
-    second's two, 1899-12-31 among them.
-    Contract: ``DateOutOfRangeError`` naming the second asset alone (``items`` ``[{"asset_id": second, "dates":
-    ["1899-12-31"]}]``, ``count`` 1), the session never reached, and neither asset has a price.
+    Red before X-R65: the upsert works asset by asset and commits as it goes: the first asset's two prices, then the
+    second's two, the day after the ceiling among them.
+    Contract: ``DateOutOfRangeError`` naming the second asset alone (``items`` ``[{"asset_id": second, "dates": [the day
+    after the ceiling]}]``, ``count`` 1), the session never reached, and neither asset has a price. Until N83's revision
+    the second asset's offending day was 1899-12-31, which is now stored (``test_a_manual_price_before_1900_is_stored``).
     """
     data = [
         FAUpsert(asset_id=clean_prices, prices=[_on(BASE_DATE, "10"), _on(BASE_DATE + timedelta(days=1), "11")]),
-        FAUpsert(asset_id=xr65_second_asset, prices=[_on(BASE_DATE + timedelta(days=2), "12"), _on(XR65_BEFORE, "13")]),
+        FAUpsert(asset_id=xr65_second_asset, prices=[_on(BASE_DATE + timedelta(days=2), "12"), _on(XR65_AFTER, "13")]),
     ]
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         spy = _SessionSpy(session)
         error = await _refused_out_of_range(spy, data)
 
     assert spy.used == [], f"the session was reached for {spy.used} before the refusal"
-    assert (error.items, error.count) == ([{"asset_id": xr65_second_asset, "dates": [XR65_BEFORE.isoformat()]}], 1)
+    assert (error.items, error.count) == ([{"asset_id": xr65_second_asset, "dates": [XR65_AFTER.isoformat()]}], 1)
     assert await _stored_days(clean_prices) == []
     assert await _stored_days(xr65_second_asset) == []
 
@@ -1155,43 +1201,47 @@ async def test_an_offending_asset_refuses_the_clean_asset_before_it(clean_prices
 async def test_the_refusal_names_each_assets_dates_in_input_order_ten_at_most(frozen_stored_ceiling):
     """X-R65: the numbers of a refusal, read on no database at all (the check comes before any statement).
 
-    Three assets: the first with twelve days before the floor, newest first, a valid day among them; the second clean;
-    the third with the day after the ceiling, a valid day and 1066-10-14. The asset ids name no row: the stand-in
-    session answers none.
-    Before the fix: each asset is read («Asset … not found»), nothing is refused.
-    Contract: ``items`` the first and the third asset, in input order, each with its offending dates in input order (not
-    sorted), the first one's ten at most; ``count`` 14, every offending date; the session never reached.
+    Three assets: the first with twelve days after the ceiling, latest first, a valid day among them; the second clean;
+    the third with 9999-12-31, a valid day, 1066-10-14 and the day after the ceiling. The asset ids name no row: the
+    stand-in session answers none.
+    Red before X-R65: each asset is read («Asset … not found»), nothing is refused.
+    Red before N83's revision: 1066-10-14 is refused too, the third asset's second date, and ``count`` is 15.
+    Contract: ``items`` the first and the third asset, in input order, each with its dates after the ceiling in input
+    order (not sorted), the first one's ten at most; 1066-10-14 in none, a day like any other; ``count`` 14, every date
+    after the ceiling; the session never reached.
     """
-    early = [XR65_BEFORE - timedelta(days=n) for n in range(12)]
+    late = [XR65_AFTER + timedelta(days=n) for n in range(11, -1, -1)]
     data = [
-        FAUpsert(asset_id=9_001, prices=[_on(day, "10") for day in early[:6]] + [_on(BASE_DATE, "10")] + [_on(day, "10") for day in early[6:]]),
+        FAUpsert(asset_id=9_001, prices=[_on(day, "10") for day in late[:6]] + [_on(BASE_DATE, "10")] + [_on(day, "10") for day in late[6:]]),
         FAUpsert(asset_id=9_002, prices=[_on(BASE_DATE, "10")]),
-        FAUpsert(asset_id=9_003, prices=[_on(XR65_AFTER, "10"), _on(BASE_DATE, "10"), _on(date(1066, 10, 14), "10")]),
+        FAUpsert(asset_id=9_003, prices=[_on(date.max, "10"), _on(BASE_DATE, "10"), _on(date(1066, 10, 14), "10"), _on(XR65_AFTER, "10")]),
     ]
     spy = _SessionSpy()
     error = await _refused_out_of_range(spy, data)
 
     assert spy.used == [], f"the session was reached for {spy.used} before the refusal"
     assert error.items == [
-        {"asset_id": 9_001, "dates": [day.isoformat() for day in early[:10]]},
-        {"asset_id": 9_003, "dates": [XR65_AFTER.isoformat(), "1066-10-14"]},
+        {"asset_id": 9_001, "dates": [day.isoformat() for day in late[:10]]},
+        {"asset_id": 9_003, "dates": [date.max.isoformat(), XR65_AFTER.isoformat()]},
     ]
     assert error.count == 14
 
 
 @pytest.mark.asyncio
-async def test_a_providers_prices_outside_the_bounds_are_dropped_named_and_logged(clean_prices, frozen_stored_ceiling):
-    """X-R65: under a provider's key, the points outside [1900-01-01, the ceiling] are dropped and the others written.
+async def test_a_providers_prices_after_the_ceiling_are_dropped_named_and_logged(clean_prices, frozen_stored_ceiling):
+    """X-R65 guard, green before N83's revision and after: under a provider's key, the points after the ceiling are
+    dropped and the others written.
 
-    Four points: 1899-12-31, a valid day, the day after the ceiling, another valid day.
-    Before the fix: the four are stored, the message is «Upserted 4 prices», nothing is logged.
+    Four points: 9999-12-31, a valid day, the day after the ceiling, another valid day.
+    Red before X-R65: the four are stored, the message is «Upserted 4 prices», nothing is logged.
     Contract: no exception; the two valid days alone are stored, under the provider's key; the asset's result counts 2
     and its message says «rejected 2 date(s)», naming both days; a warning (or worse) names the asset and both days. A
     barrier (an event sent through ``price_store``'s own logger inside the capture) proves the capture sees that logger:
-    a missing warning is a warning not logged, never a blind capture.
+    a missing warning is a warning not logged, never a blind capture. Until N83's revision the first point was
+    1899-12-31, which a provider now stores (``test_a_providers_prices_before_1900_are_stored_as_delivered``).
     """
     inside = (BASE_DATE, BASE_DATE + timedelta(days=1))
-    data = [FAUpsert(asset_id=clean_prices, prices=[_on(XR65_BEFORE, "9"), _on(inside[0], "10"), _on(XR65_AFTER, "11"), _on(inside[1], "12")])]
+    data = [FAUpsert(asset_id=clean_prices, prices=[_on(date.max, "9"), _on(inside[0], "10"), _on(XR65_AFTER, "11"), _on(inside[1], "12")])]
     with capture_logs() as events:
         price_store_module.logger.warning(_XR65_BARRIER)
         async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
@@ -1203,56 +1253,111 @@ async def test_a_providers_prices_outside_the_bounds_are_dropped_named_and_logge
     assert [(price.date, price.close, price.source_plugin_key) for price in stored] == [(inside[0], Decimal("10"), XR65_PROVIDER), (inside[1], Decimal("12"), XR65_PROVIDER)]
     row = next(entry for entry in result["results"] if entry["asset_id"] == clean_prices)
     assert row["count"] == 2, row
-    assert "rejected 2 date(s)" in row["message"] and _names(row["message"], XR65_BEFORE, XR65_AFTER), row["message"]
+    assert "rejected 2 date(s)" in row["message"] and _names(row["message"], date.max, XR65_AFTER), row["message"]
     warnings = [event for event in events if event.get("log_level") in ("warning", "error", "critical") and event.get("event") != _XR65_BARRIER]
-    assert [event for event in warnings if _names(event, clean_prices, XR65_BEFORE, XR65_AFTER)], f"no warning names the asset and both days: {warnings}"
+    assert [event for event in warnings if _names(event, clean_prices, date.max, XR65_AFTER)], f"no warning names the asset and both days: {warnings}"
 
 
 @pytest.mark.asyncio
-async def test_a_provider_refresh_never_stores_a_price_before_1900(assigned_asset, clean_prices, monkeypatch):
-    """X-R65 through the refresh: the provider answers 1899-12-31 among its history; the refresh stores the others.
+async def test_a_providers_prices_before_1900_are_stored_as_delivered(clean_prices):
+    """N83 (revised 19/10): under a provider's key, points before 1900-01-01 -- 0001-01-01, 1850-06-01, 1899-12-31 --
+    are stored like the valid day among them, under the provider's key.
+
+    Red before N83's revision: the three are dropped as ``date_out_of_range``: the valid day alone is stored, the result
+    counts 1 and its message says «rejected 3 date(s) outside 1900-01-01 …».
+    Contract: no exception; the four days stored at their closes, under the provider's key; the asset's result counts 4,
+    its message is «Upserted 4 prices», and ``rejected`` is empty.
+    """
+    early = (date.min, date(1850, 6, 1), XR65_BEFORE)
+    data = [FAUpsert(asset_id=clean_prices, prices=[_on(early[1], "8"), _on(BASE_DATE, "10"), _on(early[0], "7"), _on(early[2], "9")])]
+
+    result = await _accepted(data, key=XR65_PROVIDER)
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        stored = (await session.execute(select(PriceHistory).where(PriceHistory.asset_id == clean_prices).order_by(PriceHistory.date))).scalars().all()
+    expected = [(early[0], Decimal("7")), (early[1], Decimal("8")), (early[2], Decimal("9")), (BASE_DATE, Decimal("10"))]
+    assert [(price.date, price.close, price.source_plugin_key) for price in stored] == [(day, close, XR65_PROVIDER) for day, close in expected], result
+    row = next(entry for entry in result["results"] if entry["asset_id"] == clean_prices)
+    assert (row["count"], row["message"], row.get("rejected")) == (4, "Upserted 4 prices", []), row
+
+
+@pytest.mark.asyncio
+async def test_a_provider_refresh_stores_a_price_before_1900(assigned_asset, clean_prices, monkeypatch):
+    """N83 (revised 19/10) through the refresh: the provider answers 1899-12-31 among its history; the refresh stores it
+    with the others.
 
     The refresh hands the provider's points to ``bulk_upsert_prices`` under the provider's key (``refresh.py``), and a
-    result message saying «rejected» becomes an error of the refresh. Only the floor is reached this way: the refresh
-    itself drops a point after the range it asked for. The real ceiling, tomorrow: these days are long past.
-    Before the fix: the three points are stored, 1899-12-31 among them, and the refresh reports no error.
-    Contract: 1899-12-31 is not stored, the two other days are; an error of the refresh names 1899-12-31.
+    result message saying «rejected» becomes an error of the refresh. The real ceiling, tomorrow: these days are long
+    past.
+    Red before N83's revision: 1899-12-31 is not stored, the two other days are, and an error of the refresh names
+    1899-12-31.
+    Contract: the three days are stored, 1899-12-31 among them; no error of the refresh names it.
     """
     _patch_provider_with_events(monkeypatch, [_on(XR65_BEFORE, "9"), _on(BASE_DATE, "10"), _on(BASE_DATE + timedelta(days=1), "11")], [])
 
     result = await _refresh(assigned_asset)
 
-    assert await _stored_days(assigned_asset) == [BASE_DATE, BASE_DATE + timedelta(days=1)], result
-    assert [error for error in result.errors if XR65_BEFORE.isoformat() in error], result.errors
+    assert await _stored_days(assigned_asset) == [XR65_BEFORE, BASE_DATE, BASE_DATE + timedelta(days=1)], result
+    assert not [error for error in result.errors if XR65_BEFORE.isoformat() in error], result.errors
 
 
 @pytest.mark.asyncio
-async def test_a_provider_refresh_neither_counts_nor_announces_a_price_before_1900(assigned_asset, clean_prices, monkeypatch):
-    """X-R65 through the refresh: a date the upsert drops for lying before 1900-01-01 is neither counted nor announced.
+async def test_a_provider_refresh_counts_and_announces_a_price_before_1900(assigned_asset, clean_prices, monkeypatch):
+    """N83 (revised 19/10) through the refresh: a date before 1900-01-01, which the upsert now stores, is counted and
+    announced like any other.
 
-    The setup of the case above, with two rows stored first: day 0 at 10, and 1899-12-30 at 8, as a release before X-R65
-    could leave it (written past the upsert, which now refuses it). The provider answers 1899-12-30 (9), 1899-12-31 (9.5),
-    day 0 (20) and day 1 (21). The refresh counts its changes, and lists them in ``changed_points`` for the chart, before
-    the upsert, which keeps day 0 and day 1 alone and leaves the legacy row as it was.
-    Before the fix: the count is handed every point but the ones no column can keep (W-B62): 1899-12-31 counts as
-    inserted and 1899-12-30 as updated, and both are announced: 2 inserted, 2 updated, 4 changed, four dates.
-    Contract: like a value no column can keep (W-B62), a date the upsert drops for lying outside ``stored_date_bounds()``
-    is neither counted nor announced: 1 inserted (day 1), 1 updated (day 0), 2 changed, ``changed_points`` day 0 and
-    day 1 alone. ``points_fetched`` counts what the provider delivered, as for W-B62: not pinned here.
+    The setup of the case above, with two rows stored first: day 0 at 10, and 1899-12-30 at 8. The provider answers
+    1899-12-30 (9), 1899-12-31 (9.5), day 0 (20) and day 1 (21). The refresh counts its changes, and lists them in
+    ``changed_points`` for the chart, before the upsert.
+    Red before N83's revision: the upsert keeps day 0 and day 1 alone and leaves 1899-12-30 at 8; the count follows it:
+    1 inserted, 1 updated, 2 changed, ``changed_points`` day 0 and day 1.
+    Contract: the four days stored as delivered; 2 inserted (1899-12-31, day 1), 2 updated (1899-12-30, day 0), 4
+    changed, ``changed_points`` the four days. ``points_fetched`` counts what the provider delivered: not pinned here.
     """
-    legacy, before, day0, day1 = XR65_BEFORE - timedelta(days=1), XR65_BEFORE, BASE_DATE, BASE_DATE + timedelta(days=1)
+    stored_first, before, day0, day1 = XR65_BEFORE - timedelta(days=1), XR65_BEFORE, BASE_DATE, BASE_DATE + timedelta(days=1)
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
-        session.add_all([PriceHistory(asset_id=assigned_asset, date=day, close=Decimal(close), currency="USD", source_plugin_key=XR65_PROVIDER) for day, close in ((legacy, "8"), (day0, "10"))])
+        session.add_all([PriceHistory(asset_id=assigned_asset, date=day, close=Decimal(close), currency="USD", source_plugin_key=XR65_PROVIDER) for day, close in ((stored_first, "8"), (day0, "10"))])
         await session.commit()
-    assert await _stored_closes(assigned_asset) == {legacy: Decimal("8"), day0: Decimal("10")}, "barrier: the rows stored before the refresh are not the two written"
-    _patch_provider_with_events(monkeypatch, [_on(legacy, "9"), _on(before, "9.5"), _on(day0, "20"), _on(day1, "21")], [])
+    assert await _stored_closes(assigned_asset) == {stored_first: Decimal("8"), day0: Decimal("10")}, "barrier: the rows stored before the refresh are not the two written"
+    _patch_provider_with_events(monkeypatch, [_on(stored_first, "9"), _on(before, "9.5"), _on(day0, "20"), _on(day1, "21")], [])
 
     result = await _refresh(assigned_asset)
 
     stored = await _stored_closes(assigned_asset)
-    assert stored == {legacy: Decimal("8"), day0: Decimal("20"), day1: Decimal("21")}, f"barrier: the upsert should store day 0 and day 1 alone and leave the legacy row as it was: {stored}; {result!r}"
+    assert stored == {stored_first: Decimal("9"), before: Decimal("9.5"), day0: Decimal("20"), day1: Decimal("21")}, f"the four days should be stored as delivered: {stored}; {result!r}"
     counted = (result.inserted_count, result.updated_count, result.points_changed, sorted(point.date for point in result.changed_points or []))
-    assert counted == (1, 1, 2, [day0, day1]), f"(inserted, updated, changed, changed_points) = {counted}: the dates the upsert dropped, {legacy} and {before}, are counted or announced (points_fetched {result.points_fetched})"
+    assert counted == (2, 2, 4, [stored_first, before, day0, day1]), f"(inserted, updated, changed, changed_points) = {counted}: the dates before 1900, {stored_first} and {before}, are not counted or announced (points_fetched {result.points_fetched})"
+
+
+@pytest.mark.asyncio
+async def test_a_provider_refresh_neither_counts_nor_announces_a_price_after_the_ceiling(assigned_asset, clean_prices, frozen_stored_ceiling, monkeypatch):
+    """X-R65 guard through the refresh, green before N83's revision and after: a date the upsert drops for lying after the
+    (frozen) ceiling is neither counted nor announced, like a value no column can keep (W-B62).
+
+    Day 0 is stored first at 10. The refresh asks from day 0 to the day after the ceiling -- a range long past, so the
+    refresh's own cut (prices up to yesterday) keeps that day -- and the provider answers day 0 (20), day 1 (21) and the
+    day after the ceiling (22). The refresh counts its changes before the upsert, which drops the day after the ceiling.
+    Contract: day 0 and day 1 stored; 1 inserted (day 1), 1 updated (day 0), 2 changed, ``changed_points`` day 0 and day
+    1 alone; an error of the refresh names the day after the ceiling. Until N83's revision the date pinned here lay
+    before 1900, and those are now counted (``test_a_provider_refresh_counts_and_announces_a_price_before_1900``).
+    """
+    day0, day1 = BASE_DATE, BASE_DATE + timedelta(days=1)
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        session.add(PriceHistory(asset_id=assigned_asset, date=day0, close=Decimal("10"), currency="USD", source_plugin_key=XR65_PROVIDER))
+        await session.commit()
+    assert await _stored_closes(assigned_asset) == {day0: Decimal("10")}, "barrier: the row stored before the refresh is not the one written"
+    _patch_provider_with_events(monkeypatch, [_on(day0, "20"), _on(day1, "21"), _on(XR65_AFTER, "22")], [])
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        item = FARefreshItem(asset_id=assigned_asset, date_range=SyncDateRangeModel(start=day0, end=XR65_AFTER))
+        response = await AssetSourceManager.bulk_refresh_prices([item], session)
+    result = next(r for r in response.results if r.asset_id == assigned_asset)
+
+    stored = await _stored_closes(assigned_asset)
+    assert stored == {day0: Decimal("20"), day1: Decimal("21")}, f"barrier: the upsert should store day 0 and day 1 alone: {stored}; {result!r}"
+    counted = (result.inserted_count, result.updated_count, result.points_changed, sorted(point.date for point in result.changed_points or []))
+    assert counted == (1, 1, 2, [day0, day1]), f"(inserted, updated, changed, changed_points) = {counted}: the date the upsert dropped, {XR65_AFTER}, is counted or announced (points_fetched {result.points_fetched})"
+    assert [error for error in result.errors if XR65_AFTER.isoformat() in error], result.errors
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1428,23 +1533,24 @@ async def test_a_currency_refusal_names_each_asset_at_fault_its_currencies_and_t
 
 
 @pytest.mark.asyncio
-async def test_a_date_out_of_range_is_refused_before_the_currencies_are_read(clean_prices, xr65_second_asset):
+async def test_a_date_out_of_range_is_refused_before_the_currencies_are_read(clean_prices, xr65_second_asset, frozen_stored_ceiling):
     """X-R71 guard, green before the fix and after: the dates are checked first, on the input alone (X-R65).
 
-    The first asset with a day in EUR, the second with a price on 1899-12-31.
+    The first asset with a day in EUR, the second with a price on the day after the (frozen) ceiling -- until N83's
+    revision on 1899-12-31, a day the check now lets through.
     Contract: ``DateOutOfRangeError`` naming the second asset, the session never reached (the currencies are not read),
     and neither asset has a price.
     """
     data = [
         FAUpsert(asset_id=clean_prices, prices=[_on(BASE_DATE, "10"), _in(BASE_DATE + timedelta(days=1), "11", "EUR")]),
-        FAUpsert(asset_id=xr65_second_asset, prices=[_on(BASE_DATE + timedelta(days=2), "12"), _on(XR65_BEFORE, "13")]),
+        FAUpsert(asset_id=xr65_second_asset, prices=[_on(BASE_DATE + timedelta(days=2), "12"), _on(XR65_AFTER, "13")]),
     ]
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         spy = _SessionSpy(session)
         error = await _refused_out_of_range(spy, data)
 
     assert spy.used == [], f"the session was reached for {spy.used} before the refusal"
-    assert (error.items, error.count) == ([{"asset_id": xr65_second_asset, "dates": [XR65_BEFORE.isoformat()]}], 1)
+    assert (error.items, error.count) == ([{"asset_id": xr65_second_asset, "dates": [XR65_AFTER.isoformat()]}], 1)
     assert await _stored_days(clean_prices) == []
     assert await _stored_days(xr65_second_asset) == []
 
@@ -1470,11 +1576,11 @@ async def test_a_providers_currency_mismatch_still_raises_value_error(clean_pric
 # X-R46: an asset's result names the dates the upsert refused, machine-readable
 #
 # The defect, on HEAD 1c1456713: ``bulk_upsert_prices`` drops a date, asset by asset, in three cases -- a candle whose
-# close lies outside its own [low, high] (``rejected_dates``, under any key), a provider's date outside
-# ``stored_date_bounds()`` (``out_of_range_dates``, X-R65) and a provider's value no price column can keep
-# (``unstorable_dates``, W-B58) -- and says so only in the English ``results[].message`` («Upserted N prices; rejected 1
-# date(s) with impossible OHLC …»), while ``count`` leaves them out. The Data Editor cannot read which rows were refused,
-# and announces every row it sent as saved.
+# close lies outside its own [low, high] (``rejected_dates``, under any key), a provider's date after
+# ``latest_stored_date()`` (``out_of_range_dates``, X-R65; outside [1900-01-01, tomorrow] until N83's revision, 19/10)
+# and a provider's value no price column can keep (``unstorable_dates``, W-B58) -- and says so only in the English
+# ``results[].message`` («Upserted N prices; rejected 1 date(s) with impossible OHLC …»), while ``count`` leaves them
+# out. The Data Editor cannot read which rows were refused, and announces every row it sent as saved.
 #
 # Contract (X-R46): ``schemas.prices.FAPriceRejection`` (a ``StrictModel``) {``date``, ``reason``:
 # ``ohlc_inconsistent`` | ``date_out_of_range`` | ``value_not_storable``}; ``FAUpsertResult.rejected:
@@ -1567,20 +1673,23 @@ async def test_xr46_guard_a_clean_manual_upsert_lists_no_rejection(clean_prices:
 
 @pytest.mark.asyncio
 async def test_xr46_a_providers_dates_outside_the_bounds_are_listed_in_rejected(clean_prices: int, frozen_stored_ceiling: date):
-    """X-R46 on X-R65's provider case: under a provider's key, 1899-12-31, a day, the day after the (frozen) ceiling,
+    """X-R46 on X-R65's provider case: under a provider's key, 9999-12-31, a day, the day after the (frozen) ceiling,
     another day.
 
-    Red on HEAD 1c1456713: the two dropped dates are told only in the message («rejected 2 date(s) outside …»).
-    Contract: the two days inside alone stored; ``count`` 2 and the message as before; ``rejected`` the two dates
-    outside, ``date_out_of_range``, by date, in the service's result and through ``FAUpsertResult``.
+    Red on HEAD 1c1456713: the two dropped dates are told only in the message («rejected 2 date(s) …»).
+    Green before N83's revision and after (a guard of it): until then the first date was 1899-12-31, which a provider
+    now stores; the two dates here lie after the ceiling under either contract.
+    Contract: the two days inside alone stored; ``count`` 2 and the message as before, naming both dates; ``rejected``
+    the two dates after the ceiling, ``date_out_of_range``, by date, in the service's result and through
+    ``FAUpsertResult``.
     """
     inside = [BASE_DATE, BASE_DATE + timedelta(days=1)]
 
-    row = await _xr46_upsert(clean_prices, [_on(XR65_BEFORE, "9"), _on(inside[0], "10"), _on(XR65_AFTER, "11"), _on(inside[1], "12")], key=XR65_PROVIDER)
+    row = await _xr46_upsert(clean_prices, [_on(date.max, "9"), _on(inside[0], "10"), _on(XR65_AFTER, "11"), _on(inside[1], "12")], key=XR65_PROVIDER)
 
-    assert await _stored_days(clean_prices) == inside, "barrier: the two dates outside the bounds should be dropped, the others stored"
-    assert row["count"] == 2 and "rejected 2 date(s) outside" in row["message"], row
-    expected = [{"date": XR65_BEFORE.isoformat(), "reason": "date_out_of_range"}, {"date": XR65_AFTER.isoformat(), "reason": "date_out_of_range"}]
+    assert await _stored_days(clean_prices) == inside, "barrier: the two dates after the ceiling should be dropped, the others stored"
+    assert row["count"] == 2 and "rejected 2 date(s)" in row["message"] and _names(row["message"], XR65_AFTER, date.max), row
+    expected = [{"date": XR65_AFTER.isoformat(), "reason": "date_out_of_range"}, {"date": date.max.isoformat(), "reason": "date_out_of_range"}]
     assert _xr46_rejected(row) == expected, row
     assert _xr46_route_rejected(row) == expected
 
@@ -1589,30 +1698,33 @@ async def test_xr46_a_providers_dates_outside_the_bounds_are_listed_in_rejected(
 async def test_xr46_a_providers_three_kinds_of_refusal_are_listed_by_date(clean_prices: int, frozen_stored_ceiling: date):
     """X-R46: under a provider's key, a date refused for each reason, out of date order: day 2, a candle whose close (50)
     lies outside its [9, 12]; the day after the (frozen) ceiling; day 1, a sound close; day 0, a close no price column
-    can keep (1E+15); 1899-12-31.
+    can keep (1E+15); 1899-12-31, a candle whose close (50) lies outside its [9, 12] as well.
 
     Red on HEAD 1c1456713: the four refusals are told only in the English message.
+    Red before N83's revision: 1899-12-31 is refused for its date (``date_out_of_range``) before its candle is read.
     Contract: day 1 alone stored; ``count`` 1 and the message as before, naming the three kinds; ``rejected`` sorted by
-    date -- 1899-12-31 ``date_out_of_range``, day 0 ``value_not_storable``, day 2 ``ohlc_inconsistent``, the day after
-    the ceiling ``date_out_of_range`` -- an order neither of the input nor of any concatenation of the three lists (the
-    two dates out of range lie on either side of the others). The service's entries are compared whatever their order
-    (where the sort happens is the cure's choice); the route's, through ``FAUpsertResult``, in that order.
+    date -- 1899-12-31 ``ohlc_inconsistent`` (its date no refusal since N83's revision), day 0 ``value_not_storable``,
+    day 2 ``ohlc_inconsistent``, the day after the ceiling ``date_out_of_range`` -- an order neither of the input nor of
+    any concatenation of the three lists (the two candles lie on either side of day 0). The service's entries are
+    compared whatever their order (where the sort happens is the cure's choice); the route's, through ``FAUpsertResult``,
+    in that order.
     """
     day0, day1, day2 = (BASE_DATE + timedelta(days=offset) for offset in range(3))
-    prices = [_point(2, "50", low="9", high="12"), _on(XR65_AFTER, "11"), _on(day1, "11"), _on(day0, "1E+15"), _on(XR65_BEFORE, "9")]
+    old_candle = FAPricePoint(date=XR65_BEFORE, close=Decimal("50"), low=Decimal("9"), high=Decimal("12"), currency="USD")
+    prices = [_point(2, "50", low="9", high="12"), _on(XR65_AFTER, "11"), _on(day1, "11"), _on(day0, "1E+15"), old_candle]
 
     row = await _xr46_upsert(clean_prices, prices, key=XR65_PROVIDER)
 
     assert await _stored_days(clean_prices) == [day1], "barrier: day 1 alone should be stored"
-    assert row["count"] == 1 and all(said in row["message"] for said in ("with impossible OHLC", "rejected 2 date(s) outside", "no price column can keep")), row
     expected = [
-        {"date": XR65_BEFORE.isoformat(), "reason": "date_out_of_range"},
+        {"date": XR65_BEFORE.isoformat(), "reason": "ohlc_inconsistent"},
         {"date": day0.isoformat(), "reason": "value_not_storable"},
         {"date": day2.isoformat(), "reason": "ohlc_inconsistent"},
         {"date": XR65_AFTER.isoformat(), "reason": "date_out_of_range"},
     ]
     assert _xr46_unordered(_xr46_rejected(row)) == _xr46_unordered(expected), row
     assert _xr46_route_rejected(row) == expected
+    assert row["count"] == 1 and all(said in row["message"] for said in ("rejected 2 date(s) with impossible OHLC", "no price column can keep")) and _names(row["message"], XR65_AFTER), row
 
 
 def test_xr46_fa_price_rejection_holds_one_of_three_reasons_and_a_result_defaults_to_none():
@@ -1632,7 +1744,7 @@ def test_xr46_fa_price_rejection_holds_one_of_three_reasons_and_a_result_default
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# The erase sentinel -1 is no bound for the OHLC check (the docs-writer's finding, 17/10)
+# The erase marker is no bound for the OHLC check (the docs-writer's finding, 17/10; the marker is "clear" since N92)
 #
 # The defect, on HEAD 1c1456713 with X-R46's cure: the strict branch of the OHLC integrity policy (see its section above;
 # ``if price.low is not None and price.high is not None`` in ``bulk_upsert_prices``) reads the raw incoming ``price.low``
@@ -1646,9 +1758,17 @@ def test_xr46_fa_price_rejection_holds_one_of_three_reasons_and_a_result_default
 # left with one real bound is written as it is, even on the wrong side of the close (decided 17/10: today's one-bound
 # partial update; X-R78 will decide whether to refuse it instead).
 #
+# N92 (i) with «clear» (developer's decisions of 19/10): an erased field is the text ``"clear"``, no longer ``-1``, which
+# is now a negative number like any other, refused by the write model (``FAPriceWritePoint``, 422). The X-R46 check reads
+# ``"clear"`` where it read ``-1``, and the cases keep their meaning: an erased bound is no bound. They send their edit as
+# ``POST /assets/prices`` parses it: the JSON point the data editor sends, validated into ``FAUpsert`` (``_erase_upsert``).
+# RED until N92 (expected failure before the cure): ``FAUpsert``'s points are ``FAPricePoint``, whose parser reads
+# ``"clear"`` as a number (``Decimal("clear")`` raises ``InvalidOperation``, no ValidationError: the route answers 500),
+# and each erasing case fails naming it. The guard sends real numbers only: green before and after.
+#
 # Each case seeds ``ERASE_DAY`` on this unit's own asset (``clean_prices``) with open/high/low/close 12/14/10/12 through
 # a first manual upsert, checked as a barrier, then sends its manual edit of that day, open and volume omitted (F.4:
-# kept). The upsert and its ``rejected`` are read as X-R46's cases read them (``_xr46_upsert``, ``_xr46_rejected``).
+# kept). The upsert's ``rejected`` is read as X-R46's cases read it (``_xr46_rejected``).
 # ─────────────────────────────────────────────────────────────────────────────
 
 ERASE_OFFSET = 0
@@ -1663,9 +1783,24 @@ async def _stored_ohlc(asset_id: int, day: date) -> tuple | None:
     return None if row is None else tuple(row)
 
 
+async def _erase_upsert(asset_id: int, point: dict) -> dict:
+    """``POST /assets/prices`` minus HTTP, for one JSON ``point`` of ``ERASE_DAY`` (its fields as the data editor sends
+    them, ``"clear"`` for an erased one): the body validated into ``FAUpsert`` as the route validates it, then upserted
+    manually; the asset's own result. A body the model does not read fails the case naming the exception (N92: before the
+    cure ``"clear"`` raises ``InvalidOperation``, which the route answers with a 500)."""
+    body = {"asset_id": asset_id, "prices": [{"date": ERASE_DAY.isoformat(), **point}]}
+    try:
+        upsert = FAUpsert.model_validate(body)
+    except Exception as exc:  # noqa: BLE001 — any exception here is the defect under test
+        pytest.fail(f"N92: POST /assets/prices does not read the edit {point}: {exc!r}")
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        result = await AssetSourceManager.bulk_upsert_prices([upsert], session)
+    return next(entry for entry in result["results"] if entry["asset_id"] == asset_id)
+
+
 async def _erase_seeded(asset_id: int) -> None:
     """``ERASE_DAY`` stored as ``ERASE_SEED`` through a first manual upsert, checked: a barrier."""
-    seed = await _xr46_upsert(asset_id, [_point(ERASE_OFFSET, "12", low="10", high="14", open_="12")])
+    seed = await _erase_upsert(asset_id, {"close": "12", "low": "10", "high": "14", "open": "12"})
     stored = await _stored_ohlc(asset_id, ERASE_DAY)
     assert (seed["count"], stored) == (1, ERASE_SEED), f"barrier: the seed of {ERASE_DAY} should store open/high/low/close 12/14/10/12: {seed}; stored {stored}"
 
@@ -1679,16 +1814,17 @@ async def _erase_outcome(asset_id: int, row: dict) -> tuple:
 @pytest.mark.asyncio
 async def test_a_manual_edit_erasing_high_is_saved_not_rejected(clean_prices: int):
     """The day stored 12/14/10/12 (open/high/low/close); the editor erases High and sets Low to 11, the close staying 12:
-    close 12, low 11, high -1.
+    close 12, low 11, high "clear".
 
-    Red on HEAD 1c1456713 with X-R46's cure: the check reads high -1 as a bound, below low 11: the date is refused
-    (``count`` 0, ``rejected`` ``[{the day, "ohlc_inconsistent"}]``) and the row keeps 12/14/10/12.
+    History: red on HEAD 1c1456713 with X-R46's cure (the erase was ``-1``, read as a bound below low 11: refused as
+    ``ohlc_inconsistent``); green with X-R46b's.
+    RED until N92: the write model does not read ``"clear"`` (``InvalidOperation``: a 500).
     Contract: an erased bound is no bound: ``count`` 1, ``rejected`` ``[]``; the row open 12 (omitted: kept), high NULL,
     low 11, close 12 -- one merged bound left, nothing to widen.
     """
     await _erase_seeded(clean_prices)
 
-    row = await _xr46_upsert(clean_prices, [_point(ERASE_OFFSET, "12", low="11", high="-1")])
+    row = await _erase_upsert(clean_prices, {"close": "12", "low": "11", "high": "clear"})
 
     outcome = await _erase_outcome(clean_prices, row)
     assert outcome == (1, [], (Decimal("12"), None, Decimal("11"), Decimal("12"))), f"(count, rejected, open/high/low/close) = {outcome}: {row['message']}"
@@ -1697,15 +1833,15 @@ async def test_a_manual_edit_erasing_high_is_saved_not_rejected(clean_prices: in
 @pytest.mark.asyncio
 async def test_a_manual_edit_erasing_both_bounds_is_saved_not_rejected(clean_prices: int):
     """The day stored 12/14/10/12 (open/high/low/close); the editor erases High and Low, the close staying 12: close 12,
-    low -1, high -1.
+    low "clear", high "clear".
 
-    Red on HEAD 1c1456713 with X-R46's cure: the check reads [-1, -1] as the bounds, the close 12 outside them: the date
-    is refused (``count`` 0, ``rejected`` ``[{the day, "ohlc_inconsistent"}]``) and the row keeps 12/14/10/12.
+    History: red on HEAD 1c1456713 with X-R46's cure (the close 12 outside [-1, -1]); green with X-R46b's.
+    RED until N92: the write model does not read ``"clear"`` (``InvalidOperation``: a 500).
     Contract: ``count`` 1, ``rejected`` ``[]``; the row open 12 (omitted: kept), high NULL, low NULL, close 12.
     """
     await _erase_seeded(clean_prices)
 
-    row = await _xr46_upsert(clean_prices, [_point(ERASE_OFFSET, "12", low="-1", high="-1")])
+    row = await _erase_upsert(clean_prices, {"close": "12", "low": "clear", "high": "clear"})
 
     outcome = await _erase_outcome(clean_prices, row)
     assert outcome == (1, [], (Decimal("12"), None, None, Decimal("12"))), f"(count, rejected, open/high/low/close) = {outcome}: {row['message']}"
@@ -1714,12 +1850,12 @@ async def test_a_manual_edit_erasing_both_bounds_is_saved_not_rejected(clean_pri
 @pytest.mark.asyncio
 async def test_a_manual_edit_erasing_low_with_high_below_the_close_is_saved_as_is(clean_prices: int):
     """The mirror that tells the cures apart: the day stored 12/14/10/12 (open/high/low/close); the editor erases Low and
-    sets High to 11, below the close 12: close 12, low -1, high 11.
+    sets High to 11, below the close 12: close 12, low "clear", high 11.
 
-    Red on HEAD 1c1456713 with X-R46's cure, and under a cure that resolves the sentinel of High alone: the check reads
-    low -1 as a bound, the close 12 outside [-1, 11]: the date is refused (``count`` 0, ``rejected`` ``[{the day,
-    "ohlc_inconsistent"}]``) and the row keeps 12/14/10/12. The two erasing cases above pass under either cure; this one
-    only when the sentinel is resolved on both bounds.
+    History: red on HEAD 1c1456713 with X-R46's cure, and under a cure that resolved the marker of High alone (the close 12
+    outside [-1, 11]); green with X-R46b's. The two erasing cases above pass under either cure; this one only when the
+    marker is resolved on both bounds -- now ``"clear"``.
+    RED until N92: the write model does not read ``"clear"`` (``InvalidOperation``: a 500).
     Contract (decided 17/10): one real incoming bound is not checked; the edit is written as it is, as today's one-bound
     partial update is: ``count`` 1, ``rejected`` ``[]``; the row open 12 (omitted: kept), high 11, low NULL, close 12.
     This pins the current one-bound policy, not an endorsement of the row it leaves, a close above its only bound:
@@ -1728,7 +1864,7 @@ async def test_a_manual_edit_erasing_low_with_high_below_the_close_is_saved_as_i
     """
     await _erase_seeded(clean_prices)
 
-    row = await _xr46_upsert(clean_prices, [_point(ERASE_OFFSET, "12", low="-1", high="11")])
+    row = await _erase_upsert(clean_prices, {"close": "12", "low": "clear", "high": "11"})
 
     outcome = await _erase_outcome(clean_prices, row)
     assert outcome == (1, [], (Decimal("12"), Decimal("11"), None, Decimal("12"))), f"(count, rejected, open/high/low/close) = {outcome}: {row['message']}"
@@ -1736,15 +1872,15 @@ async def test_a_manual_edit_erasing_low_with_high_below_the_close_is_saved_as_i
 
 @pytest.mark.asyncio
 async def test_a_manual_edit_with_two_real_bounds_and_the_close_below_low_is_still_rejected(clean_prices: int):
-    """Guard, green before the cure and after: the strict check still runs when both incoming bounds are real. The day
-    stored 12/14/10/12 (open/high/low/close); the edit: close 12, low 13, high 14.
+    """GUARD, green before the cure and after (X-R46b's and N92's): the strict check still runs when both incoming bounds
+    are real. The day stored 12/14/10/12 (open/high/low/close); the edit: close 12, low 13, high 14.
 
     Contract (unchanged): the date refused, ``count`` 0, ``rejected`` ``[{the day, "ohlc_inconsistent"}]``; the row keeps
     12/14/10/12.
     """
     await _erase_seeded(clean_prices)
 
-    row = await _xr46_upsert(clean_prices, [_point(ERASE_OFFSET, "12", low="13", high="14")])
+    row = await _erase_upsert(clean_prices, {"close": "12", "low": "13", "high": "14"})
 
     outcome = await _erase_outcome(clean_prices, row)
     assert outcome == (0, [{"date": ERASE_DAY.isoformat(), "reason": "ohlc_inconsistent"}], ERASE_SEED), f"(count, rejected, open/high/low/close) = {outcome}: {row['message']}"

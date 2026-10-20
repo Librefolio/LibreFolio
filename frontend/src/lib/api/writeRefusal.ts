@@ -2,7 +2,7 @@
  * writeRefusal.ts — A save the backend refused, whole or in part, as one sentence in the interface language (X-R46).
  *
  * The data editors save prices (`POST /assets/prices`) and rates (`POST /fx/currencies/rate`). The server refuses a
- * whole save with a coded `detail`: 422 `date_out_of_range` (X-R65), 422 `price_currency_mismatch` (X-R71), 422
+ * whole save with a coded `detail`: 422 `date_out_of_range` (X-R65: a date after tomorrow, N83), 422 `price_currency_mismatch` (X-R71), 422
  * `bulk_too_many_items` (MF-SEC9a: a save's own sentence, not X-R58's reading one), 400 `fx_rates_refused`. Or it writes the save and leaves single dates out, naming
  * them in `rejected` (`{date, reason}`). This module turns both into a sentence that names the dates; any other error
  * falls back to what the server said (`extractErrorMessage`), never to Axios's «Request failed with status code …».
@@ -85,8 +85,8 @@ export function writeRefusalMessage(error: unknown, t: Translate, dateLabel: Dat
     if (response.status === 422 && code === 'date_out_of_range') {
         const params = asRecord(detail.params);
         const dates = outOfRangeDates(detail.items);
-        if (!finite(count) || typeof params?.min !== 'string' || typeof params?.max !== 'string' || dates.length === 0) return null;
-        return t('common.writeRefusal.dateOutOfRange', {values: {count, min: dateLabel(params.min), max: dateLabel(params.max), dates: listed(dates.map(dateLabel), count, t)}});
+        if (!finite(count) || typeof params?.max !== 'string' || dates.length === 0) return null;
+        return t('common.writeRefusal.dateOutOfRange', {values: {count, max: dateLabel(params.max), dates: listed(dates.map(dateLabel), count, t)}});
     }
     if (response.status === 422 && code === 'price_currency_mismatch') {
         const items = records(detail.items);

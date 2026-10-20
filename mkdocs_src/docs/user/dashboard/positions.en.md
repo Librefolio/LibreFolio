@@ -141,6 +141,7 @@ How does the price compare with what you paid, and where does each lot stand?
 - **Abs / %** shows prices or their change from the first point; **Auto / From 0** sets where the axis starts.
 - **Bubble colour** is the opening broker, its **size** the lot's quantity (**Abs**) or its opening value (**%**); a **dashed border** means valued at cost.
 - **A gap in an Avg. Cost line** is a day whose average cost is unknown: no wrong average is drawn.
+- **The Market Price line** covers the whole period, days without an open lot included: after you sell everything, it runs on to the end date.
 
 ### 🕒 2. Lot Life & Custody
 
@@ -199,13 +200,13 @@ The whole story of one lot. Open it with **View lot detail** (⋮) or by clickin
 **How to read it**
 
 - **Quantities are the broker's full holdings**, as the ⓘ beside them says.
-- **A transfer with a broker outside the panel** counts as units coming in or going out. Units received open a new lot on the day they arrive, at the cost the transfer carries. Units sent close their lots on the day they leave, at that day's market price, so the gain they made at this broker counts as realized here. The lot's History shows these moves as adjustments. To follow the original lots through the move, open the panel with both brokers (no broker filter on the Dashboard). A transfer still on its way on the panel's last day shows its units as in transit.
+- **A transfer with a broker outside the panel** counts as units coming in or going out. Units received open a new lot on the day they arrive, at the cost the transfer carries. Units sent close their lots on the day they leave, at that day's market price, so the gain they made at this broker counts as realized here. The lot's History labels these moves **TRANSFER+** and **TRANSFER-**, and the charts mark them as transfers — ◆ on Lot Life & Custody, **Transfer In** and **Transfer Out** on the markers of Avg. Cost / Market Price — without naming the other broker. To follow the original lots through the move, open the panel with both brokers (no broker filter on the Dashboard). A transfer still on its way on the panel's last day shows its units as in transit.
 - **Go to transaction** opens the transaction of the History row you picked — by default, the opening one.
 
 ??? warning "⚠️ When the panel warns you"
 
     - **A folded banner** lists what is missing — a rate, a price, a purchase cost — with a chip per affected lot that finds its bubble. Fix it as for the [Data Quality banner](index.md#data-quality-banner). The folded banner also lists income and costs that no lot could take — a dividend paid after every lot was sold, for example — each with its own amount and date.
-    - **A red message** means the quantities or transfers of some of the asset's transactions do not add up, so its lots cannot be rebuilt. It lists each transaction to fix with its day, its broker, what is wrong and a **Go to transaction** button. Meanwhile the panel hides the lots, their timeline and the comparison, and the first chart keeps only its **Avg. Cost** lines. Fix those transactions and the lots come back.
+    - **A red message** means the quantities or transfers of some of the asset's transactions do not add up, so its lots cannot be rebuilt. It lists each transaction to fix with its day, its broker, what is wrong and a **Go to transaction** button. Meanwhile the panel hides the lots, their timeline and the comparison, and the first chart keeps only its **Avg. Cost** lines and the **Market Price**. Fix those transactions and the lots come back.
     - **Valued at cost**: on the days before the asset's first price — no market price, no purchase or sale — its lots are valued at what they cost, with no market gain or loss, and the banner names those days. With no price at all up to the end date, the lot's bubble has a dashed border.
 
 ---

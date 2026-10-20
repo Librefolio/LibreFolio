@@ -89,11 +89,16 @@ T-1's cut, 1 172 at `5d0585595`), plus its math in `backend/app/services/financi
   closed in B3b the same day (`59a7c3e2f`, "withhold pools without a rate").
 - **A FAILED replay withholds its figures (2026-10-17, J-12, decision N81 option A).** Until then a `FAILED` analysis
   ("warn but show", 2026-07-22) returned the lots of a replay that no longer matched the account — a sale beyond the
-  quantity held left a lot of 4 open where 1 was held. Now, right after the engine, `shown_analyses` keeps only the WAC
-  lines (`_AVERAGE_COST_ANALYSES`: they come from the transactions, not the replay): every lot section, `price_history`
-  included (one series per lot), and the orphan totals are `None`. `data_quality` keeps the issues that fail the replay
-  and the WAC-line gaps of `_report_gaps()`, and drops the issues about withheld things (reference prices, the
-  `*_NO_ELIGIBLE_LOTS` orphans, `CURRENT_PRICE_ASSUMED_AT_COST`, the rates of the lot figures). Each failing issue gets
+  quantity held left a lot of 4 open where 1 was held. Now, right after the engine, `shown_analyses` keeps only the
+  analyses that do not come from the replay (`_REPLAY_FREE_ANALYSES`, named `_AVERAGE_COST_ANALYSES` until Y-30): the
+  WAC lines, from the transactions, and — since Y-30 the same evening — the lot-free `market_price_history`, from the
+  asset's prices. Every lot section, `price_history` included (one series per lot), and the orphan totals are `None`.
+  `data_quality` keeps the issues that fail the replay and the gaps of what is still drawn — the WAC lines'
+  (`_report_gaps()`) and the market price line's missing rates — and drops the issues about withheld things (reference
+  prices, the `*_NO_ELIGIBLE_LOTS` orphans, `CURRENT_PRICE_ASSUMED_AT_COST`, the rates of the lot figures). One
+  exception, found by Y-30's docs pass and not covered by a test: the income, fee and tax conversions run before the
+  engine (`needs_income_alloc` reads the requested analyses), so a rate missing there is still reported with FAILED.
+  Each failing issue gets
   `transaction_date` and `fails_analysis: true` in `message_params`; its `transaction_id` is the row to fix — for a
   transfer, the giving leg (`raw_transaction_ids[0]` in the engine, no longer the pair's id). The AI Export reads the
   codes back with `analysis_failure_codes()` and declares the asset (`failed_lot_reconstructions`) instead of exporting
@@ -121,6 +126,7 @@ T-1's cut, 1 172 at `5d0585595`), plus its math in `backend/app/services/financi
 | Public DTO | `backend/app/schemas/portfolio.py` |
 | Service-level tests | `backend/test_scripts/test_services/test_financial/test_lots_analysis_service.py` |
 | FAILED withholding (J-12) | `backend/test_scripts/test_services/test_financial/test_lots_failed_analysis_withholding.py`, `backend/test_scripts/test_services/test_ai_export_fifo_failed_reconstruction.py` |
+| Lot-free market price series (Y-30) | `backend/test_scripts/test_services/test_financial/test_lots_market_price_history.py` |
 | Scope edge (J-10) | `backend/app/services/financial_math/lots/scope_boundary.py` |
 | Pure tests (WAC lines and their gaps) | `backend/test_scripts/test_services/test_lots_analysis_pure.py` |
 | Lots WAC lines of the #32 case (L1–L3) | `backend/test_scripts/test_services/test_financial/test_portfolio_cost_currency.py` |

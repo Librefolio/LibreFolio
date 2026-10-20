@@ -106,6 +106,16 @@ def today_date() -> date:
 EARLIEST_RANGE_START = date(1900, 1, 1)
 
 
+def server_today() -> date:
+    """Today by the server's calendar: its local date, as ``date.today()`` reads it (``today_date()`` above is UTC's).
+
+    The day ``latest_range_end()`` follows. A broker import that keeps only settled rows compares with it (N74, the plugin
+    guide's rule «only safe rows»): a row whose value date comes after it has not settled yet, and arrives with the next
+    export.
+    """
+    return date.today()
+
+
 def latest_range_end() -> date:
     """The latest day a requested date range may reach: tomorrow, by the server's calendar (R13-SEC7-1).
 
@@ -115,9 +125,10 @@ def latest_range_end() -> date:
     ``PortfolioService.get_summary`` / ``get_report``, ``LotsAnalysisService.get_lots_analysis``, risk's portfolio scope
     (``risk.scope.load_scope_inputs``) and ``AiExportRuntimeService.prepare_request``.
 
-    The server's local date, like ``date.today()`` in those modules (``today_date()`` above is UTC's).
+    The server's local date, like ``date.today()`` in those modules (``today_date()`` above is UTC's): ``server_today()``
+    plus one day.
     """
-    return date.today() + timedelta(days=1)
+    return server_today() + timedelta(days=1)
 
 
 def shift_date(value: date, days: int) -> date:

@@ -1381,3 +1381,50 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > attuale per cambiare l'email, chiusura delle altre sessioni). J ha trovato un MWRR sbagliato in circa il 4 % dei
 > portafogli simulati (CP-4d, risolutore verificato). G ha trovato G-15 (barra delle schede di Settings che trabocca
 > in spagnolo), affidato ad A.
+
+### Lacuna 16/10 → 18/10, e lo STOP del developer (17/10, 21:45)
+
+Il registro qui sopra si ferma al 15/10. Dal 16/10 sera al 17/10 sono entrati in `dev_release2` circa 280 lotti, con le
+decisioni notturne del coordinatore N53–N92. Il 17/10 alle 21:45 il developer ha fermato tutto. Il resoconto completo
+(stato, decisioni, errori di metodo) è nel file di sessione del coordinatore `resoconto-20261017.md`; la storia dei
+lotti è nei piani dei figli e nel log di `dev_release2`.
+
+### Ripartenza ✅ (2026-10-19)
+
+**Regole nuove** (developer):
+- nessuna decisione di prodotto dai figli né dal coordinatore: ogni scelta diventa una domanda per il developer;
+- si implementa solo dopo il via esplicito;
+- due slot pesanti alla volta; i lavori leggeri solo con carico a 1 minuto sotto 50.
+
+**Pulizia:**
+- ogni lavoro a metà è stato parcheggiato come patch nella cartella di sessione del figlio;
+- il giornale di ogni figlio è committato;
+- tutte le basi sono state aggiornate a `dev_release2` `ede7adf75`, che comprende Y-30;
+- contabilità: tabelle dei lotti e ✅ del backlog con la prova del commit, per tutti i figli; le voci di Phase_0
+  chiuse dalla 1.3 sono in corso di marcatura.
+
+**Decisioni del developer, 19/10:**
+- **Z-33**: resta solo la correzione del plugin Yahoo (la data locale). Escono la riparazione D″ e la migrazione 011,
+  senza colonne, con i comandi manuali per la nightly del developer e per il suo DB di produzione (già alla 011,
+  nessuna assegnazione Yahoo). Sulla 010 decide il developer.
+- **J-57**: resta. Lo 0 manuale è permesso, il messaggio suggerisce «Manuale e 0» per un regalo, nel form e nel wizard.
+  Aperte: Q-J57-1, Q-J57-3 (0 o costo del donante), Q-J57-4, J-60.
+- **N68**: niente blocco; gli split sopravvivono al cambio di valuta; un bottone «Ricollega eventi» in Transazioni. Il
+  ricollegamento automatico va in `TODO_FUTURI`, da analizzare.
+- **N73, N76, N77, N84, N54, N87, N89**: confermate. Anche le tecniche N53…N82 sono confermate.
+- **N74**: limite in avanti = domani del server. Aperta Q-N74-1: Fineco data le righe T+2.
+- **N78**: la regola del costo esposta già calcolata dal backend, più un inventario degli endpoint con regole (W).
+- **N81**: A. **MF-E2**: (b), cioè gli short nello storico con segni giusti e flussi completi.
+- **N83**: per prezzi e cambi solo il limite in avanti (domani).
+- **N92**: i prezzi negativi non si accettano (i). Per il «cancella» dell'OHLC c'è una proposta (`null` solo per l'API
+  manuale) in attesa.
+- **Lotti approvati e partiti**: J-1 (MF), X-R16 (X), J-48 (J), B-15 e B-8 (B), A-57 (A).
+- **Sospesi in attesa del developer**: N90 (Z-29, da ridisegnare con `max_points` dal frontend), N91 (K3a, V-37b),
+  H-55 (CSP applicata per direttiva), C-70b, i lotti di riordino di W non fatti (W3, W4 CP7, W5–W6, K2b/c), i lotti
+  aperti di X (CP5, CP6, CP7, CP8, CP12).
+- **Nuove analisi consegnate**: indici del DB (13 da togliere su 44), N74 (il motore salta già i giorni fermi), N64
+  (cache dei segnali), N65 (il righello), N69 (amministrazione), testi dei controlli.
+
+> **⚠️ Fuori pista**: il registro dei treni del README di Phase_1 si ferma al 370, e la tabella delle sessioni era ferma
+> al 15/10: aggiornata oggi. Il backlog sottostimava il lavoro fatto (W: 7 ✅ invece di 56). Una mia affermazione su
+> N92 («l'API accetta i prezzi negativi») era sbagliata: corretta da X.

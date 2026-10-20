@@ -870,7 +870,18 @@ encrypt (`backend/app/api/v1/backup/panel.py` passes no password). The format is
 alike). `jobs.start_backup()` creates the job's folder and its first state before the thread runs: a full disk or quota
 there (`jobs.out_of_space()`) answers `507` `backup_no_space`, `Not enough free space to start the backup`, logged as a
 warning, `Instance backup could not start: not enough free space` (lot B-30). Another backup running stays `409`
-`backup_busy`, and any other failure `500` `backup_folder_unusable` or `backup_failed`.
+`backup_busy`, and any other failure `500` `backup_folder_unusable` or `backup_failed`. The `backup_busy` detail names
+the running backup, `job_id` and `origin`, to a caller that can read it: the Backup tab always, the hosting panel only
+a backup of its own (lot B-8). A run records its job id in the lock it holds (`backups/.jobs/.lock`, its content), once
+its first state is written; a refused start reads it back, never through a link, and names the job only while its state
+says it runs. A clear start of the tab follows a backup of its own kind (`ui`) whose start answer was lost, and offers
+it only if it ends clear; it keeps that adoption across a reload (`librefolio.backup.adopted`). A secure start never
+follows one: a job records no user, so nothing tells whether that backup carries this password (defect of the
+automatic review, 19/10). One of the command line or of the panel is never followed. The tab does not name the backup
+that runs; the answer does (developer, 19/10). Whatever its origin, the card says only that another backup runs, or
+follows its own, and never shows the job's id or origin. The tab writes them to the browser console instead, with the
+state, `running`: one `console.warn` per refused start (`backupJob.svelte.ts`), whatever the log level. None of the
+three is personal data.
 
 **The creation** (`jobs._run()`). With a password, `build_archive()` writes the zip as for a clear backup, in the
 job's folder `backups/.jobs/<id>/` (`0700`, the zip `0600`), with the instance key entry when there is one to carry
@@ -2145,7 +2156,7 @@ with `PRAGMA writable_schema=RESET`.
   insert that needs it («unsafe use of regexp()»). The refusal comes at a statement, never inside the listener:
   SQLAlchemy's pool does not close a connection whose `connect` listener raised (`_ConnectionRecord.__connect()`).
 - **Nothing of the app changes.** LibreFolio's own schema calls only the built-in `lower()` (the index
-  `ux_users_email_lower`, migration 009), and the pragma restricts only the SQL the schema holds, never top-level SQL.
+  `ux_users_email_lower`, step 6 of migration `005_release_1_3_0_schema`), and the pragma restricts only the SQL the schema holds, never top-level SQL.
 - **In the upgrade's process too.** `backend/alembic/env.py` imports `backend.app.db.base`, so the package's
   `backend/app/db/__init__.py`, which imports `session.py`: the upgrade's connections get `set_sqlite_pragma()` as
   well, before `_schema_untrusted`, which `env.py` registers on its own engine. Before H-51, `set_sqlite_pragma()`

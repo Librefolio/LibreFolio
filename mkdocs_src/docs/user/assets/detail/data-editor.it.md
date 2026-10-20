@@ -24,7 +24,7 @@ Finché non salvi, i prezzi nuovi e modificati vengono mostrati sul grafico come
 
 ## 💰 Scheda Prezzi
 
-- **Chiusura** è obbligatoria e deve essere un numero positivo; **Apertura**, **Massimo**, **Minimo** e **Volume** sono opzionali, e la gomma in una cella cancella il suo valore.
+- **Chiusura** è obbligatoria e deve essere maggiore di 0; **Apertura**, **Massimo**, **Minimo** e **Volume** sono opzionali, 0 o più, e la gomma in una cella cancella il suo valore. LibreFolio non tiene prezzi negativi: una riga con uno, che solo un file importato può portare, non si salva e conta fra le saltate.
 - I prezzi sono nella valuta dell'asset, mostrata accanto alle schede (*Prezzi in USD*).
 - Le **righe obsolete** sono giorni privi di un prezzo proprio, riempiti con l'ultimo conosciuto. Quando ce ne sono alcune, compaiono un conteggio ⚠️ e un interruttore: attivalo per nasconderle.
 
