@@ -63,7 +63,7 @@ On the login page, click **Forgot Password?**. If your instance can send emails,
 
 Check that:
 
-1. **Scheduler Enabled** is on in the [Global Settings](../admin/settings.md#market-data-scheduler): it runs the automatic updates
+1. **Scheduler Enabled** is on in [Global Settings](../admin/settings.md#market-data-scheduler): it runs the automatic updates. Only administrators have that tab: if you are not one, ask your administrator to check it
 2. Your assets have valid ISINs or symbols recognized by the configured **data provider** (e.g., [yfinance](https://pypi.org/project/yfinance/) for stocks and ETFs)
 3. The provider's service is available (check server logs for errors)
 
@@ -71,7 +71,7 @@ Check that:
 
 Check that:
 
-1. **Scheduler Enabled** is on in the [Global Settings](../admin/settings.md#market-data-scheduler)
+1. **Scheduler Enabled** is on in [Global Settings](../admin/settings.md#market-data-scheduler). Only administrators have that tab: if you are not one, ask your administrator to check it
 2. The currency pair has at least one [data provider configured](../user/fx/detail/provider.md)
 3. The provider's API is reachable (ECB, FED, BOE, SNB)
 4. You've run a [sync](../user/fx/sync.md) for the desired date range
