@@ -1428,6 +1428,14 @@ def services_server_errors(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "Request id and server error tests", verbose=verbose)
 
 
+def services_hosting_panel_access(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the hosting panel's shared access (H-61, L1): the status token's reader, panel_access per scope (off 404, unusable 503, Bearer 401), the limiter's 429 and the line of each call, without secrets."""
+    print_section("Services: Hosting Panel Access")
+    print_info("Testing: backend/app/config/hosting_panel.py, backend/app/services/platform/hosting_panel/access.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_hosting_panel_access.py", test_names)
+    return run_command(cmd, "Hosting panel access tests", verbose=verbose)
+
+
 def services_client_address(verbose: bool = False, test_names: list = None) -> bool:
     """Test the client address behind a trusted proxy: LIBREFOLIO_CLIENT_IP_HEADER, client_address and client_rate_key (P17); no function only for the tests (N58)."""
     print_section("Services: Client Address")
@@ -2804,6 +2812,15 @@ Note: No backend server required.
         desc="H-60: X-Request-Id on every answer and request_id in every line of the request; 4xx as FastAPI; a 5xx with request_id and error_type, its cause logged once (error with traceback, warning without a cause, nothing when the route logged it); the unhandled 500 as JSON, logged once and re-raised; H-33's 500 as JSON; no request secret in an answer or a line; client_log_level follows LOG_LEVEL; H-60r: requests failing on one shared exception (a shared build, one object raised twice) each leave their id in the log, the traceback once, the later ones a short warning pointing to the first",
         # PURE: fresh FastAPI apps in process; the real app for its handler table, its stack and D4, its session on an
         # in-memory SQLite built with create_all; the activity record monkeypatched per request. No lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "hosting-panel-access",
+        services_hosting_panel_access,
+        name="Hosting Panel Access",
+        desc="H-61 L1: LIBREFOLIO_PANEL_STATUS_TOKEN read as the backup and wake tokens are; panel_access(scope) for backup, wake and status: off 404 without a line, unusable 503 with the scope's code, Bearer only, constant-time compare, missing or different 401 with the scope's code, a token never opens another scope; 20 refused credentials per address in 10 minutes across scopes then 429 panel_too_many_attempts with Retry-After, none behind an untrusted proxy; one line per call, never a secret, a header, the query or the address",
+        # PURE: fresh FastAPI apps in process, tokens through monkeypatch, the limiter replaced by one on a fake clock. No DB, no server.
         isolation="pure",
     )
     add_test(

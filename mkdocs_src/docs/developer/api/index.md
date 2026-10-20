@@ -32,6 +32,7 @@ The API is structured into routers, each handling a specific domain (all mounted
 - `/transactions`: Transaction management.
 - `/brokers`: Broker management and sharing — includes `/import` (BRIM broker report import).
 - `/backup`: Backup & export.
+- `/panel`: The hosting panel's status route, `GET /panel/status` (`get_panel_status`), with the `LIBREFOLIO_PANEL_STATUS_TOKEN` token instead of a session: where the setup of the [initial administrator](../architecture/access_control.md#initial-admin) stands. Its answer, `PanelStatusResponse`, holds exactly two keys: `admin_setup`, one of `none`, `pending`, `done` and `expired`, and `setup_expires_at`, when the setup link stops working, in UTC, only while `pending` (`null` otherwise). Responses `200`, `401`, `404` (no token set: the route is off), `429` and `503`; it answers on a blocked instance too. Its OpenAPI tag is «Hosting panel», the only tag of the six routes a hosting panel calls: this one, the four `/backup/panel/jobs…` routes and `POST /system/wake-sync`. See [The Hosting Panel's Access](../architecture/security.md#panel-access) and, for administrators, [The Setup Status](../../admin/hosting_providers.md#panel-status).
 - `/portfolio`: Portfolio analysis and metrics.
 - `/fx`: Foreign exchange operations — includes `/fx/providers` and `/fx/currencies`.
 - `/signals`: Domain-agnostic signal preview (`POST /signals/preview`).

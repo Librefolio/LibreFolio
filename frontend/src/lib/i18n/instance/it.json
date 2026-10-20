@@ -50,6 +50,11 @@
         "off": "La modalità di test è spenta.",
         "testLane": "La modalità di test è accesa, in una corsia del runner dei test.",
         "outsideTestLane": "La modalità di test è accesa fuori dal runner dei test: sono disponibili i fornitori di dati fatti per i test, i dati stanno in {data_dir} e il file .env non viene letto. Togli LIBREFOLIO_TEST_MODE."
+      },
+      "hostingPanel": {
+        "off": "Nessun token è impostato per il risveglio programmato o per la rotta di stato del pannello del fornitore: quelle rotte sono spente.",
+        "ok": "I token del pannello del fornitore che sono impostati (risveglio programmato, rotta di stato) si possono usare.",
+        "unusable": "{variables}: questi token del pannello del fornitore non si possono usare (un file che non si legge, troppo corti o con caratteri che un'intestazione di richiesta non porta): le loro rotte rispondono 503 finché non si corregge."
       }
     },
     "block": {

@@ -50,6 +50,11 @@
         "off": "Le mode test est désactivé.",
         "testLane": "Le mode test est activé, dans une voie du lanceur de tests.",
         "outsideTestLane": "Le mode test est activé en dehors du lanceur de tests : les fournisseurs de données conçus pour les tests sont proposés, les données sont conservées dans {data_dir} et le fichier .env n'est pas lu. Retirez LIBREFOLIO_TEST_MODE."
+      },
+      "hostingPanel": {
+        "off": "Aucun jeton n'est défini pour le réveil programmé ou la route d'état du panneau de l'hébergeur : ces routes sont désactivées.",
+        "ok": "Les jetons du panneau de l'hébergeur qui sont définis (réveil programmé, route d'état) sont utilisables.",
+        "unusable": "{variables} : ces jetons du panneau de l'hébergeur ne sont pas utilisables (un fichier illisible, trop courts, ou des caractères qu'un en-tête de requête ne transporte pas) : leurs routes répondent 503 tant que ce n'est pas corrigé."
       }
     },
     "block": {
