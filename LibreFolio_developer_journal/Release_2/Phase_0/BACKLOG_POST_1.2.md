@@ -6649,6 +6649,18 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   piano 04, «B-52 · La data dell'operazione: cura», passo 4.
   ✅ 20/10 (via del coordinatore): «Trade date: the day the operation was made» in `models.py`, negli schemi e nella doc del DB;
   `api sync` senza differenze tracciate. Commit: il checkpoint W-B89 del coordinatore. Dettagli: piano 04, «W-B89».
+- **W-B90 · Una `DataTable` senza colonne non si assesta mai** — minimo, test; W, 20/10 (test-author di B-51). Con `columns: []` il
+  ripiego per un ordine di colonne vuoto (`frontend/src/lib/components/table/DataTable.svelte:855-861`) riscrive a ogni giro un `[]` e
+  un `{}` nuovi, e l'effetto si richiama da sé: Svelte si ferma su `effect_update_depth_exceeded`. Nessun utente lo vede (ogni tabella
+  dell'app ha colonne), ma un test di componente che monta una tabella vuota cade (`AnalyzeStep.test.ts` passa una colonna inerte, col
+  perché). Cura, piccola: il ripiego scrive solo se l'ordine di default ha colonne (`defaultColumnOrder.length > 0`), e lo stesso
+  per le larghezze. È un file condiviso: decide il coordinatore, con il suo proprietario. Dettagli: piano 04, «B-51», passo 1.
+- **W-B91 · La guida dell'import, passo 3: «un file è fallito» manda a un bottone che può mancare** — minimo, chiarezza; W, 20/10
+  (docs-writer di B-51). In `user/transactions/import/how-to.*.md` il punto «A file failed: … Fix its plugin in Select Files, then click
+  Re-parse all»: **Re-parse all** sta nella fila dei riquadri, che compare solo se almeno un file è stato letto, quindi se falliscono
+  tutti non c'è; e cambiare plugin e premere **Parse (N)** rianalizza già da sé. Con questa, due tabelle per sviluppatori
+  (`brim_plugin_guide.md:910`, `developer/backend/brim/architecture.md:392`) dicono dove compaiono le note senza i conti nuovi di B-51.
+  Cura: due frasi in EN, IT, FR, ES più il timbro; in un lotto di doc. Dettagli: piano 04, «B-51», passo 4.
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
