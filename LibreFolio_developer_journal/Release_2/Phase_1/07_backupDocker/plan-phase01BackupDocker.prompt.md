@@ -7355,3 +7355,106 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   - `fix(backup): a tab's own backup is never adopted`: `backupJob.svelte.ts`, `backupJob.test.ts`, le due doc;
 >   - `docs(journal): B-8 own-job refinement`: questo piano e il backlog.
 > - **Poi B-50**: il contratto è pronto (`files/b50-contract.md`), con una domanda sul perimetro (sotto).
+
+### B-50 — uno stato illeggibile di un job o di un controllo è «non trovato», mai un 500 (2026-10-20, 09:06-09:57) — ✅ 🧊 FROZEN (checkpoint delle 09:57)
+
+> **Coordinatore** (09:06): rifinitura committata, `43face16e` (`fix(backup): a tab's own backup is never adopted`) e
+> `9a7d4a2ea` (il giornale), albero pulito, in dev con il prossimo treno. «Il perimetro di B-50: approvo la tua
+> proposta»: anche lo `state.json` che è una cartella e quello senza permessi di lettura sono «illeggibili», quindi
+> 404; gli altri `OSError`, transitori, restano un 500 che la scheda riprova. Via: prima i rossi, poi la cura, poi il
+> checkpoint; corse leggere solo con il carico a 1 minuto sotto 50.
+>
+> - **Da sapere** (coordinatore, 09:06):
+>   - E-20 di E riscrive la barriera di RNW-109 in `test_restore_non_iso_warning.py` (righe 847-849), il mio test di
+>     B-49: l'audit con il factory permissivo non alza più, e la stessa prova la fa un lettore sqlite3 semplice; le
+>     mie asserzioni restano identiche. Non aprire quel file finché E non ha finito (B-50 non lo tocca);
+>   - una domanda di E, per **dopo** B-50: il ripristino a mano (`#by-hand`) non passa dal controllo dell'archivio;
+>     serve un controllo di tutto il DB vivo? Rispondere con una proposta quando ci arrivo.
+> - ✅ **Base** (09:07): HEAD `9a7d4a2ea`, albero pulito, carico 18.
+> - ✅ **Contratto** (`files/b50-contract.md`, aggiornato 09:08):
+>   - backup: `from_json` alza `ValueError` per un documento che non è un oggetto; nuova
+>     `BackupJobUnreadableError`, sottoclasse di `BackupJobNotFoundError`, per uno stato illeggibile (`ValueError`,
+>     `TypeError`, `KeyError`, `IsADirectoryError`, `PermissionError`); gli altri `OSError` passano come oggi;
+>   - `get_job` registra un avviso, «A backup job's state cannot be read», con l'id e la classe dell'errore e mai il
+>     contenuto, poi rilancia: resta il 404 `backup_job_not_found`. I cicli di pulizia restano silenziosi, come oggi;
+>   - ripristino: `_read_state` dà `None` per un documento che non è un oggetto (gli altri casi illeggibili già lo
+>     sono, senza log).
+> - **Rossi** a due test-author in parallelo, su file diversi, sola scrittura: TA-B50-JOBS (`test_backup_jobs.py`,
+>   `test_backup_cli.py`) e TA-B50-RESTORE (`test_backup_leftovers.py`).
+> - **⚠️ Fuori pista — le date senza fuso orario** (09:10, sonda `files/b50-analysis/b50_probe_naive.py`): uno stato
+>   `done` con `finished_at` senza fuso orario fa alzare `TypeError` a `get_job`, a `remove_expired_jobs` (la
+>   sottrazione è fuori dal suo `try`) e a ogni partenza: è la stessa classe di B-50, e blocca ogni backup. Aggiunto
+>   al contratto (`from_json` rifiuta una data senza fuso orario come illeggibile) e ai rossi di TA-B50-JOBS. Un
+>   `created_at` senza fuso orario da solo non blocca nulla nella sonda.
+> - **Cura pronta, non applicata**: `files/b50-wip/apply_b50.py`, 6 operazioni in `jobs.py` e `restore_jobs.py`
+>   (`--check` OK su `9a7d4a2ea`).
+> - ✅ **Doc** (09:11): `security.md`, dopo «A read of a job…», un paragrafo: uno stato illeggibile non è un job, per
+>   la lettura e per la pulizia; il 404, l'avviso con l'id e la classe, mai il contenuto; gli altri errori del disco
+>   restano un 500 che la scheda riprova; un controllo del ripristino illeggibile è `restore_stage_not_found`.
+> - ✅ **Rossi del ripristino** (TA-B50-RESTORE, 09:08-09:30, solo `test_backup_leftovers.py`): la sezione (h), 6 test
+>   e 65 casi, 34 rossi e 31 guardie (le righe `mode-000` saltano da root). I rossi: `_checks`/`prune`, `read_check`,
+>   `remove_check` e `confirm_check` (`CheckNotFoundError`, niente log), la fine di un caricamento, l'avvio di un
+>   controllo, la pulizia all'avvio per i controlli e per i job (nessun errore con `part`). Le sue domande:
+>   - (1) uno stato di controllo illeggibile e vecchio non lo toglie nessuno (già vero oggi per un file vuoto o `{}`);
+>   - (2) nel ripristino ogni `OSError` è «nessuno stato», anche quelli transitori;
+>
+>   sono tutte e due fuori dal perimetro deciso, quindi le porto al coordinatore. (3) Il log solo in `get_job`:
+>   deciso.
+> - **⚠️ Fuori pista — un descrittore perso a ogni lettura** (domanda 4, misurata alle 09:33 con
+>   `files/b50-analysis/b50_probe_fd.py`): 50 letture di uno stato di controllo che è una cartella lasciano aperti 50
+>   descrittori in più (da 5 a 55), perché `os.fdopen` non chiude quello che rifiuta. Nel server ogni pulizia, fine di
+>   caricamento o avvio di un controllo ne perderebbe uno, fino a «too many open files». È dentro il perimetro di B-50
+>   (una cartella al posto dello stato): la cura lo chiude (patch aggiornata, `--check` OK), e TA-B50-RESTORE scrive
+>   il rosso. Lo stesso schema c'è in `outcome.py`, `staging.py` e `apply.py`, fuori dai 2 file: è un residuo, con una
+>   proposta (un aiuto unico che apre un file privato e chiude il descrittore se è rifiutato).
+> - ✅ **Il rosso del descrittore** (TA-B50-RESTORE, 09:36-09:41):
+>   `test_reading_a_check_state_that_is_a_folder_leaves_no_descriptor_open`, `[_checks]` e `[read_check]`, nella
+>   sezione (h): 20 letture di uno stato che è una cartella, poi nessun descrittore del processo aperto su quella
+>   cartella. Li cerca per dispositivo e inode (`descriptors_on` di `test_backup_archive.py`, che fissa lo stesso
+>   difetto per `_add_file`), dietro una barriera (un descrittore aperto dal test si vede, e sparisce chiuso) e li
+>   chiude nel `finally`, così un rosso non ne lascia ai test dopo.
+> - ✅ **Rossi dei job e della CLI** (TA-B50-JOBS, 09:08-09:43, `test_backup_jobs.py` e `test_backup_cli.py`): 13 forme
+>   (le quattro `json-*`, file vuoto, non JSON, `{}`, `created_at` numero o non data, non UTF-8, cartella, modo 000
+>   che salta da root, e `finished-at-without-time-zone`). Rossi: «non trovato» e lasciato com'è, l'avviso con id e
+>   classe (mai `exc_info`), le tre rotte (404 `backup_job_not_found`, scheda e pannello), l'avvio oltre uno stato
+>   illeggibile, `remove_expired_jobs` ed `end_interrupted_jobs` che vanno avanti, un lucchetto che nomina un job
+>   illeggibile (409 senza job). Guardie: stato assente (nessun avviso), un `EIO` che passa com'è (nessun «non
+>   trovato», nessun avviso). CLI: `create` oltre uno stato cartella o non oggetto. Le sue 5 domande avevano risposta
+>   nel contratto; aggiunta la forma del fuso anche fra le righe dell'avviso (`ValueError`).
+> - ✅ **Rossi della CLI lanciati** (09:45, `utils backup-cli`, carico 22): **2 rossi, 102 verdi**, per i motivi
+>   attesi: `state-is-a-folder` esce con 1 («Is a directory»), `state-not-an-object` con 1 e la traccia di
+>   `AttributeError`. Log: `files/logs/b50_red_utils_backup-cli.log`.
+> - ✅ **Rossi dei job e del ripristino lanciati** (09:47, carico 22): `services backup-jobs` **56 rossi**, 93 verdi;
+>   `services backup-leftovers` **36 rossi**, 75 verdi. I conti tornano con quelli dei test-author (13 + 13 + 6 + 8 +
+>   7 + 6 + 3; 34 più i 2 del descrittore), nessun errore di raccolta né di preparazione, e ogni rosso ha il motivo
+>   atteso: l'`AttributeError` delle quattro forme non oggetto, `KeyError`, `JSONDecodeError`, `UnicodeDecodeError`,
+>   `IsADirectoryError`, `PermissionError`, la sottrazione fra una data con fuso e una senza, i 20 descrittori aperti,
+>   la pulizia d'avvio che registra un errore. Log: `files/logs/b50_red_services_backup-{jobs,leftovers}.log`.
+> - ✅ **Cura** (09:48): `apply_b50.py`, 6 operazioni in 2 file (`jobs.py` +40/−10, `restore_jobs.py` +11/−1).
+> - ✅ **Verdi** (09:48-09:53, carico 22-38):
+>   - i tre rossi: `services backup-jobs` **149**, `services backup-leftovers` **111**, `utils backup-cli` **104**;
+>   - regressione, tutte pure: `services backup-secure` 77, `backup-staging` 202, `backup-apply` 255,
+>     `backup-archive` 155 (1 saltato, di prima: un nome non UTF-8, che APFS rifiuta), `backup-secure-rules` 24;
+>     `utils backup-cli-secure` 106, `backup-cli-restore` 109;
+>   - `ruff check` e `black --check` puliti sui 5 file Python; `lint --dead-code --scope backend`: nessun rilievo
+>     nei file toccati (l'uscita 1 viene da rilievi di prima, altrove);
+>   - `mkdocs build` stretta, `check-links`, `utils gate-docs-links` 63; `git diff --check` pulito.
+>   - **Non lanciate**: le suite `api` ed `e2e` del backup, che avviano il server della corsia (nessuno slot
+>     chiesto). Le rotte sono coperte dai test dei servizi attraverso le viste (`job_views`): 404
+>     `backup_job_not_found`, per la scheda e per il pannello.
+> - ✅ **Residui** (sonda e lettura, 09:54-09:57), nel backlog:
+>   - **B-53**: lo stesso descrittore perso in `outcome._read_record` e in `staging.read_report`, misurato
+>     (`files/b50-analysis/b53_probe_fd.py`: 20 letture di una cartella, 20 descrittori aperti, per ciascuno). Il
+>     secondo alza anche `IsADirectoryError`, che `_stage_view` non prende: a lettura, un 500 sulla lettura del
+>     controllo. `apply.py:329` è al riparo: controlla `S_ISREG` con `lstat` prima di aprire;
+>   - **B-54** (domanda 1 di TA-B50-RESTORE): uno stato di controllo illeggibile non lo toglie nessuno
+>     (`_prune_unrecorded` pulisce caricamenti e copie, mai `checks/`);
+>   - **B-55** (domanda 2), da decidere: nel ripristino un `OSError` transitorio è «nessun controllo», e la scheda
+>     dimentica il controllo che segue (`restoreFlow.svelte.ts:593-597`) invece di riprovare come per un 500.
+> - ✅ **Backlog**: B-50 chiusa; B-53, B-54 e B-55 nuove. Solo la sezione B: dev (`701054da9`) ha cambiato il backlog
+>   dopo la mia base, ma nessuna sua modifica cade nella sezione B.
+> - ✅ **Checkpoint** (09:57), 🧊 FROZEN. Commit proposti:
+>   - `fix(backup): unreadable job state is not found (B-50)`: `jobs.py`, `restore_jobs.py`, i 3 file di test,
+>     `security.md`;
+>   - `docs(journal): B-50 unreadable states`: questo piano e il backlog.
+> - **Poi**: la proposta per la domanda di E sul ripristino a mano (`#by-hand`).
