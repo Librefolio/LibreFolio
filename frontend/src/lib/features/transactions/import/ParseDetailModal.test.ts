@@ -30,6 +30,9 @@
  * Phase F2 (U3) adds, at the end of the file, the pairing section of a report set's detail: the
  * outcome chips, the reasons table and the preview / download of the combined file.
  *
+ * Lot B-51 adds, last, the notices section: the plugin's warnings and notes apart, each kind in a
+ * subsection of its own (plan 04, `plan-phase01ImportTransactions.prompt.md`, section «B-51»).
+ *
  * Plan: `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md`, F.0 (F1 · D2).
  */
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
@@ -505,5 +508,203 @@ describe('ParseDetailModal — F2 · U3: the pairing of a report set', () => {
 
         const download = the('parse-detail-download-combined', {}, pairing);
         expect(download).toHaveAttribute('href', `/api/v1/brokers/import/files/${encodeURIComponent(SET_FILE_ID)}/download`);
+    });
+});
+
+// ===========================================================================
+// B-51 — the notices of a parse: the warnings and the notes apart
+// ===========================================================================
+//
+// Pinned in plan 04 (section «B-51»). A BRIM plugin's notices (`response.warnings`) are of two kinds: `info` is a blue
+// note — the plugin explains a choice it made on purpose — and any other severity, none included, an amber warning (the
+// rule of BrimNoticeList; `noticeSeverity` in importNotices.ts). The modal had one «Warnings» section listing them all,
+// so a note read as a warning. Now:
+//   parse-detail-notices (data-warnings, data-notes) — the section, with the two counts;
+//   parse-detail-notice-section (data-severity warning | info, data-count) — one per kind present, the warnings first,
+//     never an empty one; inside, that kind's notices as BrimNoticeList items (`brim-notice`, the same data-severity),
+//     in the order raised, and no other;
+//   parse-detail-notices-empty — no notice at all: this and no subsection. Read here as living inside the section,
+//     which then counts 0 and 0 (as every other section of the modal keeps its title over its «none» line);
+//   the summary of several files splits the notices of all of them the same way, and sums the counts.
+// The codes are invented (`probe_*`): no catalogue names them, so each item shows the plugin's own message, which is
+// how a test finds it.
+
+/** Notes (`info`): the plugin explains a choice it made on purpose. */
+const NOTE_TRANSFERS = {severity: 'info', code: 'probe_note_transfers', message: 'Probe note: the transfers are booked as adjustments, on purpose', evidence: [], context: null} as const;
+const NOTE_RATE = {severity: 'info', code: 'probe_note_rate', message: 'Probe note: the exchange rate is the one the bank applied', evidence: [], context: null} as const;
+const NOTE_BETA = {severity: 'info', code: 'probe_note_beta', message: 'Probe note: this reading is in beta, compare the totals', evidence: [], context: null} as const;
+/** Warnings: something needs the user's attention. */
+const WARNING_CASH = {severity: 'warning', code: 'probe_warning_cash', message: 'Probe warning: the cash of two rows does not add up', evidence: [], context: null} as const;
+const WARNING_LEFT_OUT = {severity: 'warning', code: 'probe_warning_left_out', message: 'Probe warning: three rows were left out', evidence: [], context: null} as const;
+/** A notice that states no severity at all: a warning, by the rule of BrimNoticeList. */
+const WARNING_UNSTATED = {code: 'probe_warning_unstated', message: 'Probe warning: a notice that states no severity', evidence: [], context: null} as const;
+
+/** One plugin's notices in the order it raised them: a note first, the kinds interleaved — 2 warnings, 3 notes. */
+const NOTICES_RAISED = [NOTE_TRANSFERS, WARNING_CASH, NOTE_RATE, WARNING_LEFT_OUT, NOTE_BETA] as const;
+
+/** A parsed file whose plugin raised these notices (`response.warnings`), and no field todo. */
+function parsedFileWithNotices(fileId: string, fileName: string, notices: readonly unknown[]) {
+    const file = parsedFile(fileId, fileName, []);
+    return {...file, response: {...file.response, warnings: notices}};
+}
+
+/** Mount the detail of one file with these notices; returns the modal once it is there. */
+async function mountNotices(notices: readonly unknown[]): Promise<HTMLElement> {
+    render(modal(), {open: true, parseResult: parsedFileWithNotices('probe-file-notices', 'probe-notices.csv', notices), onClose: vi.fn()});
+    return screen.findByTestId('parse-detail-modal');
+}
+
+/** The messages of the `brim-notice` items in `scope`, in the order drawn. */
+function noticeMessages(scope: ParentNode): string[] {
+    return all('brim-notice', scope).map((item) => text(the('brim-notice-message', {}, item)));
+}
+
+/** The notice subsections in the order drawn, as `[data-severity, data-count]`. */
+function noticeSections(scope: ParentNode = document): [string | undefined, string | undefined][] {
+    return all('parse-detail-notice-section', scope).map((section) => [section.dataset.severity, section.dataset.count]);
+}
+
+describe('ParseDetailModal — B-51: the warnings and the notes apart', () => {
+    it('every notice is one brim-notice item of its kind, showing its own message (guard: true before B-51 too)', async () => {
+        const root = await mountNotices(NOTICES_RAISED);
+
+        const items = all('brim-notice', root);
+        expect(items, 'one item per notice').toHaveLength(NOTICES_RAISED.length);
+        for (const notice of NOTICES_RAISED) {
+            const showing = items.filter((item) => text(item).includes(notice.message));
+            expect(showing, `${notice.code}: exactly one item shows its message`).toHaveLength(1);
+            expect(showing[0], `${notice.code}: drawn as its kind`).toHaveAttribute('data-severity', notice.severity);
+        }
+    });
+
+    it('the section carries the two counts: 2 warnings, 3 notes', async () => {
+        await mountNotices(NOTICES_RAISED);
+
+        const section = the('parse-detail-notices');
+        expect(section).toHaveAttribute('data-warnings', '2');
+        expect(section).toHaveAttribute('data-notes', '3');
+    });
+
+    it('one subsection per kind present, the warnings first although a note was raised first, each with its count', async () => {
+        await mountNotices(NOTICES_RAISED);
+
+        expect(noticeSections(the('parse-detail-notices'))).toEqual([
+            ['warning', '2'],
+            ['info', '3'],
+        ]);
+    });
+
+    it("each subsection lists its own kind's notices, as items of that kind, in the order raised — and every item sits in one", async () => {
+        await mountNotices(NOTICES_RAISED);
+
+        const warnings = the('parse-detail-notice-section', {severity: 'warning'});
+        const notes = the('parse-detail-notice-section', {severity: 'info'});
+        expect(noticeMessages(warnings), 'the warnings subsection').toEqual([WARNING_CASH.message, WARNING_LEFT_OUT.message]);
+        expect(noticeMessages(notes), 'the notes subsection').toEqual([NOTE_TRANSFERS.message, NOTE_RATE.message, NOTE_BETA.message]);
+        for (const item of all('brim-notice', warnings)) expect(item, 'an item of the warnings subsection').toHaveAttribute('data-severity', 'warning');
+        for (const item of all('brim-notice', notes)) expect(item, 'an item of the notes subsection').toHaveAttribute('data-severity', 'info');
+        // No notice outside the subsections: the single list of all notices is gone.
+        for (const item of all('brim-notice')) {
+            expect(
+                [warnings, notes].filter((section) => section.contains(item)),
+                `"${text(item)}" sits in exactly one subsection`,
+            ).toHaveLength(1);
+        }
+    });
+
+    it('a note is never under the warnings: one note alone counts 0 warnings and 1 note, in a notes subsection', async () => {
+        await mountNotices([NOTE_RATE]);
+
+        const section = the('parse-detail-notices');
+        expect(section).toHaveAttribute('data-warnings', '0');
+        expect(section).toHaveAttribute('data-notes', '1');
+        expect(noticeSections(section)).toEqual([['info', '1']]);
+        expect(noticeMessages(the('parse-detail-notice-section', {severity: 'info'}))).toEqual([NOTE_RATE.message]);
+    });
+
+    it('notes alone: one subsection, the notes — no empty warnings subsection', async () => {
+        await mountNotices([NOTE_TRANSFERS, NOTE_RATE, NOTE_BETA]);
+
+        expect(noticeSections()).toEqual([['info', '3']]);
+        expect(all('parse-detail-notice-section').filter((section) => section.dataset.severity === 'warning')).toHaveLength(0);
+    });
+
+    it('warnings alone: one subsection, the warnings — no empty notes subsection', async () => {
+        await mountNotices([WARNING_CASH, WARNING_LEFT_OUT]);
+
+        const section = the('parse-detail-notices');
+        expect(section).toHaveAttribute('data-warnings', '2');
+        expect(section).toHaveAttribute('data-notes', '0');
+        expect(noticeSections(section)).toEqual([['warning', '2']]);
+        expect(all('parse-detail-notice-section').filter((subsection) => subsection.dataset.severity === 'info')).toHaveLength(0);
+    });
+
+    it('a notice that states no severity is a warning here too, as BrimNoticeList draws it', async () => {
+        await mountNotices([WARNING_UNSTATED, NOTE_RATE]);
+
+        const section = the('parse-detail-notices');
+        expect(section).toHaveAttribute('data-warnings', '1');
+        expect(section).toHaveAttribute('data-notes', '1');
+        expect(noticeSections(section)).toEqual([
+            ['warning', '1'],
+            ['info', '1'],
+        ]);
+        expect(noticeMessages(the('parse-detail-notice-section', {severity: 'warning'}))).toEqual([WARNING_UNSTATED.message]);
+    });
+
+    it('no notice at all: the empty marker, and no subsection, no item', async () => {
+        await mountNotices([]);
+
+        the('parse-detail-notices-empty');
+        expect(all('parse-detail-notice-section')).toHaveLength(0);
+        expect(all('brim-notice')).toHaveLength(0);
+    });
+
+    it('no notice at all: the section is still there, counting 0 and 0, the empty marker inside it', async () => {
+        await mountNotices([]);
+
+        const section = the('parse-detail-notices');
+        expect(section).toHaveAttribute('data-warnings', '0');
+        expect(section).toHaveAttribute('data-notes', '0');
+        expect(section.contains(the('parse-detail-notices-empty')), 'the empty marker is inside the section').toBe(true);
+    });
+
+    describe('the summary of several files', () => {
+        /** Two files: a note and a warning in the first, a warning and two notes in the second. */
+        async function mountAggregate(): Promise<HTMLElement> {
+            render(modal(), {
+                open: true,
+                parseResult: null,
+                allResults: [parsedFileWithNotices('probe-file-1', 'probe-notices-1.csv', [NOTE_TRANSFERS, WARNING_CASH]), parsedFileWithNotices('probe-file-2', 'probe-notices-2.csv', [WARNING_LEFT_OUT, NOTE_RATE, NOTE_BETA])],
+                onClose: vi.fn(),
+            });
+            return screen.findByTestId('parse-detail-modal');
+        }
+
+        it('lists every notice of every file, one item each, of its kind (guard: true before B-51 too)', async () => {
+            const root = await mountAggregate();
+
+            const items = all('brim-notice', root);
+            expect(items, 'one item per notice, both files').toHaveLength(NOTICES_RAISED.length);
+            for (const notice of NOTICES_RAISED) {
+                const showing = items.filter((item) => text(item).includes(notice.message));
+                expect(showing, `${notice.code}: exactly one item shows its message`).toHaveLength(1);
+                expect(showing[0], `${notice.code}: drawn as its kind`).toHaveAttribute('data-severity', notice.severity);
+            }
+        });
+
+        it('splits the notices of both files the same way, and sums the counts', async () => {
+            await mountAggregate();
+
+            const section = the('parse-detail-notices');
+            expect(section).toHaveAttribute('data-warnings', '2');
+            expect(section).toHaveAttribute('data-notes', '3');
+            expect(noticeSections(section)).toEqual([
+                ['warning', '2'],
+                ['info', '3'],
+            ]);
+            expect(noticeMessages(the('parse-detail-notice-section', {severity: 'warning'})), 'the warnings, file by file').toEqual([WARNING_CASH.message, WARNING_LEFT_OUT.message]);
+            expect(noticeMessages(the('parse-detail-notice-section', {severity: 'info'})), 'the notes, file by file').toEqual([NOTE_TRANSFERS.message, NOTE_RATE.message, NOTE_BETA.message]);
+        });
     });
 });

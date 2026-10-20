@@ -71,7 +71,7 @@
         type IdentifiedBulkOp,
     } from '$lib/features/transactions/bulk/bulkDisplay';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
-    import {cashAmountsCancel, resolvePromoteAllFields, TX_DESCRIPTION_MAX_LENGTH} from '$lib/features/transactions/bulk/promoteHelpers';
+    import {cashAmountsCancel, promotePairOrder, resolvePromoteAllFields, TX_DESCRIPTION_MAX_LENGTH} from '$lib/features/transactions/bulk/promoteHelpers';
     import {assetQuantitiesCancel, importableSuggestions as importableFromResults, mixedPromotePairs, newRowSuggestId} from '$lib/features/transactions/bulk/promoteSuggest';
     import {resolveIssueMessage, type ResolverContext} from '$lib/features/transactions/resolveValidationMessage';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
@@ -3013,8 +3013,7 @@
             const opB = ops.find((o) => o.tempId === entry.tempIdB);
             if (!opA?.fields.cash || !opB?.fields.cash) continue;
 
-            const aAmt = Number(opA.fields.cash.amount);
-            const [fromOp, toOp] = aAmt < 0 ? [opA, opB] : [opB, opA];
+            const {from: fromOp, to: toOp} = promotePairOrder(opA, opB, getTypeRule);
             if (!fromOp.fields.cash || !toOp.fields.cash) continue;
             const base = fromOp.fields.cash.code;
             const quote = toOp.fields.cash.code;
@@ -3065,6 +3064,12 @@
 
     /** Trigger promote from a suggestion line (auto-select both ops + invoke handler). */
     function triggerPromoteFromSuggestion(sug: (typeof allSuggestions)[number]) {
+        // The banner's own order (`promotePairOrder`, read as the banner and «Merge all» read it, before `suggestionOps`
+        // may add a saved candidate): the dialog lists first the row the banner lists first, so its first text is the
+        // one «Merge all → All left» keeps (J-66). Only what the dialog shows follows it; the promote keeps opA and opB.
+        const rawA = ops.find((o) => o.tempId === sug.tempIdA);
+        const rawB = ops.find((o) => o.tempId === sug.tempIdB);
+        const swapped = !!(rawA && rawB) && promotePairOrder(rawA, rawB, getTypeRule).swapped;
         const pair = suggestionOps(sug);
         if (!pair) return;
         const {opA, opB} = pair;
@@ -3078,11 +3083,11 @@
             tagsB = opB.fields.tags;
         const diverges = descA !== descB || JSON.stringify(tagsA) !== JSON.stringify(tagsB);
         if (diverges) {
-            const labelA = sug.isDB ? `#${(opA as any).txId ?? ''} ${opA.fields.type}` : opA.fields.type;
-            const labelB = sug.isDB ? `#${(opB as any).txId ?? ''} ${opB.fields.type}` : opB.fields.type;
+            const [first, second] = swapped ? [opB, opA] : [opA, opB];
+            const labelOf = (op: PendingOp) => (sug.isDB ? `#${(op as any).txId ?? ''} ${op.fields.type}` : op.fields.type);
             promoteMergeData = {
-                txA: {label: labelA, description: descA, tags: tagsA, date: opA.fields.date},
-                txB: {label: labelB, description: descB, tags: tagsB, date: opB.fields.date},
+                txA: {label: labelOf(first), description: first.fields.description, tags: first.fields.tags, date: first.fields.date},
+                txB: {label: labelOf(second), description: second.fields.description, tags: second.fields.tags, date: second.fields.date},
                 targetTypeLabel: match.targetLabel,
                 opA,
                 opB,
@@ -3112,8 +3117,8 @@
             if (!rawA || isPaired(rawA)) continue;
             const rawB = ops.find((o) => o.tempId === sug.tempIdB);
             if (rawB && isPaired(rawB)) continue;
-            // The banner's own order: the negative-cash row first when both rows carry cash.
-            const swapped = !!(rawB && rawA.fields.cash && rawB.fields.cash && Number(rawA.fields.cash.amount) > 0 && Number(rawB.fields.cash.amount) < 0);
+            // The banner's own order (`promotePairOrder`): the paying row first, the one «left» names.
+            const swapped = !!rawB && promotePairOrder(rawA, rawB, getTypeRule).swapped;
             const pair = suggestionOps(sug);
             if (!pair || isPaired(pair.opB)) continue;
             const {opA, opB} = pair;

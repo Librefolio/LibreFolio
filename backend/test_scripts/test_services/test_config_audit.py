@@ -92,6 +92,16 @@ and an English summary for the log. ``log_configuration_audit()`` runs them at s
     managed start stops with the ``ManagedTestModeError`` of (h), its message word for word, nothing logged first;
     within them the check is ok, ``testLane``, and a managed start goes on with nothing logged about test mode.
     ``FAKE_LANE_ID``, 30 characters, is within the bounds, so no case of (h) changes its outcome.
+(j) Every server check has a guide (N69d, the «Guide» button of each check in the «Security» tab, workstream A). The map
+    from each check to the page and anchor of its guide in the admin docs is data,
+    ``frontend/src/lib/features/instance/checkGuides.json``, which ``checkGuides.ts`` wraps for the frontend: a
+    ``server`` half, one key per check of ``GET /api/v1/security/checks``, and a ``browser`` half, the findings the
+    browser adds. Under the ``configuration`` fixture, the ids of ``run_config_checks()`` then
+    ``plugin_secrets_check.CHECK_ID``, the list that endpoint returns, are the keys of ``server``, in order. The file is
+    read with ``json.load`` from the repository root, located from this file, and never written: no TS parsing in
+    Python. A failure names the ids without a guide and the guide entries without a check, since a new check needs a
+    guide there; while the file does not exist, the test fails naming the lot and listing the keys it must hold. The
+    values and the ``browser`` half are the frontend's own test, ``checkGuides.test.ts``.
 
 Pure: the data directory is in ``tmp_path``, every variable the checks read is set or removed through ``monkeypatch``
 (environment values win over a ``.env``), the forwarding notes of (f) are emptied the same way, and the module's logger
@@ -109,6 +119,7 @@ which keeps ``min_length`` and ``max_length`` as ``annotated_types.MinLen`` and 
 from __future__ import annotations
 
 import errno
+import json
 import os
 import traceback
 from collections.abc import Callable
@@ -126,7 +137,7 @@ from backend.app.config import platform as platform_config
 from backend.app.config.platform import instance_blocked
 from backend.app.services.accounts.checks import ACCOUNTS_CONFIG_CHECKS, check_login_limit
 from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS, check_email_links, check_smtp_configuration, check_smtp_encryption
-from backend.app.services.platform import config_audit
+from backend.app.services.platform import config_audit, plugin_secrets_check
 from backend.app.services.platform.client_address import PUBLIC_FORWARDING_SUMMARY, UNTRUSTED_PROXY_SUMMARY, _untrusted_forwarding
 from backend.app.services.platform.config_audit import (
     CONFIG_CHECKS,
@@ -1609,3 +1620,38 @@ def test_a_managed_start_goes_on_with_a_lane_id_within_the_bounds(configuration,
     assert "platform.jwt_secret" in checks, f"Barrier: the audit's record of the unset JWT secret must reach the recorder, or the silence about test mode proves nothing: {logged}"
     assert "platform.test_mode" not in checks, f"in a test lane, nothing about test mode is logged: {logged}"
     print_success(f"LIBREFOLIO_TEST_LANE_ID of {length} characters, {stripped} once stripped: the start went on, nothing logged about test mode")
+
+
+# =============================================================================
+# (j) Every server check has a guide (N69d)
+# =============================================================================
+
+
+#: (j) The repository root, located from this file: ``backend/test_scripts/test_services/`` is three folders below it.
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+#: (j) The map from each check of the «Security» tab to its guide, relative to ``REPOSITORY_ROOT``: frontend data, read
+#: here with ``json.load``, so there is no TS parsing in Python.
+CHECK_GUIDES_JSON = "frontend/src/lib/features/instance/checkGuides.json"
+
+
+def test_every_server_check_has_a_guide(configuration):
+    """(j) N69d: the ids of ``GET /security/checks``, ``run_config_checks()`` then the stored plugin secrets' check, are
+    the keys of the map's ``server`` half, in order: an id without a guide, or a guide entry without a check, is named.
+    Barrier: the repository root located from this file holds the map's folder, so a missing map is the map's absence,
+    never a wrong path."""
+    print_section("N69d: every server check has a guide")
+    ids = [result.check_id for result in run_config_checks()] + [plugin_secrets_check.CHECK_ID]
+    path = REPOSITORY_ROOT / CHECK_GUIDES_JSON
+    folder = Path(CHECK_GUIDES_JSON).parent.as_posix()
+    assert path.parent.is_dir(), f"Precondition: the repository root located from this file, {REPOSITORY_ROOT}, must hold the map's folder, {folder}: else a missing map would only mean a wrong root"
+    assert path.is_file(), f"N69d (the guide of each check): {CHECK_GUIDES_JSON} does not exist; it maps each check of the Security tab to its guide in the admin docs (the Guide button), and its server half must hold, in order, {ids}"
+
+    with path.open(encoding="utf-8") as file:
+        guides = json.load(file)
+
+    assert isinstance(guides, dict) and isinstance(guides.get("server"), dict), f"{CHECK_GUIDES_JSON} must be an object whose server half maps each check id to its guide: {guides!r:.300}"
+    keys = list(guides["server"])
+    without_a_guide = [check_id for check_id in ids if check_id not in keys]
+    without_a_check = [key for key in keys if key not in ids]
+    assert keys == ids, f"a new check needs a guide in {CHECK_GUIDES_JSON} (the Security tab's Guide button, N69d): ids without a guide {without_a_guide}; guide entries without a check {without_a_check}; in order, the checks are {ids} and the guides {keys}"
+    print_success(f"{len(ids)} server checks, each with its guide, in order: {', '.join(ids)}")

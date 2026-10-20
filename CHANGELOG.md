@@ -89,6 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Settings › Administration › Users shows each account's avatar**, or the first letter of its name, next to the name.
 - **Errors you can trace.** Every answer of the server carries an `X-Request-Id`, and every log line of that request carries the same `request_id`. A server error (5xx) answers with that id and the type of its cause, never its message, and its cause reaches the log once, as one JSON line with its traceback. Where the app shows a generic error for a server failure, it adds that code, for example «(code: 3f9a…)», so an administrator can find it in the log.
 - **Failed API calls in the browser console.** The web app writes one line per unexpected API failure: status, path, request id, never the data of the request. With `LOG_LEVEL` at `DEBUG` or `TRACE` it writes the 4xx answers too (`client_log_level` in `GET /api/v1/system/instance`).
+- **Units per single price, proposed by the provider.** Picking a **Search Online** result sets it like the name: Yahoo Finance's 100 for a London line quoted in pence (`GBp`), otherwise 100 for a bond and 1 for any other type, with a note under the field. **Ask Provider** proposes it as a ticked row when it differs. Nothing changes until you save.
 
 ### 🔄 Changed
 
@@ -183,6 +184,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Measure tool: choosing the same day twice in a measure's dates left them showing a day the measure never took; a second click on the start point is ignored. In measure mode the chart shows its crosshair, which never appeared, and the not-allowed cursor over the start point.
 - **Yahoo Finance prices, dividends and splits of exchanges east of UTC (e.g. Milan, London in summer, Tokyo) were stored one day early.** New ones are dated on the exchange's own day; rows saved by earlier versions stay as they are.
+- **Asset search with Yahoo Finance no longer hides a refusal for too many requests.** While LibreFolio read the currency of each result, a refusal left that result without a currency for a day, and Yahoo was never paused: now the search says Yahoo refused, and Yahoo is paused as after any other refusal. Another error while reading a currency no longer hides it for a day either: the next search asks again.
 - The asset page now names the data provider (for example "Yahoo Finance") instead of its internal code when the provider list arrives after the asset.
 - **The bulk editor names a broker you can only view, and flags the row it refuses.** Copying a transfer whose receiving broker is shared with you as a viewer showed that side as "—" and reported the refusal on the sending row as "Broker #N". The grid and the message now name the broker, and the refusal sits on the row that caused it; refused edits, deletions and splits are flagged on their own rows too.
 - **Deleting a broker also removes its leftover import folders and lock file**, which used to pile up in the broker reports storage.
@@ -362,6 +364,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Each logged exception is written once, at level `ERROR`, inside its JSON line. Before, it came a second time in plain text, at level `EXCEPTION`; an unexpected error is now answered in JSON.
 - **The money-weighted return (MWRR) after near-total losses.** On portfolios that lost almost everything over many years, the card and the chart line showed "—" where a rate exists; they now show it.
 - **Import: the check made when the rows arrive is no longer discarded.** On imports of more than 50 rows, refused rows appeared only after ⚡ Validate now.
+- **Bulk editor: the merge banner shows an exchange the right way round.** A withdrawal paired with a deposit in another currency is listed first again, and the implied rate reads from the currency paid to the one received (1000 EUR paid for 1100 USD: EUR → USD @ 1.1000, no longer USD → EUR @ 0.9091), with the market rate it is compared with taken for that same pair. The **Merge** dialog lists the two rows in the banner's order, and **Merge all → All left** keeps the notes of the row listed first, the paying one.
+- **Lot detail: a sale names the broker the units left.** In a lot's history, a sale (or a transfer out of the brokers you are viewing) of units that had been moved to another broker now names the broker they left, not the one where the lot was bought.
+- Import, step 3: an importer's blue notes are no longer counted as warnings. The results table and the summary show ⚠️ warnings and ℹ️ notes apart, the file detail lists them under two headings, and the confirmation counts only the warnings when it speaks of warnings.
+- **Lots analysis: performance history with short positions.** An open short was counted as if it were owned and its sale was missing, so the history showed a loss on a profitable short; it now counts the short as a debt and its sale as money out, and measures returns on the gross exposure.
 
 #### 🔒 Security
 
@@ -419,6 +425,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The admin guide says what to do when LibreFolio has replaced a lost instance key: put your copy of `secrets/instance.key` back before anyone enters a plugin secret again.
 - Backups inside Docker are documented: `dev.py backup` works in the image, the archives go to `backups/` and, like `secrets/`, only LibreFolio's user can read them.
 - **A split with a ratio of 0 or below is refused when you save it.** Such a split was saved, and as soon as a transaction was linked to it the Dashboard failed to load. The events editor now names the split at fault; a provider's split with such a ratio is skipped.
+- Admin guide: Tailscale Serve and Funnel in front of the Docker image — find the network's gateway, list it in `FORWARDED_ALLOW_IPS`, check the visitor's address in the log.
 
 ### ⚠️ Breaking changes
 

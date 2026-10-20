@@ -8340,6 +8340,81 @@ Cartella di prova in `/tmp` cancellata.
 - Riuso: con `rate_days` la stessa funzione serve a Q2 e Q3 (la freschezza del cambio, `fx_rate_date` e
   `fx_days_back`).
 
+### P3, la funzione «a gradini» — rossi, cura, verdi ✅ 20/10 (via 09:35, base `10335d428`)
+
+**Via e contratto**: MF ha dato l'OK alla firma; il coordinatore ha dato il via dopo il lotto di `wac.py`. Le note di MF
+sono contratto:
+- (n1) la stessa aritmetica di `convert_bulk`, meglio una funzione sola per entrambi;
+- (n2) le stesse righe: il filtro di X-R38 nell'ancora e nella finestra, e gli stessi blocchi di `FX_PAIRS_PER_QUERY`;
+- (n3) `rate_days` è la data della riga usata; il primo gradino di una finestra cade al suo primo giorno, con la riga
+  d'ancora; prima della prima riga usabile, None;
+- (n4) due righe consecutive con lo stesso valore restano due gradini;
+- (n5) la coppia di una sola valuta dà `ValueError`, scritto nella doc;
+- (n6) l'oracolo: `at(day)` uguale a `convert_bulk` bit per bit (`as_tuple()`) su ogni giorno di ogni finestra, e
+  `rate_day_at(day)` uguale alla sua data.
+- MF tiene dal lato del consumatore il dominio dei giorni chiesti: un giorno non chiesto dà None.
+
+**Rossi** ✅ (test-author `bf576265`): `backend/test_scripts/test_services/test_fx_rate_steps.py`, **63 casi**, azione
+`services fx-rate-steps` (`isolation="pure"`).
+- Il file: un SQLite privato in memoria per test, le righe piantate con SQL grezzo e rilette come barriera, coppie
+  esca intorno a ogni calendario.
+- Un solo oracolo: `unit_rate_steps` una volta, `convert_bulk` su ogni giorno di ogni finestra, `as_tuple()` e data
+  del tasso, col primo giorno che differisce.
+- I casi:
+  - 36 calendari in entrambe le direzioni: buchi, ancora lontana, nessuna riga prima, nessuna riga, finestre di un
+    giorno, valori uguali consecutivi, finestre disgiunte (anche in ordine inverso), sovrapposte, annidate, che
+    condividono un giorno, adiacenti, ripetute;
+  - 12 tassi inutilizzabili (0, 1E-11, −1,5, inf, 1E+14, 1E+19) come ancora e dentro la finestra; 4 ai limiti usabili
+    (1E-10, 99 999 999 999 999);
+  - le due direzioni di una coppia in una richiesta, più una coppia senza righe;
+  - `at` fuori dalle finestre;
+  - 501 e 1 035 coppie, coi blocchi veri da 500 e il conto delle istruzioni;
+  - i `ValueError`, anche accanto a coppie o finestre valide;
+  - la richiesta vuota.
+- **Validato prima della consegna** contro una funzione di riferimento costruita solo dalle risposte di `convert_bulk`
+  (63/63). Sei varianti sbagliate di proposito cadono esattamente sui casi giusti: inverso a una cifra di meno,
+  valore normalizzato (che un oracolo col solo `==` lascerebbe passare), righe fra le finestre come gradini, gradini
+  uguali fusi, primo gradino alla data dell'ancora, una sola istruzione per tutte le coppie.
+- Registrato in `_backend_services.py`, solo in aggiunta (+18 righe).
+- Rieseguito da me: **0 raccolti, 1 errore**, cioè `ImportError` di `UnitRateSteps`. È il rosso atteso per una
+  funzione nuova.
+- Le letture del contratto che il test-author ha fissato, e che coincidono col disegno:
+  - il primo giorno di una finestra annidata o sovrapposta è un gradino anche senza una riga;
+  - `at` fuori dalle finestre è l'ultimo gradino prima, non la risposta di `convert_bulk`;
+  - esattamente ⌈n/500⌉ istruzioni;
+  - il `ValueError` rifiuta tutta la chiamata.
+
+**Cura** ✅ (`files/checks/p3steps_code.py`, preparata durante i rossi, a secco pulita con black e ruff), solo in
+`backend/app/services/fx/conversion.py` (+147, −42):
+- `_converted(amount, rate, direct)`: l'aritmetica di `convert_bulk`, ora usata anche dai gradini (n1);
+- `_usable_rates(session, spans)`: la lettura di `convert_bulk` (ancora, finestra, filtro di X-R38, blocchi, colonne
+  semplici) spostata in un aiuto privato, che `convert_bulk` chiama con i suoi `min_date` e `max_date` (n2);
+- `UnitRateSteps` (frozen, slots): `days`, `values`, `rate_days`, `at`, `rate_day_at`;
+- `unit_rate_steps(session, requests)`: le finestre di ogni coppia, le due direzioni di una coppia salvata lette
+  insieme, poi un dizionario «giorno del gradino → riga». La funzione pura `_step_rows`, separata perché ruff (C901)
+  misurava 11 su 10.
+- I `ValueError` sono nella docstring e vengono prima di ogni lettura.
+
+**Verdi**:
+- `services fx-rate-steps` **63/63** al primo giro;
+- le regressioni di `convert_bulk`, pure: `fx-conversion` 44/44, `fx-pairs-per-query` 6/6, `bulk-reads-chunked`
+  65/65, `lots-analysis-pure` 198/198, `financial-math` 1 836/1 836;
+- nella corsia: `roi-fifo-utils` 1 509/1 509 (motore, cassa nativa, lotti), `portfolio-engine` 41/41,
+  `period-changes` 60/60;
+- black e ruff puliti sui 3 file; `check-orphans`: 491 test backend raggiungibili, uno in più; porta 6183 libera.
+
+**Doc** ✅ (docs-writer `67dea090`): in `developer/backend/fx/architecture.md`, una frase in `#convert-bulk-window` (la
+lettura è `_usable_rates()`, in comune con i gradini) e la sezione nuova `#unit-rate-steps`, dopo di essa.
+- Contenuto: perché esiste e che oggi nessuno la chiama; la richiesta e la risposta; i due tipi di gradino; un esempio
+  (righe l'1, il 5, il 9, l'11 e il 15 marzo, finestre 3–7 e 13–17: gradini il 3 con la riga dell'1, il 5, il 13 con
+  la riga dell'11, il 15), che ho ricontrollato a mano;
+- la garanzia e i due aiuti; il fuori-finestra, sullo stesso esempio; il `ValueError` (n5); i test.
+- Prove: `mkdocs build` stretto, uscita 0; `check-links`, 97 link validi; nessun venv nuovo. Le pagine per sviluppatori
+  non hanno traduzioni.
+
+**CHANGELOG**: nessuna voce. Oggi nessuno chiama `unit_rate_steps`: il motore e la cassa nativa ci passano nel lotto di
+MF, P3 vero e proprio.
+
 ### N64 — aggiornamento dell'analisi (20/10, sola lettura, prima del via)
 
 - **Il punto di partenza**: l'analisi del 19/10 («N64 — la cache della pagina dell'asset», più in alto). Il developer
@@ -8369,3 +8444,69 @@ Cartella di prova in `/tmp` cancellata.
     richiesta), una sulla pagina dell'asset (`front-asset asset-detail`) e una su quella della coppia
     (`front-fx fx-detail`), in uno slot.
 - **Peso**: medio, solo frontend, nessun cambio di API.
+
+### Z-39 — Yahoo: il rifiuto letto con la valuta non si inghiotte più ✅ 20/10 (via 10:39, base `b8c2f614b`)
+
+**La nota di Z**, girata dal coordinatore: `_fetch_currency` di Yahoo inghiotte anche un rifiuto per troppe richieste
+(429) e tiene None per 24 ore. Toccava la ricerca, e sul ramo di Z tocca anche il suggerimento della base di quotazione
+(Z-32 d, `3cf04d0aa`, non ancora in dev).
+
+**Analisi breve** (mandata dopo il checkpoint di P3; appunti in `files/z39-notes.md`):
+- `_fetch_currency` (`yahoo_finance/plugin.py:389`) legge `fast_info` senza `_yf_with_retry` e prende ogni eccezione:
+  None in cache per 24 ore.
+- `search()` legge già `yf.Search` con `_yf_with_retry` e rilancia `AssetRateLimitedError`: inghiotte solo la valuta di
+  ogni risultato.
+- È contro la regola della guida, «never swallow a refusal». Di proposito, la guida la deroga solo per due
+  arricchimenti di Borsa Italiana.
+- Un'aggravante, fuori portata: `fast_info` costa due chiamate HTTP pesanti, quindi fino a 40 per una ricerca di 20
+  risultati.
+
+**Decisioni del coordinatore** (10:39, «seguono la regola già scritta nella guida e la regola che un errore non è una
+risposta»):
+- (1)(a): un rifiuto mentre si legge la valuta fa rispondere alla ricerca di Yahoo «troppe richieste», e Yahoo va in
+  pausa;
+- (2)(a): un altro errore dà nessuna valuta, senza cache: si riprova alla ricerca dopo.
+
+**Rossi** ✅ (test-author `8c02b6cd`), in `test_yahoo_finance_errors.py` (azione `services provider-errors`, pura):
+- 5 rossi:
+  - `_fetch_currency` rifiutato, sia `YFRateLimitError` sia il messaggio col 429: deve sollevare subito, senza sonno, e
+    non tenere niente;
+  - un altro errore: None, non tenuto, e la lettura dopo chiede di nuovo;
+  - la ricerca rifiutata sulla valuta del secondo risultato: `AssetRateLimitedError`, e la valuta del terzo non si
+    chiede;
+  - un altro errore nella ricerca: risponde, e la seconda ricerca chiede di nuovo quella valuta.
+- 2 guardie: una risposta senza valuta (`{}` e `currency` None) resta in cache.
+- In più, fissato dal test-author: il rifiuto porta la causa originale (`from`); una risposta vera resta in cache.
+- Gli aiuti:
+  - `_FakeTicker` ha preso `fast_info_exc` e un contatore;
+  - i simboli sono unici per test (`Z39-…-<hex>`), perché la cache delle valute è una sola per tutto il processo;
+  - di `test_fetch_currency_cache_hit_and_error` è cambiato solo il commento («cached negatively» → «not cached»).
+- Rieseguiti da me, a carico 28: **5 rossi, 3 verdi**.
+
+**Cura** ✅ (`files/checks/z39_code.py`, a secco pulita con black e ruff):
+- `_fetch_currency`:
+  - un rifiuto (`_is_rate_limited`) diventa `AssetRateLimitedError`, sollevata `from` l'originale, senza cache;
+  - un altro errore dà None, senza cache;
+  - si mette in cache solo dopo una lettura riuscita.
+- `search()` non cambia: il suo `except AssetRateLimitedError: raise` lascia già passare il rifiuto, e il ciclo si
+  ferma lì.
+- Niente riprova per gli errori di rete: in una ricerca di 20 risultati un'attesa per risultato terrebbe il thread del
+  fornitore troppo a lungo.
+- `CHANGELOG.md`, in «🐛 Fixed» di Unreleased, dopo la voce di Yahoo sui giorni a est di UTC: una riga. I CHANGELOG
+  tradotti non hanno la sezione Unreleased.
+
+**Verdi**:
+- `services provider-errors` **219/219**;
+- `test_asset_source.py`, l'unico altro test che importa il plugin di Yahoo, usa solo la storia: non toccato;
+- black e ruff puliti; `mkdocs build` stretto con uscita 0; `check-links` con 97 link validi; nessun venv nuovo;
+  porta 6183 libera.
+
+**Doc** ✅ (docs-writer):
+- `developer/backend/assets/provider_yahoo_finance.md`: il punto della valuta nella ricerca, con due sotto-punti (il
+  rifiuto, un altro errore), e la riga della cache, «solo risposte»;
+- `developer/architecture/patterns/asset_plugin_guide.md`: nell'elenco di «never swallow a refusal», la ricerca di
+  Yahoo «con la lettura della valuta di ogni risultato, Z-39».
+- La pagina utente non cambia: la ricerca mostra il rifiuto di Yahoo come già faceva per il rifiuto di `yf.Search`.
+
+**Con Z**: stesso file, pezzi diversi. Quando Z-32 (d) entra, `suggest_quote_base` eredita la cura: un rifiuto sale, la
+sonda lo legge come «nessun suggerimento» e `call_provider` mette in pausa.

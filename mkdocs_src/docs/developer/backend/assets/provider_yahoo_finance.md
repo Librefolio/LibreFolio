@@ -90,7 +90,12 @@ history uses `NO_DATA`, and malformed or unexpected Yahoo responses use `FETCH_E
 - Minimum query length: **2 characters**.
 - Results limited to **top 20** quotes.
 - `quoteType` is normalized to LibreFolio asset types: `equity → STOCK`, `etf → ETF`, `mutualfund → FUND`, `cryptocurrency → CRYPTO`, etc.
-- Currency is fetched per-symbol via `_fetch_currency()` (cached separately, 24-hour TTL).
+- Currency is fetched per-symbol via `_fetch_currency()` (`fast_info`), cached separately for 24
+  hours. Only an answer is cached: a currency, or Yahoo answering without one (Z-39).
+    - A refusal for too many requests (`_is_rate_limited()`) raises `AssetRateLimitedError` at once,
+      with no retry and nothing cached: the whole search leaves as rate limited at that result, the
+      remaining results' currencies are not asked, and the core pauses Yahoo.
+    - Any other error gives that result no currency and is not cached: the next search asks again.
 - A result whose currency is a minor unit carries a `quote_base_suggestion`: `GBp` gives
   `{"quantity": 100, "quote_currency": "GBp"}`; any other currency, or none, adds no key
   ([Quote Base Suggestion](#quote-base-suggestion)).
@@ -148,7 +153,7 @@ version stored a day early stays, beside the one a sync fetches again
 | **Core current value** | Provider code + identifier + identifier type (refresh also includes the provider-parameter hash) | 120 sec | 300 | Avoid repeated `ticker.info` calls during current-price polling and refresh. |
 | **Core history** | Provider code + identifier + identifier type + provider-parameter hash | 15 min | 500 | Reuse fetched date ranges during provider-driven refresh. |
 | **Core search query** | Provider code + normalized query | 15 min | 500 | Avoid repeating the same provider search. |
-| **Yahoo currency lookup** | `symbol` | 24 hours | 2000 | Cache the provider's `fast_info` currency sub-operation used by `search()` and `suggest_quote_base()`. |
+| **Yahoo currency lookup** | `symbol` | 24 hours | 2000 | Cache the provider's `fast_info` currency sub-operation used by `search()` and `suggest_quote_base()`. Only answers are cached, never a refusal or an error. |
 
 All are in-memory, per-process TTL caches created with `get_ttl_cache()`. The shared result caches
 are owned by `assets/core.py`; Yahoo owns only its currency sub-operation cache.

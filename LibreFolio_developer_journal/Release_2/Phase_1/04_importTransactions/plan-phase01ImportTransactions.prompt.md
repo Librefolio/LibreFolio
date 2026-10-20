@@ -8172,3 +8172,159 @@ di finire riassunta in silenzio. È più giusto (la custodia copre quel giorno e
 - ✅ 6. Simulazione d'integrazione (`n74_sim_light.sh dev_release2 merge`, dev `701054da9`, base `9857be3d2`, 16 file): pulita. Dev
   non ha toccato i file del lotto; ruff e black puliti sui file fusi.
 - ✅ 7. Il backlog: W-B89, la data descritta ancora come «settlement date» in modelli, schemi e doc (file condivisi).
+
+### W-B89 · La data di una transazione è la data dell'operazione, anche nelle descrizioni: cura ✅ (2026-10-20, base `9989facda`)
+
+Il via del coordinatore (10:10): lotto piccolo prima di B-51. Le descrizioni di `transactions.date` dicono «trade date», non
+«settlement date», in `models.py`, negli schemi e nella doc del DB; poi `api sync`. Solo testo, nessuno schema del DB.
+- I 7 testi:
+  - `backend/app/db/models.py`: la docstring di `TransactionType` («All calculations based on the trade date…»), le «Field
+    semantics» di `Transaction` e la `description` del campo;
+  - `schemas/transactions/transactions.py`: `TXCreateItem.date` e `TXUpdateItem.date`;
+  - `schemas/transactions/batch.py`: la data fusa di un promote;
+  - `developer/architecture/database/brokers_transactions.md`: la riga `date`.
+- Le altre occorrenze restano: parlano della colonna di regolamento di un report (la guida dei plugin) o della storia di N74
+  (`service.md`).
+- Nessun rosso: nessun test fissa quei testi, e il comportamento non cambia. La `description` di un campo SQLModel è solo metadato
+  pydantic (non un commento di colonna), quindi nessuna migrazione.
+- Prove (10:14-10:17, carico 39-43, `files/scripts/wb89_light.sh`, log `files/logs/wb89/`), tutte exit 0: `api sync` (nessun file
+  tracciato cambiato: il client generato è ignorato), ruff e black sui 3 file Python, `front check` senza errori né avvisi, `mkdocs
+  build` strict.
+- La simulazione su dev `f73514a77`: pulita. Dev contiene il mio HEAD e non tocca i 4 file.
+
+### B-51 · Le note blu contate come avvisi nel passo 3 del wizard (2026-10-20, base `ef2a17998`)
+
+Trovato da B nella revisione di N74, approvato dal coordinatore come difetto: la colonna «⚠️» dei risultati conta anche le note
+`info` blu (un file Fineco mostra «⚠️ 1»; anche Scalable, Danske, Crédit Agricole), e il dettaglio della lettura chiama tutto
+«Warnings». La cura di B: due numeri nella cella, ⚠️ ambra per gli avvisi e ℹ️ blu per le note; nel dettaglio due sottosezioni,
+come nella conferma del passo 3. Solo frontend, 4 lingue.
+
+**Analisi** (inviata al coordinatore alle 10:25, sola lettura). Le note blu contate come avvisi in **tre** punti, uno in più di B:
+1. `ImportWizardModal.svelte:4247-4254`, la colonna `warningCount`: la cella è `warnings.length`, avvisi e note insieme.
+2. `ImportWizardModal.svelte:351` (`parseAggregateStats().totalWarnings`), letto da `AnalyzeStep.svelte:144-145`: il riquadro
+   «N avvisi», ambra se N > 0.
+3. `ParseDetailModal.svelte:482-490`: una sola sezione «Avvisi» (`importWizard.warningsSection`).
+
+Già giusti: la conferma del passo 3 (`step3NoticeSections`, «Da verificare» / «Note informative») e la scheda del set.
+
+**Il via** (coordinatore, 10:39): nessun lotto dei colori tocca i tre file; le chiavi di `importWizard/*.json` si possono
+cambiare, rimozioni comprese; lo zero in `text-lf-muted` va bene. Prima i rossi.
+
+**Il contratto dei rossi** (deciso prima dei test; i dettagli sono scelte d'implementazione nel perimetro approvato):
+- **`importNotices.ts`** (nuovo, puro, `features/transactions/import/`):
+  - `noticeSeverity(notice)`: `info` → `'info'`, ogni altra gravità (anche assente o sconosciuta) → `'warning'`: la regola di
+    `BrimNoticeList.severityOf`;
+  - `noticeCounts(notices)` → `{warnings, notes}`; una lista assente vale `{0, 0}`;
+  - `splitNotices(notices)` → `{warnings, notes}`: gli stessi oggetti, nell'ordine d'origine;
+  - `noticeSortValue(notices)`: `null` se la lista manca (riga non letta, va in fondo); altrimenti ordina per avvisi, e a
+    parità d'avvisi per note;
+  - `noticeCountsCell(notices)`: `'—'` se la lista manca; altrimenti la cella `{type: 'custom', component: NoticeCounts,
+    props: {warnings, notes}}`.
+- **`NoticeCounts.svelte`** (nuovo): i due numeri, ciascuno con la sua icona lucide (`AlertTriangle`, `Info`), come nella lista
+  delle note e nella conferma del passo 3. Un'emoji non prende il colore del ruolo, e la regola 12 del design system vieta
+  l'opacità su un'icona di nota: con lucide lo zero è tutto `text-lf-muted`, icona compresa.
+  - Testid: `notice-counts` (`data-warnings`, `data-notes`); ogni conteggio `notice-count` (`data-severity` `warning` | `info`,
+    `data-count`, `data-zero`).
+  - Il conto > 0 in `text-lf-warning` / `text-lf-info`; ogni conto nominato per chi usa un lettore di schermo (`sr-only`,
+    chiavi `warningsCount` e `notesCount`).
+- **La colonna** (`ImportWizardModal.svelte`):
+  - id `noticeCount` (non più `warningCount`: la tabella salva le larghezze per id, e una larghezza salvata a 40 px
+    schiaccerebbe i due numeri);
+  - intestazione `⚠️ ℹ️`, tooltip `colTip.noticeCount`, cella `noticeCountsCell`, ordinamento `noticeSortValue`, larghezza 72.
+- **Il riquadro del passo 3** (`AnalyzeStep.svelte`):
+  - `parseAggregateStats()` dà `totalWarnings` (solo gli avvisi, via `noticeCounts`) e `totalNotes`;
+  - il riquadro `import-wizard-stat-notices` mostra `NoticeCounts`, e sotto «N avvisi · M note».
+- **Il dettaglio della lettura** (`ParseDetailModal.svelte`):
+  - la sezione `parse-detail-notices` (`data-warnings`, `data-notes`), titolo `noticeConfirmTitle`;
+  - una sottosezione `parse-detail-notice-section` per ogni gravità presente (`data-severity`, `data-count`), prima gli
+    avvisi, con l'intestazione e l'icona della conferma (`noticeSectionWarning`, `noticeSectionInfo`) e la sua `BrimNoticeList`;
+  - nessuna sottosezione vuota; senza note né avvisi, `parse-detail-notices-empty` (`noNotices`);
+  - lo stesso nel riepilogo di più file.
+- **i18n** (`importWizard/*.json`, 4 lingue):
+  - nuove: `notesCount` (plurale), `noNotices`, `colTip.noticeCount`;
+  - `warningsCount` diventa plurale («1 avviso»): sta accanto a «1 nota» nel riquadro;
+  - tolte: `warningsSection`, `noWarnings`, `colTip.warningCount`.
+- **I test**:
+  - `importNotices.test.ts` (nuovo);
+  - `NoticeCounts.test.ts` (nuovo, jsdom);
+  - `ParseDetailModal.test.ts` (un blocco nuovo);
+  - `AnalyzeStep.test.ts` (nuovo, jsdom);
+  - i file nuovi registrati in `front-transaction tx-unit`.
+
+  Gli E2E leggono del dettaglio solo l'abbinamento e la chiusura: nessun cambio.
+
+**Passi:**
+- ✅ 1. I rossi (test-author `b51-reds`, 2026-10-20 10:45-11:05, carico 15-27, Vitest file per file): **84 rossi, 22 verdi**, ogni
+  rosso per il contratto mancante (modulo assente, testid assente, conti), mai per un errore del test.
+  - `importNotices.test.ts` (nuovo, jsdom): 34 rossi. Prova anche che `noticeSeverity` dice ciò che `BrimNoticeList` disegna, per 10
+    forme di gravità; le liste in ingresso sono congelate.
+  - `NoticeCounts.test.ts` (nuovo): 36 rossi (12 casi per tre taglie: assente, `sm`, `lg`).
+  - `AnalyzeStep.test.ts` (nuovo): 4 rossi, 2 guardie verdi.
+  - `ParseDetailModal.test.ts`, un blocco nuovo di 12: 10 rossi, 2 guardie verdi; i 18 test di prima restano verdi.
+  - Registrati in `front-transaction tx-unit` (`_frontend_transaction.py`: la lista e la `desc`).
+  > **⚠️ Fuori pista**: con `step3Columns: []` `DataTable` non si assesta mai (`effect_update_depth_exceeded`): il ripiego per un
+  > ordine di colonne vuoto (`DataTable.svelte:855-861`) riscrive un `[]` e un `{}` nuovi a ogni giro. Il wizard ha sempre colonne,
+  > quindi nessun utente lo vede; il test passa una colonna inerte, col perché. Difetto fuori perimetro: W-B90 nel backlog.
+- ✅ 2. La cura (2026-10-20 11:07-11:20):
+  - `importNotices.ts` e `NoticeCounts.svelte`, nuovi, come da contratto. Il conto ordina con `warnings + notes / (notes + 1)`:
+    un avviso in più supera qualsiasi numero di note.
+  - `ImportWizardModal.svelte`:
+    - `parseAggregateStats()` dà `totalWarnings` (solo gli avvisi) e `totalNotes`;
+    - la colonna `noticeCount`;
+    - `step3NoticeSections` e `step3HasWarningSeverity` leggono `noticeSeverity`: una regola sola.
+  - `AnalyzeStep.svelte`: il riquadro `import-wizard-stat-notices` con `NoticeCounts` (`lg`) e la didascalia «N avvisi · M note»,
+    nascosta ai lettori di schermo perché i conti si nominano già da sé.
+  - `ParseDetailModal.svelte`: la sezione «Note dall'importazione» con le due sottosezioni, intestazioni e icone della conferma, e
+    il numero fra parentesi.
+  - i18n (`files/b51/i18n.sh`, poi una `update`):
+    - nuove `notesCount`, `noNotices`, `colTip.noticeCount`; `warningsCount` plurale;
+    - tolte `warningsSection`, `noWarnings`, `colTip.warningCount`;
+    - 5106 chiavi, prima e dopo; in francese `notesCount` ha un ramo `many`, così nessun testo plurale è identico fra due lingue
+      (la cache di svelte-i18n).
+  > **⚠️ Fuori pista**: **c'era un quarto punto**. Con almeno un avviso, l'introduzione della conferma del passo 3 diceva «{n}
+  > avviso/i generati…» con `n` = tutte le note (`step3Warnings.length`): 1 avviso e 5 note davano «6 avviso/i». La conferma
+  > «già giusta» dell'analisi lo era solo nelle sottosezioni. Curato nello stesso file approvato: `n` è il numero degli avvisi
+  > (`step3NoticeTally`), e nel ramo delle sole note il numero delle note (è lo stesso di prima).
+  > Nessun rosso dedicato: il conto è `noticeCounts` (provato), e il cablaggio dentro un modale di 4800 righe non ha un test di
+  > componente. Lo stesso vale per la colonna: sono provati i pezzi (`noticeCountsCell`, `noticeSortValue`), non il loro cablaggio.
+- ✅ 3. I verdi leggeri (11:08-11:15, carico 21-52, `files/scripts/b51_light.sh`, log `files/logs/b51/`), tutti exit 0:
+  - i Vitest, uno per file:
+    - `importNotices` 34;
+    - `NoticeCounts` 36;
+    - `AnalyzeStep` 6;
+    - `ParseDetailModal` 30;
+    - `BrimNoticeList` 10;
+  - `front-transaction tx-unit`: 27 file, 1087 test (999 + gli 88 nuovi);
+  - i gate:
+    - Prettier invariato;
+    - `theme-roles --check` pulito;
+    - `themeRoles.gate` 80;
+    - `i18n check` (5106 chiavi);
+    - `catalogIcuLocale` 17;
+  - `front check`: 0 errori, 0 avvisi.
+- ✅ 4. La doc (docs-writer `b51-docs`, 11:20-11:27; le traduzioni a mano, 11:30):
+  - `user/transactions/import/how-to.en.md`, passo 3: la riga `⚠️ ℹ️` della tabella (due numeri: avvisi ambra da guardare, note blu
+    senza nulla da correggere), i riquadri «sotto» la tabella (dicevano «sopra»: stanno sotto da quando esistono) e il dettaglio che
+    elenca avvisi e note a parte, il punto «Avvisi e note» della conferma.
+  - Le stesse tre righe a mano in IT, FR ES, con le parole dell'app («Vedi Dettaglio», «Voir Détail», «Ver Detalle»), poi
+    `translate-stamp`: nessun debito nuovo (`translate --dry-run` «up-to-date»; `translate-diff` non nomina `how-to`, i 18 debiti
+    che elenca sono di altre pagine e di prima).
+  - `developer/frontend/components/features/import-wizard.md`, «🧾 Per-file parse stats»: la regola unica (`noticeSeverity`), i
+    quattro punti, perché la colonna ha cambiato id.
+  - `brim_plugin_guide.md` ancora giusta: nessun cambio.
+  - Prove (11:31-11:36, carico 9-20): `mkdocs build` strict senza WARNING, `check-links` 97 validi, `front check` di nuovo 0 e 0
+    (il wizard era cambiato dopo il primo).
+  > **⚠️ Fuori pista** (le scoperte del docs-writer, fuori da B-51, non toccate):
+  > - il punto «Un file non è stato elaborato … poi clicca **Rianalizza tutti**»: il bottone sta nella fila dei riquadri, che
+  >   compare solo se almeno un file è stato letto; se falliscono tutti non c'è. E cambiare plugin e premere **Analizza (N)**
+  >   rianalizza già da sé;
+  > - `brim_plugin_guide.md:910` e `developer/backend/brim/architecture.md:392` dicono dove compaiono le note («parse-detail +
+  >   confirmation modal»): vero, ma non nominano i conti nuovi della colonna e dei riquadri.
+- ✅ 5. La simulazione d'integrazione (`n74_sim_light.sh dev_release2 merge`, dev `f73514a77`, base `9989facda`, 22 file): pulita.
+  - Dev ha toccato `how-to.en.md` (il paragrafo di J-57, riga ~288) e il runner (un'altra funzione): fusi senza conflitti.
+  - Ruff e black sul runner fuso danno i 4 PLC0415 e il formato che il file di dev ha già da sé: non sono di B-51.
+  - Nessun E2E legge i conti o le chiavi tolte: cliccano solo `import-wizard-warning-confirm`, che compare come prima (con
+    qualsiasi nota).
+- ✅ 6. CHECKPOINT READY al coordinatore (2026-10-20 ~11:42), FROZEN. Nel backlog: W-B90 (la `DataTable` senza colonne) e W-B91 (la
+  guida, «un file è fallito»). B-51 sta nella sezione di B: la chiude il coordinatore. Fuori dal lotto: la galleria del passo 3
+  (`import-wizard-step3`) mostra la colonna e il riquadro vecchi, da rigenerare in uno slot pesante.
