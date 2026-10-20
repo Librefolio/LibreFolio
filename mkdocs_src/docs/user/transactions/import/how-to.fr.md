@@ -101,15 +101,17 @@ LibreFolio lit chaque fichier, le vérifie et le résume dans un tableau :
 | ✗ | Titres pas encore associés à vos actifs — vous les associez dans **Révision** |
 | 🔴 | Problèmes de validation : lignes qui n'ont pas pu devenir des transactions |
 | 🔧 | Champs à renseigner avant l'enregistrement (en rouge quand l'un bloque l'enregistrement) |
-| ⚠️ | Avertissements de l'importateur, comme des lignes ignorées |
+| ⚠️ ℹ️ | Deux nombres : les avertissements (ambre) sont à regarder, comme des lignes ignorées ; les notes (bleu) expliquent un choix de l'importateur, sans rien à corriger |
 
-Les tuiles au-dessus du tableau comptent ce qui sera réellement importé ; **Voir tout** ouvre les détails.
+Les tuiles sous le tableau comptent ce qui sera réellement importé ; **Voir tout**, ou **Voir Détail** dans
+le menu **⋮** d'une ligne, ouvre les détails, avec les avertissements et les notes listés à part.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step3" alt="Étape 3 de l'assistant : Analyse" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-- **Avertissements** : **Continuer** les liste d'abord ; lisez-les, puis cliquez sur **Continuer quand même**.
+- **Avertissements et notes** : **Continuer** liste d'abord les avertissements, puis les notes ; lisez-les,
+  puis cliquez sur **Continuer quand même**.
 - **Un fichier a échoué** : une bannière en explique la raison. Corrigez son plugin dans **Sélectionner**, puis cliquez sur **Réanalyser tout**.
 
 ### 🧩 Étapes qui n'apparaissent qu'en cas de besoin {: #only-when-needed }
@@ -255,9 +257,9 @@ les lignes listées en rouge, et demande confirmation avant d'enregistrer les va
 vérifiées (**Enregistrer quand même**). Une ligne dont la quantité a plus de 10 décimales, dont le montant en a
 plus de 6, ou dont le prix de revient unitaire en a plus de 12, est refusée à **Enregistrer Tout**, avec le
 maximum dans le message (*Quantité : Au maximum 10 décimales*) : LibreFolio ne l'arrondit jamais.
-Les dates des transactions vont du 1er janvier 1900 à un an après aujourd'hui : une ligne du relevé datée hors
+Les dates des transactions vont du 1er janvier 1900 à demain : une ligne du relevé datée hors
 de cet intervalle est elle aussi refusée à **Enregistrer Tout**, avec l'intervalle dans le message (*Date : Entre
-1900-01-01 et 2027-10-17* si nous sommes le 17 octobre 2026).
+1900-01-01 et 2026-10-18* si nous sommes le 17 octobre 2026).
 
 ---
 

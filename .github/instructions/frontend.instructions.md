@@ -144,6 +144,28 @@ production build the E2E suite runs against.
 Naming: `area.thing.past-tense` — `asset.saved`, `fx.rates.synced`,
 `tx.import.committed`.
 
+### API errors in the console
+
+The API client writes every unexpected API failure to the browser console, in production too (lot H-60):
+`lib/api/apiErrorConsole.ts`, called by the Axios response interceptor and by the `zod-validation` plugin of
+`lib/api/zodios-client.ts`. One line: `console.error('[API]', '<status> <METHOD> <path>', {code, reason_code,
+component_id, request_id, error_type})`, `network` for a call nothing answered, `schema` for an answer that breaks its
+schema (with the issues' paths). How much follows the instance, `client_log_level` of `/system/instance` (the backend's
+`LOG_LEVEL`): `error` writes server errors, network failures and schema mismatches; `debug` writes every 4xx too. A
+canceled request is not a failure.
+
+- **Do not add a `console.*` of your own for an API error**, and never print an error object whole: an Axios error
+  holds the request's body and configuration, a `ZodiosError` message embeds the whole answer it refused.
+- **Never print** a request body, a header (the `X-Request-Id` aside), a token, a password, a query string, the text of
+  a `detail`, the `input` a 422 can repeat.
+- **To show the id to the user**, in a generic error message: `withRequestId(t, message, error)`
+  (`lib/api/requestIdMessage.ts`, H-60r). The message stays whole and the code follows it, «… (code: <id>)»
+  (`common.errorWithRequestId`), only for a 5xx carrying a LibreFolio id: the failure whose id the server log always
+  holds. Pass the caught error as it is (a wrapper is followed through `originalError` or `cause`); never build that
+  text by hand, never instead of a message that tells the user what to do.
+- A console line is for the human who investigates; it is never the signal a test or a component reads («Publish
+  state, do not print it»).
+
 ## Chart Components (`lib/components/charts/`)
 
 14 files, ~5100 lines. Key components:

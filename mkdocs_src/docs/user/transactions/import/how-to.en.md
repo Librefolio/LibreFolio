@@ -127,15 +127,17 @@ LibreFolio reads each file, checks it and sums it up in a table:
 | ✗ | Securities not matched to your assets yet — you match them in **Review** |
 | 🔴 | Validation issues: rows that could not become transactions |
 | 🔧 | Fields to fill in before saving (red when one blocks the save) |
-| ⚠️ | Importer warnings, such as skipped rows |
+| ⚠️ ℹ️ | Two numbers: warnings (amber) need a look, such as skipped rows; notes (blue) explain a choice the importer made, with nothing to fix |
 
-The tiles above the table count what will really be imported; **View All** opens the details.
+The tiles below the table count what will really be imported; **View All**, or **View Detail** in
+a row's **⋮** menu, opens the details, with the warnings and the notes listed apart.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step3" alt="Wizard Step 3: Analysis" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-- **Warnings**: **Continue** lists them first; read them, then click **Continue anyway**.
+- **Warnings and notes**: **Continue** lists the warnings first, then the notes; read them, then
+  click **Continue anyway**.
 - **A file failed**: a banner says why. Fix its plugin in **Select Files**, then click
   **Re-parse all**.
 
@@ -284,9 +286,9 @@ for the rows listed in red, and asks before saving the values listed in amber th
 verified (**Save anyway**). A row whose quantity has more than 10 decimal places, whose cash amount
 has more than 6, or whose per-unit cost basis has more than 12, is refused at **Save All**, with the
 maximum in the message (*Quantity: At most 10 decimal places*): LibreFolio never rounds it.
-Transaction dates go from 1 January 1900 to one year from today: a row of the report dated outside
+Transaction dates go from 1 January 1900 to tomorrow: a row of the report dated outside
 that range is refused at **Save All** too, with the range in the message (*Date: Between 1900-01-01
-and 2027-10-17* when today is 17 October 2026).
+and 2026-10-18* when today is 17 October 2026).
 
 A row that brings units in — an **Adjustment** that adds units, or the receiving side of an
 **Asset Transfer** — keeps the cost written in the report, even 0, in **Manual**. If the report

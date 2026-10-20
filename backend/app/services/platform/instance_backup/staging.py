@@ -74,8 +74,10 @@ from backend.app.services.platform.instance_backup.paths import (
     STAGE_LOCK_FILE,
     STAGE_REPORT_FILE,
     BackupPathError,
+    NotRegularFileError,
     ensure_private_dir,
     is_plain_dir,
+    read_regular_file,
     restore_dir,
     stage_dir,
     stages_dir,
@@ -256,11 +258,14 @@ def stage_archive(archive_path: Path, data_dir: Path, *, stage_id: str | None = 
 
 
 def read_report(data_dir: Path, stage_id: str) -> StagingReport:
-    """The report of a checked archive. ``FileNotFoundError`` when there is none (never checked, refused or removed)."""
+    """The report of a checked archive. ``FileNotFoundError`` when there is none to read: never checked, refused or
+    removed, a content that is no report, or a folder, a link, a special file or a file it may not read in its place
+    (B-53); any other ``OSError``, a transient one, as it came."""
     path = stage_dir(data_dir, stage_id) / STAGE_REPORT_FILE
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-    with os.fdopen(os.open(path, flags), "rb") as handle:
-        raw = handle.read()
+    try:
+        raw = read_regular_file(path)
+    except (NotADirectoryError, IsADirectoryError, PermissionError, NotRegularFileError):
+        raise FileNotFoundError(f"No readable report for stage {stage_id}") from None
     try:
         return StagingReport.model_validate_json(raw)
     except ValidationError:
@@ -797,8 +802,9 @@ def _administrators(database: Path) -> list[str]:
 def _holds_non_iso_currencies(database: Path, stage_id: str) -> bool:
     """Whether the upgraded copy holds stored currency values that are not ISO 4217 codes (E-19b1): E-19a's audit
     (``find_stored_currency_findings``), read only. Whatever it raises never ends the check, as the control totals' read
-    (B-29): the warning is left out, and the log names the error's class, never its text or a path — for a stored text
-    that is no UTF-8, sqlite3's message quotes the archive's bytes."""
+    (B-29): the warning is left out, and the log names the error's class, never its text or a path — a message may quote
+    what the archive stores (a text that is not UTF-8 no longer gets here: B-49 refuses it first, and since E-20 the
+    audit reads one as its bytes)."""
     try:
         with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as conn:
             conn.execute("PRAGMA trusted_schema=OFF")

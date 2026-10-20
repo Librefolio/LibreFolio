@@ -99,8 +99,41 @@ decision 1).
 belongs to a service layer, such as `financial_math/` (developer decision D-P7, 2026-10-12). Its folders group them by
 type: `utils/asset/` (sectors, geographic areas, identifiers, display-name locale), `utils/fx/` (currencies),
 `utils/runtime/` (version, client network address, TTL caches, sliding-window rate limits in `rate_window.py`, pauses
-after a remote's «too many requests» in `cooldown.py`); `datetime_utils`, `json_utils` and `decimal_utils` stay
+after a remote's «too many requests» in `cooldown.py`, the causes of an exception and the «reported» mark in
+`errors.py`); `datetime_utils`, `json_utils` and `decimal_utils` stay
 at the root. The truncation to the database precision reads the models, so it lives in `db/precision.py`.
+
+## Errors: never lose the cause
+
+The developer's rule (19/10/2026): when something fails, the useful information is printed, in the server log and in
+the browser console (lot H-60).
+
+- **A broad `except` that turns a failure into a fallback, a result field or an HTTP error logs it once, where it is
+  caught**: `logger.warning(...)` or `logger.error(...)` with `exc_info=exc` and the identifiers of what failed (ids,
+  codes, component), never personal data, addresses or secrets. A caught exception that only becomes `str(exc)` in a
+  response is lost to the log, and the text of an internal error never goes to the client.
+- **Keep the chain**: `raise NewError(...) from exc`. A wrapper that stores its cause sets `__cause__`, or carries it
+  in a `cause` attribute (`utils/runtime/errors.py` reads both).
+- **The client gets a code, never a message or a stack.** Every response carries `X-Request-Id`, and every log line of
+  the request carries `request_id` (`services/platform/request_id.py`). A 5xx body adds `request_id` and `error_type`,
+  the class name of the root cause, to its `detail` (`api/server_errors.py`, `services/platform/failure_report.py`); a
+  closed `reason_code` says more when the client can act on it. The message, the type and the traceback go to the log.
+- **The safety net, not a second line.** A warning or a higher line written with an exception, or inside the `except`
+  that handles it, marks it as reported for the request the line carries (`logging_config.LibreFolioBoundLogger`): the
+  5xx handler then writes nothing more for that request. Otherwise it writes the failure once: an error line with the
+  traceback of a cause nobody logged, a warning line for a 5xx raised without a cause. One exception object can reach
+  several requests (a single-flight build hands its failure to every request waiting on it): a request whose failure
+  another request logged already gets a short warning, «Request failed with an error already logged», with its own
+  `request_id` and `logged_with_request_id`, never the traceback again (H-60r). An exception that leaves the app is
+  answered by `security_headers.py` and logged there, once per request; uvicorn's own line for it is dropped.
+- **A failure handed to several consumers is written with its traceback once**: a memoized failure, a single-flight
+  build. Before writing `exc_info=error`, ask `traceback_reported(error)` (`utils/runtime/errors.py`); when a line
+  carried it already, write the consumer's line without `exc_info`, naming `logged_with_request_id`
+  (`traceback_reporting_request(error)`), as the AI Export `BuildContext._build` does.
+- **`logger.exception()` writes one JSON line at `ERROR`, its traceback inside it.** The log stays JSON (developer
+  decision D1): the message is the `event` key.
+- **Catch what you expect.** A broad `except Exception` is an isolation boundary and says so in a comment. A parsing
+  probe whose failure *is* the answer («is this a date?») may return without logging, and says so too.
 
 ## Where to Find Things
 
@@ -110,6 +143,7 @@ at the root. The truncation to the database precision reads the models, so it li
 | API Schemas | `backend/app/schemas/*.py` |
 | Business Logic | `backend/app/services/*.py` |
 | App startup and shutdown: one line per step (`STARTUP_STEPS`, `SHUTDOWN_STEPS`), run by `lifecycle.py`; middleware, outermost first (`MIDDLEWARE_STACK`); MkDocs and SPA serving; DB create/migrate at startup. `main.py` only wires them | `backend/app/services/platform/app_lifespan.py`, `lifecycle.py`, `middleware.py`, `static_site.py`, `database_bootstrap.py` |
+| Errors (H-60): the request id of every request, the body and the log line of a 5xx, the causes of an exception and its «reported» mark | `backend/app/services/platform/request_id.py`, `failure_report.py`, `backend/app/api/server_errors.py`, `backend/app/utils/runtime/errors.py` |
 | Platform services (scheduler, data-quality thresholds, per-series exports `series_export.py`, instance backup `instance_backup/`, instance key `derive_key()`, startup config checks, readiness `/system/ready`, provider pauses after HTTP 429 `provider_cooldown.py`, shutdown budget `shutdown_budget.py`, sleep and wake `sleep_wake/`: the user's activity and the work in progress) | `backend/app/services/platform/` |
 | Uploads and file previews | `backend/app/services/files/` |
 | Email (optional SMTP: transport, hourly budget, templates in 4 languages, config checks) | `backend/app/services/email/` (config in `backend/app/config/email.py`; sliding-window limiter in `backend/app/utils/runtime/rate_window.py`) |

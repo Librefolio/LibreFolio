@@ -126,7 +126,7 @@ class TXValidationCode(StrEnum):
     DECIMAL_PLACES_EXCEEDED = "decimalPlacesExceeded"
     SIGNIFICANT_DIGITS_EXCEEDED = "significantDigitsExceeded"
     INTEGER_DIGITS_EXCEEDED = "integerDigitsExceeded"
-    # N74 (R13-SEC7-3): a date outside 1900-01-01 … today + 1 year, params {min, max} (ISO dates).
+    # N74 (R13-SEC7-3): a date outside 1900-01-01 … tomorrow by the server's calendar, params {min, max} (ISO dates).
     DATE_OUT_OF_RANGE = "dateOutOfRange"
     # W-B69: an Auto cost over a pool holding rows that cannot be read, params {count}.
     AUTO_COST_UNREADABLE = "autoCostUnreadable"
@@ -199,7 +199,7 @@ class TXPromoteResolvedFields(StrictModel):
 
     description: Optional[str] = Field(default=None, max_length=500, description="Merged notes, on both rows; null clears them")
     tags: Optional[List[str]] = Field(default=None, description="Merged tags, on both rows; null clears them")
-    date: Optional[date_type] = Field(default=None, description="Merged settlement date, on both rows; never null")
+    date: Optional[date_type] = Field(default=None, description="Merged trade date, on both rows; never null")
     cost_basis_override: Optional[IsoCurrencyAmount] = Field(default=None, description="Merged per-unit cost basis, on the receiving leg; null clears it")
 
     @field_validator("tags", mode="before")

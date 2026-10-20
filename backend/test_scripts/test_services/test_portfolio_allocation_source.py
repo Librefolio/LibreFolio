@@ -8,6 +8,7 @@ database row or process cache is mutated.
 from __future__ import annotations
 
 import dataclasses
+import inspect
 import json
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -1608,14 +1609,21 @@ async def test_saved_fx_prefill_returns_the_direct_saved_rate_for_a_canonical_pa
     assert issues == []
 
 
+#: X-R45b's look-back, ``fx_quotes._previous_usable_row(session, base, quote, before)``: its parameters, to read a call
+#: whether its arguments were passed by position or by name.
+PREVIOUS_USABLE_ROW_SIGNATURE = inspect.Signature([inspect.Parameter(name, inspect.Parameter.POSITIONAL_OR_KEYWORD) for name in ("session", "base", "quote", "before")])
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("saved_rows", "expected_code"),
+    ("saved_rows", "expected_code", "looks_back"),
     [
-        pytest.param({}, "allocation.saved_fx_missing", id="missing"),
+        pytest.param({}, "allocation.saved_fx_missing", False, id="missing"),
+        # RED until X-R45b (the look-back): fx_quotes has no _previous_usable_row to replace yet.
         pytest.param(
             {("EUR", "JPY"): _fx(quote="JPY", rate="0")},
             "allocation.saved_fx_invalid",
+            True,
             id="invalid-nonpositive",
         ),
         pytest.param(
@@ -1624,6 +1632,7 @@ async def test_saved_fx_prefill_returns_the_direct_saved_rate_for_a_canonical_pa
                 ("JPY", "USD"): _fx(base="JPY", quote="USD"),
             },
             "allocation.saved_fx_missing",
+            False,
             id="no-chaining",
         ),
     ],
@@ -1632,16 +1641,31 @@ async def test_saved_fx_missing_invalid_and_no_chaining_are_explicit(
     monkeypatch,
     saved_rows,
     expected_code,
+    looks_back,
 ):
+    """A pair with no saved row, or with rows of other pairs only (no chaining), is ``allocation.saved_fx_missing``; a
+    saved row whose rate is not usable, with no usable row before it, is ``allocation.saved_fx_invalid``. Either way the
+    quote has no rate and the one issue names the pair.
+
+    ``invalid-nonpositive`` — RED until X-R45b (the look-back). A saved rate that is not usable — 0 here; a negative or a
+    non-finite one alike, ``keys.usable_rate`` being finite and > 0 — sends the builder back to the pair's previous usable
+    row, ``fx_quotes._previous_usable_row``, which does not exist before the cure, so ``monkeypatch`` cannot replace it.
+    Replaced to find nothing, it is awaited once, on the builder's session, with the pair's base and quote and the 0
+    row's date; finding nothing, the error stands. The other two cases never look back: they have no row of the pair.
+    """
     monkeypatch.setattr(
         source_fx_quotes,
         "_load_latest_planner_fx_rows",
         AsyncMock(return_value=saved_rows),
     )
+    look_back = AsyncMock(return_value=None)
+    if looks_back:
+        monkeypatch.setattr(source_fx_quotes, "_previous_usable_row", look_back)
+    session = object()
     issues = []
 
     rows = await source_fx_quotes.build_planner_fx_quotes(
-        object(),
+        session,
         request_pairs=["EUR/JPY"],
         as_of=AS_OF,
         issues=issues,
@@ -1658,6 +1682,11 @@ async def test_saved_fx_missing_invalid_and_no_chaining_are_explicit(
         "name": "pair",
         "value": "EUR/JPY",
     }
+    if looks_back:
+        look_back.assert_awaited_once()
+        passed = PREVIOUS_USABLE_ROW_SIGNATURE.bind(*look_back.await_args.args, **look_back.await_args.kwargs).arguments
+        expected = {"session": session, "base": "EUR", "quote": "JPY", "before": saved_rows[("EUR", "JPY")].date}
+        assert passed == expected, f"the look-back was awaited with {passed}: expected {expected}, the pair and the 0 row's date (X-R45b)"
 
 
 @pytest.mark.asyncio
@@ -1975,16 +2004,28 @@ async def test_wac_contexts_call_canonical_runtime_sequentially_and_keep_fiscal_
     }
 
 
-def _converted_wac_result(*, rate: str = "0.8") -> WACPreviewResultItem:
+def _converted_wac_result(
+    *,
+    rate: str = "0.8",
+    original_currency: str = "USD",
+    currency: str = "EUR",
+    unit_cost: str = "80",
+    wac: str = "80.0000",
+) -> WACPreviewResultItem:
+    """Two buys of 2 at 100 ``original_currency``, both converted into ``currency`` at ``rate``, the 2026-01-01 rate.
+
+    The defaults are the inverted pair, USD→EUR at 0.8; ``rate="1.25", original_currency="EUR", currency="USD",
+    unit_cost="125", wac="125.0000"`` is the direct one.
+    """
     shared = {
         "type": "BUY",
         "quantity": Decimal("2"),
-        "unit_cost": Decimal("80"),
-        "currency": "EUR",
+        "unit_cost": Decimal(unit_cost),
+        "currency": currency,
         "effect": "add",
-        "running_wac": Decimal("80.0000"),
+        "running_wac": Decimal(wac),
         "original_unit_cost": Decimal("100"),
-        "original_currency": "USD",
+        "original_currency": original_currency,
         "fx_rate_used": Decimal(rate),
         "fx_info": FxBackwardFillInfo(
             fx_rate_date=date(2026, 1, 1),
@@ -1992,7 +2033,7 @@ def _converted_wac_result(*, rate: str = "0.8") -> WACPreviewResultItem:
         ),
     }
     return WACPreviewResultItem(
-        wac=Currency(code="EUR", amount=Decimal("80.0000")),
+        wac=Currency(code=currency, amount=Decimal(wac)),
         wac_qualifying_txs=[
             WACQualifyingTX(
                 tx_id=1,
@@ -2285,6 +2326,95 @@ async def test_wac_fx_without_a_saved_row_at_the_rate_date_fails_closed_even_if_
         "allocation.fiscal_currency_missing",
         "allocation.wac_fx_missing",
     }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("direct", "saved_rate", "expected_status"),
+    [
+        # GUARD, green before and after: the positive barrier — on the same direct shape, a usable row is the evidence.
+        pytest.param(True, "1.25", "available", id="direct-usable"),
+        # RED before the cure: on a direct pair oriented_rate keeps the infinity, _rates_match takes it for the cost's
+        # 1.25 (its scale is infinite), and the ``available`` evidence refuses a rate that is not finite.
+        pytest.param(True, "Infinity", "missing", id="direct-inf"),
+        # GUARD: ``rate > 0`` already refuses a 0.
+        pytest.param(True, "0", "missing", id="direct-zero"),
+        # GUARD: 1/Infinity is 0E-1000026, which never matches the cost's 0.8 — missing already, by accident.
+        pytest.param(False, "Infinity", "missing", id="inverted-inf"),
+    ],
+)
+async def test_wac_fx_row_at_the_rate_date_with_an_unusable_rate_fails_closed(
+    monkeypatch,
+    direct,
+    saved_rate,
+    expected_status,
+):
+    """X-R45b, MF's review of the X-R45 revert: one rule for every saved rate the planner reads — finite and above 0.
+
+    The saved row at the cost's rate date is WAC evidence only if its rate is usable: an unusable one fails closed like a
+    changed or deleted row (``missing`` evidence, ``allocation.wac_fx_missing``, no unit cost). ``convert_bulk`` skips
+    such a rate, so only a table changed between the two reads gets here. RED before the cure on ``direct-inf`` only, as
+    an exception while the evidence is built (a 500 at the endpoint); the other three are guards, green before and after.
+    """
+    if direct:
+        # Bought in EUR, costed in USD: EUR sorts before USD, so the cost's directed rate is the saved EUR/USD rate itself.
+        result = _converted_wac_result(
+            rate="1.25",
+            original_currency="EUR",
+            currency="USD",
+            unit_cost="125",
+            wac="125.0000",
+        )
+        source_currency, target_currency = "EUR", "USD"
+    else:
+        # Bought in USD, costed in EUR at 0.8: the cost's directed rate is the inverse of the saved EUR/USD rate.
+        result = _converted_wac_result()
+        source_currency, target_currency = "USD", "EUR"
+    monkeypatch.setattr(
+        portfolio_service,
+        "compute_wac_iterative",
+        AsyncMock(return_value=result),
+    )
+    saved_key = ("EUR", "USD", date(2026, 1, 1))
+    saved = _fx(
+        on=date(2026, 1, 1),
+        base="EUR",
+        quote="USD",
+        rate=saved_rate,
+        source_name="SAVED_AT_RATE_DATE",
+    )
+    load_saved_rows = AsyncMock(return_value={saved_key: saved})
+    monkeypatch.setattr(source_wac, "_load_wac_fx_rows", load_saved_rows)
+    issues = []
+
+    rows = await source_wac.build_planner_wac_contexts(
+        object(),
+        holding_rows=[(7, 11, Decimal("4"))],
+        selected_asset_ids={11},
+        assets_by_id={11: _asset(11, currency=source_currency)},
+        as_of=AS_OF,
+        target_currency=target_currency,
+        issues=issues,
+    )
+    row = next(row for row in rows if row.asset_id == "asset:11")
+
+    # The planner asked for the very row the fake holds: a missing evidence below is about its rate, not its key.
+    load_saved_rows.assert_awaited_once()
+    assert load_saved_rows.await_args.kwargs["keys"] == {saved_key}
+    (evidence,) = row.fx_evidence
+    assert (evidence.source_currency, evidence.destination_currency, evidence.inverted) == (source_currency, target_currency, not direct)
+    assert evidence.status == expected_status
+    if expected_status == "available":
+        assert (evidence.rate, evidence.reference_date, evidence.source) == (Decimal("1.25"), date(2026, 1, 1), "SAVED_AT_RATE_DATE")
+        assert row.unit_cost == Decimal("125.0000")
+        assert {issue.code for issue in issues} == {"allocation.fiscal_currency_missing"}
+    else:
+        assert (evidence.rate, evidence.reference_date, evidence.source) == (None, None, None)
+        assert row.unit_cost is None
+        assert {issue.code for issue in issues} == {
+            "allocation.fiscal_currency_missing",
+            "allocation.wac_fx_missing",
+        }
 
 
 @pytest.mark.asyncio

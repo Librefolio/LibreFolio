@@ -3903,6 +3903,28 @@ in the refresh, the re-date helpers, the timezone the plugin declared. `exchange
 Filed: revision of [[problems/yahoo-bars-dated-one-day-early-east-of-utc]].
 Graph: not updated; graphify is not available in this worktree.
 
+## [2026-10-19] file | Svelte 5: a `$derived` over a non-reactive module cache stays stale across close and reopen (A-CL1)
+Workstream A, A-CL1 (the developer's nightly, Settings › About). `ChangelogModal`'s `ready` read the translations through `peek()` on a plain `Map`: a window closed while its translation loaded dropped the answer and, once reopened, kept its stale `undefined` (the sidebar's was another instance, computed after the fill). Cure `5ccb495e5`: the cache is a `SvelteMap`; one window, the Sidebar's, opened from both versions.
+Filed: [[problems/svelte5-derived-stale-over-non-reactive-cache]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-19] update | The real module of the changelog cache, in Vitest (A-CL1 review)
+The automatic review of `5ccb495e5` found that only a fake proved the cure. The node environment has no reactivity
+and jsdom refuses the `?raw` import, mocked or not; the bundle imports moved to `changelogSources.ts`, which a jsdom
+test mocks, and `changelog.reactivity.test.ts` drives the real `createLocalizedChangelog` (red with `new Map`, green
+with `SvelteMap`). Page section «Prevention» and its source files updated.
+Filed: revision of [[problems/svelte5-derived-stale-over-non-reactive-cache]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-19] file | No range of a single day; zrender's cursor; jsdom and disabled buttons (Y-N65)
+Workstream Y, lot Y-N65 (developer decision 19/10, N65-2…N65-7). No range picker in the app makes a range of a single
+day, and the measuring ruler ignores a second click on its start. In measure mode the chart now owns its cursor through
+zrender (crosshair, not-allowed over the start), because zrender resets an inline cursor on every move. A Vitest
+finding, verified with a jsdom 30.0.1 probe: a dispatched click reaches a disabled button's handlers.
+Filed: [[decisions/no-range-of-a-single-day]], [[problems/zrender-resets-cursor-on-every-move]],
+[[problems/dispatched-click-reaches-disabled-button-in-jsdom]]; section and history row in [[features/F-045]].
+Graph: not updated; graphify is not available in this worktree.
+
 ## [2026-10-19] file | The lots computed on their change days (L1a): self-parity and RealDecimal
 L1a computes the lots' daily series only on the days an input changes and re-dates them over the window,
 byte-identical (0 differences on four DB copies, the real data included). Two lessons: a battery that compares the

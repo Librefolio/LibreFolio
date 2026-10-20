@@ -140,6 +140,15 @@ Lot A-54 + A-55 + A-56 (decide under the write lock; reviewer E, through the coo
     written, the instance at its limit and not one over it (A-56). With nobody acting in the window, each request answers
     as before.
 
+Lot N69-4 (N69 point 4, decision D8 (a): each account's avatar in the Users tab) adds:
+
+20. ``avatar_url`` on every account ``GET /users`` lists and ``PATCH /users/{user_id}`` answers: the account's avatar
+    from its user settings (``UserSettings.avatar_url``: an image uploaded to the app, ``/api/v1/uploads/file/<id>``, or
+    an address, 500 characters at most), as it is stored; null when it has none — no settings row, or a row without an
+    avatar. Each account carries its own, whoever calls and whatever the ids of the settings rows. The ``PATCH`` answer
+    carries it as the list does: the answer replaces the account's row in the Users tab. Nothing else changes in either
+    answer: an account is exactly its ten fields, A7b's nine and ``avatar_url``; ``usage`` counts as before.
+
 Coded refusals are read from ``detail.error_code``, the shape ``POST /auth/login`` gives ``ACCOUNT_DISABLED`` and
 ``test_registration_api.py`` reads; the administrator's ``USER_LIMIT_REACHED`` carries ``limit``, ``used`` and
 ``billing_url`` in the same ``detail``.
@@ -254,6 +263,18 @@ write»; each race's barrier says where the rival landed — right before the re
 verdict), after the request had read the account it decides on (for an invitation, after its authentication read the
 caller) — and that the rival's own request was served. A cure reads again under the lock: its first write,
 ``begin_writes``, comes before its decisions, so the rival lands before the lock and the decisions see it.
+
+Red until N69-4 (label ``# red until N69-4``; point 20): UADM-AV-01 to UADM-AV-04 — ``avatar_url`` is no field of
+``AdminUserRead`` today, and no item carries it —; and, by construction, every case that reads an account through
+``_user_item_violations`` or ``USER_ITEM_KEYS`` — UADM-003, 007, 008, 028, 052, 060 to 064, 068 to 071, 073 to 075, 079,
+A51-001, A51-003 and UADM-LOCK-06 —: an account is now exactly ten fields, its ``avatar_url`` null for every account of
+theirs, none of which has an avatar (their docstrings, older than point 20, still say nine). Left alone, those cases
+would turn red the day ``avatar_url`` lands. UADM-AV-01 and UADM-AV-02 run on the lane: an account of the case sets its
+avatar as it does from its profile, ``PUT /settings/user`` with its own session — the only setting written there, a row
+of the case's own account, which goes with it at teardown by the schema's cascade. That route takes any address of 500
+characters at most and checks no file, so an uploaded avatar is an address of that shape, never a file. UADM-AV-03 runs
+in-process, on the private instance of ``create_all``: every account and settings row there is the test's, so the whole
+list is asserted, and each settings row is written with the id of another account. UADM-AV-04 reads the schema.
 """
 
 import ast
@@ -331,7 +352,8 @@ PUBLIC_URL = "https://librefolio.example.test/base/"
 PUBLIC_ORIGIN = "https://librefolio.example.test/base"
 BILLING_LINK = "https://billing.example.test/plans/family"
 
-USER_ITEM_KEYS = frozenset({"id", "username", "email", "is_active", "is_superuser", "created_at", "protected", "holds_place", "pending_setup"})
+#: An account as GET /users lists it and PATCH /users/{user_id} answers it; ``avatar_url`` is lot N69-4's (point 20).
+USER_ITEM_KEYS = frozenset({"id", "username", "email", "is_active", "is_superuser", "created_at", "protected", "holds_place", "pending_setup", "avatar_url"})
 INVITE_ITEM_KEYS = frozenset({"id", "grants_admin", "email", "created_at", "expires_at", "created_by_user_id"})
 USAGE_KEYS = frozenset({"used", "max_users", "billing_url"})
 ISSUED_INVITE_KEYS = frozenset({"invite", "token", "path", "url"})
@@ -469,16 +491,17 @@ def _comparable(item: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
     return {key: _instant(value) if key.endswith("_at") else value for key, value in item.items()}
 
 
-def _user_item_violations(item: Any, account: _Account, *, active: bool, superuser: bool, protected: bool = False, holds_place: bool = False, pending_setup: bool = False) -> list[str]:
-    """What is wrong with an account as GET /users lists it, and PATCH answers it: exactly its nine fields, with these values.
+def _user_item_violations(item: Any, account: _Account, *, active: bool, superuser: bool, protected: bool = False, holds_place: bool = False, pending_setup: bool = False, avatar_url: Optional[str] = None) -> list[str]:
+    """What is wrong with an account as GET /users lists it, and PATCH answers it: exactly its ten fields, with these values.
 
     ``protected`` is False unless the test replaced the hook: today the hook protects nobody (lot A6a).
     ``holds_place`` is workstream E's flag, true only for an inactive account whose live verification link holds its place (``api email-verification-hooks``, EVH-006…012); false unless the case wrote such a link (UADM-060).
     ``pending_setup`` is lot A7b's flag (C5), true only for the account waiting for its F02 setup (UADM-060 to UADM-064); false unless the case made one.
+    ``avatar_url`` is lot N69-4's field (point 20), the account's avatar as its user settings store it; None — null — unless the case gave the account one (UADM-AV-01 to UADM-AV-03).
     """
     if not isinstance(item, dict) or set(item) != USER_ITEM_KEYS:
         return [f"{account.username}: an account must be exactly {sorted(USER_ITEM_KEYS)}, no hash and no secret: {item}"]
-    expected = {"id": account.user_id, "username": account.username, "email": account.email, "is_active": active, "is_superuser": superuser, "protected": protected, "holds_place": holds_place, "pending_setup": pending_setup}
+    expected = {"id": account.user_id, "username": account.username, "email": account.email, "is_active": active, "is_superuser": superuser, "protected": protected, "holds_place": holds_place, "pending_setup": pending_setup, "avatar_url": avatar_url}
     found = {key: item[key] for key in expected}
     violations = [] if found == expected else [f"{account.username}: expected {expected}, got {found}"]
     _expect(violations, _instant(item["created_at"]) is not None, f"{account.username}: created_at is not a timestamp: {item['created_at']!r}")
@@ -4247,3 +4270,161 @@ class TestDecidedUnderTheWriteLock:
         _expect(violations, strays == {}, f"nothing may change but the target's onboarding rows — what else changed: {strays}")
         assert not violations, f"An onboarding reset with nobody in its window must reset as before:{_verdict(violations)}"
         print_success(f"204, {'every flow' if flow is None else flow} pending; first write «{_first_write(window)}»")
+
+
+# ============================================================================
+# N69-4: EVERY ACCOUNT'S AVATAR (point 20)
+# ============================================================================
+
+
+def _uploaded_avatar() -> str:
+    """An avatar uploaded to the app as the profile stores it, ``/api/v1/uploads/file/<id>``, a fresh id each time: the address only — PUT /settings/user checks no file."""
+    return f"/api/v1/uploads/file/{uuid.uuid4()}"
+
+
+def _linked_avatar() -> str:
+    """An avatar at an address outside the app, with a query of its own, a fresh one each time."""
+    return f"https://example.org/uadm-av/{uuid.uuid4().hex[:12]}.png?size=2"
+
+
+def _avatar_of(item: Any) -> Any:
+    """``avatar_url`` of an account as listed or answered; ``<missing>`` when the item lacks the field (before N69-4), ``<not listed>`` when there is no item."""
+    if not isinstance(item, dict):
+        return "<not listed>"
+    return item.get("avatar_url", "<missing>")
+
+
+async def _live_set_avatar(member: _Signed, avatar_url: Optional[str]) -> None:
+    """``member`` sets its own avatar — or clears it, with None — as its profile does: PUT /settings/user with its own session. Ends on what it promises: the settings it is answered carry that avatar."""
+    response = await _live("PUT", "/settings/user", cookie=member.cookie, json={"avatar_url": avatar_url})
+    assert response.status_code == 200 and _avatar_of(response.json()) == avatar_url, f"Setup: PUT /settings/user {{avatar_url: {avatar_url!r}}} as {member.account.username}: {response.status_code} {response.text}"
+
+
+async def _private_settings_rows(private: _Private, rows: list[tuple[int, _Account, Optional[str]]]) -> None:
+    """Settings rows written directly, each ``(its id, its account, its avatar)``: the ids are the case's choice, which no route offers."""
+    async with AsyncSession(private.engine) as session:
+        session.add_all([UserSettings(id=row_id, user_id=account.user_id, avatar_url=avatar) for row_id, account, avatar in rows])
+        await session.commit()
+
+
+def _patch_answer_violations(change: dict[str, bool], response: httpx.Response, listed: Optional[dict[str, Any]], account: _Account, *, superuser: bool, avatar_url: Optional[str]) -> list[str]:
+    """What is wrong with the answer of PATCH ``change`` on ``account``, an active account: a 200, exactly its ten fields with its own ``avatar_url`` — null without one —, and the item GET /users listed right after (``listed``)."""
+    if response.status_code != 200:
+        return [f"PATCH {change} on {account.username}: expected 200, got {response.status_code} {response.text}"]
+    answer = response.json()
+    violations = [f"PATCH {change}, its answer: {problem}" for problem in _user_item_violations(answer, account, active=True, superuser=superuser, avatar_url=avatar_url)]
+    _expect(violations, _avatar_of(answer) == avatar_url, f"PATCH {change} on {account.username}: its answer must carry the account's avatar_url {avatar_url!r}, got {_avatar_of(answer)!r}")
+    _expect(violations, _comparable(answer) == _comparable(listed), f"PATCH {change} on {account.username}: its answer must be the account as GET /users lists it right after: answered {answer}, listed {listed}")
+    return violations
+
+
+class TestAccountAvatarsOnTheLane:
+    """Lot N69-4 (point 20) on the lane's server: the case's accounts set their own avatars, and are found by id among whatever the neighbours registered."""
+
+    # red until N69-4
+    @pytest.mark.asyncio
+    async def test_the_list_carries_each_accounts_own_avatar_and_null_without_one(self, lane: _LaneRows) -> None:
+        """UADM-AV-01: GET /users → each of this case's five accounts, found by id, carries its own avatar_url as stored: the uploaded image of one (``/api/v1/uploads/file/<id>``), the address of another (with a query of its own); null for an account that set one and cleared it (a settings row without an avatar), for one that never wrote its settings (no row), and for the caller, the administrator. Each exactly its ten fields, every other value as before.
+
+        Each avatar is set by its account through PUT /settings/user, as its profile does; the two differ, and the caller
+        has none: an avatar read from the wrong account shows.
+        """
+        print_section("UADM-AV-01: GET /users carries each account's avatar")
+        admin = await _live_admin(lane)
+        uploaded = await _live_member(lane, "uadm_av_file")
+        linked = await _live_member(lane, "uadm_av_link")
+        cleared = await _live_member(lane, "uadm_av_cleared")
+        bare = await _live_register(lane, "uadm_av_bare")
+        file_avatar, link_avatar = _uploaded_avatar(), _linked_avatar()
+        await _live_set_avatar(uploaded, file_avatar)
+        await _live_set_avatar(linked, link_avatar)
+        await _live_set_avatar(cleared, _uploaded_avatar())
+        await _live_set_avatar(cleared, None)
+
+        response = await _live("GET", "/users", cookie=admin.cookie)
+
+        assert response.status_code == 200, f"GET /users as an administrator: {response.status_code} {response.text}"
+        items = {item.get("id"): item for item in response.json()["items"]}
+        # (account, is_superuser, avatar_url)
+        expected = [(admin.account, True, None), (uploaded.account, False, file_avatar), (linked.account, False, link_avatar), (cleared.account, False, None), (bare, False, None)]
+        wanted = {account.username: avatar for account, _, avatar in expected}
+        found = {account.username: _avatar_of(items.get(account.user_id)) for account, _, _ in expected}
+        violations: list[str] = []
+        _expect(violations, found == wanted, f"avatar_url must be each account's own, null without one: expected {wanted}, got {found}")
+        for account, superuser, avatar in expected:
+            violations += _user_item_violations(items.get(account.user_id), account, active=True, superuser=superuser, avatar_url=avatar)
+        assert not violations, f"GET /users must carry every account's own avatar (lot N69-4):{_verdict(violations)}"
+        print_success("an uploaded image and an address listed as stored; null without one, with a settings row or without")
+
+    # red until N69-4
+    @pytest.mark.asyncio
+    async def test_the_patch_answer_carries_the_accounts_avatar(self, lane: _LaneRows) -> None:
+        """UADM-AV-02: PATCH /users/{id} answers the account as GET /users lists it, avatar_url included: the answer replaces its row in the Users tab. Two accounts of this case, each promoted then demoted — PATCH {is_superuser: true}, then {is_superuser: false}, each 200 —: the one that set an uploaded avatar answers it both times, the one without an avatar answers null; each answer exactly its ten fields, and the item GET /users lists right after. The caller has no avatar: an answer that read the caller's settings shows."""
+        print_section("UADM-AV-02: the PATCH answer carries the account's avatar")
+        admin = await _live_admin(lane)
+        pictured = await _live_member(lane, "uadm_av_patched")
+        avatar = _uploaded_avatar()
+        await _live_set_avatar(pictured, avatar)
+        bare = await _live_register(lane, "uadm_av_patched_bare")
+
+        violations: list[str] = []
+        for account, expected in ((pictured.account, avatar), (bare, None)):
+            for superuser in (True, False):
+                change = {"is_superuser": superuser}
+                response = await _live("PATCH", f"/users/{account.user_id}", cookie=admin.cookie, json=change)
+                listed = await _listed(admin.cookie, "/users", account.user_id)
+                violations += _patch_answer_violations(change, response, listed, account, superuser=superuser, avatar_url=expected)
+        assert not violations, f"The PATCH answer must carry the account's avatar, as the list does (lot N69-4):{_verdict(violations)}"
+        print_success("promoted, then demoted: each answer carries the account's avatar, or null, as listed right after")
+
+
+class TestAccountAvatarsInProcess:
+    """Lot N69-4 (point 20) on a private instance: every account and every settings row are the test's, so the whole list is asserted, and the settings rows take the ids of other accounts."""
+
+    # red until N69-4
+    @pytest.mark.asyncio
+    async def test_every_account_carries_its_own_avatar_whatever_the_ids_of_the_settings_rows(self, private: _Private) -> None:
+        """UADM-AV-03: root (the caller) with an avatar at an address, ana with an uploaded one, ben with one at another address, cleo with a settings row and no avatar, dan with no settings row. Each row is written with the id of another account — ana's with ben's id, ben's with ana's, root's with dan's, cleo's with root's —: an avatar looked up by anything but the account's id lands on another account. GET /users → the instance's five accounts, each with its own avatar_url, null for cleo and dan, each exactly its ten fields; PATCH {is_superuser: true} on ana, then on dan → 200, each answer with its own avatar_url (ana's, null) and the item GET /users lists right after.
+
+        Premise first: no settings row has the id of its own account.
+        """
+        print_section("UADM-AV-03: each account's own avatar, the ids of the settings rows crossed")
+        root, cookie = await _admin(private)
+        ana, ben, cleo, dan = [await _add_user(private, name) for name in ("ana", "ben", "cleo", "dan")]
+        avatars = {root: _linked_avatar(), ana: _uploaded_avatar(), ben: _linked_avatar(), cleo: None, dan: None}
+        rows = [(ben.user_id, ana), (ana.user_id, ben), (dan.user_id, root), (root.user_id, cleo)]
+        assert all(row_id != account.user_id for row_id, account in rows), f"premise: each settings row takes the id of another account: {[(row_id, account.username, account.user_id) for row_id, account in rows]}"
+        await _private_settings_rows(private, [(row_id, account, avatars[account]) for row_id, account in rows])
+
+        items = await _private_listed(private, cookie)
+
+        wanted = {account.username: avatar for account, avatar in avatars.items()}
+        found = {account.username: _avatar_of(items.get(account.user_id)) for account in avatars}
+        violations: list[str] = []
+        _expect(violations, sorted(items) == sorted(account.user_id for account in avatars), f"GET /users must list every account of the instance, these five: {sorted(items)}")
+        _expect(violations, found == wanted, f"avatar_url must be each account's own, null without one: expected {wanted}, got {found}")
+        for account, avatar in avatars.items():
+            violations += _user_item_violations(items.get(account.user_id), account, active=True, superuser=account == root, avatar_url=avatar)
+        for account in (ana, dan):
+            change = {"is_superuser": True}
+            response = await _call(private, "PATCH", f"/users/{account.user_id}", cookie=cookie, json=change)
+            listed = (await _private_listed(private, cookie)).get(account.user_id)
+            violations += _patch_answer_violations(change, response, listed, account, superuser=True, avatar_url=avatars[account])
+        assert not violations, f"Each account must carry its own avatar, whatever the ids of the settings rows (lot N69-4):{_verdict(violations)}"
+        print_success("five accounts, each its own avatar or null, in the list and in the PATCH answers")
+
+    # red until N69-4
+    def test_admin_user_read_declares_avatar_url_null_by_default(self) -> None:
+        """UADM-AV-04: AdminUserRead declares ``avatar_url: Optional[str]``, null by default — an AdminUserRead built without it, as UADM-064 builds one, has no avatar —, and nothing else changes: its fields are exactly the ten an account is listed with."""
+        print_section("UADM-AV-04: AdminUserRead.avatar_url")
+        declared = AdminUserRead.model_fields.get("avatar_url")
+        assert declared is not None, f"AdminUserRead must declare avatar_url (lot N69-4, point 20); it declares {sorted(AdminUserRead.model_fields)}"
+        built = AdminUserRead(id=1, username="built", email="built@example.com", is_active=True, is_superuser=False, created_at=utcnow(), protected=False)
+
+        violations: list[str] = []
+        _expect(violations, declared.annotation == Optional[str], f"avatar_url must be an Optional[str]: {declared.annotation!r}")
+        _expect(violations, not declared.is_required() and declared.default is None, f"avatar_url must default to null: required {declared.is_required()}, default {declared.default!r}")
+        _expect(violations, getattr(built, "avatar_url", "<missing>") is None, f"an account built without it must have no avatar: {getattr(built, 'avatar_url', '<missing>')!r}")
+        _expect(violations, set(AdminUserRead.model_fields) == USER_ITEM_KEYS, f"AdminUserRead must be exactly {sorted(USER_ITEM_KEYS)}: {sorted(AdminUserRead.model_fields)}")
+        assert not violations, f"AdminUserRead.avatar_url broke its contract:{_verdict(violations)}"
+        print_success("an Optional[str], null by default, ten fields")

@@ -13,7 +13,9 @@
  * @see https://github.com/ecyrbe/zodios
  */
 import axios, {type AxiosError, type InternalAxiosRequestConfig} from 'axios';
+import {zodValidationPlugin} from '@zodios/core';
 import {createApiClient} from './generated';
+import {reportApiFailure, requestPath} from './apiErrorConsole';
 import {goto} from '$app/navigation';
 import {browser} from '$app/environment';
 import {debug} from '$lib/debug';
@@ -103,7 +105,8 @@ axiosInstance.interceptors.request.use(
         config.headers.set('Accept-Language', lang);
 
         // Debug logging
-        debug.log('API', `${config.method?.toUpperCase() || 'GET'} ${config.url}`);
+        // The path only: a query string can carry a token (H-60)
+        debug.log('API', `${config.method?.toUpperCase() || 'GET'} ${requestPath(config.url)}`);
 
         return config;
     },
@@ -141,6 +144,9 @@ axiosInstance.interceptors.response.use(
         return response;
     },
     (error: AxiosError) => {
+        // One console line for an unexpected failure, without a word of its data (H-60): apiErrorConsole.ts
+        reportApiFailure(error);
+
         // A 401 means the session is gone: go to the login, carrying the page to come back to.
         // On the root the login is already there, and a failed sign-in answers 401 too; a link page has no session.
         if (error.response?.status === 401) {
@@ -191,6 +197,25 @@ axiosInstance.interceptors.response.use(
 export const zodiosApi = createApiClient(API_BASE, {
     axiosInstance,
     validate: 'response', // Validate responses with Zod, trust request params
+});
+
+// Zodios's own response check, replaced under its name so that it keeps its place in the plugin chain (H-60): an answer
+// that breaks its schema is written to the console (apiErrorConsole.ts), then rejected as before.
+const responseValidation = zodValidationPlugin({validate: 'response', transform: true, sendDefaults: false});
+const validateResponse = responseValidation.response;
+zodiosApi.use({
+    name: 'zod-validation',
+    request: responseValidation.request,
+    response: validateResponse
+        ? async (api, config, response) => {
+              try {
+                  return await validateResponse(api, config, response);
+              } catch (error) {
+                  reportApiFailure(error);
+                  throw error;
+              }
+          }
+        : undefined,
 });
 
 // =============================================================================

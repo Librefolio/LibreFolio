@@ -87,6 +87,7 @@ from backend.app.services.platform.instance_backup.paths import (
     is_plain_dir,
     lock_path,
     previous_dir,
+    read_regular_file,
     restore_dir,
     restore_state_path,
     stage_data_dir,
@@ -326,8 +327,7 @@ def _read_state(data_dir: Path) -> RestoreState | None:
         if not stat.S_ISREG(os.lstat(path).st_mode):
             logger.error("The state of the restore is not a file: it is ignored")
             return None
-        with os.fdopen(os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)), "rb") as handle:
-            raw = handle.read()
+        raw = read_regular_file(path)
     except FileNotFoundError:
         return None
     except OSError as exc:
@@ -467,7 +467,9 @@ def confirm_restore(stage_id: str, *, confirmed_by: str, data_dir: Path | None =
         raise RestoreStageMissingError("No checked copy has this id")
     try:
         report = read_report(data_dir, stage_id)
-    except OSError:
+    except FileNotFoundError:
+        # No report it can read (B-53). A transient error of the disk is no missing copy: it reaches the caller, an error
+        # to try again, never a «not found» that makes the tab forget the check (B-55).
         raise RestoreStageMissingError("No checked copy has this id") from None
     if report.blockers:
         raise RestoreNotRestorableError(f"The archive cannot be restored: {', '.join(report.blockers)}")

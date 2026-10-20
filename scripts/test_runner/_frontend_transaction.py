@@ -31,6 +31,10 @@ def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
            "src/lib/features/transactions/import/GapFixStep.test.ts",
            "src/lib/features/transactions/import/ReportSetCard.test.ts",
            "src/lib/features/transactions/import/ParseDetailModal.test.ts",
+           "src/lib/features/transactions/import/BrimNoticeList.test.ts",
+           "src/lib/features/transactions/import/importNotices.test.ts",
+           "src/lib/features/transactions/import/NoticeCounts.test.ts",
+           "src/lib/features/transactions/import/AnalyzeStep.test.ts",
            "src/lib/features/transactions/bulk/bulkTodos.test.ts",
            "src/lib/features/transactions/transactionTypeStore.test.ts",
            "src/routes/(app)/transactions/filterState.test.ts"]
@@ -831,6 +835,6 @@ def populate_registry(registry: dict) -> None:
         desc="W-B39, each test on a disposable account with brokers of its own, the page's commit answered through page.route by a refusal the generated client's response schema accepts: S1 a linked TRANSFER pair split from its row menu and refused with wacFxUnavailable on the split → an error toast naming the pair (USD, no {placeholder}), the confirmation still open and usable, the pair still linked after Cancel; P1 a WITHDRAWAL and a DEPOSIT linked from the selection toolbar's plain confirm and refused with accessDenied on the receiving broker → an error toast naming that broker, the confirmation still open, both rows still standalone after Cancel",
         tests="transactions/tx-split-refusal.spec.ts",
     )
-    add_test(cat, "tx-unit", front_tx_unit, test_names=False, name="TX Unit Tests (Vitest)", desc="Pure unit tests: txPayloadHelpers + txCommitApi + promoteHelpers + splitRowCharges + fixRowLifecycle + duplicateRecheckPayload + importReportSets + gapFixModel + GapFixStep (jsdom)", tests="vitest")
+    add_test(cat, "tx-unit", front_tx_unit, test_names=False, name="TX Unit Tests (Vitest)", desc="Pure unit tests: txPayloadHelpers + txCommitApi + promoteHelpers + splitRowCharges + fixRowLifecycle + duplicateRecheckPayload + importReportSets + gapFixModel + GapFixStep (jsdom) + BrimNoticeList's report-issue link (jsdom) + the notice counts of step 3 (importNotices, NoticeCounts, AnalyzeStep; jsdom)", tests="vitest")
     add_test(cat, "all", front_transaction_all, test_names=False, name="All Transaction Tests", desc="Run all Transaction E2E tests")
     registry["front-transaction"] = cat

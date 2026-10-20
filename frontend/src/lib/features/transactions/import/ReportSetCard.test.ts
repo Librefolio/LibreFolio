@@ -83,8 +83,16 @@
  * that unticks the set must leave its checkbox unticked — Svelte keeps the last `checked` it wrote, and from 'some' to
  * 'none' that value does not change, so the browser's own toggle stays on screen.
  *
+ * B-52 (1.3, the operation date; the developer, 20/10/2026: «the problem seems to be only the suggested account-opening date,
+ * which must move back») — written red first. On a first import (no history_start) the history note,
+ * report-set-history[data-kind="first"], proposes the opening on the eve of the first segment's start — the oldest trade date of
+ * the custody export, where the plugin now opens every set — whatever a must_cover role covers: also when the cash statement
+ * starts later. The old rule (design A13) proposed the eve of the cash statement's start there. A guard keeps the usual shape,
+ * the cash statement starting first. The note publishes no date of its own: it is compared through formatIsoDay.
+ *
  * Plan: `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md`, F2.0, §14 G.2 and §17.5;
- * step 7: `plan-phase00BrimDanskeBankStep7ButtonAndR6.prompt.md`, §2 and §4.
+ * step 7: `plan-phase00BrimDanskeBankStep7ButtonAndR6.prompt.md`, §2 and §4;
+ * B-52: `LibreFolio_developer_journal/Release_2/Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md`, «B-52 · il caso A13, la decisione del developer».
  */
 import {beforeAll, describe, expect, it, vi} from 'vitest';
 import {createRawSnippet, type Component} from 'svelte';
@@ -291,6 +299,53 @@ const PREVIEW_LONG_ROLES = {
     members: MEMBERS.map((entry) => ({...entry, role: entry.role === null ? null : LONG_ROLE_OF[entry.role]})),
     roles: PREVIEW.roles.map((role) => ({...role, code: LONG_ROLE_OF[role.code]})),
 };
+
+// B-52: a first import — nothing in LibreFolio yet — of one custody export and one cash statement. The first segment starts on
+// the custody export's oldest trade date, and the plugin opens the set on its eve, also when the cash statement starts later
+// (the A13 shape). Every eve is written out here, never computed with the product's dayBefore.
+const CU_FIRST = setFile('cu-first', 'probe-custody-first.xlsx', 8);
+const CA_FIRST = setFile('ca-first', 'probe-cash-first.csv', 9);
+const SET_FIRST_IMPORT = {...SET, files: [CU_FIRST, CA_FIRST]};
+const FIRST_IMPORT = {
+    segmentStart: '2021-03-08',
+    segmentEnd: '2021-11-26',
+    /** The eve of the first segment's start: the opening the card proposes. */
+    eve: '2021-03-07',
+    /** The A13 shape: the cash statement starts a week after the first segment; the old rule proposed its eve. */
+    cashLate: '2021-03-15',
+    eveOfCashLate: '2021-03-14',
+    /** The usual shape: the cash statement starts two weeks before the first segment. */
+    cashEarly: '2021-02-22',
+    eveOfCashEarly: '2021-02-21',
+    cashEnd: '2021-11-30',
+    custodyRows: 53,
+    cashRows: 212,
+} as const;
+
+/** The notice the backend adds when the cash statement starts after the custody period (brim_report_sets.py). */
+const CASH_STARTS_LATE = {severity: 'warning', code: 'coverage_starts_late', message: 'The cash export starts after the custody period', context: {role: 'cash', covered_role: 'custody', date: FIRST_IMPORT.cashLate}};
+
+/** The preview of SET_FIRST_IMPORT on a first import, its cash statement starting on `cashStart`. */
+function firstImportPreview(cashStart: string, warnings: unknown[] = []) {
+    return {
+        broker_id: BROKER,
+        plugin_code: PLUGIN_CODE,
+        batch_id: BATCH,
+        members: [member(CU_FIRST, 'custody', FIRST_IMPORT.custodyRows, [{axis: 'trade', start: FIRST_IMPORT.segmentStart, end: FIRST_IMPORT.segmentEnd}]), member(CA_FIRST, 'cash', FIRST_IMPORT.cashRows, [{axis: 'value', start: cashStart, end: FIRST_IMPORT.cashEnd}])],
+        roles: [
+            {code: 'custody', required: true, multiple: true, status: 'present', file_ids: [CU_FIRST.file_id]},
+            {code: 'cash', required: true, multiple: true, status: 'present', file_ids: [CA_FIRST.file_id]},
+        ],
+        missing: [],
+        segments: [{start: FIRST_IMPORT.segmentStart, end: FIRST_IMPORT.segmentEnd}],
+        gaps: [],
+        history_start: null,
+        history_end: null,
+        history_count: 0,
+        warnings,
+        complete: true,
+    };
+}
 
 // ---------------------------------------------------------------------------
 // Mounting and reading
@@ -872,6 +927,35 @@ describe('ReportSetCard — H · R3: each timeline row names its role whole', ()
         expect(text(the('report-set-timeline-label', {role: LONG_CUSTODY_ROLE.code}, timeline)), 'the custody row names its role whole').toBe(LONG_CUSTODY_ROLE.description);
         expect(text(the('report-set-timeline-label', {role: LONG_CASH_ROLE.code}, timeline)), 'the cash row names its role whole').toBe(LONG_CASH_ROLE.description);
         expect(text(the('report-set-timeline-label', {role: 'history'}, timeline)), 'the history row has its label').not.toBe('');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// B-52 — the opening proposed on a first import: the eve of the first segment's start
+// ---------------------------------------------------------------------------
+
+describe('ReportSetCard — B-52: a first import proposes the opening on the eve of the first segment’s start', () => {
+    it('the cash statement starts after the first segment (A13): the note proposes the eve of the segment’s start, not of the cash statement’s', async () => {
+        await mountCard({set: SET_FIRST_IMPORT, preview: firstImportPreview(FIRST_IMPORT.cashLate, [CASH_STARTS_LATE])});
+
+        // Premise: the card holds the A13 shape — the custody export from the first segment's start, the cash statement from later.
+        expect(the('report-set-timeline-bar', {'file-id': CU_FIRST.file_id}), 'premise: the custody export starts with the first segment').toHaveAttribute('data-start', FIRST_IMPORT.segmentStart);
+        expect(the('report-set-timeline-bar', {'file-id': CA_FIRST.file_id}), 'premise: the cash statement starts a week later').toHaveAttribute('data-start', FIRST_IMPORT.cashLate);
+
+        const note = the('report-set-history', {kind: 'first'});
+        expect(text(note), `the eve of the first segment’s start (${FIRST_IMPORT.eve}), whatever the cash statement covers`).toContain(formatIsoDay(FIRST_IMPORT.eve));
+        expect(text(note), `not the eve of the cash statement’s start (${FIRST_IMPORT.eveOfCashLate}): the A13 rule is gone`).not.toContain(formatIsoDay(FIRST_IMPORT.eveOfCashLate));
+    });
+
+    it('B-52 (guard: true before B-52 too): the cash statement starts before the first segment: the note proposes the eve of the segment’s start, not of the cash statement’s', async () => {
+        await mountCard({set: SET_FIRST_IMPORT, preview: firstImportPreview(FIRST_IMPORT.cashEarly)});
+
+        expect(the('report-set-timeline-bar', {'file-id': CU_FIRST.file_id}), 'premise: the custody export starts with the first segment').toHaveAttribute('data-start', FIRST_IMPORT.segmentStart);
+        expect(the('report-set-timeline-bar', {'file-id': CA_FIRST.file_id}), 'premise: the cash statement starts two weeks earlier').toHaveAttribute('data-start', FIRST_IMPORT.cashEarly);
+
+        const note = the('report-set-history', {kind: 'first'});
+        expect(text(note), `the eve of the first segment’s start (${FIRST_IMPORT.eve})`).toContain(formatIsoDay(FIRST_IMPORT.eve));
+        expect(text(note), `not the eve of the cash statement’s start (${FIRST_IMPORT.eveOfCashEarly}): an earlier cash statement does not move the opening back`).not.toContain(formatIsoDay(FIRST_IMPORT.eveOfCashEarly));
     });
 });
 

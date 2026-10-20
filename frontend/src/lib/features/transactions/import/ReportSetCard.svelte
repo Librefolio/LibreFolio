@@ -103,17 +103,10 @@
         if (preview.history_start) return {kind: 'later', date: String(preview.history_start)};
         const segments = preview.segments ?? [];
         if (segments.length === 0) return null;
-        // The opening checkpoint is the eve of the first segment, or of the first day the
-        // balance-providing exports cover when they start later (design A13).
-        let start = String(segments[0].start);
-        for (const role of roles.filter((r) => r.must_cover)) {
-            for (const member of (preview.members ?? []).filter((m) => m.role === role.code)) {
-                for (const coverage of member.coverage ?? []) {
-                    if (String(coverage.start) > start) start = String(coverage.start);
-                }
-            }
-        }
-        return {kind: 'first', date: dayBefore(start)};
+        // The opening checkpoint is the eve of the first segment, its oldest trade date, also when a balance-providing export
+        // starts later: a trade is recorded on its trade date, so the opening precedes all of them (B-52, the developer,
+        // 20/10/2026: «la data di apertura conto suggerita, che va spostata all'indietro»).
+        return {kind: 'first', date: dayBefore(String(segments[0].start))};
     });
 
     const inputs: Record<string, HTMLInputElement | undefined> = $state({});

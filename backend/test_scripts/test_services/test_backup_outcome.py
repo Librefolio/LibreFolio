@@ -55,6 +55,13 @@ outlives the restart, the swap, the commit and a rollback (``test_backup_apply.p
     written (``issue_ticket``), read whole and valid, removed (``drop_ticket``) or found missing by a read, each alone;
     and when it fails in another way, a return to the first failure included. Each data directory remembers its own: two
     with the same failure, one error each. The answers never change: ``None``.
+(h) B-53, the reader of the ticket's file (``paths.read_regular_file``, one byte past 4096 at most). A folder in its
+    place: ``None`` and one error «cannot be read», as (c) and (g) have it, and no descriptor left open on it however
+    often it is read — ``os.fdopen`` refused a folder without closing the descriptor ``os.open`` gave, one per read,
+    which anyone without a session could repeat with any well-formed ticket. A FIFO in its place: ``None`` at once, never
+    a read waiting for a writer that never comes, logged as a ticket's file that cannot be read, one error however often
+    it is read, no descriptor left open. A link, mode 000 and ``os.open`` refusing it keep (g)'s answers and events; a
+    link's ``error`` may name another ``OSError`` class, which no test pins.
 
 How. Pure: every data directory under ``tmp_path``, its ``.restore`` made as ``ensure_private_dir`` makes it. The
 restore's state is a ``RestoreState`` built in the test as a start leaves it: ``read_outcome`` reads only the state it is
@@ -65,6 +72,10 @@ configured data directory is a folder of the test that must stay absent (``confi
 imported, autouse), but in (f), where it is the test's instance. ``now`` is given everywhere but in (f). Logs are read
 with ``structlog.testing.capture_logs`` and pytest's ``caplog``, each behind a barrier: a canary through a logger of
 ``outcome``'s name must reach it. Modes and links are POSIX-only. No database, no server, no network.
+(h)'s descriptors are found in ``/dev/fd`` by what they are open on (``descriptors_on`` of ``test_backup_archive.py``);
+its FIFO is read in a thread waited for a deadline (``answered_within``, of the same module), a read still waiting then
+released by a writer that appears and leaves, so that a red run never hangs the suite. FIFOs and ``/dev/fd`` are
+POSIX-only too.
 """
 
 from __future__ import annotations
@@ -95,6 +106,7 @@ from backend.app.services.platform.instance_backup import paths
 from backend.app.services.platform.instance_backup.apply import Boot, RestoreState, SwapEntry
 from backend.app.services.platform.instance_backup.paths import SWAPPED_FOLDERS, BackupPathError, ensure_private_dir, restore_dir, restore_state_path
 from backend.test_scripts.test_services import test_backup_staging as cases
+from backend.test_scripts.test_services.test_backup_archive import answered_within, close_all, descriptors_on, needs_dev_fd, needs_fifo
 from backend.test_scripts.test_utils import print_section, print_success
 
 # Autouse: the production data directory of this process is a folder of the test that must stay absent.
@@ -1306,3 +1318,71 @@ def test_each_data_directory_remembers_its_own_failure(tmp_path, caplog, monkeyp
     assert answers == [None] * 4, f"{way}: None at every read: {answers}"
     assert warned(events) == [("error", failure) for failure in failures], f"{way}: one error for each data directory: {lines(events)}"
     print_success(f"{way}: two data directories, one error each")
+
+
+# =============================================================================
+# (h) B-53: a folder or a FIFO in place of the ticket's file
+# =============================================================================
+#
+# ``_read_record`` opened the ticket's file with ``os.open`` (``O_NOFOLLOW``, without ``O_NONBLOCK``) and wrapped it with
+# ``os.fdopen``. A folder in its place: ``None`` and one error, as it should, but one descriptor left open per read —
+# ``os.fdopen`` refuses a folder without closing the descriptor it is handed — and anyone, without a session, reads it as
+# often as they like with any well-formed ticket. A FIFO in its place held the read for good, waiting for a writer. Lot
+# B-53 reads it through ``paths.read_regular_file``: the answers and the events stay those of (c) and (g).
+
+#: Reads of a ticket's file that is a FIFO: one error for all of them, while the same failure lasts (B-42).
+FIFO_READS = 3
+
+
+def a_ticket_s_file_replaced(root: Path, make: Callable[[Path], None]) -> tuple[str, RestoreState, Path]:
+    """The right ticket of a pending restore in ``root``, then its file replaced by what ``make`` puts at its path: the
+    ticket, the restore, the path."""
+    state = restore_in(root, "pending")
+    ticket = issued(root)
+    path = ticket_file(root)
+    path.unlink()
+    make(path)
+    assert descriptors_on(path) == [], "precondition: no descriptor of this process is open on what replaced the ticket's file"
+    return ticket, state, path
+
+
+@needs_dev_fd
+def test_a_folder_in_place_of_the_ticket_s_file_opens_nothing_and_leaves_no_descriptor_open(tmp_path, caplog, monkeypatch):
+    """(h) B-53 The right ticket and its restore, the ticket's file a folder, read twenty times: ``None`` at every read
+    and one error «The restore outcome ticket cannot be read» while the same failure lasts (B-42), as before B-53; and no
+    descriptor left open on the folder. Red before B-53: twenty descriptors, one per read, for as long as the server
+    runs."""
+    print_section("(h) B-53: a folder or a FIFO in place of the ticket's file")
+    root = an_instance(tmp_path)
+    ticket, state, path = a_ticket_s_file_replaced(root, lambda where: where.mkdir(mode=0o700))
+    with logs_of_outcome(caplog, monkeypatch) as events:
+        answers = [opened(ticket, state, root) for _ in range(cases.LEAK_READS)]
+    left_open = close_all(descriptors_on(path))
+    assert answers == [None] * cases.LEAK_READS, f"a folder: None at every read: {[shown(answer) for answer in answers]}"
+    assert warned(events) == [("error", TICKET_CANNOT_BE_READ)], f"a folder: one error while the same failure lasts: {lines(events)}"
+    assert left_open == [], f"{len(left_open)} descriptor(s) left open on the folder by {cases.LEAK_READS} reads of the ticket's file: {left_open}"
+    print_success(f"a folder: None at each of {cases.LEAK_READS} reads, one error, no descriptor left open")
+
+
+@needs_dev_fd
+@needs_fifo
+def test_a_fifo_in_place_of_the_ticket_s_file_opens_nothing_at_once_and_is_one_error(tmp_path, caplog, monkeypatch):
+    """(h) B-53 The right ticket and its restore, the ticket's file a FIFO, read three times: ``None`` at once at every
+    read — never a read waiting for a writer that never comes — logged as a ticket's file that cannot be read (the event
+    «The restore outcome ticket cannot be read»), one error for the three (B-42), and no descriptor left open on it. Each
+    read runs in a thread waited for a deadline; one still waiting then is released, the reads stop there, and the test
+    fails. Red before B-53: the first read waits for a writer."""
+    root = an_instance(tmp_path)
+    ticket, state, path = a_ticket_s_file_replaced(root, lambda where: os.mkfifo(where, 0o600))
+    answers = []
+    with logs_of_outcome(caplog, monkeypatch) as events:
+        for _ in range(FIFO_READS):
+            answers.append(answered_within(lambda: opened(ticket, state, root), path))
+            if answers[-1].blocked:
+                break  # a red run waits once, not once per read
+    left_open = close_all(descriptors_on(path))
+    assert not answers[-1].blocked, f"a FIFO: read {len(answers)} was still waiting after {answers[-1].deadline}s: the ticket's file was opened without O_NONBLOCK, and the read waited for a writer that never comes"
+    assert [(answer.returned, answer.raised) for answer in answers] == [(None, None)] * FIFO_READS, f"a FIFO: None at every read, nothing raised: {answers}"
+    assert warned(events) == [("error", TICKET_CANNOT_BE_READ)], f"a FIFO: one error, a ticket's file that cannot be read, while the same failure lasts: {lines(events)}"
+    assert left_open == [], f"{len(left_open)} descriptor(s) left open on the FIFO: {left_open}"
+    print_success(f"a FIFO: None at once at each of {FIFO_READS} reads, one error, no descriptor left open")
