@@ -9238,3 +9238,254 @@ Ogni punto ha un test nei passi 2–4.
 >   dopo `all-backend`: tocca solo la docstring, e ruff e black sono puliti.
 > - **D3 resta ad A e J**, che hanno `requestIdOf(error)`. Finché l'id non compare nei messaggi, la pagina admin dice
 >   di chiederlo dalla console del browser: va aggiornata quando D3 entra.
+
+### Lotto «N70: il paragrafo su Tailscale nella guida dei controlli di connessione» (19/10, 18:10) — in corso, PAUSA
+
+> Dal coordinatore (19/10, 18:10), con le risposte del developer. Solo doc, in inglese, un commit a parte che il
+> coordinatore fa entrare presto. Il developer, testuale: «quando hai scritto la guida dimmelo così la seguo e ti dico
+> se ha funzionato». Sulla sua nightly Docker le richieste arrivano da **`172.28.0.1`**, una rete compose sua: non
+> `172.17` né `172.18`. La guida deve dire come trovare quell'indirizzo (`docker network inspect`, o il log) e cosa
+> mettere in `FORWARDED_ALLOW_IPS`; il `172.16.0.0/12` lo copre.
+> Le altre risposte, per i lotti dopo:
+> - il link della guida per ogni controllo: la mia soluzione, cioè una mappa nel frontend controllata da un test (A lo
+>   saprà dal coordinatore);
+> - i testi dei controlli: i miei, in inglese; IT/FR/ES alla fine, con Aphra.
+> - Ordine dopo N70: il piano breve aggiornato di H-55 (CSP v2), poi i lotti dei controlli.
+
+**Pausa generale alle 18:12 (il developer spegne la macchina).** HEAD `2c7fc7b8d` (H-60 entrato: `bf16865ed`,
+`2c7fc7b8d`); worktree pulito, porta 6181 libera, nessun processo della corsia. La corsia in `/tmp` va ricreata con
+`db populate --force --clean`.
+
+**Già verificato** (sul codice e sulle fonti; da non rifare):
+- **La pagina.** `mkdocs_src/docs/admin/connection_checks.en.md`, `## 🧰 Behind a Reverse Proxy {: #reverse-proxy }`
+  (l.157) e `### 🧭 The Visitor's Address {: #client-address }` (l.203). Il paragrafo «When LibreFolio does not trust
+  your proxy» (~l.266) già nomina `FORWARDED_ALLOW_IPS`, `docker network inspect` e l'esempio `172.18.0.0/16`. Il
+  paragrafo su Tailscale va lì o subito dopo.
+- **uvicorn 0.52.4.** `Config` legge `FORWARDED_ALLOW_IPS` dall'ambiente (default `127.0.0.1`, `config.py:357`); accetta
+  una lista separata da virgole, indirizzi **e reti** (`ip_network`, `middleware/proxy_headers.py:136`) e `*`. Quindi
+  `172.16.0.0/12` funziona. Il Docker parte con `uvicorn backend.app.main:app` (CLI) e legge l'ambiente; compose passa
+  `.env` con `env_file: .env`.
+- **Il log d'accesso** di uvicorn scrive l'indirizzo di `scope["client"]`, già riscritto dal middleware dei proxy. Prima
+  della correzione si vede il gateway (`172.28.0.1:porta - "GET …"`), dopo l'indirizzo del visitatore: è la verifica da
+  dare al developer.
+- **Le due configurazioni Tailscale della guida** (`service_exposure.en.md`):
+  - `tailscale serve --bg 6040` / `tailscale funnel --bg 6040` sul server: il proxy va su `http://127.0.0.1:6040`.
+    LibreFolio installato sull'host vede `127.0.0.1`, già fidato. In Docker, il proxy di Docker passa la connessione al
+    container, che vede **il gateway della sua rete**.
+  - Livello 4: un container Tailscale (`network_mode: bridge`) con socat verso `HOST_IP:HOST_PORT`, l'IP di LAN del
+    server. Anche qui il container di LibreFolio vede il gateway della sua rete (NAT a forcina).
+  - In tutti e due i casi va messo in `FORWARDED_ALLOW_IPS` il gateway (`172.28.0.1` per il developer) oppure
+    `172.16.0.0/12`.
+- **Come trovare il gateway** (container `librefolio`, `container_name` in compose):
+  - `docker inspect librefolio --format '{{range .NetworkSettings.Networks}}{{.Gateway}}{{end}}'`;
+  - oppure `docker network inspect <rete>` (`IPAM.Config[].Gateway`/`Subnet`);
+  - oppure il log d'accesso, sopra.
+- **Le avvertenze da scrivere.**
+  - Una rete compose ricreata (`down` e poi `up`) può cambiare sottorete: l'IP esatto è il più stretto, ma va
+    ricontrollato; `172.16.0.0/12` sopravvive al cambio, ma si fida di ogni rete Docker dell'host.
+  - Le reti oltre `172.31` (pool `192.168.x.x/20`) non sono coperte.
+  - Il gateway è anche l'indirizzo di ogni connessione fatta sul server stesso, e via IPv6 dal resto della rete (vedi
+    `#limits`): se Tailscale sul server è l'unica via d'ingresso, conviene pubblicare la porta solo su loopback,
+    `127.0.0.1:6040:6040`. Non vale per il livello 4, che passa dall'IP di LAN.
+- **Tailscale e gli header.** Serve e Funnel scrivono `X-Forwarded-For` con l'IP del client (codice
+  `ipn/ipnlocal/serve.go`, issue #19728). `X-Forwarded-Proto` è dubbio secondo le fonti (issue #7061, in corso). La
+  guida (riga ~174) e il livello 4 dicono già «send both»: è **da verificare sul codice di Tailscale**
+  (`ipn/ipnlocal/serve.go`) prima di scrivere, e da correggere se serve, perché il cookie `Secure` dipende da
+  `X-Forwarded-Proto`.
+
+**Prossimo passo esatto**:
+1. Verificare `X-Forwarded-Proto` nel `serve.go` di Tailscale (web_fetch del file su GitHub, versione corrente).
+2. Il brief al docs-writer con i fatti sopra: il paragrafo «Tailscale Serve and Funnel» in `#client-address` (Docker:
+   il gateway, come trovarlo, cosa mettere, la verifica nel log, le avvertenze; host: niente da fare); nessuno stamp se
+   la pagina ha già un debito di traduzione (da controllare); `mkdocs build` stretto e `check-links`.
+3. Mandare al coordinatore i percorsi per il commit a parte e il messaggio per il developer: «la guida è pronta, sezione
+   …, seguila e dimmi se ha funzionato».
+
+> **H-55 v2 confermata dal developer (19/10, 18:15, durante la pausa).** Testuale: «confermo quanto scrivi, facciamolo
+> come dici, di default attivo, e si allargano le maglie solo all'occorrenza». Sì a Q1–Q4:
+> - la sonda a immagine per l'indirizzo pubblico;
+> - l'avviso per gli script iniettati, in console e nella scheda Sicurezza;
+> - le tre regole base anche sulla documentazione;
+> - le categorie del cloud «virtuali» nel runner.
+>
+> La CSP è sempre applicata, direttiva per direttiva, senza interruttore. In coda dopo N70.
+>
+> Prima serve un **piano breve aggiornato**, perché da allora è cambiato qualcosa:
+> - H-60 ha toccato `security_headers.py` (il 500 non gestito è JSON, scritto nel log una volta) e ha messo
+>   `request_id` nello stack, subito dopo `activity`;
+> - la patch dei rossi di H-55 v1 (`files/parked/h55-csp-enforce-reds-on-d6c252ec4.patch`) va rifatta sulla base di
+>   oggi;
+> - la console del frontend ora scrive `console.error('[API]', …)`, ma la CSP non c'entra.
+>
+> Il disegno della CSP, cioè direttive, rischi e ordine, non cambia.
+
+> **N70, passo 1 fatto (20/10, 09:20, durante l'attesa dei test-author di H-60r).** Verificato nel sorgente attuale di
+> Tailscale (`ipn/ipnlocal/serve.go`, ramo `main`, ultimo cambio 25/09/2026, commit `3d62394a`), funzione
+> `addProxyForwardedHeaders`, chiamata dal `Rewrite` del reverse proxy di Serve e Funnel:
+> - `X-Forwarded-Host` è l'`Host` ricevuto;
+> - `X-Forwarded-Proto: https` c'è **solo se la richiesta arriva in TLS** (`r.In.TLS != nil`): con Serve in HTTPS (il
+>   default) e con Funnel (sempre HTTPS) c'è; con `tailscale serve --http=…` no, ma lì anche il visitatore è in http;
+> - `X-Forwarded-For` è l'indirizzo d'origine della connessione (`SrcAddr`).
+>
+> Le tre intestazioni sono scritte con `Set`, che sostituisce quelle mandate dal client. Quindi «manda entrambe» della
+> guida (`connection_checks.en.md` ~l.174, Level 4 di `service_exposure`) **è giusto per HTTPS**. Nel paragrafo nuovo
+> basta una frase: con `--http` niente `X-Forwarded-Proto`, ed è corretto così. Il consiglio sul cookie non cambia.
+
+#### Contratto della mappa delle guide per A (N69d), 19/10 18:20, inviato ad A prima del codice
+
+- **Modulo** (di H): `frontend/src/lib/features/instance/checkGuides.ts`.
+- **Export**:
+  - `checkGuidePath(checkId: string): string | undefined`, da usare nel bottone;
+  - `CHECK_GUIDES: Readonly<Record<string, string>>`, la mappa intera.
+- **Chiave**: il `finding.id` di A, così com'è, cioè il `check_id` del server oppure l'id del controllo del browser
+  (`accounts.openRegistration`, `OPEN_REGISTRATION_NOTICE_ID`). Lo stesso link vale per ogni stato, superati compresi.
+- **Valore**: un percorso relativo a `/mkdocs/`, senza lingua e senza `/` iniziale, nella forma URL di cartella più
+  ancora esplicita. Va passato tale e quale a `DocsLink path`, che aggiunge la lingua. `localizedFallbackPath` non
+  serve: aggiunge comunque il prefisso della lingua.
+- **`undefined`**: id sconosciuto, quindi niente bottone.
+- **Contenuto previsto** (18 voci; le ancore verificate in EN sul `2c7fc7b8d`):
+  - `platform.jwt_secret` → `admin/configuration/#secrets`;
+  - `platform.secrets_set_twice` → `#secret-files`;
+  - `platform.instance_key` → `#instance-key`;
+  - `platform.session_cookie` → `admin/connection_checks/#session-cookie` (4 lingue);
+  - `platform.client_address` → `admin/connection_checks/#untrusted-proxy` (**nuova**, da mettere col docs-writer
+    dentro N70: un titolo `####` al posto del grassetto «When LibreFolio does not trust your proxy»);
+  - `platform.frame_protection` → `admin/configuration/#frame-protection` (**nuova**);
+  - `platform.csp_report_only` → `admin/configuration/#csp-report-only` (**nuova**; con H-55 v2 diventa una
+    sottosezione di `#csp`);
+  - `platform.log_level` e `platform.test_mode` → `#startup-checks`;
+  - `platform.plugin_secrets` → `#plugin-secrets`;
+  - `accounts.login_limit` → `#login-limit`;
+  - `backup.panel_token` → `admin/hosting_providers/#panel-token`;
+  - `backup.upload_limit` e `backup.restore_limit` → `#restore-upload-limit`;
+  - `email.smtp` → `admin/email/#variables`;
+  - `email.smtp_encryption` → `#encryption-modes`;
+  - `email.links` → `#links-check`;
+  - `accounts.openRegistration` → `admin/settings/#open-registration-warning`.
+  - Con H-55 v2 si aggiunge la voce del controllo del browser «script bloccato», con id e ancora da fissare nel suo
+    piano breve.
+- **Lingue**:
+  - `email` e `hosting_providers` esistono solo in inglese. La build le pubblica anche sotto `/it/` ecc., perché
+    `fallback_to_default` del plugin i18n vale `True` di default (verificato: `mkdocs_static_i18n/config.py:88`).
+  - `configuration`, `connection_checks` e `settings` hanno traduzioni senza le sezioni della 1.3. In IT/FR/ES il link
+    apre la pagina giusta ma in cima, fino alla traduzione con Aphra di fine release.
+- **Test (H)**:
+  - un Vitest: la forma del valore, l'ancora `{: #… }` presente nella pagina `.en.md`, e un cricchetto con le ancore
+    che mancano ancora nelle traduzioni, che deve scendere a zero dopo Aphra;
+  - un pytest puro: le voci del server uguali, nei due sensi, a `CONFIG_CHECKS` più `platform.plugin_secrets`. La
+    mappa è letta come testo, una voce per riga.
+- **Ordine proposto**: N70 (con `#untrusted-proxy`), poi la mappa e le due ancore nuove (domani mattina), poi i testi
+  dei controlli. Il piano breve di H-55 v2 lo mando mentre la mappa aspetta il checkpoint. A ha bisogno del modulo
+  nella sua base: l'ingresso e l'aggiornamento di base li decide il coordinatore.
+
+### Lotto «H-60r: la cura della revisione di H-60» (20/10, 08:47) — passi
+
+> Ripresa del 20/10. Lane 6181 ripopolata (`db populate --force --clean`, exit 0). HEAD `2c7fc7b8d`; unico file sporco
+> questo piano. La revisione automatica di `bf16865ed`/`2c7fc7b8d` (accento sulla sicurezza) trova **due difetti
+> medi**, da curare prima dell'ingresso; il resto è pulito: id lato server, niente locals, niente query string nei
+> log, header conservati. Ordine approvato: (1) questa cura e il suo checkpoint; (2) N70 con l'ancora
+> `#untrusted-proxy`; (3) la mappa delle guide; (4) il piano breve di H-55 v2 mentre la mappa aspetta.
+
+**Difetto 1: il segno «reported» sta sull'oggetto eccezione, condiviso fra richieste.**
+- Chi condivide lo stesso oggetto:
+  - la build del portfolio engine (`financial_math/portfolio/engine.py`, MF-J45b/d: `flight.set_exception(error)`, e
+    chi aspetta riceve lo stesso `error`);
+  - i motori di rischio (`risk/quant/engine.py` e `optimization_engine.py`, `future.set_exception(exc)`).
+- La prima richiesta scrive la riga e mette il segno. Le altre restituiscono il loro `request_id` ma non scrivono nulla,
+  e il filtro di `uvicorn.error` toglie anche la riga di uvicorn: il loro id non compare nel log. Lo stesso succede col
+  ramo HTTPException, `chain_reported` lungo `__cause__`, quando l'oggetto condiviso è stato scritto.
+
+**Difetto 2: in `ai_export/dependencies.py:_build` lo stesso traceback viene ripetuto.**
+- Lo stesso `ResourceLoadError`, memorizzato per richiesta, arriva a ogni componente che legge quella risorsa, e ognuno
+  ripete il traceback con `exc_info=shown_error(exc)`.
+- Lo stesso succede fra due richieste che aspettano la stessa build.
+
+**Disegno della cura** (nessuna scelta di prodotto: è la definizione di H-60, «ogni id che il client vede si trova nel
+log, ogni traceback una volta sola»):
+1. **Il segno diventa per richiesta.** Sull'eccezione restano le richieste in cui una riga ne ha parlato, ciascuna col
+   suo `request_id` (`None` fuori da una richiesta) e con un flag: «quella riga ne portava il traceback».
+   - `LibreFolioBoundLogger` segna con il `request_id` della riga (keyword esplicita, poi il contesto del logger, poi i
+     contextvars di structlog).
+   - Con `exc_info` segna anche la catena che il traceback mostra (`__cause__`, poi `__context__` se non soppresso).
+2. **Rete di sicurezza** (gestore dei 5xx e 500 non gestito), per la richiesta R:
+   - già scritto **per R** → nessuna riga, come oggi (AP-API-12 e i test di B non cambiano);
+   - scritto **per un'altra richiesta**, o fuori da una richiesta → una riga corta `WARNING`, «Request failed with an
+     error already logged», con `request_id`, `status` (solo per i 5xx), `method`, `path`, `error_type` e
+     `logged_with_request_id` (la prima richiesta che l'ha scritto, se ne aveva una). Senza traceback;
+   - mai scritto → come oggi.
+3. **Il filtro di `uvicorn.error` non cambia**: `security_headers` scrive ora una riga per ogni richiesta prima di
+   rilanciare, quindi la riga di uvicorn che toglie è sempre un doppione.
+4. **`_build`**: se il traceback di `shown_error(exc)` è già nel log, la riga del componente resta (dice quale
+   componente è fallito) ma senza `exc_info`, con `logged_with_request_id` quando noto.
+
+**Aggiunta del coordinatore (20/10, 09:17)**: il formato con cui il frontend mostra l'id dell'errore, fatto una volta
+sola in un aiuto comune (funzione, chiave i18n, posizione nel messaggio), documentato nel contratto. J lo applica
+all'AI Export, al rischio e ai lotti; X al PAC.
+- **Contratto §4**:
+  - `frontend/src/lib/api/requestIdMessage.ts`, con `withRequestId(t, message, error)`;
+  - la chiave `common.errorWithRequestId`, «{message} (code: {requestId})» nelle 4 lingue;
+  - il codice in fondo, tra parentesi, sulla stessa riga;
+  - **solo per un 5xx con id**, perché H-60 garantisce una riga nel log solo per i 5xx;
+  - segue `originalError` e `cause`, al più 8 passi.
+- Inviato al coordinatore alle 09:35. La scelta «solo 5xx» è da confermare.
+
+**Passi**:
+1. ⏳ Contratto (`files/h60r/contract.md`, §0–§4) e quattro test-author, uno per file:
+   - TA-R1 `test_logging_errors.py`: **fatto**, 91 casi rossi nuovi, nessun test esistente cambiato;
+   - TA-R2 `test_server_errors.py`, il rosso della revisione (due richieste sulla stessa chiave di build): in corso;
+   - TA-R3 `test_ai_export_build_failure_log.py`: **fatto**, 4 rossi; un quinto chiesto (un loader che scrive il suo
+     traceback prima di rilanciare);
+   - TA-R4 `requestIdMessage.test.ts`, nuovo: in corso.
+
+   Poi le corse rosse.
+   > **⚠️ Fuori pista**: TA-R3 ha eseguito un comando in più, fuori regola: la lettura della versione di structlog nel
+   > venv, solo lettura e innocua. Lo ha dichiarato lui.
+   > **Nota implementazione**: la cura è pronta in `files/h60r/dry/` (`errors.py`, `logging_config.py`,
+   > `failure_report.py`, `dependencies.py`, `requestIdMessage.ts`). Il controllo da solo di `errors.py` passa
+   > (`selfcheck_errors.py`). `apply.sh` applica solo se i file del worktree sono ancora uguali alle copie.
+   > **N70, passo 1 fatto** in attesa (vedi la nota nel lotto N70).
+   ✅ **Rossi del backend, 20/10, 09:45**, corsia 6181 (`files/runs/h60r/red-*.log`):
+   - `services logging-errors`: 91 failed, 122 passed. Le 91 sono esattamente le nuove: TypeError su
+     `mark_reported(e, "r1")`, AttributeError sulle funzioni nuove.
+   - `services ai-export-pure`: 5 failed, 340 passed. Le 5 nuove; la seconda riga ha ancora `exc_info`.
+   - `services server-errors`: 8 failed, 35 passed. Le 8 nuove, che riproducono il difetto della revisione:
+     - sul ramo non gestito, l'id della seconda richiesta non è in nessuna riga;
+     - sul ramo 503, «Request failed» due o tre volte, perché H-60 marcava solo l'HTTPException e non l'errore della
+       build mostrato dal traceback.
+
+   TA-R2 ha cambiato `SERVER_ERROR_LINES`, aggiungendo la riga corta, così i controlli esistenti «nessuna riga»
+   vietano anche quella. Nessun test esistente cambia esito.
+2. ✅ **Cura del backend applicata** (`apply.sh`, 20/10, 09:50), sui file `utils/runtime/errors.py`,
+   `logging_config.py`, `services/platform/failure_report.py` e `ai_export/dependencies.py` (il `_build`, nell'OK di
+   H-60). Le descrizioni di `logging-errors` e `server-errors` nel runner sono aggiornate; `requestIdMessage.test.ts`
+   è registrato in `core-unit`.
+3. ✅ **Verdi mirati del backend** (`files/runs/h60r/green*.log`):
+   - `services logging-errors` 213 passed; `services server-errors` 43; `services ai-export-pure` 345;
+   - `services response-validation` 10; `logging-access-filter` 112; `secret-masking` 68; `security-headers` 15;
+     `app-lifecycle` 53; `sleep-wake-activity` 111;
+   - `api address-probe` 28 (AP-API-12); `api ai-export` 15; `services ai-export` 1093.
+
+   Ruff e black puliti sui 9 file. Le regole sono aggiornate:
+   - `backend.instructions.md`: il segno per richiesta, la riga corta, e un punto nuovo, «a failure handed to several
+     consumers is written with its traceback once»;
+   - `frontend.instructions.md`: `withRequestId`.
+4. ✅ **Frontend, il codice nei messaggi (§4)**, 20/10, 10:30:
+   - la Vitest di TA-R4, `requestIdMessage.test.ts`, 19 test (~70 casi);
+   - rosso: `front-utility core-unit` 57 failed, tutti in quel file (modulo e chiave assenti); gli altri 220 file
+     verdi (9447 test);
+   - la cura: `frontend/src/lib/api/requestIdMessage.ts` e la chiave `common.errorWithRequestId` nelle 4 lingue
+     (`dev.py i18n add`, in `base`);
+   - verde: `core-unit` 221 file, 9504 test; `front check` 0 errori e 0 avvisi; `i18n check` stretto ok; Prettier ok;
+     `utils gate-i18n-usage` 195 passed; `utils gate-i18n-catalog` 176 passed.
+   - Il coordinatore ha confermato il contratto, compreso «solo 5xx con id» (09:24), e lo gira a J.
+5. ✅ **Docs** (docs-writer), `security.md` +100/−34:
+   - `#error-answers`: la tabella, il caso per richiesta e la riga corta, l'eccezione non gestita, l'AI Export, i test;
+   - `#request-logs`: il segno per richiesta;
+   - `#browser-console`: la sottosezione nuova `#error-code`;
+   - le intestazioni della risposta: allineate.
+
+   `mkdocs build` stretto ok; `check-links` ok, 97 validi.
+   > **⚠️ Fuori pista**: il docs-writer ha scritto i suoi log in `/tmp`. Innocuo, si rifanno.
+   > **Nota**: l'ancora `#single-flight` di `backend/financial_math.md` sta due punti sotto la frase giusta. È fuori
+   > perimetro: per ora resta così.
+6. ⏳ Checkpoint: inviato al coordinatore, FROZEN.
