@@ -8138,3 +8138,96 @@ Commit proposto: `fix(pac): re-read warnings for planned Brokers; FX card follow
 **Domande aperte**, non toccate dalla pausa:
 - le righe ≤ 0 già salvate (N92), dal developer;
 - X-R48b resta sospesa, dipende da N68.
+
+### Revisione del contratto di Z-29a v3 — ✅ OK, nessun difetto bloccante (20/10, sola lettura)
+
+Richiesta del coordinatore (19/10, ripetuta il 20/10): la parte di contratto del commit `37c3ec3ee` di Z (ramo
+`e-alfy-z-sospensione-e-risveglio`), con l'esito in un messaggio. HEAD `5a53e00ad`. Nessun comando git che scrive:
+solo `merge-tree`, `archive`, `show`, `grep`.
+
+**Fusione di prova**:
+- pulita sia con la mia HEAD (albero `1012444fc`) sia con `dev_release2` `ecc7ac667` (albero `6130aed3c`, quello che
+  Z riceverà davvero; dev ha già N92 e il mio ramo fino a `51c5f1d2c`);
+- 3 file fusi da soli, riletti:
+  - `schemas/prices.py`: qui sotto;
+  - `developer/backend/assets/architecture.md`: Z aggiunge 4 pezzi nella parte della query, il testo di N92 non lo
+    tocca, i due testi sono coerenti;
+  - `scripts/test_runner/_backend_services.py`: si legge, 189 azioni senza doppioni, ci sono le mie e le sue.
+- **Il percorso della query di Z sull'albero fuso**: `price_query.py` è identico a quello di Z. Da allora dev ha
+  cambiato, in quel percorso, solo tre file:
+  - `schemas/prices.py`, cioè N92;
+  - `price_store.py`, di cui la query usa solo `storable_current_value`, il prezzo corrente;
+  - `fx/conversion.py`, cioè il mio rovescio di X-R45: lo stesso filtro dei tassi usabili, scritto in linea, quindi
+    lo stesso comportamento.
+  - Quindi il rischio che porta la fusione sta solo nello schema.
+
+**N92 e il `model_config` di Z convivono** — provato sull'albero `6130aed3c`, esportato in una cartella di prova
+(`files/checks/z29a_merged_proof.sh`):
+- una sola `model_config` per classe: in `FAPricePoint` il gancio di Z `_description_without_backticks`, in
+  `FAPriceWritePoint` il `from_attributes` di N92;
+- la descrizione di `FAPricePoint` nello schema non ha più apici inversi e tiene il `"clear"` di N92;
+- `api sync`: uscita 0. Il generatore scrive la descrizione come template literal (`generated.ts`,
+  `` first: FAPricePoint.describe(`Single price point…`) ``), dove le virgolette doppie non danno noia;
+- `front check`: 0 errori e 0 avvisi; nessun venv nuovo.
+
+**I punti del contratto**, riletti nel codice e provati con la validazione dello schema fuso:
+- **Voci**:
+  - `key` e `sample_like` seguono `^[A-Za-z0-9_.:-]{1,64}$`; `max_points` va da 1 a 10 000; `resolution` è
+    `daily`, `weekly` o `monthly`;
+  - al massimo uno dei tre, e mai insieme a segnali, annotazioni o eventi: altrimenti il 422 di pydantic, provato.
+- **Il 422 `sample_reference`**:
+  - `detail = {code, reason, item, key, message}`, con `reason` uno di `unknown_key`, `duplicate_key`, `chained`,
+    `range_mismatch`;
+  - si alza prima di ogni lettura, anche prima del taglio al soffitto.
+- **I risultati**:
+  - `resolution` vale `daily` di default, `sample_bounds` è `None`;
+  - in settimanale o mensile, i punti sono le fini dei secchi, e il primo punto va negli estremi quando non è una
+    fine di secchio;
+  - gli estremi si calcolano dopo la conversione dei cambi. La conversione non scarta mai un punto, quindi il
+    `pop(0)` è sicuro.
+- **Il seguace di una scheda giornaliera** è giornaliero dal giorno F' più tardo: Z riscrive `date_range`
+  (`daily_starts`) solo quando il primo giorno della scheda viene dopo il suo, e la risposta non ha estremi. Se la
+  scheda non ha dati, sul riempimento del seguace vale il `max_points` o la `resolution` della scheda.
+- **Con `include_price: false`** la risposta è `weekly`/`monthly`, senza punti né estremi. Confermato, ed è scritto
+  nella doc.
+- **I chiamanti di `get_prices_bulk`** in produzione passano tutti un `FAPriceQueryItem`: l'API, tre componenti
+  dell'AI Export, il rischio. Così i campi nuovi valgono sempre `None` e per loro non cambia niente.
+
+**Note, nessuna bloccante**:
+1. **`include_price: false`**: le righe dei secchi si leggono lo stesso (`_read_samples`) e contano nel budget dei
+   giorni (punti + 2). Una voce che non restituisce prezzi può quindi provocare `bulk_too_many_days`.
+   - Proposta: saltare la lettura e il conteggio per queste voci, perché la `resolution` viene dal solo piano; oppure
+     rifiutarle nella validazione.
+   - La descrizione di `sample_bounds`, «None for a daily one», dovrebbe aggiungere «or without prices».
+2. **Requisito per Z-29b, il frontend**:
+   - `planBulkBatches` e `splitBatch` (`frontend/src/lib/api/bulkBatches.ts`) tagliano la lista in fette contigue;
+   - un `sample_like` il cui capo finisce in un altro lotto fa fallire tutto il lotto con un 422 `unknown_key`;
+   - quindi ogni gruppo (la voce della scheda e il bersaglio del confronto) deve restare nello stesso lotto, anche
+     nel nuovo taglio dopo un `bulk_too_many_days`.
+3. **Estetica dello schema**:
+   - il gancio trasforma ``` ``x`` ``` in `''x''` nella descrizione OpenAPI: Swagger mostra `''FAHistoricalData''`.
+     Sostituire prima la coppia di apici inversi darebbe `'x'`;
+   - il rischio degli apici inversi vale per ogni modello nuovo puntato da un campo obbligatorio. Un ritocco
+     nell'esportatore (`scripts/list_api_endpoints.py`) li coprirebbe tutti. Il guasto è rumoroso (`api sync` o
+     `front check` falliscono), quindi non è urgente.
+4. **Strati**:
+   - `schemas/prices.py` importa `SampleResolution` da `services/assets/price_sampling.py`. C'è un precedente:
+     `schemas/risk.py`, MF-D3;
+   - il modulo e i due `__init__` dei pacchetti importano solo la libreria standard, quindi nessun ciclo;
+   - in alternativa, il tipo potrebbe stare negli schemi. È solo una questione di stile.
+
+**Previsione dei conflitti con la mia coda**: Q1 (i prezzi per osservazioni) e Q2 (la conversione solo nei giorni di
+cambiamento) riscrivono gli stessi blocchi di `get_prices_bulk` che Z cambia: il riempimento, il budget, la
+conversione.
+- Quindi Q1 e Q2 partono su una base che ha già Z-29a. Si costruiscono su `_fill_point` e `_sample_series`, e tengono
+  il budget di Z per le voci campionate.
+- Nessuna sovrapposizione con la funzione «a gradini» (`fx/conversion.py`) né con N64.
+
+**Non girato**: i pytest di Z (`services price-query-sampling`) sull'albero fuso.
+- Il runner, per la categoria `services`, cancella il DB della corsia e lo ricostruisce dalle migrazioni dell'albero.
+- Il conftest della radice, poi, apre il DB di `get_data_dir()`.
+- Quindi non si possono girare con sicurezza da una copia di prova: restano al gate dopo la fusione.
+
+**Prove** (cartella di sessione `files/checks/logs/`): `z29a_mt_head.log`, `z29a_mt_dev.log`,
+`z29a_merged_proof.log`, `z29a_merged_schema_probe.log`, `z29a_merged_api_sync.log`, `z29a_merged_front_check.log`.
+Cartella di prova in `/tmp` cancellata.
