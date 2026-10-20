@@ -17,6 +17,9 @@
  *   4. The defaults: `fetch` is `fetchSecurityChecks` (the generated client); `browser` reads the registration of
  *      `instanceConfig` only once `instanceConfig.loaded` — before, `registrationMode` is `''` — and the host of the page,
  *      `window.location.hostname`. `securityChecks` is the app's store: `createSecurityChecks()` with those defaults.
+ *   5. (N69b, the security-attention dot) a reactive getter `attentionSeverity`: `null` before the first answer, like
+ *      `attentionCount`; once answered, `attentionSeverity(findings)` of `securityFindings.ts` — `'error'`, `'warning'`
+ *      or `null` (infos never count) —, following each `reload()` and the browser's state as `findings` does.
  *
  * How the cases read it. Requests are deferreds the test answers by hand (`scriptedFetch`): no clock, and «loading» is a
  * state the case holds open. The findings of a ready store are compared with `securityFindings` itself — its own file
@@ -108,6 +111,8 @@ interface SecurityChecksStore {
     readonly checks: SecurityCheck[];
     readonly findings: Findings;
     readonly attentionCount: number;
+    /** N69b: not on the store yet — read, it is `undefined` until it lands. */
+    readonly attentionSeverity: 'error' | 'warning' | null;
     ensureLoaded(): Promise<void>;
     reload(): Promise<void>;
 }
@@ -603,5 +608,98 @@ describe('the defaults: the generated client, instanceConfig and the page', () =
         expect(store.status).toBe('ready');
         expect(store.findings.attention).toEqual(expected);
         expect(store.findings.passed, 'premise: the server’s checks are all there').toHaveLength(10);
+    });
+});
+
+/**
+ * attentionSeverity (N69b): what the sidebar's connection line and the phone's menu button colour their dot with. Read
+ * on the store's reactive graph (`recordReads`), like `attentionCount` above: a getter that answered when polled but
+ * re-ran no effect would leave the dot as it was drawn. The literals are the contract's (error beats warning, infos never
+ * count); `securityFindings.test.ts` pins the pure function itself.
+ */
+describe('attentionSeverity — the store’s getter (N69b)', () => {
+    /** Warnings, an info and an ok: no error. */
+    const WARNINGS_ONLY: SecurityCheck[] = [
+        check('platform.jwt_secret', 'warning', 'instance.checks.jwtSecret.short', {source: 'JWT_SECRET', length: 12, minimum: 32}),
+        check('platform.log_level', 'info', 'instance.checks.logLevel.verbose', {log_level: 'DEBUG'}),
+        check('accounts.login_limit', 'warning', 'auth.checks.loginLimit.off'),
+        check('email.smtp', 'ok', 'email.checks.smtp.ok'),
+    ];
+    /** Infos and an ok: listed for attention, nothing counted. */
+    const INFOS_ONLY: SecurityCheck[] = [check('platform.log_level', 'info', 'instance.checks.logLevel.verbose', {log_level: 'DEBUG'}), check('email.links', 'info', 'email.checks.links.missing'), check('email.smtp', 'ok', 'email.checks.smtp.ok')];
+
+    // red until N69b
+    it('null before the first answer, then the most severe of each answer: it follows reload() — error, warning, and null when nothing or only infos are left', async () => {
+        const graph = await freshGraph();
+        const {fetch, answers} = scriptedFetch();
+        const store = graph.createSecurityChecks({fetch, browser: () => SILENT});
+        const reads = graph.recordReads(() => store.attentionSeverity);
+
+        expect(store.attentionSeverity, 'idle: nothing to say before the first answer').toBeNull();
+        const loading = store.ensureLoaded();
+        expect(store.attentionSeverity, 'loading: still nothing').toBeNull();
+        answers[0].resolve(MIXED);
+        await settle(loading);
+        graph.flushSync();
+        expect(store.attentionSeverity, '2 errors among 4 warnings and 2 infos: error').toBe('error');
+
+        const toWarnings = store.reload();
+        answers[1].resolve(WARNINGS_ONLY);
+        await settle(toWarnings);
+        graph.flushSync();
+        expect(store.attentionCount, 'premise: the reload brought two warnings').toBe(2);
+        expect(store.attentionSeverity, 'warnings and no error: warning').toBe('warning');
+
+        const toAllOk = store.reload();
+        answers[2].resolve(ALL_OK);
+        await settle(toAllOk);
+        graph.flushSync();
+        expect(store.attentionSeverity, 'every check ok: null').toBeNull();
+
+        const toInfos = store.reload();
+        answers[3].resolve(INFOS_ONLY);
+        await settle(toInfos);
+        graph.flushSync();
+        reads.stop();
+
+        expect(
+            store.findings.attention.map((finding) => finding.severity),
+            'premise: the infos are listed',
+        ).toEqual(['info', 'info']);
+        expect(store.attentionSeverity, 'infos only: listed, never counted — null').toBeNull();
+        expect(changes(reads.values), 'a consumer reading it re-runs at each change').toEqual([null, 'error', 'warning', null]);
+        expect(fetch, 'one request per ensureLoaded() or reload()').toHaveBeenCalledTimes(4);
+    });
+
+    // red until N69b
+    it('the browser’s warning: nothing before an answer, even after a failed request; with every server check ok it is the warning — and it goes when the registration closes', async () => {
+        const graph = await freshGraph();
+        const {fetch, answers} = scriptedFetch();
+        const world = graph.reactiveBox<BrowserState>({...OPEN_EXTERNAL});
+        const store = graph.createSecurityChecks({fetch, browser: () => ({registrationMode: world.registrationMode, registrationLocked: world.registrationLocked, hostname: world.hostname})});
+        const reads = graph.recordReads(() => store.attentionSeverity);
+
+        expect(store.attentionSeverity, 'idle, the browser would warn: still nothing before the server answers').toBeNull();
+        const failing = store.ensureLoaded();
+        answers[0].reject(new Error('503 Service Unavailable'));
+        await settle(failing);
+        expect(store.status, 'premise: the first request failed').toBe('error');
+        expect(store.attentionSeverity, 'no answer yet: not even the browser’s warning').toBeNull();
+
+        const retry = store.ensureLoaded();
+        answers[1].resolve(ALL_OK);
+        await settle(retry);
+        graph.flushSync();
+        expect(store.attentionCount, 'premise: the browser’s warning is the one thing to look at').toBe(1);
+        expect(store.attentionSeverity, 'the browser’s warning counts like the server’s').toBe('warning');
+
+        world.registrationMode = 'invite';
+        graph.flushSync();
+        reads.stop();
+
+        expect(store.attentionCount, 'premise: invitation only, nothing to warn about').toBe(0);
+        expect(store.attentionSeverity).toBeNull();
+        expect(changes(reads.values), 'it follows the browser’s state as findings does').toEqual([null, 'warning', null]);
+        expect(fetch, 'none of this asks the server again').toHaveBeenCalledTimes(2);
     });
 });

@@ -2806,7 +2806,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Nelle due catture identiche del dopo (`cd686f445`, 18/10), su mobile in spagnolo scuro, la modale è uguale ma la
     pagina dietro no: in una si vedono il nome utente ed «Eliminar Cuenta», nell'altra l'avatar e «Seguridad». È il
     15,4 % dei pixel, in una variante su 16.
-  - Nel rumore del 13/10 (`g-ref13`) lo scatto era «basso»; oggi è «instabile». Nei confronti dello stesso giorno le
+  - Nel rumore del 16/10 (`g-ref13`) lo scatto era «basso»; oggi è «instabile». Nei confronti dello stesso giorno le
     sue zone di rumore lo coprono, ma il riferimento resta meno pulito.
   - Da fare con `test-triage`, partendo dall'ipotesi del tempo: la pagina che scorre mentre la modale si apre, o
     l'avatar che si carica e la sposta. Poi fermare lo scorrimento prima di aprire la modale, come negli altri scatti a
@@ -2815,6 +2815,18 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
   Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
   «Galleria del giro 3».
+- **G-27 · `build_designer_round.py`: l'etichetta del «prima» e la coppia dello stesso giorno** — basso; G, 18/10,
+  dallo zip del giro 3. Il coordinatore l'ha approvata il 18/10 alle 04:05, per un lotto successivo.
+  - Lo strumento chiama v1.2 il «prima» (le tabelle «prima (v1.2)», la guida, l'indice) e scrive che i dati cambiano
+    col giorno della cattura. Era vero per il pacchetto del 16/10, non per la coppia dello stesso giorno del 18/10.
+  - Quella notte il testo l'ho corretto dopo il build, solo nelle pagine generate: 726 tabelle, 4 note, la guida e
+    l'indice. Il README di `scripts/visual_review/` lo dice al passo 3b.
+  - Proposta: un'opzione per l'etichetta del «prima» (per esempio `--before-label`) e il riconoscimento della coppia
+    dello stesso giorno dalle date delle due catture, che cambia la frase sui dati. In `scripts/visual_review/`, poi
+    una prova a secco sulla coppia del giro 3, che resta su disco.
+
+  Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
+  «Galleria del giro 3» e «README di `scripts/visual_review/` al riferimento del 18/10».
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
@@ -3050,16 +3062,28 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   i dati mancanti, blu per le note, verde per i successi) e il `MISSING_PRICE` del rischio diventato un avviso. Per la
   passata della documentazione a fine programma (docs-writer). Dettagli: piano di T, «Giro 3 della designer».
 - ✅ **TC-20 · Il caso «export JSON, reset all, import back» del Lab dava per diverse due sorgenti di colore diventate
-  una** — basso, test; T, 18/10, verifica per l'ingresso di DV; **chiusa il 18/10 nel checkpoint di R3-c**: per il passo
-  L2 il caso usa la radice della pagina delle transazioni (`transactionsPageRoot`, `text-lf-primary`), con le
-  precondizioni che le due sorgenti siano diverse e che dopo L1 la radice tenga il suo colore; `front-designer-lab live`
-  12/12 sulla punta `b238d5b6e` più l'albero (01:11–01:14). La segnalazione com'era:
-  `frontend/e2e/designer-lab/designer-lab-live.spec.ts:673` cambia nella stessa run la variabile del sottotitolo delle
-  transazioni (L1, rosa) e il letterale dell'intestazione della data di `DataTable` (L2, blu); dal 16/10 leggono
-  entrambi `--lf-text-muted` (`546204732`, e il lotto delle tabelle di T `77bfa6a39`), così l'override di L1 vince e
-  l'intestazione resta rosa: rosso deterministico, anche sul target senza DV (`7845fc3d3`: 11 verdi e 1 rosso). Verdetto
-  della triage: un'assunzione del test. La spec era di L (archiviato): la prende T. Dettagli: piano di T, «Una verifica
-  per l'ingresso di DV» e «R3-c e TC-20».
+  una** — basso, test; T, 18/10, verifica per l'ingresso di DV; **chiusa il 18/10 nel checkpoint di R3-c** (commit
+  `6b218d4a4`, entrato in `cd686f445`): per il passo L2 il caso usa la radice della pagina delle transazioni
+  (`transactionsPageRoot`, `text-lf-primary`), con le precondizioni che le due sorgenti siano diverse e che dopo L1 la
+  radice tenga il suo colore; `front-designer-lab live` 12/12 sulla punta `b238d5b6e` più l'albero (01:11–01:14). La
+  segnalazione com'era: `frontend/e2e/designer-lab/designer-lab-live.spec.ts:673` cambia nella stessa run la variabile
+  del sottotitolo delle transazioni (L1, rosa) e il letterale dell'intestazione della data di `DataTable` (L2, blu); dal
+  16/10 leggono entrambi `--lf-text-muted` (`546204732`, e il lotto delle tabelle di T `77bfa6a39`), così l'override di
+  L1 vince e l'intestazione resta rosa: rosso deterministico, anche sul target senza DV (`7845fc3d3`: 11 verdi e 1
+  rosso). Verdetto della triage: un'assunzione del test. La spec era di L (archiviato): la prende T. Dettagli: piano di
+  T, «Una verifica per l'ingresso di DV» e «R3-c e TC-20».
+- **TC-21 · Una riga cancellata lascia vedere sotto le colonne fisse di `DataTable`** — minimo; T, 19/10, cura delle
+  colonne fisse. `tr.row-deleted td` (bulk delle transazioni, `DataEditor`) sbiadisce ogni cella con `opacity: 0.55`,
+  le fisse comprese (la selezione, e le azioni in `DataEditor`), che lasciano vedere al 45 % il contenuto che scorre
+  sotto. C'era già prima del lotto delle tabelle; non è una tinta di riga e la riga opaca non la cura: va sbiadito il
+  contenuto, non lo sfondo, senza cambiare l'aspetto delle celle normali. Dettagli: piano di T, «Le colonne fisse
+  trasparenti», Fuori pista.
+- **TC-22 · La pagina per sviluppatori di `DataTable` non dice come si tinge una riga** — minimo, docs; T, 19/10, cura
+  delle colonne fisse. `mkdocs_src/docs/developer/frontend/components/core-ui/data-table.md`, «Sticky columns»: una riga
+  dipinge la card e la tinta del suo stato, `--dt-row-tint` (registrata con `@property`), e le celle fisse ereditano i
+  due strati; chi tinge le righe con `getRowClass` imposta `--dt-row-tint`, mai lo sfondo della riga (`AssetTable`).
+  Per la passata della documentazione a fine programma (docs-writer). Dettagli: piano di T, «Le colonne fisse
+  trasparenti».
 
 ---
 
@@ -4620,6 +4644,13 @@ A-21b, A-31, A-41, A-49 e A-58 aspettano una decisione; A-4 e A-10 sono lavoro d
     in ogni lingua (oggi le pagine inglesi linkano `cli_tools.md` per nome di sezione, senza ancora); una frase in
     `admin/docker_advanced` (un riavvio non aiuta finché gli account non sono separati); in `user/settings/profile`
     «Changing Your Email» (un punto cambiato, uno nuovo: le maiuscole).
+  - Da N69a (20/10), nessun timbro; le traduzioni ora dicono cose false:
+    - `user/settings/index` dice ancora che «Administration» è visibile a tutti; da N69-2 è solo degli admin;
+    - `admin/settings`, in tre passaggi: l'introduzione («everyone can read them»), «everyone else gets a read-only
+      view» ed «Everyone can see the panel»;
+    - `user/settings/profile`: l'avatar si vede anche nella scheda Utenti, con un link nuovo `admin/users.md#accounts`
+      che manca alle traduzioni;
+    - `community/faq`: «Scheduler Enabled» lo controlla un amministratore, nelle due voci di prezzi e cambi.
 
   Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.5».
 - ✅ **A-11 · Un tema non valido in `user_settings` blocca l'accesso** — basso; chiusa il 17/10 (commit del
@@ -5024,6 +5055,45 @@ A-21b, A-31, A-41, A-49 e A-58 aspettano una decisione; A-4 e A-10 sono lavoro d
     `'self'` e l'origine di `LIBREFOLIO_PUBLIC_URL`). Quando H manda la politica esatta, A rivede anche le attese di
     AUSR-E-07 (`e2e/settings/admin-users.spec.ts`), che prova apposta altre origini http, su una corsia che la
     applica.
+- ✅ **A-CL1 · Il changelog aperto da Impostazioni › Informazioni resta «in caricamento»** — basso, UX; chiusa il 19/10
+  (commit del coordinatore): una finestra sola per tutta l'app, quella della Sidebar, aperta dalle due versioni tramite
+  `changelogModalStore.svelte.ts`; la cache delle traduzioni è una `SvelteMap`. Visto dal developer sulla nightly
+  (`v1.2.1-2591-g5e1a7c3af`), tramite il coordinatore (19/10). La finestra chiusa mentre la traduzione caricava
+  scartava il risultato, e alla riapertura leggeva una cache non reattiva. Verde con Vitest (M1, M2, About, Sidebar
+  1–4) e con l'E2E E1/E2 di `changelog-locale.spec.ts`, rosso prima della cura. Dettagli: [piano
+  02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-CL1» e «CL1.1»–«CL1.7».
+- **A-59 · Il ramo in sola lettura di `GlobalSettingsTab` non si raggiunge più** — minimo, pulizia; A, 20/10 (N69a).
+  Da N69-2 la scheda è solo degli admin, quindi `canEdit` è sempre vero sullo schermo. Il ramo in sola lettura
+  (`settings-readonly-indicator`, i controlli disattivati, le `props` `{canEdit}` del registro) e i suoi test restano
+  per ora. Cura: toglierli insieme, con la doc per sviluppatori di `GlobalSettingsTab`. Dettagli: [piano
+  02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «N69 — L'amministrazione: via al lotto».
+- **A-60 · Due altri cerchi d'avatar non usano `UserAvatar`** — minimo, fattorizzazione; A, 20/10 (N69a).
+  - Hanno ognuno la sua copia di `getAvatarInitial`: `components/ui/select/UserSearchSelect.svelte` (i selettori
+    di utenti) e `features/brokers/BrokerSharingPanel.svelte` (iniziali ambra su classi di palette, del programma
+    colori).
+  - `UserAvatar` (N69-4) ha lo schema dei selettori: `bg-lf-neutral` con `text-lf-muted`, per condizione del
+    programma colori (19/10).
+  - Quella coppia non è fra quelle che il cancello del contrasto misura (regola 5 della skill `design-system`: un
+    testo su `neutral` non è promesso). La decide il programma colori.
+  - Cura: i due cerchi passano a `UserAvatar`, con i loro proprietari. Dettagli: [piano
+    02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «N69a.3».
+- **A-61 · Lo store dei controlli di sicurezza non si azzera al cambio d'account** — basso; A, 20/10 (N69b).
+  - `securityChecks` (`features/settings/security/securityChecks.svelte.ts`, da A8b) non registra un
+    `registerClientSessionReset`: dopo un'uscita e un altro accesso nella stessa scheda tiene la risposta di prima.
+  - Cosa si vede: niente di sbagliato. I componenti filtrano per ruolo, quindi un membro non vede né il puntino né
+    il conto; un altro admin vede i controlli dell'istanza, che sono gli stessi, ma letti prima, fino a «Controlla
+    di nuovo» o a un ricaricamento.
+  - Da N69b lo store si riempie su ogni pagina di un admin, non più solo in Impostazioni.
+  - Cura: un reset alla transizione della sessione (`checks`, `answered`, `status`), con il suo test. Dettagli: [piano
+    02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «N69b.1».
+- **A-62 · Il nome accessibile del pulsante del menu è in inglese in ogni lingua** — basso, a11y; A, 20/10 (N69b;
+  visto in F2.2).
+  - `Header.svelte`: «Toggle menu» è scritto a mano dal piano 36. Da N69b il nome aggiunge, dopo «—», il livello della
+    connessione e il conto degli avvisi nella lingua dell'utente, quindi in italiano diventa per esempio «Toggle menu
+    — 2 avvisi di sicurezza».
+  - Nel catalogo non c'è una chiave per il menu.
+  - Cura (chiesta al coordinatore nel checkpoint di N69b): una chiave nuova nelle 4 lingue e l'asserzione di
+    `Header.test.ts`. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «F2.2».
 
 ## X · Plugin, asset e ricerca (fase 01)
 

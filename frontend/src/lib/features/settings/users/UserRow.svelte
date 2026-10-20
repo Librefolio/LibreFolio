@@ -9,6 +9,7 @@ managed from the Profile tab.
     import {ChevronRight, KeyRound, Link2Off, LogOut, RotateCcw, ShieldCheck, ShieldOff, Trash2, UserCheck, UserX} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
+    import UserAvatar from '$lib/components/ui/media/UserAvatar.svelte';
     import type {AdminAccount, UserAction} from './types';
 
     interface Props {
@@ -64,6 +65,7 @@ managed from the Profile tab.
 >
     <button aria-controls="{uid}-panel" aria-expanded={expanded} class="flex w-full min-w-0 items-center gap-3 text-left" data-testid="users-row-toggle" onclick={() => (expanded = !expanded)} type="button">
         <ChevronRight class="h-4 w-4 shrink-0 text-lf-muted transition-transform {expanded ? 'rotate-90' : ''}" />
+        <UserAvatar username={account.username} avatarUrl={account.avatar_url ?? null} testId="users-row-avatar" />
         <span class="min-w-0 flex-1">
             <span class="flex flex-wrap items-center gap-1.5">
                 <span class="truncate font-medium text-lf-primary">{account.username}</span>

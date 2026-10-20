@@ -853,7 +853,7 @@
                     </div>
                 {/if}
 
-                <!-- Cache Panel (status for all users; clear actions admin-only via canEdit) -->
+                <!-- Cache Panel (the tab is administrators-only since N69-2; clear actions behind canEdit) -->
                 {#if selectedCategory === 'memory' || selectedCategory === 'all'}
                     <CachePanel canEdit={canEdit && !isLocked} />
                 {/if}
