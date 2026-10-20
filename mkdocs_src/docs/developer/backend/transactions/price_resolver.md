@@ -93,9 +93,8 @@ composes one synthetic P&L candle per day:
   freezes a stale FX). Trade unit prices are lifted to the qbq axis (`× quote_base_quantity`)
   so a qbq=100 bond lands on its ~100 par axis alongside market quotes. The portfolio engine
   takes those rates from `fx_rate_map`, preloaded once per calculation by `_preload_fx_rates()`
-  (`financial_math/portfolio/engine.py`) with a single `convert_bulk()` call — see
-  [FX Architecture](../fx/architecture.md#convert-bulk-window) for how that call loads only the
-  rate window it can use.
+  (`financial_math/portfolio/engine.py`) with a single `unit_rate_steps()` call, the rates of
+  `convert_bulk()` kept as steps (P3) — see [FX Architecture](../fx/architecture.md#unit-rate-steps).
 - **Never for realized / cost basis.** The mark is for *open-position valuation* and the price
   line only. Realized P&L and cost basis always come from the actual transaction prices, never
   from this estimate.

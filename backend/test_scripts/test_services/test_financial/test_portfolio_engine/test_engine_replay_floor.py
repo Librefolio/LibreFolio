@@ -17,7 +17,8 @@ own conversion, at its own date, is still asked: the rows before the floor are r
     and the first one holds the 1890 rows (cash 600, the 10 X at their cost of 400, capital 1000 — the same numbers HEAD
     shows on 1900-01-01);
   * GREEN on HEAD and after: a ``date_from`` after the floor (1900-01-05) is kept as it is.
-- ``TestTransitRatesStartAtTheFloor`` — ``_preload_fx_rates`` on a ``convert_bulk`` double (pure):
+- ``TestTransitRatesStartAtTheFloor`` — ``_preload_fx_rates`` on a ``unit_rate_steps`` double (pure; a ``convert_bulk``
+  double before P3, «formule veloci»: the days asked one by one are now the days of the windows of one call):
   * red on HEAD: USD cash in transit from 1890-01-02 to 2025-01-01 asks a rate for every day since 1890-01-02 (HEAD:
     3 652 days before the floor); after the cure the only days before the floor are the movements' own (1890-01-01,
     1890-01-02), and the transit's rates run from 1900-01-01 exactly to its last day;
@@ -36,7 +37,7 @@ database (``SQLModel.metadata.create_all``, one per test, closed and disposed at
 database, no server, no network. Their rows predate the write floor N74: ``PRAGMA ignore_check_constraints`` keeps a
 CHECK that floor may add to the schema from refusing them, as a stored row was never refused. The books are all in EUR,
 so no rate is asked. The engine's blob cache is emptied around each test (a cached blob would answer without a replay).
-``TestTransitRatesStartAtTheFloor`` replaces ``convert_bulk`` on the engine module through ``monkeypatch``; its engine
+``TestTransitRatesStartAtTheFloor`` replaces ``unit_rate_steps`` on the engine module through ``monkeypatch``; its engine
 has no session. ``TestRowsBeforeFloorRecord`` touches no database.
 
 Reference: backend/app/services/financial_math/portfolio/engine.py (calculate step 5, _preload_fx_rates).
@@ -58,6 +59,7 @@ import backend.app.services.financial_math.portfolio.models as portfolio_models
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, User, UserRole
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
+from backend.test_scripts.test_services._unit_steps_double import UnitStepsDouble
 from backend.test_scripts.test_utils import print_section, print_success
 
 #: ``EARLIEST_RANGE_START`` (utils/datetime_utils.py) as a literal: the name is new in R13-SEC8-2.
@@ -182,15 +184,12 @@ def _tx(*, id: int, broker_id: int, type: str, dt: date, amount: str, related_id
     return tx
 
 
-async def _requested_rates(monkeypatch, txs: list[MagicMock], *, date_from: date, date_to: date) -> set[tuple[str, date]]:
-    """Every ``(currency, day)`` ``_preload_fx_rates`` asks ``convert_bulk`` for, on the classified ``txs`` (scope A and B)."""
-    requested: set[tuple[str, date]] = set()
-
-    async def recording_convert_bulk(_session, conversions, raise_on_error=True):
-        requested.update((amount.code, day) for amount, _to, day in conversions)
-        return [None] * len(conversions), []
-
-    monkeypatch.setattr(portfolio_engine_module, "convert_bulk", recording_convert_bulk)
+async def _requested_rates(monkeypatch, txs: list[MagicMock], *, date_from: date, date_to: date) -> tuple[set[tuple[str, date]], UnitStepsDouble]:
+    """Every ``(currency, day)`` ``_preload_fx_rates`` asks a rate for, on the classified ``txs`` (scope A and B): the days
+    of the windows of its one ``unit_rate_steps`` call (P3; the ``convert_bulk`` items before); and the double, whose
+    windows the tests read too. It answers no rate, as the ``convert_bulk`` double answered None."""
+    steps = UnitStepsDouble(value=None)
+    monkeypatch.setattr(portfolio_engine_module, "unit_rate_steps", steps)
     classification = ScopeAwareTransactionClassifier({A, B}, sorted(txs, key=lambda tx: (tx.date, tx.id)), {A: Decimal("1"), B: Decimal("1")}).classify()
     assert [interval.tx_type for interval in classification.in_transit_intervals] == ["cash"], "precondition: one cash interval in transit"
     await PortfolioCalculationEngine(None)._preload_fx_rates(
@@ -203,7 +202,7 @@ async def _requested_rates(monkeypatch, txs: list[MagicMock], *, date_from: date
         date_from,
         date_to,
     )
-    return requested
+    return {(currency, day) for currency, _target, day in steps.asked_keys()}, steps
 
 
 class TestTransitRatesStartAtTheFloor:
@@ -219,11 +218,13 @@ class TestTransitRatesStartAtTheFloor:
             _tx(id=3, broker_id=B, type="CASH_TRANSFER", dt=date(2025, 1, 2), amount="400", related_id=2),
         ]
 
-        requested = await _requested_rates(monkeypatch, txs, date_from=date(2025, 1, 1), date_to=date(2025, 1, 7))
+        requested, steps = await _requested_rates(monkeypatch, txs, date_from=date(2025, 1, 1), date_to=date(2025, 1, 7))
 
         before_the_floor = sorted(day for _currency, day in requested if day < FLOOR)
         assert before_the_floor == [OLD, date(1890, 1, 2)], f"{len(before_the_floor)} days asked before the floor, from {before_the_floor[:1]}"
         assert {("USD", FLOOR), ("USD", date(2025, 1, 1))} <= requested, "the transit's rates run from the floor to its last day"
+        assert (FLOOR, date(2025, 1, 1)) in steps.only_call()[("USD", "EUR")], "P3: the transit is one window, from the floor to its last day"
+        assert steps.runs() == {("USD", "EUR"): [(OLD, date(1890, 1, 2)), (FLOOR, date(2025, 1, 2))]}, "the movements' days, then the floor to the arrival"
         print_success("the movements' own days, then the transit from 1900-01-01")
 
     @pytest.mark.asyncio
@@ -236,9 +237,10 @@ class TestTransitRatesStartAtTheFloor:
             _tx(id=3, broker_id=B, type="CASH_TRANSFER", dt=date(1900, 1, 6), amount="400", related_id=2),
         ]
 
-        requested = await _requested_rates(monkeypatch, txs, date_from=date(1900, 1, 3), date_to=date(1900, 1, 7))
+        requested, steps = await _requested_rates(monkeypatch, txs, date_from=date(1900, 1, 3), date_to=date(1900, 1, 7))
 
         assert requested == {("USD", day) for day in _days(date(1900, 1, 3), date(1900, 1, 6))}
+        assert (date(1900, 1, 3), date(1900, 1, 5)) in steps.only_call()[("USD", "EUR")], "P3: the transit is one window, from its start"
         print_success("1900-01-03 to 1900-01-06")
 
 
