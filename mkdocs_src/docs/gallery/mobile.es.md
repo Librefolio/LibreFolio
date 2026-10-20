@@ -321,6 +321,14 @@ Configuración de todo el sistema en móvil.
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Configuración global">
 </div>
 
+### 📧 Correo (Administrador)
+
+El estado del correo de la instancia y el correo de prueba en móvil.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="settings" data-name="email" alt="Correo">
+</div>
+
 ### 🕐 Planificador de datos de mercado — Configuración
 
 Configura el demonio de sincronización automática de datos de mercado en móvil.

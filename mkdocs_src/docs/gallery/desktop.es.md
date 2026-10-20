@@ -309,6 +309,14 @@ Los administradores pueden configurar ajustes para todo el sistema.
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Configuración global">
 </div>
 
+### 📧 Correo (Administrador)
+
+Los administradores revisan el correo de la instancia: si puede enviar, cuántos correos quedan en esta hora, las comprobaciones de la configuración y un correo de prueba a su propia dirección.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="email" alt="Correo">
+</div>
+
 ### 🕐 Planificador de datos de mercado — Config
 
 Configura el demonio de sincronización automática de datos de mercado: frecuencia de actualización, horas de sincronización del historial y días activos.

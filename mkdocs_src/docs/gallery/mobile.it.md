@@ -321,6 +321,14 @@ Configurazione a livello di sistema su mobile.
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Impostazioni globali">
 </div>
 
+### 📧 Email (Admin)
+
+Lo stato dell'email dell'istanza e l'email di prova su mobile.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="settings" data-name="email" alt="Email">
+</div>
+
 ### 🕐 Scheduler dati di mercato — Config
 
 Configura il daemon di sincronizzazione automatica dei dati di mercato su mobile.
