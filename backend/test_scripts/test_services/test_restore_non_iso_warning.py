@@ -59,7 +59,9 @@ Under test, the four places a warning code lives:
    ``database_damaged``, its message naming text that is not UTF-8: no report, the copy removed, the audit never run
    and no line of its, no line of the log holding those bytes or the words of a decode error; its twin, ``EUR`` stored
    there, is checked to its end, unwarned (RNW-109, red until B-49: today the audit fails on the copy, logs its warning,
-   and the check goes on to its report). What these archives store is read by SQL: the E-19a audit is what fails on it.
+   and the check goes on to its report). What these archives store is read by SQL: a plain read, on ``sqlite3``'s
+   default text factory as the server reads, is what fails on it (since E-20 the E-19a audit reads such a text as its
+   bytes).
 
 "RED" tests (marked ``# red until E-19b1``) fail before E-19b1, those marked ``# red until E-19b1.3`` before that lot,
 the one marked ``# red until B-49`` before that lot; "GUARD (green today)" ones pass before and after. The
@@ -829,10 +831,11 @@ def test_a_real_error_of_the_read_is_logged_by_its_class_never_with_the_archive_
     twin, ``EUR`` stored there, is checked to its end, restorable, unwarned. The audit's own failure, which no longer
     meets this text, stays pinned by RNW-107's injected errors.
 
-    Preconditions, read back as bytes: the archive stores the text, as TEXT; the twin's copy stores ``EUR``. Barrier:
-    the E-19a audit does fail on the archive's database with that ``OperationalError``, its message quoting the text, so
-    the log had something to keep out. Red until B-49: the audit fails on the copy, logs its warning (the class name
-    only), and the check goes on to its report.
+    Preconditions, read back as bytes: the archive stores the text, as TEXT; the twin's copy stores ``EUR``. Barrier: a
+    plain read of the archive's database (``where.read``), on ``sqlite3``'s default text factory as the server reads,
+    does fail with that ``OperationalError``, its message quoting the text, so the log had something to keep out; the
+    E-19a audit no longer does, since E-20 it reads such a text as its bytes. Red until B-49: the audit fails on the
+    copy, logs its warning (the class name only), and the check goes on to its report.
     """
     print_section(f"RNW-109: a text that is not UTF-8 in {where.place}")
 
@@ -845,8 +848,8 @@ def test_a_real_error_of_the_read_is_logged_by_its_class_never_with_the_archive_
     assert _read_as_bytes(_copy_of(instance.root, twin.stage_id), where.read) == [(b"text", CANONICAL.encode())], f"precondition: the twin's copy stores {CANONICAL} in {where.place}"
     stored = _archive(tmp_path / "stored", databases.head, (), statements=(where.store(f"CAST(x'{NOT_UTF8.hex()}' AS TEXT)"),), verify=carries_the_text)
     with closing(cases.read_only(cases.database_of(stored.path, tmp_path / "stored.db"))) as conn, pytest.raises(sqlite3.OperationalError) as raised:
-        find_stored_currency_findings(conn)
-    assert NOT_UTF8_MARKER in str(raised.value), f"barrier: the error the audit fails with on the archive's database quotes its text, so the log had something to keep out: {raised.value}"
+        conn.execute(where.read).fetchall()
+    assert NOT_UTF8_MARKER in str(raised.value), f"barrier: a plain read of the archive's database, as the server's driver reads it (sqlite3's default text_factory), fails with an error quoting its text, so the log had something to keep out: {raised.value}"
     original, stages = cases.sha256(stored.path.read_bytes()), cases.leftover_stages(instance.root)
     audited = _audit_recorded(monkeypatch)
     stage_id = staging.new_stage_id()

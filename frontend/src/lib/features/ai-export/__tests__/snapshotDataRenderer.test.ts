@@ -551,7 +551,7 @@ describe('AI Export compact Snapshot Data renderer', () => {
     it('falls back for unknown component versions instead of dropping future fields', () => {
         const section = {
             component_id: 'asset.ohlc_returns',
-            component_version: 2,
+            component_version: 3,
             schema_id: 'asset.ohlc_returns',
             schema_version: 2,
             payload: {

@@ -9038,7 +9038,7 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   - Smistati altrove dal coordinatore: il modale delle rotte FX che cancella prima di ripubblicare (X) e il `GBp` di
     Yahoo contro il confronto esatto del refresh (Z).
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-19».
-- **E-20 · L'audit delle valute e i testi che non sono UTF-8** — piccolo; `test-author` di E-19b1.3 (dubbi 1 e 2),
+- ✅ **E-20 · L'audit delle valute e i testi che non sono UTF-8** — piccolo; `test-author` di E-19b1.3 (dubbi 1 e 2),
   17/10.
   - Un solo valore TEXT che non è UTF-8 valido, in una delle 14 colonne, fa alzare a sqlite3 un `OperationalError` al
     `fetchall`, e l'audit intero cade:
@@ -9060,6 +9060,17 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     quattro posti) e poi, con ogni probabilità, fa fallire le letture del server di quelle righe (pysqlite alza al
     `fetch`, come prova la barriera di SCA-036; non misurato sul server). Segnalato al coordinatore.
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-19b1.3».
+  - 20/10, E: fatta nella 1.3 (via del coordinatore, 09:00). Dettagli: piano 08, «E-20» ed «E-20.3».
+    - La metà d'avvio: l'audit legge con un `text_factory` permissivo, quindi un testo non UTF-8 è un reperto `X'…'`
+      come un BLOB; il controllo d'avvio elenca anche tutti gli altri, e `db currencies` esce con 1 (SCA-016, SCA-036,
+      SCA-046). Non è la cura proposta sopra (il CTE con `typeof()` e `hex()`): il factory tocca solo le letture
+      dell'audit e torna com'era anche quando una lettura fallisce (SCA-017, SCA-018). E nessun errore dei dati arriva
+      più al confronto del messaggio con «no such table».
+    - La metà del ripristino l'ha chiusa B-49: un archivio con un testo non UTF-8 è rifiutato (`database_damaged`).
+    - Il `GBp`: chiuso senza codice. Nessun percorso di LibreFolio salva `GBp`: le scritture (`iso_currency_code`), le
+      letture (`Currency.validate_code`) e il validatore dell'ORM (`_validate_currency_field`, `models.py:48`, 8 campi,
+      i prezzi dei provider compresi) lo portano tutti a `GBP`, come già la regola di prima. Un `GBp` salvato può venire
+      solo da fuori: una modifica a mano, un altro programma.
 - **E-21 · Le frasi `BRIMParseError` dei plugin arrivano in inglese, dentro la cornice tradotta** — medio, chiarezza;
   coordinatore, 17/10 (decisione (c) di C-70b). Da C-70b il 400 del parse è `parse_failed`, con una cornice tradotta
   («Il plugin X non ha potuto leggere Y: …»), ma il motivo resta la frase inglese del plugin: circa 60 `raise
@@ -9078,6 +9089,15 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   - L'idea di H: un piccolo segno nella cartella dei dati, legato alla versione dell'app e alla testa di alembic e
     cancellato dal commit di un ripristino, con cui i risvegli normali saltano la scansione.
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-19a.4».
+- **E-23 · AI Export: un asset con prezzi solo prima del periodo risulta coperto con una serie vuota** — piccolo,
+  chiarezza; E, 19/10 (analisi di E-AI503). Preesistente, fuori da E-AI503: aperta, nessuna decisione (per J e lo
+  sviluppatore).
+  - Se l'ultimo prezzo salvato è anteriore al periodo, i punti del periodo sono solo riportati in avanti.
+    `portfolio.technical_prices` tiene l'asset in `assets` con la valuta, i bucket tutti vuoti e `latest_close` nullo,
+    e lo conta coperto. `portfolio.technical_coverage` lo dà invece non coperto (0 osservazioni).
+  - Con la regola dello sviluppatore («il calcolo … sul ritorno di punti che il db dà») potrebbe passare fra gli
+    `uncovered_assets` con un motivo suo; oggi il prompt non dice perché la serie è vuota.
+  - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-AI503.0» e «E-AI503.5».
 
 ## Y · Cruscotto e grafici (fase 01)
 

@@ -100,15 +100,44 @@ class AssetPriceSeriesPayload(StrictModel):
     latest_date: date | None = None
 
 
-class AssetOhlcReturnsPayload(StrictModel):
-    """`asset.ohlc_returns`: single-target observed-close bucket series."""
+#: Why an eligible asset has no price series in a technical payload (E-AI503), decided on the price points the price
+#: history returned for it, never on its type: no point at all (no price stored up to the period end), or points that
+#: do not share one currency.
+PriceSeriesGapReason = Literal["no_stored_price", "mixed_price_currencies"]
+
+
+class AssetPriceSeriesGapPayload(StrictModel):
+    """An eligible held asset with no price series in this payload, and why (E-AI503)."""
 
     asset_id: int
-    currency: CurrencyCode
+    portfolio_weight_ratio: float | None = Field(
+        None,
+        description="Gross absolute open-position value of this unique asset / gross eligible exposure, as for the assets with a series. Fraction in [0,1]; None if weightless.",
+    )
+    reason_code: PriceSeriesGapReason
+
+
+class AssetOhlcReturnsPayload(StrictModel):
+    """`asset.ohlc_returns`: single-target observed-close bucket series.
+
+    Without a price series (E-AI503) ``currency`` is None and ``reason_code`` says why; the buckets stay, all empty.
+    """
+
+    asset_id: int
+    currency: CurrencyCode | None = Field(..., description="Native currency of the price series; None exactly when there is no series (see reason_code).")
+    reason_code: PriceSeriesGapReason | None = Field(None, description="Why there is no price series (no_stored_price, mixed_price_currencies); None when there is one.")
     price_basis: Literal["observed_close"] = "observed_close"
     buckets: tuple[PriceBucket, ...]
     latest_close: float | None = None
     latest_date: date | None = None
+
+    @model_validator(mode="after")
+    def validate_series_gap(self) -> AssetOhlcReturnsPayload:
+        if (self.currency is None) != (self.reason_code is not None):
+            raise ValueError("currency is null exactly when reason_code says why there is no price series")
+        if self.currency is None and (any(bucket.observation_count for bucket in self.buckets) or self.latest_close is not None or self.latest_date is not None):
+            raise ValueError("without a price series no bucket is populated and there is no latest close")
+        return self
 
 
 class PortfolioTechnicalPricesPayload(StrictModel):
@@ -116,6 +145,10 @@ class PortfolioTechnicalPricesPayload(StrictModel):
 
     price_basis: Literal["observed_close"] = "observed_close"
     assets: tuple[AssetPriceSeriesPayload, ...]
+    uncovered_assets: tuple[AssetPriceSeriesGapPayload, ...] = Field(
+        ...,
+        description="Eligible assets with no price series in this payload, each with its reason (no_stored_price, mixed_price_currencies), ordered by asset_id. Decided on the price points returned, never on the asset type.",
+    )
     eligible_asset_count: int = Field(
         ...,
         ge=0,
@@ -136,6 +169,17 @@ class PortfolioTechnicalPricesPayload(StrictModel):
         ge=0,
         description="Eligible assets with a returned price series in this payload (subset of eligible_asset_count). Unit: assets.",
     )
+
+    @model_validator(mode="after")
+    def validate_universe(self) -> PortfolioTechnicalPricesPayload:
+        if self.covered_asset_count != len(self.assets):
+            raise ValueError("covered_asset_count must equal the number of assets with a price series")
+        if self.eligible_asset_count != len(self.assets) + len(self.uncovered_assets):
+            raise ValueError("eligible_asset_count must equal the assets with a price series plus uncovered_assets")
+        asset_ids = [asset.asset_id for asset in self.assets] + [asset.asset_id for asset in self.uncovered_assets]
+        if len(asset_ids) != len(set(asset_ids)):
+            raise ValueError("an asset is listed at most once across assets and uncovered_assets")
+        return self
 
 
 class TechnicalDatedValue(StrictModel):

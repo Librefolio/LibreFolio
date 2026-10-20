@@ -41,7 +41,10 @@ The panel opens on a ready-to-use choice: change only what you need.
 
 Under **Export type**:
 
-- **Export Data** copies only the facts: keep a snapshot, or ask your own question.
+- **Export Data** copies only the facts, to keep as a snapshot or to ask your own question.
+  Paste them alone and the AI only confirms it has received them, in your interface language,
+  perhaps listing the main topics; ask a question in the same message and it answers that
+  question.
 - **Request Analysis** adds a focused question, rules for checking the figures, and the
   structure of the expected answer.
 
@@ -85,18 +88,23 @@ LibreFolio remembers your last choices on each page for a few minutes; logging o
 
 You copy plain text: a short header (what was exported, the date, period, currency and detail
 level) and your data in compact tables. **Request Analysis** adds the question and the expected
-answer structure around them. Every export ends with LibreFolio's
-[legal notice](../settings/about.md#legal-notice), in your interface language and without its
-links; with **Request Analysis**, only the line that asks the AI to answer in your language comes
-after it.
+answer structure around them. Every export carries LibreFolio's
+[legal notice](../settings/about.md#legal-notice) near the end, in your interface language and
+without its links; only a short instruction for the AI follows it: with **Export Data**, how to
+reply; with **Request Analysis**, the line that asks it to answer in your language.
 
 1. Open a new chat in an AI assistant you trust with financial data.
-2. Paste the text and send it. With **Request Analysis**, the question is already in it.
+2. Paste the text and send it. With **Request Analysis**, the question is already in it; with
+   **Export Data**, add your question to the same message, or send the data alone and ask once
+   the AI confirms it has it.
 3. Answer the AI's questions: it is told to ask only for what changes the result (a budget, a
    goal, your tax situation) and never to guess it.
 
 Good to know:
 
+- Both export types tell the AI not to repeat the figures you have already seen in LibreFolio,
+  but to use them to answer only the question asked. When your data is not enough, it is asked
+  to also search the web for the latest news and to say which conclusions rely on it.
 - With **Request Analysis**, the AI is asked to answer in your LibreFolio interface language and
   to keep your figures apart from its interpretation.
 - The **Performance & Market Drivers** analyses need an assistant that can search the web;
