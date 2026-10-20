@@ -16,6 +16,8 @@ that asked the restart reads the outcome with a one-time ticket, whose hash wait
 
 from __future__ import annotations
 
+import errno
+import os
 import re
 import stat
 from pathlib import Path
@@ -201,3 +203,36 @@ def ensure_private_dir(path: Path, data_dir: Path) -> Path:
         if not stat.S_ISDIR(current.lstat().st_mode):
             raise BackupPathError(current)
     return path
+
+
+class NotRegularFileError(OSError):
+    """Something else than a regular file where one is read: a link (never followed), a FIFO, a device (B-53)."""
+
+
+def read_regular_file(path: Path, *, limit: int | None = None) -> bytes:
+    """The content of the regular file at ``path``, its first ``limit`` bytes when given (B-53).
+
+    Opened without following a link and without waiting on a FIFO, its descriptor closed whatever happens: ``os.fdopen``
+    keeps a descriptor it refuses, so a folder read that way left one open at each read. ``FileNotFoundError`` when
+    nothing is there, ``NotADirectoryError`` when a folder on the way is a file, ``IsADirectoryError`` for a folder,
+    ``NotRegularFileError`` for a link or a special file, ``PermissionError`` when it may not be read; any other
+    ``OSError``, a transient one, as the system raised it.
+    """
+    try:
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise NotRegularFileError(exc.errno, exc.strerror, exc.filename) from None
+        raise
+    try:
+        mode = os.fstat(fd).st_mode
+        if stat.S_ISDIR(mode):
+            raise IsADirectoryError(errno.EISDIR, os.strerror(errno.EISDIR), str(path))
+        if not stat.S_ISREG(mode):
+            raise NotRegularFileError(errno.EINVAL, "Not a regular file", str(path))
+        handle = os.fdopen(fd, "rb")
+    except BaseException:
+        os.close(fd)  # until the file object owns it, the descriptor is closed here
+        raise
+    with handle:
+        return handle.read() if limit is None else handle.read(limit)
