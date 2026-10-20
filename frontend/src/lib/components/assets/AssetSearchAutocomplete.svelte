@@ -457,7 +457,8 @@
         return next;
     }
 
-    /** P20, a support page: it opens in a new tab, and the report goes to the clipboard, to paste there. */
+    /** P20, a support page: it opens in a new tab with the report in its address (N61-form), and the report also goes to the
+     * clipboard, for a page that does not read it. */
     function reportClicked() {
         if (channel?.kind !== 'page' || report === null) return;
         // The write starts inside the click, before anything is awaited (writeTextToClipboard). It may throw at once.

@@ -47,8 +47,10 @@ accounts do not. The limit is set on the server with `LIBREFOLIO_MAX_USERS`: see
 
 ## 👤 Accounts {: #accounts }
 
-One row per account, oldest first: the username with its badges, then the e-mail and the creation
-date.
+One row per account, oldest first: the account's avatar, the username with its badges, then the
+e-mail and the creation date. The avatar is the picture chosen for the account by its user (see
+[Profile](../user/settings/profile.md)); an account without one shows the first letter of its
+username in a plain circle.
 
 | Badge | Meaning |
 |---|---|

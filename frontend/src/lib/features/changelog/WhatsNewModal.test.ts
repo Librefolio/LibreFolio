@@ -78,7 +78,9 @@ const changelogFixture = vi.hoisted(() => {
 //  - `files.set(lang, () => promise)`: its translation file, not loaded yet — `peek` answers undefined and `load` waits
 //    for it; a success is cached, a rejection is a failed chunk, which resolves to English and is not cached;
 //  - neither: a language without a file — English at once, as for `en`.
-const localizedFake = vi.hoisted(() => {
+// The cache is a `SvelteMap`, as the module's since A-CL1: a window reading `peek` sees a load that fills it.
+const localizedFake = await vi.hoisted(async () => {
+    const {SvelteMap} = await import('svelte/reactivity');
     const baseLanguage = (locale: string | null | undefined): string => (locale ?? '').trim().toLowerCase().split(/[-_]/)[0] || 'en';
     let memo: {from: ChangelogChapter[]; shown: ShownChapter[]} | null = null;
     const english = (): ShownChapter[] => {
@@ -88,7 +90,7 @@ const localizedFake = vi.hoisted(() => {
         }
         return memo.shown;
     };
-    const cached = new Map<string, ShownChapter[]>();
+    const cached = new SvelteMap<string, ShownChapter[]>();
     const files = new Map<string, () => Promise<ShownChapter[]>>();
     const ready = (lang: string): ShownChapter[] | undefined => cached.get(lang) ?? (files.has(lang) ? undefined : english());
     const peek = vi.fn((locale: string | null | undefined): ShownChapter[] | undefined => ready(baseLanguage(locale)));

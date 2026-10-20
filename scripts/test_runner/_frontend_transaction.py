@@ -31,6 +31,7 @@ def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
            "src/lib/features/transactions/import/GapFixStep.test.ts",
            "src/lib/features/transactions/import/ReportSetCard.test.ts",
            "src/lib/features/transactions/import/ParseDetailModal.test.ts",
+           "src/lib/features/transactions/import/BrimNoticeList.test.ts",
            "src/lib/features/transactions/bulk/bulkTodos.test.ts",
            "src/lib/features/transactions/transactionTypeStore.test.ts",
            "src/routes/(app)/transactions/filterState.test.ts"]
@@ -323,6 +324,19 @@ def front_tx_transfer_auto_cost(verbose: bool = False, ui: bool = False, headed:
     if not _ensure_test_users():
         return False
     return _run_playwright("transactions/tx-transfer-auto-cost.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_auto_cost_refusal(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run TX Auto Cost Refusal E2E tests (J-57: an Auto cost with nothing to average is refused, a cost by hand — 0 included — saves, the editor leads to the refused row)."""
+    print_section("Frontend TX Auto Cost Refusal Tests")
+    if not _ensure_frontend_build():
+        return False
+    # Every test registers its own account and uploads its own synthetic report: no seeded row is read.
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-auto-cost-refusal.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_tx_event_picker(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -681,6 +695,14 @@ def populate_registry(registry: dict) -> None:
         desc="CHANGELOG 1.2, each test on a disposable account with its own brokers and manual asset (A buys 10 @ 100 + 10 @ 200, average 150, quoted 180): a TRANSFER A → B entered in the editor's form with the cost basis left in Auto — the form and the editor cell propose 150, the commit sends the receiving side in Auto and the server answers it averaged A at 150, the saved receiving row costs 150, the Dashboard report and Positions table (average-cost column shown through the column menu) give B 150 per unit; T1 the whole position (B 20 @ 150, gain 600 not 3600, nothing left on A), T2 a partial one (B 8 @ 150, A keeps 12 @ 150)",
         tests="transactions/tx-transfer-auto-cost.spec.ts",
     )
+    add_test(
+        cat,
+        "tx-auto-cost-refusal",
+        front_tx_auto_cost_refusal,
+        name="TX Auto Cost Refusal Tests",
+        desc="J-57 complete, each test on a disposable account with its own broker and asset: E1 (red: data-code) the editor's form refuses an Auto ADJUSTMENT +5 on a broker that never held the asset — autoCostEmptyPool on the wire and as tx-form-issue[data-code], Save all refused and nothing written — then Manual 0 saves it at cost 0 (API); on a synthetic CoinTracking export (a crypto Deposit is an ADJUSTMENT +q, no cost, no todo) uploaded over the API and walked through the wizard: E2 (red) after the hand-over the Receive is refused autoCostEmptyPool, the issue names its row and the grid is on it, highlighted, without a click, then Manual 0 saves the whole import at cost 0 (API); E2-⚡ (red) from page 1, Validate now and a refused Save page the grid to the OLDEST of two refused Receives, a background validation does not; E3 (control) the cascade — two Auto Receives both refused, Manual 0 on the earlier lets the later pass in Auto, both saved at 0; E4 (red) a blocking cost_basis_override todo injected into the parse — the row's form opens in Manual, empty, Apply empty keeps the todo and holds Save, 0 answers it",
+        tests="transactions/tx-auto-cost-refusal.spec.ts",
+    )
     add_test(cat, "tx-event-picker", front_tx_event_picker, name="TX Event Picker Tests", desc="Event picker card-style dropdown, delta, slider range, type visibility", tests="transactions/tx-event-picker.spec.ts")
     add_test(
         cat,
@@ -789,6 +811,6 @@ def populate_registry(registry: dict) -> None:
         desc="W-B39, each test on a disposable account with brokers of its own, the page's commit answered through page.route by a refusal the generated client's response schema accepts: S1 a linked TRANSFER pair split from its row menu and refused with wacFxUnavailable on the split → an error toast naming the pair (USD, no {placeholder}), the confirmation still open and usable, the pair still linked after Cancel; P1 a WITHDRAWAL and a DEPOSIT linked from the selection toolbar's plain confirm and refused with accessDenied on the receiving broker → an error toast naming that broker, the confirmation still open, both rows still standalone after Cancel",
         tests="transactions/tx-split-refusal.spec.ts",
     )
-    add_test(cat, "tx-unit", front_tx_unit, test_names=False, name="TX Unit Tests (Vitest)", desc="Pure unit tests: txPayloadHelpers + txCommitApi + promoteHelpers + splitRowCharges + fixRowLifecycle + duplicateRecheckPayload + importReportSets + gapFixModel + GapFixStep (jsdom)", tests="vitest")
+    add_test(cat, "tx-unit", front_tx_unit, test_names=False, name="TX Unit Tests (Vitest)", desc="Pure unit tests: txPayloadHelpers + txCommitApi + promoteHelpers + splitRowCharges + fixRowLifecycle + duplicateRecheckPayload + importReportSets + gapFixModel + GapFixStep (jsdom) + BrimNoticeList's report-issue link (jsdom)", tests="vitest")
     add_test(cat, "all", front_transaction_all, test_names=False, name="All Transaction Tests", desc="Run all Transaction E2E tests")
     registry["front-transaction"] = cat

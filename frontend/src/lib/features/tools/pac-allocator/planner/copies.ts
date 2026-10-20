@@ -8,6 +8,7 @@
  */
 import {canonicalInput, compareDecimal, decimalSign, fractionToPercent} from './decimal';
 import {EXPOSURE_DIMENSIONS, PlannerDraft, nowTimestamp, priceIsCopied, rateIsCopied, samePrice, type CopyKind, type CopyRecord, type CopyRef, type DraftAsset, type DraftBroker, type DraftCash, type DraftExposure, type DraftFx, type DraftPrice, type ExposureDimension} from './draft.svelte';
+import {rememberFxPairIssues} from './fxIssues';
 import type {PlannerSource, SourceAsset, SourceBroker, SourceCurrentWeight, SourceIssue, SourceQuery, SourceSection} from './source';
 
 export type CopyConflict = {id: string; kind: 'cash'; cashKey: string; label: string; currency: string; previous: string; previousStamp: CopyRef | null; incoming: string; incomingStamp: CopyRef; ownershipShare: string; economicAmount: string; selected: string};
@@ -477,7 +478,15 @@ export interface RefreshSummary {
     unchanged: number;
     /** Labels of facts the source no longer publishes: they keep the copied value. */
     missing: string[];
+    /**
+     * What the re-read said (X-R45b): a saved FX rate skipped for an older one, for one. Of the Brokers, only those whose
+     * cash the plan holds, as a Liquidity copy reports them, and without their structural note, as `CopyNotice` does.
+     */
+    issues: SourceIssue[];
 }
+
+/** Structural, one per Broker (LibreFolio stores no fees or order modes): the Broker step says it once. */
+const EXECUTION_PROFILE_CODE = 'allocation.broker_execution_profile_unsupported';
 
 const ascending = (a: number, b: number) => a - b;
 
@@ -548,9 +557,18 @@ function sameQuote(left: DraftPrice, right: DraftPrice): boolean {
  * repeated here so an edit made while the read was running is never overwritten.
  * The amount to use of a cash row is the user's: only «all» (equal to the whole
  * available amount) follows the new balance, any other amount is never touched.
+ * A pair read again also takes what the read said about it (X-R45b, `fxIssues.ts`).
  */
 export function refreshCopiedFacts(draft: PlannerDraft, source: PlannerSource, plan: RefreshPlan): RefreshSummary {
-    const summary: RefreshSummary = {readAt: source.generatedAt, prices: 0, fx: 0, cash: 0, unchanged: 0, missing: []};
+    const summary: RefreshSummary = {
+        readAt: source.generatedAt,
+        prices: 0,
+        fx: 0,
+        cash: 0,
+        unchanged: 0,
+        missing: [],
+        issues: selectedBrokerIssues(source, plan.cashBrokerIds).filter((issue) => issue.code !== EXECUTION_PROFILE_CODE),
+    };
     const records = new Map<CopyKind, CopyRecord>();
     const record = (kind: CopyKind): CopyRecord => {
         let copy = records.get(kind);
@@ -583,10 +601,12 @@ export function refreshCopiedFacts(draft: PlannerDraft, source: PlannerSource, p
         asset.priceSource = row.source;
     }
 
+    const reread: string[] = [];
     for (const pair of plan.fxPairs) {
         const current = draft.fx(pair);
         const awaiting = !current || rateAwaitsRead(current);
         if (!awaiting && (!current || !rateIsCopied(current) || current.copiedRate === null)) continue;
+        reread.push(pair);
         const row = source.fxQuotes.find((item) => item.pair === pair);
         if (!row || row.rate === null) {
             // Still no rate for an awaiting pair: the calculation reports it.
@@ -602,6 +622,8 @@ export function refreshCopiedFacts(draft: PlannerDraft, source: PlannerSource, p
         fx.source = row.source;
         fx.referenceDate = row.reference_date;
     }
+    // X-R45b: with its rate, each pair read again takes what this read said about it, in place of an older read's
+    rememberFxPairIssues(draft, reread, source.issues);
 
     const sourceBrokers = new Map(source.brokers.map((row) => [row.broker_id, row.source_broker_id]));
     for (const cash of draft.data.cash) {

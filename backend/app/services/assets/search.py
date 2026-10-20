@@ -7,6 +7,7 @@ import json
 from typing import AsyncGenerator, Optional
 
 import structlog
+from pydantic import ValidationError
 
 from backend.app.db.models import (
     AssetType,
@@ -14,12 +15,26 @@ from backend.app.db.models import (
 from backend.app.schemas.provider import (
     FAProviderSearchResponse,
     FAProviderSearchResultItem,
+    FAQuoteBaseSuggestion,
 )
 from backend.app.services.assets import core, provider_policy, web_link_finder
 from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
 
 logger = structlog.get_logger(__name__)
+
+
+def _quote_base_suggestion(code: str, item: dict) -> FAQuoteBaseSuggestion | None:
+    """A search result's quote base suggestion (Z-32 d), from the plugin's key ``quote_base_suggestion``: one that does
+    not validate is dropped with a warning, and the result stays."""
+    raw = item.get("quote_base_suggestion")
+    if raw is None:
+        return None
+    try:
+        return FAQuoteBaseSuggestion.model_validate(raw)
+    except ValidationError as error:
+        logger.warning("Search result: quote_base_suggestion dropped", provider=code, identifier=item.get("identifier"), error=str(error))
+        return None
 
 
 def _default_search_codes() -> list[str]:
@@ -330,6 +345,7 @@ class AssetSearchService:
                         asset_type=raw_asset_type,
                         provider_url=item_provider_url,
                         provider_params=item.get("provider_params"),
+                        quote_base_suggestion=_quote_base_suggestion(code, item),
                         via_web=bool(item.get("_via_web", False)),
                     )
                 )
@@ -449,6 +465,7 @@ class AssetSearchService:
                 # Extract enum .value to avoid "IdentifierType.TICKER" serialization
                 raw_id_type = item.get("identifier_type", "")
                 id_type_str = raw_id_type.value if hasattr(raw_id_type, "value") else str(raw_id_type)
+                suggestion = _quote_base_suggestion(code, item)
 
                 result_items.append(
                     {
@@ -460,6 +477,7 @@ class AssetSearchService:
                         "asset_type": raw_asset_type,
                         "provider_url": item_provider_url,
                         "provider_params": item.get("provider_params"),
+                        "quote_base_suggestion": suggestion.model_dump(mode="json") if suggestion else None,
                         "via_web": bool(item.get("_via_web", False)),
                     }
                 )
