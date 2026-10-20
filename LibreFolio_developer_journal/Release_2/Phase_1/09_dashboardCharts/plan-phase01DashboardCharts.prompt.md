@@ -1,11 +1,13 @@
 # Piano — fase 01, 09: Y · Cruscotto e grafici (1.3.0)
 
-> **Stato al 19/10** (base `ede7adf75`): tutti i lotti di Y sono entrati in `dev_release2` tranne **Y4a** (fermo: il
-> coordinatore ha portato al developer «non nella 1.3, oppure una finestra notturna», 16/10 20:21) e **Y13** (parcheggiato
-> fino alla risposta del developer a Y13-1). L'ultimo ingresso è Y-30 (`ede7adf75`, 19/10). Lotto per lotto, con i commit:
-> §4, «Stato dei lotti». Dal 19/10 valgono le regole nuove del coordinatore: nessuna decisione di prodotto da Y (ogni
-> scelta diventa una domanda, con le opzioni e un consiglio), si implementa solo col suo via esplicito, carichi pesanti
-> solo in uno slot.
+> **Stato al 19/10 sera** (HEAD `15603fe69`): tutti i lotti di Y sono entrati in `dev_release2` tranne **Y4a** (fermo:
+> il coordinatore ha portato al developer «non nella 1.3, oppure una finestra notturna», 16/10 20:21) e **Y13**
+> (parcheggiato fino alla risposta del developer a Y13-1). L'ultimo ingresso è Y-N65 (merge `5cb47395f`, CHANGELOG
+> `b1e7a2dd5`, 19/10). Lotto per lotto, con i commit: §4, «Stato dei lotti». La ripresa dopo la pausa generale del
+> 19/10 sera (la corsia da ripopolare, le note in coda) è nella sezione «19/10 sera · Pausa generale»; il prossimo
+> lavoro, Z-29d, nella sezione «20/10 · Z-29d», in fondo. Dal 19/10 valgono le
+> regole nuove del coordinatore: nessuna decisione di prodotto da Y (ogni scelta diventa una domanda, con le opzioni e
+> un consiglio), si implementa solo col suo via esplicito, carichi pesanti solo in uno slot.
 >
 > - **Workstream Y** · worktree `LibreFolio-worktrees/e-alfy-redesigned-spork` · ramo `e-alfy-y-cruscotto-e-grafici`
 >   (rinominato dall'app all'avvio; prima `e-alfy-redesigned-spork`).
@@ -477,7 +479,10 @@ antenato della base il 19/10. I titoli ⏳ del §7 sono il registro del momento:
 | Y12b | U8 con i campi di J e MF: P19; R17, W8, P4; V11 e P5 | ✅ 16–17/10 | `23f71e739` (140), `1565b6bbb` (202), `d4ecfb692` (255) | «Y12b», «R17 · W8 · P4» |
 | Y4a | FE2a, i segnali in `lib/features/signals/` | ⏸ fermo | — | «Y4a · analisi aggiornata»: per il developer, «non nella 1.3, oppure una finestra notturna» (16/10 20:21) |
 | Y13 | FE9–FE11 | ⏸ parcheggiato | — | «Y13»: fino alla risposta del developer a Y13-1 (dopo il tag?) |
-| Y-N65 | N65: nessun intervallo di un giorno in tutti i selettori; il righello; il cursore del grafico (N65-7) | ⏳ checkpoint 19/10 | — | «19/10 · Y-N65», «Il lotto Y-N65» |
+| Y-N65 | N65: nessun intervallo di un giorno in tutti i selettori; il righello; il cursore del grafico (N65-7) | ✅ 19/10 | `5cb47395f` (treno da annotare) | «19/10 · Y-N65», «Il lotto Y-N65» (passo 7) |
+| Z-29d-0 | `AssetComparisonSignal._basePoint`: la base in % del confronto dal punto iniettato (per Z-29b e Z-29d) | ⏳ checkpoint 20/10 | — | «20/10 · Z-29d», «Risposte del coordinatore (20/10 09:01) e il lotto Z-29d-0» |
+| Z-29d | il dialogo chiede la serie allineata del bersaglio | ⏸ aspetta Z-29a in dev e Z-29b sulla base | — | «20/10 · Z-29d» |
+| Y-38 | il selettore dell'asset di confronto fa scorrere il nome lungo | ⏳ analisi 20/10, domanda aperta | — | «20/10 · Y-38» |
 
 Fuori dai lotti:
 - **Le voci Y-N** della mia sezione del backlog: ognuna ✅ porta il suo commit d'ingresso (rimesse in pari il 19/10). Aperte,
@@ -7111,3 +7116,460 @@ mirino non si vedeva quasi mai. Lo rende vero la stessa chiamata del punto 4, co
    >   vanno le mie. Si tengono tutte;
    > - `LibreFolio_devWiki/log.md`: tutti e due aggiungono in fondo. Si tengono tutti e due;
    > - il backlog: nessun pezzo dentro la mia sezione.
+7. ✅ 19/10 — **Ingresso**. Il coordinatore ha committato `298be1611` (`fix(web)`, 17 percorsi) e `15603fe69` (il
+   giornale, 8 percorsi), che ho verificato contro le liste. Revisione automatica pulita; merge `5cb47395f` in
+   `dev_release2`, CHANGELOG `b1e7a2dd5` con le mie due righe (🔄 e 🐛); gate leggero del coordinatore: Vitest
+   236/236 su 6 file, `front check` 0/0.
+   > **Note implementazione**: i conflitti della devWiki (`index.md`, `log.md`) li ha risolti il coordinatore
+   > sommando le due parti, con A-CL1. Verificato in sola lettura alle 17:15: i miei commit sono antenati di dev, le mie
+   > righe (le due tabelle e il registro) e quelle di A-CL1 ci sono, nessun marcatore di conflitto. DV, che aspettava
+   > questo ingresso per la sua riga in `PriceChartFull` e `CandlestickChart`, lo avvisa il coordinatore.
+
+## 19/10 sera · Pausa generale (richiesta del developer, 18:12)
+
+Il developer spegne la macchina, e `/tmp` verrà ripulito. Stato scritto alle 18:1x, senza comandi git.
+
+- **Nulla in corsa**: nessun test, sonda o server; la porta 6189 è libera (18:14).
+- **Il worktree**: HEAD `15603fe69`, non ancora portato al merge di dev (`5cb47395f`, poi `b1e7a2dd5`). L'unico file
+  sporco è questo piano (la contabilità di Y-N65 e questa sezione): va nel prossimo checkpoint.
+- **La corsia non sopravvive**: `/tmp/librefolio-r13-y` sparisce con `/tmp`. Alla ripresa, prima di qualunque run e col
+  carico sotto 50: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6189
+  --data-dir /tmp/librefolio-r13-y db populate --force --clean`. Per le E2E resta la guardia dei report: senza un
+  `.csv` in `<data dir>/broker_reports/uploaded`, `LF_SETUP_DONE` va tolto. Script e log stanno nella cartella della
+  sessione, non in `/tmp`.
+- **Il prossimo lavoro**: **Z-29d**, il dialogo che chiede la serie del bersaglio. Parte quando Z-29b è avanti, al
+  messaggio del coordinatore: prima l'analisi, niente codice.
+
+**Note in coda, per il prossimo checkpoint:**
+1. **Le maschere della galleria** (nota del programma colori, 19/10 17:02). Il punto 4 delle verifiche del taglio di
+   `GrowthChart` (§4; oggi righe 95–99), l'unica procedura che le usa, cita `g-final3-r1`, con maschere e stabilità di
+   `g-final3__r1__vs__r2`: sono state cancellate per liberare il disco. Il riferimento di oggi è il trio del 18/10,
+   `g-r3-prima-ba8e06763-full`, `g-r3-dopo-cd686f445-full` e `g-r3-dopo2-cd686f445-full`, con maschere e stabilità da
+   `diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-cd686f445`. Lo descrive `scripts/visual_review/README.md`, sezione
+   «Known gallery behaviour»: è in dev, non ancora nella mia base, da rileggere dopo l'aggiornamento. Tutte le altre
+   citazioni di `g-final3` (gli esiti di Y1 e Y2, la galleria mobile di Y7, la nota sul giorno UTC) sono la storia
+   delle corse fatte: restano. Il coordinatore, 20/10: le maschere chiedono una pausa di tutta la macchina, quindi
+   più avanti. La nota resta in coda.
+2. **Il numero del treno di Y-N65** nella tabella «Stato dei lotti»: da leggere nel README della fase, dopo
+   l'aggiornamento della base.
+3. **Aperti, invariati**: nel backlog Y-7, Y-9, Y-10, Y-15, Y-18, Y-26, Y-32, Y-35, Y-36, Y-37 (in attesa del
+   developer, o minimi); fermi Y4a e Y13 (Y13-1); dopo la 1.3, se assegnati, J-56 e J-59.
+
+## 20/10 · Z-29d — il dialogo che chiede la serie del bersaglio: analisi (sola lettura)
+
+> **Richiesta del coordinatore** (20/10 08:46): «Z-29d aspetta che Z-29b sia avanti, e Z è ancora su Z-32 (d). […]
+> Nel frattempo prepara l'analisi di Z-29d (file, rischi, ordine dei passi), senza scrivere codice. Niente corse
+> pesanti.»
+>
+> - **Base del worktree**: `15603fe69`; sporco solo questo piano.
+> - **Codice letto**: quello di `dev_release2` `ecc7ac667`. Per il contratto di Z-29a, il ramo di Z `6510fe169`: commit,
+>   letti in sola lettura con `git show`.
+> - **Nessuna corsa** e nessun comando che cambia qualcosa. I numeri di riga sono di `ecc7ac667`.
+
+**Cos'è Z-29d.** Viene dal piano di Z, sezioni «piano breve del lotto intero» e «il contratto rivisto» (19/10
+15:25–15:35):
+- «in modalità scheda, scegliendo il bersaglio di un confronto, la pagina dà la serie allineata con un risolutore
+  asincrono; Vitest e un caso E2E. **0,5 giorni**»;
+- «Il dialogo, scegliendo un bersaglio, manda la voce della scheda (`include_price: false`) e quella del bersaglio in
+  una richiesta sola»;
+- a Y tocca anche `AssetComparisonSignal`, «una riga»: in percentuale, la base del confronto dal `first` del bersaglio
+  (`_baseValue`). Serve anche a Z-29b, per le schede.
+
+### Lo stato reale (20/10)
+
+**Le dipendenze.**
+- **Z-29a e Z-29r, committati sul ramo di Z** (`37c3ec3ee`; checkpoint del 19/10 17:15, revisori MF e X), non ancora
+  in `dev_release2`:
+  - Z-29a è il backend dei prezzi: `key`, `max_points`, `resolution` e `sample_like` nella richiesta; `resolution` e
+    `sample_bounds` nella risposta;
+  - Z-29r è la sede neutra della regola per secchio.
+- **Z-29s e Z-29b, non cominciati**: Z-29s riduce i segnali nel backend, Z-29b è la lista. Z è su Z-32 (d).
+
+**Il dialogo oggi** (`lib/components/charts/ChartSettingsModal.svelte`, 444 righe). La modalità scheda è
+`mode="pair"`.
+- **La linea principale dell'anteprima** è `pairData` (`:227`), cioè la `chartData` della scheda (pagina, `:1913`).
+  In % la normalizza `normalizeToPercentage`, che prende la base dal primo punto disegnato (`:231`).
+- **I segnali locali** passano da `renderLocalPreview` (`:287`) a `renderMulti(previewDataAbs, …)`. La loro base in %
+  è il primo punto dei dati di base (`ChartSignal.ts:421`).
+- **Il confronto con un asset**: `_resolvedData = assetsDataMap[targetId]` (`:296-301`). È la `chartData` della scheda
+  del bersaglio, sincrona.
+  - L'anteprima non mette il nome del bersaglio e non controlla l'asset stesso.
+  - La scheda invece salta il confronto con sé stessa (`assets/+page.svelte:1304`).
+- **I segnali del backend in modalità scheda** sono i risultati salvati, dati dalla pagina:
+  `resolveSettingsBackendPreview` → `getRenderedSignals(asset.id, asset.chartData, …)` (pagina, `:1265-1269`).
+- **Il modello per l'asincrono c'è già, in modalità globale**: i segnali del backend sulla curva sintetica, con un
+  ritardo di 250 ms (`:271`), un gettone (`livePreviewToken`) e uno stato d'errore.
+- **I test.** Nessun test del dialogo. Lo legge solo il controllo sul sorgente di `chartCoreHelpers.test.ts:256`:
+  verifica alcune proprietà di `<ChartSettingsModal>` nella pagina degli asset, e una proprietà in più non lo rompe.
+
+**La pagina degli asset** (`routes/(app)/assets/+page.svelte`).
+- `assetsDataMap` raccoglie le `chartData` delle schede (`:1916`).
+- `fetchPriceSeries` manda `{asset_id, date_range: {start: dateStart, end: dateEnd}, include_price, signals}`, senza
+  `target_currency` (`:739-742`), con `sendBulkBatches` e il pool dei worker (`:780`).
+
+**`AssetComparisonSignal`** (`lib/charts/signals/AssetComparisonSignal.ts`, 176 righe).
+- Allinea `_resolvedData` alle date del grafico per data esatta.
+- In % la base è il suo primo valore allineato, per la linea (`:67`) e per il fantasma della conversione (`:137`).
+  `comparisonSignals.test.ts:123` lo fissa.
+- Sulla lista non c'è conversione, quindi niente fantasma.
+
+**Il backend di Z-29a v3 per la richiesta del dialogo** (ramo di Z, `price_query.py`).
+- `_plan_samples` pianifica la voce indicata anche con `include_price: false`: ne legge il seme e la prima riga, cioè
+  il giorno F e il passo.
+- Una voce con `include_price: false` torna con `prices` vuoti e senza `sample_bounds` (`:1054-1056`).
+- Il `first` del bersaglio cade nel più tardo fra il giorno F della scheda e il primo giorno del bersaglio. Con una
+  scheda giornaliera, il bersaglio è giornaliero da quel giorno.
+- Due voci con intervalli diversi danno un 422 `range_mismatch`.
+
+### Rispetto al piano di Z: cosa manca, cosa devia
+- **Di Z-29d non c'è ancora nulla**, né del suo `AssetComparisonSignal`.
+- **Il confronto rado, cioè il difetto che Z-29d ripara.** Dopo Z-29b ogni scheda ha la sua serie ridotta, con il suo
+  giorno F e il suo passo. In modalità scheda l'anteprima allinea per data la serie ridotta del bersaglio
+  (`assetsDataMap`) sulle date ridotte della scheda: con passi o F diversi le date coincidono poco o niente, e la
+  linea è rada o vuota.
+- **«Una riga» non basta.** Il fantasma della conversione ha la sua base, il primo valore originale allineato. Con la
+  sola `_baseValue` linea e fantasma partirebbero da giorni diversi. Sulla lista oggi non succede (nessuna
+  conversione), ma la classe serve anche al dettaglio e ai cambi.
+- **La base dell'anteprima: un punto nuovo, che il piano di Z non tocca.**
+  - Dopo Z-29b la scheda disegna `prices` e prende la base dal `first`: per la percentuale e per i segnali locali e
+    del backend.
+  - Il dialogo invece normalizza `pairData` sul suo primo punto e calcola i segnali locali su `pairData`.
+  - Così, in %, la linea principale e i segnali locali dell'anteprima partono da 0 % alla fine del primo secchio, la
+    scheda dal giorno F: anteprima e scheda non coincidono più.
+  - Va riparato nello stesso lotto (D-Z29d-4).
+- **I segnali del backend nell'anteprima** vengono da `getRenderedSignals` con la `chartData` della scheda. Se Z-29b
+  cambia i dati di base di quella funzione per la scheda, deve cambiare anche questa chiamata (stesso file, di
+  Z-29b). Lo verifico all'inizio di Z-29d.
+- **La stima.** Il piano di Z dà 0,5 giorni per il dialogo, più la riga della classe. Con la base dell'anteprima, lo
+  stato pubblicato e i suoi test, la mia stima è di circa 1,25 giorni (sotto).
+
+### La proposta (tecnica, da concordare con Z)
+
+1. **`AssetComparisonSignal`: `_basePoint`**, un punto invece del numero `_baseValue`.
+   - In % la base della linea è `_basePoint.value`, quella del fantasma `_basePoint.originalValue` quando c'è.
+   - Senza `_basePoint`, o con una base inutilizzabile (zero, non finita, `missing`), resta tutto come oggi.
+   - Lo iniettano un solo aiuto comune, usato dalla scheda (Z-29b) e dall'anteprima (Z-29d), così i due calcoli del
+     confronto non divergono.
+2. **Il dialogo**, solo in modalità scheda. Le proprietà sono facoltative: senza, resta tutto com'è (lista dei cambi,
+   modalità globale).
+   - `comparisonTargetResolver(targetId)` restituisce `{data, basePoint, displayName}`, cioè la serie allineata del
+     bersaglio, `[first, …prices]`. La dà subito se la pagina la ha, altrimenti con una promessa.
+   - `pairFirst`, il `first` della scheda: dà la base della linea principale, e i segnali locali si calcolano su
+     `[first, …prices]`, come sulla scheda.
+   - Un piccolo modulo a rune accanto al dialogo tiene lo stato per bersaglio: `loading`, `ready` o `failed`.
+     - Una sola richiesta per bersaglio a ogni apertura.
+     - Un gettone per apertura: una risposta arrivata dopo la chiusura si scarta.
+     - Nessun ritardo: una scelta nel menù è un evento solo.
+   - L'anteprima pubblica lo stato, per i test: `data-testid="chart-settings-preview"`, con
+     `data-comparison-state="none|loading|ready|failed"`. Il `LineChart` dell'anteprima non espone le sue serie: niente
+     `__lfChart`, solo `data-chart-ready` e `data-chart-renders`.
+3. **La pagina** (`assets/+page.svelte`), il risolutore.
+   - **La serie c'è già**: se le strutture di Z-29b hanno la serie allineata per la coppia (scheda, bersaglio), il
+     risolutore la restituisce subito, senza richiesta. Succede con un confronto salvato della scheda, caricato nella
+     sua richiesta.
+   - **Altrimenti**, una richiesta sola con due voci, costruite dal costruttore di gruppo di Z-29b:
+     - la voce della scheda: la sua `key`, lo stesso `date_range` della sua voce in cache, `include_price: false`, e
+       il suo campo di campionamento (T-Z29d-1);
+     - quella del bersaglio: `sample_like` = la chiave della scheda, e lo stesso `date_range`.
+   - **La risposta** passa dalla stessa via dei worker e va nella cache di Z-29b, che il bus `{kind: 'prices'}` svuota.
+   - **Il bersaglio uguale alla scheda**: nessuna richiesta e nessuna linea, come sulla scheda (D-Z29d-3).
+
+### Domande
+
+**Di prodotto**: cambiano ciò che si vede. Il consiglio è in neretto.
+- **D-Z29d-1 · Mentre la serie allineata arriva** (qualche centinaio di ms):
+  - (a) **nessuna linea di confronto finché non arriva**. Niente lampo di una linea sbagliata, e oggi un bersaglio
+    senza dati non dà linea;
+  - (b) intanto la serie della scheda del bersaglio, rada, poi sostituita.
+- **D-Z29d-2 · Se la richiesta fallisce** (rete, 422, budget):
+  - (a) **nessuna linea, senza messaggio**. È un'anteprima: dopo il salvataggio la scheda chiede il suo confronto
+    nella sua richiesta, con la gestione degli errori della pagina;
+  - (b) un breve messaggio sotto l'anteprima, come quelli dei segnali del backend, con chiavi nuove nelle 4 lingue.
+- **D-Z29d-3 · Il confronto con l'asset stesso.** Oggi l'anteprima lo disegna, la scheda mai.
+  - (a) **lo salta anche l'anteprima**, come la scheda;
+  - (b) resta com'è.
+- **D-Z29d-4 · La base dell'anteprima dopo Z-29b:**
+  - (a) **l'anteprima segue la scheda**, dentro Z-29d: linea principale e segnali locali con la base dal `first`;
+  - (b) resta com'è, e in % anteprima e scheda sono diverse.
+
+**Tecniche**, per il coordinatore e Z:
+- **T-Z29d-1 · Il campo di campionamento della voce della scheda:**
+  - **la `resolution` della risposta della scheda**, cioè il passo disegnato. L'allineamento è garantito anche se la
+    larghezza è cambiata e la scheda non ha ancora richiesto;
+  - oppure il suo `max_points`: il backend rifà la stessa scelta, se la larghezza non è cambiata.
+- **T-Z29d-2 · Il nome e la forma della base:** **`_basePoint`** o `_baseValue`. Il punto copre anche il fantasma; il
+  nome lo usa anche Z-29b.
+- **T-Z29d-3 · Chi fa `AssetComparisonSignal`, e quando:**
+  - **io, subito, come lotto minimo Z-29d-0**: è indipendente, perché senza iniezione non cambia nulla, e Z-29b lo
+    trova pronto;
+  - oppure Z, dentro Z-29b, con la mia revisione.
+- **T-Z29d-4 · Dove va il caso E2E:**
+  - **in coda a `assets/asset-list.spec.ts`, dopo che le E2E di Z-29b sono entrate**: stessa azione,
+    `front-asset asset-list`, e nessuna riga nuova nel runner;
+  - oppure una spec nuova, con la sua riga nel runner, che è un file condiviso.
+- **Nota per Z, non bloccante.** Una voce pianificata con `include_price: false` legge e conta lo stesso le sue righe
+  di secchio, perché `_read_samples` scorre tutte le voci pianificate, e poi le scarta. Sono poche centinaia di righe.
+
+### Superfici
+- **Codice:**
+  - `lib/charts/signals/AssetComparisonSignal.ts` (Z-29d-0);
+  - `lib/components/charts/ChartSettingsModal.svelte`, più il modulo nuovo dello stato (nome da fissare, per esempio
+    `comparisonPreviewTargets.svelte.ts`);
+  - `routes/(app)/assets/+page.svelte`: il risolutore, e due proprietà su `<ChartSettingsModal>`;
+  - forse `lib/utils/chartUtils.ts`: `normalizeToPercentage` con una base, se Z-29b non lo ha già fatto.
+- **Test:**
+  - `comparisonSignals.test.ts` (Z-29d-0);
+  - il test del modulo dello stato, o un `ChartSettingsModal.test.ts` nuovo;
+  - il test del costruttore della richiesta;
+  - un caso in `asset-list.spec.ts`.
+- **Doc:**
+  - `developer/frontend/components/charts.md`: l'anteprima in modalità scheda, il risolutore, la base;
+  - la base del confronto nella pagina per sviluppatori dei segnali.
+  - Nessuna pagina utente descrive l'anteprima in modalità scheda: nessun cambio previsto.
+- **Fuori:** nessun backend; nessuna chiave i18n e nessun colore nuovo, salvo D-Z29d-2 (b), che userebbe un
+  `InfoBanner` esistente.
+
+### Conflitti previsti
+- **`assets/+page.svelte`** è il file principale di Z-29b: la cache, i bersagli, la ricarica per scheda. Z-29d parte
+  solo con il codice di Z-29b sulla mia base. Il risolutore è un pezzo a parte.
+- **`asset-list.spec.ts`**: Z-29b ci scrive le sue E2E. Io dopo di lui (T-Z29d-4).
+- **`ChartSettingsModal.svelte`**: oggi nessuno lo ha aperto.
+  - DV lo ha portato a 0 classi di palette, quindi non ha un record nel cricchetto: nel codice nuovo solo ruoli.
+  - Y4a lo sposterebbe in `lib/features/signals/` (tabella di DV, «D-Y14»), ma è fermo. Se riparte, l'ordine lo
+    decide il coordinatore.
+- **`AssetComparisonSignal.ts`**: solo Y. Z-29b inietta la base dal lato della pagina.
+- **Il controllo sul sorgente** in `chartCoreHelpers.test.ts`: le proprietà nuove non lo toccano.
+- **La galleria**: lo scatto `assets/chart-settings` è in modalità globale, e il confronto del dettaglio è
+  giornaliero. Nessuno scatto cambia.
+- **Gli altri**: J (il renderer dei segnali), X (i cambi; X rivede la lista), W, A e H non hanno file in comune.
+
+### Complessità e rischi
+- **Lo stato asincrono del dialogo**: risposte tardive, chiusura e riapertura, cambi rapidi di bersaglio, più confronti
+  insieme. È una complessità media, che il modello globale risolve già.
+- **Le forme di Z-29b**: la chiave, la voce in cache, il `first` della scheda, il mapping dei worker. Parto dal suo
+  codice committato, non da questa analisi: al primo passo ricontrollo e aggiorno.
+- **Due calcoli del confronto**, la scheda e l'anteprima, possono divergere. Il rimedio è un solo aiuto d'iniezione,
+  usato da tutti e due.
+- **`range_mismatch`**: l'intervallo della richiesta va preso dalla voce della scheda, non ricalcolato.
+- **Il costo**: una richiesta piccola per ogni bersaglio nuovo, nessuna per quelli salvati.
+
+### Lotti e passi
+
+Ogni lotto si chiude con un checkpoint FROZEN.
+
+0. ✅ 20/10 — Questa analisi, con le domande al coordinatore.
+1. **Z-29d-0 · `AssetComparisonSignal._basePoint`**, se T-Z29d-3 è (a). Indipendente da Z-29a e Z-29b. **0,25
+   giorni.**
+   - Rossi (`test-author`): la base iniettata, per la linea e per il fantasma; senza iniezione, come oggi; la base
+     zero.
+   - Poi la cura, i Vitest leggeri e il checkpoint.
+2. **L'attesa**: Z-29a in `dev_release2` e il codice di Z-29b sulla mia base, aggiornata dal coordinatore. Poi la
+   corsia 6189 si ripopola con `--force --clean`.
+3. **Z-29d · il dialogo.** **Circa 1 giorno.**
+   1. Ricontrollo sul codice di Z-29b (la chiave, la voce in cache, il `first`, i worker, `getRenderedSignals`, il bus)
+      e aggiornamento di questa analisi.
+   2. Rossi (`test-author`), poi visti rossi con il carico sotto 50:
+      - il modulo dello stato: una richiesta per bersaglio, la risposta subito dalla pagina, la risposta tardiva
+        scartata, il fallimento, il bersaglio uguale alla scheda;
+      - il costruttore della richiesta: due voci, con i campi detti;
+      - la base dell'anteprima dal `first`;
+      - GUARDIE: senza risolutore come oggi; la lista dei cambi e la modalità globale invariate.
+   3. La cura, poi le prove leggere:
+      - i Vitest toccati e i vicini: `comparisonSignals`, `chartCoreHelpers`, `ChartSignalsSection`,
+        `chartPageSignals`, `loadComparisonData`, `previewPolicy`;
+      - `front check`, Prettier, `theme-roles --check`, `git diff --check`.
+   4. Uno slot E2E:
+      - il caso nuovo: su «All», le impostazioni di una scheda, un confronto con un asset di storia diversa. Una
+        richiesta con le due voci giuste, e `data-comparison-state="ready"`;
+      - come regressione, `front-asset asset-list` e `asset-detail`.
+   5. La doc (`docs-writer`), poi CHECKPOINT READY.
+
+**Totale: circa 1,25 giorni.**
+
+**Fatto quando:**
+- in modalità scheda, il confronto dell'anteprima sta sulle date della scheda e, in %, parte dove parte sulla scheda,
+  con una scheda ridotta come con una giornaliera;
+- c'è una richiesta per ogni bersaglio nuovo, nessuna per uno salvato;
+- modalità globale, lista dei cambi e dettaglio non cambiano;
+- i rossi sono stati visti rossi, poi verdi; prove leggere ed E2E verdi; doc scritta; piano aggiornato.
+
+**Il piano dei passi** lo scrivo qui sotto, sezione «Il lotto Z-29d», al via del coordinatore.
+
+### Risposte del coordinatore (20/10 09:01) e il lotto Z-29d-0
+
+**Le risposte.**
+- **D-Z29d-1…4**: le porta il coordinatore al developer.
+- **T-Z29d-1**: la `resolution` della risposta della scheda.
+- **T-Z29d-2**: `_basePoint`.
+- **T-Z29d-3**: Z-29d-0 è mio, **via adesso**: prima i rossi, poi il codice, poi il checkpoint. Corse leggere solo con
+  il carico a 1 minuto sotto 50; la corsia 6189 si ripopola quando serve.
+- **T-Z29d-4**: il caso E2E in coda ad `asset-list.spec.ts`.
+- **`data-comparison-state`** sull'anteprima: sì.
+- **Il dialogo** parte quando Z-29a è in dev e Z-29b sulla mia base: avvisa il coordinatore.
+
+**Il contratto di chi consuma la serie ridotta** (le tre note della revisione di MF su Z-29a v3, per Y e Z-29b):
+- **(n1)** Il Vitest legge la tabella dei casi (`compactDensityCases.json`) con la regola del browser e i
+  `max_points` che la pagina manda. Per Z-29d: il dialogo non calcola `max_points`; manda la `resolution` della risposta
+  della scheda (T-Z29d-1), e il suo Vitest lo fissa.
+- **(n2)** Se un ridimensionamento cambia il passo, si rilegge dal server: un campione settimanale non si riaggrega in
+  mesi, e da un campione non si torna al giornaliero. Per Z-29d: la chiave dell'anteprima comprende la `resolution` e
+  l'intervallo della scheda; se la scheda rilegge con un altro passo, l'anteprima chiede di nuovo e non riaggrega mai
+  la serie che ha.
+- **(n3)** La base della percentuale e il colore della linea leggono `sample_bounds.first` (F), non `prices[0]`.
+  - Z-29d-0: `_basePoint` è il `sample_bounds.first` del bersaglio.
+  - Z-29d (D-Z29d-4, in attesa del developer): la linea principale dell'anteprima prende base e colore dal `first`
+    della scheda.
+  - Z-29b: lo stesso sulla scheda.
+
+**Il contratto di Z-29d-0** (`AssetComparisonSignal`).
+1. `params._basePoint`, facoltativo, è un `LineDataPoint`, iniettato dalla pagina come `_resolvedData`. Vale il punto
+   del bersaglio nel giorno in cui parte il confronto: dopo Z-29a, il `sample_bounds.first` della voce del bersaglio,
+   convertito come i suoi prezzi (`value` e, con la conversione, `originalValue`).
+2. In %:
+   - la linea si normalizza su `_basePoint.value`, non più sul suo primo valore allineato;
+   - il fantasma della conversione si normalizza su `_basePoint.originalValue` quando c'è, altrimenti come oggi.
+3. Un `_basePoint` inutilizzabile si ignora, e tutto resta come oggi: assente, non un oggetto, `missing: true`, oppure
+   un `value` non finito o zero. Lo stesso per `originalValue` nel fantasma.
+4. Nessun punto in più: il punto della base non si disegna. Le date restano quelle allineate, come per la scheda, che
+   non disegna F (Q-Z29-1). La vista assoluta non cambia.
+5. `toConfig()` lascia fuori `_basePoint`, come `_resolvedData`: è un dato del momento. Tiene gli altri parametri con
+   `_`, che sono preferenze di stile salvate (il commento di `toConfig`, per esempio `_signalColor` di MACD).
+   - Oggi `toConfig()` si chiama solo su un segnale appena creato (`createSignalConfig`), quindi niente perdite; la
+     regola resta esplicita.
+   - L'intestazione della classe dice che anche `_assetDisplayName` è escluso: non è vero (il codice esclude solo
+     `_resolvedData`). Si corregge.
+6. Senza `_basePoint` è tutto identico a oggi, per tutti i chiamanti di adesso: dettaglio, lista, cambi, anteprima.
+
+**Fuori da Z-29d-0.**
+- `FxPairSignal`: secondo l'analisi di Z, il negozio dei cambi ha ogni giorno di calendario. Con i dati di base
+  `[first, …prices]` di Z-29b il cambio ha quindi il giorno F, e la sua base è già quella di F. Fa eccezione solo una
+  coppia che comincia dopo F, un caso raro: nota per Z-29b.
+- Nessuna pagina MkDocs descrive la base del confronto. Le pagine utente («in % le due linee partono da 0 %») parlano
+  del dettaglio, che resta giornaliero. `_basePoint` si documenta con il suo primo uso, in Z-29b e Z-29d.
+- Niente CHANGELOG (nessun cambio visibile), niente E2E (nessun chiamante), niente corsia (nessun backend).
+
+**Passi.**
+1. ✅ 20/10 — Rossi (`test-author`), in coda a `lib/charts/signals/__tests__/comparisonSignals.test.ts`, describe
+   «AssetComparisonSignal — an injected base point (Z-29d-0)». Sono rossi oggi: la base iniettata per la linea e per il
+   fantasma, e `toConfig()` senza `_basePoint`. Le guardie:
+   - la vista assoluta non cambia;
+   - un `_basePoint` inutilizzabile lascia tutto come oggi;
+   - un `_basePoint` senza `originalValue` lascia il fantasma come oggi;
+   - il punto della base non si disegna;
+   - `toConfig()` tiene un parametro con `_` di stile e lascia fuori `_resolvedData`.
+   > **Note implementazione**: 4 rossi e 25 guardie nuove (tabelle comprese), più i 29 test di prima: 58 in tutto. Un
+   > secondo `test-author` ha aggiunto le righe di una decisione presa da me, che il primo aveva lasciato aperta.
+   > **⚠️ Fuori pista**: il caso di un `value` inutilizzabile con un `originalValue` buono, per esempio
+   > `{value: 0, originalValue: 200}`. Si leggeva in due modi. Ho deciso: il punto vale solo se vale il suo `value`, e
+   > il fantasma vuole in più un `originalValue` buono. Con un `value` inutilizzabile si ignora tutto il punto, fantasma
+   > compreso. Così vale alla lettera il punto 3 del contratto, «si ignora, e tutto resta come oggi».
+   >
+   > La base zero: l'analisi diceva «nessuna normalizzazione», il contratto «si ignora»; vale il contratto, cioè la
+   > linea di oggi, misurata dal suo primo valore. La frase dell'analisi è corretta qui sotto.
+2. ✅ 20/10 09:2x — I rossi visti rossi: `TAG=red bash files/scripts/z29d0_vitest.sh <file>`, carico 18. 4 falliti e 54
+   passati su 58: falliscono esattamente i 4 rossi, ognuno sulla sua asserzione. Per esempio «the comparison restarts at
+   0 % on its first drawn point (110 on 03-02) instead of measuring from … (100 on 03-01)», e «toConfig() saves the
+   moment's base point with the chart settings». Nessun `TypeError`.
+3. ✅ 20/10 — La cura.
+   - `ChartSignal.ts`:
+     - `TRANSIENT_PARAMS = {_resolvedData, _basePoint}`, che `toConfig()` lascia fuori (prima l'esclusione era una
+       chiave sola, scritta nel codice);
+     - corretti i due commenti, quello di `toConfig` e quello di `SignalConfig`.
+   - `AssetComparisonSignal.ts`:
+     - `isUsableBase`: un numero finito diverso da 0;
+     - `basePoint()`, privato: il punto iniettato, oppure null se manca o è inutilizzabile;
+     - `render()`: `p0 = basePoint()?.value ?? absData[0].value`;
+     - `renderMulti()`, il fantasma: `originalValue` del punto se è utilizzabile, altrimenti come oggi;
+     - l'intestazione, corretta: non dice più che `_assetDisplayName` è escluso.
+   - Diff: +44 −10 righe in 2 file.
+4. ✅ 20/10 — Prove leggere, con il carico fra 15 e 18:
+   - `comparisonSignals`: 58/58;
+   - i vicini, `files/scripts/z29d0_vitest_batch.sh`: 39 file in un solo processo, cioè tutti i test di `lib/charts/`,
+     i gate di `src/*.gate.test.ts` (compreso quello della matematica finanziaria), `chartSettingsStore` e
+     `chartSettingsStore.migration`, `ChartSignalsSection`, `SignalTreeSelect`, `chartCoreHelpers`,
+     `assetDetailPriceQuery` e `assetDetailFxRequirements`: 1216/1216;
+   - `npm run check`: 0 errori e 0 avvisi;
+   - Prettier `--check` sui 3 file, `theme-roles --check` e `git diff --check`: puliti.
+   - Log: `files/logs/z29d0_*`.
+5. ⏳ CHECKPOINT READY, poi FROZEN.
+
+**Le risposte del developer su Z-29d** (20/10, mattina, dal coordinatore). Valgono per il lotto del dialogo.
+- **D-Z29d-1: (a)**, nessuna linea di confronto finché la serie non arriva.
+- **D-Z29d-2**, testuale: «se la connessione manca io mostrerei in toast di errore rosse che dice che la connessione è
+  persa, se invece l'errore è nel segnale, in asset globa non mostriamo nulla, mentre in asset detail lo mostriamo
+  dentro la card del segnale, come già avviene per i segnali tecnici. Al più si potrebbe fare in asset global la stessa
+  cosa in impostazioni, anche se ha poco senso, vedi tu se è facile.» Secondo il coordinatore:
+  - **connessione persa**: il toast rosso che esiste già, se c'è;
+  - **errore nella pagina Assets**: nessuna linea;
+  - **errore nel dettaglio dell'asset**: come i segnali tecnici, dentro la card del segnale;
+  - **il messaggio nell'anteprima delle impostazioni**: facoltativo, solo se costa poco e riusa chiavi esistenti.
+  - Da verificare all'inizio del lotto del dialogo:
+    - se un toast rosso di connessione persa esiste già, e dove;
+    - se il dettaglio mostra già nella card un confronto fallito. `ChartSignalsSection` ha già una diagnostica del
+      confronto (`_conversionFailed`, `comparisonStatus`, i problemi tipizzati); manca forse il caso «richiesta
+      fallita». Se manca, è lavoro nuovo da proporre.
+- **D-Z29d-3 e D-Z29d-4**: in arrivo.
+
+## 20/10 · Y-38 — il selettore dell'asset di confronto fa scorrere il nome lungo: analisi breve (sola lettura)
+
+> **Richiesta del developer** (dal coordinatore, 20/10), testuale: «in segnali il selettore dell'asset di confronto non
+> è praticamente mai largo abbastanza per far vedere il nome per intero dell'asset, possiamo aggiungere a quel
+> componente la capacità di "scorrere" come avviene in quasi tutto il resto del progetto, quando il nome è troppo
+> lungo?»
+> Il coordinatore: «Usa il componente di scorrimento che il progetto ha già, e fai prima un'analisi breve […]. Se è
+> piccolo e non tocca i file di Z-29b, puoi farlo dopo Z-29d-0.»
+>
+> - **Base:** `15603fe69`, uguale a `dev_release2` su questi file.
+> - **ID:** Y-38, libero.
+
+**Dove sta.** `lib/components/charts/ChartSignalsSection.svelte`, ramo `configuredAssets` (`:675-722`).
+- È un `SearchSelect` in un riquadro largo `w-48`, cioè 192 px, con due snippet, che disegnano tutti e due icona e
+  nome dentro `<span class="flex items-center gap-1.5 truncate">`. Da qui il nome tagliato con «…»:
+  - `selectedItem`, il campo chiuso;
+  - `item`, le righe della tendina.
+- La tendina è larga quanto il campo: `dropdownMinWidth` vale 0, e la larghezza è il massimo fra il campo e quel valore
+  (`SearchSelect.svelte:173`). Così anche le righe sono tagliate.
+- Lo stesso componente sta in tre posti, quindi una modifica li copre tutti:
+  - la finestra delle impostazioni (`ChartSettingsModal`), cioè la lista Asset e la lista dei cambi;
+  - il pannello dei segnali del dettaglio asset (`assets/[id]/+page.svelte:2341`);
+  - il pannello dei segnali del dettaglio cambio (`fx/[pair]/+page.svelte:1420`).
+- Il selettore della coppia di valute (`w-44`) ha etichette corte, bandiere e codici: resta com'è.
+
+**Cosa si riusa.** Lo scorrimento automatico del progetto, usato in 27 file (nomi di asset e broker nelle schede,
+tabelle, titoli, la pagina Informazioni):
+- l'azione `use:scrollOnOverflow` (`lib/actions/scrollOnOverflow.ts`): dopo 2 s di pausa il testo scorre fino alla
+  fine, si ferma e riparte. Non fa nulla se il testo ci sta, né con il movimento ridotto;
+- la classe comune `overflowScrollTextClass` (`lib/utils/overflowScroll.ts`).
+
+`MarqueeName.svelte` del PAC è lo stesso, ma con peso e colore fissi; si usano direttamente azione e classe, come negli
+altri 25 posti. La catena delle larghezze c'è già: `SearchSelect` mette gli snippet dentro
+`<div class="flex-1 min-w-0">` (`:450`, `:533`).
+
+**La modifica**, nei due snippet:
+- il contenitore passa da `truncate` a `min-w-0`;
+- il nome diventa `<span use:scrollOnOverflow class="{overflowScrollTextClass} text-xs" title={option.label}>`;
+- in più, due import. Nessun colore nuovo; il file non ha un record nel cricchetto (0 classi di palette).
+
+**Domanda** (di prodotto, consiglio in neretto). Scorrono anche le righe della tendina?
+- (a) **sì, come il campo**: due nomi lunghi con lo stesso inizio si distinguono. Le tabelle del progetto fanno già
+  scorrere più righe insieme;
+- (b) solo il campo chiuso: nella tendina il nome resta tagliato, con il nome intero nel tooltip.
+
+**Test.**
+- **Vitest**, in `ChartSignalsSection.test.ts`, describe del confronto. Un nome lungo nel campo chiuso (e nelle righe,
+  se (a)): il nome intero sta in un elemento dello scorrimento, trovato con `OVERFLOW_MARQUEE_SELECTOR` (il marcatore
+  che lo scorrimento esporta, come nei test di `GrowthChart` e del rischio), con `title` uguale al nome.
+- **Niente E2E nuova**: lo scorrimento è visivo, e le E2E del pannello usano i `data-testid`, che non cambiano.
+- **La galleria**: gira con il movimento ridotto (`gallery.spec.ts:489`), quindi lo scorrimento non parte mai. Lo scatto
+  del dettaglio con un confronto (`:5389`) può cambiare solo alla fine di un nome lungo: tagliato netto invece dei «…».
+
+**Conflitti.**
+- `ChartSignalsSection.svelte` non è fra i file di Z-29b, e oggi non l'ha aperto nessuno.
+- È di Y: il lotto del dialogo (D-Z29d-2, la card del dettaglio) potrebbe toccarlo dopo. Lo stesso proprietario, in
+  sequenza.
+- T ha scritto che non lo tocca più. Y4a lo sposterebbe, ma è fermo.
+
+**Costo**: circa 0,25 giorni, rossi e doc compresi. Doc: nessuna pagina descrive il selettore, quindi niente MkDocs;
+CHANGELOG, una riga 🔄.
+
+**Ordine**: dopo il commit di Z-29d-0. Prima i rossi (`test-author`), poi la cura, le prove leggere e il checkpoint.
