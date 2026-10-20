@@ -55,16 +55,29 @@ converter.
    `FAKE_ASSET_ID_BASE` (`2**31 - 1`, in `backend/app/schemas/brim.py`) and count down, one
    per ISIN/ticker — plus the extracted asset info, so the core can drive the
    asset-matching UI. They are never negative and never persisted.
-9. **Only safe rows.** Import only rows whose date the broker will not change any more:
-   movements already settled, executed and booked. A provisional row — its value or
-   settlement date after the server's today (`server_today()`, `backend/app/utils/datetime_utils.py`,
-   never the browser's date) — is left out **whole**, with every transaction it would have
-   produced (its fee, its premium), and arrives with the next import. Say so with one
-   `severity="info"` note per reason (a `code`, `context.count`, the rows as evidence), never a
-   warning: nothing is wrong, the rows are simply not final yet. When the report holds no export
-   date and no status, compare the row's own date with `server_today()` (Fineco); when it covers
-   a known period, its end (Danske Bank's cash file). A row the broker marks by its status
-   (reserved, cancelled, pending) follows rule 10.
+9. **The operation date, and only settled rows.** Record every transaction on its **operation
+   date**, the day the operation was made (the trade date), never on the settlement or value
+   date (the developer's principle, 19/10/2026). Then decide from the columns the report has
+   whether the row is stable and booked:
+   - a **status** column, when there is one, decides; what it says follows rule 10 (reserved,
+     cancelled or pending are known; a word the plugin does not know is unknown);
+   - otherwise a **value or settlement date** after the server's today (`server_today()`,
+     `backend/app/utils/datetime_utils.py`, never the browser's date) marks a provisional row. It
+     is left out **whole**, with every transaction it would have produced (its fee, its
+     premium), and arrives with the next import. Say so with one `severity="info"` note per
+     reason (a `code`, `context.count`, the rows as evidence), never a warning: nothing is
+     wrong, the rows are simply not final yet (Fineco);
+   - a report that covers a known period compares with its end instead (Danske Bank's cash
+     file: a trade valued after its last day waits for the next import);
+   - with neither, the operation date itself must not be after today.
+
+   A report set that compares balances with the bank's, as Danske Bank does, compares them in
+   operation-date terms: a truth on a day adds the cash and the quantities still in flight
+   (operation date ≤ day < value date; `_Analysis.in_flight`), and its opening is the eve of the
+   oldest operation date of the export, even when the cash statement starts later (the
+   statement's first balance then stands for it). **The one exception is the
+   Generic CSV**: its files are the user's own, so the date column the user maps is the
+   transaction date, whatever it means.
 10. **Known rows quietly, unknown rows loudly.** Leave a row out only for a reason the plugin can
     name (the developer's principle, 19/10/2026).
     - **Known and safe to leave out** — a blank, header or total row, a reservation (Danske

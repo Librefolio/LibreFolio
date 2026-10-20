@@ -75,6 +75,10 @@ Normally there is nothing to change: **Read as**, in the card's header, shows **
 
 The securities export only goes back one year, so import **at least once a year**, each new securities export reaching back to where the previous one ended. Overlaps are fine: what LibreFolio already holds is hidden in the **Review** (*N already in LibreFolio (hidden)*) or arrives deselected as a [duplicate](index.md#duplicate-detection). Skipped more than a year? See [Gaps](#gaps).
 
+!!! warning "Sets imported with LibreFolio 1.2"
+
+    LibreFolio 1.2 recorded each trade on the day the money moved; it now records it on the day you made it, a few days earlier. Imported again, those trades would not be recognised as duplicates, and would count twice. So, once: delete all the Danske Bank transactions those imports created — the corrections tagged `gap_fix` too — and import the whole set again, or import only from the day after the last day you already imported: start the securities export there, and the cash statement the day before, as [What to export](#what-to-export) says. From then on, overlaps are fine again.
+
 ---
 
 ## 📝 What is imported
@@ -91,7 +95,7 @@ The securities export only goes back one year, so import **at least once a year*
 | Any other credit (only your own money can be paid in) | **Deposit** — a notice lists them |
 | `Jakautuminen, vanha` / `uusi` (a demerger) | **Adjustments** without cash — see [Demergers](#demergers) |
 
-- Each transaction gets its **value date** (the day the money or the shares moved) and its amount in **euro**, as the bank wrote it.
+- Each trade is recorded on the **day you made it** (`Kauppapäivä`, the trade date): a purchase made on the 27th is a purchase of the 27th, even though the bank moves the money a few business days later. Dividends and demergers take their day in the securities export too; deposits, withdrawals, taxes, fees and interest keep their date in the cash statement. Amounts are in **euro**, as the bank wrote them.
 - The files give no ISIN or ticker: confirm each security in the wizard's [asset mapping](index.md#asset-mapping).
 - **Every row is accounted for**: a row left out — a missing payment, a trade paid after the statement ends… — is still counted in the set's detail, with its reason, and listed in the importer's notices, in **Finnish** like the files. Two cases are handled differently:
     - **Reservations** (`Varaus` in the cash statement) are holds that the bank replaces with the booked movement, and that movement is the one imported. They are counted in the set's detail as *reserved, not booked*, but not listed in the notices: there is nothing to check.
@@ -119,6 +123,8 @@ On the first import, everything before the first day of your securities export i
 
 After the **Review**, **Import N transactions** may open **Align with the bank**: it compares what LibreFolio will hold with what the bank states, and proposes what closes the difference — a **Deposit** or a **Withdrawal** that brings the cash to the balance of the cash statement, and an **Adjustment** for each position your files prove.
 
+LibreFolio records a trade on the day you made it, while the bank's balance changes only when the trade is paid, a few business days later. So each comparison counts the imported trades already made but not yet paid on that day, and both sides speak of the same thing.
+
 1. Cards at the top show each point — the **Starting point**, an **After the gap** point per [gap](#gaps), the [End-of-period check](#end-of-period-check). Click one to see its comparison and only its corrections; click it again to see them all.
 2. The corrections, tagged `gap_fix`, are **selected by default**: untick those you don't want (or use **Select All**, **Select visible**, **Deselect All**), then click **Continue**.
 3. In the editor, enter the **cost per share** of each position marked *cost to enter* — the bank's website shows each holding's average purchase price. **Save All** waits for it.
@@ -129,9 +135,18 @@ After the **Review**, **Import N transactions** may open **Align with the bank**
 
 The step opens **only when there is something to show** — usually not after a yearly import that overlaps the previous one. History you entered by hand counts: only the difference is proposed. If the comparison with the bank fails, you can **Continue** without corrections.
 
+### 📅 If your cash statement starts later {: #cash-statement-starts-later }
+
+If your cash statement starts **after** the first day of your securities export, the starting point still falls on the day before the securities export, and takes the balance your cash statement starts from.
+
+- A trade you made before the cash statement starts, and that was paid inside it, is imported as usual, on the day you made it.
+- A trade already paid before the cash statement starts is not in the statement, so it cannot be imported one by one: a notice lists it, and the set's detail counts it as *settled before the cash statement starts*. Its money is already in the balance the statement starts from, so it ends up in the starting point, a few days before the day you made it. Its shares too, when your files prove the holding — a dividend, for instance; otherwise check that security on the bank's website (see [Limits](#limits)).
+
+To have every trade imported on its own day, export the cash statement from the day before the securities export, as [What to export](#what-to-export) says.
+
 ### ✅ End-of-period check
 
-The last card compares your cash with the statement's balance at the end of the last securities period: **Matches** or **Does not match**. It is **never corrected**: your next import brings the trades of the last days, missing from your cash until then. If it does not match, add by hand the movement the import left out (see the set's detail in **Parse**).
+The last card compares your cash with the statement's balance at the end of the last securities period — counting, like the other points, the imported trades made but not yet paid that day: **Matches** or **Does not match**. It is **never corrected**: your next import brings the trades of the last days, missing from your cash until then. If it does not match, add by hand the movement the import left out (see the set's detail in **Parse**).
 
 ---
 
