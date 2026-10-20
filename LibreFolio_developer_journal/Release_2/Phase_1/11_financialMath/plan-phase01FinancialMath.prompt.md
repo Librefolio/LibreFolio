@@ -4183,3 +4183,84 @@ Le convenzioni possibili:
   prova incompleta, nessun errore); in `fx_quotes.py` lo 0 ricade su `allocation.saved_fx_invalid` (il mio appunto
   «irraggiungibile» di X-R45 torna raggiungibile, quindi utile), ma un `inf` storico passa `> 0` e diventa una quota:
   `rate.is_finite()` accanto a `> 0` lo chiuderebbe.
+- ✅ **Checkpoint P1b** (coordinatore, 09:0x): `b970284de` «fix(financial-math): MWRR after near-total losses (P1b)»,
+  poi il merge di `dev_release2` (`ecc7ac667`) → HEAD **`ea0fd0346`**, albero pulito. Revisione combinata, passi leggeri
+  (carico 14): `ruff`, `black --check` verdi; `financial-math test_mwrr_warm_start` **199** verdi; `returns.py` invariato dal
+  merge.
+- ✅ **Dati veri** (skill `real-data-copy`; copia di lavoro `/tmp/librefolio-r2-mf-realdata` presa dal riferimento alla
+  `005`, nessun server, il motore direttamente): la card `period_mwrr` e la linea `period_mwrr_series` prima e dopo P1b,
+  ambito intero e ciascun broker × EUR/USD × 26 finestre (tutto, 1A, 6M, 3M, 1M, da inizio anno, trimestri): **156
+  linee, 93 062 punti, 156 card, 0 cambi**. Per E2 (lettura aggregata, `mode=ro&immutable=1`: il motore aveva lasciato il
+  DB in WAL e `mode=ro` da solo non apre): nessun broker ammette lo scoperto e nessuna quantità progressiva va sotto
+  zero: **nessuno short nei dati veri**. Copia di lavoro e file derivati **cancellati** (`ls` come prova).
+- ✅ **MF-P1c** aggiunto in `Phase_1/PROSSIMI_LAVORI.md`, nuova sezione «MF · Matematica finanziaria».
+
+#### MF-E2 — piano breve (20/10, sola lettura; base `ea0fd0346`)
+- **Approvato** (developer, 19/10): opzione (b), segni giusti e flussi completi; convenzione **(1) esposizione lorda**;
+  D2 sì (TWRR e ROI d'uno stesso corto possono differire, spiegato nella doc); D3 sì (nei giorni al costo un corto vale
+  −la sua quota d'incasso). Riverificato su `ea0fd0346`: l'analisi del 19/10 regge, le righe sono le stesse
+  (`lots/histories.py` 724 righe; `build_performance_history` `:57-201`, `_open_value_on_date` `:635`, `_cost_at_opening`
+  `:204`, flussi `:117` BUY, `:135-145` solo chiusure SELL di lotti LONG, linee dal primo flusso `:187-192`). Chi legge
+  `PERFORMANCE_HISTORY`: ancora solo l'API e 6 file di test; né il web app né l'AI Export. **Dati veri: nessuno short**
+  (misura del 20/10), quindi nessun numero dei dati veri cambia.
+
+##### Cosa si scrive
+1. **Valore** (`lots/histories.py`): `_open_value_on_date` → un valore **firmato**: −q·p per un frammento SHORT; nei
+   giorni al costo `_cost_at_opening` dà per un corto −(quota dell'incasso d'apertura, `lot.cumulative_proceeds ·
+   q / original_quantity`, al cambio della data d'apertura, regola 26), invece di None. Lo stesso per i due usi al
+   confine (`_boundary_leg_cost`, `_moved_cost`): i trasferimenti di corti non esistono («fase 1»,
+   `SHORT_TRANSFER_NOT_SUPPORTED`), quindi lì non cambia nulla, ma la funzione resta una.
+2. **Flussi**: per ogni lotto SHORT dello scope, aperto dentro lo scope, un flusso **+incasso** (al cambio della sua
+   data d'apertura) il giorno d'apertura: la vendita allo scoperto porta denaro fuori dalla posizione, come i proventi
+   d'una vendita d'un lungo. Il riacquisto è già un versamento (ogni BUY). Un SELL che chiude dei lunghi e apre un
+   corto è diviso dal FIFO: i proventi dei lunghi dalle chiusure (come oggi), l'incasso del corto dal lotto. Senza
+   cambio → `invalid_external_flow_from`, come per gli altri flussi.
+3. **Base dei rendimenti** (due varianti pure nella casa, `financial_math/returns.py`; le funzioni della Dashboard non
+   cambiano):
+   - TWRR: ogni sotto-periodo divide per l'**esposizione lorda** del giorno prima, |valore dei lunghi| + |valore dei
+     corti|, invece del NAV. Senza corti l'esposizione lorda **è** il NAV (stessa somma di valori non negativi, stesso
+     `Decimal`): uguale al bit;
+   - ROI: guadagno (NAV + flussi cumulati, il numeratore di oggi) diviso il **capitale impegnato** = il capitale netto
+     dei lunghi di oggi (`max(0, −flussi cumulati dei lunghi)`) **+** l'incasso cumulato delle vendite allo scoperto
+     (E2-Q1). Senza corti è il
+     ROI di oggi, al bit. Il riacquisto d'un corto è un flusso del corto, non dei lunghi: con un BUY che riacquista e
+     apre un lungo insieme, la parte di riacquisto la dà la chiusura del lotto SHORT. Vedi la domanda E2-Q1.
+4. **L1a di J** (non ancora in HEAD; tocca lo stesso file): i flussi nuovi sono datati da transazioni e lotti, già nei
+   giorni di cambiamento di `analysis_event_dates`; l'esposizione lorda cambia solo quando cambia il prezzo o un
+   frammento, anch'essi giorni di cambiamento; il rendimento d'un giorno quieto resta `0`. Se E2 entra dopo L1a, la
+   parità «ogni giorno contro solo i giorni di cambiamento» va rifatta con i libri di J più un libro con un corto.
+   L'unico tocco comune è la funzione `trim_dates` che L1a toglie: nessun conflitto di testo atteso.
+5. **Doc**: la pagina dell'analisi dei lotti (`mkdocs_src/docs/developer/backend/transactions/lots_analysis_service.md`):
+   la convenzione dei corti, l'esempio, perché TWRR e ROI differiscono; `financial_math.md` per le due varianti. Riga di
+   CHANGELOG 🐛 proposta: «**Lots analysis: performance history with short positions.** An open short was counted as if
+   it were owned and its sale was missing, so the history showed a loss on a profitable short; it now counts the short
+   as a debt and its sale as money out, and measures returns on the gross exposure.»
+
+##### Numeri che cambiano
+Solo `performance_history` di `/lots/analysis`, solo per un asset con un lotto **corto** nello scope (nessuna pagina la
+mostra; nessuno short nei dati veri). L'esempio del 19/10, vendo allo scoperto 10 a 100 e ricompro a 80: oggi ROI
+−100 %, TWRR −180 %; dopo ROI **+20 %**, TWRR **+22,2 %**. Valori, rendimenti per lotto e sintesi del lotto: invariati.
+
+##### Prove (test-author, rossi prima)
+- rossi: l'esempio (oggi −100 %/−180 %, dopo +20 %/+22,2 %); un lungo e un corto sullo stesso asset in due broker; un SELL
+  che chiude un lungo e apre un corto lo stesso giorno, e un BUY che riacquista e apre un lungo; un giorno al costo con un
+  corto aperto (oggi nessun punto, dopo −la quota d'incasso); un corto venduto in un'altra valuta (incasso al cambio della
+  vendita); un corto senza cambio (la serie si ferma come oggi per un flusso senza cambio);
+- **parità al bit** per gli asset solo lunghi: ogni test esistente dei 6 file invariato e verde, più un confronto
+  prima/dopo campo per campo su casi casuali solo lunghi (HEAD caricato a parte, come P1/P2) e su copie del DB;
+- le due varianti pure della casa: senza corti uguali al bit alle funzioni di oggi;
+- mutanti: segno del valore corto, flusso d'apertura assente o col segno sbagliato, base = NAV invece dell'esposizione
+  lorda, capitale senza l'incasso dei corti, cambio alla data sbagliata.
+- Corsia: `services roi-fifo-utils`, `services financial-math`, `api portfolio` (slot).
+
+##### Stima e rischi
+- Piccolo-medio: un file della casa più le varianti, ~1 giornata con i test.
+- Rischi: lungo e corto insieme (l'esposizione lorda lo regge; un NAV netto vicino a zero no, per questo la base non è il
+  NAV); la sovrapposizione con L1a (ordine e merge del coordinatore); la parità al bit sugli asset solo lunghi è la
+  garanzia per tutti gli altri utenti.
+
+##### Domanda (una, di dettaglio, nel perimetro già approvato)
+- **E2-Q1** — Nel ROI, il capitale dei corti è l'**incasso cumulato** delle vendite allo scoperto (come i lunghi contano
+  il versato), **non** l'incasso dei soli corti ancora aperti: dopo il riacquisto il ROI resta +20 % (con i soli corti
+  aperti la base diventerebbe 0 e il ROI sparirebbe, o +100 % con l'incasso meno il riacquisto). Consiglio: **sì,
+  incasso cumulato**, è la stessa logica del capitale versato dei lunghi e dà il +20 % approvato nell'esempio.
