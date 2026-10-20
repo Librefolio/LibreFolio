@@ -119,10 +119,17 @@ the browser console (lot H-60).
   the class name of the root cause, to its `detail` (`api/server_errors.py`, `services/platform/failure_report.py`); a
   closed `reason_code` says more when the client can act on it. The message, the type and the traceback go to the log.
 - **The safety net, not a second line.** A warning or a higher line written with an exception, or inside the `except`
-  that handles it, marks it as reported (`logging_config.LibreFolioBoundLogger`): the 5xx handler then writes nothing
-  more. Otherwise it writes the failure once: an error line with the traceback of a cause nobody logged, a warning line
-  for a 5xx raised without a cause. An exception that leaves the app is answered by `security_headers.py` and logged
-  there, once; uvicorn's own line for it is dropped.
+  that handles it, marks it as reported for the request the line carries (`logging_config.LibreFolioBoundLogger`): the
+  5xx handler then writes nothing more for that request. Otherwise it writes the failure once: an error line with the
+  traceback of a cause nobody logged, a warning line for a 5xx raised without a cause. One exception object can reach
+  several requests (a single-flight build hands its failure to every request waiting on it): a request whose failure
+  another request logged already gets a short warning, «Request failed with an error already logged», with its own
+  `request_id` and `logged_with_request_id`, never the traceback again (H-60r). An exception that leaves the app is
+  answered by `security_headers.py` and logged there, once per request; uvicorn's own line for it is dropped.
+- **A failure handed to several consumers is written with its traceback once**: a memoized failure, a single-flight
+  build. Before writing `exc_info=error`, ask `traceback_reported(error)` (`utils/runtime/errors.py`); when a line
+  carried it already, write the consumer's line without `exc_info`, naming `logged_with_request_id`
+  (`traceback_reporting_request(error)`), as the AI Export `BuildContext._build` does.
 - **`logger.exception()` writes one JSON line at `ERROR`, its traceback inside it.** The log stays JSON (developer
   decision D1): the message is the `event` key.
 - **Catch what you expect.** A broad `except Exception` is an isolation boundary and says so in a comment. A parsing

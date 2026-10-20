@@ -2801,7 +2801,7 @@ Note: No backend server required.
         "server-errors",
         services_server_errors,
         name="Request Id and Server Errors",
-        desc="H-60: X-Request-Id on every answer and request_id in every line of the request; 4xx as FastAPI; a 5xx with request_id and error_type, its cause logged once (error with traceback, warning without a cause, nothing when the route logged it); the unhandled 500 as JSON, logged once and re-raised; H-33's 500 as JSON; no request secret in an answer or a line; client_log_level follows LOG_LEVEL",
+        desc="H-60: X-Request-Id on every answer and request_id in every line of the request; 4xx as FastAPI; a 5xx with request_id and error_type, its cause logged once (error with traceback, warning without a cause, nothing when the route logged it); the unhandled 500 as JSON, logged once and re-raised; H-33's 500 as JSON; no request secret in an answer or a line; client_log_level follows LOG_LEVEL; H-60r: requests failing on one shared exception (a shared build, one object raised twice) each leave their id in the log, the traceback once, the later ones a short warning pointing to the first",
         # PURE: fresh FastAPI apps in process; the real app for its handler table, its stack and D4, its session on an
         # in-memory SQLite built with create_all; the activity record monkeypatched per request. No lane DB, no server.
         isolation="pure",
@@ -2999,7 +2999,7 @@ Note: No backend server required.
         "logging-errors",
         services_logging_errors,
         name="Errors in the Log",
-        desc="H-60: the error helpers (visible causes, root, shown error, reason code, linked errors, the reported mark); logger.exception writes one JSON line at ERROR with its traceback once; a warning or more with an exception, or while one is handled, marks it; uvicorn.error drops its own record of a reported exception",
+        desc="H-60: the error helpers (visible causes, root, shown error, reason code, linked errors, the reported mark); logger.exception writes one JSON line at ERROR with its traceback once; a warning or more with an exception, or while one is handled, marks it; uvicorn.error drops its own record of a reported exception; H-60r: the mark per request (is_reported_for, chain_reported_for), the traceback flag on the chain a traceback shows (mark_traceback_reported), the first reporting request; a line marks the request it carries (its keyword, the bound context, structlog's contextvars)",
         # PURE: helpers on exceptions built in the test; configure_logging with file logging off, structlog and every
         # logger put back after each test; one fresh interpreter for the import-time bootstrap. No DB, no server.
         isolation="pure",
