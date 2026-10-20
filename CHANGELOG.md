@@ -87,6 +87,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **«Can't find it? Let us know»** after every asset search: a report of the search — the text, the sources asked and what each answered, the currency, type and identifiers already in the form, the version — sent from your own device. `LIBREFOLIO_SUPPORT_URL` says where: an email address (`mailto:` and one address), or a support page that opens with the report in its address (`title` and `body`, as for a GitHub issue, so a support form can fill itself in) and copied for you; without it, on a self-hosted instance, a GitHub issue you review before sending; on an instance run by a hosting provider the link appears only once the provider sets an address. Nothing about you or your portfolio goes in it.
 - **Dashboard: a transfer between two brokers you own at different shares now shows an info note**: each side counts at its own share, and the difference counts as a gain or loss.
 - **Settings › Administration › Users shows each account's avatar**, or the first letter of its name, next to the name.
+- **Errors you can trace.** Every answer of the server carries an `X-Request-Id`, and every log line of that request carries the same `request_id`. A server error (5xx) answers with that id and the type of its cause, never its message, and its cause reaches the log once, as one JSON line with its traceback. Where the app shows a generic error for a server failure, it adds that code, for example «(code: 3f9a…)», so an administrator can find it in the log.
+- **Failed API calls in the browser console.** The web app writes one line per unexpected API failure: status, path, request id, never the data of the request. With `LOG_LEVEL` at `DEBUG` or `TRACE` it writes the 4xx answers too (`client_log_level` in `GET /api/v1/system/instance`).
 
 ### 🔄 Changed
 
@@ -147,6 +149,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API: `PUT /api/v1/auth/profile` with your own address in other capitals needs no `current_password`.
 - Settings › Profile no longer asks for your password when you only change the capitals of your email address: it is the same address, saved as you typed it.
 - API: `POST /api/v1/assets/prices` names each date it leaves out in `results[].rejected` (date and reason), and `POST /api/v1/fx/currencies/rate` in `rejected` (index, date and reason). When every rate is refused, the 400's `detail` is an object (`code: fx_rates_refused`, the same `message`, `rejected`) instead of a string.
+- **Fineco and Danske Bank imports record each trade on the day you made it**, not the day the money moved; the value date only decides whether a trade has settled. Files imported with an earlier version: delete those transactions once (for Danske, the opening and gap corrections too) and import them again.
+- **Danske Bank**: a set whose cash statement starts after the securities export now starts on the day before the securities export, and the trades of those first days are imported on their own day; the balance comparisons count the trades made but not yet paid.
+- **Import: a row that brings units in without a cost starts in Auto.** An Adjustment that adds units, or the receiving side of an Asset Transfer, that the report leaves without a cost is now saved at the average cost of the units already held, instead of staying without a mode. A cost written in the report, 0 included, stays in Manual. The rows the importer flags (Align with the bank, a Danske Bank demerger line, a Generic CSV adjustment without a cost) open in Manual with the cost empty, and stay listed until a cost is typed, even 0.
+- **A refused Auto cost says what to do, and the import grid takes you there.** When there is nothing to average, the message asks you to choose Manual and type what the units cost you (0 for a gift). After the rows arrive, after ⚡ Validate now and after a refused Save All, the grid turns to the oldest refused row.
+- **AI Export: pasted prompts no longer make the AI restate your figures.** An analysis answers its question from them; Export Data ends with the AI confirming it has the data, in your language, or answering the question you add with it. When the data is not enough, the AI is asked to look for recent news.
+- Signals: in the comparison-asset selector a long asset name now scrolls, in the field and in the list, instead of being cut off.
 
 #### 🎨 A new colour palette
 
@@ -349,6 +357,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An invalid technical signal no longer breaks the chart of an asset or an exchange rate: the prices and rates stay on the chart and in the page's cache, and **All** resolves the start of the range; only the signals are reported as unavailable.
 - A provider that delivers a day with a price of 0 or less no longer makes the whole price download of the asset fail: that day is skipped and the sync says so. A current price of 0 or less from a provider is refused like an unusable one: the last stored price stays.
 - PAC planner: a saved exchange rate an older version could store but not use (0, or infinite) no longer blocks the pair, nor, when infinite, breaks the planner: the previous valid rate is used, and a warning names the pair, the day skipped and the day used, to correct in the pair's rate editor.
+- The AI Export no longer fails with "a required data source is unavailable" when a held asset has no stored price, or prices in more than one currency: the export lists the asset without a price series and says why.
+- A failed part of an AI Export is now written to the log with its cause: the 503 "source unavailable" used to leave nothing to investigate.
+- Each logged exception is written once, at level `ERROR`, inside its JSON line. Before, it came a second time in plain text, at level `EXCEPTION`; an unexpected error is now answered in JSON.
+- **The money-weighted return (MWRR) after near-total losses.** On portfolios that lost almost everything over many years, the card and the chart line showed "—" where a rate exists; they now show it.
+- **Import: the check made when the rows arrive is no longer discarded.** On imports of more than 50 rows, refused rows appeared only after ⚡ Validate now.
 
 #### 🔒 Security
 
