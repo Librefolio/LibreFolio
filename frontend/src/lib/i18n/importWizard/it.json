@@ -31,7 +31,7 @@
     "selectPlugin": "Seleziona plugin…",
     "extensionError": "Tipo file non supportato: {ext}. Accettati: .csv, .xlsx, .xls",
     "unresolvedCount": "{n, plural, one {# asset non risolto} other {# asset non risolti}}",
-    "warningsCount": "{n} avvisi",
+    "warningsCount": "{n, plural, one {# avviso} other {# avvisi}}",
     "importedCount": "{n} transazioni importate nell'editor",
     "resolveAssets": "Risolvi Asset",
     "parsingProgress": "Analisi… {done}/{total}",
@@ -52,8 +52,6 @@
     "duplicatesSection": "Stato transazioni",
     "uniqueTx": "{n} unici",
     "possibleDuplicates": "{n} possibili",
-    "warningsSection": "Avvisi",
-    "noWarnings": "Nessun avviso",
     "validationIssues": "Problemi di validazione",
     "validationIssueCount": "{n} problemi di validazione",
     "noValidationIssues": "Nessun problema di validazione",
@@ -75,7 +73,7 @@
       "unresolvedCount": "Asset non ancora abbinati a uno strumento noto",
       "issueCount": "Problemi di validazione — transazioni non create",
       "todoCount": "Campi che richiedono input manuale (🔴 = bloccante)",
-      "warningCount": "Avvisi del parser (righe saltate, dati ambigui)"
+      "noticeCount": "Avvisi (ambra): da verificare. Note (blu): scelte che l'importazione spiega."
     },
     "allResolved": "Tutti risolti",
     "searchAll": "Cerca nei tuoi asset…",
@@ -530,6 +528,8 @@
       "scalable_cash_by_sign": "Il segno della colonna amount ha deciso tra deposito e prelievo.",
       "fineco_not_yet_settled": "La data valuta di queste righe è dopo oggi: non sono ancora regolate.",
       "fineco_incomplete_rows": "L'ultima colonna nomina il campo senza numero; la riga è importata così com'è."
-    }
+    },
+    "notesCount": "{n, plural, one {# nota} other {# note}}",
+    "noNotices": "Nessun avviso né nota"
   }
 }

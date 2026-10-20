@@ -31,7 +31,7 @@
     "selectPlugin": "Seleccionar plugin…",
     "extensionError": "Tipo de archivo no soportado: {ext}. Aceptados: .csv, .xlsx, .xls",
     "unresolvedCount": "{n, plural, one {# activo no resuelto} other {# activos no resueltos}}",
-    "warningsCount": "{n} advertencias",
+    "warningsCount": "{n, plural, one {# advertencia} other {# advertencias}}",
     "importedCount": "{n} transacciones importadas al editor",
     "resolveAssets": "Resolver Activos",
     "parsingProgress": "Analizando… {done}/{total}",
@@ -52,8 +52,6 @@
     "duplicatesSection": "Estado de transacciones",
     "uniqueTx": "{n} únicos",
     "possibleDuplicates": "{n} posibles",
-    "warningsSection": "Advertencias",
-    "noWarnings": "Sin advertencias",
     "validationIssues": "Problemas de validación",
     "validationIssueCount": "{n} problemas de validación",
     "noValidationIssues": "Sin problemas de validación",
@@ -75,7 +73,7 @@
       "unresolvedCount": "Activos no asociados aún a un instrumento conocido",
       "issueCount": "Problemas de validación — transacciones no creadas",
       "todoCount": "Campos que requieren entrada manual (🔴 = bloqueante)",
-      "warningCount": "Avisos del parser (filas omitidas, datos ambiguos)"
+      "noticeCount": "Advertencias (ámbar): por verificar. Notas (azul): decisiones que el importador explica."
     },
     "allResolved": "Todo resuelto",
     "searchAll": "Buscar en tus activos…",
@@ -530,6 +528,8 @@
       "scalable_cash_by_sign": "El signo de la columna amount decidió entre depósito y retirada.",
       "fineco_not_yet_settled": "La fecha valor de estas filas es posterior a hoy: aún no están liquidadas.",
       "fineco_incomplete_rows": "La última columna nombra el campo sin número; la fila se importa tal cual."
-    }
+    },
+    "notesCount": "{n, plural, one {# nota} other {# notas}}",
+    "noNotices": "Sin advertencias ni notas"
   }
 }

@@ -101,15 +101,17 @@ LibreFolio lit chaque fichier, le vérifie et le résume dans un tableau :
 | ✗ | Titres pas encore associés à vos actifs — vous les associez dans **Révision** |
 | 🔴 | Problèmes de validation : lignes qui n'ont pas pu devenir des transactions |
 | 🔧 | Champs à renseigner avant l'enregistrement (en rouge quand l'un bloque l'enregistrement) |
-| ⚠️ | Avertissements de l'importateur, comme des lignes ignorées |
+| ⚠️ ℹ️ | Deux nombres : les avertissements (ambre) sont à regarder, comme des lignes ignorées ; les notes (bleu) expliquent un choix de l'importateur, sans rien à corriger |
 
-Les tuiles au-dessus du tableau comptent ce qui sera réellement importé ; **Voir tout** ouvre les détails.
+Les tuiles sous le tableau comptent ce qui sera réellement importé ; **Voir tout**, ou **Voir Détail** dans
+le menu **⋮** d'une ligne, ouvre les détails, avec les avertissements et les notes listés à part.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step3" alt="Étape 3 de l'assistant : Analyse" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-- **Avertissements** : **Continuer** les liste d'abord ; lisez-les, puis cliquez sur **Continuer quand même**.
+- **Avertissements et notes** : **Continuer** liste d'abord les avertissements, puis les notes ; lisez-les,
+  puis cliquez sur **Continuer quand même**.
 - **Un fichier a échoué** : une bannière en explique la raison. Corrigez son plugin dans **Sélectionner**, puis cliquez sur **Réanalyser tout**.
 
 ### 🧩 Étapes qui n'apparaissent qu'en cas de besoin {: #only-when-needed }
