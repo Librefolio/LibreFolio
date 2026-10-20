@@ -261,12 +261,13 @@ test.describe('Settings › Backup — who gets the tab', () => {
         await navigateTo(page, '/settings?tab=backup');
 
         // Presence first: the bar is drawn up to its last tab everyone sees, and the page has chosen the tab it opens...
-        await expect(page.getByTestId('settings-tab-administration')).toBeVisible({timeout: PAGE_MS});
+        await expect(page.getByTestId('settings-tab-about'), 'the bar is drawn, up to About, the last tab everyone sees').toBeVisible({timeout: PAGE_MS});
         await expect(page.getByTestId('settings-tab-profile'), '?tab=backup names no tab of this user: the first one opens').toHaveAttribute('aria-selected', 'true');
         await expect(page.getByTestId('profile-tab')).toBeVisible();
 
         // ...then the absence: the tab is left out of the bar, not hidden in it, and no backup body is drawn.
-        // «Administration» stands for Global Settings alone here (decision P13 b): no second bar, no member tab at all.
+        // A regular user has no «Administration» at all (N69-2, decision D4 a): no group, no second bar, no member tab.
+        await expect(page.getByTestId('settings-tab-administration')).toHaveCount(0);
         await expect(page.getByTestId('settings-tab-admin')).toHaveCount(0);
         await expect(page.getByTestId('settings-tab-backup')).toHaveCount(0);
         await expect(page.getByTestId('backup-tab')).toHaveCount(0);

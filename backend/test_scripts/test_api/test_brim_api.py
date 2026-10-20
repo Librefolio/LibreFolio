@@ -1718,7 +1718,11 @@ class TestDanskeReportSetEndToEnd:
     @pytest.mark.asyncio
     async def test_main_set_from_upload_to_gap_fix(self, test_server):
         """RS-B01: preview 2020-02-03…06-26 without gaps; combine, then reuse; a member alone is 422; the combined parse
-        brings the opening checkpoint, the verification and H0; the gap-fix proposes the opening deposit and checks the verification."""
+        brings the opening checkpoint, the verification and H0; the gap-fix proposes the opening deposit and checks the verification.
+
+        Lot B-52 (red until the cure): the verification on 2020-06-26 is in operation-date terms, 1776.46. It is the bank's
+        1994.46 plus the Tunturi purchase traded that day and settled on 06-30 (−218). The selection records that purchase on
+        06-26, so LibreFolio's side is 1776.46 too, and the check stays ok."""
         print_section("RS-B01: Danske main set, from upload to gap-fix")
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
@@ -1768,7 +1772,7 @@ class TestDanskeReportSetEndToEnd:
                 assert len(result["checkpoints"]) == 1 and len(result["verifications"]) == 1, (result["checkpoints"], result["verifications"])
                 checkpoint, verification = result["checkpoints"][0], result["verifications"][0]
                 assert (checkpoint["as_of"], checkpoint["kind"], _money_list(checkpoint["cash"]), len(checkpoint["positions"])) == ("2020-02-02", "opening", {"EUR": Decimal("2699.50")}, 3)
-                assert (verification["as_of"], _money_list(verification["cash"])) == ("2020-06-26", {"EUR": Decimal("1994.46")})
+                assert (verification["as_of"], _money_list(verification["cash"])) == ("2020-06-26", {"EUR": Decimal("1776.46")})
 
                 selection = [tx for tx in result["transactions"] if tx["date"] >= result["history_start"]]
                 fix = await _gap_fix(client, {"broker_id": broker_id, "plugin_code": DANSKE_CODE, "checkpoints": result["checkpoints"], "verifications": result["verifications"], "selection": selection})
@@ -1782,7 +1786,7 @@ class TestDanskeReportSetEndToEnd:
                 explanation = opening["explanation"]
                 assert (explanation["absorbed_count"], explanation["absorbed_missing_count"], explanation["unexplained_cash"]) == (14, 14, [])
                 check = _one(fix.json()["verifications"], "2020-06-26")
-                assert (check["ok"], _money_rows(check["cash"])) == (True, {"EUR": (Decimal("1994.46"), Decimal("1994.46"), Decimal("0"))})
+                assert (check["ok"], _money_rows(check["cash"])) == (True, {"EUR": (Decimal("1776.46"), Decimal("1776.46"), Decimal("0"))})
                 assert await _broker_tx_ids(client, broker_id) == set(), "the set API and the gap-fix save nothing"
                 print_success("✓ Danske main set: combined, parsed and aligned with the bank")
             finally:

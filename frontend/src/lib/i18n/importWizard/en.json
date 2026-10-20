@@ -381,7 +381,8 @@
         "invalid": "invalid",
         "not_yet_settled": "not settled yet",
         "outside_cash_coverage": "settled before the cash statement starts",
-        "superseded": "replaced by a newer file"
+        "superseded": "replaced by a newer file",
+        "reservation": "reserved, not booked"
       },
       "downloadCombined": "Download the combined file",
       "warning": {

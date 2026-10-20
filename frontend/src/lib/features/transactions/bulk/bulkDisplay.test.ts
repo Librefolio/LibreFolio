@@ -1,6 +1,9 @@
 // @vitest-environment node
 import {describe, expect, it} from 'vitest';
 import {buildBulkOperationIndex, buildBulkRowLabels, createBulkDateComparator, resolveBulkIssueRows, serializeOps, settleBulkIssueSnapshot, type BulkBatchResult, type BulkDisplayRow, type BulkIssue, type BulkIssueRow, type BulkIssueSnapshotEntry, type IdentifiedBulkOp} from './bulkDisplay';
+// The module as a whole, for an export the cure adds (J-57, `firstAutoCostRefusal` below): read off it at run time, a
+// missing export fails its own tests, never the whole file at collection.
+import * as bulkDisplayModule from './bulkDisplay';
 
 const displayRow = (tempId: string, date: string, extra: Partial<BulkDisplayRow> = {}): BulkDisplayRow => ({
     tempId,
@@ -298,6 +301,284 @@ describe('resolveBulkIssueRows', () => {
 
         expect(resolveBulkIssueRows(issue, rows, opMap).map((row) => row.tempId)).toEqual(['mapped-main', 'mapped-partner']);
         expect(resolveBulkIssueRows({...issue, index: 4}, rows, new Map()).map((row) => row.tempId)).toEqual(['by-ref']);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// firstAutoCostRefusalRowId — where an explicit validation pages the grid (J-57 complete, Q-J57-4)
+// ---------------------------------------------------------------------------
+
+/**
+ * Q-J57-4 (the developer's «yes» of 19/10, as the coordinator details it): after an explicit validation — ⚡ «Validate
+ * now», the import hand-over, a refused Save; never the background auto-validation — the editor pages the grid to the
+ * first row refused for an Auto cost, the oldest by date. The choice is a pure helper of `bulkDisplay.ts`:
+ *
+ *     firstAutoCostRefusalRowId(issues, rowsOf): string | null
+ *
+ *   - candidates: every row `rowsOf` returns for the issues coded `autoCostEmptyPool` or `autoCostUnknownPool` (N88) or
+ *     `autoCostUnreadable` (W-B69: the pool holds a row that cannot be read; Q-J57-6, the coordinator's decision of 19/10
+ *     evening), in encounter order — the issues in their order, each issue's rows in the order `rowsOf` gives (the
+ *     editor passes them already sorted by grid position);
+ *   - the pick: the smallest `row.fields.date`, ISO `YYYY-MM-DD` compared as text; on equal dates, the earliest candidate
+ *     in encounter order;
+ *   - the answer: its visible id, `row.pairedWith ?? row.tempId`; `null` when there is no candidate. Every other code is
+ *     ignored, even on an older row.
+ *
+ * No comparator (the coordinator's contract change, 19/10): `createBulkDateComparator` keys its bounds by group id
+ * (`pairedWith ?? tempId`), so a hidden partner handed to it — the receiving leg of a TRANSFER, where these refusals
+ * land — compares as ['', ''] and always sorts first. Here a hidden partner is placed by its own date.
+ *
+ * RED and CONTROL. Before cure v1 (19/10) every test of this block was red: the export did not exist, so each failed
+ * with «bulkDisplay.firstAutoCostRefusalRowId is not implemented yet (J-57, Q-J57-4)» — never a TypeError, and the file
+ * still collects. On cure v1 they pass but for the reds of Q-J57-6, marked as such: cure v1 counts the two codes of N88
+ * alone, so it passes over a row refused with `autoCostUnreadable`. Every other test is green on cure v1 and stays green
+ * after the Q-J57-6 cure.
+ *
+ * Fixtures. Rows by `issueRow` above, dates chosen per case; issues on their own operation and index; `rowsOf` answers
+ * from a table keyed by operation and index, as `resolveBulkIssueRows` reads an emitted operation, and gives no row to an
+ * issue it does not know.
+ */
+
+type FirstAutoCostRefusalRowId = (issues: readonly BulkIssue[], rowsOf: (issue: BulkIssue) => readonly BulkIssueRow[]) => string | null;
+
+/** The helper, read off the module for the test that needs it: while the export is missing, each test fails on its own. */
+function firstAutoCostRefusal(): FirstAutoCostRefusalRowId {
+    const helper: unknown = Reflect.get(bulkDisplayModule, 'firstAutoCostRefusalRowId');
+    if (typeof helper !== 'function') throw new Error('bulkDisplay.firstAutoCostRefusalRowId is not implemented yet (J-57, Q-J57-4)');
+    return helper as FirstAutoCostRefusalRowId;
+}
+
+const EMPTY_POOL = 'autoCostEmptyPool';
+const UNKNOWN_POOL = 'autoCostUnknownPool';
+const UNREADABLE_POOL = 'autoCostUnreadable';
+
+/** One issue and the rows `rowsOf` gives it, in that order. */
+type IssueWithRows = readonly [BulkIssue, readonly BulkIssueRow[]];
+
+/** An issue of `code` on create `index`, as the batch reports an Auto cost refusal: no ref_id, no params. */
+const refusal = (code: string, index: number): BulkIssue => ({operation: 'create', index, ref_id: null, code, params: null});
+
+/** `rowsOf` as the editor hands it over: each issue's rows, in the order given, found by the issue's operation and index. */
+function rowsOfTable(entries: readonly IssueWithRows[]): (issue: BulkIssue) => readonly BulkIssueRow[] {
+    const table = new Map(entries.map(([issue, rows]) => [`${issue.operation}:${issue.index}`, rows] as const));
+    if (table.size !== entries.length) throw new Error('scaffold: two issues share an operation and an index');
+    return (issue) => table.get(`${issue.operation}:${issue.index}`) ?? [];
+}
+
+/** The helper's answer for `entries`: the issues in their order, `rowsOf` answering each with its rows. */
+function pick(entries: readonly IssueWithRows[]): string | null {
+    const firstAutoCostRefusalRowId = firstAutoCostRefusal();
+    const issues = entries.map(([issue]) => issue);
+    return firstAutoCostRefusalRowId(issues, rowsOfTable(entries));
+}
+
+describe('firstAutoCostRefusalRowId — the first row refused for an Auto cost, the oldest by date (J-57 complete, Q-J57-4)', () => {
+    it('null when no issue is an Auto cost refusal: no issue at all, or only other codes, rows and all', () => {
+        const firstAutoCostRefusalRowId = firstAutoCostRefusal();
+        const balanceIssue: BulkIssue = {operation: 'update', index: -1, code: 'balanceCashNegative', params: {brokerId: 4, date: '2024-01-02', currency: 'EUR'}};
+        const uncoded: BulkIssue = {operation: 'create', index: 1, code: null};
+        const codeless: BulkIssue = {operation: 'create', index: 2};
+        const noRows: (issue: BulkIssue) => readonly BulkIssueRow[] = () => [];
+
+        const noIssue = firstAutoCostRefusalRowId([], noRows);
+        const otherCodesOnly = pick([
+            [balanceIssue, [issueRow('balance-row', {broker_id: 4, date: '2024-01-02', cash: {code: 'EUR', amount: '-20'}})]],
+            [refusal('costBasisRequired', 0), [issueRow('cost-required-row', {date: '2024-01-03'})]],
+            [uncoded, [issueRow('uncoded-row', {date: '2024-01-04'})]],
+            [codeless, [issueRow('codeless-row', {date: '2024-01-05'})]],
+        ]);
+
+        expect.soft(noIssue, 'no issue').toBeNull();
+        expect(otherCodesOnly, 'other codes only').toBeNull();
+    });
+
+    it('one refusal with one row: its tempId, for autoCostEmptyPool and autoCostUnknownPool alike', () => {
+        expect.soft(pick([[refusal(EMPTY_POOL, 0), [issueRow('empty-pool-row', {date: '2024-03-01'})]]]), EMPTY_POOL).toBe('empty-pool-row');
+        expect.soft(pick([[refusal(UNKNOWN_POOL, 0), [issueRow('unknown-pool-row', {date: '2024-03-01'})]]]), UNKNOWN_POOL).toBe('unknown-pool-row');
+    });
+
+    it('an older refusal in a later issue beats a newer one in an earlier issue: the date decides, not the order of the issues', () => {
+        const newer = issueRow('newer-row', {date: '2024-05-10'});
+        const older = issueRow('older-row', {date: '2024-03-02'});
+
+        const emptyPoolFirst = pick([
+            [refusal(EMPTY_POOL, 0), [newer]],
+            [refusal(UNKNOWN_POOL, 1), [older]],
+        ]);
+        const unknownPoolFirst = pick([
+            [refusal(UNKNOWN_POOL, 0), [newer]],
+            [refusal(EMPTY_POOL, 1), [older]],
+        ]);
+
+        expect.soft(emptyPoolFirst, 'autoCostEmptyPool on the newer row first, autoCostUnknownPool on the older one after').toBe('older-row');
+        expect.soft(unknownPoolFirst, 'autoCostUnknownPool on the newer row first, autoCostEmptyPool on the older one after').toBe('older-row');
+    });
+
+    it('every row rowsOf gives is a candidate: the older second row of one refusal beats the next refusal', () => {
+        const newerFirst = issueRow('first-row-newer', {date: '2024-06-01'});
+        const olderSecond = issueRow('second-row-older', {date: '2024-02-15'});
+        const between = issueRow('next-refusal-row', {date: '2024-04-01'});
+
+        expect(
+            pick([
+                [refusal(UNKNOWN_POOL, 0), [newerFirst, olderSecond]],
+                [refusal(EMPTY_POOL, 1), [between]],
+            ]),
+        ).toBe('second-row-older');
+    });
+
+    it('ignores every other code, even on an older row: a negative balance, cash or asset, and a missing cost basis', () => {
+        // CONTROL, green on cure v1 and after the Q-J57-6 cure: none of these refuses an Auto cost. Until Q-J57-6 this test
+        // also pinned `autoCostUnreadable` as ignored; that code now counts (the reds below).
+        const cashIssue: BulkIssue = {operation: 'update', index: -1, code: 'balanceCashNegative', params: {brokerId: 4, date: '2023-12-01', currency: 'EUR'}};
+        const assetIssue: BulkIssue = {operation: 'create', index: -1, code: 'balanceAssetNegative', params: {brokerId: 4, date: '2023-11-15', assetId: 77}};
+
+        expect(
+            pick([
+                [cashIssue, [issueRow('cash-balance-row', {broker_id: 4, date: '2023-12-01', cash: {code: 'EUR', amount: '-50'}})]],
+                [assetIssue, [issueRow('asset-balance-row', {broker_id: 4, date: '2023-11-15', asset_id: 77, quantity: '-3'})]],
+                [refusal('costBasisRequired', 0), [issueRow('cost-required-row', {date: '2023-11-01'})]],
+                [refusal(EMPTY_POOL, 2), [issueRow('auto-cost-row', {date: '2024-05-01'})]],
+            ]),
+        ).toBe('auto-cost-row');
+    });
+
+    it('counts autoCostUnreadable (Q-J57-6): alone, a plain row leads to its tempId, a hidden partner to its pairedWith', () => {
+        // RED against cure v1: null both times — it counts the two codes of N88 alone.
+        const plainRow = pick([[refusal(UNREADABLE_POOL, 0), [issueRow('unreadable-pool-row', {date: '2024-03-01'})]]]);
+        const hiddenPartner = pick([[refusal(UNREADABLE_POOL, 0), [issueRow('receiving-leg', {pairedWith: 'giving-leg', date: '2024-03-01'})]]]);
+
+        expect.soft(plainRow, 'a plain row').toBe('unreadable-pool-row');
+        expect.soft(hiddenPartner, 'a hidden partner').toBe('giving-leg');
+    });
+
+    it('an older autoCostUnreadable row beats a newer autoCostEmptyPool one, whichever issue comes first (Q-J57-6)', () => {
+        // RED against cure v1: 'empty-pool-row' both times — it passes over the autoCostUnreadable issue.
+        const newer = issueRow('empty-pool-row', {date: '2024-05-10'});
+        const older = issueRow('unreadable-pool-row', {date: '2024-03-02'});
+
+        const emptyPoolFirst = pick([
+            [refusal(EMPTY_POOL, 0), [newer]],
+            [refusal(UNREADABLE_POOL, 1), [older]],
+        ]);
+        const unreadablePoolFirst = pick([
+            [refusal(UNREADABLE_POOL, 0), [older]],
+            [refusal(EMPTY_POOL, 1), [newer]],
+        ]);
+
+        expect.soft(emptyPoolFirst, 'autoCostEmptyPool on the newer row first, autoCostUnreadable on the older one after').toBe('unreadable-pool-row');
+        expect.soft(unreadablePoolFirst, 'autoCostUnreadable on the older row first, autoCostEmptyPool on the newer one after').toBe('unreadable-pool-row');
+    });
+
+    it('same date: an autoCostUnreadable issue met first leads, in encounter order as any refusal (Q-J57-6)', () => {
+        // RED against cure v1: 'empty-pool-row' — it passes over the autoCostUnreadable issue. After the cure, also the
+        // guard against counting the new code in a pass of its own, after the codes of N88.
+        const unreadableRow = issueRow('unreadable-pool-row', {date: '2024-03-05'});
+        const emptyRow = issueRow('empty-pool-row', {date: '2024-03-05'});
+
+        expect(
+            pick([
+                [refusal(UNREADABLE_POOL, 0), [unreadableRow]],
+                [refusal(EMPTY_POOL, 1), [emptyRow]],
+            ]),
+        ).toBe('unreadable-pool-row');
+    });
+
+    it('autoCostUnreadable takes no precedence: an older autoCostUnknownPool row beats a newer autoCostUnreadable one (Q-J57-6)', () => {
+        // CONTROL, green on cure v1 (which ignores autoCostUnreadable) and after the Q-J57-6 cure: the date decides, not the code.
+        const newer = issueRow('unreadable-pool-row', {date: '2024-06-01'});
+        const older = issueRow('unknown-pool-row', {date: '2024-02-01'});
+
+        expect(
+            pick([
+                [refusal(UNREADABLE_POOL, 0), [newer]],
+                [refusal(UNKNOWN_POOL, 1), [older]],
+            ]),
+        ).toBe('unknown-pool-row');
+    });
+
+    it('a hidden partner, the oldest candidate by its own date: the visible id, its pairedWith', () => {
+        // The receiving leg of a TRANSFER, hidden under its giving leg, refused for its Auto cost; its own date is the
+        // only one of its pair the helper sees, and it is the oldest of the candidates.
+        const receivingLeg = issueRow('receiving-leg', {pairedWith: 'giving-leg', date: '2024-02-01'});
+        const otherRefusal = issueRow('other-refusal-row', {date: '2024-04-01'});
+
+        expect(
+            pick([
+                [refusal(EMPTY_POOL, 0), [otherRefusal]],
+                [refusal(UNKNOWN_POOL, 1), [receivingLeg]],
+            ]),
+        ).toBe('giving-leg');
+    });
+
+    it('a hidden partner on a newer date does not jump ahead: the older row wins', () => {
+        // The defect the contract change removes: compared by createBulkDateComparator, a hidden partner reads ['', ''] and
+        // would sort first whatever its date.
+        const receivingLeg = issueRow('receiving-leg', {pairedWith: 'giving-leg', date: '2024-06-01'});
+        const olderRow = issueRow('older-row', {date: '2024-04-01'});
+
+        expect(
+            pick([
+                [refusal(UNKNOWN_POOL, 0), [receivingLeg]],
+                [refusal(EMPTY_POOL, 1), [olderRow]],
+            ]),
+        ).toBe('older-row');
+    });
+
+    it('same date: the first candidate in encounter order — two rows of one refusal, in the order rowsOf gives them', () => {
+        // Neither the tempId nor the saved id decides: z-row has the later tempId and the higher txId.
+        const zRow = issueRow('z-row', {date: '2024-03-05', txId: 900});
+        const aRow = issueRow('a-row', {date: '2024-03-05', txId: 5});
+
+        expect.soft(pick([[refusal(EMPTY_POOL, 0), [zRow, aRow]]]), 'rowsOf gives z-row first').toBe('z-row');
+        expect.soft(pick([[refusal(EMPTY_POOL, 0), [aRow, zRow]]]), 'rowsOf gives a-row first').toBe('a-row');
+    });
+
+    it('same date: the first candidate in encounter order — across two refusals, in the order of the issues', () => {
+        // Their place in the list decides, not their index (3 before 1 in the first order) nor their code.
+        const zRow = issueRow('z-row', {date: '2024-03-05'});
+        const aRow = issueRow('a-row', {date: '2024-03-05'});
+        const unknownOnCreate3 = refusal(UNKNOWN_POOL, 3);
+        const emptyOnCreate1 = refusal(EMPTY_POOL, 1);
+
+        const unknownIssueFirst = pick([
+            [unknownOnCreate3, [zRow]],
+            [emptyOnCreate1, [aRow]],
+        ]);
+        const emptyIssueFirst = pick([
+            [emptyOnCreate1, [aRow]],
+            [unknownOnCreate3, [zRow]],
+        ]);
+
+        expect.soft(unknownIssueFirst, 'the autoCostUnknownPool issue on create 3 first').toBe('z-row');
+        expect.soft(emptyIssueFirst, 'the autoCostEmptyPool issue on create 1 first').toBe('a-row');
+    });
+
+    it("skips an Auto cost refusal whose rowsOf is empty: null alone, the other refusal's row beside it", () => {
+        const alone = pick([[refusal(EMPTY_POOL, 0), []]]);
+        const besideARefusalWithARow = pick([
+            [refusal(EMPTY_POOL, 0), []],
+            [refusal(UNKNOWN_POOL, 1), [issueRow('the-row', {date: '2024-07-01'})]],
+        ]);
+
+        expect.soft(alone, 'alone').toBeNull();
+        expect.soft(besideARefusalWithARow, 'beside a refusal with a row').toBe('the-row');
+    });
+
+    it('reads its inputs without changing them: the issues, and the rows rowsOf gives', () => {
+        const firstAutoCostRefusalRowId = firstAutoCostRefusal();
+        const entries: IssueWithRows[] = [
+            [refusal(EMPTY_POOL, 0), [issueRow('newer', {date: '2024-05-01'}), issueRow('older', {date: '2024-01-01'})]],
+            [refusal('balanceCashNegative', 1), [issueRow('balance', {date: '2023-01-01'})]],
+        ];
+        const issues = entries.map(([issue]) => issue);
+        const rowsOfEach = () => entries.map(([, rows]) => rows);
+        const issuesBefore = structuredClone(issues);
+        const rowsBefore = structuredClone(rowsOfEach());
+
+        expect(firstAutoCostRefusalRowId(issues, rowsOfTable(entries))).toBe('older');
+        expect(issues, 'the issues, in their order').toEqual(issuesBefore);
+        expect(rowsOfEach(), 'the rows of each issue, in their order').toEqual(rowsBefore);
     });
 });
 

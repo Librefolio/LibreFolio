@@ -27,8 +27,8 @@
  *
  * The Users tab is a member of «Administration» (decision P13 b, lot A8b): an administrator opens the group in the top
  * bar, then Users in its second bar (`settings-subtabs`, through `openSettingsTab` of fixtures/settings-tabs.ts), or goes
- * straight to it with `?tab=users`, which opens it inside its group. A member's «Administration» holds Global Settings
- * alone: no second bar, and no `settings-tab-users` anywhere.
+ * straight to it with `?tab=users`, which opens it inside its group. A member has no «Administration» at all (N69-2,
+ * decision D4 a): no group, no second bar, and no `settings-tab-users` anywhere.
  *
  * Ownership. `e2e_test_admin` only acts: no test changes its role or state, nor those of any other fixture user. Each
  * test registers its own disposable accounts anonymously (the lane registers openly: checked first, and no spec changes
@@ -478,10 +478,12 @@ test.describe('Who has the Users tab', () => {
             expect(await signedInAs(page), `${TEST_USER.username} must be an ordinary member`).toMatchObject({username: TEST_USER.username, is_superuser: false});
             await navigateTo(page, '/settings?tab=users');
             const profile = page.getByTestId('settings-tab-profile');
-            // Presence barrier: the tab bar is drawn, with the tabs a member does see — «Administration» is everyone's,
-            // standing for Global Settings alone: a member has no second bar, and no Global Settings tab of its own.
-            await expect(profile, 'The tab bar is drawn for the member').toBeVisible({timeout: LOAD_MS});
-            await expect(page.getByTestId('settings-tab-administration')).toBeVisible({timeout: UI_MS});
+            // Presence barrier: the tab bar is drawn, up to About, the last tab every account sees. «Administration»
+            // and every member of it, Users among them, are an administrator's alone (N69-2, decision D4 a). The bar's
+            // entries come from one derivation, and a member's context never turns administrator: the group would be
+            // drawn with them, or never.
+            await expect(page.getByTestId('settings-tab-about'), 'The tab bar is drawn for the member, up to About').toBeVisible({timeout: LOAD_MS});
+            await expect(page.getByTestId('settings-tab-administration'), 'A member has no «Administration» group: the registry does not draw it').toHaveCount(0, {timeout: UI_MS});
             await expect(page.getByTestId('settings-tab-admin')).toHaveCount(0, {timeout: UI_MS});
             await expect(page.getByTestId('settings-tab-users'), 'A member has no Users tab: the registry does not draw it').toHaveCount(0, {timeout: UI_MS});
             await expect(profile, '?tab=users names no tab of a member: the first one, Profile, opens').toHaveAttribute('aria-selected', 'true', {timeout: UI_MS});

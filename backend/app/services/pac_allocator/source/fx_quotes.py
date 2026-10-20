@@ -4,7 +4,6 @@ rate the planner cannot use (0, not finite) is skipped with a warning (X-R45b)."
 from __future__ import annotations
 
 from datetime import date as date_type
-from decimal import Decimal
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,13 +13,7 @@ from backend.app.schemas.portfolio import (
     PortfolioPlannerSourceFxQuote,
     PortfolioPlannerSourceIssue,
 )
-from backend.app.services.pac_allocator.source.keys import FX_PROVENANCE_ID, date_param, field_issue, fx_key, normalized_fx_pair, text_param
-
-
-def _usable_rate(rate: Decimal | None) -> bool:
-    """A saved rate the planner may quote (X-R45b): finite and above 0. A 0 or an infinity is what an older version could
-    store; a finite rate past the column's limits stays a value (developer, 19/10)."""
-    return rate is not None and rate.is_finite() and rate > 0
+from backend.app.services.pac_allocator.source.keys import FX_PROVENANCE_ID, date_param, field_issue, fx_key, normalized_fx_pair, text_param, usable_rate
 
 
 async def _previous_usable_row(session: AsyncSession, base: str, quote: str, before: date_type) -> FxRate | None:
@@ -29,7 +22,7 @@ async def _previous_usable_row(session: AsyncSession, base: str, quote: str, bef
     cursor = before
     while True:
         row = (await session.execute(select(FxRate).where(FxRate.base == base, FxRate.quote == quote, FxRate.date < cursor).order_by(FxRate.date.desc()).limit(1))).scalar_one_or_none()
-        if row is None or _usable_rate(row.rate):
+        if row is None or usable_rate(row.rate):
             return row
         cursor = row.date
 
@@ -118,10 +111,10 @@ async def build_planner_fx_quotes(
         # X-R45b: a latest rate the planner cannot use (0 or not finite, which an older version could store) is skipped
         # for the previous valid one, and a warning says so; without one, the quote has no rate (saved_fx_invalid)
         used_row = saved_row
-        if not _usable_rate(saved_row.rate):
+        if not usable_rate(saved_row.rate):
             used_row = await _previous_usable_row(session, saved_row.base, saved_row.quote, saved_row.date) or saved_row
         fx_id = fx_key(pair, used_row.date, used_row.source)
-        rate = used_row.rate if _usable_rate(used_row.rate) else None
+        rate = used_row.rate if usable_rate(used_row.rate) else None
         if used_row is not saved_row:
             issues.append(
                 field_issue(

@@ -90,7 +90,7 @@ planted with raw SQL past the model, as an older release could leave them:
 X-R45b — the planner's quote skips a saved rate of 0 or not finite for the previous valid one, with a warning. The
 decision (developer, 19/10), verbatim: «Sì: tasso valido precedente con l'avviso, e lo 0 trattato allo stesso modo». In
 ``build_planner_fx_quotes``, when the latest saved row of a pair (on or before ``as_of``, from the loader, which does not
-change) has a rate of 0 or not finite — a negative one too, the cure's ``_usable_rate`` being finite and > 0; no case
+change) has a rate of 0 or not finite — a negative one too, the cure's ``keys.usable_rate`` being finite and > 0; no case
 pins it —, the quote is built from the pair's most recent earlier row whose rate is finite and above 0
 (``_previous_usable_row``, as many rows back as it takes), with ONE warning ``allocation.saved_fx_skipped`` (kind
 ``invalid``) about that quote, its params the pair, ``skipped_date`` (the most recent row skipped) and ``used_date``,
