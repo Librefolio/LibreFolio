@@ -199,7 +199,7 @@ class TXPromoteResolvedFields(StrictModel):
 
     description: Optional[str] = Field(default=None, max_length=500, description="Merged notes, on both rows; null clears them")
     tags: Optional[List[str]] = Field(default=None, description="Merged tags, on both rows; null clears them")
-    date: Optional[date_type] = Field(default=None, description="Merged settlement date, on both rows; never null")
+    date: Optional[date_type] = Field(default=None, description="Merged trade date, on both rows; never null")
     cost_basis_override: Optional[IsoCurrencyAmount] = Field(default=None, description="Merged per-unit cost basis, on the receiving leg; null clears it")
 
     @field_validator("tags", mode="before")
