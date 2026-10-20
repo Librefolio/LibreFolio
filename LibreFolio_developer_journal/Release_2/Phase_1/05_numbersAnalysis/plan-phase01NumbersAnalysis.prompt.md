@@ -8620,7 +8620,7 @@ lettura di Q1 nelle date comuni. Con Y, per un'uscita a gradini: solo se il deve
    corpo dell'aiutante e il suo docstring. Il segno di ogni riga viene da `buildSignedCash(cash,
    resolveRule(type).cashSign)` ed `exactDecimalSign`; `swapped` è `signA === 1 && signB === -1`; `from` è `a` se
    `signA === -1`, altrimenti `b`.
-4. ⏳ **Verdi.**
+4. ✅ **Verdi.**
    - ✅ Vitest del bulk **221/221** (09:55, `files/j/j66/vitest_green.log`); Prettier pulito.
    - ✅ E2E `tx-fx-implied-rate` da solo (09:56–09:59, carico 23): **3 passed**; A e A2 erano rossi.
    - ✅ Slot chiesto al coordinatore (~10:00) per `front-transaction all --workers 2`: copre le altre 5 specifiche che
@@ -8693,7 +8693,7 @@ lettura di Q1 nelle date comuni. Con Y, per un'uscita a gradini: solo se il deve
        - CHANGELOG 🐛: «Bulk editor: the merge banner shows an exchange the right way round …»;
        - commit `fix(transactions): banner reads paying row by type` e `docs(journal): J-66 done, J-67 found`.
      - Il testo intero sta in `files/j/j66/checkpoint_draft.md`.
-5. ⏳ Documentazione e checkpoint.
+5. ✅ Documentazione e checkpoint.
    - ✅ 20/10 ~09:56–10:06 — **docs-writer**, `developer/frontend/state/transaction-draft.md`, «Promote suggestions»,
      il primo punto. La frase «the paying row first when both rows carry cash» diventa due frasi: `promotePairOrder`,
      la regola (il contante col segno del tipo, letto esatto; mai una riga senza contante o con un importo che non è
@@ -8724,3 +8724,74 @@ lettura di Q1 nelle date comuni. Con Y, per un'uscita a gradini: solo se il deve
        lo dice già). Un importo sotto 1e-6 arriverebbe come `1e-8`, e con la lettura esatta non paga mai. Prima della
        cura non pagava comunque, perché era letto positivo: nessuna regressione, e per il contante in valuta non succede
        in pratica.
+
+#### Gantt §29, punto 2 — la riga di chiusura nomina il broker da cui le quote escono (via del 20/10; base `c9becf87c`)
+
+> Coordinatore: il via del punto 2 è arrivato alle ~09:25, «dopo J-57, prima i rossi», con la riga 🐛 nel checkpoint.
+> Alle 11:04, dopo il checkpoint di J-66 (`7dbb043a2` codice, `c9becf87c` giornale): «Vai con il §29, punto 2». J-67
+> è mio, dopo questo punto: riporta la griglia al dato salvato, quindi non serve una domanda.
+
+**Verifica prima del codice (20/10 ~11:05, sola lettura).**
+- HEAD `c9becf87c`, albero pulito, porta 6185 libera.
+- **Lettori di `lot_events[].broker_id` per le righe di chiusura.**
+  - Nel frontend arriva solo `lot_events` (`LotsAnalysisPanel.svelte:203`). Lo leggono:
+    - la riga dello Storico della modale di custodia (`eventDescription`: etichetta + broker): cambia;
+    - il tooltip del grafico WAC, solo per i BUY (`LotWacPriceChart.svelte:1410`): cambia solo per il BUY che chiude
+      uno short spostato, caso raro;
+    - il Gantt mette i segni per `fragment_id`, e la modale raggruppa le fette dal riepilogo del lotto: non cambiano.
+  - Nessuno legge `custody_history` nel frontend. L'AI Export chiede solo `LOT_SUMMARY`.
+- **Test che fissano oggi il broker di una chiusura: nessuno.**
+  - L'E2E `brokers-detail` guarda solo che lo Storico sia visibile.
+  - I `broker_id` in `test_lots_failed_analysis_withholding.py:415,586` sono di una issue di qualità dei dati.
+
+**Passi.**
+1. ✅ 20/10 ~11:06–11:20 — **Rossi** (test-author; brief `files/j/s29/brief_point2_reds.md`).
+   > **Note implementazione**:
+   > - nuovo `test_financial/test_lots_closure_broker.py`: C1 e C2 rossi; C3 guardia; C4 guardia in due casi;
+   > - in `test_lots_analysis_pure.py` (+58 righe): P1 rosso; P2 guardia; P3 guardia in due casi;
+   > - tutti i test si chiamano `test_s29_*`, quindi il filtro `s29` li prende tutti.
+   >
+   > I test di chiusura controllano prima, come precondizione, lo stato COMPLETE senza issue e che il Gantt disegni
+   > il frammento chiuso al broker atteso: un rosso cade solo su `broker_id`.
+   >
+   > Prova sul codice di prima (11:20, carico 17):
+   > - `services lots-analysis-pure s29`: **1 failed, 3 passed** (P1: `broker_id` 1, atteso 2);
+   > - `services roi-fifo-utils s29`: **2 failed, 3 passed** (C1 SELL e C2 ADJUSTMENT_OUT `OUT`: A, atteso B).
+   > - Log: `files/j/s29/pure_red.log`, `db_red.log`.
+   >
+   > **⚠️ Fuori pista — tre correzioni del brief, dal test-author, verificate:**
+   > - **C4.** In L1 il trasferimento dura due giorni (12 → 13 gennaio), quindi anche TRANSFER_ARRIVE ha `broker_id`
+   >   None, con origine A e destinazione B (come T5 di `test_lots_transfer_in_transit_at_date_to.py`). Solo un
+   >   trasferimento in un giorno solo dà TRANSFER_ARRIVE con il broker B, e senza origine né destinazione. C4 fissa i
+   >   valori veri nei due casi.
+   > - **Il BUY che chiude uno short spostato non esiste**: il motore rifiuta di trasferire una posizione short. Quindi
+   >   cambiano solo le righe SELL e ADJUSTMENT_OUT, e `custody_history` non cambia.
+   > - **Per il punto 1 del §29 (il tooltip)**: un trasferimento in un giorno solo non ha la riga TRANSFER_DEPART, e il
+   >   suo TRANSFER_ARRIVE non ha origine né destinazione. Il tooltip «Da A / A B» dovrà tenerne conto.
+2. ✅ 20/10 11:20 — **Cura** (`files/j/s29/patch_point2_cure.py`, a secco pulita, poi applicata, 4 modifiche):
+   - `_NO_FRAGMENT_BROKERS`;
+   - in `_build_lot_event_rows` la mappa `fragment_brokers` da `engine_result.fragment_intervals`;
+   - `_build_closure_rows(..., *, fragment_brokers=...)`, solo per parola chiave: i due test che lo chiamano per
+     posizione restano validi;
+   - `broker_id` = il broker del frammento chiuso, altrimenti quello d'apertura.
+   black e ruff puliti sui 3 file.
+3. ✅ 20/10 11:21–11:23 — **Verdi:**
+   - `services lots-analysis-pure` **202/202**;
+   - i file dei lotti di `test_financial/` (`roi-fifo-utils` col filtro dei moduli: `lots_closure_broker`,
+     `lots_transfer_scope_boundary`, `lots_change_days_parity`, `lots_transfer_in_transit`, `lots_analysis_service`,
+     `lots_failed_analysis`, `lots_market_price_history`, `invalid_split_ratio`): **381 passed**. Dentro ci sono la
+     parità di L1a e i test di confine di J-10;
+   - `api portfolio` **55 passed**. Nello slot di L1a erano 56: la base è cambiata da allora, nessun fallito né
+     saltato;
+   - porta libera.
+   - Non ripetuto: tutto `roi-fifo-utils` (1694), che è del cancello del coordinatore. Nessun altro test legge il
+     broker di una chiusura (grep sopra).
+4. ✅ 20/10 ~11:25–11:32 — **Documentazione** (docs-writer).
+   - `developer/backend/transactions/lots_analysis_service.md`, punto «**Event history**»: una frase con la regola
+     (§29), `fragment_brokers` e il ripiego sul broker d'apertura, più l'esempio A → B.
+   - Il punto «Labels.», `lots-analysis.md` e `positions.en.md` non nominano il broker di una chiusura: niente da
+     cambiare, niente timbro.
+   - `mkdocs build` stretto: exit 0. `check-links`: 97 validi.
+   - ✅ **Checkpoint mandato** (~11:33), poi FROZEN:
+     - commit `fix(lots): closure rows name the selling broker` e `docs(journal): §29 point 2 done, J-68 found`;
+     - riga 🐛 proposta: «Lot detail: a sale names the broker the units left».
