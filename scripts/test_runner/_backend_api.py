@@ -1054,7 +1054,7 @@ Tests for REST API endpoints (server auto-started):
         "ai-export-unpriced-asset",
         api_ai_export_unpriced_asset,
         name="AI Export Unpriced Asset API",
-        desc="E-AI503: POST /ai-export/snapshot with a held asset of any type and no stored price is 200, not 503: the asset is listed without a price series, with its reason",
+        desc="E-AI503, E-23: POST /ai-export/snapshot with a held asset of any type and no stored price, or prices stored only before the period, is 200, not 503: the asset is listed without a price series, with its reason (and its last stored price)",
         # PURE: the real AI Export router runs in-process on a private SQLite file under tmp_path, with the real snapshot
         # service, portfolio report and price query; the portfolio caches are emptied around each test: the lane's backend
         # is never called.

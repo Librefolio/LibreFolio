@@ -68,7 +68,8 @@ buckets of price and rate series. Neither path invents observations or converts
 absence to zero. Empty price and rate buckets are not silent, though: each maximal
 run of them that holds a market-open day is reported, merged, as one gap carrying the
 last value stored before it, if any, never a value inside it. A weekend or a market
-holiday alone, whole empty daily buckets in this window, is never a gap
+holiday alone, whole empty daily buckets in this window, is never a gap, and neither is
+the snapshot day alone at the end of the series, whose price may not be synchronized yet
 ([Price and Rate Gaps](ai_export_composition.md#series-gaps)).
 
 ## 🧮 Full Policy Matrix

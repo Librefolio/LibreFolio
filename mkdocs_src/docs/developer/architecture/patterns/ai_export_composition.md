@@ -182,8 +182,12 @@ maximal run of contiguous empty buckets (no observed point) that holds at least 
 market-open day: Monday to Friday and not in the union of the main exchanges'
 holidays of the [Market Calendar](../../backend/risk/architecture.md#market-calendar)
 (weekends alone after a failed build of that table). A weekend or a holiday alone is
-never a gap. The run's buckets merge into one gap, from the first start to the last
-end, closed days at its edges included.
+never a gap. Nor is a run that reaches the snapshot day (`snapshot_as_of`, the plan's
+end) when that day is its only market-open day: that is the day's price not yet
+synchronized, and on every asset it would only be noise (E-23.3). A historical period
+that ends on a weekday without a price loses that one-day gap too. The run's buckets
+merge into one gap, from the first start to the last end, closed days at its edges
+included.
 
 `last_value` and `last_value_date` are the last value observed before the gap. For a
 gap that opens the period they are the last value stored before the period: the
