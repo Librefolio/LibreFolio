@@ -31,20 +31,92 @@
  * Written RED-FIRST against the stubs of plan 36 (step 2), and the closing cases against the line as plan 36 left it
  * (plan 48, C3): every red fails on an assertion. Never a translated string: test ids, attributes, the focus, the
  * clock and the store's values only.
+ *
+ * N69b, the security-attention dot, is the last describe; its contract and its doubles are written above it. The checks'
+ * store (`$lib/features/settings/security/securityChecks.svelte`) is a fake for the whole file — the real one is a
+ * module singleton nothing can reset between cases —, idle and empty unless a case says otherwise, so the line as it was
+ * before N69b meets it unchanged.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 
 const api = vi.hoisted(() => ({
     connection: vi.fn(),
     me: vi.fn(),
+    // The checks' own request: the store is faked (below), so this is called only by a line that would ask the server
+    // around the store. Pending forever, like any inert operation.
+    securityChecks: vi.fn(() => new Promise<never>(() => {})).mockName('zodiosApi.list_security_checks_api_v1_security_checks_get'),
 }));
 
-// `$lib/api`: the two operations this file programs, and an inert spy for any other a transitive import may touch —
+/** A finding of the Security tab, as the store lists it (`securityFindings.ts`). */
+interface FakeFinding {
+    id: string;
+    severity: 'error' | 'warning' | 'info';
+    messageKey: string;
+    params: Record<string, string | number>;
+    source: 'server' | 'browser';
+}
+
+/**
+ * The checks' store, faked over a `$state` box (`reactiveBox`), so the line re-renders when a case lands an answer. One
+ * source of truth, the answer's attention findings: `findings`, `attentionCount` (errors and warnings) and
+ * `attentionSeverity` (error, else warning, else null) are derived from it as the real store derives them, all empty and
+ * `null` before the answer. `ensureLoaded()` does to the state it reads what the real one does — it reads the status and,
+ * from idle or error, starts a request (`loading`) — so an effect that calls it without `untrack` depends on that status
+ * and runs again, as it would on the real store; `reload()` always starts one. Neither ever answers: a case lands the
+ * answer itself (`storeAnswers`).
+ */
+const securityStore = await vi.hoisted(async () => {
+    const {reactiveBox} = await import('$test/runes.svelte');
+    const state = reactiveBox<{status: 'idle' | 'loading' | 'ready' | 'error'; answered: boolean; attention: FakeFinding[]}>({status: 'idle', answered: false, attention: []});
+    const ensureLoaded = vi
+        .fn((): Promise<void> => {
+            if (state.status === 'idle' || state.status === 'error') state.status = 'loading';
+            return Promise.resolve();
+        })
+        .mockName('securityChecks.ensureLoaded');
+    const reload = vi
+        .fn((): Promise<void> => {
+            state.status = 'loading';
+            return Promise.resolve();
+        })
+        .mockName('securityChecks.reload');
+    const counted = (): FakeFinding[] => (state.answered ? state.attention.filter((finding) => finding.severity === 'error' || finding.severity === 'warning') : []);
+    const store = {
+        get status() {
+            return state.status;
+        },
+        get checks(): never[] {
+            return [];
+        },
+        get answered() {
+            return state.answered;
+        },
+        get findings(): {attention: FakeFinding[]; passed: FakeFinding[]} {
+            return {attention: state.answered ? state.attention : [], passed: []};
+        },
+        get attentionCount(): number {
+            return counted().length;
+        },
+        get attentionSeverity(): 'error' | 'warning' | null {
+            const found = counted();
+            if (found.some((finding) => finding.severity === 'error')) return 'error';
+            return found.length > 0 ? 'warning' : null;
+        },
+        ensureLoaded,
+        reload,
+    };
+    return {state, ensureLoaded, reload, store};
+});
+
+vi.mock('$lib/features/settings/security/securityChecks.svelte', () => ({securityChecks: securityStore.store}));
+
+// `$lib/api`: the operations this file programs, and an inert spy for any other a transitive import may touch —
 // pending forever, so that nothing it starts can settle behind the assertions or reach the network.
 vi.mock('$lib/api', () => {
     const programmed: Record<string, unknown> = {
         get_connection_security_api_v1_system_connection_get: api.connection,
         get_me_api_v1_auth_me_get: api.me,
+        list_security_checks_api_v1_security_checks_get: api.securityChecks,
     };
     const inert = new Map<string, unknown>();
     const pending = () => new Promise(() => {});
@@ -63,14 +135,15 @@ vi.mock('$lib/api', () => {
 });
 
 import {get} from 'svelte/store';
-import {tick} from 'svelte';
-import {waitLocale} from 'svelte-i18n';
+import {flushSync, tick} from 'svelte';
+import {addMessages, waitLocale} from 'svelte-i18n';
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import ConnectionSecurityIndicator from './ConnectionSecurityIndicator.svelte';
 import {connectionSecurity, refreshConnectionSecurity, resetConnectionSecurity} from '$lib/stores/app/connectionSecurityStore';
 import {connectionSecurityDocsUrl, type ConnectionLevel, type ConnectionReason, type ServerView} from '$lib/utils/security/connectionSecurity';
 import {auth} from '$lib/stores/app/auth';
 import {currentLanguage} from '$lib/stores/app/language';
+import {_ as formatMessage} from '$lib/i18n';
 
 /** The JSDOM instance vitest exposes in this environment: its URL is the page's `window.location`. */
 const dom = (globalThis as unknown as {jsdom: {reconfigure(settings: {url: string}): void}}).jsdom;
@@ -147,6 +220,15 @@ function expectDocsLink(link: HTMLElement, lang: keyof typeof DOCS_HREF): void {
     expect((link.getAttribute('rel') ?? '').split(/\s+/), 'without a window.opener').toContain('noopener');
 }
 
+/** The checks' store back to a page load that has asked nothing: idle, no answer, no call recorded. */
+function resetSecurityStore(): void {
+    securityStore.state.status = 'idle';
+    securityStore.state.answered = false;
+    securityStore.state.attention = [];
+    securityStore.ensureLoaded.mockClear();
+    securityStore.reload.mockClear();
+}
+
 beforeAll(async () => {
     await setupI18n();
 });
@@ -154,10 +236,12 @@ beforeAll(async () => {
 beforeEach(() => {
     api.connection.mockReset();
     api.me.mockReset();
+    api.securityChecks.mockClear();
     // Unprogrammed, the endpoint fails loudly instead of answering for the case.
     api.connection.mockRejectedValue(new Error('GET /system/connection is not programmed for this case'));
     auth.reset();
     resetConnectionSecurity();
+    resetSecurityStore();
 });
 
 afterEach(() => {
@@ -661,5 +745,222 @@ describe('ConnectionSecurityIndicator — closing the details: the reason, and 3
 
             expect(vi.getTimerCount(), `closed by ${closer}, the countdown is cancelled`).toBe(timersBefore);
         });
+    });
+});
+
+/**
+ * N69b — the security-attention dot (N69 point 1; the developer's answers D1 a, D2 a, D3 a). The «1» of the Settings ›
+ * Security tab — `securityChecks.attentionCount`, the errors and warnings of `GET /api/v1/security/checks` plus the
+ * browser's open-registration warning — is seen by an administrator from anywhere, on this line:
+ *   - for an administrator (`$auth.user?.is_superuser === true`) the line calls `securityChecks.ensureLoaded()`, once,
+ *     from an effect; for anybody else never: no request to the checks;
+ *   - `attention` is the store's `attentionCount` for an administrator, 0 for anybody else; the severity is the store's
+ *     `attentionSeverity` while `attention > 0`, none otherwise;
+ *   - the root `connection-security` publishes `data-security-attention` (the number) and `data-security-severity`
+ *     (`error` | `warning` | `none`);
+ *   - the dot, `connection-security-attention-dot`: inside the toggle, `aria-hidden="true"`, `data-severity` the severity,
+ *     only while `attention > 0`, with the sidebar expanded and collapsed;
+ *   - the toggle's accessible name while `attention > 0`: «‹level label› — ‹attention text›», expanded and collapsed, and
+ *     the `title` the same when collapsed; the attention text is `$_('connectionSecurity.attention', {values: {count}})`.
+ *     Without attention, today's: the level label as `aria-label` and `title` when collapsed, neither when expanded;
+ *   - in the details, after the reason: `connection-security-attention-link`, an `<a href="/settings?tab=security">` whose
+ *     text is the attention text, only while `attention > 0`; a click on it closes the details.
+ *
+ * The doubles. The checks' store is the fake at the top of the file: a case lands its answer by hand (`storeAnswers`),
+ * and `ensureLoaded`/`reload` are spies, so «asks» and «never asks» are counted calls; the generated client's own
+ * operation is a spy too, for a line that would go around the store. The attention key is given the test's own ICU
+ * plural (`addMessages`, English is the cases' locale), so a name or a link reads `⟦key·branch·count⟧`: the key, the
+ * plural branch and the count passed, never a translation — a call without `values` would print the raw ICU message. The
+ * level label is what the line's own `$_` gives for the level's key, never written here.
+ */
+describe('ConnectionSecurityIndicator — the security-attention dot (N69b)', () => {
+    const ATTENTION_KEY = 'connectionSecurity.attention';
+    const ATTENTION_MESSAGE = `{count, plural, one {⟦${ATTENTION_KEY}·one·#⟧} other {⟦${ATTENTION_KEY}·other·#⟧}}`;
+    /** Between the level label and the attention text, as the header's menu label already writes «— insecure». */
+    const SEPARATOR = ' — ';
+    const LAN_PAGE = 'http://lf.lan/';
+    const LAN: ServerView = {clientClass: 'lan', cookieSecure: false};
+    const SECURITY_TAB = '/settings?tab=security';
+
+    const finding = (id: string, severity: FakeFinding['severity']): FakeFinding => ({id, severity, messageKey: `test.${id}`, params: {}, source: 'server'});
+    /** Two warnings and an info: 2, warning. */
+    const WARNINGS = [finding('platform.jwt_secret', 'warning'), finding('accounts.login_limit', 'warning'), finding('platform.log_level', 'info')];
+    /** An error, a warning and an info: 2, error. */
+    const WITH_ERROR = [finding('platform.instance_key', 'error'), finding('email.smtp_encryption', 'warning'), finding('email.links', 'info')];
+    /** One warning: 1, warning — the singular. */
+    const ONE_WARNING = [finding('platform.session_cookie', 'warning')];
+    /** Infos only: listed in the tab, counted nowhere. */
+    const INFOS_ONLY = [finding('platform.log_level', 'info'), finding('email.links', 'info')];
+
+    /** The attention text for `count`, as the test's own message renders it. */
+    function attentionText(count: number): string {
+        return `⟦${ATTENTION_KEY}·${count === 1 ? 'one' : 'other'}·${count}⟧`;
+    }
+
+    /** The level label, as the line's own `$_` gives it for the level's key. */
+    function levelLabel(level: ConnectionLevel): string {
+        return get(formatMessage)(`connectionSecurity.level.${level}`);
+    }
+
+    /** The checks' answer lands in the store, as `ensureLoaded()` or `reload()` lands it. */
+    async function storeAnswers(attention: FakeFinding[]): Promise<void> {
+        securityStore.state.attention = attention;
+        securityStore.state.answered = true;
+        securityStore.state.status = 'ready';
+        flushSync();
+        await tick();
+    }
+
+    /** The root's two N69b attributes, as strings. */
+    function attentionRoot(): {attention: string | null; severity: string | null} {
+        const root = present('connection-security');
+        return {attention: root.getAttribute('data-security-attention'), severity: root.getAttribute('data-security-severity')};
+    }
+
+    /** A click on a link, kept on the page: jsdom would follow it and report navigation as not implemented. */
+    async function clickWithoutNavigating(link: HTMLElement): Promise<void> {
+        const stayOnThePage = (event: Event) => event.preventDefault();
+        link.addEventListener('click', stayOnThePage, {capture: true});
+        try {
+            await fireEvent.click(link);
+        } finally {
+            link.removeEventListener('click', stayOnThePage, {capture: true});
+        }
+    }
+
+    /** An administrator or a member on a LAN page, the store already holding `attention` when the line mounts. */
+    async function pageWith(isSuperuser: boolean, attention: FakeFinding[] | null): Promise<void> {
+        await signInAs(isSuperuser);
+        await primeAt(LAN_PAGE, LAN);
+        expect(get(connectionSecurity).level, 'premise: a LAN page, the level local').toBe('local');
+        if (attention) await storeAnswers(attention);
+    }
+
+    beforeAll(() => {
+        addMessages('en', {[ATTENTION_KEY]: ATTENTION_MESSAGE});
+        expect(get(formatMessage)(ATTENTION_KEY, {values: {count: 2}}), 'premise: the attention key renders the test’s own marker').toBe(attentionText(2));
+    });
+
+    // red until N69b
+    it('an administrator with warnings: the root says 2 and warning, the dot in the toggle, the count in the name, and the link to Settings › Security, which closes the details', async () => {
+        await pageWith(true, WARNINGS);
+        expect([securityStore.store.attentionCount, securityStore.store.attentionSeverity], 'premise: the store holds two warnings').toEqual([2, 'warning']);
+
+        await mountIndicator();
+
+        expect(attentionRoot(), 'the root publishes what the administrator has to look at').toEqual({attention: '2', severity: 'warning'});
+        const toggle = present('connection-security-toggle');
+        const dot = present('connection-security-attention-dot', toggle, 'the dot sits inside the toggle, on its icon');
+        expect(dot, 'the dot is decoration: the count is in the name').toHaveAttribute('aria-hidden', 'true');
+        expect(dot).toHaveAttribute('data-severity', 'warning');
+        expect(toggle.getAttribute('aria-label'), 'expanded too, the count is in the accessible name: colour alone is not enough').toBe(`${levelLabel('local')}${SEPARATOR}${attentionText(2)}`);
+
+        const details = await openDetails();
+        const reason = present('connection-security-reason', details, 'the details give the reason');
+        const link = present('connection-security-attention-link', details, 'the details link the Security tab');
+        expect(link.tagName, 'the attention link is an anchor').toBe('A');
+        expect(link, 'to Settings › Security').toHaveAttribute('href', SECURITY_TAB);
+        expect(link.textContent?.replace(/\s+/g, ' ').trim(), 'its text is the attention text').toBe(attentionText(2));
+        expect(reason.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING, 'the link comes after the reason').not.toBe(0);
+        present('connection-security-docs-link', details, 'the rest of the details is unchanged: the docs link is still there');
+
+        await clickWithoutNavigating(link);
+
+        expect(toggle.getAttribute('aria-expanded'), 'a click on the link closes the details').toBe('false');
+        expect(screen.queryByTestId('connection-security-details'), 'the details are gone').toBeNull();
+    });
+
+    // red until N69b
+    it('an administrator with an error among the warnings: the severity is error, on the root and on the dot', async () => {
+        await pageWith(true, WITH_ERROR);
+        expect([securityStore.store.attentionCount, securityStore.store.attentionSeverity], 'premise: an error beats the warning').toEqual([2, 'error']);
+
+        await mountIndicator();
+
+        expect(attentionRoot()).toEqual({attention: '2', severity: 'error'});
+        const dot = present('connection-security-attention-dot', present('connection-security-toggle'), 'the dot sits inside the toggle');
+        expect(dot).toHaveAttribute('data-severity', 'error');
+        expect(dot).toHaveAttribute('aria-hidden', 'true');
+        const details = await openDetails();
+        expect(present('connection-security-attention-link', details, 'an error is linked like a warning'), 'to Settings › Security').toHaveAttribute('href', SECURITY_TAB);
+    });
+
+    // red until N69b
+    it('an administrator with nothing to look at (infos only): the root says 0 and none, no dot, no link, and the name as today, expanded and collapsed', async () => {
+        await pageWith(true, INFOS_ONLY);
+        expect(securityStore.store.attentionCount, 'premise: infos are listed, never counted').toBe(0);
+
+        const {rerender} = await mountIndicator();
+
+        expect(attentionRoot(), 'nothing to look at').toEqual({attention: '0', severity: 'none'});
+        const toggle = present('connection-security-toggle', document.body, 'presence barrier: the line is drawn');
+        expect(within(toggle).queryByTestId('connection-security-attention-dot'), 'no attention, no dot').toBeNull();
+        expect([toggle.getAttribute('aria-label'), toggle.getAttribute('title')], 'expanded, as today: the visible label names it').toEqual([null, null]);
+        const details = await openDetails();
+        present('connection-security-reason', details, 'presence barrier: the details are drawn');
+        expect(within(details).queryByTestId('connection-security-attention-link'), 'no attention, no link').toBeNull();
+
+        await rerender({collapsed: true});
+
+        const collapsed = present('connection-security-toggle');
+        expect([collapsed.getAttribute('aria-label'), collapsed.getAttribute('title')], 'collapsed, as today: the level label alone').toEqual([levelLabel('local'), levelLabel('local')]);
+        expect(within(collapsed).queryByTestId('connection-security-attention-dot'), 'collapsed, no dot either').toBeNull();
+    });
+
+    // red until N69b
+    it('a member, the store holding an administrator’s warnings: the root says 0, no dot, no link, the name as today — and the line never asks the checks', async () => {
+        await pageWith(false, WARNINGS);
+        expect(securityStore.store.attentionCount, 'premise: the store holds two warnings, left by an administrator earlier in this runtime').toBe(2);
+
+        await mountIndicator();
+
+        expect(attentionRoot(), 'only an administrator is shown the checks').toEqual({attention: '0', severity: 'none'});
+        const toggle = present('connection-security-toggle', document.body, 'presence barrier: the line is drawn');
+        expect(within(toggle).queryByTestId('connection-security-attention-dot'), 'a member gets no dot').toBeNull();
+        expect(toggle.getAttribute('aria-label'), 'expanded, as today: no aria-label').toBeNull();
+        const details = await openDetails();
+        present('connection-security-reason', details, 'presence barrier: the details are drawn');
+        expect(within(details).queryByTestId('connection-security-attention-link'), 'a member gets no link').toBeNull();
+        expect(securityStore.ensureLoaded, 'a member’s line never asks the checks').not.toHaveBeenCalled();
+        expect(securityStore.reload, 'nor forces a read').not.toHaveBeenCalled();
+        expect(api.securityChecks, 'no request to GET /api/v1/security/checks').not.toHaveBeenCalled();
+    });
+
+    // red until N69b
+    it('collapsed: the dot is still on the icon, and the count is in the name and in the title — one warning, the singular', async () => {
+        await pageWith(true, ONE_WARNING);
+        const onExpand = vi.fn();
+
+        await mountIndicator({collapsed: true, onExpand});
+
+        expect(attentionRoot()).toEqual({attention: '1', severity: 'warning'});
+        const toggle = present('connection-security-toggle');
+        expect(screen.queryByTestId('connection-security-label'), 'premise: collapsed, the line is its icon').toBeNull();
+        expect(present('connection-security-attention-dot', toggle, 'collapsed, the dot is still drawn'), 'the dot’s severity').toHaveAttribute('data-severity', 'warning');
+        const name = `${levelLabel('local')}${SEPARATOR}${attentionText(1)}`;
+        expect(toggle.getAttribute('aria-label'), 'the count is in the accessible name').toBe(name);
+        expect(toggle.getAttribute('title'), 'and in the title, the only text a pointer gets').toBe(name);
+        expect(onExpand, 'premise: nothing was clicked').not.toHaveBeenCalled();
+    });
+
+    // red until N69b
+    it('an administrator: the line asks the store once, from its own mount, and follows the answer when it lands', async () => {
+        await pageWith(true, null);
+        expect(securityStore.state.status, 'premise: nothing has asked the checks on this page load').toBe('idle');
+
+        await mountIndicator();
+
+        expect(securityStore.ensureLoaded, 'an administrator’s line asks the checks').toHaveBeenCalledTimes(1);
+        expect(securityStore.state.status, 'premise: the store started its request').toBe('loading');
+        expect(attentionRoot(), 'until the answer lands, nothing to show').toEqual({attention: '0', severity: 'none'});
+        expect(screen.queryByTestId('connection-security-attention-dot'), 'no dot before the answer').toBeNull();
+
+        await storeAnswers(WARNINGS);
+
+        expect(attentionRoot(), 'the line follows the answer').toEqual({attention: '2', severity: 'warning'});
+        expect(present('connection-security-attention-dot', present('connection-security-toggle'), 'the dot appears with the answer')).toHaveAttribute('data-severity', 'warning');
+        expect(securityStore.ensureLoaded, 'once: the store changing under the line does not make it ask again').toHaveBeenCalledTimes(1);
+        expect(securityStore.reload, 'the line never forces a read').not.toHaveBeenCalled();
+        expect(api.securityChecks, 'and never goes around the store').not.toHaveBeenCalled();
     });
 });
