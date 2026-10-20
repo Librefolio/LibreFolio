@@ -147,6 +147,15 @@ The tagged union structure of `PendingOp` simplifies complex composite operation
 
 * **Split** (`handleSplitRow`) breaks a linked pair (`TRANSFER`, `CASH_TRANSFER`, `FX_CONVERSION`)
   into two independent rows; nothing is deleted.
+  - A pair **merged in the workspace** and not saved yet — an entry of `pendingPromotes`, two
+    saved rows or a saved and a new one — is not split: its merge is undone, whichever row the
+    pair shows (`undoPendingPromote`, J-67). Each row takes its source type back (a saved row's
+    from the store, `txStoreGet(txId).type`; a new row's `promoteFromType`) and its quantity and
+    cash back in the workspace's sign convention (`magnitudeForRule()`, as `fieldsFromTx` reads
+    them), the new row's `link_uuid` is cleared, both rows are visible, and the entry leaves
+    `pendingPromotes`: the save sends neither the promote nor a split, where a mixed merge's save
+    used to be refused (`promoteRefNotFound`). The description and the tags chosen for the merge
+    stay. Two new rows merged are no such entry: they split as a **new** pair.
   - A **saved** pair is queued in `pendingSplits` as `{id_a, id_b}`; the backend splits it at
     commit. Meanwhile the partner op loses `pairedWith` and becomes a visible row next to its
     former main row.
@@ -155,12 +164,26 @@ The tagged union structure of `PendingOp` simplifies complex composite operation
     `DEPOSIT` for `FX_CONVERSION`).
 * **Promote** (`executePromote`) links two independent rows (e.g. a `WITHDRAWAL` and a `DEPOSIT`)
   into a pair of the matching type; both ops take the target type and collapse into one paired
-  row, the receiving op becoming the hidden partner (`collapseIntoPaired`).
+  row, the receiving op becoming the hidden partner (`collapseIntoPaired`). Before the type
+  changes, every branch below moves the sign into the values (`applySignRules()`, under each
+  row's own type rule), so a `WITHDRAWAL`'s cash, held as its magnitude, turns negative: the
+  target is free-sign (`CASH_TRANSFER`, `FX_CONVERSION`), and `collapseIntoPaired` picks the row
+  to show by the sign of its cash — the paying one, its cash negative, on the *From:* line of the
+  pair's cells, the receiving one on *To:* (J-67; before, only a merge of two new rows did). For
+  a merge with a saved row the save does not depend on it: a saved row is not sent as an update
+  (`resolveOps()` skips the ids in `pendingPromotes`), and a new row is created under its source
+  type (`promoteFromType`), whose rule signs it again — `applySign()` is idempotent.
   - Two **saved** rows are queued in `pendingPromotes` (`{id_a, id_b}`) for the backend.
   - Two **new** rows simply share a fresh `link_uuid`.
   - A **mixed** pair (one saved, one new) is queued as `{id_a, link_uuid_b}`, and the new row keeps
     its pre-promote type in `promoteFromType`, because the backend derives the target from the
     two source types.
+
+`e2e/transactions/tx-bulk-promote-split.spec.ts` pins both (J-67): a saved `WITHDRAWAL` merged
+with a new `DEPOSIT` shows the withdrawal on *From:* (F1), its cash negative (F2); **Split pair**
+on a new `WITHDRAWAL` merged with a saved `DEPOSIT`, before the save, gives each row its type
+back, and the save creates the withdrawal alone, with no update and no promote (F3); G guards
+two new rows, merged, split and saved as two creates.
 
 ### 💡 Promote suggestions {: #promote-suggestions }
 
