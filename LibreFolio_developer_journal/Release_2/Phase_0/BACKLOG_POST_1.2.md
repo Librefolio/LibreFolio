@@ -9268,7 +9268,7 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   - L'idea di H: un piccolo segno nella cartella dei dati, legato alla versione dell'app e alla testa di alembic e
     cancellato dal commit di un ripristino, con cui i risvegli normali saltano la scansione.
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-19a.4».
-- **E-23 · AI Export: un asset con prezzi solo prima del periodo risulta coperto con una serie vuota** — piccolo,
+- ✅ **E-23 · AI Export: un asset con prezzi solo prima del periodo risulta coperto con una serie vuota** — piccolo,
   chiarezza; E, 19/10 (analisi di E-AI503). Preesistente, fuori da E-AI503: aperta, nessuna decisione (per J e lo
   sviluppatore).
   - Se l'ultimo prezzo salvato è anteriore al periodo, i punti del periodo sono solo riportati in avanti.
@@ -9277,6 +9277,20 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   - Con la regola dello sviluppatore («il calcolo … sul ritorno di punti che il db dà») potrebbe passare fra gli
     `uncovered_assets` con un motivo suo; oggi il prompt non dice perché la serie è vuota.
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-AI503.0» e «E-AI503.5».
+  - 20/10, E: fatta nella 1.3 (J chiude il suo J-65 come doppione), con le decisioni dello sviluppatore (E-23.1):
+    - un asset senza prezzi nel periodo, ma con prezzi prima, va fra gli `uncovered_assets` con `no_price_in_period`,
+      la valuta, l'ultimo prezzo salvato e la sua data; da solo, `asset.ohlc_returns` dice lo stesso codice;
+    - ogni sequenza di secchi vuoti con almeno un giorno di mercato aperto (`market_calendar.py`) diventa un buco
+      fuso, con l'ultimo valore salvato prima: la tabella `PRICE GAPS`, e `RATE GAPS` per i cambi (`fx.rate_ohlc` v2);
+      un buco in testa senza prezzo prima ha le celle vuote.
+    - Dettagli: piano 08, da «E-23» a «E-23.2».
+- **E-25 · `/verify-email` spende il link all'apertura, senza un clic** — piccolo, sicurezza; E, 16/10 (E6, lista del
+  mattino), analisi 20/10. Un filtro di posta che apre i link in un browser isolato verifica l'indirizzo al posto del
+  titolare. Proposta: uno stato «Conferma» col pulsante, solo file di E. Da decidere (sviluppatore). Dettagli:
+  [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-25 ed E-26».
+- **E-26 · Dopo la registrazione «We sent you an email» anche quando l'email è trattenuta** — minimo, chiarezza; E,
+  16/10 (E6, lista del mattino), analisi 20/10. Il messaggio non dice la via d'uscita (accedere e chiedere un nuovo
+  link). Proposta: solo il testo, una chiave di E ×4. Da decidere (sviluppatore). Dettagli: piano 08, «E-25 ed E-26».
 
 ## Y · Cruscotto e grafici (fase 01)
 
