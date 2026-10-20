@@ -8543,3 +8543,184 @@ lettura di Q1 nelle date comuni. Con Y, per un'uscita a gradini: solo se il deve
   - la Vitest è di H, in `core-unit`.
   - Per me: nei punti del rischio e dei lotti che oggi tengono solo un flag va tenuto l'errore catturato, per passarlo
     a `withRequestId`. Nell'AI Export basta avvolgere i due rami generici di `getAiExportErrorMessage`.
+
+#### J-66 — il banner di promozione legge il segno dal tipo (via del 20/10 ~09:35; base `5679c8910`)
+
+> Coordinatore (09:35): checkpoint di J-57 fatto (`4ee8423ab` codice, `5679c8910` giornale). **J-66 è mio e viene
+> prima del §29**: è un rosso in `front-transaction` sulla base e blocca i suoi cancelli. Il rimedio proposto: il lato
+> «da» dalla regola del tipo, non dal segno. Prima il rosso (i due di `tx-fx-implied-rate` lo sono già), poi la cura,
+> una Vitest se serve, il checkpoint. Corse leggere con il carico sotto 50; per l'intero `front-transaction`, lo slot.
+
+**Analisi (sola lettura, 09:36–09:45).**
+- **La regola dell'ordine è copiata in 4 punti**, e tutti leggono il segno salvato (`Number(cash.amount)`):
+  1. `TxBulkBanners.svelte:272`, `needSwap`: l'ordine della coppia nel banner;
+  2. `TxBulkBanners.svelte:330-332`: il lato «da» del tasso implicito, e la chiave della cache del cambio di mercato
+     (`:335`);
+  3. `TransactionBulkModal.svelte:3016-3017`: l'effetto che chiede il cambio di mercato (base, quotata, data);
+  4. `TransactionBulkModal.svelte:3116`, «Merge all»: la copia dichiarata («The banner's own order»). «left» è la riga
+     che il banner elenca per prima (`PromoteAllModal.svelte:5-6`).
+- **La regola giusta esiste già.** `signedCashAmount` e `buildSignedCash` (`txPayloadHelpers.ts:155-194`): «Anything
+  that compares, sums or pairs cash amounts must go through here». `cashAmountsCancel` la usa già.
+- **Perché sbagliano.** L'editor tiene come valore assoluto il contante di un tipo con regola `negative`: da sempre le
+  righe salvate (`fieldsFromTx`), da W-B65 anche le righe applicate dal form (`applyFormPayload`). Il prelievo non è
+  più negativo:
+  - coppia e tasso al contrario;
+  - il cambio di mercato è chiesto per la coppia rovesciata (lo scarto confronta due cose rovesciate, in modo coerente);
+  - «Merge all → left» prende le note della riga mostrata per prima, coerente col banner sbagliato.
+- **Dati salvati: nessuno.** Il merge di due righe nuove mette i segni prima di cambiare il tipo (`applySignRules`,
+  `TransactionBulkModal.svelte:2675`); edit+edit e misto mandano gli id, e i lati li ricava il backend.
+- **I punti vanno cambiati insieme.** 1 e 4: altrimenti «left» non è più la riga mostrata per prima, e le note scelte
+  sarebbero quelle dell'altra. 2 e 3: la chiave della cache deve coincidere.
+- **Esclusi:**
+  - `formatCashText` (`:1567`): legge gambe di coppia, che hanno già il segno;
+  - `TxFormPairSection.svelte:353` e `TransactionFormModal.svelte:734`: il draft del form, altra convenzione (lo
+    Scenario B è verde);
+  - `computeFxConversionInfo` usa i valori assoluti: conta solo quale lato è «da».
+- **Gli E2E vicini reggono.** PC7 di `tx-bulk-promote-cost-basis` accetta i due ordini delle note (`:1197`); S4 di
+  `tx-import-scalable-transfers` lavora su gambe senza contante, dove lo scambio non scatta.
+- **Il rimedio.** Un aiutante puro, `promotePairOrder(a, b, resolveRule)`, in `promoteHelpers.ts` accanto a
+  `cashAmountsCancel`. Restituisce `{swapped, from, to}` dal contante col segno del tipo (`buildSignedCash` ed
+  `exactDecimalSign`). I 4 punti lo chiamano e le copie spariscono.
+- **I valori che cambiano (dichiarati).** Nessun numero salvato. Per le coppie con un prelievo salvato o applicato
+  dal form cambiano:
+  - l'ordine della coppia nel banner;
+  - il tasso implicito mostrato, che torna giusto (1.1000, non 0.9091);
+  - la coppia del cambio di mercato chiesta per lo scarto;
+  - quale riga è «left» in «Merge all».
+
+**Passi.**
+1. ✅ 20/10 ~09:50 — **Estrazione senza cambio di comportamento** (`files/j/j66/patch_j66_extract.py`, a secco pulita,
+   poi applicata): l'aiutante con la regola di oggi (il segno salvato), e i 4 punti lo chiamano.
+   > **Note implementazione**: `promotePairOrder<T extends CashCancelable>(a, b, resolveRule)` e l'interfaccia
+   > `PromotePairOrder<T>` in `promoteHelpers.ts`, dopo `cashAmountsCancel`. `resolveRule` è ancora inusato (`void`,
+   > «TEMP»). 8 modifiche in 3 file:
+   > - `TxBulkBanners.svelte`: gli import `getTypeRule` e `promotePairOrder`, `needSwap`, `fromOpFx`/`toOpFx`;
+   > - `TransactionBulkModal.svelte`: l'import, l'effetto del cambio di mercato, «Merge all».
+   > La classe di palette `text-violet-600 dark:text-violet-400` accanto resta com'è: è del programma colori.
+   > Prove:
+   > - Prettier pulito sui 3 file;
+   > - Vitest del bulk 211/211 (`vitest run src/lib/features/transactions/bulk/`, log
+   >   `files/j/j66/vitest_bulk_step1.log`);
+   > - `front check`: svelte-check 0 errori, 0 avvisi.
+2. ✅ 20/10 ~09:52–09:54 — **Rossi Vitest** (test-author, `promoteHelpers.test.ts`, blocco «promotePairOrder — the
+   paying row first, signed by its type (J-66)», 10 test).
+   > **Note implementazione**: 6 rossi e 4 guardie; la guardia del caso 7 gira due volte. Rossi:
+   > - un prelievo tenuto come valore assoluto, nei due ordini;
+   > - un satoshi;
+   > - un prelievo accanto a una riga senza contante;
+   > - un DEPOSIT con il meno (la regola `positive` decide, come al salvataggio);
+   > - `-1e3`, che non è un decimale semplice e quindi non paga mai.
+   > Le guardie: le righe del pool già col segno, le gambe a segno libero (FX_CONVERSION e CASH_TRANSFER, `nonzero`
+   > come in `type_metadata.py`), la riga senza contante, due depositi. Gli ultimi due rossi li ha aggiunti
+   > test-author: fissano regole del mio contratto («positive makes it positive», «no plain decimal never pays»). Li
+   > tengo.
+   > Prova sull'aiutante del passo 1 (`vitest run …/promoteHelpers.test.ts`, 09:54, log `files/j/j66/vitest_red.log`):
+   > **6 failed, 57 passed**, ciascuno sull'asserzione prevista (`from` o `swapped`).
+3. ✅ 20/10 ~09:55 — **Cura** (`files/j/j66/patch_j66_cure.py`, a secco pulita, poi applicata): cambiano solo il
+   corpo dell'aiutante e il suo docstring. Il segno di ogni riga viene da `buildSignedCash(cash,
+   resolveRule(type).cashSign)` ed `exactDecimalSign`; `swapped` è `signA === 1 && signB === -1`; `from` è `a` se
+   `signA === -1`, altrimenti `b`.
+4. ⏳ **Verdi.**
+   - ✅ Vitest del bulk **221/221** (09:55, `files/j/j66/vitest_green.log`); Prettier pulito.
+   - ✅ E2E `tx-fx-implied-rate` da solo (09:56–09:59, carico 23): **3 passed**; A e A2 erano rossi.
+   - ✅ Slot chiesto al coordinatore (~10:00) per `front-transaction all --workers 2`: copre le altre 5 specifiche che
+     toccano il banner (`tx-bulk-promote-cost-basis`, `tx-bulk-promote-exec`, `tx-bulk-suggest-ux`, `tx-crud-full`,
+     `tx-import-scalable-transfers`). Esito qui sotto.
+   - ✅ `front check` dopo la cura (10:00): svelte-check 0 errori, 0 avvisi.
+   - ✅ **Slot `front-transaction all --workers 2`** (dato alle ~10:10; corsa 10:14–10:31, dopo l'attesa del carico,
+     che era a 61): **356 passed, 1 failed**; Vitest **1036/1036** (1026 più i 10 nuovi); slot liberato alle 10:33,
+     porta libera. Log: `files/j/j66/slot_e2e_tx_all.log`.
+   > **⚠️ Fuori pista — il rosso è S4 di `tx-import-scalable-transfers` (`:948`), e smentisce la mia analisi.** Avevo
+   > scritto che S4 lavora su gambe senza contante: è falso. Le gambe sono un prelievo e un deposito importati, tenuti
+   > come valori assoluti.
+   > - **I lettori dell'ordine sono 5, non 4.** Il «Merge» singolo apre il dialogo (`triggerPromoteFromSuggestion` →
+   >   `suggestionOps`) con le due righe nell'ordine della proposta: lo scambio del banner non l'ha mai applicato.
+   > - Prima di J-66 lo scambio non scattava mai sui valori assoluti, quindi il dialogo e «Merge all → left»
+   >   coincidevano per caso. Ora «left» è la riga che paga (atteso `synthD…0003`, ricevuto `SYNTHC…0005`), mentre il
+   >   dialogo mette per prima l'altra.
+   > - S4 legge «il testo di sinistra» dal dialogo, e il suo contratto dice: «a proposal's merge dialog joins the texts
+   >   of its two rows in the banner's order». Il difetto è del dialogo, non del test.
+   > - Lo scambio era già incoerente prima, per le righe col segno (le gambe di una coppia divisa; le righe del form
+   >   prima di W-B65), ma nessun test lo copriva.
+   > - **Q-J66-1 al coordinatore** (10:33), perché cambia ciò che l'utente vede nel dialogo:
+   >   - (a), consiglio: anche il dialogo segue l'ordine del banner (`promotePairOrder(...).swapped`), solo nella
+   >     presentazione. `executePromote` tiene i suoi argomenti. S4 resta com'è; S1, S2 e PC7 accettano i due ordini;
+   >   - (b) il dialogo resta nell'ordine della proposta e si cambia S4;
+   >   - (c) «left» torna all'ordine della proposta, contro la documentazione.
+   > - La patch dell'opzione (a) è pronta e **non applicata**: `files/j/j66/patch_j66_dialog.py`, a secco pulita, 2
+   >   modifiche in `triggerPromoteFromSuggestion`. Lo scambio si calcola come lo calcolano il banner e «Merge all»:
+   >   dalle righe trovate per id temporaneo, prima che `suggestionOps` aggiunga un candidato salvato. Il dialogo mostra
+   >   `txA`/`txB` in quell'ordine; `opA`/`opB` restano quelli della proposta.
+   >   Prove dopo la risposta (corse leggere, una alla volta):
+   >   - `tx-import-scalable-transfers`: S4 rosso → verde;
+   >   - `tx-bulk-promote-cost-basis`, `tx-bulk-promote-exec`, `tx-fx-implied-rate`;
+   >   - svelte-check.
+   - ✅ 20/10 10:39 — **Q-J66-1: (a)**, decisione del coordinatore: «La finestra del merge segue l'ordine del banner
+     con lo stesso aiuto, e cambia solo la presentazione in `triggerPromoteFromSuggestion`. È coerente con la doc
+     («left» è la riga che il banner mette per prima), quindi decido io.»
+   - ✅ 20/10 10:39–10:48 — **(a) applicata e verificata.**
+     - `patch_j66_dialog.py` applicata (a secco pulita, 2 modifiche); il docstring di `promotePairOrder` dice ora 5
+       lettori. Il test-author ha portato a «five readers» l'intestazione del blocco di test (solo parole).
+     - Prove:
+       - Prettier pulito; `front check`: svelte-check 0 errori (10:40);
+       - E2E da soli, una corsa alla volta, carico 20–50:
+         - `tx-import-scalable-transfers` **4 passed**: S4, rosso nello slot, ora verde;
+         - `tx-bulk-promote-cost-basis` **9 passed**;
+         - `tx-bulk-promote-exec` **9 passed**;
+         - `tx-fx-implied-rate` **3 passed**;
+       - Vitest del bulk **221/221** sul file di test finale.
+       - Log: `files/j/j66/e2e_scalable.log`, `light_runs_driver.log`.
+     - docs-writer, seguito: il paragrafo dice «Five readers» e aggiunge il dialogo del **Merge** singolo; il punto
+       **Merge** dice che il dialogo mostra le righe nell'ordine del banner. `mkdocs build` stretto: exit 0, 3085 URL;
+       `check-links`: exit 0, 97 validi.
+   > **⚠️ Fuori pista — un sesto lettore dello stesso segno, trovato dal docs-writer e verificato: J-67.**
+   > - `collapseIntoPaired` (`TransactionBulkModal.svelte` ~`:739-754`) sceglie la riga visibile della coppia («From:»
+   >   nella griglia, `renderDualHtml`) da `Number(cash)`. Gira alla fine di `executePromote`, dopo che il tipo è
+   >   diventato quello di destinazione.
+   > - Due righe nuove hanno già il segno (`applySignRules` prima del cambio di tipo): corretto.
+   > - Due salvate, o una salvata e una nuova: il prelievo è ancora un valore assoluto, quindi la riga visibile è sempre
+   >   `opA`. Se `opA` è il deposito, la griglia mostra il trasferimento al contrario fino al salvataggio, contro la
+   >   pagina dello sviluppatore («the receiving op becoming the hidden partner»). Il salvataggio è giusto: i lati li
+   >   ricava il backend.
+   > - Preesistente, e J-66 non lo peggiora: prima anche il banner aveva quell'ordine. Non è nel via del coordinatore e
+   >   cambia ciò che si vede, quindi non lo tocco qui.
+   > - Rimedio proposto: calcolare `promotePairOrder` sui tipi di partenza, prima del cambio di tipo, e passare
+   >   `from`/`to` a `collapseIntoPaired`. Un rosso E2E: due righe salvate col deposito come `opA`, la riga visibile
+   >   dev'essere il prelievo. Registrato come J-67, da assegnare.
+   - ✅ 20/10 ~10:52 — **Checkpoint di J-66 mandato**, poi FROZEN.
+     - HEAD `5679c8910`; 7 file modificati, nessuno nuovo; `git diff --check` pulito; porta 6185 libera.
+     - Proposte per il coordinatore:
+       - CHANGELOG 🐛: «Bulk editor: the merge banner shows an exchange the right way round …»;
+       - commit `fix(transactions): banner reads paying row by type` e `docs(journal): J-66 done, J-67 found`.
+     - Il testo intero sta in `files/j/j66/checkpoint_draft.md`.
+5. ⏳ Documentazione e checkpoint.
+   - ✅ 20/10 ~09:56–10:06 — **docs-writer**, `developer/frontend/state/transaction-draft.md`, «Promote suggestions»,
+     il primo punto. La frase «the paying row first when both rows carry cash» diventa due frasi: `promotePairOrder`,
+     la regola (il contante col segno del tipo, letto esatto; mai una riga senza contante o con un importo che non è
+     un decimale semplice), i quattro lettori, la storia in mezza frase. Pagina solo EN, niente debito, niente timbro.
+     `mkdocs build` stretto: exit 0, 3085 URL risolti, nessun WARNING. `check-links`: exit 0, 97 validi.
+   > **⚠️ Fuori pista — una premessa sbagliata, trovata dal docs-writer** e verificata nel codice.
+   > - Nel bulk anche la riga importata è tenuta come valore assoluto: `txCreateItemToPendingOp` (~`:2242-2256`) toglie
+   >   il segno al contante di una regola `negative` al passaggio. Le righe col segno nell'editor vengono solo dalle
+   >   gambe di una coppia divisa (`handleSplitRow`, ~`:925-990`).
+   > - Quindi il difetto è **più vecchio di W-B65** per le righe salvate e importate. W-B65 l'ha esteso alle righe del
+   >   form, ed è lì che gli E2E sono diventati rossi.
+   > - Il vecchio codice, poi, non dava i due sintomi insieme: col prelievo primo il tasso era invertito (Scenario A),
+   >   col deposito primo il deposito veniva elencato primo (A2).
+   > - Corretti:
+   >   - il docstring di `promotePairOrder`, con la regola d'ordine precisa: si scambia solo se `a` riceve e `b` paga;
+   >   - l'intestazione e il titolo del caso 5 nel test, dal test-author: solo le parole, la logica non cambia;
+   >   - la causa nella voce J-66 del backlog.
+   - ✅ 20/10 ~10:12 — **Parole del test** (test-author, seguito dello stesso compito): l'intestazione del blocco nomina
+     i tre percorsi che tolgono il segno (salvata, importata, form W-B65) e le gambe di una coppia divisa che lo tengono
+     (`handleSplitRow`); dice anche i due sintomi secondo l'ordine. Cambiano il titolo e il commento del caso 5 («rows
+     already signed, as a split pair’s legs keep them»). Logica invariata, Prettier pulito. Il file è stato scritto alle
+     10:12:47, prima della corsa dello slot (10:14:06): niente sovrapposizione.
+   - **Residui segnalati dal test-author, fuori dal perimetro (nessuna voce nuova):**
+     - lo stesso premesso sbagliato («import pool … already signed») sta nel docstring preesistente di
+       `cashAmountsCancel` e nell'intestazione del file di test (`:10`, le suite di `cashAmountsCancel`). Sono testi
+       d'altri, non li tocco;
+     - `txCreateItemToPendingOp` passa ancora il contante importato da `Number`/`String` (la pagina dello sviluppatore
+       lo dice già). Un importo sotto 1e-6 arriverebbe come `1e-8`, e con la lettura esatta non paga mai. Prima della
+       cura non pagava comunque, perché era letto positivo: nessuna regressione, e per il contante in valuta non succede
+       in pratica.

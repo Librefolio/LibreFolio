@@ -7514,18 +7514,34 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     «nessun prezzo nel periodo») o dichiararla nel testo.
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «Ripresa del 20/10
     e revisione di E-AI503», nota 2.
-- **J-66 · Il banner di promozione del bulk mostra coppia FX e tasso implicito al contrario** — medio, numeri (un tasso
+- ✅ **J-66 · Il banner di promozione del bulk mostra coppia FX e tasso implicito al contrario** — medio, numeri (un tasso
   mostrato invertito); J, 20/10 (slot di J-57, `front-transaction all`).
-  - Da W-B65 (`2b3c9e8d7`, 17/10) il bulk tiene come valore assoluto il contante dei tipi con regola
-    `cashSign: 'negative'`, per esempio il prelievo. `TxBulkBanners.svelte:272` e `:327` scelgono invece il lato «da»
-    dal segno del valore. Con un prelievo di 1000 EUR e un deposito di 1100 USD il banner scrive «USD → EUR @ 0.9091»
-    invece di «EUR → USD @ 1.1000», e mette il deposito per primo.
+  - Il bulk tiene come valore assoluto il contante dei tipi con regola `cashSign: 'negative'`, per esempio il prelievo:
+    le righe salvate (`fieldsFromTx`) e quelle importate (`txCreateItemToPendingOp`) da prima, quelle del form da
+    W-B65 (`2b3c9e8d7`, 17/10). Il banner, il tasso implicito, la richiesta del cambio di mercato e il «left» di
+    «Merge all» sceglievano il lato «da» dal segno del valore.
+  - Con un prelievo di 1000 EUR e un deposito di 1100 USD, a seconda dell'ordine il banner scriveva
+    «USD → EUR @ 0.9091» invece di «EUR → USD @ 1.1000», oppure metteva il deposito per primo.
   - Si vede in `tx-fx-implied-rate.spec.ts`, Scenario A e A2: rossi e deterministici sulla base `2534c71fd`, anche in
     una corsa da sola. J-57 non c'entra.
-  - Rimedio possibile: il lato «da» dalla regola del tipo (`getTypeRule(type).cashSign`), non dal segno del valore
-    tenuto. Da assegnare: il proprietario del bulk (W), oppure J se il coordinatore lo affida.
+  - **Chiusa il 20/10 da J** (via del coordinatore, checkpoint J-66). Un aiutante solo, `promotePairOrder`
+    (`promoteHelpers.ts`), legge il lato dal contante col segno del tipo, come `cashAmountsCancel`. Lo leggono tutti e
+    cinque i punti: i quattro di prima più il dialogo del «Merge» singolo (Q-J66-1 (a), decisione del coordinatore).
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «J-57 v3 e slot
-    pesante, parte 2».
+    pesante, parte 2» e «J-66 — il banner di promozione legge il segno dal tipo».
+- **J-67 · Dopo un merge di righe salvate, la griglia può mostrare la coppia al contrario fino al salvataggio** — basso,
+  chiarezza (nessun dato salvato sbagliato); J, 20/10 (docs-writer durante J-66, verificato da J).
+  - `collapseIntoPaired` (`TransactionBulkModal.svelte` ~`:739-754`) sceglie la riga visibile, il «From:» della
+    griglia, da `Number(cash)`, dopo che `executePromote` ha già cambiato il tipo. Per due righe salvate, o una salvata
+    e una nuova, il prelievo è ancora un valore assoluto: se il deposito è `opA`, resta visibile lui e la coppia si
+    legge al contrario fino al salvataggio. Le due righe nuove hanno già il segno, e lì è corretto.
+  - Preesistente; J-66 non lo peggiora.
+  - Rimedio proposto: `promotePairOrder` sui tipi di partenza, prima del cambio di tipo, e `from`/`to` passati a
+    `collapseIntoPaired`. Un rosso E2E: due righe salvate col deposito come `opA`, la riga visibile dev'essere il
+    prelievo. Peso: 1–2 ore.
+  - Da assegnare: il proprietario del promote (W), oppure J.
+  - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «J-66 — il banner
+    di promozione legge il segno dal tipo», passo 5.
 
 ## Z · Sospensione e risveglio (fase 01)
 
