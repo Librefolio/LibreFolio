@@ -1074,12 +1074,24 @@ A read of a job, through `get_job()` (the Backup tab and the hosting panel follo
 a dead run the same way, its work files included, without waiting for a restart.
 
 A state that cannot be read is no job, to that read and to every cleanup (lot B-50): a content that is no job's state
-(a document that is not a JSON object, or a date without a time zone, included), a folder in its place, or a file the
-server may not read. `get_job()` answers `BackupJobNotFoundError`, so the routes answer `404` `backup_job_not_found`,
-never a `500`, and log one warning, `A backup job's state cannot be read`, with the job's id and the error's type
-name, never its content. A start goes on, and the folder expires by its date. The other errors of the disk, transient,
-stay as they come: a `500` the tab retries, which a «not found» would make it forget. A restore check whose state
-cannot be read is likewise none: `restore_stage_not_found`.
+(a document that is not a JSON object, or a date without a time zone, included), a folder, a link or a special file in
+its place (lot B-53), or a file the server may not read. `get_job()` answers `BackupJobNotFoundError`, so the routes
+answer `404` `backup_job_not_found`, never a `500`, and log one warning, `A backup job's state cannot be read`, with
+the job's id and the error's type name, never its content. A start goes on, and the folder expires by its date. The
+other errors of the disk, transient, stay as they come: a `500` the tab retries, which a «not found» would make it
+forget.
+
+A restore check whose state cannot be read is likewise none, `restore_stage_not_found`, in silence: a content that is
+no check's state (a date without a time zone included), a folder, a link or a special file in its place, or no
+permission to read it; the other errors of the disk reach the caller the same way, so the check's read is a `500` the
+tab retries (lot B-55). `prune` removes such a state, and one a writer killed outright left half written
+(`<id>.json.part`), once older than a check's lifetime and while no check runs (lot B-54). The report of a finished
+check that cannot be read is no report: the check is answered without it, never a `500`.
+
+The state of a job or of a check, the report of a check and the outcome ticket of a restore are read through one
+reader, `read_regular_file()` (lot B-53): it never follows a link, never waits on a FIFO, and closes its descriptor
+whatever happens. Read the old way, a folder left a descriptor open at each read, and a FIFO held the read forever:
+the start of a backup, the reads of the tab and the startup sweep included.
 
 - **Nothing a running process holds**: the run lock of the backups (a `dev.py backup create` running while the server
   starts keeps its job), the lock of the checks (a check of the command line or of the app), an `inspect` younger than
@@ -1328,6 +1340,18 @@ Settings › Administration reads it (lot A8b, [SecurityTab](../frontend/compone
 once per page load, when an administrator first opens Settings, so that the tab's badge counts before the tab is
 opened, and again on «check again». On a [blocked instance](#instance-block) the route is not on the allow-list: an
 administrator gets `423`.
+
+Each check has a guide, the section of the admin guide that explains it. The map is
+`frontend/src/lib/features/instance/checkGuides.json`: `server`, every check of `GET /security/checks`, in the order of
+its answer; `browser`, the findings the browser adds to the tab, today `accounts.openRegistration`
+(`OPEN_REGISTRATION_NOTICE_ID`, [The Open-Registration Warning](#open-registration-warning)). Each value is a path
+below `/mkdocs/` without the language, which `DocsLink` adds: `admin/<page>/#<anchor>`, such as
+`admin/configuration/#frame-protection` for `platform.frame_protection`. The tab's «Guide» button (workstream A, N69d)
+reads it through `checkGuidePath(id)` of `checkGuides.ts`, beside the map. A new check needs its entry, and its anchor
+must be an explicit `{: #… }` of the English page: `./dev.py test services config-audit` fails when a check of the
+server has no entry, or an entry no check, and `./dev.py test front-utility core-unit` (`checkGuides.test.ts`) when an
+anchor is missing, or when a translation gains or loses one: a ratchet, whose baseline in the test goes to zero after
+the release's translation.
 
 Tests: `./dev.py test api login-throttle` (in-process: `401` and `403`, every check once, as `run_config_checks()` and
 `check_plugin_secrets()` evaluate them, `accounts.login_limit` `ok` with the limit on and a `warning` with `off`, no

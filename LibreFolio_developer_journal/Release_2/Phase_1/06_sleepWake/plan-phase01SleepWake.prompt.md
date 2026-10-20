@@ -6768,6 +6768,57 @@ lo porta a 100 (Salva lo scrive).
 6. Checkpoint del backend: ✅ 20/10 09:25, dopo di nuovo sul codice finale `api assets-provider` 30/30 (09:22) e
    `api plugin-settings` 16 (09:23). FROZEN. Il frontend (passi 3 e 4, il via c'è già) dopo il commit del coordinatore;
    poi Z-29a-f.
+7. ✅ 20/10 09:32 — Base nuova e revisione combinata. Il coordinatore ha committato (`3cf04d0aa` codice, `815f1819e`
+   giornale) e unito `dev_release2` (`701054da9`, con Z-29a v3 + Z-29r già in dev, N69a, X-R45b-ui, N61-form, B-8,
+   L1a): HEAD `ff5bf1543`, albero pulito. Corsia ripopolata (09:27, `--force --clean`, 0 anomalie); 09:27
+   `services quote-base-suggestion` 47/47; 09:31 `api assets-provider` 30/30 (il server ha ricostruito il frontend
+   della base unita). N61-form ha toccato `AssetSearchAutocomplete.svelte` (3 righe) e il suo test: riletti prima del
+   brief.
+8. ⏳ Frontend (passi 3 e 4). Coordinatore colori: via anche per `AssetSearchAutocomplete.svelte` (solo logica,
+   nessuna condizione). Contratto riscritto sulla base nuova: `files/z32d-draft/FRONTEND_CONTRACT.v2.md`. Due scelte
+   tecniche dentro le regole del developer, da far vedere a X:
+   - **R1**: il suggerimento che il confronto passa alla scaletta è quello della sonda, altrimenti l'ultimo esplicito
+     dello stesso plugin per la stessa linea (`providerConfigKey`: fornitore, identificativo, parametri) in questa
+     finestra. Senza, una sonda il cui suggerimento fallisce (tempo scaduto, pausa) dopo una scelta in pence
+     proporrebbe «100 → 1» spuntata (Q-Q5 a): l'opposto dello scopo.
+   - Le note delle righe: il testo di Q-Q2 per un suggerimento, l'avviso delle obbligazioni per il default di `BOND`,
+     nessuna nota per il default 1 degli altri tipi (nessun testo nuovo oltre ai due approvati).
+   Rossi Vitest affidati a test-author (cinque file esistenti). R1 approvato dal coordinatore; Q-Q7 (una nota
+   per la riga del default 1 di un tipo non obbligazionario) portata al developer: intanto senza nota.
+   - ✅ 10:08 — Rossi visti (Vitest sui 5 file, binario bloccato): 65 falliti per le ragioni dette (export assenti,
+     nessuna riga, nessun testid della nota, l'autocompletamento che perde il campo, valori non sovrascritti, chiavi
+     non ancora nel catalogo), 219 verdi; ogni file carica (nessun errore d'import).
+   - ✅ 10:15 — Cura: `files/z32d-draft/apply_z32d_frontend.py`, provato su una copia di HEAD (inverso esatto),
+     applicato con la stessa impronta (`z32d_frontend_applied.md5`); `dev.py i18n add` di
+     `assets.modal.quoteBaseSuggested` e `…Plain` in quattro lingue. Verdi: i 5 file 284/284.
+   - (Interruzione 10:15–10:40: il rosso di `core-unit` da Z-29a, sezione sotto, committato `19bf858cb`.)
+   - ✅ 10:52 — Controlli: `front check` prima 4 errori di TS (lo stato del suggerimento dichiarato con l'annotazione
+     e `null` restringeva il tipo a `null` nel `$derived` in cima allo script): `let quoteBaseHint =
+     $state<QuoteBaseHint | null>(null)`, come nel resto del repo, stessa sostituzione nello script e nel worktree, di
+     nuovo dai blob di HEAD i 6 file uguali; poi `front check` 0/0, `AssetModal.test.ts` 67/67. Prettier pulito sui 16
+     file; `theme-roles --check` pulito; dieci file vicini (fra cui `AssetModal.providerLifecycle`,
+     `ImportWizardModal`, `providerComparisonQueue`, `AssetTypeSelect`) 350/350; `i18n check` stretto, `utils
+     gate-i18n-catalog` 176, `gate-i18n-usage` 195, `catalogIcuLocale.test.ts` 17.
+   - ✅ E2E: E1-002 di `tx-import-asset-inspector.spec.ts` aggiornata (test-author): dopo «Ask Provider» le
+     distribuzioni si riempiono come prima, poi il dialogo con una riga sola (`data-total-count` 1, la base, spuntata,
+     25 → 1, nessuna nota); `comparison-cancel` e il campo resta 25. E2-002 senza modifiche (deseleziona tutto prima di
+     scegliere). La galleria del confronto tiene le sue tre righe (ricerca ETF, fornitore ETF_STOCK: tutti e due 1).
+     Da lanciare nello slot chiesto (~10:55): la E2E, `component-unit` e `onboarding-component-unit`.
+   - ✅ 11:12 — Slot pesante 2 (coordinatore, dalle ~11:04, corsia 6186, uno alla volta): 11:08
+     `front-transaction tx-import-asset-inspector` 5/5 (E1-002 aggiornata compresa); 11:11 `front-utility
+     component-unit` 196 file, 5138 test; 11:11 `onboarding-component-unit` 16 file, 509 test. Porta libera, slot
+     liberato alle 11:12.
+   - ✅ 11:13 — Doc (docs-writer, solo inglese, verificata da me sul codice): `user/assets/create-edit.en.md` (il punto
+     «Units per single price» riscritto: la frase «LibreFolio proposes it when you choose **Bond**» era inesatta; un
+     punto nuovo nel confronto: proposta, mai riempita, spuntata, la nota, R1 detto per l'utente),
+     `user/assets/providers/yahoo-finance.en.md` (un paragrafo su `GBp` → 100), `asset_plugin_guide.md` (la frase «does
+     not read the suggestion yet» sostituita), `frontend/components/features/asset-identity.md` (sottosezione nuova
+     `#quote-base-proposal`; corretta una frase che dava la decisione del confronto a `fetchAndCompareMetadata`, che
+     da `fc6220d28` è in `compareMetadata`). `mkdocs build` stretto 0 avvisi, `check-links` 97 validi.
+     `translate-validate` sulle due pagine utente: 36 errori, di cui 6 miei (un link nuovo per lingua su ciascuna
+     pagina) più gli avvisi dei codici nuovi (`.L`, `GBP`, `GBp`); gli altri 30 c'erano già (le traduzioni di
+     `create-edit` non hanno le sezioni «🔎 Search Online results» e «📨 Let us know»). Nessuna marcatura: è debito di
+     traduzione vero, per la pipeline su richiesta.
 
 **Stato alla pausa (19/10 18:20).** HEAD `6510fe169`; nessun commit, nessun comando git. File sporchi: questo piano,
 `test_assets_provider.py`, `_backend_services.py` (modificati), `test_quote_base_suggestion.py` (nuovo). Nessun codice
@@ -6783,3 +6834,28 @@ di prodotto nel worktree. Nessuna corsa né server della corsia; porta 6186 libe
 5. `apply`, verdi, i vicini (`probe-rate-limit`, `rate-limit-results`, `provider-policy`, `asset-source`,
    `test-only-providers`), `api sync`.
 6. Passo 3 (rossi del frontend) e seguenti.
+
+### Z-29a — il rosso di `core-unit` in dev (20/10 ~10:15, base `ff5bf1543`, precedenza su tutto)
+
+> **Segnalazione** (coordinatore, 20/10 ~10:15): nel suo gate su `701054da9`, `front-utility core-unit` dà 3 falliti,
+> tutti in `src/lib/components/assets/detail/assetDetailPriceQuery.test.ts`
+> (`parseAssetPriceQueryWithSignalIsolation`): l'uscita contiene `"resolution": "daily"`, che il test non si aspetta.
+> «Decidi tu se è giusto che il client lo veda come predefinito […] oppure se il campo va dichiarato diversamente.»
+
+1. ✅ 10:16 — Rosso riprodotto sul mio ramo (Vitest sul file, binario bloccato): 3 falliti, 73 verdi, le tre attese
+   esatte (`toEqual`) delle righe 165, 171 e 178 ricevono una chiave in più.
+2. ✅ Decisione (tecnica, nel contratto già approvato): il predefinito è giusto. Lo schema generato legge
+   `resolution` come `z.enum([...]).optional().default('daily')`: il server la manda sempre, e una voce senza il campo
+   è una serie giornaliera, che è il significato del contratto («`resolution` sempre presente, `"daily"` anche senza
+   `max_points`»). In più Z-29b potrà contare su `resolution` sempre valorizzata nell'uscita del parse.
+   `sample_bounds` resta facoltativo senza predefinito: nell'uscita non compare. Si aggiornano le attese del test, non
+   lo schema.
+3. ✅ 10:19 — Cura (test-author): le tre attese con `resolution: 'daily'`; un test nuovo nello stesso describe
+   («keeps the resolution an item sends, defaults a missing one to daily, and adds no sample bounds»: `weekly` resta
+   `weekly`, un'assenza diventa `daily`, nessuna chiave `sample_bounds`). Verdi: il file 77/77, con gli altri tre file
+   di test sulla query dei prezzi (`loadComparisonData`, `fxDetailConvertQuery`, `assetPriceStoreRegistry`) 169/169;
+   10:20 `front-utility core-unit` intero 220 file, 9603 test.
+   > **⚠️ Fuori pista**: prettier allargava la riga nuova (un array di due oggetti si scrive sempre in verticale):
+   > `prettier --write` sul solo file (binario bloccato), di nuovo 77/77.
+   > **⚠️ Fuori pista** (mio, da Z-29a): nello slot di Z-29a avevo lanciato ai-export, rischio e mkdocs, nessuna
+   > suite Vitest. Da qui in avanti un cambio di contratto API passa anche da `core-unit`.

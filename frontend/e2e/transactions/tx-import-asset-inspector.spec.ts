@@ -2,7 +2,8 @@
  * Group E — real ImportWizard asset-inspector persistence and nested dialogs.
  *
  * E1-001: stored metadata + quote base survive a manual edit, including inactive assets.
- * E1-002: explicit, offline Ask Provider distributions survive PATCH, GET and reopen.
+ * E1-002: explicit, offline Ask Provider distributions survive PATCH, GET and reopen;
+ *         the quote base row it also proposes (Z-32 d) is cancelled, the stored base kept.
  * E1-003: clearing description preserves sector/geographic; whole classification can still be nulled.
  * E2-001: a real currency blocker is actionable above the inspector; cancel is inert,
  *         confirm wipes only the inspected asset's own market data.
@@ -585,6 +586,23 @@ test.describe('Group E — import asset inspector', () => {
         await page.getByTestId('asset-modal-ask-provider').click();
         await expectDistribution(page, 'sector', classification.sector_area!.distribution);
         await expectDistribution(page, 'geographic', classification.geographic_area!.distribution);
+        // Z-32 (d): the quote base is compared with the ladder too. No suggestion and no type
+        // from the provider, so the ETF's default, 1, differs from the stored 25: one row, checked
+        // like every row (developer's decision Q-Q5 (a)), no note (only BOND's default has one).
+        // The distributions above were actions, filled before the dialog opened over the Save.
+        const comparison = page.getByTestId('comparison-modal');
+        await expect(comparison).toBeVisible({timeout: UI_TIMEOUT});
+        await expect(comparison.getByTestId('comparison-body')).toHaveAttribute('data-total-count', '1');
+        await expect(comparison.locator('[data-testid="comparison-card"][data-field="quote_base_quantity"]')).toBeVisible();
+        await expect(comparison.getByTestId('comparison-checkbox-quote_base_quantity')).toBeChecked();
+        // Each value box also holds its caption (translated, digit-free): match the whole number.
+        await expect(comparison.getByTestId('comparison-current-quote_base_quantity')).toContainText(/(^|\D)25(\D|$)/);
+        await expect(comparison.getByTestId('comparison-provider-quote_base_quantity')).toContainText(/(^|\D)1(\D|$)/);
+        await expect(comparison.getByTestId('comparison-note-quote_base_quantity')).toHaveCount(0);
+        // The user keeps the stored base: Cancel applies nothing and the field still reads 25.
+        await comparison.getByTestId('comparison-cancel').click();
+        await expect(comparison).toBeHidden({timeout: UI_TIMEOUT});
+        await expect(page.getByTestId('asset-modal-quote-base-quantity')).toHaveValue('25');
         // A probe is a dry run. Only the user's real Save may persist its proposal.
         expect((await readMetadata(page, asset.id)).classification_params).toBeNull();
         const patch = await saveInspector(page, asset);

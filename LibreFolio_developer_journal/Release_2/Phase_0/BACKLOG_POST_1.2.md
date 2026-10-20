@@ -6737,6 +6737,20 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   pagina `developer/backend/database/brokers_transactions.md:99`. Le descrizioni degli schemi finiscono nell'OpenAPI e nel client
   generato. Sono file condivisi: decide il coordinatore (proposta: «the operation date, the day the operation was made»). Dettagli:
   piano 04, «B-52 · La data dell'operazione: cura», passo 4.
+  ✅ 20/10 (via del coordinatore): «Trade date: the day the operation was made» in `models.py`, negli schemi e nella doc del DB;
+  `api sync` senza differenze tracciate. Commit: il checkpoint W-B89 del coordinatore. Dettagli: piano 04, «W-B89».
+- **W-B90 · Una `DataTable` senza colonne non si assesta mai** — minimo, test; W, 20/10 (test-author di B-51). Con `columns: []` il
+  ripiego per un ordine di colonne vuoto (`frontend/src/lib/components/table/DataTable.svelte:855-861`) riscrive a ogni giro un `[]` e
+  un `{}` nuovi, e l'effetto si richiama da sé: Svelte si ferma su `effect_update_depth_exceeded`. Nessun utente lo vede (ogni tabella
+  dell'app ha colonne), ma un test di componente che monta una tabella vuota cade (`AnalyzeStep.test.ts` passa una colonna inerte, col
+  perché). Cura, piccola: il ripiego scrive solo se l'ordine di default ha colonne (`defaultColumnOrder.length > 0`), e lo stesso
+  per le larghezze. È un file condiviso: decide il coordinatore, con il suo proprietario. Dettagli: piano 04, «B-51», passo 1.
+- **W-B91 · La guida dell'import, passo 3: «un file è fallito» manda a un bottone che può mancare** — minimo, chiarezza; W, 20/10
+  (docs-writer di B-51). In `user/transactions/import/how-to.*.md` il punto «A file failed: … Fix its plugin in Select Files, then click
+  Re-parse all»: **Re-parse all** sta nella fila dei riquadri, che compare solo se almeno un file è stato letto, quindi se falliscono
+  tutti non c'è; e cambiare plugin e premere **Parse (N)** rianalizza già da sé. Con questa, due tabelle per sviluppatori
+  (`brim_plugin_guide.md:910`, `developer/backend/brim/architecture.md:392`) dicono dove compaiono le note senza i conti nuovi di B-51.
+  Cura: due frasi in EN, IT, FR, ES più il timbro; in un lotto di doc. Dettagli: piano 04, «B-51», passo 4.
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
@@ -7750,18 +7764,48 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     «nessun prezzo nel periodo») o dichiararla nel testo.
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «Ripresa del 20/10
     e revisione di E-AI503», nota 2.
-- **J-66 · Il banner di promozione del bulk mostra coppia FX e tasso implicito al contrario** — medio, numeri (un tasso
+- ✅ **J-66 · Il banner di promozione del bulk mostra coppia FX e tasso implicito al contrario** — medio, numeri (un tasso
   mostrato invertito); J, 20/10 (slot di J-57, `front-transaction all`).
-  - Da W-B65 (`2b3c9e8d7`, 17/10) il bulk tiene come valore assoluto il contante dei tipi con regola
-    `cashSign: 'negative'`, per esempio il prelievo. `TxBulkBanners.svelte:272` e `:327` scelgono invece il lato «da»
-    dal segno del valore. Con un prelievo di 1000 EUR e un deposito di 1100 USD il banner scrive «USD → EUR @ 0.9091»
-    invece di «EUR → USD @ 1.1000», e mette il deposito per primo.
+  - Il bulk tiene come valore assoluto il contante dei tipi con regola `cashSign: 'negative'`, per esempio il prelievo:
+    le righe salvate (`fieldsFromTx`) e quelle importate (`txCreateItemToPendingOp`) da prima, quelle del form da
+    W-B65 (`2b3c9e8d7`, 17/10). Il banner, il tasso implicito, la richiesta del cambio di mercato e il «left» di
+    «Merge all» sceglievano il lato «da» dal segno del valore.
+  - Con un prelievo di 1000 EUR e un deposito di 1100 USD, a seconda dell'ordine il banner scriveva
+    «USD → EUR @ 0.9091» invece di «EUR → USD @ 1.1000», oppure metteva il deposito per primo.
   - Si vede in `tx-fx-implied-rate.spec.ts`, Scenario A e A2: rossi e deterministici sulla base `2534c71fd`, anche in
     una corsa da sola. J-57 non c'entra.
-  - Rimedio possibile: il lato «da» dalla regola del tipo (`getTypeRule(type).cashSign`), non dal segno del valore
-    tenuto. Da assegnare: il proprietario del bulk (W), oppure J se il coordinatore lo affida.
+  - **Chiusa il 20/10 da J** (via del coordinatore, checkpoint J-66). Un aiutante solo, `promotePairOrder`
+    (`promoteHelpers.ts`), legge il lato dal contante col segno del tipo, come `cashAmountsCancel`. Lo leggono tutti e
+    cinque i punti: i quattro di prima più il dialogo del «Merge» singolo (Q-J66-1 (a), decisione del coordinatore).
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «J-57 v3 e slot
-    pesante, parte 2».
+    pesante, parte 2» e «J-66 — il banner di promozione legge il segno dal tipo».
+- **J-67 · Dopo un merge di righe salvate, la griglia può mostrare la coppia al contrario fino al salvataggio** — basso,
+  chiarezza (nessun dato salvato sbagliato); J, 20/10 (docs-writer durante J-66, verificato da J).
+  - `collapseIntoPaired` (`TransactionBulkModal.svelte` ~`:739-754`) sceglie la riga visibile, il «From:» della
+    griglia, da `Number(cash)`, dopo che `executePromote` ha già cambiato il tipo. Per due righe salvate, o una salvata
+    e una nuova, il prelievo è ancora un valore assoluto: se il deposito è `opA`, resta visibile lui e la coppia si
+    legge al contrario fino al salvataggio. Le due righe nuove hanno già il segno, e lì è corretto.
+  - Preesistente; J-66 non lo peggiora.
+  - Rimedio proposto: `promotePairOrder` sui tipi di partenza, prima del cambio di tipo, e `from`/`to` passati a
+    `collapseIntoPaired`. Un rosso E2E: due righe salvate col deposito come `opA`, la riga visibile dev'essere il
+    prelievo. Peso: 1–2 ore.
+  - Da assegnare: il proprietario del promote (W), oppure J.
+  - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «J-66 — il banner
+    di promozione legge il segno dal tipo», passo 5.
+  - **20/10, coordinatore**: assegnata a J, dopo il §29 punto 2. Riporta la griglia al dato salvato: non serve una
+    domanda.
+- **J-68 · Un trasferimento in un giorno solo non nomina l'origine nelle viste dei lotti** — basso, chiarezza; J, 20/10
+  (test-author durante il §29 punto 2, verificato da J nel codice).
+  - Per un trasferimento che parte e arriva lo stesso giorno, `_build_transfer_rows` (`lots_analysis_service.py`)
+    scrive solo TRANSFER_ARRIVE, dal frammento di destinazione, con `broker_id` B ma senza `source_broker_id` né
+    `destination_broker_id`; non c'è TRANSFER_DEPART. Un trasferimento di più giorni ha invece le due righe, con
+    origine e destinazione.
+  - Effetto: lo Storico della modale scrive «In transit → B» senza dire da dove; il tooltip del grafico WAC scrive «—»
+    sia in «Da» sia in «A». Nessun numero.
+  - Da guardare insieme al §29 punto 1 (il tooltip dei marcatori vuole «Da A / A B»): l'origine sta nel frammento di
+    partenza, oppure nel motore, che può scriverla sul frammento di destinazione.
+  - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «Gantt §29, punto
+    2», passo 1.
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -8852,7 +8896,7 @@ sulla base `23f6578f3`.
   - Da chiarire: la regola riguarda solo chi data per valuta (Fineco) o per periodo (Danske), o quei plugin chiedono
     un seguito.
   Dettagli: piano 07, «N74 di W — revisione», F2.
-- **B-53 · Altri due lettori di `.restore/` lasciano aperto un descrittore quando il loro file è una cartella** —
+- ✅ **B-53 · Altri due lettori di `.restore/` lasciano aperto un descrittore quando il loro file è una cartella** —
   piccolo, robustezza; B, 20/10 (B-50, sonda). Precedente a B-50.
   - `outcome._read_record` (`outcome.py:141`) risponde «nessun esito» e lo registra una volta, come deve, ma ogni
     lettura dell'esito con un biglietto lascia aperto un descrittore.
@@ -8867,7 +8911,15 @@ sulla base `23f6578f3`.
     rifiuta, oppure controlla `S_ISREG` con `fstat` come `archive._add_file`; e `read_report` che risponde «nessun
     report» anche per una cartella.
   Dettagli: piano 07, «B-50».
-- **B-54 · Uno stato di controllo del ripristino illeggibile non lo toglie nessuno** — minimo, pulizia; B, 20/10
+  ✅ **Fatta il 20/10** (via del coordinatore alle 10:10, i job alle 10:39): un lettore unico,
+  `paths.read_regular_file()`, legge gli stati dei job e dei controlli, i report e il biglietto dell'esito. Non segue
+  mai un link, non aspetta mai una FIFO, chiude sempre il descrittore. Una cartella, un link o un file speciale al
+  posto di uno di quei file è illeggibile: per un job «non trovato» con un avviso (un link al posto di `state.json`
+  prima si seguiva), per un controllo «nessun controllo», per un report «nessun report» (la vista risponde senza, mai
+  un 500). Trovato dalle sonde e curato nello stesso lotto: una FIFO al posto dello stato di un job o di un controllo
+  bloccava la lettura per sempre, quindi l'avvio di un backup e la pulizia d'avvio, cioè ogni avvio.
+  Dettagli: piano 07, «B-53 + B-54 + B-55».
+- ✅ **B-54 · Uno stato di controllo del ripristino illeggibile non lo toglie nessuno** — minimo, pulizia; B, 20/10
   (B-50, domanda di test-author). Precedente a B-50.
   - `_prune_checks` lavora solo sui controlli che `_checks` sa leggere, e `_prune_unrecorded` pulisce i caricamenti e
     le copie, mai `checks/`.
@@ -8875,7 +8927,11 @@ sulla base `23f6578f3`.
     permessi. Sono pochi byte ciascuno.
   - Cura possibile: togliere da `checks/` gli stati illeggibili più vecchi del limite, quando nessun controllo gira.
   Dettagli: piano 07, «B-50».
-- **B-55 · Nel ripristino ogni `OSError` su uno stato di controllo è «nessun controllo», anche se transitorio** — da
+  ✅ **Fatta il 20/10**: `prune`, quando nessun controllo gira, toglie da `checks/` gli stati che nessun controllo
+  leggibile registra e quelli scritti a metà (`<id>.json.part`), più vecchi della durata di un controllo; mai quello
+  della copia protetta, mai i nomi che non sono suoi, mai attraverso un link. In silenzio.
+  Dettagli: piano 07, «B-53 + B-54 + B-55».
+- ✅ **B-55 · Nel ripristino ogni `OSError` su uno stato di controllo è «nessun controllo», anche se transitorio** — da
   decidere (coordinatore o developer); B, 20/10 (B-50, domanda di test-author). Precedente a B-50.
   - `restore_jobs._read_state` prende ogni `OSError`: un errore passeggero del disco (`EIO`, `EMFILE`) diventa un 404
     `restore_stage_not_found`.
@@ -8885,6 +8941,23 @@ sulla base `23f6578f3`.
   - Da decidere: la stessa regola nel ripristino (`IsADirectoryError` e `PermissionError` illeggibili, gli altri
     `OSError` che passano), oppure lasciarlo com'è.
   Dettagli: piano 07, «B-50».
+  ✅ **Fatta il 20/10** (decisione del coordinatore: la stessa regola dei job): «nessun controllo» solo per una
+  cartella, un link, un file speciale, un permesso negato o un contenuto illeggibile, ora anche una data senza fuso
+  (faceva fallire ogni `prune` con un `TypeError`). Gli altri `OSError`, transitori, arrivano a chi chiama: un 500 che
+  la scheda riprova. Lo stesso nella conferma: un errore transitorio sul report è un 500 `restore_confirm_failed`, non
+  più «copia mancante».
+  Dettagli: piano 07, «B-53 + B-54 + B-55».
+- **B-56 · Un controllo a richiesta del DB vivo** — piccolo, dopo la 1.3; B, 20/10 (domanda di E sul ripristino a
+  mano; proposta approvata dal coordinatore il 20/10).
+  - Il ripristino a mano (`#by-hand`) non passa dal controllo dell'archivio: un danno che l'avvio non vede, come un
+    testo non UTF-8 o una pagina rovinata del DB, si scopre solo quando una pagina legge quei dati.
+  - Proposta: un comando in sola lettura, a richiesta (`dev.py db check` o simile), che fa sul DB vivo i controlli del
+    ripristino: `integrity_check`, `foreign_key_check`, il testo non UTF-8 indicato con tabella e rowid (mai il
+    contenuto), la revisione conosciuta. Serve al supporto dopo un ripristino a mano o un disco rovinato; mai
+    all'avvio.
+  - Nella 1.3 c'è la frase della guida in `#by-hand`: `backup inspect` e `backup restore --dry-run` prima di
+    scompattare a mano.
+  Dettagli: piano 07, «La domanda di E sul ripristino a mano».
 
 ## E · Email (fase 01)
 

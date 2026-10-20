@@ -83,6 +83,7 @@ _CUSTODY_KINDS = {
 }
 
 _NO_BOUNDARY_LEGS: Mapping[int, BoundaryLeg] = MappingProxyType({})
+_NO_FRAGMENT_BROKERS: Mapping[str, int | None] = MappingProxyType({})
 
 
 class LotsAnalysisService:
@@ -986,7 +987,8 @@ class LotsAnalysisService:
         rows: list[LotTimelineEventSchema] = []
         rows.extend(self._build_opening_and_split_rows(engine_result, selected, fx_resolver, lots_by_id, boundary_legs))
         rows.extend(self._build_transfer_rows(engine_result.fragment_intervals, selected, lots_by_id, fx_resolver))
-        rows.extend(self._build_closure_rows(engine_result.closures, selected, lots_by_id, fx_resolver, boundary_legs))
+        fragment_brokers = {fragment.fragment_id: fragment.broker_id for fragment in engine_result.fragment_intervals}
+        rows.extend(self._build_closure_rows(engine_result.closures, selected, lots_by_id, fx_resolver, boundary_legs, fragment_brokers=fragment_brokers))
         return sorted(rows, key=lambda row: (row.date, row.lot_id, row.transaction_id, row.kind))
 
     def _build_opening_and_split_rows(
@@ -1149,6 +1151,8 @@ class LotsAnalysisService:
         lots_by_id: dict[int, FifoLot],
         fx_resolver: FxRateResolver,
         boundary_legs: Mapping[int, BoundaryLeg] = _NO_BOUNDARY_LEGS,
+        *,
+        fragment_brokers: Mapping[str, int | None] = _NO_FRAGMENT_BROKERS,
     ) -> list[LotTimelineEventSchema]:
         rows: list[LotTimelineEventSchema] = []
         for closure in closures:
@@ -1156,6 +1160,9 @@ class LotsAnalysisService:
                 continue
             lot = lots_by_id[closure.lot_id]
             converted = convert_closure(closure, lot, fx_resolver)
+            # §29: the broker the units leave, the closed fragment's; the opening broker only for a fragment without one
+            # (in transit) or unknown. A lot moved to B and sold there reads «SELL B», not the broker it was bought at.
+            closing_broker_id = fragment_brokers.get(closure.fragment_id)
             rows.append(
                 LotTimelineEventSchema(
                     lot_id=closure.lot_id,
@@ -1163,7 +1170,7 @@ class LotsAnalysisService:
                     kind=LotTimelineEventKind(closure.close_reason),
                     transaction_id=closure.transaction_id,
                     related_transaction_id=None,
-                    broker_id=lot.opening_broker_id,
+                    broker_id=closing_broker_id if closing_broker_id is not None else lot.opening_broker_id,
                     source_broker_id=None,
                     destination_broker_id=None,
                     fragment_id=closure.fragment_id,

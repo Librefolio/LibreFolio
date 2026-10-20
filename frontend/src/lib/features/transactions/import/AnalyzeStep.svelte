@@ -8,6 +8,7 @@
     import {_ as t} from '$lib/i18n';
     import {Eye, CheckCircle, RefreshCw} from 'lucide-svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
+    import NoticeCounts from '$lib/features/transactions/import/NoticeCounts.svelte';
     import type {ParsedFileResult} from './wizardTypes';
     import type {ColumnDef, RowAction} from '$lib/components/table/types';
 
@@ -17,7 +18,7 @@
         parseResults: ParsedFileResult[];
         showAggregateDetail: boolean;
         usingCachedResults: boolean;
-        parseAggregateStats: () => {totalTx: number; doneFileCount: number; uniqueAssets: number; unresolvedCount: number; totalWarnings: number; totalIssues: number; totalTodos: number; todoBlockers: number; likelyDuplicates: number};
+        parseAggregateStats: () => {totalTx: number; doneFileCount: number; uniqueAssets: number; unresolvedCount: number; totalWarnings: number; totalNotes: number; totalIssues: number; totalTodos: number; todoBlockers: number; likelyDuplicates: number};
         parseCompletedCount: number;
         parseDone: boolean;
         parseFailures: ParsedFileResult[];
@@ -140,9 +141,10 @@
                 <div class="text-lg font-semibold" class:text-lf-danger={stats.todoBlockers > 0} class:text-lf-warning={stats.todoBlockers === 0 && stats.totalTodos > 0} class:text-lf-primary={stats.totalTodos === 0}>{stats.totalTodos}</div>
                 <div class="text-xs text-lf-muted">{$t('importWizard.fieldTodoCount', {values: {n: stats.totalTodos}})}</div>
             </div>
-            <div class="text-center">
-                <div class="text-lg font-semibold" class:text-lf-warning={stats.totalWarnings > 0} class:text-lf-primary={stats.totalWarnings === 0}>{stats.totalWarnings}</div>
-                <div class="text-xs text-lf-muted">{$t('importWizard.warningsCount', {values: {n: stats.totalWarnings}})}</div>
+            <!-- B-51: the plugins' warnings (amber) and notes (blue) apart; the counts name themselves for screen readers. -->
+            <div class="text-center" data-testid="import-wizard-stat-notices">
+                <div class="text-lg font-semibold"><NoticeCounts warnings={stats.totalWarnings} notes={stats.totalNotes} size="lg" /></div>
+                <div class="text-xs text-lf-muted" aria-hidden="true">{$t('importWizard.warningsCount', {values: {n: stats.totalWarnings}})} · {$t('importWizard.notesCount', {values: {n: stats.totalNotes}})}</div>
             </div>
             <div class="text-center">
                 <div class="text-lg font-semibold" class:text-lf-warning={stats.likelyDuplicates > 0} class:text-lf-primary={stats.likelyDuplicates === 0}>{stats.likelyDuplicates}</div>
