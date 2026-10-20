@@ -40,6 +40,22 @@ The cases:
 - UPA-05, red until E-AI503, for the ETF and the CROWDFUND: ``asset.market_history`` is 200, ``asset.ohlc_returns``
   with a null currency.
 
+E-23 (plan, «E-23.2»): an asset with prices stored in one currency but none inside the period — the price history
+returns only carries of its last close — is uncovered as ``no_price_in_period``. Today (HEAD ``1ef19d8dc``) it passes as
+covered: it stays in ``assets`` with every bucket empty, and ``asset.ohlc_returns`` gives no reason. The contract:
+portfolio and broker move it from ``assets`` to ``uncovered_assets`` with ``currency``, ``last_close`` and
+``last_close_date`` (the last close stored before the period), three fields null for the other two reasons; counted
+eligible, not covered. Single asset: ``asset.ohlc_returns`` keeps the currency, says ``no_price_in_period``, and its
+``price_gaps`` is one gap over the whole period after that close. Again on the points, never on the type. THE STALE BOOK
+(fixture ``stale_book``): the book plus B3, owned by the same user, holding ``ETF_STALE`` (ETF) and ``CROWD_STALE``
+(CROWDFUND), each with a close on every weekday from January 2017 to Friday 15 March 2024 — two weeks before the period,
+none inside it — and the same EUR deposit and BUY in January 2024.
+
+- UPA-06, red until E-23: ``portfolio.asset_history`` on B1, B2 and B3 is 200, the stale pair uncovered as
+  ``no_price_in_period`` with the close of 15 March 2024, the unpriced pair as ``no_stored_price`` with nulls.
+- UPA-07, red until E-23, for the ETF and the CROWDFUND: ``asset.market_history`` on a stale asset is 200, its
+  ``asset.ohlc_returns`` in EUR with ``no_price_in_period`` and one gap over the whole period.
+
 Isolation: PURE with respect to the lane. The real AI Export router runs in process (httpx ``ASGITransport``) on an app
 of the test's own, with the real ``AiExportSnapshotService``, ``PortfolioService`` and ``get_prices_bulk``. The session
 dependency opens sessions on the private file (the app schema by ``create_all``, NullPool, the engine disposed at
@@ -84,6 +100,7 @@ from backend.app.schemas.ai_export_runtime import (
 from backend.app.schemas.common import OpenDateRangeModel
 from backend.app.schemas.portfolio import PortfolioReportQuery
 from backend.app.services import portfolio_service as portfolio_service_module
+from backend.app.services.ai_export.components import technical_shared
 from backend.app.services.ai_export.datasets.catalog import build_dataset_registry
 from backend.app.services.assets import price_query
 from backend.app.services.portfolio_service import PortfolioService
@@ -107,6 +124,17 @@ _HOLDINGS = (
 )
 PRICED = ("ETF_PRICED", "CROWD_PRICED")
 UNPRICED = ("ETF_UNPRICED", "CROWD_UNPRICED")
+
+# E-23: the last close stored for the stale assets, a Friday two weeks before the period
+STALE_LAST_CLOSE = date(2024, 3, 15)
+
+# E-23: (label, asset type, quantity bought, EUR paid; the same EUR deposited the day before), all on B3, each with a close
+# on every weekday from CLOSES_FROM to STALE_LAST_CLOSE and none after
+_STALE_HOLDINGS = (
+    ("ETF_STALE", AssetType.ETF, "50", "5000"),
+    ("CROWD_STALE", AssetType.CROWDFUND, "60", "6000"),
+)
+STALE = ("ETF_STALE", "CROWD_STALE")
 
 
 # =============================================================================
@@ -150,6 +178,33 @@ async def _seed(engine: AsyncEngine) -> _Book:
 def _ids(book: _Book, labels: tuple[str, ...]) -> list[int]:
     """The asset ids of ``labels`` in id order, the order the payloads list them in."""
     return sorted(book.asset_ids[label] for label in labels)
+
+
+def _stale_closes() -> list[tuple[date, Decimal]]:
+    """E-23: a stale asset's closes, `_weekday_closes` up to STALE_LAST_CLOSE: none inside the period."""
+    return [(day, close) for day, close in _weekday_closes() if day <= STALE_LAST_CLOSE]
+
+
+async def _seed_stale(book: _Book) -> _Book:
+    """E-23: B3, owned by the book's user, holding the two stale assets, committed to the book's file; the book with them."""
+    async with AsyncSession(book.engine, expire_on_commit=False) as session:
+        broker = Broker(name="E-23 stale prices B3")
+        assets = {label: Asset(display_name=f"E-23 {label}", currency=EUR, asset_type=asset_type) for label, asset_type, _quantity, _paid in _STALE_HOLDINGS}
+        session.add_all([broker, *assets.values()])
+        await session.flush()
+        session.add(BrokerUserAccess(broker_id=broker.id, user_id=book.user_id, role=UserRole.OWNER, share_percentage=Decimal("1")))
+        for label, _asset_type, quantity, paid in _STALE_HOLDINGS:
+            asset_id = assets[label].id
+            session.add(Transaction(broker_id=broker.id, asset_id=None, type=TransactionType.DEPOSIT, date=DEPOSIT_DAY, quantity=Decimal("0"), amount=Decimal(paid), currency=EUR))
+            session.add(Transaction(broker_id=broker.id, asset_id=asset_id, type=TransactionType.BUY, date=BUY_DAY, quantity=Decimal(quantity), amount=-Decimal(paid), currency=EUR))
+            session.add_all(PriceHistory(asset_id=asset_id, date=day, open=close, high=close, low=close, close=close, currency=EUR, source_plugin_key="MANUAL") for day, close in _stale_closes())
+        await session.commit()
+        return _Book(
+            engine=book.engine,
+            user_id=book.user_id,
+            broker_ids={**book.broker_ids, "B3": broker.id},
+            asset_ids={**book.asset_ids, **{label: asset.id for label, asset in assets.items()}},
+        )
 
 
 # =============================================================================
@@ -240,9 +295,16 @@ def no_cached_portfolio(request: pytest.FixtureRequest) -> None:
 
 @pytest.fixture(autouse=True)
 def no_market_holidays(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The market holiday table, empty, wherever a snapshot awaits it (the prices' signals, the drawdown's risk run)."""
+    """The market holiday table, empty, wherever a snapshot awaits it: the prices' signals, the drawdown's risk run.
+
+    From E-23 the gaps of the technical price series read it too, through ``technical_shared.ensure_market_holidays``, a
+    name that module has only from E-23 on: ``raising=False`` until then. Without it, every snapshot of this file with a
+    run of empty buckets to judge (a weekend in the daily buckets is one) would build the real table, in a QuantLib
+    process.
+    """
     monkeypatch.setattr(price_query, "ensure_market_holidays", _no_market_holidays)
     monkeypatch.setattr(risk_service_module, "ensure_market_holidays", _no_market_holidays)
+    monkeypatch.setattr(technical_shared, "ensure_market_holidays", _no_market_holidays, raising=False)
 
 
 @pytest_asyncio.fixture
@@ -255,6 +317,12 @@ async def book(tmp_path: Path) -> AsyncIterator[_Book]:
         yield await _seed(engine)
     finally:
         await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def stale_book(book: _Book) -> _Book:
+    """E-23: the book plus B3 and its two stale assets, on the same private file, disposed with it."""
+    return await _seed_stale(book)
 
 
 # =============================================================================
@@ -361,3 +429,65 @@ async def test_upa05_an_unpriced_asset_market_history_builds_with_a_null_currenc
     section = _section(response, "asset.ohlc_returns")
     assert section["component_version"] == 2
     assert (section["payload"]["currency"], section["payload"]["reason_code"]) == (None, "no_stored_price")
+
+
+# red until E-23
+@pytest.mark.asyncio
+async def test_upa06_the_stale_assets_are_uncovered_with_no_price_in_period_and_their_last_close(stale_book):
+    """UPA-06 — red until E-23: ``portfolio.asset_history`` on B1, B2 and B3 is 200, the stale assets uncovered.
+
+    The stale ETF and CROWDFUND have closes stored up to 15 March 2024 and none in the period: inside it the price
+    history returns only carries of that close. Pins, in ``portfolio.technical_prices``: the priced pair keeps its
+    series; ``uncovered_assets`` lists, in id order, the unpriced pair as ``no_stored_price`` with ``currency``,
+    ``last_close`` and ``last_close_date`` present and null, and the stale pair as ``no_price_in_period`` in EUR with the
+    close of 15 March 2024 and its date; 6 eligible, 2 covered; together the two lists still weigh the whole universe.
+    Red until E-23: today the stale pair stays in ``assets``, covered, with every bucket empty.
+    """
+    last_day, last_close = _stale_closes()[-1]
+    assert last_day == STALE_LAST_CLOSE, "premise: the stale closes end on STALE_LAST_CLOSE"
+    expected = {stale_book.asset_ids[label]: ("no_stored_price", None, None, None) for label in UNPRICED} | {stale_book.asset_ids[label]: ("no_price_in_period", EUR, pytest.approx(float(last_close)), last_day.isoformat()) for label in STALE}
+
+    response = await _post_snapshot(stale_book, _portfolio_request(stale_book, "B1", "B2", "B3"))
+
+    assert response.status_code == 200, _answered(response)
+    payload = _section(response, "portfolio.technical_prices")["payload"]
+    assert [asset["asset_id"] for asset in payload["assets"]] == _ids(stale_book, PRICED)
+    assert [gap["asset_id"] for gap in payload["uncovered_assets"]] == sorted(expected)
+    assert {gap["asset_id"]: (gap["reason_code"], *(gap.get(key, "<absent>") for key in ("currency", "last_close", "last_close_date"))) for gap in payload["uncovered_assets"]} == expected
+    assert (payload["eligible_asset_count"], payload["covered_asset_count"]) == (6, 2)
+    assert sum(entry["portfolio_weight_ratio"] for entry in (*payload["assets"], *payload["uncovered_assets"])) == pytest.approx(1.0)
+
+
+# red until E-23
+@pytest.mark.asyncio
+@pytest.mark.parametrize("label", [pytest.param("ETF_STALE", id="etf"), pytest.param("CROWD_STALE", id="crowdfund")])
+async def test_upa07_a_stale_asset_market_history_says_no_price_in_period_whatever_its_type(stale_book, label):
+    """UPA-07 — red until E-23, for an ETF and a CROWDFUND alike: the points decide, never the type.
+
+    ``asset.market_history`` on a stale asset is 200. Pins, in its ``asset.ohlc_returns`` (version 2): the currency
+    stays, EUR, with the reason ``no_price_in_period``; every bucket empty and no latest close or date; ``price_gaps``
+    is one gap over the whole period, 1 April - 30 June 2024, after the close stored on 15 March 2024. Red until E-23:
+    today the reason is null and there is no ``price_gaps``.
+    """
+    last_day, last_close = _stale_closes()[-1]
+    assert last_day == STALE_LAST_CLOSE, "premise: the stale closes end on STALE_LAST_CLOSE"
+
+    response = await _post_snapshot(stale_book, _asset_request(stale_book, label))
+
+    assert response.status_code == 200, _answered(response)
+    section = _section(response, "asset.ohlc_returns")
+    payload = section["payload"]
+    assert section["component_version"] == 2
+    assert (payload["currency"], payload["reason_code"]) == (EUR, "no_price_in_period")
+    assert payload["buckets"], "the bucket plan still covers the period"
+    assert all(bucket["observation_count"] == 0 for bucket in payload["buckets"])
+    assert (payload["latest_close"], payload["latest_date"]) == (None, None)
+    assert payload.get("price_gaps") == [
+        {
+            "start_date": PERIOD_START.isoformat(),
+            "end_date": PERIOD_END.isoformat(),
+            "calendar_days": (PERIOD_END - PERIOD_START).days + 1,
+            "last_value": pytest.approx(float(last_close)),
+            "last_value_date": last_day.isoformat(),
+        }
+    ]
