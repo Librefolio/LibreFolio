@@ -43,7 +43,7 @@
             <p class="font-semibold text-sm mt-2 mb-1">{$t('transactions.validate.issuesHeader')}</p>
             <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-form-issues">
                 {#each fieldIssues as issue}
-                    <li data-testid="tx-form-issue">{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}</li>
+                    <li data-testid="tx-form-issue" data-code={issue.code}>{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}</li>
                 {/each}
             </ul>
         {/if}
@@ -51,7 +51,7 @@
             <p class="font-semibold text-sm mt-2 mb-1">{$t('transactions.validate.balanceIssuesHeader')}</p>
             <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-form-balance-issues">
                 {#each balanceIssues as issue}
-                    <li data-testid="tx-form-balance-issue">{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}</li>
+                    <li data-testid="tx-form-balance-issue" data-code={issue.code}>{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}</li>
                 {/each}
             </ul>
         {/if}
@@ -67,7 +67,7 @@
             <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-form-issues">
                 {#each fieldIssues as issue}
                     {#if issue.code === 'wacFxUnavailable'}
-                        <li data-testid="tx-form-issue" class="flex flex-wrap items-center gap-1.5">
+                        <li data-testid="tx-form-issue" data-code={issue.code} class="flex flex-wrap items-center gap-1.5">
                             <span>{$t('transactions.errors.wacFxUnavailable')}</span>
                             <button
                                 type="button"
@@ -85,7 +85,7 @@
                             <span>{$t('transactions.errors.wacFxUnavailableOrManual')}</span>
                         </li>
                     {:else}
-                        <li data-testid="tx-form-issue">{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}</li>
+                        <li data-testid="tx-form-issue" data-code={issue.code}>{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}</li>
                     {/if}
                 {/each}
             </ul>
@@ -94,7 +94,7 @@
             <p class="font-semibold text-sm {fieldIssues.length > 0 ? 'mt-2' : ''} mb-1.5">{$t('transactions.validate.balanceIssuesHeader')}</p>
             <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-form-balance-issues">
                 {#each balanceIssues as issue}
-                    <li data-testid="tx-form-balance-issue">{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}</li>
+                    <li data-testid="tx-form-balance-issue" data-code={issue.code}>{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}</li>
                 {/each}
             </ul>
         {/if}
