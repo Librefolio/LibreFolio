@@ -479,11 +479,13 @@ describe('a huge paste costs linear time (W-B66, D-W66-1 (b))', () => {
  * - Linear: 40 000 zeros cost no more than reading them, wherever they stand.
  */
 
-/** What `decimalDigitCounts` answers: declared here, so the cases compile before the export exists. */
+/** What `decimalDigitCounts` answers: declared here, so the cases compile before the export exists. `significantDigits`
+ *  is B-48's additive field (below): optional here, so W-B64's cases keep naming only the three counts they pin. */
 interface DigitCounts {
     integerDigits: number;
     fractionDigits: number;
     stripped: string;
+    significantDigits?: number;
 }
 
 /**
@@ -541,9 +543,10 @@ describe('decimalDigitCounts — digits counted as the backend counts them (W-B6
         expect(decimalDigitCounts(text)).toBeNull();
     });
 
-    // Red before the W-B64 cure, for the same reason.
+    // Red before the W-B64 cure, for the same reason. `toMatchObject`: the three counts this case pins, whatever field is
+    // added beside them (B-48's `significantDigits`, an additive field, is pinned below).
     it.each(COUNTED)('%s: %j → %i integer digits, %i decimals, stripped %j', (_rule, text, integerDigits, fractionDigits, stripped) => {
-        expect(decimalDigitCounts(text)).toEqual({integerDigits, fractionDigits, stripped});
+        expect(decimalDigitCounts(text)).toMatchObject({integerDigits, fractionDigits, stripped});
     });
 
     /*
@@ -553,8 +556,44 @@ describe('decimalDigitCounts — digits counted as the backend counts them (W-B6
      */
     it.each(HUGE_ZEROS)('counts %s, in linear time', (_label, text, expected) => {
         const {result, ms} = timed(() => decimalDigitCounts(text));
-        expect(shownCounts(result), `the counts of ${shown(text)}`).toEqual(shownCounts(expected));
+        expect(shownCounts(result), `the counts of ${shown(text)}`).toMatchObject(shownCounts(expected) as object);
         expect(result?.stripped === expected.stripped, 'stripped is exactly the text expected, not only its two ends and its length').toBe(true);
         expect(ms, `decimalDigitCounts took ${ms.toFixed(0)} ms on ${text.length} characters`).toBeLessThan(BOUND_MS);
+    });
+});
+
+/*
+ * B-48 / D-K3-6 — the significant digits, counted as the backend counts them.
+ *
+ * The backend keeps at most 15 significant digits (`precision._digit_counts`, refusal `significantDigitsExceeded`): the
+ * digits of the value once the zeros that do not count are dropped — leading zeros, wherever the point stands, and
+ * trailing zeros, of the fraction and of the integer alike (`1000` is one digit, `1E+3`); zeros between digits count;
+ * zero itself has one. The form caps the integer digits and the decimals apart, so `999999999999999.5` passes both of
+ * its budgets with sixteen significant digits.
+ *
+ * The contract: `decimalDigitCounts` gains an additive field, `significantDigits`, the backend's count. The three W-B64
+ * counts are unchanged (pinned above).
+ */
+
+/** The contract's examples: [rule, text, significant digits]. */
+const SIGNIFICANT: ReadonlyArray<readonly [string, string, number]> = [
+    ['fifteen integer digits and a decimal are sixteen', '999999999999999.5', 16],
+    ['fourteen integer digits and a decimal are fifteen', '99999999999999.5', 15],
+    ['the zeros before the first digit do not count', '0.00123', 3],
+    ['the trailing zeros of an integer do not count', '1000', 1],
+    ['nor do those of the fraction after them', '1000.000', 1],
+    ['the sign does not count, nor the trailing zero', '-12.340', 4],
+    ['the zeros between two digits count', '100.001', 6],
+    ['leading integer zeros do not count', '007', 1],
+    ['zero has one digit', '0', 1],
+    ['zero written with a decimal has one digit', '0.0', 1],
+];
+
+describe('decimalDigitCounts — significant digits, as the backend counts them (B-48)', () => {
+    // Red today: the counts carry no significantDigits.
+    it.each(SIGNIFICANT)('%s: %j → significantDigits %i', (_rule, text, significantDigits) => {
+        const counts = decimalDigitCounts(text);
+        expect(counts, `premise: ${text} is a canonical decimal`).not.toBeNull();
+        expect(counts?.significantDigits, `B-48: decimalDigitCounts(${JSON.stringify(text)}) publishes no significantDigits, or the wrong count`).toBe(significantDigits);
     });
 });

@@ -415,6 +415,9 @@
     $effect(() => {
         if (!open) return;
         const {rows, status: initSt, autoForm} = resolveInitialRows();
+        // K-2: the nested form or wizard opens automatically once per open. Set when it is scheduled before the load
+        // ends; the load's end then opens nothing the user may have closed meanwhile.
+        let autoOpenScheduled = false;
         untrack(() => {
             issues = [];
             lastOpsIndexMap = new Map();
@@ -462,6 +465,7 @@
                 ops = next;
                 initialOpsKey = serializeOps(next);
                 scheduleAutoOpen(autoForm, next);
+                autoOpenScheduled = true;
             } else {
                 // Slow path: keep ops empty so DataTable doesn't render
                 // with FALLBACK_RULE. Ops will be assigned after Promise.all.
@@ -470,6 +474,7 @@
                 // empty key would make an untouched editor ask to discard.
                 initialOpsKey = serializeOps(ops);
                 if (rows.length === 0 && intent?.action !== 'import') {
+                    autoOpenScheduled = true;
                     queueMicrotask(() => {
                         formOpen = true;
                         formMode = 'create';
@@ -478,6 +483,7 @@
                     });
                 }
                 if (intent?.action === 'import') {
+                    autoOpenScheduled = true;
                     queueMicrotask(() => {
                         importWizardOpen = true;
                     });
@@ -485,7 +491,9 @@
             }
         });
         void (async () => {
-            await Promise.all([ensureBrokersLoaded(), ensureCurrenciesLoaded($currentLanguage), ensureAssetsLoaded(), ensureTypesLoaded()]);
+            // K-4: the language read untracked. Tracked, a language change re-ran this whole effect, which rebuilds the
+            // rows from the intent: every unsaved edit was lost.
+            await Promise.all([ensureBrokersLoaded(), ensureCurrenciesLoaded(untrack(() => $currentLanguage)), ensureAssetsLoaded(), ensureTypesLoaded()]);
             untrack(() => {
                 // B4-fix: if ops was deferred (slow path), rebuild + assign now.
                 if (ops.length === 0 && rows.length > 0) {
@@ -499,7 +507,7 @@
                     ops = next2;
                     initialOpsKey = serializeOps(next2);
                 }
-                if (!formOpen) {
+                if (!autoOpenScheduled && !formOpen) {
                     scheduleAutoOpen(autoForm, ops);
                 }
             });
@@ -630,6 +638,17 @@
             if (partnerId == null) continue;
             const pIdx = idToIdx.get(partnerId);
             if (pIdx == null || pIdx === i || toHide.has(pIdx)) continue;
+            // K-3b: a W4b placeholder (the half on a broker the user cannot read) has no row in the store, so the direction
+            // test below would read its cash as 0 and hide a readable receiver behind it: after a reset the pair left the
+            // grid. As in the first build (pass 2), the placeholder is always the hidden partner of the readable half.
+            if (opArr[pIdx].inaccessible) {
+                const sharedUuid = generateUUID();
+                d.link_uuid = sharedUuid;
+                opArr[pIdx].link_uuid = sharedUuid;
+                opArr[pIdx].pairedWith = d.tempId;
+                toHide.add(pIdx);
+                continue;
+            }
             // Determine from/to: "from" = negative cash or negative qty (the sender)
             const cashAmt = Number((d.op === 'edit' ? txStoreGet(d.txId) : undefined)?.cash?.amount ?? 0);
             const partnerCashAmt = Number((opArr[pIdx].op === 'edit' ? txStoreGet(opArr[pIdx].txId) : undefined)?.cash?.amount ?? 0);
@@ -909,8 +928,9 @@
         // BUG-C2: also undo pending splits
         // Remove partner rows added by split, then reset remaining edit rows
         ops = ops.filter((d) => !(d as any).addedBySplit);
+        // K-3: a W4b placeholder has nothing to reset, its half is not in the store (as in `resetRow`).
         ops = ops.map((d) => {
-            if (d.op !== 'edit') return d;
+            if (d.op !== 'edit' || d.inaccessible) return d;
             const reset = editOpFromTx(d.txId, {addedViaPicker: d.addedViaPicker});
             return reset;
         });
@@ -2282,9 +2302,8 @@
         let cash: {code: string; amount: string} | null = null;
         const rawCash = tx.cash && !Array.isArray(tx.cash) ? tx.cash : null;
         if (rawCash) {
-            const rawAmt = Number(rawCash.amount);
-            const displayAmt = rule.cashSign === 'negative' && rawAmt < 0 ? Math.abs(rawAmt) : rawAmt;
-            cash = {code: String(rawCash.code), amount: String(displayAmt)};
+            // B-47: the editor's convention (W-B65), as in `fieldsFromTx`: exact, never through Number.
+            cash = {code: String(rawCash.code), amount: magnitudeForRule(String(rawCash.amount), rule.cashSign)};
         }
 
         // cost_basis_override

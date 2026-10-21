@@ -8958,6 +8958,7 @@ sulla base `23f6578f3`.
     ricevuto), oppure la chiave della guardia legge i decimali per valore e non per testo.
   - Nello stesso giro: l'ingresso dell'import (`txCreateItemToPendingOp`) passa ancora la cassa da `Number`, e
     `isDraftReadyForValidation` legge `amount === '0'`.
+  - **21/10, lotto K3a (W, in attesa del checkpoint)**: `CompactCashCell` emette al blur solo se importo o valuta cambiano per valore esatto; `txCreateItemToPendingOp` legge la cassa come testo esatto; `isDraftReadyForValidation` legge ogni zero (`0.00`, `-0`) come non pronto. Chiusura chiesta al coordinatore.
   Dettagli: piano 07, «W-B64 + W-B65 (per W)».
 - **B-48 · Il Form accetta una quantità che il backend rifiuta per le cifre significative** — minimo, chiarezza; B,
   17/10 (W-B64, nota del test-author; area di W).
@@ -8966,6 +8967,7 @@ sulla base `23f6578f3`.
     (`significantDigitsExceeded`, con un messaggio chiaro). Era già così a 12 + 10.
   - Un commento vecchio in `frontend/e2e/transactions/tx-bulk-promote-cost-basis.spec.ts` dice ancora «the form
     (12 integer digits, 6 decimals)».
+  - **21/10, lotto K3a (W, in attesa del checkpoint)**: `decimalDigitCounts` conta le cifre significative come il backend; prop `maxSignificantDigits` (15) su `ExactQuantityInput` e `CompactCashCell`; il Form blocca Apply sopra le 15 cifre (quantità e ogni cassa) con `transactions.errors.significantDigitsExceeded`. Chiusura chiesta al coordinatore.
   Dettagli: piano 07, «W-B64 + W-B65 (per W)».
 - ✅ **B-49 · Un testo non UTF-8 nei dati di un backup passa la verifica del ripristino** (fatta il 17/10 da B,
   checkpoint delle 21:26: la verifica lo rifiuta, `database_damaged`, prima dell'upgrade) — basso, da decidere dopo
