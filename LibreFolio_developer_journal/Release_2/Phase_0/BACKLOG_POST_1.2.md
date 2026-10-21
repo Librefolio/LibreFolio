@@ -7769,8 +7769,9 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - Cura proposta: lo stesso rifiuto quando il pool è incompleto, con un codice proprio. In alternativa, un avviso
     nell'anteprima. Un controllo che fissa il valore di oggi c'è già (J-57, C4).
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-57».
-- **J-60 · Un costo di carico scritto a mano può essere negativo** — basso, numeri e dati; J, 19/10 (analisi di J-57
-  completa, letto nel codice). **Da decidere (developer)**.
+- ✅ **J-60 · Un costo di carico scritto a mano può essere negativo** — basso, numeri e dati; J, 19/10 (analisi di J-57
+  completa, letto nel codice). **Deciso: (a)**, rifiutarlo e tenere lo 0 (coordinatore, 19/10). I testi li ha
+  approvati il developer con J-57. N92 (i) ha poi deciso che un prezzo negativo non si accetta.
   - Il backend non guarda il segno: `Currency.amount` può essere negativo (`schemas/common.py:188`) e
     `IsoCurrencyAmount` controlla solo il codice (`:498-504`). Il batch controlla solo le cifre
     (`transaction_batch_stages.py:96-102`). Nel form la cella del costo diventa rossa sotto lo 0
@@ -7781,6 +7782,16 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - Opzioni: (a) rifiutare un costo < 0 con un codice tradotto; (b) accettarlo con un avviso; (c) com'è oggi.
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «Ripartenza del
     19/10».
+  - **Chiusa il 20/10 da J** (checkpoint J-60). Lo stadio `check_cost_basis_sign` del batch
+    (`transaction_batch_stages.py`) legge il costo dove lo legge il controllo delle cifre: il costo manuale di una
+    creazione, o di un aggiornamento che lo manda (l'Auto è escluso), e quello che una promozione risolve. Sotto lo 0:
+    `costBasisNegative` su `cost_basis_override`, e il batch non si salva.
+  - **Residui** (coordinatore, 20/10 14:28):
+    - le righe già salvate con un costo negativo, e la media Auto negativa che ne può nascere: **J-70**;
+    - note senza voce:
+      - preesistente, per ogni codice: `promote_transfer` appiattisce le issue in `errors: [str]`, quindi lì il
+        rifiuto arriva come testo inglese;
+      - un'issue che non è di saldo salta il calcolo Auto di tutto il batch.
 - **J-61 · Tre seguiti della revisione di Y a J-21 bis** — minimo, chiarezza e documentazione; Y, 19/10 (revisione a
   posteriori di `def1d5259`: OK). Niente codice adesso (coordinatore, 19/10). Dettagli: piano 09 di Y, «19/10 ·
   Revisione a posteriori di J-21 bis».
@@ -7889,6 +7900,21 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     partenza, oppure nel motore, che può scriverla sul frammento di destinazione.
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «Gantt §29, punto
     2», passo 1.
+- **J-70 · Costi di carico negativi già salvati, e la media Auto che ne nasce** — basso, numeri e dati; J, 20/10
+  (residui di J-60, raccolti in una voce dal coordinatore).
+  - J-60 rifiuta un costo negativo nuovo o mandato di nuovo. Le righe salvate prima con un costo manuale negativo
+    restano, e il WAC e i lotti le usano. Quante sono si conta su una copia dei dati reali (skill `real-data-copy`),
+    quando servirà.
+  - Una riga Auto su un insieme che contiene quelle righe può ancora prendere una media negativa: N88 reagisce solo
+    allo 0 esatto. Un costo salvato a −300 per unità porta la media a −100. La guardia
+    `test_an_auto_row_over_a_pool_averaging_below_zero_gets_no_cost_basis_negative` fissa soltanto che quella riga
+    non riceve `costBasisNegative`, non il valore.
+  - Rimedi possibili, da decidere dopo il conteggio:
+    - (a) far correggere le righe all'utente: un avviso di qualità dei dati che le elenca;
+    - (b) rifiutare una media Auto sotto lo 0 con un codice proprio, come N88 fa per l'insieme vuoto;
+    - (c) nessuno, se il conteggio è zero.
+  - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «J-60 — un costo di
+    carico negativo si rifiuta nel batch», passo 1.
 
 ## Z · Sospensione e risveglio (fase 01)
 
