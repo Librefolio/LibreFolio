@@ -50,7 +50,7 @@ from backend.app.services.assets.price_store import storable_current_value
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.market_series import mark_market_closed_carries, prepare_asset_series_set
-from backend.app.services.signals.aggregation import sample_signal_series
+from backend.app.services.signals.aggregation import align_signal_series, sample_signal_series
 from backend.app.services.signals.execution import SignalPreparedSeriesBundle
 from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.services.signals.service import SignalService
@@ -400,8 +400,8 @@ class PriceQueryOperations:
     @staticmethod
     def _sample_signal_result(signal: SignalResult, plan: _SamplePlan) -> SignalResult:
         """``signal`` with each series reduced to ``plan``'s dates by its output's ``aggregation_profile``, read from the
-        plugin as AI Export reads it (Z-29s, ``sample_signal_series``). A series no output spec describes stays as it is,
-        logged: none today."""
+        plugin as AI Export reads it (Z-29s, ``sample_signal_series``), then all on the same dates (O1,
+        ``align_signal_series``). A series no output spec describes stays as it is, logged: none today."""
         if not signal.series:
             return signal
         plugin_class = SignalPluginRegistry.get_plugin(signal.signal_code)
@@ -414,7 +414,17 @@ class PriceQueryOperations:
                 reduced.append(series)
                 continue
             reduced.append(sample_signal_series(series, profile, plan.resolution, plan.dates))
-        return signal.model_copy(update={"series": reduced})
+        return signal.model_copy(update={"series": PriceQueryOperations._align_reduced(signal.series, reduced)})
+
+    @staticmethod
+    def _align_reduced(daily: list, reduced: list) -> list:
+        """``reduced`` (``daily``'s series each reduced alone) on identical dates, as ``SignalResult`` wants them (O1,
+        ``align_signal_series``). A series left as it was (no output spec, or a reduction that kept no value) keeps its
+        daily dates and is not aligned with the others: Z-29b does not read the step from the density of a signal."""
+        done = [index for index, (before, after) in enumerate(zip(daily, reduced, strict=True)) if after is not before]
+        for index, series in zip(done, align_signal_series([reduced[index] for index in done]), strict=True):
+            reduced[index] = series
+        return reduced
 
     @staticmethod
     def _fill_span(

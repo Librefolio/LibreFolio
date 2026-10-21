@@ -438,6 +438,59 @@ values, within the field's `min`/`max` when set) and the `.lf-compact-number-inp
 ([Mobile CSS](../pwa.md#mobile-css)) sets every input without `.zoom-guard-exempt` to 16 px; the
 class then only resets the line height.
 
+### Signal rendering shared by cards and preview {: #signal-rendering }
+
+`lib/charts/chartSignalRendering.ts` is the one place that turns a chart's saved signals into
+`RenderedSignal[]`. It is pure (no Svelte state, no store read): the caller says where the series
+come from.
+
+| Function | Role |
+|----------|------|
+| `renderLocalSignal(config, baseData, viewMode, sources)` | one saved local signal, rebuilt with `signalFromConfig()`, given its data, rendered on `baseData`; nothing if the type is unknown or the series it reads is missing |
+| `renderLocalSignals(configs, definitionsByType, baseData, viewMode, sources)` | a chart's local signals in order; backend-owned and unknown definitions are skipped |
+| `renderBackendResults(configs, results, definitionsByType, baseData, viewMode, translate?)` | a chart's backend results in order, each drawn with the current config of its id |
+| `SignalDataSources` | `fxPairData(slug)`, `comparisonTarget(assetId)` and `selfAssetId`: where an FX-pair or comparison signal gets its series; `NO_SIGNAL_SOURCES` is the empty set |
+
+The Assets list (`routes/(app)/assets/+page.svelte`), the FX list (`routes/(app)/fx/+page.svelte`)
+and `ChartSettingsModal` call these functions with their own `SignalDataSources`, so a signal
+looks the same on a card and in its preview: a comparison is named after its target, a comparison
+with the chart's own asset (`selfAssetId`) is never drawn, and an FX pair follows the direction of
+the card. The two detail pages still keep their own loop (backlog Y-42); `signalRendering.gate.test.ts` keeps any other file from calling `signalFromConfig()` outside this module.
+
+### Preview chart in the modal {: #settings-preview-chart }
+
+The preview in `ChartSettingsModal` is `PriceChartFull`, the chart of the detail pages, not a
+bespoke `LineChart`. It is configured as follows:
+
+| Prop | Value |
+|------|-------|
+| `data` | the **absolute** series: the card's real data in `pair` mode, a synthetic curve in `global` mode |
+| `externalViewMode` | the modal's own **Abs** / **%** switch: the chart takes the percentage view itself |
+| `externalChartType` | `'line'` (no candlesticks) |
+| `hideToolbar` | `true` |
+| `chartHeight` | `'220px'` |
+| `areaFill`, `colorByBaseline`, `showGridLines`, `showGradient` | the aesthetics being edited, not the saved ones |
+| `yAxisMode` / `yAxisMin` / `yAxisMax`, `secondaryAxisScales` | the axis scales being edited, for the primary scale of the active view and for the secondary axes |
+| `overlaySignals`, `overlaySignalInfoMap` | the preview signals and `buildOverlaySignalInfoMap()` of them, so a comparison shows its asset's icon and type in the tooltip like on the detail page |
+
+The modal passes no events, measure or edit props, so none of them is drawn. The mouse-wheel zoom
+is the chart's own `inside` dataZoom.
+
+### Baseline colour on cards {: #cards-baseline-colour }
+
+The list cards (`AssetCard`, `FxCard`) pass `colorByBaseline` from the chart settings to
+`PriceChartCompact`, which forwards it to `LineChart`; before, compact charts ignored it. The
+series is green from the baseline up and red below it, with a dashed baseline line. The base is:
+
+- **absolute view**: the `baselineValue` prop when a page gives one, else the first non-missing
+  point of the `data` the chart received. A card thins a dense series to weekly or monthly points
+  *inside* `LineChart`, after this base is taken, so the base is the real start of the period and
+  not the end of the first bucket;
+- **percentage view**: always 0, whatever `baselineValue` says.
+
+`baselineValue` is an optional prop of `LineChart`, forwarded by `PriceChartCompact`, for a page
+that knows a better base than the first point of the data it hands over. No list page uses it today.
+
 ## Responsive Date Axis
 
 `lib/components/charts/responsiveXAxis.ts` (`buildResponsiveXAxisPolicy()`) decides how many date

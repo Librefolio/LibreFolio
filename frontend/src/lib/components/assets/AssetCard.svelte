@@ -10,6 +10,7 @@
     import {_ as t} from '$lib/i18n';
     import {Merge, Percent, RefreshCw, RotateCw, Settings, Trash2} from 'lucide-svelte';
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
+    import {compactPlotWidth} from '$lib/components/charts/timeSeriesAggregation';
     import AssetIcon from './AssetIcon.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
@@ -62,6 +63,14 @@
         renderSignals?: (chartData: LineDataPoint[], viewMode: 'absolute' | 'percentage') => RenderedSignal[];
         /** Chart data points */
         chartData?: LineDataPoint[];
+        /**
+         * The value on the first day of the series (Z-29b): the percentage view is measured from it, and the line's colour and
+         * dashed reference in the absolute view (`baselineValue`). A sampled series opens on the end of its first bucket, so its own first point is not it. Without
+         * it, the first point is the base.
+         */
+        baseValue?: number | null;
+        /** The width of the chart's plot, reported when it is measured or changes (Z-29b): the page asks the series for it. */
+        onplotwidth?: (assetId: number, plotWidthPx: number) => void;
         /** Loading state */
         loading?: boolean;
         /** True when this asset is currently syncing */
@@ -87,6 +96,8 @@
         chartSettings,
         renderSignals,
         chartData = [],
+        baseValue = null,
+        onplotwidth,
         loading = false,
         syncing = false,
         onsync,
@@ -119,7 +130,13 @@
 
     let displayData = $derived.by((): LineDataPoint[] => {
         if (cardViewMode === 'absolute' || chartData.length === 0) return chartData;
-        return normalizeToPercentage(chartData);
+        return normalizeToPercentage(chartData, baseValue);
+    });
+
+    /** The width of the chart's box: its plot's is that minus the grid's paddings (`compactPlotWidth`). */
+    let chartWidth = $state(0);
+    $effect(() => {
+        if (chartWidth > 0) onplotwidth?.(asset.id, compactPlotWidth(chartWidth));
     });
 
     let overlaySignals = $derived.by((): RenderedSignal[] => {
@@ -248,28 +265,31 @@
 
     <!-- Mini Chart -->
     <div class="px-4">
-        {#if displayData.length > 0}
-            <PriceChartCompact
-                axisScale={chartSettings?.axisScales[cardViewMode]}
-                data={displayData}
-                height="80px"
-                viewMode={cardViewMode}
-                areaFill={chartSettings?.areaFill ?? true}
-                colorByBaseline={chartSettings?.colorByBaseline}
-                showGridLines={chartSettings?.gridLines}
-                showGradient={chartSettings?.staleGradient ?? true}
-                {overlaySignals}
-                secondaryAxisScales={chartSettings?.axisScales.secondary}
-            />
-        {:else if loading}
-            <div class="h-20 flex items-center justify-center">
-                <div class="animate-pulse bg-lf-neutral rounded w-full h-12"></div>
-            </div>
-        {:else}
-            <div class="h-20 flex items-center justify-center text-sm text-lf-muted">
-                {$t('common.noData')}
-            </div>
-        {/if}
+        <div bind:clientWidth={chartWidth}>
+            {#if displayData.length > 0}
+                <PriceChartCompact
+                    axisScale={chartSettings?.axisScales[cardViewMode]}
+                    data={displayData}
+                    height="80px"
+                    viewMode={cardViewMode}
+                    areaFill={chartSettings?.areaFill ?? true}
+                    colorByBaseline={chartSettings?.colorByBaseline}
+                    baselineValue={baseValue ?? undefined}
+                    showGridLines={chartSettings?.gridLines}
+                    showGradient={chartSettings?.staleGradient ?? true}
+                    {overlaySignals}
+                    secondaryAxisScales={chartSettings?.axisScales.secondary}
+                />
+            {:else if loading}
+                <div class="h-20 flex items-center justify-center">
+                    <div class="animate-pulse bg-lf-neutral rounded w-full h-12"></div>
+                </div>
+            {:else}
+                <div class="h-20 flex items-center justify-center text-sm text-lf-muted">
+                    {$t('common.noData')}
+                </div>
+            {/if}
+        </div>
     </div>
 
     <!-- Footer: actions -->

@@ -7056,3 +7056,81 @@ riduzione sull'endpoint dei cambi (`max_points`, `sample_like`, `sample_bounds`,
 6. ✅ 21/10 ~13:30 — Checkpoint FROZEN, consegnato al coordinatore (CHECKPOINT READY). Revisori: MF (la semantica della
    riduzione, i residui R1–R4) e Y (il contratto: `signals` accettati col campionamento, nessun campo nuovo nelle
    richieste, `resolution` e `sample_bounds` come prima). Backlog: Z-29 (stato) e Z-40 (residui R1–R4).
+
+### Z-40 · O1 — le serie di un segnale ridotto escono sulle stesse date (21/10, ondata 2, base `89e8b2e61`)
+
+> **Decisione del developer (21/10): allineare.** Dopo la riduzione le serie dello stesso segnale possono avere date
+> diverse (`_scalar_points` scarta i nulli iniziali di ogni serie per conto suo), mentre `_validate_series_alignment`
+> le vuole identiche. Tutte le serie escono con l'unione delle date che le riduzioni lasciano; dove una serie non ha un
+> punto, c'è un punto senza valore (`value: null`; una banda: `lower`, `middle`, `upper` nulli). Il validatore resta com'è.
+
+1. ✅ 21/10 ~15:00 — I rossi.
+   > **Note implementazione**: nella tabella comune `signal_sampling_cases.v1.json` la sezione nuova `series_sets` (3
+   > insiemi: tre serie MACD-like con tre riscaldamenti, una banda con una linea, e il residuo R5 con
+   > `browser_parity: false`); in `test_signal_aggregation.py` SAG-S09 (la tabella è ben formata e contiene un insieme dove
+   > le riduzioni da sole non concordano: verde, fissa la tabella) e SAG-S10…S12 (rossi per
+   > `align_signal_series is missing`); in `test_price_query_sampling.py` PQS-SG11 con **ADX(3)** su RECENT, serie reali:
+   > con la cura spenta cade su `the series are on different dates: adx […18/01, 25/01, 01/02], plus_di […11/01, 18/01,
+   > 25/01]`. `_assert_signals_reduced` ora attende le serie allineate (`_validate_series_alignment` sul risultato).
+   > **⚠️ Fuori pista**: il MACD **non** mostra O1 con dati reali (le tre serie hanno il primo valore lo stesso giorno:
+   > il plugin le fa partire insieme), l'ho provato con (3,6,3) e (2,4,3); il caso reale è l'ADX (+DI e −DI prima
+   > dell'ADX). Il backlog nominava MACD, ADX, Aroon e PPO: nominati, non verificati tutti.
+2. ✅ 21/10 ~15:10 — La cura.
+   > **Note implementazione**: `align_signal_series(series)` in `services/signals/aggregation.py` (pura: unione delle
+   > date, `SignalValuePoint(date)` o `SignalBandPoint(date)` dove manca; le serie che concordano tornano gli stessi
+   > oggetto; copie con `model_copy`, i campi diversi da `points` invariati); `PriceQueryOperations._align_reduced` la
+   > applica **alle sole serie ridotte** in `_sample_signal_result` (una serie rimasta giornaliera, per nessuna
+   > `output_spec` o riduzione senza punti, non si allinea alle altre: O4). Il Vitest di `timeSeriesAggregation` legge
+   > anche le `series_sets` (ogni serie disegnata da sola come un caso; `expectedSampling` di una banda ora scarta i
+   > punti incompleti, che il browser non disegna).
+   > **⚠️ Residuo R5**: il segnaposto del buco di una serie è una data (il giorno dopo l'ultimo secchio) su cui le altre
+   > non hanno punto; allineando, le altre ci hanno un punto senza valore e **la loro linea si spezza lì**, dove il browser
+   > la disegna intera. Succede solo se una serie ha un buco nel periodo e le altre no (un riscaldamento non lo causa mai).
+   > È nella tabella con `browser_parity: false`. Non l'ho evitato: le sole alternative sono inventare un valore o togliere
+   > i segnaposto (che cambia il contratto di Z-29s-a). Da dire al developer.
+3. ✅ 21/10 ~15:15 — Verdi: `services signal-aggregation` 228, `services price-query-sampling` 197, `api assets-price` 32,
+   `schemas signals` 477, Vitest `timeSeriesAggregation.test.ts` 68 (`LC_ALL=en_US.UTF-8`); ruff e black puliti.
+4. ✅ 21/10 ~15:15 — Doc (O3 e O4): `developer/backend/assets/architecture.md` («Series on the same dates», «What the browser
+   adds and the backend does not», «The step is the answer's») e `signal_plugin_guide.md` (un periodo nel paragrafo di
+   `sample_signal_series()`). **O3**: con la riduzione restano solo la data del secchio e, per il rendimento, la
+   provenienza. **O4**: Z-29b non deduce il passo dalla densità delle serie dei segnali; lo legge da `resolution`.
+
+### Z-29b — la lista Assets chiede serie ridotte: lavoro (21/10, ondata 2, base `0fdbb28a7`)
+
+> Contratto: «Z-29b, il contratto della pagina» (sopra). Note di MF n1–n3 e requisito dei lotti di X applicati.
+
+1. ✅ 21/10 — I rossi, poi la cura, uno strato alla volta (Vitest).
+   > **Note implementazione**:
+   > - `timeSeriesAggregation.ts`: la soglia 1,3 e le costanti della griglia compatta spostate da `LineChart.svelte`
+   >   (`COMPACT_DENSITY_THRESHOLD`, `COMPACT_GRID_*`), più `compactPlotWidth`, `compactMaxPoints`, `chooseCompactResolution`,
+   >   `fillCounts` (giorni, settimane ISO, mesi) e `stepForMaxPoints`. `LineChart` tocca solo la soglia (`:194-198`,
+   >   `:293-302`). `compactDensity.test.ts` (42 casi) legge `compactDensityCases.json` (n1): `max_points`, conteggi e passo.
+   > - `bulkBatches.ts`: `groupOf` in piano e in divisione dopo `bulk_too_many_days`; un gruppo vale la somma delle sue
+   >   voci, un lotto di un solo gruppo fallisce come uno di una voce (`bulkBatchesGroups.test.ts`, 8 casi).
+   > - `assetPriceDerived.ts`: `derived.base` (da `sample_bounds.first`, altrimenti il primo prezzo; n3); il worker dà
+   >   `requestIndex` (il pool riordina i risultati: `splitBalancedIndexed`, `requestIndexesOf`) e `resolution`.
+   > - `utils/reducedPriceQuery.ts` (puro): `buildReducedQuery` (voce della scheda con `key` `asset:<id>` e `max_points`,
+   >   bersagli `sample_like`, un gruppo per scheda; la voce senza prezzi se servono solo i bersagli), `estimateEntryDays`,
+   >   `comparisonTargetIds`, `comparisonTargetFrom` (con `basePoint`), `cardsOfAnotherStep` (n2, con la guardia contro
+   >   i giri), `signalBaseData` (O2).
+   > - `stores/reducedPriceCache.ts`: cache ridotta accanto alla giornaliera; un'entrata risponde a una larghezza solo se
+   >   il passo che quella larghezza chiede (dai conteggi dell'entrata) è il suo; stale sul bus `{kind: 'prices'}`;
+   >   `invalidateAsset` dai punti dove la pagina invalidava la giornaliera.
+   > - `chartUtils.normalizeToPercentage(data, base)`; `syncHelpers.hasStoredRowBehindSample` (l'avviso del dialogo di
+   >   sync legge la riga dietro ogni punto, `data − staleDays`).
+   > - `AssetCard.svelte`: misura il suo riquadro (`bind:clientWidth`) e riporta `onplotwidth`; `baseValue` per la %.
+   > - `assets/+page.svelte`: `fetchPriceSeries(only?)` riscritta; larghezze per scheda con ritardo di 250 ms; ricarica per
+   >   scheda al salvataggio delle sue impostazioni (tutte solo col globale); «All» parte da `base.date`; i bersagli
+   >   dei confronti da `targetSamples`.
+   > **⚠️ Fuori pista**: (a) `bulkBatchesGroups`, `signalBaseData`, `hasStoredRowBehindSample` e `cardsOfAnotherStep`
+   > hanno test e cura scritti nello stesso passo, senza il giro «rosso» separato (piccole funzioni pure); i rossi veri sono
+   > quelli degli strati sopra. (b) Il primo `GET` parte con la larghezza di riserva (300 px): la scheda misurata
+   > rilegge solo se il passo cambia.
+2. ✅ 21/10 — Verdi: Vitest intero 593 file / 20597 test (`--maxWorkers=4`, `LC_ALL=en_US.UTF-8`), `front check`
+   0 errori 0 avvisi, `mkdocs build` exit 0, prettier pulito sui file toccati.
+3. ✅ 21/10 ~17:00 — Dopo il merge di Y-39b (`5ff6d40f5`): `AssetCard` passa `baselineValue={baseValue}` a `PriceChartCompact`
+   (il colore e la linea tratteggiata in assoluto partono da `base.value`, cioè `sample_bounds.first`). `api sync` 0;
+   Vitest dei file toccati 97 file / 3151 test; `front check` 0/0. **E2E `front-asset asset-list` nello slot** (corsia 6186
+   ripopolata, `LC_ALL=en_US.UTF-8`): 43 passati in 2,3 min, avviso di sync C-66 compreso.
+   > **⚠️ Fuori pista**: O2 resta con una soluzione della pagina (`signalBaseData`), non un parametro `basePoint` di
+   > `renderBackendResults` (file di Y-39b).
