@@ -8195,6 +8195,9 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   - Stato (21/10): Z-29a (backend: `max_points`, `resolution`, `sample_like`) in `dev_release2` col treno 1 (`746920b83`),
     Z-29d-0 col treno 2, Z-29a-f col treno 4 (`bbc668d02`). Restano: Z-29s-a (rossi scritti nel worktree di Z, nessun codice),
     Z-29b (dopo l'ingresso di Y-39a, stesso file `assets/+page.svelte`), Z-29s, Z-29d ridotto, Z-29fx (dopo Y-40).
+  - Z-29s-a (21/10): la cura e i verdi sono nel worktree di Z (checkpoint consegnato al coordinatore, da committare):
+    i `signals` si accettano con `max_points` / `resolution` / `sample_like` e la serie di prezzo e i segnali si ridu-
+    cono sui secchi del prezzo (`sample_signal_series`). Restano Z-29b, Z-29d ridotto, Z-29fx; i residui R1–R4 sono in Z-40.
 - ✅ **Z-28 · Due file di lock aperti con `open()`, che segue un symlink** — basso, sicurezza; Z, 17/10
   (dall'analisi di Z-23; via coordinatore, che l'ha assegnata). **Chiusa il 17/10 col lotto Z-28** (il commit è del
   coordinatore).
@@ -8335,6 +8338,20 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     come «nessun suggerimento»); nella ricerca, decidere se lo stesso o un risultato senza valuta.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-32 (d) — lavoro», passo 5.
   - ✅ 21/10 (riconciliazione): in `dev_release2` col treno 3 (`cac0ab76e`; commit `6011a9ff0`).
+- **Z-40 · Segnali ridotti dal backend: quattro punti in cui la scheda e il grafico pieno possono differire** — minimo,
+  qualità dei dati dei grafici; Z, 21/10 (Z-29s-a). I primi due sono stati accettati dal developer il 19/10.
+  - R1: un secchio dove due corse (tratti senza buchi) si incontrano mostra un punto, quello della seconda, dove il
+    browser ne disegnerebbe due. R2: una linea con regioni a stile viene divisa per stile dal browser dopo la
+    riduzione. R3: due corse a un giorno di distanza alla fine del periodo non hanno posto per il segnaposto del buco.
+    R4: oltre 30 corse il browser unisce i buchi di una linea senza stile; dopo la riduzione conta le corse ridotte.
+  - R1 e R3 sono casi della tabella `signal_sampling_cases.v1.json` con `browser_parity: false` (più il caso «niente nel
+    periodo», dove la riduzione lascia la serie com'è e il browser non disegna nulla), ognuno con la sua nota; il Vitest
+    di `timeSeriesAggregation` li tiene documentati (il browser disegna altro). R2 e R4 vengono dal modo di disegnare
+    del browser e **non** sono nella tabella né in un test.
+  - Proposta: nessuna cura; sono differenze piccole e dette nel contratto. Da rivedere solo se un revisore (MF o Y) o il
+    developer chiede la parità piena, che cambierebbe il contratto della serie ridotta.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-29s-a — i segnali ridotti dal
+  backend, la metà backend: lavoro».
 
 ## B · Backup e Docker (fase 01)
 
