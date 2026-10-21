@@ -69,8 +69,9 @@ An administrator can invite you with a link of your own, by message or by email:
 Some instances ask every new account to confirm its email address before the first sign-in. Then,
 after **Register**:
 
-1. The login page says: *Account created. We sent you an email with a link to activate it: open it
-   within 24 hours, then sign in.* You cannot sign in yet.
+1. The login page says: *Account created. We are sending you an email with a link to activate it:
+   open it within 24 hours, then sign in. No email after a few minutes? Check the spam folder, then
+   sign in with your username and password: you will be offered a new link.* You cannot sign in yet.
 2. Open the email *Confirm your email address* and click **Confirm my email address**. If the
    button does not work, copy into your browser the address written under it.
 3. The button opens a LibreFolio page that asks you to confirm. Click **Confirm my email address**
@@ -83,8 +84,12 @@ after **Register**:
 - ⏱️ The link works once, for 24 hours.
 - 📭 No email? Look in the spam folder. Then, on the login page, sign in with your username and
   password: LibreFolio says that your address is not verified yet, and offers **Send the link
-  again**. A new link replaces the older ones. If you ask too often, or after too many wrong
+  again** below. A new link replaces the older ones. If you ask too often, or after too many wrong
   passwords, the page tells you in how many minutes you can ask again.
+- 🚦 If the login page says instead that the activation email could not leave now, because there
+  were too many sign-ups from your network in the last hour, no email is on its way. Your account is
+  created all the same: sign in with your username and password, and you are offered **Send the
+  link again**.
 - ⌛ If the page says that the link has expired, sign in the same way: you are offered a new link.
   If the instance has no free place left meanwhile, ask your administrator.
 - ✅ If the page says that the link has already been used, your account is probably active already:
