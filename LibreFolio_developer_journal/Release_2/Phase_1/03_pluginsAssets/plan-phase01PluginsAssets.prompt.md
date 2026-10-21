@@ -8510,3 +8510,28 @@ risposta»):
 
 **Con Z**: stesso file, pezzi diversi. Quando Z-32 (d) entra, `suggest_quote_base` eredita la cura: un rifiuto sale, la
 sonda lo legge come «nessun suggerimento» e `call_provider` mette in pausa.
+
+### Y-39 e il cancello dei segnali — nota per FE4, FE5a e Y-42 (20/10)
+
+- **Y-39** (deciso dal developer; il lotto di Y) riunisce la scheda degli asset, quella dei cambi e l'anteprima delle
+  impostazioni. Tocca `fx/+page.svelte` solo per questo. Nessuna obiezione da parte mia.
+- **Il mio messaggio a Y**: le copie del ciclo dei segnali locali sono cinque, non tre. Ci sono anche
+  `assets/[id]/+page.svelte` (`overlaySignals`) e `fx/[pair]/+page.svelte`, con le loro differenze: `staleDays` nei
+  punti del cambio; nome, icona e tipo nel confronto. Gli ho proposto un contratto non legato alla scheda.
+- **Y l'ha adottato** (13:30). Il modulo è `lib/charts/chartSignalRendering.ts`:
+  - `SignalDataSources`: `fxPairData(slug)` e `comparisonTarget(id)`, che dà `{data, displayName?, iconUrl?,
+    assetType?, basePoint?}`, più `selfAssetId?`;
+  - `fxPointToLineDataPoint(point, inverted)`, con `missing` e `staleDays`;
+  - `renderLocalSignal(s)` e `renderBackendResults`.
+- **Il cancello nuovo**, `src/signalRendering.gate.test.ts`, permette `signalFromConfig(` solo nel modulo e nelle mie
+  due pagine di dettaglio, copie note in una lista che può solo accorciarsi.
+  - Verificato oggi: la mia HEAD (`6011a9ff0`) e `dev_release2` hanno gli stessi 7 file con `signalFromConfig(`.
+    Fuori dalle pagine ci sono solo la definizione (`signals/registry.ts:196`) e un commento (`ChartSignal.ts:173`).
+    Il mio ramo non porta quindi nessun chiamante in più.
+- **Per i miei lotti**:
+  - **Y-42**, l'adozione del modulo nelle due pagine di dettaglio, la proporrà il coordinatore. Quando tolgo il ciclo
+    da una pagina, il cancello mi chiede di toglierla dalla lista.
+  - **FE4 e FE5a**: se spostano il ciclo fuori da una pagina di rotta, per esempio in un componente di
+    `lib/features/…`, il cancello lo rifiuta, perché la lista non si allunga. Quindi o adottano il modulo nello
+    stesso lotto, o lasciano il ciclo nella pagina.
+  - **N64** tocca le richieste dei segnali del backend, non questo ciclo: nessun conflitto.
