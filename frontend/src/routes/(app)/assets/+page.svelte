@@ -58,10 +58,11 @@
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
     import {todayIso} from '$lib/utils/dateOnly';
-    import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, renderBackendSignalResult, signalFromConfig, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
+    import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
+    import {fxPointToLineDataPoint, renderBackendResults, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import {createPairSlug, displayFxRate, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {createPairSlug, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore} from '$lib/stores/assetPriceStoreRegistry';
     import {computeDerivedPriceState} from '$lib/utils/assetPriceDerived';
     import {fetchAssetPeriodChanges, PeriodChangesLedger, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
@@ -1206,31 +1207,28 @@
         await Promise.allSettled(promises);
     }
 
-    function fxPointToLineDataPoint(point: {date: string; rate: number | null; backwardFillInfo?: {daysBack: number} | null}): LineDataPoint {
-        const rate = displayFxRate(point.rate, false);
+    /**
+     * Where the cards — and their settings preview — get the series their FX pair and comparison signals read (Y-39a):
+     * the pairs from the FX stores, straight; the comparison targets from the cards of the list. A card never draws a
+     * comparison with its own asset.
+     */
+    function signalSourcesFor(selfAssetId: number | null): SignalDataSources {
         return {
-            date: point.date,
-            value: rate ?? 0,
-            missing: rate === null,
-            staleDays: point.backwardFillInfo?.daysBack ?? 0,
+            fxPairData: (pairSlug) =>
+                getFxStore(pairSlug)
+                    .getAllSorted()
+                    .map((point) => fxPointToLineDataPoint(point, false)),
+            comparisonTarget: (assetId) => {
+                const target = assets.find((asset) => asset.id === assetId);
+                if (!target?.chartData.length) return null;
+                return {data: target.chartData, displayName: target.display_name, iconUrl: target.icon_url, assetType: target.asset_type};
+            },
+            selfAssetId,
         };
     }
 
-    /** Build pairsDataMap from FX stores for ChartSettingsModal preview */
-    function buildPairsDataMap(): Record<string, LineDataPoint[]> {
-        const entries: Array<[string, LineDataPoint[]]> = [];
-        for (const slug of fxPairSlugs) {
-            try {
-                const store = getFxStore(slug);
-                const data = store.getAllSorted();
-                if (data.length === 0) continue;
-                entries.push([slug, data.map(fxPointToLineDataPoint)]);
-            } catch {
-                /* skip */
-            }
-        }
-        return Object.fromEntries(entries);
-    }
+    /** The settings preview reads the series as the cards do: in a card's settings, with that card's own sources. */
+    let settingsSignalSources = $derived(signalSourcesFor(settingsTargetId ? Number(settingsTargetId) : null));
 
     /**
      * Global (filter-bar) mode: compute backend overlay signals live on the
@@ -1246,20 +1244,7 @@
             signals: plan.requests,
         });
         const mapped = mapSignalInstanceResults(configs, plan, response.signals ?? []);
-        const rendered: RenderedSignal[] = [];
-        for (const item of mapped) {
-            if (item.source !== 'backend' || !item.result) continue;
-            const definition = signalDefinitionsByType.get(item.config.signalType);
-            if (!definition || definition.source !== 'backend') continue;
-            const outcome = renderBackendSignalResult(item.result, item.config, {
-                baseData: points,
-                viewMode,
-                definition,
-                translate: (key) => $t(key),
-            });
-            rendered.push(...outcome.signals);
-        }
-        return rendered;
+        return renderBackendResults(configs, mapped, signalDefinitionsByType, points, viewMode, (key) => $t(key));
     }
 
     function resolveSettingsBackendPreview(viewMode: 'absolute' | 'percentage'): RenderedSignal[] {
@@ -1277,60 +1262,7 @@
         void getSettingsVersion();
         const settings = getSettingsForPair(`asset-${assetId}`, 'assets');
         if (!settings.signals.length) return [];
-        const rendered: RenderedSignal[] = [];
-        for (const cfg of settings.signals) {
-            const definition = signalDefinitionsByType.get(cfg.signalType);
-            if (!definition || definition.source === 'backend') continue;
-            const instance = signalFromConfig(cfg);
-            if (!instance) continue;
-
-            // Resolve FxPairSignal data from FX stores
-            if (cfg.signalType === 'fx-pair') {
-                const pairSlug = String(cfg.params.pairSlug || '');
-                if (!pairSlug) continue;
-                try {
-                    const store = getFxStore(pairSlug);
-                    const storeData = store.getAllSorted();
-                    if (storeData.length === 0) continue;
-                    instance.params._resolvedData = storeData.map(fxPointToLineDataPoint);
-                } catch {
-                    continue;
-                }
-            }
-
-            // Resolve AssetComparisonSignal data from local assets array
-            if (cfg.signalType === 'asset-comparison') {
-                const targetId = Number(cfg.params.assetId);
-                if (!targetId || targetId === assetId) continue;
-                const targetAsset = assets.find((a) => a.id === targetId);
-                if (!targetAsset?.chartData?.length) continue;
-                instance.params._resolvedData = targetAsset.chartData;
-                instance.params._assetDisplayName = targetAsset.display_name;
-            }
-
-            const results = instance.renderMulti(absoluteData, vm);
-            for (const result of results) {
-                if (result.data.length > 0) rendered.push(result);
-            }
-        }
-
-        for (const item of signalResultsByAsset.get(assetId) ?? []) {
-            if (item.source !== 'backend' || !item.result) continue;
-            const currentConfig = settings.signals.find((config) => config.id === item.config.id) ?? item.config;
-            const definition = signalDefinitionsByType.get(currentConfig.signalType);
-            if (!definition || definition.source !== 'backend') {
-                console.error(`Missing backend signal definition for '${currentConfig.signalType}'`);
-                continue;
-            }
-            const outcome = renderBackendSignalResult(item.result, currentConfig, {
-                baseData: absoluteData,
-                viewMode: vm,
-                definition,
-                translate: (key) => $t(key),
-            });
-            rendered.push(...outcome.signals);
-        }
-        return rendered;
+        return [...renderLocalSignals(settings.signals, signalDefinitionsByType, absoluteData, vm, signalSourcesFor(assetId)), ...renderBackendResults(settings.signals, signalResultsByAsset.get(assetId) ?? [], signalDefinitionsByType, absoluteData, vm, (key) => $t(key))];
     }
 
     function clearFilters() {
@@ -1913,8 +1845,7 @@
     pairData={settingsTargetId ? assets.find((a) => a.id === Number(settingsTargetId))?.chartData : undefined}
     availablePairs={fxPairSlugs}
     availableAssets={assets.map((a) => ({id: a.id, display_name: a.display_name, icon_url: a.icon_url, asset_type: a.asset_type}))}
-    assetsDataMap={Object.fromEntries(assets.filter((a) => a.chartData.length > 0).map((a) => [String(a.id), a.chartData]))}
-    pairsDataMap={buildPairsDataMap()}
+    signalSources={settingsSignalSources}
 />
 
 <!-- Delete Asset Confirm Dialog (single) -->
