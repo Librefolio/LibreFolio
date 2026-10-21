@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Z-29s-a: one signal series reduced onto the dates of a sampled price series. Read by pytest (test_signal_aggregation.py: sample_signal_series, backend/app/services/signals/aggregation.py, on every case) and by Vitest (timeSeriesAggregation.test.ts: downsampleRenderedSignal on the browser_parity cases, each run of a line or area downsampled alone as backendRenderer.ts splits it, the expected split at its markers). render_dates: the sampled price dates, ascending, one per bucket: the last day of each ISO week (Monday to Sunday) or calendar month, the last one cut at the range's end, as price_sampling.sample_dates gives them; daily, every day. points: the daily series as a plugin sends it, nulls included (a band: lower, middle, upper). expected: the reduced points, each gap marker {date, value: null} included. browser_parity false only for a residue of the contract (R1, R3) or a synthetic input, said in its note.",
+  "description": "Z-29s-a: one signal series reduced onto the dates of a sampled price series. Read by pytest (test_signal_aggregation.py: sample_signal_series, backend/app/services/signals/aggregation.py, on every case) and by Vitest (timeSeriesAggregation.test.ts: downsampleRenderedSignal on the browser_parity cases, each run of a line or area downsampled alone as backendRenderer.ts splits it, the expected split at its markers). render_dates: the sampled price dates, ascending, one per bucket: the last day of each ISO week (Monday to Sunday) or calendar month, the last one cut at the range's end, as price_sampling.sample_dates gives them; daily, every day. points: the daily series as a plugin sends it, nulls included (a band: lower, middle, upper). expected: the reduced points, each gap marker {date, value: null} included. browser_parity false only for a residue of the contract (R1, R3) or a synthetic input, said in its note. series_sets (O1, Z-29b prelude): the series of one signal reduced each alone on the same render_dates, then aligned: every series carries the union of the dates the reductions left, a point without a value (a band: lower, middle and upper null) where a series has none. Per series, points are the daily series as a plugin sends it and expected the aligned reduction; read by pytest (align_signal_series) and by Vitest, which draws each series alone as it does a case. browser_parity false for R5.",
   "cases": [
     {
       "id": "line-weekly-last-the-last-week-cut-at-the-end",
@@ -411,6 +411,170 @@
       ],
       "browser_parity": false,
       "note": "Synthetic: no valued point in a week with a render date, so the reduction would leave no value, and a series needs one: the series is returned unchanged. A plugin's values start on the fill's first day, so a real series never comes here. The browser draws nothing."
+    }
+  ],
+  "series_sets": [
+    {
+      "id": "macd-like-weekly-lines-and-a-bar-with-different-warm-ups",
+      "resolution": "weekly",
+      "render_dates": ["2026-01-11", "2026-01-18", "2026-01-25", "2026-02-01"],
+      "series": [
+        {
+          "key": "macd",
+          "kind": "line",
+          "profile": "last_with_range",
+          "points": [
+            {"date": "2026-01-05", "value": null},
+            {"date": "2026-01-06", "value": 1.0},
+            {"date": "2026-01-09", "value": 2.0},
+            {"date": "2026-01-13", "value": 3.0},
+            {"date": "2026-01-16", "value": 4.0},
+            {"date": "2026-01-20", "value": 5.0},
+            {"date": "2026-01-23", "value": 6.0},
+            {"date": "2026-01-27", "value": 7.0},
+            {"date": "2026-01-30", "value": 8.0}
+          ],
+          "expected": [
+            {"date": "2026-01-11", "value": 2.0},
+            {"date": "2026-01-18", "value": 4.0},
+            {"date": "2026-01-25", "value": 6.0},
+            {"date": "2026-02-01", "value": 8.0}
+          ]
+        },
+        {
+          "key": "signal",
+          "kind": "line",
+          "profile": "last_with_range",
+          "points": [
+            {"date": "2026-01-05", "value": null},
+            {"date": "2026-01-14", "value": null},
+            {"date": "2026-01-15", "value": 10.0},
+            {"date": "2026-01-16", "value": 11.0},
+            {"date": "2026-01-22", "value": 12.0},
+            {"date": "2026-01-23", "value": 13.0},
+            {"date": "2026-01-29", "value": 14.0},
+            {"date": "2026-01-30", "value": 15.0}
+          ],
+          "expected": [
+            {"date": "2026-01-11", "value": null},
+            {"date": "2026-01-18", "value": 11.0},
+            {"date": "2026-01-25", "value": 13.0},
+            {"date": "2026-02-01", "value": 15.0}
+          ]
+        },
+        {
+          "key": "histogram",
+          "kind": "bar",
+          "profile": "last_with_range",
+          "points": [
+            {"date": "2026-01-05", "value": null},
+            {"date": "2026-01-21", "value": null},
+            {"date": "2026-01-22", "value": 0.5},
+            {"date": "2026-01-23", "value": -0.5},
+            {"date": "2026-01-30", "value": 0.25}
+          ],
+          "expected": [
+            {"date": "2026-01-11", "value": null},
+            {"date": "2026-01-18", "value": null},
+            {"date": "2026-01-25", "value": -0.5},
+            {"date": "2026-02-01", "value": 0.25}
+          ]
+        }
+      ],
+      "browser_parity": true,
+      "note": "A MACD-like signal: a line valued from the first week, a line valued from the second and a bar valued from the third (warm-ups of different lengths inside the range). Each is reduced alone; the dates they leave differ, so the signal's series are aligned on the union: the points a series lacks are there without a value (leading ones here). The browser draws a line's or a bar's leading nulls as nothing, so each series is drawn as it was."
+    },
+    {
+      "id": "band-and-line-weekly-the-band-warms-up-later",
+      "resolution": "weekly",
+      "render_dates": ["2026-01-11", "2026-01-18", "2026-01-25", "2026-02-01"],
+      "series": [
+        {
+          "key": "line",
+          "kind": "line",
+          "profile": "last_with_range",
+          "points": [
+            {"date": "2026-01-09", "value": 1.0},
+            {"date": "2026-01-16", "value": 2.0},
+            {"date": "2026-01-23", "value": 3.0},
+            {"date": "2026-01-30", "value": 4.0}
+          ],
+          "expected": [
+            {"date": "2026-01-11", "value": 1.0},
+            {"date": "2026-01-18", "value": 2.0},
+            {"date": "2026-01-25", "value": 3.0},
+            {"date": "2026-02-01", "value": 4.0}
+          ]
+        },
+        {
+          "key": "band",
+          "kind": "band",
+          "profile": "band_envelope",
+          "points": [
+            {"date": "2026-01-05", "lower": null, "middle": null, "upper": null},
+            {"date": "2026-01-09", "lower": null, "middle": 2.0, "upper": null},
+            {"date": "2026-01-14", "lower": 1.0, "middle": 2.0, "upper": 3.0},
+            {"date": "2026-01-16", "lower": 0.5, "middle": 2.5, "upper": 3.5},
+            {"date": "2026-01-23", "lower": 1.0, "middle": 2.0, "upper": 3.0},
+            {"date": "2026-01-30", "lower": 1.5, "middle": 2.5, "upper": 3.5}
+          ],
+          "expected": [
+            {"date": "2026-01-11", "lower": null, "middle": null, "upper": null},
+            {"date": "2026-01-18", "lower": 0.5, "middle": 2.5, "upper": 3.5},
+            {"date": "2026-01-25", "lower": 1.0, "middle": 2.0, "upper": 3.0},
+            {"date": "2026-02-01", "lower": 1.5, "middle": 2.5, "upper": 3.5}
+          ]
+        }
+      ],
+      "browser_parity": true,
+      "note": "A line valued from the first week and a band complete from the second. The band's incomplete points are dropped by its reduction, so its first week has no point; aligned, it has one without a value (lower, middle and upper null). The browser draws a band from its complete points only."
+    },
+    {
+      "id": "two-lines-weekly-R5-a-gap-marker-breaks-the-other-line",
+      "resolution": "weekly",
+      "render_dates": ["2026-01-11", "2026-01-18", "2026-01-25", "2026-02-01"],
+      "series": [
+        {
+          "key": "gappy",
+          "kind": "line",
+          "profile": "last_with_range",
+          "points": [
+            {"date": "2026-01-06", "value": 1.0},
+            {"date": "2026-01-12", "value": null},
+            {"date": "2026-01-20", "value": null},
+            {"date": "2026-01-21", "value": 2.0},
+            {"date": "2026-01-23", "value": 3.0},
+            {"date": "2026-01-30", "value": 4.0}
+          ],
+          "expected": [
+            {"date": "2026-01-11", "value": 1.0},
+            {"date": "2026-01-12", "value": null},
+            {"date": "2026-01-18", "value": null},
+            {"date": "2026-01-25", "value": 3.0},
+            {"date": "2026-02-01", "value": 4.0}
+          ]
+        },
+        {
+          "key": "steady",
+          "kind": "line",
+          "profile": "last_with_range",
+          "points": [
+            {"date": "2026-01-09", "value": 5.0},
+            {"date": "2026-01-16", "value": 6.0},
+            {"date": "2026-01-23", "value": 7.0},
+            {"date": "2026-01-30", "value": 8.0}
+          ],
+          "expected": [
+            {"date": "2026-01-11", "value": 5.0},
+            {"date": "2026-01-12", "value": null},
+            {"date": "2026-01-18", "value": 6.0},
+            {"date": "2026-01-25", "value": 7.0},
+            {"date": "2026-02-01", "value": 8.0}
+          ]
+        }
+      ],
+      "browser_parity": false,
+      "note": "Residue R5: a line with a gap spanning the whole week of 2026-01-12 is reduced with a gap marker on its Monday, 2026-01-12, a date the other, continuous line has no point on. Aligned, the continuous line gets a point without a value there, and the browser would draw it in two pieces where it draws one if reduced alone. Seen only when the marker's series has a gap in the range that the other has not; a warm-up never does it."
     }
   ]
 }

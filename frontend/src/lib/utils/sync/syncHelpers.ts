@@ -14,6 +14,7 @@ import {AlertCircle, AlertTriangle, Check, SkipForward} from 'lucide-svelte';
 import type {LegDetail} from '$lib/utils/providerHelpers';
 import {formatFixed} from '$lib/utils/core/formatFixed';
 import {extractDaysBack, type RawPricePoint} from '$lib/utils/assetPriceDerived';
+import {addDays} from '$lib/utils/dateOnly';
 
 // =========================================================================
 // Sync status type and result interface
@@ -104,6 +105,19 @@ export type ShownPoint = {date: string} & Pick<RawPricePoint, 'backward_fill_inf
  * a point filled backward from an earlier date is not one. Such a row is what a sync replaces (C-66). */
 export function hasStoredPointInRange(points: readonly ShownPoint[], start: string, end: string): boolean {
     return points.some((point) => (start === 'min' || point.date >= start) && point.date <= end && extractDaysBack(point) === 0);
+}
+
+/**
+ * `hasStoredPointInRange` for a series the backend sampled (Z-29b): a weekly or monthly point is the last row on or before
+ * its date, so the row a sync would replace is the one behind it, dated `date − staleDays`. Any stored row of the range
+ * backs the point of its own bucket or of a later one, inside the range, so the answer is exact; for a daily series it is
+ * `hasStoredPointInRange`'s.
+ */
+export function hasStoredRowBehindSample(points: readonly {date: string; staleDays: number}[], start: string, end: string): boolean {
+    return points.some((point) => {
+        const rowDate = addDays(point.date, -point.staleDays);
+        return (start === 'min' || rowDate >= start) && rowDate <= end;
+    });
 }
 
 // =========================================================================
