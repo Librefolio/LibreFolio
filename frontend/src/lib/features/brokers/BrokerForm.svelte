@@ -305,14 +305,14 @@
             <button
                 aria-checked={isActive}
                 aria-label={$_('brokers.isActive')}
-                class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-libre-green focus:ring-offset-2"
-                class:bg-gray-300={!isActive}
-                class:bg-libre-green={isActive}
+                class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-lf-focus focus:ring-offset-2"
+                class:bg-lf-switch-off={!isActive}
+                class:bg-lf-checked={isActive}
                 on:click={() => (isActive = !isActive)}
                 role="switch"
                 type="button"
             >
-                <span class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out" class:translate-x-0={!isActive} class:translate-x-5={isActive}></span>
+                <span class="pointer-events-none inline-block h-5 w-5 transform rounded-full {isActive ? 'bg-lf-switch-knob-on' : 'bg-lf-switch-knob-off border border-lf-input'} shadow ring-0 transition duration-200 ease-in-out" class:translate-x-0={!isActive} class:translate-x-5={isActive}></span>
             </button>
         </div>
     </div>
@@ -360,7 +360,7 @@
 
     <!-- Initial Balances (only for create mode) -->
     {#if mode === 'create'}
-        <div class="border-t pt-5">
+        <div class="border-t border-lf-subtle pt-5">
             <div class="flex items-center justify-between mb-3">
                 <div>
                     <h4 class="text-sm font-medium text-lf-secondary">{$_('brokers.initialBalances')}</h4>
