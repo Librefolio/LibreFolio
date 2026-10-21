@@ -52,9 +52,12 @@
         "outsideTestLane": "El modo de prueba está activado fuera del ejecutor de pruebas: se ofrecen los proveedores de datos hechos para las pruebas, los datos se guardan en {data_dir} y el archivo .env no se lee. Quita LIBREFOLIO_TEST_MODE."
       },
       "hostingPanel": {
-        "off": "No hay ningún token para el despertar programado ni para la ruta de estado del panel del proveedor: esas rutas están desactivadas.",
-        "ok": "Los tokens del panel del proveedor que están definidos (despertar programado, ruta de estado) se pueden usar.",
-        "unusable": "{variables}: estos tokens del panel del proveedor no se pueden usar (un archivo que no se puede leer, demasiado cortos o con caracteres que una cabecera de solicitud no transporta): sus rutas responden 503 hasta que se corrija."
+        "off": "No hay ningún token ni clave pública para el despertar programado ni para la ruta de estado del panel del proveedor: esas rutas están desactivadas.",
+        "ok": "Las credenciales del panel del proveedor que están definidas (tokens del despertar programado y de la ruta de estado, claves públicas de los tickets firmados) se pueden usar.",
+        "unusable": "{variables}: estos tokens del panel del proveedor no se pueden usar (un archivo que no se puede leer, demasiado cortos o con caracteres que una cabecera de solicitud no transporta): sus rutas responden 503 hasta que se corrija.",
+        "ticketsUnusable": "{variables}: los ajustes de los tickets firmados del panel del proveedor no se pueden usar (una clave pública mal formada, una tolerancia del reloj fuera de 0–300 segundos, o claves sin dirección pública): cada ruta del panel responde 503 hasta que se corrija.",
+        "coexisting": "{variables}: un token del panel del proveedor sigue definido junto a las claves públicas del panel. Quítalo cuando el panel firme sus llamadas con tickets.",
+        "audiencePath": "LIBREFOLIO_PUBLIC_URL contiene la ruta {path}, pero un ticket del panel del proveedor solo nombra el origen (esquema, host y puerto): otra instancia en el mismo origen aceptaría los tickets de esta. Sirve una instancia por origen."
       }
     },
     "block": {
