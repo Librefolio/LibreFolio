@@ -35,7 +35,8 @@
 <div class="bg-lf-card text-lf-primary rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle">
     <button class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-lf-secondary hover:bg-lf-hover transition-colors rounded-xl" data-testid="asset-detail-metadata-toggle" use:guideAnchor={'asset.detail.metadata'} onclick={() => (open = !open)}>
         <span class="flex items-center gap-2">
-            <Info class="text-sky-500" size={15} />
+            <!-- colour: closest role, to review: decorative section icon in sky, mapped to the info state -->
+            <Info class="text-lf-info" size={15} />
             {$t('assetDetail.metadata')}
         </span>
         <ChevronDown class="transition-transform {open ? 'rotate-180' : ''}" size={15} />

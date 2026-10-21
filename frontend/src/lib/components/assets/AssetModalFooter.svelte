@@ -43,9 +43,9 @@
                 data-testid="asset-active-toggle"
                 disabled={saving}
                 onclick={() => (active = !active)}
-                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {active ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {active ? 'bg-lf-checked' : 'bg-lf-switch-off'}"
             >
-                <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform {active ? 'translate-x-6' : 'translate-x-1'}"></span>
+                <span class="inline-block h-4 w-4 transform rounded-full shadow transition-transform {active ? 'translate-x-6 bg-lf-switch-knob-on' : 'translate-x-1 bg-lf-switch-knob-off border border-lf-input'}"></span>
             </button>
         </div>
 
@@ -66,9 +66,9 @@
                 data-testid="asset-benchmark-toggle"
                 disabled={saving}
                 onclick={() => (isBenchmark = !isBenchmark)}
-                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {isBenchmark ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {isBenchmark ? 'bg-lf-checked' : 'bg-lf-switch-off'}"
             >
-                <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform {isBenchmark ? 'translate-x-6' : 'translate-x-1'}"></span>
+                <span class="inline-block h-4 w-4 transform rounded-full shadow transition-transform {isBenchmark ? 'translate-x-6 bg-lf-switch-knob-on' : 'translate-x-1 bg-lf-switch-knob-off border border-lf-input'}"></span>
             </button>
         </div>
     </div>

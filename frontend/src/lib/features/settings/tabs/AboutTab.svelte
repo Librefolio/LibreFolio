@@ -444,18 +444,19 @@ Generated: ${new Date().toISOString()}
                         <ChevronDown size={16} class="text-lf-muted transition-transform group-open:rotate-180" />
                     </summary>
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3 pl-1">
+                        <!-- colour: closest role, to review: the section accents (asset green, FX blue, import amber) are decorative, not states; roles link/info/warning on the tile and hover edge; alt neutral tiles (bg-lf-panel text-lf-secondary) -->
                         {#each assetProviders as p}
                             <svelte:element
                                 this={getProviderUrl(p) ? 'a' : 'div'}
                                 href={getProviderUrl(p) || undefined}
                                 target={getProviderUrl(p) ? '_blank' : undefined}
                                 rel={getProviderUrl(p) ? 'noopener noreferrer' : undefined}
-                                class="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-lg shadow-sm {getProviderUrl(p) ? 'hover:border-libre-green hover:shadow-md cursor-pointer transition-all' : ''}"
+                                class="flex items-center gap-3 p-3 bg-lf-card border border-lf-subtle rounded-lg shadow-sm {getProviderUrl(p) ? 'hover:border-lf-focus hover:shadow-md cursor-pointer transition-all' : ''}"
                             >
                                 {#if p.icon_url && !failedIconUrls.has(p.icon_url)}
                                     <img src={p.icon_url} alt={p.name} class="w-8 h-8 rounded object-contain shrink-0 bg-lf-panel p-0.5" onerror={() => p.icon_url && markIconFailed(p.icon_url)} />
                                 {:else}
-                                    <div class="w-8 h-8 rounded bg-libre-green/10 text-libre-green flex items-center justify-center text-xs font-bold shrink-0">
+                                    <div class="w-8 h-8 rounded bg-lf-selected text-lf-link flex items-center justify-center text-xs font-bold shrink-0">
                                         {codeInitials(p.code)}
                                     </div>
                                 {/if}
@@ -483,12 +484,12 @@ Generated: ${new Date().toISOString()}
                                 href={getProviderUrl(p) || undefined}
                                 target={getProviderUrl(p) ? '_blank' : undefined}
                                 rel={getProviderUrl(p) ? 'noopener noreferrer' : undefined}
-                                class="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-lg shadow-sm {getProviderUrl(p) ? 'hover:border-blue-400 hover:shadow-md cursor-pointer transition-all' : ''}"
+                                class="flex items-center gap-3 p-3 bg-lf-card border border-lf-subtle rounded-lg shadow-sm {getProviderUrl(p) ? 'hover:border-lf-info hover:shadow-md cursor-pointer transition-all' : ''}"
                             >
                                 {#if p.icon_url && !failedIconUrls.has(p.icon_url)}
                                     <img src={p.icon_url} alt={p.name} class="w-8 h-8 rounded object-contain shrink-0 bg-lf-panel p-0.5" onerror={() => p.icon_url && markIconFailed(p.icon_url)} />
                                 {:else}
-                                    <div class="w-8 h-8 rounded bg-blue-500/10 text-blue-600 flex items-center justify-center text-xs font-bold shrink-0">
+                                    <div class="w-8 h-8 rounded bg-lf-info-soft text-lf-info-on-soft flex items-center justify-center text-xs font-bold shrink-0">
                                         {p.code.slice(0, 3).toUpperCase()}
                                     </div>
                                 {/if}
@@ -516,12 +517,12 @@ Generated: ${new Date().toISOString()}
                                 href={getDocsUrl(p) || undefined}
                                 target={getDocsUrl(p) ? '_blank' : undefined}
                                 rel={getDocsUrl(p) ? 'noopener noreferrer' : undefined}
-                                class="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-lg shadow-sm {getDocsUrl(p) ? 'hover:border-amber-400 hover:shadow-md cursor-pointer transition-all' : ''}"
+                                class="flex items-center gap-3 p-3 bg-lf-card border border-lf-subtle rounded-lg shadow-sm {getDocsUrl(p) ? 'hover:border-lf-warning hover:shadow-md cursor-pointer transition-all' : ''}"
                             >
                                 {#if p.icon_url && !failedIconUrls.has(p.icon_url)}
                                     <img src={p.icon_url} alt={brimPluginName(p, $_)} class="w-8 h-8 rounded object-contain shrink-0 bg-lf-panel p-0.5" onerror={() => p.icon_url && markIconFailed(p.icon_url)} />
                                 {:else}
-                                    <div class="w-8 h-8 rounded bg-amber-500/10 text-amber-600 flex items-center justify-center text-xs font-bold shrink-0">
+                                    <div class="w-8 h-8 rounded bg-lf-warning-soft text-lf-warning-on-soft flex items-center justify-center text-xs font-bold shrink-0">
                                         {codeInitials(p.code)}
                                     </div>
                                 {/if}
@@ -542,6 +543,7 @@ Generated: ${new Date().toISOString()}
                     <ChevronDown size={16} class="text-lf-muted transition-transform group-open:rotate-180" />
                 </summary>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3 pl-1">
+                    <!-- colour: signal cards keep the purple category accent: left whole as palette classes until the categorical roles come -->
                     {#each installedSignals as signal}
                         <svelte:element
                             this={mkdocsUrl(signal.docsPath) ? 'a' : 'div'}
@@ -642,7 +644,8 @@ Generated: ${new Date().toISOString()}
         <!-- Made with love -->
         <div class="flex items-center justify-center space-x-2 text-lf-muted pt-4 border-t border-lf-subtle">
             <span>{$_('settings.madeWith')}</span>
-            <Heart class="text-red-500" size={16} />
+            <!-- colour: closest role, to review: the heart is decorative red; text-lf-danger, alt text-lf-loss -->
+            <Heart class="text-lf-danger" size={16} />
             <span>{$_('settings.inItaly')}</span>
         </div>
     </div>
