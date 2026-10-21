@@ -100,7 +100,7 @@ LibreFolio turns off the actions it knows the server would refuse, and says why 
 ### ⏳ Accounts Waiting for Their Email {: #waiting }
 
 With **Require Email Verification** on ([Global Settings](settings.md)), a new account waits until
-its owner opens the link LibreFolio emails to its address. Until then:
+its owner confirms the address with the link LibreFolio emails to it. Until then:
 
 - its row shows **Deactivated**: this version has no badge of its own for a waiting account;
 - it takes a place while its link is live, that is for 24 hours after the last link sent;

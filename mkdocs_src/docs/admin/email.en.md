@@ -501,8 +501,8 @@ the instance holds those back.
 
 ## ✅ Email Verification {: #verification }
 
-With **Require Email Verification** on, a new account cannot sign in until its owner opens a link
-that LibreFolio emails to the address of the account. The switch is in
+With **Require Email Verification** on, a new account cannot sign in until its owner confirms the
+address with a link that LibreFolio emails to the account. The switch is in
 **Settings › Administration › Global Settings**, in the **Security** category
 ([Global Settings](settings.md)), and it is off by default.
 
@@ -518,17 +518,23 @@ that LibreFolio emails to the address of the account. The switch is in
   **Default Language**: a new account has no language of its own yet. Its button,
   **Confirm my email address**, opens a link that starts with `LIBREFOLIO_PUBLIC_URL`
   ([Emails with a Link](#public-url)) and works once, for 24 hours.
-- **Until the link is opened**, the account cannot sign in. Signing in with the right password says
-  that the address is not verified yet, and offers **Send the link again**: a new link, which stops
-  the older ones. With a wrong password, the login gives its usual refusal, so nobody learns more
-  than from any other attempt.
-- **Once the link is opened**, the account is active, and its owner is back on the login page with a
+- **Until the address is confirmed**, the account cannot sign in. Signing in with the right
+  password says that the address is not verified yet, and offers **Send the link again**: a new
+  link, which stops the older ones. With a wrong password, the login gives its usual refusal, so
+  nobody learns more than from any other attempt.
+- **Once the owner confirms**, the account is active, and its owner is back on the login page with a
   confirmation. What the person sees, step by step: *If LibreFolio Asks You to Confirm Your Email*
   in [Getting Started](../user/getting-started.md).
-- **While a hosting provider blocks the instance**, the page of the link says so and offers no
-  retry: the link is not used up, and works again once the instance is unblocked, as long as it has
-  not expired; otherwise signing in offers a new one
-  ([Hosting for Others](hosting_providers.md#instance-block)). Signing in still offers
+- **Opening the link confirms nothing**: it shows a page of LibreFolio with a button,
+  **Confirm my email address**, and only the click on it uses the link up. The reason is the mail
+  filters that scan links, such as Microsoft Defender Safe Links: they open the links of a message
+  in a browser that runs scripts, and if opening were enough, the filter would activate the account
+  in place of its owner. Such an opening spends nothing; the link stays valid for its owner.
+  Someone who opens a link without having signed up has only to close the page.
+- **While a hosting provider blocks the instance**, the page of the link says so, once its owner
+  clicks **Confirm my email address**, and offers no retry: the link is not used up, and works
+  again once the instance is unblocked, as long as it has not expired; otherwise signing in offers
+  a new one ([Hosting for Others](hosting_providers.md#instance-block)). Signing in still offers
   **Send the link again**, which then says *This instance is blocked by its hosting provider: try
   again once it is unblocked.*, never that the password is wrong, and works once the instance is
   unblocked. Nobody can sign up meanwhile: the registration page says the same.
@@ -589,7 +595,7 @@ does not tell it apart from an account an administrator deactivated.
 | A free place, once the account's link has expired | The request is refused: its owner is told to ask you. |
 
 A link whose email did not go out counts neither for the account nor for the mailbox. If the
-account stops waiting in the meantime — its link opened, or an administrator activated or
+account stops waiting in the meantime — its address confirmed, or an administrator activated or
 deactivated it — no new link is sent. The limits per address and per mailbox are kept in the memory
 of each server process: with several processes, each keeps its own count, and a restart forgets
 them. Behind a reverse proxy, the address that counts follows the rules given in
@@ -736,8 +742,8 @@ read again when you ask, where a finding links to the [Email tab](#email-tab) (s
 | `Verification email: the request failed` | `error` | An unexpected error, with its type in `error` and the `user_id`, nothing more. |
 | `Login refused: email not verified` | `info` | A waiting account signed in with the right password; with `user_id`. |
 | `Verification resend refused: wrong credentials` | `warning` | Someone asked for a new verification link with a wrong password, or for an account that does not exist. Neither what was typed nor the address is logged. |
-| `Email verified` | `info` | A link was opened: the account is active; `user_id` and `token_id`. |
-| `Email verification refused: the link's email did not go out` | `info` | Someone opened a link whose email LibreFolio counted as not sent: the account still waits, and **Send the link again** works. |
+| `Email verified` | `info` | The owner confirmed on the page of the link: the account is active; `user_id` and `token_id`. |
+| `Email verification refused: the link's email did not go out` | `info` | Someone confirmed with a link whose email LibreFolio counted as not sent: the account still waits, and **Send the link again** works. |
 | `Email verification refused: the link was sent to another address` | `info` | The account's address changed after the link was sent: that link stops working. |
 | `Email change notice sent to the previous address` | `info` | The notice went to the old address. The line has `user_id` and `language`, and neither address. |
 | `Email change notice: email is off, nothing sent` | `info` | Email is off: nothing to send, and nothing wrong. |

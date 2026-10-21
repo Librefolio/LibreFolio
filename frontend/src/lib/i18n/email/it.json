@@ -92,7 +92,10 @@
         "unknown": "Questo link non è valido: riaprilo intero dall'email. Se non funziona ancora, accedi per chiederne uno nuovo.",
         "blocked": "Questa istanza è bloccata dal suo fornitore di hosting, quindi il link non può essere verificato ora. Aprilo di nuovo quando l'istanza sarà sbloccata; se intanto il link è scaduto, accedi per averne uno nuovo.",
         "missing": "Questo link è incompleto: riaprilo dall'email.",
-        "error": "Non è stato possibile verificare il link: riprova."
+        "error": "Non è stato possibile verificare il link: riprova.",
+        "ready": "Conferma il tuo indirizzo email per attivare il tuo account.",
+        "confirm": "Conferma il mio indirizzo email",
+        "notSignedUp": "Se non hai creato un account su questa istanza, chiudi questa pagina: non succede nulla."
       },
       "verified": "Il tuo indirizzo email è verificato, {username}: ora puoi accedere.",
       "loginRequired": "Il tuo indirizzo email non è ancora verificato: apri il link nell'email che ti abbiamo mandato, poi accedi.",

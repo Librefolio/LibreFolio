@@ -9516,3 +9516,78 @@ pagine).
 >   breve al coordinatore: il nome del campo, i valori, il testo del caso trattenuto, i file.
 > - **L'ordine** (coordinatore): E-25, la voce di X nella galleria (già fatta, sopra), poi E-26.
 > - Le traduzioni di `getting-started` restano debito, senza timbro, salvo diversa indicazione dello sviluppatore.
+
+#### E-25.2 — Il passo «Conferma»: esecuzione (2026-10-21, ondata 3, notte; base `2879ae3e4`)
+> **La richiesta** (coordinatore, brief `kickoff-E.md`, ondata 3): solo il passo A, E-25, approvato dallo sviluppatore il
+> 20/10 (13:4x) coi testi proposti. Corsia `6182`, `/tmp/librefolio-r13-e`; niente E2E (solo proporlo), `front check` e
+> Vitest su più di 3 file dentro `flock /tmp/librefolio-heavy.lock`, con `LC_ALL=en_US.UTF-8`. Nessun commit: il
+> coordinatore committa al checkpoint.
+
+**Le scelte di dettaglio** (dentro la proposta approvata, non decisioni di prodotto):
+- le tre chiavi sotto `email.verification.page`: `ready` (lo stato, accanto agli altri di `VERIFY_PAGE_KEYS`),
+  `confirm` (il pulsante, le parole del pulsante dell'email: `templates/<lang>.json`, `email_verification.action`, nelle
+  quattro lingue) e `notSignedUp` (la riga per chi non si è registrato; in it/fr/es con le parole di
+  `email_verification.ignore`, «non hai creato un account»);
+- in `ready` la scheda non offre «Torna all'accesso»: l'unica azione è confermare, e chi non si è registrato legge di
+  chiudere la pagina. Accedere prima di confermare porta al 403 e a «Send the link again», che renderebbe morto questo
+  link. Si cambia con una riga, se lo sviluppatore lo vuole;
+- il pulsante sparisce al clic (lo stato passa a `checking`, senza pulsanti): un doppio clic non spende due volte.
+
+- ✅ **Passo 1 — Base e `api sync`** (2026-10-21)
+  > **Note implementazione**: `git rev-parse HEAD` = `2879ae3e4d8d232f9fb29939addbef28ecc3bdd8` (branch `e-alfy-e-email`,
+  > albero pulito); `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py api sync` exit 0, nessun file
+  > tracciato cambiato. Rilette sul codice le affermazioni dell'analisi: `+page.svelte:44-56` spende il token in
+  > `onMount` e su `hashchange`; `VerifyEmailCard.svelte` ha otto stati; i bottoni dell'email in
+  > `backend/app/services/email/templates/{en,it,fr,es}.json:27`. Base dei Vitest: i tre file, 316 test verdi
+  > (`LC_ALL=en_US.UTF-8 node_modules/.bin/vitest run …`, log `ondata3/E-A-vitest-baseline.log`).
+  > **⚠️ Fuori pista**: i file di test sono tre, non due: `emailText.test.ts` (ETX-07) fissa gli otto stati di
+  > `VERIFY_PAGE_KEYS` e va allargato al nono.
+- ✅ **Passo 2 — I rossi** (`test-author`): `routes/verify-email/page.test.ts`, `VerifyEmailCard.test.ts`,
+  `emailText.test.ts` (ETX-07: nove stati) (2026-10-21)
+  > **Note implementazione**: `test-author` (sonnet), solo i tre file di test. Pagina 22 → 25 casi (VEP-01…15: VEP-01
+  > il cuore, aprire la pagina ed eseguire ogni effetto non chiama mai la conferma; VEP-13 il clic chiede una volta e il
+  > pulsante sparisce; VEP-14/15 i frammenti dopo un rifiuto e durante l'attesa); scheda 26 → 38 (VEC-09…12: `ready`
+  > con e senza `onconfirm`, conferma e riga solo in `ready`, il cambio di lingua e l'uscita da `ready`); `emailText`
+  > 268 → 271 (ETX-07 nove stati, ETX-08b le due chiavi nuove). Corsa: `LC_ALL=en_US.UTF-8 node_modules/.bin/vitest run
+  > <i tre file>` → **28 rossi, 306 verdi (334)**, ogni rosso per il comportamento mancante (VEP-01: «confirm called 1
+  > times» all'apertura; gli altri VEP: la pagina mostra `checking` invece di `ready`; VEC/ETX: chiave o pulsante
+  > assenti); nessun rosso da import o mock. Prettier pulito. Log `ondata3/E-A-vitest-red.log`. Rivisto il diff.
+  > **⚠️ Fuori pista**: `mkdocs_src/docs/developer/backend/email.md:1404` cita «VEC-01…08» e «VEP-01…12»: da
+  > aggiornare con la doc (passo 5).
+- ✅ **Passo 3 — La cura**: `emailText.ts`, `VerifyEmailCard.svelte`, `routes/verify-email/+page.svelte`, tre chiavi ×4
+  (2026-10-21)
+  > **Note implementazione**: `emailText.ts`: `VerifyPageStatus` col nono stato `ready`, `VERIFY_PAGE_KEYS.ready`.
+  > `VerifyEmailCard.svelte`: prop `onconfirm`; in `ready` il messaggio, il pulsante `verify-email-confirm` (stesse
+  > classi del «Riprova», solo con `onconfirm`) e la riga `verify-email-hint` (`text-xs text-lf-secondary`, come
+  > `link-status-hint`); «Torna all'accesso» in ogni stato tranne `checking` e `ready`. `+page.svelte`: `takeLink()`
+  > alza la generazione, tiene il token e mostra `ready` (o `missing`), all'apertura e su `hashchange`; `confirm()`
+  > resta com'era e parte solo dal pulsante o dal «Riprova» (`onconfirm={confirm} onretry={confirm}`). Le chiavi con
+  > `dev.py i18n add` (sorgente `frontend/src/lib/i18n/email/<lang>.json`): `ready`, `confirm`, `notSignedUp`, testi
+  > inglesi approvati, it/fr/es con le parole del pulsante e della riga «ignore» dell'email
+  > (`templates/<lang>.json`). Corsa dei tre Vitest: **334/334 verdi** (log `ondata3/E-A-vitest-green.log`).
+- ✅ **Passo 4 — Le prove**: i Vitest toccati, `i18n check`, prettier, `front check` (in `flock`) (2026-10-21/22)
+  > **Note implementazione**: i tre Vitest 334/334 (`ondata3/E-A-vitest-green.log`); prettier `--check` sui sei file
+  > toccati pulito; `dev.py i18n check` exit 0 («5125 keys … strict»); `utils gate-i18n-usage` 195 passed e
+  > `utils gate-i18n-catalog` 176 passed (corsia 6182, nessun server); i gate dei colori
+  > `themeRoles.gate.test.ts` + `themeComponentTokens.gate.test.ts` 98/98; `LC_ALL=en_US.UTF-8 flock
+  > /tmp/librefolio-heavy.lock … dev.py front check` exit 0, **svelte-check 0 errori e 0 avvisi** (log
+  > `ondata3/E-A-front-check.log`); `git diff --check` pulito.
+  > **⚠️ Fuori pista**: `front check` ha aspettato il lucchetto dalle 22:18 alle 00:02 (davanti l'`all-frontend` di H e
+  > altre dieci corse in coda): nessun intervento, solo attesa.
+- ✅ **Passo 5 — La doc**: `user/getting-started.en.md`, `admin/email.en.md` (solo inglese, traduzioni a debito, senza
+  timbro) (2026-10-21)
+  > **Note implementazione**: `docs-writer` (sonnet). `getting-started.en.md` passo 3 (la pagina chiede di confermare)
+  > e due punti (perché un clic in più; chi non si è registrato chiude la pagina); `admin/email.en.md` le due voci
+  > «Until the address is confirmed» / «Once the owner confirms», una voce nuova «Opening the link confirms nothing»
+  > (i filtri come Defender Safe Links), l'istanza bloccata dopo il clic, la riga 598 e due righe della tabella dei log;
+  > `developer/backend/email.md` «In the Frontend» (lo stato `ready`, il clic, `hashchange`, le risposte tardive), «Why
+  > a click», i testid, i casi VEC-01…12 e VEP-01…15. Rivisto il diff.
+  > `flock … dev.py mkdocs build` (stretto) exit 0; `dev.py mkdocs check-links` exit 0 (log `ondata3/E-A-mkdocs-*.log`).
+  > **⚠️ Fuori pista**: altre tre pagine dicevano che il link si spende all'apertura e sono state corrette:
+  > `admin/users.en.md:103` (ha traduzioni: debito piccolo), `developer/architecture/security.md:2206` («spends its
+  > token at once») e `developer/architecture/database/users_access.md:125`. Debito di traduzione senza timbro:
+  > `user/getting-started`, `admin/email`, `admin/users` (it/fr/es). La pagina del wiki `domains/email.md` («Silent hold
+  > and early spend») aggiornata: E-25 chiusa, E-26 con la scelta (b). Grafo non disponibile nel worktree (ignorato).
+- ✅ **Passo 6 — Checkpoint (A)** (2026-10-22): consegnato al coordinatore, poi FROZEN. E2E facoltativo proposto, non
+  eseguito (nessuno slot): aprire `/verify-email#token=<finto>`, verificare che nessuna `POST
+  /email/verification/confirm` parta prima del clic, poi il clic → `unknown`.
