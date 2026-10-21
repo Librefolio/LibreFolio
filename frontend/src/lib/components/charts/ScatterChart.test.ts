@@ -137,7 +137,7 @@ const TEST_ID = 'scatter-under-test';
 const LABELS = {volatility: 'Volatility (fixture)', return: 'Return (fixture)', capitalMarketLine: 'Line (fixture)'};
 const RISK_FREE = 0.02;
 /** The light theme's selection colour. jsdom's root carries no `dark` class, and `beforeEach` makes sure of it. */
-const SELECTED_LIGHT = '#22c55e';
+const SELECTED_LIGHT = '#236b4d';
 /** A render here is one `tick()` away: generous for a loaded machine, short enough that a red is quick. */
 const WAIT = {timeout: 2_000};
 

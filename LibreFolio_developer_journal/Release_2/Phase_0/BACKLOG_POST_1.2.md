@@ -3308,6 +3308,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     «W6», passi W6-a e DV-9.
 - **DV-10 · B4: quel che i neutri dei grafici sui ruoli lasciano alla designer** — minimo; DV, 16/10 notte (B4,
   D-T27).
+  - **21/10, C2 (mandato D-T28):** serie, stati e segni di `chartTheme.ts` sui ruoli più vicini (153 letterali → 4, quelli della
+    designer), `treemapPnlColor` e `toneClasses.ts` sui ruoli; da rivedere con lei: elenco nel piano di DV, sezione «DV-10
+    chiusa da C2».
   - **Da rivedere con lei:** la mappa voce → ruolo è il ruolo più vicino. In scuro assi e griglie passano da 1,93 a
     1,21:1 sulla card (`border-subtle`, come i divisori); i riquadri dei tooltip sono popover (`card`, `raised`).
     - I tooltip di correlazione e rischio/rendimento prendono il riquadro comune: il loro bordo non riprende più il
