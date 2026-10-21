@@ -95,9 +95,18 @@ Nessun annuncio aperto sul file; T lo converte più avanti, nell'ondata W5.
 3. Validazione anche con `front-designer-lab`, insieme a `front-utility theme-roles` o `--check`.
 4. Galleria filtrata del checkpoint, dopo la fine della finestra, nella corsia:
    `scripts/visual_review/gallery_snapshot.sh <etichetta> --checkout <worktree> --port 6189 --data-dir
-   /tmp/librefolio-r13-y -- -f "Dashboard|Brokers" --workers 6`; confronto con il riferimento `g-final3-r1` di oggi,
-   `--common-only --ignore-masks $W/diffs/g-final3__r1__vs__r2/masks --stability
-   $W/diffs/g-final3__r1__vs__r2/stability.json`. Rumore noto: `static-grid`, `import-modal` e gli scatti instabili.
+   /tmp/librefolio-r13-y -- -f "Dashboard|Brokers" --workers 6`.
+   - **Il riferimento, dal 19/10, è il trio del 18/10**: `g-r3-prima-ba8e06763-full`, `g-r3-dopo-cd686f445-full` e
+     `g-r3-dopo2-cd686f445-full`. Le maschere e la stabilità di `g-final3__r1__vs__r2`, citate qui fino al 19/10,
+     sono state cancellate per liberare il disco.
+   - Il confronto: `--common-only --ignore-masks $W/diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-cd686f445/masks
+     --stability $W/diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-cd686f445/stability.json`.
+   - Un diff di pixel vuole un riferimento preso lo stesso giorno del candidato; il trio serve all'occhio.
+   - Rumore noto, classi e scatti instabili: `scripts/visual_review/README.md`, sezione «Known gallery behaviour
+     (18/10/2026, the reference trio)», in `dev_release2` da `ccc2a4141` (19/10).
+   - Le altre citazioni di `g-final3` in questo piano sono la cronaca di quei giorni, e restano.
+   > **Nota 20/10**: righe aggiornate su richiesta del programma colori (19/10, via il coordinatore). Sezione del README
+   > letta da `ccc2a4141` con `git show`; uguale in `dev_release2` `a820bd4dd`.
 
 Per Y2: annuncio al coordinatore quando ci arrivo. Il lotto C di R ha portato `DataTable` sui token `--lf-cmp-*`, e la
 E2E del Lab legge il token della sua intestazione.
@@ -479,11 +488,12 @@ antenato della base il 19/10. I titoli ⏳ del §7 sono il registro del momento:
 | Y12b | U8 con i campi di J e MF: P19; R17, W8, P4; V11 e P5 | ✅ 16–17/10 | `23f71e739` (140), `1565b6bbb` (202), `d4ecfb692` (255) | «Y12b», «R17 · W8 · P4» |
 | Y4a | FE2a, i segnali in `lib/features/signals/` | ⏸ fermo | — | «Y4a · analisi aggiornata»: per il developer, «non nella 1.3, oppure una finestra notturna» (16/10 20:21) |
 | Y13 | FE9–FE11 | ⏸ parcheggiato | — | «Y13»: fino alla risposta del developer a Y13-1 (dopo il tag?) |
-| Y-N65 | N65: nessun intervallo di un giorno in tutti i selettori; il righello; il cursore del grafico (N65-7) | ✅ 19/10 | `5cb47395f` (treno da annotare) | «19/10 · Y-N65», «Il lotto Y-N65» (passo 7) |
-| Z-29d-0 | `AssetComparisonSignal._basePoint`: la base in % del confronto dal punto iniettato (per Z-29b e Z-29d) | ⏳ checkpoint 20/10 | — | «20/10 · Z-29d», «Risposte del coordinatore (20/10 09:01) e il lotto Z-29d-0» |
+| Y-N65 | N65: nessun intervallo di un giorno in tutti i selettori; il righello; il cursore del grafico (N65-7) | ✅ 19/10 | `5cb47395f` | «19/10 · Y-N65», «Il lotto Y-N65» (passo 7) |
+| Z-29d-0 | `AssetComparisonSignal._basePoint`: la base in % del confronto dal punto iniettato (per Z-29b e Z-29d) | ✅ committato 20/10, entra col treno 2 | `bccf05cbb` (giornale `c19d808fe`) | «20/10 · Z-29d», «Risposte del coordinatore (20/10 09:01) e il lotto Z-29d-0» |
 | Z-29d | il dialogo chiede la serie allineata del bersaglio | ⏸ aspetta Z-29a in dev e Z-29b sulla base | — | «20/10 · Z-29d» |
-| Y-38 | il selettore dell'asset di confronto fa scorrere il nome lungo | ⏳ checkpoint 20/10 | — | «20/10 · Y-38» |
-| Y-39 | la scheda e la sua anteprima: un grafico solo, una funzione dei segnali (proposta) | ⏳ analisi 20/10, domande F-1…F-3 | — | «20/10 · La scheda e l'anteprima» |
+| Y-38 | il selettore dell'asset di confronto fa scorrere il nome lungo | ✅ committato 20/10, entra col treno 2 | `252ddefbd` (giornale `a91ff36cd`) | «20/10 · Y-38» |
+| Y-39 | la scheda e la sua anteprima: una funzione dei segnali, l'anteprima sul grafico del dettaglio (rivisto con F-1) | ⏳ via 20/10 13:16. Y-39a: cura fatta, prove leggere verdi; aspetta l'OK sulle righe del runner e lo slot E2E. Y-39b dopo l'aggiornamento della base | — | «20/10 · La scheda e l'anteprima», «20/10 · Y-39 rivisto e Y-40», «20/10 · Il lotto Y-39» |
+| Y-40 | le tre viste: assoluto, percentuale, rendimento mobile (barra, scheda, impostazioni, dettaglio), anche sui cambi (V-9) | ⏸ nella 1.3, dopo Z-29s; V-1…V-8 (a) | — | «20/10 · Y-39 rivisto e Y-40», «20/10 · Il lotto Y-39» (decisioni) |
 
 Fuori dai lotti:
 - **Le voci Y-N** della mia sezione del backlog: ognuna ✅ porta il suo commit d'ingresso (rimesse in pari il 19/10). Aperte,
@@ -7151,8 +7161,12 @@ Il developer spegne la macchina, e `/tmp` verrà ripulito. Stato scritto alle 18
    citazioni di `g-final3` (gli esiti di Y1 e Y2, la galleria mobile di Y7, la nota sul giorno UTC) sono la storia
    delle corse fatte: restano. Il coordinatore, 20/10: le maschere chiedono una pausa di tutta la macchina, quindi
    più avanti. La nota resta in coda.
+   - ✅ 20/10, al checkpoint di Y-39a: il testo del punto 4 è aggiornato (§4, ora righe 96–109), con la sezione del
+     README letta da `ccc2a4141`. Resta per la pausa della macchina solo la corsa della galleria, quando servirà.
 2. **Il numero del treno di Y-N65** nella tabella «Stato dei lotti»: da leggere nel README della fase, dopo
    l'aggiornamento della base.
+   - ✅ 20/10: il README della fase non numera più i treni dopo il 112 (16/10). Il riferimento resta il merge
+     `5cb47395f`.
 3. **Aperti, invariati**: nel backlog Y-7, Y-9, Y-10, Y-15, Y-18, Y-26, Y-32, Y-35, Y-36, Y-37 (in attesa del
    developer, o minimi); fermi Y4a e Y13 (Y13-1); dopo la 1.3, se assegnati, J-56 e J-59.
 
@@ -7492,7 +7506,8 @@ Ogni lotto si chiude con un checkpoint FROZEN.
    - `npm run check`: 0 errori e 0 avvisi;
    - Prettier `--check` sui 3 file, `theme-roles --check` e `git diff --check`: puliti.
    - Log: `files/logs/z29d0_*`.
-5. ⏳ CHECKPOINT READY, poi FROZEN.
+5. ✅ 20/10 — CHECKPOINT READY, poi FROZEN. Committato dal coordinatore: `bccf05cbb` (codice) e `c19d808fe` (giornale);
+   entra in `dev_release2` col treno 2.
 
 **Le risposte del developer su Z-29d** (20/10, mattina, dal coordinatore). Valgono per il lotto del dialogo.
 - **D-Z29d-1: (a)**, nessuna linea di confronto finché la serie non arriva.
@@ -7617,7 +7632,8 @@ CHANGELOG, una riga 🔄.
    - **La galleria**: col movimento ridotto lo scorrimento non parte. Nello scatto del dettaglio con un confronto
      (`gallery.spec.ts:5389`) un nome lungo finisce tagliato netto, senza i «…».
    - **Doc**: nessuna pagina descrive il selettore.
-4. ⏳ CHECKPOINT READY, con una riga 🔄 nel CHANGELOG.
+4. ✅ 20/10 — CHECKPOINT READY, con una riga 🔄 nel CHANGELOG. Committato dal coordinatore: `252ddefbd` (codice) e
+   `a91ff36cd` (giornale); entra in `dev_release2` col treno 2, insieme a Z-29d-0.
 
 ## 20/10 · La scheda e l'anteprima: due componenti? Analisi della fusione (sola lettura)
 
@@ -7715,3 +7731,406 @@ CHANGELOG, una riga 🔄.
   - `LineChart.svelte`, solo con F-2 (a): ci lavora Z-29b, e c'entra il programma colori.
 - **Colori**: nessun ruolo nuovo. F-2 (a) usa il verde e il rosso che il grafico ha già.
 - **Lotto proposto**: Y-39, «una scheda e la sua anteprima: un grafico solo, una funzione dei segnali», di Y.
+
+> **F-1 risposto dal developer** (20/10 ~10:00): l'anteprima usa il grafico del dettaglio, con il rendimento mobile; la
+> proposta qui sopra è superata per il grafico (vale ancora la funzione comune dei segnali). Analisi rivista nella
+> sezione «20/10 · Y-39 rivisto e Y-40». F-2 lo chiede il coordinatore; F-3 si risolve da sé.
+
+## 20/10 · Y-39 rivisto e Y-40 (le tre viste): analisi (sola lettura)
+
+> **F-1, risposta del developer** (dal coordinatore, 20/10 ~10:00), testuale: «in impostazioni farei il componente come
+> in asset detail e ci aggiungerei anche il rendimento mobile come opzione, e nelle impostazioni globali questo fa si
+> che tutte le card si spostano al rendimento e a livello di car il bottone percentuale abs lo farei diventare che ad
+> ogni tocco cambia a rotazione, prima % per andare in percentuale, poi l'icona della rendita mobile per andare alla
+> rendita mobile, e per finire in abs per tornare all'abs, e il bottone nella top bar abs/% ci aggiungerei anche la
+> renditaà quindi è un triplo selettore, e ovviamente entrando poi in asset detail l'impostazione resta, ti torna?»
+>
+> La lettura del coordinatore:
+> - l'anteprima delle impostazioni usa il grafico del dettaglio;
+> - tre viste: assoluto, percentuale, rendimento mobile; nelle impostazioni globali la scelta vale per tutte le schede;
+> - il pulsante della scheda gira % → rendimento → assoluto;
+> - il selettore della barra in alto diventa triplo;
+> - il dettaglio si apre nella vista scelta.
+>
+> Chiede: il costo lato server, la lista dei cambi, dove si salva la vista, l'ordine con Z-29b e la stima, le domande.
+> F-2 lo chiede lui al developer; F-3 si risolve da sé; `fx/+page.svelte` lo chiede lui a X.
+>
+> - **Base:** `c19d808fe`, scritta come bozza mentre Y-38 era in consegna; copiata qui dopo il suo commit (`a91ff36cd`).
+> - **Metodo:** il codice di oggi, in sola lettura; nessuna corsa.
+
+### Lo stato di oggi
+
+**Il rendimento mobile** è il segnale del backend `ASSET_CALENDAR_ROLLING_RETURN`
+(`backend/app/services/signal_plugins/calendar_rolling_return/plugin.py`).
+- Vale solo per gli asset: `compatible_domains = (SignalDomain.ASSET,)`.
+- Il suo profilo di riduzione è `LAST_WITH_RANGE`.
+- La finestra è `window_days`: preset 1S, 1M, 3M, 1A, oppure personalizzata in settimane, mesi o anni. La predefinita
+  è 1M (`calendarReturnWindow.ts`).
+- Per il primo giorno mostrato servono `window_days` giorni di storia prima.
+
+**Lo chiede solo il dettaglio** (`charts.md`, tabella «price | calendar-return»):
+- una voce per l'asset, con il segnale;
+- una voce per ogni confronto, con `include_price: false`, lo stesso segnale e la stessa valuta;
+- in questa modalità il dettaglio mostra solo i confronti: gli altri segnali restano salvati e nascosti.
+
+**La vista oggi non si salva da nessuna parte.**
+- Nel dettaglio, `primaryMode` parte da `'price'` (`assets/[id]/+page.svelte:206`) e `viewMode` da `'percentage'`
+  (`:203`), a ogni visita.
+- Nella lista, `globalViewMode` parte da `'percentage'` (`assets/+page.svelte:249`). La scelta della scheda
+  (`AssetCard.svelte:103`) è in memoria e si azzera quando cambia il globale.
+- Si salva solo la finestra, `calendarReturnWindow`, nelle impostazioni dei grafici: globali e per scheda, nel
+  `localStorage` dell'utente, non nel backend.
+
+**Il resto.**
+- `PriceChartFull` ha già le proprietà per una forma ridotta: `hideToolbar`, `hideViewModeToggle`,
+  `disableCandlestick`, `valueUnit`; niente `editMode`, `measureMode` o eventi.
+- Il dettaglio dei cambi non ha il rendimento mobile.
+
+### 1. Il costo lato server del rendimento su ogni scheda
+
+**Cosa fa il server.** Ogni scheda in vista rendimento diventa una voce con un segnale del backend. Il server legge il
+riempimento giornaliero dall'inizio meno la finestra fino alla fine, e calcola il rendimento giorno per giorno. In più
+c'è una voce per ogni bersaglio di un confronto, come nel dettaglio; la si può tenere una sola per asset bersaglio, con
+la stessa finestra e la stessa valuta.
+
+**Ordine di grandezza**, su «Tutto» di 20 anni:
+- circa 7 300 giorni per scheda, più il margine dei segnali (`BULK_SIGNAL_MARGIN_DAYS` = 400);
+- con 100 asset, circa 770 000 giorni-voce: sta in un lotto da 800 000 (`BULK_ITEM_DAYS_BUDGET`), al più due;
+- è il costo per il server della lista di prima di Z-29, cioè quello che Z-29 toglie alle schede senza segnali.
+
+**La risposta dipende da Z-29s.**
+- Senza Z-29s il rendimento torna giornaliero: circa 7 300 punti per scheda, la lista pesante di prima.
+- Con Z-29s, che riduce i segnali nel backend con il loro profilo (qui `LAST_WITH_RANGE`), sono qualche centinaio di
+  punti.
+- Nel contratto di Z-29a, una voce con `max_points` e segnali dà 422 finché Z-29s non arriva.
+- **Y-40 dipende quindi da Z-29s.**
+
+**Con le serie campionate.** La regola dello 0 non serve: il rendimento è già una percentuale. F e `sample_bounds`
+servono solo al prezzo in testa alla scheda.
+
+**Un'alternativa più leggera, per dopo.** Calcolare il rendimento solo nelle date campionate: due prezzi per punto,
+quello del giorno e quello di una finestra prima, invece di tutti i giorni. Si perde però l'intervallo del secchio che
+`LAST_WITH_RANGE` porta. Ora non la propongo.
+
+### 2. La lista dei cambi
+
+**Proposta: per ora no.**
+- Il segnale vale solo per gli asset, e il dettaglio dei cambi non ha il rendimento mobile.
+- La regola «una lista offre le viste del suo dettaglio» tiene la lista dei cambi su Abs/%.
+- Se il developer la vuole, è un lotto a parte: il segnale per i cambi, la modalità nel dettaglio dei cambi, poi la
+  lista. Circa 2–3 giorni.
+
+### 3. Dove si salva la vista
+
+- **Un campo nuovo nelle impostazioni dei grafici**: `primaryView: 'absolute' | 'percentage' | 'calendar-return'`.
+  - È globale e per scheda, nello stesso `localStorage` dell'utente.
+  - Il valore predefinito è `'percentage'`, come oggi la lista e il dettaglio.
+  - Il formato salvato si migra; il negozio ha già le sue migrazioni (`chartSettingsStore.migration.test.ts`).
+- **Il valore globale** lo scrivono il selettore triplo della barra in alto e la finestra delle impostazioni globali.
+  Come oggi l'interruttore della barra, cambiarlo azzera le scelte delle schede.
+- **Il pulsante della scheda** gira % → rendimento → Abs e scrive la scelta di quell'asset.
+- **Il dettaglio** si apre con la vista di quell'asset: la sua scelta, altrimenti la globale.
+  - `'calendar-return'` diventa `primaryMode` rendimento.
+  - `'absolute'` e `'percentage'` diventano `primaryMode` prezzo, con quella `viewMode`.
+- **Niente URL**: è una preferenza, non un pezzo del link.
+- **La finestra** resta `calendarReturnWindow`, la stessa nella lista e nel dettaglio.
+
+### 4. Ordine e stima
+
+**Y-39 rivisto: circa 2,5 giorni, prima di Z-29b** (la funzione comune dei segnali e l'anteprima sul grafico del
+dettaglio).
+- La funzione comune nei tre posti (scheda Asset, scheda del cambio, anteprima), con i Vitest di parità: 1 giorno.
+- L'anteprima su `PriceChartFull` ridotto, con le tre viste: 1 giorno.
+  - Nel globale la curva sintetica deve essere più lunga della finestra: oggi è di un anno, quindi con una finestra di
+    1A il rendimento sarebbe vuoto.
+  - Il rendimento sintetico passa da `/signals/preview`, come gli altri segnali del backend.
+- E2E (`fx-chart-settings`, `asset-list`, `fx-list`) e doc: 0,5 giorni.
+- In più un cancello della galleria, perché gli scatti `chart-settings` cambiano.
+
+**Y-40, le tre viste: circa 4 giorni, dopo Z-29s.**
+- Il campo, la migrazione e i test del negozio: 0,5 giorni.
+- Il selettore triplo e il pulsante a rotazione, con le due E2E della lista che oggi provano Abs/%: in
+  `asset-list.spec.ts`, «global Abs/% controls update every rendered AssetCard…» e «one AssetCard can override
+  Abs/% until a later global change». 1 giorno.
+- La richiesta della lista e il disegno della scheda: 1,5 giorni. Cioè la voce del rendimento per ogni scheda e i
+  bersagli dei confronti, nei lotti.
+- Il dettaglio che eredita la vista: 0,5 giorni.
+- La doc per l'utente e per gli sviluppatori: 0,5 giorni.
+- In più la galleria: la barra della lista e le schede in vista rendimento.
+
+**Ordine proposto**: Y-39 → Z-29b → Z-29s → Y-40. Z-29d resta dopo Z-29b, ridotto al risolutore dell'anteprima, circa
+0,75 giorni. **Totale nuovo per Y: circa 7 giorni** (2,5 + 4 + 0,75).
+
+### 5. Le domande
+
+**Di prodotto** (il consiglio in neretto):
+- **V-1 · La scelta del pulsante della scheda:**
+  - (a) **resta salvata per quell'asset, e il dettaglio la eredita** («l'impostazione resta»);
+  - (b) è temporanea come oggi, e il dettaglio si apre con la vista globale.
+- **V-2 · Un cambio di vista nel dettaglio:**
+  - (a) **diventa la scelta di quell'asset, e la scheda la segue**;
+  - (b) vale solo per quella visita.
+- **V-3 · Il selettore della barra e le impostazioni globali:**
+  - (a) **sono lo stesso valore, e cambiarlo azzera le scelte delle schede**, come oggi;
+  - (b) le scelte delle schede restano.
+- **V-4 · La finestra del rendimento nelle schede:**
+  - (a) **la stessa del dettaglio** (`calendarReturnWindow`, globale o della scheda), che si cambia nelle impostazioni;
+  - (b) una finestra fissa per la lista.
+- **V-5 · I segnali in vista rendimento:**
+  - (a) **solo i confronti, come nel dettaglio**; gli altri segnali restano salvati e nascosti;
+  - (b) anche gli altri segnali.
+- **V-6 · Il prezzo e il Δ in testa alla scheda:**
+  - (a) **restano come oggi**, cambia solo il grafico;
+  - (b) mostrano l'ultimo rendimento.
+- **V-7 · Un asset con meno storia della finestra:**
+  - (a) **la scheda mostra in piccolo lo stato del dettaglio** («storia insufficiente»), con le chiavi che esistono;
+  - (b) la scheda torna alla vista prezzo.
+- **V-8 · L'icona del rendimento sul pulsante:** (a) **quella del dettaglio** (`AssetChartModeToggle`).
+- **V-9 · La lista dei cambi:** (a) **per ora no** (punto 2).
+
+**Tecniche**, per il coordinatore e Z:
+- Z-29s deve coprire anche il rendimento mobile; il profilo `LAST_WITH_RANGE` è già previsto.
+- Nei lotti della lista, i bersagli dei confronti vanno tenuti una volta sola per asset.
+
+### Rischi
+- **Il selettore triplo nella barra della lista**: lo spazio sul telefono e le soglie del layout
+  (`responsiveLayout`); le schermate cambiano.
+- **Il costo del server**: con tutte le schede in vista rendimento torna quello di prima di Z-29. Le risposte restano
+  piccole solo con Z-29s.
+- **La migrazione delle impostazioni salvate**: un campo nuovo con il suo valore predefinito, nessun dato perso.
+
+## 20/10 · Il lotto Y-39: decisioni, contratto, passi
+
+> **Le decisioni del developer** (dal coordinatore, 20/10 13:16; scelte alle 12:1x):
+> - Y-39 e Y-40 tutti e due nella 1.3.
+> - V-1…V-8: tutte (a).
+> - V-9: il rendimento mobile anche sui cambi, nella 1.3 (+2–3 giorni: il segnale per le coppie, la vista nel dettaglio
+>   della coppia, le tre viste nella lista dei cambi).
+> - Testuale: «mi pare che il grafico sia lo stesso componente anche in forex, se è così il componente va fattorizzato
+>   si». Quindi Y-39 riunisce la scheda degli asset, la scheda dei cambi e l'anteprima.
+> - F-2 (a): il colore della linea di base anche sulle schede.
+> - Il rendimento mobile (Y-40): la finestra si sceglie nelle impostazioni; al primo avvio, la più grande del selettore
+>   per il periodo mostrato.
+> - L'ordine: Y-39 → Z-29b → Z-29s → Y-40 (con i cambi); Z-29d, ridotto, dopo Z-29b.
+> - **Via per Y-39**: prima i rossi, la parità fra scheda e anteprima.
+> - I file d'altri:
+>   - `fx/+page.svelte`: X è d'accordo, purché il lavoro resti dentro Y-39;
+>   - `LineChart.svelte` per F-2: il coordinatore chiede al coordinatore dei colori;
+>   - `assets/+page.svelte`: Z aspetta la fine di Y-39 per cominciare Z-29b.
+> - La galleria (gli scatti `chart-settings` e quelli delle schede) si rigenera in una pausa della macchina, a fine
+>   lotto.
+>
+> **X** (20/10 ~13:20, direttamente): le copie del ciclo dei segnali locali sono cinque, non tre. Le altre due sono
+> nelle pagine di dettaglio, file di X (FE4/FE5): `assets/[id]/+page.svelte` (`overlaySignals`, `:711-750`) e
+> `fx/[pair]/+page.svelte` (`:~390-430`). Le differenze vere: i punti del cambio (`staleDays` nelle due pagine dei
+> cambi; il dettaglio dell'asset li scrive in linea, con `missing` e senza `staleDays`) e il confronto (il dettaglio del
+> cambio passa anche icona e tipo). Non chiede di allargare il lotto: chiede un contratto della funzione comune non
+> legato alla scheda, con i risolutori come parametri, il punto del cambio con `missing` e `staleDays`, il confronto con
+> nome, icona e tipo. Così le pagine di dettaglio potranno adottarla più avanti. N64, il suo prossimo lotto, tocca solo
+> le richieste dei segnali del backend nei dettagli: nessun conflitto.
+>
+> - **Base:** `a91ff36cd`. dev `6e1761121` è 173 commit avanti, con Z-29a dentro. Sulle superfici di Y-39 cambia solo
+>   l'avvio di ECharts (`chartInitOptions` di `chartPixelRatio.ts`) in `LineChart`, `PriceChartFull` e
+>   `CandlestickChart`; pagine, schede, modale e `lib/charts/` sono uguali.
+
+### Le copie, oggi (verificate sul codice)
+- **Il ciclo dei segnali locali**, cinque copie:
+  - in Y-39: `assets/+page.svelte` e `fx/+page.svelte` (`getRenderedSignals`), `ChartSettingsModal.svelte`
+    (`renderLocalPreview`);
+  - fuori, di X: le due pagine di dettaglio.
+- **Il convertitore** «punto del cambio → punto del grafico»: `fx/+page.svelte:197` e `fx/[pair]/+page.svelte:332`
+  (con `inverted`, `staleDays` da `extractDaysBack`), `assets/+page.svelte:1209` (senza `inverted`), più in linea in
+  `FxCard.svelte` (due volte) e nel dettaglio dell'asset (senza `staleDays`).
+- **`resolveGlobalBackendPreview`**: due copie uguali, salvo il dominio (le due liste).
+
+### Il contratto di Y-39a: un modulo puro, non legato alla scheda
+Il modulo è `lib/charts/chartSignalRendering.ts`, nuovo. Sta accanto a `chartPageSignals.ts` (dei dettagli, che X
+toccherà con FE4), ma separato: niente conflitti con X.
+- **Le fonti**, `SignalDataSources`:
+  - `fxPairData(slug)`: i cambi diritti, che il `_inverted` del segnale gira;
+  - `comparisonTarget(id)`: `{data, displayName?, iconUrl?, assetType?, basePoint?}`, oppure null;
+  - `selfAssetId?`: l'asset del grafico.
+- **`fxPointToLineDataPoint(point, inverted)`**: `value`, `missing` e `staleDays`.
+- **`renderLocalSignal(config, baseData, viewMode, sources)`** e `renderLocalSignals(configs, definitionsByType, …)`,
+  con il meglio delle copie:
+  - il confronto ha il nome del bersaglio (dalla scheda), icona e tipo quando ci sono (dal dettaglio del cambio) e
+    `_basePoint` (Z-29d-0);
+  - niente confronto con sé stesso (D-Z29d-3 a); un bersaglio senza dati si salta;
+  - la coppia arriva dai dati diritti, girata dal `_inverted` del segnale (F-3 a);
+  - nessuna mutazione della configurazione.
+- **`renderBackendResults(configs, results, …)`**: i risultati salvati, con la configurazione corrente, come oggi nelle
+  due liste.
+- **Chi lo usa in Y-39a:**
+  - la lista Asset, per le schede e la modale, con le fonti della pagina: i cambi dal negozio, i confronti dalle schede
+    della lista, `selfAssetId` della scheda;
+  - la lista dei cambi, per le schede e la modale: `comparisonTarget` resta null come oggi, perché la lista non carica
+    asset (vedi Y-41);
+  - la modale: una prop nuova, `signalSources`; escono `pairsDataMap` e `assetsDataMap`.
+- **La parità** fra scheda e anteprima viene per costruzione: le due chiamano `renderLocalSignal` con le stesse fonti e
+  gli stessi dati assoluti. `pairData` è la `chartData` della scheda; per i cambi, la stessa conversione con
+  l'inversione della scheda.
+- **Gli effetti visibili**, tutti già decisi:
+  - nell'anteprima il confronto ha il nome del bersaglio, non più «Asset #id»;
+  - l'anteprima non disegna più il confronto con sé stesso;
+  - nella lista dei cambi, la coppia è nel verso della scheda.
+  - Icona e tipo del confronto: il grafico compatto delle schede non li mostra; l'anteprima sul grafico del dettaglio
+    (Y-39b) sì, come nel dettaglio.
+
+### Il contratto di Y-39b
+- **L'anteprima sul grafico del dettaglio** (F-1): `PriceChartFull` al posto di `LineChart`. Riceve i dati assoluti, la
+  vista dell'anteprima (`externalViewMode`), i segnali, l'aspetto e le scale degli assi delle impostazioni in modifica.
+  - La proposta di aspetto (domanda P-Y39 al coordinatore): la barra degli strumenti nascosta, perché resta il
+    selettore della modale, che in Y-40 diventa triplo; solo linea, perché la lista non ha OHLC; niente eventi, misure
+    o modifica; circa 220 px di altezza (oggi 140); lo zoom con la rotella come nel dettaglio, senza barra visibile.
+- **F-2 (a)**: `LineChart` applica `colorByBaseline` anche in modalità compatta (oggi `colorByBaseline && !compact`,
+  `:450`).
+  - In valore assoluto la base è il primo punto dei dati in ingresso, prima della riduzione per densità. Oggi è il primo
+    punto ridotto, cioè la fine del primo secchio; così il colore segue la regola dello 0, il giorno F.
+  - Una prop facoltativa, `baselineValue`, la sostituisce: Z-29b ci passa F (n3). `PriceChartCompact` la inoltra.
+  - Serve l'OK del coordinatore dei colori su `LineChart.svelte`, che chiede il coordinatore.
+- **Doc, CHANGELOG, E2E e galleria**: `charts.md` (la funzione comune, l'anteprima, il colore sulle schede) e le pagine
+  utente delle impostazioni dei grafici; due righe 🔄; le E2E `asset-list`, `fx-list` e `fx-settings`; la galleria
+  nella pausa della macchina.
+
+### Proposte al coordinatore
+- **T-Y39-1 · Due checkpoint.**
+  - Y-39a (il modulo, le due liste, la modale; circa 1 giorno) libera `assets/+page.svelte` per Z-29b.
+  - Y-39b (l'anteprima sul grafico del dettaglio, F-2, la doc; circa 1 giorno) non tocca `assets/+page.svelte` e va in
+    parallelo con Z-29b.
+  - Su `LineChart.svelte` Z-29b sposta la soglia della densità (`:193`, `:296-301`), mentre F-2 tocca `:450` e aggiunge
+    una prop: pezzi diversi.
+  - **Consiglio: sì.**
+- **T-Y39-2 · La terza vista dell'anteprima, il rendimento mobile, va in Y-40.**
+  - Nelle impostazioni quella vista è la vista salvata (V-3 a: barra e impostazioni globali sono lo stesso valore), e
+    nessuno la legge prima di Y-40.
+  - I dati del rendimento di una scheda vera arrivano con la richiesta della lista di Y-40, dopo Z-29s.
+  - In Y-39 l'anteprima ha Abs e % come oggi, sul grafico del dettaglio.
+  - Tenerla in Y-39 costa circa +1 giorno: un risolutore asincrono per la scheda e una curva sintetica più lunga della
+    finestra.
+  - **Consiglio: in Y-40.**
+- **P-Y39 · L'aspetto dell'anteprima** sul grafico del dettaglio: la proposta qui sopra.
+- **La base**: aggiornarla quando è comodo, prima della cura di F-2.
+
+### Fuori dal lotto, da registrare nel backlog al checkpoint
+- **Y-41**: nella lista dei cambi la finestra delle impostazioni offre il confronto con un asset, ma né la scheda né
+  l'anteprima lo disegnano, perché la lista non carica asset. È così già oggi, e resta uguale.
+- **Y-42**: le due pagine di dettaglio, file di X, adottano `chartSignalRendering.ts` e il convertitore comune. Il
+  cancello `signalRendering.gate` le tiene in una lista che può solo accorciarsi. Da proporre a X tramite il
+  coordinatore.
+- `FxCard.svelte` converte i punti in linea, due volte: può passare a `fxPointToLineDataPoint` chi tocca quel file
+  (FE5, X).
+
+### Le risposte del coordinatore (20/10 13:34)
+- **T-Y39-1: sì, due checkpoint.** Y-39a libera `assets/+page.svelte` per Z-29b; Y-39b va in parallelo.
+- **T-Y39-2: sì**, la terza vista dell'anteprima va in Y-40.
+- **P-Y39: va bene**, «è proprio quello che ha chiesto il developer».
+- **Il contratto staccato dalla scheda, per X: ok.** Y-41 e Y-42 si registrano al checkpoint.
+- **La base** la aggiorna il coordinatore al checkpoint di Y-39a, con l'albero pulito, prima della cura di F-2.
+- **Le condizioni di DV per F-2 su `LineChart.svelte`** (dal coordinatore dei colori):
+  1. Non toccare `echarts.init(…, chartInitOptions(chartContainer))`: è il DPR, sorvegliato dal gate K-13. È in dev,
+     non ancora sulla mia base.
+  2. I colori sono gli stessi di oggi, `greenColor` e `redColor`: in `LineChart` nessun letterale e nessun nuovo
+     `isDark ? … : …`. `chartTheme.ts` non si tocca, perché DV-10 lo porterà sui ruoli.
+     - Oggi `LineChart` li prende da `COLORS.greenLight`, `greenDark`, `redLight` e `redDark` (`:140-143`,
+       `:417-418`), e restano così.
+  3. Il perimetro: l'unico chiamante compatto è `PriceChartCompact`, cioè `AssetCard` e `FxCard`.
+     - Verificato: i quattro `LineChart` del rischio (`RiskAnalysisPanel:725` e `:1061`, `UnderwaterChart:63`,
+       `L4Simulation:246`) non sono compatti e passano `colorByBaseline={false}`.
+  4. Prima del checkpoint:
+     - `front-portfolio chart-safety-unit`, `LineChart.test.ts` e `chartCoreHelpers.test.ts`;
+     - poi una scheda nei due temi, cambiando tema senza ricaricare: il verde e il rosso seguono il tema, e la cache
+       delle frecce non tiene colori vecchi (la regola di Y-8).
+
+### I passi di Y-39a
+1. ✅ 20/10 · I rossi (`test-author` `47f7b156`):
+   - `lib/charts/__tests__/chartSignalRendering.test.ts`: il contratto del modulo, rosso perché il modulo non c'è;
+   - `lib/components/charts/ChartSettingsModal.test.ts`: l'anteprima con `signalSources` (il nome del confronto, la
+     coppia diritta e il suo `_inverted`), con i due grafici possibili sostituiti da un registratore; una guardia, un
+     segnale locale senza dati esterni, nei due modi;
+   - `chartCoreHelpers.test.ts`: le due liste passano `signalSources`, non passano più `pairsDataMap` né
+     `assetsDataMap`, e importano il modulo;
+   - `src/signalRendering.gate.test.ts`: `signalFromConfig(` solo nel modulo, più le due pagine di dettaglio, copie
+     note che possono solo diminuire.
+2. ✅ 20/10 · I rossi visti rossi, con il carico a 11: 57 rossi e 318 verdi su 375, in 4 file, ognuno rosso per la
+   ragione dichiarata (il modulo assente, le props della modale, le due liste, il cancello).
+3. ✅ 20/10 · La cura.
+   > **Note implementazione**:
+   > - `lib/charts/chartSignalRendering.ts`, nuovo: il contratto qui sopra, più `NO_SIGNAL_SOURCES`, le fonti vuote che
+   >   la modale prende quando la pagina non ne passa (coppie e confronti non disegnati, gli altri segnali sì).
+   > - `ChartSettingsModal.svelte`: la prop `signalSources` al posto di `pairsDataMap` e `assetsDataMap`;
+   >   `renderLocalPreview` chiama `renderLocalSignal` con quelle fonti. Nessun `signalFromConfig(` nel file.
+   > - `assets/+page.svelte`: `signalSourcesFor(selfAssetId)` (i cambi dal negozio, diritti; i confronti dalle schede,
+   >   con nome, icona e tipo; la scheda stessa esclusa) per le schede, e `settingsSignalSources`, un `$derived` sulla
+   >   scheda della modale, per l'anteprima. `getRenderedSignals` diventa `renderLocalSignals` più
+   >   `renderBackendResults`; `resolveGlobalBackendPreview` usa `renderBackendResults`. Tolti il convertitore locale,
+   >   `buildPairsDataMap` e le due mappe passate alla modale.
+   > - `fx/+page.svelte`: `fxListSignalSources`, i cambi dal negozio, diritti, e nessun confronto (Y-41). Stesso
+   >   cambio per `getRenderedSignals` e `resolveGlobalBackendPreview`; il convertitore viene dal modulo, e la mappa
+   >   `pairsDataMap` girata scheda per scheda (F-3) esce.
+
+   > **⚠️ Fuori pista**:
+   > - I risolutori dei cambi sono di una riga, senza `try`: `getFxStore` crea il negozio quando manca, quindi non
+   >   lancia, e il modulo tratta una serie vuota come una assente.
+   > - `TimeSeriesStore` non è reattivo (una `Map`). La prop di prima era un'istantanea memorizzata, rifatta solo
+   >   quando cambiava `fxPairSlugs`; ora l'anteprima legge il negozio a ogni ricalcolo, quindi è aggiornata almeno
+   >   quanto prima. Le schede leggono il negozio come prima.
+   > - `renderBackendResults` scrive `console.error` per una definizione mancante, mentre l'anteprima globale prima
+   >   saltava in silenzio. Lì non può succedere: il piano delle richieste nasce dalle definizioni.
+   > - Icona e tipo arrivano ora anche ai confronti delle schede, ma `LineChart` non li disegna (non usa
+   >   `signalLabel`): nessun effetto visibile in Y-39a. Si vedranno nel tooltip dell'anteprima con `PriceChartFull`
+   >   (Y-39b).
+4. ✅ 20/10 · Le prove leggere, con il carico sotto 35:
+   - i 4 file dei rossi: **375/375** (`files/logs/y39a_cure.log`);
+   - i vicini, 31 file in un processo solo (i `src/*.gate`, i segnali, i confronti, lo store delle impostazioni,
+     `fxStoreRegistry`, `LineChart`, `FxCard`, `ChartSignalsSection`, `SignalTreeSelect`): **1044/1044**
+     (`files/logs/y39a_neighbours.log`);
+   - `npm run check`: 0 errori e 0 avvisi;
+   - Prettier: tre file riscritti (il modulo e le due liste), solo nelle mie righe; le due liste erano pulite a HEAD;
+   - `theme-roles --check` e `git diff --check`: puliti.
+   - Da fare dopo l'OK del coordinatore: le tre righe del runner in `_frontend_utility.py`, un file del programma
+     colori, poi `check-orphans`:
+     - `front_utility_unit`: `chartSignalRendering.test.ts` dopo `chartPageSignals.test.ts` (`:47`), e
+       `src/signalRendering.gate.test.ts` dopo `src/instanceProfile.gate.test.ts` (`:144`);
+     - `front_component_unit`: `ChartSettingsModal.test.ts` dopo `ChartSignalsSection.test.ts` (`:355`).
+4b. ✅ 21/10 · La rifinitura dei rossi e le prove leggere sulla base fusa (HEAD `e64e9df0f`, merge di `dev_release2`
+   `208199bf6`; Linux, carico 3-10):
+   > **Note implementazione**:
+   > - Le parole della fase rossa sono sparite dai quattro file di test. Cambiate solo parole, titoli e import:
+   >   asserzioni e numero dei test uguali (375).
+   >   - `chartSignalRendering.test.ts`: import statico del modulo al posto di `exported()` con l'import dinamico
+   >     `@vite-ignore`; i tipi copiati a mano (`ViewMode`, `FxStorePoint`, `ComparisonTarget`, `SignalDataSources`,
+   >     `ChartSignalRendering`) sono i tipi del modulo (`ViewMode` ne è derivato con `Parameters<…>`); tolte le
+   >     righe `const x = await exported(…)` e gli `async` che non servivano più; la sezione «Red until the cure» è
+   >     diventata «How the cases are built».
+   >   - `ChartSettingsModal.test.ts`: tolta la copia locale di `SignalDataSources` (import del tipo del modulo) e il
+   >     `as unknown as`: `props` è ora `ComponentProps<typeof ChartSettingsModal>`; tolti «Red today», «(to be)» e
+   >     i «RED:» dai titoli; la sezione «Red and green» è diventata «Cases and guards».
+   >   - `signalRendering.gate.test.ts`: tolto il paragrafo «Red until Y-39a», «(to be)» e i «RED until Y-39a — » dai
+   >     due titoli; due verbi al passato nell'introduzione.
+   >   - `chartCoreHelpers.test.ts`: tolta la frase «Red until Y-39a» dal commento.
+   > - `chartSignalRendering.ts`: una sola riga di tipo, `FxRatePoint.backwardFillInfo` accetta anche
+   >   `actualRateDate?: string` (c'è in `FxDataPoint`): serviva perché i test passino al modulo i punti dello
+   >   store senza un tipo copiato. Nessun cambio di comportamento.
+   > - Prove: Vitest 4 file **375/375**; 31 vicini in un processo **1044/1044** (stessa lista del 20/10, `files/logs/
+   >   y39a_neighbours.txt`); Prettier `--check` sugli 8 file toccati o vicini: pulito; `theme-roles --check`: pulito;
+   >   `git diff --check`: pulito; `dev.py test check-orphans`: tutti raggiungibili (frontend `src` 588, e2e 147).
+   >
+   > **⚠️ Fuori pista**:
+   > - `dev.py front check`: **1 errore, 0 avvisi**, in un file che non è mio:
+   >   `src/lib/features/instance/instanceConfig.svelte.ts:68` («Property 'client_log_level' does not exist on type
+   >   'InstanceConfigResponse'»). Viene da `dev_release2` (H-60): il backend ha `client_log_level`
+   >   (`backend/app/schemas/system.py`), ma `frontend/src/lib/api/generated.ts` (ignorato da git) è ancora quello di
+   >   prima della fusione. Si cura con `api sync`, che è del coordinatore: non l'ho lanciato. Nessun errore nei file
+   >   di Y-39a.
+5. ✅ 21/10 · Lo slot E2E (coordinatore, 12:44-14:00), Chromium 1228 sulla macchina (`~/.cache/ms-playwright/chromium-1228`).
+   > **Note implementazione**: corsia 6189 + `/tmp/librefolio-r13-y`, popolata da zero (`db populate --force --clean`, rc 0,
+   > 10 s); ogni spec dentro `flock /tmp/librefolio-heavy.lock`, `--workers 2`, `nice`, uno alla volta, HEAD `e64e9df0f`,
+   > carico 3,9-5,1. Comando: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6189
+   > --data-dir /tmp/librefolio-r13-y --workers 2 <categoria> <spec>`.
+   > - `front-fx fx-settings`: **3/3** (8,4 s di test; 4 min 19 s con la build di debug e l'avvio), guardia d'allargamento
+   >   superata (3 test, non la categoria);
+   > - `front-fx fx-list`: **25/25** (54,9 s);
+   > - `front-asset asset-list`: **43/43** (2,0 min).
+   > Nessun rosso, nessun ripetuto. Porta 6189 libera a fine corsa (`lsof`: nessun ascoltatore). Log in
+   > `…/scratchpad/y39a_e2e_{fx-settings,fx-list,asset-list}.log` (cartella di sessione, non nel repo).
+6. ✅ 21/10 · CHECKPOINT READY (dopo l'E2E). Da lì Z-29b può partire su `assets/+page.svelte`.

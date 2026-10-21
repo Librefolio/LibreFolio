@@ -9799,6 +9799,22 @@ da Y il 15/10.
     `numericArrows` sull'anno); «week starts on Monday for most locales», ma parte sempre da lunedì.
   - Il riferimento `DateRangePicker.svelte:36,216-251` (8/10) è approssimato.
   - Y-N65 non li tocca. Dettagli: piano di Y, «Il lotto Y-N65», passo 6.
+- **Y-41 · Lista dei cambi: il confronto con un asset si può scegliere, ma non si disegna** — minimo, preesistente; Y,
+  20/10 (Y-39a).
+  - Nella lista dei cambi la finestra delle impostazioni offre il segnale di confronto con un asset, ma né la scheda né
+    l'anteprima lo disegnano: la lista non carica le serie degli asset (`fxListSignalSources` dà `comparisonTarget`
+    nullo).
+  - Era così anche prima di Y-39a, e resta uguale. Da decidere: caricare le serie (come il dettaglio del cambio) o non
+    offrire il confronto in quella lista.
+  - Dettagli: piano di Y, «20/10 · Il lotto Y-39».
+- **Y-42 · I due dettagli adottano il disegno comune dei segnali** — medio; Y, 20/10 (Y-39a, contratto concordato con
+  X).
+  - `assets/[id]/+page.svelte` (`overlaySignals`) e `fx/[pair]/+page.svelte` ricostruiscono ancora i segnali locali
+    da soli. Possono passare a `lib/charts/chartSignalRendering.ts`: le fonti sono parametri, il punto del cambio porta
+    `missing` e `staleDays`, il confronto nome, icona e tipo.
+  - Il cancello `src/signalRendering.gate.test.ts` le tiene in `KNOWN_COPIES`, una lista che può solo accorciarsi.
+  - Anche `FxCard.svelte` converte i punti del cambio in linea, due volte: può usare `fxPointToLineDataPoint`.
+  - File di X (FE4, FE5): da proporre a X tramite il coordinatore. Dettagli: piano di Y, «20/10 · Il lotto Y-39».
 
 ## MF · Matematica finanziaria (fase 01)
 

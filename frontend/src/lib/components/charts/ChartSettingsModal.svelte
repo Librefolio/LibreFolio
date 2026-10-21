@@ -24,7 +24,8 @@
     import {DEFAULT_AXIS_SCALE, DEFAULT_CHART_SETTINGS, DEFAULT_PERCENTAGE_AXIS_SCALE, normalizeAxisScaleSettings, type AxisScaleSettings, type ChartAxisSettings, type ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {collectConfigurableSecondaryAxes} from './chartCoreHelpers';
     import {exchangeRateAxisLabel, percentageAxisLabel, priceAxisLabel, secondaryAxisLabel} from './axisLabelHelpers';
-    import {getRegisteredSignalTypes, resolveSignalPreview, type RenderedSignal, type SignalConfig, type SignalDefinition, signalFromConfig} from '$lib/charts/signals';
+    import {getRegisteredSignalTypes, resolveSignalPreview, type RenderedSignal, type SignalConfig, type SignalDefinition} from '$lib/charts/signals';
+    import {NO_SIGNAL_SOURCES, renderLocalSignal, type SignalDataSources} from '$lib/charts/chartSignalRendering';
     import {SineSignal} from '$lib/charts/signals/SineSignal';
     import {normalizeToPercentage} from '$lib/utils/chartUtils';
 
@@ -67,10 +68,11 @@
         signalsLoading?: boolean;
         /** Pair-specific data for preview chart (used in pair mode). If omitted, uses synthetic demo data. */
         pairData?: LineDataPoint[];
-        /** Map of pair slug → data points for resolving FxPairSignal data in preview */
-        pairsDataMap?: Record<string, LineDataPoint[]>;
-        /** Map of asset ID → data points for resolving AssetComparisonSignal data in preview */
-        assetsDataMap?: Record<string, LineDataPoint[]>;
+        /**
+         * Where the preview's FX pair and comparison signals get their series: the same sources the cards use, so the
+         * preview draws them as the card does (Y-39a). Omitted: those signals are not drawn.
+         */
+        signalSources?: SignalDataSources;
         /** Called when user saves */
         onsave?: (settings: ChartSettings) => void;
         /** Called when user closes without saving */
@@ -93,8 +95,7 @@
         signalsLoading = false,
         onretrySignalBackend,
         pairData,
-        pairsDataMap = {},
-        assetsDataMap = {},
+        signalSources = NO_SIGNAL_SOURCES,
         onsave,
         onclose,
     }: Props = $props();
@@ -285,21 +286,7 @@
     });
 
     function renderLocalPreview(cfg: SignalConfig): RenderedSignal[] {
-        const instance = signalFromConfig(cfg);
-        if (!instance) return [];
-        if (cfg.signalType === 'fx-pair') {
-            const pairSlug = String(cfg.params.pairSlug || '');
-            const resolvedData = pairsDataMap[pairSlug];
-            if (!pairSlug || !resolvedData?.length) return [];
-            instance.params._resolvedData = resolvedData;
-        }
-        if (cfg.signalType === 'asset-comparison') {
-            const targetId = String(cfg.params.assetId || '');
-            const resolvedData = assetsDataMap[targetId];
-            if (!targetId || !resolvedData?.length) return [];
-            instance.params._resolvedData = resolvedData;
-        }
-        return instance.renderMulti(previewDataAbs, previewViewMode).filter((result) => result.data.length > 0);
+        return renderLocalSignal(cfg, previewDataAbs, previewViewMode, signalSources);
     }
 
     let previewResolution = $derived.by(() => {
