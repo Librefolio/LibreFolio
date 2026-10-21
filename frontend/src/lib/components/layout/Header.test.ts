@@ -8,8 +8,9 @@
  * gives a real click and a real Tab, live in header-scroll.spec.ts.
  *
  * The menu dot of N69b (an administrator's security attention) is the last
- * describe. The checks' store it reads is a fake for the whole file, idle and
- * empty unless a case says otherwise (see `securityStore` below).
+ * describe, and the burger's translated name (A-62) a describe inside it. The
+ * checks' store it reads is a fake for the whole file, idle and empty unless a
+ * case says otherwise (see `securityStore` below).
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance} from 'vitest';
 import type {ComponentProps} from 'svelte';
@@ -742,8 +743,8 @@ describe('Header menu security dot (plan 36)', () => {
  *   - it carries `data-severity`: `error` when the connection is insecure or the administrator's `attentionSeverity` is
  *     `error`, else `warning`;
  *   - absent for anybody else on a secure or local connection, and for an administrator with nothing to see;
- *   - the burger's `aria-label` appends the attention text, «… — ‹attention text›», after whatever it says today (the
- *     English «Toggle menu», and «— ‹insecure label›» when insecure), the attention text being
+ *   - the burger's `aria-label` appends the attention text, «… — ‹attention text›», after whatever it says today (its
+ *     first part, `$_('nav.toggleMenu')` since A-62, and «— ‹insecure label›» when insecure), the attention text being
  *     `$_('connectionSecurity.attention', {values: {count}})`;
  *   - the header only reads the store (`attentionCount`, `attentionSeverity`) and `$auth`: it never calls
  *     `ensureLoaded()` — the sidebar's line, always mounted in the app shell, loads it.
@@ -752,7 +753,8 @@ describe('Header menu security dot (plan 36)', () => {
  * through the auth store's own seam, `auth.checkAuth()` against a spied `GET /auth/me`; the connection primed as the
  * plan-36 cases prime it. The attention key is given the test's own ICU plural (`addMessages`, English is the cases'
  * locale), so the label reads `⟦key·branch·count⟧`: the key, the plural branch and the count passed, never a
- * translation. Today's part of the label is read from the burger before the attention lands, never written here.
+ * translation. Today's part of the label is read from the burger before the attention lands, never written here — the
+ * A-62 describe at the end is the one that writes it, and pins what it is made of.
  */
 describe('Header menu dot: an administrator’s security attention (N69b)', () => {
     const ATTENTION_KEY = 'connectionSecurity.attention';
@@ -938,5 +940,75 @@ describe('Header menu dot: an administrator’s security attention (N69b)', () =
         expect(dots[0]).toHaveAttribute('data-severity', 'warning');
         expect(burgerLabel(), 'control: and names the count').toBe(`${membersLabel}${SEPARATOR}${attentionText(2)}`);
         expectNeverAsked('member then administrator');
+    });
+
+    /**
+     * A-62 — the first part of the burger's name is translated. It was the English «Toggle menu», written in the
+     * component; it is now `$_('nav.toggleMenu')`, a key of the base catalogue, so the Italian, French and Spanish UI
+     * name the burger in their own language and the part «— ‹level›» / «— ‹count›» that follows keeps its shape:
+     *   - `‹toggle menu›` alone on a secure connection, for a member;
+     *   - `‹toggle menu› — ‹insecure label›` when the connection is insecure;
+     *   - `‹toggle menu› — ‹attention text›` for an administrator with attention;
+     *   - `‹toggle menu› — ‹insecure label› — ‹attention text›` for both, in that order.
+     * The key is given the test's own message (`addMessages`, English is the cases' locale), so the first part reads
+     * `⟦nav.toggleMenu⟧` and a label that does not start with it is naming the burger from somewhere else; never a
+     * real translation. `addMessages` is global for the file's svelte-i18n instance and has no counterpart that takes a
+     * message back, so the marker is added once, here, and stays for the end of the file; the cases above, which read the
+     * first part from the burger and never write it, are indifferent to what it says.
+     */
+    describe('the burger’s name starts with the translated «toggle menu» (A-62)', () => {
+        const TOGGLE_KEY = 'nav.toggleMenu';
+        const TOGGLE_MARKER = `⟦${TOGGLE_KEY}⟧`;
+
+        beforeAll(() => {
+            addMessages('en', {[TOGGLE_KEY]: TOGGLE_MARKER});
+            expect(get(formatMessage)(TOGGLE_KEY), 'premise: the toggle key renders the test’s own marker').toBe(TOGGLE_MARKER);
+        });
+
+        // red until A-62
+        it('a member on a secure connection: the name is the translated «toggle menu», alone', async () => {
+            await signInAs(false);
+            await primeConnection(SECURE_LOCATION, SECURE_ANSWER, 'secure');
+
+            await mount();
+
+            expect(burger(), 'presence barrier: the burger is drawn').toBeInTheDocument();
+            expect(burgerLabel(), 'nothing to add: the first part, and only it').toBe(TOGGLE_MARKER);
+            expectNeverAsked('a member');
+        });
+
+        // red until A-62
+        it('a member on an insecure connection: the translated «toggle menu», then the insecure level', async () => {
+            await signInAs(false);
+            await primeConnection(INSECURE_LOCATION, INSECURE_ANSWER, 'insecure');
+
+            await mount();
+
+            expect(burger(), 'presence barrier: the burger is drawn').toBeInTheDocument();
+            expect(burgerLabel(), 'the level follows the first part').toBe(`${TOGGLE_MARKER}${SEPARATOR}${insecureLabel()}`);
+        });
+
+        // red until A-62
+        it('an administrator with warnings on a secure connection: the translated «toggle menu», then the count', async () => {
+            await signInAs(true);
+            await primeConnection(SECURE_LOCATION, SECURE_ANSWER, 'secure');
+            await mount();
+            expect(burgerLabel(), 'premise: before the answer, the first part alone').toBe(TOGGLE_MARKER);
+
+            await storeAnswers(WARNINGS);
+
+            expect(burgerLabel(), 'the count follows the first part').toBe(`${TOGGLE_MARKER}${SEPARATOR}${attentionText(2)}`);
+            expectNeverAsked('after the answer');
+        });
+
+        // red until A-62
+        it('an administrator with warnings on an insecure connection: the translated «toggle menu», the insecure level, the count — in that order', async () => {
+            await signInAs(true);
+            await primeConnection(INSECURE_LOCATION, INSECURE_ANSWER, 'insecure');
+            await mount();
+            await storeAnswers(WARNINGS);
+
+            expect(burgerLabel(), 'the worse first, as the dot orders them').toBe(`${TOGGLE_MARKER}${SEPARATOR}${insecureLabel()}${SEPARATOR}${attentionText(2)}`);
+        });
     });
 });
