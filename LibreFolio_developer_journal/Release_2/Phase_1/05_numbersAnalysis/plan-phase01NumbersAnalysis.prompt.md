@@ -9058,3 +9058,44 @@ lettura di Q1 nelle date comuni. Con Y, per un'uscita a gradini: solo se il deve
    > Prove: black e ruff puliti; `services transaction-cost-basis-rule` **244/244** (14:16); `git diff --check`
    > pulito; porta libera.
    - ✅ **Checkpoint mandato** (~14:17), poi FROZEN.
+   - ✅ 20/10 14:28 — **Commit del coordinatore**: `cd44e6531` (codice) e `7321c8b9b` (giornale), col treno 5 e la
+     riga 🐛.
+     - I residui 1 e 2 diventano una voce sola del backlog, **J-70**: le righe già salvate con un costo negativo, da
+       contare su una copia dei dati reali quando servirà, e la media Auto negativa. Scritta nella sezione J.
+     - I residui 3 e 4 restano note, senza voce.
+     - Q-TC23-1 e Q-G29-1: il coordinatore le porta adesso al developer.
+
+#### L1b, R1, CP-8 e CP-9b/9c — promemoria per il coordinatore (20/10 ~14:35, sola lettura)
+
+> Coordinatore (14:28): «ricordami in tre righe cosa sono e cosa consigli: le decido io, oppure le porto al developer».
+
+- **Stato delle dipendenze**, letto in `dev_release2`:
+  - P3 è in dev. La metà di X (`cac0ab76e`, i tassi a gradini) è nella mia HEAD; quella di MF (`e71012c67`, il motore
+    e il contante leggono i gradini, entrato con `015094472`, treno 4) non ancora;
+  - Q1 di X (i prezzi per osservazioni) non è consegnata: il piano di X la tiene in coda (`plan-phase01PluginsAssets`,
+    ~8219).
+- **Nessuna delle quattro cambia ciò che l'utente vede**: valori identici, oppure soli spostamenti di codice. Sono
+  quindi decisioni di calendario del coordinatore, non del developer.
+- **L1b**: i lotti leggono i cambi a gradini (P3) invece di un tasso al giorno. Piccolo, circa 2–3 ore, coi test di
+  parità di L1a. **Consiglio: subito dopo TC-23**, con un aggiornamento di base che porti la metà di MF.
+- **R1**: il rischio legge le sole osservazioni invece della serie giornaliera (valori identici, `algorithm_version`
+  invariata). Circa 3 ore più la parità. **Bloccata su Q1 di X: aspettare**. Nel frattempo concordare con X la lettura
+  nelle date comuni (l'ultimo prezzo ≤ d al cambio di d).
+- **CP-8**: `portfolio_service.py` e `lots_analysis_service.py` in `services/portfolio/`, più gli schemi del
+  portafoglio. Solo spostamenti: prima la rinomina, poi il taglio, niente shim, `api sync` senza differenze. Circa mezza
+  giornata. Sblocca CP-11 (le mie parti di U1 e B15 lato PAC).
+  - **Consiglio: in una finestra quieta**, quando la coda di MF su `portfolio_service.py` è vuota (MF ci lavora da
+    giorni) e dopo L1b (stesso file dei lotti).
+- **CP-9b/9c**: `schemas/risk.py` → `schemas/risk/`, prima la rinomina in `outputs.py`, poi il taglio in 4 moduli.
+  Circa 45 importatori: plugin del rischio, AI Export, segnali, test. L'ordine approvato era 9a → CP-10 → 9b/9c, e
+  CP-10 è chiuso.
+  - **Consiglio: una finestra quieta annunciata, come FE8b**, 9b e 9c di fila, circa mezza giornata in tutto.
+  - CP-8 e CP-9b/9c possono stare nella stessa finestra: toccano file diversi.
+- **Decisioni del coordinatore** (20/10 14:32), testuali in sostanza: «D'accordo, le decido io».
+  - **L1b: via adesso.** TC-23 aspetta ancora il developer. Prima i rossi, sulla parità di L1a.
+  - **R1**: aspetta Q1 di X. Intanto accordarsi con X sulle date comuni.
+  - **CP-8 e CP-9b/9c**: una finestra tranquilla annunciata, quando la coda di MF su `portfolio_service.py` è vuota
+    (MF ora fa P4, che lo tocca) e dopo L1b. La apre lui.
+  - Correzione (14:3x): la base non era stata aggiornata. Il merge non partiva, perché toccava i due file del giornale
+    sporchi (questo piano e il backlog con J-70). Per ripartire: FROZEN; lui fa il commit
+    `docs(journal): J-70, L1b R1 CP-8/9 memo` e il merge di `dev_release2` (con P3 di MF, treno 4). Poi L1b.
