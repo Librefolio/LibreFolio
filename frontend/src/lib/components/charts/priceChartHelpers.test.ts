@@ -1340,7 +1340,7 @@ describe('buildEventScatterGroups', () => {
     it('falls back to a neutral colour for a comparison marker with no signal colour', () => {
         const ctx = scatterCtx(['2024-01-01'], [10]);
         const groups = buildEventScatterGroups([evm('2024-01-01', 'SIG', {assetLabel: 'Beta'})], 'daily', ctx);
-        expect(groups[0].color).toBe('#6b7280');
+        expect(groups[0].color).toBe('#727b87');
     });
 
     it('places a comparison marker on its overlay line, not the main price', () => {
@@ -1460,15 +1460,15 @@ describe('buildEventScatterGroups', () => {
 describe('buildDeltaHtml', () => {
     it('uses green for a non-negative percentage delta and red for a negative one', () => {
         // The contract: colour is derived from the sign, not a fixed value.
-        expect(buildDeltaHtml(2.5, 0, true)).toContain('#10b981');
+        expect(buildDeltaHtml(2.5, 0, true)).toContain('#18794e');
         expect(buildDeltaHtml(2.5, 0, true)).toContain('(Δ +2.50%)');
-        expect(buildDeltaHtml(-2.5, 0, true)).toContain('#ef4444');
+        expect(buildDeltaHtml(-2.5, 0, true)).toContain('#c82838');
         expect(buildDeltaHtml(-2.5, 0, true)).toContain('(Δ -2.50%)');
     });
 
     it('exactly 0 counts as non-negative: green, and no sign (M-18)', () => {
         const html = buildDeltaHtml(0, 0, true);
-        expect(html).toContain('#10b981');
+        expect(html).toContain('#18794e');
         // Why (re-pin, M-18 CP2): the delta goes through `formatPercent`, whose rule (CP1) is that a zero
         // is not a gain: `(Δ +0.00%)` becomes `(Δ 0.00%)`. The colour is unchanged.
         expect(html).toContain('(Δ 0.00%)');
@@ -1478,13 +1478,13 @@ describe('buildDeltaHtml', () => {
     it('shows both the absolute and percentage delta in absolute view', () => {
         // value 110 vs first 100 → +10.0000 absolute, +10.00% relative, green.
         const html = buildDeltaHtml(110, 100, false);
-        expect(html).toContain('#10b981');
+        expect(html).toContain('#18794e');
         expect(html).toContain('(Δ +10.0000 / +10.00%)');
     });
 
     it('colours by the absolute delta sign in absolute view', () => {
         const html = buildDeltaHtml(90, 100, false);
-        expect(html).toContain('#ef4444');
+        expect(html).toContain('#c82838');
         expect(html).toContain('(Δ -10.0000 / -10.00%)');
     });
 
@@ -1504,7 +1504,7 @@ describe('buildDeltaHtml', () => {
         // Red (J-44, N65): `(Δ -10.0000 / —)`. Before: `(Δ -10.0000 / 0.00%)`, the same 0 % as above. The red
         // is already right today and must survive the change: with no percentage left, the sign of the
         // absolute delta alone decides the colour.
-        expect(html).toContain('#ef4444');
+        expect(html).toContain('#c82838');
         expect(html).toContain('(Δ -10.0000 / —)');
     });
 });
@@ -1645,8 +1645,8 @@ describe('splitGhostLabel — the name and the currency apart, nothing cut (K st
  */
 describe('buildDeltaHtml and formatMonthLabel in the interface language (M-18)', () => {
     const FR = {locale: 'fr'} as const;
-    const GREEN = '#10b981';
-    const RED = '#ef4444';
+    const GREEN = '#18794e';
+    const RED = '#c82838';
 
     /** `value` as JSON with its no-break spaces spelled out, so a message tells U+00A0 and U+202F from a space. */
     function spelled(value: unknown): string {
@@ -1758,8 +1758,8 @@ describe('buildDeltaHtml — the absolute Δ keeps its significant digits (C-97c
     /** Two prices in millionths, 1.2e-7 apart (the float difference is 1.2000000000000012e-7). */
     const LOW = 0.0000034573;
     const HIGH = 0.0000035773;
-    const GREEN = '#10b981';
-    const RED = '#ef4444';
+    const GREEN = '#18794e';
+    const RED = '#c82838';
 
     /** A delta suffix's colour, and its absolute and relative parts: `(Δ abs / pct)`. */
     function partsOf(html: string): {color: string; abs: string; pct: string} {

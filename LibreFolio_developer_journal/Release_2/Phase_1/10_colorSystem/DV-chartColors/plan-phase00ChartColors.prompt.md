@@ -2444,6 +2444,57 @@ secondo la 1.3, tranne `PriceChartFull` e `CandlestickChart` (Y-N65, circa un gi
   > - slot (17:52–18:02, `files/dv14-slot/`): E2E `asset-detail` 43 su 43, `fx-detail` 28 su 28, progetto
   >   `[desktop]`; porta 6156 libera, HEAD `56666d2ce`.
 
+## DV-10 chiusa da C2 (programma colori, ondata 2, 21/10/2026)
+
+> ✅ **21/10/2026 · mandato D-T28** («migra veloce, rifinisci dopo»): le serie, gli stati e i segni di `chartTheme.ts`
+> passano ai ruoli più vicini di `tokens.css`, marcati «da rivedere» per la designer. Sessione figlia C2.
+>
+> **Note implementazione**
+> - **API invariata.** Stessi nomi e stessa forma: ogni coppia `{light, dark}` è `rolePair('--lf-…')`
+>   (`lib/theme/seriesRoles.ts`, nuovo); `COLORS.greenLight` & C. restano stringhe. Le voci che erano una stringa uguale nei due
+>   temi sono *getter* che leggono il ruolo del tema attivo a ogni accesso (`roleNow`). Le bande col canale alfa:
+>   `rolePairAlpha`; i fondi scuri nei due temi (badge chiuso, tile senza P&L): `rolePairSplit`.
+> - **Parità.** `SERIES_ROLE_VALUES` tiene il valore di ogni ruolo per tema (come gli stand-in di `roleColors.ts`);
+>   `seriesRoles.test.ts` lo tiene uguale a `tokens.css` (stesso risolutore) e controlla che nessuna riga sia morta.
+>   **Limite:** le serie sono valori letti al caricamento (o al disegno, per i getter), non lette a ogni disegno
+>   sull'elemento del grafico come i neutri (`chartNeutrals`): il Designer Lab non le sposta in diretta. Per farlo i
+>   componenti dei grafici devono costruire le opzioni con `chartRoles` (lavoro dei componenti, fuori da `lib/theme`).
+> - **Cambio tema senza ricaricare (richiesta del coordinatore, 21/10).** Un getter letto una sola volta restava col tema
+>   vecchio: `RiskAnalysisPanel`, `L4Simulation` (`$derived`) e `SignalVisualLegend` (template) leggevano `RISK_OVERLAY_COLORS`
+>   e `legendBarPreview`. Cura in `lib/theme`: `themeTick.svelte.ts` (`trackTheme()`, `createSubscriber` su
+>   `onThemeClassChange`) è chiamato dai getter, così ogni `$derived`/`$effect`/template che li legge ricalcola al cambio di
+>   classe; test `seriesRoles.reactive.svelte.test.ts` (rosso senza la chiamata) e scansione dei chiamanti in
+>   `seriesRoles.test.ts`. Resta una copia: `LineChart.svelte:127` (`pendingColor = PRICE_SERIES.pendingEditPoint`, fallback di
+>   prop messo in cache da Svelte), file fuori perimetro: cura in una riga del suo proprietario. Prova a occhio, due temi
+>   senza ricaricare (Dashboard, Growth Abs e P&L, tab Rischio del portafoglio, dettaglio asset, tab Rischio dell'asset):
+>   corretta; screenshot in `salvataggi-worktrees-20261021/ondata2/c2-screens/` (18 PNG).
+> - **Letterali.** `chartTheme.ts` 153 → 4 (solo `GEO_MAP_COLORS.land` e `PAC_EXPOSURE_COLORS.ideal`, valori della
+>   designer del giro 3, §1.6/§1.7); `chartColorScales.ts` 4 → 0 (`treemapPnlColor` ora parte da `--lf-gain`/`--lf-loss` e
+>   va verso il testo primario con l'intensità); `toneClasses.ts` 22 classi legacy → 0 (`combined`, `identifier`: ruoli
+>   `cat-fund`, `cat-etf`, `cat-stock`, `cat-hold`; baseline `lib/theme/toneClasses.ts` tolta). Restano fuori dai ruoli:
+>   `chartCategories.ts` (54, il lotto DV-11), `chartPalettes.ts` (26: la scala dei blu della designer e la palette dei
+>   colori che l'utente salva), gli stand-in di `roleColors.ts` e le righe di `seriesRoles.ts` (copie parity-gated di
+>   `tokens.css`).
+> - **Test.** I 9 file che asserivano i vecchi esadecimali (prezzi, lotti, segnali, scatter) leggono i nuovi valori dei
+>   ruoli; nessuna logica cambiata.
+> - **Mappa voce → ruolo** (da rivedere): guadagno/perdita (prezzi e portafoglio fusi) `--lf-gain`/`--lf-loss`; linea
+>   prezzo, NAV, P&L totale `--lf-focus`; blu delle serie `--lf-info` (trasferimento WAC `--lf-info-on-soft`); ambra
+>   `--lf-warning`; oro dei dividendi e split del Gantt `--lf-cat-crypto`; arancio `--lf-cat-commodity`; viola
+>   `--lf-cat-stock` (non `--lf-ai`); deposito `--lf-cat-liquidity`; salvia `--lf-border-input`; grigi `--lf-cat-other`,
+>   `--lf-cat-hold`, `--lf-text-secondary`, `--lf-text-primary`; punto selezionato `--lf-checked`. Tabella completa con i
+>   valori vecchi nella cartella delle note del programma (`C2-tabella-letterali-ruoli.md`).
+>
+> **⚠️ Da rivedere con la designer**
+> - il verde NAV/prezzo (`focus`, #236b4d chiaro) e il verde dei rientri (`gain`, #18794e) sono vicini in chiaro;
+> - i blu delle serie sono lo stato `info`; i viola «interessi/altro» coincidono col tipo Stock; il turchese del
+>   deposito diventa la liquidità; l'oro e l'arancio sono due categorie (`crypto`, `commodity`);
+> - il badge «aperta» (`openBadge`) sta su `--lf-action`, che in scuro sulla card è 1,95:1 (il testo bianco è leggibile, il
+>   bordo del badge no); servono i «pieni di stato» di T;
+> - i marker acquisto/vendita/proventi sono eventi, non segni: stanno su gain/loss per vicinanza.
+>
+> **⚠️ Fuori pista**: nessuna. Prova nei due temi sul browser: non ancora fatta (serve lo slot pesante del
+> coordinatore: build + server sulla porta 6188).
+
 ## Definizione di fatto
 
 - **Un colore fisso per chiave:** ogni chiave ha un colore per tema, uguale in torta e storico, in dashboard, broker
