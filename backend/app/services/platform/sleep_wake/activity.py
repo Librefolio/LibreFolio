@@ -5,7 +5,10 @@ request of the user stamps the moment of the user's last request, at its start a
 probe is *in flight* until the app has finished with it: the last chunk of a streamed body and the background tasks of
 the response included. The probes (``PROBE_PATHS``: health, readiness, the test lane's health) are not counted at all,
 so an orchestrator calling them every few seconds never keeps a machine awake. ``wake-sync`` (``WAKE_PATHS``) is in
-flight but it is not the user: a scheduled wake-up must not look like a visit. Any other request is the user, the
+flight but it is not the user: a scheduled wake-up must not look like a visit. Nor do the hosting panel's routes
+(``PANEL_PATH_PREFIXES``, lot H-61): its backups and its status are in flight while they run, never the user, so the
+panel's polling never keeps a machine awake as a visit would; in flight, not probes, since the download of an archive
+runs after the backup's own lock is released. Any other request is the user, the
 frontend's polling included: the frontend stops polling in a hidden tab and after two minutes without input.
 
 Work that runs outside a request says so with ``busy(reason)``; a source the process cannot wrap, such as a backup run
@@ -38,6 +41,8 @@ logger = get_logger(__name__)
 PROBE_PATHS: frozenset[str] = frozenset({f"{API_V1_PREFIX}/system/health", f"{API_V1_PREFIX}/system/ready", f"{API_V1_PREFIX}/system/test-lane-health"})
 #: The scheduled wake-up: in flight while its jobs run, but never the user.
 WAKE_PATHS: frozenset[str] = frozenset({f"{API_V1_PREFIX}/system/wake-sync"})
+#: The hosting panel's routes (lot H-61): its backups and its status, classified as the wake-up is.
+PANEL_PATH_PREFIXES: tuple[str, ...] = (f"{API_V1_PREFIX}/backup/panel/", f"{API_V1_PREFIX}/panel/")
 
 RequestKind = Literal["probe", "wake", "user"]
 
@@ -53,7 +58,7 @@ def request_kind(path: str) -> RequestKind:
     normalized = path.rstrip("/") or "/"
     if normalized in PROBE_PATHS:
         return "probe"
-    if normalized in WAKE_PATHS:
+    if normalized in WAKE_PATHS or normalized.startswith(PANEL_PATH_PREFIXES):
         return "wake"
     return "user"
 

@@ -3,13 +3,14 @@ in progress (plan phase01SleepWake §Z2a, decision D-S1, lot Z2a).
 
 An idle monitor (lot Z2b) will read it to suspend a Fly machine after N idle minutes when nothing is busy, and the
 scheduler's catch-up (lot Z3) to run on the first request after a silence. Every HTTP request counts as the user's
-presence except the probes and ``wake-sync``. The contract pinned here:
+presence except the probes, ``wake-sync`` and, since lot H-61, the hosting panel's requests. The contract pinned here:
 
 (a) ``PROBE_PATHS`` holds ``/system/health``, ``/system/ready`` and ``/system/test-lane-health``, ``WAKE_PATHS`` holds
     ``/system/wake-sync``, all under ``API_V1_PREFIX``; both are frozensets. ``request_kind(path)`` ignores trailing
     slashes, then matches exactly, case included: ``"probe"``, ``"wake"``, anything else ``"user"`` — ``/``, the site,
     the docs, an unknown path, and every near miss: ``/system/healthz``, ``/system/health/extra``,
-    ``/system/wake-sync/x``, a probe without the prefix or in another case.
+    ``/system/wake-sync/x``, a probe without the prefix or in another case. The hosting panel's paths are ``"wake"``
+    too, matched by prefix: (p).
 (b) ``Activity(*, clock=time.time)``: every timestamp comes from ``clock``, the wall clock by default — a suspend must
     count as silence —; ``started_at`` is ``clock()`` at construction; ``in_flight`` (0) and ``last_user_request_at``
     (None) are read-only properties.
@@ -62,6 +63,16 @@ presence except the probes and ``wake-sync``. The contract pinned here:
     request's start —, the name lower-cased and the value in latin-1, unless the answer already has a header of that
     name (the app's value wins); a streaming answer gets them once, on its single start message. A probe, and any path
     outside ``/api/`` (the site, the docs), get none.
+(p) The hosting panel (lot H-61, decision Q5): its requests are in flight but never the user's presence, as wake-sync's
+    are. ``PANEL_PATH_PREFIXES``, a tuple, holds ``/backup/panel/`` then ``/panel/``, under ``API_V1_PREFIX``;
+    ``request_kind`` answers ``"wake"`` for a path that, its trailing slashes ignored, starts with one of them — the
+    jobs of a panel backup, the download of its archive, the panel's status —, and ``"user"``, as before, for the backup
+    routes of the settings (``/backup/instance…``, ``/backup/restore``) and for a path beside a prefix
+    (``/backup/panelx``, ``/panelx/status``, ``/backup/panels/jobs``). ``WAKE_PATHS`` keeps wake-sync alone. Through the
+    middleware a panel request is in flight while the app runs, through the last chunk of a download — which runs after
+    the backup's lock is released: only «in flight» keeps the machine awake until it ends —; it leaves
+    ``last_user_request_at`` as it was and ``idle_seconds()`` counting, and calls no return listener however long the
+    silence: the user's next request receives the whole of it. SWA-030 runs on the panel's paths too.
 
 Pure: no database, no server, no lane port, no network. Every ``Activity`` under test is the test's own, on a fake clock
 that moves only when the test sets it; an autouse fixture puts a decoy in place of the process's ``ACTIVITY``, which is
@@ -77,7 +88,11 @@ Red until ``backend/app/services/platform/sleep_wake/activity.py`` exists: the m
 red until ``MIDDLEWARE_STACK`` starts with the activity entry. The removal of (f), SWA-038…040, stays red until
 ``Activity.remove_return_listener`` exists (lot Z3). The response headers of (o), SWA-041…050, stay red until
 ``Activity.register_response_header`` exists and ``ActivityMiddleware`` adds them (lot Z5): an ``AttributeError`` per
-case, then a missing header on the answers.
+case, then a missing header on the answers. The hosting panel's cases of (p) — its paths in SWA-002 and SWA-030, and
+SWA-051…054 — stay red until ``request_kind`` answers ``"wake"`` below ``PANEL_PATH_PREFIXES`` (lot H-61): today those
+paths are ``"user"``, so SWA-051 finds no ``PANEL_PATH_PREFIXES`` and the others find the panel's request stamped as
+the user's and a listener called on it. The ``"user"`` cases of SWA-002 beside them — the backup routes of the
+settings, the paths beside a prefix — pass before and after: they hold the boundary of the prefixes.
 """
 
 from __future__ import annotations
@@ -117,11 +132,26 @@ LANE_HEALTH = f"{API_V1_PREFIX}/system/test-lane-health"
 WAKE_SYNC = f"{API_V1_PREFIX}/system/wake-sync"
 EXPECTED_PROBE_PATHS = frozenset({HEALTH, READY, LANE_HEALTH})
 EXPECTED_WAKE_PATHS = frozenset({WAKE_SYNC})
+#: The hosting panel's paths (lot H-61, decision Q5): a panel backup's jobs, one of them, the download of its archive,
+#: and the panel's status; and the two prefixes every path of the panel starts with, in their order.
+PANEL_JOBS = f"{API_V1_PREFIX}/backup/panel/jobs"
+PANEL_JOB = f"{PANEL_JOBS}/abc"
+PANEL_DOWNLOAD = f"{PANEL_JOB}/file"
+PANEL_STATUS = f"{API_V1_PREFIX}/panel/status"
+EXPECTED_PANEL_PATH_PREFIXES = (f"{API_V1_PREFIX}/backup/panel/", f"{API_V1_PREFIX}/panel/")
+#: The panel's paths the test app answers with its plain handler, by test id: under each prefix, one with a trailing
+#: slash too. Its download, ``PANEL_DOWNLOAD``, streams instead.
+PANEL_PLAIN_PATHS = {
+    "panel-backup-jobs": PANEL_JOBS,
+    "panel-backup-job-with-a-trailing-slash": f"{PANEL_JOB}/",
+    "panel-status": PANEL_STATUS,
+    "panel-status-with-a-trailing-slash": f"{PANEL_STATUS}/",
+}
 #: A route of the test apps that is neither a probe nor wake-sync: the user's.
 USER_ROUTE = "/x"
 #: Every path the test app answers with its plain handler: the probes and wake-sync, one of each with a trailing slash
-#: too, and the user's route.
-OBSERVED_PATHS = (HEALTH, READY, LANE_HEALTH, f"{READY}/", WAKE_SYNC, f"{WAKE_SYNC}/", USER_ROUTE)
+#: too, the hosting panel's, and the user's route.
+OBSERVED_PATHS = (HEALTH, READY, LANE_HEALTH, f"{READY}/", WAKE_SYNC, f"{WAKE_SYNC}/", *PANEL_PLAIN_PATHS.values(), USER_ROUTE)
 
 START = 1_000.0
 DECOY_START = 9_000.0
@@ -157,12 +187,26 @@ REQUEST_KINDS = [
     pytest.param(f"{LANE_HEALTH}/", "probe", id="test-lane-health-trailing-slash"),
     pytest.param(f"{WAKE_SYNC}/", "wake", id="wake-sync-one-trailing-slash"),
     pytest.param(f"{WAKE_SYNC}///", "wake", id="wake-sync-three-trailing-slashes"),
+    # The hosting panel (lot H-61, decision Q5): every path below one of its two prefixes is "wake", trailing slashes
+    # ignored — its backup's jobs, one job, the download of its archive, its status.
+    pytest.param(PANEL_JOBS, "wake", id="panel-backup-jobs"),
+    pytest.param(f"{PANEL_JOBS}/", "wake", id="panel-backup-jobs-trailing-slash"),
+    pytest.param(PANEL_JOB, "wake", id="panel-backup-job"),
+    pytest.param(f"{PANEL_JOB}/", "wake", id="panel-backup-job-trailing-slash"),
+    pytest.param(PANEL_DOWNLOAD, "wake", id="panel-backup-download"),
+    pytest.param(f"{PANEL_DOWNLOAD}/", "wake", id="panel-backup-download-trailing-slash"),
+    pytest.param(PANEL_STATUS, "wake", id="panel-status"),
+    pytest.param(f"{PANEL_STATUS}/", "wake", id="panel-status-trailing-slash"),
     # Everything else is the user: the root, the SPA, the docs, the chunks, the rest of the API, an unknown path...
     pytest.param("/", "user", id="root"),
     pytest.param("/assets/1", "user", id="spa-page"),
     pytest.param("/mkdocs/x", "user", id="docs"),
     pytest.param("/_app/x.js", "user", id="chunk"),
     pytest.param(f"{API_V1_PREFIX}/system/info", "user", id="system-info"),
+    # The backup routes of the settings, beside the hosting panel's (lot H-61), are the user's.
+    pytest.param(f"{API_V1_PREFIX}/backup/instance", "user", id="settings-backup-start"),
+    pytest.param(f"{API_V1_PREFIX}/backup/instance/jobs/abc/file", "user", id="settings-backup-download"),
+    pytest.param(f"{API_V1_PREFIX}/backup/restore", "user", id="settings-restore"),
     pytest.param("/no/such/path", "user", id="unknown"),
     # ...and every near miss: a longer name, a path below, another case, no prefix.
     pytest.param(f"{API_V1_PREFIX}/system/healthz", "user", id="healthz"),
@@ -171,6 +215,10 @@ REQUEST_KINDS = [
     pytest.param("/API/v1/system/health", "user", id="prefix-in-another-case"),
     pytest.param(f"{API_V1_PREFIX}/system/Health", "user", id="name-in-another-case"),
     pytest.param("/system/health", "user", id="without-the-prefix"),
+    # The hosting panel's near misses: a path beside one of its prefixes — a longer name, a plural.
+    pytest.param(f"{API_V1_PREFIX}/backup/panelx", "user", id="beside-the-backup-panel-prefix"),
+    pytest.param(f"{API_V1_PREFIX}/panelx/status", "user", id="beside-the-panel-prefix"),
+    pytest.param(f"{API_V1_PREFIX}/backup/panels/jobs", "user", id="backup-panels-plural"),
 ]
 
 PROBE_REQUESTS = [
@@ -179,7 +227,10 @@ PROBE_REQUESTS = [
     pytest.param(LANE_HEALTH, id="test-lane-health"),
     pytest.param(f"{READY}/", id="ready-with-a-trailing-slash"),
 ]
-WAKE_REQUESTS = [pytest.param(WAKE_SYNC, id="wake-sync"), pytest.param(f"{WAKE_SYNC}/", id="wake-sync-with-a-trailing-slash")]
+#: The hosting panel's requests the test app answers with its plain handler (lot H-61): in flight, never presence.
+PANEL_REQUESTS = [pytest.param(path, id=name) for name, path in PANEL_PLAIN_PATHS.items()]
+#: The requests of kind "wake": wake-sync, and since lot H-61 the hosting panel's.
+WAKE_REQUESTS = [pytest.param(WAKE_SYNC, id="wake-sync"), pytest.param(f"{WAKE_SYNC}/", id="wake-sync-with-a-trailing-slash"), *PANEL_REQUESTS]
 #: ``(path, status, where the app records it)``: a route, or a path the router answers 404 through the app's handler.
 USER_REQUESTS = [
     pytest.param(USER_ROUTE, 200, "handler", id="a-route"),
@@ -413,16 +464,18 @@ async def _broken(request: Request) -> PlainTextResponse:
 def _observed_app(observed: Observed) -> FastAPI:
     """A small app reading ``observed.activity`` from inside, with ``ActivityMiddleware`` added on that activity.
 
-    ``OBSERVED_PATHS`` answer 200, ``/stream`` streams ``STREAM_CHUNKS`` chunks, ``/background`` runs a background task
-    after its response, ``/raise`` raises, and any other path is answered 404 by the app's handler. Each records what the
-    activity reads in ``observed.seen``; a handler moves the clock on by ``HANDLER_SECONDS``, the end of the streaming
-    body and the background task by ``TAIL_SECONDS``.
+    ``OBSERVED_PATHS`` answer 200, ``/stream`` and the hosting panel's download, ``PANEL_DOWNLOAD``, stream
+    ``STREAM_CHUNKS`` chunks, ``/background`` runs a background task after its response, ``/raise`` raises, and any
+    other path is answered 404 by the app's handler. Each records what the activity reads in ``observed.seen``; a
+    handler moves the clock on by ``HANDLER_SECONDS``, the end of the streaming body and the background task by
+    ``TAIL_SECONDS``.
     """
     app = FastAPI()
     app.state.observed = observed
     for path in OBSERVED_PATHS:
         app.add_api_route(path, _handler, methods=["GET"])
     app.add_api_route("/stream", _stream, methods=["GET"])
+    app.add_api_route(PANEL_DOWNLOAD, _stream, methods=["GET"])
     app.add_api_route("/background", _background, methods=["GET"])
     app.add_api_route("/raise", _broken, methods=["GET"])
     app.add_exception_handler(404, _not_found)
@@ -1571,3 +1624,85 @@ async def test_without_its_own_activity_the_middleware_reads_the_providers_of_cu
 
     assert response.headers.get_list(TEST_HEADER) == ["starting"]
     print_success("the process's record")
+
+
+# =============================================================================
+# (p) THE HOSTING PANEL (lot H-61, decision Q5)
+# =============================================================================
+
+
+def test_the_panel_prefixes_are_built_on_the_api_prefix_and_wake_paths_keeps_wake_sync_alone() -> None:
+    """SWA-051 — contract (p): ``PANEL_PATH_PREFIXES`` is a tuple, ``/backup/panel/`` then ``/panel/``, both under ``API_V1_PREFIX``; ``WAKE_PATHS`` is still the frozenset of wake-sync alone: the panel is matched by prefix, never added to it."""
+    print_section("SWA-051: PANEL_PATH_PREFIXES; WAKE_PATHS unchanged")
+    prefixes = getattr(activity_module, "PANEL_PATH_PREFIXES", None)
+
+    assert isinstance(prefixes, tuple), f"PANEL_PATH_PREFIXES must be the tuple of the panel's two prefixes: {prefixes!r}"
+    assert prefixes == EXPECTED_PANEL_PATH_PREFIXES
+    assert isinstance(activity_module.WAKE_PATHS, frozenset)
+    assert activity_module.WAKE_PATHS == EXPECTED_WAKE_PATHS
+    print_success(f"{prefixes}; WAKE_PATHS still wake-sync alone")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", PANEL_REQUESTS)
+async def test_a_panel_request_leaves_the_users_inactivity_counting(path: str) -> None:
+    """SWA-052 — contract (p): the user's last request ended at 1100, 400 s of inactivity at 1500. A panel request then finds itself in flight and that stamp unchanged, and ends at 1520: ``last_user_request_at`` is still 1100, and ``idle_seconds()`` has kept counting, 420 s, where a request of the user would have brought it back to 0."""
+    print_section(f"SWA-052: GET {path}, the user's inactivity")
+    activity, clock = _activity()
+    clock.now = 1_100.0
+    _user_request(activity)
+    observed = Observed(activity, clock)
+    clock.now = 1_500.0
+    before = activity.idle_seconds()
+
+    async with _client(_observed_app(observed)) as client:
+        response = await client.get(path)
+
+    assert response.status_code == 200
+    assert observed.seen == [("handler", path, 1, 1_100.0)]
+    assert (activity.in_flight, activity.last_user_request_at) == (0, 1_100.0)
+    assert (before, activity.idle_seconds()) == (400.0, 400.0 + HANDLER_SECONDS)
+    print_success(f"in flight; idle {before} s before, {activity.idle_seconds()} s after")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", PANEL_REQUESTS)
+async def test_a_panel_request_calls_no_return_listener_and_the_users_next_request_gets_the_whole_silence(path: str) -> None:
+    """SWA-053 — contract (p): a listener of 60 s, and no request since the start at 1000. At 1300, after 300 s of silence, a panel request calls no listener — the app finds it in flight and no request of the user stamped — and ends at 1320. The barrier: the user's request that follows calls the listener before the app runs, with the whole silence, 320.0, and is stamped as usual."""
+    print_section(f"SWA-053: GET {path}, then the user's request: the return listeners")
+    activity, clock = _activity()
+    observed = Observed(activity, clock)
+    activity.register_return_listener("catch-up", 60.0, observed.listener)
+    clock.now = 1_300.0
+
+    async with _client(_observed_app(observed)) as client:
+        panel = await client.get(path)
+        user = await client.get(USER_ROUTE)
+
+    assert (panel.status_code, user.status_code) == (200, 200)
+    assert observed.seen == [("handler", path, 1, None), ("listener", 300.0 + HANDLER_SECONDS), ("handler", USER_ROUTE, 1, 1_300.0 + HANDLER_SECONDS)]
+    assert (activity.in_flight, activity.last_user_request_at) == (0, 1_300.0 + 2 * HANDLER_SECONDS)
+    print_success("no listener for the panel; the user's next request gets the whole silence")
+
+
+@pytest.mark.asyncio
+async def test_a_panel_download_streams_in_flight_until_its_last_chunk_and_is_never_the_user() -> None:
+    """SWA-054 — contract (p): the user's last request ended at 1100, a listener of 60 s. At 1500 the panel downloads its archive, a streaming answer: every chunk, and the generator's end after the last one, find the download in flight and the user's stamp unchanged, and no listener runs; once the client has the whole body nothing is in flight and the stamp is still 1100. The barrier: the user's next request, at 1530, calls the listener with the whole silence, 430.0."""
+    print_section(f"SWA-054: GET {PANEL_DOWNLOAD}, a streaming download")
+    activity, clock = _activity()
+    clock.now = 1_100.0
+    _user_request(activity)
+    observed = Observed(activity, clock)
+    activity.register_return_listener("catch-up", 60.0, observed.listener)
+    clock.now = 1_500.0
+
+    async with _client(_observed_app(observed)) as client:
+        download = await client.get(PANEL_DOWNLOAD)
+        after_the_download = (activity.in_flight, activity.last_user_request_at)
+        user = await client.get(USER_ROUTE)
+
+    assert (download.status_code, user.status_code) == (200, 200)
+    assert download.text == "".join(f"chunk-{index}\n" for index in range(STREAM_CHUNKS))
+    assert observed.seen == [*(("chunk", index, 1, 1_100.0) for index in range(STREAM_CHUNKS)), ("after-the-last-chunk", STREAM_CHUNKS, 1, 1_100.0), ("listener", 400.0 + TAIL_SECONDS), ("handler", USER_ROUTE, 1, 1_500.0 + TAIL_SECONDS)]
+    assert after_the_download == (0, 1_100.0)
+    print_success(f"in flight through {STREAM_CHUNKS} chunks and the generator's end; never the user")

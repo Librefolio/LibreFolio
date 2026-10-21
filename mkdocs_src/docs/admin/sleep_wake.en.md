@@ -49,7 +49,15 @@ except:
 - the health checks, `/api/v1/system/health` and `/api/v1/system/ready`, which a host or an uptime
   monitor may call every few seconds;
 - the [scheduled wake-up](#wake-sync): it is not a visit, although it keeps the machine awake while
-  its jobs run.
+  its jobs run;
+- the calls of a hosting panel to its backup routes, `/api/v1/backup/panel/…`, and to its status
+  route, `/api/v1/panel/status` ([Hosting Panel API](hosting_providers.md#panel-api)): they are not
+  visits either, so a panel that polls a backup or the setup status never keeps the machine awake
+  as a visit would. Each call keeps it awake only while it runs, a download until its last byte,
+  and a running backup keeps it awake by itself (below). Like any request through Fly's proxy, a
+  call still resumes a suspended machine, as the tip below says of uptime monitors. The backup and
+  restore routes of Settings › Administration › Backup, `/api/v1/backup/instance…` and
+  `/api/v1/backup/restore/…`, are the user's: they count as visits.
 
 The live prices of the Assets list and of an asset's page are requests too, so they count while
 someone uses the page. They pause while the tab is in the background and after two minutes without
@@ -251,11 +259,17 @@ The rules of the token:
   token can start the updates, and nothing else.
 - **Only in the `Authorization: Bearer` header**, never in the URL: addresses end up in the logs of
   servers and proxies, and a token in the URL is refused with `401`.
+- **The rules of the hosting panel.** The wake-up is the `wake` scope of the
+  [Hosting Panel API](hosting_providers.md#panel-api), whose shared rules hold for it too: after too
+  many wrong tokens from one address, to any of its scopes, that address gets `429` for a while,
+  and each call writes a `Hosting panel request` line in the log.
 
-LibreFolio checks the token when the route is called, not at startup. A token it cannot use (too
-short, with a space or a character outside ASCII, or a `LIBREFOLIO_WAKE_TOKEN_FILE` that is
-missing, unreadable or empty) does not stop the server: the route answers `503` to every call, and
-each call logs this error, with the variable and what is wrong, never the token:
+LibreFolio checks the token at startup, and reads it again at every call. A token it cannot use
+(too short, with a space or a character outside ASCII, or a `LIBREFOLIO_WAKE_TOKEN_FILE` that is
+missing, unreadable or empty) does not stop the server: the start log has an error that names the
+variable (`check` is `platform.hosting_panel`: see
+[The Startup Check](hosting_providers.md#panel-api-check)), the route answers `503` to every call,
+and each call logs this error, with the variable and what is wrong, never the token:
 
 ```text
 The wake-up token cannot be used: the scheduled wake-up refuses every request
