@@ -8187,3 +8187,11 @@ toccherà con FE4), ma separato: niente conflitti con X.
    > - `front-asset asset-list`: **43/43** (2,0 min).
    > Nessun rosso, nessun ripetuto. Porta 6189 libera a fine corsa (`lsof`: nessun ascoltatore). Log in
    > `salvataggi-worktrees-20261021/ondata2/y-e2e-{fx-settings,fx-list,asset-list}.log`.
+6. ✅ 21/10 · Seguito da C2 (colori): `pendingColor` di `LineChart` non ha più il getter come valore di default della prop (Svelte lo
+   tiene: dopo un cambio tema senza ricarica restava il colore vecchio).
+   > **Note implementazione**: rosso prima (`LineChart.test.ts`, nuovo `describe` «the pending-edit colour follows the theme after a
+   > rebuild»: `PRICE_SERIES.pendingEditPoint` sostituito da un getter, colore cambiato, grafico ridisegnato con
+   > `notifyChartColorsChange()`: restava quello del montaggio). Cura di una riga: prop senza default, `pendingColor ?? PRICE_SERIES.pendingEditPoint`
+   > dove si costruisce la serie. Una guardia: la prop `pendingColor` vince ancora. `LineChart.test.ts` **25/25**; `front check`
+   > 0 errori e 0 avvisi (in `flock`); Prettier, `theme-roles --check`, `git diff --check` puliti. Non toccati `echarts.init` né `chartTheme.ts`.
+
