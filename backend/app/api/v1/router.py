@@ -13,6 +13,7 @@ from backend.app.api.v1 import (
     brokers,
     email,
     fx,
+    panel,
     plugin_settings,
     portfolio_api,
     risk,
@@ -28,6 +29,7 @@ from backend.app.api.v1 import (
 from backend.app.api.v1.instance_block import refuse_when_blocked
 from backend.app.api.v1.utilities import router as utilities_router
 from backend.app.logging_config import get_logger
+from backend.app.services.platform.hosting_panel.access import HOSTING_PANEL_TAG
 
 logger = get_logger(__name__)
 
@@ -49,6 +51,7 @@ router.include_router(assets.asset_router)
 router.include_router(transactions.tx_router)
 router.include_router(brokers.broker_router)
 router.include_router(backup.backup_router)
+router.include_router(panel.panel_router, prefix="/panel", tags=[HOSTING_PANEL_TAG])  # Hosting panel: the setup status of the instance
 router.include_router(portfolio_api.portfolio_router)
 router.include_router(risk.router)
 router.include_router(signals.signals_router)

@@ -10022,8 +10022,28 @@ eliminato dopo il setup vale `none`. A lo scrive dopo N69b; i miei test lo sosti
    - `hosting-panel-routes` 11 su 15: i 4 rossi sono tutti della rotta di stato, cioè R1;
    - `core-unit` 9510 (`green3`), con la mappa e l'ancora `#panel-api`;
    - ruff e black puliti. Black ha toccato solo le mie righe nei file condivisi del runner.
-3. ⏳ R1, quando la funzione di A è nella base. Il codice è pronto in `files/h61/dry/` (`api_panel.py`,
-   `schemas_hosting_panel.py`).
+3. ✅ **R1** (21/10, ondata 1 su Linux; la funzione di A è nella base da `f9f417bfa`).
+   > **Note implementazione**: quattro file toccati, due nuovi.
+   > - `backend/app/schemas/hosting_panel.py` (nuovo): `PanelStatusResponse`, `extra="forbid"`, due chiavi esatte;
+   > - `backend/app/api/v1/panel.py` (nuovo): `get_panel_status` con `panel_access(PanelScope.STATUS)` e la sessione della
+   >   richiesta; `admin_setup_status(session, now=utcnow())`; la mappatura è `status.state.value`, e `setup_expires_at`
+   >   passa solo per `pending` (Q10), con `ensure_utc`;
+   > - `backend/app/api/v1/router.py`: `panel.panel_router` incluso con `prefix="/panel"` e `tags=[HOSTING_PANEL_TAG]`,
+   >   subito dopo `backup_router`;
+   > - `backend/app/api/v1/instance_block.py`: `panel.get_panel_status` in `ALLOWED_WHEN_BLOCKED` (+ la frase nel
+   >   docstring del modulo).
+   >
+   > Il codice di `files/h61/dry/` è stato ripreso con una sola differenza: niente `hasattr(status.state, "value")`
+   > (lo stato di A è sempre un `StrEnum`), si legge `status.state.value` come dice il contratto.
+   > **Verdi** (corsia 6181, `db populate --force --clean` prima): `api panel-status` 20 su 20; `api hosting-panel-routes`
+   > 15 su 15 (i 4 rossi di R1 sono verdi); `api instance-block` 62 su 62 (la riga dell'elenco).
+   > **Rimandi in doc a `access_control.md#setup-status`** (l'ancora di A, già nella base): `admin/hosting_providers.en.md`
+   > (voce «For developers» in «Related»), `developer/architecture/security.md` (la riga `status` della tabella degli scopi
+   > e la riga di `GET /panel/status` nella tabella delle rotte) e `developer/api/index.md` (la voce `/panel`).
+   > **Rilettura dei file fusi**: per `admin/settings.en.md`, `security.md`, `settings.md` e `access_control.md` ho
+   > confrontato `ad4effcf9` (A fuso in `dev_release2`) con `HEAD`: le sole righe tolte sono quelle che avevo riscritto
+   > io (i token di wake e stato, le rotte del pannello, la riga del limite per indirizzo); nessuna riga di A è andata
+   > persa e l'ancora `{: #setup-status }` c'è.
 4. ✅ **Doc**, con il docs-writer, in due giri:
    - `hosting_providers.en.md`: la sezione `## 🔌 Hosting Panel API {: #panel-api }`, con sette sottosezioni, la riga
      dell'istanza bloccata e il 429 nella tabella del backup;
@@ -10075,6 +10095,31 @@ eliminato dopo il setup vale `none`. A lo scrive dopo N69b; i miei test lo sosti
    > - R1, dove la mappatura dello stato diventa `status.state.value`;
    > - il rimando da `#panel-status` a `access_control.md#setup-status`, l'ancora nuova di A;
    > - le corse, poi il checkpoint.
+
+   ✅ **21/10, chiusura del checkpoint 1** (base `8db27b418`, `dev_release2` `208199bf6`). R1 e i rimandi sopra (passo 3);
+   inoltre la **18ª voce della fixture di G**.
+   > **Note implementazione**: in `frontend/e2e/fixtures/gallerySecurity.ts`, `platform.hosting_panel` (ramo `ok`
+   > `instance.checks.hostingPanel.off`) tra `platform.log_level` e `platform.test_mode`, come in `CONFIG_CHECKS`; il commento
+   > in testa dice «18» e nomina i token del pannello fra i default del self-hosted. `prettier --check` (da `frontend/`, il
+   > plugin svelte si trova solo lì) e `tsc -p tsconfig.e2e.json` puliti. Nessuna corsa della galleria.
+   >
+   > **Corse** (corsia `--test-port 6181 --data-dir /tmp/librefolio-r13-h`, prima `db populate --force --clean`, una alla
+   > volta, carico sotto 8), tutte verdi:
+   > - le tre ex rosse: `api panel-status` 20, `api hosting-panel-routes` 15, `api instance-block` 62;
+   > - il resto di CP1: `services hosting-panel-access` 102, `services config-audit` 255, `services config-env-example`
+   >   39, `api backup-panel` 66, `api backup` 23, `api system-wake` 76, `api system` 122,
+   >   `services sleep-wake-activity` 139, `services sleep-wake-suspend` 141, `services backup-checks` 93,
+   >   `front-utility core-unit` 9771 su 9771 (223 file);
+   > - `ruff check` e `black --check` sui 22 file Python del checkpoint: puliti; `git diff --check` pulito;
+   > - `dev.py mkdocs build` (passa `--strict`) esce 0; `dev.py mkdocs check-links` 97 link validi.
+   >
+   > **⚠️ Fuori pista**: `api backup-panel` è 66 e non 61, e `core-unit` 9771 e non 9510: i numeri del 20/10 precedono il
+   > merge di `dev_release2`, che porta cinque casi nuovi di B (B-8, `0b8037b75`) e i test di altri lotti. Non è una deriva
+   > di H.
+   > **⚠️ Fuori pista**: `prettier --check` lanciato dalla radice del worktree fallisce con «Cannot find package
+   > 'prettier-plugin-svelte'»: la configurazione sta in `frontend/`, quindi si lancia lì dentro.
+   > Server: l'avvio e lo stop del server condiviso sono del runner, non miei; dopo l'ultima corsa
+   > `lsof -nP -iTCP:6181 -sTCP:LISTEN` è vuoto.
 
 #### H-61, checkpoint 2 (L2, i biglietti firmati) — preparazione mentre il checkpoint 1 aspetta A (20/10, 13:30–14:25)
 
