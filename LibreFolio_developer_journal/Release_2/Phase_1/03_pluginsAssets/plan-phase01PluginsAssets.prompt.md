@@ -8535,3 +8535,128 @@ sonda lo legge come «nessun suggerimento» e `call_provider` mette in pausa.
     `lib/features/…`, il cancello lo rifiuta, perché la lista non si allunga. Quindi o adottano il modulo nello
     stesso lotto, o lasciano il ciclo nella pagina.
   - **N64** tocca le richieste dei segnali del backend, non questo ciclo: nessun conflitto.
+
+### Y-42 — i due dettagli disegnano i segnali con il modulo comune (21/10 notte, ondata 3)
+
+> **Via**: piano dell'ondata 3 «APPROVATO dal developer» (`salvataggi-worktrees-20261021/ondata3/PIANO-ondata3.md`,
+> «Decisioni del developer (21/10 sera)»: «Y-42 dentro questa ondata (sessione X)»), brief `kickoff-X.md`, lavoro
+> notturno: sotto-agente in background del coordinatore, il checkpoint è l'unico messaggio. Solo Y-42; N64 dopo.
+>
+> - Worktree `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-cuddly-engine`, ramo
+>   `e-alfy-x-plugin-asset-e-ricerca`, HEAD `c788e51be` (= atteso; merge di `dev_release2` `2879ae3e4`), albero pulito.
+> - Corsia 6191 + `/tmp/librefolio-r13-x`; pesanti in `flock /tmp/librefolio-heavy.lock`, `LC_ALL=en_US.UTF-8`.
+> - Grafo graphify assente nel worktree (ignorato): wiki letto a mano (`decisions/signal-label-unification.md`).
+
+#### Analisi (sola lettura, prima del codice)
+- **Stato reale** (verificato sul codice): `assets/[id]/+page.svelte` `overlaySignals` `:711-751` e
+  `fx/[pair]/+page.svelte` `:397-437` hanno ancora il ciclo `signalFromConfig(cfg)` → `_resolvedData` → `renderMulti`;
+  tutte e due hanno anche `backendOverlaySignals` (`:686-706` e `:375-395`), copia identica di `renderBackendResults`.
+  Il dettaglio del cambio ha il suo `fxPointToLineDataPoint` (`:337-345`), uguale a quello del modulo. Il cancello
+  `src/signalRendering.gate.test.ts` ha le due pagine in `KNOWN_COPIES` (`:76-85`) e le usa anche nei casi sintetici
+  (`CLEAN`, `KNOWN_COPIES[0]`/`[1]`) e nel test «bite on these very files».
+- **Le differenze fra le due copie e il modulo**, caso per caso:
+  - coppia FX nel dettaglio dell'asset: punto scritto in linea senza `staleDays`; il modulo lo aggiunge, ma
+    `FxPairSignal.computePoints` legge solo `value` (e scarta lo 0 dei mancanti): **disegno identico**;
+  - confronto: i dati stanno nei parametri della configurazione (`applyComparisonAssetsData` scrive `_resolvedData`,
+    `_assetIconUrl`, `_assetType`, `_assetCurrency`, `_targetCurrency`, `_conversionFailed`); `signalFromConfig` li
+    copia nell'istanza. Il nome: l'asset dà `display_name` o lascia il nome al catalogo; il cambio scrive a mano la
+    stessa chiave `chartSettings.signals.assetFallback` (stesso testo di `ChartSignal.text`). Icona e tipo: dalla lista
+    degli asset (cambio) o dai parametri caricati dalla stessa lista (asset): **stessi valori**;
+  - confronto con sé stesso: escluso nel dettaglio dell'asset (`data.assetId`), che diventa `selfAssetId`;
+  - `try/catch` intorno a `getFxStore`: non lancia mai (nota di Y in Y-39a); serie vuota = non disegnata, come nel modulo.
+  - **Nessuna differenza visibile trovata**: Y-42 è un cambio di struttura. Unica sfumatura: due confronti sullo
+    stesso asset, uno appena aggiunto e non ancora caricato, prendono i dati già caricati dall'altro (stesso asset,
+    stessi dati) invece di aspettare il caricamento.
+- **Superfici**:
+  - `lib/charts/chartPageSignals.ts` (di X, aiutanti dei dettagli): nuova funzione pura `detailPageSignalSources`
+    (le fonti dei dettagli: i cambi dallo store passato come funzione, diritti; il confronto dai `_resolvedData` della
+    configurazione con nome, icona e tipo dalla lista degli asset; `selfAssetId`);
+  - le due pagine: `renderLocalSignals` + `renderBackendResults` + `fxPointToLineDataPoint` dal modulo; via
+    `signalFromConfig`, `renderBackendSignalResult`, il convertitore locale e gli import rimasti senza uso;
+  - test: `lib/charts/__tests__/chartPageSignals.test.ts` (contratto delle fonti, parità con il vecchio disegno,
+    adozione letta nei sorgenti) e `src/signalRendering.gate.test.ts` (lista vuota, casi sintetici su copie finte,
+    morso sulle pagine reali). Tutti già registrati in `front_utility_unit` (`core-unit`): nessuna riga del runner.
+  - doc per sviluppatori `developer/frontend/components/charts.md` `#signal-rendering`, se nomina le copie.
+- **Non tocco**: `chartSignalRendering.ts` (di Y: nessuna aggiunta serve), `FxCard.svelte` (di Y in questa ondata:
+  converte due volte in linea, `:106-111` e `:121-126` → richiesta a Y nel checkpoint), le liste, lo store.
+- **Conflitti**: le due pagine sono mie in questa ondata; `signalRendering.gate.test.ts` nato con Y-39a (lo scrivo io
+  per ordine del brief); Y-40 leggerà `primaryView` nei dettagli dopo, in un secondo passo.
+- **Rischi**: reattività (`overlayDataVersion` resta letto nel `$derived`); i casi sintetici del cancello che oggi
+  indicizzano `KNOWN_COPIES[0]`/`[1]` vanno riscritti su copie finte, o il cancello si rompe con la lista vuota.
+- **Passi**: 1 analisi → 2 rossi (`test-author`) → 3 rossi visti rossi → 4 cura → 5 verdi leggeri (Vitest, `core-unit`,
+  `front check` dopo `api sync`, Prettier, `git diff --check`) → 6 doc → 7 checkpoint. E2E solo nello slot del
+  coordinatore: `front-asset asset-detail`, `front-fx fx-detail`.
+- **Fatto quando**: nessun `signalFromConfig(` nelle due pagine, `KNOWN_COPIES` vuota, rossi→verdi, `front check` 0/0,
+  E2E di dettaglio verdi nello slot, doc e piano aggiornati, CHANGELOG: nessuna riga visibile.
+
+#### Passi
+1. ✅ 21/10 · Analisi (sopra). `api sync` rc 0 (`ondata3/X-api-sync.log`), albero pulito dopo.
+2. ✅ 21/10 · I rossi (`test-author`, solo due file di test):
+   > **Note implementazione**:
+   > - `lib/charts/__tests__/chartPageSignals.test.ts`: tre parti nuove — il contratto di `detailPageSignalSources`
+   >   (fxPairData pigra e per coppia, diritta con `fxPointToLineDataPoint(p, false)`; comparisonTarget dai
+   >   `_resolvedData` della configurazione, nome/icona/tipo dagli asset, null senza dati; `selfAssetId`; purezza),
+   >   la parità attraverso il modulo (confronto con nome/icona/tipo, ripiego del catalogo, niente confronto con sé,
+   >   niente senza dati, la linea fantasma della conversione, coppia diritta e girata dal suo `_inverted`, store vuoto),
+   >   l'adozione letta nei sorgenti delle due pagine (import per valore di `renderLocalSignals` e
+   >   `renderBackendResults`, chiamati; `detailPageSignalSources(` chiamato; nessun convertitore locale nel cambio).
+   > - `src/signalRendering.gate.test.ts`: `KNOWN_COPIES = []`; i casi sintetici su `SYNTHETIC_COPIES` passate
+   >   esplicitamente; la camminata legge registro, modulo e le due pagine (`DETAIL_PAGES`); il «morso» rifatto sui file
+   >   veri (il testo del modulo copiato altrove; una pagina con una chiamata iniettata; una pagina come copia nota
+   >   finta, che risulta superata); nuovo «KNOWN_COPIES è vuota».
+3. ✅ 21/10 · I rossi visti rossi (carico 4,5): 2 file, **50 rossi, 51 verdi su 101**
+   (`ondata3/X-y42-red.log`).
+   - `chartPageSignals.test.ts` 79: 45 rossi (42 `detailPageSignalSources is not a function`, 3 adozione con le
+     pagine non adottate), 34 verdi (i 31 di prima, intatti, + 3 controlli delle forme).
+   - `signalRendering.gate.test.ts` 22: 5 rossi (le due pagine chiamano ancora `signalFromConfig(`, `:717` e `:403`;
+     iniezione e copia superata, una per pagina, per la stessa ragione), 17 verdi (tutti i sintetici).
+   - Prettier `--check` sui due file: pulito.
+4. ✅ 21/10 · La cura.
+   > **Note implementazione**:
+   > - `lib/charts/chartPageSignals.ts`: `DetailPageAsset`, `DetailPageSignalSourcesInput` e la funzione pura
+   >   `detailPageSignalSources` (il contratto dell'analisi). Importa solo da `chartSignalRendering.ts`, che resta
+   >   intatto: nessuna richiesta a Y.
+   > - `assets/[id]/+page.svelte`: `backendOverlaySignals = $derived(renderBackendResults(…, (key) => $t(key)))`;
+   >   `signalSources = $derived(detailPageSignalSources({configs: signals, assets: allAssets, fxPairPoints: (slug) =>
+   >   getFxStore(slug).getAllSorted(), selfAssetId: data.assetId}))`; `overlaySignals` = `renderLocalSignals(…)` più i
+   >   risultati del backend, con `void overlayDataVersion` ancora letto. Via `signalFromConfig`,
+   >   `renderBackendSignalResult`, `displayFxRate` dagli import (non più usati).
+   > - `fx/[pair]/+page.svelte`: stesso cambio senza `selfAssetId`; via il convertitore locale (ora
+   >   `fxPointToLineDataPoint` dal modulo, anche per `lineData`), `extractDaysBack`, `signalFromConfig`,
+   >   `renderBackendSignalResult` dagli import.
+   > - Doc (`docs-writer`, solo inglese): `developer/frontend/components/charts.md`, `#signal-rendering`: titolo «…cards,
+   >   preview and detail pages», un paragrafo sui dettagli e `detailPageSignalSources`, il cancello con la lista vuota.
+   >   `mkdocs check-links` in `flock`: rc 0, 97 link validi (`ondata3/X-y42-docs-checklinks.log`).
+   >
+   > **⚠️ Fuori pista**:
+   > - Il test d'adozione non vedeva una chiamata dopo lo spread (`[...renderLocalSignals(`): lo sguardo indietro
+   >   `(?<![\w$.])` rifiutava il `.` dello spread. Riparato da `test-author` (`(?<![\w$])(?<!(?<!\.)\.)`, due controlli
+   >   in più: spread accettato, `other.renderLocalSignals(` rifiutato). `chartPageSignals.test.ts` 79/79
+   >   (`ondata3/X-y42-repair.log`).
+5. ✅ 22/10 · Le prove leggere.
+   - Vitest, 11 file in 4 gruppi da al più 3 (fuori dal lucchetto, carico 3,5-4,1), `LC_ALL=en_US.UTF-8`:
+     **603/603** (`ondata3/X-y42-light-b{1..4}.log`): `chartPageSignals` + `signalRendering.gate` +
+     `comparisonSignalPages` 112; `chartSignalRendering` + `fxDetailConvertQuery` + `AssetBrowseNav` 117;
+     `layout.authGate` + `PriceChartFull.tooltipEscape` + `designer-lab/anchor` 58 (i test che leggono i sorgenti delle
+     due pagine); `ChartSettingsModal` + `chartCoreHelpers` 316.
+   - Prettier `--check` sui 3 file di codice e sui 2 di test: pulito. `git diff --check`: pulito.
+   - Nessun `signalFromConfig(` fuori dal modulo (grep: solo `chartSignalRendering.ts:72`, la dichiarazione in
+     `registry.ts:196` e un commento in `ChartSignal.ts:173`).
+   - In `flock`, `LC_ALL=en_US.UTF-8`, `nice` (`ondata3/X-y42-verify.sh`, riassunto `X-y42-verify.summary`; due ore di coda
+     dietro l'inventario CSP di H e le corse degli altri):
+     - `dev.py test --test-port 6191 --data-dir /tmp/librefolio-r13-x front-utility core-unit`: **227 file, 9958/9958**
+       (`X-y42-core-unit.log`, 00:03);
+     - `dev.py front check` (dopo `api sync`): **0 errori, 0 avvisi** (`X-y42-front-check.log`, 00:33).
+   > **⚠️ Fuori pista**: il passo «vicini» dello script, ancora in coda al lucchetto, l'ho annullato (rc 143, mai
+   > partito): gli stessi 11 file erano già verdi nei 4 gruppi qui sopra. Nessun server avviato; la porta 6191 non è
+   > mai stata usata.
+6. ✅ 22/10 · Doc: fatta al passo 4 (`charts.md#signal-rendering`). CHANGELOG: **nessuna riga visibile** (nessun
+   cambio di disegno trovato: stesso nome, icona, tipo, linea fantasma, verso della coppia).
+7. ⏳ 22/10 · CHECKPOINT READY al coordinatore; E2E nello slot del coordinatore: `front-asset asset-detail`,
+   `front-fx fx-detail` (consigliata anche `front-portfolio risk-asset-detail`: i segnali di rischio del dettaglio
+   filtrano `backendOverlaySignals`).
+   - **Richiesta a Y** (FxCard è di Y in questa ondata): `FxCard.svelte:106-111` e `:121-126` convertono i punti in
+     linea con `staleDays: d.backwardFillInfo?.daysBack ?? 0`; possono usare `fxPointToLineDataPoint(d, inverted)` del
+     modulo (stesso risultato: `extractDaysBack` legge prima `backward_fill_info.days_back`, poi lo stesso campo).
+   - **Backlog**: Y-42 sta nella sezione di Y (`BACKLOG_POST_1.2.md:9860`): non la tocco; al coordinatore la chiusura
+     (✅ le due pagine e il cancello; resta il punto `FxCard`, a Y).
