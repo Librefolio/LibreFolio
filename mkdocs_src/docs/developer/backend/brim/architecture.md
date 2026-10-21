@@ -537,7 +537,20 @@ eToro itself downloads the statement as XLS.
   2 `Descrizione` · 3 `Titolo` · 4 `Isin` · 5 `Segno` · 6 `Quantita` · 7 `Divisa` · 8 `Prezzo` ·
   9 `Cambio` (ignored) · 10 `Controvalore`. A header longer than 11 cells is the layout with commissions:
   columns 11 to 14 are summed (absolute values) into one `FEE` in EUR (`FEE_CURRENCY`, tag `fee`)
-  when the sum is positive. A data row shorter than 11 cells is skipped with a warning.
+  when the sum is positive (the real export has a single one, `Commissioni amministrato`, in
+  column 11). A data row shorter than 11 cells is skipped with a warning.
+- **The commission is inside the `Controvalore`** (W-B92, plugin 1.4.0; the real export of
+  GitHub discussion #49). In a `Compravendita titoli` row the `Controvalore` of a purchase already
+  includes the commission and that of a sale has it already taken off. So, with a positive
+  commission sum and a readable `Controvalore`, a `BUY` is booked for `Controvalore − commission`
+  and a `SELL` for `Controvalore + commission` (`_net_of_commission`), each followed by the `FEE`
+  of the commission: `BUY + FEE = −Controvalore`, `SELL + FEE = +Controvalore`. Untouched: dividends
+  (net of tax), `Stacco Cedole`, `Aumento capitale`, `Rimborso` (open question Q-WB-1: does its
+  `Controvalore` hold a commission?), rows with no commission, a blank or unreadable
+  `Controvalore` (cash stays 0, W-B83), a purchase whose commission exceeds its `Controvalore`
+  (Q-WB-2: left as printed, never inverted) and the 11-column layout. Open question Q-WB-3: on a
+  row whose `Divisa` is not EUR the same arithmetic is applied, the cash tagged with the `Divisa`
+  and the `FEE` in EUR; whether the `Controvalore` is in the `Divisa` or in euro is not settled.
 - **Type**, by lower-cased substring of `Descrizione`: `compravendita` with `Segno` `A` or `V` →
   `BUY` or `SELL` (another `Segno` → warning), `dividendo` → `DIVIDEND`, `cedol` → `INTEREST`,
   `rimborso` → `SELL`, `aumento capitale` → cashless `ADJUSTMENT`; anything else → warning.
@@ -568,12 +581,13 @@ eToro itself downloads the statement as XLS.
   which the schema refuses as before (a validation issue). One `info` notice,
   `fineco_incomplete_rows`, `context` `{"count": n, "report_issue": true}`, lists the rows;
   its evidence adds a last column, `Campo vuoto`, naming the empty field(s). The message says
-  the plugin is in beta, so the import may be wrong, and asks the user to check the rows and,
+  the import may be wrong, and asks the user to check the rows and,
   if the file is right, to open an issue on GitHub: `report_issue` puts the link under it
   ([`context` keys](../../architecture/patterns/brim_plugin_guide.md#context-keys-the-frontend-understands)).
-  A row left out for its date is not counted here. The backend has no beta flag: the beta
-  status is in the docs (the user page, the [providers list](providers_list.md)) and in this
-  message.
+  A row left out for its date is not counted here. Fineco is no longer beta (21/10/2026): the
+  [providers list](providers_list.md) shows it as stable, and the user page ends with its known
+  limitations (verified on a *regime amministrato* account only; *regime dichiarativo*, funds and
+  BTP not yet seen on real exports).
 - **Above par**: a `rimborso` `SELL` whose `Titolo` passes `_brim_io.looks_like_bond` (`BTP`,
   `BOT`, `CCT`, `CTZ`, `BUND`, `OAT`, `OBBLIG`, `CCTEU`, `BOND`), with `Prezzo` above 100, goes
   through `model_bond_maturity(ctv=Controvalore, price=Prezzo, held_qty=|Quantita|)`: a `SELL` of
@@ -586,7 +600,7 @@ eToro itself downloads the statement as XLS.
   their codes (`importWizard.brimNotice.<code>`, `importWizard.brimEvidence.<code>`). The
   descriptions of the generated legs (`Commissioni: …`,
   `Rimborso a scadenza — premio/rivalutazione oltre la pari: …`) are Italian too.
-- **`plugin_version`** 1.3.0: the operation date (B-52). 1.2.0 brought the two notices above,
+- **`plugin_version`** 1.4.0: the commission is inside the `Controvalore` (W-B92). 1.3.0 brought the operation date (B-52). 1.2.0 brought the two notices above,
   1.1.0 the split above par. A file parsed by an older version shows as stale
   (`parse_is_stale`) until it is parsed again.
 - **Files imported before 1.3.0.** Their transactions are dated with `Data valuta`. The
@@ -596,6 +610,9 @@ eToro itself downloads the statement as XLS.
   imports carry the new date, so after the switch everything settles). The transition, once:
   delete the Fineco transactions those files created and import the files again, or import
   only from the day after the last imported day. The user page says the same.
+- **Files imported before 1.4.0.** Their trades counted the commission twice (the full
+  `Controvalore` plus a `FEE`): a purchase too low in cash, a sale too high. Nothing corrects them
+  in place; delete the Fineco transactions those files created and import the files again.
 
 ---
 
