@@ -1268,6 +1268,7 @@ SAMPLING_RESOLUTIONS = ("daily", "weekly", "monthly")  # the steps (N90), writte
 SAMPLING_FIELDS = ("max_points", "resolution", "sample_like")  # at most one per item (N90, revised 19/10)
 SAMPLING_UNREAD_ASSET_ID = 2_147_483_647  # never read: the body is refused before the handler runs
 SAMPLING_SMA3 = {"instance_id": "sma3", "signal_code": "SMA", "params": {"period": 3}}
+SAMPLING_CLOSE_CROSSES_100 = {"kind": "threshold_crossing", "key": "close-crosses-100", "attach_to_instance_id": "sma3", "source": {"kind": "price"}, "threshold": 100.0}
 SAMPLING_ROWS = (date(2020, 12, 1), date(2023, 12, 29))  # a card's weekday closes, the first and the last
 SAMPLING_LATE_ROWS = (date(2022, 3, 1), date(2023, 12, 29))  # a target's: a Tuesday, long after the range starts
 SAMPLING_RANGE = (date(2021, 1, 3), date(2023, 12, 31))  # Sunday to Sunday, 1 093 days; Friday 2021-01-01 precedes it
@@ -1368,22 +1369,24 @@ def _assert_sampled(answer: dict, daily: dict, step: str, first: date, end: date
 @pytest.mark.parametrize(
     ("extra", "named"),
     [
-        pytest.param({"signals": [SAMPLING_SMA3]}, ("max_points",), id="signals"),
-        pytest.param({"include_events": True}, ("max_points",), id="include-events"),
+        pytest.param({"signals": [SAMPLING_SMA3], "annotation_requests": [SAMPLING_CLOSE_CROSSES_100]}, ("max_points", "annotation_requests"), id="signals-and-annotations"),
+        pytest.param({"include_events": True}, ("max_points", "include_events"), id="include-events"),
         pytest.param({"resolution": "weekly"}, SAMPLING_FIELDS, id="resolution"),
     ],
 )
-async def test_query_max_points_with_signals_events_or_resolution_is_refused(test_server, extra, named):
-    """PQS-API-01 (Z-29a, N90 revised 19/10): an item with max_points and signals, or with max_points and include_events,
-    answers 422: a value error naming max_points — the sample carries the price series alone, signals and events need
-    every day (until Z-29s). An item with max_points and resolution answers 422 too: a value error naming max_points,
+async def test_query_max_points_with_annotations_events_or_resolution_is_refused(test_server, extra, named):
+    """PQS-API-01 (Z-29a, N90 revised 19/10; updated by Z-29s-a): an item with max_points, signals and their
+    annotation_requests, or with max_points and include_events, answers 422: a value error naming max_points and the
+    field refused — annotations and events need every day. Signals alone are taken on a sample since Z-29s-a, reduced by
+    the backend (PQS-API-06). An item with max_points and resolution answers 422 too: a value error naming max_points,
     resolution and sample_like — an item says its step one way.
 
     The asset id is never read: the body is refused before the handler runs. The same item without max_points is valid
     (services price-query-sampling, PQS-S03, S13).
-    Red before Z-29a: 422 too, but for max_points itself, an unknown field (``extra_forbidden``).
+    Red before Z-29a: 422 too, but for max_points itself, an unknown field (``extra_forbidden``). Updated by Z-29s-a,
+    which removed its signals case (signals alone, refused until then): green before Z-29s-a and after.
     """
-    print_section(f"PQS-API-01: max_points with {next(iter(extra))} refused")
+    print_section(f"PQS-API-01: max_points with {' and '.join(extra)} refused")
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
@@ -1557,6 +1560,68 @@ async def test_query_sample_like_puts_a_target_on_its_cards_buckets(test_server)
             assert {name: detail[name] for name in ("code", "reason", "item", "key")} == {"code": "sample_reference", "reason": "unknown_key", "item": 1, "key": None}, detail
             assert isinstance(detail["message"], str) and detail["message"].strip(), detail
             print_success(f"  ✓ 422 {detail['code']} {detail['reason']} on item {detail['item']}")
+        finally:
+            if owned:
+                await client.delete(f"{API_BASE}/assets", params={"asset_ids": owned}, timeout=TIMEOUT)
+
+
+@pytest.mark.asyncio
+async def test_query_max_points_with_signals_reduces_them_on_the_sample(test_server):
+    """PQS-API-06 (Z-29s-a): one asset of this test's own, PQS-API-04's closes (every weekday from 2020-12-01 to
+    2023-12-29), asked from Sunday 2021-01-03 to Sunday 2023-12-31 with SMA(3): first daily, then in one request with
+    max_points 100 (monthly, 36 points) and 200 (weekly, 157). The sampled items answer 200: each says its step, its
+    prices and bounds are the daily answer's points on its dates, on 2021-01-03 and on 2023-12-31; its SMA series keeps
+    every field of the daily one, and its points are the daily SMA's last value in the bucket of each price date, dated as
+    that price date: no point without value (SMA after its warm-up has no gap, so no marker), the last on the last price
+    date, 2023-12-31. Monthly, one point on each of the 36 price dates; weekly, on each but the first, 2021-01-03, whose
+    week's quote days (2020-12-28 … 2021-01-01) precede the range: a bucket without a point of the series gives none.
+
+    The range ends in 2023, before any ceiling: the answer does not depend on the day the suite runs.
+    Red before Z-29s-a: 422, signals refused with max_points (a value error naming max_points).
+    """
+    print_section("PQS-API-06: signals on a sample, reduced by the backend on the sampled dates")
+    first, end = SAMPLING_RANGE
+    date_range = {"start": first.isoformat(), "end": end.isoformat()}
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        owned: list[int] = []
+        try:
+            owned.append(await _create_sampling_asset(client))
+            (asset_id,) = owned
+            await _upsert_sampling_closes(client, asset_id, SAMPLING_ROWS, 100)
+            resp = await client.post(f"{API_BASE}/assets/prices/query", json=[{"asset_id": asset_id, "date_range": date_range, "signals": [SAMPLING_SMA3]}], timeout=TIMEOUT)
+            assert resp.status_code == 200, f"{resp.status_code}: {resp.text[:300]}"
+            (daily,) = resp.json()["items"]
+            (daily_sma,) = daily["signals"]
+            (daily_series,) = daily_sma["series"]
+            assert daily_sma["status"] in ("ok", "partial") and daily_series["points"], f"premise: the daily SMA is computed: {daily_sma['status']}"
+            assert all(point["value"] is not None for point in daily_series["points"]), "premise: the daily SMA has a value on every quote day of the range"
+            daily_points = {point["date"]: point for point in daily["prices"]}
+
+            body = [{"asset_id": asset_id, "date_range": date_range, "max_points": max_points, "signals": [SAMPLING_SMA3]} for max_points in (100, 200)]
+            resp = await client.post(f"{API_BASE}/assets/prices/query", json=body, timeout=TIMEOUT)
+            assert resp.status_code == 200, f"Z-29s-a: signals on a sample refused, {resp.status_code}: {resp.text[:400]}"
+            monthly, weekly = resp.json()["items"]
+            for answer, step, count, without_point in ((monthly, "monthly", 36, []), (weekly, "weekly", 157, [first.isoformat()])):
+                price_dates = [day.isoformat() for day in _sampling_dates(first, end, step)]
+                assert (answer.get("resolution"), len(price_dates)) == (step, count), f"resolution {answer.get('resolution')!r}, {len(price_dates)} {step} dates"
+                assert [point["date"] for point in answer["prices"]] == price_dates, f"{step}: {len(answer['prices'])} prices for {count}"
+                differing = [point for point in answer["prices"] if point != daily_points.get(point["date"])]
+                assert not differing, f"{step}: {len(differing)} points differ from the daily answer's; the first: {differing[0]}"
+                assert answer.get("sample_bounds") == {"first": daily_points[first.isoformat()], "last": daily_points[end.isoformat()]}, f"{step}: sample_bounds {answer.get('sample_bounds')}"
+                (sma,) = answer["signals"]
+                (series,) = sma["series"]
+                assert {key: value for key, value in series.items() if key != "points"} == {key: value for key, value in daily_series.items() if key != "points"}, f"{step}: the SMA series changed beyond its points"
+                last_in_bucket: dict[tuple[int, int], dict] = {}
+                for point in daily_series["points"]:  # in date order: each bucket keeps its last
+                    last_in_bucket[_sampling_bucket(date.fromisoformat(point["date"]), step)] = point
+                expected = [{"date": day, "value": last_in_bucket[bucket]["value"]} for day in price_dates if (bucket := _sampling_bucket(date.fromisoformat(day), step)) in last_in_bucket]
+                assert [day for day in price_dates if day not in {point["date"] for point in expected}] == without_point, f"premise: {step} price dates without an SMA point in their bucket"
+                assert all(point["value"] is not None for point in series["points"]), f"{step}: the SMA holds points without value: {[point['date'] for point in series['points'] if point['value'] is None][:3]}"
+                assert series["points"] == expected, f"{step}: {len(series['points'])} SMA points for {len(expected)}; the first ones {series['points'][:2]}, expected {expected[:2]}"
+                assert series["points"][-1]["date"] == price_dates[-1] == end.isoformat(), f"{step}: the SMA ends on {series['points'][-1]['date']}"
+                print_success(f"  ✓ {step}: {len(answer['prices'])} prices, {len(series['points'])} SMA points, each the last of its bucket, the last on {end}")
         finally:
             if owned:
                 await client.delete(f"{API_BASE}/assets", params={"asset_ids": owned}, timeout=TIMEOUT)

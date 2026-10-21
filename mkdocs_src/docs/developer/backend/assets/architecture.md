@@ -446,8 +446,9 @@ Each query item can request:
 - `include_price: true` — price history with backward-fill
 - `include_events: true` — asset events in the date range
 - `max_points`, `resolution` or `sample_like`, at most one of them — the price series sampled
-  for a compact chart, daily, weekly or monthly; `key` names an item for another item's
-  `sample_like` ([Sampled Price Series](#price-query-sampling))
+  for a compact chart, daily, weekly or monthly, and with `signals` their series reduced to the
+  same dates; `key` names an item for another item's `sample_like`
+  ([Sampled Price Series](#price-query-sampling))
 
 `get_prices_bulk()` never invokes a provider. Provider acquisition belongs to
 `refresh.py` through `POST /assets/prices/sync`; the query path remains DB-only while retaining
@@ -500,10 +501,11 @@ the builders of their 422 `detail`, `bulk_too_many_items_detail()` and
   first price after the end). The comparison series of a signal that needs a prepared asset series
   (a rolling beta against another asset) count too; a comparison against the item's own asset is
   not counted twice. An item that starts after the ceiling counts zero. A
-  [sampled](#price-query-sampling) weekly or monthly item counts its points plus two for its
-  `sample_bounds`, before any of its bucket rows is read; an item with `max_points`, `resolution` or
-  `sample_like` sent with `include_price: false`, a placeholder that only gives its step, counts
-  nothing, whatever its step. Over `MAX_BULK_ITEM_DAYS`
+  [sampled](#price-query-sampling) weekly or monthly item without `signals` counts its points plus
+  two for its `sample_bounds`, before any of its bucket rows is read; an item with `max_points`,
+  `resolution` or `sample_like` and no `signals` sent with `include_price: false`, a placeholder
+  that only gives its step, counts nothing, whatever its step. A sampled item with `signals` counts
+  its fill's days like any item with signals. Over `MAX_BULK_ITEM_DAYS`
   (1,000,000) the method raises `BulkTooManyDaysError`, its `item_days` the request's exact total,
   and the route answers 422 `{"code": "bulk_too_many_days", "message", "max_item_days", "item_days"}`.
 
@@ -569,10 +571,10 @@ ask for that sample instead of its whole daily fill (Z-29a), through four option
 | `key` | A name for the item, unique in the request, that another item's `sample_like` gives; it changes nothing in the item's own answer. `key` and `sample_like` take 1 to 64 characters among ASCII letters, digits, `_`, `.`, `:` and `-` (`SAMPLE_KEY_PATTERN`) |
 
 An item asks one way at most. The model validator `validate_sampling()` refuses two of
-`max_points`, `resolution` and `sample_like` together, and any of them with `signals`,
-`annotation_requests` or `include_events: true`, which need every day: a sampled item carries its
-price series alone. Both refusals are 422 validation errors on the request body, before the
-handler runs. `target_currency` and `include_price` stay allowed.
+`max_points`, `resolution` and `sample_like` together, and any of them with `annotation_requests`
+or `include_events: true`, which need every day. Both refusals are 422 validation errors on the
+request body, before the handler runs. `signals` (Z-29s-a, see **Signals** below),
+`target_currency` and `include_price` stay allowed.
 
 **The step.** The rule is pure, in `backend/app/services/assets/price_sampling.py`;
 `_plan_samples()` in `price_query.py` applies it once the [ceiling](#price-query-range-ceiling) has
@@ -597,12 +599,12 @@ by default. A weekly or monthly result also carries `sample_bounds` (`FAPriceSam
 `FAPricePoint`): `first`, the fill's point on F, and `last`, its point on the range end, which is
 also the last point of `prices`. A daily result, an empty one included, has no `sample_bounds`, and
 `include_price: false` gives neither points nor bounds. With `max_points`, `resolution` or
-`sample_like`, an item sent with `include_price: false` is a placeholder (see the reads, below): it
-still says its step in `resolution`, weekly or monthly from its plan, else `daily`. In the OpenAPI
-document, the description of `FAPricePoint` has single quotes where its docstring has backticks
-(`_description_without_backticks()`): the web client's generator, openapi-zod-client, writes the
-description of the model a required field refers to into a template literal, which a backtick
-would close.
+`sample_like`, an item without `signals` sent with `include_price: false` is a placeholder (see the
+reads, below): it still says its step in `resolution`, weekly or monthly from its plan, else
+`daily`. In the OpenAPI document, the description of `FAPricePoint` has single quotes where its
+docstring has backticks (`_description_without_backticks()`): the web client's generator,
+openapi-zod-client, writes the description of the model a required field refers to into a template
+literal, which a backtick would close.
 
 **`sample_like`.** It puts an item on the buckets of another item of the request, named by its
 `key`, as a comparison drawn on a card needs. The follower takes the step of the item it names,
@@ -625,8 +627,8 @@ ceiling cut and before any read, and refuses the request at the first fault. The
 | `chained` | Names an item that has a `sample_like` itself, itself included: one level only, so no cycle |
 | `range_mismatch` | Names an item with another `date_range`, an absent `end` counting as its `start` (`DateRangeModel`'s single day) |
 
-**The reads.** The weekly and monthly items stay out of the day-by-day read. For them,
-`_plan_samples()` reads only the seed and the first row in the range of each asset, and, for a
+**The reads.** The weekly and monthly items without `signals` stay out of the day-by-day read. For
+them, `_plan_samples()` reads only the seed and the first row in the range of each asset, and, for a
 follower that starts later, its last row on or before that day: the dates of each sample are known,
 and counted against the [day budget](#bulk-request-limits), before any bucket row is read. Once the
 budget has passed them, `_read_samples()` reads their points. An asset another item of the request
@@ -642,6 +644,56 @@ is left out of the day-by-day read and of `_read_samples()`, so no price row is 
 plan, and it counts nothing against the budget. So a comparison drawn on a card can send the card's
 item without its prices, beside the target that follows it.
 
+**Signals.** `max_points`, `resolution` and `sample_like` are accepted together with `signals`
+(Z-29s-a); `annotation_requests` and `include_events: true` are still refused (the 422 of
+`validate_sampling()`, above). An item with both is read day by day, as without the sampling field:
+its fill is built from the signals' warm-up, its signals are computed, and it counts against the
+[day budget](#bulk-request-limits) the days of that fill, the comparison series of a signal
+included, not its points and bounds. It is neither a bucket read nor a placeholder, even with
+`include_price: false`: its signals need the rows. `get_prices_bulk()` holds it apart in
+`signal_samples`, out of `sample_plans` and of `placeholders`. Once the signals are computed and the
+result cut to the requested range, a weekly or monthly plan reduces the answer in memory
+(`_reduce_signal_sample()`); a daily plan, or an item with nothing to fill, answers as without the
+field. `prices` are the daily answer's points on the plan's dates, and `sample_bounds` and
+`resolution` come out as the same item without signals gives them; with `include_price: false` the
+prices stay empty and `sample_bounds` is `None`, and the step is still said. A `sample_like`
+follower is reduced on its own plan, from the later first day: its signal points before that day's
+bucket are dropped.
+
+Each signal series is reduced by `sample_signal_series(series, profile, resolution, render_dates)`
+(`backend/app/services/signals/aggregation.py`, the module of the
+[`aggregation_profile` rule](../../architecture/patterns/signal_plugin_guide.md#plugin-contract)),
+with `render_dates` the plan's dates and the profile that of the output spec the series' `key`
+names, read from the plugin class in `SignalPluginRegistry` as AI Export reads it
+(`_sample_signal_result()`). A series no output spec describes stays daily and is logged as a
+warning; none does today. The function is pure and reproduces the browser:
+`downsampleRenderedSignal()` (`frontend/src/lib/components/charts/timeSeriesAggregation.ts`), after
+`backendRenderer.ts` (`frontend/src/lib/charts/signals/`) has split a line or an area into runs at
+the points sent without a value.
+
+- **Daily** gives the series itself.
+- **Line and area**: one run at a time. The representative of a bucket is the element itself
+  (`select_point()`) re-dated at the bucket's price date, so the calendar rolling return
+  `ASSET_CALENDAR_ROLLING_RETURN` (`last_with_range`) keeps its `provenance`. Between two runs, a
+  gap marker, a point with value `None`, stands on the day after the first run's last
+  representative when that day comes before the next run's first; the line stays broken as it was.
+- **Bar**: the points without a value are dropped and each bucket keeps one representative; a bar
+  output has no runs.
+- **Band** (`band_envelope`): the complete points only; each bucket keeps the lowest `lower`, the
+  last `middle` and the highest `upper`.
+
+A point whose bucket has no price date, those before the plan's first bucket for one, is dropped. A
+profile that does not fit the series' kind raises `ValueError`, and the series given is not
+changed. Four accepted residues keep the reduction from being the browser's to the point: (R1) where
+two runs meet in a bucket it shows the later run's point, the browser draws two (accepted by the
+developer on 19/10); (R2) a line with styled value regions (regions with a line style) is split by
+style in the browser on the reduced points, where daily points are split by style before they are
+reduced; (R3) two runs on consecutive days at the very end of the range get no marker, there being
+no day between them; (R4) past `MAX_LINE_RUNS` (30) runs the browser joins the gaps of an unstyled
+line, and after the reduction it counts the reduced runs, not the daily ones. R1 and R3 are cases
+of the shared table with `browser_parity: false`, each saying so in its note; R2 and R4 follow from
+the browser's own rendering and are not in the table.
+
 The step rule is the chart's. The case table
 `frontend/src/lib/components/charts/__tests__/compactDensityCases.json` holds cases of the
 chart's rule at 1.3 points per pixel (first day, end, plot width, days, weeks, `max_points`, step),
@@ -649,10 +701,19 @@ chart's rule at 1.3 points per pixel (first day, end, plot width, days, weeks, `
 `test_price_query_sampling.py` checks every case against the chart's rule, and `fill_counts()` and
 `choose_resolution()` against every case. Tests: `test_price_query_sampling.py`
 (`./dev.py test services price-query-sampling`, PURE: a private SQLite file) pins the rule, the
-buckets, the references, the budget and the reads; the Z-29a block at the end of
-`test_assets_prices.py` (`./dev.py test api assets-price`) the route's 422s, the OpenAPI document
-and sampled answers on the lane's server. The web app sends none of these fields: the asset list
-still asks each card's daily fill.
+buckets, the references, the budget and the reads, and, in its PQS-SG block, the signals on a
+sample (five real plugins: the day budget, the item that is no placeholder, the follower, the
+descriptions); the Z-29a block at the end of `test_assets_prices.py`
+(`./dev.py test api assets-price`) the route's 422s, the OpenAPI document and sampled answers on the
+lane's server, and its PQS-API-06 the SMA reduced on a monthly and a weekly sample through the
+route. `test_signal_aggregation.py` (`./dev.py test services signal-aggregation`, its SAG-S block)
+pins `sample_signal_series()` on every case of the shared table
+`backend/test_scripts/fixtures/signals/signal_sampling_cases.v1.json`, which the "Z-29s-a" block of
+`frontend/src/lib/components/charts/__tests__/timeSeriesAggregation.test.ts` (Vitest) also reads,
+drawing its `browser_parity` cases through `downsampleRenderedSignal()`: the backend reduction and
+the chart's are tied by it, as `aggregation_profiles.v1.json` ties the per-bucket rule
+([Signal Plugin Guide](../../architecture/patterns/signal_plugin_guide.md#plugin-contract)). The web
+app sends none of these fields: the asset list still asks each card's daily fill.
 
 ### 📅 Fixed-Period Changes {: #fixed-period-changes }
 

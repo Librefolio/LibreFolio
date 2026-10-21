@@ -6908,3 +6908,151 @@ una copia). 3. Verdi: `services price-query-sampling`, `api assets-price`, i vic
    stretto 0 avvisi, `check-links` 97 validi.
 5. ✅ Checkpoint FROZEN. In comune con `dev_release2` (`6e1761121`, che contiene già `daf7b200d`) solo
    `_backend_services.py` (7 commit di dev), senza conflitto (`git merge-file`).
+   Committato `5bbadda95` (coordinatore, 20/10 ~13:15), entra col treno 4.
+
+### Z-29b e Z-29s — analisi breve aggiornata (20/10 ~13:30, sola lettura, `5bbadda95`)
+
+> **Ordine deciso dal developer** (dal coordinatore, 20/10 ~13:15): Y-39 (scheda e anteprima tornano un solo
+> componente, anche per i cambi), poi Z-29b, poi Z-29s, poi Y-40 (le viste assoluto / % / rendimento mobile sulle
+> schede, anche per i cambi). Z-29b parte dopo Y-39 (tutti e due toccano `assets/+page.svelte`). Z-29s deve coprire
+> anche il rendimento mobile (`ASSET_CALENDAR_ROLLING_RETURN`, profilo `LAST_WITH_RANGE`), e poi quello delle coppie.
+> Il coordinatore chiede l'analisi di Z-29b durante Y-39, e un lotto pronto che non tocchi i file di Y-39
+> (`PriceChartCompact`, `ChartSettingsModal`, `AssetCard`, `FxCard`, `assets/+page.svelte`, `fx/+page.svelte`).
+
+**Cosa è cambiato dal 19/10.**
+- Il backend è pronto: Z-29a v3 (`key`, `max_points`, `resolution`, `sample_like`, `sample_bounds`, budget), Z-29a-f
+  (una voce senza prezzi dà solo il passo), e il client generato dà `resolution: 'daily'` a una voce che non ce l'ha.
+- Y-39 cambia il punto d'aggancio di Z-29b: la scheda e l'anteprima del dialogo diventano un componente solo. Z-29b si
+  aggancia a quel componente, non ad `AssetCard`/`PriceChartCompact` di oggi; l'interfaccia la leggo dopo Y-39. Se
+  l'anteprima è la scheda, Z-29d (il dialogo che chiede il bersaglio) può ridursi alla ricarica per scheda di Z-29b:
+  da verificare dopo Y-39.
+- Le note di MF (n1–n3) e il requisito di X sui lotti (sezione «Revisioni», sopra).
+
+**Z-29b, il contratto della pagina** (dopo Y-39).
+- Ogni scheda manda la sua voce con `key` (per esempio `asset:42`) e `max_points` dalla larghezza misurata del grafico
+  (`compactMaxPoints(w)`, la soglia 1,3 spostata da `LineChart.svelte` in `timeSeriesAggregation.ts`); ogni bersaglio
+  dei suoi confronti è una voce con `sample_like` = quella chiave.
+- `bulkBatches.ts` taglia per gruppi (la scheda e i suoi bersagli insieme), anche nel nuovo taglio dopo un
+  `bulk_too_many_days` (X): la stima di un gruppo è la somma delle sue voci.
+- Una cache ridotta sua (asset, inizio, fine, passo; prezzi, `resolution`, `sample_bounds`), accanto a quella
+  giornaliera, che non si tocca; lo stesso bus `{kind: 'prices'}` per invalidarla.
+- Il grafico disegna `prices` com'è. Se un ridimensionamento cambia il passo, si rilegge: niente ri-aggregazione di un
+  campione settimanale in mesi, niente ritorno al giornaliero da un campione (MF n2).
+- La base della percentuale e il colore della linea leggono `sample_bounds.first` (MF n3); «All» parte da
+  `first.date`; l'avviso del dialogo di sync legge la riga dietro `first`.
+- La ricarica è per scheda quando cambiano le sue impostazioni; tutte solo col globale (Q-Z29-2 del developer).
+- Le schede con segnali del backend: finché Z-29s non c'è, restano giornaliere (la richiesta di oggi); con Z-29s
+  mandano `max_points` come le altre.
+- Rossi: Vitest (MF n1: la tabella `compactDensityCases.json` con la regola del browser e i `max_points` che la pagina
+  manda; il piano a gruppi; la cache ridotta; la base da `first`; i bersagli), E2E `front-asset asset-list`.
+- Revisori: X (la lista), Y (il componente), MF (la semantica). Costo: circa 2–2,5 giorni (era 2: i gruppi nei lotti e
+  il componente nuovo).
+- Le coppie (FX): fuori da Z-29b. Le schede dei cambi restano giornaliere finché `POST /fx/currencies/convert` non sa
+  ridurre (vedi sotto).
+
+**Z-29s, i segnali ridotti dal backend: la parte backend si può fare adesso** (nessun file di Y-39).
+- Contratto: `signals` accettati con `max_points`, `resolution` o `sample_like` (oggi 422; eventi e annotazioni restano
+  422). La voce si legge giornaliera come oggi (i segnali si calcolano sul giornaliero); poi il prezzo si riduce in
+  memoria dalle stesse righe, e ogni serie di segnale si riduce sui secchi del prezzo col profilo della sua uscita
+  (`services/signals/aggregation.py`: scalari e inviluppo delle bande), datata al punto del prezzo del secchio, come fa
+  `downsampleRenderedSignal`. Il budget conta i giorni del riempimento, come oggi per una voce con segnali.
+- Il rendimento mobile (`ASSET_CALENDAR_ROLLING_RETURN`, solo dominio asset) è uno scalare `LAST_WITH_RANGE`: il punto
+  scelto è l'elemento stesso (`select_point`), quindi tiene la sua provenienza.
+- I buchi (valori nulli) e le regioni con stile come il grafico; i due resti accettati dal developer il 19/10.
+- Rossi: pytest e una tabella comune `signalSamplingCases.json` letta anche da Vitest (`downsampleRenderedSignal`, in
+  `components/charts/__tests__/`: non è un file di Y-39). Revisori MF e Y. Costo 1,5 giorni, come previsto.
+- Con questa parte pronta prima di Z-29b, Z-29b tratta tutte le schede allo stesso modo in un passaggio solo.
+
+**Le coppie** («e poi quello delle coppie»): oggi il rendimento mobile è solo degli asset, e `POST
+/fx/currencies/convert` non sa ridurre. Servono un rendimento mobile del dominio FX (di chi fa Y-40, o MF) e la
+riduzione sull'endpoint dei cambi (`max_points`, `sample_like`, `sample_bounds`, segnali ridotti): un lotto suo
+(«Z-29fx»), circa 2 giorni, dopo Y-40.
+
+**Il lotto pronto mentre Y fa Y-39:** la parte backend di Z-29s (Z-29s-a). In alternativa, l'analisi di Q4 di MF
+(«formule veloci»), anche lei fuori dai file di Y.
+
+### Z-29s-a — i segnali ridotti dal backend, la metà backend: lavoro (20/10 dalle ~13:40, base `5bbadda95`)
+
+> **Via** (coordinatore, 20/10 ~13:34): «Z-29s-a (la metà backend) durante Y-39: hai il via. Non cambia il risultato
+> voluto dal developer, anticipa solo il backend senza toccare i file di Y. Prima i rossi; rivedono MF e Y.» Z-29fx (la
+> riduzione su `/fx/currencies/convert`) in coda dopo Y-40, da decidere col developer.
+
+**Il contratto** (verificato sul codice di `5bbadda95`; copia di lavoro: `files/z29s-draft/CONTRACT.md` della sessione).
+- La regola del browser: `renderBuckets` (un secchio per punto del prezzo, datato al punto), `downsampleRenderedSignal`
+  (scalari col profilo dell'uscita, bande con l'inviluppo), e in `backendRenderer.ts` le corse fra i punti senza valore
+  (linee e aree; le barre no, i nulli spariscono e basta; le bande tengono i punti completi).
+- `sample_signal_series(series, profile, resolution, render_dates)` in `services/signals/aggregation.py`, puro:
+  1. linee e aree: una corsa alla volta;
+  2. il rappresentante è l'elemento stesso, ridatato al punto del prezzo del secchio, quindi la provenienza del
+     rendimento mobile resta;
+  3. fra due corse un segnaposto nullo il giorno dopo l'ultimo punto della prima, se cade prima del primo della
+     seconda (calcolato prima della regola 4);
+  4. un secchio dove due corse si incontrano tiene il punto della seconda (il resto accettato il 19/10);
+  5. barre senza corse; bande con l'inviluppo dei punti completi;
+  6. giornaliero invariato; un profilo che non va col tipo → `ValueError`.
+- `POST /assets/prices/query`:
+  - `signals` accettati coi campi di campionamento (eventi e annotazioni restano 422);
+  - la voce si legge, si calcola e si conta come oggi (giornaliera; né lettura a secchi né segnaposto, anche senza
+    prezzi);
+  - alla fine, dopo il taglio:
+    - i prezzi sono quelli del giornaliero sulle date del piano, `sample_bounds` e `resolution` come senza segnali;
+    - ogni serie è ridotta col profilo dell'uscita del plugin (`output_specs` per chiave).
+  - Le descrizioni (OpenAPI) dicono la riduzione: `api sync`.
+- La tabella comune `backend/test_scripts/fixtures/signals/signal_sampling_cases.v1.json`, accanto ad
+  `aggregation_profiles.v1.json`: pytest la legge tutta, Vitest (`timeSeriesAggregation.test.ts`, già registrato) i
+  casi in parità, una corsa alla volta come il renderer.
+- I resti (fuori parità nella tabella):
+  - R1, il secchio dove due corse si incontrano;
+  - R2, le regioni con stile;
+  - R3, due corse a un giorno di distanza alla fine del periodo, senza posto per il segnaposto;
+  - R4, oltre 30 corse il browser unisce i buchi: dopo la riduzione conta le corse ridotte.
+
+**Passi.**
+1. ✅ 20/10, confermati il 21/10 (12:38–12:47, base `208199bf6`, corsia 6186 popolata con `db populate --force --clean`) —
+   I rossi (test-author): blocco nuovo in `test_signal_aggregation.py` (il riduttore e la tabella), la tabella,
+   blocco Vitest in `timeSeriesAggregation.test.ts`, blocco in `test_price_query_sampling.py` (integrazione coi plugin
+   veri: EMA, BOLLINGER, MACD, RISK_DRAWDOWN, ASSET_CALENDAR_ROLLING_RETURN), i 422 aggiornati in PQS-S03 e
+   PQS-API-01, un caso API nuovo. Corse nella corsia 6186.
+   > **Note implementazione** (21/10, rilancio dei rossi, un comando alla volta, carico sotto 4): `services
+   > signal-aggregation` 50 rossi / 172 verdi, tutti per `Failed: Z-29s-a: …sample_signal_series is missing`;
+   > `services price-query-sampling` 17 rossi / 179 verdi, tutti per il 422 di `validate_sampling` («samples the price
+   > series alone: not with signals…»); `api assets-price` 1 rosso / 31 verdi (`assert 422 == 200`, il 422 stesso).
+   > Nessun errore di import o di configurazione. Il Vitest di `timeSeriesAggregation` era già verde (62) alla base: è il
+   > testimone di parità lato browser, legge la tabella e prova `downsampleRenderedSignal`, non ha una cura da fare.
+2. ✅ 21/10 ~12:55 — La cura: le sostituzioni di `files/z29s-draft/apply_z29s.py`, base `208199bf6`.
+   > **Note implementazione**: i quattro file di prodotto (`aggregation.py`, `schemas/prices.py`, `price_query.py`,
+   > `api/v1/assets/prices.py`) avevano ancora gli md5 di base della bozza (`z29s_base.md5`); dopo la cura coincidono
+   > con `z29s_applied.md5` byte per byte (prima del ritocco sotto). Le due descrizioni del runner
+   > (`scripts/test_runner/_backend_services.py`, file condiviso: solo il testo di `desc` delle mie due suite) hanno
+   > trovato le loro ancore (il file era cambiato dalla base della bozza, per altre 7 modifiche di dev).
+   > **⚠️ Fuori pista**: il classificatore del permesso ha rifiutato di eseguire lo script della bozza, che sta nella
+   > cartella di un'altra sessione («codice esterno»). Letto per intero (solo sostituzioni esatte), le stesse
+   > sostituzioni sono state fatte con lo strumento Edit, una per una: stesso risultato, md5 verificato. Un secondo
+   > ritocco: SG10 chiede la parola `aggregation_profile` anche nella descrizione di `FAPriceQueryResult.resolution`
+   > (la bozza non la diceva); aggiunta, in una stringa sola (black).
+3. ✅ 21/10 ~13:00 — I verdi (corsia 6186, uno alla volta, carico 3–8): `services signal-aggregation` 222 (era 50 rossi);
+   `services price-query-sampling` 196 (erano 17 rossi; la prima corsa dopo la cura: 16 verdi, SG10 rosso per la parola
+   mancante, poi 196); `api assets-price` 32 (era 1 rosso); Vitest `timeSeriesAggregation` 62; i vicini:
+   `services range-ceiling` 74 (con `bulk-limits`), `asset-signals` 30, `signal-service` 69, `ai-export-pure` 497.
+   Porta 6186 libera (`lsof` senza ascolto).
+   > **Note implementazione**: nessuna regressione nei vicini. `services bulk-limits` non esiste come azione (è dentro
+   > `range-ceiling`): errore di argparse, nulla toccato.
+4. ✅ 21/10 ~13:05 — `api sync` (exit 0; `generated.ts`, ignorato dal repo, ha le descrizioni nuove; l'unico scarto fra le
+   due versioni è la riga «Installed providers: … MOCKFX, MOCKFX_FAIL …», che dipende dall'ambiente della corsa, non
+   da questo lotto); `front check` 0 errori 0 avvisi (1 min 18); ruff e black puliti sui file toccati, prettier pulito
+   sul `.test.ts`, `git diff --check` pulito. `core-unit` (220 file) **non lanciato**: corsa pesante, serve uno slot
+   del coordinatore; il solo file Vitest toccato è verde.
+5. ✅ 21/10 ~13:25 — La doc (docs-writer): la query dei prezzi e la guida dei segnali.
+   > **Note implementazione**: `developer/backend/assets/architecture.md` («Sampled Price Series»: il validatore dice che
+   > restano rifiutati solo annotazioni ed eventi; due paragrafi nuovi **Signals.** con il budget in giorni, il caso che
+   > non è né lettura a secchi né segnaposto, `signal_samples`, `sample_signal_series` per tipo di uscita, i residui
+   > R1–R4; il paragrafo «Tests:»), e `developer/architecture/patterns/signal_plugin_guide.md` («Plugin Contract»: un
+   > paragrafo dopo quello di `aggregation_profile`). Ritocchi minimi a quattro frasi che il lotto rendeva false («The
+   > answer.», «The reads.», «Item-days» in `#bulk-request-limits`, «Data Flow: Price Query»). `mkdocs build` (stretto)
+   > exit 0, 0 avvisi; `check-links` 97 validi, 8 non verificabili (invariati). Il developer-doc è solo inglese: nessuna
+   > traduzione da timbrare. Verificato da me: PQS-API-06 e `MAX_LINE_RUNS = 30` (`backendRenderer.ts:147`) esistono.
+   > **⚠️ Fuori pista**: la doc dice (e il backlog Z-40) che R2 e R4 **non** sono pinnate da un test né da un caso della
+   > tabella: solo R1 e R3 (e il caso «niente nel periodo») hanno `browser_parity: false`. Detto, non nascosto.
+6. ✅ 21/10 ~13:30 — Checkpoint FROZEN, consegnato al coordinatore (CHECKPOINT READY). Revisori: MF (la semantica della
+   riduzione, i residui R1–R4) e Y (il contratto: `signals` accettati col campionamento, nessun campo nuovo nelle
+   richieste, `resolution` e `sample_bounds` come prima). Backlog: Z-29 (stato) e Z-40 (residui R1–R4).

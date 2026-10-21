@@ -349,6 +349,20 @@ rule in one module, `backend/app/services/signals/aggregation.py` (`select_point
 stacks read, and `test_signal_aggregation.py` (`./dev.py test services signal-aggregation`) tie
 the two.
 
+The same module also holds `sample_signal_series()`, which reduces a whole series, not one
+bucket, for an item of `POST /assets/prices/query` that asks a weekly or monthly sample with
+`signals` (see [Sampled Price Series](../../backend/assets/architecture.md#price-query-sampling)):
+each series of the item's signals comes back with one point per bucket, as the compact chart
+(`downsampleRenderedSignal()`, in the same `timeSeriesAggregation.ts`) draws it, and a line or an
+area keeps its gaps. A second shared table,
+`backend/test_scripts/fixtures/signals/signal_sampling_cases.v1.json`, read by pytest on every case
+and by Vitest on the cases the browser draws the same way, ties it as `aggregation_profiles.v1.json`
+ties the per-bucket rule. A plugin needs nothing new for it: the reduction reads each output's
+`aggregation_profile` from `output_specs` (matched to the series by `key`) and the series' kind, so
+a new output only has to declare a profile that fits its kind: `band_envelope` for a band, one of
+the four scalar profiles for a line, an area or a bar. `SignalOutputSpec` already refuses a
+band/scalar mismatch when it is built, and `sample_signal_series()` raises `ValueError` on one.
+
 ### 📅 Sessions or Calendar Days
 
 `computes_on_quote_days` decides what a plugin's periods count. When it is `True` (the
