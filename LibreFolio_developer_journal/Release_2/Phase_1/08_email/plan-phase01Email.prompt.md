@@ -9591,3 +9591,69 @@ pagine).
 - ✅ **Passo 6 — Checkpoint (A)** (2026-10-22): consegnato al coordinatore, poi FROZEN. E2E facoltativo proposto, non
   eseguito (nessuno slot): aprire `/verify-email#token=<finto>`, verificare che nessuna `POST
   /email/verification/confirm` parta prima del clic, poi il clic → `unknown`.
+
+#### E-26.2 — Il contratto dell'email trattenuta: analisi (2026-10-22, ondata 3, notte; base `bb11f1479`)
+> **La richiesta** (coordinatore): E-25 verificato e committato in `bb11f1479`; E-25-q1 va allo sviluppatore («lascia
+> com'è (a)»). Ora solo l'analisi del contratto di E-26 (b), niente codice, scritta in
+> `salvataggi-worktrees-20261021/ondata3/E-26-contratto.md`; `auth.py` è libero, A rivede dopo A-62.
+
+- ✅ **Analisi** (22/10): rilette `auth.py:292-332`, `schemas/auth.py:114-119`, `verification.py:57-64, 196-316`,
+  `RegisterCard.svelte:105`, `LoginCard.svelte:57-60`, `RegisterCard.verification.test.ts`, EVH-001…016, le righe di
+  doc. La proposta: `verification_email: Optional[Literal["sending", "held"]] = None` («sending» perché l'email parte
+  dopo la risposta; `null` senza verifica; il frontend confronta solo `=== 'held'`); il `message` inglese del caso
+  trattenuto non dice più «check your email»; il limite per casella resta fuori dalla risposta, che altrimenti
+  direbbe a chi si registra con l'indirizzo di un altro se quella casella ha appena ricevuto email. Rossi previsti:
+  EVH-001/002/003/005/013/014/015/016 sul campo, EVH-017 nuovo (il limite per casella: 201 «sending», nessuna email),
+  RCV-04/05, le chiavi in `emailText.test.ts`. Tre domande per lo sviluppatore (q1 il testo del caso trattenuto, q2 il
+  colore del riquadro, q3 `loginRequired`, che all'account trattenuto dice «the email we sent you»).
+  > **⚠️ Fuori pista**: `developer/backend/email.md:749` cita `client_address(http_request)`, il codice usa
+  > `rate_limit_address(http_request)` da H-36: da correggere con la doc di E-26.
+
+#### E-26.3 — L'email trattenuta: esecuzione (2026-10-22, ondata 3, notte; base `bb11f1479`)
+> **Il via** (coordinatore): la revisione di A approva il contratto (nullabile `null | "sending" | "held"`, nomi e
+> valori, il limite per casella fuori dalla risposta), con sette correzioni: (1) la descrizione del campo comincia con
+> «lo stato dell'invio, non un indirizzo», e quella di `verification_required` non dice più «a link is on its way»;
+> (2) il testo trattenuto sostituisce solo il pezzo centrale del `message`, `" (Admin)"` resta (un caso EVH di un
+> invitato amministratore trattenuto); (3) una variabile locale `verification_email = None`, impostata solo dentro
+> `if verification_required:`; (4) ogni EVH che legge la risposta controlla i due campi insieme; (5) la docstring
+> della route; (6) `RegisterCard.svelte:105` con le chiavi scritte intere, RCV-05 fissato; (7) q3 in inglese «open the
+> link **in** the activation email». Testi: q1 = (A), q2 = (a) verde, q3 = (a) corretta, **da confermare dallo
+> sviluppatore**, solo nei cataloghi.
+
+- ✅ **Passo 1 — I rossi** (`test-author`, 22/10): `test_email_verification_hooks_api.py` 26 → 28 casi, coppia
+  `(verification_required, verification_email)` ovunque si legge la risposta (helper `_verification()`), i tre
+  `message` esatti, EVH-017 nuovo (la casella piena: 201 «sending», nessuna email, il token senza indirizzo, il log
+  `Verification email: not sent` con `EMAIL_RATE_LIMITED`), EVH-018 nuovo (un invitato amministratore trattenuto:
+  «held» e il testo + `" (Admin)"`); `RegisterCard.verification.test.ts` 4 → 7 (RCV-04 «held», RCV-05 server senza il
+  campo); `emailText.test.ts` ETX-08 con `registered` e `registeredHeld`. Corse: pytest **22 rossi, 6 verdi**
+  (`api email-verification-hooks`, corsia 6182 ripopolata prima), Vitest **2 rossi, 276 verdi**; ogni rosso per il
+  campo o la chiave mancante (`(True, '<absent>') == (True, 'sending')`). Log `ondata3/E-B-*-red.log`.
+- ✅ **Passo 2 — La cura** (22/10):
+  - `schemas/auth.py`: il campo `verification_email: Optional[Literal["sending", "held"]] = None`, la descrizione
+    (1); `verification_required` ora rimanda al campo;
+  - `api/v1/auth.py`: la variabile locale (3), «sending» nel ramo accodato e «held» nell'altro, il pezzo centrale del
+    `message` da una mappa a tre voci, `" (Admin)"` intatto (2), la docstring (5);
+  - `RegisterCard.svelte:105`: `!verification_required` → `auth.accountCreated`; `=== 'held'` →
+    `email.verification.registeredHeld`; altrimenti `email.verification.registered` (6);
+  - cataloghi con `dev.py i18n update/add`: `registered` (testo (a)), `registeredHeld` (variante A) e
+    `loginRequired` (q3, «open the link in the activation email, or ask for a new one below»), ×4;
+  - `api sync` exit 0: in `generated.ts` (ignorato) `verification_email: z.union([z.enum(['sending', 'held']),
+    z.null()]).optional()`; nell'OpenAPI `anyOf [enum sending/held, null]`. Nessun file tracciato generato.
+- ✅ **Passo 3 — Le prove** (22/10): `api email-verification-hooks` **28/28**; `api auth` 95/95 e `api registration`
+  102/102 (leggono la risposta, nessun cambio); Vitest `RegisterCard.verification` + `emailText` +
+  `routes/invite/page.test.ts` **299/299**, `LoginCard.verification` + `RegisterCard` + `VerificationNotice` **114/114**;
+  ruff e black puliti sui tre file Python; prettier pulito; `i18n check` exit 0 (5126 chiavi); `gate-i18n-usage`
+  195 e `gate-i18n-catalog` 176 passed; `flock … front check` **0 errori, 0 avvisi**; `git diff --check` pulito;
+  porta 6182 libera dopo ogni corsa.
+  > **⚠️ Fuori pista**: la prima corsa verde di `api email-verification-hooks` è partita con il carico a 20 (sopra la
+  > soglia di 8 dei controlli leggeri): è un'azione in processo di 7 s, verde; le corse seguenti col carico sotto 8.
+- ✅ **Passo 4 — La doc** (`docs-writer`, 22/10), unita a quella di E-25 senza toccarla:
+  `user/getting-started.en.md` (il passo 1 col testo (a), il 📭 «below», un punto 🚦 per il caso trattenuto);
+  `admin/email.en.md` («Right after the registration» coi due testi e quando compare il secondo, «The email» parte
+  dopo la risposta, due righe della tabella dei limiti, un paragrafo «What stays invisible», due righe della tabella
+  dei log); `developer/backend/email.md` (il punto «Registration» col campo, i tre `message`, la deriva
+  `client_address` → `rate_limit_address` corretta; i componenti; EVH-001…018 e RCV-01…05);
+  `developer/architecture/access_control.md:270`; `developer/frontend/components/features/auth.md:186`.
+  `flock … mkdocs build` stretto exit 0, `check-links` exit 0. Debito di traduzione senza timbro: `user/getting-started`
+  e `admin/email` (it/fr/es).
+- ✅ **Passo 5 — Checkpoint (E-26)** (22/10): consegnato al coordinatore, poi FROZEN.

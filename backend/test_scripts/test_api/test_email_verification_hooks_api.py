@@ -6,17 +6,19 @@ E5a pinned the flow (``test_services/test_email_verification.py``) and its two r
 in place. The contract:
 
 1. Registration (``POST /auth/register``), the option on, email and ``LIBREFOLIO_PUBLIC_URL`` ready: an account that is
-   not the instance's first answers 201 with ``verification_required: true`` and is created inactive; after the answer
-   one email goes to its address with a ``/verify-email#token=`` link built from ``LIBREFOLIO_PUBLIC_URL``. Signing in
-   with the right password is 403 ``EMAIL_NOT_VERIFIED``; with a wrong one 401, byte for byte an unknown account's
-   answer. «Resend» sends a new link that replaces the first; the click verifies the account, and the sign-in is 200.
-   The instance's first account never waits. An invited registration waits too, and spends its invitation. From one
-   client address, ten registration emails an hour: past them the registration still answers 201
-   ``verification_required: true``, but its email is held — logged, ``info`` —, and the account waits with its hold
-   until its owner asks «resend».
+   not the instance's first answers 201 with ``verification_required: true`` and ``verification_email: "sending"``, and
+   is created inactive; after the answer one email goes to its address with a ``/verify-email#token=`` link built from
+   ``LIBREFOLIO_PUBLIC_URL``. Signing in with the right password is 403 ``EMAIL_NOT_VERIFIED``; with a wrong one 401,
+   byte for byte an unknown account's answer. «Resend» sends a new link that replaces the first; the click verifies the
+   account, and the sign-in is 200. The instance's first account never waits (``verification_required: false``,
+   ``verification_email: null``). An invited registration waits too, and spends its invitation. From one client
+   address, ten registration emails an hour: past them the registration still answers 201
+   ``verification_required: true``, but with ``verification_email: "held"``: its email is held — logged, ``info`` —, and
+   the account waits with its hold until its owner asks «resend».
 2. The option on and no email with a link able to go out (email off, or no public URL): 409
    ``EMAIL_VERIFICATION_UNAVAILABLE``, nothing created, an invitation given with it not spent. The option off:
-   registration as before, ``verification_required: false``, active, no verification token, no email.
+   registration as before, ``verification_required: false``, ``verification_email: null``, active, no verification
+   token, no email.
 3. The limit (``LIBREFOLIO_MAX_USERS``): a waiting account takes a place while its link is live — ``GET /users`` counts
    it in ``usage.used``, and a registration that needs one more place is refused — and none once the link expired.
    ``GET /users`` says ``holds_place: true`` for it while its link is live, false once expired, false for any other
@@ -42,6 +44,18 @@ in place. The contract:
    private address without one — a device of the local network talking to LibreFolio directly — keeps its own budget:
    past it the account is created and waits with its hold, as in 1. EVH-014 pins the skip, red before the cure;
    EVH-015 and EVH-016 are guards, green before and after.
+6. What the answer says about that email (lot E-26 (b)): ``verification_email`` is ``null`` when nothing waits
+   (``verification_required: false``: the option off, or the instance's first account), ``"sending"`` when the email
+   is queued — a request counted under no address included (5) — and ``"held"`` when the limit per client address
+   (``REGISTRATION_EMAILS_BY_ADDRESS``) holds it. The English ``message`` changes only in its middle piece:
+   «Registration successful», «Registration successful: check your email to activate the account», or «Registration
+   successful: the activation email is held (too many registrations from this address); sign in to ask for a new
+   link»; the `` (Admin)`` of a superuser follows whichever it is. Every case above that reads the register answer
+   asserts the two fields together, as a pair. ``"sending"`` means queued, not delivered: the work after the answer
+   can still send nothing — the limit per recipient mailbox (``VERIFICATION_BY_MAILBOX``, three an hour), the hourly
+   budget, an SMTP failure — and the answer stays ``"sending"``; EVH-017 pins that documented limit: the account
+   waits with its hold, a warning is logged, no email goes. EVH-018: an administrator registering by invitation whose
+   email is held keeps the `` (Admin)`` suffix on the held message.
 
 Pure: the real auth, users, settings and email routers run in-process on a private SQLite file under ``tmp_path``
 (NullPool, disposed at teardown), the option set in that file only; accounts are rows with a real bcrypt hash at cost
@@ -54,7 +68,9 @@ registration emails per client address are private on a fake clock; ``socket.get
 every SMTP conversation is with ``FakeSmtpServer`` on 127.0.0.1. Where minutes must pass between two steps,
 ``verification.utcnow`` is a clock the test moves. Nothing is timed.
 
-Red until E5b is applied (``AuthRegisterResponse.verification_required``, ``AdminUserRead.holds_place``).
+Red until E5b is applied (``AuthRegisterResponse.verification_required``, ``AdminUserRead.holds_place``), and the
+pair of every register answer, the held message, EVH-017 and EVH-018 until lot E-26 (b) is
+(``AuthRegisterResponse.verification_email``).
 """
 
 from __future__ import annotations
@@ -136,6 +152,14 @@ SHIPPED_MAILBOX = verification.VERIFICATION_BY_MAILBOX
 #: The process's limiter of registration emails per client address: replaced by a private one, as the others are.
 SHIPPED_REGISTRATION_EMAILS = verification.REGISTRATION_EMAILS_BY_ADDRESS
 START = 1_000.0
+#: The English ``message`` of a registration answer (lot E-26 (b)): its middle piece says what happens to the email, and
+#: ``ADMIN_SUFFIX`` follows whichever it is for a superuser.
+MESSAGE_PLAIN = "Registration successful"
+MESSAGE_SENDING = "Registration successful: check your email to activate the account"
+MESSAGE_HELD = "Registration successful: the activation email is held (too many registrations from this address); sign in to ask for a new link"
+ADMIN_SUFFIX = " (Admin)"
+#: What ``_verification`` reads for a field the register answer lacks, so that a red names it.
+ABSENT = "<absent>"
 
 
 class FakeClock:
@@ -369,6 +393,12 @@ async def _register(private: _Private, username: str, *, invite_token: str | Non
     return await _post(private, REGISTER, body, client=client, headers=headers)
 
 
+def _verification(registered: httpx.Response) -> tuple[Any, Any]:
+    """``(verification_required, verification_email)`` of a register answer, read together; a field it lacks reads ``ABSENT``."""
+    body = registered.json()
+    return body.get("verification_required", ABSENT), body.get("verification_email", ABSENT)
+
+
 async def _login(private: _Private, username: str, password: str = PASSWORD) -> httpx.Response:
     return await _post(private, LOGIN, {"username": username, "password": password})
 
@@ -410,7 +440,7 @@ async def _listed(private: _Private) -> dict[str, Any]:
 
 @pytest.mark.asyncio
 async def test_a_registration_waits_for_its_link_then_signs_in(private: _Private, monkeypatch: pytest.MonkeyPatch, moment: _Moment) -> None:
-    """EVH-001 — contract 1: the option on, email and links ready, an administrator already there. Register: 201 ``verification_required: true``, the account inactive, one email to its address with a ``/verify-email`` link. Sign-in: right password 403 ``EMAIL_NOT_VERIFIED``; wrong password 401, the same bytes as an unknown account's. Six minutes later «resend» sends a new link; the first one is then ``revoked``; the new one verifies (200 ``{username}``), and the sign-in is 200."""
+    """EVH-001 — contract 1: the option on, email and links ready, an administrator already there. Register: 201 ``verification_required: true`` and ``verification_email: "sending"``, the account inactive, one email to its address with a ``/verify-email`` link. Sign-in: right password 403 ``EMAIL_NOT_VERIFIED``; wrong password 401, the same bytes as an unknown account's. Six minutes later «resend» sends a new link; the first one is then ``revoked``; the new one verifies (200 ``{username}``), and the sign-in is 200."""
     print_section("EVH-001: register, wait, resend, click, sign in")
     await _add_user(private.engine, ADMIN, admin=True)
     await _option(private.engine, "true")
@@ -420,7 +450,8 @@ async def test_a_registration_waits_for_its_link_then_signs_in(private: _Private
         _ready(monkeypatch, fake)
         registered = await _register(private, VERA)
         assert registered.status_code == 201, registered.text
-        assert registered.json()["verification_required"] is True and registered.json()["user"]["is_active"] is False
+        assert _verification(registered) == (True, "sending"), registered.text
+        assert registered.json()["user"]["is_active"] is False, registered.text
         assert [message.rcpt_tos for message in fake.messages] == [[f"{VERA}@example.com"]], "one email after the answer"
         first = _token_in(fake.messages[0])
 
@@ -445,14 +476,16 @@ async def test_a_registration_waits_for_its_link_then_signs_in(private: _Private
 
 @pytest.mark.asyncio
 async def test_the_first_account_never_waits(private: _Private) -> None:
-    """EVH-002 — contract 1: on an empty instance, the option on and email off, the first registration is the administrator: 201 ``verification_required: false``, active, no verification token; it signs in."""
+    """EVH-002 — contract 1: on an empty instance, the option on and email off, the first registration is the administrator: 201 ``verification_required: false`` and ``verification_email: null`` with the plain message and `` (Admin)``, active, no verification token; it signs in."""
     print_section("EVH-002: the first account")
     await _option(private.engine, "true")
 
     registered = await _register(private, ADMIN)
 
     assert registered.status_code == 201, registered.text
-    assert (registered.json()["verification_required"], registered.json()["user"]["is_active"], registered.json()["user"]["is_superuser"]) == (False, True, True)
+    assert _verification(registered) == (False, None), registered.text
+    assert registered.json()["message"] == MESSAGE_PLAIN + ADMIN_SUFFIX, registered.text
+    assert (registered.json()["user"]["is_active"], registered.json()["user"]["is_superuser"]) == (True, True)
     admin = await _user(private.engine, ADMIN)
     assert await _verification_rows(private.engine, admin.id) == []
     assert (await _login(private, ADMIN)).status_code == 200
@@ -461,7 +494,7 @@ async def test_the_first_account_never_waits(private: _Private) -> None:
 
 @pytest.mark.asyncio
 async def test_an_invited_registration_waits_too_and_spends_its_invitation(private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
-    """EVH-003 — contract 1: registration by invitation, the option on, email ready: 201 ``verification_required: true``, inactive, the email sent, and the invitation spent."""
+    """EVH-003 — contract 1: registration by invitation, the option on, email ready: 201 ``verification_required: true`` and ``verification_email: "sending"``, inactive, the email sent, and the invitation spent."""
     print_section("EVH-003: an invitation")
     admin = await _add_user(private.engine, ADMIN, admin=True)
     await _option(private.engine, "true")
@@ -471,15 +504,16 @@ async def test_an_invited_registration_waits_too_and_spends_its_invitation(priva
         _ready(monkeypatch, fake)
         registered = await _register(private, VERA, invite_token=invitation.token)
 
-    assert registered.status_code == 201 and registered.json()["verification_required"] is True, registered.text
+    assert registered.status_code == 201 and _verification(registered) == (True, "sending"), registered.text
     assert len(fake.messages) == 1
     assert await _status(private.engine, invitation.token, INVITE) == TokenStatus.CONSUMED
     print_success("waits, the invitation spent")
 
 
-async def _issue_invite(engine: AsyncEngine, admin_id: int) -> IssuedToken:
+async def _issue_invite(engine: AsyncEngine, admin_id: int, *, grants_admin: bool = False) -> IssuedToken:
+    """An invitation from the administrator; with ``grants_admin`` the account that spends it is an administrator."""
     async with AsyncSession(engine, expire_on_commit=False) as session:
-        issued = await token_service.issue_token(session, INVITE, created_by_user_id=admin_id)
+        issued = await token_service.issue_token(session, INVITE, created_by_user_id=admin_id, grants_admin=grants_admin)
         await session.commit()
     return issued
 
@@ -515,7 +549,7 @@ async def test_no_email_with_a_link_refuses_the_registration(private: _Private, 
 
 @pytest.mark.asyncio
 async def test_with_the_option_off_registration_is_as_before(private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
-    """EVH-005 — contract 2: the option off, email ready: 201 ``verification_required: false``, active, no verification token, no email; the sign-in is 200."""
+    """EVH-005 — contract 2: the option off, email ready: 201 ``verification_required: false`` and ``verification_email: null`` with the plain message, active, no verification token, no email; the sign-in is 200."""
     print_section("EVH-005: the option off")
     await _add_user(private.engine, ADMIN, admin=True)
     await _registration_open(private.engine)
@@ -524,7 +558,8 @@ async def test_with_the_option_off_registration_is_as_before(private: _Private, 
         _ready(monkeypatch, fake)
         registered = await _register(private, VERA)
 
-    assert registered.status_code == 201 and registered.json()["verification_required"] is False and registered.json()["user"]["is_active"] is True, registered.text
+    assert registered.status_code == 201 and _verification(registered) == (False, None) and registered.json()["user"]["is_active"] is True, registered.text
+    assert registered.json()["message"] == MESSAGE_PLAIN, registered.text
     assert fake.messages == [] and await _verification_rows(private.engine, (await _user(private.engine, VERA)).id) == []
     assert (await _login(private, VERA)).status_code == 200
     print_success("active at once")
@@ -543,7 +578,7 @@ async def _registered_and_waiting(private: _Private, monkeypatch: pytest.MonkeyP
     with FakeSmtpServer() as fake:
         _ready(monkeypatch, fake)
         registered = await _register(private, VERA)
-        assert registered.status_code == 201 and registered.json()["verification_required"] is True, registered.text
+        assert registered.status_code == 201 and _verification(registered) == (True, "sending"), registered.text
         token = _token_in(fake.messages[0])
     return await _user(private.engine, VERA), token
 
@@ -567,7 +602,7 @@ async def test_a_waiting_account_takes_a_place_while_its_link_is_live(private: _
     assert live["usage"]["used"] == 2 and live["holds_place"] == {ADMIN: False, VERA: True, "zq_carol": False}, live
     assert (full.status_code, _detail(full)["error_code"]) == (409, "USER_LIMIT_REACHED"), full.text
     assert expired["usage"]["used"] == 1 and expired["holds_place"][VERA] is False, expired
-    assert freed.status_code == 201 and freed.json()["verification_required"] is True, freed.text
+    assert freed.status_code == 201 and _verification(freed) == (True, "sending"), freed.text
     print_success("counted while live, not once expired")
 
 
@@ -649,7 +684,7 @@ async def test_the_patch_answer_says_whether_a_waiting_account_holds_its_place(p
 
 @pytest.mark.asyncio
 async def test_registration_emails_are_limited_per_client_address(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> None:
-    """EVH-013 — contract 1 (E5b, after the security review): ``REGISTRATION_EMAILS_BY_ADDRESS`` at one email an hour for this test. Two registrations from one client address both answer 201 ``verification_required: true``; only the first one's email goes. The second account waits with its hold — inactive, one verification token without an address, neither consumed nor revoked —, and «Verification email held: too many registrations from this address» is logged, ``info``, with its ``user_id``. Its owner then asks «resend» from the sign-in: 200, and its link goes."""
+    """EVH-013 — contract 1 (E5b, after the security review): ``REGISTRATION_EMAILS_BY_ADDRESS`` at one email an hour for this test. Two registrations from one client address both answer 201 ``verification_required: true``: the first with ``verification_email: "sending"`` and the «check your email» message, the second with ``verification_email: "held"`` and the held message (no `` (Admin)``: Wanda is a regular account); only the first one's email goes. The second account waits with its hold — inactive, one verification token without an address, neither consumed nor revoked —, and «Verification email held: too many registrations from this address» is logged, ``info``, with its ``user_id``. Its owner then asks «resend» from the sign-in: 200, and its link goes."""
     print_section("EVH-013: registration emails per client address")
     monkeypatch.setattr(verification, "REGISTRATION_EMAILS_BY_ADDRESS", SlidingWindowLimiter(1, 3600, clock=clock))
     await _add_user(private.engine, ADMIN, admin=True)
@@ -666,7 +701,8 @@ async def test_registration_emails_are_limited_per_client_address(private: _Priv
         holds = [(row.email, row.consumed_at, row.revoked_at) for row in await _verification_rows(private.engine, wanda.id)]
         resent = await _post(private, RESEND, {"username": "zq_wanda", "password": PASSWORD})
 
-    assert [(answer.status_code, answer.json()["verification_required"]) for answer in (first, second)] == [(201, True), (201, True)], [answer.text for answer in (first, second)]
+    assert [(answer.status_code, *_verification(answer)) for answer in (first, second)] == [(201, True, "sending"), (201, True, "held")], [answer.text for answer in (first, second)]
+    assert [answer.json()["message"] for answer in (first, second)] == [MESSAGE_SENDING, MESSAGE_HELD], [answer.text for answer in (first, second)]
     assert sent_by_the_registrations == [[f"{VERA}@example.com"]], "only the first registration's email goes"
     assert wanda.is_active is False and holds == [(None, None, None)], holds
     held = [(event["log_level"], event.get("user_id")) for event in events if event.get("event") == "Verification email held: too many registrations from this address"]
@@ -769,7 +805,7 @@ async def _wait_of(private: _Private, username: str) -> tuple[bool, list[tuple[A
 @pytest.mark.parametrize(("header", "prefix"), FORWARDING_HEADERS)
 @pytest.mark.parametrize("proxy", PRIVATE_PROXIES)
 async def test_two_visitors_behind_one_private_proxy_each_get_their_registration_email(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, proxy: str, header: str, prefix: str) -> None:
-    """EVH-014 — contract 5, red before the cure of decision N70 (H-36's ``rate_limit_address``): ``REGISTRATION_EMAILS_BY_ADDRESS`` at one email an hour for this test; the option on, registration open, email ready. Both registrations come from the proxy's private address — ``172.17.0.1``, the Docker bridge; ``fd00::2``, an IPv6 unique-local one —, each with a forwarding header naming its visitor. Visitor A registers: 201 ``verification_required: true``, and A's verification email goes. Visitor B registers through the same proxy: 201 ``verification_required: true``, and B's email goes too, never held. Then the skip itself, which B's email alone would not prove: the limiter per address holds no key at all — neither registration counted under an address, the proxy's or its visitor's. The headers are exactly H-36's list — ``X-Forwarded-For``, ``Forwarded`` (``for=…``), ``X-Real-IP`` —, crossed with the two peers: six cases."""
+    """EVH-014 — contract 5, red before the cure of decision N70 (H-36's ``rate_limit_address``): ``REGISTRATION_EMAILS_BY_ADDRESS`` at one email an hour for this test; the option on, registration open, email ready. Both registrations come from the proxy's private address — ``172.17.0.1``, the Docker bridge; ``fd00::2``, an IPv6 unique-local one —, each with a forwarding header naming its visitor. Visitor A registers: 201 ``verification_required: true`` with ``verification_email: "sending"``, and A's verification email goes. Visitor B registers through the same proxy: 201, the same two fields, and B's email goes too, never held (``"sending"``, not ``"held"``). Then the skip itself, which B's email alone would not prove: the limiter per address holds no key at all — neither registration counted under an address, the proxy's or its visitor's. The headers are exactly H-36's list — ``X-Forwarded-For``, ``Forwarded`` (``for=…``), ``X-Real-IP`` —, crossed with the two peers: six cases."""
     print_section(f"EVH-014: two visitors behind {proxy}, {header}")
     by_address = await _one_registration_email_an_hour(private, monkeypatch, clock)
     peer = (proxy, PROXY_PORT)
@@ -780,7 +816,7 @@ async def test_two_visitors_behind_one_private_proxy_each_get_their_registration
         second = await _register(private, ACCOUNT_B, client=peer, headers={header: f"{prefix}{VISITOR_B}"})
         recipients = [message.rcpt_tos for message in fake.messages]
 
-    assert [(answer.status_code, answer.json().get("verification_required")) for answer in (first, second)] == [(201, True), (201, True)], [answer.text for answer in (first, second)]
+    assert [(answer.status_code, *_verification(answer)) for answer in (first, second)] == [(201, True, "sending"), (201, True, "sending")], [answer.text for answer in (first, second)]
     assert [f"{ACCOUNT_A}@example.com"] in recipients, f"barrier: visitor A's verification email goes: {recipients}"
     assert [f"{ACCOUNT_B}@example.com"] in recipients, f"two visitors behind one private proxy ({proxy}) shared one per-address budget: visitor B's verification email was held because visitor A had registered: {recipients}"
     assert len(by_address) == 0, f"a registration through a reverse proxy LibreFolio does not trust ({proxy}, {header}) is counted under no address (N70): the limiter per address holds {len(by_address)} key(s)"
@@ -791,7 +827,7 @@ async def test_two_visitors_behind_one_private_proxy_each_get_their_registration
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("header", "prefix"), OWN_FORWARDING_HEADERS)
 async def test_a_public_clients_own_forwarding_header_does_not_release_a_held_registration_email(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, header: str, prefix: str) -> None:
-    """EVH-015 — contract 5, a guard, green before and after the cure: ``REGISTRATION_EMAILS_BY_ADDRESS`` at one email an hour for this test; the option on, registration open, email ready. A client at the public address ``198.51.100.7`` writes a forwarding header itself — ``X-Forwarded-For``, ``Forwarded`` (``for=…``) or ``X-Real-IP`` —, naming ``203.0.113.10`` for the first registration, ``203.0.113.20`` for the second: both answer 201 ``verification_required: true``; the first one's email goes, the second's is held — its account created and waiting with its hold: inactive, one verification token without an address, neither consumed nor revoked —: what a client writes never moves its own budget. The forwarding headers that count follow H-36, and the cure may extend the parametrization."""
+    """EVH-015 — contract 5, a guard, green before and after the cure: ``REGISTRATION_EMAILS_BY_ADDRESS`` at one email an hour for this test; the option on, registration open, email ready. A client at the public address ``198.51.100.7`` writes a forwarding header itself — ``X-Forwarded-For``, ``Forwarded`` (``for=…``) or ``X-Real-IP`` —, naming ``203.0.113.10`` for the first registration, ``203.0.113.20`` for the second: both answer 201 ``verification_required: true`` — ``verification_email: "sending"`` for the first, ``"held"`` for the second —; the first one's email goes, the second's is held — its account created and waiting with its hold: inactive, one verification token without an address, neither consumed nor revoked —: what a client writes never moves its own budget. The forwarding headers that count follow H-36, and the cure may extend the parametrization."""
     print_section(f"EVH-015: a public client's own {header}")
     await _one_registration_email_an_hour(private, monkeypatch, clock)
 
@@ -801,7 +837,7 @@ async def test_a_public_clients_own_forwarding_header_does_not_release_a_held_re
         second = await _register(private, ACCOUNT_B, client=CLIENT, headers={header: f"{prefix}{VISITOR_B}"})
         recipients = [message.rcpt_tos for message in fake.messages]
 
-    assert [(answer.status_code, answer.json().get("verification_required")) for answer in (first, second)] == [(201, True), (201, True)], [answer.text for answer in (first, second)]
+    assert [(answer.status_code, *_verification(answer)) for answer in (first, second)] == [(201, True, "sending"), (201, True, "held")], [answer.text for answer in (first, second)]
     assert [f"{ACCOUNT_A}@example.com"] in recipients, f"barrier: the first registration's email goes: {recipients}"
     assert [f"{ACCOUNT_B}@example.com"] not in recipients, f"a client at a public address chose its own budget with a {header} header it wrote itself: {recipients}"
     assert await _wait_of(private, ACCOUNT_B) == (False, [(None, None, None)]), "the second account is created and waits with its hold"
@@ -810,7 +846,7 @@ async def test_a_public_clients_own_forwarding_header_does_not_release_a_held_re
 
 @pytest.mark.asyncio
 async def test_a_private_client_without_a_forwarding_header_keeps_its_own_registration_budget(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> None:
-    """EVH-016 — contract 5, a guard, green before and after the cure: ``REGISTRATION_EMAILS_BY_ADDRESS`` at one email an hour for this test; the option on, registration open, email ready. A device of the local network talks to LibreFolio directly — the private address ``192.168.1.5``, no forwarding header — and registers twice: both answer 201 ``verification_required: true``; the first one's email goes, the second's is held — its account created and waiting with its hold —: a private address alone is not a proxy, and keeps its own budget. The forwarding headers that count follow H-36, and the cure may extend the parametrization."""
+    """EVH-016 — contract 5, a guard, green before and after the cure: ``REGISTRATION_EMAILS_BY_ADDRESS`` at one email an hour for this test; the option on, registration open, email ready. A device of the local network talks to LibreFolio directly — the private address ``192.168.1.5``, no forwarding header — and registers twice: both answer 201 ``verification_required: true`` — ``verification_email: "sending"`` for the first, ``"held"`` for the second —; the first one's email goes, the second's is held — its account created and waiting with its hold —: a private address alone is not a proxy, and keeps its own budget. The forwarding headers that count follow H-36, and the cure may extend the parametrization."""
     print_section("EVH-016: a device of the local network")
     await _one_registration_email_an_hour(private, monkeypatch, clock)
 
@@ -820,8 +856,73 @@ async def test_a_private_client_without_a_forwarding_header_keeps_its_own_regist
         second = await _register(private, ACCOUNT_B, client=LAN_DEVICE)
         recipients = [message.rcpt_tos for message in fake.messages]
 
-    assert [(answer.status_code, answer.json().get("verification_required")) for answer in (first, second)] == [(201, True), (201, True)], [answer.text for answer in (first, second)]
+    assert [(answer.status_code, *_verification(answer)) for answer in (first, second)] == [(201, True, "sending"), (201, True, "held")], [answer.text for answer in (first, second)]
     assert [f"{ACCOUNT_A}@example.com"] in recipients, f"barrier: the first registration's email goes: {recipients}"
     assert [f"{ACCOUNT_B}@example.com"] not in recipients, f"a private address without a forwarding header lost its own budget: {recipients}"
     assert await _wait_of(private, ACCOUNT_B) == (False, [(None, None, None)]), "the second account is created and waits with its hold"
     print_success("201 twice; the second email held: its own budget")
+
+
+# =============================================================================
+# 6. WHAT THE ANSWER SAYS ABOUT THE EMAIL (LOT E-26 (b))
+# =============================================================================
+
+#: The administrator an invitation with ``grants_admin`` opens.
+INVITED_ADMIN = "zq_invited_admin"
+
+
+@pytest.mark.asyncio
+async def test_sending_is_queued_not_delivered_when_the_mailbox_limit_is_spent(private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+    """EVH-017 — contract 6, «sending» is not «delivered» (the documented invisible limit): the option on, registration open, email ready, and the per-mailbox limiter (``VERIFICATION_BY_MAILBOX``, the module's private one on the fake clock) already full for the new account's mailbox. The registration answers 201 ``verification_required: true`` and ``verification_email: "sending"`` with the «check your email» message — the answer cannot know what the work after it will find —; once the answer is complete no email went, the account is inactive and waits with its hold (one verification token without an address, neither consumed nor revoked), and ``Verification email: not sent`` is logged, ``warning``, with its ``user_id`` and the code ``EMAIL_RATE_LIMITED``."""
+    print_section("EVH-017: «sending» is queued, not delivered")
+    await _add_user(private.engine, ADMIN, admin=True)
+    await _option(private.engine, "true")
+    await _registration_open(private.engine)
+    mailbox = delivery.mailbox_budget_key(f"{VERA}@example.com")
+    by_mailbox = verification.VERIFICATION_BY_MAILBOX
+    for _ in range(SHIPPED_MAILBOX.limit):
+        by_mailbox.hit(mailbox)
+    assert by_mailbox.peek(mailbox).allowed is False, "setup: the mailbox's limit must be spent before the registration"
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        with capture_logs() as events:
+            registered = await _register(private, VERA)
+        sent = [message.rcpt_tos for message in fake.messages]
+        vera = await _user(private.engine, VERA)
+        waits = await _wait_of(private, VERA)
+
+    assert registered.status_code == 201, registered.text
+    assert _verification(registered) == (True, "sending"), registered.text
+    assert registered.json()["message"] == MESSAGE_SENDING, registered.text
+    assert sent == [], "the mailbox's limit was spent: no email went to it"
+    assert waits == (False, [(None, None, None)]), "the account waits with its hold: inactive, one verification token without an address, neither consumed nor revoked"
+    not_sent = [(event["log_level"], event.get("user_id"), event.get("code")) for event in events if event.get("event") == "Verification email: not sent"]
+    assert not_sent == [("warning", vera.id, "EMAIL_RATE_LIMITED")], events
+    print_success("201 «sending», no email: the mailbox's limit spent, the account waits with its hold, the warning logged")
+
+
+@pytest.mark.asyncio
+async def test_an_invited_administrator_whose_email_is_held_keeps_the_admin_suffix(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> None:
+    """EVH-018 — contract 6: ``REGISTRATION_EMAILS_BY_ADDRESS`` at one email an hour on the fake clock (as EVH-013); the option on; the registration mode stays the module's default, by invitation. From one client address, a registration by a regular invitation answers 201 ``(true, "sending")`` and its email goes; then one by an administrator's invitation (``grants_admin``) answers 201 ``(true, "held")``: the account is a superuser, inactive and waiting with its hold, its invitation consumed, no email for it, and the message is the held one with `` (Admin)`` after it, exactly."""
+    print_section("EVH-018: an invited administrator, held")
+    monkeypatch.setattr(verification, "REGISTRATION_EMAILS_BY_ADDRESS", SlidingWindowLimiter(1, 3600, clock=clock))
+    admin = await _add_user(private.engine, ADMIN, admin=True)
+    await _option(private.engine, "true")
+    regular_invitation = await _issue_invite(private.engine, admin.id)
+    admin_invitation = await _issue_invite(private.engine, admin.id, grants_admin=True)
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        first = await _register(private, VERA, invite_token=regular_invitation.token)
+        second = await _register(private, INVITED_ADMIN, invite_token=admin_invitation.token)
+        sent = [message.rcpt_tos for message in fake.messages]
+
+    invited_admin = await _user(private.engine, INVITED_ADMIN)
+    assert [(answer.status_code, *_verification(answer)) for answer in (first, second)] == [(201, True, "sending"), (201, True, "held")], [answer.text for answer in (first, second)]
+    assert [answer.json()["message"] for answer in (first, second)] == [MESSAGE_SENDING, MESSAGE_HELD + ADMIN_SUFFIX], [answer.text for answer in (first, second)]
+    assert (invited_admin.is_superuser, invited_admin.is_active) == (True, False), "the invitation made it an administrator, and it waits for its link"
+    assert await _wait_of(private, INVITED_ADMIN) == (False, [(None, None, None)]), "the held account waits with its hold"
+    assert sent == [[f"{VERA}@example.com"]], "only the first registration's email goes: none for the held administrator"
+    assert await _status(private.engine, admin_invitation.token, INVITE) == TokenStatus.CONSUMED
+    print_success("201 «held» + (Admin): the invited administrator waits with its hold, its invitation spent")

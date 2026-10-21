@@ -9461,6 +9461,12 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   link). Proposta: solo il testo, una chiave di E ×4. Da decidere (sviluppatore). Dettagli: piano 08, «E-25 ed E-26».
   - 20/10, sviluppatore (14:3x): la (b), un campo nella risposta di `POST /auth/register` per l'email trattenuta, più il
     testo (a) per il caso normale. File di A e `api sync`: prima l'accordo con A sul contratto. Dopo E-25.
+  - ✅ 22/10 (E, ondata 3): fatta. Contratto rivisto da A: `verification_email: null | "sending" | "held"` nella
+    risposta di `POST /auth/register`, «held» oltre le 10 email di registrazione all'ora dallo stesso indirizzo; la
+    scheda di registrazione lo dice (`registeredHeld`), `registered` col testo (a), `loginRequired` corretto. I testi
+    vanno confermati dallo sviluppatore. Resta invisibile ciò che succede dopo la risposta (limite per casella,
+    budget orario, SMTP): scritto nella doc. Checkpoint su `bb11f1479`, commit del coordinatore. Dettagli: piano 08,
+    «E-26.2» e «E-26.3».
 
 ## Y · Cruscotto e grafici (fase 01)
 

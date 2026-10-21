@@ -299,8 +299,10 @@ async def register(request: AuthRegisterRequest, background: BackgroundTasks, ht
     A refusal for the limit tells nothing about how many accounts exist: whoever asks is not signed in.
 
     With email verification required (workstream E), the new account waits for its link: ``verification_required`` is
-    true and the email goes after the answer, unless this client address sent 10 of them in the hour: the account then
-    waits without it, and its owner asks for the link again from the sign-in page. 409
+    true, and ``verification_email`` says what became of its email (lot E-26). ``sending``: the email goes after the
+    answer, so a failure then (the recipient mailbox's limit, the hourly budget, the SMTP server) is only logged.
+    ``held``: this client address already sent 10 of them in the hour, so the account waits without it, and its owner
+    asks for the link again from the sign-in page. Without verification ``verification_email`` is null. 409
     ``EMAIL_VERIFICATION_UNAVAILABLE`` when the option is on and no email with a link can go out now.
     """
     _refuse_weak_password(request.password)
@@ -318,17 +320,26 @@ async def register(request: AuthRegisterRequest, background: BackgroundTasks, ht
         raise HTTPException(status_code=_REGISTRATION_REFUSALS[exc.code], detail={"error_code": exc.code, "message": exc.message}) from None
 
     verification_required = not user.is_active
+    verification_email: Literal["sending", "held"] | None = None
     if verification_required:
         if email_verification.registration_email_allowed(rate_limit_address(http_request)):
             # The session of this request ends with it: the work opens its own, on the same database.
             background.add_task(email_verification.registration_email_work, user.id, engine=session.bind)
+            verification_email = "sending"
         else:
             # Too many registration emails from this client address: the account waits without its email (workstream E).
             logger.info("Verification email held: too many registrations from this address", user_id=user.id)
+            verification_email = "held"
+    outcome = {
+        None: "",
+        "sending": ": check your email to activate the account",
+        "held": ": the activation email is held (too many registrations from this address); sign in to ask for a new link",
+    }[verification_email]
     return AuthRegisterResponse(
         user=_auth_user(user),
-        message="Registration successful" + (": check your email to activate the account" if verification_required else "") + (" (Admin)" if user.is_superuser else ""),
+        message="Registration successful" + outcome + (" (Admin)" if user.is_superuser else ""),
         verification_required=verification_required,
+        verification_email=verification_email,
     )
 
 
