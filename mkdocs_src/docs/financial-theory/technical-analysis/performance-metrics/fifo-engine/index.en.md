@@ -56,7 +56,7 @@ LibreFolio replays every transaction for an asset **in chronological order**, cl
 | BUY | First closes any open SHORT lots on that broker; any remainder opens a new LONG lot |
 | SELL | Closes open LONG lots in FIFO order on that broker; any remainder opens a new SHORT lot only where the broker allows shorting |
 | Adjustment in | Same matching logic as BUY, at the adjustment's per-unit cost basis (zero without one): any remainder opens a new LONG lot at that cost — in the cost basis's currency when it has one |
-| Adjustment out | Closes open LONG lots in FIFO order on that broker, like a SELL, at the adjustment's per-unit cost basis — or at zero without one, a write-off; it never opens a SHORT lot |
+| Adjustment out | Closes open LONG lots in FIFO order on that broker, like a SELL, at zero: it has no value, so each lot realizes minus the cost of the units it gives up; it never opens a SHORT lot |
 | SPLIT | Rescales quantity and unit cost for every open lot of the asset |
 | Transfer (depart / arrive) | Moves custody of a lot's open quantity from one broker to another |
 
@@ -84,7 +84,7 @@ $$
 \text{RealizedPnL}_{\text{SHORT}} = \text{MatchedQuantity} \times (\text{LotUnitCost} - \text{ClosePrice})
 $$
 
-$\text{ClosePrice}$ is the trade's unit price for a SELL, or for a BUY closing a SHORT lot. An adjustment trades nothing: it closes at its per-unit **cost basis override**, or at **zero** without one. For an outgoing adjustment that zero is a write-off, while a cost basis hands the units over at cost: every lot it consumes closes at that same per-unit cost, not the lot's own, so a cheaper lot realizes the difference, as the average cost does (see [Outgoing Adjustments](../../../instruments/transaction-types/adjustment.md#outgoing-adjustments)). The cost basis applies whatever the lot's currency.
+$\text{ClosePrice}$ is the trade's unit price for a SELL, or for a BUY closing a SHORT lot. An adjustment trades nothing: an incoming one closes at its per-unit **cost basis override**, or at **zero** without one. An outgoing adjustment has no value: it always closes at **zero**, so every lot it consumes realizes minus the cost of those units, whatever cost basis the row holds (see [Outgoing Adjustments](../../../instruments/transaction-types/adjustment.md#outgoing-adjustments)).
 
 This is why two lots of the same asset, bought at different times and prices, can show very different realized results even though they are later matched on the same day at the same price — see the worked example in [FIFO Lot Analysis](fifo-lot-analysis.md).
 

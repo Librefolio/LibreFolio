@@ -950,6 +950,53 @@ describe('TransactionFormModal — exact quantity contract', () => {
             else expect(screen.queryByTestId('tx-form-cost-basis-warning')).toBeNull();
         });
     });
+
+    // N78-1 (the developer's decision, 21/10/2026): an ADJUSTMENT taking units out has no value, so the Form shows its
+    // cost section (`tx-form-cost-basis-inline`) only with a positive quantity. RED until the cure for the negative
+    // quantities — today `showCostBasisField` is true for every ADJUSTMENT —; the positive one is the guard, and the
+    // presence barrier of the absences: the same mount does render the section when the quantity allows it.
+    it.each([
+        ['3', true],
+        ['-3', false],
+        ['-999999999999.123456', false],
+    ] as const)('N78-1: a new ADJUSTMENT shows its cost section only with a positive quantity, %j', async (quantity, shown) => {
+        mount({
+            mode: 'create',
+            items: [
+                txRow({
+                    type: 'ADJUSTMENT',
+                    quantity,
+                    cash: null,
+                    cost_basis_mode: 'manual',
+                    cost_basis_override: null,
+                }),
+            ],
+            commitOnSave: false,
+            onPushDraft: vi.fn(),
+        });
+
+        await screen.findByTestId('tx-form-quantity');
+        if (shown) await waitFor(() => expect(screen.getByTestId('tx-form-cost-basis-inline')).toBeInTheDocument());
+        else expect(screen.queryByTestId('tx-form-cost-basis-inline'), `N78-1: an ADJUSTMENT of quantity ${quantity} takes no value, so the Form shows no cost section`).toBeNull();
+    });
+
+    it('N78-1: editing a saved outgoing ADJUSTMENT that stores a value shows no cost section', async () => {
+        mount({
+            mode: 'edit',
+            items: [
+                txRow({
+                    type: 'ADJUSTMENT',
+                    quantity: '-3',
+                    cash: null,
+                    cost_basis_mode: 'manual',
+                    cost_basis_override: {code: 'EUR', amount: '20'},
+                }),
+            ],
+        });
+
+        await screen.findByTestId('tx-form-quantity');
+        expect(screen.queryByTestId('tx-form-cost-basis-inline'), 'N78-1: an old row storing a value on an outgoing ADJUSTMENT shows no cost section: the value is ignored').toBeNull();
+    });
 });
 
 /**

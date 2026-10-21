@@ -1335,19 +1335,19 @@ class TestValuedAtCostWithoutObservation:
 
 
 # =============================================================================
-# J-24 — a priced outgoing ADJUSTMENT hands its units over at the rate of its day
+# N78-1 — an outgoing ADJUSTMENT has no value, whatever it stores (J-24, inverted)
 # =============================================================================
 
 _J24_USD_ASSET = 400
 _J24_EUR_ASSET = 401
 _J24_HANDOVER_ID = 3
-# 1 USD = 0.90 EUR on the purchase day (01-01), 0.80 on the handover day (01-02) and after
+# 1 USD = 0.90 EUR on the purchase day (01-01), 0.80 on the day of the exit (01-02) and after
 _J24_USD_RATES = {
     ("USD", "EUR", date(2025, 1, 1)): Decimal("0.9"),
     ("USD", "EUR", date(2025, 1, 2)): Decimal("0.8"),
     ("USD", "EUR", date(2025, 1, 3)): Decimal("0.8"),
 }
-# Only the purchase day's rate: a conversion asked on the handover day is a movement failure
+# Only the purchase day's rate: a conversion asked on the day of the exit would be a movement failure
 _J24_USD_RATE_OF_THE_PURCHASE_ONLY = {("USD", "EUR", date(2025, 1, 1)): Decimal("0.9")}
 
 
@@ -1380,7 +1380,7 @@ def _sales_of(result, transaction_id: int) -> list[dict]:
 
 
 def _j24_sale(*, asset_id: int, quantity: str, proceeds: str | None, cost: str, cost_complete: bool = True) -> dict:
-    """The RealizedSale J-24 expects for the handover of broker 10 on 01-02, in the shape of :func:`_sales_of`."""
+    """The RealizedSale expected for the exit of broker 10 on 01-02, in the shape of :func:`_sales_of`."""
     return {
         "asset_id": asset_id,
         "broker_id": 10,
@@ -1401,166 +1401,165 @@ def _broker_problems(states, day: date, broker_id: int, **expected) -> list[str]
     return [f"{day}/broker {broker_id}: {name}={getattr(contribution, name)!r}, expected {want!r}" for name, want in expected.items() if getattr(contribution, name) != want]
 
 
-class TestPricedAdjustmentOutHandsOverAtItsDate:
-    """J-24 (developer's rule P21: «convert into the target currency at the rate of the transaction's day, and do
-    every calculation in the target currency»). An outgoing ADJUSTMENT with a cost basis hands its units over at
-    ``D = |quantity × share| × cost_basis_override``, in ``cost_basis_currency`` — the asset's currency when it is
-    None, the pool's rule for an incoming ADJUSTMENT — converted at the row's own date. The capital
-    (``cumulative_external_cash_flow``, and the broker's ``capital_contribution``) falls by D, and the difference from
-    the historical cost C the pool gives up is realized, as for a SELL: one ``RealizedSale`` for the row, proceeds D,
-    cost C, ``cost_complete`` the pool's before the row. With no rate on its day the proceeds are unknown (None), the
-    pair is a movement failure dated that day, and the capital falls by C, as before J-24. Rows before ``date_from``
-    too (J1: one replay with the same rules every day; before J1 they ran in a separate pre-frame branch). Unchanged: an outgoing ADJUSTMENT without a cost
-    basis (its units destroyed, J-11 undecided), a split-linked ADJUSTMENT, the NAV, the pool.
+class TestAdjustmentOutHasNoValue:
+    """N78-1 (the developer's decision, 21/10/2026): an outgoing ADJUSTMENT has no value — it only lowers the quantity.
+    Whatever ``cost_basis_override`` the row stores is ignored: the capital (``cumulative_external_cash_flow``, and the
+    broker's ``capital_contribution``) does not move, TWRR and MWRR see no flow that day, no rate is asked on its date, and
+    the row realizes 0 − C, C the historical cost the pool gives up: one ``RealizedSale`` for the row, proceeds 0, cost C,
+    ``cost_complete`` the pool's before the row — as the FIFO lots close it at 0. With or without a stored value, rows
+    before ``date_from`` too (J1: one replay with the same rules every day). Unchanged: a split-linked ADJUSTMENT (a split
+    rescales the pool and realizes nothing), the NAV, the pool (the PMC never moves on an exit).
 
-    Before J-24 the capital fell by C in both branches, nothing converted the row, and only a SELL was realized; the
-    lots realize the handover at its own date since CP-7a (``lots/conversions.py::convert_closure``).
+    RED until N78-1, but for the split guard. Before N78-1 — J-24 (developer's rule P21) — an outgoing ADJUSTMENT storing a
+    value handed its units over at ``D = |quantity × share| × cost_basis_override`` converted at its own date: the capital
+    fell by D (by C without a rate that day, a movement failure dated that day), a RealizedSale booked proceeds D against
+    C, and the day's performance flow was D; one without a value moved no capital and booked no RealizedSale (J-11, its
+    −C landing in «other» on the Dashboard). Each docstring keeps what its test read before.
 
     Built like ``PortfolioCalculationEngine.calculate``: the mark series, the average costs and the native cash from
     the same transactions and rate map (``_builder``); the deposit's external flow as the classifier gives it.
     """
 
-    def test_foreign_handover_leaves_the_capital_at_the_rate_of_its_day(self):
+    def test_foreign_adjustment_out_storing_a_value_keeps_the_capital(self):
         """10 units of a USD asset bought for 1000 USD on 01-01, when 1 USD = 0.90 EUR — the 1000 USD deposited that
-        day: capital 900, and the pool's cost C = 900 EUR —; an ADJUSTMENT −10 at 100 USD a unit on 01-02, when
-        1 USD = 0.80 EUR: D = 800 EUR. From 01-02: capital 900 − 800 = 100, NAV 0 (no units, no cash), P&L −100, the
-        broker's line alike, no cash flow of the day; one RealizedSale for the row — 10 units, proceeds 800, cost 900,
-        a realized −100 —; no missing rate. 01-01 reads the same before and after: capital 900, NAV 900, P&L 0.
+        day: capital 900, and the pool's cost C = 900 EUR —; an ADJUSTMENT −10 storing 100 USD a unit on 01-02, when
+        1 USD = 0.80 EUR. From 01-02: capital 900, NAV 0 (no units, no cash), P&L −900, the broker's line alike, no cash
+        flow of the day; one RealizedSale for the row — 10 units, proceeds 0, cost 900, a realized −900 —; no missing
+        rate. 01-01 reads the same before and after: capital 900, NAV 900, P&L 0.
 
-        Before J-24: from 01-02 capital 0 (900 − C) and P&L 0, the broker's line alike; no RealizedSale for the row.
+        Before N78-1 (J-24): from 01-02 capital 100 (900 − D, D = 800) and P&L −100; the RealizedSale's proceeds 800.
         """
         result = _builder(**_j24_book(_j24_handover(), foreign=True), fx_rate_map=_J24_USD_RATES).build()
 
         problems = _day_problems(result.daily_states, date(2025, 1, 1), cumulative_external_cash_flow=Decimal("900"), nav_value=Decimal("900"), total_pnl=Decimal("0"))
         for day in (date(2025, 1, 2), date(2025, 1, 3)):
-            problems += _day_problems(result.daily_states, day, cumulative_external_cash_flow=Decimal("100"), external_cash_flow=Decimal("0"), nav_value=Decimal("0"), total_pnl=Decimal("-100"))
-            problems += _broker_problems(result.daily_states, day, 10, capital_contribution=Decimal("100"), pnl_contribution=Decimal("-100"))
+            problems += _day_problems(result.daily_states, day, cumulative_external_cash_flow=Decimal("900"), external_cash_flow=Decimal("0"), nav_value=Decimal("0"), total_pnl=Decimal("-900"))
+            problems += _broker_problems(result.daily_states, day, 10, capital_contribution=Decimal("900"), pnl_contribution=Decimal("-900"))
         assert not problems, "\n".join(problems)
-        assert _sales_of(result, _J24_HANDOVER_ID) == [_j24_sale(asset_id=_J24_USD_ASSET, quantity="10", proceeds="800", cost="900")]
+        assert _sales_of(result, _J24_HANDOVER_ID) == [_j24_sale(asset_id=_J24_USD_ASSET, quantity="10", proceeds="0", cost="900")]
         assert result.missing_fx == {}
 
-    def test_the_days_performance_flow_is_the_value_handed_over(self):
+    def test_the_day_of_the_exit_has_no_performance_flow(self):
         """The same foreign book: TWRR and MWRR take the capital flows from the baseline's daily change
-        (``DerivedViewsBuilder.build_performance_inputs``), so the baseline moves by −D = −800 on 01-02 — a flow of
-        +800 in the investor's sign (positive = money out), against −900 for the deposit of 01-01.
+        (``DerivedViewsBuilder.build_performance_inputs``), and the baseline does not move on 01-02 — the only flow is the
+        deposit of 01-01, −900 in the investor's sign.
 
-        Before J-24: +900 on 01-02, the historical cost.
+        Before N78-1 (J-24): a flow of +800 on 01-02, the value handed over.
         """
         result = _builder(**_j24_book(_j24_handover(), foreign=True), fx_rate_map=_J24_USD_RATES).build()
 
         _navs, flows = DerivedViewsBuilder(result.daily_states, "EUR").build_performance_inputs()
 
-        assert {flow.date: flow.amount for flow in flows} == {date(2025, 1, 1): Decimal("-900"), date(2025, 1, 2): Decimal("800")}
+        assert {flow.date: flow.amount for flow in flows} == {date(2025, 1, 1): Decimal("-900")}
 
-    def test_declared_cost_above_the_average_realizes_the_difference(self):
-        """One currency, a declared cost other than the average: 10 units bought for 200 EUR on 01-01 (200 deposited;
-        average 20), an ADJUSTMENT −4 at 25 EUR on 01-02: D = 100, C = 80. From 01-02: capital 100, NAV 120 (6 units at
-        the purchase's 20, no cash), P&L +20 — the realized gain, nothing unrealized —, the broker's line alike; one
-        RealizedSale of 4 units, proceeds 100, cost 80.
+    def test_a_stored_value_above_the_average_realizes_minus_the_cost(self):
+        """One currency, a stored value other than the average: 10 units bought for 200 EUR on 01-01 (200 deposited;
+        average 20), an ADJUSTMENT −4 storing 25 EUR on 01-02: C = 80. From 01-02: capital 200, NAV 120 (6 units at the
+        purchase's 20, no cash), P&L −80 — the realized loss, nothing unrealized —, the broker's line alike; one
+        RealizedSale of 4 units, proceeds 0, cost 80.
 
-        Before J-24: capital 120 (200 − C) and P&L 0, the broker's line alike; no RealizedSale for the row.
+        Before N78-1 (J-24): capital 100 (200 − D, D = 100) and P&L +20; the RealizedSale's proceeds 100.
         """
         handover = _j24_handover(asset_id=_J24_EUR_ASSET, quantity="-4", cost="25", currency="EUR")
         result = _builder(**_j24_book(handover, foreign=False)).build()
 
         problems = _day_problems(result.daily_states, date(2025, 1, 1), cumulative_external_cash_flow=Decimal("200"), nav_value=Decimal("200"), total_pnl=Decimal("0"))
         for day in (date(2025, 1, 2), date(2025, 1, 3)):
-            problems += _day_problems(result.daily_states, day, cumulative_external_cash_flow=Decimal("100"), nav_value=Decimal("120"), open_cost_basis=Decimal("120"), total_pnl=Decimal("20"))
-            problems += _broker_problems(result.daily_states, day, 10, capital_contribution=Decimal("100"), pnl_contribution=Decimal("20"))
+            problems += _day_problems(result.daily_states, day, cumulative_external_cash_flow=Decimal("200"), nav_value=Decimal("120"), open_cost_basis=Decimal("120"), total_pnl=Decimal("-80"))
+            problems += _broker_problems(result.daily_states, day, 10, capital_contribution=Decimal("200"), pnl_contribution=Decimal("-80"))
         assert not problems, "\n".join(problems)
-        assert _sales_of(result, _J24_HANDOVER_ID) == [_j24_sale(asset_id=_J24_EUR_ASSET, quantity="4", proceeds="100", cost="80")]
+        assert _sales_of(result, _J24_HANDOVER_ID) == [_j24_sale(asset_id=_J24_EUR_ASSET, quantity="4", proceeds="0", cost="80")]
 
-    def test_handover_at_the_average_cost_in_one_currency_moves_nothing(self):
-        """GUARD, D = C: the same EUR book with the ADJUSTMENT −4 at the average, 20 EUR (D = C = 80). From 01-02:
-        capital 120, NAV 120, P&L 0, the broker's line alike; the performance flow of 01-02 is +80; the row realizes
-        nothing (whatever it books adds up to 0). Green before and after J-24 — J-24 adds a RealizedSale of 80 against
-        80, which this guard does not require.
+    def test_a_stored_value_at_the_average_leaves_the_capital_alone_too(self):
+        """The same EUR book with the ADJUSTMENT −4 storing the average, 20 EUR. From 01-02: capital 200, NAV 120, P&L
+        −80, the broker's line alike; the only performance flow is the deposit's, −200 on 01-01; the row realizes 0 − 80.
+
+        Before N78-1 (J-24, a guard then): capital 120 (200 − 80), P&L 0, a flow of +80 on 01-02, a realized 80 − 80 = 0.
         """
         handover = _j24_handover(asset_id=_J24_EUR_ASSET, quantity="-4", cost="20", currency="EUR")
         result = _builder(**_j24_book(handover, foreign=False)).build()
 
         problems = []
         for day in (date(2025, 1, 2), date(2025, 1, 3)):
-            problems += _day_problems(result.daily_states, day, cumulative_external_cash_flow=Decimal("120"), nav_value=Decimal("120"), total_pnl=Decimal("0"))
-            problems += _broker_problems(result.daily_states, day, 10, capital_contribution=Decimal("120"), pnl_contribution=Decimal("0"))
+            problems += _day_problems(result.daily_states, day, cumulative_external_cash_flow=Decimal("200"), nav_value=Decimal("120"), total_pnl=Decimal("-80"))
+            problems += _broker_problems(result.daily_states, day, 10, capital_contribution=Decimal("200"), pnl_contribution=Decimal("-80"))
         assert not problems, "\n".join(problems)
         _navs, flows = DerivedViewsBuilder(result.daily_states, "EUR").build_performance_inputs()
-        assert {flow.date: flow.amount for flow in flows} == {date(2025, 1, 1): Decimal("-200"), date(2025, 1, 2): Decimal("80")}
-        gains = [sale.proceeds - sale.cost for sale in result.realized_sales if sale.transaction_id == _J24_HANDOVER_ID]
-        assert sum(gains, Decimal("0")) == Decimal("0"), gains
+        assert {flow.date: flow.amount for flow in flows} == {date(2025, 1, 1): Decimal("-200")}
+        assert _sales_of(result, _J24_HANDOVER_ID) == [_j24_sale(asset_id=_J24_EUR_ASSET, quantity="4", proceeds="0", cost="80")]
 
-    def test_owner_share_scales_the_value_handed_over(self):
-        """D is at the owner's share, as the pool's cost is: the EUR book of a broker owned at 50 % — 5 units costing
-        100 EUR, 100 of capital —, the ADJUSTMENT −4 at 25 EUR: |−4 × 0.5| × 25 = 50 handed over, C = 2 × 20 = 40. From
-        01-02: capital 50, NAV 60 (3 units at 20), P&L +10; one RealizedSale of 2 units, proceeds 50, cost 40.
+    def test_owner_share_scales_the_cost_the_exit_realizes(self):
+        """C is at the owner's share, as the pool's cost is: the EUR book of a broker owned at 50 % — 5 units costing
+        100 EUR, 100 of capital —, the ADJUSTMENT −4 storing 25 EUR: 2 units leave, C = 2 × 20 = 40. From 01-02: capital
+        100, NAV 60 (3 units at 20), P&L −40; one RealizedSale of 2 units, proceeds 0, cost 40.
 
-        Before J-24: capital 60 (100 − C) and P&L 0; no RealizedSale for the row.
+        Before N78-1 (J-24): capital 50 (100 − |−4 × 0.5| × 25) and P&L +10; the RealizedSale's proceeds 50.
         """
         handover = _j24_handover(asset_id=_J24_EUR_ASSET, quantity="-4", cost="25", currency="EUR")
         result = _builder(**_j24_book(handover, foreign=False, share="0.5")).build()
 
         problems = []
         for day in (date(2025, 1, 2), date(2025, 1, 3)):
-            problems += _day_problems(result.daily_states, day, cumulative_external_cash_flow=Decimal("50"), nav_value=Decimal("60"), total_pnl=Decimal("10"))
+            problems += _day_problems(result.daily_states, day, cumulative_external_cash_flow=Decimal("100"), nav_value=Decimal("60"), total_pnl=Decimal("-40"))
         assert not problems, "\n".join(problems)
-        assert _sales_of(result, _J24_HANDOVER_ID) == [_j24_sale(asset_id=_J24_EUR_ASSET, quantity="2", proceeds="50", cost="40")]
+        assert _sales_of(result, _J24_HANDOVER_ID) == [_j24_sale(asset_id=_J24_EUR_ASSET, quantity="2", proceeds="0", cost="40")]
 
-    def test_cost_basis_without_currency_counts_in_the_assets_currency(self):
-        """The foreign book with the ADJUSTMENT's cost basis written in no currency: 100 a unit counts in the asset's
-        currency, USD — the pool's rule for an incoming ADJUSTMENT —, so D = 10 × 100 USD at 0.80 = 800 EUR, not 1000
-        read in the report currency: from 01-02 capital 100 and P&L −100; proceeds 800 against a cost of 900.
+    def test_a_stored_value_without_currency_is_ignored_too(self):
+        """The foreign book with the ADJUSTMENT's stored value written in no currency: still no value — from 01-02 capital
+        900 and P&L −900; proceeds 0 against a cost of 900.
 
-        Before J-24: capital 0 and P&L 0; no RealizedSale for the row.
+        Before N78-1 (J-24): 100 a unit counted in the asset's currency, D = 800 EUR: capital 100, P&L −100, proceeds 800.
         """
         result = _builder(**_j24_book(_j24_handover(currency=None), foreign=True), fx_rate_map=_J24_USD_RATES).build()
 
         problems = []
         for day in (date(2025, 1, 2), date(2025, 1, 3)):
-            problems += _day_problems(result.daily_states, day, cumulative_external_cash_flow=Decimal("100"), total_pnl=Decimal("-100"))
+            problems += _day_problems(result.daily_states, day, cumulative_external_cash_flow=Decimal("900"), total_pnl=Decimal("-900"))
         assert not problems, "\n".join(problems)
-        assert _sales_of(result, _J24_HANDOVER_ID) == [_j24_sale(asset_id=_J24_USD_ASSET, quantity="10", proceeds="800", cost="900")]
+        assert _sales_of(result, _J24_HANDOVER_ID) == [_j24_sale(asset_id=_J24_USD_ASSET, quantity="10", proceeds="0", cost="900")]
 
-    def test_missing_rate_on_the_handover_day_leaves_the_proceeds_unknown(self):
-        """The foreign book with no USD rate on 01-02 (0.90 on 01-01 only): D cannot be converted. One RealizedSale for
-        the row with proceeds None and cost 900 — the Dashboard leaves it out of the realized —, the pair USD/EUR with
-        01-02 among the movement failures, and the capital falls by C, as before J-24: 0 from 01-02, NAV 0, P&L 0, the
-        broker's line alike.
+    def test_no_rate_is_asked_on_the_day_of_the_exit(self):
+        """The foreign book with no USD rate on 01-02 (0.90 on 01-01 only): nothing needs converting on that day. One
+        RealizedSale for the row with proceeds 0 and cost 900, no missing pair; from 01-02 capital 900, NAV 0, P&L −900,
+        the broker's line alike.
 
-        Before J-24: the same capital and P&L, but no RealizedSale for the row and no missing pair (nothing converted it).
+        Before N78-1 (J-24): proceeds None (the stored 1000 USD had no rate), USD/EUR missing on 01-02, and the capital
+        fell by C: 0 from 01-02, P&L 0.
         """
         result = _builder(**_j24_book(_j24_handover(), foreign=True), fx_rate_map=_J24_USD_RATE_OF_THE_PURCHASE_ONLY).build()
 
-        assert _sales_of(result, _J24_HANDOVER_ID) == [_j24_sale(asset_id=_J24_USD_ASSET, quantity="10", proceeds=None, cost="900")]
-        assert result.missing_fx == {"USD/EUR": {date(2025, 1, 2)}}
+        assert _sales_of(result, _J24_HANDOVER_ID) == [_j24_sale(asset_id=_J24_USD_ASSET, quantity="10", proceeds="0", cost="900")]
+        assert result.missing_fx == {}
         problems = []
         for day in (date(2025, 1, 2), date(2025, 1, 3)):
-            problems += _day_problems(result.daily_states, day, cumulative_external_cash_flow=Decimal("0"), nav_value=Decimal("0"), total_pnl=Decimal("0"))
-            problems += _broker_problems(result.daily_states, day, 10, capital_contribution=Decimal("0"))
+            problems += _day_problems(result.daily_states, day, cumulative_external_cash_flow=Decimal("900"), nav_value=Decimal("0"), total_pnl=Decimal("-900"))
+            problems += _broker_problems(result.daily_states, day, 10, capital_contribution=Decimal("900"))
         assert not problems, "\n".join(problems)
 
-    def test_handover_before_the_period_leaves_the_capital_at_the_rate_of_its_day(self):
+    def test_an_exit_before_the_period_keeps_the_capital(self):
         """The foreign book read from 01-05 to 01-06: the purchase and the ADJUSTMENT come before ``date_from``, so they
-        are replayed before the first emitted state (J1: with the same rules as any day; before J1, in the pre-frame
-        branch), as for a period that starts after them. The states open on 01-05
-        with capital 100, NAV 0 and P&L −100, the broker's line alike; the row's RealizedSale is there (10 units,
-        proceeds 800, cost 900, dated 01-02); no missing rate.
+        are replayed before the first emitted state (J1: with the same rules as any day). The states open on 01-05 with
+        capital 900, NAV 0 and P&L −900, the broker's line alike; the row's RealizedSale is there (10 units, proceeds 0,
+        cost 900, dated 01-02); no missing rate.
 
-        Before J-24: capital 0 and P&L 0 on 01-05; no RealizedSale (the pre-frame realized SELLs only).
+        Before N78-1 (J-24): capital 100 and P&L −100 on 01-05; the RealizedSale's proceeds 800.
         """
         rates = {**_J24_USD_RATES, ("USD", "EUR", date(2025, 1, 5)): Decimal("0.8"), ("USD", "EUR", date(2025, 1, 6)): Decimal("0.8")}
         result = _builder(**_j24_book(_j24_handover(), foreign=True), fx_rate_map=rates, date_from=date(2025, 1, 5), date_to=date(2025, 1, 6)).build()
 
         assert min(s.date for s in result.daily_states) == date(2025, 1, 5), "precondition: the frame starts after the two rows"
-        problems = _day_problems(result.daily_states, date(2025, 1, 5), cumulative_external_cash_flow=Decimal("100"), nav_value=Decimal("0"), total_pnl=Decimal("-100"))
-        problems += _broker_problems(result.daily_states, date(2025, 1, 5), 10, capital_contribution=Decimal("100"), pnl_contribution=Decimal("-100"))
+        problems = _day_problems(result.daily_states, date(2025, 1, 5), cumulative_external_cash_flow=Decimal("900"), nav_value=Decimal("0"), total_pnl=Decimal("-900"))
+        problems += _broker_problems(result.daily_states, date(2025, 1, 5), 10, capital_contribution=Decimal("900"), pnl_contribution=Decimal("-900"))
         assert not problems, "\n".join(problems)
-        assert _sales_of(result, _J24_HANDOVER_ID) == [_j24_sale(asset_id=_J24_USD_ASSET, quantity="10", proceeds="800", cost="900")]
+        assert _sales_of(result, _J24_HANDOVER_ID) == [_j24_sale(asset_id=_J24_USD_ASSET, quantity="10", proceeds="0", cost="900")]
         assert result.missing_fx == {}
 
-    def test_handover_without_cost_basis_destroys_the_units(self):
-        """GUARD (J-11 undecided): the foreign book with the ADJUSTMENT −10 carrying no cost basis, and no rate on
-        01-02. The units go without moving the capital: 900 on every day, NAV 0 and P&L −900 from 01-02; nothing
-        realized; no rate asked (no missing pair). Green before and after J-24.
+    def test_an_exit_without_a_value_realizes_minus_its_cost(self):
+        """The foreign book with the ADJUSTMENT −10 storing no value, and no rate on 01-02. The units go without moving
+        the capital: 900 on every day, NAV 0 and P&L −900 from 01-02; one RealizedSale — 10 units, proceeds 0, cost 900:
+        the Dashboard's realized −900, as the lots' (decision 3 of N78-1); no rate asked (no missing pair).
+
+        Before N78-1 (J-11): the same capital, NAV and P&L, but no RealizedSale — the −900 sat in «other».
         """
         result = _builder(**_j24_book(_j24_handover(cost=None, currency=None), foreign=True), fx_rate_map=_J24_USD_RATE_OF_THE_PURCHASE_ONLY).build()
 
@@ -1569,13 +1568,13 @@ class TestPricedAdjustmentOutHandsOverAtItsDate:
             problems += _day_problems(result.daily_states, day, cumulative_external_cash_flow=Decimal("900"), nav_value=Decimal("0"), total_pnl=Decimal("-900"))
             problems += _broker_problems(result.daily_states, day, 10, capital_contribution=Decimal("900"))
         assert not problems, "\n".join(problems)
-        assert _sales_of(result, _J24_HANDOVER_ID) == []
+        assert _sales_of(result, _J24_HANDOVER_ID) == [_j24_sale(asset_id=_J24_USD_ASSET, quantity="10", proceeds="0", cost="900")]
         assert result.missing_fx == {}
 
     def test_split_linked_adjustment_out_with_a_cost_basis_moves_nothing(self):
         """GUARD: the ADJUSTMENT −5 of a 1-for-2 reverse split on 01-02, carrying a cost basis of 200 USD (as Auto mode
         once wrote on split rows), with no rate on 01-02. A split rescales the pool: the capital stays 900, the 5 units
-        left keep the cost of 900, nothing is realized and no rate is asked. Green before and after J-24.
+        left keep the cost of 900, nothing is realized and no rate is asked. Green before and after J-24 and N78-1.
         """
         split = SplitRecord(event_id=90, asset_id=_J24_USD_ASSET, date=date(2025, 1, 2), ratio=Decimal("0.5"))
         result = _builder(
@@ -1598,10 +1597,10 @@ class TestPricedAdjustmentOutHandsOverAtItsDate:
     def test_cost_complete_is_the_pools_before_the_row(self):
         """As for a SELL, the RealizedSale says whether the pool it took from knew its whole cost. On 01-01: 5 units
         received by an ADJUSTMENT without cost basis and 5 bought for 100 EUR (10 units, a known cost of 100, the pool
-        incomplete); on 01-02 the ADJUSTMENT −4 at 25 EUR: proceeds 100, cost 40 (the known 100 × 4/10), cost_complete
-        False — the Dashboard leaves it out of the realized.
+        incomplete); on 01-02 the ADJUSTMENT −4 storing 25 EUR: proceeds 0, cost 40 (the known 100 × 4/10),
+        cost_complete False — the Dashboard leaves it out of the realized.
 
-        Before J-24: no RealizedSale for the row.
+        Before N78-1 (J-24): proceeds 100, the stored value.
         """
         deposit = _tx(id=1, type="DEPOSIT", dt="2025-01-01", amount="100")
         received = _tx(id=2, type="ADJUSTMENT", dt="2025-01-01", quantity="5", asset_id=_J24_EUR_ASSET)
@@ -1613,7 +1612,7 @@ class TestPricedAdjustmentOutHandsOverAtItsDate:
             asset_currencies={_J24_EUR_ASSET: "EUR"},
         ).build()
 
-        assert _sales_of(result, _J24_HANDOVER_ID) == [_j24_sale(asset_id=_J24_EUR_ASSET, quantity="4", proceeds="100", cost="40", cost_complete=False)]
+        assert _sales_of(result, _J24_HANDOVER_ID) == [_j24_sale(asset_id=_J24_EUR_ASSET, quantity="4", proceeds="0", cost="40", cost_complete=False)]
 
 
 class TestClassificationResultHelper:

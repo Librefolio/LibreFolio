@@ -295,8 +295,7 @@ fix converts, once, the halves already in a database.
   `FX_CONVERSION` becomes a `WITHDRAWAL` when its amount is negative, a `DEPOSIT` otherwise, without
   asset. The link goes, `updated_at` moves to now, every other column stays.
 - It leaves the giving leg of a `TRANSFER` (negative quantity) to the step after the fixes:
-  counted, not changed, since it becomes an `ADJUSTMENT` only with the Auto cost of its broker,
-  which a `sqlite3` connection cannot compute (see [Lone giving legs](#lone-transfer-legs)). It
+  counted, not changed (see [Lone giving legs](#lone-transfer-legs)). It
   also leaves a row whose quantity or amount sign cannot be read, and the rows of other types (an
   `ADJUSTMENT` can carry a link). Each of these keeps its type, and loses its link only when that
   link names a missing row, so that the run's `foreign_key_check` can pass.
@@ -306,7 +305,7 @@ fix converts, once, the halves already in a database.
   WARNING with `count` (every row found), `conversions` (the ids per `TYPE->TYPE`),
   `without_cost_basis`, `unlinked_only`, `left_giving_transfer_legs` and `left_unreadable_sign`.
   It comes back at every start while a giving leg, or a row of unreadable sign, remains — a giving
-  leg remains only when the step after the fixes cannot give it a cost; with nothing left to
+  leg remains only when the step after the fixes did not run or failed; with nothing left to
   change, the outcome is `clean`. After the commit, `finish()` logs one INFO line
   per row changed — *Transaction without its pair converted* or *… unlinked* — with
   `transaction_id`, `broker_id`, `date`, `from_type`, `to_type`, `quantity`, `amount`, `currency`,
@@ -350,13 +349,13 @@ The admin side (log lines, the offline run) is in [Command-Line Tools](../../../
 
 Until 1.3, deleting a broker also left the giving leg of each `TRANSFER` it had received units
 through as a `TRANSFER` without its partner. Since 1.3 the deletion turns such a leg into an
-`ADJUSTMENT` taking its units out at the Auto cost of its own broker, at which the FIFO lots hand
-them over (decision 47 of release 1.3, see
-[Broker Deletion](../../backend/transactions/service.md#broker-deletion)). The legs already in a
-database get the same from `backend/app/services/transactions/lone_transfer_legs.py`, not from a
-fix: the Auto cost is the async average cost (`compute_wac_iterative()`, with its conversions and
-splits), which the `sqlite3` connection of the fixes cannot compute. So this step runs right after
-them, in two places:
+`ADJUSTMENT` taking its units out, and such an `ADJUSTMENT` has no value: its units only leave the
+quantity, and the FIFO lots and the Dashboard realize their cost as a loss (decision 47 of release
+1.3, as the developer changed it on 21/10/2026, N78-1; until then the leg left at the Auto cost of
+its own broker; see [Broker Deletion](../../backend/transactions/service.md#broker-deletion)). The
+legs already in a database get the same from
+`backend/app/services/transactions/lone_transfer_legs.py`, a step that runs right after the fixes,
+in two places:
 
 - **At startup**, as the `lone-transfer-legs` step of the lifespan, right after
   `post-migration-fixes`. `convert_lone_giving_legs_at_startup()` does not read the fixes' report:
@@ -382,43 +381,28 @@ Both call `convert_lone_giving_legs(session, *, dry_run=False)`:
   still sees the leg. SQLite reads the sign (`quantity < 0` in the query), so a row whose quantity
   it cannot read as a number is never selected. A lone receiving leg (the fix's) and a linked
   `TRANSFER` are never touched.
-- **Costs first.** Every leg's cost is computed before any row changes, by
-  `TransactionService._handover_cost()`: the leg's own broker, up to its date, without the leg.
-- **Conversion.** A leg with a cost becomes an `ADJUSTMENT` (`make_standalone()`: the same
-  quantity, asset, date, description and tags, no link, a new `updated_at`), and
-  `_write_auto_cost()` writes `cost_basis_override` and `cost_basis_currency`. A leg whose cost
-  needs a missing conversion, or whose cost cannot be computed (the computation raises), stays a
-  `TRANSFER` without its partner, every column as it was: an `ADJUSTMENT` taking units out without
-  a cost would read them as destroyed. One such error is `UnreadablePoolError` (W-B69): since
-  W-B58 a stored value that is no number reads `None` instead of raising (see
-  [Decimal Columns](#decimal-columns)), so the average would skip such a row or count its cost at
-  zero; `_auto_cost()` raises instead when a row of the leg's broker pool cannot be read, with
-  the number of such rows and no id (see
-  [Unreadable pool](../../backend/transactions/wac.md#unreadable-pool)). The other legs are
-  converted all the same, and the next run tries the ones left again.
+- **Conversion.** Every lone giving leg found becomes an `ADJUSTMENT` (`make_standalone()`: the same
+  quantity, asset, date, description and tags, no link, a new `updated_at`), and its
+  `cost_basis_override` and `cost_basis_currency` are cleared. No cost is computed, so no leg needs a
+  rate or a readable pool, and every one is converted.
 - **Transaction.** The function commits nothing: its caller commits, or rolls back after a dry run,
   which changes nothing. Outside a dry run it first calls `begin_writes(session, Transaction)`,
   which takes the write lock: of several workers starting together, the first converts and the
   next find nothing to convert.
-- **Answer and logs.** It returns one `LoneLeg` per lone giving leg found, converted or not (`id`,
-  `broker_id`, `date`, `quantity`, `asset_id`, `cost`, `cost_currency`, and `reason` when the
-  computation raised). Each leg gets a log line with `transaction_id`, `broker_id`, `date`,
-  `quantity` and `asset_id`: INFO *Lone transfer leg converted at its Auto cost* (on a dry run,
-  *Lone transfer leg would become an ADJUSTMENT at its Auto cost*), with `cost_basis` and
-  `cost_basis_currency`; or WARNING *Lone transfer leg left as it is: its Auto cost needs a missing
-  conversion*, or *… its Auto cost could not be computed*, with `error`.
+- **Answer and logs.** It returns one `LoneLeg` per lone giving leg found (`id`, `broker_id`,
+  `date`, `quantity`, `asset_id`). Each leg gets an INFO line with `transaction_id`, `broker_id`,
+  `date`, `quantity` and `asset_id`: *Lone transfer leg converted to an ADJUSTMENT-out without a
+  value* (on a dry run, *Lone transfer leg would become an ADJUSTMENT-out without a value*).
 
 After the fixes' lines, the offline script prints one line per lone giving leg
 (`LoneLeg.describe()`), *became* instead of *would become* on a real run:
 
 ```text
-Lone transfer leg <id> (broker <id>, <date>, quantity <quantity>, asset <id>): would become an ADJUSTMENT at <cost> <currency> per unit
-Lone transfer leg <id> (broker <id>, <date>, quantity <quantity>, asset <id>): stays a TRANSFER without its partner, no Auto cost (missing conversion)
-Lone transfer leg <id> (broker <id>, <date>, quantity <quantity>, asset <id>): stays a TRANSFER without its partner, its cost could not be computed: <error>
+Lone transfer leg <id> (broker <id>, <date>, quantity <quantity>, asset <id>): would become an ADJUSTMENT-out without a value
 ```
 
 When the step itself raises, the script prints `Error: lone transfer legs: <error>` and exits with
-`1`; a leg whose cost could not be computed is no such failure.
+`1`.
 
 `./dev.py test services lone-transfer-legs`
 (`backend/test_scripts/test_services/test_lone_transfer_legs.py`) pins this contract.

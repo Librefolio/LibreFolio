@@ -980,11 +980,16 @@ class TestSecuritiesPairsBetweenBrokers:
         assert not problems, "\n".join(problems)
         _assert_invariant_every_day(result.daily_states)
 
-    def test_case_15b_adjustment_pair_stays_capital_at_cost(self):
-        """Case 15b, guard (D4): the same pair typed ADJUSTMENT keeps the in-kind rule. A's
-        leg removes the pool cost (100) from C_A, B's leg brings its override cost (100)
-        into C_B, so B's line shows +20 on d2. Step 3b must not touch it.
-        Green before and after the fix."""
+    def test_case_15b_adjustment_pair_out_leg_has_no_value_and_in_leg_brings_its_cost(self):
+        """Case 15b, the same pair typed ADJUSTMENT, as N78-1 reads it literally (the developer's decision,
+        21/10/2026: an ADJUSTMENT-out has no value). A's leg keeps C_A at 100 and realizes 0 − the pool cost,
+        −100, so P_A falls to −100 from d2; B's leg brings its override cost (100) into C_B, so B's line shows
+        +20 on d2 and +30 on d3. The aggregate counts the capital twice, 200, and its P&L is 100 lower than
+        Setup T's: −80 on d2, −70 on d3, for a move between two brokers of the scope. Step 3b must not touch it.
+
+        OPEN QUESTION Q-N78-1k: a LINKED internal ADJUSTMENT pair could keep the in-kind rule at cost (A's leg
+        taking its cost out of C_A, as before N78-1); the developer may change this pin. Before N78-1 (D4,
+        green then): A (0, 0) from d2, the aggregate Setup T's (100, 20) and (100, 30)."""
         classification, overrides = _case_15_pair_with_cost("ADJUSTMENT")
         assert _classifications(classification) == {1: "normal", 2: "normal", 3: "linked_internal", 4: "linked_internal"}
 
@@ -993,10 +998,11 @@ class TestSecuritiesPairsBetweenBrokers:
         expected = {
             D0: {A: ("100", "0"), B: ("0", "0")},
             D1: {A: ("100", "10"), B: ("0", "0")},
-            D2: {A: ("0", "0"), B: ("100", "20")},
-            D3: {A: ("0", "0"), B: ("100", "30")},
+            D2: {A: ("100", "-100"), B: ("100", "20")},
+            D3: {A: ("100", "-100"), B: ("100", "30")},
         }
-        problems = _line_problems(result, expected) + _aggregate_problems(result, _setup_t_aggregate(D3))
+        aggregate = {**_setup_t_aggregate(D1), D2: ("200", "-80"), D3: ("200", "-70")}
+        problems = _line_problems(result, expected) + _aggregate_problems(result, aggregate)
         assert not problems, "\n".join(problems)
         _assert_invariant_every_day(result.daily_states)
 

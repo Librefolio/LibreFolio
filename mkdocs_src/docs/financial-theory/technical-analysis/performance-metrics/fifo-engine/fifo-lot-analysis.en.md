@@ -74,7 +74,7 @@ The **WAC / Market Price** chart plots each lot as a bubble against the market p
 
 ## 💰 Total Return per Lot
 
-**Total Return** is broader than Open Return. It includes the lot's remaining market value, any sale proceeds already realized from that lot — or the value an outgoing adjustment with a cost basis handed over at that cost — and any allocated income received while the lot was held.
+**Total Return** is broader than Open Return. It includes the lot's remaining market value, any sale proceeds already realized from that lot — an outgoing adjustment adds none, having no value — and any allocated income received while the lot was held.
 
 LibreFolio's lot math uses these exact building blocks:
 
@@ -148,7 +148,7 @@ $$
 \text{Closure Realized PnL} = \text{Closure Proceeds} - \text{Closure Cost}
 $$
 
-$\text{ClosePrice}$ is a sale's unit price, in the sale's currency, or the per-unit cost basis at which an outgoing adjustment hands its units over, in that cost basis's currency — zero, in the lot's currency, without one (see [Outgoing Adjustments](../../../instruments/transaction-types/adjustment.md#outgoing-adjustments)). $ccy_{\text{close}}$ need not be $ccy_{\text{lot}}$: a lot moved to a broker of another currency and sold there converts the sale from that currency. A SHORT lot mirrors the rule: it realizes the proceeds of its opening sale, $\text{Convert}(q \cdot \text{LotUnitCost}, ccy_{\text{lot}}, D_{\text{open}})$, minus the cost of the purchase that closes it, $\text{Convert}(q \cdot \text{ClosePrice}, ccy_{\text{close}}, D_{\text{close}})$.
+$\text{ClosePrice}$ is a sale's unit price, in the sale's currency, or zero, in the lot's currency, for an outgoing adjustment, which has no value (see [Outgoing Adjustments](../../../instruments/transaction-types/adjustment.md#outgoing-adjustments)). $ccy_{\text{close}}$ need not be $ccy_{\text{lot}}$: a lot moved to a broker of another currency and sold there converts the sale from that currency. A SHORT lot mirrors the rule: it realizes the proceeds of its opening sale, $\text{Convert}(q \cdot \text{LotUnitCost}, ccy_{\text{lot}}, D_{\text{open}})$, minus the cost of the purchase that closes it, $\text{Convert}(q \cdot \text{ClosePrice}, ccy_{\text{close}}, D_{\text{close}})$.
 
 When a lot is bought and sold in one currency, with rates $r_{\text{open}}$ and $r_{\text{close}}$ on the two dates, its realized result splits into the price gain at the sale rate and the exchange-rate move on the cost of the units sold:
 
@@ -156,7 +156,7 @@ $$
 \text{Closure Realized PnL} = q\,(\text{ClosePrice} - \text{LotUnitCost})\,r_{\text{close}} + q\,\text{LotUnitCost}\,(r_{\text{close}} - r_{\text{open}})
 $$
 
-The exchange-rate move between purchase and sale is therefore realized with the units, as on the Dashboard, where a sale's proceeds — or the value an outgoing adjustment hands over — convert at its date and the units leave at their historical cost (see [WAC](../weighted-average-cost.md)). A missing rate leaves the closure's realized P&L unknown, and with it the lot's $\text{RealizedPnL}$: it is never computed from the native amounts.
+The exchange-rate move between purchase and sale is therefore realized with the units, as on the Dashboard, where a sale's proceeds convert at its date and the units leave at their historical cost (see [WAC](../weighted-average-cost.md)). A missing rate leaves the closure's realized P&L unknown, and with it the lot's $\text{RealizedPnL}$: it is never computed from the native amounts.
 
 Every closure's cost converts at the opening date, like $\text{OriginalCost}$, so a LONG lot's market P&L is the value of its open units minus their cost at the purchase rate:
 
