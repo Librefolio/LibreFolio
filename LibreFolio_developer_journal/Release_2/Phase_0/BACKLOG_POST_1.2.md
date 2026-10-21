@@ -6828,6 +6828,18 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   tutti non c'è; e cambiare plugin e premere **Parse (N)** rianalizza già da sé. Con questa, due tabelle per sviluppatori
   (`brim_plugin_guide.md:910`, `developer/backend/brim/architecture.md:392`) dicono dove compaiono le note senza i conti nuovi di B-51.
   Cura: due frasi in EN, IT, FR, ES più il timbro; in un lotto di doc. Dettagli: piano 04, «B-51», passo 4.
+- **W-B92 · Fineco: le commissioni contate due volte** — **alto**, numeri sbagliati; W, 21/10 (discussione #49, `@Xgialippo`,
+  https://github.com/Librefolio/LibreFolio/discussions/49, con l'Excel vero). Nel report di Fineco il **Controvalore** di un acquisto
+  contiene già la commissione e quello di una vendita l'ha già tolta. Il plugin (`broker_fineco/plugin.py`, layout con colonne di
+  commissione) prendeva il Controvalore tal quale **e** aggiungeva una FEE a parte: ogni operazione con commissione era sbagliata
+  della commissione (acquisto troppo caro, vendita troppo ricca). Decisione del developer del 21/10, **soluzione B**: BUY = −(Controvalore −
+  commissioni) più la FEE −commissioni; SELL = +(Controvalore + commissioni) più la FEE −commissioni; dividendi già netti, righe senza
+  commissione e layout senza colonne di commissione invariati. `plugin_version` 1.4.0. I `sample_reports/fineco*.csv` con commissioni
+  avevano Controvalore = quantità × prezzo (una supposizione): corretti. **I dati già importati restano sbagliati**: per correggerli si
+  cancellano le transazioni di quel file e lo si reimporta (nota in guida e nel CHANGELOG, con il ringraziamento a `@Xgialippo`). Domande
+  aperte al developer (casi dubbi, non scelti dal plugin): Q-WB-1 il Controvalore di un `Rimborso` con commissione la contiene? (oggi
+  invariato); Q-WB-2 una commissione maggiore del Controvalore; Q-WB-3 una riga in valuta (Divisa USD): il Controvalore è nella Divisa o
+  in euro? Dettagli: piano 04, «W-B92».
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
