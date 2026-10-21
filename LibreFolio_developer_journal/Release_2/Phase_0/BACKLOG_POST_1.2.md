@@ -4550,7 +4550,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     8 rossi → verdi, checkpoint inviato; il ✅ col commit va alla prossima riconciliazione.
 
   Dettagli: piano H, §14, lotto «H-57», nota delle 14:20.
-- **H-60 · Errori leggibili: le informazioni utili stampate in caso di errore, anche in console** — alto, regola del
+- ✅ **H-60 · Errori leggibili: le informazioni utili stampate in caso di errore, anche in console** — alto, regola del
   developer (19/10), via coordinatore. Analisi e via il 19/10 (D1 no, D2–D5 sì; D4 (a)). **Fatto il 19/10**: rossi,
   cura, regola, doc; `all-backend` 29 456 passati e 0 falliti. Checkpoint inviato; il ✅ col commit alla prossima
   riconciliazione. Restano agli altri D3 (A, J), D5 (J) e i P2 qui sotto.
@@ -4571,6 +4571,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     regola nelle istruzioni, i P2 per area (W, X, MF, Y/J).
 
   Dettagli: piano H, §14, lotto «H-60».
+  - ✅ 21/10 (riconciliazione): in `dev_release2` col treno 2 (`e8c970379`; commit `bf16865ed`, cura `b6a5d8544`) e, per la mappa delle guide e il fix W-B37, col treno 3 (`6ba039f01`).
 
 ## A · Account e accessi (fase 01)
 
@@ -6758,7 +6759,7 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   ✅ 19/10, chiusa con la decisione del developer (D1), testuale: «essendo una cosa generica che tocca sia le istanze self-hosted
   che quelle hostate, facciamo aprire il link sempre su github». I due link restano come sono, nessun codice. Dettagli: piano 04,
   «N74 — il merge di `dev_release2` e le risposte del developer».
-- **W-B85 · Danske Bank: `excluded_status` mescola le righe annullate e quelle in attesa** — minimo, chiarezza; W, 19/10 (lotto
+- ✅ **W-B85 · Danske Bank: `excluded_status` mescola le righe annullate e quelle in attesa** — minimo, chiarezza; W, 19/10 (lotto
   N74). `_classify_custody()` e `_classify_cash()` (`broker_danske_bank/plugin.py`) mettono sotto `status` ogni riga non contabilizzata:
   un ordine di custodia con un `Tila` diverso da «Toteutettu», una riga di cassa con un `Tila` diverso da «Toteutunut», o una
   prenotazione «Varaus». Un ordine annullato non arriverà mai: un avviso va bene. Una riga in attesa o una prenotazione arriverà
@@ -6785,6 +6786,7 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   Restano aperte D-W85-1…4: gli altri motivi di Danske, le note delle righe non regolate, gli altri plugin (W-B86), i salti con
   effetto economico (W-B87). Commit: il checkpoint W-B85 del coordinatore. Dettagli: piano 04, «W-B85 · Danske Bank, «noto in
   silenzio, ignoto con avviso»: cura».
+  - ✅ 21/10 (riconciliazione): in `dev_release2` (commit `323c120eb`, 19/10).
 - **W-B86 · Gli altri plugin BRIM col principio «noto in silenzio, ignoto con avviso»** — medio, chiarezza (cloud); W, 19/10
   (inventario di W-B85). Oggi 25 plugin saltano le righe ignote o illeggibili con un avviso a stringa per riga, che diventa
   `generic` e non può portare il link «apri una issue». DEGIRO, Scalable e Crédit Agricole hanno già note a codice: basta
@@ -8179,7 +8181,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   «Z-27 — le richieste di massa divise in lotti: lavoro».
   - Prova (19/10): `8d236fa11`, entrato in `726d90d72`; CHANGELOG `f1786a883`.
 - **Z-29 · Una scheda della lista asset carica lo storico giornaliero intero** — **alto** (coordinatore, 17/10, da
-  R13-SEC9-2 di E: «it's the real cure, post-1.3»), progetto, dopo la 1.3; Z, 17/10 (dall'analisi di Z-27).
+  R13-SEC9-2 di E: «it's the real cure, post-1.3»), progetto, **nella 1.3** (N90, 17/10; ordine del 20/10: Y-39 → Z-29b → Z-29s → Y-40); Z, 17/10 (dall'analisi di Z-27).
   - Su «All» la lista chiede per ogni asset tutti i giorni dal 2000 (~9 800 punti): 300 asset sono ~2,9 milioni di
     punti, centinaia di MB di JSON, elaborati dal pool di worker. I lotti di Z-27 ne limitano il picco per risposta,
     non il totale.
@@ -8190,9 +8192,9 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     backend, Z-29b lista (X). In attesa della decisione.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z-27 — il web app e i tetti
   delle richieste di massa: analisi» e «Z-29 — una scheda della lista asset e lo storico intero: analisi».
-  - Stato (19/10): analisi fatta e (A) approvata (N90, 17/10); Z-29a sospesa il 19/10 con gli ampliamenti che il
-    developer sta leggendo. I rossi scritti sono parcheggiati come patch nella cartella di sessione di Z
-    (`files/parked/`).
+  - Stato (21/10): Z-29a (backend: `max_points`, `resolution`, `sample_like`) in `dev_release2` col treno 1 (`746920b83`),
+    Z-29d-0 col treno 2, Z-29a-f col treno 4 (`bbc668d02`). Restano: Z-29s-a (rossi scritti nel worktree di Z, nessun codice),
+    Z-29b (dopo l'ingresso di Y-39a, stesso file `assets/+page.svelte`), Z-29s, Z-29d ridotto, Z-29fx (dopo Y-40).
 - ✅ **Z-28 · Due file di lock aperti con `open()`, che segue un symlink** — basso, sicurezza; Z, 17/10
   (dall'analisi di Z-23; via coordinatore, che l'ha assegnata). **Chiusa il 17/10 col lotto Z-28** (il commit è del
   coordinatore).
@@ -8322,7 +8324,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   - Proposta: farla passare da `aggregation.select_point`, a uscite invariate (i test di AI Export lo dicono).
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-29a (v3) e Z-29r — lavoro»,
   passo 3 di Z-29r.
-- **Z-39 · Yahoo: `_fetch_currency` inghiotte un rifiuto per troppe richieste e tiene None per 24 h** — basso,
+- ✅ **Z-39 · Yahoo: `_fetch_currency` inghiotte un rifiuto per troppe richieste e tiene None per 24 h** — basso,
   fornitori; proprietario X (il plugin di Yahoo); Z, 20/10 (docs-writer, dalla doc di Z-32 d; verificato da Z).
   - `_fetch_currency` (`yahoo_finance/plugin.py:397-416`) legge `fast_info` senza `_yf_with_retry` e prende ogni
     eccezione, `YFRateLimitError` compreso: mette None nella cache delle valute per 24 ore e risponde normalmente.
@@ -8332,6 +8334,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   - Proposta: nessuna voce in cache per un rifiuto, e per `suggest_quote_base` lasciarlo salire (la sonda lo prende già
     come «nessun suggerimento»); nella ricerca, decidere se lo stesso o un risultato senza valuta.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-32 (d) — lavoro», passo 5.
+  - ✅ 21/10 (riconciliazione): in `dev_release2` col treno 3 (`cac0ab76e`; commit `6011a9ff0`).
 
 ## B · Backup e Docker (fase 01)
 
@@ -8986,7 +8989,7 @@ sulla base `23f6578f3`.
     lettore chiude il descrittore che `fdopen` rifiuta (una cartella al posto dello stato ne lasciava aperto uno a
     ogni lettura).
   Dettagli: piano 07, «B-50».
-- **B-51 · La colonna «⚠️» dei risultati di una lettura conta anche le note** — minimo, chiarezza; B, 19/10 (revisione
+- ✅ **B-51 · La colonna «⚠️» dei risultati di una lettura conta anche le note** — minimo, chiarezza; B, 19/10 (revisione
   di N74; area di W). Precedente a N74.
   - Nella tabella del passo di analisi, la colonna «⚠️» (tooltip «Parser warnings (skipped rows, ambiguous data)»)
     conta tutte le note di un file, anche quelle `info`.
@@ -8994,7 +8997,8 @@ sulla base `23f6578f3`.
   - Nel dettaglio della lettura la sezione s'intitola «Warnings», con le note dentro, ognuna nel suo colore.
   - Cura possibile: contare solo `severity !== 'info'`, oppure due conteggi.
   Dettagli: piano 07, «N74 di W — revisione», R1.
-- **B-52 · La regola «solo righe sicure» e i plugin con una colonna di regolamento** — da decidere (W o il
+  - ✅ 21/10 (riconciliazione): in `dev_release2` col treno 3 (`00c5d9014`; commit `3cc5bed99`).
+- ✅ **B-52 · La regola «solo righe sicure» e i plugin con una colonna di regolamento** — da decidere (W o il
   developer); B, 19/10 (revisione di N74; area di W).
   - La regola 9 della skill `brim-plugin` e della guida dice che una riga «con la data valuta o di regolamento dopo
     oggi» è provvisoria e resta fuori.
@@ -9005,6 +9009,7 @@ sulla base `23f6578f3`.
   - Da chiarire: la regola riguarda solo chi data per valuta (Fineco) o per periodo (Danske), o quei plugin chiedono
     un seguito.
   Dettagli: piano 07, «N74 di W — revisione», F2.
+  - ✅ 21/10 (riconciliazione): Fineco e Danske registrano la data dell'operazione, in `dev_release2` col treno 2 (`a79a223cd`; commit `56be23cf7`). Gli altri plugin: W-B88, dopo la 1.3.
 - ✅ **B-53 · Altri due lettori di `.restore/` lasciano aperto un descrittore quando il loro file è una cartella** —
   piccolo, robustezza; B, 20/10 (B-50, sonda). Precedente a B-50.
   - `outcome._read_record` (`outcome.py:141`) risponde «nessun esito» e lo registra una volta, come deve, ma ogni
@@ -10113,7 +10118,7 @@ punto di partenza, l'audit dello stesso giorno:
   a zero; (2) `_is_xirr_root` scarta radici vere quando il VAN è mal condizionato (termini enormi che si annullano). P1
   le ha conservate al bit, fissate nei test con un commento. I valori che cambiano si dichiarano prima, come domanda se
   toccano numeri mostrati. Dettagli: piano MF, voce P1.
-- **MF-E2b · Lo storico di performance dei lotti perde i flussi dei giorni senza valore** — piccolo, numeri (rari);
+- ✅ **MF-E2b · Lo storico di performance dei lotti perde i flussi dei giorni senza valore** — piccolo, numeri (rari);
   test-author di MF, 20/10 (E2). `calculate_simple_roi_series` e `calculate_twrr_period_series` contano solo i flussi
   datati in un giorno con NAV: un acquisto o una vendita in un giorno senza valore dopo il primo (nel servizio, un prezzo
   senza cambio verso la valuta del rapporto) non entra mai in ROI e TWRR, mentre le sue quote sono nel valore del giorno
@@ -10121,3 +10126,4 @@ punto di partenza, l'audit dello stesso giorno:
   giorno con valore successivo; domanda al developer. Dettagli: piano MF, «MF-E2 — via», domanda MF-E2b.
   **Il developer sceglie A** il 20/10; codice e test pronti il 20/10 (`returns.flows_by_snapshot_date`; 22 rossi prima;
   Dashboard invariata su 4 copie), in attesa del checkpoint. Dettagli: piano MF, «MF-E2b».
+  - ✅ 21/10 (riconciliazione): in `dev_release2` col treno 4 (`015094472`; commit `bf748bbc3`).
