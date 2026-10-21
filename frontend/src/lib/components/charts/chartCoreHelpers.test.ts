@@ -287,6 +287,57 @@ describe('canonical overlay axis and reference helpers', () => {
             expect(settingsAxisContext).toMatch(/return\s+isCardInverted\(settingsTargetSlug\)\s*\?\s*`\$\{pair\.config\.quote\}\/\$\{pair\.config\.base\}`\s*:\s*`\$\{pair\.config\.base\}\/\$\{pair\.config\.quote\}`;/);
             expect(source).toMatch(/import\s+\{\s*isCardInverted\s*\}\s+from\s+['"]\$lib\/stores\/fx\/fxCardInversionStore['"]/);
         });
+
+        /**
+         * Y-39a, «parity between the card and the preview»: each list page draws its cards' saved signals through
+         * `$lib/charts/chartSignalRendering`, and hands its settings modal the same sources, `signalSources`. The two maps
+         * the preview read until then go away with the modal props of the same names: `pairsDataMap` (each pair turned by
+         * its own card, where the card turns it by the signal's own `_inverted`) and `assetsDataMap` (no target name, so the
+         * preview called a comparison «Asset #id»). A prop counts as passed in both forms Svelte takes, `name=` and the
+         * shorthand `{name}`. Red until Y-39a: both pages pass the two maps and no `signalSources`, and neither imports the
+         * module.
+         */
+        const SIGNAL_SOURCE_LIST_PAGES = [
+            ['asset list', new URL('../../../routes/(app)/assets/+page.svelte', import.meta.url)],
+            ['FX list', new URL('../../../routes/(app)/fx/+page.svelte', import.meta.url)],
+        ] as const;
+
+        /** Whether a component invocation passes `prop`: as `prop=…`, or as the shorthand `{prop}`. */
+        const passesProp = (invocation: string, prop: string): boolean => new RegExp(`\\s(?:${prop}\\s*=(?!=)|\\{\\s*${prop}\\s*\\})`).test(invocation);
+
+        it.each(SIGNAL_SOURCE_LIST_PAGES)('Y-39a: the %s hands ChartSettingsModal signalSources, and neither pairsDataMap nor assetsDataMap', (page, path) => {
+            const source = readFileSync(path, 'utf8');
+            const modal = source.match(/<ChartSettingsModal\b[\s\S]*?\/>/)?.[0];
+
+            expect(modal).toBeDefined();
+            if (!modal) throw new Error(`${page} ChartSettingsModal invocation not found`);
+            // Controls: the invocation is read whole — a `/>` inside an attribute's expression would cut it short, and a
+            // cut one would pass none of the props below — and the helper sees a prop every invocation passes.
+            expect(modal.split('{').length, `${page}: the ChartSettingsModal invocation is not read whole`).toBe(modal.split('}').length);
+            expect(passesProp(modal, 'settings'), `${page}: control — the invocation passes its settings`).toBe(true);
+
+            expect(
+                {signalSources: passesProp(modal, 'signalSources'), pairsDataMap: passesProp(modal, 'pairsDataMap'), assetsDataMap: passesProp(modal, 'assetsDataMap')},
+                `${page}: the settings preview does not get the cards' signalSources in place of the two data maps, so it cannot draw the FX pairs and the comparisons as the cards do`,
+            ).toEqual({signalSources: true, pairsDataMap: false, assetsDataMap: false});
+        });
+
+        it.each(SIGNAL_SOURCE_LIST_PAGES)('Y-39a: the %s imports $lib/charts/chartSignalRendering, the renderer its cards and its settings preview share', (page, path) => {
+            const source = readFileSync(path, 'utf8');
+            const clauses = [...source.matchAll(/import\s+(type\s+)?([^;'"]*?)\s*\bfrom\s*['"]\$lib\/charts\/chartSignalRendering['"]/g)].filter(([, typeOnly]) => !typeOnly).map(([, , clause]) => clause.trim());
+            // A value binding: a namespace, or a specifier that is not `type …` — a type alone renders nothing.
+            const valueImports = clauses.filter(
+                (clause) =>
+                    /^\*\s*as\s+[\w$]+$/.test(clause) ||
+                    clause
+                        .replace(/^\{|\}$/g, '')
+                        .split(',')
+                        .map((specifier) => specifier.trim())
+                        .some((specifier) => specifier !== '' && !/^type\s/.test(specifier)),
+            );
+
+            expect(valueImports, `${page}: draws its saved signals without $lib/charts/chartSignalRendering`).not.toEqual([]);
+        });
     });
 
     const SHORT_X_AXIS_DATES = ['2026-01-01', '2026-01-02'] as const;
