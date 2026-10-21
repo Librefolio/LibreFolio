@@ -73,9 +73,13 @@ after **Register**:
    within 24 hours, then sign in.* You cannot sign in yet.
 2. Open the email *Confirm your email address* and click **Confirm my email address**. If the
    button does not work, copy into your browser the address written under it.
-3. LibreFolio confirms your address and brings you back to the login page, with a confirmation:
-   log in with your username and password.
+3. The button opens a LibreFolio page that asks you to confirm. Click **Confirm my email address**
+   there: LibreFolio then confirms your address and brings you back to the login page, with a
+   confirmation: log in with your username and password.
 
+- 🖱️ Why one more click? Some email services open the links of a message by themselves, to check
+  them: the click makes sure that it is you who confirms.
+- 🙋 If you did not sign up on this instance, just close the page: nothing happens.
 - ⏱️ The link works once, for 24 hours.
 - 📭 No email? Look in the spam folder. Then, on the login page, sign in with your username and
   password: LibreFolio says that your address is not verified yet, and offers **Send the link

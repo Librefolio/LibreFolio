@@ -92,7 +92,10 @@
         "unknown": "Ce lien n'est pas valide : rouvrez-le en entier depuis l'e-mail. S'il échoue encore, connectez-vous pour en demander un nouveau.",
         "blocked": "Cette instance est bloquée par son hébergeur : le lien ne peut pas être vérifié pour le moment. Rouvrez-le une fois l'instance débloquée ; si le lien a expiré entre-temps, connectez-vous pour en obtenir un nouveau.",
         "missing": "Ce lien est incomplet : rouvrez-le depuis l'e-mail.",
-        "error": "Le lien n'a pas pu être vérifié : réessayez."
+        "error": "Le lien n'a pas pu être vérifié : réessayez.",
+        "ready": "Confirmez votre adresse e-mail pour activer votre compte.",
+        "confirm": "Confirmer mon adresse e-mail",
+        "notSignedUp": "Si vous n'avez pas créé de compte sur cette instance, fermez cette page : rien ne se passe."
       },
       "verified": "Votre adresse e-mail est vérifiée, {username} : vous pouvez vous connecter.",
       "loginRequired": "Votre adresse e-mail n'est pas encore vérifiée : ouvrez le lien de l'e-mail que nous vous avons envoyé, puis connectez-vous.",

@@ -92,7 +92,10 @@
         "unknown": "Este enlace no es válido: vuelve a abrirlo completo desde el correo. Si sigue fallando, inicia sesión para pedir uno nuevo.",
         "blocked": "Esta instancia está bloqueada por su proveedor de alojamiento, así que el enlace no se puede comprobar ahora. Ábrelo de nuevo cuando la instancia se desbloquee; si el enlace ha caducado para entonces, inicia sesión para obtener uno nuevo.",
         "missing": "Este enlace está incompleto: vuelve a abrirlo desde el correo.",
-        "error": "No se pudo comprobar el enlace: inténtalo de nuevo."
+        "error": "No se pudo comprobar el enlace: inténtalo de nuevo.",
+        "ready": "Confirma tu dirección de correo para activar tu cuenta.",
+        "confirm": "Confirmar mi dirección de correo",
+        "notSignedUp": "Si no has creado ninguna cuenta en esta instancia, cierra esta página: no pasa nada."
       },
       "verified": "Tu dirección de correo está verificada, {username}: ya puedes iniciar sesión.",
       "loginRequired": "Tu dirección de correo aún no está verificada: abre el enlace del correo que te enviamos y luego inicia sesión.",

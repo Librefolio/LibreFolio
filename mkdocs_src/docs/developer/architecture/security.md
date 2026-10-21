@@ -2203,7 +2203,8 @@ email verification in [Email Verification](../backend/email.md#verification); th
   already on the page changes only the fragment and loads nothing, so the page reads the new token there. All four
   declare `<meta name="referrer" content="no-referrer">`: a link followed from them sends no `Referer` at all. Their
   components are in [Authentication Components](../frontend/components/features/auth.md#link-pages), except those
-  of `/verify-email`, which spends its token at once, without inspecting it first:
+  of `/verify-email`, which does not inspect its token first and spends it only on its owner's click (lot E-25),
+  so that a mail filter opening the link in a browser of its own verifies nothing:
   [In the Frontend](../backend/email.md#verification-frontend).
 - **A `401` never takes a link page to the sign-in.** The API client's response interceptor sends a `401` to the
   sign-in page from any page but `/` and these four, matched on the exact path (a trailing slash allowed). Their
