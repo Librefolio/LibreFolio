@@ -25,7 +25,7 @@ type ViewMode = 'absolute' | 'percentage';
 export interface FxRatePoint {
     date: string;
     rate: number | null;
-    backwardFillInfo?: {daysBack?: number} | null;
+    backwardFillInfo?: {actualRateDate?: string; daysBack?: number} | null;
 }
 
 /** The other asset a comparison signal draws. */

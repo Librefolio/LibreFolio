@@ -39,18 +39,17 @@
  *     the target gives wins over it. With neither, the signal's own catalogue fallback names it.
  *   - «its definition» is the definition of the config the item is drawn with — the current one when there is one.
  *
- * ## Red until the cure
+ * ## How the cases are built
  *
- * The module does not exist yet. It is loaded by a computed specifier (`exported()`), so each case fails on its own —
- * «cannot be loaded — red until Y-39a creates it» — instead of the whole file at import, and everything a case builds
- * before loading it runs today: a red here is the missing module, not a broken fixture. The contract's types are written
- * out below for the same reason: the type check does not wait for the module.
+ * The cases call the module's functions with sources they inject (spies), so each case pins one rule of the contract and
+ * nothing else; the types are the module's own. Everything a case builds before calling the module is plain data, so a
+ * red here is the module's behaviour, not a broken fixture.
  *
  * The names a signal gives itself before the page names it come from the catalogue (`ChartSignal.text`), which throws
  * before svelte-i18n is initialised: the file boots it once, in English, and compares a fallback with the catalogue's own
  * text for its key, never with a literal. «Synthetic peer» and the other names below are data the cases inject.
  *
- * Registered (to be) in `front_utility_unit` (`scripts/test_runner/_frontend_utility.py`, action `core-unit`), beside
+ * Registered in `front_utility_unit` (`scripts/test_runner/_frontend_utility.py`, action `core-unit`), beside
  * `chartPageSignals.test.ts`.
  */
 import {beforeAll, describe, expect, it, vi} from 'vitest';
@@ -62,60 +61,12 @@ import {getRegisteredSignalTypes, type RenderedSignal, type SignalConfig, type S
 import {renderBackendSignalResult} from '$lib/charts/signals/backendRenderer';
 import {backendSignalSchemas, type BackendSignalResult} from '$lib/charts/signals/backendTypes';
 import type {SignalInstanceResult} from '$lib/charts/signals/resultMapper';
+import {fxPointToLineDataPoint, renderBackendResults, renderLocalSignal, renderLocalSignals, type ComparisonTarget, type FxRatePoint, type SignalDataSources} from '$lib/charts/chartSignalRendering';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 import {displayFxRate} from '$lib/stores/fxStoreRegistry';
 import {extractDaysBack} from '$lib/utils/assetPriceDerived';
 
-// ---------------------------------------------------------------------------
-// The contract's types, written out: the module does not exist yet
-// ---------------------------------------------------------------------------
-
-type ViewMode = 'absolute' | 'percentage';
-
-/** An FX store point, as `fxPointToLineDataPoint` reads it (`FxDataPoint` of `$lib/stores/fxStoreRegistry`). */
-interface FxStorePoint {
-    date: string;
-    rate: number | null;
-    backwardFillInfo?: {actualRateDate?: string; daysBack: number} | null;
-}
-
-interface ComparisonTarget {
-    data: LineDataPoint[];
-    displayName?: string | null;
-    iconUrl?: string | null;
-    assetType?: string | null;
-    basePoint?: LineDataPoint | null;
-}
-
-interface SignalDataSources {
-    fxPairData: (pairSlug: string) => LineDataPoint[] | null;
-    comparisonTarget: (assetId: number) => ComparisonTarget | null;
-    selfAssetId?: number | null;
-}
-
-/** `lib/charts/chartSignalRendering.ts`, as Y-39a specifies it. */
-interface ChartSignalRendering {
-    fxPointToLineDataPoint(point: FxStorePoint, inverted: boolean): LineDataPoint;
-    renderLocalSignal(config: SignalConfig, baseData: LineDataPoint[], viewMode: ViewMode, sources: SignalDataSources): RenderedSignal[];
-    renderLocalSignals(configs: readonly SignalConfig[], definitionsByType: ReadonlyMap<string, SignalDefinition>, baseData: LineDataPoint[], viewMode: ViewMode, sources: SignalDataSources): RenderedSignal[];
-    renderBackendResults(configs: readonly SignalConfig[], results: readonly SignalInstanceResult[], definitionsByType: ReadonlyMap<string, SignalDefinition>, baseData: LineDataPoint[], viewMode: ViewMode, translate?: (key: string) => string): RenderedSignal[];
-}
-
-const MODULE_FILE = 'src/lib/charts/chartSignalRendering.ts';
-/** Computed, so that a missing module fails the case that loads it, not the whole file at import. */
-const MODULE_SPECIFIER = '../chartSignalRendering';
-
-/** One export of the module, loaded when the case needs it. */
-async function exported<K extends keyof ChartSignalRendering>(name: K): Promise<ChartSignalRendering[K]> {
-    let loaded: Record<string, unknown>;
-    try {
-        loaded = (await import(/* @vite-ignore */ MODULE_SPECIFIER)) as Record<string, unknown>;
-    } catch (error) {
-        throw new Error(`${MODULE_FILE} cannot be loaded — red until Y-39a creates it: ${String(error)}`);
-    }
-    expect(typeof loaded[name], `${MODULE_FILE} exports no ${name}()`).toBe('function');
-    return loaded[name] as ChartSignalRendering[K];
-}
+type ViewMode = Parameters<typeof renderLocalSignal>[2];
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -266,15 +217,11 @@ function backendSignals(result: BackendSignalResult, config: SignalConfig, viewM
 // ---------------------------------------------------------------------------
 
 describe('fxPointToLineDataPoint: an FX store point as a chart point — its value, its gap, its staleness (rule 1)', () => {
-    it('keeps the date and the rate, with no gap and no staleness', async () => {
-        const fxPointToLineDataPoint = await exported('fxPointToLineDataPoint');
-
+    it('keeps the date and the rate, with no gap and no staleness', () => {
         expect(fxPointToLineDataPoint({date: '2026-03-02', rate: 0.5, backwardFillInfo: null}, false)).toEqual({date: '2026-03-02', value: 0.5, missing: false, staleDays: 0});
     });
 
-    it('inverted, the value is the reciprocal of the rate', async () => {
-        const fxPointToLineDataPoint = await exported('fxPointToLineDataPoint');
-
+    it('inverted, the value is the reciprocal of the rate', () => {
         expect(fxPointToLineDataPoint({date: '2026-03-02', rate: 0.5, backwardFillInfo: null}, true)).toEqual({date: '2026-03-02', value: 2, missing: false, staleDays: 0});
     });
 
@@ -283,22 +230,17 @@ describe('fxPointToLineDataPoint: an FX store point as a chart point — its val
         {label: 'no rate, inverted', rate: null, inverted: true},
         {label: 'a rate of 0, which displayFxRate refuses', rate: 0, inverted: false},
         {label: 'a rate of 0, inverted', rate: 0, inverted: true},
-    ])('$label is a gap: value 0, missing', async ({rate, inverted}) => {
-        const fxPointToLineDataPoint = await exported('fxPointToLineDataPoint');
-
+    ])('$label is a gap: value 0, missing', ({rate, inverted}) => {
         expect(fxPointToLineDataPoint({date: '2026-03-04', rate, backwardFillInfo: null}, inverted)).toEqual({date: '2026-03-04', value: 0, missing: true, staleDays: 0});
     });
 
-    it('a backward-filled rate keeps its staleness: staleDays is its days back, 0 without backward-fill info', async () => {
-        const fxPointToLineDataPoint = await exported('fxPointToLineDataPoint');
-
+    it('a backward-filled rate keeps its staleness: staleDays is its days back, 0 without backward-fill info', () => {
         expect(fxPointToLineDataPoint({date: '2026-03-02', rate: 0.5, backwardFillInfo: {actualRateDate: '2026-02-27', daysBack: 3}}, false)).toEqual({date: '2026-03-02', value: 0.5, missing: false, staleDays: 3});
         expect(fxPointToLineDataPoint({date: '2026-03-02', rate: 0.5}, true), 'a point with no backward-fill info at all').toEqual({date: '2026-03-02', value: 2, missing: false, staleDays: 0});
     });
 
-    it('gives the FX list’s own point in every case: displayFxRate for the value and the gap, extractDaysBack for the staleness', async () => {
-        const fxPointToLineDataPoint = await exported('fxPointToLineDataPoint');
-        const points: FxStorePoint[] = [
+    it('gives the FX list’s own point in every case: displayFxRate for the value and the gap, extractDaysBack for the staleness', () => {
+        const points: FxRatePoint[] = [
             {date: '2026-03-02', rate: 0.5, backwardFillInfo: null},
             {date: '2026-03-03', rate: 1.25, backwardFillInfo: {actualRateDate: '2026-03-01', daysBack: 2}},
             {date: '2026-03-04', rate: null, backwardFillInfo: {actualRateDate: '2026-02-27', daysBack: 5}},
@@ -320,8 +262,7 @@ describe('fxPointToLineDataPoint: an FX store point as a chart point — its val
 // ---------------------------------------------------------------------------
 
 describe('renderLocalSignal — an FX pair: the straight rates its source gives, turned by the signal’s own _inverted (rule 2)', () => {
-    it('draws the rates sources.fxPairData gives for its slug, straight, on the days the chart draws', async () => {
-        const renderLocalSignal = await exported('renderLocalSignal');
+    it('draws the rates sources.fxPairData gives for its slug, straight, on the days the chart draws', () => {
         const sources = sourcesWith();
 
         const signals = renderLocalSignal(fxPair(), CHART, 'absolute', sources);
@@ -332,18 +273,14 @@ describe('renderLocalSignal — an FX pair: the straight rates its source gives,
         expect(valuesOf(signals[0]), 'not the straight rates of EUR-GBP').toEqual([0.5, 0.8, 0.625]);
     });
 
-    it('with the signal’s own _inverted, draws their reciprocals: the module hands the rates over straight and turns them nowhere else', async () => {
-        const renderLocalSignal = await exported('renderLocalSignal');
-
+    it('with the signal’s own _inverted, draws their reciprocals: the module hands the rates over straight and turns them nowhere else', () => {
         const signals = renderLocalSignal(fxPair({_inverted: true}), CHART, 'absolute', sourcesWith());
 
         expect(datesOf(signals[0])).toEqual(EUR_GBP_DATES);
         expect(valuesOf(signals[0]), 'not the reciprocals of 0.5, 0.8 and 0.625').toEqual([2, 1.25, 1.6]);
     });
 
-    it('in the percentage view, measures the pair from its own first rate', async () => {
-        const renderLocalSignal = await exported('renderLocalSignal');
-
+    it('in the percentage view, measures the pair from its own first rate', () => {
         const signals = renderLocalSignal(fxPair(), CHART, 'percentage', sourcesWith());
 
         expect(valuesOf(signals[0]), '0.5 → 0.8 → 0.625 from 0.5').toEqual([0, 60, 25]);
@@ -353,14 +290,11 @@ describe('renderLocalSignal — an FX pair: the straight rates its source gives,
         {label: 'an empty slug', params: {pairSlug: ''}},
         {label: 'no slug', params: {pairSlug: undefined}},
         {label: 'a pair the source has no data for', params: {pairSlug: 'USD-JPY'}},
-    ])('draws nothing for $label', async ({params}) => {
-        const renderLocalSignal = await exported('renderLocalSignal');
-
+    ])('draws nothing for $label', ({params}) => {
         expect(renderLocalSignal(fxPair(params), CHART, 'absolute', sourcesWith())).toEqual([]);
     });
 
-    it('draws nothing when the source gives the pair an empty series', async () => {
-        const renderLocalSignal = await exported('renderLocalSignal');
+    it('draws nothing when the source gives the pair an empty series', () => {
         const sources: SignalDataSources = {...sourcesWith(), fxPairData: vi.fn(() => [])};
 
         expect(renderLocalSignal(fxPair(), CHART, 'absolute', sources)).toEqual([]);
@@ -368,8 +302,7 @@ describe('renderLocalSignal — an FX pair: the straight rates its source gives,
 });
 
 describe('renderLocalSignal — a comparison: its target’s data, name, icon, type and base point; never the chart’s own asset (rule 2)', () => {
-    it('draws the target’s data on the days the chart draws, named after the target', async () => {
-        const renderLocalSignal = await exported('renderLocalSignal');
+    it('draws the target’s data on the days the chart draws, named after the target', () => {
         const sources = sourcesWith();
 
         const signals = renderLocalSignal(comparison(), CHART, 'absolute', sources);
@@ -381,8 +314,7 @@ describe('renderLocalSignal — a comparison: its target’s data, name, icon, t
         expect(valuesOf(signals[0])).toEqual([200, 220, 180]);
     });
 
-    it('reads the saved asset id as a number: a numeric string asks for the same target', async () => {
-        const renderLocalSignal = await exported('renderLocalSignal');
+    it('reads the saved asset id as a number: a numeric string asks for the same target', () => {
         const sources = sourcesWith();
 
         const signals = renderLocalSignal(comparison({assetId: '42'}), CHART, 'absolute', sources);
@@ -394,24 +326,19 @@ describe('renderLocalSignal — a comparison: its target’s data, name, icon, t
     it.each([
         {label: 'no display name', target: {data: PEER}},
         {label: 'a null display name', target: {data: PEER, displayName: null}},
-    ])('with $label, keeps the signal’s own catalogue fallback for asset 42', async ({target}) => {
-        const renderLocalSignal = await exported('renderLocalSignal');
-
+    ])('with $label, keeps the signal’s own catalogue fallback for asset 42', ({target}) => {
         const signals = renderLocalSignal(comparison(), CHART, 'absolute', sourcesWith(target));
 
         expect(signals.map((signal) => signal.label)).toEqual([catalogue('chartSettings.signals.assetFallback', {id: '42'})]);
     });
 
-    it('hands the target’s icon and type to the drawn signal', async () => {
-        const renderLocalSignal = await exported('renderLocalSignal');
-
+    it('hands the target’s icon and type to the drawn signal', () => {
         const signals = renderLocalSignal(comparison(), CHART, 'absolute', sourcesWith({data: PEER, displayName: PEER_NAME, iconUrl: '/icons/peer.png', assetType: 'ETF'}));
 
         expect(signals.map((signal) => ({iconUrl: signal.iconUrl, assetType: signal.assetType}))).toEqual([{iconUrl: '/icons/peer.png', assetType: 'ETF'}]);
     });
 
-    it('writes only what the target gives: a name, an icon and a type the saved config carries stay when the target has none, and give way to the target’s own', async () => {
-        const renderLocalSignal = await exported('renderLocalSignal');
+    it('writes only what the target gives: a name, an icon and a type the saved config carries stay when the target has none, and give way to the target’s own', () => {
         const saved = comparison({_assetDisplayName: 'Name saved with the config', _assetIconUrl: '/icons/saved.png', _assetType: 'STOCK'});
 
         const bare = renderLocalSignal(saved, CHART, 'absolute', sourcesWith({data: PEER}));
@@ -427,9 +354,7 @@ describe('renderLocalSignal — a comparison: its target’s data, name, icon, t
         ).toEqual([{label: PEER_NAME, iconUrl: '/icons/peer.png', assetType: 'ETF'}]);
     });
 
-    it('measures the percentage line from the target’s base point when one is given (Z-29d-0), from its own first point otherwise', async () => {
-        const renderLocalSignal = await exported('renderLocalSignal');
-
+    it('measures the percentage line from the target’s base point when one is given (Z-29d-0), from its own first point otherwise', () => {
         const fromBase = renderLocalSignal(comparison(), CHART, 'percentage', sourcesWith({data: PEER, displayName: PEER_NAME, basePoint: {date: '2026-02-27', value: 160}}));
         const fromFirst = renderLocalSignal(comparison(), CHART, 'percentage', sourcesWith());
 
@@ -440,9 +365,7 @@ describe('renderLocalSignal — a comparison: its target’s data, name, icon, t
     it.each([
         {label: 'its id saved as a number', assetId: 42},
         {label: 'its id saved as a numeric string', assetId: '42'},
-    ])('never draws a comparison with the chart’s own asset ($label)', async ({assetId}) => {
-        const renderLocalSignal = await exported('renderLocalSignal');
-
+    ])('never draws a comparison with the chart’s own asset ($label)', ({assetId}) => {
         expect(renderLocalSignal(comparison({assetId}), CHART, 'absolute', sourcesWith(undefined, PEER_ID))).toEqual([]);
     });
 
@@ -450,9 +373,7 @@ describe('renderLocalSignal — a comparison: its target’s data, name, icon, t
         {label: 'another asset', selfAssetId: 7},
         {label: 'no asset (null)', selfAssetId: null},
         {label: 'no asset (absent)', selfAssetId: undefined},
-    ])('draws the comparison on a chart whose own asset is $label', async ({selfAssetId}) => {
-        const renderLocalSignal = await exported('renderLocalSignal');
-
+    ])('draws the comparison on a chart whose own asset is $label', ({selfAssetId}) => {
         expect(renderLocalSignal(comparison(), CHART, 'absolute', sourcesWith(undefined, selfAssetId)).map((signal) => signal.label)).toEqual([PEER_NAME]);
     });
 
@@ -462,9 +383,7 @@ describe('renderLocalSignal — a comparison: its target’s data, name, icon, t
         {label: 'an asset id that is not a number', params: {assetId: 'peer'}},
         {label: 'no asset id', params: {assetId: undefined}},
         {label: 'a target the source does not know', params: {assetId: 43}},
-    ])('draws nothing for $label', async ({params}) => {
-        const renderLocalSignal = await exported('renderLocalSignal');
-
+    ])('draws nothing for $label', ({params}) => {
         expect(renderLocalSignal(comparison(params), CHART, 'absolute', sourcesWith())).toEqual([]);
     });
 
@@ -480,16 +399,13 @@ describe('renderLocalSignal — a comparison: its target’s data, name, icon, t
                 displayName: PEER_NAME,
             },
         },
-    ])('draws nothing for a target with $label', async ({target}) => {
-        const renderLocalSignal = await exported('renderLocalSignal');
-
+    ])('draws nothing for a target with $label', ({target}) => {
         expect(renderLocalSignal(comparison(), CHART, 'absolute', sourcesWith(target))).toEqual([]);
     });
 });
 
 describe('renderLocalSignal — any other local signal: the chart’s data alone (rule 2)', () => {
-    it('a linear benchmark draws on every day of the chart, and asks no source', async () => {
-        const renderLocalSignal = await exported('renderLocalSignal');
+    it('a linear benchmark draws on every day of the chart, and asks no source', () => {
         const sources = sourcesWith();
 
         const signals = renderLocalSignal(linear(), CHART, 'absolute', sources);
@@ -500,9 +416,7 @@ describe('renderLocalSignal — any other local signal: the chart’s data alone
         expect(sources.comparisonTarget).not.toHaveBeenCalled();
     });
 
-    it('a type the local registry does not know draws nothing', async () => {
-        const renderLocalSignal = await exported('renderLocalSignal');
-
+    it('a type the local registry does not know draws nothing', () => {
         expect(renderLocalSignal(signalConfig('sma-1', 'sma', {window: 2}), CHART, 'absolute', sourcesWith())).toEqual([]);
     });
 });
@@ -512,8 +426,7 @@ describe('renderLocalSignal — never writes into the config it draws (rule 2)',
         {label: 'an FX pair', build: () => fxPair({_inverted: true})},
         {label: 'a comparison', build: () => comparison({assetId: '42'})},
         {label: 'a linear benchmark', build: linear},
-    ])('leaves the config of $label, its params and its style as they were', async ({build}) => {
-        const renderLocalSignal = await exported('renderLocalSignal');
+    ])('leaves the config of $label, its params and its style as they were', ({build}) => {
         const config = frozen(build());
         const before: unknown = JSON.parse(JSON.stringify(config));
         const target: ComparisonTarget = {data: PEER, displayName: PEER_NAME, iconUrl: '/icons/peer.png', assetType: 'ETF', basePoint: {date: '2026-02-27', value: 160}};
@@ -533,9 +446,7 @@ describe('renderLocalSignal — never writes into the config it draws (rule 2)',
 // ---------------------------------------------------------------------------
 
 describe('renderLocalSignals — the local configs of a chart, in their order (rule 3)', () => {
-    it('draws each local config in order — skipping a backend one and one with no definition — as renderLocalSignal draws it', async () => {
-        const renderLocalSignals = await exported('renderLocalSignals');
-        const renderLocalSignal = await exported('renderLocalSignal');
+    it('draws each local config in order — skipping a backend one and one with no definition — as renderLocalSignal draws it', () => {
         const configs = [comparison(), signalConfig('sma-1', 'sma', {window: 2}), linear(), signalConfig('mystery-1', 'mystery-signal'), fxPair()];
 
         const signals = renderLocalSignals(configs, definitionsWith(SMA_DEFINITION), CHART, 'absolute', sourcesWith());
@@ -544,8 +455,7 @@ describe('renderLocalSignals — the local configs of a chart, in their order (r
         expect(signals, 'not the concatenation of renderLocalSignal').toEqual([comparison(), linear(), fxPair()].flatMap((config) => renderLocalSignal(config, CHART, 'absolute', sourcesWith())));
     });
 
-    it('skips a config whose definition is backend-owned, even of a type the local registry could draw', async () => {
-        const renderLocalSignals = await exported('renderLocalSignals');
+    it('skips a config whose definition is backend-owned, even of a type the local registry could draw', () => {
         const localLinear = LOCAL_DEFINITIONS.find((definition) => definition.type === 'linear');
         if (!localLinear) throw new Error('premise: the local registry defines `linear`');
 
@@ -554,8 +464,7 @@ describe('renderLocalSignals — the local configs of a chart, in their order (r
         expect(signals.map((signal) => signal.id)).toEqual(['fx-eur-gbp']);
     });
 
-    it('a local definition the registry cannot rebuild draws nothing, and the next config still draws', async () => {
-        const renderLocalSignals = await exported('renderLocalSignals');
+    it('a local definition the registry cannot rebuild draws nothing, and the next config still draws', () => {
         const phantom: SignalDefinition = {type: 'phantom', displayName: 'Phantom', icon: '?', category: 'benchmark', paramDescriptors: [], source: 'local'};
 
         const signals = renderLocalSignals([signalConfig('phantom-1', 'phantom'), linear()], definitionsWith(phantom), CHART, 'absolute', sourcesWith());
@@ -563,9 +472,7 @@ describe('renderLocalSignals — the local configs of a chart, in their order (r
         expect(signals.map((signal) => signal.id)).toEqual(['lin-1']);
     });
 
-    it('draws nothing for no configs', async () => {
-        const renderLocalSignals = await exported('renderLocalSignals');
-
+    it('draws nothing for no configs', () => {
         expect(renderLocalSignals([], definitionsWith(SMA_DEFINITION), CHART, 'absolute', sourcesWith())).toEqual([]);
     });
 });
@@ -578,9 +485,7 @@ describe('renderBackendResults — the saved backend results, drawn with the cur
     const requested = signalConfig('sma-1', 'sma', {window: 2}, {...STYLE, color: '#111111'});
     const current = signalConfig('sma-1', 'sma', {window: 2}, {...STYLE, color: '#ff0000'});
 
-    it('draws a result with the current config of its id: a colour changed since the request wins over the one saved with the result', async () => {
-        const renderBackendResults = await exported('renderBackendResults');
-
+    it('draws a result with the current config of its id: a colour changed since the request wins over the one saved with the result', () => {
         const signals = renderBackendResults([current], [resultItem(requested, SMA_1_RESULT)], definitionsWith(SMA_DEFINITION), CHART, 'absolute');
 
         expect(signals.length, 'control: the result is drawn').toBeGreaterThan(0);
@@ -591,17 +496,14 @@ describe('renderBackendResults — the saved backend results, drawn with the cur
         expect(signals).toEqual(backendSignals(SMA_1_RESULT, current, 'absolute'));
     });
 
-    it('draws a result with its own config when the current configs no longer hold its id', async () => {
-        const renderBackendResults = await exported('renderBackendResults');
-
+    it('draws a result with its own config when the current configs no longer hold its id', () => {
         const signals = renderBackendResults([signalConfig('other-1', 'sma')], [resultItem(requested, SMA_1_RESULT)], definitionsWith(SMA_DEFINITION), CHART, 'absolute');
 
         expect(signals.length, 'control: the result is drawn').toBeGreaterThan(0);
         expect(signals).toEqual(backendSignals(SMA_1_RESULT, requested, 'absolute'));
     });
 
-    it('keeps the order of the results, and skips every item it cannot draw', async () => {
-        const renderBackendResults = await exported('renderBackendResults');
+    it('keeps the order of the results, and skips every item it cannot draw', () => {
         const sma2 = signalConfig('sma-2', 'sma', {window: 3}, {...STYLE, color: '#00aa00'});
         const items = [
             resultItem(linear(), null, 'local'), // a local signal: renderLocalSignals draws it
@@ -618,15 +520,13 @@ describe('renderBackendResults — the saved backend results, drawn with the cur
         expect(signals).toEqual([...backendSignals(SMA_2_RESULT, sma2, 'absolute'), ...backendSignals(SMA_1_RESULT, current, 'absolute')]);
     });
 
-    it('looks the definition up by the config it draws with: a current config of a type with no backend definition is skipped', async () => {
-        const renderBackendResults = await exported('renderBackendResults');
+    it('looks the definition up by the config it draws with: a current config of a type with no backend definition is skipped', () => {
         const retyped = signalConfig('sma-1', 'linear', {annualRate: 2, offset: 0});
 
         expect(renderBackendResults([retyped], [resultItem(requested, SMA_1_RESULT)], definitionsWith(SMA_DEFINITION), CHART, 'absolute')).toEqual([]);
     });
 
-    it('hands the view mode and translate to the backend renderer', async () => {
-        const renderBackendResults = await exported('renderBackendResults');
+    it('hands the view mode and translate to the backend renderer', () => {
         const translate = (key: string): string => (key === 'signals.sma' ? 'Label injected by the case' : key);
 
         const signals = renderBackendResults([current], [resultItem(current, SMA_1_RESULT)], definitionsWith(SMA_DEFINITION), CHART, 'percentage', translate);

@@ -5,11 +5,11 @@
  *
  * Drawing a saved signal starts with `signalFromConfig(config)`: the registry rebuilds the signal from its config, the
  * page injects what it draws against — an FX pair's rates, a comparison's target — and calls `renderMulti`. Until Y-39a
- * that loop is written five times: the asset list and the FX list (`getRenderedSignals`, their cards), the settings
+ * that loop was written five times: the asset list and the FX list (`getRenderedSignals`, their cards), the settings
  * preview (`ChartSettingsModal`'s `renderLocalPreview`) and the two detail pages. The copies drifted: the preview named a
  * comparison «Asset #id» where the card named it after its target, drew a comparison with the chart's own asset where
  * the card skipped it, and turned an FX pair by its card where the card let the signal's own `_inverted` turn it. Each
- * copy is one more place the next rule has to reach. Y-39a moves the loop into `lib/charts/chartSignalRendering.ts`; this
+ * copy is one more place the next rule has to reach. Y-39a moved the loop into `lib/charts/chartSignalRendering.ts`; this
  * gate keeps it there: a sixth copy is red the day it is written.
  *
  * ## The rule, as this file checks it
@@ -42,9 +42,8 @@
  * The walk reads every `.svelte`, `.ts` and `.js` file under `src` but the tests — every `*.test.ts`, this file among
  * them, and anything under a `__tests__/` or `__mocks__/` directory — and never enters `node_modules`.
  *
- * Red until Y-39a: the two list pages and the settings modal call `signalFromConfig(` themselves, and the module does not
- * exist yet. Registered (to be) in `front_utility_unit` (`scripts/test_runner/_frontend_utility.py`, action
- * `core-unit`), beside the other gates.
+ * Registered in `front_utility_unit` (`scripts/test_runner/_frontend_utility.py`, action `core-unit`), beside the other
+ * gates.
  */
 
 import {describe, expect, it} from 'vitest';
@@ -394,7 +393,7 @@ describe('Saved signals are drawn through lib/charts/chartSignalRendering.ts onl
             expect(emptyScans(srcAudit()), 'the scan reads nothing the rule needs: fix the walk or the patterns — never relax this, the rule passes on an empty scan').toEqual([]);
         });
 
-        it('RED until Y-39a — signalFromConfig( is called only in lib/charts/chartSignalRendering.ts and in the known copies', () => {
+        it('signalFromConfig( is called only in lib/charts/chartSignalRendering.ts and in the known copies', () => {
             const found = offenders(srcAudit());
 
             expect(found, ['', `Saved signals are drawn in one place: ${RULE} (Y-39a). ${found.length} call(s) outside it:`, '', ...found, ''].join('\n  ')).toEqual([]);
@@ -404,7 +403,7 @@ describe('Saved signals are drawn through lib/charts/chartSignalRendering.ts onl
             expect(staleCopies(srcAudit())).toEqual([]);
         });
 
-        it('RED until Y-39a — lib/charts/chartSignalRendering.ts exists and draws through signalFromConfig(', () => {
+        it('lib/charts/chartSignalRendering.ts exists and draws through signalFromConfig(', () => {
             expect(moduleProblems(srcAudit()), 'the one renderer of saved signals is missing, or rebuilds no signal through the registry: «no call outside the module» says nothing until it does').toEqual([]);
         });
 

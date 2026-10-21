@@ -6,12 +6,12 @@
  * ## The contract
  *
  * A card and its settings preview drew the same saved signals through two copies of one loop, and the copies drifted
- * (`lib/charts/__tests__/chartSignalRendering.test.ts` tells how). After Y-39a the modal takes an optional prop,
+ * (`lib/charts/__tests__/chartSignalRendering.test.ts` tells how). Since Y-39a the modal takes an optional prop,
  * `signalSources` — the `SignalDataSources` of `lib/charts/chartSignalRendering.ts`, the very sources the page's cards
  * draw with — and draws each local signal of its preview with
  * `renderLocalSignal(config, <the preview's base data>, <the preview's view mode>, signalSources)`: in pair mode (a
  * card's settings) on `pairData`, in global mode on its synthetic curve. The props `pairsDataMap` and `assetsDataMap`
- * go away. Without `signalSources`, an FX pair or a comparison draws nothing; every other local signal draws as before.
+ * are gone. Without `signalSources`, an FX pair or a comparison draws nothing; every other local signal draws as before.
  * The backend signals keep their paths (saved results in pair mode, the live resolver in global mode): not asserted here.
  *
  * ## The harness
@@ -31,14 +31,13 @@
  * The asset picker of a comparison row loads the asset list on mount: here it is answered at once, empty, so no case
  * makes a request.
  *
- * ## Red and green
+ * ## Cases and guards
  *
- * Red today, each on its own assertion: the preview reads `assetsDataMap` and `pairsDataMap`, which these cases do not
- * give, so it draws no comparison and no FX pair. The GUARDs are green today and after the cure: a benchmark needing no
- * outside data is drawn in both modes, with `signalSources` and without; without it, an FX pair and a comparison draw
- * nothing.
+ * The cases pin where the preview gets a comparison and an FX pair: from `signalSources`, each on its own assertion. The
+ * GUARDs pin what holds with and without them: a benchmark needing no outside data is drawn in both modes, with
+ * `signalSources` and without; without it, an FX pair and a comparison draw nothing.
  *
- * Registered (to be) in `front_component_unit` (`scripts/test_runner/_frontend_utility.py`, action `component-unit`),
+ * Registered in `front_component_unit` (`scripts/test_runner/_frontend_utility.py`, action `component-unit`),
  * beside `ChartSignalsSection.test.ts`.
  */
 import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
@@ -79,17 +78,11 @@ vi.mock('$lib/stores/reference/assetStore', async (importOriginal) => ({
 
 import {tick, type ComponentProps} from 'svelte';
 import {render, screen, setupI18n, within} from '$test/component';
+import type {SignalDataSources} from '$lib/charts/chartSignalRendering';
 import type {RenderedSignal, SignalConfig, SignalStyle} from '$lib/charts/signals';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 import {DEFAULT_CHART_SETTINGS, type ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
 import ChartSettingsModal from './ChartSettingsModal.svelte';
-
-/** The sources a page hands the modal: `SignalDataSources` of `lib/charts/chartSignalRendering.ts`, written out — the module does not exist yet. */
-interface SignalDataSources {
-    fxPairData: (pairSlug: string) => LineDataPoint[] | null;
-    comparisonTarget: (assetId: number) => {data: LineDataPoint[]; displayName?: string | null; iconUrl?: string | null; assetType?: string | null; basePoint?: LineDataPoint | null} | null;
-    selfAssetId?: number | null;
-}
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -168,11 +161,10 @@ interface OpenOptions {
 /** The modal, open, on settings holding `signals` — as a list page opens it for a card (pair) or for the filter bar (global). */
 async function openModal({mode, signals, pairData, signalSources}: OpenOptions): Promise<void> {
     const settings: ChartSettings = {...(JSON.parse(JSON.stringify(DEFAULT_CHART_SETTINGS)) as ChartSettings), signals: JSON.parse(JSON.stringify(signals)) as SignalConfig[]};
-    const props: Record<string, unknown> = {open: true, settings, mode};
+    const props: ComponentProps<typeof ChartSettingsModal> = {open: true, settings, mode};
     if (pairData) props.pairData = pairData;
-    // `signalSources` is the prop Y-39a adds: until then the modal ignores it.
     if (signalSources) props.signalSources = signalSources;
-    render(ChartSettingsModal, props as unknown as ComponentProps<typeof ChartSettingsModal>);
+    render(ChartSettingsModal, props);
     await tick();
 }
 
@@ -201,7 +193,7 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('ChartSettingsModal preview — saved local signals drawn through signalSources (Y-39a)', () => {
-    it('RED: a saved comparison with asset 42 is drawn from signalSources.comparisonTarget(42) — named after its target, on the days of pairData', async () => {
+    it('a saved comparison with asset 42 is drawn from signalSources.comparisonTarget(42) — named after its target, on the days of pairData', async () => {
         const sources = signalSources();
         await openModal({mode: 'pair', signals: [LINEAR, COMPARISON_42], pairData: PAIR_DATA, signalSources: sources});
 
@@ -222,7 +214,7 @@ describe('ChartSettingsModal preview — saved local signals drawn through signa
     it.each([
         {label: 'its straight rates', inverted: false, levels: [0.5, 0.8, 0.625]},
         {label: 'with the signal’s _inverted: true, their reciprocals', inverted: true, levels: [2, 1.25, 1.6]},
-    ])('RED: a saved FX pair EUR-GBP is drawn from signalSources.fxPairData — $label', async ({inverted, levels}) => {
+    ])('a saved FX pair EUR-GBP is drawn from signalSources.fxPairData — $label', async ({inverted, levels}) => {
         const sources = signalSources();
         await openModal({mode: 'pair', signals: [LINEAR, fxPair(inverted)], pairData: PAIR_DATA, signalSources: sources});
 
