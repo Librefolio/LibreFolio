@@ -64,8 +64,8 @@
         /** Chart data points */
         chartData?: LineDataPoint[];
         /**
-         * The value on the first day of the series (Z-29b): the percentage view is measured from it, and the line's colour in
-         * the absolute view. A sampled series opens on the end of its first bucket, so its own first point is not it. Without
+         * The value on the first day of the series (Z-29b): the percentage view is measured from it, and the line's colour and
+         * dashed reference in the absolute view (`baselineValue`). A sampled series opens on the end of its first bucket, so its own first point is not it. Without
          * it, the first point is the base.
          */
         baseValue?: number | null;
@@ -274,6 +274,7 @@
                     viewMode={cardViewMode}
                     areaFill={chartSettings?.areaFill ?? true}
                     colorByBaseline={chartSettings?.colorByBaseline}
+                    baselineValue={baseValue ?? undefined}
                     showGridLines={chartSettings?.gridLines}
                     showGradient={chartSettings?.staleGradient ?? true}
                     {overlaySignals}
