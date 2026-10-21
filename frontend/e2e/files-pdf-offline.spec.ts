@@ -25,6 +25,13 @@
  *      `pdfium.<hash>.wasm` with a GET (the page itself only probes it, with a HEAD) and the app answered 200, so the
  *      log does see the worker; every viewer font asked for was a 200 from the app (a Latin text needs none: PDFium
  *      has its own faces for the standard fonts); and from the page jsDelivr is out of reach, its refusal recorded.
+ *      Under the Content-Security-Policy the backend enforces on every page of the app (H-55 v2, `connect-src`
+ *      without jsDelivr: `security_headers.py`, `PDF_VIEWER_CDN_ORIGIN`), the browser stops that fetch itself, before
+ *      the network layer and so before this spec's route sees it. The control proves the refusal either way — the
+ *      browser's (an enforced `connect-src` violation for exactly that address, recorded by the H-43 collector) or
+ *      the route's (the request in `refused`) — and if the policy ever allows the CDN, the route's. The violation is
+ *      raised on purpose: this test alone opts out of the collector's failure on an unknown violation
+ *      (`cspFailOnUnknown: false`), and checks itself that the probe is the only one the baseline does not know.
  *
  * Chinese, Japanese and Korean are out of scope on purpose: those fallback fonts, tens of megabytes each, still come
  * from the CDN on demand — a residual the decision above accepts — so a CJK PDF asks jsDelivr by design.
@@ -46,6 +53,7 @@
  */
 import {expect, test, type BrowserContext, type Page, type Request} from './fixtures/playwright';
 import {navigateTo} from './fixtures/auth-helpers';
+import type {CspViolation} from './fixtures/csp';
 import {TEST_USER} from './fixtures/test-users';
 import {waitForSettled} from './fixtures/app-events';
 import {uniqueSuffix} from './fixtures/unique';
@@ -57,6 +65,8 @@ const LOCAL_ENGINE_PATH = /^\/_app\/immutable\/assets\/pdfium\.[^/]+\.wasm$/;
 const LOCAL_VIEWER_FONT_PATH = /^\/_app\/immutable\/assets\/Noto[^/]+\.ttf$/;
 /** Positive control: an address on jsDelivr, the viewer's fallback host, that nothing in the app asks for. */
 const OFFLINE_PROBE_URL = 'https://cdn.jsdelivr.net/npm/librefolio-e2e-offline-probe/index.js';
+/** How long the browser's or the route's refusal of the probe may take to be recorded: a violation is reported to the collector by a binding call. */
+const PROBE_REFUSAL_TIMEOUT_MS = 10_000;
 /** The PDF's only text: Latin letters, nothing a CJK font is needed for. */
 const PDF_TEXT = 'LibreFolio offline PDF preview';
 
@@ -122,6 +132,20 @@ function laneRequests(network: OfflineNetwork, origin: string, path: RegExp): Re
 /** `<status> <method> <path>` of each request, once answered — `no answer` for one that failed. */
 async function answers(requests: Recorded[]): Promise<string[]> {
     return Promise.all(requests.map(async ({method, url, request}) => `${(await request.response())?.status() ?? 'no answer'} ${method} ${url.pathname}`));
+}
+
+/**
+ * Whether `violation` is the probe's: `connect-src`, blocked address exactly the probe's (its fragment, if the browser
+ * keeps one, aside). Either disposition: a lane that also sends the report-only policy (`LIBREFOLIO_CSP_REPORT_ONLY`, on
+ * in the managed profile) records the same block twice, once `enforce` and once `report`.
+ */
+function isProbeViolation(violation: CspViolation): boolean {
+    return violation.directive === 'connect-src' && violation.blockedURI.split('#')[0] === OFFLINE_PROBE_URL;
+}
+
+/** One line per violation: disposition, directive, what it blocked, and where. */
+function describeViolations(violations: CspViolation[]): string[] {
+    return violations.map((violation) => `${violation.disposition} ${violation.directive} blocked ${violation.blockedURI || '(nothing)'} at ${violation.sourceFile || violation.documentURI}:${violation.lineNumber}`);
 }
 
 /** Whether the page can fetch `url`: a `no-cors` fetch resolves on any answer, and rejects only when none came back. */
@@ -208,6 +232,11 @@ async function openPdfPreview(page: Page, fileId: string, filename: string): Pro
 }
 
 test.describe('PDF preview without internet (1.2 gap 7)', () => {
+    // The positive control below fetches jsDelivr on purpose, and the policy blocks it with an enforced connect-src
+    // violation the baseline does not (and must not) know: the collector records it and attaches it, but does not fail
+    // the test for it. The test checks itself that it is the only unknown violation. This describe holds this one test.
+    test.use({cspFailOnUnknown: false});
+
     let network: OfflineNetwork | undefined;
     /** Static files this test uploaded, deleted after it. */
     let ownedStaticFiles: string[] = [];
@@ -228,7 +257,7 @@ test.describe('PDF preview without internet (1.2 gap 7)', () => {
         }
     });
 
-    test('a one-page Latin PDF is drawn with every other origin refused: its engine from the app, nothing asked of a CDN', async ({page, baseURL}) => {
+    test('a one-page Latin PDF is drawn with every other origin refused: its engine from the app, nothing asked of a CDN', async ({page, baseURL, cspViolations}) => {
         const origin = laneOrigin(baseURL);
         const offline = network;
         if (!offline) throw new Error('beforeEach did not cut the browser off from other origins');
@@ -248,6 +277,9 @@ test.describe('PDF preview without internet (1.2 gap 7)', () => {
             // CDN is exactly what this spec looks for.
             const asked = askedOfOtherOrigins(offline, origin);
             expect.soft(asked, `the page was not drawn, and meanwhile the browser asked other origins:\n${asked.join('\n')}`).toEqual([]);
+            // The collector does not fail for the probe's violation here, so what else it saw is named now: a viewer blocked by
+            // the policy is as much this spec's subject as one waiting on an unreachable CDN.
+            expect.soft(describeViolations(cspViolations.unknown()), 'the page was not drawn, and meanwhile the policy blocked').toEqual([]);
             throw error;
         }
 
@@ -274,11 +306,19 @@ test.describe('PDF preview without internet (1.2 gap 7)', () => {
             `every fallback font the viewer asked for came from the app with a 200: ${fontAnswers.join(', ')}`,
         ).toEqual([]);
 
-        // Positive control: the browser really has no internet. From the page, jsDelivr is out of reach, and the refusal
-        // is this spec's, recorded.
+        // Positive control: the browser really has no internet. From the page, jsDelivr is out of reach — the fetch rejects —
+        // and the refusal is recorded, by whoever made it: the policy (an enforced connect-src violation for exactly the
+        // probe's address, as the page's own collector saw it; the fetch never reaches the route) or, if the policy allows
+        // the CDN, the spec's route (the request in `refused`). Polled: the violation is reported by a binding call.
         expect(await canReach(page, OFFLINE_PROBE_URL), 'positive control: from the page, jsDelivr is out of reach').toBe(false);
-        expect(offline.refused, 'positive control: the refusal is this spec’s, and it is recorded').toContain(`GET ${OFFLINE_PROBE_URL}`);
-        // And since the page was drawn, nothing but that probe went to another origin.
+        const refusal = () => (cspViolations.list().some((violation) => violation.disposition === 'enforce' && isProbeViolation(violation)) ? 'policy' : offline.refused.includes(`GET ${OFFLINE_PROBE_URL}`) ? 'route' : 'none');
+        await expect.poll(refusal, {message: 'positive control: the probe was refused by the policy (connect-src violation) or by the route (refused), and the refusal is recorded', timeout: PROBE_REFUSAL_TIMEOUT_MS}).not.toBe('none');
+        console.log(`offline probe refused by the ${refusal()}`);
+        // The probe's violation is the only one the baseline does not know: the collector no longer fails for the others,
+        // so the test does. Nothing else was blocked by the policy while the viewer drew the page.
+        expect(describeViolations(cspViolations.unknown().filter((violation) => !isProbeViolation(violation))), 'violations of the Content-Security-Policy the baseline does not know, other than the probe').toEqual([]);
+        // And since the page was drawn, nothing but that probe went to another origin (when the browser's own check
+        // stopped it before the network layer, it may not be in the log at all).
         expect(
             askedOfOtherOrigins(offline, origin).filter((entry) => entry !== `GET ${OFFLINE_PROBE_URL}`),
             'after the page was drawn, the browser asked other origins',

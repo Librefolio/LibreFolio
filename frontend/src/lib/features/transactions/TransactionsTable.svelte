@@ -766,7 +766,7 @@
                 const info = getAssetInfo(d.tx.asset_id);
                 const nameHtml = escapeHtml(info?.display_name ?? `#${d.tx.asset_id}`);
                 const iconSrc = info?.icon_url ?? (info?.asset_type ? getAssetTypeIconUrl(info.asset_type) : null);
-                const iconHtml = iconSrc ? `<img src="${escapeHtml(iconSrc)}" alt="" width="20" height="20" loading="lazy" class="inline-block mr-1 align-middle" onerror="this.style.display='none'" />` : '';
+                const iconHtml = iconSrc ? `<img src="${escapeHtml(iconSrc)}" alt="" width="20" height="20" loading="lazy" class="inline-block mr-1 align-middle" data-hide-on-error="display" />` : '';
                 return {
                     type: 'html',
                     html: `<span role="link" tabindex="0" data-asset-navigate="${d.tx.asset_id}" class="inline-flex items-center gap-1 min-w-0 cursor-pointer group" data-testid="tx-asset-link-${d.tx.asset_id}">${iconHtml}<span class="min-w-0 ${overflowScrollTextClass}">${nameHtml}</span><span class="shrink-0 opacity-0 group-hover:opacity-60 transition-opacity text-lf-muted text-[10px] ml-0.5">↗</span></span>`,

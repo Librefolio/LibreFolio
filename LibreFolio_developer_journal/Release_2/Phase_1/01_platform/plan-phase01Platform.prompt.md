@@ -10208,3 +10208,103 @@ mescolare le righe del runner dei due lotti:
    > `hosting-panel-vectors` 11, `config-audit` 255, `hosting-panel-access` 102, `config-env-example` 39; `i18n check` ok;
    > ruff e black puliti; `mkdocs build` stretto ok, `check-links` 97.
 7. ⏳ Checkpoint 2: CHECKPOINT READY aggiornato al coordinatore, FROZEN.
+
+#### H-55 v2, la CSP sempre applicata — esecuzione (ondata 3, notte 21→22/10, base `2879ae3e4`, corsia 6181)
+
+> Via del coordinatore (21/10, sera): kickoff `salvataggi-worktrees-20261021/ondata3/kickoff-H.md`. Contratto dei rossi,
+> scritto da H sul piano breve del 20/10: `h55_contract.md` (scratchpad della sessione), passi 1–5. I rossi
+> parcheggiati di H-55 v1 sono stati rifatti dai test-author sulla base di oggi, non applicati.
+
+**Passi**:
+0. ⏳ **Inventario**: slot chiesto al coordinatore (21/10, sera), comando
+   `... dev.py test --test-port 6181 --data-dir /tmp/librefolio-r13-h --lane-setting LIBREFOLIO_CSP_REPORT_ONLY=true all-frontend`.
+1. ✅ **Gli hash seguono la build** (21/10). Rossi in `test_managed_headers.py` (test-author), poi la cura.
+   > **Note implementazione**: `security_headers._BuildScriptHashes`: firma `(nome, st_mtime_ns, st_size)` delle pagine
+   > `*.html` della build (non nascoste); stessa firma → nessuna rilettura; firma nuova → hash ricalcolati; una pagina
+   > dell'ultima build buona mancante → restano gli ultimi hash buoni e la risposta dopo ricontrolla. Solo le pagine della
+   > web app fanno lo `stat`. La cache è per istanza del middleware.
+2. ✅ **La sonda a immagine, lato backend** (21/10). `GET /api/v1/auth/address-probe.png` in un modulo suo,
+   `api/v1/address_probe_image.py`, registrato da `router.py`: **`auth.py` non è toccato** (E-26 può partire). PNG 1×1
+   se il nonce è di questa istanza, 2×1 altrimenti, `Cache-Control: no-store`. Azione nuova `api address-probe-image`.
+   > **⚠️ Fuori pista**: il contratto diceva «nell'elenco di chi risponde a istanza bloccata, come la sonda JSON»; il
+   > test-author ha visto che la sonda JSON **non** ci sta (decisione A6a: il 401 fuori elenco si legge «non
+   > verificabile»), e un ingresso nuovo passa dal developer. Corretto: anche l'immagine resta fuori, ed è in
+   > `PUBLIC_READS_OUTSIDE_THE_LIST` di `test_instance_block.py`.
+   > **⚠️ Fuori pista**: l'helper di AP-IMG-06 leggeva `app.routes` piatto; con questa FastAPI un router incluso è un
+   > `_IncludedRouter` pigro. Riparato con `iter_route_contexts`, come in `test_instance_block.py`.
+3. ✅ **La politica applicata, lato backend** (21/10).
+   > **Note implementazione**: un solo `Content-Security-Policy` per risposta. Ogni documento: `object-src 'none'; base-uri
+   > 'self'; form-action 'self'` in ogni profilo; le pagine della web app in più `script-src 'self' 'wasm-unsafe-eval'
+   > 'report-sample' <hash>`, `worker-src 'self' blob:`, `connect-src 'self' <origine di LIBREFOLIO_PUBLIC_URL>
+   > [https://api.github.com nel self-hosted]`; `frame-ancestors` e `X-Frame-Options` con la protezione dai frame. Niente
+   > `default-src` né `style-src`. Il report-only resta, con le stesse sorgenti di `connect-src`. L'origine canonica ha una
+   > casa sola, `utils/runtime/origins.canonical_origin`, che ora usa anche `panel_audience` (H-61). Un
+   > `LIBREFOLIO_PUBLIC_URL` inservibile: nessuna origine aggiunta, un warning nel log alla costruzione (domanda aperta).
+   > **Rossi → verdi**: `managed-headers` 230 rossi (asserzioni sulla politica mancante) → 593 verdi; `security-headers` 15,
+   > `server-errors` 43, `config-audit` 255, i biglietti (212, 93, 11), `api address-probe-image` 14 (13 rossi prima),
+   > `address-probe` 28, `instance-block` 63 (1 rosso prima).
+4. ⏳ **Frontend (passi 2, 4 e 5): rossi scritti** (21/10, test-author), cura in bozza, ferma finché l'inventario non ha
+   fatto la sua build (altrimenti misurerebbe un frontend diverso da quello dichiarato).
+   > **Rossi** (Vitest, gruppi di 3 file, carico sotto 8): `addressProbe`, `emailLinks`, `cspNotice` → 60 falliti e 69
+   > passati; `securityFindings`, `checkGuides`, `cspEarlyListener.gate` → 15 falliti e 46 passati. Tutti per il motivo
+   > giusto: mancano `probeImageUrl` e il loader d'immagine, `cspNotice.ts`, il blocco di `app.html`, la voce
+   > `platform.blockedScript` e l'ancora `#csp`. E2E riscritti ma non lanciati (serve lo slot): `csp-collector.spec.ts`,
+   > AUSR-E-07 di `admin-users.spec.ts`.
+   > **Da adeguare**: `LinkShare.component.test.ts` (test-author in corso), `page-policy.spec.ts` (dopo l'inventario), le
+   > due azioni `core-unit` per i file Vitest nuovi nel runner.
+   > **⚠️ Fuori pista**: l'inventario era «senza codice»; quando lo slot è arrivato, il worktree aveva già i passi backend
+   > 1–3. Gira quindi sotto la politica applicata con il report-only sopra. Detto al coordinatore prima di partire.
+0. ✅ **Inventario** (21/10, 21:56 → 23:55; la corsa vera dura 1 h 37 min, il resto è l'attesa del lucchetto). Log in
+   `salvataggi-worktrees-20261021/ondata3/h55-inventory.log`; smistamento di un sotto-agente, verificato da me.
+   > **Attese**: F1, cheetah-grid (`eval`), già in baseline; F3, sonda d'indirizzo (`connect-src`), è AUSR-E-07. Più i rossi
+   > nuovi del lotto, prima della cura (`csp-collector`, i Vitest di sonda, avviso e scheda Sicurezza).
+   > **Da correggere nel codice**: `script-src-attr` inline su `/assets` (12), `/transactions` (26) e `/brokers/1` (1):
+   > 20 gestori `onerror="…"` scritti nelle stringhe HTML delle celle, in 10 file. Facevano fallire 21 test.
+   > **Nuove da coprire nella politica (decisione)**: `connect-src https://cdn.jsdelivr.net`, il CDN del visore PDF (i font
+   > CJK sempre, il motore se la copia locale non risponde). Bloccato; la sonda di `files-pdf-offline` ne è la prova.
+   > **Non CSP** (6): la cache di `asset-detail`, l'Esc del modale di `brokers-detail`, la finestra di date di `fx-sync`,
+   > `data-busy` della dashboard, il 409 del seed di YOC, e il ripiego sul CDN di `files.spec.ts:826`, che è CSP ma senza
+   > violazione registrata (il worker del motore).
+5. ✅ **Cura del frontend** (22/10, notte).
+   > **Note implementazione**:
+   > - `addressProbe.ts`: la sonda a immagine, con un `loadImage` iniettabile; `emailLinks.ts` passa `loadImage`;
+   > - `security/cspNotice.ts` (avviato nel layout radice): il buffer di `app.html`, l'ascoltatore, un `ReportingObserver`
+   >   bufferizzato; una riga in console per pagina; le sorgenti in `sessionStorage`; `readBlockedScripts()`;
+   > - la scheda Sicurezza: `platform.blockedScript` (`securityFindings.ts`, `securityChecks.svelte.ts`), il testo in 4
+   >   lingue, la voce `browser` di `checkGuides.json` → `admin/configuration/#csp`;
+   > - `app.html`: un blocco suo, in un `try`, **dopo** l'IIFE anti-FOUC; tema, `theme-color` e splash non toccati;
+   > - `security/imageErrorFallback.ts`: un solo ascoltatore in cattura sugli errori delle immagini, che legge
+   >   `data-hide-on-error` (display, visibility, next-sibling), `data-fallback-text` e `data-fallbacks`. I 20 gestori
+   >   inline sono diventati attributi; `getExhaustedScript` di `brokerHelpers.ts` è tolto. Il gate
+   >   `noInlineEventHandlers` vieta di riscriverne;
+   > - `csp-baseline.json`: F3 tolta, F1 col motivo corretto (istanbul usa `globalThis`);
+   > - il CDN del visore PDF in un punto solo: `security_headers.PDF_VIEWER_CDN_ORIGIN` ed `EXTRA_CONNECT_SOURCES = ()`.
+   > **Verdi** (Vitest a gruppi di 3): sonda, link e avviso 129; scheda Sicurezza, guide e gate di `app.html` 61; ripiego delle
+   > icone, gate degli inline e `LinkShare` 60; `managed-headers` 593.
+   > **⚠️ Fuori pista**: il gate degli inline ha trovato due casi che non si limitano a nascondere l'icona: le iniziali del
+   > fornitore (`providerHelpers.ts:61`) e la catena delle icone del broker (`brokerHelpers.ts`). Coperti da due attributi
+   > in più, con i loro rossi.
+6. ✅ **Spec E2E, controlli pesanti, auto-revisione** (22/10, notte).
+   > **Note implementazione**:
+   > - `page-policy.spec.ts` non inietta più `PAGE_POLICY`: legge l'header della corsia (un solo campo, il trio,
+   >   `frame-ancestors` se e solo se `X-Frame-Options`);
+   > - `files-pdf-offline.spec.ts`: la sonda del CDN la rifiuta o la CSP (violazione `connect-src` attesa da quel test) o la
+   >   rotta;
+   > - `files.spec.ts:826` (il ripiego del motore PDF sul CDN) resta rosso per scelta, legato alla domanda sul CDN: senza
+   >   CDN il visore non ha uno stato di errore e gira all'infinito, come già oggi senza internet.
+   > **Controlli** (in `flock`): gate dei temi e degli HTML 211, `core-unit` 9 955, `component-unit` 5 245, `front check` 0
+   > errori, `mkdocs build` stretto ok, `check-links` 97.
+   > **⚠️ Fuori pista**: `front check` cadeva (1 errore) su `ForgotPasswordCard.email.test.ts` di E, «Type instantiation is
+   > excessively deep», in un `vi.spyOn(zodiosApi, …)`. La causa era la mia rotta a immagine, un alias in più nel client
+   > generato. Ora è fuori dallo schema OpenAPI (`include_in_schema=False`: la legge un `<img>`, mai il client), e il
+   > controllo dà 0. Il tipo di `zodiosApi` resta al limite: la prossima rotta nuova potrebbe rifarlo cadere.
+   > **⚠️ Fuori pista**: `mkdocs build` stretto cadeva su due link `configuration.md#csp` da pagine con traduzioni (ancora
+   > assente in it/fr/es): ora puntano alla pagina senza ancora, nominando la sezione. `check-links` cadeva sulla costante
+   > della guida in `cspNotice.ts`. `MKDOCS_ANCHOR_EXCEPTIONS` «deve solo accorciarsi» e non l'ho toccata: la riga in
+   > console legge la guida da `checkGuides.json` (la stessa della scheda Sicurezza), dove il debito
+   > `es/fr/it:configuration#csp` è dichiarato dalla ratchet del suo test.
+   > **Auto-revisione di sicurezza** (sotto-agente, sul diff di H-55): nessun problema alto o medio. Accolto il
+   > rafforzamento proposto: `canonical_origin` rifiuta un host con `;`, virgolette, spazi o virgole, un IPv6 che non è un
+   > indirizzo e un id di zona; i nomi internazionali in punycode. Test nuovo `utils origins`, 67 casi (2 rossi prima della
+   > cura dell'id di zona).
+7. ⏳ **Passo 5**: la corsa E2E completa sotto la politica, nello slot del coordinatore.

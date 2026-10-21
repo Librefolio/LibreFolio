@@ -6,6 +6,7 @@ Aggregates all v1 endpoints.
 from fastapi import APIRouter, Depends
 
 from backend.app.api.v1 import (
+    address_probe_image,
     ai_export,
     assets,
     auth,
@@ -38,6 +39,7 @@ router = APIRouter(dependencies=[Depends(refuse_when_blocked)])
 
 # Include sub-routers
 router.include_router(auth.router)  # Auth first (no prefix, uses /auth)
+router.include_router(address_probe_image.router)  # The address probe as an image, /auth/address-probe.png (H-55 v2)
 router.include_router(ai_export.router)
 router.include_router(settings.router)  # Settings
 router.include_router(plugin_settings.router)  # Plugin settings (/settings/plugins)

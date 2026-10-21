@@ -1182,8 +1182,8 @@ started: it is `ok` at startup, so the startup audit never logs it.
 | `platform.session_cookie` | `SESSION_COOKIE_SECURE=never` | `warning` |
 | `platform.client_address` | Since the start, forwarding headers came from an untrusted local peer ([Behind a Proxy Nobody Trusts](#untrusted-proxy)): `instance.checks.clientAddress.untrustedProxy`, `detail` `{"headers": …}` with the names met, such as `"X-Forwarded-For, X-Real-IP"`, summary `UNTRUSTED_PROXY_SUMMARY` | `warning` |
 | `platform.client_address` | Since the start, they came from untrusted public peers only: `instance.checks.clientAddress.publicForwarding`, the names met in `headers`, summary `PUBLIC_FORWARDING_SUMMARY` | `info` |
-| `platform.frame_protection` | `LIBREFOLIO_FRAME_PROTECTION` is off with `LIBREFOLIO_PROFILE=managed`, whose entry in `PROFILE_DEFAULTS` turns it on ([Frame Protection and the Report-Only Policy](#managed-headers)): a value set in the environment or in `.env`, or the entry lost from the table. `instance.checks.frameProtection.offManaged`, summary `LIBREFOLIO_FRAME_PROTECTION is off in the managed profile: any site can show LibreFolio in a frame; the managed profile turns it on` | `warning` |
-| `platform.csp_report_only` | `LIBREFOLIO_CSP_REPORT_ONLY` is off with `LIBREFOLIO_PROFILE=managed`, the same way: `instance.checks.cspReportOnly.offManaged`, summary `LIBREFOLIO_CSP_REPORT_ONLY is off in the managed profile: browsers list no Content-Security-Policy violation; the managed profile turns it on`. Only an `info`: the policy reports, and never blocks | `info` |
+| `platform.frame_protection` | `LIBREFOLIO_FRAME_PROTECTION` is off with `LIBREFOLIO_PROFILE=managed`, whose entry in `PROFILE_DEFAULTS` turns it on ([The Content-Security-Policy and Frame Protection](#managed-headers)): a value set in the environment or in `.env`, or the entry lost from the table. `instance.checks.frameProtection.offManaged`, summary `LIBREFOLIO_FRAME_PROTECTION is off in the managed profile: any site can show LibreFolio in a frame; the managed profile turns it on` | `warning` |
+| `platform.csp_report_only` | `LIBREFOLIO_CSP_REPORT_ONLY` is off with `LIBREFOLIO_PROFILE=managed`, the same way: `instance.checks.cspReportOnly.offManaged`, summary `LIBREFOLIO_CSP_REPORT_ONLY is off in the managed profile: browsers list no Content-Security-Policy violation; the managed profile turns it on`. Only an `info`: the wider policy it adds only reports, and never blocks; the enforced policy is on in every profile | `info` |
 | `platform.log_level` | `LOG_LEVEL`, after the `LIBREFOLIO_LOG_LEVEL` override, is `DEBUG` or `TRACE` | `info` |
 | `platform.hosting_panel` | `LIBREFOLIO_WAKE_TOKEN` or `LIBREFOLIO_PANEL_STATUS_TOKEN`, or its `_FILE`, is set but cannot be used (`wake_token()`, `panel_status_token()`; lot H-61): their routes answer `503` ([The Hosting Panel's Access](#panel-access)). `instance.checks.hostingPanel.unusable`, `detail` `{"variables": …}`, the unusable variables in that order, comma-separated, never a value; the summary adds each one's code, `FILE_UNREADABLE` for a `SecretFileError`: `A hosting panel token cannot be used, and its route answers 503 to every call: LIBREFOLIO_WAKE_TOKEN (WAKE_TOKEN_TOO_SHORT)`. `ok` otherwise: `instance.checks.hostingPanel.off` while neither is set, `instance.checks.hostingPanel.ok` while each one set can be used. The backup token has workstream B's `backup.panel_token`, below | `error` |
 | `platform.test_mode` | `LIBREFOLIO_TEST_MODE` is on (`is_test_mode()`: `1`, `true` or `yes`, in any case) outside a test lane, with `LIBREFOLIO_TEST_LANE_ID` unset, or not 16 to 128 characters once stripped (`owning_test_lane_id()`, H-49): `instance.checks.testMode.outsideTestLane`, `detail` `{"data_dir": …}`, the test data directory in use (`str(get_data_dir())`), summary `TEST_MODE_OUTSIDE_LANE_SUMMARY`, `LIBREFOLIO_TEST_MODE is on outside a test lane: test-only providers are served, the data are kept in the test data directory <data_dir> and .env is not read; unset it on a production instance`. The same in every profile (below) | `error`; with `LIBREFOLIO_PROFILE=managed`, `log_configuration_audit()` stops the startup first |
@@ -1382,6 +1382,7 @@ All endpoints that access or modify user data require a valid session cookie (`D
 | `/auth/password-reset` | POST | Spend a password-reset link: a new password, under the [password rules](#password-rules), and every session of the account ended |
 | `/auth/setup` | POST | Spend the setup link of the [initial administrator](access_control.md#initial-admin): its password, under the [password rules](#password-rules), the account activated and signed in |
 | `/auth/address-probe` | GET | Whether this instance issued a nonce: `{match}` and nothing else, readable from any origin; see [Address Probe](#address-probe) |
+| `/auth/address-probe.png` | GET | The same bit as the width of a PNG, 1×1 or 2×1 (H-55 v2); see [Address Probe](#address-probe) |
 | `/system/health` | GET | Health check: the server answers |
 | `/system/info` | GET | System information, the app version only without a valid session (`SystemInfoPublicResponse`) and everything with one (`SystemInfoResponse`): see [System information and readiness](#system-info-and-readiness) |
 | `/system/instance` | GET | Public instance configuration, needed before sign-in: see [Public instance configuration](settings.md#public-instance-configuration), and [The First-Account Flag](#first-account-open) for the one fact about the users it tells |
@@ -1831,7 +1832,7 @@ valid session gets these answers:
 | Routes | Not blocked | Blocked |
 |--------|-------------|---------|
 | Protected routes outside the list | `401` | The same `401` |
-| Public routes outside the list: `POST /auth/register`, `POST /auth/setup` (the [initial administrator](access_control.md#initial-admin): a blocked instance stays blocked until the subscription is paid, P16), `POST /email/verification/confirm` ([spends a verification link](../backend/email.md#api-verification-confirm)), `POST /email/verification/resend` ([sends the verification email again](../backend/email.md#api-verification-resend), with the sign-in's credentials instead of a session), `GET /auth/address-probe`, `GET /utilities/*`, `GET /ai-export/catalog` | Their usual answer | `401` |
+| Public routes outside the list: `POST /auth/register`, `POST /auth/setup` (the [initial administrator](access_control.md#initial-admin): a blocked instance stays blocked until the subscription is paid, P16), `POST /email/verification/confirm` ([spends a verification link](../backend/email.md#api-verification-confirm)), `POST /email/verification/resend` ([sends the verification email again](../backend/email.md#api-verification-resend), with the sign-in's credentials instead of a session), `GET /auth/address-probe` and `GET /auth/address-probe.png`, `GET /utilities/*`, `GET /ai-export/catalog` | Their usual answer | `401` |
 | The routes of the list | Their usual answer | The same answer |
 
 - The protected routes and the routes of the list do not reveal the block: `/system/instance`,
@@ -2651,15 +2652,19 @@ something. `backend/app/services/accounts/address_probe.py` does it with a signe
 
 1. the browser asks its own instance for a nonce: `POST /api/v1/users/address-probe`, administrators only
    (`require_admin`), `200` `{nonce, expires_at}` (`AddressProbeIssued`), a new nonce at every call;
-2. it sends the nonce, without credentials, to `GET <address>/api/v1/auth/address-probe?nonce=…`, which is
-   public and answers `200` `{"match": true}` only when the instance there issued the nonce,
-   `{"match": false}` otherwise (`AddressProbeResult`), and nothing else.
+2. it sends the nonce, without credentials, to `GET <address>/api/v1/auth/address-probe.png?nonce=…` (H-55 v2: an
+   image, see [The Address Check Is an Image](#csp-address-probe)): public, a PNG of 1×1 only when the instance there
+   issued the nonce, of 2×1 otherwise. The older JSON route, `GET <address>/api/v1/auth/address-probe?nonce=…`, answers
+   `200` `{"match": true}` or `{"match": false}` (`AddressProbeResult`), and nothing else; it stays for `curl` and older
+   clients, and the paragraphs below about CORS and `fetch` describe it.
 
 **In the app.** `LinkShare`, the panel of the Users tab's invitation and password-reset dialogs, runs the check
 through `checkAddress()` (`frontend/src/lib/features/settings/users/addressProbe.ts`), and only for an address the
-administrator changed, 500 ms after the last keystroke. The nonce comes through the Zodios client; the check is a bare
-`fetch`, a CORS simple request (see [the warning below](#address-probe-cors)), abandoned after 8 s. A readable
-`{"match": true}` or `{"match": false}` reads *match* or *mismatch*; anything else reads *unverifiable*, never *no*.
+administrator changed, 500 ms after the last keystroke. The nonce comes through the Zodios client; the check loads an `Image` of the address
+(`referrerPolicy = 'no-referrer'`, no `crossOrigin`), abandoned after 8 s, and reads its `naturalWidth`: 1×1 reads
+*match*, 2×1 *mismatch*; any other size, a failed load or the timeout reads *unverifiable*, never *no*. (Until H-55 v2 it
+was a bare `fetch` of the JSON route, a CORS simple request: see [the warning below](#address-probe-cors); an enforced
+`connect-src` blocks it for another origin.)
 No verdict stops the administrator from copying the link. Component side:
 [LinkShare](../frontend/components/features/settings.md#linkshare).
 
@@ -3085,8 +3090,9 @@ to the log: see [Request Logs](#request-logs).
 `SecurityHeadersMiddleware` (`backend/app/services/platform/security_headers.py`), the `security_headers` entry of
 `MIDDLEWARE_STACK` (see [Steps and Middleware: the Contract](overview.md#lifecycle-contract)), adds the security headers
 of decision D5. Two of them, `ALWAYS_HEADERS`, go on every HTTP response of the app: API answers, the web app, the
-documentation and the files, compressed or not, errors included. Two switches add more, off on a self-hosted install and
-on in the managed profile: see [Frame Protection and the Report-Only Policy](#managed-headers).
+documentation and the files, compressed or not, errors included. A `Content-Security-Policy` is enforced on every
+document too, in every profile, and two switches add more, off on a self-hosted install and on in the managed profile: see
+[The Content-Security-Policy and Frame Protection](#managed-headers).
 
 | Header | Value | Effect |
 |--------|-------|--------|
@@ -3121,192 +3127,172 @@ on in the managed profile: see [Frame Protection and the Report-Only Policy](#ma
   `SERVED_TYPES` (JavaScript, CSS, JSON and source maps, the web manifest, WebAssembly, SVG, the fonts) to
   `mimetypes` for the whole process, so these extensions get the same type on every machine.
 
-### 🖼️ Frame Protection and the Report-Only Policy {: #managed-headers }
+### 🛡️ The Content-Security-Policy and Frame Protection {: #managed-headers }
 
-The part of decision D5 meant for the [managed profile](../../admin/hosting_providers.md#managed-profile): two `bool`
-switches of `Settings`, `False` in the code and `True` in `PROFILE_DEFAULTS["managed"]` (see
-[Settings System](settings.md)). Each can be set on its own, in either profile, and a value set in the environment or in
+Decision D5 for the [managed profile](../../admin/hosting_providers.md#managed-profile), and, since H-55 v2, the
+Content-Security-Policy **always enforced** (developer decision of 19/10: on by default in every profile, no switch, a
+mesh widened only where it is truly needed). Two `bool` switches of `Settings`, `False` in the code and `True` in
+`PROFILE_DEFAULTS["managed"]` (see [Settings System](settings.md)), still add to it: `LIBREFOLIO_FRAME_PROTECTION` and
+`LIBREFOLIO_CSP_REPORT_ONLY`. Each can be set on its own, in either profile, and a value set in the environment or in
 `.env` wins over the profile. In the managed profile, a switch that is off shows in the
 [configuration checks](#configuration-checks): `platform.frame_protection`, a `warning`, and `platform.csp_report_only`,
-an `info` (H-39).
+an `info` (H-39). The enforced policy has no check: it cannot be off. For administrators:
+«The Content-Security-Policy» in [Configuration](../../admin/configuration.md).
 
-| Switch | Header | Value | Sent on |
-|--------|--------|-------|---------|
-| `LIBREFOLIO_FRAME_PROTECTION` | `X-Frame-Options` | `SAMEORIGIN` | Every HTTP response, a `304` included |
-| `LIBREFOLIO_FRAME_PROTECTION` | `Content-Security-Policy` | `PAGE_POLICY`: `frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'` | Documents, whatever the path (H-45): HTML (the web app's pages, the documentation, Swagger UI and ReDoc), XHTML, SVG and XML, any type ending with `+xml` included; never a `304` |
-| `LIBREFOLIO_FRAME_PROTECTION` | `Content-Security-Policy` | `frame-ancestors 'self'`, that directive only | Every other response but a `304` |
-| `LIBREFOLIO_CSP_REPORT_ONLY` | `Content-Security-Policy-Report-Only` | `CSP_REPORT_ONLY_POLICY`, below, with the hashes of the build's inline scripts in its `script-src` (`report_only_policy()`, H-52) | The HTML pages of the web app (`text/html` exactly); never a `304` |
+One `Content-Security-Policy` field per response (never two), and the module's docstring
+(`backend/app/services/platform/security_headers.py`) is the reference:
 
-- **Frame protection** (`FRAME_HEADERS`, or `PAGE_FRAME_HEADERS` on a document) is enforced: only the app's own
-  pages may frame it, so a hosting panel or a dashboard on another origin that shows the app in a frame is refused by
-  the browser. Its two headers go where `ALWAYS_HEADERS` go: API answers, the web app, the documentation, the files,
-  the CORS preflights (the `cors` entry is inside this one) and the middleware's own 500; a `304` gets only
-  `X-Frame-Options` (below). `X-Frame-Options` is the same on all of them; the `Content-Security-Policy` follows
-  the response's type, read at `http.response.start`. `_media_type()` takes the first `content-type` header, the part
-  before `;`, stripped and in lower case (`""` when there is none), so case and parameters (`; charset=utf-8`) do not
-  count. `_is_document()` (H-45) holds when that type is in `DOCUMENT_MEDIA_TYPES` (`text/html`,
-  `application/xhtml+xml`, `image/svg+xml`, `application/xml`, `text/xml`) or ends with `DOCUMENT_MEDIA_TYPE_SUFFIX`
-  (`+xml`: `application/atom+xml`, `application/rss+xml`, …). A document gets `PAGE_FRAME_HEADERS`, whose policy is
-  `PAGE_POLICY`, whatever the path: the web app's pages, the client-side routes the SPA catch-all answers and the HTML
-  files of the build, the documentation under `/mkdocs` and its sitemap, Swagger UI and ReDoc, the HTML 404 the
-  catch-all answers for an unknown API path, and an SVG or an XML document wherever it comes from. Every other
-  response keeps `frame-ancestors 'self'` alone: a PDF, JSON and any `+json` type (`application/problem+json`), plain
-  text, an image other than SVG, a script, a style sheet, a response without `Content-Type` such as a `204`, the
-  CORS preflights, which are plain text, and the 500, which is JSON since H-60. `_is_html()`, an exact match on
-  `text/html` since H-45 (H-42's prefix test also took an invented `text/htmlx`, harmlessly), serves only the
-  report-only policy: `_is_web_app_page()`, below, applies it, then the path.
-- **Three more directives on documents** (H-42). `PAGE_POLICY` adds to `frame-ancestors 'self'` three directives that
-  touch no script, so they can be enforced today while `script-src` stays report-only: `object-src 'none'`, no plugin
-  content (`<object>`, `<embed>`); `base-uri 'self'`, no injected `<base>` sending the page's relative URLs to another
-  origin; `form-action 'self'`, no form sending its data to another site. The report-only policy already listed the
-  three, and is unchanged. Nothing LibreFolio serves needs what they forbid: the app's sources, every page of the
-  built documentation and the pages FastAPI writes for Swagger UI and ReDoc hold no `<object>`, `<embed>` or
-  `<base>`, and no form of the app or of the documentation (its palette switch and its search) has an `action`. No
-  switch of their own: with `LIBREFOLIO_FRAME_PROTECTION` off, the self-hosted default, nothing changes; an install
-  that turns it on gets the three with `frame-ancestors`. A route's own `Content-Security-Policy` is still kept
-  alone, on an HTML page too: such a page carries only what its route's policy says.
-- **Why documents only.** The three mean something only for a document, a response the browser renders as a page:
-  HTML and, since H-45, the other markup it renders, XHTML, SVG and XML. And Chromium shows an inline PDF with a
-  viewer it treats as a plugin, so `object-src 'none'` on the PDF's own answer could stop it showing the file. That
-  comes from documentation and reports, and no test here can verify it: headless Chromium has no PDF viewer. The app's
-  preview draws a PDF with EmbedPDF, its PDFium engine compiled to WebAssembly, without that viewer; the preview's
-  fallback, an `<iframe>` on the file's own URL, loads a PDF answer, which keeps `frame-ancestors 'self'` alone:
-  `/api/v1/uploads/file/{id}`, or `/api/v1/brokers/import/files/{id}/download?download=false` for a broker's file.
-  What LibreFolio serves of the new types today: no SVG, neither in the web app's build nor in the built documentation
-  nor in the plugins' static folders, and no XML but the documentation's sitemap, `sitemap.xml`, which holds no
-  `<object>`, `<embed>`, `<base>` or form, and its gzip copy `sitemap.xml.gz`, which `FileResponse` sends with the
-  same type (to `mimetypes`, `.gz` is an encoding). A user's SVG or XML never comes inline as a document: an upload
-  goes out as an attachment (`/api/v1/uploads/file/{id}`), its text preview as `text/plain`, and its image preview
-  (`img_preview`) refuses an SVG, since the preview resizes with Pillow, which cannot open one, and answers `500`; a
-  broker's file is shown inline only for `INLINE_SAFE_MEDIA_TYPES` (`backend/app/api/v1/brokers.py`), which has no
-  SVG or XML. The plugin-asset route (`/api/v1/uploads/plugin/…`) would serve a plugin's own SVG inline, and it would
-  get the policy. H-45 is thus defence in depth, with no visible change today.
-- **No policy on a `304`** (H-45). A `304` gets neither `Content-Security-Policy` nor
-  `Content-Security-Policy-Report-Only` from the middleware, whatever its headers, with a `Content-Type` or without
-  one: its status picks `self.not_modified_headers`, which is `self.headers` without `content-security-policy`.
-  `X-Frame-Options` (when frame protection is on), `X-Content-Type-Options` and `Referrer-Policy` go on it as on any
-  other response, and a header the route set on its `304`, a policy included, is kept: the middleware only adds what
-  is missing. Why: a browser that revalidates a response it cached freshens it with the header fields of the `304`
-  (RFC 9111 §4.3.4), and Starlette's `304`, the `NotModifiedResponse` of `StaticFiles`, keeps only `Cache-Control`,
-  `Content-Location`, `Date`, `ETag`, `Expires` and `Vary`. With no `Content-Type`, it used to get
-  `frame-ancestors 'self'` alone, which would replace the `PAGE_POLICY` of the cached document. Checked in Chromium 149
-  with a probe outside the app, a server of Python's standard library: a page served `200` with `PAGE_POLICY`, then
-  revalidated with a `304` carrying `frame-ancestors 'self'` alone, no longer refused an injected `<base>`; with no
-  policy on the `304`, or with `PAGE_POLICY` on it, the page still refused it. Today only `StaticFiles` answers `304`,
-  in the `/_app` mount (`ImmutableStaticFiles`), which holds no document; `/`, the web app's pages and `/mkdocs` go
-  through `FileResponse`, which in Starlette 1.6 never answers `304`: it reads neither `If-None-Match` nor
-  `If-Modified-Since`. The guard is thus latent: it would matter for an SVG under `/_app`, and for every page if an
-  upgrade of Starlette gave `FileResponse` conditional answers.
-- **The report-only policy blocks nothing**: the browser lists each violation in its developer console. There is no
-  report endpoint: the policy has no `report-uri` or `report-to`, and no `Report-To` or `Reporting-Endpoints` header
-  is sent.
-- **`'report-sample'`** (H-52). With it in `script-src`, Chromium puts the first 40 characters of a blocked script or
-  `eval` in the violation's `sample`. Today only the page's own `securitypolicyviolation` event sees them, since the
-  policy names no report endpoint; if one is ever added (`report-uri`, `report-to`), those characters leave the
-  browser with every report.
-- **Where the report-only policy goes.** `_is_web_app_page()` decides at `http.response.start`, from the response's
-  `Content-Type` and `scope["path"]`: the media type `_media_type()` reads must be exactly `text/html` (`_is_html()`),
-  and the path must be outside `/mkdocs` (bare or `/mkdocs/…`) and `/api` (bare or `/api/…`); a `304` never gets the
-  policy, whatever its type and path (above). The middleware is outside GZip, so a compressed page still says
-  `text/html`. The policy thus reaches `/`, the client-side routes the SPA catch-all answers and the HTML files of the
-  build (`200.html`, `offline.html`). Left out on purpose: the documentation, a separate site that this policy does not
-  describe; Swagger UI and ReDoc (`/api/v1/docs`, `/api/v1/redoc`), which load their scripts from a CDN, so a
-  `default-src 'self'` report there would be pure noise; the HTML 404 that the catch-all answers for an unknown API
-  path; every other document, an SVG or an XHTML page even on a web-app path, which gets `PAGE_POLICY` and no
-  report-only header; and every response that is not a document: JavaScript, JSON, text files, the CORS preflights,
-  which are plain text, and the 500, which is JSON.
-- **The inline scripts, by their hashes** (H-52). `spa_inline_script_hashes(build_dir)`
-  (`backend/app/services/platform/static_site.py`) reads every top-level `*.html` of the build, `frontend/build/`
-  (today `index.html`, `200.html` and `offline.html`; never a hidden one, which no route serves), and gives the CSP
-  source expression `'sha256-<base64>'` of every `<script>` without `src`, whatever its `type`: its text with the line
-  ends the HTML parser leaves (CR LF and a lone CR become LF), encoded in UTF-8, each expression once, sorted.
-  `report_only_policy(hashes)` (`security_headers.py`) appends them to the `script-src` of `CSP_REPORT_ONLY_POLICY`.
-  Without a build there is no hash, and a page that cannot be read is left out with a warning: the server starts all
-  the same, and the browser reports what the policy then lacks.
-- **Read once.** `SecurityHeadersMiddleware.__init__` reads both switches from `get_settings()`, so they are read when
-  the middleware is built, never per request. Starlette builds the middleware stack lazily, at the app's first ASGI
-  call: for the real app, the lifespan startup. Changing a switch takes a restart, and the tests build a fresh app for
-  each configuration. With the report-only policy on, `__init__` also builds that header, once, with the hashes of the
-  build it finds then; with the policy off, the build is never read. A new frontend build therefore takes a restart
-  too: SvelteKit's start script names the build's own chunks, so its hash changes with every build.
+| Response | Enforced directives | Constant |
+|----------|---------------------|----------|
+| A document, any path: HTML (the web app's pages, the documentation, Swagger UI and ReDoc), XHTML, SVG, XML, any type ending with `+xml` (H-45); not a PDF | `object-src 'none'; base-uri 'self'; form-action 'self'` | `DOCUMENT_DIRECTIVES` |
+| A page of the web app (`text/html` exactly, outside `/mkdocs` and `/api`), in addition | `script-src 'self' 'wasm-unsafe-eval' 'report-sample'` and the sorted hashes of the build's inline scripts; `worker-src 'self' blob:`; `connect-src 'self'`, then the origin of `LIBREFOLIO_PUBLIC_URL`, then `https://api.github.com` in the `selfhosted` profile only | `WEB_APP_SCRIPT_SRC`, `WEB_APP_WORKER_SRC`, `web_app_policy()`, `connect_sources()` |
+| Every response, with `LIBREFOLIO_FRAME_PROTECTION` on | `frame-ancestors 'self'` (first), and the `X-Frame-Options: SAMEORIGIN` header | `FRAME_ANCESTORS`, `PAGE_POLICY` |
+| A non-document with frame protection off | no policy | |
 
-`CSP_REPORT_ONLY_POLICY`, directive by directive:
+Never in the enforced header: `default-src`, `style-src`, `img-src`, `font-src`, `frame-src`. Styles, images (asset and
+broker icons are set by URL), fonts and frames stay free, and framing the app (a Home Assistant panel) stays a
+legitimate self-hosted use, controlled by frame protection alone. What each directive is for:
+
+- **The trio on every document** (H-42, H-45, now always): no plugin content (`<object>`, `<embed>`), no injected
+  `<base>` sending relative URLs elsewhere, no form sending its data to another site. LibreFolio uses none of them. Not a
+  PDF: Chromium shows an inline PDF with a viewer it treats as a plugin, which `object-src 'none'` on the PDF's own
+  answer could stop. A user's SVG or XML never comes inline as a document (an upload is an attachment, its text preview
+  is `text/plain`), so the document types are defence in depth.
+- **`script-src`** is the point of the lot: only the app's own scripts, and an inline script only by its hash.
+  `'wasm-unsafe-eval'` lets WebAssembly compile, for the PDF viewer (EmbedPDF's PDFium). `'report-sample'` puts the first
+  40 characters of a blocked script or `eval` in the page's own `securitypolicyviolation` event; there is no report
+  endpoint, so they never leave the browser (if one is ever added, they would).
+- **`worker-src 'self' blob:`**: without it workers follow `script-src`, which has no `blob:`, and the PDF viewer's
+  workers are blocked.
+- **`connect-src`**: the app's origin, the canonical origin of `LIBREFOLIO_PUBLIC_URL` (`canonical_origin()`,
+  `backend/app/utils/runtime/origins.py`: `scheme://host[:port]`, lower case, no default port, the same form as the
+  hosting panel's audience), and GitHub's API for the update check, which runs in the administrator's browser
+  (`frontend/src/lib/features/update-check/updateCheck.ts`; the managed profile never makes it, and gets no GitHub
+  source). A `LIBREFOLIO_PUBLIC_URL` that cannot be used (`env_url()` raises) adds nothing,
+  logs one warning when the middleware is built, and the server keeps serving.
+- **Frame protection** (`LIBREFOLIO_FRAME_PROTECTION`): `X-Frame-Options: SAMEORIGIN` on every response (a `304`
+  included) and `frame-ancestors 'self'` in its policy; only the app's own pages may frame it, so a hosting panel or a
+  dashboard on another origin is refused by the browser. The policy of a response follows its type, read at
+  `http.response.start`: `_media_type()` takes the first `content-type`, the part before `;`, stripped and lower case
+  (`""` when there is none); `_is_document()` holds when that type is in `DOCUMENT_MEDIA_TYPES` (`text/html`,
+  `application/xhtml+xml`, `image/svg+xml`, `application/xml`, `text/xml`) or ends with `+xml`; `_is_web_app_page()`
+  requires exactly `text/html` and a path outside `/mkdocs` (bare or `/mkdocs/…`) and `/api` (bare or `/api/…`).
+  The middleware is outside GZip, so a compressed page still says `text/html`. The pages of the documentation, Swagger
+  UI and ReDoc, the HTML 404 for an unknown API path and any non-HTML document get the trio (and `frame-ancestors`) but
+  no `script-src`: the documentation is a separate site this policy does not describe, and Swagger UI and ReDoc load
+  their scripts from a CDN.
+- **No policy on a `304`** (H-45). `self.not_modified_headers` has no `content-security-policy`: a browser freshens the
+  response it cached with the header fields of a `304` (RFC 9111 §4.3.4), and Starlette's `NotModifiedResponse`
+  (`StaticFiles`, the `/_app` mount) has no `Content-Type`, so a policy on it would replace the cached document's
+  (checked in Chromium 149). `X-Frame-Options`, `nosniff` and `Referrer-Policy` still go on it. `FileResponse` (the pages,
+  the documentation) never answers `304`, so the guard is latent.
+- **A header the route set is kept**, names compared whole: a route's own `Content-Security-Policy` leaves the middleware's
+  out, and the report-only one is its own field.
+
+#### 🔄 The Hashes Follow the Build {: #csp-build-hashes }
+
+`spa_inline_script_hashes(build_dir)` (`backend/app/services/platform/static_site.py`) reads every top-level `*.html` of
+`frontend/build/` (today `index.html`, `200.html`, `offline.html`; never a hidden one) and gives the source expression
+`'sha256-<base64>'` of every `<script>` without `src`, whatever its `type`: its text with the line ends the HTML parser
+leaves (CR LF and a lone CR become LF), UTF-8, each once, sorted. SvelteKit has no `csp` option here and adds no nonce, and
+its start script names the build's own chunks, so its hash changes with every build.
+
+Before H-55 v2 the hashes were read once, when the middleware was built, and a build made while the server ran left a blank
+page under an enforced policy. Now `_BuildScriptHashes` (a cache of the middleware) keeps the hashes of the build as it is:
+
+- the signature of the build is, for every `*.html` directly in `static_site.FRONTEND_BUILD_DIR` whose name does not start
+  with `.`, `(name, st_mtime_ns, st_size)`, sorted: one `stat` per page, paid by web-app HTML responses only (never an
+  asset, an API answer or `/mkdocs`);
+- the same signature as last time: no page is read again (`static_site.spa_inline_script_hashes` is looked up as a module
+  attribute at each miss, so a test can count its calls); a changed one: the hashes are recomputed and used from that
+  response on, in the enforced header and in the report-only one;
+- a page of the last good signature missing now (the build being written): the last good hashes stay and the next
+  web-app response checks again; no build, ever: no hash, just `'self'`.
+
+So a new frontend build needs **no restart**. What is read once, when the middleware is built, are the settings:
+frame protection, report-only, the profile and `LIBREFOLIO_PUBLIC_URL`; Starlette builds the stack lazily at the app's first
+ASGI call. A change of any of them takes a restart.
+
+#### 🕵️ A Script Nobody Sent {: #csp-injected-script }
+
+A proxy that injects a script (Cloudflare's Rocket Loader or automatic Web Analytics, an Nginx `sub_filter`), a CDN or a
+browser extension is blocked: a `script-src-elem` violation. It is made visible where an administrator looks, and nowhere
+else (`frontend/src/lib/features/security/cspNotice.ts`):
+
+- `frontend/src/app.html` has, after the anti-FOUC script, a second block in its own `try`: it fills
+  `window.__lfCspViolations` from `securitypolicyviolation` events with `disposition === 'enforce'`, before any bundle
+  loads. `startCspNotice()` drains it, listens for the next ones and, where the browser has one, a `ReportingObserver`
+  with `{types: ['csp-violation'], buffered: true}`;
+- `KNOWN_CSP_VIOLATIONS` are never reported: cheetah-grid's probe of the global object, `script-src`, `eval`, sample
+  `(function anonymous(\n) {\nreturn this\n})` (the same entry as
+  [the E2E baseline](../test-walkthrough/e2e.md#csp-baseline)'s `cheetah-grid-global-probe`);
+- anything else enforced: one `console.error` per page load, `LibreFolio blocked a script it did not send (<origin, inline
+  or eval>): a proxy, a CDN or a browser extension adds it. Guide: <origin>/mkdocs/admin/configuration/#csp`, and its
+  source added once to `sessionStorage['librefolio-csp-blocked']`, a JSON array of distinct strings; storage failures are
+  swallowed;
+- the Security tab's browser check `platform.blockedScript` (`securityFindings.ts`, guide entry in `checkGuides.json`) is a
+  warning while that array holds a source. No request of any kind, no report endpoint. The report-only policy's
+  violations (the managed profile's wider policy) are not its business.
+
+#### 📋 The Report-Only Policy {: #csp-report-only-policy }
+
+`LIBREFOLIO_CSP_REPORT_ONLY` adds, on the web app's pages only, `Content-Security-Policy-Report-Only:
+CSP_REPORT_ONLY_POLICY`, the whole policy the app aims at: the enforced `script-src`, `worker-src` and `connect-src`
+(the hashes and the `connect-src` sources are the same, `report_only_policy()`) plus what stays free in the enforced
+header. It blocks nothing; the browser lists each violation in its console, and there is no `report-uri`, `report-to`,
+`Report-To` or `Reporting-Endpoints`.
 
 | Directive | Sources | Why |
 |-----------|---------|-----|
 | `default-src` | `'self'` | Every fetch directive the policy does not name falls back to the app's own origin |
-| `script-src` | `'self' 'wasm-unsafe-eval' 'report-sample'`, then the hashes of the build's inline scripts | Script files from the app's origin, and an inline script only by its hash; WebAssembly may compile, for the PDF viewer (its PDFium engine); a violation carries the first 40 characters of the blocked code (above) |
+| `script-src` | as enforced | Script files from the app's origin, an inline script only by its hash |
 | `style-src` | `'self' 'unsafe-inline'` | The app's inline styles are allowed |
 | `img-src` | `'self' data: blob: https:` | Images from any HTTPS address: asset and broker icons are set by URL |
 | `font-src` | `'self' data:` | Fonts from the app's origin, or inlined as `data:` URLs |
-| `connect-src` | `'self'` | `fetch`, XHR and WebSockets reach the app's origin only |
-| `worker-src` | `'self' blob:` | Workers, the service worker included, from the app's origin or a `blob:` URL |
+| `connect-src` | as enforced | `fetch`, XHR and WebSockets |
+| `worker-src` | `'self' blob:` | Workers, the service worker included |
 | `frame-src` | `'self' blob:` | The app's frames show its own pages or a `blob:` URL |
-| `object-src` | `'none'` | No `<object>` or `<embed>` content |
-| `base-uri` | `'self'` | A `<base>` element cannot send the page's relative URLs to another origin |
-| `form-action` | `'self'` | Forms submit to the app's origin only |
-| `frame-ancestors` | `'self'` | Only the app's own pages may frame the page, as with frame protection |
+| `object-src`, `base-uri`, `form-action` | the trio | As enforced |
+| `frame-ancestors` | `'self'` | As frame protection |
 
-The inline scripts of the build's pages are all allowed by their hashes, so none of them is reported any more (H-52):
-the script of `frontend/src/app.html`, in `index.html` and `200.html`, which applies the theme before the first paint,
-keeps the PWA install prompt and registers the service worker; the start script SvelteKit writes into each of those two
-pages, a different one in `200.html`, the SPA fallback (`base: ""`, absolute imports), since
-`frontend/svelte.config.js` has no `csp` option and SvelteKit adds no hash or nonce itself; and the script of
-`frontend/static/offline.html`, the page the service worker shows when the server cannot be reached. That page's retry
-button listens through its script (`addEventListener`), not an inline `onclick`: an inline event handler falls under
-`script-src-attr`, which no hash of `script-src` covers, and the policy does not use `'unsafe-hashes'`. The managed
-lane's cloud smoke met two more violations, both recorded in the
-[E2E baseline](../test-walkthrough/e2e.md#csp-baseline): cheetah-grid's `eval`, a harmless probe of the global object,
-known only by its exact sample, so any other `eval` fails a test; and the `connect-src` of the
-[address check](#address-probe) of a link, which fetches the address the administrator typed. That check is what an
-enforced `connect-src 'self'` would break: for an origin other than the page's it would read *unverifiable* (backlog
-H-53, workstream A for the experience).
+Left out on purpose, as before: the documentation, Swagger UI and ReDoc, the 404 of an unknown API path, every other
+document, and every response that is not a document.
 
-Tests: `./dev.py test services security-headers` (`backend/test_scripts/test_services/test_security_headers.py`:
-`nosniff` and `Referrer-Policy` exactly once on every kind of response, a route's own kept, the 500 with its exception
-still re-raised), `./dev.py test services managed-headers` (`backend/test_scripts/test_services/test_managed_headers.py`,
-on fresh apps holding the stack's `security_headers`, `gzip` and `cors`, Swagger UI and ReDoc, and a fake static site:
-frame protection once on every response when on, a `304` aside, and on none when off, `false` over `managed` included,
-its policy exactly `PAGE_POLICY` on the HTML (the web app's pages, compressed too, the documentation, Swagger UI,
-ReDoc, the HTML 404 of an unknown API path) and `frame-ancestors 'self'` on the rest; around the middleware alone, the
-type deciding whatever the path, `text/html` in four spellings of case and parameters against an inline PDF, an
-image, a script, a style sheet, JSON and a 204 without `Content-Type`; `PAGE_POLICY`, `DOCUMENT_MEDIA_TYPES` and
-`DOCUMENT_MEDIA_TYPE_SUFFIX` pinned by value; one case per document type (H-45), XHTML, SVG with a `charset` and in
-mixed case, `application/xml`, `text/xml`, `application/atom+xml` and `application/rss+xml`, against the types that
-are not documents, PDF, JSON, `application/problem+json`, `text/plain`, PNG and an invented `text/htmlx`; an SVG and
-an XHTML on a web-app path, with `PAGE_POLICY` and no report-only header; a `304` in every mode, without
-`Content-Type` and with `text/html`, carrying neither policy, and a route's own policy on its `304` kept; a real `304`
-of `StaticFiles` under `/_app`, an SVG whose `200` carries `PAGE_POLICY` and whose `304` no policy; the report-only
-policy on the web app's HTML only, compressed too, never on the documentation, the API's JSON or HTML, a JavaScript
-chunk, a text file, a CORS preflight or a 500; the policy read directive by directive, each directive once, with no
-report endpoint, its `script-src` exactly `'self' 'wasm-unsafe-eval' 'report-sample'` and then the hashes of the fake
-build's inline scripts (H-52: `spa_inline_script_hashes()` alone, on builds written for each of its rules, against a
-published vector, with no build or no page, and with a page that cannot be decoded, skipped with one warning;
-`report_only_policy()` appending the hashes in the order given; the header built once, when the middleware is built, a
-build changed afterwards leaving it as it was, and the build never read with the policy off); a route's own header kept
-alone and the others added, its own `Content-Security-Policy` on an HTML
-page never replaced by `PAGE_POLICY`; the switches read when the middleware is built, never per request)
-and `./dev.py test utils nosniff-content-types` (`backend/test_scripts/test_utilities/test_nosniff_content_types.py`:
-the type of every extension of `frontend/build/` and `mkdocs_src/site/`, also in an interpreter that read no system
-`mime.types` file; no hidden file of either tree is sampled, since no route serves one,
-see [Server Startup](overview.md#server-startup)). The switches' values per profile are tested with the profile defaults,
-`./dev.py test services profile-defaults` (see [Settings System](settings.md)).
+The inline scripts of the build's pages are all covered by their hashes: the script of `frontend/src/app.html` (theme before
+the first paint, the PWA install prompt, the service worker), the start script SvelteKit writes into `index.html` and
+`200.html` (a different one in each), and the script of `frontend/static/offline.html`, whose retry button listens through
+`addEventListener`, not an inline `onclick` (an inline handler falls under `script-src-attr`, which no hash covers).
+The [E2E baseline](../test-walkthrough/e2e.md#csp-baseline) holds only cheetah-grid's `eval`: the address check left it
+when it became an image (below).
 
-In a browser, `./dev.py test front-utility page-policy` (`frontend/e2e/layout/page-policy.spec.ts`) checks that the
-app and the documentation need nothing `PAGE_POLICY` forbids. A test lane runs self-hosted, frame protection off,
-unless it turns it on with `--lane-setting` (the managed profile, or `LIBREFOLIO_FRAME_PROTECTION` itself: see
-[Lane Settings](../test-walkthrough/index.md#lane-settings)), so the spec does not rely on the lane: it injects
-`PAGE_POLICY` by routing into every HTML document the lane serves, in place of any `Content-Security-Policy` the lane
-sent (a report-only policy is left as the lane sent it), with service workers blocked (the app's answers navigations
-itself, out of the route's reach). Positive
-controls come first, on the sign-in page: an injected `<object>` typed `application/pdf`, a `<base>` aimed at another
-origin and a form posted to another origin must each be refused with an enforced violation. The `<object>` is plugin
-content on purpose: in Chromium 149, an untyped `<object>` of an image, inserted in the same task as the form's
-submission, is fetched as an image with no `object-src` check. Then a documentation page and its search, the PDF
-preview and the Dashboard must raise none. `./dev.py test front-utility csp-collector` checks the hashes end to end: it
-computes the policy itself from the lane's three pages, requires a managed lane's header to equal it on each, and finds
-that the sign-in page and the offline page report nothing under it (see
-[CSP Collector](../test-walkthrough/front-utility.md#csp-collector)).
+#### 📷 The Address Check Is an Image {: #csp-address-probe }
+
+Under an enforced `connect-src`, a `fetch` of the [address check](#address-probe) to the address the administrator typed would
+be blocked for any other origin. So the check loads an image, which `img-src` (not enforced) does not hold back and whose size
+a page reads from any origin without CORS: `GET /api/v1/auth/address-probe.png?nonce=…`
+(`answer_address_probe_image`, `backend/app/api/v1/address_probe_image.py`, a router of its own so that `auth.py` stays
+untouched), public, `Cache-Control: no-store`, `200` `image/png` either way, **1×1** when `verify_probe_nonce()` holds and
+**2×1** otherwise. The route is out of the OpenAPI schema (`include_in_schema=False`): an `<img>` reads it, never the generated client. The JSON route stays for `curl` and older clients, and neither is in `ALLOWED_WHEN_BLOCKED`: on a blocked
+instance the image gets the guard's `401`, which the page reads as *unverifiable* (decision A6a).
+
+Tests: `./dev.py test services managed-headers` (`backend/test_scripts/test_services/test_managed_headers.py`: the enforced
+header per response type and profile, each directive once and never `default-src`, `style-src`, `img-src`, `font-src` or
+`frame-src`; `connect-src` with the public origin and GitHub per profile, an invalid public URL adding nothing; the report-only
+policy on the web app's HTML only; a `304` without a policy; a route's own header kept; the hashes per signature, a build
+changed or being written after the middleware was built, no page read again with the same signature, no build, only
+web-app HTML looking at the build; the settings read when the middleware is built, never per request),
+`./dev.py test services security-headers`, `./dev.py test api address-probe-image`
+(`backend/test_scripts/test_api/test_address_probe_image.py`), and
+`./dev.py test utils nosniff-content-types` (the type of every extension of `frontend/build/` and `mkdocs_src/site/`).
+
+In a browser, `./dev.py test front-utility csp-collector` (`frontend/e2e/layout/csp-collector.spec.ts`) runs the real app under
+the enforced policy on any lane, self-hosted or managed: it checks a web-app page's header against the table above, computed
+from the spec's own reading of the build, a `/mkdocs` page getting the trio only, and an inline script injected by
+`page.route` blocked (not run, an enforced `script-src-elem` violation, and the console line of the notice); see
+[CSP Collector](../test-walkthrough/front-utility.md#csp-collector). `./dev.py test front-utility page-policy`
+(`frontend/e2e/layout/page-policy.spec.ts`) checks that the app and the documentation need nothing the trio forbids, with
+controls first: an injected `<object>` typed `application/pdf` (an untyped image `<object>` is fetched with no `object-src`
+check in Chromium 149), a `<base>` aimed at another origin and a form posted to another origin are each refused.
 
 ## 🌐 HTTPS & Deployment Architecture
 

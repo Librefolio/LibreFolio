@@ -405,7 +405,8 @@
         "error": "Errore",
         "warning": "Avviso",
         "info": "Informazione"
-      }
+      },
+      "blockedScript": "Questa scheda del browser ha bloccato uno script che LibreFolio non ha inviato ({sources}): lo aggiunge un proxy, una CDN o un'estensione del browser. Spegni quell'iniezione per questo sito."
     }
   }
 }
