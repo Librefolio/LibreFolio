@@ -301,6 +301,14 @@ La catégorie Prise en main des préférences, avec le statut de chaque guide et
     <img class="gallery-img" data-category="settings" data-name="onboarding-replay" alt="🔁 Relancer les guides">
 </div>
 
+### 🧩 Paramètres des plugins
+
+L'onglet Plugins : les paramètres que demandent les sources de prix et de taux de change, chaque plugin dans son propre formulaire avec son badge.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="plugins" alt="🧩 Paramètres des plugins">
+</div>
+
 ### 🛡️ Paramètres globaux (administrateur)
 
 Les administrateurs peuvent configurer les paramètres à l'échelle du système.

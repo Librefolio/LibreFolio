@@ -301,6 +301,14 @@ La categoría Introducción de Preferencias con el estado de cada guía y su bot
     <img class="gallery-img" data-category="settings" data-name="onboarding-replay" alt="🔁 Repetición de guías">
 </div>
 
+### 🧩 Ajustes de los plugins
+
+La pestaña Plugins: los ajustes que piden las fuentes de precios y de tipos de cambio, cada plugin en su propio formulario con su insignia.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="plugins" alt="🧩 Ajustes de los plugins">
+</div>
+
 ### 🛡️ Configuración global (Administrador)
 
 Los administradores pueden configurar ajustes para todo el sistema.
