@@ -7094,3 +7094,39 @@ riduzione sull'endpoint dei cambi (`max_points`, `sample_like`, `sample_bounds`,
    adds and the backend does not», «The step is the answer's») e `signal_plugin_guide.md` (un periodo nel paragrafo di
    `sample_signal_series()`). **O3**: con la riduzione restano solo la data del secchio e, per il rendimento, la
    provenienza. **O4**: Z-29b non deduce il passo dalla densità delle serie dei segnali; lo legge da `resolution`.
+
+### Z-29b — la lista Assets chiede serie ridotte: lavoro (21/10, ondata 2, base `0fdbb28a7`)
+
+> Contratto: «Z-29b, il contratto della pagina» (sopra). Note di MF n1–n3 e requisito dei lotti di X applicati.
+
+1. ✅ 21/10 — I rossi, poi la cura, uno strato alla volta (Vitest).
+   > **Note implementazione**:
+   > - `timeSeriesAggregation.ts`: la soglia 1,3 e le costanti della griglia compatta spostate da `LineChart.svelte`
+   >   (`COMPACT_DENSITY_THRESHOLD`, `COMPACT_GRID_*`), più `compactPlotWidth`, `compactMaxPoints`, `chooseCompactResolution`,
+   >   `fillCounts` (giorni, settimane ISO, mesi) e `stepForMaxPoints`. `LineChart` tocca solo la soglia (`:194-198`,
+   >   `:293-302`). `compactDensity.test.ts` (42 casi) legge `compactDensityCases.json` (n1): `max_points`, conteggi e passo.
+   > - `bulkBatches.ts`: `groupOf` in piano e in divisione dopo `bulk_too_many_days`; un gruppo vale la somma delle sue
+   >   voci, un lotto di un solo gruppo fallisce come uno di una voce (`bulkBatchesGroups.test.ts`, 8 casi).
+   > - `assetPriceDerived.ts`: `derived.base` (da `sample_bounds.first`, altrimenti il primo prezzo; n3); il worker dà
+   >   `requestIndex` (il pool riordina i risultati: `splitBalancedIndexed`, `requestIndexesOf`) e `resolution`.
+   > - `utils/reducedPriceQuery.ts` (puro): `buildReducedQuery` (voce della scheda con `key` `asset:<id>` e `max_points`,
+   >   bersagli `sample_like`, un gruppo per scheda; la voce senza prezzi se servono solo i bersagli), `estimateEntryDays`,
+   >   `comparisonTargetIds`, `comparisonTargetFrom` (con `basePoint`), `cardsOfAnotherStep` (n2, con la guardia contro
+   >   i giri), `signalBaseData` (O2).
+   > - `stores/reducedPriceCache.ts`: cache ridotta accanto alla giornaliera; un'entrata risponde a una larghezza solo se
+   >   il passo che quella larghezza chiede (dai conteggi dell'entrata) è il suo; stale sul bus `{kind: 'prices'}`;
+   >   `invalidateAsset` dai punti dove la pagina invalidava la giornaliera.
+   > - `chartUtils.normalizeToPercentage(data, base)`; `syncHelpers.hasStoredRowBehindSample` (l'avviso del dialogo di
+   >   sync legge la riga dietro ogni punto, `data − staleDays`).
+   > - `AssetCard.svelte`: misura il suo riquadro (`bind:clientWidth`) e riporta `onplotwidth`; `baseValue` per la %.
+   > - `assets/+page.svelte`: `fetchPriceSeries(only?)` riscritta; larghezze per scheda con ritardo di 250 ms; ricarica per
+   >   scheda al salvataggio delle sue impostazioni (tutte solo col globale); «All» parte da `base.date`; i bersagli
+   >   dei confronti da `targetSamples`.
+   > **⚠️ Fuori pista**: (a) `bulkBatchesGroups`, `signalBaseData`, `hasStoredRowBehindSample` e `cardsOfAnotherStep`
+   > hanno test e cura scritti nello stesso passo, senza il giro «rosso» separato (piccole funzioni pure); i rossi veri sono
+   > quelli degli strati sopra. (b) Il primo `GET` parte con la larghezza di riserva (300 px): la scheda misurata
+   > rilegge solo se il passo cambia.
+2. ✅ 21/10 — Verdi: Vitest intero 593 file / 20597 test (`--maxWorkers=4`, `LC_ALL=en_US.UTF-8`), `front check`
+   0 errori 0 avvisi, `mkdocs build` exit 0, prettier pulito sui file toccati.
+3. ⏳ Mancano: (i) la prop `baselineValue` di Y-39b su `PriceChartCompact` (il colore della linea in assoluto parte
+   da `base.value`: `AssetCard` ha `baseValue` pronto); (ii) E2E `front-asset asset-list` nello slot, dopo quello di Y.

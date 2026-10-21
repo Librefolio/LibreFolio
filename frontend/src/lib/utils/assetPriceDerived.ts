@@ -94,9 +94,21 @@ export interface DerivedChartPoint {
     staleDays: number;
 }
 
+/** The point a series is measured from: the fill's first day (Z-29b, MF n3). */
+export interface DerivedBase {
+    date: string;
+    value: number;
+}
+
 export interface DerivedPriceState {
     lastPrice: number | null;
     chartData: DerivedChartPoint[];
+    /**
+     * The point on the fill's first day F: what a card's percentage view and its line's colour are measured from. A daily
+     * series opens on it; a weekly or monthly one opens on the end of its first bucket, F being `sample_bounds.first`.
+     * Null for an empty series.
+     */
+    base: DerivedBase | null;
 }
 
 /** Catalog keys of a duration label by unit letter: `{n}` + the reader's unit letter, the date picker's presets. */
@@ -123,10 +135,14 @@ export function deltaPeriodLabel(key: string, t: DurationLabelTranslate): string
  * Pure function: same input always produces the same output, no shared/mutable state
  * touched — safe to call from a Worker as well as the main thread.
  */
-export function computeDerivedPriceState(prices: RawPricePoint[]): DerivedPriceState {
+export function computeDerivedPriceState(prices: RawPricePoint[], sampleBounds?: {first?: RawPricePoint | null; last?: RawPricePoint | null} | null): DerivedPriceState {
     if (prices.length === 0) {
-        return {lastPrice: null, chartData: []};
+        return {lastPrice: null, chartData: [], base: null};
     }
+
+    // The base reads `sample_bounds.first` when the backend sampled the series (Z-29b, MF n3), the first price otherwise.
+    const baseSource = sampleBounds?.first ?? prices[0];
+    const base: DerivedBase | null = baseSource.close != null ? {date: baseSource.date, value: Number(baseSource.close)} : null;
 
     const lastPrice = prices[prices.length - 1]?.close != null ? Number(prices[prices.length - 1].close) : null;
 
@@ -136,5 +152,5 @@ export function computeDerivedPriceState(prices: RawPricePoint[]): DerivedPriceS
         staleDays: extractDaysBack(p),
     }));
 
-    return {lastPrice, chartData};
+    return {lastPrice, chartData, base};
 }
