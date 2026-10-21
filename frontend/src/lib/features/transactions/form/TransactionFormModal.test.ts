@@ -513,6 +513,26 @@ describe('TransactionFormModal — exact quantity contract', () => {
         ];
     }
 
+    /**
+     * B-48 — the quantities of the five cases that pin the exact path (the pre-blur push, the two hydrations, the two
+     * transfer updates). They used 999999999999.12345x: eighteen significant digits, past the fifteen the backend keeps,
+     * and refused by the form since B-48. Their size was only the means of the subject: no double holds eighteen digits,
+     * so a quantity that went through a JavaScript number came out changed (exactness, 75309672e). Within fifteen
+     * significant digits a double holds every value, so the means is now a quantity below 1e-6 — four significant
+     * digits, ten decimals, within the domain — which a number writes with an exponent: an exact path and a Number path
+     * still give different strings.
+     */
+    const TINY = '0.0000001234';
+    /** TINY as typed where the decimal mark is a comma. */
+    const TINY_TYPED = '0,0000001234';
+    /** The stored quantity the transfer legs are edited from, one step below TINY. */
+    const TINY_BEFORE = '0.0000001233';
+
+    /** The premise of every case on TINY: through a JavaScript number, it is written with an exponent. */
+    function expectNumberPathVisible(): void {
+        expect([String(Number(TINY)), String(-Number(TINY))], 'premise: through a JavaScript number the quantity is written with an exponent').toEqual(['1.234e-7', '-1.234e-7']);
+    }
+
     it.each([
         ['TRANSFER', false],
         ['BUY', true],
@@ -554,7 +574,9 @@ describe('TransactionFormModal — exact quantity contract', () => {
         expect(document.querySelectorAll(`[id="${hintId}"]`)).toHaveLength(1);
     });
 
-    it('pushes a pre-blur high SELL as one normalized exact negative string', async () => {
+    // B-48: the SELL was 999999999999,123456, eighteen significant digits; now below 1e-6 (see TINY above).
+    it('pushes a pre-blur SELL below 1e-6 as one normalized exact negative string', async () => {
+        expectNumberPathVisible();
         const onPushDraft = vi.fn();
         mount({
             mode: 'create',
@@ -565,17 +587,17 @@ describe('TransactionFormModal — exact quantity contract', () => {
         const input = await screen.findByTestId('tx-form-quantity');
 
         await fireEvent.focus(input);
-        await fireEvent.input(input, {target: {value: '999999999999,123456'}});
-        expect(input).toHaveValue('999999999999,123456');
+        await fireEvent.input(input, {target: {value: TINY_TYPED}});
+        expect(input).toHaveValue(TINY_TYPED);
         await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeEnabled());
 
         await fireEvent.click(screen.getByTestId('tx-form-save'));
 
-        expect(input).toHaveValue('999999999999,123456');
+        expect(input).toHaveValue(TINY_TYPED);
         expect(onPushDraft).toHaveBeenCalledTimes(1);
         expect(onPushDraft.mock.calls[0]?.[0]).toMatchObject({
             type: 'SELL',
-            quantity: '-999999999999.123456',
+            quantity: `-${TINY}`,
         });
         expect(commitTransactions).not.toHaveBeenCalled();
     });
@@ -665,21 +687,23 @@ describe('TransactionFormModal — exact quantity contract', () => {
         });
     });
 
+    // B-48: the stored SELL was -999999999999.123456, eighteen significant digits; now below 1e-6 (see TINY above).
     it.each([
         ['edit', 'edit'],
         ['create-from-duplicate-draft', 'create'],
-    ] as const)('%s hydrates a high SELL as a positive magnitude and pushes the exact negative payload', async (_label, mode) => {
+    ] as const)('%s hydrates a SELL below 1e-6 as its exact positive magnitude and pushes the exact negative payload', async (_label, mode) => {
+        expectNumberPathVisible();
         const onPushDraft = vi.fn();
         const source = txRow({
             type: 'SELL',
             date: '2017-08-09',
-            quantity: '-999999999999.123456',
+            quantity: `-${TINY}`,
             cash: {code: 'EUR', amount: '100'},
         });
         mount({mode, items: [source], commitOnSave: false, onPushDraft});
 
         const input = await screen.findByTestId('tx-form-quantity');
-        expect(input).toHaveValue('999999999999.123456');
+        expect(input).toHaveValue(TINY);
         const dateInput = within(screen.getByTestId('tx-form-date-wrap')).getByRole('textbox');
         expect(dateInput).toHaveValue('2017-08-09');
 
@@ -690,10 +714,12 @@ describe('TransactionFormModal — exact quantity contract', () => {
         expect(onPushDraft.mock.calls[0]?.[0]).toMatchObject({
             type: 'SELL',
             date: '2017-08-09',
-            quantity: '-999999999999.123456',
+            quantity: `-${TINY}`,
         });
     });
 
+    // B-48: the legs went from 999999999999.123455 to 999999999999.123456, eighteen significant digits; now from
+    // TINY_BEFORE to TINY, below 1e-6 (see TINY above).
     it.each([
         {
             label: 'auto receiver-first',
@@ -717,7 +743,8 @@ describe('TransactionFormModal — exact quantity contract', () => {
             },
         },
     ] as const)('$label maps exact sender/receiver update legs and preserves allowed cost basis', async ({receiverFirst, mode, initialOverride, nextOverride, expectedReceiverCostBasis}) => {
-        const {sender, receiver} = transferPair('999999999999.123455');
+        expectNumberPathVisible();
+        const {sender, receiver} = transferPair(TINY_BEFORE);
         Object.assign(receiver, {
             cost_basis_mode: mode,
             cost_basis_override: initialOverride,
@@ -727,24 +754,24 @@ describe('TransactionFormModal — exact quantity contract', () => {
             items: receiverFirst ? [receiver, sender] : [sender, receiver],
         });
         const input = await screen.findByTestId('tx-form-quantity');
-        expect(input).toHaveValue('999999999999.123455');
+        expect(input).toHaveValue(TINY_BEFORE);
 
         if (nextOverride) {
             const amountInput = (await screen.findByTestId('tx-form-cost-basis-input-amount')) as HTMLInputElement;
             await fireEvent.input(amountInput, {target: {value: nextOverride}});
             expect(amountInput).toHaveValue(nextOverride);
         }
-        await fireEvent.input(input, {target: {value: '999999999999,123456'}});
+        await fireEvent.input(input, {target: {value: TINY_TYPED}});
         await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeEnabled());
         await fireEvent.click(screen.getByTestId('tx-form-save'));
 
         await waitFor(() => expect(commitTransactions).toHaveBeenCalledTimes(1));
         expect(vi.mocked(commitTransactions).mock.calls[0]?.[0]).toEqual({
             updates: [
-                {id: 101, quantity: '-999999999999.123456'},
+                {id: 101, quantity: `-${TINY}`},
                 {
                     id: 202,
-                    quantity: '999999999999.123456',
+                    quantity: TINY,
                     ...expectedReceiverCostBasis,
                 },
             ],
@@ -1211,6 +1238,222 @@ describe('TransactionFormModal — a quantity the form refuses is never validate
     });
 });
 
+/**
+ * B-47 — a focus and a blur on the cash change nothing.
+ *
+ * In the Bulk editor a saved row's cash comes back from the API padded to six decimals (`READ_MIN_SCALE`): `0.010000`.
+ * The Form shows it as `0.01`, and its CompactCashCell emits that display form on every blur; `setCash` stores it, and
+ * «Apply» pushes `0.01` back into the row, where the close guard (`serializeOps`, a text compare) sees a change nobody
+ * made and asks to discard it (the E2E twin: tx-bulk-operations.spec.ts, «B-47»). The contract: a blur emits only a
+ * change (CompactCashCell.test.ts), so the draft keeps the text it was given.
+ *
+ * Pinned in the Bulk's own mode — a saved row in edit mode, `unlockImmutable`, `commitOnSave` false: «Apply» pushes the
+ * draft to the parent — on a SELL, whose cash the Form keeps as given (its sign rule is positive).
+ */
+describe('TransactionFormModal — a focus and a blur on the cash change nothing (B-47)', () => {
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        guideAnchors.clear();
+        resetGuideState();
+        vi.mocked(zodiosApi.get_transaction_types_api_v1_transactions_types_get).mockResolvedValue(validMinimalTXTypesResponse);
+        await setupI18n();
+        await ensureTypesLoaded();
+    });
+
+    afterEach(() => {
+        cleanup();
+        guideAnchors.clear();
+        resetGuideState();
+    });
+
+    // Red today: the blur emits `0.01`, `setCash` stores it, and Apply pushes it.
+    it('B-47: a saved SELL whose cash reads 0.010000, the cash focused and blurred, then Apply: the pushed cash is 0.010000, as given', async () => {
+        const onPushDraft = vi.fn();
+        mount({
+            mode: 'edit',
+            unlockImmutable: true,
+            commitOnSave: false,
+            onPushDraft,
+            items: [txRow({type: 'SELL', quantity: '-1.000000', cash: {code: 'EUR', amount: '0.010000'}})],
+        });
+        const cash = (await screen.findByTestId('tx-form-cash-amount')) as HTMLInputElement;
+        expect(cash, 'premise: the padded amount is shown in its display form').toHaveValue('0.01');
+
+        await fireEvent.focus(cash);
+        await fireEvent.blur(cash);
+        await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeEnabled());
+        await fireEvent.click(screen.getByTestId('tx-form-save'));
+
+        expect(onPushDraft, 'Apply pushes the draft to the parent').toHaveBeenCalledTimes(1);
+        expect(commitTransactions).not.toHaveBeenCalled();
+        const pushed = onPushDraft.mock.calls[0]?.[0] as {cash?: unknown} | undefined;
+        expect(pushed?.cash, 'B-47: the blur rewrote the cash into its display form, and Apply pushed it').toEqual({code: 'EUR', amount: '0.010000'});
+    });
+});
+
+/**
+ * B-48 — at most fifteen significant digits, quantity and cash (D-K3-6).
+ *
+ * The backend keeps at most 15 significant digits, leading and trailing zeros not counted (`precision._digit_counts`,
+ * refusal `significantDigitsExceeded`). The Form caps the quantity's integer digits (15) and decimals (10) apart, and the
+ * cash not at all: a quantity of `999999999999999.5` and a cash of `1234567890123.456`, sixteen significant digits each,
+ * pass the Form and are refused only by the server.
+ *
+ * The contract: the Form gives the quantity and every cash cell (`tx-form-quantity`, `tx-form-cash`, `tx-form-cash-from`,
+ * `tx-form-cash-to`) a cap of 15 significant digits. A value over it is one of the form's own errors (V-37): Apply is
+ * disabled, «⚡ Validate now» moves the focus to that field and sends no validation request, and nothing is validated on
+ * its own; under the field, `<field testid>-significant-error` shows `transactions.errors.significantDigitsExceeded` with
+ * `{max: 15}` — read here through the app's own formatter, never as English copied in.
+ *
+ * Each red reports all of it (soft assertions): today there is no message, Apply is enabled, ⚡ validates instead of
+ * leading to the field, and the value goes to validation. The guard: fifteen significant digits, in the quantity and in
+ * the cash, are no error.
+ */
+describe('TransactionFormModal — at most fifteen significant digits, quantity and cash (B-48)', () => {
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        guideAnchors.clear();
+        resetGuideState();
+        vi.mocked(zodiosApi.get_transaction_types_api_v1_transactions_types_get).mockResolvedValue(validMinimalTXTypesResponse);
+        await setupI18n();
+        await ensureTypesLoaded();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        cleanup();
+        guideAnchors.clear();
+        resetGuideState();
+    });
+
+    const SIGNIFICANT_KEY = 'transactions.errors.significantDigitsExceeded';
+    const MAX_SIGNIFICANT = 15;
+    /** Past the scheduler's debounce (500 ms by default) with room to spare, far short of the 60 s idle run (as V-37). */
+    const PAST_THE_DEBOUNCE_MS = 5_000;
+    const squash = (text: string | null | undefined): string => (text ?? '').replace(/\s+/g, ' ').trim();
+
+    /** A complete standalone BUY: the single layout, its quantity beside its cash. */
+    function buyItems() {
+        return [txRow({type: 'BUY', quantity: '1', cash: {code: 'EUR', amount: '-100'}})];
+    }
+
+    /**
+     * Only the timers decide whether an automatic run goes out, and only the scheduler sets them: faking
+     * setTimeout/clearTimeout puts every debounce on a clock the test advances (the V-37 pattern).
+     */
+    function holdTheClock() {
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout']});
+    }
+
+    /** What each `validateTransactions` call from call `from` on asked about: per create, its quantity and its cash amount. */
+    function validatedSince(from: number): Array<Array<{quantity: unknown; cash: unknown}>> {
+        return vi
+            .mocked(validateTransactions)
+            .mock.calls.slice(from)
+            .map(([payload]) => ((payload as unknown as {creates?: Array<{quantity?: unknown; cash?: {amount?: unknown} | null}>}).creates ?? []).map((create) => ({quantity: create.quantity, cash: create.cash?.amount ?? null})));
+    }
+
+    /**
+     * The value in `input` is one of the form's own errors: the message `messageTestId` under the field says why, Apply is
+     * disabled, ⚡ leads to the field, and nothing has been sent to validation since call `callsAtEdit`.
+     */
+    async function expectTheFormsOwnError(input: HTMLElement, messageTestId: string, callsAtEdit: number): Promise<void> {
+        const expected = get(translate)(SIGNIFICANT_KEY, {values: {max: MAX_SIGNIFICANT}});
+        expect(expected, `premise: the catalogue has ${SIGNIFICANT_KEY}: the formatter answers a missing key with the key itself`).not.toBe(SIGNIFICANT_KEY);
+
+        // Every automatic run has had its chance to go out.
+        await vi.advanceTimersByTimeAsync(PAST_THE_DEBOUNCE_MS);
+
+        const message = screen.queryByTestId(messageTestId);
+        expect.soft(message, `B-48: ${messageTestId} must say why the value is refused; no such element is rendered`).not.toBeNull();
+        if (message) {
+            expect.soft(message, `${messageTestId} is shown`).toBeVisible();
+            expect.soft(squash(message.textContent), `${messageTestId} reads ${SIGNIFICANT_KEY} with {max: ${MAX_SIGNIFICANT}}`).toContain(expected);
+            expect.soft(input.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING, 'the message sits under the field: after it in document order').not.toBe(0);
+        }
+
+        expect.soft(screen.getByTestId('tx-form-save'), 'B-48: Apply is enabled on a value the backend refuses').toBeDisabled();
+
+        // Validate now leads to the field. A real click leaves the focus on the button; the handler is what may move it.
+        const validateNow = screen.getByTestId('tx-form-validate-now');
+        expect(validateNow, 'premise: Validate now is disabled only by an incomplete form, and this one is complete').toBeEnabled();
+        validateNow.focus();
+        expect(input, 'premise: the focus is not on the field').not.toHaveFocus();
+        await fireEvent.click(validateNow);
+        expect.soft(input, 'B-48: Validate now does not lead to the refused field').toHaveFocus();
+        await vi.advanceTimersByTimeAsync(PAST_THE_DEBOUNCE_MS);
+
+        expect.soft(validatedSince(callsAtEdit), 'B-48: the refused value was sent to validation (on its own, or by Validate now)').toEqual([]);
+    }
+
+    // Red today: fifteen integer digits and one decimal are within both of the quantity's budgets.
+    it('B-48: BUY (single layout): a quantity of 999999999999999.5, sixteen significant digits, is one of the form’s own errors', async () => {
+        holdTheClock();
+        mount({mode: 'create', items: buyItems(), commitOnSave: false, onPushDraft: vi.fn()});
+        const quantity = await screen.findByTestId('tx-form-quantity');
+        expect(screen.queryByTestId('tx-form-dual-split'), 'premise: the single layout').toBeNull();
+
+        const callsAtEdit = vi.mocked(validateTransactions).mock.calls.length;
+        await fireEvent.input(quantity, {target: {value: '999999999999999.5'}});
+        await tick();
+        expect(quantity, 'kept as typed').toHaveValue('999999999999999.5');
+        expect.soft(quantity, 'B-48: sixteen significant digits are past the fifteen the backend keeps').toHaveAttribute('aria-invalid', 'true');
+
+        await expectTheFormsOwnError(quantity, 'tx-form-quantity-significant-error', callsAtEdit);
+    });
+
+    // Red today: the cash cell has no cap at all.
+    it('B-48: BUY (single layout): a cash of 1234567890123.456, sixteen significant digits, is one of the form’s own errors', async () => {
+        holdTheClock();
+        mount({mode: 'create', items: buyItems(), commitOnSave: false, onPushDraft: vi.fn()});
+        await screen.findByTestId('tx-form-quantity');
+        const cash = screen.getByTestId('tx-form-cash-amount');
+
+        const callsAtEdit = vi.mocked(validateTransactions).mock.calls.length;
+        await setCashAmount('tx-form-cash', '1234567890123.456');
+        await tick();
+        expect(cash, 'kept as typed').toHaveValue('1234567890123.456');
+        expect.soft(cash, 'B-48: sixteen significant digits are past the fifteen the backend keeps').toHaveAttribute('aria-invalid', 'true');
+
+        await expectTheFormsOwnError(cash, 'tx-form-cash-significant-error', callsAtEdit);
+    });
+
+    // Red today, as the single cash: the FX layout's two cash cells have no cap either.
+    it('B-48: FX_CONVERSION (pair layout): a cash-to of 1234567890123.456, sixteen significant digits, is one of the form’s own errors', async () => {
+        mount({defaultBrokerId: 17, commitOnSave: false, onPushDraft: vi.fn()});
+        await chooseFxType();
+        await setCashAmount('tx-form-cash-from', '125.5');
+        // The form is still incomplete (no cash-to), so the scheduler has armed nothing on the real clock.
+        holdTheClock();
+
+        const callsAtEdit = vi.mocked(validateTransactions).mock.calls.length;
+        await setCashAmount('tx-form-cash-to', '1234567890123.456');
+        await tick();
+        const cashTo = screen.getByTestId('tx-form-cash-to-amount');
+        expect(cashTo, 'kept as typed').toHaveValue('1234567890123.456');
+        expect.soft(cashTo, 'B-48: sixteen significant digits are past the fifteen the backend keeps').toHaveAttribute('aria-invalid', 'true');
+
+        await expectTheFormsOwnError(cashTo, 'tx-form-cash-to-significant-error', callsAtEdit);
+    });
+
+    // Guard, green today: fifteen significant digits are within the cap, in the quantity and in the cash.
+    it('B-48 guard: a quantity of 99999999999999.5 and a cash of 123456789012.345, fifteen significant digits each, are no error', async () => {
+        mount({mode: 'create', items: buyItems(), commitOnSave: false, onPushDraft: vi.fn()});
+        const quantity = await screen.findByTestId('tx-form-quantity');
+
+        await fireEvent.input(quantity, {target: {value: '99999999999999.5'}});
+        await setCashAmount('tx-form-cash', '123456789012.345');
+
+        expect(quantity).toHaveAttribute('aria-invalid', 'false');
+        expect(screen.getByTestId('tx-form-cash-amount')).not.toHaveAttribute('aria-invalid', 'true');
+        for (const messageTestId of ['tx-form-quantity-significant-error', 'tx-form-cash-significant-error']) {
+            const message = screen.queryByTestId(messageTestId);
+            if (message) expect(message, `${messageTestId} shows for fifteen significant digits`).not.toBeVisible();
+        }
+        await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeEnabled());
+    });
+});
+
 describe('TransactionFormModal — a currency exchange says why its two dates may differ (C-89)', () => {
     // The paired layout gives each side its own date, «From» and «To»: a currency exchange and a transfer
     // share it (`pairLayout`). For an exchange the two dates read as a question to a user who is not an
@@ -1370,5 +1613,124 @@ describe('TransactionFormModal — create guide lifecycle', () => {
             expect(guideState.queuedGuides).toEqual([]);
         });
         expect(guideMocks.dismissHost.mock.invocationCallOrder.at(0) ?? 0).toBeLessThan(guideMocks.clearQueued.mock.invocationCallOrder.at(0) ?? 0);
+    });
+});
+
+/**
+ * #58 — the asset of a saved transaction is fixed.
+ *
+ * The backend's update (`TXUpdateItem`) has no `asset_id`: a change of asset on a saved row was shown in the grid, never
+ * sent, and left the row «original» with Save all grey, while closing still asked to discard. So the asset select is
+ * locked for a stored row — in the editor's deep-edit (`unlockImmutable`) as in a plain edit — exactly as the broker is
+ * in a plain edit; a new row still picks its asset, and the type of a stored row stays free within its swap group.
+ */
+describe('TransactionFormModal — the asset of a saved transaction is locked (#58)', () => {
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        guideAnchors.clear();
+        resetGuideState();
+        vi.mocked(zodiosApi.get_transaction_types_api_v1_transactions_types_get).mockResolvedValue(validMinimalTXTypesResponse);
+        await setupI18n();
+        await ensureTypesLoaded();
+    });
+
+    afterEach(() => {
+        cleanup();
+        guideAnchors.clear();
+        resetGuideState();
+    });
+
+    it.each([
+        ['the editor’s deep-edit (unlockImmutable)', {mode: 'edit', unlockImmutable: true, commitOnSave: false}],
+        ['a plain edit', {mode: 'edit'}],
+    ])('#58: a saved BUY in %s shows its asset select locked', async (_where, props) => {
+        mount({...props, items: [txRow()]});
+        const trigger = await screen.findByTestId('tx-form-asset-trigger');
+        expect(trigger).toHaveAttribute('data-disabled', 'true');
+    });
+
+    it('#58: a new row (create) still picks its asset', async () => {
+        mount({mode: 'create', items: [txRow()]});
+        const trigger = await screen.findByTestId('tx-form-asset-trigger');
+        expect(trigger).toHaveAttribute('data-disabled', 'false');
+    });
+
+    it('#58 guard: the deep-edit of a saved BUY still changes its type within the swap group, and Apply is enabled', async () => {
+        const onPushDraft = vi.fn();
+        mount({mode: 'edit', unlockImmutable: true, commitOnSave: false, onPushDraft, items: [txRow()]});
+        await screen.findByTestId('tx-form-type');
+        expect(screen.getByTestId('tx-form-type-wrap')).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeEnabled());
+    });
+});
+
+/**
+ * #58 — the broker of a saved transaction is fixed too.
+ *
+ * `broker_id` is no more in the backend's update than `asset_id`: a broker changed on a saved row in the editor's
+ * deep-edit (`unlockImmutable` opened it) was shown in the grid and never sent. A saved row shows its broker as text;
+ * a saved pair has both brokers locked, and the «swap sides» arrow (which swaps the two brokers) with them; a new row
+ * and a new pair still pick theirs.
+ */
+describe('TransactionFormModal — the broker of a saved transaction is locked (#58)', () => {
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        guideAnchors.clear();
+        resetGuideState();
+        vi.mocked(zodiosApi.get_transaction_types_api_v1_transactions_types_get).mockResolvedValue(validMinimalTXTypesResponse);
+        await setupI18n();
+        await ensureTypesLoaded();
+    });
+
+    afterEach(() => {
+        cleanup();
+        guideAnchors.clear();
+        resetGuideState();
+    });
+
+    it.each([
+        ['the editor’s deep-edit (unlockImmutable)', {mode: 'edit', unlockImmutable: true, commitOnSave: false}],
+        ['a plain edit', {mode: 'edit'}],
+    ])('#58: a saved BUY in %s shows its broker as text, with no select', async (_where, props) => {
+        mount({...props, items: [txRow()]});
+        expect(await screen.findByTestId('tx-form-broker-readonly')).toBeInTheDocument();
+        expect(within(screen.getByTestId('tx-form-broker-wrap')).queryByRole('combobox')).toBeNull();
+    });
+
+    it('#58: a new row (create) still picks its broker', async () => {
+        mount({mode: 'create', items: [txRow()]});
+        const wrap = await screen.findByTestId('tx-form-broker-wrap');
+        expect(within(wrap).getByRole('combobox')).toBeInTheDocument();
+        expect(screen.queryByTestId('tx-form-broker-readonly')).toBeNull();
+    });
+
+    it('#58: a saved transfer pair in the deep-edit has both brokers locked and the swap arrow off', async () => {
+        const {sender, receiver} = transferPair();
+        mount({mode: 'edit', unlockImmutable: true, commitOnSave: false, items: [sender, receiver]});
+        const from = await screen.findByTestId('tx-form-dual-from');
+        const to = screen.getByTestId('tx-form-dual-to');
+        await waitFor(() => expect(within(from).getAllByRole('combobox').length).toBeGreaterThan(0));
+        for (const side of [from, to]) {
+            for (const select of within(side).getAllByRole('combobox')) expect(select, 'a broker select on a saved pair').toHaveAttribute('data-disabled', 'true');
+        }
+        expect(screen.getByTestId('tx-form-dual-swap')).toBeDisabled();
+    });
+
+    it('#58: a new transfer pair still picks both brokers and swaps the sides', async () => {
+        mount({mode: 'create', defaultBrokerId: 17});
+        await chooseDualType('TRANSFER');
+        const from = screen.getByTestId('tx-form-dual-from');
+        const to = screen.getByTestId('tx-form-dual-to');
+        expect(
+            within(from)
+                .getAllByRole('combobox')
+                .some((select) => select.getAttribute('data-disabled') === 'false'),
+        ).toBe(true);
+        expect(
+            within(to)
+                .getAllByRole('combobox')
+                .some((select) => select.getAttribute('data-disabled') === 'false'),
+        ).toBe(true);
+        expect(screen.getByTestId('tx-form-dual-swap')).toBeEnabled();
     });
 });

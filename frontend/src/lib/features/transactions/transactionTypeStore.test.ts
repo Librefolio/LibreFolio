@@ -17,6 +17,9 @@
  * refused. They also keep the F-cases from passing for the wrong reason, since null is what
  * findPromoteMatch answers on an empty cache too.
  *
+ * Also isDraftReadyForValidation, the gate of the automatic validation: a zero cash is no cash
+ * (B-47, at the end of the file).
+ *
  * Node env. `$lib/api` is mocked: GET /transactions/types answers six types copied from the
  * backend's TX_TYPE_METADATA (backend/app/schemas/transactions/type_metadata.py), in its order and through
  * the generated schema the real client applies. The store caches the response at module
@@ -24,7 +27,7 @@
  */
 import {beforeAll, describe, expect, it, vi} from 'vitest';
 import {schemas} from '$lib/api/generated';
-import {ensureTypesLoaded, findPromoteMatch, getTypeRule, isTypesLoaded, type PromoteContext} from './transactionTypeStore';
+import {ensureTypesLoaded, findPromoteMatch, getTypeRule, isDraftReadyForValidation, isTypesLoaded, type PromoteContext} from './transactionTypeStore';
 
 const {getTransactionTypes} = vi.hoisted(() => ({getTransactionTypes: vi.fn()}));
 
@@ -241,5 +244,38 @@ describe('findPromoteMatch — controls', () => {
     it('G7: without a context the match is by type only, as before: ADJUSTMENT / ADJUSTMENT is a TRANSFER', () => {
         const match = findPromoteMatch('ADJUSTMENT', 'ADJUSTMENT', t);
         expect(match, 'G7: no context, type-only match, so TRANSFER').toMatchObject({targetType: 'TRANSFER'});
+    });
+});
+
+/**
+ * B-47 — a zero cash is not "ready". `isDraftReadyForValidation` gates the automatic validation (the Form's and the Bulk
+ * editor's): a draft of a type whose cash is required is not ready without a cash. It reads only the text `'0'` as zero,
+ * so `0.00`, `0.000000` — an amount as the API reads it back — or `-0` count as a cash, and the editor asks the server
+ * about a draft that has none. The contract: zero by exact value (`exactDecimalSign(amount) === 0`), never by its text.
+ *
+ * DEPOSIT is the fixture's type with `cash_mode: 'required'` and no quantity, so the cash is the only thing that decides.
+ */
+describe('isDraftReadyForValidation — a zero cash is no cash (B-47)', () => {
+    /** A DEPOSIT complete but for its cash amount. */
+    function deposit(amount: string) {
+        return {type: 'DEPOSIT', broker_id: 1, quantity: '0', cash: {code: 'EUR', amount}};
+    }
+
+    it('premise: the DEPOSIT requires a cash and takes no quantity', () => {
+        expect({cash: getTypeRule('DEPOSIT').cashField, quantity: getTypeRule('DEPOSIT').quantityMode}).toEqual({cash: 'required', quantity: 'forbidden'});
+    });
+
+    // Red today: only the text '0' is read as zero.
+    it.each(['0.00', '0.000000', '-0'])('B-47: a DEPOSIT whose cash is %j is not ready', (amount) => {
+        expect(isDraftReadyForValidation(deposit(amount)), `B-47: a cash of ${amount} is zero, and the draft was read as ready`).toBe(false);
+    });
+
+    // Guards, green today: zero written as '0' is not ready, a cent is.
+    it('B-47 guard: a DEPOSIT whose cash is "0" is not ready', () => {
+        expect(isDraftReadyForValidation(deposit('0'))).toBe(false);
+    });
+
+    it('B-47 guard: a DEPOSIT whose cash is 0.01 is ready', () => {
+        expect(isDraftReadyForValidation(deposit('0.01'))).toBe(true);
     });
 });

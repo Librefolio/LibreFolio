@@ -17,6 +17,7 @@
     import {getAssetInfo} from '$lib/stores/reference/assetStore';
     import {getTransactionTypeIconUrl, type PairFormLayout, type TransactionTypeCode, getTypeRule} from '$lib/features/transactions/transactionTypeStore';
     import {exactDecimalSign} from '$lib/features/transactions/txPayloadHelpers';
+    import {exceedsSignificantDigits, REAL_SIGNIFICANT_DIGITS} from '$lib/utils/core/parseDecimalInput';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import type {BrokerInfo} from '$lib/stores/reference/brokerStore';
     import type {FormDraft, TxFormWacResult} from './txFormTypes';
@@ -33,6 +34,7 @@
         allowedTypes: TransactionTypeCode[] | undefined;
         autocompleteNonce: string;
         brokerIdValue: number | null;
+        rowSaved: boolean;
         brokerImmutable: boolean;
         brokers: BrokerInfo[];
         brokersForSelect: Array<{id: number; name: string; icon_url?: string | null}>;
@@ -76,6 +78,7 @@
         allowedTypes,
         autocompleteNonce,
         brokerIdValue,
+        rowSaved,
         brokerImmutable,
         brokers,
         brokersForSelect,
@@ -106,6 +109,10 @@
         setQuantity,
         setType,
     }: Props = $props();
+
+    // B-48: the reason a quantity or a cash amount past the significant digits is refused, said under the field.
+    let quantitySignificantError = $derived(exceedsSignificantDigits(draft.quantity, REAL_SIGNIFICANT_DIGITS));
+    let cashSignificantError = $derived(exceedsSignificantDigits(draft.cash?.amount, REAL_SIGNIFICANT_DIGITS));
 </script>
 
 <!-- Required section -->
@@ -174,6 +181,7 @@
                     step="1"
                     maxIntegerDigits={15}
                     maxFractionDigits={10}
+                    maxSignificantDigits={REAL_SIGNIFICANT_DIGITS}
                     allowNegative
                     signRule={quantityInputSignRule}
                     resetKey={`${open}:${openKey ?? 0}`}
@@ -182,10 +190,14 @@
                     placeholder="0"
                     ariaLabel={$t('transactions.table.quantity')}
                     ariaDescribedby={qtyHint ? quantityHintId : undefined}
+                    ariaErrormessage={quantitySignificantError ? `${quantityInputId}-significant-error` : undefined}
                     className="qty-input !rounded-lg !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-lf-focus/30"
                     disabled={isReadonly}
                     testid="tx-form-quantity"
                 />
+                {#if quantitySignificantError}
+                    <p id="{quantityInputId}-significant-error" class="mt-1 text-xs text-lf-danger" data-testid="tx-form-quantity-significant-error">{$t('transactions.errors.significantDigitsExceeded', {values: {max: REAL_SIGNIFICANT_DIGITS}})}</p>
+                {/if}
                 {#if qtyHint}
                     <span id={quantityHintId} class="text-[10px] text-lf-muted">{qtyHint}</span>
                 {/if}
@@ -203,7 +215,11 @@
                     testid="tx-form-cash"
                     defaultCode={(draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR'}
                     originalCurrency={draft.asset_id != null ? getAssetInfo(draft.asset_id)?.currency : undefined}
+                    maxSignificantDigits={REAL_SIGNIFICANT_DIGITS}
                 />
+                {#if cashSignificantError}
+                    <p class="mt-1 text-xs text-lf-danger" data-testid="tx-form-cash-significant-error">{$t('transactions.errors.significantDigitsExceeded', {values: {max: REAL_SIGNIFICANT_DIGITS}})}</p>
+                {/if}
                 {#if cashHint}
                     <span class="text-[10px] text-lf-muted">{cashHint}</span>
                 {/if}
@@ -222,6 +238,7 @@
                     step="1"
                     maxIntegerDigits={15}
                     maxFractionDigits={10}
+                    maxSignificantDigits={REAL_SIGNIFICANT_DIGITS}
                     allowNegative
                     signRule={quantityInputSignRule}
                     resetKey={`${open}:${openKey ?? 0}`}
@@ -230,10 +247,14 @@
                     placeholder="0"
                     ariaLabel={$t('transactions.table.quantity')}
                     ariaDescribedby={qtyHint ? quantityHintId : undefined}
+                    ariaErrormessage={quantitySignificantError ? `${quantityInputId}-significant-error` : undefined}
                     className="qty-input !rounded-lg !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-lf-focus/30"
                     disabled={isReadonly}
                     testid="tx-form-quantity"
                 />
+                {#if quantitySignificantError}
+                    <p id="{quantityInputId}-significant-error" class="mt-1 text-xs text-lf-danger" data-testid="tx-form-quantity-significant-error">{$t('transactions.errors.significantDigitsExceeded', {values: {max: REAL_SIGNIFICANT_DIGITS}})}</p>
+                {/if}
                 {#if qtyHint}
                     <span id={quantityHintId} class="text-[10px] text-lf-muted">{qtyHint}</span>
                 {/if}
@@ -253,7 +274,11 @@
                     testid="tx-form-cash"
                     defaultCode={(draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR'}
                     originalCurrency={draft.asset_id != null ? getAssetInfo(draft.asset_id)?.currency : undefined}
+                    maxSignificantDigits={REAL_SIGNIFICANT_DIGITS}
                 />
+                {#if cashSignificantError}
+                    <p class="mt-1 text-xs text-lf-danger" data-testid="tx-form-cash-significant-error">{$t('transactions.errors.significantDigitsExceeded', {values: {max: REAL_SIGNIFICANT_DIGITS}})}</p>
+                {/if}
                 {#if cashHint}
                     <span class="text-[10px] text-lf-muted">{cashHint}</span>
                 {/if}
@@ -270,7 +295,7 @@
                 >{$t('common.asset')}{rule.assetField === 'required' ? ' *' : ''}{#if rule.assetField === 'optional'}
                     <span class="text-lf-muted italic">({$t('common.optional')})</span>{/if}</span
             >
-            <AssetSelect bind:value={draft.asset_id} disabled={isReadonly} onchange={setAsset} testid="tx-form-asset" createLabel={isReadonly ? undefined : $t('assets.create') || 'New asset'} onCreateNew={isReadonly ? undefined : () => (createAssetOpen = true)} />
+            <AssetSelect bind:value={draft.asset_id} disabled={isReadonly || rowSaved} onchange={setAsset} testid="tx-form-asset" createLabel={isReadonly || rowSaved ? undefined : $t('assets.create') || 'New asset'} onCreateNew={isReadonly || rowSaved ? undefined : () => (createAssetOpen = true)} />
         </div>
     {/if}
 
