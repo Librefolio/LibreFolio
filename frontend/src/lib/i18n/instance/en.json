@@ -50,6 +50,11 @@
         "off": "Test mode is off.",
         "testLane": "Test mode is on, in a lane of the test runner.",
         "outsideTestLane": "Test mode is on outside the test runner: data providers made for the tests are offered, the data are kept in {data_dir} and the .env file is not read. Unset LIBREFOLIO_TEST_MODE."
+      },
+      "hostingPanel": {
+        "off": "No token is set for the hosting panel's scheduled wake-up or status route: those routes are off.",
+        "ok": "The hosting panel's tokens that are set (scheduled wake-up, status route) can be used.",
+        "unusable": "{variables}: these hosting panel tokens cannot be used (a file that cannot be read, too short, or characters a request header cannot carry): their routes answer 503 until it is fixed."
       }
     },
     "block": {

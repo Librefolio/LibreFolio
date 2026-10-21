@@ -135,6 +135,27 @@ def restore_login_limit():
         yield
 
 
+#: The limit on refused hosting panel credentials in every test process: none in practice (lot H-61).
+_TEST_PANEL_ATTEMPT_LIMIT = 1_000_000
+
+
+@pytest.fixture(autouse=True)
+def lift_panel_attempt_limit():
+    """Give each test a limiter of the hosting panel's refused credentials of its own, with no limit in practice (H-61).
+
+    The limit counts per process and per address, like the one on sign-ins, which is off in every test process (above),
+    and the in-process apps of many files refuse panel credentials on purpose, from httpx's one client address: with the
+    real limit a file's own 401 tests would meet a 429 (PANEL-012 alone sends 36 refusals). The limit's own tests
+    (``test_hosting_panel_access.py``) replace this limiter, after this fixture, through their monkeypatch.
+    """
+    from backend.app.services.platform.hosting_panel import access  # noqa: PLC0415 — the app's modules load after the lane's configuration
+    from backend.app.utils.runtime.rate_window import SlidingWindowLimiter  # noqa: PLC0415
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(access, "PANEL_ATTEMPTS", SlidingWindowLimiter(_TEST_PANEL_ATTEMPT_LIMIT, access.PANEL_ATTEMPT_WINDOW_SECONDS))
+        yield
+
+
 # The aiosqlite leak guard (J-6) is installed here, when this conftest is imported: before any test module of the
 # run, and therefore any aiosqlite connection, exists. Idempotent.
 aiosqlite_guard.install()

@@ -600,7 +600,7 @@ curl -b cookies.txt -X POST \
 
 Every secret of LibreFolio is read by `env_secret(name)` in `backend/app/config/__init__.py`: today
 `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY`, `LIBREFOLIO_WEB_LINK_FINDER_API_KEY`,
-`LIBREFOLIO_SMTP_PASSWORD`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, `LIBREFOLIO_WAKE_TOKEN`,
+`LIBREFOLIO_SMTP_PASSWORD`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, `LIBREFOLIO_WAKE_TOKEN`, `LIBREFOLIO_PANEL_STATUS_TOKEN`,
 `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`, and every variable of the plugin settings, secret or not
 (`plugin_setting_env()` in `backend/app/config/plugins.py`: the derived `LIBREFOLIO_PLUGIN_*` names and the aliases
 of secret fields, see [Plugin Settings](patterns/plugin_settings.md#environment)). In this order:
@@ -642,15 +642,19 @@ line in the start log, never a stop; [Configuration Checks of the Backup](#backu
 the hosting panel's routes, so the server starts anyway. Besides the `SecretFileError` of a broken `_FILE`, it raises
 `BackupConfigError` for a token with anything but visible ASCII characters, spaces included
 (`BACKUP_DOWNLOAD_TOKEN_NOT_VISIBLE_ASCII`), or shorter than 32 characters
-(`BACKUP_DOWNLOAD_TOKEN_TOO_SHORT`). `require_panel_token()` in `backend/app/api/v1/backup/panel.py` turns
+(`BACKUP_DOWNLOAD_TOKEN_TOO_SHORT`). The hosting panel's access, `panel_access(PanelScope.BACKUP)`
+([The Hosting Panel's Access](#panel-access)), turns
 either into `503` with the code `backup_panel_unavailable`, on every panel route, and logs one error line
 per refused call, `The hosting panel's backup token cannot be used: its routes refuse every request`, whose
 `error` names the variable, and the path of a file, never the token
 ([Hosting for Others](../../admin/hosting_providers.md#panel-backups)).
-Nor does an unusable `LIBREFOLIO_WAKE_TOKEN`: `require_wake_token()` in
-`backend/app/api/v1/system/wake.py` reads it at each call of `POST /system/wake-sync`, which then
-answers `503` with the code `wake_unavailable`
-([Scheduled Wake-up](../../admin/sleep_wake.md#wake-sync)). Nor does a `_FILE` of a plugin setting
+Nor does an unusable `LIBREFOLIO_WAKE_TOKEN` or `LIBREFOLIO_PANEL_STATUS_TOKEN`: `wake_token()` in
+`backend/app/config/sleep_wake.py` and `panel_status_token()` in `backend/app/config/hosting_panel.py` follow the
+rules of the backup token, with `SleepWakeConfigError` and `HostingPanelConfigError` (`WAKE_TOKEN_…` and
+`PANEL_STATUS_TOKEN_…`, `_NOT_VISIBLE_ASCII` or `_TOO_SHORT`). The startup check `platform.hosting_panel` reads both
+([Configuration Checks](#configuration-checks)), and `panel_access()` reads each at every call of its route,
+`POST /system/wake-sync` or `GET /panel/status`, which then answers `503` with the code `wake_unavailable` or
+`panel_status_unavailable` ([Hosting Panel API](../../admin/hosting_providers.md#panel-api)). Nor does a `_FILE` of a plugin setting
 that cannot give its value: the field gets the problem `invalid_env`, and the plugin is not configured
 until the variable is fixed ([Plugin Settings](patterns/plugin_settings.md#environment)).
 
@@ -1136,7 +1140,7 @@ start log, not only at the hosting panel's first call, at the first restore uplo
 | `backup.restore_limit` | `ProfileDefaultError`: while it is unset outside `selfhosted`, the upload limit's entry of `ENVIRONMENT_PROFILE_DEFAULTS` is missing or of the wrong type | `backup.checks.restoreLimit.profileTable` | — | `error` |
 
 - **In `CONFIG_CHECKS`.** `BACKUP_CONFIG_CHECKS = (check_panel_token, check_upload_limit, check_restore_limit)` is unpacked in
-  `CONFIG_CHECKS` right after `check_log_level`, before workstream A's `ACCOUNTS_CONFIG_CHECKS` and E's
+  `CONFIG_CHECKS` right after `check_test_mode`, the last of the platform's, before workstream A's `ACCOUNTS_CONFIG_CHECKS` and E's
   `*EMAIL_CONFIG_CHECKS`, which still close the tuple. The startup audit logs their
   error states as errors, each with its `summary`, a line naming its variable (quoted in «Startup Checks» of [Configuration](../../admin/configuration.md)), and the start goes on. The routes are unchanged: `503`, and their own
   error line at each call.
@@ -1158,7 +1162,7 @@ it should be. Each check is a function that returns a `ConfigCheck`:
 |-------|---------|
 | `check_id` | Stable id, such as `platform.jwt_secret` |
 | `severity` | `ok`, `info`, `warning` or `error` |
-| `i18n_key` | Key of its message, written whole in the module of the check so the i18n usage scan (`scripts/i18n_usage.py`) sees it: `instance.checks.*` for the platform's (`config_audit.py`, `plugin_secrets_check.py`), whose 27 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; `auth.checks.*` for workstream A's (`services/accounts/checks.py`), whose three messages are in the `auth` subsystem; `backup.checks.*` for workstream B's (`services/platform/instance_backup/checks.py`), whose thirteen messages are in the `backup` subsystem ([Configuration Checks of the Backup](#backup-config-checks)); `email.checks.*` for workstream E's ([Email Service](../backend/email.md#configuration-checks)). The «Security» tab of Settings › Administration shows these messages, all four subsystems', from [`GET /security/checks`](#security-checks-endpoint) ([SecurityTab](../frontend/components/features/settings.md#securitytab)); the log has the English `summary` instead |
+| `i18n_key` | Key of its message, written whole in the module of the check so the i18n usage scan (`scripts/i18n_usage.py`) sees it: `instance.checks.*` for the platform's (`config_audit.py`, `plugin_secrets_check.py`), whose 30 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; `auth.checks.*` for workstream A's (`services/accounts/checks.py`), whose three messages are in the `auth` subsystem; `backup.checks.*` for workstream B's (`services/platform/instance_backup/checks.py`), whose thirteen messages are in the `backup` subsystem ([Configuration Checks of the Backup](#backup-config-checks)); `email.checks.*` for workstream E's ([Email Service](../backend/email.md#configuration-checks)). The «Security» tab of Settings › Administration shows these messages, all four subsystems', from [`GET /security/checks`](#security-checks-endpoint) ([SecurityTab](../frontend/components/features/settings.md#securitytab)); the log has the English `summary` instead |
 | `detail` | The parameters of that message |
 | `summary` | The English sentence written to the log |
 
@@ -1181,6 +1185,7 @@ started: it is `ok` at startup, so the startup audit never logs it.
 | `platform.frame_protection` | `LIBREFOLIO_FRAME_PROTECTION` is off with `LIBREFOLIO_PROFILE=managed`, whose entry in `PROFILE_DEFAULTS` turns it on ([Frame Protection and the Report-Only Policy](#managed-headers)): a value set in the environment or in `.env`, or the entry lost from the table. `instance.checks.frameProtection.offManaged`, summary `LIBREFOLIO_FRAME_PROTECTION is off in the managed profile: any site can show LibreFolio in a frame; the managed profile turns it on` | `warning` |
 | `platform.csp_report_only` | `LIBREFOLIO_CSP_REPORT_ONLY` is off with `LIBREFOLIO_PROFILE=managed`, the same way: `instance.checks.cspReportOnly.offManaged`, summary `LIBREFOLIO_CSP_REPORT_ONLY is off in the managed profile: browsers list no Content-Security-Policy violation; the managed profile turns it on`. Only an `info`: the policy reports, and never blocks | `info` |
 | `platform.log_level` | `LOG_LEVEL`, after the `LIBREFOLIO_LOG_LEVEL` override, is `DEBUG` or `TRACE` | `info` |
+| `platform.hosting_panel` | `LIBREFOLIO_WAKE_TOKEN` or `LIBREFOLIO_PANEL_STATUS_TOKEN`, or its `_FILE`, is set but cannot be used (`wake_token()`, `panel_status_token()`; lot H-61): their routes answer `503` ([The Hosting Panel's Access](#panel-access)). `instance.checks.hostingPanel.unusable`, `detail` `{"variables": …}`, the unusable variables in that order, comma-separated, never a value; the summary adds each one's code, `FILE_UNREADABLE` for a `SecretFileError`: `A hosting panel token cannot be used, and its route answers 503 to every call: LIBREFOLIO_WAKE_TOKEN (WAKE_TOKEN_TOO_SHORT)`. `ok` otherwise: `instance.checks.hostingPanel.off` while neither is set, `instance.checks.hostingPanel.ok` while each one set can be used. The backup token has workstream B's `backup.panel_token`, below | `error` |
 | `platform.test_mode` | `LIBREFOLIO_TEST_MODE` is on (`is_test_mode()`: `1`, `true` or `yes`, in any case) outside a test lane, with `LIBREFOLIO_TEST_LANE_ID` unset, or not 16 to 128 characters once stripped (`owning_test_lane_id()`, H-49): `instance.checks.testMode.outsideTestLane`, `detail` `{"data_dir": …}`, the test data directory in use (`str(get_data_dir())`), summary `TEST_MODE_OUTSIDE_LANE_SUMMARY`, `LIBREFOLIO_TEST_MODE is on outside a test lane: test-only providers are served, the data are kept in the test data directory <data_dir> and .env is not read; unset it on a production instance`. The same in every profile (below) | `error`; with `LIBREFOLIO_PROFILE=managed`, `log_configuration_audit()` stops the startup first |
 | `backup.panel_token` | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, or its `_FILE`, is set but cannot be used: `backup.checks.panelToken.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
 | `backup.upload_limit` | `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, or the profile's entry for it, cannot be used: `backup.checks.uploadLimit.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
@@ -1364,7 +1369,7 @@ and `platform.plugin_secrets` listed; a member `403`, no session `401`).
 
 ## 🛡️ Endpoint Protection
 
-All endpoints that access or modify user data require a valid session cookie (`Depends(get_current_user)` in FastAPI), except the hosting panel's backup routes (`/backup/panel/jobs…`), which authenticate with the panel token instead: see [Hosting for Others](../../admin/hosting_providers.md#panel-backups).
+All endpoints that access or modify user data require a valid session cookie (`Depends(get_current_user)` in FastAPI), except the hosting panel's routes (`/backup/panel/jobs…`, `/system/wake-sync`, `/panel/status`), which authenticate with a token per scope instead: see [The Hosting Panel's Access](#panel-access).
 
 ### 🌐 Public Endpoints (no auth required)
 
@@ -1470,13 +1475,78 @@ shape:
 
 ### 🔒 Private Endpoints (auth required)
 
-All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and the global settings: any signed-in user reads them through `GET /settings/global` and `GET /settings/global/{key}`, only an administrator writes them; the login page needs none of them, it reads `/system/instance`), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), the catch-up of the prices (`/system/price-refresh`, see [Catch-up Progress](../backend/scheduler.md#price-refresh)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. Two kinds of route take a token of their own instead of a session cookie, sent as `Authorization: Bearer`: the hosting panel's backup routes (`/backup/panel/*`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`) and the [scheduled wake-up](../../admin/sleep_wake.md#wake-sync) (`/system/wake-sync`, `LIBREFOLIO_WAKE_TOKEN`). The panel's token is compared in constant time by `require_panel_token` (`backend/app/api/v1/backup/panel.py`): a missing or wrong token answers `401`, and while no token is set the panel's routes answer `404`, as a path that does not exist: see [Hosting for Others](../../admin/hosting_providers.md#panel-backups). The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api). So does `GET /security/checks`, the configuration checks on demand: see [The Checks on Demand](#security-checks-endpoint).
+All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and the global settings: any signed-in user reads them through `GET /settings/global` and `GET /settings/global/{key}`, only an administrator writes them; the login page needs none of them, it reads `/system/instance`), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), the catch-up of the prices (`/system/price-refresh`, see [Catch-up Progress](../backend/scheduler.md#price-refresh)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. The routes of the hosting panel take a token of their own instead of a session cookie, one per scope, sent as `Authorization: Bearer`: the backup routes (`/backup/panel/*`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`), the [scheduled wake-up](../../admin/sleep_wake.md#wake-sync) (`/system/wake-sync`, `LIBREFOLIO_WAKE_TOKEN`) and the setup status (`/panel/status`, `LIBREFOLIO_PANEL_STATUS_TOKEN`). One dependency checks them all, `panel_access(scope)`: a missing or wrong token answers `401`, too many refused ones from an address `429`, and while a scope's token is not set its routes answer `404`, as a path that does not exist: see [The Hosting Panel's Access](#panel-access) below. The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api). So does `GET /security/checks`, the configuration checks on demand: see [The Checks on Demand](#security-checks-endpoint).
 
 !!! info "📁 Files are protected too"
 
     Uploaded files (`/uploads/file/{id}`) and plugin assets (`/uploads/plugin/{type}/{path}`) **require authentication**. Since auth uses HTTP-only cookies, the browser includes the session automatically for `<img>` tags — no special handling needed. A personal file needs more than a session: see [Uploaded Files: Common and Personal](#upload-scope).
 
 For a complete endpoint reference, see the [API Overview](../api/overview.md).
+
+### 🔌 The Hosting Panel's Access {: #panel-access }
+
+Lot H-61. A hosting panel calls the instance without a session, with one token per **scope** (decision Q2), and one
+dependency checks all its routes: `panel_access(scope)` in `backend/app/services/platform/hosting_panel/access.py`.
+`PanelScope` names the scopes:
+
+| Scope | Routes | Token reader, and its errors | Bearer scheme | `401` / `503` codes |
+|-------|--------|------------------------------|---------------|---------------------|
+| `backup` | The four `/backup/panel/jobs…` routes, `backend/app/api/v1/backup/panel.py` (workstream B) | `backup_download_token()`: `SecretFileError`, `BackupConfigError` | `BackupPanelToken` | `backup_panel_unauthorized` / `backup_panel_unavailable` |
+| `wake` | `POST /system/wake-sync`, `backend/app/api/v1/system/wake.py` (workstream Z) | `wake_token()`: `SecretFileError`, `SleepWakeConfigError` | `WakeToken` | `wake_unauthorized` / `wake_unavailable` |
+| `status` | `GET /panel/status`, the [setup status](../../admin/hosting_providers.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status) | `panel_status_token()` (`backend/app/config/hosting_panel.py`): `SecretFileError`, `HostingPanelConfigError` | `PanelStatusToken` | `panel_status_unauthorized` / `panel_status_unavailable` |
+
+`panel_access(scope)` returns the same function for the same scope, so FastAPI runs it once per request. It takes the
+`Request` and the scope's `HTTPBearer(auto_error=False)`, and returns `PanelCaller(scope, credential="token")`, a frozen
+dataclass. In this order:
+
+1. **The token**, read at each call. One of the scope's errors: the scope's error line (the backup's and the wake-up's
+   worded as before H-61), one request line (below), then `503` with the scope's code. `None`: `404`
+   `{"detail": "Not Found"}`, as a path that does not exist (decision Q3), with no line, nothing counted and the
+   limiter not read.
+2. **The limiter**, on the key `client_rate_key(rate_limit_address(request))` ([The Client's Address](#client-address)),
+   skipped when it is `None`, behind a [proxy nobody trusts](#untrusted-proxy). A key over its limit (`peek()` not
+   allowed) gets `429` with the code `panel_too_many_attempts` and `Retry-After`, the wait in whole seconds, rounded
+   up, at least 1. The credential is not read.
+3. **The credential**, from `Authorization: Bearer` only, compared with the scope's token by `hmac.compare_digest()`
+   on the UTF-8 bytes. Missing or different: `hit()` on the key, when there is one, then the scope's `401`, with
+   `WWW-Authenticate: Bearer`.
+4. **Accepted**: the caller. A right credential is never counted, and clears nothing.
+
+Every refusal but the `404` has the body `{"detail": {"code": …, "message": …}}`; those of the backup and wake-up
+routes are the ones they had before.
+
+- **The limiter.** `PANEL_ATTEMPTS`, built by `new_panel_attempts()`: one
+  [sliding-window limiter](../backend/email.md#rate-window) for the three scopes, `PANEL_ATTEMPT_LIMIT` (20) refused
+  credentials per key in `PANEL_ATTEMPT_WINDOW_SECONDS` (600), in memory and per process. The dependency reads the
+  module attribute at each call, so a test puts one of its own in place:
+  `monkeypatch.setattr(access, "PANEL_ATTEMPTS", SlidingWindowLimiter(20, 600, clock=fake))`. In every test process
+  the autouse fixture `lift_panel_attempt_limit` of `backend/test_scripts/conftest.py` gives each test one without a
+  limit in practice, as the sign-in limit is off there.
+- **The line.** One per call, but for a scope that is off: `Hosting panel request` (`REQUEST_LINE`), INFO for the
+  `outcome` `accepted`, WARNING for `refused` (`reason`: `missing` or `mismatch`), `limited` (`retry_after`) and
+  `unavailable` (`reason`: `unusable`). Its other fields: `scope`, `method`, `path` (`request.url.path`, never the
+  query) and `credential` (`"token"`), with the `request_id` from structlog's context variables
+  ([Request Logs](#request-logs)). Never the token, the value sent, a header, the query or the client's address:
+  uvicorn's access line has the address.
+- **The OpenAPI tag.** `HOSTING_PANEL_TAG`, «Hosting panel», is the only tag of the six routes. FastAPI adds the tags
+  of a router to those of what it includes, and never replaces them, so the tag sits on each include and the parent
+  routers have none: `backend/app/api/v1/backup/__init__.py` includes `panel.panel_router` with it and its other
+  routers with `Backup & Export`, `backend/app/api/v1/system/__init__.py` includes `wake.wake_router` with it and the
+  others with `System`, and `backend/app/api/v1/router.py` includes the status route's router with the prefix `/panel`
+  and the tag. Paths, methods and endpoint names did not move, so the operation ids and the aliases of the web app's
+  client are those of before.
+- **The bearer schemes.** Each route asks for its scope's scheme alone, `BackupPanelToken`, `WakeToken` or
+  `PanelStatusToken`, an HTTP bearer whose description names its variable: the OpenAPI document tells which token
+  opens which route.
+- **On a blocked instance** the six routes stay allowed: see [Instance Block](#instance-block).
+
+Tests: `./dev.py test services hosting-panel-access`
+(`backend/test_scripts/test_services/test_hosting_panel_access.py`: the status token's reader, the four steps for
+each scope, the limit across scopes and behind an untrusted proxy, the line), `./dev.py test api hosting-panel-routes`
+(`backend/test_scripts/test_api/test_hosting_panel_routes.py`: the tag, the endpoints and their operation ids, the
+schemes, the documented `429`) and `./dev.py test api panel-status`
+(`backend/test_scripts/test_api/test_panel_status_api.py`: the status route). Administrator side:
+[Hosting Panel API](../../admin/hosting_providers.md#panel-api).
 
 ### 🔢 Numbers in Requests {: #request-numbers }
 
@@ -1722,12 +1792,13 @@ path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint func
 | `POST /auth/tokens/inspect`, `POST /auth/password-reset` | `auth.inspect_link_token`, `auth.reset_password_with_link` | A link already sent: reading it, and setting a new password with a reset link; without them, someone who lost the password could never reach the block page, the account deletion or the backup |
 | `DELETE /auth/users/me`, `GET /auth/users/me/deletion-preview` | `auth.delete_own_account`, `auth.preview_own_account_deletion` | Deleting one's own account, and seeing first what it would delete; the block page has no button for it yet |
 | `POST /backup/instance`, `GET /backup/instance/options`, `GET /backup/instance/jobs/{job_id}`, `GET /backup/instance/jobs/{job_id}/file`, `DELETE /backup/instance/jobs/{job_id}` | `backup_instance.start_instance_backup`, `backup_instance.get_instance_backup_options`, `backup_instance.get_instance_backup_job`, `backup_instance.download_instance_backup`, `backup_instance.delete_instance_backup_job` | The full backup, for an administrator: start, poll, download, delete. On a blocked instance the data can still be taken away, from the backup card of the block page (`backup_available` of `GET /system/block`, below). `GET /backup/instance/options` gives the rules of a secure backup's password ([Secure Backups](#secure-backups)), so that the card of a blocked instance can offer a secure backup too |
-| `POST /backup/panel/jobs`, `GET /backup/panel/jobs/{job_id}`, `GET /backup/panel/jobs/{job_id}/file`, `DELETE /backup/panel/jobs/{job_id}` | `backup_panel.start_panel_backup`, `backup_panel.get_panel_backup_job`, `backup_panel.download_panel_backup`, `backup_panel.delete_panel_backup_job` | The same, for the hosting panel, with its token (`require_panel_token`) instead of a session: the provider hands the data back |
+| `POST /backup/panel/jobs`, `GET /backup/panel/jobs/{job_id}`, `GET /backup/panel/jobs/{job_id}/file`, `DELETE /backup/panel/jobs/{job_id}` | `backup_panel.start_panel_backup`, `backup_panel.get_panel_backup_job`, `backup_panel.download_panel_backup`, `backup_panel.delete_panel_backup_job` | The same, for the hosting panel, with its token (`panel_access(PanelScope.BACKUP)`) instead of a session: the provider hands the data back |
 | `GET /backup/restore/outcome` | `backup_restore.get_restore_outcome` | The outcome of a restore, for the page that asked its restart, with the one-time ticket of that request instead of a session ([The Outcome Ticket](#backup-restore-outcome)): a restart that came back blocked reads `pending`, `waiting: "instance_blocked"`. It starts nothing |
 | `GET /system/block`, `GET /system/instance` | `block.get_instance_block`, `instance.get_instance_config` | The block page |
 | `GET /system/health`, `GET /system/ready`, `GET /system/info` | `health.health_check`, `ready.get_readiness`, `info.get_system_info` | Probes and version |
 | `GET /system/test-lane-health` | `health.test_lane_health` | The test runner's probe, `404` outside test mode |
 | `POST /system/wake-sync` | `wake.wake_sync` | The [scheduled wake-up](../../admin/sleep_wake.md#wake-sync), with its own token instead of a session: on a blocked instance it runs no job and answers `200` with `status: "blocked"` (decision D-W3) |
+| `GET /panel/status` | `panel.get_panel_status` | The hosting panel's [setup status](../../admin/hosting_providers.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status), with its own token instead of a session (lot H-61): it answers as on any other instance |
 
 **The refusal.** On a blocked instance, an endpoint outside the list first runs `get_current_user()`
 with the request's own database session (FastAPI caches the dependency), then refuses:
@@ -3298,7 +3369,8 @@ profile, names that header: `Fly-Client-IP` on Fly.io, `X-Real-IP` from Nginx's
   their address with `rate_limit_address()` too (lot E-13): «forgot password» and «send the link again» in
   `backend/app/api/v1/email.py`, the registration email in `backend/app/api/v1/auth.py`. The
   [failed sign-in limit](#login-limit) takes it in `backend/app/api/v1/auth.py`, for the sign-in, the password change
-  and the email change; at «send the link again» it counts with the address `email.py` reads. Their key follows the rule
+  and the email change; at «send the link again» it counts with the address `email.py` reads. So does the hosting
+  panel's limit on refused credentials ([The Hosting Panel's Access](#panel-access)). Their key follows the rule
   of `client_rate_key()`.
 - **Not the indicator.** `GET /system/connection` (`backend/app/api/v1/system/connection.py`) keeps
   `client_address(forwarded_for, peer)` of `backend/app/utils/runtime/network.py`, a different function that classifies
