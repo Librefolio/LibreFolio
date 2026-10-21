@@ -8352,6 +8352,11 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     developer chiede la parità piena, che cambierebbe il contratto della serie ridotta.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-29s-a — i segnali ridotti dal
   backend, la metà backend: lavoro».
+  - Revisione di Y su Z-29s-a (21/10, sola lettura): nessun bloccante; contratto compatibile con `chartSignalRendering.ts` e Y-40. Osservazioni:
+    - **O1, da decidere (Z, MF)**: dopo la riduzione le serie dello stesso segnale possono non avere più le stesse date (`_scalar_points`, `aggregation.py:129`: ogni serie si riduce per conto suo e scarta i nulli iniziali), mentre `_validate_series_alignment` (`schemas/signals.py:1127`) le vuole allineate. MACD, ADX, Aroon, PPO con riscaldamento diverso dentro l'intervallo. Non dà 500 (FastAPI non rivalida le istanze) e il browser disegna serie per serie. Nessun test lo copre: servirebbe un caso a due serie, poi allineare le date o documentare l'eccezione. Prima di Z-29b.
+    - **O2 (Z-29b o Y-40)**: `backendRenderer.ts:356` usa `baseData[0]` come base delle serie `base_percentage`; con le schede ridotte è il primo secchio, non `sample_bounds.first`. Serve un parametro `basePoint` in `renderBackendResults`.
+    - **O3 (doc)**: con la riduzione del backend restano solo la data del secchio e, per il rendimento, la provenienza (il browser aggiungeva il giorno vero e il numero di giorni del secchio).
+    - **O4**: una serie torna giornaliera dentro una risposta `weekly`/`monthly` se nessun `output_spec` la descrive (oggi nessuna) o se la riduzione non tiene nessun punto; Z-29b non deve dedurre il passo dalla densità dei segnali.
 
 ## B · Backup e Docker (fase 01)
 
