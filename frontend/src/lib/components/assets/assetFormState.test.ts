@@ -1,8 +1,14 @@
 /**
  * assetFormState — pure unit tests for the AssetModal form derivations.
+ *
+ * The quote base ladder (Z-32 d) replaces the bond seed (`shouldSeedBondQuoteBase`): the plugin's explicit suggestion
+ * for the line, else the asset type's default — 100 for a BOND, 1 for every other type — and the note that says where
+ * the proposal comes from, as an i18n key with its values (never the text). RED until the three functions and the
+ * defaults table exist: today the imports below are undefined and each case throws «is not a function».
  */
 import {describe, expect, it} from 'vitest';
-import {isQuoteBaseQuantityInvalid, quoteBaseQuantityErrorKey, shouldSeedBondQuoteBase, computeHasProvider, computeProviderDirty, groupImportNotices} from './assetFormState';
+import {ASSET_TYPES} from '$lib/utils/assetTypes';
+import {isQuoteBaseQuantityInvalid, quoteBaseQuantityErrorKey, QUOTE_BASE_TYPE_DEFAULTS, defaultQuoteBaseQuantity, proposeQuoteBase, quoteBaseNote, type QuoteBaseSource, computeHasProvider, computeProviderDirty, groupImportNotices} from './assetFormState';
 
 describe('isQuoteBaseQuantityInvalid', () => {
     it('accepts a positive integer', () => {
@@ -31,15 +37,91 @@ describe('quoteBaseQuantityErrorKey', () => {
     });
 });
 
-describe('shouldSeedBondQuoteBase', () => {
-    it('seeds only a fresh, untouched BOND still at 1', () => {
-        expect(shouldSeedBondQuoteBase('BOND', 1, false)).toBe(true);
+// =========================================================================
+// The quote base ladder (Z-32 d) — replaces the bond seed. RED: none of these exports exists yet.
+// =========================================================================
+
+describe('QUOTE_BASE_TYPE_DEFAULTS', () => {
+    it('lists the one type not quoted per unit: a BOND, per 100 nominal', () => {
+        expect(QUOTE_BASE_TYPE_DEFAULTS).toEqual({BOND: 100});
+    });
+});
+
+describe('defaultQuoteBaseQuantity', () => {
+    it('is 100 for a BOND, whatever the case of its code', () => {
+        expect(defaultQuoteBaseQuantity('BOND')).toBe(100);
+        expect(defaultQuoteBaseQuantity('bond')).toBe(100);
+        expect(defaultQuoteBaseQuantity('Bond')).toBe(100);
     });
 
-    it('does not seed a non-bond, an already-set base, or a user-touched field', () => {
-        expect(shouldSeedBondQuoteBase('STOCK', 1, false)).toBe(false);
-        expect(shouldSeedBondQuoteBase('BOND', 100, false)).toBe(false);
-        expect(shouldSeedBondQuoteBase('BOND', 1, true)).toBe(false);
+    it('is 1 for every other asset type — a bond ETF included, which is quoted per share', () => {
+        const others = ASSET_TYPES.filter((type) => type !== 'BOND');
+        // Premise: the enum still holds BOND and the neighbours this case is about.
+        expect(ASSET_TYPES).toContain('BOND');
+        expect(others).toEqual(expect.arrayContaining(['STOCK', 'ETF', 'ETF_BOND', 'FUND', 'CRYPTO', 'OTHER']));
+        expect(Object.fromEntries(others.map((type) => [type, defaultQuoteBaseQuantity(type)]))).toEqual(Object.fromEntries(others.map((type) => [type, 1])));
+    });
+
+    it('is 1 for an empty or unknown type', () => {
+        expect(defaultQuoteBaseQuantity('')).toBe(1);
+        expect(defaultQuoteBaseQuantity('NOT_A_TYPE')).toBe(1);
+    });
+});
+
+describe('proposeQuoteBase', () => {
+    it('takes the plugin’s suggestion — a whole number of 1 or more — with its quote currency as the provider wrote it', () => {
+        expect(proposeQuoteBase({quantity: 100, quote_currency: 'GBp'}, 'STOCK')).toEqual({kind: 'suggestion', quantity: 100, quoteCurrency: 'GBp'});
+    });
+
+    it('reads a missing or null quote currency as null', () => {
+        expect(proposeQuoteBase({quantity: 10}, 'STOCK')).toEqual({kind: 'suggestion', quantity: 10, quoteCurrency: null});
+        expect(proposeQuoteBase({quantity: 10, quote_currency: null}, 'STOCK')).toEqual({kind: 'suggestion', quantity: 10, quoteCurrency: null});
+    });
+
+    it('lets a suggestion win over the type: 1 for a BOND is a suggestion too, and so is 1000', () => {
+        expect(proposeQuoteBase({quantity: 1}, 'BOND')).toEqual({kind: 'suggestion', quantity: 1, quoteCurrency: null});
+        expect(proposeQuoteBase({quantity: 1000, quote_currency: 'EUR'}, 'BOND')).toEqual({kind: 'suggestion', quantity: 1000, quoteCurrency: 'EUR'});
+    });
+
+    it('without a suggestion, proposes the type’s default and names the type', () => {
+        expect(proposeQuoteBase(null, 'BOND')).toEqual({kind: 'typeDefault', assetType: 'BOND', quantity: 100});
+        expect(proposeQuoteBase(undefined, 'STOCK')).toEqual({kind: 'typeDefault', assetType: 'STOCK', quantity: 1});
+    });
+
+    it.each<{label: string; suggestion: unknown}>([
+        {label: 'zero', suggestion: {quantity: 0}},
+        {label: 'negative', suggestion: {quantity: -100}},
+        {label: 'fractional', suggestion: {quantity: 2.5}},
+        {label: 'NaN', suggestion: {quantity: Number.NaN}},
+        {label: 'infinite', suggestion: {quantity: Number.POSITIVE_INFINITY}},
+        {label: 'a numeric string', suggestion: {quantity: '100', quote_currency: 'GBp'}},
+        {label: 'null', suggestion: {quantity: null}},
+        {label: 'missing', suggestion: {quote_currency: 'GBp'}},
+    ])('counts a suggestion whose quantity is $label as none: the type’s default', ({suggestion}) => {
+        // The backend validates the suggestion; the form does not trust that to keep a division by zero out of a price.
+        expect(proposeQuoteBase(suggestion as never, 'BOND')).toEqual({kind: 'typeDefault', assetType: 'BOND', quantity: 100});
+        expect(proposeQuoteBase(suggestion as never, 'STOCK')).toEqual({kind: 'typeDefault', assetType: 'STOCK', quantity: 1});
+    });
+});
+
+describe('quoteBaseNote', () => {
+    const suggestion = (quantity: number, quoteCurrency: string | null): QuoteBaseSource => ({kind: 'suggestion', quantity, quoteCurrency});
+    const typeDefault = (assetType: string, quantity: number): QuoteBaseSource => ({kind: 'typeDefault', assetType, quantity});
+
+    it('names the provider, the quote currency and the quantity of a suggestion that has a currency', () => {
+        expect(quoteBaseNote(suggestion(100, 'GBp'), 'Yahoo Finance')).toEqual({key: 'assets.modal.quoteBaseSuggested', values: {provider: 'Yahoo Finance', currency: 'GBp', quantity: 100}});
+    });
+
+    it('takes the plain message, with no currency among its values, for a suggestion without one', () => {
+        expect(quoteBaseNote(suggestion(10, null), 'Owned source')).toEqual({key: 'assets.modal.quoteBaseSuggestedPlain', values: {provider: 'Owned source', quantity: 10}});
+    });
+
+    it('gives a BOND’s default the bond hint, which has no values', () => {
+        expect(quoteBaseNote(typeDefault('BOND', 100), 'Owned source')).toEqual({key: 'assets.modal.bondQuoteBaseHint', values: {}});
+    });
+
+    it.each([{type: 'STOCK'}, {type: 'ETF'}, {type: 'ETF_BOND'}, {type: 'FUND'}, {type: ''}])('says nothing about the default of «$type»', ({type}) => {
+        expect(quoteBaseNote(typeDefault(type, 1), 'Owned source')).toBeNull();
     });
 });
 

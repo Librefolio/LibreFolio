@@ -217,9 +217,13 @@ Questo passo appare solo quando lo scenario necessita di tassi di cambio.
 Contiene un tasso di cambio $x$ per ogni coppia di valute in gioco, ciascuno
 **Auto** o **Manuale**:
 
-- **Auto**: l'ultimo tasso memorizzato in LibreFolio, letto quando il passo si
+- **Auto**: l'ultimo tasso valido memorizzato in LibreFolio, letto quando il passo si
   apre e di nuovo appena prima del calcolo. Nessun provider di dati viene
-  chiamato.
+  chiamato. Un tasso memorizzato che il pianificatore non può usare (0 o infinito,
+  che una versione precedente poteva salvare) si salta per il precedente valido,
+  con un avviso che nomina la coppia, il giorno saltato e quello usato: quel giorno
+  va corretto in **Modifica tassi** della coppia; fino ad allora i risultati
+  potrebbero essere lievemente approssimati.
 - **Manuale**: un tuo tasso di cambio.
 
 Contiene anche uno **Spread di conversione** $s$: una percentuale di ogni

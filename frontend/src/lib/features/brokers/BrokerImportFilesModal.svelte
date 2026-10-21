@@ -95,8 +95,7 @@
                 queries: {broker_ids: [brokerId]},
             });
             files = response as BrimFile[];
-        } catch (e) {
-            console.error('Failed to load files:', e);
+        } catch {
             error = $_('brokers.loadFailed');
         } finally {
             loading = false;

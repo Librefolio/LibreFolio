@@ -32,6 +32,7 @@ from backend.app.schemas.signals import (
 )
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.period_changes import get_period_changes_bulk, live_range_changes
+from backend.app.services.assets.price_sampling import SampleReferenceError, sample_reference_detail
 from backend.app.services.assets.price_store import PriceCurrencyMismatchError, price_currency_mismatch_detail
 from backend.app.services.signals.planning import SignalRequestValidationError
 from backend.app.services.signals.registry import SignalPluginRegistry
@@ -161,6 +162,13 @@ async def query_prices_bulk(
     ``bulk_too_many_items``, before any read) and at most ``MAX_BULK_ITEM_DAYS`` per-day points over all the fills (422
     ``bulk_too_many_days``, counted once the prices are read, before the fills). The web app's asset list splits its
     request into batches under both, and splits again a batch refused for its days (Z-27).
+
+    An item's ``max_points``, ``resolution`` or ``sample_like`` (Z-29) asks for the series a compact chart draws: daily,
+    weekly or monthly, said by the result's ``resolution``. A weekly or monthly result holds one point per bucket, with
+    the fill's first and last points in ``sample_bounds``; it reads one row per bucket, and its points count against the
+    day budget. A comparison's target follows its card's buckets with ``sample_like``. A ``sample_like`` that names no
+    item, a repeated ``key``, a chain or another range: 422 ``sample_reference``. Sent with ``include_price: false``,
+    such an item only gives its step: it reads no price row past its plan and counts nothing (Z-29a-f).
     """
     if len(requests) > MAX_BULK_ITEMS:
         raise HTTPException(status_code=422, detail=bulk_too_many_items_detail(len(requests), MAX_BULK_ITEMS))
@@ -169,6 +177,8 @@ async def query_prices_bulk(
         return FAPriceQueryResponse(items=results)
     except SignalRequestValidationError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+    except SampleReferenceError as e:
+        raise HTTPException(status_code=422, detail=sample_reference_detail(e)) from e
     except BulkTooManyDaysError as e:
         raise HTTPException(status_code=422, detail=bulk_too_many_days_detail(e.item_days, e.max_item_days)) from e
     except Exception as e:

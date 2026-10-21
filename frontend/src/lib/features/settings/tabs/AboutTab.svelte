@@ -17,12 +17,11 @@
     import {getCurrentResolvedTheme, getStoredThemePreference, type ThemePreference} from '$lib/stores/app/themeStore';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
-    import ChangelogModal from '$lib/components/layout/ChangelogModal.svelte';
+    import {changelogModal} from '$lib/features/changelog/changelogModalStore.svelte';
     import {brimPluginName} from '$lib/utils/brim/pluginText';
     import {writeTextToClipboard} from '$lib/utils/clipboard';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
 
-    let changelogOpen = false;
     let toolPanelOpen = false;
 
     const githubUrl = 'https://github.com/Librefolio/LibreFolio';
@@ -262,11 +261,9 @@ Generated: ${new Date().toISOString()}
         </div>
         <div>
             <h3 class="text-xl font-bold text-lf-primary" data-testid="about-app-name">LibreFolio</h3>
-            <button type="button" class="text-lf-muted hover:text-lf-secondary transition-colors cursor-pointer text-left" title={$_('changelog.title')} onclick={() => (changelogOpen = true)} data-testid="about-version">{$_('settings.version')} {systemInfo?.app_version ?? '...'}</button>
+            <button type="button" class="text-lf-muted hover:text-lf-secondary transition-colors cursor-pointer text-left" title={$_('changelog.title')} onclick={() => changelogModal.show()} data-testid="about-version">{$_('settings.version')} {systemInfo?.app_version ?? '...'}</button>
         </div>
     </div>
-
-    <ChangelogModal open={changelogOpen} onClose={() => (changelogOpen = false)} currentVersion={systemInfo?.app_version ?? ''} />
 
     <!-- Description -->
     <div class="space-y-2">

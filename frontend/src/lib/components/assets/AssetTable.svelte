@@ -370,12 +370,14 @@
 </div>
 
 <style>
-    /* An inactive asset's row: the warning tint, a step stronger under the pointer — the roles follow the theme. */
+    /* An inactive asset's row: the warning tint, a step stronger under the pointer — the roles follow the theme. Set as the
+       row's tint of DataTable (`--dt-row-tint`), never as its background: so the fixed columns show the same colour,
+       opaque. */
     :global(tr.asset-row-inactive:not(.selected):not(.highlighted)) {
-        background-color: var(--lf-warning-soft) !important;
+        --dt-row-tint: var(--lf-warning-soft) !important;
     }
 
     :global(tr.asset-row-inactive:not(.selected):not(.highlighted):hover) {
-        background-color: color-mix(in oklab, var(--lf-warning-line) 50%, transparent) !important;
+        --dt-row-tint: color-mix(in oklab, var(--lf-warning-line) 50%, transparent) !important;
     }
 </style>

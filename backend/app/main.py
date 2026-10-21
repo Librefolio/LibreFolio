@@ -15,6 +15,7 @@ warnings.filterwarnings("ignore", message=".*already taken in index.*")
 from fastapi import FastAPI
 
 from backend.app.api.response_validation import install_response_validation_handler
+from backend.app.api.server_errors import install_server_error_handler
 from backend.app.api.v1.router import router as api_v1_router
 from backend.app.api.validation_errors import install_validation_error_handler
 from backend.app.config import (
@@ -63,6 +64,9 @@ install_validation_error_handler(app)
 
 # A response that breaks its model is logged without its content (H-33): api/response_validation.py
 install_response_validation_handler(app)
+
+# A 5xx answers with a request id and the failure's type, and its cause reaches the log once (H-60): api/server_errors.py
+install_server_error_handler(app)
 
 # Mount API v1 router
 app.include_router(api_v1_router, prefix=API_V1_PREFIX)

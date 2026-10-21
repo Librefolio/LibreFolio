@@ -147,6 +147,15 @@ The tagged union structure of `PendingOp` simplifies complex composite operation
 
 * **Split** (`handleSplitRow`) breaks a linked pair (`TRANSFER`, `CASH_TRANSFER`, `FX_CONVERSION`)
   into two independent rows; nothing is deleted.
+  - A pair **merged in the workspace** and not saved yet — an entry of `pendingPromotes`, two
+    saved rows or a saved and a new one — is not split: its merge is undone, whichever row the
+    pair shows (`undoPendingPromote`, J-67). Each row takes its source type back (a saved row's
+    from the store, `txStoreGet(txId).type`; a new row's `promoteFromType`) and its quantity and
+    cash back in the workspace's sign convention (`magnitudeForRule()`, as `fieldsFromTx` reads
+    them), the new row's `link_uuid` is cleared, both rows are visible, and the entry leaves
+    `pendingPromotes`: the save sends neither the promote nor a split, where a mixed merge's save
+    used to be refused (`promoteRefNotFound`). The description and the tags chosen for the merge
+    stay. Two new rows merged are no such entry: they split as a **new** pair.
   - A **saved** pair is queued in `pendingSplits` as `{id_a, id_b}`; the backend splits it at
     commit. Meanwhile the partner op loses `pairedWith` and becomes a visible row next to its
     former main row.
@@ -155,12 +164,26 @@ The tagged union structure of `PendingOp` simplifies complex composite operation
     `DEPOSIT` for `FX_CONVERSION`).
 * **Promote** (`executePromote`) links two independent rows (e.g. a `WITHDRAWAL` and a `DEPOSIT`)
   into a pair of the matching type; both ops take the target type and collapse into one paired
-  row, the receiving op becoming the hidden partner (`collapseIntoPaired`).
+  row, the receiving op becoming the hidden partner (`collapseIntoPaired`). Before the type
+  changes, every branch below moves the sign into the values (`applySignRules()`, under each
+  row's own type rule), so a `WITHDRAWAL`'s cash, held as its magnitude, turns negative: the
+  target is free-sign (`CASH_TRANSFER`, `FX_CONVERSION`), and `collapseIntoPaired` picks the row
+  to show by the sign of its cash — the paying one, its cash negative, on the *From:* line of the
+  pair's cells, the receiving one on *To:* (J-67; before, only a merge of two new rows did). For
+  a merge with a saved row the save does not depend on it: a saved row is not sent as an update
+  (`resolveOps()` skips the ids in `pendingPromotes`), and a new row is created under its source
+  type (`promoteFromType`), whose rule signs it again — `applySign()` is idempotent.
   - Two **saved** rows are queued in `pendingPromotes` (`{id_a, id_b}`) for the backend.
   - Two **new** rows simply share a fresh `link_uuid`.
   - A **mixed** pair (one saved, one new) is queued as `{id_a, link_uuid_b}`, and the new row keeps
     its pre-promote type in `promoteFromType`, because the backend derives the target from the
     two source types.
+
+`e2e/transactions/tx-bulk-promote-split.spec.ts` pins both (J-67): a saved `WITHDRAWAL` merged
+with a new `DEPOSIT` shows the withdrawal on *From:* (F1), its cash negative (F2); **Split pair**
+on a new `WITHDRAWAL` merged with a saved `DEPOSIT`, before the save, gives each row its type
+back, and the save creates the withdrawal alone, with no update and no promote (F3); G guards
+two new rows, merged, split and saved as two creates.
 
 ### 💡 Promote suggestions {: #promote-suggestions }
 
@@ -179,8 +202,21 @@ The workspace looks for the two halves of a transfer or an exchange and offers t
   (`assetQuantitiesCancel`, in `promoteSuggest.ts`). Both helpers give each value the sign its
   type implies, then compare the decimal strings exactly, as the backend compares `Decimal`s: a
   relative tolerance of 1e-9 would let a one-cent difference through above about 10 million, a
-  pair the backend refuses. It shows the first five pairs, the paying row first when both rows
-  carry cash. `executePromote` asks `findPromoteMatch` again before it promotes, so its refusals
+  pair the backend refuses. It shows the first five pairs, and `promotePairOrder`
+  (`promoteHelpers.ts`, J-66) tells which row of a pair pays: the one whose cash, signed by its type
+  (`buildSignedCash`, its sign read exactly by `exactDecimalSign`, as `cashAmountsCancel` reads it),
+  is negative — a `WITHDRAWAL` pays whether the workspace holds its cash as its magnitude (the sign
+  convention above: `fieldsFromTx`, `txCreateItemToPendingOp`, and since W-B65 `applyFormPayload()`)
+  or signed — and never a row without cash, or whose amount is no plain decimal. Five readers share
+  that answer: the banner's order, the paying row first when the other one receives (`swapped`); the
+  implied rate shown for an exchange, from that row to the other (`from` → `to`, `to` ÷ `from` in
+  `computeFxConversionInfo`); the market rate it is compared with, fetched in the same direction on
+  the paying row's date (the `fxMarketCache` effect); the `left` of **Merge all** (*All left*), the
+  row the banner lists first (`mergeAllSuggestions`); and the **Merge** dialog, which shows that row
+  first, its text first in the combined description it opens with (`triggerPromoteFromSuggestion`;
+  `executePromote` still gets the rows in the suggestion's order) — all but the dialog used to read
+  the stored amount, where a `WITHDRAWAL` held as its magnitude never paid and the pair could show
+  backwards. `executePromote` asks `findPromoteMatch` again before it promotes, so its refusals
   hold for every promote of the workspace: **Merge**, **Merge all**, and the selection toolbar's
   promote button (`selectedForPromote`, `promote-toolbar-confirm`), which also asks
   `cashAmountsCancel` of a cash transfer and `assetQuantitiesCancel` of an asset transfer.
@@ -201,10 +237,10 @@ The workspace looks for the two halves of a transfer or an exchange and offers t
   from merging. The 💡 opens `TransactionPickerModal` on those candidates; once one is added, the
   banner offers the pair.
 * **Merge** (`promote-suggest-link-<idx>`) promotes one pair: `executePromote` at once, or
-  `PromoteMergeModal` first when the two rows differ in description or tags. Where the
-  descriptions differ, the dialog counts the merged one under its textarea
-  (`promote-merge-desc-counter`, `data-state` `ok` or `over`), in code points as Python's
-  `len()` counts them (`textLength()` and `TX_DESCRIPTION_MAX_LENGTH`, 500, in
+  `PromoteMergeModal` first, showing the two rows in the banner's order (`promotePairOrder`), when
+  they differ in description or tags. Where the descriptions differ, the dialog counts the merged
+  one under its textarea (`promote-merge-desc-counter`, `data-state` `ok` or `over`), in code points
+  as Python's `len()` counts them (`textLength()` and `TX_DESCRIPTION_MAX_LENGTH`, 500, in
   `promoteHelpers.ts`). Past 500 — 500 itself fits — the textarea is `aria-invalid`, a message
   names the limit (`promote-merge-desc-too-long`) and **Confirm promotion**
   (`promote-merge-confirm`) is disabled: the backend would refuse the merged notes with

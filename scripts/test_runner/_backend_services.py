@@ -49,6 +49,7 @@ AI_EXPORT_SERVICE_TEST_PATHS = (
 # the shared DB) so the unit can honestly declare PURE isolation and run beside
 # anything.
 AI_EXPORT_PURE_TEST_PATHS = (
+    "backend/test_scripts/test_services/test_ai_export_build_failure_log.py",
     "backend/test_scripts/test_services/test_ai_export_components_drawdown_total_loss.py",
     "backend/test_scripts/test_services/test_ai_export_fx_payload_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_fx_timing_invariants.py",
@@ -187,6 +188,15 @@ def services_fx_conversion(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "FX conversion service tests", verbose=verbose)
 
 
+def services_fx_rate_steps(verbose: bool = False, test_names: list = None) -> bool:
+    """P3: unit_rate_steps, one unit of a currency in another as steps, == convert_bulk on every window day (private in-memory DB)."""
+    print_section("Services: FX Rate Steps (P3)")
+    print_info("Testing: backend/app/services/fx/conversion.py (unit_rate_steps, UnitRateSteps; convert_bulk the oracle)")
+    print_info("Tests: at/rate_day_at == convert_bulk(Currency(1)) bit for bit on every window day, direct and inverse; the step calendar; unusable rates skipped; 501/1 035 pairs in convert_bulk's chunks; ValueError cases")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_rate_steps.py", test_names)
+    return run_command(cmd, "FX rate steps tests", verbose=verbose)
+
+
 def services_asset_source(verbose: bool = False, test_names: list = None) -> bool:
     """Test Asset Source service logic."""
     print_section("Services: Asset Source Logic")
@@ -225,6 +235,18 @@ def services_range_ceiling(verbose: bool = False, test_names: list = None) -> bo
     if test_names:
         cmd.extend(["-k", " or ".join(test_names)])
     return run_command(cmd, "Date range ceiling and bulk limit tests", verbose=verbose)
+
+
+def services_price_query_sampling(verbose: bool = False, test_names: list = None) -> bool:
+    """Z-29a (N90, revised 19/10): an item of POST /assets/prices/query sampled for a compact chart — by max_points, resolution or sample_like."""
+    print_section("Services: Price Query Sampling (Z-29a)")
+    print_info("Testing: price_sampling (bucket_of, fill_counts, choose_resolution, sample_dates, SampleReferenceError), FAPriceQueryItem (key, max_points, resolution, sample_like), FAPriceQueryResult (resolution, sample_bounds), get_prices_bulk, the query route's 422")
+    print_info("Per item, on its own fill after the X-R55 ceiling: the step chosen (max_points), asked (resolution) or followed (sample_like, from the later first day); prices the last day of each ISO week or month, each the daily answer's point; sample_bounds on the first day and the cut end")
+    print_info("Wrong references refused before any read (unknown or duplicate key, chained, range mismatch: 422 sample_reference); one read per asset: a whole daily read serves its samples, else one bucket statement per range and step")
+    print_info("Day budget counts the sampled points + 2 bounds, checked before the bucket rows; no daily fill built; at most buckets + 2 price rows read per asset")
+    print_info("Case table shared with the chart: frontend/src/lib/components/charts/__tests__/compactDensityCases.json")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_price_query_sampling.py", test_names)
+    return run_command(cmd, "Price query sampling tests", verbose=verbose)
 
 
 def services_provider_registry(verbose: bool = False, test_names: list = None) -> bool:
@@ -353,6 +375,16 @@ def services_signal_annotations(verbose: bool = False, test_names: list = None) 
     print_info("Testing: extended-range crossing, gaps, observed-only, dedup and sampling")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_annotations.py", test_names)
     return run_command(cmd, "Signal annotation tests", verbose=verbose)
+
+
+def services_signal_aggregation(verbose: bool = False, test_names: list = None) -> bool:
+    """Z-29r: the one home of the signals' per-bucket selection rule (services/signals/aggregation.py) and AI Export through it."""
+    print_section("Services: Signal Aggregation (Z-29r)")
+    print_info("Testing: backend/app/services/signals/aggregation.py (Selector, SCALAR_PROFILE_SELECTORS, BAND_ENVELOPE_SELECTORS, select_point, scalar_representative, band_envelope)")
+    print_info("Parity: timeSeriesAggregation.ts (selectSignalRepresentative, bandRepresentative, the envelope) and fixtures/signals/aggregation_profiles.v1.json")
+    print_info("One home: ai_export/temporal/aggregators.py goes through the module, its outputs unchanged")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_aggregation.py", test_names)
+    return run_command(cmd, "Signal aggregation tests", verbose=verbose)
 
 
 def services_signal_plugins_core(verbose: bool = False, test_names: list = None) -> bool:
@@ -1027,12 +1059,24 @@ def services_probe_rate_limit(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Probe rate-limit tests", verbose=verbose)
 
 
+def services_quote_base_suggestion(verbose: bool = False, test_names: list = None) -> bool:
+    """Z-32 (d): a provider's quote base suggestion (FAQuoteBaseSuggestion) in its search results and in the probe's metadata."""
+    print_section("Services: Quote Base Suggestion (Z-32 d)")
+    print_info("Testing: schemas/provider.py (FAQuoteBaseSuggestion; quote_base_suggestion on FAProviderSearchResultItem and ProbeMetadataResult), AssetSearchService.search, AssetSourceProvider.suggest_quote_base, probe_provider_config, the Yahoo Finance and mockprov plugins")
+    print_info("Search: a plugin's suggestion (dict or model) reaches its result; an invalid one is dropped with a warning, the result kept")
+    print_info("Probe: asked after the metadata answered, through core.call_provider with 5 s; never after a failed metadata, never of a provider keeping the base class's hook")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_quote_base_suggestion.py", test_names)
+    return run_command(cmd, "Quote base suggestion tests", verbose=verbose)
+
+
 def services_bulk_reads_chunked(verbose: bool = False, test_names: list = None) -> bool:
     """MF-SEC9a (rest): bulk reads of the BRIM candidate search and of the WAC FX evidence in statements SQLite can parse (private in-memory DB)."""
-    print_section("Services: Bulk Reads Chunked (MF-SEC9a)")
-    print_info("Testing: services/brim/brim_provider.py (search_asset_candidates_bulk, _classify_candidates, _contains_matcher vs search_asset_candidates), services/pac_allocator/source/wac.py (_load_wac_fx_rows)")
+    print_section("Services: Bulk Reads Chunked (MF-SEC9a, X-R45 reverted, X-R45b)")
     print_info(
-        "Tests: 300 isin+symbol+name and 150 name-only triples without «Expression tree is too large», each answer == the per-asset search (ids, confidences, order, auto-select), 50 triples guard; 1 500 WAC keys + 10 missing exact (500/501 at the chunk edge); barriers: one OR of 1 500 refused, a nested OR counts every term; MF-SEC9g: classification off the loop (thread + loop handshake), compiles ≤ needles and dumps ≤ assets, 300×1 011 parity guard, exact-hit order guard"
+        "Testing: services/brim/brim_provider.py (search_asset_candidates_bulk, _classify_candidates, _contains_matcher vs search_asset_candidates), services/pac_allocator/source/wac.py (_load_wac_fx_rows), services/pac_allocator/source/fx_quotes.py (_load_latest_planner_fx_rows, build_planner_fx_quotes), services/fx/conversion.py (convert_bulk), services/fx/period_changes.py (_first_rate_days_inside), schemas/portfolio.py (PortfolioPlannerSourceIssueCode), schemas/pac_allocator/base.py (PlannerIssueCode)"
+    )
+    print_info(
+        "Tests: 300 isin+symbol+name and 150 name-only triples without «Expression tree is too large», each answer == the per-asset search (ids, confidences, order, auto-select), 50 triples guard; 1 500 WAC keys + 10 missing exact (500/501 at the chunk edge); barriers: one OR of 1 500 refused, a nested OR counts every term; MF-SEC9g: classification off the loop (thread + loop handshake), compiles ≤ needles and dumps ≤ assets, 300×1 011 parity guard, exact-hit order guard; X-R45 reverted: the planner's latest saved FX row and the WAC row of its exact date are read as stored (a legacy 0, inf or 1E+14); X-R45b: a latest saved rate of 0 or inf falls back to the previous valid one with one allocation.saved_fx_skipped warning (pair, skipped_date, used_date), over a run of two too; no valid rate before → the latest row's quote with no rate and allocation.saved_fx_invalid; 1E+14 quoted as read back; the code a source issue code, not a tool one; guards: the latest usable rate wins, convert_bulk and _first_rate_days_inside still skip unusable rates"
     )
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_bulk_reads_chunked.py", test_names)
     return run_command(cmd, "Bulk reads chunked tests", verbose=verbose)
@@ -1419,6 +1463,14 @@ def services_response_validation(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Response validation tests", verbose=verbose)
 
 
+def services_server_errors(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the request id and the 5xx answers: id in every answer and log line, the HTTPException handler, the unhandled 500, H-33's 500, D4 (H-60)."""
+    print_section("Services: Request Id and Server Errors")
+    print_info("Testing: services/platform/request_id.py, api/server_errors.py, services/platform/failure_report.py, the unhandled 500 of security_headers.py, api/response_validation.py, client_log_level of /system/instance")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_server_errors.py", test_names)
+    return run_command(cmd, "Request id and server error tests", verbose=verbose)
+
+
 def services_client_address(verbose: bool = False, test_names: list = None) -> bool:
     """Test the client address behind a trusted proxy: LIBREFOLIO_CLIENT_IP_HEADER, client_address and client_rate_key (P17); no function only for the tests (N58)."""
     print_section("Services: Client Address")
@@ -1619,6 +1671,14 @@ def services_series_export_csv(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Series export CSV tests", verbose=verbose)
 
 
+def services_logging_errors(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the error helpers and the log of a failure: one traceback per exception, the «reported» mark, uvicorn's duplicate dropped (H-60)."""
+    print_section("Services: Errors in the Log")
+    print_info("Testing: backend/app/utils/runtime/errors.py (causes, root, shown error, reason code, reported mark) and backend/app/logging_config.py (LibreFolioBoundLogger, add_log_level, the uvicorn.error filter)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_logging_errors.py", test_names)
+    return run_command(cmd, "Errors in the log tests", verbose=verbose)
+
+
 def services_logging_access_filter(verbose: bool = False, test_names: list = None) -> bool:
     """Test the credential mask of uvicorn's request lines: the rule, the filter on any record, uvicorn's HTTP and WebSocket records, configure_logging installing it once on each logger and closing the handlers it removes."""
     print_section("Services: Credentials in uvicorn's Request Lines")
@@ -1704,10 +1764,10 @@ def services_scheduler_jobs(verbose: bool = False, test_names: list = None) -> b
 
 
 def services_scheduler_last_fx_dates(verbose: bool = False, test_names: list = None) -> bool:
-    """Test X-R45 on the history sync's lookup: the real _last_fx_dates skips a stored rate no read may use (lane DB)."""
-    print_section("Services: Scheduler Last FX Dates (X-R45)")
+    """Test the X-R45 revert on the history sync's lookup: the real _last_fx_dates answers the latest stored rate's date, whatever its value (lane DB)."""
+    print_section("Services: Scheduler Last FX Dates (X-R45 reverted)")
     print_info("Testing: backend/app/services/platform/scheduler/jobs.py (_last_fx_dates, _history_sync_start) on the lane database")
-    print_info("Tests: 1.5 on D1 and a legacy 0 / inf / 1E+14 on D2 → D1 for both slugs, the sync starting the day after D1; a legacy rate alone → nothing; guard: a usable latest rate (2, 1E-10, 99999999999999) → D2")
+    print_info("Tests: 1.5 on D1 and a legacy 0 / inf / 1E+14 on D2 → D2 for both slugs, the sync starting the day after D2 (not fetched again); a legacy rate alone → its date, D2; guard: a usable latest rate (2, 1E-10, 99999999999999) → D2")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_last_fx_dates.py", test_names)
     return run_command(cmd, "Scheduler last FX dates tests", verbose=verbose)
 
@@ -1891,6 +1951,15 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "fx-rate-steps",
+        services_fx_rate_steps,
+        name="FX Rate Steps (P3)",
+        desc="unit_rate_steps: at/rate_day_at == convert_bulk(Currency(1)) bit for bit (as_tuple) and its rate date on every window day, direct and inverse; steps = each window's first day with its anchor + usable rows inside; unusable rates skipped; disjoint, overlapping, touching windows; 501 and 1 035 pairs in ⌈n/500⌉ statements; ValueError on a one-currency pair or a backward window",
+        # PURE: one private in-memory SQLite per test (create_all), disposed at teardown; no service replaced.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "pac-planner-core",
         services_pac_planner_core,
         name="PAC/Rebalancer Exact Core",
@@ -1976,6 +2045,19 @@ Note: No backend server required.
         # X-R65's handlers run the same way: the price route on a stand-in session that reads nothing, the rate route with upsert_rates_bulk replaced by an in-process writer.
         isolation="pure",
     )
+    add_test(
+        cat,
+        "price-query-sampling",
+        services_price_query_sampling,
+        name="Price Query Sampling",
+        desc="Z-29a (N90, revised 19/10) and Z-29a-f (an item without prices only gives its step: no row read past its plan, nothing counted): FAPriceQueryItem.key and sample_like (1 … 64 of A-Z a-z 0-9 _ . : -), max_points (1 … 10 000), resolution (daily, weekly, monthly), at most one of the three, none with signals, annotations or events; FAPriceQueryResult.resolution always, sample_bounds (FAPriceSampleBounds: first, last) on weekly and monthly answers only; price_sampling's buckets (ISO week, calendar month), counts, step, sampled dates (the last day of each bucket, the first day only when it closes its own) and SampleReferenceError; per item on its own fill after the X-R55 ceiling, daily as without the fields, else each point and bound the daily answer's, converted per point; sample_like: the card's step from the later first day, a card with nothing to fill lending its max_points or resolution; wrong references (unknown or duplicate key, chained, range mismatch) refused before any statement, the route's 422 sample_reference; the day budget counts points + 2 bounds, before the bucket rows are read; no daily fill built, at most buckets + 2 rows read; one read per asset, one bucket statement per range and step; request order kept; the case table shared with the chart (compactDensityCases.json)",
+        # PURE: no lane DB, no server, no network. The price queries run on a private SQLite file under tmp_path built
+        # with create_all, its assets on ids of their own; the X-R55 ceiling and the day budget replaced by monkeypatch in
+        # price_query; the FX rates of the conversion case are rows of that file; the route is called as a function on a
+        # session of that file; statements and ORM loads are counted by listeners the tests register and remove; the
+        # case table is a file of the repository, read only.
+        isolation="pure",
+    )
     add_test(cat, "provider-registry", services_provider_registry, name="Provider Registry", desc="Registration, lookup, priority, fallback")
     add_test(cat, "quantlib-runtime", services_quantlib_runtime, name="QuantLib Runtime", desc="Pinned version, required APIs and seeded path reproducibility")
     add_test(cat, "risk-simulation", services_risk_simulation, name="Risk Simulation", desc="Serializable contracts, sampling, moments, chunking and cache")
@@ -1996,6 +2078,17 @@ Note: No backend server required.
     add_test(cat, "signal-contracts", services_signal_contracts, name="Signal Contracts", desc="Auto-discovered test-only line, band/composite, warm-up, failure and event fixtures")
     add_test(cat, "signal-service", services_signal_service, name="Signal Service", desc="Planning, dedup, availability, one-thread batch, output validation and slicing")
     add_test(cat, "signal-annotations", services_signal_annotations, name="Signal Annotations", desc="Line crossover, threshold crossing, observed-only, dedup and sampling")
+    add_test(
+        cat,
+        "signal-aggregation",
+        services_signal_aggregation,
+        name="Signal Aggregation",
+        desc="Z-29r: the per-bucket rule of the signals' aggregation_profile in one home, services/signals/aggregation.py: Selector, the read-only profile and envelope selector maps, select_point / scalar_representative / band_envelope picking as the chart (timeSeriesAggregation.ts; ties to the earliest, any input order, any element type through keyword-only accessors, the element itself) and as the shared aggregation_profiles.v1.json; AI Export's temporal aggregators going through it (aggregation.select_point and the two maps, read at the call), their outputs unchanged",
+        # PURE: no lane DB, no server, no network. Pure functions over points built in memory; AI Export's aggregators
+        # called directly on hand-built plans; the module attributes the tests replace (select_point, the two maps) put
+        # back by monkeypatch; the shared fixture read from the repository.
+        isolation="pure",
+    )
     add_test(cat, "signal-plugins-core", services_signal_plugins_core, name="Core Signal Plugins", desc="EMA, RSI, MACD and Bollinger TA-Lib delegation and numerical regression")
     add_test(cat, "signal-plugins-close-only", services_signal_plugins_close_only, name="Close-only Signal Plugins", desc="SMA, ROC, StochRSI, KAMA and PPO delegation, warm-up and Asset/FX parity")
     add_test(cat, "signal-plugins-ohlc", services_signal_plugins_ohlc, name="OHLC Signal Plugins", desc="ATR, ADX, NATR, Aroon, Donchian and CCI strict input and numerical regression")
@@ -2456,10 +2549,24 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "quote-base-suggestion",
+        services_quote_base_suggestion,
+        name="Quote Base Suggestion",
+        desc="Z-32 (d): FAQuoteBaseSuggestion (quantity a whole number ≥ 1, required; quote_currency as the provider reports it, GBp kept; strict), quote_base_suggestion on FAProviderSearchResultItem and ProbeMetadataResult (null when absent, in the OpenAPI document: quantity required, minimum 1); the search carries a plugin's suggestion (dict or model, also from the query cache) and drops an invalid one with a warning, the result, its neighbours and the provider kept; AssetSourceProvider.suggest_quote_base answers None with no I/O; the probe asks it once fetch_asset_metadata answered (a patch or None), never in parallel, through core.call_provider with 5 s and the metadata's arguments, never after a failed metadata (exception, refusal, timeout), never without the metadata operation, never of a provider keeping the base class's hook or of a double without one, never into patch_data, its own failures None with the metadata's outcome unchanged; Yahoo: a GBp search result and suggest_quote_base → 100 GBp, GBP/USD/none → nothing; mockprov: MINOR_UNIT_QUERY lf-minor-unit → MOCK_MINOR_UNIT, a GBp STOCK with 100 GBp, suggest_quote_base for it only, the other searches unchanged",
+        # PURE: no lane DB, no server, no network. The providers are in-process doubles without settings handed out by
+        # AssetProviderRegistry.get_provider_instance (monkeypatch), so configured_provider reads no row; the pauses go
+        # to a private Cooldowns on a fake clock; core.call_provider is wrapped to record the calls; the Yahoo plugin's
+        # yf module is a fake; mockprov is called directly; the OpenAPI document is an app of the test around the real
+        # provider_router (backend.app.main is not imported). Codes, queries and symbols are unique per test, so the
+        # process's search and currency caches answer for no other test.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "bulk-reads-chunked",
         services_bulk_reads_chunked,
-        name="Bulk Reads Chunked (MF-SEC9a)",
-        desc="search_asset_candidates_bulk over 100 (first size past HEAD's 91) and 300 isin+symbol+name and 150 name-only triples (1 100 / 3 300 / 1 200 OR terms) == search_asset_candidates per triple, 50/90-triple guards; _load_wac_fx_rows with 500, 501 and 1 510 keys exact; barriers: one OR of 1 500 refused, a nested OR's terms counted; MF-SEC9g: the candidate classification's LIKE matching runs off the event loop's thread and the loop answers a coroutine mid-classification (100 generic names × 300 funds); ≤ 1 LIKE compile per needle and ≤ 1 identifier_other dump per stored asset (counted, not timed); 300 extractions over 1 011 assets == search_asset_candidates (wildcard bond names, codes stored in either case, duplicate holders); exact ISIN/ticker hits in display-name order",
+        name="Bulk Reads Chunked (MF-SEC9a, X-R45 reverted, X-R45b)",
+        desc="search_asset_candidates_bulk over 100 (first size past HEAD's 91) and 300 isin+symbol+name and 150 name-only triples (1 100 / 3 300 / 1 200 OR terms) == search_asset_candidates per triple, 50/90-triple guards; _load_wac_fx_rows with 500, 501 and 1 510 keys exact; barriers: one OR of 1 500 refused, a nested OR's terms counted; MF-SEC9g: the candidate classification's LIKE matching runs off the event loop's thread and the loop answers a coroutine mid-classification (100 generic names × 300 funds); ≤ 1 LIKE compile per needle and ≤ 1 identifier_other dump per stored asset (counted, not timed); 300 extractions over 1 011 assets == search_asset_candidates (wildcard bond names, codes stored in either case, duplicate holders); exact ISIN/ticker hits in display-name order; X-R45 reverted: _load_latest_planner_fx_rows answers the latest stored row (a legacy 0, inf or 1E+14 on D2 over 2.5 on D1, as of D2 and later, and alone), _load_wac_fx_rows reads the exact key's stored row whatever its rate; X-R45b: build_planner_fx_quotes skips a latest saved rate of 0 or inf for the pair's previous valid one (finite, > 0), with one warning allocation.saved_fx_skipped about the used row's quote (params pair, skipped_date = the most recent skipped, used_date): 0 or inf on D2 over 2.5 on D1 (as of D2 and later) and a run of two on D2 and D3 (0 then inf, inf then 0; as of D3 and later) quoted from D1, never from the valid ERN/SZL and BBD/STN rates planted between; no valid rate before (inf alone, 0 then inf; guards: 0 alone, inf then 0) → the latest row's quote with no rate and allocation.saved_fx_invalid, no warning; guard: 1E+14 on D2, over 2.5 and alone, quoted as read back, no issue; allocation.saved_fx_skipped in PortfolioPlannerSourceIssueCode, not in PlannerIssueCode; guards: the latest usable rate wins (4, 1E-10, 99999999999999), a usable WAC rate on its exact date, convert_bulk (backward-fill anchor and window) and _first_rate_days_inside read 1E-10, 1.5, 99999999999999 and skip 0, 1E-11, -1.5, inf, 1E+14, 1E+19",
         # PURE: one private in-memory SQLite per test (create_all), disposed at teardown; no service replaced.
         isolation="pure",
     )
@@ -2718,8 +2825,8 @@ Note: No backend server required.
         cat,
         "scheduler-last-fx-dates",
         services_scheduler_last_fx_dates,
-        name="Scheduler Last FX Dates (X-R45)",
-        desc="jobs._last_fx_dates, the real one on the lane database: a usable rate on D1 and a legacy 0, inf or 1E+14 on D2 answer D1 for both slugs of the pair, and the history sync (horizon a week) starts the day after D1, so D2 is fetched again; a pair whose only rate is unusable answers nothing; guard: a usable latest rate (2, 1E-10, 99999999999999) answers D2",
+        name="Scheduler Last FX Dates (X-R45 reverted)",
+        desc="jobs._last_fx_dates, the real one on the lane database, after the X-R45 revert: a usable rate on D1 and a legacy 0, inf or 1E+14 on D2 answer D2 for both slugs of the pair, and the history sync (horizon a week) starts the day after D2, so D2 is not fetched again; a pair whose only rate is a legacy one answers that rate's date; guard: a usable latest rate (2, 1E-10, 99999999999999) answers D2",
         # WRITE_SCOPED: each test writes rows of its own pair XQD/XQE (used by no other test, checked free before writing)
         # with raw SQL in its own session and never commits: the session rolls them back, no other connection sees them.
         isolation="write-scoped",
@@ -2775,8 +2882,18 @@ Note: No backend server required.
         "response-validation",
         services_response_validation,
         name="Response Validation",
-        desc="H-33: a response that breaks its response_model is logged with its route, endpoint, error types and locations, never its content, and answered 500 in plain text",
+        desc="H-33: a response that breaks its response_model is logged with its route, endpoint, error types and locations, never its content, and answered 500 as every platform 5xx (H-60: JSON with request_id and error_type)",
         # Fresh FastAPI apps in process, and the real app's handler table; logs captured with structlog. No DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "server-errors",
+        services_server_errors,
+        name="Request Id and Server Errors",
+        desc="H-60: X-Request-Id on every answer and request_id in every line of the request; 4xx as FastAPI; a 5xx with request_id and error_type, its cause logged once (error with traceback, warning without a cause, nothing when the route logged it); the unhandled 500 as JSON, logged once and re-raised; H-33's 500 as JSON; no request secret in an answer or a line; client_log_level follows LOG_LEVEL; H-60r: requests failing on one shared exception (a shared build, one object raised twice) each leave their id in the log, the traceback once, the later ones a short warning pointing to the first",
+        # PURE: fresh FastAPI apps in process; the real app for its handler table, its stack and D4, its session on an
+        # in-memory SQLite built with create_all; the activity record monkeypatched per request. No lane DB, no server.
         isolation="pure",
     )
     add_test(
@@ -2965,6 +3082,16 @@ Note: No backend server required.
         name="Series Export CSV",
         desc="Lot B-39, CSV formula injection in the series exports (series_export.stream_rows_as_csv): a cell whose text starts with =, +, -, @, a tab or a CR, behind any apostrophes ('*[=+-@\\t\\r]), written with one leading apostrophe ('=x becomes ''=x, so the round trip is exact; a CR alone too; a value that is no str written as one; in a row of the events' schema, only that cell); a plain number never escaped in any type (Decimal -1.5, text -1.5, +2, -1E+2, -0, int -3); dates, UTC datetimes, None, other text ('hello included), the header rows of the three schemas and the ; delimiter unchanged; the JSON export unchanged; every cell read back with csv.reader",
         # PURE: the two stream functions called directly. No database, no server, no network, no file.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "logging-errors",
+        services_logging_errors,
+        name="Errors in the Log",
+        desc="H-60: the error helpers (visible causes, root, shown error, reason code, linked errors, the reported mark); logger.exception writes one JSON line at ERROR with its traceback once; a warning or more with an exception, or while one is handled, marks it; uvicorn.error drops its own record of a reported exception; H-60r: the mark per request (is_reported_for, chain_reported_for), the traceback flag on the chain a traceback shows (mark_traceback_reported), the first reporting request; a line marks the request it carries (its keyword, the bound context, structlog's contextvars)",
+        # PURE: helpers on exceptions built in the test; configure_logging with file logging off, structlog and every
+        # logger put back after each test; one fresh interpreter for the import-time bootstrap. No DB, no server.
         isolation="pure",
     )
     add_test(

@@ -222,6 +222,11 @@ D-T24): static copies of it, and of a few roles, live outside `tokens.css` (see 
   3.99:1.
 - **A translucent background** is measured composited over the opaque surfaces it lies on (the `over` field of a pair,
   as the backdrop is).
+- **A translucent tint under a fixed cell** (a sticky column) lets what scrolls beneath show through, and is painted
+  twice where the cell repaints its row's background: put the tint over an opaque surface. A `DataTable` row paints the
+  card and, over it, its state's tint in one image layer, `--dt-row-tint` (registered in its `<style>`), and its fixed
+  cells inherit both layers. A list that tints its rows through `getRowClass` sets `--dt-row-tint` on the row, never the
+  row's background (`AssetTable`, the inactive asset).
 - **What no pair can hold:** the switch turned off is recognised by the edge of its knob, and a translucent colour that
   is no role (`bg-lf-bar-danger/20`) has no role to compose. Both are checked by hand.
 

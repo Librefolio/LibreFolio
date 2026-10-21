@@ -66,6 +66,24 @@ export function backupFailureCode(error: unknown): string {
     return isAxiosError(error) && !error.response ? 'network' : 'unexpected';
 }
 
+/**
+ * What to tell about a failed upload of an archive (B-15): as `backupFailureCode`, and a 413 that is not LibreFolio's —
+ * no `detail.code`, so a proxy in front of it refused the body (nginx's `client_max_body_size`, a hosting proxy, a CDN)
+ * — is `proxy_too_large`: the server's log knows nothing of it. LibreFolio's own 413 keeps its code (`backup_too_large`).
+ */
+export function uploadFailureCode(error: unknown): string {
+    const code = backupFailureCode(error);
+    return code === 'unexpected' && isAxiosError(error) && error.response?.status === 413 ? 'proxy_too_large' : code;
+}
+
+/** The running backup a `backup_busy` refusal names (B-8): its job id and where it was started; `null` without one. */
+export function backupBusyJob(error: unknown): {jobId: string; origin: string} | null {
+    if (backupErrorCode(error) !== 'backup_busy' || !isAxiosError(error)) return null;
+    const detail = error.response?.data?.detail as {job_id?: unknown; origin?: unknown};
+    const {job_id: jobId, origin} = detail;
+    return typeof jobId === 'string' && /^[0-9a-f]{32}$/.test(jobId) && typeof origin === 'string' && origin !== '' ? {jobId, origin} : null;
+}
+
 // =============================================================================
 // The restore (lot B5b): upload an archive, check it on a copy, confirm, restart
 // =============================================================================

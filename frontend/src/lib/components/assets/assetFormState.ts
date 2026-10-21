@@ -21,12 +21,47 @@ export function isQuoteBaseQuantityInvalid(q: number): boolean {
 }
 
 /**
- * Whether to seed the bond per-100 quotation default: only for a BOND still at the
- * initial 1 that the user has not manually touched. A market convention (BTP/BOT and
- * most MOT bonds quote per 100 nominal), so it is a suggestion, never an override.
+ * The quote base an asset type starts from when no provider suggests one (Z-32 d): bonds are quoted per 100 nominal
+ * (BTP/BOT and most MOT bonds), every other type per unit. One entry per exception.
  */
-export function shouldSeedBondQuoteBase(assetType: string, quoteBaseQuantity: number, touched: boolean): boolean {
-    return assetType === 'BOND' && quoteBaseQuantity === 1 && !touched;
+export const QUOTE_BASE_TYPE_DEFAULTS: Readonly<Record<string, number>> = Object.freeze({BOND: 100});
+
+/** The quote base of an asset type without a provider's suggestion: `QUOTE_BASE_TYPE_DEFAULTS`, else 1. */
+export function defaultQuoteBaseQuantity(assetType: string): number {
+    return QUOTE_BASE_TYPE_DEFAULTS[(assetType ?? '').toUpperCase()] ?? 1;
+}
+
+/** A provider's quote base suggestion, as the API sends it (`FAQuoteBaseSuggestion`). */
+export interface QuoteBaseSuggestion {
+    quantity: number;
+    quote_currency?: string | null;
+}
+
+/** Where a proposed quote base comes from: the provider's explicit suggestion, or the asset type's default. */
+export type QuoteBaseSource = {kind: 'suggestion'; quantity: number; quoteCurrency: string | null} | {kind: 'typeDefault'; assetType: string; quantity: number};
+
+/**
+ * The quote base the form proposes (Z-32 d, the developer's ladder): the provider's explicit suggestion when it is a
+ * whole number of at least 1, else the asset type's default. A search selection writes it like the name; "Ask the
+ * provider" offers it as a comparison row when it differs from the field.
+ */
+export function proposeQuoteBase(suggestion: QuoteBaseSuggestion | null | undefined, assetType: string): QuoteBaseSource {
+    const quantity = suggestion?.quantity;
+    if (typeof quantity === 'number' && Number.isInteger(quantity) && quantity >= 1) {
+        return {kind: 'suggestion', quantity, quoteCurrency: suggestion?.quote_currency ?? null};
+    }
+    return {kind: 'typeDefault', assetType, quantity: defaultQuoteBaseQuantity(assetType)};
+}
+
+/**
+ * The note that says why a quote base is proposed: the provider's suggestion (with its quote currency when it gave
+ * one), or the bond convention; none for another type's default of 1.
+ */
+export function quoteBaseNote(source: QuoteBaseSource, provider: string): {key: string; values: Record<string, string | number>} | null {
+    if (source.kind === 'suggestion') {
+        return source.quoteCurrency ? {key: 'assets.modal.quoteBaseSuggested', values: {provider, currency: source.quoteCurrency, quantity: source.quantity}} : {key: 'assets.modal.quoteBaseSuggestedPlain', values: {provider, quantity: source.quantity}};
+    }
+    return source.assetType.toUpperCase() === 'BOND' ? {key: 'assets.modal.bondQuoteBaseHint', values: {}} : null;
 }
 
 /**

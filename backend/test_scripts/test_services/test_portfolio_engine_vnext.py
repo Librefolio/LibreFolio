@@ -17,13 +17,13 @@ import pytest
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 from backend.app.db.models import Transaction, TransactionType
-from backend.app.schemas.common import Currency
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, InTransitInterval, SplitRecord, ValuationSource
 from backend.app.services.financial_math.price_marks import build_asset_price_series
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
+from backend.test_scripts.test_services._unit_steps_double import UnitStepsDouble
 
 
 def _tx(*, tx_id=1, broker_id=1, asset_id=1, tx_type=TransactionType.BUY, dt=date(2025, 1, 2), quantity=Decimal("0"), amount=None, currency="EUR", cbo=None, cbo_ccy=None):
@@ -912,17 +912,10 @@ class TestPreloadFxRates:
             ),
         ]
 
-        captured: dict[str, object] = {}
-
-        async def fake_convert_bulk(db, bulk_items, raise_on_error=False):
-            captured["db"] = db
-            captured["bulk_items"] = bulk_items
-            captured["raise_on_error"] = raise_on_error
-            results = [(Currency(code="EUR", amount=Decimal("1")), item[2], False) for item in bulk_items]
-            return results, []
-
+        # P3: one unit_rate_steps call with each currency's windows; every asked day reads 1
+        steps = UnitStepsDouble()
         db = object()
-        monkeypatch.setattr(portfolio_engine_module, "convert_bulk", fake_convert_bulk)
+        monkeypatch.setattr(portfolio_engine_module, "unit_rate_steps", steps)
 
         fx_map = await PortfolioCalculationEngine(db)._preload_fx_rates(
             classified_txs=txs,
@@ -956,9 +949,16 @@ class TestPreloadFxRates:
             ("AUD", "EUR", date(2025, 1, 4)),
         }
 
-        assert captured["db"] is db
-        assert captured["raise_on_error"] is False
-        assert {(item[0].code, item[1], item[2]) for item in captured["bulk_items"]} == expected_keys
+        assert steps.sessions == [db]
+        assert steps.asked_keys() == expected_keys, "the windows cover the days convert_bulk was handed one by one before P3"
+        assert steps.runs() == {
+            ("USD", "EUR"): [(date(2025, 1, 1), date(2025, 1, 3))],
+            ("CHF", "EUR"): [(date(2025, 1, 1), date(2025, 1, 3))],
+            ("JPY", "EUR"): [(date(2025, 1, 1), date(2025, 1, 3))],
+            ("GBP", "EUR"): [(date(2025, 1, 3), date(2025, 1, 3))],
+            ("CAD", "EUR"): [(date(2025, 1, 2), date(2025, 1, 3))],
+            ("AUD", "EUR"): [(date(2025, 1, 4), date(2025, 1, 4))],
+        }
         assert set(fx_map.keys()) == expected_keys
         assert set(fx_map.values()) == {Decimal("1")}
         # Asset currencies only over the range: no rate at a BUY date before it (was requested for the inline WAC).
@@ -987,10 +987,8 @@ class TestPreloadFxRates:
             _c(_tx(tx_id=5, asset_id=1, tx_type=TransactionType.ADJUSTMENT, dt=date(2025, 1, 2), quantity=Decimal("-1"), currency=None, cbo=Decimal("60"), cbo_ccy="GBP")),
         ]
 
-        async def fake_convert_bulk(db, bulk_items, raise_on_error=False):
-            return [(Currency(code="EUR", amount=Decimal("1")), item[2], False) for item in bulk_items], []
-
-        monkeypatch.setattr(portfolio_engine_module, "convert_bulk", fake_convert_bulk)
+        steps = UnitStepsDouble()
+        monkeypatch.setattr(portfolio_engine_module, "unit_rate_steps", steps)
 
         fx_map = await PortfolioCalculationEngine(object())._preload_fx_rates(
             classified_txs=txs,
@@ -1012,3 +1010,9 @@ class TestPreloadFxRates:
             ("JPY", "EUR", date(2025, 1, 2)),
         }
         assert keys == expected, f"missing={sorted(expected - keys)} unexpected={sorted(keys - expected)}"
+        assert steps.asked_keys() == expected, "P3: the windows of the one unit_rate_steps call cover the same days"
+        assert steps.runs() == {
+            ("USD", "EUR"): [(date(2024, 12, 20), date(2024, 12, 20))],
+            ("JPY", "EUR"): [(date(2024, 12, 23), date(2024, 12, 23)), (date(2025, 1, 1), date(2025, 1, 2))],
+            ("GBP", "EUR"): [(date(2025, 1, 2), date(2025, 1, 2))],
+        }
