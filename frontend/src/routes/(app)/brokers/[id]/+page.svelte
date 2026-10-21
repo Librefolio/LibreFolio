@@ -536,9 +536,10 @@
                 <div class="flex items-center gap-2 flex-wrap">
                     {#if safeString(broker.user_role)}
                         {@const role = safeString(broker.user_role)}
+                        <!-- colour: closest role, to review: broker role badge (owner amber, editor blue, viewer grey) on warning, info and neutral tints -->
                         <span
                             class="inline-flex items-center gap-1 px-2 py-1 rounded-full flex-shrink-0
-                            {role === 'OWNER' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : role === 'EDITOR' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}"
+                            {role === 'OWNER' ? 'bg-lf-warning-soft text-lf-warning-on-soft' : role === 'EDITOR' ? 'bg-lf-info-soft text-lf-info-on-soft' : 'bg-lf-neutral text-lf-secondary'}"
                             title={$_(role === 'OWNER' ? 'brokers.sharing.roleOwnerShort' : role === 'EDITOR' ? 'brokers.sharing.roleEditorShort' : 'brokers.sharing.roleViewerShort')}
                             data-testid="broker-quota-badge"
                         >

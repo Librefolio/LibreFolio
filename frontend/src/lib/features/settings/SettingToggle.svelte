@@ -39,23 +39,23 @@
     }
 </script>
 
-<div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 py-4 border-b border-gray-100 dark:border-slate-700 last:border-0">
+<div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 py-4 border-b border-lf-subtle text-lf-primary last:border-0">
     <!-- Left: Label and hint -->
     <div class="flex-1 min-w-0">
-        <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
+        <div class="flex items-center text-sm font-medium text-lf-secondary">
             {#if icon}
                 {@const Icon = icon}
-                <Icon size={16} class="mr-2 text-gray-500 dark:text-gray-400" />
+                <Icon size={16} class="mr-2 text-lf-muted" />
             {/if}
             {label}
             {#if badge}
-                <span data-testid="setting-badge" class="ml-2 shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium uppercase tracking-wide bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                <span data-testid="setting-badge" class="ml-2 shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium uppercase tracking-wide bg-lf-warning-soft text-lf-warning-on-soft">
                     {badge}
                 </span>
             {/if}
         </div>
         {#if hint}
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{hint}</p>
+            <p class="text-xs text-lf-muted mt-1">{hint}</p>
         {/if}
     </div>
 
@@ -73,15 +73,15 @@
             data-testid="setting-toggle-switch"
             onclick={toggle}
             class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
-                {value ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}
+                {value ? 'bg-lf-checked' : 'bg-lf-switch-off'}
                 {effectiveLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}"
         >
             <span
-                class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform
-                    {value ? 'translate-x-6' : 'translate-x-1'}"
+                class="inline-block h-4 w-4 transform rounded-full transition-transform
+                    {value ? 'translate-x-6 bg-lf-switch-knob-on' : 'translate-x-1 bg-lf-switch-knob-off border border-lf-input'}"
             ></span>
         </button>
-        <span class="text-sm text-gray-600 dark:text-gray-400 w-10">
+        <span class="text-sm text-lf-secondary w-10">
             {value ? 'ON' : 'OFF'}
         </span>
     </div>

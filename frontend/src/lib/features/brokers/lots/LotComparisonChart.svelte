@@ -1461,7 +1461,7 @@
         </div>
         {#if mode === 'value' && hasEstimatedAtCostLots}
             <p class="flex items-center gap-2 text-[11px] text-lf-muted" data-testid="lot-comparison-estimated-at-cost-legend">
-                <span class="h-0 w-8 border-t border-dashed border-slate-500 dark:border-slate-400"></span>
+                <span class="h-0 w-8 border-t border-dashed border-lf-input"></span>
                 <span>{modeLabels.estimatedAtCostLegend}</span>
             </p>
         {/if}

@@ -625,7 +625,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 35 | Giro 3, R3-b: i ruoli `--lf-cat-*` dei 12 tipi, il risolutore `in srgb`, i badge col colore della famiglia e il pallino del contenuto | ✅ commit `fc0493eb9`, entrato in `7845fc3d3` (00:12): `component-unit` 4.959, `asset-list` 41/41, `asset-unit` 1.112 |
 | 36 | Giro 3, R3-c: lo skill `design-system` (regole 11 e 12, la tabella, le decisioni) e `palette.md` (i 36 ruoli dei tipi); TC-20, il caso del Lab su due sorgenti provate indipendenti | ✅ commit `6b218d4a4`, entrato in `cd686f445` (01:18): `front-designer-lab live` 12/12 desktop, gate del tema 158/158 |
 | 37 | Le colonne fisse di `DataTable` opache in ogni stato della riga (regressione di `77bfa6a39`): la riga dipinge la card e la tinta del suo stato (`--dt-row-tint`, registrata), l'evidenziazione pulsa davvero; la riga inattiva di `AssetTable` sulla stessa tinta; il test E2E | ✅ commit `2559dc87e`, entrato in `1fa64ceae` (15:4x; base merge `dd9d66281` col target `cc3c3af15`): prova del rosso 2/2 rossi su `HEAD`; `component-unit` 4.978, `asset-list` 43/43, `broker detail` 40/40 |
-| 38 | T2: nel banner della qualità dei dati il pulsante che ripara sopra l'elenco di ciò che ripara (il developer, 19/10); un chip per coppia per aggiungere o aprire una coppia; i nomi degli asset di STALE_PRICE | ⏳ CHECKPOINT READY (16:5x), FROZEN: prova del rosso 10/20 rossi su `HEAD`; `component-unit` 5.001; E2E 108/108 su 6 azioni |
+| 38 | T2: nel banner della qualità dei dati il pulsante che ripara sopra l'elenco di ciò che ripara (il developer, 19/10); un chip per coppia per aggiungere o aprire una coppia; i nomi degli asset di STALE_PRICE | ✅ commit `e673d4af6`, entrato in `ccc2a4141` (16:58; base merge `68e7a2a73` col target `c0cc8330b`): prova del rosso 10/20 rossi su `HEAD`; `component-unit` 5.001; E2E 108/108 su 6 azioni |
 
 ## Avanzamento
 
@@ -3719,3 +3719,52 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > senza fotografie. Rifatta a parte con la sonda giusta (`shots.sh`).
 
 > ✅ **8 · Il checkpoint** (16:5x): `git diff --check` pulito, porta libera, CHECKPOINT READY al coordinatore; FROZEN.
+
+> ✅ **9 · Entrato** (coordinatore, 16:58): commit **`e673d4af6`**, con la base merge `68e7a2a73` (il target
+> `c0cc8330b`), entrato in **`ccc2a4141`**; sull'albero unito i gate 119/119, i due Vitest del banner 20/20, `api sync`
+> senza file cambiati, `front check` 0 e 0, il runner compila. Il ramo portato in avanti, pulito. **I punti aperti:** il
+> CHANGELOG dei colori in un'unica passata a fine programma; TC-23 girato alla 1.3; `data-group-key` (i due contenitori
+> di MISSING_FX_RATES con lo stesso testid) e `aria-busy` sul pulsante occupato da annotare come voci TC nella mia
+> sezione dell'indice al prossimo checkpoint, senza urgenza. Fermo fino a nuovo messaggio del coordinatore.
+
+
+### Ondata 2 · C1 — neutri, stati e interruttori di broker, impostazioni, strumenti e UI condivisa — ✅ 21/10/2026
+
+> **Note implementazione**: sessione figlia C1 (D-T28, «migra veloce, rifinisci dopo»), base `89e8b2e61`. 18 file di
+> produzione convertiti ai ruoli, tre sotto-agenti `sonnet` per gruppo di file, ogni diff riletto. Ratchet m1
+> 590 → 383 (−207), m2 2 → 2, 45 → 32 file; baseline stretta con `--update` solo per i 18 file del perimetro. Grammatica
+> 0 violazioni. Gate dei temi + 12 Vitest dei componenti toccati: 64/65 file verdi; `front check` 0 e 0.
+> **Interruttori** (Q2) su `SettingToggle`, `ChartAestheticsSection` (4), `DataEditor`, `DataTableCellContent`, `BrokerForm`:
+> `bg-lf-checked` acceso, `bg-lf-switch-off` spento, manopola `bg-lf-switch-knob-on` / `bg-lf-switch-knob-off border border-lf-input`.
+>
+> **⚠️ Fuori pista**: `themeTokens.gate.test.ts` (C4) era rosso per costruzione: le regole di `app.css` per `bg-gray-50`,
+> `border-gray-200`, `focus:ring-libre-green`, `text-gray-400`, `text-gray-700` non avevano più usi. Il coordinatore ha
+> autorizzato C1 a cancellare solo quelle 5 regole da `app.css`: fatto (21/10); gate dei temi 5 file, 158/158 verdi.
+> **E2E** `front-utility theme-roles`: 24/24 verdi nello slot (corsia 6187), log in `ondata2/c1-theme-roles-e2e.log`.
+
+**Punti «to review» per la designer** (commento `colour: closest role, to review` nel file):
+
+| File | Cosa | Ruolo scelto | Alternativa |
+|---|---|---|---|
+| `BrokerSharingPanel` | pillole proprietario/editor/viewer (ambra/blu/neutro = categorie dei ruoli broker, non stati) | `warning`, `info`, `panel`; hover `X-line`; disco avatar `bg-lf-card` | chip sulla card stile `bannerChip` |
+| `BrokerCard`, `brokers/[id]/+page`, `brokerRoleHelpers` | badge e icona del ruolo broker | `warning-soft`, `info-soft`, `neutral`; icona `text-lf-warning/info/muted`; chiuso a chiave `danger` | ruoli categorici |
+| `UnifiedLotsTable` | LONG/SHORT (direzione, né stato né gain/loss) | `success`/`danger` soft con `-line` | `SIGN_BADGE` |
+| `UnifiedLotsTable` | stato del lotto, badge «in transito» | success/warning/neutral/info/danger soft | — |
+| `LotCustodyModal` | marcatore dello storico (apertura/trasferimento/chiusura) via `markerClass()`; icone di transito | success/info/warning soft; `text-lf-info` | — |
+| `AboutTab` | accenti delle sezioni (verde asset, blu FX, ambra import), cuore | `selected`+`link`, `info-soft`, `warning-soft`; `text-lf-danger` | tessere neutre; `text-lf-loss` |
+| `AssetTable`, `ResultCell`, `DistributionDialog` (PAC) | riempimento «dopo il piano» (verde del marchio come colore dato) | `bg-lf-checked` | `bg-lf-action` |
+| `DataEditor` | interruttore «nascondi stale» (era ambra) | `bg-lf-checked` | `bg-lf-warning` |
+| `DataTableCellContent` | interruttore booleano (era smeraldo) | `bg-lf-checked` | `bg-lf-success` |
+| `BackendTimingBar` | «Queue wait» (slate) | `bg-lf-muted` | `bg-lf-neutral` (già usato da «non attribuito») |
+
+**Rimasti legacy per scelta (categoriali o marchi), 55 classi nel perimetro:**
+- violet: `UnifiedLotsTable` (DISTRIBUTED, badge «N brokers»: 12), `LotCustodyModal` (ramo «other» del marcatore: 4),
+  `LotGanttChart` (legenda in transito: 4), `AboutTab` (scheda Installed Signals: 5);
+- `BackendTimingBar` (6 fasi, una tinta ciascuna: 12) e `RiskReturnLevel` (pallini portafoglio/benchmark, appaiati ai
+  token di `table.css`: 4) sono serie categoriali, non stati;
+- `supportLinks.ts` (14): colori ufficiali dei marchi (X, Reddit, Facebook, Instagram, TikTok): decisione del developer 21/10, restano e sono registrati come eccezione nel ratchet con `--accept` (riga `~accept`), con un commento nel file.
+- `ScheduledInvestmentEditor` (4 interruttori) è in `lib/components/assets/**`, fuori perimetro (dopo Y-39b/Z-29b).
+
+**Ruoli che mancano:** una famiglia categoriale (serie, fasi, accenti di sezione, ruoli broker, LONG/SHORT) con soft e
+on-soft; un gradino di testo più quieto dentro ogni famiglia di stato (sotto-riga delle pillole); un hover per una
+pillola soft; un meccanismo per i marchi di `supportLinks`; un ruolo «riempimento dati in verde accento» (oggi `checked`).
