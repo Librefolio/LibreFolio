@@ -1290,8 +1290,8 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
     - i banner della qualità dei dati e le pillole del rischio parziale (§2). Nessun toast: nessuno scatto ne fotografa
       uno.
   - **Aperte, dipendono dalla corsia o dall'inquadratura, non dal colore:**
-    - G-22: il badge «1» su «Amministrazione» e Security, il conto dei controlli della corsia, finché una fixture non
-      lo serve;
+    - G-22 e G-28: il conto dei controlli di sicurezza della corsia (il badge «1» su «Amministrazione» e Security, e da
+      N69b il pallino), finché la fixture di G-28 non li serve tutti «ok»;
     - G-23: lo stato delle cache in memoria nel pannello della cache;
     - G-25: `onboarding/welcome-setup` su mobile, in francese e spagnolo, dopo A9;
     - G-26: `settings/password-modal` su mobile, lo scorrimento della pagina sotto la modale.
@@ -1299,6 +1299,35 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
     `whats_new` è `null`, quindi non compare in nessuno scatto.
   - **Il nuovo riferimento del rumore**, dopo A8b e A9: `diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-cd686f445`
     (maschere e `stability.json`), al posto di `g-ref13` del 16/10, cancellato il 19/10.
+  - **N69a**, entrato in `3e82ed2e0` (20/10 09:17): il gruppo «Amministrazione» è solo degli admin, e la lista utenti
+    ha gli avatar. Cambi voluti, non di colore:
+    - `settings/plugins`, la vista del membro (e2e_test_user): nella barra in alto non c'è più «Amministrazione»;
+      restano Profilo, Preferenze, Plugin e Informazioni;
+    - `settings/users`: dopo la freccia di ogni riga c'è l'avatar, in un cerchio di 24 px. Le quattro righe della
+      fixture della scena non hanno `avatar_url`, che il backend di N69a rende facoltativo. Ogni riga mostra quindi la
+      sua iniziale, «E», «A», «M» e «G», su `bg-lf-neutral` con `text-lf-muted`: nessuna immagine da caricare, niente
+      di asincrono;
+    - nella vista dell'admin il gruppo c'era già: nient'altro cambia.
+    - **N69c, non ancora entrato** (il coordinatore avvisa): la modalità d'iscrizione passa nella scheda Utenti.
+      Cambieranno `settings/global-settings`, che perde quella sezione, e `settings/users`, che la guadagna.
+  - **N69b**, entrato in `1e711253a` (20/10 13:34): il pallino dei controlli di sicurezza per gli admin. Ogni pagina
+    che un admin apre legge `GET /api/v1/security/checks`. Con un errore o un avviso compaiono:
+    - un pallino di 8 px, ambra o rosso, sullo scudo della riga della connessione nella barra laterale;
+    - nei dettagli della riga, un link «N security warnings»;
+    - sul telefono, un pallino di 10 px sul pulsante del menu.
+
+    Senza cura lo mostrerebbe ogni scena da admin, cioè quasi tutta la galleria, perché la corsia ha il limite dei
+    login spento (`accounts.login_limit`, avviso `auth.checks.loginLimit.off`). In `security/connection-indicator` ci
+    sarebbe anche il link, coi dettagli più alti: sul telefono rischia il controllo «tutta la riga sullo schermo». E il
+    pallino arriva dopo una lettura asincrona, quindi con un rischio di a≠b.
+    - **La cura è G-28**, verificata il 20/10 (record «N69 nella galleria»): i controlli simulati, tutti «ok», per ogni
+      test della galleria. Con la cura:
+      - nessun pallino e nessun link in nessuna scena. `security/connection-indicator` resta com'era, e il suo testo
+        alternativo resta vero;
+      - il badge «1» su «Amministrazione» e su «Security» sparisce da tutti gli scatti admin della pagina Settings
+        (l'elenco di A8b qui sopra): è il cambio atteso;
+      - lo scudo della riga della connessione ora sta in un contenitore, per il pallino: identico a occhio contro il
+        18/10, e a = b in `security/connection-indicator`.
 - **`settings/backup-ready` per la 1.3 ✅, 16/10 22:54–23:11.** Commit `b89985a8b`: la punta, con B (`0cd910a7e`: B3
   ripristino, B5b, B5c). Due run identiche, `g-backup-a` e `g-backup-b`, sullo stesso build, 2 worker. Il filtro
   `-f "Settings backup ready \(admin\) - all languages and themes"` seleziona solo `gallery.spec.ts:2126`.
@@ -1534,3 +1563,113 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
     indicazioni correnti: il passo di Y in `09_dashboardCharts/plan-phase01DashboardCharts.prompt.md` (righe 93–95, le
     maschere di `g-final3__r1__vs__r2`) e «Dati di riferimento» in `10_colorSystem/README.md` (`baseline-r1` e
     `baseline-r2`). Gli altri sono registri del passato.
+- **N69 nella galleria: analisi e cura (G-28), 20/10 ✅.** Via del coordinatore alle 13:48; verificata alle 14:2x. Chiesta
+  dal coordinatore alle 13:35, solo analisi; base `15fa228ef`, per fast-forward, pulita. Alle 13:4x il coordinatore ha
+  aggiunto che il pallino vale per tutte le scene da admin, e che E scrive le voci di `settings/email` nelle 8 pagine
+  della galleria.
+  - **Quello che ho verificato nel codice:**
+    - la riga della connessione è nella barra laterale di ogni pagina dell'app (`Sidebar.svelte`), e il pulsante del
+      menu nell'intestazione (`Header.svelte`);
+    - N69b legge i controlli una volta per caricamento, per ogni admin (`ConnectionSecurityIndicator.svelte`,
+      `securityChecks.ensureLoaded()`). Il conto è `attentionCount`, lo stesso del badge di Settings;
+    - nella corsia l'unico avviso è `accounts.login_limit` (`services/accounts/checks.py`): le corsie di test girano
+      col limite spento. Gli altri 16 controlli sono `ok`;
+    - la voce del browser (la registrazione aperta) non c'è: `localhost` e `lf-e2e.lan` sono locali per
+      `isLocalHost` (`features/auth/localHost.ts`, il suffisso `.lan`);
+    - quasi tutta la galleria entra come admin, `TEST_ADMIN`, nel test o nel `beforeEach` del suo gruppo. Non lo sono
+      le pagine d'accesso (nessun accesso), le scene di onboarding (un account appena registrato, membro), `plugins`
+      (`TEST_USER`) e lo stato vuoto della Dashboard (`TEST_EMPTY`).
+  - **La scelta:** i controlli tutti «ok» per ogni test, non lo scatto da utente normale.
+    - Il secondo curerebbe solo `security/connection-indicator`, e la pagina dell'utente resterebbe giusta; ma il
+      pallino resterebbe in ogni altra scena da admin.
+    - I controlli «ok» sono un'istanza configurata bene, cioè «valori realistici» come per G-22. Tolgono un avviso
+      che è della corsia di test e non di un'installazione, e una lettura asincrona che darebbe rumore.
+  - **Il testo alternativo:** nessuna modifica. Con la cura lo scatto mostra quello che il testo descrive.
+  - **Cosa serve per verificarla:** l'OK; test-author per il codice; A per i valori della fixture; `prettier --check`
+    e `tsc -p tsconfig.e2e.json` coi binari bloccati, a carico sotto 50. Poi la corsia:
+    - `dev.py server --test --build-only`: il frontend è cambiato dal 18/10;
+    - `dev.py test --test-port 6153 --data-dir /tmp/librefolio-r2-g db populate --force --clean` prima di ogni cattura;
+    - un doppio a/b filtrato a 4 worker: `connection indicator on a local network`, `main dashboard`,
+      `mobile menu open`, `global settings (admin)`, `email (admin)`, `plugins`, `users`. Sono 7 test e 13 esecuzioni
+      di progetto, circa 25 minuti per la coppia, build compreso.
+  - **Definition of done:**
+    - tutto verde nei due schermi, la scena compresa;
+    - a = b sugli scatti toccati;
+    - le asserzioni provano che la fixture ha risposto e che non c'è pallino, link o badge;
+    - a occhio contro il trio del 18/10 («giorno diverso»): la riga della connessione uguale, il badge sparito, le
+      iniziali in `users`, `plugins` senza «Amministrazione».
+  - **Il via, 13:48.** Docs entrati (`e32b53473`, ingresso `a820bd4dd`); worktree avanzato a `a820bd4dd`, pulito.
+    Perimetro: la fixture, la riga nel `beforeEach` esterno e le asserzioni della scena; niente testi alternativi né
+    pagine della galleria. Valori ricavati dal backend, senza aspettare A: la 1.3 glieli fa guardare al checkpoint.
+    Slot dei colori nella 6153 concesso subito. Dopo il riavvio `/tmp/librefolio-r2-g` non c'era.
+    - **Passo 1 — Codice (test-author):** ✅ 20/10 13:49–13:59.
+      > **Note implementazione**: `frontend/e2e/fixtures/gallerySecurity.ts`, nuovo: i 17 controlli tutti `ok` nell'ordine
+      > della piattaforma, coi rami `ok` del backend. Sono i default del profilo self-hosted, col limite dei login acceso
+      > e l'email configurata come la simula `galleryEmail.ts`. Il corpo è tipato col client generato e controllato
+      > con `schemas.SecurityChecksResponse` alla registrazione. Il file contiene:
+      > - `serveGallerySecurityChecks`, che risponde solo a `GET` sul percorso, da qualunque origine, e conta le
+      >   letture per pagina;
+      > - `gallerySecurityReads`;
+      > - `expectGallerySecurityServed`, un poll di 15 s su una lettura dopo il caricamento.
+      >
+      > In `gallery.spec.ts` (22 righe aggiunte, nessuna tolta):
+      > - l'import;
+      > - la chiamata nel `beforeEach` esterno, dopo `guardGalleryOffline`, col suo commento;
+      > - il commento del blocco Security;
+      > - nella scena, per combinazione: il conto delle letture prima del `goto`; poi, dopo il verdetto, la lettura
+      >   servita, `data-security-attention="0"`, `data-security-severity="none"`, nessun
+      >   `connection-security-attention-dot` e nessun `mobile-menu-security-dot`; nei dettagli, nessun
+      >   `connection-security-attention-link`.
+      >
+      > Il controllo dei 17 contro il backend, letto da test-author, torna. La costante resta privata (knip): G-22 la
+      > esporterà se ne avrà bisogno. Il pallino del telefono si verifica con `toHaveCount(0)`, non `toBeHidden()`:
+      > su desktop il pulsante è nascosto dal CSS e `toBeHidden()` passerebbe comunque.
+      > **⚠️ Fuori pista**: una lettura servita prova che ha risposto la fixture, non che la pagina abbia già disegnato
+      > la risposta. Prima della risposta la riga dice anch'essa `0`/`none`. Per lo scatto non cambia niente: con tutto
+      > `ok` la riga resta a zero, e la risposta della corsia non può arrivare. Un segnale `pending|ready` sulla riga
+      > sarebbe una modifica del prodotto: segnalato, non chiesto.
+    - **Passo 2 — Prebuild e controlli leggeri:** ✅ prebuild 13:54:53–13:57:25, carico 14→25:
+      `files/g28/prebuild.sh`, cioè `dev.py server --test --build-only` con la versione fissata, `TEST_PORT=6153` e
+      `LIBREFOLIO_TEST_DATA_DIR=/tmp/librefolio-r2-g`. Frontend ricostruito (debug, `v0.0.0-review` nel bundle) e
+      MkDocs ricostruito; albero con i soli file di G-28; 6153 libera.
+      > **⚠️ Fuori pista**: il download di MathJax dalla CDN è fallito (`CERTIFICATE_VERIFY_FAILED`), e il build ha
+      > tenuto la copia in cache. La galleria è offline: nessun effetto sugli scatti.
+      > **Controlli leggeri**, 14:05, carico 16:
+      > - `frontend/node_modules/.bin/prettier --check` sui due file: pulito;
+      > - `frontend/node_modules/.bin/tsc -p tsconfig.e2e.json`: exit 0, nessun errore, 8 s, sul client rigenerato dal
+      >   prebuild alle 13:55. Il `satisfies` del `detail: {source: 'generated'}` passa.
+    - **Passo 3 — Coppia a/b filtrata:** ✅ 20/10, `files/g28/g28.sh capture a`, poi `capture b`.
+      > **Note implementazione**:
+      > - `g28-a-a820bd4dd`: 14:05:56–14:08:36; `g28-b-a820bd4dd`: 14:08:46–14:11:27. Carico da 14 a 39, 4 worker.
+      > - Prima di ognuna, `dev.py test --test-port 6153 --data-dir /tmp/librefolio-r2-g db populate --force --clean`.
+      > - Lo stesso codice nelle due (hash del diff della spec e della fixture: `22673e59570d38f1`). I file cambiati
+      >   sono solo quelli di G-28, controllati prima di ogni cattura.
+      > - Ognuna: 13 test verdi e 1 saltato (`mobile menu open` su desktop), 136 PNG su 136, exit 0. Nessun prezzo
+      >   live; misti G-18 0 su 136 scatti; 6153 libera alla fine.
+      > - Il filtro, verificato con `fe5c_check.py select`, prende esattamente i 7 test.
+      > - **a↔b:**
+      >   - grezzo: 92 identiche e 44 cambiate; con le maschere del rumore del 18/10: 102 e 34; nessuna di altra
+      >     misura;
+      >   - identiche in ogni immagine: `security/connection-indicator` (16/16), `dashboard/menu-open` (8/8) e
+      >     `settings/plugins` (16/16);
+      >   - il resto è nel rumore noto, entro le classi del 18/10:
+      >     - antialiasing ≤ 3 livelli in `dashboard/kpi-top`, `main`, `main-pct` (al massimo lo 0,0031 %) e in
+      >       `settings/email`;
+      >     - in `settings/global-settings` l'ora «Last updated», 16/16: è l'ora del popolamento, rifatto fra a e b;
+      >     - in `settings/users`, 2 immagini su 16: 8 pixel agli angoli del logo della barra laterale, Δ15, lo stesso
+      >       rumore del logo della coppia del punto 33 (17/10). Non c'entra con N69a né con G-28.
+      >
+      >   Il carico è restato sotto 50, quindi nessuna nuova esecuzione da sola.
+    - **Passo 4 — Confronto e checkpoint:** ✅ 20/10.
+      > **Note implementazione**: il foglio `LibreFolio_visual_review/sheets/g28-2026-10-20/index.html` (5,7 MB, 136
+      > immagini). Mette accanto a ogni scatto del 20/10, in italiano nei due temi e nei due schermi, lo stesso del 18/10
+      > (`g-r3-dopo2-cd686f445-full`), «giorno diverso», senza diff di pixel (G-13). Ingrandisce dove starebbe il
+      > pallino: lo scudo della riga su desktop, il pulsante del menu o la riga nel cassetto sul telefono. A occhio:
+      > - nessun pallino, in nessuno scatto;
+      > - nei dettagli della scena nessun link ai controlli, e la riga identica al 18/10;
+      > - «Amministrazione» e «Sicurezza» senza il badge «1»;
+      > - in `users` le iniziali «E», «A», «M», «G»;
+      > - in `plugins` la barra del membro senza «Amministrazione».
+      >
+      > Il badge non ha un'asserzione in nessun test di Settings, che restano fuori dal perimetro. Dipende dallo stesso
+      > conto che la scena prova a zero, ed è verificato a occhio. Diff: `diffs/g28__a__vs__b` (e `__raw`).

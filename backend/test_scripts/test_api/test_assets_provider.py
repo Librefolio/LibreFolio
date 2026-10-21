@@ -5,8 +5,14 @@ Tests for asset provider assignment and management:
 - POST /api/v1/assets/provider - Assign providers to assets
 - DELETE /api/v1/assets/provider - Remove provider assignments
 - POST /api/v1/assets/provider/refresh - Refresh metadata from providers
+
+Z-32 (d), the quote base suggestion (QBS-A01…A06, the HTTP side of test_services/test_quote_base_suggestion.py, whose
+docstring holds the contract): the search and the probe's metadata carry ``quote_base_suggestion`` (mockprov's
+``MOCK_MINOR_UNIT``, a London line quoted in pence: ``{"quantity": 100, "quote_currency": "GBp"}``; null otherwise);
+the metadata refresh never changes ``quote_base_quantity`` for it; the served OpenAPI document has the component.
 """
 
+import uuid
 from datetime import date, timedelta
 
 import httpx
@@ -1489,3 +1495,213 @@ async def test_probe_bulk_assign_refresh_and_remove_with_mock_provider(test_serv
         remove_data = remove_resp.json()
         assert remove_data["success_count"] == 2
         print_success("✓ Bulk provider removal succeeded")
+
+
+# ============================================================
+# Z-32 (d): the quote base suggestion (QBS-A01…A06)
+# ============================================================
+# The HTTP side of test_services/test_quote_base_suggestion.py, on the lane's server, where mockprov is served (test
+# mode; a search names it in `providers`). mockprov's minor-unit line is written here, not imported from its plugin
+# (MINOR_UNIT_QUERY, MINOR_UNIT_IDENTIFIER): importing names only the cure adds would stop this whole module from loading.
+
+QBS_MINOR_UNIT_QUERY = "lf-minor-unit"
+QBS_MINOR_UNIT_IDENTIFIER = "MOCK_MINOR_UNIT"
+QBS_GBP_PENCE = {"quantity": 100, "quote_currency": "GBp"}
+QBS_FIELD = "quote_base_suggestion"
+
+
+def _qbs_unique(prefix: str) -> str:
+    """Unique across the lane's workers: a time, a per-process counter and randomness."""
+    return f"{unique_id(prefix)}_{uuid.uuid4().hex[:8]}"
+
+
+async def _qbs_search_mockprov(client: httpx.AsyncClient, query: str) -> dict:
+    """``GET /assets/provider/search`` for ``query``, mockprov only; the answer, mockprov having answered."""
+    resp = await client.get(f"{API_BASE}/assets/provider/search", params={"q": query, "providers": "mockprov"}, timeout=TIMEOUT)
+    assert resp.status_code == 200, f"search {query!r}: {resp.status_code} {resp.text[:300]}"
+    data = resp.json()
+    assert "mockprov" in data["providers_queried"] and "mockprov" not in data["providers_with_errors"], f"barrier: mockprov answered {query!r}: queried {data['providers_queried']}, errors {data['providers_with_errors']}"
+    return data
+
+
+def _qbs_only_result(data: dict, identifier: str) -> dict:
+    """The one mockprov result ``identifier`` of a search answer this test asked for."""
+    matches = [result for result in data["results"] if result["provider_code"] == "mockprov" and result["identifier"] == identifier]
+    assert len(matches) == 1, f"one mockprov result {identifier} expected in the answer to {data['query']!r}: its results are {[(r['provider_code'], r['identifier']) for r in data['results']]}"
+    return matches[0]
+
+
+async def _qbs_probe_metadata(client: httpx.AsyncClient, identifier: str) -> dict:
+    """``POST /assets/provider/probe`` of mockprov ``identifier`` (a TICKER), metadata only; the metadata result, which
+    answered."""
+    resp = await client.post(
+        f"{API_BASE}/assets/provider/probe",
+        json={"provider_code": "mockprov", "identifier": identifier, "identifier_type": "TICKER", "operations": ["metadata"]},
+        timeout=TIMEOUT,
+    )
+    assert resp.status_code == 200, f"probe {identifier}: {resp.status_code} {resp.text[:300]}"
+    meta = resp.json()["metadata"]
+    assert meta is not None and meta["success"] is True and meta["patch_data"] is not None, f"barrier: mockprov answered the metadata of {identifier}: {meta}"
+    return meta
+
+
+@pytest.mark.asyncio
+async def test_qbs_a01_search_carries_mockprov_minor_unit_suggestion(test_server):
+    """QBS-A01 (Z-32 d, points 3 and 8): ``GET /assets/provider/search?q=lf-minor-unit&providers=mockprov`` answers
+    mockprov's ``MOCK_MINOR_UNIT`` — a London line quoted in pence — with ``quote_base_suggestion == {"quantity": 100,
+    "quote_currency": "GBp"}``.
+
+    Red before Z-32 (d): mockprov answers ``lf-minor-unit`` like any query (``MOCK_LF-MINOR-UNIT``), and a search result
+    has no ``quote_base_suggestion``.
+    """
+    print_section("QBS-A01: search lf-minor-unit on mockprov → 100 GBp")
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        data = await _qbs_search_mockprov(client, QBS_MINOR_UNIT_QUERY)
+
+    result = _qbs_only_result(data, QBS_MINOR_UNIT_IDENTIFIER)
+    assert QBS_FIELD in result, f"a search result has no {QBS_FIELD}: its keys are {sorted(result)}"
+    assert result[QBS_FIELD] == QBS_GBP_PENCE, f"{QBS_MINOR_UNIT_IDENTIFIER} must suggest 100 GBp: {result[QBS_FIELD]!r}"
+    print_success(f"✓ {QBS_MINOR_UNIT_IDENTIFIER}: {result[QBS_FIELD]}")
+
+
+@pytest.mark.asyncio
+async def test_qbs_a02_other_mockprov_search_result_suggests_null(test_server):
+    """QBS-A02 (Z-32 d, points 2 and 8): a mockprov search for a query of this test answers its ``MOCK_<QUERY>`` with
+    ``quote_base_suggestion`` present and null, as the answer's other optional fields are.
+
+    Red before Z-32 (d): a search result has no ``quote_base_suggestion``.
+    """
+    print_section("QBS-A02: any other mockprov search → null")
+    query = _qbs_unique("qbs-plain")
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        data = await _qbs_search_mockprov(client, query)
+
+    result = _qbs_only_result(data, f"MOCK_{query.upper()}")
+    assert QBS_FIELD in result, f"a search result has no {QBS_FIELD}: its keys are {sorted(result)}"
+    assert result[QBS_FIELD] is None, f"mockprov suggests nothing for {query!r}: {result[QBS_FIELD]!r}"
+    print_success(f"✓ {result['identifier']}: null")
+
+
+@pytest.mark.asyncio
+async def test_qbs_a03_probe_metadata_carries_mockprov_minor_unit_suggestion(test_server):
+    """QBS-A03 (Z-32 d, points 5 and 8): ``POST /assets/provider/probe`` of mockprov ``MOCK_MINOR_UNIT``, metadata only:
+    ``metadata.quote_base_suggestion == {"quantity": 100, "quote_currency": "GBp"}``, and ``metadata.patch_data`` sets
+    no ``quote_base_quantity`` — the patch is what a metadata refresh writes without asking.
+
+    Red before Z-32 (d): the probe asks no suggestion, and its metadata result has no ``quote_base_suggestion``.
+    """
+    print_section("QBS-A03: probe MOCK_MINOR_UNIT metadata → 100 GBp, not in the patch")
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        meta = await _qbs_probe_metadata(client, QBS_MINOR_UNIT_IDENTIFIER)
+
+    assert QBS_FIELD in meta, f"the probe's metadata result has no {QBS_FIELD}: its keys are {sorted(meta)}"
+    assert meta[QBS_FIELD] == QBS_GBP_PENCE, f"{QBS_MINOR_UNIT_IDENTIFIER} must suggest 100 GBp: {meta[QBS_FIELD]!r}"
+    assert meta["patch_data"].get("quote_base_quantity") is None, f"patch_data carries a quote base, which the refresh would write: {meta['patch_data']}"
+    print_success(f"✓ {meta[QBS_FIELD]}, patch_data without a quote base")
+
+
+@pytest.mark.asyncio
+async def test_qbs_a04_probe_metadata_of_another_mockprov_line_suggests_null(test_server):
+    """QBS-A04 (Z-32 d, points 2, 5 and 8): the same probe of another mockprov identifier (one of this test): the
+    metadata answers, its ``quote_base_suggestion`` present and null.
+
+    Red before Z-32 (d): the probe's metadata result has no ``quote_base_suggestion``.
+    """
+    print_section("QBS-A04: probe another mockprov line → null")
+    identifier = _qbs_unique("MOCK_QBS").upper()
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        meta = await _qbs_probe_metadata(client, identifier)
+
+    assert QBS_FIELD in meta, f"the probe's metadata result has no {QBS_FIELD}: its keys are {sorted(meta)}"
+    assert meta[QBS_FIELD] is None, f"mockprov suggests nothing for {identifier}: {meta[QBS_FIELD]!r}"
+    print_success(f"✓ {identifier}: null")
+
+
+@pytest.mark.asyncio
+async def test_qbs_a05_metadata_refresh_keeps_the_quote_base(test_server):
+    """QBS-A05 (Z-32 d, point 6): an asset of this test, in GBP with ``quote_base_quantity`` 1, assigned to mockprov
+    ``MOCK_MINOR_UNIT``: ``POST /assets/provider/refresh`` refreshes its metadata (a refreshed field), refreshes no
+    ``quote_base_quantity``, and the asset's ``quote_base_quantity`` is still 1. The asset is deleted at the end.
+
+    Green before Z-32 (d), by construction: the refresh writes mockprov's patch, which has no quote base. A guard: the
+    cure must not let the suggestion reach a stored asset — the quote base is the user's to accept, in the web modal.
+    """
+    print_section("QBS-A05: a metadata refresh keeps quote_base_quantity")
+    name = f"QBS refresh {_qbs_unique('QBS')}"
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        asset_item = FAAssetCreateItem(display_name=name, currency="GBP", asset_type=AssetType.STOCK, quote_base_quantity=1)
+        create_resp = await client.post(f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT)
+        assert create_resp.status_code == 201, f"create {name}: {create_resp.status_code} {create_resp.text[:300]}"
+        created = next((result for result in FABulkAssetCreateResponse(**create_resp.json()).results if result.display_name == name), None)
+        assert created is not None and created.success and created.asset_id is not None, f"create {name}: {create_resp.text[:300]}"
+        asset_id = created.asset_id
+        try:
+            assignment = FAProviderAssignmentItem(asset_id=asset_id, provider_code="mockprov", identifier=QBS_MINOR_UNIT_IDENTIFIER, identifier_type=ProviderInputType.TICKER, provider_params=None)
+            assign_resp = await client.post(f"{API_BASE}/assets/provider", json=[assignment.model_dump(mode="json")], timeout=TIMEOUT)
+            assert assign_resp.status_code == 200, f"assign: {assign_resp.status_code} {assign_resp.text[:300]}"
+            assert FABulkAssignResponse(**assign_resp.json()).success_count == 1, f"assign: {assign_resp.text[:300]}"
+
+            refresh_resp = await client.post(f"{API_BASE}/assets/provider/refresh", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+            assert refresh_resp.status_code == 200, f"refresh: {refresh_resp.status_code} {refresh_resp.text[:300]}"
+            refreshed = next((result for result in refresh_resp.json()["results"] if result["asset_id"] == asset_id), None)
+            assert refreshed is not None and refreshed["success"] is True, f"barrier: the refresh of asset {asset_id} succeeded: {refresh_resp.text[:500]}"
+            fields = [change["info"] for change in refreshed["fields_detail"]["refreshed_fields"]]
+            assert fields, f"barrier: the refresh wrote a patch: {refreshed}"
+            assert "quote_base_quantity" not in fields, f"the refresh refreshed quote_base_quantity: {fields}"
+
+            read_resp = await client.get(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+            assert read_resp.status_code == 200, f"read: {read_resp.status_code} {read_resp.text[:300]}"
+            asset = next((item for item in read_resp.json() if item["asset_id"] == asset_id), None)
+            assert asset is not None, f"asset {asset_id} not in its own read: {read_resp.text[:300]}"
+            assert asset["quote_base_quantity"] == 1, f"the metadata refresh changed quote_base_quantity: {asset['quote_base_quantity']!r}"
+            print_success(f"✓ asset {asset_id}: refreshed {fields}, quote_base_quantity still 1")
+        finally:
+            await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+
+
+def _qbs_component(schemas: dict, name: str) -> tuple[str, dict]:
+    """The component ``name`` of the document, or its ``-Output`` form (FastAPI's name when a model's two schemas
+    differ)."""
+    for key in (name, f"{name}-Output"):
+        if key in schemas:
+            return key, schemas[key]
+    pytest.fail(f"the OpenAPI document has no component {name}", pytrace=False)
+
+
+@pytest.mark.asyncio
+async def test_qbs_a06_openapi_documents_the_suggestion(test_server):
+    """QBS-A06 (Z-32 d, point 2): the OpenAPI document the lane's server serves (``GET /api/v1/openapi.json``, i.e.
+    ``backend.app.main.app.openapi()``): ``FAProviderSearchResultItem`` and ``ProbeMetadataResult`` have an optional,
+    nullable ``quote_base_suggestion`` referring to the ``FAQuoteBaseSuggestion`` component, whose ``quantity`` is a
+    required integer with ``minimum`` 1.
+
+    Red before Z-32 (d): neither model documents the property, and there is no such component.
+    """
+    print_section("QBS-A06: the served OpenAPI document")
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(f"{API_BASE}/openapi.json", timeout=TIMEOUT)
+    assert resp.status_code == 200, f"GET /api/v1/openapi.json: {resp.status_code}"
+    schemas = resp.json()["components"]["schemas"]
+
+    referenced: set[str] = set()
+    for parent in ("FAProviderSearchResultItem", "ProbeMetadataResult"):
+        key, component = _qbs_component(schemas, parent)
+        properties = component.get("properties", {})
+        assert QBS_FIELD in properties, f"{key} documents no {QBS_FIELD}: its properties are {sorted(properties)}"
+        prop = properties[QBS_FIELD]
+        assert QBS_FIELD not in component.get("required", []), f"{key}.{QBS_FIELD} must be optional"
+        assert {"type": "null"} in prop.get("anyOf", []), f"{key}.{QBS_FIELD} must be nullable: {prop}"
+        refs = [part["$ref"].rsplit("/", 1)[-1] for part in (prop, *prop.get("anyOf", [])) if "$ref" in part]
+        assert len(refs) == 1 and refs[0].split("-")[0] == "FAQuoteBaseSuggestion", f"{key}.{QBS_FIELD} must refer to FAQuoteBaseSuggestion: {prop}"
+        referenced.add(refs[0])
+    for key in sorted(referenced):
+        component = schemas[key]
+        quantity = component.get("properties", {}).get("quantity", {})
+        assert "quantity" in component.get("required", []), f"{key}: quantity must be required: {component.get('required')}"
+        assert (quantity.get("type"), quantity.get("minimum")) == ("integer", 1), f"{key}.quantity: {quantity}"
+    print_success(f"✓ both answers refer to {sorted(referenced)}")

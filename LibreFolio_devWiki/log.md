@@ -3915,3 +3915,21 @@ test mocks, and `changelog.reactivity.test.ts` drives the real `createLocalizedC
 with `SvelteMap`). Page section «Prevention» and its source files updated.
 Filed: revision of [[problems/svelte5-derived-stale-over-non-reactive-cache]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-19] file | No range of a single day; zrender's cursor; jsdom and disabled buttons (Y-N65)
+Workstream Y, lot Y-N65 (developer decision 19/10, N65-2…N65-7). No range picker in the app makes a range of a single
+day, and the measuring ruler ignores a second click on its start. In measure mode the chart now owns its cursor through
+zrender (crosshair, not-allowed over the start), because zrender resets an inline cursor on every move. A Vitest
+finding, verified with a jsdom 30.0.1 probe: a dispatched click reaches a disabled button's handlers.
+Filed: [[decisions/no-range-of-a-single-day]], [[problems/zrender-resets-cursor-on-every-move]],
+[[problems/dispatched-click-reaches-disabled-button-in-jsdom]]; section and history row in [[features/F-045]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-19] file | The lots computed on their change days (L1a): self-parity and RealDecimal
+L1a computes the lots' daily series only on the days an input changes and re-dates them over the window,
+byte-identical (0 differences on four DB copies, the real data included). Two lessons: a battery that compares the
+code with itself cannot see a bug in a step both runs share, and equal closes read back alike through `RealDecimal`
+(only a trade mark differs in form).
+Filed: [[concepts/self-parity-needs-the-shared-step-pinned]], [[problems/equal-closes-read-back-alike-through-realdecimal]];
+revision of [[entities/lots-analysis-service]].
+Graph: not updated; graphify is not available in this worktree.

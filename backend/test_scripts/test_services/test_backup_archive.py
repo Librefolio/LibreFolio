@@ -9,6 +9,15 @@ Under test, in ``backend/app/services/platform/instance_backup/``:
     missing folders 0700 and refuses a link or a file where a folder belongs, without writing through it; the
     ``BackupPathError`` names that very folder (``.path``: ``backups``, ``backups/.jobs`` or the job's own folder),
     its message "<path> is not a plain folder". ``job_dir`` never builds a path from something that is not a job id.
+    Lot B-53, ``read_regular_file(path, *, limit=None)``, the one reader of the files the backup keeps (a check's
+    state, a report, the restore's state, the outcome's ticket): a regular file's bytes, all of them or its first
+    ``limit`` at most, an empty one ``b""``, no descriptor left open. Never a link, whatever it points to (a regular
+    file, a folder, nothing): ``NotRegularFileError`` keeping ``ELOOP``; never a wait on a FIFO: ``NotRegularFileError``
+    at once, a device alike; a folder ``IsADirectoryError`` (``EISDIR``), its descriptor closed however often it is
+    read; nothing there ``FileNotFoundError``, a file on the way ``NotADirectoryError``, mode 000 ``PermissionError``,
+    as the system raises them; any other error of ``os.open`` or ``os.fstat`` (``EIO``) the very error raised, the
+    descriptor closed. ``NotRegularFileError``: an ``OSError`` of its own kind, neither ``PermissionError``,
+    ``IsADirectoryError`` nor ``FileNotFoundError``, keeping the ``errno``, ``strerror`` and ``filename`` it is given.
 (b) ``snapshot``: ``snapshot_database`` copies the live database with ``VACUUM INTO``. The copy is the database as of
     one instant even while another connection keeps committing in WAL mode, that writer is never blocked, and the copy
     is a standalone rollback-journal file with nothing beside it. ``describe_database`` reads a file without changing
@@ -56,6 +65,14 @@ found in ``/dev/fd``, the list of this process's own, by the device and inode of
 ``ledger_totals_of`` is replaced, for the tests of (g) that say so, wherever ``archive`` may read it (the totals
 module's own, and the name ``archive`` imported); ``instance_backup.totals`` is imported by the tests that need it,
 never at collection: until lot B-13 writes it, each of them fails on its own.
+Lot B-53's ``paths.read_regular_file`` and ``paths.NotRegularFileError`` are looked up the same way, by the test that
+needs them (``new_in_paths``): written red, each of those tests fails on its own ("[new] …") until the lot adds them.
+Their transient errors are the global ``os.open`` failing for that one path (``opening_fails``) and the global
+``os.fstat`` failing for the descriptor opened on it, every other call the real one; a FIFO is read in a thread waited
+for ``DEADLINE_S`` (``answered_within``), a read still waiting then released by a writer that appears and leaves, so
+that a red run never hangs the suite. ``/dev/null`` is the device, only read. ``answered_within``, ``opening_fails``,
+``descriptors_on`` and ``close_all`` serve the B-53 tests of ``test_backup_staging.py``, ``test_backup_outcome.py`` and
+``test_backup_apply.py`` too.
 """
 
 from __future__ import annotations
@@ -73,18 +90,20 @@ import threading
 import uuid
 import warnings
 import zipfile
-from contextlib import closing
+from collections.abc import Callable
+from contextlib import closing, suppress
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
+from typing import Any
 
 import pytest
 from structlog.testing import capture_logs
 
 from backend.app.services.financial_math.ledger_totals import control_totals
-from backend.app.services.platform.instance_backup import archive, snapshot
+from backend.app.services.platform.instance_backup import archive, paths, snapshot
 from backend.app.services.platform.instance_backup.archive import ArchiveError, BackupNoSpaceError, BuiltArchive, PartialEntryError, build_archive, check_archive, collect_files, required_space
 from backend.app.services.platform.instance_backup.manifest import FORMAT, FORMAT_VERSION, MANIFEST_MAX_BYTES, BackupManifest, ManifestDatabase, ManifestError, ManifestFile, check_entry_path
 from backend.app.services.platform.instance_backup.paths import (
@@ -451,6 +470,305 @@ def test_the_refusal_names_the_folder_that_is_not_a_plain_folder(tmp_path, case)
     assert str(raised.value) == f"{culprit} is not a plain folder", f"{case}: the message keeps its format: {raised.value}"
     assert list(elsewhere.iterdir()) == [], f"{case}: nothing is created through a link"
     print_success(f"{case}: .path = {culprit.relative_to(data)}")
+
+
+# -----------------------------------------------------------------------------
+# (a) paths, lot B-53: read_regular_file, the one reader of the files the backup keeps
+# -----------------------------------------------------------------------------
+#
+# ``os.fdopen`` refuses a folder without closing the descriptor it is handed: a reader that opened a file the backup
+# keeps with ``os.open`` and wrapped it with ``os.fdopen`` left one descriptor open per read of a folder in its place
+# (measured: twenty reads, twenty descriptors, in ``outcome._read_record`` and ``staging.read_report``). And ``os.open``
+# without ``O_NONBLOCK`` waits on a FIFO for a writer that never comes. Lot B-53 gives ``paths`` one reader for them,
+# ``read_regular_file``, and its ``NotRegularFileError``: both looked up by the test that needs them (``new_in_paths``),
+# so that until the lot adds them each of these tests fails on its own and the file still collects.
+
+#: A regular file's content, larger than one read of 64 KiB: a reader that reads once returns a part of it.
+REGULAR_CONTENT = bytes(range(256)) * 800
+#: A device every POSIX system has: no regular file either.
+DEVICE = Path(os.devnull)
+needs_a_device = pytest.mark.skipif(not POSIX or not DEVICE.is_char_device(), reason="needs /dev/null, a character device")
+
+
+def new_in_paths(name: str) -> Any:
+    """A name lot B-53 adds to ``paths`` (``read_regular_file``, ``NotRegularFileError``), looked up by the test that needs
+    it, never imported at the top: the file collects without it, and each test fails on its own ("[new] …")."""
+    value = getattr(paths, name, None)
+    assert value is not None, f"[new] paths.{name} does not exist yet: lot B-53 adds it"
+    return value
+
+
+def opening_fails(patch: pytest.MonkeyPatch, path: Path, code: int) -> OSError:
+    """The global ``os.open`` failing with ``code`` for ``path`` alone, as a dying disk fails (``EIO``), every other path
+    opened as it is: the error it raises, one instance, so that a test tells whether it reached the caller as it is.
+    Every reader looks ``os.open`` up when it opens. Shared with the B-53 tests of ``test_backup_staging.py`` and
+    ``test_backup_apply.py``."""
+    error = OSError(code, os.strerror(code), str(path))
+    target = os.path.realpath(path)
+    real_open = os.open
+
+    def failing_open(file: Any, flags: int, *args: Any, **kwargs: Any) -> int:
+        if kwargs.get("dir_fd") is None and os.path.realpath(os.fsdecode(file)) == target:
+            raise error
+        return real_open(file, flags, *args, **kwargs)
+
+    patch.setattr(os, "open", failing_open)
+    return error
+
+
+@dataclass
+class Answer:
+    """What a call answered within ``answered_within``: what it returned or raised; ``blocked`` when it was still waiting
+    at the deadline, ``deadline`` seconds (released then, so that it ended)."""
+
+    blocked: bool = False
+    returned: Any = None
+    raised: BaseException | None = None
+    deadline: float = DEADLINE_S
+
+
+def answered_within(call: Callable[[], Any], fifo: Path) -> Answer:
+    """``call()`` in a thread of its own, waited for ``DEADLINE_S``: a read that opens a FIFO without ``O_NONBLOCK`` waits
+    there for a writer that never comes. Still waiting then, it is ``blocked``, and a writer appears on ``fifo`` and
+    leaves (opened with ``O_NONBLOCK``: this never waits itself), so that the blocked open returns and a red run never
+    hangs the suite. A read that does not wait answers at once: the deadline only ends a red run. Shared with the B-53
+    tests of ``test_backup_staging.py`` and ``test_backup_outcome.py``."""
+    answer = Answer()
+
+    def run() -> None:
+        try:
+            answer.returned = call()
+        except BaseException as exc:  # reported by the test, in its own thread
+            answer.raised = exc
+
+    worker = threading.Thread(target=run, name="b53-read", daemon=True)
+    worker.start()
+    try:
+        worker.join(answer.deadline)
+    finally:
+        if worker.is_alive():
+            answer.blocked = True
+            with suppress(OSError):
+                os.close(os.open(fifo, os.O_WRONLY | os.O_NONBLOCK))  # a writer appears and leaves: the blocked open returns
+            worker.join(answer.deadline)
+    return answer
+
+
+def close_all(descriptors: list[int]) -> list[int]:
+    """Close ``descriptors``, left open by a red run that must not carry them into the tests that follow; returns them."""
+    for fd in descriptors:
+        os.close(fd)
+    return descriptors
+
+
+#: (content, limit, what is read): every byte, or at most ``limit`` of them.
+READS = [
+    pytest.param(REGULAR_CONTENT, None, REGULAR_CONTENT, id="whole-more-than-one-read-of-64-KiB"),
+    pytest.param(REGULAR_CONTENT, 70_000, REGULAR_CONTENT[:70_000], id="a-limit-past-one-read-of-64-KiB"),
+    pytest.param(REGULAR_CONTENT, 4097, REGULAR_CONTENT[:4097], id="the-outcome-ticket-s-limit"),
+    pytest.param(REGULAR_CONTENT, len(REGULAR_CONTENT), REGULAR_CONTENT, id="a-limit-of-its-size"),
+    pytest.param(REGULAR_CONTENT, len(REGULAR_CONTENT) + 1, REGULAR_CONTENT, id="a-limit-past-its-size"),
+    pytest.param(b"", None, b"", id="empty"),
+    pytest.param(b"", 4097, b"", id="empty-with-a-limit"),
+]
+
+
+@needs_dev_fd
+@pytest.mark.parametrize(("content", "limit", "expected"), READS)
+def test_read_regular_file_gives_a_regular_file_whole_or_its_first_limit_bytes_and_closes_it(tmp_path, content, limit, expected):
+    """(a) B-53 A regular file: every byte of it, more than one read's worth, or its first ``limit`` bytes at most —
+    ``outcome`` reads the ticket's file with ``limit=4097``, one byte past what it accepts — and an empty file ``b""``.
+    No descriptor is left open on it. Red until lot B-53 adds the reader."""
+    print_section("(a) B-53: read_regular_file")
+    read = new_in_paths("read_regular_file")
+    path = tmp_path / "state.json"
+    path.write_bytes(content)
+    got = read(path) if limit is None else read(path, limit=limit)
+    left_open = close_all(descriptors_on(path))
+    seen = f"{len(got)} bytes" if isinstance(got, bytes) else repr(got)[:80]
+    assert got == expected, f"limit={limit}: the file's first {len(expected)} bytes, not {seen}"
+    assert left_open == [], f"limit={limit}: {len(left_open)} descriptor(s) left open on the file: {left_open}"
+    print_success(f"limit={limit}: {seen}, no descriptor left open")
+
+
+@pytest.mark.parametrize("case", ["nothing-there", "a-file-on-the-way"])
+def test_read_regular_file_says_nothing_there_and_a_file_on_the_way_as_the_system_does(tmp_path, case):
+    """(a) B-53 Nothing at the path: ``FileNotFoundError``; a file where a folder of the path belongs:
+    ``NotADirectoryError``. As the system raises them: a reader tells «none» from the rest by them. Red until lot B-53
+    adds the reader."""
+    read = new_in_paths("read_regular_file")
+    if case == "nothing-there":
+        path, expected = tmp_path / "state.json", FileNotFoundError
+    else:
+        (tmp_path / "job").write_bytes(b"a file where a folder belongs")
+        path, expected = tmp_path / "job" / "state.json", NotADirectoryError
+    with pytest.raises(OSError) as raised:
+        read(path)
+    assert type(raised.value) is expected, f"{case}: {expected.__name__}, not {type(raised.value).__name__}: {raised.value}"
+    print_success(f"{case}: {expected.__name__}")
+
+
+@needs_dev_fd
+def test_read_regular_file_refuses_a_folder_as_is_a_directory_and_closes_its_descriptor(tmp_path):
+    """(a) B-53 A folder where a file is read: ``IsADirectoryError`` (``EISDIR``) at every read, and no descriptor left
+    open on it however often it is read. Regression: ``os.fdopen`` refuses a folder without closing the descriptor
+    ``os.open`` gave, so each read of a folder in place of a check's report or of the outcome's ticket left one open, for
+    as long as the server ran. Red until lot B-53 adds the reader."""
+    read = new_in_paths("read_regular_file")
+    folder = tmp_path / "report.json"
+    folder.mkdir()
+    assert descriptors_on(folder) == [], "precondition: no descriptor of this process is open on the folder"
+    answers: set[str] = set()
+    for _ in range(LEAK_CALLS):
+        try:
+            got = read(folder)
+        except OSError as exc:
+            answers.add(f"{type(exc).__name__} ({errno.errorcode.get(exc.errno or 0)})")
+        else:
+            answers.add(f"returned {got!r:.60}")
+    left_open = close_all(descriptors_on(folder))
+    assert answers == {"IsADirectoryError (EISDIR)"}, f"a folder: IsADirectoryError (EISDIR) at every read: {sorted(answers)}"
+    assert left_open == [], f"{len(left_open)} descriptor(s) left open on the folder by {LEAK_CALLS} reads: {left_open}"
+    print_success(f"folder: IsADirectoryError at each of {LEAK_CALLS} reads, no descriptor left open")
+
+
+@needs_symlinks
+@pytest.mark.parametrize("pointed", ["a-regular-file", "a-folder", "nothing"], ids=["to-a-regular-file", "to-a-folder", "dangling"])
+def test_read_regular_file_never_follows_a_link(tmp_path, pointed):
+    """(a) B-53 A link where a file is read is refused, never followed: ``NotRegularFileError`` keeping ``ELOOP``,
+    whatever it points to — a regular file, whose content it never returns; a folder; nothing: a dangling link is not
+    «nothing there» (``FileNotFoundError``), which a reader takes for no file at all and would not report. Red until lot
+    B-53 adds the reader."""
+    read = new_in_paths("read_regular_file")
+    not_regular = new_in_paths("NotRegularFileError")
+    target = tmp_path / "elsewhere" / "state.json"
+    target.parent.mkdir()
+    if pointed == "a-regular-file":
+        target.write_bytes(b'{"status": "done", "read": "through a link: never returned"}')
+    elif pointed == "a-folder":
+        target.mkdir()
+    link = tmp_path / "state.json"
+    link.symlink_to(target, target_is_directory=pointed == "a-folder")
+    with pytest.raises(OSError) as raised:
+        read(link)
+    found = (type(raised.value).__name__, errno.errorcode.get(raised.value.errno or 0))
+    assert isinstance(raised.value, not_regular) and raised.value.errno == errno.ELOOP, f"a link to {pointed}: NotRegularFileError, errno ELOOP, not {found}: {raised.value}"
+    print_success(f"a link to {pointed}: NotRegularFileError (ELOOP), never followed")
+
+
+@needs_dev_fd
+@needs_fifo
+def test_read_regular_file_refuses_a_fifo_at_once_and_closes_its_descriptor(tmp_path):
+    """(a) B-53 A FIFO where a file is read: ``NotRegularFileError`` at once — opened with ``O_NONBLOCK``, never waiting
+    for a writer that never comes, which stopped every reader of a check's state, a report or the outcome's ticket for
+    good, the startup's sweep among them — and no descriptor left open on it. The read runs in a thread waited for
+    ``DEADLINE_S`` (``answered_within``): a read still waiting then is released, and the test fails. Red until lot B-53
+    adds the reader."""
+    read = new_in_paths("read_regular_file")
+    not_regular = new_in_paths("NotRegularFileError")
+    fifo = tmp_path / "state.json"
+    os.mkfifo(fifo, 0o600)
+    assert descriptors_on(fifo) == [], "precondition: no descriptor of this process is open on the FIFO"
+    answer = answered_within(lambda: read(fifo), fifo)
+    left_open = close_all(descriptors_on(fifo))
+    assert not answer.blocked, f"read_regular_file was still waiting after {DEADLINE_S}s: it opened the FIFO without O_NONBLOCK and waited for a writer that never comes"
+    assert isinstance(answer.raised, not_regular), f"a FIFO is no regular file: NotRegularFileError, not {answer}"
+    assert left_open == [], f"{len(left_open)} descriptor(s) left open on the FIFO: {left_open}"
+    print_success("FIFO: NotRegularFileError at once, no descriptor left open")
+
+
+@needs_a_device
+def test_read_regular_file_refuses_a_device_as_no_regular_file():
+    """(a) B-53 A device (``/dev/null``, only read) is no regular file either: ``NotRegularFileError``, as a FIFO — what
+    is refused is anything but a regular file, not a FIFO alone. Red until lot B-53 adds the reader."""
+    read = new_in_paths("read_regular_file")
+    not_regular = new_in_paths("NotRegularFileError")
+    with pytest.raises(OSError) as raised:
+        read(DEVICE)
+    assert isinstance(raised.value, not_regular), f"{DEVICE}: NotRegularFileError, not {type(raised.value).__name__}: {raised.value}"
+    print_success(f"{DEVICE}: NotRegularFileError")
+
+
+@needs_permission_checks
+def test_read_regular_file_says_a_file_it_may_not_read_is_a_permission_error(tmp_path):
+    """(a) B-53 A file of mode 000: ``PermissionError`` (``EACCES``), as the system raises it; root reads it all the same
+    (skipped). Its mode is put back whatever happens. Red until lot B-53 adds the reader."""
+    read = new_in_paths("read_regular_file")
+    path = tmp_path / "state.json"
+    path.write_bytes(b'{"status": "done"}')
+    path.chmod(0o000)
+    try:
+        with pytest.raises(OSError) as raised:
+            read(path)
+    finally:
+        path.chmod(0o600)
+    assert type(raised.value) is PermissionError and raised.value.errno == errno.EACCES, f"mode 000: PermissionError (EACCES), not {type(raised.value).__name__}: {raised.value}"
+    print_success("mode 000: PermissionError")
+
+
+def test_not_regular_file_error_is_an_oserror_of_its_own_kind():
+    """(a) B-53 ``NotRegularFileError`` is an ``OSError`` — a reader that takes any ``OSError`` for «cannot be read» keeps
+    doing so — of its own kind: neither a ``PermissionError``, an ``IsADirectoryError`` nor a ``FileNotFoundError``, which
+    a reader may take for something else (no permission, a folder, nothing there). It keeps the ``errno``, ``strerror``
+    and ``filename`` it is given, as an ``OSError`` does. Red until lot B-53 adds it."""
+    not_regular = new_in_paths("NotRegularFileError")
+    assert isinstance(not_regular, type) and issubclass(not_regular, OSError), f"an OSError: {not_regular!r}"
+    kinds = [kind.__name__ for kind in (PermissionError, IsADirectoryError, FileNotFoundError) if issubclass(not_regular, kind)]
+    assert kinds == [], f"of its own kind, not a {kinds}: {not_regular.__mro__}"
+    error = not_regular(errno.ELOOP, os.strerror(errno.ELOOP), "state.json")
+    found = (type(error), error.errno, error.strerror, error.filename)
+    assert found == (not_regular, errno.ELOOP, os.strerror(errno.ELOOP), "state.json"), f"its errno, strerror and filename kept, as an OSError's: {found}"
+    print_success(f"NotRegularFileError: {[kind.__name__ for kind in not_regular.__mro__]}")
+
+
+def test_read_regular_file_lets_a_transient_error_of_its_opening_through_as_it_is(tmp_path, monkeypatch):
+    """(a) B-53 ``os.open`` failing for the file alone with ``EIO``, as a dying disk fails: that very error reaches the
+    caller — not a ``NotRegularFileError``, a ``PermissionError`` nor anything a reader takes for «no file» — so that a
+    caller can answer «try again» instead of «none». Red until lot B-53 adds the reader."""
+    read = new_in_paths("read_regular_file")
+    path = tmp_path / "state.json"
+    path.write_bytes(b'{"status": "done"}')
+    refusal = opening_fails(monkeypatch, path, errno.EIO)
+    with pytest.raises(OSError) as raised:
+        read(path)
+    assert raised.value is refusal, f"the very EIO os.open raised, as it is: not {type(raised.value).__name__} ({errno.errorcode.get(raised.value.errno or 0)}): {raised.value}"
+    print_success("os.open EIO: raised as it is")
+
+
+@needs_dev_fd
+def test_read_regular_file_lets_a_transient_error_of_fstat_through_and_closes_the_descriptor(tmp_path):
+    """(a) B-53 ``os.fstat`` failing with ``EIO`` on the descriptor opened for the file, every other call the real one:
+    that very error reaches the caller, and the descriptor is closed all the same. Red until lot B-53 adds the reader."""
+    read = new_in_paths("read_regular_file")
+    path = tmp_path / "state.json"
+    path.write_bytes(b'{"status": "done"}')
+    refusal = os_error(errno.EIO)
+    target, opened = os.path.realpath(path), []
+    real_open, real_fstat = os.open, os.fstat
+
+    def opening(file: Any, flags: int, *args: Any, **kwargs: Any) -> int:
+        fd = real_open(file, flags, *args, **kwargs)
+        if kwargs.get("dir_fd") is None and os.path.realpath(os.fsdecode(file)) == target:
+            opened.append(fd)
+        return fd
+
+    def failing_fstat(fd: Any, *args: Any, **kwargs: Any) -> os.stat_result:
+        if fd in opened:
+            raise refusal
+        return real_fstat(fd, *args, **kwargs)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(os, "open", opening)
+        patch.setattr(os, "fstat", failing_fstat)
+        try:
+            returned, raised = read(path), None
+        except OSError as exc:
+            returned, raised = None, exc
+    left_open = close_all(descriptors_on(path))  # after the patch: descriptors_on reads every descriptor with os.fstat
+    assert opened, "precondition: the reader opened the file through the global os.open"
+    assert raised is refusal, f"the very EIO os.fstat raised, as it is: {type(raised).__name__}: {raised} (returned {returned!r})"
+    assert left_open == [], f"{len(left_open)} descriptor(s) left open on the file once os.fstat failed: {left_open}"
+    print_success("os.fstat EIO: raised as it is, the descriptor closed")
 
 
 # =============================================================================

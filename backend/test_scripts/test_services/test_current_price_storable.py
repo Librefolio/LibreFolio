@@ -75,6 +75,12 @@ The double builds the points of a ``raw_history`` inside the provider call (``FA
 its own, so a point the schema refuses raises where a plugin's would. The N92 tests carry ``n92`` in their names
 (``-k n92``); every one is RED until N92 but the GUARD of a zero open and volume, green before and after.
 
+Z's note (the N92 review, 19/10): the cure names a discarded day by its date alone, «N points discarded: price not above
+0 (<dates>)», in the note and in the warning, even when the fault is a volume of -10, which is no price. The contract: each
+discarded day is named with its fields at fault, «<ISO date> (<name>=<value>, …)», the value as the provider gave it and a
+sound field not named (``_n92_discarded_entry``), in the note and in the warning; a fault of the volume alone is not called
+a price. The assertions that pin it are marked «RED until Z's note (N92 review)».
+
 The doubles and fixtures are W-B58's and W-B62's, copied from ``test_asset_digit_limits.py`` (workstream W): the two
 assets of the unit (``owned``), ``_QuoteDouble`` and the ``assigned`` fixture, ``_current_price``, ``_falling_back``,
 ``_seed_closes`` and ``_record_current_cache``. W-B62's tests are W's, unchanged; the X-R40 tests follow them.
@@ -827,7 +833,12 @@ async def test_guard_a_quote_that_fits_is_served_in_its_own_form(owned, assigned
 _N92_BARRIER = "N92 capture barrier"
 
 #: Day 1 of a history whose days 0 and 2 are sound: a close not above 0, or a negative open, high, low or volume — the
-#: old sentinel -1 among them, which the history stored before N92 as an erased open.
+#: old sentinel -1 among them, which the history stored before N92 as an erased open —, or two of them at once (Z's note
+#: names every field at fault, comma-separated). The values are written as the provider gives them.
+#: No case carries both a low and a high with the close or the open outside them: the base's OHLC guard
+#: (``base._repair_ohlc_point``, wrapped around every plugin's ``get_history_value``) widens such bounds before the refresh
+#: sees the day, so that raw day is not what the refresh judges (a high of -0.5 and a low of -2 around a close of 1.5
+#: arrive as a high of 1.5).
 _N92_BAD_DAYS = [
     pytest.param({"close": "-5"}, id="close-minus-5"),
     pytest.param({"close": "0"}, id="close-zero"),
@@ -835,10 +846,31 @@ _N92_BAD_DAYS = [
     pytest.param({"close": "1.5", "low": "-2"}, id="low-minus-2"),
     pytest.param({"close": "1.5", "high": "-0.5"}, id="high-minus-0.5"),
     pytest.param({"close": "1.5", "volume": "-10"}, id="volume-minus-10"),
+    pytest.param({"close": "1.5", "open": "-1", "volume": "-10"}, id="open-and-volume-negative"),
 ]
 
 #: Current values not above 0, a negative one and a zero written with its decimals: each is named as written.
 _N92_QUOTES = [pytest.param(Decimal("-5"), id="-5"), pytest.param(Decimal("0.00"), id="0.00")]
+
+#: The fields of a provider's point the sign rule of N92 reads, in the order a note names those at fault (Z's note).
+_N92_SIGNED_FIELDS = ("close", "open", "high", "low", "volume")
+
+
+def _n92_fields_at_fault(point: dict) -> list[str]:
+    """The fields of a provider's ``point`` (its values as the provider gave them, as text) that N92 does not keep: a close
+    not above 0, a negative open, high, low or volume; in the order of ``_N92_SIGNED_FIELDS``. Derived from the point,
+    never from a second table."""
+    return [name for name in _N92_SIGNED_FIELDS if name in point and (Decimal(point[name]) <= 0 if name == "close" else Decimal(point[name]) < 0)]
+
+
+def _n92_discarded_entry(point: dict) -> str:
+    """How the note and the warning name a discarded day of the provider (Z's note on N92): its ISO date, then its fields
+    at fault as ``name=value``, the value as the provider gave it, comma-separated: «1991-04-09 (volume=-10)», «1991-04-09
+    (open=-1, volume=-10)». A sound field (a close of 1.5) is not named."""
+    fields = _n92_fields_at_fault(point)
+    assert fields, f"scaffold: the provider's point {point} has no field at fault: nothing discards it"
+    shown = ", ".join(f"{name}={point[name]}" for name in fields)
+    return f"{point['date'].isoformat()} ({shown})"
 
 
 def _n92_names_value(text: str | None, value: str) -> bool:
@@ -893,8 +925,16 @@ async def test_n92_a_providers_day_not_above_zero_is_discarded_named_and_logged(
     result PARTIAL, ``points_fetched`` 2 (the discarded point not counted), one error, its message, saying that 1 point
     was discarded and naming day 1 alone; a WARNING (or worse) names day 1. The capture is proved live by a barrier event
     of ``refresh``'s logger.
+
+    RED until Z's note (N92 review): the note names day 1 by its date alone, «1 points discarded: price not above 0
+    (<day 1>)», and the warning by its date alone too (``dates``), whatever the field at fault — a volume of -10 is called
+    a price. Contract (Z's note): the note names day 1 with its fields at fault, exactly «<day 1> (<name>=<value>)», the
+    value as the provider gave it, several comma-separated, a sound close of 1.5 not named (``_n92_discarded_entry``,
+    derived from the param); the warning naming day 1 carries the same text; a fault of the volume alone is not called a
+    price: the note does not say «price not above 0».
     """
-    assigned.raw_history = [{"date": _day(0), "close": "1.5"}, {"date": _day(1), **bad}, {"date": _day(2), "close": "2.5"}]
+    day_one = {"date": _day(1), **bad}
+    assigned.raw_history = [{"date": _day(0), "close": "1.5"}, day_one, {"date": _day(2), "close": "2.5"}]
     story = f"a refresh whose provider delivers days 0 and 2 sound and day 1 ({_day(1)}) with {bad}"
 
     with capture_logs() as events:
@@ -912,6 +952,14 @@ async def test_n92_a_providers_day_not_above_zero_is_discarded_named_and_logged(
     assert delta == [_day(0), _day(2)], f"N92: {story} announces {delta} in changed_points: expected days 0 and 2"
     assert _n92_warnings_naming(events, _day(1)), f"N92: {story} logged no warning naming {_day(1)}, the discarded day: {[event for event in events if event.get('event') != _N92_BARRIER]}"
 
+    # RED until Z's note (N92 review): day 1 named with its fields at fault, in the note and in the warning
+    named = _n92_discarded_entry(day_one)
+    assert named in result.message, f"Z's note (N92 review): {story} answered {answered}: the note must name day 1 with its fields at fault, exactly «{named}»"
+    if _n92_fields_at_fault(day_one) == ["volume"]:
+        assert "price not above 0" not in result.message.lower(), f"Z's note (N92 review): {story}: a fault of the volume alone is called a price: {result.message!r}"
+    carrying = [event for event in _n92_warnings_naming(events, _day(1)) if named in str(event)]
+    assert carrying, f"Z's note (N92 review): {story}: no warning naming {_day(1)} carries «{named}»: {_n92_warnings_naming(events, _day(1))}"
+
 
 @pytest.mark.asyncio
 async def test_n92_a_history_whose_every_day_is_not_above_zero_fails_naming_them(owned, assigned):
@@ -920,6 +968,10 @@ async def test_n92_a_history_whose_every_day_is_not_above_zero_fails_naming_them
 
     Contract (N92, as the currency-mismatch short-circuit): every point discarded, nothing stored; FAILED,
     ``points_fetched`` 0, one error, its message, saying that 2 points were discarded and naming both days.
+
+    RED until Z's note (N92 review): the note names the two days by their dates alone, «2 points discarded: price not
+    above 0 (<day 0>, <day 1>)». Contract (Z's note): it names each with its field at fault, in the order the provider gave
+    them: «(<day 0> (close=-5)» … «<day 1> (close=0))» (``_n92_discarded_entry``, derived from the provider's points).
     """
     assigned.raw_history = [{"date": _day(0), "close": "-5"}, {"date": _day(1), "close": "0"}]
     story = f"a refresh whose provider delivers a close of -5 on {_day(0)} and of 0 on {_day(1)}"
@@ -932,6 +984,13 @@ async def test_n92_a_history_whose_every_day_is_not_above_zero_fails_naming_them
     notes = _n92_discard_notes(result.errors, 2, [_day(0), _day(1)], [])
     failed = (result.status, result.points_fetched) == (SyncStatus.FAILED, 0)
     assert failed and len(result.errors) == 1 and notes == result.errors and result.message == notes[0], f"N92: {story} answered {answered}: expected FAILED, 0 points fetched, one error, its message, saying that 2 points were discarded and naming both days"
+
+    # RED until Z's note (N92 review): both days named with their fields at fault, in the provider's order
+    entries = [_n92_discarded_entry(point) for point in assigned.raw_history]
+    opening, closing = f"({entries[0]}", f"{entries[-1]})"
+    note = result.message
+    in_order = opening in note and closing in note and note.index(opening) < note.index(closing)
+    assert in_order, f"Z's note (N92 review): {story} answered {answered}: the note must name both days with their fields at fault, in the order the provider gave them: «{opening}» … «{closing}»"
 
 
 @pytest.mark.asyncio

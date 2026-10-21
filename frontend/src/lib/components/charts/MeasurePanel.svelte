@@ -134,10 +134,21 @@
         emitRendered();
     }
 
-    /** Called from parent on mousemove to update live preview line */
-    export function updatePendingEnd(date: string, value: number) {
-        if (!measureActive || pendingStartDate === null) return;
-        if (date === pendingStartDate) return; // no zero-length measure
+    /**
+     * Called from parent on mousemove to update the live preview line. Answers whether `date`
+     * is the pending start, where a measure of one day is refused: the chart's cue for the
+     * not-allowed cursor.
+     */
+    export function updatePendingEnd(date: string, value: number): boolean {
+        if (!measureActive || pendingStartDate === null) return false;
+        if (date === pendingStartDate) {
+            // Back on the start day the preview goes: it would be a measure of one day.
+            if (pendingMeasure) {
+                pendingMeasure = null;
+                emitRendered();
+            }
+            return true;
+        }
         const [s, e] = pendingStartDate <= date ? [pendingStartDate, date] : [date, pendingStartDate];
         pendingMeasure = new MeasureSignal(
             '__pending__',
@@ -149,6 +160,7 @@
             {startDate: s, endDate: e},
         );
         emitRendered();
+        return false;
     }
 
     export function addPoint(date: string, value: number) {
@@ -161,6 +173,9 @@
         if (pendingStartDate === null) {
             pendingStartDate = date;
             pendingStartValue = value;
+        } else if (date === pendingStartDate) {
+            // A second click on the start day would make a measure of one day: ignored, the start stays pending.
+            return;
         } else {
             const id = `measure-${nextId++}`;
             const [start, end] = pendingStartDate <= date ? [pendingStartDate, date] : [date, pendingStartDate];
@@ -230,7 +245,6 @@
         if (!m) return;
         // Ensure start <= end
         const [s, e] = newStart <= newEnd ? [newStart, newEnd] : [newEnd, newStart];
-        if (s === e) return; // measure needs 2 different days
         // Update dates on the object (mutation, no reactivity trigger yet)
         m.params.startDate = s;
         m.params.endDate = e;

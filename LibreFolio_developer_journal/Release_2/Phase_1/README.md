@@ -55,6 +55,13 @@ lavori leggeri solo con carico a 1 minuto sotto 50.
 Corsie del programma colori, da non usare: 6150–6154 e 6160. Lettere riservate ai colori:
 L, R, G, T, C, U, S, P.
 
+### Ripresa del 21/10 (Linux)
+
+Il 20/10 alle 14:36 il coordinatore Copilot si è fermato (errore 403) e con lui le sessioni figlie. Il lavoro è ripreso su
+Linux con un coordinatore Claude Code, in sola lettura prima: analisi e piano a ondate in `ANALISI-ripresa-LibreFolio.md`
+(accanto al repo). Ondata 0 fatta il 21/10: copia dei diff dei worktree sporchi, `.claude/` nel git, treno 5. I figli
+restano fermi finché il developer non dà il via all'ondata 1 (Y, H, Z).
+
 ## Funzioni per il cloud
 
 | Ondata | Funzione | Sessione | Stato (19/10) |
@@ -477,3 +484,9 @@ Sono tutti locali: la push la fa il developer.
 | 369 | 17/10 19:58 | A journal: A-54..A-58 filed | `fe42c9a2f` |
 | 370 | 17/10 20:00 | W-B48 testid selectors, W-B51 BRIM quantity duplicates | `4bc6b2ab1` |
 | — | 17/10 00:05–00:45 | Colori: AF file, media e menu `9d3607eb6`; T `CompactCashCell` `b58108665` | — |
+| 20/10-T1 | 20/10 09:17 | Z-29a v3 + Z-29r, B-8 rifinitura, N69a, X-R45b-ui + N61-form, L1a | `701054da9` |
+| 20/10-T2 | 20/10 10:10 | H-60, E-AI503/E-20/E-24, X wac-inf, Z-29d-0 + Y-38, B-50, B-52, MF-P1b, J-57, Z-32 (d) backend | `f73514a77` |
+| 20/10-T3 | 20/10 11:31 | Z-32 (d) frontend, J-66 + §29, W-B89 + B-51, E-24.2, B-53/54/55, MF-E2, mappa guide + N70, P3 (X) + Z-39 | `6e1761121` |
+| 20/10-T4 | 20/10 13:34 | E-23, Z-29a-f, J-67, MF-E2b + P3 consumatore, N69b | `15fa228ef` |
+| — | 20/10 14:15 | G: note N69, G-28 fixture sicurezza «ok» | `b844f83f2` |
+| 21/10-T5 | 21/10 | `.claude/` + CLAUDE.md; J-60 + J-70; A: `admin_setup_status` (H-61); E: galleria Email + traduzioni | `d1893f84b` |

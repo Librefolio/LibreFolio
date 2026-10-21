@@ -226,6 +226,20 @@ without a cost basis (``autoCostUnknownPool``). Today each is saved, or answered
 for 1 000 EUR beside 10 planted without a cost, 1 000 / 20 = 50 EUR (J-58). The API side — the receiving leg of a TRANSFER
 from an empty pool, at /validate — is ``test_wac_inline.py``'s ``test_wacp27_empty_pool_is_refused``.
 
+J-60 (the coordinator's decision of 19/10, the developer's texts approved; N92 (i) refuses negative prices too) — a manual
+cost basis below 0, the ``TestJ60…`` classes: RED until its cure but for the guards. Nothing reads the sign of a cost basis
+today: −1 EUR written by a create, an update or a promote is saved, and the lots take it as a negative cost. The contract: a
+stage ``check_cost_basis_sign``, beside ``check_decimal_limits`` and ``check_dates``, reads the costs the digit limits read
+— a create's or an update's ``cost_basis_override`` sent without ``cost_basis_mode`` ``auto``/``auto-detail``, and the
+one a promote resolves — and below 0 gives the row one ``costBasisNegative`` (``TXValidationCode.COST_BASIS_NEGATIVE``,
+message ``transactions.errors.costBasisNegative``) on ``cost_basis_override``, its operation and index, ``ref_id`` the row
+of an update, no params: not committed, nothing written, and the batch runs on, so the row's other refusals come in the
+same answer. Reds, at −1 EUR on /commit and /validate: an ADJUSTMENT +5, a TRANSFER's receiving leg, an ADJUSTMENT −5's
+handover cost, an update, a promote, each beside nothing else; the same row beside a refusal found before the check and
+one found by the last stage; the code, its listing, its message; DERIVED, on /commit, an update re-sending unchanged the
+−1 a row stores. Guards: a Manual 0, ``-0`` included; an Auto row, whatever its payload carries or (DERIVED) its pool
+averages; a notes-only or tags-only edit of a row stored at −1, which keeps it.
+
 Ownership. Every test builds its own asset and brokers under a unique marker, in a session rolled back at the end:
 ``execute_batch`` never commits (its caller does), so nothing reaches the lane's database. The two scaffolds that
 change module state — an entry of ``TX_TYPE_METADATA``, ``SWAP_GROUPS`` — go through ``monkeypatch``, which puts
@@ -233,7 +247,8 @@ them back. W-B69's plants are raw SQL in the same session, rolled back with it, 
 
 Run: ``./dev.py test services transaction-cost-basis-rule`` (the action ``services_transaction_cost_basis_rule``); W-B69's
 cases alone: ``./dev.py test services transaction-cost-basis-rule WB69``; N78's: ``… transaction-cost-basis-rule N78``;
-W-B67's: ``… transaction-cost-basis-rule WB67``; N88's: ``… transaction-cost-basis-rule N88``.
+W-B67's: ``… transaction-cost-basis-rule WB67``; N88's: ``… transaction-cost-basis-rule N88``; J-60's: ``…
+transaction-cost-basis-rule J60``.
 """
 
 import ast
@@ -263,7 +278,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import backend.app.schemas.transactions.transactions as transaction_schemas
 import backend.app.schemas.transactions.type_metadata as type_metadata
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, FxConversionRoute, FxRate, Transaction, TransactionType
-from backend.app.db.precision import round_computed_value
+from backend.app.db.precision import decimal_limit_issue, integer_digits_issue, round_computed_value
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.batch import TXBatchResponse, TXValidationCode, TXValidationIssue
@@ -2725,6 +2740,9 @@ class TestN88AutoCostWithNothingToAverage:
     units for 1 000 EUR. Each batch runs as ``POST /transactions/commit`` or ``/validate`` runs it, its transaction included
     (``_as_the_endpoint``: a refusal is an issue, a batch that raises fails the test), and its rows are read back by id or by
     raw SQL. What each pool holds is checked before the batch (``_pool``), never assumed.
+
+    B1 (J-57 complete), a control at the end: the receiving leg of a TRANSFER, whose pool is its partner's broker, over units
+    of unknown cost — refused in Auto, committed at a Manual cost of 0, the answer Q-J57-1 (c) asks of the user.
     """
 
     @pytest.mark.asyncio
@@ -2920,3 +2938,491 @@ class TestN88AutoCostWithNothingToAverage:
         response = await _as_the_endpoint(world, commit=commit, creates=batch.creates)
 
         await _assert_takes(world, response, batch, cost=understated, commit=commit, what=f"J-58, today: an Auto ADJUSTMENT +{ADJUSTMENT_QUANTITY} over {BUY_QUANTITY} units bought for {WORLD_PAID} EUR and {BUY_QUANTITY} of unknown cost")
+
+    @staticmethod
+    def _transfer(sender_id: int, receiver_id: int, asset_id: int, *, receiving: dict) -> list[dict]:
+        """A TRANSFER pair to create on ``MOVE_DAY``, ``sender_id`` → ``receiver_id``, under a link of its own: the giving leg
+        −4 at index 0, the receiving leg +4 at index 1, carrying ``receiving`` (its mode, or its cost basis)."""
+        link_uuid = str(uuid.uuid4())
+        giving = {"broker_id": sender_id, "asset_id": asset_id, "type": "TRANSFER", "date": MOVE_DAY.isoformat(), "quantity": str(-TRANSFER_QUANTITY), "link_uuid": link_uuid}
+        received = {"broker_id": receiver_id, "asset_id": asset_id, "type": "TRANSFER", "date": MOVE_DAY.isoformat(), "quantity": str(TRANSFER_QUANTITY), "link_uuid": link_uuid, **receiving}
+        return [giving, received]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", ENDPOINTS)
+    async def test_receiving_transfer_leg_over_units_of_unknown_cost_is_refused_in_auto_and_commits_at_a_manual_zero(self, world, commit):
+        """B1 (J-57 complete), control, green today and after: N88 on the receiving leg of a TRANSFER, then the answer
+        Q-J57-1 (c) asks of the user.
+
+        ``dest`` holds 5 units of unknown cost — an ADJUSTMENT +5 planted on ``N88_POOL_DAY`` without a cost basis — and sends
+        4 of them on ``MOVE_DAY`` to a receiver of the test's own, which holds nothing of the asset. In ``auto`` the receiving
+        leg (create 1) averages its partner's broker, ``dest``, up to the partner's date, without the two legs
+        (``_auto_cost_source``): units, none at a known cost. The batch refuses it with one ``autoCostUnknownPool`` on create
+        1 — field ``cost_basis_override``, no params, ``ref_id`` None —, no ``wac_results`` item, nothing committed (/commit
+        and /validate alike). The reds above cover ADJUSTMENTs and an update; ``test_wac_inline.py``'s P27 a TRANSFER from an
+        empty pool, through the API.
+
+        Then the same transfer with the receiving leg at a Manual cost of 0 EUR — no mode, as the form sends a manual cost:
+        Q-J57-1 (c), 19/10, a blocking cost todo is answered only by a value, 0 included — commits with no issue. The leg
+        stores 0 EUR, a known cost, and the lot it brings the receiver reads 0: the receiver's pool is that leg alone, 4 units
+        at a unit cost of 0, their average 0 EUR.
+        """
+        await _n88_plant(world, broker=world.dest, tx_type=TransactionType.ADJUSTMENT, quantity=ADJUSTMENT_QUANTITY)
+        now = utcnow()
+        receiver = Broker(name=f"{world.marker} N88 receiver", description="N88 B1: the broker the transfer reaches", allow_cash_overdraft=True, allow_asset_shorting=False, created_at=now, updated_at=now)
+        world.session.add(receiver)
+        await world.session.flush()
+        sender_pool = await _pool(world, world.dest)
+        assert sender_pool == [(TransactionType.ADJUSTMENT, ADJUSTMENT_QUANTITY, Decimal("0"), None)], f"precondition broken: dest's pool on {MOVE_DAY} must be one ADJUSTMENT +{ADJUSTMENT_QUANTITY} without a cost basis: {sender_pool}"
+        receiver_pool = await _pool(world, receiver)
+        assert receiver_pool == [], f"precondition broken: the receiver must hold nothing of the asset; its pool on {MOVE_DAY} holds {receiver_pool}"
+        # The ids and both batches are taken before either runs: the refused batch's rollback expires what it touched.
+        sender_id, receiver_id, asset_id = world.dest.id, receiver.id, world.asset.id
+        auto_pair = self._transfer(sender_id, receiver_id, asset_id, receiving={"cost_basis_mode": "auto"})
+        manual_zero_pair = self._transfer(sender_id, receiver_id, asset_id, receiving={"cost_basis_override": _cost_sent(ZERO_COST)})
+        brokers = await _world_brokers(world)
+        before = await _raw_rows(world, brokers)
+
+        refused = await _as_the_endpoint(world, commit=commit, creates=auto_pair)
+
+        await _assert_nothing_to_average(
+            world,
+            refused,
+            [("create", 1, AUTO_COST_UNKNOWN_POOL)],
+            commit=commit,
+            brokers=brokers,
+            before=before,
+            pool=f"dest's {ADJUSTMENT_QUANTITY} units of unknown cost (the receiving leg of a TRANSFER dest → receiver, in auto, averages its partner's broker up to the partner's date)",
+            today=f"{N88_TODAY_UNKNOWN} — N88's defect, back on a receiving TRANSFER leg",
+        )
+
+        answered = await _as_the_endpoint(world, commit=True, creates=manual_zero_pair)
+
+        assert (answered.committed, answered.issues) == (True, []), f"Q-J57-1 (c): the same transfer with the receiving leg at a Manual cost of 0 {EUR}, no mode, must commit with no issue: {_render(answered.issues)}"
+        receiving_id = _created_id(answered, 1)
+        stored = await _stored_cost(world, receiving_id)
+        assert stored == (ZERO_COST.amount, ZERO_COST.code), f"The receiving leg id={receiving_id} was committed with {_show(stored)}, not the Manual {ZERO_COST.amount} {ZERO_COST.code} it was sent with"
+        lot = await compute_wac_iterative(world.session, broker_id=receiver_id, asset_id=asset_id, as_of_date=MOVE_DAY, asset_currency=EUR, use_cache=False)
+        read = ([(row.tx_id, row.type, row.quantity, row.unit_cost) for row in lot.wac_qualifying_txs], (lot.wac.amount, lot.wac.code) if lot.wac else None)
+        assert read == (
+            [(receiving_id, TransactionType.TRANSFER.value, TRANSFER_QUANTITY, ZERO_COST.amount)],
+            (ZERO_COST.amount, EUR),
+        ), f"The lot the receiving leg id={receiving_id} brings the receiver must read a cost of 0: its pool that leg alone, {TRANSFER_QUANTITY} units at a unit cost of 0, their average 0 {EUR}; (tx_id, type, quantity, unit_cost) of its rows, and its average: {read}"
+
+
+# ============================================================================
+# RED AND GUARDS — J-60: A MANUAL COST BASIS BELOW 0
+# ============================================================================
+
+# The cure's TXValidationCode.COST_BASIS_NEGATIVE, as a literal: the member does not exist before it.
+COST_BASIS_NEGATIVE = "costBasisNegative"
+# The codes of the other refusals a row at a negative cost gets beside it (TestJ60ANegativeCostDoesNotStopTheBatch).
+DECIMAL_PLACES_EXCEEDED = TXValidationCode.DECIMAL_PLACES_EXCEEDED.value
+BALANCE_ASSET_NEGATIVE = TXValidationCode.BALANCE_ASSET_NEGATIVE.value
+# The manual cost basis every J-60 red sends, per unit: below 0, within every digit limit, in the asset's currency.
+J60_NEGATIVE_COST = Currency(code=EUR, amount=Decimal("-1"))
+# A manual cost basis goes without a mode, as the form sends it, or in "manual", as an API client may: both are read.
+J60_MANUAL_MODES = (pytest.param(None, id="no-mode"), pytest.param("manual", id="manual"))
+# A manual cost of zero as a payload writes it: "0", and "-0", which parses to Decimal("-0"), equal to 0 and not below it.
+J60_ZERO_TEXTS = (pytest.param("0", id="zero"), pytest.param("-0", id="minus-zero"))
+# The rows _store writes, as J-60's messages name them: an update red sends the receiving leg of a pair alone.
+J60_SHAPE_LABELS = {"transfer_in": f"TRANSFER receiving leg +{TRANSFER_QUANTITY}", "adjustment_in": f"ADJUSTMENT +{ADJUSTMENT_QUANTITY}"}
+# The Auto rows whose payload carries J60_NEGATIVE_COST (_j60_auto_batch).
+J60_AUTO_CASES = ("adjustment-create", "transfer-create", "transfer-update")
+# The other refusal of a row at a negative cost: one a stage before the sign's check finds, one only the batch's last finds.
+J60_BESIDE_CASES = ("decimal-places", "short-balance")
+# 11 decimal places, past the 10 a quantity keeps (test_transaction_decimal_places.py's "quantity-11-decimals"):
+# decimalPlacesExceeded, a refusal that does not stop the batch, unlike the integer digits.
+J60_QUANTITY_11_DECIMALS = Decimal("0.12345678901")
+# The per-unit cost an older version stored on 10 units of source, for the guard over a pool averaging below 0: with the
+# world's BUY, (1 000 − 3 000) / 20 = −100 EUR.
+J60_LEGACY_NEGATIVE_COST = Currency(code=EUR, amount=Decimal("-300"))
+
+
+def _j60_mode(mode: str | None) -> str:
+    """A manual cost's mode, for a message."""
+    return "no mode" if mode is None else f"cost_basis_mode {mode}"
+
+
+def _j60_issue(operation: str, index: int, ref_id: int | None = None) -> dict:
+    """J-60's issue as ``_j60_view`` shows it: ``costBasisNegative`` on ``cost_basis_override``, on the row's operation and
+    index, ``ref_id`` the row an update names — None for a create or a promote, as ``check_decimal_limits`` gives them."""
+    return {"operation": operation, "index": index, "ref_id": ref_id, "code": COST_BASIS_NEGATIVE, "field": "cost_basis_override"}
+
+
+def _j60_view(issue: TXValidationIssue) -> dict:
+    """``_issue_view`` without its params: where an issue lies and what it says. The params of ``costBasisNegative`` — none —
+    are checked apart (``_assert_cost_basis_negative``); those of another code are its own tests' business."""
+    view = _issue_view(issue)
+    del view["params"]
+    return view
+
+
+async def _j60_as_the_endpoint(world: World, *, commit: bool, creates: list[dict] | None = None, updates: list[dict] | None = None, promotes: list[dict] | None = None) -> TXBatchResponse:
+    """The batch as ``POST /transactions/commit`` (``commit=True``) or ``/validate`` runs it, its transaction included —
+    ``_as_the_endpoint``, promotes included: /commit keeps what the service answers committed and rolls back the rest,
+    /validate always rolls back. A refusal is an issue: a batch that raises fails the test. Read the rows back by id or raw
+    afterwards (``_stored_cost``, ``_raw_rows``), never through a copy the rollback expired."""
+    savepoint = await world.session.begin_nested()
+    try:
+        response = await _run_batch(world, commit=commit, creates=creates, updates=updates, promotes=promotes)
+    except Exception as error:  # the contract: a refusal is an issue, nothing raises
+        pytest.fail(f"J-60: the batch must answer with its issues, never raise; it raised {type(error).__name__}: {error!r}")
+    if commit and response.committed:
+        await savepoint.commit()
+    else:
+        await savepoint.rollback()
+    return response
+
+
+async def _j60_today(world: World, response: TXBatchResponse, operation: str, index: int) -> str:
+    """What the batch did with row ``operation`` ``index``, for a red's message: committed, and the cost basis each of its
+    rows now stores; validated clean; or refused, and with what."""
+    if response.committed:
+        ids = next((result.ids for result in response.results if (result.operation, result.index) == (operation, index)), [])
+        stored = []
+        for tx_id in ids:
+            stored.append(f"id={tx_id} holding {_show(await _stored_cost(world, tx_id))}")
+        return f"the batch committed, {operation} {index} saved with {', '.join(stored) or 'no row'}"
+    if not response.issues:
+        return f"the batch validated clean, nothing on {operation} {index}: /commit saves its cost below 0"
+    return f"the batch was refused with [{_render(response.issues)}]"
+
+
+async def _assert_cost_basis_negative(world: World, response: TXBatchResponse, *, row: tuple[str, int, int | None], what: str, commit: bool, brokers: list[int], before: dict[int, dict], beside: tuple[dict, ...] = ()) -> None:
+    """J-60's assertions on a batch the sign's check refuses: its issues are exactly ``costBasisNegative`` on ``row`` —
+    ``(operation, index, ref_id)`` — and ``beside``, the row's other refusals, which come in the same answer (as
+    ``_j60_view`` shows them, in any order); the ``costBasisNegative`` carries no params, None or empty alike; the batch is
+    not committed; and every row of ``brokers`` is as it was (``before``): nothing written. ``what`` says what it sends."""
+    operation, index, ref_id = row
+    expected = [_j60_issue(operation, index, ref_id), *beside]
+    views = [_j60_view(issue) for issue in response.issues]
+    today = await _j60_today(world, response, operation, index)
+    also = "".join(f", beside {view['code']} on {view['operation']} {view['index']}" for view in beside)
+    assert (response.committed, _in_order(views)) == (False, _in_order(expected)), f"J-60: {what} must be refused ({_endpoint(commit)}) with exactly {COST_BASIS_NEGATIVE} on {operation} {index} — ref_id {ref_id}, field cost_basis_override —{also}; today {today}"
+    params = [issue.params for issue in response.issues if issue.code == COST_BASIS_NEGATIVE]
+    assert not any(params), f"J-60: {COST_BASIS_NEGATIVE} carries no params (None or empty alike); it carries {params}"
+    changed = _changed(before, await _raw_rows(world, brokers))
+    assert changed == {}, f"J-60: the refused batch changed rows of the test's brokers (before, after): {changed}"
+
+
+async def _j60_auto_batch(world: World, case: str, mode: str) -> AutoBatch:
+    """An Auto row in ``mode`` whose payload carries ``J60_NEGATIVE_COST``, over ``source``'s pool: the ``world``'s BUY.
+
+    ``adjustment-create``: an ADJUSTMENT +5 on ``source``, create 0. ``transfer-create``: the receiving leg of a TRANSFER pair
+    source → dest, create 1; ``transfer-update``: the receiving leg of the stored pair, at 42 EUR, recomputed by an update
+    that also gives both legs new notes, update 1 (both ``_auto_batch``).
+    """
+    if case == "adjustment-create":
+        created = {**_created_adjustment(world, broker=world.source, quantity=ADJUSTMENT_QUANTITY, cost_basis_mode=mode), "cost_basis_override": _cost_sent(J60_NEGATIVE_COST)}
+        return AutoBatch(operation="create", index=0, creates=[created], updates=[], row_id=None)
+    if case not in J60_AUTO_CASES:
+        raise ValueError(f"unknown J-60 Auto case {case!r}")
+    batch = await _auto_batch(world, "create" if case == "transfer-create" else "update", mode)
+    rows = batch.creates if batch.operation == "create" else batch.updates
+    rows[batch.index]["cost_basis_override"] = _cost_sent(J60_NEGATIVE_COST)
+    return batch
+
+
+class TestJ60ANegativeManualCostOnACreate:
+    """J-60 — RED until its cure: a create that sends a manual cost basis below 0 is refused on its own row, wherever a cost
+    basis goes in: an ADJUSTMENT adding units, a TRANSFER's receiving leg, and an ADJUSTMENT taking units out, whose handover
+    cost N78 lets in (decision 47). Today each commits with −1 EUR stored, and /validate answers clean.
+
+    Each batch runs as ``POST /transactions/commit`` or ``/validate`` runs it, its transaction included
+    (``_j60_as_the_endpoint``), and the rows of the test's brokers are read back raw, before and after (``_raw_rows``).
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", ENDPOINTS)
+    @pytest.mark.parametrize("mode", J60_MANUAL_MODES)
+    async def test_adjustment_in_at_a_negative_cost_is_refused(self, world, mode, commit):
+        """RED until J-60: an ADJUSTMENT +5 on ``dest`` at −1 EUR, with no mode or in ``manual`` — N78's guard
+        ``test_adjustment_in_with_a_manual_cost_basis_commits`` with its cost below 0 — gets one ``costBasisNegative`` on
+        create 0, ``ref_id`` None; not committed, nothing written; /validate answers the same issue."""
+        created = {**_created_adjustment(world, broker=world.dest, quantity=ADJUSTMENT_QUANTITY, cost_basis_mode=mode), "cost_basis_override": _cost_sent(J60_NEGATIVE_COST)}
+        brokers = await _world_brokers(world)
+        before = await _raw_rows(world, brokers)
+
+        response = await _j60_as_the_endpoint(world, commit=commit, creates=[created])
+
+        what = f"an ADJUSTMENT +{ADJUSTMENT_QUANTITY} on dest created at a manual cost of {J60_NEGATIVE_COST.amount} {EUR} ({_j60_mode(mode)})"
+        await _assert_cost_basis_negative(world, response, row=("create", 0, None), what=what, commit=commit, brokers=brokers, before=before)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", ENDPOINTS)
+    @pytest.mark.parametrize("mode", J60_MANUAL_MODES)
+    async def test_transfer_whose_receiving_leg_has_a_negative_cost_is_refused(self, world, mode, commit):
+        """RED until J-60: a TRANSFER pair source → dest whose receiving leg (create 1) carries −1 EUR, with no mode or in
+        ``manual``, gets one ``costBasisNegative`` on create 1, ``ref_id`` None, and nothing else: the row stays in the batch,
+        so its pair is not broken — no ``linkUuidPairCount`` on the giving leg —; not committed, nothing written."""
+        giving, receiving = _created_pair(world, cost_basis_mode=mode)
+        receiving["cost_basis_override"] = _cost_sent(J60_NEGATIVE_COST)
+        brokers = await _world_brokers(world)
+        before = await _raw_rows(world, brokers)
+
+        response = await _j60_as_the_endpoint(world, commit=commit, creates=[giving, receiving])
+
+        what = f"a TRANSFER pair source → dest whose receiving leg (create 1) carries a manual cost of {J60_NEGATIVE_COST.amount} {EUR} ({_j60_mode(mode)})"
+        await _assert_cost_basis_negative(world, response, row=("create", 1, None), what=what, commit=commit, brokers=brokers, before=before)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", ENDPOINTS)
+    async def test_adjustment_out_at_a_negative_handover_cost_is_refused(self, world, commit):
+        """RED until J-60: an ADJUSTMENT −5 on ``source`` — which holds the ``world``'s 10 units, so it does not go short — at
+        a handover cost of −1 EUR, no mode. N78 lets the giving side carry a cost, decision 47's handover cost
+        (``TestN78GuardsTheGivingSideOfAnAdjustment``), never one below 0: one ``costBasisNegative`` on create 0, ``ref_id``
+        None; not committed, nothing written. Today its units are handed over at −1 EUR."""
+        assert not cost_basis_allowed(TransactionType.ADJUSTMENT, -ADJUSTMENT_QUANTITY), "precondition broken: TX_TYPE_METADATA must refuse a cost basis on an ADJUSTMENT's giving side, or this row is not N78's exception"
+        created = {**_created_adjustment(world, broker=world.source, quantity=-ADJUSTMENT_QUANTITY), "cost_basis_override": _cost_sent(J60_NEGATIVE_COST)}
+        brokers = await _world_brokers(world)
+        before = await _raw_rows(world, brokers)
+
+        response = await _j60_as_the_endpoint(world, commit=commit, creates=[created])
+
+        what = f"an ADJUSTMENT -{ADJUSTMENT_QUANTITY} on source created at a handover cost of {J60_NEGATIVE_COST.amount} {EUR} (no mode)"
+        await _assert_cost_basis_negative(world, response, row=("create", 0, None), what=what, commit=commit, brokers=brokers, before=before)
+
+
+class TestJ60ANegativeManualCostOnAnUpdate:
+    """J-60 — RED until its cure: an update that sends a manual cost basis below 0 is refused on its own row, ``ref_id`` the
+    row. An update is checked when it sends the cost, as ``check_decimal_limits`` reads it — whether or not the cost changes
+    (the DERIVED red) —, never when it leaves it out (the guard
+    ``test_notes_or_tags_edit_of_a_row_stored_at_a_negative_cost_commits_and_keeps_it``). Today each commits, and /validate
+    answers clean."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", ENDPOINTS)
+    @pytest.mark.parametrize("mode", J60_MANUAL_MODES)
+    @pytest.mark.parametrize("shape", SHAPES)
+    async def test_update_setting_a_negative_cost_is_refused(self, world, shape, mode, commit):
+        """RED until J-60: ``{id, cost_basis_override: −1 EUR}`` — with no mode, as the app's diff sends a manual cost, or in
+        ``manual`` — on a TRANSFER receiving leg (sent alone) or an ADJUSTMENT +5 stored at 42 EUR (``_store``) gets one
+        ``costBasisNegative`` on update 0, ``ref_id`` the row; not committed, the row keeps its 42 EUR. Today it holds −1."""
+        stored = await _store(world, shape, cost=STORED_COST)
+        subject_id = stored.subject.id
+        update = {"id": subject_id, "cost_basis_override": _cost_sent(J60_NEGATIVE_COST)}
+        if mode is not None:
+            update["cost_basis_mode"] = mode
+        brokers = await _world_brokers(world)
+        before = await _raw_rows(world, brokers)
+
+        response = await _j60_as_the_endpoint(world, commit=commit, updates=[update])
+
+        what = f"an update setting a manual cost of {J60_NEGATIVE_COST.amount} {EUR} ({_j60_mode(mode)}) on the {J60_SHAPE_LABELS[shape]} id={subject_id}, stored at {STORED_COST.amount} {STORED_COST.code}"
+        await _assert_cost_basis_negative(world, response, row=("update", 0, subject_id), what=what, commit=commit, brokers=brokers, before=before)
+
+    @pytest.mark.asyncio
+    async def test_update_resending_unchanged_the_negative_cost_a_row_stores_is_refused(self, world):
+        """RED until J-60, DERIVED from «an update is checked when it sends the cost»: an ADJUSTMENT +5 an older version
+        stored at −1 EUR, and an update sending its new notes with its cost, −1 EUR, unchanged — the whole row sent back, as
+        an API client may; the app's diff never re-sends an unchanged cost (``buildUpdateDiff``). Refused: one
+        ``costBasisNegative`` on update 0, ``ref_id`` the row; not committed, the notes not written. The analysis of 20/10
+        lists it among what J-60 declares («un client dell'API che rimanda la riga intera … viene rifiutato»): it tells a
+        check of the cost sent from one of the cost changed. Drop it if the stored value is to be compared. Today it commits."""
+        stored = await _store(world, "adjustment_in", cost=J60_NEGATIVE_COST)
+        row_id = stored.subject.id
+        stored_before = await _stored_cost(world, row_id)
+        assert stored_before == (J60_NEGATIVE_COST.amount, J60_NEGATIVE_COST.code), f"scaffold: the ADJUSTMENT id={row_id} must be stored at {J60_NEGATIVE_COST.amount} {EUR}, or the cost re-sent is a change; it holds {_show(stored_before)}"
+        update = {"id": row_id, "description": f"{world.marker} notes edited", "cost_basis_override": _cost_sent(J60_NEGATIVE_COST)}
+        brokers = await _world_brokers(world)
+        before = await _raw_rows(world, brokers)
+
+        response = await _j60_as_the_endpoint(world, commit=True, updates=[update])
+
+        what = f"an update re-sending, unchanged, the cost of {J60_NEGATIVE_COST.amount} {EUR} the ADJUSTMENT +{ADJUSTMENT_QUANTITY} id={row_id} stores, with new notes"
+        await _assert_cost_basis_negative(world, response, row=("update", 0, row_id), what=what, commit=True, brokers=brokers, before=before)
+
+
+class TestJ60ANegativeCostAPromoteResolves:
+    """J-60 — RED until its cure: the cost basis a promote resolves (``resolved_fields.cost_basis_override``, the merge
+    modal's choice) is the user's too, read where ``check_decimal_limits`` reads it (``_promote_cost_amount``): below 0 it
+    is refused on the promote's index, ``ref_id`` None."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", ENDPOINTS)
+    async def test_promote_resolving_a_negative_cost_is_refused(self, world, commit):
+        """RED until J-60: two saved ADJUSTMENTs — −4 on ``source`` without a cost, +4 on ``dest`` at 42 EUR — promoted into a
+        TRANSFER with ``resolved_fields.cost_basis_override`` −1 EUR get one ``costBasisNegative`` on promote 0, ``ref_id``
+        None; not committed, both rows as they were: ADJUSTMENTs, unlinked, the +4 at its 42 EUR. Today the promote commits
+        and the receiving leg holds −1 EUR (``_apply_promote_cost_basis``); /validate answers clean."""
+        giving = _stored_row(world, broker=world.source, tx_type=TransactionType.ADJUSTMENT, quantity=-TRANSFER_QUANTITY)
+        receiving = _stored_row(world, broker=world.dest, tx_type=TransactionType.ADJUSTMENT, quantity=TRANSFER_QUANTITY, cost=STORED_COST)
+        world.session.add_all([giving, receiving])
+        await world.session.flush()
+        giving_id, receiving_id = giving.id, receiving.id
+        promote = {"id_a": giving_id, "id_b": receiving_id, "resolved_fields": {"cost_basis_override": _cost_sent(J60_NEGATIVE_COST)}}
+        brokers = await _world_brokers(world)
+        before = await _raw_rows(world, brokers)
+
+        response = await _j60_as_the_endpoint(world, commit=commit, promotes=[promote])
+
+        what = f"a promote of the ADJUSTMENTs id={giving_id} (-{TRANSFER_QUANTITY}) and id={receiving_id} (+{TRANSFER_QUANTITY}, at {STORED_COST.amount} {STORED_COST.code}) into a TRANSFER, resolving a cost of {J60_NEGATIVE_COST.amount} {EUR}"
+        await _assert_cost_basis_negative(world, response, row=("promote", 0, None), what=what, commit=commit, brokers=brokers, before=before)
+
+
+class TestJ60ANegativeCostDoesNotStopTheBatch:
+    """J-60 — RED until its cure for its ``costBasisNegative``, a guard for the other refusal: the sign's check does not stop
+    the batch, unlike the integer digits and the dates (``execute_batch``), so a row at a negative cost gets its other
+    refusals in the same answer — one a stage before the check finds, and one only the batch's last stage finds, which is
+    there only if the check let the batch run on."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", ENDPOINTS)
+    @pytest.mark.parametrize("beside", J60_BESIDE_CASES)
+    async def test_a_negative_cost_comes_with_the_rows_other_refusal(self, world, beside, commit):
+        """RED until J-60: an ADJUSTMENT on ``dest`` at −1 EUR, no mode, also refused for something else, gets both issues on
+        create 0 in one answer; not committed, nothing written. Today the other refusal comes alone.
+
+        ``decimal-places``: +0.12345678901 units, 11 decimal places where a quantity keeps 10 — ``decimalPlacesExceeded`` on
+        ``quantity``, from ``check_decimal_limits``, which does not stop the batch either. ``short-balance``: −5 units, at a
+        handover cost of −1, on ``dest``, which holds nothing of the asset and refuses shorting — ``balanceAssetNegative``,
+        from the balance replay, the batch's last stage: the case that tells a check that runs on from one that stops.
+        """
+        if beside == "decimal-places":
+            limit = decimal_limit_issue(J60_QUANTITY_11_DECIMALS, Transaction, "quantity")
+            digits = integer_digits_issue(J60_QUANTITY_11_DECIMALS, Transaction, "quantity")
+            assert (limit[0] if limit else None, digits) == (
+                DECIMAL_PLACES_EXCEEDED,
+                None,
+            ), f"precondition broken: {J60_QUANTITY_11_DECIMALS} must be refused for its decimal places, its integer digits within the limit (past it the batch stops early); decimal_limit_issue gives {limit}, integer_digits_issue {digits}"
+            quantity, other = J60_QUANTITY_11_DECIMALS, {"operation": "create", "index": 0, "ref_id": None, "code": DECIMAL_PLACES_EXCEEDED, "field": "quantity"}
+        else:
+            pool = await _pool(world, world.dest)
+            assert (pool, world.dest.allow_asset_shorting) == ([], False), f"precondition broken: dest must hold nothing of the asset and refuse shorting; its pool on {MOVE_DAY} holds {pool}, allow_asset_shorting={world.dest.allow_asset_shorting}"
+            quantity, other = -ADJUSTMENT_QUANTITY, {"operation": "create", "index": 0, "ref_id": None, "code": BALANCE_ASSET_NEGATIVE, "field": None}
+        created = {**_created_adjustment(world, broker=world.dest, quantity=quantity), "cost_basis_override": _cost_sent(J60_NEGATIVE_COST)}
+        brokers = await _world_brokers(world)
+        before = await _raw_rows(world, brokers)
+
+        response = await _j60_as_the_endpoint(world, commit=commit, creates=[created])
+
+        what = f"an ADJUSTMENT {quantity:+} on dest at a manual cost of {J60_NEGATIVE_COST.amount} {EUR}, also refused with {other['code']}"
+        await _assert_cost_basis_negative(world, response, row=("create", 0, None), what=what, commit=commit, brokers=brokers, before=before, beside=(other,))
+
+
+class TestJ60GuardsWhatTheSignLeavesAlone:
+    """J-60 — guards, green today and after the cure: what the sign's check leaves alone. A Manual cost of 0 — a gift, the
+    new shares of a split —, ``-0`` included: the check reads the value, not the minus sign of the text. An Auto cost, the
+    batch's own average, recomputed: never checked, whatever the payload carries or (DERIVED) the pool averages. A row an
+    older version stored at a negative cost, while an update leaves its cost out: the app sends differences only
+    (``buildUpdateDiff``), so the row stays editable until its cost is touched."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("text", J60_ZERO_TEXTS)
+    @pytest.mark.parametrize("shape", SHAPES)
+    async def test_a_manual_cost_of_zero_commits(self, world, shape, text):
+        """Guard: an ADJUSTMENT +5 on ``dest`` (create 0), or the receiving leg of a TRANSFER pair source → dest (create 1),
+        at a Manual cost of ``text`` EUR, no mode, commits with no issue and stores 0 EUR. ``-0`` parses to ``Decimal("-0")``,
+        which is not below 0. The stored zero is compared as a number, never by its sign: whether the database keeps the
+        minus of a REAL −0.0 is not J-60's business."""
+        if shape == "transfer_in":
+            creates, subject_index = _created_pair(world), 1
+        else:
+            creates, subject_index = [_created_adjustment(world, broker=world.dest, quantity=ADJUSTMENT_QUANTITY)], 0
+        creates[subject_index]["cost_basis_override"] = {"code": EUR, "amount": text}
+        parsed = transaction_schemas.TXCreateItem.model_validate(creates[subject_index]).cost_basis_override.amount
+        assert parsed == 0, f"scaffold: the cost basis {text!r} must parse to a zero; it parses to {parsed!r}"
+
+        response = await _j60_as_the_endpoint(world, commit=True, creates=creates)
+
+        assert (response.committed, response.issues) == (True, []), f"J-60: a Manual cost of {text!r} {EUR} (parsed {parsed!r}) on the {J60_SHAPE_LABELS[shape]} is not below 0, so it must commit; it was refused: {_render(response.issues)}"
+        stored = await _stored_cost(world, _created_id(response, subject_index))
+        assert stored == (ZERO_COST.amount, ZERO_COST.code), f"The {J60_SHAPE_LABELS[shape]} sent at a Manual cost of {text!r} {EUR} was committed with {stored[0]!r} {stored[1]}, not 0 {EUR}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", ENDPOINTS)
+    @pytest.mark.parametrize("mode", AUTO_MODES)
+    @pytest.mark.parametrize("case", J60_AUTO_CASES)
+    async def test_an_auto_row_sending_a_negative_amount_takes_its_average(self, world, case, mode, commit):
+        """Guard: an Auto row whose payload carries a cost basis of −1 EUR — in ``auto`` or ``auto-detail``: the currency hint,
+        its amount below 0, as the form would send back the preview's average over a pool of old negative costs — is not
+        refused for its sign. The batch reads only the hint's currency and computes the amount (``auto_cost.py``), which the
+        digit limits skip as well (``_decimal_limit_values``). No issue, and the row's cost is ``source``'s average, the
+        ``world``'s BUY, 100 EUR — answered on /validate, answered and saved on /commit (``_assert_takes``): an ADJUSTMENT +5
+        on ``source``, the receiving leg of a TRANSFER pair created, or stored at 42 EUR and recomputed by an update."""
+        batch = await _j60_auto_batch(world, case, mode)
+
+        response = await _j60_as_the_endpoint(world, commit=commit, creates=batch.creates, updates=batch.updates)
+
+        await _assert_takes(world, response, batch, cost=UNIT_COST, commit=commit, what=f"J-60: an Auto {case} ({mode}) whose payload carries a cost basis of {J60_NEGATIVE_COST.amount} {EUR}")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", ENDPOINTS)
+    async def test_an_auto_row_over_a_pool_averaging_below_zero_gets_no_cost_basis_negative(self, world, commit):
+        """Guard, DERIVED from «an Auto cost is the batch's own average, never checked» — the analysis's reason to keep the
+        check out of ``validate_cost_basis``, which runs once the Auto cost is written. ``source`` holds the ``world``'s 10
+        units bought for 1 000 EUR and 10 an older version stored at −300 EUR a unit (an ADJUSTMENT +10 planted before the
+        move, ``_n88_plant``): an ADJUSTMENT +5 in ``auto`` averages (1 000 − 3 000) / 20 = −100 EUR. The batch answers no
+        ``costBasisNegative``: that refusal asks the user for a cost of 0 or more, which an Auto row cannot give. What else
+        becomes of an average below 0 — today it is saved, or answered, at −100 EUR — is J-60's residue, not pinned here."""
+        await _n88_plant(world, broker=world.source, tx_type=TransactionType.ADJUSTMENT, quantity=BUY_QUANTITY, cost=J60_LEGACY_NEGATIVE_COST)
+        pool = await _pool(world, world.source)
+        assert pool == [
+            (TransactionType.BUY, BUY_QUANTITY, -WORLD_PAID, None),
+            (TransactionType.ADJUSTMENT, BUY_QUANTITY, Decimal("0"), J60_LEGACY_NEGATIVE_COST.amount),
+        ], f"precondition broken: source's pool on {MOVE_DAY} must be the BUY of {BUY_QUANTITY} units for {WORLD_PAID} EUR and an ADJUSTMENT +{BUY_QUANTITY} stored at {J60_LEGACY_NEGATIVE_COST.amount} EUR a unit: {pool}"
+        average = _average(WORLD_PAID + BUY_QUANTITY * J60_LEGACY_NEGATIVE_COST.amount, 2 * BUY_QUANTITY)
+        assert average == Decimal("-100"), "the oracle: (1 000 − 3 000) / 20"
+        created = _created_adjustment(world, broker=world.source, quantity=ADJUSTMENT_QUANTITY, cost_basis_mode="auto")
+
+        response = await _j60_as_the_endpoint(world, commit=commit, creates=[created])
+
+        refused = [issue for issue in response.issues if issue.code == COST_BASIS_NEGATIVE]
+        assert refused == [], f"J-60: an Auto cost is the batch's own average, never checked for its sign, so over a pool averaging {average} {EUR} the Auto row gets no {COST_BASIS_NEGATIVE}: {_render(refused)}; {_verdict(response, 'create', 0)}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("shape", SHAPES)
+    @pytest.mark.parametrize("edit", EDITS)
+    async def test_notes_or_tags_edit_of_a_row_stored_at_a_negative_cost_commits_and_keeps_it(self, world, edit, shape):
+        """Guard: a TRANSFER receiving leg — edited with its giving leg: a pair keeps one description and one set of tags —
+        or an ADJUSTMENT +5, stored at −1 EUR straight into the session (``_store``), as an older version left it. A
+        notes-only or tags-only edit, the cost key left out as the app's diff leaves it, commits; the edit lands, and the row
+        keeps its −1 EUR: nothing repaired, nothing refused. Its cost is checked the day an update sends one
+        (``test_update_setting_a_negative_cost_is_refused``)."""
+        stored = await _store(world, shape, cost=J60_NEGATIVE_COST)
+        subject_id = stored.subject.id
+        stored_before = await _stored_cost(world, subject_id)
+        assert stored_before == (J60_NEGATIVE_COST.amount, J60_NEGATIVE_COST.code), f"scaffold: the {J60_SHAPE_LABELS[shape]} id={subject_id} must be stored at {J60_NEGATIVE_COST.amount} {EUR}, or an edit that keeps it proves nothing; it holds {_show(stored_before)}"
+        updates = _edit(stored.rows, edit, world.marker)
+        assert not any(_sends_the_cost(update) for update in updates), f"scaffold: no update may send cost_basis_override, or the cost is touched: {updates}"
+
+        response = await _commit_as_the_endpoint(world, updates=updates)
+
+        assert response.committed is True and response.issues == [], f"J-60: a {edit}-only edit of the {J60_SHAPE_LABELS[shape]} stored at {J60_NEGATIVE_COST.amount} {EUR} leaves its cost out, so it is not checked and must commit; it was refused: {_render(response.issues)}"
+        assert _update_results(response) == [(index, (row.id,), "success") for index, row in enumerate(stored.rows)], f"Committed, but not every row was updated: {response.results}"
+        _assert_edit_landed(stored.rows, edit, world.marker)
+        stored_after = await _stored_cost(world, subject_id)
+        assert stored_after == stored_before, f"J-60 repairs nothing: after a {edit}-only edit the {J60_SHAPE_LABELS[shape]} id={subject_id} holds {_show(stored_after)}, not the {_show(stored_before)} it was stored at"
+
+
+class TestJ60TheCodeAndItsMessage:
+    """J-60 — RED until its cure: the code the app maps to its message, ``costBasisNegative``, listed by ``GET
+    /transactions/types``, and its message in the app's four languages. The code and its key go in together: W-B69's gate
+    ``test_every_code_has_its_message_in_every_language`` holds every ``TXValidationCode`` to its message, so the member
+    alone turns that gate red."""
+
+    def test_tx_validation_code_has_cost_basis_negative(self):
+        """RED until J-60: ``TXValidationCode.COST_BASIS_NEGATIVE == "costBasisNegative"`` — the app maps a refusal's code to
+        ``transactions.errors.<code>``."""
+        member = getattr(TXValidationCode, "COST_BASIS_NEGATIVE", None)
+
+        assert member is not None and member.value == COST_BASIS_NEGATIVE, f"J-60: TXValidationCode.COST_BASIS_NEGATIVE is {member!r}: expected a member of value {COST_BASIS_NEGATIVE!r}"
+
+    def test_transaction_types_lists_cost_basis_negative(self):
+        """RED until J-60: the response ``GET /transactions/types`` builds (``get_transaction_types``) lists
+        ``costBasisNegative`` in ``validation_codes`` (``VALIDATION_CODE_METADATA``)."""
+        response = TXTypesResponse(transaction_types=list(TX_TYPE_METADATA.values()), event_types=EVENT_TYPE_METADATA)
+
+        listed = sorted(info.code for info in response.validation_codes)
+
+        assert COST_BASIS_NEGATIVE in listed, f"J-60: GET /transactions/types does not list {COST_BASIS_NEGATIVE!r} in validation_codes: {listed}"
+
+    @pytest.mark.parametrize("language", UI_LANGUAGES)
+    def test_cost_basis_negative_has_its_message(self, language):
+        """RED until J-60: ``transactions.errors.costBasisNegative`` is a non-empty text in ``language``, read without the
+        English fallback (``load_catalog(language, fallback=False)``): what the sources translate. Its words are the
+        developer's approved texts, never asserted here."""
+        messages = flatten(load_catalog(language, fallback=False))
+
+        assert _error_text(messages, COST_BASIS_NEGATIVE), f"J-60: transactions.errors.{COST_BASIS_NEGATIVE} has no {language} message, so the app would show the backend's raw English"
