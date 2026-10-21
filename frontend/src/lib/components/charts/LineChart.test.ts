@@ -265,6 +265,7 @@ import type {RenderedSignal} from '$lib/charts/signals';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {setRoleReader} from '$lib/theme/roleColors';
+import {PRICE_SERIES} from '$lib/theme/chartTheme';
 import {notifyChartColorsChange} from '$lib/theme/themeMode';
 import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
 import LineChart, {type LineDataPoint} from './LineChart.svelte';
@@ -1265,5 +1266,51 @@ describe('LineChart — a compact chart colours its line by its baseline, from t
         await waitFor(() => expect(priceSeries(lastFullDraw()).length, 'barrier: the card’s chart drew its line').toBeGreaterThan(0), {timeout: 5_000});
 
         expect(baseValues(), 'F-2: PriceChartCompact did not hand baselineValue to LineChart').toEqual([150]);
+    });
+});
+
+/**
+ * The pending-edit colour is read when the option is built, not when the props are declared.
+ *
+ * What it protects: `pendingColor` defaulted to `PRICE_SERIES.pendingEditPoint` in the props declaration, which Svelte reads once
+ * per prop and keeps. A colour the theme answers at the time of the call (the colour programme turns the constants of
+ * `chartTheme.ts` into getters) would stay that of the theme the chart was mounted in after a theme switch without a reload. The
+ * contract: with no `pendingColor` prop, the pending series takes `PRICE_SERIES.pendingEditPoint` as it reads when the chart is
+ * rebuilt; a `pendingColor` prop still wins.
+ *
+ * How it is tested: the constant is replaced by a getter answering a colour the case changes, as the programme will make it; the
+ * chart is mounted, the colour changed, the chart rebuilt on `notifyChartColorsChange()`, and the pending series' colour read.
+ */
+describe('LineChart — the pending-edit colour follows the theme after a rebuild', () => {
+    const PENDING = [{date: YEAR_2025[10].date, value: 105}];
+    const pendingPaint = (): unknown => seriesIn(lastDraw()).find((series) => series.name === 'Pending')?.itemStyle;
+    let original: PropertyDescriptor | undefined;
+    let colour = '#0b1d2f';
+
+    beforeEach(() => {
+        original = Object.getOwnPropertyDescriptor(PRICE_SERIES, 'pendingEditPoint');
+        colour = '#0b1d2f';
+        Object.defineProperty(PRICE_SERIES, 'pendingEditPoint', {configurable: true, enumerable: true, get: () => colour});
+    });
+
+    afterEach(() => {
+        if (original) Object.defineProperty(PRICE_SERIES, 'pendingEditPoint', original);
+    });
+
+    it('rebuilt after the colour changed, the pending series carries the new colour, not the one at mount', async () => {
+        render(LineChart, {props: {data: YEAR_2025, currency: 'EUR', pendingData: PENDING}});
+        await drawnOver(YEAR_2025.map((point) => point.date));
+        expect(carries(pendingPaint(), '#0b1d2f'), 'precondition: the pending series is drawn in the colour at mount').toBe(true);
+
+        colour = '#d4c3b2';
+        notifyChartColorsChange();
+        await waitFor(() => expect(carries(pendingPaint(), '#d4c3b2'), 'the rebuilt chart kept the pending colour of the mount').toBe(true), {timeout: 5_000});
+    });
+
+    it('guard: a pendingColor prop wins over the constant', async () => {
+        render(LineChart, {props: {data: YEAR_2025, currency: 'EUR', pendingData: PENDING, pendingColor: '#123456'}});
+        await drawnOver(YEAR_2025.map((point) => point.date));
+
+        expect(carries(pendingPaint(), '#123456')).toBe(true);
     });
 });
