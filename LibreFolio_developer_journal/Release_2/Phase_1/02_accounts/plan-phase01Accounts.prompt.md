@@ -8837,3 +8837,31 @@ Ognuno con i rossi prima e uno slot. Uno slot API (`users-admin`) per N69-4 e N6
 - **Previsione dei conflitti** con dev `b844f83f2` (base = HEAD `a35f40c48`): solo `access_control.md` (1 commit di dev),
   `git merge-file` pulito.
 - **Delta**: 4 file, +948/−1. Checkpoint mandato; FROZEN. Poi A-62.
+
+## H-61 entrato; la fixture di G; A-62 col segnale dei controlli (20/10, 14:28–; base `50d1f29c6`)
+- **Coordinatore** (14:28): H-61 è committato, `64b8b9fa3`, `bdb083782`, `50d1f29c6`; lo porta lui a H.
+  - Sì alla riga `desc` di `services admin-bootstrap`, dentro A-62.
+  - Va controllata la fixture della galleria di G.
+  - Il segnale `pending|ready`: lo decido io, e se è piccolo va in A-62. Poi A-62.
+- **La fixture di G** (`frontend/e2e/fixtures/gallerySecurity.ts`, in dev da `b844f83f2`), controllata con
+  `work/a62/check_gallery_fixture.py` sul ref `dev_release2`: **17/17 giuste**.
+  - Ogni `check_id` esiste: i 16 di `CONFIG_CHECKS`, più `platform.plugin_secrets`.
+  - Ogni chiave è una chiave `ok` che quel controllo produce, ed è nel catalogo inglese.
+  - Nessun mio lotto aggiunge un controllo.
+  - A H ho scritto direttamente: la 18ª voce, `platform.hosting_panel`, arriva con H-61, e H dà la chiave `ok` a G.
+    Nulla protegge la fixture dal registro (`checkGuides.test.ts` invece lo fa), e decide G.
+- **Il segnale: sì, dentro A-62** (decisione mia, delegata dal coordinatore). È invisibile all'utente e serve ai test e
+  alla galleria. Sulla radice della riga, `data-security-checks`:
+  - `off` per chi non è admin;
+  - `pending` fino alla prima risposta;
+  - `ready` dopo, anche durante «Controlla di nuovo»;
+  - `error` se la prima lettura è fallita.
+  - Solo Vitest; ADOT-E-03 tiene la sua barriera, quindi nessuno slot.
+- **A-62**: `test-author` `c3acb2f4` per i rossi (`Header.test.ts`, `ConnectionSecurityIndicator.test.ts`). Bozza
+  `work/a62/apply_a62.py`, 4 modifiche, prova a vuoto pulita: l'etichetta del menu, il segnale (due), la riga del
+  registro. Più `work/a62/i18n_add.py` (`nav.toggleMenu`).
+- **Coordinatore** (14:32): va bene su tutti e tre, cioè il segnale dentro A-62 e `nav.toggleMenu` coi testi proposti.
+  - **In arrivo dopo A-62: E-26 (b)**, deciso dal developer. La risposta di `POST /auth/register` avrà un campo che
+    dice quando l'email di verifica è trattenuta, e il messaggio di `RegisterCard` cambierà di conseguenza.
+  - Il lavoro è di E, ma tocca file miei (lo schema della risposta, `RegisterCard`): E mi scrive per il contratto, e la
+    revisione è mia.
