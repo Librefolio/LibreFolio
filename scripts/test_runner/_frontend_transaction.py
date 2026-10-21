@@ -161,6 +161,18 @@ def front_tx_bulk_operations(verbose: bool = False, ui: bool = False, headed: bo
     return _run_playwright("transactions/tx-bulk-operations.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_edit_save_gate(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the issue #58 E2E tests (a type or asset edit keeps Apply and Save-all enabled)."""
+    print_section("Frontend TX Edit Save Gate Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-edit-save-gate.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_split_promote(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run Transaction Split & Promote E2E tests (split, promote, merge modal, guards)."""
     print_section("Frontend TX Split & Promote Tests")
@@ -683,6 +695,7 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "tx-picker-pagination", front_tx_picker_pagination, name="TX Picker Pagination Tests", desc="PickerModal pagination, reset on reopen, tooltip richness, validation banners", tests="transactions/tx-picker-pagination.spec.ts")
     add_test(cat, "tx-clone", front_tx_clone, name="TX Clone Tests", desc="Clone standalone, paired, qty=0, commit pair, viewer guard", tests="transactions/tx-clone.spec.ts")
     add_test(cat, "tx-bulk-operations", front_tx_bulk_operations, name="TX Bulk Operations Tests", desc="Mixed commit, reset, picker guard, pair validation, mark delete", tests="transactions/tx-bulk-operations.spec.ts")
+    add_test(cat, "tx-edit-save-gate", front_tx_edit_save_gate, name="TX Edit Save Gate Tests", desc="Issue #58: changing the type or the asset of a stored row keeps Apply and Save-all enabled, and the discard question agrees", tests="transactions/tx-edit-save-gate.spec.ts")
     add_test(cat, "tx-split-promote", front_tx_split_promote, name="TX Split & Promote Tests", desc="Split paired, promote standalone, merge modal, guards, non-regression", tests="transactions/tx-split-promote.spec.ts")
     add_test(cat, "tx-crud-full", front_tx_crud_full, name="TX CRUD Full Lifecycle Tests", desc="Full CRUD lifecycle: standalone, paired, split, promote, bulk, suggest, cash sign", tests="transactions/tx-crud-full.spec.ts")
     add_test(cat, "tx-commit-all-types", front_tx_commit_all_types, name="TX Commit All Types Tests", desc="End-to-end commit for every TX type: standalone + paired create, edit, delete", tests="transactions/tx-commit-all-types.spec.ts")
