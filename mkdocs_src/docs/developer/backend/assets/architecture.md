@@ -682,9 +682,32 @@ the points sent without a value.
 - **Band** (`band_envelope`): the complete points only; each bucket keeps the lowest `lower`, the
   last `middle` and the highest `upper`.
 
+**Series on the same dates.** A `SignalResult` wants the series of one signal on identical dates,
+and reduced alone they may not be: a warm-up that ends inside the range (ADX: the `plus_di` and
+`minus_di` lines are valued before `adx`; any plugin whose outputs warm up by different amounts
+shows it when the first values fall in different buckets) or a gap one series has and another has not. The developer
+decided on 21/10 to align them (O1): `align_signal_series()` gives every reduced series of a signal
+the union of the dates the reductions left, a point without a value (`value: null`; a band: `lower`,
+`middle` and `upper` null) where a series has none. `_sample_signal_result()` aligns the series it
+reduced and no other. The browser draws a line's or a bar's leading and trailing points without a
+value as nothing and a band from its complete points, so a series is drawn as it was; the fifth
+residue (R5) is the one case it is not: a gap marker of one series is a date the others have no
+point on, and there they get a point without a value too, which ends a run of theirs.
+
+**What the browser adds and the backend does not.** A reduced point carries its bucket's price
+date and, for the calendar rolling return, its `provenance`, and nothing more: the browser, reducing
+the daily series itself, also adds the real day of the representative and the number of days of the
+bucket (O3). A card that needs either reads the daily series, or the full chart's.
+
+**The step is the answer's.** The `resolution` of the result says the step of the item; the
+density of the signal series says nothing about it, and a client must not deduce the step from
+it (O4). A series comes back daily inside a weekly or monthly answer when no output spec describes
+it (none does today) or when the reduction keeps no point; such a series is not aligned with the
+others.
+
 A point whose bucket has no price date, those before the plan's first bucket for one, is dropped. A
 profile that does not fit the series' kind raises `ValueError`, and the series given is not
-changed. Four accepted residues keep the reduction from being the browser's to the point: (R1) where
+changed. Four accepted residues (and the fifth, below) keep the reduction from being the browser's to the point: (R1) where
 two runs meet in a bucket it shows the later run's point, the browser draws two (accepted by the
 developer on 19/10); (R2) a line with styled value regions (regions with a line style) is split by
 style in the browser on the reduced points, where daily points are split by style before they are
@@ -692,7 +715,8 @@ reduced; (R3) two runs on consecutive days at the very end of the range get no m
 no day between them; (R4) past `MAX_LINE_RUNS` (30) runs the browser joins the gaps of an unstyled
 line, and after the reduction it counts the reduced runs, not the daily ones. R1 and R3 are cases
 of the shared table with `browser_parity: false`, each saying so in its note; R2 and R4 follow from
-the browser's own rendering and are not in the table.
+the browser's own rendering and are not in the table. (R5, see above, is a `series_sets` entry with
+`browser_parity: false`.)
 
 The step rule is the chart's. The case table
 `frontend/src/lib/components/charts/__tests__/compactDensityCases.json` holds cases of the
@@ -707,7 +731,7 @@ descriptions); the Z-29a block at the end of `test_assets_prices.py`
 (`./dev.py test api assets-price`) the route's 422s, the OpenAPI document and sampled answers on the
 lane's server, and its PQS-API-06 the SMA reduced on a monthly and a weekly sample through the
 route. `test_signal_aggregation.py` (`./dev.py test services signal-aggregation`, its SAG-S block)
-pins `sample_signal_series()` on every case of the shared table
+pins `sample_signal_series()` on every case of the shared table and `align_signal_series()` on its `series_sets`
 `backend/test_scripts/fixtures/signals/signal_sampling_cases.v1.json`, which the "Z-29s-a" block of
 `frontend/src/lib/components/charts/__tests__/timeSeriesAggregation.test.ts` (Vitest) also reads,
 drawing its `browser_parity` cases through `downsampleRenderedSignal()`: the backend reduction and
