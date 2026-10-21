@@ -131,7 +131,7 @@
         showMiniAxis = false,
         lineColor,
         darkLineColor,
-        pendingColor = PRICE_SERIES.pendingEditPoint,
+        pendingColor,
         pendingData = [],
         onPointClick,
         viewMode = 'absolute',
@@ -492,7 +492,8 @@
                 symbol: 'diamond',
                 symbolSize: 10,
                 itemStyle: {
-                    color: pendingColor,
+                    // Read here, not as the prop's default: a default is kept, and a theme switch would not reach it
+                    color: pendingColor ?? PRICE_SERIES.pendingEditPoint,
                     borderColor: neutrals.price.pendingEditPointRing,
                     borderWidth: 2,
                 },
