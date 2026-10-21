@@ -178,7 +178,7 @@ describe('asset lifecycle', () => {
 });
 
 describe('AssetTable — F15 usage badge', () => {
-    it('tints the count by scope: own → emerald, others → blue, analysis → gray', async () => {
+    it('publishes the scope on the count badge: own, others, analysis', async () => {
         render(AssetTable, {
             data: [row(1, 3, 'own'), row(2, 5, 'others'), row(3, 0, 'analysis')],
         });
@@ -195,9 +195,9 @@ describe('AssetTable — F15 usage badge', () => {
         expect(others, 'others badge missing').not.toBeNull();
         expect(analysis, 'analysis badge missing').not.toBeNull();
 
-        expect(own!.className).toContain('bg-emerald-100');
-        expect(others!.className).toContain('bg-blue-100');
-        expect(analysis!.className).toContain('bg-gray-100');
+        expect(own).toHaveAttribute('data-scope', 'own');
+        expect(others).toHaveAttribute('data-scope', 'others');
+        expect(analysis).toHaveAttribute('data-scope', 'analysis');
 
         // The number the badge carries is the total tx count, whatever the scope.
         expect(own!.textContent?.trim()).toBe('3');
@@ -207,14 +207,14 @@ describe('AssetTable — F15 usage badge', () => {
 
     it('renders the badge with a zero count when txScope is omitted entirely', async () => {
         // Rows built before the F15 fields existed (or from a partial payload)
-        // have neither txCount nor txScope: the cell must still render, gray,
+        // have neither txCount nor txScope: the cell must still render, scope 'none',
         // rather than crash the column.
         render(AssetTable, {data: [row(9, 0, undefined)]});
 
         await waitFor(() => expect(document.querySelector('tbody tr[data-row-id="9"]')).not.toBeNull());
         const badge = badgeIn(rowEl(9));
         expect(badge).not.toBeNull();
-        expect(badge!.className).toContain('bg-gray-100');
+        expect(badge).toHaveAttribute('data-scope', 'none');
         expect(badge!.textContent?.trim()).toBe('0');
     });
 });
