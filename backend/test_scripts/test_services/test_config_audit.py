@@ -18,9 +18,10 @@ and an English summary for the log. ``log_configuration_audit()`` runs them at s
     check of (h) speaking beside them too (H-46).
 (c) A check changes nothing: ``run_config_checks`` evaluates every check in the order of ``CONFIG_CHECKS``, leaves the
     environment as it was and generates no key file. ``CONFIG_CHECKS`` is the platform's checks (the two of (g) right
-    after the client address check, the test mode check of (h) last), then workstream B's ``BACKUP_CONFIG_CHECKS``, then
-    workstream A's ``ACCOUNTS_CONFIG_CHECKS``, then E's three, which end it; it holds no check without an id here (a new
-    check comes with its tests), and each result carries the id of its check.
+    after the client address check, the hosting panel check of (k) then the test mode check of (h) last), then
+    workstream B's ``BACKUP_CONFIG_CHECKS``, then workstream A's ``ACCOUNTS_CONFIG_CHECKS``, then E's three, which end
+    it; it holds no check without an id here (a new check comes with its tests), and each result carries the id of its
+    check.
 (d) ``log_configuration_audit``: a ``JWT_SECRET_FILE`` that cannot be read stops the start (``SecretFileError``), and so
     does a configured instance key that cannot be used (``InstanceKeyError``), since the admin asked for that source and
     the server must not start without it; nothing is logged first, and a blank ``NAME`` beside the file hides nothing. A
@@ -74,7 +75,8 @@ and an English summary for the log. ``log_configuration_audit()`` runs them at s
     ``instance.checks.testMode.testLane``; on outside one — the lane id unset, empty or blank, or, since H-49, out of the
     bounds of (i) —, an error, ``instance.checks.testMode.outsideTestLane``, whose detail ``data_dir`` is the test data
     directory (``get_data_dir()``) and whose summary is ``TEST_MODE_OUTSIDE_LANE_SUMMARY`` filled with it. An ok state
-    has no detail and no summary. The check runs last of the platform's, right after ``check_log_level``. At startup, in
+    has no detail and no summary. The check runs last of the platform's, right before workstream B's first; it used to
+    follow ``check_log_level``, and since H-61 the hosting panel check of (k) runs between the two. At startup, in
     ``managed``, its error stops the start (``ManagedTestModeError``, a ``RuntimeError``, its message word for word)
     right after the short-key stop of (e), which stays first: before the block's warning, nothing logged first.
     Self-hosted, the profile unset included, it is logged as an error and the start goes on. ``_configure`` puts every
@@ -92,6 +94,36 @@ and an English summary for the log. ``log_configuration_audit()`` runs them at s
     managed start stops with the ``ManagedTestModeError`` of (h), its message word for word, nothing logged first;
     within them the check is ok, ``testLane``, and a managed start goes on with nothing logged about test mode.
     ``FAKE_LANE_ID``, 30 characters, is within the bounds, so no case of (h) changes its outcome.
+(j) Every server check has a guide (N69d, the «Guide» button of each check in the «Security» tab, workstream A). The map
+    from each check to the page and anchor of its guide in the admin docs is data,
+    ``frontend/src/lib/features/instance/checkGuides.json``, which ``checkGuides.ts`` wraps for the frontend: a
+    ``server`` half, one key per check of ``GET /api/v1/security/checks``, and a ``browser`` half, the findings the
+    browser adds. Under the ``configuration`` fixture, the ids of ``run_config_checks()`` then
+    ``plugin_secrets_check.CHECK_ID``, the list that endpoint returns, are the keys of ``server``, in order. The file is
+    read with ``json.load`` from the repository root, located from this file, and never written: no TS parsing in
+    Python. A failure names the ids without a guide and the guide entries without a check, since a new check needs a
+    guide there; while the file does not exist, the test fails naming the lot and listing the keys it must hold. The
+    values and the ``browser`` half are the frontend's own test, ``checkGuides.test.ts``.
+(k) The hosting panel's tokens (H-61, checkpoint 1, contract §5, 20/10). ``check_hosting_panel``
+    (``platform.hosting_panel``) reads the scheduled wake-up's token, ``LIBREFOLIO_WAKE_TOKEN``
+    (``config.sleep_wake.wake_token``), and the panel status route's, ``LIBREFOLIO_PANEL_STATUS_TOKEN``
+    (``config.hosting_panel.panel_status_token``, H-61 §1): each from its variable or its ``_FILE``, a blank or empty
+    value counting as unset. Neither set is ok, ``instance.checks.hostingPanel.off``; the set ones all usable, ok,
+    ``instance.checks.hostingPanel.ok``; both with no detail. Any unusable — shorter than 32 characters, holding a space,
+    a tab or a character outside visible ASCII, or a ``_FILE`` that cannot give its secret — is an error,
+    ``instance.checks.hostingPanel.unusable``, whose detail is exactly ``{"variables": ...}``, the unusable variables
+    joined by ``", "`` (as ``secretsSetTwice.found`` joins its own) in the order wake, status, and whose summary names
+    each of them and, for an error of its reader, its code (``WAKE_TOKEN_TOO_SHORT``, ``WAKE_TOKEN_NOT_VISIBLE_ASCII``,
+    ``PANEL_STATUS_TOKEN_TOO_SHORT``, ``PANEL_STATUS_TOKEN_NOT_VISIBLE_ASCII``; a ``SecretFileError`` has no code).
+    Never a value: no token, usable or not, is in a field of a result or in a record of the startup audit, which logs an
+    unusable one once, as an error with the check's summary, id and detail, and goes on. The hosting panel's backup
+    token stays B's own check, ``backup.panel_token``: this one does not read it. The check changes nothing. In
+    ``CONFIG_CHECKS`` it runs right after ``check_log_level`` and right before ``check_test_mode``, which stays the
+    platform's last. Its three messages are in the four catalogues of ``frontend/src/lib/i18n/instance``: ``unusable``
+    naming exactly ``{variables}``, ``off`` and ``ok`` nothing; the control is ``secretsSetTwice.found``, which names
+    exactly ``{variables}`` in each. ``_configure`` leaves both tokens unset, whatever the environment holds, so the
+    check is ok (off) in every other case of this file. The guide of the check, ``admin/hosting_providers/#panel-api``,
+    is (j)'s and ``checkGuides.test.ts``'s.
 
 Pure: the data directory is in ``tmp_path``, every variable the checks read is set or removed through ``monkeypatch``
 (environment values win over a ``.env``), the forwarding notes of (f) are emptied the same way, and the module's logger
@@ -101,15 +133,19 @@ of test roots stops on it first, by a rule of its own. The names H-46 adds to th
 ``ManagedTestModeError``, ``TEST_MODE_OUTSIDE_LANE_SUMMARY``) are read by name, with ``getattr``, in the tests that need
 them (``_h46``), as ``test_managed_headers.py`` reads H-42's ``PAGE_POLICY``: before H-46 those tests fail naming it,
 while every other test still collects and runs. So are the two bounds H-49 adds to ``backend/app/config/platform.py``
-(``_h49``). The probe's own bounds are read from the ``Annotated`` metadata of the ``token`` parameter of
-``test_lane_health``, imported and never called, so no request is made: FastAPI's ``Query`` is a pydantic ``FieldInfo``,
-which keeps ``min_length`` and ``max_length`` as ``annotated_types.MinLen`` and ``MaxLen``.
+(``_h49``), and H-61's ``check_hosting_panel`` (``_h61``), which ``CHECK_IDS`` leaves out while the module has none. The
+tokens of (k) are set through ``monkeypatch``, their files written in ``tmp_path``. The probe's own bounds are read from
+the ``Annotated`` metadata of the ``token`` parameter of ``test_lane_health``, imported and never called, so no request
+is made: FastAPI's ``Query`` is a pydantic ``FieldInfo``, which keeps ``min_length`` and ``max_length`` as
+``annotated_types.MinLen`` and ``MaxLen``.
 """
 
 from __future__ import annotations
 
 import errno
+import json
 import os
+import re
 import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -126,7 +162,7 @@ from backend.app.config import platform as platform_config
 from backend.app.config.platform import instance_blocked
 from backend.app.services.accounts.checks import ACCOUNTS_CONFIG_CHECKS, check_login_limit
 from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS, check_email_links, check_smtp_configuration, check_smtp_encryption
-from backend.app.services.platform import config_audit
+from backend.app.services.platform import config_audit, plugin_secrets_check
 from backend.app.services.platform.client_address import PUBLIC_FORWARDING_SUMMARY, UNTRUSTED_PROXY_SUMMARY, _untrusted_forwarding
 from backend.app.services.platform.config_audit import (
     CONFIG_CHECKS,
@@ -156,6 +192,9 @@ needs_posix_paths = pytest.mark.skipif(not POSIX, reason="Windows reports a path
 #: H-46: the test mode check of (h), read by name so that this file collects before the module has it. ``None`` until
 #: then: ``CHECK_IDS`` leaves it out, and the tests of its place, in (c) and (h), fail naming H-46 (``_h46``).
 _TEST_MODE_CHECK: Callable[[], ConfigCheck] | None = getattr(config_audit, "check_test_mode", None)
+#: H-61: the check of the hosting panel's tokens of (k), read by name in the same way. ``None`` until then: ``CHECK_IDS``
+#: leaves it out, and the tests of (k), and of its place in (c), fail naming H-61 (``_h61``).
+_HOSTING_PANEL_CHECK: Callable[[], ConfigCheck] | None = getattr(config_audit, "check_hosting_panel", None)
 
 #: The id of every check, in the order of ``CONFIG_CHECKS`` (c): the platform's, then workstream B's, A's and E's.
 CHECK_IDS: dict[Callable[[], ConfigCheck], str] = {
@@ -167,7 +206,11 @@ CHECK_IDS: dict[Callable[[], ConfigCheck], str] = {
     check_frame_protection: "platform.frame_protection",
     check_csp_report_only: "platform.csp_report_only",
     check_log_level: "platform.log_level",
-    # H-46: the platform's last check, right after the log level's; left out while the module has no check_test_mode
+    # H-61: the hosting panel's tokens, right after the log level's, right before test mode's; left out while the module
+    # has no check_hosting_panel
+    **({_HOSTING_PANEL_CHECK: "platform.hosting_panel"} if _HOSTING_PANEL_CHECK is not None else {}),
+    # H-46: the platform's last check, right after the hosting panel's (H-61); left out while the module has no
+    # check_test_mode
     **({_TEST_MODE_CHECK: "platform.test_mode"} if _TEST_MODE_CHECK is not None else {}),
     check_panel_token: "backup.panel_token",
     check_upload_limit: "backup.upload_limit",
@@ -199,6 +242,10 @@ H46_NAMES = {
 H49_NAMES = {
     "TEST_LANE_ID_MIN_LENGTH": "the fewest characters of a LIBREFOLIO_TEST_LANE_ID, once stripped, that make a test lane: 16, the min_length of the token of GET /api/v1/system/test-lane-health",
     "TEST_LANE_ID_MAX_LENGTH": "the most characters of a LIBREFOLIO_TEST_LANE_ID, once stripped, that make a test lane: 128, the max_length of the token of GET /api/v1/system/test-lane-health",
+}
+#: H-61: the name the module gains, with what it is, for the message of a test that reads it before it exists.
+H61_NAMES = {
+    "check_hosting_panel": "the check of the hosting panel's tokens, LIBREFOLIO_WAKE_TOKEN and LIBREFOLIO_PANEL_STATUS_TOKEN (platform.hosting_panel), right after check_log_level and right before check_test_mode",
 }
 
 
@@ -256,6 +303,10 @@ def _configure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, production: b
     # H-39: the two switches the managed profile turns on, unset whatever the environment holds, so the profile's default
     # decides them and no shell can switch one off under a managed case
     for variable in ("LIBREFOLIO_FRAME_PROTECTION", "LIBREFOLIO_CSP_REPORT_ONLY"):
+        monkeypatch.delenv(variable, raising=False)
+    # H-61: neither of the hosting panel's tokens of (k), whatever the environment holds, so its check is ok (off); their
+    # _FILE variables are gone with every LIBREFOLIO_*_FILE above
+    for variable in ("LIBREFOLIO_WAKE_TOKEN", "LIBREFOLIO_PANEL_STATUS_TOKEN"):
         monkeypatch.delenv(variable, raising=False)
     monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "0" if production else "1")
     # H-46: test mode in a lane of this file's own, production in none, whatever the runner exported, so the test mode
@@ -334,6 +385,13 @@ def _h49(name: str) -> Any:
     """``backend.app.config.platform.<name>``, a bound H-49 adds, read when the test runs, as ``_h46`` reads H-46's names: until the module has it, the test fails naming H-49, while the rest of this file collects and runs."""
     value = getattr(platform_config, name, None)
     assert value is not None, f"H-49: backend.app.config.platform has no {name}, {H49_NAMES[name]}"
+    return value
+
+
+def _h61(name: str) -> Any:
+    """``config_audit.<name>``, a name H-61 adds, read when the test runs, as ``_h46`` reads H-46's: until the module has it, the test fails naming H-61, while the rest of this file collects and runs."""
+    value = getattr(config_audit, name, None)
+    assert value is not None, f"H-61: config_audit has no {name}, {H61_NAMES[name]}"
     return value
 
 
@@ -611,7 +669,7 @@ def test_no_secret_value_reaches_a_result_a_log_record_or_a_startup_error(config
 
 
 def test_run_config_checks_evaluates_every_check_in_order_and_changes_nothing(configuration):
-    """(c) The order of CONFIG_CHECKS, each result what the check alone returns, the test mode check's right after the log level's (H-46); no variable changed, no key generated. Which checks CONFIG_CHECKS holds, where, with which ids: the next test."""
+    """(c) The order of CONFIG_CHECKS, each result what the check alone returns, the hosting panel check's right after the log level's (H-61), then the test mode check's (H-46); no variable changed, no key generated. Which checks CONFIG_CHECKS holds, where, with which ids: the next test."""
     print_section("Configuration checks: run_config_checks")
     environment = dict(os.environ)
 
@@ -620,7 +678,10 @@ def test_run_config_checks_evaluates_every_check_in_order_and_changes_nothing(co
     assert results == [check() for check in CONFIG_CHECKS], "run_config_checks must return what each check returns on its own, in the order of CONFIG_CHECKS"
     ids = [result.check_id for result in results]
     log_level = ids.index("platform.log_level")
-    assert ids[log_level + 1 : log_level + 2] == ["platform.test_mode"], f"H-46: run_config_checks must evaluate the test mode check, platform.test_mode, right after the log level check, last of the platform's: {ids}"
+    assert ids[log_level + 1 : log_level + 3] == [
+        "platform.hosting_panel",
+        "platform.test_mode",
+    ], f"H-61, H-46: run_config_checks must evaluate the hosting panel check, platform.hosting_panel, right after the log level check, then the test mode check, platform.test_mode, last of the platform's: {ids}"
     assert all(result.severity in SEVERITIES for result in results), f"unknown severity in {results}"
     assert dict(os.environ) == environment, "a configuration check changed the environment"
     assert not configuration.data_dir.exists(), f"a configuration check created files: {list(configuration.data_dir.rglob('*'))}"
@@ -628,10 +689,12 @@ def test_run_config_checks_evaluates_every_check_in_order_and_changes_nothing(co
 
 
 def test_config_checks_holds_every_check_in_its_place_with_its_id(configuration):
-    """(c) ``CONFIG_CHECKS`` is the platform's checks, the test mode check last (H-46), then workstream B's ``BACKUP_CONFIG_CHECKS``, then workstream A's ``ACCOUNTS_CONFIG_CHECKS``, then E's three, which end it (``test_email_checks.py``, EMK-010); it holds every check with an id here, in the order of ``CHECK_IDS``, and no other — a new check comes with its tests —; ``run_config_checks`` gives each result the id of its check."""
+    """(c) ``CONFIG_CHECKS`` is the platform's checks, the hosting panel check (H-61) then the test mode check last (H-46), then workstream B's ``BACKUP_CONFIG_CHECKS``, then workstream A's ``ACCOUNTS_CONFIG_CHECKS``, then E's three, which end it (``test_email_checks.py``, EMK-010); it holds every check with an id here, in the order of ``CHECK_IDS``, and no other — a new check comes with its tests —; ``run_config_checks`` gives each result the id of its check."""
     print_section("Configuration checks: CONFIG_CHECKS whole")
     # H-46: CHECK_IDS holds the test mode check, the platform's last, only once the module has it
     _h46("check_test_mode")
+    # H-61: and the hosting panel check, right before it, only once the module has that one
+    _h61("check_hosting_panel")
     sections = (*BACKUP_CONFIG_CHECKS, *ACCOUNTS_CONFIG_CHECKS, *EMAIL_CONFIG_CHECKS)
     platform = tuple(check for check in CHECK_IDS if check not in sections)
 
@@ -1244,15 +1307,15 @@ def test_managed_test_mode_error_is_a_runtime_error():
 
 
 def test_the_test_mode_check_runs_last_of_the_platform_checks():
-    """(h) H-46: registered in CONFIG_CHECKS right after check_log_level, so the platform's last check, right before
-    workstream B's first."""
+    """(h) H-46: registered in CONFIG_CHECKS as the platform's last check, right before workstream B's first. It used to
+    follow check_log_level; since H-61 the hosting panel check runs between the two, the place (k) pins."""
     check_test_mode = _h46("check_test_mode")
-    index = CONFIG_CHECKS.index(check_log_level)
+    index = CONFIG_CHECKS.index(check_test_mode)
 
-    following = CONFIG_CHECKS[index + 1 : index + 3]
+    following = CONFIG_CHECKS[index + 1 : index + 2]
 
-    assert following == (check_test_mode, BACKUP_CONFIG_CHECKS[0]), f"H-46: CONFIG_CHECKS must run check_test_mode right after check_log_level, then B's first check, {BACKUP_CONFIG_CHECKS[0].__name__}: {[check.__name__ for check in CONFIG_CHECKS]}"
-    print_success(f"{[check.__name__ for check in CONFIG_CHECKS[index : index + 3]]}")
+    assert following == (BACKUP_CONFIG_CHECKS[0],), f"H-46: CONFIG_CHECKS must run check_test_mode last of the platform's checks, right before B's first check, {BACKUP_CONFIG_CHECKS[0].__name__}: {[check.__name__ for check in CONFIG_CHECKS]}"
+    print_success(f"{[check.__name__ for check in CONFIG_CHECKS[index : index + 2]]}")
 
 
 @pytest.mark.parametrize("lane", [pytest.param(FAKE_LANE_ID, id="with-a-lane"), pytest.param(None, id="without-a-lane")])
@@ -1609,3 +1672,300 @@ def test_a_managed_start_goes_on_with_a_lane_id_within_the_bounds(configuration,
     assert "platform.jwt_secret" in checks, f"Barrier: the audit's record of the unset JWT secret must reach the recorder, or the silence about test mode proves nothing: {logged}"
     assert "platform.test_mode" not in checks, f"in a test lane, nothing about test mode is logged: {logged}"
     print_success(f"LIBREFOLIO_TEST_LANE_ID of {length} characters, {stripped} once stripped: the start went on, nothing logged about test mode")
+
+
+# =============================================================================
+# (j) Every server check has a guide (N69d)
+# =============================================================================
+
+
+#: (j) The repository root, located from this file: ``backend/test_scripts/test_services/`` is three folders below it.
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+#: (j) The map from each check of the «Security» tab to its guide, relative to ``REPOSITORY_ROOT``: frontend data, read
+#: here with ``json.load``, so there is no TS parsing in Python.
+CHECK_GUIDES_JSON = "frontend/src/lib/features/instance/checkGuides.json"
+
+
+def test_every_server_check_has_a_guide(configuration):
+    """(j) N69d: the ids of ``GET /security/checks``, ``run_config_checks()`` then the stored plugin secrets' check, are
+    the keys of the map's ``server`` half, in order: an id without a guide, or a guide entry without a check, is named.
+    Barrier: the repository root located from this file holds the map's folder, so a missing map is the map's absence,
+    never a wrong path."""
+    print_section("N69d: every server check has a guide")
+    ids = [result.check_id for result in run_config_checks()] + [plugin_secrets_check.CHECK_ID]
+    path = REPOSITORY_ROOT / CHECK_GUIDES_JSON
+    folder = Path(CHECK_GUIDES_JSON).parent.as_posix()
+    assert path.parent.is_dir(), f"Precondition: the repository root located from this file, {REPOSITORY_ROOT}, must hold the map's folder, {folder}: else a missing map would only mean a wrong root"
+    assert path.is_file(), f"N69d (the guide of each check): {CHECK_GUIDES_JSON} does not exist; it maps each check of the Security tab to its guide in the admin docs (the Guide button), and its server half must hold, in order, {ids}"
+
+    with path.open(encoding="utf-8") as file:
+        guides = json.load(file)
+
+    assert isinstance(guides, dict) and isinstance(guides.get("server"), dict), f"{CHECK_GUIDES_JSON} must be an object whose server half maps each check id to its guide: {guides!r:.300}"
+    keys = list(guides["server"])
+    without_a_guide = [check_id for check_id in ids if check_id not in keys]
+    without_a_check = [key for key in keys if key not in ids]
+    assert keys == ids, f"a new check needs a guide in {CHECK_GUIDES_JSON} (the Security tab's Guide button, N69d): ids without a guide {without_a_guide}; guide entries without a check {without_a_check}; in order, the checks are {ids} and the guides {keys}"
+    print_success(f"{len(ids)} server checks, each with its guide, in order: {', '.join(ids)}")
+
+
+# =============================================================================
+# (k) The hosting panel's tokens (H-61)
+# =============================================================================
+
+
+#: (k) The two tokens the check reads, spelled out as ``.env.example`` writes them, so a rename shows: the scheduled
+#: wake-up's (``config/sleep_wake.py``) and the panel status route's (``config/hosting_panel.py``, H-61 §1).
+WAKE_TOKEN_VARIABLE = "LIBREFOLIO_WAKE_TOKEN"
+STATUS_TOKEN_VARIABLE = "LIBREFOLIO_PANEL_STATUS_TOKEN"
+#: (k) Usable tokens: visible ASCII, more than 32 characters. Each holds ``CANARY``, as every token of (k) does, so no
+#: field of a result and no log record may contain it.
+USABLE_WAKE_TOKEN = f"{CANARY}-wake-0123456789abcdef0123456789abcdef"
+USABLE_STATUS_TOKEN = f"{CANARY}-status-0123456789abcdef0123456789abcdef"
+USABLE_BACKUP_TOKEN = f"{CANARY}-backup-0123456789abcdef0123456789abcdef"
+#: (k) Visible ASCII, 20 characters: too short.
+SHORT_TOKEN = f"{CANARY}-short-0123"
+#: (k) Long enough, but holding spaces, or a character outside ASCII: not visible ASCII, which the readers check first.
+SPACED_TOKEN = f"{CANARY} holds spaces 0123456789abcdef0123456789"
+NON_ASCII_TOKEN = f"{CANARY}-é-0123456789abcdef0123456789abcdef"
+
+
+@dataclass(frozen=True)
+class Token:
+    """(k) One token as a case sets it: ``written`` in the variable itself; else ``content`` in a file its ``_FILE``
+    names; with neither, a ``_FILE`` naming a file that does not exist."""
+
+    written: str | None = None
+    content: bytes | None = None
+
+
+#: (k) A ``_FILE`` naming a file that does not exist: the reader raises ``SecretFileError``, which carries no code.
+MISSING_FILE = Token()
+
+
+def _in_file(token: str) -> Token:
+    """(k) ``token`` in a file, as a Docker secret mounts one: followed by a line break, which the reader drops."""
+    return Token(content=f"{token}\n".encode())
+
+
+def _set_tokens(configuration: Configuration, wake: Token | None, status: Token | None) -> None:
+    """(k) Both tokens as the case sets them; ``None`` leaves one unset, as ``_configure`` left it. A file is
+    ``<variable>-file`` in ``tmp_path``: its path holds no token."""
+    for variable, token in ((WAKE_TOKEN_VARIABLE, wake), (STATUS_TOKEN_VARIABLE, status)):
+        if token is None:
+            continue
+        if token.written is not None:
+            configuration.set(**{variable: token.written})
+            continue
+        name = f"{variable.lower()}-file"
+        path = configuration.tmp_path / name if token.content is None else configuration.file(name, token.content)
+        configuration.set(**{f"{variable}_FILE": str(path)})
+
+
+#: (k) Every state of the check: the two tokens as set, the state (the end of its i18n key), and the unusable variables,
+#: in the order wake, status, each with the code its reader raises (``None`` for a ``_FILE`` that cannot give the
+#: secret, whose ``SecretFileError`` has no code).
+HOSTING_PANEL_STATES = [
+    pytest.param(None, None, "off", [], id="neither-set"),
+    pytest.param(Token(written="   "), Token(written=""), "off", [], id="blank-and-empty-count-as-unset"),
+    pytest.param(Token(written=USABLE_WAKE_TOKEN), None, "ok", [], id="wake-usable"),
+    pytest.param(None, Token(written=USABLE_STATUS_TOKEN), "ok", [], id="status-usable"),
+    pytest.param(Token(written=USABLE_WAKE_TOKEN), Token(written=USABLE_STATUS_TOKEN), "ok", [], id="both-usable"),
+    pytest.param(_in_file(USABLE_WAKE_TOKEN), _in_file(USABLE_STATUS_TOKEN), "ok", [], id="both-usable-from-their-files"),
+    pytest.param(Token(written=SHORT_TOKEN), None, "unusable", [(WAKE_TOKEN_VARIABLE, "WAKE_TOKEN_TOO_SHORT")], id="wake-too-short"),
+    pytest.param(Token(written=SPACED_TOKEN), None, "unusable", [(WAKE_TOKEN_VARIABLE, "WAKE_TOKEN_NOT_VISIBLE_ASCII")], id="wake-with-spaces"),
+    pytest.param(Token(written=NON_ASCII_TOKEN), None, "unusable", [(WAKE_TOKEN_VARIABLE, "WAKE_TOKEN_NOT_VISIBLE_ASCII")], id="wake-outside-ascii"),
+    pytest.param(_in_file(SHORT_TOKEN), None, "unusable", [(WAKE_TOKEN_VARIABLE, "WAKE_TOKEN_TOO_SHORT")], id="wake-too-short-from-its-file"),
+    pytest.param(MISSING_FILE, None, "unusable", [(WAKE_TOKEN_VARIABLE, None)], id="wake-file-missing"),
+    pytest.param(None, Token(written=SHORT_TOKEN), "unusable", [(STATUS_TOKEN_VARIABLE, "PANEL_STATUS_TOKEN_TOO_SHORT")], id="status-too-short"),
+    pytest.param(None, Token(written=SPACED_TOKEN), "unusable", [(STATUS_TOKEN_VARIABLE, "PANEL_STATUS_TOKEN_NOT_VISIBLE_ASCII")], id="status-with-spaces"),
+    pytest.param(None, Token(written=NON_ASCII_TOKEN), "unusable", [(STATUS_TOKEN_VARIABLE, "PANEL_STATUS_TOKEN_NOT_VISIBLE_ASCII")], id="status-outside-ascii"),
+    pytest.param(None, _in_file(SPACED_TOKEN), "unusable", [(STATUS_TOKEN_VARIABLE, "PANEL_STATUS_TOKEN_NOT_VISIBLE_ASCII")], id="status-with-spaces-from-its-file"),
+    pytest.param(None, MISSING_FILE, "unusable", [(STATUS_TOKEN_VARIABLE, None)], id="status-file-missing"),
+    pytest.param(Token(written=SHORT_TOKEN), Token(written=USABLE_STATUS_TOKEN), "unusable", [(WAKE_TOKEN_VARIABLE, "WAKE_TOKEN_TOO_SHORT")], id="wake-unusable-beside-a-usable-status"),
+    pytest.param(Token(written=USABLE_WAKE_TOKEN), MISSING_FILE, "unusable", [(STATUS_TOKEN_VARIABLE, None)], id="status-unusable-beside-a-usable-wake"),
+    pytest.param(
+        Token(written=SPACED_TOKEN),
+        Token(written=SHORT_TOKEN),
+        "unusable",
+        [(WAKE_TOKEN_VARIABLE, "WAKE_TOKEN_NOT_VISIBLE_ASCII"), (STATUS_TOKEN_VARIABLE, "PANEL_STATUS_TOKEN_TOO_SHORT")],
+        id="both-unusable-wake-first",
+    ),
+]
+
+
+@pytest.mark.parametrize(("wake", "status", "state", "unusable"), HOSTING_PANEL_STATES)
+def test_check_hosting_panel_in_each_of_its_states(configuration, wake, status, state, unusable):
+    """(k) H-61: neither token set is ok, ``off``, blank and empty values counting as unset; the set ones all usable, ok,
+    ``ok``; both with no detail. Any unusable is an error, ``unusable``, whose detail names exactly the unusable
+    variables, in the order wake, status, and whose summary names each of them with its reader's code; no token in any
+    field."""
+    check_hosting_panel = _h61("check_hosting_panel")
+    _set_tokens(configuration, wake, status)
+
+    result = check_hosting_panel()
+
+    detail = {"variables": ", ".join(variable for variable, _ in unusable)} if unusable else {}
+    _assert_check(result, check_hosting_panel, "error" if unusable else "ok", f"hostingPanel.{state}", detail)
+    unnamed = [name for variable, code in unusable for name in (variable, code) if name is not None and name not in result.summary]
+    assert unnamed == [], f"the summary of an unusable token must name its variable and its reader's code: {unnamed} missing from {result.summary!r}"
+    assert CANARY not in repr(result), f"check_hosting_panel() put a token in its result: {result!r}"
+    print_success(f"{result.severity} {result.i18n_key} {result.detail}")
+
+
+#: (k) Both tokens set, each holding ``CANARY``, usable or not, in the variable or in its file, with the state the check
+#: must be in: what the leak test reads.
+TOKEN_LEAK_CASES = [
+    pytest.param(Token(written=USABLE_WAKE_TOKEN), Token(written=USABLE_STATUS_TOKEN), "ok", id="both-usable"),
+    pytest.param(_in_file(USABLE_WAKE_TOKEN), _in_file(USABLE_STATUS_TOKEN), "ok", id="both-usable-from-their-files"),
+    pytest.param(Token(written=SHORT_TOKEN), Token(written=SPACED_TOKEN), "unusable", id="too-short-and-with-spaces"),
+    pytest.param(Token(written=NON_ASCII_TOKEN), _in_file(SHORT_TOKEN), "unusable", id="outside-ascii-and-too-short-from-its-file"),
+    pytest.param(_in_file(SPACED_TOKEN), Token(content=CANARY.encode() + b"\xff\xfe"), "unusable", id="with-spaces-from-its-file-and-a-file-not-utf8"),
+]
+
+
+@pytest.mark.parametrize(("wake", "status", "state"), TOKEN_LEAK_CASES)
+def test_no_hosting_panel_token_reaches_a_result_or_the_startup_log(configuration, logged, wake, status, state):
+    """(k)(b)(d) H-61: no token, usable or not, from its variable or from its file, is in a field of the check's result,
+    of ``run_config_checks()``, or in a record of the startup audit. The audit logs an unusable token once, as an error
+    with the check's summary, id and detail, and goes on; a usable one is not logged. Barriers: the check is in the
+    state of the case, so both tokens were read, and the audit's record of the unset JWT secret reaches the recorder."""
+    check_hosting_panel = _h61("check_hosting_panel")
+    _set_tokens(configuration, wake, status)
+    result = check_hosting_panel()
+    expected_state = ("error" if state == "unusable" else "ok", f"{I18N_PREFIX}hostingPanel.{state}")
+    assert (result.severity, result.i18n_key) == expected_state, f"Barrier: the check must be {expected_state}, or the silence about the tokens proves nothing: {result}"
+
+    results = run_config_checks()
+    returned = log_configuration_audit()
+
+    assert returned is None, f"the start goes on: log_configuration_audit() returns None, not {returned!r}"
+    assert any(fields.get("check") == "platform.jwt_secret" for _, _, fields in logged), f"Barrier: the audit's record of the unset JWT secret must reach the recorder: {logged}"
+    records = [record for record in logged if record[2].get("check") == "platform.hosting_panel"]
+    expected = [("error", result.summary, {"check": "platform.hosting_panel", "detail": result.detail})] if state == "unusable" else []
+    assert records == expected, f"the startup audit logs an unusable token once, as an error with the check's summary, id and detail, and a usable one not at all:\n  expected {expected}\n  got      {records}"
+    shown = [where for where, text in (("the check's result", repr(result)), ("run_config_checks()", repr(results)), ("the startup log", repr(logged))) if CANARY in text]
+    assert shown == [], f"a hosting panel token reached {shown}"
+    print_success(f"{result.severity} {result.i18n_key}: no token in the result or in the log")
+
+
+def test_the_hosting_panel_check_runs_right_before_the_test_mode_check():
+    """(k) H-61: registered in CONFIG_CHECKS right after check_log_level and right before check_test_mode, which stays the
+    platform's last check, right before workstream B's first."""
+    print_section("H-61: the hosting panel's tokens")
+    check_hosting_panel = _h61("check_hosting_panel")
+    check_test_mode = _h46("check_test_mode")
+    index = CONFIG_CHECKS.index(check_log_level)
+
+    following = CONFIG_CHECKS[index + 1 : index + 4]
+
+    assert following == (
+        check_hosting_panel,
+        check_test_mode,
+        BACKUP_CONFIG_CHECKS[0],
+    ), f"H-61: CONFIG_CHECKS must run check_hosting_panel right after check_log_level, then check_test_mode, the platform's last, then B's first check, {BACKUP_CONFIG_CHECKS[0].__name__}: {[check.__name__ for check in CONFIG_CHECKS]}"
+    print_success(f"{[check.__name__ for check in CONFIG_CHECKS[index : index + 4]]}")
+
+
+@pytest.mark.parametrize(
+    ("token", "backup_state"),
+    [
+        pytest.param(USABLE_BACKUP_TOKEN, ("ok", "backup.checks.panelToken.ok"), id="backup-token-usable"),
+        pytest.param(SHORT_TOKEN, ("error", "backup.checks.panelToken.tooShort"), id="backup-token-too-short"),
+    ],
+)
+def test_the_backup_token_stays_with_its_own_check(configuration, token, backup_state):
+    """(k) H-61: the hosting panel's backup token, ``LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN``, keeps B's own check,
+    ``backup.panel_token``: with it set, usable or not, and neither token of (k), the hosting panel check is ok,
+    ``off``. Barrier: B's check reads the token."""
+    check_hosting_panel = _h61("check_hosting_panel")
+    configuration.set(LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN=token)
+    backup = check_panel_token()
+    assert (backup.severity, backup.i18n_key) == backup_state, f"Barrier: B's check must read the backup token as {backup_state}: {backup}"
+
+    result = check_hosting_panel()
+
+    _assert_check(result, check_hosting_panel, "ok", "hostingPanel.off", {})
+    print_success(f"backup token {backup.severity}: {result.severity} {result.i18n_key}")
+
+
+def _files(root: Path) -> dict[str, bytes]:
+    """(k) Every file under ``root``, by its path below it, with its bytes."""
+    return {str(path.relative_to(root)): path.read_bytes() for path in sorted(root.rglob("*")) if path.is_file()}
+
+
+@pytest.mark.parametrize(
+    ("wake", "status"),
+    [
+        pytest.param(None, None, id="neither-set"),
+        pytest.param(Token(written=USABLE_WAKE_TOKEN), _in_file(USABLE_STATUS_TOKEN), id="usable-in-the-variable-and-in-a-file"),
+        pytest.param(_in_file(SHORT_TOKEN), MISSING_FILE, id="unusable-from-a-file-and-a-file-missing"),
+    ],
+)
+def test_check_hosting_panel_changes_nothing(configuration, wake, status):
+    """(k) H-61: the check reads the two variables and the files they name, and leaves everything as it was: no variable
+    changed, no file written or removed, nothing in the data directory; the same configuration gives the same result."""
+    check_hosting_panel = _h61("check_hosting_panel")
+    _set_tokens(configuration, wake, status)
+    environment = dict(os.environ)
+    files = _files(configuration.tmp_path)
+
+    results = [check_hosting_panel(), check_hosting_panel()]
+
+    assert results[0] == results[1], f"the same configuration gives the same result: {results}"
+    assert dict(os.environ) == environment, "check_hosting_panel() changed the environment"
+    assert _files(configuration.tmp_path) == files, "check_hosting_panel() wrote or removed a file"
+    assert not configuration.data_dir.exists(), f"check_hosting_panel() created files: {list(configuration.data_dir.rglob('*'))}"
+    print_success(f"{results[0].severity} {results[0].i18n_key}: unchanged")
+
+
+#: (k) The instance's catalogues, one per language, from which ``dev.py i18n`` builds the web app's: where the messages of
+#: ``instance.checks.*`` live.
+INSTANCE_CATALOGUES = REPOSITORY_ROOT / "frontend" / "src" / "lib" / "i18n" / "instance"
+CATALOGUE_LANGUAGES = ("en", "it", "fr", "es")
+#: (k) A placeholder of an ICU message: ``{name}``, or the name of ``{name, plural, ...}``; never the ``{#`` of a plural
+#: branch.
+PLACEHOLDER = re.compile(r"\{\s*([A-Za-z_]\w*)\s*[,}]")
+#: (k) The three messages of the check, each with the placeholders its detail fills.
+HOSTING_PANEL_MESSAGES: dict[str, set[str]] = {
+    f"{I18N_PREFIX}hostingPanel.off": set(),
+    f"{I18N_PREFIX}hostingPanel.ok": set(),
+    f"{I18N_PREFIX}hostingPanel.unusable": {"variables"},
+}
+#: (k) The control of the reader: a message every catalogue has, naming exactly the placeholder ``unusable`` names.
+KNOWN_MESSAGE = (f"{I18N_PREFIX}secretsSetTwice.found", {"variables"})
+
+
+def _flattened(catalogue: object, prefix: str = "") -> dict[str, object]:
+    """(k) A catalogue as ``{dotted key: message}``, nested objects walked."""
+    if not isinstance(catalogue, dict):
+        return {prefix: catalogue}
+    found: dict[str, object] = {}
+    for name, value in catalogue.items():
+        found.update(_flattened(value, f"{prefix}.{name}" if prefix else name))
+    return found
+
+
+@pytest.mark.parametrize("language", CATALOGUE_LANGUAGES)
+def test_the_hosting_panel_messages_are_in_the_four_catalogues(language):
+    """(k) H-61: the three keys of the check are messages of ``frontend/src/lib/i18n/instance/<language>.json``:
+    ``unusable`` names exactly ``{variables}``, which its detail fills, ``off`` and ``ok`` nothing, as they come without
+    a detail; the Security tab renders each with the detail as it comes. Control: the reader finds
+    ``secretsSetTwice.found`` there, naming exactly ``{variables}``."""
+    path = INSTANCE_CATALOGUES / f"{language}.json"
+    assert path.is_file(), f"Precondition: the repository root located from this file, {REPOSITORY_ROOT}, must hold the catalogue {path.relative_to(REPOSITORY_ROOT)}"
+    messages = _flattened(json.loads(path.read_text(encoding="utf-8")))
+    known_key, known_placeholders = KNOWN_MESSAGE
+    known = messages.get(known_key)
+    assert isinstance(known, str) and set(PLACEHOLDER.findall(known)) == known_placeholders, f"Control: the reader must find {known_key} naming exactly {sorted(known_placeholders)}: {known!r}"
+
+    problems = []
+    for key, placeholders in HOSTING_PANEL_MESSAGES.items():
+        message = messages.get(key)
+        if not isinstance(message, str) or not message.strip():
+            problems.append(f"{key}: no message")
+        elif set(PLACEHOLDER.findall(message)) != placeholders:
+            problems.append(f"{key}: names {sorted(set(PLACEHOLDER.findall(message)))}, its detail fills {sorted(placeholders)}")
+
+    assert problems == [], f"H-61: {path.relative_to(REPOSITORY_ROOT)} (dev.py i18n add):\n- " + "\n- ".join(problems)
+    print_success(f"{language}: the {len(HOSTING_PANEL_MESSAGES)} messages of platform.hosting_panel")

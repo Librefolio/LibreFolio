@@ -2,11 +2,12 @@
   ParseDetailModal.svelte — Phase 07 Part 5 v5 M2
 
   Shows a detailed parse summary for a single file or aggregate across multiple files.
-  Sections: TX by type (with type icons), asset mappings, duplicates, warnings.
+  Sections: TX by type (with type icons), asset mappings, duplicates, and the notes from the importer: the warnings,
+  then the notes (B-51), each kind under its own heading, as in the step-3 confirmation.
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {CheckCircle, HelpCircle, X, CircleAlert, FileText, Wrench, Info, Eye, Download} from 'lucide-svelte';
+    import {CheckCircle, HelpCircle, X, CircleAlert, FileText, Wrench, Info, Eye, Download, AlertTriangle} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
@@ -16,6 +17,7 @@
     import {resolveBrimTodoMessage} from '$lib/features/transactions/resolveBrimNotice';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import BrimNoticeList from '$lib/features/transactions/import/BrimNoticeList.svelte';
+    import {splitNotices} from '$lib/features/transactions/import/importNotices';
     import BrimEvidenceTable from '$lib/features/transactions/import/BrimEvidenceTable.svelte';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {maskable} from '$lib/utils/privacy/maskable';
@@ -141,11 +143,19 @@
         return null;
     });
 
-    let warnings = $derived.by((): BrimNotice[] => {
+    let notices = $derived.by((): BrimNotice[] => {
         if (parseResult?.response?.warnings) return parseResult.response.warnings;
         if (isAggregate) return activeResults.flatMap((r) => r.response!.warnings ?? []);
         return [];
     });
+    let noticesBySeverity = $derived(splitNotices(notices));
+    /** One subsection per kind present, the warnings first: a note is not a warning (B-51). */
+    let noticeSections = $derived(
+        [
+            {severity: 'warning' as const, notices: noticesBySeverity.warnings},
+            {severity: 'info' as const, notices: noticesBySeverity.notes},
+        ].filter((section) => section.notices.length > 0),
+    );
 
     let validationIssues = $derived.by((): BrimValidationIssue[] => {
         if (parseResult?.response?.validation_issues) return parseResult.response.validation_issues as BrimValidationIssue[];
@@ -479,13 +489,28 @@
                 {/if}
             </section>
 
-            <!-- Warnings -->
-            <section>
-                <h3 class="text-sm font-semibold text-lf-secondary mb-2">{$t('importWizard.warningsSection')}</h3>
-                {#if warnings.length > 0}
-                    <BrimNoticeList notices={warnings} />
+            <!-- Notes from the importer: the warnings, then the notes (B-51) -->
+            <section data-testid="parse-detail-notices" data-warnings={noticesBySeverity.warnings.length} data-notes={noticesBySeverity.notes.length}>
+                <h3 class="text-sm font-semibold text-lf-secondary mb-2">{$t('importWizard.noticeConfirmTitle')}</h3>
+                {#if noticeSections.length > 0}
+                    <div class="space-y-3">
+                        {#each noticeSections as section (section.severity)}
+                            <div data-testid="parse-detail-notice-section" data-severity={section.severity} data-count={section.notices.length}>
+                                <h4 class="flex items-center gap-1.5 text-xs font-semibold mb-1.5 {section.severity === 'info' ? 'text-lf-info' : 'text-lf-warning'}">
+                                    {#if section.severity === 'info'}
+                                        <Info size={13} class="shrink-0" aria-hidden="true" />
+                                    {:else}
+                                        <AlertTriangle size={13} class="shrink-0" aria-hidden="true" />
+                                    {/if}
+                                    {section.severity === 'info' ? $t('importWizard.noticeSectionInfo') : $t('importWizard.noticeSectionWarning')}
+                                    ({section.notices.length})
+                                </h4>
+                                <BrimNoticeList notices={section.notices} />
+                            </div>
+                        {/each}
+                    </div>
                 {:else}
-                    <p class="text-xs text-lf-muted">{$t('importWizard.noWarnings')}</p>
+                    <p class="text-xs text-lf-muted" data-testid="parse-detail-notices-empty">{$t('importWizard.noNotices')}</p>
                 {/if}
             </section>
         </div>

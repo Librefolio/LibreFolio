@@ -39,10 +39,12 @@ the headers, then lets the exception go on, so it is still logged.
 import mimetypes
 from collections.abc import Iterable
 
-from starlette.responses import PlainTextResponse
+from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from backend.app.config import get_settings
+from backend.app.services.platform.failure_report import error_body, report_unhandled_error
+from backend.app.services.platform.request_id import request_id_of
 
 #: Added to every HTTP response that does not carry them already.
 ALWAYS_HEADERS: tuple[tuple[bytes, bytes], ...] = (
@@ -201,7 +203,10 @@ class SecurityHeadersMiddleware:
 
         try:
             await self.app(scope, receive, send_with_headers)
-        except Exception:
+        except Exception as exc:
+            # Logged once, as JSON with the request id (H-60); uvicorn's own line for it is then dropped (logging_config.py)
+            request_id = request_id_of(scope)
+            error_type = report_unhandled_error(exc, method=scope.get("method"), path=scope.get("path"), request_id=request_id)
             if not started:
-                await PlainTextResponse("Internal Server Error", status_code=500)(scope, receive, send_with_headers)
+                await JSONResponse(error_body("Internal Server Error", request_id, error_type), status_code=500)(scope, receive, send_with_headers)
             raise

@@ -42,6 +42,10 @@ export interface PriceProcessingRequest {
 
 export interface ProcessedAssetResult {
     assetId: number;
+    /** The position of the item in the request it answers (the workers' chunks and the pool's balancing reorder the results). */
+    requestIndex: number;
+    /** The step of the item's prices: `daily`, or `weekly` or `monthly` when the item was sampled (Z-29b). */
+    resolution: 'daily' | 'weekly' | 'monthly';
     mappedPoints: AssetPricePoint[];
     derived: DerivedPriceState;
     signals: Array<z.infer<typeof schemas.SignalResult>>;
@@ -65,7 +69,7 @@ export function processPriceRequest(request: PriceProcessingRequest): PriceProce
     const results: ProcessedAssetResult[] = [];
     const invalidItemErrors: string[] = [];
 
-    for (const rawItem of request.items) {
+    for (const [requestIndex, rawItem] of request.items.entries()) {
         const parsed = FAPriceQueryResultSchema.safeParse(rawItem);
         if (!parsed.success) {
             invalidItemErrors.push(parsed.error.message);
@@ -76,8 +80,11 @@ export function processPriceRequest(request: PriceProcessingRequest): PriceProce
         const prices = item.prices ?? [];
         results.push({
             assetId: item.asset_id,
+            requestIndex,
+            resolution: item.resolution ?? 'daily',
             mappedPoints: apiPricesToAssetPricePoints(prices),
-            derived: computeDerivedPriceState(prices),
+            // The generated type of a nullable object is wider than the schema's: an array is never what the backend sends.
+            derived: computeDerivedPriceState(prices, Array.isArray(item.sample_bounds) ? null : item.sample_bounds),
             signals: item.signals ?? [],
         });
     }

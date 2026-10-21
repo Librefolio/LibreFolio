@@ -178,7 +178,7 @@ The mechanism is generic: `activity.py` imports nothing from the scheduler, and 
 `GET /api/v1/system/price-refresh` (`backend/app/api/v1/system/price_refresh.py`, one module of the `system` package, like `wake.py`) answers the tracker's state, `PriceRefreshResponse` (`backend/app/schemas/sleep_wake.py`). It reads the same tracker as the header, so the two agree.
 
 * **Signed-in users only**, any role: `get_current_user` answers `401` without a valid session, and the answer tells nothing about anyone's data. On a blocked instance the route is not on the allow-list: a signed-in user gets the `423` of the [Instance Block](../architecture/security.md#instance-block). The web app stops asking at the first `4xx` ([After a 4xx](../frontend/components/features/live-ticker.md#price-refresh-4xx)).
-* **A request of the user.** For the activity record it counts like any route but the probes and the wake-up: while the web app asks, the [idle suspension](../../admin/sleep_wake.md#idle-suspend) sees a user.
+* **A request of the user.** For the activity record it counts like any route but the probes, the wake-up and the hosting panel's routes: while the web app asks, the [idle suspension](../../admin/sleep_wake.md#idle-suspend) sees a user.
 
 | Field | What it holds |
 |---|---|

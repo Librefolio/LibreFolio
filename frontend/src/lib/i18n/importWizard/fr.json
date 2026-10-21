@@ -31,7 +31,7 @@
     "selectPlugin": "Choisir un plugin…",
     "extensionError": "Type de fichier non supporté : {ext}. Acceptés : .csv, .xlsx, .xls",
     "unresolvedCount": "{n, plural, one {# actif non résolu} other {# actifs non résolus}}",
-    "warningsCount": "{n} avertissements",
+    "warningsCount": "{n, plural, one {# avertissement} other {# avertissements}}",
     "importedCount": "{n} transactions importées dans l'éditeur",
     "resolveAssets": "Résoudre les actifs",
     "parsingProgress": "Analyse… {done}/{total}",
@@ -52,8 +52,6 @@
     "duplicatesSection": "État des transactions",
     "uniqueTx": "{n} uniques",
     "possibleDuplicates": "{n} possibles",
-    "warningsSection": "Avertissements",
-    "noWarnings": "Aucun avertissement",
     "validationIssues": "Problèmes de validation",
     "validationIssueCount": "{n} problèmes de validation",
     "noValidationIssues": "Aucun problème de validation",
@@ -75,7 +73,7 @@
       "unresolvedCount": "Actifs non encore associés à un instrument connu",
       "issueCount": "Problèmes de validation — transactions non créées",
       "todoCount": "Champs nécessitant une saisie manuelle (🔴 = bloquant)",
-      "warningCount": "Avertissements du parseur (lignes ignorées, données ambiguës)"
+      "noticeCount": "Avertissements (ambre) : à vérifier. Notes (bleu) : choix que l'importateur explique."
     },
     "allResolved": "Tout résolu",
     "searchAll": "Rechercher dans vos actifs…",
@@ -199,11 +197,14 @@
       "scalable_reversal": "{count, plural, one {# ligne annule une opération déjà enregistrée et n’a pas été importée.} other {# lignes annulent des opérations déjà enregistrées et n’ont pas été importées.}} Vérifiez les opérations annulées et corrigez-les à la main.",
       "scalable_not_imported": "{count, plural, one {# ligne n’a pas été importée} other {# lignes n’ont pas été importées}} : transferts de titres, opérations sur titres et types que LibreFolio ne lit pas encore. Ajoutez-les à la main si elles déplacent des titres ou des espèces.",
       "scalable_several_overnight_accounts": "Le fichier contient {count} comptes rémunérés : toutes leurs lignes vont dans ce courtier, dont le solde est leur somme.",
-      "scalable_not_executed": "{count, plural, one {# ligne n’a pas été exécutée (en attente, annulée, expirée ou rejetée) et n’a pas été importée.} other {# lignes n’ont pas été exécutées (en attente, annulées, expirées ou rejetées) et n’ont pas été importées.}} Un ordre exécuté plus tard arrive avec l’export suivant.",
       "scalable_internal_transfers": "{count, plural, one {# transfert} other {# transferts}} entre le compte-titres et le compte rémunéré : importez le fichier de l’autre compte dans son propre courtier, puis fusionnez chaque paire en un « Virement » dans l’éditeur groupé.",
       "scalable_dividends_net": "{count, plural, one {# dividende a été importé tel que crédité} other {# dividendes ont été importés tels que crédités}}, après la retenue à la source : le fichier n’indique pas l’impôt.",
       "scalable_tax_refund": "{count, plural, one {# remboursement d’impôt a été importé comme dépôt} other {# remboursements d’impôt ont été importés comme dépôts}} : dans LibreFolio, une taxe retire toujours de l’argent.",
-      "scalable_cash_by_sign": "{count, plural, one {# ligne d’espèces a un type que LibreFolio ne connaît pas, ou un signe inattendu : elle a été enregistrée comme dépôt ou retrait} other {# lignes d’espèces ont un type que LibreFolio ne connaît pas, ou un signe inattendu : elles ont été enregistrées comme dépôts ou retraits}}, selon le signe du montant."
+      "scalable_cash_by_sign": "{count, plural, one {# ligne d’espèces a un type que LibreFolio ne connaît pas, ou un signe inattendu : elle a été enregistrée comme dépôt ou retrait} other {# lignes d’espèces ont un type que LibreFolio ne connaît pas, ou un signe inattendu : elles ont été enregistrées comme dépôts ou retraits}}, selon le signe du montant.",
+      "fineco_not_yet_settled": "{count, plural, one {# ligne n’est pas encore réglée (sa date de valeur est après aujourd’hui) et n’a pas été importée : elle arrivera avec le prochain export.} other {# lignes ne sont pas encore réglées (leur date de valeur est après aujourd’hui) et n’ont pas été importées : elles arriveront avec le prochain export.}}",
+      "fineco_incomplete_rows": "Cet import pourrait être faux : {count, plural, one {# ligne n’a pas} other {# lignes n’ont pas}} un nombre nécessaire (quantité ou montant). Vérifiez les lignes ci-dessous ; si le fichier est correct, c’est probablement une erreur de l’import, et vous pouvez nous aider à la corriger :",
+      "rows_not_recognized": "{count, plural, one {# ligne a été exclue ou importée en partie seulement} other {# lignes ont été exclues ou importées en partie seulement}} : l’import ne reconnaît pas, ou n’importe pas encore, ce qu’elles décrivent. Vérifiez les lignes ci-dessous ; si cela compte pour vos parts ou votre trésorerie, signalez le cas pour que nous le traitions :",
+      "rows_unreadable": "{count, plural, one {# ligne a été exclue} other {# lignes ont été exclues}} car une valeur nécessaire est illisible. Vérifiez les lignes ci-dessous ; si le fichier est correct, signalez le cas pour que nous le traitions :"
     },
     "evidenceRowsTitle": "Lignes du fichier",
     "evidenceRowCount": "{n} lignes",
@@ -379,7 +380,8 @@
         "invalid": "invalides",
         "not_yet_settled": "pas encore réglées",
         "outside_cash_coverage": "réglées avant le début du relevé",
-        "superseded": "remplacées par un fichier plus récent"
+        "superseded": "remplacées par un fichier plus récent",
+        "reservation": "réservées, non comptabilisées"
       },
       "downloadCombined": "Télécharger le fichier combiné",
       "warning": {
@@ -520,11 +522,16 @@
       "scalable_reversal": "Ces lignes sont des annulations : leur colonne lf_is_cancellation vaut true.",
       "scalable_not_imported": "La colonne type indique ce que sont ces lignes.",
       "scalable_several_overnight_accounts": "La première ligne de chaque compte rémunéré ; la colonne lf_account_index les distingue.",
-      "scalable_not_executed": "La colonne status indique pourquoi ces lignes n’ont pas été exécutées.",
       "scalable_internal_transfers": "Ces lignes déplacent de l’argent entre vos deux comptes Scalable (lf_subtype CASH_TRANSFER_IN ou CASH_TRANSFER_OUT) : chacune a sa jumelle dans le fichier de l’autre compte.",
       "scalable_dividends_net": "La colonne tax est vide sur ces lignes : le montant est ce qui est arrivé sur le compte.",
       "scalable_tax_refund": "Un montant positif dans la colonne tax est de l’argent rendu.",
-      "scalable_cash_by_sign": "Le signe de la colonne amount a décidé entre dépôt et retrait."
-    }
+      "scalable_cash_by_sign": "Le signe de la colonne amount a décidé entre dépôt et retrait.",
+      "fineco_not_yet_settled": "La date de valeur de ces lignes est après aujourd’hui : elles ne sont pas encore réglées.",
+      "fineco_incomplete_rows": "La dernière colonne nomme le champ sans nombre ; la ligne est importée telle quelle.",
+      "rows_not_recognized": "La dernière colonne indique ce qu’est chaque ligne, ou ce qui n’a pas été importé.",
+      "rows_unreadable": "La dernière colonne indique ce qui n’a pas pu être lu dans chaque ligne."
+    },
+    "notesCount": "{n, plural, one {# note} many {# notes} other {# notes}}",
+    "noNotices": "Ni avertissement ni note"
   }
 }

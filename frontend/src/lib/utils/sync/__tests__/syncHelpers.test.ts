@@ -22,7 +22,7 @@
  * Red today: `hasStoredPointInRange` does not exist.
  */
 import {describe, expect, it} from 'vitest';
-import {hasStoredPointInRange} from '../syncHelpers';
+import {hasStoredPointInRange, hasStoredRowBehindSample} from '../syncHelpers';
 
 const START = '2024-03-01';
 const END = '2024-03-31';
@@ -70,5 +70,49 @@ describe('hasStoredPointInRange', () => {
         expect(hasStoredPointInRange([filledInside, storedOutside], START, END)).toBe(false);
         // One point that meets both is enough, wherever it sits in the list.
         expect(hasStoredPointInRange([filledInside, storedOutside, {date: '2024-03-20'}], START, END)).toBe(true);
+    });
+});
+
+describe('hasStoredRowBehindSample (Z-29b)', () => {
+    // A card's series is a weekly or monthly sample: a point is the last row on or before its date, so it is rarely a stored
+    // row itself. The sync dialog's question — does the range hold a row a sync would replace? — is answered by the row
+    // behind each point: dated `date − staleDays`. Any stored row of the range backs the point of its own bucket, or of a
+    // later one, within the range.
+    const sampled = (date: string, staleDays: number) => ({date, staleDays});
+
+    it('finds the row behind a point filled backward from it, when that row is inside the range', () => {
+        // Sunday 2026-01-11 stands for Friday 2026-01-09's row.
+        expect(hasStoredRowBehindSample([sampled('2026-01-11', 2)], '2026-01-05', '2026-06-30')).toBe(true);
+    });
+
+    it('does not count a row dated before the range: the seed a point opens on', () => {
+        // Sunday 2026-01-11 stands for Friday 2025-12-26's row, before the range starts on 2026-01-05.
+        expect(hasStoredRowBehindSample([sampled('2026-01-11', 16)], '2026-01-05', '2026-06-30')).toBe(false);
+    });
+
+    it('does not count a row after the end of the range', () => {
+        expect(hasStoredRowBehindSample([sampled('2026-07-03', 0)], '2026-01-05', '2026-06-30')).toBe(false);
+    });
+
+    it('reads a start of «min» as no lower bound', () => {
+        expect(hasStoredRowBehindSample([sampled('2000-01-02', 1)], 'min', '2026-06-30')).toBe(true);
+    });
+
+    it('agrees with hasStoredPointInRange on a daily series', () => {
+        const days = [sampled('2026-01-05', 0), sampled('2026-01-06', 1), sampled('2026-01-07', 2)];
+        const shown = days.map((day) => ({date: day.date, backwardFillInfo: {daysBack: day.staleDays}}));
+
+        for (const [start, end] of [
+            ['2026-01-05', '2026-01-07'],
+            ['2026-01-06', '2026-01-07'],
+            ['2026-01-06', '2026-01-06'],
+            ['2026-01-08', '2026-01-09'],
+        ]) {
+            expect(hasStoredRowBehindSample(days, start, end), `${start} … ${end}`).toBe(hasStoredPointInRange(shown, start, end));
+        }
+    });
+
+    it('is false for no points', () => {
+        expect(hasStoredRowBehindSample([], 'min', '2026-06-30')).toBe(false);
     });
 });

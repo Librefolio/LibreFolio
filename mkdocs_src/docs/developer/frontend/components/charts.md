@@ -328,6 +328,51 @@ currency (see [Price Query](../../backend/assets/architecture.md#data-flow-price
 `loadComparisonAssetsData()` (same file) drops them and flags the card with `_conversionFailed`, so
 a comparison line never mixes currencies.
 
+#### Measure mode {: #measure-mode }
+
+The asset detail and FX pair pages measure on their chart through `MeasurePanel`
+(`lib/components/charts/MeasurePanel.svelte`). The asset page mounts one panel per primary mode and
+talks to the one on screen (`activeMeasurePanel()`). 📏 calls the panel's `startMeasureMode()` or
+`stopMeasureMode()`; the panel reports its mode through `onmeasuremodechange`, and the page hands it
+to the chart as `measureMode`, with the chart's two measure callbacks wired to the panel:
+
+- `onMeasureClick(date, value)` calls `addPoint(date, value)`. The first click leaves the start
+  pending. A second click on the start's day is ignored: no measure, measure mode stays on, the start
+  stays pending. A click on another day adds the measure, its dates sorted, and stops measure mode.
+- `onMeasureHover(date, value)` returns `updatePendingEnd(date, value)` straight through:
+  `(date, value) => activeMeasurePanel()?.updatePendingEnd(date, value)` in
+  `routes/(app)/assets/[id]/+page.svelte`, `(date, value) => measurePanel?.updatePendingEnd(date, value)`
+  in `routes/(app)/fx/[pair]/+page.svelte`. `updatePendingEnd` draws the dashed live preview
+  (`__pending__`) from the start to `date` and returns a `boolean`: `true` on the pending start's
+  day, where it also removes the preview if one is drawn; `false` elsewhere, with measure mode off, or
+  with no start pending.
+
+No measure spans a single day (lot Y-N65, as in the
+[date pickers](core-ui/datePickers.md#no-single-day-range)). The expanded card's `DateRangePicker`
+cannot publish a range of one day, so `updateMeasureDates` no longer refuses one on its own: that
+silent refusal was bug N65, where the card's picker showed the same day in «From» and «To» while the
+measure kept its old dates. The panel's **+** (`addMeasureFromChartData()`) measures from the first
+measurable point to the last, and does nothing when both fall on the same day.
+
+**The cursor.** zrender writes its own cursor inline on its element at every pointer move, before
+its listeners run (`Handler.mousemove`, zrender 6), so the `cursor-crosshair` class that the chart
+container carries in measure mode was hardly ever seen. `PriceChartFull` (line view) and
+`CandlestickChart` (candles) therefore set their cursor through zrender:
+
+- On every zr `mousemove` while `measureMode` is on (and an `onMeasureHover` is given), synchronously
+  and before the `requestAnimationFrame` throttle, the chart calls `zr.setCursorStyle('crosshair')`,
+  or `'not-allowed'` while the last resolved hover was refused.
+- In the frame it resolves the point under the pointer, calls `onMeasureHover`, and applies the
+  cursor of the new answer. `onMeasureHover` is typed `(date, value) => boolean | void`; `true` means
+  refused. The container publishes the answer as `data-measure-hover`: `"blocked"` over a refused day
+  (the measure's start), `"free"` anywhere else, including off every point. Out of measure mode the
+  attribute is absent, and a hover still queued when measure mode ends publishes nothing.
+- Outside measure mode the chart never calls `setCursorStyle`: zrender keeps its own cursor.
+
+These rules are pinned in the Y-N65 describes of `MeasurePanel.test.ts` and `PriceChartFull.test.ts`.
+The latter runs each case on the line view and on the candle view, with an ECharts stand-in whose zr
+records every `setCursorStyle` call.
+
 ## Chart Settings and Axis Scales
 
 The FX and Asset charts (list cards, detail pages, and the **Chart Settings** modal's preview)
@@ -392,6 +437,59 @@ values, within the field's `min`/`max` when set) and the `.lf-compact-number-inp
 (`app.css`: 0.75rem tabular figures). Below 768 px the iOS zoom guard
 ([Mobile CSS](../pwa.md#mobile-css)) sets every input without `.zoom-guard-exempt` to 16 px; the
 class then only resets the line height.
+
+### Signal rendering shared by cards and preview {: #signal-rendering }
+
+`lib/charts/chartSignalRendering.ts` is the one place that turns a chart's saved signals into
+`RenderedSignal[]`. It is pure (no Svelte state, no store read): the caller says where the series
+come from.
+
+| Function | Role |
+|----------|------|
+| `renderLocalSignal(config, baseData, viewMode, sources)` | one saved local signal, rebuilt with `signalFromConfig()`, given its data, rendered on `baseData`; nothing if the type is unknown or the series it reads is missing |
+| `renderLocalSignals(configs, definitionsByType, baseData, viewMode, sources)` | a chart's local signals in order; backend-owned and unknown definitions are skipped |
+| `renderBackendResults(configs, results, definitionsByType, baseData, viewMode, translate?)` | a chart's backend results in order, each drawn with the current config of its id |
+| `SignalDataSources` | `fxPairData(slug)`, `comparisonTarget(assetId)` and `selfAssetId`: where an FX-pair or comparison signal gets its series; `NO_SIGNAL_SOURCES` is the empty set |
+
+The Assets list (`routes/(app)/assets/+page.svelte`), the FX list (`routes/(app)/fx/+page.svelte`)
+and `ChartSettingsModal` call these functions with their own `SignalDataSources`, so a signal
+looks the same on a card and in its preview: a comparison is named after its target, a comparison
+with the chart's own asset (`selfAssetId`) is never drawn, and an FX pair follows the direction of
+the card. The two detail pages still keep their own loop (backlog Y-42); `signalRendering.gate.test.ts` keeps any other file from calling `signalFromConfig()` outside this module.
+
+### Preview chart in the modal {: #settings-preview-chart }
+
+The preview in `ChartSettingsModal` is `PriceChartFull`, the chart of the detail pages, not a
+bespoke `LineChart`. It is configured as follows:
+
+| Prop | Value |
+|------|-------|
+| `data` | the **absolute** series: the card's real data in `pair` mode, a synthetic curve in `global` mode |
+| `externalViewMode` | the modal's own **Abs** / **%** switch: the chart takes the percentage view itself |
+| `externalChartType` | `'line'` (no candlesticks) |
+| `hideToolbar` | `true` |
+| `chartHeight` | `'220px'` |
+| `areaFill`, `colorByBaseline`, `showGridLines`, `showGradient` | the aesthetics being edited, not the saved ones |
+| `yAxisMode` / `yAxisMin` / `yAxisMax`, `secondaryAxisScales` | the axis scales being edited, for the primary scale of the active view and for the secondary axes |
+| `overlaySignals`, `overlaySignalInfoMap` | the preview signals and `buildOverlaySignalInfoMap()` of them, so a comparison shows its asset's icon and type in the tooltip like on the detail page |
+
+The modal passes no events, measure or edit props, so none of them is drawn. The mouse-wheel zoom
+is the chart's own `inside` dataZoom.
+
+### Baseline colour on cards {: #cards-baseline-colour }
+
+The list cards (`AssetCard`, `FxCard`) pass `colorByBaseline` from the chart settings to
+`PriceChartCompact`, which forwards it to `LineChart`; before, compact charts ignored it. The
+series is green from the baseline up and red below it, with a dashed baseline line. The base is:
+
+- **absolute view**: the `baselineValue` prop when a page gives one, else the first non-missing
+  point of the `data` the chart received. A card thins a dense series to weekly or monthly points
+  *inside* `LineChart`, after this base is taken, so the base is the real start of the period and
+  not the end of the first bucket;
+- **percentage view**: always 0, whatever `baselineValue` says.
+
+`baselineValue` is an optional prop of `LineChart`, forwarded by `PriceChartCompact`, for a page
+that knows a better base than the first point of the data it hands over. No list page uses it today.
 
 ## Responsive Date Axis
 
@@ -523,10 +621,11 @@ fell back to the system, which prints two letters where it has no flag glyphs (W
   nothing else, so every other character falls through to that default and keeps its font.
 - `CHART_INIT_THEME`: `{textStyle: {fontFamily: CHART_FONT_FAMILY}}`.
 
-Every chart is created with that theme:
+Every chart is created with that theme, and with the options of
+[`chartInitOptions`](#chart-pixel-density):
 
 ```typescript
-chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'});
+chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, chartInitOptions(chartContainer));
 ```
 
 A theme's `textStyle` is ECharts' global font: the canvas text and the tooltip's inline `font` use
@@ -555,6 +654,25 @@ count. Two steps cover this:
    the chart (`resize()`) once the request of `chartFontReady()` settles. Every chart calls it
    except `LotGanttChart`.
 
+### Pixel density {: #chart-pixel-density }
+
+A chart's canvases hold its CSS size times a pixel density. zrender reads the screen's density once,
+when its module loads, and fixes it for a chart at `init`: a tab opened on a 1× screen drew every
+chart at 1×, the ones opened later too, and blurred them once the window moved to a Retina screen
+or the browser zoomed in. `lib/components/charts/chartPixelRatio.ts` handles both moments:
+
+- **At creation:** `chartInitOptions(element)` gives `echarts.init` the canvas renderer and the
+  screen's density at that moment (`devicePixelRatio`, never under 1, zrender's own rule).
+- **When the density changes:** one `matchMedia` resolution query for the whole app, armed by the
+  first chart and re-armed at each change. Every chart created through `chartInitOptions` and
+  still alive is brought to the new density in place (`setChartPixelRatio`): its zoom, legend,
+  selection and handlers stay, and nothing is drawn again from its options.
+
+In place means the members of zrender 6's canvas painter that its own `resize()` uses
+(`painter.dpr`, `getLayers()`, each layer's `dpr`, `ctx.dpr` and `resize()`, then
+`refresh(true)`). They are checked before anything is touched: when one is not there, the chart
+keeps its density, with a warning in debug builds.
+
 ### Tooltip HTML {: #chart-tooltip-escaping }
 
 ECharts sets what a tooltip formatter returns as `innerHTML`. Every value a formatter takes from
@@ -576,10 +694,17 @@ notation). The rule for every hand-built HTML string, and its other gates, is in
 
 | Test | Checks |
 |---|---|
-| `lib/components/charts/chartFlagFont.test.ts` | With the real ECharts, rendered server-side to SVG: a chart created with `CHART_INIT_THEME` draws its legend, axis and pie labels with `'LF Flags'` first, also after `setOption(option, true)`. A static scan of the production sources: every `echarts.init(` passes exactly `CHART_INIT_THEME` as its second argument, and no module reaches ECharts' `init` under another name. The scan skips `lib/dev/designer-lab/`, whose engine creates a 1×1 probe that never paints. |
+| `lib/components/charts/chartFlagFont.test.ts` | With the real ECharts, rendered server-side to SVG: a chart created with `CHART_INIT_THEME` draws its legend, axis and pie labels with `'LF Flags'` first, also after `setOption(option, true)`. A static scan of the production sources: every `echarts.init(` passes exactly `CHART_INIT_THEME` as its second argument and `chartInitOptions(<its element>)` as its third, every chart included since DV-14. `PIXEL_RATIO_PENDING` is kept, empty, for a chart that cannot migrate at once: a listed file that passes it, has no call or is gone fails the gate. And no module reaches ECharts' `init` under another name. The scan skips `lib/dev/designer-lab/`, whose engine creates a 1×1 probe that never paints. |
 | `lib/components/charts/chartFont.load.test.ts` | The face is requested before the first paint, and a chart that painted before it arrived paints again once it is in. |
+| `lib/components/charts/chartPixelRatio.test.ts` | A chart is created at the density of that moment; a change of density re-arms the query and brings every live chart to it; the update in place runs on the real zrender, so an upgrade that moves its painter's members fails here. What it does not recognise, an SVG chart or a disposed one, it leaves alone, never throwing. |
 | `*.tooltipEscape.test.ts`: `AllocationPieChart`, `CandlestickChart` and `PriceChartFull` beside the charts, `CorrelationHeatmap` in `lib/features/risk/` | Fed a value that carries markup, the tooltip injects no element and shows the value as text; the heatmap's also requires the shared `escapeHtml`'s output, quotes included. |
 | `lib/utils/core/escapeHtml.single.test.ts` | No production source holds an HTML escaper (`&` mapped to `&amp;`) outside `escapeHtml.ts` and the exempt `inlineMath.ts`; an exempt file that no longer holds one fails too, so an exemption cannot go stale. |
+
+Beside them, `SemiDonutChart.test.ts` checks that a chart's `init` receives the canvas renderer and
+the screen's density, and `./dev.py test front-portfolio chart-pixel-ratio`
+(`e2e/portfolio/chart-pixel-ratio.spec.ts`) changes the density of a live Dashboard through
+Chromium's device metrics: its charts follow in place, the same instances and canvases, and a chart
+opened after the change is born at the new density.
 
 ## Pie Charts (AllocationPieChart)
 

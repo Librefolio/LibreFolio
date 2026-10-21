@@ -45,7 +45,7 @@ Under test: ``backend/app/config/sleep_wake.py`` (``WAKE_TOKEN_VARIABLE``, ``wak
 - WAKE-023, the log of a run: "Wake-up run started", then "Wake-up run finished" with a ``status``, both INFO, once each.
 - WAKE-024, D-W3 with the real ``run_due_jobs``: on a blocked instance, 200 with ``status`` "blocked" and no job, and
   nothing of the scheduler past its two switches is reached.
-- WAKE-025..026, OpenAPI and the composition: ``POST /api/v1/system/wake-sync``, tag System, asks for the ``WakeToken``
+- WAKE-025..026, OpenAPI and the composition: ``POST /api/v1/system/wake-sync``, tag Hosting panel alone, asks for the ``WakeToken``
   bearer scheme and no other, which no other route of the system router asks for; its 200 is ``WakeSyncResponse``,
   exactly the keys above, and 401, 404, 409 and 503 are documented. ``wake_router`` serves ``POST /wake-sync`` with
   ``wake_sync``, which the system router serves under ``/api/v1/system``; the module ships ``WAKE_KEEPALIVE_SECONDS``
@@ -1482,7 +1482,7 @@ def resolve(document: dict[str, Any], schema: object) -> dict[str, Any]:
 
 
 def test_openapi_documents_the_route_its_token_and_its_answer():
-    """WAKE-025: ``POST /api/v1/system/wake-sync``, tag System, asks for the ``WakeToken`` HTTP bearer scheme and nothing
+    """WAKE-025: ``POST /api/v1/system/wake-sync``, tag Hosting panel alone, asks for the ``WakeToken`` HTTP bearer scheme and nothing
     else, and no other route of the system router asks for it; its 200 is ``WakeSyncResponse``, exactly the keys of the
     body, its ``jobs`` an array of a model with exactly the keys of a job (its name is free); 401, 404, 409 and 503 are
     documented."""
@@ -1496,7 +1496,7 @@ def test_openapi_documents_the_route_its_token_and_its_answer():
     job_model = resolve(document, jobs.get("items"))
 
     assert operation, f"POST {WAKE_SYNC} is documented: {sorted(document['paths'])}"
-    assert operation.get("tags") == ["System"], f"the route belongs to the System tag: {operation.get('tags')}"
+    assert operation.get("tags") == ["Hosting panel"], f"the route carries the Hosting panel tag alone: {operation.get('tags')}"
     assert operation.get("security") == [{"WakeToken": []}], f"the route asks for the WakeToken scheme and nothing else: {operation.get('security')}"
     assert (scheme.get("type"), scheme.get("scheme")) == ("http", "bearer"), f"WakeToken is an HTTP bearer scheme: {scheme}"
     assert asking == [f"POST {WAKE_SYNC}"], f"wake-sync, and only it, asks for WakeToken: {asking}"

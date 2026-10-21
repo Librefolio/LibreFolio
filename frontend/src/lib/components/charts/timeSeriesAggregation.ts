@@ -9,6 +9,7 @@
  */
 
 import type {RenderedSignal} from '$lib/charts/signals';
+import {daysBetween} from '$lib/utils/dateOnly';
 
 import type {LineDataPoint} from './LineChart.svelte';
 
@@ -472,6 +473,76 @@ export function downsampleRenderedSignal(signal: RenderedSignal, resolution: Cha
 export function computeDensity(bucketCount: number, plotWidthPx: number): number {
     if (plotWidthPx <= 0) return 0;
     return bucketCount / plotWidthPx;
+}
+
+// =========================================================================
+// The compact chart's sizing rule (Z-29b)
+// =========================================================================
+//
+// A card draws as many points as its plot has room for: at most 1.3 per pixel, the line grammar's own density. The page
+// asks the backend for exactly that many (`max_points`), and the backend picks the finest step whose count fits
+// (`choose_resolution()`): the same rule as `LineChart`'s static one. They are tied by the case table
+// `__tests__/compactDensityCases.json`, which `test_price_query_sampling.py` and `compactDensity.test.ts` both read.
+
+/** The most points per pixel a compact chart draws; its static resolution and the `max_points` a card sends read it. */
+export const COMPACT_DENSITY_THRESHOLD = LINE_HIGH_DENSITY_THRESHOLD;
+/** The compact chart's grid: the room left of the plot, right of it, and right of it with the mini axis on. */
+export const COMPACT_GRID_LEFT_PX = 5;
+export const COMPACT_GRID_RIGHT_PX = 5;
+export const COMPACT_GRID_RIGHT_WITH_AXIS_PX = 45;
+/** The plot width assumed for a card not measured yet (the table view has no card), about a three-column grid's. */
+export const DEFAULT_COMPACT_PLOT_WIDTH_PX = 300;
+/** The backend's cap on `max_points` (`FAPriceQueryItem.max_points`, `le=10_000`). */
+export const COMPACT_MAX_POINTS_CAP = 10_000;
+
+/** The width of a compact chart's plot inside its container: the grid's paddings taken out; 0 when nothing is left. */
+export function compactPlotWidth(containerWidthPx: number, showMiniAxis = true): number {
+    const rightPadding = showMiniAxis ? COMPACT_GRID_RIGHT_WITH_AXIS_PX : COMPACT_GRID_RIGHT_PX;
+    return Math.max(containerWidthPx - COMPACT_GRID_LEFT_PX - rightPadding, 0);
+}
+
+/**
+ * The `max_points` a card sends for a plot `plotWidthPx` wide: the most points the plot takes at 1.3 per pixel, never
+ * fewer than 1 nor more than the backend takes. A series with that many points or fewer is drawn as it is.
+ */
+export function compactMaxPoints(plotWidthPx: number): number {
+    if (!Number.isFinite(plotWidthPx) || plotWidthPx <= 0) return 1;
+    // The epsilon keeps 1.3 × 100 from falling to 129 on the float's last digit; no width in the table sits that close.
+    return Math.min(COMPACT_MAX_POINTS_CAP, Math.max(1, Math.floor(plotWidthPx * COMPACT_DENSITY_THRESHOLD + 1e-9)));
+}
+
+/** The first Monday on or before an ISO day (the start of its ISO week). */
+function isoWeekStart(isoDay: string): string {
+    const [year, month, day] = isoDay.split('-').map(Number);
+    const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+    const sinceMonday = (weekday + 6) % 7;
+    return new Date(Date.UTC(year, month - 1, day - sinceMonday)).toISOString().slice(0, 10);
+}
+
+/** How many days, ISO weeks (Monday to Sunday) and calendar months a fill from `first` to `end` touches (`fill_counts()`). */
+export function fillCounts(first: string, end: string): {days: number; weeks: number; months: number} {
+    const days = daysBetween(first, end) + 1;
+    const weeks = daysBetween(isoWeekStart(first), isoWeekStart(end)) / 7 + 1;
+    const months = (Number(end.slice(0, 4)) - Number(first.slice(0, 4))) * 12 + Number(end.slice(5, 7)) - Number(first.slice(5, 7)) + 1;
+    return {days, weeks, months};
+}
+
+/**
+ * The static resolution of a compact chart: daily while the days fit the plot at the threshold, else weekly while the
+ * weeks do, else monthly. What `LineChart` applies to the daily series it is given, and what the backend answers a card
+ * whose `max_points` is `compactMaxPoints()` of the same plot.
+ */
+export function chooseCompactResolution(counts: {dailyCount: number; weeklyCount: number}, plotWidthPx: number): ChartResolution {
+    if (computeDensity(counts.dailyCount, plotWidthPx) <= COMPACT_DENSITY_THRESHOLD) return 'daily';
+    if (computeDensity(counts.weeklyCount, plotWidthPx) <= COMPACT_DENSITY_THRESHOLD) return 'weekly';
+    return 'monthly';
+}
+
+/** The step the backend picks for an item with `max_points` over a fill of these counts: the finest whose count fits. */
+export function stepForMaxPoints(counts: {days: number; weeks: number}, maxPoints: number): ChartResolution {
+    if (counts.days <= maxPoints) return 'daily';
+    if (counts.weeks <= maxPoints) return 'weekly';
+    return 'monthly';
 }
 
 /**

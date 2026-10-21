@@ -1,0 +1,255 @@
+# LibreFolio — Claude Code Instructions
+
+## What is LibreFolio
+
+LibreFolio is a **self-hosted, open-source financial portfolio tracker** — alternative to Ghostfolio. It supports traditional assets (ETFs, stocks, bonds, crypto), multi-provider FX rates, technical analysis (EMA, MACD, RSI, Bollinger), import from 11+ brokers, and versioned AI Export for factual datasets and analysis-ready prompts.
+
+## Tech Stack
+
+| Layer | Technology | Details |
+|-------|-----------|---------|
+| **Backend** | Python 3.13 + FastAPI | SQLModel/SQLite, Alembic, Pipenv |
+| **Frontend** | SvelteKit 2 + Svelte 5 | Tailwind CSS 4, ECharts 6, Zodios, Playwright |
+| **Docs** | MkDocs Material | i18n (suffix strategy), Mermaid, LaTeX (KaTeX) |
+| **Deploy** | Docker single-image | Backend serves frontend as static files |
+| **CLI** | `dev.py` | Single entry point for everything |
+
+## Project Structure
+
+```text
+LibreFolio/
+├── backend/           # Python FastAPI (API, DB, services, providers)
+├── frontend/          # SvelteKit SPA (routes, components, stores, i18n)
+├── mkdocs_src/        # Documentation (MkDocs Material, i18n)
+├── scripts/           # CLI tools (imported by dev.py)
+├── dev.py             # Main CLI — ALWAYS use this, never manual commands
+└── .github/           # Copilot instructions, skills
+```
+
+## Key Architectural Decisions
+
+1. **All calculations in Backend** — the frontend is pure presentation
+2. **FIFO at Runtime** — cost matching computed on-demand, not persisted
+3. **Provider Registry Pattern** — auto-discovery for FX, Asset and BRIM providers with `params_schema` for dynamic forms
+4. **Multi-Provider with Fallback** — FX rates from ECB→FED→BOE→SNB + MANUAL sentinel
+5. **Svelte 5 Runes** — `$state`, `$derived`, `$effect` in new components
+6. **Zodios API Client** — types from OpenAPI, Zod runtime validation
+7. **Data Separation prod/test** — completely isolated folders
+8. **Dual View** — card grid + DataTable for Assets and FX, toggle persisted in localStorage
+9. **AI Export Boundary** — backend owns deterministic versioned facts; frontend owns safe prompt rendering, localization, clipboard, and contextual draft memory
+10. **One home for financial math** — every financial calculation has one implementation, and its home is `backend/app/services/financial_math/` (where each one lives today: `backend.instructions.md`, «Financial Math — One Home»). Search there before writing a calculation, add new ones there, never keep a local or partial copy, and report any copy you find
+
+## Fundamental Rules
+
+- **Caveman mode ultra** — always active. Use `caveman` skill at `ultra` intensity. Max compression, abbrevs, arrows for causality (X → Y). Off only if user says "stop caveman" or "normal mode".
+- **ALWAYS use `./dev.py`** for complex operations — never manual commands
+- **Legacy support case-by-case** — tend to migrate to the correct design; keep an old path only with a concrete reason (e.g. not breaking released installs/APIs)
+- **Code in English** — comments, docstrings, variables, README
+- **Multilingual UI** — only the graphical interface in EN/IT/FR/ES
+- **Edit > Rewrite** — prefer targeted edits to avoid regressions
+- **Incremental Alembic migrations (released)** — ship schema changes as new migrations to protect existing installs; edit `001_initial.py` only for brand-new never-shipped tables; `db create-clean` only for fresh/test DBs
+- **After modifying API** — run `./dev.py api sync` to regenerate TypeScript client
+- **After modifying DB models** — add an incremental Alembic migration (`./dev.py db migrate "…"`); use `db create-clean` only for fresh/test DBs
+- **Git: local yes, remote only the developer** (developer decision, 14/10/2026).
+  - **Allowed locally**, when the task needs it: commit, merge, fast-forward,
+    cherry-pick, branch create and rename.
+  - **The developer's alone:** `git push`, force-push, and any change to remotes or to
+    remote branches and tags. They push when they want, after their own review.
+  - **Coordinated work:** only the coordinator mutates history; child workstreams never
+    commit or merge. See `.claude/agents/release-coordinator.agent.md` («Git authority»)
+    and `.claude/agents/coordinated-workstream.agent.md` («Git policy»).
+  - **Guardrails, always:**
+    - **Never destroy work you do not own.** No `reset --hard`, `checkout -- …`,
+      `restore`, `clean -fd` or `stash drop` on changes you did not create: a dirty tree
+      is someone's open work.
+    - **Never rewrite history that already exists on `origin`.** No amend or rebase of
+      pushed commits.
+    - Delete or force-update a branch only if all of its commits are already in the
+      target or preserved elsewhere.
+    - Before every history operation, record HEAD and `git status --porcelain`. After
+      it, verify HEAD, parents and cleanliness, and report the resulting SHAs.
+    - Stage explicit, reviewed paths only. Never `git add -A` on a checkout shared with
+      other sessions or with the developer's IDE.
+    - Never commit secrets or ignored/generated artifacts.
+    - Commit messages follow Conventional Commits (skill `caveman-commit`).
+
+## Terminal Command Rules
+
+- **Long commands (>10 lines)** → do NOT paste them directly into the shell. Instead, write the command/script to a temporary file under `/tmp/` (e.g. `/tmp/libreFolio_<descr>.sh` or `.py`) and execute that file. This avoids quoting/escape issues and keeps the terminal log readable.
+- **Truncated output (`tail`, `head`, `grep -m`, `| head -n`, etc.)** → always `tee` the full output to a file in `/tmp/` *before* truncating, so the complete log can be re-inspected without re-running the command. Pattern:
+    ```bash
+    <command> 2>&1 | tee /tmp/libreFolio_<descr>.log | tail -n 100
+    ```
+    Then, if more context is needed, read `/tmp/libreFolio_<descr>.log` instead of re-executing the command.
+- ⚠️ **`tee` followed by `head` or `grep -m` truncates the log itself.** `head` and `grep -m` close the pipe early, `tee` dies with SIGPIPE, and the `/tmp` log silently loses everything it had not written yet — with exit code 0 (measured: 14–22 thousand of 200 000 lines). Only a consumer that reads to the end, like `tail`, is safe after `tee`. For `head` or `grep -m`, write the file first, or drain the pipe:
+    ```bash
+    <command> > /tmp/libreFolio_<descr>.log 2>&1; head -n 40 /tmp/libreFolio_<descr>.log
+    <command> 2>&1 | tee /tmp/libreFolio_<descr>.log | { head -n 40; cat >/dev/null; }
+    ```
+- ⚠️ **Never `npx` for frontend tools.** Without a local `node_modules/.bin`, npx (npm 11) queries the registry: plain `npx` installs a missing package into the user cache without asking (no TTY), and even `npx --no-install` silently runs a cached copy when it is the latest published version — in both cases not the version pinned by the lock. Call the locked binary explicitly, `frontend/node_modules/.bin/<tool>`, or an `npm run <script>` from `package.json`: a missing binary then fails with "No such file". `dev.py front build` and `dev.py api client`/`api sync` check `frontend/node_modules/.bin` first and stop with exit 1, naming the missing tools and `npm ci`; some runner actions still call `npx` directly (Vitest, J-8). So in a **fresh worktree** run the approved `npm ci` before the first `dev.py test` run that starts the shared backend, even a backend-only one (`server --test` builds the frontend when the build is missing), and before any `dev.py test front-*`, `front build` or `front check`. No manual build is needed after it: the runner and `dev.py mkdocs gallery` run `dev.py server --test --build-only` in the foreground before they start the test server, so a missing or stale debug build and site are built, visibly, outside the startup timeout (300 s, `LIBREFOLIO_TEST_STARTUP_TIMEOUT`), which measures the server start only.
+- **Rationale**: avoid re-running expensive commands (tests, builds, db operations) just to see output that was truncated earlier.
+
+## Async I/O Rule (Event Loop Safety)
+
+In `async def` handlers, **every sync library doing I/O** MUST be wrapped in `await asyncio.to_thread(...)`. Never call `requests.get()`, `yf.Ticker().info`, etc. directly — they block the entire event loop. If an endpoint only does light sync I/O (e.g. `Path.exists()`), define it as `def` (not `async def`).
+
+## Frontend Conventions
+
+- **Svelte 5 Runes**: use `$state()`, `$derived()`, `$effect()` — never old `$:` reactive
+- **Tailwind CSS 4**: config via `@theme {}` in `app.css` — no `tailwind.config.ts`
+- **Colours and dark mode**: the colour roles of `lib/theme/tokens.css` through their utilities (`bg-lf-card`, `text-lf-muted`, `border-lf-input`…), which change value under `html.dark` — never `dark:` on a role, no new palette class or hand-written colour (ratchet gate). For any new or changed UI: skill `design-system` (the two themes, the palette, the rules); details in `frontend.instructions.md` «Design System»; migrating legacy classes: skill `theme-roles`
+- **Icons**: lucide-svelte
+- **Selectors**: always use `data-testid` — never CSS classes or text (fragile with i18n)
+- **Flag emoji**: the `'LF Flags'` face (`static/lf-flags.css`, flags-only `unicode-range`) leads every font stack — Apple flags on Apple devices, the self-hosted Noto flags subset elsewhere, Windows included. Never name an emoji font in a `font-family`; a component with its own stack starts it with `'LF Flags'` or wraps the flag in `.emoji-flag`
+
+## Developer Journal & Plan Methodology
+
+Development history is tracked in `LibreFolio_developer_journal/`. We follow a structured plan-driven workflow:
+
+1. **Plan** → create a detailed implementation plan (`.prompt.md`)
+2. **Execute** → implement the plan
+3. **Repeat: BugfixPlan + Execute** → for each issue, create a bugfix plan and execute it
+4. **Debug** → final verification pass
+
+### File Naming Convention
+
+Plans are saved with an ordered naming scheme that encodes phase, step, iteration, and bugfix round:
+
+```
+plan-phase{NN}{Description}.prompt.md              # Main plan
+plan-phase{NN}Step{N}{Description}.prompt.md        # Step-level plan
+plan-phase{NN}BugfixMigration.prompt.md             # Bugfix iteration
+plan-phase{NN}Step{N}Round{N}-{Description}.prompt.md  # Bugfix round N
+plan-phase{NN}Step{N}Round{N}{Suffix}.prompt.md     # Sub-iteration (e.g. part2, part3b)
+```
+
+When a plan spawns a follow-up, both files cross-link each other (the original links forward, the new one links back).
+
+### Plan Execution — Progress Tracking Rule
+
+When executing a plan, after completing **EVERY step**, immediately return to the plan `.prompt.md` file and:
+1. Mark the step as ✅ completed with date
+2. Add a line `> **Note implementazione**: ...` describing what was done
+3. If there were **detours** (unexpected fixes, discoveries, errors), note them with `> **⚠️ Fuori pista**: ...`
+
+**Do not wait until the end** — update after each step. If context resets mid-execution, nothing is lost.
+
+### Archive Structure
+
+Completed plan chains are moved into `LibreFolio_developer_journal/RoadmapV4_UI/phases/`:
+
+```
+phases/
+├── phase-{NN}-{name}.md          # Summary plan for the phase
+├── phase-{NN}-subplan/           # All sub-plans, bugfix rounds, checklists
+│   ├── README.md                 # Index of all sub-plans with status
+│   ├── Bugfix-Step{N}/           # Grouped by step
+│   │   ├── plan-phase{NN}...md
+│   │   └── checklist-...md
+│   └── ...
+└── 00-index.md                   # Master index of all phases
+```
+
+Each `phase-{NN}-subplan/README.md` contains a table of all sub-plans with step, description, and status (✅/⏳).
+
+### Skills
+
+Use the `plan-archive` skill for plan verification and archiving operations (see `.claude/skills/plan-archive/SKILL.md`).
+
+Use the `find-skills` skill when looking for new capabilities to install (see `~/.claude/skills/find-skills/SKILL.md`).
+
+## Persistent Knowledge Layer (devWiki)
+
+`LibreFolio_devWiki/` is the accumulated knowledge base for this project — decisions, patterns, problems solved, entity documentation. It is NOT the source of truth (code is) and NOT user docs (mkdocs is). It is the living memory that compounds across sessions.
+
+**For the main dev agent**, two wiki skills are available:
+
+| Skill | When to Use |
+|-------|------------|
+| `wiki-search` | At the **start** of a task — enrich context with accumulated knowledge before coding |
+| `wiki-file` | At the **end** of a session — preserve discoveries, solved problems, decisions made |
+
+**Rule**: before touching code in a domain with prior history (providers, FIFO, async I/O, EditBuffer, FX, etc.), run `wiki-search` first to avoid re-deriving what's already been learned.
+
+**Historian agent**: for full wiki operations (ingest sources, query the wiki, health-check), invoke the `project-historian` agent — the workflows are embedded directly in that agent's instructions.
+
+### Graphify Knowledge Graph
+
+The devWiki is backed by a **graphify knowledge graph** (`LibreFolio_devWiki/graphify-out/graph.json`). Read its real size from `graphify-out/GRAPH_REPORT.md` rather than from here: as of 2026-09-01 it holds ~1 617 nodes / 2 277 edges / 167 communities, built from **100 files**. A number written in prose ages; the report does not.
+
+> ⚠️ **The graph covers the wiki, not the code.** Its manifest holds ~363 wiki pages against ~91 code files, out of a corpus of ~2 750. So a BFS/DFS query about *accumulated knowledge* is reliable, while one about *the code* answers partially and **looks complete** — which is the dangerous half. A lint on 2026-09-01 found 144 broken source-file references that no graph query would have surfaced, because the graph does not contain the files that were missing; a filesystem check found all of them in a fraction of a second.
+>
+> Before writing a wiki page, run `python3 LibreFolio_devWiki/check_source_paths.py`. Every path cited in a `## Source files` table must exist. And remember that **a plan is not a chronicle**: a path read out of a proposal is not a path that was delivered.
+
+- `wiki-search` uses graphify BFS/DFS as primary lookup (much faster than reading raw files)
+- `./dev.py graph update` — incremental code-only rebuild after code changes (no LLM, ~5s)
+- `./dev.py graph viz` — regenerate `graph.html` for browser visualization
+- `./dev.py graph query "TOPIC"` — quick BFS query from the CLI
+- Full semantic rebuild (new .md files): invoke the `graphify` skill through the AI assistant
+
+## Changelog Rules (CHANGELOG.md)
+
+The repo-root `CHANGELOG.md` is bundled into the app at build time and shown in the
+in-app changelog modal (sidebar version click → foldable panels). Keep it accurate.
+
+**Structure** — Keep a Changelog, SemVer:
+- One chapter per release: `## [x.y.z] - YYYY-MM-DD` (`## [Unreleased]` has no date
+  and is supported — the parser keeps it).
+- Inside a chapter: `###` sections, always with the leading emoji —
+  `### 🧪 Beta` (beta subsystems), `### ✨ Added`, `### 🔄 Changed`, `### 🐛 Fixed`,
+  `### ⚠️ Breaking changes`. Add an optional free-text intro paragraph before the
+  first `###` to present the release in two or three sentences.
+- `####` sub-headings group related items inside a `###` section (e.g.
+  `#### 🧠 Technical Analysis — backend Signals platform`); each carries an emoji too.
+- The modal folds `##` → `###` → `####` progressively, so headlines must be
+  self-explanatory: the detail lives in the bullet list under them.
+
+**Keeping it up to date**:
+- While a release is being prepared, its chapter is the single place that accumulates
+  user-visible changes (features, fixes, breaking notes) — add entries as work lands.
+- On release: set the chapter date, tag `vX.Y.Z`; the next Docker/CI build bundles it.
+- Entries are user-facing: no internal refactors unless they change observable behavior.
+- The in-app modal also links to the remote file; GitHub Releases notes can point here.
+
+## Writing Tests
+
+**Every test within one runtime lane runs against one shared database and one shared
+backend, alongside its neighbours.** So a test may never *assume* — it must *verify*:
+no fixed positions, no global counts, no clock waits, no assertions on translated text.
+Separate worktrees may run concurrently only when each has a unique pair of
+`--test-port` and `--data-dir`; never share either resource between active lanes.
+App-managed worktrees reuse the main locked environment without installing a
+second one:
+`PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test ...`.
+Plain `pipenv run` from a worktree path may create an empty worktree-specific venv.
+
+**Agent**: for writing, rewriting or repairing any test (backend or frontend), invoke the
+`test-author` agent — the rules, the isolation classes, the runner registration and the
+definition of done are embedded in `.claude/agents/test-author.agent.md`.
+
+| Skill | When |
+|-------|------|
+| `testing-backend` | pytest suites, coverage, catalogue |
+| `testing-frontend` | Playwright E2E, Vitest, parallelism per block |
+| `test-triage` | a red whose cause is not obvious — **before** calling anything "flaky" |
+
+## Test Users
+
+| Username | Password | Role |
+|----------|----------|------|
+| `e2e_test_user` | `E2eTestPass123!` | Normal user |
+| `e2e_test_admin` | `E2eAdminPass123!` | Admin |
+
+## Ports
+
+| Port | Service |
+|------|---------|
+| 6040 | Backend production (default) |
+| 6041 | Backend test mode (default; override per lane) |
+| 6042 | MkDocs serve |
+| 5173 | Frontend dev (Vite HMR) |
+
+
+## Commit messages
+
+See `.github/git-commit-instructions.md` (Conventional Commits).

@@ -32,6 +32,7 @@ from backend.app.services.financial_math.average_cost import AverageCost, CostPo
 from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
 from backend.app.services.financial_math.fifo.models import EconomicAllocationGroup, EconomicEvent, FifoDataQualityIssue, FifoEngineResult, FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure, ReferencePriceResolution, fails_the_replay
 from backend.app.services.financial_math.lots.average_cost_lines import ALL_BROKERS, build_broker_wac_history, build_cumulative_wac_history
+from backend.app.services.financial_math.lots.change_days import analysis_event_dates, expand_to_days, lot_change_days
 from backend.app.services.financial_math.lots.conversions import FxRateResolver, collect_fx_needs, collect_performance_fx_needs, convert_closure, needs_market_series, unconvertible_ids
 from backend.app.services.financial_math.lots.economic_events import NOTHING_WITHHELD, WithheldEconomics, build_cost_economic_events, build_engine_transactions, build_income_economic_events, extract_cost_outputs, extract_income_outputs, map_economic_groups, withheld_economics
 from backend.app.services.financial_math.lots.histories import (
@@ -47,7 +48,6 @@ from backend.app.services.financial_math.lots.histories import (
     known_buyback_cost,
     known_cumulative_proceeds,
     known_realized_pnl,
-    trim_dates,
 )
 from backend.app.services.financial_math.lots.prices import last_day_without_observation, opening_reference_price
 from backend.app.services.financial_math.lots.scope_boundary import BoundaryDirection, BoundaryLeg, ScopeBoundaryReading, TransferPartner, partner_ids_to_load, read_transfers_at_scope_boundary
@@ -83,6 +83,7 @@ _CUSTODY_KINDS = {
 }
 
 _NO_BOUNDARY_LEGS: Mapping[int, BoundaryLeg] = MappingProxyType({})
+_NO_FRAGMENT_BROKERS: Mapping[str, int | None] = MappingProxyType({})
 
 
 class LotsAnalysisService:
@@ -381,6 +382,23 @@ class LotsAnalysisService:
                 target_currency=target_currency,
             )
 
+        # L1a: the daily series are computed on the days one of their inputs changes, and every other day of the window
+        # is filled from the last of them before it (``financial_math/lots/change_days.py``): the same figures, byte for
+        # byte, without computing every lot on every day since the first transaction.
+        change_days = lot_change_days(
+            days=history_dates,
+            market_prices=market_prices,
+            estimated_market_prices=estimated_market_prices,
+            at_cost_until=at_cost_until,
+            event_dates=analysis_event_dates(
+                transactions=[*transactions, *late_legs, *performance_context.transactions, *income_transactions, *cost_transactions],
+                engine_results=(engine_result, performance_context.engine_result),
+                prefixes=(income_prefix_by_lot, fees_prefix_by_lot, taxes_prefix_by_lot),
+                withheld=withheld,
+                average_cost_lines=average_cost_lines.values(),
+            ),
+        )
+
         lots = None
         if LotAnalysisType.LOT_SUMMARY in shown_analyses:
             lots = self._build_lot_summaries(
@@ -425,14 +443,14 @@ class LotsAnalysisService:
 
         value_history = None
         if LotAnalysisType.VALUE_HISTORY in shown_analyses:
-            value_history = trim_dates(
+            value_history = expand_to_days(
                 build_value_history(
                     selected_ids=selected_ids,
                     lots_by_id=lots_by_id,
                     fragments_by_lot=fragments_by_lot,
                     closures_by_lot=closures_by_lot,
                     market_prices=market_prices,
-                    history_dates=history_dates,
+                    history_dates=change_days,
                     fx_resolver=fx_resolver,
                     income_prefix_by_lot=income_prefix_by_lot,
                     fees_prefix_by_lot=fees_prefix_by_lot,
@@ -441,13 +459,15 @@ class LotsAnalysisService:
                     quote_base_quantity=quote_base_quantity,
                     withheld=withheld,
                 ),
-                display_from,
-                actual_to,
+                key=lambda row: row.lot_id,
+                change_days=change_days,
+                window_from=display_from,
+                window_to=actual_to,
             )
 
         return_history = None
         if LotAnalysisType.RETURN_HISTORY in shown_analyses:
-            return_history = trim_dates(
+            return_history = expand_to_days(
                 build_return_history(
                     selected_ids=selected_ids,
                     lots_by_id=lots_by_id,
@@ -455,7 +475,7 @@ class LotsAnalysisService:
                     market_prices=market_prices,
                     price_series=price_series,
                     fx_resolver=fx_resolver,
-                    history_dates=history_dates,
+                    history_dates=change_days,
                     closures_by_lot=closures_by_lot,
                     income_prefix_by_lot=income_prefix_by_lot,
                     fees_prefix_by_lot=fees_prefix_by_lot,
@@ -464,55 +484,65 @@ class LotsAnalysisService:
                     quote_base_quantity=quote_base_quantity,
                     withheld=withheld,
                 ),
-                display_from,
-                actual_to,
+                key=lambda row: row.lot_id,
+                change_days=change_days,
+                window_from=display_from,
+                window_to=actual_to,
             )
 
         price_history = None
         if LotAnalysisType.PRICE_HISTORY in shown_analyses:
-            price_history = trim_dates(
+            price_history = expand_to_days(
                 build_price_history(
                     selected_ids=selected_ids,
                     lots_by_id=lots_by_id,
                     estimated_market_prices=estimated_market_prices,
-                    history_dates=history_dates,
+                    history_dates=change_days,
                     target_currency=target_currency,
                     closures_by_lot=closures_by_lot,
                 ),
-                display_from,
-                actual_to,
+                key=lambda row: row.lot_id,
+                change_days=change_days,
+                window_from=display_from,
+                window_to=actual_to,
             )
 
         market_price_history = None
         if LotAnalysisType.MARKET_PRICE_HISTORY in shown_analyses:
-            market_price_history = trim_dates(
-                build_market_price_history(estimated_market_prices=estimated_market_prices, history_dates=history_dates, target_currency=target_currency),
-                display_from,
-                actual_to,
+            market_price_history = expand_to_days(
+                build_market_price_history(estimated_market_prices=estimated_market_prices, history_dates=change_days, target_currency=target_currency),
+                key=lambda row: None,
+                change_days=change_days,
+                window_from=display_from,
+                window_to=actual_to,
             )
 
         broker_wac_history = None
         if LotAnalysisType.BROKER_WAC_HISTORY in shown_analyses:
-            broker_wac_history = trim_dates(
-                build_broker_wac_history(scope_broker_ids, average_cost_lines, history_dates),
-                display_from,
-                actual_to,
+            broker_wac_history = expand_to_days(
+                build_broker_wac_history(scope_broker_ids, average_cost_lines, change_days),
+                key=lambda row: row.broker_id,
+                change_days=change_days,
+                window_from=display_from,
+                window_to=actual_to,
             )
 
         cumulative_wac_history = None
         if LotAnalysisType.CUMULATIVE_WAC_HISTORY in shown_analyses:
-            cumulative_wac_history = trim_dates(
-                build_cumulative_wac_history(average_cost_lines, history_dates),
-                display_from,
-                actual_to,
+            cumulative_wac_history = expand_to_days(
+                build_cumulative_wac_history(average_cost_lines, change_days),
+                key=lambda row: None,
+                change_days=change_days,
+                window_from=display_from,
+                window_to=actual_to,
             )
 
         performance_history = None
         if LotAnalysisType.PERFORMANCE_HISTORY in shown_analyses:
-            performance_history = trim_dates(
+            performance_history = expand_to_days(
                 build_performance_history(
                     scope_broker_ids=scope_broker_ids,
-                    history_dates=history_dates,
+                    history_dates=change_days,
                     market_prices=market_prices,
                     asset_currency=asset.currency,
                     fx_resolver=fx_resolver,
@@ -520,8 +550,10 @@ class LotsAnalysisService:
                     quote_base_quantity=quote_base_quantity,
                     at_cost_until=at_cost_until,
                 ),
-                display_from,
-                actual_to,
+                key=lambda row: None,
+                change_days=change_days,
+                window_from=display_from,
+                window_to=actual_to,
             )
 
         income_events = None
@@ -955,7 +987,8 @@ class LotsAnalysisService:
         rows: list[LotTimelineEventSchema] = []
         rows.extend(self._build_opening_and_split_rows(engine_result, selected, fx_resolver, lots_by_id, boundary_legs))
         rows.extend(self._build_transfer_rows(engine_result.fragment_intervals, selected, lots_by_id, fx_resolver))
-        rows.extend(self._build_closure_rows(engine_result.closures, selected, lots_by_id, fx_resolver, boundary_legs))
+        fragment_brokers = {fragment.fragment_id: fragment.broker_id for fragment in engine_result.fragment_intervals}
+        rows.extend(self._build_closure_rows(engine_result.closures, selected, lots_by_id, fx_resolver, boundary_legs, fragment_brokers=fragment_brokers))
         return sorted(rows, key=lambda row: (row.date, row.lot_id, row.transaction_id, row.kind))
 
     def _build_opening_and_split_rows(
@@ -1118,6 +1151,8 @@ class LotsAnalysisService:
         lots_by_id: dict[int, FifoLot],
         fx_resolver: FxRateResolver,
         boundary_legs: Mapping[int, BoundaryLeg] = _NO_BOUNDARY_LEGS,
+        *,
+        fragment_brokers: Mapping[str, int | None] = _NO_FRAGMENT_BROKERS,
     ) -> list[LotTimelineEventSchema]:
         rows: list[LotTimelineEventSchema] = []
         for closure in closures:
@@ -1125,6 +1160,9 @@ class LotsAnalysisService:
                 continue
             lot = lots_by_id[closure.lot_id]
             converted = convert_closure(closure, lot, fx_resolver)
+            # §29: the broker the units leave, the closed fragment's; the opening broker only for a fragment without one
+            # (in transit) or unknown. A lot moved to B and sold there reads «SELL B», not the broker it was bought at.
+            closing_broker_id = fragment_brokers.get(closure.fragment_id)
             rows.append(
                 LotTimelineEventSchema(
                     lot_id=closure.lot_id,
@@ -1132,7 +1170,7 @@ class LotsAnalysisService:
                     kind=LotTimelineEventKind(closure.close_reason),
                     transaction_id=closure.transaction_id,
                     related_transaction_id=None,
-                    broker_id=lot.opening_broker_id,
+                    broker_id=closing_broker_id if closing_broker_id is not None else lot.opening_broker_id,
                     source_broker_id=None,
                     destination_broker_id=None,
                     fragment_id=closure.fragment_id,

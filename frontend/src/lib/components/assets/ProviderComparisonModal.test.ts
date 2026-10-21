@@ -26,6 +26,12 @@
  * written here: the claim is "the badge shows the catalogue's name for this key", not
  * any word of it. Every other string row keeps the raw, truncated value.
  *
+ * The *quote base* row (Z-32 d, the last block) is a string row like the others, drawn in the asset details group
+ * beside the name, the type and the currency (`DIFF_FIELD_SECTIONS`), and checked like every row. Any row may carry a
+ * `note` — text the caller has already put in the UI language — drawn under its values as `comparison-note-{field}`; a
+ * row without one draws none. The note asserted is the one the test passed in. RED until the note is drawn and the
+ * row is grouped: today `quote_base_quantity` falls under Other.
+ *
  * What it deliberately does NOT assert:
  *   - translated text. Section titles, the apply-button label and the value-box
  *     captions all come from the four-language catalogue. Groups are addressed by
@@ -473,5 +479,73 @@ describe('ProviderComparisonModal — identifier resolution', () => {
         const applied = lastApply(onapply);
         expect(applied?.fields).toEqual(['currency']);
         expect(applied?.resolutions).toEqual({});
+    });
+});
+
+// =========================================================================
+// The quote base row and its note (Z-32 d) — see the header
+// =========================================================================
+
+/** A string row with a note under its values: the caller's text, already in the UI language. */
+function notedDiff(field: string, current: unknown, provider: unknown, note: string): DiffItem {
+    return {...stringDiff(field, current, provider), note};
+}
+
+/** The group a card is drawn under: the `data-section` of the last group header before it, in document order. */
+function sectionOf(field: string): string | null {
+    let section: string | null = null;
+    for (const element of document.querySelectorAll<HTMLElement>('[data-testid="comparison-group"], [data-testid="comparison-card"]')) {
+        if (element.getAttribute('data-testid') === 'comparison-group') section = element.getAttribute('data-section');
+        else if (element.getAttribute('data-field') === field) return section;
+    }
+    return null;
+}
+
+describe('ProviderComparisonModal — the quote base row and its note (Z-32 d)', () => {
+    /** What AssetModal would pass, already translated: a value the test owns, never a catalogue sentence. */
+    const NOTE = 'note: Owned source quotes this line in GBp, one price per 100 units';
+
+    it('draws a row’s note under its values, inside its own card: the text the caller passed', async () => {
+        await setupI18n();
+        mount([notedDiff('quote_base_quantity', '1', '100', NOTE)]);
+        await settled();
+
+        const row = card('quote_base_quantity');
+        // RED today: a note is never drawn.
+        const note = within(row).getByTestId('comparison-note-quote_base_quantity');
+        expect(note).toHaveTextContent(NOTE);
+        const values = within(row).getByTestId('comparison-provider-quote_base_quantity');
+        expect(values.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING, 'the note comes under the values, not above them').toBeTruthy();
+    });
+
+    it('draws no note for a row that has none', async () => {
+        await setupI18n();
+        mount([stringDiff('currency', 'EUR', 'GBP'), notedDiff('quote_base_quantity', '1', '100', NOTE)]);
+        await settled();
+
+        // Presence barrier — RED today: the note is drawn where one is given, so its absence next door is a decision, not a late mount.
+        expect(within(card('quote_base_quantity')).getByTestId('comparison-note-quote_base_quantity')).toHaveTextContent(NOTE);
+        expect(within(card('currency')).queryAllByTestId(/^comparison-note-/), 'the currency row has no note to draw').toHaveLength(0);
+        expect(screen.queryAllByTestId(/^comparison-note-/), 'one note given, one note drawn').toHaveLength(1);
+    });
+
+    it('groups quote_base_quantity with the asset details — name, type, currency — never under Other', async () => {
+        await setupI18n();
+        mount([stringDiff('currency', 'EUR', 'GBP'), stringDiff('quote_base_quantity', '1', '100'), stringDiff('short_description', 'a', 'b')]);
+        await settled();
+
+        // RED today: the field is in no section, so it falls through to Other.
+        expect(sectionOf('quote_base_quantity')).toBe('assets.modal.assetDetails');
+        expect(sectionOrder()).toEqual(['assets.modal.assetDetails', 'common.classification']);
+    });
+
+    it('starts the quote base row checked, like every row, and hands it back on apply (guard)', async () => {
+        await setupI18n();
+        const {onapply} = mount([stringDiff('quote_base_quantity', '100', '1')]);
+        await settled();
+
+        expect(screen.getByTestId('comparison-checkbox-quote_base_quantity')).toBeChecked();
+        await fireEvent.click(screen.getByTestId('comparison-apply'));
+        expect(lastApply(onapply)).toEqual({fields: ['quote_base_quantity'], resolutions: {}});
     });
 });

@@ -1428,3 +1428,58 @@ lotti è nei piani dei figli e nel log di `dev_release2`.
 > **⚠️ Fuori pista**: il registro dei treni del README di Phase_1 si ferma al 370, e la tabella delle sessioni era ferma
 > al 15/10: aggiornata oggi. Il backlog sottostimava il lavoro fatto (W: 7 ✅ invece di 56). Una mia affermazione su
 > N92 («l'API accetta i prezzi negativi») era sbagliata: corretta da X.
+
+### Ripresa su Linux e ondata 0 ✅ (2026-10-21)
+
+Il 20/10 alle 14:36 il coordinatore Copilot si è fermato (errore 403, credenziali scadute) e con lui le sessioni
+figlie. Il lavoro è stato migrato su Linux e ripreso con un coordinatore Claude Code. Analisi completa e piano a ondate:
+`ANALISI-ripresa-LibreFolio.md` (accanto al repo, fuori da git). Decisioni di backup in discussione:
+`BACKUP-pro-contro-20261021.md`.
+
+**Stato verificato su git (21/10):**
+- `dev_release2` conteneva i treni 1-4 del 20/10 e G-28 (`b844f83f2`); il gate del treno 4 è verde (all-backend 7/7,
+  core-unit 9771, component-unit 5154, E2E mirati).
+- Lavoro committato sui branch e non in dev: pezzo di A per H-61 (`64b8b9fa3`…), H-61 CP1 intermedio (`e917659c9`,
+  rosso voluto fino a R1), J-60, pagine di galleria di E.
+- Lavoro non committato nei worktree (copia di sicurezza dei diff: `salvataggi-worktrees-20261021/`): Y-39a (11 file),
+  Z-29s-a (6), E (9, poi committati), J (2, poi committati), H CP2 (3 test non tracciati).
+
+**Decisioni del developer, 21/10:** colori D-T28 sì (interruttori e serie dei grafici sui ruoli più vicini, "da
+rivedere"); import: le raccomandazioni del §4-C dell'analisi (D-W85-1…4, K3a in 1.3, C-70b/E-21 dopo); ondata 0 sì;
+backup in discussione.
+
+**Ondata 0:**
+- venv: alias `LibreFolio-SAUMUTtc` → `LibreFolio-OqaCk-or` (nome Mac nei documenti, venv Linux);
+- `.claude/` e `CLAUDE.md` nel git (`1a0586f0b`), `settings.local.json` escluso;
+- treno 5: J-60 (`aa109e06b`), pezzo di A per H-61 (`ad4effcf9`), E galleria + traduzioni (`ae47dc812`), CHANGELOG
+  (`d1893f84b`). Gate leggero verde: `api sync` senza diff, `front check` 0/0, `i18n check`, `transaction-cost-basis-rule` 244,
+  `admin-bootstrap` 310, `services transaction` 130, `api transactions-validate` 12, `core-unit` 9771, `mkdocs build` stretto e
+  `check-links` ok;
+- baseline Linux: `all-backend --fresh-run --workers 2` su `b844f83f2` (worktree `gate-coord`, dopo `npm ci`), **7/7
+  verde in 25 min 42 s** (nei campioni: carico 2-4, RAM disponibile oltre 3 GB). Il verde del Mac regge su Linux per il backend; E2E e galleria
+  non ancora provati qui;
+- scoperto: i `node_modules` dei worktree sono quelli del Mac (darwin-arm64): serve `npm ci` in `frontend/` di ogni
+  worktree prima di usarlo.
+
+**Lotti deliberati il 20/10 che il piano non riportava:** Y-39a/b (carte e anteprima in un solo componente, anche per i
+cambi), Z-29b/Z-29s/Z-29d ridotto/Z-29fx (serie ridotte), Y-40 (tre viste abs/%/rendimento mobile), H-61 (pannello di
+hosting: L1, R1, L2), A-62, E-25, E-26 (b), TC-23 (a), L1b, P4. Ordine deciso: Y-39 → Z-29b → Z-29s → Y-40.
+
+> **⚠️ Fuori pista**: il REPORT di ripartenza del 21/10 dava per aperti B-51, J-57 v3, A-CL1, X-R45b-ui e `gate_b8`:
+> erano già in `dev_release2` e verdi. I `node_modules` dei worktree erano inutilizzabili su Linux.
+
+**Ondata 1 e treno 6 ✅ (2026-10-21).** Tre sessioni, un lotto ciascuna, tutte verificate dal coordinatore rilanciando le loro prove:
+- Y-39a: `1b7b7331b` (E2E `fx-settings` 3/3, `fx-list` 25/25, `asset-list` 43/43);
+- H-61 checkpoint 1, R1: `75dd4aa38` (`api panel-status` 20, `hosting-panel-routes` 15, `instance-block` 62);
+- Z-29s-a: `7d077207d` (`signal-aggregation` 222, `price-query-sampling` 196, `api assets-price` 32); revisione di Y: nessun bloccante, osservazioni O1-O4 in Z-40.
+- Treno 6 in `dev_release2` = `861a38567` (fast-forward su un candidato provato nel worktree `gate-coord`): `all-backend` 7/7, `core-unit` 9835, `component-unit` 5162, E2E `asset-list` 43/43, `mkdocs build` stretto e `check-links` ok, `front check` 0/0.
+- **Test dipendenti dalla lingua del sistema**: su questa macchina (`LANG=it_IT.UTF-8`) 3 test di `OtherPeriodEffectsTable.test.ts` falliscono, identici su `dev_release2` senza il treno: il test costruisce l'importo con la lingua del sistema (virgola) e il componente stampa in inglese (punto). Si lanciano con `LC_ALL=en_US.UTF-8`; il test va corretto.
+
+**Ondata 2 e treno 7 ✅ (2026-10-21).** Coordinatore Opus, 7 sessioni figlie in parallelo (Y, Z, H, W-back, W-front, C1, C2), un comando pesante alla volta (`flock`); ogni consegna verificata rilanciando le prove prima del commit. Brief e log in `LibreFolio_prj/salvataggi-worktrees-20261021/ondata2/`.
+- Y-39b: `79965b736` + `ebe64831e` (colore in attesa letto alla costruzione); E2E `fx-settings` 3, `fx-list` 25, `asset-list` 43.
+- Z: O1 `0fdbb28a7` (decisione del developer: allineare; residuo R5, linea spezzata dove una sola serie ha un buco, accettato), Z-29b `686691e3d` + merge di Y `5ff6d40f5` + `62f03b204`; E2E `asset-list` 43.
+- H-61 CP2: `bf33e26de`; 319 casi rossi → verdi più 11 vettori; revisione di sicurezza indipendente: nessun alto/medio, tre bassi chiusi (margine fisso di potatura, symlink rifiutati, avviso su `PUBLIC_URL` con percorso).
+- W-back: Fineco `a7c6db19f` (soluzione B, numeri scalati, beta tolta ovunque, limiti noti: Rimborso con commissione, commissione > controvalore, valuta non EUR), W-B86/W-B87 `fcf39fab0` (`RowSkips`, 4 plugin stabili, avvisi minimi su 6 plugin beta).
+- W-front: K3a + #58 `bc01226f4` (decisioni del developer: PC5 diviso, valori nel dominio, K-3b nel lotto; asset e broker bloccati in modifica).
+- Colori: C1 `ce3bc869a` + `1778fd328`, C2 `6fc379b1b`; ratchet m1 590 → 243 sull'albero unito; marchi di `supportLinks.ts` accettati come eccezione.
+- Treno 7 in `dev_release2` = `9e3575452` (candidato `23d31392a` + correzione d'integrazione `KNOWN_COPIES`): `all-backend` 7/7, `core-unit` 9904, `component-unit` 5211, E2E `asset-list` 43, `fx-list` 25, `theme-roles` 24, `front-transaction all` 365 (32 saltati), `mkdocs build` stretto e `check-links`, `front check` 0/0, `i18n check`.

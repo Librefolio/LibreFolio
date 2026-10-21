@@ -204,7 +204,7 @@ describe('canonical backend signal renderer', () => {
             seriesType: 'area',
             aggregationProfile: 'min_with_range',
             fillOpacity: 0.2,
-            color: '#dc2626',
+            color: '#c82838',
         });
     });
 
@@ -233,7 +233,7 @@ describe('canonical backend signal renderer', () => {
             viewMode: 'absolute',
         });
 
-        expect(outcome.signals.map((signal) => signal.color)).toEqual(['#3b82f6', '#16a34a', '#dc2626']);
+        expect(outcome.signals.map((signal) => signal.color)).toEqual(['#3b82f6', '#18794e', '#c82838']);
         expect(outcome.signals.map((signal) => signal.lineType)).toEqual(['solid', 'solid', 'solid']);
         expect(outcome.signals.map((signal) => signal.lineWidth)).toEqual([3, 2, 2]);
     });
@@ -271,7 +271,7 @@ describe('canonical backend signal renderer', () => {
             markerStart: 'circle',
             markerEnd: 'diamond',
         });
-        expect(outcome.signals[2]).toMatchObject({color: '#dc2626', lineWidth: 2, lineType: 'solid'});
+        expect(outcome.signals[2]).toMatchObject({color: '#c82838', lineWidth: 2, lineType: 'solid'});
     });
 
     it('preserves axis metadata and applies backend value-region styling', () => {

@@ -32,5 +32,6 @@ LibreFolio reads the trades of an **Activity Flex Query** exported as CSV. The s
 - **Commissions**, each as a separate **Fee** on the same asset and date, in
   `IBCommissionCurrency` (or the trade's currency when that column is empty).
 - **Not imported**: dividends, interest, taxes, deposits and withdrawals, currency conversions
-  (rows without an ISIN are skipped with a warning) and corporate actions. Add them by hand, or
+  (the currency trades, which have no ISIN, are listed in an amber warning with a link to open an
+  issue on GitHub) and corporate actions. Add them by hand, or
   with a [Generic CSV](generic-csv.md) file.

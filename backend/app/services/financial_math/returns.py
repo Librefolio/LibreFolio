@@ -464,16 +464,42 @@ def calculate_simple_roi(current_nav: Decimal, total_invested: Decimal) -> Decim
     return ((current_nav - total_invested) / total_invested).quantize(_PREC_PCT, rounding=ROUND_HALF_UP)
 
 
+def flows_by_snapshot_date(nav_snapshots: Sequence[NAVSnapshot], cash_flows: Iterable[CashFlowInput]) -> dict[date, Decimal]:
+    """The flows summed on the snapshot each one counts on: the first dated on or after it (MF-E2b).
+
+    A series computes only the days that have a NAV; a flow on a day without one — the transaction stays on its day —
+    counts on the first day the series computes after it, so the units it bought or sold and the money that paid for
+    them meet in the same sub-period (developer decision A, 20/10). A flow before the first snapshot counts on the first,
+    a flow after the last on none (its own date, which no snapshot reads). Sums in the order the flows are given, from
+    0, as before: a flow already on a snapshot's date is summed exactly as it was.
+    """
+    snapshot_dates = sorted(snapshot.date for snapshot in nav_snapshots)
+    by_date: dict[date, Decimal] = {}
+    for cash_flow in cash_flows:
+        index = bisect.bisect_left(snapshot_dates, cash_flow.date)
+        counted_on = snapshot_dates[index] if index < len(snapshot_dates) else cash_flow.date
+        by_date[counted_on] = by_date.get(counted_on, Decimal("0")) + cash_flow.amount
+    return by_date
+
+
 def calculate_simple_roi_series(
     nav_snapshots: list[NAVSnapshot],
     cash_flows: list[CashFlowInput],
+    *,
+    capital_by_date: Mapping[date, Decimal] | None = None,
 ) -> list[SimpleROIPoint]:
     """Cumulative Simple ROI series — one point per NAV snapshot.
 
     For each snapshot t, computes the cumulative net invested capital up to t:
     Net_Invested_t = max(0, -sum(CF_i for i <= t))  # deposits are < 0, withdrawals > 0.
+    Each flow counts on the first snapshot dated on or after it (:func:`flows_by_snapshot_date`).
 
     Then: ROI_t = (NAV_t - Net_Invested_t) / Net_Invested_t.
+
+    With ``capital_by_date`` (MF-E2, the lots' performance with short positions) the capital of each snapshot's date is
+    given, and the return is the gain on it: ROI_t = (NAV_t + sum(CF_i for i <= t)) / Capital_t, 0 where the capital is 0.
+    A short's NAV is negative and its sale a withdrawal, so the gain stays NAV plus the net flows; the capital it
+    commits is not the net deposit.
 
     Returns:
         List of SimpleROIPoint, one per snapshot.
@@ -482,9 +508,7 @@ def calculate_simple_roi_series(
         return []
 
     sorted_navs = sorted(nav_snapshots, key=lambda s: s.date)
-    cf_by_date: dict[date, Decimal] = {}
-    for cf in cash_flows:
-        cf_by_date[cf.date] = cf_by_date.get(cf.date, Decimal("0")) + cf.amount
+    cf_by_date = flows_by_snapshot_date(sorted_navs, cash_flows)
 
     result: list[SimpleROIPoint] = []
     cumulative_cf = Decimal("0")
@@ -497,6 +521,11 @@ def calculate_simple_roi_series(
 
         # Net invested is the opposite of cumulative CF (since deposits are negative)
         # If cumulative_cf is positive, we've withdrawn more than deposited, so invested is 0.
+        if capital_by_date is not None:
+            capital = capital_by_date[snap.date]
+            roi = Decimal("0") if capital == Decimal("0") else ((snap.nav + cumulative_cf) / capital).quantize(_PREC_PCT, rounding=ROUND_HALF_UP)
+            result.append(SimpleROIPoint(date=snap.date, roi=roi))
+            continue
         net_invested = -cumulative_cf if cumulative_cf < Decimal("0") else Decimal("0")
 
         roi = calculate_simple_roi(snap.nav, net_invested)
@@ -545,15 +574,23 @@ def calculate_twrr(
 def calculate_twrr_period_series(
     nav_snapshots: list[NAVSnapshot],
     cash_flows: list[CashFlowInput],
+    *,
+    exposure_by_date: Mapping[date, Decimal] | None = None,
 ) -> list[TWRRPeriodPoint]:
-    """Return exact sub-period HPR and unrounded cumulative TWRR values."""
+    """Return exact sub-period HPR and unrounded cumulative TWRR values.
+
+    Each flow counts on the first snapshot dated on or after it (:func:`flows_by_snapshot_date`): one on a day without a
+    NAV joins the sub-period that ends on the next snapshot, with the value it bought or sold.
+
+    Each sub-period's gain is divided by the NAV it starts from, or, with ``exposure_by_date`` (MF-E2, the lots'
+    performance with short positions), by the exposure of its first snapshot's date: a NAV that nets a debt against a
+    holding can be small or negative while the money at stake is not. A base of 0 gives a sub-period return of 0.
+    """
     if len(nav_snapshots) < 2:
         return []
 
     sorted_navs = sorted(nav_snapshots, key=lambda snapshot: snapshot.date)
-    cf_by_date: dict[date, Decimal] = {}
-    for cash_flow in cash_flows:
-        cf_by_date[cash_flow.date] = cf_by_date.get(cash_flow.date, Decimal("0")) + cash_flow.amount
+    cf_by_date = flows_by_snapshot_date(sorted_navs, cash_flows)
 
     compound = Decimal("1")
     result: list[TWRRPeriodPoint] = []
@@ -564,7 +601,11 @@ def calculate_twrr_period_series(
     ):
         cash_flow = cf_by_date.get(current.date, Decimal("0"))
         value_before_cash_flow = current.nav + cash_flow
-        period_return = Decimal("0") if previous.nav == Decimal("0") else (value_before_cash_flow - previous.nav) / previous.nav
+        if exposure_by_date is None:
+            period_return = Decimal("0") if previous.nav == Decimal("0") else (value_before_cash_flow - previous.nav) / previous.nav
+        else:
+            base = exposure_by_date[previous.date]
+            period_return = Decimal("0") if base == Decimal("0") else (value_before_cash_flow - previous.nav) / base
         compound *= Decimal("1") + period_return
         result.append(
             TWRRPeriodPoint(
@@ -580,10 +621,13 @@ def calculate_twrr_period_series(
 def calculate_twrr_series(
     nav_snapshots: list[NAVSnapshot],
     cash_flows: list[CashFlowInput],
+    *,
+    exposure_by_date: Mapping[date, Decimal] | None = None,
 ) -> list[TWRRPoint]:
     """Cumulative TWRR series — one point per NAV snapshot (O(N) iterative).
 
-    At each snapshot the TWRR is the geometric product from t0 to that point.
+    At each snapshot the TWRR is the geometric product from t0 to that point. ``exposure_by_date``: the base of each
+    sub-period, as :func:`calculate_twrr_period_series` reads it.
 
     Returns:
         List of TWRRPoint, one per snapshot (excluding the first).
@@ -596,7 +640,7 @@ def calculate_twrr_series(
             date=point.date,
             twrr=point.cumulative_twrr.quantize(_PREC_PCT, rounding=ROUND_HALF_UP),
         )
-        for point in calculate_twrr_period_series(nav_snapshots, cash_flows)
+        for point in calculate_twrr_period_series(nav_snapshots, cash_flows, exposure_by_date=exposure_by_date)
     ]
 
 
@@ -629,6 +673,31 @@ def _is_xirr_root(flows: Sequence[tuple[float, float]], rate: float, scale: floa
         return math.isfinite(rate) and abs(_xirr_npv(flows, rate)) <= _XIRR_ROOT_TOLERANCE * scale
     except (OverflowError, ZeroDivisionError):
         return False
+
+
+def _is_bracketed_xirr_root(flows: Sequence[tuple[float, float]], rate: float, scale: float) -> bool:
+    """Whether a root the bracketing found solves the NPV equation: :func:`_is_xirr_root`, or the NPV changing sign
+    across it (:func:`_changes_sign_at`).
+
+    The second test is for an ill-conditioned NPV (P1b): where its terms are far larger than the flows and cancel, the
+    NPV at a true root is only as small as their rounding, and the first test depended on the root's last bits. A sign
+    change within ±1e-9 of the rate proves a true root that close. Newton's answer keeps the first test alone: with
+    several roots, which one the solve returns stays as it was.
+    """
+    return _is_xirr_root(flows, rate, scale) or (math.isfinite(rate) and _changes_sign_at(flows, rate))
+
+
+def _npv_noise_floor(flows: Sequence[tuple[float, float]]) -> float:
+    """The size below which an NPV's sign is rounding noise: the error of its terms where they underflow to subnormal
+    numbers, at most about one smallest subnormal per unit of amount and per term, four times over."""
+    return 4.0 * (sum(abs(amount) for _, amount in flows) + len(flows)) * math.ulp(0.0)
+
+
+def _opposite_signs(first: float, second: float, noise_floor: float) -> bool:
+    """Whether two NPVs have opposite signs, both above ``noise_floor`` (:func:`_npv_noise_floor`) and read from their
+    signs (P1b): their product can underflow to 0.0 when both are tiny, and a true sign change would be missed; and the
+    sign of a subnormal NPV is rounding noise, which a product large enough to stay nonzero would have trusted."""
+    return abs(first) > noise_floor and abs(second) > noise_floor and (first < 0.0) != (second < 0.0)
 
 
 def _solve_xirr(flows: Sequence[tuple[float, float]], x0: float) -> float | None:
@@ -672,6 +741,7 @@ def _bracketed_xirr(flows: Sequence[tuple[float, float]], x0: float, scale: floa
     roots: list[float] = []
     previous_rate: float | None = None
     previous_npv: float | None = None
+    noise_floor = _npv_noise_floor(flows)
     for base in _XIRR_GRID:
         rate = base - 1.0
         try:
@@ -684,13 +754,13 @@ def _bracketed_xirr(flows: Sequence[tuple[float, float]], x0: float, scale: floa
             continue
         if npv == 0.0:
             roots.append(rate)
-        elif previous_rate is not None and previous_npv is not None and previous_npv * npv < 0.0:
+        elif previous_rate is not None and previous_npv is not None and _opposite_signs(previous_npv, npv, noise_floor):
             try:
                 roots.append(brentq(lambda r: _xirr_npv(flows, r), previous_rate, rate, xtol=1e-14, maxiter=200))
             except (OverflowError, ZeroDivisionError, RuntimeError, ValueError):
                 pass
         previous_rate, previous_npv = rate, npv
-    verified = [root for root in roots if _is_xirr_root(flows, root, scale)]
+    verified = [root for root in roots if _is_bracketed_xirr_root(flows, root, scale)]
     return min(verified, key=lambda root: abs(root - x0)) if verified else None
 
 
@@ -698,7 +768,7 @@ def _bracketed_xirr_at(flows: Sequence[tuple[float, float]], rate: float, scale:
     """The root :func:`_bracketed_xirr` finds in the one grid interval holding ``rate``, by the scan's own steps and tests.
 
     The two grid points around ``rate``, both evaluable and finite: one whose NPV is exactly 0.0 is the root, as the scan
-    keeps it; otherwise NPVs whose product is negative, the same Brent call and the same verification. None wherever the
+    keeps it; otherwise NPVs of opposite signs (:func:`_opposite_signs`), the same Brent call and the same verification. None wherever the
     scan would not find a verified root there: the caller then runs the whole scan.
     """
     from scipy.optimize import brentq  # noqa: PLC0415
@@ -717,13 +787,13 @@ def _bracketed_xirr_at(flows: Sequence[tuple[float, float]], rate: float, scale:
     if high_npv == 0.0 or low_npv == 0.0:
         exact = high if high_npv == 0.0 else low
         return exact if _is_xirr_root(flows, exact, scale) else None
-    if not low_npv * high_npv < 0.0:
+    if not _opposite_signs(low_npv, high_npv, _npv_noise_floor(flows)):
         return None
     try:
         root = brentq(lambda r: _xirr_npv(flows, r), low, high, xtol=1e-14, maxiter=200)
     except (OverflowError, ZeroDivisionError, RuntimeError, ValueError):
         return None
-    return root if _is_xirr_root(flows, root, scale) else None
+    return root if _is_bracketed_xirr_root(flows, root, scale) else None
 
 
 def _changes_sign_at(flows: Sequence[tuple[float, float]], rate: float) -> bool:
@@ -733,7 +803,7 @@ def _changes_sign_at(flows: Sequence[tuple[float, float]], rate: float) -> bool:
         below, above = _xirr_npv(flows, rate - step), _xirr_npv(flows, rate + step)
     except (OverflowError, ZeroDivisionError):
         return False
-    return math.isfinite(below) and math.isfinite(above) and below * above < 0.0
+    return math.isfinite(below) and math.isfinite(above) and _opposite_signs(below, above, _npv_noise_floor(flows))
 
 
 def _rate_decimal(rate: float) -> Decimal:

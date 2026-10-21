@@ -41,7 +41,8 @@
  * a search queried splits the dropdown into a Premium section and a community one
  * that starts closed. P20: every finished search ends with a «Can't find it? Let us
  * know» row whose link goes where the instance's `support_url` says — a mail, a page
- * (the report is copied for it) or a GitHub issue — and carries a report proven by
+ * (its link carrying the report as GitHub's does, N61-form — RED until then in
+ * ASA-R9 — and the click copying it too) or a GitHub issue — and carries a report proven by
  * decoding the link; the row stays reachable: a click outside closes the dropdown,
  * a focus brings the finished search back, until the input is cleared. For them
  * more boundaries are mocked: the instance's configuration (`support_url`,
@@ -62,6 +63,12 @@
  * `assets.search.failed` in the language in force — never the error's own message,
  * which still goes to `console.error` (spied, and silenced, for that case) — and the
  * time cap keeps its own `assets.search.timeout`.
+ *
+ * After it, Z-32 (d): a result may carry the quote base its provider suggests for
+ * the line (`quote_base_suggestion`: `{quantity, quote_currency}`). Both mappings —
+ * the stream's `provider_results` and the REST fallback — hand it to `onselect` as
+ * sent, and `null` for a result without one. RED until both mappings copy it: today
+ * they drop the field.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
@@ -1028,7 +1035,7 @@ describe('AssetSearchAutocomplete — «Can’t find it? Let us know» (P20)', (
         expect(href).toBe(reportHref({kind: 'mailto', address: 'support@example.org'}, report));
     });
 
-    it('ASA-R9: an http(s) support page opens in a new tab; the click copies the report for it and, once the copy is done, notify() says so; the dropdown stays open', async () => {
+    it('ASA-R9: an http(s) support page opens in a new tab, its link carrying the report as GitHub’s does; the click copies the report for it and, once the copy is done, notify() says so; the dropdown stays open', async () => {
         const page = 'https://help.example.org/assets?from=librefolio';
         instance.supportUrl = page;
         const via = catalogue('assets.search.reportVia.page');
@@ -1038,13 +1045,24 @@ describe('AssetSearchAutocomplete — «Can’t find it? Let us know» (P20)', (
         await mountReady({reportContext: context});
         await type('apple');
         await waitFor(() => expect(state()).toBe('results'));
+        // The report of this search, as the pure function writes it from this test's own inputs: the one the click
+        // copies and, N61-form, the one the link carries.
+        const report = expectedReport(
+            'apple',
+            [
+                {code: 'alpha', status: 'results', count: 1},
+                {code: 'beta', status: 'error', errorCode: 'NOT_CONFIGURED'},
+            ],
+            context,
+        );
 
         const link = await reportLink();
         expect(link).toHaveAttribute('data-channel', 'page');
-        expect(link).toHaveAttribute('href', page);
+        // The address the click opens: checked at the end, once the copy is proven (N61-form).
+        const href = link.getAttribute('href') ?? '';
         expect(link).toHaveAttribute('title', via);
         expect(link).toHaveAttribute('target', '_blank');
-        expect((link.getAttribute('rel') ?? '').split(/\s+/)).toEqual(expect.arrayContaining(['noopener', 'noreferrer']));
+        expect((link.getAttribute('rel') ?? '').split(/\s+/), 'no Referer: the page learns nothing of the instance').toEqual(expect.arrayContaining(['noopener', 'noreferrer']));
         expect(writeTextToClipboard, 'nothing is copied before the click').not.toHaveBeenCalled();
 
         // The copy is held: what the component says must wait for its outcome.
@@ -1076,18 +1094,22 @@ describe('AssetSearchAutocomplete — «Can’t find it? Let us know» (P20)', (
             expectNoToastBesides();
             expect(screen.getByTestId('asset-search-results').contains(link), 'the link is inside the dropdown, and the dropdown stays open').toBe(true);
 
-            const report = expectedReport(
-                'apple',
-                [
-                    {code: 'alpha', status: 'results', count: 1},
-                    {code: 'beta', status: 'error', errorCode: 'NOT_CONFIGURED'},
-                ],
-                context,
-            );
-            expect(text).toBe(report.body);
+            expect(text, 'the click copies the report, as it always has').toBe(report.body);
         } finally {
             finishCopy();
         }
+
+        // RED until N61-form: today the link is the page alone. The page, its own query going on with the report's
+        // title and body, each as encodeURIComponent writes it — as GitHub's — and nothing else.
+        expect(href.startsWith(page), `the page, as configured: ${href}`).toBe(true);
+        const url = new URL(href);
+        expect([...url.searchParams.keys()], 'the page’s own param, then the report’s title and body: nothing else').toEqual(['from', 'title', 'body']);
+        expect(url.searchParams.get('from'), 'the page’s own param stays').toBe('librefolio');
+        expect(url.searchParams.get('title'), 'the subject of this search').toBe('LibreFolio: asset not found — apple');
+        expect(url.searchParams.get('title')).toBe(report.subject);
+        expect(url.searchParams.get('body'), 'the very report the click copies').toBe(report.body);
+        expect(href, 'the rule: & after the page’s own query, then title and body').toBe(`${page}&title=${encodeURIComponent(report.subject)}&body=${encodeURIComponent(report.body)}`);
+        expect(href, 'never the address of the instance').not.toContain(window.location.host);
     });
 
     it('ASA-R10: the copy fails: notify() warns that the report was not copied — one notification, never a success', async () => {
@@ -1239,6 +1261,8 @@ describe('AssetSearchAutocomplete — a report needs a channel (X-R37, N61)', ()
 
     /** Every address anywhere in the component, hidden or not. */
     const hrefs = (): string[] => [...document.querySelectorAll('[data-search-autocomplete] [href]')].map((element) => element.getAttribute('href') ?? '');
+    /** The page a link opens: its address up to its query or its fragment — the report rides after them since N61-form (ASA-R9). */
+    const pageOf = (link: Element): string => (link.getAttribute('href') ?? '').split(/[?#]/)[0];
 
     it.each([
         {label: 'results', finished: 'results', rows: ['A1'], search: async () => sseResponse([answered('alpha', [hit('alpha', 'A1')]), answered('beta', []), DONE])},
@@ -1294,7 +1318,7 @@ describe('AssetSearchAutocomplete — a report needs a channel (X-R37, N61)', ()
 
         const link = await reportLink();
         expect(link).toHaveAttribute('data-channel', 'page');
-        expect(link).toHaveAttribute('href', 'https://help.example.org/assets');
+        expect(pageOf(link), 'a link to that page, whatever its query carries').toBe('https://help.example.org/assets');
     });
 
     it('ASA-S4: a managed instance whose support page carries a user and a password: that address counts as none — no row, and it is never linked', async () => {
@@ -1370,7 +1394,7 @@ describe('AssetSearchAutocomplete — a report needs a channel (X-R37, N61)', ()
 
         const link = await reportLink();
         expect(link).toHaveAttribute('data-channel', 'page');
-        expect(link).toHaveAttribute('href', 'https://help.example.org/assets');
+        expect(pageOf(link), 'the absolute address, its two slashes written out, whatever its query carries').toBe('https://help.example.org/assets');
     });
 });
 
@@ -1415,5 +1439,70 @@ describe('AssetSearchAutocomplete — a failed search says so in the UI’s lang
         expect(restSearch, 'the time cap does not fall back to REST').not.toHaveBeenCalled();
 
         expect(normalize(screen.getByTestId('asset-search-results').textContent)).toContain(normalize(timeout));
+    });
+});
+
+// =========================================================================
+// Z-32 (d): the quote base a provider suggests for a line reaches onselect — see the header
+// =========================================================================
+describe('AssetSearchAutocomplete — the quote base a provider suggests reaches onselect (Z-32 d)', () => {
+    /** A line quoted in pence: its provider suggests one price per 100 shares, in GBp, as Yahoo does for VOD.L. */
+    const PENCE = {identifier: 'GB00BH4HKS39', identifier_type: 'isin', display_name: 'Vodafone Group', provider_code: 'alpha', currency: 'GBP', asset_type: 'STOCK', via_web: false, quote_base_suggestion: {quantity: 100, quote_currency: 'GBp'}};
+    /** A result whose provider says it has nothing to suggest. (`R2` says nothing by leaving the field out.) */
+    const SILENT = {...R1, quote_base_suggestion: null};
+
+    afterEach(() => {
+        // A REST answer a case did not consume must not reach the next one.
+        restSearch.mockReset();
+    });
+
+    /** Clicks the result `identifier` once the search lists it, and returns what onselect received for it. */
+    async function pick(onselect: ReturnType<typeof vi.fn>, identifier: string): Promise<Record<string, unknown>> {
+        const row = await waitFor(() => {
+            const found = document.querySelector<HTMLElement>(`[data-testid^="asset-search-result-"][data-identifier="${identifier}"]`);
+            expect(found, `the search lists ${identifier}`).not.toBeNull();
+            return found!;
+        });
+        await fireEvent.click(row);
+        expect(onselect).toHaveBeenCalledTimes(1);
+        return onselect.mock.calls[0][0];
+    }
+
+    it('ASA-Q1: a streamed result hands onselect the quote base its provider suggests, as sent', async () => {
+        global.fetch = vi.fn(async () => sseResponse([answered('alpha', [PENCE]), answered('beta', [R2]), DONE])) as never;
+        const {onselect} = await mountReady();
+        await type('vodafone');
+        await waitFor(() => expect(state()).toBe('results'));
+
+        // RED today: the stream's mapping drops the field.
+        expect(await pick(onselect, PENCE.identifier)).toEqual(expect.objectContaining({identifier: PENCE.identifier, provider_code: 'alpha', quote_base_suggestion: {quantity: 100, quote_currency: 'GBp'}}));
+    });
+
+    it.each([
+        {label: 'leaves the field out', result: R2},
+        {label: 'sends null', result: SILENT},
+    ])('ASA-Q2: a streamed result whose provider $label hands onselect null', async ({result}) => {
+        global.fetch = vi.fn(async () => sseResponse([answered(result.provider_code, [result]), DONE])) as never;
+        const {onselect} = await mountReady();
+        await type('apple');
+        await waitFor(() => expect(state()).toBe('results'));
+
+        // RED today: the field is not there at all, not even as null.
+        expect(await pick(onselect, result.identifier)).toHaveProperty('quote_base_suggestion', null);
+    });
+
+    it.each([
+        {label: 'the quote base its provider suggests', result: PENCE, suggestion: {quantity: 100, quote_currency: 'GBp'}},
+        {label: 'null, for a result without one', result: R2, suggestion: null},
+    ])('ASA-Q3: on the REST fallback, a result hands onselect $label', async ({result, suggestion}) => {
+        global.fetch = vi.fn(async () => sseResponse([], {ok: false})) as never;
+        restSearch.mockResolvedValue({results: [PENCE, R2]} as never);
+        const {onselect} = await mountReady();
+        await type('vodafone');
+        await waitFor(() => expect(state()).toBe('results'));
+        expect(restSearch, 'precondition: the stream was unavailable, so the search fell back to REST').toHaveBeenCalledTimes(1);
+
+        // RED today: the REST mapping drops the field too.
+        expect(await pick(onselect, result.identifier)).toHaveProperty('quote_base_suggestion', suggestion);
     });
 });

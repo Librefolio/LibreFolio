@@ -27,13 +27,16 @@ export function getRoleIcon(role: string | null | undefined): any {
 export function getRoleIconColor(role: string | null | undefined): string {
     switch (role) {
         case 'OWNER':
-            return 'text-amber-500';
+            /* colour: closest role, to review: owner amber is a category of the broker roles, not a warning; warning is the nearest */
+            return 'text-lf-warning';
         case 'EDITOR':
-            return 'text-blue-500';
+            /* colour: closest role, to review: editor blue is a category of the broker roles, not information; info is the nearest */
+            return 'text-lf-info';
         case 'VIEWER':
-            return 'text-gray-400';
+            return 'text-lf-muted';
         default:
-            return 'text-red-400';
+            /* colour: closest role, to review: locked (no access) red; danger is the nearest */
+            return 'text-lf-danger';
     }
 }
 
