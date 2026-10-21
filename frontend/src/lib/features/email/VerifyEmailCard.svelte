@@ -1,7 +1,8 @@
 <!--
-  VerifyEmailCard — what the page of a verification link shows (workstream E, lot E5): the wait for the server, why the
-  link cannot be used, or a check that failed, and the way back to the sign-in. A dead verification link is never the
-  end: signing in offers a new one, so this card, unlike the invitation's, never sends anyone to an administrator.
+  VerifyEmailCard — what the page of a verification link shows (workstream E, lots E5 and E-25): the click that confirms
+  the address, the wait for the server, why the link cannot be used, or a check that failed, and the way back to the
+  sign-in. A dead verification link is never the end: signing in offers a new one, so this card, unlike the
+  invitation's, never sends anyone to an administrator.
 -->
 <script lang="ts">
     import {goto} from '$app/navigation';
@@ -11,21 +12,32 @@
 
     interface Props {
         status: VerifyPageStatus;
+        /** Spends the link: only the owner's click does, never the opening of the page (lot E-25). */
+        onconfirm?: () => void;
         onretry?: () => void;
     }
 
-    let {status, onretry}: Props = $props();
+    let {status, onconfirm, onretry}: Props = $props();
 </script>
 
 <AuthCard data-status={status} testId="verify-email-status">
     <div class="space-y-5 text-center">
         <p aria-live="polite" class="text-sm text-lf-primary" data-testid="verify-email-message">{$_(VERIFY_PAGE_KEYS[status])}</p>
+        {#if status === 'ready' && onconfirm}
+            <button class="w-full bg-lf-action text-lf-on-action font-bold py-3 rounded-lg shadow-md hover:bg-lf-action-hover transition-all active:scale-[0.98]" data-testid="verify-email-confirm" onclick={onconfirm} type="button">
+                {$_('email.verification.page.confirm')}
+            </button>
+        {/if}
+        {#if status === 'ready'}
+            <!-- The only thing to do is confirm: whoever did not sign up just closes the page, so no way back here. -->
+            <p class="text-xs text-lf-secondary" data-testid="verify-email-hint">{$_('email.verification.page.notSignedUp')}</p>
+        {/if}
         {#if status === 'error' && onretry}
             <button class="w-full bg-lf-action text-lf-on-action font-bold py-3 rounded-lg shadow-md hover:bg-lf-action-hover transition-all active:scale-[0.98]" data-testid="verify-email-retry" onclick={onretry} type="button">
                 {$_('common.retry')}
             </button>
         {/if}
-        {#if status !== 'checking'}
+        {#if status !== 'checking' && status !== 'ready'}
             <button class="text-xs font-semibold text-lf-link hover:text-lf-primary underline decoration-1 underline-offset-2" data-testid="verify-email-goto-login" onclick={() => goto('/')} type="button">
                 {$_('auth.backToLogin')}
             </button>

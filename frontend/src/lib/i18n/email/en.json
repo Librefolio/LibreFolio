@@ -92,7 +92,10 @@
         "unknown": "This link is not valid: open it again, whole, from the email. If it still fails, sign in to ask for a new one.",
         "blocked": "This instance is blocked by its hosting provider, so the link cannot be checked now. Open it again once the instance is unblocked; if the link has expired by then, sign in to get a new one.",
         "missing": "This link is incomplete: open it again from the email.",
-        "error": "The link could not be checked: try again."
+        "error": "The link could not be checked: try again.",
+        "ready": "Confirm your email address to activate your account.",
+        "confirm": "Confirm my email address",
+        "notSignedUp": "If you did not sign up on this instance, close this page: nothing happens."
       },
       "verified": "Your email address is verified, {username}: you can sign in.",
       "loginRequired": "Your email address is not verified yet: open the link in the email we sent you, then sign in.",
