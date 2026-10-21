@@ -8,14 +8,15 @@
 <script lang="ts">
     import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
-    import {Merge, Percent, RefreshCw, RotateCw, Settings, Trash2} from 'lucide-svelte';
+    import {CalendarSync, ChartLine, Merge, Percent, RefreshCw, RotateCw, Settings, Trash2} from 'lucide-svelte';
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
     import {compactPlotWidth} from '$lib/components/charts/timeSeriesAggregation';
     import AssetIcon from './AssetIcon.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
-    import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {nextCardPrimaryView, type ChartPrimaryView, type ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import type {CalendarReturnViewState} from '$lib/components/charts/priceChartHelpers';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {normalizeToPercentage} from '$lib/utils/chartUtils';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
@@ -56,8 +57,14 @@
         dateStart?: string;
         /** Date range end (passed to detail page on navigation) */
         dateEnd?: string;
-        /** Global view mode from parent: 'percentage' (default) or 'absolute' */
-        globalViewMode?: 'percentage' | 'absolute';
+        /** The view the page resolves for this card (Y-40): its saved choice, else the list's. */
+        primaryView?: ChartPrimaryView;
+        /** The card's button asks the next view of the turn (percent → rolling return → absolute); the page saves it. */
+        onprimaryviewchange?: (assetId: number, view: ChartPrimaryView) => void;
+        /** The card's rolling return, in percent, for the rolling-return view (Y-40); with the detail's problem when there is none. */
+        calendarReturn?: {state: CalendarReturnViewState; points: LineDataPoint[]; problemCode?: string | null; problemMessage?: string | null};
+        /** The comparisons' rolling returns, drawn over the card's in the rolling-return view (V-5 a: the only signals there). */
+        calendarOverlaySignals?: RenderedSignal[];
         /** Chart settings for this card (resolved from store by parent) */
         chartSettings?: ChartSettings;
         renderSignals?: (chartData: LineDataPoint[], viewMode: 'absolute' | 'percentage') => RenderedSignal[];
@@ -92,7 +99,10 @@
         deltaAbs = null,
         dateStart,
         dateEnd,
-        globalViewMode = 'percentage',
+        primaryView = 'percentage',
+        onprimaryviewchange,
+        calendarReturn,
+        calendarOverlaySignals = [],
         chartSettings,
         renderSignals,
         chartData = [],
@@ -111,16 +121,10 @@
     // State
     // =========================================================================
 
-    let localViewModeOverride: 'absolute' | 'percentage' | null = $state(null);
-    let cardViewMode = $derived(localViewModeOverride ?? globalViewMode);
-
-    let prevGlobal: string | undefined;
-    $effect(() => {
-        if (prevGlobal !== undefined && globalViewMode !== prevGlobal) {
-            localViewModeOverride = null;
-        }
-        prevGlobal = globalViewMode;
-    });
+    /** The price views draw the prices; the rolling-return view draws the return, already in percent. */
+    let isCalendarView = $derived(primaryView === 'calendar-return');
+    let cardViewMode: 'absolute' | 'percentage' = $derived(primaryView === 'absolute' ? 'absolute' : 'percentage');
+    let nextView = $derived(nextCardPrimaryView(primaryView));
 
     // =========================================================================
     // Derived
@@ -129,6 +133,7 @@
     let absoluteData = $derived(chartData);
 
     let displayData = $derived.by((): LineDataPoint[] => {
+        if (isCalendarView) return calendarReturn?.points ?? [];
         if (cardViewMode === 'absolute' || chartData.length === 0) return chartData;
         return normalizeToPercentage(chartData, baseValue);
     });
@@ -140,6 +145,7 @@
     });
 
     let overlaySignals = $derived.by((): RenderedSignal[] => {
+        if (isCalendarView) return calendarOverlaySignals;
         if (!renderSignals || absoluteData.length === 0) return [];
         return renderSignals(absoluteData, cardViewMode);
     });
@@ -189,7 +195,8 @@
        {cardSurfaceClass} {cardBorderClass}"
     data-testid="asset-card-{asset.id}"
     data-lifecycle={asset.active ? 'active' : 'inactive'}
-    data-view-mode={cardViewMode}
+    data-view-mode={primaryView}
+    data-calendar-state={isCalendarView ? (calendarReturn?.state ?? 'idle') : undefined}
     onclick={handleCardClick}
     onkeydown={(e) => e.key === 'Enter' && handleCardClick()}
     role="button"
@@ -216,16 +223,24 @@
                 {#if !asset.provider_code}
                     <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-lf-warning-soft text-lf-warning-on-soft"> ✏️ Manual </span>
                 {/if}
+                <!-- One button, three views in turn (Y-40): it shows where it goes -->
                 <button
-                    class="p-1 rounded-md transition-colors {cardViewMode === 'percentage' ? 'bg-lf-selected text-lf-link' : 'text-lf-muted hover:bg-lf-neutral hover:text-lf-secondary'}"
+                    class="p-1 rounded-md transition-colors {primaryView === 'absolute' ? 'text-lf-muted hover:bg-lf-neutral hover:text-lf-secondary' : 'bg-lf-selected text-lf-link'}"
                     data-testid="asset-card-view-toggle"
+                    data-next-view={nextView}
                     onclick={(e) => {
                         stop(e);
-                        localViewModeOverride = cardViewMode === 'absolute' ? 'percentage' : 'absolute';
+                        onprimaryviewchange?.(asset.id, nextView);
                     }}
-                    title={cardViewMode === 'absolute' ? $t('chart.showPercentage') : $t('chart.showAbsolute')}
+                    title={nextView === 'percentage' ? $t('chart.showPercentage') : nextView === 'absolute' ? $t('chart.showAbsolute') : $t('signals.riskRollingReturn.name')}
                 >
-                    <Percent size={14} />
+                    {#if nextView === 'percentage'}
+                        <Percent size={14} />
+                    {:else if nextView === 'calendar-return'}
+                        <CalendarSync size={14} />
+                    {:else}
+                        <ChartLine size={14} />
+                    {/if}
                 </button>
                 <span class="w-2 h-2 rounded-full shrink-0 {asset.active ? 'bg-lf-success' : 'bg-lf-danger'}"></span>
                 {#if txCount !== undefined}
@@ -266,7 +281,15 @@
     <!-- Mini Chart -->
     <div class="px-4">
         <div bind:clientWidth={chartWidth}>
-            {#if displayData.length > 0}
+            {#if isCalendarView && calendarReturn?.state === 'loading' && displayData.length === 0}
+                <div class="h-20 flex items-center justify-center" data-testid="asset-card-calendar-loading">
+                    <div class="animate-pulse bg-lf-neutral rounded w-full h-12"></div>
+                </div>
+            {:else if isCalendarView && displayData.length === 0}
+                <div class="h-20 flex items-center justify-center px-2 text-center text-xs text-lf-muted" data-testid="asset-card-calendar-problem" data-state={calendarReturn?.state ?? 'idle'} data-problem-code={calendarReturn?.problemCode ?? undefined}>
+                    {calendarReturn?.problemMessage ?? $t('chartSettings.signalProblems.unavailable')}
+                </div>
+            {:else if displayData.length > 0}
                 <PriceChartCompact
                     axisScale={chartSettings?.axisScales[cardViewMode]}
                     data={displayData}
@@ -274,7 +297,7 @@
                     viewMode={cardViewMode}
                     areaFill={chartSettings?.areaFill ?? true}
                     colorByBaseline={chartSettings?.colorByBaseline}
-                    baselineValue={baseValue ?? undefined}
+                    baselineValue={isCalendarView ? undefined : (baseValue ?? undefined)}
                     showGridLines={chartSettings?.gridLines}
                     showGradient={chartSettings?.staleGradient ?? true}
                     {overlaySignals}

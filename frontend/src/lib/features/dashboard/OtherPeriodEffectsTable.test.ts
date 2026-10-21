@@ -57,6 +57,7 @@ vi.mock('$lib/stores/reference/currencyStore', async (importOriginal) => ({
 }));
 
 import en from '$lib/i18n/en.json';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import {render, screen, setupI18n, waitFor} from '$test/component';
 import OtherPeriodEffectsTable from './OtherPeriodEffectsTable.svelte';
 
@@ -80,9 +81,12 @@ function keyOf(index: number, effect: Effect): string {
 // What the component prints, rebuilt with the calls it makes
 // =============================================================================
 
-/** The number `formatCurrencyAmountPlain` prints: the absolute value with two decimals, through the same call. */
+/**
+ * The number `formatCurrencyAmountPlain` prints: the absolute value with two decimals, through the same call and in the same
+ * locale — the interface locale (`uiLocale()`), never the host's, so the file passes on an Italian machine too.
+ */
 function plainAmount(value: number): string {
-    return Math.abs(value).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    return Math.abs(value).toLocaleString(uiLocale(), {minimumFractionDigits: 2, maximumFractionDigits: 2});
 }
 
 /** What `formatCurrencyAmountPlain` appends for EUR under the currency mock: symbol, flag, code. */
