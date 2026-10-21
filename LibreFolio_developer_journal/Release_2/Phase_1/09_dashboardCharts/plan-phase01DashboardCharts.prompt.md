@@ -8092,5 +8092,45 @@ toccherà con FE4), ma separato: niente conflitti con X.
      - `front_utility_unit`: `chartSignalRendering.test.ts` dopo `chartPageSignals.test.ts` (`:47`), e
        `src/signalRendering.gate.test.ts` dopo `src/instanceProfile.gate.test.ts` (`:144`);
      - `front_component_unit`: `ChartSettingsModal.test.ts` dopo `ChartSignalsSection.test.ts` (`:355`).
-5. Uno slot E2E: `front-asset asset-list`, `front-fx fx-list`, `front-fx fx-settings`.
-6. CHECKPOINT READY. Da lì Z-29b può partire su `assets/+page.svelte`.
+4b. ✅ 21/10 · La rifinitura dei rossi e le prove leggere sulla base fusa (HEAD `e64e9df0f`, merge di `dev_release2`
+   `208199bf6`; Linux, carico 3-10):
+   > **Note implementazione**:
+   > - Le parole della fase rossa sono sparite dai quattro file di test. Cambiate solo parole, titoli e import:
+   >   asserzioni e numero dei test uguali (375).
+   >   - `chartSignalRendering.test.ts`: import statico del modulo al posto di `exported()` con l'import dinamico
+   >     `@vite-ignore`; i tipi copiati a mano (`ViewMode`, `FxStorePoint`, `ComparisonTarget`, `SignalDataSources`,
+   >     `ChartSignalRendering`) sono i tipi del modulo (`ViewMode` ne è derivato con `Parameters<…>`); tolte le
+   >     righe `const x = await exported(…)` e gli `async` che non servivano più; la sezione «Red until the cure» è
+   >     diventata «How the cases are built».
+   >   - `ChartSettingsModal.test.ts`: tolta la copia locale di `SignalDataSources` (import del tipo del modulo) e il
+   >     `as unknown as`: `props` è ora `ComponentProps<typeof ChartSettingsModal>`; tolti «Red today», «(to be)» e
+   >     i «RED:» dai titoli; la sezione «Red and green» è diventata «Cases and guards».
+   >   - `signalRendering.gate.test.ts`: tolto il paragrafo «Red until Y-39a», «(to be)» e i «RED until Y-39a — » dai
+   >     due titoli; due verbi al passato nell'introduzione.
+   >   - `chartCoreHelpers.test.ts`: tolta la frase «Red until Y-39a» dal commento.
+   > - `chartSignalRendering.ts`: una sola riga di tipo, `FxRatePoint.backwardFillInfo` accetta anche
+   >   `actualRateDate?: string` (c'è in `FxDataPoint`): serviva perché i test passino al modulo i punti dello
+   >   store senza un tipo copiato. Nessun cambio di comportamento.
+   > - Prove: Vitest 4 file **375/375**; 31 vicini in un processo **1044/1044** (stessa lista del 20/10, `files/logs/
+   >   y39a_neighbours.txt`); Prettier `--check` sugli 8 file toccati o vicini: pulito; `theme-roles --check`: pulito;
+   >   `git diff --check`: pulito; `dev.py test check-orphans`: tutti raggiungibili (frontend `src` 588, e2e 147).
+   >
+   > **⚠️ Fuori pista**:
+   > - `dev.py front check`: **1 errore, 0 avvisi**, in un file che non è mio:
+   >   `src/lib/features/instance/instanceConfig.svelte.ts:68` («Property 'client_log_level' does not exist on type
+   >   'InstanceConfigResponse'»). Viene da `dev_release2` (H-60): il backend ha `client_log_level`
+   >   (`backend/app/schemas/system.py`), ma `frontend/src/lib/api/generated.ts` (ignorato da git) è ancora quello di
+   >   prima della fusione. Si cura con `api sync`, che è del coordinatore: non l'ho lanciato. Nessun errore nei file
+   >   di Y-39a.
+5. ✅ 21/10 · Lo slot E2E (coordinatore, 12:44-14:00), Chromium 1228 sulla macchina (`~/.cache/ms-playwright/chromium-1228`).
+   > **Note implementazione**: corsia 6189 + `/tmp/librefolio-r13-y`, popolata da zero (`db populate --force --clean`, rc 0,
+   > 10 s); ogni spec dentro `flock /tmp/librefolio-heavy.lock`, `--workers 2`, `nice`, uno alla volta, HEAD `e64e9df0f`,
+   > carico 3,9-5,1. Comando: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6189
+   > --data-dir /tmp/librefolio-r13-y --workers 2 <categoria> <spec>`.
+   > - `front-fx fx-settings`: **3/3** (8,4 s di test; 4 min 19 s con la build di debug e l'avvio), guardia d'allargamento
+   >   superata (3 test, non la categoria);
+   > - `front-fx fx-list`: **25/25** (54,9 s);
+   > - `front-asset asset-list`: **43/43** (2,0 min).
+   > Nessun rosso, nessun ripetuto. Porta 6189 libera a fine corsa (`lsof`: nessun ascoltatore). Log in
+   > `…/scratchpad/y39a_e2e_{fx-settings,fx-list,asset-list}.log` (cartella di sessione, non nel repo).
+6. ✅ 21/10 · CHECKPOINT READY (dopo l'E2E). Da lì Z-29b può partire su `assets/+page.svelte`.

@@ -291,11 +291,10 @@ describe('canonical overlay axis and reference helpers', () => {
         /**
          * Y-39a, «parity between the card and the preview»: each list page draws its cards' saved signals through
          * `$lib/charts/chartSignalRendering`, and hands its settings modal the same sources, `signalSources`. The two maps
-         * the preview read until then go away with the modal props of the same names: `pairsDataMap` (each pair turned by
+         * the preview read until then went away with the modal props of the same names: `pairsDataMap` (each pair turned by
          * its own card, where the card turns it by the signal's own `_inverted`) and `assetsDataMap` (no target name, so the
          * preview called a comparison «Asset #id»). A prop counts as passed in both forms Svelte takes, `name=` and the
-         * shorthand `{name}`. Red until Y-39a: both pages pass the two maps and no `signalSources`, and neither imports the
-         * module.
+         * shorthand `{name}`.
          */
         const SIGNAL_SOURCE_LIST_PAGES = [
             ['asset list', new URL('../../../routes/(app)/assets/+page.svelte', import.meta.url)],
