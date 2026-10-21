@@ -452,10 +452,11 @@ class GenericCSVBrokerProvider(BRIMProvider):
                         warnings.append(f"Row {row_num}: {e!s}")
                         continue
 
-                    # Emit field_todo for ADJUSTMENT rows missing cost_basis_override
+                    # Emit field_todo for incoming ADJUSTMENT rows missing cost_basis_override (an outgoing one has no
+                    # value, N78-1)
                     if len(transactions) > tx_count_before:
                         added_tx = transactions[-1]
-                        if added_tx.type == TransactionType.ADJUSTMENT:
+                        if added_tx.type == TransactionType.ADJUSTMENT and added_tx.quantity > 0:
                             cbo = added_tx.cost_basis_override
                             has_cbo = cbo is not None and not (hasattr(cbo, "amount") and float(str(cbo.amount)) == 0)
                             if not has_cbo:

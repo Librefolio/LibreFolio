@@ -14,8 +14,8 @@ The decided contract (developer decisions D6 and «una sola funzione condivisa»
   commits; the endpoint removes the BRIM files of the deleted brokers after the commit;
 - a transfer from a broker that goes to one that stays leaves its incoming half as the ADJUSTMENT
   a split of the pair leaves (V-3, D-J4; the giving half of a transfer whose receiver goes becomes,
-  with decision 47, an ADJUSTMENT handed over at its own broker's Auto cost, or stays a TRANSFER
-  when that cost needs a missing conversion), unlinked (``related_transaction_id`` NULL), its
+  with decision 47 as N78-1 changed it, an ADJUSTMENT without a value — not pinned here, see
+  test_broker_service.py BR-U-078), unlinked (``related_transaction_id`` NULL), its
   ``cost_basis_override`` untouched;
 - the sole administrator is still refused (400): a product rule, not a technical error. Since plan
   34 step 2 (§3.2) «sole» means the last ACTIVE administrator: login refuses an inactive account,

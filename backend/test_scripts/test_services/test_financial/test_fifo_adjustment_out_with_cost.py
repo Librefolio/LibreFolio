@@ -28,6 +28,12 @@ of 15/10, in ``backend/app/services/financial_math/fifo/engine.py``:
 4. J-9: a lot opened by a positive ADJUSTMENT whose price comes from ``cost_basis_override`` is in
    ``cost_basis_currency``; without an override it keeps the row's ``currency``.
 
+N78-1 (the developer's decision, 21/10/2026): an ADJUSTMENT-out READ FROM THE DATABASE has no value — the engine closes
+it at 0 whatever ``cost_basis_override`` the row stores (``TestN78ARowReadFromTheDatabaseHasNoValue``, RED until the
+cure). The hand-written ``FifoInputTransaction`` rows of the other classes are the shape the J-10 scope-boundary readings
+take (``financial_math/lots/scope_boundary.py``: a TRANSFER leg leaving the scope, read as an ADJUSTMENT-out at the
+market value of its day, or at each fragment's own FIFO cost): the mechanism those readings keep, unchanged.
+
 Before CP-16 every negative ADJUSTMENT closed at price 0, with or without an override, and only a SELL had
 proceeds: units leaving with a cost read as destroyed (realized −cost, proceeds 0) while the Dashboard read them
 as handed over at cost; and a priced ADJUSTMENT-in opened its lot in the row's ``currency``, often None. Each
@@ -41,6 +47,7 @@ from decimal import Decimal
 
 import pytest
 
+from backend.app.db.models import Transaction, TransactionType
 from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
 from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoInputTransaction, FifoLot, LotClosure
 
@@ -258,6 +265,49 @@ class TestOneLotHandedOverAtCost:
             "closures of the ADJUSTMENT": {1: _closure("ADJUSTMENT_OUT", "4", "20", "0", "-80", "0")},
             "lot 1": _lot("6", "4", "-80", "0"),
         }
+
+
+# --------------------------------------------------------------------------- #
+# N78-1: a row read from the database closes at 0 whatever it stores
+# --------------------------------------------------------------------------- #
+
+
+def _stored_adjustment(tx_id: int, quantity: str, *, on: str, override: str, override_currency: str) -> Transaction:
+    """An ADJUSTMENT as the database holds it — a ``Transaction`` row, never flushed —, storing a per-unit value: what an
+    old row or a 1.2.1 install may hold, and what the lots analysis hands the engine (``FifoInputTransaction.from_transaction``)."""
+    return Transaction(
+        id=tx_id,
+        broker_id=BROKER_A,
+        asset_id=ASSET_ID,
+        type=TransactionType.ADJUSTMENT,
+        date=date.fromisoformat(on),
+        quantity=D(quantity),
+        amount=D("0"),
+        cost_basis_override=D(override),
+        cost_basis_currency=override_currency,
+    )
+
+
+class TestN78ARowReadFromTheDatabaseHasNoValue:
+    @pytest.mark.parametrize("override", [pytest.param("20", id="stored-at-the-average-20"), pytest.param("30", id="stored-at-the-market-30")])
+    def test_a_stored_adjustment_out_closes_at_zero_whatever_it_stores(self, override):
+        """RED until N78-1: 10 bought at 20 EUR, then an ADJUSTMENT −4 read from the database storing ``override`` EUR a
+        unit. The engine ignores the stored value: the 4 units close at 0 — realized −80, proceeds 0 —, as the same row
+        without a value (``test_without_an_override_the_units_still_leave_at_zero``). Before N78-1 (CP-16) they closed at
+        the stored value: realized 4 × (override − 20), proceeds 4 × override."""
+        result = _run(
+            [
+                _buy(1, "10", "20", on="2018-10-01"),
+                _stored_adjustment(2, "-4", on="2018-10-03", override=override, override_currency="EUR"),
+            ]
+        )
+
+        observed = {"closures of the ADJUSTMENT": _closures_by_lot(result, 2), "lot 1": _lot_view(result.get_lot(1))}
+
+        assert observed == {
+            "closures of the ADJUSTMENT": {1: _closure("ADJUSTMENT_OUT", "4", "20", "0", "-80", "0")},
+            "lot 1": _lot("6", "4", "-80", "0"),
+        }, f"N78-1: an ADJUSTMENT-out read from the database closes at 0, whatever it stores ({override} EUR a unit)"
 
 
 # --------------------------------------------------------------------------- #

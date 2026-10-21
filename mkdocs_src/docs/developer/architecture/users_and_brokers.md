@@ -133,8 +133,7 @@ Another `OWNER` row counts whether or not its account is active: an inactive co-
   of deleting a broker, `TransactionService.delete_by_broker()`: it loses its link, and becomes the
   standalone row a split of the pair leaves — a received `TRANSFER` an `ADJUSTMENT`, a `CASH_TRANSFER` or
   `FX_CONVERSION` a `DEPOSIT` or a `WITHDRAWAL` (backlog V-3, D-J4), and the giving leg of a `TRANSFER` an
-  `ADJUSTMENT` at the Auto cost of its own broker (decision 47); that leg only loses its link when its cost
-  needs a missing conversion. See [Broker Deletion](../backend/transactions/service.md#broker-deletion).
+  `ADJUSTMENT` without a value (decision 47, as N78-1 changed it on 21/10/2026). See [Broker Deletion](../backend/transactions/service.md#broker-deletion).
 - **Sessions.** `get_current_user()` no longer finds a deleted account: its sessions get `401` at their next
   request.
 

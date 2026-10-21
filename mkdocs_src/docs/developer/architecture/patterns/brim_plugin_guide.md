@@ -776,7 +776,7 @@ transaction breaks these rules, so flip source signs as needed:
     cash row, a `TRANSFER`'s giving leg — `_create_transaction()` refuses the row, a
     `costBasisNotAllowed` validation issue instead of a transaction (rule 12b, W-B72, or
     rule 12's `costBasisModeIncompatible` when the row names a `cost_basis_mode`; an
-    `ADJUSTMENT` taking units out may still carry its handover cost: see
+    `ADJUSTMENT` taking units out is refused the same way, since it has no value: see
     [Per-type rules](../../backend/transactions/service.md#per-type-rules)).
 
 !!! tip "Matured-bond redemption: close at par, surplus → INTEREST"

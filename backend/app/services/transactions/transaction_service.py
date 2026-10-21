@@ -66,10 +66,8 @@ class TransactionService(TransactionAccessMixin, TransactionValidationMixin, Tra
         without its partner, which the lots and the Dashboard cannot read (V-3): it becomes the standalone row a
         split of the pair leaves. A received TRANSFER becomes an ADJUSTMENT, with its sender's Auto cost (computed
         here, while the sender's rows exist) when it has no cost basis; a CASH_TRANSFER or FX_CONVERSION becomes a
-        WITHDRAWAL or DEPOSIT by its sign. The giving leg of a TRANSFER becomes an ADJUSTMENT-out at the Auto cost of
-        its own broker (decision 47, ``_handover_cost``), at which the lots hand its units over; without that cost (a
-        missing conversion) it only loses its link, since an ADJUSTMENT-out without a cost would read the units it
-        moved as destroyed.
+        WITHDRAWAL or DEPOSIT by its sign. The giving leg of a TRANSFER becomes an ADJUSTMENT-out without a value
+        (decision 47 as the developer changed it, N78-1, 21/10/2026): its units only leave the quantity.
 
         Skips access control and balance validation — caller is expected to have
         already verified OWNER permissions on the broker.
@@ -83,11 +81,10 @@ class TransactionService(TransactionAccessMixin, TransactionValidationMixin, Tra
         if tx_ids:
             survivors = (await self.session.execute(select(Transaction).where(Transaction.broker_id != broker_id, Transaction.related_transaction_id.in_(tx_ids)).order_by(Transaction.id))).scalars().all()
             # A receiving leg without a cost basis (older data: one is required now) keeps the cost its units had
-            # when they left: the Auto cost, computed while the sender's rows are still there. A giving TRANSFER leg
-            # leaves at the Auto cost of its own broker (decision 47). Every cost is computed before any row changes,
-            # so a computation that fails leaves every row as it was.
+            # when they left: the Auto cost, computed while the sender's rows are still there. Every cost is computed
+            # before any row changes, so a computation that fails leaves every row as it was. A giving TRANSFER leg
+            # leaves without a value (decision 47, N78-1).
             auto_costs = [(survivor, await self._auto_cost(survivor, await self._auto_cost_source(survivor))) for survivor in survivors if survivor.type == TransactionType.TRANSFER and survivor.quantity > 0 and survivor.cost_basis_override is None]
-            handovers = {survivor.id: await self._handover_cost(survivor) for survivor in survivors if survivor.type == TransactionType.TRANSFER and survivor.quantity < 0}
             for survivor, wac_result in auto_costs:
                 self._write_auto_cost(survivor, wac_result)
             # The broker's own pairs go whole: unlink them before their rows go.
@@ -95,16 +92,15 @@ class TransactionService(TransactionAccessMixin, TransactionValidationMixin, Tra
             for survivor in survivors:
                 split_types = self.SPLIT_TYPE_MAP.get(survivor.type)
                 gives = split_types is not None and pair_sides(survivor, by_id[survivor.related_transaction_id])[0] is survivor
-                handover = handovers.get(survivor.id)
-                if split_types is None or (handover is not None and not handover.wac):
-                    # Only the link goes: a link no split knows (an ADJUSTMENT may carry one), or a giving TRANSFER leg
-                    # whose Auto cost needs a missing conversion (decision 47: it stays a TRANSFER without its partner).
+                if split_types is None:
+                    # Only the link goes: a link no split knows (an ADJUSTMENT may carry one).
                     survivor.related_transaction_id = None
                     survivor.updated_at = utcnow()
                     continue
                 make_standalone(survivor, split_types[0] if gives else split_types[1])
-                if handover is not None:
-                    self._write_auto_cost(survivor, handover)
+                if survivor.type == TransactionType.ADJUSTMENT and survivor.quantity < 0:
+                    survivor.cost_basis_override = None
+                    survivor.cost_basis_currency = None
 
         count = 0
         for tx in txs:
