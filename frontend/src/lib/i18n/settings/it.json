@@ -246,7 +246,8 @@
         "admin": "Admin",
         "inactive": "Disattivato",
         "protected": "Protetto",
-        "pendingSetup": "In attesa del setup"
+        "pendingSetup": "In attesa del setup",
+        "pendingVerification": "In attesa di verifica"
       },
       "actions": {
         "deactivate": "Disattiva",
@@ -350,7 +351,8 @@
         "resetLinkCreated": "Link di reimpostazione creato per {username}.",
         "setupCancelled": "Il link di setup di {username} non funziona più."
       },
-      "pendingSetupHint": "Questo account amministratore si attiva con il suo link di setup. Se il link è perso, esegui «dev.py user setup-link» sul server, o chiedi al tuo fornitore."
+      "pendingSetupHint": "Questo account amministratore si attiva con il suo link di setup. Se il link è perso, esegui «dev.py user setup-link» sul server, o chiedi al tuo fornitore.",
+      "pendingVerificationHint": "Il titolare non ha ancora aperto il link di verifica: accedendo può farsene mandare uno nuovo. Riattiva lo fa entrare subito, senza l'email."
     },
     "linkShare": {
       "addressLabel": "Indirizzo del server",
