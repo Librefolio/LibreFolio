@@ -3,6 +3,8 @@
     import {onMount} from 'svelte';
     import {DEFAULT_LOCALE, i18nLoading, initI18n, locale} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
+    import {startCspNotice} from '$lib/features/security/cspNotice';
+    import {startImageErrorFallback} from '$lib/features/security/imageErrorFallback';
 
     // Initialize i18n
     initI18n();
@@ -24,6 +26,10 @@
     onMount(() => {
         // Sync language store with i18n after mount
         currentLanguage.init();
+        // H-55 v2: a script the enforced Content-Security-Policy blocked, made visible (console, Security tab)
+        startCspNotice();
+        // The icons' fallbacks, without inline handlers the policy would block
+        startImageErrorFallback();
         // Designer Lab, debug builds only: re-applies the colour changes saved in this browser (a no-op without any).
         if (__LF_DESIGNER_LAB__) import('$lib/dev/designer-lab/client').then((lab) => lab.start()).catch(() => {});
     });

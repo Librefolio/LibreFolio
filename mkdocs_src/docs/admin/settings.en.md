@@ -307,6 +307,7 @@ findings keep the order of this table.
 | Links in emails | ℹ️ Email works, but `LIBREFOLIO_PUBLIC_URL` is not set. ⚠️ `LIBREFOLIO_PUBLIC_URL` cannot start a link | **Open the Email tab** |
 | Plugin secrets | ❌ Instance-wide plugin secrets cannot be read with the instance key | **Open the plugin settings**, to **Settings › Plugins** |
 | Open registration, checked by your browser | ⚠️ **Registration** is **Open**, and you reached LibreFolio at an address outside your local network, as for [the warning above the pages](#open-registration-warning) | **Change who can sign up**, to **Global Settings**. None when `LIBREFOLIO_REGISTRATION` sets the mode: the finding names that variable instead |
+| A blocked script, checked by your browser | ⚠️ A script that LibreFolio did not send, added by a proxy, a CDN or a browser extension, was blocked in this browser tab: the finding names its sources. It goes when you close the tab. Not fixed on the server, but in the proxy, the CDN or the extension: [A Script You Did Not Send](configuration.md#csp-blocked-script) | — |
 
 The findings without a link are fixed on the server, in its configuration, and need a restart: what
 to do for each one is in the table of «Startup Checks» in [Configuration](configuration.md), where

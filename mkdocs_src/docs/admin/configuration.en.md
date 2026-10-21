@@ -40,8 +40,8 @@ the same sample as `.env`.
 | `LIBREFOLIO_CLIENT_IP_HEADER` | _not set_ | Behind a reverse proxy, the header in which it passes the visitor's address, such as `Fly-Client-IP` on Fly.io: set it only if every request crosses that proxy. See [The Visitor's Address](connection_checks.md#client-address). |
 | `PREVIEW_CACHE_MAX_MB` | `50` | Memory, in MB, of the image-preview cache in each server process. |
 | `LIBREFOLIO_PROFILE` | `selfhosted` | Leave it unset. `managed` is reserved for hosting providers that run LibreFolio for their customers: there, a `JWT_SECRET` shorter than 32 characters, or `LIBREFOLIO_TEST_MODE` on outside LibreFolio's own test runs, stops the server at startup, and some defaults change unless you set their variables: the archives uploaded for a restore are limited to 500 MB (`LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`), and what they unpack to while they are checked to 8 times that, 4000 MB (`LIBREFOLIO_BACKUP_MAX_RESTORE_MB`), idle risk workers stop after 60 seconds (the risk settings below), and `LIBREFOLIO_FRAME_PROTECTION` and `LIBREFOLIO_CSP_REPORT_ONLY` are on. The app changes for its users too: no **Buy Me a Coffee** link in the page header, the **Help & Support** menu, the sign-in pages or Settings › About, and no donation popup; no check for a newer release, neither at an administrator's sign-in nor with **Check for updates** in the changelog, since the hosting provider updates the instance; and **Forgot Password?** shows no server command, but tells users to ask their administrator for a password-reset link. Case and spaces around the value do not matter; any other value stops the server at startup. The profile is public: anyone who can reach the server can read it at `/api/v1/system/instance`. See [Hosting for Others](hosting_providers.md#managed-profile). |
-| `LIBREFOLIO_FRAME_PROTECTION` | `false` (`true` in the `managed` profile) | Leave it unset on an install of your own: dashboards at another address, such as Home Assistant panels, can then show LibreFolio in a frame. `true` lets only LibreFolio's own pages show it in a frame, with `X-Frame-Options: SAMEORIGIN` and `Content-Security-Policy: frame-ancestors 'self'`, and adds `object-src 'none'; base-uri 'self'; form-action 'self'` to the policy of LibreFolio's pages: LibreFolio itself uses none of what they block, so nothing visible changes. `true` or `false`; `1`/`0`, `yes`/`no` and `on`/`off` work too, in any case; any other value stops the server at startup. A value you set wins over the profile. See [Frame Protection](#frame-protection). |
-| `LIBREFOLIO_CSP_REPORT_ONLY` | `false` (`true` in the `managed` profile) | Leave it unset on an install of your own. `true` adds a report-only Content-Security-Policy to the pages of the web app, not to the documentation or the API: it blocks nothing, and the browser lists in its developer console what the policy would block, without sending a report anywhere. Same values as `LIBREFOLIO_FRAME_PROTECTION`; a value you set wins over the profile. See [The Report-Only Policy](#csp-report-only). |
+| `LIBREFOLIO_FRAME_PROTECTION` | `false` (`true` in the `managed` profile) | Leave it unset on an install of your own: dashboards at another address, such as Home Assistant panels, can then show LibreFolio in a frame. `true` lets only LibreFolio's own pages show it in a frame, with `X-Frame-Options: SAMEORIGIN` and `Content-Security-Policy: frame-ancestors 'self'`, to every response. The three rules `object-src 'none'; base-uri 'self'; form-action 'self'` do not depend on it: LibreFolio's pages always carry them ([The Content-Security-Policy](#csp)). `true` or `false`; `1`/`0`, `yes`/`no` and `on`/`off` work too, in any case; any other value stops the server at startup. A value you set wins over the profile. See [Frame Protection](#frame-protection). |
+| `LIBREFOLIO_CSP_REPORT_ONLY` | `false` (`true` in the `managed` profile) | Leave it unset on an install of your own. `true` adds a second, wider Content-Security-Policy to the pages of the web app, not to the documentation or the API, in report-only mode: it blocks nothing, and the browser lists in its developer console what that wider policy would block, without sending a report anywhere. The enforced [Content-Security-Policy](#csp) is always on, with or without it. Same values as `LIBREFOLIO_FRAME_PROTECTION`; a value you set wins over the profile. See [The Report-Only Policy](#csp-report-only). |
 | `LIBREFOLIO_SUPPORT_URL` | _not set_ | Where the users of the instance ask for help, such as an asset the search does not find ([Let us know](../user/assets/create-edit.md#let-us-know), under the search results): a page with `http://` or `https://`, or one email address as `mailto:help@example.org`. With an email address, the user's email app opens a message with the details of the search; with a page, the page opens in a new tab and receives the report in its address, as the `title` and `body` query parameters, like a prefilled GitHub issue, so that a support form can fill itself in ([the format](hosting_providers.md#support-form)), and the details are copied too, to paste there. Not set: on an install of your own (the `selfhosted` profile), a new public issue on LibreFolio's GitHub opens with the details, for the user to review before sending it; in the `managed` profile the link does not appear at all, since that issue would publish the instance's profile, its provider codes and the asset's identifiers, so a hosting provider should set its own. Any other value is ignored, as if it were not set, and the server logs it once. A page whose address holds a user name or a password counts as not set too. The address is public: anyone who can reach the server can read it at `/api/v1/system/instance`. See [Hosting for Others](hosting_providers.md#managed-profile). |
 | `LIBREFOLIO_TOS_URL` | _not set_ | The terms of service of the instance: a page with `http://` or `https://`. The legal notice that every user sees, in Settings › About, on the Welcome page, under the card of every sign-in page and at the foot of the sidebar, links it as **Terms of service**, opened in a new tab. Not set: no link, the notice alone. A hosting provider sets its own. Unlike `LIBREFOLIO_SUPPORT_URL`, no `mailto:`. A value LibreFolio cannot use, an address with a user name or a password included, does not stop the server: the link stays hidden, and the log has an error (see below). The address is public: anyone who can reach the server can read it at `/api/v1/system/instance`. See [Hosting for Others](hosting_providers.md#legal-pages). |
 | `LIBREFOLIO_PRIVACY_URL` | _not set_ | The privacy policy of the instance, linked as **Privacy policy** next to the terms of service: the same rules as `LIBREFOLIO_TOS_URL`. |
@@ -398,7 +398,7 @@ tab, and read again with **Check again** once you have fixed the configuration a
 | ⚠️ `warning` | `… is open to other users (…): the folder should be 0700 and the file 0600` | Restrict them: `chmod 700` on the `secrets/` folder, `chmod 600` on `instance.key`. |
 | ⚠️ `warning` | `SESSION_COOKIE_SECURE=never: the session cookie is sent over plain HTTP too; prefer auto` | Go back to `auto` unless you really need `never`: see [HTTPS and reverse proxies](#session-cookie-secure). |
 | ⚠️ `warning` | `LIBREFOLIO_FRAME_PROTECTION is off in the managed profile: any site can show LibreFolio in a frame; the managed profile turns it on` (`check` is `platform.frame_protection`; in the `managed` profile only) | Unless you mean to let pages at other addresses show LibreFolio in a frame, such as your hosting panel ([Hosting for Others](hosting_providers.md#managed-profile)), remove `LIBREFOLIO_FRAME_PROTECTION` from `.env` and from the environment, or set it to `true`, then restart. If neither `.env` nor the environment sets it, it is a fault of LibreFolio's own profile table: set it to `true` yourself, and report it. See [Frame Protection](#frame-protection). |
-| ℹ️ `info` | `LIBREFOLIO_CSP_REPORT_ONLY is off in the managed profile: browsers list no Content-Security-Policy violation; the managed profile turns it on` (`check` is `platform.csp_report_only`; in the `managed` profile only) | Unless you turned it off on purpose, do the same for `LIBREFOLIO_CSP_REPORT_ONLY`. Nothing is blocked either way: the policy only reports, in the browser's developer console. See [The Report-Only Policy](#csp-report-only). |
+| ℹ️ `info` | `LIBREFOLIO_CSP_REPORT_ONLY is off in the managed profile: browsers list no Content-Security-Policy violation; the managed profile turns it on` (`check` is `platform.csp_report_only`; in the `managed` profile only) | Unless you turned it off on purpose, do the same for `LIBREFOLIO_CSP_REPORT_ONLY`. The wider policy it adds only reports, in the browser's developer console; the enforced one is on either way. See [The Report-Only Policy](#csp-report-only). |
 | ℹ️ `info` | `The log level is DEBUG: the log records operational detail; …` (or `TRACE`) | Go back to `INFO` once you are done troubleshooting. |
 | ❌ `error` | `A hosting panel token cannot be used, and its route answers 503 to every call: LIBREFOLIO_WAKE_TOKEN (WAKE_TOKEN_TOO_SHORT)`, naming each token that cannot be used and why: `…_TOO_SHORT`, `…_NOT_VISIBLE_ASCII` (a space, a tab or a character outside visible ASCII) or `FILE_UNREADABLE` (`check` is `platform.hosting_panel`) | The token of the scheduled wake-up (`LIBREFOLIO_WAKE_TOKEN`) or of your hosting panel's status route (`LIBREFOLIO_PANEL_STATUS_TOKEN`) cannot be used. Generate a new one with `openssl rand -hex 32` ([Hosting Panel API](hosting_providers.md#panel-api)), or fix the `_FILE` that holds it (each call of the route logs what is wrong with it), then restart. Only that route is off: it answers `503` until then. The server starts anyway. |
 | ❌ `error` | `LIBREFOLIO_TEST_MODE is on outside a test lane: test-only providers are served, the data are kept in the test data directory <path> and .env is not read; unset it on a production instance` (`check` is `platform.test_mode`) | Test mode is for LibreFolio's own test runs (`./dev.py test`, `./dev.py server --test`), which turn it on and off by themselves: remove `LIBREFOLIO_TEST_MODE` from the server's environment, or set it to `0`, then restart: look where the server's environment comes from, such as a service unit or your hosting panel. Until then the server works on the folder the line names instead of your [data directory](filesystem.md): what is entered meanwhile is saved there, not with your data. In the `managed` profile the server does not start instead: see below. |
@@ -439,19 +439,104 @@ instance that already has accounts, and a `LIBREFOLIO_LOGIN_LIMIT` other than `o
 
 ## 🛡️ Browser Protections {: #browser-protections }
 
-Every answer of LibreFolio carries headers that tell the browser how to protect its pages. Two are
-always there, with nothing to set:
+Every answer of LibreFolio carries headers that tell the browser how to protect its pages. Three
+are always there, with nothing to set:
 
 - `X-Content-Type-Options: nosniff`: the browser uses the type LibreFolio sends and never guesses
   another, so an uploaded file is never run as a script or shown as a page.
 - `Referrer-Policy: strict-origin-when-cross-origin`: another site learns at most LibreFolio's
   address, such as `https://librefolio.example.com`, never the page a request came from.
+- A `Content-Security-Policy` on every page, in every profile, with no switch to turn it off: see
+  [The Content-Security-Policy](#csp).
 
 Two more are switches, each set on its own, off on an install of your own (the `selfhosted` profile)
 and on in the `managed` profile: [Frame Protection](#frame-protection) and
 [The Report-Only Policy](#csp-report-only). A value you set, in `.env` or in the environment, always
 wins over the profile. LibreFolio reads both when it starts: restart it after a change. For
 developers: [Response Headers](../developer/architecture/security.md#response-headers).
+
+### 🛡️ The Content-Security-Policy {: #csp }
+
+A Content-Security-Policy tells the browser what a page may run and where it may connect to.
+LibreFolio **always enforces** one, in every profile: there is no setting to turn it off. It is kept
+as narrow as it can be while LibreFolio works as it always did, and widened only where LibreFolio
+truly needs it. It asks nothing of you in the usual case: it matters only when something between
+LibreFolio and the browser adds a script to the page ([A Script You Did Not Send](#csp-blocked-script)).
+
+| What | Policy | Why |
+|---|---|---|
+| Every page of LibreFolio: the web app, the documentation (`/mkdocs`) and the API's own pages at `/api/v1/docs` and `/api/v1/redoc` | `object-src 'none'; base-uri 'self'; form-action 'self'` | No plugin content (`<object>`, `<embed>`); no `<base>` element sending the page's links to another site; no form sending its data to another site. LibreFolio uses none of them. A PDF is not a page: it carries none of these |
+| The pages of the web app | `script-src`: only LibreFolio's own scripts. Its inline scripts are allowed by their hash, which LibreFolio works out from the web app's files, so a script written into the page by anyone else does not run | A script that LibreFolio did not send is the way a page is hijacked |
+| The pages of the web app | `worker-src 'self' blob:` | The workers of the PDF viewer |
+| The pages of the web app | `connect-src 'self'`, the origin of [`LIBREFOLIO_PUBLIC_URL`](#accounts) when it is set, and `https://api.github.com` on a self-hosted install only | Where the page may send requests to. The public address is the one you tell LibreFolio users reach it at; GitHub is the check for a newer release, which your browser makes when an administrator signs in (the `managed` profile never makes it) |
+| Every response, with [Frame Protection](#frame-protection) on | `frame-ancestors 'self'` | Only LibreFolio's own pages may show it in a frame |
+
+What the policy does **not** enforce: `default-src`, `style-src`, `img-src`, `font-src` and
+`frame-src`. Images (the icons of assets and brokers are set by a link to any address), styles,
+fonts and frames stay free; whether another page may show LibreFolio in a frame is decided by
+`LIBREFOLIO_FRAME_PROTECTION` alone, since showing LibreFolio inside a dashboard is a legitimate use
+of an install of your own.
+
+Nothing changes for what LibreFolio does by itself. When you rebuild the web app from the sources
+while LibreFolio runs, the hashes follow the new build: you do not need to restart it.
+
+#### 🕵️ A Script You Did Not Send {: #csp-blocked-script }
+
+A proxy, a CDN or a browser extension that **adds a script** to LibreFolio's pages is blocked, as
+anything else that LibreFolio did not send. Typical cases:
+
+- Cloudflare's **Rocket Loader**, its **Email Address Obfuscation** and the automatic setup of its
+  **Web Analytics**, which rewrite the page or add a script to it as it passes;
+- an Nginx `sub_filter` that writes a `<script>` into the pages;
+- a browser extension that adds a script of its own to every page.
+
+What you see:
+
+- the page works, but may lose the piece that script provided: a counter, an obfuscated address, a
+  widget of the extension;
+- the browser's console shows, once per page load, `LibreFolio blocked a script it did not send
+  (<source>): a proxy, a CDN or a browser extension adds it. Guide:
+  https://<your address>/mkdocs/admin/configuration/#csp`, where `<source>` is the address the script
+  came from, or `inline` for a script written into the page;
+- in the [Security](settings.md#security-tab) tab of **Settings › Administration**, the browser
+  that met it lists a warning, *a script was blocked*, naming the sources. The warning belongs to that
+  browser tab, and goes when the tab closes.
+
+Nothing is sent to your server: no report, no request. The console and the tab are the only
+places the browser says it.
+
+What to do: **turn the addition off for LibreFolio's address**. The policy is not widened by a
+setting, because a script added on the way is exactly what it is there to stop.
+
+- **Cloudflare**: for LibreFolio's host name, turn off Rocket Loader (*Speed › Optimization*), Email
+  Address Obfuscation (*Scrape Shield*) and the automatic setup of Web Analytics (*Analytics & Logs ›
+  Web Analytics*). A *Configuration Rule* can do it for that host alone and leave your other sites as
+  they are. The names of the menus change from time to time.
+- **Nginx**: remove the `sub_filter` that adds the script from the `server` or the `location` that
+  proxies LibreFolio.
+- **A browser extension**: turn it off for LibreFolio's address, or try the page in a private window,
+  which usually runs without extensions.
+
+Then reload the page: the line is gone from the console. The warning in the Security tab stays until
+you close that browser tab.
+
+#### 🔗 A Public Address That Cannot Be Used {: #csp-public-url }
+
+`LIBREFOLIO_PUBLIC_URL` adds its origin (`scheme://host`, with the port only when it is not the
+default one) to `connect-src`. A value that cannot be used, such as one without `http://` or
+`https://`, or with a user name or a password, adds nothing: the server starts and serves as usual,
+and the log has a warning, *LIBREFOLIO_PUBLIC_URL cannot be used*. Fix the value, then restart: see
+[Accounts and Sign-ups](#accounts).
+
+#### 📡 The Address Check of a Share Link {: #csp-address-check }
+
+The check of the **Server address** in the invitation and password-reset dialogs of the
+[Users](users.md#server-address) tab does not ask the address for data any more: the policy would stop the
+page from doing it. It loads a tiny, transparent image from the address you typed,
+`/api/v1/auth/address-probe.png`, which the policy allows, and reads its size: one size says that
+**this** instance answers there, another that something else does. What the messages say is the
+same as before. On a [blocked instance](hosting_providers.md#instance-block) the image is refused like
+the rest, and the check reads *cannot verify*, as it did.
 
 ### 🖼️ Frame Protection {: #frame-protection }
 
@@ -469,13 +554,10 @@ With the switch on:
 - every answer carries `X-Frame-Options: SAMEORIGIN` and
   `Content-Security-Policy: frame-ancestors 'self'`, the same rule in the older header and in the
   newer one;
-- LibreFolio's pages, that is the web app, the documentation and the API's own documentation pages
-  at `/api/v1/docs` and `/api/v1/redoc`, and any SVG image or XML document it serves, such as the
-  documentation's sitemap, get three more rules in the same `Content-Security-Policy`:
-  `object-src 'none'`, no plugin content (`<object>`, `<embed>`); `base-uri 'self'`, no `<base>`
-  element sending the page's relative links to another site; and `form-action 'self'`, no form
-  sending its data to another site. LibreFolio itself uses none of these, so nothing visible
-  changes. A PDF keeps `frame-ancestors 'self'` alone, so that the browser can still show it;
+- the same `Content-Security-Policy` field also carries the three rules that
+  [LibreFolio enforces on its pages](#csp) in every profile: `object-src 'none'`,
+  `base-uri 'self'` and `form-action 'self'`. They do not depend on this switch. A PDF keeps
+  `frame-ancestors 'self'` alone, so that the browser can still show it;
 - a `304 Not Modified` answer gets only `X-Frame-Options`, so that the browser keeps the policy of
   the copy it already has.
 
@@ -508,10 +590,12 @@ It is the `platform.frame_protection` check of the [startup checks](#startup-che
 
 ### 📋 The Report-Only Policy {: #csp-report-only }
 
-`LIBREFOLIO_CSP_REPORT_ONLY` adds a report-only Content-Security-Policy to the pages of the web app.
-The policy says where a page may load its content from. Report-only means that the browser checks it
-and blocks nothing: it lists what falls outside the policy in its developer console, and nowhere
-else, since the policy names no address to send a report to.
+The [Content-Security-Policy](#csp) LibreFolio enforces is narrow on purpose: it leaves images,
+styles, fonts and frames free. `LIBREFOLIO_CSP_REPORT_ONLY` adds a second, **wider** policy to the
+pages of the web app: the whole policy LibreFolio aims at, which also says where a page may load
+its images, styles, fonts and frames from. It is report-only: the browser checks it and blocks
+nothing. It lists what falls outside it in its developer console, and nowhere else, since the policy
+names no address to send a report to. The enforced policy is on whatever this switch says.
 
 - **Off** (`false`), the default on an install of your own.
 - **On** (`true`), the default in the `managed` profile.
@@ -525,11 +609,13 @@ With the switch on:
   such as images from any `https://` address (the icons of assets and brokers are set by a link),
   inline styles and the WebAssembly of the PDF viewer. For developers, the whole policy, directive
   by directive:
-  [Frame Protection and the Report-Only Policy](../developer/architecture/security.md#managed-headers);
-- the web app's own inline scripts are allowed by their hashes, which LibreFolio reads from the web
-  app's files when it starts: after you rebuild the web app from the sources, restart LibreFolio, or
-  the console lists the new build's inline scripts;
-- each line the policy adds to the console says what it would have blocked: nothing was.
+  [The Content-Security-Policy and Frame Protection](../developer/architecture/security.md#managed-headers);
+- the web app's own inline scripts are allowed by their hashes, the same as in the enforced policy,
+  which follow the web app's files: after you rebuild the web app from the sources, you do not need
+  to restart LibreFolio;
+- each line this policy adds to the console says what it would have blocked: nothing was. A script
+  that the enforced policy blocks is a different thing, and has its own line: see
+  [A Script You Did Not Send](#csp-blocked-script).
 
 When to change it:
 
@@ -537,13 +623,13 @@ When to change it:
   either way. Turn it on if you want to see, in the browser's developer console, what such a policy
   would block on your instance.
 - **In the `managed` profile**, leave it on: it blocks nothing, and turning it off only stops the
-  browser from listing what the policy would block. See
+  browser from listing what the wider policy would block. See
   [Hosting for Others](hosting_providers.md#managed-profile).
 
 It is the `platform.csp_report_only` check of the [startup checks](#startup-checks), also in the
 [Security](settings.md#security-tab) tab of **Settings › Administration**:
 
-- **Off in the `managed` profile**: information, not a warning, since the policy blocks nothing
+- **Off in the `managed` profile**: information, not a warning, since this policy blocks nothing
   either way. The startup log says, at the `info` level,
   `LIBREFOLIO_CSP_REPORT_ONLY is off in the managed profile: browsers list no Content-Security-Policy violation; the managed profile turns it on`,
   and the tab *The report-only Content-Security-Policy is off in the managed profile: browsers list
@@ -553,10 +639,9 @@ It is the `platform.csp_report_only` check of the [startup checks](#startup-chec
   restart. If neither `.env` nor the environment sets it, it is a fault of LibreFolio's own profile
   table: set it to `true` yourself, and report it.
 - **Otherwise** the check passes, and the log says nothing about it. The tab lists it among the
-  [passed checks](settings.md#security-passed): *The pages of the web app carry a report-only
-  Content-Security-Policy: the browser lists in its console what it would block, and blocks
-  nothing.* with the switch on, *No report-only Content-Security-Policy: the default of an install
-  of your own.* with the switch off on an install of your own.
+  [passed checks](settings.md#security-passed): a line saying that the pages of the web app carry a
+  report-only policy, with the switch on, *No report-only Content-Security-Policy: the default of
+  an install of your own.* with the switch off on an install of your own.
 
 ---
 
