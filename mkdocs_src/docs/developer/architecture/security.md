@@ -1500,7 +1500,7 @@ dependency checks all its routes: `panel_access(scope)` in `backend/app/services
 dataclass. In this order:
 
 1. **The token**, read at each call. One of the scope's errors: the scope's error line (the backup's and the wake-up's
-   worded as before H-61), one request line (below), then `503` with the scope's code. `None`: `404`
+   worded as before H-61), one request line (below), then `503` with the scope's code. `None`, with no public keys either (L2, below): `404`
    `{"detail": "Not Found"}`, as a path that does not exist (decision Q3), with no line, nothing counted and the
    limiter not read.
 2. **The limiter**, on the key `client_rate_key(rate_limit_address(request))` ([The Client's Address](#client-address)),
@@ -1539,6 +1539,21 @@ routes are the ones they had before.
   `PanelStatusToken`, an HTTP bearer whose description names its variable: the OpenAPI document tells which token
   opens which route.
 - **On a blocked instance** the six routes stay allowed: see [Instance Block](#instance-block).
+
+**Level L2: signed tickets.** Beside the tokens, `panel_access()` accepts a ticket signed by the panel's Ed25519
+key (lot H-61, checkpoint 2), scope by scope. The panel's public keys are read at each call
+(`panel_public_keys()`, `backend/app/config/hosting_panel.py`), and a scope is off, with the `404`, only when neither
+its token nor the keys are set.
+
+| Part | Where | What it does |
+|------|-------|--------------|
+| Verification | `verify_ticket()`, `backend/app/services/platform/hosting_panel/tickets.py` | PyJWT checks the signature and the algorithm, the rest is checked here, in the contract's order: unknown key, times (tolerance `LIBREFOLIO_PANEL_CLOCK_SKEW_SECONDS`), audience (the origin of `LIBREFOLIO_PUBLIC_URL`), scope, `jti` and lifetime |
+| Registry | `record()`, `backend/app/services/platform/hosting_panel/ticket_registry.py` | Each accepted `jti` once, in `<data dir>/panel_tickets.sqlite3` (mode 600, outside the backups), checked and recorded in one `BEGIN IMMEDIATE` transaction; rows pruned `PRUNE_MARGIN_SECONDS` (600 s, the widest tolerance plus the longest life) after their expiry, so a clock stepping back never revives a ticket; anything but a regular file (a symlink) or a file it cannot use raises `TicketRegistryError`, the scope's `503` |
+| Limiter | `_ticket_caller()`, `access.py` | Counts a ticket only when it proves nothing: unverifiable, or signed with an unknown key. A ticket with the panel's signature is never counted, so a panel whose clock is behind does not lock itself out |
+| Check | `check_hosting_panel()`, `backend/app/services/platform/config_audit.py` | Keys, tolerance and audience that cannot be used: error, and every route answers `503`; in the managed profile a token beside usable keys is a warning |
+
+`PanelCaller` then carries `credential="ticket"`, with the `kid` and the `jti`, and the request line adds both. The
+contract, the codes and the test vectors are in [Signed Tickets](../../admin/hosting_providers.md#panel-api-tickets).
 
 Tests: `./dev.py test services hosting-panel-access`
 (`backend/test_scripts/test_services/test_hosting_panel_access.py`: the status token's reader, the four steps for
