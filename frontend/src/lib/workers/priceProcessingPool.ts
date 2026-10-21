@@ -41,20 +41,31 @@ export function itemWeight(item: RawPriceQueryResultItem): number {
  * meant to be a perfectly optimal partition.
  */
 export function splitBalanced(items: RawPriceQueryResultItem[], chunkCount: number): RawPriceQueryResultItem[][] {
-    const groups: RawPriceQueryResultItem[][] = Array.from({length: chunkCount}, () => []);
+    return splitBalancedIndexed(items, chunkCount).map((group) => group.items);
+}
+
+/** `splitBalanced`, each group with the position in `items` of every item it holds (Z-29b: the balancing reorders them). */
+export function splitBalancedIndexed(items: RawPriceQueryResultItem[], chunkCount: number): Array<{items: RawPriceQueryResultItem[]; indexes: number[]}> {
+    const groups: Array<{items: RawPriceQueryResultItem[]; indexes: number[]}> = Array.from({length: chunkCount}, () => ({items: [], indexes: []}));
     const groupWeights = new Array(chunkCount).fill(0);
 
-    const sorted = [...items].sort((a, b) => itemWeight(b) - itemWeight(a));
-    for (const item of sorted) {
+    const sorted = items.map((item, index) => ({item, index})).sort((a, b) => itemWeight(b.item) - itemWeight(a.item));
+    for (const {item, index} of sorted) {
         let lightestIndex = 0;
         for (let i = 1; i < chunkCount; i++) {
             if (groupWeights[i] < groupWeights[lightestIndex]) lightestIndex = i;
         }
-        groups[lightestIndex].push(item);
+        groups[lightestIndex].items.push(item);
+        groups[lightestIndex].indexes.push(index);
         groupWeights[lightestIndex] += itemWeight(item);
     }
 
-    return groups.filter((g) => g.length > 0);
+    return groups.filter((g) => g.items.length > 0);
+}
+
+/** The results of a chunk with `requestIndex` put back from the position in the chunk to the position in the request. */
+export function requestIndexesOf(results: ProcessedAssetResult[], chunkIndexes: readonly number[]): ProcessedAssetResult[] {
+    return results.map((result) => ({...result, requestIndex: chunkIndexes[result.requestIndex]}));
 }
 
 /**
@@ -70,16 +81,17 @@ export async function processPriceItemsInParallel(items: RawPriceQueryResultItem
     // Don't create more chunks than items — a single tiny fetch (e.g. 1 asset) should
     // just run as one chunk on one worker, not pointlessly spread across the whole pool.
     const chunkCount = Math.max(1, Math.min(items.length, getPoolSizeHint()));
-    const chunks = splitBalanced(items, chunkCount);
+    const chunks = splitBalancedIndexed(items, chunkCount);
 
-    const chunkResponses = await Promise.all(chunks.map((chunk) => workerPool.run<PriceProcessingRequest, PriceProcessingResponse>({items: chunk})));
+    const chunkResponses = await Promise.all(chunks.map((chunk) => workerPool.run<PriceProcessingRequest, PriceProcessingResponse>({items: chunk.items})));
 
     const results: ProcessedAssetResult[] = [];
     const invalidItemErrors: string[] = [];
-    for (const response of chunkResponses) {
-        results.push(...response.results);
+    chunkResponses.forEach((response, chunk) => {
+        results.push(...requestIndexesOf(response.results, chunks[chunk].indexes));
         invalidItemErrors.push(...response.invalidItemErrors);
-    }
+    });
+    results.sort((left, right) => left.requestIndex - right.requestIndex);
     return {results, invalidItemErrors};
 }
 

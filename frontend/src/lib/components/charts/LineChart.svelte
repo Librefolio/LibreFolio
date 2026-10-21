@@ -28,7 +28,7 @@
     import {toRgba} from '$lib/theme/colorAlpha';
     import {assignOverlaySignalAxes, buildSecondaryYAxes, computeRightMargin} from './chartCoreHelpers';
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
-    import {aggregateLineSeries, computeDensity, downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
+    import {aggregateLineSeries, chooseCompactResolution, compactPlotWidth, downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
     import {truncateName} from '$lib/utils/text';
     import {buildResponsiveXAxisPolicy, categoryAxisLabelPatch, visiblePointCountFromZoom, ZOOM_LABEL_SETTLE_MS} from './responsiveXAxis';
     import {clearTimer} from '$lib/utils/core/clearTimer';
@@ -80,6 +80,12 @@
         showGradient?: boolean;
         /** Enable baseline coloring (red below baseline, green above) */
         colorByBaseline?: boolean;
+        /**
+         * The base of the colouring and of the dashed reference line in the absolute view. Without it, the base is the
+         * first point of `data`; a compact chart draws a reduced series, so a page that knows a base the reduction hides
+         * hands it in. The percentage view's base is 0 whatever this says.
+         */
+        baselineValue?: number;
         /** Show grid split lines */
         showGridLines?: boolean;
         /** CSS height */
@@ -118,13 +124,14 @@
         areaFill = true,
         showGradient = true,
         colorByBaseline = true,
+        baselineValue: baselineOverride,
         showGridLines = true,
         height = '300px',
         compact = false,
         showMiniAxis = false,
         lineColor,
         darkLineColor,
-        pendingColor = PRICE_SERIES.pendingEditPoint,
+        pendingColor,
         pendingData = [],
         onPointClick,
         viewMode = 'absolute',
@@ -191,11 +198,7 @@
         chartInstance.setOption({xAxis: {axisLabel: categoryAxisLabelPatch(policy)}}, {lazyUpdate: true});
     }
 
-    const COMPACT_DENSITY_THRESHOLD = 1.3;
     const COMPACT_RESIZE_EPSILON_PX = 4;
-    const COMPACT_GRID_LEFT_PX = 5;
-    const COMPACT_GRID_RIGHT_PX = 5;
-    const COMPACT_GRID_RIGHT_WITH_AXIS_PX = 45;
 
     let lastSourceRef: LineDataPoint[] | null = null;
     let aggregatedByResolution = new Map<ChartResolution, LineDataPoint[]>();
@@ -226,6 +229,7 @@
             void overlaySignals;
             void areaFill;
             void colorByBaseline;
+            void baselineOverride;
             void showGridLines;
             void showGradient;
             void viewMode;
@@ -290,18 +294,12 @@
 
     function getCompactPlotWidthPx() {
         const measuredWidth = chartContainer?.getBoundingClientRect().width || chartInstance?.getWidth() || 0;
-        const rightPadding = showMiniAxis ? COMPACT_GRID_RIGHT_WITH_AXIS_PX : COMPACT_GRID_RIGHT_PX;
-        return Math.max(measuredWidth - COMPACT_GRID_LEFT_PX - rightPadding, 0);
+        return compactPlotWidth(measuredWidth, showMiniAxis);
     }
 
+    /** The rule a card's `max_points` is sized by (`timeSeriesAggregation.ts`, Z-29b): a series sampled for this plot stays as it is. */
     function chooseStaticResolution(dailyPointCount: number, plotWidthPx: number): ChartResolution {
-        const densityDaily = computeDensity(dailyPointCount, plotWidthPx);
-        if (densityDaily <= COMPACT_DENSITY_THRESHOLD) return 'daily';
-
-        const densityWeekly = computeDensity(lastWeeklyBucketCount, plotWidthPx);
-        if (densityWeekly <= COMPACT_DENSITY_THRESHOLD) return 'weekly';
-
-        return 'monthly';
+        return chooseCompactResolution({dailyCount: dailyPointCount, weeklyCount: lastWeeklyBucketCount}, plotWidthPx);
     }
 
     function resizeChartOnly() {
@@ -448,9 +446,11 @@
         const dates = renderedData.map((d) => d.date);
 
         // Determine if we need baseline coloring (green above baseline, red below)
-        const useBaselineColoring = colorByBaseline && !compact;
-        const firstValue = renderedData.find((point) => !point.missing)?.value ?? 0;
-        const baselineValue = isPercentage ? 0 : firstValue;
+        // The base is the first point of the data it was given: a compact chart draws a reduced series, whose first point is
+        // the end of the first bucket.
+        const useBaselineColoring = colorByBaseline;
+        const firstValue = data.find((point) => !point.missing)?.value ?? 0;
+        const baselineValue = isPercentage ? 0 : Number.isFinite(baselineOverride) ? (baselineOverride as number) : firstValue;
 
         // Build per-point stale data array
         const staleDaysArr = renderedData.map((d) => d.staleDays ?? 0);
@@ -482,7 +482,8 @@
                 symbol: 'diamond',
                 symbolSize: 10,
                 itemStyle: {
-                    color: pendingColor,
+                    // Read here, not as the prop's default: a default is kept, and a theme switch would not reach it
+                    color: pendingColor ?? PRICE_SERIES.pendingEditPoint,
                     borderColor: neutrals.price.pendingEditPointRing,
                     borderWidth: 2,
                 },

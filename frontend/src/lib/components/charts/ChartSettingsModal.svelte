@@ -4,7 +4,7 @@
   Thin wrapper around:
   - ChartAestheticsSection (toggles + Y-axis mode)
   - ChartSignalsSection (add/remove/reorder overlay signals)
-  - Preview chart (LineChart with live rendering)
+  - Preview chart (PriceChartFull, the detail pages' chart, with live rendering)
 
   Both sections are also used standalone in the FX detail page (inline foldable panels).
 
@@ -18,7 +18,7 @@
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {ConfirmModal} from '$lib/components/table';
     import type {LineDataPoint} from './LineChart.svelte';
-    import LineChart from './LineChart.svelte';
+    import PriceChartFull from './PriceChartFull.svelte';
     import ChartAestheticsSection from './ChartAestheticsSection.svelte';
     import ChartSignalsSection from './ChartSignalsSection.svelte';
     import {DEFAULT_AXIS_SCALE, DEFAULT_CHART_SETTINGS, DEFAULT_PERCENTAGE_AXIS_SCALE, normalizeAxisScaleSettings, type AxisScaleSettings, type ChartAxisSettings, type ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
@@ -27,7 +27,7 @@
     import {getRegisteredSignalTypes, resolveSignalPreview, type RenderedSignal, type SignalConfig, type SignalDefinition} from '$lib/charts/signals';
     import {NO_SIGNAL_SOURCES, renderLocalSignal, type SignalDataSources} from '$lib/charts/chartSignalRendering';
     import {SineSignal} from '$lib/charts/signals/SineSignal';
-    import {normalizeToPercentage} from '$lib/utils/chartUtils';
+    import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
 
     // =========================================================================
     // Props
@@ -227,11 +227,6 @@
 
     let previewDataAbs = $derived(mode === 'pair' && pairData && pairData.length > 0 ? pairData : syntheticData);
 
-    let previewData = $derived.by((): LineDataPoint[] => {
-        if (previewViewMode !== 'percentage' || previewDataAbs.length === 0) return previewDataAbs;
-        return normalizeToPercentage(previewDataAbs);
-    });
-
     let activeSignalDefinitions = $derived(signalDefinitions ?? getRegisteredSignalTypes());
 
     // =========================================================================
@@ -301,6 +296,7 @@
         });
     });
     let previewSignals = $derived(previewResolution.signals);
+    let previewSignalInfo = $derived(buildOverlaySignalInfoMap(previewSignals));
     let previewPrimaryScale = $derived(previewViewMode === 'percentage' ? axisScales.percentage : axisScales.absolute);
     let previewPrimaryLabel = $derived.by(() => {
         const translate = (key: string, values?: Record<string, string>) => $t(key, {values});
@@ -364,26 +360,44 @@
                 <div class="flex items-center justify-between mb-2">
                     <h3 class="text-sm font-semibold text-lf-secondary">{$t('common.preview')}</h3>
                     <div class="flex rounded-lg border border-lf-subtle overflow-hidden">
-                        <button class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewViewMode === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}" onclick={() => (previewViewMode = 'absolute')} type="button">Abs </button>
-                        <button class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewViewMode === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}" onclick={() => (previewViewMode = 'percentage')} type="button">% </button>
+                        <button
+                            class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewViewMode === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            data-testid="chart-settings-preview-view-absolute"
+                            onclick={() => (previewViewMode = 'absolute')}
+                            type="button"
+                            >Abs
+                        </button>
+                        <button
+                            class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewViewMode === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            data-testid="chart-settings-preview-view-percentage"
+                            onclick={() => (previewViewMode = 'percentage')}
+                            type="button"
+                            >%
+                        </button>
                     </div>
                 </div>
                 <div class="rounded-lg border border-lf-subtle overflow-hidden bg-lf-panel">
-                    <LineChart
+                    <!-- The detail pages' chart (Y-39b): absolute data, the view chosen above, the line only, no events, measure or edit -->
+                    <PriceChartFull
                         {areaFill}
                         {colorByBaseline}
-                        compact={false}
+                        chartHeight="220px"
                         currency={mode === 'pair' && pairData && pairData.length > 0 ? '' : 'Preview'}
-                        data={previewData}
-                        height="140px"
+                        data={previewDataAbs}
+                        disableCandlestick={true}
+                        externalChartType="line"
+                        externalViewMode={previewViewMode}
+                        fxStaleLabel={$t('chart.tooltip.fxStale')}
+                        hideToolbar={true}
+                        hideViewModeToggle={true}
+                        overlaySignalInfoMap={previewSignalInfo}
                         overlaySignals={previewSignals}
                         showGradient={staleGradient}
                         showGridLines={gridLines}
-                        showMiniAxis={false}
-                        viewMode={previewViewMode}
-                        yAxisMode={previewPrimaryScale.mode}
-                        yAxisMin={previewPrimaryScale.min}
+                        staleLabel={$t('chart.tooltip.stale')}
                         yAxisMax={previewPrimaryScale.max}
+                        yAxisMin={previewPrimaryScale.min}
+                        yAxisMode={previewPrimaryScale.mode}
                         secondaryAxisScales={axisScales.secondary}
                     />
                 </div>
