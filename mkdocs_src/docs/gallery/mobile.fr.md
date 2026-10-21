@@ -313,6 +313,14 @@ La catégorie Prise en main des préférences avec le statut de chaque guide et 
     <img class="gallery-img" data-category="settings" data-name="onboarding-replay" alt="🔁 Relancer les guides">
 </div>
 
+### 🧩 Paramètres des plugins
+
+L'onglet Plugins sur mobile : les paramètres de chaque plugin dans son propre formulaire.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="settings" data-name="plugins" alt="🧩 Paramètres des plugins">
+</div>
+
 ### 🛡️ Paramètres globaux (Admin)
 
 Configuration à l'échelle du système sur mobile.
