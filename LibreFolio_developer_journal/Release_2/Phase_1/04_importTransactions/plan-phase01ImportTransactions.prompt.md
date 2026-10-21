@@ -8328,3 +8328,46 @@ cambiare, rimozioni comprese; lo zero in `text-lf-muted` va bene. Prima i rossi.
 - ✅ 6. CHECKPOINT READY al coordinatore (2026-10-20 ~11:42), FROZEN. Nel backlog: W-B90 (la `DataTable` senza colonne) e W-B91 (la
   guida, «un file è fallito»). B-51 sta nella sezione di B: la chiude il coordinatore. Fuori dal lotto: la galleria del passo 3
   (`import-wizard-step3`) mostra la colonna e il riquadro vecchi, da rigenerare in uno slot pesante.
+
+### W-B92 · Fineco: la commissione è già dentro il Controvalore — analisi e cura (2026-10-21, base `89e8b2e61`)
+
+**Il fatto.** Discussione #49 (`@Xgialippo`, con l'Excel vero): nel report di Fineco il **Controvalore** di un acquisto contiene già la
+commissione e quello di una vendita l'ha già tolta. Il plugin (layout con colonne di commissione) prendeva il Controvalore tal quale
+e aggiungeva una FEE a parte: ogni operazione con commissione era sbagliata della commissione. Decisione del developer (21/10),
+**soluzione B**: BUY = −(Controvalore − commissioni) più FEE −commissioni; SELL = +(Controvalore + commissioni) più FEE −commissioni.
+Il developer ha promesso all'utente il nome nel CHANGELOG. Numeri delle fixture: **scalati** (stessa struttura e aritmetica, importi diversi).
+
+- ✅ 1. Analisi (21/10). Il report vero ha **12 colonne** (una sola colonna di commissione, «Commissioni amministrato», in 11), non 15:
+  `has_commissions` (> 11 celle) vale lo stesso e `_sum_commissions` somma le colonne presenti. `Prezzo` = Controvalore / quantità.
+  > **Note implementazione**: l'Excel annotato dell'utente (solo uso interno, non pubblicato) mostra le 4 righe del brief.
+- ✅ 2. Rossi (21/10, test-author): `TestFinecoControvaloreIncludesCommission` (nuova) in `test_brim_providers.py` (4 righe scalate con date;
+  la forma vera a 12 colonne, `;` e virgole decimali; l'invariante «BUY/SELL + FEE = ± Controvalore»; più colonne di commissione;
+  guardie per Rimborso, Aumento capitale, dividendo e cedola, layout a 11 colonne, Controvalore vuoto o illeggibile; commissione sopra il
+  Controvalore; riga in valuta, provvisoria). Prima della cura: **24 falliti, 31 passati** (`-k Fineco`, log
+  `/tmp/librefolio_wb_fineco_red.log`). Le fixture esistenti con commissione hanno il Controvalore spostato (BUY + commissione, SELL −
+  commissione) perché le attese restassero uguali.
+- ✅ 3. Cura (21/10): `broker_fineco/plugin.py`, `_net_of_commission`; `plugin_version` 1.4.0. I tre `sample_reports/fineco*.csv` con
+  commissioni ora rispecchiano l'Excel vero (Controvalore = prezzo eseguito × quantità ± commissione, `Prezzo` = Controvalore / quantità;
+  le righe in USD tengono il `Prezzo` in USD); il `fineco_variant_a.csv` è invariato. Dopo la cura: **55/55** (`-k Fineco`, log
+  `/tmp/librefolio_wb_fineco_green.log`).
+- ✅ 4. Guida (21/10, docs-writer): `user/transactions/import/fineco.en.md` riscritta (percorso vero in 7 passi con
+  `static/broker-guides/fineco/Fineco_1..6.png`, commissioni, nota per chi ha importato con 1.2 o prima, ringraziamento a
+  `@Xgialippo`); `developer/backend/brim/architecture.md` («Fineco») aggiornata. Traduzioni IT/FR/ES: debito reale, non toccate.
+  > **⚠️ Fuori pista**: la guida chiama il report «Ordini e contabili» (la voce vera del sito) e non più «Movimenti Dossier
+  > Titoli», che resta nel docstring e nel rilevamento del file.
+- **Domande aperte al developer** (non scelte dal plugin): **Q-WB-1** il Controvalore di un `Rimborso` con commissione la contiene? (oggi
+  invariato: SELL = Controvalore più FEE); **Q-WB-2** una commissione maggiore del Controvalore di un acquisto (oggi: l'importo resta
+  quello stampato, mai invertito); **Q-WB-3** riga con Divisa non EUR: il Controvalore è nella Divisa o in euro? (oggi stessa
+  aritmetica, importo con la Divisa, FEE in EUR).
+- ✅ 5. Avviso nella guida (21/10, dal developer, parola dell'utente `@Xgialippo`): nel suo file l'unica colonna è «Commissioni
+  amministrato»; non ha mai avuto fondi né BTP; chi è in **regime dichiarativo** può avere colonne e valori diversi. Il riquadro
+  `!!! warning "Beta — community feedback welcome"` della guida lo dice e invita a una issue o alla discussione #49 con un file
+  anonimizzato. Nel codice nessuna congettura: colonne di commissione con altri nomi → somma delle colonne 11-14, come i test.
+- ✅ 6. Beta tolta (21/10, correzione del developer al punto 5): niente riquadro in testa; la guida chiude con «Known limitations»
+  (verificato su regime amministrato; dichiarativo, fondi e BTP non visti; issue o discussione #49 con file anonimizzato).
+  `index.en.md` (scheda Fineco) e `providers_list.md` (✅ Stable), il messaggio `INCOMPLETE_MESSAGE` e i docstring del plugin senza
+  «beta». mkdocs build stretto 0 avvisi, check-links 97 validi. Autorizzato dal developer (21/10): tolta la frase «in beta» dalle chiavi `fineco_incomplete_rows` (importWizard `en/it/es/fr.json:206`, solo
+  quella frase, senza ritradurre) e il riquadro Beta di `fineco.it/es/fr.md` (solo il riquadro); cataloghi generati rifatti con
+  `dev.py i18n build`, `i18n check` verde (5117 chiavi × 4 lingue), `test_i18n_catalog_gate.py` 176 verdi. La guida EN elenca in «Known
+  limitations» anche Q-WB-1/2/3 (Rimborso con commissione, commissione maggiore del Controvalore, righe non EUR). Resta al coordinatore
+  `CHANGELOG.md:99` («Fineco importer (beta)»).

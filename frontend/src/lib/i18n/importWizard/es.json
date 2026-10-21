@@ -203,7 +203,7 @@
       "scalable_tax_refund": "{count, plural, one {# devolución de impuestos se importó como depósito} other {# devoluciones de impuestos se importaron como depósitos}}: en LibreFolio un impuesto siempre retira dinero.",
       "scalable_cash_by_sign": "{count, plural, one {# fila de efectivo tiene un tipo que LibreFolio no conoce, o un signo inesperado: se registró como depósito o retiro} other {# filas de efectivo tienen un tipo que LibreFolio no conoce, o un signo inesperado: se registraron como depósitos o retiros}}, según el signo del importe.",
       "fineco_not_yet_settled": "{count, plural, one {# fila aún no está liquidada (su fecha valor es posterior a hoy) y no se importó: llegará con la próxima exportación.} other {# filas aún no están liquidadas (su fecha valor es posterior a hoy) y no se importaron: llegarán con la próxima exportación.}}",
-      "fineco_incomplete_rows": "La importación de Fineco está en beta, así que esta importación podría ser incorrecta: {count, plural, one {# fila no tiene} other {# filas no tienen}} un número necesario (cantidad o importe). Revisa las filas de abajo; si el archivo es correcto, probablemente sea un error de la importación, y puedes ayudarnos a corregirlo:"
+      "fineco_incomplete_rows": "Esta importación podría ser incorrecta: {count, plural, one {# fila no tiene} other {# filas no tienen}} un número necesario (cantidad o importe). Revisa las filas de abajo; si el archivo es correcto, probablemente sea un error de la importación, y puedes ayudarnos a corregirlo:"
     },
     "evidenceRowsTitle": "Filas del archivo",
     "evidenceRowCount": "{n} filas",

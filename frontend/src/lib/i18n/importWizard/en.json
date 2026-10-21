@@ -203,7 +203,7 @@
       "scalable_tax_refund": "{count, plural, one {# tax refund was imported as a deposit} other {# tax refunds were imported as deposits}}: in LibreFolio a tax always takes money out.",
       "scalable_cash_by_sign": "{count, plural, one {# cash row has a type LibreFolio does not know, or an unexpected sign: it was recorded as a deposit or a withdrawal} other {# cash rows have a type LibreFolio does not know, or an unexpected sign: they were recorded as deposits or withdrawals}}, by the sign of the amount.",
       "fineco_not_yet_settled": "{count, plural, one {# row is not settled yet (its value date is after today) and was not imported: it arrives with the next export.} other {# rows are not settled yet (their value date is after today) and were not imported: they arrive with the next export.}}",
-      "fineco_incomplete_rows": "The Fineco importer is in beta, so this import may be wrong: {count, plural, one {# row lacks} other {# rows lack}} a required number (quantity or amount). Check the rows below; if the file is right, it is likely an importer bug, and you can help us fix it:"
+      "fineco_incomplete_rows": "This import may be wrong: {count, plural, one {# row lacks} other {# rows lack}} a required number (quantity or amount). Check the rows below; if the file is right, it is likely an importer bug, and you can help us fix it:"
     },
     "evidenceRowsTitle": "Source rows",
     "evidenceRowCount": "{n} rows",
