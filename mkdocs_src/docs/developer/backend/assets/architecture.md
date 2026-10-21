@@ -755,7 +755,9 @@ into days. The chart draws `prices` as they are. The percentage view, the line's
 comparison's base read `sample_bounds.first` (`derived.base`), the point on the fill's first day,
 not `prices[0]`, the end of the first bucket. `compactDensity.test.ts` reads
 `compactDensityCases.json` and ties `compactMaxPoints()`, `fillCounts()` and the step to it, as
-`test_price_query_sampling.py` ties the backend. The FX list still asks every day (backlog Z-29fx).
+`test_price_query_sampling.py` ties the backend. `POST /fx/currencies/convert` takes the same fields
+([Sampled conversions](../fx/architecture.md#convert-sampling), Z-29fx); the FX list still asks every day
+until the FX half of Y-40.
 
 ### 📅 Fixed-Period Changes {: #fixed-period-changes }
 
