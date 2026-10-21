@@ -2,6 +2,8 @@
  * Designer Lab — what the page lists, derived from the catalogue. Pure functions: no DOM, so they can be unit-tested.
  */
 
+import {CATEGORY_ROLES} from '$lib/theme/chartCategories';
+
 import {parseColor} from './color.js';
 import type {CatalogCategory, CatalogLiteral, CatalogPaletteEntry, CatalogVar, ColorCatalog, LabChange, Layer} from './types';
 
@@ -138,16 +140,24 @@ export function changedVarValue(changes: LabChange[], name: string, dark: boolea
     return (own ?? both)?.to ?? null;
 }
 
-/** A chart category with the value its table writes in each theme (`null` when it writes none). */
+/**
+ * A chart category with the value its table writes in each theme (`null` when it writes none). An asset type or the
+ * cash is a view of its role (DV-11): `role` names it, the values are the role's in tokens.css, and an edit of the row
+ * is an edit of that variable.
+ */
 export interface CategoryRow extends CatalogCategory {
     lightValue: string | null;
     darkValue: string | null;
+    role?: string;
 }
 
-/** The chart categories of the catalogue, in the order of their tables, with their values. */
+/** The chart categories, in the order of their tables: the asset types and the cash as views of their roles, then the rest. */
 export function categoryRows(catalog: ColorCatalog): CategoryRow[] {
     const value = (id: number | null) => (id === null ? null : (catalog.literals[id]?.raw ?? null));
-    return (catalog.categories ?? []).map((c) => ({...c, lightValue: value(c.light), darkValue: value(c.dark)}));
+    const roleValue = (role: string, dark: boolean) => sourceVarValue(catalog, role, dark) || null;
+    const roles = CATEGORY_ROLES.map((c): CategoryRow => ({target: c.target, kind: c.kind, key: c.key, light: null, dark: null, role: c.role, lightValue: roleValue(c.role, false), darkValue: roleValue(c.role, true)}));
+    const own = (catalog.categories ?? []).filter((c) => !roles.some((r) => r.target === c.target)).map((c) => ({...c, lightValue: value(c.light), darkValue: value(c.dark)}));
+    return [...roles.filter((r) => r.kind === 'type'), ...own.filter((c) => c.kind !== 'bucket'), ...roles.filter((r) => r.kind === 'bucket'), ...own.filter((c) => c.kind === 'bucket')];
 }
 
 /** The value the tables give a category in a theme; `''` when the catalogue does not know it. */

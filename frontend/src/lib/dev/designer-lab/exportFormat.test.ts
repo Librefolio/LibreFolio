@@ -677,6 +677,21 @@ describe('buildExport and parseImport — a chart category, edited by key', () =
         }
     });
 
+    it('imports an asset type or the cash edited as a category before DV-11 as a change of its role, with a warning', () => {
+        const doc = exportWith(WITH_CATEGORIES, [AAA]);
+        const legacy = [
+            {...doc.changes[0], target: 'type:REAL_ESTATE', scope: 'light', from: '#96602C', to: '#123456'},
+            {...doc.changes[0], target: 'bucket:Liquidity', scope: 'both', from: '', to: '#654321'},
+        ];
+        const result = parseImport(json({...doc, changes: legacy}), emptyState(), WITH_CATEGORIES);
+        expect(result.errors).toEqual([]);
+        expect(result.warnings).toEqual(['change 0: type:REAL_ESTATE is the role --lf-cat-real-estate since DV-11, imported as a change of that variable', 'change 1: bucket:Liquidity is the role --lf-cat-liquidity since DV-11, imported as a change of that variable']);
+        expect(result.state?.changes.map((c) => [c.id, c.layer, c.target, c.scope, c.from, c.to])).toEqual([
+            ['css-var:--lf-cat-real-estate@light', 'css-var', '--lf-cat-real-estate', 'light', '#96602C', '#123456'],
+            ['css-var:--lf-cat-liquidity@both', 'css-var', '--lf-cat-liquidity', 'both', '', '#654321'],
+        ]);
+    });
+
     it('accepts any well-formed category from a catalogue built before the categories, which has no list to check', () => {
         const doc = exportWith(WITH_CATEGORIES, [AAA]);
         const result = parseImport(json({...doc, changes: [{...doc.changes[0], target: 'type:Ghost'}]}), emptyState(), CATALOG);
