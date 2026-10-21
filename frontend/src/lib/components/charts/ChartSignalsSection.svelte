@@ -27,9 +27,11 @@
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {humanizeKey} from '$lib/utils/text';
     import {translateOr} from '$lib/utils/core/translateOr';
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {INPUT_FIELD_ORDER, formatSignalProblem, getParamNumber, getParamString} from './chartSignalsHelpers';
 
     import {numericArrows} from '$lib/actions/numericArrows';
+    import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     // =========================================================================
     // Types
     // =========================================================================
@@ -695,7 +697,8 @@
                                                             >
                                                                 {#snippet item(option)}
                                                                     {@const info = findAssetInfo(option.value)}
-                                                                    <span class="flex items-center gap-1.5 truncate">
+                                                                    <!-- A long name scrolls with the project marquee instead of being cut (Y-38). -->
+                                                                    <span class="flex min-w-0 items-center gap-1.5">
                                                                         {#if info?.icon_url}
                                                                             <img src={info.icon_url} alt="" class="w-4 h-4 rounded-full object-cover shrink-0" />
                                                                         {:else if info?.asset_type}
@@ -703,12 +706,12 @@
                                                                         {:else}
                                                                             <BarChart3 size={14} class="text-lf-secondary shrink-0" />
                                                                         {/if}
-                                                                        <span class="text-xs">{option.label}</span>
+                                                                        <span use:scrollOnOverflow class="{overflowScrollTextClass} text-xs" title={option.label}>{option.label}</span>
                                                                     </span>
                                                                 {/snippet}
                                                                 {#snippet selectedItem(option)}
                                                                     {@const info = findAssetInfo(option.value)}
-                                                                    <span class="flex items-center gap-1.5 truncate">
+                                                                    <span class="flex min-w-0 items-center gap-1.5">
                                                                         {#if info?.icon_url}
                                                                             <img src={info.icon_url} alt="" class="w-4 h-4 rounded-full object-cover shrink-0" />
                                                                         {:else if info?.asset_type}
@@ -716,7 +719,7 @@
                                                                         {:else}
                                                                             <BarChart3 size={14} class="text-lf-muted shrink-0" />
                                                                         {/if}
-                                                                        <span class="text-xs">{option.label}</span>
+                                                                        <span use:scrollOnOverflow class="{overflowScrollTextClass} text-xs" title={option.label}>{option.label}</span>
                                                                     </span>
                                                                 {/snippet}
                                                             </SearchSelect>

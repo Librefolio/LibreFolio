@@ -1,0 +1,198 @@
+---
+paths:
+  - "backend/app/db/**"
+  - "backend/alembic/**"
+---
+
+# Database & Alembic Reference
+
+## ORM: SQLModel (SQLAlchemy 2.x async)
+
+All models are in `backend/app/db/models.py`. Session management in `session.py`.
+
+### Models
+
+Verified against the real schema on 2026-09-22 (`backend/data/prod`, revision
+`004_release_1_2_0_schema`): 14 tables, columns/indexes/FK matching SQLModel metadata
+exactly. **Table names are plural** — a lookup for `asset` or `transaction` finds nothing.
+
+| Model | Table | Key Fields |
+|-------|-------|------------|
+| `User` | `users` | username, email, hashed_password, **is_superuser**, is_active, login_count, donation_popup_last_shown_at, donation_popup_logins_since_shown |
+| `UserSettings` | `user_settings` | user_id (FK), base_currency, language, theme, avatar_url |
+| `UserOnboardingProgress` | `user_onboarding_progress` | user_id, flow, status, version, completed_at, skipped_at |
+| `UserOnboardingStepProgress` | `user_onboarding_step_progress` | user_id, flow, step_id, status, version, completed_at, skipped_at |
+| `GlobalSetting` | `global_settings` | key, value, value_type, description, updated_by_user_id |
+| `Broker` | `brokers` | name, description, portal_url, icon_url, default_import_plugin, allow_cash_overdraft, allow_asset_shorting, is_active, opened_at |
+| `BrokerUserAccess` | `broker_user_access` | broker_id, user_id, role, share_percentage |
+| `Asset` | `assets` | display_name, currency, asset_type, **is_benchmark**, classification_params (JSON), quote_base_quantity, active, user_url, identifier_* (one column per `IdentifierType`) |
+| `Transaction` | `transactions` | broker_id, asset_id, type, date, quantity, **amount**, currency, related_transaction_id, tags, cost_basis_override, cost_basis_currency, asset_event_id |
+| `PriceHistory` | `price_history` | asset_id, date, open, high, low, close, volume, adjusted_close, currency, source_plugin_key, fetched_at |
+| `AssetEvent` | `asset_events` | asset_id, date, type, value, currency, provider_assignment_id, notes |
+| `FxRate` | `fx_rates` | base, quote, date, rate, **source** |
+| `FxConversionRoute` | `fx_conversion_routes` | base, quote, priority, chain_steps |
+| `AssetProviderAssignment` | `asset_provider_assignments` | asset_id, provider_code, identifier, identifier_type, provider_params, last_fetch_at |
+
+Two traps this table used to set: a transaction carries a signed **`amount`**, not
+`price` + `fees` (unified transactions), and a user's role is the boolean
+`is_superuser` — `UserRole` is a *different* thing (per-broker access).
+
+### Enums
+
+| Enum | Values |
+|------|--------|
+| `AssetType` | base: STOCK, ETF, BOND, CRYPTO, FUND, CROWDFUND, HOLD, COMMODITY, REAL_ESTATE, INDEX, OTHER<br>ETF subtypes: ETF_STOCK, ETF_BOND, ETF_COMMODITY, ETF_REAL_ESTATE, ETF_CRYPTO, ETF_MONETARY<br>CROWDFUND subtypes: CROWDFUND_REAL_ESTATE |
+| `TransactionType` | BUY, SELL, DIVIDEND, INTEREST, DEPOSIT, WITHDRAWAL, FEE, TAX, ADJUSTMENT, TRANSFER, FX_CONVERSION, CASH_TRANSFER |
+| `AssetEventType` | DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT, MATURITY_SETTLEMENT |
+| `IdentifierType` | ISIN, TICKER, CUSIP, SEDOL, FIGI, UUID, OTHER — each one owns an `identifier_*` column in `assets` |
+| `UserRole` | OWNER, EDITOR, VIEWER — **per-broker access**, not the global user role |
+| `OnboardingFlow` | 15 values: welcome, intro_tour, then the page/entity guides for transactions, brokers, FX and assets |
+| `OnboardingStatus` | pending, completed, skipped |
+
+A subtype answers *which base type does this instrument hold?*, so the second level is the
+set of base types, not a parallel taxonomy; ETF and CROWDFUND are the two families that
+have one, and their plain values stay the residual. `INDEX` forbids transactions; every other
+value is behaviourally inert in the backend. `AssetType` also feeds the `asset_class`
+buckets of stress scenarios, where **a type missing from `bucket_shocks` is shocked by
+zero silently** — hence the dedicated coverage test.
+
+### Conventions
+
+- **Decimal columns** (C-97): amounts and event values `RealDecimal(18, 6)` (W-B60); quantities `RealDecimal(22, 10)`;
+  prices and the per-unit cost basis `RealDecimal(24, 12)` (`db/real_decimal.py`: the SQLite REAL read back as
+  the decimal written, at most 15 significant digits; reading never raises — a stored ±inf reads `None` — and a
+  value a double cannot hold is refused on write); FX rates `Numeric(24, 10)`. A value typed or read from a
+  file over its column's limit is refused, never rounded (`db/precision.decimal_limit_issue`: decimal places,
+  15 significant digits, and the digits before the decimal point, `max_integer_digits` — 15 for a quantity and a
+  transaction amount, decision N63, otherwise precision − scale); a value LibreFolio
+  or a plugin computes is rounded explicitly (`db/precision.round_computed_value`); provider prices are truncated
+  (`truncate_priceHistory`), and one no column can keep is skipped (`storable_value`, `storable_price`, W-B58).
+  Never sum these columns in SQL: `SUM` adds the stored doubles — sum in Python with
+  `financial_math` (`position_quantities`, `native_balances`)
+- **Timestamps**: UTC via `utcnow()` helper
+- **Daily-point policy**: one record per day for prices and FX rates
+- **Foreign keys**: enforced with `PRAGMA foreign_keys=ON`
+- **Currency validation**: via `Currency.validate_code()` from schemas
+
+## Alembic Migrations
+
+### Current Phase: Released — Incremental Migrations
+
+LibreFolio is **officially released**. Existing user installations carry real data, so schema changes
+MUST ship as **incremental Alembic migrations** that upgrade an existing DB in place. Do **not** edit
+`001_initial.py` for changes to already-shipped tables — that would silently break deployed databases.
+
+```bash
+./dev.py db migrate "describe change"   # Autogenerate a new migration from model changes
+./dev.py db upgrade                      # Apply pending migrations (runs on user installs too)
+./dev.py db downgrade                    # Revert last migration
+```
+
+**Rule**: model change → add an incremental migration with working `upgrade()` **and** `downgrade()`,
+tested against a populated DB. Only touch `001_initial.py` for the initial schema of a brand-new table
+that has never shipped.
+
+`./dev.py db create-clean` still rebuilds a DB from scratch for **fresh installs and test runs**, but is
+**no longer** the way to evolve an existing schema.
+
+### Naming: `00N_<target release or scope>`
+
+`./dev.py db migrate` generates a random hex revision id and a slugified filename. **Rename both**
+before committing, while the migration is still unreleased:
+
+```
+001_initial.py                  002_identifier_other_json_list.py
+003_scheduler_timezone.py       004_release_1_2_0_schema.py
+005_release_1_3_0_schema.py
+```
+
+- **Zero-padded sequential prefix** (`00N_`) so the chain reads in order on disk.
+- After the prefix, either the **target release version** it ships in
+  (`004_release_1_2_0_schema` → v1.2.0, `005_release_1_3_0_schema` → v1.3.0) or the **functional scope** when the migration is a
+  single self-contained change (`003_scheduler_timezone`).
+- The `revision` string inside the file equals the filename without `.py`.
+- ⚠️ **Keep the id at 32 characters or fewer.** Alembic's own `alembic_version.version_num`
+  is `VARCHAR(32)`, and on an engine that enforces length a longer id fails to stamp.
+  `004_release_1_2_0_schema` is 24 — comfortable, but `005_release_1_3_0_taxonomy_rework`
+  would be 33 and would not fit. Count before committing:
+  `python -c "print(len('005_your_revision_id'))"`.
+
+⚠️ **The revision id is the contract; the filename is not.** Alembic resolves revisions by id,
+never by path, so a file can be renamed freely — this is *verified*: renaming
+`5b1333fa6b07_scheduler_times_use_configured_timezone.py` to `003_scheduler_timezone.py` left
+databases stamped `5b1333fa6b07` upgrading to head with a schema identical to a from-scratch
+build. The **id**, once it appears in a published tag, is in users' `alembic_version` tables
+and can never change or disappear. Before removing or consolidating any revision:
+
+```bash
+git cat-file -e <tag>:backend/alembic/versions/<file>   # is it inside a released tag?
+```
+
+Anything inside a released tag stays in the chain. Anything not released may be consolidated.
+
+**One migration per release.** Before a release, the cycle's unreleased migrations are folded into one
+`00N_release_<version>_schema`: 004 for 1.2, and `005_release_1_3_0_schema` for 1.3 (decision of 19/10/2026).
+The folded file must give the same schema as the chain it replaces: freeze that schema before deleting
+the chain, and test the new file against it (`test_migration_005_release_1_3.py`). A database stamped with a
+retired id comes from an unreleased build only: it is brought forward by hand (the developer journal holds the
+procedure), never by code in the app, and a backup at such an id is refused as from a newer LibreFolio.
+
+### One head, always — never `alembic merge`
+
+Two migrations authored in parallel that declare the same `down_revision` produce **no Git
+conflict** and a fork that only bites on a fresh install. Resolve it by re-parenting one onto
+the other, not with a merge node.
+
+This is not a style preference. `alembic_head_revision()` (`services/platform/readiness.py`,
+read at startup by `database_bootstrap.ensure_database_exists()` and by `GET /system/ready`) calls
+`ScriptDirectory.get_current_head()` (singular), which **raises `CommandError` on multiple
+heads**; the caller swallows it and returns `None`, so the pending-migration check at startup
+silently evaluates to false and **the server boots without migrating** — the exact failure the
+check exists to prevent. A fork therefore disables auto-upgrade for every install while
+leaving only a warning in the log, and `/system/ready` answering `migrations: unknown`.
+
+`db_schema_validate.py` enforces `len(ScriptDirectory.get_heads()) == 1`.
+
+### Indexes: only the ones a query uses
+
+The developer's rule (19/10/2026), after an analysis found 13 indexes nobody needed (dropped by
+`005_release_1_3_0_schema`; `001_initial.py` stays as released):
+
+- **A `UNIQUE` constraint already creates its index** (`sqlite_autoindex_<table>_<n>`). Never add an `Index`,
+  `index=True` or `CREATE INDEX` on the same columns. In a model, `Field(unique=True)` or a `UniqueConstraint`
+  alone: `unique=True, index=True` makes `create_all` build a unique index where a migration writes the
+  constraint, and a migration that wrote both left six duplicates in the 1.2 schema.
+- **No index that is the left prefix of another.** `(broker_id, date, id)` already serves every query on
+  `broker_id`, and SQLite's foreign-key checks on it.
+- **Every new index has a query that uses it, proven with `EXPLAIN QUERY PLAN`**: name the query in the
+  migration's docstring, with the plan line (`SEARCH <table> USING INDEX <name> (...)`). An index nobody reads
+  costs space and every write.
+- **The guard**: `db validate` (`db_schema_validate.py`) fails on an index equal to, or a left prefix of, another
+  index of the same table, automatic ones included. A `UNIQUE` prefix of a longer index, a partial index and an
+  expression index are not redundancy.
+
+### Standard Commands
+
+```bash
+./dev.py db check                 # Verify the model CHECK constraints exist in the DB
+./dev.py db current               # Show current revision
+./dev.py db upgrade               # Apply pending migrations
+./dev.py db downgrade             # Revert last migration
+./dev.py db migrate "message"     # Create a new incremental migration
+```
+
+### Data Separation
+
+| Environment | DB Path | Command |
+|-------------|---------|---------|
+| Production | `backend/data/prod/sqlite/app.db` | `./dev.py db create-clean` |
+| Test | `backend/data/test/sqlite/app.db` | `./dev.py db create-clean --test` |
+
+Completely isolated — different SQLite files, different data directories.
+
+## Session Management
+
+- `get_async_engine()` — singleton async engine
+- `get_session_generator()` — FastAPI dependency yielding `AsyncSession`
+- All DB operations use async SQLAlchemy sessions
+

@@ -12,6 +12,11 @@
   is not noise to be skipped, it is a decision the user should be aware of before
   the data lands in the portfolio.
 
+  A notice whose `context.report_issue` is `true` carries, under its message, the fix step's link «open an issue on
+  GitHub» (`importWizard.fixStep.reportIssueLink`), on every instance. Two uses: a warning for rows the plugin left out
+  because it does not know them (W-B85, Danske Bank's `excluded_status`), and a note from a plugin in beta that suspects
+  its own reading (Fineco's `fineco_incomplete_rows`, W-B83).
+
   Legacy plugins that append plain strings are coerced backend-side into
   `{severity: 'warning', code: 'generic', message: <string>}`, so this component
   never has to deal with bare strings.
@@ -21,6 +26,7 @@
     import {t} from 'svelte-i18n';
     import BrimEvidenceTable from './BrimEvidenceTable.svelte';
     import {resolveBrimEvidenceComment, resolveBrimNoticeMessage} from '$lib/features/transactions/resolveBrimNotice';
+    import {GITHUB_NEW_ISSUE_URL} from '$lib/components/assets/assetSearchReport';
     import type {BrimNotice} from '$lib/types';
 
     interface Props {
@@ -38,6 +44,11 @@
     function severityOf(notice: BrimNotice): 'info' | 'warning' {
         return notice.severity === 'info' ? 'info' : 'warning';
     }
+
+    /** Whether the plugin asks the user to report its reading (`context.report_issue`, the boolean `true` only). */
+    function reportsIssue(notice: BrimNotice): boolean {
+        return (notice.context as Record<string, unknown> | null | undefined)?.report_issue === true;
+    }
 </script>
 
 <ul class={dense ? 'space-y-1.5' : 'space-y-2'} data-testid="brim-notice-list">
@@ -53,6 +64,15 @@
                 <p class="{dense ? 'text-xs' : 'text-sm'} leading-relaxed whitespace-pre-line {severity === 'info' ? 'text-lf-info' : 'text-lf-warning'}" data-testid="brim-notice-message">
                     {resolveBrimNoticeMessage(notice, $t)}
                 </p>
+                {#if reportsIssue(notice)}
+                    <a
+                        href={GITHUB_NEW_ISSUE_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="inline-block {dense ? 'text-xs' : 'text-sm'} font-medium underline underline-offset-2 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus {severity === 'info' ? 'text-lf-info' : 'text-lf-warning'}"
+                        data-testid="brim-notice-report-issue">{$t('importWizard.fixStep.reportIssueLink')}</a
+                    >
+                {/if}
                 {#each notice.evidence ?? [] as evidence}
                     <BrimEvidenceTable evidence={{...evidence, title: evidence.title || $t('importWizard.evidenceRowsTitle'), comment: resolveBrimEvidenceComment(notice, evidence.comment, $t)}} tone={severity} collapsible={collapsibleEvidence} {onGotoRow} />
                 {/each}

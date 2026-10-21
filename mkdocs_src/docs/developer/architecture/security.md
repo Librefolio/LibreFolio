@@ -874,7 +874,20 @@ encrypt (`backend/app/api/v1/backup/panel.py` passes no password). The format is
 alike). `jobs.start_backup()` creates the job's folder and its first state before the thread runs: a full disk or quota
 there (`jobs.out_of_space()`) answers `507` `backup_no_space`, `Not enough free space to start the backup`, logged as a
 warning, `Instance backup could not start: not enough free space` (lot B-30). Another backup running stays `409`
-`backup_busy`, and any other failure `500` `backup_folder_unusable` or `backup_failed`.
+`backup_busy`, and any other failure `500` `backup_folder_unusable` or `backup_failed`. The `backup_busy` detail names
+the running backup, `job_id` and `origin`, to a caller that can read it: the Backup tab always, the hosting panel only
+a backup of its own (lot B-8). A run records its job id in the lock it holds (`backups/.jobs/.lock`, its content), once
+its first state is written; a refused start reads it back, never through a link, and names the job only while its state
+says it runs. A clear start of the tab follows a backup of its own kind (`ui`) whose start answer was lost, and offers
+it only if it ends clear; it keeps that adoption across a reload (`librefolio.backup.adopted`). The backup the tab
+already follows by itself (its own, started there) is followed as its own, never adopted: its end is offered whatever
+its mode. A secure start never
+follows one: a job records no user, so nothing tells whether that backup carries this password (defect of the
+automatic review, 19/10). One of the command line or of the panel is never followed. The tab does not name the backup
+that runs; the answer does (developer, 19/10). Whatever its origin, the card says only that another backup runs, or
+follows its own, and never shows the job's id or origin. The tab writes them to the browser console instead, with the
+state, `running`: one `console.warn` per refused start (`backupJob.svelte.ts`), whatever the log level. None of the
+three is personal data.
 
 **The creation** (`jobs._run()`). With a password, `build_archive()` writes the zip as for a clear backup, in the
 job's folder `backups/.jobs/<id>/` (`0700`, the zip `0600`), with the instance key entry when there is one to carry
@@ -1063,6 +1076,26 @@ The startup step `backup-leftovers`, right after `restore-commit` (decision N66;
 
 A read of a job, through `get_job()` (the Backup tab and the hosting panel following their jobs, the downloads), ends
 a dead run the same way, its work files included, without waiting for a restart.
+
+A state that cannot be read is no job, to that read and to every cleanup (lot B-50): a content that is no job's state
+(a document that is not a JSON object, or a date without a time zone, included), a folder, a link or a special file in
+its place (lot B-53), or a file the server may not read. `get_job()` answers `BackupJobNotFoundError`, so the routes
+answer `404` `backup_job_not_found`, never a `500`, and log one warning, `A backup job's state cannot be read`, with
+the job's id and the error's type name, never its content. A start goes on, and the folder expires by its date. The
+other errors of the disk, transient, stay as they come: a `500` the tab retries, which a «not found» would make it
+forget.
+
+A restore check whose state cannot be read is likewise none, `restore_stage_not_found`, in silence: a content that is
+no check's state (a date without a time zone included), a folder, a link or a special file in its place, or no
+permission to read it; the other errors of the disk reach the caller the same way, so the check's read is a `500` the
+tab retries (lot B-55). `prune` removes such a state, and one a writer killed outright left half written
+(`<id>.json.part`), once older than a check's lifetime and while no check runs (lot B-54). The report of a finished
+check that cannot be read is no report: the check is answered without it, never a `500`.
+
+The state of a job or of a check, the report of a check and the outcome ticket of a restore are read through one
+reader, `read_regular_file()` (lot B-53): it never follows a link, never waits on a FIFO, and closes its descriptor
+whatever happens. Read the old way, a folder left a descriptor open at each read, and a FIFO held the read forever:
+the start of a backup, the reads of the tab and the startup sweep included.
 
 - **Nothing a running process holds**: the run lock of the backups (a `dev.py backup create` running while the server
   starts keeps its job), the lock of the checks (a check of the command line or of the app), an `inspect` younger than
