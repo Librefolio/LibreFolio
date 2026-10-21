@@ -7170,3 +7170,32 @@ riduzione sull'endpoint dei cambi (`max_points`, `sample_like`, `sample_bounds`,
    `services signal-registry` 66 (i perni «solo asset» del rendimento mobile aggiornati), `asset-signals` 30,
    `test_risk_signal_plugins.py` 45. Richiesta del coordinatore: i 5 test Vitest di Z-29b registrati in
    `_frontend_utility.py` (core-unit); `check-orphans` pulito (596 unitari, 515 backend).
+
+### Z-29d ridotto — l'anteprima del dialogo dei confronti: analisi (22/10, ondata 3, base `46455857a`, sola lettura)
+
+**Il problema, oggi in dev (dopo Z-29b).** Nel dialogo delle impostazioni di una scheda ridotta (settimanale o mensile),
+se l'utente sceglie un nuovo asset da confrontare, l'anteprima non disegna la linea finché non salva. Il motivo:
+`signalSourcesFor(...).comparisonTarget` (`assets/+page.svelte:1310-1321`) restituisce `null` quando il bersaglio non
+è ancora stato letto «come la scheda» (`targetSamples`) e la scheda non è giornaliera. Dopo il salvataggio la ricarica
+per scheda (Z-29b) lo legge e la linea compare. Esempio: scheda AAPL settimanale, scelgo «confronta con MSFT» → nessuna
+linea nell'anteprima; salvo → la linea compare sulla scheda.
+
+**La cura proposta (0,5 giorni).**
+1. `assets/+page.svelte`: quando `comparisonTarget(assetId)` non trova il campione di `<scheda>|<bersaglio>`, chiede
+   alla pagina di leggerlo in differita (`queueMicrotask`, mai dentro un `$derived`: Svelte rifiuta le scritture di
+   stato lì), una sola volta per scheda, bersaglio, intervallo e `max_points`; la lettura usa `buildReducedQuery` con la
+   scheda in `include_price: false` (solo il passo, Z-29a-f) e il bersaglio in `sample_like`, scrive in
+   `reducedPrices.putTarget` e in `targetSamples`; l'anteprima si ridisegna da sola (legge `targetSamples`, che è
+   `$state`). Un errore non riprova finché non cambia l'intervallo.
+2. Con la vista «rendimento mobile» di Y-40 lo stesso bersaglio deve chiedere anche il suo rendimento mobile (il
+   `calendar` che Y aggiunge a `CardQueryInput` in `reducedPriceQuery.ts`): la lettura differita va costruita sulla
+   versione di Y.
+3. `ChartSettingsModal.svelte` non cambia: legge già le fonti dalla pagina (`signalSources`).
+
+**Rossi previsti.** Vitest su un caricatore puro (`lib/utils/targetSampleLoader.ts`, nuovo: deduplica, una lettura per
+chiave, nessun nuovo tentativo dopo un errore, chiave con intervallo e `max_points`); E2E `front-asset asset-list`: su
+una scheda settimanale, scelto un bersaglio nel dialogo, l'anteprima ha la linea di confronto prima del salvataggio.
+
+**Perché aspetto.** I file da toccare sono `assets/+page.svelte` e, per il punto 2, `reducedPriceQuery.ts`: tutti e due
+sporchi nel worktree di Y (Y-40, 196 righe nuove nella pagina, proprio su bersagli e richieste). Scritto ora, il
+caricatore divergerebbe dalla versione di Y. Riprendo dopo il commit di Y-40.
