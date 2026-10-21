@@ -17,14 +17,14 @@
  * ## The harness
  *
  * The modal runs as in the app — real i18n, real `ModalBase`, real signals section — with its preview chart stood in
- * for. Both chart modules the preview may mount are replaced by the same recorder: `LineChart.svelte` today,
- * `PriceChartFull.svelte` once Y-39b moves the preview onto the detail page's chart, so the cases survive the swap. The
+ * for. Both chart modules the preview mounted over time are replaced by the same recorder (`LineChart.svelte` before Y-39b, `PriceChartFull.svelte`
+ * since), so the Y-39a cases read the same props whichever chart the preview is. The
  * stand-in keeps the props object the modal hands the chart — its getters read the modal's state at the time of the read
  * — and marks its place with `data-testid="chart-settings-preview-chart"`, so the preview is found by test id inside the
  * open modal. The cases read the `overlaySignals` and the `data` it receives: never a pixel, never a translated text —
  * «Synthetic peer» is a name the case injects.
  *
- * The cases do not choose the preview's view: its toggle is the modal's own today, and Y-39b hands it to the new chart.
+ * The cases do not choose the preview's view: its toggle is the modal's own, and the modal hands it to the chart (`externalViewMode`).
  * A comparison's or a pair's values are accepted in either view — the levels in the absolute one, their change from the
  * first in the percentage one — and the straight rates are told from their reciprocals in both.
  *
@@ -77,7 +77,7 @@ vi.mock('$lib/stores/reference/assetStore', async (importOriginal) => ({
 }));
 
 import {tick, type ComponentProps} from 'svelte';
-import {render, screen, setupI18n, within} from '$test/component';
+import {fireEvent, render, screen, setupI18n, within} from '$test/component';
 import type {SignalDataSources} from '$lib/charts/chartSignalRendering';
 import type {RenderedSignal, SignalConfig, SignalStyle} from '$lib/charts/signals';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
@@ -156,11 +156,13 @@ interface OpenOptions {
     signals: SignalConfig[];
     pairData?: LineDataPoint[];
     signalSources?: SignalDataSources;
+    /** Saved settings other than the defaults: what the preview's aesthetics and scales start from. */
+    saved?: Partial<ChartSettings>;
 }
 
 /** The modal, open, on settings holding `signals` — as a list page opens it for a card (pair) or for the filter bar (global). */
-async function openModal({mode, signals, pairData, signalSources}: OpenOptions): Promise<void> {
-    const settings: ChartSettings = {...(JSON.parse(JSON.stringify(DEFAULT_CHART_SETTINGS)) as ChartSettings), signals: JSON.parse(JSON.stringify(signals)) as SignalConfig[]};
+async function openModal({mode, signals, pairData, signalSources, saved}: OpenOptions): Promise<void> {
+    const settings: ChartSettings = {...(JSON.parse(JSON.stringify(DEFAULT_CHART_SETTINGS)) as ChartSettings), ...saved, signals: JSON.parse(JSON.stringify(signals)) as SignalConfig[]};
     const props: ComponentProps<typeof ChartSettingsModal> = {open: true, settings, mode};
     if (pairData) props.pairData = pairData;
     if (signalSources) props.signalSources = signalSources;
@@ -169,6 +171,14 @@ async function openModal({mode, signals, pairData, signalSources}: OpenOptions):
 }
 
 /** What the one chart of the open modal's preview receives: the overlay signals, and the data it draws them over. */
+function previewMount(): {module: string; live: Record<string, unknown>} {
+    const stands = within(screen.getByTestId('chart-settings-modal')).getAllByTestId('chart-settings-preview-chart');
+    expect(stands, 'the open modal mounts one preview chart').toHaveLength(1);
+    const mount = charts.mounts.find((entry) => entry.element === stands[0]);
+    if (!mount) throw new Error('the preview chart was not placed by a chart stand-in');
+    return mount;
+}
+
 function previewChart(): {overlaySignals: RenderedSignal[]; data: LineDataPoint[]} {
     const stands = within(screen.getByTestId('chart-settings-modal')).getAllByTestId('chart-settings-preview-chart');
     expect(stands, 'the open modal mounts one preview chart').toHaveLength(1);
@@ -257,5 +267,97 @@ describe('ChartSettingsModal preview — saved local signals drawn through signa
         await openModal({mode: 'pair', signals: [COMPARISON_42, LINEAR, fxPair(false)], pairData: PAIR_DATA});
 
         expect(previewChart().overlaySignals.map((signal) => signal.id)).toEqual([LINEAR.id]);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Y-39b (F-1) — the preview is the detail page's chart
+// ---------------------------------------------------------------------------
+
+/**
+ * Y-39b (F-1) — the preview draws on `PriceChartFull`, the chart of the detail pages, as they draw it.
+ *
+ * What it protects: the preview of the settings used to be a `LineChart` of its own, 140 px tall, which drew the signals,
+ * the aesthetics and the axis scales its own way; a signal looked one way in the preview and another on the page it was
+ * for. The contract, after the cure: the preview mounts `PriceChartFull` with
+ *
+ * - the ABSOLUTE data (`pairData`, or the synthetic curve) and `externalViewMode` = the preview's own Abs/% toggle —
+ *   `PriceChartFull` takes the percentage itself, as on the detail pages; the modal's toggle stays, and the chart's
+ *   toolbar and the floating controls it carries over the plot are hidden (`hideToolbar`, `hideViewModeToggle`);
+ * - only the line (`externalChartType: 'line'`, `disableCandlestick`: no OHLC in a list), no events, no measure and no edit, and about 220 px of
+ *   height (`chartHeight`); the wheel zoom is the chart's own;
+ * - the aesthetics and the scales of the settings in editing: `colorByBaseline`, `areaFill`, `showGridLines`,
+ *   `showGradient`, the primary axis of the previewed view (`yAxisMode`/`yAxisMin`/`yAxisMax`) and
+ *   `secondaryAxisScales`.
+ *
+ * How it is tested: as the cases above, over the recorder that stands in for the chart modules: which module was
+ * mounted, with which props — never a pixel. The toggle is found by its test id.
+ */
+describe('ChartSettingsModal preview — the detail page’s chart (Y-39b, F-1)', () => {
+    const viewToggle = (view: 'absolute' | 'percentage') => screen.getByTestId(`chart-settings-preview-view-${view}`);
+
+    it('mounts PriceChartFull, in place of LineChart', async () => {
+        await openModal({mode: 'pair', signals: [], pairData: PAIR_DATA});
+
+        expect(previewMount().module).toBe('PriceChartFull');
+    });
+
+    it.each(['absolute', 'percentage'] as const)('hands the chart the absolute data and the %s view, which the modal’s toggle chooses', async (view) => {
+        await openModal({mode: 'pair', signals: [], pairData: PAIR_DATA});
+
+        await fireEvent.click(viewToggle(view));
+        await tick();
+
+        const {live} = previewMount();
+        expect(live.externalViewMode, 'the chart is not told the preview’s view').toBe(view);
+        expect(live.data, 'the chart is not handed the absolute data: the percentage is the chart’s to take').toEqual(PAIR_DATA);
+    });
+
+    it('draws the line only, with no toolbar, no events, no measure and no edit, in about 220 px', async () => {
+        await openModal({mode: 'pair', signals: [], pairData: PAIR_DATA});
+
+        const {live} = previewMount();
+        expect({
+            hideToolbar: live.hideToolbar,
+            disableCandlestick: live.disableCandlestick,
+            hideViewModeToggle: live.hideViewModeToggle,
+            externalChartType: live.externalChartType,
+            editMode: live.editMode ?? false,
+            measureMode: live.measureMode ?? false,
+            eventMarkers: live.eventMarkers ?? [],
+            chartHeight: live.chartHeight,
+        }).toEqual({hideToolbar: true, disableCandlestick: true, hideViewModeToggle: true, externalChartType: 'line', editMode: false, measureMode: false, eventMarkers: [], chartHeight: '220px'});
+    });
+
+    it('hands the chart the aesthetics and the scales of the settings in editing — the percentage view’s scale in the percentage view', async () => {
+        const saved: Partial<ChartSettings> = {
+            colorByBaseline: false,
+            areaFill: false,
+            gridLines: false,
+            staleGradient: false,
+            axisScales: {absolute: {mode: 'custom', min: 90, max: 110}, percentage: {mode: 'include0'}, secondary: {rsi: {mode: 'custom', min: 0, max: 100}}},
+        };
+        await openModal({mode: 'pair', signals: [], pairData: PAIR_DATA, saved});
+
+        await fireEvent.click(viewToggle('absolute'));
+        await tick();
+        const absolute = previewMount().live;
+        expect(
+            {
+                colorByBaseline: absolute.colorByBaseline,
+                areaFill: absolute.areaFill,
+                showGridLines: absolute.showGridLines,
+                showGradient: absolute.showGradient,
+                yAxisMode: absolute.yAxisMode,
+                yAxisMin: absolute.yAxisMin,
+                yAxisMax: absolute.yAxisMax,
+                secondaryAxisScales: absolute.secondaryAxisScales,
+            },
+            'the absolute view',
+        ).toEqual({colorByBaseline: false, areaFill: false, showGridLines: false, showGradient: false, yAxisMode: 'custom', yAxisMin: 90, yAxisMax: 110, secondaryAxisScales: saved.axisScales?.secondary});
+
+        await fireEvent.click(viewToggle('percentage'));
+        await tick();
+        expect(previewMount().live.yAxisMode, 'the percentage view').toBe('include0');
     });
 });

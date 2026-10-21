@@ -492,7 +492,7 @@ antenato della base il 19/10. I titoli ⏳ del §7 sono il registro del momento:
 | Z-29d-0 | `AssetComparisonSignal._basePoint`: la base in % del confronto dal punto iniettato (per Z-29b e Z-29d) | ✅ committato 20/10, entra col treno 2 | `bccf05cbb` (giornale `c19d808fe`) | «20/10 · Z-29d», «Risposte del coordinatore (20/10 09:01) e il lotto Z-29d-0» |
 | Z-29d | il dialogo chiede la serie allineata del bersaglio | ⏸ aspetta Z-29a in dev e Z-29b sulla base | — | «20/10 · Z-29d» |
 | Y-38 | il selettore dell'asset di confronto fa scorrere il nome lungo | ✅ committato 20/10, entra col treno 2 | `252ddefbd` (giornale `a91ff36cd`) | «20/10 · Y-38» |
-| Y-39 | la scheda e la sua anteprima: una funzione dei segnali, l'anteprima sul grafico del dettaglio (rivisto con F-1) | ⏳ via 20/10 13:16. Y-39a: cura fatta, prove leggere verdi; aspetta l'OK sulle righe del runner e lo slot E2E. Y-39b dopo l'aggiornamento della base | — | «20/10 · La scheda e l'anteprima», «20/10 · Y-39 rivisto e Y-40», «20/10 · Il lotto Y-39» |
+| Y-39 | la scheda e la sua anteprima: una funzione dei segnali, l'anteprima sul grafico del dettaglio (rivisto con F-1) | ⏳ via 20/10 13:16. Y-39a ✅ in dev (treno 6, `89e8b2e61`). Y-39b: cura fatta il 21/10, prove leggere e prova a mano verdi; aspetta lo slot E2E | — | «20/10 · La scheda e l'anteprima», «20/10 · Y-39 rivisto e Y-40», «20/10 · Il lotto Y-39» |
 | Y-40 | le tre viste: assoluto, percentuale, rendimento mobile (barra, scheda, impostazioni, dettaglio), anche sui cambi (V-9) | ⏸ nella 1.3, dopo Z-29s; V-1…V-8 (a) | — | «20/10 · Y-39 rivisto e Y-40», «20/10 · Il lotto Y-39» (decisioni) |
 
 Fuori dai lotti:
@@ -8134,3 +8134,56 @@ toccherà con FE4), ma separato: niente conflitti con X.
    > Nessun rosso, nessun ripetuto. Porta 6189 libera a fine corsa (`lsof`: nessun ascoltatore). Log in
    > `…/scratchpad/y39a_e2e_{fx-settings,fx-list,asset-list}.log` (cartella di sessione, non nel repo).
 6. ✅ 21/10 · CHECKPOINT READY (dopo l'E2E). Da lì Z-29b può partire su `assets/+page.svelte`.
+
+### I passi di Y-39b
+1. ✅ 21/10 · I rossi (HEAD `89e8b2e61`, `api sync` fatto):
+   - `LineChart.test.ts`: nuovo `describe` «a compact chart colours its line by its baseline…» (9 casi): la base tratteggiata sul
+     compatto, la base = primo punto dei dati in ingresso (8 anni di giorni, disegnati a settimane), `baselineValue`, la base 0 in
+     percentuale, verde/rosso chiari, scuri e ridisegno al cambio tema, due guardie (colorByBaseline spento; la base del grafico
+     pieno), `PriceChartCompact` che inoltra `baselineValue`. **7 rossi, 2 verdi** (le guardie), ognuno per la causa dichiarata.
+   - `ChartSettingsModal.test.ts`: nuovo `describe` «the detail page's chart» (5 casi): il modulo montato è `PriceChartFull`, dati
+     assoluti e `externalViewMode` dal selettore della modale, solo linea / niente barra, eventi, misure, modifica / 220 px,
+     estetica e scale in modifica (la scala % nella vista %). **5 rossi, 8 verdi** (i casi di Y-39a, che non cambiano).
+2. ✅ 21/10 · La cura.
+   > **Note implementazione**:
+   > - `LineChart.svelte`: la prop `baselineValue` (nel codice `baselineOverride`); `useBaselineColoring = colorByBaseline` (via
+   >   `&& !compact`); la base assoluta è il primo punto non mancante di `data` (prima della riduzione per densità), sostituita da
+   >   `baselineValue` se finito; in percentuale 0. `echarts.init(…chartInitOptions…)`, i colori `COLORS.*` e `chartTheme.ts`
+   >   non toccati; nessun nuovo `isDark ? … : …`. Solo `:450` e la prop: la soglia di densità resta a Z-29b.
+   > - `PriceChartCompact.svelte`: inoltra `baselineValue`.
+   > - `ChartSettingsModal.svelte`: `PriceChartFull` al posto di `LineChart` (dati assoluti, `externalViewMode`, `hideToolbar`,
+   >   `disableCandlestick`, `hideViewModeToggle`, `externalChartType="line"`, 220 px, estetica e scale in modifica,
+   >   `overlaySignalInfoMap` e le etichette di stale); via `previewData` e `normalizeToPercentage` (la percentuale la prende il
+   >   grafico); due `data-testid` sui bottoni Abs / %.
+   > - Doc (agente `docs-writer`, solo inglese): `user/fx/chart-settings.en.md` e `developer/frontend/components/charts.md`
+   >   (tre sezioni: `#signal-rendering`, `#settings-preview-chart`, `#cards-baseline-colour`). `mkdocs build` e `check-links` exit 0.
+   >
+   > **⚠️ Fuori pista**:
+   > - `hideToolbar` nasconde solo la `ChartToolbar`: `PriceChartFull` disegna sul grafico anche un selettore flottante (tipo di
+   >   grafico, Abs/%). Visto nella prova a mano (il test dei props non lo vedeva): aggiunti `disableCandlestick` e
+   >   `hideViewModeToggle`, con il test rosso prima.
+   > - Sulle schede compare ora la linea tratteggiata della base (la disegna `LineChart` ogni volta che colora per base): è la
+   >   regola del contratto, da confermare a occhio dal developer.
+   > - **O2 (`backendRenderer.ts:356`)**: lasciato a Z-29b. La base `baseData[0]` serve i segnali del backend in % e deve valere
+   >   `sample_bounds.first`, che è dei dati della pagina `assets/+page.svelte` (file di Z-29b): serve un `baseValue` nelle opzioni
+   >   del renderer e in `renderBackendResults`, passato dalla pagina insieme al `baselineValue` della scheda (stessa F).
+3. ✅ 21/10 · Le prove leggere (carico 3-8):
+   - 5 file Vitest (`LineChart`, `ChartSettingsModal`, `chartCoreHelpers`, `signalRendering.gate`, `chartSignalRendering`): **403/403**;
+     `FxCard.test.ts` + `chartCoreHelpers`: 307/307;
+   - `dev.py test front-portfolio chart-safety-unit` (in `flock`): **9 file, 144/144**;
+   - `dev.py front check` (dopo `api sync`, in `flock`): **0 errori, 0 avvisi** (due volte, anche dopo l'ultima modifica);
+   - Prettier `--check` sui 5 file: pulito (tre riscritti nelle mie righe, erano puliti a HEAD); `theme-roles --check` pulito;
+     `git diff --check` pulito.
+4. ✅ 21/10 · La prova a mano, nei due temi (build di debug, corsia 6189, `e2e_test_user`, server fermato, porta libera):
+   - la modale di una scheda: anteprima di 220 px, senza selettori sul grafico, nei due temi;
+   - schede della lista, cambiando tema senza ricaricare: pixel del canvas nei colori scuri (`#4ade80`/`#f87171`) e zero nei chiari
+     dopo il passaggio al buio; di nuovo chiari e zero scuri tornando al chiaro (la cache non tiene colori vecchi).
+5. ✅ 21/10 · Slot E2E (coordinatore), corsia 6189 + `/tmp/librefolio-r13-y`, HEAD `89e8b2e61` + il lotto; ogni spec in `flock`,
+   `nice`, `--workers 2`, `LC_ALL=en_US.UTF-8`, una alla volta.
+   > **Note implementazione**: comando `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6189
+   > --data-dir /tmp/librefolio-r13-y --workers 2 <categoria> <spec>`.
+   > - `front-fx fx-settings`: **3/3** (8,9 s);
+   > - `front-fx fx-list`: **25/25** (56,0 s);
+   > - `front-asset asset-list`: **43/43** (2,0 min).
+   > Nessun rosso, nessun ripetuto. Porta 6189 libera a fine corsa (`lsof`: nessun ascoltatore). Log in
+   > `salvataggi-worktrees-20261021/ondata2/y-e2e-{fx-settings,fx-list,asset-list}.log`.

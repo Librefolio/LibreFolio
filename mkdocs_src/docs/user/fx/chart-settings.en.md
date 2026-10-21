@@ -28,8 +28,12 @@ settings: changing the FX charts never touches the asset charts.
 
 ## 👀 Preview before you apply
 
-The window shows a preview chart with its own **Abs** / **%** switch. Your charts change only when
-you click **Apply**; **Cancel** asks before discarding your changes.
+The window shows a preview chart with its own **Abs** / **%** switch. It is the same chart as on the
+[pair](detail/index.md) and [asset](../assets/detail/chart.md) detail pages, only taller than a
+card's chart: a line (no candlesticks), without the toolbar, event markers or measure tool, and you
+can zoom it with the mouse wheel like on the detail page. It draws with the look and the axis ranges
+you are editing, and a comparison signal shows its asset's icon and type in the tooltip. Your charts
+change only when you click **Apply**; **Cancel** asks before discarding your changes.
 
 <div class="screenshot-container" style="max-width: 620px; margin: 1rem auto;">
     <img class="gallery-img" data-category="assets" data-name="chart-settings" alt="Chart settings modal with the live preview">
@@ -40,13 +44,16 @@ you click **Apply**; **Cancel** asks before discarding your changes.
 - 🎯 **For one chart**, the preview uses that chart's real data. Indicators show the last applied
   settings until you click **Apply**, and a banner reminds you of it.
 
+A signal looks the same in the preview as on the card, so what you see here is what the card draws
+after **Apply**.
+
 ---
 
 ## 🎨 Appearance
 
 | Setting | What it does |
 |---------|--------------|
-| **Baseline Colors** | Green above, red below the start of the period |
+| **Baseline Colors** | Green above, red below the start of the period, with a dashed baseline. It applies to the cards in the lists, the detail pages and the preview |
 | **Area Fill** | Gradient under the line |
 | **Grid Lines** | Horizontal dashed grid |
 | **Stale Gradient** | Fades the days without a new value, which repeat an earlier one |
