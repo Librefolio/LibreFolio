@@ -45,6 +45,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.brim_providers import _brim_io as io
 from backend.app.services.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
@@ -71,8 +72,9 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
 
 FEE_TYPES = ("withdraw fee", "withdrawal conversion fee", "conversion fee")
 
-# Types to skip
-SKIP_TYPES = [
+# Types left out that carry a cost or a tax: the plugin does not import them yet, so a notice with the link to open an issue lists
+# them (W-B87, D-W85-4).
+NOT_IMPORTED_TYPES = [
     "overnight fee",
     "overnight refund",
     "sdrt",  # UK stamp duty
@@ -216,12 +218,14 @@ class EtoroBrokerProvider(BRIMProvider):
         extracted_assets: Dict[int, Dict[str, Optional[str]]] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
+        skips = io.RowSkips()
 
         detected_delim = self.detect_csv_delimiter(file_path)
 
         try:
             with self._open_text(file_path) as f:
                 reader = csv.DictReader(f, delimiter=detected_delim)
+                skips.set_headers(reader.fieldnames)
                 row_num = 1
 
                 for row in reader:
@@ -231,8 +235,9 @@ class EtoroBrokerProvider(BRIMProvider):
                     if not tx_type_raw:
                         continue
 
-                    # Skip non-transactional rows before normal type mapping.
-                    if any(skip in tx_type_raw for skip in SKIP_TYPES):
+                    # Costs and taxes the plugin does not import yet: listed, before the normal type mapping.
+                    if any(skip in tx_type_raw for skip in NOT_IMPORTED_TYPES):
+                        skips.unknown(row_num, row, f"not imported yet: {tx_type_raw}")
                         continue
 
                     amount = _parse_etoro_number(row.get(COL_AMOUNT, ""))
@@ -344,7 +349,7 @@ class EtoroBrokerProvider(BRIMProvider):
 
         return BRIMParseOutput(
             transactions=transactions,
-            warnings=warnings,
+            warnings=[*warnings, *skips.notices()],
             validation_issues=validation_issues,
             extracted_assets=extracted_assets_typed,
         )
@@ -355,7 +360,8 @@ class EtoroBrokerProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
-        return "1.1.0"
+        # 1.2.0 — overnight fees, their refunds and SDRT are listed in a notice with the link to open an issue (W-B87).
+        return "1.2.0"
 
     @property
     def test_file_pattern(self) -> Optional[str]:

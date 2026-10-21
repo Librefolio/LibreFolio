@@ -20,6 +20,8 @@ Responsibilities:
   data starting at column A in CSV but column C in the XLSX variant).
 - Parse Italian-formatted numbers (``1.234,56`` -> ``1234.56``) and plain/Anglo
   numbers (``1867.178`` -> ``1867.178``) and multi-format dates.
+- Collect the rows a plugin leaves out and turn them into the two shared notices (``RowSkips``): *known rows quietly,
+  unknown rows loudly* (the plugin guide's rule 10, W-B86).
 
 None of these helpers touch the FX subsystem or recompute any figure; they only
 transcribe and normalise what the broker reported (BRIM verbatim rule).
@@ -34,8 +36,9 @@ from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Union
 
+from backend.app.schemas.brim import BRIMEvidence, BRIMNotice
 from backend.app.services.brim.brim_provider import BRIMProvider
 
 try:
@@ -398,3 +401,86 @@ def detect_maturity_hits(transactions: Sequence[Any]) -> Dict[int, List[int]]:
         if looks_like_maturity(getattr(tx, "description", None)):
             hits.setdefault(asset_id, []).append(idx)
     return hits
+
+
+# =============================================================================
+# ROWS LEFT OUT — "known rows quietly, unknown rows loudly" (W-B86)
+# =============================================================================
+
+#: A row whose type, status or description the plugin does not recognise, or recognises but does not import yet.
+ROWS_NOT_RECOGNIZED = "rows_not_recognized"
+#: A row the plugin cannot read: a date, an amount, a currency or a required field is missing or unusable.
+ROWS_UNREADABLE = "rows_unreadable"
+
+_SKIP_DETAIL_HEADER = "Reason"
+_SKIP_COMMENTS = {
+    ROWS_NOT_RECOGNIZED: "The last column says what each row is, or what of it was not imported: the importer does not know it, or does not import it yet.",
+    ROWS_UNREADABLE: "The last column says what could not be read on each row.",
+}
+_SKIP_MESSAGES = {
+    ROWS_NOT_RECOGNIZED: "{n} rows were left out, or only partly imported, because the importer does not recognise them or does not import them yet. If they change your shares or cash, report them so the case can be handled.",
+    ROWS_UNREADABLE: "{n} rows were left out because a value they need cannot be read. Check them and, if the file is right, report them so the case can be handled.",
+}
+
+
+class RowSkips:
+    """The rows a plugin leaves out for a reason it cannot call safe, grouped into the two shared notices (W-B86).
+
+    A plugin calls ``unknown`` for a row it does not recognise (a type, a status, a description) and ``unreadable`` for a row it
+    cannot read (a date, an amount, a required field), then returns ``notices()`` with its warnings. Each notice is a
+    ``warning`` with the rows as evidence (the file's header, one last column naming the reason, the 1-based line numbers) and
+    ``context`` ``{"count": n, "report_issue": True}``: the wizard shows «open an issue on GitHub» under it, so the users
+    become the canaries of a broker whose export changes. A row the plugin knows it may drop (a blank, a header or a total
+    row, a reservation, a cancelled order) is not collected here: it is dropped silently, with at most a log line.
+
+    The two codes are shared, and so are their i18n keys (``importWizard.brimNotice.<code>`` and
+    ``importWizard.brimEvidence.<code>``); the message here is the English fallback.
+    """
+
+    def __init__(self, headers: Optional[Sequence[Any]] = None) -> None:
+        self._headers = [cell_str(cell) for cell in (headers or [])]
+        self._rows: Dict[str, List[tuple[int, List[str], str]]] = {ROWS_NOT_RECOGNIZED: [], ROWS_UNREADABLE: []}
+
+    def set_headers(self, headers: Optional[Sequence[Any]]) -> None:
+        """Give the header row once the reader has it (a ``csv.DictReader`` knows its field names only when it starts)."""
+        self._headers = [cell_str(cell) for cell in (headers or [])]
+
+    def _cells(self, row: Union[Sequence[Any], Mapping[str, Any]]) -> List[str]:
+        """The row's cells as strings; a ``csv.DictReader`` row is read in the order of the headers the helper was given."""
+        if isinstance(row, Mapping):
+            return [cell_str(row.get(header)) for header in self._headers]
+        return [cell_str(cell) for cell in row]
+
+    def unknown(self, row_number: int, row: Union[Sequence[Any], Mapping[str, Any]], reason: str) -> None:
+        """A row the plugin does not recognise or does not import yet; ``reason`` names it (the unknown type, the status)."""
+        self._rows[ROWS_NOT_RECOGNIZED].append((row_number, self._cells(row), reason))
+
+    def unreadable(self, row_number: int, row: Union[Sequence[Any], Mapping[str, Any]], reason: str) -> None:
+        """A row whose date, amount or required field cannot be read; ``reason`` names the field."""
+        self._rows[ROWS_UNREADABLE].append((row_number, self._cells(row), reason))
+
+    def __bool__(self) -> bool:
+        return any(self._rows.values())
+
+    def count(self, code: Optional[str] = None) -> int:
+        """The rows collected, for one code or for both."""
+        return len(self._rows[code]) if code else sum(len(rows) for rows in self._rows.values())
+
+    def notices(self) -> List[BRIMNotice]:
+        """At most two notices, one for each code that collected rows (unknown first)."""
+        notices: List[BRIMNotice] = []
+        for code in (ROWS_NOT_RECOGNIZED, ROWS_UNREADABLE):
+            rows = self._rows[code]
+            if not rows:
+                continue
+            width = max([len(self._headers), *(len(cells) for _, cells, _ in rows)])
+            headers = [*self._headers, *[f"#{index + 1}" for index in range(len(self._headers), width)]]
+            evidence = BRIMEvidence(
+                title="",
+                headers=[*headers, _SKIP_DETAIL_HEADER],
+                rows=[[*(cells + [""] * width)[:width], reason] for _, cells, reason in rows],
+                row_numbers=[number for number, _, _ in rows],
+                comment=_SKIP_COMMENTS[code],
+            )
+            notices.append(BRIMNotice(severity="warning", code=code, message=_SKIP_MESSAGES[code].format(n=len(rows)), evidence=[evidence], context={"count": len(rows), "report_issue": True}))
+        return notices

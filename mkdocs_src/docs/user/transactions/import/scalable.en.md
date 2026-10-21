@@ -84,6 +84,8 @@ The first export reads the whole history; the next ones start from the last expo
 
 Import each file into its own broker, in the same import or at different times: in the [Import Wizard](how-to.md), drop the CSV files and assign each one to its broker. Never import the same file into two brokers: its transactions would count twice.
 
+Only **executed** orders are imported. Orders that are pending, cancelled, expired or rejected are left out quietly, without a note: an order executed later comes with the next export. A row with a status LibreFolio does not know is listed in an amber warning, with a link to open an issue on GitHub.
+
 !!! note "💡 A file in the wrong broker"
 
     If a broker has a **Default Import Plugin**, the wizard checks every file assigned to it right after the upload. When that plugin cannot read a file, the wizard says why, shows which broker can read it, and offers to move the file, keep it or remove it.

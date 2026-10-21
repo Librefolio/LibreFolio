@@ -28,6 +28,7 @@ To export your stock/crypto transaction history from Revolut:
 
 - Supports stock trades, crypto purchases, dividends paid, custody fees, and cash transfers.
 - Handles multi-currency amounts in the same file automatically.
+- **Stock splits are not imported yet** (Invest statements): the rows are listed in an amber warning, with a link to open an issue on GitHub. Add the split by hand. Transfers between your own accounts are left out quietly, since they change nothing.
 
 ## 🔗 Developer Reference
 
