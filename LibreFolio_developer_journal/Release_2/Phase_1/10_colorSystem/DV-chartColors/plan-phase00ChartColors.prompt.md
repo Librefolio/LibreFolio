@@ -2495,6 +2495,45 @@ secondo la 1.3, tranne `PriceChartFull` e `CandlestickChart` (Y-N65, circa un gi
 > **⚠️ Fuori pista**: nessuna. Prova nei due temi sul browser: non ancora fatta (serve lo slot pesante del
 > coordinatore: build + server sulla porta 6188).
 
+## Ondata 3 di C2 (notte 21→22/10/2026): DV-11, TC-21, DV-12, DV-13
+
+> ✅ **22/10/2026 · DV-11, i colori dei tipi in un posto solo.**
+>
+> **Note implementazione**
+> - `chartCategories.ts`: gli undici tipi e la liquidità non hanno più righe di letterali; sono i ruoli `--lf-cat-*`
+>   (`CATEGORY_ROLES`, esportato). `categoryColor` li legge con `pageRoles(dark)` (`roleColors.ts`, nuovo): il ruolo
+>   letto su `<html>` quando la pagina mostra quel tema, lo stand-in quando chiede l'altro tema o non c'è pagina.
+>   Settori e «Unknown» restano letterali (nessun ruolo). Hook del Lab (C3) invariato.
+> - `roleColors.ts`: i 12 ruoli entrano in `ChartRole` con i loro stand-in (parità con tokens.css nel test esistente);
+>   lo scan dei lettori conta i ruoli nominati nella tabella di `chartCategories.ts`.
+> - Designer Lab: nella scheda «Categorie» la riga di un tipo (e della liquidità) è una vista del ruolo
+>   (`categoryRows` → `role`, `data-role`); il clic apre l'editor sulla variabile (L1), così una modifica raggiunge
+>   badge e grafici insieme e l'export punta alle righe di `tokens.css`. Le vecchie modifiche `category` su
+>   `type:*`/`bucket:Liquidity` diventano modifiche del ruolo (`asRoleChange`, in `readState` e `parseImport`, con avviso).
+>   Lo scanner del catalogo legge ancora le tabelle dei tipi dove esistono (alberi vecchi, test sintetici).
+> - Test: `chartCategories.test.ts` (C2 solo settori e «Unknown», nuovo caso dei ruoli, parità ora «lettura = tokens.css»),
+>   `roleColors.test.ts`, `catalogView.test.ts`, `scanColors.test.ts` (albero reale), `store.test.ts`,
+>   `exportFormat.test.ts`; E2E `designer-lab-live` «one asset type … by its role» riscritto (test-author).
+> - Skill `design-system` e `palette.md`, commento di `tokens.css`: niente più «due copie».
+>
+> ✅ **22/10/2026 · TC-21** (`DataTable.svelte`): una riga cancellata non usa più `opacity` sulle celle; cella opaca
+> (tinta danger al 55 % sulla card) e un velo `::after` dello stesso sfondo al 45 % sopra il contenuto, che lascia
+> passare il puntatore; sui telefoni le celle fisse tornano posizionate per reggere il velo. Test di sorgente
+> `DataTable.rowDeleted.test.ts` (rosso prima, verde dopo).
+>
+> ✅ **22/10/2026 · DV-12** (`e2e/portfolio/dashboard.spec.ts`): `goto('about:blank')` prima della rotta che trattiene
+> il report (test-author). **DV-13**: già superato da TC-20 (lo spec usa `transactionsPageRoot`); da confermare nello
+> slot E2E.
+>
+> **⚠️ Fuori pista**:
+> - La corsa completa ha fatto emergere il contratto «un grafico legge i ruoli sul proprio elemento»
+>   (`AllocationPieChart.test.ts`): `categoryColor` e `sequenceColor` hanno ora un argomento `scope` opzionale (API
+>   compatibile), passato da `AllocationPieChart`, `AllocationHistoryChart` e `SemiDonutChart`; senza `scope` si legge
+>   la pagina (`pageRoles`: `exposureBarColours`, `growthBrokerColor`).
+> - Il livello `category` del Lab non è più esercitato da nessun E2E: lo usano solo i settori, coperti dai Vitest del Lab.
+> - Prove: Vitest 186 file / 6918 test verdi; `front check` 0/0; `mkdocs build` e `check-links` verdi; E2E nello slot
+>   (corsia 6188) `front-portfolio dashboard` 27/27 e `front-designer-lab live` 12/12.
+
 ## Definizione di fatto
 
 - **Un colore fisso per chiave:** ogni chiave ha un colore per tema, uguale in torta e storico, in dashboard, broker

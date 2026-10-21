@@ -104,8 +104,8 @@ html.light,
     --lf-mark-text: #1c2420;
     --lf-mark-line: transparent; /* no edge in light */
 
-    /* Categories (round 3, §1.2 and §1.9): each asset type's colour, the one the charts draw it in — chartCategories.ts
-       holds the same values, and a parity test of DV ties the two copies — and its badge text, -on-soft: the colour
+    /* Categories (round 3, §1.2 and §1.9): each asset type's colour, the one the charts draw it in — the one copy since
+       DV-11: chartCategories.ts reads these roles, roleColors.ts keeps their stand-ins — and its badge text, -on-soft: the colour
        itself, or the colour moved in lightness alone, only as far as 4.5:1 on its tint. The tint, -soft, is derived.
        No green, teal or cyan among them (§1.1): the cash is slate blue */
     --lf-cat-stock: #7041c6;

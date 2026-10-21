@@ -566,7 +566,7 @@
         const hierarchy = buildAllocationHierarchy(
             dataset.sortedNames.map((name) => ({key: name, weight: dataset.avgWeights[name] ?? 0, item: name})),
             // One area per family and no shades (D375): a member never needs a colour of its own here.
-            {resolvePrimary: assetTypeFamily, colorOf: (primary) => categoryColor('type', primary, isDark), shade: (base) => base},
+            {resolvePrimary: assetTypeFamily, colorOf: (primary) => categoryColor('type', primary, isDark, chartContainer), shade: (base) => base},
         );
         const families: SeriesStyle[] = [];
         for (const entry of hierarchy) {
@@ -584,11 +584,11 @@
      * while the unclassified one keeps its own colour.
      */
     function keyedStyling(dataset: AggregatedAllocationDataset, isDark: boolean): SeriesStyle[] {
-        if (dimension === 'sector') return dataset.sortedNames.map((name) => ({id: name, color: categoryColor('sector', name, isDark), members: [name]}));
+        if (dimension === 'sector') return dataset.sortedNames.map((name) => ({id: name, color: categoryColor('sector', name, isDark, chartContainer), members: [name]}));
         const poles = shadePoles(isDark, chartRoles(isDark, chartContainer).color('--lf-surface-card'));
         const rounds = COUNTRY_SEQUENCE.length * 7;
         let rank = 0;
-        const styling = dataset.sortedNames.map((name) => ({id: name, color: isUnclassifiedCountry(name) ? categoryColor('sector', 'Unknown', isDark) : sequenceColor(COUNTRY_SEQUENCE, rank++, isDark, poles), members: [name]}));
+        const styling = dataset.sortedNames.map((name) => ({id: name, color: isUnclassifiedCountry(name) ? categoryColor('sector', 'Unknown', isDark, chartContainer) : sequenceColor(COUNTRY_SEQUENCE, rank++, isDark, poles, chartContainer), members: [name]}));
         // The sequence and its six shades give 98 colours: past them a colour comes back. Announce it rather than let it pass.
         if (rank > rounds) debug.warn('AllocationHistoryChart', `${rank} countries for ${rounds} distinct colours: ${rank - rounds} repeat an earlier colour`);
         return styling;

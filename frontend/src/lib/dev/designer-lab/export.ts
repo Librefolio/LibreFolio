@@ -5,7 +5,7 @@
  * `downloadText`.
  */
 
-import {changeId, STATE_SCHEMA} from './store';
+import {asRoleChange, changeId, STATE_SCHEMA} from './store';
 import {varImpact} from './catalogView';
 import {ELEMENT_PROPERTIES} from './cssProps';
 import type {CatalogLiteral, ColorCatalog, LabAnchor, LabAnchorCandidate, LabChange, LabState, Layer, Scope, SourceKind} from './types';
@@ -293,7 +293,10 @@ export function parseImport(text: string, base: LabState, catalog: ColorCatalog)
             errors.push(`change ${i}: invalid`);
             return;
         }
-        const change: LabChange = {id: '', layer: c.layer as LabChange['layer'], target: c.target, scope: c.scope as Scope, from: typeof c.from === 'string' ? c.from : '', to: c.to};
+        // An asset type or the cash edited as a category before DV-11 is an edit of its role now.
+        const asRole = asRoleChange({id: '', layer: c.layer as LabChange['layer'], target: c.target, scope: c.scope as Scope, from: '', to: c.to});
+        if (asRole.layer !== c.layer) warnings.push(`change ${i}: ${c.target} is the role ${asRole.target} since DV-11, imported as a change of that variable`);
+        const change: LabChange = {id: '', layer: asRole.layer, target: asRole.target, scope: c.scope as Scope, from: typeof c.from === 'string' ? c.from : '', to: c.to};
         if (c.layer === 'element') {
             const property = typeof c.property === 'string' ? c.property : '';
             if (!isSafeSelector(c.target) || !ELEMENT_PROPERTIES.includes(property) || (property === 'chart' && !(typeof c.color_key === 'string' && COLOR_KEY.test(c.color_key)))) {
@@ -302,13 +305,13 @@ export function parseImport(text: string, base: LabState, catalog: ColorCatalog)
             }
             change.property = property;
             if (property === 'chart') change.colorKey = c.color_key;
-        } else if (c.layer === 'category') {
+        } else if (change.layer === 'category') {
             // A category of this catalogue only: its key names lines of the tables the app is built with.
             if (!/^(type|sector|bucket):[A-Za-z0-9 _&.-]{1,60}$/.test(c.target) || (catalog.categories && !catalog.categories.some((x) => x.target === c.target))) {
                 errors.push(`change ${i}: unknown category ${c.target.slice(0, 80)}`);
                 return;
             }
-        } else if (c.layer !== 'css-var') change.alphaVariants = c.alpha_variants !== false;
+        } else if (change.layer !== 'css-var') change.alphaVariants = c.alpha_variants !== false;
         if (c.anchor !== undefined) {
             const anchor = sanitizeAnchor(c.anchor);
             if (anchor) change.anchor = anchor;
