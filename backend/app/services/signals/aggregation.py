@@ -3,7 +3,7 @@
 A plugin declares, for each of its outputs, how a chart or a summary reduces its points to one per bucket (the profile,
 ``schemas/signals.py`` ``SignalAggregationProfile``). This module is the backend's one home of that rule: AI Export's
 temporal aggregators go through it, and so does the reduction of a sampled price query item's signals for a compact chart
-(``sample_signal_series``, Z-29s). The chart keeps the same rule in the browser (``timeSeriesAggregation.ts``:
+(``sample_signal_series``, Z-29s; ``align_signal_series``, O1). The chart keeps the same rule in the browser (``timeSeriesAggregation.ts``:
 ``selectSignalRepresentative``, ``bandRepresentative``, ``downsampleRenderedSignal``), tied to this one by the shared
 fixtures ``aggregation_profiles.v1.json`` and ``signal_sampling_cases.v1.json`` and by ``test_signal_aggregation.py``.
 
@@ -182,3 +182,28 @@ def sample_signal_series[S](series: S, profile: SignalAggregationProfile, resolu
             raise ValueError(f"{getattr(profile, 'value', profile)} is not a scalar aggregation profile")
         points = _scalar_points(series, selector, render_date)
     return series.model_copy(update={"points": points}) if points else series
+
+
+def align_signal_series[S](series: Sequence[S]) -> list[S]:
+    """The series of ONE signal, each reduced alone by ``sample_signal_series``, on identical dates (O1, the developer's
+    decision of 21/10), as ``SignalResult`` wants them (``_validate_series_alignment``).
+
+    Reduced alone, they leave different dates: a warm-up that ends inside the range, a gap one has and another has not.
+    Each gets the union of the dates the reductions left: its own points, and, where it has none, a point without a value
+    (``SignalValuePoint(date=d)``; a band's: lower, middle and upper null) instead of a missing date. The browser draws
+    a line's or a bar's leading and trailing points without a value as nothing, a band's from its complete points only;
+    in the middle of a series such a point ends a run, which a gap marker of another series causes (residue R5).
+
+    Series that agree are given back as they are; the others are copies in their own class with every field but ``points``
+    unchanged. The list is in the order given, and neither it nor its series are changed.
+    """
+    dates = sorted({point.date for item in series for point in item.points})
+    aligned = []
+    for item in series:
+        if [point.date for point in item.points] == dates:
+            aligned.append(item)
+            continue
+        by_date = {point.date: point for point in item.points}
+        empty = SignalBandPoint if isinstance(item, SignalBandSeries) else SignalValuePoint
+        aligned.append(item.model_copy(update={"points": [by_date[day] if day in by_date else empty(date=day) for day in dates]}))
+    return aligned

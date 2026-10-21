@@ -168,7 +168,7 @@ from backend.app.db.models import Asset, AssetType, FxRate, PriceHistory
 from backend.app.schemas import prices as price_schemas
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.prices import FAPricePoint, FAPriceQueryItem, FAPriceQueryResult
-from backend.app.schemas.signals import SignalAggregationProfile, SignalBandSeries, SignalBarSeries, SignalCalendarReturnValuePoint, SignalResult
+from backend.app.schemas.signals import SignalAggregationProfile, SignalBandSeries, SignalBarSeries, SignalCalendarReturnValuePoint, SignalResult, _validate_series_alignment
 from backend.app.services.assets import price_query
 from backend.app.services.assets.price_query import PriceQueryOperations
 from backend.app.services.signals import aggregation as signal_aggregation
@@ -2178,6 +2178,9 @@ WAVE_START = date(2026, 3, 1)
 SG_EMA = {"instance_id": "ema5", "signal_code": "EMA", "params": {"period": 5}}
 SG_BANDS = {"instance_id": "bands5", "signal_code": "BOLLINGER", "params": {"period": 5, "multiplier": 2.0}}
 SG_MACD = {"instance_id": "macd363", "signal_code": "MACD", "params": {"fast_period": 3, "slow_period": 6, "signal_period": 3}}
+#: An ADX whose two directional lines are valued from the fourth session, in the first week, and whose ADX from the
+#: seventh, in the second (PQS-SG06, O1).
+SG_ADX = {"instance_id": "adx3", "signal_code": "ADX", "params": {"period": 3}}
 SG_DRAWDOWN = {"instance_id": "drawdown", "signal_code": "RISK_DRAWDOWN", "params": {"full_history": True}}
 SG_RETURN = {"instance_id": "return7", "signal_code": "ASSET_CALENDAR_ROLLING_RETURN", "params": {"window_days": 7}}
 SG_ALL = [SG_EMA, SG_BANDS, SG_MACD, SG_DRAWDOWN, SG_RETURN]
@@ -2189,6 +2192,9 @@ SG_PROFILES = {
     ("MACD", "macd"): "last_with_range",
     ("MACD", "signal"): "last_with_range",
     ("MACD", "histogram"): "last_with_range",
+    ("ADX", "adx"): "last_with_range",
+    ("ADX", "plus_di"): "last_with_range",
+    ("ADX", "minus_di"): "last_with_range",
     ("RISK_DRAWDOWN", "drawdown"): "min_with_range",
     ("ASSET_CALENDAR_ROLLING_RETURN", "calendar_return"): "last_with_range",
 }
@@ -2323,27 +2329,39 @@ def _first_mismatch(got: list[dict], expected: list[dict]) -> str:
     return f"{len(got)} points for {len(expected)}; from position {at}: {got[at : at + 2]} instead of {expected[at : at + 2]}"
 
 
+def _ref_empty(day: date, band: bool) -> dict:
+    """The point a series has, without a value, on a date only another series of its signal reduced to (O1)."""
+    return {"date": day.isoformat(), "lower": None, "middle": None, "upper": None} if band else {"date": day.isoformat(), "value": None}
+
+
 def _assert_signals_reduced(sampled: FAPriceQueryResult, daily: FAPriceQueryResult, step: str, render_dates: list[date]) -> None:
     """Each signal result of ``sampled`` is the daily answer's but for its series (``computed_at`` aside), and each of its
     series is reduced: walked apart (``_ref_reduction``), the point its output's profile picks in each bucket re-dated at
-    the bucket's render date, every point on one of ``render_dates``; and it is ``sample_signal_series`` of the daily
-    series with that profile, ``step`` and ``render_dates``."""
+    the bucket's render date, then on the dates of all the signal's series (O1: the union of the dates the reductions
+    leave, a point without a value where a series has none, so that ``SignalResult`` accepts them), every point on one
+    of ``render_dates``; and, but for those points without a value, it is ``sample_signal_series`` of the daily series
+    with that profile, ``step`` and ``render_dates``."""
     daily_results = _signals_by_id(daily)
     assert sorted(_signals_by_id(sampled)) == sorted(daily_results), f"the signals {sorted(_signals_by_id(sampled))} for {sorted(daily_results)}"
     for result in sampled.signals:
         reference = daily_results[result.instance_id]
         assert _without_clock(result.model_dump(mode="json", exclude={"series"})) == _without_clock(reference.model_dump(mode="json", exclude={"series"})), f"{result.instance_id}: the result differs from the daily one beyond its series"
         assert [(series.kind, series.key) for series in result.series] == [(series.kind, series.key) for series in reference.series], result.instance_id
+        walked = {series.key: _ref_reduction(daily_series, SG_PROFILES[(result.signal_code, series.key)], step, render_dates) for series, daily_series in zip(result.series, reference.series, strict=True)}
+        union = sorted({point["date"] for points in walked.values() for point in points})
+        _validate_series_alignment(result.series)
         for series, daily_series in zip(result.series, reference.series, strict=True):
             profile = SG_PROFILES[(result.signal_code, series.key)]
             label = f"{result.instance_id}.{series.key} ({profile}, {step})"
-            expected = _ref_reduction(daily_series, profile, step, render_dates)
-            assert expected, f"premise: {label} has no point in the plan's buckets"
+            own = {point["date"]: point for point in walked[series.key]}
+            expected = [own.get(day) or _ref_empty(date.fromisoformat(day), series.kind == "band") for day in union]
+            assert walked[series.key], f"premise: {label} has no point in the plan's buckets"
             got = [point.model_dump(mode="json") for point in series.points]
             assert got == expected, f"{label}: {_first_mismatch(got, expected)}"
             assert {point.date for point in series.points} <= set(render_dates), f"{label}: points off the plan's dates"
-            reduced = _signal_sampler()(daily_series, SignalAggregationProfile(profile), step, list(render_dates))
-            assert series.model_dump(mode="json") == reduced.model_dump(mode="json"), f"{label}: not sample_signal_series of the daily series"
+            reduced = _signal_sampler()(daily_series, SignalAggregationProfile(profile), step, list(render_dates)).model_dump(mode="json")
+            assert [point for point in got if point["date"] in own] == reduced["points"], f"{label}: not sample_signal_series of the daily series"
+            assert series.model_dump(mode="json", exclude={"points"}) == {key: value for key, value in reduced.items() if key != "points"}, f"{label}: a field other than the points changed"
 
 
 #: Items with signals on a sample, each asset on its range, how it asks its step, the step and its count of dates: WAVE
@@ -2604,3 +2622,33 @@ def test_pqs_sg10_the_descriptions_say_the_signals_are_reduced():
     wrong = {where: text for where, text in said.items() if where.endswith("max_points") and "not with signals" in text.lower()}
     wrong |= {where: text for where, text in said.items() if not where.endswith("max_points") and "aggregation_profile" not in text}
     assert not wrong, wrong
+
+
+@pytest.mark.asyncio
+async def test_pqs_sg11_the_series_of_a_signal_with_different_warm_ups_are_on_the_same_dates(signal_world, frozen_ceiling):
+    """PQS-SG11 (O1): RECENT from its first row, Monday 2026-01-05, in 100 points (weekly: its 41 weeks fit) with ADX (3):
+    the directional lines are valued from the fourth session, in the first week, the ADX from the seventh, in the second.
+    Reduced, each series is its daily one reduced alone (PQS-SG02's checks), and the three are on the same dates, as
+    ``SignalResult`` wants them: the ADX has a point without a value on the render date of the first week, where only the
+    directional lines have a value; none after its first value.
+
+    Red before the O1 cure: the ADX has no point on the first week, so the three series are on different dates.
+    """
+    start, fields = _HISTORIES["recent"][0], {"max_points": 100}
+    expected = _expected(signal_world, _item(signal_world.recent, start, **fields))
+    assert (expected.step, expected.first, len(expected.dates)) == ("weekly", start, 41), "premise"
+    _assert_profiles()
+    (daily,) = await _query(signal_world.engine, _item(signal_world.recent, start, signals=[SG_ADX]))
+    _assert_computed(daily, [SG_ADX])
+    (adx,) = daily.signals
+    firsts = {series.key: next(point.date for point in series.points if point.value is not None) for series in adx.series}
+    weeks = {key: _ref_bucket(day, "weekly") for key, day in firsts.items()}
+    assert weeks["plus_di"] == weeks["minus_di"] == _ref_bucket(expected.dates[0], "weekly") != weeks["adx"], f"premise: the daily series are first valued on {firsts}"
+    (sampled,) = await _query(signal_world.engine, _signal_item(signal_world.recent, start, signals=[SG_ADX], **fields))
+    (reduced,) = sampled.signals
+    by_key = {series.key: series for series in reduced.series}
+    dates = {key: [point.date for point in series.points] for key, series in by_key.items()}
+    assert dates["adx"] == dates["plus_di"] == dates["minus_di"], f"the series are on different dates: {({key: days[:3] for key, days in dates.items()})}"
+    assert [(point.date, point.value) for point in by_key["adx"].points[:1]] == [(expected.dates[0], None)], "the ADX has no point without a value on the first week"
+    assert [point.date for point in by_key["adx"].points if point.value is None] == [expected.dates[0]], "the ADX has points without a value besides the first week's"
+    _assert_signals_reduced(sampled, daily, "weekly", expected.dates)

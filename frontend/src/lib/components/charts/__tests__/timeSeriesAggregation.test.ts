@@ -51,6 +51,18 @@ interface SignalSamplingCase {
     note: string;
 }
 /**
+ * O1: the series of one signal, each reduced alone and then aligned on the union of their dates by the backend
+ * (`align_signal_series`). Each series is drawn here alone, as a case of the table is.
+ */
+interface SignalSeriesSet {
+    id: string;
+    resolution: ChartResolution;
+    render_dates: string[];
+    series: Array<{key: string; kind: SignalSamplingCase['kind']; profile: SignalSamplingCase['profile']; points: SignalSamplingCase['points']; expected: SignalSamplingCase['expected']}>;
+    browser_parity: boolean;
+    note: string;
+}
+/**
  * Z-29s-a: the case table the backend's `sample_signal_series` is pinned on (test_signal_aggregation.py, SAG-S02). Its
  * browser_parity cases are what this chart draws: they tie the backend's reduction to `downsampleRenderedSignal`.
  */
@@ -58,6 +70,7 @@ const signalSamplingTable = JSON.parse(readFileSync(new URL('../../../../../../b
     version: number;
     description: string;
     cases: SignalSamplingCase[];
+    series_sets: SignalSeriesSet[];
 };
 
 function pt(date: string, value: number, extra: Partial<LineDataPoint> = {}): LineDataPoint {
@@ -158,9 +171,17 @@ function browserSampling(fixtureCase: SignalSamplingCase): Array<Array<SamplingS
         .filter((points) => points.length > 0);
 }
 
+/** A series of a set of the table as a case of its own, drawn and expected as one. */
+function seriesSetCase(set: SignalSeriesSet, entry: SignalSeriesSet['series'][number]): SignalSamplingCase {
+    return {id: `${set.id}/${entry.key}`, kind: entry.kind, profile: entry.profile, resolution: set.resolution, render_dates: set.render_dates, points: entry.points, expected: entry.expected, browser_parity: set.browser_parity, note: set.note};
+}
+
 /** A case's expected points as the series the chart would draw from them: split at their gap markers (a band has none). */
 function expectedSampling(fixtureCase: SignalSamplingCase): Array<Array<SamplingScalarPoint | SamplingBandPoint>> {
-    if (fixtureCase.kind === 'band') return fixtureCase.expected.length > 0 ? [fixtureCase.expected] : [];
+    if (fixtureCase.kind === 'band') {
+        const drawn = (fixtureCase.expected as SamplingBandPoint[]).filter(isCompleteBandPoint);
+        return drawn.length > 0 ? [drawn] : [];
+    }
     return samplingRuns(fixtureCase.expected as SamplingScalarPoint[]);
 }
 
@@ -592,6 +613,34 @@ describe('timeSeriesAggregation', () => {
         for (const fixtureCase of residues) {
             expect(fixtureCase.note.trim(), fixtureCase.id).not.toBe('');
             expect(browserSampling(fixtureCase), fixtureCase.id).not.toEqual(expectedSampling(fixtureCase));
+        }
+    });
+
+    // =========================================================================
+    // O1: the series of one signal, aligned by the backend on the union of their dates
+    // =========================================================================
+    const parityEntries = signalSamplingTable.series_sets.filter((set) => set.browser_parity).flatMap((set) => set.series.map((entry) => seriesSetCase(set, entry)));
+
+    it.each(parityEntries.map((fixtureCase) => [fixtureCase.id, fixtureCase] as const))('draws the aligned series %s as the backend leaves it: its points without a value end or begin nothing', (_id, fixtureCase) => {
+        expect(browserSampling(fixtureCase)).toEqual(expectedSampling(fixtureCase));
+    });
+
+    it('keeps the aligned series of the shared table on identical dates, and its residue drawn otherwise', () => {
+        const sets = signalSamplingTable.series_sets;
+        expect(sets.length).toBeGreaterThan(0);
+        for (const set of sets) {
+            const dates = set.series.map((entry) => entry.expected.map((point) => point.date));
+            for (const own of dates) expect(own, set.id).toEqual(dates[0]);
+            expect(set.note.trim(), set.id).not.toBe('');
+        }
+        const residues = sets.filter((set) => !set.browser_parity);
+        expect(residues.length).toBeGreaterThan(0);
+        for (const set of residues) {
+            const differing = set.series.filter((entry) => {
+                const fixtureCase = seriesSetCase(set, entry);
+                return JSON.stringify(browserSampling(fixtureCase)) !== JSON.stringify(expectedSampling(fixtureCase));
+            });
+            expect(differing.length, set.id).toBeGreaterThan(0);
         }
     });
 
