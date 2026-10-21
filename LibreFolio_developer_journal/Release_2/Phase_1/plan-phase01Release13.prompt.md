@@ -1467,3 +1467,10 @@ hosting: L1, R1, L2), A-62, E-25, E-26 (b), TC-23 (a), L1b, P4. Ordine deciso: Y
 
 > **⚠️ Fuori pista**: il REPORT di ripartenza del 21/10 dava per aperti B-51, J-57 v3, A-CL1, X-R45b-ui e `gate_b8`:
 > erano già in `dev_release2` e verdi. I `node_modules` dei worktree erano inutilizzabili su Linux.
+
+**Ondata 1 e treno 6 ✅ (2026-10-21).** Tre sessioni, un lotto ciascuna, tutte verificate dal coordinatore rilanciando le loro prove:
+- Y-39a: `1b7b7331b` (E2E `fx-settings` 3/3, `fx-list` 25/25, `asset-list` 43/43);
+- H-61 checkpoint 1, R1: `75dd4aa38` (`api panel-status` 20, `hosting-panel-routes` 15, `instance-block` 62);
+- Z-29s-a: `7d077207d` (`signal-aggregation` 222, `price-query-sampling` 196, `api assets-price` 32); revisione di Y: nessun bloccante, osservazioni O1-O4 in Z-40.
+- Treno 6 in `dev_release2` = `861a38567` (fast-forward su un candidato provato nel worktree `gate-coord`): `all-backend` 7/7, `core-unit` 9835, `component-unit` 5162, E2E `asset-list` 43/43, `mkdocs build` stretto e `check-links` ok, `front check` 0/0.
+- **Test dipendenti dalla lingua del sistema**: su questa macchina (`LANG=it_IT.UTF-8`) 3 test di `OtherPeriodEffectsTable.test.ts` falliscono, identici su `dev_release2` senza il treno: il test costruisce l'importo con la lingua del sistema (virgola) e il componente stampa in inglese (punto). Si lanciano con `LC_ALL=en_US.UTF-8`; il test va corretto.

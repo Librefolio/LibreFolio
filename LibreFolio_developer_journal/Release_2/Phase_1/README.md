@@ -490,3 +490,4 @@ Sono tutti locali: la push la fa il developer.
 | 20/10-T4 | 20/10 13:34 | E-23, Z-29a-f, J-67, MF-E2b + P3 consumatore, N69b | `15fa228ef` |
 | — | 20/10 14:15 | G: note N69, G-28 fixture sicurezza «ok» | `b844f83f2` |
 | 21/10-T5 | 21/10 | `.claude/` + CLAUDE.md; J-60 + J-70; A: `admin_setup_status` (H-61); E: galleria Email + traduzioni | `d1893f84b` |
+| 21/10-T6 | 21/10 | Y-39a (un solo modulo per i segnali di card e anteprima), H-61 R1 (`GET /api/v1/panel/status`), Z-29s-a (segnali ridotti sui secchi del prezzo) | `861a38567` |
