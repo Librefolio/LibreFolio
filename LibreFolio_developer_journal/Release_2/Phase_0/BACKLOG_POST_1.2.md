@@ -7850,9 +7850,11 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     sui giorni in cui un ingresso cambia, e `expand_to_days` riempie la finestra
     (`financial_math/lots/change_days.py`). Uscita identica al byte: 0 differenze su quattro copie di DB, dati veri
     compresi. Col 1900 il tempo si dimezza.
-  - **L1b**, dopo P3 di MF: i giorni del mercato presi dai gradini di P3 invece che dalla scansione di ogni giorno.
-    Restano giornalieri la conversione del segno, i cambi chiesti giorno per giorno e la scansione stessa: è il resto
-    del tempo col 1900. Da coordinare con Y per i grafici.
+  - ✅ **L1b** 21/10 (checkpoint L1b; commit del coordinatore). Il resolver dei cambi dei lotti legge i gradini di
+    P3 (`unit_rate_steps`, una chiamata per `load`) invece di un `convert_bulk` d'un'unità al giorno, e il mercato
+    chiede una finestra per valuta (`need_days`). Uscita identica: 214 casi di parità contro la copia del vecchio
+    resolver, 5 mutazioni intercettate. Restano giornalieri, per progetto: la conversione del segno di ogni giorno, la
+    registrazione dei giorni senza tasso e la scansione dei giorni di cambiamento.
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «L1a — i lotti
     calcolati solo nei giorni in cui cambia qualcosa».
 - **J-64 · Il CSV generico chiede il costo dove c'è già o dove non si può dare** — basso, dati e chiarezza; docs-writer
@@ -7942,6 +7944,12 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     - (c) nessuno, se il conteggio è zero.
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «J-60 — un costo di
     carico negativo si rifiuta nel batch», passo 1.
+- **J-71 · Due copie in linea di `buildSyncTargets` nei pannelli del rischio** — minimo, riordino senza effetti; J, 21/10
+  (durante TC-23). `levels/RiskPanelHeader.svelte` e `RiskAnalysisPanel.svelte` calcolano ancora da soli
+  `syncAssets`/`syncFxPairs`, la regola che `features/risk/syncTargets.ts::buildSyncTargets` ha sollevato «so a second
+  surface does not become a second copy». Oggi danno lo stesso risultato; da sostituire con la funzione, con un test che
+  ne fissi l'uso. Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10
+  «Ondata 3 (21/10 notte) — TC-23 poi L1b», passo A2.
 
 ## Z · Sospensione e risveglio (fase 01)
 

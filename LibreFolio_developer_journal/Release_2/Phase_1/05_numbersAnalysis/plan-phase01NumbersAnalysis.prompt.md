@@ -9099,3 +9099,142 @@ lettura di Q1 nelle date comuni. Con Y, per un'uscita a gradini: solo se il deve
   - Correzione (14:3x): la base non era stata aggiornata. Il merge non partiva, perché toccava i due file del giornale
     sporchi (questo piano e il backlog con J-70). Per ripartire: FROZEN; lui fa il commit
     `docs(journal): J-70, L1b R1 CP-8/9 memo` e il merge di `dev_release2` (con P3 di MF, treno 4). Poi L1b.
+
+#### Ondata 3 (21/10 notte) — TC-23 poi L1b (via del coordinatore per tutti e due)
+
+- **Base**: `2879ae3e4d8d232f9fb29939addbef28ecc3bdd8` (verificata, uguale a `dev_release2`); `api sync` pulito, nessun
+  diff. Corsia nuova: porta **6190**, `/tmp/librefolio-r13-j`. Log in
+  `salvataggi-worktrees-20261021/ondata3/` (fuori dal worktree).
+- **Q-TC23-1 = (a)** (developer, 20/10 14:32): i pannelli aprono loro `FxPairAddModal`, sulla coppia premuta o vuota;
+  dopo `oncreated`/`onsynced` il pannello si ricarica. Regola unica `labQualityAction` → `{kind: 'add_pair', pair}`.
+- **Wiki**: grafo assente nel worktree (atteso); pagine lette direttamente quando servono.
+
+**Passo A — TC-23**
+1. ✅ 21/10 ~21:45 — Rossi (test-author): `syncTargets.test.ts` (`add_fx_pair` con/senza coppia, i lati della coppia) e
+   un test del componente `RiskPanelHeader` (il chip apre la finestra con base e quotata; dopo il salvataggio il
+   pannello ricarica).
+   > **Note implementazione**: visti fallire sul codice di HEAD, carico sotto 8, un file alla volta:
+   > - `syncTargets.test.ts`: **15 verdi, 8 rossi** (2 righe di `labQualityAction`: «expected {kind:'navigate',
+   >   href:'/fx'} to deeply equal {kind:'add_pair', pair:'EUR-USD'}», e con `pair:''`; 6 di `addPairSides`: «syncTargets
+   >   exports no addPairSides()»). Il vecchio caso «add_fx_pair va sempre a /fx» sostituito.
+   > - nuovo `levels/RiskPanelHeader.test.ts` (jsdom, 6 casi): **1 verde, 5 rossi** (nessuna finestra aperta; `goto`
+   >   chiamato con `/fx`). Il verde è il controllo `navigate_fx` → `goto('/fx/EUR-USD')`: l'imbragatura funziona.
+   > - nuovo stub `src/__tests__/harness/FxPairAddModalStub.svelte` (cartella degli stub esistente).
+   > - registrazione: una riga additiva nell'azione `front-portfolio risk-levels-component`
+   >   (`scripts/test_runner/_frontend_portfolio.py`, lista Vitest + `tests=` + una frase della descrizione).
+2. ✅ 21/10 ~21:55 — Cura: `syncTargets.ts`, `levels/RiskPanelHeader.svelte`, `RiskAnalysisPanel.svelte`,
+   `AssetSetRiskPanel.svelte`.
+   > **Note implementazione**:
+   > - `syncTargets.ts`: `LabQualityAction` ha la variante `{kind: 'add_pair', pair}` (`pair` vuota senza bersaglio);
+   >   nuovo `addPairSides(pair)` (due parti non vuote → base e quotata, altrimenti vuote).
+   > - I tre pannelli leggono `labQualityAction` (le due copie in linea di `RiskPanelHeader` e `RiskAnalysisPanel` tolte:
+   >   ora anche lì vale `startsWith('sync_')` e il bersaglio è codificato). `add_pair` apre `FxPairAddModal` dentro un
+   >   `{#if}` (stato nuovo a ogni apertura, come la Dashboard), con `initialBase`/`initialQuote`.
+   > - Dopo `oncreated` e dopo `onsynced`: `RiskPanelHeader` e `RiskAnalysisPanel` chiamano `controller.handleSynced()`
+   >   (nei livelli il controller passa poi all'`onsynced` della pagina, come dopo la sua sincronizzazione);
+   >   `AssetSetRiskPanel` chiama il suo `reload()`. Una guardia `onDestroy`: la sincronizzazione dei tassi
+   >   (`finishFxPairCreation`) può finire dopo che il pannello è sparito.
+   > - Verdi: `syncTargets.test.ts` + `RiskPanelHeader.test.ts` **29/29**; i file che leggono le sorgenti toccate:
+   >   `riskAnalysisHelpers` (138/138 coi due sopra), `warningTranslatorSites` + `stressBuckets` + `L4Shock` **32/32**,
+   >   `levelHelpers` + `riskGlossary` + `themeRoles.gate` **297/297**; prettier pulito sui 7 file.
+   > **⚠️ Fuori pista**: nessuno. Restano in linea, fuori perimetro, le copie di `buildSyncTargets` dentro
+   > `RiskPanelHeader` e `RiskAnalysisPanel` (`syncAssets`/`syncFxPairs`): annotate come residuo.
+3. ✅ 21/10 ~22:35 — Verdi: Vitest toccati, `front check` (in `flock`), prettier.
+   > **Note implementazione**: `LC_ALL=en_US.UTF-8 flock /tmp/librefolio-heavy.lock … dev.py front check` (in coda
+   > dietro altri lotti, ~40 min di attesa): **svelte-check 0 errori, 0 avvisi**, exit 0
+   > (`ondata3/J-tc23-front-check.log`). Vitest come al passo 2.
+4. ✅ 21/10 ~22:05 — Documentazione (docs-writer): una frase nelle pagine utente del rischio.
+   > **Note implementazione**: un punto nuovo, dopo quello del banner, in `user/dashboard/risk.en.md` e
+   > `user/assets/correlation.en.md` («Notices and Missing Data»): una coppia senza percorso ha il suo pulsante nel banner
+   > (tooltip **Add FX pair**), apre **Add New Currency Pair** già compilata, e l'analisi si ricalcola da sola quando la
+   > coppia è salvata e i suoi tassi scaricati; link a «Adding a Currency Pair». La scheda Rischio dell'asset non è
+   > documentata («not covered yet»): niente. `mkdocs check-links`: 97 validi.
+   > **⚠️ Fuori pista**: **nessun timbro**. Le due pagine erano allineate (hash della cache uguali, it/fr/es fatti); la
+   > frase nuova è contenuto nuovo, e un timbro la nasconderebbe alle traduzioni. Debito lasciato apposta: un punto
+   > per pagina in IT/FR/ES, da tradurre quando il developer lo chiede.
+
+**Passo B — L1b**
+1. ✅ 21/10 ~22:15 — Analisi sul codice di oggi (gradini di P3, `change_days`, conversione dei segni).
+   > **Note implementazione**:
+   > - Il costo giornaliero rimasto dopo L1a, col libro del 1900 (44 240 giorni): `collect_fx_needs` chiede le valute
+   >   del mercato **un `need()` al giorno**; `FxRateResolver.load` passa a `convert_bulk` **un `Currency` per
+   >   bisogno** (44 240 oggetti pydantic in entrata e altrettanti in uscita, un dizionario di metadati, un
+   >   `logger.debug` per ogni giorno portato avanti, una stringa d'errore per ogni giorno prima del primo tasso).
+   > - Il resolver legge già **l'unità** (`convert_bulk` di 1, poi `amount * rate`): `UnitRateSteps.at(day)` di X è
+   >   proprio quell'importo, «to the digit and the exponent». Quindi la parità al byte regge passando ai gradini.
+   > - Due sottigliezze da tenere: `Currency(code=…)` **normalizza** il codice (`usd` → `USD`, spazi) e rifiuta un codice
+   >   invalido al `load`; e un codice che normalizzato è la valuta d'arrivo (`eur` per `EUR`) era un'identità di
+   >   `convert_bulk`, a `Decimal('1')` esatto. Il codice si normalizza ancora con `Currency`, una volta per valuta.
+   > - **Restano giornalieri, come dice il brief**: la conversione del segno di ogni giorno (il ciclo del servizio), la
+   >   registrazione dei giorni senza tasso (`missing_pairs`) e la scansione di `lot_change_days`. Toglierli
+   >   cambierebbe l'elenco dei buchi del report: non è L1b.
+   > - Il resto dei test che toccano l'interno del resolver: i due casi `TestFxRateResolverLoad` (stub di
+   >   `convert_bulk`) da riscrivere; gli aiutanti che riempiono `_rates` a mano restano (il primo dizionario di una
+   >   `ChainMap`); `_needs` resta per i bisogni d'un giorno.
+2. ✅ 21/10 ~22:40 — Rossi e parità (test-author).
+   > **Note implementazione**: visti sul codice di HEAD, corsia 6190 (populate fresco, 8 s):
+   > - nuovo `test_financial/test_lots_fx_steps_parity.py` (DB, 214 casi; `roi-fifo-utils` gira la cartella intera):
+   >   **2 rossi, 212 verdi**. r1: «44240 conversions handed to convert_bulk in 1 call(s) to read 31 days; the budget is
+   >   400»; r2: «unit_rate_steps was never called». Libro nuovo `1900-usd` (un asset EUR letto in USD, EUR/USD sui
+   >   giorni lavorativi 2019-12 – 2021-02 più una riga del 29/12/1899). Parità: 178 casi L1a in EUR, 21 di `fx-daily`
+   >   letto in HUF, 3 di `1900-usd` in USD, contro una copia testuale del vecchio resolver e del vecchio
+   >   `collect_fx_needs`; più 9 casi del resolver da solo (`as_tuple()`, `missing_pairs` uguali): buco di sei giorni,
+   >   coppia letta al contrario e diretta, finestra a cavallo del primo tasso, codice numerico `978`, `usd`/`huf`
+   >   minuscoli, `eur` per `EUR`, due `load`, righe legacy inutilizzabili (0, 1E-19, 1E+19, inf), `Z1` che solleva.
+   > - `test_lots_analysis_pure.py`: **8 rossi, 239 verdi** (i 2 `TestFxRateResolverLoad` riscritti su
+   >   `unit_rate_steps`, 5 `TestFxRateResolverNeedDays` nuovi, 1 su `collect_fx_needs` con 20 000 giorni: «40000 need()
+   >   calls for 2 market currencies»). Due casi esistenti adattati perché non si rompessero dopo la cura (letti con un
+   >   aiutante `_Asked`; `convert_bulk` patchato con `raising=False`).
+   > - `scripts/test_runner/_backend_services.py`: una riga di commento (`convert_bulk` → `unit_rate_steps`).
+   > **⚠️ Fuori pista**: il test-author ha controllato i test con una cura di prova sua (plugin pytest nella scratchpad,
+   > mai codice del prodotto): 247 + 214 verdi, e due mutazioni intercettate.
+3. ✅ 21/10 ~22:50 — Cura (`financial_math/lots/conversions.py`, solo questo file del prodotto).
+   > **Note implementazione**:
+   > - `FxRateResolver.need_days(currency, first, last)`; `need()` salta un giorno già dentro una finestra chiesta;
+   > - `load()`: le finestre chieste dall'ultimo `load` (un giorno = una finestra d'un giorno) → codice normalizzato con
+   >   `Currency` → **una** chiamata `unit_rate_steps` → un `AskedDayRates` per `load`, in una `ChainMap` (`_rates`); il
+   >   codice che è la valuta d'arrivo con un'altra grafia legge `_UnitIdentity` (sempre `Decimal('1')`);
+   > - `collect_fx_needs`: un `need_days(currency, computed_from, actual_to)` per valuta del mercato;
+   > - tolti gli import di `convert_bulk` e `timedelta`. ruff e black puliti.
+   > - Verdi: `services lots-analysis-pure` **247/247**; `services roi-fifo-utils test_lots_fx_steps_parity`
+   >   **214/214** (46 s).
+   > - **Mutazioni** (`ondata3/J-l1b/mutate.py`, file ripristinato per digest `6e9b2aaf38a0`): finestra più corta di un
+   >   giorno → 33 rossi; codice non normalizzato → 3; identità `Decimal('1.0')` → 1; finestra del mercato solo
+   >   sull'ultimo giorno → 26; bisogni d'un giorno riletti a ogni `load` → 1 (pure). Tutte intercettate.
+4. ✅ 22/10 00:20 — Verdi: `services lots-analysis*`, `roi-fifo-utils` parità, `api portfolio`, `api sync` senza diff.
+   > **Note implementazione** (21/10 ~23:30 – 22/10 00:20):
+   > - `api portfolio` (in `flock`, ~1 h e mezza di coda dietro E2E e build d'altri): **55 passed**, 23 s; porta 6190
+   >   libera dopo (`lsof` vuoto).
+   > - `api sync` dopo la cura: exit 0, nessun diff in `frontend/src/lib/api` (L1b non tocca l'API).
+   > - Documentazione dev (docs-writer): `developer/backend/transactions/lots_analysis_service.md` (la frase dopo la
+   >   tabella dei moduli, «FX Conversion» con `need_days` e il paragrafo «One window, not one need a day», «Change
+   >   Days», i test), `developer/backend/financial_math.md` (l'esempio di test ora su `unit_rate_steps`, chi legge
+   >   `convert_bulk` e chi `unit_rate_steps`, l'albero del pacchetto), `developer/backend/fx/architecture.md` (i lotti
+   >   terzo lettore dei gradini), `.github/instructions/financial-math.instructions.md` (riga `lots/`). Pagine solo
+   >   inglesi. `mkdocs check-links`: 97 validi. Il build stretto non è partito: 20 minuti in coda sul lucchetto, poi
+   >   lasciato, come da brief del docs-writer (nessuna ammonizione nuova; le ancore nuove verificate a mano).
+   > - `services roi-fifo-utils` sui 16 file dei lotti di `test_financial/` (servizio, parità L1a e L1b, chiusure,
+   >   FAILED, prezzo di mercato, performance al costo e short, trasferimenti, reddito con segno, ADJUSTMENT_OUT,
+   >   split invalidi, broker cancellato, limiti delle date, yield on cost): **535 passed**, 33 s;
+   > - `services financial-math` (`test_lot_change_days`, `test_lots_scope_boundary`, `test_lots_summary_house`,
+   >   `test_layer_boundaries`, `test_asked_day_rates`): **401 passed**;
+   > - `services ai-export` sui 6 file che leggono i lotti: **336 passed**;
+   > - `services lots-analysis-pure`: **247 passed**.
+   > - **Sonde su copie di DB** (`ondata3/J-l1b/run_probes.sh`, albero di HEAD `git archive 2879ae3e4 backend` contro il
+   >   worktree, stessa copia, JSON per SHA-256 senza `generated_at`; copie dal populate della corsia, preso dallo
+   >   snapshot `.testLog/00_archive/test-db_20261021_220953`):
+   >
+   >   | Copia | Richieste | Punti giornalieri | Errori | Differenze | Secondi prima → dopo |
+   >   |---|---|---|---|---|---|
+   >   | populate fresco | 1 440 | 226 590 | 0 | **0** | 19,9 → 19,9 |
+   >   | populate + BUY al 1900-01-02 (asset 1) | 408 | 13 141 244 | 0 | **0** | 163,0 → 139,9 |
+   >
+   >   Sul 1900, finestra di un mese nella valuta dell'utente (con cambi): **11,4 → 6,9 s** sulle 34 richieste, la più
+   >   lenta **0,94 → 0,49 s**; un anno −29 %, metà storia −39 %. Le finestre intere in USD (l'asset è in USD, nessun
+   >   cambio) restano dove sono: lì pesa l'uscita di 47 000 punti.
+   > **⚠️ Fuori pista**: il populate della corsia era stato svuotato dalla prima corsa `services` («Creating clean test
+   > database for services tests»): le copie vengono dallo snapshot che il populate aveva archiviato, senza un secondo
+   > populate mentre `api portfolio` era in coda sul lucchetto.
+
+**Consegna (22/10 ~00:25)**: CHECKPOINT READY di A (TC-23) e B (L1b) insieme, poi FROZEN. Residuo nuovo: **J-71** (le
+due copie in linea di `buildSyncTargets`). TC-23 sta nella sezione T del backlog: la chiude il coordinatore.
