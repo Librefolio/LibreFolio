@@ -36,6 +36,30 @@ const sharedAggregationFixture = JSON.parse(readFileSync(new URL('../../../../..
     }>;
 };
 
+/** A point of the shared signal sampling table: a line, area or bar point, or a band point. */
+type SamplingScalarPoint = {date: string; value: number | null};
+type SamplingBandPoint = {date: string; lower: number | null; middle: number | null; upper: number | null};
+interface SignalSamplingCase {
+    id: string;
+    kind: 'line' | 'area' | 'bar' | 'band';
+    profile: RenderedSignal['aggregationProfile'];
+    resolution: ChartResolution;
+    render_dates: string[];
+    points: Array<SamplingScalarPoint | SamplingBandPoint>;
+    expected: Array<SamplingScalarPoint | SamplingBandPoint>;
+    browser_parity: boolean;
+    note: string;
+}
+/**
+ * Z-29s-a: the case table the backend's `sample_signal_series` is pinned on (test_signal_aggregation.py, SAG-S02). Its
+ * browser_parity cases are what this chart draws: they tie the backend's reduction to `downsampleRenderedSignal`.
+ */
+const signalSamplingTable = JSON.parse(readFileSync(new URL('../../../../../../backend/test_scripts/fixtures/signals/signal_sampling_cases.v1.json', import.meta.url), 'utf8')) as {
+    version: number;
+    description: string;
+    cases: SignalSamplingCase[];
+};
+
 function pt(date: string, value: number, extra: Partial<LineDataPoint> = {}): LineDataPoint {
     return {
         date,
@@ -68,6 +92,76 @@ function signal(data: LineDataPoint[], extra: Partial<RenderedSignal> = {}): Ren
 
 function renderedBucket(date: string, bucketStart: string, bucketEnd: string): LineDataPoint {
     return pt(date, 0, {bucketStart, bucketEnd});
+}
+
+/**
+ * The runs a backend line or area output is drawn as (backendRenderer.ts, `renderScalarSeries`): only the points with a
+ * value are drawn, and a point without one ends a run; leading and trailing ones end nothing.
+ */
+function samplingRuns(points: SamplingScalarPoint[]): Array<Array<{date: string; value: number}>> {
+    const runs: Array<Array<{date: string; value: number}>> = [];
+    let current: Array<{date: string; value: number}> = [];
+    for (const point of points) {
+        if (typeof point.value !== 'number') {
+            if (current.length > 0) runs.push(current);
+            current = [];
+            continue;
+        }
+        current.push({date: point.date, value: point.value});
+    }
+    if (current.length > 0) runs.push(current);
+    return runs;
+}
+
+function isCompleteBandPoint(point: SamplingBandPoint): point is {date: string; lower: number; middle: number; upper: number} {
+    return typeof point.lower === 'number' && typeof point.middle === 'number' && typeof point.upper === 'number';
+}
+
+/**
+ * What this chart draws of a case of the shared signal sampling table, series by series: the RenderedSignals the
+ * renderer builds from the backend's points (a line or an area: one per run; a bar: one, its nulls dropped; a band: its
+ * complete points, `bandData` aligned on them), each downsampled alone on one price point per render date, those left
+ * empty not drawn.
+ */
+function browserSampling(fixtureCase: SignalSamplingCase): Array<Array<SamplingScalarPoint | SamplingBandPoint>> {
+    const bucketedData = fixtureCase.render_dates.map((date) => pt(date, 0));
+    if (fixtureCase.kind === 'band') {
+        const complete = (fixtureCase.points as SamplingBandPoint[]).filter(isCompleteBandPoint);
+        const band = signal(
+            complete.map((point) => pt(point.date, point.middle)),
+            {
+                id: fixtureCase.id,
+                seriesType: 'band',
+                aggregationProfile: fixtureCase.profile,
+                bandData: {upper: complete.map((point) => point.upper), middle: complete.map((point) => point.middle), lower: complete.map((point) => point.lower)},
+            },
+        );
+        const drawn = downsampleRenderedSignal(band, fixtureCase.resolution, bucketedData);
+        const envelope = drawn.bandData ?? {lower: [], middle: [], upper: []};
+        const points = drawn.data.map((point, index) => ({date: point.date, lower: envelope.lower[index], middle: envelope.middle[index], upper: envelope.upper[index]}));
+        return points.length > 0 ? [points] : [];
+    }
+    const scalar = fixtureCase.points as SamplingScalarPoint[];
+    const runs = fixtureCase.kind === 'bar' ? [scalar.filter((point): point is {date: string; value: number} => typeof point.value === 'number')] : samplingRuns(scalar);
+    return runs
+        .map((run) =>
+            downsampleRenderedSignal(
+                signal(
+                    run.map((point) => pt(point.date, point.value)),
+                    {id: fixtureCase.id, seriesType: fixtureCase.kind, aggregationProfile: fixtureCase.profile},
+                ),
+                fixtureCase.resolution,
+                bucketedData,
+            ),
+        )
+        .map((drawn) => drawn.data.map((point) => ({date: point.date, value: point.value})))
+        .filter((points) => points.length > 0);
+}
+
+/** A case's expected points as the series the chart would draw from them: split at their gap markers (a band has none). */
+function expectedSampling(fixtureCase: SignalSamplingCase): Array<Array<SamplingScalarPoint | SamplingBandPoint>> {
+    if (fixtureCase.kind === 'band') return fixtureCase.expected.length > 0 ? [fixtureCase.expected] : [];
+    return samplingRuns(fixtureCase.expected as SamplingScalarPoint[]);
 }
 
 describe('timeSeriesAggregation', () => {
@@ -478,6 +572,26 @@ describe('timeSeriesAggregation', () => {
                 const representative = selectSignalRepresentative(points, profile as RenderedSignal['aggregationProfile']);
                 expect(representative ? {date: representative.date, value: String(representative.value)} : null).toEqual(expected);
             }
+        }
+    });
+
+    // =========================================================================
+    // Z-29s-a: the shared signal sampling table (the backend's sample_signal_series)
+    // =========================================================================
+    const parityCases = signalSamplingTable.cases.filter((fixtureCase) => fixtureCase.browser_parity);
+
+    it.each(parityCases.map((fixtureCase) => [fixtureCase.id, fixtureCase] as const))('draws the shared signal sampling case %s as the backend reduces it', (_id, fixtureCase) => {
+        expect(browserSampling(fixtureCase)).toEqual(expectedSampling(fixtureCase));
+    });
+
+    it('keeps the residues of the shared signal sampling table documented: parity cases, and non-parity ones each with a note and drawn otherwise', () => {
+        expect(signalSamplingTable.version).toBe(1);
+        expect(parityCases.length).toBeGreaterThan(0);
+        const residues = signalSamplingTable.cases.filter((fixtureCase) => !fixtureCase.browser_parity);
+        expect(residues.length).toBeGreaterThan(0);
+        for (const fixtureCase of residues) {
+            expect(fixtureCase.note.trim(), fixtureCase.id).not.toBe('');
+            expect(browserSampling(fixtureCase), fixtureCase.id).not.toEqual(expectedSampling(fixtureCase));
         }
     });
 
