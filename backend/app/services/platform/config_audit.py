@@ -20,7 +20,11 @@ from typing import Literal
 
 from backend.app.config import SecretFileError, get_data_dir, get_settings, is_test_mode, secrets_set_twice
 from backend.app.config.accounts import admin_bootstrap_config, login_limit_enabled
+from backend.app.config.backup import PANEL_TOKEN_VARIABLE as BACKUP_PANEL_TOKEN_VARIABLE
+from backend.app.config.backup import BackupConfigError, backup_download_token
+from backend.app.config.hosting_panel import PANEL_STATUS_TOKEN_VARIABLE, HostingPanelConfigError, panel_audience, panel_clock_skew_seconds, panel_public_keys, panel_public_url_path, panel_status_token
 from backend.app.config.platform import TEST_LANE_ID_MAX_LENGTH, TEST_LANE_ID_MIN_LENGTH, configured_jwt_secret, configured_jwt_secret_origin, instance_blocked, instance_deletion_date, owning_test_lane_id
+from backend.app.config.sleep_wake import WAKE_TOKEN_VARIABLE, SleepWakeConfigError, wake_token
 from backend.app.logging_config import get_logger
 from backend.app.services.accounts.checks import ACCOUNTS_CONFIG_CHECKS
 from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS
@@ -209,6 +213,86 @@ def check_log_level() -> ConfigCheck:
     return ConfigCheck(check_id, "ok", "instance.checks.logLevel.ok")
 
 
+#: The hosting panel's tokens ``check_hosting_panel`` reads, in the order its detail names them (H-61); the backup token
+#: has its own check, ``backup.panel_token`` (workstream B).
+_PANEL_TOKENS: tuple[tuple[str, Callable[[], str | None]], ...] = ((WAKE_TOKEN_VARIABLE, wake_token), (PANEL_STATUS_TOKEN_VARIABLE, panel_status_token))
+
+
+def _panel_ticket_settings() -> tuple[bool, list[tuple[str, str]]]:
+    """Whether the panel's signed tickets are on (L2, H-61), and the ticket settings that cannot be used: each
+    ``(variable, code)``. The tolerance and the audience count only with the keys set: without them nothing reads them."""
+    try:
+        keys = panel_public_keys()
+    except HostingPanelConfigError as exc:
+        return True, [(exc.variable, exc.code)]
+    if keys is None:
+        return False, []
+    unusable: list[tuple[str, str]] = []
+    for read in (panel_clock_skew_seconds, panel_audience):
+        try:
+            read()
+        except HostingPanelConfigError as exc:
+            unusable.append((exc.variable, exc.code))
+    return True, unusable
+
+
+def _backup_token_set() -> bool:
+    """The hosting panel's backup token is set; one that cannot be used counts as set (``backup.panel_token`` says why)."""
+    try:
+        return backup_download_token() is not None
+    except (SecretFileError, BackupConfigError):
+        return True
+
+
+def check_hosting_panel() -> ConfigCheck:
+    """The hosting panel's credentials (H-61): the tokens of the scheduled wake-up and of the status route (L1), and the
+    signed tickets (L2): the panel's public keys, the clock tolerance and the audience the keys need,
+    ``LIBREFOLIO_PUBLIC_URL``.
+
+    Unset, the routes are off (ok, nothing logged at startup). A token that cannot be used, its route answers 503 to
+    every call (error, ``hostingPanel.unusable``); ticket settings that cannot be used, every route of the panel does
+    (error, ``hostingPanel.ticketsUnusable``). With usable keys, a ``LIBREFOLIO_PUBLIC_URL`` holding a path is a warning
+    in every profile (``hostingPanel.audiencePath``): a ticket's audience is the origin, so one origin per instance. In the
+    managed profile, a scope's token beside usable keys is a warning (``hostingPanel.coexisting``, decision β): the panel
+    signs tickets, so the token should go. The detail names the
+    variables, never a value or a key; the summary adds why each is refused (its error code).
+    """
+    check_id = "platform.hosting_panel"
+    unusable: list[tuple[str, str]] = []
+    tokens_set: list[str] = []
+    for variable, read in _PANEL_TOKENS:
+        try:
+            token = read()
+        except SecretFileError:
+            unusable.append((variable, "FILE_UNREADABLE"))
+            continue
+        except (SleepWakeConfigError, HostingPanelConfigError) as exc:
+            unusable.append((variable, exc.code))
+            continue
+        if token is not None:
+            tokens_set.append(variable)
+    if unusable:
+        names = ", ".join(variable for variable, _ in unusable)
+        reasons = ", ".join(f"{variable} ({code})" for variable, code in unusable)
+        return ConfigCheck(check_id, "error", "instance.checks.hostingPanel.unusable", {"variables": names}, f"A hosting panel token cannot be used, and its route answers 503 to every call: {reasons}")
+    tickets_on, tickets_unusable = _panel_ticket_settings()
+    if tickets_unusable:
+        names = ", ".join(variable for variable, _ in tickets_unusable)
+        reasons = ", ".join(f"{variable} ({code})" for variable, code in tickets_unusable)
+        return ConfigCheck(check_id, "error", "instance.checks.hostingPanel.ticketsUnusable", {"variables": names}, f"The hosting panel's ticket settings cannot be used, and every route of the panel answers 503: {reasons}")
+    path = panel_public_url_path() if tickets_on else None
+    if path is not None:
+        return ConfigCheck(
+            check_id, "warning", "instance.checks.hostingPanel.audiencePath", {"path": path}, f"LIBREFOLIO_PUBLIC_URL holds the path {path}, but a hosting panel ticket names the origin only: another instance on the same origin would accept this one's tickets; serve one instance per origin"
+        )
+    if tickets_on and get_settings().LIBREFOLIO_PROFILE == MANAGED_PROFILE:
+        beside = ([BACKUP_PANEL_TOKEN_VARIABLE] if _backup_token_set() else []) + tokens_set
+        if beside:
+            names = ", ".join(beside)
+            return ConfigCheck(check_id, "warning", "instance.checks.hostingPanel.coexisting", {"variables": names}, f"A hosting panel token is set beside the panel's public keys: remove it once the panel signs tickets: {names}")
+    return ConfigCheck(check_id, "ok", "instance.checks.hostingPanel.ok" if tokens_set or tickets_on else "instance.checks.hostingPanel.off")
+
+
 #: The summary of ``platform.test_mode`` outside a test lane (H-46): ``{data_dir}`` is the test data directory in use.
 TEST_MODE_OUTSIDE_LANE_SUMMARY = "LIBREFOLIO_TEST_MODE is on outside a test lane: test-only providers are served, the data are kept in the test data directory {data_dir} and .env is not read; unset it on a production instance"
 
@@ -249,6 +333,8 @@ CONFIG_CHECKS: tuple[Callable[[], ConfigCheck], ...] = (
     check_frame_protection,
     check_csp_report_only,
     check_log_level,
+    # The hosting panel's wake-up and status tokens (H-61); the backup token has B's own check below
+    check_hosting_panel,
     check_test_mode,
     # Workstream B: the hosting panel's backup token and the restore's upload limit (instance_backup/checks.py, B-9)
     *BACKUP_CONFIG_CHECKS,

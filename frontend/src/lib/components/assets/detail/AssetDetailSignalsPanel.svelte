@@ -21,7 +21,8 @@
         <button type="button" class="absolute inset-0 z-0 w-full rounded-xl hover:bg-lf-hover" data-testid="asset-detail-signals-toggle" aria-expanded={open} aria-label={$t('common.signals')} onclick={() => (open = !open)}></button>
         <div class="relative z-10 pointer-events-none w-full flex items-center gap-1 px-2 py-1.5" data-testid="asset-detail-signals-header">
             <span class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-lf-secondary">
-                <TrendingUp class="text-blue-500" size={15} />
+                <!-- colour: closest role, to review: decorative section icon in blue, mapped to the info state -->
+                <TrendingUp class="text-lf-info" size={15} />
                 {$t('common.signals')}
             </span>
             <div class="flex-1"></div>

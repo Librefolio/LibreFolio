@@ -65,7 +65,7 @@ function markMissing(data: LineDataPoint[], date: string): LineDataPoint[] {
 describe('MeasureSignal — default style', () => {
     it('ships a dotted orange line pinned at the start and arrowed at the end', () => {
         expect(MeasureSignal.getDefaultStyle()).toEqual({
-            color: '#f97316',
+            color: '#b85e45',
             lineWidth: 1,
             lineType: 'dotted',
             markerStart: 'pin',
@@ -77,7 +77,7 @@ describe('MeasureSignal — default style', () => {
         const first = MeasureSignal.getDefaultStyle();
         first.color = '#000000';
 
-        expect(MeasureSignal.getDefaultStyle().color).toBe('#f97316');
+        expect(MeasureSignal.getDefaultStyle().color).toBe('#b85e45');
     });
 });
 

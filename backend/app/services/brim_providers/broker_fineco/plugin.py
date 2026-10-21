@@ -10,6 +10,24 @@ language of the export (Italian here). FinecoBank also operates in the UK; if a 
 other) export layout — different columns and language — is added later, its warnings
 should follow that layout's language.
 
+**The operation date (B-52).** Every transaction is dated with ``Operazione``, the day of the operation (``Data valuta``
+when it is empty): the developer's principle, 19/10/2026. ``Data valuta`` only decides whether the row has settled.
+
+**Only settled rows (N74).** A row whose date — its value date, or its trade date when the value date is empty — comes
+after the server's today has not settled yet: it is left out whole (its fee and its maturity premium too), and an info
+note (``fineco_not_yet_settled``) lists it. It arrives with the next export, once settled.
+
+**Rows with a required number missing (W-B83).** When a column a row's transaction is built from
+(``Quantita`` for buys, sells, redemptions and capital increases; ``Controvalore`` for buys, sells, dividends and coupons)
+gives no number, the row is imported as before, and an info note (``fineco_incomplete_rows``, ``context.report_issue``)
+names it and asks the user to open an issue if the file is right.
+
+**The commission is inside the Controvalore (W-B92).** In a Fineco trade (``Compravendita titoli``) the Controvalore of a
+purchase already includes the commission and the Controvalore of a sale has it already taken off (the real export of
+discussion #49). So with commission columns the BUY is booked for ``Controvalore - commissions`` and the SELL for
+``Controvalore + commissions``, each with a separate FEE of the commissions: together they are the Controvalore. Dividends,
+coupons, capital increases, ``Rimborso`` rows, rows with no commission and the layout without commission columns are untouched.
+
 **Import philosophy (verbatim / no forex):**
 This plugin is a faithful transcriber, not a re-calculator. Numbers are imported
 exactly as they appear in the report. The currency of every monetary figure in a
@@ -29,8 +47,8 @@ ignored — no conversion of any kind is performed.
 - Variant B — 15 columns, with 4 trailing commission columns.
 
 **Columns (0-based):**
-- 0  Operazione: Trade date (DD/MM/YYYY)
-- 1  Data valuta: Value/settlement date (DD/MM/YYYY) — used as transaction date
+- 0  Operazione: Trade date (DD/MM/YYYY) — the transaction date (B-52); Data valuta when it is empty
+- 1  Data valuta: Value/settlement date (DD/MM/YYYY) — decides whether the row has settled: after today, it is left out
 - 2  Descrizione: Operation description (drives type mapping)
 - 3  Titolo: Asset name
 - 4  Isin: Asset ISIN
@@ -39,7 +57,7 @@ ignored — no conversion of any kind is performed.
 - 7  Divisa: Currency of the row's monetary figures
 - 8  Prezzo: Price (in Divisa)
 - 9  Cambio: Exchange rate — IGNORED
-- 10 Controvalore: Settled cash figure (imported verbatim, tagged with Divisa)
+- 10 Controvalore: Settled cash figure (tagged with Divisa). In a trade it already holds the commission (W-B92)
 - 11 Commissioni Fondi Sw/Ingr/Uscita       (Variant B only)
 - 12 Commissioni Fondi Banca Corrispondente  (Variant B only)
 - 13 Spese Fondi Sgr                          (Variant B only)
@@ -61,18 +79,19 @@ from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMEvidence, BRIMExtractedAssetInfo, BRIMNotice, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_providers import _brim_io as io
 from backend.app.services.provider_registry import register_provider
+from backend.app.utils.datetime_utils import server_today
 
 logger = structlog.get_logger(__name__)
 
@@ -105,6 +124,23 @@ MIN_COLUMNS = COL_CONTROVALORE + 1
 # Fees are always charged/settled in EUR by Fineco; the per-row Divisa governs
 # the trade figures, while commission columns are account-currency (EUR).
 FEE_CURRENCY = "EUR"
+
+# W-B83: the columns a row's transaction is built from, by type. When one gives no number, the row is still imported as
+# before, and a note names it. Divisa (EUR when empty) and Prezzo (no transaction field) are not here.
+REQUIRED_NUMBER_COLUMNS: Dict[TransactionType, Tuple[int, ...]] = {
+    TransactionType.BUY: (COL_QUANTITY, COL_CONTROVALORE),
+    TransactionType.SELL: (COL_QUANTITY, COL_CONTROVALORE),
+    TransactionType.DIVIDEND: (COL_CONTROVALORE,),
+    TransactionType.INTEREST: (COL_CONTROVALORE,),
+    TransactionType.ADJUSTMENT: (COL_QUANTITY,),
+}
+
+# The notes' texts, in the export's language (the wizard shows the translation of each code, importWizard.brimNotice.*).
+NOT_SETTLED_MESSAGE = "Righe non ancora regolate (data valuta dopo oggi): {n}. Non sono state importate e arriveranno con il prossimo export."
+NOT_SETTLED_COMMENT = "La data valuta di queste righe è dopo oggi: non sono ancora regolate."
+INCOMPLETE_MESSAGE = "Questo import potrebbe essere sbagliato: righe senza un numero necessario (quantità o controvalore): {n}. Controlla le righe; se il file è giusto, è probabilmente un errore del plugin: apri una issue su GitHub " "per analizzarlo e risolverlo."
+INCOMPLETE_COMMENT = "L'ultima colonna nomina il campo senza numero; la riga è importata così com'è."
+INCOMPLETE_COLUMN = "Campo vuoto"
 
 
 def _parse_fineco_date(value: str) -> Optional[date_type]:
@@ -177,7 +213,10 @@ class FinecoBrokerProvider(BRIMProvider):
     @property
     def plugin_version(self) -> str:
         # 1.1.0 — bond redeemed above par split into par SELL + INTEREST surplus.
-        return "1.1.0"
+        # 1.2.0 — only settled rows (N74); a note for rows with a required number missing (W-B83).
+        # 1.3.0 — dated with the operation date, Operazione; the value date only decides whether a row has settled (B-52).
+        # 1.4.0 — a trade's Controvalore already holds its commission, so the BUY/SELL are net of it (W-B92).
+        return "1.4.0"
 
     @property
     def detection_priority(self) -> int:
@@ -230,6 +269,11 @@ class FinecoBrokerProvider(BRIMProvider):
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
         validation_issues: List[BRIMValidationIssue] = []
+        # N74 and W-B83: the rows left out because not settled yet, and the rows imported with a required number missing.
+        not_settled: List[Tuple[int, List[str]]] = []
+        incomplete: List[Tuple[int, List[str], List[str]]] = []
+        header: List[str] = []
+        today = server_today()
         extracted_assets_raw: Dict[int, Dict[str, Optional[str]]] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
@@ -268,6 +312,7 @@ class FinecoBrokerProvider(BRIMProvider):
             if header_idx is None:
                 raise BRIMParseError("Could not locate the 'Operazione' header row")
 
+            header = [cell.strip() for cell in rows[header_idx]]
             has_commissions = len(rows[header_idx]) > COL_CONTROVALORE + 1
 
             for offset, row in enumerate(rows[header_idx + 1 :]):
@@ -281,10 +326,20 @@ class FinecoBrokerProvider(BRIMProvider):
                     warnings.append(f"Row {row_num}: insufficient columns, skipping")
                     continue
 
-                # Settlement date = value date (Data valuta); fall back to trade date
-                tx_date = _parse_fineco_date(row[COL_VALUE_DATE]) or _parse_fineco_date(row[COL_TRADE_DATE])
-                if not tx_date:
+                # B-52: the operation date records the row (Operazione; Data valuta when it is missing), the value date
+                # decides whether it has settled (Data valuta; Operazione when it is missing).
+                trade_day = _parse_fineco_date(row[COL_TRADE_DATE])
+                value_day = _parse_fineco_date(row[COL_VALUE_DATE])
+                tx_date = trade_day or value_day
+                settle_day = value_day or trade_day
+                if not tx_date or not settle_day:
                     warnings.append(f"Row {row_num}: invalid date, skipping")
+                    continue
+
+                # N74: only settled rows. A value date after the server's today is a movement not settled yet: the whole row
+                # (its fee and its maturity premium too) waits for the next export, with a note and no warning.
+                if settle_day > today:
+                    not_settled.append((row_num, row))
                     continue
 
                 descrizione = row[COL_DESC].strip()
@@ -298,6 +353,12 @@ class FinecoBrokerProvider(BRIMProvider):
                 if tx_type is None:
                     warnings.append(f"Row {row_num}: unknown operation '{descrizione}', skipping")
                     continue
+
+                # W-B83: a column the transaction is built from that gives no number. The row is imported as before (an
+                # empty Controvalore reads 0, an empty Quantita stays the validation refusal it was); a note names it.
+                missing = [header[col] if col < len(header) and header[col] else str(col) for col in REQUIRED_NUMBER_COLUMNS.get(tx_type, ()) if _parse_fineco_number(row[col]) is None]
+                if missing:
+                    incomplete.append((row_num, row, missing))
 
                 # Verbatim currency from the Divisa column (no FX involvement)
                 currency = row[COL_CURRENCY].strip() or "EUR"
@@ -322,6 +383,13 @@ class FinecoBrokerProvider(BRIMProvider):
                         if model.nominal > 0 and model.surplus_cash > 0:
                             controvalore = model.principal_cash
                             maturity_surplus = model.surplus_cash
+
+                # W-B92: in a Fineco trade the Controvalore already holds the commission (a purchase) or has it taken off (a
+                # sale). The BUY/SELL is booked net of it, and the commission is its own FEE below, so the two together are
+                # exactly the Controvalore.
+                fee_total = self._sum_commissions(row) if has_commissions else Decimal("0")
+                if fee_total > 0 and _parse_fineco_number(row[COL_CONTROVALORE]) is not None and "compravendita" in descrizione.lower():
+                    controvalore = self._net_of_commission(tx_type, controvalore, fee_total)
 
                 # Apply per-type sign conventions (verbatim magnitude from source)
                 quantity, cash = self._apply_sign_rules(tx_type, quantity, controvalore, currency)
@@ -362,23 +430,21 @@ class FinecoBrokerProvider(BRIMProvider):
                     )
 
                 # Variant B: emit a separate FEE transaction for total commissions
-                if has_commissions:
-                    fee_total = self._sum_commissions(row)
-                    if fee_total > 0:
-                        self._create_transaction(
-                            row_num=row_num,
-                            transactions=transactions,
-                            validation_issues=validation_issues,
-                            context=f"Fineco commissions: {name}" if name else "Fineco commissions",
-                            broker_id=broker_id,
-                            asset_id=asset_id,
-                            type=TransactionType.FEE,
-                            date=tx_date,
-                            quantity=Decimal("0"),
-                            cash=Currency(code=FEE_CURRENCY, amount=-fee_total),
-                            description=f"Commissioni: {name}" if name else "Commissioni",
-                            tags=["import", "fineco", "fee"],
-                        )
+                if fee_total > 0:
+                    self._create_transaction(
+                        row_num=row_num,
+                        transactions=transactions,
+                        validation_issues=validation_issues,
+                        context=f"Fineco commissions: {name}" if name else "Fineco commissions",
+                        broker_id=broker_id,
+                        asset_id=asset_id,
+                        type=TransactionType.FEE,
+                        date=tx_date,
+                        quantity=Decimal("0"),
+                        cash=Currency(code=FEE_CURRENCY, amount=-fee_total),
+                        description=f"Commissioni: {name}" if name else "Commissioni",
+                        tags=["import", "fineco", "fee"],
+                    )
 
         except BRIMParseError:
             raise
@@ -387,7 +453,7 @@ class FinecoBrokerProvider(BRIMProvider):
         except Exception as e:
             raise BRIMParseError(f"Error parsing file: {e}") from e
 
-        if not transactions:
+        if not transactions and not not_settled:
             warnings.append("No valid transactions found in file")
 
         extracted_assets_typed: Dict[int, BRIMExtractedAssetInfo] = {
@@ -408,7 +474,7 @@ class FinecoBrokerProvider(BRIMProvider):
 
         return BRIMParseOutput(
             transactions=transactions,
-            warnings=warnings,
+            warnings=[*warnings, *self._notes(header, not_settled, incomplete)],
             validation_issues=validation_issues,
             extracted_assets=extracted_assets_typed,
         )
@@ -416,6 +482,26 @@ class FinecoBrokerProvider(BRIMProvider):
     # -------------------------------------------------------------------------
     # HELPERS
     # -------------------------------------------------------------------------
+
+    @staticmethod
+    def _notes(header: List[str], not_settled: List[Tuple[int, List[str]]], incomplete: List[Tuple[int, List[str], List[str]]]) -> List[BRIMNotice]:
+        """The info notes of N74 (rows left out, not settled yet) and W-B83 (rows imported with a required number missing),
+        each with its source rows as evidence (an empty title: the wizard gives its own)."""
+        width = len(header)
+        notes: List[BRIMNotice] = []
+        if not_settled:
+            evidence = BRIMEvidence(title="", headers=list(header), rows=[(cells + [""] * width)[:width] for _, cells in not_settled], row_numbers=[line for line, _ in not_settled], comment=NOT_SETTLED_COMMENT)
+            notes.append(BRIMNotice(severity="info", code="fineco_not_yet_settled", message=NOT_SETTLED_MESSAGE.format(n=len(not_settled)), evidence=[evidence], context={"count": len(not_settled)}))
+        if incomplete:
+            evidence = BRIMEvidence(
+                title="",
+                headers=[*header, INCOMPLETE_COLUMN],
+                rows=[[*(cells + [""] * width)[:width], ", ".join(missing)] for _, cells, missing in incomplete],
+                row_numbers=[line for line, _, _ in incomplete],
+                comment=INCOMPLETE_COMMENT,
+            )
+            notes.append(BRIMNotice(severity="info", code="fineco_incomplete_rows", message=INCOMPLETE_MESSAGE.format(n=len(incomplete)), evidence=[evidence], context={"count": len(incomplete), "report_issue": True}))
+        return notes
 
     @staticmethod
     def _map_transaction_type(descrizione: str, segno: str) -> Optional[TransactionType]:
@@ -458,6 +544,16 @@ class FinecoBrokerProvider(BRIMProvider):
             return qty, None
         # Fallback (should not happen given _map_transaction_type)
         return quantity, Currency(code=currency, amount=amount) if amount else None
+
+    @staticmethod
+    def _net_of_commission(tx_type: TransactionType, controvalore: Decimal, fee: Decimal) -> Decimal:
+        """The trade's amount without its commission (W-B92): a purchase's Controvalore holds the commission, a sale's has it
+        taken off. A purchase whose commission exceeds its Controvalore is inconsistent: it is left as printed, never inverted."""
+        if tx_type == TransactionType.BUY:
+            return controvalore - fee if controvalore >= fee else controvalore
+        if tx_type == TransactionType.SELL:
+            return controvalore + fee
+        return controvalore
 
     @staticmethod
     def _sum_commissions(row: List[str]) -> Decimal:

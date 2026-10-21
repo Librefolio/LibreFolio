@@ -48,7 +48,6 @@ import pytest
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 from backend.app.db.models import TransactionType
-from backend.app.schemas.common import Currency
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
@@ -56,6 +55,7 @@ from backend.app.services.financial_math.portfolio.models import ClassifiedTrans
 from backend.app.services.financial_math.price_marks import build_asset_price_series
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
+from backend.test_scripts.test_services._unit_steps_double import UnitStepsDouble
 
 A, B, C = 10, 20, 30
 ASSET = 100
@@ -1393,10 +1393,9 @@ class TestPreloadTransferLegRates:
             _ctxn(external_in, "linked_external_inflow", paired=external_out),
         ]
 
-        async def fake_convert_bulk(db, bulk_items, raise_on_error=False):
-            return [(Currency(code="EUR", amount=Decimal("1")), item[2], False) for item in bulk_items], []
-
-        monkeypatch.setattr(portfolio_engine_module, "convert_bulk", fake_convert_bulk)
+        # P3: one unit_rate_steps call with each currency's windows; every asked day reads 1
+        steps = UnitStepsDouble()
+        monkeypatch.setattr(portfolio_engine_module, "unit_rate_steps", steps)
 
         fx_map = await PortfolioCalculationEngine(object())._preload_fx_rates(
             classified_txs=classified,
@@ -1418,3 +1417,9 @@ class TestPreloadTransferLegRates:
         expected = {(currency, "EUR", day) for currency in ("USD", "CHF", "GBP") for day in (D10, D11)}
         expected |= {("USD", "EUR", D2), ("CHF", "EUR", D2), ("GBP", "EUR", D5)}
         assert keys == expected, f"missing={sorted(expected - keys)} unexpected={sorted(keys - expected)}"
+        assert steps.asked_keys() == expected, "the windows of the one unit_rate_steps call cover the same days"
+        assert steps.runs() == {
+            ("USD", "EUR"): [(D2, D2), (D10, D11)],
+            ("CHF", "EUR"): [(D2, D2), (D10, D11)],
+            ("GBP", "EUR"): [(D5, D5), (D10, D11)],
+        }, "a leg's single day, apart from the range"

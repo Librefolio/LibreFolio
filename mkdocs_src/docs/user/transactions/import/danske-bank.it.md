@@ -93,7 +93,7 @@ L'esportazione dei movimenti titoli va indietro solo di un anno, quindi importa 
 
 - Ogni transazione riceve la sua **data valuta** (il giorno in cui il denaro o le azioni si sono mossi) e il suo importo in **euro**, come l'ha scritto la banca.
 - I file non forniscono ISIN o ticker: conferma ogni titolo nella [mappatura degli asset](index.md#asset-mapping) della procedura guidata.
-- **Niente viene eliminato in silenzio**: le righe escluse — un pagamento mancante, un ordine non eseguito, un'operazione pagata dopo la fine dell'estratto del conto… — sono conteggiate nel dettaglio del set ed elencate negli avvisi dell'importatore, in **finlandese** come i file. Controlla le operazioni abbinate che un avviso segnala perché i loro nomi differiscono.
+- **Nessuna riga si perde**: una riga esclusa — un pagamento mancante, un'operazione pagata dopo la fine dell'estratto del conto… — resta conteggiata nel dettaglio del set, con il suo motivo, e gli avvisi dell'importatore, in **finlandese** come i file, elencano quelle da controllare. Controlla le operazioni abbinate che un avviso segnala perché i loro nomi differiscono.
 
 ### 💶 Le commissioni sono incluse negli importi delle operazioni
 

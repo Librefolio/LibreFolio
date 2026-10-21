@@ -20,7 +20,7 @@ The library is split into two architectural layers: **Core UI** (generic atoms a
 | **[Transaction Form](features/transaction-form.md)** | Complex modal for creating/editing transactions with reactive auto-calculation and live WAC preview. |
 | **[Import Wizard](features/import-wizard.md)** | Multi-file staged broker import: duplicate detection (vs DB and in-batch), the file-priority batch resolver, and the N-way compare modal. |
 | **[Brokers](features/brokers/index.md)** | `BrokerCard`, `BrokerForm`, `BrokerModal`, `DeleteBrokerDialog`, and Broker Sharing. |
-| **[Settings](features/settings.md)** | The tab registry and its «Administration» group, `SettingsLayout`, `PreferencesTab`, `GlobalSettingsTab`, `UsersTab` with `LinkShare` (shared links and their address check), `SecurityTab` (the configuration checks), `AccountDeletionDialog` (shared by the Profile and Users tabs). |
+| **[Settings](features/settings.md)** | The tab registry and its «Administration» group, `SettingsLayout`, `PreferencesTab`, `GlobalSettingsTab`, `UsersTab` with `LinkShare` (shared links and their address check), `SecurityTab` (the configuration checks, and [their dot](features/settings.md#security-attention-dot) on the sidebar's connection line), `AccountDeletionDialog` (shared by the Profile and Users tabs). |
 | **[Authentication](features/auth.md)** | `LoginCard`, `RegisterCard`, `ForgotPasswordCard`, the account link pages (`LinkStatusCard`, `ResetPasswordCard`), the password-manager contract. |
 | **[Live Prices](features/live-ticker.md)** | How the Assets list (every 60 s) and the asset detail page (every 30 s, one request for the price summary and the chart head) poll `POST /assets/prices/current`, how the polls pause while nobody uses the page, and how a price change is shown. |
 | **[Lots Analysis](features/lots-analysis.md)** | `LotsAnalysisPanel` and its chart/table/modal group: per-lot WAC vs market price, custody Gantt, unified lots table, value/return comparison, custody drill-down modal. |
@@ -45,6 +45,13 @@ The scroll position is sampled once per animation frame; the slide is a 200 ms t
 under `prefers-reduced-motion`. The state is published as `data-scroll-state` (`visible`, `hidden`,
 `pinned`) next to `data-menu-open`, `data-modal-open`, `data-sidebar-open` and `data-guide-active`:
 `Header.test.ts` tests the state machine, `e2e/layout/header-scroll.spec.ts` the real geometry.
+
+On a phone the sidebar, with its connection line, hides behind the menu button
+(`mobile-menu-toggle`), so the button carries a dot, `mobile-menu-security-dot`, for an insecure
+connection (plan 36) and, since lot N69b, for an administrator's security warnings, with
+`data-severity` `error` or `warning`; its accessible name appends the insecure level and the count.
+The header only reads the stores and never asks for the checks: see
+[The sidebar's dot](features/settings.md#security-attention-dot), with its tests.
 
 ## 📏 Component Guidelines
 

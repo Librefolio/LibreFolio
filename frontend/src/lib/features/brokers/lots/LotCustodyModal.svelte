@@ -119,6 +119,14 @@
         return 'text-lf-primary';
     }
 
+    /* colour: closest role, to review: open/transfer/close markers on success/info/warning tints; "other" stays categorical violet until the categorical roles exist */
+    function markerClass(kind: string): string {
+        if (kind === 'open') return 'bg-lf-success-soft text-lf-success-on-soft';
+        if (kind === 'transfer') return 'bg-lf-info-soft text-lf-info-on-soft';
+        if (kind === 'close') return 'bg-lf-warning-soft text-lf-warning-on-soft';
+        return 'bg-violet-100 px-2 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300';
+    }
+
     function stateLabel(state: string): string {
         const key = `brokers.lots.modal.state.${state.toLowerCase()}`;
         const translated = $_(key);
@@ -448,7 +456,8 @@
                                             <BrokerBadge broker={group.broker} {brokers} />
                                         {:else}
                                             <div class="inline-flex items-center gap-2 text-sm font-medium text-lf-secondary">
-                                                <ArrowRightLeft size={16} class="text-blue-500 dark:text-blue-400" />
+                                                <ArrowRightLeft size={16} class="text-lf-info" />
+                                                <!-- colour: closest role, to review: in-transit blue icon on info; same blue as the transfer marker -->
                                                 <span>{$_('brokers.lots.modal.inTransit')}</span>
                                             </div>
                                         {/if}
@@ -470,7 +479,8 @@
                                         <BrokerBadge broker={getBroker(slice.broker_id) ?? {id: -1, name: '—'}} {brokers} />
                                     {:else}
                                         <div class="inline-flex items-center gap-2 text-sm font-medium text-lf-secondary">
-                                            <ArrowRightLeft size={16} class="text-blue-500 dark:text-blue-400" />
+                                            <ArrowRightLeft size={16} class="text-lf-info" />
+                                            <!-- colour: closest role, to review: in-transit blue icon on info; same blue as the transfer marker -->
                                             <span>{$_('brokers.lots.modal.inTransit')}</span>
                                         </div>
                                     {/if}
@@ -511,15 +521,7 @@
                                 </div>
 
                                 <div class="flex min-w-0 flex-1 items-start gap-3">
-                                    <div
-                                        class="mt-0.5 flex h-7 min-w-7 items-center justify-center rounded-full text-xs font-semibold {markerKind === 'open'
-                                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                                            : markerKind === 'transfer'
-                                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                                              : markerKind === 'close'
-                                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-                                                : 'bg-violet-100 px-2 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300'}"
-                                    >
+                                    <div class="mt-0.5 flex h-7 min-w-7 items-center justify-center rounded-full text-xs font-semibold {markerClass(markerKind)}">
                                         {#if markerKind === 'open'}
                                             <Plus size={14} />
                                         {:else if markerKind === 'transfer'}

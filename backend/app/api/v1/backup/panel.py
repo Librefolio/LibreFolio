@@ -2,63 +2,41 @@
 Backup of the whole instance for a hosting panel (``/backup/panel``): the jobs of ``instance.py``, authenticated by a
 token instead of a user session.
 
-``LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`` (or its ``_FILE``, ``config/backup.py``) turns the routes on. Unset, they answer
-404, as a path that does not exist. The token travels only in ``Authorization: Bearer``, never in the URL, where access
-logs would keep it, and is compared in constant time; a missing or wrong one answers 401. A token the server cannot use
-(a ``_FILE`` it cannot read, a value too short) answers 503 and is logged, never the archive.
+``LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`` (or its ``_FILE``, ``config/backup.py``) turns the routes on: they are the
+``backup`` scope of the hosting panel, behind its shared access (``services/platform/hosting_panel/access.py``, lot
+H-61). Unset, they answer 404, as a path that does not exist. The token travels only in ``Authorization: Bearer``,
+never in the URL, where access logs would keep it, and is compared in constant time; a missing or wrong one answers 401,
+too many refused ones from an address 429. A token the server cannot use (a ``_FILE`` it cannot read, a value too short)
+answers 503 and is logged, never the archive. The routes carry the OpenAPI tag of the hosting panel
+(``api/v1/backup/__init__.py``).
 
 The panel sees only the jobs it started (origin ``panel``): any other job id answers 404. Its archives never hold the
 instance key, which the panel itself configured. The routes stay allowed on an instance its hosting provider blocked
 (``api/v1/instance_block.py``): that is when the provider hands the data back.
 """
 
-import hmac
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Response, status
 from fastapi.responses import FileResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from backend.app.api.v1.backup import job_views
-from backend.app.config import SecretFileError
-from backend.app.config.backup import BackupConfigError, backup_download_token
-from backend.app.logging_config import get_logger
 from backend.app.schemas.backup import InstanceBackupJob
-
-logger = get_logger(__name__)
+from backend.app.services.platform.hosting_panel.access import PanelCaller, PanelScope, panel_access
 
 panel_router = APIRouter()
-
-_bearer = HTTPBearer(auto_error=False, scheme_name="BackupPanelToken", description="LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN, sent as `Authorization: Bearer <token>`")
 
 PANEL_ORIGIN = "panel"
 
 _AUTH_RESPONSES = {
     401: {"description": "No token, or not the token of this instance (code `backup_panel_unauthorized`)"},
     404: {"description": "The panel routes are off (no `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`), or no backup job of the panel has this id"},
+    429: {"description": "Too many refused panel credentials from this address (code `panel_too_many_attempts`, with `Retry-After`)"},
     503: {"description": "The token of this instance cannot be used: its file is unreadable or it is too short (code `backup_panel_unavailable`)"},
 }
 
 
-def require_panel_token(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)]) -> None:
-    """Let the request through only with the hosting panel's token: 404 when the routes are off, 401 without the token."""
-    try:
-        expected = backup_download_token()
-    except (SecretFileError, BackupConfigError) as exc:
-        logger.error("The hosting panel's backup token cannot be used: its routes refuse every request", error=str(exc))
-        raise job_views.backup_error(status.HTTP_503_SERVICE_UNAVAILABLE, "backup_panel_unavailable", "The panel token of this instance cannot be used") from None
-    if expected is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
-    presented = credentials.credentials if credentials is not None else ""
-    if not hmac.compare_digest(presented.encode("utf-8"), expected.encode("utf-8")):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "backup_panel_unauthorized", "message": "A valid panel token is required"},
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-
-PanelToken = Annotated[None, Depends(require_panel_token)]
+PanelToken = Annotated[PanelCaller, Depends(panel_access(PanelScope.BACKUP))]
 
 
 @panel_router.post("/panel/jobs", status_code=status.HTTP_202_ACCEPTED, response_model=InstanceBackupJob, responses={**_AUTH_RESPONSES, **job_views.START_RESPONSES})

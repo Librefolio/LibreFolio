@@ -26,15 +26,10 @@ from backend.app.services.ai_export.temporal.points import (
     ObservedPoint,
     sort_by_date,
 )
+from backend.app.services.signals import aggregation  # Z-29r: the per-bucket rule's one home, read at each call
 
-_SCALAR_AGGREGATION_PROFILES = frozenset(
-    {
-        SignalAggregationProfile.LAST_WITH_RANGE,
-        SignalAggregationProfile.FIRST_WITH_RANGE,
-        SignalAggregationProfile.MIN_WITH_RANGE,
-        SignalAggregationProfile.MAX_WITH_RANGE,
-    }
-)
+#: The profiles the dispatcher takes as scalar: the keys of the rule's map (Z-29r)
+_SCALAR_AGGREGATION_PROFILES = frozenset(aggregation.SCALAR_PROFILE_SELECTORS)
 
 
 def _assign_by_date[T: Dated](items: Sequence[T], plan: BucketPlan) -> tuple[tuple[T, ...], ...]:
@@ -199,17 +194,14 @@ def _scalar_statistics_for_bucket(
             maximum=None,
             last=None,
         )
-    minimum_value = min(point.value for point in points)
-    maximum_value = max(point.value for point in points)
-    minimum_point = next(point for point in points if point.value == minimum_value)
-    maximum_point = next(point for point in points if point.value == maximum_value)
+    # Z-29r: the four points through the rule's one home (date order, the earliest among equal values)
     return ScalarBucketStatistics(
         bucket=bucket,
         observation_count=len(points),
-        first=_dated_value(points[0]),
-        minimum=_dated_value(minimum_point),
-        maximum=_dated_value(maximum_point),
-        last=_dated_value(points[-1]),
+        first=_dated_value(aggregation.select_point(points, "first")),
+        minimum=_dated_value(aggregation.select_point(points, "min")),
+        maximum=_dated_value(aggregation.select_point(points, "max")),
+        last=_dated_value(aggregation.select_point(points, "last")),
     )
 
 
@@ -283,15 +275,10 @@ def select_scalar_representative(
         raise TypeError("statistics must be ScalarBucketStatistics")
     if not isinstance(profile, SignalAggregationProfile):
         raise TypeError("profile must be a SignalAggregationProfile")
-    selectors = {
-        SignalAggregationProfile.FIRST_WITH_RANGE: statistics.first,
-        SignalAggregationProfile.MIN_WITH_RANGE: statistics.minimum,
-        SignalAggregationProfile.MAX_WITH_RANGE: statistics.maximum,
-        SignalAggregationProfile.LAST_WITH_RANGE: statistics.last,
-    }
-    if profile not in selectors:
+    selector = aggregation.SCALAR_PROFILE_SELECTORS.get(profile)
+    if selector is None:
         raise ValueError(f"{profile.value} is not a scalar aggregation profile")
-    return selectors[profile]
+    return _statistic(statistics, selector)
 
 
 def select_band_envelope(
@@ -304,12 +291,18 @@ def select_band_envelope(
         raise TypeError("statistics must be BandBucketStatistics")
     if profile != SignalAggregationProfile.BAND_ENVELOPE:
         raise ValueError("band envelope selection requires band_envelope profile")
+    selectors = aggregation.BAND_ENVELOPE_SELECTORS
     return BandEnvelopeRepresentative(
         bucket=statistics.bucket,
-        lower=statistics.lower.minimum,
-        middle=statistics.middle.last,
-        upper=statistics.upper.maximum,
+        lower=_statistic(statistics.lower, selectors["lower"]),
+        middle=_statistic(statistics.middle, selectors["middle"]),
+        upper=_statistic(statistics.upper, selectors["upper"]),
     )
+
+
+def _statistic(statistics: ScalarBucketStatistics, selector: aggregation.Selector) -> DatedValue | None:
+    """The bucket statistic a selector of the rule names (Z-29r)."""
+    return {"first": statistics.first, "min": statistics.minimum, "max": statistics.maximum, "last": statistics.last}[selector]
 
 
 @dataclass(frozen=True, slots=True)

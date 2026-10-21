@@ -49,6 +49,7 @@ AI_EXPORT_SERVICE_TEST_PATHS = (
 # the shared DB) so the unit can honestly declare PURE isolation and run beside
 # anything.
 AI_EXPORT_PURE_TEST_PATHS = (
+    "backend/test_scripts/test_services/test_ai_export_build_failure_log.py",
     "backend/test_scripts/test_services/test_ai_export_components_drawdown_total_loss.py",
     "backend/test_scripts/test_services/test_ai_export_fx_payload_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_fx_timing_invariants.py",
@@ -236,6 +237,18 @@ def services_range_ceiling(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "Date range ceiling and bulk limit tests", verbose=verbose)
 
 
+def services_price_query_sampling(verbose: bool = False, test_names: list = None) -> bool:
+    """Z-29a (N90, revised 19/10): an item of POST /assets/prices/query sampled for a compact chart — by max_points, resolution or sample_like."""
+    print_section("Services: Price Query Sampling (Z-29a)")
+    print_info("Testing: price_sampling (bucket_of, fill_counts, choose_resolution, sample_dates, SampleReferenceError), FAPriceQueryItem (key, max_points, resolution, sample_like), FAPriceQueryResult (resolution, sample_bounds), get_prices_bulk, the query route's 422")
+    print_info("Per item, on its own fill after the X-R55 ceiling: the step chosen (max_points), asked (resolution) or followed (sample_like, from the later first day); prices the last day of each ISO week or month, each the daily answer's point; sample_bounds on the first day and the cut end")
+    print_info("Wrong references refused before any read (unknown or duplicate key, chained, range mismatch: 422 sample_reference); one read per asset: a whole daily read serves its samples, else one bucket statement per range and step")
+    print_info("Day budget counts the sampled points + 2 bounds, checked before the bucket rows; no daily fill built; at most buckets + 2 price rows read per asset")
+    print_info("Case table shared with the chart: frontend/src/lib/components/charts/__tests__/compactDensityCases.json")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_price_query_sampling.py", test_names)
+    return run_command(cmd, "Price query sampling tests", verbose=verbose)
+
+
 def services_provider_registry(verbose: bool = False, test_names: list = None) -> bool:
     """Test registry dei provider (asset & fx)."""
     print_section("Services: Provider Registry")
@@ -362,6 +375,16 @@ def services_signal_annotations(verbose: bool = False, test_names: list = None) 
     print_info("Testing: extended-range crossing, gaps, observed-only, dedup and sampling")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_annotations.py", test_names)
     return run_command(cmd, "Signal annotation tests", verbose=verbose)
+
+
+def services_signal_aggregation(verbose: bool = False, test_names: list = None) -> bool:
+    """Z-29r: the one home of the signals' per-bucket selection rule (services/signals/aggregation.py) and AI Export through it."""
+    print_section("Services: Signal Aggregation (Z-29r)")
+    print_info("Testing: backend/app/services/signals/aggregation.py (Selector, SCALAR_PROFILE_SELECTORS, BAND_ENVELOPE_SELECTORS, select_point, scalar_representative, band_envelope)")
+    print_info("Parity: timeSeriesAggregation.ts (selectSignalRepresentative, bandRepresentative, the envelope) and fixtures/signals/aggregation_profiles.v1.json")
+    print_info("One home: ai_export/temporal/aggregators.py goes through the module, its outputs unchanged")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_aggregation.py", test_names)
+    return run_command(cmd, "Signal aggregation tests", verbose=verbose)
 
 
 def services_signal_plugins_core(verbose: bool = False, test_names: list = None) -> bool:
@@ -1036,6 +1059,16 @@ def services_probe_rate_limit(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Probe rate-limit tests", verbose=verbose)
 
 
+def services_quote_base_suggestion(verbose: bool = False, test_names: list = None) -> bool:
+    """Z-32 (d): a provider's quote base suggestion (FAQuoteBaseSuggestion) in its search results and in the probe's metadata."""
+    print_section("Services: Quote Base Suggestion (Z-32 d)")
+    print_info("Testing: schemas/provider.py (FAQuoteBaseSuggestion; quote_base_suggestion on FAProviderSearchResultItem and ProbeMetadataResult), AssetSearchService.search, AssetSourceProvider.suggest_quote_base, probe_provider_config, the Yahoo Finance and mockprov plugins")
+    print_info("Search: a plugin's suggestion (dict or model) reaches its result; an invalid one is dropped with a warning, the result kept")
+    print_info("Probe: asked after the metadata answered, through core.call_provider with 5 s; never after a failed metadata, never of a provider keeping the base class's hook")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_quote_base_suggestion.py", test_names)
+    return run_command(cmd, "Quote base suggestion tests", verbose=verbose)
+
+
 def services_bulk_reads_chunked(verbose: bool = False, test_names: list = None) -> bool:
     """MF-SEC9a (rest): bulk reads of the BRIM candidate search and of the WAC FX evidence in statements SQLite can parse (private in-memory DB)."""
     print_section("Services: Bulk Reads Chunked (MF-SEC9a, X-R45 reverted, X-R45b)")
@@ -1430,6 +1463,54 @@ def services_response_validation(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Response validation tests", verbose=verbose)
 
 
+def services_server_errors(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the request id and the 5xx answers: id in every answer and log line, the HTTPException handler, the unhandled 500, H-33's 500, D4 (H-60)."""
+    print_section("Services: Request Id and Server Errors")
+    print_info("Testing: services/platform/request_id.py, api/server_errors.py, services/platform/failure_report.py, the unhandled 500 of security_headers.py, api/response_validation.py, client_log_level of /system/instance")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_server_errors.py", test_names)
+    return run_command(cmd, "Request id and server error tests", verbose=verbose)
+
+
+def services_hosting_panel_access(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the hosting panel's shared access (H-61, L1): the status token's reader, panel_access per scope (off 404, unusable 503, Bearer 401), the limiter's 429 and the line of each call, without secrets."""
+    print_section("Services: Hosting Panel Access")
+    print_info("Testing: backend/app/config/hosting_panel.py, backend/app/services/platform/hosting_panel/access.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_hosting_panel_access.py", test_names)
+    return run_command(cmd, "Hosting panel access tests", verbose=verbose)
+
+
+def services_hosting_panel_tickets(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the hosting panel's signed tickets (H-61, L2): the readers of the keys, the clock tolerance and the audience, and verify_ticket, pure."""
+    print_section("Services: Hosting Panel Tickets")
+    print_info("Testing: backend/app/config/hosting_panel.py (L2 readers), backend/app/services/platform/hosting_panel/tickets.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_hosting_panel_tickets.py", test_names)
+    return run_command(cmd, "Hosting panel ticket tests", verbose=verbose)
+
+
+def services_hosting_panel_registry(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the registry of used panel tickets (H-61, L2): one jti accepted once, across restarts, threads and processes; pruning; an unusable file gives 503."""
+    print_section("Services: Hosting Panel Ticket Registry")
+    print_info("Testing: backend/app/services/platform/hosting_panel/ticket_registry.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_hosting_panel_registry.py", test_names)
+    return run_command(cmd, "Hosting panel ticket registry tests", verbose=verbose)
+
+
+def services_hosting_panel_access_tickets(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the signed tickets inside panel_access (H-61, L2): scopes, refusal codes, replay, the limiter counting only what proves nothing, the lines, the startup check."""
+    print_section("Services: Hosting Panel Access with Tickets")
+    print_info("Testing: backend/app/services/platform/hosting_panel/access.py (L2), backend/app/services/platform/config_audit.py (check_hosting_panel)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_hosting_panel_access_tickets.py", test_names)
+    return run_command(cmd, "Hosting panel access ticket tests", verbose=verbose)
+
+
+def services_hosting_panel_vectors(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the hosting panel's ticket test vectors in the admin guide (H-61, L2): the key, the ticket and every verdict, checked against the code."""
+    print_section("Services: Hosting Panel Ticket Test Vectors")
+    print_info("Testing: mkdocs_src/docs/admin/hosting_providers.en.md (#panel-api-test-vectors) against backend/app/services/platform/hosting_panel/tickets.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_hosting_panel_vectors.py", test_names)
+    return run_command(cmd, "Hosting panel ticket vector tests", verbose=verbose)
+
+
 def services_client_address(verbose: bool = False, test_names: list = None) -> bool:
     """Test the client address behind a trusted proxy: LIBREFOLIO_CLIENT_IP_HEADER, client_address and client_rate_key (P17); no function only for the tests (N58)."""
     print_section("Services: Client Address")
@@ -1628,6 +1709,14 @@ def services_series_export_csv(verbose: bool = False, test_names: list = None) -
     print_info("Testing: backend/app/services/platform/series_export.py (stream_rows_as_csv, stream_rows_as_json)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_series_export_csv.py", test_names)
     return run_command(cmd, "Series export CSV tests", verbose=verbose)
+
+
+def services_logging_errors(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the error helpers and the log of a failure: one traceback per exception, the «reported» mark, uvicorn's duplicate dropped (H-60)."""
+    print_section("Services: Errors in the Log")
+    print_info("Testing: backend/app/utils/runtime/errors.py (causes, root, shown error, reason code, reported mark) and backend/app/logging_config.py (LibreFolioBoundLogger, add_log_level, the uvicorn.error filter)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_logging_errors.py", test_names)
+    return run_command(cmd, "Errors in the log tests", verbose=verbose)
 
 
 def services_logging_access_filter(verbose: bool = False, test_names: list = None) -> bool:
@@ -1996,6 +2085,19 @@ Note: No backend server required.
         # X-R65's handlers run the same way: the price route on a stand-in session that reads nothing, the rate route with upsert_rates_bulk replaced by an in-process writer.
         isolation="pure",
     )
+    add_test(
+        cat,
+        "price-query-sampling",
+        services_price_query_sampling,
+        name="Price Query Sampling",
+        desc="Z-29a (N90, revised 19/10), Z-29a-f (an item without prices only gives its step: no row read past its plan, nothing counted) and Z-29s (with signals: read, computed and counted day by day, then prices and bounds as without signals and each signal series reduced by its output's aggregation_profile): FAPriceQueryItem.key and sample_like (1 … 64 of A-Z a-z 0-9 _ . : -), max_points (1 … 10 000), resolution (daily, weekly, monthly), at most one of the three, none with annotations or events; FAPriceQueryResult.resolution always, sample_bounds (FAPriceSampleBounds: first, last) on weekly and monthly answers only; price_sampling's buckets (ISO week, calendar month), counts, step, sampled dates (the last day of each bucket, the first day only when it closes its own) and SampleReferenceError; per item on its own fill after the X-R55 ceiling, daily as without the fields, else each point and bound the daily answer's, converted per point; sample_like: the card's step from the later first day, a card with nothing to fill lending its max_points or resolution; wrong references (unknown or duplicate key, chained, range mismatch) refused before any statement, the route's 422 sample_reference; the day budget counts points + 2 bounds, before the bucket rows are read; no daily fill built, at most buckets + 2 rows read; one read per asset, one bucket statement per range and step; request order kept; the case table shared with the chart (compactDensityCases.json)",
+        # PURE: no lane DB, no server, no network. The price queries run on a private SQLite file under tmp_path built
+        # with create_all, its assets on ids of their own; the X-R55 ceiling and the day budget replaced by monkeypatch in
+        # price_query; the FX rates of the conversion case are rows of that file; the route is called as a function on a
+        # session of that file; statements and ORM loads are counted by listeners the tests register and remove; the
+        # case table is a file of the repository, read only.
+        isolation="pure",
+    )
     add_test(cat, "provider-registry", services_provider_registry, name="Provider Registry", desc="Registration, lookup, priority, fallback")
     add_test(cat, "quantlib-runtime", services_quantlib_runtime, name="QuantLib Runtime", desc="Pinned version, required APIs and seeded path reproducibility")
     add_test(cat, "risk-simulation", services_risk_simulation, name="Risk Simulation", desc="Serializable contracts, sampling, moments, chunking and cache")
@@ -2016,6 +2118,17 @@ Note: No backend server required.
     add_test(cat, "signal-contracts", services_signal_contracts, name="Signal Contracts", desc="Auto-discovered test-only line, band/composite, warm-up, failure and event fixtures")
     add_test(cat, "signal-service", services_signal_service, name="Signal Service", desc="Planning, dedup, availability, one-thread batch, output validation and slicing")
     add_test(cat, "signal-annotations", services_signal_annotations, name="Signal Annotations", desc="Line crossover, threshold crossing, observed-only, dedup and sampling")
+    add_test(
+        cat,
+        "signal-aggregation",
+        services_signal_aggregation,
+        name="Signal Aggregation",
+        desc="Z-29r: the per-bucket rule of the signals' aggregation_profile in one home, services/signals/aggregation.py: Selector, the read-only profile and envelope selector maps, select_point / scalar_representative / band_envelope picking as the chart (timeSeriesAggregation.ts; ties to the earliest, any input order, any element type through keyword-only accessors, the element itself) and as the shared aggregation_profiles.v1.json; AI Export's temporal aggregators going through it (aggregation.select_point and the two maps, read at the call), their outputs unchanged; Z-29s: sample_signal_series reduces one series as the compact chart does (a run at a time between null points, a gap marker, the later run where two meet in a bucket, bars whole, bands by envelope, the element itself re-dated), on the shared signal_sampling_cases.v1.json",
+        # PURE: no lane DB, no server, no network. Pure functions over points built in memory; AI Export's aggregators
+        # called directly on hand-built plans; the module attributes the tests replace (select_point, the two maps) put
+        # back by monkeypatch; the shared fixture read from the repository.
+        isolation="pure",
+    )
     add_test(cat, "signal-plugins-core", services_signal_plugins_core, name="Core Signal Plugins", desc="EMA, RSI, MACD and Bollinger TA-Lib delegation and numerical regression")
     add_test(cat, "signal-plugins-close-only", services_signal_plugins_close_only, name="Close-only Signal Plugins", desc="SMA, ROC, StochRSI, KAMA and PPO delegation, warm-up and Asset/FX parity")
     add_test(cat, "signal-plugins-ohlc", services_signal_plugins_ohlc, name="OHLC Signal Plugins", desc="ATR, ADX, NATR, Aroon, Donchian and CCI strict input and numerical regression")
@@ -2476,6 +2589,20 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "quote-base-suggestion",
+        services_quote_base_suggestion,
+        name="Quote Base Suggestion",
+        desc="Z-32 (d): FAQuoteBaseSuggestion (quantity a whole number ≥ 1, required; quote_currency as the provider reports it, GBp kept; strict), quote_base_suggestion on FAProviderSearchResultItem and ProbeMetadataResult (null when absent, in the OpenAPI document: quantity required, minimum 1); the search carries a plugin's suggestion (dict or model, also from the query cache) and drops an invalid one with a warning, the result, its neighbours and the provider kept; AssetSourceProvider.suggest_quote_base answers None with no I/O; the probe asks it once fetch_asset_metadata answered (a patch or None), never in parallel, through core.call_provider with 5 s and the metadata's arguments, never after a failed metadata (exception, refusal, timeout), never without the metadata operation, never of a provider keeping the base class's hook or of a double without one, never into patch_data, its own failures None with the metadata's outcome unchanged; Yahoo: a GBp search result and suggest_quote_base → 100 GBp, GBP/USD/none → nothing; mockprov: MINOR_UNIT_QUERY lf-minor-unit → MOCK_MINOR_UNIT, a GBp STOCK with 100 GBp, suggest_quote_base for it only, the other searches unchanged",
+        # PURE: no lane DB, no server, no network. The providers are in-process doubles without settings handed out by
+        # AssetProviderRegistry.get_provider_instance (monkeypatch), so configured_provider reads no row; the pauses go
+        # to a private Cooldowns on a fake clock; core.call_provider is wrapped to record the calls; the Yahoo plugin's
+        # yf module is a fake; mockprov is called directly; the OpenAPI document is an app of the test around the real
+        # provider_router (backend.app.main is not imported). Codes, queries and symbols are unique per test, so the
+        # process's search and currency caches answer for no other test.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "bulk-reads-chunked",
         services_bulk_reads_chunked,
         name="Bulk Reads Chunked (MF-SEC9a, X-R45 reverted, X-R45b)",
@@ -2795,8 +2922,63 @@ Note: No backend server required.
         "response-validation",
         services_response_validation,
         name="Response Validation",
-        desc="H-33: a response that breaks its response_model is logged with its route, endpoint, error types and locations, never its content, and answered 500 in plain text",
+        desc="H-33: a response that breaks its response_model is logged with its route, endpoint, error types and locations, never its content, and answered 500 as every platform 5xx (H-60: JSON with request_id and error_type)",
         # Fresh FastAPI apps in process, and the real app's handler table; logs captured with structlog. No DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "server-errors",
+        services_server_errors,
+        name="Request Id and Server Errors",
+        desc="H-60: X-Request-Id on every answer and request_id in every line of the request; 4xx as FastAPI; a 5xx with request_id and error_type, its cause logged once (error with traceback, warning without a cause, nothing when the route logged it); the unhandled 500 as JSON, logged once and re-raised; H-33's 500 as JSON; no request secret in an answer or a line; client_log_level follows LOG_LEVEL; H-60r: requests failing on one shared exception (a shared build, one object raised twice) each leave their id in the log, the traceback once, the later ones a short warning pointing to the first",
+        # PURE: fresh FastAPI apps in process; the real app for its handler table, its stack and D4, its session on an
+        # in-memory SQLite built with create_all; the activity record monkeypatched per request. No lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "hosting-panel-access",
+        services_hosting_panel_access,
+        name="Hosting Panel Access",
+        desc="H-61 L1: LIBREFOLIO_PANEL_STATUS_TOKEN read as the backup and wake tokens are; panel_access(scope) for backup, wake and status: off 404 without a line, unusable 503 with the scope's code, Bearer only, constant-time compare, missing or different 401 with the scope's code, a token never opens another scope; 20 refused credentials per address in 10 minutes across scopes then 429 panel_too_many_attempts with Retry-After, none behind an untrusted proxy; one line per call, never a secret, a header, the query or the address",
+        # PURE: fresh FastAPI apps in process, tokens through monkeypatch, the limiter replaced by one on a fake clock. No DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "hosting-panel-tickets",
+        services_hosting_panel_tickets,
+        name="Hosting Panel Tickets",
+        desc="H-61 L2: LIBREFOLIO_PANEL_PUBLIC_KEYS (kid:key, 1 to 4 entries, no _FILE, the entry named by position, never a key), LIBREFOLIO_PANEL_CLOCK_SKEW_SECONDS (0 to 300, default 60), the audience as the canonical origin of LIBREFOLIO_PUBLIC_URL; verify_ticket per scope: unverifiable (alg none, HS256 with the public key, typ, signature, over 2048 bytes) without a code, unknown kid, expired, not yet valid at the tolerance edges, lifetime 300/301, wrong or missing audience, wrong scope, jti rule, missing claims, the first defect wins",
+        # PURE: keys from fixed seeds, tickets signed with PyJWT, now fixed in 2033, variables through monkeypatch. No DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "hosting-panel-registry",
+        services_hosting_panel_registry,
+        name="Hosting Panel Ticket Registry",
+        desc="H-61 L2: DATA_DIR/panel_tickets.sqlite3, a jti accepted once in one process, after a module reload and in a new process; threads and spawned processes released together, exactly one accepted; pruning at the tolerance edges; an unusable file raises, is left as it was, and gives the scope's 503 through panel_access; created on first use with mode 0600, outside every archived entry, in the data directory of the moment",
+        # PURE: a data directory of its own under tmp_path per test, fixed clocks, barriers; spawned processes on the same file. No lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "hosting-panel-access-tickets",
+        services_hosting_panel_access_tickets,
+        name="Hosting Panel Access with Tickets",
+        desc="H-61 L2 in panel_access: the keys alone turn a scope on, token and keys together (beta), two keys, the canonical audience; each signed refusal its panel_ticket_* code with a Bearer challenge, never counted, Retry-After 5 when not yet valid; unverifiable tickets the scope's 401, counted; replay; registry out of reach 503; 20 refusals that prove nothing close the address, signed refusals never do; no ticket or Authorization in any answer or line; check_hosting_panel error, ok and the managed coexisting warning",
+        # PURE: fresh FastAPI apps in process, keys from fixed seeds, the registry under tmp_path, the limiter on a fake clock. No lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "hosting-panel-vectors",
+        services_hosting_panel_vectors,
+        name="Hosting Panel Ticket Test Vectors",
+        desc="H-61 L2: the JSON block after #panel-api-test-vectors in the admin guide: the seed derives the public key and LIBREFOLIO_PANEL_PUBLIC_KEYS, the ticket is the header and payload signed by it (byte for byte), each verdict row is what verify_ticket answers through the real readers, and the rows cover both tolerance edges, the wrong scope and the wrong audience",
+        # PURE: reads one docs page from the repository; variables through monkeypatch; no clock, DB or server.
         isolation="pure",
     )
     add_test(
@@ -2985,6 +3167,16 @@ Note: No backend server required.
         name="Series Export CSV",
         desc="Lot B-39, CSV formula injection in the series exports (series_export.stream_rows_as_csv): a cell whose text starts with =, +, -, @, a tab or a CR, behind any apostrophes ('*[=+-@\\t\\r]), written with one leading apostrophe ('=x becomes ''=x, so the round trip is exact; a CR alone too; a value that is no str written as one; in a row of the events' schema, only that cell); a plain number never escaped in any type (Decimal -1.5, text -1.5, +2, -1E+2, -0, int -3); dates, UTC datetimes, None, other text ('hello included), the header rows of the three schemas and the ; delimiter unchanged; the JSON export unchanged; every cell read back with csv.reader",
         # PURE: the two stream functions called directly. No database, no server, no network, no file.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "logging-errors",
+        services_logging_errors,
+        name="Errors in the Log",
+        desc="H-60: the error helpers (visible causes, root, shown error, reason code, linked errors, the reported mark); logger.exception writes one JSON line at ERROR with its traceback once; a warning or more with an exception, or while one is handled, marks it; uvicorn.error drops its own record of a reported exception; H-60r: the mark per request (is_reported_for, chain_reported_for), the traceback flag on the chain a traceback shows (mark_traceback_reported), the first reporting request; a line marks the request it carries (its keyword, the bound context, structlog's contextvars)",
+        # PURE: helpers on exceptions built in the test; configure_logging with file logging off, structlog and every
+        # logger put back after each test; one fresh interpreter for the import-time bootstrap. No DB, no server.
         isolation="pure",
     )
     add_test(

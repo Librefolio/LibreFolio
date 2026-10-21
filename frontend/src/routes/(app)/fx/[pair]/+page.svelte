@@ -90,6 +90,11 @@
 
     const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
 
+    /** Chart toolbar toggle at rest (measure, editor, aesthetics): the card, quiet text, a step into the page on hover. */
+    const TOOLBAR_TOGGLE_IDLE_CLASS = 'bg-lf-card/80 text-lf-muted hover:bg-lf-hover hover:text-lf-secondary';
+    /* The measure toggle keeps the violet of the measure tool (categorical: no role yet), so it lives in its own literal. */
+    const MEASURE_TOGGLE_ACTIVE_CLASS = 'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 ring-1 ring-violet-300 dark:ring-violet-700';
+
     // =========================================================================
     // Page data
     // =========================================================================
@@ -1406,7 +1411,8 @@
             <button type="button" class="absolute inset-0 z-0 w-full rounded-xl hover:bg-lf-hover" data-testid="fx-detail-signals-toggle" aria-expanded={showSignals} aria-label={$t('common.signals')} onclick={() => (showSignals = !showSignals)}></button>
             <div class="relative z-10 pointer-events-none w-full flex items-center gap-1 px-2 py-1.5" data-testid="fx-detail-signals-header">
                 <span class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-lf-secondary">
-                    <TrendingUp class="text-blue-500" size={15} />
+                    <!-- colour: closest role, to review: the signals icon is a blue accent, not a state; info chosen, alternative text-lf-link -->
+                    <TrendingUp class="text-lf-info" size={15} />
                     {$t('common.signals')}
                 </span>
                 <div class="flex-1"></div>
@@ -1466,9 +1472,7 @@
                 <div class="absolute top-0 right-0 z-10 flex items-center gap-1.5">
                     <button
                         data-testid="fx-detail-measure-btn"
-                        class="p-1.5 rounded-lg transition-colors {measureMode
-                            ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 ring-1 ring-violet-300 dark:ring-violet-700'
-                            : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
+                        class="p-1.5 rounded-lg transition-colors {measureMode ? MEASURE_TOGGLE_ACTIVE_CLASS : TOOLBAR_TOGGLE_IDLE_CLASS}"
                         onclick={async () => {
                             if (measureMode) {
                                 measurePanel?.stopMeasureMode();
@@ -1482,12 +1486,11 @@
                     >
                         <Ruler size={16} />
                     </button>
+                    <!-- colour: closest role, to review: the editor toggle's amber is the warning tint (as the editor panel it opens); no role for a toolbar accent -->
                     <button
                         data-testid="fx-detail-edit-btn"
                         use:guideAnchor={'fx.detail.editor'}
-                        class="p-1.5 rounded-lg transition-colors {showDataEditor
-                            ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 ring-1 ring-amber-300 dark:ring-amber-700'
-                            : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
+                        class="p-1.5 rounded-lg transition-colors {showDataEditor ? 'bg-lf-warning-soft text-lf-warning-on-soft ring-1 ring-lf-warning-line' : TOOLBAR_TOGGLE_IDLE_CLASS}"
                         onclick={() => {
                             if (showDataEditor) {
                                 showDataEditor = false;
@@ -1510,12 +1513,11 @@
                     >
                         <Pencil size={16} />
                     </button>
+                    <!-- colour: closest role, to review: the aesthetics toggle's emerald is an accent, not a state; success tint chosen, alternative bg-lf-selected text-lf-link -->
                     <button
                         data-testid="fx-detail-aesthetics-toggle"
                         aria-expanded={showAesthetics}
-                        class="p-1.5 rounded-lg transition-colors {showAesthetics
-                            ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-300 dark:ring-emerald-700'
-                            : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
+                        class="p-1.5 rounded-lg transition-colors {showAesthetics ? 'bg-lf-success-soft text-lf-success-on-soft ring-1 ring-lf-success-line' : TOOLBAR_TOGGLE_IDLE_CLASS}"
                         onclick={() => (showAesthetics = !showAesthetics)}
                         title={$t('common.aesthetics')}
                     >

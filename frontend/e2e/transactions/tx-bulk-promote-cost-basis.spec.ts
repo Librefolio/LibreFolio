@@ -28,9 +28,10 @@
  *   PC4  (the banner, not the save) a new +5 beside a saved −3 and a saved −5 of the same asset:
  *        the banner offers one merge only, the −5's, never the crossed −3 / +5 the backend's
  *        promote rule refuses (`assetQuantitiesCancel`, `$lib/features/transactions/bulk/promoteSuggest.ts`);
- *   PC5  (the selection toolbar, not the save) two new ADJUSTMENTs, −123456789012.123456 on A and
- *        +123456789012.123457 on B, opposite as doubles and not as decimals → neither the banner nor
- *        the selection toolbar offers the merge; the regression test of C-46, see «PC5» below;
+ *   PC5  (B-48, the form, not the save) the leg the old PC5 typed, −123456789012.123456 — 18 significant
+ *        digits — after the same leg cut to 15, which the form takes → the form refuses it on its own: the
+ *        message under the quantity, Apply disabled; red until the cure, see «PC5» below. Its old subject,
+ *        C-46, is guarded in TransactionBulkModal.test.ts (Vitest);
  *   PC6  (the 💡's window, not the save) a new +5 on B, two saved −5 on A outside the editor, today and
  *        yesterday → with «Max Δ days» at 0 the 💡 offers today's alone, and moving the slider to 1
  *        searches again and offers both; red until the cure, see «PC6» below;
@@ -103,27 +104,33 @@
  * anchors every absence on a twin the search must still offer. The 💡 is not shown before that
  * answer lands, since no earlier answer offers anything, so a count of exactly 1 can only come from it.
  *
- * ## PC5: the selection toolbar compared doubles (C-46), regression test
+ * ## PC5: the form refuses what the backend refuses (B-48), red until the cure
  *
- * Two paths offer an asset TRANSFER merge. The banner asks `findPromoteMatch` and
- * `assetQuantitiesCancel`, which compares the signed decimal strings exactly, as the backend's
- * `_validate_linked_pair` compares `Decimal`s. The selection toolbar (`selectedForPromote` in
- * TransactionBulkModal → `promote-toolbar-confirm`) asked `findPromoteMatch` only, whose TRANSFER rule
- * is `qA !== 0 && qA === -qB` on JavaScript numbers (`buildPromoteCtx` reads `Number(quantity)`): two
- * quantities opposite as doubles and not as decimals passed the toolbar and not the banner, and two
- * new rows merged that way were refused on save with `pairQuantityMismatch`. Since C-46 the toolbar
- * asks `assetQuantitiesCancel` too; PC5 was written red against the old behaviour.
+ * PC5 used to be C-46's regression test. Two paths offer an asset TRANSFER merge: the banner asks
+ * `findPromoteMatch` and `assetQuantitiesCancel`, which compares the signed decimal strings exactly, as the
+ * backend's `_validate_linked_pair` compares `Decimal`s; the selection toolbar (`selectedForPromote` in
+ * TransactionBulkModal → `promote-toolbar-confirm`) asked `findPromoteMatch` only, whose TRANSFER rule is
+ * `qA !== 0 && qA === -qB` on JavaScript numbers (`buildPromoteCtx` reads `Number(quantity)`). Two new legs typed
+ * through the form, −123456789012.123456 on A and +123456789012.123457 on B — one double, not one decimal — were
+ * offered by the toolbar, and their save was refused with `pairQuantityMismatch`. Since C-46 the toolbar asks
+ * `assetQuantitiesCancel` too.
  *
- * The pair fits the column (`Numeric(18, 6)`) and the form (12 integer digits, 6 decimals). Between
- * 2^36 and 2^37 consecutive doubles are 2^-16 ≈ 1.5e-5 apart, about 15 steps of the 6th decimal, so
- * 123456789012.123456 and 123456789012.123457 are one double (0x423CBE991A141F9B), inside the run
- * .123452–.123466 that rounds to it; neither ends on a zero the form would strip, so the text typed is
- * the text the form must keep. The test re-checks the premise in Node, whose `Number()` is the browser's.
+ * Those legs have 18 significant digits, and the backend keeps at most 15 (`precision._digit_counts`, refusal
+ * `significantDigitsExceeded`). Within 15 significant digits two different decimals are always two different
+ * doubles (a decimal of at most 15 significant digits survives the round trip through a double: DBL_DIG), so
+ * C-46's case exists only outside the domain the form and the backend accept, and a form that keeps to that
+ * domain cannot type it. Its guard left this file: the same pair, and the same positive control, are brought into
+ * the editor the way an import brings them, never typed, in
+ * `src/lib/features/transactions/bulk/TransactionBulkModal.test.ts` («C-46», Vitest).
  *
- * The positive control comes first, in the same editor: A's same −123456789012.123456 against an exact
- * +123456789012.123456 on B, one digit away from the pair under test. The banner offers it and its
- * selection shows the toolbar's merge; the banner then merges it, so that the banner is hidden again
- * and none of its rows is selected when the pair under test is typed. Nothing is saved.
+ * What the old PC5 typed is now B-48's subject. The form held the quantity's integer digits (15) and its decimals
+ * (10) apart, so −123456789012.123456, within both, passed, and only the save's validation refused it. The contract
+ * of the cure: at most 15 significant digits in the form; over them the quantity is one of the form's own errors —
+ * the message under the field (`tx-form-quantity-significant-error`, carrying the 15) and Apply disabled. PC5
+ * types it with the old steps short of Apply (`fillAdjustment`: + Add row → ADJUSTMENT → broker A → the asset →
+ * the quantity, read back after the blur → the description), after a positive control in the same form: the same
+ * leg cut to 15 significant digits, −123456789012.123, leaves the form complete, with no message and Apply enabled,
+ * so the refusal that follows is the quantity's doing. Nothing is saved.
  *
  * ## PC6: the 💡's window, red until the cure
  *
@@ -525,7 +532,8 @@ async function applyForm(page: Page): Promise<void> {
 }
 
 /**
- * `+ Add row` → the form → one ADJUSTMENT pushed into the grid.
+ * `+ Add row` → the form → one ADJUSTMENT typed in, short of Apply: its type, broker, asset, quantity (read back
+ * after the blur, `fillQuantity`) and description. PC5 stops here; `addAdjustment` goes on to Apply.
  *
  * `withoutCostBasis` is the receiver under test, NOT in Auto mode: Manual is chosen first, before
  * the form is complete enough to validate (Auto is the form's default for a positive ADJUSTMENT,
@@ -533,7 +541,7 @@ async function applyForm(page: Page): Promise<void> {
  * as by a user who skips it. The form's own warning (`tx-form-cost-basis-warning`: positive
  * quantity, not Auto, no amount) proves the draft is in exactly that state when it is applied.
  */
-async function addAdjustment(page: Page, row: {broker: Broker; asset: Asset; quantity: string; description: string; withoutCostBasis?: boolean}): Promise<void> {
+async function fillAdjustment(page: Page, row: {broker: Broker; asset: Asset; quantity: string; description: string; withoutCostBasis?: boolean}): Promise<void> {
     await page.getByTestId('tx-bulk-add-row').click();
     await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: UI_TIMEOUT});
     await selectType(page, 'ADJUSTMENT');
@@ -552,6 +560,11 @@ async function addAdjustment(page: Page, row: {broker: Broker; asset: Asset; qua
         await expect(page.getByTestId('tx-form-cost-basis-input-amount'), 'with no cost basis typed').toHaveValue('');
         await expect(page.getByTestId('tx-form-cost-basis-warning'), 'the form says it: Manual, positive quantity, no amount').toBeVisible();
     }
+}
+
+/** `fillAdjustment`, then Apply: one ADJUSTMENT pushed into the grid. */
+async function addAdjustment(page: Page, row: {broker: Broker; asset: Asset; quantity: string; description: string; withoutCostBasis?: boolean}): Promise<void> {
+    await fillAdjustment(page, row);
     await applyForm(page);
 }
 
@@ -580,17 +593,6 @@ async function selectBulkRows(rows: Locator, count: number): Promise<void> {
         await expect(checkbox).toBeVisible({timeout: UI_TIMEOUT});
         if ((await checkbox.getAttribute('data-state')) !== 'checked') await checkbox.click();
         await expect(checkbox).toHaveAttribute('data-state', 'checked');
-    }
-}
-
-/** The reverse of `selectBulkRows`: every row of an ALREADY-FILTERED locator back to `unchecked`. */
-async function unselectBulkRows(rows: Locator, count: number): Promise<void> {
-    await expect(rows).toHaveCount(count, {timeout: UI_TIMEOUT});
-    for (let i = 0; i < count; i++) {
-        const checkbox = rows.nth(i).locator('[data-testid^="dt-row-checkbox-"]');
-        await expect(checkbox).toBeVisible({timeout: UI_TIMEOUT});
-        if ((await checkbox.getAttribute('data-state')) !== 'unchecked') await checkbox.click();
-        await expect(checkbox).toHaveAttribute('data-state', 'unchecked');
     }
 }
 
@@ -921,7 +923,8 @@ test.describe('Bulk editor — a promoted receiver without a cost basis is refus
         // The second pair is a cash one on purpose: a WITHDRAWAL and a DEPOSIT can only meet each other,
         // so the pairs «Merge all» takes do not depend on how the banner matches asset quantities —
         // which PC4 checks on its own. (The selection toolbar asks `findPromoteMatch`, which compares the
-        // quantities as JavaScript numbers, then, since C-46, the exact `assetQuantitiesCancel`: see PC5.)
+        // quantities as JavaScript numbers, then, since C-46, the exact `assetQuantitiesCancel`: its guard is
+        // «C-46» in TransactionBulkModal.test.ts.)
         const [fund, float, sender, withdrawal] = await commitOwnedRows(page, [
             {label: 'fund', create: adjustment(brokers.a, asset, dayBefore(owned.today), '10', `PCB fund ${owned.suffix}`, {cost_basis_override: {code: 'EUR', amount: '50'}})},
             {label: 'float', create: cashRow(brokers.a, 'DEPOSIT', dayBefore(owned.today), '1000', `PCB float ${owned.suffix}`)},
@@ -1013,62 +1016,42 @@ test.describe('Bulk editor — a promoted receiver without a cost basis is refus
         await expectLedgerUntouched(page, brokers, before);
     });
 
-    test('PC5: two new legs opposite as doubles, not as decimals → no merge from the banner, none from the selection toolbar', async ({page, owned}) => {
-        // A's leg is the same in both pairs. B's cancels it exactly in the control, and one digit off in the
-        // 6th decimal in the pair under test: one double all the same (see «PC5» in the header).
-        const out = '-123456789012.123456';
-        const exactIn = '123456789012.123456';
-        const nearIn = '123456789012.123457';
-        expect(out, 'premise: the control is exactly opposite as decimals').toBe(`-${exactIn}`);
-        expect(out, 'premise: the pair under test is not').not.toBe(`-${nearIn}`);
-        expect(Number(out), 'premise: yet it is opposite as doubles, the comparison findPromoteMatch makes').toBe(-Number(nearIn));
+    test('PC5: the form refuses a quantity of eighteen significant digits — the message under the field, Apply disabled (B-48)', async ({page, owned}) => {
+        // The leg the old PC5 typed (C-46's), and the same leg cut to fifteen significant digits: the backend keeps at
+        // most fifteen (see «PC5» in the header). The premise, re-checked: digits counted as the backend counts them,
+        // the sign, the point and the zeros that lead or trail not counted.
+        const refused = '-123456789012.123456';
+        const accepted = '-123456789012.123';
+        const significantDigits = (value: string) => value.replace(/[-.]/g, '').replace(/^0+/, '').replace(/0+$/, '').length;
+        expect([significantDigits(refused), significantDigits(accepted)], 'premise: eighteen significant digits refused, fifteen accepted').toEqual([18, 15]);
 
         const {asset, brokers} = await ownAssetAndBrokers(page, owned);
-        const exact = `PCB exact ${owned.suffix}`;
-        const near = `PCB near ${owned.suffix}`;
-        // The editor opens on A's fund, the earlier unrelated row. It does not cover A's legs, and the editor says
-        // so (A's holdings would go negative): balances play no part in what the banner or the toolbar offers, and
-        // nothing is saved.
+        const description = `PCB refused ${owned.suffix}`;
+        // The editor opens on A's fund, the earlier unrelated row, as the old PC5's did. Nothing is saved.
         const [fund] = await commitOwnedRows(page, [{label: 'fund', create: adjustment(brokers.a, asset, dayBefore(owned.today), '10', `PCB fund ${owned.suffix}`, {cost_basis_override: {code: 'EUR', amount: '50'}})}]);
         const before = await readOwnedLedger(page, brokers);
         expect(before.map((row) => row.id)).toEqual([fund.id]);
-
         await openEditorOn(page, brokers, [fund]);
-        const banner = page.getByTestId('promote-suggest-banner');
-        const promote = page.getByTestId('promote-toolbar-confirm');
 
-        // The positive control, typed through the same form: the banner offers it, and so does the toolbar.
-        await addAdjustment(page, {broker: brokers.a, asset, quantity: out, description: exact});
-        await addAdjustment(page, {broker: brokers.b, asset, quantity: exactIn, description: exact});
-        const exactRows = bulkRowsWith(page, exact);
-        await expect(exactRows, 'the control is two rows').toHaveCount(2, {timeout: UI_TIMEOUT});
-        await expectBannerOffers(page, 1);
-        await selectBulkRows(exactRows, 2);
-        await expect(promote, 'the control: the selection toolbar offers the merge of two legs that cancel exactly').toBeVisible();
-        // Unselected before the banner merges them: the merged row, still selected, would be a third row in the
-        // selection below, and the toolbar asks about two rows only.
-        await unselectBulkRows(exactRows, 2);
-        await banner.getByTestId('promote-suggest-link-0').click();
-        await expect(exactRows, 'the banner offered the control: its two rows are now one pair row').toHaveCount(1, {timeout: UI_TIMEOUT});
-        await expect(banner, 'and it has nothing else to offer').toBeHidden();
+        // The old PC5's typing steps, short of Apply, on the control first: fifteen significant digits, the form
+        // complete, no message and Apply enabled — so a disabled Apply below is the quantity's doing.
+        await fillAdjustment(page, {broker: brokers.a, asset, quantity: accepted, description});
+        const quantity = page.getByTestId('tx-form-quantity');
+        const message = page.getByTestId('tx-form-quantity-significant-error');
+        const apply = page.getByTestId('tx-form-save');
+        await expect(apply, 'the control: fifteen significant digits, the form complete, Apply enabled').toBeEnabled({timeout: UI_TIMEOUT});
+        await expect(quantity, 'the control: the quantity is not flagged').toHaveAttribute('aria-invalid', 'false');
+        await expect(message, 'the control: no message under the quantity').toBeHidden();
 
-        // The pair under test, typed through the form: addAdjustment reads each quantity back after the blur
-        // (fillQuantity), and Apply is enabled only for a quantity within the form's 12 + 6 digits (applyForm).
-        await addAdjustment(page, {broker: brokers.a, asset, quantity: out, description: near});
-        await addAdjustment(page, {broker: brokers.b, asset, quantity: nearIn, description: near});
-        const nearRows = bulkRowsWith(page, near);
-        await expect(nearRows, 'the pair under test is two rows').toHaveCount(2, {timeout: UI_TIMEOUT});
-        // Side check, the exact one: the banner derives from the rows on screen, synchronously (see PC4), and
-        // compares the decimal strings.
-        await expect(banner, 'the banner offers no merge: the two legs differ in the 6th decimal').toBeHidden();
+        // The old PC5's leg: refused by the form itself, before any save. `fillQuantity` reads it back whole after the
+        // blur: a refused value is kept as typed, never cut to fit.
+        await fillQuantity(page, refused);
+        await expect(message, 'B-48: the form takes eighteen significant digits without a word; only the save would refuse them').toBeVisible({timeout: UI_TIMEOUT});
+        await expect(message, 'the message carries the limit: 15').toContainText('15');
+        await expect(quantity, 'B-48: the quantity is flagged').toHaveAttribute('aria-invalid', 'true');
+        await expect(apply, 'B-48: Apply is enabled on a quantity the backend refuses').toBeDisabled();
 
-        // The selection is exactly the two legs: their boxes checked, the anchor as in PC2, and no other.
-        await selectBulkRows(nearRows, 2);
-        for (const other of [bulkRowsWith(page, fund.description), exactRows]) await expect(other.locator('[data-testid^="dt-row-checkbox-"]'), 'no other row is selected').toHaveAttribute('data-state', 'unchecked');
-        await expect(promote, `nor does the selection toolbar: Number() makes ${out} and ${nearIn} one double, and the save would be refused (pairQuantityMismatch)`).toHaveCount(0);
-        await expect(nearRows, 'the two legs stay apart').toHaveCount(2);
-
-        // Nothing was saved: the editor is left open and discarded by the cleanup.
+        // Nothing was saved: the editor and its form are left open and discarded by the cleanup.
         await expectLedgerUntouched(page, brokers, before);
     });
 

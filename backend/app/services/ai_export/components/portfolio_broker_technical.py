@@ -35,6 +35,7 @@ from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.technical_payloads import (
     AssetIndicatorsPayload,
+    AssetPriceSeriesGapPayload,
     AssetPriceSeriesPayload,
     PortfolioTechnicalPricesPayload,
     TechnicalEventsPayload,
@@ -43,6 +44,7 @@ from backend.app.services.ai_export.components.technical_payloads import (
 )
 from backend.app.services.ai_export.components.technical_shared import (
     BROKER_TECHNICAL_UNIVERSE_KWARGS,
+    NO_PRICE_IN_PERIOD,
     OHLC_BUCKET_AGGREGATOR,
     PORTFOLIO_TECHNICAL_UNIVERSE_KWARGS,
     SIGNAL_PROFILE_BUCKET_AGGREGATOR,
@@ -53,8 +55,11 @@ from backend.app.services.ai_export.components.technical_shared import (
     build_price_buckets,
     coherent_price_currency,
     latest_point_value,
+    load_series_gaps,
     load_technical_universe_bundle,
     price_result_to_close_points,
+    price_series_gap,
+    price_series_seed,
     signal_results_to_discrete_events,
 )
 from backend.app.services.ai_export.components.types import Domain, PeriodBehavior
@@ -72,29 +77,48 @@ async def _build_universe_technical_prices(context: BuildContext, *, universe_kw
 
     context.register_price_sampling()
     assets: list[AssetPriceSeriesPayload] = []
+    uncovered_assets: list[AssetPriceSeriesGapPayload] = []
     for asset_id in universe.asset_ids:
         result = universe.price_results.by_asset_id.get(asset_id)
-        if result is None:
+        weight = universe.weights.get(asset_id)
+        weight_ratio = float(weight) if weight is not None else None
+        gap = price_series_gap(result)
+        if gap is not None:
+            # E-AI503: decided on the price points returned, never on the asset type; the asset stays eligible. No price
+            # inside the period (E-23): the last one stored before it, with its currency.
+            seed = price_series_seed(result) if gap == NO_PRICE_IN_PERIOD else None
+            uncovered_assets.append(
+                AssetPriceSeriesGapPayload(
+                    asset_id=asset_id,
+                    portfolio_weight_ratio=weight_ratio,
+                    reason_code=gap,
+                    currency=coherent_price_currency(result) if seed is not None else None,
+                    last_close=seed[1] if seed is not None else None,
+                    last_close_date=seed[0] if seed is not None else None,
+                )
+            )
             continue
         points = price_result_to_close_points(result, start=scope.period_start, end=scope.period_end)
         buckets = build_price_buckets(points, context.bucket_plan, key="close")
         latest_close, latest_date = latest_point_value(points, key="close")
-        currency = coherent_price_currency(result)
-        weight = universe.weights.get(asset_id)
+        price_gaps = await load_series_gaps(points, context.bucket_plan, key="close", seed=price_series_seed(result))
         assets.append(
             AssetPriceSeriesPayload(
                 asset_id=asset_id,
-                portfolio_weight_ratio=(float(weight) if weight is not None else None),
-                currency=currency,
+                portfolio_weight_ratio=weight_ratio,
+                currency=coherent_price_currency(result),
                 buckets=buckets,
                 latest_close=latest_close,
                 latest_date=latest_date,
+                price_gaps=price_gaps,
             )
         )
     assets.sort(key=lambda payload: payload.asset_id)
+    uncovered_assets.sort(key=lambda payload: payload.asset_id)
 
     return PortfolioTechnicalPricesPayload(
         assets=tuple(assets),
+        uncovered_assets=tuple(uncovered_assets),
         eligible_asset_count=len(universe.asset_ids),
         period_position_leg_count=universe.period_position_leg_count,
         period_contributor_asset_count=universe.period_contributor_asset_count,
@@ -112,7 +136,7 @@ async def _build_broker_technical_prices(context: BuildContext, dependencies: Ma
 
 PORTFOLIO_TECHNICAL_PRICES_SPEC = ComponentSpec(
     component_id="portfolio.technical_prices",
-    version=1,
+    version=2,
     domains=frozenset({Domain.PORTFOLIO}),
     output_model=PortfolioTechnicalPricesPayload,
     builder=_build_portfolio_technical_prices,
@@ -123,7 +147,7 @@ PORTFOLIO_TECHNICAL_PRICES_SPEC = ComponentSpec(
 
 BROKER_TECHNICAL_PRICES_SPEC = ComponentSpec(
     component_id="broker.technical_prices",
-    version=1,
+    version=2,
     domains=frozenset({Domain.BROKER}),
     output_model=PortfolioTechnicalPricesPayload,
     builder=_build_broker_technical_prices,

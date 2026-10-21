@@ -535,3 +535,53 @@ describe('ExactQuantityInput — the digit budget counts no zero the backend dro
         expectDigitsError(input, TID, 10);
     });
 });
+
+/**
+ * B-48 — at most fifteen significant digits (D-K3-6). The backend keeps a quantity of at most 15 significant digits,
+ * leading and trailing zeros not counted (`precision._digit_counts`, refusal `significantDigitsExceeded`); the form
+ * caps the integer digits (15) and the decimals (10) apart, so `999999999999999.5` — fifteen and one, sixteen
+ * significant — passes both budgets and is refused on save.
+ *
+ * The contract: an additive prop `maxSignificantDigits`, no cap by default. Over it the field is `aria-invalid`, and the
+ * validity it publishes has `digitsValid: false`, `valid: false`; the value is kept whole, as every refused value is. The
+ * cases pass the budgets the transaction form gives a quantity (15 integer digits, 10 decimals), so the significant
+ * digits are the only limit in play. The message the form shows under the field is TransactionFormModal.test.ts's.
+ */
+describe('ExactQuantityInput — at most maxSignificantDigits significant digits (B-48)', () => {
+    const FORM_BUDGET = {maxIntegerDigits: 15, maxFractionDigits: 10};
+
+    /** Type `typed` behind the parent loop and wait for the validity published for it. */
+    async function typeQuantity(typed: string, overrides: Record<string, unknown>) {
+        const mounted = mountWithParentLoop(overrides);
+        await fireEvent.input(mounted.input, {target: {value: typed}});
+        expect(mounted.emissions.at(-1), 'the model is the whole value, never cut').toBe(typed);
+        await mounted.loopBack();
+        expect(mounted.input, 'kept as typed').toHaveValue(typed);
+        await waitFor(() => expect(lastValidity(mounted.validities)).toMatchObject({normalized: typed, empty: false}));
+        return mounted;
+    }
+
+    // Red today: nothing counts the significant digits — fifteen integer digits and one decimal are within both budgets.
+    it('B-48: with maxSignificantDigits=15, 999999999999999.5 (16 significant digits) is refused: aria-invalid, digitsValid false, valid false', async () => {
+        const {input, validities} = await typeQuantity('999999999999999.5', {...FORM_BUDGET, maxSignificantDigits: 15});
+
+        await waitFor(() => expect(lastValidity(validities), 'B-48: the published validity accepts sixteen significant digits').toMatchObject({digitsValid: false, valid: false}));
+        expect(input, 'B-48: sixteen significant digits are past the cap of fifteen').toHaveAttribute('aria-invalid', 'true');
+    });
+
+    // Guard, green today: fifteen are within the cap.
+    it('B-48 guard: with maxSignificantDigits=15, 99999999999999.5 (15 significant digits) is valid', async () => {
+        const {input, validities} = await typeQuantity('99999999999999.5', {...FORM_BUDGET, maxSignificantDigits: 15});
+
+        expect(input).toHaveAttribute('aria-invalid', 'false');
+        expect(lastValidity(validities)).toMatchObject({digitsValid: true, valid: true});
+    });
+
+    // Guard, green today: the cap is opt-in — no prop, no cap.
+    it('B-48 guard: without maxSignificantDigits, 999999999999999.5 is valid', async () => {
+        const {input, validities} = await typeQuantity('999999999999999.5', FORM_BUDGET);
+
+        expect(input).toHaveAttribute('aria-invalid', 'false');
+        expect(lastValidity(validities)).toMatchObject({digitsValid: true, valid: true});
+    });
+});

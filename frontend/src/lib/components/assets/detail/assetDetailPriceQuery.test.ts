@@ -162,26 +162,39 @@ describe('parseAssetPriceQueryWithSignalIsolation: each item is validated with i
 
         const {items} = parseAssetPriceQueryWithSignalIsolation({items: [priceItem(7, {signals: [valid, invalid, failed]})]});
 
-        expect(items).toEqual([{asset_id: 7, prices: [{date: '2026-02-02', close: '101.5'}], signals: [valid, invalid, failed]}]);
+        expect(items).toEqual([{asset_id: 7, prices: [{date: '2026-02-02', close: '101.5'}], signals: [valid, invalid, failed], resolution: 'daily'}]);
     });
 
     it('returns the schema output for the rest of the item', () => {
         const {items} = parseAssetPriceQueryWithSignalIsolation({items: [priceItem(7, {errors: [FX_ERROR], unknown_field: 'a key the schema does not know'})]});
 
-        expect(items).toEqual([{asset_id: 7, prices: [{date: '2026-02-02', close: '101.5'}], errors: [FX_ERROR], signals: []}]);
+        expect(items).toEqual([{asset_id: 7, prices: [{date: '2026-02-02', close: '101.5'}], errors: [FX_ERROR], signals: [], resolution: 'daily'}]);
         expect(items.find((item) => item.asset_id === 7)).not.toHaveProperty('unknown_field');
     });
 
     it('gives an item without signals an empty signal list', () => {
         const {items} = parseAssetPriceQueryWithSignalIsolation({items: [priceItem(7)]});
 
-        expect(items).toEqual([{asset_id: 7, prices: [{date: '2026-02-02', close: '101.5'}], signals: []}]);
+        expect(items).toEqual([{asset_id: 7, prices: [{date: '2026-02-02', close: '101.5'}], signals: [], resolution: 'daily'}]);
     });
 
     it('keeps the items in the order of the answer', () => {
         const {items} = parseAssetPriceQueryWithSignalIsolation({items: [priceItem(9), priceItem(7), priceItem(8)]});
 
         expect(items.map((item) => item.asset_id)).toEqual([9, 7, 8]);
+    });
+
+    it('keeps the resolution an item sends, defaults a missing one to daily, and adds no sample bounds', () => {
+        // Z-29: `resolution` is the step of `prices`. The schema defaults it, so an item that does
+        // not name its step reads as daily, an unsampled series; `sample_bounds` has no default.
+        const {items} = parseAssetPriceQueryWithSignalIsolation({items: [priceItem(7, {resolution: 'weekly'}), priceItem(8)]});
+
+        expect(items).toEqual([
+            {asset_id: 7, prices: [{date: '2026-02-02', close: '101.5'}], signals: [], resolution: 'weekly'},
+            {asset_id: 8, prices: [{date: '2026-02-02', close: '101.5'}], signals: [], resolution: 'daily'},
+        ]);
+        expect(items.find((item) => item.asset_id === 7)).not.toHaveProperty('sample_bounds');
+        expect(items.find((item) => item.asset_id === 8)).not.toHaveProperty('sample_bounds');
     });
 });
 

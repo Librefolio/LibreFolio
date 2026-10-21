@@ -28,6 +28,7 @@ To export your transaction statement from Trading212:
 
 - Supports stock/ETF buys and sells, dividends, interest on cash, deposits, withdrawals, and FX conversion fees.
 - Multi-currency accounts are supported.
+- **Stock splits, share distributions and currency conversions are not imported yet**: the rows are listed in an amber warning, with a link to open an issue on GitHub. Add them by hand. Transfers between your own accounts are left out quietly, since they change nothing.
 
 ## 🔗 Developer Reference
 

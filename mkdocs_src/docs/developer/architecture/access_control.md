@@ -349,8 +349,8 @@ or *links show the bare path until it is fixed*.
 
 | Route | Body | Does | Answers |
 |-------|------|------|---------|
-| `GET /users` | — | Every account, oldest first (`id`, `username`, `email`, `is_active`, `is_superuser`, `created_at`, `protected`: see [Protected Accounts](#account-protection), `holds_place`: inactive and waiting for its email verification with a live link, so its place is already counted, from `place_holders()` in one query — see [Email Verification](../backend/email.md#verification) —, and `pending_setup`: the [initial administrator](#initial-admin) waiting for its setup, from `registration_service.pending_admin_ids()` in one query), with `usage: {used, max_users, billing_url}` | `200` |
-| `PATCH /users/{user_id}` | `{is_active?, is_superuser?, cancel_setup?}` | `update_user_status()`, all or nothing: an omitted field, or a value equal to the current one, changes nothing, with two exceptions for `is_active: false` on an account inactive already: one waiting for its email verification ends the wait as `user deactivate` does — its links revoked, its place free —, and the initial administrator waiting for its setup has its setup links revoked, the [cancellation](#setup-cancel) of its link (any other account has the setup links it never consumed retired). `cancel_setup: true` (default `false`, lot A-51) makes the request that cancellation and nothing else: an account that does not wait for its setup is left as it is. The service reads the account again under SQLite's write lock before its own decisions — a deactivation or a demotion, the last active administrator, «waiting» —, so a change committed since the route's first read, a setup completed for one, is seen ([Decided under the write lock](#decided-under-the-lock)). A deactivation or a demotion ends every session of the account. A change of `is_active` revokes the account's email-verification links and retires its setup links ([The Initial Administrator](#initial-admin)) | `200` with the account, `holds_place` and `pending_setup` included (`holds_place` `false` once a wait has ended; `pending_setup` still `true` after a cancellation); `404`, also for an account deleted since the route's first read (lot A-54); `422` for `cancel_setup: true` without `is_active: false`; `409` `ACCOUNT_PROTECTED` for a deactivation, a demotion or a cancellation of a [protected account](#account-protection), checked first; `409` `PENDING_SETUP` for `is_superuser: false` or `is_active: true` on the initial administrator waiting for its setup (`is_pending_admin()`), checked before the user limit, nothing changed; `409` `LAST_ADMIN` for the last active administrator; `409` `SETUP_COMPLETED` for `cancel_setup: true` on an account that does not wait for its setup, its setup completed since the caller looked ([A setup completed meanwhile](#setup-completed-meanwhile)), nothing changed; `409` `USER_LIMIT_REACHED` for a reactivation over the limit, counted under the write lock (lot A-56), unless the account `holds_place` |
+| `GET /users` | — | Every account, oldest first (`id`, `username`, `email`, `is_active`, `is_superuser`, `created_at`, `protected`: see [Protected Accounts](#account-protection), `holds_place`: inactive and waiting for its email verification with a live link, so its place is already counted, from `place_holders()` in one query — see [Email Verification](../backend/email.md#verification) —, `pending_setup`: the [initial administrator](#initial-admin) waiting for its setup, from `registration_service.pending_admin_ids()` in one query, and `avatar_url`: the account's avatar as its user settings store it, an image uploaded to the app or an address, `null` without one or without a settings row, from `user_service.avatar_urls()` in one query, lot N69-4), with `usage: {used, max_users, billing_url}` | `200` |
+| `PATCH /users/{user_id}` | `{is_active?, is_superuser?, cancel_setup?}` | `update_user_status()`, all or nothing: an omitted field, or a value equal to the current one, changes nothing, with two exceptions for `is_active: false` on an account inactive already: one waiting for its email verification ends the wait as `user deactivate` does — its links revoked, its place free —, and the initial administrator waiting for its setup has its setup links revoked, the [cancellation](#setup-cancel) of its link (any other account has the setup links it never consumed retired). `cancel_setup: true` (default `false`, lot A-51) makes the request that cancellation and nothing else: an account that does not wait for its setup is left as it is. The service reads the account again under SQLite's write lock before its own decisions — a deactivation or a demotion, the last active administrator, «waiting» —, so a change committed since the route's first read, a setup completed for one, is seen ([Decided under the write lock](#decided-under-the-lock)). A deactivation or a demotion ends every session of the account. A change of `is_active` revokes the account's email-verification links and retires its setup links ([The Initial Administrator](#initial-admin)) | `200` with the account, `holds_place`, `pending_setup` and `avatar_url` included (`holds_place` `false` once a wait has ended; `pending_setup` still `true` after a cancellation); `404`, also for an account deleted since the route's first read (lot A-54); `422` for `cancel_setup: true` without `is_active: false`; `409` `ACCOUNT_PROTECTED` for a deactivation, a demotion or a cancellation of a [protected account](#account-protection), checked first; `409` `PENDING_SETUP` for `is_superuser: false` or `is_active: true` on the initial administrator waiting for its setup (`is_pending_admin()`), checked before the user limit, nothing changed; `409` `LAST_ADMIN` for the last active administrator; `409` `SETUP_COMPLETED` for `cancel_setup: true` on an account that does not wait for its setup, its setup completed since the caller looked ([A setup completed meanwhile](#setup-completed-meanwhile)), nothing changed; `409` `USER_LIMIT_REACHED` for a reactivation over the limit, counted under the write lock (lot A-56), unless the account `holds_place` |
 | `GET /users/{user_id}/deletion-preview` | — | `preview_user_deletion()`: what [deleting the account](#admin-account-deletion) would take with it. Writes nothing | `200` `AccountDeletionPreviewRead`; `404` |
 | `DELETE /users/{user_id}` | — | `delete_account()`: the account, and the brokers it is the only `OWNER` of, all or nothing. Cannot be undone: see [Deleting an Account](#admin-account-deletion) | `204` with an empty body; `404`, also for an account deleted since the route's first read; `409` `SELF_DELETION`, `ACCOUNT_PROTECTED` or `DEMOTE_FIRST` (never for the initial administrator waiting for its setup, deleted directly; whether the account is an administrator, and whether it still waits, is read under SQLite's write lock, so one set up or promoted since the route's first read answers `DEMOTE_FIRST`, lots A-51 and A-55: [Decided under the write lock](#decided-under-the-lock)); `500` when the deletion fails, nothing deleted |
 | `POST /users/{user_id}/password-reset-link` | — | A [reset link](#reset-links), shown once | `201` `{token, path, url, expires_at}`; `404`, also for an account deleted since the route's first read ([under the write lock](#decided-under-the-lock), lot A-54) |
@@ -501,7 +501,10 @@ registration by mode, inspection, the password reset, the password rules on both
 block, the locked setting) and
 `./dev.py test api users-admin` (`backend/test_scripts/test_api/test_users_admin_api.py`: the
 administrator API with its guards and its logs; the deletion and its preview on the lane's server, and
-in process the protection hook replaced, the log event and an injected failure). The address probe has
+in process the protection hook replaced, the log event and an injected failure; each account's
+`avatar_url`, lot N69-4, UADM-AV-01 to UADM-AV-04: in `GET /users` and in the answer of a `PATCH` on
+the lane's server, in process with the settings rows given the ids of other accounts, and the
+schema). The address probe has
 its own tests, listed in [Address Probe](security.md#address-probe).
 
 The web pages of the links, `/invite` and `/reset-password`, are in
@@ -596,6 +599,35 @@ what it writes, and returns a `BootstrapResult` whose `action` (`BootstrapAction
   counts the accounts. The worker that comes second finds the account, goes on as `pending`, and
   delivers nothing. On a restart, a worker that finds the lock taken while another re-arms or
   renames answers `pending`, and lets that one apply the change.
+
+**The setup's status, for a hosting panel** (lot H-61). `admin_setup_status(session, *, now=None)`
+tells the status route of a hosting panel where the setup of the initial administrator stands. It
+answers an `AdminSetupStatus`, a frozen dataclass: `state`, an `AdminSetupState` (a `StrEnum`, so it
+formats and serialises as its value: `none`, `pending`, `done` or `expired`), and `setup_expires_at`,
+in UTC, for `pending` only, `None` otherwise. It reads the `admin_setup` links of every account,
+though only the F02 administrator ever gets one; the links of the other purposes (invitations,
+password resets, email verifications) never count. The status is not «waiting» (`pending_admin()`,
+above): an administrator whose link ran out or was [cancelled](#setup-cancel) still waits, and its
+setup reads `expired`. The rule, in this order («done wins»):
+{: #setup-status }
+
+1. No `admin_setup` link stored: `none`. None was ever issued, or the account that held them was
+   deleted: `account_tokens.user_id` is `ON DELETE CASCADE`, and its links went with it
+   ([Deleting an Account](#admin-account-deletion)).
+2. Any `admin_setup` link consumed: `done`. Spent by the setup (`complete_admin_setup()`, below), or
+   retired because the account was activated or given a password another way (A-32, below). A
+   consumption is final: no link is issued after one (`pending_admin()` wants none consumed), so a
+   stray newer link, which a setup through an older one leaves revoked, never makes a set-up
+   instance read `expired`.
+3. Otherwise the latest link, by `created_at` then `id`, decides. Revoked without use — the setup
+   [cancelled](#setup-cancel) (A-43), the address changed (A-33, above) — or past its expiry
+   (`expires_at <= now`): `expired`. Otherwise `pending`, with that link's `expires_at` as
+   `setup_expires_at`. A link replaced by a newer one (`issue_setup_link()`, a re-arm) is revoked
+   too, but the newer one is then the latest, and decides.
+
+`now`, the moment the expiry is compared with, is the clock (`utcnow()`) when left out. The function
+only reads: it writes and commits nothing, leaves nothing in the session for its caller to commit,
+and never takes SQLite's write lock.
 
 **The setup.** `POST /api/v1/auth/setup` `{token, new_password}` (`AdminSetupRequest`, `token` of at
 most 200 characters) is public:
@@ -779,4 +811,12 @@ works as before, `cancel_setup` without `is_active: false` is `422`, a plain dea
 window deactivates the administrator just set up and says so, a deletion in it answers
 `DEMOTE_FIRST`) and A51-007 and A51-008 to `admin-bootstrap` (`user deactivate` and `user demote`
 of the only administrator of a new instance while its setup completes, both refused as the last
-active administrator).
+active administrator). Lot H-61 adds H61-001 to H61-018 to `admin-bootstrap`, for
+[`admin_setup_status()`](#setup-status): the two types and the signature; `none` without any setup
+link, the tokens of the other purposes counting for nothing, and once the administrator was
+deleted; `pending` after the creation, until the expiry to the microsecond; `done` through the
+link, another way, and through the older of two links; `expired` once the link was withdrawn; the
+link that replaced another; of two links, a consumed one first, otherwise the newer; the order by
+`created_at` then `id`; the links of every account; nothing written in any state; the clock without
+`now`. Every test name holds `setup_status`, so `./dev.py test services admin-bootstrap setup_status`
+runs them alone.

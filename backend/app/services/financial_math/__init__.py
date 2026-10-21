@@ -40,7 +40,8 @@ Modules:
   fixed periods of the Assets and FX tables, and the gain that recovers a drawdown.
 * ``valuation`` — the value of a holding from its quantity, price and quote base quantity.
 * ``fx_rates`` — the orientation of a stored FX rate: a pair read from source to destination,
-  either way.
+  either way; and the unit rates a calculation reads by day, kept as steps and answered on the asked days only
+  (``AskedDayRates``, P3).
 * ``interest`` — the time fraction between two dates under a day count convention (ACT/365, ACT/360, ACT/ACT,
   30/360), simple interest and daily compounding over a span in closed form: the primitives the Scheduled
   Investment provider builds its accrual on.

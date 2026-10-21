@@ -129,6 +129,10 @@ class InstanceConfigResponse(StrictModel):
         description="Where users ask for help, such as an asset the search does not find (LIBREFOLIO_SUPPORT_URL, workstream H): an http(s) page or mailto: and one email address; null when it is not set or not valid, and the asset search then offers a new issue on the project's GitHub on a self-hosted instance, and no report link on a managed one",
     )
     legal: LegalInstanceConfig = Field(default_factory=LegalInstanceConfig, description="The legal pages of the instance, linked by the legal notice (workstream A)")
+    client_log_level: Literal["error", "debug"] = Field(
+        default="error",
+        description="How much the web app writes to the browser console about failed API calls (workstream H): error, server errors, network failures and answers that break their schema; debug, every 4xx too. debug when the instance's LOG_LEVEL is DEBUG or TRACE",
+    )
 
 
 class InstanceBlockResponse(StrictModel):
