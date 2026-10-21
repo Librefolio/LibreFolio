@@ -91,6 +91,18 @@ converter.
       that carries `context.report_issue = True`. The wizard then shows the link «open an issue
       on GitHub» under the warning, on every instance, self-hosted or hosted: the users become
       the canaries of a broker whose export changes. Example: Danske Bank's `excluded_status`.
+      **Use the shared helper** `_brim_io.RowSkips` (W-B86): `skips = io.RowSkips(header_row)`,
+      `skips.unknown(line, row, reason)` for a type or status the plugin does not recognise (or does
+      not import yet), `skips.unreadable(line, row, reason)` for a date, amount or required field it
+      cannot read (a `csv.DictReader` row works too: `skips.set_headers(reader.fieldnames)` first),
+      then `warnings=[*warnings, *skips.notices()]`. It yields the two shared warnings
+      `rows_not_recognized` and `rows_unreadable` (`context = {count, report_issue: True}`, the rows
+      and a «Reason» column as evidence), already worded in the four languages
+      (`importWizard.brimNotice.<code>`, `importWizard.brimEvidence.<code>`). A plugin with its own
+      notice codes (DEGIRO, Crédit Agricole, Scalable, Danske) just adds `report_issue: True` to the
+      context of the ones that mean «unknown» or «unreadable». A plain `warnings.append("Row 5: …")`
+      cannot carry the link. `test_brim_row_skips.py` classifies every registered plugin: a new one
+      must be listed there, with how to build an unknown and an unreadable row.
     - **Never silently** leave out a row that may carry an economic effect (a split, a fee, a
       tax, a currency conversion) unless the plugin knows that is safe: a row it cannot import
       is unknown.
