@@ -137,7 +137,8 @@ a row's **⋮** menu, opens the details, with the warnings and the notes listed 
 </div>
 
 - **Warnings and notes**: **Continue** lists the warnings first, then the notes; read them, then
-  click **Continue anyway**.
+  click **Continue anyway**. A warning about rows the importer left out, because it does not
+  know or cannot read them, has a link to open an issue on GitHub.
 - **A file failed**: a banner says why. Fix its plugin in **Select Files**, then click
   **Re-parse all**.
 

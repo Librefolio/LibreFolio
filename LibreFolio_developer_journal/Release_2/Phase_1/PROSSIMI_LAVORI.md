@@ -127,7 +127,7 @@ Quattro lotti del riordino pianificato in testa alla 1.3 non sono mai partiti. A
   avuto con W-B85. Il CSV generico resta fuori: è la mappatura dell'utente.
 - **Da decidere (D-W85-4)**: i plugin di W-B87 sono tutti in beta. Per la regola sopra resterebbero fuori, ma lì il
   problema non è la chiarezza: sono numeri sbagliati in silenzio.
-- **Stato**: ❌ non iniziato; analisi e inventario fatti.
+- **Stato**: ✅ 21/10 (backend, solo ciò che era in 1.3): l'aiuto `RowSkips`, i 4 plugin stabili e la versione minima di D-W85-4 (3 plugin con l'avviso aggregato, 3 convertiti ai codici). Restano i plugin in beta (W-B86) e l'import vero delle righe con effetto economico (W-B87), dopo la 1.3.
 - **Dove**: [piano 04, «W-B85 · «Noto in silenzio, ignoto con avviso»: analisi», punti 3 e
   4](04_importTransactions/plan-phase01ImportTransactions.prompt.md);
   nel backlog [«W-B86 · Gli altri plugin BRIM col principio …» e «W-B87 · Plugin che saltano in silenzio righe con un

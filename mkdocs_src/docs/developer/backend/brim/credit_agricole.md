@@ -196,6 +196,10 @@ language; every other message reaches the user as written.
 Except `derived_quantity` and the two `*_empty` notices, each one carries its source rows as
 `BRIMEvidence`, with their line numbers and the export's own column labels.
 
+Since version 1.5.0, `ca_securities_unknown_causale`, `ca_account_invalid_amount` and `ca_unknown_causale`
+carry `context.report_issue`, so the wizard shows the link *open an issue on GitHub* under them: they are rows the
+importer does not know or cannot read ([Rows left out](architecture.md#brim-row-skips)).
+
 ---
 
 ## 🧪 Samples and tests
