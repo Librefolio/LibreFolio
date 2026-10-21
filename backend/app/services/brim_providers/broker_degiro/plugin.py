@@ -494,7 +494,7 @@ class _StatementReader:
             if not rows:
                 continue
             evidence = BRIMEvidence(title=texts["evidence_title"], headers=headers, rows=[list(row.cells) for row in rows], row_numbers=[row.line for row in rows])
-            notices.append(BRIMNotice(severity="warning", code=code, message=texts[code].format(n=len(rows)), evidence=[evidence], context={"language": self.language, "count": len(rows)}))
+            notices.append(BRIMNotice(severity="warning", code=code, message=texts[code].format(n=len(rows)), evidence=[evidence], context={"language": self.language, "count": len(rows), "report_issue": True}))
         return notices
 
     def _flag(self, code: str, row: _Row) -> None:
@@ -650,8 +650,8 @@ class DegiroBrokerProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
-        """2.0.0: columns read by position in any language, amounts and currencies per row, FX pairs."""
-        return "2.0.0"
+        """2.0.0: columns read by position in any language, amounts and currencies per row, FX pairs. 2.1.0: every note about rows left out asks for an issue (W-B86)."""
+        return "2.1.0"
 
     @property
     def docs_url(self) -> Optional[str]:

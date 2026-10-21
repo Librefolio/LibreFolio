@@ -43,6 +43,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.brim_providers import _brim_io as io
 from backend.app.services.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
@@ -143,12 +144,14 @@ class IBKRBrokerProvider(BRIMProvider):
         extracted_assets: Dict[int, Dict[str, Optional[str]]] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
+        skips = io.RowSkips()
 
         detected_delim = self.detect_csv_delimiter(file_path)
 
         try:
             with self._open_text(file_path) as f:
                 reader = csv.DictReader(f, delimiter=detected_delim)
+                skips.set_headers(reader.fieldnames)
                 row_num = 1
 
                 for row in reader:
@@ -164,13 +167,13 @@ class IBKRBrokerProvider(BRIMProvider):
                     elif direction == "SELL":
                         tx_type = TransactionType.SELL
                     else:
-                        warnings.append(f"Row {row_num}: unknown direction '{direction}', skipping")
+                        skips.unknown(row_num, row, f"unknown direction: '{direction}'")
                         continue
 
                     # Parse date
                     tx_date = _parse_ibkr_date(row.get(COL_DATE, ""))
                     if not tx_date:
-                        warnings.append(f"Row {row_num}: invalid date, skipping")
+                        skips.unreadable(row_num, row, "invalid date")
                         continue
 
                     # Get ISIN
@@ -182,8 +185,8 @@ class IBKRBrokerProvider(BRIMProvider):
                         quantity = Decimal("0")
 
                     if not isin:
-                        # This might be an FX trade - skip for now
-                        warnings.append(f"Row {row_num}: no ISIN (likely FX trade), skipping")
+                        # This might be an FX trade, which the plugin does not import yet (W-B87): listed, so the user adds it by hand.
+                        skips.unknown(row_num, row, "no ISIN (likely a currency trade): not imported")
                         continue
 
                     # Get or create fake asset ID
@@ -278,10 +281,15 @@ class IBKRBrokerProvider(BRIMProvider):
 
         return BRIMParseOutput(
             transactions=transactions,
-            warnings=warnings,
+            warnings=[*warnings, *skips.notices()],
             validation_issues=validation_issues,
             extracted_assets=extracted_assets_typed,
         )
+
+    @property
+    def plugin_version(self) -> str:
+        # 1.1.0 — the rows left out (no ISIN, unknown direction, unreadable date) are listed in shared notices with the link to open an issue (W-B87).
+        return "1.1.0"
 
     @property
     def docs_url(self) -> Optional[str]:

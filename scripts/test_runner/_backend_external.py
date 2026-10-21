@@ -260,6 +260,17 @@ def external_brim_scalable(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "BRIM Scalable Capital tests", verbose=verbose)
 
 
+def external_brim_row_skips(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the rows BRIM plugins leave out: known quietly, unknown loudly (W-B86)."""
+    print_section("External: BRIM Row Skips Tests")
+    print_info("Testing: the shared RowSkips helper, the rows each stable plugin leaves out, the contract over every registered plugin, the catalogue keys")
+    print_info("Tests: one file per case (a sample plus one row), report_issue, silent rows, versions, samples, plugin classification")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_row_skips.py",
+                            test_names or None)
+    return run_command(cmd, "BRIM row skips tests", verbose=verbose)
+
+
 def external_all(verbose: bool = False,
                  providers: list = None, exclude_providers: list = None) -> bool:
     """Run all external tests (network-dependent)."""
@@ -311,6 +322,9 @@ These tests verify external API integrations:
     add_test(cat, "brim-scalable", external_brim_scalable, name="BRIM Scalable Capital",
              desc="Test the Scalable Capital plugins (broker and overnight account)", prereq="Sample files in test fixtures",
              tests="Recognition, refusals with a code, PRIME and exporter samples, legs, notices, synthetic edge cases")
+    add_test(cat, "brim-row-skips", external_brim_row_skips, name="BRIM Row Skips",
+             desc="Test the rows BRIM plugins leave out (known quietly, unknown loudly)", prereq="Sample files in test fixtures",
+             tests="RowSkips helper, report_issue per plugin, silent rows, versions, plugin classification, catalogue keys")
     add_test(cat, "all", external_all, test_names=False, name="All External Tests",
              desc="Run all external tests")
     registry["external"] = cat

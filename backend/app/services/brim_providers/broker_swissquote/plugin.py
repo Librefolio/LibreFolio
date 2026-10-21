@@ -44,6 +44,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.brim_providers import _brim_io as io
 from backend.app.services.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
@@ -160,7 +161,8 @@ class SwissquoteBrokerProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
-        return "1.0.0"
+        # 1.1.0 — the rows left out (forex legs, unknown or unreadable rows) are listed in shared notices with the link to open an issue (W-B87).
+        return "1.1.0"
 
     def can_parse(self, file_path: Path) -> bool:
         """Detect Swissquote format by checking the exact distinctive header."""
@@ -183,6 +185,7 @@ class SwissquoteBrokerProvider(BRIMProvider):
         extracted_assets_raw: Dict[int, Dict[str, Optional[str]]] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
+        skips = io.RowSkips()
 
         detected_delim = self.detect_csv_delimiter(file_path)
 
@@ -191,6 +194,7 @@ class SwissquoteBrokerProvider(BRIMProvider):
                 reader = csv.DictReader(f, delimiter=detected_delim)
                 if reader.fieldnames != SWISSQUOTE_HEADER:
                     raise BRIMParseError("Unexpected Swissquote CSV header")
+                skips.set_headers(reader.fieldnames)
 
                 row_num = 1
                 for row in reader:
@@ -198,27 +202,28 @@ class SwissquoteBrokerProvider(BRIMProvider):
                     raw_tx = row.get(COL_TRANSACTION, "").strip()
                     tx_label = raw_tx.lower()
                     if tx_label in {"forex credit", "forex debit"}:
-                        warnings.append(f"Row {row_num}: Swissquote forex leg '{raw_tx}' skipped")
+                        # A currency conversion the plugin does not import yet (W-B87): listed, so the user adds it by hand.
+                        skips.unknown(row_num, row, f"forex leg not imported: '{raw_tx}'")
                         continue
 
                     tx_type = _map_swissquote_transaction(raw_tx)
                     if tx_type is None:
-                        warnings.append(f"Row {row_num}: unknown Swissquote transaction '{raw_tx}', skipping")
+                        skips.unknown(row_num, row, f"unknown transaction: '{raw_tx}'")
                         continue
 
                     tx_date = _parse_swissquote_date(row.get(COL_DATE, ""))
                     if not tx_date:
-                        warnings.append(f"Row {row_num}: invalid date '{row.get(COL_DATE, '')}', skipping")
+                        skips.unreadable(row_num, row, f"invalid date: '{row.get(COL_DATE, '')}'")
                         continue
 
                     amount = _parse_swissquote_number(row.get(COL_NET_AMOUNT, ""))
                     if amount is None or amount == 0:
-                        warnings.append(f"Row {row_num}: missing or zero net amount for '{raw_tx}', skipping")
+                        skips.unreadable(row_num, row, "missing or zero net amount")
                         continue
 
                     currency = row.get(COL_CURRENCY, "").strip().upper()
                     if not currency:
-                        warnings.append(f"Row {row_num}: missing currency for '{raw_tx}', skipping")
+                        skips.unreadable(row_num, row, "missing currency")
                         continue
 
                     quantity = _parse_swissquote_number(row.get(COL_QUANTITY, ""))
@@ -234,7 +239,7 @@ class SwissquoteBrokerProvider(BRIMProvider):
                     if asset_required:
                         asset_key = isin or symbol
                         if not asset_key:
-                            warnings.append(f"Row {row_num}: {tx_type.value} requires ISIN or symbol, skipping")
+                            skips.unreadable(row_num, row, f"{tx_type.value} without an ISIN or a symbol")
                             continue
                         if asset_key in asset_to_fake_id:
                             asset_id = asset_to_fake_id[asset_key]
@@ -250,13 +255,13 @@ class SwissquoteBrokerProvider(BRIMProvider):
 
                     if tx_type == TransactionType.BUY:
                         if quantity <= 0:
-                            warnings.append(f"Row {row_num}: BUY has non-positive quantity, skipping")
+                            skips.unreadable(row_num, row, "BUY without a positive quantity")
                             continue
                         quantity = abs(quantity)
                         amount = -abs(amount)
                     elif tx_type == TransactionType.SELL:
                         if quantity <= 0:
-                            warnings.append(f"Row {row_num}: SELL has non-positive quantity, skipping")
+                            skips.unreadable(row_num, row, "SELL without a positive quantity")
                             continue
                         quantity = -abs(quantity)
                         amount = abs(amount)
@@ -326,7 +331,7 @@ class SwissquoteBrokerProvider(BRIMProvider):
 
         return BRIMParseOutput(
             transactions=transactions,
-            warnings=warnings,
+            warnings=[*warnings, *skips.notices()],
             validation_issues=validation_issues,
             extracted_assets=extracted_assets_typed,
         )

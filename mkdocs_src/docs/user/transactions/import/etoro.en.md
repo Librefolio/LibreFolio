@@ -34,9 +34,9 @@ LibreFolio reads the **Account Activity** sheet of eToro's account statement, sa
 
 The instrument comes from **Details** (for example `NKE/USD`) and the quantity from **Units**.
 
-**Not imported**: **Overnight fee** and **Overnight refund** (CFD financing) and **SDRT** (UK stamp
-duty) are skipped without a warning, so add them by hand if you track them. Any other type is
-skipped with a warning.
+**Not imported yet**: **Overnight fee** and **Overnight refund** (CFD financing) and **SDRT** (UK stamp
+duty). They are listed in an amber warning, with a link to open an issue on GitHub: add them by hand if
+you track them. Any other type is skipped with a warning.
 
 ## ⚠️ Common Pitfalls
 
