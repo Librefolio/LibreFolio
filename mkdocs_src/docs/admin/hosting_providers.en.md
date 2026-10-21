@@ -921,5 +921,7 @@ LIBREFOLIO_PRIVACY_URL=https://hosting.example.com/privacy
 - 👑 For developers: **[The Initial Administrator](../developer/architecture/access_control.md#initial-admin)** —
   The startup step, the setup link and its route; the setup page is in
   **[Account Link Pages](../developer/frontend/components/features/auth.md#link-pages)**
+- 📊 For developers: **[The Setup's Status](../developer/architecture/access_control.md#setup-status)** —
+  How the four states of [The Setup Status](#panel-status) are read from the setup links
 - ⚖️ For developers: **[Public Instance Configuration](../developer/architecture/settings.md#public-instance-configuration)** —
   `GET /api/v1/system/instance`, the profile and the `legal` part included

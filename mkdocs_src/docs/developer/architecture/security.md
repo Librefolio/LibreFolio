@@ -1493,7 +1493,7 @@ dependency checks all its routes: `panel_access(scope)` in `backend/app/services
 |-------|--------|------------------------------|---------------|---------------------|
 | `backup` | The four `/backup/panel/jobs…` routes, `backend/app/api/v1/backup/panel.py` (workstream B) | `backup_download_token()`: `SecretFileError`, `BackupConfigError` | `BackupPanelToken` | `backup_panel_unauthorized` / `backup_panel_unavailable` |
 | `wake` | `POST /system/wake-sync`, `backend/app/api/v1/system/wake.py` (workstream Z) | `wake_token()`: `SecretFileError`, `SleepWakeConfigError` | `WakeToken` | `wake_unauthorized` / `wake_unavailable` |
-| `status` | `GET /panel/status`, the [setup status](../../admin/hosting_providers.md#panel-status) | `panel_status_token()` (`backend/app/config/hosting_panel.py`): `SecretFileError`, `HostingPanelConfigError` | `PanelStatusToken` | `panel_status_unauthorized` / `panel_status_unavailable` |
+| `status` | `GET /panel/status`, the [setup status](../../admin/hosting_providers.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status) | `panel_status_token()` (`backend/app/config/hosting_panel.py`): `SecretFileError`, `HostingPanelConfigError` | `PanelStatusToken` | `panel_status_unauthorized` / `panel_status_unavailable` |
 
 `panel_access(scope)` returns the same function for the same scope, so FastAPI runs it once per request. It takes the
 `Request` and the scope's `HTTPBearer(auto_error=False)`, and returns `PanelCaller(scope, credential="token")`, a frozen
@@ -1798,7 +1798,7 @@ path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint func
 | `GET /system/health`, `GET /system/ready`, `GET /system/info` | `health.health_check`, `ready.get_readiness`, `info.get_system_info` | Probes and version |
 | `GET /system/test-lane-health` | `health.test_lane_health` | The test runner's probe, `404` outside test mode |
 | `POST /system/wake-sync` | `wake.wake_sync` | The [scheduled wake-up](../../admin/sleep_wake.md#wake-sync), with its own token instead of a session: on a blocked instance it runs no job and answers `200` with `status: "blocked"` (decision D-W3) |
-| `GET /panel/status` | `panel.get_panel_status` | The hosting panel's [setup status](../../admin/hosting_providers.md#panel-status), with its own token instead of a session (lot H-61): it answers as on any other instance |
+| `GET /panel/status` | `panel.get_panel_status` | The hosting panel's [setup status](../../admin/hosting_providers.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status), with its own token instead of a session (lot H-61): it answers as on any other instance |
 
 **The refusal.** On a blocked instance, an endpoint outside the list first runs `get_current_user()`
 with the request's own database session (FastAPI caches the dependency), then refuses:
