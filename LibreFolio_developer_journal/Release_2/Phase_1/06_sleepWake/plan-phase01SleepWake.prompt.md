@@ -7128,5 +7128,9 @@ riduzione sull'endpoint dei cambi (`max_points`, `sample_like`, `sample_bounds`,
    > rilegge solo se il passo cambia.
 2. ✅ 21/10 — Verdi: Vitest intero 593 file / 20597 test (`--maxWorkers=4`, `LC_ALL=en_US.UTF-8`), `front check`
    0 errori 0 avvisi, `mkdocs build` exit 0, prettier pulito sui file toccati.
-3. ⏳ Mancano: (i) la prop `baselineValue` di Y-39b su `PriceChartCompact` (il colore della linea in assoluto parte
-   da `base.value`: `AssetCard` ha `baseValue` pronto); (ii) E2E `front-asset asset-list` nello slot, dopo quello di Y.
+3. ✅ 21/10 ~17:00 — Dopo il merge di Y-39b (`5ff6d40f5`): `AssetCard` passa `baselineValue={baseValue}` a `PriceChartCompact`
+   (il colore e la linea tratteggiata in assoluto partono da `base.value`, cioè `sample_bounds.first`). `api sync` 0;
+   Vitest dei file toccati 97 file / 3151 test; `front check` 0/0. **E2E `front-asset asset-list` nello slot** (corsia 6186
+   ripopolata, `LC_ALL=en_US.UTF-8`): 43 passati in 2,3 min, avviso di sync C-66 compreso.
+   > **⚠️ Fuori pista**: O2 resta con una soluzione della pagina (`signalBaseData`), non un parametro `basePoint` di
+   > `renderBackendResults` (file di Y-39b).
