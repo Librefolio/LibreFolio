@@ -23,9 +23,11 @@ export const PROVIDER_COLORS: Record<string, string> = {
     ECB: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
     FRANKFURTER: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400',
     FIXED_RATE: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
-    MANUAL: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+    /* colour: closest role, to review: MANUAL amber read as the warning tint (as the Manual badge of AssetTable); a provider identity, could be a categorical role */
+    MANUAL: 'bg-lf-warning-soft text-lf-warning-on-soft',
 };
-export const DEFAULT_PROVIDER_COLOR = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
+/* colour: closest role, to review: the neutral chip for a provider with no colour of its own */
+export const DEFAULT_PROVIDER_COLOR = 'bg-lf-neutral text-lf-secondary';
 
 /**
  * Parse a `provider_used` string into individual provider codes.

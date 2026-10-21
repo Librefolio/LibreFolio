@@ -205,10 +205,6 @@ html.dark .text-gray-600 {
     color: var(--theme-text-secondary) !important;
 }
 
-html.dark .text-gray-500 {
-    color: var(--theme-text-muted) !important;
-}
-
 html.dark .border-gray-100 {
     border-color: var(--theme-border-primary) !important;
 }
@@ -216,10 +212,6 @@ html.dark .border-gray-100 {
 html.dark .shadow-sm,
 html.dark .shadow {
     --tw-shadow: var(--theme-shadow);
-}
-
-html.dark .hover\:bg-gray-100:hover {
-    background-color: var(--theme-bg-hover) !important;
 }
 
 html.dark input:where(:not([class*='-lf-'])),
@@ -233,10 +225,6 @@ html.dark textarea:where(:not([class*='-lf-'])) {
 html.dark input:where(:not([class*='-lf-']))::placeholder,
 html.dark textarea:where(:not([class*='-lf-']))::placeholder {
     color: var(--theme-text-tertiary);
-}
-
-html.dark .text-libre-green {
-    color: #39af50 !important; /* Lighter green for dark mode */
 }
 
 /* Dark mode: Rounded containers */
@@ -258,11 +246,6 @@ html.dark .shadow-lg {
 
 html.dark .shadow-xl {
     --tw-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
-}
-
-/* Dark mode: Primary buttons */
-html.dark .bg-libre-green {
-    background-color: #166534 !important; /* Darker green for better contrast */
 }
 
 /* ===== Live price flash (asset detail — AssetPriceSummary) =====
