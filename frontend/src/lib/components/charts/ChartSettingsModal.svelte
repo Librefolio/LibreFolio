@@ -11,7 +11,7 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
-    import {Settings, X} from 'lucide-svelte';
+    import {CalendarSync, Settings, X} from 'lucide-svelte';
     import {untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
@@ -21,13 +21,18 @@
     import PriceChartFull from './PriceChartFull.svelte';
     import ChartAestheticsSection from './ChartAestheticsSection.svelte';
     import ChartSignalsSection from './ChartSignalsSection.svelte';
-    import {DEFAULT_AXIS_SCALE, DEFAULT_CHART_SETTINGS, DEFAULT_PERCENTAGE_AXIS_SCALE, normalizeAxisScaleSettings, type AxisScaleSettings, type ChartAxisSettings, type ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {DEFAULT_AXIS_SCALE, DEFAULT_CHART_SETTINGS, DEFAULT_PERCENTAGE_AXIS_SCALE, effectiveCalendarReturnWindow, normalizeAxisScaleSettings, type AxisScaleSettings, type ChartAxisSettings, type ChartPrimaryView, type ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {calendarReturnWindowDays, type CalendarReturnPresetKey, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from './calendarReturnWindow';
+    import AssetCalendarWindowControls from '$lib/components/assets/detail/AssetCalendarWindowControls.svelte';
     import {collectConfigurableSecondaryAxes} from './chartCoreHelpers';
     import {exchangeRateAxisLabel, percentageAxisLabel, priceAxisLabel, secondaryAxisLabel} from './axisLabelHelpers';
     import {getRegisteredSignalTypes, resolveSignalPreview, type RenderedSignal, type SignalConfig, type SignalDefinition} from '$lib/charts/signals';
     import {NO_SIGNAL_SOURCES, renderLocalSignal, type SignalDataSources} from '$lib/charts/chartSignalRendering';
     import {SineSignal} from '$lib/charts/signals/SineSignal';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
+
+    /** The days of the global preview's synthetic curve. */
+    const SYNTHETIC_DAYS = 365;
 
     // =========================================================================
     // Props
@@ -73,6 +78,13 @@
          * preview draws them as the card does (Y-39a). Omitted: those signals are not drawn.
          */
         signalSources?: SignalDataSources;
+        /** The days of the period on screen: while the rolling-return window is automatic, the largest preset that fits them (Y-40). */
+        calendarRangeDays?: number;
+        /**
+         * The rolling return of the preview (Y-40): the page computes it over `windowDays` on `points` (the card's data, or the
+         * synthetic curve lengthened by the window), with the comparisons of `configs`. Omitted: no rolling-return view.
+         */
+        calendarPreviewResolver?: (windowDays: number, configs: SignalConfig[], points: LineDataPoint[]) => Promise<{points: LineDataPoint[]; overlays: RenderedSignal[]} | null>;
         /** Called when user saves */
         onsave?: (settings: ChartSettings) => void;
         /** Called when user closes without saving */
@@ -96,6 +108,8 @@
         onretrySignalBackend,
         pairData,
         signalSources = NO_SIGNAL_SOURCES,
+        calendarRangeDays = SYNTHETIC_DAYS,
+        calendarPreviewResolver,
         onsave,
         onclose,
     }: Props = $props();
@@ -110,10 +124,23 @@
     let staleGradient = $state(true);
     let axisScales: ChartAxisSettings = $state(deepClone(DEFAULT_CHART_SETTINGS.axisScales));
     let signals: SignalConfig[] = $state([]);
+    /** The view of the preview: the saved view of the chart, which Apply saves (Y-40, V-3 a). */
+    let previewView: ChartPrimaryView = $state(untrack(() => openingView(settings)));
+    let calendarWindow: CalendarReturnWindowSelection = $state(deepClone(DEFAULT_CHART_SETTINGS.calendarReturnWindow));
+    let calendarWindowAuto = $state(true);
+    let calendarCustomAmount = $state(DEFAULT_CHART_SETTINGS.calendarReturnWindow.customAmount);
+    let calendarCustomUnit: CalendarReturnWindowUnit = $state(DEFAULT_CHART_SETTINGS.calendarReturnWindow.customUnit);
+    let calendarCustomEditing = $state(false);
 
     // Reset local state when modal opens
     $effect(() => {
         if (open && settings) {
+            previewView = openingView(settings);
+            calendarWindow = deepClone(settings.calendarReturnWindow);
+            calendarWindowAuto = settings.calendarReturnWindowAuto;
+            calendarCustomAmount = settings.calendarReturnWindow.customAmount;
+            calendarCustomUnit = settings.calendarReturnWindow.customUnit;
+            calendarCustomEditing = false;
             colorByBaseline = settings.colorByBaseline;
             areaFill = settings.areaFill;
             gridLines = settings.gridLines;
@@ -122,6 +149,12 @@
             signals = JSON.parse(JSON.stringify(settings.signals));
         }
     });
+
+    /** The view the preview opens on: the saved one; the rolling return only where it is offered (the asset charts). */
+    function openingView(saved: ChartSettings | undefined): ChartPrimaryView {
+        const view = saved?.primaryView ?? 'percentage';
+        return view === 'calendar-return' && axisDomain !== 'asset' ? 'percentage' : view;
+    }
 
     // =========================================================================
     // Save / Close
@@ -139,6 +172,8 @@
         if (staleGradient !== settings.staleGradient) return true;
         if (JSON.stringify(axisScales) !== JSON.stringify(settings.axisScales)) return true;
         if (JSON.stringify(signals) !== JSON.stringify(settings.signals)) return true;
+        if (previewView !== settings.primaryView) return true;
+        if (calendarWindowAuto !== settings.calendarReturnWindowAuto || JSON.stringify(calendarWindow) !== JSON.stringify(settings.calendarReturnWindow)) return true;
         return false;
     }
 
@@ -172,7 +207,9 @@
             gridLines,
             staleGradient,
             axisScales: normalizedAxisScales(),
-            calendarReturnWindow: deepClone(settings.calendarReturnWindow),
+            calendarReturnWindow: deepClone(calendarWindow),
+            calendarReturnWindowAuto: calendarWindowAuto,
+            primaryView: previewView,
             signals: deepClone(signals),
         };
         onsave?.(result);
@@ -196,12 +233,13 @@
     // Preview chart data
     // =========================================================================
 
-    let previewViewMode: 'absolute' | 'percentage' = $state('percentage');
+    /** The price view under the preview: the rolling return has the percentage one under it, as on the detail page. */
+    let previewViewMode: 'absolute' | 'percentage' = $derived(previewView === 'absolute' ? 'absolute' : 'percentage');
+    let previewIsCalendar = $derived(previewView === 'calendar-return');
 
-    function generateSyntheticData(): LineDataPoint[] {
+    function generateSyntheticData(DAYS: number = SYNTHETIC_DAYS): LineDataPoint[] {
         const baseDates: LineDataPoint[] = [];
         const today = new Date();
-        const DAYS = 365;
         for (let i = 0; i < DAYS; i++) {
             const d = new Date(today);
             d.setDate(d.getDate() - (DAYS - 1 - i));
@@ -224,6 +262,61 @@
     }
 
     const syntheticData = generateSyntheticData();
+
+    // =========================================================================
+    // The rolling-return preview (Y-40)
+    // =========================================================================
+
+    let effectiveWindow = $derived(effectiveCalendarReturnWindow({calendarReturnWindow: calendarWindow, calendarReturnWindowAuto: calendarWindowAuto}, calendarRangeDays));
+    let calendarWindowDays = $derived(calendarReturnWindowDays(effectiveWindow) ?? 30);
+    let calendarPreview = $state<{state: 'idle' | 'loading' | 'ready' | 'error'; points: LineDataPoint[]; overlays: RenderedSignal[]}>({state: 'idle', points: [], overlays: []});
+    let calendarPreviewToken = 0;
+    /** A comparison changed asks the return again; any other edit does not. */
+    let calendarComparisonFingerprint = $derived(JSON.stringify(signals.filter((config) => config.signalType === 'asset-comparison').map((config) => config.params.assetId)));
+
+    function chooseCalendarPreset(preset: CalendarReturnPresetKey): void {
+        calendarCustomEditing = false;
+        calendarWindow = {...calendarWindow, kind: 'preset', preset};
+        calendarWindowAuto = false;
+    }
+
+    function chooseCalendarCustom(customAmount: number, customUnit: CalendarReturnWindowUnit): void {
+        const selection: CalendarReturnWindowSelection = {...calendarWindow, kind: 'custom', customAmount, customUnit};
+        if (calendarReturnWindowDays(selection) === null) return;
+        calendarWindow = selection;
+        calendarWindowAuto = false;
+    }
+
+    $effect(() => {
+        const active = open && previewIsCalendar && !!calendarPreviewResolver;
+        const windowDays = calendarWindowDays;
+        void calendarComparisonFingerprint;
+        // The global preview's year has a return from its first day: the curve starts a window earlier.
+        const points = mode === 'global' || !pairData?.length ? generateSyntheticData(SYNTHETIC_DAYS + windowDays) : pairData;
+        if (!active) {
+            calendarPreview = {state: 'idle', points: [], overlays: []};
+            return;
+        }
+        const resolver = calendarPreviewResolver!;
+        const configs = untrack(() => deepClone(signals));
+        const firstShown = mode === 'global' || !pairData?.length ? syntheticData[0].date : null;
+        const token = ++calendarPreviewToken;
+        calendarPreview = {...untrack(() => calendarPreview), state: 'loading'};
+        resolver(windowDays, configs, points)
+            .then((result) => {
+                if (token !== calendarPreviewToken) return;
+                if (!result) {
+                    calendarPreview = {state: 'error', points: [], overlays: []};
+                    return;
+                }
+                const shown = firstShown ? result.points.filter((point) => point.date >= firstShown) : result.points;
+                calendarPreview = {state: 'ready', points: shown, overlays: result.overlays};
+            })
+            .catch(() => {
+                if (token !== calendarPreviewToken) return;
+                calendarPreview = {state: 'error', points: [], overlays: []};
+            });
+    });
 
     let previewDataAbs = $derived(mode === 'pair' && pairData && pairData.length > 0 ? pairData : syntheticData);
 
@@ -253,7 +346,7 @@
         const fingerprint = backendConfigFingerprint;
         const points = previewDataAbs;
         const viewMode = previewViewMode;
-        const active = open && globalLivePreviewActive;
+        const active = open && globalLivePreviewActive && !previewIsCalendar;
 
         if (!active || fingerprint === '[]' || points.length === 0) {
             backendLivePreviewSignals = [];
@@ -296,7 +389,9 @@
         });
     });
     let previewSignals = $derived(previewResolution.signals);
-    let previewSignalInfo = $derived(buildOverlaySignalInfoMap(previewSignals));
+    /** What the preview chart draws over its line: the comparisons' returns in the rolling-return view (V-5 a), else the signals. */
+    let previewOverlays = $derived(previewIsCalendar ? calendarPreview.overlays : previewSignals);
+    let previewSignalInfo = $derived(buildOverlaySignalInfoMap(previewOverlays));
     let previewPrimaryScale = $derived(previewViewMode === 'percentage' ? axisScales.percentage : axisScales.absolute);
     let previewPrimaryLabel = $derived.by(() => {
         const translate = (key: string, values?: Record<string, string>) => $t(key, {values});
@@ -310,7 +405,7 @@
             label: previewPrimaryLabel,
             settings: previewPrimaryScale,
         },
-        ...collectConfigurableSecondaryAxes(previewSignals).map((axis) => ({
+        ...collectConfigurableSecondaryAxes(previewOverlays).map((axis) => ({
             key: axis.key,
             label: secondaryAxisLabel((key, values) => $t(key, {values}), axis),
             settings: axisScales.secondary[axis.key] ?? DEFAULT_AXIS_SCALE,
@@ -361,45 +456,73 @@
                     <h3 class="text-sm font-semibold text-lf-secondary">{$t('common.preview')}</h3>
                     <div class="flex rounded-lg border border-lf-subtle overflow-hidden">
                         <button
-                            class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewViewMode === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewView === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                             data-testid="chart-settings-preview-view-absolute"
-                            onclick={() => (previewViewMode = 'absolute')}
+                            aria-pressed={previewView === 'absolute'}
+                            onclick={() => (previewView = 'absolute')}
                             type="button"
                             >Abs
                         </button>
                         <button
-                            class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewViewMode === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewView === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                             data-testid="chart-settings-preview-view-percentage"
-                            onclick={() => (previewViewMode = 'percentage')}
+                            aria-pressed={previewView === 'percentage'}
+                            onclick={() => (previewView = 'percentage')}
                             type="button"
                             >%
                         </button>
+                        {#if axisDomain === 'asset' && calendarPreviewResolver}
+                            <button
+                                class="inline-flex items-center px-2.5 py-1 text-[10px] font-medium transition-colors {previewView === 'calendar-return' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                                data-testid="chart-settings-preview-view-calendar-return"
+                                aria-pressed={previewView === 'calendar-return'}
+                                aria-label={$t('signals.riskRollingReturn.name')}
+                                title={$t('signals.riskRollingReturn.name')}
+                                onclick={() => (previewView = 'calendar-return')}
+                                type="button"
+                            >
+                                <CalendarSync size={12} />
+                            </button>
+                        {/if}
                     </div>
                 </div>
+                {#if previewIsCalendar}
+                    <div class="mb-2" data-testid="chart-settings-calendar-window" data-window-days={calendarWindowDays} data-window-auto={calendarWindowAuto ? 'true' : 'false'}>
+                        <AssetCalendarWindowControls selection={effectiveWindow} bind:customAmount={calendarCustomAmount} bind:customUnit={calendarCustomUnit} bind:customEditing={calendarCustomEditing} onpreset={chooseCalendarPreset} oncustom={chooseCalendarCustom} />
+                    </div>
+                {/if}
                 <div class="rounded-lg border border-lf-subtle overflow-hidden bg-lf-panel">
                     <!-- The detail pages' chart (Y-39b): absolute data, the view chosen above, the line only, no events, measure or edit -->
-                    <PriceChartFull
-                        {areaFill}
-                        {colorByBaseline}
-                        chartHeight="220px"
-                        currency={mode === 'pair' && pairData && pairData.length > 0 ? '' : 'Preview'}
-                        data={previewDataAbs}
-                        disableCandlestick={true}
-                        externalChartType="line"
-                        externalViewMode={previewViewMode}
-                        fxStaleLabel={$t('chart.tooltip.fxStale')}
-                        hideToolbar={true}
-                        hideViewModeToggle={true}
-                        overlaySignalInfoMap={previewSignalInfo}
-                        overlaySignals={previewSignals}
-                        showGradient={staleGradient}
-                        showGridLines={gridLines}
-                        staleLabel={$t('chart.tooltip.stale')}
-                        yAxisMax={previewPrimaryScale.max}
-                        yAxisMin={previewPrimaryScale.min}
-                        yAxisMode={previewPrimaryScale.mode}
-                        secondaryAxisScales={axisScales.secondary}
-                    />
+                    {#if previewIsCalendar && calendarPreview.points.length === 0}
+                        <div class="h-[220px] flex items-center justify-center text-xs text-lf-muted" data-testid="chart-settings-calendar-preview-state" data-state={calendarPreview.state}>
+                            {calendarPreview.state === 'error' ? $t('chartSettings.signalResultsUnavailable') : calendarPreview.state === 'loading' ? $t('common.loading') : $t('common.noData')}
+                        </div>
+                    {:else}
+                        <PriceChartFull
+                            {areaFill}
+                            {colorByBaseline}
+                            chartHeight="220px"
+                            currency={mode === 'pair' && pairData && pairData.length > 0 ? '' : 'Preview'}
+                            data={previewIsCalendar ? calendarPreview.points : previewDataAbs}
+                            disableCandlestick={true}
+                            externalChartType="line"
+                            externalViewMode={previewIsCalendar ? 'absolute' : previewViewMode}
+                            fxStaleLabel={$t('chart.tooltip.fxStale')}
+                            hideToolbar={true}
+                            hideViewModeToggle={true}
+                            overlaySignalInfoMap={previewSignalInfo}
+                            overlaySignals={previewOverlays}
+                            showGradient={staleGradient}
+                            showGridLines={gridLines}
+                            showMainDelta={!previewIsCalendar}
+                            staleLabel={$t('chart.tooltip.stale')}
+                            valueUnit={previewIsCalendar ? 'percentage' : 'price'}
+                            yAxisMax={previewPrimaryScale.max}
+                            yAxisMin={previewPrimaryScale.min}
+                            yAxisMode={previewPrimaryScale.mode}
+                            secondaryAxisScales={axisScales.secondary}
+                        />
+                    {/if}
                 </div>
                 <p class="text-[10px] text-lf-muted mt-1 italic">
                     {mode === 'global' ? $t('chartSettings.previewDescGlobal') : $t('chartSettings.previewDescPair')}

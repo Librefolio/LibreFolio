@@ -238,3 +238,57 @@ describe('signalBaseData (MF n3, backlog O2)', () => {
         expect(signalBaseData(chart, undefined, 'weekly')).toBe(chart);
     });
 });
+
+/**
+ * Y-40 — a card in the rolling-return view. The card asks its own rolling return as a backend signal (the page puts it in
+ * `signals`), and each comparison target asks its rolling return on the card's buckets: an item `sample_like` the card,
+ * with the signal, no prices — the target's price sample is not drawn in this view, and its cache is not its to fill — and
+ * in the card's currency, as the detail page asks its comparisons (`target_currency`). Every target is sent, cached or
+ * not: a signal is never cached.
+ *
+ * Red today: `CardQueryInput` has no `calendar`.
+ */
+describe('buildReducedQuery: a card in the rolling-return view (Y-40)', () => {
+    const CAL = {instance_id: 'asset-calendar-return', signal_code: 'ASSET_CALENDAR_ROLLING_RETURN', params: {window_days: 90}};
+    const calendarCard = (extra: Partial<CardQueryInput> = {}): CardQueryInput =>
+        ({
+            ...card(7, {
+                needsPrice: false,
+                signals: [CAL],
+                targets: [
+                    {assetId: 9, needsRead: false},
+                    {assetId: 11, needsRead: true},
+                ],
+            }),
+            calendar: {signals: [CAL], targetCurrency: 'EUR'},
+            ...extra,
+        }) as CardQueryInput;
+
+    it('sends each target, cached or not, with the rolling return and no prices, in the card’s currency, sampled like the card', () => {
+        const entries = buildReducedQuery([calendarCard()]);
+
+        expect(entries.map((entry) => entry.item)).toEqual([
+            {asset_id: 7, date_range: RANGE, include_price: false, signals: [CAL], key: 'asset:7', max_points: 377},
+            {asset_id: 9, date_range: RANGE, include_price: false, signals: [CAL], sample_like: 'asset:7', target_currency: 'EUR'},
+            {asset_id: 11, date_range: RANGE, include_price: false, signals: [CAL], sample_like: 'asset:7', target_currency: 'EUR'},
+        ]);
+        expect(entries.map((entry) => [entry.role, entry.targetId])).toEqual([
+            ['card', null],
+            ['target', 9],
+            ['target', 11],
+        ]);
+    });
+
+    it('counts a target’s rolling return against the day budget: its range and the signals’ margin', () => {
+        const [, target] = buildReducedQuery([calendarCard()]);
+
+        expect(estimateEntryDays(target, '2026-06-30')).toBe(estimateEntryDays({...target, item: {...target.item, include_price: true}}, '2026-06-30'));
+        expect(estimateEntryDays(target, '2026-06-30')).toBeGreaterThan(BULK_SIGNAL_MARGIN_DAYS);
+    });
+
+    it('guard: a card in the price views sends its targets as before', () => {
+        const entries = buildReducedQuery([card(7, {targets: [{assetId: 9, needsRead: true}]})]);
+
+        expect(entries[1].item).toEqual({asset_id: 9, date_range: RANGE, include_price: true, signals: [], sample_like: 'asset:7'});
+    });
+});
