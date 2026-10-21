@@ -148,6 +148,7 @@
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div class="cell-checkbox-wrapper flex justify-center" onclick={(e) => e.stopPropagation()}>
+            <!-- colour: closest role, to review: the on track was emerald-500 (a success green); switch role bg-lf-checked, alt bg-lf-success -->
             <button
                 type="button"
                 onclick={() => {
@@ -155,14 +156,14 @@
                 }}
                 aria-label="Toggle"
                 class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors
-                       {cellContent.value ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-slate-600'}
+                       {cellContent.value ? 'bg-lf-checked' : 'bg-lf-switch-off'}
                        {cellContent.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}"
                 aria-pressed={cellContent.value}
                 disabled={cellContent.disabled}
             >
                 <span
-                    class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform
-                         {cellContent.value ? 'translate-x-[18px]' : 'translate-x-[3px]'}"
+                    class="inline-block h-3.5 w-3.5 rounded-full shadow-sm transition-transform
+                         {cellContent.value ? 'translate-x-[18px] bg-lf-switch-knob-on' : 'translate-x-[3px] bg-lf-switch-knob-off border border-lf-input'}"
                 ></span>
             </button>
         </div>

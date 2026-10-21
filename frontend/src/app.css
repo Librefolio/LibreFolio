@@ -197,26 +197,19 @@ html.dark .bg-white {
     background-color: var(--theme-bg-card) !important;
 }
 
-html.dark .bg-gray-50 {
-    background-color: var(--theme-bg-secondary) !important;
-}
-
 html.dark .bg-gray-100 {
     background-color: var(--theme-bg-tertiary) !important;
 }
 
-html.dark .text-gray-600,
-html.dark .text-gray-700 {
+html.dark .text-gray-600 {
     color: var(--theme-text-secondary) !important;
 }
 
-html.dark .text-gray-400,
 html.dark .text-gray-500 {
     color: var(--theme-text-muted) !important;
 }
 
-html.dark .border-gray-100,
-html.dark .border-gray-200 {
+html.dark .border-gray-100 {
     border-color: var(--theme-border-primary) !important;
 }
 
@@ -250,11 +243,6 @@ html.dark .text-libre-green {
 html.dark .rounded-xl:where(:not([class*='-lf-'])),
 html.dark .rounded-2xl:where(:not([class*='-lf-'])) {
     border-color: var(--theme-border-primary);
-}
-
-/* Dark mode: Focus rings */
-html.dark .focus\:ring-libre-green:focus {
-    --tw-ring-color: #4ade80;
 }
 
 /* Dark mode: Dropdown/Select options (those of a migrated select are exempt) */
