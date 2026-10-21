@@ -1,4 +1,4 @@
-"""Calendar-day rolling return over an already-resolved daily asset series."""
+"""Calendar-day rolling return over an already-resolved daily series: an asset's prices or an FX pair's rates."""
 
 from __future__ import annotations
 
@@ -160,7 +160,8 @@ class CalendarRollingReturnPlugin(SignalPlugin):
             ],
         ),
     )
-    compatible_domains = (SignalDomain.ASSET,)
+    # Z-29fx: an FX rate series is a resolved daily series too (the FX half of Y-40).
+    compatible_domains = (SignalDomain.ASSET, SignalDomain.FX)
 
     @classmethod
     def warmup_requirement(
