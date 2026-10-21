@@ -361,3 +361,102 @@ describe('ChartSettingsModal preview — the detail page’s chart (Y-39b, F-1)'
         expect(previewMount().live.yAxisMode, 'the percentage view').toBe('include0');
     });
 });
+
+// ---------------------------------------------------------------------------
+// Y-40 — the three views in the settings, and the rolling-return preview
+// ---------------------------------------------------------------------------
+
+/**
+ * Y-40 — the preview's view is the saved view of the chart (V-3 a: the list's top bar and its global settings are one value;
+ * a card's settings hold the card's), with a third one, the rolling return.
+ *
+ * The contract, after the cure:
+ * - The selector has three views — `chart-settings-preview-view-{absolute,percentage,calendar-return}` — and opens on the
+ *   settings' `primaryView`. Apply saves the view it shows (`onsave(…{primaryView})`).
+ * - In the rolling-return view the modal asks its page for the return (`calendarPreviewResolver(windowDays, signals,
+ *   points)`) and draws what it answers on `PriceChartFull` as the detail draws it: the return as the data, already in
+ *   percent (`valueUnit: 'percentage'`, `externalViewMode: 'absolute'`), the comparisons' returns as the overlays, the
+ *   percentage axis' scale. In global mode the points are the synthetic curve lengthened by the window, so the year shown
+ *   has a return from its first day.
+ * - The window is chosen there (`asset-calendar-window-<preset>`, the detail's controls): while the settings' window is
+ *   automatic, the one in force is the largest preset that fits the period on screen (`calendarRangeDays`); a preset chosen
+ *   is asked at once and saved as chosen (`calendarReturnWindowAuto: false`).
+ * - The FX settings offer no rolling return yet (its backend is lot Z-29fx).
+ *
+ * Red today: two views, no resolver, no window.
+ */
+describe('ChartSettingsModal — the three views, and the rolling-return preview (Y-40)', () => {
+    const RETURNS: LineDataPoint[] = [
+        {date: '2026-03-03', value: 4},
+        {date: '2026-03-04', value: -2},
+    ];
+    const PEER_RETURN = {id: 'cmp-42:calendar-return', label: PEER_NAME, data: [{date: '2026-03-04', value: 1}], color: '#f59e0b', lineWidth: 2, lineType: 'solid', markerStart: null, markerEnd: null, yAxisIndex: 0} as RenderedSignal;
+    const viewButton = (view: string) => screen.getByTestId(`chart-settings-preview-view-${view}`);
+    const flush = async () => {
+        for (let turn = 0; turn < 5; turn++) await tick();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await tick();
+    };
+
+    async function open(extra: Record<string, unknown>, saved: Partial<ChartSettings> = {}) {
+        const settings: ChartSettings = {...(JSON.parse(JSON.stringify(DEFAULT_CHART_SETTINGS)) as ChartSettings), ...saved};
+        const onsave = vi.fn();
+        const calendarPreviewResolver = vi.fn(async () => ({points: RETURNS, overlays: [PEER_RETURN]}));
+        render(ChartSettingsModal, {open: true, settings, mode: 'pair', pairData: PAIR_DATA, onsave, calendarPreviewResolver, ...extra} as unknown as ComponentProps<typeof ChartSettingsModal>);
+        await tick();
+        return {onsave, calendarPreviewResolver};
+    }
+
+    it('opens the selector on the saved view, and Apply saves the view it shows', async () => {
+        const {onsave} = await open({}, {primaryView: 'absolute'} as Partial<ChartSettings>);
+        expect(viewButton('absolute')).toHaveAttribute('aria-pressed', 'true');
+        expect(previewMount().live.externalViewMode).toBe('absolute');
+
+        await fireEvent.click(viewButton('calendar-return'));
+        await fireEvent.click(screen.getByTestId('chart-settings-apply'));
+
+        expect(onsave).toHaveBeenCalledWith(expect.objectContaining({primaryView: 'calendar-return'}));
+    });
+
+    it('in the rolling-return view, asks the page for the return over the window in force and draws it as the detail does', async () => {
+        const {calendarPreviewResolver} = await open({calendarRangeDays: 120}, {primaryView: 'calendar-return'} as Partial<ChartSettings>);
+        await flush();
+
+        expect(calendarPreviewResolver, 'automatic window: 120 days on screen take the 3-month preset').toHaveBeenCalledWith(90, expect.any(Array), PAIR_DATA);
+        const live = previewMount().live;
+        expect({data: live.data, valueUnit: live.valueUnit, externalViewMode: live.externalViewMode, overlaySignals: live.overlaySignals, yAxisMode: live.yAxisMode}).toEqual({
+            data: RETURNS,
+            valueUnit: 'percentage',
+            externalViewMode: 'absolute',
+            overlaySignals: [PEER_RETURN],
+            yAxisMode: DEFAULT_CHART_SETTINGS.axisScales.percentage.mode,
+        });
+    });
+
+    it('in global mode, hands the resolver the synthetic curve lengthened by the window', async () => {
+        const {calendarPreviewResolver} = await open({mode: 'global', pairData: undefined, calendarRangeDays: 400}, {primaryView: 'calendar-return'} as Partial<ChartSettings>);
+        await flush();
+
+        const [windowDays, , points] = calendarPreviewResolver.mock.calls[0] as unknown as [number, unknown, LineDataPoint[]];
+        expect(windowDays).toBe(365);
+        expect(points.length, 'the synthetic year plus the window before it').toBeGreaterThanOrEqual(365 + 365);
+    });
+
+    it('chooses the window there: a preset is asked at once, and saved as chosen', async () => {
+        const {calendarPreviewResolver, onsave} = await open({calendarRangeDays: 120}, {primaryView: 'calendar-return'} as Partial<ChartSettings>);
+        await flush();
+
+        await fireEvent.click(screen.getByTestId('asset-calendar-window-1y'));
+        await flush();
+        expect(calendarPreviewResolver).toHaveBeenLastCalledWith(365, expect.any(Array), PAIR_DATA);
+
+        await fireEvent.click(screen.getByTestId('chart-settings-apply'));
+        expect(onsave).toHaveBeenCalledWith(expect.objectContaining({calendarReturnWindow: expect.objectContaining({kind: 'preset', preset: '1y'}), calendarReturnWindowAuto: false}));
+    });
+
+    it('guard: the FX settings offer no rolling return yet', async () => {
+        await open({axisDomain: 'fx'});
+
+        expect(screen.queryByTestId('chart-settings-preview-view-calendar-return')).toBeNull();
+    });
+});

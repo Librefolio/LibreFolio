@@ -33,6 +33,8 @@ export interface ReducedQueryItem {
     max_points?: number;
     /** On a target's item: the key of the card it is sampled like. */
     sample_like?: string;
+    /** On a target's item in the rolling-return view: the card's currency, its return measured in it (Y-40). */
+    target_currency?: string;
 }
 
 /** An item with what the page needs to put its answer back: whose it is. */
@@ -60,6 +62,11 @@ export interface CardQueryInput {
     signals: readonly unknown[];
     /** The assets its comparison signals draw, each with whether its sample is missing from the cache. */
     targets: ReadonlyArray<{assetId: number; needsRead: boolean}>;
+    /**
+     * The card is in the rolling-return view (Y-40): each target asks `signals` (its rolling return) on the card's buckets,
+     * cached or not, without prices, in `targetCurrency`.
+     */
+    calendar?: {signals: readonly unknown[]; targetCurrency?: string};
 }
 
 /** The key a card's item is named by. */
@@ -73,7 +80,7 @@ export function buildReducedQuery(cards: readonly CardQueryInput[]): ReducedQuer
     for (const card of cards) {
         const targets: number[] = [];
         for (const target of card.targets) {
-            if (target.needsRead && target.assetId !== card.assetId && !targets.includes(target.assetId)) targets.push(target.assetId);
+            if ((target.needsRead || card.calendar) && target.assetId !== card.assetId && !targets.includes(target.assetId)) targets.push(target.assetId);
         }
         if (!card.needsPrice && card.signals.length === 0 && targets.length === 0) continue;
         const key = cardKey(card.assetId);
@@ -86,7 +93,10 @@ export function buildReducedQuery(cards: readonly CardQueryInput[]): ReducedQuer
             targetId: null,
         });
         for (const targetId of targets) {
-            entries.push({item: {asset_id: targetId, date_range: dateRange, include_price: true, signals: [], sample_like: key}, group: key, role: 'target', cardId: card.assetId, targetId});
+            const item: ReducedQueryItem = card.calendar
+                ? {asset_id: targetId, date_range: dateRange, include_price: false, signals: card.calendar.signals, sample_like: key, ...(card.calendar.targetCurrency ? {target_currency: card.calendar.targetCurrency} : {})}
+                : {asset_id: targetId, date_range: dateRange, include_price: true, signals: [], sample_like: key};
+            entries.push({item, group: key, role: 'target', cardId: card.assetId, targetId});
         }
     }
     return entries;
