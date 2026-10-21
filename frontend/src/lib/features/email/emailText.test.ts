@@ -32,7 +32,9 @@
  *     request for a rate limit, `…resendErrors.unavailable` for the four ways the instance cannot send, and
  *     `…resendErrors.generic` for anything else, an inherited name included —; every one of these keys, and the
  *     notice's and the page's own (`loginRequired`, `resend`, `resending`, `resent`, `verified` with its
- *     `{username}`), is in the four catalogues with exactly the placeholders the code fills;
+ *     `{username}`), and the two sentences the sign-up leaves the sign-in with (lot E-26 (b): `registered` once the
+ *     email is queued, `registeredHeld` when the client address's limit holds it), is in the four catalogues with
+ *     exactly the placeholders the code fills — `registered` and `registeredHeld` none;
  *   - the page on a blocked instance (lot E-10): its eighth state, `blocked`, has a key of its own, in the four
  *     catalogues without a placeholder — `email.verification.page.blocked` names nothing the page fills;
  *   - «send the link again» on a blocked instance (lot E-11): `resendFailureMessage` words `INSTANCE_BLOCKED` with one
@@ -422,9 +424,9 @@ describe('the verification of an address (lot E5a) — its words', () => {
         expectInEveryCatalogue(`email.verification.page.${state}`, []);
     });
 
-    it('ETX-08: the notice’s and the page’s own keys are in the four catalogues: «verified» names the {username} the page fills, the others nothing', () => {
+    it('ETX-08: the notice’s and the page’s own keys are in the four catalogues: «verified» names the {username} the page fills, the others nothing — `registered` and `registeredHeld`, the sign-up’s two sentences (lot E-26 (b)), included', () => {
         expectInEveryCatalogue('email.verification.verified', ['username']);
-        for (const key of ['loginRequired', 'resend', 'resending', 'resent']) expectInEveryCatalogue(`email.verification.${key}`, []);
+        for (const key of ['loginRequired', 'resend', 'resending', 'resent', 'registered', 'registeredHeld']) expectInEveryCatalogue(`email.verification.${key}`, []);
     });
 
     it.each(['confirm', 'notSignedUp'])('ETX-08b: the page’s %s (lot E-25: the click that spends the link, and the line for whoever did not sign up) is in the four catalogues, without a placeholder', (key) => {

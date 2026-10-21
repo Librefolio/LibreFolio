@@ -511,10 +511,18 @@ address with a link that LibreFolio emails to the account. The switch is in
   never waits, nor does the administrator LibreFolio creates from `LIBREFOLIO_ADMIN_EMAIL`, which
   its setup link activates; neither do the accounts created with `user create` on the
   [command line](cli_tools.md), nor the accounts that already exist.
-- **Right after the registration**, the login page says: *Account created. We sent you an email
-  with a link to activate it: open it within 24 hours, then sign in.*
-- **The email**, *Confirm your email address*, leaves at once, unless a limit holds it back
-  ([Limits of the Verification Emails](#verification-limits)), in the instance's
+- **Right after the registration**, the login page says: *Account created. We are sending you an
+  email with a link to activate it: open it within 24 hours, then sign in. No email after a few
+  minutes? Check the spam folder, then sign in with your username and password: you will be
+  offered a new link.* When the client address already had the emails of 10 registrations in the
+  last hour, no email goes, and the page says so instead: *Account created, but the activation
+  email could not leave now: too many sign-ups from your network in the last hour. Sign in with
+  your username and password: you will be offered a new link.* Behind a reverse proxy LibreFolio
+  does not trust, on a local address (the usual Docker setup), nothing is counted per address, so
+  this second text never shows ([Forgotten Passwords](#forgot-password)). Either way the account
+  is created and waits.
+- **The email**, *Confirm your email address*, leaves right after that answer, unless a limit holds
+  it back ([Limits of the Verification Emails](#verification-limits)), in the instance's
   **Default Language**: a new account has no language of its own yet. Its button,
   **Confirm my email address**, opens a link that starts with `LIBREFOLIO_PUBLIC_URL`
   ([Emails with a Link](#public-url)) and works once, for 24 hours.
@@ -586,13 +594,25 @@ does not tell it apart from an account an administrator deactivated.
 
 | Limit | Past it |
 | --- | --- |
-| The emails of 10 registrations an hour from the same address; an IPv6 address counts by its /64 | The next new accounts are still created and wait, but their emails do not leave: their owners ask for the link again from the login page, under the limits below. |
+| The emails of 10 registrations an hour from the same address; an IPv6 address counts by its /64 | The next new accounts are still created and wait, but their emails do not leave: the login page says so right after the registration, and their owners ask for the link again from the login page, under the limits below. |
 | 10 requests of **Send the link again** every 15 minutes from the same address, counted before the password is checked; an IPv6 address counts by its /64 | The request is refused until the oldest of them is 15 minutes old. |
 | The sign-in's own limit on wrong passwords, shared with the login page: 10 every 15 minutes for the same username or email address, 50 from the same address (see *Failed Sign-ins* in [Configuration](configuration.md)) | The request is refused before the password is checked: the page says in how many minutes to try again. The right password clears the failures of what was typed. |
 | 1 email every 5 minutes, and 3 an hour, for the same account, the email of the registration included | The request is refused: the page says in how many minutes to try again. |
-| 3 emails an hour to the same mailbox, whatever account they are for and however its address is written ([Forgotten Passwords](#forgot-password)): the email of a registration and the links sent again alike, and only the emails that went out | **Send the link again** is refused: the page says in how many minutes to try again. After a registration, the account is created and waits, but no email leaves: its owner asks for the link again later. |
+| 3 emails an hour to the same mailbox, whatever account they are for and however its address is written ([Forgotten Passwords](#forgot-password)): the email of a registration and the links sent again alike, and only the emails that went out | **Send the link again** is refused: the page says in how many minutes to try again. After a registration, the account is created and waits, but no email leaves, and nothing tells its owner: the page gives its usual text, which already says what to do (look in the spam folder, then sign in to be offered a new link). |
 | The hourly limit of the instance, `LIBREFOLIO_SMTP_MAX_PER_HOUR` | The request is refused until an email fits again. |
 | A free place, once the account's link has expired | The request is refused: its owner is told to ask you. |
+
+**What stays invisible.** After a registration, *We are sending you an email* means that the email
+is queued, not that it was delivered: it leaves after the answer, and it can still not go. The
+mailbox's limit of 3 verification emails an hour, the hourly limit of the instance, an SMTP
+failure, email or `LIBREFOLIO_PUBLIC_URL` that stopped working meanwhile, a restart: none of them
+reaches the page. Only the log says it, with `Verification email: not sent` or
+`Verification email: the request failed` ([What the Log Says](#logs)), and a restart before the
+email left leaves no line at all. The account waits with its hold, and **Send the link again**
+recovers it; that is why the text of the page tells the person what to do when nothing arrives.
+The mailbox limit is deliberately not checked before the answer: a registration that answered
+differently when the mailbox had just received emails would tell anyone who signs up with someone
+else's address whether that mailbox is receiving them.
 
 A link whose email did not go out counts neither for the account nor for the mailbox. If the
 account stops waiting in the meantime — its address confirmed, or an administrator activated or
@@ -735,9 +755,9 @@ read again when you ask, where a finding links to the [Email tab](#email-tab) (s
 | `Forgotten password: no email sent` | `warning` | Email or `LIBREFOLIO_PUBLIC_URL` stopped working after the answer, or the email was refused: `reason` and `code` say which. A link created for it is revoked. |
 | `Forgotten password: the request failed` | `error` | An unexpected error, with its type in `error` and nothing more: no detail of the request reaches the log. |
 | `Registration waits for email verification` | `info` | A new account waits for its link; with `user_id`. The `User registered` line of the same registration has `waits_for_email` set to true. |
-| `Verification email held: too many registrations from this address` | `info` | The address of the registration already had the emails of 10 registrations in the hour: the account waits without its email; with `user_id`. |
+| `Verification email held: too many registrations from this address` | `info` | The address of the registration already had the emails of 10 registrations in the hour: the account waits without its email, and the login page tells its owner so; with `user_id`. |
 | `Verification link emailed` | `info` | A verification link went out: `user_id`, `token_id` and `language`. |
-| `Verification email: not sent` | `warning` | The email of a registration did not go out: `reason` and `code` say why. The account still waits, and its owner can ask for the link again. |
+| `Verification email: not sent` | `warning` | The email of a registration did not go out: `reason` and `code` say why. The page had said that the email was on its way, so only this line says that it was not. The account still waits, and its owner can ask for the link again. |
 | `Verification email: the account no longer waits, nothing sent` | `info` | An administrator activated, deactivated or deleted the account before its email left; with `user_id`. |
 | `Verification email: the request failed` | `error` | An unexpected error, with its type in `error` and the `user_id`, nothing more. |
 | `Login refused: email not verified` | `info` | A waiting account signed in with the right password; with `user_id`. |
