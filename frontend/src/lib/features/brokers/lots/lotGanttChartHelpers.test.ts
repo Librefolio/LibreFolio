@@ -442,17 +442,17 @@ describe('signedColorField', () => {
     });
 
     it('wraps a positive value in green (dark vs light theme)', () => {
-        expect(signedColorField(5, asIs, true)).toBe('<span style="color:#4ade80">5</span>');
-        expect(signedColorField(5, asIs, false)).toBe('<span style="color:#16a34a">5</span>');
+        expect(signedColorField(5, asIs, true)).toBe('<span style="color:#5ed69a">5</span>');
+        expect(signedColorField(5, asIs, false)).toBe('<span style="color:#18794e">5</span>');
     });
 
     it('wraps a negative value in red (dark vs light theme)', () => {
-        expect(signedColorField(-5, asIs, true)).toBe('<span style="color:#f87171">-5</span>');
-        expect(signedColorField(-5, asIs, false)).toBe('<span style="color:#dc2626">-5</span>');
+        expect(signedColorField(-5, asIs, true)).toBe('<span style="color:#ff7a86">-5</span>');
+        expect(signedColorField(-5, asIs, false)).toBe('<span style="color:#c82838">-5</span>');
     });
 
     it('HTML-escapes the formatter output before wrapping', () => {
-        expect(signedColorField(5, () => '<b>&', true)).toBe('<span style="color:#4ade80">&lt;b&gt;&amp;</span>');
+        expect(signedColorField(5, () => '<b>&', true)).toBe('<span style="color:#5ed69a">&lt;b&gt;&amp;</span>');
     });
 });
 
@@ -460,13 +460,13 @@ describe('segmentBaseColor', () => {
     const brokers = [{id: 1, name: 'Alpha'}];
 
     it('is violet while in transit (dark vs light)', () => {
-        expect(segmentBaseColor({custodyType: 'IN_TRANSIT', brokerId: null}, true, brokers)).toBe('#c084fc');
-        expect(segmentBaseColor({custodyType: 'IN_TRANSIT', brokerId: 7}, false, brokers)).toBe('#7c3aed');
+        expect(segmentBaseColor({custodyType: 'IN_TRANSIT', brokerId: null}, true, brokers)).toBe('#b69af0');
+        expect(segmentBaseColor({custodyType: 'IN_TRANSIT', brokerId: 7}, false, brokers)).toBe('#7041c6');
     });
 
     it('is blue when no broker is assigned (dark vs light)', () => {
-        expect(segmentBaseColor({custodyType: 'BROKER', brokerId: null}, true, brokers)).toBe('#60a5fa');
-        expect(segmentBaseColor({custodyType: 'BROKER', brokerId: null}, false, brokers)).toBe('#2563eb');
+        expect(segmentBaseColor({custodyType: 'BROKER', brokerId: null}, true, brokers)).toBe('#3f86fa');
+        expect(segmentBaseColor({custodyType: 'BROKER', brokerId: null}, false, brokers)).toBe('#155eef');
     });
 
     it("is the broker's vivid colour otherwise (dark vs light)", () => {
