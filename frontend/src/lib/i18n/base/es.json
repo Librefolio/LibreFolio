@@ -305,7 +305,8 @@
   },
   "nav": {
     "dashboard": "Panel",
-    "settings": "Configuración"
+    "settings": "Configuración",
+    "toggleMenu": "Abrir o cerrar el menú"
   },
   "prices": {
     "sync": {

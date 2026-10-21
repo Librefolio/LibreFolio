@@ -73,6 +73,9 @@
     const isAdmin = $derived($auth.user?.is_superuser === true);
     const attention = $derived(isAdmin ? securityChecks.attentionCount : 0);
     const severity = $derived(attention > 0 ? securityChecks.attentionSeverity : null);
+    // Where the administrator's checks stand, for tests and the gallery (A-62): «pending» until the first answer, «ready»
+    // from then on (a «check again» keeps it), «error» when the first read failed; «off» for anyone else.
+    const checksState = $derived(!isAdmin ? 'off' : securityChecks.answered ? 'ready' : securityChecks.status === 'error' ? 'error' : 'pending');
     const attentionText = $derived(attention > 0 ? $_('connectionSecurity.attention', {values: {count: attention}}) : '');
     // Colour is not the only sign (WCAG 1.4.1): the count joins the line's name, and its tooltip when collapsed.
     const toggleName = $derived(attention > 0 ? `${label} — ${attentionText}` : collapsed ? label : undefined);
@@ -124,6 +127,7 @@
     data-server-checked={$connectionSecurity.serverChecked ? 'true' : 'false'}
     data-security-attention={attention}
     data-security-severity={severity ?? 'none'}
+    data-security-checks={checksState}
     onpointerenter={() => (pointerInside = true)}
     onpointerleave={() => (pointerInside = false)}
 >

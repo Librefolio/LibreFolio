@@ -2219,7 +2219,7 @@ Note: No backend server required.
         "admin-bootstrap",
         services_admin_bootstrap,
         name="Initial Administrator (F02)",
-        desc="LIBREFOLIO_ADMIN_* read and refused by code, the startup bootstrap (created, ignored, pending, rearmed, expired, two workers), the link logged once and emailed, complete_admin_setup, the waiting administrator in user_usage, user setup-link",
+        desc="LIBREFOLIO_ADMIN_* read and refused by code, the startup bootstrap (created, ignored, pending, rearmed, expired, two workers), the link logged once and emailed, complete_admin_setup, the waiting administrator in user_usage, user setup-link, admin_setup_status for a hosting panel (H-61: none, pending with its expiry, done wins, expired)",
         # PURE: every database is a private file under tmp_path built with create_all; variables set with monkeypatch; the
         # email faked in this process; the race holds two connections to that private file only. No lane DB, no server.
         isolation="pure",
