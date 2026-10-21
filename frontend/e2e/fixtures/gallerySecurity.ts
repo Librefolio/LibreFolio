@@ -16,8 +16,9 @@
  * platform, in its order — `CONFIG_CHECKS` of `backend/app/services/platform/config_audit.py`, then
  * `platform.plugin_secrets`, which `backend/app/api/v1/security.py` appends —, each on the branch the backend takes for a
  * well-configured self-hosted instance, with that branch's own message key. Those branches are the self-hosted profile's
- * defaults — frame protection and the report-only CSP off, a generated instance key, no hosting panel's backup token, no
- * size limit on a backup's upload or restore, test mode off —, the login limit on, and email configured, as
+ * defaults — frame protection and the report-only CSP off, a generated instance key, no hosting panel's tokens (the
+ * wake-up and status ones of `platform.hosting_panel`, nor the backup one), no size limit on a backup's upload or
+ * restore, test mode off —, the login limit on, and email configured, as
  * galleryEmail.ts simulates it for the Email tab. A check the backend adds later is missing here until it is written in:
  * that matters only to a picture of the Security tab's list of passed checks, never to the dot or to the badge, which
  * count what is not `ok`.
@@ -44,7 +45,7 @@ const SECURITY_CHECKS_PATH = '/api/v1/security/checks';
 /** What `GET /api/v1/security/checks` answers, as the generated client types it. */
 type SecurityChecksResponse = ReturnType<typeof schemas.SecurityChecksResponse.parse>;
 
-/** The checks every gallery page reads: the platform's 17, in its order, each `ok` — on which branch, and why, above. */
+/** The checks every gallery page reads: the platform's 18, in its order, each `ok` — on which branch, and why, above. */
 const GALLERY_SECURITY_CHECKS = {
     items: [
         {check_id: 'platform.jwt_secret', severity: 'ok', i18n_key: 'instance.checks.jwtSecret.ok', detail: {}},
@@ -55,6 +56,7 @@ const GALLERY_SECURITY_CHECKS = {
         {check_id: 'platform.frame_protection', severity: 'ok', i18n_key: 'instance.checks.frameProtection.offSelfHosted', detail: {}},
         {check_id: 'platform.csp_report_only', severity: 'ok', i18n_key: 'instance.checks.cspReportOnly.offSelfHosted', detail: {}},
         {check_id: 'platform.log_level', severity: 'ok', i18n_key: 'instance.checks.logLevel.ok', detail: {}},
+        {check_id: 'platform.hosting_panel', severity: 'ok', i18n_key: 'instance.checks.hostingPanel.off', detail: {}},
         {check_id: 'platform.test_mode', severity: 'ok', i18n_key: 'instance.checks.testMode.off', detail: {}},
         {check_id: 'backup.panel_token', severity: 'ok', i18n_key: 'backup.checks.panelToken.off', detail: {}},
         {check_id: 'backup.upload_limit', severity: 'ok', i18n_key: 'backup.checks.uploadLimit.unlimited', detail: {}},
