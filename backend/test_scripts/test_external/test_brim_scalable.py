@@ -64,7 +64,7 @@ BROKER_NAME = "Scalable Capital broker"
 DEPOSIT_NAME = "Scalable Capital overnight account"
 PLUGIN_CODES = (BROKER_CODE, DEPOSIT_CODE)
 DOCS_URL = "/mkdocs/user/transactions/import/scalable/"
-PLUGIN_VERSION = "1.0.0"
+PLUGIN_VERSION = "1.1.0"
 SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
 PRIME_SAMPLE = SAMPLE_DIR / "scalable-prime-export.csv"
 BROKER_SAMPLE = SAMPLE_DIR / "scalable-broker-export.csv"
@@ -82,7 +82,6 @@ BOM = b"\xef\xbb\xbf"
 TRANSFER_SUBTYPES = ("CASH_TRANSFER_IN", "CASH_TRANSFER_OUT")
 
 # The notices of the two plugins (plan §4.5) and the severity of each. Exporter 1.0.0's ``scalable_fee_in_amount`` is gone with it (U-6, 13/10).
-NOT_EXECUTED = "scalable_not_executed"
 OPEN_PARTIAL = "scalable_open_partial"
 FEES_UNKNOWN = "scalable_fees_unknown"
 REVERSAL = "scalable_reversal"
@@ -93,8 +92,15 @@ INTERNAL_TRANSFERS = "scalable_internal_transfers"
 SEVERAL_ACCOUNTS = "scalable_several_overnight_accounts"
 UNREADABLE_ROWS = "scalable_unreadable_rows"
 DIVIDENDS_NET = "scalable_dividends_net"
+# W-B86: a known not-executed status (``KNOWN_NOT_EXECUTED``) is dropped without a notice, so ``scalable_not_executed`` is never given any more.
+NOT_EXECUTED = "scalable_not_executed"
+# The two codes every plugin shares for the rows it leaves out (``_brim_io.RowSkips``), and the notices that carry ``context.report_issue``.
+ROWS_NOT_RECOGNIZED = "rows_not_recognized"
+ROWS_UNREADABLE = "rows_unreadable"
+SHARED_SEVERITY = {ROWS_NOT_RECOGNIZED: "warning", ROWS_UNREADABLE: "warning"}
+REPORTED = {ROWS_NOT_RECOGNIZED, ROWS_UNREADABLE, "scalable_unreadable_rows", "scalable_not_imported"}
+KNOWN_NOT_EXECUTED = ("Pending", "Cancelled", "Canceled", "Expired", "Rejected", "CANCELLED", "expired", "rejected")
 SEVERITY = {
-    NOT_EXECUTED: "info",
     CASH_BY_SIGN: "info",
     TAX_REFUND: "info",
     INTERNAL_TRANSFERS: "info",
@@ -430,33 +436,40 @@ def _row_notices(out: BRIMParseOutput) -> Dict[str, List[int]]:
     return {code: lines for code, lines in _listed(out).items() if code != SEVERAL_ACCOUNTS}
 
 
-def _evidence_problems(evidence: BRIMEvidence, header: Sequence[str], raw: Dict[int, List[str]]) -> List[str]:
+def _evidence_problems(evidence: BRIMEvidence, header: Sequence[str], raw: Dict[int, List[str]], *, reason: bool = False) -> List[str]:
     """Where an evidence table breaks the brief: no title of its own (an empty one, so the wizard captions the table in the UI language,
-    ``importWizard.evidenceRowsTitle``), a comment, the file's header, one row per line number, each row the cells of its line."""
+    ``importWizard.evidenceRowsTitle``), a comment, the file's header, one row per line number, each row the cells of its line.
+
+    A table of the two shared codes (``reason`` True) has one more last column, ``Reason``, with a non-empty reason on every row."""
     problems = [] if evidence.title == "" else [f"evidence titled {evidence.title!r}: the wizard shows its translated caption only for an empty title"]
     if not (evidence.comment or "").strip():
         problems.append("evidence without a comment")
-    if [name.strip() for name in evidence.headers] != [name.strip() for name in header]:
-        problems.append(f"evidence headers {evidence.headers}, not the file's {list(header)}")
-    if not evidence.row_numbers or len(evidence.rows) != len(evidence.row_numbers):
-        problems.append(f"{len(evidence.rows)} evidence rows for the line numbers {evidence.row_numbers}")
-    mismatched = [number for number, cells in zip(evidence.row_numbers, evidence.rows, strict=False) if [cell.strip() for cell in cells] != [cell.strip() for cell in raw.get(number, [])]]
+    headers, rows = list(evidence.headers), [list(cells) for cells in evidence.rows]
+    if reason:
+        problems += [f"evidence row {cells} has no reason in its last column" for cells in rows if not cells or not cells[-1].strip()]
+        headers, rows = headers[:-1], [cells[:-1] for cells in rows]
+    if [name.strip() for name in headers] != [name.strip() for name in header]:
+        problems.append(f"evidence headers {evidence.headers}, not the file's {list(header)}" + (" plus the reason column" if reason else ""))
+    if not evidence.row_numbers or len(rows) != len(evidence.row_numbers):
+        problems.append(f"{len(rows)} evidence rows for the line numbers {evidence.row_numbers}")
+    mismatched = [number for number, cells in zip(evidence.row_numbers, rows, strict=False) if [cell.strip() for cell in cells] != [cell.strip() for cell in raw.get(number, [])]]
     return problems + [f"line {number}: the evidence row is not the file's {raw.get(number)}" for number in mismatched]
 
 
 def _notice_problems(notice: BRIMNotice, header: Sequence[str], raw: Dict[int, List[str]]) -> List[str]:
     """Where a notice breaks the brief: the severity of its code, an English message, ``context`` ``{"count": n}`` (n: the lines it lists, or the
-    accounts for the overnight accounts' notice) and one evidence table (``_evidence_problems``)."""
-    severity = SEVERITY.get(notice.code, "<a code the plan does not have>")
+    accounts for the overnight accounts' notice), plus ``"report_issue": True`` for the codes of ``REPORTED`` (W-B86), and one evidence table (``_evidence_problems``)."""
+    severity = {**SEVERITY, **SHARED_SEVERITY}.get(notice.code, "<a code the plan does not have>")
     problems = [] if notice.severity == severity else [f"severity {notice.severity!r}, expected {severity!r}"]
     if not (notice.message or "").strip():
         problems.append("no message")
     if len(notice.evidence) != 1:
         return [*problems, f"{len(notice.evidence)} evidence tables, one expected"]
     count = (notice.context or {}).get("count") if notice.code == SEVERAL_ACCOUNTS else len(notice.evidence[0].row_numbers)
-    if notice.context != {"count": count}:
-        problems.append(f"context {notice.context}, expected {{'count': {count!r}}}")
-    return [*problems, *_evidence_problems(notice.evidence[0], header, raw)]
+    expected = {"count": count, "report_issue": True} if notice.code in REPORTED else {"count": count}
+    if notice.context != expected:
+        problems.append(f"context {notice.context}, expected {expected}")
+    return [*problems, *_evidence_problems(notice.evidence[0], header, raw, reason=notice.code in SHARED_SEVERITY)]
 
 
 def _all_notice_problems(out: BRIMParseOutput, path: Path) -> List[str]:
@@ -529,6 +542,7 @@ class SampleSpec:
     transactions: Tuple[Tx, ...]
     notices: Dict[str, Tuple[int, ...]]
     assets: Tuple[str, ...]
+    silent: Tuple[int, ...] = ()  # the lines of the known not-executed rows: dropped without a notice (W-B86)
 
 
 PRIME_SPEC = SampleSpec(
@@ -558,9 +572,10 @@ PRIME_SPEC = SampleSpec(
         Tx(14, "DEPOSIT", "2026-03-20", "12.5"),
         Tx(15, "TAX", "2026-03-10", "-8.4"),
     ),
-    # The pending and the cancelled order (2, 3), the tax refund booked as a deposit (14), the security transfer (16)
-    notices={NOT_EXECUTED: (2, 3), TAX_REFUND: (14,), NOT_IMPORTED: (16,)},
+    # The pending and the cancelled order (2, 3) are dropped without a notice (W-B86); the tax refund booked as a deposit (14), the security transfer (16)
+    notices={TAX_REFUND: (14,), NOT_IMPORTED: (16,)},
     assets=(APPLE, TELEKOM, MSCI_WORLD, ALL_WORLD_ACC),
+    silent=(2, 3),
 )
 
 BROKER_SPEC = SampleSpec(
@@ -592,8 +607,9 @@ BROKER_SPEC = SampleSpec(
         # A purchase without its details (fee and tax empty): booked as it is
         Tx(20, "BUY", "2026-02-10", "-840", quantity="7", isin=ALL_WORLD_DIST),
     ),
-    notices={OPEN_PARTIAL: (2,), NOT_EXECUTED: (3,), DIVIDENDS_NET: (5,), REVERSAL: (6,), INTERNAL_TRANSFERS: (8, 13), TAX_REFUND: (16,), CASH_BY_SIGN: (18,), NOT_IMPORTED: (19,), FEES_UNKNOWN: (20,)},
+    notices={OPEN_PARTIAL: (2,), DIVIDENDS_NET: (5,), REVERSAL: (6,), INTERNAL_TRANSFERS: (8, 13), TAX_REFUND: (16,), CASH_BY_SIGN: (18,), NOT_IMPORTED: (19,), FEES_UNKNOWN: (20,)},
     assets=(APPLE, TELEKOM, MSCI_WORLD, ALL_WORLD_ACC, ALL_WORLD_DIST),
+    silent=(3,),
 )
 
 DEPOSIT_SPEC = SampleSpec(
@@ -613,8 +629,9 @@ DEPOSIT_SPEC = SampleSpec(
         Tx(8, "DEPOSIT", "2026-04-02", "1000"),
         Tx(9, "DEPOSIT", "2026-03-02", "5000"),
     ),
-    notices={NOT_EXECUTED: (2,), FEES_UNKNOWN: (3,), INTERNAL_TRANSFERS: (5, 8)},
+    notices={FEES_UNKNOWN: (3,), INTERNAL_TRANSFERS: (5, 8)},
     assets=(),
+    silent=(2,),
 )
 
 SAMPLE_SPECS = [pytest.param(PRIME_SPEC, id="prime"), pytest.param(BROKER_SPEC, id="broker-export"), pytest.param(DEPOSIT_SPEC, id="deposit-export")]
@@ -789,7 +806,7 @@ class TestIdentity:
 
     @pytest.mark.parametrize(("code", "name", "icon", "pattern", "patterns"), IDENTITIES)
     def test_the_plugin_declares_its_identity(self, code: str, name: str, icon: str, pattern: str, patterns: List[str]):
-        """Code and name; ``.csv`` only; priority 100, above the generic CSV; its composed icon among the plugins' static files; the user guide; 1.0.0; its sample patterns."""
+        """Code and name; ``.csv`` only; priority 100, above the generic CSV; its composed icon among the plugins' static files; the user guide; 1.1.0; its sample patterns."""
         plugin = _plugin(code)
 
         declared = (plugin.provider_code, plugin.provider_name, plugin.supported_extensions, plugin.detection_priority, plugin.icon_url, plugin.docs_url, plugin.plugin_version, plugin.test_file_pattern, plugin.test_file_patterns)
@@ -902,11 +919,21 @@ class TestSampleFixtures:
 
     @pytest.mark.parametrize("spec", SAMPLE_SPECS)
     def test_every_data_line_is_accounted_for(self, spec: SampleSpec):
-        """Each data line gives a transaction or is listed by a notice: the brief skips no line without a word."""
+        """Each data line gives a transaction, is listed by a notice, or is a known not-executed row dropped without a word (W-B86): no other line is skipped."""
         _, raw = _raw(spec.path)
-        claimed = {tx.line for tx in spec.transactions} | {line for lines in spec.notices.values() for line in lines}
+        claimed = {tx.line for tx in spec.transactions} | {line for lines in spec.notices.values() for line in lines} | set(spec.silent)
 
         assert claimed == set(raw), f"{spec.path.name}: lines claimed {sorted(claimed)}, data lines {sorted(raw)}"
+
+    @pytest.mark.parametrize("spec", SAMPLE_SPECS)
+    def test_the_lines_dropped_without_a_word_have_a_known_not_executed_status(self, spec: SampleSpec):
+        """Each line of ``silent`` holds a status the plugins know is not final (``KNOWN_NOT_EXECUTED``, in any case), gives no transaction and is in no notice."""
+        header, raw = _raw(spec.path)
+        statuses = {line: _by_name(header, raw[line])["status"].lower() for line in spec.silent}
+        claimed = {tx.line for tx in spec.transactions} | {line for lines in spec.notices.values() for line in lines}
+
+        assert {line for line, status in statuses.items() if status not in {known.lower() for known in KNOWN_NOT_EXECUTED}} == set(), f"{spec.path.name}: statuses {statuses}"
+        assert not claimed & set(spec.silent), f"{spec.path.name}: a silent line is also claimed by a transaction or a notice"
 
     @pytest.mark.parametrize("spec", SAMPLE_SPECS)
     def test_the_expected_values_are_the_line_cells(self, spec: SampleSpec):
@@ -981,13 +1008,14 @@ class TestSamples:
 
     @pytest.mark.parametrize("spec", SAMPLE_SPECS)
     def test_the_sample_lists_its_rows_by_reason(self, spec: SampleSpec):
-        """Exactly the brief's notices, one per code, each listing its lines (1-based, the header is line 1) with ``context`` ``{"count": n}``."""
+        """Exactly the brief's notices, one per code, each listing its lines (1-based, the header is line 1) with ``context`` ``{"count": n}``
+        (and ``report_issue`` True for the codes of ``REPORTED``)."""
         out = _parse(spec.code, spec.path)
         codes = Counter(notice.code for notice in out.warnings)
 
         assert codes == Counter(spec.notices.keys()), f"{spec.path.name}: notices {dict(codes)}, expected exactly one of each of {sorted(spec.notices)}"
         assert _listed(out) == {code: sorted(lines) for code, lines in spec.notices.items()}, f"{spec.path.name}: the notices list the lines {_listed(out)}"
-        assert {notice.code: notice.context for notice in out.warnings} == {code: {"count": len(lines)} for code, lines in spec.notices.items()}
+        assert {notice.code: notice.context for notice in out.warnings} == {code: {"count": len(lines), **({"report_issue": True} if code in REPORTED else {})} for code, lines in spec.notices.items()}
 
     @pytest.mark.parametrize("spec", SAMPLE_SPECS)
     def test_every_notice_keeps_the_contract(self, spec: SampleSpec):
@@ -1029,19 +1057,19 @@ class TestStatusesAndReversals:
 
     def test_the_exporter_imports_only_executed_rows(self, tmp_path: Path):
         """``Pending`` with shares executed and ``lf_ordered_shares``: ``scalable_open_partial``. Any other ``Pending``, ``Cancelled``, ``Expired``,
-        ``Rejected``: ``scalable_not_executed``. ``lf_is_cancellation`` true: ``scalable_reversal``, whatever the row reverses."""
+        ``Rejected``: known, dropped without a notice (W-B86). ``lf_is_cancellation`` true: ``scalable_reversal``, whatever the row reverses."""
         cases = [
             (_trade("Buy", MSCI_WORLD, "2", "100,5", "-201"), (Leg("BUY", "-201", "2", asset=True),), None),
             (_trade("Buy", MSCI_WORLD, "1", "100", "-100", status="Settled"), (Leg("BUY", "-100", "1", asset=True),), None),
             (_cash("Deposit", "50", status="executed"), (Leg("DEPOSIT", "50"),), None),
             (_cash("Withdrawal", "-20", status="SETTLED"), (Leg("WITHDRAWAL", "-20"),), None),
             (_trade("Buy", ALL_WORLD_ACC, "3", "135,2", "-405,6", status="Pending", ordered_shares="10"), (), OPEN_PARTIAL),
-            (_trade("Buy", ALL_WORLD_ACC, "0", "135,2", "0", status="Pending", ordered_shares="10"), (), NOT_EXECUTED),
-            (_trade("Buy", ALL_WORLD_ACC, "3", "135,2", "-405,6", status="Pending"), (), NOT_EXECUTED),
-            (_trade("Buy", ALL_WORLD_ACC, "0", "", "0", status="Cancelled", fee="", tax=""), (), NOT_EXECUTED),
-            (_trade("Buy", ALL_WORLD_ACC, "0", "", "0", status="Expired", fee="", tax=""), (), NOT_EXECUTED),
-            (_trade("Sell", APPLE, "0", "", "0", status="Rejected", fee="", tax=""), (), NOT_EXECUTED),
-            (_cash("Withdrawal", "-75", status="Pending"), (), NOT_EXECUTED),
+            (_trade("Buy", ALL_WORLD_ACC, "0", "135,2", "0", status="Pending", ordered_shares="10"), (), None),
+            (_trade("Buy", ALL_WORLD_ACC, "3", "135,2", "-405,6", status="Pending"), (), None),
+            (_trade("Buy", ALL_WORLD_ACC, "0", "", "0", status="Cancelled", fee="", tax=""), (), None),
+            (_trade("Buy", ALL_WORLD_ACC, "0", "", "0", status="Expired", fee="", tax=""), (), None),
+            (_trade("Sell", APPLE, "0", "", "0", status="Rejected", fee="", tax=""), (), None),
+            (_cash("Withdrawal", "-75", status="Pending"), (), None),
             (_trade("Buy", APPLE, "5", "150,1", "-750,5", fee="0,99", cancellation="true"), (), REVERSAL),
             (_cash("Deposit", "70", cancellation="true"), (), REVERSAL),
         ]
@@ -1053,11 +1081,86 @@ class TestStatusesAndReversals:
         cases = [
             (_trade("Buy", MSCI_WORLD, "1", "100", "-100", status="Settled"), (Leg("BUY", "-100", "1", asset=True),), None),
             (_cash("Deposit", "50", status="EXECUTED"), (Leg("DEPOSIT", "50"),), None),
-            (_trade("Buy", ALL_WORLD_ACC, "10", "135,2", "-1352", status="Pending"), (), NOT_EXECUTED),
-            (_trade("Sell", APPLE, "0", "", "0", status="Expired"), (), NOT_EXECUTED),
+            (_trade("Buy", ALL_WORLD_ACC, "10", "135,2", "-1352", status="Pending"), (), None),
+            (_trade("Sell", APPLE, "0", "", "0", status="Expired"), (), None),
         ]
 
         _run(tmp_path, PRIME, cases)
+
+
+class TestRowsLeftOut:
+    """D — «known rows quietly, unknown rows loudly» (W-B86, skill rule 10). A status the plugins know is not final (pending, cancelled, canceled, expired,
+    rejected, in any case) is dropped without a notice; a status they do not know is ``rows_not_recognized``, an empty one ``rows_unreadable``, each with
+    ``report_issue`` and the row's line in its evidence. ``scalable_not_executed`` is never given any more."""
+
+    @pytest.mark.parametrize("layout", BROKER_LAYOUTS)
+    @pytest.mark.parametrize("status", KNOWN_NOT_EXECUTED)
+    def test_a_known_not_executed_status_is_dropped_without_a_notice(self, layout: Layout, status: str, tmp_path: Path):
+        """A trade and a cash row of each known status leave no transaction and no notice at all; the executed row beside them is imported."""
+        cases = [
+            (_cash("Deposit", "10"), (Leg("DEPOSIT", "10"),), None),
+            (_trade("Buy", ALL_WORLD_ACC, "3", "135,2", "-405,6", status=status), (), None),
+            (_cash("Withdrawal", "-75", status=status), (), None),
+        ]
+
+        out = _run(tmp_path, layout, cases)
+
+        assert [notice.code for notice in out.warnings] == [], f"status {status!r}: notices {[notice.code for notice in out.warnings]}, none expected"
+
+    @pytest.mark.parametrize("layout", BROKER_LAYOUTS)
+    def test_a_status_nobody_knows_is_not_recognized_and_names_the_status(self, layout: Layout, tmp_path: Path):
+        """``On hold`` is neither executed nor a known not-executed status: ``rows_not_recognized`` lists its line, its reason names the status, no transaction."""
+        cases = [
+            (_cash("Deposit", "10"), (Leg("DEPOSIT", "10"),), None),
+            (_trade("Buy", ALL_WORLD_ACC, "3", "135,2", "-405,6", status="On hold"), (), ROWS_NOT_RECOGNIZED),
+            (_cash("Withdrawal", "-75", status="Zorglub"), (), ROWS_NOT_RECOGNIZED),
+        ]
+
+        out = _run(tmp_path, layout, cases)
+
+        notice = next(notice for notice in out.warnings if notice.code == ROWS_NOT_RECOGNIZED)
+        reasons = {line: cells[-1].lower() for line, cells in zip(notice.evidence[0].row_numbers, notice.evidence[0].rows, strict=True)}
+        assert (notice.severity, notice.context) == ("warning", {"count": 2, "report_issue": True})
+        assert ("on hold" in reasons[3], "zorglub" in reasons[4]) == (True, True), f"the reasons must name the status: {reasons}"
+
+    @pytest.mark.parametrize("layout", BROKER_LAYOUTS)
+    def test_an_empty_status_is_unreadable(self, layout: Layout, tmp_path: Path):
+        """A row without a status cannot be told executed from pending: ``rows_unreadable`` lists its line with ``report_issue``, no transaction."""
+        cases = [
+            (_cash("Deposit", "10"), (Leg("DEPOSIT", "10"),), None),
+            (_cash("Deposit", "20", status=""), (), ROWS_UNREADABLE),
+        ]
+
+        out = _run(tmp_path, layout, cases)
+
+        notice = next(notice for notice in out.warnings if notice.code == ROWS_UNREADABLE)
+        assert (notice.severity, notice.context, notice.evidence[0].row_numbers) == ("warning", {"count": 1, "report_issue": True}, [3])
+
+    @pytest.mark.parametrize("layout", BROKER_LAYOUTS)
+    def test_the_notice_of_a_status_dropped_quietly_is_gone(self, layout: Layout, tmp_path: Path):
+        """Guard on the whole file: whatever the statuses, ``scalable_not_executed`` is never given, and an order filled in part and still open keeps ``scalable_open_partial``."""
+        rows = _laid_out([_trade("Buy", ALL_WORLD_ACC, "3", "135,2", "-405,6", status="Pending", ordered_shares="10"), _trade("Buy", ALL_WORLD_ACC, "1", "135,2", "-135,2", status="Rejected")], layout)
+
+        out = _parse(BROKER_CODE, _write(tmp_path, layout, rows))
+
+        assert sorted(notice.code for notice in out.warnings) == ([OPEN_PARTIAL] if layout.exporter else []), f"{layout.name}: notices {[notice.code for notice in out.warnings]}"
+
+    @pytest.mark.parametrize("spec", SAMPLE_SPECS)
+    def test_the_samples_give_none_of_the_two_shared_codes(self, spec: SampleSpec):
+        """Guard (green today and after): every row of the three samples is known, so neither ``rows_not_recognized`` nor ``rows_unreadable`` is given."""
+        out = _parse(spec.code, spec.path)
+        assert out.transactions, f"presence barrier: {spec.path.name} gives no transaction"
+
+        assert sorted({notice.code for notice in out.warnings} & set(SHARED_SEVERITY)) == [], f"{spec.path.name}: {[notice.code for notice in out.warnings]}"
+
+    @pytest.mark.parametrize("code", ["scalable_unreadable_rows", "scalable_not_imported"])
+    @pytest.mark.parametrize("layout", BROKER_LAYOUTS)
+    def test_the_two_notices_of_rows_left_out_ask_for_a_report(self, layout: Layout, code: str, tmp_path: Path):
+        """``scalable_unreadable_rows`` and ``scalable_not_imported`` carry ``report_issue`` True beside their ``count``."""
+        row = _cash("Deposit", "10", day="") if code == "scalable_unreadable_rows" else _trade("Security transfer", ALL_WORLD_DIST, "7", "", "0")
+        out = _run(tmp_path, layout, [(row, (), code)])
+
+        assert next(notice.context for notice in out.warnings if notice.code == code) == {"count": 1, "report_issue": True}
 
 
 # A trade's |amount| can differ from shares x price: by the fee, by the fee and the tax, by anything else. Whatever the gap, the trade is booked
@@ -1309,7 +1412,7 @@ class TestDescriptionsAndAssets:
         """From the top, the first security a transaction names gets ``FAKE_ASSET_ID_BASE``: a pending order, a reversal or a security transfer before it
         uses no id, and a security only they name is not extracted."""
         cases = [
-            (_trade("Buy", ALL_WORLD_ACC, "3", "135,2", "-405,6", status="Pending"), (), NOT_EXECUTED),
+            (_trade("Buy", ALL_WORLD_ACC, "3", "135,2", "-405,6", status="Pending"), (), None),
             (_trade("Buy", TELEKOM, "4", "25", "-100", cancellation="true"), (), REVERSAL),
             (_trade("Security transfer", ALL_WORLD_DIST, "7", "", "0"), (), NOT_IMPORTED),
             (_trade("Buy", MSCI_WORLD, "2", "100,5", "-201"), (Leg("BUY", "-201", "2", asset=True),), None),

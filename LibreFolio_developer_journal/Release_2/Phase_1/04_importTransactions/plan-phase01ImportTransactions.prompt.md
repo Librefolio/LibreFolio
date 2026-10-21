@@ -8371,3 +8371,29 @@ Il developer ha promesso all'utente il nome nel CHANGELOG. Numeri delle fixture:
   `dev.py i18n build`, `i18n check` verde (5117 chiavi × 4 lingue), `test_i18n_catalog_gate.py` 176 verdi. La guida EN elenca in «Known
   limitations» anche Q-WB-1/2/3 (Rimborso con commissione, commissione maggiore del Controvalore, righe non EUR). Resta al coordinatore
   `CHANGELOG.md:99` («Fineco importer (beta)»).
+
+### W-B86 e W-B87 · «Noto in silenzio, ignoto con avviso» negli altri plugin (2026-10-21, base `a7c6db19f`)
+
+**Il via del coordinatore (21/10)**: il passo B del workstream W backend. Aiuto condiviso in `_brim_io.py`, W-B86 solo sui 4 plugin stabili
+(decisione del 19/10), D-W85-4 nella versione minima (approvata dal developer il 21/10). Le chiavi `importWizard.brimNotice.*` le scrive W.
+
+- ✅ 1. L'aiuto `RowSkips` (21/10): `unknown`, `unreadable`, `set_headers`, `notices()`: al più due avvisi `warning` (`rows_not_recognized`,
+  `rows_unreadable`), `context {count, report_issue: True}`, un'evidenza con l'intestazione del file e una colonna «Reason», i numeri di riga.
+  Accetta anche le righe di un `csv.DictReader`.
+- ✅ 2. Rossi (test-author, 21/10): `test_brim_row_skips.py` (nuovo, azione `external brim-row-skips`: aiuto, contratto su tutti i plugin
+  registrati con l'insieme `ROW_SKIPS_PENDING` per quelli in beta, chiavi del catalogo), più `TestRowsLeftOutAreReported` in
+  `test_brim_degiro.py` e `TestRowsLeftOut` in `test_brim_scalable.py`. Prima della cura: **row_skips 128 falliti / 71 passati, degiro 9 / 198,
+  scalable 50 / 133, providers 778 passati** (log `/tmp/librefolio_wb_rs_final_*.log`).
+- ✅ 3. La cura (21/10): DEGIRO 2.1.0 e Crédit Agricole 1.5.0 (`report_issue` sui codici «ignoto» e «illeggibile»); Scalable 1.1.0 (anche il
+  plugin dei depositi): `report_issue` su `scalable_unreadable_rows` e `scalable_not_imported`, stati `pending`/`cancelled`/`canceled`/`expired`/
+  `rejected` in silenzio con una riga di log, stato ignoto → `rows_not_recognized`, stato vuoto → `rows_unreadable`, `scalable_not_executed`
+  tolto (chiavi i18n tolte); Directa 1.1.0 (i 4 avvisi a stringa → codici condivisi); Revolut 1.2.0, Trading 212 1.1.0, eToro 1.2.0 (le righe
+  con effetto economico in un avviso aggregato, `Transfer` in silenzio); Trade Republic 1.1.0, Swissquote 1.1.0, IBKR 1.1.0 (dalle stringhe ai
+  codici condivisi). Dopo la cura: row_skips **199/199**, degiro **207/207**, scalable **183/183**, providers **778 + 1 saltato**, danske 359,
+  report sets 274, versioning 5, gate del catalogo 176.
+  > **Note implementazione**: i sample con righe che ora danno un avviso (Directa 34 e 35, Revolut Invest 9, Trading 212 11/13/14, eToro
+  > 24/26/27/29, Trade Republic 9/10, Swissquote 3/4/10/11, IBKR 10/11/12) sono fissati riga per riga nel test di contratto.
+  > **⚠️ Fuori pista**: `ca_unknown_causale` resta `info` (la riga è importata per segno) e porta `report_issue`; il Revolut crypto, T212 ed
+  > eToro non hanno una riga «illeggibile» nel contratto: le loro altre stringhe restano com'erano (plugin in beta).
+- ✅ 4. Chiavi i18n (21/10, via del coordinatore): `importWizard.brimNotice.rows_not_recognized` e `rows_unreadable`, `importWizard.brimEvidence.*`
+  (4 lingue); tolte `scalable_not_executed` (brimNotice e brimEvidence). `i18n check` verde (5119 chiavi).

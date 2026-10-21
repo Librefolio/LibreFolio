@@ -6794,6 +6794,11 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   codici condivisi (`rows_not_recognized`, `rows_unreadable`), evidenza e `report_issue`, e un test di contratto su tutti i plugin.
   Circa 1,5 giorni. La decisione (1.3 o dopo) spetta al coordinatore. Dettagli: piano 04, «W-B85 · «Noto in silenzio, ignoto con
   avviso»: analisi», punto 3.
+  - ✅ 21/10 (via del coordinatore, solo i 4 plugin stabili, decisione del 19/10): aiuto `RowSkips` in `_brim_io.py` (codici
+    `rows_not_recognized` e `rows_unreadable`, chiavi `importWizard.brimNotice.*` e `brimEvidence.*` in 4 lingue), test di contratto
+    `test_brim_row_skips.py` (`external brim-row-skips`); DEGIRO 2.1.0, Crédit Agricole 1.5.0 e Scalable 1.1.0 con `report_issue` (di
+    Scalable, gli stati noti non eseguiti in silenzio, gli ignoti con avviso: sparisce `scalable_not_executed`), Directa 1.1.0 coi codici
+    condivisi. **Restano** i plugin in beta (elenco in `ROW_SKIPS_PENDING` del test di contratto). Dettagli: piano 04, «W-B86 e W-B87».
 - **W-B87 · Plugin che saltano in silenzio righe con un effetto economico** — alto, numeri; W, 19/10 (inventario di W-B85).
   - Revolut: lo stock split, `SKIP_TYPES` (`broker_revolut/plugin.py:90-93`).
   - Trading 212: stock split, distribuzione di azioni e conversione di valuta (`broker_trading212/plugin.py:87-92`).
@@ -6802,6 +6807,11 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   Quantità dopo uno split, costi e tasse escono sbagliati senza che l'utente lo sappia. Proposta: per la 1.3 almeno l'avviso con
   `report_issue`; l'import vero, per plugin, dopo. Dettagli: piano 04, «W-B85 · «Noto in silenzio, ignoto con avviso»: analisi»,
   punto 4.
+  - ✅ 21/10 (D-W85-4, versione minima approvata dal developer): un avviso aggregato `rows_not_recognized` con `report_issue` per le
+    righe saltate con effetto economico: Revolut 1.2.0 (stock split), Trading 212 1.1.0 (split, distribuzione di azioni, conversione di
+    valuta), eToro 1.2.0 (commissioni overnight, rimborsi, SDRT); Trade Republic 1.1.0 (Kosten/Belasting), Swissquote 1.1.0 (gambe
+    forex) e IBKR 1.1.0 (FX senza ISIN) dagli avvisi a stringa ai codici condivisi. **L'import vero di quelle righe resta dopo la 1.3**,
+    plugin per plugin. Dettagli: piano 04, «W-B86 e W-B87».
 - **W-B88 · Quale data registra ogni plugin BRIM, contro il principio di B-52** — medio, numeri; W, 19/10 (analisi di B-52). Il
   principio del developer: registrare la data dell'operazione; usare la data valuta, o lo stato, solo per decidere se la riga è
   regolata. Nel lotto B-52 ci sono Fineco, Danske e il CSV generico. Altri 10 plugin nominano una data valuta o di regolamento:

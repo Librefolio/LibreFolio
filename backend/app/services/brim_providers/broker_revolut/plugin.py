@@ -54,6 +54,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.brim_providers import _brim_io as io
 from backend.app.services.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
@@ -86,9 +87,14 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "custody fee": TransactionType.FEE,
 }
 
-# Types to skip
+# Types left out quietly: no economic effect (W-B86: a log line only).
 SKIP_TYPES = [
     "transfer",
+]
+
+# Types left out that change the quantity or the cash (a split): the plugin does not import them yet, so a notice with the link to
+# open an issue lists them (W-B87, D-W85-4).
+NOT_IMPORTED_TYPES = [
     "stock split",
 ]
 
@@ -295,7 +301,8 @@ class RevolutBrokerProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
-        return "1.1.0"
+        # 1.2.0 — a stock split in an Invest file is listed in a notice with the link to open an issue (W-B87).
+        return "1.2.0"
 
     def can_parse(self, file_path: Path) -> bool:
         """Detect Revolut invest or crypto format by checking distinctive headers."""
@@ -345,6 +352,8 @@ class RevolutBrokerProvider(BRIMProvider):
         extracted_assets: Dict[int, Dict[str, Optional[str]]] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
+        skips = io.RowSkips(reader.fieldnames)
+        quiet = 0
 
         row_num = 1
 
@@ -355,7 +364,12 @@ class RevolutBrokerProvider(BRIMProvider):
             if not tx_type_raw:
                 continue
 
+            if any(skip in tx_type_raw for skip in NOT_IMPORTED_TYPES):
+                skips.unknown(row_num, row, f"not imported yet: {tx_type_raw}")
+                continue
+
             if any(skip in tx_type_raw for skip in SKIP_TYPES):
+                quiet += 1
                 continue
 
             tx_type = None
@@ -442,6 +456,8 @@ class RevolutBrokerProvider(BRIMProvider):
             for fake_id, info in extracted_assets.items()
         }
 
+        if quiet:
+            logger.info("Revolut rows left out without a notice", count=quiet)
         logger.info(
             "Revolut file parsed",
             transaction_count=len(transactions),
@@ -451,7 +467,7 @@ class RevolutBrokerProvider(BRIMProvider):
 
         return BRIMParseOutput(
             transactions=transactions,
-            warnings=warnings,
+            warnings=[*warnings, *skips.notices()],
             validation_issues=validation_issues,
             extracted_assets=extracted_assets_typed,
         )

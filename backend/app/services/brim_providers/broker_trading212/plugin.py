@@ -49,6 +49,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.brim_providers import _brim_io as io
 from backend.app.services.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
@@ -83,11 +84,16 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "interest on cash": TransactionType.INTEREST,
 }
 
-# Types to skip
+# Types left out quietly: no economic effect (W-B86: a log line only).
 SKIP_TYPES = [
+    "transfer",
+]
+
+# Types left out that change the quantity, the shares or the cash: the plugin does not import them yet, so a notice with the link to
+# open an issue lists them (W-B87, D-W85-4).
+NOT_IMPORTED_TYPES = [
     "stock split",
     "stock distribution",
-    "transfer",
     "currency conversion",
 ]
 
@@ -192,12 +198,15 @@ class Trading212BrokerProvider(BRIMProvider):
         extracted_assets: Dict[int, Dict[str, Optional[str]]] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
+        skips = io.RowSkips()
+        quiet = 0
 
         detected_delim = self.detect_csv_delimiter(file_path)
 
         try:
             with self._open_text(file_path) as f:
                 reader = csv.DictReader(f, delimiter=detected_delim)
+                skips.set_headers(reader.fieldnames)
                 row_num = 1
 
                 for row in reader:
@@ -207,8 +216,13 @@ class Trading212BrokerProvider(BRIMProvider):
                     if not action:
                         continue
 
-                    # Skip certain types
+                    if any(skip in action for skip in NOT_IMPORTED_TYPES):
+                        skips.unknown(row_num, row, f"not imported yet: {action}")
+                        continue
+
+                    # Known and without economic effect: left out quietly
                     if any(skip in action for skip in SKIP_TYPES):
+                        quiet += 1
                         continue
 
                     # Map transaction type
@@ -354,6 +368,8 @@ class Trading212BrokerProvider(BRIMProvider):
             for fake_id, info in extracted_assets.items()
         }
 
+        if quiet:
+            logger.info("Trading212 rows left out without a notice", count=quiet)
         logger.info(
             "Trading212 file parsed",
             transaction_count=len(transactions),
@@ -363,10 +379,15 @@ class Trading212BrokerProvider(BRIMProvider):
 
         return BRIMParseOutput(
             transactions=transactions,
-            warnings=warnings,
+            warnings=[*warnings, *skips.notices()],
             validation_issues=validation_issues,
             extracted_assets=extracted_assets_typed,
         )
+
+    @property
+    def plugin_version(self) -> str:
+        # 1.1.0 — a split, a share distribution or a currency conversion is listed in a notice with the link to open an issue (W-B87).
+        return "1.1.0"
 
     @property
     def docs_url(self) -> Optional[str]:
