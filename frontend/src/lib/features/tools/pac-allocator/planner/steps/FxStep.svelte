@@ -19,11 +19,14 @@
     import type {DraftFx, PlannerDraft} from '../draft.svelte';
     import {formatPlannerDate, formatPlannerFxRate} from '../format';
     import {FxRateReader} from '../fxRead.svelte';
+    import {presentSourceIssues} from '../issues';
+    import {listIssue} from '../labels';
     import {loadPairSetups, pairSetup, type PairSetup} from '../fxSetup';
     import {BADGE, BUTTON_LINK, BUTTON_SECONDARY, CARD, HINT, INPUT, INPUT_ADORNMENT, LABEL_ROW, NOTICE} from '../ui';
     import AutoManualToggle from '../shared/AutoManualToggle.svelte';
     import CurrencyCode from '../shared/CurrencyCode.svelte';
     import HelpTip from '../shared/HelpTip.svelte';
+    import IssueList from '../shared/IssueList.svelte';
 
     const KEY = 'tools.pacAllocator.planner.fx';
 
@@ -246,6 +249,7 @@
                 {@const manual = fx?.manual ?? false}
                 {@const rate = fx?.rate.trim() ?? ''}
                 {@const status = readState(pair)}
+                {@const pairIssues = manual ? [] : presentSourceIssues(reader.issues(draft, pair), draft, reader.load.data).map(listIssue)}
                 <section class={CARD} data-testid="pac-planner-fx-pair" data-pair={pair} data-purpose={draft.fxPurpose(pair)} data-mode={manual ? 'manual' : 'auto'} data-rate={rate === '' ? 'missing' : 'set'} data-read={status}>
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <h3 class="flex flex-wrap items-center gap-1.5 font-semibold text-lf-primary" data-testid="pac-planner-fx-pair-title">
@@ -318,6 +322,10 @@
                             <p class={HINT} data-testid="pac-planner-fx-no-rate">{$t(`${KEY}.readLater`, {default: 'Read from LibreFolio just before the calculation.'})}</p>
                         {/if}
                     </div>
+                    {#if pairIssues.length > 0}
+                        <!-- X-R45b: what the read said about this pair, such as a saved rate skipped for an older one -->
+                        <div class="mt-2"><IssueList items={pairIssues} testid="pac-planner-fx-issues" /></div>
+                    {/if}
                 </section>
             {/each}
         </div>

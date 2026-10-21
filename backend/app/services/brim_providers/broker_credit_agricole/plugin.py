@@ -864,7 +864,7 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
-        return "1.4.3"
+        return "1.5.0"
 
     @property
     def test_file_pattern(self) -> Optional[str]:
@@ -1087,7 +1087,7 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
                         severity="warning",
                         code="ca_securities_unknown_causale",
                         message=f"Riga {offset}: causale '{causale}' non riconosciuta, saltata",
-                        context={"causale": causale, "row": offset},
+                        context={"causale": causale, "row": offset, "report_issue": True},
                         evidence=[
                             BRIMEvidence(
                                 title="Riga del file",
@@ -1382,7 +1382,7 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
                         severity="warning",
                         code="ca_account_invalid_amount",
                         message=f"Riga {offset}: importo non valido per '{causale}', saltata",
-                        context={"causale": causale, "row": offset},
+                        context={"causale": causale, "row": offset, "report_issue": True},
                         evidence=[source_row_evidence(row, offset, comment="L'importo di questa riga non è leggibile come numero, quindi la riga è stata scartata.")],
                     )
                 )
@@ -1630,7 +1630,7 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
                     severity="info",
                     code="ca_unknown_causale",
                     message=(f"{total_rows} righe con {len(unknown_causali)} causali non ancora previste sono state registrate come versamento o prelievo, in base al segno dell'importo. " "Se una di queste è in realtà un'operazione su titoli, correggila prima di importare."),
-                    context={"causali": sorted(unknown_causali), "row_count": total_rows},
+                    context={"causali": sorted(unknown_causali), "row_count": total_rows, "report_issue": True},
                     evidence=[
                         BRIMEvidence(
                             title="Righe con causale non prevista",

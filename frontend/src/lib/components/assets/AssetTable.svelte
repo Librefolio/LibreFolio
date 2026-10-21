@@ -160,11 +160,11 @@
                 header: () => $t('assets.table.txCount'),
                 headerTooltip: () => $t('assets.table.txCountTooltip'),
                 cell: (row) => {
-                    const scopeCls =
-                        row.txScope === 'own' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : row.txScope === 'others' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-gray-400';
+                    /* colour: closest role, to review: own = success tint, others = info tint, none = neutral chip (secondary text for contrast on the neutral fill) */
+                    const scopeCls = row.txScope === 'own' ? 'bg-lf-success-soft text-lf-success-on-soft' : row.txScope === 'others' ? 'bg-lf-info-soft text-lf-info-on-soft' : 'bg-lf-neutral text-lf-secondary';
                     return {
                         type: 'html',
-                        html: `<span class="inline-flex items-center justify-center min-w-8 px-1.5 py-0.5 rounded-md text-[11px] font-mono font-medium ${scopeCls}">${row.txCount ?? 0}</span>`,
+                        html: `<span data-scope="${row.txScope ?? 'none'}" class="inline-flex items-center justify-center min-w-8 px-1.5 py-0.5 rounded-md text-[11px] font-mono font-medium ${scopeCls}">${row.txCount ?? 0}</span>`,
                     };
                 },
                 type: 'number',

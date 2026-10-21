@@ -8,6 +8,11 @@
  * each item's days, under the caps with a margin (D1), sends them one after the other (D2: production runs one backend
  * process), and splits again a batch the backend still refuses for its days. The caller applies the answers once every
  * batch has settled (D3). With every input under the caps there is a single batch: the single request of before.
+ *
+ * Groups (Z-29b). A card's item and the items sampled like it (`sample_like` its `key`) must reach the backend in one
+ * request, or it refuses the follower (422 `sample_reference`). `groupOf` names the group of an item; the members of a
+ * group are consecutive, and a plan, or a split after a refusal, cuts between groups and never inside one. A group is
+ * counted as one: its estimate is the sum of its items'.
  */
 import {addDays, daysBetween} from '$lib/utils/dateOnly';
 
@@ -39,35 +44,62 @@ export interface BulkBatch<T> {
 }
 
 /** The caps a plan stays under; the defaults are `BULK_MAX_ITEMS` and `BULK_ITEM_DAYS_BUDGET`. */
-export interface BulkLimits {
+export interface BulkLimits<T = never> {
     readonly maxItems?: number;
     readonly maxItemDays?: number;
+    /** The group of an item: consecutive items with the same group (compared with `===`) are never separated. */
+    readonly groupOf?: (item: T) => unknown;
+}
+
+/** Consecutive items that go together, with the index of the first one in the list. */
+interface BulkUnit<T> {
+    readonly items: T[];
+    readonly start: number;
+}
+
+/** `items` as units: the runs of items of one group, or one unit per item without `groupOf`. */
+function bulkUnits<T>(items: readonly T[], groupOf: ((item: T) => unknown) | undefined): BulkUnit<T>[] {
+    const units: BulkUnit<T>[] = [];
+    let lastGroup: unknown;
+    items.forEach((item, index) => {
+        const group = groupOf?.(item);
+        const last = units[units.length - 1];
+        if (groupOf !== undefined && last !== undefined && group === lastGroup) {
+            last.items.push(item);
+        } else {
+            units.push({items: [item], start: index});
+        }
+        lastGroup = group;
+    });
+    return units;
 }
 
 /**
- * The batches of `items`, consecutive and in order: an item joins the current batch unless that would pass the item
- * cap or the day budget, and one whose estimate alone passes the budget gets a batch of its own. One batch when
- * everything fits.
+ * The batches of `items`, consecutive and in order: a unit (an item, or with `groupOf` a group) joins the current batch
+ * unless that would pass the item cap or the day budget, and one whose estimate alone passes the budget gets a batch of
+ * its own. One batch when everything fits.
  */
-export function planBulkBatches<T>(items: readonly T[], estimateDays: (item: T) => number, limits: BulkLimits = {}): BulkBatch<T>[] {
+export function planBulkBatches<T>(items: readonly T[], estimateDays: (item: T) => number, limits: BulkLimits<T> = {}): BulkBatch<T>[] {
     const maxItems = limits.maxItems ?? BULK_MAX_ITEMS;
     const maxItemDays = limits.maxItemDays ?? BULK_ITEM_DAYS_BUDGET;
     const batches: BulkBatch<T>[] = [];
     let current: T[] = [];
     let offset = 0;
     let days = 0;
-    items.forEach((item, index) => {
-        const estimate = estimateDays(item);
-        const itemDays = Number.isFinite(estimate) ? Math.max(0, estimate) : 0;
-        if (current.length > 0 && (current.length >= maxItems || days + itemDays > maxItemDays)) {
+    for (const unit of bulkUnits(items, limits.groupOf)) {
+        const unitDays = unit.items.reduce((sum, item) => {
+            const estimate = estimateDays(item);
+            return sum + (Number.isFinite(estimate) ? Math.max(0, estimate) : 0);
+        }, 0);
+        if (current.length > 0 && (current.length + unit.items.length > maxItems || days + unitDays > maxItemDays)) {
             batches.push({items: current, offset});
             current = [];
-            offset = index;
+            offset = unit.start;
             days = 0;
         }
-        current.push(item);
-        days += itemDays;
-    });
+        current.push(...unit.items);
+        days += unitDays;
+    }
     if (current.length > 0) batches.push({items: current, offset});
     return batches;
 }
@@ -103,21 +135,27 @@ export interface BulkOutcome<T, R> {
     readonly failedBatch?: BulkBatch<T>;
 }
 
-export interface BulkSendOptions extends BulkLimits {
+export interface BulkSendOptions<T = never> extends BulkLimits<T> {
     /** Levels of splitting after `bulk_too_many_days` refusals; `BULK_SPLIT_MAX_DEPTH` by default. */
     readonly maxDepth?: number;
 }
 
-function splitBatch<T>(batch: BulkBatch<T>, refusal: BulkDaysRefusal): BulkBatch<T>[] {
-    const size = batch.items.length;
+function splitBatch<T>(batch: BulkBatch<T>, refusal: BulkDaysRefusal, groupOf: ((item: T) => unknown) | undefined): BulkBatch<T>[] {
+    const units = bulkUnits(batch.items, groupOf);
+    const size = units.length;
     const parts = Math.min(size, Math.max(2, Math.ceil(refusal.itemDays / refusal.maxItemDays) + 1));
     const split: BulkBatch<T>[] = [];
     for (let part = 0; part < parts; part++) {
         const from = Math.floor((part * size) / parts);
         const to = Math.floor(((part + 1) * size) / parts);
-        split.push({items: batch.items.slice(from, to), offset: batch.offset + from});
+        split.push({items: units.slice(from, to).flatMap((unit) => unit.items), offset: batch.offset + units[from].start});
     }
     return split;
+}
+
+/** Whether a batch can be cut: it holds more than one unit. */
+function canSplit<T>(batch: BulkBatch<T>, groupOf: ((item: T) => unknown) | undefined): boolean {
+    return bulkUnits(batch.items, groupOf).length > 1;
 }
 
 /**
@@ -125,9 +163,10 @@ function splitBatch<T>(batch: BulkBatch<T>, refusal: BulkDaysRefusal): BulkBatch
  *
  * A batch refused with `bulk_too_many_days` is split into `max(2, ceil(item_days / max_item_days) + 1)` consecutive
  * parts, sent in order, at most `maxDepth` levels deep; a refused batch of one item, or one at the last level, fails.
- * Any other error fails at once. A failure stops the sending: the batches answered before it keep their answers.
+ * Any other error fails at once. A failure stops the sending: the batches answered before it keep their answers. With
+ * `groupOf` the parts are cut between groups, and a batch of one group, however many items, fails like a batch of one item.
  */
-export async function sendBulkBatches<T, R>(items: readonly T[], estimateDays: (item: T) => number, send: (items: T[]) => Promise<R>, options: BulkSendOptions = {}): Promise<BulkOutcome<T, R>> {
+export async function sendBulkBatches<T, R>(items: readonly T[], estimateDays: (item: T) => number, send: (items: T[]) => Promise<R>, options: BulkSendOptions<T> = {}): Promise<BulkOutcome<T, R>> {
     const maxDepth = options.maxDepth ?? BULK_SPLIT_MAX_DEPTH;
     const answers: BulkAnswer<T, R>[] = [];
     const pending = planBulkBatches(items, estimateDays, options).map((batch) => ({batch, depth: 0}));
@@ -137,8 +176,8 @@ export async function sendBulkBatches<T, R>(items: readonly T[], estimateDays: (
             answers.push({batch, answer: await send([...batch.items])});
         } catch (error) {
             const refusal = bulkTooManyDaysOf(error);
-            if (refusal && batch.items.length > 1 && depth < maxDepth) {
-                pending.unshift(...splitBatch(batch, refusal).map((part) => ({batch: part, depth: depth + 1})));
+            if (refusal && canSplit(batch, options.groupOf) && depth < maxDepth) {
+                pending.unshift(...splitBatch(batch, refusal, options.groupOf).map((part) => ({batch: part, depth: depth + 1})));
                 continue;
             }
             return {answers, failed: true, error, failedBatch: batch};

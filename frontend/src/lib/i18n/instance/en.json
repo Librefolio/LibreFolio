@@ -50,6 +50,14 @@
         "off": "Test mode is off.",
         "testLane": "Test mode is on, in a lane of the test runner.",
         "outsideTestLane": "Test mode is on outside the test runner: data providers made for the tests are offered, the data are kept in {data_dir} and the .env file is not read. Unset LIBREFOLIO_TEST_MODE."
+      },
+      "hostingPanel": {
+        "off": "No token or public key is set for the hosting panel's scheduled wake-up or status route: those routes are off.",
+        "ok": "The hosting panel's credentials that are set (tokens of the scheduled wake-up and status route, public keys of the signed tickets) can be used.",
+        "unusable": "{variables}: these hosting panel tokens cannot be used (a file that cannot be read, too short, or characters a request header cannot carry): their routes answer 503 until it is fixed.",
+        "ticketsUnusable": "{variables}: the hosting panel's signed-ticket settings cannot be used (a malformed public key, a clock tolerance out of 0–300 seconds, or keys without a public address): every route of the panel answers 503 until it is fixed.",
+        "coexisting": "{variables}: a hosting panel token is still set beside the panel's public keys. Remove it once the panel signs its calls with tickets.",
+        "audiencePath": "LIBREFOLIO_PUBLIC_URL holds the path {path}, but a hosting panel ticket names only the origin (scheme, host and port): another instance on the same origin would accept this one's tickets. Serve one instance per origin."
       }
     },
     "block": {

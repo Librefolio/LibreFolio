@@ -3,9 +3,12 @@
 Owner: workstream Z (sleep and wake, release 1.3; F07, decisions D-W1…D-W3 and 33). A hosting panel that wakes a
 suspended machine, or a self-hosted cron, calls it to bring the prices and the exchange rates up to date without a
 user: it runs ``run_due_jobs("wake")`` and answers how each job ended. ``LIBREFOLIO_WAKE_TOKEN`` (or its ``_FILE``,
-``config/sleep_wake.py``) turns the route on, with the rules of the hosting panel's backup token: unset, it answers 404,
-as a path that does not exist; the token travels only in ``Authorization: Bearer``, never in the URL, and is compared
-in constant time; a missing or wrong one answers 401; one the server cannot use answers 503 and is logged.
+``config/sleep_wake.py``) turns the route on: it is the ``wake`` scope of the hosting panel, behind its shared access
+(``services/platform/hosting_panel/access.py``, lot H-61), with the rules of the panel's backup token: unset, it answers
+404, as a path that does not exist; the token travels only in ``Authorization: Bearer``, never in the URL, and is
+compared in constant time; a missing or wrong one answers 401, too many refused ones from an address 429; one the server
+cannot use answers 503 and is logged. The route carries the OpenAPI tag of the hosting panel
+(``api/v1/system/__init__.py``).
 
 One wake-up at a time in the process: another one meanwhile answers 409 ``wake_in_progress``. The run is a task of its
 own: if the caller goes away, the jobs still end, and the next wake-up is accepted only then. The answer is streamed,
@@ -17,19 +20,16 @@ tells how the run ended: ``blocked`` on an instance its hosting provider blocked
 """
 
 import asyncio
-import hmac
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from backend.app.config import SecretFileError
-from backend.app.config.sleep_wake import WAKE_TOKEN_VARIABLE, SleepWakeConfigError, wake_token
 from backend.app.logging_config import get_logger
 from backend.app.schemas.sleep_wake import WakeSyncJob, WakeSyncResponse
+from backend.app.services.platform.hosting_panel.access import PanelCaller, PanelScope, panel_access
 from backend.app.services.platform.scheduler.scheduler import RunReport, run_due_jobs
 from backend.app.services.platform.sleep_wake import idle_monitor
 
@@ -42,13 +42,12 @@ wake_router = APIRouter()
 WAKE_KEEPALIVE_SECONDS = 15.0
 KEEPALIVE = b" "
 
-_bearer = HTTPBearer(auto_error=False, scheme_name="WakeToken", description="LIBREFOLIO_WAKE_TOKEN, sent as `Authorization: Bearer <token>`")
-
 _RESPONSES: dict[int | str, dict] = {
     200: {"model": WakeSyncResponse, "description": "Streamed: whitespace while the jobs run, then this JSON; `status` tells how the run ended"},
     401: {"description": "No token, or not the token of this instance (code `wake_unauthorized`)"},
     404: {"description": "The scheduled wake-up is off: no `LIBREFOLIO_WAKE_TOKEN`"},
     409: {"description": "A wake-up is already running (code `wake_in_progress`)"},
+    429: {"description": "Too many refused panel credentials from this address (code `panel_too_many_attempts`, with `Retry-After`)"},
     503: {"description": "The wake-up token of this instance cannot be used: its file is unreadable, or it is too short or not visible ASCII (code `wake_unavailable`)"},
 }
 
@@ -57,20 +56,6 @@ _running: asyncio.Task[WakeSyncResponse] | None = None
 
 def _refusal(status_code: int, code: str, message: str, headers: dict[str, str] | None = None) -> HTTPException:
     return HTTPException(status_code=status_code, detail={"code": code, "message": message}, headers=headers)
-
-
-def require_wake_token(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)]) -> None:
-    """Let the request through only with the wake-up token: 404 when the route is off, 401 without the token."""
-    try:
-        expected = wake_token()
-    except (SecretFileError, SleepWakeConfigError) as exc:
-        logger.error("The wake-up token cannot be used: the scheduled wake-up refuses every request", variable=WAKE_TOKEN_VARIABLE, error=str(exc))
-        raise _refusal(status.HTTP_503_SERVICE_UNAVAILABLE, "wake_unavailable", "The wake-up token of this instance cannot be used") from None
-    if expected is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
-    presented = credentials.credentials if credentials is not None else ""
-    if not hmac.compare_digest(presented.encode("utf-8"), expected.encode("utf-8")):
-        raise _refusal(status.HTTP_401_UNAUTHORIZED, "wake_unauthorized", "A valid wake-up token is required", headers={"WWW-Authenticate": "Bearer"})
 
 
 def _utc_now() -> datetime:
@@ -129,7 +114,7 @@ async def _stream(run: asyncio.Task[WakeSyncResponse]) -> AsyncIterator[bytes]:
 
 
 @wake_router.post("/wake-sync", response_model=None, responses=_RESPONSES)
-async def wake_sync(_token: Annotated[None, Depends(require_wake_token)]) -> StreamingResponse:
+async def wake_sync(_caller: Annotated[PanelCaller, Depends(panel_access(PanelScope.WAKE))]) -> StreamingResponse:
     """Run the scheduler's due jobs now, and stream how each one ended: whitespace while they run, then the JSON."""
     global _running
     if _in_progress():

@@ -74,6 +74,7 @@
     import {deduplicateIssues, signLabel, signHintKey} from '$lib/features/transactions/form/txFormFields';
     import {isBulkBalanceIssue} from '$lib/features/transactions/bulk/bulkDisplay';
     import {applySign, buildCreatePayload, buildUpdateDiff, diffDualItem, buildDualCreatePayloads, exactDecimalSign, upgradeAutoToDetail, type TxFields, type TxOriginal, type TxDualSide, type PairFormLayout as PayloadPairLayout} from '$lib/features/transactions/txPayloadHelpers';
+    import {exceedsSignificantDigits, REAL_SIGNIFICANT_DIGITS} from '$lib/utils/core/parseDecimalInput';
     import {lookupFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/currency/fxConversionHelper';
     import type {TXReadItem} from '../types';
@@ -716,7 +717,11 @@
         // No restriction for create/duplicate
         return undefined;
     });
-    let brokerImmutable = $derived(((mode === 'edit' || mode === 'view') && !unlockImmutable) || forcedBroker != null);
+    /** #58: a saved transaction keeps its asset and its broker(s): the update the backend accepts has neither `asset_id`
+     *  nor `broker_id`, so a change shown in the grid was never sent. A new row (`create`) still picks them; a stored
+     *  one in `edit` shows them, in the grid's deep-edit too (`unlockImmutable` frees the type only). */
+    let rowSaved = $derived(mode === 'edit' || mode === 'view');
+    let brokerImmutable = $derived(rowSaved || forcedBroker != null);
     let canShowAssetEvent = $derived(rule.eventLinkable && draft.asset_id != null && draft.date !== '');
 
     /** H4-fix: true when all required fields for the current type are filled.
@@ -822,20 +827,24 @@
     let cashSignResult = $derived(computeSignHint(parseFloat(draft.cash?.amount ?? '0'), effectiveCashRule));
     let cashToSignViolation = $derived(pairLayout === 'fx' && computeSignHint(parseFloat(dualTo.cash?.amount ?? '0'), 'positive').bad);
 
-    // Block submit for an invalid exact quantity (syntax, 12+6 budget, range or
-    // sign) and for the legacy cash-sign checks.
+    // Block submit for an invalid exact quantity (syntax, digit budget — 15 integer, 10 decimals, 15 significant —
+    // range or sign) and for the legacy cash-sign checks.
     let hasSignViolation = $derived((rule.quantityMode !== 'forbidden' && !quantityInputValid) || cashSignResult.bad || cashToSignViolation);
+
+    // B-48: a cash amount past the significant digits the backend keeps. The quantity's own budget is in its validity.
+    let cashOverSignificant = $derived(exceedsSignificantDigits(draft.cash?.amount, REAL_SIGNIFICANT_DIGITS));
+    let cashToOverSignificant = $derived(pairLayout === 'fx' && exceedsSignificantDigits(dualTo.cash?.amount, REAL_SIGNIFICANT_DIGITS));
 
     /** A date picker shows a date it refused: the draft still holds the previous one. */
     let hasDateError = $derived(!dateMainValid || !dateToValid);
     /**
      * V-37: the errors the form sees on its own — a quantity or cash sign it refuses, two sides that must differ, a
-     * typed date the picker refused. While any is on screen the server is not asked: the payload would carry the
+     * typed date the picker refused, a cash amount past the significant digits (B-48). While any is on screen the server is not asked: the payload would carry the
      * sign-corrected quantity or the previous date, and its verdict would be about a draft that is not the one shown.
      * So no automatic run, no manual one, no «valid» and no Apply. Declared before the scheduler, whose constructor
      * already reads `enabled`.
      */
-    let hasLocalErrors = $derived(hasSignViolation || !!dualValidationError || hasDateError);
+    let hasLocalErrors = $derived(hasSignViolation || !!dualValidationError || hasDateError || cashOverSignificant || cashToOverSignificant);
 
     // =========================================================================
     // Validate scheduler — debounced/manual/idle, always enabled (1 row).
@@ -1111,8 +1120,8 @@
         const selectors: string[] = [];
         if (hasDateError) selectors.push('[data-invalid="true"] input[type="text"]');
         if (rule.quantityMode !== 'forbidden' && !quantityInputValid) selectors.push('input[data-testid="tx-form-quantity"]');
-        if (cashSignResult.bad) selectors.push('input[data-testid="tx-form-cash-amount"]', 'input[data-testid="tx-form-cash-from-amount"]');
-        if (cashToSignViolation) selectors.push('input[data-testid="tx-form-cash-to-amount"]');
+        if (cashSignResult.bad || cashOverSignificant) selectors.push('input[data-testid="tx-form-cash-amount"]', 'input[data-testid="tx-form-cash-from-amount"]');
+        if (cashToSignViolation || cashToOverSignificant) selectors.push('input[data-testid="tx-form-cash-to-amount"]');
         if (dualValidationError) selectors.push(pairLayout === 'fx' ? '[data-testid="tx-form-cash-to"] [role="combobox"]' : '[data-testid="tx-form-dual-to"] [role="combobox"]');
         if (selectors.length === 0) return;
         formBodyEl.querySelector<HTMLElement>(selectors.join(', '))?.focus();
@@ -1448,6 +1457,7 @@
                     {allowedTypes}
                     {autocompleteNonce}
                     {brokerIdValue}
+                    {rowSaved}
                     {brokerImmutable}
                     {brokerToIdValue}
                     {brokers}
@@ -1497,6 +1507,7 @@
                     {allowedTypes}
                     {autocompleteNonce}
                     {brokerIdValue}
+                    {rowSaved}
                     {brokerImmutable}
                     {brokers}
                     {brokersForSelect}

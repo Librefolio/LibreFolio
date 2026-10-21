@@ -22,6 +22,7 @@
     import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/currency/fxConversionHelper';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {exceedsSignificantDigits, REAL_SIGNIFICANT_DIGITS} from '$lib/utils/core/parseDecimalInput';
     import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import type {TXReadItem} from '../types';
     import type {DualDraftTo, FormDraft, TxFormWacResult} from './txFormTypes';
@@ -42,6 +43,7 @@
         allowedTypes: TransactionTypeCode[] | undefined;
         autocompleteNonce: string;
         brokerIdValue: number | null;
+        rowSaved: boolean;
         brokerImmutable: boolean;
         brokerToIdValue: number | null;
         brokers: BrokerInfo[];
@@ -91,6 +93,7 @@
         allowedTypes,
         autocompleteNonce,
         brokerIdValue,
+        rowSaved,
         brokerImmutable,
         brokerToIdValue,
         brokers,
@@ -123,6 +126,11 @@
         setType,
         swapDualSides,
     }: Props = $props();
+
+    // B-48: the reason a quantity or a cash amount past the significant digits is refused, said under the field.
+    let quantitySignificantError = $derived(exceedsSignificantDigits(draft.quantity, REAL_SIGNIFICANT_DIGITS));
+    let cashSignificantError = $derived(exceedsSignificantDigits(draft.cash?.amount, REAL_SIGNIFICANT_DIGITS));
+    let cashToSignificantError = $derived(exceedsSignificantDigits(dualTo.cash?.amount, REAL_SIGNIFICANT_DIGITS));
 </script>
 
 <fieldset class="border border-lf-subtle rounded-lg p-4" data-testid="tx-form-required" use:guideAnchor={'transaction.create.amounts'}>
@@ -177,7 +185,7 @@
     {#if pairLayout === 'transfer_asset'}
         <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-asset-wrap">
             <span class="text-xs text-lf-muted">{$t('common.asset')} *</span>
-            <AssetSelect bind:value={draft.asset_id} disabled={isReadonly} onchange={setAsset} testid="tx-form-asset" createLabel={isReadonly ? undefined : $t('assets.create') || 'New asset'} onCreateNew={isReadonly ? undefined : () => (createAssetOpen = true)} />
+            <AssetSelect bind:value={draft.asset_id} disabled={isReadonly || rowSaved} onchange={setAsset} testid="tx-form-asset" createLabel={isReadonly || rowSaved ? undefined : $t('assets.create') || 'New asset'} onCreateNew={isReadonly || rowSaved ? undefined : () => (createAssetOpen = true)} />
         </div>
         <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-quantity-wrap">
             <span class="text-xs text-lf-muted">
@@ -190,6 +198,7 @@
                 step="1"
                 maxIntegerDigits={15}
                 maxFractionDigits={10}
+                maxSignificantDigits={REAL_SIGNIFICANT_DIGITS}
                 allowNegative
                 signRule={quantityInputSignRule}
                 resetKey={`${open}:${openKey ?? 0}`}
@@ -197,10 +206,14 @@
                 name="qty-{autocompleteNonce}"
                 placeholder="0"
                 ariaLabel={$t('transactions.table.quantity')}
+                ariaErrormessage={quantitySignificantError ? `${quantityInputId}-significant-error` : undefined}
                 className="qty-input !rounded-lg !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-lf-focus/30"
                 disabled={isReadonly}
                 testid="tx-form-quantity"
             />
+            {#if quantitySignificantError}
+                <p id="{quantityInputId}-significant-error" class="mt-1 text-xs text-lf-danger" data-testid="tx-form-quantity-significant-error">{$t('transactions.errors.significantDigitsExceeded', {values: {max: REAL_SIGNIFICANT_DIGITS}})}</p>
+            {/if}
         </div>
     {/if}
 
@@ -210,7 +223,10 @@
             <span class="text-xs text-lf-muted">
                 {$t('transactions.table.cash')} *
             </span>
-            <CompactCashCell value={draft.cash} onChange={setCash} signHint="positive" disabled={isReadonly} testid="tx-form-cash" defaultCode="EUR" />
+            <CompactCashCell value={draft.cash} onChange={setCash} signHint="positive" disabled={isReadonly} testid="tx-form-cash" defaultCode="EUR" maxSignificantDigits={REAL_SIGNIFICANT_DIGITS} />
+            {#if cashSignificantError}
+                <p class="mt-1 text-xs text-lf-danger" data-testid="tx-form-cash-significant-error">{$t('transactions.errors.significantDigitsExceeded', {values: {max: REAL_SIGNIFICANT_DIGITS}})}</p>
+            {/if}
         </div>
     {/if}
 
@@ -231,12 +247,15 @@
                 {/if}
             </div>
             {#if pairLayout === 'fx'}
-                <CompactCashCell value={draft.cash} onChange={setCash} signHint="positive" disabled={isReadonly} testid="tx-form-cash-from" defaultCode="EUR" />
+                <CompactCashCell value={draft.cash} onChange={setCash} signHint="positive" disabled={isReadonly} testid="tx-form-cash-from" defaultCode="EUR" maxSignificantDigits={REAL_SIGNIFICANT_DIGITS} />
+                {#if cashSignificantError}
+                    <p class="mt-1 text-xs text-lf-danger" data-testid="tx-form-cash-from-significant-error">{$t('transactions.errors.significantDigitsExceeded', {values: {max: REAL_SIGNIFICANT_DIGITS}})}</p>
+                {/if}
             {:else}
                 <!-- transfer_asset / transfer_cash: broker from -->
                 <div class="flex flex-col gap-1">
                     <span class="text-xs text-lf-muted">{$t('transactions.table.broker')}</span>
-                    <BrokerSearchSelect brokers={brokersForFrom} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} disabled={isReadonly} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} />
+                    <BrokerSearchSelect brokers={brokersForFrom} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} disabled={isReadonly || rowSaved} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} />
                 </div>
             {/if}
         </div>
@@ -248,7 +267,7 @@
             onclick={swapDualSides}
             title={$t('transactions.form.swapSides') || 'Swap sides'}
             data-testid="tx-form-dual-swap"
-            disabled={isReadonly}
+            disabled={isReadonly || rowSaved}
         >
             <ArrowRight size={20} />
         </button>
@@ -258,7 +277,7 @@
             onclick={swapDualSides}
             title={$t('transactions.form.swapSides') || 'Swap sides'}
             data-testid="tx-form-dual-swap-mobile"
-            disabled={isReadonly}
+            disabled={isReadonly || rowSaved}
         >
             <ArrowDown size={20} />
         </button>
@@ -280,7 +299,10 @@
                 </div>
             {/if}
             {#if pairLayout === 'fx'}
-                <CompactCashCell value={dualTo.cash} onChange={setCashTo} signHint="positive" disabled={isReadonly} testid="tx-form-cash-to" defaultCode="USD" />
+                <CompactCashCell value={dualTo.cash} onChange={setCashTo} signHint="positive" disabled={isReadonly} testid="tx-form-cash-to" defaultCode="USD" maxSignificantDigits={REAL_SIGNIFICANT_DIGITS} />
+                {#if cashToSignificantError}
+                    <p class="mt-1 text-xs text-lf-danger" data-testid="tx-form-cash-to-significant-error">{$t('transactions.errors.significantDigitsExceeded', {values: {max: REAL_SIGNIFICANT_DIGITS}})}</p>
+                {/if}
             {:else}
                 <!-- transfer_asset / transfer_cash: broker to -->
                 <div class="flex flex-col gap-1">
@@ -337,7 +359,7 @@
                             {/if}
                         </div>
                     {:else}
-                        <BrokerSearchSelect brokers={brokersForTo} value={brokerToIdValue} onchange={(id) => setBrokerTo(id ?? 0)} disabled={isReadonly} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} />
+                        <BrokerSearchSelect brokers={brokersForTo} value={brokerToIdValue} onchange={(id) => setBrokerTo(id ?? 0)} disabled={isReadonly || rowSaved} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} />
                     {/if}
                 </div>
             {/if}

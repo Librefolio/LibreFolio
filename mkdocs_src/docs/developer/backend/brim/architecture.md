@@ -396,12 +396,47 @@ class MyBrokerProvider(BRIMProvider):
 Notices and todos can both carry `BRIMEvidence` — the source rows as a small table, with
 1-based line numbers that render a jump into the file preview. `BRIMFieldTodo.context` also
 carries a small set of keys the correction step reads directly (`split_hint`,
-`split_suggestions`, `compare_nominal`, …).
+`split_suggestions`, `compare_nominal`, …), and a notice's `context.report_issue` puts a link
+to open an issue on GitHub under its message.
 
 The full contract, with worked examples from `broker_credit_agricole/plugin.py`, is in
 [Talking to the import wizard](../../architecture/patterns/brim_plugin_guide.md#talking-to-the-import-wizard).
 
 Plugins are auto-discovered once per process, the first time the registry is used (see *Plugin discovery* under *Concurrency & off-loading* above). See the [BRIM Plugin Guide](../../architecture/patterns/brim_plugin_guide.md) for a complete walkthrough of creating a new plugin.
+
+### 🚮 Rows left out {: #brim-row-skips }
+
+A plugin leaves a row out only for a reason it can name: *known rows quietly, unknown rows loudly* (lot W-B86;
+the rule and the helper are in [BRIM Plugin Guide → Rows left out](../../architecture/patterns/brim_plugin_guide.md#row-skips)).
+A row the plugin knows it may drop gets no notice, at most one log line (Scalable, Revolut and Trading 212 write one). A row it does not recognise, does not
+import yet or cannot read goes to one of two shared `warning` notices, built by `RowSkips` in `_brim_io.py`: each
+carries the count, one evidence table (the file's header, a last column *Reason*, the rows and their 1-based lines)
+and `context.report_issue`, which shows the link *open an issue on GitHub* under it. The wizard words them once for all
+plugins (`importWizard.brimNotice.<code>`, `importWizard.brimEvidence.<code>`).
+
+| Code | The row is |
+|---|---|
+| `rows_not_recognized` | a type, status or description the plugin does not recognise, or recognises but does not import yet |
+| `rows_unreadable` | a row whose date, amount, currency or a required field cannot be read |
+
+What each plugin sends there (`plugin_version` is the one that introduced it; checked in the plugins' code):
+
+| Plugin | Version | `rows_not_recognized` | `rows_unreadable` | Left out quietly |
+|---|---|---|---|---|
+| DEGIRO | 2.1.0 | — (own codes: its six `degiro_*` notices carry `report_issue`) | — | information lines (no amount), internal rows (cash sweep, reservations) |
+| Crédit Agricole | 1.5.0 | — (own codes: `ca_securities_unknown_causale`, `ca_unknown_causale`, `ca_account_invalid_amount` carry `report_issue`) | — | — |
+| Scalable (both accounts) | 1.1.0 | a `status` not known | an empty `status` | `pending`, `cancelled`, `canceled`, `expired`, `rejected` |
+| Directa | 1.1.0 | a type not known | too few columns, an unreadable date, a missing type | — |
+| Revolut (Invest layout) | 1.2.0 | `Stock split` | — | `Transfer` |
+| Trading 212 | 1.1.0 | `stock split`, `stock distribution`, `currency conversion` | — | `transfer` |
+| eToro | 1.2.0 | `overnight fee`, `overnight refund`, `sdrt` | — | — |
+| Trade Republic | 1.1.0 | an unknown type; a row whose `Kosten` or `Belasting` is not zero (the row is imported, the fee and tax are not) | an unreadable date or amount, a missing ISIN | — |
+| Swissquote | 1.1.0 | forex credit and debit legs, an unknown transaction | an unreadable date, a missing or zero net amount, a missing currency, a missing ISIN and symbol, a quantity not positive on a trade | — |
+| Interactive Brokers | 1.1.0 | an unknown direction, a trade without an ISIN (a currency trade) | an unreadable date | — |
+
+Danske Bank has its own cure for the same rule (`excluded_status`, [Finnish notices](danske_bank.md#finnish-notices)).
+The other plugins have not been migrated yet and may still write one plain string per skipped row. The contract test
+`./dev.py test external brim-row-skips` classifies every registered plugin in one set or the other.
 
 ### 🗂️ Plugin layout and translations {: #plugin-layout }
 
@@ -473,7 +508,9 @@ layout behind them.
   fee or withdrawal negative, else `degiro_unexpected_sign`; negative interest is a `FEE`. Trades,
   dividends, taxes and fees get one fake asset per ISIN (the product name when there is none).
 - **Notices**: one `warning` per code, with its rows as evidence under the file's own header (an
-  unnamed column takes the previous name plus `#`). Tests: `./dev.py test external brim-degiro`.
+  unnamed column takes the previous name plus `#`). All six carry `context.report_issue` (version 2.1.0),
+  so the wizard shows the link *open an issue on GitHub* under each
+  ([Rows left out](#brim-row-skips)). Tests: `./dev.py test external brim-degiro`.
 
 ### 🇮🇹 Intesa Sanpaolo {: #plugin-intesa }
 
@@ -511,7 +548,8 @@ eToro itself downloads the statement as XLS.
   `dividend` → `DIVIDEND`, `interest payment` → `INTEREST`, `withdraw request` → `WITHDRAWAL`,
   `deposit` → `DEPOSIT`. `withdraw fee`, `withdrawal conversion fee` and `conversion fee` are a
   `FEE` when the amount is not zero and skipped silently when it is; `overnight fee`,
-  `overnight refund` and `sdrt` are always skipped silently; any other type → warning.
+  `overnight refund` and `sdrt` are not imported yet and go to the shared notice `rows_not_recognized`
+  (`NOT_IMPORTED_TYPES`, version 1.2.0: [Rows left out](#brim-row-skips)); any other type → warning.
 - **Asset and currency** come from `Details` (`SYMBOL/CCY`, such as `NKE/USD`): the symbol is the
   fake asset's `extracted_symbol` (no ISIN, no name), and the three letters after the slash are the
   currency of the row's `Amount`. Without that shape, the whole text is the symbol and the currency
@@ -532,25 +570,86 @@ eToro itself downloads the statement as XLS.
 - **Detection**: within the first 15 lines, `operazione`, `data valuta`, `isin`, `controvalore`
   and the `dossier` metadata marker. The header is the first row whose first cell is `Operazione`;
   the metadata above it (`Dossier:`, `Intestatario:`, `Titoli e operazioni`) is skipped.
-- **Columns by position**: 0 `Operazione` (trade date) · 1 `Data valuta` · 2 `Descrizione` ·
-  3 `Titolo` · 4 `Isin` · 5 `Segno` · 6 `Quantita` · 7 `Divisa` · 8 `Prezzo` · 9 `Cambio`
-  (ignored) · 10 `Controvalore`. A header longer than 11 cells is the layout with commissions:
+- **Columns by position**: 0 `Operazione` (trade date) · 1 `Data valuta` (value date) ·
+  2 `Descrizione` · 3 `Titolo` · 4 `Isin` · 5 `Segno` · 6 `Quantita` · 7 `Divisa` · 8 `Prezzo` ·
+  9 `Cambio` (ignored) · 10 `Controvalore`. A header longer than 11 cells is the layout with commissions:
   columns 11 to 14 are summed (absolute values) into one `FEE` in EUR (`FEE_CURRENCY`, tag `fee`)
-  when the sum is positive. A data row shorter than 11 cells is skipped with a warning.
+  when the sum is positive (the real export has a single one, `Commissioni amministrato`, in
+  column 11). A data row shorter than 11 cells is skipped with a warning.
+- **The commission is inside the `Controvalore`** (W-B92, plugin 1.4.0; the real export of
+  GitHub discussion #49). In a `Compravendita titoli` row the `Controvalore` of a purchase already
+  includes the commission and that of a sale has it already taken off. So, with a positive
+  commission sum and a readable `Controvalore`, a `BUY` is booked for `Controvalore − commission`
+  and a `SELL` for `Controvalore + commission` (`_net_of_commission`), each followed by the `FEE`
+  of the commission: `BUY + FEE = −Controvalore`, `SELL + FEE = +Controvalore`. Untouched: dividends
+  (net of tax), `Stacco Cedole`, `Aumento capitale`, `Rimborso` (open question Q-WB-1: does its
+  `Controvalore` hold a commission?), rows with no commission, a blank or unreadable
+  `Controvalore` (cash stays 0, W-B83), a purchase whose commission exceeds its `Controvalore`
+  (Q-WB-2: left as printed, never inverted) and the 11-column layout. Open question Q-WB-3: on a
+  row whose `Divisa` is not EUR the same arithmetic is applied, the cash tagged with the `Divisa`
+  and the `FEE` in EUR; whether the `Controvalore` is in the `Divisa` or in euro is not settled.
 - **Type**, by lower-cased substring of `Descrizione`: `compravendita` with `Segno` `A` or `V` →
   `BUY` or `SELL` (another `Segno` → warning), `dividendo` → `DIVIDEND`, `cedol` → `INTEREST`,
   `rimborso` → `SELL`, `aumento capitale` → cashless `ADJUSTMENT`; anything else → warning.
-- **Date**: `Data valuta`, else `Operazione` (`DD/MM/YYYY`). **Currency**: `Divisa`, EUR when
-  empty. **Numbers**: a value containing `,` is Italian (`.` thousands), otherwise a dot decimal.
+- **Date: the operation date** (B-52, the plugin guide's rule *The operation date, and only
+  settled rows* under
+  [Import philosophy](../../architecture/patterns/brim_plugin_guide.md#import-philosophy-currency-rules)):
+  every transaction of a row is dated with `Operazione`, or with `Data valuta` when `Operazione`
+  is empty or unreadable (`DD/MM/YYYY`). The commission `FEE` and the maturity `INTEREST` take
+  the same date as the row's main transaction. A row with neither date readable is skipped with a
+  warning. **Currency**: `Divisa`, EUR when empty. **Numbers**: a value containing `,` is Italian
+  (`.` thousands), otherwise a dot decimal.
+- **Only settled rows** (N74): `Data valuta` only decides whether the row has settled. A row
+  whose `Data valuta` — or its `Operazione`, when `Data valuta` is empty or unreadable — comes
+  after the server's today (`server_today()`) has not settled yet, typically a trade of the last
+  one or two working days, whose value date (T+2) is still ahead at export time. It is left out
+  **whole**, before its type is even read: no transaction, no commission `FEE`, no maturity
+  `INTEREST`, and no asset extracted from it.
+  One `info` notice, `fineco_not_yet_settled`, `context` `{"count": n}`, lists those rows as
+  evidence (the file's header, their line numbers, an empty title so the wizard shows its
+  own). It is no warning: the rows arrive with the next export, once settled. A file that
+  yields no transaction because of such rows gets no *No valid transactions found in file*
+  warning: the notice already says why.
+- **A required number missing** (W-B83): a column the row's transaction is built from gives
+  no number, blank or unreadable (`REQUIRED_NUMBER_COLUMNS`): `Quantita` for `BUY`, `SELL`
+  (`rimborso` included) and `ADJUSTMENT`; `Controvalore` for `BUY`, `SELL`, `DIVIDEND` and
+  `INTEREST`; never `Divisa` (EUR when empty) or `Prezzo`. Such a row is read exactly as
+  before: an empty `Controvalore` reads 0, and an empty `Quantita` leaves a quantity of 0,
+  which the schema refuses as before (a validation issue). One `info` notice,
+  `fineco_incomplete_rows`, `context` `{"count": n, "report_issue": true}`, lists the rows;
+  its evidence adds a last column, `Campo vuoto`, naming the empty field(s). The message says
+  the import may be wrong, and asks the user to check the rows and,
+  if the file is right, to open an issue on GitHub: `report_issue` puts the link under it
+  ([`context` keys](../../architecture/patterns/brim_plugin_guide.md#context-keys-the-frontend-understands)).
+  A row left out for its date is not counted here. Fineco is no longer beta (21/10/2026): the
+  [providers list](providers_list.md) shows it as stable, and the user page ends with its known
+  limitations (verified on a *regime amministrato* account only; *regime dichiarativo*, funds and
+  BTP not yet seen on real exports).
 - **Above par**: a `rimborso` `SELL` whose `Titolo` passes `_brim_io.looks_like_bond` (`BTP`,
   `BOT`, `CCT`, `CTZ`, `BUND`, `OAT`, `OBBLIG`, `CCTEU`, `BOND`), with `Prezzo` above 100, goes
   through `model_bond_maturity(ctv=Controvalore, price=Prezzo, held_qty=|Quantita|)`: a `SELL` of
   the par principal and an `INTEREST` for the surplus (tag `maturity_premium`).
 - **Assets** are keyed by `Isin`; a row without one gets an asset of its own (`UNKNOWN_ROW_<n>`).
   Every transaction, `FEE` included, carries the row's asset.
-- Warnings are plain English strings, although the module docstring says Italian; only the
+- **Language**: the plain warnings are English strings (coerced to `warning` notices with code
+  `legacy`), although the guide wants the export's language, as the module docstring admits.
+  The two notices above are in Italian, and the wizard shows them in the user's language from
+  their codes (`importWizard.brimNotice.<code>`, `importWizard.brimEvidence.<code>`). The
   descriptions of the generated legs (`Commissioni: …`,
-  `Rimborso a scadenza — premio/rivalutazione oltre la pari: …`) are Italian.
+  `Rimborso a scadenza — premio/rivalutazione oltre la pari: …`) are Italian too.
+- **`plugin_version`** 1.4.0: the commission is inside the `Controvalore` (W-B92). 1.3.0 brought the operation date (B-52). 1.2.0 brought the two notices above,
+  1.1.0 the split above par. A file parsed by an older version shows as stale
+  (`parse_is_stale`) until it is parsed again.
+- **Files imported before 1.3.0.** Their transactions are dated with `Data valuta`. The
+  duplicate check compares exact dates ([Deduplication Logic](#deduplication-logic)), so the
+  same rows imported again with 1.3.0 come back with their earlier `Operazione` date and are
+  not recognised as duplicates. No code bridges the two (the developer, 19/10/2026: the next
+  imports carry the new date, so after the switch everything settles). The transition, once:
+  delete the Fineco transactions those files created and import the files again, or import
+  only from the day after the last imported day. The user page says the same.
+- **Files imported before 1.4.0.** Their trades counted the commission twice (the full
+  `Controvalore` plus a `FEE`): a purchase too low in cash, a sale too high. Nothing corrects them
+  in place; delete the Fineco transactions those files created and import the files again.
 
 ---
 

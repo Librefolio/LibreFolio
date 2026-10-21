@@ -12,10 +12,11 @@ The service keeps the orchestration (`get_lots_analysis()`), the database loader
 
 | Module | What it holds |
 |--------|---------------|
-| `prices.py` | What the lots read from the asset's `AssetPriceSeries`: `opening_reference_price()`, a lot's reference price at its opening (see [Reference Price](#reference-price)), and `last_day_without_observation()`, the last day valued at cost (see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback)) |
+| `prices.py` | What the lots read from the asset's `AssetPriceSeries`: `opening_reference_price()`, a lot's reference price at its opening (see [Reference Price](#reference-price)), and `last_day_without_observation()`, the last day valued at cost, found by bisection (see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback)) |
 | `conversions.py` | `FxRateResolver`; `convert_closure()` → `ConvertedClosure`, a closure's two legs each in its own currency at its own date, and `need_closure_rates()`, the two rates it reads (see [Closures: each leg at its own date](#closure-conversion)); the conversions each view needs: `collect_fx_needs()`, `collect_performance_fx_needs()`, `needs_market_series()`, `unconvertible_ids()` |
 | `economic_events.py` | The engine's income and FEE/TAX inputs (`build_income_economic_events()`, `build_cost_economic_events()`, `build_engine_transactions()`), their outputs (`extract_income_outputs()`, `extract_cost_outputs()`), `WithheldEconomics` / `withheld_economics()` and `map_economic_groups()` |
-| `histories.py` | The value, return, price, market price and performance histories (`build_value_history()`, `build_return_history()`, `build_price_history()`, `build_market_price_history()`, `build_performance_history()`) with their per-day snapshot helpers, `lot_history_end_date()`, `trim_dates()`, `known_realized_pnl()`, `known_cumulative_proceeds()` |
+| `histories.py` | The value, return, price, market price and performance histories (`build_value_history()`, `build_return_history()`, `build_price_history()`, `build_market_price_history()`, `build_performance_history()`) with their per-day snapshot helpers, `lot_history_end_date()`, `known_realized_pnl()`, `known_cumulative_proceeds()` |
+| `change_days.py` | The days the daily series can change on: `lot_change_days()`, over the dates `analysis_event_dates()` gathers, and `expand_to_days()`, which fills every day of the window from them (see [Change Days](#change-days)) |
 | `summary.py` | A lot's figures, read by the lot summary and the histories: `residual_cost()`, the original cost of the quantity still open (also the AI Export's `lot_residual_cost_basis()`); `lot_value()`, a lot's total value and P&L by direction; `lot_summary_figures()` → `LotSummaryFigures`, the lot summary's computed figures from its converted inputs — `_build_lot_summaries()` gathers those inputs and maps the result |
 | `average_cost_lines.py` | `ALL_BROKERS`, and the broker and cumulative WAC history points (`build_broker_wac_history()`, `build_cumulative_wac_history()`, `average_cost_points()`) |
 
@@ -125,9 +126,10 @@ High-level flow:
 5. Collect needed FX pairs with `collect_fx_needs()` / `collect_performance_fx_needs()`, then batch-load rates through `FxRateResolver`.
 6. Extract the engine's **economic stage** outputs — income, FEE/TAX and net metrics — with `extract_income_outputs()` and `extract_cost_outputs()` (allocation itself happens inside the engine, not here).
 7. Convert the marks of the days the requested analyses read into the two valuation maps, `market_prices` and `estimated_market_prices`, both from the same series.
-8. When `BROKER_WAC_HISTORY` or `CUMULATIVE_WAC_HISTORY` is requested, compute the average-cost lines with one `compute_average_costs()` call (see [WAC Lines](#wac-lines)); their gaps — missing rates, unknown costs — are reported in step 10.
-9. Emit only requested DTO sections.
-10. Once every builder has run, report the gaps once, for the whole analysis: `_report_gaps()` adds to `data_quality` the WAC lines' gaps and every conversion `FxRateResolver` could not make (see [FX Conversion](#fx-conversion)).
+8. When `BROKER_WAC_HISTORY` or `CUMULATIVE_WAC_HISTORY` is requested, compute the average-cost lines with one `compute_average_costs()` call (see [WAC Lines](#wac-lines)); their gaps — missing rates, unknown costs — are reported in step 11.
+9. Compute the change days once, with `lot_change_days()`: the days of `history_dates` on which a daily series can change. The seven daily builders run on those days only, and `expand_to_days()` fills every day of the window, `[display_from, actual_to]`, from the last change day on or before it (see [Change Days](#change-days)).
+10. Emit only requested DTO sections.
+11. Once every builder has run, report the gaps once, for the whole analysis: `_report_gaps()` adds to `data_quality` the WAC lines' gaps and every conversion `FxRateResolver` could not make (see [FX Conversion](#fx-conversion)).
 
 Step 1's broker scope comes from `_get_scope_broker_ids()`: every broker the user can access, in any role, intersected with `broker_ids` when given. No owner share is applied anywhere in the analysis — quantities, values and P&L are each broker's full figures, unlike the portfolio summary, which scales an OWNER's brokers by their `share_percentage`. The lot modal says so next to its quantities (`brokers.lots.modal.absoluteQuantityTooltip`).
 
@@ -262,7 +264,7 @@ Service converts:
 
 - **Daily valuation**: a mark whose rate is missing leaves that day unvalued — `market_prices[date]` is `None`, the day has no point in either price series (`price_history`, `market_price_history`), and a still-open lot has no value or return point that day. Never at cost: only a `MISSING` day, with no observation on or before it (up to `at_cost_until`), values a lot at cost; see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback).
 - **Value and return histories** (`_lot_value_basis()` and `_lot_snapshot_on_date()`, shared by both builders): a lot whose original cost — or, for a SHORT, its proceeds — has no rate gets no point; a lot's series stops the day before the first closure whose proceeds — for a SHORT, its buy-back cost — have no rate (`_closure_prefix(lot, closures, fx_resolver, leg)`, in `financial_math/lots/histories.py`, returns the running sum of that converted leg by close date and that date). Same rule as the [WAC Lines](#wac-lines): a point that cannot be computed is omitted. Within an emitted point, the income, fee and tax fields that a degraded economic pool withholds — and the figures read from them — are `None` instead (see [Economic events and degraded pools](#degraded-economic-pools)).
-- **Performance history**: a BUY amount, an ADJUSTMENT's money — an ADJUSTMENT-in's, or the cost an ADJUSTMENT-out with a cost basis hands over (`_adjustment_native_cost()` / `adjustment_cash_flow_cost()`) — or a SELL closure's proceeds without a rate — the sale's currency at its date — set `invalid_external_flow_from`: ROI and TWRR are `None` from that date. `collect_performance_fx_needs()` registers each of those rates; for an ADJUSTMENT-out with a non-zero cost basis, `cost_basis_currency` (the asset's currency when empty) at the row's date.
+- **Performance history**: a BUY amount, an ADJUSTMENT's money — an ADJUSTMENT-in's, or the cost an ADJUSTMENT-out with a cost basis hands over (`_adjustment_native_cost()` / `adjustment_cash_flow_cost()`) — or a SELL closure's proceeds without a rate — the sale's currency at its date — set `invalid_external_flow_from`: ROI and TWRR are `None` from that date. So do a short sale's proceeds without a rate at its opening date, and the cost of a purchase closing a short without a rate at its date (MF-E2). `collect_performance_fx_needs()` registers each of those rates; for an ADJUSTMENT-out with a non-zero cost basis, `cost_basis_currency` (the asset's currency when empty) at the row's date; for a SHORT lot, its currency at its opening date.
 - **Lot summary**: `original_cost` and `opening_unit_price` are `None` when the rate at the opening date is missing; `cumulative_proceeds` (`known_cumulative_proceeds()`) when one closure's closing rate is missing — for a SHORT lot's proceeds, the opening-date rate — and `realized_pnl` (`known_realized_pnl()`) when one closure misses either of the two rates it reads (see [Closures: each leg at its own date](#closure-conversion)); `reference_unit_price` when the rate of its currency at the opening date is missing, and `reference_price_source` whenever `reference_unit_price` is `None` — a reference that could not be converted has no source, as in the return history. `total_value` (when the proceeds have no rate), `pnl`, `market_pnl`, `total_pnl`, `cash_yield`, `total_return`, `net_total_pnl`, `net_total_return` and `annualized_return` are `None` when one of their inputs is unknown — an amount above, or the income, fees or taxes a degraded economic pool withholds — and the estimated-at-cost branch values no lot without a converted cost.
 - **Gantt topology**: `GanttSegmentSchema.unit_price` is `None` when the rate at the fragment's `start_date` is missing.
 - **Economic events** (income, FEE, TAX): a missing rate on an event degrades its pool, and one on a trade can degrade a FEE / TAX pool that the trade weights; the figures a degraded pool feeds are withheld — see [Economic events and degraded pools](#degraded-economic-pools).
@@ -294,7 +296,7 @@ Every reader converts closures through `convert_closure()`:
 - **Lot summary**: `realized_pnl` (`known_realized_pnl()`) sums the closures' and is `None` as soon as one of them is; `cumulative_proceeds` (`known_cumulative_proceeds()`) sums a LONG lot's closure proceeds — a SHORT lot's are those of its opening sale, converted at the opening date;
 - **Value and return histories**: the running sums of `_closure_prefix(lot, closures, fx_resolver, leg)` (`financial_math/lots/histories.py`) — a LONG lot's closure `proceeds`, a SHORT lot's `cost`;
 - **Performance history**: the SELL closures' proceeds, its inflows;
-- **Event history**: the closure rows (`_build_closure_rows()`) — `unit_price` and `close_unit_price` at the closing rate, `open_unit_price` at the opening rate, `proceeds` and `realized_pnl` as above.
+- **Event history**: the closure rows (`_build_closure_rows()`) — `unit_price` and `close_unit_price` at the closing rate, `open_unit_price` at the opening rate, `proceeds` and `realized_pnl` as above. Their `broker_id` is the broker the units leave (§29): the closed fragment's, `FragmentInterval.broker_id` of the closure's `fragment_id` (`fragment_brokers`, from `_build_lot_event_rows()`), and the lot's `opening_broker_id` only for a fragment without a broker (in transit) or unknown — a lot opened at A, moved to B and sold at B reads B on its `SELL` row, not A.
 
 The lot summary keeps `market_pnl = pnl − realized_pnl`. Every closure's cost converts at the opening date, like `original_cost`, so a LONG lot's `market_pnl` is its open value minus the cost of its open units at the purchase rate: a fully closed LONG lot has a `market_pnl` of 0 and a `realized_pnl` equal to its `pnl`, and the exchange-rate move between purchase and sale is realized with the units, as on the Dashboard. The theory page [FIFO Lot Analysis](../../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md) works an example through.
 
@@ -508,8 +510,9 @@ at_cost_until = last_day_without_observation(price_series, history_dates)
 `computed_from` is the first transaction's date, and `EARLIEST_RANGE_START` (1 January 1900, same module) at the
 earliest (R13-SEC8): a transaction stored centuries back made every history walk every day since. The response's
 `computed_date_from` carries it. From it start `history_dates`, the window `_load_prices()` reads and the per-day rates
-of the market series (`collect_fx_needs()`). `display_from`, the start `trim_dates()` cuts the histories to, is the
-requested `date_from` (or `computed_from`), clamped to the same floor; `requested_date_from` stays as requested. A
+of the market series (`collect_fx_needs()`). `display_from`, the first day `expand_to_days()` fills the histories from
+(see [Change Days](#change-days)), is the requested `date_from` (or `computed_from`), clamped to the same floor;
+`requested_date_from` stays as requested. A
 transaction dated before the floor still enters the FIFO engine on its own date, so the lot it opens or closes counts,
 its history points from the floor on; `build_performance_history()` carries the flows dated before the first NAV day
 into that day, like any flow before the first mark. A transfer leg needs the value of its own day: dated before the
@@ -517,7 +520,7 @@ floor, that day has no observation on or before it, so the leg moves the cost of
 cost (J-33); only when the first history day already has an observation, a quote stored before the floor, has the leg
 neither a price nor a cost, and the ROI/TWRR series stops from its date on — here, the whole series.
 
-`last_day_without_observation()` (`financial_math/lots/prices.py`) returns the last of the ascending days whose `price_series.resolve()` is `MISSING`: the day before the first observation, `actual_to` when the asset has none, `None` when the first transaction's day already has one — a quote before it included. The days valued at cost are `[computed_from, at_cost_until]`, whether or not the asset is priced later:
+`last_day_without_observation()` (`financial_math/lots/prices.py`) returns the last of the ascending days whose `price_series.resolve()` is `MISSING`: the day before the first observation, `actual_to` when the asset has none, `None` when the first transaction's day already has one — a quote before it included. `resolve(day).is_missing` is true up to the first observation and false after it, so the days with an observation are a tail of the days: the function finds the first of them by bisection (`bisect.bisect_left()`), a few `resolve()` calls whatever the length of the history, where it used to resolve every day up to that observation. The days valued at cost are `[computed_from, at_cost_until]`, whether or not the asset is priced later:
 
 | Reader | What it does with `at_cost_until` |
 |--------|-----------------------------------|
@@ -603,7 +606,7 @@ Also note: `PERFORMANCE_HISTORY` and `MARKET_PRICE_HISTORY` ignore lot selection
 
 The report currency is the analysis `target_currency`, with `asset_leg=False`. Each acquisition is converted at its own date; quantities are the brokers' own, with no owner share applied.
 
-`average_cost_points(line, history_dates)` (`financial_math/lots/average_cost_lines.py`) emits `(date, wac, pool_qty)` for each history date from the line's first movement on, reading `line.state_at(date)`: `wac` is `unit_cost_report` (per single unit, in the target currency), `pool_qty` the pool's quantity. **A date on which the pool lacks part of its cost has no point** — a missing conversion or an acquisition without cost basis — so the chart shows a gap rather than a wrong average. `trim_dates()` then cuts the points to the displayed range.
+`average_cost_points(line, history_dates)` (`financial_math/lots/average_cost_lines.py`) emits `(date, wac, pool_qty)` for each date it is given — the change days (see [Change Days](#change-days)) — from the line's first movement on, reading `line.state_at(date)`: `wac` is `unit_cost_report` (per single unit, in the target currency), `pool_qty` the pool's quantity. **A date on which the pool lacks part of its cost has no point** — a missing conversion or an acquisition without cost basis — so the chart shows a gap rather than a wrong average. `expand_to_days()` then fills the displayed range: each day takes the point of the last change day on or before it, and has none when that change day has none. A line moves only on the date of one of its steps (`state_at()` reads the last step on or before the day), and every such date in `history_dates` is a change day.
 
 `_report_gaps(data_quality, lines, conversion_gaps, target_currency, asset)` puts in the response what the lines could not compute, merged with every other conversion the analysis could not make (`conversion_gaps = fx_resolver.missing_pairs()`, see [FX Conversion](#fx-conversion)). It runs once, after every builder, through the same `build_data_quality_report()` (`financial_math/portfolio/data_quality.py`) as the Dashboard banner:
 
@@ -630,9 +633,75 @@ and in `financial_math/lots/`:
 - `build_price_history()` — truncates at closure date, no post-close points
 - `build_market_price_history()` — the asset's market price: one point per history day with an entry in `estimated_market_prices` — the resolver's mark of that day, converted at that day's rate, `estimated` when it comes from a trade (see [Unified Price Resolver](#unified-price-resolver)) — whatever lots are open. No truncation at closure: after every lot is closed the series runs on to `actual_to`, and `selected_lot_ids` does not change it. A day with no observation on or before it, or without a rate, has no point; the missing rate is reported (see [FX Conversion](#fx-conversion)). Kept with `FAILED` (see [A Failed Reconstruction](#failed-reconstruction))
 - `build_broker_wac_history()` / `build_cumulative_wac_history()` — WAC points read from the average-cost lines via `average_cost_points()` (see [WAC Lines](#wac-lines))
-- `build_performance_history()` — asset-wide ROI/TWRR from NAV + external cash flows. The NAV is read only on a day with a mark: no at-cost fallback reaches it (see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback)). Money in: a BUY's amount and an ADJUSTMENT-in's money. Money out: a LONG SELL closure's proceeds and, for an ADJUSTMENT-out carrying a cost basis, the cost it hands over — `|quantity| × cost_basis_override`, converted from `cost_basis_currency` (the asset's currency when empty) at the row's date; the flow is read from the row, never from the `ADJUSTMENT_OUT` closures' proceeds. Transfer legs crossing the broker scope count at market value: a pair the re-run over the accessible brokers holds whole, and a leg read at the scope's edge (see [Transfers Across the Scope's Edge](#scope-edge-transfers)). An ADJUSTMENT-out without a cost basis is a quantity correction, never a flow. The units of an ADJUSTMENT-out leave at cost, so on a day the asset is quoted above that cost the gain they carried leaves with them — the same principle as an ADJUSTMENT-in valued at cost.
+- `build_performance_history()` — asset-wide ROI/TWRR from NAV + external cash flows. The NAV is read on a day with a mark, and on a day with no observation on or before it at cost, up to `at_cost_until` (J-33; see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback)). Money in: a BUY's amount and an ADJUSTMENT-in's money. Money out: a LONG SELL closure's proceeds and, for an ADJUSTMENT-out carrying a cost basis, the cost it hands over — `|quantity| × cost_basis_override`, converted from `cost_basis_currency` (the asset's currency when empty) at the row's date; the flow is read from the row, never from the `ADJUSTMENT_OUT` closures' proceeds. Transfer legs crossing the broker scope count at market value: a pair the re-run over the accessible brokers holds whole, and a leg read at the scope's edge (see [Transfers Across the Scope's Edge](#scope-edge-transfers)). An ADJUSTMENT-out without a cost basis is a quantity correction, never a flow. A flow dated on a day without a NAV stays on its day, and counts on the first day after it with one (`returns.flows_by_snapshot_date()`, MF-E2b): the units it bought or sold are in that day's value, so the money joins them there. The units of an ADJUSTMENT-out leave at cost, so on a day the asset is quoted above that cost the gain they carried leaves with them — the same principle as an ADJUSTMENT-in valued at cost.
+  **Short positions** (MF-E2): an open short is a debt, `−quantity × price`, and on a day at cost `−` its share of the opening sale's proceeds at the opening date's rate (`_signed_nav_on_date()`, `_proceeds_at_opening()`). The sale that opens it is money out, its proceeds at the opening date's rate (`collect_performance_fx_needs()` asks that rate); the purchase that closes it — a BUY, or an ADJUSTMENT-in at its cost basis — is money in, as any BUY. With a short in the scope the returns are read on the gross exposure: the TWRR divides each day's gain by `|long values| + |short values|` of the day before (`calculate_twrr_series(..., exposure_by_date=)`), the ROI the gain (NAV plus the net flows) by the capital committed, the long side's net deposit plus the proceeds of every short sale so far (`calculate_simple_roi_series(..., capital_by_date=)`, `_committed_capital_by_date()`). Selling 10 short at 100 and buying them back at 80 gains 200: ROI +20 % on the 1 000 committed, TWRR +22.2 % (+10 % on 1 000, then +11.1 % on the 900 still owed), higher because the exposure shrinks as the price falls — the return of a short rebalanced daily. Without a short in the scope the series are those of the long-only rule, unchanged.
 
-Important nuance: `date_from` trims emitted rows only. Engine still starts from earliest in-scope asset transaction so FIFO state stays correct.
+Important nuance: `date_from` only selects the emitted rows, through the expansion — `expand_to_days()` fills `[display_from, actual_to]` (see [Change Days](#change-days)). The engine still starts from the earliest in-scope asset transaction so FIFO state stays correct, and the change days still start from `computed_from`.
+
+### 📆 Change Days {: #change-days }
+
+The seven daily builders — `build_value_history()`, `build_return_history()`, `build_price_history()`, `build_market_price_history()`, `build_broker_wac_history()`, `build_cumulative_wac_history()` and `build_performance_history()` — run only on the **change days**: the days of `history_dates` on which one of their series can change (lot L1a, `financial_math/lots/change_days.py`). `get_lots_analysis()` computes them once, after the two valuation maps and the average-cost lines, and hands them to every builder as its `history_dates`:
+
+```python
+change_days = lot_change_days(
+    days=history_dates,
+    market_prices=market_prices,
+    estimated_market_prices=estimated_market_prices,
+    at_cost_until=at_cost_until,
+    event_dates=analysis_event_dates(
+        transactions=[*transactions, *late_legs, *performance_context.transactions, *income_transactions, *cost_transactions],
+        engine_results=(engine_result, performance_context.engine_result),
+        prefixes=(income_prefix_by_lot, fees_prefix_by_lot, taxes_prefix_by_lot),
+        withheld=withheld,
+        average_cost_lines=average_cost_lines.values(),
+    ),
+)
+```
+
+**Why.** Before L1a every builder valued every selected lot on every day of `history_dates` — every day since the first transaction, floored at 1 January 1900 — and `trim_dates()`, since removed, then cut the rows to the window: the cost grew with the age of the book, not with the window. On the parity tests' 1900 book — a lot bought on 2 January 1900, read from 16 January to 15 February 2021 — that made 221 200 calls of the per-day snapshot helpers `_lot_snapshot_on_date()` and `_open_value_on_date()` (44 240 days, five calls a day) to answer 31 days; on its change days the same reading stays under the test's budget of 400 calls.
+
+**Which days.** `lot_change_days(*, days, market_prices, estimated_market_prices, at_cost_until, event_dates)` returns, ascending, the days of `days` that are:
+
+| Change day | What can change there |
+|------------|-----------------------|
+| The first and the last day | Every day then has a change day on or before it; the last is `history_dates[-1]`, the day `_lot_value_basis()` and `lot_history_end_date()` read |
+| A day whose `market_prices` or `estimated_market_prices` entry is not the previous day's in its exact representation (`Decimal.as_tuple()`) | The converted mark: a new observation, a mark that appears or disappears, a new `estimated` flag, or a new exchange rate — each mark is converted at its own day's rate, so a rate that moves the mark is caught here. `Decimal("1.10")` is not `Decimal("1.1")`: it would print otherwise |
+| `at_cost_until + 1` | The valuation at cost ends (see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback)), even when no mark changes that day — a first observation without a rate |
+| Every date of `event_dates` | An input other than the mark (below) |
+| The day after each of the above | A series that changes the day after its input (below) |
+
+Only days of `days` count: an event dated after `actual_to` (a late transfer leg) or before `computed_from` adds nothing.
+
+`analysis_event_dates(*, transactions, engine_results, prefixes, withheld, average_cost_lines)` gathers the dates on which an input other than the mark changes:
+
+- the dates of the rows: the scope's (as read at its edge), the late transfer legs, the performance re-run's, the income and the FEE / TAX rows;
+- from the engine result — and from the re-run's too, when `PERFORMANCE_HISTORY` re-runs the engine over every broker the user can see: the lot openings, the starts and ends of the fragments, the closures and the classified events;
+- the dates of the cumulative income, fee and tax prefixes (`income_prefix_by_lot`, `fees_prefix_by_lot`, `taxes_prefix_by_lot`);
+- the dates a pool becomes unknown from (`WithheldEconomics.income_from`, `fees_from`, `taxes_from`; see [Economic events and degraded pools](#degraded-economic-pools));
+- the steps of the average-cost lines.
+
+The rows and the engine give overlapping dates today; both are kept, so that a date one of them derives on its own is never missed.
+
+Some series change on the day after an input, with no input of their own changing that day: the TWRR's first value is on the day after the first NAV snapshot (`calculate_twrr_series()` has no point on the first snapshot), and a closed lot's price line stops on the day after its last closure (`build_price_history()` emits up to the closure date). Without that day, the expansion would carry the row before it: no TWRR, or a price past the closure. A day that is a change day only as the day after another brings no day after of its own.
+
+**Expansion.** `expand_to_days(rows, *, key, change_days, window_from, window_to)` turns a builder's rows on the change days into the rows of every day of `[display_from, actual_to]`. Key by key, in the order the builder emitted them, each day takes the row of the last change day on or before it, re-dated with `model_copy(update={"date": day})` (a change day keeps its own row). A day before the first change day, or whose change day has no row for that key, gets none — as when every day was computed.
+
+| `key` | Builders |
+|-------|----------|
+| `row.lot_id` | Value, return and price histories |
+| `row.broker_id` | Broker WAC history |
+| `None` (one line) | Market price history, cumulative WAC history, performance history |
+
+**Why the figures are the same, byte for byte.** Between two change days every input a builder reads for a day is the same `Decimal`, in the same representation, as on the last change day — the converted mark (its price and its rate together), the open fragments, the closures' running sums, the income, fee and tax prefixes, the withheld pools, the average-cost step, the at-cost flag — so a day computed there would repeat that change day's figures. The two series that accumulate from day to day do not move either: on such a day the TWRR multiplies by exactly `Decimal("1")` — `(x − x) / x` has exponent 0 — and the ROI adds a zero cash flow. The readers of `history_dates[-1]` (`_lot_value_basis()`, `lot_history_end_date()`) still see the last day, which is always a change day. The output contract is unchanged: one point per day of the window, the same JSON.
+
+Still read on every day of `history_dates`: the two valuation maps, for the histories that read the marks (`daily_series`, see [FX Conversion](#fx-conversion)) — a `resolve()` and a conversion a day — and the scan of `lot_change_days()` over them. No lot is valued there.
+
+**One rule with the engine.** The change days are the lots' application of the portfolio engine's rule, developer decision 28 «recompute whenever a term of the formula changes» (see [The Days the Engine Recomputes](../financial_math.md#recomputed-days)). Not the same function: the engine and the native cash share `native_cash.change_days()`, the one home of «the day a rate changes», which compares rates; the lots compare the converted marks themselves, in their exact representation, because their output must stay byte-identical.
+
+**Tests.**
+
+- `test_services/test_financial_math/test_lot_change_days.py` (`./dev.py test services financial-math`, pure): the contract of `lot_change_days()` and `expand_to_days()`, and `last_day_without_observation()` against a day-by-day walk, in at most 34 `resolve()` calls over 20 000 days.
+- `test_services/test_financial/test_lots_change_days_parity.py` (`./dev.py test services roi-fifo-utils`): the service against itself with every day a change day (`lot_change_days` replaced by «every day»): the same JSON, `generated_at` aside, on 13 books × their windows × their scopes, 178 cases; and the two reds on the 1900 book — at most 400 calls of the two snapshot helpers, and one call of `lot_change_days()`.
 
 ---
 

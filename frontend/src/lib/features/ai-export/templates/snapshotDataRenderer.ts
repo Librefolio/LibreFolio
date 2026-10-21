@@ -691,6 +691,10 @@ function technicalSeries(payload: JsonRecord, directory: EntityDirectory): {read
 function renderContinuousSeries(payload: JsonRecord, directory: EntityDirectory, diagnostics: MutableSnapshotFormatDiagnostics): string | undefined {
     const series = technicalSeries(payload, directory);
     if (!series) return undefined;
+    const gaps = priceSeriesGaps(payload);
+    if (!gaps) return undefined;
+    const seriesGaps = seriesGapRows(series);
+    if (!seriesGaps) return undefined;
     const summaryRows = series.map(({entity, portfolioWeightRatio, values}) => [entity, normalizedRatioPercent(portfolioWeightRatio, diagnostics), firstPresent(values, 'currency', 'quote_currency'), firstPresent(values, 'latest_close', 'latest_rate'), values.latest_date]);
     const bucketRows: unknown[][] = [];
     for (const {entity, values} of series) {
@@ -723,6 +727,7 @@ function renderContinuousSeries(payload: JsonRecord, directory: EntityDirectory,
     }
     const globalRows = [
         ['price_basis', payload.price_basis],
+        ['reason_code', gaps.targetCode],
         ['period_position_leg_count', payload.period_position_leg_count],
         ['period_contributor_asset_count', payload.period_contributor_asset_count],
         ['eligible_asset_count', payload.eligible_asset_count],
@@ -730,13 +735,113 @@ function renderContinuousSeries(payload: JsonRecord, directory: EntityDirectory,
         ['base_currency', payload.base_currency],
         ['quote_currency', payload.quote_currency],
     ].filter((row) => row[1] !== undefined);
+    // E-23: the last price stored before the period, only for no_price_in_period; the columns only when one such row is there
+    const withLastPrice = gaps.uncovered.some((asset) => asset.reason_code === 'no_price_in_period');
+    const gapRows = gaps.uncovered.map((asset) => [
+        assetRef(asset.asset_id, directory),
+        normalizedRatioPercent(asset.portfolio_weight_ratio, diagnostics),
+        asset.reason_code,
+        ...(withLastPrice ? (asset.reason_code === 'no_price_in_period' ? [asset.currency, asset.last_close, asset.last_close_date] : [undefined, undefined, undefined]) : []),
+    ]);
     return [
-        ...(globalRows.length ? ['SUMMARY', pipeTable(['field', 'value'], globalRows, diagnostics)] : []),
+        ...(globalRows.length ? ['SUMMARY', pipeTable(['field', 'value'], globalRows, diagnostics), ...priceSeriesGapMeaningLines(gaps.targetCode ? [gaps.targetCode] : [])] : []),
         'SERIES',
         pipeTable(['entity', 'portfolio_weight_percent', 'currency', 'latest_value', 'latest_date'], summaryRows, diagnostics),
+        ...(gapRows.length
+            ? [
+                  'ASSETS WITHOUT PRICE SERIES',
+                  pipeTable(['entity', 'portfolio_weight_percent', 'reason_code', ...(withLastPrice ? ['currency', 'last_price', 'last_price_date'] : [])], gapRows, diagnostics),
+                  ...priceSeriesGapMeaningLines(gaps.uncovered.map((asset) => asset.reason_code).filter(isPriceSeriesGapCode)),
+              ]
+            : []),
         'BUCKETS',
         pipeTable(['entity', 'start', 'end', 'days', 'obs', 'first', 'last', 'min', 'min_date', 'max', 'max_date', 'return_from', 'simple_return', 'volatility'], bucketRows, diagnostics),
+        ...(seriesGaps.rows.length ? [seriesGaps.table.title, pipeTable(['entity', 'from', 'to', 'days', seriesGaps.table.lastValue, seriesGaps.table.lastValueDate], seriesGaps.rows, diagnostics), `${seriesGaps.table.key}=${SERIES_GAP_MEANINGS[seriesGaps.table.key]}`] : []),
     ].join('\n');
+}
+
+/**
+ * Why an eligible asset has no price series in `*.technical_prices` or `asset.ohlc_returns` (E-AI503): the backend's
+ * reason codes, each with its local meaning, printed right after the assets it explains. The backend decides the code
+ * on the price points it found, never on the asset type; the meanings stay here, as the frontend never takes
+ * presentation text from the backend.
+ */
+export const PRICE_SERIES_GAP_MEANINGS = {
+    no_stored_price: 'no price is stored for this asset up to the end of the period, so it has no price series, return or price-based indicator in the technical data; its value in the positions comes from its last trade or its cost (valuation_source); missing data, not a zero',
+    mixed_price_currencies:
+        'the prices stored for this asset are not all in one currency, so they do not form a price series in the technical data: no return or price-based indicator for it here; its value in the positions still comes from its latest stored price or a later trade, converted (valuation_source); missing data, not a zero',
+    no_price_in_period:
+        'prices are stored for this asset, but none inside the period: last_price is the last one, on last_price_date; so it has no price series, return or price-based indicator in the technical data; its value in the positions still comes from its latest stored price or a later trade, converted (valuation_source); missing data, not a zero',
+} as const satisfies Readonly<Record<string, string>>;
+
+/**
+ * The meaning of a gap table (E-23), printed once right after it: `PRICE GAPS` for the prices of assets, `RATE GAPS`
+ * for an FX pair. A gap is a run of whole empty buckets with a market-open day, merged by the backend, which also
+ * gives the last value stored before it; the meanings stay here, as the frontend never takes presentation text from
+ * the backend.
+ */
+export const SERIES_GAP_MEANINGS = {
+    price_gap: 'a span of whole buckets with no stored price while markets were open, merged: last_price is the last price stored before it, on last_price_date (empty when none is stored before it); missing data, not a zero, and not proof that the price stayed the same',
+    rate_gap: 'a span of whole buckets with no stored rate while markets were open, merged: last_rate is the last rate stored before it, on last_rate_date (empty when none is stored before it); missing data, not a zero, and not proof that the rate stayed the same',
+} as const satisfies Readonly<Record<string, string>>;
+
+type PriceSeriesGapCode = keyof typeof PRICE_SERIES_GAP_MEANINGS;
+
+function isPriceSeriesGapCode(value: unknown): value is PriceSeriesGapCode {
+    return typeof value === 'string' && Object.hasOwn(PRICE_SERIES_GAP_MEANINGS, value);
+}
+
+/** One `<code>=<meaning>` line per distinct code, sorted by code. */
+function priceSeriesGapMeaningLines(codes: readonly PriceSeriesGapCode[]): string[] {
+    return [...new Set(codes)].sort().map((code) => `${code}=${PRICE_SERIES_GAP_MEANINGS[code]}`);
+}
+
+interface PriceSeriesGaps {
+    /** `asset.ohlc_returns` without a series: why; undefined when it has one, and in every other component. */
+    readonly targetCode: PriceSeriesGapCode | undefined;
+    /** `*.technical_prices`: the eligible assets without a series, in payload order. */
+    readonly uncovered: readonly JsonRecord[];
+}
+
+/** Which gap table a series' gaps go to, and its last-value columns (E-23). */
+const SERIES_GAP_TABLES = {
+    price_gaps: {key: 'price_gap', title: 'PRICE GAPS', lastValue: 'last_price', lastValueDate: 'last_price_date'},
+    rate_gaps: {key: 'rate_gap', title: 'RATE GAPS', lastValue: 'last_rate', lastValueDate: 'last_rate_date'},
+} as const;
+
+type SeriesGapTable = (typeof SERIES_GAP_TABLES)[keyof typeof SERIES_GAP_TABLES];
+
+function isSeriesGapRecord(gap: JsonRecord): boolean {
+    return typeof gap.start_date === 'string' && typeof gap.end_date === 'string' && typeof gap.calendar_days === 'number' && (gap.last_value === null || typeof gap.last_value === 'number') && (gap.last_value_date === null || typeof gap.last_value_date === 'string');
+}
+
+/**
+ * The gap rows of the series (E-23), in series order, or undefined for a gap list this renderer does not know: the
+ * section then goes through the generic renderer. A gap without a value stored before it gets empty cells
+ * (`undefined`, never `null`): none, rather than unavailable.
+ */
+function seriesGapRows(series: readonly {readonly entity: string; readonly values: JsonRecord}[]): {readonly table: SeriesGapTable; readonly rows: unknown[][]} | undefined {
+    let table: SeriesGapTable = SERIES_GAP_TABLES.price_gaps;
+    const rows: unknown[][] = [];
+    for (const {entity, values} of series) {
+        for (const field of ['price_gaps', 'rate_gaps'] as const) {
+            if (values[field] === undefined) continue;
+            const gaps = records(values[field]);
+            if (!gaps || !gaps.every(isSeriesGapRecord)) return undefined;
+            table = SERIES_GAP_TABLES[field];
+            for (const gap of gaps) rows.push([entity, gap.start_date, gap.end_date, gap.calendar_days, gap.last_value ?? undefined, gap.last_value_date ?? undefined]);
+        }
+    }
+    return {table, rows};
+}
+
+/** A continuous series' gaps, or undefined for a code or a list this renderer does not know: the section then goes through the generic renderer, with no meaning invented. */
+function priceSeriesGaps(payload: JsonRecord): PriceSeriesGaps | undefined {
+    const uncovered = payload.uncovered_assets === undefined ? [] : records(payload.uncovered_assets);
+    if (!uncovered || !uncovered.every((asset) => isPriceSeriesGapCode(asset.reason_code))) return undefined;
+    const code = payload.reason_code;
+    if (code === undefined || code === null) return {targetCode: undefined, uncovered};
+    return isPriceSeriesGapCode(code) ? {targetCode: code, uncovered} : undefined;
 }
 
 interface IndicatorEntity {
@@ -1521,12 +1626,19 @@ function technicalPayload(
 // reconciliation bump (C-53) only changes what `reconciled` means for a rounding-size residual. The drawdown
 // bump (MF-D2) only lets a total loss keep its section with `remaining_to_peak_ratio` null. The FIFO lots and
 // lot detail bumps (J-12) add the reconstruction status and the FAILED assets (identity and codes only), which
-// the generic renderer prints as a scalar and a table.
+// the generic renderer prints as a scalar and a table. The price series bumps (E-AI503) add the eligible assets
+// without a price series and a single asset's null currency, each with its reason code, which the continuous-series
+// renderer prints with the local meaning of the code. The gap bumps (E-23: `fx.rate_ohlc`, the price components
+// already at 2) add the merged runs of empty buckets, which the continuous-series renderer prints as a gap table.
 const COMPACT_COMPONENT_VERSIONS: ReadonlyMap<string, ReadonlySet<number>> = new Map([
     ['portfolio.provenance', new Set([1, 2, 3])],
     ['broker.provenance', new Set([1, 2, 3])],
     ['portfolio.positions', new Set([1, 2])],
     ['broker.positions', new Set([1, 2])],
+    ['portfolio.technical_prices', new Set([1, 2])],
+    ['broker.technical_prices', new Set([1, 2])],
+    ['asset.ohlc_returns', new Set([1, 2])],
+    ['fx.rate_ohlc', new Set([1, 2])],
     ['asset.provenance', new Set([1, 2])],
     ['asset.positions_by_broker', new Set([1, 2])],
     ['asset.lot_detail', new Set([1, 2, 3, 4])],

@@ -31,6 +31,10 @@ def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
            "src/lib/features/transactions/import/GapFixStep.test.ts",
            "src/lib/features/transactions/import/ReportSetCard.test.ts",
            "src/lib/features/transactions/import/ParseDetailModal.test.ts",
+           "src/lib/features/transactions/import/BrimNoticeList.test.ts",
+           "src/lib/features/transactions/import/importNotices.test.ts",
+           "src/lib/features/transactions/import/NoticeCounts.test.ts",
+           "src/lib/features/transactions/import/AnalyzeStep.test.ts",
            "src/lib/features/transactions/bulk/bulkTodos.test.ts",
            "src/lib/features/transactions/transactionTypeStore.test.ts",
            "src/routes/(app)/transactions/filterState.test.ts"]
@@ -157,6 +161,18 @@ def front_tx_bulk_operations(verbose: bool = False, ui: bool = False, headed: bo
     return _run_playwright("transactions/tx-bulk-operations.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_edit_save_gate(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the issue #58 E2E tests (a type or asset edit keeps Apply and Save-all enabled)."""
+    print_section("Frontend TX Edit Save Gate Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-edit-save-gate.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_split_promote(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run Transaction Split & Promote E2E tests (split, promote, merge modal, guards)."""
     print_section("Frontend TX Split & Promote Tests")
@@ -215,6 +231,19 @@ def front_tx_bulk_promote_exec(verbose: bool = False, ui: bool = False, headed: 
     if not _ensure_test_users():
         return False
     return _run_playwright("transactions/tx-bulk-promote-exec.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_bulk_promote_split(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run BulkModal merged-pair sign + «Split pair» before the save E2E tests (J-67: F3 split of a mixed merge, F1 the paying leg shown, F2 its cash sign, G create+create guard)."""
+    print_section("Frontend TX Bulk Promote Split Tests")
+    if not _ensure_frontend_build():
+        return False
+    # Every test registers its own account and writes only there: no seeded row is read.
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-bulk-promote-split.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_tx_bulk_promote_cost_basis(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -323,6 +352,19 @@ def front_tx_transfer_auto_cost(verbose: bool = False, ui: bool = False, headed:
     if not _ensure_test_users():
         return False
     return _run_playwright("transactions/tx-transfer-auto-cost.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_auto_cost_refusal(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run TX Auto Cost Refusal E2E tests (J-57: an Auto cost with nothing to average is refused, a cost by hand — 0 included — saves, the editor leads to the refused row)."""
+    print_section("Frontend TX Auto Cost Refusal Tests")
+    if not _ensure_frontend_build():
+        return False
+    # Every test registers its own account and uploads its own synthetic report: no seeded row is read.
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-auto-cost-refusal.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_tx_event_picker(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -653,11 +695,20 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "tx-picker-pagination", front_tx_picker_pagination, name="TX Picker Pagination Tests", desc="PickerModal pagination, reset on reopen, tooltip richness, validation banners", tests="transactions/tx-picker-pagination.spec.ts")
     add_test(cat, "tx-clone", front_tx_clone, name="TX Clone Tests", desc="Clone standalone, paired, qty=0, commit pair, viewer guard", tests="transactions/tx-clone.spec.ts")
     add_test(cat, "tx-bulk-operations", front_tx_bulk_operations, name="TX Bulk Operations Tests", desc="Mixed commit, reset, picker guard, pair validation, mark delete", tests="transactions/tx-bulk-operations.spec.ts")
+    add_test(cat, "tx-edit-save-gate", front_tx_edit_save_gate, name="TX Edit Save Gate Tests", desc="Issue #58: changing the type or the asset of a stored row keeps Apply and Save-all enabled, and the discard question agrees", tests="transactions/tx-edit-save-gate.spec.ts")
     add_test(cat, "tx-split-promote", front_tx_split_promote, name="TX Split & Promote Tests", desc="Split paired, promote standalone, merge modal, guards, non-regression", tests="transactions/tx-split-promote.spec.ts")
     add_test(cat, "tx-crud-full", front_tx_crud_full, name="TX CRUD Full Lifecycle Tests", desc="Full CRUD lifecycle: standalone, paired, split, promote, bulk, suggest, cash sign", tests="transactions/tx-crud-full.spec.ts")
     add_test(cat, "tx-commit-all-types", front_tx_commit_all_types, name="TX Commit All Types Tests", desc="End-to-end commit for every TX type: standalone + paired create, edit, delete", tests="transactions/tx-commit-all-types.spec.ts")
     add_test(cat, "tx-bulk-suggest-ux", front_tx_bulk_suggest_ux, name="TX Bulk Suggest UX Tests", desc="Split badge, type preview, undo split, suggest banner, ActionModal AFTER rows", tests="transactions/tx-bulk-suggest-ux.spec.ts")
     add_test(cat, "tx-bulk-promote-exec", front_tx_bulk_promote_exec, name="TX Bulk Promote Execution Tests", desc="Promote execution: edit+edit/create+create/mixed, merge modal confirm/cancel, banner link, restore-and-edit", tests="transactions/tx-bulk-promote-exec.spec.ts")
+    add_test(
+        cat,
+        "tx-bulk-promote-split",
+        front_tx_bulk_promote_split,
+        name="TX Bulk Promote Split Tests",
+        desc="J-67, each test on a disposable account with two brokers of its own: the editor holds a withdrawal's cash as its magnitude, and a merge with a saved row (mixed, edit+edit) changes the type without moving the sign — F3 (red) a saved DEPOSIT on B + a new WITHDRAWAL on A merged by the banner, then «Split pair» before the save: the grid gives each leg its type back, the commit sends one WITHDRAWAL create on A, no update, no promote, and the account holds it (soft; the grid, the request, the answer and the rows read back in every message, annotation «J-67 F3 verdict»: REFUSED / WRONG DATA SAVED / RIGHT); F1 (red) a saved WITHDRAWAL + a new DEPOSIT merged → the pair is shown as the withdrawal («From:»); F2 (red) its cash cell reads −X / +X; G (guard) two new rows merged (shown as the withdrawal, −X / +X), split (WITHDRAWAL / DEPOSIT again), saved as two creates and no promote",
+        tests="transactions/tx-bulk-promote-split.spec.ts",
+    )
     add_test(
         cat,
         "tx-bulk-promote-cost-basis",
@@ -680,6 +731,14 @@ def populate_registry(registry: dict) -> None:
         name="TX Transfer Auto Cost Tests",
         desc="CHANGELOG 1.2, each test on a disposable account with its own brokers and manual asset (A buys 10 @ 100 + 10 @ 200, average 150, quoted 180): a TRANSFER A → B entered in the editor's form with the cost basis left in Auto — the form and the editor cell propose 150, the commit sends the receiving side in Auto and the server answers it averaged A at 150, the saved receiving row costs 150, the Dashboard report and Positions table (average-cost column shown through the column menu) give B 150 per unit; T1 the whole position (B 20 @ 150, gain 600 not 3600, nothing left on A), T2 a partial one (B 8 @ 150, A keeps 12 @ 150)",
         tests="transactions/tx-transfer-auto-cost.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-auto-cost-refusal",
+        front_tx_auto_cost_refusal,
+        name="TX Auto Cost Refusal Tests",
+        desc="J-57 complete, each test on a disposable account with its own broker and asset: E1 (red: data-code) the editor's form refuses an Auto ADJUSTMENT +5 on a broker that never held the asset — autoCostEmptyPool on the wire and as tx-form-issue[data-code], Save all refused and nothing written — then Manual 0 saves it at cost 0 (API); on a synthetic CoinTracking export (a crypto Deposit is an ADJUSTMENT +q, no cost, no todo) uploaded over the API and walked through the wizard: E2 (red) after the hand-over the Receive is refused autoCostEmptyPool, the issue names its row and the grid is on it, highlighted, without a click, then Manual 0 saves the whole import at cost 0 (API); E2-⚡ (red) from page 1, Validate now and a refused Save page the grid to the OLDEST of two refused Receives, a background validation does not; E3 (control) the cascade — two Auto Receives both refused, Manual 0 on the earlier lets the later pass in Auto, both saved at 0; E4 (red) a blocking cost_basis_override todo injected into the parse — the row's form opens in Manual, empty, Apply empty keeps the todo and holds Save, 0 answers it",
+        tests="transactions/tx-auto-cost-refusal.spec.ts",
     )
     add_test(cat, "tx-event-picker", front_tx_event_picker, name="TX Event Picker Tests", desc="Event picker card-style dropdown, delta, slider range, type visibility", tests="transactions/tx-event-picker.spec.ts")
     add_test(
@@ -789,6 +848,6 @@ def populate_registry(registry: dict) -> None:
         desc="W-B39, each test on a disposable account with brokers of its own, the page's commit answered through page.route by a refusal the generated client's response schema accepts: S1 a linked TRANSFER pair split from its row menu and refused with wacFxUnavailable on the split → an error toast naming the pair (USD, no {placeholder}), the confirmation still open and usable, the pair still linked after Cancel; P1 a WITHDRAWAL and a DEPOSIT linked from the selection toolbar's plain confirm and refused with accessDenied on the receiving broker → an error toast naming that broker, the confirmation still open, both rows still standalone after Cancel",
         tests="transactions/tx-split-refusal.spec.ts",
     )
-    add_test(cat, "tx-unit", front_tx_unit, test_names=False, name="TX Unit Tests (Vitest)", desc="Pure unit tests: txPayloadHelpers + txCommitApi + promoteHelpers + splitRowCharges + fixRowLifecycle + duplicateRecheckPayload + importReportSets + gapFixModel + GapFixStep (jsdom)", tests="vitest")
+    add_test(cat, "tx-unit", front_tx_unit, test_names=False, name="TX Unit Tests (Vitest)", desc="Pure unit tests: txPayloadHelpers + txCommitApi + promoteHelpers + splitRowCharges + fixRowLifecycle + duplicateRecheckPayload + importReportSets + gapFixModel + GapFixStep (jsdom) + BrimNoticeList's report-issue link (jsdom) + the notice counts of step 3 (importNotices, NoticeCounts, AnalyzeStep; jsdom)", tests="vitest")
     add_test(cat, "all", front_transaction_all, test_names=False, name="All Transaction Tests", desc="Run all Transaction E2E tests")
     registry["front-transaction"] = cat

@@ -219,12 +219,12 @@ K-5…K-26 dalla verifica d'archivio di K su `586a4f0ea`; i percorsi senza prefi
   rilevamento scritta nel piano.
   - ✅ **Chiusa il 15/10 senza codice** (decisione 24 del developer: «si sono daccordo, niente codice, parliamo
     comunque di un caso limite»). La query di rilevamento resta nel piano di W (04, §12).
-- **K-2 · Nel percorso lento, form o wizard aperti da soli si riaprono** — basso. Se l'utente chiude il form o il
+- ✅ **K-2 · Nel percorso lento, form o wizard aperti da soli si riaprono** (fatta il 21/10 nel lotto K3a, W: l'apertura automatica avviene una volta sola; test `bulk/TransactionBulkModal.test.ts`) — basso. Se l'utente chiude il form o il
   wizard prima che il caricamento finisca, il Bulk lo riapre a caricamento finito; i test B6 aspettano la fine.
-- **K-3 · Il crash di *Reset all* su una coppia con un capo inaccessibile** — basso, oggi non raggiungibile dalla UI.
+- ✅ **K-3 · Il crash di *Reset all* su una coppia con un capo inaccessibile** (fatta il 21/10 nel lotto K3a, W: `resetAll` salta il segnaposto; più K-3b, la metà ricevente non sparisce dopo il reset) — basso, oggi non raggiungibile dalla UI.
   `resetAll` arriva a `txStoreGet(...)!` → `fieldsFromTx(undefined)` sul segnaposto `inaccessible`; la guardia c'è
   solo in `resetRow`.
-- **K-4 · Bulk: l'`$effect` d'apertura legge `$currentLanguage` fuori da `untrack`** — basso.
+- ✅ **K-4 · Bulk: l'`$effect` d'apertura legge `$currentLanguage` fuori da `untrack`** (fatta il 21/10 nel lotto K3a, W: un cambio di lingua non perde più le modifiche) — basso.
   `TransactionBulkModal.svelte:513-514`: un cambio di lingua col Bulk aperto ricostruirebbe le righe.
 
 - **K-5 · Registrazione aperta senza utenti anche se l'admin l'ha chiusa** — minimo, decisione (un endpoint, oppure va

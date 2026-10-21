@@ -209,6 +209,14 @@ def _need_cost_rates(fx_resolver: FxRateResolver, lots_by_id: dict[int, FifoLot]
             fx_resolver.need(lot.currency, lot.opening_date)
 
 
+def _need_short_proceeds_rates(fx_resolver: FxRateResolver, lots_by_id: dict[int, FifoLot]) -> None:
+    """Each SHORT lot's currency at its opening date: its sale's proceeds are a flow at that day's rate (MF-E2); the
+    purchase that closes it converts at its own date, a rate the purchase already asks."""
+    for lot in lots_by_id.values():
+        if lot.direction == "SHORT":
+            fx_resolver.need(lot.currency, lot.opening_date)
+
+
 def collect_performance_fx_needs(
     *,
     fx_resolver: FxRateResolver,
@@ -222,6 +230,7 @@ def collect_performance_fx_needs(
     if LotAnalysisType.PERFORMANCE_HISTORY not in analyses:
         return
     _need_cost_rates(fx_resolver, lots_by_id, at_cost_until)
+    _need_short_proceeds_rates(fx_resolver, lots_by_id)
     for tx in transactions:
         tx_type = str(getattr(tx.type, "value", tx.type))
         if tx_type == "BUY":

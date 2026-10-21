@@ -28,9 +28,12 @@
  *   - positioning. jsdom returns zeros for every `getBoundingClientRect`, so a
  *     layout assertion would only measure the absence of a layout engine.
  *   - the online-search flow (`AssetSearchAutocomplete`) — covered by its own
- *     component test. One exception, at the end of the file: AssetModal hands
+ *     component test. Two exceptions, at the end of the file: AssetModal hands
  *     both of its searches the form (`reportContext`), and the report link of a
- *     search that found nothing must name what the form says (P20).
+ *     search that found nothing must name what the form says (P20); and the quote
+ *     base (Z-32 d) is decided by a pick from that search and by the provider's
+ *     answer, so the last block picks results from a streamed search and answers
+ *     the provider's probe.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
@@ -77,7 +80,7 @@ import {zodiosApi} from '$lib/api';
 import {_} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
 import {toasts} from '$lib/stores/app/toastStore.svelte';
-import {isParametricProvider} from '$lib/utils/providerHelpers';
+import {getAssetProviderName, isParametricProvider} from '$lib/utils/providerHelpers';
 import {DEFAULT_INSTANCE_CONFIG, instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 import {GITHUB_NEW_ISSUE_URL} from './assetSearchReport';
 
@@ -1170,5 +1173,496 @@ describe('AssetModal — the report of a search carries the form (P20)', () => {
 
         const lines = await reportOfEmptySearch(QUERY);
         expect(formLines(lines), 'the type the user chose; the currency is still the blank form’s').toEqual(['In the form: type ETF']);
+    });
+});
+
+// =========================================================================
+// Z-32 (d): the quote base — the plugin's suggestion for the line, else the type's default (a BOND 100, any other 1).
+//
+// A search selection writes it as it writes the name, the type and the currency: over any value, typed ones included,
+// in create and in edit (Q-Q6). A suggestion shows its hint (`asset-modal-qbq-suggestion-hint`) while the line is still
+// the one it was made for; a keystroke in the field hides it. «Ask the provider» — the automatic read after a selection
+// too — never fills the field in silence: a different proposal is a checked row of the comparison, applied only on the
+// user's word, and an equal one is nothing. R1: the line's latest explicit suggestion answers for a read whose own
+// suggestion failed. A stored asset changes only on Save; a manual type change does nothing to the field.
+//
+// The search is the real AssetSearchAutocomplete over a streamed answer, as in the P20 block. The probe is answered by
+// operation: the connection test passes, the metadata of a line is the case's. The hint's and the note's sentences are
+// read from the loaded catalogue (`get(_)`), each key proven present first — never written here. A read that finds
+// nothing to ask ends on `toasts.success(assets.comparison.allMatch)`: that toast is the barrier a case waits on before
+// it asserts that nothing was proposed. RED until the modal follows the ladder (and AssetSearchAutocomplete hands it the
+// suggestion): today a selection keeps the field, only a BOND gets 100 (the seed, and only over an untouched 1), and no
+// read ever proposes a quote base. The guards, green today, say so in their names.
+describe('AssetModal — the quote base: the plugin’s suggestion, else the type’s default (Z-32 d)', () => {
+    type ProviderList = Awaited<ReturnType<typeof zodiosApi.list_providers_api_v1_assets_provider_get>>;
+    /** The plugin's suggestion, as the API sends it (`FAQuoteBaseSuggestion`). */
+    interface Suggestion {
+        quantity: number;
+        quote_currency?: string | null;
+    }
+    /** A search result (`FAProviderSearchResultItem`). */
+    interface Line {
+        identifier: string;
+        identifier_type: string;
+        display_name: string;
+        provider_code: string;
+        currency: string;
+        asset_type: string;
+        via_web: boolean;
+        quote_base_suggestion?: Suggestion | null;
+    }
+
+    const LINE_PROVIDER = 'fixture_quote_source';
+    const LINE_PROVIDER_NAME = 'Owned quote source';
+    const QUERY = 'Owned quote base query';
+    const quoteSource: ProviderList = [
+        {
+            code: LINE_PROVIDER,
+            name: LINE_PROVIDER_NAME,
+            description: 'Synthetic searchable provider metadata; no network implementation',
+            kind: 'online_scraper',
+            supports_search: true,
+            params_schema: [],
+            // Two types: with only one, the provider panel would rewrite a picked line's identifier type, and the line with it.
+            accepted_identifier_types: ['TICKER', 'ISIN'],
+        },
+    ];
+
+    /** A line quoted in pence: its plugin suggests one price per 100 shares, in GBp (Yahoo's VOD.L). */
+    const PENCE: Line = {identifier: 'VOD.L', identifier_type: 'TICKER', display_name: 'Owned Vodafone Group', provider_code: LINE_PROVIDER, currency: 'GBP', asset_type: 'STOCK', via_web: false, quote_base_suggestion: {quantity: 100, quote_currency: 'GBp'}};
+    /** A STOCK its plugin says nothing about. */
+    const PLAIN_STOCK: Line = {identifier: 'US0378331005', identifier_type: 'ISIN', display_name: 'Owned Apple Inc.', provider_code: LINE_PROVIDER, currency: 'USD', asset_type: 'STOCK', via_web: false, quote_base_suggestion: null};
+    /** A BOND whose result has no suggestion field at all. */
+    const PLAIN_BOND: Line = {identifier: 'IT0005557006', identifier_type: 'ISIN', display_name: 'Owned BTP Valore 2028', provider_code: LINE_PROVIDER, currency: 'EUR', asset_type: 'BOND', via_web: false};
+    /** A pence line the search found without its suggestion: only a metadata read brings it. */
+    const PENCE_UNSUGGESTED: Line = {identifier: 'BARC.L', identifier_type: 'TICKER', display_name: 'Owned Barclays', provider_code: LINE_PROVIDER, currency: 'GBP', asset_type: 'STOCK', via_web: false, quote_base_suggestion: null};
+    const LINES = [PENCE, PLAIN_STOCK, PLAIN_BOND, PENCE_UNSUGGESTED];
+
+    /** The same split for every line: the first read fills the empty form, every later one agrees with it. */
+    const CLASSIFICATION = {sector_area: {distribution: {Telecommunications: 1}}, geographic_area: {distribution: {GBR: 1}}};
+
+    /** The probe's metadata of a line, agreeing with its search result on every field; `suggestion` is what the plugin says of its quote base this time. */
+    function metadataOf(line: Pick<Line, 'display_name' | 'asset_type' | 'currency'>, suggestion: Suggestion | null) {
+        return {success: true, execution_time_ms: 1, patch_data: {display_name: line.display_name, asset_type: line.asset_type, currency: line.currency, classification_params: CLASSIFICATION}, quote_base_suggestion: suggestion};
+    }
+    type Metadata = ReturnType<typeof metadataOf>;
+
+    /**
+     * The probe, answered by operation: the connection test (current price, history) passes, and the metadata of a line
+     * is `metadata[identifier]` — each line's own by default, its search suggestion included. Returns the map, which a
+     * case may change between two reads.
+     */
+    function probeAnswers(overrides: Record<string, Metadata> = {}): Record<string, Metadata> {
+        const metadata: Record<string, Metadata> = {...Object.fromEntries(LINES.map((line) => [line.identifier, metadataOf(line, line.quote_base_suggestion ?? null)])), ...overrides};
+        vi.mocked(zodiosApi.probe_provider_config_api_v1_assets_provider_probe_post).mockImplementation((async (body: {provider_code: string; identifier: string; operations: string[]}) => {
+            const answer = {provider_code: body.provider_code, identifier: body.identifier, total_execution_time_ms: 1};
+            if (!body.operations.includes('metadata')) return {...answer, current_price: {success: true, execution_time_ms: 1}, history: {success: true, execution_time_ms: 1}};
+            const read = metadata[body.identifier];
+            if (!read) throw new Error(`this case gave no metadata for ${body.identifier}`);
+            return {...answer, metadata: read};
+        }) as never);
+        return metadata;
+    }
+
+    /** The online search lists every line; any other request gets this file's default answer. */
+    function searchListing(): void {
+        vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get).mockResolvedValue(quoteSource);
+        const encoder = new TextEncoder();
+        const events = [{event: 'provider_results', provider_code: LINE_PROVIDER, results: LINES}, {event: 'done'}];
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async (url: string) => {
+                if (!String(url).includes('/assets/provider/search/stream')) return new Response(null, {status: 503});
+                // A fresh stream per search, replaying the events as SSE `data:` lines (as the P20 block does).
+                const chunks = events.map((event) => encoder.encode(`data: ${JSON.stringify(event)}\n`));
+                let next = 0;
+                return {ok: true, body: {getReader: () => ({read: async () => (next < chunks.length ? {done: false, value: chunks[next++]} : {done: true, value: undefined}), cancel: vi.fn()})}};
+            }),
+        );
+    }
+
+    /** A blank create form that opens on a search listing every line; returns the probe's metadata map. */
+    async function openCreate(overrides: Record<string, Metadata> = {}): Promise<Record<string, Metadata>> {
+        const metadata = probeAnswers(overrides);
+        searchListing();
+        render(AssetModal, {open: true, editMode: false, initialSearchQuery: QUERY, oncreated: vi.fn()});
+        await waitForForm();
+        return metadata;
+    }
+
+    /** The form's online search box. */
+    function searchBox(): HTMLElement {
+        const box = document.querySelector<HTMLElement>('[data-search-autocomplete]');
+        expect(box, 'the form shows its online search').not.toBeNull();
+        return within(box!).getByRole('textbox');
+    }
+
+    /** Picks `line` among the search results; the focus reopens a dropdown an earlier pick closed. */
+    async function pick(line: Line): Promise<void> {
+        await fireEvent.focusIn(searchBox());
+        const row = await waitFor(
+            () => {
+                const found = document.querySelector<HTMLElement>(`[data-testid^="asset-search-result-"][data-identifier="${line.identifier}"]`);
+                expect(found, `the search lists ${line.identifier}`).not.toBeNull();
+                return found!;
+            },
+            {timeout: 3_000},
+        );
+        await fireEvent.click(row);
+    }
+
+    const quoteBase = () => screen.getByTestId('asset-modal-quote-base-quantity') as HTMLInputElement;
+    const suggestionHint = () => screen.queryByTestId('asset-modal-qbq-suggestion-hint');
+    const bondHint = () => screen.queryByTestId('asset-modal-bond-qbq-hint');
+    const askProvider = () => screen.getByTestId('asset-modal-ask-provider') as HTMLButtonElement;
+
+    /** A sentence of the loaded catalogue. The key must resolve: a missing one echoes itself and would pass for text. */
+    function sentence(key: string, values?: Record<string, string | number>): string {
+        const text = get(_)(key, values === undefined ? undefined : {values});
+        expect(text, `${key} does not resolve: the catalogue is not loaded, or the key is not there yet`).not.toBe(key);
+        return text;
+    }
+
+    /** What the hint and the note say of a suggestion: with its quote currency, or the plain sentence without one. */
+    function suggested(quantity: number, currency: string | null): string {
+        return currency ? sentence('assets.modal.quoteBaseSuggested', {provider: LINE_PROVIDER_NAME, currency, quantity}) : sentence('assets.modal.quoteBaseSuggestedPlain', {provider: LINE_PROVIDER_NAME, quantity});
+    }
+
+    /** The suggestion hint is on screen, under the field, and says `text`. */
+    function expectSuggestionHint(text: string): void {
+        const hint = suggestionHint();
+        expect(hint, 'the suggestion hint').not.toBeNull();
+        expect(quoteBase().compareDocumentPosition(hint!) & Node.DOCUMENT_POSITION_FOLLOWING, 'the hint comes under the field, not above it').toBeTruthy();
+        expect(hint).toHaveTextContent(text);
+    }
+
+    /** How many metadata reads have ended with nothing to ask: each one says so with `assets.comparison.allMatch`. */
+    function agreements(): number {
+        const allMatch = sentence('assets.comparison.allMatch');
+        return vi.mocked(toasts.success).mock.calls.filter(([message]) => message === allMatch).length;
+    }
+
+    /** A value box of the comparison shows `n` — not merely a number that contains its digits. */
+    function showsNumber(testId: string, n: number): void {
+        expect(screen.getByTestId(testId).textContent ?? '', `${testId} does not show ${n}`).toMatch(new RegExp(`(^|\\D)${n}(\\D|$)`));
+    }
+
+    beforeEach(() => {
+        // The provider's name, never its code: what the hint and the note must say.
+        vi.mocked(getAssetProviderName).mockImplementation((code: string) => (code === LINE_PROVIDER ? LINE_PROVIDER_NAME : code));
+    });
+
+    afterEach(() => {
+        // Back to the module mocks' own answers for whatever runs next.
+        vi.mocked(zodiosApi.probe_provider_config_api_v1_assets_provider_probe_post).mockReset();
+        vi.mocked(getAssetProviderName).mockReset();
+    });
+
+    describe('create: a search selection', () => {
+        it('a pence result sets 100 and its suggestion hint, which names the provider, the quote currency and the quantity', async () => {
+            await openCreate();
+
+            await pick(PENCE);
+            // Barrier: the selection's own metadata read has ended, with nothing to ask.
+            await waitFor(() => expect(agreements()).toBe(1));
+
+            expect(nameInput()).toHaveValue(PENCE.display_name);
+            // RED today: the field keeps 1, and there is no such hint.
+            expect(quoteBase()).toHaveValue(100);
+            expectSuggestionHint(suggested(100, 'GBp'));
+            expect(bondHint(), 'a STOCK: no bond hint').toBeNull();
+        });
+
+        it('then a result without a suggestion: the type’s default, 1 for a STOCK, and no hint', async () => {
+            await openCreate();
+            await pick(PENCE);
+            await waitFor(() => expect(agreements()).toBe(1));
+            // Precondition — RED today: the pence result left 1, with no hint.
+            expect(quoteBase()).toHaveValue(100);
+            expectSuggestionHint(suggested(100, 'GBp'));
+
+            await pick(PLAIN_STOCK);
+            await waitFor(() => expect(agreements()).toBe(2));
+
+            expect(nameInput()).toHaveValue(PLAIN_STOCK.display_name);
+            expect(quoteBase()).toHaveValue(1);
+            expect(suggestionHint()).toBeNull();
+        });
+
+        it('a BOND result without a suggestion: 100 from its type, the bond hint, and the earlier suggestion hint gone', async () => {
+            await openCreate();
+            await pick(PENCE);
+            await waitFor(() => expect(agreements()).toBe(1));
+            // Precondition — RED today: no suggestion hint after the pence result.
+            expectSuggestionHint(suggested(100, 'GBp'));
+
+            await pick(PLAIN_BOND);
+            await waitFor(() => expect(agreements()).toBe(2));
+
+            expect(nameInput()).toHaveValue(PLAIN_BOND.display_name);
+            expect(quoteBase()).toHaveValue(100);
+            expect(bondHint()).not.toBeNull();
+            // The pence line's number, another source: the hint follows the source, not the value.
+            expect(suggestionHint()).toBeNull();
+        });
+
+        it.each([
+            {label: 'a pence result, its suggestion: 100', line: PENCE, expected: 100},
+            {label: 'a STOCK result without one, its type’s default: 1', line: PLAIN_STOCK, expected: 1},
+            {label: 'a BOND result without one, its type’s default: 100', line: PLAIN_BOND, expected: 100},
+        ])('overwrites a quote base the user typed, as it overwrites the name — $label', async ({line, expected}) => {
+            await openCreate();
+            await fill('asset-modal-quote-base-quantity', '7');
+            expect(quoteBase()).toHaveValue(7);
+
+            await pick(line);
+            await waitFor(() => expect(agreements()).toBe(1));
+
+            expect(nameInput()).toHaveValue(line.display_name);
+            // RED today: a typed value is never replaced — the bond seed, too, stops at a touched field.
+            expect(quoteBase()).toHaveValue(expected);
+        });
+
+        it('a keystroke in the field hides the suggestion hint', async () => {
+            await openCreate();
+            await pick(PENCE);
+            await waitFor(() => expect(agreements()).toBe(1));
+            // Precondition — RED today: there is no hint to hide.
+            expectSuggestionHint(suggested(100, 'GBp'));
+
+            await fill('asset-modal-quote-base-quantity', '50');
+
+            await waitFor(() => expect(suggestionHint()).toBeNull());
+            expect(quoteBase()).toHaveValue(50);
+        });
+    });
+
+    describe('create: an import’s prefill, and a manual type change', () => {
+        it.each([
+            {label: 'a BOND without a quote base: its type’s default, 100 (guard)', prefill: {asset_type: 'BOND'}, expected: 100},
+            {label: 'a BOND with a quote base of 0, which is none: its type’s default, 100 (guard)', prefill: {asset_type: 'BOND', quote_base_quantity: 0}, expected: 100},
+            {label: 'a BOND with a quote base of 1: the import’s value, never a seed over it', prefill: {asset_type: 'BOND', quote_base_quantity: 1}, expected: 1},
+            {label: 'an ETF without a quote base: its type’s default, 1 (guard)', prefill: {asset_type: 'ETF'}, expected: 1},
+        ])('a prefill of $label, and no suggestion hint', async ({prefill, expected}) => {
+            render(AssetModal, {open: true, editMode: false, prefillData: {display_name: 'Owned imported line', currency: 'EUR', ...prefill}, oncreated: vi.fn()});
+            await waitForForm();
+
+            expect(nameInput()).toHaveValue('Owned imported line');
+            // RED today for the BOND with 1: the bond seed turns the import's 1 into 100.
+            expect(quoteBase()).toHaveValue(expected);
+            expect(suggestionHint(), 'an import suggests nothing').toBeNull();
+        });
+
+        it('a manual type change does nothing to the field: a blank form made a BOND keeps 1, under the bond hint (guard)', async () => {
+            render(AssetModal, {open: true, editMode: false, oncreated: vi.fn()});
+            await waitForForm();
+            expect(quoteBase()).toHaveValue(1);
+
+            // The type picker, driven as a user does (as the P20 block does for an ETF): BOND sits at the root.
+            const field = screen.getByTestId('asset-modal-type');
+            const trigger = screen.getByTestId('asset-modal-type-button');
+            await fireEvent.click(trigger);
+            await fireEvent.click(within(field).getByTestId('asset-type-tree-option-BOND'));
+            await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
+
+            // Presence barrier: the form holds BOND — the bond hint says so.
+            await waitFor(() => expect(bondHint()).not.toBeNull());
+            expect(quoteBase()).toHaveValue(1);
+            expect(suggestionHint()).toBeNull();
+        });
+    });
+
+    describe('edit: a search selection overwrites the stored value too (Q-Q6); the asset changes only on Save', () => {
+        /** Types `query` into the online search, as a user does: in edit mode it opens empty and searches nothing. */
+        async function searchFor(query: string): Promise<void> {
+            await fireEvent.input(searchBox(), {target: {value: query}});
+        }
+
+        it.each([
+            {label: 'a STOCK stored at 1 takes a pence result’s 100, and its hint', stored: 1, line: PENCE, expected: 100, hint: {quantity: 100, currency: 'GBp'}},
+            {label: 'a STOCK stored at 100 takes a plain STOCK result’s 1, and no hint', stored: 100, line: PLAIN_STOCK, expected: 1, hint: null},
+        ])('$label', async ({stored, line, expected, hint}) => {
+            probeAnswers();
+            searchListing();
+            render(AssetModal, {
+                open: true,
+                editMode: true,
+                editData: {id: 7, display_name: 'Owned stored line', currency: line.currency, asset_type: 'STOCK', quote_base_quantity: stored, active: true},
+                onupdated: vi.fn(),
+            });
+            await waitForForm();
+            await waitFor(() => expect(quoteBase()).toHaveValue(stored));
+
+            await searchFor(QUERY);
+            await pick(line);
+            await waitFor(() => expect(agreements()).toBe(1));
+
+            // The selection overwrote the stored name, as it does in edit mode: the quote base goes the same way.
+            expect(nameInput()).toHaveValue(line.display_name);
+            // RED today: the stored value stays.
+            expect(quoteBase()).toHaveValue(expected);
+            if (hint) expectSuggestionHint(suggested(hint.quantity, hint.currency));
+            else expect(suggestionHint()).toBeNull();
+            expect(patchFn(), 'nothing is written before Save').not.toHaveBeenCalled();
+        });
+    });
+
+    describe('«Ask the provider»: a different proposal is a checked row, an equal one is nothing', () => {
+        /**
+         * Opens the pence line as stored — under the quote source, with the type and the quote base a case gives it — and
+         * makes the provider's read of it agree on every field but the quote base: `suggestion` is what the plugin says of
+         * it, and `providerType` the type the provider names (the stored one by default).
+         */
+        async function openStored(assetType: string, stored: number, suggestion: Suggestion | null, providerType: string = assetType): Promise<void> {
+            probeAnswers({[PENCE.identifier]: metadataOf({...PENCE, asset_type: providerType}, suggestion)});
+            vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get).mockResolvedValue(quoteSource);
+            render(AssetModal, {
+                open: true,
+                editMode: true,
+                editData: {id: 7, display_name: PENCE.display_name, currency: PENCE.currency, asset_type: assetType, quote_base_quantity: stored, active: true, provider_code: LINE_PROVIDER, provider_identifier: PENCE.identifier, provider_identifier_type: PENCE.identifier_type},
+                onupdated: vi.fn(),
+            });
+            await waitForForm();
+            await waitFor(() => expect(quoteBase()).toHaveValue(stored));
+            expect(askProvider(), 'precondition: the stored line has a provider to ask').toBeEnabled();
+        }
+
+        it.each([
+            {label: 'a STOCK at 1, the plugin suggesting 100 GBp', type: 'STOCK', stored: 1, suggestion: {quantity: 100, quote_currency: 'GBp'}, proposed: 100, note: () => suggested(100, 'GBp'), hint: () => suggested(100, 'GBp')},
+            {label: 'a STOCK at 1, the plugin suggesting 10 with no currency', type: 'STOCK', stored: 1, suggestion: {quantity: 10}, proposed: 10, note: () => suggested(10, null), hint: () => suggested(10, null)},
+            {label: 'a BOND at 1, no suggestion: its type’s default, noted by the bond hint', type: 'BOND', stored: 1, suggestion: null, proposed: 100, note: () => sentence('assets.modal.bondQuoteBaseHint'), hint: null},
+            {label: 'a STOCK at 100, no suggestion: its type’s default alone, with no note (Q-Q5 a)', type: 'STOCK', stored: 100, suggestion: null, proposed: 1, note: null, hint: null},
+        ])('$label: a checked row; applying it sets the value, and the hint of a suggestion', async ({type, stored, suggestion, proposed, note, hint}) => {
+            await openStored(type, stored, suggestion);
+
+            await fireEvent.click(askProvider());
+
+            // RED today: no read proposes a quote base, so no dialog opens at all.
+            const checkbox = await screen.findByTestId('comparison-checkbox-quote_base_quantity');
+            expect(checkbox, 'every row starts checked, this one too').toBeChecked();
+            showsNumber('comparison-current-quote_base_quantity', stored);
+            showsNumber('comparison-provider-quote_base_quantity', proposed);
+            if (note) expect(screen.getByTestId('comparison-note-quote_base_quantity')).toHaveTextContent(note());
+            else expect(screen.queryByTestId('comparison-note-quote_base_quantity'), 'the default of a type other than BOND has no note').toBeNull();
+            expect(quoteBase(), 'nothing is filled in silence').toHaveValue(stored);
+
+            await fireEvent.click(screen.getByTestId('comparison-apply'));
+            await waitFor(() => expect(screen.queryByTestId('comparison-modal')).toBeNull());
+
+            expect(quoteBase()).toHaveValue(proposed);
+            if (hint) expectSuggestionHint(hint());
+            else expect(suggestionHint(), 'a type’s default leaves no suggestion hint').toBeNull();
+            expect(patchFn(), 'nothing is written before Save').not.toHaveBeenCalled();
+        });
+
+        it.each([
+            {label: 'a STOCK at 100 its plugin quotes per 100', type: 'STOCK', stored: 100, suggestion: {quantity: 100, quote_currency: 'GBp'}},
+            {label: 'a STOCK at 1 its plugin says nothing about', type: 'STOCK', stored: 1, suggestion: null},
+            {label: 'a BOND at 100 its plugin says nothing about', type: 'BOND', stored: 100, suggestion: null},
+        ])('$label: the proposal equals the field, so there is nothing to ask (guard)', async ({type, stored, suggestion}) => {
+            await openStored(type, stored, suggestion);
+
+            await fireEvent.click(askProvider());
+
+            // Barrier: the read has ended, and found the form in agreement on every field.
+            await waitFor(() => expect(agreements()).toBe(1));
+            expect(screen.queryByTestId('comparison-modal')).toBeNull();
+            expect(quoteBase()).toHaveValue(stored);
+        });
+
+        it('applying the provider’s type no longer seeds a BOND’s 100: the quote base is a row of its own', async () => {
+            await openStored('STOCK', 1, null, 'BOND');
+
+            await fireEvent.click(askProvider());
+
+            // Two rows, both checked: the type (STOCK → BOND), and the quote base that type's default proposes (1 → 100).
+            expect(await screen.findByTestId('comparison-checkbox-asset_type')).toBeChecked();
+            // RED today: there is no quote base row.
+            const quoteBaseRow = await screen.findByTestId('comparison-checkbox-quote_base_quantity');
+            expect(quoteBaseRow).toBeChecked();
+            showsNumber('comparison-provider-quote_base_quantity', 100);
+            expect(screen.getByTestId('comparison-note-quote_base_quantity')).toHaveTextContent(sentence('assets.modal.bondQuoteBaseHint'));
+
+            // The user takes the type and leaves the quote base.
+            await fireEvent.click(quoteBaseRow);
+            expect(quoteBaseRow).not.toBeChecked();
+            await fireEvent.click(screen.getByTestId('comparison-apply'));
+            await waitFor(() => expect(screen.queryByTestId('comparison-modal')).toBeNull());
+
+            // Presence barrier: the form holds BOND now — the bond hint says so.
+            await waitFor(() => expect(bondHint()).not.toBeNull());
+            // RED today as well: applying the type seeds 100 over the untouched 1.
+            expect(quoteBase()).toHaveValue(1);
+        });
+    });
+
+    describe('R1: the line’s latest explicit suggestion answers for a read whose own suggestion failed', () => {
+        it('after a pence selection, a read that lost its suggestion proposes nothing — the automatic read, then an asked one', async () => {
+            await openCreate({[PENCE.identifier]: metadataOf(PENCE, null)});
+
+            await pick(PENCE);
+            // Barrier: the selection's read — its suggestion lost, as a timeout or a pause loses it — has ended with nothing to ask.
+            await waitFor(() => expect(agreements()).toBe(1));
+            expect(screen.queryByTestId('comparison-modal'), 'the read does not propose to undo the suggestion').toBeNull();
+            // RED today: the selection left 1, and no hint.
+            expect(quoteBase()).toHaveValue(100);
+            expectSuggestionHint(suggested(100, 'GBp'));
+
+            expect(askProvider()).toBeEnabled();
+            await fireEvent.click(askProvider());
+            await waitFor(() => expect(agreements()).toBe(2));
+            expect(screen.queryByTestId('comparison-modal')).toBeNull();
+            expect(quoteBase()).toHaveValue(100);
+            expectSuggestionHint(suggested(100, 'GBp'));
+        });
+
+        it('a suggestion only the metadata brings is a checked row, never a silent fill — and once brought, it answers for its line', async () => {
+            const metadata = await openCreate({[PENCE_UNSUGGESTED.identifier]: metadataOf(PENCE_UNSUGGESTED, {quantity: 100, quote_currency: 'GBp'})});
+
+            await pick(PENCE_UNSUGGESTED);
+
+            // The selection's read asks, and the field keeps its type's default meanwhile. RED today: no row, so no dialog.
+            expect(await screen.findByTestId('comparison-checkbox-quote_base_quantity')).toBeChecked();
+            showsNumber('comparison-provider-quote_base_quantity', 100);
+            expect(screen.getByTestId('comparison-note-quote_base_quantity')).toHaveTextContent(suggested(100, 'GBp'));
+            expect(quoteBase(), 'nothing is filled in silence').toHaveValue(1);
+            expect(suggestionHint()).toBeNull();
+
+            await fireEvent.click(screen.getByTestId('comparison-apply'));
+            await waitFor(() => expect(screen.queryByTestId('comparison-modal')).toBeNull());
+            expect(quoteBase()).toHaveValue(100);
+            expectSuggestionHint(suggested(100, 'GBp'));
+
+            // The next read of the same line loses its suggestion: the one the last read brought still answers for it.
+            metadata[PENCE_UNSUGGESTED.identifier] = metadataOf(PENCE_UNSUGGESTED, null);
+            expect(askProvider()).toBeEnabled();
+            await fireEvent.click(askProvider());
+            await waitFor(() => expect(agreements()).toBe(1));
+            expect(screen.queryByTestId('comparison-modal')).toBeNull();
+            expect(quoteBase()).toHaveValue(100);
+        });
+
+        it('the hint and the suggestion belong to their line: another identifier hides the hint, keeps the value, and its read proposes the type’s default', async () => {
+            await openCreate({VOD: metadataOf(PENCE, null)});
+            await pick(PENCE);
+            await waitFor(() => expect(agreements()).toBe(1));
+            // Precondition — RED today: the field keeps 1, with no hint.
+            expect(quoteBase()).toHaveValue(100);
+            expectSuggestionHint(suggested(100, 'GBp'));
+
+            // The same provider, another line: the suggestion was made for VOD.L, not for VOD.
+            await fill('provider-identifier', 'VOD');
+            await waitFor(() => expect(suggestionHint()).toBeNull());
+            expect(quoteBase(), 'only the user, a selection or an applied row changes the value').toHaveValue(100);
+
+            expect(askProvider()).toBeEnabled();
+            await fireEvent.click(askProvider());
+
+            // VOD's read brings no suggestion, and VOD.L's does not answer for it: a STOCK's default, asked as a row.
+            expect(await screen.findByTestId('comparison-checkbox-quote_base_quantity')).toBeChecked();
+            showsNumber('comparison-current-quote_base_quantity', 100);
+            showsNumber('comparison-provider-quote_base_quantity', 1);
+            expect(screen.queryByTestId('comparison-note-quote_base_quantity'), 'a STOCK’s default has no note').toBeNull();
+        });
     });
 });

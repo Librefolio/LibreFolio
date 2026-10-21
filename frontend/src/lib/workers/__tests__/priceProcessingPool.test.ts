@@ -6,7 +6,7 @@
  */
 import {describe, expect, it} from 'vitest';
 
-import {itemWeight, splitBalanced} from '../priceProcessingPool';
+import {itemWeight, requestIndexesOf, splitBalanced, splitBalancedIndexed} from '../priceProcessingPool';
 
 describe('itemWeight', () => {
     it('returns the price array length when present', () => {
@@ -56,5 +56,30 @@ describe('splitBalanced', () => {
         const groups = splitBalanced(items, 3);
         expect(groups.length).toBe(3);
         for (const g of groups) expect(g.length).toBe(2);
+    });
+});
+
+describe('splitBalancedIndexed (Z-29b)', () => {
+    it('gives each group the position in the list of each of its items, and the same groups as splitBalanced', () => {
+        const items = [
+            {asset_id: 1, prices: new Array(50).fill(0)},
+            {asset_id: 1, prices: new Array(5).fill(0)},
+            {asset_id: 2, prices: new Array(30).fill(0)},
+            {asset_id: 3, prices: []},
+        ];
+
+        const groups = splitBalancedIndexed(items, 2);
+
+        expect(groups.map((group) => group.items)).toEqual(splitBalanced(items, 2));
+        for (const group of groups) group.items.forEach((item, local) => expect(items[group.indexes[local]]).toBe(item));
+        expect(groups.flatMap((group) => group.indexes).sort()).toEqual([0, 1, 2, 3]);
+    });
+});
+
+describe('requestIndexesOf (Z-29b)', () => {
+    it('puts the position of a result in its chunk back to its position in the whole request', () => {
+        const results = [{requestIndex: 0}, {requestIndex: 2}] as Array<{requestIndex: number}>;
+
+        expect(requestIndexesOf(results as never, [5, 9, 4]).map((result) => result.requestIndex)).toEqual([5, 4]);
     });
 });

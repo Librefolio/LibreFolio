@@ -17,10 +17,15 @@
  * pair nobody had touched. That normalization is a plain sign-strip
  * (`cash.amount.replace(/^-/, '')`), deliberately not `Math.abs(Number(...))`:
  * the latter round-trips the decimal string through a JS double and silently
- * rounds any amount with more precision than a double can hold. Test 1 uses
- * an 18-significant-digit amount (the exact edge of the DB's `NUMERIC(18,6)`
- * column) specifically because it demonstrates that loss when parsed as a
- * float, and asserts the exact string survives Apply → reopen unchanged.
+ * rounds any amount with more precision than a double can hold. Test 1 used
+ * an 18-significant-digit amount to show that loss. Since B-48 the form, like
+ * the backend, keeps at most 15 significant digits, and a double holds every
+ * such amount, so the loss can no longer be typed here: the sign-strip's
+ * exactness is pinned by `applySign`'s own cases (txPayloadHelpers.test.ts).
+ * Test 1 now types an amount at the edge of what the backend keeps for one —
+ * 15 significant digits, 6 decimals — and still asserts that its string
+ * survives Apply → reopen unchanged; its subject is the broker, the dates and
+ * the staging, not the digits.
  *
  * What this file does NOT assume, and checks instead:
  *  - that the From/To date fields are two independent pieces of state, and
@@ -245,14 +250,14 @@ test.describe('FX_CONVERSION dual-form completeness', () => {
         const saveBtn = page.getByTestId('tx-form-save');
         const validateBtn = page.getByTestId('tx-form-validate-now');
 
-        // Canonical decimal on the From leg (currency defaults to EUR).
-        // 18 significant digits (12 integer + 6 fraction — the exact edge of
-        // the DB's NUMERIC(18,6) column) deliberately exceeds what a JS double
-        // can round-trip: `String(Math.abs(Number('-123456789012.123456')))`
-        // collapses to `'123456789012.12346'`, silently dropping precision.
-        // `fromTx()` must never go through Number() for this — only a plain
-        // sign-strip preserves every digit through Apply → reopen below.
-        const FROM_AMOUNT = '123456789012.123456';
+        // Canonical decimal on the From leg (currency defaults to EUR), at the
+        // edge of what the backend keeps for an amount: 15 significant digits,
+        // 6 decimals. B-48: it was 123456789012.123456, 18 significant digits —
+        // past that edge, refused by the form since B-48. The digits are not
+        // this test's subject (see the header): the value only has to be one
+        // the form and the backend accept, and it still survives Apply →
+        // reopen exactly as typed.
+        const FROM_AMOUNT = '123456789.123456';
         await fillCashAmount(page, 'tx-form-cash-from', FROM_AMOUNT);
         await expect(page.getByTestId('tx-form-cash-from-amount')).toHaveValue(FROM_AMOUNT);
 
@@ -313,9 +318,10 @@ test.describe('FX_CONVERSION dual-form completeness', () => {
         // Reopen the local pair: `fromTx()` must hand back a POSITIVE magnitude
         // for the From leg (it is stored internally as a negative amount), or
         // the "positive" sign guard would re-block Apply on a pair nobody edited.
-        // It must ALSO hand back the exact digits it was given — the tightened
-        // fix (`cash.amount.replace(/^-/, '')`) never round-trips through a JS
-        // Number, unlike the old `String(Math.abs(Number(cash.amount)))`.
+        // It must also hand back the digits it was given. (Since B-48 the amount
+        // is one a double holds exactly, so a Number round trip would hand them
+        // back too: the plain sign-strip `cash.amount.replace(/^-/, '')` is
+        // pinned against Number by `applySign`'s own cases.)
         await appended.hover();
         const kebab = appended.getByTestId(`row-actions-${appendedRowId}`);
         await expect(kebab).toBeVisible({timeout: 2_000});
@@ -323,9 +329,7 @@ test.describe('FX_CONVERSION dual-form completeness', () => {
         await page.getByTestId('context-menu-action-edit-single').click();
         await expect(formModal).toBeVisible({timeout: 5_000});
 
-        // Exact string match, not just numeric equality: a reopened value of
-        // '123456789012.12346' would also satisfy `Number(x) === Number(FROM_AMOUNT)`
-        // to float precision, but it is not the value the user typed.
+        // Exact string match: the reopened From leg is the value the user typed.
         await expect(page.getByTestId('tx-form-cash-from-amount')).toHaveValue(FROM_AMOUNT);
         await expect(page.getByTestId('tx-form-cash-to-amount')).toHaveValue('2200.75');
         // Each leg's distinct date must round-trip on its own side — no

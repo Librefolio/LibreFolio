@@ -203,17 +203,21 @@ reads its points as `FAPriceWritePoint` (`FAUpsert.prices`), whose `open`, `high
 the change count and the upsert, PERSIST (`_persist_refresh_item()` in `refresh.py`) sets aside
 the points LibreFolio does not keep: a point in another currency than the asset's (#R3-2,
 *N points discarded: currency mismatch (got …, expected …)*), and, since N92, a day with a close
-of 0 or less or a negative open, high, low or volume (`_price_not_above_zero()`). A zero open or
+of 0 or less or a negative open, high, low or volume (`_sign_issue()`). A zero open or
 volume is a value, and is kept; a value that is not a finite number is left to
 `_unstorable_provider_point()` (W-B58, below). The discarded days are named in one error,
-*N points discarded: price not above 0 (…)*, with their ISO dates, the first five then
-*(+ N more)*, and a warning is logged, *Provider prices discarded: price not above 0*, with
-`asset_id`, `provider`, the first five `dates` and the `count`. `points_fetched` counts only the
+*N points discarded: a close not above 0 or a negative open, high, low or volume (…)*, each day
+with its ISO date and the fields at fault, `2026-01-02 (volume=-10)`, as W-B58 names a value no
+column keeps, the first five then *(+ N more)*; and a warning is logged, *Provider prices
+discarded: …* with the same rule, with `asset_id`, `provider`, the first five `days` and the
+`count`. `points_fetched` counts only the
 points kept. With other points left the item is `partial`, the first of its errors its
 `message`; when every point is discarded it is `failed`, with `points_fetched` 0 and nothing
 written, as after a currency mismatch (#R4-1). The points kept reach the upsert through
-`FAUpsert.model_construct()`, never read as write points, so that a value no column keeps still
-reaches `_unstorable_provider_point()` and is named instead of raising. Before N92, the plugin's
+`FAUpsert.model_construct()`, not validated again as write points: they are `FAPricePoint`
+already built and filtered, and `FAPriceWritePoint` checks no digits (a value no column keeps
+reaches `_unstorable_provider_point()` either way), so a full validation of a 45 000-point history
+would cost about 0.23 s on the event loop for nothing. Before N92, the plugin's
 own `FAPricePoint` refused such a day, so its whole history download failed (with no current
 value either, the item failed with *No price data available from provider*), and an open, high,
 low or volume of exactly `-1` was stored as an erased value.
@@ -300,7 +304,7 @@ A risk range starts no earlier than `range_span_floor()`, 100 years before its e
   point, before 1900 included, is stored and counted.
 
 The [FX rate writes](../fx/architecture.md#stored-rate-dates) keep to the same last date.
-Transactions keep their own floor, 1900-01-01 since N74, with an end a year ahead
+Transactions keep their own floor, 1900-01-01 since N74, and the same last date
 ([Transaction dates](../transactions/service.md#transaction-dates), where the code is
 `dateOutOfRange`). The web app's data editors tell these 422s in the interface language, naming
 the dates refused and the last day a date may carry (*N dates are after …*,
@@ -441,6 +445,10 @@ Each query item can request:
 
 - `include_price: true` — price history with backward-fill
 - `include_events: true` — asset events in the date range
+- `max_points`, `resolution` or `sample_like`, at most one of them — the price series sampled
+  for a compact chart, daily, weekly or monthly, and with `signals` their series reduced to the
+  same dates; `key` names an item for another item's `sample_like`
+  ([Sampled Price Series](#price-query-sampling))
 
 `get_prices_bulk()` never invokes a provider. Provider acquisition belongs to
 `refresh.py` through `POST /assets/prices/sync`; the query path remains DB-only while retaining
@@ -492,7 +500,12 @@ the builders of their 422 `detail`, `bulk_too_many_items_detail()` and
   per day from the first stored price to the end; none when the fill emits nothing (no price, or a
   first price after the end). The comparison series of a signal that needs a prepared asset series
   (a rolling beta against another asset) count too; a comparison against the item's own asset is
-  not counted twice. An item that starts after the ceiling counts zero. Over `MAX_BULK_ITEM_DAYS`
+  not counted twice. An item that starts after the ceiling counts zero. A
+  [sampled](#price-query-sampling) weekly or monthly item without `signals` counts its points plus
+  two for its `sample_bounds`, before any of its bucket rows is read; an item with `max_points`,
+  `resolution` or `sample_like` and no `signals` sent with `include_price: false`, a placeholder
+  that only gives its step, counts nothing, whatever its step. A sampled item with `signals` counts
+  its fill's days like any item with signals. Over `MAX_BULK_ITEM_DAYS`
   (1,000,000) the method raises `BulkTooManyDaysError`, its `item_days` the request's exact total,
   and the route answers 422 `{"code": "bulk_too_many_days", "message", "max_item_days", "item_days"}`.
 
@@ -528,7 +541,8 @@ get their prices, the others no new ones, and the error reaches only the browser
 window shows its generic *Technical signals could not be updated*. An explicit message is a
 follow-up (workstream X, X-R58). Batching bounds each request, not the total: on «All» each card
 still loads its asset's full daily history, and 300 assets without signals still fill about
-2.9 million points (backlog Z-29, post-1.3).
+2.9 million points: the asset list does not ask for the [sampled series](#price-query-sampling)
+the query can return (backlog Z-29).
 
 With `target_currency`, the conversion pass converts every close not already in that currency
 through one `convert_bulk()` call per result, scales open, high and low by the same factor, keeps
@@ -538,6 +552,210 @@ native price and currency, and the result's `errors` lists the failures, dedupli
 ten plus one "… and N more" line. The query never registers an FX pair: the asset page reports
 the pair through its `requiredFxPairs` banners, and its comparison loader drops those points (see
 [Chart internals](../../frontend/components/charts.md#asset-detail-page-sync-and-comparison-sync)).
+
+### 🗜️ Sampled Price Series {: #price-query-sampling }
+
+A card's compact chart (`LineChart` with `compact`, through `PriceChartCompact.svelte`) keeps the
+daily points while they are at most 1.3 per pixel of its plot, else the last point of each ISO week
+while those are, else the last point of each calendar month (`chooseStaticResolution()` in
+`frontend/src/lib/components/charts/LineChart.svelte`, on the buckets of `mapDateToBucket()` and
+`aggregateLineSeries()` in `timeSeriesAggregation.ts`). An item of `POST /assets/prices/query` can
+ask for that sample instead of its whole daily fill (Z-29a), through four optional fields of
+`FAPriceQueryItem` (`backend/app/schemas/prices.py`):
+
+| Field | What the item asks |
+|---|---|
+| `max_points` | An integer from 1 to 10,000, the most points the chart's plot takes: the backend chooses the step on the item's own fill |
+| `resolution` | A step, `daily`, `weekly` or `monthly`, whatever the length of the fill |
+| `sample_like` | The step and the buckets of the item of the request whose `key` it gives |
+| `key` | A name for the item, unique in the request, that another item's `sample_like` gives; it changes nothing in the item's own answer. `key` and `sample_like` take 1 to 64 characters among ASCII letters, digits, `_`, `.`, `:` and `-` (`SAMPLE_KEY_PATTERN`) |
+
+An item asks one way at most. The model validator `validate_sampling()` refuses two of
+`max_points`, `resolution` and `sample_like` together, and any of them with `annotation_requests`
+or `include_events: true`, which need every day. Both refusals are 422 validation errors on the
+request body, before the handler runs. `signals` (Z-29s-a, see **Signals** below),
+`target_currency` and `include_price` stay allowed.
+
+**The step.** The rule is pure, in `backend/app/services/assets/price_sampling.py`;
+`_plan_samples()` in `price_query.py` applies it once the [ceiling](#price-query-range-ceiling) has
+cut the range. An item's fill starts on its first day F: the range's start when a stored row of the
+asset precedes it (the fill's seed), else the asset's first row in the range. With `max_points`,
+`choose_resolution()` takes the finest of daily, weekly and monthly whose count over F … end
+(`fill_counts()`: the days, the ISO weeks and the calendar months the fill touches) fits in
+`max_points`; monthly is the floor and may exceed it. With `resolution`, the step is the one
+asked. A daily step gives the ordinary daily fill, the answer without the fields. An item with
+nothing to fill, no seed and no row in the range, gets an empty series whatever it asks.
+
+**The points.** A weekly or monthly series holds the dates of `sample_dates()`: the last day of
+each ISO week (Monday to Sunday) or calendar month (`bucket_of()`) from F's bucket to the end's,
+the last bucket cut at the range end. Each point is the one the daily fill has on that date
+(`_fill_point()`, which `_build_backward_filled_series()` uses too): the last stored row on or
+before it, with its `backward_fill_info`. F is one of these dates only when it closes its bucket or
+is the end. With `target_currency`, the conversion pass converts the sample and the point on F like
+any series, each point on its own date.
+
+**The answer.** `FAPriceQueryResult.resolution` is always present: the step of `prices`, `daily`
+by default. A weekly or monthly result also carries `sample_bounds` (`FAPriceSampleBounds`, two
+`FAPricePoint`): `first`, the fill's point on F, and `last`, its point on the range end, which is
+also the last point of `prices`. A daily result, an empty one included, has no `sample_bounds`, and
+`include_price: false` gives neither points nor bounds. With `max_points`, `resolution` or
+`sample_like`, an item without `signals` sent with `include_price: false` is a placeholder (see the
+reads, below): it still says its step in `resolution`, weekly or monthly from its plan, else
+`daily`. In the OpenAPI document, the description of `FAPricePoint` has single quotes where its
+docstring has backticks (`_description_without_backticks()`): the web client's generator,
+openapi-zod-client, writes the description of the model a required field refers to into a template
+literal, which a backtick would close.
+
+**`sample_like`.** It puts an item on the buckets of another item of the request, named by its
+`key`, as a comparison drawn on a card needs. The follower takes the step of the item it names,
+the one that item's `max_points` or `resolution` gives on that item's own fill (daily with
+neither), from the later of the two first days: its points are its own daily fill's on the bucket
+dates from that day's bucket on, and `sample_bounds.first` is its point on that day. A daily step
+gives the follower the daily fill from that later day. When the named item has nothing to fill,
+the follower is sampled on its own fill by that item's `max_points` or `resolution`.
+
+`resolve_sample_references()` checks every reference on the whole request, before the
+ceiling cut and before any read, and refuses the request at the first fault. The route turns its
+`SampleReferenceError` into a 422
+`{"code": "sample_reference", "reason", "item", "key", "message"}` (`sample_reference_detail()`),
+`item` the position of the item at fault in the request and `key` that item's own `key`:
+
+| `reason` | The item at fault |
+|---|---|
+| `unknown_key` | Gives in `sample_like` a key no item of the request carries |
+| `duplicate_key` | Carries a `key` an earlier item already carries |
+| `chained` | Names an item that has a `sample_like` itself, itself included: one level only, so no cycle |
+| `range_mismatch` | Names an item with another `date_range`, an absent `end` counting as its `start` (`DateRangeModel`'s single day) |
+
+**The reads.** The weekly and monthly items without `signals` stay out of the day-by-day read. For
+them, `_plan_samples()` reads only the seed and the first row in the range of each asset, and, for a
+follower that starts later, its last row on or before that day: the dates of each sample are known,
+and counted against the [day budget](#bulk-request-limits), before any bucket row is read. Once the
+budget has passed them, `_read_samples()` reads their points. An asset another item of the request
+already loads whole, on a range that holds the sampled item's (a daily item, or a signal's
+comparison series), is sampled from those rows, not read a second time. The other items are read
+by one statement per range and step, which covers every asset of that group
+(`_bucket_last_rows()`): SQLite groups the rows by asset and ISO week or calendar month and, through
+its bare-column rule for `max()`, returns only the last row of each bucket. No daily fill is built
+for a weekly or monthly item. A placeholder only gives its step (Z-29a-f, `placeholders` in
+`get_prices_bulk()`): `_plan_samples()` still plans it, with the probes above, and a `sample_like`
+that names it takes its step and first day as from any item; but, whatever its step, the placeholder
+is left out of the day-by-day read and of `_read_samples()`, so no price row is read for it past its
+plan, and it counts nothing against the budget. So a comparison drawn on a card can send the card's
+item without its prices, beside the target that follows it.
+
+**Signals.** `max_points`, `resolution` and `sample_like` are accepted together with `signals`
+(Z-29s-a); `annotation_requests` and `include_events: true` are still refused (the 422 of
+`validate_sampling()`, above). An item with both is read day by day, as without the sampling field:
+its fill is built from the signals' warm-up, its signals are computed, and it counts against the
+[day budget](#bulk-request-limits) the days of that fill, the comparison series of a signal
+included, not its points and bounds. It is neither a bucket read nor a placeholder, even with
+`include_price: false`: its signals need the rows. `get_prices_bulk()` holds it apart in
+`signal_samples`, out of `sample_plans` and of `placeholders`. Once the signals are computed and the
+result cut to the requested range, a weekly or monthly plan reduces the answer in memory
+(`_reduce_signal_sample()`); a daily plan, or an item with nothing to fill, answers as without the
+field. `prices` are the daily answer's points on the plan's dates, and `sample_bounds` and
+`resolution` come out as the same item without signals gives them; with `include_price: false` the
+prices stay empty and `sample_bounds` is `None`, and the step is still said. A `sample_like`
+follower is reduced on its own plan, from the later first day: its signal points before that day's
+bucket are dropped.
+
+Each signal series is reduced by `sample_signal_series(series, profile, resolution, render_dates)`
+(`backend/app/services/signals/aggregation.py`, the module of the
+[`aggregation_profile` rule](../../architecture/patterns/signal_plugin_guide.md#plugin-contract)),
+with `render_dates` the plan's dates and the profile that of the output spec the series' `key`
+names, read from the plugin class in `SignalPluginRegistry` as AI Export reads it
+(`_sample_signal_result()`). A series no output spec describes stays daily and is logged as a
+warning; none does today. The function is pure and reproduces the browser:
+`downsampleRenderedSignal()` (`frontend/src/lib/components/charts/timeSeriesAggregation.ts`), after
+`backendRenderer.ts` (`frontend/src/lib/charts/signals/`) has split a line or an area into runs at
+the points sent without a value.
+
+- **Daily** gives the series itself.
+- **Line and area**: one run at a time. The representative of a bucket is the element itself
+  (`select_point()`) re-dated at the bucket's price date, so the calendar rolling return
+  `ASSET_CALENDAR_ROLLING_RETURN` (`last_with_range`) keeps its `provenance`. Between two runs, a
+  gap marker, a point with value `None`, stands on the day after the first run's last
+  representative when that day comes before the next run's first; the line stays broken as it was.
+- **Bar**: the points without a value are dropped and each bucket keeps one representative; a bar
+  output has no runs.
+- **Band** (`band_envelope`): the complete points only; each bucket keeps the lowest `lower`, the
+  last `middle` and the highest `upper`.
+
+**Series on the same dates.** A `SignalResult` wants the series of one signal on identical dates,
+and reduced alone they may not be: a warm-up that ends inside the range (ADX: the `plus_di` and
+`minus_di` lines are valued before `adx`; any plugin whose outputs warm up by different amounts
+shows it when the first values fall in different buckets) or a gap one series has and another has not. The developer
+decided on 21/10 to align them (O1): `align_signal_series()` gives every reduced series of a signal
+the union of the dates the reductions left, a point without a value (`value: null`; a band: `lower`,
+`middle` and `upper` null) where a series has none. `_sample_signal_result()` aligns the series it
+reduced and no other. The browser draws a line's or a bar's leading and trailing points without a
+value as nothing and a band from its complete points, so a series is drawn as it was; the fifth
+residue (R5) is the one case it is not: a gap marker of one series is a date the others have no
+point on, and there they get a point without a value too, which ends a run of theirs.
+
+**What the browser adds and the backend does not.** A reduced point carries its bucket's price
+date and, for the calendar rolling return, its `provenance`, and nothing more: the browser, reducing
+the daily series itself, also adds the real day of the representative and the number of days of the
+bucket (O3). A card that needs either reads the daily series, or the full chart's.
+
+**The step is the answer's.** The `resolution` of the result says the step of the item; the
+density of the signal series says nothing about it, and a client must not deduce the step from
+it (O4). A series comes back daily inside a weekly or monthly answer when no output spec describes
+it (none does today) or when the reduction keeps no point; such a series is not aligned with the
+others.
+
+A point whose bucket has no price date, those before the plan's first bucket for one, is dropped. A
+profile that does not fit the series' kind raises `ValueError`, and the series given is not
+changed. Four accepted residues (and the fifth, below) keep the reduction from being the browser's to the point: (R1) where
+two runs meet in a bucket it shows the later run's point, the browser draws two (accepted by the
+developer on 19/10); (R2) a line with styled value regions (regions with a line style) is split by
+style in the browser on the reduced points, where daily points are split by style before they are
+reduced; (R3) two runs on consecutive days at the very end of the range get no marker, there being
+no day between them; (R4) past `MAX_LINE_RUNS` (30) runs the browser joins the gaps of an unstyled
+line, and after the reduction it counts the reduced runs, not the daily ones. R1 and R3 are cases
+of the shared table with `browser_parity: false`, each saying so in its note; R2 and R4 follow from
+the browser's own rendering and are not in the table. (R5, see above, is a `series_sets` entry with
+`browser_parity: false`.)
+
+The step rule is the chart's. The case table
+`frontend/src/lib/components/charts/__tests__/compactDensityCases.json` holds cases of the
+chart's rule at 1.3 points per pixel (first day, end, plot width, days, weeks, `max_points`, step),
+`max_points` being the most points the plot width takes at that density;
+`test_price_query_sampling.py` checks every case against the chart's rule, and `fill_counts()` and
+`choose_resolution()` against every case. Tests: `test_price_query_sampling.py`
+(`./dev.py test services price-query-sampling`, PURE: a private SQLite file) pins the rule, the
+buckets, the references, the budget and the reads, and, in its PQS-SG block, the signals on a
+sample (five real plugins: the day budget, the item that is no placeholder, the follower, the
+descriptions); the Z-29a block at the end of `test_assets_prices.py`
+(`./dev.py test api assets-price`) the route's 422s, the OpenAPI document and sampled answers on the
+lane's server, and its PQS-API-06 the SMA reduced on a monthly and a weekly sample through the
+route. `test_signal_aggregation.py` (`./dev.py test services signal-aggregation`, its SAG-S block)
+pins `sample_signal_series()` on every case of the shared table
+`backend/test_scripts/fixtures/signals/signal_sampling_cases.v1.json`, and `align_signal_series()`
+on its `series_sets`; the "Z-29s-a" block of
+`frontend/src/lib/components/charts/__tests__/timeSeriesAggregation.test.ts` (Vitest) also reads
+the table, drawing its `browser_parity` cases through `downsampleRenderedSignal()`: the backend reduction and
+the chart's are tied by it, as `aggregation_profiles.v1.json` ties the per-bucket rule
+([Signal Plugin Guide](../../architecture/patterns/signal_plugin_guide.md#plugin-contract)).
+
+**The web app (Z-29b).** The grid of the Assets list sends these fields. Each card sends its own
+item with `key` `asset:<id>` and the `max_points` its measured plot takes
+(`compactMaxPoints(plotWidthPx)` in `timeSeriesAggregation.ts`: the plot's width at 1.3 points per
+pixel, the rule `LineChart` applies to a daily series); each asset its comparison signals draw is an
+item `sample_like` that key, on the same range, so the target comes on the card's own buckets
+(`utils/reducedPriceQuery.ts`, `buildReducedQuery()`). `bulkBatches.ts` cuts the request by groups,
+a card with its targets, because a `sample_like` whose named item is in another request is refused
+(422 `sample_reference`). The answers go to the reduced price cache
+(`stores/reducedPriceCache.ts`, beside the daily one, which it does not touch): an entry is
+answered for a width only if the step that width asks, computed from the entry's own counts of days
+and weeks (`stepForMaxPoints()`), is the entry's; otherwise the card is read again from the backend
+(`cardsOfAnotherStep()`), and a weekly sample is never re-aggregated into months nor turned back
+into days. The chart draws `prices` as they are. The percentage view, the line's colour and a
+comparison's base read `sample_bounds.first` (`derived.base`), the point on the fill's first day,
+not `prices[0]`, the end of the first bucket. `compactDensity.test.ts` reads
+`compactDensityCases.json` and ties `compactMaxPoints()`, `fillCounts()` and the step to it, as
+`test_price_query_sampling.py` ties the backend. The FX list still asks every day (backlog Z-29fx).
 
 ### 📅 Fixed-Period Changes {: #fixed-period-changes }
 
@@ -769,7 +987,10 @@ Operations (selectable per request):
 | `history` | Fetches the last 7 days of data → validates historical data availability |
 | `metadata` | Fetches asset metadata → validates identifier resolution |
 
-Each operation returns `success`, `execution_time_ms`, and operation-specific data. The response's
+Each operation returns `success`, `execution_time_ms`, and operation-specific data. The `metadata` result also
+carries `quote_base_suggestion`, beside `patch_data` and never inside it: the plugin's
+[quote base suggestion](../../architecture/patterns/asset_plugin_guide.md#quote-base-suggestion), asked once
+`fetch_asset_metadata()` has answered (with 5 s of its own), `null` when there is none. The response's
 `provider_url` is the plugin's `get_asset_url()`, withheld (`null`) when it shows one of the
 provider's secrets: `core.public_asset_url()` drops it and logs a warning naming the provider
 ([Plugin Settings](../../architecture/patterns/plugin_settings.md#secrets)). The frontend

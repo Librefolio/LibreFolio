@@ -445,9 +445,8 @@ class TestMWRRSeries:
 class TestSimpleROISeries:
     """Tests for calculate_simple_roi_series().
 
-    IMPORTANT CONSTRAINT (same as TWRR): for CFs to be included in the ROI
-    calculation at snapshot t, there must be a NAVSnapshot on the CF date.
-    CFs without a matching NAVSnapshot on the same date are silently skipped.
+    MF-E2b: a CF counts at the first NAVSnapshot on or after its date (a CF after the last snapshot counts nowhere).
+    Before MF-E2b a CF without a NAVSnapshot on its own date was silently skipped.
     """
 
     def test_empty_snapshots(self):
@@ -567,24 +566,25 @@ class TestSimpleROISeries:
             assert isinstance(point.roi, Decimal)
             assert isinstance(point.date, date)
 
-    def test_cf_between_snapshots_is_missed(self):
+    def test_cf_between_snapshots_counts_on_the_next_snapshot(self):
         """
-        DOCUMENTED BEHAVIOR (not a bug): a CF on a date that has no matching
-        NAVSnapshot is silently skipped.
+        MF-E2b (developer's decision A, 20/10): a CF on a date that has no matching NAVSnapshot counts on the first
+        snapshot on or after it — the transaction keeps its day, the calculation reads it on the first day it can value.
 
-        Caller MUST provide a NAVSnapshot for every CF date.
-        This constraint is the same as for calculate_twrr().
+        Jun 1's −10 000 counts on Dec 31: Jan 1 ROI 0 (nothing invested yet), Dec 31 ROI (10 500 − 10 000) / 10 000 = 5%.
+
+        Before MF-E2b this test was ``test_cf_between_snapshots_is_missed`` («DOCUMENTED BEHAVIOR (not a bug): a CF on a
+        date that has no matching NAVSnapshot is silently skipped»), asserting ROI 0 on both snapshots. The rule's cases
+        are in test_financial_math/test_returns_gap_flows.py.
         """
         navs = [
             NAVSnapshot(date(2025, 1, 1), Decimal("0")),
             NAVSnapshot(date(2025, 12, 31), Decimal("10500")),
         ]
-        # CF on Jun 1 — no snapshot on Jun 1 → will be missed
+        # CF on Jun 1 — no snapshot on Jun 1 → counts on Dec 31
         cfs = [CashFlowInput(date(2025, 6, 1), Decimal("-10000"))]
         result = calculate_simple_roi_series(navs, cfs)
-        # net_invested stays 0 for all snapshots → roi = 0
-        for point in result:
-            assert point.roi == Decimal("0"), "CF without matching NAVSnapshot is silently dropped. " "Callers must provide a snapshot for every CF date."
+        assert [(point.date, point.roi) for point in result] == [(date(2025, 1, 1), Decimal("0")), (date(2025, 12, 31), Decimal("0.05"))]
 
 
 # ---------------------------------------------------------------------------

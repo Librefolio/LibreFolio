@@ -146,7 +146,8 @@
         "other": "refusé par le serveur"
       },
       "tooManyItems": "Rien n'a été enregistré : le serveur accepte au plus {max, number} valeurs par enregistrement, et celui-ci en contenait {count, number}. Enregistrez-les en plusieurs fois."
-    }
+    },
+    "errorWithRequestId": "{message} (code : {requestId})"
   },
   "csvImport": {
     "title": "Importer des données CSV",

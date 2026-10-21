@@ -324,6 +324,21 @@ The main fields; `lib/components/table/types.ts` has the full interface.
 | `urlKey` | `string` | URL parameter of the column's filter (default: the id). |
 | `integerOnly` | `boolean` | Integer-only number filter. |
 
+## 📅 Date filter {: #date-filter }
+
+The filter of a `date` column (`DataTableColumnFilter.svelte`) is a `DateRangePicker` without
+presets (`compact`, `stacked`), and it applies a `DateFilter`, `{type: 'date', from?, to?}`
+(`types.ts`). Either end may stay blank: `matchesColumnFilter` (`dataTableLogic.ts`) drops a row only
+before `from` or after `to`, as does `TransactionsTable`'s own pre-filter, so a date in «From» alone
+keeps the rows from that day on, and one in «To» alone the rows up to that day. In the URL the filter
+reads `from,to`, either side empty (`lib/utils/urlFilters.ts`); the Transactions page keeps its own
+`date_start` and `date_end` (`routes/(app)/transactions/filterState.ts`).
+
+The picker cannot make a filter of one day
+([No range of a single day](datePickers.md#no-single-day-range)). Until Y-N65, a date typed in
+«From» alone filled «To» with the same date, so the filter kept that day only. A one-day filter that
+arrives through the URL still applies as it is.
+
 ## 🎨 Cell Content Types
 
 The `cell` function can return a simple string/number or a structured object:

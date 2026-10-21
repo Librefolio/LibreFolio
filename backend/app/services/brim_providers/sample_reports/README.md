@@ -21,7 +21,10 @@ This directory contains sample broker report files for testing BRIM plugins.
 | File                   | Description                                              | Expected Result                                             |
 |------------------------|---------------------------------------------------------|-------------------------------------------------------------|
 | `fineco-export.csv`    | Variant B (15 columns, with commission columns)         | Trades/dividends/coupons/redemptions + separate FEE rows    |
+| `fineco_btp_market.csv`, `fineco_btp_placement.csv` | Variant B, bond trades with commissions | BUY (Controvalore minus commission) + separate FEE rows |
 | `fineco_variant_a.csv` | Variant A (11 columns, no commission columns)           | Same operations parsed, no FEE rows (currency from Divisa)  |
+
+In the Variant-B samples the **Controvalore** of a trade already includes the commission (purchase) or has it taken off (sale), as in a real Fineco export (discussion #49): `Prezzo` = `Controvalore` / `Quantita` on euro rows.
 
 ### Danske Bank Plugin (`broker_danske_bank`) — report sets
 

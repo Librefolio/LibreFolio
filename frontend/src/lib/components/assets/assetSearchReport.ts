@@ -3,7 +3,8 @@
  *
  * The report leaves from the user's own client, never from the server:
  * - the instance's support address is `mailto:` and one address → a `mailto:` link with the subject and the body;
- * - it is an http(s) page → the page opens, and the report goes to the clipboard, to paste there;
+ * - it is an http(s) page → the page opens with the report as `title` and `body` in its address, as for a GitHub
+ *   issue (N61-form), and the report also goes to the clipboard, for a page that does not read them;
  * - it is not set, or not valid → on a self-hosted instance, a prefilled GitHub issue, public, that the user reviews
  *   before sending it; on a managed instance, or when the configuration could not be read, no link at all (N61): a
  *   public issue would publish the profile, the provider codes and the identifiers.
@@ -124,7 +125,22 @@ export function buildSearchReport(input: SearchReportInput): SearchReport {
     return {subject: `LibreFolio: asset not found — ${subjectQuery}`, body: lines.join('\n')};
 }
 
-/** The link that sends `report` through `channel`: `mailto:` with subject and body, the page itself, or a new GitHub issue. */
+/**
+ * A support page with the report in its address (N61-form): `title` and `body`, encoded as for a GitHub issue
+ * (`encodeURIComponent`: a space is `%20`, a line break `%0A`), so a support form can fill itself in. They follow the
+ * page's own query, a `title` or `body` already there replaced, and come before its fragment.
+ */
+function pageWithReport(url: string, report: SearchReport): string {
+    const page = new URL(url);
+    const kept = page.search
+        .slice(1)
+        .split('&')
+        .filter((part) => part !== '' && !/^(title|body)(=|$)/.test(part));
+    const query = [...kept, `title=${encodeURIComponent(report.subject)}`, `body=${encodeURIComponent(report.body)}`].join('&');
+    return `${page.origin}${page.pathname}?${query}${page.hash}`;
+}
+
+/** The link that sends `report` through `channel`: `mailto:` with subject and body, the page with the report, or a new GitHub issue. */
 export function reportHref(channel: SupportChannel, report: SearchReport): string {
     switch (channel.kind) {
         case 'mailto':
@@ -133,6 +149,6 @@ export function reportHref(channel: SupportChannel, report: SearchReport): strin
         case 'github':
             return `${channel.url}?title=${encodeURIComponent(report.subject)}&body=${encodeURIComponent(report.body)}`;
         case 'page':
-            return channel.url;
+            return pageWithReport(channel.url, report);
     }
 }

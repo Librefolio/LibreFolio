@@ -288,17 +288,17 @@ describe('lotBubbleRadius', () => {
 
 describe('lotBubbleSignColor', () => {
     it('paints gains, losses and a flat dead band per theme', () => {
-        expect(lotBubbleSignColor(1, false)).toBe('#16a34a');
-        expect(lotBubbleSignColor(1, true)).toBe('#4ade80');
-        expect(lotBubbleSignColor(-1, false)).toBe('#dc2626');
-        expect(lotBubbleSignColor(-1, true)).toBe('#f87171');
-        expect(lotBubbleSignColor(0, false)).toBe('#64748b');
-        expect(lotBubbleSignColor(0, true)).toBe('#94a3b8');
+        expect(lotBubbleSignColor(1, false)).toBe('#18794e');
+        expect(lotBubbleSignColor(1, true)).toBe('#5ed69a');
+        expect(lotBubbleSignColor(-1, false)).toBe('#c82838');
+        expect(lotBubbleSignColor(-1, true)).toBe('#ff7a86');
+        expect(lotBubbleSignColor(0, false)).toBe('#727b87');
+        expect(lotBubbleSignColor(0, true)).toBe('#a9b0bb');
     });
 
     it('treats a crumb within ±epsilon as flat', () => {
-        expect(lotBubbleSignColor(LOT_BUBBLE_ZERO_EPS / 2, false)).toBe('#64748b');
-        expect(lotBubbleSignColor(-LOT_BUBBLE_ZERO_EPS / 2, false)).toBe('#64748b');
+        expect(lotBubbleSignColor(LOT_BUBBLE_ZERO_EPS / 2, false)).toBe('#727b87');
+        expect(lotBubbleSignColor(-LOT_BUBBLE_ZERO_EPS / 2, false)).toBe('#727b87');
     });
 });
 

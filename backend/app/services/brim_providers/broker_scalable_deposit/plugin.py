@@ -55,7 +55,8 @@ class ScalableDepositProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
-        return "1.0.0"
+        """1.1.0: a status the file shows that the importer does not know is reported; the known ones that are not movements are dropped quietly (W-B86)."""
+        return "1.1.0"
 
     @property
     def docs_url(self) -> Optional[str]:

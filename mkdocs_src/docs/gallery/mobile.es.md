@@ -313,12 +313,28 @@ La categoría Introducción de Preferencias con el estado de cada guía y su bot
     <img class="gallery-img" data-category="settings" data-name="onboarding-replay" alt="🔁 Repetición de guías">
 </div>
 
+### 🧩 Ajustes de los plugins
+
+La pestaña Plugins en móvil: los ajustes de cada plugin en su propio formulario.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="settings" data-name="plugins" alt="🧩 Ajustes de los plugins">
+</div>
+
 ### 🛡️ Configuración global (Administrador)
 
 Configuración de todo el sistema en móvil.
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Configuración global">
+</div>
+
+### 📧 Correo (Administrador)
+
+El estado del correo de la instancia y el correo de prueba en móvil.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="settings" data-name="email" alt="Correo">
 </div>
 
 ### 🕐 Planificador de datos de mercado — Configuración

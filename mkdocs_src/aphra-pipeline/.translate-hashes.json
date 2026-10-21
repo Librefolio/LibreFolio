@@ -1319,7 +1319,7 @@
     }
   },
   "gallery/desktop.en.md": {
-    "md5": "7cd49d23cc1ab40cdd3c3586abbcdf80",
+    "md5": "c1c44d33ff9d6af83796cabbf9aba056",
     "langs_done": [
       "es",
       "fr",
@@ -1338,7 +1338,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 326.3,
-        "stamped_at": "2026-10-13T02:45:34.302846+00:00",
+        "stamped_at": "2026-10-20T12:32:28.470484+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -1351,7 +1351,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 348.5,
-        "stamped_at": "2026-10-13T02:45:34.302846+00:00",
+        "stamped_at": "2026-10-20T12:32:28.470484+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -1364,14 +1364,14 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 293.1,
-        "stamped_at": "2026-10-13T02:45:34.302846+00:00",
+        "stamped_at": "2026-10-20T12:32:28.470484+00:00",
         "stamped_by": "translate-stamp"
       }
     },
     "last_translated": "2026-10-10T07:49:11.086759+00:00"
   },
   "gallery/mobile.en.md": {
-    "md5": "bd77fa67c3e1a377dbea6ccbeead3eb4",
+    "md5": "af27faa62c87f318747307d454ce9e95",
     "langs_done": [
       "es",
       "fr",
@@ -1390,7 +1390,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 318.7,
-        "stamped_at": "2026-10-13T02:45:41.106310+00:00",
+        "stamped_at": "2026-10-20T12:32:28.470484+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -1403,7 +1403,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 274.3,
-        "stamped_at": "2026-10-13T02:45:41.106310+00:00",
+        "stamped_at": "2026-10-20T12:32:28.470484+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -1416,7 +1416,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 291.0,
-        "stamped_at": "2026-10-13T02:45:41.106310+00:00",
+        "stamped_at": "2026-10-20T12:32:28.470484+00:00",
         "stamped_by": "translate-stamp"
       }
     },
@@ -5368,7 +5368,7 @@
     }
   },
   "user/transactions/import/index.en.md": {
-    "md5": "52c28c5c760749d481573df4335f996d",
+    "md5": "ec5aabbd804f8fcdaa48ba8418f821a9",
     "langs_done": [
       "es",
       "fr",
@@ -5388,7 +5388,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 184.8,
-        "stamped_at": "2026-10-17T06:08:50.588319+00:00",
+        "stamped_at": "2026-10-19T14:07:03.104022+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -5401,7 +5401,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 142.0,
-        "stamped_at": "2026-10-17T06:08:50.588319+00:00",
+        "stamped_at": "2026-10-19T14:07:03.104022+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -5414,7 +5414,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 126.6,
-        "stamped_at": "2026-10-17T06:08:50.588319+00:00",
+        "stamped_at": "2026-10-19T14:07:03.104022+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -6546,7 +6546,7 @@
     }
   },
   "user/transactions/import/how-to.en.md": {
-    "md5": "5b3d315c551fa1ed8dea76cc68b1268d",
+    "md5": "62b4e6fa610c58fcef863996fada1112",
     "langs_done": [
       "es",
       "fr",
@@ -6566,7 +6566,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 167.7,
-        "stamped_at": "2026-10-17T06:08:45.031967+00:00",
+        "stamped_at": "2026-10-20T09:22:34.925399+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -6581,7 +6581,7 @@
         "elapsed_s": 173.0,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=114, translated=115 (Δ+1)\n  L3: src=1 trn=2\n    EN: The **Import Wizard** turns the reports you download from your broker into transactions. You check\n    TR: L'**Assistant d'importation** transforme les rapports que vous téléchargez depuis votre courtier en transactions. Vous v\n  L4: src=1 trn=0\n    EN: what it read and settle its doubts; nothing is saved until you press **Save All**.\n    TR: \n  L9: src=0 trn=1\n    EN: \n    TR: 1. Exportez un rapport de transactions depuis votre courtier : sa page dans les **[Courtiers pris en charge](index.md)**\n  L10: src=1 trn=2\n    EN: 1. Export a transaction report from your broker: its page in **[Supported Brokers](index.md)** says\n    TR: 2. Sur la page **[Transactions](../index.md)**, cliquez sur **Importer** (:material-file-upload:).\n  L12: src=2 trn=1\n    EN: 2. On the **[Transactions](../index.md)** page, click **Import** (:material-file-upload:).\n    TR: 4. Cliquez sur **Importer N transactions** : les lignes s'ouvrent dans l'espace de travail groupé, pas encore enregistré\n  L13: src=0 trn=1\n    EN: 3. Drop the report into the wizard, assign it to its broker and follow the steps below.\n    TR: 5. Jetez-y un dernier coup d'œil et cliquez sur **Tout enregistrer**.\n  L14: src=1 trn=0\n    EN: 4. Click **Import N transactions**: the rows open in the bulk workspace, not saved yet.\n    TR: \n  L15: src=1 trn=0\n    EN: 5. Give them a last look and click **Save All**.\n    TR: <div class=\"lf-screenshot-carousel\" data-carousel=\"carousel-import-wizard\" data-carousel-interval=\"6000\" data-show-title\n  … and more (showing first 8 mismatches)\n\nSOURCE_OUTLINE (for reference):\n  # 🧙 How to Import Transactions\n    ## 🚀 Step-by-Step Guide\n    ## 🧙 The Import Wizard Steps\n      ### 📤 Step 1: Upload\n        #### 🧭 A file in the wrong broker {: #wrong-broker }\n      ### 🗂️ Step 2: Select Files\n      ### 🧠 Step 3: Parse\n      ### 🧩 Steps that appear only when needed {: #only-when-needed }\n      ### 📦 Step 4: Review {: #review }\n        #### 🗂️ Match each security\n        #### 🚦 Read the status badges\n        #### ⛔ Rows before the broker's opening date {: #opening-date }\n        #### 📥 Import the rows\n      ### 💾 Save in the bulk workspace\n    ## 🧭 Guided First Import {: #guided-first-import }\n    ## 🔗 Related",
         "final_structural_issues": 1,
-        "stamped_at": "2026-10-17T06:08:45.031967+00:00",
+        "stamped_at": "2026-10-20T09:22:34.925399+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -6594,7 +6594,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 161.9,
-        "stamped_at": "2026-10-17T06:08:45.031967+00:00",
+        "stamped_at": "2026-10-20T09:22:34.925399+00:00",
         "stamped_by": "translate-stamp"
       }
     }
