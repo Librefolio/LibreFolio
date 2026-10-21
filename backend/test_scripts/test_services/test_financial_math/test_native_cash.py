@@ -11,11 +11,12 @@ currency it holds, worth on any day that balance at that day's rate — every fo
 converted at its own date through the FX service, in one batched call — and every conversion it
 could not make is reported with its pair and dates instead of becoming a silent zero.
 
-Pure: no database, no server, no network. The module's only I/O is ``convert_bulk``; every
-test replaces the module attribute ``native_cash.convert_bulk`` with a double, so every
-figure is exact and every conversion request is observable. Where nothing needs converting
-the double is a probe that records and fails, and the session is ``None``: nothing may
-touch it. Values are compared through ``str()`` wherever the exponent is part of the contract:
+Pure: no database, no server, no network. The module's only I/O is the FX service: ``convert_bulk``
+for the movements' amounts and, since P3 («formule veloci»), ``unit_rate_steps`` for the unit rates,
+asked as windows of days and answered as steps. Every test replaces both module attributes with
+doubles on the same rates (``FakeFx``, ``FakeSteps``), so every figure is exact and every request is
+observable. Where nothing needs converting both are one probe that records and fails, and the
+session is ``None``: nothing may touch it. Values are compared through ``str()`` wherever the exponent is part of the contract:
 an EUR-only history must come out byte-identical, so ``Decimal("950.00")`` is not
 ``Decimal("950")`` here.
 
@@ -31,11 +32,14 @@ this file still collects and runs.
 Section 12 (R13-SEC8-2) pins which days a currency's unit rate is asked on: every day from
 ``max(first movement, 1900-01-01)``, and before that floor only the foreign movements' own days, so a
 balance counted before 1900 keeps a rate. The floor ``EARLIEST_RANGE_START`` is written as a literal
-(the name is new).
+(the name is new). Since P3 those days are asked as windows — one ``(d, d)`` per movement day before
+the floor, one window from ``max(first movement, floor)`` — and sections 3 and 12 assert the windows,
+the very days asked one by one before.
 """
 
 from __future__ import annotations
 
+from bisect import bisect_right
 from dataclasses import FrozenInstanceError, dataclass, field
 from datetime import date
 from decimal import Decimal
@@ -55,6 +59,7 @@ from backend.app.services.financial_math.native_cash import (
     compute_native_cash,
     effective_share,
 )
+from backend.app.services.fx.conversion import UnitRateSteps
 from backend.test_scripts.test_utils import print_section, print_success
 
 D0 = date(2025, 1, 1)
@@ -92,6 +97,8 @@ class FakeFx:
     calls: list[list[tuple[Currency, str, date]]] = field(default_factory=list)
     sessions: list[object] = field(default_factory=list)
     raise_on_error_args: list[object] = field(default_factory=list)
+    #: The ``unit_rate_steps`` double installed with this one, on the same rates (``install_fx``).
+    steps: FakeSteps | None = None
 
     async def __call__(self, session, conversions, raise_on_error=_NOT_PASSED):
         batch = list(conversions)
@@ -123,30 +130,72 @@ class FakeFx:
 
 
 @dataclass
+class FakeSteps:
+    """``unit_rate_steps`` double on the same rates as ``FakeFx`` (P3): one unit's steps on the windows asked, built as the
+    FX service builds them — a step on each window's first day with the last rate on or before it (none before the
+    first rate), and one on each rate day inside a window. So on every asked day ``at`` is what ``FakeFx`` answers for
+    one unit, to the digit (``Decimal("1") * rate``). Every call recorded, the windows read once as lists; a pair of one
+    currency, or a window that ends before it starts, raises ``ValueError`` as the FX service does.
+    """
+
+    rates: dict[tuple[str, str], dict[date, Decimal]] = field(default_factory=dict)
+    calls: list[dict[tuple[str, str], list[tuple[date, date]]]] = field(default_factory=list)
+    sessions: list[object] = field(default_factory=list)
+
+    async def __call__(self, session, requests):
+        asked = {pair: list(windows) for pair, windows in requests.items()}
+        self.sessions.append(session)
+        self.calls.append(asked)
+        steps: dict[tuple[str, str], UnitRateSteps] = {}
+        for (source, destination), windows in asked.items():
+            if source == destination:
+                raise ValueError(f"unit_rate_steps: {source}/{destination} is one currency, not a pair")
+            series = self.rates.get((source, destination), {})
+            rate_days = sorted(series)
+            rows_by_day: dict[date, date] = {}
+            for first, last in sorted(windows):
+                if last < first:
+                    raise ValueError(f"unit_rate_steps: the window {first} – {last} of {source}/{destination} ends before it starts")
+                anchor = bisect_right(rate_days, first) - 1
+                if anchor >= 0:
+                    rows_by_day[first] = rate_days[anchor]
+                for rate_day in rate_days[anchor + 1 : bisect_right(rate_days, last)]:
+                    rows_by_day[rate_day] = rate_day
+            days = tuple(sorted(rows_by_day))
+            steps[(source, destination)] = UnitRateSteps(source=source, destination=destination, days=days, values=tuple(Decimal("1") * series[rows_by_day[day]] for day in days), rate_days=tuple(rows_by_day[day] for day in days))
+        return steps
+
+
+@dataclass
 class ForbiddenFx:
     """Probe for histories where nothing needs converting: it records the call, then fails loudly.
 
-    The record is what the tests assert on, so a caller that swallowed the exception would
-    still be caught.
+    It stands for both doors of the FX service, ``convert_bulk`` and ``unit_rate_steps`` (P3). The record is what the
+    tests assert on, so a caller that swallowed the exception would still be caught.
     """
 
     calls: list[tuple[tuple, dict]] = field(default_factory=list)
 
     async def __call__(self, *args, **kwargs):
         self.calls.append((args, kwargs))
-        raise AssertionError("convert_bulk must not be called: nothing in this history needs converting")
+        raise AssertionError("the FX service (convert_bulk, unit_rate_steps) must not be called: nothing in this history needs converting")
 
 
 @pytest.fixture
 def forbidden_fx(monkeypatch) -> ForbiddenFx:
     probe = ForbiddenFx()
     monkeypatch.setattr(native_cash, "convert_bulk", probe)
+    monkeypatch.setattr(native_cash, "unit_rate_steps", probe)
     return probe
 
 
 def install_fx(monkeypatch, rates: dict[tuple[str, str], dict[date, str]]) -> FakeFx:
+    """``convert_bulk`` and ``unit_rate_steps`` replaced on the module by doubles on the same ``rates``; the steps double
+    is ``fx.steps``."""
     fx = FakeFx(rates={pair: {day: Decimal(rate) for day, rate in series.items()} for pair, series in rates.items()})
+    fx.steps = FakeSteps(rates=fx.rates)
     monkeypatch.setattr(native_cash, "convert_bulk", fx)
+    monkeypatch.setattr(native_cash, "unit_rate_steps", fx.steps)
     return fx
 
 
@@ -234,6 +283,17 @@ def _str_dict(mapping) -> dict:
 def _batch(fx: FakeFx, index: int = 0) -> list[tuple[str, str, str, date]]:
     """Call ``index`` of the double as ``(code, str(amount), to, day)`` in request order."""
     return [(amount.code, str(amount.amount), to_currency, day) for amount, to_currency, day in fx.calls[index]]
+
+
+def _unit_windows(fx: FakeFx) -> dict[tuple[str, str], list[tuple[date, date]]]:
+    """The windows of the one ``unit_rate_steps`` call, by pair (P3); fails unless there was exactly one."""
+    assert fx.steps is not None and len(fx.steps.calls) == 1, f"one unit_rate_steps call expected, got {0 if fx.steps is None else len(fx.steps.calls)}"
+    return fx.steps.calls[0]
+
+
+def _window_days(windows: list[tuple[date, date]]) -> list[date]:
+    """Every day of ``windows``, in window order: the days a request a day asked before P3."""
+    return [date.fromordinal(ordinal) for first, last in windows for ordinal in range(first.toordinal(), last.toordinal() + 1)]
 
 
 _FLOW_FIELDS = ("signed_by_type", "absolute_by_type", "income_by_position", "costs_by_position", "unallocated_income", "unallocated_costs")
@@ -456,9 +516,10 @@ class TestRequestContract:
         print_success("zero rows keep their own amount, no unit rate asked")
 
     @pytest.mark.asyncio
-    async def test_one_call_amount_requests_then_unit_requests(self, monkeypatch):
-        """Raw amounts in movement order, then unit rates by currency code, each from its first to its last non-zero day."""
-        print_section("3 — one call: amount requests, then unit requests")
+    async def test_one_call_for_the_amounts_then_one_for_the_unit_windows(self, monkeypatch):
+        """Raw amounts in movement order to ``convert_bulk``; then one ``unit_rate_steps`` call with each currency's window
+        from its first to its last non-zero day (P3: before it, the same days were unit requests of the same call)."""
+        print_section("3 — one call for the amounts, one for the unit windows")
         fx = install_fx(monkeypatch, _CONTRACT_RATES)
         session = object()
 
@@ -468,16 +529,14 @@ class TestRequestContract:
         assert fx.sessions[0] is session
         assert fx.raise_on_error_args[0] is False
         assert fx.identity_requests == []
-        assert _batch(fx) == [
-            *_CONTRACT_AMOUNT_REQUESTS,
-            ("GBP", "1", "EUR", D2),
-            ("USD", "1", "EUR", D1),
-            ("USD", "1", "EUR", D2),
-            ("USD", "1", "EUR", D3),
-        ]
+        assert _batch(fx) == _CONTRACT_AMOUNT_REQUESTS, "convert_bulk converts the amounts only: the unit rates are asked as windows"
+        windows = _unit_windows(fx)
+        assert fx.steps.sessions[0] is session
+        assert windows == {("GBP", "EUR"): [(D2, D2)], ("USD", "EUR"): [(D1, D3)]}
+        assert {pair: _window_days(asked) for pair, asked in windows.items()} == {("GBP", "EUR"): [D2], ("USD", "EUR"): [D1, D2, D3]}, "the days the unit requests asked"
         assert _strs(result.converted) == _CONTRACT_CONVERTED, "aligned with the movements; 500.00 is converted whole, the share is not applied"
         assert _str_dict(result.unit_rates) == {("GBP", D2): "1.20", ("USD", D1): "0.90", ("USD", D2): "0.92", ("USD", D3): "0.95"}
-        print_success("3 amount requests, 4 unit requests, one call, raise_on_error=False")
+        print_success("3 amount requests in one call, 2 unit windows in another, raise_on_error=False")
 
     @pytest.mark.asyncio
     async def test_rates_until_extends_every_unit_range(self, monkeypatch):
@@ -487,16 +546,10 @@ class TestRequestContract:
         result = await compute_native_cash(object(), _contract_movements(), report_currency="EUR", rates_until=D4)
 
         assert len(fx.calls) == 1
-        assert _batch(fx) == [
-            *_CONTRACT_AMOUNT_REQUESTS,
-            ("GBP", "1", "EUR", D2),
-            ("GBP", "1", "EUR", D3),
-            ("GBP", "1", "EUR", D4),
-            ("USD", "1", "EUR", D1),
-            ("USD", "1", "EUR", D2),
-            ("USD", "1", "EUR", D3),
-            ("USD", "1", "EUR", D4),
-        ]
+        assert _batch(fx) == _CONTRACT_AMOUNT_REQUESTS
+        windows = _unit_windows(fx)
+        assert windows == {("GBP", "EUR"): [(D2, D4)], ("USD", "EUR"): [(D1, D4)]}
+        assert {pair: _window_days(asked) for pair, asked in windows.items()} == {("GBP", "EUR"): [D2, D3, D4], ("USD", "EUR"): [D1, D2, D3, D4]}
         assert _strs(result.converted) == _CONTRACT_CONVERTED
         assert _str_dict(result.unit_rates) == {
             ("GBP", D2): "1.20",
@@ -507,7 +560,7 @@ class TestRequestContract:
             ("USD", D3): "0.95",
             ("USD", D4): "0.95",
         }, "every answered day is a unit rate, as the service answered it"
-        print_success("unit requests run through D4 for both currencies")
+        print_success("unit windows run through D4 for both currencies")
 
     @pytest.mark.asyncio
     async def test_rates_until_before_a_currency_starts_asks_no_unit_rate_for_it(self, monkeypatch):
@@ -517,10 +570,11 @@ class TestRequestContract:
         result = await compute_native_cash(object(), _contract_movements(), report_currency="EUR", rates_until=D1)
 
         assert len(fx.calls) == 1
-        assert _batch(fx) == [*_CONTRACT_AMOUNT_REQUESTS, ("USD", "1", "EUR", D1)], "amounts are all asked; GBP starts on D2, after D1: empty range"
+        assert _batch(fx) == _CONTRACT_AMOUNT_REQUESTS, "amounts are all asked"
+        assert _unit_windows(fx) == {("USD", "EUR"): [(D1, D1)]}, "GBP starts on D2, after D1: no window for it (D2 – D1 would end before it starts)"
         assert _strs(result.converted) == _CONTRACT_CONVERTED
         assert _str_dict(result.unit_rates) == {("USD", D1): "0.90"}
-        print_success("USD unit rate on D1 only, no GBP unit request")
+        print_success("USD unit rate on D1 only, no GBP window")
 
     @pytest.mark.asyncio
     async def test_failed_conversion_is_none_and_reported_missing(self, monkeypatch):
@@ -531,7 +585,8 @@ class TestRequestContract:
         result = await compute_native_cash(object(), movements, report_currency="EUR")
 
         assert len(fx.calls) == 1
-        assert _batch(fx) == [("USD", "100", "EUR", D1), ("USD", "50", "EUR", D2), ("USD", "1", "EUR", D1), ("USD", "1", "EUR", D2)]
+        assert _batch(fx) == [("USD", "100", "EUR", D1), ("USD", "50", "EUR", D2)]
+        assert _unit_windows(fx) == {("USD", "EUR"): [(D1, D2)]}, "the unit days D1 and D2"
         assert _strs(result.converted) == ["1000", None, "45.00"], "no rate is None, never a zero"
         assert _str_dict(result.unit_rates) == {("USD", D2): "0.90"}, "an unanswered day has no unit rate"
         assert result.missing_conversions() == [MissingCashConversion(pair="USD/EUR", dates=(D1,))]
@@ -1306,30 +1361,34 @@ def _days_from(first: date, count: int) -> list[date]:
 
 
 def _unit_days(fx: FakeFx, currency: str) -> list[date]:
-    """The days of the double's first call on which ``currency``'s unit rate was asked, in request order."""
-    return [day for code, amount, _to, day in _batch(fx) if code == currency and amount == "1"]
+    """The days ``currency``'s unit rate was asked on, in window order: its windows of the one ``unit_rate_steps`` call
+    (P3), day by day — the unit requests of the ``convert_bulk`` call before."""
+    return _window_days(_unit_windows(fx).get((currency, "EUR"), []))
 
 
 class TestUnitRequestsStartAtTheFloor:
     """A currency's unit rate is asked on every day from ``max(its first movement, the floor)`` to ``rates_until``, and
     before the floor on each of its movements' own days only (R13-SEC8-2, MEDIUM, DoS): a foreign movement stored
     before 1900 no longer asks one rate for every day since its own date — what it asks is bounded by the movements, not
-    by the days. The movement's own amount is still converted at its own date: it is replayed exactly."""
+    by the days. The movement's own amount is still converted at its own date: it is replayed exactly. Since P3 the days
+    are windows: ``(d, d)`` for each movement day before the floor, one window from ``max(first, floor)``."""
 
     @pytest.mark.asyncio
     async def test_a_movement_before_the_floor_asks_its_own_day_then_from_the_floor(self, monkeypatch):
-        """USD 100 on 1890-01-01, rates until 1900-01-10: the amount at 1890-01-01, then eleven unit requests — the
-        movement's own day, 1890-01-01, then 1900-01-01 to 1900-01-10. HEAD 94e170ae1: 3 662, every day from 1890-01-01."""
-        print_section("12 — a USD movement of 1890: its own day, then unit requests from 1900-01-01")
+        """USD 100 on 1890-01-01, rates until 1900-01-10: the amount at 1890-01-01, then eleven unit days — the
+        movement's own day, 1890-01-01, then 1900-01-01 to 1900-01-10, as the windows (1890-01-01, 1890-01-01) and
+        (1900-01-01, 1900-01-10). HEAD 94e170ae1: 3 662, every day from 1890-01-01."""
+        print_section("12 — a USD movement of 1890: its own day, then unit windows from 1900-01-01")
         fx = install_fx(monkeypatch, {("USD", "EUR"): {_BEFORE_THE_FLOOR: "0.50", _FLOOR: "0.90"}})
 
         result = await compute_native_cash(object(), [movement(_BEFORE_THE_FLOOR, "USD", "100")], report_currency="EUR", rates_until=_RATES_UNTIL)
 
         assert len(fx.calls) == 1
-        assert _batch(fx)[0] == ("USD", "100", "EUR", _BEFORE_THE_FLOOR), "the movement's own amount, at its own date"
+        assert _batch(fx) == [("USD", "100", "EUR", _BEFORE_THE_FLOOR)], "the movement's own amount, at its own date, and nothing else"
+        assert _unit_windows(fx) == {("USD", "EUR"): [(_BEFORE_THE_FLOOR, _BEFORE_THE_FLOOR), (_FLOOR, _RATES_UNTIL)]}
         expected = [_BEFORE_THE_FLOOR, *_days_from(_FLOOR, 10)]
         units = _unit_days(fx, "USD")
-        assert units == expected, f"{len(units)} USD unit requests, from {units[0] if units else None}"
+        assert units == expected, f"{len(units)} USD unit days, from {units[0] if units else None}"
         assert _strs(result.converted) == ["50.00"]
         assert sorted(result.unit_rates) == [("USD", day) for day in expected]
         print_success("the amount at 1890-01-01, unit rates on 1890-01-01 and from 1900-01-01")
@@ -1346,6 +1405,7 @@ class TestUnitRequestsStartAtTheFloor:
         await compute_native_cash(object(), movements, report_currency="EUR", rates_until=date(1900, 1, 3))
 
         assert len(fx.calls) == 1
+        assert _unit_windows(fx) == {("USD", "EUR"): [(_BEFORE_THE_FLOOR, _BEFORE_THE_FLOOR), (date(1895, 3, 1), date(1895, 3, 1)), (_FLOOR, date(1900, 1, 3))]}
         assert _unit_days(fx, "USD") == [_BEFORE_THE_FLOOR, date(1895, 3, 1), *_days_from(_FLOOR, 3)]
         print_success("1890-01-01, 1895-03-01, then 1900-01-01 to 1900-01-03")
 
@@ -1361,6 +1421,7 @@ class TestUnitRequestsStartAtTheFloor:
         await compute_native_cash(object(), movements, report_currency="EUR", rates_until=date(1900, 1, 6))
 
         assert len(fx.calls) == 1
+        assert _unit_windows(fx) == {("GBP", "EUR"): [(date(1900, 1, 5), date(1900, 1, 6))], ("USD", "EUR"): [(_FLOOR, date(1900, 1, 6))]}
         assert (_unit_days(fx, "GBP"), _unit_days(fx, "USD")) == (_days_from(date(1900, 1, 5), 2), _days_from(_FLOOR, 6))
         print_success("GBP from 1900-01-05, USD from 1900-01-01")
 
@@ -1371,15 +1432,17 @@ class TestUnitRequestsStartAtTheFloor:
         own day's unit rate. On a day between the movement and the floor ``value_at`` is 50.00 (100 at 0.50, carried),
         and ``exchange_results(day, 1900-01-10)`` 40.00 (90.00 - 50.00) — numbers, no ValueError.
 
-        HEAD: green (every day's unit rate is asked, so the day reads 0.50). A floor-only clamp — unit rates from
-        1900-01-01 alone, without the movements' own days — leaves a counted balance with no rate on or before the day:
+        HEAD: green (every day's unit rate is asked, so the day reads 0.50). Since P3 the movement's own day is a window
+        ``(1890-01-01, 1890-01-01)``, whose step carries 0.50 forward. A floor-only clamp — unit rates from 1900-01-01
+        alone, without the movements' own days — leaves a counted balance with no rate on or before the day:
         ``_foreign_value`` raises ``ValueError: no USD/EUR rate on or before …``, a 500 once the Dashboard passes such a
         period start to ``exchange_results``. This test guards against that clamp."""
         print_section(f"12 — a USD balance of 1890 valued on {day}")
-        install_fx(monkeypatch, {("USD", "EUR"): {date(1880, 1, 1): "0.50", _FLOOR: "0.90"}})
+        fx = install_fx(monkeypatch, {("USD", "EUR"): {date(1880, 1, 1): "0.50", _FLOOR: "0.90"}})
 
         cash = await compute_native_cash(object(), [movement(_BEFORE_THE_FLOOR, "USD", "100")], report_currency="EUR", rates_until=_RATES_UNTIL)
 
+        assert _unit_windows(fx) == {("USD", "EUR"): [(_BEFORE_THE_FLOOR, _BEFORE_THE_FLOOR), (_FLOOR, _RATES_UNTIL)]}, "precondition: the 1890 day is asked"
         assert _strs(cash.converted) == ["50.00"], "precondition: the 1890 movement is converted, so its balance is counted"
         assert _str_dict(cash.value_at(day)) == {A: "50.00"}
         assert _str_dict(cash.exchange_results(day, _RATES_UNTIL)) == {A: "40.00"}

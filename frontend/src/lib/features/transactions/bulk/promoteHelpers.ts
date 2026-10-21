@@ -51,6 +51,38 @@ export function cashAmountsCancel(a: CashCancelable, b: CashCancelable, resolveR
     return exactDecimalEqual(applySign(amountA, 'positive'), applySign(amountB, 'positive'));
 }
 
+/** What `promotePairOrder` says about a suggested pair: whether the banner lists `b` first, and the two rows by
+ *  direction — `from`, the row the money leaves, and `to`, the other. */
+export interface PromotePairOrder<T> {
+    swapped: boolean;
+    from: T;
+    to: T;
+}
+
+/**
+ * The order of a suggested pair, one rule for all its readers (J-66). The banner lists the paying row first when the
+ * other one receives (`swapped` when `a` receives and `b` pays); the merge dialog of a single «Merge» lists the rows in
+ * that order, and «Merge all» calls the row listed first «left»; an exchange reads its implied rate, and asks the market
+ * rate to compare it with, from `from` to `to`. `from` is `a` when `a` pays, `b` otherwise; a row without cash, or whose
+ * amount is no plain decimal, never pays.
+ *
+ * A row pays when its cash, signed by its type, is negative: the sign `buildSignedCash` gives it, read exactly, as
+ * `cashAmountsCancel` reads it. The editor holds a withdrawal's cash as its magnitude (a saved row through
+ * `fieldsFromTx`, an imported one through `txCreateItemToPendingOp`, and since W-B65 a row applied from the form), while
+ * the legs of a split pair keep their signed cash; both give the same answer. Read as stored, a withdrawal held as its
+ * magnitude never paid: depending on the order, the deposit was listed first or the implied rate was inverted.
+ */
+export function promotePairOrder<T extends CashCancelable>(a: T, b: T, resolveRule: TypeRuleResolver): PromotePairOrder<T> {
+    const signOf = (row: T) => {
+        const signed = buildSignedCash(row.fields.cash, resolveRule(row.fields.type).cashSign);
+        return signed ? exactDecimalSign(signed.amount) : null;
+    };
+    const signA = signOf(a);
+    const signB = signOf(b);
+    const swapped = signA === 1 && signB === -1;
+    return signA === -1 ? {swapped, from: a, to: b} : {swapped, from: b, to: a};
+}
+
 /**
  * Merge two free-text field values (e.g. descriptions) for the promote-merge modal.
  * An empty side yields the other; identical sides collapse to one; otherwise the two are

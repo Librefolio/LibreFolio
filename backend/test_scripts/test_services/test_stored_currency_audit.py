@@ -51,7 +51,8 @@ Lot E-19b1.3 (B's review of E-19b1) adds two rules, RED until it (``# red until 
   ``./dev.py db currencies`` ends with a traceback (SCA-015, SCA-035, SCA-044, SCA-045).
 - The warning of a check that fails names the class of the error (and SQLite's error name), never the error's text: a
   currency stored as TEXT that is not UTF-8 makes ``sqlite3`` raise an ``OperationalError`` whose message quotes it, and
-  after a restore those are an archive's bytes (SCA-036).
+  after a restore those are an archive's bytes (SCA-036; since E-20, which makes that text a finding, SCA-036b, with an
+  injected error).
 
 The preconditions of these tests (a BLOB, a text that is not UTF-8) are read by SQL, never through the audit.
 
@@ -79,6 +80,20 @@ Lot H-review of E-19a (H's two LOWs on E-19a) adds two rules, RED until it (``# 
   the other background starts, so after both repairs and after ``restore-commit`` (SCA-070, RED until the move: today
   it stands right after ``lone-transfer-legs``). No wait is a pause: each is bounded (``PROMPT_SECONDS``) and ends when
   what it waits for happens; every thread a test holds is released, and every task it starts awaited, before it ends.
+
+Lot E-20 (the startup half: since B-49 the restore check refuses such an archive) adds one rule, RED until it (``# red
+until E-20``): a currency stored as TEXT that is not UTF-8 is a finding, as a BLOB is. LibreFolio never writes one; a
+database put back by hand, another program writing the file or a damaged file can hold one, and then the server's own
+reads of its rows fail too: the audit is how the admin finds where. ``find_stored_currency_findings`` reads through a
+lenient ``text_factory`` (the text decoded as UTF-8, else its bytes), set on the connection around its reads and put
+back in a ``finally``: the value is ``_as_text`` of the bytes, ``X'…'``, without a suggestion, and every other place and
+value is still found. So the startup's check returns the findings and logs their one warning, no line of its log holding
+the text or the words of a decode error (SCA-036, rewritten); the command lists the value with its place and ``—``,
+exit 1, nothing on stderr (SCA-046); a code inside a JSON text, a provider's ``currency`` or a route step's ``from``, is
+a finding too (SCA-016). Three GUARDs (green today, and after): E-19b1.3's rule for a check that fails, with an injected
+``OperationalError`` (SCA-036b), and the connection's ``text_factory``, the very object it was before the audit, done
+(SCA-017) or failed (SCA-018). The precondition of a text that is not UTF-8 is proved by a plain ``sqlite3`` reader on
+its default ``text_factory``, as the server reads, never through the audit, which reads it since E-20.
 
 Pure: no server, no network, no shared database; only files of ``tmp_path`` (and subprocess runs of the module, and one
 startup step run alone).
@@ -142,6 +157,9 @@ WARNING_OR_ABOVE = WARNING_LEVELS | {"error", "exception", "critical", "fatal"}
 READ_LOT = "E-19b1.3"
 BLOB_RED = "_as_text does not handle a BLOB yet"
 LOG_RED = "the failure log still carries the error's text"
+#: The lot that reads a currency stored as TEXT that is not UTF-8 (E-20, the startup half), and why its reds fail.
+UTF8_LOT = "E-20"
+UTF8_RED = "the audit still reads every text as UTF-8, and one that is not ends it"
 
 # =============================================================================
 # THE MODULE UNDER TEST, LOOKED UP WHEN A TEST RUNS (absent before E-19a)
@@ -409,13 +427,50 @@ BLOB_FINDINGS: list[Finding] = [
 BLOB_STORAGE = [(1, "text", "455552"), (2, "blob", "455552"), (3, "blob", "00FF"), (4, "blob", "455552")]
 
 #: E-19b1.3: a currency stored as TEXT whose bytes are not UTF-8 (a ``CAST`` of bytes writes one: SQLite checks no
-#: encoding). ``sqlite3`` cannot read it back as text, and the message of its ``OperationalError`` quotes it, the byte
-#: replaced by U+FFFD: «Could not decode to UTF-8 column 'currency' with text '…'».
+#: encoding). ``sqlite3`` on its default ``text_factory`` (``str``), as the server reads, cannot read it back as text,
+#: and the message of its ``OperationalError`` quotes it, the byte replaced by U+FFFD: «Could not decode to UTF-8 column
+#: 'currency' with text '…'».
 NOT_UTF8_MARKER = "sca-stored-text"
 NOT_UTF8 = b"E\xffR " + NOT_UTF8_MARKER.encode()
 #: What no line of the log may hold of that error: the stored text (its ASCII part; as the message quotes it) and the
 #: words of the message.
 NOT_UTF8_FRAGMENTS = (NOT_UTF8_MARKER, "E\ufffdR", "\ufffd", "Could not decode", "with text")
+#: Nor, once E-20 has Python decode the text, the words of Python's decoder, which name the byte.
+DECODER_FRAGMENTS = ("\\xff", "0xff", "can't decode", "invalid start byte")
+#: E-20: that value as the audit reads it since then, its bytes, written as SQLite's ``quote()`` writes a BLOB
+#: (``_as_text``): never canonical, never a suggestion.
+NOT_UTF8_VALUE = f"X'{NOT_UTF8.hex().upper()}'"
+#: Its start, ``X'45FF52``: the bytes of ``E``, of the byte that is not UTF-8 and of ``R``. A summary and a line of the
+#: command quote at most 16 characters of a value, then ``…`` (``shown_currency_text``, E-18): never the whole of this one.
+NOT_UTF8_SHOWN = NOT_UTF8_VALUE[:8]
+#: What ``_not_utf8_database`` holds that is no canonical code, since E-20: the ``978`` beside, and that value.
+NOT_UTF8_FINDINGS: list[Finding] = [("transactions.currency", "978", 1, "EUR"), ("assets.currency", NOT_UTF8_VALUE, 1, None)]
+
+#: E-20: codes that are not UTF-8 inside JSON texts, each written as TEXT: the ``currency`` of asset 1's provider
+#: parameters (``G\xffP``) and the ``from`` of the step of the route EUR → USD (``E\xffR``); beside them, asset 2's
+#: parameters hold ``EURO``, and the route 826 → SEK its own step.
+NOT_UTF8_PARAMS = b'{"currency": "G\xffP", "selector": ".price"}'
+NOT_UTF8_STEPS = b'[{"from": "E\xffR", "to": "USD", "provider": "ECB"}]'
+SEK_STEPS = _route(("826", "SEK", "BOE"))
+#: What that database holds that is no canonical code: each of those codes as its bytes, ``X'…'``, without a suggestion,
+#: after the ordinary findings of its place (a digit and a capital sort before ``X``).
+JSON_NOT_UTF8_FINDINGS: list[Finding] = [
+    ("fx_conversion_routes.base", "826", 1, "GBP"),
+    ("fx_conversion_routes.chain_steps.from", "826", 1, "GBP"),
+    ("fx_conversion_routes.chain_steps.from", "X'45FF52'", 1, None),
+    ("asset_provider_assignments.provider_params.currency", "EURO", 1, "EUR"),
+    ("asset_provider_assignments.provider_params.currency", "X'47FF50'", 1, None),
+]
+
+#: E-20: the read ``_FailingReads`` makes fail, and every one after it: its third SELECT, after two that read (the
+#: audit's ``transactions.currency`` and ``transactions.cost_basis_currency``).
+FAILING_READ = 3
+#: What it raises: an ``OperationalError`` no database raised, worded as ``sqlite3``'s for a text that is not UTF-8 and
+#: quoting ``INJECTED_MARKER``; no ``no such table`` in it, so the audit never takes it for an older schema.
+INJECTED_MARKER = "sca036b-secret"
+INJECTED_ERROR = f"Could not decode to UTF-8 column 'currency' with text 'E\ufffdR {INJECTED_MARKER}'"
+#: What no line of the log may hold of it: the marker and the words of the message.
+INJECTED_FRAGMENTS = (INJECTED_MARKER, "E\ufffdR", "\ufffd", "Could not decode", "with text")
 
 
 def _fingerprint(path: Path) -> tuple[Optional[str], tuple[str, ...]]:
@@ -475,9 +530,11 @@ def _blob_database(tmp_path: Path) -> Path:
 
 def _not_utf8_database(tmp_path: Path) -> Path:
     """A database whose asset 2 stores ``NOT_UTF8`` as TEXT, beside asset 1's ``EUR`` and a ``978`` in
-    ``transactions.currency``. Verified, not assumed: read back as bytes, the value is TEXT, its bytes as written; the
-    audit fails on the file with an ``OperationalError`` whose message quotes it, so a log of that message would hold it;
-    and the reads that verify it leave the file and its folder as written."""
+    ``transactions.currency``. Verified, not assumed, and never through the audit (which reads that value since E-20):
+    read back as bytes, the value is TEXT, its bytes as written; a plain ``sqlite3`` reader, on its default
+    ``text_factory`` (``str``), as the server reads, fails on that column with an ``OperationalError`` whose message
+    quotes the text, so a log of that message would hold it; and the reads that verify it leave the file and its folder
+    as written."""
     path = _build(tmp_path / "app.db", {"assets": _assets(["EUR", "EUR"]), "transactions": _transactions([("978", None)])})
     connection = sqlite3.connect(path)
     try:
@@ -490,13 +547,85 @@ def _not_utf8_database(tmp_path: Path) -> Path:
     assert stored == [(1, b"text", b"EUR"), (2, b"text", NOT_UTF8)], f"precondition: asset 2 stores its currency as TEXT that is not UTF-8: {stored}"
     connection = _reader(path)
     try:
+        assert connection.text_factory is str, f"precondition: a plain reader decodes every text as UTF-8, sqlite3's default text_factory: {connection.text_factory!r}"
         with pytest.raises(sqlite3.OperationalError) as raised:
-            _audit("find_stored_currency_findings")(connection)
+            connection.execute("SELECT currency FROM assets WHERE id = 2").fetchall()
     finally:
         connection.close()
-    assert NOT_UTF8_MARKER in str(raised.value), f"precondition: the error the audit fails with quotes the stored text: {raised.value}"
+    assert NOT_UTF8_MARKER in str(raised.value), f"precondition: a plain read of that column, as the server reads, fails with an error quoting the stored text: {raised.value}"
     assert _fingerprint(path) == written, "precondition: reading the database as written changed it or its folder"
     return path
+
+
+def _json_not_utf8_database(tmp_path: Path) -> Path:
+    """A database whose asset 1's provider parameters hold ``NOT_UTF8_PARAMS`` and whose route EUR → USD holds
+    ``NOT_UTF8_STEPS``, each written as TEXT over valid JSON, beside asset 2's ``{"currency": "EURO"}`` and the route
+    826 → SEK. Verified by SQL, never through the audit: each text is TEXT, its bytes as written; SQLite takes it as JSON
+    (``json_valid``), and ``json_extract`` gives the code back as a text of the bytes ``47FF50`` and ``45FF52``; and the
+    reads leave the file and its folder as written."""
+    tables = {
+        "assets": _assets(["EUR", "EUR"]),
+        "fx_conversion_routes": _routes([("EUR", "USD", 1, _route(("EUR", "USD", "ECB"))), ("826", "SEK", 1, SEK_STEPS)]),
+        "asset_provider_assignments": _assignments(['{"currency": "EUR"}', '{"currency": "EURO"}']),
+    }
+    path = _build(tmp_path / "app.db", tables)
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute("UPDATE asset_provider_assignments SET provider_params = CAST(? AS TEXT) WHERE asset_id = 1", (NOT_UTF8_PARAMS,))
+        connection.execute("UPDATE fx_conversion_routes SET chain_steps = CAST(? AS TEXT) WHERE base = 'EUR' AND quote = 'USD'", (NOT_UTF8_STEPS,))
+        connection.commit()
+    finally:
+        connection.close()
+    written = _fingerprint(path)
+    params = _stored(path, "SELECT asset_id, typeof(provider_params), provider_params FROM asset_provider_assignments ORDER BY asset_id", as_bytes=True)
+    assert params == [(1, b"text", NOT_UTF8_PARAMS), (2, b"text", b'{"currency": "EURO"}')], f"precondition: asset 1's provider parameters are TEXT that is not UTF-8: {params}"
+    steps = _stored(path, "SELECT base, quote, typeof(chain_steps), chain_steps FROM fx_conversion_routes ORDER BY base", as_bytes=True)
+    assert steps == [(b"826", b"SEK", b"text", SEK_STEPS.encode()), (b"EUR", b"USD", b"text", NOT_UTF8_STEPS)], f"precondition: the steps of the route EUR → USD are TEXT that is not UTF-8: {steps}"
+    params_code = "SELECT json_valid(provider_params), typeof(json_extract(provider_params, '$.currency')), hex(json_extract(provider_params, '$.currency')) FROM asset_provider_assignments WHERE asset_id = 1"
+    step_code = "SELECT json_valid(chain_steps), typeof(json_extract(chain_steps, '$[0].from')), hex(json_extract(chain_steps, '$[0].from')) FROM fx_conversion_routes WHERE base = 'EUR' AND quote = 'USD'"
+    extracted = _stored(path, params_code) + _stored(path, step_code)
+    assert extracted == [(1, "text", "47FF50"), (1, "text", "45FF52")], f"precondition: SQLite takes both texts as JSON, and json_extract gives each code back as a text of its bytes: {extracted}"
+    assert _fingerprint(path) == written, "precondition: reading the database as written changed it or its folder"
+    return path
+
+
+class _FailingReads(sqlite3.Connection):
+    """E-20: a connection whose reads fail from its ``FAILING_READ``-th SELECT on, each raising ``INJECTED_ERROR``. Every
+    SELECT made on it is kept in ``reads``, with the ``text_factory`` in force when it was made: whether a read was
+    reached, and under which factory it ran. Any other statement (a PRAGMA) runs as on any connection."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.reads: list[tuple[str, Any]] = []
+
+    def execute(self, sql: str, *args: Any) -> sqlite3.Cursor:
+        if sql.lstrip().upper().startswith("SELECT"):
+            self.reads.append((sql, self.text_factory))
+            if len(self.reads) >= FAILING_READ:
+                raise sqlite3.OperationalError(INJECTED_ERROR)
+        return super().execute(sql, *args)
+
+
+def _failing_reader(path: Path) -> _FailingReads:
+    """A ``_FailingReads`` on the file at ``path``, ``query_only`` as ``_reader``."""
+    connection = sqlite3.connect(path, factory=_FailingReads)
+    connection.execute("PRAGMA query_only = ON")
+    return connection
+
+
+def _own_text_factory(data: bytes) -> str:
+    """A ``text_factory`` of a caller's own, not ``sqlite3``'s ``str``: the audit must give back this very object."""
+    return data.decode("utf-8")
+
+
+def _given_text_factory(connection: sqlite3.Connection, factory: str) -> Any:
+    """The ``text_factory`` a test gives ``connection``, returned: ``default`` leaves ``sqlite3``'s own, ``str``; ``own``
+    sets ``_own_text_factory``."""
+    if factory == "own":
+        connection.text_factory = _own_text_factory
+    expected = _own_text_factory if factory == "own" else str
+    assert connection.text_factory is expected, f"precondition: the connection's text_factory is {expected!r}: {connection.text_factory!r}"
+    return connection.text_factory
 
 
 # =============================================================================
@@ -608,6 +737,68 @@ def test_a_blob_is_a_finding_as_sqlite_quotes_it(tmp_path):  # red until E-19b1.
     except TypeError as exc:
         _red(f"{BLOB_RED}: {type(exc).__name__}: {exc}", lot=READ_LOT)
     assert found == BLOB_FINDINGS
+
+
+def test_a_code_that_is_not_utf8_in_a_json_text_is_a_finding_as_its_bytes(tmp_path):  # red until E-20: the audit still reads every text as UTF-8, and one that is not ends it
+    """SCA-016 — RED until E-20: a code that is not UTF-8 inside a JSON text is a finding, as its bytes: in the
+    ``currency`` of a provider's parameters, ``X'47FF50'`` (``G``, the byte ``FF``, ``P``), and in the ``from`` of a
+    route's step, ``X'45FF52'`` (``E``, ``FF``, ``R``), each without a suggestion; beside them, the ordinary findings of
+    those places (``826``, ``EURO``), sorted as ever: ``JSON_NOT_UTF8_FINDINGS``. SQLite takes both texts as JSON
+    (``json_valid``) and ``json_extract`` gives each code back as a text of its bytes, which E-20's lenient
+    ``text_factory`` hands the audit as bytes.
+
+    Preconditions, read by SQL (``_json_not_utf8_database``): both texts stored as TEXT, their bytes as written, valid
+    JSON for SQLite, the code ``json_extract`` gives a text of the bytes ``47FF50`` and ``45FF52``. Today the read of the
+    steps' ``from`` fails with ``sqlite3``'s ``OperationalError``, which ends the whole audit.
+    """
+    path = _json_not_utf8_database(tmp_path)
+    try:
+        found = _find(path)
+    except sqlite3.OperationalError as exc:
+        _red(f"{UTF8_RED}: {type(exc).__name__}: {exc}", lot=UTF8_LOT)
+    assert found == JSON_NOT_UTF8_FINDINGS
+
+
+@pytest.mark.parametrize("factory", ["default", "own"])
+def test_the_audit_gives_back_the_text_factory_it_found(tmp_path, factory):
+    """SCA-017 — GUARD (green today, and after E-20): E-20 reads through a lenient ``text_factory`` set on the caller's
+    connection; done, the audit leaves on it the very ``text_factory`` it found (``is``): ``sqlite3``'s default, ``str``,
+    or one of the caller's own, ``_own_text_factory``, which a ``str`` put back in its place would not be. Barrier: the
+    audit read through that connection, its findings those of ``CLI_TABLES``. Today the audit never touches the factory."""
+    find = _audit("find_stored_currency_findings")
+    path = _build(tmp_path / "app.db", CLI_TABLES)
+    connection = _reader(path)
+    try:
+        before = _given_text_factory(connection, factory)
+        found = find(connection)
+        after = connection.text_factory
+    finally:
+        connection.close()
+    assert _as_tuples(found) == CLI_FINDINGS, "barrier: the audit read the database through that connection"
+    assert after is before, f"the audit leaves the connection's text_factory as it found it, {before!r}: it is {after!r}"
+
+
+@pytest.mark.parametrize("factory", ["default", "own"])
+def test_the_audit_gives_back_the_text_factory_it_found_when_a_read_fails(tmp_path, factory):
+    """SCA-018 — GUARD (green today, and after E-20 when the factory is put back in a ``finally``): a read that fails
+    inside the audit, under E-20's lenient ``text_factory``, ends the audit with its error, and the connection's
+    ``text_factory`` is still the very object it found, ``str`` or ``_own_text_factory``. The connection is a
+    ``_FailingReads``: from its ``FAILING_READ``-th SELECT on, every read raises ``INJECTED_ERROR``. Barrier: the audit
+    raised that error, at that read. The file is as it was. Today the audit never touches the factory."""
+    find = _audit("find_stored_currency_findings")
+    path = _build(tmp_path / "app.db", CLI_TABLES)
+    built = _fingerprint(path)
+    connection = _failing_reader(path)
+    try:
+        before = _given_text_factory(connection, factory)
+        with pytest.raises(sqlite3.OperationalError) as raised:
+            find(connection)
+        after, reads = connection.text_factory, list(connection.reads)
+    finally:
+        connection.close()
+    assert (INJECTED_MARKER in str(raised.value), len(reads)) == (True, FAILING_READ), f"barrier: the audit failed with the injected error, at its read {FAILING_READ}: {raised.value!r} after {len(reads)} read(s)"
+    assert after is before, f"the audit leaves the connection's text_factory as it found it, {before!r}, also when a read fails: it is {after!r}; its reads ran under {[used for _, used in reads]}"
+    assert _fingerprint(path) == built, "the audit changed the database file or its folder"
 
 
 # =============================================================================
@@ -759,25 +950,61 @@ def test_log_audit_of_blobs_warns_of_their_findings(tmp_path):  # red until E-19
     assert _fingerprint(path) == before, "the audit changed the database file or its folder"
 
 
-def test_log_audit_that_fails_names_the_class_of_the_error_never_its_text(tmp_path):  # red until E-19b1.3: the failure log still carries the error's text
-    """SCA-036 — RED until E-19b1.3: the warning of a check that fails names the class of the error (and SQLite's error
-    name), never the error's text, which can quote what the database stores: after a restore, an archive's bytes. A
-    currency stored as TEXT that is not UTF-8 makes ``sqlite3`` raise an ``OperationalError`` quoting it: the check
-    returns None and logs one warning whose event says ``could not``, a field of which names ``OperationalError``; no
-    line of the log holds the stored text or the words of the message (``NOT_UTF8_FRAGMENTS``).
+def test_log_audit_of_a_text_that_is_not_utf8_warns_of_it_as_its_bytes(tmp_path):  # red until E-20: the audit still reads every text as UTF-8, and one that is not ends it
+    """SCA-036 — RED until E-20 (rewritten: until E-20 it pinned E-19b1.3's log of a check that fails, which SCA-036b
+    keeps): a currency stored as TEXT that is not UTF-8 is a finding, as a BLOB is (SCA-035). On ``_not_utf8_database``
+    the startup's check returns the findings, ``NOT_UTF8_FINDINGS``: the ``978`` of ``transactions.currency`` (``EUR``)
+    and asset 2's value as its bytes, ``NOT_UTF8_VALUE`` (``X'…'``), in 1 row, without a suggestion; and it logs their
+    one warning (``ISO 4217``, their count, a summary naming that value by its start, ``NOT_UTF8_SHOWN``: a summary
+    quotes 16 characters of a value at most), never one saying it could not check. No line of the log holds the stored
+    text, the words of ``sqlite3``'s decode error (``NOT_UTF8_FRAGMENTS``) or of Python's decoder
+    (``DECODER_FRAGMENTS``); the file is as it was.
 
-    Preconditions (``_not_utf8_database``): the value is stored as TEXT, its bytes as written, and the audit fails on the
-    file with that ``OperationalError``, its message quoting the text. Today the warning carries ``str(error)``.
+    Preconditions (``_not_utf8_database``): the value is stored as TEXT, its bytes as written, and a plain reader, as the
+    server reads, fails on it with an ``OperationalError`` quoting it. Today the audit fails the same way: the check logs
+    that it could not check, by the class of the error alone, and returns None, every finding lost, the ``978`` too.
     """
     path = _not_utf8_database(tmp_path)
     before = _fingerprint(path)
     result, logs = _audit_and_capture(path)
-    assert result is None, f"a check that fails gives None, got {result!r}"
+    told = [line for line in logs if any(fragment in repr(line) for fragment in (*NOT_UTF8_FRAGMENTS, *DECODER_FRAGMENTS))]
+    assert told == [], f"no line of the log holds the stored text or the words of a decode error: {told}"
+    assert _fingerprint(path) == before, "the audit changed the database file or its folder"
+    if result is None:
+        _red(f"{UTF8_RED}: the startup's check lost every finding, logging {_at_least_warning(logs)}", lot=UTF8_LOT)
+    _assert_logged_findings(result, logs, NOT_UTF8_FINDINGS)
+    summary = str(_one_warning(logs).get("summary"))
+    assert NOT_UTF8_SHOWN in summary, f"the summary names the value as its bytes, {NOT_UTF8_SHOWN}…: {summary}"
+
+
+def test_log_audit_of_a_read_that_fails_names_the_class_of_the_error_never_its_text(tmp_path, monkeypatch):
+    """SCA-036b — GUARD (green today, and after E-20): E-19b1.3's rule for a check that fails, kept without its old
+    trigger, a text that is not UTF-8 (a finding since E-20: SCA-036). Its warning names the class of the error (and
+    SQLite's error name), never the error's text, which can quote what the database stores. The startup's check reads
+    through a ``_FailingReads`` (the module's ``_read_only`` replaced): its read ``FAILING_READ`` raises
+    ``INJECTED_ERROR``, worded as ``sqlite3``'s for such a text and quoting ``INJECTED_MARKER``. The check returns None,
+    never the findings read before the failure (``978``), and logs one warning whose event says ``could not``, a field
+    of which names ``OperationalError``; no line of the log holds the marker or the words of the message
+    (``INJECTED_FRAGMENTS``). Barrier: the check read through one connection of ``_read_only``, up to the read made to
+    fail. The file is as it was."""
+    module = _audit_module()
+    path = _build(tmp_path / "app.db", CLI_TABLES)
+    before = _fingerprint(path)
+    opened: list[_FailingReads] = []
+
+    def failing_read_only(database: Path) -> _FailingReads:
+        connection = _failing_reader(database)
+        opened.append(connection)
+        return connection
+
+    monkeypatch.setattr(module, "_read_only", failing_read_only)
+    result, logs = _audit_and_capture(path)
+    assert [len(connection.reads) for connection in opened] == [FAILING_READ], f"barrier: the check read through one connection of _read_only, up to its read {FAILING_READ}, made to fail: {[connection.reads for connection in opened]}"
+    assert result is None, f"a check that fails gives None, never the findings read before the failure: got {result!r}"
     entry = _one_warning(logs)
     assert "could not" in str(entry.get("event")).lower(), entry
-    told = [line for line in logs if any(fragment in repr(line) for fragment in NOT_UTF8_FRAGMENTS)]
-    if told:
-        _red(f"{LOG_RED}: {told}", lot=READ_LOT)
+    told = [line for line in logs if any(fragment in repr(line) for fragment in INJECTED_FRAGMENTS)]
+    assert told == [], f"{LOG_RED}: {told}"
     fields = {key: value for key, value in entry.items() if key not in ("event", "log_level")}
     assert any(isinstance(value, str) and "OperationalError" in value for value in fields.values()), f"a field of the warning names the class of the error, OperationalError: {fields}"
     assert _fingerprint(path) == before, "the audit changed the database file or its folder"
@@ -914,6 +1141,29 @@ def test_cli_as_a_module_lists_blobs_without_a_traceback(tmp_path):  # red until
     lines = {finding: _lines_naming(done.stdout, finding) for finding in BLOB_FINDINGS}
     assert all(len(found) == 1 for found in lines.values()), f"one line per finding expected: {lines}\n{said}"
     assert _fingerprint(path) == before, "the command changed the database file or its folder"
+
+
+def test_cli_lists_a_text_that_is_not_utf8_as_its_bytes_and_exits_1(tmp_path, capsys):  # red until E-20: the audit still reads every text as UTF-8, and one that is not ends it
+    """SCA-046 — RED until E-20: ``main(["--db-file", path])`` on ``_not_utf8_database`` returns 1, says nothing on
+    stderr, and prints one line per finding: the ``978`` of ``transactions.currency``, and asset 2's value with its
+    place, as its bytes, by its start (``NOT_UTF8_SHOWN``: a line quotes 16 characters of a value at most), its row and
+    ``—``; never the text itself, nor the words of a decode error. The file is as it was. Today the read fails: exit 2,
+    and stderr quotes ``sqlite3``'s message, the stored text in it."""
+    main = _audit("main")
+    path = _not_utf8_database(tmp_path)
+    before = _fingerprint(path)
+    with capture_logs():
+        code = main(["--db-file", str(path)])
+    out, err = capsys.readouterr()
+    assert _fingerprint(path) == before, "the command changed the database file or its folder"
+    if code == 2:
+        _red(f"{UTF8_RED}: the command could not read the database, exit 2, stderr {err.strip()[-500:]!r}", lot=UTF8_LOT)
+    assert (code, err) == (1, ""), f"findings: exit 1 and nothing on stderr expected; got exit {code!r}, stderr {err!r}; printed {out!r}"
+    shown: list[Finding] = [("transactions.currency", "978", 1, "EUR"), ("assets.currency", NOT_UTF8_SHOWN, 1, None)]
+    lines = {finding: _lines_naming(out, finding) for finding in shown}
+    assert all(len(found) == 1 for found in lines.values()), f"one line per finding expected: {lines}\n{out}"
+    told = [fragment for fragment in (*NOT_UTF8_FRAGMENTS, *DECODER_FRAGMENTS) if fragment in out]
+    assert told == [], f"the command shows the value as its bytes, never as text: {told}\n{out}"
 
 
 # =============================================================================

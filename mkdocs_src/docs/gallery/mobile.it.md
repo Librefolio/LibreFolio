@@ -313,12 +313,28 @@ La categoria Primo utilizzo delle Preferenze con lo stato di ciascuna guida e il
     <img class="gallery-img" data-category="settings" data-name="onboarding-replay" alt="🔁 Ripetizione guide">
 </div>
 
+### 🧩 Impostazioni dei plugin
+
+La scheda Plugin su mobile: le impostazioni di ogni plugin in un modulo a sé.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="settings" data-name="plugins" alt="🧩 Impostazioni dei plugin">
+</div>
+
 ### 🛡️ Impostazioni globali (Admin)
 
 Configurazione a livello di sistema su mobile.
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Impostazioni globali">
+</div>
+
+### 📧 Email (Admin)
+
+Lo stato dell'email dell'istanza e l'email di prova su mobile.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="settings" data-name="email" alt="Email">
 </div>
 
 ### 🕐 Scheduler dati di mercato — Config

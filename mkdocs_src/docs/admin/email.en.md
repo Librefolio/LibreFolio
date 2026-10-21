@@ -174,6 +174,60 @@ Replace `smtp.example.com`, the addresses and the password with your own, then r
       sender addresses your account may use.
     - Better still, keep the password in a file, as in the Docker Compose tab.
 
+=== "Gmail"
+
+    Your Gmail account, or a Google Workspace one, through Gmail's SMTP server. LibreFolio signs in
+    with a user and a password only, not with «Sign in with Google», so Gmail needs an
+    **app password**, not the password of your Google Account.
+
+    1. Turn on **2-Step Verification** for your Google Account, if it is not on yet: app passwords
+       exist only with it.
+    2. Open [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) and
+       create an app password, with a name such as `LibreFolio`. Google shows it as a code of 16
+       characters, in four groups of four: copy it. If that page offers no way to create one,
+       [Google's help page](https://support.google.com/accounts/answer/185833) says why. A work or
+       school account may need its administrator.
+    3. Add the variables to `.env`:
+
+        ```env
+        LIBREFOLIO_SMTP_HOST=smtp.gmail.com
+        LIBREFOLIO_SMTP_USER=you@gmail.com
+        LIBREFOLIO_SMTP_PASSWORD=abcdefghijklmnop
+        LIBREFOLIO_SMTP_FROM=LibreFolio <you@gmail.com>
+        ```
+
+        - `you@gmail.com` stands for your full Gmail address, or your full work address with
+          Google Workspace.
+        - `abcdefghijklmnop` stands for your app password: its 16 characters, written
+          **without the spaces**, since LibreFolio uses the password exactly as written, spaces
+          included. Better still, keep it in a password file, as in the Docker Compose tab, also
+          without the spaces.
+        - The sender is the same address, with a name in front or without. Gmail sends only as your
+          own address, or as one you added and confirmed under **Send mail as** in Gmail's settings.
+        - No `LIBREFOLIO_SMTP_TLS` and no port: `starttls` on port 587 is the default, and one of
+          the two ways Gmail offers. For the other, port 465, add `LIBREFOLIO_SMTP_TLS=tls`: the
+          port follows.
+
+    4. Restart LibreFolio. With Docker Compose, run `docker compose up -d`:
+       `docker compose restart` keeps the old values.
+    5. Open **Settings › Administration › Email**, where the state reads **Ready**, and click
+       **Send a test email**. It goes to the address of your account: see
+       [The Test Email](#test-email).
+
+    To keep it working:
+
+    - A personal Gmail account can send about 500 emails a day: past that, Gmail refuses to send
+      for 1 to 24 hours. A Google Workspace account has 2,000 a day through `smtp.gmail.com`. These
+      are [Google's limits](https://support.google.com/mail/answer/22839), and Google can change
+      them. When Gmail refuses, the test email and the log report the refusal
+      ([Sending Errors](#sending-errors)).
+    - LibreFolio's own limit is 50 emails an hour by default, which could reach 1,200 in a day. To
+      stay under the personal limit, add `LIBREFOLIO_SMTP_MAX_PER_HOUR=20` to `.env`, that is 480 a
+      day, and restart. The count is per server process: see [The Variables](#variables).
+    - Google revokes app passwords when the password of your Google Account changes: then create a
+      new one, write it in place of the old one and restart. Removing the app password, on the page
+      where you created it, also stops LibreFolio from sending.
+
 === "Local relay"
 
     A relay such as Postfix, on the same machine or on your network, takes mail without a login and

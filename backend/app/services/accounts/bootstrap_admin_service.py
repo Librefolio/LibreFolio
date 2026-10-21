@@ -11,6 +11,8 @@ While the administrator waits, a restart issues nothing new. A token of the vari
 for 72 hours, and ``./dev.py user setup-link`` issues a new one. An instance that already has other accounts ignores
 the variables. With more than one worker only one creates the account and delivers its link: the creation takes
 SQLite's write lock before it looks at the accounts, so the other worker finds the account waiting.
+
+``admin_setup_status`` tells a hosting panel where the setup stands (H-61): none, pending until when, done, expired.
 """
 
 import asyncio
@@ -65,6 +67,47 @@ class BootstrapResult:
     username: Optional[str] = None
     link_token: Optional[str] = None
     expires_at: Optional[datetime] = None
+
+
+class AdminSetupState(StrEnum):
+    """Where the setup of the initial administrator stands, for a hosting panel (H-61)."""
+
+    NONE = "none"
+    PENDING = "pending"
+    DONE = "done"
+    EXPIRED = "expired"
+
+
+@dataclass(frozen=True)
+class AdminSetupStatus:
+    """The answer of ``admin_setup_status``: ``setup_expires_at``, in UTC, only while the setup waits (``pending``)."""
+
+    state: AdminSetupState
+    setup_expires_at: Optional[datetime] = None
+
+
+async def admin_setup_status(session: AsyncSession, *, now: Optional[datetime] = None) -> AdminSetupStatus:
+    """Where the setup of the initial administrator stands, read from its ``admin_setup`` links (H-61).
+
+    None ever issued: ``none``. Any link consumed: ``done`` — spent by the setup, or retired because the account was
+    activated or given a password another way (A-32). A consumption is final: no link is issued after one
+    (``pending_admin`` wants none consumed), so a stray newer link left revoked does not undo it. Otherwise the latest
+    link, by creation then id, decides: revoked without use — the setup cancelled (A-43), the address changed (A-33)
+    — or past its expiry, ``expired``; else the setup waits, ``pending`` until ``setup_expires_at``. A replaced link
+    is revoked, but the newer one is the latest and decides. Reads only: no write, no commit, no write lock.
+    """
+    moment = ensure_utc(now or utcnow())
+    spent = await session.execute(select(AccountToken.id).where(AccountToken.purpose == _SETUP, AccountToken.consumed_at.is_not(None)).limit(1))  # type: ignore[union-attr]
+    if spent.first() is not None:
+        return AdminSetupStatus(AdminSetupState.DONE)
+    result = await session.execute(select(AccountToken.revoked_at, AccountToken.expires_at).where(AccountToken.purpose == _SETUP).order_by(AccountToken.created_at.desc(), AccountToken.id.desc()).limit(1))  # type: ignore[union-attr]
+    latest = result.first()
+    if latest is None:
+        return AdminSetupStatus(AdminSetupState.NONE)
+    expires_at = ensure_utc(latest.expires_at)
+    if latest.revoked_at is not None or expires_at <= moment:
+        return AdminSetupStatus(AdminSetupState.EXPIRED)
+    return AdminSetupStatus(AdminSetupState.PENDING, setup_expires_at=expires_at)
 
 
 async def pending_admin(session: AsyncSession) -> Optional[User]:

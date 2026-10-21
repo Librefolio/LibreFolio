@@ -16,6 +16,7 @@
     import {assertToolAccount, type CompatibleToolDescriptor} from '../../contracts';
     import {PLANNER_CONTRACT_VERSION, PLANNER_TOOL_CODE} from './defaults';
     import {copiedOnly, refreshCopiedFacts, refreshPlan, refreshQuery, type RefreshSummary} from './copies';
+    import type {PlannerSource} from './source';
     import {PlannerDraft} from './draft.svelte';
     import {STEP_FALLBACKS, listLocalProblem, stepKey, type ListedIssue} from './labels';
     import {defaultPolicy} from './policies';
@@ -85,7 +86,7 @@
     let refreshing = $state(false);
     let refreshFailure = $state.raw<SourceLoadError | null>(null);
     /** What the last re-read changed, valid only for the draft it produced. */
-    let refreshNotice = $state.raw<{fingerprint: string; summary: RefreshSummary} | null>(null);
+    let refreshNotice = $state.raw<{fingerprint: string; summary: RefreshSummary; source: PlannerSource} | null>(null);
     let allowLeave = false;
     let destroyed = false;
 
@@ -112,7 +113,7 @@
     const navVariant = $derived(desktop.current ? 'vertical' : tablet.current ? 'horizontal' : 'compact');
     const leaveCounts = $derived({assets: draft.data.assets.length, sources: draft.data.cash.length + draft.data.contributions.length});
     const working = $derived(run.running || refreshing);
-    const reviewNotice = $derived(step === 'review' && refreshNotice !== null && refreshNotice.fingerprint === draft.fingerprint && reviewProblems.length > 0 ? refreshNotice.summary : null);
+    const reviewNotice = $derived(step === 'review' && refreshNotice !== null && refreshNotice.fingerprint === draft.fingerprint && reviewProblems.length > 0 ? refreshNotice : null);
 
     async function focusFirst(...ids: string[]): Promise<void> {
         await tick();
@@ -215,7 +216,7 @@
             if (sequence !== refreshSequence || destroyed) return 'stopped';
             if (!source) return refreshLoad.status === 'error' && refreshLoad.error ? refreshFailed(sequence, refreshLoad.error) : 'stopped';
             const summary = refreshCopiedFacts(draft, source, readable);
-            refreshNotice = {fingerprint: draft.fingerprint, summary};
+            refreshNotice = {fingerprint: draft.fingerprint, summary, source};
             return 'done';
         } finally {
             if (sequence === refreshSequence) refreshing = false;
@@ -311,7 +312,7 @@
                 </p>
             {/if}
             {#if refreshNotice && refreshNotice.fingerprint === run.outcome.built.fingerprint}
-                <RefreshNotice summary={refreshNotice.summary} asOf={draft.data.asOf} />
+                <RefreshNotice summary={refreshNotice.summary} source={refreshNotice.source} {draft} asOf={draft.data.asOf} />
             {/if}
             <ResultView outcome={run.outcome} {draft} {apiVersion} busy={run.running} ongoto={editStep} onedit={() => editStep('review')} oncalculate={() => void calculate()} onretry={retry} ondiscard={discard} />
         {:else}
@@ -375,7 +376,7 @@
                 {/if}
 
                 {#if reviewNotice}
-                    <div class="mb-4"><RefreshNotice summary={reviewNotice} asOf={draft.data.asOf} /></div>
+                    <div class="mb-4"><RefreshNotice summary={reviewNotice.summary} source={reviewNotice.source} {draft} asOf={draft.data.asOf} /></div>
                 {/if}
 
                 {#if step === 'scenario'}

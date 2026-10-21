@@ -291,7 +291,7 @@ pipenv run ./dev.py db currencies /path/to/copy/app.db
 - 🔎 Each line names the place (`transactions.currency`, `assets.currency`, the steps of an FX route, a provider's settings, a user's base currency…), the value, how many rows hold it, and the ISO code it stands for: `978` is `EUR`, `US DOLLAR` is `USD`.
 - ➖ A dash means there is no single code: a name two currencies share (`Bolívar Soberano`: `VED` or `VES`), a value that is no currency, or a code that counts cents rather than units (`GBX`, `ZAC`, `ILA`), which must never simply be renamed.
 - 🔤 A code in lower case or with spaces, such as `eur`, is listed too: the right currency, in a form that exact comparisons miss.
-- 🧱 A value saved as raw bytes rather than text, which only a damaged or hand-made database holds, is listed in SQLite's notation, such as `X'455552'`, with a dash: it is never a code.
+- 🧱 A value saved as raw bytes rather than text, or as text that is not valid UTF-8, which only a damaged or hand-made database holds, is listed in SQLite's notation, such as `X'455552'`, with a dash: it is never a code.
 - 🚦 The command exits with `0` when every code is an ISO code, `1` when it lists some, and `2` when it cannot read the database.
 - 🐳 In Docker: `docker compose exec librefolio python dev.py db currencies`.
 

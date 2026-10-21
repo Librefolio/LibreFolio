@@ -104,7 +104,8 @@
       "internet": "Non chiffrée sur Internet : les mots de passe et les données circulent en clair."
     },
     "cookieWarning": "Votre navigateur utilise HTTPS, mais le cookie de session n'est pas marqué Secure. Faites envoyer X-Forwarded-Proto par le reverse proxy (Nginx : proxy_set_header X-Forwarded-Proto $scheme;), ou remettez SESSION_COOKIE_SECURE sur auto s'il vaut never.",
-    "learnMore": "Comment se connecter en toute sécurité"
+    "learnMore": "Comment se connecter en toute sécurité",
+    "attention": "{count, plural, one {# avertissement de sécurité} other {# avertissements de sécurité}}"
   },
   "legal": {
     "title": "Mentions légales",

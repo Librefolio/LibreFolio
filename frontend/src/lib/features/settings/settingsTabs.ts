@@ -74,8 +74,9 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     // Everyone: their own plugin settings, and the instance's read-only unless an administrator (workstream X, CP11, D-X15).
     {id: 'plugins', labelKey: 'pluginSettings.tab.label', icon: Puzzle, order: 25, component: PluginSettingsTab},
     {id: 'about', labelKey: 'settings.about', icon: Info, order: 30, component: AboutTab},
-    // Everyone reads the global settings; only an administrator changes them.
-    {id: 'admin', labelKey: 'settings.globalSettings', icon: Settings2, order: 100, component: GlobalSettingsTab, props: (ctx) => ({canEdit: ctx.isSuperuser}), group: 'administration'},
+    // Administrators only (N69-2): a user has no Administration group at all. The props keep the read-only branch of the
+    // tab, no longer reached from the UI, until a cleanup.
+    {id: 'admin', labelKey: 'settings.globalSettings', icon: Settings2, order: 100, component: GlobalSettingsTab, props: (ctx) => ({canEdit: ctx.isSuperuser}), visible: (ctx) => ctx.isSuperuser, group: 'administration'},
     // Administrators only: the accounts and the open invitations (decision D-A10).
     {id: 'users', labelKey: 'settings.users', icon: Users, order: 110, component: UsersTab, visible: (ctx) => ctx.isSuperuser, group: 'administration'},
     // Administrators only: the archive holds every user's data.
