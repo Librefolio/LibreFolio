@@ -1,20 +1,31 @@
 """MF-J1-8a (workstream MF, J-1 item 8) — an FX gap is read one way: by the engine's securities and by the native cash.
 
-What it guards. A guard, no product change (green on HEAD 5d87dec28). Two readers value a portfolio day in the report
-currency, and both get their rates from ONE ``convert_bulk`` rule (``backend/app/services/fx/conversion.py``): the
-latest usable rate on or before the day, with no limit on how far back, a row ``usable_fx_rate_clause``
-(``backend/app/db/precision.py``) rejects (a stored 0, ``inf``, anything at or above ``usable_fx_rate_bounds()[1]``) being
-a missing rate, filled over like a day without a row.
+What it guards. A guard, no product change (green on HEAD 5d87dec28, and on the P3 cure). Two readers value a portfolio
+day in the report currency, and both get their rates from ONE rule of the FX service
+(``backend/app/services/fx/conversion.py``): the latest usable rate on or before the day, with no limit on how far back,
+a row the bounds ``usable_fx_rate_bounds()`` (X-R38) reject (a stored 0, ``inf``, anything at or above
+``usable_fx_rate_bounds()[1]``) being a missing rate, filled over like a day without a row. Since P3 («formule veloci»)
+the rule has two doors that share it: ``convert_bulk``, an amount on a day, and ``unit_rate_steps``, one unit on windows
+of days kept as steps (the days a stored rate changes) — the same rows and filter (``_usable_rates``, from each window's
+backward-fill anchor) and the same arithmetic (``_converted``), so on every asked day a step is ``convert_bulk``'s answer
+to the digit (pinned by ``test_services/test_fx_rate_steps.py``).
 
-- The engine (``financial_math/portfolio/engine.py::_preload_fx_rates``) asks ``convert_bulk`` for one unit of every
-  foreign price / asset currency on every day of ``[actual_from, actual_to]`` (and on every transaction date, every day a
-  cash transfer is in transit) and keeps the answers in ``fx_rate_map[(currency, report currency, day)]``;
+- The engine (``financial_math/portfolio/engine.py::_preload_fx_rates``) gathers, for each foreign currency, the windows
+  of days it reads — every day of ``[actual_from, actual_to]`` for the price / asset currencies, each transaction date,
+  every day a cash transfer is in transit — makes one ``unit_rate_steps`` call and returns ``AskedDayRates(steps,
+  windows)`` (``financial_math/fx_rates.py``) as ``fx_rate_map``: ``fx_rate_map[(currency, report currency, day)]`` is
+  the step on or before the day, on an asked day only (any other day is absent, as in the dict it replaces).
   ``DailyStateBuilder._convert`` / ``_market_value_for`` read it at the exact day. The securities are valued with it.
-- The native cash (``financial_math/native_cash.py::compute_native_cash``, called with ``rates_until=actual_to``) asks
-  ``convert_bulk`` for one unit of each foreign currency on every day from its first movement through ``rates_until``
-  (``_unit_requests``) and keeps them in ``NativeCash.unit_rates[(currency, day)]``; ``_rate_at`` reads the last of them on
-  or before the day (a bisect), and ``_foreign_value`` raises on a counted balance without one. The cash is valued with
-  it, and the daily states take their cash from it (``_revalue_foreign_cash``).
+  Before P3 it asked ``convert_bulk`` for one unit on every one of those days.
+- The native cash (``financial_math/native_cash.py::compute_native_cash``, called with ``rates_until=actual_to``)
+  converts each foreign movement at its date with ``convert_bulk``, and asks one unit of each foreign currency on every
+  day from its first movement through ``rates_until`` as windows (``_unit_windows``) in one ``unit_rate_steps`` call.
+  ``NativeCash.unit_rates`` is ``AskedDayRates(steps, windows, fixed_destination=report currency)``: its walk gives
+  ``(currency, day)`` for every asked day with a rate, as the dict did. ``_rate_at`` bisects the steps themselves
+  (``step_series()``: only the days a rate starts) for the last rate on or before the day, and ``_foreign_value`` raises on
+  a counted balance without one. The cash is valued with it, and the daily states take their cash from it
+  (``_revalue_foreign_cash``). Before P3 the unit rates were ``convert_bulk`` answers on every day (``_unit_requests``),
+  and ``_rate_at`` bisected all of them.
 
 The backlog (CP-6) had feared that a gap «beyond ``convert_bulk``'s fill window» would leave the cash valued and the
 securities not: there is no such window, both readings come from the same unlimited fill. This file keeps it that way.
@@ -41,28 +52,42 @@ The tests (every day of the gap is asserted, the deviations listed all at once):
   day D1..END and hold the same rate on each; every gap day carries D3's rate, every stored day its own; on every gap day
   the daily state values the securities (``qty × close × 0.625``, no missing price or FX, NAV complete) and the cash
   (``USD balance × 0.625``, the native cash's ``value_at``), and the report's history point says the same.
-- ``TestTheNativeCashFillsOnItsOwn`` — the native cash's second layer: rebuilt with the unit rates of the stored days
-  only (as if ``convert_bulk`` had answered nothing in the gap), it values every day D1..END as the real one does.
+- ``TestTheNativeCashFillsOnItsOwn`` — the native cash's second layer: rebuilt from a plain dict of the unit rates of the
+  stored days only (as if nothing had been asked in the gap; ``_rate_series`` reads a dict as before P3), it values
+  every day D1..END as the real one does. Since P3 the real one reads its steps only (D1..D3, then RESUME on), so this
+  carrying forward is read end to end too.
 - ``TestBeforeTheFirstRate`` — the same book with a DEPOSIT of 500 USD on EARLY_DAY (02-27), before the first stored
   rate: neither reader has a rate on 02-27..02-29; the native cash does not count the deposit (no conversion, reported
   missing) and neither does the engine (its ``missing_fx`` names the day; the cash on D1 is 10000 × 0.8, not 10500 × 0.8).
 
-Teeth — product mutations that turn it red, each applied at runtime in a private harness on HEAD 5d87dec28:
+Teeth — product mutations that turn it red. First applied at runtime in a private harness on HEAD 5d87dec28; re-measured
+on the P3 cure (HEAD 2f4ab1962 + the cure) on a scratch copy, which is what follows:
 
-- (a) a fill limit in ``_preload_fx_rates`` only (an answer more than 5 days older than the day asked is dropped): the
-  engine's map loses 03-09..03-17, the native cash keeps them; the securities read 0 with USD/EUR missing and the
-  engine's cash misses the BUY of 03-11 — the three ``TestOneReadingOfTheGap`` tests red;
-- (b) ``NativeCash._rate_at`` reading the exact day only: masked end to end (``compute_native_cash`` asks every day and
-  ``convert_bulk`` has filled each), so ``TestOneReadingOfTheGap`` stays green; ``TestTheNativeCashFillsOnItsOwn`` is
-  red (the rebuilt cash raises ``ValueError`` from the first gap day);
-- (c) ``usable_fx_rate_clause`` dropped from ``convert_bulk``: on 03-08..03-12 the 0 row divides by zero, so neither map
-  has a rate, the native valuation bisects back to 03-07 while the engine's securities are missing, and the BUY of 03-11
-  is converted by neither; on 03-13..03-17 both maps read 1E-19 (the same in both: only the «last usable rate» check
-  sees it) — all five tests red;
-- (d) a fill limit in ``convert_bulk`` itself, for every caller (the backlog's «fill window» made real): both maps lose
-  03-09..03-17, the native bisect still values the cash at 0.625, the securities are missing — all five tests red;
-- (e) ``NativeCash._rate_at`` reading forward (``bisect_left``, the rate on or after the day): masked end to end like
-  (b); ``TestTheNativeCashFillsOnItsOwn`` red (the gap reads RESUME's 0.64).
+- (a) a fill limit in the engine's reading only (re-expressed for P3: a step of ``_preload_fx_rates``'s map whose stored
+  row is more than 5 days older than the day reads no rate; before P3, a ``convert_bulk`` answer that old was dropped):
+  the engine's map loses 03-09..03-17, the native cash keeps them; the securities read 0 with USD/EUR missing and the
+  engine's cash misses the BUY of 03-11 — the three ``TestOneReadingOfTheGap`` tests red, as before P3;
+- (b) ``NativeCash._rate_at`` reading the exact day only: no longer masked end to end. Before P3 every day had a unit
+  rate, so only ``TestTheNativeCashFillsOnItsOwn`` saw it; now the native cash keeps its steps only, and its
+  ``value_at`` raises ``ValueError`` from the first gap day — ``TestOneReadingOfTheGap``'s third test and
+  ``TestTheNativeCashFillsOnItsOwn`` red;
+- (c) the usable bounds (X-R38) dropped from ``_usable_rates``, both doors at once: the 0 row of 03-08 becomes a step and
+  ``unit_rate_steps`` divides by it — ``decimal.DivisionByZero`` from the report (``convert_bulk`` caught it per item and
+  answered no rate; the steps have no such catch: the bounds are their only guard) — all five tests red;
+- (d) a fill limit in ``convert_bulk`` alone (the backlog's «fill window» made real), since P3 only the movements' door:
+  both maps keep 03-09..03-17 (they read ``unit_rate_steps``); the native cash no longer converts the BUY of 03-11 (left
+  out, reported missing) while the engine still counts it — ``TestOneReadingOfTheGap``'s third test,
+  ``TestTheNativeCashFillsOnItsOwn`` and ``TestBeforeTheFirstRate`` red (before P3, all five);
+- (d') the same limit in ``unit_rate_steps`` alone, the second door (a step older than 5 days expires): both maps lose
+  03-09..03-17, and the native cash raises ``ValueError: no USD/EUR rate on or before 2024-03-09`` for its counted
+  balance — all five tests red. A fill window for every reader now needs both doors; ``test_fx_rate_steps.py`` (X)
+  holds them to one rule, and ``test_fx_steps_service_parity.py`` catches either alone (8 reds each);
+- (e) ``NativeCash._rate_at`` reading forward (``bisect_left``, the rate on or after the day): no longer masked, like
+  (b): the gap reads RESUME's 0.64 in the real native cash too — ``TestOneReadingOfTheGap``'s third test and
+  ``TestTheNativeCashFillsOnItsOwn`` red.
+
+No assertion of this file changed for P3: the two walks (``fx_rate_map.items()``, ``native_cash.unit_rates.items()``)
+still give every asked day, and every re-expressed mutant turns red the tests named above.
 
 Isolation: PURE with respect to the lane — no session on the lane's database, no server, no network. The L2, WAC and
 engine blob caches (process-global) are emptied before and after each test; every patch goes through ``monkeypatch``.
@@ -71,10 +96,13 @@ No sleep, no wall-clock assertion, no translated text.
 Runs in ``./dev.py test services roi-fifo-utils`` (the runner collects the whole ``test_financial/`` directory); alone:
 ``./dev.py test services roi-fifo-utils test_fx_gap_single_reading``.
 
-Reference: backend/app/services/fx/conversion.py (convert_bulk), backend/app/services/financial_math/portfolio/engine.py
+Reference: backend/app/services/fx/conversion.py (convert_bulk, unit_rate_steps, _usable_rates),
+backend/app/services/financial_math/fx_rates.py (AskedDayRates), backend/app/services/financial_math/portfolio/engine.py
 (_preload_fx_rates, compute_native_cash's call), backend/app/services/financial_math/portfolio/daily_state.py (_convert,
-_market_value_for, _revalue_foreign_cash), backend/app/services/financial_math/native_cash.py (_unit_requests, _rate_at,
-_foreign_value), LibreFolio_developer_journal/Release_2/Phase_1/11_financialMath/plan-phase01FinancialMath.prompt.md
+_market_value_for, _revalue_foreign_cash), backend/app/services/financial_math/native_cash.py (_unit_windows, _rate_at,
+_step_rate_series, _foreign_value), backend/test_scripts/test_services/test_financial/test_fx_steps_service_parity.py
+(P3: both readers against convert_bulk, bit for bit),
+LibreFolio_developer_journal/Release_2/Phase_1/11_financialMath/plan-phase01FinancialMath.prompt.md
 («J-1 — riconciliazione», item 8, proposal 8a).
 """
 
@@ -438,8 +466,9 @@ class TestTheNativeCashFillsOnItsOwn:
     @pytest.mark.asyncio
     async def test_a_day_convert_bulk_did_not_answer_reads_the_last_rate_before_it(self, tmp_path, monkeypatch):
         """The engine's NativeCash rebuilt with the unit rates of the stored days only values every day D1..END as the
-        real one does: ``_rate_at`` reads the last rate on or before the day, as ``convert_bulk`` does. End to end this
-        layer is masked (``compute_native_cash`` asks every day and ``convert_bulk`` fills each); here it stands alone."""
+        real one does: ``_rate_at`` reads the last rate on or before the day, as ``convert_bulk`` does. Before P3 this
+        layer was masked end to end (``compute_native_cash`` asked every day and ``convert_bulk`` filled each); since P3
+        the real one reads its steps only, so it is read end to end too; here it stands alone, on a plain dict."""
         print_section("MF-J1-8a: NativeCash with the stored days' rates only reads the gap as convert_bulk does")
         reading = await _read_the_book(tmp_path, monkeypatch)
         native_cash = reading.native_cash

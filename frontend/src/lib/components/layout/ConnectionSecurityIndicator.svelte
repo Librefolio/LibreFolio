@@ -9,13 +9,14 @@
      * anywhere on the indicator holds the countdown, and so does the focus inside the details, not on the toggle,
      * where a mouse click leaves it in Chrome (choice (b)). Once nothing holds it, the countdown starts again from 30 s.
      */
-    import {onMount} from 'svelte';
+    import {onMount, untrack} from 'svelte';
     import {BookOpen, ShieldAlert, ShieldCheck, ShieldHalf} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import {auth} from '$lib/stores/app/auth';
     import {currentLanguage} from '$lib/stores/app/language';
     import {connectionSecurity, refreshConnectionSecurity} from '$lib/stores/app/connectionSecurityStore';
     import {connectionSecurityDocsUrl, type ConnectionLevel, type ConnectionReason} from '$lib/utils/security/connectionSecurity';
+    import {securityChecks} from '$lib/features/settings/security/securityChecks.svelte';
 
     interface Props {
         /** The sidebar shows icons only. */
@@ -67,6 +68,21 @@
     const Icon = $derived(LEVEL_ICONS[level]);
     const showAdminWarning = $derived($auth.user?.is_superuser === true && $connectionSecurity.cookieWarning);
 
+    // An administrator's security checks (N69-1): the errors and warnings the Security tab counts, as a dot on the icon
+    // and a link in the details to their list. Anyone else has none, and the page never asks for them.
+    const isAdmin = $derived($auth.user?.is_superuser === true);
+    const attention = $derived(isAdmin ? securityChecks.attentionCount : 0);
+    const severity = $derived(attention > 0 ? securityChecks.attentionSeverity : null);
+    const attentionText = $derived(attention > 0 ? $_('connectionSecurity.attention', {values: {count: attention}}) : '');
+    // Colour is not the only sign (WCAG 1.4.1): the count joins the line's name, and its tooltip when collapsed.
+    const toggleName = $derived(attention > 0 ? `${label} — ${attentionText}` : collapsed ? label : undefined);
+
+    // Once per page load. Untracked: the read moves the store's status, which must not run this again (a failed read
+    // would be retried for ever); the next page load tries again.
+    $effect(() => {
+        if (isAdmin) untrack(() => void securityChecks.ensureLoaded());
+    });
+
     onMount(() => {
         void refreshConnectionSecurity();
     });
@@ -101,7 +117,16 @@
     }
 </script>
 
-<div data-testid="connection-security" data-level={level} data-reason={$connectionSecurity.reason} data-server-checked={$connectionSecurity.serverChecked ? 'true' : 'false'} onpointerenter={() => (pointerInside = true)} onpointerleave={() => (pointerInside = false)}>
+<div
+    data-testid="connection-security"
+    data-level={level}
+    data-reason={$connectionSecurity.reason}
+    data-server-checked={$connectionSecurity.serverChecked ? 'true' : 'false'}
+    data-security-attention={attention}
+    data-security-severity={severity ?? 'none'}
+    onpointerenter={() => (pointerInside = true)}
+    onpointerleave={() => (pointerInside = false)}
+>
     <button
         bind:this={toggleEl}
         type="button"
@@ -109,11 +134,16 @@
         data-testid="connection-security-toggle"
         aria-expanded={detailsOpen}
         aria-controls={collapsed ? undefined : 'connection-security-details'}
-        aria-label={collapsed ? label : undefined}
-        title={collapsed ? label : undefined}
+        aria-label={toggleName}
+        title={collapsed ? toggleName : undefined}
         onclick={toggle}
     >
-        <Icon size={16} class="flex-shrink-0 {LEVEL_TONES[level]}" aria-hidden="true" />
+        <span class="relative inline-flex flex-shrink-0">
+            <Icon size={16} class={LEVEL_TONES[level]} aria-hidden="true" />
+            {#if severity}
+                <span class="absolute -right-1 -top-1 h-2 w-2 rounded-full ring-2 ring-lf-bar {severity === 'error' ? 'bg-lf-bar-danger' : 'bg-lf-bar-warning'}" data-testid="connection-security-attention-dot" data-severity={severity} aria-hidden="true"></span>
+            {/if}
+        </span>
         {#if !collapsed}
             <span class="flex-1 truncate text-left text-lf-bar-text" data-testid="connection-security-label">{label}</span>
         {/if}
@@ -124,6 +154,18 @@
             <button type="button" class="block w-full cursor-pointer text-left rounded focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-bar-focus" data-testid="connection-security-reason" title={$_('common.close')} onclick={closeFromReason}
                 >{$_(REASON_KEYS[$connectionSecurity.reason])}</button
             >
+            {#if severity}
+                <a
+                    class="flex items-center gap-1.5 rounded border px-2 py-1 transition-colors hover:text-lf-on-bar-active focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-bar-focus {severity === 'error' ? 'border-lf-bar-danger' : 'border-lf-bar-warning'}"
+                    data-testid="connection-security-attention-link"
+                    data-severity={severity}
+                    href="/settings?tab=security"
+                    onclick={closeDetails}
+                >
+                    <ShieldAlert size={12} class="flex-shrink-0 {severity === 'error' ? 'text-lf-bar-danger' : 'text-lf-bar-warning'}" aria-hidden="true" />
+                    {attentionText}
+                </a>
+            {/if}
             {#if showAdminWarning}
                 <p class="rounded border border-lf-bar-warning px-2 py-1 text-lf-bar-warning" data-testid="connection-security-admin-warning">{$_('connectionSecurity.cookieWarning')}</p>
             {/if}

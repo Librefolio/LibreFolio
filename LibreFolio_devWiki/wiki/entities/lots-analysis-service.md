@@ -2,7 +2,7 @@
 title: "Lots Analysis Service"
 category: entity
 type: service
-updated: 2026-10-17
+updated: 2026-10-19
 tags: [backend, fifo, lots, orchestration, fx, wac, average-cost, data-quality, financial-math]
 related:
   - entities/fifo-lot-engine
@@ -15,6 +15,8 @@ related:
   - problems/zero-purchase-cost-foreign-asset-paid-in-report-currency
   - problems/lots-failed-when-a-transfer-crossed-the-broker-scope
   - concepts/fifo-lot-tracking
+  - concepts/self-parity-needs-the-shared-step-pinned
+  - problems/equal-closes-read-back-alike-through-realdecimal
 ---
 
 # Lots Analysis Service
@@ -114,6 +116,18 @@ T-1's cut, 1 172 at `5d0585595`), plus its math in `backend/app/services/financi
   sits outside the broker scope at the scope's edge ([[problems/lots-failed-when-a-transfer-crossed-the-broker-scope]]);
   J-47 hands the engine the arriving leg dated after `date_to` (`_load_late_transfer_legs()`, `replay_until`), so a
   transfer still in transit stays `IN_TRANSIT` instead of failing on `TRANSFER_PAIR_MISSING`.
+- **The daily series are computed on their change days (2026-10-19, L1a).** Every builder used to value every lot on
+  every day from the first transaction (floored at 1900) and then trim to the window: a lot of 1900 read over one month
+  cost 221 200 calls of the per-day snapshot helpers. Now `lot_change_days()` (`financial_math/lots/change_days.py`)
+  lists the days an input can change on: the first and the last day; a day whose converted mark or estimated entry
+  changes form (`as_tuple()`, so a new exchange rate counts); `at_cost_until + 1`; every event date (the rows, what both
+  engines derive from them, the prefixes, the withheld pools, the average-cost steps); and the day after each. The
+  builders run on those days, and `expand_to_days()` re-dates the last change day's row over every day of the window.
+  The output is byte-identical: 0 differences on four DB copies (13.3 million daily points on the 1900 copy), the real
+  data included, and the 1900 copy runs in half the time. It is the engine's rule, decision 28; it is not
+  `native_cash.change_days()`, which compares rates. Still per day: the mark conversion, the per-day FX needs and the
+  scan itself, which is L1b, after MF's P3. See [[concepts/self-parity-needs-the-shared-step-pinned]] and
+  [[problems/equal-closes-read-back-alike-through-realdecimal]].
 
 ## Source files
 
@@ -128,6 +142,7 @@ T-1's cut, 1 172 at `5d0585595`), plus its math in `backend/app/services/financi
 | FAILED withholding (J-12) | `backend/test_scripts/test_services/test_financial/test_lots_failed_analysis_withholding.py`, `backend/test_scripts/test_services/test_ai_export_fifo_failed_reconstruction.py` |
 | Lot-free market price series (Y-30) | `backend/test_scripts/test_services/test_financial/test_lots_market_price_history.py` |
 | Scope edge (J-10) | `backend/app/services/financial_math/lots/scope_boundary.py` |
+| Change days (L1a) | `backend/app/services/financial_math/lots/change_days.py`, `backend/test_scripts/test_services/test_financial_math/test_lot_change_days.py`, `backend/test_scripts/test_services/test_financial/test_lots_change_days_parity.py` |
 | Pure tests (WAC lines and their gaps) | `backend/test_scripts/test_services/test_lots_analysis_pure.py` |
 | Lots WAC lines of the #32 case (L1–L3) | `backend/test_scripts/test_services/test_financial/test_portfolio_cost_currency.py` |
 | Developer docs | `mkdocs_src/docs/developer/backend/transactions/lots_analysis_service.md` |

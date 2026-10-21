@@ -50,7 +50,8 @@ else `~/LibreFolio_visual_review`.
   - The PAC planner dates its scenario on the earlier of the local and the UTC date (`planner/defaults.ts`,
     `defaultAsOf`, rule N26). Between local midnight and UTC midnight its result shows the day before, with other
     figures and a page 24 px taller. That window is 00:00–02:00 in Rome's summer time and 00:00–01:00 in winter.
-  - On 16/10/2026, `g-ref13-r1`/`r2` (00:02–01:31) and `g-ref13-r3` (05:28) differed in every PAC result shot.
+  - On 16/10/2026, `g-ref13-r1`/`r2` (00:02–01:31) and `g-ref13-r3` (05:28) differed in every PAC result shot (those
+    snapshots were deleted on 19/10). The reference trio of 18/10 was captured from 02:00 on, out of that window.
   - So never capture in that window, and never let a reference and its candidate straddle it.
 - **The app version is pinned.** The sidebar, the changelog and the About tab show the build's version, which is
   `git describe` by default and so differs between any two commits. `gallery_snapshot.sh` exports
@@ -156,6 +157,9 @@ pipenv run python -m scripts.visual_review.build_designer_round $W/snapshots/can
   listed under «Da classificare» and named on the console.
 - **Images** are WebP lossless by default: the same pixels as the PNG, about half the size (`--format png` keeps PNG).
   One language of two galleries, the before-and-after included, makes a zip of about 140 MB.
+- **The «before» is called v1.2**, and the pages say that the two captures are of different days: true for the round
+  of 16/10. For another «before» or a pair of the same day (round 3, 18/10), the text of the generated pages had to be
+  corrected after the build. An option for it is planned (G-27).
 
 ### 4. Live server for the designer
 ```bash
@@ -198,7 +202,47 @@ pipenv run python -m scripts.visual_review.gallery_tool mixed $W/snapshots/cand 
 - `gallery_tool mixed <snapshot> --collect` merges the records by hand, for example after a run interrupted before the
   script's end. On a retry, the latest record of a shot wins.
 
+## Known gallery behaviour (18/10/2026, the reference trio)
+
+Three full runs at 6 workers, all on 18/10 after 02:00, so with the same local and UTC date. They are the reference
+after A8b (the Administration group of Settings), A9 (the legal notice) and the designer's round 3. The record is in
+G's plan, «Galleria del giro 3»:
+[plan-phase00GalleryDeterminism.prompt.md](../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md).
+
+| Snapshot | Commit | Captured | Tests |
+|---|---|---|---|
+| `g-r3-prima-ba8e06763-full` | `ba8e06763`, the target just before round 3 | 02:00–02:34 | 31.1 min |
+| `g-r3-dopo-cd686f445-full` | `cd686f445`, round 3 complete | 02:36–03:10 | 29.4 min, after a 143 s build |
+| `g-r3-dopo2-cd686f445-full` | `cd686f445` again | 03:10–03:42 | 29.3 min |
+
+- **The reference is this trio.** It was kept on 19/10, when every older snapshot and diff was deleted to free the disk.
+  - **Noise masks and stability:** `diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-cd686f445` (`masks/`,
+    `stability.json`), the same commit twice on the same day. Pass them to `diff` with `--ignore-masks` and
+    `--stability`.
+  - **For the eye on another day:** the three snapshots. A pixel diff still needs a reference captured on the
+    candidate's day (see «Lanes and rules»).
+  - The `-full` snapshots keep the PNGs, `meta.json` and `mixed_elements.json`. The base runs, their fills and their
+    logs were deleted.
+- **Each run:** 258 tests passed, 1 skipped (`mobile menu open`, on desktop), 1 red, 2900 PNG. No live price, no mixed
+  element, no CSP violation outside `e2e/csp-baseline.json` (H-43).
+  - The red is the same in the three runs, alone at 2 and 1 workers too: `Onboarding › welcome setup` on the phone in
+    `fr` and `es`. Since A9 the legal notice under the card makes the page taller than the screen, and the shot wants
+    the whole form in view (G-25). Those 4 images are missing on every side.
+- **Noise (dopo↔dopo2):** 2081 of 2900 images identical. Classes: 27 `stable`, 133 `low`, 18 `medium`, 4 `unstable`.
+  - Unstable:
+    - `assets/detail-editor` and `brokers/import-nway-compare`, as on 16/10;
+    - `auth/01-login`: one variant, at most 5 levels, so invisible;
+    - `settings/password-modal`: on the phone in `es/dark` the page behind the modal stops at another scroll (G-26).
+  - Since 16/10, `assets/detail-measures` went from `unstable` to `low` (G-11), and `files/brim-report-sets` from
+    `unstable` to `medium`.
+- **Round 3, prima↔dopo:** with the noise masked, 2055 of 2900 images are identical (1766 raw); 350 differ only in the
+  noise, negligibly or in unstable shots; 495 changed beyond the noise; none is of another size. The designer's sheet,
+  by area of the round: `sheets/r3-2026-10-18/index.html`.
+
 ## Known gallery behaviour (16/10/2026, commit `a2c1c39f4`, G-13)
+
+History: the snapshots and diffs named in this section and in the next one were deleted on 19/10/2026. The analyses
+in G's evidence remain.
 
 Three full runs of the same commit at 6 workers (`g-ref13-r1`/`r2`/`r3`). The analysis is in G's evidence:
 [analysis-g13-2026-10-16.md](../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-g13-2026-10-16.md).
@@ -215,8 +259,8 @@ Three full runs of the same commit at 6 workers (`g-ref13-r1`/`r2`/`r3`). The an
     - `files/brim-report-sets`: the random name of the disposable account, which also resizes the open filter;
     - `brokers/import-nway-compare`: the order of the set's two files.
 - **`media/asset-picker-modal` is `low`.** It was unstable before H's fix of the order of uploads (G-10).
-- **The reference for the candidates of 16/10 is `g-ref13-r3`**, with the masks and the stability of
-  `g-ref13__r1__vs__r2`.
+- **The reference for the candidates of 16/10 was `g-ref13-r3`**, with the masks and the stability of
+  `g-ref13__r1__vs__r2`. Since 18/10 it is the trio above.
 - **After a colour migration, «changed» is not «visible».** At tolerance 0 nearly every image changes by a few levels.
   `gallery_tool sheet` ranks the shots by visible change. The night's candidate:
   `diffs/g-ref13-r3__vs__g-cand16a/contact_sheet.it.html` and `visible.json`. Of 182 shots, by median visible change:

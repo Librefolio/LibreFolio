@@ -8,6 +8,7 @@
 <script lang="ts" module>
     import * as echarts from 'echarts';
     import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
+    import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
     import {buildGeoNameMaps} from '$lib/components/charts/geographyMapHelpers';
 
     /** The world map, fetched and registered once, then shared by every planner result. */
@@ -187,7 +188,7 @@
         let chart = charts[side];
         const fresh = chart === null;
         if (!chart) {
-            chart = echarts.init(element, CHART_INIT_THEME, {renderer: 'canvas'});
+            chart = echarts.init(element, CHART_INIT_THEME, chartInitOptions(element));
             charts[side] = chart;
             attachChartReady(chart, element, `pac-planner-exposure-map-${side}`);
             follow(side, chart);

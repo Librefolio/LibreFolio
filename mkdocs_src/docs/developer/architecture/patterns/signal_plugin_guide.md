@@ -335,6 +335,20 @@ The Asset catalog, `GET /api/v1/assets/prices/signals`, lists the 22 plugins who
 SMA, KAMA, MACD, PPO, ROC, RSI, Stochastic RSI and Bollinger Bands.
 `test_signal_plugin_matrix.py` pins both sets.
 
+`aggregation_profile` says which point stands for a bucket when an output is reduced to one point
+per bucket, by a chart drawing weekly or monthly points or by an AI Export technical component:
+`first_with_range`, `last_with_range`, `min_with_range` and `max_with_range` keep the earliest, the
+latest, the smallest or the largest point (the earliest among equal values), and `band_envelope`
+keeps a band's lowest `lower`, its last `middle` and its highest `upper`. The backend keeps that
+rule in one module, `backend/app/services/signals/aggregation.py` (`select_point()`,
+`scalar_representative()`, `band_envelope()`), which AI Export's temporal aggregators
+(`ai_export/temporal/aggregators.py`) go through; the chart keeps the same rule in the browser
+(`selectSignalRepresentative()` and `bandRepresentative()` in
+`frontend/src/lib/components/charts/timeSeriesAggregation.ts`). The shared fixture
+`backend/test_scripts/fixtures/signals/aggregation_profiles.v1.json`, which the tests of both
+stacks read, and `test_signal_aggregation.py` (`./dev.py test services signal-aggregation`) tie
+the two.
+
 ### 📅 Sessions or Calendar Days
 
 `computes_on_quote_days` decides what a plugin's periods count. When it is `True` (the

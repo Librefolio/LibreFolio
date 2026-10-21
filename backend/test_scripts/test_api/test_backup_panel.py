@@ -44,6 +44,13 @@ the administrators' routes of ``instance.py``.
 - PANEL-022 (B-30), a full disk at the panel's start: ``start_backup`` raising ``ENOSPC`` through ``job_views.start_job``,
   with the token: 507 ``backup_no_space``, one WARNING with the origin ``panel``, never a path or the system's words;
   OpenAPI documents the start's 507 (``START_RESPONSES``).
+- PANEL-023 (B-8), a start refused while the panel's own job runs (``BackupBusyError.running``, a job of origin
+  ``panel``): 409 ``backup_busy`` whose detail names that job, exactly ``{code, message, job_id, origin: panel}``, the
+  message as before; the id is one the panel follows (its poll answers that job, running).
+- PANEL-024 (B-8), a guard become contract: a start refused while a job the panel cannot see runs (``ui``, ``cli``,
+  ``pre-restore``), or with no job read: the detail stays exactly ``{code, message}``, no ``job_id`` nor ``origin``. A
+  job of another origin is as invisible in a refusal as at its poll (PANEL-015). The refusal is built as PANEL-018's,
+  its ``running`` set on it: the test does not depend on how the constructor takes it.
 - Every request of this module: the token, and whatever the caller presented, never appears in the answer, its body or
   its headers, nor in the log.
 
@@ -872,3 +879,62 @@ def test_openapi_documents_507_on_the_panel_start():
     (``START_RESPONSES``)."""
     documented = set(backup_app().openapi()["paths"][PANEL]["post"]["responses"])
     assert {"409", "500", "507"} <= documented, f"the panel's start, its refusals, 507 included: {sorted(documented)}"
+
+
+# =============================================================================
+# PANEL-023..024: a start refused while a job runs (B-8)
+# =============================================================================
+
+#: What a start refused while another run is in progress says, as before B-8.
+BUSY_MESSAGE = "Another backup is running"
+
+
+def busy_with(running: jobs.BackupJob | None) -> jobs.BackupBusyError:
+    """The refusal of a start while another run holds the lock, built as PANEL-018 builds it, carrying the running job it
+    could read (B-8), or None. ``running`` is set on the instance: the test does not depend on how the constructor takes
+    it."""
+    error = jobs.BackupBusyError(BUSY_MESSAGE)
+    error.running = running
+    return error
+
+
+@pytest.mark.asyncio
+async def test_a_panel_start_refused_while_its_own_job_runs_names_that_job(app, monkeypatch, service):
+    """PANEL-023 (B-8): a start refused while a job of the panel runs names that job: 409, ``detail`` exactly ``{code:
+    backup_busy, message: «Another backup is running», job_id, origin: panel}``. A panel whose start answer was lost
+    finds its job there, and follows it: its poll answers that job, running."""
+    print_section("Backup panel: a start refused while the panel's own job runs (B-8)")
+    token = a_token()
+    monkeypatch.setenv(TOKEN_VARIABLE, token)
+    bearer = f"Bearer {token}"
+    running = service.running("panel")
+    service.start_error = busy_with(running)
+
+    started = await send(app, "POST", PANEL, authorization=bearer, never=[token])
+
+    assert service.calls[:1] == [("start_backup", "panel")], f"Precondition: the route asked for a run of origin panel: {service.calls}"
+    expected = {"detail": {"code": "backup_busy", "message": BUSY_MESSAGE, "job_id": running.job_id, "origin": "panel"}}
+    assert started.answer == (409, expected), f"a start refused while the panel's own job runs must name that job: {started.answer}"
+    followed = await send(app, "GET", f"{PANEL}/{started.response.json()['detail']['job_id']}", authorization=bearer, never=[token])
+    polled = followed.response.json() if followed.response.status_code == 200 else {}
+    assert (followed.response.status_code, polled.get("job_id"), polled.get("status")) == (200, running.job_id, "running"), f"the panel follows the job its refusal names: {followed.answer}"
+    print_success("409 backup_busy naming the panel's running job; its poll answers it, running")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("origin", ["ui", "cli", "pre-restore", pytest.param(None, id="no-job-read")])
+async def test_a_panel_start_refused_while_a_job_it_cannot_see_runs_names_no_job(app, monkeypatch, service, origin):
+    """PANEL-024 (B-8), a guard become contract: a start refused while a job of another origin runs (the Backup tab's,
+    the command line's, a pre-restore backup), or with no job read, names none: 409, ``detail`` exactly ``{code:
+    backup_busy, message}``, no ``job_id`` nor ``origin``. The panel sees only its own jobs (PANEL-015), in a refusal
+    too."""
+    token = a_token()
+    monkeypatch.setenv(TOKEN_VARIABLE, token)
+    running = None if origin is None else service.running(origin)
+    service.start_error = busy_with(running)
+
+    started = await send(app, "POST", PANEL, authorization=f"Bearer {token}", never=[token])
+
+    assert service.calls[:1] == [("start_backup", "panel")], f"Precondition: the route asked for a run of origin panel: {service.calls}"
+    assert started.answer == (409, {"detail": {"code": "backup_busy", "message": BUSY_MESSAGE}}), f"a job of origin {origin} is not the panel's: the refusal must not name it: {started.answer}"
+    print_success(f"origin {origin}: 409 backup_busy, code and message only")

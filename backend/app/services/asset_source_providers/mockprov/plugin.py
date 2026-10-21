@@ -9,7 +9,9 @@ WARNING: This provider is for TESTING ONLY. Do not use in production code.
 
 It declares one plugin setting of every kind (system and user, plain and secret), so that the settings infrastructure is
 exercised end to end. Searching for ``SETTINGS_ECHO_QUERY`` answers with one item that describes the settings the call
-received: the plain values, and for each secret only whether it is set — never its value.
+received: the plain values, and for each secret only whether it is set — never its value. Searching for
+``MINOR_UNIT_QUERY`` answers a line quoted in pence, ``MINOR_UNIT_IDENTIFIER``, with a quote base suggestion of 100,
+which ``suggest_quote_base`` gives for it too (Z-32 d).
 """
 
 from datetime import date, timedelta
@@ -29,6 +31,7 @@ from backend.app.schemas.prices import (
     FAHistoricalData,
     FAPricePoint,
 )
+from backend.app.schemas.provider import FAQuoteBaseSuggestion
 from backend.app.services.assets.base import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetRateLimitedError, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType
@@ -42,6 +45,13 @@ RATE_LIMITED_QUERY = "lf-rate-limited"
 #: ``true`` (no ``Retry-After``). For in-process tests only: never on the shared test backend, where a pause would
 #: outlive the test.
 RATE_LIMITED_PARAM = "mock_rate_limited"
+#: The search query that makes the mock answer a line quoted in pence (Z-32 d): ``MINOR_UNIT_IDENTIFIER``, currency
+#: ``GBp``, with a quote base suggestion of 100 units per price.
+MINOR_UNIT_QUERY = "lf-minor-unit"
+#: The identifier of that line: ``suggest_quote_base`` suggests 100 units per price for it, nothing for any other.
+MINOR_UNIT_IDENTIFIER = "MOCK_MINOR_UNIT"
+#: The suggestion for that line.
+_MINOR_UNIT_SUGGESTION = {"quantity": 100, "quote_currency": "GBp"}
 
 
 def _refuse_if_asked(provider_params: Dict | None) -> None:
@@ -193,10 +203,22 @@ class MockProvider(AssetSourceProvider):
         Mock search - returns dummy result for any query.
 
         ``SETTINGS_ECHO_QUERY`` returns one item whose display name describes the settings this call received;
-        ``RATE_LIMITED_QUERY`` refuses for too many requests.
+        ``RATE_LIMITED_QUERY`` refuses for too many requests; ``MINOR_UNIT_QUERY`` returns a line quoted in pence with
+        its quote base suggestion.
         """
         if query == RATE_LIMITED_QUERY:
             raise AssetRateLimitedError("Mock provider refused for too many requests (testing)", retry_after=30.0)
+        if query == MINOR_UNIT_QUERY:
+            return [
+                {
+                    "identifier": MINOR_UNIT_IDENTIFIER,
+                    "identifier_type": IdentifierType.TICKER,
+                    "display_name": "Mock Asset: quoted in pence",
+                    "currency": "GBp",
+                    "type": "STOCK",
+                    "quote_base_suggestion": dict(_MINOR_UNIT_SUGGESTION),
+                }
+            ]
         if query == SETTINGS_ECHO_QUERY:
             return [{"identifier": "MOCK_SETTINGS", "identifier_type": IdentifierType.TICKER, "display_name": self._settings_summary(), "currency": "USD", "type": "MOCK"}]
         return [
@@ -256,3 +278,13 @@ class MockProvider(AssetSourceProvider):
         )
 
         return FAAssetPatchItem(asset_id=0, classification_params=classification_params)  # Will be set by caller
+
+    async def suggest_quote_base(
+        self,
+        identifier: str,
+        identifier_type: IdentifierType,
+        provider_params: Dict | None = None,
+    ) -> FAQuoteBaseSuggestion | None:
+        """100 units per price for ``MINOR_UNIT_IDENTIFIER``, a line quoted in pence; nothing for any other (Z-32 d)."""
+        _refuse_if_asked(provider_params)
+        return FAQuoteBaseSuggestion(**_MINOR_UNIT_SUGGESTION) if identifier == MINOR_UNIT_IDENTIFIER else None

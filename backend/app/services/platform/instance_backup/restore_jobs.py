@@ -40,11 +40,13 @@ from backend.app.services.platform.instance_backup.paths import (
     STAGE_DECRYPTED_ARCHIVE,
     STAGE_LOCK_FILE,
     BackupPathError,
+    NotRegularFileError,
     check_state_path,
     checks_dir,
     ensure_private_dir,
     is_job_id,
     is_plain_dir,
+    read_regular_file,
     restore_dir,
     stages_dir,
     upload_path,
@@ -403,12 +405,18 @@ def _prune_checks(data_dir: Path, cutoff: datetime, *, idle: bool, protected: st
 
 def _prune_unrecorded(data_dir: Path, cutoff: datetime, recorded: set[str]) -> None:
     """Remove what no check records, older than ``cutoff``: uploads never checked, the copies of a command-line check
-    stopped before its end."""
+    stopped before its end, and the states in ``checks/`` no check could be read from, or half written (B-54)."""
     for folder, keep in ((uploads_dir(data_dir), set()), (stages_dir(data_dir), recorded)):
         if is_plain_dir(folder):
             for path in folder.iterdir():
                 if is_job_id(path.name.removesuffix(_PARTIAL_SUFFIX)) and path.name not in keep and _older_than(path, cutoff):
                     _remove_path(path)
+    if _plain_folders(data_dir, checks_dir(data_dir)):
+        for path in checks_dir(data_dir).iterdir():
+            name = path.name.removesuffix(_PARTIAL_SUFFIX)
+            stage_id = name.removesuffix(".json")
+            if name == f"{stage_id}.json" and is_job_id(stage_id) and stage_id not in recorded and _older_than(path, cutoff):
+                _remove_path(path)
 
 
 def _older_than(path: Path, cutoff: datetime) -> bool:
@@ -495,16 +503,25 @@ def _write_state(data_dir: Path, check: RestoreCheck) -> None:
 
 
 def _read_state(data_dir: Path, stage_id: str) -> RestoreCheck | None:
+    """The state of the check ``stage_id``. ``None`` when there is none, or none this module can read: a content that is
+    no check's state (a date without a time zone included), a folder, a link or a special file in its place, no
+    permission to read it (B-50, B-55). Any other ``OSError``, a transient one, as it came: a «no check» would make the
+    tab forget a check it follows, where an error lets it try again."""
     if not _plain_folders(data_dir, checks_dir(data_dir)):
         return None
     try:
-        with os.fdopen(os.open(check_state_path(data_dir, stage_id), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)), encoding="utf-8") as handle:
-            record = json.load(handle)
+        record = json.loads(read_regular_file(check_state_path(data_dir, stage_id)).decode("utf-8"))
+        # A document that is not a JSON object is no check's state, like the other unreadable ones (B-50).
+        if not isinstance(record, dict):
+            return None
         for key in ("created_at", "finished_at"):
             if record.get(key) is not None:
-                record[key] = datetime.fromisoformat(record[key])
+                moment = datetime.fromisoformat(record[key])
+                if moment.tzinfo is None:
+                    return None  # every state this module writes has one: prune could not compare it (B-55)
+                record[key] = moment
         return RestoreCheck(**record)
-    except (OSError, ValueError, TypeError):
+    except (FileNotFoundError, NotADirectoryError, IsADirectoryError, PermissionError, NotRegularFileError, ValueError, TypeError):
         return None
 
 

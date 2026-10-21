@@ -40,14 +40,16 @@ it draws its two bars and the active body from that list. Each entry is a `Setti
 | `preferences` | 20 | `PreferencesTab` | everyone | — | — |
 | `plugins` | 25 | `PluginSettingsTab` | everyone | — | — |
 | `about` | 30 | `AboutTab` | everyone | — | — |
-| `admin` | 100 | `GlobalSettingsTab` | everyone | `administration` | Label `settings.globalSettings` (*Global Settings*), icon `Settings2`; `props: (ctx) => ({canEdit: ctx.isSuperuser})` |
+| `admin` | 100 | `GlobalSettingsTab` | administrators | `administration` | Label `settings.globalSettings` (*Global Settings*), icon `Settings2`; `visible: (ctx) => ctx.isSuperuser` (lot N69-2, decision D4 a); `props: (ctx) => ({canEdit: ctx.isSuperuser})`, kept: see [GlobalSettingsTab](#globalsettingstab-admin-only) |
 | `users` | 110 | [`UsersTab`](#userstab) | administrators | `administration` | `visible: (ctx) => ctx.isSuperuser` |
 | `backup` | 120 | `BackupTab` | administrators | `administration` | `visible: (ctx) => ctx.isSuperuser` |
 | `email` | 130 | `EmailSettingsTab` | administrators | `administration` | `visible: (ctx) => ctx.isSuperuser` |
 | `security` | 140 | [`SecurityTab`](#securitytab) | administrators | `administration` | `visible: (ctx) => ctx.isSuperuser`; `badge: () => securityChecks.attentionCount`; `prefetch: (ctx) => { if (ctx.isSuperuser) void securityChecks.ensureLoaded(); }` |
 
 The `admin` id stays as it was, so `?tab=admin`, the link of the
-[open-registration warning](auth.md#open-registration-notice), still opens the global settings;
+[open-registration warning](auth.md#open-registration-notice), still opens the global settings (the
+warning shows to administrators only, as the tab does; for a regular user, `?tab=admin` names a
+hidden tab and opens `profile`, the first visible one);
 lot A8b changed only its label and its icon, the group having taken the `Shield`, and removed the
 key `settings.admin` (*Admin*) from the catalogues. Five bodies are in `lib/features/settings/tabs/`,
 the Security tab's in `lib/features/settings/security/` ([SecurityTab](#securitytab)). The Plugins
@@ -74,8 +76,9 @@ by `order`, each a `{kind: 'tab', tab}` entry, except the visible members of a g
 one `{kind: 'group', group, members}` entry placed where its first visible member would be,
 `members` being its visible members by `order`. A group without a visible member has no entry, and a
 tab whose `group` names none of `groups` stays a tab entry. A regular user's bar is `profile`,
-`preferences`, `plugins`, `about`, and `administration` with `admin` alone; an administrator's ends
-with `administration` and its five members.
+`preferences`, `plugins` and `about`: every member of `administration` is an administrator's (since
+lot N69-2), so the group has no entry for them; an administrator's ends with `administration` and
+its five members.
 
 #### The page {: #settings-page }
 
@@ -91,8 +94,10 @@ The page is the runtime of the registry, written in Svelte 5 runes:
   second `TabBar`, inside `data-testid="settings-subtabs"`, lists those members, each with its own
   `settings-tab-{id}`, icon, label (hidden on a phone too) and badge, the open one selected. It
   takes the same props (`hideLabelOnMobile`, `scrollable`) and the same colour roles as the top bar.
-  A regular user's `administration` has one visible member, so no second bar: the group's entry
-  opens `admin` directly, and `settings-tab-admin` is not drawn for them.
+  A group with one visible member gets no second bar: its entry opens that member directly, and
+  the member has no `settings-tab-{id}` of its own. No context of today's registry makes such a
+  group since lot N69-2 (a regular user sees no member of `administration`, an administrator all
+  five), but the page still handles it, on a registry of the test's own (see the tests below).
 - **Clicks** (`selectTop()`): a tab entry opens its tab; a group entry opens the group's first
   visible member, unless one of its members is open already, which stays, its body not mounted
   again. A member of the second bar opens that member.
@@ -107,13 +112,15 @@ The page is the runtime of the registry, written in Svelte 5 runes:
 - **Active tab**: always a tab, never a group. The first visible tab, unless `?tab=` names a visible
   tab or a group: a member's `id` opens that member inside its group (with the second bar when the
   group has two visible members or more), a group's `id` its first visible member
-  (`?tab=administration` opens `admin`). The choice runs in `$effect.pre`, so the tab that `?tab=`
-  names is the first body mounted: the default body never mounts, not even for an instant. Clicking
-  a tab does not rewrite the URL, so a `?tab=` value is applied once: a later page update that keeps
-  it does not take back the tab the user picked, while a new value is applied again. An unknown id,
-  or the id of a tab this user cannot see, is ignored; a `?tab=` naming a tab that becomes visible
-  later (the user is promoted while on the page) is applied when the tab appears, inside its group.
-  If the active tab stops being visible, the first visible tab opens.
+  (`?tab=administration` opens `admin`, for an administrator). The choice runs in `$effect.pre`, so
+  the tab that `?tab=` names is the first body mounted: the default body never mounts, not even for
+  an instant. Clicking a tab does not rewrite the URL, so a `?tab=` value is applied once: a later
+  page update that keeps it does not take back the tab the user picked, while a new value is
+  applied again. An unknown id, the id of a tab this user cannot see, or that of a group with no
+  visible member, is ignored: a regular user's `?tab=admin` or `?tab=administration` opens
+  `profile`, and the body of Global Settings never mounts for them. A `?tab=` naming a tab that
+  becomes visible later (the user is promoted while on the page) is applied when the tab appears,
+  inside its group. If the active tab stops being visible, the first visible tab opens.
 - **Badges**: a tab entry shows its `badge(ctx)`, a group entry the sum of its visible members',
   and `TabBar` draws none for `0`. They are read while the bars are derived, so a badge follows the
   reactive state it reads: a count that arrives after the first render shows at once.
@@ -148,7 +155,10 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
   and a `?tab=` naming it is ignored for them. Leave `visible` out for a tab everyone sees.
 - **`group`**: `'administration'` for a tab that looks after the instance: it has no button of its
   own in the top bar, and shows in the group's second bar. Leave it out for a tab of the top bar.
-- **`props`**: only when the body depends on the context, as `admin` does for `canEdit`.
+- **`props`**: only when the body depends on the context, as `admin` does for `canEdit`. Since lot
+  N69-2 only administrators see that tab, so `canEdit` is always `true` on screen: the read-only
+  branch, `canEdit: false`, stays in `GlobalSettingsTab`, unreached from the interface, until a
+  cleanup.
 - **`badge` and `prefetch`**: only for a tab whose button counts something, today `security` alone.
   `badge` reads a reactive count synchronously, `0` until there is one; `prefetch` starts what the
   count needs, does nothing for a context the tab is not for, and nothing again once loaded, as
@@ -162,17 +172,28 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
   and `BARS` lists of those who see it and, when it joins the group, to `ADMINISTRATION`, with a
   `vi.mock` of its body module like the others; the cases that list today's tabs by name follow it
   (`users` also has two cases of its own: STAB-01, hidden from a regular user, and STAB-02, order
-  110 after `admin`, both members of the group). The same file checks the ids, the orders and the
-  labels in the four catalogues, the group and what its tabs carry (STAB-03 to STAB-13: one group,
-  its label, icon and members, no tab with `alignEnd`, `security` the only tab with a badge and a
-  prefetch, the bar of each context), and `settingsBar()` on lists of its own (SBAR-01 to SBAR-05).
-  `routes/(app)/settings/page.tabs.test.ts` tests the page on a registry of its own, with two groups
-  (`crew`, and `office`, the stand-in for Administration) and counts in a reactive box (SPAGE-01 to
-  SPAGE-21: the top bar, the second bar and its clicks, `?tab=` naming a member or a group, the
-  badges and their sums, the prefetch at the start, again for a new context and never otherwise);
-  it only gains a no-op `vi.mock` of the new body module (and of a store the registry imports, as
-  `securityChecks` is), as it loads the real `settingsTabs` module (`importOriginal`), which
-  imports every body. `./dev.py test front-utility core-unit` runs `settingsTabs.test.ts`,
+  110 after `admin`, both members of the group; `admin` has one, rewritten by lot N69-2: hidden
+  from a regular user, shown to an administrator, its `props` still `{canEdit: isSuperuser}`). The
+  same file checks the ids, the orders and the labels in the four catalogues, the group and what
+  its tabs carry (STAB-03 to STAB-14: one group, its label, icon and members, no tab with
+  `alignEnd`, `security` the only tab with a badge and a prefetch, the bar of each context;
+  STAB-14, lot N69-2: no `administration` entry nor any of its members in a regular user's bar,
+  the entry once in an administrator's, `admin` its first member), and `settingsBar()` on lists of
+  its own (SBAR-01 to SBAR-05). `routes/(app)/settings/page.tabs.test.ts` tests the page on a
+  registry of its own, with two groups (`crew`, and `office`, the stand-in for Administration as
+  lot A8b had it, with one visible member for a regular user) and counts in a reactive box
+  (SPAGE-01 to SPAGE-21: the top bar, the second bar and its clicks, `?tab=` naming a member or a
+  group, the badges and their sums, the prefetch at the start, again for a new context and never
+  otherwise). SPAGE-22 to SPAGE-24 (lot N69-2) render the page on the real registry: a regular
+  user's page with neither `settings-tab-administration` nor `settings-tab-admin`, **Profile**
+  open; `?tab=admin` and `?tab=administration` opening **Profile** for a regular user, the Global
+  Settings body never mounted, and Global Settings, with `canEdit: true`, inside its group for an
+  administrator. The file loads the real `settingsTabs` module (`importOriginal`), which imports
+  every body: the mocked module's `SETTINGS_TABS` and `SETTINGS_TAB_GROUPS` are getters, answering
+  the real lists while a case sets `mocks.registry.real` and the synthetic ones otherwise, and each
+  real body is a probe named by its module (`mocks.realBodies`). A new tab adds its body there,
+  with its `vi.mock` (a store the registry imports gets a no-op stand-in, as `securityChecks`
+  does). `./dev.py test front-utility core-unit` runs `settingsTabs.test.ts`,
   `./dev.py test front-utility component-unit` runs `page.tabs.test.ts`.
 
 ### 📐 SettingsLayout
@@ -360,7 +381,7 @@ the server, the refusals with `PASSWORD_TOO_WEAK` among them, the rules taken fr
 `PasswordStrength`, and the limit's `429`: the key, never the server's sentence, the fields kept and
 usable, no success and no toast).
 
-### 🌍 GlobalSettingsTab (read by everyone, edited by administrators) {: #globalsettingstab-admin-only }
+### 🌍 GlobalSettingsTab (administrators only) {: #globalsettingstab-admin-only }
 
 <div class="screenshot-container" style="margin: 1rem 0 2rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 600px;">
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Global Settings" style="width: 100%; display: block;">
@@ -374,12 +395,17 @@ System-wide configuration with lock toggle:
 - Scheduler configuration and new-user defaults
 - Other app-wide settings
 
-The Settings page shows this tab to every user, but only a superuser can change it: its entry in
-the [tab registry](#tab-registry) (`admin`, labelled *Global Settings*) has no `visible` and passes
-`canEdit` through `props: (ctx) => ({canEdit: ctx.isSuperuser})`, and without `canEdit` the tab shows
-a read-only indicator (`settings-readonly-indicator`) instead of the lock toggle
-(`settings-lock-toggle`) and the bulk Save/Undo/Reset actions. It is the first member of the
-`administration` [group](#tab-groups), and the only one a regular user sees there.
+Only a superuser has this tab (lot N69-2, decision D4 a): its entry in the
+[tab registry](#tab-registry) (`admin`, labelled *Global Settings*) has
+`visible: (ctx) => ctx.isSuperuser`, like every other member of the `administration`
+[group](#tab-groups), of which it is the first. A regular user has no group at all, and a
+`?tab=admin` opens their `profile` ([The page](#settings-page)). The entry still passes `canEdit`
+through `props: (ctx) => ({canEdit: ctx.isSuperuser})`, so the tab always gets `canEdit: true` on
+screen; without `canEdit` it would show a read-only indicator (`settings-readonly-indicator`)
+instead of the lock toggle (`settings-lock-toggle`) and the bulk Save/Undo/Reset actions, a branch
+no longer reached from the interface and kept until a cleanup. Hiding the tab hides no value: the
+app still reads the global settings for every signed-in user, through `GET /api/v1/settings/global`
+([Settings System](../../../architecture/settings.md)).
 
 For the three *display* defaults (`default_language`, `default_currency`, `default_theme`) the
 tab reuses the **same shared `Setting*` wrappers as the PreferencesTab**, passing the
@@ -410,8 +436,10 @@ it from the [instance configuration](../../state/app-state.md#instance-config),
 ### 🧹 CachePanel
 
 `CachePanel.svelte` shows the status of every named backend cache (the theine registry): name,
-`current_size / maxsize`, and a human-formatted TTL, refreshed on demand. Status is visible to
-any authenticated user; the per-cache **Clear** and **Clear all** buttons appear only when the
+`current_size / maxsize`, and a human-formatted TTL, refreshed on demand. It sits in the Memory
+category of the [Global Settings tab](#globalsettingstab-admin-only), so only administrators see it
+since lot N69-2, although `GET /api/v1/settings/cache/status` still answers any authenticated user;
+the per-cache **Clear** and **Clear all** buttons appear only when the
 `canEdit` prop is set (it mirrors the Global-settings lock). Both clear actions pass through a
 danger confirmation modal — after a clear, the next fetch hits the providers again. Backend
 contract: [Cache Registry & Admin](../../../architecture/settings_cache.md).
@@ -502,15 +530,21 @@ toast, when there is one, is a field of the same call.
 #### UserRow {: #userrow }
 
 `lib/features/settings/users/UserRow.svelte`. Props: `account` (`AdminAccount`, the `GET /users`
-item, with `holds_place` and `pending_setup` when they are sent: both optional in
-`users/types.ts`), `isSelf`, `isOnlyActiveAdmin`, `full`, `onAction(action, account)`.
+item, with `holds_place`, `pending_setup` and `avatar_url` when they are sent: all three optional
+in `users/types.ts`), `isSelf`, `isOnlyActiveAdmin`, `full`, `onAction(action, account)`.
 
 - The `<li>` is `users-row`, with `data-user-id`, `data-username`, `data-active`, `data-admin`,
   `data-pending-setup`, `data-protected` and `data-self` (`"true"` or `"false"`; `data-pending-setup`
   is `"false"` when the field is absent, the answer of an older server).
-- `users-row-toggle`, a button with `aria-expanded` and `aria-controls`, shows the username, the
-  badges (`settings.usersTab.badges.you`, `admin`, `inactive`, `protected`), the email and
-  `settings.usersTab.createdOn`, and opens or closes the panel of actions under the row.
+- `users-row-toggle`, a button with `aria-expanded` and `aria-controls`, shows the chevron, the
+  account's avatar, the username, the badges (`settings.usersTab.badges.you`, `admin`, `inactive`,
+  `protected`), the email and `settings.usersTab.createdOn`, and opens or closes the panel of
+  actions under the row.
+- **The avatar** (lot N69-4, decision D8 a): a [`UserAvatar`](../core-ui/file-upload.md#useravatar)
+  right after the chevron, given `account.avatar_url ?? null`, its root `users-row-avatar` with
+  `data-avatar="image"` or `"initial"`: an image uploaded to the app asked for as its 48×48
+  preview, an address elsewhere as it is, and the username's initial in a neutral circle for an
+  account without one, `avatar_url` null or absent.
 - The own row (`isSelf`) has no action: `users-self-hint`, with a link to `/settings?tab=profile`.
 - The buttons: `users-action-deactivate` for an active account or `users-action-reactivate` for an
   inactive one, `users-action-cancel-setup` in its place for an account with `pending_setup`;
@@ -730,7 +764,9 @@ own from [ProfileTab](#profiletab) or another's from [UsersTab](#userstab). A `M
   **Reactivate** and no `limit` reason, the hint; since lot A-43, UPS-12 to UPS-23:
   `users-action-cancel-setup` in its place, turned off with `protected` on a protected account
   (UPS-23), `users-action-demote` off with `pending-setup`, `users-action-delete` enabled; every
-  other row unchanged),
+  other row unchanged), `users/UserRow.avatar.test.ts` (URA-01 to URA-04, lot N69-4: the avatar
+  in the toggle, between the chevron and the username, an uploaded image asked for as its 48×48
+  preview, an address as it is, the initial without one, and the toggle still opening its panel),
   `AccountDeletionDialog.test.ts` (both modes; ADEL-28 and ADEL-29, lot A-16: a refused own
   deletion worded in the interface language, the `400` `LAST_ADMIN` as `LAST_ADMIN_DELETION` with the
   dialog left open, the `500` as `DELETION_FAILED`) and `tabs/ProfileTab.test.ts`.
@@ -757,7 +793,7 @@ evaluates, and one check that only the browser can make, most severe first. Admi
 |---|---|
 | `securityChecksApi.ts` | The seam over the generated client: `fetchSecurityChecks()` calls `list_security_checks_api_v1_security_checks_get` once and resolves to the `items` of the answer as they came, `SecurityCheck[]` (`{check_id, severity, i18n_key, detail}`, `severity` one of `ok`, `info`, `warning`, `error`); a refusal or a network error propagates |
 | `securityFindings.ts` | Pure: what the tab lists, from the server's checks and from what only the browser knows |
-| `securityChecks.svelte.ts` | The state: one read per page load, shared by the tab and the badges |
+| `securityChecks.svelte.ts` | The state: one read per page load, shared by the tab, the badges and, since lot N69b, the [sidebar's dot](#security-attention-dot) |
 | `SecurityTab.svelte` | The body |
 
 **The findings.** `securityFindings(checks, browser)`, where `browser` is
@@ -788,12 +824,16 @@ inputs.
   configuration: no link.
 - `attentionCount(findings)`: the errors and the warnings of `attention`, the browser's included,
   never an info. It is the badge.
+- `attentionSeverity(findings)` (lot N69b): how serious what `attentionCount` counts is: `'error'`
+  when an attention finding is an error, wherever it sits in the list, else `'warning'` when one is a
+  warning, else `null`. An info never counts, so it is `null` exactly when `attentionCount` is `0`. It
+  changes nothing it reads. It is the colour of the [sidebar's dot](#security-attention-dot).
 
 **The state.** `createSecurityChecks({fetch?, browser?})` builds a store; `securityChecks` is the
 app's, created at import, asking nothing until it is told to. Its getters are reactive: `status`
 (`idle`, `loading`, `ready` or `error`), `checks`, `answered` (true once a read has succeeded),
-`findings` and `attentionCount`, which are `securityFindings(checks, browser())` and its count once
-`answered`, empty lists and `0` before.
+`findings`, `attentionCount` and `attentionSeverity`, which are `securityFindings(checks, browser())`,
+its count and its severity once `answered`; empty lists, `0` and `null` before.
 
 - `ensureLoaded()` reads once: nothing while a read is under way, whose promise concurrent calls
   share, nor once `ready`; again after a failure. There is no retry of its own.
@@ -804,16 +844,17 @@ app's, created at import, asking nothing until it is told to. Its getters are re
   `open`, and an invite-only instance would warn for nothing. The host is `window.location.hostname`.
   As `findings` is computed on each read, the browser's finding follows `instanceConfig`: a save of
   `registration_mode` in [GlobalSettingsTab](#globalsettingstab-admin-only), which reloads it, adds
-  or removes the finding, badge included, without a new request.
+  or removes the finding, badge and dot included, without a new request.
 - The default `fetch` is `fetchSecurityChecks()`.
 
 **The badge.** The registry's `security` entry reads `securityChecks.attentionCount` as its `badge`,
 summed on the `administration` entry, and its `prefetch` calls `securityChecks.ensureLoaded()` for an
 administrator, nothing for a user. The page runs the prefetch when it opens, so the number shows
-before the tab is opened; the tab's own `onMount` calls `ensureLoaded()` too, which reads nothing
-more once the prefetch's read has succeeded. The store lives as long as the page load: leaving
-Settings and coming back reads nothing again (unless the last read failed), «check again» or a
-reload of the page does.
+before the tab is opened; the tab's own `onMount` calls `ensureLoaded()` too. Since lot N69b the
+sidebar's connection line has usually asked already, on the first page of the load
+([The sidebar's dot](#security-attention-dot)): the prefetch and the tab then share its read, or read
+nothing once it has succeeded. The store lives as long as the page load: leaving Settings and coming
+back reads nothing again (unless the last read failed), «check again» or a reload of the page does.
 
 **The body.** `SecurityTab.svelte`, prop `checks`: the store to show, `securityChecks` unless a test
 hands its own. The root, `security-tab`, carries `data-status` (the store's `status`), and
@@ -846,13 +887,116 @@ Tests: `./dev.py test front-utility core-unit` runs `security/securityChecksApi.
 of the generated client, its items as they came, an empty answer, a failure that propagates),
 `security/securityFindings.test.ts` (the order by severity and within one, the passed checks, which
 findings link where, the browser's finding against `openRegistrationNoticeFor()` for every mode, pin
-and host, the inputs left as they were, `attentionCount`) and `security/securityChecks.test.ts`
-(idle at creation, `ensureLoaded()` once and shared, `reload()` keeping the last checks, the
-failures, the findings following the browser's state, the reactive getters, the defaults: the
-generated client, `instanceConfig` and the page's host). `./dev.py test front-utility component-unit`
+and host, the inputs left as they were, `attentionCount`; since lot N69b, `attentionSeverity`: an
+error wherever it sits among warnings, warnings with or without infos, `null` for infos only or for
+nothing, `null` exactly when `attentionCount` is `0` on what `securityFindings` lists, the browser's
+warning included, a frozen list left as it was) and `security/securityChecks.test.ts` (idle at
+creation, `ensureLoaded()` once and shared, `reload()` keeping the last checks, the failures, the
+findings following the browser's state, the reactive getters, the defaults: the generated client,
+`instanceConfig` and the page's host; since lot N69b, the getter `attentionSeverity`: `null` before
+the first answer, even after a failed read, then the most severe of each answer, a reactive read
+following `reload()` and the browser's state). `./dev.py test front-utility component-unit`
 runs `security/SecurityTab.test.ts` (the store it is given, the placeholder, the findings and their
 words, the links, the all-clear, the passed checks, «check again», the failures, colour roles only,
 every key a message of the four catalogues).
+
+#### The sidebar's dot {: #security-attention-dot }
+
+Lot N69b (point 1 of N69; decisions D1 a, D2 a, D3 a) shows an administrator the tab's count from
+every page of the app shell: as a dot on the sidebar's connection line,
+`lib/components/layout/ConnectionSecurityIndicator.svelte` (plan 36), and, on a phone, on the menu
+button of [`Header.svelte`](../index.md#app-header). Both only read `securityChecks` and the auth
+store. Neither has a branch for the managed profile (D1 a): the dot is the same there.
+
+- **Who sees it.** `isAdmin` is `$auth.user?.is_superuser === true`. The line's count, `attention`,
+  is `securityChecks.attentionCount` for an administrator and `0` for anyone else; its severity is
+  `securityChecks.attentionSeverity` while `attention > 0`, none otherwise. The role is checked in
+  the components, not in the store: `securityChecks` is not reset when the account changes (it has
+  no `registerClientSessionReset`, as since lot A8b), so an administrator's answer stays in memory
+  for the rest of the page load, and a member who signs in after them in the same tab is shown none
+  of it.
+- **One read per page load.** An `$effect` of the line calls `securityChecks.ensureLoaded()` for an
+  administrator, inside `untrack()`: `ensureLoaded()` reads the store's `status` and moves it, and a
+  tracked call would run the effect again at each move — after a failure, a new request, in a loop.
+  The [page's prefetch](#settings-page) is untracked for the same reason. The effect depends on
+  `isAdmin` alone; the sidebar belongs to the app shell, on every page and on a phone too (off-screen
+  until the menu opens); and `ensureLoaded()` reads nothing more once a read has succeeded: one read
+  per page load, on its first page. A failed read is not retried by the line: the next page load
+  retries it, and so do Settings (its prefetch and the tab's mount) and **Try again**. Anyone else
+  never asks: no request to `GET /api/v1/security/checks`, which would answer them `403`. The header
+  never asks either: it reads what the line loaded.
+- **The root**, `connection-security`, publishes `data-security-attention`, the count (`0` for anyone
+  not an administrator, and until the answer), and `data-security-severity`, `error`, `warning` or
+  `none`, beside `data-level`, `data-reason` and `data-server-checked`.
+- **The dot**, `connection-security-attention-dot`: on the corner of the level's icon, inside the
+  toggle (`connection-security-toggle`), with `data-severity` the severity and
+  `aria-hidden="true"`; drawn while `attention > 0`, with the sidebar expanded or collapsed. A dot,
+  not a number (D3 a): `bg-lf-bar-danger` for an error, `bg-lf-bar-warning` for warnings only, with
+  a `ring-2 ring-lf-bar` in the bar's colour that cuts it out of the icon.
+- **The name.** Colour is not the only sign (WCAG 1.4.1): while `attention > 0`, the toggle's
+  `aria-label` is «‹level label› — ‹attention text›», expanded and collapsed, and its `title` the
+  same when collapsed. The attention text is `$_('connectionSecurity.attention', {values: {count}})`,
+  an ICU plural in the four catalogues of the `app` subsystem (*1 security warning*,
+  *2 security warnings*: the errors are counted in it). Without attention the toggle is named as
+  before: by the level label in `aria-label` and `title` when collapsed, by its visible label when
+  expanded.
+- **The link**, `connection-security-attention-link`: in the details, after the reason and before
+  the administrator's cookie line and the docs link, an `<a href="/settings?tab=security">` whose
+  text is the attention text after a `ShieldAlert` icon, with `data-severity` the severity and its
+  border and icon in `lf-bar-danger` or `lf-bar-warning`. A click calls `closeDetails()` while the app
+  navigates to the tab.
+- **The menu button** (D2 a). On a phone the sidebar, and the line with it, hide behind
+  `mobile-menu-toggle`. Its dot, `mobile-menu-security-dot`, until N69b for an insecure connection
+  alone (plan 36), is drawn while the connection is insecure or an administrator's `attentionCount`
+  is above `0`: one dot either way. Its `data-severity` is `error` when the connection is insecure or
+  `attentionSeverity` is `error`, `warning` otherwise; `bg-lf-danger` or `bg-lf-warning`, with
+  `ring-2 ring-lf-header` and `aria-hidden="true"`. The button's `aria-label` is `Toggle menu`,
+  followed by the insecure level's label when the connection is insecure and by the attention text
+  with attention, each after « — ».
+
+Tests: `./dev.py test front-utility component-unit` runs
+`lib/components/layout/ConnectionSecurityIndicator.test.ts` and `lib/components/layout/Header.test.ts`
+(the latter also in `onboarding-component-unit`). Each file fakes the checks' store over a reactive
+box, one list of findings from which `findings`, `attentionCount` and `attentionSeverity` derive as in
+the real store, with `ensureLoaded` and `reload` spied and the answer landed by the case; and each
+gives `connectionSecurity.attention` an ICU message of its own, so that a name reads the key, the
+plural branch and the count, never a translation. Their last describe is N69b's:
+
+- the line, 6 cases: an administrator with warnings (`2` and `warning` on the root, the dot in the
+  toggle, the count in the name, the link after the reason, which closes the details); with an error
+  among them (`error` on the root and the dot); with infos only (`0` and `none`, no dot nor link, the
+  name as before, expanded and collapsed); a member over a store holding an administrator's warnings
+  (`0` and `none`, no dot nor link, and no call of `ensureLoaded()`, `reload()` or the generated
+  client); collapsed (the dot, and the singular in the name and the title); an administrator's line
+  asking the store once from its mount and following the answer when it lands;
+- the header, 5 cases: an administrator with warnings, then with an error among them, on a secure
+  connection (the dot and its severity, the count appended to the name, nothing for infos only); a
+  member on an insecure connection (the plan-36 dot, now `data-severity="error"`, nothing about the
+  checks in the name); an administrator with warnings on an insecure connection (one dot, `error`;
+  the name carries the level, then the count); a member over an administrator's warnings, then an
+  administrator signed in on the same header, the control. The header never calls `ensureLoaded()`
+  nor `reload()`.
+
+`./dev.py test front-utility connection-security` runs
+`frontend/e2e/layout/connection-security.spec.ts` on the desktop and the mobile projects. Its describe
+«An administrator: the security dot (N69-1)» runs under a loopback name, where the browser adds no
+open-registration finding of its own, and reads the root's two attributes, the dots and the link:
+
+- **ADOT-E-01**, the lane as it is: `accounts.login_limit` is a warning on every lane
+  (`dev.py server --test` sets `LIBREFOLIO_LOGIN_LIMIT=off`), read first as a precondition. The page
+  reads the checks once, and the line's count and severity are those of that very read
+  (`platform.client_address` may differ from one server process to another), with, on a phone, the
+  burger's dot. Its link opens **Settings › Administration › Security** and closes the details, and
+  the tab lists as many errors and warnings without a second read;
+- **ADOT-E-02**, stubbed (`page.route`), one error and two warnings, an info and an ok besides: `3`
+  and `error`, the dot expanded and, on desktop, collapsed, the burger's on a phone, the link;
+- **ADOT-E-03**, stubbed, every check ok: `0` and `none` once the Security tab has settled on the
+  same answer, no dot on the line nor, on a phone, on the burger, no link;
+- **ADOT-E-04**, stubbed, one warning: `1` and `warning`, on the line and, on a phone, on the burger;
+- **ADOT-E-05**, a member: `0` and `none`, no dot, and no read of the checks through a sign-in, a page
+  load and a navigation to Settings.
+
+A stubbed case counts one read for its page load, answered by the stub.
 
 ### ℹ️ AboutTab {: #abouttab }
 

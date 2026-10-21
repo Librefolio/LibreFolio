@@ -17,6 +17,10 @@
  * was first drawn with) and when the chart colours change without one (contract C4 with the Designer
  * Lab, `notifyChartColorsChange`), the roles read again from its own element.
  *
+ * It is created at the screen's density (DV): `echarts.init` receives `chartInitOptions(container)` —
+ * the canvas renderer and `window.devicePixelRatio` of that moment. The watcher that follows a change of
+ * density, and the update in place on the real zrender, are `chartPixelRatio.test.ts`'s.
+ *
  * Expectations come from the theme's own functions — `sequenceColor`, `categoryColor`, `familyShade`,
  * `chartRoles` — never from copied hex values, which the theme's tests pin. Each owner's rank by key is
  * spelled out in the fixture, then checked against the rule. Role values are injected through
@@ -42,7 +46,7 @@ import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest
 /**
  * The ECharts stand-in: it answers every call the donut and its helpers make on an instance
  * (`attachChartReady` → `on`, `scheduleFirstRenderStabilityFix` → `isDisposed`/`resize`, the teardown →
- * `dispose`) and keeps every `setOption` payload.
+ * `dispose`), keeps every `setOption` payload, and what `echarts.init` was handed besides the element.
  */
 const {chartInstances, echartsModule} = vi.hoisted(() => {
     interface SetOptionCall {
@@ -51,6 +55,8 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
     }
 
     interface FakeChart {
+        /** What `echarts.init` was handed besides the element: the theme and the init options. */
+        initArgs: {theme: unknown; opts: unknown};
         setOptionCalls: SetOptionCall[];
         setOption: (option: Record<string, unknown>, opts?: unknown) => void;
         getDom: () => unknown;
@@ -63,9 +69,10 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
 
     const chartInstances: FakeChart[] = [];
 
-    function createFakeChart(dom: unknown): FakeChart {
+    function createFakeChart(dom: unknown, theme: unknown, opts: unknown): FakeChart {
         let disposed = false;
         const chart: FakeChart = {
+            initArgs: {theme, opts},
             setOptionCalls: [],
             setOption(option, opts) {
                 chart.setOptionCalls.push({option, opts});
@@ -83,7 +90,7 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
         return chart;
     }
 
-    return {chartInstances, echartsModule: {init: (dom: unknown) => createFakeChart(dom)}};
+    return {chartInstances, echartsModule: {init: (dom: unknown, theme?: unknown, opts?: unknown) => createFakeChart(dom, theme, opts)}};
 });
 
 vi.mock('echarts', () => echartsModule);
@@ -401,5 +408,24 @@ describe('SemiDonutChart — redrawn when the theme switches (R-7) or its colour
             'initials still in the old text roles',
         ).toEqual([]);
         expect(chartInstances, 'the notification made a new chart').toHaveLength(1);
+    });
+});
+
+// =============================================================================
+// Created at the screen's density (DV)
+// =============================================================================
+
+describe('SemiDonutChart — created at the screen’s density (DV, chartInitOptions)', () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it.each([2, 1.5])('with window.devicePixelRatio at %s, echarts.init receives the canvas renderer and that density', async (ratio) => {
+        vi.stubGlobal('devicePixelRatio', ratio);
+
+        await mountDonut();
+
+        expect(chartInstances, 'the donut did not create exactly one chart').toHaveLength(1);
+        expect(chartInstances[0].initArgs.opts).toMatchObject({renderer: 'canvas', devicePixelRatio: ratio});
     });
 });

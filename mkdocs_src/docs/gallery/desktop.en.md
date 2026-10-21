@@ -320,6 +320,14 @@ Administrators can configure system-wide settings.
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Global Settings">
 </div>
 
+### 📧 Email (Admin)
+
+Administrators check the instance's email: whether it can send, how many emails are left this hour, the configuration checks, and a test email to their own address.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="email" alt="Email">
+</div>
+
 ### 🕐 Market Data Scheduler — Config
 
 Configure the automatic market data sync daemon: update frequency, history sync times, and active days.

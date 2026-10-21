@@ -12,6 +12,7 @@
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
+    import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {_ as t} from '$lib/i18n';
     import type {ChartType, ViewMode} from './ChartToolbar.svelte';
@@ -537,7 +538,7 @@
         if (rect.width === 0 || rect.height === 0) return;
 
         if (!chartInstance) {
-            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'});
+            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, chartInitOptions(chartContainer));
             // Expose the instance for gallery/E2E tooling (deterministic tooltip control
             // without simulating a pixel-perfect hover on a scatter marker).
             (chartContainer as unknown as Record<string, unknown>).__lfChart = chartInstance;

@@ -106,6 +106,23 @@ their load of the account and their write lock, answer what their first check an
 refresh under the lock, and the CLI prints a traceback). LOCK-CLI-02, a guard: the same window with nobody deleted in it,
 the four commands work as today. The self-deletion twin is ACCDEL-LOCK-03, in ``test_account_deletion_api.py``, which
 imports this file's window (``_issuer_engine``, ``_rival_before_the_first_write``).
+
+Lot H-61 (the hosting panel's status; contract agreed between A and H, 20/10, «done wins» since 14:10) adds one section
+at the end, every new red labelled ``# red until H-61``. H61 — ``admin_setup_status(session, *, now=None)``, which the
+panel's status route calls: an ``AdminSetupStatus`` — ``state``, an ``AdminSetupState`` StrEnum (``none``, ``pending``,
+``done``, ``expired``), and ``setup_expires_at``, UTC-aware, for ``pending`` only —, read from the ``admin_setup`` tokens
+of every account: none at all, ``none``; any of them consumed, ``done`` — spent by the setup, or retired by A-32's
+``retire_tokens``, the setup done another way: a consumption is final, so a newer link left revoked, as the setup through
+an older link leaves one, never makes a set-up instance read ``expired`` —; none consumed, the latest, by ``created_at``
+then ``id``, both descending, decides: revoked, ``expired`` — withdrawn: the setup cancelled (A-43), the address changed
+(A-33), replaced by a newer link —; run out at its ``expires_at`` exactly, ``expired``; live, ``pending``, until its
+expiry. The other purposes' tokens never count; the tokens go with their account (``ON DELETE CASCADE``), so an
+administrator deleted reads ``none``. Read-only: nothing written, nothing committed, never SQLite's write lock. Red until
+H-61: the three names did not exist, and each test, its scene built first, said so on its first contract assertion — an
+assertion naming them, never an ImportError at collection —; then «done wins» (H, 20/10 14:10) turned six cases to
+``done`` — H61-012's three whose older link is consumed, H61-013's two whose consumed link is not the latest, H61-014's
+older link of another account consumed — and added the setup through the older of two live links, which revokes the
+newer (H61-018, and a scene of H61-016): red until its cure, «the latest decides» reading them ``pending`` or ``expired``.
 """
 
 from __future__ import annotations
@@ -3285,3 +3302,770 @@ async def test_a_restart_after_the_link_ran_out_still_says_it_has_expired(engine
     assert [event for event in _logged(events) if SAYS_WITHDRAWN in _said(event)] == [], "a link that ran out must not be said withdrawn: the most recent setup link decides, not an earlier one revoked"
     assert _holding(events, CANARY) == [] and (created.link_token is None or _holding(events, created.link_token) == []), "no log event may hold a link"
     print_success("EXPIRED; one warning: has expired, the remedy as today")
+
+
+# =============================================================================
+# H61 — LOT H-61: WHERE THE INITIAL ADMINISTRATOR'S SETUP STANDS, FOR THE HOSTING PANEL
+# =============================================================================
+# H-61: the hosting panel's status route (workstream H, ``GET /api/v1/panel/status``) shows whether the initial
+# administrator has set up its account. Its answer is A's ``admin_setup_status(session, *, now=None)``, in
+# ``bootstrap_admin_service`` (contract agreed between A and H, 20/10; H's route maps it into its own schema): an
+# ``AdminSetupStatus`` — ``state``, an ``AdminSetupState`` StrEnum (``none``, ``pending``, ``done``, ``expired``: the route
+# serialises the value), and ``setup_expires_at``, UTC-aware, for ``pending`` only —, read from the ``admin_setup``
+# tokens of every account, in this order («done wins», H's answer of 20/10, 14:10):
+#   1. no such token: ``none``;
+#   2. any of them consumed: ``done`` — spent by the setup, or retired by ``token_service.retire_tokens`` (revoked and
+#      consumed at once, without a consumer) because the account was activated or given a password another way (A-32):
+#      a setup done another way. A consumption is final — no flow issues a setup link after one: ``pending_admin`` wants
+#      none consumed —, so a newer link left revoked never makes a set-up instance read ``expired``: the setup through
+#      the older of two live links consumes it and revokes the newer (``complete_admin_setup``), the latest;
+#   3. none consumed: the latest, by ``created_at`` then ``id``, both descending, decides — revoked, ``expired``
+#      (withdrawn: the setup cancelled, A-43; the address changed, A-33; replaced by a newer link); run out,
+#      ``expires_at <= now``, ``expired``; live, ``pending``, until its ``expires_at``.
+# The other purposes' tokens never count, in rule 2 as in rule 3, and the tokens go with their account
+# (``account_tokens.user_id`` ``ON DELETE CASCADE``): an administrator deleted reads ``none``, H's «honest reading».
+# Read-only: nothing written, nothing committed, never SQLite's write lock.
+#
+# The scenes go through the module's own flows where they are cheap — the bootstrap, the setup, ``issue_setup_link``, the
+# re-arm, ``user_service`` —, and through rows where the contract reaches states those flows never leave: two live links
+# of one account, a tie, an older link outliving a newer one, a consumed link older than a live one, another account's
+# link. Every call takes its ``now`` but ``user_service``'s, which read the clock: those scenes are dated from it, as
+# A32's and A43's, and so is H61-017, which asks without ``now``. Red until H-61: the three names did not exist — each
+# test builds its scene first, its barriers green, then says so on its first contract assertion (``_h61``): an
+# AssertionError naming them, never an ImportError at collection. Then «done wins» changed six cases — H61-012's
+# ``an-older-consumed-*``, H61-013's two whose consumed link is not the latest, H61-014's older link of another account
+# consumed — and added the setup through the older of two live links (H61-018, and H61-016's
+# ``done-through-the-older-of-two-links``): red until its cure, «the latest decides» reading them ``pending`` or
+# ``expired``; each names its rule in its failure (``_deciding``). Every test name holds ``setup_status``: ``services
+# admin-bootstrap setup_status`` runs this section alone.
+
+#: The names lot H-61 adds to ``bootstrap_admin_service``.
+H61_NAMES = ("AdminSetupState", "AdminSetupStatus", "admin_setup_status")
+#: ``AdminSetupState``, member by member: what the route serialises is the value.
+SETUP_STATES = {"NONE": "none", "PENDING": "pending", "DONE": "done", "EXPIRED": "expired"}
+#: ``admin_setup_status``'s parameters, read as BOOT-002 reads the module's other functions: (name, kind, default).
+SETUP_STATUS_SIGNATURE = [("session", POSITIONAL, EMPTY), ("now", KEYWORD_ONLY, None)]
+#: Every purpose of an account token but the setup's: invitations, password resets, email verifications.
+OTHER_PURPOSES = tuple(purpose for purpose in AccountTokenPurpose if purpose != ADMIN_SETUP)
+#: What ``inspect_token`` says of a token left live, consumed or revoked.
+END_STATUS = {"live": TokenStatus.VALID, "consumed": TokenStatus.CONSUMED, "revoked": TokenStatus.REVOKED}
+#: How long after its issue a token written for a scene is revoked, consumed or retired.
+END_DELAY = timedelta(minutes=5)
+#: The life of a setup link written as a row that has run out by the moment it is read: issued an hour or more before.
+RUN_OUT_TTL = timedelta(minutes=30)
+#: The life of the second of two live setup links issued at the same instant: their expiries tell them apart.
+SHORTER_TTL = timedelta(hours=48)
+
+
+def _h61(bootstrap: ModuleType) -> ModuleType:
+    """``bootstrap_admin_service``, holding the names of H-61; until it does, the test fails here, on an assertion naming the missing ones — never an ImportError at collection."""
+    missing = [name for name in H61_NAMES if not hasattr(bootstrap, name)]
+    assert not missing, f"red until H-61: bootstrap_admin_service has no {', '.join(missing)}"
+    return bootstrap
+
+
+async def _setup_status(engine: AsyncEngine, bootstrap: ModuleType, *, now: Optional[datetime]) -> Any:
+    """``admin_setup_status`` in a session of its own, as the panel's status route calls it: with ``now``, or — ``now=None`` here — without it, the clock deciding."""
+    module = _h61(bootstrap)
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        if now is None:
+            return await module.admin_setup_status(session)
+        return await module.admin_setup_status(session, now=now)
+
+
+def _assert_status(bootstrap: ModuleType, status: Any, state: str, setup_expires_at: Optional[datetime] = None, *, scene: str) -> None:
+    """``status`` is the ``AdminSetupStatus`` of ``state`` — an ``AdminSetupState`` —, its ``setup_expires_at`` exactly the one given: UTC-aware for ``pending``, ``None`` for every other state."""
+    assert isinstance(status, bootstrap.AdminSetupStatus), f"{scene}: admin_setup_status must answer an AdminSetupStatus, got {status!r}"
+    assert isinstance(status.state, bootstrap.AdminSetupState) and status.state == state, f"{scene}: expected the state {state}, got {status!r}"
+    expiry = status.setup_expires_at
+    if setup_expires_at is None:
+        assert expiry is None, f"{scene}: setup_expires_at is pending's alone — {state} carries None —, got {status!r}"
+        return
+    assert expiry is not None and expiry.tzinfo is not None and expiry.utcoffset() == timedelta(0), f"{scene}: setup_expires_at must be UTC-aware — SQLite gives it back naive: the function makes it UTC —, got {expiry!r}"
+    assert expiry == setup_expires_at, f"{scene}: setup_expires_at must be the expiry of the setup link that decides, {setup_expires_at}, got {expiry}"
+
+
+async def _link_id(engine: AsyncEngine, token: str) -> int:
+    """The id of the setup link ``token``: identified by what the test holds, never by its position."""
+    inspection = await _inspect(engine, token, NOW)
+    assert inspection.record is not None and inspection.record.id is not None, "setup: the setup link is stored"
+    return inspection.record.id
+
+
+async def _ended_token(engine: AsyncEngine, purpose: AccountTokenPurpose, user_id: Optional[int], issued_at: datetime, end: str, *, ttl: Optional[timedelta] = None) -> IssuedToken:
+    """A token of ``purpose`` issued directly at ``issued_at`` — for ``user_id``; an invitation has none —, living ``ttl`` (the purpose's own when ``None``), then ended as ``end`` says, ``END_DELAY`` after its issue: ``live`` and ``ran-out``, nothing (a link that has run out was issued with a life too short to reach the moment it is read at); ``revoked``; ``consumed``, by its account, as its setup or its reset spends it; ``retired``, revoked and consumed at once, without a consumer, as ``retire_tokens`` leaves every never-consumed token of that account and purpose. Committed."""
+    issued = await _issue(engine, purpose, user_id=user_id, now=issued_at, ttl=ttl)
+    moment = issued_at + END_DELAY
+    if end == "revoked":
+        await _revoke(engine, issued.record.id, moment)
+    elif end == "consumed":
+        async with AsyncSession(engine) as session:
+            assert await token_service.consume_token(session, issued.token, purpose, consumed_by_user_id=user_id, now=moment) is not None, "setup: the token must be consumed"
+            await session.commit()
+    elif end == "retired":
+        assert user_id is not None, "setup: only an account's tokens are retired"
+        async with AsyncSession(engine) as session:
+            assert await token_service.retire_tokens(session, user_id=user_id, purpose=purpose, now=moment) >= 1, "setup: the token must be retired"
+            await session.commit()
+    return issued
+
+
+@dataclass(frozen=True)
+class LinkRow:
+    """A setup link written as a row (H61-012, H61-013): issued ``issued`` from NOW — before it, negative —, ended as ``end`` says (``_ended_token``), living ``ttl``; a ``ran-out`` link lives ``RUN_OUT_TTL``."""
+
+    issued: timedelta
+    end: str = "live"
+    ttl: timedelta = SETUP_TTL
+
+
+async def _link_rows(engine: AsyncEngine, user_id: int, links: list[LinkRow]) -> list[AccountToken]:
+    """The setup links of ``links`` issued for ``user_id`` in that order — so their ids ascend —, each ended as it says; their rows, read fresh, in the same order."""
+    rows: list[AccountToken] = []
+    for link in links:
+        issued = await _ended_token(engine, ADMIN_SETUP, user_id, NOW + link.issued, link.end, ttl=RUN_OUT_TTL if link.end == "ran-out" else link.ttl)
+        rows.append(await _token_row(engine, issued.record.id))
+    return rows
+
+
+def _row_end(row: AccountToken, moment: datetime) -> str:
+    """How a setup link's row stands at ``moment``, by its columns: ``consumed``, ``revoked``, ``ran-out`` or ``live`` — the barrier that a scene is what it claims."""
+    if row.consumed_at is not None:
+        return "consumed"
+    if row.revoked_at is not None:
+        return "revoked"
+    return "ran-out" if ensure_utc(row.expires_at) <= moment else "live"
+
+
+def _latest(rows: list[AccountToken]) -> AccountToken:
+    """The latest of ``rows`` in rule 3's order — ``created_at``, then ``id`` —: what a barrier checks a scene's latest link against."""
+    return max(rows, key=lambda row: (ensure_utc(row.created_at), row.id))
+
+
+def _deciding(rows: list[AccountToken], moment: datetime) -> str:
+    """Which rule decides ``rows`` at ``moment``, in words, for a failure message only — the state a test expects is always written in its parameters: «done wins» when a link was consumed, naming the latest when it is not that one; otherwise the latest, as it stands."""
+    latest = _row_end(_latest(rows), moment)
+    said = {"live": "is live", "revoked": "is revoked", "ran-out": "has run out", "consumed": "is consumed"}[latest]
+    if any(row.consumed_at is not None for row in rows):
+        return "done wins: a setup link was consumed" + ("" if latest == "consumed" else f", though the latest {said}")
+    return f"none consumed: the latest decides, and it {said}"
+
+
+def _hours(delta: timedelta) -> str:
+    """``delta`` in signed hours, for a failure message: ``-1 h``, ``+1 h`` — ``str(timedelta)`` writes minus an hour as ``-1 day, 23:00:00``."""
+    return f"{delta / HOUR:+g} h"
+
+
+@contextlib.contextmanager
+def _heard(reader: AsyncEngine) -> Iterator[tuple[list[str], list[str]]]:
+    """What the engine ``reader`` does while the block runs: every statement it sends to SQLite, and a mark for every commit of its connections, filled as they come. Nothing but the call under test uses that engine."""
+    statements: list[str] = []
+    commits: list[str] = []
+
+    def before_cursor_execute(_connection: Any, _cursor: Any, statement: str, _parameters: Any, _context: Any, _executemany: bool) -> None:
+        statements.append(statement)
+
+    def commit(_connection: Any) -> None:
+        commits.append("COMMIT")
+
+    event.listen(reader.sync_engine, "before_cursor_execute", before_cursor_execute)
+    event.listen(reader.sync_engine, "commit", commit)
+    try:
+        yield statements, commits
+    finally:
+        event.remove(reader.sync_engine, "commit", commit)
+        event.remove(reader.sync_engine, "before_cursor_execute", before_cursor_execute)
+
+
+def _writes(statements: list[str]) -> list[str]:
+    """The statements that open a write in SQLite (``WRITE_STATEMENTS``, A42's): any of them takes its write lock."""
+    return [statement for statement in statements if (statement.split(None, 1) or [""])[0].upper() in WRITE_STATEMENTS]
+
+
+async def _other_purposes_in_every_state(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType) -> Optional[int]:
+    """carol, an inactive administrator written as a row — a waiting administrator but for a setup link —, and tokens of every other purpose, one live, one consumed, one revoked each: invitations, carol's password-reset and email-verification links. No setup link at all."""
+    carol = await _add_user(engine, "carol", active=False, admin=True)
+    for purpose in OTHER_PURPOSES:
+        for end in END_STATUS:
+            await _ended_token(engine, purpose, None if purpose == INVITE else carol, NOW, end)
+    return None
+
+
+async def _cancel_setup_in_the_users_tab(engine: AsyncEngine, user_id: int, moment: datetime) -> None:
+    """The Users tab's cancellation of the setup, its PATCH with ``cancel_setup``: ``update_user_status(session, user, is_active=False, cancel_setup=True)``."""
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        user = await session.get(User, user_id)
+        refusal = await user_service.update_user_status(session, user, is_active=False, cancel_setup=True)
+    assert refusal is None, f"barrier: the cancellation must succeed: {refusal}"
+
+
+async def _address_changed_by_user_set_email(engine: AsyncEngine, user_id: int, moment: datetime) -> None:
+    """The CLI's ``user set-email`` to another address (A-33): ``update_profile(session, user_id, email=OTHER_EMAIL)``."""
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        user, refusal = await user_service.update_profile(session, user_id, email=OTHER_EMAIL)
+    assert user is not None and refusal is None, f"barrier: the address must change: {refusal}"
+
+
+async def _replace_the_setup_link(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, replacement: str, moment: datetime) -> str:
+    """The waiting administrator's setup link replaced at ``moment`` as ``replacement`` says (``REPLACEMENTS``): the newer link's token."""
+    if replacement == "user-setup-link":
+        issued = await _issue_setup_link(engine, bootstrap, now=moment)
+        assert isinstance(issued, IssuedToken), f"setup: ./dev.py user setup-link gives the waiting administrator a new link: {issued!r}"
+        return issued.token
+    email = OTHER_EMAIL if replacement == "a-new-address-and-a-token-never-seen" else ADMIN_EMAIL
+    rearmed = await _run(engine, bootstrap, _config(f02, email=email, token=TOKEN_TWO), now=moment)
+    assert rearmed.action == bootstrap.BootstrapAction.REARMED, f"setup: a token never seen re-arms the waiting administrator: {rearmed!r}"
+    return TOKEN_TWO
+
+
+async def _set_up_through_the_older_of_two_links(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, *, token: Optional[str] = None) -> int:
+    """The setup through the older of two live links, by the real flow: the F02 administrator created at NOW — with ``token`` from the configuration, or a generated link — holds a second live setup link issued half an hour later, as SETUP-001 builds it; its setup completed through the OLDER one an hour after NOW (``complete_admin_setup``), which consumes it and revokes the newer, never consumed — the latest. The account's id.
+
+    Barriers: both links valid before the setup; after it, the older consumed by its account, the newer revoked and only revoked, and the latest.
+    """
+    created = await _created(engine, bootstrap, f02, token=token)
+    older = token or created.link_token
+    newer = await _issue(engine, ADMIN_SETUP, user_id=created.user_id, now=NOW + timedelta(minutes=30))
+    moment = NOW + HOUR
+    statuses = (await _status(engine, older, moment), await _status(engine, newer.token, moment))
+    assert statuses == (TokenStatus.VALID, TokenStatus.VALID), f"barrier: two live setup links before the setup: {statuses}"
+    user = await _complete(engine, bootstrap, older, now=moment)
+    assert user is not None and user.id == created.user_id and user.is_active, f"setup: the older link completes the setup: {user!r}"
+    rows = await _setup_rows(engine, created.user_id)
+    assert _link_states(rows) == [(False, True, created.user_id), REVOKED_ONLY], f"barrier: the older link consumed by its account, the newer revoked and never consumed — complete_admin_setup revokes the account's other live links: {_link_states(rows)}"
+    assert _latest(rows).id == newer.record.id, "barrier: the newer link, revoked, is the latest: «the latest decides» would read it expired"
+    return created.user_id
+
+
+#: A scene of H61-016, from (the engine, the bootstrap module, the F02 config module): (its state, the expiry ``pending``
+#: carries, the moment it is asked at).
+StateScene = Callable[[AsyncEngine, ModuleType, ModuleType], Awaitable[tuple[str, Optional[datetime], datetime]]]
+
+
+async def _nothing_to_set_up(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType) -> tuple[str, Optional[datetime], datetime]:
+    """An instance without accounts: no setup link at all — ``none``."""
+    return "none", None, NOW + HOUR
+
+
+async def _waiting_for_its_setup(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType) -> tuple[str, Optional[datetime], datetime]:
+    """The F02 administrator created at NOW, its link live — ``pending``, until NOW + 72 h."""
+    created = await _created(engine, bootstrap, f02)
+    return "pending", ensure_utc(created.expires_at), NOW + HOUR
+
+
+async def _set_up_through_its_link(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType) -> tuple[str, Optional[datetime], datetime]:
+    """The F02 administrator created at NOW, set up through its link half an hour later — ``done``."""
+    created = await _created(engine, bootstrap, f02)
+    assert await _complete(engine, bootstrap, created.link_token, now=NOW + timedelta(minutes=30)) is not None, "setup: the administrator completes its setup"
+    return "done", None, NOW + HOUR
+
+
+async def _its_link_retired(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType) -> tuple[str, Optional[datetime], datetime]:
+    """The F02 administrator created at NOW, its link retired half an hour later — revoked and consumed at once, as A-32 leaves it — ``done``."""
+    created = await _created(engine, bootstrap, f02)
+    async with AsyncSession(engine) as session:
+        assert await token_service.retire_tokens(session, user_id=created.user_id, purpose=ADMIN_SETUP, now=NOW + timedelta(minutes=30)) == 1, "setup: the administrator's one setup link is retired"
+        await session.commit()
+    return "done", None, NOW + HOUR
+
+
+async def _its_link_revoked(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType) -> tuple[str, Optional[datetime], datetime]:
+    """The F02 administrator created at NOW, its link revoked half an hour later — withdrawn — ``expired``."""
+    created = await _created(engine, bootstrap, f02)
+    await _revoke(engine, await _link_id(engine, created.link_token), NOW + timedelta(minutes=30))
+    return "expired", None, NOW + HOUR
+
+
+async def _its_link_run_out(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType) -> tuple[str, Optional[datetime], datetime]:
+    """The F02 administrator created at NOW, asked an hour after its link's 72 hours — ``expired``."""
+    await _created(engine, bootstrap, f02)
+    return "expired", None, NOW + SETUP_TTL + HOUR
+
+
+async def _set_up_through_the_older_of_two(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType) -> tuple[str, Optional[datetime], datetime]:
+    """The F02 administrator set up an hour after NOW through the older of two live links (``_set_up_through_the_older_of_two_links``), the newer revoked and the latest — ``done``, «done wins»."""
+    await _set_up_through_the_older_of_two_links(engine, bootstrap, f02)
+    return "done", None, NOW + 2 * HOUR
+
+
+#: Instances without any ``admin_setup`` token (H61-003).
+NONE_SCENES = [
+    pytest.param(_no_account, id="an-instance-without-accounts"),
+    pytest.param(_an_active_account, id="an-operators-account"),
+    pytest.param(_an_inactive_account, id="an-inactive-account-without-any-token"),
+    pytest.param(_inactive_with_a_reset_link_only, id="an-inactive-account-with-a-reset-link-only"),
+    pytest.param(_other_purposes_in_every_state, id="tokens-of-every-other-purpose-in-every-state"),
+]
+#: Where the CREATED link's expiry falls for the moment asked at (H61-006): before it — a second, a microsecond —
+#: ``pending``; at it exactly, and after it, ``expired``.
+EXPIRY_BOUNDARY = [
+    pytest.param(-timedelta(seconds=1), "pending", id="a-second-before-its-expiry-pending"),
+    pytest.param(-MICROSECOND, "pending", id="a-microsecond-before-its-expiry-pending"),
+    pytest.param(timedelta(0), "expired", id="at-its-expiry-exactly-expired"),
+    pytest.param(HOUR, "expired", id="an-hour-after-its-expiry-expired"),
+]
+#: The ways the waiting administrator's setup ends without its link, which A-32 retires: activated, or given a
+#: password, another way (H61-008).
+SETUP_DONE_ANOTHER_WAY = [*ACTIVATIONS_ANOTHER_WAY, *PASSWORDS_ANOTHER_WAY]
+#: What withdraws the waiting administrator's live setup link through ``user_service``, the account still waiting
+#: (H61-009): the setup cancelled (A-43) — in the Users tab, by its PATCH without the flag, by ``user deactivate`` —, or
+#: its address changed by ``user set-email`` (A-33).
+WITHDRAWALS = [
+    pytest.param(_cancel_setup_in_the_users_tab, id="the-setup-cancelled-in-the-users-tab"),
+    pytest.param(_deactivate_by_update_user_status, id="deactivated-by-update-user-status"),
+    pytest.param(_deactivate_by_set_user_active, id="deactivated-by-user-deactivate"),
+    pytest.param(_address_changed_by_user_set_email, id="a-new-address-by-user-set-email"),
+]
+#: What withdraws the setup link half an hour after its creation, dated from NOW (H61-010): its row revoked directly; a
+#: restart with a new LIBREFOLIO_ADMIN_EMAIL and no token never seen (A-33).
+NOW_WITHDRAWALS = [
+    pytest.param("revoked", id="its-link-revoked"),
+    pytest.param("a-new-address", id="a-restart-with-a-new-address"),
+]
+#: What replaces the waiting administrator's setup link with a newer one an hour after its creation (H61-011):
+#: ``./dev.py user setup-link`` (``issue_setup_link``); a restart with a token never seen (the re-arm); a restart with a
+#: new address and a token never seen (A-33, then the re-arm). Each leaves the older link revoked, the newer live.
+REPLACEMENTS = [
+    pytest.param("user-setup-link", id="user-setup-link"),
+    pytest.param("a-token-never-seen", id="a-restart-with-a-token-never-seen"),
+    pytest.param("a-new-address-and-a-token-never-seen", id="a-restart-with-a-new-address-and-a-token-never-seen"),
+]
+#: Two setup links of one account, the older issued two hours before NOW, the newer one hour before — the newer has the
+#: higher id too —: (how the older ended, how the newer ended, the state). Either consumed, ``done`` (rule 2, «done
+#: wins»), whatever the newer says; none consumed, the newer decides (rule 3), whatever the older says.
+LATEST_PAIRS = [
+    pytest.param("revoked", "live", "pending", id="an-older-revoked-a-newer-live"),
+    pytest.param("live", "consumed", "done", id="an-older-live-a-newer-consumed"),
+    pytest.param("consumed", "revoked", "done", id="an-older-consumed-a-newer-revoked"),  # «done wins»: was expired
+    pytest.param("consumed", "live", "done", id="an-older-consumed-a-newer-live"),  # «done wins»: was pending
+    pytest.param("live", "revoked", "expired", id="an-older-live-a-newer-revoked"),
+    pytest.param("revoked", "consumed", "done", id="an-older-revoked-a-newer-consumed"),
+    pytest.param("live", "live", "pending", id="two-live-the-newers-expiry"),
+    pytest.param("consumed", "ran-out", "done", id="an-older-consumed-a-newer-run-out"),  # «done wins»: was expired
+    pytest.param("live", "ran-out", "expired", id="an-older-live-a-newer-run-out"),
+]
+#: Setup links of one account, in the order they are issued — their ids ascending —: (the links, the state, the index of
+#: the latest by rule 3's order: ``created_at`` first, the higher ``id`` on a tie). None consumed, that latest decides;
+#: one consumed, ``done`` whatever the order («done wins»). The two cases «done wins» turned had ids naming the link that
+#: decided before — ``a-tie-the-higher-id-live``, ``the-later-created-has-the-lower-id-live`` —: their ids now name the
+#: whole scene, and three rule-3 cases pin the order they pinned: a tie's higher id live, the later created with the
+#: lower id live or revoked, beside a link revoked or live.
+ORDERS = [
+    pytest.param([LinkRow(-HOUR, "consumed"), LinkRow(-HOUR, "live")], "done", 1, id="a-tie-the-lower-id-consumed-the-higher-live"),  # «done wins»: was pending
+    pytest.param([LinkRow(-HOUR, "revoked"), LinkRow(-HOUR, "live")], "pending", 1, id="a-tie-the-lower-id-revoked-the-higher-live"),
+    pytest.param([LinkRow(-HOUR, "live"), LinkRow(-HOUR, "consumed")], "done", 1, id="a-tie-the-higher-id-consumed"),
+    pytest.param([LinkRow(-HOUR, "live"), LinkRow(-HOUR, "revoked")], "expired", 1, id="a-tie-the-higher-id-revoked"),
+    pytest.param([LinkRow(-HOUR, "live"), LinkRow(-HOUR, "live", SHORTER_TTL)], "pending", 1, id="a-tie-both-live-the-higher-ids-expiry"),
+    pytest.param([LinkRow(-HOUR, "live"), LinkRow(-2 * HOUR, "consumed")], "done", 0, id="the-later-created-live-the-earlier-consumed-with-the-higher-id"),  # «done wins»: was pending
+    pytest.param([LinkRow(-HOUR, "live"), LinkRow(-2 * HOUR, "revoked")], "pending", 0, id="the-later-created-has-the-lower-id-live-the-earlier-revoked"),
+    pytest.param([LinkRow(-HOUR, "revoked"), LinkRow(-2 * HOUR, "live")], "expired", 0, id="the-later-created-has-the-lower-id-revoked"),
+    pytest.param([LinkRow(-HOUR, "consumed"), LinkRow(-2 * HOUR, "live")], "done", 0, id="the-later-created-has-the-lower-id-consumed"),
+    pytest.param([LinkRow(-HOUR, "live"), LinkRow(-2 * HOUR, "live")], "pending", 0, id="both-live-the-later-createds-expiry"),
+]
+#: boss's setup link beside the waiting administrator's, which was issued at NOW (H61-014): (boss's issued an hour after
+#: it, or an hour before; how it ended; the state). boss's consumed — even older than the administrator's live link —:
+#: ``done`` («done wins», whichever account holds it); none consumed, the latest of either account decides.
+ANOTHER_ACCOUNTS_LINK = [
+    pytest.param(HOUR, "retired", "done", id="a-newer-link-of-another-account-retired"),
+    pytest.param(HOUR, "live", "pending", id="a-newer-link-of-another-account-live"),
+    pytest.param(HOUR, "revoked", "expired", id="a-newer-link-of-another-account-revoked"),
+    pytest.param(-HOUR, "consumed", "done", id="an-older-link-of-another-account-consumed"),  # «done wins»: was pending
+    pytest.param(-HOUR, "live", "pending", id="an-older-link-of-another-account-live"),
+]
+#: Every state: both ways to ``expired``, and three to ``done`` — through the link; its link retired; through the older of
+#: two live links, the newer revoked and the latest (H61-016).
+STATE_SCENES = [
+    pytest.param(_nothing_to_set_up, id="none"),
+    pytest.param(_waiting_for_its_setup, id="pending"),
+    pytest.param(_set_up_through_its_link, id="done-through-its-link"),
+    pytest.param(_its_link_retired, id="done-its-link-retired"),
+    pytest.param(_set_up_through_the_older_of_two, id="done-through-the-older-of-two-links"),  # «done wins»: new
+    pytest.param(_its_link_revoked, id="expired-its-link-revoked"),
+    pytest.param(_its_link_run_out, id="expired-its-link-run-out"),
+]
+#: How old the F02 administrator is by the clock when the status is asked without ``now`` (H61-017): an hour, its link
+#: live; 73 hours, its link run out an hour ago.
+CLOCK_AGES = [
+    pytest.param(HOUR, "pending", id="created-an-hour-ago-its-link-live"),
+    pytest.param(SETUP_TTL + HOUR, "expired", id="created-73-hours-ago-its-link-run-out"),
+]
+#: When the status is asked after the setup through the older of two links, done an hour after NOW (H61-018): from NOW,
+#: two hours — the newer link revoked before its 72 hours were over —, or 74 — both links' 72 hours over: the
+#: consumption is final.
+AFTER_THE_SETUP = [
+    pytest.param(2 * HOUR, id="an-hour-after-the-setup"),
+    pytest.param(SETUP_TTL + 2 * HOUR, id="once-both-links-72-hours-are-over"),
+]
+
+
+# red until H-61
+def test_the_setup_status_vocabulary(bootstrap: ModuleType) -> None:
+    """H61-001 — NEW, red until H-61 (today ``bootstrap_admin_service`` has neither name): ``AdminSetupState``, a StrEnum of exactly four states — ``NONE`` ``none``, ``PENDING`` ``pending``, ``DONE`` ``done``, ``EXPIRED`` ``expired`` —, each formatted as its value, which is what the route serialises; ``AdminSetupStatus(state, setup_expires_at=None)``, a frozen dataclass: assigning either field raises."""
+    print_section("H61-001: AdminSetupState and AdminSetupStatus")
+    module = _h61(bootstrap)
+    state_type, status_type = module.AdminSetupState, module.AdminSetupStatus
+
+    assert issubclass(state_type, StrEnum), f"AdminSetupState must be a StrEnum: {state_type.__mro__}"
+    assert {state.name: state.value for state in state_type} == SETUP_STATES
+    assert [str(state) for state in state_type] == [state.value for state in state_type], "each state must format as its value"
+    assert dataclasses.is_dataclass(status_type)
+    assert [(field.name, field.default) for field in dataclasses.fields(status_type)] == [("state", dataclasses.MISSING), ("setup_expires_at", None)]
+    status = status_type(state=state_type.PENDING, setup_expires_at=NOW)
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        status.state = state_type.DONE
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        status.setup_expires_at = None
+    assert status_type(state=state_type.NONE).setup_expires_at is None
+    print_success("four states, each its own value; a frozen (state, setup_expires_at=None)")
+
+
+# red until H-61
+def test_admin_setup_status_is_a_coroutine_of_a_session_and_an_optional_now(bootstrap: ModuleType) -> None:
+    """H61-002 — NEW, red until H-61: ``admin_setup_status(session, *, now=None)``, a coroutine function — the session positional, ``now`` keyword-only and ``None`` by default, the clock then —, as the module's other functions take them."""
+    module = _h61(bootstrap)
+    parameters = [(parameter.name, parameter.kind, parameter.default) for parameter in inspect.signature(module.admin_setup_status).parameters.values()]
+
+    assert parameters == SETUP_STATUS_SIGNATURE, f"expected admin_setup_status(session, *, now=None): {parameters}"
+    assert inspect.iscoroutinefunction(module.admin_setup_status), "admin_setup_status must be a coroutine function"
+
+
+# red until H-61
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scene", NONE_SCENES)
+async def test_without_any_setup_link_the_setup_status_is_none(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, scene: Scene) -> None:
+    """H61-003 — NEW, red until H-61: no ``admin_setup`` token at all — an instance without accounts, an operator's account, an inactive account without any token or with a password-reset link only, or tokens of every other purpose in every state (invitations, password resets, email verifications; live, consumed, revoked) beside an inactive administrator —: ``none``, ``setup_expires_at`` ``None``. A consumed token of another purpose is no consumed setup link: rule 2 counts ``admin_setup`` links only, or this would read ``done``.
+
+    Barrier first: the scene holds no setup link.
+    """
+    await scene(engine, bootstrap, f02)
+    assert await _setup_rows(engine) == [], "barrier: the scene holds no admin_setup token"
+
+    status = await _setup_status(engine, bootstrap, now=NOW + HOUR)
+
+    _assert_status(bootstrap, status, "none", scene=_named(scene))
+
+
+# red until H-61
+@pytest.mark.asyncio
+@pytest.mark.parametrize("end", list(END_STATUS))
+@pytest.mark.parametrize("purpose", [pytest.param(purpose, id=purpose.value) for purpose in OTHER_PURPOSES])
+async def test_a_newer_token_of_another_purpose_never_counts_in_the_setup_status(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, purpose: AccountTokenPurpose, end: str) -> None:
+    """H61-004 — NEW, red until H-61: the F02 administrator created at NOW, its setup link live; an hour later a token of another purpose — an invitation, a password-reset or an email-verification link of the administrator — issued, then left live, consumed or revoked: newer than the setup link, it counts for nothing, in rule 2 as in rule 3 — consumed, it is no consumed setup link. ``pending``, until the setup link's expiry — counted, that token would say ``done``, ``expired``, or ``pending`` until its own expiry.
+
+    Barrier first: the setup link live, the newer token as its end says, at the moment asked.
+    """
+    created = await _created(engine, bootstrap, f02)
+    newer = await _ended_token(engine, purpose, None if purpose == INVITE else created.user_id, NOW + HOUR, end)
+    moment = NOW + HOUR + 2 * END_DELAY
+    statuses = (await _status(engine, created.link_token, moment), await _status(engine, newer.token, moment, purpose))
+    assert statuses == (TokenStatus.VALID, END_STATUS[end]), f"barrier: the setup link valid, the newer {purpose.value} token {END_STATUS[end]}: {statuses}"
+
+    status = await _setup_status(engine, bootstrap, now=moment)
+
+    _assert_status(bootstrap, status, "pending", ensure_utc(created.expires_at), scene=f"a newer {purpose.value} token, {end}")
+
+
+# red until H-61
+@pytest.mark.asyncio
+@pytest.mark.parametrize("token", LINK_ORIGINS)
+async def test_the_setup_status_is_pending_for_the_administrator_the_bootstrap_created(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, token: Optional[str]) -> None:
+    """H61-005 — NEW, red until H-61: ``CREATED`` — one setup link, the variable's token or a generated one, issued at NOW for the life the token service gives a setup link (``DEFAULT_TTL``: the bootstrap passes none) —; asked an hour later: ``pending``, ``setup_expires_at`` that link's ``expires_at``, NOW + 72 h, UTC-aware.
+
+    Barriers first: the link is the account's one setup link, and SQLite gives its expiry back naive — so a UTC-aware answer is the function's doing —, NOW + ``DEFAULT_TTL[admin_setup]``, as ``CREATED`` said.
+    """
+    print_section(f"H61-005: pending after CREATED, {'the variable token' if token else 'a generated link'}")
+    created = await _created(engine, bootstrap, f02, token=token)
+    rows = await _setup_rows(engine, created.user_id)
+    assert len(rows) == 1 and rows[0].expires_at.tzinfo is None, "barrier: one setup link, whose expiry SQLite gives back naive"
+    expires_at = ensure_utc(rows[0].expires_at)
+    assert expires_at == NOW + DEFAULT_TTL[ADMIN_SETUP] == ensure_utc(created.expires_at), f"barrier: the link lives the token service's {DEFAULT_TTL[ADMIN_SETUP]} from NOW, as CREATED said: {expires_at}"
+
+    status = await _setup_status(engine, bootstrap, now=NOW + HOUR)
+
+    _assert_status(bootstrap, status, "pending", NOW + DEFAULT_TTL[ADMIN_SETUP], scene="CREATED, an hour later")
+    print_success("pending until NOW + 72 h, UTC-aware")
+
+
+# red until H-61
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("offset", "state"), EXPIRY_BOUNDARY)
+async def test_the_setup_status_is_pending_until_the_links_expiry_exactly(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, offset: timedelta, state: str) -> None:
+    """H61-006 — NEW, red until H-61: the CREATED link, asked a second or a microsecond before its ``expires_at`` — ``pending``, until it —, at it exactly — ``expired``: ``expires_at <= now`` —, and an hour after it — ``expired`` —; ``setup_expires_at`` ``None`` once expired.
+
+    Barrier first: the token service reads the link the same way at that moment, valid or expired.
+    """
+    created = await _created(engine, bootstrap, f02)
+    expires_at = ensure_utc(created.expires_at)
+    moment = expires_at + offset
+    expected_status = TokenStatus.VALID if state == "pending" else TokenStatus.EXPIRED
+    assert await _status(engine, created.link_token, moment) == expected_status, f"barrier: the token service must read the link {expected_status} at {moment}"
+
+    status = await _setup_status(engine, bootstrap, now=moment)
+
+    _assert_status(bootstrap, status, state, expires_at if state == "pending" else None, scene=f"asked {offset} from the link's expiry")
+
+
+# red until H-61
+@pytest.mark.asyncio
+@pytest.mark.parametrize("elapsed", [pytest.param(HOUR, id="an-hour-after-the-creation"), pytest.param(SETUP_TTL + HOUR, id="once-the-links-72-hours-are-over")])
+@pytest.mark.parametrize("token", LINK_ORIGINS)
+async def test_the_setup_status_is_done_once_the_link_completed_the_setup(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, token: Optional[str], elapsed: timedelta) -> None:
+    """H61-007 — NEW, red until H-61: the F02 administrator created at NOW sets its password through its link half an hour later (``complete_admin_setup``): its one setup link consumed, by its account, the latest. Asked an hour after the creation, or once the link's 72 hours are over — consumed decides before run out —: ``done``, ``setup_expires_at`` ``None``."""
+    created = await _created(engine, bootstrap, f02, token=token)
+    user = await _complete(engine, bootstrap, token or created.link_token, now=NOW + timedelta(minutes=30))
+    assert user is not None and user.is_active, f"setup: the administrator completes its setup: {user!r}"
+    assert _link_states(await _setup_rows(engine, created.user_id)) == [(False, True, created.user_id)], "barrier: its one setup link consumed by its account, not revoked"
+
+    status = await _setup_status(engine, bootstrap, now=NOW + elapsed)
+
+    _assert_status(bootstrap, status, "done", scene=f"set up through its link, asked {elapsed} after the creation")
+
+
+# red until H-61
+@pytest.mark.asyncio
+@pytest.mark.parametrize("expired", LINK_STATES)
+@pytest.mark.parametrize("change", SETUP_DONE_ANOTHER_WAY)
+async def test_the_setup_status_is_done_not_expired_after_a_setup_done_another_way(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, change: Change, expired: bool) -> None:
+    """H61-008 — NEW, red until H-61: the waiting administrator activated another way — ``user activate``, the Users tab's ``update_user_status`` — or given a password another way — ``user reset-password``, a reset link —, its link live or already expired: A-32 retires the link — revoked and consumed at once, without a consumer —, and a retired link is a setup done another way: ``done``, not ``expired``, ``setup_expires_at`` ``None``. Dated from the clock, as A32's: ``user_service`` reads it.
+
+    Barrier first: the link is retired.
+    """
+    print_section(f"H61-008: {_named(change)}, its link {'expired' if expired else 'live'}")
+    moment = utcnow()
+    user_id = await _waiting_administrator(engine, bootstrap, f02, moment, expired=expired)
+    await change(engine, user_id, moment)
+    assert _link_states(await _setup_rows(engine, user_id)) == [RETIRED], f"barrier: {_named(change)} retires the setup link — revoked and consumed, without a consumer (A-32)"
+
+    status = await _setup_status(engine, bootstrap, now=moment + AFTERWARDS)
+
+    _assert_status(bootstrap, status, "done", scene=_named(change))
+    print_success("done: the setup done another way")
+
+
+# red until H-61
+@pytest.mark.asyncio
+@pytest.mark.parametrize("withdraw", WITHDRAWALS)
+async def test_the_setup_status_is_expired_once_user_service_withdrew_the_link(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, withdraw: Change) -> None:
+    """H61-009 — NEW, red until H-61: the waiting administrator's live setup link withdrawn through ``user_service`` — the setup cancelled (A-43): in the Users tab (``update_user_status(..., is_active=False, cancel_setup=True)``), by its PATCH without the flag, by ``user deactivate`` (``set_user_active(..., False)``); or its address changed by ``user set-email`` (``update_profile``, A-33) —: revoked, never consumed, its 72 hours not over. ``expired`` — withdrawn —, ``setup_expires_at`` ``None``: the revocation decides before the expiry. Dated from the clock, as A43's: ``user_service`` reads it.
+
+    Barriers first (``_cancelled_waiting_administrator``): the link revoked, and only revoked; the account still waiting; the link's expiry still ahead.
+    """
+    print_section(f"H61-009: {_named(withdraw)}")
+    moment = utcnow()
+    _, link = await _cancelled_waiting_administrator(engine, bootstrap, f02, withdraw, moment, token=TOKEN_ONE)
+    later = moment + AFTERWARDS
+    inspection = await _inspect(engine, link, later)
+    assert inspection.status == TokenStatus.REVOKED and inspection.record is not None and ensure_utc(inspection.record.expires_at) > later, f"barrier: the link revoked before its expiry: {inspection.status}"
+
+    status = await _setup_status(engine, bootstrap, now=later)
+
+    _assert_status(bootstrap, status, "expired", scene=_named(withdraw))
+    print_success("expired: the link withdrawn")
+
+
+# red until H-61
+@pytest.mark.asyncio
+@pytest.mark.parametrize("token", LINK_ORIGINS)
+@pytest.mark.parametrize("withdrawal", NOW_WITHDRAWALS)
+async def test_the_setup_status_is_expired_once_the_link_was_revoked_or_its_address_changed(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, withdrawal: str, token: Optional[str]) -> None:
+    """H61-010 — NEW, red until H-61: the CREATED link — the variable's token or a generated one — withdrawn half an hour after its creation: its row revoked directly, or a restart with a new LIBREFOLIO_ADMIN_EMAIL and no token never seen (A-33: ``EXPIRED``, the link revoked). Asked an hour after the creation, its 72 hours far from over: ``expired``, ``setup_expires_at`` ``None``.
+
+    Barrier first: the link revoked, and only revoked — never consumed.
+    """
+    created = await _created(engine, bootstrap, f02, token=token)
+    link = token or created.link_token
+    if withdrawal == "revoked":
+        await _revoke(engine, await _link_id(engine, link), NOW + timedelta(minutes=30))
+    else:
+        moved = await _run(engine, bootstrap, _config(f02, email=OTHER_EMAIL, token=token), now=NOW + timedelta(minutes=30))
+        assert moved.action == bootstrap.BootstrapAction.EXPIRED, f"setup: a new address revokes the link, and no token re-arms it (A-33): {moved!r}"
+    assert _link_states(await _setup_rows(engine, created.user_id)) == [REVOKED_ONLY], "barrier: the link revoked, and only revoked"
+
+    status = await _setup_status(engine, bootstrap, now=NOW + HOUR)
+
+    _assert_status(bootstrap, status, "expired", scene=f"the link {withdrawal}")
+
+
+# red until H-61
+@pytest.mark.asyncio
+@pytest.mark.parametrize("replacement", REPLACEMENTS)
+async def test_the_setup_status_follows_the_link_that_replaced_another(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, replacement: str) -> None:
+    """H61-011 — NEW, red until H-61: the CREATED link replaced an hour later — ``./dev.py user setup-link``, a restart with a token never seen, a restart with a new address and a token never seen —: an older link revoked, a newer one live, what ``issue_setup_link`` and the re-arm leave. ``pending``, until the NEWER link's expiry, NOW + 1 h + 72 h, never the older one's. Then the newer link spent by the setup — an older revoked link, a newer consumed one —: ``done``.
+
+    Barriers first: the older link revoked, the newer live; their expiries differ, so the answer tells them apart.
+    """
+    print_section(f"H61-011: {replacement}")
+    created = await _created(engine, bootstrap, f02)
+    newer_token = await _replace_the_setup_link(engine, bootstrap, f02, replacement, NOW + HOUR)
+    newer = (await _inspect(engine, newer_token, NOW + 2 * HOUR)).record
+    assert newer is not None and _link_states(await _setup_rows(engine, created.user_id)) == [REVOKED_ONLY, (False, False, None)], "barrier: the older link revoked, the newer live"
+    assert ensure_utc(newer.expires_at) == NOW + HOUR + SETUP_TTL != ensure_utc(created.expires_at), "barrier: the newer link lives until NOW + 1 h + 72 h, the older until NOW + 72 h"
+
+    pending = await _setup_status(engine, bootstrap, now=NOW + 2 * HOUR)
+    _assert_status(bootstrap, pending, "pending", NOW + HOUR + SETUP_TTL, scene=f"{replacement}: an older link revoked, a newer live")
+    assert await _complete(engine, bootstrap, newer_token, now=NOW + 3 * HOUR) is not None, "setup: the newer link completes the setup"
+    done = await _setup_status(engine, bootstrap, now=NOW + 4 * HOUR)
+
+    _assert_status(bootstrap, done, "done", scene=f"{replacement}, then the setup: an older link revoked, a newer consumed")
+    print_success("pending until the newer link's expiry; done once it is spent")
+
+
+# red until H-61 — updated for «done wins» (H, 20/10 14:10): its three cases whose older link is consumed
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("older", "newer", "state"), LATEST_PAIRS)
+async def test_of_two_setup_links_a_consumed_one_decides_the_setup_status_else_the_newer(engine: AsyncEngine, bootstrap: ModuleType, older: str, newer: str, state: str) -> None:
+    """H61-012 — NEW, red until H-61: carol, an inactive administrator written as a row, holds two setup links, the older issued two hours before NOW, the newer one hour before. Either consumed: ``done`` (rule 2, «done wins»), whatever the newer says — live, revoked, run out. None consumed, the newer decides, whatever the older says (rule 3): live, ``pending`` until ITS expiry (two live links: the newer's, never the first live one found); revoked, ``expired``; run out, ``expired`` — even with the older one still live, a state no flow leaves (every setup link lives 72 h), which the contract decides all the same.
+
+    Updated for «done wins» (H, 20/10 14:10): ``[an-older-consumed-a-newer-live]``, ``[an-older-consumed-a-newer-revoked]`` and ``[an-older-consumed-a-newer-run-out]`` read ``done`` — red until its cure, «the latest decides» reading them ``pending``, ``expired`` and ``expired``.
+
+    Barriers first: each row is what the scene says, and the newer is the latest by ``created_at``, then ``id``.
+    """
+    carol = await _add_user(engine, "carol", active=False, admin=True)
+    rows = await _link_rows(engine, carol, [LinkRow(-2 * HOUR, older), LinkRow(-HOUR, newer)])
+    assert [_row_end(row, NOW) for row in rows] == [older, newer] and _latest(rows).id == rows[1].id, f"barrier: an older {older} link, a newer {newer} one, the newer the latest"
+
+    status = await _setup_status(engine, bootstrap, now=NOW)
+
+    _assert_status(bootstrap, status, state, ensure_utc(rows[1].expires_at) if state == "pending" else None, scene=f"an older {older} link, a newer {newer} one — {_deciding(rows, NOW)}")
+
+
+# red until H-61 — updated for «done wins» (H, 20/10 14:10): its two cases whose consumed link is not the latest
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("links", "state", "latest"), ORDERS)
+async def test_the_setup_status_orders_the_links_by_created_at_then_the_higher_id(engine: AsyncEngine, bootstrap: ModuleType, links: list[LinkRow], state: str, latest: int) -> None:
+    """H61-013 — NEW, red until H-61: rule 3's «latest» is ``created_at`` first, the higher ``id`` on a tie; with a link consumed the order decides nothing (rule 2). carol's two setup links, as rows. Issued at the same instant, none consumed, the higher id decides — live above a revoked one, ``pending`` until its expiry; revoked above a live one, ``expired``; both live, ``pending`` until the higher id's expiry. The later created issued first, so with the LOWER id, none consumed, decides all the same — live beside a revoked one, ``pending`` until its expiry; revoked beside a live one, ``expired``; both live, ``pending`` until the later created's expiry —, never the higher id. One consumed — the higher id or the lower, the later created or the earlier —: ``done``.
+
+    Updated for «done wins» (H, 20/10 14:10): the consumed link below a live one in a tie, ``[a-tie-the-lower-id-consumed-the-higher-live]``, and the earlier created consumed with the higher id, ``[the-later-created-live-the-earlier-consumed-with-the-higher-id]``, read ``done`` — red until its cure, «the latest decides» reading both ``pending`` —; their ids were ``a-tie-the-higher-id-live`` and ``the-later-created-has-the-lower-id-live``, and the order they pinned is pinned by three rule-3 cases.
+
+    Barriers first: each row is what the scene says, and link ``latest`` is the latest by rule 3's order.
+    """
+    carol = await _add_user(engine, "carol", active=False, admin=True)
+    rows = await _link_rows(engine, carol, links)
+    assert [_row_end(row, NOW) for row in rows] == [link.end for link in links] and _latest(rows).id == rows[latest].id, f"barrier: the rows {[link.end for link in links]}, link {latest} the latest"
+
+    status = await _setup_status(engine, bootstrap, now=NOW)
+
+    _assert_status(bootstrap, status, state, ensure_utc(rows[latest].expires_at) if state == "pending" else None, scene=f"links in the order issued: {', '.join(f'{link.end} at {_hours(link.issued)}' for link in links)} — {_deciding(rows, NOW)}")
+
+
+# red until H-61 — updated for «done wins» (H, 20/10 14:10): its case of an older consumed link of another account
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("offset", "end", "state"), ANOTHER_ACCOUNTS_LINK)
+async def test_the_setup_status_reads_the_setup_links_of_every_account(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, offset: timedelta, end: str, state: str) -> None:
+    """H61-014 — NEW, red until H-61: the setup links of EVERY account count, in rule 2 as in rule 3. Beside the F02 administrator created at NOW, its link live — the account ``pending_admin`` answers —, boss, an operator's active administrator written as a row, holds a setup link issued an hour later or an hour earlier. Consumed — retired, newer; consumed by its setup, older, beside the administrator's live link —: ``done`` («done wins», whichever account holds it). None consumed, the latest of either account decides: boss's newer, live — ``pending`` until boss's link's expiry — or revoked — ``expired`` —; boss's older and live, the administrator's link: ``pending``, until its expiry.
+
+    Updated for «done wins» (H, 20/10 14:10): ``[an-older-link-of-another-account-consumed]`` reads ``done`` — red until its cure, «the latest decides» reading ``pending``, the administrator's newer link live. Rows: no flow gives a second account a setup link (the bootstrap and ``issue_setup_link`` issue them to the account they create or that waits only).
+
+    Barriers first: the administrator's link valid at the moment asked; the latest link is the one the scene says.
+    """
+    print_section(f"H61-014: boss's setup link {'an hour after' if offset > timedelta(0) else 'an hour before'} the administrator's, {end}")
+    created = await _created(engine, bootstrap, f02)
+    boss = await _add_user(engine, OTHER_USERNAME, email=OTHER_EMAIL, admin=True)
+    await _ended_token(engine, ADMIN_SETUP, boss, NOW + offset, end)
+    moment = NOW + 2 * HOUR
+    rows = await _setup_rows(engine)
+    latest = _latest(rows)
+    assert await _status(engine, created.link_token, moment) == TokenStatus.VALID, "barrier: the waiting administrator's link is valid"
+    assert latest.user_id == (boss if offset > timedelta(0) else created.user_id), f"barrier: the latest setup link must be {'boss' if offset > timedelta(0) else 'the administrator'}'s"
+
+    status = await _setup_status(engine, bootstrap, now=moment)
+
+    _assert_status(bootstrap, status, state, ensure_utc(latest.expires_at) if state == "pending" else None, scene=f"boss's link {end}, issued {_hours(offset)} from the administrator's — {_deciding(rows, moment)}")
+    print_success(f"{state}: the setup links of every account")
+
+
+# red until H-61
+@pytest.mark.asyncio
+@pytest.mark.parametrize("set_up", [pytest.param(True, id="after-its-setup"), pytest.param(False, id="while-it-waits")])
+async def test_the_setup_status_is_none_once_the_administrator_was_deleted(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, set_up: bool) -> None:
+    """H61-015 — NEW, red until H-61 — H's «honest reading», accepted 20/10: the F02 administrator, after its setup — its link consumed — or while it waits — its link live —, deleted by ``user_service.delete_user`` (what an administrator's ``DELETE /users/{id}`` runs), root beside. ``account_tokens.user_id`` is ``ON DELETE CASCADE`` and the private engine's connections have foreign keys ON — the PRAGMA listener of ``backend.app.db.session``, as production's —: its setup links went with it. No setup link left: ``none``, ``setup_expires_at`` ``None`` — never ``done`` from a link that no longer exists.
+
+    Barriers first: foreign keys ON; the setup link stored before the deletion, gone after it, with the account.
+    """
+    print_section(f"H61-015: the administrator deleted {'after its setup' if set_up else 'while it waits'}")
+    created = await _created(engine, bootstrap, f02)
+    if set_up:
+        assert await _complete(engine, bootstrap, created.link_token, now=NOW + timedelta(minutes=30)) is not None, "setup: the administrator completes its setup"
+    await _add_user(engine, ROOT_USERNAME, admin=True)
+    async with engine.connect() as connection:
+        foreign_keys = (await connection.execute(text("PRAGMA foreign_keys"))).scalar_one()
+    assert foreign_keys == 1, "barrier: the private engine's connections must have foreign_keys ON, as production opens its own (the PRAGMA listener of backend.app.db.session)"
+    assert len(await _setup_rows(engine, created.user_id)) == 1, "barrier: the administrator's setup link is stored"
+
+    async with AsyncSession(engine) as session:
+        deleted = await user_service.delete_user(session, created.user_id)
+
+    assert deleted is not None and set(await _accounts(engine)) == {ROOT_USERNAME}, f"barrier: delete_user must delete the administrator, root left: {deleted!r}"
+    assert await _setup_rows(engine) == [], "barrier: account_tokens.user_id ON DELETE CASCADE — the setup links went with their account"
+    status = await _setup_status(engine, bootstrap, now=NOW + HOUR)
+
+    _assert_status(bootstrap, status, "none", scene="the administrator deleted")
+    print_success("none: the administrator deleted took its setup link along")
+
+
+# red until H-61 — updated for «done wins» (H, 20/10 14:10): its scene of the setup through the older of two links
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scene", STATE_SCENES)
+async def test_the_setup_status_reads_and_writes_nothing_in_every_state(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, scene: StateScene) -> None:
+    """H61-016 — NEW, red until H-61: read-only, in every state — ``none``; ``pending``; ``done``, through the link, its link retired, or through the older of two links, the newer revoked and the latest; ``expired``, its link revoked or run out —, on a session of an engine of its own (``_issuer_engine``): ``admin_setup_status`` commits nothing, leaves nothing for its caller to commit — no new, dirty or deleted object in the session —, and sends SQLite no write — no INSERT, UPDATE, DELETE, REPLACE, BEGIN or SAVEPOINT: never its write lock —; committed by its caller afterwards, the database is exactly as before (``_snapshot``). And ``setup_expires_at`` is ``pending``'s alone: ``None`` for ``none``, ``done`` and ``expired``.
+
+    Updated for «done wins» (H, 20/10 14:10): ``[done-through-the-older-of-two-links]``, new — red until its cure, «the latest decides» reading ``expired`` —: the read of rule 2, whatever the latest says, is read-only too.
+
+    Barrier: the listener hears the call — at least one statement —, so «no write» proves something.
+    """
+    state, expires_at, moment = await scene(engine, bootstrap, f02)
+    module = _h61(bootstrap)
+    before = await _snapshot(engine)
+
+    async with _issuer_engine(engine) as reader:
+        with _heard(reader) as (statements, commits):
+            async with AsyncSession(reader, expire_on_commit=False) as session:
+                status = await module.admin_setup_status(session, now=moment)
+                committed = list(commits)
+                left = {"new": list(session.new), "dirty": list(session.dirty), "deleted": list(session.deleted)}
+                await session.commit()
+
+    _assert_status(module, status, state, expires_at, scene=_named(scene))
+    assert statements, "barrier: the listener heard nothing of the call, so «no write» would prove nothing"
+    assert committed == [], "admin_setup_status must commit nothing: the caller's transaction is the caller's"
+    assert left == {"new": [], "dirty": [], "deleted": []}, f"admin_setup_status must leave nothing for its caller to commit: {left}"
+    assert _writes(statements) == [], f"admin_setup_status must never take SQLite's write lock: it sent {_writes(statements)}"
+    assert await _snapshot(engine) == before, "admin_setup_status must write nothing, even when its caller commits afterwards"
+
+
+# red until H-61
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("age", "state"), CLOCK_AGES)
+async def test_without_now_the_setup_status_reads_the_clock(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, age: timedelta, state: str) -> None:
+    """H61-017 — NEW, red until H-61: ``now`` left out, ``admin_setup_status(session)`` reads the clock (``utcnow``): the F02 administrator created by the clock an hour ago — ``pending``, until its link's expiry — or 73 hours ago — ``expired``, its link run out an hour ago. No fixed instant answers both.
+
+    Barrier first: by the clock, the link is live, or has run out.
+    """
+    moment = utcnow()
+    created = await _created(engine, bootstrap, f02, now=moment - age)
+    expires_at = ensure_utc(created.expires_at)
+    assert (expires_at > moment) == (state == "pending"), f"barrier: by the clock the link must be {'live' if state == 'pending' else 'run out'}: it expires at {expires_at}"
+
+    status = await _setup_status(engine, bootstrap, now=None)
+
+    _assert_status(bootstrap, status, state, expires_at if state == "pending" else None, scene=f"created {age} ago by the clock, asked without now")
+
+
+# red until H-61 «done wins»
+@pytest.mark.asyncio
+@pytest.mark.parametrize("elapsed", AFTER_THE_SETUP)
+@pytest.mark.parametrize("token", LINK_ORIGINS)
+async def test_the_setup_status_is_done_after_the_setup_through_the_older_of_two_links(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, token: Optional[str], elapsed: timedelta) -> None:
+    """H61-018 — NEW, red until H-61 «done wins» (H, 20/10 14:10; with «the latest decides» it reads ``expired``: the newer link, revoked by the setup, is the latest), the real flow: the waiting administrator holds two live setup links, as SETUP-001 builds them — the CREATED link at NOW, the variable's token or a generated one, and another issued half an hour later —; its setup completed through the OLDER one an hour after NOW (``complete_admin_setup``) consumes it and revokes the newer, never consumed. A consumption is final: ``done``, ``setup_expires_at`` ``None`` — an hour after the setup, and once both links' 72 hours are over.
+
+    Barriers first (``_set_up_through_the_older_of_two_links``): two live links before the setup; after it, the older consumed by its account, the newer revoked and only revoked, and the latest.
+    """
+    print_section(f"H61-018: the setup through the older of two links, {'the variable token' if token else 'a generated link'}, asked {elapsed} after NOW")
+    user_id = await _set_up_through_the_older_of_two_links(engine, bootstrap, f02, token=token)
+    rows = await _setup_rows(engine, user_id)
+    moment = NOW + elapsed
+
+    status = await _setup_status(engine, bootstrap, now=moment)
+
+    _assert_status(bootstrap, status, "done", scene=f"the setup through the older of two links — {_deciding(rows, moment)}")
+    print_success("done: set up through the older link; the newer, revoked, decides nothing")

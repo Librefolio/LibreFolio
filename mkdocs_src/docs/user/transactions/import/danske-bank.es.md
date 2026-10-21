@@ -93,7 +93,7 @@ La exportación de valores solo se remonta un año, así que importa **al menos 
 
 - Cada transacción recibe su **fecha valor** (el día en que se movió el dinero o las acciones) y su importe en **euros**, tal como lo escribió el banco.
 - Los archivos no dan ISIN ni ticker: confirma cada valor en el [mapeo de activos](index.md#asset-mapping) del asistente.
-- **Nada se descarta en silencio**: las filas omitidas — un pago que falta, una orden no ejecutada, una operación pagada después de que termina el extracto… — se cuentan en el detalle del conjunto y se listan en los avisos del importador, en **finés** como los archivos. Revisa las operaciones emparejadas que señale un aviso porque sus nombres difieren.
+- **Ninguna fila se pierde**: una fila omitida — un pago que falta, una operación pagada después de que termina el extracto… — sigue contándose en el detalle del conjunto, con su motivo, y los avisos del importador, en **finés** como los archivos, enumeran las que hay que revisar. Revisa las operaciones emparejadas que señale un aviso porque sus nombres difieren.
 
 ### 💶 Las comisiones están incluidas en los importes de las operaciones
 

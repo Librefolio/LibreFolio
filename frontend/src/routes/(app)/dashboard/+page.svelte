@@ -441,9 +441,8 @@
         } else if (action === 'navigate_fx' && target) {
             goto(`/fx/${target}`);
         } else if (action === 'add_fx_pair') {
-            // Open modal — use first affected pair as slug hint
-            const pairs = _issue.affected_fx_pairs ?? [];
-            fxPairCreateSlug = pairs[0] ?? '';
+            // The banner has one chip per missing pair: the dialog opens on the pair of the chip pressed.
+            fxPairCreateSlug = target ?? '';
             showFxPairAddModal = true;
         } else if (action === 'sync_fx_pair') {
             await syncMissingFxRates(_issue);

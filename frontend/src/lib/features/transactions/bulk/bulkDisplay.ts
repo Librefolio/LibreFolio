@@ -171,6 +171,24 @@ export function resolveBulkIssueRows(issue: BulkIssue, rows: readonly BulkIssueR
     return [];
 }
 
+/** The codes of a cost refused in Auto: nothing true to average (J-57, N88), or an average that cannot be read (W-B69). */
+const AUTO_COST_REFUSALS = new Set(['autoCostEmptyPool', 'autoCostUnknownPool', 'autoCostUnreadable']);
+
+/** The row the editor leads to after an explicit validation or a refused Save (Q-J57-4): of the rows refused for an
+ *  Auto cost, the oldest by its own date — correcting it can free the ones after it on the same pool — and, on the same
+ *  date, the first met (issues in their order, each issue's rows as `rowsOf` gives them: the editor's grid order). The
+ *  visible row's id: a hidden partner leads to its pair. Null when no row is refused for an Auto cost. */
+export function firstAutoCostRefusalRowId<I extends BulkIssue>(issues: readonly I[], rowsOf: (issue: I) => readonly BulkIssueRow[]): string | null {
+    let first: BulkIssueRow | null = null;
+    for (const issue of issues) {
+        if (!AUTO_COST_REFUSALS.has(issue.code ?? '')) continue;
+        for (const row of rowsOf(issue)) {
+            if (first === null || compareText(row.fields.date, first.fields.date) < 0) first = row;
+        }
+    }
+    return first === null ? null : (first.pairedWith ?? first.tempId);
+}
+
 /** What the close guard reads of an editor row, beyond its content: the identities a reset regenerates. */
 export interface GuardKeyRow {
     tempId: string;
