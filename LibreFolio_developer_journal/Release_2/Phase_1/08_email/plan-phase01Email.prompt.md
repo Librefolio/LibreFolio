@@ -9495,3 +9495,24 @@ pagine).
   (`c8d23c544`, 16/10) c'è solo in inglese, in desktop e mobile (`translate-validate`: 133 titoli contro 132, prima della
   mia voce 132 contro 131). Timbrare avrebbe nascosto quel debito vero. Il timbro va fatto dopo che quella voce è
   tradotta.
+- **Il via del coordinatore** (14:28; checkpoint `b02611402` e `a7c7de18d`): tradurre io la voce di X in it/fr/es (sei
+  voci brevi; lo sviluppatore permette le correzioni piccole nelle 4 lingue), poi il timbro sulle due pagine, perché a
+  quel punto il debito è chiuso davvero. Seguito minimo, col checkpoint.
+- ✅ **Le sei voci** (14:3x), dopo `onboarding-replay` come in inglese: «🧩 Impostazioni dei plugin», «🧩 Paramètres des
+  plugins», «🧩 Ajustes de los plugins» (`pluginSettings.tab.title`), coi termini dell'app («le fonti dei prezzi e dei
+  tassi di cambio», la scheda «Plugin»/«Plugins») e quelli delle pagine (scheda/onglet/pestaña, modulo/formulaire/
+  formulario, badge/badge/insignia). Verificato prima: dal timbro (l'inglese di `810deabf9`) le due pagine inglesi sono
+  cambiate solo per la voce di X (`c8d23c544`) e per la mia (`b02611402`), quindi nient'altro resta da tradurre.
+- ✅ **Le prove** (14:3x): titoli 133/133 e 134/134 nelle quattro lingue, nello stesso ordine; `translate-validate`:
+  nessuna riga per le pagine della galleria (erano 684), gli errori del sito da 1544 a 1454; poi `translate-stamp --file
+  gallery/desktop.en.md gallery/mobile.en.md` (il cache cambia solo quelle due voci); `mkdocs build` stretto ok,
+  `check-links` ok.
+
+#### E-25.1 ed E-26.1 — Le decisioni (2026-10-20, 13:4x–14:3x)
+> - **E-25**: approvata dallo sviluppatore (13:4x), coi testi proposti. Via del coordinatore (14:28): prima i rossi.
+> - **E-26**: lo sviluppatore ha scelto la (b) (14:3x): anche un campo nella risposta di `POST /auth/register` che dice
+>   quando l'email è trattenuta, più il testo (a) per il caso normale. Tocca file di A (lo schema della risposta,
+>   `RegisterCard`) e chiede `api sync`: prima l'accordo con A sul contratto, e la revisione è di A. Prima un'analisi
+>   breve al coordinatore: il nome del campo, i valori, il testo del caso trattenuto, i file.
+> - **L'ordine** (coordinatore): E-25, la voce di X nella galleria (già fatta, sopra), poi E-26.
+> - Le traduzioni di `getting-started` restano debito, senza timbro, salvo diversa indicazione dello sviluppatore.
