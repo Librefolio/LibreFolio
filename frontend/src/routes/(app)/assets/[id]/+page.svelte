@@ -53,9 +53,7 @@
         getSignalProblemSeverity,
         getLocalSignalDefinitions,
         mapSignalInstanceResults,
-        renderBackendSignalResult,
         renderedSignalPointCount,
-        signalFromConfig,
         SignalResultState,
         type BackendSignalResult,
         type RenderedSignal,
@@ -71,7 +69,7 @@
     import type {ViewMode, ChartType} from '$lib/components/charts/ChartToolbar.svelte';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
-    import {displayFxRate, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '$lib/stores/assetPriceStoreRegistry';
     import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
     import {buildIdentifiersList} from '$lib/utils/assetTypes';
@@ -83,7 +81,8 @@
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
     import {applyComparisonAssetsData, buildComparisonSyncRange, clearComparisonAssetsData, collectConfiguredComparisonFxSlugs, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
-    import {comparisonAssetIds as comparisonPeerAssetIds, parseBackendSignalResults, signalDataContextFingerprint} from '$lib/charts/chartPageSignals';
+    import {comparisonAssetIds as comparisonPeerAssetIds, detailPageSignalSources, parseBackendSignalResults, signalDataContextFingerprint} from '$lib/charts/chartPageSignals';
+    import {renderBackendResults, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
@@ -681,73 +680,20 @@
 
     let signalDefinitionsByType = $derived(new Map(signalDefinitions.map((definition) => [definition.type, definition])));
 
-    let backendOverlaySignals: RenderedSignal[] = $derived.by(() => {
-        const rendered: RenderedSignal[] = [];
-        for (const item of signalInstanceResults) {
-            if (item.source !== 'backend' || !item.result) continue;
-            const currentConfig = signals.find((config) => config.id === item.config.id) ?? item.config;
-            const definition = signalDefinitionsByType.get(currentConfig.signalType);
-            if (!definition || definition.source !== 'backend') {
-                console.error(`Missing backend signal definition for '${currentConfig.signalType}'`);
-                continue;
-            }
-            const outcome = renderBackendSignalResult(item.result, currentConfig, {
-                baseData: lineData,
-                viewMode,
-                definition,
-                translate: (key) => $t(key),
-            });
-            rendered.push(...outcome.signals);
-        }
-        return rendered;
-    });
+    let backendOverlaySignals: RenderedSignal[] = $derived(renderBackendResults(signals, signalInstanceResults, signalDefinitionsByType, lineData, viewMode, (key) => $t(key)));
 
     let rollingRiskSignals = $derived.by(() => {
         const riskConfigIds = new Set(signals.filter((config) => signalDefinitionsByType.get(config.signalType)?.indicatorGroup === 'risk').map((config) => config.id));
         return backendOverlaySignals.filter((signal) => riskConfigIds.has(signal.id.split(':')[0]));
     });
 
-    // Overlay signals
+    // Overlay signals: the saved local signals, drawn by the one renderer with the page's data (Y-42), then the backend results.
+    // A comparison reads the series its load wrote into its config; an asset that is gone is named by the signal's own
+    // catalogue fallback; the page's own asset is never compared with itself.
+    let signalSources: SignalDataSources = $derived(detailPageSignalSources({configs: signals, assets: allAssets, fxPairPoints: (pairSlug) => getFxStore(pairSlug).getAllSorted(), selfAssetId: data.assetId}));
     let overlaySignals: RenderedSignal[] = $derived.by(() => {
         void overlayDataVersion;
-        const rendered: RenderedSignal[] = [];
-        for (const cfg of signals) {
-            const definition = signalDefinitionsByType.get(cfg.signalType);
-            if (!definition || definition.source === 'backend') continue;
-            const instance = signalFromConfig(cfg);
-            if (!instance) continue;
-
-            if (cfg.signalType === 'fx-pair') {
-                const pairSlug = String(cfg.params.pairSlug || '');
-                if (!pairSlug) continue;
-                try {
-                    const store = getFxStore(pairSlug);
-                    const storeData = store.getAllSorted();
-                    if (storeData.length === 0) continue;
-                    instance.params._resolvedData = storeData.map((d) => {
-                        const rate = displayFxRate(d.rate, false);
-                        return {date: d.date, value: rate ?? 0, missing: rate === null};
-                    });
-                } catch {
-                    continue;
-                }
-            }
-
-            if (cfg.signalType === 'asset-comparison') {
-                const targetId = Number(cfg.params.assetId);
-                if (!targetId || targetId === data.assetId) continue;
-                const targetAsset = allAssets.find((a) => a.id === targetId);
-                // An asset that is gone gets its name from the signal itself: one fallback, in the catalogue.
-                instance.params._assetDisplayName = targetAsset?.display_name;
-                if (!instance.params._resolvedData) continue;
-            }
-
-            const results = instance.renderMulti(lineData, viewMode);
-            for (const result of results) {
-                if (result.data.length > 0) rendered.push(result);
-            }
-        }
-        return [...rendered, ...backendOverlaySignals];
+        return [...renderLocalSignals(signals, signalDefinitionsByType, lineData, viewMode, signalSources), ...backendOverlaySignals];
     });
 
     let allOverlaySignals: RenderedSignal[] = $derived([...overlaySignals, ...measureSignals, ...(pendingPreviewSignal ? [pendingPreviewSignal] : [])]);

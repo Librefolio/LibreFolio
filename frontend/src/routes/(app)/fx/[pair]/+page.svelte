@@ -44,9 +44,7 @@
         getSignalProblem,
         getLocalSignalDefinitions,
         mapSignalInstanceResults,
-        renderBackendSignalResult,
         renderedSignalPointCount,
-        signalFromConfig,
         SignalResultState,
         type BackendSignalResult,
         type RenderedSignal,
@@ -63,7 +61,6 @@
     import {fetchFxPeriodChanges} from '$lib/utils/periodChanges';
     import type {RangeDelta} from '$lib/utils/rangeChange';
     import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
-    import {extractDaysBack} from '$lib/utils/assetPriceDerived';
     import {setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
@@ -72,6 +69,8 @@
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
     import {applyComparisonAssetsData, clearComparisonAssetsData, COMPARISON_ASSET_RUNTIME_PARAM_KEYS, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
+    import {detailPageSignalSources} from '$lib/charts/chartPageSignals';
+    import {fxPointToLineDataPoint, renderBackendResults, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
@@ -334,16 +333,6 @@
         untrack(() => void pageBusy.join('fx-detail-range-delta', () => loadRangeDeltas(base, quote, start, end)));
     });
 
-    function fxPointToLineDataPoint(point: FxDataPoint, inverted: boolean): LineDataPoint {
-        const rate = displayFxRate(point.rate, inverted);
-        return {
-            date: point.date,
-            value: rate ?? 0,
-            missing: rate === null,
-            staleDays: extractDaysBack(point),
-        };
-    }
-
     let lineData: LineDataPoint[] = $derived(chartData.map((d) => fxPointToLineDataPoint(d, inverted)));
 
     /** First data point date — used for "no data before" banner */
@@ -372,68 +361,15 @@
 
     let signalDefinitionsByType = $derived(new Map(signalDefinitions.map((definition) => [definition.type, definition])));
 
-    let backendOverlaySignals: RenderedSignal[] = $derived.by(() => {
-        const rendered: RenderedSignal[] = [];
-        for (const item of signalInstanceResults) {
-            if (item.source !== 'backend' || !item.result) continue;
-            const currentConfig = signals.find((config) => config.id === item.config.id) ?? item.config;
-            const definition = signalDefinitionsByType.get(currentConfig.signalType);
-            if (!definition || definition.source !== 'backend') {
-                console.error(`Missing backend signal definition for '${currentConfig.signalType}'`);
-                continue;
-            }
-            const outcome = renderBackendSignalResult(item.result, currentConfig, {
-                baseData: lineData,
-                viewMode,
-                definition,
-                translate: (key) => $t(key),
-            });
-            rendered.push(...outcome.signals);
-        }
-        return rendered;
-    });
+    let backendOverlaySignals: RenderedSignal[] = $derived(renderBackendResults(signals, signalInstanceResults, signalDefinitionsByType, lineData, viewMode, (key) => $t(key)));
 
-    // Computed overlay signals from settings
+    // Overlay signals: the saved local signals, drawn by the one renderer with the page's data (Y-42), then the backend results.
+    // FX pairs come from the store, straight (the signal's own `_inverted` turns them); a comparison reads the series
+    // loadComparisonAssetsData wrote into its config, and an asset the page does not know is named by the catalogue fallback.
+    let signalSources: SignalDataSources = $derived(detailPageSignalSources({configs: signals, assets: allAssets, fxPairPoints: (pairSlug) => getFxStore(pairSlug).getAllSorted()}));
     let overlaySignals: RenderedSignal[] = $derived.by(() => {
         void overlayDataVersion; // trigger recomputation when overlay data changes
-        const rendered: RenderedSignal[] = [];
-        for (const cfg of signals) {
-            const definition = signalDefinitionsByType.get(cfg.signalType);
-            if (!definition || definition.source === 'backend') continue;
-            const instance = signalFromConfig(cfg);
-            if (!instance) continue;
-
-            // For FxPairSignal: resolve data from the TimeSeriesStore before rendering
-            if (cfg.signalType === 'fx-pair') {
-                const pairSlug = String(cfg.params.pairSlug || '');
-                if (!pairSlug) continue;
-                try {
-                    const store = getFxStore(pairSlug);
-                    const storeData = store.getAllSorted();
-                    if (storeData.length === 0) continue;
-                    instance.params._resolvedData = storeData.map((d) => fxPointToLineDataPoint(d, false));
-                } catch {
-                    continue; // Store not available for this pair
-                }
-            }
-
-            // For AssetComparisonSignal: resolve data injected by loadComparisonAssetsData
-            if (cfg.signalType === 'asset-comparison') {
-                const targetId = Number(cfg.params.assetId);
-                if (!targetId) continue;
-                const targetAsset = allAssets.find((a) => a.id === targetId);
-                instance.params._assetDisplayName = targetAsset?.display_name ?? $t('chartSettings.signals.assetFallback', {values: {id: String(targetId)}});
-                instance.params._assetIconUrl = targetAsset?.icon_url ?? null;
-                instance.params._assetType = targetAsset?.asset_type ?? null;
-                if (!instance.params._resolvedData) continue;
-            }
-
-            const results = instance.renderMulti(lineData, viewMode);
-            for (const result of results) {
-                if (result.data.length > 0) rendered.push(result);
-            }
-        }
-        return [...rendered, ...backendOverlaySignals];
+        return [...renderLocalSignals(signals, signalDefinitionsByType, lineData, viewMode, signalSources), ...backendOverlaySignals];
     });
 
     /** Combined overlay signals: computed from settings + measure signals */

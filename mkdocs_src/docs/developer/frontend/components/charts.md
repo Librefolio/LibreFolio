@@ -438,7 +438,7 @@ values, within the field's `min`/`max` when set) and the `.lf-compact-number-inp
 ([Mobile CSS](../pwa.md#mobile-css)) sets every input without `.zoom-guard-exempt` to 16 px; the
 class then only resets the line height.
 
-### Signal rendering shared by cards and preview {: #signal-rendering }
+### Signal rendering shared by cards, preview and detail pages {: #signal-rendering }
 
 `lib/charts/chartSignalRendering.ts` is the one place that turns a chart's saved signals into
 `RenderedSignal[]`. It is pure (no Svelte state, no store read): the caller says where the series
@@ -455,7 +455,26 @@ The Assets list (`routes/(app)/assets/+page.svelte`), the FX list (`routes/(app)
 and `ChartSettingsModal` call these functions with their own `SignalDataSources`, so a signal
 looks the same on a card and in its preview: a comparison is named after its target, a comparison
 with the chart's own asset (`selfAssetId`) is never drawn, and an FX pair follows the direction of
-the card. The two detail pages still keep their own loop (backlog Y-42); `signalRendering.gate.test.ts` keeps any other file from calling `signalFromConfig()` outside this module.
+the card.
+
+The two detail pages (`routes/(app)/assets/[id]/+page.svelte` and `routes/(app)/fx/[pair]/+page.svelte`)
+use the same functions: `renderLocalSignals` for their saved local signals, `renderBackendResults`
+for their backend results and, on the FX page, the module's `fxPointToLineDataPoint` to turn store
+points into chart points. They build their `SignalDataSources` with the pure helper
+`detailPageSignalSources({configs, assets, fxPairPoints, selfAssetId?})`
+(`lib/charts/chartPageSignals.ts`):
+
+- an FX pair reads the points of the FX store, straight (the signal's own `_inverted` turns them),
+  asked lazily, one pair at a time;
+- a comparison reads the series that the comparison load wrote into its config
+  (`params._resolvedData`), named with icon and type by the assets the page knows (an unknown asset
+  gets the catalogue fallback name);
+- there is no base point, because the detail pages draw daily data;
+- the asset detail page passes its own asset as `selfAssetId`.
+
+So a signal looks the same on a card, in the preview and on a detail page.
+`signalRendering.gate.test.ts` keeps it that way: no file outside the module calls
+`signalFromConfig()`, and the list of known copies (`KNOWN_COPIES`) is empty and can only shrink.
 
 ### Preview chart in the modal {: #settings-preview-chart }
 
