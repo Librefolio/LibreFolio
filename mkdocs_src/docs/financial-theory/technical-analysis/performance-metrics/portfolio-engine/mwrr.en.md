@@ -85,7 +85,7 @@ $$
 * It is ideal for long-term comparisons (e.g., comparing your performance with an annual bank interest rate or CAGR).
 * **Volatility Warning:** On short periods (e.g., a few days or weeks), the annualized return can be highly volatile and display extreme percentages because the math extrapolates a small-window return to a full 365-day year.
 
-LibreFolio builds MWRR cash flows from capital-baseline deltas, not cash-only deposit rows. Priced in-kind ADJUSTMENT/TRANSFER capital is therefore treated as contributed capital rather than as sudden investment performance. An outgoing ADJUSTMENT with a cost basis returns to the investor the value it hands over, converted at its date ([Deposited Capital — Outgoing Adjustments](deposited-capital.md#outgoing-adjustments)).
+LibreFolio builds MWRR cash flows from capital-baseline deltas, not cash-only deposit rows. Priced in-kind ADJUSTMENT/TRANSFER capital is therefore treated as contributed capital rather than as sudden investment performance. An outgoing ADJUSTMENT has no value: it returns nothing to the investor and is no cash flow ([Deposited Capital — Outgoing Adjustments](deposited-capital.md#outgoing-adjustments)).
 
 ### 📊 Cumulative MWRR {: #cumulative-mwrr }
 Cumulative MWRR represents the total equivalent return over the selected period, obtained by compounding the annualized rate for the actual duration of that window.

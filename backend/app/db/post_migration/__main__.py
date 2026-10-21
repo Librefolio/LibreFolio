@@ -34,7 +34,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
     data_dir = args.data_dir or get_data_dir()
     report = run_post_migration_fixes(db_path, data_dir, dry_run=args.dry_run)
-    # Then, as at startup, the lone giving TRANSFER legs at their Auto cost (decision 47): listed with it on a dry run.
+    # Then, as at startup, the lone giving TRANSFER legs, converted to ADJUSTMENT-out without a value (decision 47, N78-1).
     legs, legs_error = [], None
     if report.integrity_ok and not report.failed:
         try:

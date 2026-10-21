@@ -3,7 +3,7 @@
 ## 💡 What is it?
 TWRR measures the **"pure" performance** of your chosen assets and strategy (The Market), completely ignoring the timing and size of your deposits or withdrawals. 
 
-LibreFolio detects external sub-period breaks from capital-baseline deltas. This includes priced in-kind ADJUSTMENT/TRANSFER capital, so seeded assets are treated as investor capital entering the portfolio, not as market return. An outgoing ADJUSTMENT with a cost basis is capital leaving at the value it hands over, converted at its date ([Deposited Capital — Outgoing Adjustments](deposited-capital.md#outgoing-adjustments)): when that value is the units' market value that day, the adjustment leaves the day's return untouched.
+LibreFolio detects external sub-period breaks from capital-baseline deltas. This includes priced in-kind ADJUSTMENT/TRANSFER capital, so seeded assets are treated as investor capital entering the portfolio, not as market return. An outgoing ADJUSTMENT has no value and is no flow ([Deposited Capital — Outgoing Adjustments](deposited-capital.md#outgoing-adjustments)): the value of its units leaves the NAV, and the day's return reads it as a loss.
 
 It is the standard metric used by mutual funds and ETFs because fund managers have no control over when clients deposit or withdraw capital; they must be evaluated solely on the returns of the underlying investments.
 
