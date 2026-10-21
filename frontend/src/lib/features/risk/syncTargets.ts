@@ -12,6 +12,9 @@
  * the rule can be pinned by a unit test instead of by a page. It is the same rule
  * `RiskPanelHeader` applies inline, lifted so a second surface does not become a
  * second copy that can drift from the first.
+ *
+ * The banner rule below (`labQualityAction`) is the one every risk panel reads —
+ * the lab, the levels of the Dashboard and of a broker, and the asset detail (TC-23).
  */
 
 /** The asset fields the sync modal and the pair rule read. */
@@ -64,21 +67,35 @@ export function buildSyncTargets(assetIds: readonly number[], targetCurrency: st
     return {assets, fxPairs: [...pairs].sort()};
 }
 
-/** What a data-quality banner action does in the lab. */
-export type LabQualityAction = {kind: 'sync'} | {kind: 'navigate'; href: string};
+/** What a data-quality banner action does in a risk panel. */
+export type LabQualityAction = {kind: 'sync'} | {kind: 'navigate'; href: string} | {kind: 'add_pair'; pair: string};
 
 /**
- * What a data-quality banner action does in the lab: a sync opens the lab's own sync, which
- * refreshes the selection's prices and rates (`buildSyncTargets`); the rest navigate, as on the
- * Dashboard. `null` for an action the lab does not know, or a navigation without a target.
+ * What a data-quality banner action does in a risk panel: a sync opens the panel's own sync, which
+ * refreshes the answer's prices and rates (`buildSyncTargets`); `add_fx_pair` opens the panel's own
+ * «add FX pair» dialog on the pair of the chip pressed, or empty when the action names no pair
+ * (TC-23, the developer's decision Q-TC23-1 (a): the reader stays on the analysis, as on the
+ * Dashboard); the rest navigate. `null` for an action the panel does not know, or a navigation
+ * without a target.
  *
  * Any `sync_` action syncs, the two the backend sends today (`sync_asset_prices`,
- * `sync_fx_pair`) and a later one alike: the lab has one sync, and it covers both.
+ * `sync_fx_pair`) and a later one alike: the panel has one sync, and it covers both.
  */
 export function labQualityAction(action: string, target: string | null): LabQualityAction | null {
     if (action.startsWith('sync_')) return {kind: 'sync'};
     if (action === 'navigate_asset') return target ? {kind: 'navigate', href: `/assets/${encodeURIComponent(target)}`} : null;
     if (action === 'navigate_fx') return target ? {kind: 'navigate', href: `/fx/${encodeURIComponent(target)}`} : null;
-    if (action === 'add_fx_pair') return {kind: 'navigate', href: '/fx'};
+    if (action === 'add_fx_pair') return {kind: 'add_pair', pair: target ?? ''};
     return null;
+}
+
+/**
+ * The sides the «add FX pair» dialog opens on, for the pair of an `add_pair` action: a slug of
+ * exactly two non-empty parts (`EUR-USD`) gives both, kept as written; anything else opens the
+ * dialog empty, for the reader to choose.
+ */
+export function addPairSides(pair: string): {base: string; quote: string} {
+    const parts = pair.split('-');
+    if (parts.length === 2 && parts[0] && parts[1]) return {base: parts[0], quote: parts[1]};
+    return {base: '', quote: ''};
 }
