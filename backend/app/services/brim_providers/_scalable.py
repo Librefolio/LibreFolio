@@ -46,7 +46,7 @@ from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMEvidence, BRIMExtra
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
-from backend.app.services.brim_providers._brim_io import read_rows, to_date, to_decimal_it
+from backend.app.services.brim_providers._brim_io import RowSkips, read_rows, to_date, to_decimal_it
 
 logger = structlog.get_logger(__name__)
 
@@ -64,6 +64,10 @@ _SEP = " · "
 _TEXT_LIMIT = 350  # the description column holds 500 characters; the id, the reference and a leg prefix follow the text
 _DATE_FORMATS = ("%Y-%m-%d",)
 _EXECUTED = {"executed", "settled"}
+# Known and safe to leave out, quietly (W-B86): an order that is not (or not yet) a movement. Any other status is unknown: a notice.
+_NOT_EXECUTED = {"pending", "cancelled", "canceled", "expired", "rejected"}
+# The notices that ask the user to report the case (W-B86): rows the importer cannot read or does not import.
+_REPORTED = {"scalable_unreadable_rows", "scalable_not_imported"}
 _BUY_TYPES = {"buy", "savings plan"}
 _TAX_TYPES = {"taxes", "tax"}
 _TRANSFER_SUBTYPES = {"CASH_TRANSFER_IN", "CASH_TRANSFER_OUT"}
@@ -99,11 +103,6 @@ _NOTICES: Dict[str, Tuple[str, str, str]] = {
         "warning",
         "The file holds {n} overnight accounts: all their rows go into this broker, whose balance is their sum.",
         "The first row of each overnight account, told apart by lf_account_index.",
-    ),
-    "scalable_not_executed": (
-        "info",
-        "{n} rows were not executed (pending, cancelled, expired or rejected) and were not imported. An order executed later comes with the next export.",
-        "The status column says why these rows were not executed.",
     ),
     "scalable_internal_transfers": (
         "info",
@@ -285,6 +284,8 @@ class _Reader:
         self.transactions: List[TXCreateItem] = []
         self.validation_issues: List[BRIMValidationIssue] = []
         self.flagged: Dict[str, List[_Row]] = {code: [] for code in _NOTICES}
+        self.skips = RowSkips(scalable.header)
+        self.quiet: Dict[str, int] = {}
         self.assets: Dict[int, BRIMExtractedAssetInfo] = {}
         self.asset_ids: Dict[str, int] = {}
         self.next_fake_id = FAKE_ASSET_ID_BASE
@@ -296,9 +297,11 @@ class _Reader:
         for row in rows:
             self._row(row)
         self._several_accounts(rows)
+        if self.quiet:
+            logger.info("Scalable Capital rows left out without a notice", plugin_code=self.provider.provider_code, statuses=dict(sorted(self.quiet.items())), count=sum(self.quiet.values()))
         used = {tx.asset_id for tx in self.transactions if tx.asset_id is not None}
         assets = {fake_id: info for fake_id, info in self.assets.items() if fake_id in used}
-        return BRIMParseOutput(transactions=self.transactions, warnings=self._notices(), validation_issues=self.validation_issues, extracted_assets=assets)
+        return BRIMParseOutput(transactions=self.transactions, warnings=[*self._notices(), *self.skips.notices()], validation_issues=self.validation_issues, extracted_assets=assets)
 
     def _notices(self) -> List[BRIMNotice]:
         width = len(self.file.header)
@@ -314,7 +317,7 @@ class _Reader:
                 row_numbers=[row.line for row in rows],
                 comment=comment,
             )
-            notices.append(BRIMNotice(severity=severity, code=code, message=message.format(n=len(rows)), evidence=[evidence], context={"count": len(rows)}))
+            notices.append(BRIMNotice(severity=severity, code=code, message=message.format(n=len(rows)), evidence=[evidence], context={"count": len(rows), **({"report_issue": True} if code in _REPORTED else {})}))
         return notices
 
     def _flag(self, code: str, row: _Row) -> None:
@@ -338,9 +341,7 @@ class _Reader:
             return
         status = row.get("status").lower()
         if status not in _EXECUTED:
-            shares = row.number("shares")
-            partial = status == "pending" and row.get("lf_ordered_shares") and shares is not None and shares > 0
-            self._flag("scalable_open_partial" if partial else "scalable_not_executed", row)
+            self._not_executed(row, status)
             return
         if to_date(row.get("date"), _DATE_FORMATS) is None or row.number("amount") is None or not row.get("currency"):
             self._flag("scalable_unreadable_rows", row)
@@ -356,6 +357,19 @@ class _Reader:
             self._cash(row, kind)
         else:
             self._flag("scalable_not_imported", row)
+
+    def _not_executed(self, row: _Row, status: str) -> None:
+        """A row that is not an executed movement: an open partial fill is a note, a known status goes quietly (a log line
+        at the end), an unknown or empty one is reported (W-B86)."""
+        shares = row.number("shares")
+        if status == "pending" and row.get("lf_ordered_shares") and shares is not None and shares > 0:
+            self._flag("scalable_open_partial", row)
+        elif status in _NOT_EXECUTED:
+            self.quiet[status] = self.quiet.get(status, 0) + 1
+        elif status:
+            self.skips.unknown(row.line, row.cells, f"status: {row.get('status')}")
+        else:
+            self.skips.unreadable(row.line, row.cells, "status")
 
     def _trade(self, row: _Row, sell: bool) -> None:
         shares = row.number("shares")

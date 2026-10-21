@@ -26,12 +26,12 @@
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {type ChartSettings, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
-    import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, renderBackendSignalResult, signalFromConfig, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
+    import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
+    import {fxPointToLineDataPoint, renderBackendResults, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import {createPairSlug, displayFxRate, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, loadFxRatesAndSignalsBulk, removeFxStore} from '$lib/stores/fxStoreRegistry';
+    import {createPairSlug, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, loadFxRatesAndSignalsBulk, removeFxStore} from '$lib/stores/fxStoreRegistry';
     import {bulkRefusalMessage} from '$lib/api/bulkRefusal';
     import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
-    import {extractDaysBack} from '$lib/utils/assetPriceDerived';
     import {fetchFxPeriodChanges, PeriodChangesLedger, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
     import type {RangeDelta} from '$lib/utils/rangeChange';
     import {isCardInverted} from '$lib/stores/fx/fxCardInversionStore';
@@ -193,16 +193,6 @@
 
     // Which delta periods are visible for the selected date range
     let visiblePeriods = $derived(visiblePeriodColumns(periodSpecs, dateStart, dateEnd));
-
-    function fxPointToLineDataPoint(point: FxDataPoint, inverted: boolean): LineDataPoint {
-        const rate = displayFxRate(point.rate, inverted);
-        return {
-            date: point.date,
-            value: rate ?? 0,
-            missing: rate === null,
-            staleDays: extractDaysBack(point),
-        };
-    }
 
     // Extract unique currencies from configured pairs for filter dropdown
     let configuredCurrencies = $derived([...new Set(pairs.flatMap((p) => [p.config.base, p.config.quote]))].sort());
@@ -686,6 +676,19 @@
     }
 
     /**
+     * Where the cards — and their settings preview — get the series their FX pair signals read (Y-39a): the FX stores,
+     * straight, each signal turning its pair by its own `_inverted`. The FX list holds no asset series, so a comparison
+     * is not drawn here (backlog Y-41).
+     */
+    const fxListSignalSources: SignalDataSources = {
+        fxPairData: (pairSlug) =>
+            getFxStore(pairSlug)
+                .getAllSorted()
+                .map((point) => fxPointToLineDataPoint(point, false)),
+        comparisonTarget: () => null,
+    };
+
+    /**
      * Render overlay signals for a pair. Called by FxCard reactively whenever
      * cardViewMode or inverted changes. Receives absolute chart data (post-inversion).
      */
@@ -694,57 +697,7 @@
         void getSettingsVersion();
         const settings = getSettingsForPair(slug, 'fx');
         if (!settings.signals.length) return [];
-        const rendered: RenderedSignal[] = [];
-        for (const cfg of settings.signals) {
-            const definition = signalDefinitionsByType.get(cfg.signalType);
-            if (!definition || definition.source === 'backend') continue;
-            const instance = signalFromConfig(cfg);
-            if (!instance) continue;
-
-            // For FxPairSignal: resolve data from the TimeSeriesStore before rendering
-            if (cfg.signalType === 'fx-pair') {
-                const pairSlug = String(cfg.params.pairSlug || '');
-                if (!pairSlug) continue;
-                try {
-                    const store = getFxStore(pairSlug);
-                    const storeData = store.getAllSorted();
-                    if (storeData.length === 0) continue;
-                    // Inject resolved data as LineDataPoint[]
-                    instance.params._resolvedData = storeData.map((d) => fxPointToLineDataPoint(d, false));
-                } catch {
-                    continue; // Store not available for this pair
-                }
-            }
-
-            // AssetComparisonSignal: graceful skip — asset data not available in FX view
-            // Full resolution requires async loading, will be implemented in Parte A
-            if (cfg.signalType === 'asset-comparison') {
-                continue;
-            }
-
-            const results = instance.renderMulti(absoluteData, vm);
-            for (const result of results) {
-                if (result.data.length > 0) rendered.push(result);
-            }
-        }
-
-        for (const item of signalResultsByPair.get(slug) ?? []) {
-            if (item.source !== 'backend' || !item.result) continue;
-            const currentConfig = settings.signals.find((config) => config.id === item.config.id) ?? item.config;
-            const definition = signalDefinitionsByType.get(currentConfig.signalType);
-            if (!definition || definition.source !== 'backend') {
-                console.error(`Missing backend signal definition for '${currentConfig.signalType}'`);
-                continue;
-            }
-            const outcome = renderBackendSignalResult(item.result, currentConfig, {
-                baseData: absoluteData,
-                viewMode: vm,
-                definition,
-                translate: (key) => $_(key),
-            });
-            rendered.push(...outcome.signals);
-        }
-        return rendered;
+        return [...renderLocalSignals(settings.signals, signalDefinitionsByType, absoluteData, vm, fxListSignalSources), ...renderBackendResults(settings.signals, signalResultsByPair.get(slug) ?? [], signalDefinitionsByType, absoluteData, vm, (key) => $_(key))];
     }
 
     /**
@@ -761,20 +714,7 @@
             signals: plan.requests,
         });
         const mapped = mapSignalInstanceResults(configs, plan, response.signals ?? []);
-        const rendered: RenderedSignal[] = [];
-        for (const item of mapped) {
-            if (item.source !== 'backend' || !item.result) continue;
-            const definition = signalDefinitionsByType.get(item.config.signalType);
-            if (!definition || definition.source !== 'backend') continue;
-            const outcome = renderBackendSignalResult(item.result, item.config, {
-                baseData: points,
-                viewMode,
-                definition,
-                translate: (key) => $_(key),
-            });
-            rendered.push(...outcome.signals);
-        }
-        return rendered;
+        return renderBackendResults(configs, mapped, signalDefinitionsByType, points, viewMode, (key) => $_(key));
     }
 
     function resolveSettingsBackendPreview(viewMode: 'absolute' | 'percentage'): RenderedSignal[] {
@@ -1331,18 +1271,6 @@
                   return fxPointToLineDataPoint(d, inv);
               })
         : undefined}
-    pairsDataMap={Object.fromEntries(
-        pairs
-            .filter((p) => p.data.length > 0)
-            .map((p) => {
-                const inv = isCardInverted(p.config.slug);
-                return [
-                    p.config.slug,
-                    p.data.map((d) => {
-                        return fxPointToLineDataPoint(d, inv);
-                    }),
-                ];
-            }),
-    )}
+    signalSources={fxListSignalSources}
     settings={settingsForModal}
 />

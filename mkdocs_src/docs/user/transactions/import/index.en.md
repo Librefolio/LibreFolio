@@ -127,7 +127,7 @@ Importers without a label are well tested and reliable for the formats they supp
     <img src="https://finecobank.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Fineco">
     <span class="card-title" style="margin: 0;">Fineco</span>
     </div>
-    <span class="card-desc">🧪 Beta · The "Movimenti Dossier Titoli" CSV export</span>
+    <span class="card-desc">The "Ordini e contabili" securities list, saved as CSV</span>
     </a>
     <a href="intesa/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -287,9 +287,9 @@ untick a row yourself.
 If a broker has an **opening date**, rows dated before it cannot be imported; the opening day
 itself is fine. If the date is wrong, correct it from the
 [Review](how-to.md#opening-date) step and the rows are checked again. Whatever the opening date,
-transaction dates go from 1 January 1900 to one year from today: a row dated outside that range is
+transaction dates go from 1 January 1900 to tomorrow: a row dated outside that range is
 refused when you save the imported rows, with a message such as *Date: Between 1900-01-01 and
-2027-10-17*, when today is 17 October 2026.
+2026-10-18*, when today is 17 October 2026.
 
 ---
 

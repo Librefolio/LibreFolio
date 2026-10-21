@@ -6,12 +6,14 @@
  * - `ensureLoaded()` reads once: nothing while a read is under way or after one succeeded; again after a failure.
  *   Concurrent calls share one request.
  * - `reload()` reads again (the tab's «check again»); the last checks stay listed meanwhile, and after a failure.
- * - `findings` and `attentionCount` follow the checks and what the browser knows (the public configuration and the
- *   host of the page); before the first answer they are empty.
+ * - `findings`, `attentionCount` and `attentionSeverity` follow the checks and what the browser knows (the public
+ *   configuration and the host of the page); before the first answer they are empty.
+ * - The sidebar's connection line asks for them on every page an administrator opens, and draws the dot of
+ *   `attentionSeverity`; the phone's menu button reads the same (N69-1).
  */
 import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 import {fetchSecurityChecks, type SecurityCheck} from './securityChecksApi';
-import {attentionCount, securityFindings, type BrowserSecurityState, type SecurityFindings} from './securityFindings';
+import {attentionCount, attentionSeverity, securityFindings, type BrowserSecurityState, type SecurityFindings} from './securityFindings';
 
 export type SecurityChecksStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -78,6 +80,10 @@ export function createSecurityChecks(dependencies: SecurityChecksDependencies = 
         },
         get attentionCount(): number {
             return answered ? attentionCount(securityFindings(checks, browser())) : 0;
+        },
+        /** The dot's state: an error before a warning; null before the first answer, or with nothing to see. */
+        get attentionSeverity(): 'error' | 'warning' | null {
+            return answered ? attentionSeverity(securityFindings(checks, browser())) : null;
         },
         ensureLoaded(): Promise<void> {
             if (status === 'ready') return Promise.resolve();

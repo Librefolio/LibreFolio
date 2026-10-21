@@ -248,6 +248,9 @@ class DirectaBrokerProvider(BRIMProvider):
         if header_idx is None:
             raise BRIMParseError("Directa header row not found (expected 'Data operazione'/'Tipo operazione'/'Isin')")
 
+        # W-B86: the rows left out for a reason the plugin cannot call safe become two shared notices, with the link to open an issue.
+        skips = io.RowSkips(rows[header_idx])
+
         for offset, row in enumerate(rows[header_idx + 1 :]):
             row_num = header_idx + 2 + offset  # 1-based line number for messages
 
@@ -257,24 +260,24 @@ class DirectaBrokerProvider(BRIMProvider):
 
             # Need at least the basic columns up to "Importo euro"
             if len(row) < COL_AMOUNT_EUR + 1:
-                warnings.append(f"Riga {row_num}: colonne insufficienti, saltata")
+                skips.unreadable(row_num, row, "colonne insufficienti")
                 continue
 
             # Parse date
             tx_date = _parse_directa_date(row[COL_DATE])
             if not tx_date:
-                warnings.append(f"Riga {row_num}: data '{io.cell_str(row[COL_DATE])}' non valida, saltata")
+                skips.unreadable(row_num, row, f"data non valida: '{io.cell_str(row[COL_DATE])}'")
                 continue
 
             # Parse type
             tipo_raw = io.cell_str(row[COL_TYPE])
             if not tipo_raw:
-                warnings.append(f"Riga {row_num}: tipo operazione mancante, saltata")
+                skips.unreadable(row_num, row, "tipo operazione mancante")
                 continue
 
             tx_type = _map_transaction_type(tipo_raw)
             if not tx_type:
-                warnings.append(f"Riga {row_num}: tipo '{tipo_raw}' sconosciuto, saltata")
+                skips.unknown(row_num, row, f"tipo sconosciuto: '{tipo_raw}'")
                 continue
 
             # Parse amount
@@ -379,7 +382,12 @@ class DirectaBrokerProvider(BRIMProvider):
             asset_count=len(extracted_assets_typed),
         )
 
-        return BRIMParseOutput(transactions=transactions, warnings=warnings, validation_issues=validation_issues, extracted_assets=extracted_assets_typed)
+        return BRIMParseOutput(transactions=transactions, warnings=[*warnings, *skips.notices()], validation_issues=validation_issues, extracted_assets=extracted_assets_typed)
+
+    @property
+    def plugin_version(self) -> str:
+        # 1.1.0 — the rows left out (unreadable, unknown type) are reported with the shared notices and the link to open an issue (W-B86).
+        return "1.1.0"
 
     @property
     def docs_url(self) -> Optional[str]:

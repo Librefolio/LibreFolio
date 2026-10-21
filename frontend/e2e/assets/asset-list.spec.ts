@@ -802,10 +802,9 @@ test.describe('Asset List Page', () => {
 
     // ========================================================================
     // Test 16 (F15 round-2): the list view is THREE stacked tables, one per
-    // usage scope. The bucketing contract is the txCount badge palette (own →
-    // emerald, others → blue, analysis → gray — the class IS the feature here,
-    // as sanctioned for the AssetTable component test): every row of a panel
-    // must carry that panel's badge, and the seeded Apple position (transacted
+    // usage scope. The bucketing contract is the scope the txCount badge
+    // publishes (data-scope = own | others | analysis, never its colour): every
+    // row of a panel must carry that panel's badge, and the seeded Apple position (transacted
     // on Interactive Brokers, which TEST_USER owns at 30%) must land in "own".
     // ========================================================================
     test('list view buckets every row into its usage panel', async ({page}) => {
@@ -813,22 +812,17 @@ test.describe('Asset List Page', () => {
         await page.getByTestId('view-mode-list').click();
         await waitForSettled(page.getByTestId('assets-page'), 20_000);
 
-        const panels = [
-            {id: 'own', badge: 'bg-emerald-100'},
-            {id: 'others', badge: 'bg-blue-100'},
-            {id: 'analysis', badge: 'bg-gray-100'},
-        ] as const;
+        const panels = [{id: 'own'}, {id: 'others'}, {id: 'analysis'}] as const;
 
-        for (const {id, badge} of panels) {
+        for (const {id} of panels) {
             const panel = page.getByTestId(`assets-table-panel-${id}`);
             await expect(panel, `panel "${id}" empty or missing — the mock data puts assets in all three (populate_mock_data.py)`).toBeVisible();
             // Retry until rows are painted; a bare count() would read mid-render.
             await expect.poll(async () => panel.locator('tbody tr[data-row-id]').count(), {timeout: 10_000}).toBeGreaterThan(0);
             const rowCount = await panel.locator('tbody tr[data-row-id]').count();
-            // font-mono pins the txCount badge specifically — other cells can share
-            // the palette token (a provider chip also uses blue, e.g.).
-            const badgeCount = await panel.locator(`tbody tr[data-row-id] span.font-mono[class*="${badge}"]`).count();
-            expect(badgeCount, `panel "${id}": every row must carry the ${badge} scope badge`).toBe(rowCount);
+            // font-mono pins the txCount badge specifically; data-scope is the state it publishes.
+            const badgeCount = await panel.locator(`tbody tr[data-row-id] span.font-mono[data-scope="${id}"]`).count();
+            expect(badgeCount, `panel "${id}": every row must carry the ${id} scope badge`).toBe(rowCount);
         }
 
         // Placement proof, not just palette: the seeded Apple row sits in "own".

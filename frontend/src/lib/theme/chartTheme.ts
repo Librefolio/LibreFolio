@@ -2,55 +2,67 @@
  * Colours of the ECharts charts, by meaning — the one home for them.
  *
  * ECharts draws from an options object built in TypeScript, so every chart colour is a value picked for the active
- * theme. Each chart used to write its own pairs inline; they now live here with the values they had, so moving them
- * changed no pixel.
+ * theme. Each chart used to write its own pairs inline; they now live here.
  *
- * **Divergences stay, with a name.** Where two charts draw the same thing in two colours, both values are kept side by
- * side — the emerald of the tooltip Δ and the green of the lines, the red of the price charts and the portfolio's — so
- * the designer can see them and decide. A value with two meanings gets two names. Nothing here was unified.
+ * **Divergences keep their names.** Where two charts drew the same thing in two colours, both names stay — the Δ of the
+ * tooltip and the lines, the price charts' red and the portfolio's — and since D-T28 they read the same role, so the
+ * designer can part them again with one edit. A value with two meanings gets two names.
  *
  * A `{light, dark}` pair is read with `themed(pair, dark)` (`./themePair`); a plain string is the same colour in both
  * themes.
  *
  * **The neutrals are roles (B4, DV, 16/10/2026).** Axes, grids, labels, tooltip boxes and pointers left these tables for
  * {@link chartNeutrals}, which reads the roles of tokens.css at each draw: there, two names of one meaning may now read
- * one role (the shared tooltip box and the candlestick's own). The tables keep the series, the categories, the states
- * and the signs, with their legacy values, for the designer.
+ * one role (the shared tooltip box and the candlestick's own). The tables keep the series, the states and the signs.
+ *
+ * **The series are roles too (DV-10, C2, D-T28 of 21/10/2026).** Each pair is the nearest role of tokens.css
+ * (`rolePair('--lf-…')`, `./seriesRoles`), «da rivedere» with the designer; the names and the shapes did not change. A
+ * plain string the same in both themes is a getter that reads the active theme's role at each access. Two values are
+ * not roles: the map's land and the PAC's ideal weight are the designer's own (round 3).
  *
  * @module lib/theme/chartTheme
  */
 
 import {toRgba} from './colorAlpha';
 import {chartRoles} from './roleColors';
+import {pairNow, rolePair, rolePairAlpha, rolePairSplit, roleNow, roleNowAlpha} from './seriesRoles';
 
 /** The price family: line chart, full price chart, candlestick chart, and the compact chart of the cards. */
 export const PRICE_SERIES = {
-    /** The price line when it is not coloured against the baseline. */
-    line: {light: '#1a4031', dark: '#4ade80'},
-    /** Points with unsaved edits, the same in both themes. */
-    pendingEditPoint: '#f59e0b',
-    /** Event markers of a comparison overlay that carries no colour of its own, the same in both themes. */
-    comparisonMarkerFallback: '#6b7280',
-} as const;
+    /** The price line when it is not coloured against the baseline: the app's green (was a dark forest in light, a bright green in dark). */
+    line: rolePair('--lf-focus'),
+    /** Points with unsaved edits, the same in both themes: the warning, read at each access. */
+    get pendingEditPoint() {
+        return roleNow('--lf-warning');
+    },
+    /** Event markers of a comparison overlay that carries no colour of its own, the same in both themes: the grey of «other». */
+    get comparisonMarkerFallback() {
+        return roleNow('--lf-cat-other');
+    },
+};
 
 /** Gain and loss in the charts. */
 export const CHART_GAIN_LOSS = {
     /** The price charts, above and below the baseline: the price line, candles and their volume, indicator histograms. */
     price: {
-        gain: {light: '#16a34a', dark: '#4ade80'},
-        loss: {light: '#ef4444', dark: '#f87171'},
+        gain: rolePair('--lf-gain'),
+        loss: rolePair('--lf-loss'),
     },
-    /** The portfolio charts: Growth and Performance, the treemap, the lot charts. A darker red than the price charts'. */
+    /** The portfolio charts: Growth and Performance, the treemap, the lot charts. Since D-T28 the same red as the price charts': both are `--lf-loss`. */
     portfolio: {
-        gain: {light: '#16a34a', dark: '#4ade80'},
-        loss: {light: '#dc2626', dark: '#f87171'},
+        gain: rolePair('--lf-gain'),
+        loss: rolePair('--lf-loss'),
     },
-    /** The "(Δ …)" suffix of the price tooltips: an emerald and a red, the same in both themes. */
+    /** The "(Δ …)" suffix of the price tooltips, the same in both themes: gain and loss, read at each access. */
     tooltipDelta: {
-        gain: '#10b981',
-        loss: '#ef4444',
+        get gain() {
+            return roleNow('--lf-gain');
+        },
+        get loss() {
+            return roleNow('--lf-loss');
+        },
     },
-} as const;
+};
 
 /**
  * The neutrals of the charts, on the roles of tokens.css (B4, DV, 16/10/2026): axes, grid lines and rules, labels,
@@ -171,25 +183,29 @@ export function chartNeutrals(dark: boolean, scope?: Element | null) {
 export const CHART_TOOLTIP_COLORS = {
     candlestickBox: {
         /** An overlay series that reports no colour, the same in both themes. */
-        seriesFallback: '#888',
+        get seriesFallback() {
+            return roleNow('--lf-text-muted');
+        },
     },
-} as const;
+};
 
 /** The risk-return scatter chart: its points. Its axes and the capital market line: `chartNeutrals().riskReturn`. */
 export const RISK_RETURN_COLORS = {
-    portfolio: {light: '#0284c7', dark: '#38bdf8'},
-    benchmark: {light: '#d97706', dark: '#fbbf24'},
+    portfolio: rolePair('--lf-info'),
+    benchmark: rolePair('--lf-warning'),
     /** Every other asset. */
-    other: {light: '#64748b', dark: '#94a3b8'},
-    /** The selected point: the hue of a selected table row, apart from every role colour. */
-    selected: {light: '#22c55e', dark: '#4ade80'},
+    other: rolePair('--lf-cat-other'),
+    /** The selected point: the green of a selected control. */
+    selected: rolePair('--lf-checked'),
 } as const;
 
 /** The allocation charts: pie and donut, allocation history. Their category colours: `./chartCategories`; their neutrals: `chartNeutrals().allocation`. */
 export const ALLOCATION_CHART_COLORS = {
-    /** The bubble behind a family's icon on its slice, the same in both themes. */
-    iconBubble: 'rgba(255, 255, 255, 0.75)',
-} as const;
+    /** The bubble behind a family's icon on its slice, the same in both themes: the white of the text on a scrim, at 75 %. */
+    get iconBubble() {
+        return roleNowAlpha('--lf-on-overlay', 0.75);
+    },
+};
 
 /** World maps: the portfolio's geography and the PAC planner's exposure maps. Their scale: `GEO_CHOROPLETH_SCALE`. */
 export const GEO_MAP_COLORS = {
@@ -199,7 +215,7 @@ export const GEO_MAP_COLORS = {
      */
     land: {light: '#D5D9E0', dark: '#343B46'},
     /** A hovered or selected country. */
-    highlight: {light: '#f59e0b', dark: '#fbbf24'},
+    highlight: rolePair('--lf-warning'),
 } as const;
 
 /** The PAC planner's exposure bars, «ideal vs actual» (TD-1): the actual weight takes its row's category colour. */
@@ -212,149 +228,193 @@ export const PAC_EXPOSURE_COLORS = {
     ideal: {light: '#8C929E', dark: '#868594'},
 } as const;
 
-/** Chart signals, the same in both themes. Default line colours: `SIGNAL_DEFAULT_PALETTE` in `./chartPalettes`. */
+/** Chart signals, the same in both themes (read at each access). Default line colours: `SIGNAL_DEFAULT_PALETTE` in `./chartPalettes`. */
 export const SIGNAL_COLORS = {
     /** Parts of backend indicators by role (MACD, Bollinger bands…); the `primary` part keeps the user's colour. */
-    roles: {secondary: '#f59e0b', positive: '#16a34a', negative: '#dc2626', neutral: '#64748b', accent: '#8b5cf6'},
+    roles: {
+        get secondary() {
+            return roleNow('--lf-warning');
+        },
+        get positive() {
+            return roleNow('--lf-gain');
+        },
+        get negative() {
+            return roleNow('--lf-loss');
+        },
+        get neutral() {
+            return roleNow('--lf-cat-other');
+        },
+        /** The violet of a part: the Stock type's, not the AI accent (the AI violet is no series). */
+        get accent() {
+            return roleNow('--lf-cat-stock');
+        },
+    },
     /** The legend's preview of a sign-coloured histogram, before the user customises it. */
-    legendBarPreview: {up: '#16a34a', down: '#dc2626'},
-    /** The measure tool's line. */
-    measure: '#f97316',
-} as const;
+    legendBarPreview: {
+        get up() {
+            return roleNow('--lf-gain');
+        },
+        get down() {
+            return roleNow('--lf-loss');
+        },
+    },
+    /** The measure tool's line: an orange, the commodity's. */
+    get measure() {
+        return roleNow('--lf-cat-commodity');
+    },
+};
 
 /** Income events, shared by the Growth chart's income bars and the lot comparison chart. */
 export const INCOME_EVENT_COLORS = {
-    /** Dividends: a gold kept apart from the deposit teal and the reinvested emerald, at 3:1 on the card (Tailwind's #ca8a04 was 2.94:1). */
-    dividend: {light: '#b08d00', dark: '#facc15'},
-    /** Interest in the lot comparison chart: a darker violet in the light theme than the Growth chart's (`GROWTH_SERIES.interest`). */
-    lotInterest: {light: '#6d28d9', dark: '#a78bfa'},
+    /** Dividends: the gold of the crypto type (was a gold at 3:1 on the card), kept apart from the deposit and the returns cash. */
+    dividend: rolePair('--lf-cat-crypto'),
+    /** Interest in the lot comparison chart: since D-T28 the same violet as the Growth chart's (`GROWTH_SERIES.interest`). */
+    lotInterest: rolePair('--lf-cat-stock'),
 } as const;
 
 /** The Growth chart's series, read as `cc(key)` in `GrowthChart.svelte`. */
 export const GROWTH_SERIES = {
     /** NAV — the prominent line. */
-    nav: {light: '#1a4031', dark: '#4ade80'},
+    nav: rolePair('--lf-focus'),
     /** Assets at cost — blue area. */
-    bookAssetLike: {light: '#3b82f6', dark: '#60a5fa'},
+    bookAssetLike: rolePair('--lf-info'),
     /** Capital cash — subdued green area. */
-    cashContributed: {light: '#9caf9c', dark: '#6b8e6b'},
+    cashContributed: rolePair('--lf-border-input'),
     /** Returns cash — bright emerald area. */
-    cashGenerated: {light: '#10b981', dark: '#34d399'},
+    cashGenerated: rolePair('--lf-gain'),
     /** Capital baseline — grey dashed. */
-    capitalBaseline: {light: '#6b7280', dark: '#9ca3af'},
+    capitalBaseline: rolePair('--lf-cat-other'),
     /** TWRR (% mode). */
-    invested: {light: '#2563eb', dark: '#60a5fa'},
+    invested: rolePair('--lf-info'),
     /** ROI (% mode). */
-    pctCash: {light: '#9caf9c', dark: '#94a3b8'},
+    pctCash: rolePair('--lf-border-input'),
     /** P&L mode — the total line, as prominent as NAV. */
-    totalPnl: {light: '#1a4031', dark: '#4ade80'},
+    totalPnl: rolePair('--lf-focus'),
     /** P&L income submode — dividend stacked bar: the same gold as the lot comparison chart's dividends. */
     dividend: INCOME_EVENT_COLORS.dividend,
     /** P&L income submode — interest stacked bar. */
-    interest: {light: '#7c3aed', dark: '#a78bfa'},
+    interest: rolePair('--lf-cat-stock'),
     /** P&L income submode — costs (fees and taxes): orange here, red in the Performance chart. */
-    costs: {light: '#ea580c', dark: '#fb923c'},
+    costs: rolePair('--lf-cat-commodity'),
     /** P&L income submode — deposit-size bar. */
-    deposit: {light: '#0d9488', dark: '#2dd4bf'},
+    deposit: rolePair('--lf-cat-liquidity'),
 } as const;
 
 /** The Performance chart's series and badges (`palette()` in `PerformanceChart.svelte`). Its rows and rules: `chartNeutrals().performance`. */
 export const PERFORMANCE_COLORS = {
-    unrealized: {light: '#2563eb', dark: '#60a5fa'},
+    unrealized: rolePair('--lf-info'),
     /** Realized P&L: the gain green, under its own name. */
-    realized: {light: '#16a34a', dark: '#4ade80'},
-    income: {light: '#d97706', dark: '#fbbf24'},
+    realized: rolePair('--lf-gain'),
+    income: rolePair('--lf-warning'),
     /** Costs: red here, orange in the Growth chart. */
-    costs: {light: '#dc2626', dark: '#f87171'},
-    other: {light: '#7c3aed', dark: '#a78bfa'},
-    neutral: {light: '#64748b', dark: '#cbd5e1'},
-    /** Badges of an open or a fully sold position, on the axis and in the tooltip, and their text in both themes. */
-    openBadge: {light: '#16a34a', dark: '#166534'},
-    closedBadge: {light: '#64748b', dark: '#475569'},
-    badgeText: '#ffffff',
-} as const;
+    costs: rolePair('--lf-loss'),
+    other: rolePair('--lf-cat-stock'),
+    neutral: rolePair('--lf-cat-hold'),
+    /**
+     * Badges of an open or a fully sold position, on the axis and in the tooltip, and their text in both themes. The text
+     * is white, so the fill must be dark in both: the primary button's green for open; for closed a slate (light) and
+     * the input border's grey-green (dark), which no single role gives.
+     */
+    openBadge: rolePair('--lf-action'),
+    closedBadge: rolePairSplit('--lf-cat-hold-on-soft', '--lf-border-input'),
+    get badgeText() {
+        return roleNow('--lf-on-overlay');
+    },
+};
 
 /** The exposure treemap. Tiles with a P&L take `treemapPnlColor` (`./chartColorScales`); its headers and borders: `chartNeutrals().treemap`. */
 export const TREEMAP_COLORS = {
     /** A tile with no P&L, the same in both themes. */
-    noPnl: '#6b7280',
-    /** The name on a tile, and its shadow, the same in both themes. */
-    tileLabel: '#fff',
-    tileLabelShadow: 'rgba(0,0,0,0.5)',
-} as const;
+    get noPnl() {
+        return pairNow(rolePairSplit('--lf-cat-hold-on-soft', '--lf-border-input'));
+    },
+    /** The name on a tile, and its shadow, the same in both themes: the white of the text on a scrim, and the scrim. */
+    get tileLabel() {
+        return roleNow('--lf-on-overlay');
+    },
+    get tileLabelShadow() {
+        return roleNow('--lf-surface-overlay');
+    },
+};
 
 /** Lines the risk panels add to a price chart, the same in both themes. */
 export const RISK_OVERLAY_COLORS = {
     /** The comparison asset's cumulative return. */
-    comparisonAsset: '#f59e0b',
+    get comparisonAsset() {
+        return roleNow('--lf-warning');
+    },
     /** The median of the simulated band. */
-    simulation: '#2563eb',
-} as const;
+    get simulation() {
+        return roleNow('--lf-info');
+    },
+};
 
 /** The state of a lot: fill of its markers and of the Gantt filter buttons. */
 export const LOT_STATE_COLORS = {
-    open: {light: '#0284c7', dark: '#38bdf8'},
-    partial: {light: '#d97706', dark: '#fbbf24'},
-    closed: {light: '#64748b', dark: '#94a3b8'},
+    open: rolePair('--lf-info'),
+    partial: rolePair('--lf-warning'),
+    closed: rolePair('--lf-cat-other'),
 } as const;
 
 /** The lots Gantt chart. Broker segments take the broker's colour (`getBrokerColor`); its neutrals: `chartNeutrals().lots`. */
 export const LOT_GANTT_COLORS = {
     /** A segment in transit between two brokers. */
-    inTransit: {light: '#7c3aed', dark: '#c084fc'},
+    inTransit: rolePair('--lf-cat-stock'),
     /** A segment with no broker. */
-    noBroker: {light: '#2563eb', dark: '#60a5fa'},
+    noBroker: rolePair('--lf-info'),
     /** The tooltip's estimated current value, and its costs. */
-    estimatedValue: {light: '#d97706', dark: '#fbbf24'},
-    cost: {light: '#dc2626', dark: '#f87171'},
+    estimatedValue: rolePair('--lf-warning'),
+    cost: rolePair('--lf-loss'),
     /** The band behind the selected lot, and the pulsing one after a jump to it. */
     highlightBand: {
-        fill: {light: 'rgba(59, 130, 246, 0.08)', dark: 'rgba(96, 165, 250, 0.10)'},
-        stroke: {light: '#2563eb', dark: '#60a5fa'},
+        fill: rolePairAlpha('--lf-info', 0.08, 0.1),
+        stroke: rolePair('--lf-info'),
     },
     pulseBand: {
-        fill: {light: 'rgba(147, 51, 234, 0.12)', dark: 'rgba(168, 85, 247, 0.16)'},
-        stroke: {light: '#7c3aed', dark: '#c084fc'},
-        glow: 'rgba(168, 85, 247, 0.35)',
+        fill: rolePairAlpha('--lf-cat-stock', 0.12, 0.16),
+        stroke: rolePair('--lf-cat-stock'),
+        get glow() {
+            return roleNowAlpha('--lf-cat-stock', 0.35);
+        },
     },
     /** Event symbols on the segments. */
     events: {
-        sell: {light: '#dc2626', dark: '#f87171'},
-        transfer: {light: '#7c3aed', dark: '#c084fc'},
-        split: {light: '#ca8a04', dark: '#facc15'},
-        buy: {light: '#059669', dark: '#34d399'},
+        sell: rolePair('--lf-loss'),
+        transfer: rolePair('--lf-cat-stock'),
+        split: rolePair('--lf-cat-crypto'),
+        buy: rolePair('--lf-gain'),
     },
-} as const;
+};
 
 /** The lots WAC/price chart. */
 export const LOT_WAC_COLORS = {
     /** The combined line, and a line with no broker. */
-    combinedSeries: {light: '#475569', dark: '#94a3b8'},
+    combinedSeries: rolePair('--lf-text-secondary'),
     /** Event markers, by kind; income has a marker of its own. */
     markers: {
-        buy: {light: '#16a34a', dark: '#86efac'},
-        sell: {light: '#dc2626', dark: '#fca5a5'},
-        transfer: {light: '#1d4ed8', dark: '#93c5fd'},
-        adjustment: {light: '#d97706', dark: '#fcd34d'},
-        split: {light: '#7c3aed', dark: '#c4b5fd'},
+        buy: rolePair('--lf-gain'),
+        sell: rolePair('--lf-loss'),
+        transfer: rolePair('--lf-info-on-soft'),
+        adjustment: rolePair('--lf-warning'),
+        split: rolePair('--lf-cat-stock'),
     },
-    incomeMarker: {light: '#7c3aed', dark: '#c4b5fd'},
+    incomeMarker: rolePair('--lf-cat-stock'),
     /** The bubble of a lot with no broker, and of a lot whose P&L is zero. */
-    noBrokerBubble: {light: '#475569', dark: '#94a3b8'},
-    bubbleZero: {light: '#64748b', dark: '#94a3b8'},
+    noBrokerBubble: rolePair('--lf-text-secondary'),
+    bubbleZero: rolePair('--lf-cat-other'),
     /** The market price line. */
-    marketLine: {light: '#16a34a', dark: '#4ade80'},
+    marketLine: rolePair('--lf-gain'),
 } as const;
 
 /** The lots comparison chart. Its lot lines are generated by id (`lotColor`). */
 export const LOT_COMPARISON_COLORS = {
     /** The value line of lots estimated at cost, and a return that cannot be computed. */
-    estimatedValue: {light: '#64748b', dark: '#94a3b8'},
-    undefinedReturn: {light: '#64748b', dark: '#94a3b8'},
-    aggregateReturn: {light: '#d97706', dark: '#fbbf24'},
-    residual: {light: '#2563eb', dark: '#60a5fa'},
-    proceeds: {light: '#059669', dark: '#34d399'},
-    income: {light: '#7c3aed', dark: '#a78bfa'},
-    originalCost: {light: '#475569', dark: '#cbd5e1'},
-    aggregateTotal: {light: '#0f172a', dark: '#e2e8f0'},
+    estimatedValue: rolePair('--lf-cat-other'),
+    undefinedReturn: rolePair('--lf-cat-other'),
+    aggregateReturn: rolePair('--lf-warning'),
+    residual: rolePair('--lf-info'),
+    proceeds: rolePair('--lf-gain'),
+    income: rolePair('--lf-cat-stock'),
+    originalCost: rolePair('--lf-text-secondary'),
+    aggregateTotal: rolePair('--lf-text-primary'),
 } as const;

@@ -136,7 +136,7 @@
     },
     "costBasisOverride": {
       "tooltip": "Override del precio medio de compra. Si está vacío, se calcula automáticamente de las compras al guardar. Sustituir por Exit Tax, herencia o reglas fiscales especiales. Usa el selector Total/Por unidad de abajo para elegir cómo introducir este importe.",
-      "warningAdjustment": "El coste base manual está vacío: sin él, la transacción no se puede guardar. Escribe lo que costaron estas participaciones: 0 para un desdoblamiento, el coste base original del donante para un regalo."
+      "warningAdjustment": "El coste base manual está vacío: sin él, la transacción no se puede guardar. Escribe lo que te costaron estas participaciones: 0 para las nuevas de un desdoblamiento. Para un regalo, escribe 0, o lo que pagó por ellas el donante: así el precio medio de compra, y la ganancia por la que podrías tributar, quedan más cerca de los reales."
     },
     "wacPreview": {
       "calculating": "Calculando...",
@@ -250,11 +250,12 @@
       "integerDigitsExceeded": "Como máximo {max} cifras en la parte entera",
       "dateOutOfRange": "Entre {min} y {max}",
       "autoCostUnreadable": "Coste automático no disponible: {count, plural, one {# transacción usada} other {# transacciones usadas}} para el coste medio de este activo {count, plural, one {contiene} other {contienen}} un valor que no es un número. Introduce el coste a mano.",
-      "autoCostEmptyPool": "Coste automático no disponible: en esa fecha no había unidades de este activo que promediar. Introduce el coste a mano (0 si llegaron gratis).",
-      "autoCostUnknownPool": "Coste automático no disponible: las unidades de este activo que había en esa fecha no tienen un coste conocido que promediar. Introduce el coste a mano.",
+      "autoCostEmptyPool": "Coste automático no disponible: en esa fecha no había unidades de este activo que promediar. Elige Manual e introduce lo que te costaron estas unidades; si las recibiste como regalo, escribe 0.",
+      "autoCostUnknownPool": "Coste automático no disponible: las unidades de este activo que había en esa fecha no tienen un coste conocido que promediar. Elige Manual e introduce lo que te costaron.",
       "ledgerUnreadable": "No se pueden comprobar los saldos de {brokerName}: {count, plural, one {# de sus transacciones contiene} other {# de sus transacciones contienen}} un valor que no es un número. Pide al administrador que repare los datos.",
       "costBasisNotAllowed": "❌ {type} no lleva coste base aquí: quítelo. Solo lo llevan las unidades que entran con un Ajuste o una Transferencia de Activos.",
-      "costBasisModeIncompatible": "❌ {type} no lleva coste base aquí, así que ningún modo Auto o Manual: quítelo."
+      "costBasisModeIncompatible": "❌ {type} no lleva coste base aquí, así que ningún modo Auto o Manual: quítelo.",
+      "costBasisNegative": "El coste base no puede ser negativo: escribe 0 o más."
     },
     "pydantic": {
       "greaterThan": "El valor debe ser mayor que {gt}",

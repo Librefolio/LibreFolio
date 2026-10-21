@@ -272,7 +272,7 @@ Les copies entre les fichiers que vous importez ensemble sont traitées de la m�
 
 ## ⛔ Avant la date d'ouverture du courtier {: #before-opening }
 
-Si un courtier a une **date d'ouverture**, les lignes antérieures ne peuvent pas être importées ; le jour d'ouverture lui-même est accepté. Si la date est erronée, corrigez-la à l'étape [Vérification](how-to.md#opening-date) et les lignes sont vérifiées à nouveau. Quelle que soit la date d'ouverture, les dates des transactions vont du 1er janvier 1900 à un an après aujourd'hui : une ligne datée hors de cet intervalle est refusée quand vous enregistrez les lignes importées, avec un message tel que *Date : Entre 1900-01-01 et 2027-10-17*, si nous sommes le 17 octobre 2026.
+Si un courtier a une **date d'ouverture**, les lignes antérieures ne peuvent pas être importées ; le jour d'ouverture lui-même est accepté. Si la date est erronée, corrigez-la à l'étape [Vérification](how-to.md#opening-date) et les lignes sont vérifiées à nouveau. Quelle que soit la date d'ouverture, les dates des transactions vont du 1er janvier 1900 à demain : une ligne datée hors de cet intervalle est refusée quand vous enregistrez les lignes importées, avec un message tel que *Date : Entre 1900-01-01 et 2026-10-18*, si nous sommes le 17 octobre 2026.
 
 ---
 

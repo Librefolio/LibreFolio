@@ -14,6 +14,11 @@ interface SocialShareConfig {
 
 export const SOCIAL_SHARE_ORDER: SocialPlatform[] = ['x', 'reddit', 'facebook', 'instagram', 'tiktok'];
 
+/**
+ * `brandClass` carries the official colours of external brands (X, Reddit, Facebook, Instagram, TikTok): they are
+ * not roles of the theme and stay as palette classes and hex values on purpose (D-T28 follow-up, developer, 21/10/2026;
+ * recorded in the colour ratchet with `--accept`).
+ */
 export const SOCIAL_SHARE_CONFIG: Record<SocialPlatform, SocialShareConfig> = {
     x: {
         label: 'X',

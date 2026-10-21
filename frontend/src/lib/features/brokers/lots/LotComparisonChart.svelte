@@ -2,6 +2,7 @@
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
+    import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {z} from 'zod';
     import {schemas} from '$lib/api';
@@ -1242,7 +1243,7 @@
         }
 
         if (!chartInstance) {
-            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'});
+            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, chartInitOptions(chartContainer));
             chartOptionSet = false;
             attachChartReady(chartInstance, chartContainer, 'lot-comparison');
             needsInitialLayoutStabilityPass = true;
@@ -1460,7 +1461,7 @@
         </div>
         {#if mode === 'value' && hasEstimatedAtCostLots}
             <p class="flex items-center gap-2 text-[11px] text-lf-muted" data-testid="lot-comparison-estimated-at-cost-legend">
-                <span class="h-0 w-8 border-t border-dashed border-slate-500 dark:border-slate-400"></span>
+                <span class="h-0 w-8 border-t border-dashed border-lf-input"></span>
                 <span>{modeLabels.estimatedAtCostLegend}</span>
             </p>
         {/if}

@@ -22,6 +22,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.brim_providers import _brim_io as io
 from backend.app.services.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
@@ -117,6 +118,11 @@ class TradeRepublicBrokerProvider(BRIMProvider):
         return "https://traderepublic.com/favicon.ico"
 
     @property
+    def plugin_version(self) -> str:
+        # 1.1.0 — the rows left out, and the fee and tax columns not imported, are listed in shared notices with the link to open an issue (W-B87).
+        return "1.1.0"
+
+    @property
     def docs_url(self) -> Optional[str]:
         return "/mkdocs/user/transactions/import/traderepublic/"
 
@@ -139,10 +145,12 @@ class TradeRepublicBrokerProvider(BRIMProvider):
         extracted_assets: Dict[int, Dict[str, Optional[str]]] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
+        skips = io.RowSkips()
 
         try:
             with self._open_text(file_path, newline="") as f:
                 reader = csv.DictReader(f, delimiter=";")
+                skips.set_headers(reader.fieldnames)
                 row_num = 1
 
                 if reader.fieldnames != EXPECTED_HEADER:
@@ -153,17 +161,17 @@ class TradeRepublicBrokerProvider(BRIMProvider):
                     tx_type_raw = row.get(COL_TYPE, "").strip()
                     tx_type = TYPE_MAPPINGS.get(tx_type_raw.lower())
                     if not tx_type:
-                        warnings.append(f"Row {row_num}: unknown type '{tx_type_raw}', skipping")
+                        skips.unknown(row_num, row, f"unknown type: '{tx_type_raw}'")
                         continue
 
                     tx_date = _parse_traderepublic_date(row.get(COL_DATE, ""))
                     if not tx_date:
-                        warnings.append(f"Row {row_num}: invalid date, skipping")
+                        skips.unreadable(row_num, row, "invalid date")
                         continue
 
                     amount = _parse_traderepublic_number(row.get(COL_AMOUNT, ""))
                     if amount is None:
-                        warnings.append(f"Row {row_num}: invalid amount, skipping")
+                        skips.unreadable(row_num, row, "invalid amount")
                         continue
 
                     note = row.get(COL_NOTE, "").strip()
@@ -173,7 +181,7 @@ class TradeRepublicBrokerProvider(BRIMProvider):
                     asset_id = None
                     if tx_type in (TransactionType.BUY, TransactionType.SELL, TransactionType.DIVIDEND):
                         if not isin:
-                            warnings.append(f"Row {row_num}: {tx_type.value} requires ISIN, skipping")
+                            skips.unreadable(row_num, row, f"{tx_type.value} without an ISIN")
                             continue
                         if isin in asset_to_fake_id:
                             asset_id = asset_to_fake_id[isin]
@@ -204,7 +212,8 @@ class TradeRepublicBrokerProvider(BRIMProvider):
                     fee = _parse_traderepublic_number(row.get(COL_FEE, "")) or Decimal("0")
                     tax = _parse_traderepublic_number(row.get(COL_TAX, "")) or Decimal("0")
                     if fee != Decimal("0") or tax != Decimal("0"):
-                        warnings.append(f"Row {row_num}: Kosten/Belasting columns present; additional fee/tax transactions skipped")
+                        # The row is imported, its fee and tax are not (W-B87): listed, so the user adds them by hand.
+                        skips.unknown(row_num, row, "fee/tax columns (Kosten/Belasting) not imported")
 
                     description = f"{tx_type_raw}: {note}" if note else tx_type_raw
                     self._create_transaction(
@@ -250,7 +259,7 @@ class TradeRepublicBrokerProvider(BRIMProvider):
 
         return BRIMParseOutput(
             transactions=transactions,
-            warnings=warnings,
+            warnings=[*warnings, *skips.notices()],
             validation_issues=validation_issues,
             extracted_assets=extracted_assets_typed,
         )

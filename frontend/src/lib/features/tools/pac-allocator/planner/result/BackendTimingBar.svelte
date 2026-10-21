@@ -24,8 +24,10 @@
 
     const KEY = 'tools.pacAllocator.planner.result.timing';
 
+    /* colour: closest role, to review: the phases are a categorical series, one hue each (sky, violet, emerald, amber, rose, teal): left as palette classes
+       until the categorical roles come; they are no states (a rose «Output validation» is not a danger). Only the neutral slate «Queue wait» moved to bg-lf-muted. */
     const LEAVES = [
-        {key: 'queue_wait_ms', label: 'tools.metrics.queueWait', fallback: 'Queue wait', colour: 'bg-slate-400 dark:bg-slate-500'},
+        {key: 'queue_wait_ms', label: 'tools.metrics.queueWait', fallback: 'Queue wait', colour: 'bg-lf-muted'},
         {key: 'startup_ms', label: 'tools.metrics.startup', fallback: 'Worker startup', colour: 'bg-sky-500 dark:bg-sky-400'},
         {key: 'input_validation_ms', label: 'tools.metrics.inputValidation', fallback: 'Input validation', colour: 'bg-violet-500 dark:bg-violet-400'},
         {key: 'compute_ms', label: 'tools.metrics.compute', fallback: 'Compute', colour: 'bg-emerald-500 dark:bg-emerald-400'},

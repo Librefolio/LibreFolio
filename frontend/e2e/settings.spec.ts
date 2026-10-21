@@ -203,16 +203,14 @@ test.describe('Settings', () => {
 
         test('shows all settings tabs', async ({page}) => {
             await navigateTo(page, '/settings');
-            // The top bar a member sees (decision P13 b): «Administration» stands for Global Settings, its one member here,
-            // so there is no second bar and no Global Settings tab of its own.
+            // The top bar a member sees: the tabs every account has. «Administration» and its members are an administrator's
+            // alone (N69-2, decision D4 a): their absence for a member is pinned in «Admin Tab (Global Settings)» below.
             const topBar = page.getByRole('tablist').filter({has: page.getByTestId('settings-tab-profile')});
             await expect(topBar).toHaveCount(1);
             await expect(topBar.getByTestId('settings-tab-profile')).toBeVisible();
             await expect(topBar.getByTestId('settings-tab-preferences')).toBeVisible();
             await expect(topBar.getByTestId('settings-tab-plugins')).toBeVisible();
             await expect(topBar.getByTestId('settings-tab-about')).toBeVisible();
-            await expect(topBar.getByTestId('settings-tab-administration')).toBeVisible();
-            await expect(page.getByTestId('settings-tab-admin')).toHaveCount(0);
         });
 
         test('profile tab is active by default', async ({page}) => {
@@ -504,6 +502,14 @@ test.describe('Settings', () => {
     });
 
     test.describe('Admin Tab (Global Settings)', () => {
+        /** The member's cases are about an account that is not an administrator: checked, not assumed. */
+        async function expectSignedInMember(page: Page): Promise<void> {
+            const response = await page.request.get('/api/v1/auth/me');
+            expect(response.status(), 'GET /auth/me through the browser session').toBe(200);
+            const {user} = (await response.json()) as {user: {username: string; is_superuser: boolean}};
+            expect(user, `${TEST_USER.username} must be an ordinary member, not an administrator`).toMatchObject({username: TEST_USER.username, is_superuser: false});
+        }
+
         test('admin can view and access global settings', async ({page}) => {
             await login(page, TEST_ADMIN);
             await navigateTo(page, '/settings');
@@ -515,19 +521,40 @@ test.describe('Settings', () => {
             await expect(page.getByTestId('global-settings-tab')).toBeVisible();
         });
 
-        test('non-admin can view but not edit global settings', async ({page}) => {
+        // N69-2 (decision D4 a): «Administration» is for administrators only. Global Settings was the one member a member of
+        // the instance saw, read-only; it is an administrator's now, like the rest of its group, so the group has no entry.
+        test('a non-admin sees no Administration group: Settings shows no administration tab', async ({page}) => {
             await login(page, TEST_USER);
+            await expectSignedInMember(page);
             await navigateTo(page, '/settings');
-            // A member's «Administration» has Global Settings alone: the group's tab opens it, with no second bar.
-            await openSettingsTab(page, 'admin');
 
-            const tab = page.getByTestId('global-settings-tab');
-            await expect(tab).toBeVisible();
-            // Read-only mode: where an administrator finds the lock, the header shows the read-only mark (ShieldOff), and
-            // there is no lock to open. The mark comes first: it proves the header is drawn, so the absence that follows
-            // is about the lock and not about a header still on its way.
-            await expect(tab.getByTestId('settings-readonly-indicator')).toBeVisible();
-            await expect(tab.getByTestId('settings-lock-toggle')).toHaveCount(0);
+            // Presence first: the top bar is drawn, up to About, the last tab every account sees. The bar's entries come
+            // from one derivation, and a member's context never turns administrator: an «Administration» entry would be
+            // drawn with them, or never.
+            const topBar = page.getByRole('tablist').filter({has: page.getByTestId('settings-tab-profile')});
+            await expect(topBar.getByTestId('settings-tab-about')).toBeVisible({timeout: 10_000});
+            // Then the absence, left out of the page rather than hidden in it: no group entry, none of its members, no
+            // second bar.
+            await expect(page.getByTestId(`settings-tab-${ADMINISTRATION_GROUP_ID}`)).toHaveCount(0);
+            for (const id of ADMINISTRATION_TAB_IDS) {
+                await expect(page.getByTestId(`settings-tab-${id}`), `no settings-tab-${id}: a member of «Administration»`).toHaveCount(0);
+            }
+            await expect(page.getByTestId('settings-subtabs')).toHaveCount(0);
+        });
+
+        test('a non-admin opening ?tab=admin lands on Profile', async ({page}) => {
+            await login(page, TEST_USER);
+            await expectSignedInMember(page);
+            await navigateTo(page, '/settings?tab=admin');
+
+            // ?tab=admin names no tab a member sees: the page falls back on the first visible tab, Profile. The tab bar
+            // marks the open tab with aria-selected, and the page draws the open tab's body alone.
+            await expect(page.getByTestId('settings-tab-profile'), '?tab=admin names no tab of a member: the first one, Profile, opens').toHaveAttribute('aria-selected', 'true', {timeout: 10_000});
+            await expect(page.getByTestId('profile-tab')).toBeVisible();
+            // Presence above — Profile selected, its body drawn —; so the absence below is the page's choice, not a late
+            // render: Global Settings' body is not mounted, and there is no «Administration» entry ?tab=admin could select.
+            await expect(page.getByTestId('global-settings-tab'), 'the body of Global Settings never mounts for a member').toHaveCount(0);
+            await expect(page.getByTestId(`settings-tab-${ADMINISTRATION_GROUP_ID}`)).toHaveCount(0);
         });
     });
 
@@ -684,27 +711,6 @@ test.describe('Settings', () => {
             const numberInput = sessionTtlRow(page).getByRole('spinbutton');
             await expect(numberInput).toBeVisible();
             await expect(numberInput).toBeDisabled();
-        });
-    });
-
-    test.describe('Global Settings — Non-Admin Read-Only', () => {
-        test('non-admin sees disabled toggles and inputs', async ({page}) => {
-            await login(page, TEST_USER);
-            await navigateTo(page, '/settings');
-            await openSettingsTab(page, 'admin');
-            const gs = page.getByTestId('global-settings-tab');
-            await expect(gs).toBeVisible();
-            // The tab's load state, not a row's CSS class.
-            await expect(gs).toHaveAttribute('data-busy', 'false', {timeout: 10_000});
-
-            // `scheduler_enabled`, an editable bool: the tab's first toggle is now a placeholder, disabled for everyone.
-            await expect(gs.getByTestId('global-setting-scheduler_enabled').getByTestId('setting-toggle-switch')).toBeDisabled();
-            // `session_ttl_hours` by key, not «the first number input».
-            await expect(gs.getByTestId('global-setting-session_ttl_hours').getByRole('spinbutton')).toBeDisabled();
-            // Disabled is also what an administrator sees before unlocking. Read-only is that nothing here unlocks them:
-            // the read-only mark stands where the lock would, and the lock is not there.
-            await expect(gs.getByTestId('settings-readonly-indicator')).toBeVisible();
-            await expect(gs.getByTestId('settings-lock-toggle')).toHaveCount(0);
         });
     });
 

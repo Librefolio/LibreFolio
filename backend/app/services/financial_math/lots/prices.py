@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import bisect
 from datetime import date as date_type
 from decimal import Decimal
 from typing import Sequence
@@ -45,11 +46,8 @@ def last_day_without_observation(price_series: AssetPriceSeries, days: Sequence[
 
     Such a day has no price at all — no quote and no BUY or SELL, on it or before it — so the lots value an open lot
     at its cost there, as the Dashboard values a holding (J-17). They are always the days before the asset's first
-    observation: a later day resolves to that observation, carried forward.
+    observation: a later day resolves to that observation, carried forward. So the days with an observation are a tail
+    of ``days``, found by bisection (L1a): a few lookups, whatever the length of the history.
     """
-    last: date_type | None = None
-    for day in days:
-        if not price_series.resolve(day).is_missing:
-            break
-        last = day
-    return last
+    first_observed = bisect.bisect_left(days, True, key=lambda day: not price_series.resolve(day).is_missing)
+    return days[first_observed - 1] if first_observed else None

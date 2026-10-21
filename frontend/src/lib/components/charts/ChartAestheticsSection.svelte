@@ -108,7 +108,7 @@
                 aria-label={$t('chartSettings.baselineColors')}
                 data-testid="chart-aesthetic-baseline"
                 aria-pressed={colorByBaseline}
-                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {colorByBaseline ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {colorByBaseline ? 'bg-lf-checked' : 'bg-lf-switch-off'}"
                 disabled={disabledFields.has('colorByBaseline')}
                 onclick={() => {
                     colorByBaseline = !colorByBaseline;
@@ -116,7 +116,7 @@
                 }}
                 type="button"
             >
-                <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {colorByBaseline ? 'translate-x-6' : 'translate-x-1'}"></span>
+                <span class="inline-block h-4 w-4 transform rounded-full transition-transform {colorByBaseline ? 'translate-x-6 bg-lf-switch-knob-on' : 'translate-x-1 bg-lf-switch-knob-off border border-lf-input'}"></span>
             </button>
         </div>
 
@@ -130,7 +130,7 @@
                 aria-label={$t('chartSettings.areaFill')}
                 data-testid="chart-aesthetic-area-fill"
                 aria-pressed={areaFill}
-                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {areaFill ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {areaFill ? 'bg-lf-checked' : 'bg-lf-switch-off'}"
                 disabled={disabledFields.has('areaFill')}
                 onclick={() => {
                     areaFill = !areaFill;
@@ -138,7 +138,7 @@
                 }}
                 type="button"
             >
-                <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {areaFill ? 'translate-x-6' : 'translate-x-1'}"></span>
+                <span class="inline-block h-4 w-4 transform rounded-full transition-transform {areaFill ? 'translate-x-6 bg-lf-switch-knob-on' : 'translate-x-1 bg-lf-switch-knob-off border border-lf-input'}"></span>
             </button>
         </div>
 
@@ -152,14 +152,14 @@
                 aria-label={$t('chartSettings.gridLines')}
                 data-testid="chart-aesthetic-grid-lines"
                 aria-pressed={gridLines}
-                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {gridLines ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {gridLines ? 'bg-lf-checked' : 'bg-lf-switch-off'}"
                 onclick={() => {
                     gridLines = !gridLines;
                     emitChange();
                 }}
                 type="button"
             >
-                <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {gridLines ? 'translate-x-6' : 'translate-x-1'}"></span>
+                <span class="inline-block h-4 w-4 transform rounded-full transition-transform {gridLines ? 'translate-x-6 bg-lf-switch-knob-on' : 'translate-x-1 bg-lf-switch-knob-off border border-lf-input'}"></span>
             </button>
         </div>
 
@@ -173,7 +173,7 @@
                 aria-label={$t('chartSettings.staleGradient')}
                 data-testid="chart-aesthetic-stale-gradient"
                 aria-pressed={staleGradient}
-                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {staleGradient ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {staleGradient ? 'bg-lf-checked' : 'bg-lf-switch-off'}"
                 disabled={disabledFields.has('staleGradient')}
                 onclick={() => {
                     staleGradient = !staleGradient;
@@ -181,7 +181,7 @@
                 }}
                 type="button"
             >
-                <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {staleGradient ? 'translate-x-6' : 'translate-x-1'}"></span>
+                <span class="inline-block h-4 w-4 transform rounded-full transition-transform {staleGradient ? 'translate-x-6 bg-lf-switch-knob-on' : 'translate-x-1 bg-lf-switch-knob-off border border-lf-input'}"></span>
             </button>
         </div>
 

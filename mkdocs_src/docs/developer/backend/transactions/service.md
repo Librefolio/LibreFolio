@@ -14,7 +14,7 @@ Transaction batch execution is split across these source modules, in `backend/ap
 | `backend/app/services/transactions/auto_cost.py` | `TransactionAutoCostMixin`: WAC dispatch for the Auto cost basis |
 | `backend/app/services/transactions/unreadable_rows.py` | `count_unreadable_rows()` and `UnreadableLedgerError`: the transactions whose stored value cannot be read, counted before the Auto cost's pool (W-B69) and a broker's balances (W-B74) |
 | `backend/app/services/transactions/transaction_batch_context.py` | `TransactionBatchContext` and the balance-replay exception shared across stages |
-| `backend/app/services/transactions/transaction_batch_stages.py` | The stages that open and close a batch: parse, the decimal-limit and date checks, preload/access, balance replay, response |
+| `backend/app/services/transactions/transaction_batch_stages.py` | The stages that open and close a batch: parse, the decimal-limit, date and cost-basis-sign checks, preload/access, balance replay, response |
 | `backend/app/services/transactions/batch_edits.py` | Deletes, splits, updates, and the check of updated linked pairs |
 | `backend/app/services/transactions/batch_creates.py` | Creates, promotes, and the links between the legs of new pairs |
 | `backend/app/services/transactions/batch_costs.py` | WAC and FX issues, and the required cost basis |
@@ -60,7 +60,7 @@ Its order is contractual:
 
 | # | Stage call | Purpose |
 |---|------------|---------|
-| 1 | `parse_inputs()`, then `check_decimal_limits()` and `check_dates()` | Parse create, update, split, and promote rows independently; then refuse a quantity, cash amount, manual cost basis or the cost basis a promote resolves over its column's limit (C-97, see [Decimal limits](#decimal-limits)), and a date outside 1900-01-01 … today + 1 year (N74, see [Transaction dates](#transaction-dates)) |
+| 1 | `parse_inputs()`, then `check_decimal_limits()`, `check_dates()` and `check_cost_basis_sign()` | Parse create, update, split, and promote rows independently; then refuse a quantity, cash amount, manual cost basis or the cost basis a promote resolves over its column's limit (C-97, see [Decimal limits](#decimal-limits)), a date outside 1900-01-01 … tomorrow by the server's calendar (N74, see [Transaction dates](#transaction-dates)), and either cost basis below 0 (J-60, see [Cost basis sign](#cost-basis-sign)) |
 | 2 | `preload_and_authorize()` | Load referenced rows, collect touched brokers, and require `EDITOR` access |
 | 3 | `apply_deletes()` | Stage valid deletions |
 | 4 | `apply_splits()` | Split linked pairs before any dependent update |
@@ -250,14 +250,46 @@ and nothing is committed. A quantity is no `Currency`: `1E+1000000` units still 
 currency schema refused, such as an amount that is no number, reached the promotion,
 whose `Currency.model_validate()` raised out of the batch: a 500.
 
+### ➖ Cost basis sign {: #cost-basis-sign }
+
+`check_cost_basis_sign()` (`transaction_batch_stages.py`; J-60) runs after
+`check_decimal_limits()` and `check_dates()`, and refuses a manual cost basis below 0;
+0 stays allowed, `-0` included (a gift, the new shares of a split). It reads the cost
+where `check_decimal_limits()` reads it (`_decimal_limit_values()`,
+`_promote_cost_amount()`): the manual `cost_basis_override` of a create, or of an update
+that sends one, and the cost basis a promote resolves
+(`resolved_fields.cost_basis_override`). An Auto cost basis (`cost_basis_mode` `auto` or
+`auto-detail`) is not checked: it is the batch's own average, not a value of the user's.
+Below 0, the row gets one issue: code `costBasisNegative`
+(`TXValidationCode.COST_BASIS_NEGATIVE`, listed by `GET /transactions/types` →
+`validation_codes`), `field` `cost_basis_override`, the row's `operation` and `index`, an
+update's id as `ref_id`, no `params`, and the English `error` *Cost basis override: cannot
+be negative, 0 or more*. The frontend reads the code as
+`transactions.errors.costBasisNegative`, *The cost basis can't be negative: enter 0 or
+more.*, without the field label in front (it is not in `FIELD_PREFIXED_CODES`).
+
+The issue keeps the batch from being committed (`finalize_response()`: any issue means
+`committed=False`), but, unlike the integer digits and the dates, the check does not stop
+the batch: a negative cost overflows nothing the later stages compute. The row stays in
+the batch, so a linked pair is not broken by it, and the row's other refusals come in the
+same answer: its decimal places, or a balance it takes below zero, which only the replay
+of step 12 finds; the inline WAC is skipped, as for any non-balance issue. An update that
+does not send the cost is not checked: a row an older version stored at a negative cost
+stays editable (notes, tags) until its cost is touched. An update that sends that cost
+back, even unchanged, is refused; the app sends only the fields that change
+(`buildUpdateDiff()`). A broker import confirms through this batch, so a negative cost
+read from a file is refused when the bulk workspace validates or saves its rows (decision
+D2). Tests: `./dev.py test services transaction-cost-basis-rule J60` (`TestJ60*`).
+
 ### 📅 Transaction dates {: #transaction-dates }
 
-`check_dates()` (`transaction_batch_stages.py`; night decision N74 of R13-SEC7-3, pending
-the developer's review) runs right after `check_decimal_limits()`. A transaction's date
-must lie between 1900-01-01 (`EARLIEST_RANGE_START`, `utils/datetime_utils.py`: the floor every
-replay and history walk starts from too) and today one year on:
-`transaction_date_bounds()` takes today from `today_date()`, in UTC, and maps a
-29 February to 28 February. The stage reads:
+`check_dates()` (`transaction_batch_stages.py`; decision N74 of R13-SEC7-3) runs right
+after `check_decimal_limits()`. A transaction's date must lie between 1900-01-01
+(`EARLIEST_RANGE_START`, `utils/datetime_utils.py`: the floor every replay and history walk
+starts from too) and tomorrow by the server's calendar (`latest_range_end()`, same module:
+`server_today()`, the server's local date, plus one day). `transaction_date_bounds()`
+returns that pair. The last day is also the last one a price or a rate written by hand may
+carry (N83). The stage reads:
 
 - the `date` of every parsed create;
 - the `date` of an update that sets one: an update that leaves an older row's date alone
@@ -269,8 +301,9 @@ replay and history walk starts from too) and today one year on:
 Out of the range, the row gets one issue: code `dateOutOfRange`
 (`TXValidationCode.DATE_OUT_OF_RANGE`, listed by `GET /transactions/types` →
 `validation_codes`), `field` `date`, `params` `{"min", "max"}` as ISO dates, and the
-English `error` *Date: between 1900-01-01 and 2027-10-17*. A promote's issue has
-`operation` `promote` and the promote's index; an update's has the row's id as `ref_id`.
+English `error` *Date: between 1900-01-01 and 2026-10-20* on a server whose today is
+19 October 2026. A promote's issue has `operation` `promote` and the promote's index; an
+update's has the row's id as `ref_id`.
 `check_dates()` then returns `True`, and `execute_batch()` stops right after
 `preload_and_authorize()`, as for the integer digits: the batch's usual 200, with
 `committed=False`, the issues collected so far and no results. It stops because the stages
@@ -278,11 +311,16 @@ after it replay a broker's days and look rates up at a row's date. A broker impo
 confirms through this batch, so its rows are checked here too, when the bulk workspace
 validates or saves them (as for the decimal limits, decision D2).
 
-The bound is one year ahead because the interface never offers a future date
-(`SingleDatePicker`, whose `allowFuture` is false by default), while a broker's report can
-put a row ahead of today: time zones, settlement dates. The frontend reads the code as
+The bound is tomorrow, not today, as slack for a user east of the server, whose today can
+already be the server's tomorrow. No legitimate date goes further: the interface never
+offers a future date (`SingleDatePicker`, whose `allowFuture` is false by default), and a
+broker import keeps only settled rows (the rule *The operation date, and only settled rows* of
+the [plugin guide](../../architecture/patterns/brim_plugin_guide.md#import-philosophy-currency-rules)),
+so a later date is a typing error. Lot N74 set the bound there; before, it was a year
+after today, for the settlement dates a broker's report puts ahead: under that rule, a
+plugin now leaves such a row out until it has settled. The frontend reads the code as
 `transactions.errors.dateOutOfRange`, *Between {min} and {max}*, behind the field label
-(`FIELD_PREFIXED_CODES`): *Date: Between 1900-01-01 and 2027-10-17*.
+(`FIELD_PREFIXED_CODES`): *Date: Between 1900-01-01 and 2026-10-20*.
 
 ---
 
