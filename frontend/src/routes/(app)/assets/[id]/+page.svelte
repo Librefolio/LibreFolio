@@ -1835,6 +1835,11 @@
         return primaryMode === 'price' ? measureMode : calendarMeasureMode;
     }
 
+    // The measure tool's violet is its identity (categorical, left legacy); only the idle look is on roles. Each branch is its own literal (G3).
+    function measureButtonClass(active: boolean): string {
+        return active ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 ring-1 ring-violet-300 dark:ring-violet-700' : 'bg-lf-card/80 text-lf-muted hover:bg-lf-hover hover:text-lf-secondary';
+    }
+
     function activeMeasuresOpen(): boolean {
         return primaryMode === 'price' ? showMeasures : showCalendarMeasures;
     }
@@ -2444,9 +2449,7 @@
                         <div class="absolute top-0 right-0 z-20 flex items-center gap-1.5">
                             <button
                                 data-testid="asset-detail-measure-btn"
-                                class="p-1.5 rounded-lg transition-colors {activeMeasureMode()
-                                    ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 ring-1 ring-violet-300 dark:ring-violet-700'
-                                    : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
+                                class="p-1.5 rounded-lg transition-colors {measureButtonClass(activeMeasureMode())}"
                                 onclick={async () => {
                                     if (activeMeasureMode()) {
                                         activeMeasurePanel()?.stopMeasureMode();
@@ -2461,12 +2464,11 @@
                                 <Ruler size={16} />
                             </button>
                             {#if primaryMode === 'price'}
+                                <!-- colour: closest role, to review: the edit toggle's active amber is a mode accent, not a warning; warning roles keep the hue (alternative: bg-lf-selected text-lf-link) -->
                                 <button
                                     data-testid="asset-detail-editdata-btn"
                                     use:guideAnchor={'asset.detail.editor'}
-                                    class="p-1.5 rounded-lg transition-colors {showDataEditor
-                                        ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 ring-1 ring-amber-300 dark:ring-amber-700'
-                                        : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
+                                    class="p-1.5 rounded-lg transition-colors {showDataEditor ? 'bg-lf-warning-soft text-lf-warning ring-1 ring-lf-warning-line' : 'bg-lf-card/80 text-lf-muted hover:bg-lf-hover hover:text-lf-secondary'}"
                                     onclick={() => {
                                         if (showDataEditor) {
                                             showDataEditor = false;
@@ -2490,11 +2492,10 @@
                                     <Pencil size={16} />
                                 </button>
                             {/if}
+                            <!-- colour: closest role, to review: the aesthetics toggle's active emerald is a mode accent, not a success; success roles keep the hue (alternative: bg-lf-selected text-lf-link) -->
                             <button
                                 data-testid="asset-detail-aesthetics-toggle"
-                                class="p-1.5 rounded-lg transition-colors {showAesthetics
-                                    ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-300 dark:ring-emerald-700'
-                                    : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
+                                class="p-1.5 rounded-lg transition-colors {showAesthetics ? 'bg-lf-success-soft text-lf-success ring-1 ring-lf-success-line' : 'bg-lf-card/80 text-lf-muted hover:bg-lf-hover hover:text-lf-secondary'}"
                                 onclick={() => (showAesthetics = !showAesthetics)}
                                 title={$t('common.aesthetics')}
                             >

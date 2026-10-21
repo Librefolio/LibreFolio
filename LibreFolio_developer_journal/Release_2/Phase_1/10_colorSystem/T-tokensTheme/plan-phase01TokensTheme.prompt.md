@@ -3768,3 +3768,39 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 **Ruoli che mancano:** una famiglia categoriale (serie, fasi, accenti di sezione, ruoli broker, LONG/SHORT) con soft e
 on-soft; un gradino di testo più quieto dentro ogni famiglia di stato (sotto-riga delle pillole); un hover per una
 pillola soft; un meccanismo per i marchi di `supportLinks`; un ruolo «riempimento dati in verde accento» (oggi `checked`).
+
+
+### Ondata 2 · C1-b — FX, pagina dell'asset, provider e componenti degli asset — ✅ 21/10/2026
+
+> **Note implementazione**: base `ce3bc869a` (C1). 9 file di produzione, 2 test, tre sotto-agenti `sonnet` per gruppo, diff riletti.
+> Prima ho controllato che i worktree di Y (`e-alfy-redesigned-spork`) e Z (`e-alfy-potential-sniffle`) non toccassero
+> nessun file del lotto. Ratchet m1 383 → 265 (−118), baseline stretta solo sui 9 file. Grammatica 0 violazioni.
+> Vitest (5 gate dei temi, i due gate degli HTML, `lib/components/assets`, `lib/utils`, `src/routes`): 3830/3831 verdi;
+> `front check` 0 e 0. Prettier pulito.
+> Interruttori: `AssetModalFooter` (attivo, benchmark) e `ScheduledInvestmentEditor` (interesse in ritardo) sui ruoli Q2.
+> Test: il badge del conteggio transazioni di `AssetTable` pubblica ora `data-scope` (`own`/`others`/`analysis`/`none`) e
+> `AssetTable.test.ts` e `e2e/assets/asset-list.spec.ts` lo leggono al posto delle classi colore.
+>
+> **⚠️ Fuori pista**: `themeTokens.gate.test.ts` (C4) era di nuovo rosso per costruzione: le regole di `app.css` per
+> `bg-libre-green`, `hover:bg-gray-100`, `text-gray-500`, `text-libre-green` non avevano più usi. Il coordinatore ha
+> autorizzato C1 a cancellare solo quelle 4 (21/10): fatto; i 5 gate dei temi 158/158 verdi.
+> **E2E** `front-utility theme-roles`: 24/24 verdi nello slot (corsia 6187), log in `ondata2/c1b-theme-roles-e2e.log`.
+
+**Punti «to review» per la designer:**
+
+| File | Cosa | Ruolo scelto | Alternativa |
+|---|---|---|---|
+| `fx/[pair]/+page`, `assets/[id]/+page` | toggle attivi della barra del grafico: editor (ambra), estetica (smeraldo) | tinte `warning` / `success` con `-line` | `bg-lf-selected text-lf-link` (un accento di modalità) |
+| `fx/[pair]/+page`, `AssetDetail{Metadata,Signals}Panel` | icone di sezione blu | `text-lf-info` | `text-lf-link` |
+| `fx/[pair]` e `assets/[id]` | toggle a riposo | `bg-lf-card/80 text-lf-muted hover:bg-lf-hover` | — |
+| `AssetTable` | badge del conteggio transazioni: propri / altri / nessuno | success / info / neutral soft | — |
+| `IdentifierPrimaryChooser` | origine dell'identificativo: provider / memorizzato / report | info soft / `selected`+`link` / neutral | tinta del marchio |
+| `providerHelpers` | `DEFAULT_PROVIDER_COLOR`, `MANUAL` | neutral chip; warning soft | MANUAL come tinta categoriale del provider |
+
+**Rimasti legacy per scelta (categoriali), 50 classi nel lotto:** violet dello strumento misura (`fx/[pair]` 17,
+`assets/[id]` 6, `AssetDetailMeasuresSection` 11); tinte di identità dei provider in `providerHelpers` (ECB blu,
+FRANKFURTER indaco, FIXED_RATE smeraldo: 12); il cerchio ambra dello stato vuoto di `fx/+page` (4, domanda aperta 7 della
+skill `design-system`).
+
+**Ruoli che mancano:** un accento di modalità per i toggle attivi della barra; i ruoli categoriali (strumento misura,
+provider); una coppia di testo per il chip neutro.
