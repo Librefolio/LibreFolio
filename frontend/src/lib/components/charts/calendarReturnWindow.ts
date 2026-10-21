@@ -54,6 +54,15 @@ export function calendarReturnWindowDays(selection: CalendarReturnWindowSelectio
     return isPositiveSafeInteger(windowDays) ? windowDays : null;
 }
 
+/** The largest preset whose window fits `rangeDays` on screen; the smallest when none does. */
+export function largestCalendarReturnPresetFor(rangeDays: number): CalendarReturnPresetKey {
+    let chosen: CalendarReturnPresetKey = CALENDAR_RETURN_PRESETS[0].key;
+    for (const preset of CALENDAR_RETURN_PRESETS) {
+        if (preset.windowDays <= rangeDays) chosen = preset.key;
+    }
+    return chosen;
+}
+
 export function calendarReturnRangeDays(start: string, end: string): number {
     return Math.max(0, daysBetween(start, end));
 }

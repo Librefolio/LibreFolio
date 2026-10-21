@@ -28,7 +28,9 @@ settings: changing the FX charts never touches the asset charts.
 
 ## 👀 Preview before you apply
 
-The window shows a preview chart with its own **Abs** / **%** switch. It is the same chart as on the
+The window shows a preview chart with a view selector. It is the chart's saved view, and **Apply**
+saves it: **Abs**, **%** and, for asset charts, **Rolling Return** (FX charts keep **Abs** and **%**
+for now). It is the same chart as on the
 [pair](detail/index.md) and [asset](../assets/detail/chart.md) detail pages, only taller than a
 card's chart: a line (no candlesticks), without the toolbar, event markers or measure tool, and you
 can zoom it with the mouse wheel like on the detail page. It draws with the look and the axis ranges
@@ -46,6 +48,14 @@ change only when you click **Apply**; **Cancel** asks before discarding your cha
 
 A signal looks the same in the preview as on the card, so what you see here is what the card draws
 after **Apply**.
+
+### 🔁 Rolling Return view
+
+On **Rolling Return** the preview draws the rolling return of the asset, with the rolling returns of
+its asset comparisons. For one chart it uses the card's real data and comparisons; for all charts
+it draws a demo curve. Two more controls choose the window: **1W**, **1M**, **3M**, **1Y** or a
+custom amount. Until you choose one, the window is automatic: the largest preset that fits the
+period shown in the list. The other indicators stay saved but are hidden in this view.
 
 ---
 

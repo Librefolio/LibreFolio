@@ -467,3 +467,49 @@ describe('chartSettingsStore — hydrating earlier storage versions as version 3
         expect(backing.get(storageKeyFor(user))).not.toContain(`"${REMOVED_AXIS_KEY}"`);
     });
 });
+
+/**
+ * Y-40 — the fields a payload stored before them lacks: the primary view and whether the rolling-return window is
+ * automatic. The storage version stays 3: sanitising fills them, and hydration rewrites the payload with them. The view is
+ * percent, as the list and the detail opened before; the window is automatic only where it is the shipped default, since
+ * a stored window other than it can only have been chosen.
+ */
+describe('chartSettingsStore — a payload from before Y-40', () => {
+    let backingY40 = new Map<string, string>();
+    let seq = 0;
+
+    beforeEach(() => {
+        backingY40 = new Map();
+        Object.defineProperty(globalThis, 'localStorage', {
+            configurable: true,
+            writable: true,
+            value: {
+                getItem: (key: string) => backingY40.get(key) ?? null,
+                setItem: (key: string, value: string) => void backingY40.set(key, value),
+                removeItem: (key: string) => void backingY40.delete(key),
+                clear: () => backingY40.clear(),
+            },
+        });
+    });
+
+    it('reads in percent, its default window automatic and a chosen one chosen, and is rewritten with both fields', () => {
+        const user = `chart-settings-y40-u${++seq}`;
+        const key = `lf_${user}_${STORAGE_SUFFIX}`;
+        const chosen = {kind: 'preset', preset: '1y', customAmount: 3, customUnit: 'years'};
+        const before = (window?: unknown): Record<string, unknown> => {
+            const {primaryView: _view, calendarReturnWindowAuto: _auto, ...rest} = settings([emaSignal()]) as unknown as Record<string, unknown>;
+            return window ? {...rest, calendarReturnWindow: window} : rest;
+        };
+        backingY40.set(key, JSON.stringify({version: 3, globalSettings: before(), pairOverrides: [['asset-7', before(chosen)]]}));
+        transitionClientSession(user);
+
+        const fields = (value: ChartSettings) => ({view: (value as unknown as Record<string, unknown>).primaryView, auto: (value as unknown as Record<string, unknown>).calendarReturnWindowAuto});
+        expect(fields(getGlobalSettings())).toEqual({view: 'percentage', auto: true});
+        expect({...fields(getSettingsForPair('asset-7', 'assets')), window: getSettingsForPair('asset-7', 'assets').calendarReturnWindow, signals: getSettingsForPair('asset-7', 'assets').signals}).toEqual({view: 'percentage', auto: false, window: chosen, signals: [emaSignal()]});
+
+        const rewritten = JSON.parse(backingY40.get(key) ?? '{}') as StoredDocument;
+        expect(rewritten.version).toBe(3);
+        expect(fields(rewritten.globalSettings as ChartSettings)).toEqual({view: 'percentage', auto: true});
+        expect(fields(new Map(rewritten.pairOverrides).get('asset-7') as ChartSettings)).toEqual({view: 'percentage', auto: false});
+    });
+});
