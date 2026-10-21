@@ -80,6 +80,12 @@
         showGradient?: boolean;
         /** Enable baseline coloring (red below baseline, green above) */
         colorByBaseline?: boolean;
+        /**
+         * The base of the colouring and of the dashed reference line in the absolute view. Without it, the base is the
+         * first point of `data`; a compact chart draws a reduced series, so a page that knows a base the reduction hides
+         * hands it in. The percentage view's base is 0 whatever this says.
+         */
+        baselineValue?: number;
         /** Show grid split lines */
         showGridLines?: boolean;
         /** CSS height */
@@ -118,13 +124,14 @@
         areaFill = true,
         showGradient = true,
         colorByBaseline = true,
+        baselineValue: baselineOverride,
         showGridLines = true,
         height = '300px',
         compact = false,
         showMiniAxis = false,
         lineColor,
         darkLineColor,
-        pendingColor = PRICE_SERIES.pendingEditPoint,
+        pendingColor,
         pendingData = [],
         onPointClick,
         viewMode = 'absolute',
@@ -222,6 +229,7 @@
             void overlaySignals;
             void areaFill;
             void colorByBaseline;
+            void baselineOverride;
             void showGridLines;
             void showGradient;
             void viewMode;
@@ -438,9 +446,11 @@
         const dates = renderedData.map((d) => d.date);
 
         // Determine if we need baseline coloring (green above baseline, red below)
-        const useBaselineColoring = colorByBaseline && !compact;
-        const firstValue = renderedData.find((point) => !point.missing)?.value ?? 0;
-        const baselineValue = isPercentage ? 0 : firstValue;
+        // The base is the first point of the data it was given: a compact chart draws a reduced series, whose first point is
+        // the end of the first bucket.
+        const useBaselineColoring = colorByBaseline;
+        const firstValue = data.find((point) => !point.missing)?.value ?? 0;
+        const baselineValue = isPercentage ? 0 : Number.isFinite(baselineOverride) ? (baselineOverride as number) : firstValue;
 
         // Build per-point stale data array
         const staleDaysArr = renderedData.map((d) => d.staleDays ?? 0);
@@ -472,7 +482,8 @@
                 symbol: 'diamond',
                 symbolSize: 10,
                 itemStyle: {
-                    color: pendingColor,
+                    // Read here, not as the prop's default: a default is kept, and a theme switch would not reach it
+                    color: pendingColor ?? PRICE_SERIES.pendingEditPoint,
                     borderColor: neutrals.price.pendingEditPointRing,
                     borderWidth: 2,
                 },
