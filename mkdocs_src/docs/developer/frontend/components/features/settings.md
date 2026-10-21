@@ -927,7 +927,14 @@ store. Neither has a branch for the managed profile (D1 a): the dot is the same 
   never asks either: it reads what the line loaded.
 - **The root**, `connection-security`, publishes `data-security-attention`, the count (`0` for anyone
   not an administrator, and until the answer), and `data-security-severity`, `error`, `warning` or
-  `none`, beside `data-level`, `data-reason` and `data-server-checked`.
+  `none`, beside `data-level`, `data-reason` and `data-server-checked`. Since lot A-62 it also
+  publishes `data-security-checks`, where the checks stand: `off` for anyone not an administrator,
+  `pending` for an administrator until the first answer, `ready` from the first answer on (while
+  **Check again** reloads, and after a later reload failed, too), `error` when the first read failed
+  and nothing has answered yet. The expression is
+  `!isAdmin ? 'off' : securityChecks.answered ? 'ready' : securityChecks.status === 'error' ? 'error' : 'pending'`.
+  Invisible to the user, it is there for the tests and the gallery to wait on the checks instead of
+  guessing a delay.
 - **The dot**, `connection-security-attention-dot`: on the corner of the level's icon, inside the
   toggle (`connection-security-toggle`), with `data-severity` the severity and
   `aria-hidden="true"`; drawn while `attention > 0`, with the sidebar expanded or collapsed. A dot,
@@ -950,9 +957,10 @@ store. Neither has a branch for the managed profile (D1 a): the dot is the same 
   alone (plan 36), is drawn while the connection is insecure or an administrator's `attentionCount`
   is above `0`: one dot either way. Its `data-severity` is `error` when the connection is insecure or
   `attentionSeverity` is `error`, `warning` otherwise; `bg-lf-danger` or `bg-lf-warning`, with
-  `ring-2 ring-lf-header` and `aria-hidden="true"`. The button's `aria-label` is `Toggle menu`,
-  followed by the insecure level's label when the connection is insecure and by the attention text
-  with attention, each after « — ».
+  `ring-2 ring-lf-header` and `aria-hidden="true"`. The button's `aria-label` starts with
+  `$_('nav.toggleMenu')`, the translated «Toggle menu» (a key of the base catalogue since lot A-62;
+  it was an English literal), followed by the insecure level's label when the connection is insecure
+  and by the attention text with attention, each after « — ».
 
 Tests: `./dev.py test front-utility component-unit` runs
 `lib/components/layout/ConnectionSecurityIndicator.test.ts` and `lib/components/layout/Header.test.ts`
@@ -960,7 +968,8 @@ Tests: `./dev.py test front-utility component-unit` runs
 box, one list of findings from which `findings`, `attentionCount` and `attentionSeverity` derive as in
 the real store, with `ensureLoaded` and `reload` spied and the answer landed by the case; and each
 gives `connectionSecurity.attention` an ICU message of its own, so that a name reads the key, the
-plural branch and the count, never a translation. Their last describe is N69b's:
+plural branch and the count, never a translation. N69b's describe closes `Header.test.ts` (A-62's
+nests inside it) and comes just before A-62's, the last, in `ConnectionSecurityIndicator.test.ts`:
 
 - the line, 6 cases: an administrator with warnings (`2` and `warning` on the root, the dot in the
   toggle, the count in the name, the link after the reason, which closes the details); with an error
@@ -976,6 +985,22 @@ plural branch and the count, never a translation. Their last describe is N69b's:
   the name carries the level, then the count); a member over an administrator's warnings, then an
   administrator signed in on the same header, the control. The header never calls `ensureLoaded()`
   nor `reload()`.
+
+Lot A-62 adds the last describe of the indicator's file and one inside N69b's in the header's:
+
+- the line, «the checks signal on the root (A-62)», 10 cases: a member over a store that holds the
+  answer, a failed first read or a read under way, and nobody signed in (`off` each time, and a
+  member's line never asks the checks); an administrator before the answer (`pending`, the line's own
+  request having moved the store to `loading`); an answer already there at mount (`ready`, an answer
+  with nothing to look at included); `pending` then `ready` when the answer lands; `ready` kept
+  during a **Check again** reload and after a later reload failed; a first read that failed (`error`,
+  and no second request);
+- the header, «the burger's name starts with the translated toggle menu (A-62)», 4 cases: a member on
+  a secure connection (the first part alone) and on an insecure one (then the level); an
+  administrator with warnings, on a secure connection (then the count) and on an insecure one (the
+  level, then the count, in that order). The describe gives `nav.toggleMenu` a marker of its own
+  (`⟦nav.toggleMenu⟧`, through `addMessages`), so that the name must start with that key's text and
+  not with a literal.
 
 `./dev.py test front-utility connection-security` runs
 `frontend/e2e/layout/connection-security.spec.ts` on the desktop and the mobile projects. Its describe
