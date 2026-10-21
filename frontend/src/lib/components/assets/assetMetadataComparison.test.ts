@@ -5,19 +5,32 @@
  * applies (actions), the rows of the comparison dialog (differences) and the distributions the provider does not
  * report (missingFields). Every branch is driven here with a fixed snapshot, fixed labels and a `manuallyChanged`
  * built from the set of fields the user edited while the request was in flight.
+ *
+ * The quote base (Z-32 d, the last blocks): on a full comparison only, right after the currency row, one row when the
+ * form's quote base differs from the proposal — the plugin's suggestion for the line (the sixth argument), else the
+ * default of the type the comparison reads (the provider's, unless it is the form's own or only its family). Never an
+ * action, always checked, noted by the caller's label for its source: `LABELS.quoteBaseNote` is a fake that spells the
+ * source out, so a case sees which note was asked for. The snapshot holds a quote base of 1 by default — the blank
+ * form's — so an answer with no type and no suggestion changes nothing on an empty form. RED until the row exists.
  */
-import {describe, expect, it} from 'vitest';
+import {describe, expect, it, vi} from 'vitest';
 import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
 import {compareMetadata, type ComparisonLabels, type ComparisonScope, type ComparisonSnapshot, type MetadataComparison} from './assetMetadataComparison';
+import type {QuoteBaseSource, QuoteBaseSuggestion} from './assetFormState';
 import type {Distribution} from './assetPayload';
 
+/** The note the caller writes for a quote base proposal — a fake that spells its source out, so a case sees which note was asked for. */
+function noteOf(source: QuoteBaseSource): string {
+    return source.kind === 'suggestion' ? `note(suggestion ${source.quantity} ${source.quoteCurrency ?? '—'})` : `note(typeDefault ${source.assetType} ${source.quantity})`;
+}
+
 /** The caller's labels. `description` is not 'Description' on purpose: the row once showed that English literal in every language (X-R11). */
-const LABELS: ComparisonLabels = {name: 'Name', type: 'Type', currency: 'Currency', description: 'Desc', sector: 'Sector', geographic: 'Geo'};
+const LABELS: ComparisonLabels = {name: 'Name', type: 'Type', currency: 'Currency', description: 'Desc', sector: 'Sector', geographic: 'Geo', quoteBase: 'QuoteBase', quoteBaseNote: noteOf};
 
 /** `manuallyChanged` for a request during which the user edited exactly `fields`. */
 const editedDuring = (fields: string[]) => (field: string) => fields.includes(field);
 
-/** An empty form, currency not picked by the user; each test sets only what it reads. */
+/** An empty form, currency not picked by the user, the blank form's quote base of 1; each test sets only what it reads. */
 function snapshot(overrides: Partial<ComparisonSnapshot> = {}): ComparisonSnapshot {
     return {
         identifiers: {},
@@ -25,6 +38,7 @@ function snapshot(overrides: Partial<ComparisonSnapshot> = {}): ComparisonSnapsh
         assetType: '',
         currency: '',
         currencyUserSet: false,
+        quoteBaseQuantity: 1,
         shortDescription: '',
         descriptionFromPrefill: false,
         sectorDistribution: {},
@@ -39,10 +53,12 @@ interface CompareOptions {
     scope?: ComparisonScope;
     /** The fields the user edited while the request was in flight (none by default). */
     touched?: string[];
+    /** The plugin's quote base suggestion for the line (none by default). */
+    suggestion?: QuoteBaseSuggestion | null;
 }
 
-function compare(patchData: Record<string, any>, {form = {}, scope = 'all', touched = []}: CompareOptions = {}): MetadataComparison {
-    return compareMetadata(patchData, snapshot(form), scope, editedDuring(touched), LABELS);
+function compare(patchData: Record<string, any>, {form = {}, scope = 'all', touched = [], suggestion = null}: CompareOptions = {}): MetadataComparison {
+    return compareMetadata(patchData, snapshot(form), scope, editedDuring(touched), LABELS, suggestion);
 }
 
 /** The actions and dialog rows a comparison produced for one field. */
@@ -82,7 +98,8 @@ describe('compareMetadata — scope', () => {
         ['sector', ['sector_area']],
         ['geographic', ['geographic_area']],
     ])('scope %s compares only its own fields', (scope, fields) => {
-        const result = compare(FULL_PATCH, {scope});
+        // A BOND at 100: the full answer agrees on the quote base too, so no row is left to blur the scope (Z-32 d).
+        const result = compare(FULL_PATCH, {scope, form: {quoteBaseQuantity: 100}});
         expect(result.actions.map((a) => a.field)).toEqual(fields);
         expect(result.differences).toEqual([]);
         expect(result.missingFields).toEqual([]);
@@ -453,7 +470,7 @@ describe.each<[string, 'sector_area' | 'geographic_area', 'sector' | 'geographic
 });
 
 describe('compareMetadata — purity', () => {
-    it('never writes into the payload or the snapshot, and fills with a copy of the provider weights', () => {
+    it('never writes into the payload, the snapshot or the quote base suggestion, and fills with a copy of the provider weights', () => {
         // Built fresh on each call, so the frozen copy shares nothing with the one it is compared against.
         const buildPatch = () => ({
             identifier_isin: 'IT0005557006',
@@ -469,19 +486,126 @@ describe('compareMetadata — purity', () => {
             },
         });
         const buildForm = () => snapshot({identifiers: {ISIN: 'IT0005556990'}, displayName: 'btp valore 2028', shortDescription: 'BTP VALORE', descriptionFromPrefill: true, geographicDistribution: {ITA: 0.5, FRA: 0.5}});
+        // The third input since Z-32 d: the plugin's suggestion for the line. The form holds the blank 1, so it makes a row.
+        const buildSuggestion = () => ({quantity: 100, quote_currency: 'EUR'});
         const patchData = deepFreeze(buildPatch());
         const form = deepFreeze(buildForm());
+        const suggestion = deepFreeze(buildSuggestion());
 
-        const result = compareMetadata(patchData, form, 'all', editedDuring([]), LABELS);
+        const result = compareMetadata(patchData, form, 'all', editedDuring([]), LABELS, suggestion);
 
-        // Writes of every kind were decided, plus two dialog rows — none of them into the inputs.
+        // Writes of every kind were decided, plus three dialog rows — none of them into the inputs.
         expect(result.actions.map((a) => a.kind)).toEqual(['fill', 'mergeOther', 'fill', 'fill', 'fill', 'mergeDescription', 'fillDistribution']);
-        expect(result.differences.map((d) => d.field)).toEqual(['identifier_isin', 'geographic_area']);
+        expect(result.differences.map((d) => d.field)).toEqual(['identifier_isin', 'quote_base_quantity', 'geographic_area']);
         expect(patchData).toEqual(buildPatch());
         expect(form).toEqual(buildForm());
+        expect(suggestion).toEqual(buildSuggestion());
         // The filled distribution is a new object: the form never aliases the provider's answer.
         const fill = result.actions.find((a) => a.kind === 'fillDistribution');
         expect(fill).toEqual({kind: 'fillDistribution', field: 'sector_area', value: {Government: 1}});
         expect(fill?.kind === 'fillDistribution' && fill.value).not.toBe(patchData.classification_params.sector_area.distribution);
+    });
+});
+
+// =========================================================================
+// The quote base (Z-32 d) — see the header. RED: today no comparison proposes a quote base at all.
+// =========================================================================
+
+/** A proposal from the plugin's suggestion, as `proposeQuoteBase` builds it. */
+const suggested = (quantity: number, quoteCurrency: string | null = null): QuoteBaseSource => ({kind: 'suggestion', quantity, quoteCurrency});
+/** A proposal from the default of `assetType`, as `proposeQuoteBase` builds it. */
+const typeDefault = (assetType: string, quantity: number): QuoteBaseSource => ({kind: 'typeDefault', assetType, quantity});
+
+/** The quote base row of a proposal: both values as text, always checked, the caller's note for its source, and the source itself. */
+function quoteBaseRow(current: number, source: QuoteBaseSource) {
+    return {field: 'quote_base_quantity', label: LABELS.quoteBase, type: 'string', currentValue: String(current), providerValue: String(source.quantity), selected: true, note: LABELS.quoteBaseNote(source), quoteBaseSource: source};
+}
+
+/** A line quoted in pence: the plugin suggests one price per 100 shares, in GBp (Yahoo's VOD.L). */
+const PENCE: QuoteBaseSuggestion = {quantity: 100, quote_currency: 'GBp'};
+
+describe('compareMetadata — the quote base (Z-32 d)', () => {
+    it.each<{label: string; form: Partial<ComparisonSnapshot>; suggestion: QuoteBaseSuggestion | null}>([
+        {label: 'the suggestion', form: {assetType: 'STOCK', quoteBaseQuantity: 100}, suggestion: PENCE},
+        {label: 'a STOCK’s default, 1', form: {assetType: 'STOCK', quoteBaseQuantity: 1}, suggestion: null},
+        {label: 'a BOND’s default, 100', form: {assetType: 'BOND', quoteBaseQuantity: 100}, suggestion: null},
+    ])('says nothing when the form already holds $label: no action, no row (guard)', ({form, suggestion}) => {
+        expect(forField(compare({}, {form, suggestion}), 'quote_base_quantity')).toEqual(NOTHING);
+    });
+
+    it('proposes the plugin’s suggestion as a checked row, noted as a suggestion', () => {
+        expect(forField(compare({}, {form: {assetType: 'STOCK', quoteBaseQuantity: 1}, suggestion: PENCE}), 'quote_base_quantity')).toEqual({actions: [], differences: [quoteBaseRow(1, suggested(100, 'GBp'))]});
+    });
+
+    it('reads a suggestion without its quote currency as quoteCurrency null', () => {
+        expect(compare({}, {form: {assetType: 'STOCK', quoteBaseQuantity: 1}, suggestion: {quantity: 10}}).differences).toEqual([quoteBaseRow(1, suggested(10))]);
+    });
+
+    it('lets a suggestion win over the type: 1 for a BOND stored at 100', () => {
+        expect(compare({}, {form: {assetType: 'BOND', quoteBaseQuantity: 100}, suggestion: {quantity: 1}}).differences).toEqual([quoteBaseRow(100, suggested(1))]);
+    });
+
+    it('without a suggestion, proposes the type’s default: 100 for a BOND, with the note of a BOND’s default', () => {
+        expect(compare({}, {form: {assetType: 'BOND', quoteBaseQuantity: 1}}).differences).toEqual([quoteBaseRow(1, typeDefault('BOND', 100))]);
+    });
+
+    it('without a suggestion, proposes 1 for any other type — a row from the default alone starts checked too (Q-Q5 a)', () => {
+        // An answer with no type and no suggestion at all: the form's own type is read.
+        expect(compare({}, {form: {assetType: 'STOCK', quoteBaseQuantity: 100}}).differences).toEqual([quoteBaseRow(100, typeDefault('STOCK', 1))]);
+    });
+
+    it('counts an invalid suggestion as none: the type’s default (the ladder of proposeQuoteBase)', () => {
+        expect(compare({}, {form: {assetType: 'STOCK', quoteBaseQuantity: 100}, suggestion: {quantity: 0}}).differences).toEqual([quoteBaseRow(100, typeDefault('STOCK', 1))]);
+    });
+
+    it.each<{label: string; form: Partial<ComparisonSnapshot> & {quoteBaseQuantity: number}; patch: Record<string, any>; source: QuoteBaseSource}>([
+        {label: 'a BOND for a STOCK', form: {assetType: 'STOCK', quoteBaseQuantity: 1}, patch: {asset_type: 'BOND'}, source: typeDefault('BOND', 100)},
+        {label: 'a BOND for an empty type, which it fills', form: {assetType: '', quoteBaseQuantity: 1}, patch: {asset_type: 'BOND'}, source: typeDefault('BOND', 100)},
+        {label: 'an ETF for a BOND', form: {assetType: 'BOND', quoteBaseQuantity: 100}, patch: {asset_type: 'ETF'}, source: typeDefault('ETF', 1)},
+    ])('reads the default of the type the provider proposes — $label', ({form, patch, source}) => {
+        expect(forField(compare(patch, {form}), 'quote_base_quantity')).toEqual({actions: [], differences: [quoteBaseRow(form.quoteBaseQuantity, source)]});
+    });
+
+    it('keeps the form’s type when the provider names only its family: the source names ETF_STOCK, not ETF', () => {
+        // Both default to 1: only the source tells which type the ladder read.
+        expect(forField(compare({asset_type: 'ETF'}, {form: {assetType: 'ETF_STOCK', quoteBaseQuantity: 100}}), 'quote_base_quantity').differences).toEqual([quoteBaseRow(100, typeDefault('ETF_STOCK', 1))]);
+    });
+
+    it('lets a suggestion win over the type the provider proposes too (guard)', () => {
+        // A BOND proposed for a STOCK at 1, but the plugin says 1: nothing to ask about the quote base.
+        expect(forField(compare({asset_type: 'BOND'}, {form: {assetType: 'STOCK', quoteBaseQuantity: 1}, suggestion: {quantity: 1}}), 'quote_base_quantity')).toEqual(NOTHING);
+    });
+
+    it('is never an action, and an edit of the field during the request changes nothing', () => {
+        const untouched = compare({}, {form: {assetType: 'STOCK', quoteBaseQuantity: 1}, suggestion: PENCE});
+        const touched = compare({}, {form: {assetType: 'STOCK', quoteBaseQuantity: 1}, suggestion: PENCE, touched: ['quote_base_quantity']});
+        expect(forField(touched, 'quote_base_quantity')).toEqual({actions: [], differences: [quoteBaseRow(1, suggested(100, 'GBp'))]});
+        expect(touched).toEqual(untouched);
+    });
+
+    it.each<[ComparisonScope, number]>([
+        ['all', 1],
+        ['identifiers', 0],
+        ['sector', 0],
+        ['geographic', 0],
+    ])('scope %s: %i quote base row — only a full comparison proposes one', (scope, rows) => {
+        expect(forField(compare({}, {scope, form: {assetType: 'STOCK', quoteBaseQuantity: 1}, suggestion: PENCE}), 'quote_base_quantity').differences).toHaveLength(rows);
+    });
+
+    it('lists the quote base row right after the currency row, before the description', () => {
+        const result = compare(
+            {display_name: 'Apple Inc.', asset_type: 'STOCK', currency: 'USD', classification_params: {short_description: 'Apple designs consumer electronics.'}},
+            {form: {displayName: 'Apple', assetType: 'ETF', currency: 'EUR', currencyUserSet: true, shortDescription: 'My own notes', quoteBaseQuantity: 100}},
+        );
+        expect(result.differences.map((d) => d.field)).toEqual(['display_name', 'asset_type', 'currency', 'quote_base_quantity', 'short_description']);
+    });
+
+    it('notes the row with what the caller’s label says for its source — nothing included', () => {
+        const quoteBaseNote = vi.fn((_source: QuoteBaseSource): string | undefined => undefined);
+        const result = compareMetadata({}, snapshot({assetType: 'STOCK', quoteBaseQuantity: 100}), 'all', editedDuring([]), {...LABELS, quoteBaseNote}, null);
+        expect(quoteBaseNote).toHaveBeenCalledWith(typeDefault('STOCK', 1));
+        const [row] = forField(result, 'quote_base_quantity').differences;
+        expect(row).toEqual({...quoteBaseRow(100, typeDefault('STOCK', 1)), note: undefined});
+        expect(row?.note).toBeUndefined();
     });
 });

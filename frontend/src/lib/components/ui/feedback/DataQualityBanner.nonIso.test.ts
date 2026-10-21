@@ -20,8 +20,10 @@
  *   - DQN-02 (grouped, the Dashboard's mode) and DQN-03 (flat): two NON_ISO_CURRENCY issues with different group keys,
  *     beside a MISSING_FX_MARKET issue: two `data-quality-issue-NON_ISO_CURRENCY` rows, none showing a raw key, each
  *     showing its own value and its suggestion (or candidates) and nothing of the other's value; no
- *     `data-quality-cta-NON_ISO_CURRENCY` and no asset button, while the sibling's `data-quality-cta-MISSING_FX_MARKET`
- *     is drawn in the same mount (the presence barrier of the absence);
+ *     `data-quality-cta-NON_ISO_CURRENCY`, no asset button and nothing else to press in their rows, while the sibling's
+ *     action is drawn in the same mount (the presence barrier of the absence): grouped, the chip of its pair
+ *     `data-quality-fx-pair-EUR-USD`, since an `add_fx_pair` acts on one pair at a time (the layout of 19/10/2026,
+ *     `DataQualityBanner.layout.test.ts`); flat, its `data-quality-cta-MISSING_FX_MARKET`;
  *   - DQN-04: the generated API client accepts the issue. zodios validates every response with it
  *     (`zodios-client.ts`, `validate: 'response'`): an IssueCode the client does not know rejects the whole report, and
  *     the Dashboard of a user with a stored `978` loses its data instead of showing the warning.
@@ -34,7 +36,7 @@
  * absence of a CTA hold today already: the banner needs no change.
  */
 import {afterEach, beforeAll, describe, expect, it} from 'vitest';
-import {cleanup, fireEvent, render, screen, setupI18n} from '$test/component';
+import {cleanup, fireEvent, render, screen, setupI18n, within} from '$test/component';
 import {schemas} from '$lib/api/generated';
 import type {SupportedLocale} from '$lib/i18n';
 import en from '$lib/i18n/en.json';
@@ -84,7 +86,7 @@ const AMBIGUOUS: DataQualityIssue = {
     group_key: 'non_iso_currency:Bolívar Soberano',
 };
 
-/** A canonical pair missing beside them: its CTA, drawn in the same mount, is the barrier of the absence of theirs. */
+/** A canonical pair missing beside them: its action (grouped, its pair's chip; flat, its CTA), drawn in the same mount, is the barrier of the absence of theirs. */
 const SIBLING: DataQualityIssue = {
     domain: 'portfolio',
     code: 'MISSING_FX_MARKET',
@@ -130,10 +132,15 @@ function expectEachRowShowsItsOwnValue(rows: HTMLElement[]): void {
     }
 }
 
-/** No CTA and no asset button for a NON_ISO_CURRENCY issue; asked once the sibling's CTA is proven drawn. */
+/** No action of any kind for a NON_ISO_CURRENCY issue — no CTA, no asset button, no pair chip; asked once the sibling's action is proven drawn. */
 function expectNoActionForNonIso(): void {
     expect(screen.queryByTestId(`data-quality-cta-${NON_ISO}`), 'no CTA: nothing to add, sync or open').toBeNull();
     expect(screen.queryByTestId(`data-quality-nav-assets-${NON_ISO}`), 'no asset button: the issue has no CTA').toBeNull();
+    // Whatever shape an action takes (one button, a chip per asset, a chip per pair), it is a button inside the row.
+    for (const row of screen.getAllByTestId(`data-quality-issue-${NON_ISO}`)) {
+        const buttons = [...row.querySelectorAll('button')].map((button) => button.getAttribute('data-testid'));
+        expect(buttons, 'nothing to press in a NON_ISO_CURRENCY row: no CTA, no asset button, no pair chip').toEqual([]);
+    }
 }
 
 beforeAll(async () => {
@@ -154,8 +161,9 @@ describe('DataQualityBanner — two NON_ISO_CURRENCY issues', () => {
         await fireEvent.click(toggle);
         expect(toggle, 'unfolded').toHaveAttribute('aria-expanded', 'true');
 
-        // The presence barrier of the absences below: in this very mount, an issue with a CTA draws it.
-        expect(screen.getByTestId('data-quality-cta-MISSING_FX_MARKET')).toBeVisible();
+        // The presence barrier of the absences below: in this very mount, an issue with an action draws it. Grouped, an
+        // add_fx_pair acts on one pair at a time (the layout of 19/10/2026): its action is the chip of its pair.
+        expect(within(screen.getByTestId('data-quality-issue-MISSING_FX_MARKET')).getByTestId('data-quality-fx-pair-EUR-USD')).toBeVisible();
         expectEachRowShowsItsOwnValue(screen.getAllByTestId(`data-quality-issue-${NON_ISO}`));
         expectNoActionForNonIso();
     });

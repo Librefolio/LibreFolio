@@ -96,7 +96,7 @@ The single source of truth for all financial operations. Each transaction belong
 | `broker_id` | FK to broker — required |
 | `asset_id` | FK to asset — nullable for cash-only ops (DEPOSIT, WITHDRAWAL) |
 | `type` | `TransactionType` value: BUY, SELL, DIVIDEND, INTEREST, DEPOSIT, WITHDRAWAL, FEE, TAX, ADJUSTMENT, TRANSFER, FX_CONVERSION, CASH_TRANSFER. A plain `VARCHAR(32)` with no `CHECK` constraint; databases created before 22/09/2026 still declare `VARCHAR(14)`, which SQLite does not enforce — see [Migrations](index.md#enum-column-length) |
-| `date` | Settlement date |
+| `date` | Trade date: the day the operation was made, not the day its cash settles (B-52) |
 | `quantity` | Signed asset delta (+in, −out). Default 0, NOT NULL. `RealDecimal(22, 10)`: up to 15 digits before the decimal point (decision N63) and 10 decimal places, read back as written (see [Decimal Columns](index.md#decimal-columns)) |
 | `amount` | Signed cash delta (+in, −out). Default 0, NOT NULL. `RealDecimal(18, 6)`: up to 15 digits before the decimal point (decision N63) and 6 decimal places, read back as written (see [Decimal Columns](index.md#decimal-columns)) |
 | `currency` | ISO 4217 code — required when amount ≠ 0 |

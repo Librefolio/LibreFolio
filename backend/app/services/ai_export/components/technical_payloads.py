@@ -25,6 +25,7 @@ Design notes:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date
 from typing import Annotated, Literal, Union
 
@@ -86,6 +87,43 @@ class ReturnVolatilityBucket(TechnicalBucket):
     volatility: float | None = None
 
 
+class SeriesGap(StrictModel):
+    """A run of whole empty buckets, merged, while markets were open (E-23): no price or rate stored in it.
+
+    It holds at least one market-open day (Monday to Friday, not a market holiday of ``market_calendar``): weekends and
+    holidays alone are never a gap. ``last_value`` is the last value stored before it, on ``last_value_date``; both are
+    None when none is (the history begins inside the period). Missing data, never a zero.
+    """
+
+    start_date: date
+    end_date: date
+    calendar_days: int = Field(..., ge=1)
+    last_value: float | None = None
+    last_value_date: date | None = None
+
+    @model_validator(mode="after")
+    def validate_gap(self) -> SeriesGap:
+        if self.start_date > self.end_date:
+            raise ValueError("start_date must not follow end_date")
+        if self.calendar_days != (self.end_date - self.start_date).days + 1:
+            raise ValueError("calendar_days must match the inclusive gap range")
+        if (self.last_value is None) != (self.last_value_date is None):
+            raise ValueError("last_value and last_value_date are null together")
+        if self.last_value_date is not None and self.last_value_date >= self.start_date:
+            raise ValueError("the last value of a gap is stored before it")
+        return self
+
+
+def _validate_gaps(gaps: Sequence[SeriesGap], buckets: Sequence[TechnicalBucket]) -> None:
+    """Gaps in date order, apart, and never over a populated bucket (E-23)."""
+    for previous, current in zip(gaps, gaps[1:], strict=False):
+        if previous.end_date >= current.start_date:
+            raise ValueError("gaps are in date order and do not overlap")
+    for gap in gaps:
+        if any(bucket.observation_count and bucket.start_date <= gap.end_date and gap.start_date <= bucket.end_date for bucket in buckets):
+            raise ValueError("a gap never covers a populated bucket")
+
+
 class AssetPriceSeriesPayload(StrictModel):
     """One held asset's price/return OHLC-bucketed series (Portfolio/Broker universe)."""
 
@@ -98,17 +136,66 @@ class AssetPriceSeriesPayload(StrictModel):
     buckets: tuple[PriceBucket, ...]
     latest_close: float | None = None
     latest_date: date | None = None
+    price_gaps: tuple[SeriesGap, ...] = Field(default=(), description="Runs of empty buckets with a market-open day, merged, each with the last price stored before it (E-23).")
+
+    @model_validator(mode="after")
+    def validate_price_gaps(self) -> AssetPriceSeriesPayload:
+        _validate_gaps(self.price_gaps, self.buckets)
+        return self
+
+
+#: Why an eligible asset has no price series in a technical payload (E-AI503, E-23), decided on the price points the
+#: price history returned for it, never on its type: no point at all (no price stored up to the period end), points that
+#: do not share one currency, or points that are all carried from before the period (no price stored inside it).
+PriceSeriesGapReason = Literal["no_stored_price", "mixed_price_currencies", "no_price_in_period"]
+
+
+class AssetPriceSeriesGapPayload(StrictModel):
+    """An eligible held asset with no price series in this payload, and why (E-AI503)."""
+
+    asset_id: int
+    portfolio_weight_ratio: float | None = Field(
+        None,
+        description="Gross absolute open-position value of this unique asset / gross eligible exposure, as for the assets with a series. Fraction in [0,1]; None if weightless.",
+    )
+    reason_code: PriceSeriesGapReason
+    currency: CurrencyCode | None = Field(None, description="For no_price_in_period: the currency of the prices stored before the period; None for the other reasons.")
+    last_close: float | None = Field(None, description="For no_price_in_period: the last price stored before the period; None for the other reasons.")
+    last_close_date: date | None = Field(None, description="For no_price_in_period: the date of last_close; None for the other reasons.")
+
+    @model_validator(mode="after")
+    def validate_last_price(self) -> AssetPriceSeriesGapPayload:
+        expected = self.reason_code == "no_price_in_period"
+        if any((value is not None) != expected for value in (self.currency, self.last_close, self.last_close_date)):
+            raise ValueError("currency, last_close and last_close_date are set exactly for no_price_in_period")
+        return self
 
 
 class AssetOhlcReturnsPayload(StrictModel):
-    """`asset.ohlc_returns`: single-target observed-close bucket series."""
+    """`asset.ohlc_returns`: single-target observed-close bucket series.
+
+    Without a price series (E-AI503) ``reason_code`` says why and the buckets stay, all empty: ``currency`` is None for
+    no_stored_price and mixed_price_currencies, and stays for no_price_in_period (E-23), whose last stored price is the
+    ``last_value`` of the period's gap in ``price_gaps``.
+    """
 
     asset_id: int
-    currency: CurrencyCode
+    currency: CurrencyCode | None = Field(..., description="Native currency of the price series; None exactly for no_stored_price and mixed_price_currencies (see reason_code).")
+    reason_code: PriceSeriesGapReason | None = Field(None, description="Why there is no price series (no_stored_price, mixed_price_currencies, no_price_in_period); None when there is one.")
     price_basis: Literal["observed_close"] = "observed_close"
     buckets: tuple[PriceBucket, ...]
     latest_close: float | None = None
     latest_date: date | None = None
+    price_gaps: tuple[SeriesGap, ...] = Field(default=(), description="Runs of empty buckets with a market-open day, merged, each with the last price stored before it (E-23).")
+
+    @model_validator(mode="after")
+    def validate_series_gap(self) -> AssetOhlcReturnsPayload:
+        if (self.currency is None) != (self.reason_code in ("no_stored_price", "mixed_price_currencies")):
+            raise ValueError("currency is null exactly when reason_code is no_stored_price or mixed_price_currencies")
+        if self.reason_code is not None and (any(bucket.observation_count for bucket in self.buckets) or self.latest_close is not None or self.latest_date is not None):
+            raise ValueError("without a price series no bucket is populated and there is no latest close")
+        _validate_gaps(self.price_gaps, self.buckets)
+        return self
 
 
 class PortfolioTechnicalPricesPayload(StrictModel):
@@ -116,6 +203,10 @@ class PortfolioTechnicalPricesPayload(StrictModel):
 
     price_basis: Literal["observed_close"] = "observed_close"
     assets: tuple[AssetPriceSeriesPayload, ...]
+    uncovered_assets: tuple[AssetPriceSeriesGapPayload, ...] = Field(
+        ...,
+        description="Eligible assets with no price series in this payload, each with its reason (no_stored_price, mixed_price_currencies, no_price_in_period), ordered by asset_id. Decided on the price points returned, never on the asset type.",
+    )
     eligible_asset_count: int = Field(
         ...,
         ge=0,
@@ -136,6 +227,17 @@ class PortfolioTechnicalPricesPayload(StrictModel):
         ge=0,
         description="Eligible assets with a returned price series in this payload (subset of eligible_asset_count). Unit: assets.",
     )
+
+    @model_validator(mode="after")
+    def validate_universe(self) -> PortfolioTechnicalPricesPayload:
+        if self.covered_asset_count != len(self.assets):
+            raise ValueError("covered_asset_count must equal the number of assets with a price series")
+        if self.eligible_asset_count != len(self.assets) + len(self.uncovered_assets):
+            raise ValueError("eligible_asset_count must equal the assets with a price series plus uncovered_assets")
+        asset_ids = [asset.asset_id for asset in self.assets] + [asset.asset_id for asset in self.uncovered_assets]
+        if len(asset_ids) != len(set(asset_ids)):
+            raise ValueError("an asset is listed at most once across assets and uncovered_assets")
+        return self
 
 
 class TechnicalDatedValue(StrictModel):
@@ -526,6 +628,12 @@ class FxRateOhlcPayload(StrictModel):
     buckets: tuple[PriceBucket, ...]
     latest_rate: float | None = None
     latest_date: date | None = None
+    rate_gaps: tuple[SeriesGap, ...] = Field(default=(), description="Runs of empty buckets with a market-open day, merged, each with the last rate stored before it (E-23).")
+
+    @model_validator(mode="after")
+    def validate_rate_gaps(self) -> FxRateOhlcPayload:
+        _validate_gaps(self.rate_gaps, self.buckets)
+        return self
 
 
 class FxReturnsVolatilityPayload(StrictModel):
@@ -549,6 +657,7 @@ __all__ = [
     "PortfolioTechnicalPricesPayload",
     "PriceBucket",
     "ReturnVolatilityBucket",
+    "SeriesGap",
     "SingleTargetIndicatorsPayload",
     "TechnicalBucket",
     "TechnicalDatedValue",

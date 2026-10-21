@@ -131,6 +131,7 @@ import {
 import {closeProviderCompare, fitScreenToCompareDialog, mockProviderCompare, openProviderCompare, restoreCompareScreen, settleProviderCompareShot} from './fixtures/galleryProviderCompare';
 import {expectGalleryEmailStatus, serveGalleryEmailStatus} from './fixtures/galleryEmail';
 import {expectGalleryBackupReady, serveGalleryBackupJob} from './fixtures/galleryBackup';
+import {expectGallerySecurityServed, gallerySecurityReads, serveGallerySecurityChecks} from './fixtures/gallerySecurity';
 import {extendScreenToBlock, fitScreenToDialog, PAGE_BLOCK, restoreTallScreen} from './fixtures/galleryTallShots';
 import {boxStill, bringIntoViewFromTop, captureShot, COLUMN_FILTER_GAP, DROPDOWN_GAP, expectDropdownAt, frameTarget, logApiOnFailure, scrollStill, settledToOpen, settleShot, type ShotOptions, trackApiRequests} from './fixtures/galleryShot';
 import {brimFileId, chooseTheme, closePreview, FILES_SAMPLES, filesTableReady, fontsLoaded, gridPreviewReady, imagePreviewReady, imagesInViewLoaded, languageMenuClosed, markdownPreviewReady, openPreview, pdfPreviewReady, staticFileId, textPreviewReady} from './fixtures/galleryFiles';
@@ -498,6 +499,10 @@ test.describe('Gallery Screenshots', () => {
     // The gallery is offline and deterministic as well: no page reaches a real price or exchange-rate provider, or
     // writes a price. The live-price poll and the provider catalogue are answered from fixtures, a provider search as
     // offline, and a sync, a metadata refresh or a provider probe is aborted (galleryReportSets.ts, guardGalleryOffline).
+    // An administrator's security checks are answered from a fixture too, all `ok`, on every page (gallerySecurity.ts,
+    // serveGallerySecurityChecks): the lane runs with the login limit off, a test lane's warning that the sidebar's
+    // connection line (N69b) would draw as a dot on every administrator's page, on the phone's menu button and on the
+    // Settings badge with it. Registered after the offline guard, so tried before it.
     // With any route installed Playwright aborts every image whose URL ends in /favicon.ico — the brokers' logos, most
     // import plugins' icons, FED's and SNB's — so the pages write those URLs with a query that keeps them loading: an
     // init script, in force from the next document, so before the first navigation (keepFaviconImagesLoading).
@@ -510,6 +515,7 @@ test.describe('Gallery Screenshots', () => {
         await setBrowserLocale(page, 'en');
         await hideGalleryTempData(page);
         await guardGalleryOffline(page);
+        await serveGallerySecurityChecks(page);
         await keepFaviconImagesLoading(page);
     });
 
@@ -1839,6 +1845,10 @@ test.describe('Gallery Screenshots', () => {
      * Offline as every shot: the outer beforeEach's routes match paths and third-party hosts, never the baseURL's origin,
      * so they hold under the LAN name; the two listings hideGalleryTempData filters in Node are read through the baseURL
      * (keepTempDataHiddenUnder), and the outer afterEach gives the verdict (expectGalleryOffline).
+     *
+     * The administrator's security checks are the gallery fixture's, all ok (gallerySecurity.ts) — its route matches the
+     * path as well, so it holds under the LAN name —, so the line carries no dot and its details no link to the checks: the
+     * picture is the one of the user page's opening section, not of its «Security Warnings for Administrators» section.
      */
     test.describe('Security', () => {
         /** The runner's baseURL origin: the lane serves plain HTTP, and the shot is that of an http: page. */
@@ -1923,6 +1933,8 @@ test.describe('Gallery Screenshots', () => {
             await expectGuardHoldsOnPage(page);
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
+                // Read before the load: its own read of the security checks is the one counted after it (expectGallerySecurityServed).
+                const securityReads = gallerySecurityReads(page);
                 // One full load per combination, in its language and theme: the line asks the server once per load, and
                 // every chart behind draws once.
                 await page.goto(`${lan}/dashboard`);
@@ -1937,6 +1949,15 @@ test.describe('Gallery Screenshots', () => {
                 await expect(line, 'the server answered the line (GET /api/v1/system/connection)').toHaveAttribute('data-server-checked', 'true', {timeout: 15_000});
                 await expect(line).toHaveAttribute('data-level', 'local');
                 await expect(line).toHaveAttribute('data-reason', 'lan');
+
+                // The administrator's security checks: this load's read answered from the gallery's fixture first — before its
+                // answer the line says 0 too —, then nothing counted, all ok (gallerySecurity.ts). No dot on the shield, nor on
+                // the phone's burger: the level is local, not insecure.
+                await expectGallerySecurityServed(page, securityReads);
+                await expect(line, 'nothing counted: the gallery answers every security check ok (gallerySecurity.ts)').toHaveAttribute('data-security-attention', '0');
+                await expect(line, 'no severity: nothing asks for the administrator (gallerySecurity.ts)').toHaveAttribute('data-security-severity', 'none');
+                await expect(line.getByTestId('connection-security-attention-dot'), 'no dot on the shield: the gallery answers every security check ok (gallerySecurity.ts)').toHaveCount(0);
+                await expect(page.getByTestId('mobile-menu-security-dot'), 'no dot on the burger: the level is local, not insecure, and nothing is counted').toHaveCount(0);
 
                 // On a phone the sidebar is the drawer: the burger opens it.
                 if (viewport === 'mobile') {
@@ -1955,6 +1976,7 @@ test.describe('Gallery Screenshots', () => {
                 await expect(details.getByTestId('connection-security-reason')).toBeVisible();
                 await expect(link, 'the link opens the user page in the language of the UI').toHaveAttribute('href', connectionDocsHref(lang));
                 await expect(details.getByTestId('connection-security-admin-warning'), 'no cookie line: the page is plain HTTP').toHaveCount(0);
+                await expect(details.getByTestId('connection-security-attention-link'), 'no link to the security checks: the gallery answers every one ok (gallerySecurity.ts)').toHaveCount(0);
 
                 // Settled, then in frame: the KPI cards' count-up and the growth chart behind, every image, nothing moving.
                 await textStill(page.getByTestId('kpi-row'), 'the KPI cards');

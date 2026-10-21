@@ -22,6 +22,7 @@
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
+    import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
@@ -208,7 +209,7 @@
         if (!(await waitForRenderableContainer(container, generation))) return;
 
         if (!chartInstance || chartInstance.isDisposed()) {
-            chartInstance = echarts.init(container, CHART_INIT_THEME, {renderer: 'canvas'});
+            chartInstance = echarts.init(container, CHART_INIT_THEME, chartInitOptions(container));
             attachChartReady(chartInstance, container, 'semi-donut');
             needsInitialLayoutStabilityPass = true;
         }

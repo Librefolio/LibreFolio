@@ -14,15 +14,18 @@ change in % and the yearly rate.
 ### 📏 Step 1: Turn on measure mode
 
 Click 📏 (**Add measurement**) at the top right of the chart. The **Measures** panel below the chart
-opens and reads **Active — click chart**.
+opens and reads **Active — click chart**; over the chart the pointer becomes a crosshair.
 
 ### 📍 Step 2: Click the start point
 
-A hint shows the date and rate you picked; a dashed line follows the pointer.
+A hint shows the date and rate you picked; a dashed line follows the pointer. A measurement needs two
+different days: back over the start's day, the line disappears and the pointer shows the
+*not allowed* sign (🚫), and a second click there does nothing.
 
 ### 🏁 Step 3: Click the end point
 
-The measurement is added and measure mode turns off. The two dates are put in order for you.
+Click a point on another day. The measurement is added and measure mode turns off. The two dates are
+put in order for you.
 
 ??? tip "➕ The whole period in one click — handy on a phone"
 
@@ -34,8 +37,9 @@ The measurement is added and measure mode turns off. The two dates are put in or
 ## 📊 Read a measurement
 
 Each measurement is a card showing its dates, the change in % and the number of calendar days; you
-can also set its line's colour and style. Expand it to change the dates and to see **Start**,
-**End**, **Δ Abs**, **Δ %** and **Δ%/yr** for the pair and for each overlay on the same axis.
+can also set its line's colour and style. Expand it to change the dates, again two different days,
+and to see **Start**, **End**, **Δ Abs**, **Δ %** and **Δ%/yr** for the pair and for each overlay on
+the same axis.
 
 **Δ%/yr** is the yearly rate (CAGR), with $d$ the calendar days between the two dates:
 

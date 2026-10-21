@@ -34,7 +34,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from backend.app.config import get_data_dir
 from backend.app.logging_config import get_logger
 from backend.app.schemas.backup import RestoreOutcome
-from backend.app.services.platform.instance_backup.paths import BackupPathError, is_plain_dir, outcome_ticket_path, restore_dir
+from backend.app.services.platform.instance_backup.paths import BackupPathError, is_plain_dir, outcome_ticket_path, read_regular_file, restore_dir
 
 if TYPE_CHECKING:
     from backend.app.services.platform.instance_backup.apply import RestoreState
@@ -135,11 +135,10 @@ def issue_ticket(stage_id: str, *, data_dir: Path | None = None, now: datetime |
 
 
 def _read_record(data_dir: Path) -> OutcomeTicket | None:
-    """The ticket file, read without following a link; ``None`` when there is none or it cannot be read: logged as an
-    error once while the same failure lasts (``_report``, B-42)."""
+    """The ticket file, read without following a link nor waiting on a FIFO (B-53); ``None`` when there is none or it
+    cannot be read: logged as an error once while the same failure lasts (``_report``, B-42)."""
     try:
-        with os.fdopen(os.open(outcome_ticket_path(data_dir), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)), "rb") as handle:
-            raw = handle.read(_MAX_RECORD_BYTES + 1)
+        raw = read_regular_file(outcome_ticket_path(data_dir), limit=_MAX_RECORD_BYTES + 1)
     except FileNotFoundError:
         _forget(data_dir)
         return None

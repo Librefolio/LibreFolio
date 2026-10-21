@@ -3,7 +3,7 @@ import {AI_EXPORT_PAGE_FEATURE_LABEL_KEYS, AI_EXPORT_PAGE_LABEL_KEYS, AI_EXPORT_
 import {renderFencedSection, serializeYaml} from '../serialization';
 import {findAiExportResponseContract} from './responseContracts';
 import {renderSnapshotDataText, type RenderedSnapshotDataText, type SnapshotFormatDiagnostics, type SnapshotSignalMetric} from './snapshotDataRenderer';
-import {AI_EXPORT_DOMAIN_NOTES, AI_EXPORT_SHARED_VERIFICATION_INSTRUCTIONS, findAiExportAnalysisInstruction} from './sharedInstructions';
+import {AI_EXPORT_ANSWER_FOCUS_INSTRUCTIONS, AI_EXPORT_DATA_RECEIVED_KEY, AI_EXPORT_DOMAIN_NOTES, AI_EXPORT_SHARED_VERIFICATION_INSTRUCTIONS, aiExportReplyInstructions, findAiExportAnalysisInstruction} from './sharedInstructions';
 
 export const AI_EXPORT_RESPONSE_LANGUAGE_DISPLAY_NAMES = ['English', 'Italian', 'French', 'Spanish'] as const;
 export type AiExportResponseLanguageDisplayName = (typeof AI_EXPORT_RESPONSE_LANGUAGE_DISPLAY_NAMES)[number];
@@ -47,7 +47,7 @@ export interface RenderedAiExportPrompt {
     readonly stats: AiExportPromptStats;
 }
 
-export type AiExportPromptSectionId = 'analysis_objective' | 'shared_verification_instructions' | 'response_contract' | 'snapshot_metadata' | 'snapshot_data' | 'additional_librefolio_data' | 'domain_notes' | 'user_notes' | 'legal_notice' | 'response_language';
+export type AiExportPromptSectionId = 'analysis_objective' | 'shared_verification_instructions' | 'response_contract' | 'snapshot_metadata' | 'snapshot_data' | 'additional_librefolio_data' | 'domain_notes' | 'user_notes' | 'answer_focus' | 'legal_notice' | 'response_language' | 'reply_instructions';
 
 export interface AiExportPromptDiagnosticTextBlock {
     readonly id: string;
@@ -346,6 +346,21 @@ function renderLegalNotice(input: RenderAiExportPromptInput): string {
     return [`## ${translate('legal.title')}`, '', translate('legal.disclaimer')].join('\n');
 }
 
+/** Request Analysis' closing instruction (E-24): answer the question from the data, never restate the data. Fixed English. */
+function renderAnswerFocus(): string {
+    return `## Answer Focus\n\n${AI_EXPORT_ANSWER_FOCUS_INSTRUCTIONS}`;
+}
+
+/**
+ * Export Data's last word (E-24): data only, already seen in LibreFolio, so the assistant answers only a question the
+ * user adds, and otherwise replies with the catalogue's sentence (`AI_EXPORT_DATA_RECEIVED_KEY`), in the interface
+ * language through the caller's `translate`, as the legal notice. Fixed English around that one sentence.
+ */
+function renderReplyInstructions(input: RenderAiExportPromptInput): string {
+    const translate = input.translate ?? ((key: string) => key);
+    return `## Reply Instructions\n\n${aiExportReplyInstructions(translate(AI_EXPORT_DATA_RECEIVED_KEY))}`;
+}
+
 function isTrustedResponseLanguage(value: string): value is AiExportResponseLanguageDisplayName {
     return AI_EXPORT_RESPONSE_LANGUAGE_DISPLAY_NAMES.some((language) => language === value);
 }
@@ -377,7 +392,9 @@ function buildAiExportPrompt(input: RenderAiExportPromptInput, diagnostics: bool
         sections.push({id: 'additional_librefolio_data', content: renderAdditionalData(input)});
         sections.push({id: 'domain_notes', content: renderDomainNotes(input.snapshot)});
         if (notes) sections.push({id: 'user_notes', content: renderUserNotes(notes)});
-        // Before the response language: the app's trusted instruction stays the prompt's last word (J, A9)
+        // The trusted closing, after the untrusted user notes: the answer focus (E-24), the legal notice, then the response
+        // language, the prompt's last word (J, A9)
+        sections.push({id: 'answer_focus', content: renderAnswerFocus()});
         sections.push({id: 'legal_notice', content: renderLegalNotice(input)});
         sections.push({
             id: 'response_language',
@@ -387,6 +404,8 @@ function buildAiExportPrompt(input: RenderAiExportPromptInput, diagnostics: bool
         sections.push({id: 'snapshot_metadata', content: snapshotMetadata.content});
         sections.push({id: 'snapshot_data', content: snapshotData.content});
         sections.push({id: 'legal_notice', content: renderLegalNotice(input)});
+        // Export Data's last word: how to reply, never a restatement of the data (E-24)
+        sections.push({id: 'reply_instructions', content: renderReplyInstructions(input)});
     }
 
     const prompt = sections.map((section) => section.content).join(SECTION_SEPARATOR);

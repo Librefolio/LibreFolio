@@ -304,6 +304,9 @@
         }
       }
     },
-    "tooManyPriceDays": "Esta exportación leería demasiados días de precios. Elige un periodo más corto."
+    "tooManyPriceDays": "Esta exportación leería demasiados días de precios. Elige un periodo más corto.",
+    "replyInstructions": {
+      "dataReceived": "Datos recibidos, estoy listo para escuchar tus preguntas."
+    }
   }
 }
