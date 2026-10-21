@@ -117,10 +117,8 @@ const GETTER_LEAVES =
  * Callers that copy a getter once, each with what it costs and who can cure it. The list only shrinks: a caller that
  * stops copying must leave it.
  */
-const KNOWN_COPIES: Readonly<Record<string, string>> = {
-    'lib/components/charts/LineChart.svelte':
-        "`pendingColor = PRICE_SERIES.pendingEditPoint`, a prop fallback Svelte caches: the unsaved-edit points keep the theme they were built in. Cure at the use site: `pendingColor ?? PRICE_SERIES.pendingEditPoint` where the option is built (LineChart's owner).",
-};
+// The LineChart pending-edit copy was cured by Y (`ebe64831e`): no known copy is left.
+const KNOWN_COPIES: Readonly<Record<string, string>> = {};
 
 describe('the callers — no production source copies a theme-dependent getter once, but the known ones', () => {
     /** Why a line copies a getter once, or `null`: a module-level constant, a destructuring or prop default, or a spread. */
