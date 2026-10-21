@@ -10147,3 +10147,64 @@ mescolare le righe del runner dei due lotti:
 > Un `aud` mancante dà `wrong_audience` (HPT-029).
 > **Da aggiungere nel checkpoint 2**: `panel_tickets.sqlite3` nei `managed_paths` di `validate_test_data_dir`
 > (segnalato da TA-T2).
+
+**Passi del checkpoint 2** (21/10, ondata 2 su Linux, base `89e8b2e61`, corsia 6181):
+1. ✅ **Rossi confermati** (21/10). Tre azioni nel runner (`services hosting-panel-tickets`, `hosting-panel-registry`,
+   `hosting-panel-access-tickets`), poi le corse: 212 falliti, 23 errori, 84 falliti, tutti per il motivo giusto (moduli
+   e lettori mancanti; il controllo all'avvio che non legge le chiavi; 404 dove servono 200/401).
+2. ✅ **Cura di L2** (21/10).
+   > **Note implementazione**: `config/hosting_panel.py` (i tre lettori), `hosting_panel/tickets.py`,
+   > `hosting_panel/ticket_registry.py`, `access.py` (biglietti dopo il token, `PanelCaller` con `kid`/`jti`), il controllo
+   > `check_hosting_panel` (chiavi, tolleranza, indirizzo → `error` `hostingPanel.ticketsUnusable`; nel gestito un token
+   > accanto alle chiavi → `warning` `hostingPanel.coexisting`, anche il token del backup), `panel_tickets.sqlite3` nei
+   > `managed_paths`, due chiavi nuove e i testi `off`/`ok` aggiornati in `i18n/instance/*.json` (4 lingue), `.env.example`,
+   > le descrizioni OpenAPI della rotta di stato e degli schemi Bearer.
+   > **⚠️ Fuori pista**: le bozze `dry2/` riprese con tre differenze. (a) PyJWT verifica solo la firma con `PyJWS.decode`
+   > e il JSON lo legge `tickets.py`: con `jwt.decode` PyJWT 2.10+ controlla da sé `jti`/`sub`/`iss` e un `jti` non stringa
+   > diventava «non verificabile» invece di `panel_ticket_invalid`. (b) Il `kid` di una chiave sconosciuta nel log è
+   > tagliato a 64 caratteri (è testo del chiamante). (c) Il registro chiude in `TicketRegistryError` anche un errore di
+   > configurazione della tolleranza, crea il file con `O_NOFOLLOW`, e l'errore si scrive con `exc_info`. Ruff C901:
+   > `verify_ticket` e la dipendenza spezzate in funzioni piccole (`_signed_claims`/`_checked_claims`,
+   > `_read_ticket_settings`/`_ticket_caller`).
+   > Le descrizioni 401/404/503 delle rotte di B (`backup/panel.py`) e Z (`system/wake.py`) parlano ancora solo di token:
+   > non le ho toccate (file di B e Z), segnalate al coordinatore.
+3. ✅ **Verdi** (21/10): `hosting-panel-tickets` 212, `hosting-panel-registry` 23, `hosting-panel-access-tickets` 84,
+   `hosting-panel-vectors` 11; vicine: `hosting-panel-access` 102, `config-audit` 255, `config-env-example` 39,
+   `backup-checks` 93, `sleep-wake-activity` 139, `api hosting-panel-routes` 15, `panel-status` 20, `backup-panel` 66,
+   `instance-block` 62, `system-wake` 76, `backup` 23, `system` 122. `api sync` senza diff tracciati; `i18n check` ok;
+   ruff e black puliti sui file toccati.
+4. ✅ **Doc e vettori di prova** (21/10, docs-writer): `hosting_providers.en.md` (`#panel-api-tickets`,
+   `#panel-api-ticket-refusals`, `#panel-api-registry`, `#panel-api-rotation`, `#panel-api-test-vectors`, più le frasi rese
+   false da L2), `security.md#panel-access`. Il blocco JSON dei vettori (chiave di prova da un seme pubblicato, biglietto,
+   7 verdetti ai bordi della tolleranza) lo legge `test_hosting_panel_vectors.py` (test-author, HPV-001..005, azione
+   `services hosting-panel-vectors`). `mkdocs build` (stretto) ok, `check-links` 97 validi. Debito di traduzione vero per
+   `hosting_providers` it/fr/es: niente stamp.
+5. ✅ **Auto-revisione di sicurezza** (21/10, `security-review` sul solo diff di CP2): nessuna vulnerabilità alta o
+   media. Scartati sotto soglia: audience per origine (due istanze sotto un host con prefissi diversi), enumerazione dei
+   `kid` con `unknown_key`.
+6. ✅ **I tre punti bassi della revisione indipendente** (21/10, richiesta del coordinatore dopo il primo CHECKPOINT READY).
+   > **Note implementazione**:
+   > - **Potatura**: il registro cancella le righe con `expires_at < now − PRUNE_MARGIN_SECONDS`, cioè 600 s
+   >   (`PANEL_CLOCK_SKEW_MAX_SECONDS` + `TICKET_MAX_LIFETIME_SECONDS`), e non legge più la tolleranza. Prima potava al bordo
+   >   di `verify_ticket` (`now − skew`): un orologio che torna indietro (passo NTP, ripresa di una VM) o una tolleranza
+   >   alzata al riavvio facevano passare due volte un biglietto potato. Test: HPR-006 riscritto, HPR-012 nuovo (orologio
+   >   indietro, tolleranza alzata).
+   > - **Link simbolico**: `_create` usa `os.path.lexists`, poi `_ensure_regular_file` (`os.lstat`) rifiuta tutto ciò che
+   >   non è un file regolare con `TicketRegistryError` (il 503 dello scopo) prima di `sqlite3.connect`. Test: due ostacoli
+   >   nuovi in HPR-007/HPR-008 (link pendente, link a un SQLite valido); HPR-007 ora esige la classe `TicketRegistryError`.
+   > - **Audience con un percorso**: `panel_public_url_path()` in `config/hosting_panel.py`; con chiavi usabili e un
+   >   `LIBREFOLIO_PUBLIC_URL` con un percorso, `check_hosting_panel` dà `warning` `hostingPanel.audiencePath` `{path}` in ogni
+   >   profilo, prima dell'avviso `coexisting`. Il contratto non cambia (`aud` resta l'origine). Testo in 4 lingue. Test:
+   >   HPT-043a..d.
+   > - **Guida**: «un'origine per istanza», il fail closed voluto delle impostazioni inservibili, la potatura con margine e il
+   >   rifiuto del link (`hosting_providers.en.md`); la riga del registro in `security.md`.
+   > **⚠️ Fuori pista**: al primo giro i due ostacoli «link» di HPR-007 erano verdi e HPR-008 dava 500 per il motivo
+   > sbagliato. In modalità test `validate_test_data_dir` (la riga `panel_tickets.sqlite3` dei `managed_paths`) vede il link
+   > uscire dalla cartella dati e solleva `ValueError` prima del registro. I bersagli dei link sono ora dentro la cartella
+   > dati, così decide il controllo del registro. Rossi poi giusti: 13 nel registro (link seguito → `True`/200; potatura al
+   > bordo), 3 nel controllo all'avvio.
+   > **⚠️ Fuori pista**: `pipenv run` lanciato da `/tmp` per una prova ha creato un `/tmp/Pipfile` vuoto: rimosso subito.
+   > **Verdi**: `hosting-panel-tickets` 212, `hosting-panel-registry` 33, `hosting-panel-access-tickets` 93,
+   > `hosting-panel-vectors` 11, `config-audit` 255, `hosting-panel-access` 102, `config-env-example` 39; `i18n check` ok;
+   > ruff e black puliti; `mkdocs build` stretto ok, `check-links` 97.
+7. ⏳ Checkpoint 2: CHECKPOINT READY aggiornato al coordinatore, FROZEN.

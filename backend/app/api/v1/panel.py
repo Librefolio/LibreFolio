@@ -21,10 +21,12 @@ from backend.app.utils.datetime_utils import ensure_utc, utcnow
 panel_router = APIRouter()
 
 _RESPONSES: dict[int | str, dict] = {
-    401: {"description": "No token, or not the status token of this instance (code `panel_status_unauthorized`)"},
-    404: {"description": "The status route is off: no `LIBREFOLIO_PANEL_STATUS_TOKEN`"},
+    401: {
+        "description": "No credential, not the status token of this instance, or a ticket that cannot be verified (code `panel_status_unauthorized`); a signed ticket refused has its own code: `panel_ticket_expired`, `panel_ticket_not_yet_valid` (with `Retry-After`), `panel_ticket_wrong_audience`, `panel_ticket_wrong_scope`, `panel_ticket_invalid`, `panel_ticket_replayed`, `panel_ticket_unknown_key`"
+    },
+    404: {"description": "The status route is off: neither `LIBREFOLIO_PANEL_STATUS_TOKEN` nor `LIBREFOLIO_PANEL_PUBLIC_KEYS`"},
     429: {"description": "Too many refused panel credentials from this address (code `panel_too_many_attempts`, with `Retry-After`)"},
-    503: {"description": "The status token of this instance cannot be used (code `panel_status_unavailable`)"},
+    503: {"description": "The status token or the ticket settings of this instance cannot be used, or the registry of used tickets cannot be reached (code `panel_status_unavailable`)"},
 }
 
 

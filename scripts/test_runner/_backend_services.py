@@ -1479,6 +1479,38 @@ def services_hosting_panel_access(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Hosting panel access tests", verbose=verbose)
 
 
+def services_hosting_panel_tickets(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the hosting panel's signed tickets (H-61, L2): the readers of the keys, the clock tolerance and the audience, and verify_ticket, pure."""
+    print_section("Services: Hosting Panel Tickets")
+    print_info("Testing: backend/app/config/hosting_panel.py (L2 readers), backend/app/services/platform/hosting_panel/tickets.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_hosting_panel_tickets.py", test_names)
+    return run_command(cmd, "Hosting panel ticket tests", verbose=verbose)
+
+
+def services_hosting_panel_registry(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the registry of used panel tickets (H-61, L2): one jti accepted once, across restarts, threads and processes; pruning; an unusable file gives 503."""
+    print_section("Services: Hosting Panel Ticket Registry")
+    print_info("Testing: backend/app/services/platform/hosting_panel/ticket_registry.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_hosting_panel_registry.py", test_names)
+    return run_command(cmd, "Hosting panel ticket registry tests", verbose=verbose)
+
+
+def services_hosting_panel_access_tickets(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the signed tickets inside panel_access (H-61, L2): scopes, refusal codes, replay, the limiter counting only what proves nothing, the lines, the startup check."""
+    print_section("Services: Hosting Panel Access with Tickets")
+    print_info("Testing: backend/app/services/platform/hosting_panel/access.py (L2), backend/app/services/platform/config_audit.py (check_hosting_panel)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_hosting_panel_access_tickets.py", test_names)
+    return run_command(cmd, "Hosting panel access ticket tests", verbose=verbose)
+
+
+def services_hosting_panel_vectors(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the hosting panel's ticket test vectors in the admin guide (H-61, L2): the key, the ticket and every verdict, checked against the code."""
+    print_section("Services: Hosting Panel Ticket Test Vectors")
+    print_info("Testing: mkdocs_src/docs/admin/hosting_providers.en.md (#panel-api-test-vectors) against backend/app/services/platform/hosting_panel/tickets.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_hosting_panel_vectors.py", test_names)
+    return run_command(cmd, "Hosting panel ticket vector tests", verbose=verbose)
+
+
 def services_client_address(verbose: bool = False, test_names: list = None) -> bool:
     """Test the client address behind a trusted proxy: LIBREFOLIO_CLIENT_IP_HEADER, client_address and client_rate_key (P17); no function only for the tests (N58)."""
     print_section("Services: Client Address")
@@ -2911,6 +2943,42 @@ Note: No backend server required.
         name="Hosting Panel Access",
         desc="H-61 L1: LIBREFOLIO_PANEL_STATUS_TOKEN read as the backup and wake tokens are; panel_access(scope) for backup, wake and status: off 404 without a line, unusable 503 with the scope's code, Bearer only, constant-time compare, missing or different 401 with the scope's code, a token never opens another scope; 20 refused credentials per address in 10 minutes across scopes then 429 panel_too_many_attempts with Retry-After, none behind an untrusted proxy; one line per call, never a secret, a header, the query or the address",
         # PURE: fresh FastAPI apps in process, tokens through monkeypatch, the limiter replaced by one on a fake clock. No DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "hosting-panel-tickets",
+        services_hosting_panel_tickets,
+        name="Hosting Panel Tickets",
+        desc="H-61 L2: LIBREFOLIO_PANEL_PUBLIC_KEYS (kid:key, 1 to 4 entries, no _FILE, the entry named by position, never a key), LIBREFOLIO_PANEL_CLOCK_SKEW_SECONDS (0 to 300, default 60), the audience as the canonical origin of LIBREFOLIO_PUBLIC_URL; verify_ticket per scope: unverifiable (alg none, HS256 with the public key, typ, signature, over 2048 bytes) without a code, unknown kid, expired, not yet valid at the tolerance edges, lifetime 300/301, wrong or missing audience, wrong scope, jti rule, missing claims, the first defect wins",
+        # PURE: keys from fixed seeds, tickets signed with PyJWT, now fixed in 2033, variables through monkeypatch. No DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "hosting-panel-registry",
+        services_hosting_panel_registry,
+        name="Hosting Panel Ticket Registry",
+        desc="H-61 L2: DATA_DIR/panel_tickets.sqlite3, a jti accepted once in one process, after a module reload and in a new process; threads and spawned processes released together, exactly one accepted; pruning at the tolerance edges; an unusable file raises, is left as it was, and gives the scope's 503 through panel_access; created on first use with mode 0600, outside every archived entry, in the data directory of the moment",
+        # PURE: a data directory of its own under tmp_path per test, fixed clocks, barriers; spawned processes on the same file. No lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "hosting-panel-access-tickets",
+        services_hosting_panel_access_tickets,
+        name="Hosting Panel Access with Tickets",
+        desc="H-61 L2 in panel_access: the keys alone turn a scope on, token and keys together (beta), two keys, the canonical audience; each signed refusal its panel_ticket_* code with a Bearer challenge, never counted, Retry-After 5 when not yet valid; unverifiable tickets the scope's 401, counted; replay; registry out of reach 503; 20 refusals that prove nothing close the address, signed refusals never do; no ticket or Authorization in any answer or line; check_hosting_panel error, ok and the managed coexisting warning",
+        # PURE: fresh FastAPI apps in process, keys from fixed seeds, the registry under tmp_path, the limiter on a fake clock. No lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "hosting-panel-vectors",
+        services_hosting_panel_vectors,
+        name="Hosting Panel Ticket Test Vectors",
+        desc="H-61 L2: the JSON block after #panel-api-test-vectors in the admin guide: the seed derives the public key and LIBREFOLIO_PANEL_PUBLIC_KEYS, the ticket is the header and payload signed by it (byte for byte), each verdict row is what verify_ticket answers through the real readers, and the rows cover both tolerance edges, the wrong scope and the wrong audience",
+        # PURE: reads one docs page from the repository; variables through monkeypatch; no clock, DB or server.
         isolation="pure",
     )
     add_test(
