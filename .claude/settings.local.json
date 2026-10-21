@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(nohup python3 dev.py server)",
+      "Bash(echo \"started pid $!\")",
+      "Bash(mkdir -p /private/tmp/claude-501/-Users-ea-enel-Documents-00-My-LibreFolio/2ff0c396-e502-4c12-8476-302b8eb55f5d/scratchpad)",
+      "Bash(python3 dev.py server)",
+      "Bash(awk '{print $5, $9}')",
+      "Bash(mkdir -p /private/tmp/claude-501/-Users-ea-enel-Documents-00-My-LibreFolio/2ff0c396-e502-4c12-8476-302b8eb55f5d/scratchpad/shots)",
+      "Bash(cp /var/folders/8w/ftsp04dx7q992x2__cv59tdm0000gn/T/claude-chrome-screenshots-BOVvtN/screenshot-1784890067865-0.jpg /private/tmp/claude-501/-Users-ea-enel-Documents-00-My-LibreFolio/2ff0c396-e502-4c12-8476-302b8eb55f5d/scratchpad/shots/dashboard-light.jpg)",
+      "Bash(cp /var/folders/8w/ftsp04dx7q992x2__cv59tdm0000gn/T/claude-chrome-screenshots-BOVvtN/screenshot-1784890075367-1.jpg /private/tmp/claude-501/-Users-ea-enel-Documents-00-My-LibreFolio/2ff0c396-e502-4c12-8476-302b8eb55f5d/scratchpad/shots/dashboard-dark.jpg)",
+      "Bash(cp /var/folders/8w/ftsp04dx7q992x2__cv59tdm0000gn/T/claude-chrome-screenshots-BOVvtN/screenshot-1784890084628-2.jpg /private/tmp/claude-501/-Users-ea-enel-Documents-00-My-LibreFolio/2ff0c396-e502-4c12-8476-302b8eb55f5d/scratchpad/shots/language-menu.jpg)",
+      "Bash(cp /var/folders/8w/ftsp04dx7q992x2__cv59tdm0000gn/T/claude-chrome-screenshots-BOVvtN/screenshot-1784890091672-3.jpg /private/tmp/claude-501/-Users-ea-enel-Documents-00-My-LibreFolio/2ff0c396-e502-4c12-8476-302b8eb55f5d/scratchpad/shots/dashboard-english.jpg)",
+      "Bash(python3 -)",
+      "Artifact"
+    ]
+  }
+}

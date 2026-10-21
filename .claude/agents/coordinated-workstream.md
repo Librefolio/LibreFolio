@@ -386,3 +386,13 @@ This file was written for GitHub Copilot Desktop. In Claude Code the same coordi
 | `read_agent` / `write_agent` on a background agent | `Agent` tool and `SendMessage` to the agent id |
 
 Worktrees now live in `../LibreFolio-worktrees/` (Linux); the old `/Users/ea_enel/Documents/00_My/...` paths in older notes map to the folders of `LibreFolio_prj/`. Skills live flat in `.claude/skills/`.
+
+## Token efficiency: light agents first (added on the Linux migration)
+
+Do the work with small, cheap agents and keep your own context for decisions.
+
+- Split the work into **small, bounded tasks** (one file area, one question, one test file) and hand each to a sub-agent with a precise brief: goal, files, what is already ruled out, the expected short answer.
+- Pick the lightest model that can do the task. Use the `Agent` tool's `model`: `haiku` for searches, inventories, log reading and mechanical edits; `sonnet` for writing tests, docs, patches and routine lots; `opus` only for design, security-sensitive code, financial math and the final review of a risky lot.
+- Ask sub-agents for **short, structured reports** (a list, a verdict, file:line), not file dumps. Never paste long outputs back into your own context.
+- **You check, then advance.** Read the diff or the evidence of every sub-agent result before building on it; do not forward unverified claims to the developer or to another session.
+- Do not run several sub-agents at once on the same files, and respect the memory rules (one heavy test slot at a time).
