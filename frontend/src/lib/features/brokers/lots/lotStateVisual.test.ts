@@ -36,12 +36,12 @@ describe('lotDisplayState', () => {
 
 describe('lotStateColor', () => {
     const cases: Array<[LotDisplayState, boolean, string]> = [
-        ['OPEN', true, '#38bdf8'],
-        ['OPEN', false, '#0284c7'],
-        ['PARTIAL', true, '#fbbf24'],
-        ['PARTIAL', false, '#d97706'],
-        ['CLOSED', true, '#94a3b8'],
-        ['CLOSED', false, '#64748b'],
+        ['OPEN', true, '#3f86fa'],
+        ['OPEN', false, '#155eef'],
+        ['PARTIAL', true, '#f59e0b'],
+        ['PARTIAL', false, '#ae4e00'],
+        ['CLOSED', true, '#a9b0bb'],
+        ['CLOSED', false, '#727b87'],
     ];
     it.each(cases)('colours %s (dark=%s)', (state, dark, hex) => {
         expect(lotStateColor(state, dark)).toBe(hex);
