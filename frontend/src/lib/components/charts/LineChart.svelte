@@ -28,7 +28,7 @@
     import {toRgba} from '$lib/theme/colorAlpha';
     import {assignOverlaySignalAxes, buildSecondaryYAxes, computeRightMargin} from './chartCoreHelpers';
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
-    import {aggregateLineSeries, computeDensity, downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
+    import {aggregateLineSeries, chooseCompactResolution, compactPlotWidth, downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
     import {truncateName} from '$lib/utils/text';
     import {buildResponsiveXAxisPolicy, categoryAxisLabelPatch, visiblePointCountFromZoom, ZOOM_LABEL_SETTLE_MS} from './responsiveXAxis';
     import {clearTimer} from '$lib/utils/core/clearTimer';
@@ -191,11 +191,7 @@
         chartInstance.setOption({xAxis: {axisLabel: categoryAxisLabelPatch(policy)}}, {lazyUpdate: true});
     }
 
-    const COMPACT_DENSITY_THRESHOLD = 1.3;
     const COMPACT_RESIZE_EPSILON_PX = 4;
-    const COMPACT_GRID_LEFT_PX = 5;
-    const COMPACT_GRID_RIGHT_PX = 5;
-    const COMPACT_GRID_RIGHT_WITH_AXIS_PX = 45;
 
     let lastSourceRef: LineDataPoint[] | null = null;
     let aggregatedByResolution = new Map<ChartResolution, LineDataPoint[]>();
@@ -290,18 +286,12 @@
 
     function getCompactPlotWidthPx() {
         const measuredWidth = chartContainer?.getBoundingClientRect().width || chartInstance?.getWidth() || 0;
-        const rightPadding = showMiniAxis ? COMPACT_GRID_RIGHT_WITH_AXIS_PX : COMPACT_GRID_RIGHT_PX;
-        return Math.max(measuredWidth - COMPACT_GRID_LEFT_PX - rightPadding, 0);
+        return compactPlotWidth(measuredWidth, showMiniAxis);
     }
 
+    /** The rule a card's `max_points` is sized by (`timeSeriesAggregation.ts`, Z-29b): a series sampled for this plot stays as it is. */
     function chooseStaticResolution(dailyPointCount: number, plotWidthPx: number): ChartResolution {
-        const densityDaily = computeDensity(dailyPointCount, plotWidthPx);
-        if (densityDaily <= COMPACT_DENSITY_THRESHOLD) return 'daily';
-
-        const densityWeekly = computeDensity(lastWeeklyBucketCount, plotWidthPx);
-        if (densityWeekly <= COMPACT_DENSITY_THRESHOLD) return 'weekly';
-
-        return 'monthly';
+        return chooseCompactResolution({dailyCount: dailyPointCount, weeklyCount: lastWeeklyBucketCount}, plotWidthPx);
     }
 
     function resizeChartOnly() {
