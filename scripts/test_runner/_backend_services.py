@@ -2656,7 +2656,7 @@ Note: No backend server required.
         desc="SHORT lots, estimated_mode, price gaps, ADJUSTMENT cost basis, transfer scope, FX resolver, reference price and days at cost",
         # PURE: no database, server or network. The builders under test are sync methods that take all
         # of their inputs as arguments, so the service is built with db=None; the async cases stub
-        # convert_bulk, and the reference-price and at-cost cases drive get_lots_analysis on loader
+        # unit_rate_steps, and the reference-price and at-cost cases drive get_lots_analysis on loader
         # doubles and a session double, all in EUR, so no rate is asked and nothing reaches a database.
         # Kept out of the DB-backed lots units on purpose: folding it in would declass it to the
         # category default (write-scoped).
