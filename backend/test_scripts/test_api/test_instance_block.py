@@ -124,6 +124,7 @@ PUBLIC_READS_OUTSIDE_THE_LIST = [
     pytest.param("/utilities/currencies", id="utilities-currencies"),
     pytest.param("/ai-export/catalog", id="ai-export-catalog"),
     pytest.param("/auth/address-probe", id="address-probe"),
+    pytest.param("/auth/address-probe.png", id="address-probe-image"),
 ]
 
 #: Every endpoint allowed on a blocked instance, by name, with the one route it serves. An addition goes through the

@@ -10,12 +10,13 @@
  * The contract under test:
  *   - `checkGuides.json`, next to this file, new: `{"server": {<check id>: <guide>}, "browser": {<finding id>:
  *     <guide>}}`. `server`: every check of `GET /security/checks`, the ids of `run_config_checks()` then
- *     `platform.plugin_secrets`; `browser`: the findings the browser adds, today `OPEN_REGISTRATION_NOTICE_ID`.
+ *     `platform.plugin_secrets`; `browser`: the findings the browser adds, today `OPEN_REGISTRATION_NOTICE_ID` and, since
+ *     H-55 v2, `platform.blockedScript`.
  *   - `checkGuides.ts`, next to it, new: `CHECK_GUIDES`, the two halves merged and frozen; `checkGuidePath(checkId)`,
  *     the guide of an own key only (`Object.hasOwn`), so `undefined` for an unknown id and for `constructor`,
  *     `__proto__`, `toString` and `hasOwnProperty`.
  *   - A guide is `admin/<page>/#<anchor>`, matching `^admin/[a-z0-9_]+/#[a-z0-9-]+$`: no language prefix (`DocsLink`
- *     adds it), no leading `/`, no `.md`, a folder URL, an explicit anchor. The 19 guides are `EXPECTED_GUIDES` below.
+ *     adds it), no leading `/`, no `.md`, a folder URL, an explicit anchor. The 20 guides are `EXPECTED_GUIDES` below.
  *
  * The cases: §2's five — the shape, the anchors exist, the lookup, the browser half, the translation ratchet — and §1's
  * table pinned whole, so that a changed guide is a visible change of this file.
@@ -53,6 +54,13 @@
  * its place among the checks. Red until `checkGuides.json` holds it (§1 pinned whole) and `hosting_providers.en.md`
  * writes `{: #panel-api }` (§2.2, the docs step of the lot). `hosting_providers` has no translation, so the ratchet does
  * not move.
+ *
+ * H-55 v2 (step 4, 21/10): the browser's second finding, `platform.blockedScript` — a script the enforced
+ * Content-Security-Policy blocked and this instance did not send —, has its guide, `admin/configuration/#csp`, in the
+ * browser half. Red until `checkGuides.json` holds it (§1 pinned whole, §2.4 the browser half), `securityFindings` adds the
+ * finding (§2.4's premise, fed `blockedScripts`) and, as the contract says, until `configuration.en.md` writes
+ * `{: #csp }` (§2.2, the docs step of the lot): THAT anchor check stays red until the documentation lands. The it, fr and
+ * es pages cannot have it yet: the three pairs are translation debt (§2.5), written with their reason below.
  */
 import {existsSync, readFileSync} from 'node:fs';
 import {describe, expect, it, vi} from 'vitest';
@@ -86,7 +94,7 @@ vi.mock('$lib/api', () => {
 // =============================================================================
 
 /**
- * The 19 guides of §1, whole: check id → guide. A changed guide is a change of this table. Written in the order of the
+ * The 20 guides of §1, whole: check id → guide. A changed guide is a change of this table. Written in the order of the
  * checks (`CONFIG_CHECKS`, then `platform.plugin_secrets`), then the browser's finding, and compared as a record: the
  * order is pinned by §3, against the checks themselves.
  */
@@ -112,19 +120,25 @@ const EXPECTED_GUIDES: Readonly<Record<string, string>> = {
     'platform.plugin_secrets': 'admin/configuration/#plugin-secrets',
     // The browser's half: the open-registration warning, `OPEN_REGISTRATION_NOTICE_ID`
     'accounts.openRegistration': 'admin/settings/#open-registration-warning',
+    // H-55 v2: a script the enforced policy blocked and this instance did not send (`cspNotice.ts`)
+    'platform.blockedScript': 'admin/configuration/#csp',
 };
 
-/** The findings the browser adds to the Security tab: today the open-registration warning alone. */
-const BROWSER_FINDINGS: readonly string[] = [OPEN_REGISTRATION_NOTICE_ID];
+/** The findings the browser adds to the Security tab: the open-registration warning and, since H-55 v2, a blocked script. */
+const BLOCKED_SCRIPT_ID = 'platform.blockedScript';
+const BROWSER_FINDINGS: readonly string[] = [OPEN_REGISTRATION_NOTICE_ID, BLOCKED_SCRIPT_ID];
 
 /**
  * The baseline of the translation ratchet: the `<lang>:<page>#<anchor>` pairs whose it, fr or es page does not write the
- * anchor yet, sorted. Today 30: in the three languages, every guide anchor of `configuration`, `connection_checks` and
+ * anchor yet, sorted. Today 33: in the three languages, every guide anchor of `configuration`, `connection_checks` and
  * `settings` but `session-cookie` — the translations predate these anchors, and the new English text of N70 and of this
- * lot is real translation debt, not stamped. It only shrinks: the release's Aphra translation takes it to empty, a pair
+ * lot is real translation debt, not stamped. H-55 v2 adds three, `<lang>:configuration#csp`: the new English section of the
+ * enforced policy (`{: #csp }`, the docs step of that lot) is not translated until the release's Aphra pass, as the
+ * others of `configuration` were not. It only shrinks: the release's Aphra translation takes it to empty, a pair
  * the ratchet reports gone leaves it in the same change, and a new pair comes in only with its reason written beside it.
  */
 const TRANSLATION_DEBT: readonly string[] = [
+    'es:configuration#csp',
     'es:configuration#csp-report-only',
     'es:configuration#frame-protection',
     'es:configuration#instance-key',
@@ -135,6 +149,7 @@ const TRANSLATION_DEBT: readonly string[] = [
     'es:configuration#startup-checks',
     'es:connection_checks#untrusted-proxy',
     'es:settings#open-registration-warning',
+    'fr:configuration#csp',
     'fr:configuration#csp-report-only',
     'fr:configuration#frame-protection',
     'fr:configuration#instance-key',
@@ -145,6 +160,7 @@ const TRANSLATION_DEBT: readonly string[] = [
     'fr:configuration#startup-checks',
     'fr:connection_checks#untrusted-proxy',
     'fr:settings#open-registration-warning',
+    'it:configuration#csp',
     'it:configuration#csp-report-only',
     'it:configuration#frame-protection',
     'it:configuration#instance-key',
@@ -373,6 +389,7 @@ describe('checkGuides — the guide of each finding of the Security tab (N69d)',
     });
 
     // red until N69d §1: checkGuides.ts does not exist — and §4, for as long as configuration.en.md lacks frame-protection and csp-report-only
+    // H-55 v2: red until configuration.en.md writes {: #csp } (the docs step of the lot) — the anchor of platform.blockedScript
     // H-61: red until hosting_providers.en.md writes {: #panel-api } (the docs step of contract §5)
     it('§2.2 the anchors exist: the English page of each guide writes its anchor exactly once, as {: #<anchor> }', async () => {
         expectReaderSees(['en']);
@@ -405,13 +422,19 @@ describe('checkGuides — the guide of each finding of the Security tab (N69d)',
     });
 
     // red until N69d §1: checkGuides.json does not exist
-    it('§2.4 the browser half: its keys are exactly the ids the browser adds to the Security tab, today OPEN_REGISTRATION_NOTICE_ID', () => {
+    it('§2.4 the browser half: its keys are exactly the ids the browser adds to the Security tab: OPEN_REGISTRATION_NOTICE_ID and platform.blockedScript', () => {
         // Premise: the findings the browser adds to the Security tab — an open registration reached from outside, pinned or not
         const added = new Set<string>();
         for (const registrationLocked of [false, true]) {
             for (const finding of securityFindings([], {registrationMode: 'open', registrationLocked, hostname: EXTERNAL_HOST}).attention) {
                 if (finding.source === 'browser') added.add(finding.id);
             }
+        }
+        // H-55 v2: and a script the policy blocked — a source in the tab's sessionStorage, handed over as `blockedScripts`
+        // (a variable, not a literal: the field is the lot's, so the type check does not wait for it)
+        const blockedScripts = {registrationMode: 'invite', registrationLocked: false, hostname: EXTERNAL_HOST, blockedScripts: ['inline']};
+        for (const finding of securityFindings([], blockedScripts).attention) {
+            if (finding.source === 'browser') added.add(finding.id);
         }
         expect([...added].sort(), 'Premise: the findings the browser adds are BROWSER_FINDINGS — a new one needs its guide in checkGuides.json → browser, and its id there').toEqual([...BROWSER_FINDINGS].sort());
 
@@ -435,7 +458,8 @@ describe('checkGuides — the guide of each finding of the Security tab (N69d)',
 
     // red until N69d §1: checkGuides.ts does not exist
     // H-61: red until checkGuides.json holds platform.hosting_panel (contract §5)
-    it('§1 pinned whole: CHECK_GUIDES is the table of the 19 guides — a changed guide is a change of this file', async () => {
+    // H-55 v2: red until checkGuides.json holds platform.blockedScript → admin/configuration/#csp
+    it('§1 pinned whole: CHECK_GUIDES is the table of the 20 guides — a changed guide is a change of this file', async () => {
         expect((await checkGuides()).CHECK_GUIDES, 'CHECK_GUIDES, check id → guide').toEqual(EXPECTED_GUIDES);
     });
 });
