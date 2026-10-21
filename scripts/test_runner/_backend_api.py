@@ -57,6 +57,14 @@ def api_fx_unit(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "FX API unit tests", verbose=verbose)
 
 
+def api_fx_convert_sampling(verbose: bool = False, test_names: list = None) -> bool:
+    """Run Z-29fx: POST /fx/currencies/convert sampled for a compact chart (handler in process, no server)."""
+    print_section("FX Convert Sampling Tests")
+    print_info("Testing max_points/resolution/sample_like on conversions, samples and their bounds, reduced and aligned signals")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_fx_convert_sampling.py", test_names)
+    return run_command(cmd, "FX convert sampling tests", verbose=verbose)
+
+
 def api_fx_sync(verbose: bool = False, test_names: list = None) -> bool:
     """Run FX Sync API endpoint tests."""
     print_section("FX Sync API Endpoint Tests")
@@ -1056,6 +1064,8 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "preview-cache", api_preview_cache, name="Preview Cache", desc="PreviewCache in uploads API")
     add_test(api, "fx-unit", api_fx_unit, name="FX API Unit", desc="Direct handler unit tests, no live server")
     add_test(api, "fx-sync", api_fx_sync, name="FX Sync API", desc="FX rate synchronization endpoints")
+    # PURE: the handler runs in process with convert_bulk replaced by a double; no database, no server.
+    add_test(api, "fx-convert-sampling", api_fx_convert_sampling, name="FX Convert Sampling", desc="Z-29fx: max_points, resolution and sample_like on POST /fx/currencies/convert: the step from the fill's first day, the bucket results, samples with resolution and sample_bounds, request_index, sample_reference 422s, signals reduced and aligned (O1), the calendar rolling return in the FX domain, the day budget", isolation="pure")
     add_test(api, "assets-price", api_assets_price, name="Assets Price API", desc="Bulk upsert, delete, query, sync; X-R65 422 date_out_of_range; X-R71 422 price_currency_mismatch")
     # Write-scoped (the category default): own user, own asset (deleted), rates only on AWG/TMT, a pair no other test uses.
     add_test(api, "period-changes", api_period_changes, name="Period Changes API", desc="MF-P2: login, base == quote 422, answer shape, and the Assets/FX pages' numbers from the price query and the conversions; MF-P2b: list caps, ≤ 5 distinct as_of, as_of ≥ 1900")

@@ -87,7 +87,7 @@ percentage one.
 
 Add overlays from three dropdowns, the same as in the detail page's [Signals panel](detail/signals.md):
 
-- 🧮 **Technical Indicators** — 9 indicators work on FX rates (asset charts offer more), grouped by
+- 🧮 **Technical Indicators** — 10 indicators work on FX rates (asset charts offer more), grouped by
   family with a search box. The math is in
   [Technical Indicators — Financial Theory](../../financial-theory/technical-analysis/indicators/index.md).
 - ↔️ **Data Comparison** — another FX pair or an asset on the same chart.

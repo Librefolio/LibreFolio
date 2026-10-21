@@ -28,7 +28,6 @@ from backend.app.schemas import (
     SignalEventPoint,
     SignalExecutionContext,
     SignalPricePoint,
-    SignalResult,
     SignalSourceCapability,
     SignalVolumeKind,
 )
@@ -50,9 +49,8 @@ from backend.app.services.assets.price_store import storable_current_value
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.market_series import mark_market_closed_carries, prepare_asset_series_set
-from backend.app.services.signals.aggregation import align_signal_series, sample_signal_series
 from backend.app.services.signals.execution import SignalPreparedSeriesBundle
-from backend.app.services.signals.registry import SignalPluginRegistry
+from backend.app.services.signals.sampling import sample_signal_result
 from backend.app.services.signals.service import SignalService
 from backend.app.utils.date_range_limits import MAX_BULK_ITEM_DAYS, BulkTooManyDaysError
 from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, latest_range_end, utcnow
@@ -388,43 +386,14 @@ class PriceQueryOperations:
         """Z-29s: the answer of an item with signals sampled weekly or monthly, computed day by day and cut to its range,
         reduced to ``plan``'s dates: its prices and bounds as a bucket read gives them (each the daily answer's point, the
         first day's in ``sample_bounds``), its step, and each signal series as the compact chart reduces it
-        (``_sample_signal_result``). Without prices (``include_price=False``): the step and the signals."""
+        (``signals/sampling.py``, ``sample_signal_result``). Without prices (``include_price=False``): the step and the signals."""
         if result.prices:
             first = next((point for point in result.prices if point.date == plan.first), None)
             dates = set(plan.dates)
             result.prices = [point for point in result.prices if point.date in dates]
             result.sample_bounds = FAPriceSampleBounds(first=first, last=result.prices[-1]) if first is not None and result.prices else None
         result.resolution = plan.resolution
-        result.signals = [PriceQueryOperations._sample_signal_result(signal, plan) for signal in result.signals]
-
-    @staticmethod
-    def _sample_signal_result(signal: SignalResult, plan: _SamplePlan) -> SignalResult:
-        """``signal`` with each series reduced to ``plan``'s dates by its output's ``aggregation_profile``, read from the
-        plugin as AI Export reads it (Z-29s, ``sample_signal_series``), then all on the same dates (O1,
-        ``align_signal_series``). A series no output spec describes stays as it is, logged: none today."""
-        if not signal.series:
-            return signal
-        plugin_class = SignalPluginRegistry.get_plugin(signal.signal_code)
-        profiles = {output.key: output.aggregation_profile for output in plugin_class.output_specs} if plugin_class is not None else {}
-        reduced = []
-        for series in signal.series:
-            profile = profiles.get(series.key)
-            if profile is None:
-                logger.warning("Signal series left daily on a sampled item: no output spec", signal_code=signal.signal_code, series_key=series.key)
-                reduced.append(series)
-                continue
-            reduced.append(sample_signal_series(series, profile, plan.resolution, plan.dates))
-        return signal.model_copy(update={"series": PriceQueryOperations._align_reduced(signal.series, reduced)})
-
-    @staticmethod
-    def _align_reduced(daily: list, reduced: list) -> list:
-        """``reduced`` (``daily``'s series each reduced alone) on identical dates, as ``SignalResult`` wants them (O1,
-        ``align_signal_series``). A series left as it was (no output spec, or a reduction that kept no value) keeps its
-        daily dates and is not aligned with the others: Z-29b does not read the step from the density of a signal."""
-        done = [index for index, (before, after) in enumerate(zip(daily, reduced, strict=True)) if after is not before]
-        for index, series in zip(done, align_signal_series([reduced[index] for index in done]), strict=True):
-            reduced[index] = series
-        return reduced
+        result.signals = [sample_signal_result(signal, plan.resolution, plan.dates) for signal in result.signals]
 
     @staticmethod
     def _fill_span(
