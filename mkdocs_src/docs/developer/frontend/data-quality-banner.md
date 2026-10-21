@@ -43,10 +43,16 @@ graph TD
 ## 📁 Component Modes
 
 ### 1. `grouped` — Dashboard 📊
-* Single amber/sky container grouping all issues.
+* One container grouping all issues, in the tone of its **worst** issue: `danger` when any issue is an error, else `warning`, else `info` (`getGroupedSeverity()`; severity → tone through `DATA_QUALITY_TONE` in `frontend/src/lib/theme/toneClasses.ts`: `error` → `danger`, `warning` → `warning`, `info` → `info`). Each row keeps the tone of its own severity (`data-tone` on the container and on every row).
 * Issues are sorted by severity: **Error** 🔴 → **Warning** 🟡 → **Info** 🔵.
 * The header counts errors and warnings only, naming just the non-zero counts: `"1 error(s)"`, `"2 warning(s)"` or `"1 error(s), 2 warning(s)"` (`dataQuality.headerErrors`, `dataQuality.headerWarnings`). With neither — info issues only — it reads `"Data quality note"` (`dataQuality.headerInfoOnly`).
 * The banner starts collapsed, showing only its header (`let expanded = $state(false)`). The header is itself the toggle: a button (test id `data-quality-toggle`, with `aria-expanded` and a chevron) that opens and closes the whole list. Once open, the errors and warnings — the issues the header counts — sit indented under it (`data-quality-actionable`); the info issues follow apart, not indented (`data-quality-info`), below a thin rule when errors or warnings precede them.
+
+* **Layout of a category** (since T2, 19/10/2026; `fixShape()` in the component). Each category puts its action where it says what it fixes:
+    * a button that fixes the **whole category** (`sync_fx_pair`, `sync_asset_prices`) comes first, at the top; the message and the items it fixes hang below it: the pairs, or the asset names of `STALE_PRICE` (at most 3, then «+N»);
+    * an action that works on **one item at a time** is one chip per item, under the message: `navigate_asset` one chip per affected asset, and `add_fx_pair` / `navigate_fx` one chip per FX pair, like the assets;
+    * an issue with no action shows the message alone.
+* The chips and buttons inside a banner stand on the card (`bg-lf-card`) with an edge in the state colour (`STATUS_TONES.bannerChip`, proposal a, T3-b), and take a soft tint of that state on hover.
 
 ```svelte
 <DataQualityBanner issues={dataQualityIssues} mode="grouped" onaction={handleBannerAction} />
@@ -54,11 +60,22 @@ graph TD
 
 ### 2. `flat` — Asset Detail / FX Detail 📈 💱
 * One banner is rendered per issue.
-* Each banner displays: icon + message + FX pair flags + asset context (in parentheses) + CTA button.
+* Each banner displays: icon + message + FX pair flags + asset context (in parentheses) + CTA button, in the tone of its own severity. The layout is unchanged by T2: the button stays at the end of the line.
 
 ```svelte
 <DataQualityBanner issues={assetDetailIssues} mode="flat" onaction={handleBannerAction} />
 ```
+
+### 🎨 Severity and tone — the rule for any banner {: #banner-severity-rule }
+
+| Tone | Use it for |
+|------|------------|
+| 🔴 `danger` (red) | A real error: it stops a calculation or makes it wrong. |
+| 🟡 `warning` (amber) | Missing or incomplete data that, once supplied, lets the work continue. |
+| 🔵 `info` (blue) | A note: something the app noticed, nothing to fix. |
+| 🟢 `success` (green) | A success. |
+
+The severity is decided **condition by condition, where the issue is raised** (the backend's `severity`, `error` → `danger`): the component only maps it to a tone and never decides it. The same code can therefore differ by context: the risk lab's `MISSING_PRICE` (`backend/app/services/risk/data_quality.py`) is a **warning**, because the analysis runs on the other assets and a partial result is still worth reading; the portfolio's `MISSING_PRICE`, whose asset leaves the NAV, stays an **error**.
 
 ---
 
@@ -80,7 +97,7 @@ onaction?: (action: string, target: string | null, issue: DataQualityIssue) => v
 | `sync_fx_pair` | First affected pair, unused — the handler syncs every pair in `issue.affected_fx_pairs` (`cta_target` only when that list is empty) | `POST /api/v1/fx/currencies/sync` (dashboard `syncMissingFxRates`) | Body built by `buildMissingFxRatesSyncRequest` (`utils/sync/syncRange.ts`): `{pairs, start, end}`, the pairs as alphabetical slugs and the issue's `message_params.date_from`…`date_to` widened by `padSyncRange` to 7 days either side, the end capped at today — the margin `buildComparisonSyncRange` also uses. E.g. `2022-11-03`…`2023-06-27` → `start: '2022-10-27'`, `end: '2023-07-04'`. Without usable dates: the full history (`start: 'min'`, `end`: today). Timeout 120 s (`FX_SYNC_TIMEOUT_MS`). After the answer — not after a transport error — the dashboard bumps `refreshVersion` and reloads its report. `refreshVersion` is the signal **Refresh** sends too ([How a page uses the cache](state/domain-state.md#how-a-page-uses-the-cache)): new rates change the lots and risk figures, so an open `LotsAnalysisPanel` asks `POST /api/v1/portfolio/lots/analysis` again with `force` and drops a warning the sync fixed, and a mounted `RiskLevelsPanel` (Risk tab) reloads too. Then the dashboard emits one notification, `fx.rates.synced`, detail `{origin: 'dashboard-banner', pairs, start, end, outcome, stillMissing}` (`stillMissing` is `null` when the report was not reloaded); its toast has one line per pair. When the sync answered `ok` or `partial` but the reloaded report still has a `sync_fx_pair` issue for one of those pairs, the toast appends `dataQuality.missingFxRatesAfterSync` and a success becomes a warning. |
 | `sync_asset_prices` | First affected id, unused — the handler syncs every id in `issue.affected_asset_ids` | `POST /api/v1/assets/prices/sync` (dashboard `handleBannerAction`) | Sends one item per affected asset: `{asset_id, date_range: {start: 'resume', end: <dashboard end date>}}`. `'resume'` is the backend sentinel for "the day after the last stored price" (full history when there is none). After the answer — not after a failed request, which shows one error toast and reloads nothing — it shows one toast per asset result, bumps `refreshVersion` as `sync_fx_pair` does (new prices change the lots and risk figures too: an open `LotsAnalysisPanel` and a mounted `RiskLevelsPanel` ask again), and reloads the dashboard report. |
 
-In grouped mode, `navigate_asset` renders one link per affected asset; every other action, `sync_asset_prices` included, renders a single CTA button. While a sync request runs, the dashboard passes the issue's code as the `busyCode` prop: that issue's CTA button shows a spinner and stays disabled until the request settles. The CTA test id (`data-quality-cta-{code}`) and `busyCode` are keyed by the issue code alone, so the two `MISSING_FX_RATES` rows share them: while **Sync rates** runs, the MANUAL row's **View FX** button spins and is disabled too (known limitation).
+In grouped mode, `navigate_asset` renders one chip per affected asset (`data-quality-nav-asset-{id}`) and `add_fx_pair` / `navigate_fx` one chip per FX pair (`data-quality-fx-pair-{pair}`); every other action, `sync_fx_pair` and `sync_asset_prices` included, renders a single CTA button at the top of its category. While a sync request runs, the dashboard passes the issue's code as the `busyCode` prop: that issue's CTA button shows a spinner and stays disabled until the request settles. The CTA test id (`data-quality-cta-{code}`) and `busyCode` are keyed by the issue code alone; the per-item chips take no `busyCode`.
 
 ---
 
@@ -249,7 +266,7 @@ In the response JSON, look for:
 
 1. Add the code to `IssueCode` enum in `backend/app/schemas/portfolio.py`.
 2. Generate it in the backend engine (`build_data_quality_report`) **or** construct it client-side on the relevant page.
-3. Set `severity`, `cta_action`, `cta_target`, `affected_*` fields appropriately.
+3. Set `severity` (by the [rule above](#banner-severity-rule)), `cta_action`, `cta_target`, `affected_*` fields appropriately.
 4. Add `message_i18n_key` and its translations in all 4 language files under `dataQuality.*`.
 5. If a new `cta_action` is needed, add its label in `dataQuality.cta.*` and handle it in the parent `onaction` callback.
 6. Update this document.

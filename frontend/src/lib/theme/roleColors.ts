@@ -8,7 +8,9 @@
  * tooltip boxes, pointers — take the texts, the borders, the card, the neutral surface and the text on a state fill
  * (`chartNeutrals` in `./chartTheme`, B4, DV). The colours drawn outside the charts, on a canvas or in an SVG data URL
  * (`drawnColors.ts`, AF), read the field and the hover surfaces, the focus, the selection, the checked control, the
- * primary button and its text, the warning and the mark. The parity gate below keeps the stand-ins equal to tokens.css.
+ * primary button and its text, the warning and the mark. The category colours of the asset types and the cash are the
+ * roles `--lf-cat-*` since DV-11, read by `categoryColor` (`./chartCategories`) through {@link pageRoles}. The parity
+ * gate below keeps the stand-ins equal to tokens.css.
  *
  * - **Where it reads: the chart's own element.** tokens.css recomputes the roles in the `.light`/`.dark` subtrees, so a
  *   chart inside a forced subtree, or in the Lab's preview, reads its roles from its own element, not from `<html>`.
@@ -31,6 +33,7 @@
 
 import {toRgba} from './colorAlpha';
 import {readableOn} from './contrast';
+import {isDarkTheme} from './themeMode';
 import {themed, type ThemePair} from './themePair';
 
 /** The roles the charts and the drawn colours read. */
@@ -56,7 +59,19 @@ export type ChartRole =
     | '--lf-warning'
     | '--lf-danger'
     | '--lf-info'
-    | '--lf-mark-bg';
+    | '--lf-mark-bg'
+    | '--lf-cat-stock'
+    | '--lf-cat-etf'
+    | '--lf-cat-bond'
+    | '--lf-cat-crypto'
+    | '--lf-cat-fund'
+    | '--lf-cat-hold'
+    | '--lf-cat-crowdfund'
+    | '--lf-cat-commodity'
+    | '--lf-cat-real-estate'
+    | '--lf-cat-index'
+    | '--lf-cat-other'
+    | '--lf-cat-liquidity';
 
 /** tokens.css, resolved per theme: what a role reads where the stylesheet is not loaded. Kept equal by the parity gate. */
 const STAND_INS: Readonly<Record<ChartRole, ThemePair>> = {
@@ -83,6 +98,19 @@ const STAND_INS: Readonly<Record<ChartRole, ThemePair>> = {
     '--lf-danger': {light: '#c82838', dark: '#ff7a86'},
     '--lf-info': {light: '#155eef', dark: '#3f86fa'},
     '--lf-mark-bg': {light: '#fde68a', dark: '#78350f'},
+    /** The asset types' colours and the cash's (round 3, §1.2 and §1.9), the charts' one source since DV-11. */
+    '--lf-cat-stock': {light: '#7041c6', dark: '#b69af0'},
+    '--lf-cat-etf': {light: '#2459b8', dark: '#82acf8'},
+    '--lf-cat-bond': {light: '#536a9e', dark: '#9baed8'},
+    '--lf-cat-crypto': {light: '#b87916', dark: '#e8bd69'},
+    '--lf-cat-fund': {light: '#5147b8', dark: '#9280ff'},
+    '--lf-cat-hold': {light: '#5d687b', dark: '#c6d0e0'},
+    '--lf-cat-crowdfund': {light: '#8b547d', dark: '#d5a0c7'},
+    '--lf-cat-commodity': {light: '#b85e45', dark: '#e99a82'},
+    '--lf-cat-real-estate': {light: '#96602c', dark: '#d6a36c'},
+    '--lf-cat-index': {light: '#a33d79', dark: '#e58bb9'},
+    '--lf-cat-other': {light: '#727b87', dark: '#a9b0bb'},
+    '--lf-cat-liquidity': {light: '#3f628c', dark: '#639bc0'},
 };
 
 /** How a role is read for an element, for tests: by default its computed style. `''` when it has no value. */
@@ -192,7 +220,22 @@ function resolve(raw: string): string | null {
  * `scope` defaults to `<html>`; `dark` only picks the stand-in of a role that cannot be read.
  */
 export function chartRoles(dark: boolean, scope?: Element | null): ChartRoles {
-    const element = scope ?? (typeof document === 'undefined' ? null : document.documentElement);
+    return rolesOf(dark, scope ?? (typeof document === 'undefined' ? null : document.documentElement));
+}
+
+/**
+ * The roles of the page in the theme `dark`: read on `<html>` when the page shows that theme, the stand-ins of `dark`
+ * when it shows the other one (a colour asked for the theme not on screen, the Lab's both-theme views, a unit test) or
+ * there is no page. For a caller that has no element of its own and may ask for either theme: the category colours
+ * (`categoryColor` in `./chartCategories`, DV-11).
+ */
+export function pageRoles(dark: boolean): ChartRoles {
+    const page = typeof document === 'undefined' ? null : document.documentElement;
+    return rolesOf(dark, page && isDarkTheme() === dark ? page : null);
+}
+
+/** The roles as read on `element`, or the stand-ins of `dark` when there is none. */
+function rolesOf(dark: boolean, element: Element | null): ChartRoles {
     let style: CSSStyleDeclaration | null | undefined;
     const raw = (role: ChartRole): string => {
         if (reader) return reader(role, element);

@@ -182,8 +182,8 @@ the splash and the offline page copy a few roles too: `src/themeColorMeta.gate.t
 
 ## Categories: the asset types (round 3)
 
-The colour of each asset type, the one the charts draw it in (§1.2 of the designer's round 3: `chartCategories.ts`
-holds the same values, and its parity test keeps the two equal), with its badge tint and text (§1.9): the eleven types
+The colour of each asset type, the one the charts draw it in (§1.2 of the designer's round 3: since DV-11
+`chartCategories.ts` reads these roles, one copy), with its badge tint and text (§1.9): the eleven types
 and the cash. **A badge is the pair** `bg-lf-cat-X-soft text-lf-cat-X-on-soft`, taken from
 `assetTypeBadgeClass()` of `src/lib/utils/assetTypes.ts`, never written by hand; a subtype takes its family's colour and
 says what it contains with a dot, `assetTypeBadgeDotClass()`, in the content's `-on-soft` (SKILL.md, rule 11).

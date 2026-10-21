@@ -357,7 +357,7 @@ describe('categoryRows and sourceCategoryValue — the chart categories of the c
     });
 
     it('lists the categories in the catalogue’s order, each with the value its line writes in each theme', () => {
-        expect(categoryRows(catalog)).toEqual([
+        expect(categoryRows(catalog).filter((r) => !r.role)).toEqual([
             {target: 'type:AAA', kind: 'type', key: 'AAA', light: 1, dark: 2, lightValue: '#2B4C7E', darkValue: '#7EA6E0'},
             {target: 'sector:Zed Sector', kind: 'sector', key: 'Zed Sector', light: 5, dark: 4, lightValue: '#0E0E0E', darkValue: '#334455'},
             {target: 'bucket:Nowhere', kind: 'bucket', key: 'Nowhere', light: 3, dark: null, lightValue: '#5A6B7C', darkValue: null},
@@ -365,9 +365,42 @@ describe('categoryRows and sourceCategoryValue — the chart categories of the c
         ]);
     });
 
-    it('lists nothing for a catalogue built before the categories', () => {
-        expect(categoryRows(catalogOf({literals: catalog.literals}))).toEqual([]);
-        expect(categoryRows(catalogOf({categories: []}))).toEqual([]);
+    it('lists no category of a file for a catalogue built before the categories', () => {
+        expect(categoryRows(catalogOf({literals: catalog.literals})).filter((r) => !r.role)).toEqual([]);
+        expect(categoryRows(catalogOf({categories: []})).filter((r) => !r.role)).toEqual([]);
+    });
+
+    it('lists the asset types and the cash as views of their roles (DV-11): the types first, the cash among the buckets, the values the role’s in each theme', () => {
+        const withRoles = catalogOf({
+            ...catalog,
+            css_vars: [cssVar('--lf-cat-etf', [def('--lf-cat-etf', '#2459b8', {theme: 'light'}), def('--lf-cat-etf', '#82acf8', {theme: 'dark', line: 2})])],
+            // A catalogue scanned from an older tree, whose table still wrote the type: the role row stands for it, once.
+            categories: [...(catalog.categories ?? []), {target: 'type:ETF', kind: 'type', key: 'ETF', light: 1, dark: 2}],
+        });
+        const rows = categoryRows(withRoles);
+        expect(rows.map((r) => `${r.target}${r.role ? ` → ${r.role}` : ''}`)).toEqual([
+            'type:STOCK → --lf-cat-stock',
+            'type:ETF → --lf-cat-etf',
+            'type:BOND → --lf-cat-bond',
+            'type:CRYPTO → --lf-cat-crypto',
+            'type:FUND → --lf-cat-fund',
+            'type:HOLD → --lf-cat-hold',
+            'type:CROWDFUND → --lf-cat-crowdfund',
+            'type:COMMODITY → --lf-cat-commodity',
+            'type:REAL_ESTATE → --lf-cat-real-estate',
+            'type:INDEX → --lf-cat-index',
+            'type:OTHER → --lf-cat-other',
+            'type:AAA',
+            'sector:Zed Sector',
+            'bucket:Liquidity → --lf-cat-liquidity',
+            'bucket:Nowhere',
+            'bucket:Lost',
+        ]);
+        expect(rows.find((r) => r.target === 'type:ETF')).toMatchObject({kind: 'type', key: 'ETF', light: null, dark: null, lightValue: '#2459b8', darkValue: '#82acf8'});
+        expect(
+            rows.find((r) => r.target === 'type:STOCK'),
+            'a role the catalogue does not define: no value',
+        ).toMatchObject({lightValue: null, darkValue: null});
     });
 
     it('gives the value of a category in the theme asked, and an empty value where the catalogue has none', () => {
