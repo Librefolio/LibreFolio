@@ -155,6 +155,7 @@ When something is wrong with the data, the tab says so once, right below the sel
 **How to read it**
 
 - **The data-quality banner** lists what to fix, each problem with its action, such as **Sync prices** or **Sync rates**. Click it to open the list.
+- **A currency pair with no exchange-rate route** gets its own button in that banner, one per pair (tooltip **Add FX pair**): it opens the **Add New Currency Pair** window right there, already filled in with that pair, and the analysis recalculates by itself once the pair is saved and its rates are downloaded → [Adding a Currency Pair](../fx/add-pair.md)
 - **The notice** below it names the **partial** results and their cause. A partial result still shows its figures: read them with that cause in mind.
 - **A section's own amber banner** means a result did not come back at all, often because the period is too short: choose a longer one, or sync the prices.
 - **What if…?** reports its own problems inside its section.
