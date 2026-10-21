@@ -373,6 +373,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Lots analysis: performance history with short positions.** An open short was counted as if it were owned and its sale was missing, so the history showed a loss on a profitable short; it now counts the short as a debt and its sale as money out, and measures returns on the gross exposure.
 - **Bulk editor: a merge with a saved transaction shows the pair the right way round, and «Split pair» undoes it.** After merging a saved withdrawal with a deposit, or a saved deposit with a new withdrawal, the merged row could show the deposit as its *From* side and both amounts as positive until saved. Splitting such a merge again before saving swapped the two transactions' types, and the save was refused: the split now gives each transaction back as it was.
 - **Lots analysis: a trade on a day without a value now counts.** A purchase or a sale on a day the performance history could not value (a price without an exchange rate) was left out of its ROI and TWRR, while its units were in the next day's value; it now counts on the next day that has one.
+- **Transactions: a cost basis can no longer be negative.** A cost basis typed by hand below 0, on a new transaction, an edit, a merge, or a broker import when you save it, is now refused with a message («The cost basis can't be negative: enter 0 or more.») instead of being saved and skewing the average cost and the lots' gains. 0 stays allowed: a gift, the new shares of a split.
 
 #### 🔒 Security
 
