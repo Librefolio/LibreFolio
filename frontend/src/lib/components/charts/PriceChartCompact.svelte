@@ -21,6 +21,8 @@
         showMiniAxis?: boolean;
         /** Enable baseline coloring (red below 0, green above in % mode) */
         colorByBaseline?: boolean;
+        /** Base of the colouring in the absolute view; without it, the first point of `data` */
+        baselineValue?: number;
         /** Show grid lines */
         showGridLines?: boolean;
         /** Show stale-data gradient (per-point opacity). Default: false for compact */
@@ -33,10 +35,27 @@
         secondaryAxisScales?: Record<string, AxisScaleSettings>;
     }
 
-    let {data = [], height = '80px', lineColor = PRICE_SERIES.line.light, areaFill = true, viewMode = 'absolute', showMiniAxis = true, colorByBaseline, showGridLines, showGradient = false, overlaySignals = [], axisScale, secondaryAxisScales = {}}: Props = $props();
+    let {data = [], height = '80px', lineColor = PRICE_SERIES.line.light, areaFill = true, viewMode = 'absolute', showMiniAxis = true, colorByBaseline, baselineValue, showGridLines, showGradient = false, overlaySignals = [], axisScale, secondaryAxisScales = {}}: Props = $props();
 
     // Default colorByBaseline to true only in percentage mode
     let effectiveColorByBaseline = $derived(colorByBaseline ?? viewMode === 'percentage');
 </script>
 
-<LineChart {areaFill} colorByBaseline={effectiveColorByBaseline} compact={true} {data} {height} {lineColor} {overlaySignals} {secondaryAxisScales} {showGradient} {showGridLines} {showMiniAxis} {viewMode} yAxisMax={axisScale?.max} yAxisMin={axisScale?.min} yAxisMode={axisScale?.mode} />
+<LineChart
+    {areaFill}
+    {baselineValue}
+    colorByBaseline={effectiveColorByBaseline}
+    compact={true}
+    {data}
+    {height}
+    {lineColor}
+    {overlaySignals}
+    {secondaryAxisScales}
+    {showGradient}
+    {showGridLines}
+    {showMiniAxis}
+    {viewMode}
+    yAxisMax={axisScale?.max}
+    yAxisMin={axisScale?.min}
+    yAxisMode={axisScale?.mode}
+/>
