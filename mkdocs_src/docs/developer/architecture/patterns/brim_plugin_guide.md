@@ -255,7 +255,10 @@ mandatory for every new plugin:
 Every figure a plugin emits must fit its `transactions` column (C-97; the types are in
 [Decimal Columns](../database/index.md#decimal-columns)): a `quantity` keeps 10 decimal
 places, a cash amount 6, a per-unit `cost_basis_override` 12 — the scale of the prices —
-and any of them at most 15 significant digits.
+and any of them at most 15 significant digits. A `cost_basis_override` is also never
+negative (0 for a gift or the new shares of a split): below 0, the batch refuses its row
+when the user saves it (`costBasisNegative`, J-60, see
+[Cost basis sign](../../backend/transactions/service.md#cost-basis-sign)).
 
 - **Read from the file: never rounded.** A figure the report states goes in as written,
   under the verbatim rule above. Over a limit, neither the plugin nor the import rounds
