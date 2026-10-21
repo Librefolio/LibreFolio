@@ -2873,15 +2873,19 @@ FINECO_SAMPLE_TRANSACTIONS = {
 #: The line of ``fineco-export.csv`` each of its transactions comes from, in the order above (a row's FEE follows it).
 FINECO_EXPORT_LINES = (7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 14, 15, 16, 17, 18, 19, 20)
 
+# Solution B (21/10/2026): in a trade row, ``Controvalore`` already contains the commission (a BUY's is executed price x quantity
+# + commission, a SELL's is executed price x quantity - commission). The trade fixtures below carry it that way, and the
+# transactions they expect are the same as before the cure: BUY cash = -(Controvalore - fee), SELL cash = +(Controvalore + fee).
+#
 # A: rows settled by today and rows settled after it, interleaved. Line = 7 + index. Lot B-52: a kept row is recorded on its
 # operation date (``Operazione``, the first cell); whether it is kept is still decided by its value date (the second cell).
 _FINECO_SETTLEMENT_ROWS = [
     # line 7 — settled long ago, with its commission: BUY + FEE, kept, both dated 2024-01-15 (traded 15/01, valued 17/01).
-    _fineco_row("15/01/2024", "17/01/2024", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "105.71", "", "528.55", "2.95"),
+    _fineco_row("15/01/2024", "17/01/2024", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "106.30000", "", "531.50", "2.95"),
     # line 8 — traded before today, value date tomorrow: its BUY and its Variant-B FEE are left out (the value date decides).
-    _fineco_row("16/10/2026", "20/10/2026", "Compravendita titoli", "ISHARES CORE MSCI EM IMI", "IE00BKM4GZ66", "A", "10", "EUR", "33.05", "", "330.50", "2.95"),
+    _fineco_row("16/10/2026", "20/10/2026", "Compravendita titoli", "ISHARES CORE MSCI EM IMI", "IE00BKM4GZ66", "A", "10", "EUR", "33.34500", "", "333.45", "2.95"),
     # line 9 — value date today: BUY + FEE, kept, both dated on the operation date 2026-10-15.
-    _fineco_row("15/10/2026", "19/10/2026", "Compravendita titoli", "VANGUARD FTSE ALL-WORLD", "IE00BK5BQT80", "A", "2", "EUR", "110.00", "", "220.00", "2.95"),
+    _fineco_row("15/10/2026", "19/10/2026", "Compravendita titoli", "VANGUARD FTSE ALL-WORLD", "IE00BK5BQT80", "A", "2", "EUR", "111.47500", "", "222.95", "2.95"),
     # line 10 — a bond redeemed above par, traded today, value date the day after tomorrow: its par SELL and its INTEREST
     # surplus are left out.
     _fineco_row("19/10/2026", "21/10/2026", "Rimborso", "BTP ITALIA FOI NV28", "IT0005000001", " ", "10000", "EUR", "100.40000", "1.00000", "10040.00"),
@@ -2904,7 +2908,7 @@ _FINECO_SETTLED_ISINS = ["IE00B4L5Y983", "IE00BK5BQT80", "US0378331005"]
 # B: one row per (type, needed field) of the contract, blank or unreadable, among complete rows. Line = 7 + index.
 _FINECO_INCOMPLETE_FILE = [
     # line 7 — complete BUY: not counted.
-    _fineco_row("15/01/2024", "17/01/2024", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "105.71", "", "528.55", "2.95"),
+    _fineco_row("15/01/2024", "17/01/2024", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "106.30000", "", "531.50", "2.95"),
     # line 8 — BUY, Controvalore blank: a BUY with cash 0, and its FEE.
     _fineco_row("20/02/2024", "22/02/2024", "Compravendita titoli", "APPLE INC", "US0378331005", "A", "2", "USD", "178.50", "1.0850", "", "12.95"),
     # line 9 — SELL, Quantita blank: the validation issue qtyNegative.
@@ -2918,7 +2922,7 @@ _FINECO_INCOMPLETE_FILE = [
     # line 13 — SELL (Rimborso), Quantita blank: the validation issue qtyNegative.
     _fineco_row("01/09/2024", "03/09/2024", "Rimborso", "BTP VALORE SC MZ30", "IT0005583478", " ", "", "EUR", "100.00000", "1.00000", "2000.00"),
     # line 14 — BUY, Quantita unreadable: the validation issue qtyPositive, and its FEE.
-    _fineco_row("10/01/2024", "12/01/2024", "Compravendita titoli", "BTP VALORE SC MZ30", "IT0005583478", "A", "n.d.", "EUR", "99.50", "", "1990.00", "5.00"),
+    _fineco_row("10/01/2024", "12/01/2024", "Compravendita titoli", "BTP VALORE SC MZ30", "IT0005583478", "A", "n.d.", "EUR", "99.75000", "", "1995.00", "5.00"),
     # line 15 — SELL, Controvalore blank: a SELL with cash 0, and its FEE.
     _fineco_row("15/03/2024", "19/03/2024", "Compravendita titoli", "ISHARES CORE MSCI EM IMI", "IE00BKM4GZ66", "V", "4", "EUR", "34.20", "", "", "2.95"),
     # line 16 — ADJUSTMENT with Controvalore blank: complete, an ADJUSTMENT needs only its quantity.
@@ -3190,7 +3194,7 @@ class TestFinecoSafeRows:
         rows = [
             _fineco_row("20/02/2024", "22/02/2024", "Compravendita titoli", "APPLE INC", "US0378331005", "A", "2", "USD", "178.50", "1.0850", ""),
             _fineco_row("16/10/2026", "20/10/2026", "Compravendita titoli", "APPLE INC", "US0378331005", "A", "1", "USD", "250.00", "1.0850", "", "1.95"),
-            _fineco_row("19/10/2026", "21/10/2026", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "V", "", "EUR", "120.00", "", "240.00", "2.95"),
+            _fineco_row("19/10/2026", "21/10/2026", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "V", "", "EUR", "120.00", "", "237.05", "2.95"),
         ]
 
         out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
@@ -3210,7 +3214,7 @@ class TestFinecoSafeRows:
         _pin_fineco_today(monkeypatch)
         rows = [
             _fineco_row("01/02/2024", "03/02/2024", "Compravendita titoli", "ETF COVERED BOND ISH", "IE00B3B8Q275", "A", "3", "", "", "", "431.04"),
-            _fineco_row("15/03/2024", "19/03/2024", "Compravendita titoli", "ISHARES CORE MSCI EM IMI", "IE00BKM4GZ66", "V", "4", "EUR", "", "", "136.80", "2.95"),
+            _fineco_row("15/03/2024", "19/03/2024", "Compravendita titoli", "ISHARES CORE MSCI EM IMI", "IE00BKM4GZ66", "V", "4", "EUR", "33.46250", "", "133.85", "2.95"),
             _fineco_row("15/06/2024", "17/06/2024", "Dividendo", "ISHARES JPMORGAN EM BOND", "IE00B2NPKV68", "", "", "EUR", "", "", "20.95"),
             _fineco_row("01/06/2024", "03/06/2024", "Stacco Cedole", "BTP VALORE SC MZ30", "IT0005583478", "", "", "EUR", "", "", "24.38"),
             _fineco_row("19/06/2024", "19/06/2024", "Aumento capitale", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", " ", "3", "EUR", "", "", ""),
@@ -3241,7 +3245,7 @@ class TestFinecoSafeRows:
         Contract (D): a row traded on 15/01/2024 (``Operazione``) and valued on 17/01/2024 (``Data valuta``), settled long
         ago, gives its BUY on its operation date, 2024-01-15, and its Variant-B FEE on the same day."""
         _pin_fineco_today(monkeypatch)
-        row = _fineco_row("15/01/2024", "17/01/2024", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "105.71", "", "528.55", "2.95")
+        row = _fineco_row("15/01/2024", "17/01/2024", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "106.30000", "", "531.50", "2.95")
 
         out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, [row]), broker_id=1)
 
@@ -3303,9 +3307,9 @@ class TestFinecoSafeRows:
         9, with an empty ``Operazione`` and valued tomorrow, is left out and noted, and no warning is given."""
         _pin_fineco_today(monkeypatch)
         rows = [
-            _fineco_row("", "17/01/2024", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "105.71", "", "528.55", "2.95"),
-            _fineco_row("31/02/2024", "17/01/2024", "Compravendita titoli", "ISHARES CORE MSCI EM IMI", "IE00BKM4GZ66", "A", "10", "EUR", "33.05", "", "330.50", "2.95"),
-            _fineco_row("", "20/10/2026", "Compravendita titoli", "VANGUARD FTSE ALL-WORLD", "IE00BK5BQT80", "A", "2", "EUR", "110.00", "", "220.00", "2.95"),
+            _fineco_row("", "17/01/2024", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "106.30000", "", "531.50", "2.95"),
+            _fineco_row("31/02/2024", "17/01/2024", "Compravendita titoli", "ISHARES CORE MSCI EM IMI", "IE00BKM4GZ66", "A", "10", "EUR", "33.34500", "", "333.45", "2.95"),
+            _fineco_row("", "20/10/2026", "Compravendita titoli", "VANGUARD FTSE ALL-WORLD", "IE00BK5BQT80", "A", "2", "EUR", "111.47500", "", "222.95", "2.95"),
         ]
 
         out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
@@ -3327,7 +3331,7 @@ class TestFinecoSafeRows:
         date is the same before and after B-52."""
         _pin_fineco_today(monkeypatch)
         rows = [
-            _fineco_row("", "n.d.", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "105.71", "", "528.55", "2.95"),
+            _fineco_row("", "n.d.", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "106.30000", "", "531.50", "2.95"),
             _fineco_row("19/06/2024", "19/06/2024", "Aumento capitale", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", " ", "3", "EUR", "", "", ""),
         ]
 
@@ -3336,10 +3340,310 @@ class TestFinecoSafeRows:
         assert _fineco_transactions(out) == [_fineco_tx("ADJUSTMENT", "2024-06-19", "3", None, "IE00B4L5Y983", "Aumento capitale: ISHARES MSCI WORLD ACC")]
         assert [(notice.severity, notice.code) for notice in out.warnings] == [("warning", "legacy")], "one warning, the skipped row's; no N74 note"
 
-    def test_fineco_plugin_version_is_1_3_0(self):
-        """Red today: 1.2.0 (N74 and W-B83). Contract (D): recording on the operation date changes what the plugin
-        outputs, so its version becomes 1.3.0."""
-        assert FinecoBrokerProvider().plugin_version == "1.3.0"
+    def test_fineco_plugin_version_is_1_4_0(self):
+        """Red today: 1.3.0 (B-52). Contract (solution B, 21/10/2026): taking the commission out of a trade's cash changes what
+        the plugin outputs (see ``TestFinecoControvaloreIncludesCommission``), so its version becomes 1.4.0."""
+        assert FinecoBrokerProvider().plugin_version == "1.4.0"
+
+
+# =============================================================================
+# FINECO — CONTROVALORE INCLUDES THE COMMISSION (solution B, developer's decision of 21/10/2026)
+# =============================================================================
+
+#: Four rows SCALED from a real Fineco export (GitHub discussion #49): the same structure and arithmetic, other quantities, prices
+#: and amounts. Controvalore = executed price x quantity +/- commission (+ for a BUY, - for a SELL), Prezzo = Controvalore /
+#: quantity, a dividend's Controvalore is net (gross - tax). Row ``i`` is on line ``7 + i``.
+_FINECO_SCALED_ROWS = [
+    # 1 — BUY 40 at the executed price 21.50 = 860.00, + commission 2.95: Controvalore 862.95.
+    _fineco_row("26/05/2026", "28/05/2026", "Compravendita titoli", "ISH MSCI GLB USD-AC", "IE00I8KRLL9", "A", "40", "EUR", "21.57375", "1.00000", "862.95", "2.95"),
+    # 2 — SELL 4 at the executed price 62.40 = 249.60, - commission 2.95: Controvalore 246.65.
+    _fineco_row("12/08/2026", "14/08/2026", "Compravendita titoli", "LEONARDO", "IT0003856405", "V", "4", "EUR", "61.66250", "1.00000", "246.65", "2.95"),
+    # 3 — BUY with a commission of 0.00: Controvalore is the whole cash, no FEE.
+    _fineco_row("05/01/2026", "07/01/2026", "Compravendita titoli", "LEONARDO", "IT0003856405", "A", "3", "EUR", "55.80000", "1.00000", "167.40", "0.00"),
+    # 4 — dividend, gross 1.58 - tax 0.41 = Controvalore 1.17 (already net), commission 0.00, no Segno.
+    _fineco_row("24/06/2026", "24/06/2026", "Dividendo", "LEONARDO", "IT0003856405", "", "4", "EUR", "0.00000", "1.00000", "1.17", "0.00"),
+]
+#: What the four rows import (operation dates, B-52): the BUY and the SELL without their commission, which is in the FEE.
+_FINECO_SCALED_TRANSACTIONS = [
+    _fineco_tx("BUY", "2026-05-26", "40", ("EUR", "-860.00"), "IE00I8KRLL9", "Compravendita titoli: ISH MSCI GLB USD-AC"),
+    _fineco_fee("2026-05-26", "-2.95", "IE00I8KRLL9", "ISH MSCI GLB USD-AC"),
+    _fineco_tx("SELL", "2026-08-12", "-4", ("EUR", "249.60"), "IT0003856405", "Compravendita titoli: LEONARDO"),
+    _fineco_fee("2026-08-12", "-2.95", "IT0003856405", "LEONARDO"),
+    _fineco_tx("BUY", "2026-01-05", "3", ("EUR", "-167.40"), "IT0003856405", "Compravendita titoli: LEONARDO"),
+    _fineco_tx("DIVIDEND", "2026-06-24", "0", ("EUR", "1.17"), "IT0003856405", "Dividendo: LEONARDO"),
+]
+
+#: The real export's shape: ``;`` delimiter, Italian decimal commas, ONE commission column (Commissioni amministrato) right
+#: after Controvalore — 12 columns, not the samples' 15.
+_FINECO_REAL_COLUMNS = [*FINECO_COLUMNS[:11], "Commissioni amministrato"]
+_FINECO_REAL_PREAMBLE = ["Dossier n.: 1234567", "Intestazione Dossier: TEST TEST", "", "Titoli e operazioni", ""]
+_FINECO_REAL_ROWS = [
+    "26/05/2026;28/05/2026;Compravendita titoli;ISH MSCI GLB USD-AC;IE00I8KRLL9;A;40;EUR;21,57375;1,00000;862,95;2,95",
+    "12/08/2026;14/08/2026;Compravendita titoli;LEONARDO;IT0003856405;V;4;EUR;61,66250;1,00000;246,65;2,95",
+    "05/01/2026;07/01/2026;Compravendita titoli;LEONARDO;IT0003856405;A;3;EUR;55,80000;1,00000;167,40;0,00",
+    "24/06/2026;24/06/2026;Dividendo;LEONARDO;IT0003856405;;4;EUR;0,00000;1,00000;1,17;0,00",
+]
+
+
+def _write_fineco_layout(tmp_path: Path, columns: List[str], preamble: List[str], rows: List[str], delimiter: str = ",") -> Path:
+    """An export of any layout: ``preamble`` lines padded to the width of ``columns``, the header row, then ``rows`` (ready lines)."""
+    pad = delimiter * (len(columns) - 1)
+    lines = [*(f"{text}{pad}" for text in preamble), delimiter.join(columns), *rows]
+    path = tmp_path / "fineco-layout.csv"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def _fineco_multi_fee_row(segno: str) -> List[str]:
+    """A 15-cell trade row with TWO commission cells filled: column 11 (Commissioni Fondi Sw/Ingr/Uscita) 1.50 and column 14
+    (Commissioni amministrato) 2.45, 3.95 together. ``_fineco_row`` fills only the last commission cell."""
+    return ["14/09/2026", "16/09/2026", "Compravendita titoli", "ISH MSCI GLB USD-AC", "IE00I8KRLL9", segno, "5", "EUR", "100.00000", "1.00000", "500.00", "1.50", "", "", "2.45"]
+
+
+class TestFinecoControvaloreIncludesCommission:
+    """Solution B (developer's decision, 21/10/2026): in a Fineco export the Controvalore of a trade already contains the
+    commission (a real export, GitHub discussion #49) — a BUY's is executed price x quantity + commission, a SELL's is
+    executed price x quantity - commission. Today (Variant B, a header with more than 11 columns) the plugin takes Controvalore
+    verbatim and adds a separate FEE of the summed commission columns, so the commission is counted twice.
+
+    Contract. A **Compravendita titoli** row (BUY with Segno A, SELL with Segno V) with a readable Controvalore and a summed
+    commission ``fee > 0`` gives:
+
+    - BUY: cash = -(Controvalore - fee) and a FEE of -fee (together -Controvalore);
+    - SELL: cash = +(Controvalore + fee) and a FEE of -fee (together +Controvalore).
+
+    Not adjusted (guards, green today and after): a dividend (already net), Stacco Cedole, Aumento capitale (no cash),
+    ``Rimborso`` rows, rows with no commission or a commission of 0 (no FEE row), Variant A files (no commission columns),
+    rows with a blank or unreadable Controvalore (cash stays 0, W-B83), a BUY whose fee is more than its Controvalore.
+
+    OPEN QUESTIONS for the developer (the tests pin only what is said in each docstring):
+
+    - Q-WB-1: is the Controvalore of a ``Rimborso`` (a redemption, also the bond above par) net of the commission too? Today it
+      is not adjusted: SELL = +Controvalore and the FEE as before. The guards pin today's behaviour, not a decision.
+    - Q-WB-2: a BUY whose fee is more than its Controvalore is inconsistent data; what cash should it give? Not pinned.
+    - Q-WB-3: in a row with Divisa USD, is Controvalore in USD or in EUR? The cash is tagged with the row's Divisa as today and
+      the FEE is in EUR; the arithmetic test is provisional.
+
+    «Today» is pinned on the plugin module (``_pin_fineco_today``). The reds fail today on the double counting (a BUY of
+    -862.95 instead of -860.00); the guards are green today and must stay so.
+    """
+
+    # --- the cure (red today) ---
+
+    def test_fineco_scaled_export_trades_are_net_of_the_commission(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Red today: the BUY of line 7 is cash -862.95 (the Controvalore, commission included) and its FEE -2.95 on top.
+
+        Contract: four rows scaled from a real export (``_FINECO_SCALED_ROWS``). The BUY of 40 gives cash -860.00 and a FEE
+        of -2.95; the SELL of 4 gives cash +249.60 and a FEE of -2.95; the BUY with a commission of 0.00 gives -167.40 and no
+        FEE; the net dividend gives +1.17 and no FEE. Compared in order and with the operation dates; nothing is incomplete
+        or left out, so no notice and no validation issue."""
+        _pin_fineco_today(monkeypatch)
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, _FINECO_SCALED_ROWS), broker_id=1)
+
+        assert _fineco_transactions(out) == _FINECO_SCALED_TRANSACTIONS, "solution B: Controvalore contains the commission, the BUY and the SELL are net of it"
+        assert out.validation_issues == []
+        assert [notice.code for notice in out.warnings] == [], "every row is settled and complete"
+
+    def test_fineco_real_export_shape_trades_are_net_of_the_commission(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Red today, for the same double counting as the 15-column file.
+
+        Contract: the real export's shape — 12 columns (one commission column, Commissioni amministrato, right after
+        Controvalore), ``;`` delimiter, Italian decimal commas (``862,95``, ``2,95``, ``21,57375``, a commission of ``0,00``)
+        and the metadata lines of the real file (``Dossier n.``, ``Intestazione Dossier``) — imports exactly as the same
+        four rows in the 15-column file."""
+        _pin_fineco_today(monkeypatch)
+        path = _write_fineco_layout(tmp_path, _FINECO_REAL_COLUMNS, _FINECO_REAL_PREAMBLE, _FINECO_REAL_ROWS, delimiter=";")
+        provider = FinecoBrokerProvider()
+
+        assert provider.can_parse(path), "premise: the real shape is recognised as a Fineco export"
+        out = provider.parse(path, broker_id=1)
+
+        assert _fineco_transactions(out) == _FINECO_SCALED_TRANSACTIONS, "solution B on the real shape: net of the commission, 0,00 gives no FEE"
+        assert out.validation_issues == []
+        assert [notice.code for notice in out.warnings] == []
+
+    def test_fineco_a_trades_cash_and_fee_together_are_its_controvalore(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Red today: the BUY of 862.95 and its FEE of 2.95 add up to -865.90.
+
+        Invariant over the trade rows of ``_FINECO_SCALED_ROWS``: for each one, the cash of its BUY (or SELL) plus the FEE
+        of the same security on the same day (none when the commission is 0.00) is -Controvalore for Segno A and
+        +Controvalore for Segno V. The transactions of a row are found by security and day, never by position."""
+        _pin_fineco_today(monkeypatch)
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, _FINECO_SCALED_ROWS), broker_id=1)
+
+        txs = _fineco_transactions(out)
+        trades = [row for row in _FINECO_SCALED_ROWS if row[2] == "Compravendita titoli"]
+        assert len(trades) == 3
+        for row in trades:
+            day = "-".join(reversed(row[0].split("/")))
+            isin = row[4]
+            legs = [tx for tx in txs if tx[0] in ("BUY", "SELL") and tx[1] == day and tx[5] == isin]
+            fees = [tx for tx in txs if tx[0] == "FEE" and tx[1] == day and tx[5] == isin]
+            assert len(legs) == 1, f"{day} {isin}: one trade expected, got {legs}"
+            sign = -1 if row[5] == "A" else 1
+            total = legs[0][4] + sum((fee[4] for fee in fees), Decimal("0"))
+            assert total == sign * Decimal(row[10]), f"{day} {isin}: cash {legs[0][4]} + fees {[fee[4] for fee in fees]} = {total}, Controvalore {row[10]}"
+
+    @pytest.mark.parametrize(
+        ("segno", "trade"),
+        [
+            pytest.param("A", _fineco_tx("BUY", "2026-09-14", "5", ("EUR", "-496.05"), "IE00I8KRLL9", "Compravendita titoli: ISH MSCI GLB USD-AC"), id="buy"),
+            pytest.param("V", _fineco_tx("SELL", "2026-09-14", "-5", ("EUR", "503.95"), "IE00I8KRLL9", "Compravendita titoli: ISH MSCI GLB USD-AC"), id="sell"),
+        ],
+    )
+    def test_fineco_several_commission_columns_are_all_taken_out(self, segno: str, trade: tuple, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Red today: the BUY is cash -500.00 (the whole Controvalore) and the SELL +500.00.
+
+        Contract: a row with a commission in column 11 (1.50) and another in column 14 (2.45) has a fee of 3.95. With a
+        Controvalore of 500.00 the BUY gives cash -496.05 and the SELL +503.95, each with one FEE of -3.95."""
+        _pin_fineco_today(monkeypatch)
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, [_fineco_multi_fee_row(segno)]), broker_id=1)
+
+        assert _fineco_transactions(out) == [trade, _fineco_fee("2026-09-14", "-3.95", "IE00I8KRLL9", "ISH MSCI GLB USD-AC")], "the summed commissions are taken out of the Controvalore, once"
+
+    def test_fineco_a_foreign_currency_trade_is_net_of_the_commission_provisional(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Red today: the USD BUY is cash -359.95 (the whole Controvalore) and the SELL +189.35.
+
+        PROVISIONAL (Q-WB-3): it is not known if the Controvalore of a row with Divisa USD is in USD or in EUR. This pins the
+        same arithmetic as for EUR, with the cash tagged with the row's Divisa as today and the FEE in EUR: a BUY of 2 at the
+        executed price 178.50 = 357.00, + 2.95, Controvalore 359.95, gives USD -357.00; a SELL of 1 at 192.30, - 2.95,
+        Controvalore 189.35, gives USD +192.30. Each has a FEE of -2.95 EUR. Change it with the answer."""
+        _pin_fineco_today(monkeypatch)
+        rows = [
+            _fineco_row("20/02/2026", "22/02/2026", "Compravendita titoli", "APPLE INC", "US0378331005", "A", "2", "USD", "179.97500", "1.0850", "359.95", "2.95"),
+            _fineco_row("15/05/2026", "17/05/2026", "Compravendita titoli", "APPLE INC", "US0378331005", "V", "1", "USD", "189.35000", "1.0920", "189.35", "2.95"),
+        ]
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
+
+        assert _fineco_transactions(out) == [
+            _fineco_tx("BUY", "2026-02-20", "2", ("USD", "-357.00"), "US0378331005", "Compravendita titoli: APPLE INC"),
+            _fineco_fee("2026-02-20", "-2.95", "US0378331005", "APPLE INC"),
+            _fineco_tx("SELL", "2026-05-15", "-1", ("USD", "192.30"), "US0378331005", "Compravendita titoli: APPLE INC"),
+            _fineco_fee("2026-05-15", "-2.95", "US0378331005", "APPLE INC"),
+        ], "provisional (Q-WB-3): same arithmetic as EUR, cash in the row's Divisa, FEE in EUR"
+
+    # --- not adjusted (guards, green today and after) ---
+
+    @pytest.mark.parametrize("fee", ["", "0.00"])
+    def test_guard_fineco_a_trade_without_a_commission_keeps_its_controvalore(self, fee: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Guard, green today and after: a commission cell that is blank or ``0.00`` is a fee of 0. The BUY is cash
+        -Controvalore, the SELL +Controvalore, and no FEE row is emitted."""
+        _pin_fineco_today(monkeypatch)
+        rows = [
+            _fineco_row("05/01/2026", "07/01/2026", "Compravendita titoli", "LEONARDO", "IT0003856405", "A", "3", "EUR", "55.80000", "1.00000", "167.40", fee),
+            _fineco_row("12/08/2026", "14/08/2026", "Compravendita titoli", "LEONARDO", "IT0003856405", "V", "4", "EUR", "61.66250", "1.00000", "246.65", fee),
+        ]
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
+
+        assert _fineco_transactions(out) == [
+            _fineco_tx("BUY", "2026-01-05", "3", ("EUR", "-167.40"), "IT0003856405", "Compravendita titoli: LEONARDO"),
+            _fineco_tx("SELL", "2026-08-12", "-4", ("EUR", "246.65"), "IT0003856405", "Compravendita titoli: LEONARDO"),
+        ]
+
+    def test_guard_fineco_rimborso_keeps_its_controvalore_and_its_fee_as_today(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Guard, green today and after. It pins TODAY'S behaviour, not a decision (Q-WB-1: is the Controvalore of a
+        redemption net of the commission too?).
+
+        A plain ``Rimborso`` with a commission of 2.00 stays a SELL of +Controvalore (2000.00) with its FEE of -2.00. A bond
+        redeemed above par with a commission of 3.50 keeps its split: the par SELL of +10000.00, the INTEREST surplus of
+        +40.00, and the FEE of -3.50."""
+        _pin_fineco_today(monkeypatch)
+        premium = "Rimborso a scadenza — premio/rivalutazione oltre la pari: BTP ITALIA FOI NV28"
+        rows = [
+            _fineco_row("01/09/2024", "03/09/2024", "Rimborso", "BTP VALORE SC MZ30", "IT0005583478", " ", "2000", "EUR", "100.00000", "1.00000", "2000.00", "2.00"),
+            _fineco_row("01/09/2024", "03/09/2024", "Rimborso", "BTP ITALIA FOI NV28", "IT0005000001", " ", "10000", "EUR", "100.40000", "1.00000", "10040.00", "3.50"),
+        ]
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
+
+        assert _fineco_transactions(out) == [
+            _fineco_tx("SELL", "2024-09-01", "-2000", ("EUR", "2000.00"), "IT0005583478", "Rimborso: BTP VALORE SC MZ30"),
+            _fineco_fee("2024-09-01", "-2.00", "IT0005583478", "BTP VALORE SC MZ30"),
+            _fineco_tx("SELL", "2024-09-01", "-10000", ("EUR", "10000.00"), "IT0005000001", "Rimborso: BTP ITALIA FOI NV28"),
+            _fineco_tx("INTEREST", "2024-09-01", "0", ("EUR", "40.00"), "IT0005000001", premium, ("import", "fineco", "maturity_premium")),
+            _fineco_fee("2024-09-01", "-3.50", "IT0005000001", "BTP ITALIA FOI NV28"),
+        ]
+
+    def test_guard_fineco_capital_increase_dividend_and_coupon_keep_their_net_and_their_fee(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Guard, green today and after. With a commission cell filled, an ``Aumento capitale`` is still an ADJUSTMENT with no
+        cash, a ``Dividendo`` and a ``Stacco Cedole`` (already net) keep their Controvalore, and each has its FEE as today."""
+        _pin_fineco_today(monkeypatch)
+        rows = [
+            _fineco_row("19/06/2024", "19/06/2024", "Aumento capitale", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", " ", "3", "EUR", "5.02600", "1.00000", "15.08", "1.50"),
+            _fineco_row("15/06/2024", "17/06/2024", "Dividendo", "ISHARES JPMORGAN EM BOND", "IE00B2NPKV68", "", "", "EUR", "", "", "20.95", "1.00"),
+            _fineco_row("01/06/2024", "03/06/2024", "Stacco Cedole", "BTP VALORE SC MZ30", "IT0005583478", "", "", "EUR", "", "", "24.38", "1.00"),
+        ]
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
+
+        assert _fineco_transactions(out) == [
+            _fineco_tx("ADJUSTMENT", "2024-06-19", "3", None, "IE00B4L5Y983", "Aumento capitale: ISHARES MSCI WORLD ACC"),
+            _fineco_fee("2024-06-19", "-1.50", "IE00B4L5Y983", "ISHARES MSCI WORLD ACC"),
+            _fineco_tx("DIVIDEND", "2024-06-15", "0", ("EUR", "20.95"), "IE00B2NPKV68", "Dividendo: ISHARES JPMORGAN EM BOND"),
+            _fineco_fee("2024-06-15", "-1.00", "IE00B2NPKV68", "ISHARES JPMORGAN EM BOND"),
+            _fineco_tx("INTEREST", "2024-06-01", "0", ("EUR", "24.38"), "IT0005583478", "Stacco Cedole: BTP VALORE SC MZ30"),
+            _fineco_fee("2024-06-01", "-1.00", "IT0005583478", "BTP VALORE SC MZ30"),
+        ]
+
+    def test_guard_fineco_variant_a_file_has_no_fee_and_keeps_its_controvalore(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Guard, green today and after: a Variant-A file (11 columns, the header has no commission column) has nothing to take
+        out. The BUY is cash -Controvalore, the SELL +Controvalore, and there is no FEE."""
+        _pin_fineco_today(monkeypatch)
+        buy = _fineco_row("15/01/2024", "17/01/2024", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "106.30000", "", "531.50")[:11]
+        sell = _fineco_row("15/03/2024", "19/03/2024", "Compravendita titoli", "ISHARES CORE MSCI EM IMI", "IE00BKM4GZ66", "V", "4", "EUR", "33.46250", "", "133.85")[:11]
+        path = _write_fineco_layout(tmp_path, FINECO_COLUMNS[:11], ["Dossier: 123456789", "Intestazione Dossier: TEST TEST", "", "Titoli e operazioni", ""], [",".join(buy), ",".join(sell)])
+
+        out = FinecoBrokerProvider().parse(path, broker_id=1)
+
+        assert _fineco_transactions(out) == [
+            _fineco_tx("BUY", "2024-01-15", "5", ("EUR", "-531.50"), "IE00B4L5Y983", "Compravendita titoli: ISHARES MSCI WORLD ACC"),
+            _fineco_tx("SELL", "2024-03-15", "-4", ("EUR", "133.85"), "IE00BKM4GZ66", "Compravendita titoli: ISHARES CORE MSCI EM IMI"),
+        ]
+
+    @pytest.mark.parametrize(
+        ("segno", "controvalore", "tx_type", "quantity"),
+        [
+            pytest.param("A", "", "BUY", "3", id="buy-blank"),
+            pytest.param("A", "n.d.", "BUY", "3", id="buy-unreadable"),
+            pytest.param("V", "", "SELL", "-3", id="sell-blank"),
+            pytest.param("V", "n.d.", "SELL", "-3", id="sell-unreadable"),
+        ],
+    )
+    def test_guard_fineco_a_trade_without_a_readable_controvalore_is_not_adjusted(self, segno: str, controvalore: str, tx_type: str, quantity: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Guard, green today and after (W-B83). With a blank or unreadable Controvalore the cash stays 0, whatever the fee: the
+        adjustment is not applied (it would invent a cash out of a missing number). The FEE row is still there, and the row is
+        still named by one ``fineco_incomplete_rows`` note."""
+        _pin_fineco_today(monkeypatch)
+        row = _fineco_row("20/02/2026", "22/02/2026", "Compravendita titoli", "LEONARDO", "IT0003856405", segno, "3", "EUR", "55.80000", "1.00000", controvalore, "2.95")
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, [row]), broker_id=1)
+
+        assert _fineco_transactions(out) == [
+            _fineco_tx(tx_type, "2026-02-20", quantity, ("EUR", "0"), "IT0003856405", "Compravendita titoli: LEONARDO"),
+            _fineco_fee("2026-02-20", "-2.95", "IT0003856405", "LEONARDO"),
+        ]
+        notices = _fineco_notices(out, FINECO_INCOMPLETE_ROWS)
+        assert len(notices) == 1 and sorted(line for evidence in notices[0].evidence for line in evidence.row_numbers) == [_FINECO_FIRST_LINE]
+
+    def test_guard_fineco_a_fee_above_the_controvalore_does_not_raise_or_lose_the_fee(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Guard, green today and after. Q-WB-2: a BUY whose fee (2.95) is more than its Controvalore (2.00) is inconsistent
+        data, and what cash it should give is the developer's call, so the number is NOT pinned. Whatever the plugin does, it
+        does not raise, the BUY's cash is never positive (a purchase never brings cash in), and the FEE row is still there."""
+        _pin_fineco_today(monkeypatch)
+        row = _fineco_row("20/02/2026", "22/02/2026", "Compravendita titoli", "LEONARDO", "IT0003856405", "A", "1", "EUR", "2.00000", "1.00000", "2.00", "2.95")
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, [row]), broker_id=1)
+
+        buys = [tx for tx in out.transactions if tx.type == TransactionType.BUY]
+        assert len(buys) == 1 and buys[0].cash is not None
+        assert buys[0].cash.amount <= 0, f"a BUY never brings cash in, got {buys[0].cash.amount}"
+        fees = [tx for tx in out.transactions if tx.type == TransactionType.FEE]
+        assert len(fees) == 1 and fees[0].cash is not None and fees[0].cash.amount == Decimal("-2.95"), "the FEE row is still there"
 
 
 # =============================================================================

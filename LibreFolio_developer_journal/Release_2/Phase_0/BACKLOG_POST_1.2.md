@@ -6794,6 +6794,11 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   codici condivisi (`rows_not_recognized`, `rows_unreadable`), evidenza e `report_issue`, e un test di contratto su tutti i plugin.
   Circa 1,5 giorni. La decisione (1.3 o dopo) spetta al coordinatore. Dettagli: piano 04, «W-B85 · «Noto in silenzio, ignoto con
   avviso»: analisi», punto 3.
+  - ✅ 21/10 (via del coordinatore, solo i 4 plugin stabili, decisione del 19/10): aiuto `RowSkips` in `_brim_io.py` (codici
+    `rows_not_recognized` e `rows_unreadable`, chiavi `importWizard.brimNotice.*` e `brimEvidence.*` in 4 lingue), test di contratto
+    `test_brim_row_skips.py` (`external brim-row-skips`); DEGIRO 2.1.0, Crédit Agricole 1.5.0 e Scalable 1.1.0 con `report_issue` (di
+    Scalable, gli stati noti non eseguiti in silenzio, gli ignoti con avviso: sparisce `scalable_not_executed`), Directa 1.1.0 coi codici
+    condivisi. **Restano** i plugin in beta (elenco in `ROW_SKIPS_PENDING` del test di contratto). Dettagli: piano 04, «W-B86 e W-B87».
 - **W-B87 · Plugin che saltano in silenzio righe con un effetto economico** — alto, numeri; W, 19/10 (inventario di W-B85).
   - Revolut: lo stock split, `SKIP_TYPES` (`broker_revolut/plugin.py:90-93`).
   - Trading 212: stock split, distribuzione di azioni e conversione di valuta (`broker_trading212/plugin.py:87-92`).
@@ -6802,6 +6807,11 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   Quantità dopo uno split, costi e tasse escono sbagliati senza che l'utente lo sappia. Proposta: per la 1.3 almeno l'avviso con
   `report_issue`; l'import vero, per plugin, dopo. Dettagli: piano 04, «W-B85 · «Noto in silenzio, ignoto con avviso»: analisi»,
   punto 4.
+  - ✅ 21/10 (D-W85-4, versione minima approvata dal developer): un avviso aggregato `rows_not_recognized` con `report_issue` per le
+    righe saltate con effetto economico: Revolut 1.2.0 (stock split), Trading 212 1.1.0 (split, distribuzione di azioni, conversione di
+    valuta), eToro 1.2.0 (commissioni overnight, rimborsi, SDRT); Trade Republic 1.1.0 (Kosten/Belasting), Swissquote 1.1.0 (gambe
+    forex) e IBKR 1.1.0 (FX senza ISIN) dagli avvisi a stringa ai codici condivisi. **L'import vero di quelle righe resta dopo la 1.3**,
+    plugin per plugin. Dettagli: piano 04, «W-B86 e W-B87».
 - **W-B88 · Quale data registra ogni plugin BRIM, contro il principio di B-52** — medio, numeri; W, 19/10 (analisi di B-52). Il
   principio del developer: registrare la data dell'operazione; usare la data valuta, o lo stato, solo per decidere se la riga è
   regolata. Nel lotto B-52 ci sono Fineco, Danske e il CSV generico. Altri 10 plugin nominano una data valuta o di regolamento:
@@ -6828,6 +6838,18 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   tutti non c'è; e cambiare plugin e premere **Parse (N)** rianalizza già da sé. Con questa, due tabelle per sviluppatori
   (`brim_plugin_guide.md:910`, `developer/backend/brim/architecture.md:392`) dicono dove compaiono le note senza i conti nuovi di B-51.
   Cura: due frasi in EN, IT, FR, ES più il timbro; in un lotto di doc. Dettagli: piano 04, «B-51», passo 4.
+- **W-B92 · Fineco: le commissioni contate due volte** — **alto**, numeri sbagliati; W, 21/10 (discussione #49, `@Xgialippo`,
+  https://github.com/Librefolio/LibreFolio/discussions/49, con l'Excel vero). Nel report di Fineco il **Controvalore** di un acquisto
+  contiene già la commissione e quello di una vendita l'ha già tolta. Il plugin (`broker_fineco/plugin.py`, layout con colonne di
+  commissione) prendeva il Controvalore tal quale **e** aggiungeva una FEE a parte: ogni operazione con commissione era sbagliata
+  della commissione (acquisto troppo caro, vendita troppo ricca). Decisione del developer del 21/10, **soluzione B**: BUY = −(Controvalore −
+  commissioni) più la FEE −commissioni; SELL = +(Controvalore + commissioni) più la FEE −commissioni; dividendi già netti, righe senza
+  commissione e layout senza colonne di commissione invariati. `plugin_version` 1.4.0. I `sample_reports/fineco*.csv` con commissioni
+  avevano Controvalore = quantità × prezzo (una supposizione): corretti. **I dati già importati restano sbagliati**: per correggerli si
+  cancellano le transazioni di quel file e lo si reimporta (nota in guida e nel CHANGELOG, con il ringraziamento a `@Xgialippo`). Domande
+  aperte al developer (casi dubbi, non scelti dal plugin): Q-WB-1 il Controvalore di un `Rimborso` con commissione la contiene? (oggi
+  invariato); Q-WB-2 una commissione maggiore del Controvalore; Q-WB-3 una riga in valuta (Divisa USD): il Controvalore è nella Divisa o
+  in euro? Dettagli: piano 04, «W-B92».
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di

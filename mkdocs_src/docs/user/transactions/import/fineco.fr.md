@@ -1,9 +1,5 @@
 # 📥 <img src="https://finecobank.com/favicon.ico" alt=""> Fineco
 
-!!! info "Bêta"
-
-    Ce plugin est en **Bêta** — testé avec des fichiers d'exemple, mais des cas limites peuvent se présenter.
-
 LibreFolio importe le rapport **Movimenti Dossier Titoli** de FinecoBank — les mouvements de votre
 dossier titres — enregistré au format CSV.
 
