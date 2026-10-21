@@ -541,15 +541,16 @@
             <!-- Owners Column -->
             <div data-testid="sharing-owners-column">
                 <h3 class="text-sm font-semibold text-lf-secondary flex items-center gap-1.5">
-                    <Crown size={14} class="text-amber-500" />
+                    <Crown size={14} class="text-lf-warning" />
                     {$_('brokers.sharing.owners')}
                 </h3>
                 <p class="text-[10px] text-lf-muted mb-2">{$_('brokers.sharing.ownerDesc')}</p>
                 <div class="flex flex-col gap-2">
                     {#each owners as entry (entry.user_id)}
+                        <!-- colour: closest role, to review: owner pill on warning tint (amber = owner, kept); hover = X-line (3:1 only), avatar disc on card; alt: bg-lf-card chip-in-banner style -->
                         <button
                             type="button"
-                            class="flex items-center gap-2 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-sm transition-colors w-fit {readOnly ? 'cursor-default' : 'cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/30'}"
+                            class="flex items-center gap-2 px-3 py-1.5 bg-lf-warning-soft border border-lf-warning-line text-lf-warning-on-soft rounded-xl text-sm transition-colors w-fit {readOnly ? 'cursor-default' : 'cursor-pointer hover:bg-lf-warning-line'}"
                             data-testid="access-entry-{entry.user_id}"
                             disabled={!canEditAccess}
                             onclick={() => startEdit(entry)}
@@ -558,14 +559,14 @@
                                 {#if entry.avatar_url}
                                     <LazyImage src="{entry.avatar_url}?img_preview=48x48" alt={entry.username} circle placeholder="avatar" />
                                 {:else}
-                                    <span class="w-full h-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center rounded-full">
-                                        <span class="text-[10px] font-semibold text-amber-700 dark:text-amber-300">{getAvatarInitial(entry.username)}</span>
+                                    <span class="w-full h-full bg-lf-card flex items-center justify-center rounded-full">
+                                        <span class="text-[10px] font-semibold text-lf-warning-on-soft">{getAvatarInitial(entry.username)}</span>
                                     </span>
                                 {/if}
                             </span>
                             <div class="min-w-0">
-                                <div class="text-amber-800 dark:text-amber-200 font-medium truncate">{entry.username}</div>
-                                <div class="text-[10px] text-amber-600 dark:text-amber-400">
+                                <div class="text-lf-warning-on-soft font-medium truncate">{entry.username}</div>
+                                <div class="text-[10px] text-lf-warning-on-soft">
                                     {getRoleShortLabel(entry.role)} · {formatPercent(Math.round(entry.share_percentage * 10000) / 100, {signed: false, digits: 1})}
                                 </div>
                             </div>
@@ -577,15 +578,16 @@
             <!-- Editors Column -->
             <div data-testid="sharing-editors-column">
                 <h3 class="text-sm font-semibold text-lf-secondary flex items-center gap-1.5">
-                    <Pencil size={14} class="text-blue-500" />
+                    <Pencil size={14} class="text-lf-info" />
                     {$_('brokers.sharing.editors')}
                 </h3>
                 <p class="text-[10px] text-lf-muted mb-2">{$_('brokers.sharing.editorDesc')}</p>
                 <div class="flex flex-col gap-2">
                     {#each editors as entry (entry.user_id)}
+                        <!-- colour: closest role, to review: editor pill on info tint (blue = editor, kept); same hover/avatar choices as owner -->
                         <button
                             type="button"
-                            class="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl text-sm transition-colors w-fit {readOnly ? 'cursor-default' : 'cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30'}"
+                            class="flex items-center gap-2 px-3 py-1.5 bg-lf-info-soft border border-lf-info-line text-lf-info-on-soft rounded-xl text-sm transition-colors w-fit {readOnly ? 'cursor-default' : 'cursor-pointer hover:bg-lf-info-line'}"
                             data-testid="access-entry-{entry.user_id}"
                             disabled={!canEditAccess}
                             onclick={() => startEdit(entry)}
@@ -594,14 +596,14 @@
                                 {#if entry.avatar_url}
                                     <LazyImage src="{entry.avatar_url}?img_preview=48x48" alt={entry.username} circle placeholder="avatar" />
                                 {:else}
-                                    <span class="w-full h-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center rounded-full">
-                                        <span class="text-[10px] font-semibold text-blue-700 dark:text-blue-300">{getAvatarInitial(entry.username)}</span>
+                                    <span class="w-full h-full bg-lf-card flex items-center justify-center rounded-full">
+                                        <span class="text-[10px] font-semibold text-lf-info-on-soft">{getAvatarInitial(entry.username)}</span>
                                     </span>
                                 {/if}
                             </span>
                             <div class="min-w-0">
-                                <div class="text-blue-800 dark:text-blue-200 font-medium truncate">{entry.username}</div>
-                                <div class="text-[10px] text-blue-600 dark:text-blue-400">
+                                <div class="text-lf-info-on-soft font-medium truncate">{entry.username}</div>
+                                <div class="text-[10px] text-lf-info-on-soft">
                                     {getRoleShortLabel(entry.role)} · {formatPercent(Math.round(entry.share_percentage * 10000) / 100, {signed: false, digits: 1})}
                                 </div>
                             </div>
@@ -613,15 +615,16 @@
             <!-- Viewers Column -->
             <div data-testid="sharing-viewers-column">
                 <h3 class="text-sm font-semibold text-lf-secondary flex items-center gap-1.5">
-                    <Eye size={14} class="text-gray-400" />
+                    <Eye size={14} class="text-lf-muted" />
                     {$_('brokers.sharing.viewers')}
                 </h3>
                 <p class="text-[10px] text-lf-muted mb-2">{$_('brokers.sharing.viewerDesc')}</p>
                 <div class="flex flex-col gap-2">
                     {#each viewers as entry (entry.user_id)}
+                        <!-- colour: closest role, to review: viewer pill on neutral panel; avatar bg-lf-neutral -->
                         <button
                             type="button"
-                            class="flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 rounded-xl text-sm transition-colors w-fit {readOnly ? 'cursor-default' : 'cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700'}"
+                            class="flex items-center gap-2 px-3 py-1.5 bg-lf-panel border border-lf-subtle text-lf-primary rounded-xl text-sm transition-colors w-fit {readOnly ? 'cursor-default' : 'cursor-pointer hover:bg-lf-hover'}"
                             data-testid="access-entry-{entry.user_id}"
                             disabled={!canEditAccess}
                             onclick={() => startEdit(entry)}
@@ -630,14 +633,14 @@
                                 {#if entry.avatar_url}
                                     <LazyImage src="{entry.avatar_url}?img_preview=48x48" alt={entry.username} circle placeholder="avatar" />
                                 {:else}
-                                    <span class="w-full h-full bg-gray-200 dark:bg-slate-600 flex items-center justify-center rounded-full">
-                                        <span class="text-[10px] font-semibold text-gray-500 dark:text-gray-400">{getAvatarInitial(entry.username)}</span>
+                                    <span class="w-full h-full bg-lf-neutral flex items-center justify-center rounded-full">
+                                        <span class="text-[10px] font-semibold text-lf-secondary">{getAvatarInitial(entry.username)}</span>
                                     </span>
                                 {/if}
                             </span>
                             <div class="min-w-0">
-                                <div class="text-gray-700 dark:text-gray-300 font-medium truncate">{entry.username}</div>
-                                <div class="text-[10px] text-gray-500 dark:text-gray-400">
+                                <div class="text-lf-secondary font-medium truncate">{entry.username}</div>
+                                <div class="text-[10px] text-lf-muted">
                                     {getRoleShortLabel(entry.role)} · {formatPercent(Math.round(entry.share_percentage * 10000) / 100, {signed: false, digits: 1})}
                                 </div>
                             </div>
