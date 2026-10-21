@@ -1428,3 +1428,42 @@ lotti è nei piani dei figli e nel log di `dev_release2`.
 > **⚠️ Fuori pista**: il registro dei treni del README di Phase_1 si ferma al 370, e la tabella delle sessioni era ferma
 > al 15/10: aggiornata oggi. Il backlog sottostimava il lavoro fatto (W: 7 ✅ invece di 56). Una mia affermazione su
 > N92 («l'API accetta i prezzi negativi») era sbagliata: corretta da X.
+
+### Ripresa su Linux e ondata 0 ✅ (2026-10-21)
+
+Il 20/10 alle 14:36 il coordinatore Copilot si è fermato (errore 403, credenziali scadute) e con lui le sessioni
+figlie. Il lavoro è stato migrato su Linux e ripreso con un coordinatore Claude Code. Analisi completa e piano a ondate:
+`ANALISI-ripresa-LibreFolio.md` (accanto al repo, fuori da git). Decisioni di backup in discussione:
+`BACKUP-pro-contro-20261021.md`.
+
+**Stato verificato su git (21/10):**
+- `dev_release2` conteneva i treni 1-4 del 20/10 e G-28 (`b844f83f2`); il gate del treno 4 è verde (all-backend 7/7,
+  core-unit 9771, component-unit 5154, E2E mirati).
+- Lavoro committato sui branch e non in dev: pezzo di A per H-61 (`64b8b9fa3`…), H-61 CP1 intermedio (`e917659c9`,
+  rosso voluto fino a R1), J-60, pagine di galleria di E.
+- Lavoro non committato nei worktree (copia di sicurezza dei diff: `salvataggi-worktrees-20261021/`): Y-39a (11 file),
+  Z-29s-a (6), E (9, poi committati), J (2, poi committati), H CP2 (3 test non tracciati).
+
+**Decisioni del developer, 21/10:** colori D-T28 sì (interruttori e serie dei grafici sui ruoli più vicini, "da
+rivedere"); import: le raccomandazioni del §4-C dell'analisi (D-W85-1…4, K3a in 1.3, C-70b/E-21 dopo); ondata 0 sì;
+backup in discussione.
+
+**Ondata 0:**
+- venv: alias `LibreFolio-SAUMUTtc` → `LibreFolio-OqaCk-or` (nome Mac nei documenti, venv Linux);
+- `.claude/` e `CLAUDE.md` nel git (`1a0586f0b`), `settings.local.json` escluso;
+- treno 5: J-60 (`aa109e06b`), pezzo di A per H-61 (`ad4effcf9`), E galleria + traduzioni (`ae47dc812`), CHANGELOG
+  (`d1893f84b`). Gate leggero verde: `api sync` senza diff, `front check` 0/0, `i18n check`, `transaction-cost-basis-rule` 244,
+  `admin-bootstrap` 310, `services transaction` 130, `api transactions-validate` 12, `core-unit` 9771, `mkdocs build` stretto e
+  `check-links` ok;
+- baseline Linux: `all-backend --fresh-run --workers 2` su `b844f83f2` (worktree `gate-coord`, dopo `npm ci`), **7/7
+  verde in 25 min 42 s** (nei campioni: carico 2-4, RAM disponibile oltre 3 GB). Il verde del Mac regge su Linux per il backend; E2E e galleria
+  non ancora provati qui;
+- scoperto: i `node_modules` dei worktree sono quelli del Mac (darwin-arm64): serve `npm ci` in `frontend/` di ogni
+  worktree prima di usarlo.
+
+**Lotti deliberati il 20/10 che il piano non riportava:** Y-39a/b (carte e anteprima in un solo componente, anche per i
+cambi), Z-29b/Z-29s/Z-29d ridotto/Z-29fx (serie ridotte), Y-40 (tre viste abs/%/rendimento mobile), H-61 (pannello di
+hosting: L1, R1, L2), A-62, E-25, E-26 (b), TC-23 (a), L1b, P4. Ordine deciso: Y-39 → Z-29b → Z-29s → Y-40.
+
+> **⚠️ Fuori pista**: il REPORT di ripartenza del 21/10 dava per aperti B-51, J-57 v3, A-CL1, X-R45b-ui e `gate_b8`:
+> erano già in `dev_release2` e verdi. I `node_modules` dei worktree erano inutilizzabili su Linux.
