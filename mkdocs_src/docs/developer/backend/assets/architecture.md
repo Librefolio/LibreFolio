@@ -731,13 +731,31 @@ descriptions); the Z-29a block at the end of `test_assets_prices.py`
 (`./dev.py test api assets-price`) the route's 422s, the OpenAPI document and sampled answers on the
 lane's server, and its PQS-API-06 the SMA reduced on a monthly and a weekly sample through the
 route. `test_signal_aggregation.py` (`./dev.py test services signal-aggregation`, its SAG-S block)
-pins `sample_signal_series()` on every case of the shared table and `align_signal_series()` on its `series_sets`
-`backend/test_scripts/fixtures/signals/signal_sampling_cases.v1.json`, which the "Z-29s-a" block of
-`frontend/src/lib/components/charts/__tests__/timeSeriesAggregation.test.ts` (Vitest) also reads,
-drawing its `browser_parity` cases through `downsampleRenderedSignal()`: the backend reduction and
+pins `sample_signal_series()` on every case of the shared table
+`backend/test_scripts/fixtures/signals/signal_sampling_cases.v1.json`, and `align_signal_series()`
+on its `series_sets`; the "Z-29s-a" block of
+`frontend/src/lib/components/charts/__tests__/timeSeriesAggregation.test.ts` (Vitest) also reads
+the table, drawing its `browser_parity` cases through `downsampleRenderedSignal()`: the backend reduction and
 the chart's are tied by it, as `aggregation_profiles.v1.json` ties the per-bucket rule
-([Signal Plugin Guide](../../architecture/patterns/signal_plugin_guide.md#plugin-contract)). The web
-app sends none of these fields: the asset list still asks each card's daily fill.
+([Signal Plugin Guide](../../architecture/patterns/signal_plugin_guide.md#plugin-contract)).
+
+**The web app (Z-29b).** The grid of the Assets list sends these fields. Each card sends its own
+item with `key` `asset:<id>` and the `max_points` its measured plot takes
+(`compactMaxPoints(plotWidthPx)` in `timeSeriesAggregation.ts`: the plot's width at 1.3 points per
+pixel, the rule `LineChart` applies to a daily series); each asset its comparison signals draw is an
+item `sample_like` that key, on the same range, so the target comes on the card's own buckets
+(`utils/reducedPriceQuery.ts`, `buildReducedQuery()`). `bulkBatches.ts` cuts the request by groups,
+a card with its targets, because a `sample_like` whose named item is in another request is refused
+(422 `sample_reference`). The answers go to the reduced price cache
+(`stores/reducedPriceCache.ts`, beside the daily one, which it does not touch): an entry is
+answered for a width only if the step that width asks, computed from the entry's own counts of days
+and weeks (`stepForMaxPoints()`), is the entry's; otherwise the card is read again from the backend
+(`cardsOfAnotherStep()`), and a weekly sample is never re-aggregated into months nor turned back
+into days. The chart draws `prices` as they are. The percentage view, the line's colour and a
+comparison's base read `sample_bounds.first` (`derived.base`), the point on the fill's first day,
+not `prices[0]`, the end of the first bucket. `compactDensity.test.ts` reads
+`compactDensityCases.json` and ties `compactMaxPoints()`, `fillCounts()` and the step to it, as
+`test_price_query_sampling.py` ties the backend. The FX list still asks every day (backlog Z-29fx).
 
 ### 📅 Fixed-Period Changes {: #fixed-period-changes }
 

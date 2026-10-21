@@ -25,7 +25,8 @@ describe('computeDerivedPriceState', () => {
         const result = computeDerivedPriceState([]);
         expect(result.lastPrice).toBeNull();
         expect(result.chartData).toEqual([]);
-        expect(Object.keys(result).sort(), 'the state of an empty history: its last price and its chart, no change over the range').toEqual(['chartData', 'lastPrice']);
+        expect(Object.keys(result).sort(), 'the state of an empty history: its base, its last price and its chart, no change over the range').toEqual(['base', 'chartData', 'lastPrice']);
+        expect(result.base).toBeNull();
     });
 
     it('computes lastPrice and chartData, and no change over the range', () => {
@@ -39,7 +40,7 @@ describe('computeDerivedPriceState', () => {
             {date: '2026-01-01', value: 100, staleDays: 0},
             {date: '2026-01-08', value: 110, staleDays: 0},
         ]);
-        expect(Object.keys(result).sort(), 'the change over the range is the backend’s range_change: the state of a priced history carries none').toEqual(['chartData', 'lastPrice']);
+        expect(Object.keys(result).sort(), 'the change over the range is the backend’s range_change: the state of a priced history carries none').toEqual(['base', 'chartData', 'lastPrice']);
     });
 
     it('reads staleDays from backward_fill_info.days_back when present', () => {
@@ -71,7 +72,7 @@ describe('computeDerivedPriceState', () => {
             {date: '2026-01-01', value: 0, staleDays: 0},
             {date: '2026-01-08', value: 10, staleDays: 0},
         ]);
-        expect(Object.keys(result).sort(), 'no delta keys, whatever the first price').toEqual(['chartData', 'lastPrice']);
+        expect(Object.keys(result).sort(), 'no delta keys, whatever the first price').toEqual(['base', 'chartData', 'lastPrice']);
     });
 });
 
@@ -177,5 +178,37 @@ describe('the Δ periods are the backend’s, not this module’s (MF-P2, X-R53)
         expect(priced, 'the derived state of a priced asset still carries period changes computed in the browser').not.toHaveProperty('deltas');
         expect(computeDerivedPriceState([]), 'nor an empty one').not.toHaveProperty('deltas');
         expect(priced.lastPrice, 'control: the rest of the state is still computed').toBe(110);
+    });
+});
+
+describe('computeDerivedPriceState: the base of a sampled series (Z-29b, MF n3)', () => {
+    // The base of a card's percentage view and of its line's colour is the point on the fill's first day F. A daily series
+    // opens on it. A weekly or monthly one opens on the end of the first bucket: F is `sample_bounds.first`, a point the
+    // series does not draw — reading `prices[0]` there would measure from the wrong day.
+
+    it('takes the base from the first price of a daily series', () => {
+        const result = computeDerivedPriceState([
+            {date: '2026-01-05', close: '100'},
+            {date: '2026-01-06', close: '110'},
+        ]);
+
+        expect(result.base).toEqual({date: '2026-01-05', value: 100});
+    });
+
+    it('takes the base from sample_bounds.first when the backend gives it, not from the first bucket’s point', () => {
+        const result = computeDerivedPriceState(
+            [
+                {date: '2026-01-11', close: '104'},
+                {date: '2026-01-18', close: '108'},
+            ],
+            {first: {date: '2026-01-07', close: '100', backward_fill_info: {days_back: 2}}, last: {date: '2026-01-18', close: '108'}},
+        );
+
+        expect(result.base).toEqual({date: '2026-01-07', value: 100});
+        expect(result.chartData.map((point) => point.value)).toEqual([104, 108]);
+    });
+
+    it('has no base for an empty series, whatever the bounds', () => {
+        expect(computeDerivedPriceState([], null).base).toBeNull();
     });
 });
