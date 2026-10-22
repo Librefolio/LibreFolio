@@ -79,7 +79,7 @@
         if (row.assetId === undefined) return '';
         const info = getAssetInfo(row.assetId);
         const src = info?.icon_url || getAssetTypeIconUrl(info?.asset_type ?? null);
-        return `<img src="${escapeHtml(src)}" alt="" class="h-4 w-4 shrink-0 rounded-full object-cover" onerror="this.style.visibility='hidden'" />`;
+        return `<img src="${escapeHtml(src)}" alt="" class="h-4 w-4 shrink-0 rounded-full object-cover" data-hide-on-error="visibility" />`;
     }
 
     function barHtml(row: TornadoRow): string {

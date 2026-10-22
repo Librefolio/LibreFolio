@@ -104,7 +104,7 @@
     function assetIconHtml(row: AssetRow): string {
         const iconSrc = row.icon_url || (row.asset_type ? getAssetTypeIconUrl(row.asset_type) : null);
         if (iconSrc) {
-            return `<img src="${escapeHtml(iconSrc)}" alt="" class="w-5 h-5 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />`;
+            return `<img src="${escapeHtml(iconSrc)}" alt="" class="w-5 h-5 rounded-full object-cover shrink-0" data-hide-on-error="display" />`;
         }
         return `<div class="w-5 h-5 rounded-full bg-lf-selected flex items-center justify-center shrink-0 text-lf-link"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg></div>`;
     }
@@ -129,7 +129,7 @@
         const cls = assetTypeBadgeClass(type);
         const dot = assetTypeBadgeDotClass(type);
         const label = $t(`assets.types.${type}`) || type;
-        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded ${cls}"><img src="${escapeHtml(imgSrc)}" alt="" class="w-3.5 h-3.5 object-contain" onerror="this.style.display='none'" />${label}${dot ? `<span class="inline-block w-1.5 h-1.5 shrink-0 rounded-full ${dot}" aria-hidden="true" data-testid="asset-type-dot"></span>` : ''}</span>`;
+        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded ${cls}"><img src="${escapeHtml(imgSrc)}" alt="" class="w-3.5 h-3.5 object-contain" data-hide-on-error="display" />${label}${dot ? `<span class="inline-block w-1.5 h-1.5 shrink-0 rounded-full ${dot}" aria-hidden="true" data-testid="asset-type-dot"></span>` : ''}</span>`;
     }
 
     // =========================================================================

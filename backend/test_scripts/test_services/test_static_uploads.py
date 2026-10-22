@@ -567,6 +567,22 @@ class TestValidateUploadSecurity:
         assert mime is not None
         print_success(f"Empty → {mime}")
 
+    def test_every_javascript_media_type_is_blocked(self):
+        """H-55 v2 review (R1 d): every name of the JavaScript type is in ``BLOCKED_MIME_TYPES``, not only the first two."""
+        print_section("BLOCKED_MIME_TYPES: all the JavaScript types")
+        for mime_type in ("application/javascript", "text/javascript", "application/x-javascript", "text/ecmascript", "application/ecmascript"):
+            assert mime_type in static_uploads.BLOCKED_MIME_TYPES, f"{mime_type} can be run by a <script src> and is not blocked"
+        print_success("5 JavaScript media types blocked")
+
+    def test_a_detected_javascript_media_type_is_refused(self, monkeypatch):
+        """H-55 v2 review (R1 d): a file whose sniffed type is one of the newly blocked names is refused, whatever its extension."""
+        print_section("validate_upload_security: sniffed JavaScript types")
+        for mime_type in ("application/x-javascript", "text/ecmascript", "application/ecmascript"):
+            monkeypatch.setattr(static_uploads, "_detect_actual_mime_type", lambda content, mime_type=mime_type: mime_type)
+            with pytest.raises(UploadSecurityError):
+                validate_upload_security(b"alert(1);", "notes.txt")
+        print_success("the three added types refused")
+
 
 class TestValidateUploadSecurityDetectedMime:
     """Tests for validate_upload_security() when MIME detection succeeds."""

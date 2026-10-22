@@ -407,7 +407,8 @@
         "error": "Error",
         "warning": "Warning",
         "info": "Information"
-      }
+      },
+      "blockedScript": "This browser tab blocked a script LibreFolio did not send ({sources}): a proxy, a CDN or a browser extension adds it. Turn that injection off for this site."
     }
   }
 }

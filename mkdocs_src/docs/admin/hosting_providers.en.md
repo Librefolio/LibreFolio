@@ -57,7 +57,7 @@ Today the profile changes eleven things:
 | What an archive unpacks to while a restore checks it, while `LIBREFOLIO_BACKUP_MAX_RESTORE_MB` is not set | No limit | 8 times the upload limit: 4000 MB with the 500 MB above, none when the upload limit is `0` |
 | Idle risk workers (simulations and optimizations) stop after | 600 seconds | 60 seconds |
 | Frame protection: only the app's own pages may show it in a frame | Off | On |
-| A report-only Content-Security-Policy on the pages of the web app | Off | On |
+| A second, wider Content-Security-Policy on the pages of the web app, report-only: it blocks nothing | Off | On |
 
 - The profile is public: anyone who can reach the server can read it at `/api/v1/system/instance`,
   without signing in. The web app reads it when it starts.
@@ -93,17 +93,25 @@ Today the profile changes eleven things:
 - **Frame protection** adds `X-Frame-Options: SAMEORIGIN` and
   `Content-Security-Policy: frame-ancestors 'self'` to every response (to a `304 Not Modified`
   only the first, so the browser keeps the policy of its cached copy): a browser then shows
-  LibreFolio in a frame only inside LibreFolio's own pages, whose policy also carries
-  `object-src 'none'; base-uri 'self'; form-action 'self'`, three directives that block nothing
-  LibreFolio uses (see «Main Options» in [Environment Variables](configuration.md)). If your hosting
+  LibreFolio in a frame only inside LibreFolio's own pages. (The three directives
+  `object-src 'none'; base-uri 'self'; form-action 'self'` are not part of this switch: every page
+  carries them in every profile, see «The Content-Security-Policy» in [Configuration](configuration.md).) If your hosting
   panel, or any page at another address, shows the app in a frame, the browser refuses to display it
   there: set `LIBREFOLIO_FRAME_PROTECTION=false` for those instances.
-- **The report-only Content-Security-Policy** blocks nothing. On the pages of the web app (not the
-  documentation, not the API), it tells the browser where a page may load its content from; the
-  browser lists what falls outside in its developer console and sends no report anywhere: LibreFolio
-  has no address to collect them. The web app's own inline scripts are allowed by their hashes and
-  report nothing: what the console lists is what an enforced policy would block, which is what this
-  report-only phase is for.
+- **The Content-Security-Policy** is enforced in both profiles, with no switch: on the pages of the web
+  app only LibreFolio's own scripts run, and the page may connect only to itself, to the origin of
+  `LIBREFOLIO_PUBLIC_URL` and, on a self-hosted install, to GitHub for the check for a newer release
+  («The Content-Security-Policy» in [Configuration](configuration.md)). If a proxy or a CDN in front of your
+  instances adds a script to the pages (Cloudflare's Rocket Loader or automatic Web Analytics, an
+  Nginx `sub_filter`), the browser blocks it: turn it off for your customers' hosts, as that page
+  explains. Set `LIBREFOLIO_PUBLIC_URL` for each instance too: a page may also connect to
+  that address.
+- **The report-only Content-Security-Policy** is a second, wider policy that blocks nothing. On the
+  pages of the web app (not the documentation, not the API), it tells the browser where a page may
+  load its images, styles, fonts and frames from as well; the browser lists what falls outside in its
+  developer console and sends no report anywhere: LibreFolio has no address to collect them. What
+  the console lists is what a fully enforced policy would block, which is what this report-only
+  phase is for.
 
 ### 🔑 A Session Key of 32 Characters or More {: #managed-jwt-secret }
 
@@ -493,7 +501,7 @@ For a caller without a session, most of the API answers as on any other instance
 
 A few calls are normally open to anyone: registration (`POST /api/v1/auth/register`), the setup of
 the [initial administrator](#initial-admin) (`POST /api/v1/auth/setup`), the address probe
-(`GET /api/v1/auth/address-probe`), the reference lists (`GET /api/v1/utilities/*`) and the AI
+(`GET /api/v1/auth/address-probe` and its image, `GET /api/v1/auth/address-probe.png`), the reference lists (`GET /api/v1/utilities/*`) and the AI
 Export catalogue (`GET /api/v1/ai-export/catalog`). On a blocked instance they answer `401` too. The
 setup page and the invitation page then say that the instance is blocked, instead of sending their
 visitor to the sign-in page, which would lose the link. The address probe
@@ -1098,7 +1106,7 @@ LIBREFOLIO_PRIVACY_URL=https://hosting.example.com/privacy
   The guard on the API and its list
 - 🔌 For developers: **[The Hosting Panel's Access](../developer/architecture/security.md#panel-access)** —
   The dependency of the panel's routes, its limit and its log line
-- 🖼️ For developers: **[Frame Protection and the Report-Only Policy](../developer/architecture/security.md#managed-headers)** —
+- 🖼️ For developers: **[The Content-Security-Policy and Frame Protection](../developer/architecture/security.md#managed-headers)** —
   The headers of the managed profile, directive by directive
 - 👑 For developers: **[The Initial Administrator](../developer/architecture/access_control.md#initial-admin)** —
   The startup step, the setup link and its route; the setup page is in
