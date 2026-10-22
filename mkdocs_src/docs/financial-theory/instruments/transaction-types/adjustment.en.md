@@ -57,20 +57,22 @@ A positive adjustment cannot be saved without a cost basis: enter one, or choose
 
 ### 📤 Outgoing Adjustments {: #outgoing-adjustments }
 
-Adjustments with negative quantity **decrease** the position. In the FIFO lots they consume the broker's open lots oldest first, as a sale does. What the units leave with depends, again, on the **Cost Basis Override**:
+Adjustments with negative quantity **decrease** the position: units given away, sent to an account LibreFolio does not track, or removed by a correction. Such an adjustment **has no value** — it only lowers the quantity — so it takes no **Cost Basis Override**:
 
-- **With override**: the units are **handed over at that per-unit cost** — the principle of an incoming adjustment, in the opposite direction. The Dashboard takes the value handed over, $q \times \text{CostBasis}$ converted at the adjustment's date, out of its [capital baseline](../../technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#outgoing-adjustments): capital that leaves, not a loss. The position gives up the average cost of those units, and the difference is realized, as for a sale: in a single currency, $q \times (\text{CostBasis} - \text{AverageCost})$. The FIFO lots do the same: each lot the adjustment consumes closes at the row's per-unit cost — **not** that lot's own FIFO cost — so $q$ units taken from a lot realize $q \times (\text{CostBasis} - \text{LotUnitCost})$, and the value handed over, $q \times \text{CostBasis}$, counts among that lot's proceeds
-- **Without override**: the units leave at **zero** — a write-off: each consumed lot realizes minus the cost of those units, with no proceeds. The Dashboard moves no capital and realizes nothing: the units leave the NAV, and their value comes off the Total P&L
+- **Capital and returns**: no capital leaves, so the adjustment is no flow for the [capital baseline](../../technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#outgoing-adjustments), TWRR or MWRR: the value of the units leaves the NAV, and the returns read it as a loss.
+- **Average cost**: the position gives up the average cost of those units, so the average cost (WAC) of what remains does not change.
+- **Realized**: the units leave at **zero**, so the adjustment realizes minus their cost, $-q \times \text{AverageCost}$ on the Dashboard. The FIFO lots consume the broker's open lots oldest first, as a sale does, and close them at zero: $q$ units taken from a lot realize $-q \times \text{LotUnitCost}$, with no proceeds.
 
-!!! example "Two lots, one outgoing adjustment"
+To record units that left for money, use a **Sell**. The API refuses a cost basis on an outgoing adjustment (`costBasisNotAllowed`); one stored on such a row by an earlier version stays in the database but is ignored. An adjustment linked to a **split** is the exception: the split only spreads the cost already held over the new quantity, and realizes nothing.
 
-    Every amount is in the report currency. Buy 10 units at 10, then 10 units at 20: the average cost is 15. An adjustment of −10 units with a cost basis of 15 consumes the first lot (FIFO) and closes it at 15: the lot realizes $10 \times (15 - 10) = +50$ and hands over $10 \times 15 = 150$. The second lot stays open at 20, so at a price $p$ the lots total $50 + 10 \times (p - 20) = 10 \times (p - 15)$ — the Dashboard's P&L on 10 units with an average cost of 15, where the handover realizes $150 - 150 = 0$.
+!!! example "Two shares given away"
 
-    With a single lot, buy 10 units at 20 and adjust −4 at 20: nothing is realized, and at a price of 30 the 6 remaining units gain $6 \times (30 - 20) = 60$, on the Dashboard and in the lots alike. Adjust −4 at 30 instead, the market price: the 4 units realize $4 \times (30 - 20) = +40$ on both sides, and the Dashboard's capital drops by the $4 \times 30 = 120$ handed over.
+    Every amount is in the report currency. Buy 10 shares at 50 (invested 500); the price rises to 80, so the position is worth 800 and its Total P&L is $800 - 500 = +300$. An adjustment of −2 shares gives two away:
 
-!!! note "Currency of an outgoing cost basis"
-
-    The cost basis applies to every lot the adjustment consumes, whatever its currency: a cost basis without a currency counts in the lot's, a lot without a currency in the report currency. In the report currency the two sides convert each at its own date — the value handed over, $q \times \text{CostBasis}$, from the cost basis's currency at the adjustment's date, the lot's cost from the lot's currency at its opening date — and the lot realizes their difference, the exchange-rate move between the two dates included (see [Lots in Another Currency](../../technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md#lots-in-another-currency)). The Dashboard converts the value handed over the same way, at the adjustment's date — a cost basis without a currency counts in the asset's — and realizes it against the average cost, whose purchases keep the rates of their own dates (see the example in [Deposited Capital](../../technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#outgoing-adjustments)).
+    - 8 shares remain, worth $8 \times 80 = 640$; the invested capital stays 500 and the average cost 50;
+    - realized: $0 - 2 \times 50 = -100$; unrealized: $8 \times (80 - 50) = +240$;
+    - Total P&L: $640 - 500 = +140$, that is $-100 + 240$;
+    - the day's TWRR: $640 / 800 - 1 = -20\%$, since no flow offsets the value that left.
 
 ### 🏦 Automatic Cost Basis on Transfers and Seeds
 

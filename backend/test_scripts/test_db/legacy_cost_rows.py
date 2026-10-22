@@ -10,9 +10,10 @@ such rows exist only in data an older version left behind — and that is exactl
 dashboard's yellow banner must flag (release checklist item 22, issue #32). The API cannot
 create them any more, so this module writes them the way an old version stored them.
 
-Who uses it. Only ``frontend/e2e/portfolio/data-quality-legacy.spec.ts``: the spec creates a
-disposable account, its two brokers and its two assets through the API, calls this module to add
-the legacy rows, and deletes everything in its teardown — the brokers with ``force``, which takes
+Who uses it. ``frontend/e2e/portfolio/data-quality-legacy.spec.ts`` and Y2 of
+``frontend/e2e/portfolio/yield-on-cost-real.spec.ts``: each spec creates a disposable account, its
+two brokers and its two assets through the API, calls this module to add the legacy rows, and
+deletes everything in its teardown — the brokers with ``force``, which takes
 these rows with them. The backend side of the same shapes is proven by
 ``test_portfolio_cost_currency.py`` (S7, L4).
 

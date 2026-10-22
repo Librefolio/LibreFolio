@@ -92,10 +92,13 @@
         "unknown": "Questo link non è valido: riaprilo intero dall'email. Se non funziona ancora, accedi per chiederne uno nuovo.",
         "blocked": "Questa istanza è bloccata dal suo fornitore di hosting, quindi il link non può essere verificato ora. Aprilo di nuovo quando l'istanza sarà sbloccata; se intanto il link è scaduto, accedi per averne uno nuovo.",
         "missing": "Questo link è incompleto: riaprilo dall'email.",
-        "error": "Non è stato possibile verificare il link: riprova."
+        "error": "Non è stato possibile verificare il link: riprova.",
+        "ready": "Conferma il tuo indirizzo email per attivare il tuo account.",
+        "confirm": "Conferma il mio indirizzo email",
+        "notSignedUp": "Se non hai creato un account su questa istanza, chiudi questa pagina: non succede nulla."
       },
       "verified": "Il tuo indirizzo email è verificato, {username}: ora puoi accedere.",
-      "loginRequired": "Il tuo indirizzo email non è ancora verificato: apri il link nell'email che ti abbiamo mandato, poi accedi.",
+      "loginRequired": "Il tuo indirizzo email non è ancora verificato: apri il link nell'email di attivazione, oppure chiedine uno nuovo qui sotto.",
       "resend": "Rispedisci il link",
       "resending": "Invio…",
       "resent": "Un link nuovo è in arrivo: controlla la posta, anche nello spam. I link precedenti non funzionano più.",
@@ -108,10 +111,11 @@
         "unavailable": "Ora l'email non può partire: riprova più tardi, o chiedi all'amministratore di questa istanza.",
         "generic": "Non è stato possibile spedire il link: riprova."
       },
-      "registered": "Account creato. Ti abbiamo mandato un'email con un link per attivarlo: aprilo entro 24 ore, poi accedi.",
+      "registered": "Account creato. Ti stiamo mandando un'email con un link per attivarlo: aprilo entro 24 ore, poi accedi. Nessuna email dopo qualche minuto? Controlla lo spam, poi accedi con nome utente e password: ti verrà proposto un link nuovo.",
       "signUpUnavailable": "Ora non è possibile registrarsi: questa istanza non riesce a spedire l'email di verifica. Riprova più tardi, o chiedi al suo amministratore.",
       "settingNeedsEmail": "Serve che un'email con un link possa partire: configura prima SMTP e LIBREFOLIO_PUBLIC_URL (Impostazioni › Amministrazione › Email).",
-      "settingUnavailable": "La verifica dell'email richiede che un'email con un link possa partire, e ora non può: controlla Impostazioni › Amministrazione › Email."
+      "settingUnavailable": "La verifica dell'email richiede che un'email con un link possa partire, e ora non può: controlla Impostazioni › Amministrazione › Email.",
+      "registeredHeld": "Account creato, ma l'email di attivazione non può partire ora: troppe registrazioni dalla tua rete nell'ultima ora. Accedi con nome utente e password: ti verrà proposto un link nuovo."
     },
     "sendLink": {
       "button": "Invia per email",

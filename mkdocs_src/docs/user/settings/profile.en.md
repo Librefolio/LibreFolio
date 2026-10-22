@@ -16,7 +16,7 @@ While unlocked, every modified field shows its own **save** / **undo** buttons, 
 
 Hover your avatar (while unlocked) and click the 📷 camera overlay to open the image picker: choose an existing image from the [Files library](../files/index.md), a shared one or one of your own, or upload a new one. Uploads pass through the **[Image Crop tool](../misc/image-crop.md)** with the *avatar* preset (square crop, circular preview).
 
-The avatar is saved immediately and is used across the app wherever your identity is shown — sidebar, broker sharing, and collaborator lists.
+The avatar is saved immediately and is used across the app wherever your identity is shown — sidebar, broker sharing, and collaborator lists. Administrators also see it in **[Settings › Administration › Users](../../admin/users.md#accounts)**, next to your username.
 
 Since the other users see your avatar, its picture is **shared**: an image you upload here is stored shared, and one of your personal images becomes shared when you pick it, with a notice (see [Shared or personal](../files/index.md#visibility)).
 
@@ -77,7 +77,7 @@ Your brokers follow the same rule as [leaving a shared broker](../brokers/sharin
 
 - **Deleted, with all their transactions and files**: the brokers you are the **only Owner** of, each with its number of transactions. Their imported report files go too, and they disappear also for the users you shared them with. Without any, the dialog says *No broker is deleted.*;
 - **Shared brokers that stay (only the access goes)**: every other broker you can open, with your role on it. It stays for its other users: only your access is removed;
-- a warning when transactions on other brokers are halves of transfers with the brokers that go: they stay, without their other half. A received transfer becomes an adjustment at its cost, and a transfer sent to one of those brokers an adjustment that takes the assets out at their average cost on the broker that sent them (see [Edit or delete a broker](../brokers/index.md)).
+- a warning when transactions on other brokers are halves of transfers with the brokers that go: they stay, without their other half. A received transfer becomes an adjustment at its cost, and a transfer sent to one of those brokers an adjustment that takes the assets out of the broker that sent them, without a value: their cost counts as a realized loss there (see [Edit or delete a broker](../brokers/index.md)).
 
 If the dialog cannot load that list, it does not let you delete: close it and try again. If the deletion fails for a technical reason, nothing is deleted.
 

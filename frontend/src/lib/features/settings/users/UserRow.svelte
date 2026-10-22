@@ -9,6 +9,7 @@ managed from the Profile tab.
     import {ChevronRight, KeyRound, Link2Off, LogOut, RotateCcw, ShieldCheck, ShieldOff, Trash2, UserCheck, UserX} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
+    import UserAvatar from '$lib/components/ui/media/UserAvatar.svelte';
     import type {AdminAccount, UserAction} from './types';
 
     interface Props {
@@ -39,6 +40,9 @@ managed from the Profile tab.
     // The initial administrator waiting for its setup (F02) activates through its link only: no reactivation, no reason
     // for one; it keeps its role until then, and deleting it needs no demotion (A-43)
     const pendingSetup = $derived(account.pending_setup === true);
+    // An account waiting for its email verification, its link live or expired (E-7): badged instead of «Deactivated»; its
+    // actions are a deactivated account's. The setup's wait comes first, and an active account never waits
+    const pendingVerification = $derived(account.pending_verification === true && !account.is_active && !pendingSetup);
     const deactivateReason = $derived<Reason | null>(account.protected ? 'protected' : account.is_superuser && isOnlyActiveAdmin ? 'last-admin' : null);
     // An account waiting for its email verification with a live link already holds its place (workstream E)
     const reactivateReason = $derived<Reason | null>(full && !account.holds_place ? 'limit' : null);
@@ -56,6 +60,7 @@ managed from the Profile tab.
     data-active={String(account.is_active)}
     data-admin={String(account.is_superuser)}
     data-pending-setup={String(pendingSetup)}
+    data-pending-verification={String(pendingVerification)}
     data-protected={String(account.protected)}
     data-self={String(isSelf)}
     data-testid="users-row"
@@ -64,6 +69,7 @@ managed from the Profile tab.
 >
     <button aria-controls="{uid}-panel" aria-expanded={expanded} class="flex w-full min-w-0 items-center gap-3 text-left" data-testid="users-row-toggle" onclick={() => (expanded = !expanded)} type="button">
         <ChevronRight class="h-4 w-4 shrink-0 text-lf-muted transition-transform {expanded ? 'rotate-90' : ''}" />
+        <UserAvatar username={account.username} avatarUrl={account.avatar_url ?? null} testId="users-row-avatar" />
         <span class="min-w-0 flex-1">
             <span class="flex flex-wrap items-center gap-1.5">
                 <span class="truncate font-medium text-lf-primary">{account.username}</span>
@@ -75,8 +81,10 @@ managed from the Profile tab.
                 {/if}
                 {#if pendingSetup}
                     <span class="rounded-full border border-lf-subtle bg-lf-neutral px-2 py-0.5 text-xs text-lf-secondary" data-testid="users-badge-pending-setup">{$_('settings.usersTab.badges.pendingSetup')}</span>
+                {:else if pendingVerification}
+                    <span class="rounded-full border border-lf-subtle bg-lf-neutral px-2 py-0.5 text-xs text-lf-secondary" data-testid="users-badge-pending-verification" title={$_('settings.usersTab.pendingVerificationHint')}>{$_('settings.usersTab.badges.pendingVerification')}</span>
                 {:else if !account.is_active}
-                    <span class="rounded-full border border-lf-subtle bg-lf-neutral px-2 py-0.5 text-xs text-lf-secondary">{$_('settings.usersTab.badges.inactive')}</span>
+                    <span class="rounded-full border border-lf-subtle bg-lf-neutral px-2 py-0.5 text-xs text-lf-secondary" data-testid="users-badge-inactive">{$_('settings.usersTab.badges.inactive')}</span>
                 {/if}
                 {#if account.protected}
                     <span class="rounded-full border border-lf-warning-line bg-lf-warning-soft px-2 py-0.5 text-xs text-lf-warning-on-soft">{$_('settings.usersTab.badges.protected')}</span>
@@ -135,6 +143,8 @@ managed from the Profile tab.
                 </div>
                 {#if pendingSetup}
                     <p class="mt-2 text-xs text-lf-muted" data-testid="users-pending-setup-hint">{$_('settings.usersTab.pendingSetupHint')}</p>
+                {:else if pendingVerification}
+                    <p class="mt-2 text-xs text-lf-muted" data-testid="users-pending-verification-hint">{$_('settings.usersTab.pendingVerificationHint')}</p>
                 {/if}
                 {#each reasons as reason (reason)}
                     <p class="mt-2 text-xs text-lf-muted">{$_(REASON_KEY[reason])}</p>

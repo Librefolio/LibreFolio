@@ -265,9 +265,12 @@ import type {RenderedSignal} from '$lib/charts/signals';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {setRoleReader} from '$lib/theme/roleColors';
+import {PRICE_SERIES} from '$lib/theme/chartTheme';
 import {notifyChartColorsChange} from '$lib/theme/themeMode';
 import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
 import LineChart, {type LineDataPoint} from './LineChart.svelte';
+import PriceChartCompact from './PriceChartCompact.svelte';
+import {COLORS} from './lineChartHelpers';
 
 type UiLanguage = 'en' | 'it' | 'fr';
 const LANGUAGES = ['it', 'fr'] as const;
@@ -1121,5 +1124,193 @@ describe('LineChart — a resize re-aims the arrows once it settles, not on each
 
         expect.soft(aimOf(seriesPayloadsSince(chart, afterBurst)), 'Y-25: once the resize settled, the arrows were not re-aimed exactly once — one series write-back, carrying both arrows, aimed').toEqual([TREND_ENDS.map((day) => ({day, aimed: true}))]);
         expect(chart.getOptionCount, 'Y-25: one resize — its five callbacks and its settle — read getOption() more than once: the arrows need one read, once it settles').toBeLessThanOrEqual(1);
+    });
+});
+
+// =========================================================================
+// Y-39b (F-2) — a compact chart colours its line by its baseline too
+// =========================================================================
+
+/**
+ * Y-39b (F-2) — the colour on the base, on a compact chart.
+ *
+ * What it protects: the cards of the lists (`AssetCard`, `FxCard`) draw through `PriceChartCompact` → `LineChart` with
+ * `compact`. `LineChart` coloured the line by its baseline only when it was not compact (`colorByBaseline && !compact`):
+ * the setting "colour by baseline" of the chart settings reached the detail page and the settings' preview, and not the
+ * cards. The contract, after the cure:
+ *
+ * - a compact chart honours `colorByBaseline` as a full one does: green from the baseline up, red below it, the dashed
+ *   `__baseline__` series at the base — with the colours of today (`COLORS.green*`/`red*`, light and dark, redrawn on a
+ *   theme switch);
+ * - in the absolute view the base is the FIRST POINT OF THE DATA IT WAS GIVEN, not the first point it draws: a compact
+ *   chart reduces a dense series to weekly or monthly points (`getCompactAggregatedData`), and the first reduced point is
+ *   the end of the first bucket — a base some days late, which turns the first week's colour the wrong way;
+ * - the optional prop `baselineValue` replaces that base (a page that knows the base the reduction hides hands it in:
+ *   Z-29b hands the value of the first day of the sample); the percentage view has its base at 0 whatever it says;
+ * - `PriceChartCompact` forwards `baselineValue`.
+ *
+ * How it is tested: the real component over the ECharts recorder, as the cases above. A series of eight years of daily
+ * points — far denser than the 790 px of the panel at any threshold, so the compact chart draws it weekly — rising from
+ * 100 by a hundredth a day: its first point is 100, the first it draws is that of the first week's end. The base is read
+ * from the dashed series' values, the colours from the series that carry the price, in the notation the chart writes
+ * them (`carries`). Barriers: the chart drew fewer categories than the series has days, so the reduction is in play.
+ *
+ * Red today: nothing is coloured and no base is drawn on a compact chart, and `baselineValue` is not a prop.
+ * Green today, and after: a compact chart with `colorByBaseline` off draws neither base nor colours (guard); a full
+ * chart's base is its first point (guard).
+ */
+describe('LineChart — a compact chart colours its line by its baseline, from the first point it was given (Y-39b, F-2)', () => {
+    /** Eight years of days from Monday 2018-01-01, rising from 100 by 0.01 a day: dense enough to be drawn weekly at 790 px, whatever the threshold. */
+    const EIGHT_YEARS: LineDataPoint[] = Array.from({length: 2922}, (_day, index) => ({date: new Date(Date.UTC(2018, 0, 1 + index)).toISOString().slice(0, 10), value: 100 + index / 100}));
+    const FIRST_VALUE = EIGHT_YEARS[0].value;
+    const BASELINE_SERIES = '__baseline__';
+    /** The series that carry the price: the line (and its segments), not the dashed base. */
+    const priceSeries = (option: ChartOption): ChartOption[] => seriesIn(option).filter((series) => series.type === 'line' && series.name !== BASELINE_SERIES);
+    const baselineSeries = (option: ChartOption): ChartOption[] => seriesIn(option).filter((series) => series.name === BASELINE_SERIES);
+
+    /** The chart's last full draw: its last `setOption` carrying both the series and the x-axis (a compact chart has no tooltip to tell it by). */
+    function lastFullDraw(): ChartOption {
+        const calls = chartInstances.at(-1)?.setOptionCalls ?? [];
+        return [...calls].reverse().find((call) => 'series' in call.option && 'xAxis' in call.option)?.option ?? {};
+    }
+
+    /** The values of the dashed base the last draw carries, de-duplicated: one value for a flat line. */
+    function baseValues(): number[] {
+        const [base] = baselineSeries(lastFullDraw());
+        return [...new Set(((base?.data ?? []) as Array<number | null>).filter((value): value is number => value !== null))];
+    }
+
+    async function mountCompact(props: Partial<ComponentProps<typeof LineChart>> = {}) {
+        vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(800);
+        vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(800);
+        const view = render(LineChart, {props: {data: EIGHT_YEARS, currency: 'EUR', compact: true, height: '80px', colorByBaseline: true, ...props}});
+        await waitFor(() => expect(priceSeries(lastFullDraw()).length, 'barrier: the compact chart drew its line').toBeGreaterThan(0), {timeout: 5_000});
+        const xAxis = lastFullDraw().xAxis;
+        const categories = ((Array.isArray(xAxis) ? xAxis[0] : xAxis) as {data?: string[]} | undefined)?.data ?? [];
+        expect(categories.length, 'precondition: the compact chart reduced the series — it draws fewer points than the series has days').toBeLessThan(EIGHT_YEARS.length);
+        return view;
+    }
+
+    beforeEach(() => {
+        document.documentElement.classList.remove('dark');
+    });
+
+    afterEach(() => {
+        document.documentElement.classList.remove('dark');
+    });
+
+    it('draws the dashed base on a compact chart when colorByBaseline is on', async () => {
+        await mountCompact();
+
+        expect(baselineSeries(lastFullDraw()), 'F-2: a compact chart with colorByBaseline drew no base').toHaveLength(1);
+    });
+
+    it('the base of an absolute compact chart is the first point of the data it was given, not the first point it draws', async () => {
+        await mountCompact();
+
+        expect(baseValues(), 'F-2: the base is not the series’ first value — the first reduced point is the end of the first week').toEqual([FIRST_VALUE]);
+    });
+
+    it('baselineValue replaces that base', async () => {
+        await mountCompact({baselineValue: 150});
+
+        expect(baseValues(), 'F-2: baselineValue did not set the base').toEqual([150]);
+    });
+
+    it('the percentage view has its base at 0, whatever baselineValue says', async () => {
+        await mountCompact({viewMode: 'percentage', baselineValue: 150});
+
+        expect(baseValues(), 'F-2: the percentage view’s base is not 0').toEqual([0]);
+    });
+
+    it('colours the line red below the base and green above it, in the light colours of today', async () => {
+        await mountCompact({baselineValue: 1e9});
+        const belowAll = priceSeries(lastFullDraw());
+        expect({red: carries(belowAll, COLORS.redLight), green: carries(belowAll, COLORS.greenLight)}, 'F-2: a line entirely below its base is not red, or has green on it').toEqual({red: true, green: false});
+
+        cleanup();
+        chartInstances.length = 0;
+        await mountCompact({baselineValue: -1e9});
+        const aboveAll = priceSeries(lastFullDraw());
+        expect({red: carries(aboveAll, COLORS.redLight), green: carries(aboveAll, COLORS.greenLight)}, 'F-2: a line entirely above its base is not green, or has red on it').toEqual({red: false, green: true});
+    });
+
+    it('colours with the dark colours in the dark theme, and repaints on a theme switch without a reload', async () => {
+        await mountCompact({baselineValue: 1e9});
+        expect(carries(priceSeries(lastFullDraw()), COLORS.redLight), 'precondition: in light the line is drawn in the light red').toBe(true);
+
+        document.documentElement.classList.add('dark');
+        await waitFor(() => expect(carries(priceSeries(lastFullDraw()), COLORS.redDark), 'F-2: the theme switch did not repaint the compact line in the dark red').toBe(true), {timeout: 5_000});
+        expect(carries(priceSeries(lastFullDraw()), COLORS.redLight), 'F-2: the light red outlived the theme switch').toBe(false);
+    });
+
+    it('guard: with colorByBaseline off a compact chart draws neither the base nor the colours', async () => {
+        await mountCompact({colorByBaseline: false, baselineValue: 150});
+        const option = lastFullDraw();
+
+        expect({base: baselineSeries(option).length, green: carries(priceSeries(option), COLORS.greenLight), red: carries(priceSeries(option), COLORS.redLight)}).toEqual({base: 0, green: false, red: false});
+    });
+
+    it('guard: the base of a full chart is its first point', async () => {
+        render(LineChart, {props: {data: YEAR_2025, currency: 'EUR', colorByBaseline: true}});
+        await drawnOver(YEAR_2025.map((point) => point.date));
+        const [base] = baselineSeries(lastDraw());
+
+        expect([...new Set(base?.data as number[])]).toEqual([YEAR_2025[0].value]);
+    });
+
+    it('PriceChartCompact forwards baselineValue to the chart', async () => {
+        vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(800);
+        vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(800);
+        render(PriceChartCompact, {props: {data: EIGHT_YEARS, viewMode: 'absolute', colorByBaseline: true, baselineValue: 150}});
+        await waitFor(() => expect(priceSeries(lastFullDraw()).length, 'barrier: the card’s chart drew its line').toBeGreaterThan(0), {timeout: 5_000});
+
+        expect(baseValues(), 'F-2: PriceChartCompact did not hand baselineValue to LineChart').toEqual([150]);
+    });
+});
+
+/**
+ * The pending-edit colour is read when the option is built, not when the props are declared.
+ *
+ * What it protects: `pendingColor` defaulted to `PRICE_SERIES.pendingEditPoint` in the props declaration, which Svelte reads once
+ * per prop and keeps. A colour the theme answers at the time of the call (the colour programme turns the constants of
+ * `chartTheme.ts` into getters) would stay that of the theme the chart was mounted in after a theme switch without a reload. The
+ * contract: with no `pendingColor` prop, the pending series takes `PRICE_SERIES.pendingEditPoint` as it reads when the chart is
+ * rebuilt; a `pendingColor` prop still wins.
+ *
+ * How it is tested: the constant is replaced by a getter answering a colour the case changes, as the programme will make it; the
+ * chart is mounted, the colour changed, the chart rebuilt on `notifyChartColorsChange()`, and the pending series' colour read.
+ */
+describe('LineChart — the pending-edit colour follows the theme after a rebuild', () => {
+    const PENDING = [{date: YEAR_2025[10].date, value: 105}];
+    const pendingPaint = (): unknown => seriesIn(lastDraw()).find((series) => series.name === 'Pending')?.itemStyle;
+    let original: PropertyDescriptor | undefined;
+    let colour = '#0b1d2f';
+
+    beforeEach(() => {
+        original = Object.getOwnPropertyDescriptor(PRICE_SERIES, 'pendingEditPoint');
+        colour = '#0b1d2f';
+        Object.defineProperty(PRICE_SERIES, 'pendingEditPoint', {configurable: true, enumerable: true, get: () => colour});
+    });
+
+    afterEach(() => {
+        if (original) Object.defineProperty(PRICE_SERIES, 'pendingEditPoint', original);
+    });
+
+    it('rebuilt after the colour changed, the pending series carries the new colour, not the one at mount', async () => {
+        render(LineChart, {props: {data: YEAR_2025, currency: 'EUR', pendingData: PENDING}});
+        await drawnOver(YEAR_2025.map((point) => point.date));
+        expect(carries(pendingPaint(), '#0b1d2f'), 'precondition: the pending series is drawn in the colour at mount').toBe(true);
+
+        colour = '#d4c3b2';
+        notifyChartColorsChange();
+        await waitFor(() => expect(carries(pendingPaint(), '#d4c3b2'), 'the rebuilt chart kept the pending colour of the mount').toBe(true), {timeout: 5_000});
+    });
+
+    it('guard: a pendingColor prop wins over the constant', async () => {
+        render(LineChart, {props: {data: YEAR_2025, currency: 'EUR', pendingData: PENDING, pendingColor: '#123456'}});
+        await drawnOver(YEAR_2025.map((point) => point.date));
+
+        expect(carries(pendingPaint(), '#123456')).toBe(true);
     });
 });

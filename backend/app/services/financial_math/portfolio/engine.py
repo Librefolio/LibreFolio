@@ -8,9 +8,9 @@ import hashlib
 import json
 import threading
 from collections import defaultdict
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date as date_type
-from datetime import timedelta
 from decimal import Decimal
 from typing import Optional
 
@@ -18,11 +18,11 @@ import structlog
 from sqlalchemy import and_, func, or_, select
 
 from backend.app.db.models import Asset, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, Transaction, TransactionType
-from backend.app.schemas.common import Currency as CurrencySchema
 from backend.app.services.accounts.settings_service import get_effective_base_currency
 from backend.app.services.financial_math.average_cost import (
     compute_average_costs,
 )
+from backend.app.services.financial_math.fx_rates import AskedDayRates
 from backend.app.services.financial_math.native_cash import cash_movement_from_transaction, compute_native_cash, effective_share
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
@@ -30,7 +30,7 @@ from backend.app.services.financial_math.portfolio.derived_views import build_co
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, InTransitInterval, InvalidSplitEvent, PortfolioCalculationResult, RowsBeforeFloor, SplitHistory, SplitRecord
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, build_asset_price_series
 from backend.app.services.financial_math.splits import is_valid_split_ratio, load_split_links
-from backend.app.services.fx.conversion import convert_bulk
+from backend.app.services.fx.conversion import unit_rate_steps
 from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, latest_range_end
 from backend.app.utils.runtime.cache import get_ttl_cache
 
@@ -603,13 +603,11 @@ class PortfolioCalculationEngine:
         target_currency: str,
         date_from: date_type,
         date_to: date_type,
-    ) -> dict[tuple[str, str, date_type], Decimal]:
-        """Pre-load all FX rates needed for the calculation in one bulk call.
+    ) -> Mapping[tuple[str, str, date_type], Decimal]:
+        """Pre-load all FX rates needed for the calculation in one call, as steps (P3).
 
         Includes rates for:
         - Transaction amounts → target_currency (all tx dates)
-        - Priced outgoing ADJUSTMENTs → their cost basis (or asset) currency at their date (J-24: the
-          value they hand over leaves the capital at that day's rate)
         - External cash flows → target_currency
         - Price currencies → target_currency (every day in range)
         - Asset currencies (resolver marks, unrealized split) → target_currency (every day in range)
@@ -617,55 +615,37 @@ class PortfolioCalculationEngine:
           internal broker flows and the in-kind transfer capital value securities on that date)
         - In-transit cash → target_currency (every day of the transit); in-transit cost → at arrival
 
+        Each currency's needs are windows of days — the range, a transit, single days — and one ``unit_rate_steps`` call
+        answers them all: on every asked day the rate ``convert_bulk`` gives for one unit, read on the days a stored rate
+        changes instead of a request a day (P3, «formule veloci»). The map answers on the asked days only
+        (``AskedDayRates``): an unasked day has no rate, as before.
+
         Cost conversions are not here: compute_average_costs makes its own, at each movement's date.
         """
-        # Collect all (from_ccy, date) pairs needed
-        fx_needs: set[tuple[str, date_type]] = set()
+        # The windows of days each currency needs a rate on
+        windows: dict[str, list[tuple[date_type, date_type]]] = defaultdict(list)
+
+        def need(ccy: str | None, first: date_type, last: date_type | None = None) -> None:
+            if ccy and ccy != target_currency:
+                windows[ccy].append((first, first if last is None else last))
 
         # From transaction amounts
         for ctxn in classified_txs:
             tx = ctxn.tx
-            if tx.amount and tx.amount != 0 and tx.currency and tx.currency != target_currency:
-                fx_needs.add((tx.currency, tx.date))
-
-        # From priced outgoing ADJUSTMENTs (J-24): the value they hand over, at the rate of their date, also before
-        # the range, in the cost basis currency or the asset's
-        for ctxn in classified_txs:
-            tx = ctxn.tx
-            if tx.type != TransactionType.ADJUSTMENT or tx.cost_basis_override is None or not tx.quantity or tx.quantity > 0:
-                continue
-            handover_ccy = tx.cost_basis_currency or asset_currencies.get(tx.asset_id)
-            if handover_ccy and handover_ccy != target_currency:
-                fx_needs.add((handover_ccy, tx.date))
+            if tx.amount and tx.amount != 0 and tx.currency:
+                need(tx.currency, tx.date)
 
         # From external cash flows
         for dt, _, _, ccy in external_cash_flows:
-            if ccy != target_currency:
-                fx_needs.add((ccy, dt))
+            need(ccy, dt)
 
-        # From price currencies — need rate for every day in range
-        price_currencies: set[str] = set()
-        for prices in price_map.values():
-            for _, _, ccy in prices:
-                if ccy != target_currency:
-                    price_currencies.add(ccy)
+        # From price currencies and asset currencies (resolver marks + unrealized split): every day in range
+        range_ccys = {ccy for prices in price_map.values() for _, _, ccy in prices} | set(asset_currencies.values())
+        if date_from <= date_to:
+            for ccy in range_ccys:
+                need(ccy, date_from, date_to)
 
-        # From asset currencies (resolver marks + unrealized split, every day in range)
-        asset_ccys_non_target: set[str] = set()
-        for ccy in asset_currencies.values():
-            if ccy != target_currency:
-                asset_ccys_non_target.add(ccy)
-
-        # For price/asset currencies we need rates for every day in range
-        all_non_target_ccys = price_currencies | asset_ccys_non_target
-        if all_non_target_ccys:
-            current = date_from
-            while current <= date_to:
-                for ccy in all_non_target_ccys:
-                    fx_needs.add((ccy, current))
-                current += timedelta(days=1)
-
-        # From TRANSFER legs before the range: the loop above starts at date_from
+        # From TRANSFER legs before the range: the range starts at date_from
         for ctxn in classified_txs:
             tx = ctxn.tx
             if tx.type != TransactionType.TRANSFER or tx.asset_id is None or not tx.quantity or tx.date >= date_from:
@@ -675,34 +655,20 @@ class PortfolioCalculationEngine:
             if asset_ccy:
                 leg_ccys.add(asset_ccy)
             for ccy in leg_ccys:
-                if ccy != target_currency:
-                    fx_needs.add((ccy, tx.date))
+                need(ccy, tx.date)
 
         # From in-transit intervals: cash every day of the transit, cost at the arrival date
         for interval in in_transit_intervals:
             dep = interval.departure_leg
-            if interval.tx_type == "cash" and dep.currency and dep.currency != target_currency:
-                current = max(interval.start_date, EARLIEST_RANGE_START)  # R13-SEC8: no rate is asked before the floor
-                while current <= interval.end_date:
-                    fx_needs.add((dep.currency, current))
-                    current += timedelta(days=1)
-            if interval.cost_basis_currency and interval.cost_basis_currency != target_currency:
-                fx_needs.add((interval.cost_basis_currency, interval.arrival_leg.date))
+            if interval.tx_type == "cash" and dep.currency:
+                start = max(interval.start_date, EARLIEST_RANGE_START)  # R13-SEC8: no rate is asked before the floor
+                if start <= interval.end_date:
+                    need(dep.currency, start, interval.end_date)
+            need(interval.cost_basis_currency, interval.arrival_leg.date)
 
-        if not fx_needs:
+        if not windows:
             return {}
 
-        # Batch convert
-        fx_needs_list = list(fx_needs)
-        bulk_items = [(CurrencySchema(code=ccy, amount=Decimal("1")), target_currency, dt) for ccy, dt in fx_needs_list]
-
-        results, _ = await convert_bulk(self.db, bulk_items, raise_on_error=False)
-
-        fx_rate_map: dict[tuple[str, str, date_type], Decimal] = {}
-        for i, (ccy, dt) in enumerate(fx_needs_list):
-            if i < len(results) and results[i] is not None:
-                converted_amount = results[i][0].amount if results[i] else None
-                if converted_amount is not None:
-                    fx_rate_map[(ccy, target_currency, dt)] = converted_amount
-
-        return fx_rate_map
+        pairs = {(ccy, target_currency): asked for ccy, asked in windows.items()}
+        steps = await unit_rate_steps(self.db, pairs)
+        return AskedDayRates(steps, pairs)

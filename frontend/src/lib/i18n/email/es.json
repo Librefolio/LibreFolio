@@ -92,10 +92,13 @@
         "unknown": "Este enlace no es válido: vuelve a abrirlo completo desde el correo. Si sigue fallando, inicia sesión para pedir uno nuevo.",
         "blocked": "Esta instancia está bloqueada por su proveedor de alojamiento, así que el enlace no se puede comprobar ahora. Ábrelo de nuevo cuando la instancia se desbloquee; si el enlace ha caducado para entonces, inicia sesión para obtener uno nuevo.",
         "missing": "Este enlace está incompleto: vuelve a abrirlo desde el correo.",
-        "error": "No se pudo comprobar el enlace: inténtalo de nuevo."
+        "error": "No se pudo comprobar el enlace: inténtalo de nuevo.",
+        "ready": "Confirma tu dirección de correo para activar tu cuenta.",
+        "confirm": "Confirmar mi dirección de correo",
+        "notSignedUp": "Si no has creado ninguna cuenta en esta instancia, cierra esta página: no pasa nada."
       },
       "verified": "Tu dirección de correo está verificada, {username}: ya puedes iniciar sesión.",
-      "loginRequired": "Tu dirección de correo aún no está verificada: abre el enlace del correo que te enviamos y luego inicia sesión.",
+      "loginRequired": "Tu dirección de correo aún no está verificada: abre el enlace del correo de activación o pide uno nuevo aquí abajo.",
       "resend": "Enviar el enlace de nuevo",
       "resending": "Enviando…",
       "resent": "Un enlace nuevo está en camino: revisa tu bandeja de entrada y el spam. Los enlaces anteriores ya no funcionan.",
@@ -108,10 +111,11 @@
         "unavailable": "Ahora no se puede enviar el correo: inténtalo más tarde o pregunta al administrador de esta instancia.",
         "generic": "No se pudo enviar el enlace: inténtalo de nuevo."
       },
-      "registered": "Cuenta creada. Te hemos enviado un correo con un enlace para activarla: ábrelo en las próximas 24 horas y luego inicia sesión.",
+      "registered": "Cuenta creada. Te estamos enviando un correo con un enlace para activarla: ábrelo en las próximas 24 horas y luego inicia sesión. ¿No llega ningún correo en unos minutos? Revisa el spam y luego inicia sesión con tu nombre de usuario y tu contraseña: se te ofrecerá un enlace nuevo.",
       "signUpUnavailable": "Ahora no es posible registrarse: esta instancia no puede enviar el correo de verificación. Inténtalo más tarde o pregunta a su administrador.",
       "settingNeedsEmail": "Hace falta que pueda salir un correo con enlace: configura primero SMTP y LIBREFOLIO_PUBLIC_URL (Configuración › Administración › Correo).",
-      "settingUnavailable": "La verificación del correo necesita que pueda salir un correo con enlace, y ahora no puede: revisa Configuración › Administración › Correo."
+      "settingUnavailable": "La verificación del correo necesita que pueda salir un correo con enlace, y ahora no puede: revisa Configuración › Administración › Correo.",
+      "registeredHeld": "Cuenta creada, pero el correo de activación no puede salir ahora: demasiados registros desde tu red en la última hora. Inicia sesión con tu nombre de usuario y tu contraseña: se te ofrecerá un enlace nuevo."
     },
     "sendLink": {
       "button": "Enviar por correo",

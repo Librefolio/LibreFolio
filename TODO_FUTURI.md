@@ -10,7 +10,7 @@ I TODO completati sono in `TODO_Completati.md`.
 **Data aggiunta**: 18 Ottobre 2026 · **Status**: 📋 FUTURO — da progettare · **Priorità**: 🔼 Medio-alta
 **Origine**: fusione di F16 (feedback Giuseppe + Alfy, 07/08/2026), F-MC-3 (feedback utente 08/09/2026), le voci
 C-86, C-87 e C-88 del backlog (utente C, chat del 04/09), due note sciolte (extraETF, aziende) e le richieste GitHub
-#50 e #51 di @Xgialippo (17/10/2026). Skill di riferimento: `asset-plugin`.
+#50, #51 e #52 di @Xgialippo (17/10/2026). Skill di riferimento: `asset-plugin`.
 
 ### Perché un punto solo
 
@@ -59,6 +59,13 @@ un'architettura unica, pensata bene prima di scrivere codice.
   portafoglio pesato sul valore delle posizioni**. È il primo esempio di come usare i dati del profilo: un fatto
   per asset, aggregato sul portafoglio dal backend. Risposta all'utente il 18/10: arriva dopo aver ragionato bene e
   creato l'ambiente centralizzato delle informazioni degli asset.
+- **Portafoglio diviso per obiettivi** (GitHub #52, @Xgialippo, 17/10/2026; qui dal 22/10, decisione del developer):
+  raggruppare gli asset per obiettivo («i pilastri di Coletti»: fondo emergenze, pensione…), con sottogruppi o tag, e
+  filtrare la Dashboard per gruppo. Oggi la Dashboard si filtra solo per broker. Si lega all'idea dei «Portafogli»,
+  gruppi di broker, di asset o di entrambi (più sotto, tra le idee sparse). Domande poste all'utente il 18/10, ancora
+  senza risposta: un asset sta in un solo obiettivo o si divide (a quote o a lotti)? gruppi di broker, di asset o
+  tutti e due? cosa vedere per ogni portafoglio (Dashboard filtrata, KPI e allocazione propri, allocazione obiettivo
+  per il PAC)? Registro: `PROSSIMI_LAVORI.md`, #52.
 - **Lo stesso principio, da applicare ad altre voci una volta identificate**: un fatto per asset, pesato sul valore
   delle posizioni (o raggruppato), con la quota dei dati mancanti dichiarata. Candidati da valutare quando si progetta:
   - per le obbligazioni, il rendimento a scadenza e la duration medi del portafoglio;
@@ -116,9 +123,24 @@ un'architettura unica, pensata bene prima di scrivere codice.
 
 - Piano in pausa: `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00AssetIdentityAndIdentifiers.prompt.md`
   (identità asset, identificativi).
-- `LibreFolio_developer_journal/Release_2/Phase_1/PROSSIMI_LAVORI.md` (#50, #51).
+- `LibreFolio_developer_journal/Release_2/Phase_1/PROSSIMI_LAVORI.md` (#50, #51, #52).
 - Backlog `BACKLOG_POST_1.2.md`: C-86, C-87, C-88, spostate qui.
 - Qui sotto, «💱 Settlement multicurrency ed esposizione»: F-MC-1 e F-MC-2 restano lì.
+
+---
+
+## 📐 Chiusura «rendimento totale» calcolata da noi (idea remota, 22/10/2026)
+
+**Origine**: Z-35 (decisione del developer del 22/10): i prezzi Yahoo si chiedono senza la correzione per i dividendi
+(`auto_adjust=False`) e la storia salvata si riscrive, perché la correzione di Yahoo riscala **tutte le chiusure
+precedenti** a ogni nuovo dividendo e farebbe contare il dividendo due volte (nel prezzo e nella transazione).
+
+**Idea, solo se un giorno serve** (per esempio un grafico «rendimento totale» o un confronto con un indice total return):
+la chiusura corretta si calcola da sé, con il metodo standard (lo stesso di CRSP e di Yahoo). Per ogni dividendo `D` con
+data di stacco `t`, fattore `f = 1 − D / P(t−1)` (`P(t−1)` = chiusura del giorno prima dello stacco); la chiusura corretta
+di un giorno è la chiusura vera per il prodotto dei fattori di tutti i dividendi successivi (gli split allo stesso modo,
+con fattore `1/rapporto`). Dati che servono: le chiusure vere (dopo Z-35) e i dividendi salvati come eventi dell'asset.
+Il calcolo andrebbe nella casa della matematica finanziaria (`backend/app/services/financial_math/`).
 
 ---
 

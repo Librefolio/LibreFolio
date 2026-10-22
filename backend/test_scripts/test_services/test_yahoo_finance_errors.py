@@ -13,7 +13,10 @@ and search and metadata no longer turn it into ``[]`` / ``None``. The Z-33
 cases (N86) build their frames as yfinance 1.7.0 stamps them — midnight in the
 exchange's timezone — and pin the exchange-day dating of the history and of
 the current value, and the warning the plugin gives, once per zone, on a host
-without a timezone database.
+without a timezone database. The Z-39 cases pin the currency read made for each
+search result (``_fetch_currency``): a refusal leaves at once as
+``AssetRateLimitedError``, through ``search()`` too, and any other error gives
+None; neither is cached, only Yahoo's answer is.
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ from contextlib import contextmanager
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
+from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import pandas as pd
@@ -52,6 +56,7 @@ class _FakeTicker:
         info=None,
         info_exc=None,
         fast_info=None,
+        fast_info_exc=None,
         history=None,
         history_exc=None,
         dividends=None,
@@ -64,6 +69,8 @@ class _FakeTicker:
         self._info = info if info is not None else {}
         self._info_exc = info_exc
         self._fast_info = fast_info if fast_info is not None else {}
+        self._fast_info_exc = fast_info_exc
+        self.fast_info_reads = 0
         self._history = history
         self._history_exc = history_exc
         self.history_calls: list[dict] = []
@@ -82,6 +89,9 @@ class _FakeTicker:
 
     @property
     def fast_info(self):
+        self.fast_info_reads += 1
+        if self._fast_info_exc is not None:
+            raise self._fast_info_exc
         return self._fast_info
 
     def history(self, **kwargs):
@@ -599,7 +609,7 @@ def test_fetch_currency_cache_hit_and_error(monkeypatch):
     assert p._fetch_currency("VOD.L") == "GBP"  # cache hit
     assert calls["n"] == 1
 
-    # A ticker that raises → None, cached negatively.
+    # A ticker that raises → None, not cached (Z-39, decision (2)(a): only an answer is cached; the Z-39 cases pin it).
     def boom(symbol):
         raise RuntimeError("kaboom")
 
@@ -1094,6 +1104,189 @@ def test_z33_an_unknown_name_without_area_is_not_logged(monkeypatch):
     assert isinstance(known, ZoneInfo) and known.key == "Europe/Rome", f"a known zone gives its ZoneInfo: {known!r}"
     assert unknown == dict.fromkeys(names), f"no zone for these names: {unknown}"
     assert _z33_zone_warnings(logs) == [], f"nothing may be logged for a known zone, a name without a '/' or an empty name: (level, timezone) {_z33_zone_warnings(logs)}"
+
+
+# ── Z-39: the currency read for each search result — a refusal is never swallowed, a failure never cached ──
+#
+# ``search()`` reads each result's currency through ``_fetch_currency(symbol)`` (``fast_info["currency"]``), up to 20 times
+# a search, behind a 24-hour cache that is one per process: ``get_ttl_cache("yfinance_currency")``, shared by every
+# provider instance. The read swallowed every error and cached None for it, a «too many requests» refusal included: the
+# symbol showed no currency for a day and Yahoo was never paused, against the asset plugin guide's «Never swallow a
+# refusal» (asset_plugin_guide.md, Too Many Requests). Decided (coordinator, 20/10):
+#   (1)(a) a refusal while the currency is read leaves ``_fetch_currency`` at once as ``AssetRateLimitedError``, after one
+#          request, with no sleep and no retry, and caches nothing; ``search()`` lets it through (its ``except
+#          AssetRateLimitedError: raise``): neither ``[]`` nor results without a currency;
+#   (2)(a) any other error gives None and caches nothing, so the next read asks Yahoo again; ``search()`` still answers.
+# Only an answer is cached 24 h — a currency, or Yahoo answering without one —, unchanged. No retry is pinned for a
+# transient error (a backoff per result would hold the provider's thread through a whole search); «no sleep» is pinned on
+# a refusal. Each test reads symbols of its own (``_z39_symbol``): no entry another test left in the shared cache can
+# answer instead of Yahoo. A request to Yahoo is one read of ``fast_info`` (``_Z39Yahoo.requests``).
+#
+# Red on HEAD b8c2f614b: every case but the ``_guard`` one; the first search of the other-error case is a guard too.
+
+
+def _z39_symbol(label: str) -> str:
+    """A symbol of this test alone: the currency cache is one per process, so a symbol another test, or this one run
+    again, left in it would answer instead of Yahoo."""
+    return f"Z39-{label}-{uuid4().hex[:8]}"
+
+
+class _Z39Yahoo:
+    """Yahoo for the Z-39 cases, its symbols those of ``outcomes``, in order.
+
+    ``search(query)`` is ``yf.Search``: one Yahoo equity quote per symbol. ``ticker(symbol)`` is ``yf.Ticker``: the n-th
+    ticker made for a symbol answers its n-th outcome, the last one repeating — a dict is Yahoo's ``fast_info``, an
+    exception is raised when ``fast_info`` is read. ``requests(symbol)`` counts the reads of ``fast_info`` for the symbol,
+    each one a request to Yahoo. A symbol the test does not answer for fails it, through ``pytest.fail``: no ``except
+    Exception`` in the plugin can swallow that.
+    """
+
+    def __init__(self, outcomes: dict[str, list[dict | Exception]]):
+        self._outcomes = outcomes
+        self._tickers: dict[str, list[_FakeTicker]] = {symbol: [] for symbol in outcomes}
+        self.searches: list[str] = []
+
+    def search(self, query: str) -> SimpleNamespace:
+        self.searches.append(query)
+        return SimpleNamespace(quotes=[{"symbol": symbol, "quoteType": "EQUITY", "longname": f"{symbol} plc", "isYahooFinance": True} for symbol in self._outcomes])
+
+    def ticker(self, symbol: str) -> _FakeTicker:
+        if symbol not in self._outcomes:
+            pytest.fail(f"Yahoo was asked for {symbol!r}, a symbol the test does not answer for", pytrace=False)
+        made, outcomes = self._tickers[symbol], self._outcomes[symbol]
+        outcome = outcomes[min(len(made), len(outcomes) - 1)]
+        made.append(_FakeTicker(fast_info_exc=outcome) if isinstance(outcome, Exception) else _FakeTicker(fast_info=outcome))
+        return made[-1]
+
+    def requests(self, symbol: str) -> int:
+        """How often Yahoo was asked for ``symbol``'s currency."""
+        return sum(ticker.fast_info_reads for ticker in self._tickers[symbol])
+
+
+def _z39_install(monkeypatch, outcomes: dict[str, list[dict | Exception]]) -> _Z39Yahoo:
+    """Bind a ``_Z39Yahoo`` answering ``outcomes`` as the plugin's ``yf``."""
+    yahoo = _Z39Yahoo(outcomes)
+    _install_yf(monkeypatch, ticker_factory=yahoo.ticker, search_factory=yahoo.search)
+    return yahoo
+
+
+def _z39_currencies(results: list[dict]) -> list[tuple[str, str | None]]:
+    """``(identifier, currency)`` of each search result, in order."""
+    return [(result["identifier"], result["currency"]) for result in results]
+
+
+@pytest.mark.parametrize(
+    "refusal",
+    [pytest.param(YFRateLimitError(), id="yfinance-class"), pytest.param(Exception("HTTP Error 429: Too Many Requests"), id="message")],
+)
+def test_z39_fetch_currency_refused_raises_at_once_and_caches_nothing(monkeypatch, refusal):
+    """Z-39, decision (1)(a): a refusal while the currency is read — yfinance's ``YFRateLimitError``, or a plain
+    ``Exception`` whose message says 429 — leaves ``_fetch_currency`` as ``AssetRateLimitedError``, from that refusal,
+    after one request and without a sleep. Nothing is cached: the next read asks Yahoo again and is refused again, two
+    requests in all.
+
+    The guide's «Never swallow a refusal»: swallowed, it read as «no currency» for 24 hours and Yahoo was never paused.
+    Red on HEAD b8c2f614b: ``_fetch_currency`` gives None (DID NOT RAISE).
+    """
+    _sleeping_fails(monkeypatch)
+    symbol = _z39_symbol("REFUSED")
+    yahoo = _z39_install(monkeypatch, {symbol: [refusal]})
+    provider = YahooFinanceProvider()
+
+    with pytest.raises(AssetRateLimitedError) as first:
+        provider._fetch_currency(symbol)
+    assert first.value.__cause__ is refusal, f"the AssetRateLimitedError must come from Yahoo's refusal: cause {first.value.__cause__!r}"
+    assert yahoo.requests(symbol) == 1, f"a refusal is never retried: one request, not {yahoo.requests(symbol)}"
+
+    with pytest.raises(AssetRateLimitedError):
+        provider._fetch_currency(symbol)
+    assert yahoo.requests(symbol) == 2, f"a refusal is not cached: the next read asks Yahoo again (2 requests in all, not {yahoo.requests(symbol)})"
+
+
+def test_z39_fetch_currency_other_error_gives_none_and_caches_nothing(monkeypatch):
+    """Z-39, decision (2)(a): any other error while the currency is read gives None and caches nothing. The next read
+    asks Yahoo again and gives its answer, ``GBP``, cached as any answer is: the third read does not ask. Two requests
+    for three reads.
+
+    Cached, the failure read as «no currency» for 24 hours. Red on HEAD b8c2f614b: the second read gives None from the
+    cache, without asking Yahoo.
+    """
+    symbol = _z39_symbol("BROKEN")
+    yahoo = _z39_install(monkeypatch, {symbol: [RuntimeError("kaboom"), {"currency": "GBP"}]})
+    provider = YahooFinanceProvider()
+
+    assert provider._fetch_currency(symbol) is None
+    assert yahoo.requests(symbol) == 1
+    assert provider._fetch_currency(symbol) == "GBP", "a failed read must not be cached: the next read asks Yahoo again"
+    assert provider._fetch_currency(symbol) == "GBP"
+    assert yahoo.requests(symbol) == 2, f"Yahoo's answer is cached as before: 2 requests for three reads, not {yahoo.requests(symbol)}"
+
+
+@pytest.mark.parametrize("answer", [pytest.param({}, id="no-currency-key"), pytest.param({"currency": None}, id="currency-none")])
+def test_z39_fetch_currency_answer_without_currency_is_cached_guard(monkeypatch, answer):
+    """Z-39 guard, green before and after: Yahoo answering without a currency (``fast_info`` with no ``currency``, or
+    with ``currency`` None) is an answer, not an error. None, cached 24 h like any answer: the next read comes from the
+    cache and does not ask Yahoo, which would now answer ``USD``. One request for two reads.
+
+    The cure stops caching failures, not answers.
+    """
+    symbol = _z39_symbol("NOCCY")
+    yahoo = _z39_install(monkeypatch, {symbol: [answer, {"currency": "USD"}]})
+    provider = YahooFinanceProvider()
+
+    assert [provider._fetch_currency(symbol), provider._fetch_currency(symbol)] == [None, None]
+    assert yahoo.requests(symbol) == 1, f"an answer without a currency is cached: one request, not {yahoo.requests(symbol)}"
+
+
+@pytest.mark.asyncio
+async def test_z39_search_refused_on_a_result_currency_raises_rate_limited(monkeypatch):
+    """Z-39, decision (1)(a), through ``search()``: ``yf.Search`` answers three Yahoo quotes, and the second symbol's
+    currency read is refused (``YFRateLimitError``). ``search()`` raises ``AssetRateLimitedError``, from that refusal,
+    without a sleep — neither ``[]`` nor results without a currency —, so the core pauses Yahoo. One search request, one
+    currency request for each of the first two symbols and none for the third: the refusal leaves at once, and nothing
+    more is asked of a source that has just refused.
+
+    The guide's «Never swallow a refusal». Red on HEAD b8c2f614b: ``search()`` answers three results, the second
+    without a currency.
+    """
+    _sleeping_fails(monkeypatch)
+    refusal = YFRateLimitError()
+    first, refused, third = (_z39_symbol(label) for label in ("FIRST", "REFUSED", "THIRD"))
+    yahoo = _z39_install(monkeypatch, {first: [{"currency": "USD"}], refused: [refusal], third: [{"currency": "EUR"}]})
+
+    try:
+        answered = await YahooFinanceProvider().search("Z39 refused")
+    except AssetRateLimitedError as error:
+        raised = error
+    else:
+        pytest.fail(f"a refusal on {refused}'s currency must leave search() as AssetRateLimitedError, not as an answer: (identifier, currency) {_z39_currencies(answered)}")
+
+    assert raised.__cause__ is refusal, f"the AssetRateLimitedError must come from the refusal on {refused}'s currency: cause {raised.__cause__!r}"
+    assert yahoo.searches == ["Z39 refused"]
+    assert [yahoo.requests(symbol) for symbol in (first, refused, third)] == [1, 1, 0], "currency requests per symbol: the refusal must leave at once, with nothing more asked of Yahoo"
+
+
+@pytest.mark.asyncio
+async def test_z39_search_other_error_on_a_result_currency_answers_then_asks_again(monkeypatch):
+    """Z-39, decision (2)(a), through ``search()``: the second symbol's currency read fails with another error. The
+    search still answers all three results, that one with ``currency`` None and the others with theirs: the guard part,
+    green before and after. Searched again, on the provider itself so that the core's query cache plays no part, Yahoo is
+    asked again for that symbol's currency alone, and its result now carries ``GBP``; the other two come from the cache.
+
+    Red on HEAD b8c2f614b, at the second search: the failure was cached as None, and Yahoo is not asked again.
+    """
+    first, broken, third = (_z39_symbol(label) for label in ("FIRST", "BROKEN", "THIRD"))
+    symbols = (first, broken, third)
+    yahoo = _z39_install(monkeypatch, {first: [{"currency": "USD"}], broken: [RuntimeError("kaboom"), {"currency": "GBP"}], third: [{"currency": "EUR"}]})
+    provider = YahooFinanceProvider()
+
+    answered = await provider.search("Z39 broken")
+    assert _z39_currencies(answered) == [(first, "USD"), (broken, None), (third, "EUR")]
+    assert [yahoo.requests(symbol) for symbol in symbols] == [1, 1, 1]
+
+    again = await provider.search("Z39 broken")
+    assert [yahoo.requests(symbol) for symbol in symbols] == [1, 2, 1], "currency requests per symbol: a failed read must not be cached, so the second search asks Yahoo again for that symbol alone"
+    assert _z39_currencies(again) == [(first, "USD"), (broken, "GBP"), (third, "EUR")]
 
 
 if __name__ == "__main__":

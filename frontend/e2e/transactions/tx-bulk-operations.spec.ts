@@ -11,6 +11,7 @@
  * - Create pair with different descriptions → validation error
  * - C-97b guard: an untouched one-satoshi SELL opens as original, shows 0.00000001, and closing writes nothing
  * - W-B65: an untouched Apply on a SELL, a BUY or a DEPOSIT keeps the row original, as the editor holds it, and closing asks nothing
+ * - B-47: a focus and a blur on a saved DEPOSIT's cash, then Apply, keep the row original, and closing asks nothing
  *
  * Prerequisites: backend test mode (port 6041), mock data populated.
  * Mock data contract: populate_mock_data.py creates multiple TX types on
@@ -24,7 +25,7 @@
  * afterwards. It used to rewrite "the first editable row", which is the `[delete-safe]`
  * FEE that tx-delete A1-confirm looks up by its description. The C-97b guard writes
  * the same way: its own rows through the API, on the seeded Bitcoin it only reads,
- * deleted afterwards. So do the W-B65 tests, one ledger each.
+ * deleted afterwards. So do the W-B65 tests, one ledger each, and the B-47 test.
  */
 import {expect, test, type Page, type Locator} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
@@ -332,6 +333,15 @@ async function applyFormUntouched(page: Page, ledger: SeededLedger): Promise<Loc
     const row = page.getByTestId('tx-bulk-body').locator('tbody tr[data-row-id]').filter({hasText: ledger.rowDesc});
     await expect(row).toHaveCount(1);
     return row;
+}
+
+/**
+ * B-47: where a click on the editor's Cancel landed — it closed the editor, it stopped on the discard dialog
+ * (`confirm-modal-confirm`), or the editor is still on its way out. One-shot reads, for `expect.poll` to retry.
+ */
+async function bulkCloseOutcome(page: Page): Promise<'closed' | 'asks to discard' | 'closing'> {
+    if (await page.getByTestId('confirm-modal-confirm').isVisible()) return 'asks to discard';
+    return (await page.getByTestId('tx-bulk-modal').isVisible()) ? 'closing' : 'closed';
 }
 
 // ---------------------------------------------------------------------------
@@ -1057,6 +1067,64 @@ test.describe('Transaction Bulk Operations — commit on owned rows', () => {
         // (c) Its values keep their signs, so only what else the Apply writes can make the close ask: nothing must.
         await page.getByTestId('tx-bulk-cancel').click();
         await expect(page.getByTestId('tx-bulk-modal'), 'an untouched Apply leaves nothing to discard: the editor closes at once').toBeHidden({timeout: 5_000});
+        const after = await readStoredRow(page, ledger.rowId);
+        expect(storedState(after), 'the stored DEPOSIT is still as seeded').toEqual(storedState(seeded));
+    });
+
+    /**
+     * B-47 — a focus and a blur on the cash change nothing. Red before the cure, on (c).
+     *
+     * The API reads a cash amount back padded to six decimals (`READ_MIN_SCALE`): the DEPOSIT's `0.02` is `0.020000`, and
+     * the editor holds it so (`fieldsFromTx`). The Form shows it as `0.02`, and its cash cell emitted that display form on
+     * every blur (`CompactCashCell.handleBlur`): a focus and a blur, nothing typed, and «Apply» pushed `0.02` back into the
+     * row. The row stays original — its diff against the stored row compares exact values — but the close guard compares
+     * the drafts as text (`serializeOps`), so closing asked to discard a change nobody made. The W-B65 DEPOSIT test above
+     * is the same flow without the focus and the blur.
+     *
+     * (a) The premise: the stored cash comes back padded, and the Form shows its display form. (b) After Apply, the row is
+     * original. (c) Cancel closes the editor at once, with no discard dialog, and the stored DEPOSIT is as seeded.
+     */
+    test('B-47: a focus and a blur on the cash of a saved DEPOSIT, then Apply: the row stays original, and closing asks nothing', async ({page}) => {
+        const mine: OwnedRows = {marker: `E2E-b47-deposit-${uniqueSuffix()}`, ids: []};
+        owned = mine;
+        // The DEPOSIT alone: two cents in, nothing before it to keep above zero.
+        const ledger = await seedSatoshiLedger(page, mine, 'funding');
+        const seeded = await readStoredRow(page, ledger.rowId);
+        // (a) Read back rather than inferred: the text the editor will hold, padded to six decimals.
+        expect(seeded.cash?.amount, 'premise: the API reads the DEPOSIT cash back padded to six decimals').toBe('0.020000');
+
+        // Narrowed to the ledger, the DEPOSIT alone selected → Edit: one row auto-opens its Form over the grid.
+        await goToTransactionsByIds(page, ledger.ids);
+        await ensureChecked(page.getByTestId(`dt-row-checkbox-tx-${ledger.rowId}`));
+        const editBtn = page.getByTestId('toolbar-action-edit');
+        await expect(editBtn).toBeEnabled({timeout: 5_000});
+        await editBtn.click();
+        await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
+        const formModal = page.getByTestId('tx-form-modal');
+        await expect(formModal, 'one selected row auto-opens its Form').toBeVisible({timeout: 5_000});
+
+        // A focus and a blur on the cash, nothing typed.
+        const cash = page.getByTestId('tx-form-cash-amount');
+        await expect(cash, 'premise: the Form shows the cash in its display form').toHaveValue('0.02', {timeout: 5_000});
+        await cash.focus();
+        await expect(cash).toBeFocused();
+        await cash.blur();
+        await expect(cash).not.toBeFocused();
+        await expect(cash, 'the display is still the formatted value').toHaveValue('0.02');
+
+        const applyBtn = page.getByTestId('tx-form-save');
+        await expect(applyBtn, 'the Form is complete: Apply is enabled').toBeEnabled({timeout: 5_000});
+        await applyBtn.click();
+        await expect(formModal, 'Apply pushes the draft back into the grid and closes the Form').toBeHidden({timeout: 5_000});
+
+        // (b) Original: a focus and a blur are not an edit.
+        const row = page.getByTestId('tx-bulk-body').locator('tbody tr[data-row-id]').filter({hasText: ledger.rowDesc});
+        await expect(row).toHaveCount(1);
+        await expect(row.getByTestId('tx-bulk-row-status'), 'a focus and a blur are not an edit').toHaveAttribute('data-status', 'original');
+
+        // (c) Nothing to discard: the editor closes at once, and the stored DEPOSIT was never rewritten.
+        await page.getByTestId('tx-bulk-cancel').click();
+        await expect.poll(() => bulkCloseOutcome(page), {timeout: 5_000, message: 'B-47: closing asked to discard the cash a focus and a blur had rewritten'}).toBe('closed');
         const after = await readStoredRow(page, ledger.rowId);
         expect(storedState(after), 'the stored DEPOSIT is still as seeded').toEqual(storedState(seeded));
     });

@@ -17,13 +17,13 @@ import pytest
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 from backend.app.db.models import Transaction, TransactionType
-from backend.app.schemas.common import Currency
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, InTransitInterval, SplitRecord, ValuationSource
 from backend.app.services.financial_math.price_marks import build_asset_price_series
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
+from backend.test_scripts.test_services._unit_steps_double import UnitStepsDouble
 
 
 def _tx(*, tx_id=1, broker_id=1, asset_id=1, tx_type=TransactionType.BUY, dt=date(2025, 1, 2), quantity=Decimal("0"), amount=None, currency="EUR", cbo=None, cbo_ccy=None):
@@ -576,13 +576,12 @@ class TestThreePool:
 
 
 class TestInKindAdjustmentCapital:
-    """Priced in-kind ADJUSTMENT (opening / transfer / succession) is a capital
-    contribution or distribution, NOT profit.
+    """Priced in-kind ADJUSTMENT-in (opening / transfer / succession) is a capital
+    contribution, NOT profit: it injects real book value with no cash counterpart,
+    so its cost moves the capital baseline (``cumulative_external_cash_flow``).
 
-    Such a transaction injects (qty>0) or removes (qty<0) real book value with no
-    cash counterpart, so its cost must move the capital baseline
-    (``cumulative_external_cash_flow``). Otherwise the book value leaks into total
-    P&L and, at portfolio level, into the "Other / reconciliation residual".
+    An ADJUSTMENT-out has no value (N78-1, the developer's decision, 21/10/2026): it
+    only lowers the quantity, whatever cost it stores, so it never moves the capital.
     """
 
     def test_priced_adjustment_in_is_capital_not_pnl(self):
@@ -610,10 +609,13 @@ class TestInKindAdjustmentCapital:
         assert last.cumulative_external_cash_flow == Decimal("1000")
         assert last.total_pnl == Decimal("0")
 
-    def test_adjustment_out_is_symmetric_capital_distribution(self):
-        """ADJUSTMENT-out (in-kind removal, no cash) removes book at WAC from the
-        capital baseline — mirror of the contribution — with no phantom realized P&L.
-        A full in→out cycle returns the capital baseline to zero."""
+    def test_adjustment_out_storing_a_value_leaves_the_capital_unchanged(self):
+        """N78-1: an ADJUSTMENT-out storing a value (100 EUR a unit) still has none:
+        the units leave, the capital baseline stays at the 1000 the ADJUSTMENT-in
+        brought, and the P&L is −1000 (0 − the cost given up).
+
+        Before N78-1 it was a capital distribution at its stored value, the mirror of
+        the contribution: capital back to 0, P&L 0."""
         txs = [
             _c(_tx(tx_id=1, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("10"), amount=Decimal("0"), cbo=Decimal("100"), cbo_ccy="EUR", dt=date(2025, 1, 2))),
             _c(_tx(tx_id=2, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("-10"), amount=Decimal("0"), cbo=Decimal("100"), cbo_ccy="EUR", dt=date(2025, 1, 6))),
@@ -624,11 +626,9 @@ class TestInKindAdjustmentCapital:
         mid = next(s for s in result.daily_states if s.date == date(2025, 1, 4))
         assert mid.cumulative_external_cash_flow == Decimal("1000")
         assert mid.total_pnl == Decimal("200")
-        # Final (after out): position closed, capital baseline back to 0, no residual
+        # Final (after out): position closed, the capital unchanged, the cost given up a loss
         last = result.daily_states[-1]
-        assert last.market_value == Decimal("0")
-        assert last.cumulative_external_cash_flow == Decimal("0")
-        assert last.total_pnl == Decimal("0")
+        assert (last.market_value, last.cumulative_external_cash_flow, last.total_pnl) == (Decimal("0"), Decimal("1000"), Decimal("-1000"))
 
     def test_priced_adjustment_before_date_from_carries_capital_into_the_states(self):
         """An opening ADJUSTMENT before date_from seeds the capital baseline so a
@@ -912,17 +912,10 @@ class TestPreloadFxRates:
             ),
         ]
 
-        captured: dict[str, object] = {}
-
-        async def fake_convert_bulk(db, bulk_items, raise_on_error=False):
-            captured["db"] = db
-            captured["bulk_items"] = bulk_items
-            captured["raise_on_error"] = raise_on_error
-            results = [(Currency(code="EUR", amount=Decimal("1")), item[2], False) for item in bulk_items]
-            return results, []
-
+        # P3: one unit_rate_steps call with each currency's windows; every asked day reads 1
+        steps = UnitStepsDouble()
         db = object()
-        monkeypatch.setattr(portfolio_engine_module, "convert_bulk", fake_convert_bulk)
+        monkeypatch.setattr(portfolio_engine_module, "unit_rate_steps", steps)
 
         fx_map = await PortfolioCalculationEngine(db)._preload_fx_rates(
             classified_txs=txs,
@@ -956,28 +949,35 @@ class TestPreloadFxRates:
             ("AUD", "EUR", date(2025, 1, 4)),
         }
 
-        assert captured["db"] is db
-        assert captured["raise_on_error"] is False
-        assert {(item[0].code, item[1], item[2]) for item in captured["bulk_items"]} == expected_keys
+        assert steps.sessions == [db]
+        assert steps.asked_keys() == expected_keys, "the windows cover the days convert_bulk was handed one by one before P3"
+        assert steps.runs() == {
+            ("USD", "EUR"): [(date(2025, 1, 1), date(2025, 1, 3))],
+            ("CHF", "EUR"): [(date(2025, 1, 1), date(2025, 1, 3))],
+            ("JPY", "EUR"): [(date(2025, 1, 1), date(2025, 1, 3))],
+            ("GBP", "EUR"): [(date(2025, 1, 3), date(2025, 1, 3))],
+            ("CAD", "EUR"): [(date(2025, 1, 2), date(2025, 1, 3))],
+            ("AUD", "EUR"): [(date(2025, 1, 4), date(2025, 1, 4))],
+        }
         assert set(fx_map.keys()) == expected_keys
         assert set(fx_map.values()) == {Decimal("1")}
         # Asset currencies only over the range: no rate at a BUY date before it (was requested for the inline WAC).
         assert ("JPY", "EUR", date(2024, 12, 30)) not in fx_map
 
     @pytest.mark.asyncio
-    async def test_preload_asks_the_rate_of_every_priced_outgoing_adjustment_at_its_date(self, monkeypatch):
-        """J-24: a priced outgoing ADJUSTMENT leaves the capital at the value it hands over, converted at its own date,
-        so the preload asks (cost currency, row date) for every one of them — before the range too, where the per-day
-        loop over the asset currencies never reaches, and inside it in a currency no asset is quoted in. The cost
-        currency is ``cost_basis_currency``, or the asset's when it is None.
+    async def test_preload_asks_no_rate_for_an_outgoing_adjustment_whatever_it_stores(self, monkeypatch):
+        """N78-1 (the developer's decision, 21/10/2026), RED until its cure: an outgoing ADJUSTMENT has no value — the
+        engines ignore any ``cost_basis_override`` it stores, so nothing of it is converted and the preload asks no rate
+        at its date, whatever currency the stored value is in.
 
         Range 2025-01-01..01-02, asset 1 in EUR, asset 2 in JPY (its rate asked every day of the range, as always).
-        Asked: (USD, 2024-12-20), an ADJUSTMENT −2 of asset 1 at 50 USD; (JPY, 2024-12-23), an ADJUSTMENT −3 of asset 2
-        at 700 with no cost currency; (GBP, 2025-01-02), an ADJUSTMENT −1 of asset 1 at 60 GBP inside the range. Not
-        asked: an ADJUSTMENT −1 without a cost basis on 2024-12-27 (it hands nothing over, J-11) and an ADJUSTMENT −1
-        at 40 EUR on 2024-12-30 (already in the report currency).
+        Asked: (JPY, 2025-01-01) and (JPY, 2025-01-02) only. Not asked: an ADJUSTMENT −2 of asset 1 storing 50 USD
+        (2024-12-20), an ADJUSTMENT −3 of asset 2 storing 700 with no cost currency (2024-12-23), an ADJUSTMENT −1 without
+        a value (2024-12-27), an ADJUSTMENT −1 storing 40 EUR (2024-12-30), an ADJUSTMENT −1 of asset 1 storing 60 GBP
+        inside the range (2025-01-02).
 
-        Before J-24: only (JPY, 2025-01-01) and (JPY, 2025-01-02) — nothing at the rows' dates.
+        Before N78-1 (J-24, the value handed over converted at its own date): also (USD, 2024-12-20), (JPY, 2024-12-23)
+        and (GBP, 2025-01-02).
         """
         txs = [
             _c(_tx(tx_id=1, asset_id=1, tx_type=TransactionType.ADJUSTMENT, dt=date(2024, 12, 20), quantity=Decimal("-2"), currency=None, cbo=Decimal("50"), cbo_ccy="USD")),
@@ -987,10 +987,8 @@ class TestPreloadFxRates:
             _c(_tx(tx_id=5, asset_id=1, tx_type=TransactionType.ADJUSTMENT, dt=date(2025, 1, 2), quantity=Decimal("-1"), currency=None, cbo=Decimal("60"), cbo_ccy="GBP")),
         ]
 
-        async def fake_convert_bulk(db, bulk_items, raise_on_error=False):
-            return [(Currency(code="EUR", amount=Decimal("1")), item[2], False) for item in bulk_items], []
-
-        monkeypatch.setattr(portfolio_engine_module, "convert_bulk", fake_convert_bulk)
+        steps = UnitStepsDouble()
+        monkeypatch.setattr(portfolio_engine_module, "unit_rate_steps", steps)
 
         fx_map = await PortfolioCalculationEngine(object())._preload_fx_rates(
             classified_txs=txs,
@@ -1005,10 +1003,11 @@ class TestPreloadFxRates:
 
         keys = set(fx_map)
         expected = {
-            ("USD", "EUR", date(2024, 12, 20)),
-            ("JPY", "EUR", date(2024, 12, 23)),
-            ("GBP", "EUR", date(2025, 1, 2)),
             ("JPY", "EUR", date(2025, 1, 1)),
             ("JPY", "EUR", date(2025, 1, 2)),
         }
-        assert keys == expected, f"missing={sorted(expected - keys)} unexpected={sorted(keys - expected)}"
+        assert keys == expected, f"N78-1: no rate for an outgoing ADJUSTMENT; missing={sorted(expected - keys)} unexpected={sorted(keys - expected)}"
+        assert steps.asked_keys() == expected, "P3: the windows of the one unit_rate_steps call cover the same days"
+        assert steps.runs() == {
+            ("JPY", "EUR"): [(date(2025, 1, 1), date(2025, 1, 2))],
+        }

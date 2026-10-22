@@ -144,9 +144,10 @@
      * document, informative but mute.
      */
     function originClass(origin: IdentifierOrigin): string {
-        if (origin === 'provider') return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
-        if (origin === 'stored') return 'bg-libre-green/10 text-libre-green dark:bg-libre-green/20';
-        return 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-300';
+        /* colour: closest role, to review: provider = info tint, stored = selected tint with link text (brand), report = neutral chip */
+        if (origin === 'provider') return 'bg-lf-info-soft text-lf-info-on-soft';
+        if (origin === 'stored') return 'bg-lf-selected text-lf-link';
+        return 'bg-lf-neutral text-lf-secondary';
     }
 
     /**

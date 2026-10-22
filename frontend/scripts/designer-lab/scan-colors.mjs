@@ -193,11 +193,14 @@ export function listSourceFiles(root = FRONTEND_DIR) {
 const CHART_PATH_RE = /\/(components\/charts|charts|features\/(brokers\/lots|dashboard|risk|tools\/pac-allocator\/planner\/result))\/|chart[^/]*$/i;
 
 /**
- * The chart categories with a fixed colour (contract C1–C2 with DV): the file that holds them, its two tables (the asset
- * types, the sectors) and its two buckets, which `categoryColor` adds to both kinds. One literal per line, under its key,
- * its theme the `light:` / `dark:` property it is written in.
+ * The chart categories with a fixed colour written in a file (contract C1–C2 with DV): the file that holds them, its
+ * table of the sectors and its bucket «Unknown», which `categoryColor` adds to both kinds. One literal per line, under
+ * its key, its theme the `light:` / `dark:` property it is written in. The asset types and the cash are roles of
+ * tokens.css since DV-11 (`CATEGORY_ROLES`): the Lab shows them as views of those variables.
  */
 export const CATEGORY_FILE = 'src/lib/theme/chartCategories.ts';
+// The type table and the cash's pair are still read where a tree writes them (an older tree, the synthetic ones of the
+// tests): the real file holds neither since DV-11.
 const CATEGORY_TABLES = /** @type {Record<string, string>} */ ({ASSET_TYPE_COLORS: 'type', SECTOR_COLORS: 'sector'});
 const CATEGORY_BUCKETS = /** @type {Record<string, string>} */ ({LIQUIDITY_COLOR: 'Liquidity', UNCLASSIFIED_COLOR: 'Unknown'});
 

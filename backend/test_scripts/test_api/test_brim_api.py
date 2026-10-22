@@ -16,6 +16,8 @@ Tests for Broker Report Import Manager API endpoints:
   process responsive (step 5, item 8 + F1: Category 14)
 - GET /brokers/import/files/{id}/preview of a damaged Excel workbook answers 400, not 500
   (step 6, F2: Category 15)
+- POST /brokers/import/upload refuses a name (original or custom) with a blocked extension (``.js``, ``.mjs``, ``.exe``…): 400, nothing
+  written; the report extensions stay accepted (H-55 v2 review, R1 c)
 - who may see a broker's report files: a file with no broker only its uploader and the administrator,
   and in no broker's list, ``can_delete`` on every list item, a file id that is not a UUID answers 404
   on every per-file route, a parse imports only into a broker its caller edits (F36, decision 36:
@@ -1230,6 +1232,94 @@ class TestUploadBatchId:
             assert "batch_id" in response.json() and response.json()["batch_id"] is None
 
 
+# H-55 v2 review (R1 c): a report file that can run as a script is refused at the upload, so no stored file can ever be fetched as one.
+#: Names whose extension (lower-cased) is in ``static_uploads.BLOCKED_EXTENSIONS``, with the extension the 400 names.
+BLOCKED_REPORT_NAMES = [
+    pytest.param("report.js", ".js", id="js"),
+    pytest.param("report.mjs", ".mjs", id="mjs"),
+    pytest.param("report.cjs", ".cjs", id="cjs"),
+    pytest.param("report.exe", ".exe", id="exe"),
+    pytest.param("REPORT.JS", ".js", id="upper-case-js"),
+]
+
+
+def _xlsx_bytes() -> bytes:
+    """A minimal zip with the parts of a workbook: enough for the upload, which only sniffs the plugins."""
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w") as archive:
+        archive.writestr("[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>')
+    return out.getvalue()
+
+
+#: (name, content) of the report files the upload keeps accepting.
+ACCEPTED_REPORTS = [
+    pytest.param("accepted.csv", b"date,type,quantity,amount,currency,description\n2025-01-01,DEPOSIT,0,1000.00,EUR,Test deposit\n", id="csv"),
+    pytest.param("accepted.xlsx", _xlsx_bytes(), id="xlsx"),
+    pytest.param("accepted.json", b'{"trades": []}', id="json"),
+    pytest.param("accepted.pdf", b"%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n", id="pdf"),
+    pytest.param("accepted.txt", b"plain text report\n", id="txt"),
+]
+
+
+class TestUploadBlockedExtensions:
+    """R1 c — ``POST /upload`` refuses a name (original or custom) whose extension is in ``BLOCKED_EXTENSIONS``: 400 naming it, nothing written."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("filename", "extension"), BLOCKED_REPORT_NAMES)
+    async def test_a_blocked_original_name_is_refused_and_nothing_is_written(self, test_server, filename, extension):
+        """BX-001: a script or executable name answers 400 naming the extension; the broker's files are the same before and after."""
+        print_section(f"BX-001: upload of {filename!r} is refused")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            try:
+                before = {info["file_id"] for info in await _files_on(client, broker_id)}
+
+                response = await _upload_csv(client, broker_id, b"alert('x');\n", filename)
+
+                assert response.status_code == 400, f"{filename!r}: {response.status_code} {response.text}"
+                assert extension in _detail_text(response).lower(), f"{filename!r}: the 400 does not name the extension {extension!r}: {response.text}"
+                after = {info["file_id"] for info in await _files_on(client, broker_id)}
+                assert after == before, f"{filename!r}: the refused upload left files {after - before}"
+                print_success(f"✓ {filename!r} → 400, nothing written")
+            finally:
+                await _delete_created(client, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("custom_name", "extension"), [pytest.param("renamed.mjs", ".mjs", id="mjs"), pytest.param("renamed.exe", ".exe", id="exe"), pytest.param("renamed.js", ".js", id="js")])
+    async def test_a_blocked_custom_name_is_refused_though_the_original_is_a_csv(self, test_server, sample_csv_content, custom_name, extension):
+        """BX-002: the user-renamed ``custom_filename`` is what is stored and later served: its extension is checked, not only the original's."""
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            try:
+                before = {info["file_id"] for info in await _files_on(client, broker_id)}
+
+                response = await _upload_csv(client, broker_id, sample_csv_content, "original.csv", custom_filename=custom_name)
+
+                assert response.status_code == 400, f"custom_filename={custom_name!r}: {response.status_code} {response.text}"
+                assert extension in _detail_text(response).lower(), f"custom_filename={custom_name!r}: the 400 does not name {extension!r}: {response.text}"
+                assert {info["file_id"] for info in await _files_on(client, broker_id)} == before, "the refused upload left a file"
+            finally:
+                await _delete_created(client, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("filename", "content"), ACCEPTED_REPORTS)
+    async def test_the_report_extensions_stay_accepted(self, test_server, filename, content):
+        """BX-003 — retro-compatibility guard (passes before and after R1): ``.csv``, ``.xlsx``, ``.json``, ``.pdf``, ``.txt`` are stored."""
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            try:
+                response = await _upload_csv(client, broker_id, content, filename)
+
+                assert response.status_code == 200, f"{filename!r}: {response.status_code} {response.text}"
+                assert response.json()["filename"] == filename
+                assert response.json()["file_id"] in {info["file_id"] for info in await _files_on(client, broker_id)}
+            finally:
+                await _delete_created(client, broker_ids=[broker_id])  # the broker's delete takes its report files with it
+
+
 class TestReportSetEndpoints:
     """A2 — ``POST /sets/preview`` and ``POST /sets/combine``: routing, EDITOR permission, body validation, error codes.
 
@@ -1718,7 +1808,11 @@ class TestDanskeReportSetEndToEnd:
     @pytest.mark.asyncio
     async def test_main_set_from_upload_to_gap_fix(self, test_server):
         """RS-B01: preview 2020-02-03…06-26 without gaps; combine, then reuse; a member alone is 422; the combined parse
-        brings the opening checkpoint, the verification and H0; the gap-fix proposes the opening deposit and checks the verification."""
+        brings the opening checkpoint, the verification and H0; the gap-fix proposes the opening deposit and checks the verification.
+
+        Lot B-52 (red until the cure): the verification on 2020-06-26 is in operation-date terms, 1776.46. It is the bank's
+        1994.46 plus the Tunturi purchase traded that day and settled on 06-30 (−218). The selection records that purchase on
+        06-26, so LibreFolio's side is 1776.46 too, and the check stays ok."""
         print_section("RS-B01: Danske main set, from upload to gap-fix")
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
@@ -1768,7 +1862,7 @@ class TestDanskeReportSetEndToEnd:
                 assert len(result["checkpoints"]) == 1 and len(result["verifications"]) == 1, (result["checkpoints"], result["verifications"])
                 checkpoint, verification = result["checkpoints"][0], result["verifications"][0]
                 assert (checkpoint["as_of"], checkpoint["kind"], _money_list(checkpoint["cash"]), len(checkpoint["positions"])) == ("2020-02-02", "opening", {"EUR": Decimal("2699.50")}, 3)
-                assert (verification["as_of"], _money_list(verification["cash"])) == ("2020-06-26", {"EUR": Decimal("1994.46")})
+                assert (verification["as_of"], _money_list(verification["cash"])) == ("2020-06-26", {"EUR": Decimal("1776.46")})
 
                 selection = [tx for tx in result["transactions"] if tx["date"] >= result["history_start"]]
                 fix = await _gap_fix(client, {"broker_id": broker_id, "plugin_code": DANSKE_CODE, "checkpoints": result["checkpoints"], "verifications": result["verifications"], "selection": selection})
@@ -1782,7 +1876,7 @@ class TestDanskeReportSetEndToEnd:
                 explanation = opening["explanation"]
                 assert (explanation["absorbed_count"], explanation["absorbed_missing_count"], explanation["unexplained_cash"]) == (14, 14, [])
                 check = _one(fix.json()["verifications"], "2020-06-26")
-                assert (check["ok"], _money_rows(check["cash"])) == (True, {"EUR": (Decimal("1994.46"), Decimal("1994.46"), Decimal("0"))})
+                assert (check["ok"], _money_rows(check["cash"])) == (True, {"EUR": (Decimal("1776.46"), Decimal("1776.46"), Decimal("0"))})
                 assert await _broker_tx_ids(client, broker_id) == set(), "the set API and the gap-fix save nothing"
                 print_success("✓ Danske main set: combined, parsed and aligned with the bank")
             finally:

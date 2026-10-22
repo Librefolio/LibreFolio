@@ -6925,6 +6925,15 @@ B-47 e B-48 sono nella sezione di B: chiusura chiesta al coordinatore); 7. simul
    > riceve, la coppia sparisce dalla griglia: il passo 1 di `collapsePairedOps` legge la cassa ignota del segnaposto come 0 e nasconde la
    > metà leggibile. Cura nello stesso lotto: il segnaposto è sempre il partner nascosto della metà leggibile, come nella prima costruzione.
 
+> **▶️ Ripresa il 21/10 (ondata 2, W frontend, base `89e8b2e61`)** — le tre scelte di W confermate dal developer (PC5 diviso, valori nel dominio ≤ 15 cifre, K-3b nello stesso lotto).
+> - ✅ 21/10 **Passo 1, rossi**: `git apply` della patch parcheggiata, pulito. Il secondo giro (K-3b, PC5 diviso, sei casi nel dominio) era già dentro la patch. Rilancio: **28 rossi Vitest** (26 del primo giro + 2 di K-3b), ciascuno per la sua causa.
+> - ✅ 21/10 **Passo 2, cura**: `k3a_cure.py` col dry run pulito su 8 file anche sul codice di `89e8b2e61`, poi `--apply`. Tocca `parseDecimalInput.ts`, `ExactQuantityInput`, `CompactCashCell`, `transactionTypeStore.ts`, `TransactionBulkModal`, `TransactionFormModal`, `TxFormSingleSection`, `TxFormPairSection` (+151/−28). Poi `prettier --write` su `CompactCashCell.svelte` (la cura lasciava un `<input>` su una riga).
+> - ✅ 21/10 **Passo 3, verdi leggeri**: i 9 file Vitest toccati 601/601; `front check` 0 errori / 0 avvisi; `core-unit` 9845/9845; `component-unit` 5186/5186 (con `TransactionBulkModal.test.ts` registrato); `theme-roles --check` pulito; prettier pulito.
+> - ✅ 21/10 **Passo 4, E2E nello slot** (corsia 6184, uno alla volta in `flock`): `tx-bulk-operations` 15/15, `tx-bulk-promote-cost-basis` 9/9, `tx-fx-completeness` 4/4, `tx-edit-save-gate` 3/3. Log in `salvataggi-worktrees-20261021/ondata2/wf-e2e-<nome>.log`.
+> - ✅ 21/10 **Passi 5–6**: nessuna pagina utente da cambiare; K-2…K-4 ✅ in `38_postReleaseBacklog`, B-47/B-48 con la nota «chiusura chiesta al coordinatore». Passo 7: CHECKPOINT READY al coordinatore.
+> - **⚠️ Fuori pista → ✅ 21/10 #58, decisione del developer**: durante la ripresa è arrivato #58 (E2E `tx-edit-save-gate.spec.ts`): il cambio di tipo è ok, il **cambio di asset** in una riga salvata non si poteva salvare (l'asset non è patchable, ma il form lo lasciava cambiare: «scartare?» sì, «Salva» no). Decisione del developer (21/10): **selettore asset bloccato in modifica**, per cambiarlo si cancella e si ricrea. Fatto in questo lotto: `assetImmutable` (`mode === 'edit' || 'view'`) in `TransactionFormModal`, passato a `TxFormSingleSection` e `TxFormPairSection`; la riga nuova (`create`, Bulk «Add row», wizard) sceglie ancora l'asset. Vitest `#58` ×4 in `TransactionFormModal.test.ts` (rosso senza il blocco, verde con); E2E riscritto. Verdi: `front check` 0/0, `src/lib/features/transactions` 1754/1754.
+> - ✅ 21/10 **Broker, decisione del developer (stessa regola dell'asset)**: una riga salvata non cambia broker, deep-edit del Bulk compreso. `assetImmutable` rinominato `rowSaved` (`mode === 'edit' || 'view'`): asset e broker bloccati (`brokerImmutable = rowSaved || forcedBroker`); nella coppia salvata bloccati i due broker e la freccia «scambia i lati» (scambiava i broker); la riga nuova e la coppia nuova scelgono ancora tutto. Vitest `#58 broker` ×4 (2 rossi per la causa giusta, poi verdi); E2E `tx-edit-save-gate` esteso. Verdi: `front check` 0/0, `src/lib/features/transactions` 1759/1759.
+
 > **⏸️ Parcheggiato il 19/10** (fermo del developer del 17/10 21:47; alla ripartenza K3 è fra gli ampliamenti che il developer sta leggendo,
 > N91). Il secondo giro del test-author era finito ma **mai girato**: K-3b (la metà ricevente, col reset di riga e con «Reset all»), PC5 diviso
 > (la guardia di C-46 nel Vitest del Bulk; l'E2E PC5 diventa quello di B-48), i sei casi portati nel dominio (5 del Form, uno di
@@ -7730,3 +7739,763 @@ Domanda: dentro W-B85, o una voce a parte?
   1.3, almeno l'avviso con `report_issue`, perché toccano i numeri.
 - **OK di scrittura** su `frontend/src/lib/i18n/importWizard/*.json` per `importWizard.reportSet.reason.reservation` e, se D-W85-3 è
   l'aiuto unico, `importWizard.brimNotice.rows_not_recognized` e `rows_unreadable`.
+
+### W-B85 · Danske Bank, «noto in silenzio, ignoto con avviso»: cura (2026-10-19, base `9857be3d2`)
+
+**Il via del coordinatore (16:23)**, per i punti 1 e 2 già decisi:
+- la cura Danske: «Varaus» → `reservation`, in silenzio con il log; `excluded_status` → avviso con `report_issue`; versione 1.0.2;
+- la regola 10 nella skill, e la guida tramite il docs-writer.
+
+Vincoli:
+- OK di scrittura solo per `importWizard.reportSet.reason.reservation`.
+- In attesa del developer (D-W85-1…4): dei motivi Danske si tocca solo `status`; le righe non regolate di Fineco e Danske restano a
+  nota blu (14:05); nessun altro plugin.
+
+**Avanzamento**
+- ✅ 1. Rossi (test-author `wb85-reds`, solo `test_brim_danske_bank.py`), confermati da me alle 16:43: 9 rossi e 337 verdi.
+  - Le due versioni.
+  - Le classi `varaus_label` e `varaus_pending`: una «Varaus» con `Tila` «Odottaa», per provare il controllo prima di `Tila`.
+  - Il motivo `reservation` nel riepilogo del set.
+  - Nessuna nota mostra una prenotazione; il conto e l'evidenza di `excluded_status`; il suo `report_issue`.
+  - Un solo evento di log per motivo, con il suo conteggio.
+  - Guardie: le prenotazioni fuori dalla catena dei saldi; gli altri motivi senza `report_issue` e con la gravità di oggi; le note
+    dei campioni immutate.
+- ✅ 2a. La cura è pronta e non applicata: `files/scripts/wb85_cure.py`, prova a vuoto pulita; la chiave in
+  `files/scripts/wb85_i18n.sh` (EN «reserved, not booked», IT «prenotate, non contabilizzate», FR «réservées, non comptabilisées», ES
+  «reservadas, no contabilizadas», nello stile delle altre etichette dei motivi).
+  > **Note implementazione**:
+  > - `_chain()` (la catena dei saldi di cassa) escludeva solo `status` e `invalid`: una `reservation` sarebbe entrata come movimento
+  >   contabilizzato. Ora le tre classi sono una costante, `_UNBOOKED_CLASSES`: il comportamento di oggi resta.
+  > - `_SILENT_EXCLUSIONS = {"reservation"}` e `_REPORTED_EXCLUSIONS = {"status"}`: le altre ragioni aspettano D-W85-1.
+- ✅ 4a. La regola 10 della skill `brim-plugin`, «Known rows quietly, unknown rows loudly».
+  > **⚠️ Fuori pista**: la regola 9 diceva che anche «uno stato che dice in attesa o prenotato» va con una nota info. Col principio
+  > nuovo si contraddiceva con «Varaus» in silenzio. Ora la 9 copre le righe provvisorie per data, e manda le righe segnate da uno
+  > stato (prenotata, annullata, in attesa) alla 10.
+- ✅ 2b. La cura applicata (16:45): `files/scripts/wb85_cure.py --apply` e `files/scripts/wb85_i18n.sh`.
+- ✅ 3. I verdi (16:48-17:00, carico 35-50, `files/scripts/wb85_light.sh greens`, log `files/logs/wb85/greens_*.log`), tutti exit 0:
+  - `external brim-danske-bank` 346, `external brim-providers` 750, `services brim-report-sets` 274, `services brim-parse-race`
+    45, `api brim` 118;
+  - i cancelli: `gate-plugin-i18n-ownership` 64, `gate-i18n-catalog`, `gate-i18n-usage` 195, `i18n check` (5106 chiavi);
+  - ruff, black, Prettier.
+  Porta 6184 libera.
+- ✅ 4b. La doc (docs-writer `wb85-docs`, solo inglese, nulla timbrato):
+  - la guida dei plugin: la regola nuova, «Only safe rows» ristretta, `report_issue` con i due usi, il motivo `reservation` fra gli
+    esiti;
+  - `danske_bank.md`: la versione 1.0.2, le righe di cassa, i motivi, le note, il log, `_UNBOOKED_CLASSES`;
+  - la pagina utente `danske-bank.en.md`: «Every row is accounted for», col caso delle prenotazioni e dello stato sconosciuto.
+  Prove: `mkdocs build` strict e `check-links` verdi. `translate-validate`, per `danske-bank`: solo avvisi, il debito delle voci
+  nuove (5 codici inline, 23 voci contro 20), per Aphra.
+  > **Note implementazione**: il commento in testa a `BrimNoticeList.svelte` parlava di `report_issue` solo per il beta di Fineco:
+  > ora nomina i due usi (segnalato dal docs-writer).
+  > **Nota**: un ordine rifiutato o annullato di Danske («Hylätty», «Peruttu») prende l'avviso con il link, finché il plugin non
+  > impara quella parola. È voluto: nessun export vero ha mai mostrato quegli stati.
+- ✅ 5. Simulazione d'integrazione (`n74_sim_light.sh dev_release2 merge`, dev `ccc2a4141`): pulita. La base di fusione è il mio HEAD
+  `9857be3d2`, e dev non tocca nessuno dei 12 file.
+- ✅ 6. Dopo il commit (`323c120eb`, `8ccf38604`), con l'OK del coordinatore: IT, FR ed ES di `user/transactions/import/danske-bank`
+  correggono solo la frase che prometteva «niente scartato in silenzio» (`files/scripts/wb85_danske_tr.py`, ogni sostituzione
+  contata). Ora dicono che nessuna riga si perde e che gli avvisi elencano quelle da controllare: è vero anche senza le due voci nuove,
+  che restano ad Aphra. Nessuno stamp.
+
+### B-52 · La data dell'operazione: analisi (2026-10-19, sola lettura, base `8ccf38604`)
+
+**Il principio del developer**, testuale: «usare la data dell'operazione fatta dall'utente, e in base alle colonne disponibili capire
+se è "stabile e contabilizzata", chi lo espone come colonna si usa quella, chi ha la colonna della data valuta, verifica che quella
+data è antecedente ad oggi, ma registra con la data della operazione».
+
+**L'applicazione**, testuale: «si applicalo per fineco tanto non ci sono utenti, mentre per danske fallo ma scrivimi subito un
+messaggio che mando all'utente nella issue 26 in cui lo avvisiamo». Il messaggio l'ha scritto il coordinatore: qui lo verifico
+(punto 8).
+
+**1. Gli export veri di Danske** (issue #26). I due allegati sono stati scaricati in una cartella privata della sessione, contati e
+cancellati; sono usciti solo i conteggi, senza valori. Script: `files/scripts/b52_danske_dates.py`.
+- 53 righe di custodia.
+- 48 compravendite, tutte con le due date diverse (valuta dopo l'operazione):
+  - in giorni lavorativi: +2 in 42 righe, +1 in 3, +3 in 3;
+  - in giorni di calendario: +1 in 3, +2 in 26, +3 in 3, +4 in 16.
+- 5 eventi (2 `Tuotto`, 3 `Jakautuminen`), tutti con le due date uguali.
+- Datando con l'operazione, 8 compravendite cambiano mese e 3 cambiano anno.
+
+**2. I saldi di cassa e le posizioni** (il punto principale). È una **condizione del lotto**: senza questa cura B-52 su Danske non
+esce.
+
+Oggi:
+- i segmenti di custodia si costruiscono sulla data dell'operazione (`_raw_segments`), le zone delle righe sulla data valuta (`_zone`,
+  `row.day`);
+- la verità di cassa di un checkpoint è il `Saldo` della banca alla data valuta più `border_cash` (le compravendite riassunte e
+  regolate dopo il checkpoint: per quelle è già un conto in data dell'operazione);
+- le posizioni vere sono le prove E1-E3 meno i movimenti contati alla data valuta (`_moved`, `_Movement.day = row.value`);
+- la verifica finale cade al minimo fra l'ultima operazione della custodia e l'ultimo giorno di cassa (`verification_day`).
+
+Datando le compravendite all'operazione (T), con la cassa che la banca muove alla valuta (V):
+- **regge** il checkpoint d'apertura normale (la cassa comincia prima della custodia): ogni compravendita del segmento ha T dopo il
+  checkpoint;
+- **non regge**:
+  1. la verifica finale, quando la cassa va oltre l'ultima operazione: le compravendite degli ultimi 1-2 giorni lavorativi hanno T ≤
+     giorno < V, quindi un falso allarme. Probabilmente è il caso comune;
+  2. l'apertura del caso A13 (la cassa comincia dopo la custodia): T prima del primo giorno di cassa, V dal primo giorno in poi. Il
+     gap-fix propone una correzione finta di cassa, e una di posizione (un ADJUSTMENT);
+  3. i checkpoint di buco fra segmenti più vicini del ritardo di regolamento (5 giorni lavorativi): lo stesso, ma raro.
+
+La cura, solo nel plugin: ogni verità a un giorno D in data dell'operazione.
+- La cassa: saldo della banca + `border_cash` + la cassa delle compravendite importate «in volo» a D (T ≤ D < V).
+- Le posizioni: la prova + la quantità in volo, per titolo.
+- I test:
+  - una compravendita a cavallo della verifica finale, una dell'apertura A13 e una di un checkpoint di buco: niente correzioni e
+    verifica riuscita;
+  - una guardia sull'apertura normale.
+- Peso M.
+
+**3. Fineco.**
+- Si registra con `Operazione` (la data dell'operazione); `Data valuta` solo se l'operazione manca o non si legge.
+- Regolata o no: `Data valuta` dopo oggi del server lascia fuori la riga intera, con la nota di N74 (oggi del server è
+  `server_today()`). Senza `Data valuta`, decide `Operazione`.
+- La FEE e l'INTEREST del premio a scadenza prendono la stessa data.
+- `plugin_version` 1.3.0.
+- Test: le date attese di `FINECO_SAMPLE_TRANSACTIONS` e delle righe di `TestFinecoSafeRows` passano alla data dell'operazione (per
+  esempio 2024-01-17 → 2024-01-15); un rosso per «registra l'operazione, decide la valuta».
+- Peso S–M, quasi tutto nei test.
+
+**4. Danske.**
+- `_pair()` registra con `custody:Kauppapäivä` invece di `cash:Pvm`. `_demerger()` passa da `custody:Arvopäivä` a `Kauppapäivä`
+  (sono uguali negli eventi). Le righe di sola cassa restano con `Pvm`: hanno una data sola.
+- L'abbinamento, le zone, `not_yet_settled` e `deferred_rows` restano sulla data valuta.
+- Lo stato ha la precedenza: è già così. La riga di cassa abbinata deve essere «Toteutunut», e una compravendita senza la sua cassa
+  nell'estratto resta fuori come `not_yet_settled`. La regola «valuta dopo oggi» qui è superflua: un estratto di cassa non contiene
+  righe future.
+- La cura del punto 2.
+- `plugin_version` 1.1.0.
+- Test: le date delle coppie; i valori delle verifiche; i tre scenari a cavallo; i flussi Danske di `test_api/test_brim_api.py`.
+- Peso M–L.
+
+**5. I doppioni.** Il controllo del wizard vuole la data esatta (`importDedup.ts:247`).
+- Un file Danske reimportato fa tornare come nuove tutte le compravendite. Restano riconosciuti i dividendi, le scissioni e le righe
+  di sola cassa, che hanno una data sola.
+- Lo stesso vale per un **export nuovo che si sovrappone** a giorni già importati: le compravendite della parte comune entrano due
+  volte.
+- Le opzioni (la decisione la chiede il coordinatore al developer):
+  - **(a)** il plugin dà la data valuta come seconda data di confronto, non salvata (un campo dell'uscita BRIM letto solo dal
+    wizard). Peso M; protegge anche i cambi futuri;
+  - **(b)** il messaggio della issue chiede di cancellare e reimportare. Così però non copre le sovrapposizioni.
+
+**6. Il CSV generico.** Oggi «date» accetta anche `settlement_date`, `value_date` e `trade_date`, e vince la prima colonna da
+sinistra (`_detect_columns`, `broker_generic_csv/plugin.py:500-508`).
+
+| Opzione | Cosa fa | Note |
+|---|---|---|
+| **(a)** | Separare: `date` per l'operazione (`date`, `data`, `trade_date`, `transaction_date`, `exec_date`, `fecha`, `datum`) e un campo facoltativo `settlement_date` (`settlement_date`, `value_date`). Si registra l'operazione. Con le due colonne, una riga con la valuta dopo oggi resta fuori con una nota. Con la sola valuta, è la data, come oggi | *consiglio* |
+| **(b)** | Come (a), ma la valuta non decide nulla | |
+| **(c)** | Come oggi | |
+
+In (a) e (b) cambiano anche la tabella delle colonne in `user/transactions/import/generic-csv.en.md:56` e le sue traduzioni.
+
+**7. La regola 9 della skill, riscritta** (bozza):
+> **9. The operation date, and only settled rows.** Record every row on its **operation date**, the day the operation was made (the
+> trade date), never the settlement or value date. Decide whether the row is stable and booked from the columns the report has:
+> - a **status** column, when there is one, decides (and rule 10 says what to do with what it says);
+> - otherwise a **value or settlement date** after the server's today (`server_today()`) marks a provisional row, left out whole,
+>   with one info note: it arrives with the next import;
+> - with neither, the operation date must not be after today.
+>
+> A report set that compares balances with the bank's (Danske Bank) compares them in operation-date terms: it adds the cash and the
+> quantities still in flight on that day (operation date ≤ day < value date).
+
+**8. Il messaggio per la issue #26** (`928ffa97…/files/issue26-danske-messaggio-20261019.md`): esatto su 48/48, T+2, i 3 cambi d'anno,
+la nota per le righe non regolate, le prenotazioni in silenzio, l'avviso per gli stati ignoti, il rischio dei file già importati.
+Le correzioni che propongo:
+- **(i)** «New exports: nothing to do» vale solo per un export che **non si sovrappone** a giorni già importati, salvo l'opzione (a)
+  del punto 5.
+- **(ii)** Meglio chiedere la parola di `Tila` che uno screenshot: l'evidenza sotto l'avviso elenca le righe con gli importi.
+- **(iii)** Una riga in più: in LibreFolio la cassa si muove alla data dell'operazione, in banca alla valuta. Per uno o due giorni
+  dopo una compravendita i due saldi differiscono di quella somma.
+- **(iv)** «they never change your balances» → «in LibreFolio»: il `Saldo` della banca con una prenotazione non l'abbiamo mai visto.
+- **(v)** «the date you actually see in your bank's transaction list»: la lista della custodia mostra tutte e due le date. Meglio
+  «the day you placed the trade».
+
+**9. Fuori dal lotto** (proposta **W-B88**): 13 plugin nominano una data valuta o di regolamento (Avanza, Crédit Agricole, DEGIRO,
+Directa, Disnat, Intesa, InvestEngine, Rabobank, Saxo, Schwab, il CSV generico, Fineco, Danske). Va fatto l'inventario di quale data
+registra ciascuno, contro il principio. Dopo lo sprint, come W-B86.
+
+**10. Decisioni.**
+- **D-B52-1**, i doppioni: (a) o (b). La chiede il coordinatore.
+- **D-B52-2**, il CSV generico: (a) *(consiglio)*, (b) o (c).
+- **D-B52-3**, W-B88 dopo lo sprint.
+
+**Pesi**: Fineco S–M; Danske M–L, con la cura; i doppioni (a) M; il CSV generico M, con la doc e le traduzioni; la skill e la guida S.
+
+### B-52 · La data dell'operazione: cura (2026-10-19, base `a364a100a`)
+
+**Le decisioni del developer** (via il coordinatore, 17:13-17:55):
+- **I doppioni: (b), nessun codice.** Testuale: «in futuro le sovrapposizioni restano scoperte? i prossimi reimport saranno con la
+  nuova data, quindi dopo la data di switch tutto si risolve». La transizione la spiega il messaggio della issue #26, aggiornato dal
+  coordinatore («una volta sola: cancella i Danske importati e reimporta tutto il set, oppure importa solo da dopo l'ultimo giorno
+  importato»).
+- **Il CSV generico resta com'è** (D-B52-2). Testuale: «generic CSV è l'unico che è l'eccezione, perché sono csv completamente
+  custom, sta all'utente qui mettere la data che vuole».
+- **W-B88 dopo lo sprint** (D-B52-3): il coordinatore lo mette in `PROSSIMI_LAVORI.md`.
+
+**Il via (17:55)**, prima i rossi:
+- **Fineco**: registra con `Operazione`; `Data valuta` decide solo se la riga è regolata. La FEE e il premio prendono la stessa data.
+  Versione 1.3.0.
+- **Danske**: `_pair()` registra con `Kauppapäivä`, più la cura dei saldi e delle posizioni in data dell'operazione (la cassa e la
+  quantità «in volo») con i quattro test. Versione 1.1.0. È la condizione del lotto.
+- **La regola 9 della skill** riscritta col principio, con l'eccezione esplicita del CSV generico; la guida tramite il docs-writer.
+- Al checkpoint: verificare che il messaggio della issue #26 dica il vero rispetto al codice finale.
+
+**Avanzamento**
+- ⏳ 1. Rossi: test-author `b52-reds` (Fineco in `test_brim_providers.py`, Danske in `test_brim_danske_bank.py`).
+- Q-N78-1, l'analisi del costo dell'ADJUSTMENT in uscita: i fatti raccolti fin qui sono salvati nella base della sessione
+  (`session_state`, `n78-q1-findings`). Riprende dopo B-52.
+- ✅ 2a. La cura è pronta e non applicata: `files/scripts/b52_cure.py`, prova a vuoto pulita su Fineco e Danske.
+  - **Fineco**: si registra con `Operazione` (`Data valuta` se manca); regolata o no lo decide `Data valuta` (`Operazione` se
+    manca). Versione 1.3.0.
+  - **Danske**:
+    - `_pair()` e `_demerger()` registrano con `custody:Kauppapäivä`;
+    - il metodo nuovo `_Analysis.in_flight(day)` dà la cassa e la quantità per titolo delle coppie compravendita con
+      T ≤ D < V;
+    - la verità di cassa del checkpoint, la verifica a catena rotta, le posizioni vere e la verifica finale le aggiungono;
+    - versione 1.1.0.
+  > **Note implementazione**: tutte le coppie ricevono l'esito `pair` e diventano transazioni (`_settle`), quindi sono «in volo»
+  > solo le compravendite abbinate. Un dividendo ha T = V: mai in volo. La riga riassunta resta in `border_cash`, come prima.
+- ✅ 4a. La regola 9 della skill `brim-plugin` riscritta, «The operation date, and only settled rows»:
+  - la data dell'operazione;
+  - lo stato se c'è la colonna (che va alla regola 10), altrimenti la valuta dopo oggi, oppure la fine del periodo coperto;
+  - le verità in data dell'operazione;
+  - l'eccezione esplicita del CSV generico.
+- ✅ 1b. Rossi confermati da me (18:04, `files/scripts/b52_light.sh reds`): Fineco 9 rossi e 30 verdi, Danske 29 e 327, API 1 e 3.
+- ✅ 2b. La parte Fineco della cura, applicata (18:05, `b52_cure.py --apply --only=fineco`): `external brim-providers fineco` 39
+  verdi.
+- **Il caso A13, la decisione del developer** (18:06), testuale: «la nostra priorità non è importare tutto, è importare corretto, se
+  una data esce dal margine significa che l'utente doveva aumentare la finestra di export all'indietro o attendere un paio di giorni
+  in avanti».
+  - La compravendita a cavallo dell'inizio della cassa (T ≤ checkpoint d'apertura < V) resta fuori, con la sua data vera, col motivo
+    nuovo `traded_before_cash`.
+  - Un avviso ambra, `excluded_traded_before_cash`, senza `report_issue`, nomina le righe e dà il rimedio: esportare l'estratto di
+    cassa da una data precedente e reimportare il set.
+  - La sua riga di cassa, rimasta senza compagna, finisce nell'apertura come `border_cash` (la regola che c'è già per la cassa
+    senza controparte). Così la cassa torna con la banca dopo V e mancano solo le azioni. Nell'esempio del test il deposito
+    d'apertura è 792 invece di 1000. Approvato dal coordinatore (18:10).
+  - All'apertura niente «in volo»: `in_flight` conta solo le coppie importate.
+  - OK di scrittura per `importWizard.reportSet.reason.traded_before_cash`, aggiunta nelle 4 lingue.
+  > **⚠️ Fuori pista**: lo script della cura applicava ogni modifica a tutti i file; dopo `--only=fineco` le ancore di Fineco non
+  > c'erano più. Ora `edit()` salta i file fuori da `--only`.
+- ⏳ 1c. I test A13 riscritti sulla decisione (test-author `b52-reds`, secondo giro).
+
+#### ⏸️ B-52 · pausa generale del developer (19/10 18:12): lo stato per ripartire
+
+Base `a364a100a`, nessun commit di B-52. 10 file sporchi. Nessun processo nella corsia, porta 6184 libera; i test-author fermi.
+
+**Fatto**
+- I rossi (test-author `b52-reds`, primo giro), confermati da me alle 18:04: Fineco 9 e 30, Danske 29 e 327, API 1 e 3. Stanno in
+  `test_brim_providers.py`, `test_brim_danske_bank.py` (con la classe nuova `TestOperationDateTruths`) e `test_brim_api.py`
+  (RS-B01).
+- La cura di Fineco, applicata: `broker_fineco/plugin.py`, data dell'operazione, versione 1.3.0. `external brim-providers fineco`:
+  39 verdi.
+- La regola 9 della skill `brim-plugin`, riscritta: `.github/skills/brim-tools/brim-plugin/SKILL.md`.
+- L'etichetta `importWizard.reportSet.reason.traded_before_cash`, nelle 4 lingue (`frontend/src/lib/i18n/importWizard/*.json`).
+
+**Non fatto**
+- La cura di Danske, pronta e non applicata: `files/scripts/b52_cure.py --apply --only=danske`. La prova a vuoto è pulita e
+  comprende:
+  - la data `Kauppapäivä` per le coppie e le scissioni;
+  - `_Analysis.in_flight`, che conta solo le coppie importate;
+  - le verità in data dell'operazione;
+  - l'esclusione A13 `traded_before_cash`, col messaggio finlandese e il rimedio;
+  - la versione 1.1.0.
+- I test A13, da riscrivere secondo la decisione: il contratto è sotto, ed è il messaggio al test-author delle 18:11. Il secondo giro
+  del test-author non è partito: nessun file toccato.
+- I verdi, la doc (docs-writer), la verifica del messaggio della issue #26 contro il codice finale, il checkpoint.
+
+**Decisioni ricevute e non ancora applicate**
+- A13, dal developer (18:06):
+  - la compravendita con T ≤ checkpoint d'apertura < V resta fuori, col motivo `traded_before_cash`;
+  - un avviso ambra `excluded_traded_before_cash`, senza `report_issue`, con le righe e il rimedio;
+  - la sua riga di cassa va in `border_cash` all'apertura: la cassa torna con la banca, mancano solo le azioni. Nel test il deposito
+    d'apertura è 792 contro 1000: va scritto nel checkpoint.
+  - Approvato dal coordinatore alle 18:10.
+- I doppioni: (b), nessun codice; la transizione la spiega il messaggio della issue.
+- Il CSV generico resta com'è; W-B88 dopo lo sprint; W-B86 sono i 4 plugin stabili, dopo lo sprint.
+
+**Il contratto dei test A13** (da passare al test-author)
+1. La compravendita è `excluded`, col motivo `traded_before_cash`, e non dà transazioni. `traded_before_cash` entra in `REASONS`.
+2. Un avviso `excluded_traded_before_cash`: `severity="warning"`, niente `report_issue`, la riga come evidenza, `context.count`. Il
+   testo finlandese non si fissa.
+3. La sua riga di cassa è riassunta nell'apertura: la verità di cassa vale saldo + `border_cash` (792). Niente «in volo»
+   all'apertura.
+4. La posizione vera all'apertura non ha quantità in volo: Aurora 50, non 60. Il gap-fix propone 792 e 50.
+5. Il test «broken chain (extra)»: la verifica all'apertura A13 vale 1000, il valore di oggi. Diventa una guardia.
+Invariati: la verifica finale e il checkpoint di buco (lì le compravendite sono in volo), la guardia sull'apertura normale, le date,
+le versioni.
+
+**Il prossimo passo esatto**
+1. Ripopolare la corsia, perché `/tmp` viene ripulito:
+   `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6184 --data-dir /tmp/librefolio-r13-w db populate --force --clean`.
+2. Un test-author riscrive i test A13 col contratto qui sopra, poi gira `external brim-danske-bank` (rossi).
+3. `python3 files/scripts/b52_cure.py --apply --only=danske`.
+4. `bash files/scripts/b52_light.sh greens fineco danske api-danske brim-providers report-sets gap-fix api-brim ruff black`.
+5. Il docs-writer:
+   - la guida (la regola 9 col principio e l'eccezione del CSV generico);
+   - Fineco (`brim/architecture.md`, `fineco.en.md`: la data);
+   - Danske (`danske_bank.md`: la data, le verità in data dell'operazione, `traded_before_cash`; `danske-bank.en.md`).
+6. Verificare che `928ffa97…/files/issue26-danske-messaggio-20261019.md` dica il vero rispetto al codice finale.
+7. La simulazione, poi CHECKPOINT READY, con l'esempio 792 contro 1000.
+
+Poi, dopo B-52: l'analisi Q-N78-1 (il costo dell'ADJUSTMENT in uscita, con MF). I fatti raccolti sono in
+`files/RESUME-20261019.md`.
+
+**In coda, dopo B-52** (il coordinatore, 18:15, priorità bassa nello sprint): **B-51**, trovato da B nella revisione di N74.
+- Il difetto: la colonna «⚠️» dei risultati del wizard conta anche le note `info` blu (un file Fineco mostra «⚠️ 1»; succede anche
+  con Scalable, 5 codici, Danske, 4, e Crédit Agricole, 2), e il dettaglio della lettura chiama tutto «Warnings».
+- La cura approvata (la proposta di B): due numeri nella cella, ⚠️ ambra per gli avvisi e ℹ️ blu per le note; nel dettaglio due
+  sottosezioni, come nella conferma del passo 3.
+- Solo frontend, 4 lingue. Prima un'analisi breve con i file, poi i rossi.
+- Dopo B-51 viene l'analisi Q-N78-1.
+
+#### ▶️ B-52 · ripresa del 20/10
+
+- ✅ 08:50: corsia ripopolata (`db populate --force --clean`, carico 20; `/tmp` era stato svuotato). HEAD `a364a100a`, gli stessi 10
+  file sporchi. Dev (`ecc7ac667`) non ha toccato nessun file del lotto dalla base di fusione `9857be3d2`. I miei commit di W-B85
+  aspettano ancora l'ingresso.
+- **⚠️ Fuori pista, due scoperte nel codice di Danske, prima della cura:**
+  1. `_data_lines` scrive ogni elemento di `analysis.pairs` come una riga «pair», qualunque sia il suo esito. Cambiare solo
+     l'esito della compravendita A13 l'avrebbe importata lo stesso, e senza avviso. Ora la cura la toglie da `self.pairs`: la
+     tabella scrive la riga di custodia come `excluded`/`traded_before_cash` e quella di cassa come `summarized`
+     (`files/scripts/b52_cure.py`, prova a vuoto pulita).
+  2. Le posizioni d'apertura si ricavano da una prova (per esempio un dividendo che dichiara le azioni detenute), meno i movimenti
+     **importati** fra il checkpoint e la prova (`_movements`). Una riga esclusa di quel titolo in quell'intervallo **scarta la
+     prova** (`_excluded_between`, motivo `excluded_rows`). Con la compravendita A13 esclusa, il titolo resta quindi senza posizione
+     d'apertura: mancano tutte le sue azioni, non solo quelle della compravendita. Ieri avevo annunciato «Aurora 50, mancano solo
+     le 10 azioni»: il codice non lo darebbe da sé. Domanda al coordinatore (08:55), con le opzioni:
+     - **(A)** Aurora 60, *consiglio*: in data dell'operazione la compravendita appartiene allo stato d'apertura, la riga
+       `traded_before_cash` non scarta la prova, e nessuna azione si perde quando c'è una prova. L'avviso dice che non è importata
+       come compravendita, e dà il rimedio.
+     - **(B)** Aurora 50, come annunciato ieri: la prova toglie la compravendita esclusa, in data valuta, e mancano le 10 azioni.
+     - **(C)** Come cade oggi il codice: la prova scartata.
+- ⏳ 1c. I test A13 riscritti (test-author `b52-a13`), senza il numero della posizione, in attesa della scelta.
+
+#### B-52 · il caso A13, la decisione del developer (20/10, 09:1x), parola per parola
+
+Le parole del developer: «Dobbiamo usare la data dell'operazione, il momento in cui l'utente ha fatto click e ha materialmente fatto
+l'azione: se il 27 ha comprato, la transazione di buy sarà il 27». E ancora: «mi pare che il problema sia solo la data di apertura
+conto suggerita, che va spostata all'indietro».
+
+Il coordinatore, testuale:
+- «La compravendita a cavallo dell'inizio della cassa si importa come compravendita, alla sua data dell'operazione, con il suo costo
+  vero.»
+- «L'apertura (il deposito e le posizioni provate) si sposta indietro al giorno prima della data dell'operazione più vecchia del
+  file.»
+- «Il deposito d'apertura è il saldo della banca all'inizio dell'estratto, in data valuta (1000 nel tuo esempio, non 792).»
+- «Le posizioni d'apertura si ricavano dalla prova meno i movimenti importati fra la nuova apertura e la prova: Aurora 50, poi
+  l'acquisto di +10, cioè 60.»
+- «Il motivo `traded_before_cash` e l'avviso ambra spariscono per questo caso.»
+
+Da verificare e da coprire con dei rossi, testuale:
+1. «Una vendita a cavallo dell'inizio, senza una prova per quel titolo: non deve nascere una posizione negativa. Dimmi tu come la
+   tratti; se tocca un numero, è una domanda per il developer.»
+2. «Le operazioni regolate fra la nuova apertura e l'inizio dell'estratto, che quindi non sono nel file: sono già dentro il saldo
+   d'apertura, e finiscono nell'apertura qualche giorno prima. È accettabile e va scritto nella doc.»
+3. «Il resto della cura vale ancora: la compravendita non deve finire due volte nelle coppie, e così le date e le verità «in
+   volo».»
+4. «Il messaggio della issue #26 non cambia.»
+
+Supera la decisione del 19/10 18:06 (l'esclusione `traded_before_cash`) e la domanda delle 08:55 (A, B, C). Il secondo giro del
+test-author (`b52-a13`), sul contratto vecchio, è stato fermato.
+
+**La cura A13, riscritta sulla decisione** (`files/scripts/b52_cure.py`; la versione d'esclusione è salvata in
+`b52_cure_v1_exclusion.py.bak`). Prova a vuoto pulita.
+- `_timeline` perde il caso speciale A13: l'apertura è sempre la vigilia della prima data dell'operazione del segmento
+  (`start - 1`). Senza un parametro superfluo: `first_cash`.
+- `_checkpoint_lines`: quando l'apertura precede l'estratto di cassa, la sua verità di cassa si legge alla vigilia del primo giorno
+  di cassa. Quello è «il saldo della banca all'inizio dell'estratto, in data valuta» (1000 nell'esempio), più `border_cash`.
+- `_excluded_between` salta le righe `outside_cash_coverage` regolate prima dell'inizio dell'estratto (`_absorbed_by_opening`).
+  - È il punto 2: la loro cassa è nel saldo d'apertura e le loro azioni nella posizione d'apertura. Non rendono incerta una prova.
+  - Senza questo, spostando indietro l'apertura, una prova oggi valida verrebbe scartata e il titolo perderebbe la sua posizione
+    d'apertura: una regressione.
+- Restano: le date (`Kauppapäivä`), `in_flight`, le verità «in volo» alla verifica finale e ai checkpoint di buco, la versione 1.1.0.
+- Tolti: l'esclusione `traded_before_cash` e la sua etichetta (`dev.py i18n remove`: i 4 JSON tornano come nel commit).
+- La regola 9 della skill: un set che confronta i saldi apre alla vigilia della prima data dell'operazione, anche quando la cassa
+  comincia dopo.
+
+**I punti del coordinatore**
+1. **La vendita a cavallo dell'inizio, senza una prova esatta del titolo.** La prova E3 (`_proof_e3`, «almeno» la quantità venduta)
+   dà all'apertura almeno le azioni vendute: nessuna posizione negativa. Non è un numero nuovo: E3 c'è già oggi, e il test è una
+   guardia.
+   - Il caso residuo: E3 scartata, perché un'altra riga esclusa del titolo (uno stato non contabilizzato, una riga non valida) cade
+     fra l'apertura e la vendita. Allora il titolo non ha una posizione d'apertura (la nota blu `proof_discarded`), e la vendita lo
+     manda sotto zero: il salvataggio la rifiuta per il saldo.
+   - Oggi vale lo stesso, ma nei set A13 l'intervallo si allarga: da (prima cassa − 1, V] a (inizio custodia − 1, V]. Le righe
+     `outside_cash_coverage` non contano più (punto 2).
+2. **Le operazioni regolate fra la nuova apertura e l'inizio dell'estratto**: la cassa è nel saldo d'apertura; le azioni stanno
+   nella posizione d'apertura quando una prova le copre. Le compravendite restano escluse come `outside_cash_coverage`, con l'avviso
+   di oggi. Va nella doc.
+3. **Nessun doppio conto.** La compravendita a cavallo è una coppia sola, importata alla data T. La sua cassa (V dal primo giorno di
+   cassa in poi) non è nel saldo d'apertura. Non è «in volo» all'apertura, perché T è dopo `start - 1`.
+
+**Un effetto da segnalare.** Nei set A13 la finestra in cui una cassa senza la sua riga di custodia si riassume nell'apertura
+(`border_end` = apertura + 5 giorni lavorativi) ora parte da `start - 1`. Una riga di cassa di una compravendita, senza la sua riga
+di custodia e regolata dopo quella finestra dentro la copertura della custodia, diventa `excluded` `no_counterpart` (avviso) invece
+di finire riassunta in silenzio. È più giusto (la custodia copre quel giorno e la riga manca), ma è un avviso in più.
+
+- ⏳ 1c. I test A13 col contratto nuovo (test-author `b52-a13`, stessa conversazione).
+- ✅ 1c. I test A13 sul contratto nuovo (test-author `b52-a13`, solo `test_brim_danske_bank.py`): 31 rossi e 328 verdi, confermati da
+  me alle 09:30, più 1 rosso API (RS-B01).
+  - I 26 rossi di ieri restano: versioni, date, verifiche senza la cassa in volo.
+  - 5 rossi A13, tutti sulla data d'apertura: `late`, la prova E1, `b52_a13`, il gap-fix dell'apertura A13, la catena rotta.
+  - Guardie nuove:
+    - punto 6: `b52_a13_settled_before`, la prova di Kaamos resta valida;
+    - punto 7: `b52_a13_sell`, la vendita a cavallo non va sotto zero grazie a E3;
+    - i set di forma A13 elencati dai file.
+  - Set di forma A13 trovati: `late`, `b52_a13`, `b52_a13_broken`, più i due nuovi; nessun campione lo è. Nessuno mostra l'effetto
+    `no_counterpart`.
+- ✅ 2c. La cura Danske applicata (09:32, `b52_cure.py --apply --only=danske`): `external brim-danske-bank` 359 verdi, `api brim
+  Danske` 4, Fineco 39.
+- ✅ 3. I verdi larghi (09:33-09:36, carico 22-30, `b52_light.sh greens2`, log `files/logs/b52/greens2_*.log`), tutti exit 0:
+  `external brim-providers` 762 (1 saltato), `services brim-report-sets` 274, `services brim-gap-fix` 115, `api brim` 118; ruff e
+  black puliti sui 5 file Python. Porta 6184 libera.
+- ✅ 4. La doc (docs-writer `b52-docs`, solo inglese, nulla timbrato):
+  - la guida dei plugin: la regola «The operation date, and only settled rows», gli esiti, i punti di verità, «in volo», l'apertura
+    A13;
+  - l'architettura BRIM per Fineco;
+  - `service.md`: il nome della regola;
+  - `danske_bank.md`: la versione 1.1.0, le date, le sezioni nuove «In flight» e «A cash statement that starts later (A13)», i set
+    importati prima della 1.1.0;
+  - le pagine utente `fineco.en.md` e `danske-bank.en.md`: la data dell'operazione, la transizione una tantum.
+  `mkdocs build` strict e `check-links` verdi. `translate-validate`: il debito nuovo è sulle due pagine utente (per Aphra).
+  > **⚠️ Fuori pista** (le scoperte del docs-writer):
+  > - **La scheda del set calcola da sé l'apertura proposta** (`ReportSetCard.svelte`, `history`): la vigilia dell'inizio della
+  >   cassa nei set A13, la regola vecchia. È la «data di apertura conto suggerita» del developer: la correggo nel lotto, rossa
+  >   prima (test-author `b52-card`).
+  > - Il vecchio nome della regola («only safe rows») restava in tre commenti (`datetime_utils.py`, Danske): aggiornati.
+  > - **Per il coordinatore:**
+  >   - `transactions.date` è ancora descritta come «settlement date» (`models.py:300, 857, 884`, `schemas/transactions/transactions.py:233,
+  >     522`, `batch.py:202`, `database/brokers_transactions.md:99`): file condivisi, da decidere;
+  >   - la transizione per Danske: va cancellata anche la correzione d'apertura del gap-fix (tag `gap_fix`). Altrimenti H0 resta
+  >     all'inizio della cassa e la compravendita a cavallo resta nascosta;
+  >   - la seconda via («importa solo da dopo l'ultimo giorno importato») può perdere un'operazione fatta entro quel giorno e
+  >     regolata dopo;
+  >   - il CHANGELOG.
+- ✅ 5. La scheda del set (`ReportSetCard.svelte`, `history`): l'apertura proposta è la vigilia del primo segmento. Rosso prima
+  (test-author `b52-card`: 1 rosso, 46 verdi; la scheda mostrava 03/14 invece di 03/07). Poi i verdi (10:05, carico 7-12,
+  `files/scripts/b52_front.sh`):
+  - `ReportSetCard.test.ts` 47, `front-transaction tx-unit` 999;
+  - Prettier e `theme-roles --check` puliti; `i18n check` (5106 chiavi); `front check` senza errori né avvisi.
+- ✅ 6. Simulazione d'integrazione (`n74_sim_light.sh dev_release2 merge`, dev `701054da9`, base `9857be3d2`, 16 file): pulita. Dev
+  non ha toccato i file del lotto; ruff e black puliti sui file fusi.
+- ✅ 7. Il backlog: W-B89, la data descritta ancora come «settlement date» in modelli, schemi e doc (file condivisi).
+
+### W-B89 · La data di una transazione è la data dell'operazione, anche nelle descrizioni: cura ✅ (2026-10-20, base `9989facda`)
+
+Il via del coordinatore (10:10): lotto piccolo prima di B-51. Le descrizioni di `transactions.date` dicono «trade date», non
+«settlement date», in `models.py`, negli schemi e nella doc del DB; poi `api sync`. Solo testo, nessuno schema del DB.
+- I 7 testi:
+  - `backend/app/db/models.py`: la docstring di `TransactionType` («All calculations based on the trade date…»), le «Field
+    semantics» di `Transaction` e la `description` del campo;
+  - `schemas/transactions/transactions.py`: `TXCreateItem.date` e `TXUpdateItem.date`;
+  - `schemas/transactions/batch.py`: la data fusa di un promote;
+  - `developer/architecture/database/brokers_transactions.md`: la riga `date`.
+- Le altre occorrenze restano: parlano della colonna di regolamento di un report (la guida dei plugin) o della storia di N74
+  (`service.md`).
+- Nessun rosso: nessun test fissa quei testi, e il comportamento non cambia. La `description` di un campo SQLModel è solo metadato
+  pydantic (non un commento di colonna), quindi nessuna migrazione.
+- Prove (10:14-10:17, carico 39-43, `files/scripts/wb89_light.sh`, log `files/logs/wb89/`), tutte exit 0: `api sync` (nessun file
+  tracciato cambiato: il client generato è ignorato), ruff e black sui 3 file Python, `front check` senza errori né avvisi, `mkdocs
+  build` strict.
+- La simulazione su dev `f73514a77`: pulita. Dev contiene il mio HEAD e non tocca i 4 file.
+
+### B-51 · Le note blu contate come avvisi nel passo 3 del wizard (2026-10-20, base `ef2a17998`)
+
+Trovato da B nella revisione di N74, approvato dal coordinatore come difetto: la colonna «⚠️» dei risultati conta anche le note
+`info` blu (un file Fineco mostra «⚠️ 1»; anche Scalable, Danske, Crédit Agricole), e il dettaglio della lettura chiama tutto
+«Warnings». La cura di B: due numeri nella cella, ⚠️ ambra per gli avvisi e ℹ️ blu per le note; nel dettaglio due sottosezioni,
+come nella conferma del passo 3. Solo frontend, 4 lingue.
+
+**Analisi** (inviata al coordinatore alle 10:25, sola lettura). Le note blu contate come avvisi in **tre** punti, uno in più di B:
+1. `ImportWizardModal.svelte:4247-4254`, la colonna `warningCount`: la cella è `warnings.length`, avvisi e note insieme.
+2. `ImportWizardModal.svelte:351` (`parseAggregateStats().totalWarnings`), letto da `AnalyzeStep.svelte:144-145`: il riquadro
+   «N avvisi», ambra se N > 0.
+3. `ParseDetailModal.svelte:482-490`: una sola sezione «Avvisi» (`importWizard.warningsSection`).
+
+Già giusti: la conferma del passo 3 (`step3NoticeSections`, «Da verificare» / «Note informative») e la scheda del set.
+
+**Il via** (coordinatore, 10:39): nessun lotto dei colori tocca i tre file; le chiavi di `importWizard/*.json` si possono
+cambiare, rimozioni comprese; lo zero in `text-lf-muted` va bene. Prima i rossi.
+
+**Il contratto dei rossi** (deciso prima dei test; i dettagli sono scelte d'implementazione nel perimetro approvato):
+- **`importNotices.ts`** (nuovo, puro, `features/transactions/import/`):
+  - `noticeSeverity(notice)`: `info` → `'info'`, ogni altra gravità (anche assente o sconosciuta) → `'warning'`: la regola di
+    `BrimNoticeList.severityOf`;
+  - `noticeCounts(notices)` → `{warnings, notes}`; una lista assente vale `{0, 0}`;
+  - `splitNotices(notices)` → `{warnings, notes}`: gli stessi oggetti, nell'ordine d'origine;
+  - `noticeSortValue(notices)`: `null` se la lista manca (riga non letta, va in fondo); altrimenti ordina per avvisi, e a
+    parità d'avvisi per note;
+  - `noticeCountsCell(notices)`: `'—'` se la lista manca; altrimenti la cella `{type: 'custom', component: NoticeCounts,
+    props: {warnings, notes}}`.
+- **`NoticeCounts.svelte`** (nuovo): i due numeri, ciascuno con la sua icona lucide (`AlertTriangle`, `Info`), come nella lista
+  delle note e nella conferma del passo 3. Un'emoji non prende il colore del ruolo, e la regola 12 del design system vieta
+  l'opacità su un'icona di nota: con lucide lo zero è tutto `text-lf-muted`, icona compresa.
+  - Testid: `notice-counts` (`data-warnings`, `data-notes`); ogni conteggio `notice-count` (`data-severity` `warning` | `info`,
+    `data-count`, `data-zero`).
+  - Il conto > 0 in `text-lf-warning` / `text-lf-info`; ogni conto nominato per chi usa un lettore di schermo (`sr-only`,
+    chiavi `warningsCount` e `notesCount`).
+- **La colonna** (`ImportWizardModal.svelte`):
+  - id `noticeCount` (non più `warningCount`: la tabella salva le larghezze per id, e una larghezza salvata a 40 px
+    schiaccerebbe i due numeri);
+  - intestazione `⚠️ ℹ️`, tooltip `colTip.noticeCount`, cella `noticeCountsCell`, ordinamento `noticeSortValue`, larghezza 72.
+- **Il riquadro del passo 3** (`AnalyzeStep.svelte`):
+  - `parseAggregateStats()` dà `totalWarnings` (solo gli avvisi, via `noticeCounts`) e `totalNotes`;
+  - il riquadro `import-wizard-stat-notices` mostra `NoticeCounts`, e sotto «N avvisi · M note».
+- **Il dettaglio della lettura** (`ParseDetailModal.svelte`):
+  - la sezione `parse-detail-notices` (`data-warnings`, `data-notes`), titolo `noticeConfirmTitle`;
+  - una sottosezione `parse-detail-notice-section` per ogni gravità presente (`data-severity`, `data-count`), prima gli
+    avvisi, con l'intestazione e l'icona della conferma (`noticeSectionWarning`, `noticeSectionInfo`) e la sua `BrimNoticeList`;
+  - nessuna sottosezione vuota; senza note né avvisi, `parse-detail-notices-empty` (`noNotices`);
+  - lo stesso nel riepilogo di più file.
+- **i18n** (`importWizard/*.json`, 4 lingue):
+  - nuove: `notesCount` (plurale), `noNotices`, `colTip.noticeCount`;
+  - `warningsCount` diventa plurale («1 avviso»): sta accanto a «1 nota» nel riquadro;
+  - tolte: `warningsSection`, `noWarnings`, `colTip.warningCount`.
+- **I test**:
+  - `importNotices.test.ts` (nuovo);
+  - `NoticeCounts.test.ts` (nuovo, jsdom);
+  - `ParseDetailModal.test.ts` (un blocco nuovo);
+  - `AnalyzeStep.test.ts` (nuovo, jsdom);
+  - i file nuovi registrati in `front-transaction tx-unit`.
+
+  Gli E2E leggono del dettaglio solo l'abbinamento e la chiusura: nessun cambio.
+
+**Passi:**
+- ✅ 1. I rossi (test-author `b51-reds`, 2026-10-20 10:45-11:05, carico 15-27, Vitest file per file): **84 rossi, 22 verdi**, ogni
+  rosso per il contratto mancante (modulo assente, testid assente, conti), mai per un errore del test.
+  - `importNotices.test.ts` (nuovo, jsdom): 34 rossi. Prova anche che `noticeSeverity` dice ciò che `BrimNoticeList` disegna, per 10
+    forme di gravità; le liste in ingresso sono congelate.
+  - `NoticeCounts.test.ts` (nuovo): 36 rossi (12 casi per tre taglie: assente, `sm`, `lg`).
+  - `AnalyzeStep.test.ts` (nuovo): 4 rossi, 2 guardie verdi.
+  - `ParseDetailModal.test.ts`, un blocco nuovo di 12: 10 rossi, 2 guardie verdi; i 18 test di prima restano verdi.
+  - Registrati in `front-transaction tx-unit` (`_frontend_transaction.py`: la lista e la `desc`).
+  > **⚠️ Fuori pista**: con `step3Columns: []` `DataTable` non si assesta mai (`effect_update_depth_exceeded`): il ripiego per un
+  > ordine di colonne vuoto (`DataTable.svelte:855-861`) riscrive un `[]` e un `{}` nuovi a ogni giro. Il wizard ha sempre colonne,
+  > quindi nessun utente lo vede; il test passa una colonna inerte, col perché. Difetto fuori perimetro: W-B90 nel backlog.
+- ✅ 2. La cura (2026-10-20 11:07-11:20):
+  - `importNotices.ts` e `NoticeCounts.svelte`, nuovi, come da contratto. Il conto ordina con `warnings + notes / (notes + 1)`:
+    un avviso in più supera qualsiasi numero di note.
+  - `ImportWizardModal.svelte`:
+    - `parseAggregateStats()` dà `totalWarnings` (solo gli avvisi) e `totalNotes`;
+    - la colonna `noticeCount`;
+    - `step3NoticeSections` e `step3HasWarningSeverity` leggono `noticeSeverity`: una regola sola.
+  - `AnalyzeStep.svelte`: il riquadro `import-wizard-stat-notices` con `NoticeCounts` (`lg`) e la didascalia «N avvisi · M note»,
+    nascosta ai lettori di schermo perché i conti si nominano già da sé.
+  - `ParseDetailModal.svelte`: la sezione «Note dall'importazione» con le due sottosezioni, intestazioni e icone della conferma, e
+    il numero fra parentesi.
+  - i18n (`files/b51/i18n.sh`, poi una `update`):
+    - nuove `notesCount`, `noNotices`, `colTip.noticeCount`; `warningsCount` plurale;
+    - tolte `warningsSection`, `noWarnings`, `colTip.warningCount`;
+    - 5106 chiavi, prima e dopo; in francese `notesCount` ha un ramo `many`, così nessun testo plurale è identico fra due lingue
+      (la cache di svelte-i18n).
+  > **⚠️ Fuori pista**: **c'era un quarto punto**. Con almeno un avviso, l'introduzione della conferma del passo 3 diceva «{n}
+  > avviso/i generati…» con `n` = tutte le note (`step3Warnings.length`): 1 avviso e 5 note davano «6 avviso/i». La conferma
+  > «già giusta» dell'analisi lo era solo nelle sottosezioni. Curato nello stesso file approvato: `n` è il numero degli avvisi
+  > (`step3NoticeTally`), e nel ramo delle sole note il numero delle note (è lo stesso di prima).
+  > Nessun rosso dedicato: il conto è `noticeCounts` (provato), e il cablaggio dentro un modale di 4800 righe non ha un test di
+  > componente. Lo stesso vale per la colonna: sono provati i pezzi (`noticeCountsCell`, `noticeSortValue`), non il loro cablaggio.
+- ✅ 3. I verdi leggeri (11:08-11:15, carico 21-52, `files/scripts/b51_light.sh`, log `files/logs/b51/`), tutti exit 0:
+  - i Vitest, uno per file:
+    - `importNotices` 34;
+    - `NoticeCounts` 36;
+    - `AnalyzeStep` 6;
+    - `ParseDetailModal` 30;
+    - `BrimNoticeList` 10;
+  - `front-transaction tx-unit`: 27 file, 1087 test (999 + gli 88 nuovi);
+  - i gate:
+    - Prettier invariato;
+    - `theme-roles --check` pulito;
+    - `themeRoles.gate` 80;
+    - `i18n check` (5106 chiavi);
+    - `catalogIcuLocale` 17;
+  - `front check`: 0 errori, 0 avvisi.
+- ✅ 4. La doc (docs-writer `b51-docs`, 11:20-11:27; le traduzioni a mano, 11:30):
+  - `user/transactions/import/how-to.en.md`, passo 3: la riga `⚠️ ℹ️` della tabella (due numeri: avvisi ambra da guardare, note blu
+    senza nulla da correggere), i riquadri «sotto» la tabella (dicevano «sopra»: stanno sotto da quando esistono) e il dettaglio che
+    elenca avvisi e note a parte, il punto «Avvisi e note» della conferma.
+  - Le stesse tre righe a mano in IT, FR ES, con le parole dell'app («Vedi Dettaglio», «Voir Détail», «Ver Detalle»), poi
+    `translate-stamp`: nessun debito nuovo (`translate --dry-run` «up-to-date»; `translate-diff` non nomina `how-to`, i 18 debiti
+    che elenca sono di altre pagine e di prima).
+  - `developer/frontend/components/features/import-wizard.md`, «🧾 Per-file parse stats»: la regola unica (`noticeSeverity`), i
+    quattro punti, perché la colonna ha cambiato id.
+  - `brim_plugin_guide.md` ancora giusta: nessun cambio.
+  - Prove (11:31-11:36, carico 9-20): `mkdocs build` strict senza WARNING, `check-links` 97 validi, `front check` di nuovo 0 e 0
+    (il wizard era cambiato dopo il primo).
+  > **⚠️ Fuori pista** (le scoperte del docs-writer, fuori da B-51, non toccate):
+  > - il punto «Un file non è stato elaborato … poi clicca **Rianalizza tutti**»: il bottone sta nella fila dei riquadri, che
+  >   compare solo se almeno un file è stato letto; se falliscono tutti non c'è. E cambiare plugin e premere **Analizza (N)**
+  >   rianalizza già da sé;
+  > - `brim_plugin_guide.md:910` e `developer/backend/brim/architecture.md:392` dicono dove compaiono le note («parse-detail +
+  >   confirmation modal»): vero, ma non nominano i conti nuovi della colonna e dei riquadri.
+- ✅ 5. La simulazione d'integrazione (`n74_sim_light.sh dev_release2 merge`, dev `f73514a77`, base `9989facda`, 22 file): pulita.
+  - Dev ha toccato `how-to.en.md` (il paragrafo di J-57, riga ~288) e il runner (un'altra funzione): fusi senza conflitti.
+  - Ruff e black sul runner fuso danno i 4 PLC0415 e il formato che il file di dev ha già da sé: non sono di B-51.
+  - Nessun E2E legge i conti o le chiavi tolte: cliccano solo `import-wizard-warning-confirm`, che compare come prima (con
+    qualsiasi nota).
+- ✅ 6. CHECKPOINT READY al coordinatore (2026-10-20 ~11:42), FROZEN. Nel backlog: W-B90 (la `DataTable` senza colonne) e W-B91 (la
+  guida, «un file è fallito»). B-51 sta nella sezione di B: la chiude il coordinatore. Fuori dal lotto: la galleria del passo 3
+  (`import-wizard-step3`) mostra la colonna e il riquadro vecchi, da rigenerare in uno slot pesante.
+
+### W-B92 · Fineco: la commissione è già dentro il Controvalore — analisi e cura (2026-10-21, base `89e8b2e61`)
+
+**Il fatto.** Discussione #49 (`@Xgialippo`, con l'Excel vero): nel report di Fineco il **Controvalore** di un acquisto contiene già la
+commissione e quello di una vendita l'ha già tolta. Il plugin (layout con colonne di commissione) prendeva il Controvalore tal quale
+e aggiungeva una FEE a parte: ogni operazione con commissione era sbagliata della commissione. Decisione del developer (21/10),
+**soluzione B**: BUY = −(Controvalore − commissioni) più FEE −commissioni; SELL = +(Controvalore + commissioni) più FEE −commissioni.
+Il developer ha promesso all'utente il nome nel CHANGELOG. Numeri delle fixture: **scalati** (stessa struttura e aritmetica, importi diversi).
+
+- ✅ 1. Analisi (21/10). Il report vero ha **12 colonne** (una sola colonna di commissione, «Commissioni amministrato», in 11), non 15:
+  `has_commissions` (> 11 celle) vale lo stesso e `_sum_commissions` somma le colonne presenti. `Prezzo` = Controvalore / quantità.
+  > **Note implementazione**: l'Excel annotato dell'utente (solo uso interno, non pubblicato) mostra le 4 righe del brief.
+- ✅ 2. Rossi (21/10, test-author): `TestFinecoControvaloreIncludesCommission` (nuova) in `test_brim_providers.py` (4 righe scalate con date;
+  la forma vera a 12 colonne, `;` e virgole decimali; l'invariante «BUY/SELL + FEE = ± Controvalore»; più colonne di commissione;
+  guardie per Rimborso, Aumento capitale, dividendo e cedola, layout a 11 colonne, Controvalore vuoto o illeggibile; commissione sopra il
+  Controvalore; riga in valuta, provvisoria). Prima della cura: **24 falliti, 31 passati** (`-k Fineco`, log
+  `/tmp/librefolio_wb_fineco_red.log`). Le fixture esistenti con commissione hanno il Controvalore spostato (BUY + commissione, SELL −
+  commissione) perché le attese restassero uguali.
+- ✅ 3. Cura (21/10): `broker_fineco/plugin.py`, `_net_of_commission`; `plugin_version` 1.4.0. I tre `sample_reports/fineco*.csv` con
+  commissioni ora rispecchiano l'Excel vero (Controvalore = prezzo eseguito × quantità ± commissione, `Prezzo` = Controvalore / quantità;
+  le righe in USD tengono il `Prezzo` in USD); il `fineco_variant_a.csv` è invariato. Dopo la cura: **55/55** (`-k Fineco`, log
+  `/tmp/librefolio_wb_fineco_green.log`).
+- ✅ 4. Guida (21/10, docs-writer): `user/transactions/import/fineco.en.md` riscritta (percorso vero in 7 passi con
+  `static/broker-guides/fineco/Fineco_1..6.png`, commissioni, nota per chi ha importato con 1.2 o prima, ringraziamento a
+  `@Xgialippo`); `developer/backend/brim/architecture.md` («Fineco») aggiornata. Traduzioni IT/FR/ES: debito reale, non toccate.
+  > **⚠️ Fuori pista**: la guida chiama il report «Ordini e contabili» (la voce vera del sito) e non più «Movimenti Dossier
+  > Titoli», che resta nel docstring e nel rilevamento del file.
+- **Domande aperte al developer** (non scelte dal plugin): **Q-WB-1** il Controvalore di un `Rimborso` con commissione la contiene? (oggi
+  invariato: SELL = Controvalore più FEE); **Q-WB-2** una commissione maggiore del Controvalore di un acquisto (oggi: l'importo resta
+  quello stampato, mai invertito); **Q-WB-3** riga con Divisa non EUR: il Controvalore è nella Divisa o in euro? (oggi stessa
+  aritmetica, importo con la Divisa, FEE in EUR).
+- ✅ 5. Avviso nella guida (21/10, dal developer, parola dell'utente `@Xgialippo`): nel suo file l'unica colonna è «Commissioni
+  amministrato»; non ha mai avuto fondi né BTP; chi è in **regime dichiarativo** può avere colonne e valori diversi. Il riquadro
+  `!!! warning "Beta — community feedback welcome"` della guida lo dice e invita a una issue o alla discussione #49 con un file
+  anonimizzato. Nel codice nessuna congettura: colonne di commissione con altri nomi → somma delle colonne 11-14, come i test.
+- ✅ 6. Beta tolta (21/10, correzione del developer al punto 5): niente riquadro in testa; la guida chiude con «Known limitations»
+  (verificato su regime amministrato; dichiarativo, fondi e BTP non visti; issue o discussione #49 con file anonimizzato).
+  `index.en.md` (scheda Fineco) e `providers_list.md` (✅ Stable), il messaggio `INCOMPLETE_MESSAGE` e i docstring del plugin senza
+  «beta». mkdocs build stretto 0 avvisi, check-links 97 validi. Autorizzato dal developer (21/10): tolta la frase «in beta» dalle chiavi `fineco_incomplete_rows` (importWizard `en/it/es/fr.json:206`, solo
+  quella frase, senza ritradurre) e il riquadro Beta di `fineco.it/es/fr.md` (solo il riquadro); cataloghi generati rifatti con
+  `dev.py i18n build`, `i18n check` verde (5117 chiavi × 4 lingue), `test_i18n_catalog_gate.py` 176 verdi. La guida EN elenca in «Known
+  limitations» anche Q-WB-1/2/3 (Rimborso con commissione, commissione maggiore del Controvalore, righe non EUR). Resta al coordinatore
+  `CHANGELOG.md:99` («Fineco importer (beta)»).
+
+### W-B86 e W-B87 · «Noto in silenzio, ignoto con avviso» negli altri plugin (2026-10-21, base `a7c6db19f`)
+
+**Il via del coordinatore (21/10)**: il passo B del workstream W backend. Aiuto condiviso in `_brim_io.py`, W-B86 solo sui 4 plugin stabili
+(decisione del 19/10), D-W85-4 nella versione minima (approvata dal developer il 21/10). Le chiavi `importWizard.brimNotice.*` le scrive W.
+
+- ✅ 1. L'aiuto `RowSkips` (21/10): `unknown`, `unreadable`, `set_headers`, `notices()`: al più due avvisi `warning` (`rows_not_recognized`,
+  `rows_unreadable`), `context {count, report_issue: True}`, un'evidenza con l'intestazione del file e una colonna «Reason», i numeri di riga.
+  Accetta anche le righe di un `csv.DictReader`.
+- ✅ 2. Rossi (test-author, 21/10): `test_brim_row_skips.py` (nuovo, azione `external brim-row-skips`: aiuto, contratto su tutti i plugin
+  registrati con l'insieme `ROW_SKIPS_PENDING` per quelli in beta, chiavi del catalogo), più `TestRowsLeftOutAreReported` in
+  `test_brim_degiro.py` e `TestRowsLeftOut` in `test_brim_scalable.py`. Prima della cura: **row_skips 128 falliti / 71 passati, degiro 9 / 198,
+  scalable 50 / 133, providers 778 passati** (log `/tmp/librefolio_wb_rs_final_*.log`).
+- ✅ 3. La cura (21/10): DEGIRO 2.1.0 e Crédit Agricole 1.5.0 (`report_issue` sui codici «ignoto» e «illeggibile»); Scalable 1.1.0 (anche il
+  plugin dei depositi): `report_issue` su `scalable_unreadable_rows` e `scalable_not_imported`, stati `pending`/`cancelled`/`canceled`/`expired`/
+  `rejected` in silenzio con una riga di log, stato ignoto → `rows_not_recognized`, stato vuoto → `rows_unreadable`, `scalable_not_executed`
+  tolto (chiavi i18n tolte); Directa 1.1.0 (i 4 avvisi a stringa → codici condivisi); Revolut 1.2.0, Trading 212 1.1.0, eToro 1.2.0 (le righe
+  con effetto economico in un avviso aggregato, `Transfer` in silenzio); Trade Republic 1.1.0, Swissquote 1.1.0, IBKR 1.1.0 (dalle stringhe ai
+  codici condivisi). Dopo la cura: row_skips **199/199**, degiro **207/207**, scalable **183/183**, providers **778 + 1 saltato**, danske 359,
+  report sets 274, versioning 5, gate del catalogo 176.
+  > **Note implementazione**: i sample con righe che ora danno un avviso (Directa 34 e 35, Revolut Invest 9, Trading 212 11/13/14, eToro
+  > 24/26/27/29, Trade Republic 9/10, Swissquote 3/4/10/11, IBKR 10/11/12) sono fissati riga per riga nel test di contratto.
+  > **⚠️ Fuori pista**: `ca_unknown_causale` resta `info` (la riga è importata per segno) e porta `report_issue`; il Revolut crypto, T212 ed
+  > eToro non hanno una riga «illeggibile» nel contratto: le loro altre stringhe restano com'erano (plugin in beta).
+- ✅ 4. Chiavi i18n (21/10, via del coordinatore): `importWizard.brimNotice.rows_not_recognized` e `rows_unreadable`, `importWizard.brimEvidence.*`
+  (4 lingue); tolte `scalable_not_executed` (brimNotice e brimEvidence). `i18n check` verde (5119 chiavi).
+
+### N78-1 · A che valore esce un'unità in una rettifica in uscita: analisi (2026-10-21/22, sola lettura, base `2879ae3e4`)
+
+Ondata 3, lavoro notturno, solo analisi (con i fatti preparati da MF nel piano 11, «N78-1 con W — preparazione»). Il documento per
+il developer è fuori dal repo: `salvataggi-worktrees-20261021/ondata3/N78-1-analisi.md`.
+- ✅ 1. I fatti riletti sul codice: il PMC non cambia mai (`average_cost.py:302-303`); il valore d'uscita è `cost_basis_override`,
+  letto da Dashboard (`daily_state.py:418-428`, J-24), lotti (`fifo/engine.py:241-245`, `:397-410`) e performance dei lotti
+  (`lots/histories.py:146-152`); decisione 47 al PMC, gambe al bordo di J-10 al mercato del giorno.
+- ✅ 2. L'esempio (10 azioni a 50, valgono 80, 2 regalate) per (a) costo, (b) mercato, (c) correzione: P&L totale 240 / 300 / 140,
+  TWRR del giorno −7,5 % / 0 % / −20 %, realizzato dei lotti 0 / +60 / −100. Lotti e TWRR verificati con il vero motore FIFO e
+  `calculate_twrr` (script su dati sintetici, fuori dal repo); la Dashboard a mano sul codice, il caso con un valore già fissato dal
+  test J-24.
+  > **Note implementazione**: dal Form e dal Bulk oggi si arriva solo a (c): il valore digitato su una rettifica in uscita si perde in
+  > silenzio (`txPayloadHelpers.ts:274-277`, il difetto di N78-bis); nessun plugin mette un valore in uscita.
+  > **⚠️ Fuori pista**: in (c) la Dashboard realizza 0 e i lotti −100 (i −100 finiscono in «Altro»); il CSV generico chiede un costo
+  > bloccante anche sulle rettifiche in uscita, che il Bulk non lascia riempire.
+- ✅ 3. Raccomandazione di W: (b) come default (Auto = prezzo del giorno, al costo senza prezzo), (c) come scelta esplicita, la
+  decisione 47 allineata a J-10; N78-bis come primo passo in ogni caso. Domande Q-N78-1a…h nel documento.
+
+### N78-1 · Una rettifica in uscita non ha valore: cura (2026-10-22, base `2879ae3e4`)
+
+**Le decisioni del developer** (21/10 sera, via il coordinatore; testo intero in `ondata3/N78-1-analisi.md` § 8): (1) un
+ADJUSTMENT in uscita non ha valore, abbassa solo la quantità, anche per il TWRR; (2) decisione 47: la gamba sola che cede esce senza
+valore; (3) il realizzato della Dashboard = 0 − costo, come i lotti; (4) Form e Bulk: il costo solo con quantità positiva; (5) il passo
+`lone-transfer-legs` converte senza valore; (6) in 1.3; (7) backlog dopo la 1.3: stimare un prezzo dalla metà che entra.
+
+**Piano breve**
+1. **Regole** (`schemas/transactions/transactions.py:177-195`): la 12b perde l'eccezione dell'ADJUSTMENT in uscita. Un costo inviato
+   dall'API su un'uscita è **rifiutato** con `costBasisNotAllowed` (proposta di W: come ogni tipo e lato senza costo; ignorarlo in
+   silenzio nasconderebbe l'errore a chi lo manda). Nella 1.2.1 era salvabile (la regola 12 rifiutava solo la modalità): un update
+   che non tocca il costo non lo invia, quindi una riga vecchia con un valore resta modificabile.
+2. **Motori** (`financial_math`), un'uscita senza valore anche se il database ne ha uno:
+   - FIFO: `fifo/engine.py:241-245` chiude a 0 un ADJUSTMENT in uscita letto dal database; le letture di J-10
+     (`lots/scope_boundary.py`, al mercato o `hands_over_at_own_cost`) restano;
+   - Dashboard: `daily_state._is_capital_adjustment` solo per l'entrata; ogni ADJUSTMENT in uscita (non di uno split) realizza
+     0 − costo (`_realized_disposal` con proventi 0), senza flusso di capitale; `_handed_over_value` e il bisogno di cambio di
+     `portfolio/engine.py:640-645` tolti;
+   - performance dei lotti: `lots/histories.py:146-152` e `:821` senza flusso per l'uscita; `lots/conversions.py:244` senza il cambio.
+3. **Decisione 47**: `delete_by_broker` (`transaction_service.py:60-110`), lo split nel batch (`batch_costs._cost_split_handovers`) e
+   `lone_transfer_legs.py` convertono la gamba che cede in ADJUSTMENT in uscita **senza valore**, sempre (niente più cambio mancante
+   né `wacFxUnavailable`/`autoCostUnreadable` per quella gamba); `_handover_cost` tolto. Le righe già convertite al PMC **non si
+   riconoscono** (nessun segno): la cura dei motori le rende innocue; toglierne il valore è la domanda Q-N78-1i (pezzo in pausa).
+4. **CSV generico**: il todo bloccante del costo solo sulle rettifiche in entrata (`broker_generic_csv/plugin.py:455-470`).
+5. **Frontend**: Form (`TransactionFormModal.svelte:749`, `TxFormSingleSection.svelte:319`) e Bulk (`TransactionBulkModal.svelte:210-212`)
+   mostrano il costo solo con quantità positiva. I messaggi `costBasisNotAllowed` / `costBasisModeIncompatible` dicono già «solo le
+   unità che entrano portano un costo»: nessun cambio.
+6. **Test** (test-author, prima i rossi): invertire J-24/CP-16 (`test_adjustment_out_with_cost_numbers.py`), la decisione 47
+   (`delete_by_broker`, split nel batch, `lone_transfer_legs`), la regola 12b (`TestN78…`); nuovi: l'esempio 10 a 50 / 80 / 2 regalate
+   (Dashboard realizzato −100, «Altro» 0, P&L 140, TWRR −20 %; lotti −100); J-10 invariato (guardia).
+7. **Doc** (docs-writer, inglese): pagina utente delle transazioni, `brokers_transactions.md`, la sezione lotti/Dashboard di MF.
+8. **Backlog**: la voce del punto 7 del developer.
+
+**Domande** (pausa solo del pezzo): **Q-N78-1i** togliere il valore salvato a ogni ADJUSTMENT in uscita (passo d'avvio) o
+lasciarlo, ignorato dai motori? **Q-N78-1j** le gambe al bordo di J-10 restano al mercato del giorno?
+
+**Correzione del developer al punto 5** (via il coordinatore): niente codice che bonifica dati nell'app. Il passo `lone-transfer-legs`
+resta com'è nella sua funzione, cambia solo il valore che scrive (nessuno); nessuna rimozione dei valori già scritti (Q-N78-1i chiusa:
+no). Il database del developer lo controlla il coordinatore con uno script esterno. Allineare invece i dati di test (populate).
+
+**Avanzamento**
+- ✅ 1. Piano breve (22/10) e decisioni nel documento (`ondata3/N78-1-analisi.md` § 8).
+- ✅ 2. Rossi (test-author, 22/10): **70 backend e 5 Vitest** rossi per il motivo giusto in 12 file (J-24/CP-16 invertiti in
+  `test_adjustment_out_with_cost_numbers.py`, con l'esempio 10/50/80/2 parametrizzato su nessun valore, 50 e 80; Dashboard
+  `TestAdjustmentOutHasNoValue`; decisione 47 in `test_broker_service.py`, `test_transaction_cost_basis_rule.py`,
+  `test_lone_transfer_legs.py`, `test_orphan_transfer_after_broker_delete.py`, `test_auto_cost_unreadable_pool.py`; FIFO; CSV generico;
+  Form e Bulk). Guardie J-10 verdi. Log `ondata3/wn78_final_*.log`.
+- ✅ 3. Cura (22/10), in quattro script applicati insieme:
+  - motori: `FifoInputTransaction.from_transaction` toglie il valore a un ADJUSTMENT in uscita letto dal database (le letture di J-10
+    restano); Dashboard: `_is_capital_adjustment` solo in entrata, ogni ADJUSTMENT in uscita realizza 0 − costo, `_handed_over_value`
+    tolto; tolti i cambi chiesti per un'uscita (`portfolio/engine.py`, `lots/conversions.py`); performance dei lotti senza flusso;
+  - regola 12b senza l'eccezione: un costo su un'uscita → `costBasisNotAllowed`;
+  - decisione 47 senza valore: `delete_by_broker`, lo split nel batch (`handover_rows` e `_cost_split_handovers` tolti), il passo
+    `lone-transfer-legs` (converte sempre, `LoneLeg` senza costo), `_handover_cost` tolto;
+  - CSV generico: il todo del costo solo in entrata; Form e Bulk: il costo solo con quantità positiva;
+  - populate: la riga `[wac-test] ADJUSTMENT AAPL -3` non ha più il valore 160.
+  > **⚠️ Fuori pista**: dopo la cura 8 test vecchi asserivano ancora il vecchio contratto (5 in `test_lots_analysis_pure.py`, 1 in
+  > `test_portfolio_engine_vnext.py`, 2 casi J-60): aggiornati da test-author, nessuno era una lettura di J-10. Il caso J-60
+  > «short-balance» ora usa una coppia TRANSFER (un'uscita non può più portare un costo).
+  > **Note implementazione**: la proposta di W di lasciar togliere il valore con un `null` nell'update è stata ritirata prima di
+  > applicarla (la guardia P5 resta com'è; nessuna bonifica).
+- ✅ 4. Backlog: W-B93 (questa cura) e W-B94 (la metà che entra come stima del prezzo, dopo la 1.3).
+- ✅ 5. Verdi (22/10, corsia 6183): azioni `services` financial-math 2490, roi-fifo-utils 1739, portfolio-engine 41, transaction 130,
+  transaction-cost-basis-rule 244, broker 81, edge-cases 17, lone-transfer-legs 20, lots-analysis-pure 240, brim-create-transaction 18;
+  file: post_migration 45, post_migration_orphan_pairs 47, account_deletion_api 13, brim_providers 779 + 1 saltato, guardie J-10 verdi;
+  Vitest Form e Bulk 78/78. Log in `ondata3/wn78_*`.
+  > **⚠️ Fuori pista**: in `roi-fifo-utils` altri 3 test vecchi aggiornati. (a) Un'uscita in-kind con valore (contributi per broker):
+  > invertita. (b) `TestDustResidual`: l'uscita ora è una cessione contata (`per_sales`), la base della posizione chiusa diventa il costo
+  > ceduto e l'annualizzato è `None` (rapporto −1,10 sotto −100 %): il soggetto del test (la finestra di ripiego) va riportato su un altro
+  > libro, nota per MF. (c) **La coppia di ADJUSTMENT collegata fra due broker** (caso 15b): letta alla lettera, la gamba che esce non ha
+  > valore, A realizza −100 e l'aggregato perde 100 per uno spostamento fra broker propri: domanda **Q-N78-1k**, il test fissa per ora il
+  > comportamento letterale.
+- ✅ 6. Doc (docs-writer, 35 pagine inglesi: utente, teoria finanziaria, sviluppatore), build stretto 0 avvisi, check-links 97. Debito di
+  traduzione reale su 20 pagine tradotte. I commenti del backend che citavano ancora J-24 aggiornati da me.

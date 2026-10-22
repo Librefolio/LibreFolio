@@ -146,7 +146,8 @@
         "other": "rechazado por el servidor"
       },
       "tooManyItems": "No se ha guardado nada: el servidor acepta como máximo {max, number} valores por guardado, y este contenía {count, number}. Guárdalos en varias partes."
-    }
+    },
+    "errorWithRequestId": "{message} (código: {requestId})"
   },
   "csvImport": {
     "title": "Importar datos CSV",
@@ -304,7 +305,8 @@
   },
   "nav": {
     "dashboard": "Panel",
-    "settings": "Configuración"
+    "settings": "Configuración",
+    "toggleMenu": "Abrir o cerrar el menú"
   },
   "prices": {
     "sync": {

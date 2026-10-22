@@ -3,51 +3,28 @@
 # Written only by `node frontend/scripts/theme/theme-roles.mjs` (--init, --update, --split, --accept, --resolve).
 # Merge conflict: `--resolve` merges the three sides — a line one side left as it was takes the other side's; changed on both, an accepted file keeps its accepting side, otherwise the tighter side wins (the lower m1, the m2 values both sides have) — then the gate must pass on the merged tree. Never widen a line to pass.
 # Lines starting with ~ declare a split file (old, new files, its record then) or a file taken as it is (file, reason).
-lib/components/assets/AssetModalFooter.svelte	8
-lib/components/assets/AssetTable.svelte	12
-lib/components/assets/IdentifierPrimaryChooser.svelte	11
-lib/components/assets/ScheduledInvestmentEditor.svelte	4
 lib/components/assets/detail/AssetDetailMeasuresSection.svelte	11
-lib/components/assets/detail/AssetDetailMetadataPanel.svelte	1
-lib/components/assets/detail/AssetDetailSignalsPanel.svelte	1
-lib/components/charts/ChartAestheticsSection.svelte	16
-lib/components/table/DataTableCellContent.svelte	4
-lib/components/ui/data-editor/DataEditor.svelte	5
-lib/features/brokers/BrokerCard.svelte	12
-lib/features/brokers/BrokerForm.svelte	4
-lib/features/brokers/BrokerSharingPanel.svelte	45
-lib/features/brokers/lots/LotComparisonChart.svelte	2
-lib/features/brokers/lots/LotCustodyModal.svelte	20
+lib/features/brokers/lots/LotCustodyModal.svelte	4
 lib/features/brokers/lots/LotGanttChart.svelte	4
-lib/features/brokers/lots/UnifiedLotsTable.svelte	60
+lib/features/brokers/lots/UnifiedLotsTable.svelte	12
 lib/features/risk/RiskReturnLevel.svelte	4
-lib/features/settings/SettingToggle.svelte	18
-lib/features/settings/tabs/AboutTab.svelte	21
+lib/features/settings/tabs/AboutTab.svelte	5
 lib/features/support/supportLinks.ts	14
-lib/features/tools/pac-allocator/planner/result/AssetTable.svelte	1
-lib/features/tools/pac-allocator/planner/result/BackendTimingBar.svelte	14
-lib/features/tools/pac-allocator/planner/result/ResultCell.svelte	1
-lib/features/tools/pac-allocator/planner/steps/DistributionDialog.svelte	1
-lib/features/transactions/bulk/PromoteMergeModal.svelte	62
+lib/features/tools/pac-allocator/planner/result/BackendTimingBar.svelte	12
+lib/features/transactions/bulk/PromoteMergeModal.svelte	40
 lib/features/transactions/bulk/TransactionBulkModal.svelte	9
 lib/features/transactions/bulk/TxBulkBanners.svelte	2
 lib/features/transactions/bulk/TxBulkToolbar.svelte	4
-lib/features/transactions/events/AssetEventPicker.svelte	12
+lib/features/transactions/events/AssetEventPicker.svelte	2
 lib/features/transactions/form/TxFormOptionalSection.svelte	6
 lib/features/transactions/form/TxFormPairSection.svelte	4
-lib/features/transactions/import/AssetGroupStep.svelte	8
-lib/features/transactions/import/GapFixToggle.svelte	4
-lib/features/transactions/import/TransactionCompareModal.svelte	4
 lib/features/transactions/import/pairCellHtml.ts	2
-lib/features/transactions/wac/WacPreviewSection.svelte	21
 lib/stores/app/themeStore.ts	0	#1b4334×2
-lib/theme/toneClasses.ts	22
-lib/utils/broker/brokerRoleHelpers.ts	4
-lib/utils/providerHelpers.ts	20
-routes/(app)/assets/[id]/+page.svelte	42
-routes/(app)/brokers/[id]/+page.svelte	12
+lib/utils/providerHelpers.ts	12
+routes/(app)/assets/[id]/+page.svelte	6
 routes/(app)/fx/+page.svelte	4
-routes/(app)/fx/[pair]/+page.svelte	54
+routes/(app)/fx/[pair]/+page.svelte	17
+~accept	lib/features/support/supportLinks.ts	Official colours of external brands (X, Reddit, Facebook, Instagram, TikTok) kept as they are (developer, 21/10/2026): no theme role applies
 ~accept	lib/stores/app/themeStore.ts	D-T17 (developer, 15/10): theme-color #1b4334 in both themes, the green bars' --lf-surface-bar (N2); pair checked by themeColorMeta
 ~accept	lib/stores/app/themeStore.ts	D3 (developer, 14/10): theme-color meta dark #156534 -> #166534, the sidebar green; pair checked by themeColorMeta
 ~split	lib/components/assets/AssetModal.svelte	lib/components/assets/AssetModal.svelte,lib/components/assets/AssetModalImportNotices.svelte,lib/components/assets/AssetModalDetails.svelte,lib/components/assets/AssetModalIdentifiers.svelte,lib/components/assets/AssetModalProvider.svelte,lib/components/assets/AssetModalFooter.svelte,lib/components/assets/AssetModalSelectionPrompts.svelte	214

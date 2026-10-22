@@ -301,12 +301,28 @@ La categoria Primo utilizzo delle Preferenze con lo stato di ciascuna guida e il
     <img class="gallery-img" data-category="settings" data-name="onboarding-replay" alt="🔁 Ripeti guide">
 </div>
 
+### 🧩 Impostazioni dei plugin
+
+La scheda Plugin: le impostazioni che chiedono le fonti dei prezzi e dei tassi di cambio, ogni plugin in un modulo a sé con il suo badge.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="plugins" alt="🧩 Impostazioni dei plugin">
+</div>
+
 ### 🛡️ Impostazioni globali (Admin)
 
 Gli amministratori possono configurare le impostazioni a livello di sistema.
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Impostazioni globali">
+</div>
+
+### 📧 Email (Admin)
+
+Gli amministratori controllano l'email dell'istanza: se può spedire, quante email restano in quest'ora, i controlli della configurazione e un'email di prova al proprio indirizzo.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="email" alt="Email">
 </div>
 
 ### 🕐 Scheduler dati di mercato — Configurazione

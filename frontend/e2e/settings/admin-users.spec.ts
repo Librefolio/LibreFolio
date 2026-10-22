@@ -4,8 +4,9 @@
  * An administrator manages the accounts of the instance from one tab: deactivates and reactivates them, promotes and
  * demotes them, issues a password-reset link or an invitation, signs an account out everywhere, restarts its guides,
  * deletes it after a preview of what goes with it. A link comes through `LinkShare`, whose address is editable and, once
- * edited, checked: a nonce of this instance (`POST /users/address-probe`), then a header-less, credential-less
- * `GET <address>/api/v1/auth/address-probe?nonce=…` that only this very instance answers `{match: true}`.
+ * edited, checked: a nonce of this instance (`POST /users/address-probe`), then the load of an image,
+ * `GET <address>/api/v1/auth/address-probe.png?nonce=…` (H-55 v2: under the enforced `connect-src` a `fetch` to another
+ * origin is blocked, an image is not), which only this very instance draws 1×1 — any other draws it 2×1.
  *
  * Covered, through the real tab and the lane's real backend, `e2e_test_admin` acting through the UI:
  *   AUSR-E-01  only an administrator has the tab, and it settles; a member has none, and `?tab=users` opens Profile;
@@ -14,7 +15,7 @@
  *   AUSR-E-04  promote and demote (confirmed), and no deletion of an administrator before its demotion;
  *   AUSR-E-05  a password-reset link, live for that very account;
  *   AUSR-E-06  an invitation: created with an address, listed, revoked (confirmed);
- *   AUSR-E-07  the address check: the lane's other loopback origin (`match`, through the real CORS path), a closed port
+ *   AUSR-E-07  the address check: the lane's other loopback origin (`match`: the image drawn 1×1, its size readable across origins), a closed port
  *              (`unverifiable`), not http (`invalid`, no copy), a stubbed stranger (`mismatch`), the prefill (`idle`);
  *   AUSR-E-08  a deletion: the preview of the broker that goes, the username typed, the broker gone with the account;
  *   AUSR-E-09  signed out everywhere (confirmed): the account's open session is refused, the account stays active;
@@ -27,8 +28,8 @@
  *
  * The Users tab is a member of «Administration» (decision P13 b, lot A8b): an administrator opens the group in the top
  * bar, then Users in its second bar (`settings-subtabs`, through `openSettingsTab` of fixtures/settings-tabs.ts), or goes
- * straight to it with `?tab=users`, which opens it inside its group. A member's «Administration» holds Global Settings
- * alone: no second bar, and no `settings-tab-users` anywhere.
+ * straight to it with `?tab=users`, which opens it inside its group. A member has no «Administration» at all (N69-2,
+ * decision D4 a): no group, no second bar, and no `settings-tab-users` anywhere.
  *
  * Ownership. `e2e_test_admin` only acts: no test changes its role or state, nor those of any other fixture user. Each
  * test registers its own disposable accounts anonymously (the lane registers openly: checked first, and no spec changes
@@ -41,6 +42,7 @@
  *
  * Registered in scripts/test_runner/_frontend_utility.py, action `admin-users` of front-utility.
  */
+import {deflateSync} from 'node:zlib';
 import {expect, test as base, type APIRequestContext, type Locator, type Page} from '../fixtures/playwright';
 import {eventSeq, waitForEvent, type AppEvent} from '../fixtures/app-events';
 import {login, navigateTo} from '../fixtures/auth-helpers';
@@ -50,8 +52,8 @@ import {TEST_ADMIN, TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix} from '../fixtures/unique';
 
 const API = '/api/v1';
-/** Where an instance answers whether it issued a nonce (`auth.answer_address_probe`): public, `Access-Control-Allow-Origin: *`. */
-const PROBE_PATH = `${API}/auth/address-probe`;
+/** Where an instance draws whether it issued a nonce (`answer_address_probe_image`): public, an image of 1×1 for its own nonce, of 2×1 for any other. */
+const PROBE_PATH = `${API}/auth/address-probe.png`;
 
 // Budgets: deadlines, never delays.
 /** From a navigation to a settled tab: the SPA's load, the auth check and the bootstrap, then GET /users and GET /users/invites. */
@@ -65,12 +67,44 @@ const UI_MS = 5_000;
 
 /** The password of every disposable account: eight characters or more, upper and lower case, a digit, a special one. */
 const PASSWORD = 'Ausr-Pass123!';
-/** An address nothing answers: port 1 is closed, and Chromium refuses it outright as an unsafe port. Either way the probe's fetch rejects. */
+/** An address nothing answers: port 1 is closed, and Chromium refuses it outright as an unsafe port. Either way the probe image fails to load. */
 const CLOSED_ADDRESS = 'http://127.0.0.1:1';
 /** Not http(s): `normalizeBase` refuses it before any probe. */
 const INVALID_ADDRESS = 'ftp://example.invalid';
 /** A host that never resolves (`.invalid`, RFC 2606): its probe exists only as the stub this page installs. */
 const MISMATCH_ORIGIN = 'http://probe-mismatch.invalid';
+
+/** The CRC-32 of a PNG chunk (ISO 3309), by table. */
+const CRC_TABLE = Array.from({length: 256}, (_, n) => {
+    let c = n;
+    for (let bit = 0; bit < 8; bit += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+});
+
+function crc32(bytes: Buffer): number {
+    let c = 0xffffffff;
+    for (const byte of bytes) c = CRC_TABLE[(c ^ byte) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type: string, data: Buffer): Buffer {
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(data.length, 0);
+    head.write(type, 4, 'ascii');
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), data])), 0);
+    return Buffer.concat([head, data, crc]);
+}
+
+/** A valid PNG of `width`×`height`, one grey level, built here: what the stub of a stranger's instance draws (a 2×1 for a nonce it did not issue). */
+function pngOf(width: number, height: number): Buffer {
+    const header = Buffer.alloc(13);
+    header.writeUInt32BE(width, 0);
+    header.writeUInt32BE(height, 4);
+    header.set([8, 0, 0, 0, 0], 8); // 8 bits, greyscale, deflate, no filter method, no interlace
+    const rows = Buffer.alloc((width + 1) * height); // each row: the filter byte 0, then its pixels, black
+    return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), pngChunk('IHDR', header), pngChunk('IDAT', deflateSync(rows)), pngChunk('IEND', Buffer.alloc(0))]);
+}
 
 /** A disposable account. `id`: null until the registration answers. */
 type Account = {id: number | null; username: string; email: string; password: string};
@@ -478,10 +512,12 @@ test.describe('Who has the Users tab', () => {
             expect(await signedInAs(page), `${TEST_USER.username} must be an ordinary member`).toMatchObject({username: TEST_USER.username, is_superuser: false});
             await navigateTo(page, '/settings?tab=users');
             const profile = page.getByTestId('settings-tab-profile');
-            // Presence barrier: the tab bar is drawn, with the tabs a member does see — «Administration» is everyone's,
-            // standing for Global Settings alone: a member has no second bar, and no Global Settings tab of its own.
-            await expect(profile, 'The tab bar is drawn for the member').toBeVisible({timeout: LOAD_MS});
-            await expect(page.getByTestId('settings-tab-administration')).toBeVisible({timeout: UI_MS});
+            // Presence barrier: the tab bar is drawn, up to About, the last tab every account sees. «Administration»
+            // and every member of it, Users among them, are an administrator's alone (N69-2, decision D4 a). The bar's
+            // entries come from one derivation, and a member's context never turns administrator: the group would be
+            // drawn with them, or never.
+            await expect(page.getByTestId('settings-tab-about'), 'The tab bar is drawn for the member, up to About').toBeVisible({timeout: LOAD_MS});
+            await expect(page.getByTestId('settings-tab-administration'), 'A member has no «Administration» group: the registry does not draw it').toHaveCount(0, {timeout: UI_MS});
             await expect(page.getByTestId('settings-tab-admin')).toHaveCount(0, {timeout: UI_MS});
             await expect(page.getByTestId('settings-tab-users'), 'A member has no Users tab: the registry does not draw it').toHaveCount(0, {timeout: UI_MS});
             await expect(profile, '?tab=users names no tab of a member: the first one, Profile, opens').toHaveAttribute('aria-selected', 'true', {timeout: UI_MS});
@@ -651,7 +687,7 @@ test.describe('Links: a password reset, an invitation, and the address they carr
         await test.step(`the lane's other loopback origin, ${other}: this very instance answers there, through the real CORS path`, async () => {
             await address.fill(other);
             await expect(address).toHaveValue(other, {timeout: UI_MS});
-            await expect(probe, 'Its nonce is verified there: the backend answers match, readable across origins').toHaveAttribute('data-state', 'match', {timeout: PROBE_MS});
+            await expect(probe, 'Its nonce is verified there: the backend draws the 1×1 image, its size readable across origins').toHaveAttribute('data-state', 'match', {timeout: PROBE_MS});
             expect(probedOrigins, `The verdict is the answer of ${other}: the probe went there`).toContain(other);
             await expect(link, 'The link follows the address').toHaveValue(linkPattern(other, '/invite'), {timeout: UI_MS});
             await expect(copy).toBeEnabled({timeout: UI_MS});
@@ -673,18 +709,21 @@ test.describe('Links: a password reset, an invitation, and the address they carr
 
         await test.step(`an instance that did not issue the nonce, ${MISMATCH_ORIGIN} (stubbed): mismatch`, async () => {
             // Written by the handler itself, so a read after the verdict sees what it did. Bound to this page alone.
+            const stranger = pngOf(2, 1);
+            expect([stranger.readUInt32BE(16), stranger.readUInt32BE(20)], 'Precondition: the stub’s image is 2×1, the size a stranger draws for a nonce it did not issue').toEqual([2, 1]);
             let answered = 0;
             const refused: string[] = [];
             await page.route(`${MISMATCH_ORIGIN}${PROBE_PATH}**`, async (route) => {
                 try {
                     if (route.request().method() !== 'GET') {
-                        // The probe is a simple CORS request: anything else, a preflight first of all, is a defect.
+                        // The probe is an image load, a GET: anything else is a defect.
                         refused.push(route.request().method());
                         await route.abort();
                         return;
                     }
                     answered += 1;
-                    await route.fulfill({status: 200, headers: {'access-control-allow-origin': '*', 'content-type': 'application/json'}, body: JSON.stringify({match: false})});
+                    // A stranger answers an image, as the backend does: PNG, no store, and no CORS header — an image needs none.
+                    await route.fulfill({status: 200, headers: {'content-type': 'image/png', 'cache-control': 'no-store'}, body: stranger});
                 } catch (error) {
                     // Nobody awaits a route handler: recorded, and asserted below.
                     refused.push(`the stub failed: ${String(error)}`);
@@ -693,7 +732,7 @@ test.describe('Links: a password reset, an invitation, and the address they carr
             await address.fill(MISMATCH_ORIGIN);
             await expect(address).toHaveValue(MISMATCH_ORIGIN, {timeout: UI_MS});
             await expect(probe, 'Something answers there, but not this instance').toHaveAttribute('data-state', 'mismatch', {timeout: PROBE_MS});
-            expect(answered, 'The verdict is the answer of the stub').toBeGreaterThan(0);
+            expect(answered, 'The verdict is the answer of the stub: the image was loaded from there').toBeGreaterThan(0);
             expect(refused, 'Only simple GETs reached the stub').toEqual([]);
             await expect(copy, 'D-A3: a mismatch does not stop the copy').toBeEnabled({timeout: UI_MS});
         });

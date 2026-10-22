@@ -53,9 +53,7 @@
         getSignalProblemSeverity,
         getLocalSignalDefinitions,
         mapSignalInstanceResults,
-        renderBackendSignalResult,
         renderedSignalPointCount,
-        signalFromConfig,
         SignalResultState,
         type BackendSignalResult,
         type RenderedSignal,
@@ -64,14 +62,14 @@
         type SignalInstanceResult,
         type SignalProblem,
     } from '$lib/charts/signals';
-    import {DEFAULT_AXIS_SCALE, normalizeAxisScaleSettings, setPairSettings, getSettingsForPair, type AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {DEFAULT_AXIS_SCALE, detailModesForPrimaryView, effectiveCalendarReturnWindow, normalizeAxisScaleSettings, primaryViewForDetailModes, setPairSettings, getSettingsForPair, type AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import type {ViewMode, ChartType} from '$lib/components/charts/ChartToolbar.svelte';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
-    import {displayFxRate, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '$lib/stores/assetPriceStoreRegistry';
     import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
     import {buildIdentifiersList} from '$lib/utils/assetTypes';
@@ -83,7 +81,8 @@
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
     import {applyComparisonAssetsData, buildComparisonSyncRange, clearComparisonAssetsData, collectConfiguredComparisonFxSlugs, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
-    import {comparisonAssetIds as comparisonPeerAssetIds, parseBackendSignalResults, signalDataContextFingerprint} from '$lib/charts/chartPageSignals';
+    import {comparisonAssetIds as comparisonPeerAssetIds, detailPageSignalSources, parseBackendSignalResults, signalDataContextFingerprint} from '$lib/charts/chartPageSignals';
+    import {renderBackendResults, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
@@ -91,7 +90,8 @@
     import {percentageAxisLabel, priceAxisLabel, secondaryAxisLabel} from '$lib/components/charts/axisLabelHelpers';
     import {formatSignalProblem} from '$lib/components/charts/chartSignalsHelpers';
     import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, extractCalendarReturnViewsByAsset, isCalendarReturnSignalResult, type CalendarReturnView, type CalendarReturnViewState} from '$lib/components/charts/priceChartHelpers';
-    import {calendarComparisonFxFailuresFromResponse, calendarComparisonProblemsFromResponse, parseAssetPriceQueryWithSignalIsolation, preserveFactualCalendarPeersForCurrentUnavailable} from '$lib/components/assets/detail/assetDetailPriceQuery';
+    import {assetChartAnswerForCache, assetChartAnswerKey, calendarComparisonFxFailuresFromResponse, calendarComparisonProblemsFromResponse, parseAssetPriceQueryWithSignalIsolation, preserveFactualCalendarPeersForCurrentUnavailable} from '$lib/components/assets/detail/assetDetailPriceQuery';
+    import {assetChartAnswers} from '$lib/stores/signalResultCache';
     import {mergeChartPointsIncremental} from '$lib/components/assets/detail/assetDetailChartPoints';
     import {AssetDetailLive} from '$lib/components/assets/detail/assetDetailLive.svelte';
     import {buildAssetDetailIssues, buildRequiredFxPairs, type AssetDetailIssuesInput, type RequiredFxPairInfo, type RequiredFxPairsInput} from '$lib/components/assets/detail/assetDetailFxRequirements';
@@ -204,14 +204,10 @@
     let chartType: ChartType = $state('line');
     let displayCurrency = $state('');
     let primaryMode = $state<AssetChartPrimaryMode>('price');
-    let calendarWindowSelection: CalendarReturnWindowSelection = $state({
-        ...DEFAULT_CALENDAR_RETURN_WINDOW,
-    });
     let calendarCustomAmount = $state(DEFAULT_CALENDAR_RETURN_WINDOW.customAmount);
     let calendarCustomUnit: CalendarReturnWindowUnit = $state(DEFAULT_CALENDAR_RETURN_WINDOW.customUnit);
     let calendarCustomEditing = $state(false);
     let calendarWindowHydratedScope: string | null = null;
-    let calendarWindowDays = $derived(calendarReturnWindowDays(calendarWindowSelection) ?? 30);
     let calendarRangeDays = $derived(calendarReturnRangeDays(dateStart, dateEnd));
     let calendarReturnView: CalendarReturnView = $state(emptyCalendarReturnView());
     let calendarComparisonViews: Map<number, CalendarReturnView> = $state(new Map());
@@ -223,6 +219,13 @@
     let refreshRequestGeneration = 0;
     let comparisonAppliedFingerprint: string | null = null;
     let comparisonInFlight: {fingerprint: string; promise: Promise<void>} | null = null;
+    /**
+     * N64 (Q1): whether the last call of `loadChartData` / `maybeLoadComparison` asked the server. Set before their first
+     * await, so the trigger reads it right after the call: the busy token goes with a request, never with a load the
+     * caches answered whole (`trackChartLoad`, `trackComparisonLoad`, `trackChartAndComparison`).
+     */
+    let lastChartLoadAskedServer = false;
+    let lastComparisonLoadAskedServer = false;
 
     // Foldable panels
     let showAesthetics = $state(false);
@@ -246,6 +249,12 @@
     // Chart settings
     let settings = $derived(getSettingsForPair(`asset-${data.assetId}`, 'assets'));
     let signals = $derived<SignalConfig[]>([...settings.signals]);
+    /**
+     * Y-40: the rolling-return window in force, the one the asset's card shows too: the window chosen for this asset, else
+     * the largest preset that fits the period on screen. Derived, so a change of period reads the new window at once.
+     */
+    let calendarWindowSelection: CalendarReturnWindowSelection = $derived(effectiveCalendarReturnWindow(settings, calendarRangeDays));
+    let calendarWindowDays = $derived(calendarReturnWindowDays(calendarWindowSelection) ?? 30);
     let calendarSnapshotIsCurrent = $derived.by(() => calendarSnapshotFingerprint === calendarDataFingerprint(signals));
     let signalDefinitions = $state<SignalDefinition[]>([]);
     let signalInstanceResults = $state<SignalInstanceResult[]>([]);
@@ -258,9 +267,6 @@
     $effect(() => {
         const scope = `${getClientSessionGeneration()}:${data.assetId}`;
         if (calendarWindowHydratedScope === scope) return;
-        calendarWindowSelection = {
-            ...settings.calendarReturnWindow,
-        };
         calendarCustomAmount = settings.calendarReturnWindow.customAmount;
         calendarCustomUnit = settings.calendarReturnWindow.customUnit;
         calendarWindowHydratedScope = scope;
@@ -390,21 +396,35 @@
             calendarMeasurePanel?.stopMeasureMode();
         }
         primaryMode = mode;
+        persistPrimaryView();
         if (mode === 'calendar-return') {
-            void pageBusy.track('asset-mode', () => loadChartData(false));
+            void trackChartLoad('asset-mode');
         } else {
             calendarCustomEditing = false;
-            void pageBusy.track('asset-mode', () => maybeLoadComparison());
+            void trackComparisonLoad('asset-mode');
             const hasBackendSignals = signals.some((config) => signalDefinitionsByType.get(config.signalType)?.source === 'backend');
-            if (hasBackendSignals) void pageBusy.track('asset-mode', () => loadChartData(false));
+            if (hasBackendSignals) void trackChartLoad('asset-mode');
         }
     }
 
+    /**
+     * Y-40 (V-2 a): the view the detail shows — its mode, and Abs or % under prices — is this asset's view: its card and its
+     * next visit open in it. Saved like the page's other settings, with its configs as they are: a save rebuilt from the
+     * stored override (`setItemPrimaryView`) would drop the comparison data the page wrote into them, and an Abs/% switch
+     * would lose the comparison lines.
+     */
+    function persistPrimaryView(): void {
+        const view = primaryViewForDetailModes(primaryMode, viewMode);
+        if (settings.primaryView === view) return;
+        setPairSettings(`asset-${data.assetId}`, {...settings, primaryView: view, signals: [...signals]});
+    }
+
     function persistCalendarWindow(selection: CalendarReturnWindowSelection): void {
-        calendarWindowSelection = selection;
         setPairSettings(`asset-${data.assetId}`, {
             ...settings,
             calendarReturnWindow: {...selection},
+            // Y-40: a window picked here is chosen, no longer the automatic one — also when it equals the window saved before.
+            calendarReturnWindowAuto: false,
             signals: [...signals],
         });
     }
@@ -419,7 +439,7 @@
             preset,
         });
         if (primaryMode === 'calendar-return') {
-            void pageBusy.track('asset-calendar-window', () => loadChartData(false));
+            void trackChartLoad('asset-calendar-window');
         }
     }
 
@@ -434,7 +454,7 @@
         const changed = calendarWindowSelection.kind !== 'custom' || calendarWindowSelection.customAmount !== customAmount || calendarWindowSelection.customUnit !== customUnit;
         persistCalendarWindow(selection);
         if (changed && primaryMode === 'calendar-return') {
-            void pageBusy.track('asset-calendar-window', () => loadChartData(false));
+            void trackChartLoad('asset-calendar-window');
         }
     }
 
@@ -681,73 +701,20 @@
 
     let signalDefinitionsByType = $derived(new Map(signalDefinitions.map((definition) => [definition.type, definition])));
 
-    let backendOverlaySignals: RenderedSignal[] = $derived.by(() => {
-        const rendered: RenderedSignal[] = [];
-        for (const item of signalInstanceResults) {
-            if (item.source !== 'backend' || !item.result) continue;
-            const currentConfig = signals.find((config) => config.id === item.config.id) ?? item.config;
-            const definition = signalDefinitionsByType.get(currentConfig.signalType);
-            if (!definition || definition.source !== 'backend') {
-                console.error(`Missing backend signal definition for '${currentConfig.signalType}'`);
-                continue;
-            }
-            const outcome = renderBackendSignalResult(item.result, currentConfig, {
-                baseData: lineData,
-                viewMode,
-                definition,
-                translate: (key) => $t(key),
-            });
-            rendered.push(...outcome.signals);
-        }
-        return rendered;
-    });
+    let backendOverlaySignals: RenderedSignal[] = $derived(renderBackendResults(signals, signalInstanceResults, signalDefinitionsByType, lineData, viewMode, (key) => $t(key)));
 
     let rollingRiskSignals = $derived.by(() => {
         const riskConfigIds = new Set(signals.filter((config) => signalDefinitionsByType.get(config.signalType)?.indicatorGroup === 'risk').map((config) => config.id));
         return backendOverlaySignals.filter((signal) => riskConfigIds.has(signal.id.split(':')[0]));
     });
 
-    // Overlay signals
+    // Overlay signals: the saved local signals, drawn by the one renderer with the page's data (Y-42), then the backend results.
+    // A comparison reads the series its load wrote into its config; an asset that is gone is named by the signal's own
+    // catalogue fallback; the page's own asset is never compared with itself.
+    let signalSources: SignalDataSources = $derived(detailPageSignalSources({configs: signals, assets: allAssets, fxPairPoints: (pairSlug) => getFxStore(pairSlug).getAllSorted(), selfAssetId: data.assetId}));
     let overlaySignals: RenderedSignal[] = $derived.by(() => {
         void overlayDataVersion;
-        const rendered: RenderedSignal[] = [];
-        for (const cfg of signals) {
-            const definition = signalDefinitionsByType.get(cfg.signalType);
-            if (!definition || definition.source === 'backend') continue;
-            const instance = signalFromConfig(cfg);
-            if (!instance) continue;
-
-            if (cfg.signalType === 'fx-pair') {
-                const pairSlug = String(cfg.params.pairSlug || '');
-                if (!pairSlug) continue;
-                try {
-                    const store = getFxStore(pairSlug);
-                    const storeData = store.getAllSorted();
-                    if (storeData.length === 0) continue;
-                    instance.params._resolvedData = storeData.map((d) => {
-                        const rate = displayFxRate(d.rate, false);
-                        return {date: d.date, value: rate ?? 0, missing: rate === null};
-                    });
-                } catch {
-                    continue;
-                }
-            }
-
-            if (cfg.signalType === 'asset-comparison') {
-                const targetId = Number(cfg.params.assetId);
-                if (!targetId || targetId === data.assetId) continue;
-                const targetAsset = allAssets.find((a) => a.id === targetId);
-                // An asset that is gone gets its name from the signal itself: one fallback, in the catalogue.
-                instance.params._assetDisplayName = targetAsset?.display_name;
-                if (!instance.params._resolvedData) continue;
-            }
-
-            const results = instance.renderMulti(lineData, viewMode);
-            for (const result of results) {
-                if (result.data.length > 0) rendered.push(result);
-            }
-        }
-        return [...rendered, ...backendOverlaySignals];
+        return [...renderLocalSignals(signals, signalDefinitionsByType, lineData, viewMode, signalSources), ...backendOverlaySignals];
     });
 
     let allOverlaySignals: RenderedSignal[] = $derived([...overlaySignals, ...measureSignals, ...(pendingPreviewSignal ? [pendingPreviewSignal] : [])]);
@@ -1101,7 +1068,10 @@
         events = [];
         signalInstanceResults = [];
         signalRequestFailed = false;
-        primaryMode = 'price';
+        // Y-40 (V-1 a): the detail opens in the view chosen for this asset — in the list, or here last time.
+        const openingModes = detailModesForPrimaryView(settings.primaryView);
+        primaryMode = openingModes.primaryMode;
+        viewMode = openingModes.viewMode;
         chartRequestGeneration += 1;
         comparisonRequestGeneration += 1;
         comparisonAppliedFingerprint = null;
@@ -1215,7 +1185,7 @@
         }
         if (cur !== prevDisplayCurrency) {
             prevDisplayCurrency = cur;
-            void pageBusy.track('asset-currency', () => loadChartData().then(() => maybeLoadComparison()));
+            void trackChartAndComparison('asset-currency');
         }
     });
 
@@ -1297,6 +1267,7 @@
     }
 
     async function loadChartData(force = false, requestedSignalConfigs: SignalConfig[] = signals, propagateError = false) {
+        lastChartLoadAskedServer = false;
         const requestedAssetId = data.assetId;
         const sessionGeneration = getClientSessionGeneration();
         const current = () => pageAlive && data.assetId === requestedAssetId && isClientSessionCurrent(sessionGeneration);
@@ -1375,11 +1346,36 @@
             }
         }
 
+        const requestBody: AssetPriceBulkQueryBody = [
+            {
+                asset_id: data.assetId,
+                date_range: {start: dateStart, end: dateEnd},
+                include_price: !pricesFromCache,
+                include_events: true,
+                target_currency: targetCurrency,
+                signals: [...requestPlan.requests, ...calendarRequests],
+            },
+            ...calendarComparisonAssetIds.map((assetId) => ({
+                asset_id: assetId,
+                date_range: {start: dateStart, end: dateEnd},
+                include_price: false,
+                include_events: true,
+                target_currency: effectiveCurrency || undefined,
+                signals: calendarRequests,
+            })),
+        ];
+        // N64: the same request, answered over the same price data (the generations of this asset's store and of each
+        // peer's, read now), comes back from the signal cache with its events: no request, no spinner, no token (Q1).
+        // Any invalidation of those stores — Refresh, a sync, a save, a catch-up marking them stale (Q2) — misses.
+        const answerKey = effectiveCurrency ? assetChartAnswerKey(requestBody) : null;
+        const answerGenerations = answerKey ? [requestedAssetId, ...calendarComparisonAssetIds].map((assetId) => getAssetPriceStore(assetId, effectiveCurrency).generation) : [];
+        const cachedAnswer = answerKey && pricesFromCache && !force ? assetChartAnswers.get(answerKey, answerGenerations) : null;
+
         // Cache miss fetches prices + signals; cache hit requests events (+ signals) only.
         loading = !pricesFromCache;
         error = null;
         signalRequestFailed = false;
-        signalsLoading = requestPlan.requests.length > 0 || calendarComparisonAssetIds.length > 0;
+        signalsLoading = cachedAnswer === null && (requestPlan.requests.length > 0 || calendarComparisonAssetIds.length > 0);
         if (requestedCalendarFingerprint !== null) {
             calendarSnapshotFingerprint = requestedCalendarFingerprint;
             if (retainCurrentCalendarDiagnostics) {
@@ -1395,25 +1391,10 @@
                 comparisonEvents = new Map();
             }
         }
+        lastChartLoadAskedServer = cachedAnswer === null;
         try {
-            const response = await queryAssetPricesBulkWithSignalIsolation([
-                {
-                    asset_id: data.assetId,
-                    date_range: {start: dateStart, end: dateEnd},
-                    include_price: !pricesFromCache,
-                    include_events: true,
-                    target_currency: targetCurrency,
-                    signals: [...requestPlan.requests, ...calendarRequests],
-                },
-                ...calendarComparisonAssetIds.map((assetId) => ({
-                    asset_id: assetId,
-                    date_range: {start: dateStart, end: dateEnd},
-                    include_price: false,
-                    include_events: true,
-                    target_currency: effectiveCurrency || undefined,
-                    signals: calendarRequests,
-                })),
-            ]);
+            // A hit never awaits: the whole load runs before this call returns, in the same tick.
+            const response = cachedAnswer ?? (await queryAssetPricesBulkWithSignalIsolation(requestBody));
             if (!dataRequestIsCurrent()) return;
             const responseItems: any[] = Array.isArray((response as any)?.items) ? (response as any).items : [];
             const result = responseItems.find((item) => item?.asset_id === requestedAssetId);
@@ -1423,8 +1404,11 @@
                 }
                 events = result.events ?? [];
                 const rawSignalResults: unknown[] = Array.isArray(result.signals) ? result.signals : [];
-                if (wantsCalendarReturn && calendarRequestIsCurrent() && requestedCalendarWindow === calendarWindowDays) {
-                    calendarReturnView = extractCalendarReturnView(rawSignalResults, CALENDAR_RETURN_INSTANCE_ID);
+                const answeredCalendarView = wantsCalendarReturn ? extractCalendarReturnView(rawSignalResults, CALENDAR_RETURN_INSTANCE_ID) : null;
+                // N64: only an answer the page can apply is kept — valid signal results, a calendar return that is not an error.
+                let answerIsValid = answeredCalendarView === null || (answeredCalendarView.state !== 'error' && [...extractCalendarReturnViewsByAsset(responseItems, calendarComparisonAssetIds, CALENDAR_RETURN_INSTANCE_ID).values()].every((view) => view.state !== 'error'));
+                if (wantsCalendarReturn && calendarRequestIsCurrent() && requestedCalendarWindow === calendarWindowDays && answeredCalendarView) {
+                    calendarReturnView = answeredCalendarView;
                     if (calendarComparisonsAreCurrent()) {
                         const nextComparisonViews = extractCalendarReturnViewsByAsset(responseItems, calendarComparisonAssetIds, CALENDAR_RETURN_INSTANCE_ID);
                         calendarComparisonViews = retainCurrentCalendarDiagnostics ? preserveFactualCalendarPeersForCurrentUnavailable(calendarComparisonViews, nextComparisonViews, responseItems, calendarComparisonAssetIds) : nextComparisonViews;
@@ -1449,7 +1433,9 @@
                         signalRequestFailed = requestPlan.requests.length > 0;
                     }
                     if (backendSignalResults !== null) applyBackendSignalResults(backendSignalConfigs, requestVersion, backendSignalResults);
+                    else answerIsValid = false;
                 }
+                if (cachedAnswer === null && answerKey !== null && answerIsValid) assetChartAnswers.set(answerKey, answerGenerations, assetChartAnswerForCache(response));
                 // Populate the price cache (derive currency from response if not known yet)
                 const cacheCurrency = effectiveCurrency || chartData[0]?.currency || '';
                 if (!pricesFromCache && cacheCurrency && chartData.length > 0) {
@@ -1568,10 +1554,12 @@
      * Called explicitly from onMount, handleRefresh, handleDateRangeChange, handleSignalsChange.
      */
     function maybeLoadComparison(propagateError = false, requestedSignalConfigs: SignalConfig[] = signals, force = false): Promise<void> {
+        lastComparisonLoadAskedServer = false;
         const requestedAssetId = data.assetId;
         const sessionGeneration = getClientSessionGeneration();
         const requestedFingerprint = priceComparisonLoadFingerprint(requestedSignalConfigs);
         if (!force && comparisonInFlight?.fingerprint === requestedFingerprint) {
+            lastComparisonLoadAskedServer = true;
             return comparisonInFlight.promise;
         }
         if (!force && comparisonAppliedFingerprint === requestedFingerprint && priceComparisonRuntimeIsAuthoritative(requestedSignalConfigs)) {
@@ -1591,6 +1579,7 @@
             return Promise.resolve();
         }
         if (lineData.length === 0) return Promise.resolve();
+        lastComparisonLoadAskedServer = true;
         const promise = (async () => {
             try {
                 const loaded = await loadComparisonAssetsData(requestedAssetIds, {start: dateStart, end: dateEnd}, allAssets, requestedAssetId, displayCurrency || undefined);
@@ -1613,6 +1602,35 @@
         };
         void promise.then(clearInFlight, clearInFlight);
         return promise;
+    }
+
+    /** N64 (Q1): the chart load under the page's busy token only when it asks the server; one the caches answer runs without. */
+    function trackChartLoad(label: string, requestedSignalConfigs: SignalConfig[] = signals): Promise<void> {
+        const running = loadChartData(false, requestedSignalConfigs);
+        return lastChartLoadAskedServer ? pageBusy.track(label, () => running) : running;
+    }
+
+    /** N64 (Q1): the price-mode comparisons under the busy token only when they ask the server; their memo answers without. */
+    function trackComparisonLoad(label: string, requestedSignalConfigs: SignalConfig[] = signals): Promise<void> {
+        const running = maybeLoadComparison(false, requestedSignalConfigs);
+        return lastComparisonLoadAskedServer ? pageBusy.track(label, () => running) : running;
+    }
+
+    /**
+     * N64 (Q1): the chart, then the comparisons, as a change of period or currency always loaded them, with one busy
+     * token if either asks the server: a period and currency already seen change the chart at once, with no token.
+     */
+    async function trackChartAndComparison(label: string): Promise<void> {
+        const chart = loadChartData();
+        if (lastChartLoadAskedServer) {
+            await pageBusy.track(label, async () => {
+                await chart;
+                await maybeLoadComparison();
+            });
+            return;
+        }
+        await chart;
+        await trackComparisonLoad(label);
     }
 
     // =========================================================================
@@ -1663,6 +1681,8 @@
         const requestedSignals = signals;
         const requestedSignalDataFingerprint = signalDataContextFingerprint(requestedSignals);
         invalidateAssetPriceStore(requestedAssetId);
+        // N64: Refresh asks everything again — the signal answers too, the comparisons' calendar returns included.
+        assetChartAnswers.clear();
         rearmMaxPendingBeforeReload();
         const requestedUrlStart = urlDateStart;
         const requestedUrlEnd = urlDateEnd;
@@ -1813,10 +1833,7 @@
         // stays meaningful across reloads/shares and the "All" badge doesn't
         // look stuck on a specific historical date.
         replaceHistoryDateRange(newStart, newEnd);
-        await pageBusy.track('asset-period', async () => {
-            await loadChartData();
-            await maybeLoadComparison();
-        });
+        await trackChartAndComparison('asset-period');
     }
 
     function handleMeasureClick(date: string, value: number) {
@@ -1833,6 +1850,11 @@
 
     function activeMeasureMode(): boolean {
         return primaryMode === 'price' ? measureMode : calendarMeasureMode;
+    }
+
+    // The measure tool's violet is its identity (categorical, left legacy); only the idle look is on roles. Each branch is its own literal (G3).
+    function measureButtonClass(active: boolean): string {
+        return active ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 ring-1 ring-violet-300 dark:ring-violet-700' : 'bg-lf-card/80 text-lf-muted hover:bg-lf-hover hover:text-lf-secondary';
     }
 
     function activeMeasuresOpen(): boolean {
@@ -1882,10 +1904,10 @@
         const shouldReloadPriceComparisons = priceComparisonLoadFingerprint(signals) !== priceComparisonLoadFingerprint(newSignals);
         setPairSettings(`asset-${data.assetId}`, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
         if (primaryMode === 'price' && shouldReloadPriceComparisons) {
-            void pageBusy.track('asset-comparison', () => maybeLoadComparison(false, newSignals));
+            void trackComparisonLoad('asset-comparison', newSignals);
         }
         if ((primaryMode === 'calendar-return' && shouldReloadCalendarComparisons) || (primaryMode === 'price' && shouldReloadBackend)) {
-            void pageBusy.track('asset-signals', () => loadChartData(false, newSignals));
+            void trackChartLoad('asset-signals', newSignals);
         }
     }
 
@@ -1952,6 +1974,9 @@
                   })
                 : Promise.resolve(null);
         const [assetOutcome, fxOutcome] = await Promise.allSettled([assetRequest, fxRequest]);
+        // N64: a sync may have changed what a kept signal answer was computed from — this asset, a comparison peer, a
+        // pair — even when its answer finds the page moved on: every answer is asked again, as before the cache.
+        assetChartAnswers.clear();
         if (!current()) return;
 
         const tr = get(t);
@@ -2115,6 +2140,8 @@
                 start: requestedStart,
                 end: requestedEnd,
             });
+            // N64: the rates may have changed under a converted answer, even when this one finds the page moved on.
+            assetChartAnswers.clear();
             if (!current()) return;
             const tr = get(t);
             const r = (syncResponse as any)?.results?.[0];
@@ -2444,9 +2471,7 @@
                         <div class="absolute top-0 right-0 z-20 flex items-center gap-1.5">
                             <button
                                 data-testid="asset-detail-measure-btn"
-                                class="p-1.5 rounded-lg transition-colors {activeMeasureMode()
-                                    ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 ring-1 ring-violet-300 dark:ring-violet-700'
-                                    : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
+                                class="p-1.5 rounded-lg transition-colors {measureButtonClass(activeMeasureMode())}"
                                 onclick={async () => {
                                     if (activeMeasureMode()) {
                                         activeMeasurePanel()?.stopMeasureMode();
@@ -2461,12 +2486,11 @@
                                 <Ruler size={16} />
                             </button>
                             {#if primaryMode === 'price'}
+                                <!-- colour: closest role, to review: the edit toggle's active amber is a mode accent, not a warning; warning roles keep the hue (alternative: bg-lf-selected text-lf-link) -->
                                 <button
                                     data-testid="asset-detail-editdata-btn"
                                     use:guideAnchor={'asset.detail.editor'}
-                                    class="p-1.5 rounded-lg transition-colors {showDataEditor
-                                        ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 ring-1 ring-amber-300 dark:ring-amber-700'
-                                        : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
+                                    class="p-1.5 rounded-lg transition-colors {showDataEditor ? 'bg-lf-warning-soft text-lf-warning ring-1 ring-lf-warning-line' : 'bg-lf-card/80 text-lf-muted hover:bg-lf-hover hover:text-lf-secondary'}"
                                     onclick={() => {
                                         if (showDataEditor) {
                                             showDataEditor = false;
@@ -2490,11 +2514,10 @@
                                     <Pencil size={16} />
                                 </button>
                             {/if}
+                            <!-- colour: closest role, to review: the aesthetics toggle's active emerald is a mode accent, not a success; success roles keep the hue (alternative: bg-lf-selected text-lf-link) -->
                             <button
                                 data-testid="asset-detail-aesthetics-toggle"
-                                class="p-1.5 rounded-lg transition-colors {showAesthetics
-                                    ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-300 dark:ring-emerald-700'
-                                    : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
+                                class="p-1.5 rounded-lg transition-colors {showAesthetics ? 'bg-lf-success-soft text-lf-success ring-1 ring-lf-success-line' : 'bg-lf-card/80 text-lf-muted hover:bg-lf-hover hover:text-lf-secondary'}"
                                 onclick={() => (showAesthetics = !showAesthetics)}
                                 title={$t('common.aesthetics')}
                             >
@@ -2531,6 +2554,7 @@
                             externalViewMode={primaryMode === 'price' ? viewMode : 'absolute'}
                             onViewModeChange={(mode) => {
                                 viewMode = mode;
+                                persistPrimaryView();
                             }}
                             editMode={primaryMode === 'price' && showDataEditor}
                             disableCandlestick={primaryMode === 'calendar-return'}

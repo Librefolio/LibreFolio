@@ -146,7 +146,8 @@
         "other": "refused by the server"
       },
       "tooManyItems": "Nothing was saved: the server takes at most {max, number} values in one save, and this one held {count, number}. Save them in smaller parts."
-    }
+    },
+    "errorWithRequestId": "{message} (code: {requestId})"
   },
   "csvImport": {
     "title": "Import CSV Data",
@@ -304,7 +305,8 @@
   },
   "nav": {
     "dashboard": "Dashboard",
-    "settings": "Settings"
+    "settings": "Settings",
+    "toggleMenu": "Toggle menu"
   },
   "prices": {
     "sync": {

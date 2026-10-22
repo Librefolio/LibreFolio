@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import ChainMap, defaultdict
 from dataclasses import dataclass
 from datetime import date as date_type
-from datetime import timedelta
 from decimal import Decimal
 from typing import Sequence
 
@@ -18,43 +17,99 @@ from backend.app.schemas.portfolio import (
 )
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.fifo.models import FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure
+from backend.app.services.financial_math.fx_rates import AskedDayRates
 from backend.app.services.financial_math.lots.prices import opening_reference_price
 from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.financial_math.returns import realized_gain
-from backend.app.services.fx.conversion import convert_bulk
+from backend.app.services.fx.conversion import unit_rate_steps
+
+#: One unit of a currency: the amount every rate of the resolver converts.
+_ONE = Decimal("1")
+
+
+@dataclass(frozen=True, slots=True)
+class _UnitIdentity:
+    """The rate of a currency asked under another spelling of the target (``eur`` for ``EUR``): one, every day, as
+    ``convert_bulk`` answered such an identity — no stored row, no first day."""
+
+    days: tuple[date_type, ...] = ()
+    values: tuple[Decimal, ...] = ()
+
+    def at(self, _day: date_type) -> Decimal:
+        return _ONE
 
 
 class FxRateResolver:
+    """The rates of one lots analysis into ``target_currency``: asked by day, loaded at once, read without I/O.
+
+    ``need`` asks one day, ``need_days`` every day of a window (the market series asks each of its currencies from the
+    first transaction to the end). ``load`` reads every rate asked since the previous load in one ``unit_rate_steps``
+    call (L1b, «formule veloci», on P3): one unit of each currency in the target on every asked day — the amount
+    ``convert_bulk`` gave for it, to the digit and the exponent — read on the days a stored rate changes instead of a
+    request a day. A day nobody asked has no rate (``AskedDayRates``), as when the rates were a map filled a day at a
+    time. Each currency is still read as ``Currency`` writes it (``usd`` reads the USD rates; a code ``Currency`` refuses
+    raises at load), and one that is the target under another spelling converts at exactly one.
+
+    ``convert`` turns an amount at the rate of its day, or gives None and records the day as a gap of its pair
+    (``missing_pairs``).
+    """
+
     def __init__(self, target_currency: str) -> None:
         self.target_currency = target_currency
+        #: The days asked one by one, each once, in the order asked.
         self._needs: list[tuple[str, date_type]] = []
         self._seen: set[tuple[str, date_type]] = set()
-        self._loaded: set[tuple[str, date_type]] = set()
-        self._rates: dict[tuple[str, date_type], Decimal] = {}
+        #: The windows asked by ``need_days``, by currency: a day inside one needs no ``need`` of its own.
+        self._windows: dict[str, list[tuple[date_type, date_type]]] = defaultdict(list)
+        #: What the next ``load`` reads: the windows asked since the last one, and how many of ``_needs`` it already read.
+        self._pending_windows: dict[str, list[tuple[date_type, date_type]]] = defaultdict(list)
+        self._needs_loaded = 0
+        #: The rates read so far, one map per load (``AskedDayRates``) after a first map that is empty — the one the pure
+        #: tests fill by hand.
+        self._rates: ChainMap[tuple[str, date_type], Decimal] = ChainMap()
         self._missing: dict[str, set[date_type]] = defaultdict(set)
 
     def need(self, currency: str | None, as_of_date: date_type) -> None:
+        """Ask the rate of ``currency`` on one day."""
         if not currency or currency == self.target_currency:
             return
         key = (currency, as_of_date)
-        if key in self._seen:
+        if key in self._seen or any(first <= as_of_date <= last for first, last in self._windows.get(currency, ())):
             return
         self._seen.add(key)
         self._needs.append(key)
 
-    async def load(self, session: AsyncSession) -> None:
-        pending = [key for key in self._needs if key not in self._loaded]
-        if not pending:
+    def need_days(self, currency: str | None, first: date_type, last: date_type) -> None:
+        """Ask the rate of ``currency`` on every day of ``[first, last]``; nothing when the window ends before it starts."""
+        if not currency or currency == self.target_currency or last < first:
             return
-        conversions = [(Currency(code=currency, amount=Decimal("1")), self.target_currency, as_of_date) for currency, as_of_date in pending]
-        results, _errors = await convert_bulk(session, conversions, raise_on_error=False)
-        for idx, key in enumerate(pending):
-            self._loaded.add(key)
-            result = results[idx] if idx < len(results) else None
-            if result is None:
-                continue
-            converted, _rate_date, _backfilled = result
-            self._rates[key] = converted.amount
+        self._windows[currency].append((first, last))
+        self._pending_windows[currency].append((first, last))
+
+    async def load(self, session: AsyncSession) -> None:
+        """Read the rates asked since the previous load: one ``unit_rate_steps`` call, none when nothing is asked."""
+        windows: dict[str, list[tuple[date_type, date_type]]] = defaultdict(list)
+        for currency, asked in self._pending_windows.items():
+            windows[currency].extend(asked)
+        for currency, as_of_date in self._needs[self._needs_loaded :]:
+            windows[currency].append((as_of_date, as_of_date))
+        if not windows:
+            return
+        # The code as ``convert_bulk``'s callers built it, ``Currency(code=…)``: normalised, and refused when invalid.
+        codes = {currency: Currency(code=currency, amount=_ONE).code for currency in windows}
+        requests: dict[tuple[str, str], list[tuple[date_type, date_type]]] = defaultdict(list)
+        for currency, asked in windows.items():
+            if codes[currency] != self.target_currency:
+                requests[(codes[currency], self.target_currency)].extend(asked)
+        steps = await unit_rate_steps(session, requests) if requests else {}
+        readers = {}
+        for currency in windows:
+            reader = _UnitIdentity() if codes[currency] == self.target_currency else steps.get((codes[currency], self.target_currency))
+            if reader is not None:
+                readers[(currency, self.target_currency)] = reader
+        self._rates.maps.append(AskedDayRates(readers, {(currency, self.target_currency): asked for currency, asked in windows.items()}, fixed_destination=self.target_currency))
+        self._pending_windows = defaultdict(list)
+        self._needs_loaded = len(self._needs)
 
     def convert(self, amount: Decimal | None, currency: str | None, as_of_date: date_type) -> Decimal | None:
         if amount is None:
@@ -165,12 +220,12 @@ def collect_fx_needs(  # noqa: C901 — independent per-analysis fx-need collect
 
     # The market price line (Y-30) reads the same marks every day, though it values no lot: it needs their rates too.
     if needs_market_series(analyses) or LotAnalysisType.MARKET_PRICE_HISTORY in analyses:
-        current = computed_from
         # The unified resolver marks each day from asset-system prices AND observed trades
         # (BUY/SELL; never an ADJUSTMENT), each in its native currency; both the valuation and
         # chart lines convert those marks to target at the *valuation* date. Register the fx
         # needs for every price- and trade-currency across the whole window so a foreign mark
-        # carried forward still translates on the day it is read (mirrors build_asset_price_series).
+        # carried forward still translates on the day it is read (mirrors build_asset_price_series):
+        # one window per currency, every day of it asked (L1b).
         currencies = {price.currency for price in prices}
         for tx in transactions:
             if tx.id in split_ratios_by_tx_id:
@@ -180,10 +235,8 @@ def collect_fx_needs(  # noqa: C901 — independent per-analysis fx-need collect
             if tx_type in ("BUY", "SELL") and tx.amount:
                 currencies.add(tx.currency or asset_currency)
         currencies.discard(None)
-        while current <= actual_to:
-            for currency in currencies:
-                fx_resolver.need(currency, current)
-            current += timedelta(days=1)
+        for currency in currencies:
+            fx_resolver.need_days(currency, computed_from, actual_to)
 
 
 def needs_market_series(analyses: Sequence[LotAnalysisType]) -> bool:
@@ -209,6 +262,14 @@ def _need_cost_rates(fx_resolver: FxRateResolver, lots_by_id: dict[int, FifoLot]
             fx_resolver.need(lot.currency, lot.opening_date)
 
 
+def _need_short_proceeds_rates(fx_resolver: FxRateResolver, lots_by_id: dict[int, FifoLot]) -> None:
+    """Each SHORT lot's currency at its opening date: its sale's proceeds are a flow at that day's rate (MF-E2); the
+    purchase that closes it converts at its own date, a rate the purchase already asks."""
+    for lot in lots_by_id.values():
+        if lot.direction == "SHORT":
+            fx_resolver.need(lot.currency, lot.opening_date)
+
+
 def collect_performance_fx_needs(
     *,
     fx_resolver: FxRateResolver,
@@ -222,6 +283,7 @@ def collect_performance_fx_needs(
     if LotAnalysisType.PERFORMANCE_HISTORY not in analyses:
         return
     _need_cost_rates(fx_resolver, lots_by_id, at_cost_until)
+    _need_short_proceeds_rates(fx_resolver, lots_by_id)
     for tx in transactions:
         tx_type = str(getattr(tx.type, "value", tx.type))
         if tx_type == "BUY":
@@ -232,8 +294,6 @@ def collect_performance_fx_needs(
                 fx_resolver.need(tx.cost_basis_currency or asset_currency, tx.date)
             elif tx.amount != Decimal("0"):
                 fx_resolver.need(tx.currency or asset_currency, tx.date)
-        elif tx_type == "ADJUSTMENT" and tx.quantity < 0 and tx.cost_basis_override not in (None, Decimal("0")):
-            fx_resolver.need(tx.cost_basis_currency or asset_currency, tx.date)
     for closure in closures:
         lot = lots_by_id.get(closure.lot_id)
         if lot is not None and lot.direction == "LONG" and closure.close_reason == "SELL":

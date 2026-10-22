@@ -1,0 +1,580 @@
+{
+  "version": 1,
+  "description": "Z-29s-a: one signal series reduced onto the dates of a sampled price series. Read by pytest (test_signal_aggregation.py: sample_signal_series, backend/app/services/signals/aggregation.py, on every case) and by Vitest (timeSeriesAggregation.test.ts: downsampleRenderedSignal on the browser_parity cases, each run of a line or area downsampled alone as backendRenderer.ts splits it, the expected split at its markers). render_dates: the sampled price dates, ascending, one per bucket: the last day of each ISO week (Monday to Sunday) or calendar month, the last one cut at the range's end, as price_sampling.sample_dates gives them; daily, every day. points: the daily series as a plugin sends it, nulls included (a band: lower, middle, upper). expected: the reduced points, each gap marker {date, value: null} included. browser_parity false only for a residue of the contract (R1, R3) or a synthetic input, said in its note. series_sets (O1, Z-29b prelude): the series of one signal reduced each alone on the same render_dates, then aligned: every series carries the union of the dates the reductions left, a point without a value (a band: lower, middle and upper null) where a series has none. Per series, points are the daily series as a plugin sends it and expected the aligned reduction; read by pytest (align_signal_series) and by Vitest, which draws each series alone as it does a case. browser_parity false for R5.",
+  "cases": [
+    {
+      "id": "line-weekly-last-the-last-week-cut-at-the-end",
+      "kind": "line",
+      "profile": "last_with_range",
+      "resolution": "weekly",
+      "render_dates": ["2026-01-11", "2026-01-18", "2026-01-21"],
+      "points": [
+        {"date": "2026-01-05", "value": 1.0},
+        {"date": "2026-01-06", "value": 3.0},
+        {"date": "2026-01-08", "value": 2.0},
+        {"date": "2026-01-09", "value": 5.0},
+        {"date": "2026-01-12", "value": 4.0},
+        {"date": "2026-01-14", "value": 6.0},
+        {"date": "2026-01-16", "value": 5.5},
+        {"date": "2026-01-19", "value": 7.0},
+        {"date": "2026-01-20", "value": 6.5},
+        {"date": "2026-01-21", "value": 8.0}
+      ],
+      "expected": [
+        {"date": "2026-01-11", "value": 5.0},
+        {"date": "2026-01-18", "value": 5.5},
+        {"date": "2026-01-21", "value": 8.0}
+      ],
+      "browser_parity": true,
+      "note": "The last point of each ISO week, re-dated at the week's render date; the last week is cut at the range's end, Wednesday 2026-01-21, which is its render date."
+    },
+    {
+      "id": "line-monthly-first-points-before-the-first-bucket-dropped",
+      "kind": "line",
+      "profile": "first_with_range",
+      "resolution": "monthly",
+      "render_dates": ["2026-02-28", "2026-03-31", "2026-04-30"],
+      "points": [
+        {"date": "2026-01-20", "value": 9.0},
+        {"date": "2026-01-30", "value": 8.0},
+        {"date": "2026-02-02", "value": 2.0},
+        {"date": "2026-02-14", "value": 1.0},
+        {"date": "2026-02-27", "value": 3.0},
+        {"date": "2026-03-01", "value": 4.0},
+        {"date": "2026-03-16", "value": 5.0},
+        {"date": "2026-04-01", "value": 6.0},
+        {"date": "2026-04-30", "value": 7.0}
+      ],
+      "expected": [
+        {"date": "2026-02-28", "value": 2.0},
+        {"date": "2026-03-31", "value": 4.0},
+        {"date": "2026-04-30", "value": 6.0}
+      ],
+      "browser_parity": true,
+      "note": "The first point of each calendar month. January has no render date (the sample starts in February): its two points are dropped, though they open the run. A weekend point (Saturday 2026-02-14, Sunday 2026-03-01) belongs to its month."
+    },
+    {
+      "id": "line-weekly-min-ties-and-negatives",
+      "kind": "line",
+      "profile": "min_with_range",
+      "resolution": "weekly",
+      "render_dates": ["2026-01-11", "2026-01-18", "2026-01-25"],
+      "points": [
+        {"date": "2026-01-05", "value": 3.0},
+        {"date": "2026-01-06", "value": -1.5},
+        {"date": "2026-01-07", "value": -1.5},
+        {"date": "2026-01-09", "value": 0.0},
+        {"date": "2026-01-12", "value": -2.0},
+        {"date": "2026-01-13", "value": 0.5},
+        {"date": "2026-01-15", "value": -2.5},
+        {"date": "2026-01-19", "value": 4.0},
+        {"date": "2026-01-24", "value": 4.0}
+      ],
+      "expected": [
+        {"date": "2026-01-11", "value": -1.5},
+        {"date": "2026-01-18", "value": -2.5},
+        {"date": "2026-01-25", "value": 4.0}
+      ],
+      "browser_parity": true,
+      "note": "The smallest value of each ISO week, negatives and ties included (a tie keeps the earliest point, which only its provenance would show)."
+    },
+    {
+      "id": "line-weekly-max-a-gap-reaching-into-the-next-bucket",
+      "kind": "line",
+      "profile": "max_with_range",
+      "resolution": "weekly",
+      "render_dates": ["2026-01-11", "2026-01-18", "2026-01-25"],
+      "points": [
+        {"date": "2026-01-06", "value": 3.0},
+        {"date": "2026-01-07", "value": 8.0},
+        {"date": "2026-01-09", "value": 5.0},
+        {"date": "2026-01-13", "value": null},
+        {"date": "2026-01-14", "value": 2.0},
+        {"date": "2026-01-16", "value": 9.0},
+        {"date": "2026-01-19", "value": 1.0},
+        {"date": "2026-01-21", "value": 4.0}
+      ],
+      "expected": [
+        {"date": "2026-01-11", "value": 8.0},
+        {"date": "2026-01-12", "value": null},
+        {"date": "2026-01-18", "value": 9.0},
+        {"date": "2026-01-25", "value": 4.0}
+      ],
+      "browser_parity": true,
+      "note": "Two runs, split by the null of 2026-01-13. The largest value of each run in each week; between the runs one marker, the day after the earlier run's last representative (2026-01-11 + 1 day), before the later run's first (2026-01-18)."
+    },
+    {
+      "id": "line-weekly-last-a-gap-spanning-a-whole-bucket",
+      "kind": "line",
+      "profile": "last_with_range",
+      "resolution": "weekly",
+      "render_dates": ["2026-01-11", "2026-01-18", "2026-01-25", "2026-02-01"],
+      "points": [
+        {"date": "2026-01-05", "value": 1.0},
+        {"date": "2026-01-08", "value": 2.0},
+        {"date": "2026-01-09", "value": null},
+        {"date": "2026-01-14", "value": null},
+        {"date": "2026-01-20", "value": 3.0},
+        {"date": "2026-01-23", "value": 4.0},
+        {"date": "2026-01-27", "value": 5.0}
+      ],
+      "expected": [
+        {"date": "2026-01-11", "value": 2.0},
+        {"date": "2026-01-12", "value": null},
+        {"date": "2026-01-25", "value": 4.0},
+        {"date": "2026-02-01", "value": 5.0}
+      ],
+      "browser_parity": true,
+      "note": "The week of 2026-01-12 holds nulls only: it gives no point. The marker is on its Monday, 2026-01-12, the earlier run's last representative (2026-01-11) + 1 day: a date the input does not hold."
+    },
+    {
+      "id": "line-weekly-last-leading-and-trailing-nulls-dropped",
+      "kind": "line",
+      "profile": "last_with_range",
+      "resolution": "weekly",
+      "render_dates": ["2026-01-11", "2026-01-18", "2026-01-25"],
+      "points": [
+        {"date": "2026-01-05", "value": null},
+        {"date": "2026-01-06", "value": null},
+        {"date": "2026-01-07", "value": null},
+        {"date": "2026-01-08", "value": null},
+        {"date": "2026-01-09", "value": null},
+        {"date": "2026-01-12", "value": null},
+        {"date": "2026-01-13", "value": null},
+        {"date": "2026-01-14", "value": 1.0},
+        {"date": "2026-01-15", "value": 2.0},
+        {"date": "2026-01-16", "value": 3.0},
+        {"date": "2026-01-19", "value": 4.0},
+        {"date": "2026-01-20", "value": 5.0},
+        {"date": "2026-01-21", "value": null},
+        {"date": "2026-01-22", "value": null},
+        {"date": "2026-01-23", "value": null}
+      ],
+      "expected": [
+        {"date": "2026-01-18", "value": 3.0},
+        {"date": "2026-01-25", "value": 5.0}
+      ],
+      "browser_parity": true,
+      "note": "A warm-up: leading nulls belong to no run and are dropped (the first week, nulls only, gives no point); trailing nulls end nothing: no marker, the last week's point is its last value."
+    },
+    {
+      "id": "area-monthly-min-a-gap-spanning-february",
+      "kind": "area",
+      "profile": "min_with_range",
+      "resolution": "monthly",
+      "render_dates": ["2026-01-31", "2026-02-28", "2026-03-31", "2026-04-15"],
+      "points": [
+        {"date": "2026-01-05", "value": -1.0},
+        {"date": "2026-01-12", "value": -4.0},
+        {"date": "2026-01-19", "value": -4.0},
+        {"date": "2026-01-20", "value": -2.0},
+        {"date": "2026-01-21", "value": null},
+        {"date": "2026-03-02", "value": -3.0},
+        {"date": "2026-03-09", "value": -6.0},
+        {"date": "2026-03-31", "value": -5.0},
+        {"date": "2026-04-01", "value": -7.0},
+        {"date": "2026-04-15", "value": -1.0}
+      ],
+      "expected": [
+        {"date": "2026-01-31", "value": -4.0},
+        {"date": "2026-02-01", "value": null},
+        {"date": "2026-03-31", "value": -6.0},
+        {"date": "2026-04-15", "value": -7.0}
+      ],
+      "browser_parity": true,
+      "note": "A drawdown-like area: the trough of each run in each month. February has no point at all, and the null of 2026-01-21 splits the runs: the marker on 2026-02-01, the day after January's representative. The last month is cut at the range's end, 2026-04-15."
+    },
+    {
+      "id": "bar-weekly-last-nulls-dropped-no-marker",
+      "kind": "bar",
+      "profile": "last_with_range",
+      "resolution": "weekly",
+      "render_dates": ["2026-01-11", "2026-01-18", "2026-01-25", "2026-02-01"],
+      "points": [
+        {"date": "2026-01-05", "value": null},
+        {"date": "2026-01-07", "value": 0.5},
+        {"date": "2026-01-08", "value": -0.5},
+        {"date": "2026-01-12", "value": null},
+        {"date": "2026-01-14", "value": null},
+        {"date": "2026-01-19", "value": 1.5},
+        {"date": "2026-01-21", "value": -1.0},
+        {"date": "2026-01-23", "value": null},
+        {"date": "2026-01-26", "value": 2.0},
+        {"date": "2026-01-30", "value": null}
+      ],
+      "expected": [
+        {"date": "2026-01-11", "value": -0.5},
+        {"date": "2026-01-25", "value": -1.0},
+        {"date": "2026-02-01", "value": 2.0}
+      ],
+      "browser_parity": true,
+      "note": "A histogram: a bar output has no runs. Its nulls are dropped, each week keeps its last valued point (2026-01-21, not the null of 2026-01-23), and no marker is added: a line would hold one on 2026-01-12."
+    },
+    {
+      "id": "band-weekly-envelope-incomplete-points-dropped",
+      "kind": "band",
+      "profile": "band_envelope",
+      "resolution": "weekly",
+      "render_dates": ["2026-01-11", "2026-01-18", "2026-01-25"],
+      "points": [
+        {"date": "2026-01-05", "lower": null, "middle": null, "upper": null},
+        {"date": "2026-01-06", "lower": 90.0, "middle": null, "upper": 110.0},
+        {"date": "2026-01-07", "lower": 95.0, "middle": 100.0, "upper": 105.0},
+        {"date": "2026-01-08", "lower": 92.0, "middle": 101.0, "upper": 108.0},
+        {"date": "2026-01-09", "lower": 96.0, "middle": 102.0, "upper": 107.0},
+        {"date": "2026-01-12", "lower": 98.0, "middle": 103.0, "upper": 109.0},
+        {"date": "2026-01-13", "lower": 97.0, "middle": 104.0, "upper": 111.0},
+        {"date": "2026-01-16", "lower": null, "middle": 105.0, "upper": 112.0},
+        {"date": "2026-01-19", "lower": null, "middle": null, "upper": null},
+        {"date": "2026-01-20", "lower": null, "middle": 106.0, "upper": null}
+      ],
+      "expected": [
+        {"date": "2026-01-11", "lower": 92.0, "middle": 102.0, "upper": 108.0},
+        {"date": "2026-01-18", "lower": 97.0, "middle": 104.0, "upper": 111.0}
+      ],
+      "browser_parity": true,
+      "note": "The envelope of each week over its complete points only: the lowest lower, the last middle, the highest upper. The incomplete points are dropped (2026-01-06 would widen the first week to 90 and 110, 2026-01-16 move the second week's middle to 105); the third week has no complete point and gives none."
+    },
+    {
+      "id": "band-monthly-envelope-ties-the-last-month-cut",
+      "kind": "band",
+      "profile": "band_envelope",
+      "resolution": "monthly",
+      "render_dates": ["2026-01-31", "2026-02-28", "2026-03-10"],
+      "points": [
+        {"date": "2026-01-15", "lower": 1.0, "middle": 2.0, "upper": 3.0},
+        {"date": "2026-01-20", "lower": 0.5, "middle": 2.5, "upper": 3.0},
+        {"date": "2026-01-31", "lower": 1.0, "middle": 2.0, "upper": 2.5},
+        {"date": "2026-02-03", "lower": 2.0, "middle": 3.0, "upper": 4.0},
+        {"date": "2026-03-02", "lower": 2.5, "middle": 3.5, "upper": 4.5},
+        {"date": "2026-03-10", "lower": 3.0, "middle": 4.0, "upper": 5.0}
+      ],
+      "expected": [
+        {"date": "2026-01-31", "lower": 0.5, "middle": 2.0, "upper": 3.0},
+        {"date": "2026-02-28", "lower": 2.0, "middle": 3.0, "upper": 4.0},
+        {"date": "2026-03-10", "lower": 2.5, "middle": 4.0, "upper": 5.0}
+      ],
+      "browser_parity": true,
+      "note": "The monthly envelope, the upper tied in January; a month of one point keeps it whole; the last month is cut at the range's end, 2026-03-10."
+    },
+    {
+      "id": "line-weekly-last-an-absent-week-is-no-gap",
+      "kind": "line",
+      "profile": "last_with_range",
+      "resolution": "weekly",
+      "render_dates": ["2026-01-11", "2026-01-18", "2026-01-25"],
+      "points": [
+        {"date": "2026-01-05", "value": 1.0},
+        {"date": "2026-01-09", "value": 2.0},
+        {"date": "2026-01-20", "value": 3.0},
+        {"date": "2026-01-23", "value": 4.0}
+      ],
+      "expected": [
+        {"date": "2026-01-11", "value": 2.0},
+        {"date": "2026-01-25", "value": 4.0}
+      ],
+      "browser_parity": true,
+      "note": "A date absent from the series is no gap: the week of 2026-01-12 has no point and gives none, and no marker is added; one run, which the chart draws across the empty week."
+    },
+    {
+      "id": "line-weekly-last-a-run-before-the-first-bucket-emits-nothing",
+      "kind": "line",
+      "profile": "last_with_range",
+      "resolution": "weekly",
+      "render_dates": ["2026-01-18", "2026-01-25"],
+      "points": [
+        {"date": "2026-01-06", "value": 1.0},
+        {"date": "2026-01-07", "value": 2.0},
+        {"date": "2026-01-08", "value": null},
+        {"date": "2026-01-13", "value": 3.0},
+        {"date": "2026-01-15", "value": 4.0},
+        {"date": "2026-01-20", "value": 5.0}
+      ],
+      "expected": [
+        {"date": "2026-01-18", "value": 4.0},
+        {"date": "2026-01-25", "value": 5.0}
+      ],
+      "browser_parity": true,
+      "note": "The first run lies in a week without a render date: it is dropped and gives no point, so no marker separates it from the next run."
+    },
+    {
+      "id": "line-weekly-first-three-runs-two-markers",
+      "kind": "line",
+      "profile": "first_with_range",
+      "resolution": "weekly",
+      "render_dates": ["2026-01-11", "2026-01-18", "2026-01-25", "2026-02-01", "2026-02-08"],
+      "points": [
+        {"date": "2026-01-05", "value": 1.0},
+        {"date": "2026-01-06", "value": 2.0},
+        {"date": "2026-01-07", "value": null},
+        {"date": "2026-01-19", "value": 3.0},
+        {"date": "2026-01-20", "value": 4.0},
+        {"date": "2026-01-21", "value": null},
+        {"date": "2026-01-28", "value": 5.0},
+        {"date": "2026-02-02", "value": 6.0}
+      ],
+      "expected": [
+        {"date": "2026-01-11", "value": 1.0},
+        {"date": "2026-01-12", "value": null},
+        {"date": "2026-01-25", "value": 3.0},
+        {"date": "2026-01-26", "value": null},
+        {"date": "2026-02-01", "value": 5.0},
+        {"date": "2026-02-08", "value": 6.0}
+      ],
+      "browser_parity": true,
+      "note": "Three runs, the first point of each run in each week, and a marker between each two: 2026-01-12 and 2026-01-26, each the day after the earlier run's last representative."
+    },
+    {
+      "id": "line-weekly-min-R1-a-gap-inside-one-bucket",
+      "kind": "line",
+      "profile": "min_with_range",
+      "resolution": "weekly",
+      "render_dates": ["2026-01-11", "2026-01-18", "2026-01-25"],
+      "points": [
+        {"date": "2026-01-05", "value": 5.0},
+        {"date": "2026-01-07", "value": 4.0},
+        {"date": "2026-01-12", "value": 1.0},
+        {"date": "2026-01-13", "value": null},
+        {"date": "2026-01-14", "value": 3.0},
+        {"date": "2026-01-16", "value": 2.0},
+        {"date": "2026-01-20", "value": 6.0},
+        {"date": "2026-01-22", "value": 7.0}
+      ],
+      "expected": [
+        {"date": "2026-01-11", "value": 4.0},
+        {"date": "2026-01-18", "value": 2.0},
+        {"date": "2026-01-25", "value": 6.0}
+      ],
+      "browser_parity": false,
+      "note": "R1: the two runs meet in the week of 2026-01-12. One point there, the later run's minimum (2.0, not the week's 1.0, the earlier run's), and no marker: the day after 2026-01-18 is not before the later run's first representative, 2026-01-18. The browser draws two series touching on 2026-01-18, at 1.0 and at 2.0: one point instead of two, accepted on 19/10."
+    },
+    {
+      "id": "line-weekly-last-R3-consecutive-days-at-the-end",
+      "kind": "line",
+      "profile": "last_with_range",
+      "resolution": "weekly",
+      "render_dates": ["2026-01-11", "2026-01-18", "2026-01-19"],
+      "points": [
+        {"date": "2026-01-05", "value": 1.0},
+        {"date": "2026-01-09", "value": 2.0},
+        {"date": "2026-01-12", "value": 3.0},
+        {"date": "2026-01-16", "value": 4.0},
+        {"date": "2026-01-17", "value": null},
+        {"date": "2026-01-19", "value": 5.0}
+      ],
+      "expected": [
+        {"date": "2026-01-11", "value": 2.0},
+        {"date": "2026-01-18", "value": 4.0},
+        {"date": "2026-01-19", "value": 5.0}
+      ],
+      "browser_parity": false,
+      "note": "R3: the last week is cut at the range's end, Monday 2026-01-19, the day after the previous render date. The runs split by the null of 2026-01-17 have representatives on consecutive days, 2026-01-18 and 2026-01-19: no day between them for a marker, and the line joins them where the browser draws two series."
+    },
+    {
+      "id": "line-daily-unchanged",
+      "kind": "line",
+      "profile": "last_with_range",
+      "resolution": "daily",
+      "render_dates": ["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09"],
+      "points": [
+        {"date": "2026-01-05", "value": null},
+        {"date": "2026-01-06", "value": 1.0},
+        {"date": "2026-01-07", "value": null},
+        {"date": "2026-01-08", "value": 2.0},
+        {"date": "2026-01-09", "value": 3.0}
+      ],
+      "expected": [
+        {"date": "2026-01-05", "value": null},
+        {"date": "2026-01-06", "value": 1.0},
+        {"date": "2026-01-07", "value": null},
+        {"date": "2026-01-08", "value": 2.0},
+        {"date": "2026-01-09", "value": 3.0}
+      ],
+      "browser_parity": true,
+      "note": "Daily: the series unchanged, its nulls included; the browser draws it as it is, one series per run."
+    },
+    {
+      "id": "line-weekly-nothing-in-range-unchanged",
+      "kind": "line",
+      "profile": "last_with_range",
+      "resolution": "weekly",
+      "render_dates": ["2026-01-25", "2026-02-01"],
+      "points": [
+        {"date": "2026-01-06", "value": 1.0},
+        {"date": "2026-01-13", "value": 2.0},
+        {"date": "2026-01-14", "value": null}
+      ],
+      "expected": [
+        {"date": "2026-01-06", "value": 1.0},
+        {"date": "2026-01-13", "value": 2.0},
+        {"date": "2026-01-14", "value": null}
+      ],
+      "browser_parity": false,
+      "note": "Synthetic: no valued point in a week with a render date, so the reduction would leave no value, and a series needs one: the series is returned unchanged. A plugin's values start on the fill's first day, so a real series never comes here. The browser draws nothing."
+    }
+  ],
+  "series_sets": [
+    {
+      "id": "macd-like-weekly-lines-and-a-bar-with-different-warm-ups",
+      "resolution": "weekly",
+      "render_dates": ["2026-01-11", "2026-01-18", "2026-01-25", "2026-02-01"],
+      "series": [
+        {
+          "key": "macd",
+          "kind": "line",
+          "profile": "last_with_range",
+          "points": [
+            {"date": "2026-01-05", "value": null},
+            {"date": "2026-01-06", "value": 1.0},
+            {"date": "2026-01-09", "value": 2.0},
+            {"date": "2026-01-13", "value": 3.0},
+            {"date": "2026-01-16", "value": 4.0},
+            {"date": "2026-01-20", "value": 5.0},
+            {"date": "2026-01-23", "value": 6.0},
+            {"date": "2026-01-27", "value": 7.0},
+            {"date": "2026-01-30", "value": 8.0}
+          ],
+          "expected": [
+            {"date": "2026-01-11", "value": 2.0},
+            {"date": "2026-01-18", "value": 4.0},
+            {"date": "2026-01-25", "value": 6.0},
+            {"date": "2026-02-01", "value": 8.0}
+          ]
+        },
+        {
+          "key": "signal",
+          "kind": "line",
+          "profile": "last_with_range",
+          "points": [
+            {"date": "2026-01-05", "value": null},
+            {"date": "2026-01-14", "value": null},
+            {"date": "2026-01-15", "value": 10.0},
+            {"date": "2026-01-16", "value": 11.0},
+            {"date": "2026-01-22", "value": 12.0},
+            {"date": "2026-01-23", "value": 13.0},
+            {"date": "2026-01-29", "value": 14.0},
+            {"date": "2026-01-30", "value": 15.0}
+          ],
+          "expected": [
+            {"date": "2026-01-11", "value": null},
+            {"date": "2026-01-18", "value": 11.0},
+            {"date": "2026-01-25", "value": 13.0},
+            {"date": "2026-02-01", "value": 15.0}
+          ]
+        },
+        {
+          "key": "histogram",
+          "kind": "bar",
+          "profile": "last_with_range",
+          "points": [
+            {"date": "2026-01-05", "value": null},
+            {"date": "2026-01-21", "value": null},
+            {"date": "2026-01-22", "value": 0.5},
+            {"date": "2026-01-23", "value": -0.5},
+            {"date": "2026-01-30", "value": 0.25}
+          ],
+          "expected": [
+            {"date": "2026-01-11", "value": null},
+            {"date": "2026-01-18", "value": null},
+            {"date": "2026-01-25", "value": -0.5},
+            {"date": "2026-02-01", "value": 0.25}
+          ]
+        }
+      ],
+      "browser_parity": true,
+      "note": "A MACD-like signal: a line valued from the first week, a line valued from the second and a bar valued from the third (warm-ups of different lengths inside the range). Each is reduced alone; the dates they leave differ, so the signal's series are aligned on the union: the points a series lacks are there without a value (leading ones here). The browser draws a line's or a bar's leading nulls as nothing, so each series is drawn as it was."
+    },
+    {
+      "id": "band-and-line-weekly-the-band-warms-up-later",
+      "resolution": "weekly",
+      "render_dates": ["2026-01-11", "2026-01-18", "2026-01-25", "2026-02-01"],
+      "series": [
+        {
+          "key": "line",
+          "kind": "line",
+          "profile": "last_with_range",
+          "points": [
+            {"date": "2026-01-09", "value": 1.0},
+            {"date": "2026-01-16", "value": 2.0},
+            {"date": "2026-01-23", "value": 3.0},
+            {"date": "2026-01-30", "value": 4.0}
+          ],
+          "expected": [
+            {"date": "2026-01-11", "value": 1.0},
+            {"date": "2026-01-18", "value": 2.0},
+            {"date": "2026-01-25", "value": 3.0},
+            {"date": "2026-02-01", "value": 4.0}
+          ]
+        },
+        {
+          "key": "band",
+          "kind": "band",
+          "profile": "band_envelope",
+          "points": [
+            {"date": "2026-01-05", "lower": null, "middle": null, "upper": null},
+            {"date": "2026-01-09", "lower": null, "middle": 2.0, "upper": null},
+            {"date": "2026-01-14", "lower": 1.0, "middle": 2.0, "upper": 3.0},
+            {"date": "2026-01-16", "lower": 0.5, "middle": 2.5, "upper": 3.5},
+            {"date": "2026-01-23", "lower": 1.0, "middle": 2.0, "upper": 3.0},
+            {"date": "2026-01-30", "lower": 1.5, "middle": 2.5, "upper": 3.5}
+          ],
+          "expected": [
+            {"date": "2026-01-11", "lower": null, "middle": null, "upper": null},
+            {"date": "2026-01-18", "lower": 0.5, "middle": 2.5, "upper": 3.5},
+            {"date": "2026-01-25", "lower": 1.0, "middle": 2.0, "upper": 3.0},
+            {"date": "2026-02-01", "lower": 1.5, "middle": 2.5, "upper": 3.5}
+          ]
+        }
+      ],
+      "browser_parity": true,
+      "note": "A line valued from the first week and a band complete from the second. The band's incomplete points are dropped by its reduction, so its first week has no point; aligned, it has one without a value (lower, middle and upper null). The browser draws a band from its complete points only."
+    },
+    {
+      "id": "two-lines-weekly-R5-a-gap-marker-breaks-the-other-line",
+      "resolution": "weekly",
+      "render_dates": ["2026-01-11", "2026-01-18", "2026-01-25", "2026-02-01"],
+      "series": [
+        {
+          "key": "gappy",
+          "kind": "line",
+          "profile": "last_with_range",
+          "points": [
+            {"date": "2026-01-06", "value": 1.0},
+            {"date": "2026-01-12", "value": null},
+            {"date": "2026-01-20", "value": null},
+            {"date": "2026-01-21", "value": 2.0},
+            {"date": "2026-01-23", "value": 3.0},
+            {"date": "2026-01-30", "value": 4.0}
+          ],
+          "expected": [
+            {"date": "2026-01-11", "value": 1.0},
+            {"date": "2026-01-12", "value": null},
+            {"date": "2026-01-18", "value": null},
+            {"date": "2026-01-25", "value": 3.0},
+            {"date": "2026-02-01", "value": 4.0}
+          ]
+        },
+        {
+          "key": "steady",
+          "kind": "line",
+          "profile": "last_with_range",
+          "points": [
+            {"date": "2026-01-09", "value": 5.0},
+            {"date": "2026-01-16", "value": 6.0},
+            {"date": "2026-01-23", "value": 7.0},
+            {"date": "2026-01-30", "value": 8.0}
+          ],
+          "expected": [
+            {"date": "2026-01-11", "value": 5.0},
+            {"date": "2026-01-12", "value": null},
+            {"date": "2026-01-18", "value": 6.0},
+            {"date": "2026-01-25", "value": 7.0},
+            {"date": "2026-02-01", "value": 8.0}
+          ]
+        }
+      ],
+      "browser_parity": false,
+      "note": "Residue R5: a line with a gap spanning the whole week of 2026-01-12 is reduced with a gap marker on its Monday, 2026-01-12, a date the other, continuous line has no point on. Aligned, the continuous line gets a point without a value there, and the browser would draw it in two pieces where it draws one if reduced alone. Seen only when the marker's series has a gap in the range that the other has not; a warm-up never does it."
+    }
+  ]
+}

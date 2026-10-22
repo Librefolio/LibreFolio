@@ -93,7 +93,9 @@ The fastest way to import data from an unsupported source is to **paste this ent
     An `ADJUSTMENT` row that seeds an **inherited or transferred** position
     (you owned it before, with a known purchase cost) carries a *frozen cost basis*. The
     generic CSV has no `cost_basis` column, so the import wizard **prompts you to fill it**
-    ("Missing inherited per-unit cost basis (WAC)"). Enter the **cost per single unit**
+    ("Missing inherited per-unit cost basis (WAC)"). Only a row with a positive quantity is
+    flagged: an `ADJUSTMENT` taking units out has no value (developer decision N78-1), so it takes
+    no cost basis. Enter the **cost per single unit**
     (e.g. `42.50` for a share bought at €42.50), **not** the position's total value. The
     engine multiplies it by `quantity`; a total entered here inflates the cost basis by a
     factor of `quantity`. For bonds, `quantity` is the face value and the per-unit cost is

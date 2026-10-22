@@ -88,7 +88,7 @@ def _invite_read(invite: AccountToken) -> InviteRead:
     return InviteRead(id=invite.id, grants_admin=invite.grants_admin, email=invite.email, created_at=invite.created_at, expires_at=invite.expires_at, created_by_user_id=invite.created_by_user_id)
 
 
-def _admin_user_read(user: User, *, holds_place: bool = False, pending_setup: bool = False) -> AdminUserRead:
+def _admin_user_read(user: User, *, holds_place: bool = False, pending_setup: bool = False, pending_verification: bool = False, avatar_url: Optional[str] = None) -> AdminUserRead:
     return AdminUserRead(
         id=user.id,
         username=user.username,
@@ -99,6 +99,8 @@ def _admin_user_read(user: User, *, holds_place: bool = False, pending_setup: bo
         protected=user_service.account_protection(user) is not None,
         holds_place=holds_place,
         pending_setup=pending_setup,
+        pending_verification=pending_verification,
+        avatar_url=avatar_url,
     )
 
 
@@ -179,8 +181,12 @@ async def list_accounts(admin: Annotated[User, Depends(require_admin)], session:
     holders = await email_verification.place_holders(session)
     # The initial administrator waiting for its setup link (F02): the tab offers it no reactivation
     pending = await registration_service.pending_admin_ids(session)
+    # The accounts waiting for their email verification, live link or expired: the tab badges them (E-7)
+    waiting = await email_verification.waiting_ids(session)
+    # Each account's avatar, drawn after the row's chevron (N69-4): one query for the whole list
+    avatars = await user_service.avatar_urls(session, [user.id for user in users])
     return AdminUserListResponse(
-        items=[_admin_user_read(user, holds_place=user.id in holders, pending_setup=user.id in pending) for user in users],
+        items=[_admin_user_read(user, holds_place=user.id in holders, pending_setup=user.id in pending, pending_verification=user.id in waiting, avatar_url=avatars.get(user.id)) for user in users],
         usage=_usage_read(await registration_service.user_usage(session)),
     )
 
@@ -236,8 +242,15 @@ async def update_account(user_id: int, request: AdminUserUpdateRequest, admin: A
     if outcome == "SETUP_COMPLETED":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "SETUP_COMPLETED", "message": "This account does not wait for its setup: nothing was changed"})
     logger.info("Account updated by an administrator", user_id=user.id, admin_id=admin.id, is_active=user.is_active, is_superuser=user.is_superuser)
-    # The answer replaces the row in the Users tab: it carries the same flags as the list (workstream E, F02).
-    return _admin_user_read(user, holds_place=await email_verification.holds_place(session, user), pending_setup=await registration_service.is_pending_admin(session, user))
+    # The answer replaces the row in the Users tab: it carries the same flags as the list (workstream E, F02, E-7).
+    avatars = await user_service.avatar_urls(session, [user.id])
+    return _admin_user_read(
+        user,
+        holds_place=await email_verification.holds_place(session, user),
+        pending_setup=await registration_service.is_pending_admin(session, user),
+        pending_verification=await email_verification.awaiting_verification(session, user),
+        avatar_url=avatars.get(user.id),
+    )
 
 
 @router.get("/{user_id}/deletion-preview", response_model=AccountDeletionPreviewRead, summary="What deleting an account would take with it (admin)")

@@ -191,27 +191,82 @@ mandatory for every new plugin:
 - **One source row may emit several transactions.** Keep economic legs explicit: securities-only buys can be `DEPOSIT + BUY`, sells can be `SELL + WITHDRAWAL`, maturities can be `SELL at par + INTEREST`, and snapshots can be `DEPOSIT + ADJUSTMENT` seeds.
 - **Fake asset IDs.** Emit high positive fake asset IDs (keyed by ISIN/ticker) plus
   `BRIMExtractedAssetInfo` so the core can drive the asset-matching UI.
-- **Only safe rows.** Import only rows whose date the broker will not change any more:
-  movements already settled, executed and booked. A provisional row — its value or
-  settlement date after the server's today (`server_today()` in
-  `backend/app/utils/datetime_utils.py`, never the browser's date), or a status that says
-  pending or reserved — is left out **whole**, with every transaction it would have
-  produced (its fee, its premium), and arrives with the next import. Say so with one
-  `severity="info"` notice per reason (a `code`, `context.count`, the rows as
-  [evidence](#brim-evidence)), never a warning: nothing is wrong, the rows are simply not
-  final yet. When the report holds no export date and no status, compare the row's own
-  date with `server_today()`: Fineco, notice `fineco_not_yet_settled`
-  ([Fineco notes](../../backend/brim/architecture.md#plugin-fineco)). When it covers a
-  known period, compare with the period's end: Danske Bank, notice
-  `excluded_not_yet_settled`, for the custody trades valued after the cash statement's last
-  day ([Finnish notices](../../backend/brim/danske_bank.md#finnish-notices)).
+- **The operation date, and only settled rows.** Record every transaction on its
+  **operation date**, the day the operation was made (the trade date), never on the
+  settlement or value date (the developer's principle, 19/10/2026): a purchase made on the
+  27th is a `BUY` dated the 27th, whenever its cash moves. The report's other dates only
+  tell whether the row is stable and booked, read from the columns the report has:
+    - a **status** column, when there is one, decides; what it says follows the next rule
+      (reserved, cancelled or pending are known; a word the plugin does not know is
+      unknown);
+    - otherwise a **value or settlement date** after the server's today (`server_today()`
+      in `backend/app/utils/datetime_utils.py`, never the browser's date) marks a
+      provisional row: Fineco, notice `fineco_not_yet_settled`
+      ([Fineco notes](../../backend/brim/architecture.md#plugin-fineco));
+    - a report that covers a known period compares with its end instead: Danske Bank,
+      notice `excluded_not_yet_settled`, for the custody trades valued after the cash
+      statement's last day
+      ([Finnish notices](../../backend/brim/danske_bank.md#finnish-notices));
+    - with neither, the operation date itself must not be after today.
+    - A provisional row is left out **whole**, with every transaction it would have
+      produced (its fee, its premium), and arrives with the next import. Say so with one
+      `severity="info"` notice per reason (a `code`, `context.count`, the rows as
+      [evidence](#brim-evidence)), never a warning: nothing is wrong, the rows are simply
+      not final yet.
+    - A report set that compares balances with the bank's, as Danske Bank does, compares
+      them in operation-date terms. A truth on a day adds what is still **in flight** then:
+      the cash and the quantities of the trades the set imports with an operation date up to
+      that day and a value date after it (`_Analysis.in_flight`). The set opens on the eve of
+      the oldest operation date of the export, even when the cash statement starts later: the
+      statement's first balance then stands for the opening
+      ([Danske Bank → Truth points](../../backend/brim/danske_bank.md#truth-points)).
+    - **The one exception is the Generic CSV**: its files are the user's own, so the date
+      column the user maps is the transaction date, whatever it means (`trade_date`,
+      `value_date` and `settlement_date` are all aliases of its `date` column,
+      [Generic CSV](../../backend/brim/generic_csv.md)).
+- **Known rows quietly, unknown rows loudly.** Leave a row out only for a reason the plugin
+  can name (lot W-B85, the developer's principle of 19/10/2026):
+    - **Known and safe to leave out** — a blank, header or total row, a reservation, a row
+      the broker marks as cancelled, a duplicate of another row: no notice, at most one
+      backend log line per reason (`logger.info(…, reason=…, count=…)`). In a report set the
+      row keeps its place in the set's accounting: an `excluded` outcome with its reason,
+      counted in the summary's `reasons` and labelled in the wizard by
+      `importWizard.reportSet.reason.<reason>`. Example: Danske Bank's `reservation`, a cash
+      row labelled `Varaus` (*reserved, not booked*).
+    - **Unknown or unreadable** — a type, status or description the plugin does not
+      recognise; a date, amount or required field it cannot read: leave it out, and say so
+      with one `severity="warning"` notice per reason (a `code`, `context.count`, the rows as
+      evidence) that carries `context.report_issue = True`. The helper `RowSkips` builds that
+      notice for you ([Rows left out](#row-skips)): a plugin collects the rows and returns two
+      shared notices, instead of writing a string warning for each row. The wizard then shows the link
+      *open an issue on GitHub* under the warning, on every instance, self-hosted or hosted
+      ([`context` keys](#context-keys-the-frontend-understands)): the users become the
+      canaries of a broker whose export changes. Example: Danske Bank's `excluded_status`,
+      the rows whose `Tila` is neither executed nor booked.
+    - **Never silently** leave out a row that may carry an economic effect (a split, a fee, a
+      tax, a currency conversion) unless the plugin knows that is safe: a row it cannot
+      import is unknown. A row the plugin reads but only in part (Trade Republic's fee and tax
+      columns, not imported) is unknown too: list it.
+    - **A stable plugin follows the rule**: it uses `RowSkips`, or its own codes with
+      `context.report_issue`. The plugins the lot W-B86 did not reach yet (the *pending* set of its
+      contract test: most of the beta plugins, Intesa, Fineco, the Generic CSV) may still write one
+      plain string per skipped row (a `legacy` warning, no link), and are migrated later (decision of
+      19/10/2026; the ones that already use the helper are in [Rows left out](#row-skips)).
+    - The provisional rows of *The operation date, and only settled rows* are neither: they
+      keep their info note.
+    - `report_issue` also serves a plugin in beta that imports a row but doubts its own
+      reading, on an info note: Fineco's `fineco_incomplete_rows` imports the rows missing a
+      required number and asks the user to open an issue if the file is right.
 
 ### 🔢 Decimal places {: #decimal-places }
 
 Every figure a plugin emits must fit its `transactions` column (C-97; the types are in
 [Decimal Columns](../database/index.md#decimal-columns)): a `quantity` keeps 10 decimal
 places, a cash amount 6, a per-unit `cost_basis_override` 12 — the scale of the prices —
-and any of them at most 15 significant digits.
+and any of them at most 15 significant digits. A `cost_basis_override` is also never
+negative (0 for a gift or the new shares of a split): below 0, the batch refuses its row
+when the user saves it (`costBasisNegative`, J-60, see
+[Cost basis sign](../../backend/transactions/service.md#cost-basis-sign)).
 
 - **Read from the file: never rounded.** A figure the report states goes in as written,
   under the verbatim rule above. Over a limit, neither the plugin nor the import rounds
@@ -637,7 +692,7 @@ transaction breaks these rules, so flip source signs as needed:
   amount. Reference: `broker_bitvavo/plugin.py`, `broker_cointracking/plugin.py`, `broker_delta/plugin.py`,
   `broker_cryptocom/plugin.py` (note `cryptocom` emits `INTEREST` for fiat-valued rewards but a
   cashless `ADJUSTMENT` for coin-only rewards).
-- Prefer **skipping a row with a warning** over emitting a schema-invalid transaction.
+- Prefer **skipping a row with a notice** (`RowSkips`, [Rows left out](#row-skips)) over emitting a schema-invalid transaction.
 
 !!! tip "Warning language follows the input format"
 
@@ -647,6 +702,8 @@ transaction breaks these rules, so flip source signs as needed:
     (Italian), Danske Bank (Finnish) — emit the warnings in that language so they match the report the user is
     reading. Fineco is still an exception: it reads only the Italian export, but writes its plain warnings in English;
     only its two notices, `fineco_not_yet_settled` and `fineco_incomplete_rows`, are in Italian.
+    The two shared notices of `RowSkips` are the exception to the rule: the wizard words them in
+    the user's language, and only the *Reason* column of their evidence is the plugin's text.
     When a broker ships differently localized export layouts (a UK vs. IT Fineco
     file, a non-Italian Crédit Agricole entity), detect the format and emit each variant's
     warnings in its own language. Code, comments and docstrings stay in English.
@@ -719,7 +776,7 @@ transaction breaks these rules, so flip source signs as needed:
     cash row, a `TRANSFER`'s giving leg — `_create_transaction()` refuses the row, a
     `costBasisNotAllowed` validation issue instead of a transaction (rule 12b, W-B72, or
     rule 12's `costBasisModeIncompatible` when the row names a `cost_basis_mode`; an
-    `ADJUSTMENT` taking units out may still carry its handover cost: see
+    `ADJUSTMENT` taking units out is refused the same way, since it has no value: see
     [Per-type rules](../../backend/transactions/service.md#per-type-rules)).
 
 !!! tip "Matured-bond redemption: close at par, surplus → INTEREST"
@@ -798,7 +855,7 @@ gives them the same `link_uuid`; the batch turns the shared id into reciprocal
 `related_transaction_id`s and never stores the id itself (see
 [Transaction Service → Linked Pairs](../../backend/transactions/service.md#linked-pairs)).
 `broker_degiro/plugin.py` is the first plugin to emit pairs (`_pair_fx_legs`, `_fx_pair`): Swissquote
-skips its conversion legs with a warning, and the Generic CSV refuses the paired types.
+lists its conversion legs in the shared notice `rows_not_recognized` (it does not import them yet), and the Generic CSV refuses the paired types.
 
 **What the batch accepts** — `resolve_create_links` in `batch_creates.py`, with
 `_validate_linked_pair` and `_validate_pair_description_tags` in `validation.py` (all in
@@ -863,7 +920,7 @@ is the single most important design decision in a plugin:
 |---------|---------------------------|----------------------|----------------|
 | Transactions | `transactions` | "I read this row" | Review table |
 | Validation issues | `validation_issues` | "I read this row and the schema refused it" | Parse-detail modal, red |
-| Notices | `warnings` | "Something about the **file** you should know" | Parse-detail modal + confirmation modal |
+| Notices | `warnings` | "Something about the **file** you should know", the rows it left out included | Parse-detail modal + confirmation modal |
 | Field todos | `field_todos` | "I booked this row but a **specific field** is a guess" | **Correction step**, before the duplicate check |
 
 !!! danger "A notice is not a todo"
@@ -891,9 +948,14 @@ warnings.append(
 - `severity="info"` — *the plugin did something correct and non-obvious*: explain it. An
   unknown transaction code booked by sign, a succession row turned into a cashless
   `ADJUSTMENT`, rows left for the next import because they have not settled yet (the rule
-  *Only safe rows*, under [Import philosophy](#import-philosophy-currency-rules)). Blue,
+  *The operation date, and only settled rows*, under
+  [Import philosophy](#import-philosophy-currency-rules)). Blue,
   still surfaced in the confirmation modal.
-- `severity="warning"` — *the plugin had to fall back or guess*: look at it.
+- `severity="warning"` — *the plugin had to fall back or guess*: look at it. Also a row left
+  out because the plugin does not know it, with `context.report_issue` (the rule *Known rows
+  quietly, unknown rows loudly*, under [Import philosophy](#import-philosophy-currency-rules); the
+  helper `RowSkips` writes these notices, see [Rows left out](#row-skips)).
+  A row the plugin knows it may leave out gets no notice at all.
 - A bare `str` still works (coerced to `severity="warning"`, `code="legacy"`), but new code
   should never use it: the `code` is what lets the frontend and the tests address the notice.
 
@@ -930,6 +992,56 @@ BRIMEvidence(
   `comment` of a notice's table can be translated by code too — both are explained in the tip
   *Warning language follows the input format*, under
   [Sign conventions](#sign-conventions-enforced-by-the-test-suite).
+
+### 🚮 Rows left out: `RowSkips` {: #row-skips }
+
+The helper of the rule *Known rows quietly, unknown rows loudly* (lot W-B86), in the section *ROWS LEFT OUT* of
+`backend/app/services/brim_providers/_brim_io.py` (the plugins import that module as `io`). A plugin collects the rows
+it cannot import as they come, and returns the notices once at the end:
+
+```python
+from backend.app.services.brim_providers import _brim_io as io
+
+skips = io.RowSkips(header_cells)          # or io.RowSkips() and skips.set_headers(reader.fieldnames) later
+
+for line, row in enumerate(rows, start=2):
+    if not row_date:
+        skips.unreadable(line, row, "invalid date")                    # cannot read it
+        continue
+    if tx_type is None:
+        skips.unknown(line, row, f"unknown type: '{raw_type}'")        # does not recognise it, or does not import it yet
+        continue
+    if raw_type in KNOWN_NO_EFFECT:                                     # known and safe: nothing is collected
+        quiet += 1
+        continue
+    ...
+
+return BRIMParseOutput(transactions=transactions, warnings=[*warnings, *skips.notices()], ...)
+```
+
+| Method | The row is | Notice `code` |
+|---|---|---|
+| `unknown(line, row, reason)` | a type, status or description the plugin does not recognise, or recognises but does not import yet (a split, a currency conversion, a fee column) | `rows_not_recognized` |
+| `unreadable(line, row, reason)` | one whose date, amount, currency or required field cannot be read | `rows_unreadable` |
+
+- `row` is a list of cells or a `csv.DictReader` row (read in the order of the headers); `line` is its
+  **1-based line in the file**; `reason` is the short text of the last column.
+- `notices()` returns at most two notices, `rows_not_recognized` first: each is a `warning`, with
+  `context {"count": n, "report_issue": True}` and one `BRIMEvidence` (the file's header, a last column
+  *Reason*, the rows, their line numbers). A row shorter than the header is padded; a longer one gets
+  numbered headers.
+- **The wizard words them once for every plugin**: `importWizard.brimNotice.<code>` and
+  `importWizard.brimEvidence.<code>`, in the four catalogues (`frontend/src/lib/i18n/importWizard/`), with
+  `{count}` as an ICU variable. The message in `RowSkips` is the English fallback.
+- A known row that is safe to drop is **not** collected: count it and write one log line at the end
+  (`logger.info(…, count=…)`), as Revolut and Trading 212 do for `Transfer`, and Scalable for a cancelled order.
+- A plugin that already has a notice of its own for a case keeps it, with `context.report_issue = True`
+  (DEGIRO's six `degiro_*` notices, Crédit Agricole's `ca_securities_unknown_causale`, `ca_unknown_causale` and
+  `ca_account_invalid_amount`, Scalable's `scalable_unreadable_rows` and `scalable_not_imported`).
+- Contract test: `./dev.py test external brim-row-skips`
+  (`backend/test_scripts/test_external/test_brim_row_skips.py`). Every registered plugin must be in exactly one
+  of two sets: the plugins that follow the rule (and obey it), or the pending ones, which W-B86 does not
+  cover yet. A new plugin lands in one of them, or the test fails.
 
 ### 🧩 `BRIMFieldTodo` — one field, one question, one screen
 
@@ -987,7 +1099,7 @@ A `BRIMNotice` has one key of its own, read by the notice list (`BrimNoticeList.
 
 | Key | Type | Effect in the wizard |
 |-----|------|----------------------|
-| `report_issue` | `bool` | Only the boolean `True` counts. The wizard then shows, under the notice's message, the link *open an issue on GitHub* (`importWizard.fixStep.reportIssueLink`, the same words as the correction step's link) to `https://github.com/Librefolio/LibreFolio/issues/new`, opened in a new tab (`data-testid="brim-notice-report-issue"`). It is meant for a plugin in beta that suspects its own reading: Fineco's `fineco_incomplete_rows` asks the user to check the rows and, if the file is right, to open an issue. |
+| `report_issue` | `bool` | Only the boolean `True` counts. The wizard then shows, under the notice's message, the link *open an issue on GitHub* (`importWizard.fixStep.reportIssueLink`, the same words as the correction step's link) to `https://github.com/Librefolio/LibreFolio/issues/new`, opened in a new tab (`data-testid="brim-notice-report-issue"`), on every instance, self-hosted or hosted. Two uses. A row the plugin does not know, left out: a warning, under the rule *Known rows quietly, unknown rows loudly* ([Import philosophy](#import-philosophy-currency-rules)) — the two shared notices of `RowSkips` ([Rows left out](#row-skips)) always carry it, and so do Danske Bank's `excluded_status`, which asks the user to open an issue if the rows are real movements, and the notices of DEGIRO, Crédit Agricole and Scalable listed in [BRIM Architecture](../../backend/brim/architecture.md#brim-row-skips). A plugin in beta that suspects its own reading of rows it imported: an info note — Fineco's `fineco_incomplete_rows` asks the user to check the rows and, if the file is right, to open an issue. |
 
 Everything else in `context` is free: it is passed through untouched and is useful for tests
 and for i18n interpolation.
@@ -1145,7 +1257,7 @@ return info !== null && txDate !== '' && txDate < info.openedAt;
 
 Rows before the broker opening date are deselected and non-importable; rows on the opening day remain importable. The wizard offers **Edit broker date** and re-checks after broker data refresh.
 
-Do not re-check the batch's date range either: the import confirms through the transaction batch, which checks every row's date (`check_dates()`, decision N74): from 1900-01-01 to tomorrow by the server's calendar (`latest_range_end()`). A row outside it gets `dateOutOfRange` on `date` and the batch is not saved (see [Transaction dates](../../backend/transactions/service.md#transaction-dates)). For the rows it keeps, a plugin emits the date the report states. A row dated after the server's today (`server_today()`) is provisional: leave it out, with an info notice, under the rule *Only safe rows* ([Import philosophy](#import-philosophy-currency-rules)), rather than emit it. The batch would refuse anything after tomorrow with `dateOutOfRange` anyway.
+Do not re-check the batch's date range either: the import confirms through the transaction batch, which checks every row's date (`check_dates()`, decision N74): from 1900-01-01 to tomorrow by the server's calendar (`latest_range_end()`). A row outside it gets `dateOutOfRange` on `date` and the batch is not saved (see [Transaction dates](../../backend/transactions/service.md#transaction-dates)). For the rows it keeps, a plugin emits the operation date the report states. A row whose value or settlement date is after the server's today (`server_today()`) — or whose operation date is, when the report has no other date — is provisional: leave it out, with an info notice, under the rule *The operation date, and only settled rows* ([Import philosophy](#import-philosophy-currency-rules)), rather than emit it. The batch would refuse anything after tomorrow with `dateOutOfRange` anyway.
 
 ## 🔀 One plugin, several export formats
 
@@ -1386,7 +1498,14 @@ Danske places every row on the **value-date** axis:
 - **before** is up to the first checkpoint, a **gap** lies between a window and the next
   checkpoint, and **after** is beyond the last window.
 
-Every row gets exactly one outcome, with a reason when it is excluded: nothing is lost silently.
+The axis places the rows; it does not date them. The parse records each transaction on its
+operation date, under the rule *The operation date, and only settled rows*
+([Import philosophy](#import-philosophy-currency-rules)): the custody trade date, or the `Pvm` of
+a cash-only row, its only date. Pairing, zones, `not_yet_settled` and `deferred` read the value
+date, because the bank moves the cash on that day.
+
+Every row gets exactly one outcome, with a reason when it is excluded: no row leaves the set's
+accounting, not even one left out without a notice (`reservation`).
 
 | Row | before | window | gap | after |
 |---|---|---|---|---|
@@ -1395,7 +1514,7 @@ Every row gets exactly one outcome, with a reason when it is excluded: nothing i
 | Cash trade or income **without** its custody row | `summarized` in the first checkpoint | in the border: `summarized` in that checkpoint (a trade made before the custody export, settled after its start); after the segment's last day: the next zone; elsewhere `excluded` (`no_counterpart`) | `summarized` in the next checkpoint | `deferred`: it comes with the next import |
 | Custody trade or income without its cash row | — | `excluded`: `not_yet_settled` (settled after the last cash row), `outside_cash_coverage` (outside the cash statement), otherwise `no_counterpart` | — | — |
 | Custody demerger line | — | `standalone`: a cashless `ADJUSTMENT` | — | — |
-| Not executed or not booked; unknown type; invalid | `excluded` (`status`, `unknown_type`, `invalid`) | same | same | same |
+| Not executed or not booked; reserved (`Varaus`); unknown type; invalid | `excluded` (`status`, `reservation`, `unknown_type`, `invalid`) | same | same | same |
 
 Pairing keys on value date, amount to the cent, currency and direction (`Osto` with a positive
 quantity, `Myynti` with a negative one, income with a positive amount). The name is only a
@@ -1422,17 +1541,27 @@ A truth point is what the bank states at a date. The plugin returns two kinds in
   and proposes corrections.
 - **`BRIMVerification`** — `as_of`, `cash`, `evidence`: compared, never corrected.
 
-Danske puts a checkpoint on the eve of each segment (for the first one, the eve of the first day
-both files cover). Its cash is the statement's running balance at the end of that day plus the
-cash of the segment's border rows. Its positions come from proofs inside the segment, each brought
-back to the checkpoint by removing the movements imported in between:
+Danske puts a checkpoint on the eve of each segment, the day before its oldest trade date — the
+first segment's too, even when the cash statement starts after the custody export. Its cash is
+the statement's running balance at the end of that day plus the cash of the segment's border
+rows; for an opening that precedes the statement, that balance is the statement's first balance,
+the balance before its first booked row. Its positions come from proofs inside the segment, each
+brought back to the checkpoint by removing the movements imported in between:
 
 - **E1** — a `Tuotto` (income) states the shares held: exact, unless a movement of that security
   falls in the 30 days before it;
 - **E2** — the old line of a demerger states the whole holding: exact;
 - **E3** — selling more than was bought since the segment started proves **at least** the largest
   shortfall;
-- **E4** — an excluded row of the same security between the checkpoint and the proof discards it.
+- **E4** — an excluded row of the same security between the checkpoint and the proof discards it,
+  except a trade settled before the cash statement starts (`outside_cash_coverage`): that one
+  belongs to the opening.
+
+Every truth — a checkpoint's cash and positions, every verification — also adds what is **in
+flight** on its day: the cash and, for a position, the quantity of the trades the set imports
+with a trade date up to that day and a value date after it. LibreFolio records them on their
+trade date and the bank books them on their value date, so both sides compare in operation-date
+terms.
 
 Discarded proofs are reported (`proof_discarded`). A final verification compares the cash at the
 end of the last segment, or of the cash statement if it ends first. The running balance is checked
@@ -1444,7 +1573,9 @@ day by day: when it does not add up, the cash of every checkpoint becomes a veri
     A truth point may become a **checkpoint** — that is, produce corrections — only if **no future
     import will bring, one by one, the rows it summarises**. Otherwise it must be a
     **verification**. Danske's eve of a segment qualifies: it summarises only trades that no custody
-    file of the set covers. The end of the last segment does not: the next import brings its
+    file of the set covers — and, when the cash statement starts after the custody export, the
+    trades settled before the statement's first day, which the set leaves out
+    (`outside_cash_coverage`). The end of the last segment does not: the next import brings its
     `not_yet_settled` and `deferred` trades, and a correction there would count them twice.
 
 ### ⏮️ The history start (H0) {: #report-set-history }

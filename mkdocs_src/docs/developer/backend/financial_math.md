@@ -36,7 +36,8 @@ The technical indicators (`services/signal_plugins/`, `services/signals/runtime.
 [risk engine](risk/architecture.md) (`services/risk/`) and the PAC allocator
 (`services/pac_allocator/`) stay where they are, but take the common math — returns,
 annualization, conversions, average cost, valuation — from the layer. FX conversion itself stays
-in the FX service: `convert_bulk()` in `services/fx/conversion.py` is the primitive the calculations call.
+in the FX service: `convert_bulk()` in `services/fx/conversion.py` is the primitive the calculations call,
+and `unit_rate_steps()`, in the same module, gives the rates of long ranges as steps (P3).
 
 ### 🪞 Declared Float Twins {: #float-twins }
 
@@ -66,9 +67,9 @@ backend/app/services/financial_math/
 ├── average_cost.py          average purchase cost (WAC): pools, cost steps, missing conversions
 ├── native_cash.py           cash per broker and currency: balances, daily value, flows, FX result
 ├── ledger_totals.py         control totals of the ledger for backups: cash per broker and currency, quantity per position
-├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return (also as a float for a return series), observed annualization of a return series (DAYS_PER_YEAR, its validator, calendar days ↔ observations both ways), fixed-period changes of a price or rate (1D … 5Y, both orientations) and its change over a whole range, recovery from a drawdown
+├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*; ROI and TWRR on a given capital or exposure for the lots' shorts; a flow counts on the first snapshot on or after it, flows_by_snapshot_date), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return (also as a float for a return series), observed annualization of a return series (DAYS_PER_YEAR, its validator, calendar days ↔ observations both ways), fixed-period changes of a price or rate (1D … 5Y, both orientations) and its change over a whole range, recovery from a drawdown
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
-├── fx_rates.py              the orientation of a stored FX rate: a pair read from source to destination, either way (oriented_rate, any number type)
+├── fx_rates.py              the orientation of a stored FX rate: a pair read from source to destination, either way (oriented_rate, any number type); the unit rates a calculation reads by day, as steps answered on the asked days only (AskedDayRates)
 ├── interest.py              day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360), simple interest and daily compounding over a span in closed form, at a cost independent of the span (compound_growth, memoized): the primitives the Scheduled Investment provider builds its accrual on
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
@@ -93,9 +94,10 @@ backend/app/services/financial_math/
 └── lots/                    lots analysis math, called by lots_analysis_service.py
     ├── __init__.py          docstring only
     ├── prices.py            from the asset's AssetPriceSeries: a lot's reference price at its opening, the last day valued at cost
-    ├── conversions.py       FxRateResolver, a closure's legs at their own dates, and the conversions each view needs
+    ├── conversions.py       FxRateResolver (its rates read as steps), a closure's legs at their own dates, and the conversions each view needs
     ├── economic_events.py   income and FEE/TAX as engine inputs, their outputs, what is withheld
     ├── histories.py         value, return, price, market price and performance histories
+    ├── change_days.py       the days the daily series can change on, and their expansion to every day of the window
     ├── summary.py           a lot's figures: the cost of its open quantity, value and P&L by direction, the lot summary
     ├── scope_boundary.py    transfer legs whose partner sits outside the scope, read at its edge: in at their cost, out at market
     └── average_cost_lines.py  per-broker and cumulative WAC history points
@@ -114,6 +116,12 @@ each point the rate of that single solve bit for bit, and is faster on long hist
 step from the starting guess fails, it skips the grid scan only where the scan's answer is known — the previous point's
 rate, by Newton, points at the one true root (one sign change in the flows, Descartes' rule), and the answer is the
 scan's own Brent call on that grid interval (`_mwrr_solve`, `_bracketed_xirr_at`); everywhere else the scan runs.
+A rate is returned only when it solves the equation: its NPV within 1e-7 of the flows' size (`_is_xirr_root`, the test
+of Newton's answer); a root the bracketing found may instead show the NPV changing sign within ±1e-9 of it
+(`_is_bracketed_xirr_root`), which keeps the true root of an ill-conditioned NPV, whose terms are far larger than the
+flows and cancel at the root (P1b). A sign change is read from the two signs, never from their product, which
+underflows to 0.0 when both NPVs are tiny; and a sign is trusted only above the NPV's rounding noise where its terms
+underflow (`_npv_noise_floor`, `_opposite_signs`).
 
 `float_price_return()` and `observed_annualization()` (`returns.py`) serve the float return series that the risk and
 signal statistics read. `market_series.py`, which prepares those series, takes both from here and keeps no return
@@ -192,7 +200,8 @@ One call of `PortfolioCalculationEngine.calculate()` (`portfolio/engine.py`):
    `position_states_start` — that starts on or before the requested start and ends on the
    requested end date;
 4. loads the prices, `quote_base_quantity`, currencies, types and classifications of the held
-   assets, and preloads the FX rates in one `convert_bulk()` call (`_preload_fx_rates()`);
+   assets, and preloads the FX rates in one `unit_rate_steps()` call (`_preload_fx_rates()`: each
+   currency's windows of days, read as steps; the map answers on the asked days only, P3);
 5. computes the average cost of every position (`compute_average_costs()` over
    `build_cost_positions()`), one `AssetPriceSeries` per held asset
    (`build_asset_price_series()`) and the native cash (`compute_native_cash()`);
@@ -340,7 +349,7 @@ of its rate points. The engine reads the rate `fx_rate_map` holds for that exact
 (`_read_rate()`), on every replayed day — or day of the transit, for cash in transit — each
 compared with the day before (`_calendar()` starts one day early); its calendars start on
 `EARLIEST_RANGE_START` at the earliest, since no rate is loaded before it. `_read_rate()` reads only the
-map, which `_preload_fx_rates()` already fills for these currencies on every day of
+map, which `_preload_fx_rates()` already answers for these currencies on every day of
 `[date_from, date_to]` (a day replayed before a later `date_from` may find none there, and its
 state is not emitted), and for cash in transit on every day of its transit from
 `EARLIEST_RANGE_START` on: the rule asks the FX service for nothing more.
@@ -555,8 +564,9 @@ flowchart LR
    report what cannot be computed instead of returning a number (see
    [Layer Rules](#layer-rules)).
 4. **Test it.** Write its unit tests, pure where possible: no database, the session `None`, and
-   `convert_bulk` replaced on the module that reads it. Adapted from `TestFxRateResolverLoad`
-   in `backend/test_scripts/test_services/test_lots_analysis_pure.py`:
+   the FX function replaced on the module that reads it: `convert_bulk`, or `unit_rate_steps` for
+   a module that reads its rates as steps, as the lots resolver does. Adapted from
+   `TestFxRateResolverLoad` in `backend/test_scripts/test_services/test_lots_analysis_pure.py`:
 
     ```python
     from datetime import date
@@ -568,21 +578,32 @@ flowchart LR
     from backend.app.services.financial_math.lots.conversions import FxRateResolver
 
 
+    class NoSteps:
+        """A unit-rate reader with no step: the pair has no published rate."""
+
+        days = ()
+        values = ()
+
+        def at(self, day):
+            return None
+
+
     @pytest.mark.asyncio
     async def test_a_day_with_no_published_rate_is_left_unresolved(monkeypatch):
-        async def fake_convert_bulk(_session, conversions, raise_on_error=False):
-            return [None] * len(conversions), []
+        async def fake_unit_rate_steps(_session, requests):
+            return {pair: NoSteps() for pair in requests}
 
         # Replaced where conversions.py reads it, not in backend.app.services.fx.conversion
-        monkeypatch.setattr(conversions_module, "convert_bulk", fake_convert_bulk)
+        monkeypatch.setattr(conversions_module, "unit_rate_steps", fake_unit_rate_steps)
         resolver = FxRateResolver("EUR")
         resolver.need("USD", date(2024, 1, 10))
         await resolver.load(None)
         assert resolver.convert(Decimal("100"), "USD", date(2024, 1, 10)) is None
     ```
 
-    The modules that read `convert_bulk` are `average_cost.py`, `native_cash.py`,
-    `yield_on_cost.py`, `lots/conversions.py` and `portfolio/engine.py`. A pure test of a layer
+    The modules that read `convert_bulk` are `average_cost.py`, `native_cash.py` and
+    `yield_on_cost.py`; the modules that read `unit_rate_steps` (P3, and L1b for the lots) are
+    `native_cash.py`, `portfolio/engine.py` and `lots/conversions.py`. A pure test of a layer
     module can live in `backend/test_scripts/test_services/test_financial_math/`, which
     `services financial-math` runs as a whole, as a pure unit.
 5. **Update the maps.** The module map in the docstring of `financial_math/__init__.py` (and of

@@ -127,7 +127,7 @@ Importers without a label are well tested and reliable for the formats they supp
     <img src="https://finecobank.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Fineco">
     <span class="card-title" style="margin: 0;">Fineco</span>
     </div>
-    <span class="card-desc">🧪 Beta · The "Movimenti Dossier Titoli" CSV export</span>
+    <span class="card-desc">The "Ordini e contabili" securities list, saved as CSV</span>
     </a>
     <a href="intesa/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">

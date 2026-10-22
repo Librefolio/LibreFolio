@@ -657,8 +657,7 @@ def test_calendar_plugin_is_registered_executable_and_in_the_asset_catalog():
     """`get_plugin` is the execution path, `list_definitions` the catalog one, and now they agree.
 
     Decision 29: SignalService still plans and runs the calendar plugin, and /assets/prices/signals now
-    advertises it as the one Rolling Return. /fx/currencies/signals does not, because the plugin is
-    Asset-only, not because it is hidden.
+    advertises it as the one Rolling Return. /fx/currencies/signals does too since Z-29fx: the plugin lists both domains.
     """
     plugin_class = SignalPluginRegistry.get_plugin(CALENDAR_SIGNAL_CODE)
 
@@ -676,7 +675,8 @@ def test_calendar_plugin_is_registered_executable_and_in_the_asset_catalog():
     definitions = SignalPluginRegistry.list_definitions()
     # Exactly what the two catalog endpoints build from list_definitions().
     in_public_catalog = {domain: CALENDAR_SIGNAL_CODE in {definition.signal_code for definition in definitions if domain in definition.compatible_domains} for domain in (SignalDomain.ASSET, SignalDomain.FX)}
-    assert in_public_catalog == {SignalDomain.ASSET: True, SignalDomain.FX: False}
+    # Z-29fx: the FX catalog serves it too (an FX pair's rates are a resolved daily series; the FX half of Y-40).
+    assert in_public_catalog == {SignalDomain.ASSET: True, SignalDomain.FX: True}
     assert plugin_class.catalog_visible is True
 
 
@@ -806,7 +806,7 @@ def test_calendar_plugin_declares_percentage_line_on_an_independent_axis():
     output_spec = next(spec for spec in definition.output_specs if spec.key == "calendar_return")
 
     assert definition.signal_code == CALENDAR_SIGNAL_CODE
-    assert definition.compatible_domains == [SignalDomain.ASSET]
+    assert definition.compatible_domains == [SignalDomain.ASSET, SignalDomain.FX]
     assert len(definition.output_specs) == 1
     assert output_spec.kind == SignalSeriesKind.LINE
     assert output_spec.unit == SignalUnit.PERCENTAGE

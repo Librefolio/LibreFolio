@@ -131,14 +131,14 @@ r_{\mathrm{ann}} =
 \operatorname{annualize}\left(\frac{\mathrm{PnL}_{period}}{\mathrm{CostOut}},\ t_{\mathrm{close}}-t_{\mathrm{start}}\right)
 $$
 
-- $C_s$ is the historical cost, in $C^*$, of each disposal the period's Realized counts — a SELL, or an outgoing ADJUSTMENT with a cost basis ([Portfolio Engine — §8](index.md#8-realized-gain-loss)). A disposal left out of Realized adds no cost.
+- $C_s$ is the historical cost, in $C^*$, of each disposal the period's Realized counts — a SELL, or an outgoing ADJUSTMENT not linked to a split ([Portfolio Engine — §8](index.md#8-realized-gain-loss)). A disposal left out of Realized adds no cost.
 - $C_m$ is the historical cost each transfer to another broker of the scope moved out, when the row counts that transfer's tract: it left after $t_{\mathrm{from}}$, arrived by $t_{\mathrm{end}}$, and both its value on arrival and the cost moved are known ([Period P&L](period-pnl.md), developer decision P22). The row's result carries what those units did until they arrived (the tract adjustment), so their cost belongs in the base.
 - $V_a - C_a$ is, for each such transfer the position **received**, what its units gained before they arrived: their value on arrival less the historical cost moved with them. The row's result starts those units at $V_a$ (the tract adjustment takes back $V_a - C_a$), while $C_s$ and $C_m$ carry their historical cost, so the base adds the same amount and counts them at their value on arrival too (MF-A8). So $\mathrm{CostOut}$ is not only historical cost: for the units the position received, the base holds their value on arrival.
 - $t_{\mathrm{first\ opening}}$ is the position's first acquisition at that broker: a transfer opens it on its arrival there, a split never does. It is the first one ever, not the last lot's, so days at zero between two closes inside the period stay in the window.
 - The numerator is the row's whole $\mathrm{PnL}_{period}$: for a position held at $t_{\mathrm{from}}$, its $\Delta\mathrm{UGL}$ gives back the unrealized gain/loss it started with.
 - The displayed period percentage keeps $|\mathrm{StartValue}|$ as base: only the annualized value changes base and window.
 
-When this gives no value, the row keeps the rule above. That happens when units left the position in any other way — a transfer outside the scope, or still in transit at $t_{\mathrm{end}}$, a transfer or a disposal whose value or cost is unknown, an outgoing ADJUSTMENT without a cost basis — since the row's result would then hold more than its base covers; and with fewer than 30 days held, or a return of $-100\%$ or worse. The rule above is: $|\mathrm{StartValue}|$ over $t_{\mathrm{from}} \to t_{\mathrm{end}}$, and no value for a position opened in the period.
+When this gives no value, the row keeps the rule above. That happens when units left the position in any other way — a transfer outside the scope, or still in transit at $t_{\mathrm{end}}$, a transfer or a disposal whose value or cost is unknown — since the row's result would then hold more than its base covers; and with fewer than 30 days held, or a return of $-100\%$ or worse. The rule above is: $|\mathrm{StartValue}|$ over $t_{\mathrm{from}} \to t_{\mathrm{end}}$, and no value for a position opened in the period.
 
 ??? example "Example: a position sold 90 days into a one-year period"
 

@@ -2,12 +2,12 @@
  * Tailwind classes that colour signed figures and states — the one home for them.
  *
  * Every entry is on the colour roles (`text-lf-gain`, `bg-lf-success-soft`…), which follow the theme by themselves, with
- * no `dark:` half — except the kinds told apart by hue alone (`KIND_TONES`, the combined file set), which stay palette
- * classes until the categorical roles come. Several entries now hold the same classes: each keeps its own name, so one
+ * no `dark:` half; the kinds told apart by hue alone (`KIND_TONES`, the combined file set) take the nearest category's
+ * roles since D-T28. Several entries now hold the same classes: each keeps its own name, so one
  * surface can take a role of its own without touching its consumers. The thresholds stay with the callers (`>= 0`,
  * `> 0`, three-way with zero): only the colours live here.
  *
- * An entry is either all roles or all palette classes, and the element that takes a role entry carries no palette
+ * An entry is all roles, and the element that takes a role entry carries no palette
  * colour of its own: `app.css` exempts every element with a `-lf-` class from its legacy dark remap, so a mixed element
  * would keep half of its light colours in dark.
  *
@@ -217,11 +217,11 @@ export const STATUS_TONES = {
         error: 'bg-lf-danger-soft text-lf-danger-on-soft',
     },
     /**
-     * File-set badges in the files area. `combined` names a kind, not a state: indigo, a palette class until the
-     * categorical roles come.
+     * File-set badges in the files area. `combined` names a kind, not a state: the indigo of the fund category's roles
+     * (D-T28, «da rivedere» with the designer).
      */
     fileSet: {
-        combined: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200',
+        combined: 'bg-lf-cat-fund-soft text-lf-cat-fund-on-soft',
         stale: 'bg-lf-warning-soft text-lf-warning-on-soft',
         usedInCombined: 'bg-lf-neutral text-lf-secondary',
         set: 'bg-lf-success-soft text-lf-success-on-soft',
@@ -272,14 +272,14 @@ export const STATUS_TONES = {
 export const DATA_QUALITY_TONE = {error: 'danger', warning: 'warning', info: 'info'} as const;
 
 /**
- * Badges that tell kinds apart rather than states: one hue per kind. Categorical, so still palette classes, until the
- * categorical roles come.
+ * Badges that tell kinds apart rather than states: one hue per kind, on the nearest category's roles (D-T28, «da
+ * rivedere» with the designer): the edge is the category colour at 40 %.
  */
 export const KIND_TONES = {
-    /** Import wizard, identifier badges: ISIN sky, symbol violet, name slate. */
+    /** Import wizard, identifier badges: ISIN blue (the ETF's), symbol violet (the stock's), name slate (the hold's). */
     identifier: {
-        isin: 'border-sky-300 bg-sky-100 text-sky-900 dark:border-sky-700 dark:bg-sky-900/40 dark:text-sky-100',
-        symbol: 'border-violet-300 bg-violet-100 text-violet-900 dark:border-violet-700 dark:bg-violet-900/40 dark:text-violet-100',
-        name: 'border-slate-300 bg-slate-100 text-slate-800 dark:border-slate-600 dark:bg-slate-700/60 dark:text-slate-100',
+        isin: 'border-lf-cat-etf/40 bg-lf-cat-etf-soft text-lf-cat-etf-on-soft',
+        symbol: 'border-lf-cat-stock/40 bg-lf-cat-stock-soft text-lf-cat-stock-on-soft',
+        name: 'border-lf-cat-hold/40 bg-lf-cat-hold-soft text-lf-cat-hold-on-soft',
     },
 } as const;

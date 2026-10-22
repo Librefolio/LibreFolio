@@ -22,23 +22,26 @@
     import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {safeDecimal, safeNumber, safeString} from '$lib/types';
-    import {eventLabelKind, isUnknownOrNonZero, resolveBrokerName, scopeBoundaryOf} from './lotChartShared';
+    import {isUnknownOrNonZero, resolveBrokerName} from './lotChartShared';
     import {withAlpha} from '$lib/theme/colorAlpha';
     import {
         applySharedZoomWindow as sharedApplyZoomWindow,
         branchDepthForLaneKey,
         estimateTextWidthPx,
-        eventMarkerKind,
         eventMarkerLabelKey,
         eventMarkerSymbol,
         firstPresentUnknown,
         formatQuantity,
+        ganttMarkerEvent,
+        ganttMarkerTooltipBlocks,
+        groupMarkerEvents,
         inferredTransitionKind,
         isTransferFragment,
         laneKeyForFragmentId,
         laneKeyForSegment,
         laneSortKey,
         lotQuantityLine,
+        markerTooltipHtml,
         parseDateToUtcMs,
         parseUnknownNumber,
         safeUnknownString,
@@ -48,6 +51,7 @@
         signedColorField,
         thicknessForQuantity,
         type EventMarkerKind,
+        type GanttMarkerEvent,
     } from './lotGanttChartHelpers';
     import {maskableQuantity, shouldMaskAmount} from '$lib/utils/privacy/maskable';
     import {isPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
@@ -152,7 +156,35 @@
     interface EventMarkerDatum {
         name: string;
         value: [number, number];
-        meta: {kind: EventMarkerKind; lotId: number; laneIndex: number; dateMs: number; date: string; quantity: number | null; label: string};
+        /** `events`: every event of the marker's point (same lane, same day), which its tooltip lists (Q-G29-1). */
+        meta: {kind: EventMarkerKind; lotId: number; laneIndex: number; dateMs: number; date: string; quantity: number | null; label: string; events: GanttMarkerEvent[]};
+    }
+
+    /** One marker entry before the points are grouped: the glyph's kind and place, and the event behind it. */
+    interface EventMarkerEntry {
+        kind: EventMarkerKind;
+        laneIndex: number;
+        dateMs: number;
+        event: GanttMarkerEvent;
+        segment: RenderedSegment;
+        date: string;
+        quantity: number | null;
+        labelKind: string | null;
+    }
+
+    /** The invisible hit target over one marker point (Q-G29-1), like `OverlayRect` over a segment: the segment's own
+     * target covers the markers on its edges, so the canvas never sees their hover. `dataIndex` is the point's first
+     * datum in `eventMarkerData`; its tooltip lists every event of the point. */
+    interface MarkerOverlayRect {
+        key: string;
+        lotId: number;
+        dataIndex: number;
+        date: string;
+        kinds: string;
+        label: string;
+        left: number;
+        top: number;
+        size: number;
     }
 
     /** Invisible, focusable per-segment hit target absolutely positioned over the ECharts custom
@@ -172,6 +204,8 @@
 
     const DAY_MS = 24 * 60 * 60 * 1000;
     const LANE_ROW_HEIGHT = 30;
+    /** Side of a marker's hit target (px): the glyph is 15–18 px. */
+    const MARKER_HIT_SIZE = 18;
     const STICKY_AXIS_HEIGHT = 52;
     const CHART_MIN_WIDTH = 720;
     const PULSE_DURATION_MS = 1800;
@@ -233,6 +267,8 @@
     let darkModeObserver: MutationObserver | null = null;
     let tooltipCleanup: (() => void) | null = null;
     let activeTooltipDataIndex: number | null = null;
+    /** The series the active tooltip belongs to: a segment's or a marker point's. */
+    let activeTooltipSeries: '__segments' | '__event-markers' = '__segments';
     let lastPointerViewPos: [number, number] | null = null;
     let dataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
     let dataZoomSyncHandle: DataZoomSyncHandle | null = null;
@@ -247,6 +283,7 @@
         return chartNeutrals(isDark, chartContainer);
     });
     let overlayRects = $state<OverlayRect[]>([]);
+    let markerOverlayRects = $state<MarkerOverlayRect[]>([]);
     let axisScrollLeft = $state(0);
     let axisContentWidthPx = $state(CHART_MIN_WIDTH);
     let pulseState = $state<{lotId: number; nonce: number} | null>(null);
@@ -597,23 +634,43 @@
         return translateOr($t, eventMarkerLabelKey(kind, labelKind), fallback);
     }
 
-    function pushEventMarker(target: EventMarkerDatum[], seen: Set<string>, kind: EventMarkerKind, segment: RenderedSegment, dateMs: number, date: string, quantity: number | null = segment.quantity, labelKind: string | null = null) {
-        const key = `${kind}:${segment.lotId}:${segment.laneIndex}:${dateMs}`;
-        if (seen.has(key)) return;
-        seen.add(key);
-        target.push({
-            name: key,
-            value: [dateMs, segment.laneIndex],
-            meta: {
-                kind,
-                lotId: segment.lotId,
-                laneIndex: segment.laneIndex,
-                dateMs,
-                date,
-                quantity,
-                label: eventMarkerLabel(kind, labelKind),
-            },
-        });
+    function pushEventMarker(target: EventMarkerEntry[], kind: EventMarkerKind, segment: RenderedSegment, dateMs: number, date: string, quantity: number | null, event: GanttMarkerEvent) {
+        target.push({kind, laneIndex: segment.laneIndex, dateMs, event, segment, date, quantity, labelKind: event.labelKind});
+    }
+
+    /** An event the response does not tie to a broker reads the broker its segment sits at. */
+    function withSegmentBroker(event: GanttMarkerEvent, segment: RenderedSegment): GanttMarkerEvent {
+        if (event.brokerId != null || event.sourceBrokerId != null || event.destinationBrokerId != null) return event;
+        return {...event, brokerId: segment.brokerId};
+    }
+
+    /** The event behind a marker inferred from the segments (no lot events in the response): the segment's broker, or its
+     * two ends while in transit. */
+    function inferredMarkerEvent(kind: EventMarkerKind, segment: RenderedSegment, date: string, quantity: number | null, labelKind: string | null = null): GanttMarkerEvent {
+        return {kind, labelKind, date, quantity, brokerId: segment.brokerId, sourceBrokerId: segment.sourceBrokerId, destinationBrokerId: segment.destinationBrokerId};
+    }
+
+    /** The markers to draw (one per kind, lane and day, the glyphs as before), each with every event of its point. */
+    function toMarkerData(entries: EventMarkerEntry[]): EventMarkerDatum[] {
+        return groupMarkerEvents(entries)
+            .map(({first, events}) => {
+                const key = `${first.kind}:${first.segment.lotId}:${first.laneIndex}:${first.dateMs}`;
+                return {
+                    name: key,
+                    value: [first.dateMs, first.laneIndex] as [number, number],
+                    meta: {
+                        kind: first.kind,
+                        lotId: first.segment.lotId,
+                        laneIndex: first.laneIndex,
+                        dateMs: first.dateMs,
+                        date: first.date,
+                        quantity: first.quantity,
+                        label: eventMarkerLabel(first.kind, first.labelKind),
+                        events,
+                    },
+                };
+            })
+            .sort((a, b) => a.value[0] - b.value[0] || a.value[1] - b.value[1] || a.name.localeCompare(b.name));
     }
 
     function buildExplicitEventMarkers(): EventMarkerDatum[] {
@@ -623,8 +680,7 @@
             if (!firstByLot.has(lane.lotId)) firstByLot.set(lane.lotId, lane);
         }
 
-        const out: EventMarkerDatum[] = [];
-        const seen = new Set<string>();
+        const out: EventMarkerEntry[] = [];
         for (const event of events) {
             const date = safeString(event.date) ?? '';
             const dateMs = date ? parseDateToUtcMs(date) : null;
@@ -633,16 +689,16 @@
             const lane = (fragmentId != null ? byLaneKey.get(laneKeyForFragmentId(event.lot_id, fragmentId)) : null) ?? firstByLot.get(event.lot_id);
             const segment = lane?.segments.find((entry) => entry.startMs <= dateMs && entry.endMs >= dateMs) ?? lane?.segments[0];
             if (!segment) continue;
-            // A transfer leg read at the scope's edge is a transfer marker, labelled by its direction (J-48).
-            const boundary = scopeBoundaryOf(event);
-            pushEventMarker(out, seen, eventMarkerKind(event.kind, boundary), segment, dateMs, date, parseUnknownNumber(event.quantity), boundary ? eventLabelKind(event) : null);
+            // A transfer leg read at the scope's edge is a transfer marker, labelled by its direction (J-48); an internal
+            // leg by its own side, the arrival included (Q-G29-1).
+            const markerEvent = withSegmentBroker(ganttMarkerEvent(event), segment);
+            pushEventMarker(out, markerEvent.kind, segment, dateMs, date, markerEvent.quantity, markerEvent);
         }
-        return out.sort((a, b) => a.value[0] - b.value[0] || a.value[1] - b.value[1] || a.name.localeCompare(b.name));
+        return toMarkerData(out);
     }
 
     function buildInferredEventMarkers(): EventMarkerDatum[] {
-        const out: EventMarkerDatum[] = [];
-        const seen = new Set<string>();
+        const out: EventMarkerEntry[] = [];
         const transferStartsByLot = new Map<number, Set<number>>();
         for (const lane of renderedLanes) {
             if (lane.branchDepth === 0) continue;
@@ -658,27 +714,30 @@
             const sorted = [...lane.segments].sort((a, b) => a.startMs - b.startMs || a.sortEndMs - b.sortEndMs);
             const first = sorted[0];
             if (!first) continue;
-            pushEventMarker(out, seen, lane.branchDepth > 0 || isTransferFragment(first) ? 'TRANSFER' : 'BUY', first, first.startMs, first.startDate, first.quantity);
+            const firstKind: EventMarkerKind = lane.branchDepth > 0 || isTransferFragment(first) ? 'TRANSFER' : 'BUY';
+            pushEventMarker(out, firstKind, first, first.startMs, first.startDate, first.quantity, inferredMarkerEvent(firstKind, first, first.startDate, first.quantity));
 
             for (let index = 1; index < sorted.length; index += 1) {
                 const prev = sorted[index - 1];
                 const next = sorted[index];
                 if (prev.endMs !== next.startMs) continue;
-                pushEventMarker(out, seen, inferredTransitionKind(prev, next, transferStarts), next, next.startMs, next.startDate, Math.abs(prev.quantity - next.quantity) || next.quantity);
+                const kind = inferredTransitionKind(prev, next, transferStarts);
+                const quantity = Math.abs(prev.quantity - next.quantity) || next.quantity;
+                pushEventMarker(out, kind, next, next.startMs, next.startDate, quantity, inferredMarkerEvent(kind, next, next.startDate, quantity));
             }
 
             for (const segment of sorted) {
                 if (segment.custodyType === 'IN_TRANSIT' && segment.endDate != null) {
-                    pushEventMarker(out, seen, 'TRANSFER', segment, segment.endMs, segment.endDate, segment.quantity);
+                    pushEventMarker(out, 'TRANSFER', segment, segment.endMs, segment.endDate, segment.quantity, inferredMarkerEvent('TRANSFER', segment, segment.endDate, segment.quantity, 'TRANSFER_ARRIVE'));
                 }
             }
 
             const last = sorted.at(-1);
             if (last?.endDate != null && !transferStarts?.has(last.endMs)) {
-                pushEventMarker(out, seen, 'SELL', last, last.endMs, last.endDate, last.quantity);
+                pushEventMarker(out, 'SELL', last, last.endMs, last.endDate, last.quantity, inferredMarkerEvent('SELL', last, last.endDate, last.quantity));
             }
         }
-        return out.sort((a, b) => a.value[0] - b.value[0] || a.value[1] - b.value[1] || a.name.localeCompare(b.name));
+        return toMarkerData(out);
     }
 
     const eventMarkerData = $derived.by((): EventMarkerDatum[] => (events.length > 0 ? buildExplicitEventMarkers() : buildInferredEventMarkers()));
@@ -764,6 +823,24 @@
         html += `<div style="margin-top:4px;color:${theme.mutedColor}">${escapeHtml(footer)}</div>`;
 
         return `<div style="min-width:250px;font-size:11px;color:${theme.textColor}">${html}</div>`;
+    }
+
+    /** The English words of a marker tooltip, when a catalogue misses one. */
+    const MARKER_TEXT_FALLBACKS: Record<string, string> = {'common.date': 'Date', 'common.quantity': 'Quantity', 'common.broker': 'Broker', 'common.from': 'From', 'common.to': 'To'};
+
+    /** The blocks of a marker point's tooltip (Q-G29-1): one per event, its quantity masked in privacy mode. */
+    function markerTooltipBlocks(meta: EventMarkerDatum['meta']) {
+        return ganttMarkerTooltipBlocks(meta.events, {
+            t: (key) => translateOr($t, key, MARKER_TEXT_FALLBACKS[key] ?? key.split('.').at(-1) ?? key),
+            brokerName,
+            formatDate: formatDateLong,
+            formatQuantity: (value) => formatQuantity(value),
+            maskQuantity: maskableQuantity,
+        });
+    }
+
+    function buildMarkerTooltip(meta: EventMarkerDatum['meta'], themeDark: boolean): string {
+        return markerTooltipHtml(markerTooltipBlocks(meta), buildTooltipTheme(themeDark));
     }
 
     function buildOption(themeDark: boolean): echarts.EChartsOption {
@@ -977,7 +1054,8 @@
             type: 'custom',
             clip: false,
             z: 6,
-            tooltip: {show: false},
+            // Q-G29-1: every marker has a tooltip; the chart's formatter tells the two series apart.
+            tooltip: {show: true},
             data: eventMarkerData,
             renderItem: (params: any, api: any) => {
                 const meta = eventMarkerData[params.dataIndex]?.meta as EventMarkerDatum['meta'] | undefined;
@@ -1032,6 +1110,10 @@
                 borderColor: theme.border,
                 textStyle: {color: theme.textColor},
                 formatter: (params: any) => {
+                    if (params.seriesName === '__event-markers') {
+                        const marker = eventMarkerData[params.dataIndex]?.meta as EventMarkerDatum['meta'] | undefined;
+                        return marker ? buildMarkerTooltip(marker, themeDark) : '';
+                    }
                     const meta = segmentSeriesData[params.dataIndex]?.meta as RenderedSegment | undefined;
                     return meta ? buildTooltip(meta, themeDark) : '';
                 },
@@ -1188,8 +1270,53 @@
         return rects;
     }
 
+    /** The hit targets over the marker points (see MarkerOverlayRect): one per lane and day, after the segments' in
+     * the DOM so they sit above them. */
+    function computeMarkerOverlayRects(): MarkerOverlayRect[] {
+        const chart = chartInstance;
+        if (!chart) return [];
+        const minMs = axisRangeMs?.minMs ?? null;
+        const maxMs = axisRangeMs?.maxMs ?? null;
+        if (minMs == null || maxMs == null) return [];
+
+        const rects: MarkerOverlayRect[] = [];
+        const points = new Map<string, MarkerOverlayRect>();
+        eventMarkerData.forEach((datum, dataIndex) => {
+            const meta = datum.meta;
+            if (meta.dateMs < minMs || meta.dateMs > maxMs) return;
+            const key = `${meta.laneIndex}:${meta.dateMs}`;
+            const known = points.get(key);
+            if (known) {
+                known.kinds = `${known.kinds},${meta.kind}`;
+                return;
+            }
+            try {
+                const center = chart.convertToPixel({xAxisIndex: 0, yAxisIndex: 0}, [meta.dateMs, meta.laneIndex]);
+                if (!center) return;
+                const titles = markerTooltipBlocks(meta).map((block) => block.title);
+                const rect: MarkerOverlayRect = {
+                    key,
+                    lotId: meta.lotId,
+                    dataIndex,
+                    date: meta.date,
+                    kinds: meta.kind,
+                    label: `${titles.join(', ')} — ${formatDateLong(meta.date)}`,
+                    left: center[0] - MARKER_HIT_SIZE / 2,
+                    top: center[1] - MARKER_HIT_SIZE / 2,
+                    size: MARKER_HIT_SIZE,
+                };
+                points.set(key, rect);
+                rects.push(rect);
+            } catch {
+                // Chart not laid out yet: the next 'rendered' event recomputes it.
+            }
+        });
+        return rects;
+    }
+
     function refreshOverlayRects() {
         overlayRects = computeOverlayRects();
+        markerOverlayRects = computeMarkerOverlayRects();
     }
 
     function syncAxisViewport() {
@@ -1206,9 +1333,13 @@
     /** Index of the '__segments' custom series in the live ECharts option — looked up by name
      * (not hardcoded) so it stays correct if buildOption()'s series order ever changes. */
     function segmentsSeriesIndex(): number | null {
+        return seriesIndexByName('__segments');
+    }
+
+    function seriesIndexByName(name: '__segments' | '__event-markers'): number | null {
         const series = (chartInstance?.getOption() as {series?: Array<{name?: string}>} | undefined)?.series;
         if (!series) return null;
-        const index = series.findIndex((entry) => entry?.name === '__segments');
+        const index = series.findIndex((entry) => entry?.name === name);
         return index >= 0 ? index : null;
     }
 
@@ -1240,6 +1371,23 @@
             lastPointerViewPos = null;
         }
         activeTooltipDataIndex = rect.dataIndex;
+        activeTooltipSeries = '__segments';
+        chartInstance?.dispatchAction({type: 'showTip', seriesIndex, dataIndex: rect.dataIndex});
+    }
+
+    /** A marker point's hover, focus or tap -> the native tooltip of its first datum, which lists every event of the
+     * point (Q-G29-1); placed above the pointer, as a segment's. */
+    function showMarkerTooltip(rect: MarkerOverlayRect, event?: MouseEvent) {
+        const seriesIndex = seriesIndexByName('__event-markers');
+        if (seriesIndex == null) return;
+        if (event && chartContainer) {
+            const bounds = chartContainer.getBoundingClientRect();
+            lastPointerViewPos = [event.clientX - bounds.left, event.clientY - bounds.top];
+        } else {
+            lastPointerViewPos = null;
+        }
+        activeTooltipDataIndex = rect.dataIndex;
+        activeTooltipSeries = '__event-markers';
         chartInstance?.dispatchAction({type: 'showTip', seriesIndex, dataIndex: rect.dataIndex});
     }
 
@@ -1255,7 +1403,7 @@
      * (the touch auto-hide timer still dismisses it a few seconds later). */
     function reassertActiveTooltip() {
         if (activeTooltipDataIndex == null) return;
-        const seriesIndex = segmentsSeriesIndex();
+        const seriesIndex = seriesIndexByName(activeTooltipSeries);
         if (seriesIndex == null) return;
         chartInstance?.dispatchAction({type: 'showTip', seriesIndex, dataIndex: activeTooltipDataIndex});
     }
@@ -1266,6 +1414,7 @@
             axisInstance?.clear();
             axisOptionSet = false;
             overlayRects = [];
+            markerOverlayRects = [];
             return;
         }
 
@@ -1322,6 +1471,7 @@
             axisInstance?.clear();
             axisOptionSet = false;
             overlayRects = [];
+            markerOverlayRects = [];
             return;
         }
 
@@ -1509,6 +1659,29 @@
                             onmousemove={(event) => showSegmentTooltip(rect, event)}
                             onmouseleave={hideSegmentTooltip}
                             onfocus={() => showSegmentTooltip(rect)}
+                            onblur={hideSegmentTooltip}
+                        ></button>
+                    {/each}
+                    <!-- Q-G29-1: one invisible hit target per marker point, above the segments' (which cover
+                     the markers on their edges): hover, focus or tap shows what happened there. -->
+                    {#each markerOverlayRects as rect (rect.key)}
+                        <button
+                            type="button"
+                            class="absolute cursor-pointer bg-transparent opacity-0"
+                            style={`left:${rect.left}px; top:${rect.top}px; width:${rect.size}px; height:${rect.size}px;`}
+                            data-testid={`lot-gantt-marker-${rect.lotId}`}
+                            data-date={rect.date}
+                            data-kinds={rect.kinds}
+                            aria-label={rect.label}
+                            onclick={(event) => {
+                                if (event.detail !== 1) return;
+                                toggleLotSelection(rect.lotId);
+                            }}
+                            ondblclick={() => handleLaneDoubleClick(rect.lotId)}
+                            onmouseenter={(event) => showMarkerTooltip(rect, event)}
+                            onmousemove={(event) => showMarkerTooltip(rect, event)}
+                            onmouseleave={hideSegmentTooltip}
+                            onfocus={() => showMarkerTooltip(rect)}
                             onblur={hideSegmentTooltip}
                         ></button>
                     {/each}

@@ -13,8 +13,9 @@
  *
  * `labQualityAction` is this module's other rule (decision B, the developer, 05/10/2026):
  * what an action of the lab's data-quality banner does — a sync opens the lab's own
- * sync, the rest navigate. The last block pins it, one case per row of the rule;
- * written red first, against a module that does not export it.
+ * sync, adding a pair opens the add-pair dialog (Q-TC23-1), the rest navigate. The
+ * last two blocks pin it and the dialog's two sides (`addPairSides`), one case per
+ * row of the rule; written red first, against a module that does not export them.
  */
 import {describe, expect, it} from 'vitest';
 
@@ -121,15 +122,17 @@ describe('buildSyncTargets — the exchange-rate pairs', () => {
  * and its host decides. For an asset set the backend sends five actions (D373,
  * `service.py::_data_quality_issues`): `sync_asset_prices` and `sync_fx_pair`, which the lab answers
  * with its own sync — the page's one, scoped to the selection, prices and the rates that convert
- * them — and `navigate_asset`, `navigate_fx` and `add_fx_pair`, which leave for the asset, the pair
- * or the FX page. A navigation that needs a target and has none goes nowhere, and so does an action
+ * them — and `navigate_asset` and `navigate_fx`, which leave for the asset or the pair, and
+ * `add_fx_pair`, which stays on the page: the panel opens the add-pair dialog itself, on the pair
+ * that was pressed, or empty when the issue names none (Q-TC23-1; the FX page used to be the
+ * answer). A navigation that needs a target and has none goes nowhere, and so does an action
  * the rule does not know: `null`, never a guess.
  *
  * Pure, so it is pinned here, one case per row, on the exact object each row returns.
  */
 
-/** What the panel does with an action, as decision B names it: declared here, so the cases compile before the export exists. */
-type LabQualityAction = {kind: 'sync'} | {kind: 'navigate'; href: string};
+/** What the panel does with an action, as decision B and Q-TC23-1 name it: declared here, so the cases compile before the export exists. */
+type LabQualityAction = {kind: 'sync'} | {kind: 'navigate'; href: string} | {kind: 'add_pair'; pair: string};
 
 /**
  * `labQualityAction`, called through the module. Until the export exists every case below fails
@@ -162,9 +165,17 @@ describe('labQualityAction — what an action of the lab banner does', () => {
         expect(labQualityAction('navigate_fx', null), 'no target, no pair to open').toBeNull();
     });
 
-    it('sends add_fx_pair to the FX page, whatever the target: a pair with no route has no page of its own yet', () => {
-        expect(labQualityAction('add_fx_pair', null)).toEqual({kind: 'navigate', href: '/fx'});
-        expect(labQualityAction('add_fx_pair', 'EUR-USD'), 'a target does not move add_fx_pair off the FX page').toEqual({kind: 'navigate', href: '/fx'});
+    it('opens the add-pair dialog on the pressed pair for add_fx_pair, as written', () => {
+        expect(labQualityAction('add_fx_pair', 'EUR-USD'), 'a pair pressed on an add_fx_pair chip is the pair the dialog opens on').toEqual({kind: 'add_pair', pair: 'EUR-USD'});
+        // The pair is handed over as it came, not normalised: the dialog's sides are `addPairSides`' business.
+        expect(labQualityAction('add_fx_pair', 'chf-eur')).toEqual({kind: 'add_pair', pair: 'chf-eur'});
+        // Control: the same pair under navigate_fx still leaves for its page, so the row above is what tells the two apart.
+        expect(labQualityAction('navigate_fx', 'EUR-USD')).toEqual({kind: 'navigate', href: '/fx/EUR-USD'});
+    });
+
+    it('opens the add-pair dialog empty for add_fx_pair without a pair, and does not leave for the FX page', () => {
+        // `MISSING_FX_MARKET` names no cta_target: the dialog is the answer, and it opens with nothing chosen.
+        expect(labQualityAction('add_fx_pair', null), 'no pair is an empty dialog, not a navigation and not nothing').toEqual({kind: 'add_pair', pair: ''});
     });
 
     it('encodes the target as one path segment', () => {
@@ -179,5 +190,61 @@ describe('labQualityAction — what an action of the lab banner does', () => {
         expect(labQualityAction('', '12'), 'an empty action is no action, with a target or without').toBeNull();
         // Mentioning a sync is not starting with one: `RiskPanelHeader`'s looser `includes('sync')` would open it.
         expect(labQualityAction('resync_invented', null), 'only an action starting with sync_ is a sync').toBeNull();
+    });
+});
+
+/**
+ * ─── addPairSides: the sides the add-pair dialog opens on ──────────────────────────────────────
+ *
+ * The dialog takes a base and a quote, each editable. A pair slug names both only when it is exactly
+ * two non-empty parts split on `-`; anything else names no pair the dialog could pre-fill, so it opens
+ * empty rather than half-filled. The sides are kept as written: the dialog's own selects know how to
+ * read a code, and a case change here would make two spellings of one pair look like two pairs.
+ */
+
+/** The two sides the dialog opens on: declared here, so the cases compile before the export exists. */
+interface AddPairSides {
+    base: string;
+    quote: string;
+}
+
+/** `addPairSides`, called through the module: until the export exists every case fails on the assertion that names it, not on a `TypeError`. */
+function addPairSides(pair: string): AddPairSides {
+    const rule = (syncTargets as unknown as Record<string, unknown>).addPairSides;
+    expect(typeof rule, 'syncTargets exports no addPairSides(): the add-pair dialog has no rule turning a pair slug into its two sides').toBe('function');
+    return (rule as (pair: string) => AddPairSides)(pair);
+}
+
+const NO_SIDES: AddPairSides = {base: '', quote: ''};
+
+describe('addPairSides — the sides the add-pair dialog opens on', () => {
+    it('gives both sides of a slug of exactly two non-empty parts', () => {
+        expect(addPairSides('EUR-USD')).toEqual({base: 'EUR', quote: 'USD'});
+        expect(addPairSides('CHF-EUR')).toEqual({base: 'CHF', quote: 'EUR'});
+    });
+
+    it('keeps the sides as written, with no case change', () => {
+        expect(addPairSides('eur-usd')).toEqual({base: 'eur', quote: 'usd'});
+        expect(addPairSides('Eur-uSD')).toEqual({base: 'Eur', quote: 'uSD'});
+    });
+
+    it('opens on nothing for the empty slug', () => {
+        expect(addPairSides('')).toEqual(NO_SIDES);
+    });
+
+    it('opens on nothing for a slug of one part: a lone side is not a pair', () => {
+        expect(addPairSides('EUR')).toEqual(NO_SIDES);
+    });
+
+    it('opens on nothing for a slug of more than two parts, never on its first two', () => {
+        expect(addPairSides('A-B-C')).toEqual(NO_SIDES);
+        // An empty part between two sides still makes three parts.
+        expect(addPairSides('EUR--USD')).toEqual(NO_SIDES);
+    });
+
+    it('opens on nothing when either side is empty', () => {
+        expect(addPairSides('-USD')).toEqual(NO_SIDES);
+        expect(addPairSides('EUR-')).toEqual(NO_SIDES);
+        expect(addPairSides('-')).toEqual(NO_SIDES);
     });
 });

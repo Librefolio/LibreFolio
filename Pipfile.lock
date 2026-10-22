@@ -1262,7 +1262,7 @@
         },
         "justetf-scraping": {
             "git": "https://github.com/Librefolio/justetf-scraping.git",
-            "ref": "f24a5c490c5b412272e2b47513ff3870c075b26e"
+            "ref": "73afd12faf7acbf141f9624b41f1ba5cc8c0f125"
         },
         "kiwisolver": {
             "hashes": [

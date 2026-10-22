@@ -7276,3 +7276,327 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > - ✅ **Checkpoint** (18:10), 🧊 FROZEN. Commit proposti:
 >   - `fix(backup): secure start never follows another backup`: `backupJob.svelte.ts`, i due test, le due doc;
 >   - `docs(journal): B-8 mode defect, B-50/B-51 analysis`: questo piano e il backlog.
+
+### B-8, rifinitura — il job che la scheda segue già da sé non si adotta (2026-10-19 18:10 → 2026-10-20 09:05) — ✅ 🧊 FROZEN (checkpoint delle 09:05)
+
+> **Coordinatore** (18:10): B-8 committato, `adedb0c9c` (`fix(backup): secure start never follows another backup`) e
+> `bc913e487` (il giornale); la memoria dell'adozione in `sessionStorage` va bene. «Il caso limite: sì alla
+> rifinitura, decisione mia, perché è nello spirito della tabella («si segue solo il proprio»): non adottare un job
+> che la scheda sta già seguendo da sé. Commit a parte con un rosso, piccolo, prima di B-50.» B-15 + B-8 entra in dev
+> fino a `bc913e487`, con un gate; la rifinitura dopo.
+>
+> - **Avviso di A** (coordinatore, 18:09): per N69, A cambia la barriera di FBKP-001 in `e2e/settings/backup.spec.ts`
+>   (riga 264). Un utente normale non vede più «Amministrazione»: la barriera diventa «About visible, administration
+>   count 0». Ha l'ok del coordinatore. B-8 non tocca quella spec.
+> - **La rifinitura**: una richiesta in chiaro rifiutata da un 409 che nomina il job `ui` che la scheda segue già da
+>   sé (`followedJobId`, non adottato) lo segue come suo: niente adozione, quindi alla fine è offerto qualunque sia la
+>   modalità. La strada sicura non cambia: una richiesta sicura non segue mai, il suo job compreso; si torna con
+>   «Check again», come fissa il gruppo 1.
+> - **Cura pronta, non applicata**: `apply_b8_own.py`, 1 operazione: si adotta solo se il job nominato non è quello
+>   seguito, o se quello seguito è già un'adozione. `--check` OK.
+> - **Rossi** a TA-B8-OWN (solo `backupJob.test.ts`, sola scrittura):
+>   - due rossi: il proprio backup sicuro, avviato qui o ricordato da una pagina precedente, che finisce cifrato
+>     viene offerto;
+>   - due guardie: un job che non è quello seguito, o quello seguito come adozione, resta adottato.
+> - ✅ **Doc** (18:12):
+>   - `security.md`: il backup che la scheda segue da sé si segue come suo, mai adottato (3 righe al posto di 1);
+>   - `backup_restore.en.md`, la riga 🚦: «…is not offered, unless the card had started it itself».
+> - **⏸️ PAUSA GENERALE del developer** (coordinatore, 18:12): la macchina si spegne e /tmp verrà ripulito. Fermare
+>   corse e server, mettere per iscritto lo stato, niente git. **Stato al fermo (18:16):**
+>   - porta 6187 libera; nessuna corsa né server della corsia attivi;
+>   - HEAD `bc913e487`; **sporchi 3 file**: questo piano, `security.md`, `backup_restore.en.md` (le doc della
+>     rifinitura). Codice di prodotto intatto: la rifinitura non è applicata;
+>   - **TA-B8-OWN fermato a metà**: gli ho chiesto di non scrivere più. Alle 18:15 `backupJob.test.ts` era ancora
+>     pulito. Domani controllare `git status`: se ha scritto un gruppo parziale, completarlo o rifarlo, mai lanciarlo
+>     a metà.
+> - **Per ripartire, nell'ordine** (tutto nella cartella di sessione, niente in /tmp):
+>   1. Rossi della rifinitura: brief di TA-B8-OWN qui sopra, oppure un test-author nuovo con lo stesso brief: due
+>      rossi più due guardie, solo `backupJob.test.ts`, dopo i 5 gruppi «B-8, review 19/10».
+>   2. Il rosso: `files/scripts/b_vitest.sh red-b8-own src/lib/features/backup/backupJob.test.ts`. Atteso: le due
+>      righe nuove falliscono perché il job viene adottato (la fine cifrata non è offerta); il resto verde.
+>   3. La cura: `python3 files/b15-b8-wip/apply_b8_own.py <worktree>` (1 operazione; `--check` era OK su
+>      `bc913e487`).
+>   4. I verdi: Vitest dell'intera feature `backup`, prettier sui 2 file, `front check` (prima `api sync` se il client
+>      è più vecchio della base), le doc (`files/scripts/b_docs.sh`).
+>   5. Il checkpoint: commit a parte (`fix(backup): a tab's own backup is never adopted`), più il giornale.
+>   6. **Poi B-50**: il contratto è in `files/b50-contract.md`, le sonde in `files/b50-analysis/`. Decisione (17:37):
+>      uno stato illeggibile è «non trovato» (404 `backup_job_not_found`; nel ripristino `restore_stage_not_found`),
+>      JSON non oggetto compreso, nel backup e nel ripristino. Rossi prima.
+> - **La corsia**: `/tmp/librefolio-r13-b` sparisce con /tmp. Prima di un test con server o DB, ricrearla con
+>   `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6187 --data-dir
+>   /tmp/librefolio-r13-b db populate --force --clean`. Per i Vitest e le doc non serve.
+> - 🧊 **FROZEN** (18:16).
+> - **▶️ Ripresa del 20/10** (coordinatore, 08:47): il riavvio ha svuotato /tmp; le corse leggere sulla corsia 6187
+>   solo con il carico a 1 minuto sotto 50. Ordine: i rossi della rifinitura, la cura e il checkpoint, poi B-50. Il
+>   gate di B-15 + B-8 su `dev_release2` lo lancia il coordinatore nella sua corsia.
+>   - ✅ Verificato (08:47): HEAD `bc913e487`, gli stessi 3 file sporchi, porta libera, carico 27. I file di sessione
+>     ci sono tutti; `apply_b8_own.py --check` OK. La corsia in /tmp non c'è più: per i Vitest e le doc non serve.
+>   - Il test-author di ieri non esiste più: ne lancio uno nuovo con lo stesso brief.
+> - ✅ **Rossi** (TA-B8-OWN-2, 08:50-09:00, sola scrittura; solo `backupJob.test.ts`):
+>   - un gruppo nuovo dopo i cinque della revisione: 2 rossi (il proprio backup sicuro, avviato qui con il sondaggio
+>     arreso, oppure ricordato da una pagina precedente con la lettura di `resume()` senza risposta; poi una
+>     richiesta in chiaro rifiutata che lo nomina) e 2 guardie (un job che non è quello seguito, oppure quello seguito
+>     come adozione, resta adottato e la sua fine cifrata non si presenta);
+>   - nei rossi: nessuna scrittura né rimozione della chiave di adozione su tutto il percorso (risposta mia alla sua
+>     domanda 1, come la regola delle guardie di pulizia), la fine cifrata offerta, `onDone` una volta, la chiave del
+>     job tenuta. Non fissate, di proposito: la riscrittura della chiave del job con lo stesso id, e la guardia (b)
+>     che riscrive l'adozione che ha già;
+>   - aggiornata la frase superata nel commento del primo gruppo della revisione (rimanda al gruppo nuovo).
+> - ✅ **Rosso** (09:01, carico 19): **2 falliti**, 244 passati, tutti e due perché il job seguito da sé viene adottato
+>   al rifiuto. Le guardie sono verdi.
+> - ✅ **Cura** (09:01): `apply_b8_own.py`, 1 operazione in `backupJob.svelte.ts` (+3/−1).
+> - ✅ **Verdi** (09:01-09:04):
+>   - Vitest dell'intera feature `backup`: 9 file, **1076 passati**;
+>   - prettier pulito sui 2 file; `front check` 0 errori e 0 avvisi. Il client generato è delle 17:12 di ieri, dopo
+>     l'ultimo merge, e da allora backend e schemi non sono cambiati: niente `api sync`;
+>   - `mkdocs build` stretta, `check-links`, `utils gate-docs-links` 63.
+> - ✅ **Backlog**: nella riga di B-8, la rifinitura.
+> - ✅ **Checkpoint** (09:05), 🧊 FROZEN. Commit proposti:
+>   - `fix(backup): a tab's own backup is never adopted`: `backupJob.svelte.ts`, `backupJob.test.ts`, le due doc;
+>   - `docs(journal): B-8 own-job refinement`: questo piano e il backlog.
+> - **Poi B-50**: il contratto è pronto (`files/b50-contract.md`), con una domanda sul perimetro (sotto).
+
+### B-50 — uno stato illeggibile di un job o di un controllo è «non trovato», mai un 500 (2026-10-20, 09:06-09:57) — ✅ 🧊 FROZEN (checkpoint delle 09:57)
+
+> **Coordinatore** (09:06): rifinitura committata, `43face16e` (`fix(backup): a tab's own backup is never adopted`) e
+> `9a7d4a2ea` (il giornale), albero pulito, in dev con il prossimo treno. «Il perimetro di B-50: approvo la tua
+> proposta»: anche lo `state.json` che è una cartella e quello senza permessi di lettura sono «illeggibili», quindi
+> 404; gli altri `OSError`, transitori, restano un 500 che la scheda riprova. Via: prima i rossi, poi la cura, poi il
+> checkpoint; corse leggere solo con il carico a 1 minuto sotto 50.
+>
+> - **Da sapere** (coordinatore, 09:06):
+>   - E-20 di E riscrive la barriera di RNW-109 in `test_restore_non_iso_warning.py` (righe 847-849), il mio test di
+>     B-49: l'audit con il factory permissivo non alza più, e la stessa prova la fa un lettore sqlite3 semplice; le
+>     mie asserzioni restano identiche. Non aprire quel file finché E non ha finito (B-50 non lo tocca);
+>   - una domanda di E, per **dopo** B-50: il ripristino a mano (`#by-hand`) non passa dal controllo dell'archivio;
+>     serve un controllo di tutto il DB vivo? Rispondere con una proposta quando ci arrivo.
+> - ✅ **Base** (09:07): HEAD `9a7d4a2ea`, albero pulito, carico 18.
+> - ✅ **Contratto** (`files/b50-contract.md`, aggiornato 09:08):
+>   - backup: `from_json` alza `ValueError` per un documento che non è un oggetto; nuova
+>     `BackupJobUnreadableError`, sottoclasse di `BackupJobNotFoundError`, per uno stato illeggibile (`ValueError`,
+>     `TypeError`, `KeyError`, `IsADirectoryError`, `PermissionError`); gli altri `OSError` passano come oggi;
+>   - `get_job` registra un avviso, «A backup job's state cannot be read», con l'id e la classe dell'errore e mai il
+>     contenuto, poi rilancia: resta il 404 `backup_job_not_found`. I cicli di pulizia restano silenziosi, come oggi;
+>   - ripristino: `_read_state` dà `None` per un documento che non è un oggetto (gli altri casi illeggibili già lo
+>     sono, senza log).
+> - **Rossi** a due test-author in parallelo, su file diversi, sola scrittura: TA-B50-JOBS (`test_backup_jobs.py`,
+>   `test_backup_cli.py`) e TA-B50-RESTORE (`test_backup_leftovers.py`).
+> - **⚠️ Fuori pista — le date senza fuso orario** (09:10, sonda `files/b50-analysis/b50_probe_naive.py`): uno stato
+>   `done` con `finished_at` senza fuso orario fa alzare `TypeError` a `get_job`, a `remove_expired_jobs` (la
+>   sottrazione è fuori dal suo `try`) e a ogni partenza: è la stessa classe di B-50, e blocca ogni backup. Aggiunto
+>   al contratto (`from_json` rifiuta una data senza fuso orario come illeggibile) e ai rossi di TA-B50-JOBS. Un
+>   `created_at` senza fuso orario da solo non blocca nulla nella sonda.
+> - **Cura pronta, non applicata**: `files/b50-wip/apply_b50.py`, 6 operazioni in `jobs.py` e `restore_jobs.py`
+>   (`--check` OK su `9a7d4a2ea`).
+> - ✅ **Doc** (09:11): `security.md`, dopo «A read of a job…», un paragrafo: uno stato illeggibile non è un job, per
+>   la lettura e per la pulizia; il 404, l'avviso con l'id e la classe, mai il contenuto; gli altri errori del disco
+>   restano un 500 che la scheda riprova; un controllo del ripristino illeggibile è `restore_stage_not_found`.
+> - ✅ **Rossi del ripristino** (TA-B50-RESTORE, 09:08-09:30, solo `test_backup_leftovers.py`): la sezione (h), 6 test
+>   e 65 casi, 34 rossi e 31 guardie (le righe `mode-000` saltano da root). I rossi: `_checks`/`prune`, `read_check`,
+>   `remove_check` e `confirm_check` (`CheckNotFoundError`, niente log), la fine di un caricamento, l'avvio di un
+>   controllo, la pulizia all'avvio per i controlli e per i job (nessun errore con `part`). Le sue domande:
+>   - (1) uno stato di controllo illeggibile e vecchio non lo toglie nessuno (già vero oggi per un file vuoto o `{}`);
+>   - (2) nel ripristino ogni `OSError` è «nessuno stato», anche quelli transitori;
+>
+>   sono tutte e due fuori dal perimetro deciso, quindi le porto al coordinatore. (3) Il log solo in `get_job`:
+>   deciso.
+> - **⚠️ Fuori pista — un descrittore perso a ogni lettura** (domanda 4, misurata alle 09:33 con
+>   `files/b50-analysis/b50_probe_fd.py`): 50 letture di uno stato di controllo che è una cartella lasciano aperti 50
+>   descrittori in più (da 5 a 55), perché `os.fdopen` non chiude quello che rifiuta. Nel server ogni pulizia, fine di
+>   caricamento o avvio di un controllo ne perderebbe uno, fino a «too many open files». È dentro il perimetro di B-50
+>   (una cartella al posto dello stato): la cura lo chiude (patch aggiornata, `--check` OK), e TA-B50-RESTORE scrive
+>   il rosso. Lo stesso schema c'è in `outcome.py`, `staging.py` e `apply.py`, fuori dai 2 file: è un residuo, con una
+>   proposta (un aiuto unico che apre un file privato e chiude il descrittore se è rifiutato).
+> - ✅ **Il rosso del descrittore** (TA-B50-RESTORE, 09:36-09:41):
+>   `test_reading_a_check_state_that_is_a_folder_leaves_no_descriptor_open`, `[_checks]` e `[read_check]`, nella
+>   sezione (h): 20 letture di uno stato che è una cartella, poi nessun descrittore del processo aperto su quella
+>   cartella. Li cerca per dispositivo e inode (`descriptors_on` di `test_backup_archive.py`, che fissa lo stesso
+>   difetto per `_add_file`), dietro una barriera (un descrittore aperto dal test si vede, e sparisce chiuso) e li
+>   chiude nel `finally`, così un rosso non ne lascia ai test dopo.
+> - ✅ **Rossi dei job e della CLI** (TA-B50-JOBS, 09:08-09:43, `test_backup_jobs.py` e `test_backup_cli.py`): 13 forme
+>   (le quattro `json-*`, file vuoto, non JSON, `{}`, `created_at` numero o non data, non UTF-8, cartella, modo 000
+>   che salta da root, e `finished-at-without-time-zone`). Rossi: «non trovato» e lasciato com'è, l'avviso con id e
+>   classe (mai `exc_info`), le tre rotte (404 `backup_job_not_found`, scheda e pannello), l'avvio oltre uno stato
+>   illeggibile, `remove_expired_jobs` ed `end_interrupted_jobs` che vanno avanti, un lucchetto che nomina un job
+>   illeggibile (409 senza job). Guardie: stato assente (nessun avviso), un `EIO` che passa com'è (nessun «non
+>   trovato», nessun avviso). CLI: `create` oltre uno stato cartella o non oggetto. Le sue 5 domande avevano risposta
+>   nel contratto; aggiunta la forma del fuso anche fra le righe dell'avviso (`ValueError`).
+> - ✅ **Rossi della CLI lanciati** (09:45, `utils backup-cli`, carico 22): **2 rossi, 102 verdi**, per i motivi
+>   attesi: `state-is-a-folder` esce con 1 («Is a directory»), `state-not-an-object` con 1 e la traccia di
+>   `AttributeError`. Log: `files/logs/b50_red_utils_backup-cli.log`.
+> - ✅ **Rossi dei job e del ripristino lanciati** (09:47, carico 22): `services backup-jobs` **56 rossi**, 93 verdi;
+>   `services backup-leftovers` **36 rossi**, 75 verdi. I conti tornano con quelli dei test-author (13 + 13 + 6 + 8 +
+>   7 + 6 + 3; 34 più i 2 del descrittore), nessun errore di raccolta né di preparazione, e ogni rosso ha il motivo
+>   atteso: l'`AttributeError` delle quattro forme non oggetto, `KeyError`, `JSONDecodeError`, `UnicodeDecodeError`,
+>   `IsADirectoryError`, `PermissionError`, la sottrazione fra una data con fuso e una senza, i 20 descrittori aperti,
+>   la pulizia d'avvio che registra un errore. Log: `files/logs/b50_red_services_backup-{jobs,leftovers}.log`.
+> - ✅ **Cura** (09:48): `apply_b50.py`, 6 operazioni in 2 file (`jobs.py` +40/−10, `restore_jobs.py` +11/−1).
+> - ✅ **Verdi** (09:48-09:53, carico 22-38):
+>   - i tre rossi: `services backup-jobs` **149**, `services backup-leftovers` **111**, `utils backup-cli` **104**;
+>   - regressione, tutte pure: `services backup-secure` 77, `backup-staging` 202, `backup-apply` 255,
+>     `backup-archive` 155 (1 saltato, di prima: un nome non UTF-8, che APFS rifiuta), `backup-secure-rules` 24;
+>     `utils backup-cli-secure` 106, `backup-cli-restore` 109;
+>   - `ruff check` e `black --check` puliti sui 5 file Python; `lint --dead-code --scope backend`: nessun rilievo
+>     nei file toccati (l'uscita 1 viene da rilievi di prima, altrove);
+>   - `mkdocs build` stretta, `check-links`, `utils gate-docs-links` 63; `git diff --check` pulito.
+>   - **Non lanciate**: le suite `api` ed `e2e` del backup, che avviano il server della corsia (nessuno slot
+>     chiesto). Le rotte sono coperte dai test dei servizi attraverso le viste (`job_views`): 404
+>     `backup_job_not_found`, per la scheda e per il pannello.
+> - ✅ **Residui** (sonda e lettura, 09:54-09:57), nel backlog:
+>   - **B-53**: lo stesso descrittore perso in `outcome._read_record` e in `staging.read_report`, misurato
+>     (`files/b50-analysis/b53_probe_fd.py`: 20 letture di una cartella, 20 descrittori aperti, per ciascuno). Il
+>     secondo alza anche `IsADirectoryError`, che `_stage_view` non prende: a lettura, un 500 sulla lettura del
+>     controllo. `apply.py:329` è al riparo: controlla `S_ISREG` con `lstat` prima di aprire;
+>   - **B-54** (domanda 1 di TA-B50-RESTORE): uno stato di controllo illeggibile non lo toglie nessuno
+>     (`_prune_unrecorded` pulisce caricamenti e copie, mai `checks/`);
+>   - **B-55** (domanda 2), da decidere: nel ripristino un `OSError` transitorio è «nessun controllo», e la scheda
+>     dimentica il controllo che segue (`restoreFlow.svelte.ts:593-597`) invece di riprovare come per un 500.
+> - ✅ **Backlog**: B-50 chiusa; B-53, B-54 e B-55 nuove. Solo la sezione B: dev (`701054da9`) ha cambiato il backlog
+>   dopo la mia base, ma nessuna sua modifica cade nella sezione B.
+> - ✅ **Checkpoint** (09:57), 🧊 FROZEN. Commit proposti:
+>   - `fix(backup): unreadable job state is not found (B-50)`: `jobs.py`, `restore_jobs.py`, i 3 file di test,
+>     `security.md`;
+>   - `docs(journal): B-50 unreadable states`: questo piano e il backlog.
+> - **Poi**: la proposta per la domanda di E sul ripristino a mano (`#by-hand`).
+
+### La domanda di E sul ripristino a mano (`#by-hand`) — proposta (2026-10-20, 09:58-10:05) — ✅ approvata
+
+> **Domanda** (coordinatore, 09:06, per conto di E): «il ripristino a mano (`#by-hand`) non passa dal controllo
+> dell'archivio. Serve un controllo di tutto il DB vivo?»
+>
+> - **Proposta** (inviata alle 10:05): nessun controllo automatico del DB vivo, né a ogni avvio né al primo. Il
+>   confine di fiducia è il ripristino (dalla UI o dalla CLI arriva un archivio di origine qualunque, e lì B-49
+>   rifiuta il testo non UTF-8); lo scompattamento a mano richiede già di scrivere nella cartella dati. LibreFolio non
+>   crea testo non UTF-8. Una scansione di ogni TEXT a ogni avvio costa tutto il DB, e al ritrovamento non c'è una
+>   buona reazione. Invece: (a) una frase nella doc di `#by-hand`, che indica `backup inspect` e `backup restore
+>   --dry-run` per controllare un archivio prima; (b) dopo la 1.3, un comando a richiesta, in sola lettura, sul DB
+>   vivo. Scartato: un controllo al primo avvio dopo uno scompattamento (riconosciuto dal `manifest.json` rimasto).
+> - **Coordinatore** (10:10): «approvo (a) e (b). (a): solo inglese; poi `./dev.py mkdocs translate-stamp --file
+>   <pagina>.en.md`, perché è una modifica puntuale. (b): la riga nel backlog, «dopo la 1.3».» Le faccio nel lotto qui
+>   sotto. Fonti della proposta: `files/b50-wip/e-by-hand-proposal.md`.
+
+### B-53 + B-54 + B-55 — un lettore unico per gli stati e i report del ripristino; la regola di B-50 nel ripristino (2026-10-20, 10:10-11:13) — ✅ 🧊 FROZEN (checkpoint delle 11:13)
+
+> **Coordinatore** (10:10): «Ho fatto il checkpoint: `b9c14953f` (B-50) e `13570ad2a` (il giornale), albero pulito.
+> Le suite `api` del backup le metto nel mio gate d'ingresso. I residui: B-53: sì, l'aiuto unico per aprire in
+> lettura; chiude il descrittore perso e il 500 di `read_report`. B-54: sì. B-55: sì, la stessa regola dei job. Il
+> ripristino tratta come «nessun controllo» solo `IsADirectoryError`, `PermissionError` e il contenuto illeggibile;
+> gli altri `OSError`, quelli transitori, restano un errore che la scheda riprova. Fai i tre in un lotto solo: prima i
+> rossi, poi la cura, poi il checkpoint.»
+>
+> - **Base**: HEAD `13570ad2a`, albero pulito.
+> - ✅ **Sonde** (10:12-10:18, `files/b55-analysis/`):
+>   - uno stato di controllo con le date senza fuso: `_checks` lo legge, `read_check` lo restituisce, `prune` alza
+>     `TypeError` (lo stesso difetto curato da B-50 per i job): ogni nuovo controllo è un 500 `stage_failed`;
+>   - un link al posto dello stato: già «nessun controllo»; una FIFO: `_read_state` resta bloccato (sbloccato a mano
+>     dopo 3 s). La pulizia d'avvio è il passo `backup-leftovers` (`app_lifespan.py:249`), senza timeout: una FIFO lì
+>     ferma ogni avvio;
+>   - un `EIO` sulla lettura di uno stato valido: «nessun controllo» (è ciò che B-55 cambia);
+>   - **anche i job**: una FIFO al posto di `state.json` blocca `get_job` e `remove_expired_jobs`, quindi l'avvio di
+>     ogni backup e la pulizia d'avvio.
+> - ✅ **Come applico la regola** (al coordinatore alle 10:19, «procedo così, salvo tuo no»): un link o un file
+>   speciale al posto dello stato di un controllo è illeggibile; una data senza fuso è contenuto illeggibile;
+>   `read_report` segue la stessa regola; la conferma lascia passare un errore transitorio (500
+>   `restore_confirm_failed`, che si riprova, invece di «copia mancante», che fa dimenticare il controllo); B-54
+>   toglie anche gli stati scritti a metà (`<id>.json.part`); l'esito del ripristino cambia solo il lettore.
+> - ✅ **Domanda sui job** (10:19), **risposta del coordinatore** (10:39): «Il punto 7: sì, nello stesso lotto. Una
+>   FIFO che blocca l'avvio è troppo grave per lasciarla fuori. Anche il lettore dei job passa dall'aiuto unico: FIFO
+>   e link valgono come illeggibili, cioè 404 con un avviso. La guardia di B-50 la riscrivi attraverso `os.open`. Sui
+>   punti 1-6 procedi come hai descritto.» Fatto: la cura ha 3 operazioni in più in `jobs.py` (16 in 6 file, `--check`
+>   OK, una copia compila, `ruff` e `black` puliti); i rossi dei job a TA-B50-JOBS (`test_backup_jobs.py`,
+>   `test_backup_cli.py`, con la guardia dell'`EIO` riscritta) e la pulizia d'avvio con una FIFO fra i job a
+>   TA-B50-RESTORE (i-5); la doc di sicurezza in tre paragrafi (job, controlli, lettore unico).
+> - ✅ **Contratto** (10:22): `files/b53-contract.md`. L'aiuto `read_regular_file(path, *, limit=None)` e
+>   `NotRegularFileError` in `paths.py` (solo libreria standard): apre senza seguire un link e senza aspettare una
+>   FIFO, chiude sempre il descrittore; una cartella è `IsADirectoryError`, un link o un file speciale
+>   `NotRegularFileError`, gli altri errori come il sistema li alza. Lo usano `restore_jobs._read_state`,
+>   `staging.read_report`, `apply._read_state` e `outcome._read_record`.
+> - ⏳ **Rossi chiesti** (10:24): a TA-B50-RESTORE, la sezione (i) di `test_backup_leftovers.py` (B-55, le forme nuove,
+>   B-54, la pulizia d'avvio con una FIFO); a TA-B53-READER (nuovo), l'aiuto in `test_backup_archive.py`,
+>   `read_report` e la vista in `test_backup_staging.py`, l'esito in `test_backup_outcome.py`, la conferma in
+>   `test_backup_apply.py`. Tutti e due solo in scrittura; le nuove funzioni prese dentro ogni test, così un rosso non
+>   rompe la raccolta.
+> - ✅ **(a) La frase di `#by-hand`** (10:28, `admin/backup_restore.en.md`, riga 🔎): un danno si vede all'avvio, o più
+>   tardi quando una pagina legge quei dati; per controllare un archivio prima di scompattarlo, su un'installazione
+>   che già gira, `backup inspect` («Check an Archive», senza ancora esplicita) e `backup restore --dry-run` (ancora
+>   `#backup-restore-dry-run`), mai sulla cartella vuota che si sta per riempire.
+>   - **⚠️ Fuori pista — lo stamp non l'ho fatto.** La pagina non ha traduzioni: esiste solo `backup_restore.en.md`, e
+>     il cache di Aphra (`mkdocs_src/aphra-pipeline/.translate-hashes.json`, tracciato) non ha una sua voce
+>     (`--dry-run`: «MD5 <none>→f97354d7; new langs: es, fr, it»). Lo stamp segnerebbe IT, FR ed ES come già tradotte,
+>     e il pipeline non le creerebbe mai. Lo dico al coordinatore.
+> - ✅ **(b) B-56 nel backlog** (10:30): «Un controllo a richiesta del DB vivo», dopo la 1.3.
+> - ✅ **Cura pronta** (10:34): `files/b53-wip/apply_b53.py`, 13 operazioni in 5 file (`paths.py`, `restore_jobs.py`,
+>   `staging.py`, `apply.py`, `outcome.py`); `--check` OK su `13570ad2a`; applicata a una copia nella cartella di
+>   sessione, compila, `ruff` e `black` puliti con la configurazione del repo. Il pezzo dei job (`--jobs`) aspetta la
+>   risposta.
+> - ✅ **Doc di sicurezza** (10:38, `security.md`): il paragrafo di B-50 diviso in due; il secondo dice la regola del
+>   ripristino (B-55), la pulizia degli stati vecchi (B-54), il lettore unico e i due difetti che chiude (B-53), il
+>   report illeggibile che non è più un 500.
+> - ✅ **Rossi del ripristino scritti** (TA-B50-RESTORE, 10:24-10:52), sezione (i) di `test_backup_leftovers.py`: 10
+>   test, 66 casi, 34 rossi e 32 guardie (i 3 `mode-000` saltano da root). (i-1) un `EIO` non è «nessun controllo»
+>   (`read_check`, `_checks`, `prune`, l'avvio di un controllo, la fine di un caricamento, la pulizia d'avvio); (i-2)
+>   un link (guardia), una FIFO e le date senza fuso (rossi) sono «nessun controllo», in silenzio; (i-3) `prune`
+>   toglie gli stati illeggibili vecchi (14 forme, `.part` compreso) e lascia quelli di un controllo che gira, di una
+>   copia protetta e i nomi che non sono suoi; (i-4) e (i-5) la pulizia d'avvio torna in tempo con una FIFO fra i
+>   controlli e fra i job. Ogni lettore che può incontrare una FIFO gira in un thread con 10 s di scadenza, poi la
+>   FIFO si apre in scrittura per liberarlo: un rosso costa circa 10 s per caso, mai un blocco.
+>   - Le sue domande, nessuna cambia i test: (1) un caricamento la cui pulizia finale incontra un errore transitorio
+>     lascia il file nuovo finché il caricamento seguente lo toglie come sostituito, o `prune` dopo 24 ore (lo dico al
+>     coordinatore nel checkpoint); (2) un `<id>.json.part` accanto a un `<id>.json` leggibile resta finché la
+>     scrittura seguente dello stato lo riusa, o fino alla `prune` dopo la rimozione del controllo: voluto; (3) «in
+>     silenzio» vuol dire nessun log di nessun livello: la cura non ne scrive.
+> - ✅ **Rossi del lettore scritti** (TA-B53-READER, 10:24-10:51): 20 test, 37 casi, in quattro file. (A) l'aiuto in
+>   `test_backup_archive.py` (file intero e `limit`, niente lì e un file sulla strada, cartella, link, FIFO,
+>   `/dev/null`, modo 000, la classe nuova, un `EIO` dell'apertura e di `fstat`); (B) `read_report` e la vista in
+>   `test_backup_staging.py`; (C) la cartella e la FIFO al posto del biglietto in `test_backup_outcome.py`; (D) la
+>   conferma con un `EIO` sul report, il report cartella e il report di modo 000 in `test_backup_apply.py`. Le nuove
+>   funzioni si cercano dentro ogni test. Nessun test esistente fissa il testo dell'errore di un link nell'esito.
+>   - Le sue domande: (1) la descrizione nel catalogo del runner resta com'è (file condiviso); (2) per una FIFO basta
+>     la classe, non l'errno; (3) una riga della vista basta, le altre forme le prova `read_report`; (4) 30 s di
+>     scadenza vanno bene, chiudono solo un rosso; (5) `/dev/null` si legge e basta: resta.
+> - ✅ **Rossi del lettore lanciati** (10:52-10:54, carico 20-30), `ruff` e `black` prima, puliti: `services
+>   backup-archive` **19 rossi**, 155 verdi (1 saltato, di prima); `backup-staging` **7 rossi**, 206 verdi;
+>   `backup-outcome` **2 rossi**, 164 verdi; `backup-apply` **2 rossi**, 256 verdi. Ogni rosso per il motivo atteso:
+>   l'aiuto che non c'è; la cartella, il link (`ELOOP`), il modo 000, la copia diventata un file, la FIFO che aspetta
+>   ancora dopo 30 s, i 20 descrittori aperti, la vista che alza `IsADirectoryError` (un 500); l'esito con 20
+>   descrittori aperti e la FIFO che aspetta; la conferma che prende l'`EIO` per «copia mancante» e lascia 20
+>   descrittori. Log: `files/logs/b53_red_services_backup-{archive,staging,outcome,apply}.log`.
+> - ✅ **Rossi dei job scritti** (TA-B50-JOBS, 10:41-10:58): in `test_backup_jobs.py` la sezione (B-53), 8 test (una
+>   FIFO al posto di `state.json`: `get_job`, le viste, l'avvio, `remove_expired_jobs`, `end_interrupted_jobs`, il
+>   lucchetto; un link, valido o rotto) con 10 s di scadenza e la FIFO liberata nel `finally`; la guardia dell'`EIO`
+>   di B-50 riscritta: blocca `os.open` (il lettore nuovo) e anche `io.open` (quello di oggi, `Path.read_text`), così
+>   resta verde prima e dopo. In `test_backup_cli.py` le righe `state-is-a-fifo` e `state-is-a-link` (un link a un job
+>   finito due ore fa, che oggi si segue e si toglie). Le sue domande non cambiano nulla: dopo la cura il test del
+>   lucchetto passa anche da `_running_job`.
+> - ✅ **Rossi lanciati** (10:59-11:04, carico 20-24; `ruff` e `black` puliti prima): `services backup-jobs` **9
+>   rossi**, 149 verdi (la guardia dell'`EIO` verde); `utils backup-cli` **2 rossi**, 104 verdi (la FIFO: il figlio
+>   ucciso dal timeout di 120 s; il link: seguito, e la cartella tolta); `services backup-leftovers` **34 rossi**, 143
+>   verdi (le FIFO che aspettano 10 s, le date senza fuso, gli stati vecchi lasciati, l'`EIO` preso per «nessun
+>   controllo»). Tutti per il motivo atteso. In tutto il lotto: **75 rossi**. Log: `files/logs/b53_red_*.log`.
+> - ✅ **Cura** (11:04): `apply_b53.py`, 16 operazioni in 6 file: `paths.py` +35 (l'aiuto e la classe),
+>   `restore_jobs.py` +19/−12, `staging.py` +9/−4, `apply.py` +5/−3, `outcome.py` +4/−5, `jobs.py` +9/−7.
+> - ✅ **Verdi** (11:04-11:08, carico 16-23):
+>   - i sette rossi: `services backup-archive` **174** (1 saltato, di prima), `backup-staging` **213**,
+>     `backup-outcome` **166**, `backup-apply` **258**, `backup-jobs` **158**, `backup-leftovers` **177**;
+>     `utils backup-cli` **106**;
+>   - regressione: `services backup-secure` 77, `backup-secure-rules` 24, `backup-checks` 93,
+>     `restore-non-iso-warning` 46 (solo eseguito, mai aperto: E-20); `utils backup-cli-secure` 106,
+>     `backup-cli-restore` 109;
+>   - `ruff check` e `black --check` puliti sui 13 file Python; `lint --dead-code --scope backend`: gli stessi
+>     rilievi di B-50, nessuno nuovo;
+>   - `mkdocs build` stretta, `check-links`, `utils gate-docs-links` 63; `git diff --check` pulito.
+>   - **Non lanciate**: le suite `api` ed `e2e` del backup (server della corsia), per il gate d'ingresso del
+>     coordinatore.
+> - **⚠️ Fuori pista — l'ancora nella doc** (11:09): la build stretta è fallita sulla frase nuova di `#by-hand`. La
+>   pagina non ha traduzioni, quindi il sito italiano usa quella inglese, e il link
+>   `cli_tools.md#backup-restore-dry-run` va a `cli_tools.it.md`, che quell'ancora non ce l'ha. Ora la frase nomina le
+>   due sezioni («Check an Archive» e «Try a Restore on a Copy» in [CLI Admin Tools](cli_tools.md)), come fa già il
+>   resto della pagina. Build di nuovo verde alle 11:11.
+> - ✅ **Backlog**: B-53, B-54 e B-55 chiuse; B-56 nuova. Solo la sezione B.
+> - ✅ **Conflitti con dev** (`f73514a77`): `staging.py` (dev cambia una docstring verso la riga 800, io gli import e
+>   `read_report`), `security.md` (dev da riga 1510 in poi, io alla 1077) e il backlog (nessuna modifica di dev nella
+>   sezione B): nessuna sovrapposizione.
+> - ✅ **Checkpoint** (11:13), 🧊 FROZEN. Commit proposti:
+>   - `fix(backup): one reader for job, check and report files (B-53, B-54, B-55)`: i 6 file di servizio, i 7 di test,
+>     `security.md`, `backup_restore.en.md`;
+>   - `docs(journal): B-53 to B-56`: questo piano e il backlog.

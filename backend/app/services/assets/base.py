@@ -32,6 +32,7 @@ from backend.app.schemas.provider import (
     DEFAULT_SEARCH_PRIORITY,
     FAProviderKind,
     FAProviderTier,
+    FAQuoteBaseSuggestion,
     FAVolumeKind,
 )
 from backend.app.services.plugin_settings.contract import PluginSettingsMixin
@@ -764,6 +765,28 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
             AssetSourceError: On fetch failure (network error, etc.)
         """
         return None  # Default: metadata not supported
+
+    async def suggest_quote_base(
+        self,
+        identifier: str,
+        identifier_type: IdentifierType,
+        provider_params: dict | None = None,
+    ) -> FAQuoteBaseSuggestion | None:
+        """
+        Suggest how many units one price of this asset refers to (optional feature, Z-32 d).
+
+        PLUGIN RESPONSIBILITY:
+        - Return ``FAQuoteBaseSuggestion`` only when the provider's own data says it (Yahoo Finance: 100 for a line it
+          quotes in pence, ``GBp``), else None.
+        - The same suggestion can ride on each search result, under the key ``quote_base_suggestion``.
+
+        CORE WILL:
+        - Call this in the provider probe's metadata operation only, once ``fetch_asset_metadata`` has answered, and
+          return it beside the patch, never inside: the asset form proposes it, and a stored asset changes only when
+          the user saves. The metadata refresh never calls it.
+        - Treat any error as no suggestion.
+        """
+        return None  # Default: no suggestion
 
     def get_asset_url(
         self,

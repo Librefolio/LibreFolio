@@ -617,6 +617,12 @@ def _dumps(models: Iterable[Any]) -> list[dict]:
     return [model.model_dump(mode="json") for model in models]
 
 
+def _dumps_without_index(models: Iterable[Any]) -> list[dict]:
+    """``_dumps`` without ``request_index``, the position of a result's conversion in its request (Z-29fx): the same
+    conversion asked alone and inside a larger call differs only there."""
+    return [model.model_dump(mode="json", exclude={"request_index"}) for model in models]
+
+
 @pytest.mark.asyncio
 async def test_rcf01_conversion_stops_at_the_ceiling(monkeypatch, frozen_ceiling):
     """RC-F01: a conversion asked from today-5 up to today+10 gives its last result on today+1.
@@ -714,7 +720,9 @@ async def test_rcf04_conversion_after_the_ceiling_is_empty_others_unaffected(mon
     alone_past = await _convert(monkeypatch, _Converter(), past)
     alone_with_signal = await _convert(monkeypatch, _Converter(), past_with_signal)
     assert _dumps(r for r in mixed.results if r.from_amount.amount == Decimal("100")) == _dumps(alone_past.results)
-    assert _dumps(r for r in mixed.results if r.from_amount.amount == Decimal("300")) == _dumps(alone_with_signal.results)
+    mixed_with_signal = [r for r in mixed.results if r.from_amount.amount == Decimal("300")]
+    assert {r.request_index for r in mixed_with_signal} == {2}
+    assert _dumps_without_index(mixed_with_signal) == _dumps_without_index(alone_with_signal.results)
     assert _dumps(signals_by_index[2]) == _dumps(alone_with_signal.signal_results[0].signals)
 
 

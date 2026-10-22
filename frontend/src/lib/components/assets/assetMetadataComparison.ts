@@ -3,8 +3,8 @@
  * the form, as a pure function.
  *
  * Each field is compared against the value it had when the comparison started: a field is written only by its own
- * step (filling `asset_type` also seeds the bond quote base, filling the description clears its prefill flag, and
- * neither is compared), so deciding everything on that snapshot gives the same outcome as writing step by step. The
+ * step (filling the description also clears its prefill flag, which is not compared), so deciding everything on that
+ * snapshot gives the same outcome as writing step by step. The
  * modal keeps the network, the request tickets, the toasts and the comparison dialog, and applies the actions in
  * order. One difference, on a malformed response only: an invalid distribution weight throws here, before anything
  * is written, where the inline version had already written the fields compared before it.
@@ -14,11 +14,15 @@
  * - the values agree (or differ only by case, or the currency is the untouched default) → nothing to ask;
  * - they differ → a row of the comparison dialog.
  *
+ * The quote base (Z-32 d) is never filled, the field being never empty: the provider's suggestion, else the default of
+ * the type the provider proposes (or the form's), is a row when it differs from the field.
+ *
  * @module components/assets/assetMetadataComparison
  */
 import {IDENTIFIER_TYPES, isFamilyOnlyProposal} from '$lib/utils/assetTypes';
 import {normalizeDistribution, sameDistribution, type Distribution} from './assetPayload';
 import type {DiffItem} from './ProviderComparisonModal.svelte';
+import {proposeQuoteBase, type QuoteBaseSource, type QuoteBaseSuggestion} from './assetFormState';
 
 /** Which fields a comparison covers: `all`, or the section whose "Ask Provider" was pressed. */
 export type ComparisonScope = 'all' | 'identifiers' | 'sector' | 'geographic';
@@ -32,6 +36,8 @@ export interface ComparisonSnapshot {
     currency: string;
     /** The user picked the currency (otherwise the form shows a default the provider may correct silently). */
     currencyUserSet: boolean;
+    /** The form's quote base ("Units per single price"). */
+    quoteBaseQuantity: number;
     shortDescription: string;
     /** The description is a broker-import prefill, not typed by the user: the provider's one is merged over it. */
     descriptionFromPrefill: boolean;
@@ -44,6 +50,9 @@ export interface ComparisonLabels {
     name: string;
     type: string;
     currency: string;
+    quoteBase: string;
+    /** The note under the quote base row, from where its proposal comes; undefined for none. */
+    quoteBaseNote: (source: QuoteBaseSource) => string | undefined;
     description: string;
     sector: string;
     geographic: string;
@@ -78,8 +87,9 @@ export interface MetadataComparison {
  * @param scope the fields to compare
  * @param manuallyChanged whether the user edited a field since the request was sent
  * @param labels the localized labels of the rows
+ * @param quoteBaseSuggestion the provider's quote base suggestion for this line (Z-32 d), if any
  */
-export function compareMetadata(patchData: Record<string, any>, snapshot: ComparisonSnapshot, scope: ComparisonScope, manuallyChanged: (field: string) => boolean, labels: ComparisonLabels): MetadataComparison {
+export function compareMetadata(patchData: Record<string, any>, snapshot: ComparisonSnapshot, scope: ComparisonScope, manuallyChanged: (field: string) => boolean, labels: ComparisonLabels, quoteBaseSuggestion?: QuoteBaseSuggestion | null): MetadataComparison {
     const actions: ComparisonAction[] = [];
     const differences: DiffItem[] = [];
     const missingFields: string[] = [];
@@ -123,6 +133,15 @@ export function compareMetadata(patchData: Record<string, any>, snapshot: Compar
         }
     }
 
+    function compareQuoteBase() {
+        // The ladder reads the type the provider proposes, when it proposes another one
+        const providerType = typeof patchData.asset_type === 'string' ? patchData.asset_type : '';
+        const typeChanges = providerType !== '' && providerType !== snapshot.assetType && !isFamilyOnlyProposal(snapshot.assetType, providerType);
+        const source = proposeQuoteBase(quoteBaseSuggestion, typeChanges ? providerType : snapshot.assetType);
+        if (source.quantity === snapshot.quoteBaseQuantity) return;
+        differences.push({field: 'quote_base_quantity', label: labels.quoteBase, type: 'string', currentValue: String(snapshot.quoteBaseQuantity), providerValue: String(source.quantity), selected: true, note: labels.quoteBaseNote(source), quoteBaseSource: source});
+    }
+
     // --- IDENTIFIERS (scope 'all' or 'identifiers') ---
     if (scope === 'all' || scope === 'identifiers') {
         for (const idType of IDENTIFIER_TYPES) {
@@ -142,6 +161,7 @@ export function compareMetadata(patchData: Record<string, any>, snapshot: Compar
         compareStringField('display_name', labels.name, snapshot.displayName, patchData.display_name);
         compareStringField('asset_type', labels.type, snapshot.assetType, patchData.asset_type);
         compareStringField('currency', labels.currency, snapshot.currency, patchData.currency);
+        compareQuoteBase();
     }
 
     // --- CLASSIFICATION: description, sector, geographic ---

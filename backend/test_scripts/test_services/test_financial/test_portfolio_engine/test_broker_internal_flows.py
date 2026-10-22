@@ -48,7 +48,6 @@ import pytest
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 from backend.app.db.models import TransactionType
-from backend.app.schemas.common import Currency
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
@@ -56,6 +55,7 @@ from backend.app.services.financial_math.portfolio.models import ClassifiedTrans
 from backend.app.services.financial_math.price_marks import build_asset_price_series
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
+from backend.test_scripts.test_services._unit_steps_double import UnitStepsDouble
 
 A, B, C = 10, 20, 30
 ASSET = 100
@@ -980,11 +980,16 @@ class TestSecuritiesPairsBetweenBrokers:
         assert not problems, "\n".join(problems)
         _assert_invariant_every_day(result.daily_states)
 
-    def test_case_15b_adjustment_pair_stays_capital_at_cost(self):
-        """Case 15b, guard (D4): the same pair typed ADJUSTMENT keeps the in-kind rule. A's
-        leg removes the pool cost (100) from C_A, B's leg brings its override cost (100)
-        into C_B, so B's line shows +20 on d2. Step 3b must not touch it.
-        Green before and after the fix."""
+    def test_case_15b_adjustment_pair_out_leg_has_no_value_and_in_leg_brings_its_cost(self):
+        """Case 15b, the same pair typed ADJUSTMENT, as N78-1 reads it literally (the developer's decision,
+        21/10/2026: an ADJUSTMENT-out has no value). A's leg keeps C_A at 100 and realizes 0 − the pool cost,
+        −100, so P_A falls to −100 from d2; B's leg brings its override cost (100) into C_B, so B's line shows
+        +20 on d2 and +30 on d3. The aggregate counts the capital twice, 200, and its P&L is 100 lower than
+        Setup T's: −80 on d2, −70 on d3, for a move between two brokers of the scope. Step 3b must not touch it.
+
+        OPEN QUESTION Q-N78-1k: a LINKED internal ADJUSTMENT pair could keep the in-kind rule at cost (A's leg
+        taking its cost out of C_A, as before N78-1); the developer may change this pin. Before N78-1 (D4,
+        green then): A (0, 0) from d2, the aggregate Setup T's (100, 20) and (100, 30)."""
         classification, overrides = _case_15_pair_with_cost("ADJUSTMENT")
         assert _classifications(classification) == {1: "normal", 2: "normal", 3: "linked_internal", 4: "linked_internal"}
 
@@ -993,10 +998,11 @@ class TestSecuritiesPairsBetweenBrokers:
         expected = {
             D0: {A: ("100", "0"), B: ("0", "0")},
             D1: {A: ("100", "10"), B: ("0", "0")},
-            D2: {A: ("0", "0"), B: ("100", "20")},
-            D3: {A: ("0", "0"), B: ("100", "30")},
+            D2: {A: ("100", "-100"), B: ("100", "20")},
+            D3: {A: ("100", "-100"), B: ("100", "30")},
         }
-        problems = _line_problems(result, expected) + _aggregate_problems(result, _setup_t_aggregate(D3))
+        aggregate = {**_setup_t_aggregate(D1), D2: ("200", "-80"), D3: ("200", "-70")}
+        problems = _line_problems(result, expected) + _aggregate_problems(result, aggregate)
         assert not problems, "\n".join(problems)
         _assert_invariant_every_day(result.daily_states)
 
@@ -1393,10 +1399,9 @@ class TestPreloadTransferLegRates:
             _ctxn(external_in, "linked_external_inflow", paired=external_out),
         ]
 
-        async def fake_convert_bulk(db, bulk_items, raise_on_error=False):
-            return [(Currency(code="EUR", amount=Decimal("1")), item[2], False) for item in bulk_items], []
-
-        monkeypatch.setattr(portfolio_engine_module, "convert_bulk", fake_convert_bulk)
+        # P3: one unit_rate_steps call with each currency's windows; every asked day reads 1
+        steps = UnitStepsDouble()
+        monkeypatch.setattr(portfolio_engine_module, "unit_rate_steps", steps)
 
         fx_map = await PortfolioCalculationEngine(object())._preload_fx_rates(
             classified_txs=classified,
@@ -1418,3 +1423,9 @@ class TestPreloadTransferLegRates:
         expected = {(currency, "EUR", day) for currency in ("USD", "CHF", "GBP") for day in (D10, D11)}
         expected |= {("USD", "EUR", D2), ("CHF", "EUR", D2), ("GBP", "EUR", D5)}
         assert keys == expected, f"missing={sorted(expected - keys)} unexpected={sorted(keys - expected)}"
+        assert steps.asked_keys() == expected, "the windows of the one unit_rate_steps call cover the same days"
+        assert steps.runs() == {
+            ("USD", "EUR"): [(D2, D2), (D10, D11)],
+            ("CHF", "EUR"): [(D2, D2), (D10, D11)],
+            ("GBP", "EUR"): [(D5, D5), (D10, D11)],
+        }, "a leg's single day, apart from the range"

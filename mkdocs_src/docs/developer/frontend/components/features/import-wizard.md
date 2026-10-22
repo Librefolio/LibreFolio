@@ -915,11 +915,31 @@ dispatched by `openBadgeCompare`):
 
 ## 🧾 Per-file parse stats
 
-`ParseDetailModal.svelte` (the `analyze` step) shows each file's parse outcome: total rows, plugin
-warnings, and the per-file duplicate counts (`unique` / `possible` / `likely`) computed from
-Layer 1. It is the fastest way to spot that a re-exported file overlaps an already-imported
-one before merging. For a report set it also shows how the exports were matched
-([Step `analyze`](#set-analysis)).
+`ParseDetailModal.svelte` (the `analyze` step) shows each file's parse outcome: total rows, the
+plugin's notices (warnings and notes apart), and the per-file duplicate counts (`unique` /
+`possible` / `likely`) computed from Layer 1. It is the fastest way to spot that a re-exported
+file overlaps an already-imported one before merging. For a report set it also shows how the
+exports were matched ([Step `analyze`](#set-analysis)).
+
+**Warnings and notes are counted apart (B-51).** One rule decides: a notice whose `severity` is
+exactly `info` is a *note* (blue: the plugin explains a choice it made), any other severity — or
+none — a *warning* (amber: something needs the user's attention). It is `noticeSeverity` in
+`importNotices.ts`, the same rule as `severityOf` in `BrimNoticeList.svelte`, and the step's four
+notice surfaces read it from there:
+
+- the results column `noticeCount` (header `⚠️ ℹ️`): `noticeCountsCell` draws the two counts with
+  `NoticeCounts.svelte`, each count named for screen readers; `noticeSortValue` sorts by warnings,
+  then by notes, and a row with no parse result last;
+- the stats tile: `NoticeCounts` again, fed by `parseAggregateStats()`'s `totalWarnings` (the
+  warnings alone) and `totalNotes`;
+- the parse detail: `splitNotices` gives one subsection per kind present, the warnings first;
+- the confirmation opened by **Continue**: its intro counts only the kind it names — the warnings
+  when there is one (`warningConfirmMessage`), otherwise the notes (`noticeConfirmMessage`).
+
+Until B-51 the column and the tile counted every notice as a warning: a Fineco file whose only
+notice is a note showed «⚠️ 1». The column's id changed with it, from `warningCount` to
+`noticeCount`: `DataTable` saves each column's width by id, and a width saved at 40 px for the old
+single count would crush the two numbers.
 
 ---
 

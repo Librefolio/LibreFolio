@@ -96,7 +96,7 @@ The single source of truth for all financial operations. Each transaction belong
 | `broker_id` | FK to broker — required |
 | `asset_id` | FK to asset — nullable for cash-only ops (DEPOSIT, WITHDRAWAL) |
 | `type` | `TransactionType` value: BUY, SELL, DIVIDEND, INTEREST, DEPOSIT, WITHDRAWAL, FEE, TAX, ADJUSTMENT, TRANSFER, FX_CONVERSION, CASH_TRANSFER. A plain `VARCHAR(32)` with no `CHECK` constraint; databases created before 22/09/2026 still declare `VARCHAR(14)`, which SQLite does not enforce — see [Migrations](index.md#enum-column-length) |
-| `date` | Settlement date |
+| `date` | Trade date: the day the operation was made, not the day its cash settles (B-52) |
 | `quantity` | Signed asset delta (+in, −out). Default 0, NOT NULL. `RealDecimal(22, 10)`: up to 15 digits before the decimal point (decision N63) and 10 decimal places, read back as written (see [Decimal Columns](index.md#decimal-columns)) |
 | `amount` | Signed cash delta (+in, −out). Default 0, NOT NULL. `RealDecimal(18, 6)`: up to 15 digits before the decimal point (decision N63) and 6 decimal places, read back as written (see [Decimal Columns](index.md#decimal-columns)) |
 | `currency` | ISO 4217 code — required when amount ≠ 0 |
@@ -143,7 +143,7 @@ See **[📊 Weighted Average Cost (WAC)](../../../financial-theory/technical-ana
 
 | Side | `cost_basis_override` |
 |------|----------------------|
-| Sender (qty < 0) | Never required. A `TRANSFER` sender takes none: a promote clears it from that side, with or without `resolved_fields`. An `ADJUSTMENT` taking units out may carry one, at which the FIFO lots hand its units over; a split of a `TRANSFER` pair or a broker deletion writes the Auto cost of its own broker on the former sender (decision 47, see [Broker Deletion](../../backend/transactions/service.md#broker-deletion)) |
+| Sender (qty < 0) | Never required. A `TRANSFER` sender takes none: a promote clears it from that side, with or without `resolved_fields`. An `ADJUSTMENT` taking units out has no value (developer decision N78-1, 21/10/2026): the API refuses one (`costBasisNotAllowed`, rule 12b), and every engine ignores one an older row still stores (`FifoInputTransaction.from_transaction()`). A split of a `TRANSFER` pair or a broker deletion clears it on the former sender (decision 47, see [Broker Deletion](../../backend/transactions/service.md#broker-deletion)) |
 | Receiver (qty > 0) | Required for `TRANSFER` and `ADJUSTMENT`; supplied manually, resolved by promote, or computed for a create/update auto mode |
 
 ### 🧮 How batch auto-WAC is staged
@@ -159,9 +159,8 @@ See **[📊 Weighted Average Cost (WAC)](../../../financial-theory/technical-ana
 - `compute_wac_iterative()` reads the session-visible transaction history and
   returns the WAC; `_compute_wac_for_auto_items()` writes its per-unit amount and
   currency to `cost_basis_override` and `cost_basis_currency`.
-- After the Auto rows, the same stage gives the giving leg of each `TRANSFER` pair
-  the batch splits the Auto cost of its own broker (`_handover_cost()`), unless an
-  update of the batch gives it a cost (see
+- The giving leg of each `TRANSFER` pair the batch splits needs no cost: the split
+  itself (`apply_splits()`) leaves it an `ADJUSTMENT` without a value (see
   [Split & Promote](../../backend/transactions/split_promote.md#transfer-giving-leg)).
 - Missing FX data becomes a `wacFxUnavailable` batch issue instead of silently
   persisting an unresolved cost.

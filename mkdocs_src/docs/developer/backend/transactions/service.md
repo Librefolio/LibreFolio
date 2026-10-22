@@ -14,7 +14,7 @@ Transaction batch execution is split across these source modules, in `backend/ap
 | `backend/app/services/transactions/auto_cost.py` | `TransactionAutoCostMixin`: WAC dispatch for the Auto cost basis |
 | `backend/app/services/transactions/unreadable_rows.py` | `count_unreadable_rows()` and `UnreadableLedgerError`: the transactions whose stored value cannot be read, counted before the Auto cost's pool (W-B69) and a broker's balances (W-B74) |
 | `backend/app/services/transactions/transaction_batch_context.py` | `TransactionBatchContext` and the balance-replay exception shared across stages |
-| `backend/app/services/transactions/transaction_batch_stages.py` | The stages that open and close a batch: parse, the decimal-limit and date checks, preload/access, balance replay, response |
+| `backend/app/services/transactions/transaction_batch_stages.py` | The stages that open and close a batch: parse, the decimal-limit, date and cost-basis-sign checks, preload/access, balance replay, response |
 | `backend/app/services/transactions/batch_edits.py` | Deletes, splits, updates, and the check of updated linked pairs |
 | `backend/app/services/transactions/batch_creates.py` | Creates, promotes, and the links between the legs of new pairs |
 | `backend/app/services/transactions/batch_costs.py` | WAC and FX issues, and the required cost basis |
@@ -60,7 +60,7 @@ Its order is contractual:
 
 | # | Stage call | Purpose |
 |---|------------|---------|
-| 1 | `parse_inputs()`, then `check_decimal_limits()` and `check_dates()` | Parse create, update, split, and promote rows independently; then refuse a quantity, cash amount, manual cost basis or the cost basis a promote resolves over its column's limit (C-97, see [Decimal limits](#decimal-limits)), and a date outside 1900-01-01 … tomorrow by the server's calendar (N74, see [Transaction dates](#transaction-dates)) |
+| 1 | `parse_inputs()`, then `check_decimal_limits()`, `check_dates()` and `check_cost_basis_sign()` | Parse create, update, split, and promote rows independently; then refuse a quantity, cash amount, manual cost basis or the cost basis a promote resolves over its column's limit (C-97, see [Decimal limits](#decimal-limits)), a date outside 1900-01-01 … tomorrow by the server's calendar (N74, see [Transaction dates](#transaction-dates)), and either cost basis below 0 (J-60, see [Cost basis sign](#cost-basis-sign)) |
 | 2 | `preload_and_authorize()` | Load referenced rows, collect touched brokers, and require `EDITOR` access |
 | 3 | `apply_deletes()` | Stage valid deletions |
 | 4 | `apply_splits()` | Split linked pairs before any dependent update |
@@ -69,7 +69,7 @@ Its order is contractual:
 | 7 | `apply_creates()` | Add and flush valid creates so generated IDs are available |
 | 8 | `apply_promotes()` | Resolve saved or same-batch rows and promote them in place |
 | 9 | `resolve_create_links()` | Resolve unconsumed create correlation groups into reciprocal database links |
-| 10 | `compute_wac_and_fx_issues()` | Run create/update auto-WAC, then give the giving leg of each split `TRANSFER` pair the Auto cost of its own broker ([Split & Promote](split_promote.md#transfer-giving-leg)); convert missing FX data into issues, and refuse an Auto row whose average of 0 comes from a pool with nothing to average (`autoCostEmptyPool`, `autoCostUnknownPool`, N88: [Nothing to average](wac.md#nothing-to-average)) |
+| 10 | `compute_wac_and_fx_issues()` | Run create/update auto-WAC; convert missing FX data into issues, and refuse an Auto row whose average of 0 comes from a pool with nothing to average (`autoCostEmptyPool`, `autoCostUnknownPool`, N88: [Nothing to average](wac.md#nothing-to-average)) |
 | 11 | `validate_cost_basis()` | Flush and enforce required cost basis after WAC and promote handling |
 | 12 | `validate_balances()` | Flush and replay end-of-day balances from each broker's earliest affected date |
 | 13 | `finalize_response()` | Derive `committed`, result statuses, counts, and WAC output |
@@ -86,8 +86,6 @@ stores all state that must survive across stages. This includes:
 - every row `apply_creates()` flushed, by its create index (`created_by_index`):
   the row a create's Auto cost is written on (W-B67);
 - transient create-correlation groups and the groups consumed by promote;
-- the giving legs of the `TRANSFER` pairs the batch splits, each with its split's
-  index (`handover_rows`), which the WAC stage prices;
 - optional inline `wac_results`; and
 - `commit_requested`, which affects only final response semantics.
 
@@ -105,7 +103,7 @@ promise that every possible error is collected:
   [Transaction dates](#transaction-dates)), causes an early response right after the
   access check, before the mutation stages run: `committed=False`, the issues
   collected so far, empty results;
-- inline WAC, and with it the cost of a split's giving leg, is skipped when a
+- inline WAC is skipped when a
   non-balance issue already exists; and
 - balance replay catches the first balance exception and does not continue through
   the remaining broker/date replays.
@@ -127,7 +125,7 @@ frontend, each time they run, so they follow any change to it:
 | 9 | `event_compatible()` | An asset event link on another type (`eventTypeIncompatible`, its `allowed` param from `event_compatible_types()`) or without an asset (`eventRequiresAsset`) |
 | 10, 11 | `quantity_sign`, `cash_sign` | A quantity, or a non-zero cash amount, of the wrong sign (`qtyPositive`, `qtyNegative`, `qtyZero`, `qtyNonzero`; `cashSignPositive`, `cashSignNegative`); a zero cash amount where `cash_sign` is `nonzero` (`cashNonzero`; see below for when) |
 | 12 | `cost_basis_allowed()` | A `cost_basis_mode` where the type and side take no cost basis (`costBasisModeIncompatible`; see [Persisted Cost Basis](wac.md#persisted-cost-basis)) |
-| 12b | `cost_basis_allowed()`, `cost_basis_set` | A non-null `cost_basis_override` the request sets without a `cost_basis_mode` where the type and side take no cost basis, except on an `ADJUSTMENT` taking units out (`costBasisNotAllowed`; see below) |
+| 12b | `cost_basis_allowed()`, `cost_basis_set` | A non-null `cost_basis_override` the request sets without a `cost_basis_mode` where the type and side take no cost basis, an `ADJUSTMENT` taking units out included (`costBasisNotAllowed`; see below) |
 
 Decision P6 (the developer's, 2026-10-16) sets when four of these refusals hold: a
 `TRANSFER`'s cash (`cashForbidden`), `FX_CONVERSION`'s non-zero quantity (`qtyZero`),
@@ -141,16 +139,15 @@ a changed cash and quantity, so it checks all four. A create (`changed_fields=No
 keeps them in its own rules 2, 3 and 3b. This mirrors N2's cost check, which judges only
 an update that touches the cost (see [Persisted Cost Basis](wac.md#persisted-cost-basis)).
 
-Rule 12b (W-B72; night decision N78, as the coordinator refined it on 17/10, pending the
-developer's review) reads `cost_basis_set`: whether the request sets a non-null
+Rule 12b (W-B72; night decision N78, and N78-1, the developer's decision of 21/10/2026) reads `cost_basis_set`: whether the request sets a non-null
 `cost_basis_override`. The create passes it from `TXCreateItem.validate_transaction_rules`,
 the update from `_validate_updated_final_state()`; `_promoted_state_issues()` leaves it
 false, as a promote's resolved cost basis has its own check (`_resolved_cost_issues()`, see
 [Request shape](split_promote.md#promote-request-shape)). Where `cost_basis_allowed()` is
-false, the cost basis is refused with `costBasisNotAllowed`, params `{type, qty}`, except on
-an `ADJUSTMENT` taking units out: its cost is decision 47's handover cost, which an update of
-the split's own batch may set without a mode (decision 4, see
-[The giving leg of a `TRANSFER`](split_promote.md#transfer-giving-leg)). Rule 12b is rule
+false, the cost basis is refused with `costBasisNotAllowed`, params `{type, qty}`. That
+includes an `ADJUSTMENT` taking units out: it has no value (N78-1), and every engine ignores
+a cost basis an older row of that kind still stores (`FifoInputTransaction.from_transaction()`).
+Rule 12b is rule
 12's `elif`: a request that names a mode gets `costBasisModeIncompatible` alone. It
 judges only a cost basis the request sets: never one the row already stores — a notes-only
 edit of an older row carrying a stray one commits and keeps it — and never an explicit
@@ -250,6 +247,37 @@ and nothing is committed. A quantity is no `Currency`: `1E+1000000` units still 
 currency schema refused, such as an amount that is no number, reached the promotion,
 whose `Currency.model_validate()` raised out of the batch: a 500.
 
+### ➖ Cost basis sign {: #cost-basis-sign }
+
+`check_cost_basis_sign()` (`transaction_batch_stages.py`; J-60) runs after
+`check_decimal_limits()` and `check_dates()`, and refuses a manual cost basis below 0;
+0 stays allowed, `-0` included (a gift, the new shares of a split). It reads the cost
+where `check_decimal_limits()` reads it (`_decimal_limit_values()`,
+`_promote_cost_amount()`): the manual `cost_basis_override` of a create, or of an update
+that sends one, and the cost basis a promote resolves
+(`resolved_fields.cost_basis_override`). An Auto cost basis (`cost_basis_mode` `auto` or
+`auto-detail`) is not checked: it is the batch's own average, not a value of the user's.
+Below 0, the row gets one issue: code `costBasisNegative`
+(`TXValidationCode.COST_BASIS_NEGATIVE`, listed by `GET /transactions/types` →
+`validation_codes`), `field` `cost_basis_override`, the row's `operation` and `index`, an
+update's id as `ref_id`, no `params`, and the English `error` *Cost basis override: cannot
+be negative, 0 or more*. The frontend reads the code as
+`transactions.errors.costBasisNegative`, *The cost basis can't be negative: enter 0 or
+more.*, without the field label in front (it is not in `FIELD_PREFIXED_CODES`).
+
+The issue keeps the batch from being committed (`finalize_response()`: any issue means
+`committed=False`), but, unlike the integer digits and the dates, the check does not stop
+the batch: a negative cost overflows nothing the later stages compute. The row stays in
+the batch, so a linked pair is not broken by it, and the row's other refusals come in the
+same answer: its decimal places, or a balance it takes below zero, which only the replay
+of step 12 finds; the inline WAC is skipped, as for any non-balance issue. An update that
+does not send the cost is not checked: a row an older version stored at a negative cost
+stays editable (notes, tags) until its cost is touched. An update that sends that cost
+back, even unchanged, is refused; the app sends only the fields that change
+(`buildUpdateDiff()`). A broker import confirms through this batch, so a negative cost
+read from a file is refused when the bulk workspace validates or saves its rows (decision
+D2). Tests: `./dev.py test services transaction-cost-basis-rule J60` (`TestJ60*`).
+
 ### 📅 Transaction dates {: #transaction-dates }
 
 `check_dates()` (`transaction_batch_stages.py`; decision N74 of R13-SEC7-3) runs right
@@ -283,8 +311,8 @@ validates or saves them (as for the decimal limits, decision D2).
 The bound is tomorrow, not today, as slack for a user east of the server, whose today can
 already be the server's tomorrow. No legitimate date goes further: the interface never
 offers a future date (`SingleDatePicker`, whose `allowFuture` is false by default), and a
-broker import keeps only settled rows (the rule *Only safe rows* of the
-[plugin guide](../../architecture/patterns/brim_plugin_guide.md#import-philosophy-currency-rules)),
+broker import keeps only settled rows (the rule *The operation date, and only settled rows* of
+the [plugin guide](../../architecture/patterns/brim_plugin_guide.md#import-philosophy-currency-rules)),
 so a later date is a typing error. Lot N74 set the bound there; before, it was a year
 after today, for the settlement dates a broker's report puts ahead: under that rule, a
 plugin now leaves such a row out until it has settled. The frontend reads the code as
@@ -418,15 +446,14 @@ every row of the broker is deleted. A pair with **another** broker loses one hal
 The other half — on that broker, whatever the caller's role there — becomes the
 standalone row a split of the pair leaves (backlog V-3; D-J4, decisions of
 2026-10-13 and 2026-10-15), instead of a linked type without its partner, which
-the FIFO lots refuse for a `TRANSFER` (`TRANSFER_PAIR_MISSING`). Two cases only
-lose the link: a link no split knows, and the giving leg of a `TRANSFER` whose cost
-needs a missing conversion (below).
+the FIFO lots refuse for a `TRANSFER` (`TRANSFER_PAIR_MISSING`). One case only
+loses the link: a link no split knows.
 
 | Surviving half | Becomes |
 |----------------|---------|
 | Received `TRANSFER` (quantity > 0) | `ADJUSTMENT` with the same quantity, asset, cost basis and its currency, cash currency, date, description and tags; first given its sender's Auto cost when it has no cost basis (below) |
 | `CASH_TRANSFER`, `FX_CONVERSION` | `WITHDRAWAL` when its amount is negative, `DEPOSIT` otherwise, without asset |
-| Giving `TRANSFER` (quantity < 0) | `ADJUSTMENT` with the same quantity, asset, cash currency, date, description and tags, and the Auto cost of **its own** broker as its cost basis (below); still a `TRANSFER`, without its link, when that cost needs a missing conversion |
+| Giving `TRANSFER` (quantity < 0) | `ADJUSTMENT` with the same quantity, asset, cash currency, date, description and tags, without a cost basis: an `ADJUSTMENT` taking units out has no value (below) |
 | Any other type carrying a link (an `ADJUSTMENT` can) | The same type, without its link |
 
 Each of these rows loses its `related_transaction_id` and gets a new `updated_at`,
@@ -456,42 +483,32 @@ empty pool gives what Auto gives, a zero cost (backlog P-1); a missing conversio
 writes nothing, and the `ADJUSTMENT` stays without a cost basis (see
 [WAC & Cost Basis — Diagnostics](wac.md#diagnostics)).
 
-**The giving leg of a `TRANSFER`** (decision 47 of release 1.3). The outgoing side
-of a `TRANSFER` takes no cost basis (`cost_basis_pair` in `TX_TYPE_METADATA` marks
-it `forbidden`), and an `ADJUSTMENT` taking units out without one reads the units
-it moved as destroyed: a write-off in the FIFO lots. So the leg leaves at the
-**Auto cost of its own broker**, at which the lots hand its units over (see
-[Hand-over at cost](fifo_lot_engine.md#handover-at-cost)). `_handover_cost()`
-(`auto_cost.py`) computes it: `_auto_cost()` on the leg's broker, up to its date,
-without the leg itself — not `_auto_cost_source()`, which for a `TRANSFER` still
-linked names the partner's broker, here the one being deleted. Like the receiving
-legs' costs, it is computed before any row changes, so a computation that fails
-leaves every row as it was. Then `make_standalone()` turns the leg into an
-`ADJUSTMENT` and `_write_auto_cost()` writes `cost_basis_override` and
-`cost_basis_currency`; an empty pool gives a zero cost there too. When the cost
-needs a missing conversion (no `wac`), the leg stays a `TRANSFER` and only loses
-its link: the lots refuse it (`TRANSFER_PAIR_MISSING`) and the Dashboard counts it
-at market value, as before decision 47, rather than read an `ADJUSTMENT` without a
-cost as units destroyed.
+**The giving leg of a `TRANSFER`** (decision 47 of release 1.3, as the developer changed
+it on 21/10/2026, N78-1). The outgoing side of a `TRANSFER` takes no cost basis
+(`cost_basis_pair` in `TX_TYPE_METADATA` marks it `forbidden`), and an `ADJUSTMENT`
+taking units out has no value: its units only leave the quantity, at 0 in the FIFO lots,
+and their cost is realized as a loss (see
+[An `ADJUSTMENT_OUT` has no value](fifo_lot_engine.md#handover-at-cost)). So
+`make_standalone()` turns the leg into an `ADJUSTMENT` and `delete_by_broker()` clears
+`cost_basis_override` and `cost_basis_currency`. No cost is computed for it, so it needs no
+rate and is always converted. Until N78-1 the leg left at the Auto cost of its own broker,
+and stayed a `TRANSFER` without its link when that cost needed a missing conversion.
 
-**An unreadable pool** (W-B69). Either cost raises `UnreadablePoolError` when its
-pool — the deleted broker's for a receiving leg, the leg's own broker for a giving
-one — holds a row whose quantity, amount or cost basis cannot be read (see
-[Unreadable pool](wac.md#unreadable-pool)). The deletion of that broker then fails
-whole: `delete_bulk()` rolls back its savepoint and reports it failed with the
-error's message, which gives the number of such rows and never an id; nothing of
-that broker changes, and the other brokers of the request go on.
+**An unreadable pool** (W-B69). The Auto cost of a receiving leg raises
+`UnreadablePoolError` when its pool — the deleted broker's — holds a row whose quantity,
+amount or cost basis cannot be read (see [Unreadable pool](wac.md#unreadable-pool)). The
+deletion of that broker then fails whole: `delete_bulk()` rolls back its savepoint and
+reports it failed with the error's message, which gives the number of such rows and never
+an id; nothing of that broker changes, and the other brokers of the request go on.
 
-The same cost is written wherever else a giving leg leaves its pair: on a split of
-the pair, in the batch's WAC stage (see
-[Split & Promote](split_promote.md#transfer-giving-leg)), and, on the legs that a
-deletion before 1.3 left as a `TRANSFER` without its partner, by the
-`lone-transfer-legs` step that runs right after the post-migration fixes (see
+A giving leg leaves its pair the same way wherever else it does: on a split of the pair
+(see [Split & Promote](split_promote.md#transfer-giving-leg)), and, on the legs that a
+deletion before 1.3 left as a `TRANSFER` without its partner, by the `lone-transfer-legs`
+step that runs right after the post-migration fixes (see
 [Lone giving legs](../../architecture/database/index.md#lone-transfer-legs)).
-Tests: `./dev.py test services broker` (`TestDeleteBulkCrossBrokerPair`: BR-U-073,
-076, 078 and 086–088) and `./dev.py test services orphan-transfer-numbers`
-(`TestOrphanOutgoingTransfer`: the sending broker's lots and Dashboard once the
-receiver is deleted).
+Tests: `./dev.py test services broker` (`TestDeleteBulkCrossBrokerPair`) and
+`./dev.py test services orphan-transfer-numbers` (`TestOrphanOutgoingTransfer`: the
+sending broker's lots and Dashboard once the receiver is deleted).
 
 What the conversion changes in the figures:
 
@@ -504,15 +521,13 @@ What the conversion changes in the figures:
   at arrival (`DailyStateBuilder._transfer_leg_capital()`): its gain also counts
   what the units gained before the transfer.
 - **Given asset.** The sending broker's lots no longer fail on
-  `TRANSFER_PAIR_MISSING`: the `ADJUSTMENT_OUT` closes its FIFO lots at the row's
-  cost, the value handed over counting as their proceeds, and the asset's
-  performance history counts that value as money out (see
-  [Lots Analysis Service](lots_analysis_service.md#history-builders)). On the
-  Dashboard the units leave the sending broker's capital at their average cost
-  (`_is_capital_adjustment()`), instead of their market value on the transfer date
-  (`_transfer_leg_capital()`). The price marks also read the row's cost as an
-  observed `TRADE` price: an interplay still open, pending the developer's J-17
-  (see [Price Resolver](price_resolver.md#design-contract)).
+  `TRANSFER_PAIR_MISSING`: the `ADJUSTMENT_OUT` closes its FIFO lots at 0, realizing
+  their cost as a loss, and the asset's performance history counts no money out (see
+  [Lots Analysis Service](lots_analysis_service.md#history-builders)). On the Dashboard
+  the sending broker's capital does not move, instead of losing the units' market value
+  on the transfer date (`_transfer_leg_capital()`): the units leave its NAV, and the
+  average cost they give up is realized as a loss (`DailyStateBuilder`, see
+  [WAC & Cost Basis — Portfolio engine](wac.md#portfolio-engine)).
 - **Cash halves.** Capital and P&L do not change: an unlinked `CASH_TRANSFER` or
   `FX_CONVERSION` already counted as an external cash flow
   (`ScopeAwareTransactionClassifier`), as the `DEPOSIT` or `WITHDRAWAL` it becomes

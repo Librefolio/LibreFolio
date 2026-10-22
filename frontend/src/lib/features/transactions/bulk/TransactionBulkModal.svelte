@@ -33,7 +33,7 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import BrimEvidenceTable from '$lib/features/transactions/import/BrimEvidenceTable.svelte';
-    import {remainingTodos} from '$lib/features/transactions/bulk/bulkTodos';
+    import {initialCostBasisMode, remainingTodos} from '$lib/features/transactions/bulk/bulkTodos';
     import {resolveBrimTodoMessage} from '$lib/features/transactions/resolveBrimNotice';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import TransactionResultBanner from './TransactionResultBanner.svelte';
@@ -59,6 +59,7 @@
         buildBulkOperationIndex,
         buildBulkRowLabels,
         createBulkDateComparator,
+        firstAutoCostRefusalRowId,
         isBulkBalanceIssue,
         resolveBulkIssueRows,
         serializeOps,
@@ -70,7 +71,7 @@
         type IdentifiedBulkOp,
     } from '$lib/features/transactions/bulk/bulkDisplay';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
-    import {cashAmountsCancel, resolvePromoteAllFields, TX_DESCRIPTION_MAX_LENGTH} from '$lib/features/transactions/bulk/promoteHelpers';
+    import {cashAmountsCancel, promotePairOrder, resolvePromoteAllFields, TX_DESCRIPTION_MAX_LENGTH} from '$lib/features/transactions/bulk/promoteHelpers';
     import {assetQuantitiesCancel, importableSuggestions as importableFromResults, mixedPromotePairs, newRowSuggestId} from '$lib/features/transactions/bulk/promoteSuggest';
     import {resolveIssueMessage, type ResolverContext} from '$lib/features/transactions/resolveValidationMessage';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
@@ -208,7 +209,8 @@
         const side: 'from' | 'to' | 'self' = tx.related_transaction_id != null ? (rawQty < 0 ? 'from' : 'to') : 'self';
         const cbRule = getCostBasisRule(tx.type, side);
         let cbMode: 'auto' | 'manual' | null = null;
-        if (cbRule !== 'forbidden') {
+        // A cost only where units come in: an ADJUSTMENT taking units out has no value (N78-1).
+        if (cbRule !== 'forbidden' && !(cbRule === 'required_qty_pos' && rawQty <= 0)) {
             cbMode = 'manual';
         }
         return {
@@ -414,6 +416,9 @@
     $effect(() => {
         if (!open) return;
         const {rows, status: initSt, autoForm} = resolveInitialRows();
+        // K-2: the nested form or wizard opens automatically once per open. Set when it is scheduled before the load
+        // ends; the load's end then opens nothing the user may have closed meanwhile.
+        let autoOpenScheduled = false;
         untrack(() => {
             issues = [];
             lastOpsIndexMap = new Map();
@@ -461,6 +466,7 @@
                 ops = next;
                 initialOpsKey = serializeOps(next);
                 scheduleAutoOpen(autoForm, next);
+                autoOpenScheduled = true;
             } else {
                 // Slow path: keep ops empty so DataTable doesn't render
                 // with FALLBACK_RULE. Ops will be assigned after Promise.all.
@@ -469,6 +475,7 @@
                 // empty key would make an untouched editor ask to discard.
                 initialOpsKey = serializeOps(ops);
                 if (rows.length === 0 && intent?.action !== 'import') {
+                    autoOpenScheduled = true;
                     queueMicrotask(() => {
                         formOpen = true;
                         formMode = 'create';
@@ -477,6 +484,7 @@
                     });
                 }
                 if (intent?.action === 'import') {
+                    autoOpenScheduled = true;
                     queueMicrotask(() => {
                         importWizardOpen = true;
                     });
@@ -484,7 +492,9 @@
             }
         });
         void (async () => {
-            await Promise.all([ensureBrokersLoaded(), ensureCurrenciesLoaded($currentLanguage), ensureAssetsLoaded(), ensureTypesLoaded()]);
+            // K-4: the language read untracked. Tracked, a language change re-ran this whole effect, which rebuilds the
+            // rows from the intent: every unsaved edit was lost.
+            await Promise.all([ensureBrokersLoaded(), ensureCurrenciesLoaded(untrack(() => $currentLanguage)), ensureAssetsLoaded(), ensureTypesLoaded()]);
             untrack(() => {
                 // B4-fix: if ops was deferred (slow path), rebuild + assign now.
                 if (ops.length === 0 && rows.length > 0) {
@@ -498,7 +508,7 @@
                     ops = next2;
                     initialOpsKey = serializeOps(next2);
                 }
-                if (!formOpen) {
+                if (!autoOpenScheduled && !formOpen) {
                     scheduleAutoOpen(autoForm, ops);
                 }
             });
@@ -629,6 +639,17 @@
             if (partnerId == null) continue;
             const pIdx = idToIdx.get(partnerId);
             if (pIdx == null || pIdx === i || toHide.has(pIdx)) continue;
+            // K-3b: a W4b placeholder (the half on a broker the user cannot read) has no row in the store, so the direction
+            // test below would read its cash as 0 and hide a readable receiver behind it: after a reset the pair left the
+            // grid. As in the first build (pass 2), the placeholder is always the hidden partner of the readable half.
+            if (opArr[pIdx].inaccessible) {
+                const sharedUuid = generateUUID();
+                d.link_uuid = sharedUuid;
+                opArr[pIdx].link_uuid = sharedUuid;
+                opArr[pIdx].pairedWith = d.tempId;
+                toHide.add(pIdx);
+                continue;
+            }
             // Determine from/to: "from" = negative cash or negative qty (the sender)
             const cashAmt = Number((d.op === 'edit' ? txStoreGet(d.txId) : undefined)?.cash?.amount ?? 0);
             const partnerCashAmt = Number((opArr[pIdx].op === 'edit' ? txStoreGet(opArr[pIdx].txId) : undefined)?.cash?.amount ?? 0);
@@ -786,6 +807,15 @@
         });
     }
 
+    /** Whether a row of these fields takes a cost-basis mode: the guardrail of `applyFormPayload` below, on the exact sign
+     *  of the quantity as the payload reads it (`diffDualItem`). */
+    function costBasisModeAllowed(fields: DraftFields): boolean {
+        const sign = exactDecimalSign(fields.quantity ?? '0') ?? 0;
+        const side: 'from' | 'to' | 'self' = sign < 0 ? 'from' : sign > 0 ? 'to' : 'self';
+        const cbRule = getCostBasisRule(fields.type, side);
+        return cbRule !== 'forbidden' && !(cbRule === 'required_qty_pos' && sign <= 0);
+    }
+
     function applyFormPayload(target: DraftFields, p: Record<string, unknown>) {
         const prevType = target.type; // Capture before overwrite for type-change detection
         if (typeof p.broker_id === 'number') target.broker_id = p.broker_id;
@@ -899,8 +929,9 @@
         // BUG-C2: also undo pending splits
         // Remove partner rows added by split, then reset remaining edit rows
         ops = ops.filter((d) => !(d as any).addedBySplit);
+        // K-3: a W4b placeholder has nothing to reset, its half is not in the store (as in `resetRow`).
         ops = ops.map((d) => {
-            if (d.op !== 'edit') return d;
+            if (d.op !== 'edit' || d.inaccessible) return d;
             const reset = editOpFromTx(d.txId, {addedViaPicker: d.addedViaPicker});
             return reset;
         });
@@ -912,8 +943,40 @@
     /** Split a paired row in the BulkModal.
      *  Saved paired → backend split + 2 editable preview rows (DD-R2.1).
      *  New paired (link_uuid shared or pairedWith) → local transformation only. */
+    /** «Split pair» on a merge still waiting for the save (`pendingPromotes`: two saved rows, or a saved and a new one):
+     *  undo it, whichever row the pair shows (J-67). Each row gets its own type back — a saved row's from the store, a
+     *  new row's `promoteFromType` — with its amount in the editor's convention (a withdrawal as its magnitude, as
+     *  `fieldsFromTx` reads it); the new row loses the promote's link; both rows are visible; the merge leaves the
+     *  queue, so the save sends neither it nor a split. False for any other pair: one saved as such (Case A), two new
+     *  rows merged locally (Case B/C). */
+    function undoPendingPromote(a: PendingOp, b: PendingOp): boolean {
+        const saved = [a, b].filter((op) => op.op === 'edit').map((op) => (op as any).txId as number);
+        const created = [a, b].find((op) => op.op === 'create');
+        const index = pendingPromotes.findIndex((promote) =>
+            saved.length === 2 ? (promote.id_a === saved[0] && promote.id_b === saved[1]) || (promote.id_a === saved[1] && promote.id_b === saved[0]) : saved.length === 1 && !!created?.link_uuid && promote.id_a === saved[0] && promote.link_uuid_b === created.link_uuid,
+        );
+        if (index < 0) return false;
+        pendingPromotes = pendingPromotes.filter((_, at) => at !== index);
+        for (const op of [a, b]) {
+            const sourceType = op.op === 'edit' ? txStoreGet((op as any).txId)?.type : op.promoteFromType;
+            if (sourceType) {
+                const rule = getTypeRule(sourceType);
+                op.fields.type = sourceType as TransactionTypeCode;
+                op.fields.quantity = magnitudeForRule(op.fields.quantity, rule.quantityRule);
+                if (op.fields.cash) op.fields.cash = {code: op.fields.cash.code, amount: magnitudeForRule(op.fields.cash.amount, rule.cashSign)};
+            }
+            op.promoteFromType = null;
+            if (op.op === 'create') op.link_uuid = null;
+            op.pairedWith = undefined;
+        }
+        ops = [...ops];
+        lastSuggestKey = ''; // B9: invalidate suggest
+        return true;
+    }
+
     function handleSplitRow(row: PendingOp) {
         const partnerOp = getPartnerOp(row.tempId);
+        if (partnerOp && undoPendingPromote(row, partnerOp)) return;
 
         // Splitting undoes the pairing, so any pre-promote type kept for the wire is
         // now stale — left behind it would silently override the standalone type each
@@ -1225,7 +1288,7 @@
                 return true;
             }),
         draftKey: () => lastDraftKey,
-        validateFn: async () => {
+        validateFn: async (reason) => {
             if (ops.length === 0) {
                 issues = [];
                 lastValidatedDraftKey = lastDraftKey;
@@ -1261,6 +1324,9 @@
             lastValidatedDraftKey = sentKey;
             issuesDismissed = false;
             applyIssueSnapshot(issueSnapshot, opsMap, result.rawResponse, sentKey);
+            // Q-J57-4: an explicit validation (⚡, the import hand-over) leads to the first row refused for an Auto cost;
+            // the background ones never move the grid under the user's hands.
+            if (reason === 'manual') jumpToFirstAutoCostRefusal();
 
             // ── Phase C: extract wac_results from validate response ──
             const rawResp = result.rawResponse as Record<string, unknown> | null;
@@ -1501,6 +1567,7 @@
                 applyIssueSnapshot(issueSnapshot, opsMap, result.rawResponse, currentKey);
                 issuesDismissed = false;
                 commitFailed = true;
+                jumpToFirstAutoCostRefusal();
                 return;
             }
             onCommitted?.(result.rawResponse);
@@ -1544,7 +1611,7 @@
         const slug = type.toLowerCase().replace(/_/g, '-');
         const isPair = getTypeRule(type).requiresPair;
         const arrow = isPair ? '<span class="shrink-0">↔</span>' : '';
-        return `<span class="inline-flex items-center gap-1.5 text-xs leading-snug" style="white-space:normal"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.75rem;height:1.75rem" class="object-contain shrink-0" onerror="this.style.display='none'"/>${arrow}<span>${label}</span></span>`;
+        return `<span class="inline-flex items-center gap-1.5 text-xs leading-snug" style="white-space:normal"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.75rem;height:1.75rem" class="object-contain shrink-0" data-hide-on-error="display"/>${arrow}<span>${label}</span></span>`;
     }
 
     /** Format a cash value as "±amount CODE". */
@@ -1562,7 +1629,7 @@
         const name = info?.display_name ?? `#${assetId}`;
         // Bug11-fix: use asset type icon as fallback when icon_url is null
         const iconUrl = info?.icon_url ?? (info?.asset_type ? getAssetTypeIconUrl(info.asset_type) : null);
-        const iconHtml = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
+        const iconHtml = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" data-hide-on-error="display" />` : '';
         return `<span class="inline-flex items-center gap-1.5 text-sm truncate">${iconHtml}${escapeHtml(name)}</span>`;
     }
 
@@ -1681,7 +1748,7 @@
                             const origSlug = origType.toLowerCase().replace(/_/g, '-');
                             return {
                                 type: 'html',
-                                html: `<span class="inline-flex items-center gap-1 text-[11px]"><img src="/icons/transactions/${origSlug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" onerror="this.style.display='none'"/> <span class="text-lf-muted">→</span> ${renderTypeHtml(targetType)}</span>`,
+                                html: `<span class="inline-flex items-center gap-1 text-[11px]"><img src="/icons/transactions/${origSlug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" data-hide-on-error="display"/> <span class="text-lf-muted">→</span> ${renderTypeHtml(targetType)}</span>`,
                             };
                         }
                         return {type: 'html', html: `<span class="text-[11px]">${renderTypeHtml(row.fields.type)} → <span class="text-purple-600 dark:text-purple-400">✂️ ADJUSTMENT</span></span>`};
@@ -2109,6 +2176,14 @@
         tableRef.navigateToRowId(rowId);
     }
 
+    /** Q-J57-4: page the grid to the first row refused for an Auto cost (`firstAutoCostRefusalRowId`), as a click on its
+     *  issue would; nothing when the issues no longer describe the draft or no row is refused for an Auto cost. */
+    function jumpToFirstAutoCostRefusal() {
+        if (lastIssueDraftKey !== lastDraftKey) return;
+        const rowId = firstAutoCostRefusalRowId(issues, getIssueRows);
+        if (rowId) jumpToTodoRow(rowId);
+    }
+
     function jumpToIssue(issue: ValidationIssue) {
         if (lastIssueDraftKey !== lastDraftKey) return;
         const rows = getIssueRows(issue);
@@ -2228,9 +2303,8 @@
         let cash: {code: string; amount: string} | null = null;
         const rawCash = tx.cash && !Array.isArray(tx.cash) ? tx.cash : null;
         if (rawCash) {
-            const rawAmt = Number(rawCash.amount);
-            const displayAmt = rule.cashSign === 'negative' && rawAmt < 0 ? Math.abs(rawAmt) : rawAmt;
-            cash = {code: String(rawCash.code), amount: String(displayAmt)};
+            // B-47: the editor's convention (W-B65), as in `fieldsFromTx`: exact, never through Number.
+            cash = {code: String(rawCash.code), amount: magnitudeForRule(String(rawCash.amount), rule.cashSign)};
         }
 
         // cost_basis_override
@@ -2288,10 +2362,14 @@
         return newOps;
     }
 
-    function onImportBatch(creates: Array<{tx: TransactionCreateItem; todos: ImportTodo[]}>, guideProgress?: {current: number; total: number}) {
+    async function onImportBatch(creates: Array<{tx: TransactionCreateItem; todos: ImportTodo[]}>, guideProgress?: {current: number; total: number}) {
         const newOps = creates.map((item) => {
             const op = txCreateItemToPendingOp(item.tx);
             if (item.todos.length > 0) op.todos = item.todos;
+            // Q-J57-5 (a) and Q-J57-1 (c): a row the plugin left without a cost mode starts in Auto where its type takes a
+            // cost, so the hand-over's validation costs it or refuses it and leads to it; a cost the plugin wrote, or a
+            // blocking cost todo, starts it in Manual.
+            op.fields.cost_basis_mode = initialCostBasisMode({mode: op.fields.cost_basis_mode, cost: op.fields.cost_basis_override, costAllowed: costBasisModeAllowed(op.fields)}, item.todos);
             return op;
         });
         const linked = linkPairedImportOps(newOps);
@@ -2302,6 +2380,10 @@
         toasts.success($t('importWizard.importedCount', {values: {n: creates.length}}));
         // Every hand-over is validated once, whatever its size (D5): above the auto threshold the
         // editor would otherwise say nothing until "Validate now". Later edits follow the usual rules.
+        // The validation checks the state its draft key names, and the key effect names the new rows only once this
+        // call has returned: wait for it, or the verdict comes back «stale» and is dropped — nothing shown above the
+        // threshold, and no lead to a refused row (Q-J57-4). The manual trigger cancels the run the effect queued.
+        await tick();
         scheduler.trigger('manual');
     }
 
@@ -2625,6 +2707,17 @@
             if (resolved.cost_basis_override != null) op.fields.cost_basis_override = resolved.cost_basis_override as any;
         }
 
+        // The editor shows a magnitude and lets the type carry the sign (fieldsFromTx, txCreateItemToPendingOp, the
+        // form). The target type is free-sign (CASH_TRANSFER, FX_CONVERSION), so in every branch the sign moves into the
+        // amount before the type changes, or the pair is shown, ordered and split as if the withdrawal were a deposit
+        // (J-67). The save is unchanged: a promoted saved row is not sent as an update, and a new row's create signs by
+        // its source type (`promoteFromType`), on which applySign is idempotent.
+        for (const op of [opA, opB]) {
+            const {signedQty, signedCash} = applySignRules(op.fields.quantity, op.fields.cash, getTypeRule(op.fields.type));
+            op.fields.quantity = signedQty;
+            op.fields.cash = signedCash;
+        }
+
         if (opA.op === 'edit' && opB.op === 'edit') {
             // 2 saved → batch promotes
             pendingPromotes = [
@@ -2641,12 +2734,6 @@
             // 2 new → local transformation (assign shared link_uuid)
             const sharedUuid = generateUUID();
             for (const op of [opA, opB]) {
-                // The editor shows a magnitude and lets the type carry the sign (txCreateItemToPendingOp,
-                // the form). The target type is free-sign (CASH_TRANSFER, FX_CONVERSION), so the sign has
-                // to move into the amount before the type changes, or the withdrawal leaves as a deposit.
-                const {signedQty, signedCash} = applySignRules(op.fields.quantity, op.fields.cash, getTypeRule(op.fields.type));
-                op.fields.quantity = signedQty;
-                op.fields.cash = signedCash;
                 op.link_uuid = sharedUuid;
                 op.fields.type = match.targetType as TransactionTypeCode;
             }
@@ -2983,8 +3070,7 @@
             const opB = ops.find((o) => o.tempId === entry.tempIdB);
             if (!opA?.fields.cash || !opB?.fields.cash) continue;
 
-            const aAmt = Number(opA.fields.cash.amount);
-            const [fromOp, toOp] = aAmt < 0 ? [opA, opB] : [opB, opA];
+            const {from: fromOp, to: toOp} = promotePairOrder(opA, opB, getTypeRule);
             if (!fromOp.fields.cash || !toOp.fields.cash) continue;
             const base = fromOp.fields.cash.code;
             const quote = toOp.fields.cash.code;
@@ -3035,6 +3121,12 @@
 
     /** Trigger promote from a suggestion line (auto-select both ops + invoke handler). */
     function triggerPromoteFromSuggestion(sug: (typeof allSuggestions)[number]) {
+        // The banner's own order (`promotePairOrder`, read as the banner and «Merge all» read it, before `suggestionOps`
+        // may add a saved candidate): the dialog lists first the row the banner lists first, so its first text is the
+        // one «Merge all → All left» keeps (J-66). Only what the dialog shows follows it; the promote keeps opA and opB.
+        const rawA = ops.find((o) => o.tempId === sug.tempIdA);
+        const rawB = ops.find((o) => o.tempId === sug.tempIdB);
+        const swapped = !!(rawA && rawB) && promotePairOrder(rawA, rawB, getTypeRule).swapped;
         const pair = suggestionOps(sug);
         if (!pair) return;
         const {opA, opB} = pair;
@@ -3048,11 +3140,11 @@
             tagsB = opB.fields.tags;
         const diverges = descA !== descB || JSON.stringify(tagsA) !== JSON.stringify(tagsB);
         if (diverges) {
-            const labelA = sug.isDB ? `#${(opA as any).txId ?? ''} ${opA.fields.type}` : opA.fields.type;
-            const labelB = sug.isDB ? `#${(opB as any).txId ?? ''} ${opB.fields.type}` : opB.fields.type;
+            const [first, second] = swapped ? [opB, opA] : [opA, opB];
+            const labelOf = (op: PendingOp) => (sug.isDB ? `#${(op as any).txId ?? ''} ${op.fields.type}` : op.fields.type);
             promoteMergeData = {
-                txA: {label: labelA, description: descA, tags: tagsA, date: opA.fields.date},
-                txB: {label: labelB, description: descB, tags: tagsB, date: opB.fields.date},
+                txA: {label: labelOf(first), description: first.fields.description, tags: first.fields.tags, date: first.fields.date},
+                txB: {label: labelOf(second), description: second.fields.description, tags: second.fields.tags, date: second.fields.date},
                 targetTypeLabel: match.targetLabel,
                 opA,
                 opB,
@@ -3082,8 +3174,8 @@
             if (!rawA || isPaired(rawA)) continue;
             const rawB = ops.find((o) => o.tempId === sug.tempIdB);
             if (rawB && isPaired(rawB)) continue;
-            // The banner's own order: the negative-cash row first when both rows carry cash.
-            const swapped = !!(rawB && rawA.fields.cash && rawB.fields.cash && Number(rawA.fields.cash.amount) > 0 && Number(rawB.fields.cash.amount) < 0);
+            // The banner's own order (`promotePairOrder`): the paying row first, the one «left» names.
+            const swapped = !!rawB && promotePairOrder(rawA, rawB, getTypeRule).swapped;
             const pair = suggestionOps(sug);
             if (!pair || isPaired(pair.opB)) continue;
             const {opA, opB} = pair;

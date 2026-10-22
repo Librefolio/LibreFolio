@@ -13,6 +13,10 @@ export interface AdminAccount {
     holds_place?: boolean;
     /** The initial administrator of LIBREFOLIO_ADMIN_EMAIL waiting for its setup link (F02): never reactivated here. */
     pending_setup?: boolean;
+    /** Inactive and waiting for its email verification, its link live or expired (E-7): badged instead of «Deactivated». */
+    pending_verification?: boolean;
+    /** The account's avatar (an uploaded image or an address), drawn after the row's chevron (N69-4); null without one. */
+    avatar_url?: string | null;
 }
 
 export interface OpenInvite {

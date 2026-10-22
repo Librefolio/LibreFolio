@@ -75,7 +75,7 @@ Is your securities account older than two years? A second export, the **Lista mo
     | `TITOLI SCADUTI` | **Sell** at par (100), plus **Interest** for any amount paid above par |
     | `GIRO ALTRO DOSSIER`, `VERS.TITOLI` | **Adjustment**: securities moved in from another dossier, such as an inheritance, at their book price and without cash |
 
-    Any other causale is skipped with a warning. Each buy gets a matching **Deposit**, and each sale, coupon or premium a matching **Withdrawal**: this file adds no cash of its own, and the real cash comes from the account movements.
+    Any other causale is skipped and listed in an amber warning, with a link to open an issue on GitHub. Each buy gets a matching **Deposit**, and each sale, coupon or premium a matching **Withdrawal**: this file adds no cash of its own, and the real cash comes from the account movements.
 
 ## 🔄 What gets imported
 

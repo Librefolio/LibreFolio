@@ -35,6 +35,7 @@ vi.mock('$lib/stores/reference/currencyStore', () => ({
 import ChartSignalsSection, {type SignalDataSummary} from './ChartSignalsSection.svelte';
 import ChartAestheticsSection from './ChartAestheticsSection.svelte';
 import type {SignalConfig, SignalDefinition, SignalProblem} from '$lib/charts/signals';
+import {OVERFLOW_MARQUEE_SELECTOR} from '$lib/actions/scrollOnOverflow';
 
 /** A configured signal whose summary says "no data" (pointCount 0 → severity error). */
 const SIGNAL: SignalConfig = {
@@ -731,5 +732,111 @@ describe('ChartAestheticsSection — the y-axis scale is labelled from the catal
         const {min, max} = mountMarkedBounds();
 
         expect(boundCaptions(min, max)).toEqual([marked('common.min'), marked('common.max')]);
+    });
+});
+
+describe('ChartSignalsSection — the asset-comparison selector scrolls a long asset name with the project marquee (Y-38)', () => {
+    /*
+     * What it protects: the asset-comparison selector of the signals panel sits in a 192 px box, and both its closed
+     * field and the rows of its list cut the asset's name with an ellipsis: a name is almost never readable whole
+     * (developer's request, 20/10). Decision (a): the field AND the rows scroll, with the marquee the rest of the
+     * project uses for asset names.
+     *
+     * The contract: in the closed field, and in each row of the open list, the option's label (the asset's display
+     * name plus the suffix the section appends to it) sits in ONE element carrying the marquee's marker, as its text
+     * and as its `title`. Nothing else changes: the closed field still shows the name, once.
+     *
+     * How it is read: the selector is `signal-param-<card id>-assetId-select`, its closed field `<selector>-trigger`,
+     * read while closed (with the inline search, an open selector draws its search input there instead), and a row is
+     * `search-select-option-<asset id>` inside the listbox. A marquee is found by `OVERFLOW_MARQUEE_SELECTOR`, the
+     * marker the marquee itself is keyed on: a functional hook, not a style. jsdom has no layout, so nothing ever
+     * overflows here: the contract is the element and its marker, not the motion.
+     *
+     * Red today: the field and the rows draw the label in a span that truncates it; no element carries the marker.
+     */
+    const LONG_NAME = 'Synthetic comparison asset with a deliberately long display name that never fits a 192 px field';
+    /** The asset the card under test compares against: the long name, shown in its closed field. */
+    const SELECTED = {id: 3801, display_name: LONG_NAME};
+    /** The asset the panel's other comparison card holds: the list of the card under test marks it as used elsewhere. */
+    const PINNED = {id: 3802, display_name: 'Synthetic peer asset already held by the other comparison card of the panel'};
+    /** An asset no card holds: its label carries no suffix. */
+    const FREE = {id: 3803, display_name: 'Synthetic free peer'};
+    const ASSETS = [SELECTED, PINNED, FREE];
+    /**
+     * Each asset's label in the list of the card under test, as the section builds its `configuredAssets` options:
+     * ' ✓' for the card's own asset, ' 📌' for an asset another comparison card holds, nothing for the rest. (' 👑',
+     * the page's own asset, never reaches this list: the asset page leaves that asset out of `availableAssets`, and
+     * no other page names an asset as its main one.)
+     */
+    const LABELS: Record<number, string> = {
+        [SELECTED.id]: `${SELECTED.display_name} ✓`,
+        [PINNED.id]: `${PINNED.display_name} 📌`,
+        [FREE.id]: FREE.display_name,
+    };
+    const comparisonStyle: SignalConfig['style'] = {color: '#0ea5e9', lineWidth: 2, lineType: 'solid', markerStart: null, markerEnd: null};
+    /** The card under test. */
+    const CARD: SignalConfig = {id: 'y38-comparison', signalType: 'asset-comparison', params: {assetId: String(SELECTED.id)}, style: comparisonStyle};
+    /** The panel's other comparison card, holding PINNED. */
+    const OTHER_CARD: SignalConfig = {id: 'y38-other-comparison', signalType: 'asset-comparison', params: {assetId: String(PINNED.id)}, style: comparisonStyle};
+    const SELECT_ID = `signal-param-${CARD.id}-assetId-select`;
+
+    beforeEach(async () => {
+        await setupI18n();
+    });
+
+    function normalize(text: string | null | undefined): string {
+        return (text ?? '').replace(/\s+/g, ' ').trim();
+    }
+
+    /** Every marquee inside `scope`, read as the text it shows and the title it carries. */
+    function marqueeReadings(scope: HTMLElement): Array<{text: string; title: string | null}> {
+        return [...scope.querySelectorAll<HTMLElement>(OVERFLOW_MARQUEE_SELECTOR)].map((marquee) => ({text: normalize(marquee.textContent), title: marquee.getAttribute('title')}));
+    }
+
+    /** Mount the panel with its two comparison cards: the selector of the card under test, and its closed field after checking it is closed. */
+    function mountSelector(): {select: HTMLElement; field: HTMLElement} {
+        render(ChartSignalsSection, {signals: [CARD, OTHER_CARD], definitions: [ASSET_COMPARISON_DEFINITION], availableAssets: ASSETS});
+        const select = screen.getByTestId(SELECT_ID);
+        const field = within(select).getByTestId(`${SELECT_ID}-trigger`);
+        expect(field, 'barrier: the field is closed (an open selector draws its search input there instead)').toHaveAttribute('aria-expanded', 'false');
+        return {select, field};
+    }
+
+    /** Open the list from the closed field: each asset's row, after checking it shows the asset's name. */
+    async function openRows(select: HTMLElement, field: HTMLElement): Promise<Array<{id: number; row: HTMLElement}>> {
+        await fireEvent.click(field);
+        const listbox = await within(select).findByRole('listbox');
+        return ASSETS.map(({id, display_name}) => {
+            const row = within(listbox).getByTestId(`search-select-option-${id}`);
+            expect(row, `barrier: the row of asset ${id} shows its name`).toHaveTextContent(display_name);
+            return {id, row};
+        });
+    }
+
+    it('the closed field holds the selected asset’s whole label in one marquee, as its text and its title', () => {
+        // Today: the field draws the label in a span that truncates it, so the long name ends in an ellipsis; no
+        // element of the field carries the marquee's marker.
+        const {field} = mountSelector();
+        expect(field, 'barrier: the closed field shows the selected asset').toHaveTextContent(LONG_NAME);
+
+        expect(marqueeReadings(field), 'the closed field holds no marquee with the whole label: a long asset name is cut by an ellipsis instead of scrolling').toEqual([{text: LABELS[SELECTED.id], title: LABELS[SELECTED.id]}]);
+    });
+
+    it('each row of the open list holds its asset’s whole label in one marquee, as its text and its title', async () => {
+        // Today: every row draws its label in a span that truncates it; no element of a row carries the marquee's
+        // marker.
+        const {select, field} = mountSelector();
+        const rows = await openRows(select, field);
+
+        const readings = Object.fromEntries(rows.map(({id, row}) => [id, marqueeReadings(row)]));
+        expect(readings, 'a row of the list holds no marquee with its whole label: a long asset name is cut by an ellipsis instead of scrolling').toEqual(Object.fromEntries(ASSETS.map(({id}) => [id, [{text: LABELS[id], title: LABELS[id]}]])));
+    });
+
+    it('the closed field shows the selected asset’s whole name exactly once (guard)', () => {
+        // Green today and after: the field's text holds the whole display name once. The marquee must neither drop it
+        // (the name left to a title alone) nor duplicate it (a second copy for a seamless loop).
+        const {field} = mountSelector();
+
+        expect(normalize(field.textContent).split(LONG_NAME).length - 1, 'the closed field does not show the selected asset’s whole name exactly once: the marquee dropped or duplicated it').toBe(1);
     });
 });

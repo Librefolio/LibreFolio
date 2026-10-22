@@ -7883,3 +7883,1019 @@ dell'avviso nelle 4 lingue è approvato così com'è.
 
 - **Niente stamp sulla guida del PAC.** La cache di Aphra ha l'MD5 `1e299f28…` (tradotta il 10/10), mentre la pagina EN a
   HEAD, prima della mia modifica, era già `f1d2f335…`. Il debito c'era già, e uno stamp lo nasconderebbe.
+
+### N61-form — analisi breve (19/10, sola lettura, base `51c5f1d2c`)
+
+Richiesta (developer, via coordinatore): con `LIBREFOLIO_SUPPORT_URL` pagina https (non mailto), la riga «Non lo trovi?»
+della ricerca asset passa alla pagina lo stesso oggetto e testo del mailto, `?title=…&body=…` come per GitHub, senza dati
+personali. Il modulo del sito cloud li leggerà.
+
+Oggi (`frontend/src/lib/components/assets/assetSearchReport.ts`, `reportHref`):
+- mailto: `mailto:addr?subject=<enc>&body=<enc, CRLF>` (RFC 6068);
+- github: `https://github.com/Librefolio/LibreFolio/issues/new?title=<enc>&body=<enc, LF>` (encodeURIComponent);
+- page: l'URL nudo; il clic copia il body negli appunti (`reportClicked`), toast «copiato»;
+- link con `target=_blank rel="noopener noreferrer"` per page e github: nessun Referer, l'indirizzo dell'istanza non esce.
+
+Forma proposta per la pagina:
+- parametri `title` (= oggetto del mailto) e `body` (= corpo), gli stessi nomi di GitHub;
+- codifica: UTF-8 percent-encoding con `encodeURIComponent`: spazio `%20` (mai `+`), `+` → `%2B`, a capo LF `%0A`
+  (non il CRLF del mailto). Si legge con qualunque parser standard (URLSearchParams, parse_qs, decodeURIComponent);
+- composizione: si aggiungono alla query già presente nell'URL configurato (`&` se c'è già una query), il frammento `#…`
+  resta in fondo; un `title`/`body` già presenti nell'URL configurato si sostituiscono;
+- contenuto (fisso, in inglese, come oggi): title «LibreFolio: asset not found — <testo cercato, max 80 code point, poi …>»;
+  body: «I searched LibreFolio for an asset and could not find it.» / riga vuota / «Search: <testo>» / «Providers:» con
+  «- <codice>: N result(s) | error <codice> | no answer» (o «Providers: none») / facoltativa «In the form: currency …,
+  type …, <tipo id> <valore>» / «LibreFolio <versione>, <profilo>, language <lingua>» / riga vuota / «Anything else that
+  helps (the exchange, a link to the asset's page):».
+- privacy: niente utente, email, indirizzo dell'istanza o dati del portafoglio (per costruzione); a differenza del mailto,
+  l'URL con i parametri finisce nei log del sito e nella cronologia del browser: stesso contenuto della mail o della issue.
+
+Note:
+- appunti: lascerei la copia negli appunti per la pagina, per le pagine che non leggono i parametri (nessun cambio
+  visibile; da togliere solo se il developer lo chiede);
+- lunghezza: la ricerca non ha un massimo (`q: Query(..., min_length=1)`), quindi un testo enorme farebbe un URL oltre gli
+  ~8 KB che molti server accettano (414); vale già oggi per GitHub. Nessun taglio proposto (nessuno digita 7 000 caratteri).
+- lavoro: `reportHref` (caso page), il Vitest `assetSearchReport.test.ts` (il caso «page: the page itself, nothing added»
+  si rovescia: rosso prima), eventuale E2E della riga, doc admin (`configuration.en.md`, `hosting_providers.en.md`),
+  doc utente (`user/assets/create-edit.md#let-us-know`), sviluppatore (`architecture/settings.md`), CHANGELOG. Piccolo.
+
+**N61-form — via** (19/10, developer): la forma proposta; la copia negli appunti resta; nessun taglio di lunghezza; prima
+il rosso. La forma la gira il coordinatore al coordinatore del cloud.
+- **Rossi**: un test-author nuovo, su due file Vitest.
+  - `assetSearchReport.test.ts`: il caso «page: the page itself, nothing added» si rovescia, più i casi con query,
+    frammento, `title`/`body` già presenti, e la codifica esatta.
+  - `AssetSearchAutocomplete.test.ts`, ASA-R9: l'`href` della pagina con i due parametri.
+  - Nessun E2E usa una pagina di supporto.
+- **Doc**: un docs-writer, solo EN (le traduzioni non hanno queste sezioni, debito già presente):
+  - la riga «A web page» di `user/assets/create-edit.en.md`;
+  - la riga di `LIBREFOLIO_SUPPORT_URL` in `admin/configuration.en.md`;
+  - il punto «Your own support page» di `admin/hosting_providers.en.md`, con il contratto del modulo e un esempio.
+- **CHANGELOG**: la voce «Can't find it? Let us know» è già in Unreleased, mai uscita. La aggiorno invece di aggiungere
+  una riga.
+- **Cura preparata**: `n61form_code.py`.
+  - `pageWithReport` dentro `reportHref`: la query della pagina resta, `title` e `body` già presenti si sostituiscono, il
+    frammento va in fondo.
+  - A secco su `/tmp`: Prettier pulito.
+  - Provato in Node su sei URL: andata e ritorno esatti con `URLSearchParams`, `%20`, `%2B`, `%0A`, nessun `%0D`, un
+    solo `title`, il frammento in fondo.
+
+### X-R45b-ui — l'avviso del tasso saltato arriva all'utente (19/10, base `51c5f1d2c`)
+
+**Il difetto**, trovato dalla revisione automatica di X-R45b e girato dal coordinatore: il backend è corretto, ma le due
+strade del frontend che chiedono `fx_quotes` scartano `source.issues`.
+- `FxRateReader.read()` (`planner/fxRead.svelte.ts`) usa solo `outcome.missing`.
+- `refreshCopiedFacts` (`copies.ts`) restituisce un `RefreshSummary` che non ha un campo per le issue.
+- Così il tasso più vecchio si copia senza nessun messaggio, mentre CHANGELOG, guida e i18n promettono l'avviso.
+
+**Domanda e decisione.** Il lettore Auto chiede solo `fx_quotes`; ogni card di coppia dice già «nessun tasso salvato».
+- Mostrare tutte le issue ripeterebbe «missing» due volte per ogni coppia senza tassi, il caso di un utente nuovo.
+- Ho proposto (a): nella card, sotto il tasso, senza `saved_fx_missing`; oppure (b): una lista unica in cima.
+- **Il developer sceglie (a).** La rilettura in `RefreshNotice` va come proposta: le issue della rilettura, senza la nota
+  strutturale dei Broker, come fa `CopyNotice`.
+
+**Cura** (`xr45bui_code.py`, provata a secco su `/tmp`, Prettier pulito):
+- `FxRateReader` tiene le issue dell'ultima lettura per coppia.
+  - Un metodo `issues(draft, pair)`, azzerato all'inizio di ogni lettura della coppia.
+  - Le issue sono quelle della quota FX della coppia (`fx:<coppia>:…`), meno `saved_fx_missing`.
+- In `FxStep`, nella card, solo in Auto, `IssueList` (`pac-planner-fx-issues`) con `presentSourceIssues` e `listIssue`.
+- In `RefreshSummary`, `issues`: quelle della rilettura, senza `broker_execution_profile_unsupported`.
+- `RefreshNotice` prende i props `draft` e `source` e mostra la lista (`…-issues`). Diventa *warning* anche quando c'è una
+  issue che non è *info*.
+- `PacPlannerTool` tiene la fonte della rilettura per i due punti dove mostra la nota.
+- Nessun colore nuovo: solo `mt-2` di layout e componenti esistenti sui ruoli (skill `design-system`).
+
+**Rossi**: un test-author nuovo, in quattro file nuovi da registrare: `copies.refresh.test.ts`,
+`result/RefreshNotice.test.ts`, `fxRead.test.ts`, `steps/FxStep.test.ts`.
+
+**N61-form — rossi e doc** (19/10):
+- **Rossi** ✅: Vitest sui due file, 7 rossi e 142 verdi.
+  - In `assetSearchReport.test.ts`, 6 casi pagina: senza query, con query, frammento, query e frammento, `title`/`body`
+    sostituiti, codifica esatta con andata e ritorno.
+  - In `AssetSearchAutocomplete.test.ts`, ASA-R9.
+  - Il test-author ha adattato anche ASA-S3 e ASA-S8, che confrontavano `href` con la pagina nuda: ora confrontano il
+    prefisso fino a `?` o `#`. Sono guardie, verdi prima e dopo.
+- **Doc** ✅, docs-writer, solo EN:
+  - `user/assets/create-edit.en.md`, la riga «A web page»;
+  - `admin/configuration.en.md`, la riga `LIBREFOLIO_SUPPORT_URL`, con il link a `#support-form`;
+  - `admin/hosting_providers.en.md`, il sottopunto nuovo `{: #support-form }`: codifica, posizione (con la barra
+    finale che il backend toglie), contenuto, log e cronologia, appunti, un esempio di link;
+  - `developer/backend/assets/search_link_finder.md`, il canale pagina.
+- **Nota mandata al coordinatore**, per il modulo del cloud: `env_url` toglie una barra finale, quindi `…/support/`
+  riceve `…/support?title=…`.
+- La cura (`n61form_code.py`, che corregge anche il commento di `AssetSearchAutocomplete.svelte`) si applica dopo il
+  checkpoint di X-R45b-ui, che ha la precedenza.
+
+**X-R45b-ui — rossi, cura, verdi** ✅ 19/10:
+- **Rossi**: un test-author, 4 file nuovi, tutti in jsdom come `request.test.ts`.
+  - `copies.refresh.test.ts` e `result/RefreshNotice.test.ts`.
+  - `fxRead.test.ts` e `steps/FxStep.test.ts`, con la coppia CHF/USD: `canonicalPair` ordina le valute, e USD/CHF non
+    sarebbe mai richiesta.
+  - Vitest: 10 rossi, 4 guardie verdi.
+  - Fuori dalla richiesta, il test-author ha aggiunto un rosso: una rilettura di CHF/USD pulisce solo la sua issue e
+    lascia l'avviso di EUR/USD.
+- **Cura**: `xr45bui_code.py`, 5 file. Registrati i 4 test nell'azione `component-unit` (`_frontend_utility.py`).
+- **Verdi**:
+  - Vitest sull'intera cartella `pac-allocator` più il test del cancello dei colori: 589/589 in 18 file;
+  - cancelli dei colori puliti; `front check` 0/0;
+  - `check-orphans`: 571 test frontend raggiungibili, 4 in più.
+- **Non girato**: l'E2E `pac-allocator-real.spec.ts`. La cura aggiunge DOM solo quando c'è un'issue, e i dati di prova
+  non hanno tassi saltati.
+
+**N61-form — la domanda del cloud, cura e verdi** ✅ 19/10 (base `9c8bafeca`):
+- **La domanda del coordinatore del cloud** (17:36): `LIBREFOLIO_SUPPORT_URL` può già avere una query, per esempio
+  `https://librefolio.eu/segnala?i=<riferimento opaco dell'istanza>`?
+  - Backend, `env_url`: la query è accettata. Rifiuta solo uno schema non http(s), l'host mancante, nome utente o
+    password, gli spazi. Toglie una barra finale dall'intero valore: un riferimento che finisce con `/` la perderebbe.
+  - Frontend, `supportChannel`: `new URL()` → `href`; query e frammento restano.
+  - `pageWithReport`: i parametri della pagina restano byte per byte e in ordine; un `title` o un `body` già presenti si
+    tolgono; i due nuovi si aggiungono con `&`, codificati con `encodeURIComponent`; il frammento resta in fondo.
+    Provato in Node: `?i=Ab3-x_9.z~q` identico; `?i=Ab3&title=old&body=old` → un solo `title` e un solo `body`;
+    `?i=a%20b#modulo` resta `a%20b`.
+  - Perché non `URLSearchParams.set`: riscrive tutta la query (`i=a%20b` → `i=a+b`) e scrive gli spazi come `+`,
+    contro la forma approvata (`%20`).
+  - Il riferimento: caratteri sicuri (lettere, cifre, `-` `_` `.` `~`) o già codificati; non finisce con `/`; non si
+    chiama `title` o `body`; è **pubblico** (`GET /api/v1/system/instance`): un indizio per l'assistenza, mai una prova
+    d'identità.
+  - Il coordinatore conferma (19/10): `encodeURIComponent` e la query della pagina intatta. Il contratto finale l'ha
+    girato al coordinatore del cloud.
+- **Cura** ✅: `n61form_code.py` applicato, 3 file.
+  - `assetSearchReport.ts`: `pageWithReport` nel caso `page` di `reportHref`, e il commento d'intestazione.
+  - `AssetSearchAutocomplete.svelte`: il commento di `reportClicked`.
+  - `CHANGELOG.md`: corretta la voce «Can't find it? Let us know» di Unreleased, nessuna riga nuova.
+  - Un `user:pass@` nell'URL sparirebbe con `origin`, ma `supportChannel` rifiuta già un indirizzo con nome utente o
+    password (`assetSearchReport.ts:85`): il caso non arriva mai a `pageWithReport`.
+- **Doc**: il docs-writer ha aggiunto a `#support-form` il punto «An instance reference», tre righe con le regole
+  sopra.
+- **Verdi**:
+  - Vitest sui due file: 149/149; sull'intera cartella `components/assets/`: 1 668/1 668 in 40 file;
+  - `front check` 0/0; cancelli dei colori puliti;
+  - `mkdocs build` stretto, uscita 0; `mkdocs check-links`: 97 link validi;
+  - l'esempio di `#support-form` rifatto in Node col modulo vero (`n61form_doc_example.mjs`): identico byte per byte, e
+    la decodifica ridà oggetto e corpo.
+- **Traduzioni**: nessun timbro.
+  - `hosting_providers` non ha traduzioni.
+  - `configuration` (375 errori) e `create-edit` (30) hanno debito già presente: l'hash della cache di Aphra è diverso
+    da quello di HEAD.
+  - Sono modifiche di contenuto, che le traduzioni devono ricevere.
+- **Non girato**: nessun E2E usa una pagina di supporto; l'`href` lo prova ASA-R9.
+
+### X-R45b-ui, seconda revisione — ✅ 20/10 (pausa il 19/10 alle 18:12, base `186b92404`)
+
+> **Stato alla pausa generale** del 19/10 (richiesta del developer, 18:12): rossi scritti e visti, cura preparata e
+> **non applicata**, nessun server, porta 6183 libera, nessun comando git eseguito. Ripreso il 20/10 alle 08:47
+> («Ripresa» qui sotto).
+>
+> - Sporchi nel worktree: i 3 file di test qui sotto più questo piano.
+> - Tutto ciò che serve per ripartire sta nella cartella di sessione
+>   (`~/.copilot/session-state/ad5f37c8-22bd-4df5-9dd2-74f51ca0fe6c/files/`), non in `/tmp`.
+
+**I due difetti** (revisione automatica di `082805b7a`, girati dal coordinatore):
+1. **La rilettura mostra avvisi di broker fuori dal piano.**
+   - `refreshQuery` chiede tutti i broker posseduti e, con cassa copiata, le sezioni `brokers` e `cash_balances`.
+   - `RefreshSummary.issues` le prende tutte tranne `broker_execution_profile_unsupported`: così compaiono
+     `broker_inactive`, `negative_cash_unsupported` e `currency_spec_missing` di broker fuori dal piano, e la nota passa
+     al tono warning.
+   - La copia esplicita della liquidità le filtra con `selectedBrokerIssues` (`copies.ts:31`).
+2. **La card FX tiene un avviso vecchio dopo la rilettura.**
+   - La memoria delle issue per coppia la azzera solo `FxRateReader.read`; `refreshCopiedFacts` riscrive il tasso, ma
+     non quella memoria.
+   - Così, corretto il D2 e riletto da «Calcola», la card dice ancora «D2 saltato». Al contrario, un salto trovato solo
+     dalla rilettura non compare mai sulla card.
+
+**Decisioni ricevute** (coordinatore, 19/10):
+- Prima i rossi, poi un commit a parte sopra `186b92404`, poi il checkpoint.
+- Intanto il coordinatore porta in dev il ramo fino a `51c5f1d2c`. La UI di X-R45b (`082805b7a`) e N61-form
+  (`ea532c5eb`) entrano dopo questa cura.
+- Poi, nell'ordine: la revisione del contratto di Z-29a, l'analisi della funzione «a gradini», N64, Q1–Q3/S1.
+
+**Cura** (preparata il 19/10, a secco pulita con Prettier su `/tmp`; **applicata il 20/10**, «Ripresa»):
+- Gli strumenti, nella cartella di sessione:
+  - `files/checks/xr45bui2_code.py`, a sostituzioni contate, con una copia in `files/parked/`;
+  - lo stesso cambiamento come patch, `files/parked/xr45bui2.patch` (prova `patch -p1 --dry-run` sul worktree: OK).
+- **D1**: `summary.issues = selectedBrokerIssues(source, plan.cashBrokerIds)`, meno la nota strutturale. È la regola
+  della copia della liquidità: restano le issue dei broker la cui cassa è nel piano, e tutte quelle senza chiave
+  `broker:N` (`fx_quote`, `price`, asset, sezioni).
+- **D2**:
+  - La memoria per coppia esce da `fxRead.svelte.ts` e va nel modulo nuovo `planner/fxIssues.ts`, con
+    `fxPairIssues`, `forgetFxPairIssues` e `rememberFxPairIssues`. Il modulo nuovo serve a evitare un ciclo:
+    `fxRead.svelte.ts` importa già da `copies.ts`.
+  - `FxRateReader` la scrive come prima.
+  - `refreshCopiedFacts` la scrive, insieme al tasso, per ogni coppia che rilegge, cioè quelle che passano il suo
+    primo `continue`: le issue `fx_quote` della coppia, meno `saved_fx_missing`, come fa il lettore. Nessuna issue → la
+    voce si cancella. Le coppie fuori dal piano o manuali tengono la memoria.
+- Nessun file da registrare nel runner: `fxIssues.ts` non è un test, e i rossi stanno in file già registrati.
+
+**Rossi** ✅ (test-author `5c16fc14`, secondo giro): 3 file modificati, nessuno nuovo, nessun caso esistente
+adattato.
+- Una corsa, a carico 22,5: `cd frontend && node_modules/.bin/vitest run --reporter=verbose` sui 3 file → **7 rossi,
+  18 verdi**.
+- `copies.refresh.test.ts`, D1:
+  - 3 rossi, il broker 9 posseduto ma fuori dal piano: `broker_inactive`, `negative_cash_unsupported` su
+    `cash:broker:9:USD`, `currency_spec_missing`;
+  - 3 guardie: `broker_inactive` del broker 7 del piano, `saved_fx_skipped` di EUR/USD, `price_missing`.
+  - ⚠️ **L'ultima modifica del file non è verificata**: le due tabelle `it.each` passate ad array con `%s`. Non
+    l'hanno vista né Vitest né Prettier.
+- `fxRead.test.ts`, D2:
+  - rossi: (a) la rilettura del D2 corretto cancella l'avviso; (b) un salto trovato solo dalla rilettura si ricorda;
+    (e) una coppia in attesa, che la rilettura trova senza alcun tasso salvato, dimentica il suo `saved_fx_invalid`;
+  - guardie: (c) una coppia manuale fuori dal piano tiene la memoria; (c2) una coppia passata a «Manuale» durante la
+    rilettura la tiene anch'essa; (d) l'issue di EUR/USD non finisce su CHF/USD.
+- `steps/FxStep.test.ts`: 1 rosso, lo scenario del revisore.
+  - Il passo legge e mostra il salto; si smonta; la rilettura trova il D2 valido; si rimonta.
+  - Atteso: nessun `pac-planner-fx-issues` nella card CHF/USD, e il tasso del D2.
+  - Barriera di presenza: la card EUR/USD tiene il suo avviso, ancora vero.
+- A lettura la cura copre tutti e 7, da provare:
+  - (e) perché una coppia in attesa passa il primo `continue` ed è riletta;
+  - (c2) perché il primo `continue` viene prima della riga che segna la coppia come riletta.
+
+**Ripresa** ✅ 20/10 (messaggio del coordinatore delle 08:46: riapplicare la cura dalla patch parcheggiata, i verdi, il
+checkpoint; poi la revisione di Z-29a, con l'esito in un messaggio):
+1. ✅ Stato: HEAD `186b92404`, sporchi i 3 test più questo piano, porta 6183 libera, `/tmp/librefolio-r13-x`
+   sparita col riavvio.
+2. ✅ Rossi rieseguiti, a carico 25,8: `cd frontend && node_modules/.bin/vitest run --reporter=verbose` sui 3 file → **7
+   rossi, 18 verdi**, come il 19/10. Tutti e 7 cadono su un'asserzione (`AssertionError`), nessuno su un import o un
+   errore. Prettier `--check` pulito sui 3 file: l'ultima modifica di `copies.refresh.test.ts`, non verificata il 19/10,
+   ora lo è.
+3. ✅ Cura: `patch -p1` con `files/parked/xr45bui2.patch`, prima a secco poi vera. 3 file: `copies.ts`,
+   `fxRead.svelte.ts`, il nuovo `fxIssues.ts`. Il diff applicato corrisponde alla cura descritta sopra.
+4. ✅ Verdi:
+   - Vitest sui 3 file: 25/25;
+   - Vitest sull'intera cartella `pac-allocator` più il test del cancello dei colori: **602/602** in 18 file, cioè 589
+     più i 13 casi nuovi;
+   - Prettier pulito su `copies.ts`, `fxRead.svelte.ts` e `fxIssues.ts`; cancelli dei colori puliti;
+   - `api sync` (nessun file tracciato toccato) e `front check` 0 errori e 0 avvisi;
+   - `check-orphans`: 571 test frontend, 144 E2E e 490 backend, tutti raggiungibili. Nessun file di test nuovo.
+5. ✅ Doc: nessuna modifica. La guida del PAC (`user/tools/pac-allocator/index.en.md`, passo FX) dice già quello che ora
+   succede: l'avviso nomina la coppia, il giorno saltato e quello usato, e la lettura si ripete prima del calcolo. Il
+   CHANGELOG (Unreleased) resta vero.
+6. Non girato: l'E2E `pac-allocator-real`, che il coordinatore lascia al gate d'ingresso.
+
+Commit proposto: `fix(pac): re-read warnings for planned Brokers; FX card follows the re-read (X-R45b review)`.
+
+**Corsia** ✅ ricreata il 20/10: `test --test-port 6183 --data-dir /tmp/librefolio-r13-x db populate --force --clean`,
+7 148 record (erano 7 124 sulla base `6c108929f`; la base nel frattempo è cambiata). Porta 6183 libera dopo.
+
+**Domande aperte**, non toccate dalla pausa:
+- le righe ≤ 0 già salvate (N92), dal developer;
+- X-R48b resta sospesa, dipende da N68.
+
+### Revisione del contratto di Z-29a v3 — ✅ OK, nessun difetto bloccante (20/10, sola lettura)
+
+Richiesta del coordinatore (19/10, ripetuta il 20/10): la parte di contratto del commit `37c3ec3ee` di Z (ramo
+`e-alfy-z-sospensione-e-risveglio`), con l'esito in un messaggio. HEAD `5a53e00ad`. Nessun comando git che scrive:
+solo `merge-tree`, `archive`, `show`, `grep`.
+
+**Fusione di prova**:
+- pulita sia con la mia HEAD (albero `1012444fc`) sia con `dev_release2` `ecc7ac667` (albero `6130aed3c`, quello che
+  Z riceverà davvero; dev ha già N92 e il mio ramo fino a `51c5f1d2c`);
+- 3 file fusi da soli, riletti:
+  - `schemas/prices.py`: qui sotto;
+  - `developer/backend/assets/architecture.md`: Z aggiunge 4 pezzi nella parte della query, il testo di N92 non lo
+    tocca, i due testi sono coerenti;
+  - `scripts/test_runner/_backend_services.py`: si legge, 189 azioni senza doppioni, ci sono le mie e le sue.
+- **Il percorso della query di Z sull'albero fuso**: `price_query.py` è identico a quello di Z. Da allora dev ha
+  cambiato, in quel percorso, solo tre file:
+  - `schemas/prices.py`, cioè N92;
+  - `price_store.py`, di cui la query usa solo `storable_current_value`, il prezzo corrente;
+  - `fx/conversion.py`, cioè il mio rovescio di X-R45: lo stesso filtro dei tassi usabili, scritto in linea, quindi
+    lo stesso comportamento.
+  - Quindi il rischio che porta la fusione sta solo nello schema.
+
+**N92 e il `model_config` di Z convivono** — provato sull'albero `6130aed3c`, esportato in una cartella di prova
+(`files/checks/z29a_merged_proof.sh`):
+- una sola `model_config` per classe: in `FAPricePoint` il gancio di Z `_description_without_backticks`, in
+  `FAPriceWritePoint` il `from_attributes` di N92;
+- la descrizione di `FAPricePoint` nello schema non ha più apici inversi e tiene il `"clear"` di N92;
+- `api sync`: uscita 0. Il generatore scrive la descrizione come template literal (`generated.ts`,
+  `` first: FAPricePoint.describe(`Single price point…`) ``), dove le virgolette doppie non danno noia;
+- `front check`: 0 errori e 0 avvisi; nessun venv nuovo.
+
+**I punti del contratto**, riletti nel codice e provati con la validazione dello schema fuso:
+- **Voci**:
+  - `key` e `sample_like` seguono `^[A-Za-z0-9_.:-]{1,64}$`; `max_points` va da 1 a 10 000; `resolution` è
+    `daily`, `weekly` o `monthly`;
+  - al massimo uno dei tre, e mai insieme a segnali, annotazioni o eventi: altrimenti il 422 di pydantic, provato.
+- **Il 422 `sample_reference`**:
+  - `detail = {code, reason, item, key, message}`, con `reason` uno di `unknown_key`, `duplicate_key`, `chained`,
+    `range_mismatch`;
+  - si alza prima di ogni lettura, anche prima del taglio al soffitto.
+- **I risultati**:
+  - `resolution` vale `daily` di default, `sample_bounds` è `None`;
+  - in settimanale o mensile, i punti sono le fini dei secchi, e il primo punto va negli estremi quando non è una
+    fine di secchio;
+  - gli estremi si calcolano dopo la conversione dei cambi. La conversione non scarta mai un punto, quindi il
+    `pop(0)` è sicuro.
+- **Il seguace di una scheda giornaliera** è giornaliero dal giorno F' più tardo: Z riscrive `date_range`
+  (`daily_starts`) solo quando il primo giorno della scheda viene dopo il suo, e la risposta non ha estremi. Se la
+  scheda non ha dati, sul riempimento del seguace vale il `max_points` o la `resolution` della scheda.
+- **Con `include_price: false`** la risposta è `weekly`/`monthly`, senza punti né estremi. Confermato, ed è scritto
+  nella doc.
+- **I chiamanti di `get_prices_bulk`** in produzione passano tutti un `FAPriceQueryItem`: l'API, tre componenti
+  dell'AI Export, il rischio. Così i campi nuovi valgono sempre `None` e per loro non cambia niente.
+
+**Note, nessuna bloccante**:
+1. **`include_price: false`**: le righe dei secchi si leggono lo stesso (`_read_samples`) e contano nel budget dei
+   giorni (punti + 2). Una voce che non restituisce prezzi può quindi provocare `bulk_too_many_days`.
+   - Proposta: saltare la lettura e il conteggio per queste voci, perché la `resolution` viene dal solo piano; oppure
+     rifiutarle nella validazione.
+   - La descrizione di `sample_bounds`, «None for a daily one», dovrebbe aggiungere «or without prices».
+2. **Requisito per Z-29b, il frontend**:
+   - `planBulkBatches` e `splitBatch` (`frontend/src/lib/api/bulkBatches.ts`) tagliano la lista in fette contigue;
+   - un `sample_like` il cui capo finisce in un altro lotto fa fallire tutto il lotto con un 422 `unknown_key`;
+   - quindi ogni gruppo (la voce della scheda e il bersaglio del confronto) deve restare nello stesso lotto, anche
+     nel nuovo taglio dopo un `bulk_too_many_days`.
+3. **Estetica dello schema**:
+   - il gancio trasforma ``` ``x`` ``` in `''x''` nella descrizione OpenAPI: Swagger mostra `''FAHistoricalData''`.
+     Sostituire prima la coppia di apici inversi darebbe `'x'`;
+   - il rischio degli apici inversi vale per ogni modello nuovo puntato da un campo obbligatorio. Un ritocco
+     nell'esportatore (`scripts/list_api_endpoints.py`) li coprirebbe tutti. Il guasto è rumoroso (`api sync` o
+     `front check` falliscono), quindi non è urgente.
+4. **Strati**:
+   - `schemas/prices.py` importa `SampleResolution` da `services/assets/price_sampling.py`. C'è un precedente:
+     `schemas/risk.py`, MF-D3;
+   - il modulo e i due `__init__` dei pacchetti importano solo la libreria standard, quindi nessun ciclo;
+   - in alternativa, il tipo potrebbe stare negli schemi. È solo una questione di stile.
+
+**Previsione dei conflitti con la mia coda**: Q1 (i prezzi per osservazioni) e Q2 (la conversione solo nei giorni di
+cambiamento) riscrivono gli stessi blocchi di `get_prices_bulk` che Z cambia: il riempimento, il budget, la
+conversione.
+- Quindi Q1 e Q2 partono su una base che ha già Z-29a. Si costruiscono su `_fill_point` e `_sample_series`, e tengono
+  il budget di Z per le voci campionate.
+- Nessuna sovrapposizione con la funzione «a gradini» (`fx/conversion.py`) né con N64.
+
+**Non girato**: i pytest di Z (`services price-query-sampling`) sull'albero fuso.
+- Il runner, per la categoria `services`, cancella il DB della corsia e lo ricostruisce dalle migrazioni dell'albero.
+- Il conftest della radice, poi, apre il DB di `get_data_dir()`.
+- Quindi non si possono girare con sicurezza da una copia di prova: restano al gate dopo la fusione.
+
+**Prove** (cartella di sessione `files/checks/logs/`): `z29a_mt_head.log`, `z29a_mt_dev.log`,
+`z29a_merged_proof.log`, `z29a_merged_schema_probe.log`, `z29a_merged_api_sync.log`, `z29a_merged_front_check.log`.
+Cartella di prova in `/tmp` cancellata.
+
+### Nota di MF sul rovescio di X-R45 — analisi (20/10)
+
+- MF, rivedendo `c720e25cb` da solo: un `inf` salvato supera il `rate > 0` di `fx_quotes`. È **già chiusa da X-R45b**
+  (`292d7e55e`, in dev): `_usable_rate` = finito e > 0 in `fx_quotes.py:32`, `:121`, `:124`. Lo fissano i casi `inf`,
+  `0-then-inf`, `inf-then-0` di `test_bulk_reads_chunked.py`.
+- **L'unico `rate > 0` rimasto nei lettori del PAC è `wac.py:154`**, che rilegge la riga esatta scelta da
+  `convert_bulk`. `convert_bulk` esclude gli `inf`, quindi in pratica un `inf` lì non arriva. Se arrivasse:
+  - `_rates_match(inf, x)` direbbe «uguale», perché la scala diventa infinita (provato);
+  - `SafeDecimal` rifiuta gli infiniti, quindi la prova fallirebbe con un 500.
+- **Proposta** mandata al coordinatore, in attesa del via:
+  - `_usable_rate` passa in `pac_allocator/source/keys.py` e la usano `fx_quotes` e `wac.py`;
+  - una riga infinita dà la prova «missing» e `allocation.wac_fx_missing`;
+  - il rosso va in `test_portfolio_allocation_source.py`, con `compute_wac_iterative` sostituito.
+
+### wac-inf — una sola regola per i tassi salvati del PAC ✅ 20/10 (via del coordinatore 09:14, base `2fb8e3707`)
+
+- **Via**: «Una sola regola `_usable_rate` in `pac_allocator/source/keys.py`, usata da `fx_quotes` e da `wac.py:154`.
+  Prima il rosso, poi la cura e il checkpoint.»
+- **Rosso** ✅ (test-author `e388de9d`): `test_wac_fx_row_at_the_rate_date_with_an_unusable_rate_fails_closed`, in
+  `test_portfolio_allocation_source.py` (azione `pure`, solo finti).
+  - Quattro casi: `direct-usable` (guardia, la barriera positiva), `direct-inf` (ROSSO), `direct-zero` e
+    `inverted-inf` (guardie).
+  - Controlla anche la chiave chiesta al lettore e che la prova abbia una sola riga.
+  - `_converted_wac_result` ha preso dei parametri con le stesse costanti di prima come valori di default: i
+    chiamanti esistenti non cambiano.
+  - Rieseguito da me, a carico 14,7: **1 rosso, 3 verdi**. Il rosso è una `ValidationError` di pydantic in `wac.py:168`
+    («Input should be a finite number», `Decimal('Infinity')`): il 500 descritto sopra.
+- **Cura** ✅ (`files/checks/wacinf_code.py`, a secco pulita con black e ruff):
+  - `keys.py`: `usable_rate`, finito e > 0, presa da `fx_quotes._usable_rate`. Il nome è pubblico, senza trattino
+    basso, come ogni altro aiuto di `keys.py`, perché la importano due moduli.
+  - `fx_quotes.py`: la usa nei 3 punti, la sua copia e l'import di `Decimal` ora inutile se ne vanno.
+  - `wac.py:154`: `usable_rate(saved_row.rate)` al posto di `rate > 0`, con una riga di commento.
+  - Le due docstring di test che nominavano `_usable_rate` (`test_portfolio_allocation_source.py`,
+    `test_bulk_reads_chunked.py`).
+- **Verdi**:
+  - `services portfolio-allocation-source` 102/102;
+  - `services bulk-reads-chunked` 65/65: i test di X-R45b sulle quotazioni;
+  - black e ruff puliti sui 5 file; porta 6183 libera.
+- **Nessuna voce nel CHANGELOG**: il caso non arriva all'utente. Il costo converte con un solo `convert_bulk`
+  (`financial_math/average_cost.py`, `compute_average_costs`), che salta le righe inutilizzabili, quindi la riga
+  riletta alla data del costo è sempre usabile, salvo una modifica del DB fra le due letture. Nessuna doc nomina la
+  regola.
+
+### P3, la funzione «a gradini» — analisi (20/10, sola lettura, HEAD `5a53e00ad`)
+
+**Chi la usa e come** (oggi un `convert_bulk(Currency(1, ccy) → target)` per ogni giorno):
+- il motore, `engine._preload_fx_rates` (`:596-708`):
+  - tiene solo `results[i][0].amount`, mai `rate_date` né il riempimento all'indietro;
+  - i lettori del motore leggono il giorno esatto: `daily_state.py:802`, `:818`, `:932`, `:1084`;
+- la cassa nativa, `compute_native_cash` e `_unit_requests` (`:456-517`):
+  - chiede ogni giorno dal primo movimento, da `EARLIEST_RANGE_START` in poi;
+  - prima del pavimento, solo i giorni dei movimenti;
+  - legge l'ultimo tasso ≤ giorno con una bisezione (`_rate_at`);
+  - calcola i «giorni di cambio» sul calendario dei suoi punti (`change_days`, `rate_change_days`, pubblico).
+
+**La regola da riprodurre** (`fx/conversion.py:88-289`):
+- per coppia ordinata, la finestra va dall'ancora (l'ultimo tasso usabile ≤ il primo giorno) all'ultimo giorno;
+- solo righe usabili (`usable_fx_rate_bounds`), anche per l'ancora;
+- per ogni giorno, l'ultima riga ≤ giorno (`bisect_right`), senza limite all'indietro;
+- se diretta `1 * rate`, se inversa `1 / rate`; nessuna riga dà `None`;
+- **nessuna unione delle gambe**: `convert_bulk` legge solo le righe della coppia. Le coppie a catena le salva la
+  sincronizzazione, solo nei giorni in cui ogni gamba ha un tasso (`fx/sync.py:87-90`).
+- Il piano di MF dice «rotte a più gambe = unione dei gradini delle gambe»: va corretto. Altrimenti i valori non sono
+  identici, perché comparirebbero tassi in giorni dove la catena non ne ha.
+
+**Proposta**, in `fx/conversion.py`:
+- `UnitRateSteps` (frozen): `source`, `destination`, `days`, `values`, `rate_days`, `at(day)`.
+- `async unit_rate_steps(session, requests: Mapping[(source, destination), Sequence[(first_day, last_day)]])`, che
+  restituisce un `UnitRateSteps` per ogni coppia orientata.
+- Su ogni giorno chiesto `at(day)` è identico a `convert_bulk(Currency(1, source), destination, day).amount`, e
+  `rate_days` a `rate_date`.
+- **Il calendario è tagliato alle finestre chieste**: un gradino al primo giorno di ogni finestra, col valore
+  dell'ancora, più uno per ogni riga usabile dentro la finestra.
+  - Partire dalla data dell'ancora cambierebbe i «giorni di cambio» della cassa nativa: il primo movimento non
+    sarebbe più un giorno di cambio, la data dell'ancora sì.
+  - Più finestre per coppia servono alla cassa nativa per restare identica: i giorni prima del pavimento come
+    finestre di un giorno, più la finestra principale.
+- I valori li dà `oriented_rate` (`financial_math/fx_rates.py`), che è il `1 / rate` di `convert_bulk`. Le prove
+  confrontano anche l'esponente (`as_tuple()`).
+- **Una sola regola di lettura**: la query di `convert_bulk` (ancora, finestra, filtro usabile, blocchi da
+  `FX_PAIRS_PER_QUERY`) diventa un helper privato usato da entrambi. Il comportamento di `convert_bulk` non cambia,
+  e lo tengono fermo `services fx-conversion` e i test che già lo usano.
+- La coppia di una sola valuta si rifiuta con un `ValueError`: `convert_bulk` dà come `rate_date` il giorno stesso,
+  che un gradino non sa dire, e i due chiamanti la saltano già.
+
+**Cosa resta a MF** quando passa i consumatori ai gradini, cioè P3 vero e proprio:
+- i lettori del motore oggi leggono il giorno esatto e danno `None` per un giorno che nessuno ha chiesto; `at(day)`
+  darebbe un valore. I risultati sono identici solo se il motore legge i giorni che chiede oggi: lo dica la parità
+  sull'uscita intera;
+- la cassa nativa può dare a `NativeCash` i gradini al posto della mappa per giorno: `_rate_at` e `change_days`
+  restano identici con il calendario tagliato descritto sopra.
+
+**Rossi** (un test-author), in `test_fx_rate_steps.py`, registrati come `services fx-rate-steps`:
+- parità giorno per giorno con `convert_bulk(Currency(1))`, sul valore con esponente e su `rate_date`;
+- i casi: coppia diretta e inversa, buchi, ancora prima della finestra, nessuna riga prima del primo giorno, nessuna
+  riga del tutto, righe inutilizzabili (0, `inf`, ≥ 1E+14, < 1E-10) come ancora e dentro la finestra, finestra di un
+  giorno, più finestre, più coppie di `FX_PAIRS_PER_QUERY`;
+- il calendario: il primo giorno di ogni finestra più le righe usabili dentro;
+- il `ValueError` sulla coppia di una sola valuta.
+
+**Peso**: piccolo-medio, circa 80 righe di codice tra funzione e helper, più la matrice di parità.
+- Rischi: l'esponente dei `Decimal`, gestito con `oriented_rate` e `as_tuple()`; lo spostamento della query di
+  `convert_bulk`, coperto dai test esistenti.
+- Conflitti: `fx/conversion.py` oggi non lo tocca nessun altro; `_backend_services.py` è condiviso, ma l'aggiunta è
+  additiva. Nessuna sovrapposizione con Z-29a (`price_query.py`).
+- Riuso: con `rate_days` la stessa funzione serve a Q2 e Q3 (la freschezza del cambio, `fx_rate_date` e
+  `fx_days_back`).
+
+### P3, la funzione «a gradini» — rossi, cura, verdi ✅ 20/10 (via 09:35, base `10335d428`)
+
+**Via e contratto**: MF ha dato l'OK alla firma; il coordinatore ha dato il via dopo il lotto di `wac.py`. Le note di MF
+sono contratto:
+- (n1) la stessa aritmetica di `convert_bulk`, meglio una funzione sola per entrambi;
+- (n2) le stesse righe: il filtro di X-R38 nell'ancora e nella finestra, e gli stessi blocchi di `FX_PAIRS_PER_QUERY`;
+- (n3) `rate_days` è la data della riga usata; il primo gradino di una finestra cade al suo primo giorno, con la riga
+  d'ancora; prima della prima riga usabile, None;
+- (n4) due righe consecutive con lo stesso valore restano due gradini;
+- (n5) la coppia di una sola valuta dà `ValueError`, scritto nella doc;
+- (n6) l'oracolo: `at(day)` uguale a `convert_bulk` bit per bit (`as_tuple()`) su ogni giorno di ogni finestra, e
+  `rate_day_at(day)` uguale alla sua data.
+- MF tiene dal lato del consumatore il dominio dei giorni chiesti: un giorno non chiesto dà None.
+
+**Rossi** ✅ (test-author `bf576265`): `backend/test_scripts/test_services/test_fx_rate_steps.py`, **63 casi**, azione
+`services fx-rate-steps` (`isolation="pure"`).
+- Il file: un SQLite privato in memoria per test, le righe piantate con SQL grezzo e rilette come barriera, coppie
+  esca intorno a ogni calendario.
+- Un solo oracolo: `unit_rate_steps` una volta, `convert_bulk` su ogni giorno di ogni finestra, `as_tuple()` e data
+  del tasso, col primo giorno che differisce.
+- I casi:
+  - 36 calendari in entrambe le direzioni: buchi, ancora lontana, nessuna riga prima, nessuna riga, finestre di un
+    giorno, valori uguali consecutivi, finestre disgiunte (anche in ordine inverso), sovrapposte, annidate, che
+    condividono un giorno, adiacenti, ripetute;
+  - 12 tassi inutilizzabili (0, 1E-11, −1,5, inf, 1E+14, 1E+19) come ancora e dentro la finestra; 4 ai limiti usabili
+    (1E-10, 99 999 999 999 999);
+  - le due direzioni di una coppia in una richiesta, più una coppia senza righe;
+  - `at` fuori dalle finestre;
+  - 501 e 1 035 coppie, coi blocchi veri da 500 e il conto delle istruzioni;
+  - i `ValueError`, anche accanto a coppie o finestre valide;
+  - la richiesta vuota.
+- **Validato prima della consegna** contro una funzione di riferimento costruita solo dalle risposte di `convert_bulk`
+  (63/63). Sei varianti sbagliate di proposito cadono esattamente sui casi giusti: inverso a una cifra di meno,
+  valore normalizzato (che un oracolo col solo `==` lascerebbe passare), righe fra le finestre come gradini, gradini
+  uguali fusi, primo gradino alla data dell'ancora, una sola istruzione per tutte le coppie.
+- Registrato in `_backend_services.py`, solo in aggiunta (+18 righe).
+- Rieseguito da me: **0 raccolti, 1 errore**, cioè `ImportError` di `UnitRateSteps`. È il rosso atteso per una
+  funzione nuova.
+- Le letture del contratto che il test-author ha fissato, e che coincidono col disegno:
+  - il primo giorno di una finestra annidata o sovrapposta è un gradino anche senza una riga;
+  - `at` fuori dalle finestre è l'ultimo gradino prima, non la risposta di `convert_bulk`;
+  - esattamente ⌈n/500⌉ istruzioni;
+  - il `ValueError` rifiuta tutta la chiamata.
+
+**Cura** ✅ (`files/checks/p3steps_code.py`, preparata durante i rossi, a secco pulita con black e ruff), solo in
+`backend/app/services/fx/conversion.py` (+147, −42):
+- `_converted(amount, rate, direct)`: l'aritmetica di `convert_bulk`, ora usata anche dai gradini (n1);
+- `_usable_rates(session, spans)`: la lettura di `convert_bulk` (ancora, finestra, filtro di X-R38, blocchi, colonne
+  semplici) spostata in un aiuto privato, che `convert_bulk` chiama con i suoi `min_date` e `max_date` (n2);
+- `UnitRateSteps` (frozen, slots): `days`, `values`, `rate_days`, `at`, `rate_day_at`;
+- `unit_rate_steps(session, requests)`: le finestre di ogni coppia, le due direzioni di una coppia salvata lette
+  insieme, poi un dizionario «giorno del gradino → riga». La funzione pura `_step_rows`, separata perché ruff (C901)
+  misurava 11 su 10.
+- I `ValueError` sono nella docstring e vengono prima di ogni lettura.
+
+**Verdi**:
+- `services fx-rate-steps` **63/63** al primo giro;
+- le regressioni di `convert_bulk`, pure: `fx-conversion` 44/44, `fx-pairs-per-query` 6/6, `bulk-reads-chunked`
+  65/65, `lots-analysis-pure` 198/198, `financial-math` 1 836/1 836;
+- nella corsia: `roi-fifo-utils` 1 509/1 509 (motore, cassa nativa, lotti), `portfolio-engine` 41/41,
+  `period-changes` 60/60;
+- black e ruff puliti sui 3 file; `check-orphans`: 491 test backend raggiungibili, uno in più; porta 6183 libera.
+
+**Doc** ✅ (docs-writer `67dea090`): in `developer/backend/fx/architecture.md`, una frase in `#convert-bulk-window` (la
+lettura è `_usable_rates()`, in comune con i gradini) e la sezione nuova `#unit-rate-steps`, dopo di essa.
+- Contenuto: perché esiste e che oggi nessuno la chiama; la richiesta e la risposta; i due tipi di gradino; un esempio
+  (righe l'1, il 5, il 9, l'11 e il 15 marzo, finestre 3–7 e 13–17: gradini il 3 con la riga dell'1, il 5, il 13 con
+  la riga dell'11, il 15), che ho ricontrollato a mano;
+- la garanzia e i due aiuti; il fuori-finestra, sullo stesso esempio; il `ValueError` (n5); i test.
+- Prove: `mkdocs build` stretto, uscita 0; `check-links`, 97 link validi; nessun venv nuovo. Le pagine per sviluppatori
+  non hanno traduzioni.
+
+**CHANGELOG**: nessuna voce. Oggi nessuno chiama `unit_rate_steps`: il motore e la cassa nativa ci passano nel lotto di
+MF, P3 vero e proprio.
+
+### N64 — aggiornamento dell'analisi (20/10, sola lettura, prima del via)
+
+- **Il punto di partenza**: l'analisi del 19/10 («N64 — la cache della pagina dell'asset», più in alto). Il developer
+  l'ha approvata: «la cache dei segnali come quella dei prezzi», lotto di X, dopo i «gradini».
+- **Cosa è cambiato da allora**: nei file che N64 tocca, solo X-R16 (`299393b19`, 19/10 12:28). Sono le due pagine,
+  `routes/(app)/assets/[id]/+page.svelte` e `routes/(app)/fx/[pair]/+page.svelte`. I registri dei prezzi e dei cambi
+  non sono cambiati.
+  - **X-R16 è chiusa**: la precondizione del punto 6 è soddisfatta. Anche la pagina di una coppia legge con
+    l'isolamento dei segnali (`fxDetailConvertQuery`), quindi una lettura non valida non blocca i tassi e non entrerà
+    nella cache.
+  - X-R83 è un ramo morto, dopo la 1.3: la cache dei segnali non lo tocca.
+- **Le tre domande del 19/10**: il «come quella dei prezzi» del developer risponde alla 1 (un colpo nella cache non
+  chiede nulla: niente gettone, niente rotellina) e alla 2 (dopo un recupero in background, la stessa regola dei
+  prezzi). La 3 la decide la coda del coordinatore. Da confermare al via.
+- **Il disegno resta quello del 19/10**:
+  - un registro dei risultati dei segnali accanto a quello dei prezzi, con la chiave esatta della richiesta;
+  - si tengono solo risultati validati, con i loro eventi;
+  - l'invalidazione passa da `invalidateAssetPriceStore`, `markStale` e `removeAssetPriceStore`, e dagli store dei
+    cambi per le serie convertite;
+  - un LRU;
+  - il contratto dei bottoni.
+  - Sulla pagina di una coppia, in più, i tassi con un segnale smettono di riscaricare tutto l'intervallo: vengono
+    dalla cache dei cambi, e i segnali dalla loro cache.
+- **Rossi, quando sarà il suo turno**:
+  - Vitest del registro nuovo, in `core-unit`: chiave, invalidazioni, LRU;
+  - due E2E sulla sequenza del developer (prezzi → rendimenti → prezzi → rendimenti: la seconda volta nessuna
+    richiesta), una sulla pagina dell'asset (`front-asset asset-detail`) e una su quella della coppia
+    (`front-fx fx-detail`), in uno slot.
+- **Peso**: medio, solo frontend, nessun cambio di API.
+
+### Z-39 — Yahoo: il rifiuto letto con la valuta non si inghiotte più ✅ 20/10 (via 10:39, base `b8c2f614b`)
+
+**La nota di Z**, girata dal coordinatore: `_fetch_currency` di Yahoo inghiotte anche un rifiuto per troppe richieste
+(429) e tiene None per 24 ore. Toccava la ricerca, e sul ramo di Z tocca anche il suggerimento della base di quotazione
+(Z-32 d, `3cf04d0aa`, non ancora in dev).
+
+**Analisi breve** (mandata dopo il checkpoint di P3; appunti in `files/z39-notes.md`):
+- `_fetch_currency` (`yahoo_finance/plugin.py:389`) legge `fast_info` senza `_yf_with_retry` e prende ogni eccezione:
+  None in cache per 24 ore.
+- `search()` legge già `yf.Search` con `_yf_with_retry` e rilancia `AssetRateLimitedError`: inghiotte solo la valuta di
+  ogni risultato.
+- È contro la regola della guida, «never swallow a refusal». Di proposito, la guida la deroga solo per due
+  arricchimenti di Borsa Italiana.
+- Un'aggravante, fuori portata: `fast_info` costa due chiamate HTTP pesanti, quindi fino a 40 per una ricerca di 20
+  risultati.
+
+**Decisioni del coordinatore** (10:39, «seguono la regola già scritta nella guida e la regola che un errore non è una
+risposta»):
+- (1)(a): un rifiuto mentre si legge la valuta fa rispondere alla ricerca di Yahoo «troppe richieste», e Yahoo va in
+  pausa;
+- (2)(a): un altro errore dà nessuna valuta, senza cache: si riprova alla ricerca dopo.
+
+**Rossi** ✅ (test-author `8c02b6cd`), in `test_yahoo_finance_errors.py` (azione `services provider-errors`, pura):
+- 5 rossi:
+  - `_fetch_currency` rifiutato, sia `YFRateLimitError` sia il messaggio col 429: deve sollevare subito, senza sonno, e
+    non tenere niente;
+  - un altro errore: None, non tenuto, e la lettura dopo chiede di nuovo;
+  - la ricerca rifiutata sulla valuta del secondo risultato: `AssetRateLimitedError`, e la valuta del terzo non si
+    chiede;
+  - un altro errore nella ricerca: risponde, e la seconda ricerca chiede di nuovo quella valuta.
+- 2 guardie: una risposta senza valuta (`{}` e `currency` None) resta in cache.
+- In più, fissato dal test-author: il rifiuto porta la causa originale (`from`); una risposta vera resta in cache.
+- Gli aiuti:
+  - `_FakeTicker` ha preso `fast_info_exc` e un contatore;
+  - i simboli sono unici per test (`Z39-…-<hex>`), perché la cache delle valute è una sola per tutto il processo;
+  - di `test_fetch_currency_cache_hit_and_error` è cambiato solo il commento («cached negatively» → «not cached»).
+- Rieseguiti da me, a carico 28: **5 rossi, 3 verdi**.
+
+**Cura** ✅ (`files/checks/z39_code.py`, a secco pulita con black e ruff):
+- `_fetch_currency`:
+  - un rifiuto (`_is_rate_limited`) diventa `AssetRateLimitedError`, sollevata `from` l'originale, senza cache;
+  - un altro errore dà None, senza cache;
+  - si mette in cache solo dopo una lettura riuscita.
+- `search()` non cambia: il suo `except AssetRateLimitedError: raise` lascia già passare il rifiuto, e il ciclo si
+  ferma lì.
+- Niente riprova per gli errori di rete: in una ricerca di 20 risultati un'attesa per risultato terrebbe il thread del
+  fornitore troppo a lungo.
+- `CHANGELOG.md`, in «🐛 Fixed» di Unreleased, dopo la voce di Yahoo sui giorni a est di UTC: una riga. I CHANGELOG
+  tradotti non hanno la sezione Unreleased.
+
+**Verdi**:
+- `services provider-errors` **219/219**;
+- `test_asset_source.py`, l'unico altro test che importa il plugin di Yahoo, usa solo la storia: non toccato;
+- black e ruff puliti; `mkdocs build` stretto con uscita 0; `check-links` con 97 link validi; nessun venv nuovo;
+  porta 6183 libera.
+
+**Doc** ✅ (docs-writer):
+- `developer/backend/assets/provider_yahoo_finance.md`: il punto della valuta nella ricerca, con due sotto-punti (il
+  rifiuto, un altro errore), e la riga della cache, «solo risposte»;
+- `developer/architecture/patterns/asset_plugin_guide.md`: nell'elenco di «never swallow a refusal», la ricerca di
+  Yahoo «con la lettura della valuta di ogni risultato, Z-39».
+- La pagina utente non cambia: la ricerca mostra il rifiuto di Yahoo come già faceva per il rifiuto di `yf.Search`.
+
+**Con Z**: stesso file, pezzi diversi. Quando Z-32 (d) entra, `suggest_quote_base` eredita la cura: un rifiuto sale, la
+sonda lo legge come «nessun suggerimento» e `call_provider` mette in pausa.
+
+### Y-39 e il cancello dei segnali — nota per FE4, FE5a e Y-42 (20/10)
+
+- **Y-39** (deciso dal developer; il lotto di Y) riunisce la scheda degli asset, quella dei cambi e l'anteprima delle
+  impostazioni. Tocca `fx/+page.svelte` solo per questo. Nessuna obiezione da parte mia.
+- **Il mio messaggio a Y**: le copie del ciclo dei segnali locali sono cinque, non tre. Ci sono anche
+  `assets/[id]/+page.svelte` (`overlaySignals`) e `fx/[pair]/+page.svelte`, con le loro differenze: `staleDays` nei
+  punti del cambio; nome, icona e tipo nel confronto. Gli ho proposto un contratto non legato alla scheda.
+- **Y l'ha adottato** (13:30). Il modulo è `lib/charts/chartSignalRendering.ts`:
+  - `SignalDataSources`: `fxPairData(slug)` e `comparisonTarget(id)`, che dà `{data, displayName?, iconUrl?,
+    assetType?, basePoint?}`, più `selfAssetId?`;
+  - `fxPointToLineDataPoint(point, inverted)`, con `missing` e `staleDays`;
+  - `renderLocalSignal(s)` e `renderBackendResults`.
+- **Il cancello nuovo**, `src/signalRendering.gate.test.ts`, permette `signalFromConfig(` solo nel modulo e nelle mie
+  due pagine di dettaglio, copie note in una lista che può solo accorciarsi.
+  - Verificato oggi: la mia HEAD (`6011a9ff0`) e `dev_release2` hanno gli stessi 7 file con `signalFromConfig(`.
+    Fuori dalle pagine ci sono solo la definizione (`signals/registry.ts:196`) e un commento (`ChartSignal.ts:173`).
+    Il mio ramo non porta quindi nessun chiamante in più.
+- **Per i miei lotti**:
+  - **Y-42**, l'adozione del modulo nelle due pagine di dettaglio, la proporrà il coordinatore. Quando tolgo il ciclo
+    da una pagina, il cancello mi chiede di toglierla dalla lista.
+  - **FE4 e FE5a**: se spostano il ciclo fuori da una pagina di rotta, per esempio in un componente di
+    `lib/features/…`, il cancello lo rifiuta, perché la lista non si allunga. Quindi o adottano il modulo nello
+    stesso lotto, o lasciano il ciclo nella pagina.
+  - **N64** tocca le richieste dei segnali del backend, non questo ciclo: nessun conflitto.
+
+### Y-42 — i due dettagli disegnano i segnali con il modulo comune (21/10 notte, ondata 3)
+
+> **Via**: piano dell'ondata 3 «APPROVATO dal developer» (`salvataggi-worktrees-20261021/ondata3/PIANO-ondata3.md`,
+> «Decisioni del developer (21/10 sera)»: «Y-42 dentro questa ondata (sessione X)»), brief `kickoff-X.md`, lavoro
+> notturno: sotto-agente in background del coordinatore, il checkpoint è l'unico messaggio. Solo Y-42; N64 dopo.
+>
+> - Worktree `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-cuddly-engine`, ramo
+>   `e-alfy-x-plugin-asset-e-ricerca`, HEAD `c788e51be` (= atteso; merge di `dev_release2` `2879ae3e4`), albero pulito.
+> - Corsia 6191 + `/tmp/librefolio-r13-x`; pesanti in `flock /tmp/librefolio-heavy.lock`, `LC_ALL=en_US.UTF-8`.
+> - Grafo graphify assente nel worktree (ignorato): wiki letto a mano (`decisions/signal-label-unification.md`).
+
+#### Analisi (sola lettura, prima del codice)
+- **Stato reale** (verificato sul codice): `assets/[id]/+page.svelte` `overlaySignals` `:711-751` e
+  `fx/[pair]/+page.svelte` `:397-437` hanno ancora il ciclo `signalFromConfig(cfg)` → `_resolvedData` → `renderMulti`;
+  tutte e due hanno anche `backendOverlaySignals` (`:686-706` e `:375-395`), copia identica di `renderBackendResults`.
+  Il dettaglio del cambio ha il suo `fxPointToLineDataPoint` (`:337-345`), uguale a quello del modulo. Il cancello
+  `src/signalRendering.gate.test.ts` ha le due pagine in `KNOWN_COPIES` (`:76-85`) e le usa anche nei casi sintetici
+  (`CLEAN`, `KNOWN_COPIES[0]`/`[1]`) e nel test «bite on these very files».
+- **Le differenze fra le due copie e il modulo**, caso per caso:
+  - coppia FX nel dettaglio dell'asset: punto scritto in linea senza `staleDays`; il modulo lo aggiunge, ma
+    `FxPairSignal.computePoints` legge solo `value` (e scarta lo 0 dei mancanti): **disegno identico**;
+  - confronto: i dati stanno nei parametri della configurazione (`applyComparisonAssetsData` scrive `_resolvedData`,
+    `_assetIconUrl`, `_assetType`, `_assetCurrency`, `_targetCurrency`, `_conversionFailed`); `signalFromConfig` li
+    copia nell'istanza. Il nome: l'asset dà `display_name` o lascia il nome al catalogo; il cambio scrive a mano la
+    stessa chiave `chartSettings.signals.assetFallback` (stesso testo di `ChartSignal.text`). Icona e tipo: dalla lista
+    degli asset (cambio) o dai parametri caricati dalla stessa lista (asset): **stessi valori**;
+  - confronto con sé stesso: escluso nel dettaglio dell'asset (`data.assetId`), che diventa `selfAssetId`;
+  - `try/catch` intorno a `getFxStore`: non lancia mai (nota di Y in Y-39a); serie vuota = non disegnata, come nel modulo.
+  - **Nessuna differenza visibile trovata**: Y-42 è un cambio di struttura. Unica sfumatura: due confronti sullo
+    stesso asset, uno appena aggiunto e non ancora caricato, prendono i dati già caricati dall'altro (stesso asset,
+    stessi dati) invece di aspettare il caricamento.
+- **Superfici**:
+  - `lib/charts/chartPageSignals.ts` (di X, aiutanti dei dettagli): nuova funzione pura `detailPageSignalSources`
+    (le fonti dei dettagli: i cambi dallo store passato come funzione, diritti; il confronto dai `_resolvedData` della
+    configurazione con nome, icona e tipo dalla lista degli asset; `selfAssetId`);
+  - le due pagine: `renderLocalSignals` + `renderBackendResults` + `fxPointToLineDataPoint` dal modulo; via
+    `signalFromConfig`, `renderBackendSignalResult`, il convertitore locale e gli import rimasti senza uso;
+  - test: `lib/charts/__tests__/chartPageSignals.test.ts` (contratto delle fonti, parità con il vecchio disegno,
+    adozione letta nei sorgenti) e `src/signalRendering.gate.test.ts` (lista vuota, casi sintetici su copie finte,
+    morso sulle pagine reali). Tutti già registrati in `front_utility_unit` (`core-unit`): nessuna riga del runner.
+  - doc per sviluppatori `developer/frontend/components/charts.md` `#signal-rendering`, se nomina le copie.
+- **Non tocco**: `chartSignalRendering.ts` (di Y: nessuna aggiunta serve), `FxCard.svelte` (di Y in questa ondata:
+  converte due volte in linea, `:106-111` e `:121-126` → richiesta a Y nel checkpoint), le liste, lo store.
+- **Conflitti**: le due pagine sono mie in questa ondata; `signalRendering.gate.test.ts` nato con Y-39a (lo scrivo io
+  per ordine del brief); Y-40 leggerà `primaryView` nei dettagli dopo, in un secondo passo.
+- **Rischi**: reattività (`overlayDataVersion` resta letto nel `$derived`); i casi sintetici del cancello che oggi
+  indicizzano `KNOWN_COPIES[0]`/`[1]` vanno riscritti su copie finte, o il cancello si rompe con la lista vuota.
+- **Passi**: 1 analisi → 2 rossi (`test-author`) → 3 rossi visti rossi → 4 cura → 5 verdi leggeri (Vitest, `core-unit`,
+  `front check` dopo `api sync`, Prettier, `git diff --check`) → 6 doc → 7 checkpoint. E2E solo nello slot del
+  coordinatore: `front-asset asset-detail`, `front-fx fx-detail`.
+- **Fatto quando**: nessun `signalFromConfig(` nelle due pagine, `KNOWN_COPIES` vuota, rossi→verdi, `front check` 0/0,
+  E2E di dettaglio verdi nello slot, doc e piano aggiornati, CHANGELOG: nessuna riga visibile.
+
+#### Passi
+1. ✅ 21/10 · Analisi (sopra). `api sync` rc 0 (`ondata3/X-api-sync.log`), albero pulito dopo.
+2. ✅ 21/10 · I rossi (`test-author`, solo due file di test):
+   > **Note implementazione**:
+   > - `lib/charts/__tests__/chartPageSignals.test.ts`: tre parti nuove — il contratto di `detailPageSignalSources`
+   >   (fxPairData pigra e per coppia, diritta con `fxPointToLineDataPoint(p, false)`; comparisonTarget dai
+   >   `_resolvedData` della configurazione, nome/icona/tipo dagli asset, null senza dati; `selfAssetId`; purezza),
+   >   la parità attraverso il modulo (confronto con nome/icona/tipo, ripiego del catalogo, niente confronto con sé,
+   >   niente senza dati, la linea fantasma della conversione, coppia diritta e girata dal suo `_inverted`, store vuoto),
+   >   l'adozione letta nei sorgenti delle due pagine (import per valore di `renderLocalSignals` e
+   >   `renderBackendResults`, chiamati; `detailPageSignalSources(` chiamato; nessun convertitore locale nel cambio).
+   > - `src/signalRendering.gate.test.ts`: `KNOWN_COPIES = []`; i casi sintetici su `SYNTHETIC_COPIES` passate
+   >   esplicitamente; la camminata legge registro, modulo e le due pagine (`DETAIL_PAGES`); il «morso» rifatto sui file
+   >   veri (il testo del modulo copiato altrove; una pagina con una chiamata iniettata; una pagina come copia nota
+   >   finta, che risulta superata); nuovo «KNOWN_COPIES è vuota».
+3. ✅ 21/10 · I rossi visti rossi (carico 4,5): 2 file, **50 rossi, 51 verdi su 101**
+   (`ondata3/X-y42-red.log`).
+   - `chartPageSignals.test.ts` 79: 45 rossi (42 `detailPageSignalSources is not a function`, 3 adozione con le
+     pagine non adottate), 34 verdi (i 31 di prima, intatti, + 3 controlli delle forme).
+   - `signalRendering.gate.test.ts` 22: 5 rossi (le due pagine chiamano ancora `signalFromConfig(`, `:717` e `:403`;
+     iniezione e copia superata, una per pagina, per la stessa ragione), 17 verdi (tutti i sintetici).
+   - Prettier `--check` sui due file: pulito.
+4. ✅ 21/10 · La cura.
+   > **Note implementazione**:
+   > - `lib/charts/chartPageSignals.ts`: `DetailPageAsset`, `DetailPageSignalSourcesInput` e la funzione pura
+   >   `detailPageSignalSources` (il contratto dell'analisi). Importa solo da `chartSignalRendering.ts`, che resta
+   >   intatto: nessuna richiesta a Y.
+   > - `assets/[id]/+page.svelte`: `backendOverlaySignals = $derived(renderBackendResults(…, (key) => $t(key)))`;
+   >   `signalSources = $derived(detailPageSignalSources({configs: signals, assets: allAssets, fxPairPoints: (slug) =>
+   >   getFxStore(slug).getAllSorted(), selfAssetId: data.assetId}))`; `overlaySignals` = `renderLocalSignals(…)` più i
+   >   risultati del backend, con `void overlayDataVersion` ancora letto. Via `signalFromConfig`,
+   >   `renderBackendSignalResult`, `displayFxRate` dagli import (non più usati).
+   > - `fx/[pair]/+page.svelte`: stesso cambio senza `selfAssetId`; via il convertitore locale (ora
+   >   `fxPointToLineDataPoint` dal modulo, anche per `lineData`), `extractDaysBack`, `signalFromConfig`,
+   >   `renderBackendSignalResult` dagli import.
+   > - Doc (`docs-writer`, solo inglese): `developer/frontend/components/charts.md`, `#signal-rendering`: titolo «…cards,
+   >   preview and detail pages», un paragrafo sui dettagli e `detailPageSignalSources`, il cancello con la lista vuota.
+   >   `mkdocs check-links` in `flock`: rc 0, 97 link validi (`ondata3/X-y42-docs-checklinks.log`).
+   >
+   > **⚠️ Fuori pista**:
+   > - Il test d'adozione non vedeva una chiamata dopo lo spread (`[...renderLocalSignals(`): lo sguardo indietro
+   >   `(?<![\w$.])` rifiutava il `.` dello spread. Riparato da `test-author` (`(?<![\w$])(?<!(?<!\.)\.)`, due controlli
+   >   in più: spread accettato, `other.renderLocalSignals(` rifiutato). `chartPageSignals.test.ts` 79/79
+   >   (`ondata3/X-y42-repair.log`).
+5. ✅ 22/10 · Le prove leggere.
+   - Vitest, 11 file in 4 gruppi da al più 3 (fuori dal lucchetto, carico 3,5-4,1), `LC_ALL=en_US.UTF-8`:
+     **603/603** (`ondata3/X-y42-light-b{1..4}.log`): `chartPageSignals` + `signalRendering.gate` +
+     `comparisonSignalPages` 112; `chartSignalRendering` + `fxDetailConvertQuery` + `AssetBrowseNav` 117;
+     `layout.authGate` + `PriceChartFull.tooltipEscape` + `designer-lab/anchor` 58 (i test che leggono i sorgenti delle
+     due pagine); `ChartSettingsModal` + `chartCoreHelpers` 316.
+   - Prettier `--check` sui 3 file di codice e sui 2 di test: pulito. `git diff --check`: pulito.
+   - Nessun `signalFromConfig(` fuori dal modulo (grep: solo `chartSignalRendering.ts:72`, la dichiarazione in
+     `registry.ts:196` e un commento in `ChartSignal.ts:173`).
+   - In `flock`, `LC_ALL=en_US.UTF-8`, `nice` (`ondata3/X-y42-verify.sh`, riassunto `X-y42-verify.summary`; due ore di coda
+     dietro l'inventario CSP di H e le corse degli altri):
+     - `dev.py test --test-port 6191 --data-dir /tmp/librefolio-r13-x front-utility core-unit`: **227 file, 9958/9958**
+       (`X-y42-core-unit.log`, 00:03);
+     - `dev.py front check` (dopo `api sync`): **0 errori, 0 avvisi** (`X-y42-front-check.log`, 00:33).
+   > **⚠️ Fuori pista**: il passo «vicini» dello script, ancora in coda al lucchetto, l'ho annullato (rc 143, mai
+   > partito): gli stessi 11 file erano già verdi nei 4 gruppi qui sopra. Nessun server avviato; la porta 6191 non è
+   > mai stata usata.
+6. ✅ 22/10 · Doc: fatta al passo 4 (`charts.md#signal-rendering`). CHANGELOG: **nessuna riga visibile** (nessun
+   cambio di disegno trovato: stesso nome, icona, tipo, linea fantasma, verso della coppia).
+7. ✅ 22/10 · CHECKPOINT READY al coordinatore; E2E nello slot del coordinatore: `front-asset asset-detail`,
+   `front-fx fx-detail` (consigliata anche `front-portfolio risk-asset-detail`: i segnali di rischio del dettaglio
+   filtrano `backendOverlaySignals`).
+   - **Richiesta a Y** (FxCard è di Y in questa ondata): `FxCard.svelte:106-111` e `:121-126` convertono i punti in
+     linea con `staleDays: d.backwardFillInfo?.daysBack ?? 0`; possono usare `fxPointToLineDataPoint(d, inverted)` del
+     modulo (stesso risultato: `extractDaysBack` legge prima `backward_fill_info.days_back`, poi lo stesso campo).
+   - **Backlog**: Y-42 sta nella sezione di Y (`BACKLOG_POST_1.2.md:9860`): non la tocco; al coordinatore la chiusura
+     (✅ le due pagine e il cancello; resta il punto `FxCard`, a Y).
+   > **Note implementazione**: committato dal coordinatore come `087769e44` (genitore `c788e51be`), dopo la sua verifica
+   > (101/101). Gli E2E di dettaglio li mette lui nel gate del treno; la richiesta su `FxCard` la gira a Y.
+
+### N64 — la cache dei risultati dei segnali, come quella dei prezzi (22/10 notte, passo C)
+
+> **Via del coordinatore** (22/10, dopo il commit di Y-42): «Via al passo C, N64 … Q1 sì (cache colpita: nessuna
+> richiesta, nessun token, nessuna rotellina, «Refresh» fermo), Q2 sì (dopo un aggiornamento dei prezzi in background il
+> passaggio successivo richiede di nuovo, con la rotellina)». Decisioni del developer del 21/10 nel brief `kickoff-X.md`
+> (Q3: in 1.3). HEAD `087769e44`, albero pulito. Sporchi di Y (da non toccare): `chartSettingsStore.svelte.ts`,
+> `calendarReturnWindow.ts`, `reducedPriceQuery.ts`, `chartSignalRendering.ts`, `AssetCard.svelte`,
+> `ChartSettingsModal.svelte`, `assets/+page.svelte`, i loro test, `asset-list.spec.ts`, `_frontend_utility.py`,
+> `charts.md`, due pagine utente.
+
+#### Analisi breve (sul codice di `087769e44`)
+- **Oggi**: la pagina dell'asset (`loadChartData`, `:1245-1446`) chiede segnali del backend ed eventi a ogni cambio di
+  modalità (`setPrimaryMode`), di finestra (`setCalendarPreset/Custom`), di periodo, di valuta, anche quando i prezzi
+  vengono dalla loro cache; i rendimenti di calendario dei confronti viaggiano nella stessa richiesta. La pagina della
+  coppia (`loadChartData`, `:743-852`) con un segnale riscarica tutto l'intervallo. `pageBusy.track` prende il gettone
+  sul clic, anche quando la funzione poi non chiede niente (lampo del «Refresh»).
+- **Disegno** (solo frontend, nessuna API):
+  1. `TimeSeriesStore.generation`: un numero unico in tutta l'app (contatore globale), nuovo a ogni `invalidateAll`,
+     `invalidateRange`, `markStale`; non cambia con `merge`/`markFetched`. Così ogni invalidazione dei prezzi o dei cambi
+     — Refresh, Sync, salvataggio dell'editor, cambio di valuta, recupero in background (Q2), store rimosso e ricreato —
+     invalida per costruzione i risultati calcolati su quei dati, senza toccare gli 11 chiamanti.
+  2. `lib/stores/signalResultCache.ts`, nuovo: `canonicalCacheKey(value)` (JSON con chiavi ordinate) e
+     `SignalResultCache<T>` (get/set con le generazioni lette all'inizio della richiesta, LRU, copie isolate con
+     `structuredClone`), due istanze: `assetChartAnswers` (la risposta della pagina dell'asset senza prezzi) e
+     `fxSignalAnswers` (i risultati validati della coppia). Svuotate al cambio di sessione.
+  3. Pagina dell'asset: chiave = il corpo esatto della richiesta senza `include_price` (asset, intervallo risolto,
+     valuta, segnali con id/codice/parametri, rendimenti con la finestra, confronti); generazioni = store dei prezzi
+     dell'asset e di ogni confronto nella valuta effettiva. Colpo solo se anche i prezzi sono in cache. Si scrive solo una
+     risposta applicata: elemento dell'asset presente, segnali validi (modo prezzi), rendimento non in `error`.
+  4. Pagina della coppia: chiave = il corpo della richiesta con i segnali; generazione = store della coppia. Colpo solo se
+     i tassi coprono l'intervallo.
+  5. Gettone (Q1): `loadChartData` e `maybeLoadComparison` dicono se hanno chiesto al server (bandierina sincrona, letta
+     subito dopo la chiamata); i trigger (modalità, finestra, periodo, valuta, segnali, verso) prendono il gettone solo
+     allora. Su un colpo tutto succede nello stesso tick: niente rotellina, niente gettone.
+- **Fuori**: le serie dei confronti in modalità prezzi restano col loro memo per impronta (non sono indicatori; un periodo
+  nuovo le richiede, con il gettone, come oggi) → residuo X-N64b. Granularità per segnale (togliere un indicatore
+  richiede di nuovo) → residuo. Il ramo X-R83 resta morto.
+- **Superfici**: `stores/core/TimeSeriesStore.ts`, `stores/signalResultCache.ts` (nuovo),
+  `components/assets/detail/assetDetailPriceQuery.ts` (chiave e risposta da tenere), le due pagine; test
+  `TimeSeriesStore.test.ts`, `assetPriceStoreRegistry.test.ts`, `fxStoreRegistry.test.ts`, `signalResultCache.test.ts`
+  (nuovo, una riga in `_frontend_asset.py`, non sporco in Y), `assetDetailPriceQuery.test.ts`, `chartPageSignals.test.ts`
+  (cablaggio letto nei sorgenti), E2E `asset-detail.spec.ts` e `fx-detail.spec.ts`; doc
+  `developer/frontend/state/registries.md`. `charts.md` è sporco in Y: niente.
+- **Rossi**: Vitest (generazioni, cache, chiave, cablaggio) visti rossi; E2E scritti ora, girano nello slot (non visti
+  rossi: la coda del lucchetto è di ore).
+- **Peso**: medio-alto. **CHANGELOG**: una riga 🔄 proposta (visibile: i ritorni sono istantanei).
+
+#### Passi
+1. ✅ 22/10 · Analisi breve (sopra).
+2. ✅ 22/10 · I rossi (`test-author`, due agenti su file diversi).
+   > **Note implementazione**:
+   > - Vitest: `TimeSeriesStore.test.ts` (8: generazione unica, nuova a ogni invalidazione e a `markStale`, ferma con
+   >   `merge`/`markFetched`/letture), `assetPriceStoreRegistry.test.ts` (6) e `fxStoreRegistry.test.ts` (5: invalidazioni,
+   >   bus `prices` sì, `mutation`/`refresh` no, store rimosso e ricreato), `signalResultCache.test.ts` nuovo (30: chiave
+   >   canonica, generazioni posizione per posizione, mancata = voce tolta, LRU di 32, copie isolate, i due singoli svuotati
+   >   al cambio d'utente e all'uscita, non per lo stesso utente), `assetDetailPriceQuery.test.ts` (15: chiave senza
+   >   `include_price`, risposta senza `prices`), `chartPageSignals.test.ts` (15: cablaggio letto nei sorgenti — cache
+   >   letta/scritta, `.generation`, i tre `track*`, le etichette dei trigger non più su `pageBusy.track(`; guardie per
+   >   Refresh, primo caricamento, riprova). Una riga in `_frontend_asset.py` (`front_asset_unit`).
+   > - E2E (non lanciati): `asset-detail.spec.ts` 3 (la sequenza del developer con osservatore di `data-busy` e del
+   >   caricatore; periodo e ritorno con SMA; guardia Refresh), `fx-detail.spec.ts` 2 (periodo e ritorno con RSI, server
+   >   finto; guardia Refresh). `tsc --noEmit -p tsconfig.e2e.json` exit 0, Prettier pulito.
+3. ✅ 22/10 · Rossi visti rossi (`ondata3/X-n64-red-{1,2}.log`): 19 rossi per `generation` mancante, 30 per il modulo
+   mancante (file non raccolto), 15 per i due aiutanti mancanti, 6 di cablaggio (3 per pagina); verdi tutti i 399 test
+   di prima, le 2 guardie e 7 controlli delle forme. L'agente ha provato i test su una copia usa e getta con
+   un'implementazione di riferimento (250/250) e ~30 mutazioni, tutte prese.
+4. ✅ 22/10 · La cura.
+   > **Note implementazione**:
+   > - `stores/core/TimeSeriesStore.ts`: `generation` (contatore globale del modulo), rinnovata in `invalidateAll`,
+   >   `invalidateRange`, `markStale`.
+   > - `stores/signalResultCache.ts` (nuovo): `canonicalCacheKey`, `SignalResultCache<T>` (Map in ordine d'uso = LRU di 32,
+   >   `structuredClone` in entrata e in uscita, mancata con generazioni diverse = voce tolta), `assetChartAnswers`,
+   >   `fxSignalAnswers`, svuotate da `registerClientSessionReset`.
+   > - `assetDetailPriceQuery.ts`: `assetChartAnswerKey(body)` e `assetChartAnswerForCache(answer)`.
+   > - `assets/[id]/+page.svelte`: in `loadChartData` il corpo della richiesta è costruito una volta (`requestBody`), la
+   >   chiave e le generazioni (store dell'asset e dei confronti di calendario nella valuta effettiva) lette prima della
+   >   richiesta; `const response = cachedAnswer ?? (await …)` — un colpo non attende mai, quindi tutto il caricamento
+   >   finisce prima che la chiamata ritorni. Si scrive solo una risposta valida (elemento dell'asset presente, segnali
+   >   validi in modo prezzi, nessuna vista di calendario in `error`, confronti compresi). `lastChartLoadAskedServer` e
+   >   `lastComparisonLoadAskedServer` (sincrone) e i tre aiutanti `trackChartLoad`, `trackComparisonLoad`,
+   >   `trackChartAndComparison` al posto di `pageBusy.track` nei trigger di modalità, finestra, periodo, valuta,
+   >   segnali, confronti. Refresh (`handleRefresh`) e ogni Sync dalla pagina (`runSyncAsset`, `handleSyncPair`, appena
+   >   arriva la risposta, anche se la pagina è cambiata) svuotano `assetChartAnswers`.
+   > - `fx/[pair]/+page.svelte`: stesso schema; chiave = corpo della richiesta con i segnali, generazione dello store della
+   >   coppia; colpo solo se i tassi coprono l'intervallo; si scrivono solo risultati validi.
+   >
+   > **⚠️ Fuori pista**:
+   > - Revisione delle E2E esistenti (agente `Explore`, sola lettura): nessuna rottura in `fx-detail.spec.ts` e
+   >   `risk-asset-detail.spec.ts`; in `asset-detail.spec.ts` il test lungo «calendar-return primary mode queries exact
+   >   windows…» (`:575`) aveva 5 passi che, dopo un Sync o un Sync scaduto, si aspettano di nuovo la richiesta del
+   >   periodo di 90 giorni. Ha anche trovato un buco vero del disegno: dopo il Sync di un confronto (o il ramo
+   >   `canMergeOnly`, ≤50 punti) `runSyncAsset` ricarica senza forzare, e i rendimenti del confronto in cache sarebbero
+   >   rimasti vecchi. Cura: ogni Sync dalla pagina svuota `assetChartAnswers` appena arriva la risposta (anche scaduta),
+   >   e Refresh pure: dopo un Sync tutto si richiede, come prima di N64. Con questo i 5 passi tornano a chiedere (da
+   >   provare nello slot).
+   > - La revisione nota che i passi di calendario di quel test non entrano mai in cache solo perché due confronti finti
+   >   rispondono `error`: se un giorno diventassero validi, ~60 passi andrebbero rivisti. Lo registro come rischio.
+5. ✅ 22/10 · Le prove leggere.
+   - Vitest dei 6 file di N64, dopo la cura, in 2 gruppi da 3 (fuori dal lucchetto, carico 3,3): **155/155** e
+     **216/216** (`ondata3/X-n64-cure-b{1,2}.log`); dopo le cancellazioni sui Sync, di nuovo i 3 file d'uso più 9
+     vicini che leggono le due pagine o toccano lo store (`comparisonSignalPages`, `signalRendering.gate`,
+     `fxDetailConvertQuery`, `AssetBrowseNav`, `layout.authGate`, `PriceChartFull.tooltipEscape`, `designer-lab/anchor`,
+     `assetDetailLive.svelte`, `pageBusy`): **538/538** (`X-n64-light-b{1..4}.log`).
+   - In `flock`, `LC_ALL=en_US.UTF-8`, `nice` (`X-n64-verify.sh`, un'ora di coda): `front-asset asset-unit` **25 file,
+     1181/1181**; `front-fx fx-unit` **4 file, 161/161**; `front-utility core-unit` **227 file, 9988/9988**;
+     `dev.py front check` **0 errori, 0 avvisi**.
+   - Prettier `--check` sui 5 file di codice: pulito. `git diff --check`: pulito. Porta 6191 mai usata (`lsof` vuoto).
+   - `dev.py test check-orphans`: 5 file orfani, **nessuno mio** (`bulkBatchesGroups`, `compactDensity`,
+     `reducedPriceCache`, `chartUtils`, `reducedPriceQuery`: vengono da dev); `signalResultCache.test.ts` è registrato.
+6. ✅ 22/10 · Doc (`docs-writer`, solo inglese): `developer/frontend/state/registries.md` (sezione «Signal result
+   cache» con «Invalidation, by construction» e «Cache hits and the busy token», più tabella e passo 5) e
+   `core-infrastructure.md` (la riga di `TimeSeriesStore`: `generation`). Backlog, sezione X: X-N64b, X-N64c, X-N64d.
+   CHANGELOG: una riga 🔄 proposta al coordinatore. `mkdocs check-links` in `flock`: rc 0, 97 link validi (`X-n64-docs-checklinks.log`); `mkdocs build` non lanciato (le ancore nuove controllate a mano dal `docs-writer`).
+7. ✅ 22/10 · CHECKPOINT READY (N64), poi lo slot E2E del coordinatore («slot concesso adesso», 02:40-03:03).
+   > **Note implementazione**: corsia 6191 + `/tmp/librefolio-r13-x` popolata da zero (rc 0, 7 s); ogni corsa in `flock`,
+   > `nice`, `LC_ALL=en_US.UTF-8`, una alla volta; log `ondata3/X-n64-e2e-*.log`.
+   > - `front-asset asset-detail N64`: **3/3**; `front-fx fx-detail N64`: **2/2**;
+   > - `front-asset asset-detail` intero, `--workers 2`: **45 passati, 1 rosso** (`:8555`, sotto); il test lungo `:575`
+   >   (i 5 passi della revisione) è verde: la cancellazione sui Sync funziona;
+   > - `front-fx fx-detail` intero, `--workers 2`: **30/30**; `front-portfolio risk-asset-detail`: **5/5**.
+   > - Prova che i nuovi casi mordono (non li avevo visti rossi): lettura della cache spenta per finta
+   >   (`SignalResultCache.get` → `null`, copia di riserva nel scratchpad), stessi filtri: asset **2 rossi** (le due
+   >   «nessuna richiesta», «Expected 1 / Received 3» richieste), guardia Refresh verde; FX **1 rosso** («the return… posts
+   >   no conversion request»), guardia verde. File ripristinato (`cmp` uguale alla copia), poi di nuovo `N64` asset 3/3 e
+   >   FX 2/2 sul codice vero. Porta 6191 libera (`lsof` vuoto).
+   >
+   > **⚠️ Fuori pista**: `asset-detail.spec.ts:8555` («keeps the event markers when the detail opens from a list that
+   > already cached All») è rosso **anche con la cache spenta**: non dipende da N64. La premessa del test non vale più dopo
+   > Z-29b (`686691e3d`): la lista non riempie più lo store giornaliero dei prezzi (solo `reducedPrices`), quindi il
+   > dettaglio non ha i prezzi in cache, chiede `include_price: true`, e la richiesta «solo eventi» che il test aspetta non
+   > parte. N64 non può sopprimerla: la lista non scrive `assetChartAnswers` e il contesto del browser è nuovo. Da girare
+   > a Z (o al proprietario della spec): riscrivere il percorso A o toglierlo.
+   > **Note implementazione** (dopo il commit `34b6d45c0` del coordinatore): N64 committato.
+
+### `asset-detail.spec.ts:8555` — il percorso A dopo Z-29b ✅ 22/10 (richiesta del coordinatore, HEAD `34b6d45c0`)
+- **Perché**: il test supponeva che la lista su «Tutto» riempisse lo store giornaliero dei prezzi, così il dettaglio aperto
+  da una card chiedesse solo gli eventi. Da Z-29b (scelta di progetto) la lista tiene le serie delle card in una cache
+  ridotta sua, accanto alla giornaliera senza toccarla: il dettaglio chiede i suoi prezzi giornalieri con gli eventi.
+  Nessun riuso possibile da chiedere al developer: la serie ridotta è campionata (settimane, mesi), il dettaglio disegna
+  i giorni.
+- **Cosa** (`test-author`, solo la spec, +33/−14): titolo «keeps the event markers when the detail opens from a list on
+  All: the detail asks its own daily prices with the events»; dopo il clic sulla card, la prima risposta per l'asset ha
+  `include_price: true` e `include_events: true`, nessuna richiesta «solo eventi» prima di lei, e il grafico disegna i due
+  dividendi (l'inizio chiesto letto dalla risposta consegnata, non supposto). Controlli della lista invariati; il caso
+  fratello `:8595` (percorso B, il colpo nella cache) e il blocco N64 non toccati; il titolo del `describe` resta
+  (rinominarlo cambierebbe il titolo completo del fratello). Prettier pulito, `tsc --noEmit -p tsconfig.e2e.json` exit 0.
+- **Prove** (in `flock`, `nice`, `LC_ALL=en_US.UTF-8`, corsia 6191): il test da solo **1/1** (`ondata3/X-8555-single.log`);
+  `front-asset asset-detail` intero, `--workers 2`: **46/46** (`X-8555-asset-detail.log`). Porta 6191 libera.
+
+### Y-40, il dettaglio dell'asset legge la vista scelta in lista (22/10 notte, HEAD `17ed982c2`)
+
+> **Via del coordinatore** (22/10): «il dettaglio legge la vista scelta in lista (Y-40), con il contratto scritto da Y»:
+> apertura con `getSettingsForPair('asset-<id>', 'assets').primaryView` → `detailModesForPrimaryView`; salvataggio con
+> `setItemPrimaryView(slug, primaryViewForDetailModes(…), 'assets')`; finestra `effectiveCalendarReturnWindow(settings,
+> rangeDays)`; icona `CalendarSync` per il rendimento (V-8b). Solo il dettaglio degli asset; store e
+> `chartSignalRendering.ts` di Y (sporchi nel suo worktree): non li tocco. HEAD `17ed982c2` (merge di Y-40 asset e Z-29fx),
+> albero pulito, `api sync` rc 0.
+
+#### Analisi breve
+- **Oggi** (`assets/[id]/+page.svelte`): `reloadPage` rimette `primaryMode = 'price'`; `viewMode` parte da `'percentage'`;
+  la finestra è uno `$state` idratato una volta per asset da `settings.calendarReturnWindow` (`:262-274`) e scritto da
+  `persistCalendarWindow`; `AssetChartModeToggle` usa `Percent` anche per il rendimento.
+- **Disegno**:
+  1. apertura: in `reloadPage`, `{primaryMode, viewMode} = detailModesForPrimaryView(settings.primaryView)`;
+  2. salvataggio: in `setPrimaryMode` e nel cambio Abs/% (`onViewModeChange`) la pagina salva
+     `primaryViewForDetailModes(primaryMode, viewMode)`. **Con `setPairSettings({...settings, primaryView, signals:
+     [...signals]})`, non con `setItemPrimaryView`**: quest'ultimo riparte dall'override salvato e rifà le
+     configurazioni senza i dati del confronto che la pagina vi scrive (`_resolvedData`…): un cambio Abs/% farebbe
+     sparire le linee dei confronti. Per lo store il risultato è lo stesso (stessa base: override, poi scope, poi
+     globale); è il modo in cui la pagina salva già estetica, assi e segnali. Lo scrivo nel checkpoint per Y;
+  3. finestra: `calendarWindowSelection` diventa `$derived(effectiveCalendarReturnWindow(settings, calendarRangeDays))`
+     — sincrona, quindi un cambio di periodo legge subito la finestra nuova; la scelta dell'utente si salva con
+     `calendarReturnWindowAuto: false` esplicito (lo store la segna scelta solo se diversa da quella salvata: con la
+     finestra salvata uguale a quella cliccata resterebbe in automatico);
+  4. icona: `CalendarSync` in `AssetChartModeToggle` (non sporco in Y).
+- **Fuori**: `renderCalendarComparisons` (disponibile, non serve: il dettaglio ha già la sua copia, e il file è sporco in
+  Y) → eventuale seguito; il dettaglio dei cambi (con la parte cambi di Y).
+- **Rossi**: Vitest `AssetChartModeToggle.test.ts` (l'icona); E2E in `asset-detail.spec.ts` (apertura nella vista
+  salvata, salvataggio e riapertura, finestra automatica uguale a quella della scheda, scelta dell'utente tenuta), visti
+  rossi nello slot.
+
+#### Passi
+1. ✅ 22/10 · Analisi breve (sopra).
+2. ✅ 22/10 · I rossi (`test-author`): `AssetChartModeToggle.test.ts` (l'icona letta dalla classe `lucide-<nome>`: rendimento
+   `calendar-sync`, prezzi `chart-line`, nessun `percent`) **4 rossi, 7 verdi**; E2E `asset-detail.spec.ts`, describe «Y-40
+   asset detail opens in the view chosen in the list» (7 casi: vista rendimento e assoluta scelte in lista; modalità e
+   Abs/% scelte nel dettaglio salvate e riaperte; la scheda della lista apre nella vista scelta nel dettaglio, due casi;
+   finestra automatica = il preset più grande che sta nel periodo; finestra scelta tenuta dopo il ricaricamento, anche
+   quella uguale alla predefinita). La vista si sceglie col pulsante vero della scheda (`asset-card-view-toggle`).
+   Visti rossi nello slot: **7/7 rossi** per le ragioni dichiarate (`ondata3/X-y40-red-e2e.log`).
+3. ✅ 22/10 · La cura.
+   > **Note implementazione**:
+   > - `assets/[id]/+page.svelte`: in `reloadPage` `{primaryMode, viewMode}` da `detailModesForPrimaryView(settings.primaryView)`;
+   >   `persistPrimaryView()` in `setPrimaryMode` e in `onViewModeChange` (`setPairSettings` con `primaryView` e i segnali
+   >   della pagina, vedi analisi); `calendarWindowSelection` ora `$derived(effectiveCalendarReturnWindow(settings,
+   >   calendarRangeDays))`, spostato dopo `settings`; l'effetto d'idratazione tiene solo i campi della finestra
+   >   personalizzata; `persistCalendarWindow` salva con `calendarReturnWindowAuto: false`.
+   > - `AssetChartModeToggle.svelte`: `CalendarSync` al posto di `Percent` (V-8b).
+   >
+   > **⚠️ Fuori pista**: il test lungo `:575` partiva dalla finestra 1M predefinita e con Y-40 la finestra automatica
+   > diventa 1Y sul periodo lungo (timeout a `:2720`). Riparato (`test-author`): il seme delle impostazioni segna la
+   > finestra come scelta (`calendarReturnWindowAuto: false`), così il test tiene le sue finestre esatte (la finestra
+   > automatica la provano i casi Y-40); l'unico `page.reload()` (`~:7080`) ora si aspetta di riaprire in Abs (l'ultima
+   > vista usata) invece di cliccarla.
+4. ✅ 22/10 · Le prove (slot del coordinatore, `flock`, `nice`, `LC_ALL=en_US.UTF-8`, corsia 6191):
+   - E2E `front-asset asset-detail Y-40`: **7/7**; `front-asset asset-detail` intero `--workers 2`: prima 52/53 (`:575`),
+     dopo la riparazione **53/53** (`X-y40-asset-detail-full-2.log`); `front-asset asset-mobile-layout` **21/21**;
+     `front-portfolio page-busy` **17/17** (le due spec che aprono il dettaglio sul grafico dei prezzi).
+   - Vitest: `AssetChartModeToggle` + `chartPageSignals` + `comparisonSignalPages` **116/116**; `front-utility
+     component-unit` **200 file, 5233/5233**; `front-utility core-unit` **232 file, 10100/10100**; `front check` **0/0**.
+   - Prettier pulito, `git diff --check` pulito, porta 6191 libera.
+5. ✅ 22/10 · Doc (`docs-writer`, solo inglese): `user/assets/detail/chart.en.md` (`#primary-modes`: si apre nella vista
+   della scheda e la salva; `#rolling-return`: finestra come la scheda, automatica finché non se ne sceglie una) e
+   `user/assets/index.en.md` (una frase nella nota delle tre viste). `mkdocs build` (strict) rc 0. Debito di traduzione:
+   `chart.{it,fr,es}` e `index.{it,fr,es}` (non timbrato). `charts.md` è sporco in Y: la frase sul dettaglio («the asset
+   detail page uses the same window», tolta da Y) è una richiesta a Y.
+6. ⏳ 22/10 · CHECKPOINT READY (vista del dettaglio).
+
+### Gate del treno 8 — `price-refresh-reload.spec.ts:1158` (g), triage (22/10 mattina, base `23111e2f0`)
+- **Il rosso** (gate `all-frontend`, 2 worker): il passo di controllo di (g) — ritorno in-app sul dettaglio dopo un giro
+  sul Dashboard **senza** catch-up — aspetta un `POST /assets/prices/query` per l'asset con `include_price: false` (solo
+  eventi) e va in timeout a 30 s («the page never asked for its events»). Riprodotto nella mia corsia, deterministico,
+  stessa riga (`:1181`; `ondata3/X-gate8-g-red.log`, dopo `db populate --force --clean` sulla base nuova).
+- **Verdetto: assunzione del test**, non difetto. Con N64 (decisione Q1 del developer) un colpo pieno — prezzi in cache e
+  la stessa richiesta già risposta sulla stessa generazione degli store — non chiede niente, **eventi compresi**: il
+  ritorno in-app senza catch-up oggi non manda alcuna richiesta. Il cuore di (g) (Q2/Z-14: dopo un catch-up il dettaglio
+  richiede i prezzi, `include_price: true`) non cambia: il catch-up marca gli store stale, la generazione si rinnova, la
+  risposta tenuta non vale più.
+- **Riparazione** (`test-author`, solo la spec, +25/−12): il controllo ora aspetta una barriera (radice ferma —
+  `loading` è vero dal montaggio fino al caricamento del grafico —, pulsante Refresh fermo — il gettone del primo
+  caricamento resta fino alla fine di `reloadPage()` —, grafico `data-series-state="ready"`) e poi verifica che **nessuna**
+  richiesta di prezzi per l'asset sia partita dopo il ritorno, con un messaggio che elenca le richieste trovate e la
+  causa; intestazione della spec allineata; passo finale e (h) invariati. Prettier e `tsc` dell'e2e puliti.
+- **Prove** (in `flock`, `nice`, `LC_ALL=en_US.UTF-8`, corsia 6191, `ondata3/X-gate8-*.log`): `front-portfolio
+  price-refresh` **8/8** due volte di fila (10:00 e 10:04); `front-asset asset-detail` intero `--workers 2` **53/53**.
+  Porta 6191 libera, `git diff --check` pulito.

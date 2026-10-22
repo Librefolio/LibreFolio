@@ -6,6 +6,7 @@ Aggregates all v1 endpoints.
 from fastapi import APIRouter, Depends
 
 from backend.app.api.v1 import (
+    address_probe_image,
     ai_export,
     assets,
     auth,
@@ -13,6 +14,7 @@ from backend.app.api.v1 import (
     brokers,
     email,
     fx,
+    panel,
     plugin_settings,
     portfolio_api,
     risk,
@@ -28,6 +30,7 @@ from backend.app.api.v1 import (
 from backend.app.api.v1.instance_block import refuse_when_blocked
 from backend.app.api.v1.utilities import router as utilities_router
 from backend.app.logging_config import get_logger
+from backend.app.services.platform.hosting_panel.access import HOSTING_PANEL_TAG
 
 logger = get_logger(__name__)
 
@@ -36,6 +39,7 @@ router = APIRouter(dependencies=[Depends(refuse_when_blocked)])
 
 # Include sub-routers
 router.include_router(auth.router)  # Auth first (no prefix, uses /auth)
+router.include_router(address_probe_image.router)  # The address probe as an image, /auth/address-probe.png (H-55 v2)
 router.include_router(ai_export.router)
 router.include_router(settings.router)  # Settings
 router.include_router(plugin_settings.router)  # Plugin settings (/settings/plugins)
@@ -49,6 +53,7 @@ router.include_router(assets.asset_router)
 router.include_router(transactions.tx_router)
 router.include_router(brokers.broker_router)
 router.include_router(backup.backup_router)
+router.include_router(panel.panel_router, prefix="/panel", tags=[HOSTING_PANEL_TAG])  # Hosting panel: the setup status of the instance
 router.include_router(portfolio_api.portfolio_router)
 router.include_router(risk.router)
 router.include_router(signals.signals_router)

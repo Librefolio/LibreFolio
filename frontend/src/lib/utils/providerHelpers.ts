@@ -23,9 +23,11 @@ export const PROVIDER_COLORS: Record<string, string> = {
     ECB: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
     FRANKFURTER: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400',
     FIXED_RATE: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
-    MANUAL: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+    /* colour: closest role, to review: MANUAL amber read as the warning tint (as the Manual badge of AssetTable); a provider identity, could be a categorical role */
+    MANUAL: 'bg-lf-warning-soft text-lf-warning-on-soft',
 };
-export const DEFAULT_PROVIDER_COLOR = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
+/* colour: closest role, to review: the neutral chip for a provider with no colour of its own */
+export const DEFAULT_PROVIDER_COLOR = 'bg-lf-neutral text-lf-secondary';
 
 /**
  * Parse a `provider_used` string into individual provider codes.
@@ -56,7 +58,7 @@ export function fxProviderBadgeHtml(providerCode: string): string {
     const info = providers.find((p) => p.code === providerCode);
     const cls = PROVIDER_COLORS[providerCode] ?? DEFAULT_PROVIDER_COLOR;
     if (info?.icon_url) {
-        return `<span class="inline-flex items-center px-1 py-0.5 rounded ${cls}" title="${providerCode}"><img src="${escapeHtml(info.icon_url)}" alt="${providerCode}" class="w-3.5 h-3.5 rounded-sm object-contain" onerror="this.parentElement.textContent='${providerCode.slice(0, 2)}'" /></span>`;
+        return `<span class="inline-flex items-center px-1 py-0.5 rounded ${cls}" title="${providerCode}"><img src="${escapeHtml(info.icon_url)}" alt="${providerCode}" class="w-3.5 h-3.5 rounded-sm object-contain" data-fallback-text="${escapeHtml(providerCode.slice(0, 2))}" /></span>`;
     }
     return `<span class="inline-flex items-center px-1 py-0.5 text-[9px] font-medium rounded ${cls}">${providerCode}</span>`;
 }
@@ -176,7 +178,7 @@ export function assetProviderBadgeHtml(providerCode: string): string {
     const name = assetProviderNames.get(providerCode) ?? providerCode;
     const cls = PROVIDER_COLORS[providerCode] ?? DEFAULT_PROVIDER_COLOR;
     if (iconUrl) {
-        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${cls}" title="${providerCode}"><img src="${escapeHtml(iconUrl)}" alt="${providerCode}" class="w-3.5 h-3.5 rounded-sm object-contain" onerror="this.style.display='none'" /><span class="text-[10px] font-medium">${escapeHtml(name)}</span></span>`;
+        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${cls}" title="${providerCode}"><img src="${escapeHtml(iconUrl)}" alt="${providerCode}" class="w-3.5 h-3.5 rounded-sm object-contain" data-hide-on-error="display" /><span class="text-[10px] font-medium">${escapeHtml(name)}</span></span>`;
     }
     return `<span class="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded ${cls}">${escapeHtml(name)}</span>`;
 }

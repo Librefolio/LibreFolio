@@ -127,15 +127,18 @@ LibreFolio reads each file, checks it and sums it up in a table:
 | ✗ | Securities not matched to your assets yet — you match them in **Review** |
 | 🔴 | Validation issues: rows that could not become transactions |
 | 🔧 | Fields to fill in before saving (red when one blocks the save) |
-| ⚠️ | Importer warnings, such as skipped rows |
+| ⚠️ ℹ️ | Two numbers: warnings (amber) need a look, such as skipped rows; notes (blue) explain a choice the importer made, with nothing to fix |
 
-The tiles above the table count what will really be imported; **View All** opens the details.
+The tiles below the table count what will really be imported; **View All**, or **View Detail** in
+a row's **⋮** menu, opens the details, with the warnings and the notes listed apart.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step3" alt="Wizard Step 3: Analysis" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-- **Warnings**: **Continue** lists them first; read them, then click **Continue anyway**.
+- **Warnings and notes**: **Continue** lists the warnings first, then the notes; read them, then
+  click **Continue anyway**. A warning about rows the importer left out, because it does not
+  know or cannot read them, has a link to open an issue on GitHub.
 - **A file failed**: a banner says why. Fix its plugin in **Select Files**, then click
   **Re-parse all**.
 
@@ -287,6 +290,24 @@ maximum in the message (*Quantity: At most 10 decimal places*): LibreFolio never
 Transaction dates go from 1 January 1900 to tomorrow: a row of the report dated outside
 that range is refused at **Save All** too, with the range in the message (*Date: Between 1900-01-01
 and 2026-10-18* when today is 17 October 2026).
+
+A row that brings units in — an **Adjustment** that adds units, or the receiving side of an
+**Asset Transfer** — keeps the cost written in the report, even 0, in **Manual**. If the report
+gives none, it starts in **Auto** (💡 in the **Cost basis override** column): **Save All** saves it
+at the [average cost](../form.md#cost-basis) of the units already held, unless you switch it to
+**Manual**. If there is nothing to average, the row is refused: choose **Manual** and type its
+cost, 0 for a gift.
+
+Rows whose missing cost the importer flags are the exception: a position added by
+**Align with the bank**, a new line of a Danske Bank [demerger](danske-bank.md#demergers), an
+`ADJUSTMENT` row of a [Generic CSV](generic-csv.md) file that adds units without a cost. They are listed in red,
+and their form opens in **Manual** with the cost empty: type it by hand, even if it is 0 — choosing
+**Auto** does not take them off the list.
+
+When the rows arrive, and after **⚡ Validate now** or a refused **Save All**, the grid turns to the
+page of the first row whose [**Auto** cost was refused](../form.md#cost-basis), and highlights it:
+the oldest by date, as correcting it can let the later rows of the same asset at that broker pass.
+The automatic check that runs while you edit does not do this.
 
 ---
 

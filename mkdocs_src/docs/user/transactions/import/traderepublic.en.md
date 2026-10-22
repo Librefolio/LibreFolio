@@ -11,4 +11,5 @@ Export your transaction history as **CSV** from Trade Republic and upload it in 
 ## 📝 Notes
 
 - Built from sample exports — some edge cases may not be covered yet.
+- **The fee and tax columns (*Kosten*, *Belasting*) are not imported yet**: the row itself is imported, and an amber warning lists the rows that have a fee or a tax, with a link to open an issue on GitHub. Add the fee or the tax by hand. The same warning lists the rows LibreFolio does not know or cannot read.
 - Found an issue or want to document the export steps? [Open a report](../../../community/contribute.md) — contributions welcome!

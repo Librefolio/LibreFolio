@@ -56,6 +56,11 @@ class AdminUserRead(StrictModel):
         default=False,
         description="The initial administrator of LIBREFOLIO_ADMIN_EMAIL waiting for its setup (F02): inactive, with a setup link never used; it activates through that link, never with a reactivation",
     )
+    pending_verification: bool = Field(
+        default=False,
+        description="Inactive and waiting for its email verification (E-7): a verification link neither used nor revoked, live or expired; holds_place says whether it still holds a place",
+    )
+    avatar_url: Optional[str] = Field(default=None, description="The account's avatar from its user settings (an uploaded image or an address); null without one (N69-4)")
 
 
 class AdminUserListResponse(BaseListResponse[AdminUserRead]):

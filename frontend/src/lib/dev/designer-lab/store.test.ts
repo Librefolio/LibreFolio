@@ -8,7 +8,7 @@
  */
 
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {changeId, changesForTheme, clearState, emptyState, hasEffect, readState, removeChange, STATE_SCHEMA, STORAGE_KEY, upsertChange, writeState} from './store';
+import {asRoleChange, changeId, changesForTheme, clearState, emptyState, hasEffect, readState, removeChange, STATE_SCHEMA, STORAGE_KEY, upsertChange, writeState} from './store';
 import type {LabAnchor, LabChange, LabState} from './types';
 
 /** A `Storage` held in a Map: what one browser profile's localStorage is to the functions under test. */
@@ -114,6 +114,30 @@ describe('readState / writeState / clearState', () => {
         expect(storage.getItem(STORAGE_KEY)).toBeNull();
         expect(storage.getItem('lf-other-key')).toBe('kept');
         expect(readState(storage)).toBeNull();
+    });
+});
+
+describe('asRoleChange — an asset type or the cash edited as a category before DV-11', () => {
+    it('becomes a change of its role, its key read as the tables compare it', () => {
+        expect(asRoleChange(change({layer: 'category', target: 'type:real_estate', scope: 'dark', to: '#123456'}))).toMatchObject({id: 'css-var:--lf-cat-real-estate@dark', layer: 'css-var', target: '--lf-cat-real-estate', scope: 'dark', to: '#123456'});
+        expect(asRoleChange(change({layer: 'category', target: 'bucket:Liquidity', scope: 'both'}))).toMatchObject({id: 'css-var:--lf-cat-liquidity@both', layer: 'css-var', target: '--lf-cat-liquidity'});
+    });
+
+    it('leaves every other change as it is: a sector, «Unknown», a key outside the tables, another layer', () => {
+        for (const other of [
+            change({layer: 'category', target: 'sector:Health Care', scope: 'both'}),
+            change({layer: 'category', target: 'bucket:Unknown', scope: 'both'}),
+            change({layer: 'category', target: 'type:AAA', scope: 'both'}),
+            change({layer: 'css-var', target: '--lf-cat-etf', scope: 'both'}),
+        ]) {
+            expect(asRoleChange(other), other.target).toBe(other);
+        }
+    });
+
+    it('is applied to a saved state when it is read', () => {
+        const legacy = {...change({layer: 'category', target: 'type:ETF', scope: 'light', to: '#123456'}), id: 'category:type:ETF@light'};
+        const storage = memoryStorage({[STORAGE_KEY]: JSON.stringify({schema: STATE_SCHEMA, changes: [legacy]})});
+        expect(readState(storage)?.changes).toEqual([{...legacy, layer: 'css-var', target: '--lf-cat-etf', id: 'css-var:--lf-cat-etf@light'}]);
     });
 });
 

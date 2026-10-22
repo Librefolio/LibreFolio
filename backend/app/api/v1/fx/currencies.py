@@ -20,25 +20,30 @@ from backend.app.schemas.fx import (
     FXBulkUpsertResponse,
     FXConversionRequest,
     FXConversionResult,
+    FXConversionSample,
     FXConvertResponse,
     FXDeleteItem,
     FXDeleteResult,
     FXPeriodChangesRequest,
     FXPeriodChangesResponse,
     FXRateRejection,
+    FXSampleBounds,
     FXSignalQueryResult,
     FXUpsertItem,
     FXUpsertResult,
 )
 from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncPairRequest
 from backend.app.schemas.signals import SignalCadence, SignalCatalogResponse, SignalDomain, SignalExecutionContext, SignalPricePoint
+from backend.app.services.assets.price_sampling import SampleReferenceError, resolve_sample_references, sample_reference_detail
 from backend.app.services.fx.base import FXServiceError
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.fx.period_changes import get_fx_period_changes_bulk
+from backend.app.services.fx.sampling import plan_conversion_samples
 from backend.app.services.fx.storage import FXRateNotStorableError, delete_rates_bulk, fx_rate_refusal, normalize_storable_rate, upsert_rates_bulk
 from backend.app.services.fx.sync import sync_pairs_bulk
 from backend.app.services.signals.planning import SignalExecutionPlan, SignalRequestValidationError
 from backend.app.services.signals.registry import SignalPluginRegistry
+from backend.app.services.signals.sampling import sample_signal_result
 from backend.app.services.signals.service import SignalService
 from backend.app.utils.date_range_limits import MAX_BULK_ITEM_DAYS, MAX_BULK_ITEMS, MAX_BULK_WRITE_ITEMS, bulk_too_many_days_detail, bulk_too_many_items_detail, date_out_of_range_detail, latest_stored_date, range_span_floor
 from backend.app.utils.datetime_utils import latest_range_end
@@ -449,6 +454,11 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
     conversions (422 ``bulk_too_many_items``) and at most ``MAX_BULK_ITEM_DAYS`` daily and signal items over the whole
     request (422 ``bulk_too_many_days``), both refused before any item is built (Z-25).
 
+    Sampling (Z-29fx): a conversion with ``max_points``, ``resolution`` or ``sample_like`` is computed day by day, then
+    keeps the daily results of the last day of each week or month only (``services/fx/sampling.py``, the price query's
+    rule), its signals reduced onto those dates (``signals/sampling.py``); ``samples`` says each conversion's step and, sampled,
+    its first and last results. A ``sample_like`` that cannot be followed is a 422 ``sample_reference``, before anything runs.
+
     Args:
         request: List of conversions to perform
         session: Database session
@@ -459,6 +469,10 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
 
     if len(request) > MAX_BULK_ITEMS:
         raise HTTPException(status_code=422, detail=bulk_too_many_items_detail(len(request), MAX_BULK_ITEMS))
+    try:
+        references = resolve_sample_references(request)
+    except SampleReferenceError as error:
+        raise HTTPException(status_code=422, detail=sample_reference_detail(error)) from error
 
     signal_service = SignalService()
     signal_plans: dict[int, SignalExecutionPlan] = {}
@@ -467,6 +481,8 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
 
     latest_end = latest_range_end()
     served_ranges: dict[int, DateRangeModel] = {}
+    # Z-29fx: the end of each conversion's fill, the cut range's end, for the ones with days to convert.
+    fill_ends: dict[int, date] = {}
     # Z-25: every block of days is planned and counted first, and built only once the whole request is within the
     # budget, so a request over it is refused before a single item is built.
     day_blocks: list[tuple[str, int, FXConversionRequest, Currency, date, date]] = []
@@ -484,6 +500,7 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
             # X-R41: a zero amount is converted as one unit, as the signals are: the result keeps the unit's rate, and 0
             daily_amount = conversion.from_amount if conversion.from_amount.amount != 0 else Currency(code=conversion.from_amount.code, amount=Decimal("1"))
             day_blocks.append(("daily", conv_idx, conversion, daily_amount, visible_start, requested_end))
+            fill_ends[conv_idx] = requested_end
             item_days += (requested_end - visible_start).days + 1
 
         if conversion.signals:
@@ -595,23 +612,47 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
                 conversion_date=on_date.isoformat(),
                 rate=rate,
                 backward_fill_info=backward_fill_info,
+                request_index=metadata["original_idx"],
             )
         )
+
+    # Z-29fx: a sampled conversion keeps its daily results on its plan's dates; every conversion says its step.
+    firsts: dict[int, date] = {}
+    for result in results:
+        if result.request_index not in firsts or result.conversion_date < firsts[result.request_index]:
+            firsts[result.request_index] = result.conversion_date
+    sample_plans = plan_conversion_samples(request, firsts, fill_ends, references)
+    by_day = {(result.request_index, result.conversion_date): result for result in results}
+    kept_dates = {index: set(plan.dates) for index, plan in sample_plans.items()}
+    results = [result for result in results if result.request_index not in kept_dates or result.conversion_date in kept_dates[result.request_index]]
+    samples = []
+    for index in range(len(request)):
+        plan = sample_plans.get(index)
+        bounds = None
+        if plan is not None and plan.resolution != "daily" and plan.dates:
+            first, last = by_day.get((index, plan.first)), by_day.get((index, plan.dates[-1]))
+            bounds = FXSampleBounds(first=first, last=last) if first is not None and last is not None else None
+        samples.append(FXConversionSample(request_index=index, resolution=plan.resolution if plan is not None else "daily", sample_bounds=bounds))
 
     signal_results = []
     for request_index, plan in signal_plans.items():
         conversion = request[request_index]
+        signals = await signal_service.execute(
+            plan,
+            signal_points[request_index],
+            events_loaded=False,
+        )
+        sample_plan = sample_plans.get(request_index)
+        if sample_plan is not None and sample_plan.resolution != "daily":
+            # Z-29fx: computed every day, each series reduced onto the conversion's dates (Z-29s, O1).
+            signals = [sample_signal_result(signal, sample_plan.resolution, sample_plan.dates) for signal in signals]
         signal_results.append(
             FXSignalQueryResult(
                 request_index=request_index,
                 from_currency=conversion.from_amount.code,
                 to_currency=conversion.to_currency,
                 date_range=served_ranges[request_index],
-                signals=await signal_service.execute(
-                    plan,
-                    signal_points[request_index],
-                    events_loaded=False,
-                ),
+                signals=signals,
             )
         )
 
@@ -633,6 +674,7 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
         success_count=len([result for result in results if result.to_amount is not None]),
         errors=compressed_errors,
         signal_results=signal_results,
+        samples=samples,
     )
 
 

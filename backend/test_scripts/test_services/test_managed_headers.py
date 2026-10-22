@@ -3,6 +3,22 @@ The headers of the managed profile (workstream H, platform, checkpoint CP7b-2; d
 and the enforced policy of an HTML document (lot H-42), of every document and never on a 304 (lot H-45), and the inline
 scripts of the build allowed by hash in the report-only policy (lot H-52).
 
+H-55 v2 (the Content-Security-Policy always enforced, developer decision 19/10) supersedes, in the text below, everything it
+says about ``PAGE_POLICY``, about frame protection being the only switch of an enforced policy, and about the build being
+read once, when the middleware is built. Now, in every profile and with no switch: one enforced ``Content-Security-Policy``
+per response, whose directives (each directive and its sources pinned exactly, the order between directives free) are
+``object-src 'none'; base-uri 'self'; form-action 'self'`` on every document (also ``/mkdocs`` and the API docs, frame
+protection on or off), in addition ``script-src 'self' 'wasm-unsafe-eval' 'report-sample'`` and the hashes of the build as
+it is now, ``worker-src 'self' blob:`` and ``connect-src 'self'`` (+ the origin of LIBREFOLIO_PUBLIC_URL when valid, +
+``https://api.github.com`` in the self-hosted profile) on a web app page, and ``frame-ancestors 'self'`` (with
+``X-Frame-Options``) on any response when frame protection is on; never ``default-src``, ``style-src``, ``img-src``,
+``font-src`` or ``frame-src``; a non-document with frame protection off has none; a 304 gets neither policy; a header a
+route set is kept. The hashes follow the build through a cache keyed by the build's signature (section (k), step 1); the
+report-only policy is as before plus the same extra ``connect-src`` sources, on web app pages only. Where (a), (d), (e),
+(g), (h), (i) and (j) below still say ``PAGE_POLICY``, «once, when built» or «frame protection off: no header», read this
+paragraph: the tests were rewritten for it (``expected_enforced`` is the table). The old pin of ``PAGE_POLICY`` by value is
+gone. Section (k), at the end, holds the new cases (step 1: the hashes; step 3: the table and the connect sources).
+
 Under test: ``SecurityHeadersMiddleware`` (``backend/app/services/platform/security_headers.py``, CP7b-1), which reads the
 settings ``LIBREFOLIO_FRAME_PROTECTION`` and ``LIBREFOLIO_CSP_REPORT_ONLY`` (``PROFILE_DEFAULTS``: off in self-hosted, on
 in managed) once, when it is built: ``SecurityHeadersMiddleware(app)`` calls ``get_settings()`` in ``__init__``. The
@@ -102,9 +118,8 @@ Starlette builds the middleware at the app's first request, with the configurati
 (e), (g) and most of (j) build the middleware alone, around a bare ASGI app, after the configuration is set. Requests
 are raw ASGI calls, so every header line is seen as it was sent, duplicates included; each is bounded by a deadline;
 the lifespan never runs. A barrier precedes every header: the response is the one its case names (status, type, body).
-The module of CP7b-1 is imported when a test runs, so this file collects before it exists; its ``PAGE_POLICY`` (H-42)
-is read by name, with ``getattr``, in the one test that pins it, so that before H-42 that test fails naming H-42 while
-every other test still collects and runs (the others compare each header with this file's own copy of the value).
+The module of CP7b-1 is imported when a test runs, so this file collects before it exists; every enforced header is
+compared with this file's own copy of the contract (``expected_enforced``), never with a constant of the module.
 H-52's ``static_site.spa_inline_script_hashes``, ``report_only_policy`` and ``CSP_REPORT_ONLY_POLICY`` are read by
 name too, in the tests of (j): before H-52 those fail naming H-52, and so does (c), whose ``script-src`` is now exact,
 while every other test still runs. The logs of (j) are read with ``structlog.testing.capture_logs`` and pytest's
@@ -120,9 +135,12 @@ import hashlib
 import importlib
 import json
 import logging
+import os
 import re
 import shutil
+import threading
 from collections.abc import Callable, Iterable, Iterator, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -144,8 +162,6 @@ from backend.test_scripts.test_utils import print_section, print_success
 SECURITY_MODULE = "backend.app.services.platform.security_headers"
 CLASS_NAME = "SecurityHeadersMiddleware"
 ENTRY_NAME = "security_headers"
-#: H-42: the constant of SECURITY_MODULE holding the enforced policy of an HTML document, read by name when its test runs.
-PAGE_POLICY_NAME = "PAGE_POLICY"
 #: H-45: the constants of SECURITY_MODULE naming the media types of a document, read by name when their test runs.
 DOCUMENT_MEDIA_TYPES_NAME = "DOCUMENT_MEDIA_TYPES"
 DOCUMENT_MEDIA_TYPE_SUFFIX_NAME = "DOCUMENT_MEDIA_TYPE_SUFFIX"
@@ -155,22 +171,34 @@ STACK_ENTRIES = (ENTRY_NAME, "gzip", "cors")
 PROFILE = "LIBREFOLIO_PROFILE"
 FRAME_PROTECTION = "LIBREFOLIO_FRAME_PROTECTION"
 CSP_REPORT_ONLY = "LIBREFOLIO_CSP_REPORT_ONLY"
+#: H-55 v2: the address users reach the instance at (``backend.app.config.accounts.public_url()``), whose origin the
+#: ``connect-src`` of a web app page holds when it is valid.
+PUBLIC_URL = "LIBREFOLIO_PUBLIC_URL"
+#: H-55 v2: the address of the update check the browser makes outside the managed profile: a connect source there only.
+GITHUB_API = "https://api.github.com"
 
 # CP7b-1: on every response, in every configuration
 NOSNIFF = "nosniff"
 REFERRER_POLICY = "strict-origin-when-cross-origin"
 
-# (a) Frame protection
+# (a) Frame protection, and since H-55 v2 the enforced policy by response (the table of (k))
 FRAME_OPTIONS = "SAMEORIGIN"
-#: The enforced policy of every response that is not an HTML document, exactly: who may frame the app, and nothing else,
-#: so that nothing else can break (H-42: ``object-src 'none'`` could stop Chromium's PDF viewer, a plugin).
-FRAME_POLICY = "frame-ancestors 'self'"
-#: H-42: the enforced policy of an HTML document, exactly this string, in this order (``security_headers.PAGE_POLICY``):
-#: who may frame the app, then three directives that touch no script: no plugin content, no ``<base>`` retargeting the
-#: relative URLs, no form sent to another origin.
-PAGE_POLICY = "frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+#: With frame protection on, every response: who may frame the app (the one directive of a non-document).
+FRAME_ANCESTORS = ("'self'",)
+#: H-55 v2: the three directives of every document (a response of ``DOCUMENT_MEDIA_TYPES`` or ``+xml``), in every profile
+#: and at every path, the documentation and the API docs included, frame protection on or off: no plugin content, no
+#: ``<base>`` retargeting the relative URLs, no form sent to another origin. They touch no script.
+DOCUMENT_TRIO: dict[str, tuple[str, ...]] = {"object-src": ("'none'",), "base-uri": ("'self'",), "form-action": ("'self'",)}
+#: H-55 v2: what a web app page (``text/html`` exactly, outside ``/mkdocs`` and ``/api``) adds: ``script-src`` is
+#: ``SCRIPT_SRC`` and the hashes of the build now, ``connect-src`` is ``CONNECT_SRC`` and the connect sources of the
+#: configuration (``Mode.connect_sources``).
+WORKER_SRC = ("'self'", "blob:")
+CONNECT_SRC = ("'self'",)
+#: H-55 v2: directives the enforced header never holds: styles, images, fonts and frames stay free (embedding the app is a
+#: legitimate self-hosted use); they stay in the report-only policy alone.
+NEVER_ENFORCED = ("default-src", "style-src", "img-src", "font-src", "frame-src")
 #: H-45: the media types of a document, exactly (``security_headers.DOCUMENT_MEDIA_TYPES``): opened directly, an XHTML
-#: page, an SVG image and an XML file are documents as an HTML page is, so with frame protection on they carry PAGE_POLICY.
+#: page, an SVG image and an XML file are documents as an HTML page is, so they carry the document trio.
 DOCUMENT_MEDIA_TYPES = frozenset({"text/html", "application/xhtml+xml", "image/svg+xml", "application/xml", "text/xml"})
 #: H-45: and every media type of this structured syntax (``security_headers.DOCUMENT_MEDIA_TYPE_SUFFIX``), XML by its
 #: name: ``application/atom+xml``, ``application/rss+xml``, ``application/mathml+xml``...
@@ -300,15 +328,29 @@ SITE_FILES: dict[str, bytes] = {"index.html": DOCS_INDEX_HTML, "user/index.html"
 
 @dataclass(frozen=True)
 class Mode:
-    """A configuration: the variables it sets (of the profile and the two switches, the others are unset), and the
-    switches ``get_settings()`` must resolve them to."""
+    """A configuration: the variables it sets (of the profile, the two switches and, H-55 v2, LIBREFOLIO_PUBLIC_URL, the
+    others are unset), and the switches ``get_settings()`` must resolve them to. ``public_origin``: the origin of the
+    valid LIBREFOLIO_PUBLIC_URL it sets, written here (``None``: none set, or an invalid one that adds nothing)."""
 
     env: tuple[tuple[str, str], ...]
     frame_protection: bool
     csp_report_only: bool
+    public_origin: str | None = None
 
     def describe(self) -> str:
         return ", ".join(f"{name}={value}" for name, value in self.env) or "nothing set"
+
+    @property
+    def managed(self) -> bool:
+        """The managed profile, as ``Settings`` reads the profile this configuration sets."""
+        return dict(self.env).get(PROFILE, "").strip().lower() == "managed"
+
+    @property
+    def connect_sources(self) -> tuple[str, ...]:
+        """H-55 v2: what follows ``CONNECT_SRC`` in the ``connect-src`` of a web app page built under this configuration,
+        computed here: the origin of LIBREFOLIO_PUBLIC_URL when it is valid, then ``GITHUB_API`` in the self-hosted
+        profile only (the update check runs in the browser there)."""
+        return ((self.public_origin,) if self.public_origin is not None else ()) + (() if self.managed else (GITHUB_API,))
 
 
 MODES: dict[str, Mode] = {
@@ -321,7 +363,6 @@ MODES: dict[str, Mode] = {
 }
 REPORT_ONLY_MODES = {name: mode for name, mode in MODES.items() if mode.csp_report_only}
 REPORT_ONLY_OFF_MODES = {name: mode for name, mode in MODES.items() if not mode.csp_report_only}
-FRAME_PROTECTION_MODES = {name: mode for name, mode in MODES.items() if mode.frame_protection}
 
 
 #: H-52: what ``configure`` points ``static_site.FRONTEND_BUILD_DIR`` at, under ``tmp_path``: a folder that does not exist.
@@ -333,11 +374,15 @@ def configure(monkeypatch: pytest.MonkeyPatch, mode: Mode, tmp_path: Path) -> No
     afterwards hashes (H-52) is a missing folder under ``tmp_path``, never the checkout's: a case wanting one names it after."""
     monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "1")  # get_settings() reads no .env in test mode: only this environment
     monkeypatch.setenv("LIBREFOLIO_TEST_DATA_DIR", str(tmp_path / "data"))  # get_settings() never looks at the lane's data
-    for name in (PROFILE, FRAME_PROTECTION, CSP_REPORT_ONLY):
+    for name in (PROFILE, FRAME_PROTECTION, CSP_REPORT_ONLY, PUBLIC_URL):  # H-55 v2: no lane's public address reaches a case
         monkeypatch.delenv(name, raising=False)
     for name, value in mode.env:
         monkeypatch.setenv(name, value)
     monkeypatch.setattr(static_site, "FRONTEND_BUILD_DIR", tmp_path / NO_BUILD)  # H-52: never the checkout's frontend/build
+    if mode.public_origin is not None:  # H-55 v2: the origin written here is the canonical form the hosting panel computes
+        from backend.app.config.hosting_panel import panel_audience  # noqa: PLC0415
+
+        assert panel_audience() == mode.public_origin, f"barrier: with {mode.describe()}, the canonical origin of {PUBLIC_URL} is {panel_audience()!r}, not the {mode.public_origin!r} this configuration expects"
 
     settings = get_settings()
 
@@ -623,7 +668,7 @@ def _is_the_500(reply: Reply) -> None:
 class Case:
     path: str
     is_the_kind: Callable[[Reply], None]
-    #: An HTML document (text/html, wherever it is): with frame protection on, its enforced policy is PAGE_POLICY (H-42).
+    #: An HTML document (text/html, wherever it is): with frame protection on, it carries the document trio (H-55 v2).
     html: bool
     #: An HTML document of the web app (text/html, outside /mkdocs and /api/): where the report-only policy goes when on.
     web_app_html: bool
@@ -666,37 +711,63 @@ async def answer(case: Case, mode: Mode, tmp_path: Path, monkeypatch: pytest.Mon
 
 
 # =============================================================================
-# (a) FRAME PROTECTION, ITS POLICY BY TYPE (H-42), AND (f) THE HEADERS OF CP7b-1
+# (a) THE ENFORCED POLICY BY RESPONSE (H-42, H-45, H-55 v2), THE FRAME PROTECTION, AND (f) THE HEADERS OF CP7b-1
 # =============================================================================
 
 
-def assert_frame_protection(reply: Reply, on: bool, document: bool, what: str) -> str:
-    """Frame protection ``on``: ``X-Frame-Options: SAMEORIGIN`` and one enforced policy, the one of the response's type,
-    exactly: ``PAGE_POLICY`` on a document (an HTML page, H-42; since H-45 also XHTML, SVG, XML, any ``+xml`` type),
-    ``frame-ancestors 'self'`` alone on anything else (H-42). Off: neither header. Returns what it saw, for the log."""
-    frame_options, policies = reply.values("x-frame-options"), reply.values("content-security-policy")
-    if not on:
-        assert frame_options == [] and policies == [], f"{what}: frame protection is off, yet X-Frame-Options is {frame_options} and Content-Security-Policy {policies}"
-        return "neither X-Frame-Options nor Content-Security-Policy"
+def expected_enforced(mode: Mode, *, document: bool, web_app_page: bool, script_hashes: Sequence[str] = ()) -> dict[str, tuple[str, ...]] | None:
+    """H-55 v2, the table: the directives of the one enforced ``Content-Security-Policy`` of a response under ``mode``,
+    ``{directive: sources}``, written here, never read from the module under test; ``None``: no policy at all.
+
+    ``frame-ancestors 'self'`` whenever frame protection is on; a document adds the trio, in every profile, frame
+    protection on or off; a web app page (``web_app_page``, a document by construction) adds ``script-src``
+    (``SCRIPT_SRC`` then ``script_hashes``), ``worker-src`` and ``connect-src`` (``CONNECT_SRC`` then the connect sources
+    of ``mode``). A non-document with frame protection off has no policy."""
+    assert document or not web_app_page, "barrier: a web app page is a document"
+    expected: dict[str, tuple[str, ...]] = {}
+    if mode.frame_protection:
+        expected["frame-ancestors"] = FRAME_ANCESTORS
     if document:
-        expected, why = PAGE_POLICY, "a document carries PAGE_POLICY, frame-ancestors then object-src, base-uri and form-action: an HTML page (H-42), and since H-45 any media type of DOCUMENT_MEDIA_TYPES or ending with +xml (XHTML, SVG, XML), in any case"
-    else:
-        expected, why = FRAME_POLICY, "a response that is not a document carries frame-ancestors 'self' and nothing else (H-42: object-src 'none' could stop Chromium's PDF viewer, a plugin; H-45: by its exact media type, never a prefix)"
-    assert frame_options == [FRAME_OPTIONS], f"{what}: X-Frame-Options is {frame_options}, wanted exactly one, {FRAME_OPTIONS!r}"
-    assert policies == [expected], f"{what}: Content-Security-Policy is {policies}, wanted exactly one, {expected!r}: {why}"
-    return f"X-Frame-Options: {FRAME_OPTIONS} and Content-Security-Policy: {expected}, once each"
+        expected.update(DOCUMENT_TRIO)
+    if web_app_page:
+        expected["script-src"] = SCRIPT_SRC + tuple(script_hashes)
+        expected["worker-src"] = WORKER_SRC
+        expected["connect-src"] = CONNECT_SRC + mode.connect_sources
+    return expected or None
+
+
+def assert_frame_protection(reply: Reply, mode: Mode, document: bool, what: str, *, web_app_page: bool = False, script_hashes: Sequence[str] = ()) -> str:
+    """The enforced headers of ``reply`` under ``mode``: ``X-Frame-Options: SAMEORIGIN`` once exactly when frame protection
+    is on; at most one ``Content-Security-Policy`` field (never two), whose directives and the sources of each are
+    exactly ``expected_enforced`` (the order between directives is free). Returns what it saw, for the log."""
+    frame_options, policies = reply.values("x-frame-options"), reply.values("content-security-policy")
+    assert frame_options == ([FRAME_OPTIONS] if mode.frame_protection else []), f"{what}: X-Frame-Options is {frame_options}, wanted {[FRAME_OPTIONS] if mode.frame_protection else []}: frame protection is {'on' if mode.frame_protection else 'off'}"
+    expected = expected_enforced(mode, document=document, web_app_page=web_app_page, script_hashes=script_hashes)
+    if expected is None:
+        assert policies == [], f"{what}: a response that is no document, with frame protection off, carries no Content-Security-Policy, yet it is {policies}"
+        return "no Content-Security-Policy"
+    kind = "a web app page" if web_app_page else "a document" if document else "a response that is no document"
+    assert len(policies) == 1, f"{what}: Content-Security-Policy is {policies}, wanted exactly one field: {kind} under {mode.describe()} carries {expected}"
+    found = written_directives(policies[0], what)
+    assert (
+        found == expected
+    ), f"{what}: the enforced policy {policies[0]!r} is not, directive by directive and source by source, {expected} ({kind}, H-55 v2: the document trio in every profile, frame-ancestors with frame protection on, a web app page adding script-src, worker-src and connect-src); the order between directives is free"
+    return f"{kind}: Content-Security-Policy {sorted(found)}, X-Frame-Options {frame_options}"
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("case", CASES.values(), ids=list(CASES))
 @pytest.mark.parametrize("mode", MODES.values(), ids=list(MODES))
-async def test_frame_protection_is_on_every_response_when_on_and_on_none_when_off(mode: Mode, case: Case, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_the_enforced_policy_follows_the_response_in_every_profile_and_the_frame_protection_adds_its_own(mode: Mode, case: Case, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """H-55 v2, the table over the app of ``main.py``'s shape: the document trio on every document (also ``/mkdocs`` and
+    the API docs) with frame protection on or off; the web app page's script, worker and connect sources, with the hashes
+    of the fake build; ``frame-ancestors`` with frame protection on; a non-document with it off: no policy."""
     what = f"{case.method} {case.path} with {mode.describe()}"
-    print_section(f"D5 frame protection: {what}")
+    print_section(f"H-55 v2 enforced policy: {what}")
 
     reply = await answer(case, mode, tmp_path, monkeypatch)
 
-    print_success(f"✓ {assert_frame_protection(reply, mode.frame_protection, case.html, what)}; nosniff and Referrer-Policy")
+    print_success(f"✓ {assert_frame_protection(reply, mode, case.html, what, web_app_page=case.web_app_html, script_hashes=FAKE_BUILD_SOURCES)}; nosniff and Referrer-Policy")
 
 
 # =============================================================================
@@ -765,13 +836,13 @@ ROUTE_SETS: dict[str, tuple[str, str]] = {
 
 def is_the_middlewares(name: str, values: list[str]) -> bool:
     """``values`` is the one value the middleware gives the header ``name`` of D5 on a page of the web app, in ``managed``:
-    the page is an HTML document, so its enforced policy is ``PAGE_POLICY`` (H-42)."""
+    the enforced policy of a web app page (H-55 v2), with the hashes of the fake build the route-set cases serve."""
     if len(values) != 1:
         return False
     if name == "x-frame-options":
         return values[0] == FRAME_OPTIONS
     if name == "content-security-policy":
-        return values[0] == PAGE_POLICY
+        return written_directives(values[0], name) == expected_enforced(MODES["managed"], document=True, web_app_page=True, script_hashes=FAKE_BUILD_SOURCES)
     return dict(parse_policy(values[0])).get("default-src") == REPORT_ONLY_EXACT["default-src"]
 
 
@@ -786,7 +857,9 @@ async def test_a_header_the_route_set_is_kept_and_the_others_are_added(header: s
 
     assert reply.values(header) == [value], f"GET {path}: {header} is {reply.values(header)}; the route's {value!r} must stay, alone, as in CP7b-1"
     others = {name: reply.values(name) for name in D5_HEADERS if name != header and not is_the_middlewares(name, reply.values(name))}
-    assert not others, f"GET {path}: the middleware must still add its own value of the other headers of D5, once each, on this HTML page Content-Security-Policy {PAGE_POLICY!r} (H-42): {others}"
+    assert (
+        not others
+    ), f"GET {path}: the middleware must still add its own value of the other headers of D5, once each, on this web app page, its enforced Content-Security-Policy being the table's (H-55 v2: the trio, frame-ancestors, script-src with the build's hashes, worker-src, connect-src): {others}"
     print_success(f"✓ the route's {header} kept alone; the other two added")
 
 
@@ -819,8 +892,10 @@ async def test_the_settings_are_read_when_the_middleware_is_built_never_per_requ
 
     answered(200, HTML, PAGE_HTML)(reply)
     assert_always_on(reply, f"GET / built {built}, called {called}")
-    expected = dict(zip(D5_HEADERS, (MODES[built].frame_protection, MODES[built].frame_protection, MODES[built].csp_report_only), strict=True))
+    # H-55 v2: the enforced policy is on every web app page in every profile, so Content-Security-Policy is always present
+    expected = dict(zip(D5_HEADERS, (MODES[built].frame_protection, True, MODES[built].csp_report_only), strict=True))
     assert present(reply) == expected, f"built {built} and called {called}, the headers of D5 present are {present(reply)}, not those of the configuration it was built with, {expected}: the settings must be read once, in __init__"
+    assert_frame_protection(reply, MODES[built], True, f"GET / built {built}, called {called}", web_app_page=True)  # frame-ancestors and connect-src (the profile's) as built
     print_success(f"✓ answered as built: {expected}")
 
 
@@ -845,7 +920,7 @@ PROBLEM_JSON = b'{"type": "about:blank", "title": "Not Found", "status": 404}'
 @dataclass(frozen=True)
 class TypedAnswer:
     """What a bare ASGI app answers at ``path``: ``status``, a ``Content-Type`` written as given (``None``: no
-    ``Content-Type`` at all) and ``body``. ``document``: a document, whose enforced policy is ``PAGE_POLICY``: an HTML
+    ``Content-Type`` at all) and ``body``. ``document``: a document, which carries the document trio: an HTML
     page (H-42), and since H-45 an XHTML page, an SVG image, an XML file, any media type ending with ``+xml``."""
 
     path: str
@@ -853,6 +928,14 @@ class TypedAnswer:
     body: bytes
     document: bool
     status: int = 200
+
+    @property
+    def web_app_page(self) -> bool:
+        """H-55 v2: a page of the web app, which adds script, worker and connect sources: ``text/html`` exactly (any case,
+        parameters allowed), at a path outside ``/mkdocs`` and ``/api``. Written here, from the contract."""
+        media_type = (self.content_type or "").partition(";")[0].strip().lower()
+        outside = not (self.path == "/mkdocs" or self.path.startswith("/mkdocs/") or self.path == "/api" or self.path.startswith("/api/"))
+        return media_type == "text/html" and outside
 
 
 #: Each type at a path where the app serves it, or could, HTML under /mkdocs and /api/ too: the type decides, never the path.
@@ -903,34 +986,26 @@ def assert_bare_answer(reply: Reply, typed: TypedAnswer, what: str) -> None:
     assert reply.values("content-type") == sent_type, f"barrier: {what}: the Content-Type reached the client as {reply.values('content-type')}, not as written, {sent_type}"
 
 
-def test_page_policy_is_pinned_by_value() -> None:
-    print_section(f"H-42: {SECURITY_MODULE}.{PAGE_POLICY_NAME}, by value")
-
-    # Read by name: before H-42 this test fails, naming H-42, while every other test of the file still collects and runs
-    policy = getattr(importlib.import_module(SECURITY_MODULE), PAGE_POLICY_NAME, None)
-
-    assert policy is not None, f"H-42: {SECURITY_MODULE} has no {PAGE_POLICY_NAME}, the enforced Content-Security-Policy of an HTML document when frame protection is on; wanted {PAGE_POLICY!r}"
-    assert policy == PAGE_POLICY, f"H-42: {SECURITY_MODULE}.{PAGE_POLICY_NAME} is {policy!r}, not the string {PAGE_POLICY!r}: frame-ancestors 'self', then object-src 'none', base-uri 'self' and form-action 'self', in this order, separated by '; '"
-    print_success(f"✓ {PAGE_POLICY_NAME} = {PAGE_POLICY!r}")
-
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize("typed", TYPED_ANSWERS.values(), ids=list(TYPED_ANSWERS))
 @pytest.mark.parametrize("mode", MODES.values(), ids=list(MODES))
 async def test_the_enforced_policy_follows_the_type_of_the_response(mode: Mode, typed: TypedAnswer, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """H-42/H-45, and since H-55 v2 in every profile: the type alone (with the path telling a web app page from the
+    documentation's and the API's HTML) decides the enforced policy: the trio on a document, script, worker and connect
+    sources on a web app page (no build here, so no hash), ``frame-ancestors`` with frame protection on, nothing else."""
     what = f"GET {typed.path} answered {typed.status} {typed.content_type or 'without Content-Type'} with {mode.describe()}"
-    print_section(f"H-42/H-45 enforced policy by type: {what}")
+    print_section(f"H-42/H-45/H-55 v2 enforced policy by type: {what}")
     configure(monkeypatch, mode, tmp_path)
 
     reply = await call(wrap(answering(typed)), typed.path)  # SecurityHeadersMiddleware(app) built here, configuration in place
 
     assert_bare_answer(reply, typed, what)
     assert_always_on(reply, what)
-    print_success(f"✓ {assert_frame_protection(reply, mode.frame_protection, typed.document, what)}; nosniff and Referrer-Policy")
+    print_success(f"✓ {assert_frame_protection(reply, mode, typed.document, what, web_app_page=typed.web_app_page)}; nosniff and Referrer-Policy")
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mode", FRAME_PROTECTION_MODES.values(), ids=list(FRAME_PROTECTION_MODES))
+@pytest.mark.parametrize("mode", MODES.values(), ids=list(MODES))
 async def test_an_html_page_keeps_the_policy_its_route_set(mode: Mode, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path, value = ROUTE_SETS["content-security-policy"]
     what = f"GET {path} with {mode.describe()}"
@@ -940,9 +1015,10 @@ async def test_an_html_page_keeps_the_policy_its_route_set(mode: Mode, tmp_path:
     reply = await answer(page, mode, tmp_path, monkeypatch)
 
     policies = reply.values("content-security-policy")
-    assert policies == [value], f"{what}: Content-Security-Policy is {policies}; the route's {value!r} must stay, alone, on an HTML page too: never replaced by PAGE_POLICY, never joined by a second policy"
-    assert reply.values("x-frame-options") == [FRAME_OPTIONS], f"{what}: X-Frame-Options is {reply.values('x-frame-options')}, wanted exactly one, {FRAME_OPTIONS!r}"
-    print_success(f"✓ the route's {value!r} kept alone; X-Frame-Options: {FRAME_OPTIONS} added")
+    assert policies == [value], f"{what}: Content-Security-Policy is {policies}; the route's {value!r} must stay, alone, on an HTML page too: never replaced by the middleware's policy, never joined by a second policy"
+    expected_frame_options = [FRAME_OPTIONS] if mode.frame_protection else []  # H-55 v2: the policy is enforced in every profile, X-Frame-Options follows the frame protection
+    assert reply.values("x-frame-options") == expected_frame_options, f"{what}: X-Frame-Options is {reply.values('x-frame-options')}, wanted {expected_frame_options}"
+    print_success(f"✓ the route's {value!r} kept alone; X-Frame-Options {expected_frame_options}")
 
 
 # =============================================================================
@@ -959,7 +1035,7 @@ def test_the_document_media_types_are_pinned_by_value() -> None:
     module = importlib.import_module(SECURITY_MODULE)
     media_types, suffix = getattr(module, DOCUMENT_MEDIA_TYPES_NAME, None), getattr(module, DOCUMENT_MEDIA_TYPE_SUFFIX_NAME, None)
 
-    assert media_types is not None, f"H-45: {SECURITY_MODULE} has no {DOCUMENT_MEDIA_TYPES_NAME}, the media types of a document, which carries PAGE_POLICY when frame protection is on; wanted the frozenset of {sorted(DOCUMENT_MEDIA_TYPES)}"
+    assert media_types is not None, f"H-45: {SECURITY_MODULE} has no {DOCUMENT_MEDIA_TYPES_NAME}, the media types of a document, which carries the document trio; wanted the frozenset of {sorted(DOCUMENT_MEDIA_TYPES)}"
     assert isinstance(media_types, frozenset) and media_types == DOCUMENT_MEDIA_TYPES, f"H-45: {SECURITY_MODULE}.{DOCUMENT_MEDIA_TYPES_NAME} is {media_types!r}, not the frozenset of these five str, {sorted(DOCUMENT_MEDIA_TYPES)}: HTML, XHTML, SVG, XML, lower-case"
     assert suffix is not None, f"H-45: {SECURITY_MODULE} has no {DOCUMENT_MEDIA_TYPE_SUFFIX_NAME}, the suffix making any other media type a document (application/atom+xml, application/rss+xml...); wanted {DOCUMENT_MEDIA_TYPE_SUFFIX!r}"
     assert suffix == DOCUMENT_MEDIA_TYPE_SUFFIX, f"H-45: {SECURITY_MODULE}.{DOCUMENT_MEDIA_TYPE_SUFFIX_NAME} is {suffix!r}, not the str {DOCUMENT_MEDIA_TYPE_SUFFIX!r}: the structured-syntax suffix of XML"
@@ -980,7 +1056,7 @@ NOT_TEXT_HTML_AT_WEB_APP_PATHS: dict[str, TypedAnswer] = {
 @pytest.mark.parametrize("mode", REPORT_ONLY_MODES.values(), ids=list(REPORT_ONLY_MODES))
 async def test_the_report_only_policy_stays_on_text_html_not_on_every_document(mode: Mode, typed: TypedAnswer, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """H-45: the report-only policy, written for the web app's pages, stays on a media type exactly text/html: at a path of
-    the web app an SVG or an XHTML document carries PAGE_POLICY (frame protection on), never the report-only policy."""
+    the web app an SVG or an XHTML document carries the document trio, never the report-only policy."""
     what = f"GET {typed.path} answered {typed.content_type} with {mode.describe()}"
     print_section(f"H-45 report-only policy, on text/html only: {what}")
     configure(monkeypatch, mode, tmp_path)
@@ -1000,7 +1076,7 @@ async def test_the_report_only_policy_stays_on_text_html_not_on_every_document(m
     report_only = reply.values("content-security-policy-report-only")
     kind = "a document, yet not HTML" if typed.document else "no document, the media type exactly and never a prefix"
     assert report_only == [], f"{what}: Content-Security-Policy-Report-Only is {report_only}, wanted none: H-45 leaves the report-only policy on a media type exactly text/html, and {typed.content_type!r} is {kind}"
-    print_success(f"✓ no Content-Security-Policy-Report-Only; {assert_frame_protection(reply, mode.frame_protection, typed.document, what)}")
+    print_success(f"✓ no Content-Security-Policy-Report-Only; {assert_frame_protection(reply, mode, typed.document, what)}")
 
 
 # =============================================================================
@@ -1014,8 +1090,8 @@ POLICY_HEADERS = ("content-security-policy", "content-security-policy-report-onl
 @dataclass(frozen=True)
 class Revalidated:
     """What a bare ASGI app answers at ``path``, revalidated or not: ``headers`` as written, the same on its 200 and on its
-    304, an ``etag`` among them; ``body`` on the 200 only. As a 200 it is a ``document`` (its policy ``PAGE_POLICY`` with
-    frame protection on) or not, and ``web_app_html`` (an HTML page of the web app: the report-only policy's place) or not."""
+    304, an ``etag`` among them; ``body`` on the 200 only. As a 200 it is a ``document`` (the document trio among its
+    enforced directives) or not, and ``web_app_html`` (an HTML page of the web app: the report-only policy's place) or not."""
 
     path: str
     headers: tuple[tuple[str, str], ...]
@@ -1058,11 +1134,15 @@ def revalidating(revalidated: Revalidated) -> Callable:
 
 
 def assert_the_200_carries_what_the_configuration_gives(reply: Reply, revalidated: Revalidated, mode: Mode, what: str) -> None:
-    """Barrier: ``revalidated`` answered 200 carries the policies ``mode`` gives it: the route's own, else the policy of its
-    type with frame protection on, and the middleware's report-only policy on an HTML page of the web app with it on."""
-    by_type = [PAGE_POLICY if revalidated.document else FRAME_POLICY] if mode.frame_protection else []
-    enforced = revalidated.own("content-security-policy") or by_type
-    assert reply.values("content-security-policy") == enforced, f"barrier: {what}: Content-Security-Policy is {reply.values('content-security-policy')}, not {enforced}, what this configuration gives this answer: the 304 would test the harness, not the guard"
+    """Barrier: ``revalidated`` answered 200 carries the policies ``mode`` gives it: the route's own, else the enforced
+    policy of its response (H-55 v2: the trio on a document, a web app page's sources, frame-ancestors with frame
+    protection on, none for a non-document without it), and the middleware's report-only policy on an HTML page of the
+    web app with it on."""
+    own_policy = revalidated.own("content-security-policy")
+    if own_policy:
+        assert reply.values("content-security-policy") == own_policy, f"barrier: {what}: Content-Security-Policy is {reply.values('content-security-policy')}, not the route's own {own_policy}: the 304 would test the harness, not the guard"
+    else:
+        assert_frame_protection(reply, mode, revalidated.document, f"barrier: {what}", web_app_page=revalidated.web_app_html)  # the 304 would test the harness, not the guard
     own_report_only, report_only = revalidated.own("content-security-policy-report-only"), reply.values("content-security-policy-report-only")
     if mode.csp_report_only and revalidated.web_app_html and not own_report_only:
         assert is_the_middlewares("content-security-policy-report-only", report_only), f"barrier: {what}: Content-Security-Policy-Report-Only is {report_only}, not the middleware's, once, what this configuration gives an HTML page of the web app"
@@ -1075,7 +1155,7 @@ def assert_the_200_carries_what_the_configuration_gives(reply: Reply, revalidate
 @pytest.mark.parametrize("mode", MODES.values(), ids=list(MODES))
 async def test_a_304_gets_no_policy_from_the_middleware(mode: Mode, revalidated: Revalidated, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """H-45: a browser freshens its cached response with the header fields of a 304, so a policy on a 304 would replace the
-    cached page's PAGE_POLICY: the middleware adds neither policy to a 304, in every configuration; the rest as ever."""
+    cached page's policy: the middleware adds neither policy to a 304, in every configuration; the rest as ever."""
     what = f"GET {revalidated.path} with If-None-Match: {revalidated.etag}, answered 304 with {list(revalidated.headers)}, with {mode.describe()}"
     print_section(f"H-45 no policy on a 304: {what}")
     configure(monkeypatch, mode, tmp_path)
@@ -1124,7 +1204,7 @@ MOUNTED_FILES: dict[str, MountedFile] = {
 @pytest.mark.parametrize("mounted", MOUNTED_FILES.values(), ids=list(MOUNTED_FILES))
 async def test_the_real_304_of_the_app_mount_carries_no_policy(mounted: MountedFile, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """H-45, through the stack in managed: the /_app mount (ImmutableStaticFiles, the one part of the app answering 304)
-    revalidates a file of the build; its 200 carries the policy of its type (PAGE_POLICY on the SVG, a document), its 304 none."""
+    revalidates a file of the build; its 200 carries the policy of its type (the document trio on the SVG, a document), its 304 none."""
     mode = MODES["managed"]
     what = f"GET {mounted.path} with {mode.describe()}"
     print_section(f"H-45 a real 304 through the stack: {what}, then again with its ETag")
@@ -1144,7 +1224,7 @@ async def test_the_real_304_of_the_app_mount_carries_no_policy(mounted: MountedF
     assert again.raised is None and again.status == 304 and again.body == b"", f"barrier: {again_what} answered {again.status} {again.body[:120]!r}, raised {again.raised!r}, not 304: the revalidation path was not taken"
     assert again.values("etag") == etags and again.values("cache-control") == [static_site.IMMUTABLE_CACHE_CONTROL], f"barrier: {again_what}: not the 304 of ImmutableStaticFiles, with its ETag and the Cache-Control the mount gives a file of immutable/: {again.headers}"
     assert_always_on(again, again_what)
-    enforced = assert_frame_protection(first, mode.frame_protection, mounted.document, what)
+    enforced = assert_frame_protection(first, mode, mounted.document, what)
     assert first.values("content-security-policy-report-only") == [], f"{what}: Content-Security-Policy-Report-Only is {first.values('content-security-policy-report-only')}, wanted none: {first.media_type!r} is not the web app's HTML"
     for name in POLICY_HEADERS:
         assert again.values(name) == [], f"{again_what}: {name} is {again.values(name)}, wanted none; H-45: the browser freshens its cached copy, whose policy is {first.values('content-security-policy')}, with the header fields of this 304 (RFC 9111, 3.2)"
@@ -1156,7 +1236,7 @@ async def test_the_real_304_of_the_app_mount_carries_no_policy(mounted: MountedF
 # (j) H-52: spa_inline_script_hashes, PURE
 # =============================================================================
 
-#: H-52: names read when a test runs, as PAGE_POLICY_NAME is: before H-52 their tests fail naming H-52, the rest still runs.
+#: H-52: names read when a test runs, as DOCUMENT_MEDIA_TYPES_NAME is: before H-52 their tests fail naming H-52, the rest still runs.
 SPA_HASHES_NAME = "spa_inline_script_hashes"
 REPORT_ONLY_POLICY_FUNCTION_NAME = "report_only_policy"
 CSP_REPORT_ONLY_POLICY_NAME = "CSP_REPORT_ONLY_POLICY"
@@ -1405,11 +1485,11 @@ def test_report_only_policy_appends_the_hashes_to_script_src_in_the_order_given(
 
 
 # =============================================================================
-# (j) H-52: THE MIDDLEWARE HASHES THE BUILD ONCE, WHEN IT IS BUILT
+# (j) H-52, AND H-55 v2 STEP 1: THE MIDDLEWARE HASHES THE BUILD AS IT IS NOW (a cache keyed by the build's signature)
 # =============================================================================
 
 #: H-52: paths at which the bare app answers an HTML page: the web app's, which carry the report-only policy with the
-#: build's hashes; the documentation's and the API's, which carry no report-only policy.
+#: build's hashes (and, H-55 v2, the enforced one); the documentation's and the API's, which carry neither.
 WEB_APP_PAGE_PATHS = ("/", "/portfolio/overview", "/200.html", "/offline.html")
 NOT_WEB_APP_PAGE_PATHS = ("/mkdocs", "/mkdocs/user/", f"{API_V1_PREFIX}/docs", f"{API_V1_PREFIX}/redoc")
 
@@ -1450,95 +1530,58 @@ async def page_report_only(middleware: Callable, path: str, what: str) -> list[s
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mode", REPORT_ONLY_MODES.values(), ids=list(REPORT_ONLY_MODES))
-async def test_the_build_is_hashed_once_when_the_middleware_is_built_and_only_the_web_apps_pages_carry_it(mode: Mode, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_the_build_is_hashed_once_per_signature_and_only_the_web_apps_pages_carry_it(mode: Mode, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """H-52, changed by H-55 v2: no longer «once, when the middleware is built» (a build made while the server runs left a
+    blank page): the build is read for the first web app page and not again while its signature stays; the report-only
+    policy and the enforced one carry the same hashes there, the documentation's and the API's pages neither."""
     what = f"the middleware built with {mode.describe()} on a build of {sorted(FAKE_BUILD_PAGES)}"
-    print_section(f"H-52: {what}")
+    print_section(f"H-52/H-55 v2: {what}")
     configure(monkeypatch, mode, tmp_path)
     build_dir = _write_tree(tmp_path / "build", FAKE_BUILD_PAGES)
     calls = spy_on_spa_hashes(monkeypatch)
 
     middleware = built_on(build_dir, monkeypatch)
 
-    assert calls == [build_dir], f"{what}: {SPA_HASHES_NAME} was called with {calls}, not once with {build_dir}: the hashes come from static_site.FRONTEND_BUILD_DIR as it is when the middleware is built"
     expected = SCRIPT_SRC + FAKE_BUILD_SOURCES
     for path in WEB_APP_PAGE_PATHS:
-        policies = await page_report_only(middleware, path, what)
+        reply = await call(middleware, path)
+        answered(200, HTML, PAGE_HTML)(reply)
+        assert_always_on(reply, f"GET {path}, {what}")
+        policies = reply.values("content-security-policy-report-only")
         script_src = written_directives(policies[0], f"GET {path}, {what}").get("script-src") if len(policies) == 1 else policies
         assert script_src == expected, f"GET {path}, {what}: carries {policies}, not one policy whose script-src is {expected}: {SCRIPT_SRC}, then the hash of every inline script of the build, each once, sorted"
+        enforced = reply.values("content-security-policy")
+        enforced_script_src = written_directives(enforced[0], f"GET {path}, {what}").get("script-src") if len(enforced) == 1 else enforced
+        assert enforced_script_src == expected, f"GET {path}, {what}: the enforced policy is {enforced}, not one whose script-src is {expected} (H-55 v2: the same hashes as the report-only policy)"
     for path in NOT_WEB_APP_PAGE_PATHS:
         policies = await page_report_only(middleware, path, what)
         assert policies == [], f"GET {path}, {what}: Content-Security-Policy-Report-Only is {policies}, wanted none: not a page of the web app"
-    assert calls == [build_dir], f"{what}: {SPA_HASHES_NAME} was called again while answering, {calls}: the build is read once, when the middleware is built, never per request"
+    assert calls == [build_dir], f"{what}: {SPA_HASHES_NAME} was called with {calls}, not once with {build_dir}: the build is read for the first web app page, and not again while its signature (name, mtime, size of every *.html) stays"
     print_success(f"✓ the build read once; script-src {expected} on {WEB_APP_PAGE_PATHS}, no report-only policy on {NOT_WEB_APP_PAGE_PATHS}")
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mode", REPORT_ONLY_OFF_MODES.values(), ids=list(REPORT_ONLY_OFF_MODES))
-async def test_with_the_report_only_policy_off_the_build_is_never_read(mode: Mode, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_with_the_report_only_policy_off_the_enforced_policy_still_carries_the_build_hashes(mode: Mode, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Replaces «with the report-only policy off the build is never read» (H-52): since H-55 v2 the enforced policy of a web
+    app page needs the build's hashes in every profile, whatever the report-only switch says."""
     what = f"the middleware built with {mode.describe()} on a build of {sorted(FAKE_BUILD_PAGES)}"
-    print_section(f"H-52: {what}")
+    print_section(f"H-55 v2: {what}")
+    configure(monkeypatch, mode, tmp_path)
     build_dir = _write_tree(tmp_path / "build", FAKE_BUILD_PAGES)
     calls = spy_on_spa_hashes(monkeypatch)
-    configure(monkeypatch, MODES["managed"], tmp_path)
-    built_on(build_dir, monkeypatch)
-    assert calls == [build_dir], f"barrier: built in managed, the middleware called {SPA_HASHES_NAME} with {calls}, not once with {build_dir}: the spy is not on its path, so a call below could go unseen"
-    calls.clear()
-    configure(monkeypatch, mode, tmp_path)
 
     middleware = built_on(build_dir, monkeypatch)
-    policies = await page_report_only(middleware, "/", what)
+    reply = await call(middleware, "/")
 
-    assert calls == [], f"{what}: {SPA_HASHES_NAME} was called with {calls}: with the report-only policy off, the middleware reads no build"
-    assert policies == [], f"{what}: Content-Security-Policy-Report-Only is {policies}, yet the policy is off"
-    print_success("✓ the build never read; no Content-Security-Policy-Report-Only")
-
-
-def rewrite_the_build(build_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[str, ...]:
-    """The next build written over the one the middleware was built on: every page rewritten."""
-    _write_tree(build_dir, build_pages(NEXT_BUILD_ID))
-    return build_sources(NEXT_BUILD_ID)
-
-
-def remove_the_build(build_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[str, ...]:
-    """The build the middleware was built on, removed."""
-    shutil.rmtree(build_dir)
-    return ()
-
-
-def point_at_the_next_build(build_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[str, ...]:
-    """``static_site.FRONTEND_BUILD_DIR`` pointed at the next build, written beside the first."""
-    monkeypatch.setattr(static_site, "FRONTEND_BUILD_DIR", _write_tree(tmp_path / "next-build", build_pages(NEXT_BUILD_ID)))
-    return build_sources(NEXT_BUILD_ID)
-
-
-#: H-52: a build changed after the middleware was built, three ways; each returns what would follow SCRIPT_SRC in
-#: script-src, were the build hashed again (computed here).
-BUILD_CHANGES: dict[str, Callable[[Path, Path, pytest.MonkeyPatch], tuple[str, ...]]] = {
-    "rewritten-by-the-next-build": rewrite_the_build,
-    "removed": remove_the_build,
-    "frontend-build-dir-pointed-at-the-next-build": point_at_the_next_build,
-}
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("change", list(BUILD_CHANGES))
-async def test_a_build_changed_after_the_middleware_was_built_leaves_its_header_as_it_was(change: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    mode = MODES["managed"]
-    what = f"the middleware built with {mode.describe()} on the build {BUILD_ID}, then the build {change}"
-    print_section(f"H-52: {what}")
-    configure(monkeypatch, mode, tmp_path)
-    build_dir = _write_tree(tmp_path / "build", build_pages(BUILD_ID))
-    middleware = built_on(build_dir, monkeypatch)
-    before = await page_report_only(middleware, "/", what)
-    built_with = written_directives(before[0], what).get("script-src") if len(before) == 1 else before
-    assert built_with == SCRIPT_SRC + build_sources(BUILD_ID), f"barrier (H-52): built on the build {BUILD_ID}, GET / carries {before}, not one policy whose script-src is {SCRIPT_SRC + build_sources(BUILD_ID)}"
-
-    now = BUILD_CHANGES[change](build_dir, tmp_path, monkeypatch)
-    assert now != build_sources(BUILD_ID), f"barrier: the build {change} still has the scripts it had: an unchanged header would prove nothing"
-    after = await page_report_only(middleware, "/", what)
-
-    assert after == before, f"{what}: Content-Security-Policy-Report-Only went from {before} to {after}; it is computed once, when the middleware is built: a new build is taken by a restart"
-    print_success(f"✓ as it was: {before}")
+    answered(200, HTML, PAGE_HTML)(reply)
+    assert_always_on(reply, f"GET /, {what}")
+    assert reply.values("content-security-policy-report-only") == [], f"{what}: Content-Security-Policy-Report-Only is {reply.values('content-security-policy-report-only')}, yet the policy is off"
+    enforced = reply.values("content-security-policy")
+    script_src = written_directives(enforced[0], what).get("script-src") if len(enforced) == 1 else enforced
+    assert script_src == SCRIPT_SRC + FAKE_BUILD_SOURCES, f"{what}: the enforced policy is {enforced}, not one whose script-src is {SCRIPT_SRC + FAKE_BUILD_SOURCES}: H-55 v2, the hashes of the build now, with the report-only policy off too"
+    assert calls == [build_dir], f"{what}: {SPA_HASHES_NAME} was called with {calls}, not once with {build_dir}"
+    print_success(f"✓ no report-only policy; enforced script-src {script_src}")
 
 
 #: H-52: builds without an inline script to allow: none at all (``None``), a folder without a page, a page that cannot be
@@ -1554,18 +1597,680 @@ SCRIPTLESS_BUILDS: dict[str, dict[str, bytes] | None] = {
 @pytest.mark.parametrize("build", list(SCRIPTLESS_BUILDS))
 @pytest.mark.parametrize("mode", REPORT_ONLY_MODES.values(), ids=list(REPORT_ONLY_MODES))
 async def test_a_build_without_an_inline_script_gives_the_policy_without_a_hash(mode: Mode, build: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """H-52, and since H-55 v2: the report-only policy is the constant with, in ``connect-src``, the connect sources of the
+    configuration (``https://api.github.com`` in the self-hosted profile, nothing in the managed one: no public URL
+    here), and the enforced policy of the page has a ``script-src`` without a hash."""
     what = f"the middleware built with {mode.describe()} on a build {build}"
-    print_section(f"H-52: {what}")
+    print_section(f"H-52/H-55 v2: {what}")
     configure(monkeypatch, mode, tmp_path)
     files = SCRIPTLESS_BUILDS[build]
     build_dir = tmp_path / "build" if files is None else _write_tree(tmp_path / "build", files)
     constant = written_directives(csp_report_only_policy(), CSP_REPORT_ONLY_POLICY_NAME)
+    expected = {name: CONNECT_SRC + mode.connect_sources if name == "connect-src" else sources for name, sources in constant.items()}
 
     middleware = built_on(build_dir, monkeypatch)  # the server starts all the same
-    policies = await page_report_only(middleware, "/", what)
+    reply = await call(middleware, "/")
+    answered(200, HTML, PAGE_HTML)(reply)
+    assert_always_on(reply, f"GET /, {what}")
+    policies = reply.values("content-security-policy-report-only")
 
     assert len(policies) == 1, f"{what}: {len(policies)} Content-Security-Policy-Report-Only on GET /: {policies}"
     found = written_directives(policies[0], what)
     assert found.get("script-src") == SCRIPT_SRC, f"{what}: script-src is {found.get('script-src')}, not {SCRIPT_SRC}: H-52, 'report-sample' and no hash, the build having no inline script"
-    assert list(found.items()) == list(constant.items()), f"{what}: the policy is {policies[0]!r}, not {CSP_REPORT_ONLY_POLICY_NAME} directive by directive, {list(constant.items())}"
-    print_success(f"✓ {CSP_REPORT_ONLY_POLICY_NAME}, no hash: {policies[0]}")
+    assert list(found.items()) == list(expected.items()), f"{what}: the policy is {policies[0]!r}, not {CSP_REPORT_ONLY_POLICY_NAME} directive by directive with the connect sources in connect-src, {list(expected.items())}"
+    assert_frame_protection(reply, mode, True, f"GET /, {what}", web_app_page=True)  # H-55 v2: script-src without a hash, connect-src as the profile gives it
+    print_success(f"✓ {CSP_REPORT_ONLY_POLICY_NAME}, no hash, the connect sources {mode.connect_sources}: {policies[0]}")
+
+
+# =============================================================================
+# (k) H-55 v2, STEP 1: THE INLINE-SCRIPT HASHES FOLLOW THE BUILD
+# =============================================================================
+#: The hashes the middleware puts in ``script-src`` (the enforced header, and the report-only one when on) are those of the
+#: build as it is now, through a cache keyed by the build's signature: for every ``*.html`` directly in
+#: ``static_site.FRONTEND_BUILD_DIR`` whose name does not start with ``.``, ``(name, st_mtime_ns, st_size)``. Same signature,
+#: no page read again (``static_site.spa_inline_script_hashes`` not called: the middleware looks it up as a module attribute
+#: at each cache miss, so ``spy_on_spa_hashes`` counts its calls); another signature, the hashes recomputed and used from that
+#: response on; a page of the last good signature missing (the build being written), the last good hashes stay and the next
+#: web app response checks again; no build at all, no hash; only web app HTML responses look at the build.
+#: Each case builds its own middleware: the tests assume a middleware starts with no «last good» hashes of its own.
+
+#: Seconds of the modification time a build's files get: a signature never depends on how fast a test wrote two builds.
+STAMP_0, STAMP_1 = 1_700_000_000, 1_700_001_000
+NANOSECONDS = 10**9
+#: The modes of the hash cases: self-hosted, enforced policy alone; managed, enforced and report-only.
+HASH_MODES = {name: MODES[name] for name in ("selfhosted-nothing-set", "managed")}
+#: An inline script written to a build after the middleware read it, and the expression allowing it.
+EXTRA_SCRIPT = "document.title = 'a page written later';"
+EXTRA_PAGE = page_of(f"<script>{EXTRA_SCRIPT}</script>")
+EXTRA_SOURCE = sha256_source(EXTRA_SCRIPT)
+
+
+def write_build(build_dir: Path, pages: dict[str, bytes], stamp: int) -> Path:
+    """``pages`` written under ``build_dir`` and their modification time set to ``stamp`` seconds: the signature of a file
+    (name, mtime, size) changes when a case says so, never by the clock's grain."""
+    _write_tree(build_dir, pages)
+    for relative in pages:
+        os.utime(build_dir / relative, ns=(stamp * NANOSECONDS, stamp * NANOSECONDS))
+    return build_dir
+
+
+def script_src_of(reply: Reply, field: str, what: str) -> tuple[str, ...]:
+    """The hashes after ``SCRIPT_SRC`` in the ``script-src`` of the one ``field`` policy ``reply`` carries."""
+    values = reply.values(field)
+    assert len(values) == 1, f"{what}: {field} is {values}, wanted exactly one policy (H-55 v2: the enforced policy of a web app page, with the hashes of the build now)"
+    script_src = written_directives(values[0], what).get("script-src")
+    assert script_src is not None and script_src[: len(SCRIPT_SRC)] == SCRIPT_SRC, f"{what}: the script-src of {field} is {script_src}, not {SCRIPT_SRC} then the hashes of the build"
+    return script_src[len(SCRIPT_SRC) :]
+
+
+async def hashes_now(middleware: Callable, mode: Mode, what: str, path: str = "/") -> tuple[str, ...]:
+    """The hashes the web app page at ``path`` carries now, in the enforced policy and, when the report-only policy is on,
+    the same ones in that policy: ``middleware`` answered the bare app's page and saw it."""
+    reply = await call(middleware, path)
+    answered(200, HTML, PAGE_HTML)(reply)
+    assert_always_on(reply, f"GET {path}, {what}")
+    enforced = script_src_of(reply, "content-security-policy", f"GET {path}, {what}")
+    if mode.csp_report_only:
+        report_only = script_src_of(reply, "content-security-policy-report-only", f"GET {path}, {what}")
+        assert report_only == enforced, f"GET {path}, {what}: the report-only policy has the hashes {report_only}, the enforced one {enforced}: both are those of the build now"
+    return enforced
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("before", ["another-build-was-there", "no-build-yet"])
+@pytest.mark.parametrize("mode", HASH_MODES.values(), ids=list(HASH_MODES))
+async def test_a_build_written_after_the_middleware_was_built_is_the_one_hashed(mode: Mode, before: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    what = f"the middleware built with {mode.describe()} ({before}), then the build {NEXT_BUILD_ID} written"
+    print_section(f"H-55 v2 step 1: {what}")
+    configure(monkeypatch, mode, tmp_path)
+    build_dir = tmp_path / "build"
+    if before == "another-build-was-there":
+        write_build(build_dir, build_pages(BUILD_ID), STAMP_0)
+    middleware = built_on(build_dir, monkeypatch)
+
+    write_build(build_dir, build_pages(NEXT_BUILD_ID), STAMP_1)  # a build made while the server runs
+    found = await hashes_now(middleware, mode, what)
+
+    assert found == build_sources(NEXT_BUILD_ID), f"{what}: the hashes are {found}, not those of the build as it is now, {build_sources(NEXT_BUILD_ID)}: a build made while the server runs must not leave a blank page under the enforced policy"
+    print_success(f"✓ the hashes of the build now: {found}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", HASH_MODES.values(), ids=list(HASH_MODES))
+async def test_with_the_same_signature_no_page_is_read_again(mode: Mode, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    what = f"the middleware built with {mode.describe()} on the build {BUILD_ID}, untouched"
+    print_section(f"H-55 v2 step 1: {what}")
+    configure(monkeypatch, mode, tmp_path)
+    build_dir = write_build(tmp_path / "build", build_pages(BUILD_ID), STAMP_0)
+    calls = spy_on_spa_hashes(monkeypatch)
+    middleware = built_on(build_dir, monkeypatch)
+
+    seen = [await hashes_now(middleware, mode, what, path) for path in WEB_APP_PAGE_PATHS * 2]
+
+    assert seen == [build_sources(BUILD_ID)] * len(seen), f"{what}: the hashes are {seen}, not always those of the build, {build_sources(BUILD_ID)}"
+    assert calls == [build_dir], f"{what}: {SPA_HASHES_NAME} was called with {calls} for {len(seen)} web app responses, wanted once with {build_dir}: a build whose signature (name, mtime, size of every *.html) did not change is not read again"
+    print_success(f"✓ {len(seen)} responses, the build read once")
+
+
+async def _touch_a_page(build_dir: Path) -> tuple[tuple[str, ...], bool]:
+    os.utime(build_dir / "index.html", ns=(STAMP_1 * NANOSECONDS, STAMP_1 * NANOSECONDS))  # same text, a newer mtime
+    return build_sources(BUILD_ID), True
+
+
+async def _resize_a_page(build_dir: Path) -> tuple[tuple[str, ...], bool]:
+    page = build_dir / "index.html"
+    page.write_bytes(page.read_bytes().replace(b"</body>", f"<script>{EXTRA_SCRIPT}</script></body>".encode()))
+    os.utime(page, ns=(STAMP_0 * NANOSECONDS, STAMP_0 * NANOSECONDS))  # the mtime it had: only the size changed
+    return tuple(sorted({*build_sources(BUILD_ID), EXTRA_SOURCE})), True
+
+
+async def _add_a_page(build_dir: Path) -> tuple[tuple[str, ...], bool]:
+    write_build(build_dir, {"extra.html": EXTRA_PAGE}, STAMP_0)
+    return tuple(sorted({*build_sources(BUILD_ID), EXTRA_SOURCE})), True
+
+
+async def _write_the_next_build(build_dir: Path) -> tuple[tuple[str, ...], bool]:
+    write_build(build_dir, build_pages(NEXT_BUILD_ID), STAMP_1)  # same sizes as the first build: only the mtime says it changed
+    return build_sources(NEXT_BUILD_ID), True
+
+
+async def _add_a_hidden_page(build_dir: Path) -> tuple[tuple[str, ...], bool]:
+    write_build(build_dir, {".hidden.html": EXTRA_PAGE}, STAMP_1)  # a name starting with «.» is no page of the signature
+    return build_sources(BUILD_ID), False
+
+
+async def _add_a_page_in_a_subfolder(build_dir: Path) -> tuple[tuple[str, ...], bool]:
+    write_build(build_dir, {"nested/page.html": EXTRA_PAGE}, STAMP_1)  # only *.html directly in the build count
+    return build_sources(BUILD_ID), False
+
+
+async def _change_files_that_are_no_page(build_dir: Path) -> tuple[tuple[str, ...], bool]:
+    write_build(build_dir, {"robots.txt": b"User-agent: *\nDisallow: /\n", "new-chunk.js": CHUNK_JS}, STAMP_1)
+    return build_sources(BUILD_ID), False
+
+
+#: A change made to the build between two responses: what the hashes are after it (computed here), and whether the
+#: signature changed, so the pages are read again.
+BUILD_MUTATIONS: dict[str, Callable[[Path], Any]] = {
+    "a-page-touched": _touch_a_page,
+    "a-page-resized-at-the-same-mtime": _resize_a_page,
+    "a-page-added": _add_a_page,
+    "the-next-build-written": _write_the_next_build,
+    "a-hidden-page-added": _add_a_hidden_page,
+    "a-page-in-a-subfolder-added": _add_a_page_in_a_subfolder,
+    "files-that-are-no-page-changed": _change_files_that_are_no_page,
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("change", list(BUILD_MUTATIONS))
+@pytest.mark.parametrize("mode", HASH_MODES.values(), ids=list(HASH_MODES))
+async def test_a_changed_signature_recomputes_the_hashes_from_the_next_response_on(mode: Mode, change: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    what = f"the middleware built with {mode.describe()} on the build {BUILD_ID}, then {change}"
+    print_section(f"H-55 v2 step 1: {what}")
+    configure(monkeypatch, mode, tmp_path)
+    build_dir = write_build(tmp_path / "build", build_pages(BUILD_ID), STAMP_0)
+    calls = spy_on_spa_hashes(monkeypatch)
+    middleware = built_on(build_dir, monkeypatch)
+    first = await hashes_now(middleware, mode, what)
+    assert first == build_sources(BUILD_ID) and calls == [build_dir], f"barrier: on the build {BUILD_ID} the first response has the hashes {first} after {calls} reads, not {build_sources(BUILD_ID)} after one read of {build_dir}"
+
+    expected, recomputed = await BUILD_MUTATIONS[change](build_dir)
+    second = await hashes_now(middleware, mode, what)
+
+    assert second == expected, f"{what}: the next response has the hashes {second}, not {expected}"
+    reads = 2 if recomputed else 1
+    why = "the signature (name, mtime, size of every *.html directly in the build, none starting with «.») changed: the pages are read again" if recomputed else "the signature did not change: no page is read again"
+    assert calls == [build_dir] * reads, f"{what}: {SPA_HASHES_NAME} was called with {calls}, wanted {reads} read(s) of {build_dir}: {why}"
+    print_success(f"✓ {'recomputed' if recomputed else 'not read again'}: {second}")
+
+
+async def _remove_a_page(build_dir: Path) -> None:
+    (build_dir / "200.html").unlink()  # the build being written: a page of the last good signature is not there
+
+
+async def _remove_the_build(build_dir: Path) -> None:
+    shutil.rmtree(build_dir)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("removal", [pytest.param(_remove_a_page, id="a-page-missing"), pytest.param(_remove_the_build, id="the-whole-build-missing")])
+@pytest.mark.parametrize("mode", HASH_MODES.values(), ids=list(HASH_MODES))
+async def test_a_page_of_the_last_good_build_missing_keeps_the_last_good_hashes_and_the_next_response_checks_again(mode: Mode, removal: Callable[[Path], Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    what = f"the middleware built with {mode.describe()} on the build {BUILD_ID}, then {removal.__name__.removeprefix('_')}"
+    print_section(f"H-55 v2 step 1: {what}")
+    configure(monkeypatch, mode, tmp_path)
+    build_dir = write_build(tmp_path / "build", build_pages(BUILD_ID), STAMP_0)
+    middleware = built_on(build_dir, monkeypatch)
+    last_good = await hashes_now(middleware, mode, what)
+    assert last_good == build_sources(BUILD_ID), f"barrier: on the build {BUILD_ID} the response has the hashes {last_good}, not {build_sources(BUILD_ID)}"
+
+    await removal(build_dir)
+    while_missing = [await hashes_now(middleware, mode, what, path) for path in ("/", "/offline.html")]
+
+    assert while_missing == [last_good] * 2, f"{what}: while the build is incomplete the hashes are {while_missing}, not the last good ones, {last_good}: a page of the last good signature missing (the build being written) keeps them, the hashes of the pages left would block the others"
+
+    write_build(build_dir, build_pages(NEXT_BUILD_ID), STAMP_1)
+    written = await hashes_now(middleware, mode, what)
+
+    assert written == build_sources(NEXT_BUILD_ID), f"{what}: once the next build is written the hashes are {written}, not {build_sources(NEXT_BUILD_ID)}: the next web app response checks the build again"
+    print_success(f"✓ last good kept while incomplete: {last_good}; then {written}")
+
+
+#: A folder or a build that gives no inline script, never a build before: no hash at all.
+NEVER_A_BUILD: dict[str, dict[str, bytes] | None] = {
+    "missing-folder": None,
+    "folder-without-a-page": {"robots.txt": ROBOTS_TXT, "favicon.png": FAVICON_PNG},
+    "folder-with-a-hidden-page-only": {".hidden.html": EXTRA_PAGE},
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("build", list(NEVER_A_BUILD))
+@pytest.mark.parametrize("mode", HASH_MODES.values(), ids=list(HASH_MODES))
+async def test_with_no_build_there_is_no_hash_and_the_page_is_still_served(mode: Mode, build: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    what = f"the middleware built with {mode.describe()} on a build {build}"
+    print_section(f"H-55 v2 step 1: {what}")
+    configure(monkeypatch, mode, tmp_path)
+    files = NEVER_A_BUILD[build]
+    build_dir = tmp_path / "build" if files is None else write_build(tmp_path / "build", files, STAMP_0)
+    middleware = built_on(build_dir, monkeypatch)
+
+    found = await hashes_now(middleware, mode, what)
+
+    assert found == (), f"{what}: the hashes are {found}, not none: no build, no hash (script-src is {SCRIPT_SRC} alone)"
+
+    write_build(build_dir, build_pages(BUILD_ID), STAMP_1)
+    later = await hashes_now(middleware, mode, what)
+
+    assert later == build_sources(BUILD_ID), f"{what}: once a build is written the hashes are {later}, not {build_sources(BUILD_ID)}: no build is not remembered"
+    print_success(f"✓ no hash without a build; then {later}")
+
+
+#: What answers at each path of ``test_only_web_app_html_responses_look_at_the_build``: the web app's page, then answers that are none.
+CHEAP_ANSWERS = ("uppercase-TEXT-HTML", "mixed-case-with-charset", "application-json", "image-png", "text-javascript", "image-svg-xml-charset-utf-8", "application-pdf", "application-xhtml-xml")
+
+
+def routing(answers: Iterable[TypedAnswer]) -> Callable:
+    """A bare ASGI app answering, at each path of ``answers``, that answer (the paths are distinct)."""
+    by_path = {typed.path: typed for typed in answers}
+
+    async def app(scope: dict[str, Any], receive: Callable, send: Callable) -> None:
+        await answering(by_path[scope["path"]])(scope, receive, send)
+
+    return app
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", HASH_MODES.values(), ids=list(HASH_MODES))
+async def test_only_web_app_html_responses_look_at_the_build(mode: Mode, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only a web app HTML response pays for the build's signature: never an asset, an API answer, a document that is
+    not the app's page (``/mkdocs``, the API docs, an SVG, an XHTML page), a PDF. Seen by the next build written between two
+    web app responses: nothing in between reads it, so the hashes it gives are used by the next web app page alone."""
+    what = f"the middleware built with {mode.describe()}"
+    print_section(f"H-55 v2 step 1: {what}: who looks at the build")
+    configure(monkeypatch, mode, tmp_path)
+    build_dir = write_build(tmp_path / "build", build_pages(BUILD_ID), STAMP_0)
+    calls = spy_on_spa_hashes(monkeypatch)
+    monkeypatch.setattr(static_site, "FRONTEND_BUILD_DIR", build_dir)
+    middleware = wrap(routing([TYPED_ANSWERS["text-html"], *(TYPED_ANSWERS[key] for key in CHEAP_ANSWERS)]))
+    first = await hashes_now(middleware, mode, what)
+    assert first == build_sources(BUILD_ID) and calls == [build_dir], f"barrier: on the build {BUILD_ID} the first response has the hashes {first} after {calls} reads"
+
+    write_build(build_dir, build_pages(NEXT_BUILD_ID), STAMP_1)
+    for key in CHEAP_ANSWERS:
+        typed = TYPED_ANSWERS[key]
+        reply = await call(middleware, typed.path)
+        assert_bare_answer(reply, typed, f"GET {typed.path}, {what}")
+        assert_always_on(reply, f"GET {typed.path}, {what}")
+        assert calls == [build_dir], f"GET {typed.path} answered {typed.content_type}, {what}: {SPA_HASHES_NAME} was called with {calls}: only a web app HTML response looks at the build"
+    later = await hashes_now(middleware, mode, what)
+
+    assert later == build_sources(NEXT_BUILD_ID) and calls == [build_dir] * 2, f"{what}: the web app page after them has the hashes {later} after {len(calls)} reads, not {build_sources(NEXT_BUILD_ID)} after 2"
+    print_success(f"✓ {len(CHEAP_ANSWERS)} other answers never looked at the build; the next page did: {later}")
+
+
+# =============================================================================
+# (k) H-55 v2, STEP 3: THE ENFORCED POLICY, ALWAYS (the table, the connect sources)
+# =============================================================================
+#: One ``Content-Security-Policy`` field per response, in every profile: a document carries the trio, a web app page adds
+#: script, worker and connect sources, frame protection adds ``frame-ancestors 'self'`` (and ``X-Frame-Options``) to any
+#: response; never ``default-src``, ``style-src``, ``img-src``, ``font-src`` nor ``frame-src`` in it. The full table over the
+#: app is ``test_the_enforced_policy_follows_the_response_in_every_profile_and_the_frame_protection_adds_its_own``; here the
+#: same table written out as literals, then the directives that never go in, then the connect sources.
+
+#: The answers of ``TYPED_ANSWERS`` the literal table reads, each with its kind: the web app's page; a document that is
+#: not (the documentation, the API docs, an SVG image); an answer that is no document.
+LITERAL_KINDS = {
+    "text-html": "web app page",
+    "uppercase-TEXT-HTML": "document",  # at /mkdocs/user/
+    "mixed-case-with-charset": "document",  # at /api/v1/docs
+    "image-svg-xml": "document",
+    "application-pdf": "other",
+    "application-json": "other",
+    "no-content-type": "other",
+}
+LITERAL_MODES = ("selfhosted-nothing-set", "selfhosted-frame-protection-true", "managed", "managed-both-switches-false")
+
+
+def literal_policy(kind: str, *, frame_protection: bool, managed: bool) -> dict[str, tuple[str, ...]] | None:
+    """The enforced policy the contract writes for ``kind``: as literals, not through ``expected_enforced``."""
+    policy: dict[str, tuple[str, ...]] = {"frame-ancestors": ("'self'",)} if frame_protection else {}
+    if kind in ("document", "web app page"):
+        policy |= {"object-src": ("'none'",), "base-uri": ("'self'",), "form-action": ("'self'",)}
+    if kind == "web app page":
+        policy |= {
+            "script-src": ("'self'", "'wasm-unsafe-eval'", "'report-sample'"),  # no build here: no hash
+            "worker-src": ("'self'", "blob:"),
+            "connect-src": ("'self'",) if managed else ("'self'", "https://api.github.com"),
+        }
+    return policy or None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("key", list(LITERAL_KINDS))
+@pytest.mark.parametrize("mode_name", LITERAL_MODES)
+async def test_the_enforced_header_is_exactly_this_set_of_directives_and_sources(mode_name: str, key: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    mode, typed, kind = MODES[mode_name], TYPED_ANSWERS[key], LITERAL_KINDS[key]
+    what = f"GET {typed.path} answered {typed.content_type or 'without Content-Type'} ({kind}) with {mode.describe()}"
+    print_section(f"H-55 v2 the table, literally: {what}")
+    configure(monkeypatch, mode, tmp_path)
+
+    reply = await call(wrap(answering(typed)), typed.path)
+
+    assert_bare_answer(reply, typed, what)
+    assert_always_on(reply, what)
+    expected = literal_policy(kind, frame_protection=mode.frame_protection, managed=mode.managed)
+    policies = reply.values("content-security-policy")
+    if expected is None:
+        assert policies == [], f"{what}: a response that is no document, with frame protection off, carries no Content-Security-Policy; it is {policies}"
+    else:
+        assert len(policies) == 1, f"{what}: Content-Security-Policy is {policies}, wanted exactly one field"
+        found = written_directives(policies[0], what)
+        assert found == expected, f"{what}: the enforced policy {policies[0]!r} is {found}, not this exact set of directives with exactly these sources, {expected} (the order between directives is free)"
+    print_success(f"✓ {sorted(expected) if expected else 'no Content-Security-Policy'}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case", CASES.values(), ids=list(CASES))
+@pytest.mark.parametrize("mode", MODES.values(), ids=list(MODES))
+async def test_the_enforced_header_never_holds_default_style_img_font_or_frame_sources(mode: Mode, case: Case, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    what = f"{case.method} {case.path} with {mode.describe()}"
+    print_section(f"H-55 v2 what is never enforced: {what}")
+
+    reply = await answer(case, mode, tmp_path, monkeypatch)
+
+    policies = reply.values("content-security-policy")
+    assert len(policies) <= 1, f"{what}: Content-Security-Policy is {policies}: never two fields on a response"
+    found = written_directives(policies[0], what) if policies else {}
+    if case.web_app_html:
+        assert "worker-src" in found and "script-src" in found, f"barrier: {what}: the enforced policy {policies} is not a web app page's (no script-src, worker-src): nothing below proves the styles, images, fonts and frames stay free"
+    held = [name for name in NEVER_ENFORCED if name in found]
+    assert not held, f"{what}: the enforced policy {policies} holds {held}: styles, images, fonts and frames stay free (embedding the app is a legitimate self-hosted use); they belong to the report-only policy alone"
+    reporting = [name for name in NO_REPORT_DIRECTIVES if name in found]
+    assert not reporting, f"{what}: {reporting} in the enforced policy {policies}: nothing is reported anywhere"
+    print_success(f"✓ {sorted(found) or 'no policy'}: none of {NEVER_ENFORCED}")
+
+
+# A public address as an operator may write it, the origin its connect source is (written here), the profile's own sources after it.
+#: ``(None, None)``: the variable unset. The origin: scheme, host, port; lower case, without the scheme's default port, and
+#: without a path, a query or a trailing slash (the canonical form of ``config.hosting_panel.panel_audience``).
+PUBLIC_URLS: dict[str, tuple[str | None, str | None]] = {
+    "unset": (None, None),
+    "https-with-a-port-a-path-and-a-query": ("https://librefolio.example.org:8443/portfolio/?from=mail", "https://librefolio.example.org:8443"),
+    "https-with-a-trailing-slash": ("https://librefolio.example.org/", "https://librefolio.example.org"),
+    "upper-case-and-the-default-port": ("HTTPS://LibreFolio.Example.ORG:443/app", "https://librefolio.example.org"),
+    "http-and-the-default-port": ("http://librefolio.example.org:80", "http://librefolio.example.org"),
+    "http-address-and-port": ("http://192.0.2.10:6040", "http://192.0.2.10:6040"),
+    "ipv6-address-and-port": ("http://[2001:db8::10]:6040/x", "http://[2001:db8::10]:6040"),
+}
+#: Written so that none can start a link or be an origin; each leaves the connect sources as without the variable.
+INVALID_PUBLIC_URLS: dict[str, str] = {
+    "no-scheme": "librefolio.example.org",
+    "not-http": "ftp://librefolio.example.org",
+    "no-host": "https://",
+    "with-user-info": "https://operator:s3cret-pw@librefolio.example.org",
+    "with-a-space": "https://librefolio example.org",
+}
+
+
+def connect_mode(profile: str, public_url: str | None, origin: str | None) -> Mode:
+    """The configuration of a connect-sources case: ``profile``, the report-only switch on (both policies are read),
+    LIBREFOLIO_PUBLIC_URL as written when ``public_url`` is given; frame protection as the profile gives it."""
+    env = ((PROFILE, profile), (CSP_REPORT_ONLY, "true"), *(((PUBLIC_URL, public_url),) if public_url is not None else ()))
+    return Mode(env, frame_protection=profile == "managed", csp_report_only=True, public_origin=origin)
+
+
+async def assert_connect_sources(middleware: Callable, mode: Mode, what: str) -> None:
+    """The web app's page at ``/`` and the documentation's at ``/mkdocs/user/`` through ``middleware`` (a ``routing`` of
+    both): the page's enforced policy is the table's with ``connect-src`` ``CONNECT_SRC`` and ``mode.connect_sources``; its
+    report-only policy is ``CSP_REPORT_ONLY_POLICY`` with the same ``connect-src``, every other directive in place; the
+    documentation's page has no ``connect-src`` and no report-only policy."""
+    page, docs = await call(middleware, "/"), await call(middleware, "/mkdocs/user/")
+    for reply, path in ((page, "/"), (docs, "/mkdocs/user/")):
+        answered(200, HTML, PAGE_HTML)(reply)
+        assert_always_on(reply, f"GET {path}, {what}")
+    expected_connect = CONNECT_SRC + mode.connect_sources
+    enforced = page.values("content-security-policy")
+    connect_src = written_directives(enforced[0], what).get("connect-src") if len(enforced) == 1 else enforced
+    assert connect_src == expected_connect, f"GET /, {what}: connect-src of the enforced policy is {connect_src}, not {expected_connect}: 'self', the origin of {PUBLIC_URL} when valid ({mode.public_origin or 'none'}), {GITHUB_API} in the self-hosted profile only"
+    assert_frame_protection(page, mode, True, f"GET /, {what}", web_app_page=True)
+    report_only = page.values("content-security-policy-report-only")
+    assert len(report_only) == 1, f"GET /, {what}: Content-Security-Policy-Report-Only is {report_only}, wanted exactly one"
+    constant = written_directives(csp_report_only_policy(), CSP_REPORT_ONLY_POLICY_NAME)
+    expected = {name: expected_connect if name == "connect-src" else sources for name, sources in constant.items()}
+    found = written_directives(report_only[0], what)
+    assert list(found.items()) == list(expected.items()), f"GET /, {what}: the report-only policy {report_only[0]!r} is not {CSP_REPORT_ONLY_POLICY_NAME} with the same connect-src, {expected_connect}, every other directive unchanged and in place"
+    assert_frame_protection(docs, mode, True, f"GET /mkdocs/user/, {what}")
+    assert docs.values("content-security-policy-report-only") == [], f"GET /mkdocs/user/, {what}: Content-Security-Policy-Report-Only is {docs.values('content-security-policy-report-only')}, wanted none: the connect sources go on web app pages only"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("public_url", list(PUBLIC_URLS))
+@pytest.mark.parametrize("profile", ["selfhosted", "managed"])
+async def test_connect_src_is_self_then_the_public_origin_then_github_only_self_hosted(profile: str, public_url: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    url, origin = PUBLIC_URLS[public_url]
+    mode = connect_mode(profile, url, origin)
+    what = f"with {mode.describe()}"
+    print_section(f"H-55 v2 the connect sources: {what}")
+    configure(monkeypatch, mode, tmp_path)
+
+    await assert_connect_sources(wrap(routing([TYPED_ANSWERS["text-html"], TYPED_ANSWERS["uppercase-TEXT-HTML"]])), mode, what)
+
+    print_success(f"✓ connect-src {CONNECT_SRC + mode.connect_sources} in both policies of the page, nowhere on the documentation")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("public_url", list(INVALID_PUBLIC_URLS))
+@pytest.mark.parametrize("profile", ["selfhosted", "managed"])
+async def test_an_invalid_public_url_adds_nothing_and_the_server_keeps_serving(profile: str, public_url: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    raw = INVALID_PUBLIC_URLS[public_url]
+    mode = connect_mode(profile, raw, None)
+    what = f"with {mode.describe()}"
+    print_section(f"H-55 v2 an invalid {PUBLIC_URL}: {what}")
+    configure(monkeypatch, mode, tmp_path)
+
+    middleware = wrap(routing([TYPED_ANSWERS["text-html"], TYPED_ANSWERS["uppercase-TEXT-HTML"]]))  # built all the same
+    await assert_connect_sources(middleware, mode, what)
+
+    page = await call(middleware, "/")
+    for name in ("content-security-policy", "content-security-policy-report-only"):
+        for value in page.values(name):
+            assert "s3cret" not in value and "operator" not in value, f"{what}: {name} {value!r} leaks the user info of the invalid address"
+            assert "example.org" not in value, f"{what}: {name} {value!r} names the host of an invalid address: nothing is added for it"
+    print_success(f"✓ connect-src {CONNECT_SRC + mode.connect_sources}: nothing added, the page served")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("built_profile", "called_profile"), [("selfhosted", "managed"), ("managed", "selfhosted")])
+async def test_the_public_url_and_the_profile_are_read_when_the_middleware_is_built(built_profile: str, called_profile: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    built = connect_mode(built_profile, "https://built.example.org/librefolio", "https://built.example.org")
+    called = connect_mode(called_profile, "https://moved.example.org:9443/librefolio", "https://moved.example.org:9443")
+    what = f"built with {built.describe()}, called with {called.describe()}"
+    print_section(f"H-55 v2 the connect sources are read when built: {what}")
+    configure(monkeypatch, built, tmp_path)
+    middleware = wrap(routing([TYPED_ANSWERS["text-html"], TYPED_ANSWERS["uppercase-TEXT-HTML"]]))  # the settings are read here
+    configure(monkeypatch, called, tmp_path)  # barrier inside: the environment now says the other
+
+    await assert_connect_sources(middleware, built, what)  # answers as built: its origin, its profile's sources, its frame protection
+
+    print_success(f"✓ answered as built: connect-src {CONNECT_SRC + built.connect_sources}")
+
+
+# =============================================================================
+# (l) H-55 v2, REVIEW CURE R2: THE ERROR PATH, AND THE BUILD OFF THE EVENT LOOP
+# =============================================================================
+#: Computing the headers of a response never costs the response its headers: if the web app's policy cannot be computed
+#: (reading the build fails), the page still gets every header with the policy WITHOUT hashes (fail closed: the app's inline
+#: scripts are blocked, never a policy-less page) and the failure is logged, once, as a warning with its traceback. The
+#: build's signature (``glob`` + ``stat``) and its re-read run in a thread, never on the event loop, and one re-read serves
+#: every request that waited for it. Imports of the module's names are made inside the tests (a missing name fails the
+#: test that needs it, never the collection).
+
+#: How many web app requests are in flight together in the concurrency cases.
+CONCURRENT_REQUESTS = 8
+#: How long the slow re-read of the unit case waits for its siblings: it ends at once if they all arrive (no lock), and
+#: after this when the lock keeps them out (the wait costs only a green run, and a slow machine can only make a red green).
+SIBLINGS_SECONDS = 1.0
+#: The failure a build that cannot be read raises.
+BUILD_UNREADABLE = "provoked: the build cannot be read"
+
+
+def _unreadable_build(build_dir: Path) -> tuple[str, ...]:
+    raise OSError(BUILD_UNREADABLE)
+
+
+def spa_hashes_run_in_threads(monkeypatch: pytest.MonkeyPatch, *, delay: Callable[[], None] | None = None) -> list[tuple[int, Path]]:
+    """Watch ``static_site.spa_inline_script_hashes``: answers as the real one (after ``delay``, when given) and records
+    ``(thread id, build folder)`` of every call, in order."""
+    real = spa_hashes_function()
+    calls: list[tuple[int, Path]] = []
+
+    def spy(build_dir: Path) -> tuple[str, ...]:
+        calls.append((threading.get_ident(), build_dir))
+        if delay is not None:
+            delay()
+        return real(build_dir)
+
+    monkeypatch.setattr(static_site, SPA_HASHES_NAME, spy)
+    return calls
+
+
+def stats_of_pages_in_threads(monkeypatch: pytest.MonkeyPatch, build_dir: Path) -> list[int]:
+    """Watch the ``stat`` of the build's pages (``Path.stat`` on a path under ``build_dir``): the id of the thread of each."""
+    real = Path.stat
+    seen: list[int] = []
+
+    def watching(self: Path, *args: Any, **kwargs: Any) -> os.stat_result:
+        if self.suffix == ".html" and build_dir in self.parents:
+            seen.append(threading.get_ident())
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", watching)
+    return seen
+
+
+@contextmanager
+def security_warnings() -> Iterator[Callable[[], list[dict[str, Any]]]]:
+    """The structlog events logged inside the block as a warning or worse, behind a canary of the middleware's module."""
+    with capture_logs() as events:
+        get_logger(SECURITY_MODULE).warning(LOG_CANARY)
+        assert any(event.get("event") == LOG_CANARY for event in events), f"barrier: a structlog logger of {SECURITY_MODULE} does not reach capture_logs: {events}"
+
+        def logged() -> list[dict[str, Any]]:
+            return [event for event in events if event.get("event") != LOG_CANARY and event.get("log_level") in ("warning", "error", "exception", "critical")]
+
+        yield logged
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", HASH_MODES.values(), ids=list(HASH_MODES))
+async def test_a_build_that_cannot_be_read_still_gets_every_header_with_a_policy_without_hashes(mode: Mode, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    what = f"the middleware built with {mode.describe()} on the build {BUILD_ID}, whose reading raises"
+    print_section(f"H-55 v2 R2: {what}")
+    configure(monkeypatch, mode, tmp_path)
+    build_dir = write_build(tmp_path / "build", build_pages(BUILD_ID), STAMP_0)
+    middleware = built_on(build_dir, monkeypatch)
+    monkeypatch.setattr(static_site, SPA_HASHES_NAME, _unreadable_build)
+
+    with security_warnings() as logged:
+        reply = await call(middleware, "/")
+        warned = logged()
+
+    answered(200, HTML, PAGE_HTML)(reply)  # the page itself is served: the failure costs it its hashes, never its answer
+    assert_always_on(reply, f"GET /, {what}")
+    assert_frame_protection(reply, mode, True, f"GET /, {what}", web_app_page=True, script_hashes=())
+    script_src = written_directives(reply.values("content-security-policy")[0], what).get("script-src")
+    assert script_src == SCRIPT_SRC, f"{what}: script-src is {script_src}, exactly {SCRIPT_SRC} wanted: fail closed, no hash, the app's inline scripts are blocked and the page is never policy-less"
+    if mode.csp_report_only:
+        report_only = reply.values("content-security-policy-report-only")
+        assert len(report_only) == 1, f"{what}: Content-Security-Policy-Report-Only is {report_only}, wanted one policy"
+        assert written_directives(report_only[0], what).get("script-src") == SCRIPT_SRC, f"{what}: the report-only policy {report_only[0]!r} has hashes: no build could be read"
+    with_trace = [event for event in warned if event.get("log_level") == "warning" and event.get("exc_info")]
+    assert len(with_trace) == 1, f"{what}: logged {[(event.get('log_level'), event.get('event'), bool(event.get('exc_info'))) for event in warned]}, wanted exactly one warning with exc_info: the failure is logged once, with its traceback"
+    print_success(f"✓ every header, script-src {script_src}, one warning with its traceback")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", HASH_MODES.values(), ids=list(HASH_MODES))
+async def test_after_a_failed_build_read_the_next_pages_still_answer_and_the_hashes_come_back_with_the_build(mode: Mode, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    what = f"the middleware built with {mode.describe()} on the build {BUILD_ID}, whose reading fails twice, then works"
+    print_section(f"H-55 v2 R2: {what}")
+    configure(monkeypatch, mode, tmp_path)
+    build_dir = write_build(tmp_path / "build", build_pages(BUILD_ID), STAMP_0)
+    middleware = built_on(build_dir, monkeypatch)
+    real = spa_hashes_function()
+    monkeypatch.setattr(static_site, SPA_HASHES_NAME, _unreadable_build)
+
+    for path in ("/", "/portfolio/overview"):  # a failure does not wedge the middleware: the next page answers all the same
+        reply = await call(middleware, path)
+        answered(200, HTML, PAGE_HTML)(reply)
+        assert_always_on(reply, f"GET {path}, {what}")
+        assert_frame_protection(reply, mode, True, f"GET {path}, {what}", web_app_page=True, script_hashes=())
+    monkeypatch.setattr(static_site, SPA_HASHES_NAME, real)  # the build is readable again
+
+    found = await hashes_now(middleware, mode, what)
+
+    assert found == build_sources(BUILD_ID), f"{what}: the hashes are {found}, not those of the build, {build_sources(BUILD_ID)}: a failed read is not remembered as the build's signature"
+    print_success(f"✓ two pages answered after the failure; then the hashes of the build: {found}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", HASH_MODES.values(), ids=list(HASH_MODES))
+async def test_the_build_is_read_off_the_event_loop(mode: Mode, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    what = f"the middleware built with {mode.describe()}, a web app page asked on the build {BUILD_ID}"
+    print_section(f"H-55 v2 R2: {what}: which thread reads the build")
+    configure(monkeypatch, mode, tmp_path)
+    build_dir = write_build(tmp_path / "build", build_pages(BUILD_ID), STAMP_0)
+    reads = spa_hashes_run_in_threads(monkeypatch)
+    stats = stats_of_pages_in_threads(monkeypatch, build_dir)
+    middleware = built_on(build_dir, monkeypatch)
+    loop_thread = threading.get_ident()
+
+    found = await hashes_now(middleware, mode, what)
+
+    assert found == build_sources(BUILD_ID), f"barrier: the hashes are {found}, not those of the build, {build_sources(BUILD_ID)}"
+    assert [build for _, build in reads] == [build_dir] and stats, f"barrier: {SPA_HASHES_NAME} was called with {[build for _, build in reads]} and {len(stats)} pages were stat-ed"
+    assert [thread for thread, _ in reads] != [loop_thread], f"{what}: {SPA_HASHES_NAME} ran on the event loop's thread: reading the pages is blocking I/O, to be awaited through asyncio.to_thread"
+    assert loop_thread not in stats, f"{what}: the build's signature (glob and stat of its pages) was computed on the event loop's thread: to be awaited through asyncio.to_thread"
+    print_success(f"✓ read in thread {reads[0][0]}, signature in {sorted(set(stats))}, the loop is {loop_thread}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", HASH_MODES.values(), ids=list(HASH_MODES))
+async def test_concurrent_web_app_requests_with_a_changed_build_read_it_once_and_off_the_loop(mode: Mode, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    what = f"{CONCURRENT_REQUESTS} web app requests at once on the middleware built with {mode.describe()}, after the build {NEXT_BUILD_ID} replaced {BUILD_ID}"
+    print_section(f"H-55 v2 R2: {what}")
+    configure(monkeypatch, mode, tmp_path)
+    build_dir = write_build(tmp_path / "build", build_pages(BUILD_ID), STAMP_0)
+    middleware = built_on(build_dir, monkeypatch)
+    first = await hashes_now(middleware, mode, what)
+    assert first == build_sources(BUILD_ID), f"barrier: the first response has the hashes {first}, not those of the build {BUILD_ID}"
+    write_build(build_dir, build_pages(NEXT_BUILD_ID), STAMP_1)  # a build made while the server runs
+    reads = spa_hashes_run_in_threads(monkeypatch)
+    loop_thread = threading.get_ident()
+
+    replies = await asyncio.gather(*(call(middleware, WEB_APP_PAGE_PATHS[index % len(WEB_APP_PAGE_PATHS)]) for index in range(CONCURRENT_REQUESTS)))
+
+    for reply in replies:
+        answered(200, HTML, PAGE_HTML)(reply)
+        assert_always_on(reply, what)
+        assert script_src_of(reply, "content-security-policy", what) == build_sources(NEXT_BUILD_ID), f"{what}: a response carries {reply.values('content-security-policy')}, not the hashes of the build now, {build_sources(NEXT_BUILD_ID)}"
+    assert len(reads) == 1, f"{what}: {SPA_HASHES_NAME} was called {len(reads)} times, wanted once: one read per change of the build's signature, however many requests find it changed together"
+    assert reads[0][0] != loop_thread, f"{what}: the one read ran on the event loop's thread: to be awaited through asyncio.to_thread"
+    print_success(f"✓ {CONCURRENT_REQUESTS} responses, the build read once, off the loop")
+
+
+def test_the_build_hashes_cache_reads_once_when_threads_ask_together(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``_BuildScriptHashes`` is safe under concurrent threads: a lock, and one read of a changed build even when several
+    threads ask at the same moment. The read is slow on purpose: it waits for its siblings, which arrive only if nothing
+    keeps them out."""
+    what = f"{CONCURRENT_REQUESTS} threads asking the hashes of the build {BUILD_ID} together"
+    print_section(f"H-55 v2 R2: {what}")
+    security_module = importlib.import_module(SECURITY_MODULE)
+    cache_class = getattr(security_module, "_BuildScriptHashes", None)
+    assert isinstance(cache_class, type), f"{SECURITY_MODULE} has no class _BuildScriptHashes"
+    build_dir = write_build(tmp_path / "build", build_pages(BUILD_ID), STAMP_0)
+    monkeypatch.setattr(static_site, "FRONTEND_BUILD_DIR", build_dir)
+    siblings = threading.Barrier(CONCURRENT_REQUESTS)
+
+    def wait_for_siblings() -> None:
+        try:
+            siblings.wait(timeout=SIBLINGS_SECONDS)
+        except threading.BrokenBarrierError:
+            pass  # alone: nobody else got in
+
+    reads = spa_hashes_run_in_threads(monkeypatch, delay=wait_for_siblings)
+    cache = cache_class()
+    start = threading.Barrier(CONCURRENT_REQUESTS)
+
+    def ask() -> tuple[str, ...]:
+        start.wait(timeout=SIBLINGS_SECONDS * 5)
+        return cache.current()
+
+    with ThreadPoolExecutor(max_workers=CONCURRENT_REQUESTS) as pool:
+        answers = [future.result(timeout=SIBLINGS_SECONDS * 10) for future in [pool.submit(ask) for _ in range(CONCURRENT_REQUESTS)]]
+
+    assert answers == [build_sources(BUILD_ID)] * CONCURRENT_REQUESTS, f"{what}: the answers are {answers}, not always those of the build, {build_sources(BUILD_ID)}"
+    assert len(reads) == 1, f"{what}: {SPA_HASHES_NAME} was called {len(reads)} times, wanted once: the cache holds a lock, and one read serves the threads that asked for the same signature"
+    print_success("✓ one read for all the threads")

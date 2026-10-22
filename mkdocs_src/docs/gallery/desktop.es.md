@@ -301,12 +301,28 @@ La categoría Introducción de Preferencias con el estado de cada guía y su bot
     <img class="gallery-img" data-category="settings" data-name="onboarding-replay" alt="🔁 Repetición de guías">
 </div>
 
+### 🧩 Ajustes de los plugins
+
+La pestaña Plugins: los ajustes que piden las fuentes de precios y de tipos de cambio, cada plugin en su propio formulario con su insignia.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="plugins" alt="🧩 Ajustes de los plugins">
+</div>
+
 ### 🛡️ Configuración global (Administrador)
 
 Los administradores pueden configurar ajustes para todo el sistema.
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Configuración global">
+</div>
+
+### 📧 Correo (Administrador)
+
+Los administradores revisan el correo de la instancia: si puede enviar, cuántos correos quedan en esta hora, las comprobaciones de la configuración y un correo de prueba a su propia dirección.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="email" alt="Correo">
 </div>
 
 ### 🕐 Planificador de datos de mercado — Config

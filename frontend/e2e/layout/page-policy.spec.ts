@@ -1,59 +1,61 @@
 /**
- * The page policy of H-42 in a browser: the web app and the documentation keep working with three more directives
- * enforced on every HTML document, beside `frame-ancestors 'self'`, when frame protection is on — the managed profile's
- * default:
+ * The page policy of H-42 in a browser: the web app and the documentation keep working under the three directives the
+ * backend enforces on every HTML document, beside `frame-ancestors 'self'` when frame protection is on — the managed
+ * profile's default:
  *
  *     Content-Security-Policy: frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'
  *
+ * Since H-55 v2 the Content-Security-Policy is enforced in every profile, no switch: a page of the web app also carries
+ * `script-src`, `worker-src` and `connect-src` (security_headers.py, `web_app_policy`), the documentation and the API's
+ * own HTML only the three directives and, with frame protection, `frame-ancestors`.
+ *
  * Why. E's security review, after H-39: no plugin content (`object-src 'none'`), no injected `<base>` retargeting the
  * page's relative URLs (`base-uri 'self'`), no form sending data to another origin (`form-action 'self'`) — three
- * directives that touch no script (`script-src` stays report-only). The server sets them on HTML answers only — the
- * app's pages, the documentation, the API's own HTML — and leaves every other answer with `frame-ancestors 'self'`
- * alone: there they protect nothing and can break something. Chromium counts its built-in PDF viewer as a plugin, so
- * `object-src 'none'` on a PDF's own answer could stop it showing that PDF inline (from a web search, not verifiable
- * here: headless Chromium has no PDF viewer, and no E2E can see it). The server's header is pinned by the backend test
- * `services managed-headers`; this spec proves the other half: nothing in the app or the documentation needs what the
- * policy forbids — no `<object>`, `<embed>` or `<base>`, no form posted to another origin.
+ * directives that touch no script. The server sets them on documents — the app's pages, the documentation, the API's
+ * own HTML — and leaves every other answer with `frame-ancestors 'self'` alone (frame protection on): there they
+ * protect nothing and can break something. Chromium counts its built-in PDF viewer as a plugin, so `object-src 'none'`
+ * on a PDF's own answer could stop it showing that PDF inline (from a web search, not verifiable here: headless Chromium
+ * has no PDF viewer, and no E2E can see it). The server's header is pinned by the backend test
+ * `services managed-headers`; this spec proves the other half: under the policy the lane itself sends, nothing in the
+ * app or the documentation needs what it forbids — no `<object>`, `<embed>` or `<base>`, no form posted to another
+ * origin.
  *
- * Why routing, and not a lane with the real header: a lane runs self-hosted, frame protection off, whatever the
- * developer's own configuration (`configure_test_runtime`, scripts/cli_base.py, drops every `LIBREFOLIO_*` of it),
- * unless it is started with `--lane-setting LIBREFOLIO_PROFILE=managed` or `LIBREFOLIO_FRAME_PROTECTION=true` (H-43,
- * `TEST_LANE_SETTABLE`); and a run has one backend, shared by every spec. A managed lane runs only when someone
- * launches it (`front-utility cloud-smoke`); injected by the spec, the policy is checked by the normal suite, on any
- * lane, a permanent guard. On a managed lane the route sets the same `PAGE_POLICY` in place of the lane's own
- * `Content-Security-Policy` on every HTML answer, and leaves the lane's `Content-Security-Policy-Report-Only` as it was
- * sent.
+ * The header is the lane's own: nothing is injected, every lane sends the enforced policy (H-55 v2). What a lane may
+ * differ in is frame protection, off on a self-hosted lane unless it is started with
+ * `--lane-setting LIBREFOLIO_FRAME_PROTECTION=true` (or `LIBREFOLIO_PROFILE=managed`; H-43, `TEST_LANE_SETTABLE`).
+ * So the spec reads the lane's header and checks its trio — `object-src 'none'`, `base-uri 'self'`,
+ * `form-action 'self'` — whatever the lane, and `frame-ancestors 'self'` exactly when the response says frame
+ * protection is on (`X-Frame-Options: SAMEORIGIN`), absent otherwise.
  *
  * How, before the first navigation of every test:
- *   - the header is injected. Every document request to the lane — `resourceType()` `document`: a navigation or a frame
- *     — is fetched by the spec, and an answer whose Content-Type starts with `text/html`, in any case (the server's own
- *     rule), reaches the browser with `PAGE_POLICY` as its Content-Security-Policy; any other answer reaches it
- *     unchanged. A redirect is passed back as it came, and the browser asks for its target through the same route.
- *     Every other request passes untouched;
- *   - service workers are blocked: the app's (`static/sw.js`) answers navigations with `respondWith(fetch(…))`, and a
- *     request a service worker answers never reaches the route;
+ *   - service workers are blocked: the spec reads the policy of the document the lane sent over the network, and the
+ *     app's (`static/sw.js`) answers navigations with `respondWith(fetch(…))`, falling back to its offline page;
+ *   - every document the page loads in its main frame is recorded as the browser received it: its path, its status, its
+ *     `Content-Security-Policy` fields and its `X-Frame-Options`. A redirect is no document;
  *   - every `securitypolicyviolation` of every document is recorded in that document, in a window array: disposition,
  *     directive, blocked URI. Only `enforce` counts, as a report-only policy reports without blocking. A state read
  *     when the test chooses, never the console.
  *
- * Then, the positive controls declared first, or a clean run could be the injection's silence:
+ * Then, the positive controls declared first, or a clean run could be the policy's absence:
  *   1. on the sign-in page, which no flow uses (and each test has a browser context of its own): the document reached
- *      the browser with the policy; a `<base>` aimed at another origin, a PDF `<object>` on the lane and a form posted
+ *      the browser with the trio; a `<base>` aimed at another origin, a PDF `<object>` on the lane and a form posted
  *      to another origin each raise an enforced violation — `base-uri`, `object-src`, `form-action`. The base URL stays
  *      the lane's, and no request of a control is ever made: the spec refuses them besides, so a control the policy let
- *      through could not take the page away. Nothing but the controls raises one there. Raised on purpose and checked
+ *      through could not take the page away. Nothing but the controls raises one there — the sign-in page is a page of
+ *      the web app, so under its `script-src`, `worker-src` and `connect-src` too. Raised on purpose and checked
  *      here, they are not failed by the H-43 CSP collector: this test alone opts out (`cspFailOnUnknown: false`);
  *   2. the documentation: a nested page, the kind docs-offline-math picks, then Material's search finds a word of that
  *      page's own title;
  *   3. the PDF viewer, as files-pdf-offline drives it: a one-page Latin PDF uploaded by the spec and previewed from the
  *      Files page until the viewer has drawn it (`file-preview-pdf` `data-state="ready"`);
  *   4. the app: the Dashboard draws its main view, the overview `/dashboard` opens on.
- * A flow checks first that its page reached the browser with the policy and is the only document the page loaded — so
+ * A flow checks first that its page reached the browser with the trio and is the only document the page loaded — so
  * its green never rests on another test, and the violations read at its end are the whole flow's — and it ends with no
  * enforced violation recorded, the list printed on a red.
  *
  * Other origins are not refused, the controls' own aside: online, Mermaid and the CJK fonts may legitimately ask
  * jsDelivr, and the subject is the policy, not working offline (files-pdf-offline and docs-offline-math have that one).
+ * The PDF flow's Latin PDF needs no font from there, and the viewer's engine is the app's own copy.
  *
  * Selectors: `data-testid` in the app. The documentation carries none, so there Material's own markup is the contract,
  * as in docs-offline-math: `.md-search__input` (its search field), the header's `.md-header__button[for="__search"]`
@@ -67,7 +69,7 @@
  *
  * Cleanup: the uploaded PDF is the only datum this spec writes. Static files are shared by every user, so it has a
  * unique name and is deleted by its id in afterEach — a time slot of its own, so a test cut by its timeout still
- * deletes it. The routes are removed after each test.
+ * deletes it. The control route is removed after each test.
  *
  * Needs: the documentation built (`./dev.py mkdocs build`; the lane's server builds a missing site). An unbuilt site
  * answers «Documentation not generated» on every `/mkdocs/` path: a red precondition here, never a skip.
@@ -77,13 +79,6 @@ import {navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix} from '../fixtures/unique';
-
-/**
- * The enforced policy of an HTML document with frame protection on: `PAGE_POLICY` in
- * backend/app/services/platform/security_headers.py (H-42), the string the backend test `services managed-headers` pins.
- * Copied, not read: the lane runs self-hosted and never sends it.
- */
-const PAGE_POLICY = "frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'";
 
 const API = '/api/v1';
 /** The window array, in every document of the test, holding the violations that document saw. */
@@ -122,7 +117,7 @@ const VIOLATION_TIMEOUT_MS = 10_000;
 /** Sign-in, upload, the Files page, the preview's fetch, then the viewer's engine (4.6 MB of WebAssembly) — on a loaded machine. */
 test.setTimeout(90_000);
 
-/** The app's service worker answers navigations itself, and a request it answers never reaches the route that sets the policy. */
+/** The spec reads the policy of the document the lane sent over the network: the app's service worker answers navigations itself, and falls back to its offline page. */
 test.use({serviceWorkers: 'block'});
 
 /** One `securitypolicyviolation`, as a document recorded it. */
@@ -141,85 +136,85 @@ interface RecordedViolation extends Violation {
     frame: string;
 }
 
-/** A document of the lane the route answered, and whether it was given the policy. */
-interface ServedDocument {
-    method: string;
-    path: string;
-    status: number;
-    contentType: string;
-    /**
-     * The Content-Security-Policy the lane sent itself, replaced on an HTML answer all the same: none with frame protection off (a self-hosted lane);
-     * with it on (a managed lane), `PAGE_POLICY` on an HTML answer, `frame-ancestors 'self'` alone on any other answer it records (a redirect).
-     */
-    lanePolicy: string | null;
-    injected: boolean;
-}
-
-/** A document the page loaded in its main frame, and the policy it reached the browser with. */
+/** A document the page loaded in its main frame, as the browser received it: the header fields its policy is read from. */
 interface MainDocument {
     path: string;
     status: number;
-    policy: string | null;
+    /** Every `Content-Security-Policy` field of the answer, apart: the lane sends exactly one. */
+    policies: string[];
+    /** `X-Frame-Options`: `SAMEORIGIN` exactly when frame protection is on. */
+    frameOptions: string | null;
 }
 
 /** What the spec saw of the policy during one test. */
 interface PolicyLog {
-    served: ServedDocument[];
+    /** The documents the page loaded, in the order their responses arrived; filled by `settleDocuments`, never read before it. */
     mainDocuments: MainDocument[];
-    /** Documents the route could not fetch: refused, never let through without the policy, and a red at the flow's end. */
-    failures: string[];
 }
+
+/**
+ * A response's headers are read asynchronously (`headersArray()` returns a Promise), so a listener can only start the
+ * read: the pending ones are kept here, in the order of the responses, beside the log and out of its JSON.
+ */
+const pendingDocuments = new WeakMap<PolicyLog, Array<Promise<MainDocument>>>();
 
 /** An empty log, for one test. */
 function newLog(): PolicyLog {
-    return {served: [], mainDocuments: [], failures: []};
+    const log: PolicyLog = {mainDocuments: []};
+    pendingDocuments.set(log, []);
+    return log;
 }
 
-/** The runner's baseURL, as an origin: the lane, whose documents are given the policy. */
+/** Waits for every document read started so far and puts them, in the order of the responses, in `log.mainDocuments`. A read that failed fails here. */
+async function settleDocuments(log: PolicyLog): Promise<void> {
+    log.mainDocuments = await Promise.all(pendingDocuments.get(log) ?? []);
+}
+
+/** The runner's baseURL, as an origin: the lane. */
 function laneOrigin(baseURL: string | undefined): string {
     if (!baseURL) throw new Error('This spec needs the runner-provided baseURL');
     return new URL(baseURL).origin;
 }
 
-/**
- * An HTML answer: a Content-Type starting with `text/html`, in any case. The server gives `PAGE_POLICY` to every document
- * (`_is_document`, security_headers.py: HTML, XHTML, SVG and XML since H-45); every flow of this spec opens HTML pages only.
- */
-function isHtml(contentType: string): boolean {
-    return contentType.toLowerCase().startsWith('text/html');
+/** A response's header fields, every field of its name apart: `headersArray()` keeps repeated fields from being joined. */
+function fieldsOf(headers: ReadonlyArray<{name: string; value: string}>, wanted: string): string[] {
+    return headers.filter(({name}) => name.toLowerCase() === wanted).map(({value}) => value);
+}
+
+/** The document `response` answers, as the browser received it. */
+async function documentOf(response: Response): Promise<MainDocument> {
+    const headers = await response.headersArray();
+    return {path: new URL(response.url()).pathname, status: response.status(), policies: fieldsOf(headers, 'content-security-policy'), frameOptions: fieldsOf(headers, 'x-frame-options')[0] ?? null};
+}
+
+/** A policy as the browser reads it: directives split on `;`, a name in lower case, its sources the rest; a directive named twice counts once, the first. */
+function parsePolicy(policy: string): Map<string, string> {
+    const directives = new Map<string, string>();
+    for (const part of policy.split(';')) {
+        const [name, ...sources] = part.trim().split(/\s+/);
+        if (name && !directives.has(name.toLowerCase())) directives.set(name.toLowerCase(), sources.join(' '));
+    }
+    return directives;
 }
 
 /**
- * Sets `PAGE_POLICY` on every HTML document the lane serves the browser context, as the server does with frame
- * protection on: a document request — a navigation or a frame — is fetched by the spec and answered with the lane's own
- * answer, the policy set on it when it is HTML. Every other request passes. Before the first navigation.
+ * What is wrong with the policy a document reached the browser with, read from the lane's own header (H-55 v2): exactly
+ * one `Content-Security-Policy` field, its trio — `object-src 'none'`, `base-uri 'self'`, `form-action 'self'` — and
+ * `frame-ancestors 'self'` exactly when the response says frame protection is on (`X-Frame-Options: SAMEORIGIN`),
+ * no `frame-ancestors` otherwise. The trio is `DOCUMENT_DIRECTIVES` in backend/app/services/platform/security_headers.py,
+ * which the backend test `services managed-headers` pins. Empty when nothing is wrong.
  */
-async function enforcePagePolicy(context: BrowserContext, origin: string, log: PolicyLog): Promise<void> {
-    await context.route(
-        (url) => url.origin === origin,
-        async (route) => {
-            const request = route.request();
-            if (request.resourceType() !== 'document') {
-                await route.fallback();
-                return;
-            }
-            const path = new URL(request.url()).pathname;
-            try {
-                // A redirect is not followed here but passed back as it came, and the browser asks for its target through
-                // this route again. Followed, the target's body would be answered at the address that redirected.
-                const response = await route.fetch({maxRedirects: 0});
-                const headers = response.headers();
-                const contentType = headers['content-type'] ?? '';
-                const injected = isHtml(contentType);
-                log.served.push({method: request.method(), path, status: response.status(), contentType, lanePolicy: headers['content-security-policy'] ?? null, injected});
-                await route.fulfill(injected ? {response, headers: {...headers, 'content-security-policy': PAGE_POLICY}} : {response});
-            } catch (error) {
-                // Refused, never let through without the policy: the flow fails on it, and its end names it.
-                log.failures.push(`${request.method()} ${path}: ${error instanceof Error ? error.message : String(error)}`);
-                await route.abort('failed').catch(() => undefined);
-            }
-        },
-    );
+function policyProblems(document: MainDocument): string[] {
+    if (document.policies.length !== 1) return [`${document.policies.length} Content-Security-Policy fields, one expected: ${JSON.stringify(document.policies)}`];
+    const directives = parsePolicy(document.policies[0]);
+    const frameProtection = document.frameOptions?.trim().toUpperCase() === 'SAMEORIGIN';
+    const expected: Array<[string, string | undefined]> = [
+        ['object-src', "'none'"],
+        ['base-uri', "'self'"],
+        ['form-action', "'self'"],
+        ['frame-ancestors', frameProtection ? "'self'" : undefined],
+    ];
+    return expected.filter(([name, sources]) => directives.get(name) !== sources).map(([name, sources]) => `${name}: ${sources === undefined ? 'absent (frame protection is off)' : sources} expected, got ${directives.get(name) ?? 'absent'}`);
 }
 
 /**
@@ -255,12 +250,15 @@ function isMainFrameNavigation(page: Page, response: Response): boolean {
     }
 }
 
-/** Records, as the browser received it, every document the page loads in its main frame and the policy it carried. A redirect is no document. */
+/** Records, as the browser received it, every document the page loads in its main frame and the header fields its policy is read from. A redirect is no document. */
 function recordMainDocuments(page: Page, log: PolicyLog): void {
     page.on('response', (response) => {
         const status = response.status();
         if (!isMainFrameNavigation(page, response) || (status >= 300 && status < 400)) return;
-        log.mainDocuments.push({path: new URL(response.url()).pathname, status, policy: response.headers()['content-security-policy'] ?? null});
+        const read = documentOf(response);
+        // A read nobody awaited (the test ended first) must not surface as an unhandled rejection; the real one is awaited by `settleDocuments`
+        read.catch(() => undefined);
+        pendingDocuments.get(log)?.push(read);
     });
 }
 
@@ -315,22 +313,23 @@ async function framesDrawn(page: Page): Promise<void> {
 }
 
 /**
- * The page loaded one document in its main frame, at `path`, and it reached the browser with the injected policy; no
- * document of the lane went without. The violations it holds are then the whole flow's: a document loaded since would
- * have taken the earlier ones away with it.
+ * The page loaded one document in its main frame, at `path`, and it reached the browser with the lane's own policy and
+ * its trio (`policyProblems`). The violations it holds are then the whole flow's: a document loaded since would have
+ * taken the earlier ones away with it.
  */
-function expectOneDocumentUnderPolicy(log: PolicyLog, path: string, what: string): void {
-    expect(log.failures, `${what}: every document of the lane was fetched and given the policy`).toEqual([]);
+async function expectOneDocumentUnderPolicy(log: PolicyLog, path: string, what: string): Promise<void> {
+    await settleDocuments(log);
     expect(
-        log.mainDocuments.map((loaded) => ({path: loaded.path, policy: loaded.policy})),
-        `${what}: the page loaded one document, ${path}, and it reached the browser with the injected policy — so the violations read are the whole flow's (documents the lane served: ${JSON.stringify(log.served)})`,
-    ).toEqual([{path, policy: PAGE_POLICY}]);
+        log.mainDocuments.map((loaded) => loaded.path),
+        `${what}: the page loaded one document, ${path} — so the violations read are the whole flow's (documents: ${JSON.stringify(log.mainDocuments)})`,
+    ).toEqual([path]);
+    expect(policyProblems(log.mainDocuments[0]), `${what}: the document reached the browser with the lane's enforced policy and its trio (${JSON.stringify(log.mainDocuments[0])})`).toEqual([]);
 }
 
 /** The flow raised no enforced violation of the policy, in any document still on the page; the list is printed on a red. */
 async function expectNoEnforcedViolation(page: Page, log: PolicyLog, path: string, what: string): Promise<void> {
     await framesDrawn(page);
-    expectOneDocumentUnderPolicy(log, path, what);
+    await expectOneDocumentUnderPolicy(log, path, what);
     const raised = enforced(await readViolations(page));
     expect(raised, `${what} raised enforced violations of the page policy:\n${listed(raised)}`).toEqual([]);
 }
@@ -423,16 +422,15 @@ async function openPdfPreview(page: Page, fileId: string, filename: string): Pro
     await expect(modal.getByTestId('file-preview-pdf'), 'the viewer drew the page: the document is open and every tile in view is drawn').toHaveAttribute('data-state', 'ready', {timeout: 30_000});
 }
 
-test.describe('The page policy of H-42, injected as the managed profile sends it: the app and the documentation need nothing it forbids', () => {
+test.describe('The page policy of H-42, as the lane itself sends it: the app and the documentation need nothing it forbids', () => {
     /** What the spec saw of the policy in the current test: a new one first thing, so a failed start never shows the previous test's. */
     let log: PolicyLog = newLog();
     /** Static files this test uploaded, deleted after it. */
     let ownedStaticFiles: string[] = [];
 
-    test.beforeEach(async ({context, page, baseURL}) => {
+    test.beforeEach(async ({context, page}) => {
         ownedStaticFiles = [];
         log = newLog();
-        await enforcePagePolicy(context, laneOrigin(baseURL), log);
         await recordViolations(context);
         recordMainDocuments(page, log);
     });
@@ -441,7 +439,8 @@ test.describe('The page policy of H-42, injected as the managed profile sends it
         for (const fileId of ownedStaticFiles) await deleteStaticFile(page, fileId);
         const violations = await readViolations(page).catch((error: unknown) => `unreadable: ${error instanceof Error ? error.message : String(error)}`);
         await context.unrouteAll({behavior: 'ignoreErrors'});
-        await testInfo.attach('page-policy.json', {body: JSON.stringify({policy: PAGE_POLICY, ...log, violations}, null, 1), contentType: 'application/json'});
+        await settleDocuments(log).catch(() => undefined);
+        await testInfo.attach('page-policy.json', {body: JSON.stringify({...log, violations}, null, 1), contentType: 'application/json'});
     });
 
     test.describe('with cspFailOnUnknown: false — the controls raise their violations on purpose, and the test checks them itself', () => {
@@ -454,7 +453,8 @@ test.describe('The page policy of H-42, injected as the managed profile sends it
             const reached = await refuseControlRequests(context);
 
             const response = await page.goto('/', {timeout: PAGE_TIMEOUT_MS});
-            expect(response?.headers()['content-security-policy'], 'the sign-in page reached the browser with the injected policy: without it, every green of this spec would be the injection’s silence').toBe(PAGE_POLICY);
+            if (!response) throw new Error('the sign-in page: goto returned no response');
+            expect(policyProblems(await documentOf(response)), 'the sign-in page reached the browser with the lane’s enforced policy and its trio: without it, every green of this spec would be the policy’s absence').toEqual([]);
             await expect(page.getByTestId('login-page'), 'the app drew its sign-in page under the policy').toBeVisible({timeout: PAGE_TIMEOUT_MS});
 
             // One breach per directive, at absolute addresses, so that each control stands alone whatever the <base> does.
@@ -502,7 +502,7 @@ test.describe('The page policy of H-42, injected as the managed profile sends it
             // Blocked, not merely reported: the page kept the lane as its base URL, never left, and no control's request was made.
             expect(new URL(await page.evaluate(() => document.baseURI)).origin, 'the blocked <base> retargeted nothing: the page’s base URL is still on the lane').toBe(origin);
             expect(reached, 'no request of a control was made: the policy stopped each one before it left').toEqual([]);
-            expectOneDocumentUnderPolicy(log, '/', 'the sign-in page');
+            await expectOneDocumentUnderPolicy(log, '/', 'the sign-in page');
             // And nothing else: the sign-in page itself needs nothing the policy forbids.
             const others = enforced(await readViolations(page)).filter((violation) => !isControl(violation));
             expect(others, `the sign-in page raised enforced violations of its own under the policy:\n${listed(others)}`).toEqual([]);
@@ -513,7 +513,7 @@ test.describe('The page policy of H-42, injected as the managed profile sends it
         const response = await page.goto(DOCS_PAGE, {timeout: PAGE_TIMEOUT_MS});
         expect(response?.status(), `precondition: the lane serves ${DOCS_PAGE} (a 404 is a page that moved: point this spec at another nested page)`).toBe(200);
         await expect(page.locator('meta[name="generator"]'), `precondition: ${DOCS_PAGE} is a page of the built documentation — an unbuilt site answers «Documentation not generated»: build it, see this file's header`).toHaveAttribute('content', /\bmkdocs-/);
-        expectOneDocumentUnderPolicy(log, DOCS_PAGE, 'the documentation page');
+        await expectOneDocumentUnderPolicy(log, DOCS_PAGE, 'the documentation page');
 
         const query = page.locator('.md-search__input');
         // Material's own way in: the field itself, in a desktop header; on a phone, the header's search button, which opens the field and focuses it.
@@ -535,7 +535,7 @@ test.describe('The page policy of H-42, injected as the managed profile sends it
         console.log(`owned static file ${fileId} uploaded: ${filename}`);
 
         await navigateTo(page, `/files?tab=static&filename=${encodeURIComponent(filename)}`);
-        expectOneDocumentUnderPolicy(log, '/files', 'the Files page');
+        await expectOneDocumentUnderPolicy(log, '/files', 'the Files page');
         await openPdfPreview(page, fileId, filename);
 
         await expectNoEnforcedViolation(page, log, '/files', 'the Files page and the PDF preview');
@@ -544,7 +544,7 @@ test.describe('The page policy of H-42, injected as the managed profile sends it
     test('the app: the Dashboard draws its main view — no enforced violation', async ({page}) => {
         await signInThroughApi(page);
         await navigateTo(page, '/dashboard');
-        expectOneDocumentUnderPolicy(log, '/dashboard', 'the Dashboard');
+        await expectOneDocumentUnderPolicy(log, '/dashboard', 'the Dashboard');
 
         const dashboard = page.getByTestId('dashboard-page');
         await expect(dashboard, `precondition: ${TEST_USER.username} lands on the Dashboard, an account with no onboarding due`).toBeVisible({timeout: PAGE_TIMEOUT_MS});

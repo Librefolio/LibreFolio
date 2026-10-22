@@ -41,7 +41,7 @@ from backend.app.logging_config import get_logger
 from backend.app.services.platform.instance_backup.archive import BackupNoSpaceError, build_archive
 from backend.app.services.platform.instance_backup.envelope import FILE_SUFFIX, EncryptedFile, encrypt_file
 from backend.app.services.platform.instance_backup.manifest import BackupOrigin
-from backend.app.services.platform.instance_backup.paths import STAGE_LOCK_FILE, STATE_FILE, backups_dir, ensure_private_dir, is_job_id, is_plain_dir, job_dir, jobs_dir, lock_path, stages_dir
+from backend.app.services.platform.instance_backup.paths import STAGE_LOCK_FILE, STATE_FILE, NotRegularFileError, backups_dir, ensure_private_dir, is_job_id, is_plain_dir, job_dir, jobs_dir, lock_path, read_regular_file, stages_dir
 from backend.app.services.platform.instance_backup.secure import exportable_instance_key, generated_key_unusable
 
 logger = get_logger(__name__)
@@ -78,6 +78,16 @@ class BackupBusyError(RuntimeError):
 
 class BackupJobNotFoundError(LookupError):
     """No job has this id, or its files are gone."""
+
+
+class BackupJobUnreadableError(BackupJobNotFoundError):
+    """The job's state cannot be read: a content that is no job's state, a folder, a link or a special file in its place,
+    or no permission to read it (B-50, B-53). Not found to every caller, never a 500; ``error`` is the cause's class
+    name, for the log."""
+
+    def __init__(self, error: str):
+        super().__init__("The backup job's state cannot be read")
+        self.error = error
 
 
 class BackupJobStateError(RuntimeError):
@@ -120,13 +130,25 @@ class BackupJob:
 
     @classmethod
     def from_json(cls, text: str) -> BackupJob:
+        """The job a state describes. ``ValueError`` for a document that is not a JSON object, or a date without a time
+        zone (B-50: either made every start fail, comparing or reading it)."""
+        document = json.loads(text)
+        if not isinstance(document, dict):
+            raise ValueError("a backup job's state is not a JSON object")
         known = {item.name for item in fields(cls)}
-        data = {key: value for key, value in json.loads(text).items() if key in known}
-        data["created_at"] = datetime.fromisoformat(data["created_at"])
-        data["finished_at"] = datetime.fromisoformat(data["finished_at"]) if data.get("finished_at") else None
+        data = {key: value for key, value in document.items() if key in known}
+        data["created_at"] = _aware(datetime.fromisoformat(data["created_at"]))
+        data["finished_at"] = _aware(datetime.fromisoformat(data["finished_at"])) if data.get("finished_at") else None
         data["warnings"] = tuple(data.get("warnings") or ())
         data["skipped"] = tuple(data.get("skipped") or ())
         return cls(**data)
+
+
+def _aware(moment: datetime) -> datetime:
+    """``moment``, which must carry a time zone, as every state this module writes does; ``ValueError`` otherwise."""
+    if moment.tzinfo is None:
+        raise ValueError("a date of a backup job's state has no time zone")
+    return moment
 
 
 def archive_name(created_at: datetime, *, encrypted: bool = False) -> str:
@@ -212,10 +234,15 @@ def _write_state(folder: Path, job: BackupJob) -> None:
 
 
 def _read_state(folder: Path) -> BackupJob:
+    """The state of the job in ``folder``, read without following a link nor waiting on a FIFO (B-53).
+    ``BackupJobNotFoundError`` when there is none; ``BackupJobUnreadableError`` (one) when it cannot be read (B-50,
+    B-53); any other ``OSError`` (a transient one) as it came."""
     try:
-        return BackupJob.from_json((folder / STATE_FILE).read_text(encoding="utf-8"))
+        return BackupJob.from_json(read_regular_file(folder / STATE_FILE).decode("utf-8"))
     except (FileNotFoundError, NotADirectoryError):
         raise BackupJobNotFoundError("No such backup job") from None
+    except (ValueError, TypeError, KeyError, IsADirectoryError, PermissionError, NotRegularFileError) as exc:
+        raise BackupJobUnreadableError(type(exc).__name__) from None
 
 
 def _prepare(data_dir: Path, origin: BackupOrigin) -> tuple[_RunLock, BackupJob]:
@@ -377,14 +404,19 @@ def get_job(job_id: str, *, data_dir: Path | None = None) -> BackupJob:
     if not is_job_id(job_id):
         raise BackupJobNotFoundError("No such backup job")
     folder = job_dir(data_dir, job_id)
-    job = _read_state(folder)
-    if job.finished_at is not None and _now() - job.finished_at > JOB_RETENTION:
-        shutil.rmtree(folder, ignore_errors=True)
-        raise BackupJobNotFoundError("The backup job has expired")
-    if job.status == "running" and not _run_lock_held(data_dir):
+    try:
         job = _read_state(folder)
-        if job.status == "running":
-            job = _end_interrupted(folder, job)
+        if job.finished_at is not None and _now() - job.finished_at > JOB_RETENTION:
+            shutil.rmtree(folder, ignore_errors=True)
+            raise BackupJobNotFoundError("The backup job has expired")
+        if job.status == "running" and not _run_lock_held(data_dir):
+            job = _read_state(folder)
+            if job.status == "running":
+                job = _end_interrupted(folder, job)
+    except BackupJobUnreadableError as exc:
+        # Not found to the caller (a 404, never a 500); the folder stays until it expires by its date (B-50).
+        logger.warning("A backup job's state cannot be read", job_id=job_id, error=exc.error)
+        raise
     return job
 
 

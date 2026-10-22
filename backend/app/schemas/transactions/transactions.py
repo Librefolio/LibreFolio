@@ -113,8 +113,9 @@ def validate_transaction_business_rules(  # noqa: C901 — flat per-rule error c
     and 3b.
 
     Rule 12b (N78, W-B72) reads ``cost_basis_set``, whether the request sets a non-null ``cost_basis_override``: it may
-    set one only where a cost basis is allowed (``cost_basis_allowed``), or on an ADJUSTMENT taking units out, whose
-    cost is decision 47's handover cost. A cost basis the row already stores is never judged.
+    set one only where a cost basis is allowed (``cost_basis_allowed``). An ADJUSTMENT taking units out has no value
+    (N78-1, the developer's decision of 21/10/2026), so it takes none. A cost basis the row already stores is never
+    judged: the engines ignore it on an exit.
     """
     t = tx_type.value  # shorthand for error params
     errors: List[PydanticCustomError] = []
@@ -184,9 +185,8 @@ def validate_transaction_business_rules(  # noqa: C901 — flat per-rule error c
             )
         )
     # Rule 12b (N78, W-B72): a cost basis the request sets without a mode (with one, rule 12 has spoken) only where one is
-    # allowed, or on an ADJUSTMENT taking units out: its cost is decision 47's handover cost, at which the lots hand the
-    # units over, and an update of the split's own batch may set it (decision 4; the coordinator's refined N78, 17/10).
-    elif cost_basis_set and not cost_basis_allowed(tx_type, quantity) and not (tx_type == TransactionType.ADJUSTMENT and quantity < zero):
+    # allowed. An ADJUSTMENT taking units out has no value (N78-1): it takes none either.
+    elif cost_basis_set and not cost_basis_allowed(tx_type, quantity):
         errors.append(
             PydanticCustomError(
                 "costBasisNotAllowed",
@@ -230,7 +230,7 @@ class TXCreateItem(StrictModel):
     asset_id: Optional[int] = Field(default=None, description="Asset ID. NULL for pure cash transactions")
 
     type: TransactionType = Field(..., description="Transaction type")
-    date: date_type = Field(..., description="Settlement date")
+    date: date_type = Field(..., description="Trade date: the day the operation was made")
 
     quantity: SafeDecimal = Field(default=Decimal("0"), description="Asset quantity delta (+ in, - out)")
 
@@ -519,7 +519,7 @@ class TXUpdateItem(StrictModel):
     # Sign-flip: only within the same swap group (BUY↔SELL, DEPOSIT↔WITHDRAWAL, etc.)
     type: Optional[TransactionType] = Field(default=None, description="New type (sign-flip swap only)")
 
-    date: Optional[date_type] = Field(default=None, description="New settlement date")
+    date: Optional[date_type] = Field(default=None, description="New trade date")
     quantity: Optional[SafeDecimal] = Field(default=None, description="New quantity")
 
     # Cash update using Currency class

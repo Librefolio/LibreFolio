@@ -335,6 +335,41 @@ The Asset catalog, `GET /api/v1/assets/prices/signals`, lists the 22 plugins who
 SMA, KAMA, MACD, PPO, ROC, RSI, Stochastic RSI and Bollinger Bands.
 `test_signal_plugin_matrix.py` pins both sets.
 
+`aggregation_profile` says which point stands for a bucket when an output is reduced to one point
+per bucket, by a chart drawing weekly or monthly points or by an AI Export technical component:
+`first_with_range`, `last_with_range`, `min_with_range` and `max_with_range` keep the earliest, the
+latest, the smallest or the largest point (the earliest among equal values), and `band_envelope`
+keeps a band's lowest `lower`, its last `middle` and its highest `upper`. The backend keeps that
+rule in one module, `backend/app/services/signals/aggregation.py` (`select_point()`,
+`scalar_representative()`, `band_envelope()`), which AI Export's temporal aggregators
+(`ai_export/temporal/aggregators.py`) go through; the chart keeps the same rule in the browser
+(`selectSignalRepresentative()` and `bandRepresentative()` in
+`frontend/src/lib/components/charts/timeSeriesAggregation.ts`). The shared fixture
+`backend/test_scripts/fixtures/signals/aggregation_profiles.v1.json`, which the tests of both
+stacks read, and `test_signal_aggregation.py` (`./dev.py test services signal-aggregation`) tie
+the two.
+
+The same module also holds `sample_signal_series()`, which reduces a whole series, not one
+bucket, for an item of `POST /assets/prices/query` that asks a weekly or monthly sample with
+`signals` (see [Sampled Price Series](../../backend/assets/architecture.md#price-query-sampling)):
+each series of the item's signals comes back with one point per bucket, as the compact chart
+(`downsampleRenderedSignal()`, in the same `timeSeriesAggregation.ts`) draws it, and a line or an
+area keeps its gaps. With the backend's reduction a point keeps only its bucket's date and, for a
+calendar return, its `provenance`: the browser, reducing the daily series itself, also adds the real
+day and the number of days of the bucket. The series of one signal are then aligned
+(`align_signal_series()`): they leave on the same dates, a point without a value where a series has
+none (a warm-up that ends inside the range), as `SignalResult` wants them. A client reads the step
+from the answer's `resolution`, never from the density of a signal's series: a series is daily
+inside a weekly or monthly answer when no output spec describes it or when its reduction keeps no
+point. A second shared table,
+`backend/test_scripts/fixtures/signals/signal_sampling_cases.v1.json`, read by pytest on every case
+and by Vitest on the cases the browser draws the same way, ties it as `aggregation_profiles.v1.json`
+ties the per-bucket rule. A plugin needs nothing new for it: the reduction reads each output's
+`aggregation_profile` from `output_specs` (matched to the series by `key`) and the series' kind, so
+a new output only has to declare a profile that fits its kind: `band_envelope` for a band, one of
+the four scalar profiles for a line, an area or a bar. `SignalOutputSpec` already refuses a
+band/scalar mismatch when it is built, and `sample_signal_series()` raises `ValueError` on one.
+
 ### 📅 Sessions or Calendar Days
 
 `computes_on_quote_days` decides what a plugin's periods count. When it is `True` (the

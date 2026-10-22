@@ -64,6 +64,7 @@
     import type {ColumnDef, RowAction, EnumOption} from '$lib/components/table/types';
     import type {BrimDuplicateMatch, BrimNotice} from '$lib/types/files';
     import BrimNoticeList from '$lib/features/transactions/import/BrimNoticeList.svelte';
+    import {noticeCounts, noticeCountsCell, noticeSeverity, noticeSortValue} from '$lib/features/transactions/import/importNotices';
     import FixFlaggedStep, {type FixPatch} from '$lib/features/transactions/import/FixFlaggedStep.svelte';
     import AssetGroupStep from '$lib/features/transactions/import/AssetGroupStep.svelte';
     import ReportSetCard from '$lib/features/transactions/import/ReportSetCard.svelte';
@@ -348,7 +349,8 @@
     let parseAggregateStats = $derived(() => {
         const doneResults = parseResults.filter((r) => r.status === 'done' && r.response);
         const doneFileCount = doneResults.length;
-        const totalWarnings = doneResults.reduce((sum, r) => sum + (r.response!.warnings?.length ?? 0), 0);
+        // B-51: a plugin's note (`info`) is not a warning — the tile counts the two apart.
+        const {warnings: totalWarnings, notes: totalNotes} = noticeCounts(doneResults.flatMap((r) => r.response!.warnings ?? []));
         const totalIssues = doneResults.reduce((sum, r) => sum + ((r.response!.validation_issues as unknown[] | undefined)?.length ?? 0), 0);
         const fieldTodos = doneResults.flatMap((r) => (r.response!.field_todos as {severity: string}[] | undefined) ?? []);
         const totalTodos = fieldTodos.length;
@@ -369,13 +371,13 @@
             const totalTx = mergedTransactions.filter((t) => t.selected).length;
             const uniqueAssets = assetResolutions.length;
             const unresolvedCount = assetResolutions.filter((r) => r.resolvedAssetId == null).length;
-            return {totalTx, doneFileCount, uniqueAssets, unresolvedCount, totalWarnings, totalIssues, totalTodos, todoBlockers, likelyDuplicates: duplicates};
+            return {totalTx, doneFileCount, uniqueAssets, unresolvedCount, totalWarnings, totalNotes, totalIssues, totalTodos, todoBlockers, likelyDuplicates: duplicates};
         }
         const totalTx = doneResults.reduce((sum, r) => sum + (r.response!.transactions?.length ?? 0), 0);
         const allMappings = doneResults.flatMap((r) => r.response!.asset_mappings ?? []);
         const uniqueAssetIds = new Set(allMappings.map((m) => m.fake_asset_id));
         const unresolvedCount = allMappings.filter((m) => m.selected_asset_id == null).length;
-        return {totalTx, doneFileCount, uniqueAssets: uniqueAssetIds.size, unresolvedCount, totalWarnings, totalIssues, totalTodos, todoBlockers, likelyDuplicates: duplicates};
+        return {totalTx, doneFileCount, uniqueAssets: uniqueAssetIds.size, unresolvedCount, totalWarnings, totalNotes, totalIssues, totalTodos, todoBlockers, likelyDuplicates: duplicates};
     });
 
     function computeParseHash(): string {
@@ -1648,7 +1650,7 @@
                     const arrow = isPair ? '<span class="shrink-0 mr-0.5">↔</span>' : '';
                     return {
                         type: 'html',
-                        html: `<span class="inline-flex items-center gap-1.5 text-xs leading-snug"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" onerror="this.style.display='none'"/>${arrow}<span>${escapeHtml(label)}</span></span>`,
+                        html: `<span class="inline-flex items-center gap-1.5 text-xs leading-snug"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" data-hide-on-error="display"/>${arrow}<span>${escapeHtml(label)}</span></span>`,
                     };
                 },
             },
@@ -2131,7 +2133,7 @@
                     return {
                         type: 'html',
                         html: `<span class="inline-flex items-center gap-1.5 text-xs leading-snug">\
-<img src="/icons/transactions/${slug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" onerror="this.style.display='none'"/>\
+<img src="/icons/transactions/${slug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" data-hide-on-error="display"/>\
 ${arrow}<span>${label}</span></span>`,
                     };
                 },
@@ -2202,7 +2204,7 @@ ${arrow}<span>${label}</span></span>`,
                             const rInfo = getAssetInfo(res.resolvedAssetId);
                             const rName = rInfo?.display_name ?? `#${res.resolvedAssetId}`;
                             const rIconUrl = rInfo?.icon_url ?? (rInfo?.asset_type ? getAssetTypeIconUrl(rInfo.asset_type) : null);
-                            const rIconHtml = rIconUrl ? `<img src="${escapeHtml(rIconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
+                            const rIconHtml = rIconUrl ? `<img src="${escapeHtml(rIconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" data-hide-on-error="display" />` : '';
                             const origName = getAssetDisplayName(assetId);
                             return {type: 'html', html: `<span class="inline-flex items-center gap-1.5 truncate text-lf-success" title="${escapeHtml(origName)} → ${escapeHtml(rName)}">${rIconHtml}<span class="truncate">${escapeHtml(rName)}</span></span>`};
                         }
@@ -2212,7 +2214,7 @@ ${arrow}<span>${label}</span></span>`,
                     const info = getAssetInfo(assetId);
                     const name = info?.display_name ?? `#${assetId}`;
                     const iconUrl = info?.icon_url ?? (info?.asset_type ? getAssetTypeIconUrl(info.asset_type) : null);
-                    const iconHtml = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
+                    const iconHtml = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" data-hide-on-error="display" />` : '';
                     return {type: 'html', html: `<span class="inline-flex items-center gap-1.5 truncate">${iconHtml}<span class="truncate">${escapeHtml(name)}</span></span>`};
                 },
             },
@@ -2247,7 +2249,7 @@ ${arrow}<span>${label}</span></span>`,
                     const b = brokers.find((x) => x.id === brokerId) ?? getBrokerInfo(brokerId);
                     const name = b?.name ?? `#${brokerId}`;
                     const iconUrl = b?.icon_url ?? null;
-                    const iconHtml = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
+                    const iconHtml = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" data-hide-on-error="display" />` : '';
                     // For rows blocked by the broker's opening date, surface a discoverable
                     // "edit opening date" affordance directly in the destination-broker column.
                     if (beforeOpeningIndices.has(mt.index)) {
@@ -2438,13 +2440,15 @@ ${arrow}<span>${label}</span></span>`,
                     .map((r) => ({
                         fileName: r.fileName,
                         fileId: r.fileId,
-                        warnings: (r.response!.warnings as BrimNotice[]).filter((w) => (w.severity === 'info' ? 'info' : 'warning') === severity),
+                        warnings: (r.response!.warnings as BrimNotice[]).filter((w) => noticeSeverity(w) === severity),
                     }))
                     .filter((f) => f.warnings.length > 0),
             }))
             .filter((s) => s.files.length > 0),
     );
-    let step3HasWarningSeverity = $derived(step3Warnings.some((w) => w.severity !== 'info'));
+    /** The step's warnings and notes counted apart (B-51): the confirmation's intro counts only what it names. */
+    let step3NoticeTally = $derived(noticeCounts(step3Warnings));
+    let step3HasWarningSeverity = $derived(step3NoticeTally.warnings > 0);
 
     /**
      * Duplicate groups split by overlap tier, partial first.
@@ -4244,13 +4248,16 @@ ${arrow}<span>${label}</span></span>`,
             minWidth: 32,
         },
         {
-            id: 'warningCount',
-            header: () => '⚠️',
-            headerTooltip: () => $t('importWizard.colTip.warningCount'),
-            cell: (row) => (row.response?.warnings?.length != null ? row.response.warnings.length : '—'),
+            // B-51: the warnings (amber) and the notes (blue) apart; a note is not a warning. A new id, not
+            // `warningCount`: the table keeps each column's width by id, and a width saved at 40 px would crush two counts.
+            id: 'noticeCount',
+            header: () => '⚠️ ℹ️',
+            headerTooltip: () => $t('importWizard.colTip.noticeCount'),
+            cell: (row) => noticeCountsCell(row.response?.warnings),
+            getValue: (row) => noticeSortValue(row.response?.warnings),
             type: 'number',
-            width: 40,
-            minWidth: 32,
+            width: 72,
+            minWidth: 64,
         },
     ];
 
@@ -4740,7 +4747,7 @@ ${arrow}<span>${label}</span></span>`,
         <div class="flex-1 min-w-0">
             <h2 class="text-base font-semibold text-lf-primary">{step3HasWarningSeverity ? $t('importWizard.warningConfirmTitle') : $t('importWizard.noticeConfirmTitle')}</h2>
             <p class="text-xs text-lf-muted mt-0.5">
-                {step3HasWarningSeverity ? $t('importWizard.warningConfirmMessage', {values: {n: step3Warnings.length}}) : $t('importWizard.noticeConfirmMessage', {values: {n: step3Warnings.length}})}
+                {step3HasWarningSeverity ? $t('importWizard.warningConfirmMessage', {values: {n: step3NoticeTally.warnings}}) : $t('importWizard.noticeConfirmMessage', {values: {n: step3NoticeTally.notes}})}
             </p>
         </div>
         <button type="button" class="p-1.5 rounded-lg hover:bg-lf-hover text-lf-muted shrink-0" onclick={() => (showWarningConfirm = false)}>

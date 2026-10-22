@@ -33,6 +33,14 @@ def utils_real_decimal(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "RealDecimal and digit limit tests", verbose=verbose)
 
 
+def utils_origins(verbose: bool = False, test_names: list = None) -> bool:
+    """Test canonical_origin: the one canonical form of an http(s) origin, and no origin for a host that could reach a header (H-55 v2)."""
+    print_section("Utilities: Canonical Origin")
+    print_info("Testing: backend/app/utils/runtime/origins.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_origins.py", test_names)
+    return run_command(cmd, "Canonical origin tests", verbose=verbose)
+
+
 def utils_datetime(verbose: bool = False, test_names: list = None) -> bool:
     """Test datetime utilities."""
     print_section("Utils: Datetime")
@@ -542,6 +550,15 @@ Tests for utility modules and helper functions:
         isolation="pure",
     )
     add_test(cat, "datetime", utils_datetime, name="Datetime Utils", desc="Timezone-aware datetime helpers")
+    add_test(
+        cat,
+        "origins",
+        utils_origins,
+        name="Canonical Origin",
+        desc="H-55 v2: canonical_origin, scheme://host[:port] lower-cased, default ports dropped, IPv6 in brackets, international names in punycode, path/query/fragment/user info dropped; None for a wrong shape, a bad port, and a host that could reach a header (a ';', a quote, a comma, a space, an IPv6-looking host that is no address, a zone id)",
+        # PURE: a function over strings. No DB, no server, no network.
+        isolation="pure",
+    )
     add_test(
         cat,
         "pydantic-errors",
