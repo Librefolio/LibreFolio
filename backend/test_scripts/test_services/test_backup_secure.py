@@ -1875,6 +1875,26 @@ def test_a_backup_sealed_for_two_recipients_opens_with_either_identity(tmp_path,
     print_success("two recipients: either identity opens the password")
 
 
+def test_while_sealing_the_clear_zip_is_already_gone(tmp_path, databases, monkeypatch):
+    """(k) Contract §4 (disk peak 2× the envelope; B4 review, 22/10): once the envelope is written, the clear zip leaves
+    the job's folder before the seal starts, so a sealed backup never holds zip, ``.lfbk`` and ``.tar`` together, and
+    the data in clear lives no longer than needed. Red before: the zip waited for the end of the run."""
+    _, recipient = new_identity()
+    data = source_dir(tmp_path / "source", databases, monkeypatch)
+    seen: list[list[str]] = []
+
+    def progress(phase: str, done: int, total: int) -> None:
+        if phase == "sealing" and not seen:
+            seen.append(sorted(path.name for folder in (data / "backups" / ".jobs").iterdir() if folder.is_dir() for path in folder.iterdir()))
+
+    job, _ = sealed_backup(data, (recipient,), progress=progress)
+    assert (job.status, job.error_code) == ("done", None), f"the sealed backup is done: {job}"
+    assert seen, "precondition: the progress reported the sealing phase"
+    clear = [name for name in seen[0] if name.endswith(".zip")]
+    assert clear == [], f"when the seal starts, no clear zip is left in the job's folder: {seen[0]}"
+    print_success(f"at the seal: {seen[0]}")
+
+
 def test_a_sealed_backup_started_in_the_background_ends_as_a_tar(tmp_path, databases, monkeypatch):
     """(k) Interface §5: ``start_backup(origin="panel", recipients=(r,))`` returns the first state at once, then its
     thread ends with the sealed tar alone beside the state."""

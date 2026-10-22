@@ -129,10 +129,62 @@ def sealed(lfbk: bytes, password: str, recipients: list[x25519.Recipient]) -> tu
     return pyrage.encrypt(password.encode("ascii"), recipients), manifest(lfbk, [str(r) for r in recipients])
 
 
+#: The end of a tar: two zero blocks.
+_END = bytes(1024)
+
+
+def _members_end(data: bytes) -> int:
+    """Where the members of a tar written by ``tar_bytes`` end: the offset of its first zero block."""
+    position = 0
+    while data[position : position + 512] != bytes(512):
+        size = int(data[position + 124 : position + 136].split(b"\0", 1)[0].strip() or b"0", 8)
+        position += 512 + -(-size // 512) * 512
+    return position
+
+
+def extended_cases() -> list[tuple[str, bytes, str, str]]:
+    """The cases added after the first set (security review of 22/10, finding 2), built from the good case's bytes, so
+    that no file of the first set changes: a member hidden after a single zero block, and bytes after the end."""
+    good = (HERE / TAR_NAME).read_bytes()
+    end = _members_end(good)
+    hidden = io.BytesIO()
+    with tarfile.open(fileobj=hidden, mode="w", format=tarfile.USTAR_FORMAT) as tar:
+        info = tarfile.TarInfo("evil.sh")
+        payload = b"#!/bin/sh\necho hidden after one zero block\n"
+        info.size, info.mode, info.mtime = len(payload), 0o600, int(CREATED_AT.timestamp())
+        tar.addfile(info, io.BytesIO(payload))
+    member = hidden.getvalue()[: 512 + -(-len(payload) // 512) * 512]
+    with_hidden = good[:end] + bytes(512) + member + _END
+    with_hidden += bytes(-len(with_hidden) % 10240)
+    return [
+        ("neg-hidden-member.tar", with_hidden, "sealed_tar_invalid", "a fourth member after a single zero block: tar -i would extract it"),
+        ("neg-trailing-garbage.tar", good + b"\xff" * 100, "sealed_tar_invalid", "100 bytes that are not zeros after the end of the archive"),
+    ]
+
+
+def extend() -> int:
+    """Add the cases of ``extended_cases`` that ``vectors.json`` lacks; every existing file stays as it is."""
+    index = json.loads((HERE / "vectors.json").read_text())
+    known = {case["file"] for case in index["cases"]}
+    added = 0
+    for name, data, expect, note in extended_cases():
+        if name in known:
+            continue
+        (HERE / name).write_bytes(data)
+        index["cases"].append({"file": name, "expect": expect, "note": note, "tar_sha256": sha256(data), "tar_size": len(data), "identities": ["test-identity-1.txt"]})
+        added += 1
+    (HERE / "vectors.json").write_text(json.dumps(index, indent=2, sort_keys=False) + "\n")
+    print(f"✅ {added} cases added to {HERE}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--force", action="store_true", help="write a new set over the old one (the cloud must copy it again)")
+    parser.add_argument("--extend", action="store_true", help="add the cases written after the first set, keeping every existing file")
     args = parser.parse_args()
+    if args.extend:
+        return extend()
     if (HERE / "vectors.json").exists() and not args.force:
         print(f"❌ {HERE / 'vectors.json'} exists: the vectors are written once (age is not reproducible); --force writes a new set")
         return 1

@@ -317,7 +317,7 @@ pipenv run ./dev.py db create-clean
 
 ## 💾 Back Up the Instance {: #backup }
 
-`backup create` puts the whole instance in one zip archive, while the server keeps running: the database, the uploaded files, the broker reports and your own stress scenarios. With `--encrypt`, it makes a [secure archive](#backup-secure), encrypted with a password you choose, which `backup decrypt` turns back into its zip. `backup inspect` checks an archive and shows what it holds, `backup restore --dry-run` tries a restore of it on a copy, leaving the instance as it is, and `backup restore` restores it at the next start of the server. To copy the data directory by hand instead, see [Backup](filesystem.md#backup).
+`backup create` puts the whole instance in one zip archive, while the server keeps running: the database, the uploaded files, the broker reports and your own stress scenarios. With `--encrypt`, it makes a [secure archive](#backup-secure), encrypted with a password you choose, which `backup decrypt` turns back into its zip. With `--sealed` or `--recipient`, it makes a [sealed archive](#backup-sealed), whose password only a private key of yours opens, for backups that run on their own. `backup inspect` checks an archive and shows what it holds, `backup restore --dry-run` tries a restore of it on a copy, leaving the instance as it is, and `backup restore` restores it at the next start of the server. To copy the data directory by hand instead, see [Backup](filesystem.md#backup).
 
 ### 📦 Create an Archive
 
@@ -454,7 +454,7 @@ pipenv run ./dev.py backup inspect /mnt/nas/librefolio/librefolio-backup-2026101
 
 ### 🔏 A Sealed Archive {: #backup-sealed }
 
-A sealed archive is a `.tar` whose password LibreFolio draws itself and encrypts for one or two age public keys: only the matching private key opens it ([Sealed Backups](backup_restore.md#sealed)).
+A sealed archive is a `.tar` whose password LibreFolio draws itself and encrypts for one or two age public keys: only the matching private key opens it, and the server that made it cannot. It is made for backups that run on their own, such as every night from cron. What it holds, how to keep the key and how to change it: [Sealed Backups](backup_restore.md#sealed).
 
 ```bash
 # A key pair: the private key into a file of its own (0600, never over a file), the public key printed
@@ -472,10 +472,14 @@ pipenv run ./dev.py backup restore librefolio-backup-<date>-<time>.tar --identit
 pipenv run ./dev.py backup decrypt librefolio-backup-<date>-<time>.tar --identity-file ~/librefolio-backup-key.txt -o backup.zip
 ```
 
-- `--sealed` and `--recipient` go without `--encrypt`, `--password-file` and `--password-stdin`: a sealed archive has a password of its own, which nobody types.
-- `--identity-file` reads a key file as `age-keygen` writes it, before any switch of user, as `--password-file` does: a Docker secret works. The archive's `backup.lfbk` is copied into a private temporary folder, removed at the end.
-- A `.tar` without `--identity-file` stops with `sealed_backup_needs_key`; `--identity-file` with any other archive stops too.
-- The refusals: `sealed_no_identity` (no key of the file opens the password), `sealed_tar_invalid` (not the three files of a sealed archive, in order, as plain files), `sealed_manifest_invalid` (its `manifest.json` does not describe it), `sealed_identity_invalid` (the key file holds no age key), `sealed_password_invalid`, then those of a secure archive: `wrong_password`, `envelope_damaged`.
+- 🗝️ **`keygen`** writes the private key in the format of `age-keygen` (`# created:`, `# public key: age1…`, then `AGE-SECRET-KEY-1…`), readable by its owner only, and never over a file that exists (`❌ <path> already exists: a key file is never written over`). It then prints `🔑 Public key, for --recipient or LIBREFOLIO_BACKUP_RECIPIENTS:` and the `age1…` line. Run it on a computer of yours, not on the server: the private key belongs off the server.
+- 🔏 **`create --recipient age1…`** seals for the key given, `--recipient` twice for two keys; **`create --sealed`** seals for the keys of `LIBREFOLIO_BACKUP_RECIPIENTS` ([Environment Variables](configuration.md)). The archive is `librefolio-backup-20261015-121500.tar`, with the usual rules of `-o` and of names. After the phases of a secure archive, the backup shows `… sealing`, and ends with `🔏 Sealed for 1 key: only the matching private key opens its password, and this server cannot.`
+- 🔑 **No password to give.** `--sealed` and `--recipient` go without `--encrypt`, `--password-file` and `--password-stdin`, and `--sealed` without `--recipient`: the command stops before anything is written. It needs no terminal, so it runs from cron as it is; with Docker, `docker compose exec -T librefolio python dev.py backup create --sealed`.
+- 🗝️ **Never the instance key**, even one LibreFolio generated: unlike a [secure archive](#backup-secure), a sealed one leaves `secrets/instance.key` out.
+- 💽 **Space.** Sealing writes the `.tar` beside the `.lfbk`, so the work folder in `backups/` needs the `.lfbk`'s size again, plus 64 MB, or the backup stops with `backup_no_space`.
+- 🔓 **`--identity-file`** opens a sealed archive for `inspect`, `restore` and `decrypt`. It reads a key file as `age-keygen` writes it, before any switch of user, as `--password-file` does: a Docker secret works. The command checks the `.tar` and its manifest, opens the password with the key, checks it against `backup.lfbk`, prints `🔏 Sealed backup <path>: its password opened with <key file>`, then copies `backup.lfbk` into a private folder of the system's temporary folder, removed at the end, and goes on as for a secure archive with its password.
+- ❌ A `.tar` without `--identity-file` stops with `sealed_backup_needs_key`; `--identity-file` with any other archive stops with `❌ --identity-file opens a sealed backup (.tar) only: <path> is not one`.
+- 🧾 **The refusals**, each at the end of its message: `sealed_identity_invalid` (the key file holds no age key, or cannot be read), `sealed_no_identity` (no key of the file opens the password), `sealed_tar_invalid` (not the three files of a sealed archive, in order, as plain ustar files), `sealed_manifest_invalid` (its `manifest.json` does not describe it), `sealed_password_invalid` (what the key opened is not a password LibreFolio writes), then those of a secure archive: `wrong_password` (that password does not open `backup.lfbk`) and `envelope_damaged`. Every message, with what to do: [Making or Opening a Sealed Backup](backup_restore.md#sealed-problems).
 
 ### 🧪 Try a Restore on a Copy {: #backup-restore-dry-run }
 
@@ -631,9 +635,12 @@ pipenv run ./dev.py backup pending
 
 # Drop the restore waiting, and its checked copy
 pipenv run ./dev.py backup pending --cancel
+
+# When the state of the restore cannot be read: put the data of before back (LibreFolio stopped)
+pipenv run ./dev.py backup pending --recover
 ```
 
-`backup pending` changes nothing and exits with `0`, except when it cannot read the state of the restore: it then prints `❌ The state of the restore cannot be read: <reason> (restore_state_unreadable)` and exits with `1`. The reason, such as `Permission denied`, says why: give `.restore/` and its files back to the user that runs LibreFolio, readable by it. Otherwise it shows one of these:
+`backup pending` changes nothing and exits with `0`, except when it cannot read the state of the restore: see [An Unreadable Restore State](#backup-pending-unreadable) below. Otherwise it shows one of these:
 
 | It prints | What it means |
 | --- | --- |
@@ -658,6 +665,21 @@ When a start found a restore waiting and did not apply it, one more line says wh
 | `stage_missing` | `its checked copy was gone` | The copy in `.restore/stage/` was removed or changed: check the archive again |
 
 A rollback also removes the restored data and the copy: to try again, run `backup restore` again. If even putting the data back fails, on a disk or permission error for instance, LibreFolio does not start: its log has `The data directory is half restored: the restore could not be undone, and LibreFolio does not start on it`, and every start tries again.
+
+#### 🧩 An Unreadable Restore State {: #backup-pending-unreadable }
+
+The state of the restore, `.restore/restore.json`, can become unreadable: its owner or permissions changed, a disk error, a link or a folder in its place, or content no LibreFolio wrote. A restore may then have stopped half way, and LibreFolio cannot tell which data it holds. `backup pending` says so and exits with `1`:
+
+```text
+❌ The state of the restore cannot be read: <why>: a restore may have stopped half way. LibreFolio serves no data until you choose (restore_state_unreadable: <reason>)
+   The data of before is kept in .restore/previous/: sqlite, user_files
+   Checked copies kept: 1 (none is removed while the state cannot be read)
+👉 Stop LibreFolio, then run ./dev.py backup pending --recover: it puts the data of before back.
+```
+
+`<reason>` is `io` (the file system refuses it: give `.restore/` and its files back to the user that runs LibreFolio, then run `backup pending` again, which may be enough), `not_a_file` or `invalid`. While the state cannot be read, no checked copy is removed, by the server's clean-up or by Settings › Administration › Backup, and no restore can be confirmed.
+
+`backup pending --recover`, with LibreFolio stopped, puts the data of before back from what the folders say: each folder kept in `.restore/previous/` returns to its place, and the one it replaces goes to `.restore/failed/`. A restore that was committed kept no data of before, so its data stays. The unreadable state is kept as `.restore/restore.json.unreadable-<date>` for a look, and never read again. Then start LibreFolio on the data of before, or restore a backup again with `backup restore`. While LibreFolio runs, it stops with `(restore_in_use)`; with a state it can read, or none, with `(restore_nothing_to_recover)`.
 
 `--cancel` drops the restore waiting, with its checked copy, whoever confirmed it: `✅ The restore waiting for the next start was dropped, with its copy: the data stays as it is`, exit code `0`. If the copy cannot be removed, on a permission or disk error for instance, the restore is dropped all the same, exit code `0`, with two lines instead: `✅ The restore waiting for the next start was dropped: the data stays as it is` and `⚠️ Its checked copy could not be removed: it goes when its check expires`. When the removal failed with an error, the log above them has the warning `The copy of a cancelled restore could not be removed: it goes when its check expires`; a copy left without an error, such as one holding a read-only folder, has none. LibreFolio tries again at its first start once the check is 24 hours old. If the restore itself cannot be dropped, on a file-system error before it is (its lock, or removing its state): `❌ The restore could not be cancelled: <reason>. It still waits for the next start (restore_cancel_failed)`, exit code `1`. When the state of the restore cannot be read: the `restore_state_unreadable` line of `backup pending`, exit code `1`. When no restore waits, or one is already being applied: `❌ No restore waits for the next start: nothing to cancel (restore_not_pending)`, exit code `1`.
 
@@ -720,6 +742,7 @@ docker compose exec librefolio python dev.py backup pending
 - 🔑 `restore` and `decrypt` also read the archive as the server's user: an archive that `backup create` wrote is fine, but one you copied in yourself must be readable by that user, or they stop with `archive_unreadable`. With the official image, `sudo chown 1000:1000 <archive>` on the host gives it to that user.
 - ⌨️ `docker compose exec` gives the command a terminal to ask on. Without one, such as with `docker compose exec -T` in a script, add `--yes`.
 - 🔐 For a [secure archive](#backup-secure), `--encrypt` asks the password on that terminal. With `-T`, from cron for instance, give it with `--password-file` and a Docker secret, such as `/run/secrets/backup_password`: [the example](backup_restore.md#command-line) in Backup, Restore and Moving Your Instance shows the lines to add to `docker-compose.yml`. `backup decrypt` switches to the server's user too, so its zip belongs to that user: give it an `-o` that user can write, in `LibreFolio-data/backups/` or a folder mounted from the host, such as `docker compose exec librefolio python dev.py backup decrypt /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.lfbk -o /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.zip`.
+- 🔏 A [sealed archive](#backup-sealed) needs no terminal: `docker compose exec -T librefolio python dev.py backup create --sealed` reads `LIBREFOLIO_BACKUP_RECIPIENTS` from the container's environment, which `env_file: .env` fills; after a change of `.env`, `docker compose up -d` recreates the container with it. To open one in the container, give `--identity-file` a path inside it; better, open it on your computer, where the private key is ([Open a Sealed Backup](backup_restore.md#sealed-open)).
 - 🔁 After a first start that fails on the restored data, the container starts again by itself (`restart: unless-stopped`, in both compose files LibreFolio ships), and that start puts the data as it was before back.
 - 🔒 On the host, the archives belong to the container's user, and only that user can read them: if your host user is another one, copy them with `sudo cp -a`.
 - 💻 From a source checkout, `./dev.py docker exec backup create` does the same.

@@ -1155,12 +1155,65 @@ def cmd_pending(args) -> int:
         return 1
     if args.cancel:
         return _cancel_pending(data_dir)
+    if getattr(args, "recover", False):
+        return _recover_pending(data_dir)
     try:
         state = read_restore(data_dir)
     except RestoreStateUnreadableError as exc:
-        print(f"❌ {exc} ({exc.code})")
+        _print_unreadable_state(data_dir, exc)
         return 1
     _print_restore_state(state)
+    return 0
+
+
+def _print_unreadable_state(data_dir: Path, exc) -> None:
+    """What an unreadable state of the restore means, what is on disk, and the way out (B-33)."""
+    from backend.app.services.platform.instance_backup.paths import SWAPPED_FOLDERS, is_plain_dir, previous_dir, stages_dir  # noqa: PLC0415
+
+    print(f"❌ {exc}: a restore may have stopped half way. LibreFolio serves no data until you choose ({exc.code}: {exc.reason})")
+    previous = previous_dir(data_dir)
+    try:
+        kept = [name for name in SWAPPED_FOLDERS if is_plain_dir(previous) and os.path.lexists(previous / name)]
+        copies = sum(1 for _ in stages_dir(data_dir).iterdir()) if is_plain_dir(stages_dir(data_dir)) else 0
+    except OSError as error:
+        # The same refusal that hides the state may hide the folder: say so, and still give the way out.
+        print(f"   What .restore holds cannot be listed either: {error.strerror or type(error).__name__}")
+    else:
+        if kept:
+            print(f"   The data of before is kept in .restore/previous/: {', '.join(kept)}")
+        else:
+            print("   No data of before is kept in .restore/previous/: no folder was swapped, or the restore was committed")
+        print(f"   Checked copies kept: {copies} (none is removed while the state cannot be read)")
+    print("👉 Stop LibreFolio, then run ./dev.py backup pending --recover: it puts the data of before back.")
+    print("   Then start LibreFolio as it was, or restore a backup with ./dev.py backup restore ARCHIVE.")
+
+
+def _recover_pending(data_dir: Path) -> int:
+    """``backup pending --recover``: with an unreadable state, put the data of before back (B-33)."""
+    from backend.app.services.platform.instance_backup.apply import RestoreApplyError, RestoreInUseError, RestoreNothingToRecoverError, recover_unreadable_restore  # noqa: PLC0415
+
+    try:
+        recovered = recover_unreadable_restore(data_dir)
+    except RestoreNothingToRecoverError:
+        print("❌ Nothing to recover: the state of the restore can be read, or there is none. ./dev.py backup pending shows it (restore_nothing_to_recover)")
+        return 1
+    except RestoreInUseError:
+        print("❌ LibreFolio is running on this data directory: stop it first, then run the command again (restore_in_use)")
+        return 1
+    except RestoreApplyError as exc:
+        print(f"❌ {exc} ({exc.code}): the log above says which folder; do not start LibreFolio before it is fixed")
+        return 1
+    except OSError as exc:
+        print(f"❌ The restore could not be recovered: {exc.strerror or type(exc).__name__}")
+        return 1
+    if recovered.moved_back:
+        print(f"✅ The data of before is back: {', '.join(recovered.moved_back)}")
+    else:
+        print("✅ No folder had been swapped, or the restore was committed: the data stays as it is")
+    if recovered.set_aside:
+        print(f"   The restored folders were set aside in .restore/failed/: {', '.join(recovered.set_aside)}")
+    print(f"   The unreadable state is kept as .restore/{recovered.state_kept_as}, for a look; it is never read again")
+    print("👉 Start LibreFolio, or restore a backup with ./dev.py backup restore ARCHIVE.")
     return 0
 
 
@@ -1281,7 +1334,9 @@ A relative path starts from the project root, like every path given to dev.py. A
     keygen.set_defaults(backup_func=cmd_keygen)
 
     pending = commands.add_parser("pending", help="Show the restore waiting for the next start of the server, or the last one")
-    pending.add_argument("--cancel", action="store_true", help="Drop the restore waiting for the next start, and its checked copy")
+    pending_actions = pending.add_mutually_exclusive_group()
+    pending_actions.add_argument("--cancel", action="store_true", help="Drop the restore waiting for the next start, and its checked copy")
+    pending_actions.add_argument("--recover", action="store_true", help="When the state of the restore cannot be read: put the data of before back (stop LibreFolio first)")
     pending.set_defaults(backup_func=cmd_pending)
 
     parser.set_defaults(func=_dispatch)
