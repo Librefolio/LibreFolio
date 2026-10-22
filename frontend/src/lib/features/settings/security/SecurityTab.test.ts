@@ -47,9 +47,11 @@
  * own budget (see «The modules under test»), so each case fails on its own with the contract in its message rather than
  * the whole file at import, and the type check does not depend on the modules landing first.
  */
-import {beforeAll, describe, expect, it, vi, type Mock} from 'vitest';
+import {beforeAll, beforeEach, describe, expect, it, vi, type Mock} from 'vitest';
 import {tick, type Component} from 'svelte';
 import {fireEvent, render, screen, waitFor, within} from '$test/component';
+import guides from '$lib/features/instance/checkGuides.json';
+import {currentLanguage} from '$lib/stores/app/language';
 import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
 import fr from '$lib/i18n/fr.json';
@@ -118,6 +120,7 @@ interface BrowserState {
     registrationMode: string;
     registrationLocked: boolean;
     hostname: string;
+    blockedScripts?: readonly string[];
 }
 
 interface SecurityChecksStore {
@@ -649,6 +652,7 @@ describe('SecurityTab — its words', () => {
         ['settings.securityTab.severity.info', []],
         ['settings.securityTab.openEmail', []],
         ['settings.securityTab.openPlugins', []],
+        ['settings.securityTab.guide', []],
     ];
 
     // red until A8b
@@ -660,5 +664,120 @@ describe('SecurityTab — its words', () => {
                 expect(placeholdersOf(message as string), `${language}: ${key} names other values than the tab fills`).toEqual(filled);
             }
         }
+    });
+});
+
+// Lot N69d (release 1.3, workstream A — decision D9 «Guida», with the book; D10 as the developer changed it: the guide of each
+// check comes from workstream H's map, `features/instance/checkGuides.ts`, pinned by `checkGuides.test.ts`). Every row of the
+// tab — a finding, a passed check, the browser's own — whose id the map knows gets a «Guide» button (`security-guide`, the
+// shared `DocsLink`: a book, its label visible, opened in a new tab) to the page and anchor the map holds, in the user's
+// language (`/mkdocs/<lang>/<path>`, none for English). A row whose id the map lacks has no button, and says nothing else. The
+// button is added to the row: the in-app link of a finding (`security-finding-action`) stays. Red until N69d.
+describe('SecurityTab — the guide of each check (SGUIDE-01…08, N69d)', () => {
+    const GUIDE = 'settings.securityTab.guide';
+    const SERVER_IDS = Object.keys(guides.server);
+    const guideOf = (row: HTMLElement) => within(row).getByTestId('security-guide');
+
+    /** Clicks the button and returns what the browser was asked to open. */
+    async function opened(button: HTMLElement): Promise<unknown[]> {
+        const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+        try {
+            await fireEvent.click(button);
+            return open.mock.calls[0] ?? [];
+        } finally {
+            open.mockRestore();
+        }
+    }
+
+    function passedCheck(id: string): HTMLElement {
+        const row = screen.queryAllByTestId('security-passed-check').find((candidate) => candidate.getAttribute('data-check-id') === id);
+        if (!row) throw new Error(`no security-passed-check with data-check-id="${id}" is rendered`);
+        return row;
+    }
+
+    beforeEach(() => {
+        currentLanguage.set('en');
+    });
+
+    it('SGUIDE-01: a finding the map knows has a «Guide» button — a book, named by the label — that opens its page and anchor in a new tab', async () => {
+        const mounted = await mountTab(SILENT);
+        await answer(mounted, 0, MIXED);
+        await waitForStatus('ready');
+
+        const button = guideOf(finding('accounts.login_limit'));
+
+        expect(button.tagName).toBe('BUTTON');
+        expect(button).toHaveAccessibleName(containing(say(GUIDE)));
+        expect(button.querySelector('svg'), 'the book').not.toBeNull();
+        expect(await opened(button)).toEqual(['/mkdocs/admin/configuration/#login-limit', '_blank', 'noopener']);
+    });
+
+    it('SGUIDE-02: in another language the page is the translated one — /mkdocs/<lang>/… — and the anchor is the same', async () => {
+        currentLanguage.set('it');
+        const mounted = await mountTab(SILENT);
+        await answer(mounted, 0, MIXED);
+        await waitForStatus('ready');
+
+        expect(await opened(guideOf(finding('email.smtp_encryption')))).toEqual(['/mkdocs/it/admin/email/#encryption-modes', '_blank', 'noopener']);
+    });
+
+    it('SGUIDE-03: a passed check has its guide too — the same page serves every state of a check', async () => {
+        const mounted = await mountTab(SILENT);
+        await answer(mounted, 0, MIXED);
+        await waitForStatus('ready');
+
+        expect(await opened(guideOf(passedCheck('platform.session_cookie')))).toEqual(['/mkdocs/admin/connection_checks/#session-cookie', '_blank', 'noopener']);
+    });
+
+    it('SGUIDE-04: the finding only the browser knows — open registration — has its guide as well', async () => {
+        const mounted = await mountTab(OPEN_EXTERNAL);
+        await answer(mounted, 0, MIXED);
+        await waitForStatus('ready');
+
+        expect(await opened(guideOf(finding('accounts.openRegistration')))).toEqual(['/mkdocs/admin/settings/#open-registration-warning', '_blank', 'noopener']);
+    });
+
+    it('SGUIDE-05: a check the map does not know has no button — and the rows around it keep theirs', async () => {
+        const mounted = await mountTab(SILENT);
+        await answer(mounted, 0, [check('plugin.future_check', 'warning', 'instance.checks.futureCheck.warn'), check('plugin.future_ok', 'ok', 'instance.checks.futureCheck.ok'), check('accounts.login_limit', 'warning', 'auth.checks.loginLimit.off')]);
+        await waitForStatus('ready');
+
+        expect(within(finding('plugin.future_check')).queryByTestId('security-guide'), 'no entry in the map, no button').toBeNull();
+        expect(within(passedCheck('plugin.future_ok')).queryByTestId('security-guide'), 'the same for a passed check').toBeNull();
+        expect(guideOf(finding('accounts.login_limit'))).toBeInTheDocument();
+        expect(screen.getAllByTestId('security-guide'), 'one button for the one check the map knows').toHaveLength(1);
+    });
+
+    it('SGUIDE-06: every check of the server the map lists has a button on its row — the map and the tab agree on all of them', async () => {
+        const mounted = await mountTab(SILENT);
+        await answer(
+            mounted,
+            0,
+            SERVER_IDS.map((id) => check(id, 'ok', `instance.checks.${id}`)),
+        );
+        await waitForStatus('ready');
+
+        const missing = SERVER_IDS.filter((id) => within(passedCheck(id)).queryByTestId('security-guide') === null);
+        expect(missing, 'checks of the map with no button').toEqual([]);
+        expect(screen.getAllByTestId('security-guide')).toHaveLength(SERVER_IDS.length);
+    });
+
+    it('SGUIDE-07: the button is added to the in-app link of a finding, not put in its place', async () => {
+        const mounted = await mountTab(SILENT);
+        await answer(mounted, 0, MIXED);
+        await waitForStatus('ready');
+
+        const row = finding('email.smtp_encryption');
+
+        expect(within(row).getByTestId('security-finding-action')).toHaveAttribute('href', '/settings?tab=email');
+        expect(guideOf(row)).toBeInTheDocument();
+    });
+
+    it('SGUIDE-08: the script the Content-Security-Policy blocked — a finding of the browser — has its guide', async () => {
+        const mounted = await mountTab({...SILENT, blockedScripts: ['https://cdn.example.com/x.js']});
+        await answer(mounted, 0, MIXED);
+        await waitForStatus('ready');
+
+        expect(await opened(guideOf(finding('platform.blockedScript')))).toEqual(['/mkdocs/admin/configuration/#csp', '_blank', 'noopener']);
     });
 });

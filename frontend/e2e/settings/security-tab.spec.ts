@@ -25,7 +25,8 @@
  *              until the tab has been seen loading, the last checks still listed meanwhile —, then ready, the login-limit
  *              warning still there;
  *   ASEC-E-03  a member has no «Administration» group (N69-2, decision D4 a) — no Security tab, no badge, no read of
- *              the checks —, and `?tab=security` opens Profile without mounting the tab.
+ *              the checks —, and `?tab=security` opens Profile without mounting the tab;
+ *   ASEC-E-04  the login-limit warning has a «Guide» button (N69d) that opens the guide's page on its anchor in a new tab.
  *
  * Read-only, parallel by default: GET requests, and the sign-ins of the two fixture users of `populate_mock_data.py`,
  * whose roles are checked, never changed; no setting is touched. The one route (ASEC-E-02) is the page's own, removed by
@@ -198,6 +199,30 @@ test.describe('Settings › Security — an administrator', () => {
             release();
             await page.unroute(isChecks, hold);
         }
+    });
+    test("ASEC-E-04: the login-limit warning has a «Guide» button — a book — that opens the page of the administrator's guide on its anchor, in a new tab", async ({page}) => {
+        await login(page, TEST_ADMIN);
+        await navigateTo(page, '/settings?tab=security');
+        const body = page.getByTestId('security-tab');
+        await expect(body, 'the tab settles: GET /security/checks is in').toHaveAttribute('data-status', 'ready', {timeout: LOAD_MS});
+        const loginLimit = finding(body, LOGIN_LIMIT);
+        await expect(loginLimit, 'precondition: the login limit is off on the lane, a warning (see the header)').toHaveAttribute('data-severity', 'warning');
+
+        const guide = loginLimit.getByTestId('security-guide');
+        await expect(guide, 'the finding carries its guide next to its message').toBeVisible({timeout: UI_MS});
+        // `window.open(…, 'noopener')`: the new tab belongs to the context, not to this page
+        const opened = page.context().waitForEvent('page');
+        await guide.click();
+        const tab = await opened;
+        try {
+            const url = new URL(tab.url());
+            // The user's language precedes the path unless it is English; the anchor is the English page's, whatever the language
+            expect(url.pathname, 'the page of the guide that explains the login limit').toMatch(/^\/mkdocs\/(?:(?:it|fr|es)\/)?admin\/configuration\/$/);
+            expect(url.hash, 'on its anchor').toBe('#login-limit');
+        } finally {
+            await tab.close();
+        }
+        await expect(page.getByTestId('security-tab'), 'the Settings tab stays where it was').toBeVisible();
     });
 });
 
