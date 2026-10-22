@@ -270,11 +270,15 @@ test.describe('FX Sync', () => {
  * Both periods are chosen by data, read through the endpoint the page reads its rates from (`storedFxRates`), never
  * assumed from the seed:
  *   · the 30 days up to yesterday, where some pair the dialog syncs stores rates — verified;
- *   · a past weekend where no pair the dialog syncs stores a rate while some pair shows its Friday's rate carried
- *     forward — filled backward (the seed stores weekdays only: populate_mock_data.py, populate_fx_rates). The page
- *     shows rates in that period and must not count them: the negative is the rule, not an empty period. Chosen by
- *     data among the weekends from two weeks back (`pastWeekendFilledBackward`), never a period still to come: since
- *     X-R55 (17/10) a conversion range ends at tomorrow, so a week from now shows nothing at all.
+ *   · a past weekend where some pair the dialog syncs shows its Friday's rate carried forward — filled backward, no
+ *     rate stored (the seed stores weekdays only: populate_mock_data.py, populate_fx_rates). The page shows rates in
+ *     that period and must not count that pair. Other pairs of the shared lane may store weekend rates of their own
+ *     (`fx-sync-mock`, `fx-detail` sync and edit theirs, every day): the warning may count those, and only those. So the
+ *     test reads what every pair stores before and after the dialog, and checks the dialog's count lies between the pairs
+ *     storing a rate in both reads and those storing one in either — never above: a pair counted for rates filled
+ *     backward would push it there. Chosen by data among the weekends from two weeks back
+ *     (`pastWeekendFilledBackward`), never a period still to come: since X-R55 (17/10) a conversion range ends at
+ *     tomorrow, so a week from now shows nothing at all.
  *
  * Neither test starts the dialog — no sync request may leave the page — and neither writes anything: the list does not
  * poll live rates, and every request here is a read.
@@ -282,10 +286,16 @@ test.describe('FX Sync', () => {
 /** How many past weekends `pastWeekendFilledBackward` looks at, from two weeks back. */
 const WEEKENDS_PROBED = 8;
 
+/** The pairs of `targets` that show a rate in the period and store none: every rate they show is filled backward. */
+function filledBackwardOnly(targets: Awaited<ReturnType<typeof storedFxRates>>): string[] {
+    return targets.filter((target) => target.shown > 0 && target.stored === 0).map((target) => target.name);
+}
+
 /**
- * The most recent weekend, from two weeks back, where no pair «Sync all» syncs stores a rate and some pair shows one
- * filled backward — read through `storedFxRates`, the endpoint the page reads its rates from — with what each pair shows
- * of it; null when none of the `WEEKENDS_PROBED` weekends is one (the failure message then lists what each showed).
+ * The most recent weekend, from two weeks back, where some pair «Sync all» syncs shows rates and stores none — every rate
+ * it shows filled backward — read through `storedFxRates`, the endpoint the page reads its rates from, with what each
+ * pair shows of it; null when none of the `WEEKENDS_PROBED` weekends has one (the failure message then lists what each
+ * showed). The other pairs may store weekend rates: the test reads them, it does not assume them away.
  */
 async function pastWeekendFilledBackward(page: Page): Promise<{period: SyncPeriod; targets: Awaited<ReturnType<typeof storedFxRates>>} | {period: null; seen: string[]}> {
     // Fourteen days back is today's weekday again; `getDay()` days further back (Sunday 0 … Saturday 6) is a Sunday.
@@ -295,7 +305,7 @@ async function pastWeekendFilledBackward(page: Page): Promise<{period: SyncPerio
         const sundayBack = firstSundayBack + 7 * weekend;
         const period: SyncPeriod = {start: daysAgoIso(sundayBack + 1), end: daysAgoIso(sundayBack)};
         const targets = await storedFxRates(page, period);
-        if (targets.every((target) => target.stored === 0) && targets.some((target) => target.shown > 0)) return {period, targets};
+        if (filledBackwardOnly(targets).length > 0) return {period, targets};
         seen.push(`${period.start} → ${period.end}: ${describeShown(targets)}`);
     }
     return {period: null, seen};
@@ -348,19 +358,15 @@ test.describe('FX Sync — the list dialog warns before replacing stored rates (
         expect(syncRequests, 'no sync request left the page: no provider was called').toEqual([]);
     });
 
-    test('sync all over a period whose rates are all filled backward does not warn', async ({page}) => {
-        // A past weekend, chosen by data: nothing stored, some rate shown filled backward from the Friday.
+    test('sync all over a weekend counts no pair whose rates there are all filled backward', async ({page}) => {
+        // A past weekend, chosen by data: some pair shows its Friday's rate there and stores none.
         const probe = await pastWeekendFilledBackward(page);
         if (probe.period === null) {
             throw new Error(
-                `precondition: none of the last ${WEEKENDS_PROBED} weekends from two weeks back has every pair «Sync all» syncs without a stored rate and some pair showing one filled backward (${probe.seen.join(' | ')}) — check populate_mock_data.py (populate_fx_rates stores weekdays only): this test is about rates shown but not stored, not about an empty period`,
+                `precondition: none of the last ${WEEKENDS_PROBED} weekends from two weeks back has a pair «Sync all» syncs showing rates filled backward and storing none (${probe.seen.join(' | ')}) — check populate_mock_data.py (populate_fx_rates stores weekdays only): this test is about rates shown but not stored, not about an empty period`,
             );
         }
-        const {period, targets} = probe;
-        expect(
-            targets.filter((target) => target.stored > 0).map((target) => target.name),
-            'precondition: no pair stores a rate on the weekend',
-        ).toEqual([]);
+        const {period, targets: before} = probe;
 
         const syncRequests = recordSyncRequests(page);
         await goToFxPage(page, period);
@@ -369,17 +375,32 @@ test.describe('FX Sync — the list dialog warns before replacing stored rates (
         const modal = page.getByTestId('fx-sync-modal');
         await expect(modal).toBeVisible();
         // Presence barrier: the dialog has drawn its body before the start — this period, pairs to sync, the controls a
-        // start needs — so the absence below is the rule's, not a dialog still on its way.
+        // start needs — so the count read below is the rule's, not a dialog still on its way.
         const scope = modal.getByTestId('sync-modal-count');
         await expect(scope).toContainText(period.start);
         await expect(scope).toContainText(period.end);
         expect(Number(await scope.getAttribute('data-item-count')), 'the dialog has pairs to sync').toBeGreaterThanOrEqual(1);
         await expect(modal.getByTestId('sync-modal-timeout')).toBeVisible();
         await expect(modal.getByTestId('sync-modal-start')).toBeEnabled();
-        await expect(modal.getByTestId('fx-sync-modal-overwrite-warning'), 'a rate filled backward is not a stored row: the sync would replace nothing in the period').toHaveCount(0);
+        const warning = modal.getByTestId('fx-sync-modal-overwrite-warning');
+        const existing = (await warning.count()) === 0 ? 0 : (await overwriteCounts(warning)).existing;
 
         await modal.getByTestId('sync-modal-close').click();
         await expect(modal).toBeHidden();
         expect(syncRequests, 'no sync request left the page: no provider was called').toEqual([]);
+
+        // What every pair stores, read again: a neighbour of the shared lane may have written its own pairs meanwhile.
+        const after = await storedFxRates(page, period);
+        const storing = (targets: typeof before) => new Set(targets.filter((target) => target.stored > 0).map((target) => target.name));
+        const storingBefore = storing(before);
+        const storingAfter = storing(after);
+        const storingThroughout = [...storingBefore].filter((name) => storingAfter.has(name));
+        const storingEither = new Set([...storingBefore, ...storingAfter]);
+        const backfilledThroughout = filledBackwardOnly(before).filter((name) => filledBackwardOnly(after).includes(name));
+        expect(backfilledThroughout.length, `premise: some pair shows only rates filled backward on ${period.start} → ${period.end}, in both reads (${describeShown(after)})`).toBeGreaterThan(0);
+
+        const story = `the dialog counted ${existing}; storing a rate in both reads: ${storingThroughout.join(', ') || 'none'}; in either: ${[...storingEither].join(', ') || 'none'}; filled backward only: ${backfilledThroughout.join(', ')}`;
+        expect(existing, `every pair storing a rate in the period is counted — ${story}`).toBeGreaterThanOrEqual(storingThroughout.length);
+        expect(existing, `a rate filled backward is not a stored row: no pair showing only those is counted — ${story}`).toBeLessThanOrEqual(storingEither.size);
     });
 });
