@@ -84,6 +84,15 @@ restore_jobs.py`` (the upload, the check in a thread followed through a state fi
     start, the limit readable, is 202. OpenAPI: the start documents its 503 with its code, and ``RestoreStage.error_code``
     allows ``unpacked_too_large``. The archives of a chosen size are the head archive's data directory with one more file
     of zeros, which deflate to almost nothing: whatever they declare, they weigh far less than 1 MB.
+(i) Lot L3, what the confirmation must say of the accounts. Every report carries ``credentials_from_backup`` last (after
+    the restore one signs in with the backup's credentials, and every session open now ends: staging writes it). ``GET
+    /backup/restore/stage/{id}`` adds, per viewer, ``confirming_account_not_in_backup`` after it when the requesting
+    administrator's ``username`` is not one of ``report.administrators``, and nothing when it is: two administrators
+    reading one check each get their own answer, in either order, and ``report.json`` (``read_report``, and its bytes)
+    never holds that code. The administrator of this module's requests, ``b2b-admin``, is none of the backups'
+    administrators, so the exact warnings of every report it reads end with both codes (``as_read_by_admin``). A sealed
+    nightly backup (a POSIX ustar ``.tar``) ends its check ``failed`` with ``sealed_backup_needs_key``, a code
+    ``RestoreStage.error_code`` declares (``REFUSED``). OpenAPI lists both warnings among those of the report.
 
 Pure: an app of each test holds ``backup_router`` under ``/api/v1``, as ``router.py`` mounts it; ``get_current_user`` is
 overridden by an administrator or a regular user, so the real ``require_admin`` decides and no session or database is
@@ -189,6 +198,18 @@ REGULAR_USER = SimpleNamespace(id=2, username="b2b-user", is_superuser=False)
 ADMIN_ONLY_ANSWER = (403, {"detail": "Admin access required"})
 #: The tag of every route of ``backup_router``.
 TAG = "Backup & Export"
+#: Lot L3: the warning every report carries, last; and the one ``GET /stage/{id}`` adds after it for an administrator
+#: who is none of the backup's administrators.
+CREDENTIALS_FROM_BACKUP = "credentials_from_backup"
+NOT_IN_BACKUP = "confirming_account_not_in_backup"
+
+
+def as_read_by_admin(*codes: str) -> list[str]:
+    """The exact warnings ``ADMIN`` reads in the report of a check that raises ``codes`` (lot L3): those, then
+    ``credentials_from_backup``, which every report carries, then ``confirming_account_not_in_backup``, since
+    ``b2b-admin`` is none of the administrators of this module's backups."""
+    assert ADMIN.username not in cases.ADMINISTRATORS, f"precondition: {ADMIN.username} is no administrator of the backups: {cases.ADMINISTRATORS}"
+    return [*codes, CREDENTIALS_FROM_BACKUP, NOT_IN_BACKUP]
 
 
 # =============================================================================
@@ -940,7 +961,7 @@ async def test_a_check_runs_on_a_copy_and_reports_what_a_restore_would_do(instan
     assert sizes == (len(cases.FILES), sum(map(len, cases.FILES.values())), manifest.files[0].size, False), f"the files and the database: {sizes}"
     assert (report["foreign_key_violations_before"], report["foreign_key_violations_after"]) == (0, 0), "no broken reference"
     verdict = (report["administrators"], report["warnings"], report["blockers"], report["restorable"])
-    assert verdict == (cases.ADMINISTRATORS, [], [], True), f"the administrators one signs in with afterwards; nothing to warn, nothing blocking: {verdict}"
+    assert verdict == (cases.ADMINISTRATORS, as_read_by_admin(), [], True), f"the administrators one signs in with afterwards; nothing to warn but the accounts, nothing blocking: {verdict}"
     staged = read_report(root, stage_id)
     expires = moment(report["expires_at"])
     assert expires == staged.expires_at, f"the copy expires when staging says: {expires} != {staged.expires_at}"
@@ -973,7 +994,7 @@ async def test_an_older_backup_reports_its_upgrade_its_migrations_and_its_warnin
     assert state["status"] == "done" and report is not None, f"done, with its report: {state}"
     assert (report["action"], report["backup_revision"], report["head_revision"]) == ("upgrade", cases.OLDER, cases.HEAD), f"an upgrade, from {cases.OLDER}: {report['action']}"
     assert report["migrations"] == [{"revision": migration.revision, "message": migration.message} for migration in cases.AFTER_OLDER], f"the migrations after the backup's revision, oldest first: {report['migrations']}"
-    assert (report["warnings"], report["blockers"], report["restorable"]) == (["rows_changed", "foreign_key_violations_added"], [], True), f"warned, not blocked: {report['warnings']}"
+    assert (report["warnings"], report["blockers"], report["restorable"]) == (as_read_by_admin("rows_changed", "foreign_key_violations_added"), [], True), f"warned, not blocked: {report['warnings']}"
     counts = (report["foreign_key_violations_before"], report["foreign_key_violations_after"], report["tables"]["user_settings"])
     assert counts == (0, 1, {"before": 0, "after": 1}), f"the broken reference the upgrade added: {counts}"
     assert report["post_migration_fixes"] == read_report(instance.root, state["stage_id"]).post_migration_fixes, "the post-migration fixes, as staging reports them"
@@ -1026,6 +1047,7 @@ REFUSED = [
     pytest.param(cases.not_a_zip, "not_a_backup", id="not-a-zip"),
     pytest.param(cases.bytes_differ, "checksum_mismatch", id="an-entry-changed"),
     pytest.param(cases.newer_revision, "revision_unknown", id="from-a-newer-librefolio"),
+    pytest.param(cases.sealed_nightly_backup, "sealed_backup_needs_key", id="a-sealed-nightly-backup"),
 ]
 
 
@@ -1099,6 +1121,7 @@ def test_every_code_a_check_can_end_with_is_one_the_api_declares():
     produced = produced_codes()
     declared = set(typing.get_args(RestoreErrorCode))
     assert {"not_a_backup", "manifest_newer_format", "revision_unknown", "stage_failed", "restore_interrupted", "restore_folder_unusable"} <= produced, f"precondition: the sources are read: {sorted(produced)}"
+    assert "sealed_backup_needs_key" in produced & declared, f"lot L3: staging refuses a sealed nightly backup sealed_backup_needs_key, a code RestoreStage.error_code declares: produced {'sealed_backup_needs_key' in produced}, declared {'sealed_backup_needs_key' in declared}"
     assert (sorted(produced - declared), sorted(declared - produced)) == ([], []), f"(produced, not declared: a 500 on GET; declared, never produced): {sorted(produced - declared)}, {sorted(declared - produced)}"
     print_success(f"{len(produced)} codes, all declared")
 
@@ -1863,9 +1886,10 @@ async def test_a_check_dropped_while_a_poll_probes_its_lock_is_not_found(instanc
 
 
 TOTALS_STATUSES = {"same", "changed", "absent", "other_version", "unreadable"}
-#: Every warning code of ``RestoreStageReport.warnings``, in the order of its ``Literal``: the five of before E-19b1,
-#: then ``non_iso_currencies`` (E-19b1: the copy holds stored currency values that are not ISO 4217 codes).
-STAGE_WARNINGS = {"rows_changed", "foreign_key_violations", "foreign_key_violations_added", "control_totals_changed", "control_totals_unreadable", "non_iso_currencies"}
+#: Every warning code of ``RestoreStageReport.warnings``: the five of before E-19b1, then ``non_iso_currencies`` (E-19b1:
+#: the copy holds stored currency values that are not ISO 4217 codes), then the two of lot L3, ``credentials_from_backup``
+#: (every report) and ``confirming_account_not_in_backup`` (added per viewer by the route).
+STAGE_WARNINGS = {"rows_changed", "foreign_key_violations", "foreign_key_violations_added", "control_totals_changed", "control_totals_unreadable", "non_iso_currencies", "credentials_from_backup", "confirming_account_not_in_backup"}
 TOTALS_DIFFERENCE_FIELDS = {"kind", "broker_id", "currency", "asset_id", "before", "after"}
 
 
@@ -1884,7 +1908,7 @@ async def test_a_ledger_as_recorded_is_reported_the_same(instance, head_archive)
     report = state["report"]
     assert state["status"] == "done" and report is not None, f"precondition: done, with its report: {state}"
     assert totals_of(report) == ("same", [], 0), f"same: {totals_of(report)}"
-    assert (report["warnings"], report["restorable"]) == ([], True), f"no warning: {report['warnings']}"
+    assert (report["warnings"], report["restorable"]) == (as_read_by_admin(), True), f"no warning but the accounts: {report['warnings']}"
 
 
 @pytest.mark.asyncio
@@ -1900,7 +1924,7 @@ async def test_totals_that_changed_come_with_their_differences_and_a_warning(ins
         {"kind": "quantity", "broker_id": 2, "currency": None, "asset_id": 3, "before": "0.5", "after": None},
     ]
     assert totals_of(report) == ("changed", expected, 2), f"the two lines, in order: {totals_of(report)}"
-    assert (report["warnings"], report["blockers"], report["restorable"]) == (["control_totals_changed"], [], True), f"warned, not blocked: {report['warnings']}"
+    assert (report["warnings"], report["blockers"], report["restorable"]) == (as_read_by_admin("control_totals_changed"), [], True), f"warned, not blocked: {report['warnings']}"
 
 
 @pytest.mark.asyncio
@@ -1910,7 +1934,7 @@ async def test_totals_not_compared_are_said_without_a_warning(instance, head_arc
     report = (await ended(archive.read_bytes()))["report"]
     assert report is not None, "precondition: done, with its report"
     assert totals_of(report) == (status, [], 0), f"{status}: {totals_of(report)}"
-    assert (report["warnings"], report["restorable"]) == ([], True), f"{status}: no warning: {report['warnings']}"
+    assert (report["warnings"], report["restorable"]) == (as_read_by_admin(), True), f"{status}: no warning but the accounts: {report['warnings']}"
 
 
 @pytest.mark.asyncio
@@ -1919,7 +1943,7 @@ async def test_totals_the_copy_cannot_give_are_unreadable_with_a_warning(instanc
     report = (await ended(head_archive.path.read_bytes()))["report"]
     assert report is not None, "precondition: done, with its report"
     assert totals_of(report) == ("unreadable", [], 0), f"unreadable: {totals_of(report)}"
-    assert (report["warnings"], report["blockers"], report["restorable"]) == (["control_totals_unreadable"], [], True), f"warned, not blocked: {report['warnings']}"
+    assert (report["warnings"], report["blockers"], report["restorable"]) == (as_read_by_admin("control_totals_unreadable"), [], True), f"warned, not blocked: {report['warnings']}"
 
 
 @pytest.mark.asyncio
@@ -1935,7 +1959,7 @@ async def test_a_check_whose_report_was_written_before_the_totals_answers_them_a
     report = response.json()["report"]
     assert response.status_code == 200 and report is not None, f"done, with its report: {shown(response)}"
     assert totals_of(report) == ("absent", [], 0), f"a report of before: absent: {totals_of(report)}"
-    assert report["warnings"] == [] and report["restorable"] is True, f"as it was: {report['warnings']}"
+    assert report["warnings"] == as_read_by_admin() and report["restorable"] is True, f"as it was: {report['warnings']}"
 
 
 def enum_of(schema: dict, schemas: dict) -> set:
@@ -1946,14 +1970,15 @@ def enum_of(schema: dict, schemas: dict) -> set:
 
 
 def test_openapi_documents_the_totals_of_the_report():
-    """(g) The generated client reads the three fields, the five statuses, the two warnings among the six (E-19b1 added
-    ``non_iso_currencies``), and each difference as ``RestoreTotalsDifference`` with its six fields."""
+    """(g) The generated client reads the three fields, the five statuses, the two warnings among the eight (E-19b1 added
+    ``non_iso_currencies``, L3 ``credentials_from_backup`` and ``confirming_account_not_in_backup``), and each difference
+    as ``RestoreTotalsDifference`` with its six fields."""
     schemas = restore_app().openapi()["components"]["schemas"]
     report = schemas["RestoreStageReport"]["properties"]
     missing = [field for field in cases.TOTALS_FIELDS if field not in report]
     assert missing == [], f"RestoreStageReport documents the totals: {missing} missing"
     assert enum_of(report["control_totals"], schemas) == TOTALS_STATUSES, f"the five statuses: {report['control_totals']}"
-    assert enum_of(report["warnings"]["items"], schemas) == STAGE_WARNINGS, f"the six warnings, the two of the totals included: {report['warnings']}"
+    assert enum_of(report["warnings"]["items"], schemas) == STAGE_WARNINGS, f"the eight warnings, the two of the totals and the two of the accounts (L3) included: {report['warnings']}"
     assert report["control_totals_differences"].get("items") == {"$ref": "#/components/schemas/RestoreTotalsDifference"}, f"a list of RestoreTotalsDifference: {report['control_totals_differences']}"
     assert report["control_totals_differences_count"].get("type") == "integer", f"a count: {report['control_totals_differences_count']}"
     difference = schemas.get("RestoreTotalsDifference", {}).get("properties", {})
@@ -2172,3 +2197,60 @@ def test_openapi_documents_the_restore_limit_that_cannot_be_read_and_the_archive
     }
     assert found == dict.fromkeys(found, True), f"missing: {sorted(name for name, present in found.items() if not present)}"
     print_success("503 backup_restore_unavailable documented, unpacked_too_large declared")
+
+
+# =============================================================================
+# (i) Lot L3: the accounts one signs in with after the restore
+# =============================================================================
+
+#: An administrator of this instance whose username is one of the backups' (``cases.ADMINISTRATORS``).
+BACKUP_ADMIN = SimpleNamespace(id=7, username="zoe_admin", is_superuser=True)
+
+
+async def warnings_read_by(stage_id: str, user: SimpleNamespace) -> list[str]:
+    """The warnings of a done check's report, as ``user`` reads them."""
+    response = await poll(stage_id, user=user)
+    report = response.json().get("report") if response.status_code == 200 else None
+    assert report is not None, f"precondition: {user.username} reads the check done, with its report: {shown(response)}"
+    return report["warnings"]
+
+
+@pytest.mark.asyncio
+async def test_an_administrator_who_is_not_in_the_backup_is_warned_after_the_credentials(instance, head_archive):
+    """(i) L3: ``b2b-admin`` is none of the backup's administrators: the report it reads ends with
+    ``credentials_from_backup``, then ``confirming_account_not_in_backup``, each once; restorable all the same."""
+    print_section("GET /backup/restore/stage/{id}: an administrator who is not in the backup")
+    state = await ended(head_archive.path.read_bytes())
+    report = state["report"]
+    assert state["status"] == "done" and report is not None and ADMIN.username not in report["administrators"], f"precondition: done, {ADMIN.username} none of {report and report['administrators']}: {state}"
+    assert report["warnings"] == [CREDENTIALS_FROM_BACKUP, NOT_IN_BACKUP], f"the credentials, then that the confirming account is not in the backup: {report['warnings']}"
+    assert (report["blockers"], report["restorable"]) == ([], True), f"warnings, not blockers: {report['blockers']}"
+    print_success(f"{ADMIN.username}: {report['warnings']}")
+
+
+@pytest.mark.asyncio
+async def test_an_administrator_of_the_backup_is_not_warned_of_its_account(instance, head_archive):
+    """(i) L3: ``zoe_admin``, one of the backup's administrators, reads ``credentials_from_backup`` alone: no
+    ``confirming_account_not_in_backup``."""
+    state = await started(head_archive.path.read_bytes())
+    assert BACKUP_ADMIN.username in cases.ADMINISTRATORS, f"precondition: {BACKUP_ADMIN.username} is an administrator of the backup: {cases.ADMINISTRATORS}"
+    assert await warnings_read_by(state["stage_id"], BACKUP_ADMIN) == [CREDENTIALS_FROM_BACKUP], "an administrator of the backup is warned of the credentials alone"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("first", [pytest.param(ADMIN, id="the-outsider-first"), pytest.param(BACKUP_ADMIN, id="the-backup-s-administrator-first")])
+async def test_two_administrators_reading_one_check_each_get_their_own_answer_and_report_json_never_holds_it(instance, head_archive, first):
+    """(i) L3: one check, read by ``b2b-admin`` and by ``zoe_admin``, in either order: each its own warnings, the
+    outsider's with ``confirming_account_not_in_backup``, the other's without; ``report.json`` (``read_report``, and its
+    bytes) holds ``credentials_from_backup`` and never the per-viewer code, before and after both reads."""
+    stage_id = (await started(head_archive.path.read_bytes()))["stage_id"]
+    path = stage_dir(instance.root, stage_id) / STAGE_REPORT_FILE
+    stored_before = read_report(instance.root, stage_id).warnings
+    second = BACKUP_ADMIN if first is ADMIN else ADMIN
+    read = {user.username: await warnings_read_by(stage_id, user) for user in (first, second, first)}
+    expected = {ADMIN.username: [CREDENTIALS_FROM_BACKUP, NOT_IN_BACKUP], BACKUP_ADMIN.username: [CREDENTIALS_FROM_BACKUP]}
+    assert read == expected, f"each administrator its own answer, whoever read first: {read}"
+    stored = read_report(instance.root, stage_id).warnings
+    assert (stored_before, stored) == ([CREDENTIALS_FROM_BACKUP], [CREDENTIALS_FROM_BACKUP]), f"report.json carries the credentials, never the per-viewer code: before {stored_before}, after {stored}"
+    assert NOT_IN_BACKUP.encode() not in path.read_bytes(), "the per-viewer code is never written into report.json"
+    print_success(f"{read}; report.json {stored}")

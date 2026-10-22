@@ -119,6 +119,9 @@ class BackupJob:
     error_code: JobError | None = None
     #: A secure backup: its file is an ``.lfbk`` envelope.
     encrypted: bool = False
+    #: The archive carries the instance key (decision 39): a secure backup, when LibreFolio generated the key. A state
+    #: written before L3 has no such key and reads False.
+    instance_key_included: bool = False
 
     def to_json(self) -> str:
         data = asdict(self)
@@ -316,6 +319,7 @@ def _run(data_dir: Path, job: BackupJob, lock: _RunLock, progress: Callable[[Pha
             warnings=warnings,
             skipped=built.skipped[:_SKIPPED_KEPT],
             encrypted=password is not None,
+            instance_key_included=key is not None,
         )
         logger.info(
             "Instance backup written",

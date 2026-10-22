@@ -131,6 +131,7 @@ function job(overrides: Partial<Job> = {}): Job {
         warnings: [],
         error_code: null,
         encrypted: false,
+        instance_key_included: false,
         ...overrides,
     };
 }

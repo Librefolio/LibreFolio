@@ -206,13 +206,17 @@ def _report_view(report: StagingReport) -> RestoreStageReport:
     )
 
 
-def _stage_view(check: restore_jobs.RestoreCheck) -> RestoreStage:
+def _stage_view(check: restore_jobs.RestoreCheck, *, reader: str | None = None) -> RestoreStage:
+    """A check as the API shows it. ``reader``: the username of the administrator who reads it; when the backup has no
+    such administrator, its report ends with ``confirming_account_not_in_backup`` (L3), for that reader only."""
     report = None
     if check.status == "done":
         try:
             report = _report_view(read_report(get_data_dir(), check.stage_id))
         except FileNotFoundError:
             logger.warning("A finished restore check has no readable report", stage_id=check.stage_id)
+    if report is not None and reader is not None and reader not in report.administrators:
+        report = report.model_copy(update={"warnings": [*report.warnings, "confirming_account_not_in_backup"]})
     return RestoreStage(
         stage_id=check.stage_id,
         status=check.status,
@@ -271,10 +275,11 @@ def start_restore_check(body: RestoreStageRequest, _admin: User = Depends(requir
 
 
 @restore_router.get("/restore/stage/{stage_id}", response_model=RestoreStage, responses={404: _STAGE_NOT_FOUND})
-def get_restore_check(stage_id: str, _admin: User = Depends(require_admin)) -> RestoreStage:
-    """The state of a check: its phase and progress while it runs, then its report, or the code of its refusal."""
+def get_restore_check(stage_id: str, admin: User = Depends(require_admin)) -> RestoreStage:
+    """The state of a check: its phase and progress while it runs, then its report, or the code of its refusal. The
+    report warns the administrator who reads it when the backup does not hold their account (L3)."""
     try:
-        return _stage_view(restore_jobs.read_check(stage_id))
+        return _stage_view(restore_jobs.read_check(stage_id), reader=admin.username)
     except restore_jobs.CheckNotFoundError:
         raise backup_error(status.HTTP_404_NOT_FOUND, "restore_stage_not_found", "No check has this id") from None
 

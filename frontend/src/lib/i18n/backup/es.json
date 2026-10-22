@@ -149,7 +149,8 @@
           "non_iso_currencies": "Algunos códigos de divisa de la copia de seguridad no son códigos ISO (nombres o números guardados por una versión anterior): la edición de esas filas se rechaza hasta que se corrija el código."
         },
         "expires": "La copia comprobada se conserva hasta el {date}.",
-        "drop": "Descartar este archivo"
+        "drop": "Descartar este archivo",
+        "ownAccountMissing": "Tu cuenta no está entre los administradores de esta copia de seguridad: después del reinicio no podrás iniciar sesión con ella."
       },
       "confirm": {
         "word": "restaurar",
@@ -224,7 +225,8 @@
         "password_required": "Es una copia segura: escribe su contraseña.",
         "envelope_damaged": "La copia segura está dañada o fue modificada: no se puede abrir.",
         "envelope_unsupported": "La copia segura viene de un LibreFolio más reciente: actualiza primero LibreFolio.",
-        "proxy_too_large": "Un proxy delante de LibreFolio rechazó un archivo tan grande: pide a quien lo gestiona que acepte subidas más grandes, o restaura desde la línea de comandos."
+        "proxy_too_large": "Un proxy delante de LibreFolio rechazó un archivo tan grande: pide a quien lo gestiona que acepte subidas más grandes, o restaura desde la línea de comandos.",
+        "sealed_backup_needs_key": "Esta es una copia de seguridad sellada de un panel de alojamiento: su contraseña está cifrada para la clave del proveedor. Extrae backup.lfbk, abre password.age con age y luego restaura backup.lfbk con esa contraseña."
       },
       "password": {
         "intro": "Una copia segura: escribe la contraseña con la que se hizo.",
