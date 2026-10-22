@@ -9,11 +9,27 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.schemas.backup import RestoreErrorCode, RestoreMigration, RestoreSecretCounts, RestoreStageReport, RestoreStatus
+from backend.app.schemas.backup import RestoreMigration, RestoreSecretCounts, RestoreStage, RestoreStageReport, RestoreStatus
 from backend.app.schemas.system import InstanceMode
 
-#: Who confirmed a restore, without a name.
-ConfirmedVia = Literal["admin", "cli", "panel"]
+# The field types of the administrator's views (workstream B), reused as they are: a code B adds to a report, a phase or
+# a state reaches the panel's views with it, instead of a validation error. Only the choice of fields is the panel's.
+_REPORT = RestoreStageReport.model_fields
+_STAGE = RestoreStage.model_fields
+_STATUS = RestoreStatus.model_fields
+_ReportAction = _REPORT["action"].annotation
+_ReportBackupOrigin = _REPORT["backup_origin"].annotation
+_ReportBlockers = _REPORT["blockers"].annotation
+_ReportControlTotals = _REPORT["control_totals"].annotation
+_ReportWarnings = _REPORT["warnings"].annotation
+_StageErrorCode = _STAGE["error_code"].annotation
+_StagePhase = _STAGE["phase"].annotation
+_StageStatus = _STAGE["status"].annotation
+_StatusAction = _STATUS["action"].annotation
+_StatusConfirmedVia = _STATUS["confirmed_via"].annotation
+_StatusReason = _STATUS["reason"].annotation
+_StatusState = _STATUS["state"].annotation
+_StatusWaiting = _STATUS["waiting"].annotation
 
 
 class PanelRestoreSummary(BaseModel):
@@ -21,9 +37,9 @@ class PanelRestoreSummary(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    state: Literal["none", "pending", "in_progress", "committed", "rolled_back"]
-    reason: Literal["first_start_failed", "swap_interrupted", "swap_failed", "stage_missing"] | None = None
-    waiting: Literal["backup_running", "other_data_directory", "server_running", "instance_blocked"] | None = None
+    state: _StatusState
+    reason: _StatusReason = None
+    waiting: _StatusWaiting = None
     backup_created_at: datetime | None = None
     stage_id: str | None = None
 
@@ -55,20 +71,20 @@ class PanelRestoreStageReport(BaseModel):
 
     backup_created_at: datetime
     backup_app_version: str
-    backup_origin: Literal["ui", "cli", "pre-restore", "panel"]
+    backup_origin: _ReportBackupOrigin
     backup_revision: str
     app_version: str
     head_revision: str
-    action: Literal["same", "upgrade"]
+    action: _ReportAction
     migrations: list[RestoreMigration]
     post_migration_fixes: list[str]
     instance_key_included: bool
     encrypted: bool
     secrets_rekeyed: int = Field(ge=0)
     secrets_unreadable: RestoreSecretCounts
-    warnings: list[Literal["rows_changed", "foreign_key_violations", "foreign_key_violations_added", "control_totals_changed", "control_totals_unreadable", "non_iso_currencies"]]
-    blockers: list[Literal["no_administrator"]]
-    control_totals: Literal["same", "changed", "absent", "other_version", "unreadable"]
+    warnings: _ReportWarnings
+    blockers: _ReportBlockers
+    control_totals: _ReportControlTotals
     control_totals_differences_count: int = Field(ge=0)
     restorable: bool
     expires_at: datetime
@@ -87,13 +103,13 @@ class PanelRestoreStage(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     stage_id: str
-    status: Literal["running", "done", "failed"]
-    phase: Literal["decrypting", "checking", "unpacking", "upgrading", "verifying"] | None = None
+    status: _StageStatus
+    phase: _StagePhase = None
     done_bytes: int = Field(ge=0)
     total_bytes: int = Field(ge=0)
     created_at: datetime
     finished_at: datetime | None = None
-    error_code: RestoreErrorCode | None = None
+    error_code: _StageErrorCode = None
     report: PanelRestoreStageReport | None = None
 
 
@@ -103,19 +119,19 @@ class PanelRestoreStatus(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    state: Literal["none", "pending", "in_progress", "committed", "rolled_back"]
+    state: _StatusState
     stage_id: str | None = None
     confirmed_at: datetime | None = None
-    confirmed_via: ConfirmedVia | None = None
+    confirmed_via: _StatusConfirmedVia = None
     backup_created_at: datetime | None = None
     backup_app_version: str | None = None
-    action: Literal["same", "upgrade"] | None = None
+    action: _StatusAction = None
     finished_at: datetime | None = None
-    reason: Literal["first_start_failed", "swap_interrupted", "swap_failed", "stage_missing"] | None = None
-    waiting: Literal["backup_running", "other_data_directory", "server_running", "instance_blocked"] | None = None
+    reason: _StatusReason = None
+    waiting: _StatusWaiting = None
     upload_limit_mb: int | None = Field(default=None, ge=0)
 
     @classmethod
-    def of(cls, status: RestoreStatus, confirmed_via: ConfirmedVia | None) -> "PanelRestoreStatus":
+    def of(cls, status: RestoreStatus) -> "PanelRestoreStatus":
         """The panel's view of an administrator's status: everything but the username."""
-        return cls(**status.model_dump(exclude={"confirmed_by"}), confirmed_via=confirmed_via)
+        return cls(**status.model_dump(exclude={"confirmed_by"}))

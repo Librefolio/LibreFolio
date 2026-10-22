@@ -10513,7 +10513,13 @@ mescolare le righe del runner dei due lotti:
     > **⚠️ Fuori pista**: le 7 rotte nel client generato rendono «troppo profondo» un `vi.spyOn(zodiosApi, …)` di
     > `ForgotPasswordCard.email.test.ts`: cast al modello già usato da altri 4 test (test-author). Il layout radice è
     > legacy: `children` del gate opzionale.
-    > **Da fare dopo il merge di B**: `origin="panel"` + filtro su `read_check`, `running_check` per la ripetibilità dello
-    > stage, `confirmed_via="panel"`; poi i 4 «Needs B».
+    > **Dopo il merge di B** (commit `4eb8e0b59`, merge `dc5f488d4`, 22/10): ✅ `start_check(origin="panel")` e
+    > `_panel_check` (gli stage non del pannello sono 404 per lui, anche alla conferma); `running_check` → 202 con lo stesso
+    > stage; `confirm_check(confirmed_by=<kid>, confirmed_via="panel")`. Gli schemi del pannello riusano i tipi dei campi
+    > di B (B aveva aggiunto due codici di avviso: lo schema chiuso li avrebbe rifiutati con un 500). I 4 «Needs B» verdi;
+    > `backup-panel`, `backup-restore`, `backup-staging`, `backup-apply` verdi; docs con il 409 `backup_awaiting_restore`.
+    > **⚠️ Fuori pista**: rese pubbliche le funzioni di `restore.py` e poi rimesse private su richiesta del coordinatore
+    > (B tocca quel file in B-33); il `getattr` di B in `panel.py` resta, perché i test di B sostituiscono `await_restore`
+    > sul modulo.
    > **⚠️ Fuori pista**: `"scarfSettings"` messo e poi tolto da `package.json`, dopo il cambio di Q-C: il file coincide col
    > commit.

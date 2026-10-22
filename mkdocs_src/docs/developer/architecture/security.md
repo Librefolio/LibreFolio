@@ -1921,7 +1921,7 @@ since the volume is empty or holds the data being restored. The list:
 | `GET /system/instance` | `instance.get_instance_config` |
 | `POST /system/wake-sync` | `wake.wake_sync`: `_wake_run()` answers `status: "awaiting_restore"` and runs no job |
 | `GET /panel/status` | `panel.get_panel_status` |
-| The four `/backup/panel/jobs…` routes | `backup_panel.start_panel_backup`, `get_panel_backup_job`, `download_panel_backup`, `delete_panel_backup_job` |
+| The four `/backup/panel/jobs…` routes | `backup_panel.start_panel_backup`, `get_panel_backup_job`, `download_panel_backup`, `delete_panel_backup_job`: in the mode a start answers `409 backup_awaiting_restore` (`backup/panel.py`, `_awaiting_restore()`), so a backup of the empty data never starts |
 | The seven `/backup/panel/restore…` routes | `_PANEL_RESTORE_ROUTES` |
 
 `InstanceMode` (`backend/app/schemas/system.py`), `normal` or `awaiting_restore`, is the `mode` field of
@@ -1944,10 +1944,12 @@ caller changes. Every route depends on `_restore_gate`, in this order: `panel_ac
 envelope is kept (`400 restore_envelope_required` otherwise, the file removed). The panel's views are closed models
 with `extra="forbid"` (`backend/app/schemas/hosting_panel.py`): `PanelRestoreStageReport` (the administrators as
 `administrators_count`, the control totals as a verdict and `control_totals_differences_count`, no tables, files or
-sizes), `PanelRestoreStatus` (`confirmed_via` instead of the username) and, in `/panel/status`,
+sizes), `PanelRestoreStatus` (`confirmed_via` instead of the username: a panel confirmation records `confirmed_via: panel` and the ticket's `kid` as `confirmed_by`) and, in `/panel/status`,
 `PanelRestoreSummary` (`state`, `reason`, `waiting`, `backup_created_at`, `stage_id`; `500 restore_state_unreadable`
-when the state cannot be read, never `null`). A repeated confirmation of the same stage, or a restart while the restore
-is under way or committed, answers `202` with the state found. The router is `NoInputEchoRoute`: a `422` never
+when the state cannot be read, never `null`). The panel sees only the checks it started (`origin` `panel`): any other check answers `404 restore_stage_not_found`
+(`_panel_check()`). A repeated `POST …/stage` with the same `upload_id` while its check runs, a repeated confirmation
+of the same stage, or a restart while the restore is under way or committed, answers `202` with the check or the
+state found. The router is `NoInputEchoRoute`: a `422` never
 repeats the password.
 
 **Ending the mode.** Only the panel ends it, removing the variable and restarting once the status reads `committed`.
