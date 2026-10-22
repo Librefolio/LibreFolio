@@ -19,7 +19,7 @@ from scripts.coverage_analysis import register_subparser as register_cov_parser
 from scripts.coverage_analysis import run_analysis as run_coverage_analysis
 
 # Import common module to set its globals
-from . import _common
+from . import _common, _frontend_common
 from ._backend_external import _get_external_extra_args
 from ._common import (
     Colors,
@@ -1147,6 +1147,11 @@ def _run_consolidation_prepass(args, verbose: bool) -> tuple:
     return ok, covered
 
 
+def _runs_frontend_tools(category: str) -> bool:
+    """Whether a run of ``category`` calls Vitest or Playwright: a frontend category, or one of the two suites that hold them."""
+    return category in _FRONTEND_CATEGORIES or category in ("all", "all-frontend")
+
+
 def _run_passes(args, test_names, verbose: bool) -> tuple:
     """Run the pre-passes and the serial dispatch under one shared backend.
 
@@ -1156,6 +1161,10 @@ def _run_passes(args, test_names, verbose: bool) -> tuple:
     """
     if getattr(args, "list_tests", False):
         return dispatch_to_category(args.category, test_names, verbose, args), True, True
+
+    # A run that calls Vitest or Playwright stops here, before any setup or server, when they are not installed (J-8).
+    if _runs_frontend_tools(args.category) and not _frontend_common.require_frontend_tools():
+        return 1, False, False
 
     try:
         if not _run_exclusive_setups(args):
