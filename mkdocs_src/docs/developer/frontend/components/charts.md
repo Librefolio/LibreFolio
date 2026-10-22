@@ -476,6 +476,45 @@ So a signal looks the same on a card, in the preview and on a detail page.
 `signalRendering.gate.test.ts` keeps it that way: no file outside the module calls
 `signalFromConfig()`, and the list of known copies (`KNOWN_COPIES`) is empty and can only shrink.
 
+### Series for comparisons {: #comparison-series }
+
+A saved comparison names its target; it never carries the series. The settings store keeps only the
+config (`params.assetId` for an `asset-comparison`, `params.pairSlug` for an `fx-pair`), and the
+renderers read the series through `SignalDataSources` (`comparisonTarget(assetId)` and
+`fxPairData(slug)`, see [above](#signal-rendering)). A chart that holds no series of its own (the
+cards of both lists and the settings preview) gets them from `lib/charts/comparisonSeries.ts`, the
+one door:
+
+| Function | Role |
+|----------|------|
+| `comparisonTargetFromStore(asset)` | the asset's cached daily series as a `ComparisonTarget`, named with icon and type; `null` while the cache holds none |
+| `ensureComparisonSeries(assets, range)` | loads what the cache lacks for the assets over `range`; never throws |
+| `fxPairSlugsOf(configs, ownSlug?)` | the pairs the `fx-pair` signals name, once each, without the chart's own pair and without an empty one |
+| `ensureSignalFxPairs(configs, ownSlug, range)` | loads those pairs' rates into the FX stores (`ensureFxRangeLoaded`); one pair failing does not stop the others; never throws |
+
+- **One request for the missing assets.** `ensureComparisonSeries` asks `POST /assets/prices/query`
+  once for all the assets whose cache has a gap in the range (in batches under the backend's caps,
+  `sendBulkBatches()`), daily, `include_events: false`, with no conversion: the series is in the
+  asset's own currency, as the FX detail page draws it. With nothing missing it sends nothing.
+- **The cache is shared.** The series are filed in `assetPriceStoreRegistry`, the cache of the asset
+  detail page, so a visit there warms the lists and the reverse. A request that fails marks nothing
+  as fetched, so the next call asks again; a 404 is final for the assets it carried.
+- **The stores are not reactive.** Neither the price stores nor the FX stores trigger a redraw. A
+  page that loads series reads a version counter in its `SignalDataSources` and bumps it after the
+  load: the FX list's `comparisonSeriesVersion` (bumped by `fetchComparisonSeries()`, which runs
+  one load at a time, and asks the assets of the cards plus the one the open settings window
+  draws) and the Assets list's `fxRatesVersion` (bumped by `loadFxRateData()`, which follows a change
+  of period). Both lists already load every pair's rates, so they do not need `ensureSignalFxPairs()`;
+  it is for a chart that loads only the pairs its signals name.
+- **For all charts there is no asset to draw.** The demo curve of the settings window for all
+  charts has no real asset, so a comparison with an asset is not drawn there; the FX pairs are.
+- **Contract for the detail pages** (owned by another workstream, still to adopt): call
+  `ensureSignalFxPairs(signals, ownSlug, {start, end})` on open, on a period change and when a pair
+  is chosen, then bump their overlay version. Until they do, a saved `fx-pair` comparison does not
+  draw on a clean load of a detail page, only when the FX store is already warm.
+- **Tests read the count, not the canvas.** The cards (`AssetCard`, `FxCard`) and the settings preview
+  (`chart-settings-preview`) publish `data-overlay-count`, the number of overlay lines they draw.
+
 ### Preview chart in the modal {: #settings-preview-chart }
 
 The preview in `ChartSettingsModal` is `PriceChartFull`, the chart of the detail pages, not a
@@ -563,7 +602,7 @@ to its entries by `request_index` (local to the batch), into `calendarBySlug` (`
 the rates of these conversions are never merged into the FX stores, and the cards' daily rates stay
 the stores' (not sampled). A card draws the own points and `renderCalendarPairComparisons(configs,
 views)` (`chartSignalRendering.ts`): each `fx-pair` signal whose view is `ready` or `partial`, as a
-percentage line with the signal's style; asset comparisons on FX cards are not drawn. The modal's
+percentage line with the signal's style; an asset comparison stays saved and is not drawn in this view (it is a percentage-return view of the pairs; the asset's line belongs to Abs and %, [below](#comparison-series)). The modal's
 preview (`resolveCalendarPreview`) for one pair converts the same way; for all charts it posts the
 demo points to `/signals/preview`.
 

@@ -468,3 +468,21 @@ describe('ChartSettingsModal — the three views, and the rolling-return preview
         expect(viewButton('percentage')).toHaveAttribute('aria-pressed', 'true');
     });
 });
+
+/**
+ * Y-41 — the preview publishes how many overlay lines it draws (`chart-settings-preview`, `data-overlay-count`): a saved
+ * comparison drawn in a card's settings, from the page's sources, counts; one the page cannot draw does not.
+ *
+ * Red today: the preview publishes no count.
+ */
+describe('ChartSettingsModal preview — the overlay lines it draws (Y-41)', () => {
+    it('counts the benchmark and the comparison the page’s sources can draw, and not one they cannot', async () => {
+        await openModal({mode: 'pair', signals: [LINEAR, COMPARISON_42], pairData: PAIR_DATA, signalSources: signalSources()});
+        expect(screen.getByTestId('chart-settings-preview')).toHaveAttribute('data-overlay-count', '2');
+    });
+
+    it('counts only the benchmark when the page has no series for the comparison', async () => {
+        await openModal({mode: 'pair', signals: [LINEAR, COMPARISON_42], pairData: PAIR_DATA});
+        expect(screen.getByTestId('chart-settings-preview')).toHaveAttribute('data-overlay-count', '1');
+    });
+});

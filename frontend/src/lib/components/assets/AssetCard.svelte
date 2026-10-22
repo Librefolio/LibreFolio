@@ -197,6 +197,7 @@
     data-lifecycle={asset.active ? 'active' : 'inactive'}
     data-view-mode={primaryView}
     data-calendar-state={isCalendarView ? (calendarReturn?.state ?? 'idle') : undefined}
+    data-overlay-count={overlaySignals.length}
     onclick={handleCardClick}
     onkeydown={(e) => e.key === 'Enter' && handleCardClick()}
     role="button"
