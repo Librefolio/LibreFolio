@@ -454,7 +454,7 @@ loses the link: a link no split knows.
 | Received `TRANSFER` (quantity > 0) | `ADJUSTMENT` with the same quantity, asset, cost basis and its currency, cash currency, date, description and tags; first given its sender's Auto cost when it has no cost basis (below) |
 | `CASH_TRANSFER`, `FX_CONVERSION` | `WITHDRAWAL` when its amount is negative, `DEPOSIT` otherwise, without asset |
 | Giving `TRANSFER` (quantity < 0) | `ADJUSTMENT` with the same quantity, asset, cash currency, date, description and tags, without a cost basis: an `ADJUSTMENT` taking units out has no value (below) |
-| Any other type carrying a link (an `ADJUSTMENT` can) | The same type, without its link |
+| Any other type carrying a link (an `ADJUSTMENT` can, in data stored before: a new batch refuses to link two, `pairAdjustmentNotAllowed`) | The same type, without its link |
 
 Each of these rows loses its `related_transaction_id` and gets a new `updated_at`,
 so the caches fingerprinted on it — the portfolio engine's
