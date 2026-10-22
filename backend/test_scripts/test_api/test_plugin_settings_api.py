@@ -27,6 +27,12 @@ The contract pinned here:
    member read-only, delivered to the plugin, recorded with the administrator who wrote them; deleting that
    administrator leaves the rows without an author (``SET NULL``); deleting a user deletes the user's rows (``CASCADE``).
 
+7. **The BRIM family** (W-BS): ``family=brim`` is a value of the API's enum (the catalogue's filter, every write item, the
+   OpenAPI schema ``PluginSettingFamily``); the server of the lane holds the real BRIM plugins only and none declares a
+   setting, so the BRIM group of the catalogue is empty, whether it is asked for or not; a write that names a setting of a
+   real BRIM plugin is the all-or-nothing refusal, ``UNKNOWN_FIELD``, never FastAPI's enum error. (The lab BRIM plugin that
+   declares settings lives in the service suites: this server cannot hold it.)
+
 **X-R43** (workstream X): a JSON integer of 401 digits is the write's refusal — 422, ``INVALID_VALUE`` «too large», no
 digit of it in the answer, nothing written — never a 500; one of 5000 digits, past what the server's JSON parser reads,
 is FastAPI's own refusal. «Red today» is the state before the cure; a guard passes before and after.
@@ -264,6 +270,47 @@ async def test_the_family_filter(lane: _Lane):
     assert await _fields(lane, member, family="fx") == {}
     assert set(await _fields(lane, member, "MOCKFX", family="fx")) == {"api_key", "decimals"}
     assert await _fields(lane, member, "MOCKFX", family="asset") == {}
+
+
+@pytest.mark.asyncio
+async def test_the_brim_family_is_accepted_and_holds_no_plugin_that_declares_a_setting(lane: _Lane):
+    """7: ``family=brim`` answers 200 with no plugin — the server has the real BRIM plugins only, and none declares a
+    field —, with or without a plugin named; the full catalogue has no ``brim`` entry. The count is the subject."""
+    print_section("7: the BRIM family over HTTP")
+    member = await lane.member("ps_brim_family")
+
+    by_family = await lane.call("GET", CATALOGUE, account=member, params={"family": "brim"})
+    named = await lane.call("GET", CATALOGUE, account=member, params={"family": "brim", "plugin_code": "broker_generic_csv"})
+    everything = await lane.call("GET", CATALOGUE, account=member)
+
+    assert (by_family.status_code, named.status_code, everything.status_code) == (200, 200, 200), (by_family.text, named.text)
+    assert by_family.json() == {"plugins": []} and named.json() == {"plugins": []}
+    assert [plugin["plugin_code"] for plugin in everything.json()["plugins"] if plugin["family"] == "brim"] == []
+    print_success("brim accepted, nothing in it")
+
+
+@pytest.mark.asyncio
+async def test_the_openapi_schema_lists_brim_among_the_plugin_setting_families(lane: _Lane):
+    """7: the generated client's enum comes from here: ``asset``, ``fx`` and ``brim``."""
+    response = await lane.call("GET", "/openapi.json")
+
+    assert response.status_code == 200, response.text
+    family = response.json()["components"]["schemas"]["PluginSettingFamily"]
+    assert {"asset", "fx", "brim"} <= set(family["enum"]), family
+
+
+@pytest.mark.asyncio
+async def test_a_write_to_a_setting_of_a_real_brim_plugin_is_an_unknown_field_not_a_bad_request(lane: _Lane):
+    """7: the family is valid, the plugin declares nothing: the all-or-nothing refusal with ``UNKNOWN_FIELD`` and nothing
+    written, never FastAPI's enum error (a list ``detail``)."""
+    member = await lane.member("ps_brim_write")
+    secret = _marker()
+
+    refused = await _write(lane, member, [_item("api_key", "system", family="brim", code="broker_generic_csv", secret_value=secret)])
+
+    assert _outcomes(refused) == [("api_key", False, "UNKNOWN_FIELD")]
+    assert lane.shows(secret) == []
+    assert await _user_rows(member.user_id) == []
 
 
 @pytest.mark.asyncio

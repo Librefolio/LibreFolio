@@ -80,8 +80,10 @@ from backend.app.schemas.brim import (
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.assets.crud import AssetCRUDService
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.plugin_settings.contract import BoundSettings, PluginSettingsMixin
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.pydantic_errors import error_params, loc_to_field
+from backend.app.utils.runtime.secret_masking import mask_exception, secrets_in_flight
 from backend.app.utils.sql_chunks import chunks
 
 logger = structlog.get_logger(__name__)
@@ -118,7 +120,7 @@ class BRIMSetRequiredError(BRIMParseError):
 # =============================================================================
 
 
-class BRIMProvider(ABC):
+class BRIMProvider(PluginSettingsMixin, ABC):
     """
     Abstract base class for broker report import plugins.
 
@@ -1726,9 +1728,28 @@ def _move_file_locked(file_id: str, target_status: BRIMFileStatus, error_message
 # =============================================================================
 
 
-def parse_file(file_id: str, plugin_code: str, broker_id: int) -> BRIMParseOutput:
+def parse_file(file_id: str, plugin_code: str, broker_id: int, settings: Optional[BoundSettings] = None) -> BRIMParseOutput:
     """
     Parse a file using the specified plugin (preview only, no DB persistence).
+
+    ``settings`` (W-BS): the values of a plugin that declares settings fields, resolved by the caller (the parent of the parse
+    pool, ``brim_parse_pool.parse_file_offloaded``): bound on the plugin instance before it parses, its secrets in flight for the
+    length of the parse (masked in every line logged meanwhile, and in the exception the parse raises). ``None``, always the case
+    for a plugin without fields: the parse is what it was.
+    """
+    secrets = settings.secret_values() if settings is not None else frozenset()
+    with secrets_in_flight(secrets):
+        try:
+            return _parse_file(file_id, plugin_code, broker_id, settings)
+        except BaseException as error:
+            if settings is not None:
+                mask_exception(error, secrets, whole=settings.carries_user_secrets)
+            raise
+
+
+def _parse_file(file_id: str, plugin_code: str, broker_id: int, settings: Optional[BoundSettings]) -> BRIMParseOutput:
+    """
+    The parse of ``parse_file``, with the plugin's settings bound.
 
     Process:
     1. Call get_file_path(file_id) to get actual file location
@@ -1765,6 +1786,8 @@ def parse_file(file_id: str, plugin_code: str, broker_id: int) -> BRIMParseOutpu
     plugin = BRIMProviderRegistry.get_provider_instance(plugin_code)
     if not plugin:
         raise ValueError(f"Plugin not found: {plugin_code}")
+    if settings is not None:
+        plugin.bind_settings(settings)
 
     # Verify plugin can parse this file. The guard reads the file, so it loses
     # the same race as the parse below and needs the same re-resolution: a stale

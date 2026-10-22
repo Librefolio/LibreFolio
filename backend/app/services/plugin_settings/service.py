@@ -47,6 +47,7 @@ from backend.app.schemas.plugin_settings import (
     PluginSettingWriteResult,
 )
 from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.platform.instance_key import InstanceKeyError
 from backend.app.services.plugin_settings.crypto import encrypt_secret, key_id_of, secret_aad, settings_subkey
@@ -59,11 +60,12 @@ from backend.app.utils.datetime_utils import utcnow
 logger = get_logger(__name__)
 
 #: The families whose plugins may declare settings, with their registries.
-FAMILY_REGISTRIES: dict[str, type[AbstractProviderRegistry]] = {"asset": AssetProviderRegistry, "fx": FXProviderRegistry}
+FAMILY_REGISTRIES: dict[str, type[AbstractProviderRegistry]] = {"asset": AssetProviderRegistry, "fx": FXProviderRegistry, "brim": BRIMProviderRegistry}
 
 #: The attribute of a plugin instance that holds its icon URL, per family: the one its family's provider list publishes
-#: (``GET /assets/provider`` reads ``get_icon``, ``GET /fx/providers`` reads ``icon``). A new family adds one row.
-FAMILY_ICON_ATTRIBUTES: dict[str, str] = {"asset": "get_icon", "fx": "icon"}
+#: (``GET /assets/provider`` reads ``get_icon``, ``GET /fx/providers`` reads ``icon``, the BRIM plugins publish ``icon_url``). A new family
+#: adds one row.
+FAMILY_ICON_ATTRIBUTES: dict[str, str] = {"asset": "get_icon", "fx": "icon", "brim": "icon_url"}
 
 
 class PluginSettingsRefused(Exception):

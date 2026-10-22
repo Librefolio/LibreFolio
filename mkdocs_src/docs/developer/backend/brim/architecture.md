@@ -470,6 +470,60 @@ plugin's notices and refusals (`importWizard.brimNotice.<code>`, `importWizard.b
 How to write the folder and its keys: [BRIM Plugin Guide → Auto-Discovery](../../architecture/patterns/brim_plugin_guide.md#auto-discovery)
 and [Register the name and description](../../architecture/patterns/brim_plugin_guide.md#plugin-name-i18n).
 
+### 🎛️ Settings (prepared, not used yet) {: #brim-settings }
+
+The import plugins belong to the `brim` family of the [plugin settings](../../architecture/patterns/plugin_settings.md),
+with the same rules as the price sources: personal (`user`) and instance-wide (`system`) fields, and
+secrets of both scopes, encrypted with the instance key. **This is a preparation: no real plugin
+declares a field**, so nothing changes for users today. When one does, its card appears by itself
+in **Settings › Plugins**, under **Broker imports**, and a secret never comes back in clear.
+
+What is in place:
+
+- `BRIMProvider` inherits `PluginSettingsMixin` (`settings_fields = ()` by default),
+  `BRIMProviderRegistry.settings_family()` answers `"brim"`, and the family has its row in
+  `FAMILY_RULES` and in `FAMILY_REGISTRIES` (`backend/app/services/plugin_settings/`), with
+  `icon_url` as the attribute that carries the plugin's icon. A declaration is checked, and its
+  environment variables claimed, when the plugin registers.
+- The Plugins tab knows the group (`SettingsFamily` includes `brim`, icon `Briefcase`, title key
+  `pluginSettings.families.brim`).
+
+**How a parse gets its values.** The parse runs in a [worker process](#concurrency-off-loading) that
+re-creates the plugin from its code, so the plugin cannot be configured where it is created. The
+parent does it:
+
+1. `parse_file_offloaded(file_id, plugin_code, broker_id, *, user_id=None)`
+   (`backend/app/services/brim/brim_parse_pool.py`) calls
+   `bound_settings_for(BRIMProviderRegistry, plugin_code, user_id=…)` (`plugin_settings/runtime.py`). The route
+   `POST /api/v1/brokers/import/files/{file_id}/parse` passes the signed-in user, so the values are
+   the instance's and the personal ones of whoever imports.
+2. A plugin that declares **no** field gets `None` and no database read: it is called exactly as
+   before, with three arguments.
+3. Otherwise the picklable `BoundSettings` travels as a fourth argument of
+   `brim_provider.parse_file(file_id, plugin_code, broker_id, settings)`. The worker binds it on the
+   plugin instance before the parse, and holds the secrets *in flight* for its length: masked in
+   every log line and in the exception it raises. The parent masks the exception too, and hides its
+   texts whole when a personal secret is bound ([Secrets](../../architecture/patterns/plugin_settings.md#secrets)).
+
+A plugin reads its values as `self.settings.get("key")` and `self.settings.secret("key")` **inside
+`parse()`**, never in `__init__`: the values are bound after the instance exists. How to declare a
+field (`PluginSettingField`, scopes, defaults, translations, environment variables) is in
+[Plugin Settings → Declaring Fields](../../architecture/patterns/plugin_settings.md#declaring-fields).
+
+**Not connected yet** (to do with the first real field): the places that create a plugin without
+the values, `BRIMProviderRegistry.auto_detect_plugin()`, `get_compatible_plugins()` and
+`list_plugin_info()` (plugin detection), the report sets (`brim_report_sets.py`) and the gap fix
+(`brim_gap_fix.py`), each of which calls `get_provider_instance()`. A plugin that needs a value in
+`can_parse()`, `combine()` or the gap fix would find it unset today. The
+[i18n ownership gate](../../architecture/patterns/registry_pattern.md#plugin-i18n-gate) reads the
+settings texts of asset and FX plugins only, so the keys of a BRIM field are not checked by it yet.
+
+**The test plugin.** The family is exercised by a plugin that lives in a test module,
+`backend/test_scripts/test_services/_brim_settings_lab.py`, never under `brim_providers/`: the
+suites that loop over every real plugin must not meet it. It declares one field of each kind
+(personal select, personal secret, instance select, instance secret), is `test_only`, and is put
+in the registry only for the length of one test.
+
 ---
 
 ## 🗒️ Plugin notes {: #plugin-notes }
