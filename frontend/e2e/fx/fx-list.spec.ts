@@ -18,6 +18,7 @@ import {t as catalogueText} from '../fixtures/i18n-data';
 import {maximisePageSize} from '../fixtures/paging';
 import {pageLanguage} from '../fixtures/sync-overwrite';
 import {goToFxPage} from './fx-helpers';
+import {assetComparison, assetIdByName, pairComparison, seedChartComparisons} from '../fixtures/chartComparisons';
 
 test.describe('FX List Page', () => {
     test.beforeEach(async ({page}) => {
@@ -1319,5 +1320,63 @@ test.describe('FX list — a bulk rate request refused as too large says so (X-R
         } finally {
             await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
         }
+    });
+});
+
+/**
+ * FX list — a card draws its saved comparisons (lot Y-41).
+ *
+ * The FX list asked no asset prices, so a card with a comparison with an asset drew nothing of it, while the settings
+ * offered it. Since Y-41 the list loads the daily series of the assets the cards compare, and only those: one request
+ * for all of them, none when no card has such a comparison. The comparison with another FX pair, which the list always
+ * drew, keeps drawing. A card publishes how many overlay lines it draws (`data-overlay-count`).
+ *
+ * The comparison is seeded in this browser's storage (`seedChartComparisons`): nothing shared is written. Asset prices
+ * are the seeded mock data's.
+ *
+ * Red today: the card draws the pair and not the asset (1 line, not 2), and no asset prices are asked.
+ */
+test.describe('FX list — a card draws its saved comparisons (Y-41)', () => {
+    test.describe.configure({timeout: 60_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    /** The requests for asset prices the page makes, by their items: the assets each asked. */
+    function recordAssetPriceRequests(page: import('@playwright/test').Page): number[][] {
+        const asked: number[][] = [];
+        page.on('request', (request) => {
+            if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return;
+            const items = (request.postDataJSON() as Array<{asset_id?: number}> | null) ?? [];
+            asked.push(items.map((item) => Number(item.asset_id)));
+        });
+        return asked;
+    }
+
+    test('a card with a comparison with an asset and one with a pair draws both, and the list asks that asset’s prices once', async ({page}) => {
+        const asked = recordAssetPriceRequests(page);
+        await goToFxPage(page);
+        const appleId = await assetIdByName(page, 'Apple Inc.');
+        await seedChartComparisons(page, [['EUR-USD', [assetComparison('e2e-y41-asset', appleId), pairComparison('e2e-y41-pair', 'EUR-GBP')]]]);
+        asked.length = 0;
+
+        await goToFxPage(page);
+
+        const card = page.getByTestId('fx-card-EUR-USD');
+        await expect(card, 'both comparisons are drawn: the asset and the pair').toHaveAttribute('data-overlay-count', '2', {timeout: 15_000});
+        expect(asked, 'one request, for the one asset compared').toEqual([[appleId]]);
+    });
+
+    test('guard: with no comparison with an asset the list asks no asset prices, and the pair comparison draws as before', async ({page}) => {
+        const asked = recordAssetPriceRequests(page);
+        await goToFxPage(page);
+        await seedChartComparisons(page, [['EUR-USD', [pairComparison('e2e-y41-pair', 'EUR-GBP')]]]);
+        asked.length = 0;
+
+        await goToFxPage(page);
+
+        await expect(page.getByTestId('fx-card-EUR-USD')).toHaveAttribute('data-overlay-count', '1', {timeout: 15_000});
+        expect(asked, 'no asset price is asked').toEqual([]);
     });
 });

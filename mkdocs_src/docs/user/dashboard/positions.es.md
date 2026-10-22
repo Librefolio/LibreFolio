@@ -83,7 +83,7 @@ LibreFolio recuerda tus elecciones.
 
 - **P&L período**, dividido como en la [Tarjeta P&L período](kpi-cards.md#card-1-period-pl) en **Variación no realizada**, **Ventas**, **Dividendos e intereses** y **Costes** → [P&L período](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
 - **Anualizado** — el resultado del período como tasa anual, durante el tiempo que la posición se mantuvo en el período → [Rentabilidad anualizada neta](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/net-annualized-return.md)
-- **Δ1** / **Δ1%** para posiciones abiertas y, ocultos por defecto, **Valor inicial**, **Valor final**, **Lote abierto más antiguo** y **Estado**
+- **Δ1** / **Δ1%** para posiciones abiertas y, ocultos por defecto, **Valor Inicial**, **Valor Final**, **Lote abierto más antiguo** y **Estado**
 - **Otros efectos del período** — lo que no pertenece a ninguna posición: **Ingreso no asignado** y **Costes no asignados**, registrados sin un activo; **Efecto del tipo de cambio sobre el efectivo**, lo que los tipos de cambio hicieron en el período con el efectivo que mantienes en otra divisa, con una fila solo para un bróker cuyo efectivo movieron; y el **Otro / residuo de conciliación**, lo que queda — un cambio de divisas con coste, el movimiento del tipo de cambio sobre el efectivo en camino entre dos de tus brókeres, títulos en camino entre ellos el primer o el último día del período, o una venta excluida de **Ventas** porque falta un tipo de cambio o un coste de compra → [Efecto del tipo de cambio sobre el efectivo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md#fx-on-cash)
 
 **Cómo leerlo**
@@ -91,6 +91,7 @@ LibreFolio recuerda tus elecciones.
 - **Las posiciones cerradas** aparecen en cursiva, o llevan una insignia **Cerrado** en el gráfico; para listar solo un tipo, muestra **Estado** y fíltralo.
 - **En el Mapa**, las ganancias se apilan a la derecha del cero y las pérdidas a la izquierda, el resultado neto cierra la fila; cada porcentaje se compara con el valor inicial de la posición.
 - **El P&L período de una posición** puede diferir de su ganancia total: solo cuenta el período.
+- **Valor Inicial** y **Valor Final** se calculan como el **Valor** de la **Cartera** — mismos precios, un activo sin precio a lo que te costó, el tipo de cambio de cada día — de modo que las filas más los **Otros efectos del período** cuadran con la [tarjeta P&L período](kpi-cards.md#card-1-period-pl). Un **`—`** en **Variación no realizada** significa que no se pudo calcular un valor, por ejemplo por falta de un tipo de cambio o de un coste de compra: no es un cero.
 
 ??? tip "🙈 Ocultar importes — lo que el gráfico aún muestra"
 

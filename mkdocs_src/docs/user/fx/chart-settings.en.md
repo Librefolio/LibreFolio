@@ -52,8 +52,7 @@ after **Apply**.
 
 On **Rolling Return** the preview draws the rolling return of the rate or of the asset, with the
 rolling returns of its comparisons. For one chart it uses the card's real data and, on an FX chart,
-the FX pairs compared on it (asset comparisons are not drawn on FX cards); for all charts it draws
-a demo curve. Two more controls choose the window: **1W**, **1M**, **3M**, **1Y** or a custom
+the FX pairs compared on it; for all charts it draws a demo curve. Two more controls choose the window: **1W**, **1M**, **3M**, **1Y** or a custom
 amount. Until you choose one, the window is automatic: the largest preset that fits the period
 shown in the list. The other indicators stay saved but are hidden in this view.
 
@@ -90,7 +89,13 @@ Add overlays from three dropdowns, the same as in the detail page's [Signals pan
 - 🧮 **Technical Indicators** — 10 indicators work on FX rates (asset charts offer more), grouped by
   family with a search box. The math is in
   [Technical Indicators — Financial Theory](../../financial-theory/technical-analysis/indicators/index.md).
-- ↔️ **Data Comparison** — another FX pair or an asset on the same chart.
+- ↔️ **Data Comparison** — another FX pair or an asset on the same chart. On an FX card the line of
+  an asset is its price in the asset's own currency, with no conversion, exactly as the
+  [pair detail page](detail/index.md) draws it: read it in the **%** view, where it starts at its own
+  first value like the rate. In **Abs** it sits on the rate's axis. The list loads the daily prices of
+  the compared assets once for all cards, and asks nothing when no card compares an asset. In the
+  window opened for **all charts** a comparison with an asset is not drawn, because the demo curve
+  has no real asset to compare with (as in the [Assets list](../assets/index.md)).
 - 📐 **Synthetic Benchmarks** — reference curves built from parameters alone, not market data:
   [Linear](../../financial-theory/technical-analysis/synthetic-benchmarks/linear.md),
   [Compound](../../financial-theory/technical-analysis/synthetic-benchmarks/compound.md) and
