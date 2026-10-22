@@ -41,6 +41,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/stores/__tests__/reducedPriceCache.test.ts",
             "src/lib/utils/__tests__/chartUtils.test.ts",
             "src/lib/utils/__tests__/reducedPriceQuery.test.ts",
+            "src/lib/utils/__tests__/targetSampleLoader.test.ts",
             "src/lib/api/bulkRefusal.test.ts",
             "src/lib/api/writeRefusal.test.ts",
             "src/lib/utils/__tests__/urlFilters.test.ts",
