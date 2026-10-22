@@ -673,7 +673,7 @@ test.describe('BulkModal WAC Cell Rendering', () => {
         // Assert: qualifying table has at least one row with ● (pending indicator)
         const qualTable = page.getByTestId('tx-form-cost-basis-qualifying-table');
         await expect(qualTable).toBeVisible({timeout: 3_000});
-        const pendingDots = qualTable.locator('td:first-child span.text-indigo-500');
+        const pendingDots = qualTable.getByTestId('tx-form-cost-basis-pending-dot');
         await expect(pendingDots.first()).toBeVisible({timeout: 5_000});
         expect(await pendingDots.count()).toBeGreaterThan(0);
         const dotText = await pendingDots.first().textContent();

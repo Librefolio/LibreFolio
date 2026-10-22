@@ -3804,3 +3804,42 @@ skill `design-system`).
 
 **Ruoli che mancano:** un accento di modalità per i toggle attivi della barra; i ruoli categoriali (strumento misura,
 provider); una coppia di testo per il chip neutro.
+
+
+### Ondata 3 · C1-c — le transazioni sui ruoli — ✅ 21/10/2026 (notte)
+
+> **Note implementazione**: base `2879ae3e4` (treno 7), `api sync` fatto. 6 file di produzione delle transazioni
+> convertiti (tre sotto-agenti `sonnet` per gruppo, diff riletti), 2 file categoriali-only non toccati per scelta
+> (vedi sotto). Ratchet m1 243 → 174 (−69), baseline stretta solo sui 6 file. Grammatica 0 violazioni. `app.css`: tolta
+> la sola regola di rimappatura rimasta senza usi, `html.dark .bg-gray-100`; `bg-white` e `border-gray-100` (scheda viola
+> dei segnali di `AboutTab`) e `text-gray-600` (riquadri rosa di `PromoteMergeModal`) hanno ancora usi in elementi
+> categoriali interi. Gate dei temi 158/158; Vitest `lib/features/transactions` + gate HTML 1794/1794 (54 file);
+> `front check` 0 e 0. Interruttori `GapFixToggle` e `TransactionCompareModal` sui ruoli Q2.
+> Test: il pallino «in attesa» della tabella WAC pubblica `data-testid="{testid}-pending-dot"`, e
+> `e2e/transactions/tx-wac-bulk.spec.ts` lo legge al posto di `span.text-indigo-500` (`test-author`).
+> **E2E nello slot** (corsia 6187, ripopolata prima di ognuno): `front-utility theme-roles` 24 passati, 2 saltati;
+> `front-transaction all` mobile 34 passati e 32 saltati (solo desktop), desktop 365 passati (48 spec), 0 falliti (log in `ondata3/c1c-e2e-*.log`).
+>
+> **⚠️ Fuori pista**: in `WacPreviewSection` tolte `scrollbar-thumb-gray-300 dark:scrollbar-thumb-slate-600`, classi morte
+> (nessun plugin scrollbar): nessun effetto visivo. Prettier ha riformattato 4 righe di `PromoteMergeModal`, già fuori
+> stile alla base.
+
+**Punti «to review» per la designer:**
+
+| File | Cosa | Ruolo scelto | Alternativa |
+|---|---|---|---|
+| `PromoteMergeModal` | lato «sinistra» (blu) del confronto sinistra/destra/unione; il rosa e l'indaco restano categoriali | `info-soft`, `info-line`, hover `ring-lf-info` | una terna categoriale per i tre lati |
+| `WacPreviewSection` | riga e pallino «in attesa» (indaco); badge dell'effetto: aggiunge, riduce, ereditato, diluizione | `info-soft/50`, `text-lf-info`; success / warning / info / neutral soft | indaco categoriale |
+| `AssetEventPicker` | tessere dei tipi di evento: dividendo, interesse, scadenza, rettifica | warning / info / success soft, neutral | ruoli categoriali dei tipi di evento |
+| `AssetGroupStep` | stella e anello dell'identificativo primario (ambra) | `fill-lf-warning text-lf-warning`, `ring-lf-warning ring-offset-lf-card` | un accento «preferito» |
+| `GapFixToggle`, `TransactionCompareModal` | interruttore acceso (era smeraldo) | `bg-lf-checked` | `bg-lf-success` |
+
+**Rimasti legacy (69 classi nelle transazioni):** categoriali 65 — rosa e indaco dei lati destra/unione di
+`PromoteMergeModal` (36), split viola di `AssetEventPicker` (2) e di `TransactionBulkModal` (9, con l'indaco del link di
+coppia), indaco di `TxFormOptionalSection` (6, chip `#id` del partner) e del pulsante «promuovi» di `TxBulkToolbar` (4),
+viola dei cambi in `TxFormPairSection` (4), `TxBulkBanners` (2), `pairCellHtml.ts` (2); neutri 4, il testo grigio dei due
+riquadri rosa di `PromoteMergeModal`, che si migra con il suo elemento categoriale. Nessun `--lf-cat-*` corrisponde: i
+ruoli di categoria esistenti sono dei tipi di asset.
+
+**Ruoli che mancano:** una terna categoriale per i lati del confronto (sinistra, destra, unione); i ruoli dei tipi di
+evento; un colore per coppie/trasferimenti/cambi e uno per lo split; un accento «preferito/primario».

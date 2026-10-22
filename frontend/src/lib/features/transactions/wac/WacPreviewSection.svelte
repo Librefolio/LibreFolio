@@ -507,7 +507,7 @@
 
     <!-- Qualifying TXs table (expandable). Unit cost and running WAC are unit values: public (D5′-c). -->
     {#if !hideTable && showQualifying && previewResult?.qualifying_txs?.length}
-        <div class="mt-1 max-h-40 w-0 min-w-full overflow-x-auto overflow-y-auto border border-lf-subtle rounded text-[10px] scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-slate-600" data-testid="{testid}-qualifying-table">
+        <div class="mt-1 max-h-40 w-0 min-w-full overflow-x-auto overflow-y-auto border border-lf-subtle rounded text-[10px] scrollbar-thin" data-testid="{testid}-qualifying-table">
             <table class="w-max min-w-full">
                 <thead class="bg-lf-panel sticky top-0">
                     <tr>
@@ -524,11 +524,12 @@
                     {#each previewResult.qualifying_txs as qtx}
                         {@const isPending = qtx.tx_id == null || qtx.is_pending || (pendingTxIds != null && qtx.tx_id != null && pendingTxIds.has(qtx.tx_id))}
                         {@const pendingType = qtx.pending_op === 'update' ? 'update' : pendingTxIds != null && qtx.tx_id != null && pendingTxIds.has(qtx.tx_id) ? 'create' : 'create'}
-                        <tr class="border-t border-gray-100 dark:border-slate-800 {isPending ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''}">
+                        <!-- colour: closest role, to review: the pending row and its dot were indigo; info tint and text; the effect badge below: add success, reduce warning, inherited (add_at_wac) info, dilution neutral -->
+                        <tr class="border-t border-lf-subtle {isPending ? 'bg-lf-info-soft/50' : ''}">
                             <td class="px-2 py-0.5">
                                 {#if isPending}
                                     <Tooltip text={$t(pendingType === 'update' ? 'transactions.wacPreview.pendingEdit' : 'transactions.wacPreview.pendingCreate')} position="right">
-                                        <span class="cursor-help text-indigo-500">●</span>
+                                        <span class="cursor-help text-lf-info" data-testid="{testid}-pending-dot">●</span>
                                     </Tooltip>
                                 {:else}
                                     {qtx.tx_id}
@@ -563,12 +564,12 @@
                             <td class="px-2 py-0.5 text-right">
                                 <span
                                     class="inline-block px-1 rounded text-[9px] {qtx.effect === 'add'
-                                        ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400'
+                                        ? 'bg-lf-success-soft text-lf-success-on-soft'
                                         : qtx.effect === 'reduce'
-                                          ? 'bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400'
+                                          ? 'bg-lf-warning-soft text-lf-warning-on-soft'
                                           : qtx.effect === 'add_at_wac'
-                                            ? 'bg-indigo-100 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400'
-                                            : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'}"
+                                            ? 'bg-lf-info-soft text-lf-info-on-soft'
+                                            : 'bg-lf-neutral text-lf-secondary'}"
                                     >{qtx.effect === 'add'
                                         ? ($t('transactions.wacPreview.effect.add') ?? 'Weighted')
                                         : qtx.effect === 'reduce'
