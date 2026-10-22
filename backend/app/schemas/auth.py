@@ -116,7 +116,16 @@ class AuthRegisterResponse(BaseModel):
 
     user: AuthUserResponse
     message: str = "Registration successful"
-    verification_required: bool = Field(default=False, description="The account waits for its email verification: a link is on its way, and signing in works once it is clicked")
+    verification_required: bool = Field(default=False, description="The account waits for its email verification: signing in works once its owner confirms the address with the emailed link; whether that email leaves now is verification_email")
+    verification_email: Optional[Literal["sending", "held"]] = Field(
+        default=None,
+        description=(
+            "The state of the sending of the verification email, not an address. Only when verification_required: 'sending' when the email leaves after "
+            "this answer (it can still fail later, unseen here: the recipient mailbox's limit, the instance's hourly budget, the SMTP server); 'held' when "
+            "no email goes now (too many registrations from this client address in the last hour): the owner signs in to ask for the link again. null "
+            "without verification."
+        ),
+    )
 
 
 class TokenInspectResponse(StrictModel):
