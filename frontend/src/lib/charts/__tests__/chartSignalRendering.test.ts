@@ -61,6 +61,7 @@ import {getRegisteredSignalTypes, type RenderedSignal, type SignalConfig, type S
 import {renderBackendSignalResult} from '$lib/charts/signals/backendRenderer';
 import {backendSignalSchemas, type BackendSignalResult} from '$lib/charts/signals/backendTypes';
 import type {SignalInstanceResult} from '$lib/charts/signals/resultMapper';
+import * as module from '$lib/charts/chartSignalRendering';
 import {fxPointToLineDataPoint, renderBackendResults, renderLocalSignal, renderLocalSignals, type ComparisonTarget, type FxRatePoint, type SignalDataSources} from '$lib/charts/chartSignalRendering';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 import {displayFxRate} from '$lib/stores/fxStoreRegistry';
@@ -534,5 +535,61 @@ describe('renderBackendResults — the saved backend results, drawn with the cur
         expect(signals).toEqual(backendSignals(SMA_1_RESULT, current, 'percentage', translate));
         expect(signals.map((signal) => signal.label)).toEqual(signals.map(() => 'Label injected by the case'));
         expect(valuesOf(signals[0]), '101, 104, 108 and 113 rebased on the chart’s first value, 100').toEqual([1, 4, 8, 13]);
+    });
+});
+
+/**
+ * Y-40 — the comparisons of a chart in the rolling-return view: each saved comparison drawn with its target's rolling return,
+ * as the asset detail page draws them (`calendarComparisonSignals`), so that a card and the detail agree (V-5 a: in that view
+ * the comparisons are the only signals). A target whose return is not ready nor partial, the chart's own asset and an unset
+ * target draw nothing. The line is named after the target (else the catalogue's fallback), in the config's style, on the
+ * primary percent axis, with the target's icon and type.
+ *
+ * Red today: `renderCalendarComparisons` does not exist.
+ */
+describe('renderCalendarComparisons — the comparisons of the rolling-return view (Y-40)', () => {
+    const style = {color: '#f59e0b', lineWidth: 3, lineType: 'dashed' as const, markerStart: null, markerEnd: null};
+    const config = (id: string, assetId: unknown): SignalConfig => ({id, signalType: 'asset-comparison', params: {assetId}, style});
+    const view = (state: string, points: LineDataPoint[]) => ({state, points});
+    const RETURNS: LineDataPoint[] = [{date: '2026-03-02', value: 1.5}];
+    const render = (Reflect.get(module, 'renderCalendarComparisons') ??
+        (() => {
+            throw new Error('chartSignalRendering exports no renderCalendarComparisons()');
+        })) as (
+        configs: SignalConfig[],
+        views: ReadonlyMap<number, {state: string; points: LineDataPoint[]}>,
+        target: (assetId: number) => {displayName?: string | null; iconUrl?: string | null; assetType?: string | null} | null,
+        fallbackName: (assetId: number) => string,
+        selfAssetId?: number | null,
+    ) => RenderedSignal[];
+
+    it('draws a comparison with its target’s rolling return, named after it, in its style, on the percent axis', () => {
+        const [signal] = render(
+            [config('cmp-9', 9)],
+            new Map([[9, view('ready', RETURNS)]]),
+            () => ({displayName: 'Peer', iconUrl: '/peer.png', assetType: 'ETF'}),
+            (id) => `Asset #${id}`,
+        );
+
+        expect(signal).toMatchObject({id: 'cmp-9:calendar-return', label: 'Peer', data: RETURNS, color: '#f59e0b', lineWidth: 3, lineType: 'dashed', yAxisIndex: 0, axisRole: 'price', unit: 'percentage', iconUrl: '/peer.png', assetType: 'ETF'});
+    });
+
+    it('draws a partial return too, and names an unknown target with the fallback', () => {
+        const [signal] = render(
+            [config('cmp-9', 9)],
+            new Map([[9, view('partial', RETURNS)]]),
+            () => null,
+            (id) => `Asset #${id}`,
+        );
+
+        expect(signal?.label).toBe('Asset #9');
+    });
+
+    it('draws nothing for a return not ready, for the chart’s own asset and for an unset target', () => {
+        const views = new Map([
+            [9, view('unavailable', [])],
+            [7, view('ready', RETURNS)],
+        ]);
+        expect(render([config('cmp-9', 9), config('cmp-7', 7), config('cmp-x', 'x')], views, () => null, String, 7)).toEqual([]);
     });
 });

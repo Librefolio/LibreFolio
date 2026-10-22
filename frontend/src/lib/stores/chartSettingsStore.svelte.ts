@@ -13,7 +13,7 @@
 
 import {browser} from '$app/environment';
 import type {SignalConfig} from '$lib/charts/signals';
-import {DEFAULT_CALENDAR_RETURN_WINDOW, sanitizeCalendarReturnWindow, type CalendarReturnWindowSelection} from '$lib/components/charts/calendarReturnWindow';
+import {DEFAULT_CALENDAR_RETURN_WINDOW, largestCalendarReturnPresetFor, sanitizeCalendarReturnWindow, type CalendarReturnWindowSelection} from '$lib/components/charts/calendarReturnWindow';
 import {getClientSessionUserId, registerClientSessionReset} from '$lib/stores/app/clientSession';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -34,6 +34,14 @@ export interface ChartAxisSettings {
     secondary: Record<string, AxisScaleSettings>;
 }
 
+/**
+ * The view a chart opens in (Y-40): its prices, their change in percent, or the rolling return over the calendar window.
+ * The list's top bar and the global settings set it for a scope, a card's button and the detail page for one chart.
+ */
+export type ChartPrimaryView = 'absolute' | 'percentage' | 'calendar-return';
+
+export const CHART_PRIMARY_VIEWS: readonly ChartPrimaryView[] = ['absolute', 'percentage', 'calendar-return'];
+
 export interface ChartSettings {
     /** Color line by baseline: green above, red below (in % mode) */
     colorByBaseline: boolean;
@@ -47,6 +55,13 @@ export interface ChartSettings {
     axisScales: ChartAxisSettings;
     /** Last Calendar Return window for this asset. Ignored by non-asset charts. */
     calendarReturnWindow: CalendarReturnWindowSelection;
+    /**
+     * True until the user chooses a window: the window in force is then the largest preset that fits the period on screen
+     * (`effectiveCalendarReturnWindow`), not `calendarReturnWindow`.
+     */
+    calendarReturnWindowAuto: boolean;
+    /** The view the chart opens in (Y-40). */
+    primaryView: ChartPrimaryView;
     /** Overlay signal configurations */
     signals: SignalConfig[];
 }
@@ -70,6 +85,8 @@ export const DEFAULT_CHART_SETTINGS: ChartSettings = {
         secondary: {},
     },
     calendarReturnWindow: {...DEFAULT_CALENDAR_RETURN_WINDOW},
+    calendarReturnWindowAuto: true,
+    primaryView: 'percentage',
     signals: [],
 };
 
@@ -156,8 +173,17 @@ function sanitizeAxisSettings(value: Record<string, unknown>): ChartAxisSettings
     };
 }
 
+function isPrimaryView(value: unknown): value is ChartPrimaryView {
+    return CHART_PRIMARY_VIEWS.includes(value as ChartPrimaryView);
+}
+
+function sameWindow(left: CalendarReturnWindowSelection, right: CalendarReturnWindowSelection): boolean {
+    return left.kind === right.kind && left.preset === right.preset && left.customAmount === right.customAmount && left.customUnit === right.customUnit;
+}
+
 function sanitizeSettings(value: unknown): ChartSettings {
     if (!isRecord(value)) return deepClone(DEFAULT_CHART_SETTINGS);
+    const calendarReturnWindow = sanitizeCalendarReturnWindow(value.calendarReturnWindow);
 
     return {
         colorByBaseline: typeof value.colorByBaseline === 'boolean' ? value.colorByBaseline : DEFAULT_CHART_SETTINGS.colorByBaseline,
@@ -165,7 +191,10 @@ function sanitizeSettings(value: unknown): ChartSettings {
         gridLines: typeof value.gridLines === 'boolean' ? value.gridLines : DEFAULT_CHART_SETTINGS.gridLines,
         staleGradient: typeof value.staleGradient === 'boolean' ? value.staleGradient : DEFAULT_CHART_SETTINGS.staleGradient,
         axisScales: sanitizeAxisSettings(value),
-        calendarReturnWindow: sanitizeCalendarReturnWindow(value.calendarReturnWindow),
+        calendarReturnWindow,
+        // Stored before Y-40: a window other than the shipped default was chosen by the user.
+        calendarReturnWindowAuto: typeof value.calendarReturnWindowAuto === 'boolean' ? value.calendarReturnWindowAuto : sameWindow(calendarReturnWindow, DEFAULT_CALENDAR_RETURN_WINDOW),
+        primaryView: isPrimaryView(value.primaryView) ? value.primaryView : DEFAULT_CHART_SETTINGS.primaryView,
         signals: normalizeSignalConfigs(value.signals),
     };
 }
@@ -324,8 +353,23 @@ function persistNow(): void {
     }
 }
 
+let pagehideBound = false;
+
+/** A write the debounce still holds is done when the page goes away for good: a reload, a close, a navigation away (Y-40). */
+function flushOnPagehide(): void {
+    if (pagehideBound || typeof window === 'undefined') return;
+    pagehideBound = true;
+    window.addEventListener('pagehide', () => {
+        if (!saveTimer) return;
+        clearTimeout(saveTimer);
+        saveTimer = null;
+        persistNow();
+    });
+}
+
 function schedulePersist(): void {
     if (!browser) return;
+    flushOnPagehide();
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
         saveTimer = null;
@@ -392,9 +436,9 @@ export function getSettingsVersion(): number {
  */
 export function setGlobalSettings(settings: ChartSettings, scope?: string): void {
     loadFromStorage();
-    const sanitized = sanitizeSettings(settings);
+    const sanitized = withWindowChoice(sanitizeSettings(settings), scope ? (pairOverrides.get(scopeKey(scope)) ?? globalSettings) : globalSettings);
     if (scope) {
-        pairOverrides.set(`__global_${scope}__`, deepClone(sanitized));
+        pairOverrides.set(scopeKey(scope), deepClone(sanitized));
         // Clear per-item overrides for this scope only
         for (const key of [...pairOverrides.keys()]) {
             if (key.startsWith('__global_')) continue; // Don't clear scoped globals
@@ -418,9 +462,81 @@ export function setGlobalSettings(settings: ChartSettings, scope?: string): void
  */
 export function setPairSettings(slug: string, settings: ChartSettings): void {
     loadFromStorage();
-    pairOverrides.set(slug, deepClone(sanitizeSettings(settings)));
+    pairOverrides.set(slug, deepClone(withWindowChoice(sanitizeSettings(settings), pairOverrides.get(slug) ?? globalSettings)));
     bump();
     schedulePersist();
+}
+
+function scopeKey(scope: string): string {
+    return `__global_${scope}__`;
+}
+
+/** Whether `key` is the override of one chart of `scope` (the same partition `setGlobalSettings` clears). */
+function inScope(key: string, scope: string): boolean {
+    if (key.startsWith('__')) return false;
+    return scope === 'assets' ? key.startsWith('asset-') : scope === 'fx' ? !key.startsWith('asset-') : false;
+}
+
+/** A saved window other than the one stored before is a window the user chose, whoever saves it (Y-40). */
+function withWindowChoice(next: ChartSettings, previous: ChartSettings): ChartSettings {
+    return sameWindow(next.calendarReturnWindow, previous.calendarReturnWindow) ? next : {...next, calendarReturnWindowAuto: false};
+}
+
+/**
+ * The view of a whole scope (Y-40, V-3 a): the list's top bar and its global settings. Every chart of the scope is reset to
+ * it, keeping everything else it saved; the other scope is not touched.
+ */
+export function setScopePrimaryView(view: ChartPrimaryView, scope: string): void {
+    loadFromStorage();
+    if (!isPrimaryView(view)) return;
+    const key = scopeKey(scope);
+    pairOverrides.set(key, {...deepClone(pairOverrides.get(key) ?? globalSettings), primaryView: view});
+    for (const [slug, settings] of pairOverrides) {
+        if (inScope(slug, scope)) pairOverrides.set(slug, {...settings, primaryView: view});
+    }
+    bump();
+    schedulePersist();
+}
+
+/**
+ * The view of one chart (Y-40, V-1 a and V-2 a): a card's button, the detail page. An override it creates starts from the
+ * scope's settings.
+ */
+export function setItemPrimaryView(slug: string, view: ChartPrimaryView, scope?: string): void {
+    loadFromStorage();
+    if (!isPrimaryView(view)) return;
+    const current = pairOverrides.get(slug) ?? (scope ? pairOverrides.get(scopeKey(scope)) : undefined) ?? globalSettings;
+    pairOverrides.set(slug, {...deepClone(current), primaryView: view});
+    bump();
+    schedulePersist();
+}
+
+/** The view a card's button turns to (Y-40, the developer's order): percent → rolling return → absolute → percent. */
+export function nextCardPrimaryView(view: ChartPrimaryView): ChartPrimaryView {
+    return view === 'percentage' ? 'calendar-return' : view === 'calendar-return' ? 'absolute' : 'percentage';
+}
+
+/**
+ * How the asset detail page opens a view (Y-40): the rolling return is its `calendar-return` mode, the two others its price
+ * mode in that view. The rolling return keeps the detail's percent view underneath, as today.
+ */
+export function detailModesForPrimaryView(view: ChartPrimaryView): {primaryMode: 'price' | 'calendar-return'; viewMode: 'absolute' | 'percentage'} {
+    if (view === 'calendar-return') return {primaryMode: 'calendar-return', viewMode: 'percentage'};
+    return {primaryMode: 'price', viewMode: view};
+}
+
+/** The view the detail page saves when its user changes mode or view (Y-40, V-2 a). */
+export function primaryViewForDetailModes(primaryMode: 'price' | 'calendar-return', viewMode: 'absolute' | 'percentage'): ChartPrimaryView {
+    return primaryMode === 'calendar-return' ? 'calendar-return' : viewMode;
+}
+
+/**
+ * The rolling-return window in force for `rangeDays` on screen: the one the user chose, else the largest preset of the
+ * selector that fits the period (the developer's decision for the first start, 20/10).
+ */
+export function effectiveCalendarReturnWindow(settings: Pick<ChartSettings, 'calendarReturnWindow' | 'calendarReturnWindowAuto'>, rangeDays: number): CalendarReturnWindowSelection {
+    if (!settings.calendarReturnWindowAuto) return {...settings.calendarReturnWindow};
+    return {...settings.calendarReturnWindow, kind: 'preset', preset: largestCalendarReturnPresetFor(rangeDays)};
 }
 
 registerClientSessionReset('chartSettingsStore', () => {
