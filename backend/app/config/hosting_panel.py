@@ -27,6 +27,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from backend.app.config import env_secret
 from backend.app.config.accounts import public_url
 from backend.app.config.backup import PANEL_TOKEN_CHARACTERS, PANEL_TOKEN_MIN_LENGTH
+from backend.app.utils.runtime.origins import canonical_origin
 
 #: The variable of the panel's token for the status route; ``env_secret`` also reads it from ``<name>_FILE``.
 PANEL_STATUS_TOKEN_VARIABLE = "LIBREFOLIO_PANEL_STATUS_TOKEN"
@@ -82,7 +83,6 @@ PANEL_CLOCK_SKEW_MAX_SECONDS = 300
 _KID = re.compile(r"[A-Za-z0-9._-]{1,64}")
 #: A raw Ed25519 public key (32 bytes) in base64url without padding.
 _KEY = re.compile(r"[A-Za-z0-9_-]{43}")
-_DEFAULT_PORTS = {"https": 443, "http": 80}
 
 
 def _keys_error(message: str) -> HostingPanelConfigError:
@@ -141,18 +141,12 @@ def panel_audience() -> str:
     """
     error = HostingPanelConfigError(PUBLIC_URL_VARIABLE, "PANEL_AUDIENCE_UNAVAILABLE", "the hosting panel's tickets need LIBREFOLIO_PUBLIC_URL, an http(s) address with a host")
     try:
-        url = public_url()
-        parts = urlsplit(url) if url else None
-        port = parts.port if parts is not None else None
+        origin = canonical_origin(public_url())
     except ValueError:
         raise error from None
-    if parts is None or parts.scheme.lower() not in _DEFAULT_PORTS or not parts.hostname:
+    if origin is None:
         raise error
-    scheme = parts.scheme.lower()
-    host = parts.hostname.lower()
-    if ":" in host:
-        host = f"[{host}]"
-    return f"{scheme}://{host}" if port in (None, _DEFAULT_PORTS[scheme]) else f"{scheme}://{host}:{port}"
+    return origin
 
 
 def panel_public_url_path() -> str | None:

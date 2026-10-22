@@ -4,10 +4,10 @@
  * instance from where it stands — the server may sit behind a VPN, a direct IP or a DNS of its own.
  *
  * It is workstream A's address check (`settings/users/addressProbe.ts`), reused as it is: a signed nonce of this
- * instance, sent to `<base>/api/v1/auth/address-probe`. On top of it, one case the browser can tell for sure before
- * asking anything: an https page cannot fetch an http address (mixed content).
+ * instance, loaded as the image `<base>/api/v1/auth/address-probe.png` (lot H-55 v2). On top of it, one case the browser
+ * can tell for sure before asking anything: an https page cannot load an http address (mixed content).
  */
-import {checkAddress, normalizeBase, type ProbeVerdict} from '$lib/features/settings/users/addressProbe';
+import {checkAddress, normalizeBase, type ImageLoader, type ProbeVerdict} from '$lib/features/settings/users/addressProbe';
 
 /**
  * What the check found, from this browser only:
@@ -33,7 +33,8 @@ export interface LinksProbeOptions {
     pageProtocol: string;
     /** A nonce of this instance (`POST /users/address-probe`). */
     issueNonce: () => Promise<string>;
-    fetchImpl?: typeof fetch;
+    /** The image loader of the check; `addressProbe.loadImage` when absent. */
+    loadImage?: ImageLoader;
     timeoutMs?: number;
 }
 

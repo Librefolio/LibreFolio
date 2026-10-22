@@ -306,7 +306,9 @@ Invitation and password-reset links show in the same panel:
   gives its expiry.
 
 When you change the address, your browser checks, half a second after you stop typing, that
-**this** instance answers there, and not just any server. The filled-in address itself is not
+**this** instance answers there, and not just any server: it loads a tiny image from
+`<address>/api/v1/auth/address-probe.png?nonce=…`, which is 1×1 when this instance answers and 2×1
+when another one does. The filled-in address itself is not
 checked.
 
 | Message | What it means |
@@ -314,7 +316,7 @@ checked.
 | *Checking that this LibreFolio answers at this address…* | The check is running |
 | *This instance answers at this address.* | The link reaches this LibreFolio |
 | *Something answers at this address, but not this instance: check it before sharing.* | Another LibreFolio answers there: probably not the address you meant |
-| *This address could not be checked from this browser: you can still share the link.* | The browser got no answer it could read. Nothing answers there (a wrong or closed address, or no answer within 8 seconds); a page opened with `https://` checks an `http://` address, which the browser blocks; a page on a public address checks a local one, which some browsers block or allow only after asking your permission; or an older LibreFolio answers, which cannot be checked |
+| *This address could not be checked from this browser: you can still share the link.* | The browser could not load the image. Nothing answers there (a wrong or closed address, or no answer within 8 seconds); a page opened with `https://` checks an `http://` address, which the browser blocks; a page on a public address checks a local one, which some browsers block or allow only after asking your permission; an instance that is blocked does not serve the image; or an older LibreFolio answers, which cannot be checked |
 | *Enter an address that starts with http:// or https://, without ? or #.* | Not an address: **Copy** stays off until you fix it |
 
 Whatever the result, except an address that is not one, you can copy the link: the check only

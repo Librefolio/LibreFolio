@@ -407,7 +407,8 @@
         "error": "Error",
         "warning": "Advertencia",
         "info": "Información"
-      }
+      },
+      "blockedScript": "Esta pestaña del navegador bloqueó un script que LibreFolio no envió ({sources}): lo añade un proxy, una CDN o una extensión del navegador. Desactiva esa inyección para este sitio."
     }
   }
 }

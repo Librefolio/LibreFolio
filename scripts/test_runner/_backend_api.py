@@ -827,6 +827,14 @@ def api_address_probe(verbose: bool = False, test_names: list[str] | None = None
     return run_command(cmd, "Address probe API tests", verbose=verbose)
 
 
+def api_address_probe_image(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the address probe image tests: GET /auth/address-probe.png, 1x1 for this instance's nonce, 2x1 otherwise (H-55 v2)."""
+    print_section("Address Probe Image API Tests")
+    print_info("Testing GET /auth/address-probe.png (public): a PNG, 1x1 or 2x1, no-store, no session; its own module; outside the blocked list")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_address_probe_image.py", test_names)
+    return run_command(cmd, "Address probe image API tests", verbose=verbose)
+
+
 def api_hosting_panel_routes(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the hosting panel's route tests: the six routes under the single tag Hosting panel, their bearer schemes and documented answers (H-61)."""
     print_section("Hosting Panel Routes")
@@ -1317,6 +1325,13 @@ Tests for REST API endpoints (server auto-started):
     # global row is written; the one write is the login counters of e2e_test_admin / e2e_test_user, which no unit asserts.
     # The instance key is switched in this process only (monkeypatch), never while the lane's server is asked.
     add_test(api, "address-probe", api_address_probe, name="Address Probe API", desc="Admin nonce 401/403/200, public {match} with ACAO * and no-store, Origin from elsewhere through the CORSMiddleware, forged/expired/foreign nonces false, cookies ignored, another instance in process")
+    add_test(
+        api,
+        "address-probe-image",
+        api_address_probe_image,
+        name="Address Probe Image API",
+        desc="H-55 v2: GET /auth/address-probe.png, a valid PNG 1x1 for a nonce this instance issued, 2x1 for forged, foreign, expired, empty, missing or too long, same status and type, no-store, no session; in address_probe_image.py, not auth.py; not allowed when blocked; the JSON probe unchanged",
+    )
     add_test(
         api,
         "hosting-panel-routes",

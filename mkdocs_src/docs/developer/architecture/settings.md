@@ -22,7 +22,7 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       code default. `managed` sets `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS` and
       `RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS` to `60.0` and turns on `LIBREFOLIO_FRAME_PROTECTION` and
       `LIBREFOLIO_CSP_REPORT_ONLY`, two `bool` fields off in the code
-      ([Frame Protection and the Report-Only Policy](security.md#managed-headers)).
+      ([The Content-Security-Policy and Frame Protection](security.md#managed-headers)).
       `Settings._apply_profile_defaults`, a `model_validator(mode="after")`, gives the active
       profile's value (`LIBREFOLIO_PROFILE` already normalised by its field validator) to every listed
       field that is not in `model_fields_set`. pydantic-settings passes every value a source found, so

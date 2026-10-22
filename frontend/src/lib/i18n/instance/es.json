@@ -34,7 +34,7 @@
         "offManaged": "La protección de marcos está desactivada en el perfil managed: cualquier sitio puede mostrar LibreFolio en un marco. Activa LIBREFOLIO_FRAME_PROTECTION, como hace por defecto el perfil managed."
       },
       "cspReportOnly": {
-        "on": "Las páginas de la aplicación llevan una Content-Security-Policy de solo informe: el navegador lista en su consola lo que bloquearía, y no bloquea nada.",
+        "on": "Además de la política siempre aplicada, las páginas de la aplicación llevan una Content-Security-Policy más amplia de solo informe: el navegador lista en su consola lo que también bloquearía, sin bloquearlo.",
         "offSelfHosted": "Ninguna Content-Security-Policy de solo informe: el valor predeterminado de una instalación propia.",
         "offManaged": "La Content-Security-Policy de solo informe está desactivada en el perfil managed: los navegadores no listan nada de lo que bloquearía. Activa LIBREFOLIO_CSP_REPORT_ONLY, como hace por defecto el perfil managed."
       },
