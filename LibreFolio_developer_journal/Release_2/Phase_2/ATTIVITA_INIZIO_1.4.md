@@ -37,3 +37,31 @@ della 1.4, non litiga con i lavori in corso. Ogni lotto è un riordino puro: ste
 - CP5 tocca i router che l'isolamento dei segnali di X-R16 ha cambiato.
 - CP-9b/9c toccano 45 file: serve una finestra quieta.
 - Prima la rinomina, poi il taglio (§4.2 del piano 43).
+
+---
+
+## 💸 La commissione collegata all'acquisto e alla vendita (issue #25)
+
+**Origine**: issue [#25](https://github.com/Librefolio/LibreFolio/issues/25) di @jaska087 (28/09). Il developer
+l'aveva promessa per la 1.3, poi messa in pausa; non era mai stata scritta nel backlog né nei piani. Ritrovata il
+22/10 nella verifica delle issue aperte; decisione del developer: inizio della 1.4. La bozza della risposta
+all'utente sta in [`../Phase_1/PROSSIMI_LAVORI.md`](../Phase_1/PROSSIMI_LAVORI.md), «Issue GitHub aperte».
+
+**Cosa chiede l'utente** (dai commenti):
+- inserire l'importo totale e dire quanta parte è commissione: in acquisto 100 € di titoli + 5 € di commissione = 105 €
+  pagati; in vendita 100 € − 5 € = 95 € incassati;
+- la soluzione che preferisce alla fine: un **aiuto nel form** che crea due transazioni, il BUY/SELL e la FEE, **collegate**,
+  così cancellare o modificare l'una tocca anche l'altra;
+- in alternativa, inserire prezzo unitario e quantità (più la commissione): è la #47, che va nella 1.3 (ondata 5).
+
+**Stato nel codice (22/10)**: la FEE esiste come tipo di transazione, ma non si collega a un acquisto o a una vendita:
+`related_transaction_id` serve solo a TRANSFER, FX_CONVERSION, CASH_TRANSFER e, facoltativo, ADJUSTMENT
+(`backend/app/db/models.py`).
+
+**Cosa serve** (da analizzare prima, con le domande al developer):
+- il collegamento FEE → BUY/SELL nel modello, con una migrazione Alembic incrementale se serve;
+- l'aiuto nel form (singola e, da valutare, modifica multipla), con la stessa estetica a badge decisa per la #47;
+- la commissione assegnata al suo lotto **con certezza**, invece che stimata dalla logica FIFO: tocca i calcoli,
+  quindi la matematica va in `backend/app/services/financial_math/` (regola 10), con MF;
+- gli import: i plugin che già leggono la commissione accanto al trade (Fineco dal treno 7, W-B92) potrebbero
+  collegarla allo stesso modo.
