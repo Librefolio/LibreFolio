@@ -352,7 +352,16 @@
         "setupCancelled": "Le lien de configuration de {username} ne fonctionne plus."
       },
       "pendingSetupHint": "Ce compte administrateur s'active par son lien de configuration. Si le lien est perdu, lancez « dev.py user setup-link » sur le serveur, ou demandez à votre hébergeur.",
-      "pendingVerificationHint": "Son titulaire n'a pas encore ouvert le lien de vérification : en se connectant, il peut s'en faire envoyer un nouveau. Réactiver le laisse entrer tout de suite, sans l'e-mail."
+      "pendingVerificationHint": "Son titulaire n'a pas encore ouvert le lien de vérification : en se connectant, il peut s'en faire envoyer un nouveau. Réactiver le laisse entrer tout de suite, sans l'e-mail.",
+      "registration": {
+        "label": "Qui peut s'inscrire",
+        "confirm": {
+          "title": "Laisser tout le monde s'inscrire ?",
+          "message": "Avec « Ouverte », toute personne qui atteint la page de connexion peut créer un compte. Ne la choisissez que si l'instance est destinée à être publique.",
+          "confirm": "Ouvrir les inscriptions"
+        },
+        "saveFailed": "Impossible d'enregistrer qui peut s'inscrire."
+      }
     },
     "linkShare": {
       "addressLabel": "Adresse du serveur",
@@ -408,7 +417,8 @@
         "warning": "Avertissement",
         "info": "Information"
       },
-      "blockedScript": "Cet onglet du navigateur a bloqué un script que LibreFolio n'a pas envoyé ({sources}) : un proxy, un CDN ou une extension du navigateur l'ajoute. Désactivez cette injection pour ce site."
+      "blockedScript": "Cet onglet du navigateur a bloqué un script que LibreFolio n'a pas envoyé ({sources}) : un proxy, un CDN ou une extension du navigateur l'ajoute. Désactivez cette injection pour ce site.",
+      "guide": "Guide"
     }
   }
 }

@@ -352,7 +352,16 @@
         "setupCancelled": "The setup link of {username} no longer works."
       },
       "pendingSetupHint": "This administrator account activates through its setup link. If the link is lost, run «dev.py user setup-link» on the server, or ask your hosting provider.",
-      "pendingVerificationHint": "Its owner has not opened the verification link yet: signing in offers to send a new one. Reactivate lets the account in at once, without the email."
+      "pendingVerificationHint": "Its owner has not opened the verification link yet: signing in offers to send a new one. Reactivate lets the account in at once, without the email.",
+      "registration": {
+        "label": "Who can sign up",
+        "confirm": {
+          "title": "Let anyone sign up?",
+          "message": "With «Open», anyone who reaches the login page can create an account. Choose it only if the instance is meant to be public.",
+          "confirm": "Open registration"
+        },
+        "saveFailed": "The registration mode could not be saved."
+      }
     },
     "linkShare": {
       "addressLabel": "Server address",
@@ -408,7 +417,8 @@
         "warning": "Warning",
         "info": "Information"
       },
-      "blockedScript": "This browser tab blocked a script LibreFolio did not send ({sources}): a proxy, a CDN or a browser extension adds it. Turn that injection off for this site."
+      "blockedScript": "This browser tab blocked a script LibreFolio did not send ({sources}): a proxy, a CDN or a browser extension adds it. Turn that injection off for this site.",
+      "guide": "Guide"
     }
   }
 }

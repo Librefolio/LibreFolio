@@ -8964,3 +8964,53 @@ Ognuno con i rossi prima e uno slot. Uno slot API (`users-admin`) per N69-4 e N6
     della corsia: **184 passed** (`A-final-api-users-admin.log`).
   - Porta 6185 libera alla fine (`lsof` rc 1); `git diff --check` pulito; HEAD ancora `4a053da4c`.
 - Checkpoint mandato (A-62 ed E-7 separati); FROZEN.
+
+## N69c + N69d — ondata 4 (22/10/2026, base `c042f2481`; sessione A su Sonnet, corsia 6185)
+
+Via del coordinatore: E2E di N69c con **stub** (scelta di disegno del test). `UserRow`: E7-Q4 (hover + pannello) ed E7-Q5
+(fr «En attente de vérification», es «Pendiente de verificación», suggerimento it di A) accettate dal developer.
+
+### UserRow — E7-Q4 / E7-Q5 ✅ (22/10) · nessuna modifica
+- Il badge ha già il suggerimento al passaggio del mouse (`title`) e nel pannello (`users-pending-verification-hint`), cioè «hover +
+  pannello»; i cataloghi `settings/*.json` hanno già le quattro parole del badge e il suggerimento nelle 4 lingue, quelli accettati.
+> **Note implementazione**: niente da cambiare in codice né in cataloghi. Le parole sono in `settings/*.json` (cataloghi di A),
+> non in quelli di E: E dà solo il via.
+
+### N69c — «Chi può iscriversi» anche in Utenti ✅ (22/10)
+- **Rossi** (prima del codice): `registrationMode.test.ts` (nuovo, RMODE-01…07: modulo mancante), `UsersTab.test.ts` UTAB-63…73
+  (11 rossi, `ondata4/a-n69c-red1.log`).
+- **Cura**:
+  - `features/settings/registrationMode.ts` (nuovo): `REGISTRATION_KEY`, `REGISTRATION_VARIABLE`, `REGISTRATION_MODES`,
+    `registrationModeOptions(translate)`, `saveRegistrationMode(mode)` (PATCH `/settings/global/bulk` + rilettura forzata
+    della configurazione), `refreshRegistrationConfig()`, `lockedByEnv(error)` (409 `SETTING_LOCKED_BY_ENV`).
+  - `UsersTab.svelte`: nella prima sezione, accanto a «Invita», un `SimpleSelect` (`users-registration-mode`) dentro
+    `users-registration` (`data-mode`, `data-shown`, `data-locked`, `data-saving`). Si salva alla scelta; «aperta» passa dal
+    `ConfirmModal` della scheda (`registration-open`, non danger): annulla = nessuna richiesta e il select torna al modo in
+    vigore. Bloccata dalla variabile: select spento e riga `users-registration-locked`. Rifiuto: toast di errore (evento
+    `accounts.registration.failed`), select di nuovo sul modo in vigore; con 409 rilegge la configurazione.
+    Successo: evento `settings.global.saved`, nessun toast (il select mostra già il nuovo valore).
+  - `GlobalSettingsTab.svelte`: usa il modulo per opzioni, variabile, 409 e rilettura; in più `data-value` sul riquadro di
+    `registration_mode` (additivo, lo legge l'E2E).
+  - i18n (`settings`, ×4): `settings.usersTab.registration.{label,confirm.title,confirm.message,confirm.confirm,saveFailed}`.
+- **E2E**: `admin-users.spec.ts` AUSR-E-11, con stub delle tre richieste (PATCH, `GET /system/instance`, `GET /settings/global`):
+  scelta → PATCH col corpo atteso → configurazione riletta → «Invita» spento; «aperta» chiede, annulla non manda nulla, conferma
+  manda; «Impostazioni globali» legge lo stesso modo.
+- Doc: `admin/users.en.md` (`#registration`), `admin/settings.en.md`; timbro Aphra su `settings.en.md`.
+> **Note implementazione**: `scripts/test_runner/_frontend_utility.py`, una riga additiva (`registrationMode.test.ts` in core-unit).
+
+### N69d — «Guida» sui controlli di Sicurezza ✅ (22/10)
+- **Rossi**: `SecurityTab.test.ts` SGUIDE-01…08 (8 rossi, `ondata4/a-n69d-red1.log`); la mappa è `checkGuides.ts`/`checkGuides.json` di H
+  (sola lettura, 20 voci: 18 del server + `accounts.openRegistration` e `platform.blockedScript` del browser).
+- **Cura**: `SecurityTab.svelte`, uno snippet `guide(checkId)`: se `checkGuidePath(id)` esiste, un `DocsLink` (libro, etichetta
+  visibile, nuova scheda, `testId="security-guide"`) su ogni `security-finding` e su ogni `security-passed-check`; senza voce
+  nessun pulsante. Il link interno del ritrovamento (`security-finding-action`) resta. i18n: `settings.securityTab.guide` (×4).
+- **E2E**: `security-tab.spec.ts` ASEC-E-04 (il ritrovamento `accounts.login_limit` ha «Guida»; il clic apre una nuova scheda su
+  `/mkdocs/[lingua/]admin/configuration/#login-limit`).
+- Doc: `admin/settings.en.md` (paragrafo prima di «The findings without a link»).
+> **Note implementazione**: il test SGUIDE-06 prende gli id dalla mappa stessa: un controllo nuovo di H con voce nella mappa
+> senza pulsante è un rosso, e uno senza voce non ne ha.
+
+### N69c + N69d — Prove finali ✅ (22/10, 15:07–15:31; E2E in `flock`)
+- Vitest (`settings`, `instance`, ratchet colori): **1409 passed**, 36 file. `registrationMode.test.ts` 9, `UsersTab.test.ts` 73, `SecurityTab.test.ts` (cartella `security`) 94.
+- `front check` dopo `api sync`: **0 errori, 0 avvisi** (`ondata4/a-frontcheck.log`). `i18n check`: 5136 chiavi, strict. `check-orphans` pulito.
+- Corsia 6185 (`/tmp/librefolio-r13-a`, `db populate --force --clean`): E2E `admin-users` **11 passed** (AUSR-E-11 compreso), `security-tab` **4 passed** (ASEC-E-04 compreso), `api users-admin` **184 passed** (`ondata4/a-heavy-e2e.log`). Porta libera alla fine; `git diff --check` pulito; HEAD `c042f2481`.
