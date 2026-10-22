@@ -27,9 +27,10 @@ lavoro della 1.3 da fare quando finiamo i lavori già iniziati. Quello che farem
 | ✅ Già fatte | K3a (treno 7); W-B86/W-B87, la parte della 1.3 (treno 7); #49, Fineco fuori dalla beta (treno 7) |
 | 1.3, ondata 4 | #49, tooltip e frase in 4 lingue (Y); la regola dei plugin in beta nella skill e nella guida, più Fineco su `RowSkips` (W); #50, i dati dei fondi da Yahoo (X) |
 | 1.3, ondata 5 | V-37b (W); Crédit Agricole sui report set, solo l'analisi (W); W-B88, anche i plugin in beta (W); CP12 (X, con W); C-70b (E, W rivede); E-21 (E, W rivede); MF-P1c (MF); #47 (W); #48 più la torta per asset (Y, con J/MF per il backend) |
-| Inizio 1.4 | il blocco del riordino: W3, W4/CP7, W5–W6, CP5, CP7/FE4, FE5a (e, dal backlog, CP-8/9b/9c di J e T-SG) |
+| Inizio 1.4 | il blocco del riordino: W3, W4/CP7, W5–W6, CP5, CP7/FE4, FE5a (e, dal backlog, CP-8/9b/9c di J e T-SG); la issue #25 |
 | `TODO_FUTURI` | #51 (c'era già), #52 (aggiunto il 22/10 al «🧬 Profilo dei dati dell'asset») |
 | Tolte | K2b/K2c: doppione di C-70b |
+| Issue GitHub | vedi «Issue GitHub aperte: verifica del 22/10» più sotto: #58 e #43 risolte; #25 era persa, va all'inizio della 1.4 |
 | Restano come regola | W-B86/W-B87 per i plugin in beta: si fanno quando il plugin esce dalla beta |
 
 ---
@@ -264,6 +265,10 @@ Proposta di X (19/10) per tutti e quattro: dopo la 1.3. CP6 (F05) e K-20 sono gi
 - **Dove**: [piano 03, «9. Lotti e checkpoint (ordine proposto)», punto 12, e «Stato vero di CP5, CP6, CP7, CP8,
   CP12»](03_pluginsAssets/plan-phase01PluginsAssets.prompt.md).
 - **Esito 22/10**: 1.3, **ondata 5**, a X (la parte BRIM con W).
+  - **Precisazione del developer** (al coordinatore, 22/10), parola per parola: «per brim non credo ci saranno
+    segreti, i parametri è molto più probabile, il sistema però deve supportare, se arrivasse, tutto». Quindi:
+    l'interfaccia dei plugin BRIM va **predisposta** per parametri **e** segreti, senza realizzare ora impostazioni
+    concrete. Proprietario suggerito per la parte BRIM: W.
 
 ### E e W · Le traduzioni dei rifiuti dell'import
 
@@ -333,6 +338,50 @@ Convenzioni:
   task che nascono da una richiesta si tengono qui (e nel backlog quando entrano in un rilascio). Le issue #54, #55 e
   #56, aperte da noi il 18/10, sono state cancellate il 19/10; il loro testo è nei file della sessione del
   coordinatore.
+
+---
+
+## Issue GitHub aperte: verifica del 22/10
+
+Lette con `gh` il 22/10 in sola lettura: 8 issue aperte e la discussione #49. Le risposte qui sotto sono **bozze**:
+le pubblica solo il developer, quando esce la 1.3.
+
+| Issue | Esito 22/10 |
+|---|---|
+| #58 · asset cambiato nel Bulk che non si salva | ✅ risolta nel treno 7 (`bc01226f4`, CHANGELOG `[Unreleased]`). Il developer ha già risposto «la chiudiamo all'uscita della 1.3» |
+| #43 · 6 cifre al massimo (crypto) | ✅ risolta: C-97 nel backlog, CHANGELOG `[Unreleased]` («Crypto quantities and prices keep their decimals»). CoinGecko, suggerito qui, è C-98 nel backlog: dopo la 1.3 |
+| #47 · prezzo unitario invece dell'importo | 1.3, ondata 5 (sotto, sezione #47) |
+| #48 · grafico delle posizioni sovrapposte | 1.3, ondata 5 (sotto, sezione #48) |
+| #50 · Investing.com e Yahoo | la parte Yahoo nella 1.3, ondata 4; il resto in `TODO_FUTURI.md` |
+| #51 · TER | dopo la 1.3, `TODO_FUTURI.md` |
+| #52 · portafoglio per obiettivi | dopo la 1.3, `TODO_FUTURI.md` |
+| #27 · OIDC esterno | dopo la 1.3: resta in `TODO_FUTURI.md` («🔐 Accesso con un provider OIDC esterno»), che ha già le risposte dell'utente |
+| #25 · commissione dentro acquisto e vendita | **era persa**: promessa all'utente per la 1.3 il 28/09, poi «parcheggiata per qualche settimana», e mai scritta nel backlog né nei piani. Decisione del 22/10: **inizio della 1.4**, in [`../Phase_2/ATTIVITA_INIZIO_1.4.md`](../Phase_2/ATTIVITA_INIZIO_1.4.md), con una risposta all'utente che lo dice |
+| Discussione #49 | coperta: Fineco ✅, i due task nella 1.3, ondata 4 (sotto, sezione #49) |
+
+### Bozze delle risposte (da pubblicare dal developer)
+
+**#58**, alla chiusura, quando esce la 1.3:
+
+> Fixed in 1.3.0: the asset and the broker of a saved transaction are now locked in the editor, so it no longer
+> offers a change it cannot save. To move a transaction to another asset or broker, delete it and create it again
+> (the clone feature helps). Closing — thanks again @jaska087 for the report and the screenshots!
+
+**#43**, alla chiusura, quando esce la 1.3:
+
+> Hi @r4kd7hch5v-source, this is fixed in 1.3.0. A quantity now keeps up to 10 decimal places, a price and a
+> per-unit cost up to 12, so BTC's 8 digits and tokens like PEPE fit. If you paste more digits than allowed, the
+> form tells you the maximum instead of rounding behind your back. The values you saved earlier with 7 or 8 digits
+> were kept in full in the database, so they show up again, unless a transaction was saved again while its value
+> was shown rounded. CoinGecko is on our list for after 1.3. Closing — thanks again for the clear report!
+
+**#25**, adesso o all'uscita della 1.3 (sceglie il developer):
+
+> Hi @jaska087, an honest update on this one: the fee linked to its buy or sell won't make it into 1.3, sorry. Doing
+> it properly means linking the fee to its trade and using it in the lot calculations, so that the cost of each lot
+> is exact instead of estimated, and we want to give it the time it deserves. It is planned for the start of 1.4.
+> Meanwhile we are working on entering the unit price instead of the total in the transaction form (#47), which
+> you asked for here too. Thanks for your patience!
 
 ---
 
