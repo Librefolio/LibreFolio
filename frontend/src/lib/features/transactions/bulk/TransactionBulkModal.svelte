@@ -209,7 +209,8 @@
         const side: 'from' | 'to' | 'self' = tx.related_transaction_id != null ? (rawQty < 0 ? 'from' : 'to') : 'self';
         const cbRule = getCostBasisRule(tx.type, side);
         let cbMode: 'auto' | 'manual' | null = null;
-        if (cbRule !== 'forbidden') {
+        // A cost only where units come in: an ADJUSTMENT taking units out has no value (N78-1).
+        if (cbRule !== 'forbidden' && !(cbRule === 'required_qty_pos' && rawQty <= 0)) {
             cbMode = 'manual';
         }
         return {
