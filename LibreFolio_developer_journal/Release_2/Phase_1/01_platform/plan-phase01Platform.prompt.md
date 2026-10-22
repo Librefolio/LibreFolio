@@ -10496,5 +10496,24 @@ mescolare le righe del runner dei due lotti:
     solo quelle vicine alla finestra; `/api/v1/system/health` non era mai montata. La pagina era sana (157 percorsi,
     28 tag, nessun errore). Il test-author ha cambiato il controllo: almeno 3 operazioni disegnate, ognuna un percorso del
     documento che la pagina stessa ha scaricato. Secondo giro **3/3 verdi** (log `ondata4/h-r5-e2e-api-docs-2.log`).
+11. ✅ **H-62, la rotta di ripristino del pannello e il modo «ripristino in corso»** (22/10, base `c0b6a8d06`; contratto
+    `BACKUP-contratto-L3.md` §5-§7, CONCORDATO; analisi `H-62-analisi-turno1.md`; risposte Q5 423 per chiunque, Q6 pagina
+    semplice sullo sfondo della login, Q7 500, Q8 i codici; Q1-Q4 a B).
+    > **Note implementazione**: `config.platform.awaiting_restore()` (`LIBREFOLIO_AWAIT_RESTORE`, valori del blocco,
+    > `await_restore` alias per B); controllo d'avvio; `lifecycle.Step.skip_when` sui sei passi del §6. Scope
+    > `backup:restore` solo biglietto (`access.py`). `api/v1/backup/panel_restore.py`: le 7 rotte, biglietto → 423 → 409,
+    > solo `.lfbk` (il resto si cancella), ripetibilità di confirm e restart, log della conferma con `kid`; schemi chiusi
+    > in `schemas/hosting_panel.py` (`PanelRestoreStageReport` 20 campi, `administrators_count`; `PanelRestoreStatus` con
+    > `confirmed_via`). `refuse_when_awaiting_restore` seconda dipendenza del router, `ALLOWED_WHEN_AWAITING_RESTORE`;
+    > `mode` in ready, instance e panel/status (+ `restore`, 500 se illeggibile); wake-sync `awaiting_restore`. Frontend:
+    > `InstanceAwaitingRestorePage` (sfondo `AnimatedBackground` della login, `role="status"`, si ricarica da sola),
+    > `AwaitingRestoreGate` nel layout radice, il client API ricarica la configurazione sul 423 del modo; 4 chiavi in 4 lingue.
+    > **Rossi → verdi**: backend 169 nuovi (163 rossi) → verdi tranne i 4 «Needs B» (Q1, Q2, Q3, Q4); frontend 36 nuovi →
+    > verdi; 9 file aggiornati 503/503; `services all` verde, `api all` verde tranne i 4 «Needs B».
+    > **⚠️ Fuori pista**: le 7 rotte nel client generato rendono «troppo profondo» un `vi.spyOn(zodiosApi, …)` di
+    > `ForgotPasswordCard.email.test.ts`: cast al modello già usato da altri 4 test (test-author). Il layout radice è
+    > legacy: `children` del gate opzionale.
+    > **Da fare dopo il merge di B**: `origin="panel"` + filtro su `read_check`, `running_check` per la ripetibilità dello
+    > stage, `confirmed_via="panel"`; poi i 4 «Needs B».
    > **⚠️ Fuori pista**: `"scarfSettings"` messo e poi tolto da `package.json`, dopo il cambio di Q-C: il file coincide col
    > commit.

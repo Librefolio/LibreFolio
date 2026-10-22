@@ -25,6 +25,19 @@
  * the address is jsdom's own, set with `history.replaceState` and put back to `/` after each test. With `browser` on
  * the request interceptor reads `localStorage`, which jsdom under this Node build does not provide: that describe
  * installs an in-memory one of its own for each case and puts the previous descriptors back after it.
+ *
+ * Lot H-62 (the «awaiting restore» mode): while the hosting panel restores the instance on an empty volume, every route
+ * but `GET /system/instance` answers `423 {"detail": {"code": "instance_awaiting_restore"}}`. On such an answer the
+ * interceptor forces `instanceConfig.load({force: true})`, so that the root layout's `AwaitingRestoreGate` reads the
+ * new `mode` even when the configuration was read before the mode began; the error still reaches the caller unchanged,
+ * and the instance block stays off. A 423 `instance_blocked`, a 423 with another code, a 403 with the same body and a
+ * success force nothing. `instanceConfig.svelte` is a mock whose `load` is the spy. The client must not import that
+ * rune module statically (`apiClientRuneFree.gate.test.ts`), so the call is expected to go through a dynamic `import()`
+ * and to land a few microtasks after the refusal: the positive case polls for it (`expect.poll`, a deadline, no
+ * sleep); a negative case sends a positive request after its own, then drains the lazy import queue (its own
+ * `import()` of the same module, which settles after the ones the interceptor started before it) and polls until the
+ * positive call landed: by then a call of the negative request, started first, would have landed too. Red until H-62:
+ * nothing calls `load`.
  */
 import {AxiosError, type AxiosAdapter, type AxiosResponse} from 'axios';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
@@ -32,6 +45,7 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 const mocks = vi.hoisted(() => ({
     goto: vi.fn().mockName('goto'),
     notifyPortfolioMutation: vi.fn().mockName('notifyPortfolioMutation'),
+    loadInstanceConfig: vi.fn(() => Promise.resolve()).mockName('instanceConfig.load'),
     /** What `$app/environment` exports: `browser` is off but in the describe of the 401. */
     environment: {browser: false, dev: true, building: false, version: 'test'},
 }));
@@ -42,12 +56,15 @@ vi.mock('$lib/debug', () => ({debug: {log: vi.fn(), warn: vi.fn(), error: vi.fn(
 vi.mock('$lib/stores/portfolio/portfolioMutation', () => ({notifyPortfolioMutation: mocks.notifyPortfolioMutation}));
 // The client stub takes plugins: the module installs its 'zod-validation' plugin with `use` when it loads (H-60).
 vi.mock('./generated', () => ({createApiClient: vi.fn(() => ({use: vi.fn()}))}));
+// H-62: the configuration the root gate reads; the interceptor forces a reload of it on a 423 instance_awaiting_restore.
+vi.mock('$lib/features/instance/instanceConfig.svelte', () => ({instanceConfig: {load: mocks.loadInstanceConfig}}));
 
 import {axiosInstance} from './zodios-client';
 import {instanceBlock} from '$lib/features/instance/instanceBlock.svelte';
 import {loginUrl} from '$lib/utils/internalPath';
 
 const BLOCKED_BODY = {detail: {code: 'instance_blocked', message: 'This instance is blocked by its hosting provider'}};
+const AWAITING_RESTORE_BODY = {detail: {code: 'instance_awaiting_restore', message: 'This instance is waiting for a restore'}};
 
 /** A transport that answers `status` with `data`: resolved for 2xx, otherwise rejected with the response, as axios does. */
 function answering(status: number, data: unknown): AxiosAdapter {
@@ -71,6 +88,7 @@ async function requestAnswered(status: number, data: unknown): Promise<AxiosErro
 beforeEach(() => {
     instanceBlock.clear();
     mocks.goto.mockClear();
+    mocks.loadInstanceConfig.mockClear();
     mocks.environment.browser = false;
 });
 
@@ -107,6 +125,45 @@ describe('zodios-client — a 423 instance_blocked turns the block on', () => {
         expect(error).toBeNull();
         expect(mocks.notifyPortfolioMutation, 'Barrier: the success went through the response interceptor').toHaveBeenCalled();
         expect(instanceBlock.blocked).toBe(false);
+    });
+});
+
+describe('zodios-client — a 423 instance_awaiting_restore reloads the instance config (H-62)', () => {
+    /** The lazy import queue drained: an `import()` of the module the interceptor loads lazily, then its continuations. */
+    async function drainLazyImports(): Promise<void> {
+        await import('$lib/features/instance/instanceConfig.svelte');
+        await Promise.resolve();
+        await Promise.resolve();
+    }
+
+    it('forces instanceConfig.load({force: true}), and the caller still receives the refusal', async () => {
+        const error = await requestAnswered(423, AWAITING_RESTORE_BODY);
+
+        expect(error, 'the refusal must reach the caller').toBeInstanceOf(AxiosError);
+        expect([error?.response?.status, error?.response?.data]).toEqual([423, AWAITING_RESTORE_BODY]);
+        await expect.poll(() => mocks.loadInstanceConfig.mock.calls.length, {timeout: 2_000}).toBeGreaterThanOrEqual(1);
+        expect(mocks.loadInstanceConfig).toHaveBeenCalledWith(expect.objectContaining({force: true}));
+        expect(instanceBlock.blocked, 'awaiting a restore is not a block').toBe(false);
+        expect(mocks.goto, 'a 423 never navigates').not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['a 423 instance_blocked', 423, BLOCKED_BODY],
+        ['a 423 with another code', 423, {detail: {code: 'locked'}}],
+        ['a 423 without a body', 423, undefined],
+        ['a 403 with the same body', 403, AWAITING_RESTORE_BODY],
+        ['a success', 200, {status: 'ok'}],
+    ])('forces nothing on %s', async (_case, status, data) => {
+        const error = await requestAnswered(status, data);
+        expect(error?.response?.status ?? 200, 'Barrier: the request was answered with the status of the case').toBe(status);
+
+        // Positive control after it: once its forced load landed, one from the case's request would have landed too.
+        await requestAnswered(423, AWAITING_RESTORE_BODY);
+        await drainLazyImports();
+        await expect.poll(() => mocks.loadInstanceConfig.mock.calls.length, {timeout: 2_000}).toBeGreaterThanOrEqual(1);
+        await drainLazyImports();
+
+        expect(mocks.loadInstanceConfig, `${status} is not the refusal of an instance awaiting a restore: only the control forced a load`).toHaveBeenCalledTimes(1);
     });
 });
 

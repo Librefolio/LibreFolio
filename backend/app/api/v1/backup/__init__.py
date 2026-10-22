@@ -13,7 +13,7 @@ none.
 
 from fastapi import APIRouter
 
-from backend.app.api.v1.backup import exports, instance, panel, restore
+from backend.app.api.v1.backup import exports, instance, panel, panel_restore, restore
 from backend.app.services.platform.hosting_panel.access import HOSTING_PANEL_TAG
 
 BACKUP_TAG = "Backup & Export"
@@ -21,5 +21,6 @@ BACKUP_TAG = "Backup & Export"
 backup_router = APIRouter(prefix="/backup")
 backup_router.include_router(instance.instance_router, tags=[BACKUP_TAG])
 backup_router.include_router(panel.panel_router, tags=[HOSTING_PANEL_TAG])
+backup_router.include_router(panel_restore.panel_restore_router, tags=[HOSTING_PANEL_TAG])  # The panel's restore (H-62)
 backup_router.include_router(restore.restore_router, tags=[BACKUP_TAG])
 backup_router.include_router(exports.exports_router, tags=[BACKUP_TAG])

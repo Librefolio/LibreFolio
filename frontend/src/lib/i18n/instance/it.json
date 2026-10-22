@@ -67,6 +67,12 @@
       "deletionDate": "L'istanza e i suoi dati verranno cancellati il {date}.",
       "manageSubscription": "Gestisci abbonamento",
       "backupTitle": "Conserva una copia dei dati"
+    },
+    "awaitingRestore": {
+      "title": "Stiamo ripristinando i tuoi dati",
+      "message": "Stiamo rimettendo a posto i tuoi dati: riprova tra qualche minuto.",
+      "autoReload": "La pagina si ricarica da sola quando i dati sono pronti.",
+      "retry": "Riprova"
     }
   }
 }
