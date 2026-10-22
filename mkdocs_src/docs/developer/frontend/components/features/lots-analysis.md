@@ -159,7 +159,38 @@ This chart is the **custody topology** and **life-cycle** view.
 - renders each lot as one or more custody lanes using custom ECharts series;
 - creates child lanes for transfer branches and connects them with elbow lines;
 - exposes invisible DOM hit targets (`lot-gantt-segment-{lotId}`) over canvas bars for accessibility and E2E interaction;
+- gives every event marker a tooltip (Q-G29-1) — see [Marker tooltips](#gantt-marker-tooltips);
 - keeps its time window synchronized with Block 1, but owns the **Open / Closed** toggle UI.
+
+#### Marker tooltips {: #gantt-marker-tooltips }
+
+Every marker (▲ `BUY`, ▼ `SELL`, ◆ `TRANSFER`, + `ADJUSTMENT_IN`, × `ADJUSTMENT_OUT`, │ `SPLIT`) shows a tooltip on hover,
+tap or keyboard focus: what happened (the event's label), the date, the quantity (masked by `maskableQuantity` in privacy
+mode) and the broker.
+
+- **Pure helpers** (`lotGanttChartHelpers.ts`, Vitest in `lotGanttChartHelpers.test.ts`, the «Q-G29-1» blocks):
+    - `markerLabelKind(event)` gives the label kind of a `lot_events` row: `TRANSFER_IN` / `TRANSFER_OUT` at the scope's edge, the
+      row's own `TRANSFER_DEPART` / `TRANSFER_ARRIVE` for an internal leg — an arrival has its own label key,
+      not the departure's —, else `null` (the marker kind's own label, through `eventMarkerLabelKey()`);
+    - `ganttMarkerEvent(row)` turns a row into a `GanttMarkerEvent`. A row at the scope's edge keeps only its own broker: its
+      source and destination ids are dropped, so the partner broker is never named (J-48);
+    - `ganttMarkerTooltipBlocks(events, deps)` builds one block per event — the label as title, then **Date**, **Quantity**
+      (unsigned: the title says which way the units went) and the broker rows. An internal transfer reads **From** / **To**;
+      the side a row does not carry is left out, never guessed, so a transfer that left on the day it arrived shows only
+      **To** (its origin is not in the data yet, backlog J-68). Anything else reads **Broker**;
+    - `groupMarkerEvents(entries)` keeps one glyph per kind, lane and day, in first-appearance order as before, and gives each
+      the events of its whole point (same lane, same day, any kind), so two events on one point are listed together instead of
+      the second being dropped;
+    - `markerTooltipHtml(blocks, theme)` writes the tooltip, every text escaped, blocks apart by a divider.
+- **Hit targets**: `computeMarkerOverlayRects()` draws one invisible, focusable button per marker point
+  (`lot-gantt-marker-{lotId}`, with `data-date` and `data-kinds`), rendered after the segment targets so it sits above them. The
+  segment targets (`OverlayRect`) cover the markers on their edges, so without it the canvas never sees their hover.
+- **Tooltip wiring**: `showMarkerTooltip()` dispatches `showTip` on the `__event-markers` series, whose `tooltip.show` is
+  `true`; the chart's formatter tells that series from `__segments` by `params.seriesName`, and `activeTooltipSeries` tells
+  `reassertActiveTooltip()` which of the two to re-show. A marker inferred from the segments (a response with no
+  `lot_events`) names the segment's broker, or the two ends of a transit (`inferredMarkerEvent()`).
+- **Clicks**: as on a bar — a click selects the marker's lot (`toggleLotSelection`), a double-click goes through
+  `onRowDoubleClick`.
 
 ### `UnifiedLotsTable`
 
@@ -209,7 +240,8 @@ such a row, the event's own `kind` otherwise. The three views use them for the l
   «TRANSFER-»), and `eventMarkerKind()` (`lotCustodyModalHelpers.ts`) gives it the `transfer` marker;
 - `LotGanttChart` draws it as a ◆ `TRANSFER` marker (`eventMarkerKind(kind, boundary)`, `lotGanttChartHelpers.ts`),
   whose label `eventMarkerLabelKey()` takes from `brokers.lots.chartMarkers.eventType.TRANSFER_IN` / `TRANSFER_OUT`
-  («Transfer In» / «Transfer Out»);
+  («Transfer In» / «Transfer Out»), read through `markerLabelKind()` in place of `eventLabelKind()`
+  ([Marker tooltips](#gantt-marker-tooltips));
 - `LotWacPriceChart` puts it in the transfer marker series (`eventCategory(kind, boundary)`,
   `lotWacPriceChartHelpers.ts`); its tooltip header reads the transfer label, without the «Adjustment type» row.
 
@@ -246,7 +278,7 @@ The list below reflects the literal `data-testid` strings present in the compone
 | `LotAnalysisFailedNotice` | `lots-analysis-panel-failed`, `lots-analysis-failed-explanation`, `lots-analysis-failed-list`, `lots-analysis-failed-row-{code}-{transactionId}` (`none` in place of `{transactionId}` when the issue names no transaction), `lots-analysis-failed-date`, `lots-analysis-failed-broker`, `lots-analysis-failed-message`, `lots-analysis-failed-goto-{transactionId}` |
 | `LotDataQualityBanner` | `lot-data-quality-banner`, `lot-data-quality-toggle`, `lot-data-quality-issue-{code}`, `lot-data-quality-message` (one per message line of a block), `lot-data-quality-chip-{lotId}` |
 | `LotWacPriceChart` | `lot-wac-price-chart` (`data-state` is `drawn` when the chart draws, `empty` when it shows «No data available» instead; `data-price-line` is `drawn` when it also draws the market price line — out of «No data available», with a point of the line valued in the current **Abs** / **%** mode, the condition its series is pushed on — and `absent` otherwise), `lot-wac-yaxis-toggle`, `lot-wac-yaxis-auto`, `lot-wac-yaxis-zero`, `lot-wac-toggle-absolute`, `lot-wac-toggle-percentage` |
-| `LotGanttChart` | `lot-gantt-chart`, `lot-gantt-state-filter`, `lot-gantt-filter-open`, `lot-gantt-filter-closed`, `lot-gantt-scroll`, `lot-gantt-echart`, `lot-gantt-segment-{lotId}`, `lot-gantt-sticky-axis`, `lot-gantt-legend`, `lot-gantt-legend-broker-{brokerId}`, `lot-gantt-legend-transit` |
+| `LotGanttChart` | `lot-gantt-chart`, `lot-gantt-state-filter`, `lot-gantt-filter-open`, `lot-gantt-filter-closed`, `lot-gantt-scroll`, `lot-gantt-echart`, `lot-gantt-segment-{lotId}`, `lot-gantt-marker-{lotId}` (with `data-date` and `data-kinds`), `lot-gantt-sticky-axis`, `lot-gantt-legend`, `lot-gantt-legend-broker-{brokerId}`, `lot-gantt-legend-transit` |
 | `UnifiedLotsTable` | `unified-lots-table`, `unified-lots-custody-{lotId}` |
 | `LotComparisonChart` | `lot-comparison-chart`, `lot-comparison-value-yaxis-toggle`, `lot-comparison-value-yaxis-auto`, `lot-comparison-value-yaxis-zero`, `lot-comparison-mode-toggle`, `lot-comparison-mode-value`, `lot-comparison-mode-return`, `lot-comparison-empty`, `lot-comparison-echart`, `lot-comparison-estimated-at-cost-legend` |
 | `LotCustodyModal` | `lot-custody-modal-title`, `lot-custody-modal-lot-id`, `lot-custody-modal-close`, `lot-custody-modal-summary`, `lot-custody-modal-value-source`, `lot-custody-modal-asset-income`, `lot-custody-modal-market-pnl`, `lot-custody-modal-total-pnl`, `lot-custody-modal-total-return`, `lot-custody-modal-net-breakdown`, `lot-custody-modal-allocated-fees`, `lot-custody-modal-allocated-taxes`, `lot-custody-modal-net-total-pnl`, `lot-custody-modal-net-total-return`, `lot-custody-modal-cash-yield`, `lot-custody-modal-states`, `lot-custody-modal-current-custody`, `lot-custody-modal-absolute-quantity-info`, `lot-custody-modal-custody-summary`, `lot-custody-modal-custody-summary-row-{index}`, `lot-custody-modal-custody-fragments-label`, `lot-custody-modal-custody-row-{index}`, `lot-custody-modal-current-custody-empty`, `lot-custody-modal-history`, `lot-custody-modal-history-row-{index}`, `lot-custody-modal-history-details-{index}`, `lot-custody-modal-history-empty`, `lot-custody-modal-footer-close`, `lot-custody-modal-footer-goto-transaction` |
