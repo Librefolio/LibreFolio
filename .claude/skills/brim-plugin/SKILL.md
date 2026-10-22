@@ -107,6 +107,14 @@ converter.
       tax, a currency conversion) unless the plugin knows that is safe: a row it cannot import
       is unknown.
     - Rule 9's rows not settled yet are neither: they keep their info note.
+    - **Beta plugins.** While a plugin is in beta it may still write one plain string per skipped
+      row (a `legacy` warning, no link): with no reliable reports there is no way yet to tell the
+      safe rows from the unknown ones (decision of 19/10/2026, confirmed 22/10). That is a
+      **rule, not a lot**: **leaving the beta means adopting `RowSkips`** (or your own codes with
+      `report_issue`), in the same change that removes the Beta label. In
+      `test_brim_row_skips.py` take the plugin out of `ROW_SKIPS_PENDING` and list it in
+      `ROW_SKIPS_BY_PLUGIN` with an unknown and an unreadable row, and bump its
+      `plugin_version`. Fineco did it when it left the beta (W-B92, 1.5.0).
 
 ## 🛠️ Rough shape of the work
 

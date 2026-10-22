@@ -248,10 +248,17 @@ mandatory for every new plugin:
       import is unknown. A row the plugin reads but only in part (Trade Republic's fee and tax
       columns, not imported) is unknown too: list it.
     - **A stable plugin follows the rule**: it uses `RowSkips`, or its own codes with
-      `context.report_issue`. The plugins the lot W-B86 did not reach yet (the *pending* set of its
-      contract test: most of the beta plugins, Intesa, Fineco, the Generic CSV) may still write one
-      plain string per skipped row (a `legacy` warning, no link), and are migrated later (decision of
-      19/10/2026; the ones that already use the helper are in [Rows left out](#row-skips)).
+      `context.report_issue`.
+    - **A plugin in beta may not yet.** The plugins the lot W-B86 did not reach (the *pending* set of
+      its contract test: the beta plugins, Intesa, the Generic CSV) may still write one plain string
+      per skipped row (a `legacy` warning, no link): with no reliable reports there is no way yet to
+      tell the safe rows from the unknown ones (decision of 19/10/2026, confirmed 22/10). It is a
+      rule, not a lot: **leaving the beta means adopting `RowSkips`** (or own codes with
+      `report_issue`), in the same change that removes the Beta label. The contract test says what
+      to do: take the plugin out of `ROW_SKIPS_PENDING`, list it in `ROW_SKIPS_BY_PLUGIN` with an
+      unknown and an unreadable row, bump `plugin_version`. Fineco did it when it left the beta
+      (W-B92, version 1.5.0); the plugins that already use the helper are in
+      [Rows left out](#row-skips).
     - The provisional rows of *The operation date, and only settled rows* are neither: they
       keep their info note.
     - `report_issue` also serves a plugin in beta that imports a row but doubts its own
@@ -700,8 +707,9 @@ transaction breaks these rules, so flip source signs as needed:
     in the language of the export it parses. For a single-nation broker whose report is
     published in only one language — e.g. Crédit Agricole, Directa and Intesa Sanpaolo
     (Italian), Danske Bank (Finnish) — emit the warnings in that language so they match the report the user is
-    reading. Fineco is still an exception: it reads only the Italian export, but writes its plain warnings in English;
-    only its two notices, `fineco_not_yet_settled` and `fineco_incomplete_rows`, are in Italian.
+    reading. Fineco is still an exception: it reads only the Italian export, but its one plain warning
+    (*No valid transactions found in file*) is in English; its rows left out go to the two shared notices of `RowSkips`
+    (below), and its two info notes, `fineco_not_yet_settled` and `fineco_incomplete_rows`, are in Italian.
     The two shared notices of `RowSkips` are the exception to the rule: the wizard words them in
     the user's language, and only the *Reason* column of their evidence is the plugin's text.
     When a broker ships differently localized export layouts (a UK vs. IT Fineco
