@@ -821,8 +821,9 @@ Instance Key».
 A secure backup (lot B4: decisions 38 and 39, P12) is the zip of a clear backup encrypted with a password its maker
 chooses, in an envelope of LibreFolio's own, `.lfbk`, made of standard pieces of `cryptography`: scrypt and
 AES-256-GCM. Decision 38 ruled out a password-protected zip, which only some tools open (7-Zip, Keka) and whose key
-derivation is weak. Without a password the backup is the plain zip, as before, and the hosting panel's routes never
-encrypt (`backend/app/api/v1/backup/panel.py` passes no password). The format is
+derivation is weak. Without a password the backup is the plain zip, as before. The hosting panel's routes never take a
+password: they hand out a plain zip, or, with `LIBREFOLIO_BACKUP_RECIPIENTS`, a [sealed backup](#sealed-backups), an
+`.lfbk` whose random password is encrypted for the provider's key. The format is
 `backend/app/services/platform/instance_backup/envelope.py`; what the administrator sees is
 [Secure Backups](../../admin/backup_restore.md#secure).
 
@@ -1117,11 +1118,11 @@ part on its own, the locks held, the links, a part that raises, a clean data dir
 
 #### Configuration Checks of the Backup {: #backup-config-checks }
 
-`backend/app/services/platform/instance_backup/checks.py` (lot B-9) gives three checks in the shape of H's `ConfigCheck`
+`backend/app/services/platform/instance_backup/checks.py` (lot B-9) gives four checks in the shape of H's `ConfigCheck`
 ([Configuration Checks](#configuration-checks)), under the same rules: they change nothing, never raise, and never put
 the token or a file's content in a result. With them, an unusable token, upload limit or restore limit shows in the
 start log, not only at the hosting panel's first call, at the first restore upload or at the first check (the third,
-`backup.restore_limit`, since lot B-35).
+`backup.restore_limit`, since lot B-35; the fourth, `backup.recipients`, since lot L3).
 
 | `check_id` | State | `i18n_key` | `detail` | Severity |
 |------------|-------|------------|----------|----------|
@@ -1138,8 +1139,12 @@ start log, not only at the hosting panel's first call, at the first restore uplo
 | `backup.restore_limit` | No limit: `0`, unset in the self-hosted profile, or unset with an upload limit of `0` | `backup.checks.restoreLimit.unlimited` | — | `ok` |
 | `backup.restore_limit` | `BackupConfigError`: `BACKUP_MAX_RESTORE_MB_INVALID`, not a whole number; or, while it is unset outside `selfhosted`, the upload limit's `BACKUP_MAX_UPLOAD_MB_INVALID` | `backup.checks.restoreLimit.invalid` | `{"variable": …}`, from `exc.variable`: `LIBREFOLIO_BACKUP_MAX_RESTORE_MB`, or `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` in the second case | `error` |
 | `backup.restore_limit` | `ProfileDefaultError`: while it is unset outside `selfhosted`, the upload limit's entry of `ENVIRONMENT_PROFILE_DEFAULTS` is missing or of the wrong type | `backup.checks.restoreLimit.profileTable` | — | `error` |
+| `backup.recipients` (reads `backup_recipients()`, [Sealed Backups](#sealed-backups)) | One or two usable `age1…` recipients | `backup.checks.recipients.ok` | `{"count": n}` | `ok` |
+| `backup.recipients` | Unset, and `backup_requires_recipients()` false (any profile but `managed`): the panel's backups are clear zips | `backup.checks.recipients.off` | — | `ok` |
+| `backup.recipients` | `BackupConfigError`: `BACKUP_RECIPIENTS_INVALID`, `BACKUP_RECIPIENTS_TOO_MANY` or `BACKUP_RECIPIENTS_DUPLICATE` | `backup.checks.recipients.invalid` | `{"reason": …}`, the error's `code`, never the value | `error` |
+| `backup.recipients` | Unset in the `managed` profile (decision D1 of the L3 contract: never a clear zip to the panel) | `backup.checks.recipients.missingManaged` | — | `error` |
 
-- **In `CONFIG_CHECKS`.** `BACKUP_CONFIG_CHECKS = (check_panel_token, check_upload_limit, check_restore_limit)` is unpacked in
+- **In `CONFIG_CHECKS`.** `BACKUP_CONFIG_CHECKS = (check_panel_token, check_upload_limit, check_restore_limit, check_recipients)` is unpacked in
   `CONFIG_CHECKS` right after `check_test_mode`, the last of the platform's, before workstream A's `ACCOUNTS_CONFIG_CHECKS` and E's
   `*EMAIL_CONFIG_CHECKS`, which still close the tuple. The startup audit logs their
   error states as errors, each with its `summary`, a line naming its variable (quoted in «Startup Checks» of [Configuration](../../admin/configuration.md)), and the start goes on. The routes are unchanged: `503`, and their own
@@ -1152,6 +1157,114 @@ start log, not only at the hosting panel's first call, at the first restore uplo
 
 Tests: `./dev.py test services backup-checks` (`backend/test_scripts/test_services/test_backup_checks.py`), and
 `./dev.py test services config-audit`.
+
+### 🔏 Sealed Backups (`.tar`) {: #sealed-backups }
+
+A sealed backup (lot L3) is a [secure backup](#secure-backups) whose password nobody types: LibreFolio draws it, encrypts
+it with [age](https://age-encryption.org/) for one or two public keys, and forgets it. It serves the hosting panel's
+nightly backup, whose provider must be able to restore an instance without the instance being able to read its own
+backups, and the self-hoster's cron. The format was agreed with the cloud coordinator in `BACKUP-contratto-L3.md`, the
+L3 contract, kept in the project folder outside the repository (`sealed.py`'s docstring names it); where the two
+differ, the code below is what ships. What the administrator sees is
+[Sealed Backups](../../admin/backup_restore.md#sealed).
+
+**No cryptography of our own.** The `.lfbk` inside is the version-1 envelope of above, unchanged. The password is
+encrypted with age, a published format with a reference implementation in Go (`age`) and one in Rust (`rage`), through
+`pyrage` 1.4.0, the Python binding of `rage`, pinned in the `Pipfile` and on the coordinator's side alike. Only X25519
+recipients and identities (`pyrage.x25519`): no SSH keys, no plugins. So a sealed backup opens with standard tools,
+`tar` and `age -d`, without LibreFolio, and the interoperability was checked once by hand with `age` 1.3.2 on the
+vectors (contract §9.2); `test_sealed_011_*` repeat it when an `age` binary is on the `PATH`, and skip visibly
+otherwise.
+
+**The file**, `librefolio-backup-<UTC>.tar` (`FILE_SUFFIX`): a POSIX ustar archive, uncompressed, of exactly three
+members in this order (`MEMBERS`):
+
+| # | Member | Content |
+|---|--------|---------|
+| 1 | `manifest.json` | `build_manifest()`: canonical JSON (sorted keys, no spaces, UTF-8, no final line break) with exactly `format` `"lfbk-tar"`, `version` `1`, `recipients` (the `age1…` strings, in the variable's order), `lfbk_sha256`, `lfbk_size`, `created_at` (UTC, `…Z`), `librefolio_version`, `db_revision` (string or `null`) and `password_member` `"password.age"`. No personal data |
+| 2 | `password.age` | `seal_password()`: `pyrage.encrypt()` of the password, binary (not armored) |
+| 3 | `backup.lfbk` | The job's envelope, streamed into the tar |
+
+- **Small members first.** With the two small members ahead, the first `HEAD_BYTES` (10 240 bytes, one tar record) hold
+  the manifest, the password and the envelope's 52-byte header: the coordinator verifies a stored copy (manifest,
+  password, scrypt `check`) with a ranged read, without downloading it.
+- **Deterministic.** `write_sealed()` writes through `tarfile` with `USTAR_FORMAT`, members `0600`, uid/gid `0`, empty
+  names and `mtime` the job's creation time; the same three members give the same bytes
+  (`test_sealed_003_write_sealed_rebuilds_the_good_vector_byte_for_byte`). The output goes through `_NewFile` (exclusive,
+  `0600`, `<name>.part`, fsynced, renamed), and `_HashingFile` computes its SHA-256 on the way.
+- **The password.** `new_password()`: `secrets.token_bytes(32)` in base64url without padding, 43 characters, ASCII, so
+  NFC leaves it unchanged for the envelope's key derivation. One per backup. It lives in the job's thread only, as a
+  secure backup's does: never in `state.json`, a log, an exception or a `repr`.
+
+**The job** (`jobs.py`). `start_backup()` and `run_backup()` take a `password` or `recipients`, never both
+(`_one_protection()`, `ValueError`). With recipients, `_run()` draws the password, passes `instance_key=None` to
+`build_archive()` (decision 39: a sealed backup never carries the instance key, and never gets the
+`instance_key_unusable` warning), then `_protect()` runs `_encrypt()` as for a secure backup and `_seal()`: the free
+space for the envelope's size plus 64 MiB (`backup_no_space`), the phase `sealing`, the manifest built from the
+archive's own (`app_version`, `alembic_revision`), the `.tar` written. The job's file is the `.tar`: `file_name`,
+`file_size` and `file_sha256` describe it, and the job records `sealed: true` and `sealed_recipients`
+(`InstanceBackupJob`; `false` and `[]` otherwise). The zip and the envelope are removed with the other work files, at
+the end of the run: until then, during `sealing`, the work folder holds the zip, the envelope and the `.tar`.
+
+**The recipients** (`config/backup.py`). `backup_recipients()` reads `LIBREFOLIO_BACKUP_RECIPIENTS`: unset or blank is
+`None`; otherwise comma-separated items, stripped, each one `age1…` and parsed by `x25519.Recipient.from_str()`, kept in
+its canonical form (lower case), at most `MAX_RECIPIENTS` (2), no duplicates. `BackupConfigError` carries
+`BACKUP_RECIPIENTS_INVALID`, `BACKUP_RECIPIENTS_TOO_MANY` or `BACKUP_RECIPIENTS_DUPLICATE`, and its message names the
+item's position, never its value: a private key pasted by mistake must not reach a log. Not a secret, so no `_FILE`.
+`backup_requires_recipients()` is true in the `managed` profile only. The panel's start (`panel.py`, `_recipients()`)
+reads both at each request: a value it cannot use, or none on a managed instance, answers `503`
+`backup_panel_unavailable` and logs the variable and the code, never a clear zip instead; unset on any other profile, the
+panel gets the clear zip of before. The check is `backup.recipients`, in the table above.
+
+**The strict reader.** `read_sealed()` is LibreFolio's own, short ustar reader; `tarfile` is used only to write.
+`tarfile` reads PAX and GNU headers, links, folders and long or absolute names, which a backup has no use for; a reader
+written for exactly this file refuses them by construction, and the contract lets each side choose its reader under the
+same rules (the coordinator's is incremental, fed from a stream). It never extracts by name: it records each member's
+offset and size and reads there.
+
+- **Each header** (`_header()`): magic `ustar\0` and version `00` (GNU's `ustar  \0` is refused), the checksum
+  recomputed, type `0` or NUL only, no `prefix`, an ASCII name, octal numbers.
+- **The archive** (`_members()`): exactly three members, then a zero block; names and order equal to `MEMBERS`;
+  `manifest.json` and `password.age` at most 4096 bytes each (`SMALL_MEMBER_MAX`); anything cut short refused.
+- **The envelope**: its first 52 bytes start with `LFBK` and pass `EnvelopeHeader.from_bytes()`, so its bounds are
+  checked before any derivation.
+- **The manifest** (`_manifest()`): UTF-8 JSON, one object, duplicate keys refused, exactly the nine keys (an unknown
+  key means a `version` 2), each of its type; read by content, not by bytes, so the canonical form is written, not
+  required. `lfbk_size` and `lfbk_sha256` must match the third member.
+- **The opening.** `read_identities()` reads a key file as `age-keygen` writes it (comments, blank lines,
+  `AGE-SECRET-KEY-1…` lines); `open_password()` decrypts with them and wants exactly 43 base64url characters;
+  `check_password()` is `unlock_header()` on the header already read, the scrypt check without decrypting a chunk;
+  `extract_envelope()` copies the third member to a new file.
+
+`SealedError.code` is `sealed_tar_invalid`, `sealed_manifest_invalid`, `sealed_no_identity`, `sealed_password_invalid`
+or `sealed_identity_invalid`; the messages hold no path and no secret. `is_sealed()` tells a sealed backup by the
+`ustar` magic at offset 257, whatever its name.
+
+**Where it is read.** The command line (`scripts/backup_cli.py`): `keygen` writes an identity
+(`identity_file_text()`, `O_CREAT|O_EXCL|O_NOFOLLOW`, `0600`) and prints its recipient; `create --recipient`/`--sealed`
+(`_recipients_for()`); `inspect`, `restore` and `decrypt` go through `_sealed_first()`, which refuses a sealed file
+without `--identity-file` (`sealed_backup_needs_key`) and `--identity-file` with any other, and `_run_sealed()`, which
+reads the key file before the switch of user (as `--password-file`), opens and checks the password, copies the envelope
+into a `mkdtemp()` folder removed at the end, and runs the same command on it with that password. The restore check of
+the app (`staging.py`, `_open_archive()`) recognises the magic and refuses the file with `sealed_backup_needs_key`: the
+server has no private key, by design.
+
+| Source | What it holds |
+|--------|---------------|
+| `backend/app/services/platform/instance_backup/sealed.py` | The format: writing (`new_password()`, `seal_password()`, `build_manifest()`, `write_sealed()`), the strict reader (`read_sealed()`), the opening (`read_identities()`, `open_password()`, `check_password()`, `extract_envelope()`) |
+| `backend/app/services/platform/instance_backup/jobs.py` | `_protect()`, `_seal()`, the phase `sealing`, the job's `sealed` and `sealed_recipients` |
+| `backend/app/config/backup.py` | `backup_recipients()`, `backup_requires_recipients()` |
+| `backend/app/services/platform/instance_backup/checks.py` | `check_recipients()` |
+| `backend/app/api/v1/backup/panel.py`, `backend/app/api/v1/backup/job_views.py` | The panel's start and its `503`; the download as `application/x-tar` |
+| `backend/app/services/platform/instance_backup/staging.py` | `sealed_backup_needs_key` in a check |
+| `scripts/backup_cli.py` | `cmd_keygen()`, `_recipients_for()`, `_sealed_first()`, `_run_sealed()` |
+| `backend/test_scripts/fixtures/backup_l3/` | The vectors shared with the cloud coordinator: `vectors.json`, two TEST ONLY identities, the good archive, the rotation one and the negatives, made once by `generate_vectors.py` |
+
+Tests: `./dev.py test services backup-sealed` (`backend/test_scripts/test_services/test_backup_sealed.py`: every vector,
+the byte-for-byte rebuild, the reader's refusals, the identities, the cloud's key derivation, `age` interoperability
+when available), `./dev.py test utils backup-cli-sealed` (`test_utilities/test_backup_cli_sealed.py`),
+`./dev.py test api backup-panel` (`test_api/test_backup_panel.py`: the sealed panel job, the `503`) and
+`./dev.py test services backup-checks` (`backup.recipients`).
 
 ## 🩺 Configuration Checks {: #configuration-checks }
 
