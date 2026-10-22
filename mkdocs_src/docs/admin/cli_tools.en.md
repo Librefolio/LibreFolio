@@ -41,7 +41,7 @@ pipenv run ./dev.py server --force
     | `--data-dir PATH` | Use another data directory for this run, instead of `LIBREFOLIO_DATA_DIR` |
     | `--no-scheduler` | Start without the scheduled price and FX syncs |
     | `--rebuild`, `-r` | Rebuild the web interface even when it looks up to date |
-    | `--debug`, `-d` | `DEBUG` logs and a debug build of the web interface |
+    | `--debug`, `-d` | `DEBUG` logs, a debug build of the web interface and the API's documentation pages (`/api/v1/docs`, `/api/v1/redoc`), which are off otherwise |
 
     Short forms: `-w` for `--workers`, `-p` for `--port`, `-f` for `--force`. `--test`, `--coverage` and `--no-reload` are development options: `pipenv run ./dev.py server --help` lists them all.
 

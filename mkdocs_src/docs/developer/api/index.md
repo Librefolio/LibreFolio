@@ -9,11 +9,17 @@ LibreFolio provides a comprehensive RESTful API built with **FastAPI**.
 
 ## 🖥️ Interactive Documentation
 
-When the LibreFolio server is running, you can access the auto-generated interactive documentation. These pages allow you to explore the API endpoints, see the expected
+When the server runs in debug mode (`./dev.py server --debug`), you can access the interactive documentation generated from the code. These pages allow you to explore the API endpoints, see the expected
 request/response schemas, and even execute requests directly from your browser.
 
 - 🚀 [**Swagger UI**](http://localhost:6040/api/v1/docs){:target="_blank"} : Best for exploring and testing endpoints.
 - 💻 [**ReDoc**](http://localhost:6040/api/v1/redoc){:target="_blank"}: Best for reading the documentation in a structured format.
+
+!!! warning "Off on every other instance"
+
+    `/api/v1/docs`, `/api/v1/redoc` and `/api/v1/openapi.json` exist only where the documentation is switched on: with `./dev.py server --debug`, which sets `LIBREFOLIO_API_DOCS=1`, with that variable set by hand, or in test mode (the test lanes). Anywhere else, Docker and managed instances included, they answer `404`: an instance in use publishes no map of its API. The links above therefore work on a debug server only.
+
+    The schema does not need the pages: `./dev.py api schema` (and `./dev.py api sync`, which adds the TypeScript client) builds it in process from the application, so it works whatever the instance serves ([API & Frontend Communication](overview.md)). The pages are LibreFolio's own (`backend/app/api/api_docs.py`), with their libraries pinned and checked: see [The Content-Security-Policy and Frame Protection](../architecture/security.md#managed-headers).
 
 ## 🔀 Dynamic Route Generation
 

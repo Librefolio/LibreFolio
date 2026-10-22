@@ -19,6 +19,25 @@ report-only policy is as before plus the same extra ``connect-src`` sources, on 
 paragraph: the tests were rewritten for it (``expected_enforced`` is the table). The old pin of ``PAGE_POLICY`` by value is
 gone. Section (k), at the end, holds the new cases (step 1: the hashes; step 3: the table and the connect sources).
 
+H-55 wave 4, R4 (a policy for the workers, section (l)) adds one more kind to the table: a JavaScript response (``text/javascript``
+or ``application/javascript``, parameters ignored) at a path under ``/_app/`` is not «a response that is no document», it
+carries the policy of a worker (``expected_worker_policy``: ``script-src 'self'``, ``connect-src`` as a web app page's,
+``worker-src 'self' blob:``, ``object-src 'none'``, ``base-uri 'self'``, + ``frame-ancestors 'self'`` with frame protection on).
+Where (a), (g), (i) and the like say that a script under ``/_app`` carries ``frame-ancestors`` alone, read this paragraph:
+``expected_enforced`` (``worker_script=True``) is the table.
+
+H-55 wave 5, R5 (the API docs served by us, section (m)) adds one more kind to the table: the two pages of ``install_api_docs``
+(``backend/app/api/api_docs.py``), exactly ``/api/v1/docs`` and ``/api/v1/redoc`` answered ``text/html`` (parameters ignored, any
+case), are documents that load Swagger UI and ReDoc from jsDelivr (exact version, Subresource Integrity), run start scripts
+served by the backend itself and start ReDoc's search worker from a blob. Beyond the document trio they carry
+``script-src 'self' https://cdn.jsdelivr.net`` (never a hash, never ``'wasm-unsafe-eval'``), ``worker-src 'self' blob:`` and
+``connect-src 'self'`` alone (the public origin and GitHub's API are the
+web app's), plus ``frame-ancestors 'self'`` with frame protection, in one field; no report-only policy. Any other document under
+``/api/`` (and the same paths with another type, a trailing slash or another prefix) keeps the trio alone, and
+``/api/v1/openapi.json`` (JSON) is no document. The API docs of the app below are therefore our pages (``site_app(api_docs=True)``),
+not FastAPI's, which ``main.py`` no longer builds; where (a), (b), (g) and (k) say «Swagger UI and ReDoc under ``/api/v1``» with the
+trio alone, read this paragraph: ``expected_enforced`` (``api_docs_page=True``) is the table.
+
 Under test: ``SecurityHeadersMiddleware`` (``backend/app/services/platform/security_headers.py``, CP7b-1), which reads the
 settings ``LIBREFOLIO_FRAME_PROTECTION`` and ``LIBREFOLIO_CSP_REPORT_ONLY`` (``PROFILE_DEFAULTS``: off in self-hosted, on
 in managed) once, when it is built: ``SecurityHeadersMiddleware(app)`` calls ``get_settings()`` in ``__init__``. The
@@ -62,8 +81,9 @@ contract:
 (g) H-42: the type alone decides the enforced policy, whatever the path. The middleware alone, around a bare ASGI app
     answering one type at a path where the app serves that type, in every configuration: ``text/html``, ``text/html;
     charset=utf-8``, ``TEXT/HTML`` and ``Text/HTML; Charset=UTF-8`` carry ``PAGE_POLICY``; ``application/pdf`` (a
-    broker's file shown inline), ``image/png``, ``text/javascript``, ``text/css``, ``application/json`` and a 204
-    without ``Content-Type`` carry ``frame-ancestors 'self'``; with frame protection off, none carries either header.
+    broker's file shown inline), ``image/png``, ``text/javascript`` (outside ``/_app/``; under it, since R4, the policy of a
+    worker, section (l)), ``text/css``, ``application/json`` and a 204 without ``Content-Type`` carry ``frame-ancestors
+    'self'``; with frame protection off, none carries either header.
     And ``security_headers.PAGE_POLICY`` is pinned by value: the exact string of (a).
 (h) H-45: every document, not HTML only (security review E): opened directly, an XHTML page, an SVG image or an XML file
     is a document too. With frame protection on, a response whose media type (the first ``Content-Type`` before any
@@ -194,6 +214,10 @@ DOCUMENT_TRIO: dict[str, tuple[str, ...]] = {"object-src": ("'none'",), "base-ur
 #: configuration (``Mode.connect_sources``).
 WORKER_SRC = ("'self'", "blob:")
 CONNECT_SRC = ("'self'",)
+#: H-55 R5: what the two API docs pages add to the document trio: scripts from ``'self'`` and jsDelivr (no hash, no wasm),
+#: ReDoc's search worker (``WORKER_SRC``) and ``connect-src 'self'`` alone, whatever the public address or the profile.
+API_DOCS_SCRIPT_SRC = ("'self'", "https://cdn.jsdelivr.net")
+API_DOCS_PATHS = (f"{API_V1_PREFIX}/docs", f"{API_V1_PREFIX}/redoc")
 #: H-55 v2: directives the enforced header never holds: styles, images, fonts and frames stay free (embedding the app is a
 #: legitimate self-hosted use); they stay in the report-only policy alone.
 NEVER_ENFORCED = ("default-src", "style-src", "img-src", "font-src", "frame-src")
@@ -557,6 +581,11 @@ async def api_boom() -> JSONResponse:
     raise RuntimeError(PROVOKED)
 
 
+async def api_other_html() -> HTMLResponse:
+    """H-55 R5: an HTML document under ``/api/v1`` that is none of the API docs' two pages: it keeps the document trio alone."""
+    return HTMLResponse(PAGE_HTML)
+
+
 async def sets_frame_options() -> HTMLResponse:
     return HTMLResponse(PAGE_HTML, headers={"X-Frame-Options": ROUTE_FRAME_OPTIONS})
 
@@ -573,6 +602,7 @@ async def sets_csp_report_only() -> HTMLResponse:
 ROUTES: dict[str, Callable] = {
     f"{API_V1_PREFIX}/things": api_things,
     f"{API_V1_PREFIX}/boom": api_boom,
+    f"{API_V1_PREFIX}/other": api_other_html,
     "/sets-frame-options": sets_frame_options,
     "/sets-csp": sets_csp,
     "/sets-csp-report-only": sets_csp_report_only,
@@ -586,20 +616,25 @@ def _write_tree(root: Path, files: dict[str, bytes]) -> Path:
     return root
 
 
-def site_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FastAPI:
-    """A fresh app: the stack's ``security_headers``, ``gzip`` and ``cors``, the API docs (Swagger UI and ReDoc, as in
-    ``main.py``), ``ROUTES``, then the static site of a fake build and documentation. Its middleware is built at its first
-    request, with the configuration then in place."""
+def site_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, api_docs: bool = False) -> FastAPI:
+    """A fresh app: the stack's ``security_headers``, ``gzip`` and ``cors``, ``ROUTES``, then (H-55 R5) our API docs pages when
+    ``api_docs`` (``install_api_docs``, as ``main.py`` installs them: FastAPI builds none of its own), then the static site of
+    a fake build and documentation. Its schema is at ``/api/v1/openapi.json``, as when the documentation is on. Its middleware
+    is built at its first request, with the configuration then in place."""
     security_entry()
     stack = tuple(entry for entry in MIDDLEWARE_STACK if entry.name in STACK_ENTRIES)
     assert sorted(entry.name for entry in stack) == sorted(STACK_ENTRIES), f"MIDDLEWARE_STACK must hold {STACK_ENTRIES} once each: {[entry.name for entry in MIDDLEWARE_STACK]}"
     monkeypatch.setattr(static_site, "FRONTEND_BUILD_DIR", _write_tree(tmp_path / "build", BUILD_FILES))
     monkeypatch.setattr(static_site, "SITE_DIR", _write_tree(tmp_path / "site", SITE_FILES))
 
-    app = FastAPI(openapi_url=f"{API_V1_PREFIX}/openapi.json", docs_url=f"{API_V1_PREFIX}/docs", redoc_url=f"{API_V1_PREFIX}/redoc")
+    app = FastAPI(openapi_url=f"{API_V1_PREFIX}/openapi.json", docs_url=None, redoc_url=None)
     install_middleware(app, stack)
     for path, endpoint in ROUTES.items():
         app.add_api_route(path, endpoint, methods=["GET"])
+    if api_docs:
+        from backend.app.api.api_docs import install_api_docs  # noqa: PLC0415 — H-55 R5: read when a case needs it, so the other cases still run before the module exists
+
+        install_api_docs(app, enabled=True)
     static_site.install_static_site(app)
 
     mounts = [route.path for route in app.routes if isinstance(route, Mount)]
@@ -636,13 +671,20 @@ def _is_the_json(reply: Reply) -> None:
 
 
 def _is_swagger_ui(reply: Reply) -> None:
+    """H-55 R5: our Swagger UI page: it names its start script, which the backend serves (FastAPI's page started inline)."""
     assert reply.raised is None and reply.status == 200 and reply.media_type == "text/html", f"barrier: not the API docs' HTML: {reply.status} {reply.headers}, raised {reply.raised!r}"
-    assert b"swagger-ui" in reply.body, f"barrier: not Swagger UI: {reply.body[:120]!r}"
+    assert b"/api/v1/docs/swagger-init.js" in reply.body, f"barrier: not our Swagger UI page: {reply.body[:120]!r}"
 
 
 def _is_redoc(reply: Reply) -> None:
+    """H-55 R5: our ReDoc page: it names its start script, which the backend serves (FastAPI's page used a ``<redoc>`` tag)."""
     assert reply.raised is None and reply.status == 200 and reply.media_type == "text/html", f"barrier: not the API docs' HTML: {reply.status} {reply.headers}, raised {reply.raised!r}"
-    assert b"<redoc spec-url=" in reply.body, f"barrier: not ReDoc: {reply.body[:120]!r}"
+    assert b"/api/v1/redoc/redoc-init.js" in reply.body, f"barrier: not our ReDoc page: {reply.body[:120]!r}"
+
+
+def _is_the_openapi_json(reply: Reply) -> None:
+    assert reply.raised is None and reply.status == 200 and reply.media_type == "application/json", f"barrier: not the schema's JSON: {reply.status} {reply.headers}, raised {reply.raised!r}"
+    assert "openapi" in json.loads(reply.body), f"barrier: not an OpenAPI document: {reply.body[:120]!r}"
 
 
 def _is_an_html_404(reply: Reply) -> None:
@@ -674,6 +716,10 @@ class Case:
     web_app_html: bool
     method: str = "GET"
     headers: tuple[tuple[str, str], ...] = ()
+    #: R4: a JavaScript response under /_app/, which carries the policy of a worker (never a document).
+    worker_script: bool = False
+    #: R5: one of the two pages of the API docs (``install_api_docs``), a document that adds script, worker and connect sources.
+    api_docs: bool = False
 
 
 CASES: dict[str, Case] = {
@@ -686,12 +732,14 @@ CASES: dict[str, Case] = {
     # Every other response
     "text-file-of-the-build": Case("/robots.txt", answered(200, TEXT, ROBOTS_TXT), html=False, web_app_html=False),
     "image-of-the-build": Case("/favicon.png", answered(200, IMAGE, FAVICON_PNG), html=False, web_app_html=False),
-    "javascript-under-app": Case("/_app/immutable/chunks/a1b2.js", answered(200, JAVASCRIPT, CHUNK_JS), html=False, web_app_html=False),
+    "javascript-under-app": Case("/_app/immutable/chunks/a1b2.js", answered(200, JAVASCRIPT, CHUNK_JS), html=False, web_app_html=False, worker_script=True),
     "docs-root": Case("/mkdocs", answered(200, HTML, DOCS_INDEX_HTML), html=True, web_app_html=False),
     "docs-page": Case("/mkdocs/user/", answered(200, HTML, DOCS_PAGE_HTML), html=True, web_app_html=False),
     "api-json": Case(f"{API_V1_PREFIX}/things", _is_the_json, html=False, web_app_html=False),
-    "api-html-swagger-ui": Case(f"{API_V1_PREFIX}/docs", _is_swagger_ui, html=True, web_app_html=False),
-    "api-html-redoc": Case(f"{API_V1_PREFIX}/redoc", _is_redoc, html=True, web_app_html=False),
+    "api-html-swagger-ui": Case(f"{API_V1_PREFIX}/docs", _is_swagger_ui, html=True, web_app_html=False, api_docs=True),
+    "api-html-redoc": Case(f"{API_V1_PREFIX}/redoc", _is_redoc, html=True, web_app_html=False, api_docs=True),
+    "api-openapi-json": Case(f"{API_V1_PREFIX}/openapi.json", _is_the_openapi_json, html=False, web_app_html=False),
+    "api-other-html-document": Case(f"{API_V1_PREFIX}/other", answered(200, HTML, PAGE_HTML), html=True, web_app_html=False),
     "api-unknown-path-html-404": Case(f"{API_V1_PREFIX}/no-such-route", _is_an_html_404, html=True, web_app_html=False),
     "api-cors-preflight": Case(f"{API_V1_PREFIX}/things", _is_a_preflight_answer, html=False, web_app_html=False, method="OPTIONS", headers=(("Origin", "http://elsewhere.test"), ("Access-Control-Request-Method", "GET"))),
     "api-500": Case(f"{API_V1_PREFIX}/boom", _is_the_500, html=False, web_app_html=False),
@@ -703,7 +751,7 @@ async def answer(case: Case, mode: Mode, tmp_path: Path, monkeypatch: pytest.Mon
     """``case`` on a fresh app built under ``mode``, past its barriers: the response is the one the case names, of the
     type the case declares (an HTML document or not), and the middleware saw it."""
     configure(monkeypatch, mode, tmp_path)
-    reply = await call(site_app(tmp_path, monkeypatch), case.path, method=case.method, headers=case.headers)
+    reply = await call(site_app(tmp_path, monkeypatch, api_docs=case.api_docs), case.path, method=case.method, headers=case.headers)
     case.is_the_kind(reply)
     assert (reply.media_type == "text/html") is case.html, f"barrier: {case.method} {case.path} answered {reply.media_type!r}, while the case declares html={case.html}; headers {reply.headers}"
     assert_always_on(reply, f"{case.method} {case.path} with {mode.describe()}")
@@ -715,15 +763,23 @@ async def answer(case: Case, mode: Mode, tmp_path: Path, monkeypatch: pytest.Mon
 # =============================================================================
 
 
-def expected_enforced(mode: Mode, *, document: bool, web_app_page: bool, script_hashes: Sequence[str] = ()) -> dict[str, tuple[str, ...]] | None:
+def expected_enforced(mode: Mode, *, document: bool, web_app_page: bool, script_hashes: Sequence[str] = (), worker_script: bool = False, api_docs_page: bool = False) -> dict[str, tuple[str, ...]] | None:
     """H-55 v2, the table: the directives of the one enforced ``Content-Security-Policy`` of a response under ``mode``,
     ``{directive: sources}``, written here, never read from the module under test; ``None``: no policy at all.
 
     ``frame-ancestors 'self'`` whenever frame protection is on; a document adds the trio, in every profile, frame
     protection on or off; a web app page (``web_app_page``, a document by construction) adds ``script-src``
     (``SCRIPT_SRC`` then ``script_hashes``), ``worker-src`` and ``connect-src`` (``CONNECT_SRC`` then the connect sources
-    of ``mode``). A non-document with frame protection off has no policy."""
+    of ``mode``). A non-document with frame protection off has no policy. R4 (wave 4): a JavaScript response under ``/_app/``
+    (``worker_script``, never a document) carries the policy of a worker, ``expected_worker_policy``. R5 (wave 5): one of the two
+    API docs pages (``api_docs_page``, a document, never a web app page) adds ``script-src 'self' https://cdn.jsdelivr.net``, ``worker-src`` and
+    ``connect-src 'self'`` alone (no connect source of the configuration)."""
     assert document or not web_app_page, "barrier: a web app page is a document"
+    assert document or not api_docs_page, "barrier: an API docs page is a document"
+    assert not (api_docs_page and web_app_page), "barrier: an API docs page is no web app page"
+    assert not (worker_script and document), "barrier: a script under /_app/ is no document"
+    if worker_script:
+        return expected_worker_policy(mode)
     expected: dict[str, tuple[str, ...]] = {}
     if mode.frame_protection:
         expected["frame-ancestors"] = FRAME_ANCESTORS
@@ -733,25 +789,29 @@ def expected_enforced(mode: Mode, *, document: bool, web_app_page: bool, script_
         expected["script-src"] = SCRIPT_SRC + tuple(script_hashes)
         expected["worker-src"] = WORKER_SRC
         expected["connect-src"] = CONNECT_SRC + mode.connect_sources
+    if api_docs_page:
+        expected["script-src"] = API_DOCS_SCRIPT_SRC
+        expected["worker-src"] = WORKER_SRC
+        expected["connect-src"] = CONNECT_SRC
     return expected or None
 
 
-def assert_frame_protection(reply: Reply, mode: Mode, document: bool, what: str, *, web_app_page: bool = False, script_hashes: Sequence[str] = ()) -> str:
+def assert_frame_protection(reply: Reply, mode: Mode, document: bool, what: str, *, web_app_page: bool = False, script_hashes: Sequence[str] = (), worker_script: bool = False, api_docs_page: bool = False) -> str:
     """The enforced headers of ``reply`` under ``mode``: ``X-Frame-Options: SAMEORIGIN`` once exactly when frame protection
     is on; at most one ``Content-Security-Policy`` field (never two), whose directives and the sources of each are
     exactly ``expected_enforced`` (the order between directives is free). Returns what it saw, for the log."""
     frame_options, policies = reply.values("x-frame-options"), reply.values("content-security-policy")
     assert frame_options == ([FRAME_OPTIONS] if mode.frame_protection else []), f"{what}: X-Frame-Options is {frame_options}, wanted {[FRAME_OPTIONS] if mode.frame_protection else []}: frame protection is {'on' if mode.frame_protection else 'off'}"
-    expected = expected_enforced(mode, document=document, web_app_page=web_app_page, script_hashes=script_hashes)
+    expected = expected_enforced(mode, document=document, web_app_page=web_app_page, script_hashes=script_hashes, worker_script=worker_script, api_docs_page=api_docs_page)
     if expected is None:
         assert policies == [], f"{what}: a response that is no document, with frame protection off, carries no Content-Security-Policy, yet it is {policies}"
         return "no Content-Security-Policy"
-    kind = "a web app page" if web_app_page else "a document" if document else "a response that is no document"
+    kind = "a web app page" if web_app_page else "an API docs page (R5)" if api_docs_page else "a document" if document else "a JavaScript response under /_app/ (R4: the policy of a worker)" if worker_script else "a response that is no document"
     assert len(policies) == 1, f"{what}: Content-Security-Policy is {policies}, wanted exactly one field: {kind} under {mode.describe()} carries {expected}"
     found = written_directives(policies[0], what)
     assert (
         found == expected
-    ), f"{what}: the enforced policy {policies[0]!r} is not, directive by directive and source by source, {expected} ({kind}, H-55 v2: the document trio in every profile, frame-ancestors with frame protection on, a web app page adding script-src, worker-src and connect-src); the order between directives is free"
+    ), f"{what}: the enforced policy {policies[0]!r} is not, directive by directive and source by source, {expected} ({kind}, H-55 v2: the document trio in every profile, frame-ancestors with frame protection on, a web app page adding script-src, worker-src and connect-src, R4: a script under /_app/ the policy of a worker); the order between directives is free"
     return f"{kind}: Content-Security-Policy {sorted(found)}, X-Frame-Options {frame_options}"
 
 
@@ -761,13 +821,14 @@ def assert_frame_protection(reply: Reply, mode: Mode, document: bool, what: str,
 async def test_the_enforced_policy_follows_the_response_in_every_profile_and_the_frame_protection_adds_its_own(mode: Mode, case: Case, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """H-55 v2, the table over the app of ``main.py``'s shape: the document trio on every document (also ``/mkdocs`` and
     the API docs) with frame protection on or off; the web app page's script, worker and connect sources, with the hashes
-    of the fake build; ``frame-ancestors`` with frame protection on; a non-document with it off: no policy."""
+    of the fake build; ``frame-ancestors`` with frame protection on; a non-document with it off: no policy; R4: a JavaScript
+    chunk under ``/_app/`` the policy of a worker, whatever the frame protection."""
     what = f"{case.method} {case.path} with {mode.describe()}"
     print_section(f"H-55 v2 enforced policy: {what}")
 
     reply = await answer(case, mode, tmp_path, monkeypatch)
 
-    print_success(f"✓ {assert_frame_protection(reply, mode, case.html, what, web_app_page=case.web_app_html, script_hashes=FAKE_BUILD_SOURCES)}; nosniff and Referrer-Policy")
+    print_success(f"✓ {assert_frame_protection(reply, mode, case.html, what, web_app_page=case.web_app_html, script_hashes=FAKE_BUILD_SOURCES, worker_script=case.worker_script, api_docs_page=case.api_docs)}; nosniff and Referrer-Policy")
 
 
 # =============================================================================
@@ -937,6 +998,20 @@ class TypedAnswer:
         outside = not (self.path == "/mkdocs" or self.path.startswith("/mkdocs/") or self.path == "/api" or self.path.startswith("/api/"))
         return media_type == "text/html" and outside
 
+    @property
+    def api_docs_page(self) -> bool:
+        """R5 (wave 5): one of the API docs' two pages: ``text/html`` exactly (any case, parameters allowed) at exactly
+        ``/api/v1/docs`` or ``/api/v1/redoc``. Written here, from the contract."""
+        media_type = (self.content_type or "").partition(";")[0].strip().lower()
+        return media_type == "text/html" and self.path in API_DOCS_PATHS
+
+    @property
+    def worker_script(self) -> bool:
+        """R4 (wave 4): a JavaScript response under ``/_app/``: ``text/javascript`` or ``application/javascript``, parameters
+        ignored, any case, at a path starting with ``/_app/``. Written here, from the contract."""
+        media_type = (self.content_type or "").partition(";")[0].strip().lower()
+        return media_type in ("text/javascript", "application/javascript") and self.path.startswith("/_app/")
+
 
 #: Each type at a path where the app serves it, or could, HTML under /mkdocs and /api/ too: the type decides, never the path.
 TYPED_ANSWERS: dict[str, TypedAnswer] = {
@@ -944,7 +1019,7 @@ TYPED_ANSWERS: dict[str, TypedAnswer] = {
     "text-html": TypedAnswer("/", "text/html", PAGE_HTML, document=True),
     "text-html-charset-utf-8": TypedAnswer("/portfolio/overview", "text/html; charset=utf-8", PAGE_HTML, document=True),
     "uppercase-TEXT-HTML": TypedAnswer("/mkdocs/user/", "TEXT/HTML", PAGE_HTML, document=True),
-    "mixed-case-with-charset": TypedAnswer(f"{API_V1_PREFIX}/docs", "Text/HTML; Charset=UTF-8", PAGE_HTML, document=True),
+    "mixed-case-with-charset": TypedAnswer(f"{API_V1_PREFIX}/other", "Text/HTML; Charset=UTF-8", PAGE_HTML, document=True),  # R5: /api/v1/docs is one of the API docs' two pages now (section (m))
     # Every other type, and none at all
     "application-pdf": TypedAnswer(f"{API_V1_PREFIX}/brokers/import/files/7/download", "application/pdf", BROKER_FILE_PDF, document=False),
     "image-png": TypedAnswer("/favicon.png", "image/png", FAVICON_PNG, document=False),
@@ -992,7 +1067,8 @@ def assert_bare_answer(reply: Reply, typed: TypedAnswer, what: str) -> None:
 async def test_the_enforced_policy_follows_the_type_of_the_response(mode: Mode, typed: TypedAnswer, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """H-42/H-45, and since H-55 v2 in every profile: the type alone (with the path telling a web app page from the
     documentation's and the API's HTML) decides the enforced policy: the trio on a document, script, worker and connect
-    sources on a web app page (no build here, so no hash), ``frame-ancestors`` with frame protection on, nothing else."""
+    sources on a web app page (no build here, so no hash), the policy of a worker on a JavaScript response under ``/_app/``
+    (R4), ``frame-ancestors`` with frame protection on, nothing else."""
     what = f"GET {typed.path} answered {typed.status} {typed.content_type or 'without Content-Type'} with {mode.describe()}"
     print_section(f"H-42/H-45/H-55 v2 enforced policy by type: {what}")
     configure(monkeypatch, mode, tmp_path)
@@ -1001,7 +1077,7 @@ async def test_the_enforced_policy_follows_the_type_of_the_response(mode: Mode, 
 
     assert_bare_answer(reply, typed, what)
     assert_always_on(reply, what)
-    print_success(f"✓ {assert_frame_protection(reply, mode, typed.document, what, web_app_page=typed.web_app_page)}; nosniff and Referrer-Policy")
+    print_success(f"✓ {assert_frame_protection(reply, mode, typed.document, what, web_app_page=typed.web_app_page, worker_script=typed.worker_script)}; nosniff and Referrer-Policy")
 
 
 @pytest.mark.asyncio
@@ -1192,10 +1268,12 @@ class MountedFile:
     media_types: tuple[str, ...]
     body: bytes
     document: bool
+    #: R4: a JavaScript file under /_app/, whose 200 carries the policy of a worker (its 304 none).
+    worker_script: bool = False
 
 
 MOUNTED_FILES: dict[str, MountedFile] = {
-    "javascript-chunk": MountedFile("/_app/immutable/chunks/a1b2.js", JAVASCRIPT, CHUNK_JS, document=False),
+    "javascript-chunk": MountedFile("/_app/immutable/chunks/a1b2.js", JAVASCRIPT, CHUNK_JS, document=False, worker_script=True),
     "svg-image": MountedFile(LOGO_SVG_PATH, SVG, LOGO_SVG, document=True),
 }
 
@@ -1204,7 +1282,8 @@ MOUNTED_FILES: dict[str, MountedFile] = {
 @pytest.mark.parametrize("mounted", MOUNTED_FILES.values(), ids=list(MOUNTED_FILES))
 async def test_the_real_304_of_the_app_mount_carries_no_policy(mounted: MountedFile, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """H-45, through the stack in managed: the /_app mount (ImmutableStaticFiles, the one part of the app answering 304)
-    revalidates a file of the build; its 200 carries the policy of its type (the document trio on the SVG, a document), its 304 none."""
+    revalidates a file of the build; its 200 carries the policy of its type (the document trio on the SVG, a document; the policy
+    of a worker on the JavaScript chunk, R4), its 304 none."""
     mode = MODES["managed"]
     what = f"GET {mounted.path} with {mode.describe()}"
     print_section(f"H-45 a real 304 through the stack: {what}, then again with its ETag")
@@ -1224,7 +1303,7 @@ async def test_the_real_304_of_the_app_mount_carries_no_policy(mounted: MountedF
     assert again.raised is None and again.status == 304 and again.body == b"", f"barrier: {again_what} answered {again.status} {again.body[:120]!r}, raised {again.raised!r}, not 304: the revalidation path was not taken"
     assert again.values("etag") == etags and again.values("cache-control") == [static_site.IMMUTABLE_CACHE_CONTROL], f"barrier: {again_what}: not the 304 of ImmutableStaticFiles, with its ETag and the Cache-Control the mount gives a file of immutable/: {again.headers}"
     assert_always_on(again, again_what)
-    enforced = assert_frame_protection(first, mode, mounted.document, what)
+    enforced = assert_frame_protection(first, mode, mounted.document, what, worker_script=mounted.worker_script)
     assert first.values("content-security-policy-report-only") == [], f"{what}: Content-Security-Policy-Report-Only is {first.values('content-security-policy-report-only')}, wanted none: {first.media_type!r} is not the web app's HTML"
     for name in POLICY_HEADERS:
         assert again.values(name) == [], f"{again_what}: {name} is {again.values(name)}, wanted none; H-45: the browser freshens its cached copy, whose policy is {first.values('content-security-policy')}, with the header fields of this 304 (RFC 9111, 3.2)"
@@ -1904,7 +1983,7 @@ async def test_only_web_app_html_responses_look_at_the_build(mode: Mode, tmp_pat
 LITERAL_KINDS = {
     "text-html": "web app page",
     "uppercase-TEXT-HTML": "document",  # at /mkdocs/user/
-    "mixed-case-with-charset": "document",  # at /api/v1/docs
+    "mixed-case-with-charset": "document",  # at /api/v1/other (R5: not one of the API docs' two pages)
     "image-svg-xml": "document",
     "application-pdf": "other",
     "application-json": "other",
@@ -1965,6 +2044,10 @@ async def test_the_enforced_header_never_holds_default_style_img_font_or_frame_s
     found = written_directives(policies[0], what) if policies else {}
     if case.web_app_html:
         assert "worker-src" in found and "script-src" in found, f"barrier: {what}: the enforced policy {policies} is not a web app page's (no script-src, worker-src): nothing below proves the styles, images, fonts and frames stay free"
+    if case.worker_script:
+        assert "worker-src" in found and "script-src" in found, f"barrier: {what}: the enforced policy {policies} is not a worker's (R4: no script-src, worker-src): nothing below proves the styles, images, fonts and frames stay free"
+    if case.api_docs:
+        assert "worker-src" in found and "script-src" in found, f"barrier: {what}: the enforced policy {policies} is not an API docs page's (R5: no script-src, worker-src): nothing below proves the styles, images, fonts and frames stay free"
     held = [name for name in NEVER_ENFORCED if name in found]
     assert not held, f"{what}: the enforced policy {policies} holds {held}: styles, images, fonts and frames stay free (embedding the app is a legitimate self-hosted use); they belong to the report-only policy alone"
     reporting = [name for name in NO_REPORT_DIRECTIVES if name in found]
@@ -2274,3 +2357,452 @@ def test_the_build_hashes_cache_reads_once_when_threads_ask_together(tmp_path: P
     assert answers == [build_sources(BUILD_ID)] * CONCURRENT_REQUESTS, f"{what}: the answers are {answers}, not always those of the build, {build_sources(BUILD_ID)}"
     assert len(reads) == 1, f"{what}: {SPA_HASHES_NAME} was called {len(reads)} times, wanted once: the cache holds a lock, and one read serves the threads that asked for the same signature"
     print_success("✓ one read for all the threads")
+
+
+# =============================================================================
+# (l) H-55 WAVE 4, R4: A POLICY FOR THE WORKERS (JavaScript under /_app/)
+# =============================================================================
+#
+# A browser applies the Content-Security-Policy of a *script response* to a worker started from it, and ignores it on any
+# other script. The web app's only URL worker (``priceProcessing.worker``) is served by ``/_app/``; today that response
+# carries no policy, so the worker runs under none. Contract (wave 4, §4): every JavaScript response (``text/javascript`` or
+# ``application/javascript``, parameters ignored) at a path starting with ``/_app/`` gets, besides the base headers, ONE
+# enforced ``Content-Security-Policy`` with exactly these directives, the order between them free:
+#
+#   script-src 'self'; connect-src 'self' <the web-app page's connect sources>; worker-src 'self' blob:;
+#   object-src 'none'; base-uri 'self'          (+ frame-ancestors 'self' when frame protection is on)
+#
+# never ``default-src``, ``'unsafe-inline'``, ``'unsafe-eval'`` or ``'wasm-unsafe-eval'`` (the worker compiles no
+# WebAssembly; the PDF engine's worker is a blob worker under the page's policy). None on a 304 (H-45), none on JavaScript
+# outside ``/_app/`` (plugin assets, ``/mkdocs``), a route's own policy kept. Everything here is written from the contract,
+# never read from the module; the presence barrier of each absence is a JavaScript response under ``/_app/`` carrying the
+# policy, so an absence is never the effect of the feature not existing.
+#
+# R4 has shipped: the cases of sections (a), (g) and (i) that serve a JavaScript chunk under ``/_app/``
+# (CASES["javascript-under-app"], TYPED_ANSWERS["text-javascript"], MOUNTED_FILES["javascript-chunk"]) expect this same
+# policy, through ``expected_enforced(worker_script=True)``, which reads ``expected_worker_policy`` below.
+
+WORKER_SCRIPT = b"self.onmessage = (event) => self.postMessage(event.data);\n"
+#: The two places of a worker's script and of a chunk under the build's immutable folder, as SvelteKit writes them.
+WORKER_PATH = "/_app/immutable/workers/x.js"
+CHUNK_PATH = "/_app/immutable/chunks/y.js"
+SCRIPT_PATHS: dict[str, str] = {"worker": WORKER_PATH, "chunk": CHUNK_PATH}
+#: Both JavaScript media types of the contract, the second with a parameter, which is ignored.
+SCRIPT_TYPES: dict[str, str] = {"text-javascript": "text/javascript", "application-javascript-charset": "application/javascript; charset=utf-8"}
+#: What a worker's policy holds besides ``frame-ancestors`` and ``connect-src``, which follow the configuration.
+WORKER_FIXED: dict[str, tuple[str, ...]] = {"script-src": ("'self'",), "worker-src": WORKER_SRC, "object-src": ("'none'",), "base-uri": ("'self'",)}
+#: What a policy of a worker never holds, as a token anywhere in it.
+WORKER_FORBIDDEN = ("default-src", "'unsafe-inline'", "'unsafe-eval'", "'wasm-unsafe-eval'", *NEVER_ENFORCED, "form-action", "report-uri", "report-to")
+#: The configurations of R4: every one the file parametrizes, and a valid public address in each profile (a connect source).
+R4_MODES: dict[str, Mode] = {
+    **MODES,
+    "selfhosted-public-url": connect_mode("selfhosted", "https://librefolio.example.org:8443/portfolio", "https://librefolio.example.org:8443"),
+    "managed-public-url": connect_mode("managed", "https://librefolio.example.org/", "https://librefolio.example.org"),
+}
+
+
+def script_answer(path: str, content_type: str, body: bytes = WORKER_SCRIPT) -> TypedAnswer:
+    """A bare app's answer at ``path``: ``content_type`` as written, ``body``; no document."""
+    return TypedAnswer(path, content_type, body, document=False)
+
+
+def expected_worker_policy(mode: Mode) -> dict[str, tuple[str, ...]]:
+    """R4: the directives of the policy of a JavaScript response under ``/_app/`` under ``mode``, ``{directive: sources}``,
+    written here: ``frame-ancestors 'self'`` only with frame protection on, ``connect-src`` as the web app's page has it."""
+    expected: dict[str, tuple[str, ...]] = {"frame-ancestors": FRAME_ANCESTORS} if mode.frame_protection else {}
+    expected.update(WORKER_FIXED)
+    expected["connect-src"] = CONNECT_SRC + mode.connect_sources
+    return expected
+
+
+def assert_worker_policy(reply: Reply, mode: Mode, what: str) -> dict[str, tuple[str, ...]]:
+    """``reply`` carries the worker's policy of ``mode``: one ``Content-Security-Policy`` whose directives and sources are
+    exactly ``expected_worker_policy``, ``X-Frame-Options`` once exactly with frame protection, no report-only policy.
+    Returns the directives found."""
+    policies = reply.values("content-security-policy")
+    assert len(policies) == 1, f"{what}: Content-Security-Policy is {policies}, wanted exactly one field: R4 gives a JavaScript response under /_app/ the policy of a worker, {expected_worker_policy(mode)}"
+    found = written_directives(policies[0], what)
+    expected = expected_worker_policy(mode)
+    assert found == expected, f"{what}: the policy {policies[0]!r} is not, directive by directive and source by source, {expected} (R4; the order between directives is free)"
+    assert reply.values("x-frame-options") == ([FRAME_OPTIONS] if mode.frame_protection else []), f"{what}: X-Frame-Options is {reply.values('x-frame-options')}, wanted {[FRAME_OPTIONS] if mode.frame_protection else []}: frame protection is {'on' if mode.frame_protection else 'off'}"
+    assert reply.values("content-security-policy-report-only") == [], f"{what}: Content-Security-Policy-Report-Only is {reply.values('content-security-policy-report-only')}, wanted none: it is the web app's pages' alone"
+    return found
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("content_type", SCRIPT_TYPES.values(), ids=list(SCRIPT_TYPES))
+@pytest.mark.parametrize("path", SCRIPT_PATHS.values(), ids=list(SCRIPT_PATHS))
+@pytest.mark.parametrize("mode", R4_MODES.values(), ids=list(R4_MODES))
+async def test_r4_a_javascript_response_under_app_gets_exactly_the_workers_policy(mode: Mode, path: str, content_type: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """R4: ``text/javascript`` and ``application/javascript; charset=utf-8``, at a worker's place and at a chunk's under
+    ``/_app/``, in every configuration (profile, switches, a public address): one policy, ``script-src 'self'``,
+    ``connect-src`` with the web app page's sources (``'self'``, the public origin when valid, GitHub's API self-hosted),
+    ``worker-src 'self' blob:``, ``object-src 'none'``, ``base-uri 'self'``, plus ``frame-ancestors 'self'`` exactly with
+    frame protection; no report-only policy."""
+    typed = script_answer(path, content_type)
+    what = f"GET {path} answered {content_type} with {mode.describe()}"
+    print_section(f"H-55 w4 R4 the workers' policy: {what}")
+    configure(monkeypatch, mode, tmp_path)
+
+    reply = await call(wrap(answering(typed)), path)  # SecurityHeadersMiddleware(app) built here, configuration in place
+
+    assert_bare_answer(reply, typed, what)
+    assert_always_on(reply, what)
+    found = assert_worker_policy(reply, mode, what)
+    print_success(f"✓ {sorted(found)}; connect-src {found['connect-src']}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("content_type", SCRIPT_TYPES.values(), ids=list(SCRIPT_TYPES))
+@pytest.mark.parametrize("mode", R4_MODES.values(), ids=list(R4_MODES))
+async def test_r4_the_workers_policy_never_holds_default_src_or_an_unsafe_or_wasm_source(mode: Mode, content_type: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """R4: the policy of a worker holds no ``default-src`` (styles, images, fonts and frames stay free), no
+    ``'unsafe-inline'``, no ``'unsafe-eval'``, no ``'wasm-unsafe-eval'`` (the only URL worker compiles no WebAssembly), and
+    none of the other directives the app leaves free. Behind its barrier: it is the worker's policy, with its ``script-src``."""
+    typed = script_answer(WORKER_PATH, content_type)
+    what = f"GET {WORKER_PATH} answered {content_type} with {mode.describe()}"
+    print_section(f"H-55 w4 R4 what the workers' policy never holds: {what}")
+    configure(monkeypatch, mode, tmp_path)
+
+    reply = await call(wrap(answering(typed)), WORKER_PATH)
+
+    assert_bare_answer(reply, typed, what)
+    assert_always_on(reply, what)
+    policies = reply.values("content-security-policy")
+    assert len(policies) == 1 and "script-src" in written_directives(policies[0], what) and "worker-src" in written_directives(policies[0], what), f"barrier: {what}: Content-Security-Policy is {policies}, not a worker's policy (no script-src, worker-src): nothing below proves what it never holds"
+    held = [token for token in WORKER_FORBIDDEN if token in policies[0].lower()]
+    assert not held, f"{what}: the policy {policies[0]!r} holds {held}: R4 gives a worker script-src, connect-src, worker-src, object-src and base-uri, and nothing else but frame-ancestors with frame protection"
+    print_success(f"✓ none of {WORKER_FORBIDDEN}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", SCRIPT_PATHS.values(), ids=list(SCRIPT_PATHS))
+@pytest.mark.parametrize("mode", [R4_MODES["managed"], R4_MODES["selfhosted"], R4_MODES["managed-both-switches-false"]], ids=["managed", "selfhosted", "managed-both-switches-false"])
+async def test_r4_the_mount_of_the_app_serves_a_script_with_the_workers_policy(mode: Mode, path: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """R4, through the stack (``security_headers``, gzip, cors, the static site of the fake build): the ``/_app`` mount
+    (``ImmutableStaticFiles``) serves a worker's script and a chunk as JavaScript, and the response carries the worker's
+    policy; the mount's own headers (ETag, immutable ``Cache-Control``) stay."""
+    what = f"GET {path} through the stack with {mode.describe()}"
+    print_section(f"H-55 w4 R4 through the stack: {what}")
+    configure(monkeypatch, mode, tmp_path)
+    app = site_app(tmp_path, monkeypatch)
+    _write_tree(tmp_path / "build", {path.removeprefix("/"): WORKER_SCRIPT})
+
+    reply = await call(app, path)
+
+    answered(200, JAVASCRIPT, WORKER_SCRIPT)(reply)
+    assert_always_on(reply, what)
+    assert reply.values("cache-control") == [static_site.IMMUTABLE_CACHE_CONTROL], f"barrier: {what}: not the mount's answer, Cache-Control is {reply.values('cache-control')}"
+    found = assert_worker_policy(reply, mode, what)
+    print_success(f"✓ {sorted(found)}; the mount's Cache-Control kept")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", SCRIPT_PATHS.values(), ids=list(SCRIPT_PATHS))
+@pytest.mark.parametrize("mode", R4_MODES.values(), ids=list(R4_MODES))
+async def test_r4_a_304_of_a_script_gets_no_policy_while_its_200_carries_the_workers(mode: Mode, path: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """R4 and H-45: a browser freshens its cached response with the header fields of a 304, so a policy on a 304, with or
+    without a ``Content-Type``, would replace the cached script's. The same script as a 200 (the barrier) carries the worker's
+    policy; revalidated, its 304 carries neither policy and keeps the route's headers, ``X-Frame-Options`` as any answer."""
+    revalidated = Revalidated(path, (("content-type", "text/javascript; charset=utf-8"), ("etag", '"w1"'), ("cache-control", static_site.IMMUTABLE_CACHE_CONTROL)), WORKER_SCRIPT, document=False, web_app_html=False)
+    what = f"GET {path} with If-None-Match: {revalidated.etag}, answered 304, with {mode.describe()}"
+    print_section(f"H-55 w4 R4 no policy on a 304: {what}")
+    configure(monkeypatch, mode, tmp_path)
+    middleware = wrap(revalidating(revalidated))  # SecurityHeadersMiddleware(app) built here, configuration in place
+
+    fresh = await call(middleware, path)
+
+    assert fresh.raised is None and fresh.status == 200 and fresh.body == WORKER_SCRIPT, f"barrier: {what}: not the bare app's 200: {fresh.status} {fresh.body[:120]!r}, raised {fresh.raised!r}"
+    assert_always_on(fresh, f"GET {path} answered 200, with {mode.describe()}")
+    assert_worker_policy(fresh, mode, f"barrier: GET {path} answered 200, with {mode.describe()}")
+
+    reply = await call(middleware, path, headers=(("If-None-Match", revalidated.etag),))
+
+    assert reply.raised is None and reply.status == 304 and reply.body == b"", f"barrier: {what}: not the bare app's 304: {reply.status} {reply.body[:120]!r}, raised {reply.raised!r}"
+    assert_always_on(reply, what)
+    for name in POLICY_HEADERS:
+        assert reply.values(name) == [], f"{what}: {name} is {reply.values(name)}, wanted none; H-45: a browser freshens its cached copy with the header fields of a 304, so a policy there replaces the worker's"
+    frame_options = [FRAME_OPTIONS] if mode.frame_protection else []
+    assert reply.values("x-frame-options") == frame_options, f"{what}: X-Frame-Options is {reply.values('x-frame-options')}, wanted {frame_options}"
+    print_success("✓ the 200 carries the workers' policy, the 304 none")
+
+
+#: JavaScript where R4 does not reach: a plugin's asset, the documentation's, and paths that only look like ``/_app/``.
+OUTSIDE_APP_PATHS: dict[str, str] = {
+    "plugin-asset": "/plugins/x.js",
+    "documentation-asset": "/mkdocs/assets/z.js",
+    "path-starting-like-app": "/_apple/immutable/workers/x.js",
+    "app-not-at-the-start": "/other/_app/immutable/workers/x.js",
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("key", list(OUTSIDE_APP_PATHS))
+@pytest.mark.parametrize("mode", R4_MODES.values(), ids=list(R4_MODES))
+async def test_r4_javascript_outside_app_gets_only_what_frame_protection_gives_a_non_document(mode: Mode, key: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """R4: JavaScript at a plugin's asset path, under ``/mkdocs``, or at a path that merely starts like ``/_app/``, gets what
+    any non-document gets (``frame-ancestors 'self'`` with frame protection on, no policy off): never the worker's policy. The
+    barrier, on the same middleware: a script under ``/_app/`` answered the same type carries it, so the absence is R4's
+    boundary and not a feature that does not exist."""
+    path = OUTSIDE_APP_PATHS[key]
+    inside, outside = script_answer(WORKER_PATH, "text/javascript"), script_answer(path, "text/javascript")
+    what = f"GET {path} answered text/javascript with {mode.describe()}"
+    print_section(f"H-55 w4 R4 outside /_app/: {what}")
+    configure(monkeypatch, mode, tmp_path)
+    middleware = wrap(routing([inside, outside]))
+
+    barrier = await call(middleware, WORKER_PATH)
+
+    assert_bare_answer(barrier, inside, f"barrier: GET {WORKER_PATH}")
+    assert_always_on(barrier, f"barrier: GET {WORKER_PATH}, with {mode.describe()}")
+    assert_worker_policy(barrier, mode, f"barrier: GET {WORKER_PATH}, with {mode.describe()}")
+
+    reply = await call(middleware, path)
+
+    assert_bare_answer(reply, outside, what)
+    assert_always_on(reply, what)
+    print_success(f"✓ {assert_frame_protection(reply, mode, False, what)}; nosniff and Referrer-Policy")
+
+
+#: What else is served under ``/_app/`` and is no script: a style sheet, JSON, WebAssembly, a source map; R4 is for scripts.
+NON_SCRIPT_TYPES: dict[str, TypedAnswer] = {
+    "css": TypedAnswer("/_app/immutable/assets/app.css", "text/css; charset=utf-8", APP_CSS, document=False),
+    "json": TypedAnswer("/_app/version.json", "application/json", API_JSON, document=False),
+    "wasm": TypedAnswer("/_app/immutable/assets/engine.wasm", "application/wasm", b"\x00asm\x01\x00\x00\x00", document=False),
+    "source-map": TypedAnswer("/_app/immutable/chunks/y.js.map", "application/json", API_JSON, document=False),
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("key", list(NON_SCRIPT_TYPES))
+@pytest.mark.parametrize("mode", [R4_MODES["managed"], R4_MODES["selfhosted"]], ids=["managed", "selfhosted"])
+async def test_r4_what_is_no_script_under_app_does_not_get_the_workers_policy(mode: Mode, key: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """R4: the type decides, not the path alone: a style sheet, JSON, a WebAssembly module or a source map under ``/_app/``
+    gets what any non-document gets. Barrier on the same middleware: a script under ``/_app/`` carries the worker's policy."""
+    typed, script = NON_SCRIPT_TYPES[key], script_answer(WORKER_PATH, "text/javascript")
+    what = f"GET {typed.path} answered {typed.content_type} with {mode.describe()}"
+    print_section(f"H-55 w4 R4 not a script under /_app/: {what}")
+    configure(monkeypatch, mode, tmp_path)
+    middleware = wrap(routing([script, typed]))
+
+    barrier = await call(middleware, WORKER_PATH)
+
+    assert_bare_answer(barrier, script, f"barrier: GET {WORKER_PATH}")
+    assert_always_on(barrier, f"barrier: GET {WORKER_PATH}, with {mode.describe()}")
+    assert_worker_policy(barrier, mode, f"barrier: GET {WORKER_PATH}, with {mode.describe()}")
+
+    reply = await call(middleware, typed.path)
+
+    assert_bare_answer(reply, typed, what)
+    assert_always_on(reply, what)
+    print_success(f"✓ {assert_frame_protection(reply, mode, False, what)}; nosniff and Referrer-Policy")
+
+
+def sets_its_own_policy() -> Callable:
+    """A bare ASGI app answering JavaScript at two places under ``/_app/``: one whose route sets its own
+    ``Content-Security-Policy`` (``ROUTE_CSP``), one that sets none."""
+
+    async def app(scope: dict[str, Any], receive: Callable, send: Callable) -> None:
+        own = scope["path"] == "/_app/immutable/workers/own.js"
+        headers = [(b"content-type", b"text/javascript")] + ([(b"content-security-policy", ROUTE_CSP.encode())] if own else [])
+        await send({"type": "http.response.start", "status": 200, "headers": headers})
+        await send({"type": "http.response.body", "body": WORKER_SCRIPT})
+
+    return app
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", R4_MODES.values(), ids=list(R4_MODES))
+async def test_r4_a_policy_the_route_set_on_a_script_is_kept_alone(mode: Mode, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """R4, as for every header of D5 (d): a JavaScript response under ``/_app/`` whose route set its own
+    ``Content-Security-Policy`` keeps it, alone, never replaced by the worker's policy, never joined by a second field;
+    ``X-Frame-Options`` follows the frame protection. Barrier, same middleware: the sibling without one gets the worker's."""
+    own_path, plain_path = "/_app/immutable/workers/own.js", "/_app/immutable/workers/plain.js"
+    what = f"GET {own_path} (the route sets {ROUTE_CSP!r}) with {mode.describe()}"
+    print_section(f"H-55 w4 R4 a route's own policy on a script: {what}")
+    configure(monkeypatch, mode, tmp_path)
+    middleware = wrap(sets_its_own_policy())
+
+    plain = await call(middleware, plain_path)
+
+    assert plain.raised is None and plain.status == 200 and plain.body == WORKER_SCRIPT, f"barrier: GET {plain_path}: not the bare app's answer: {plain.status} {plain.body[:120]!r}, raised {plain.raised!r}"
+    assert_always_on(plain, f"barrier: GET {plain_path}, with {mode.describe()}")
+    assert_worker_policy(plain, mode, f"barrier: GET {plain_path}, with {mode.describe()}")
+
+    reply = await call(middleware, own_path)
+
+    assert reply.raised is None and reply.status == 200 and reply.body == WORKER_SCRIPT, f"barrier: {what}: not the bare app's answer: {reply.status} {reply.body[:120]!r}, raised {reply.raised!r}"
+    assert_always_on(reply, what)
+    assert reply.values("content-security-policy") == [ROUTE_CSP], f"{what}: Content-Security-Policy is {reply.values('content-security-policy')}; the route's {ROUTE_CSP!r} must stay, alone: never replaced by the worker's policy, never joined by a second field"
+    frame_options = [FRAME_OPTIONS] if mode.frame_protection else []
+    assert reply.values("x-frame-options") == frame_options, f"{what}: X-Frame-Options is {reply.values('x-frame-options')}, wanted {frame_options}"
+    print_success(f"✓ the route's {ROUTE_CSP!r} kept alone; X-Frame-Options {frame_options}")
+
+
+# =============================================================================
+# (m) H-55 WAVE 5, R5: THE API DOCS' TWO PAGES (scripts of our own origin, ReDoc's search worker)
+# =============================================================================
+#
+# FastAPI's Swagger UI and ReDoc pages loaded their libraries from jsDelivr unpinned, with an inline start script, which the
+# enforced policy could not carry. Now ``install_api_docs`` serves both pages with no inline script (their start scripts come
+# from the backend, ``/api/v1/docs/swagger-init.js`` and ``/api/v1/redoc/redoc-init.js``) and the libraries come from jsDelivr
+# at an exact version with Subresource Integrity, and the two pages, exactly ``/api/v1/docs`` and ``/api/v1/redoc`` answered ``text/html`` (parameters ignored, any case), carry, beyond the
+# document trio (and ``frame-ancestors 'self'`` with frame protection), ``script-src 'self' https://cdn.jsdelivr.net``, ``worker-src 'self' blob:``
+# (ReDoc's search worker) and ``connect-src 'self'`` (Swagger's «Try it out» and the schema's fetch, same origin), in ONE field.
+# Nothing else changes: any other document, under ``/api/`` or elsewhere, keeps the trio alone; ``/api/v1/openapi.json`` is JSON,
+# no document. Written from the contract (``expected_enforced`` with ``api_docs_page=True`` is the table, and the literals below
+# are the contract's words); the through-the-stack cases are ``CASES["api-html-swagger-ui"]`` and ``["api-html-redoc"]`` of
+# section (a), served by ``install_api_docs`` itself.
+
+#: The kinds of ``text/html`` the pages may be answered as: the type decides, in any case, parameters allowed.
+DOCS_PAGE_TYPES: dict[str, str] = {"plain": "text/html", "charset": "text/html; charset=utf-8", "upper-case": "TEXT/HTML", "mixed-case-with-charset": "Text/HTML; Charset=UTF-8"}
+
+
+def docs_page_answer(path: str, content_type: str = "text/html") -> TypedAnswer:
+    """A bare app's HTML page at one of the API docs' paths."""
+    return TypedAnswer(path, content_type, PAGE_HTML, document=True)
+
+
+def literal_docs_policy(mode: Mode) -> dict[str, tuple[str, ...]]:
+    """The contract's policy of an API docs page, written out: the trio, ``script-src 'self' https://cdn.jsdelivr.net``, ``worker-src 'self' blob:``,
+    ``connect-src 'self'``, and ``frame-ancestors 'self'`` exactly with frame protection."""
+    policy: dict[str, tuple[str, ...]] = {"frame-ancestors": ("'self'",)} if mode.frame_protection else {}
+    policy |= {
+        "object-src": ("'none'",),
+        "base-uri": ("'self'",),
+        "form-action": ("'self'",),
+        "script-src": ("'self'", "https://cdn.jsdelivr.net"),
+        "worker-src": ("'self'", "blob:"),
+        "connect-src": ("'self'",),
+    }
+    return policy
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("content_type", DOCS_PAGE_TYPES.values(), ids=list(DOCS_PAGE_TYPES))
+@pytest.mark.parametrize("path", API_DOCS_PATHS)
+@pytest.mark.parametrize("mode", R4_MODES.values(), ids=list(R4_MODES))
+async def test_r5_an_api_docs_page_gets_exactly_the_docs_policy(mode: Mode, path: str, content_type: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """R5: ``/api/v1/docs`` and ``/api/v1/redoc`` answered ``text/html`` get, in every configuration (profile, switches, a public
+    address), the document trio, ``script-src 'self' https://cdn.jsdelivr.net``, ``worker-src 'self' blob:``, ``connect-src 'self'`` alone (the public
+    origin and GitHub's API are the web app's) and ``frame-ancestors 'self'`` exactly with frame protection; one field, no
+    report-only policy, ``X-Frame-Options`` exactly with frame protection."""
+    typed = docs_page_answer(path, content_type)
+    what = f"GET {path} answered {content_type} with {mode.describe()}"
+    print_section(f"H-55 w5 R5 the API docs page's policy: {what}")
+    configure(monkeypatch, mode, tmp_path)
+
+    reply = await call(wrap(answering(typed)), path)
+
+    assert_bare_answer(reply, typed, what)
+    assert_always_on(reply, what)
+    assert typed.api_docs_page, f"barrier: {what}: the case is one of the API docs' two pages"
+    print_success(f"✓ {assert_frame_protection(reply, mode, True, what, api_docs_page=True)}")
+    found = written_directives(reply.values("content-security-policy")[0], what)
+    assert found == literal_docs_policy(mode), f"{what}: the enforced policy {reply.values('content-security-policy')} is {found}, not this exact set of directives with exactly these sources, {literal_docs_policy(mode)} (R5; the order between directives is free)"
+    assert reply.values("content-security-policy-report-only") == [], f"{what}: Content-Security-Policy-Report-Only is {reply.values('content-security-policy-report-only')}, wanted none: it is the web app's pages' alone"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", API_DOCS_PATHS)
+@pytest.mark.parametrize("mode", [R4_MODES["managed"], R4_MODES["selfhosted"], R4_MODES["managed-public-url"]], ids=["managed", "selfhosted", "managed-public-url"])
+async def test_r5_the_docs_pages_script_src_is_self_and_jsdelivr_while_the_web_app_page_beside_it_carries_the_hashes(mode: Mode, path: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """R5: the API docs page carries no hash of the build, no ``'wasm-unsafe-eval'``, no ``'report-sample'``, no ``'unsafe-inline'``
+    nor ``'unsafe-eval'``, no ``default-src``: ``script-src 'self' https://cdn.jsdelivr.net`` and nothing more. Barrier on the same middleware, built on a build
+    with inline scripts: the web app page at ``/`` carries them in its ``script-src``, so the docs page's absence is R5's rule."""
+    docs, page = docs_page_answer(path), TYPED_ANSWERS["text-html"]
+    what = f"GET {path} (an API docs page) beside GET / with {mode.describe()}"
+    print_section(f"H-55 w5 R5 script-src of the docs page: {what}")
+    configure(monkeypatch, mode, tmp_path)
+    monkeypatch.setattr(static_site, "FRONTEND_BUILD_DIR", _write_tree(tmp_path / "build", FAKE_BUILD_PAGES))
+    middleware = wrap(routing([page, docs]))
+
+    barrier = await call(middleware, page.path)
+
+    assert_bare_answer(barrier, page, f"barrier: GET {page.path}")
+    assert_always_on(barrier, f"barrier: GET {page.path}, {what}")
+    assert written_directives(barrier.values("content-security-policy")[0], what).get("script-src") == SCRIPT_SRC + FAKE_BUILD_SOURCES, f"barrier: {what}: the web app page does not carry the hashes of the build ({FAKE_BUILD_SOURCES}): nothing proves the docs page's absence"
+
+    reply = await call(middleware, path)
+
+    assert_bare_answer(reply, docs, what)
+    assert_always_on(reply, what)
+    policies = reply.values("content-security-policy")
+    assert len(policies) == 1, f"{what}: Content-Security-Policy is {policies}, wanted one field"
+    found = written_directives(policies[0], what)
+    assert found.get("script-src") == ("'self'", "https://cdn.jsdelivr.net"), f"{what}: script-src is {found.get('script-src')} in {policies[0]!r}, wanted ('self', 'https://cdn.jsdelivr.net') and nothing more"
+    forbidden = [token for token in ("default-src", "'unsafe-inline'", "'unsafe-eval'", "'wasm-unsafe-eval'", "'report-sample'", "sha256-", *NEVER_ENFORCED, *NO_REPORT_DIRECTIVES) if token in policies[0].lower()]
+    assert not forbidden, f"{what}: the policy {policies[0]!r} holds {forbidden}"
+    print_success(f"✓ script-src {found['script-src']}")
+
+
+#: Not the API docs' two pages, though close: another path, another type, the same path with a suffix or a prefix. The page there
+#: gets what the type gives it, never the docs page's scripts. ``(path, content_type, document)``.
+NOT_API_DOCS_PAGES: dict[str, tuple[str, str, bool]] = {
+    "another-html-document-under-api": (f"{API_V1_PREFIX}/other", "text/html", True),
+    "docs-with-a-trailing-slash": (f"{API_V1_PREFIX}/docs/", "text/html", True),
+    "redoc-with-a-trailing-slash": (f"{API_V1_PREFIX}/redoc/", "text/html", True),
+    "a-path-starting-like-docs": (f"{API_V1_PREFIX}/docsx", "text/html", True),
+    "the-swagger-oauth-redirect": (f"{API_V1_PREFIX}/docs/oauth2-redirect", "text/html", True),
+    "the-swagger-start-script": (f"{API_V1_PREFIX}/docs/swagger-init.js", "text/javascript; charset=utf-8", False),
+    "the-redoc-start-script": (f"{API_V1_PREFIX}/redoc/redoc-init.js", "application/javascript", False),
+    "docs-under-mkdocs": (f"/mkdocs{API_V1_PREFIX}/docs", "text/html", True),
+    "docs-answered-xhtml": (f"{API_V1_PREFIX}/docs", "application/xhtml+xml", True),
+    "docs-answered-json": (f"{API_V1_PREFIX}/docs", "application/json", False),
+    "redoc-answered-plain-text": (f"{API_V1_PREFIX}/redoc", "text/plain; charset=utf-8", False),
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("key", list(NOT_API_DOCS_PAGES))
+@pytest.mark.parametrize("mode", [R4_MODES["managed"], R4_MODES["selfhosted"], R4_MODES["selfhosted-frame-protection-true"]], ids=["managed", "selfhosted", "selfhosted-frame-protection-true"])
+async def test_r5_what_is_not_an_api_docs_page_keeps_the_policy_of_its_type(mode: Mode, key: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """R5's boundary: a document at another path under ``/api/`` (also ``/api/v1/docs/``, ``/api/v1/docsx``, Swagger's OAuth
+    redirect, the documentation's copy of the path) or one of the two paths answered another type keeps what any such response
+    gets (the trio for a document, ``frame-ancestors`` alone for the rest). Barrier, same middleware: the real docs page carries
+    the docs policy, so the absence is the boundary and not a feature that does not exist."""
+    path, content_type, document = NOT_API_DOCS_PAGES[key]
+    # The barrier is the docs page at the other path: two routes at one path would answer with the first only
+    typed, docs = TypedAnswer(path, content_type, PAGE_HTML, document=document), docs_page_answer(next(docs_path for docs_path in API_DOCS_PATHS if docs_path != path))
+    what = f"GET {path} answered {content_type} with {mode.describe()}"
+    print_section(f"H-55 w5 R5 not an API docs page: {what}")
+    configure(monkeypatch, mode, tmp_path)
+    middleware = wrap(routing([docs, typed]))
+
+    barrier = await call(middleware, docs.path)
+
+    assert_bare_answer(barrier, docs, f"barrier: GET {docs.path}")
+    assert_always_on(barrier, f"barrier: GET {docs.path}, with {mode.describe()}")
+    assert_frame_protection(barrier, mode, True, f"barrier: GET {docs.path}, with {mode.describe()}", api_docs_page=True)
+
+    reply = await call(middleware, path)
+
+    assert_bare_answer(reply, typed, what)
+    assert_always_on(reply, what)
+    assert not typed.api_docs_page, f"barrier: {what}: the case must not be one of the API docs' two pages"
+    print_success(f"✓ {assert_frame_protection(reply, mode, document, what)}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", R4_MODES.values(), ids=list(R4_MODES))
+async def test_r5_the_openapi_json_stays_a_response_that_is_no_document(mode: Mode, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """R5: ``/api/v1/openapi.json`` is JSON: with frame protection ``frame-ancestors 'self'`` alone, without it no policy, never
+    the trio nor the docs page's scripts. Barrier, same middleware: the docs page carries the docs policy."""
+    schema = TypedAnswer(f"{API_V1_PREFIX}/openapi.json", "application/json", API_JSON, document=False)
+    docs = docs_page_answer(API_DOCS_PATHS[0])
+    what = f"GET {schema.path} answered application/json with {mode.describe()}"
+    print_section(f"H-55 w5 R5 the schema's JSON: {what}")
+    configure(monkeypatch, mode, tmp_path)
+    middleware = wrap(routing([docs, schema]))
+
+    barrier = await call(middleware, docs.path)
+
+    assert_bare_answer(barrier, docs, f"barrier: GET {docs.path}")
+    assert_always_on(barrier, f"barrier: GET {docs.path}, with {mode.describe()}")
+    assert_frame_protection(barrier, mode, True, f"barrier: GET {docs.path}, with {mode.describe()}", api_docs_page=True)
+
+    reply = await call(middleware, schema.path)
+
+    assert_bare_answer(reply, schema, what)
+    assert_always_on(reply, what)
+    print_success(f"✓ {assert_frame_protection(reply, mode, False, what)}")
