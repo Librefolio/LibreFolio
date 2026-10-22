@@ -1652,7 +1652,7 @@ class PortfolioService:
             broker = await self._get_broker(broker_id)
             broker_name = broker.name if broker else f"Broker {broker_id}"
 
-            broker_txns = await self._get_transactions(broker_id, date_to=date_to)
+            broker_txns = await self._get_transactions(broker_id, date_to=effective_end)
 
             # ── Positions: every (broker, asset) whose quantity a transaction ever moved ──
             # The owner's share is the engine's: its boundary states are already scaled.

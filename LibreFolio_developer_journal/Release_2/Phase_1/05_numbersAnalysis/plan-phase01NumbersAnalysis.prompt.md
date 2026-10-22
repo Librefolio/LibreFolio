@@ -9404,3 +9404,16 @@ con la nota del 22/10. E2E proposti al coordinatore: `front-broker detail` (il c
    > **⚠️ Fuori pista**: l'ordine degli import del file di test è stato riordinato da `ruff --fix` (un `import … as` in testa).
    > Altre due regole simili restano com'erano, con i loro contratti d'errore: `risk/quant/estimation.py:33` e
    > `risk/analytic_helpers.py:75` (decisione del coordinatore implicita: lasciarle).
+7. ✅ 22/10 — **B12 (base `534c280c6`).**
+   > **Note implementazione**:
+   > - Rosso (`J-b12-red.log`), in `test_holding_window_service.py`, classe `TestAContributionWithoutAnEndDateStopsAtToday`: BUY 10
+   >   venti giorni fa, SELL 10 tra cinque giorni, nessun `date_to`: la riga ha 10 unità oggi (precondizione verde) ma
+   >   `oldest_open_lot_date` è `None`, invece della data del BUY (la vendita futura consumava il lotto aperto). Guardia verde
+   >   prima e dopo: lo stesso con `date_to=today`.
+   > - Cura (una riga, `portfolio_service.py:1655`): `_get_transactions(broker_id, date_to=effective_end)`. Con una data
+   >   esplicita `effective_end` è quella data: nessun cambiamento per `get_report`.
+   > - Verdi: `holding_window`, `positions_contribution`, `test_portfolio_service`, `portfolio_cost_currency`, `native_cash`,
+   >   `single_flight`, `period_and_unit_costs`, `portfolio_contributions` **286 passed** (`roi-fifo-utils`, corsia 6190,
+   >   `J-b12-green.log`); ruff e black puliti.
+   > **⚠️ Fuori pista**: un `pipenv run` lanciato per errore da una cartella sbagliata ha creato un `Pipfile` vuoto in
+   > `salvataggi-worktrees-20261021/ondata4/`; l'ho tolto subito (nessun altro file toccato).

@@ -635,10 +635,14 @@ debito di traduzione di F-5 (di M).
   NAV e linee anche con la sola cassa in valuta base, quindi il golden della guardia andrebbe rigenerato: serve una
   decisione. Va in T-U1 o T-U5. Dettagli: idem, §14 e §17.6.
   - **Chiusa** (16/10, 03:55) da J CP-6 (decisione 28, `58c10197c`), entrato col treno 87 (`628e3e49e`); golden W1 rigenerato.
-- **B12 · Le quantità dei contributi leggono le date future** — minimo, latente; I, 11/10. Senza `date_to`,
+- ✅ **B12 · Le quantità dei contributi leggono le date future** — minimo, latente; I, 11/10. Senza `date_to`,
   `_get_transactions` (`portfolio_service.py:1721`) legge anche le righe future; l'unico chiamante, `get_report`
   (`:2234`), passa sempre la data di fine, quindi nessun effetto in produzione. Va in T-U5 con B8. Validare le date
   future è una scelta di prodotto. Dettagli: idem, §14.
+  ✅ 22/10 (ondata 4, J): `get_positions_contribution` legge le transazioni del broker fino a `effective_end`
+  (`date_to or oggi`), come il resto della chiamata. Rosso: una vendita futura consumava, nel FIFO di
+  `oldest_open_lot_date`, un lotto ancora aperto oggi (riga senza lotto aperto); nessun effetto con una data esplicita.
+  La validazione delle date future alla scrittura resta una scelta di prodotto, non fatta.
 - **B15 · Il PAC e la pagina del broker rifanno la custodia** — medio-basso, ½ g; I (T7), 11/10. Il PAC somma
   `Transaction.amount` per broker e valuta senza quota (`portfolio_allocation_source.py:109-137`; le quantità a `:45`);
   la pagina del broker passa da `transaction_service.get_cash_balances` (`broker_service.py:392`). Entrambi potrebbero
