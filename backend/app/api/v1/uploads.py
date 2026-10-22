@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.api.file_fetch_guard import refuse_script_destination
 from backend.app.api.v1.auth import get_current_user
 from backend.app.config import PROJECT_ROOT
 from backend.app.db import get_session_generator
@@ -415,7 +416,7 @@ def _resize_image(file_path: Path, max_width: int, max_height: int) -> bytes | N
     return output.getvalue()
 
 
-@router.get("/file/{file_id}", response_class=FileResponse, responses=BINARY_FILE_RESPONSE)
+@router.get("/file/{file_id}", response_class=FileResponse, responses=BINARY_FILE_RESPONSE, dependencies=[Depends(refuse_script_destination)])
 async def serve_file(  # noqa: C901 — flat preview-mode dispatch with early returns
     file_id: str,
     download: bool = False,

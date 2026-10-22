@@ -71,6 +71,9 @@ afterEach(() => {
 });
 
 describe('imageErrorFallback', () => {
+    // Opt-in contract: the listener acts ONLY on an image carrying `data-hide-on-error` or `data-fallback-text`. A bare
+    // `data-fallbacks` belongs to a component that walks its own chain (an `onerror` handler of its own): if the global
+    // listener walked it too, both would consume the same chain and the icon would end up hidden.
     it('exports the attribute name the {@html} strings carry', async () => {
         const {HIDE_ON_ERROR_ATTRIBUTE} = await load();
         expect(HIDE_ON_ERROR_ATTRIBUTE).toBe('data-hide-on-error');
@@ -267,6 +270,82 @@ describe('imageErrorFallback', () => {
             const {parent, img} = mkImgIn({'data-fallback-text': 'XX'});
             expect(parent.contains(img)).toBe(true);
             expect(parent.textContent).toBe('');
+        });
+    });
+
+    describe('opt-in: only data-hide-on-error and data-fallback-text make the global listener act', () => {
+        /** What a spec can observe of an image: its address, its chain attribute (null when absent), its inline style. */
+        function snapshot(img: HTMLImageElement): {src: string | null; fallbacks: string | null; style: string | null} {
+            return {src: img.getAttribute('src'), fallbacks: img.getAttribute('data-fallbacks'), style: img.getAttribute('style')};
+        }
+
+        it('only data-fallbacks with items: nothing changes (the component owns its chain and walks it itself)', async () => {
+            await start();
+            const {img, sibling} = mkImgIn({'data-fallbacks': '["u2","u3"]'});
+            const before = snapshot(img);
+            const siblingStyle = sibling.getAttribute('style');
+            fail(img);
+            expect(snapshot(img), 'src, data-fallbacks and style as they were').toEqual(before);
+            expect(img.getAttribute('src')).toBe('u1');
+            expect(img.getAttribute('data-fallbacks')).toBe('["u2","u3"]');
+            expect(sibling.getAttribute('style'), 'the next sibling is not touched either').toBe(siblingStyle);
+        });
+
+        it('only data-fallbacks="[]": nothing changes (not hidden, not rewritten)', async () => {
+            await start();
+            const {img} = mkImgIn({'data-fallbacks': '[]'});
+            const before = snapshot(img);
+            fail(img);
+            expect(snapshot(img)).toEqual(before);
+            expect(img.style.display).toBe('');
+            expect(img.style.visibility).toBe('');
+        });
+
+        it('only data-fallbacks that is no valid list: the attribute is not normalised and nothing is hidden', async () => {
+            await start();
+            const {img} = mkImgIn({'data-fallbacks': '[not json'});
+            const before = snapshot(img);
+            fail(img);
+            expect(snapshot(img)).toEqual(before);
+        });
+
+        it('a component image keeps its own onerror handler in charge: the listener sees the same event and leaves the image alone', async () => {
+            await start();
+            const {img} = mkImgIn({'data-fallbacks': '[]'});
+            // The component's own handler: a listener on the element itself (what a Svelte `onerror={…}` becomes)
+            const own = vi.fn(() => {
+                img.style.display = 'none';
+            });
+            img.addEventListener('error', own);
+            const before = snapshot(img);
+            expect(before.style).toBeNull();
+            fail(img);
+            expect(own, 'the component’s own handler ran once').toHaveBeenCalledTimes(1);
+            expect(img.getAttribute('src'), 'the global listener did not touch the address').toBe('u1');
+            expect(img.getAttribute('data-fallbacks')).toBe('[]');
+        });
+
+        it('data-fallbacks + data-hide-on-error="display": the chain is walked, then the image is hidden', async () => {
+            await start();
+            const {img} = mkImgIn({'data-fallbacks': '["u2"]', 'data-hide-on-error': 'display'});
+            fail(img);
+            expect(img.getAttribute('src')).toBe('u2');
+            expect(remaining(img)).toEqual([]);
+            expect(img.style.display).toBe('');
+            fail(img);
+            expect(img.getAttribute('src')).toBe('u2');
+            expect(img.style.display).toBe('none');
+        });
+
+        it('data-fallbacks + data-hide-on-error="next-sibling": the chain is walked, then the sibling shows', async () => {
+            await start();
+            const {img, sibling} = mkImgIn({'data-fallbacks': '["u2"]', 'data-hide-on-error': 'next-sibling'});
+            fail(img);
+            expect(img.getAttribute('src')).toBe('u2');
+            expect(sibling.style.display).toBe('none');
+            fail(img);
+            expect(img.style.display).toBe('none');
+            expect(sibling.style.display).toBe('inline-flex');
         });
     });
 

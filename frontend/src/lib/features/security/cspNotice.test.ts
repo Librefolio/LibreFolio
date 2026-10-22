@@ -124,7 +124,7 @@ class FakeReportingObserver {
 }
 
 interface FakeWindow {
-    __lfCspViolations?: Buffered[];
+    __lfCspViolations?: Buffered[] | null;
     document: FakeTarget;
     addEventListener(type: string, listener: Listener): void;
     removeEventListener(type: string, listener: Listener): void;
@@ -507,5 +507,23 @@ describe('startCspNotice — the defaults, and a page with nothing to read', () 
 
         expect(log).toHaveBeenCalledTimes(1);
         expect(stored(storage)).toEqual([CDN]);
+    });
+
+    it.each<[string, Buffered[], string[]]>([
+        ['with entries', [early()], ['inline', 'https://late.example']],
+        ['empty', [], ['https://late.example']],
+    ])('CSN-22: once the buffer is drained (%s) the window global is null — the early listener of app.html stops collecting — and a violation that comes next reaches the notice through its own listener, once', async (_what, buffer, expected) => {
+        const win = makeWindow({__lfCspViolations: buffer});
+        const storage = makeStorage();
+        await start(win, storage);
+        const before = log.mock.calls.length;
+
+        expect(win.__lfCspViolations, 'null, not an emptied array: the early listener pushes only while the global is an array').toBeNull();
+
+        win.dispatchViolation({blockedURI: 'https://late.example/x.js'});
+
+        expect(log.mock.calls.length, 'the notice saw the late violation: its first line if the buffer was empty, none more if the buffer already logged').toBe(Math.max(before, 1));
+        expect(stored(storage), 'noted once, although the event bubbles from the document to the window: one listener of the notice, at the document').toEqual(expected);
+        expect(win.__lfCspViolations, 'and it did not go back to the buffer').toBeNull();
     });
 });

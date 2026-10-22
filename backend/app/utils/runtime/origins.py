@@ -1,8 +1,9 @@
 """The origin of an http(s) address, in the one canonical form the server compares and writes it in.
 
 ``scheme://host[:port]``: lower case, the scheme's default port (80 for http, 443 for https) left out, an IPv6 host in
-brackets, an international name in punycode, nothing of the path, the query, the fragment or a user info. A host holding
-anything else (a ``;``, a quote) gives no origin: the origin is written into a header. Used for the audience of the hosting panel's
+brackets, nothing of the path, the query, the fragment or a user info. A host holding anything else (a ``;``, a quote, a
+character that is not ASCII: an international name is written in punycode) or an address with a backslash gives no
+origin: the origin is written into a header, and must be the one a browser reads. Used for the audience of the hosting panel's
 tickets (``config/hosting_panel.py``) and for the ``connect-src`` of the Content-Security-Policy
 (``services/platform/security_headers.py``).
 """
@@ -20,7 +21,8 @@ _DEFAULT_PORTS = {"https": 443, "http": 80}
 
 def canonical_origin(url: str | None) -> str | None:
     """The canonical origin of ``url``, or None when it is not an http(s) address with a host (or its port is not one)."""
-    if not url:
+    # A backslash: urlsplit and a browser read it differently (a browser takes it for a /), so the origin is unsure
+    if not url or "\\" in url:
         return None
     try:
         parts = urlsplit(url)
@@ -41,11 +43,8 @@ def canonical_origin(url: str | None) -> str | None:
             return None
         host = f"[{host}]"
     else:
-        try:
-            host = host.encode("idna").decode("ascii")
-        except UnicodeError:
-            return None
-        # Nothing else may reach a header: no ';', no space, no quote (H-55 v2: the origin goes into connect-src)
+        # Nothing else may reach a header: no ';', no space, no quote (H-55 v2: the origin goes into connect-src). An
+        # international name is written in punycode: Python's IDNA 2003 and a browser's UTS 46 may convert it differently
         if not _HOST_NAME.fullmatch(host):
             return None
     return f"{scheme}://{host}" if port in (None, _DEFAULT_PORTS[scheme]) else f"{scheme}://{host}:{port}"

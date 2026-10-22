@@ -12,7 +12,9 @@
  * - `data-hide-on-error="display"` hides the image (`display: none`), `"visibility"` keeps its room
  *   (`visibility: hidden`), `"next-sibling"` hides it and shows its next sibling (a hidden fallback icon).
  *
- * `startImageErrorFallback()` runs once per page (the root layout); a second call installs nothing more.
+ * Only an image carrying `data-hide-on-error` or `data-fallback-text` is handled: a component whose own handler walks a
+ * `data-fallbacks` chain (an enum option's icon) is left alone. `startImageErrorFallback()` runs once per page (the root
+ * layout); a second call installs nothing more.
  */
 
 export const HIDE_ON_ERROR_ATTRIBUTE = 'data-hide-on-error';
@@ -47,7 +49,8 @@ function nextFallback(image: HTMLImageElement): string | null {
 
 function onImageError(event: Event): void {
     const image = event.target;
-    if (!(image instanceof HTMLImageElement)) {
+    // Only an image that opts in: a component with a data-fallbacks chain of its own walks it with its own handler
+    if (!(image instanceof HTMLImageElement) || !(image.hasAttribute(HIDE_ON_ERROR_ATTRIBUTE) || image.hasAttribute(FALLBACK_TEXT_ATTRIBUTE))) {
         return;
     }
     const text = image.getAttribute(FALLBACK_TEXT_ATTRIBUTE);

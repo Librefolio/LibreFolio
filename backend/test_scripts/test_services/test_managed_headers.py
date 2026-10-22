@@ -138,7 +138,9 @@ import logging
 import os
 import re
 import shutil
+import threading
 from collections.abc import Callable, Iterable, Iterator, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -2073,3 +2075,202 @@ async def test_the_public_url_and_the_profile_are_read_when_the_middleware_is_bu
     await assert_connect_sources(middleware, built, what)  # answers as built: its origin, its profile's sources, its frame protection
 
     print_success(f"✓ answered as built: connect-src {CONNECT_SRC + built.connect_sources}")
+
+
+# =============================================================================
+# (l) H-55 v2, REVIEW CURE R2: THE ERROR PATH, AND THE BUILD OFF THE EVENT LOOP
+# =============================================================================
+#: Computing the headers of a response never costs the response its headers: if the web app's policy cannot be computed
+#: (reading the build fails), the page still gets every header with the policy WITHOUT hashes (fail closed: the app's inline
+#: scripts are blocked, never a policy-less page) and the failure is logged, once, as a warning with its traceback. The
+#: build's signature (``glob`` + ``stat``) and its re-read run in a thread, never on the event loop, and one re-read serves
+#: every request that waited for it. Imports of the module's names are made inside the tests (a missing name fails the
+#: test that needs it, never the collection).
+
+#: How many web app requests are in flight together in the concurrency cases.
+CONCURRENT_REQUESTS = 8
+#: How long the slow re-read of the unit case waits for its siblings: it ends at once if they all arrive (no lock), and
+#: after this when the lock keeps them out (the wait costs only a green run, and a slow machine can only make a red green).
+SIBLINGS_SECONDS = 1.0
+#: The failure a build that cannot be read raises.
+BUILD_UNREADABLE = "provoked: the build cannot be read"
+
+
+def _unreadable_build(build_dir: Path) -> tuple[str, ...]:
+    raise OSError(BUILD_UNREADABLE)
+
+
+def spa_hashes_run_in_threads(monkeypatch: pytest.MonkeyPatch, *, delay: Callable[[], None] | None = None) -> list[tuple[int, Path]]:
+    """Watch ``static_site.spa_inline_script_hashes``: answers as the real one (after ``delay``, when given) and records
+    ``(thread id, build folder)`` of every call, in order."""
+    real = spa_hashes_function()
+    calls: list[tuple[int, Path]] = []
+
+    def spy(build_dir: Path) -> tuple[str, ...]:
+        calls.append((threading.get_ident(), build_dir))
+        if delay is not None:
+            delay()
+        return real(build_dir)
+
+    monkeypatch.setattr(static_site, SPA_HASHES_NAME, spy)
+    return calls
+
+
+def stats_of_pages_in_threads(monkeypatch: pytest.MonkeyPatch, build_dir: Path) -> list[int]:
+    """Watch the ``stat`` of the build's pages (``Path.stat`` on a path under ``build_dir``): the id of the thread of each."""
+    real = Path.stat
+    seen: list[int] = []
+
+    def watching(self: Path, *args: Any, **kwargs: Any) -> os.stat_result:
+        if self.suffix == ".html" and build_dir in self.parents:
+            seen.append(threading.get_ident())
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", watching)
+    return seen
+
+
+@contextmanager
+def security_warnings() -> Iterator[Callable[[], list[dict[str, Any]]]]:
+    """The structlog events logged inside the block as a warning or worse, behind a canary of the middleware's module."""
+    with capture_logs() as events:
+        get_logger(SECURITY_MODULE).warning(LOG_CANARY)
+        assert any(event.get("event") == LOG_CANARY for event in events), f"barrier: a structlog logger of {SECURITY_MODULE} does not reach capture_logs: {events}"
+
+        def logged() -> list[dict[str, Any]]:
+            return [event for event in events if event.get("event") != LOG_CANARY and event.get("log_level") in ("warning", "error", "exception", "critical")]
+
+        yield logged
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", HASH_MODES.values(), ids=list(HASH_MODES))
+async def test_a_build_that_cannot_be_read_still_gets_every_header_with_a_policy_without_hashes(mode: Mode, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    what = f"the middleware built with {mode.describe()} on the build {BUILD_ID}, whose reading raises"
+    print_section(f"H-55 v2 R2: {what}")
+    configure(monkeypatch, mode, tmp_path)
+    build_dir = write_build(tmp_path / "build", build_pages(BUILD_ID), STAMP_0)
+    middleware = built_on(build_dir, monkeypatch)
+    monkeypatch.setattr(static_site, SPA_HASHES_NAME, _unreadable_build)
+
+    with security_warnings() as logged:
+        reply = await call(middleware, "/")
+        warned = logged()
+
+    answered(200, HTML, PAGE_HTML)(reply)  # the page itself is served: the failure costs it its hashes, never its answer
+    assert_always_on(reply, f"GET /, {what}")
+    assert_frame_protection(reply, mode, True, f"GET /, {what}", web_app_page=True, script_hashes=())
+    script_src = written_directives(reply.values("content-security-policy")[0], what).get("script-src")
+    assert script_src == SCRIPT_SRC, f"{what}: script-src is {script_src}, exactly {SCRIPT_SRC} wanted: fail closed, no hash, the app's inline scripts are blocked and the page is never policy-less"
+    if mode.csp_report_only:
+        report_only = reply.values("content-security-policy-report-only")
+        assert len(report_only) == 1, f"{what}: Content-Security-Policy-Report-Only is {report_only}, wanted one policy"
+        assert written_directives(report_only[0], what).get("script-src") == SCRIPT_SRC, f"{what}: the report-only policy {report_only[0]!r} has hashes: no build could be read"
+    with_trace = [event for event in warned if event.get("log_level") == "warning" and event.get("exc_info")]
+    assert len(with_trace) == 1, f"{what}: logged {[(event.get('log_level'), event.get('event'), bool(event.get('exc_info'))) for event in warned]}, wanted exactly one warning with exc_info: the failure is logged once, with its traceback"
+    print_success(f"✓ every header, script-src {script_src}, one warning with its traceback")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", HASH_MODES.values(), ids=list(HASH_MODES))
+async def test_after_a_failed_build_read_the_next_pages_still_answer_and_the_hashes_come_back_with_the_build(mode: Mode, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    what = f"the middleware built with {mode.describe()} on the build {BUILD_ID}, whose reading fails twice, then works"
+    print_section(f"H-55 v2 R2: {what}")
+    configure(monkeypatch, mode, tmp_path)
+    build_dir = write_build(tmp_path / "build", build_pages(BUILD_ID), STAMP_0)
+    middleware = built_on(build_dir, monkeypatch)
+    real = spa_hashes_function()
+    monkeypatch.setattr(static_site, SPA_HASHES_NAME, _unreadable_build)
+
+    for path in ("/", "/portfolio/overview"):  # a failure does not wedge the middleware: the next page answers all the same
+        reply = await call(middleware, path)
+        answered(200, HTML, PAGE_HTML)(reply)
+        assert_always_on(reply, f"GET {path}, {what}")
+        assert_frame_protection(reply, mode, True, f"GET {path}, {what}", web_app_page=True, script_hashes=())
+    monkeypatch.setattr(static_site, SPA_HASHES_NAME, real)  # the build is readable again
+
+    found = await hashes_now(middleware, mode, what)
+
+    assert found == build_sources(BUILD_ID), f"{what}: the hashes are {found}, not those of the build, {build_sources(BUILD_ID)}: a failed read is not remembered as the build's signature"
+    print_success(f"✓ two pages answered after the failure; then the hashes of the build: {found}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", HASH_MODES.values(), ids=list(HASH_MODES))
+async def test_the_build_is_read_off_the_event_loop(mode: Mode, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    what = f"the middleware built with {mode.describe()}, a web app page asked on the build {BUILD_ID}"
+    print_section(f"H-55 v2 R2: {what}: which thread reads the build")
+    configure(monkeypatch, mode, tmp_path)
+    build_dir = write_build(tmp_path / "build", build_pages(BUILD_ID), STAMP_0)
+    reads = spa_hashes_run_in_threads(monkeypatch)
+    stats = stats_of_pages_in_threads(monkeypatch, build_dir)
+    middleware = built_on(build_dir, monkeypatch)
+    loop_thread = threading.get_ident()
+
+    found = await hashes_now(middleware, mode, what)
+
+    assert found == build_sources(BUILD_ID), f"barrier: the hashes are {found}, not those of the build, {build_sources(BUILD_ID)}"
+    assert [build for _, build in reads] == [build_dir] and stats, f"barrier: {SPA_HASHES_NAME} was called with {[build for _, build in reads]} and {len(stats)} pages were stat-ed"
+    assert [thread for thread, _ in reads] != [loop_thread], f"{what}: {SPA_HASHES_NAME} ran on the event loop's thread: reading the pages is blocking I/O, to be awaited through asyncio.to_thread"
+    assert loop_thread not in stats, f"{what}: the build's signature (glob and stat of its pages) was computed on the event loop's thread: to be awaited through asyncio.to_thread"
+    print_success(f"✓ read in thread {reads[0][0]}, signature in {sorted(set(stats))}, the loop is {loop_thread}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", HASH_MODES.values(), ids=list(HASH_MODES))
+async def test_concurrent_web_app_requests_with_a_changed_build_read_it_once_and_off_the_loop(mode: Mode, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    what = f"{CONCURRENT_REQUESTS} web app requests at once on the middleware built with {mode.describe()}, after the build {NEXT_BUILD_ID} replaced {BUILD_ID}"
+    print_section(f"H-55 v2 R2: {what}")
+    configure(monkeypatch, mode, tmp_path)
+    build_dir = write_build(tmp_path / "build", build_pages(BUILD_ID), STAMP_0)
+    middleware = built_on(build_dir, monkeypatch)
+    first = await hashes_now(middleware, mode, what)
+    assert first == build_sources(BUILD_ID), f"barrier: the first response has the hashes {first}, not those of the build {BUILD_ID}"
+    write_build(build_dir, build_pages(NEXT_BUILD_ID), STAMP_1)  # a build made while the server runs
+    reads = spa_hashes_run_in_threads(monkeypatch)
+    loop_thread = threading.get_ident()
+
+    replies = await asyncio.gather(*(call(middleware, WEB_APP_PAGE_PATHS[index % len(WEB_APP_PAGE_PATHS)]) for index in range(CONCURRENT_REQUESTS)))
+
+    for reply in replies:
+        answered(200, HTML, PAGE_HTML)(reply)
+        assert_always_on(reply, what)
+        assert script_src_of(reply, "content-security-policy", what) == build_sources(NEXT_BUILD_ID), f"{what}: a response carries {reply.values('content-security-policy')}, not the hashes of the build now, {build_sources(NEXT_BUILD_ID)}"
+    assert len(reads) == 1, f"{what}: {SPA_HASHES_NAME} was called {len(reads)} times, wanted once: one read per change of the build's signature, however many requests find it changed together"
+    assert reads[0][0] != loop_thread, f"{what}: the one read ran on the event loop's thread: to be awaited through asyncio.to_thread"
+    print_success(f"✓ {CONCURRENT_REQUESTS} responses, the build read once, off the loop")
+
+
+def test_the_build_hashes_cache_reads_once_when_threads_ask_together(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``_BuildScriptHashes`` is safe under concurrent threads: a lock, and one read of a changed build even when several
+    threads ask at the same moment. The read is slow on purpose: it waits for its siblings, which arrive only if nothing
+    keeps them out."""
+    what = f"{CONCURRENT_REQUESTS} threads asking the hashes of the build {BUILD_ID} together"
+    print_section(f"H-55 v2 R2: {what}")
+    security_module = importlib.import_module(SECURITY_MODULE)
+    cache_class = getattr(security_module, "_BuildScriptHashes", None)
+    assert isinstance(cache_class, type), f"{SECURITY_MODULE} has no class _BuildScriptHashes"
+    build_dir = write_build(tmp_path / "build", build_pages(BUILD_ID), STAMP_0)
+    monkeypatch.setattr(static_site, "FRONTEND_BUILD_DIR", build_dir)
+    siblings = threading.Barrier(CONCURRENT_REQUESTS)
+
+    def wait_for_siblings() -> None:
+        try:
+            siblings.wait(timeout=SIBLINGS_SECONDS)
+        except threading.BrokenBarrierError:
+            pass  # alone: nobody else got in
+
+    reads = spa_hashes_run_in_threads(monkeypatch, delay=wait_for_siblings)
+    cache = cache_class()
+    start = threading.Barrier(CONCURRENT_REQUESTS)
+
+    def ask() -> tuple[str, ...]:
+        start.wait(timeout=SIBLINGS_SECONDS * 5)
+        return cache.current()
+
+    with ThreadPoolExecutor(max_workers=CONCURRENT_REQUESTS) as pool:
+        answers = [future.result(timeout=SIBLINGS_SECONDS * 10) for future in [pool.submit(ask) for _ in range(CONCURRENT_REQUESTS)]]
+
+    assert answers == [build_sources(BUILD_ID)] * CONCURRENT_REQUESTS, f"{what}: the answers are {answers}, not always those of the build, {build_sources(BUILD_ID)}"
+    assert len(reads) == 1, f"{what}: {SPA_HASHES_NAME} was called {len(reads)} times, wanted once: the cache holds a lock, and one read serves the threads that asked for the same signature"
+    print_success("✓ one read for all the threads")
