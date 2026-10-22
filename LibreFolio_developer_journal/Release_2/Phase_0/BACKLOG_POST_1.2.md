@@ -9474,11 +9474,20 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   titolare. Proposta: uno stato «Conferma» col pulsante, solo file di E. Da decidere (sviluppatore). Dettagli:
   [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-25 ed E-26».
   - 20/10, sviluppatore (13:4x): approvata coi testi proposti; nella 1.3, via del coordinatore (14:28).
+  - ✅ 21/10 (E, ondata 3): fatta, solo frontend. Lo stato `ready` col pulsante `verify-email-confirm`, la richiesta
+    solo al clic, anche dopo un `hashchange`; tre chiavi ×4; doc inglese (traduzioni a debito, senza timbro).
+    Checkpoint (A) su `2879ae3e4`, commit del coordinatore. Dettagli: piano 08, «E-25.2».
 - **E-26 · Dopo la registrazione «We sent you an email» anche quando l'email è trattenuta** — minimo, chiarezza; E,
   16/10 (E6, lista del mattino), analisi 20/10. Il messaggio non dice la via d'uscita (accedere e chiedere un nuovo
   link). Proposta: solo il testo, una chiave di E ×4. Da decidere (sviluppatore). Dettagli: piano 08, «E-25 ed E-26».
   - 20/10, sviluppatore (14:3x): la (b), un campo nella risposta di `POST /auth/register` per l'email trattenuta, più il
     testo (a) per il caso normale. File di A e `api sync`: prima l'accordo con A sul contratto. Dopo E-25.
+  - ✅ 22/10 (E, ondata 3): fatta. Contratto rivisto da A: `verification_email: null | "sending" | "held"` nella
+    risposta di `POST /auth/register`, «held» oltre le 10 email di registrazione all'ora dallo stesso indirizzo; la
+    scheda di registrazione lo dice (`registeredHeld`), `registered` col testo (a), `loginRequired` corretto. I testi
+    vanno confermati dallo sviluppatore. Resta invisibile ciò che succede dopo la risposta (limite per casella,
+    budget orario, SMTP): scritto nella doc. Checkpoint su `bb11f1479`, commit del coordinatore. Dettagli: piano 08,
+    «E-26.2» e «E-26.3».
 
 ## Y · Cruscotto e grafici (fase 01)
 

@@ -112,11 +112,12 @@ export function testFailureMessage(translate: Translate, failure: EmailTestFailu
     }
 }
 
-/** What the page of a verification link shows: the wait, why the link cannot be used, a blocked instance, or a check
- * that failed. */
-export type VerifyPageStatus = 'checking' | VerificationLinkRefusal | 'blocked' | 'missing' | 'error';
+/** What the page of a verification link shows: a link waiting for its owner's click (lot E-25), the wait, why the link
+ * cannot be used, a blocked instance, or a check that failed. */
+export type VerifyPageStatus = 'ready' | 'checking' | VerificationLinkRefusal | 'blocked' | 'missing' | 'error';
 
 export const VERIFY_PAGE_KEYS: Record<VerifyPageStatus, string> = {
+    ready: 'email.verification.page.ready',
     checking: 'email.verification.page.checking',
     expired: 'email.verification.page.expired',
     consumed: 'email.verification.page.consumed',
