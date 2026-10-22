@@ -27,7 +27,8 @@
         "database": "Copying the database",
         "files": "Adding the files",
         "finalizing": "Finishing",
-        "encrypting": "Encrypting with your password"
+        "encrypting": "Encrypting with your password",
+        "sealing": "Sealing for the hosting panel"
       },
       "progress": "{done} of {total}",
       "ready": "Backup ready",
@@ -254,6 +255,12 @@
         "unlimited": "A restore check accepts archives that unpack to any size.",
         "invalid": "{variable} cannot be used (a whole number of megabytes, 0 for no limit): restore checks are refused until it is fixed.",
         "profileTable": "LibreFolio's own profile defaults give the upload limit no value, or one of the wrong type, so restore checks are refused: set LIBREFOLIO_BACKUP_MAX_RESTORE_MB to a whole number of megabytes and report the error."
+      },
+      "recipients": {
+        "ok": "The hosting panel's backups are sealed for {count, plural, one {# key} other {# keys}}: only the private key opens their password.",
+        "off": "No recipients are set for the hosting panel's backups: the panel gets plain zip archives.",
+        "invalid": "LIBREFOLIO_BACKUP_RECIPIENTS cannot be used ({reason}): one or two age1… recipients, comma-separated. The hosting panel's backups answer 503 until it is fixed.",
+        "missingManaged": "LIBREFOLIO_BACKUP_RECIPIENTS is not set: a managed instance never hands a plain backup to its hosting panel, whose backups answer 503 until it is set."
       }
     }
   }

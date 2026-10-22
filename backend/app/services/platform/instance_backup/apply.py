@@ -57,10 +57,10 @@ from collections.abc import Iterator
 from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import psutil
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 try:
     import fcntl
@@ -145,10 +145,22 @@ class SwapEntry(BaseModel):
         return value
 
 
+#: Through what a restore was confirmed (L3): ``confirmed_by`` alone cannot tell, an administrator may be named ``cli``.
+ConfirmedVia = Literal["admin", "cli", "panel"]
+
+
 class RestoreState(BaseModel):
     """The state of the restore of a data directory, kept in ``.restore/restore.json``."""
 
     model_config = ConfigDict(frozen=True, extra="ignore")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _confirmed_via_of_before(cls, data: Any) -> Any:
+        # A state written before L3 has no confirmed_via: the command line wrote ``cli``, the API a username.
+        if isinstance(data, dict) and "confirmed_via" not in data:
+            return {**data, "confirmed_via": "cli" if data.get("confirmed_by") == "cli" else "admin"}
+        return data
 
     format: Literal[1] = 1
     status: RestorePhase
@@ -156,8 +168,9 @@ class RestoreState(BaseModel):
     #: The data directory's real path when the restore was confirmed: a copy of the data directory does not apply it.
     data_dir: str
     confirmed_at: datetime
-    #: The username of the administrator who confirmed it, or ``cli``.
+    #: The username of the administrator who confirmed it, or ``cli``, or what a hosting panel names itself.
     confirmed_by: str
+    confirmed_via: ConfirmedVia
     backup_created_at: datetime
     backup_app_version: str
     action: Literal["same", "upgrade"]
@@ -451,7 +464,7 @@ def _remove_leftovers(data_dir: Path, stage_id: str | None) -> None:
 # =============================================================================
 
 
-def confirm_restore(stage_id: str, *, confirmed_by: str, data_dir: Path | None = None, now: datetime | None = None) -> RestoreState:
+def confirm_restore(stage_id: str, *, confirmed_by: str, confirmed_via: ConfirmedVia = "admin", data_dir: Path | None = None, now: datetime | None = None) -> RestoreState:
     """Confirm the restore of a checked copy: it waits for the next start of the server, which applies it.
 
     ``BackupPathError`` when ``.restore`` is a link or a file; then ``RestoreStageMissingError``,
@@ -490,6 +503,7 @@ def confirm_restore(stage_id: str, *, confirmed_by: str, data_dir: Path | None =
             data_dir=str(data_dir.resolve()),
             confirmed_at=now,
             confirmed_by=confirmed_by,
+            confirmed_via=confirmed_via,
             backup_created_at=report.backup.created_at,
             backup_app_version=report.backup.app_version,
             action=report.action,
@@ -497,7 +511,7 @@ def confirm_restore(stage_id: str, *, confirmed_by: str, data_dir: Path | None =
         _write_state(data_dir, state)
         # A new restore: no ticket of an older one reads it.
         drop_ticket(data_dir=data_dir)
-    logger.warning("Restore confirmed: the next start of the server applies it", stage_id=stage_id, confirmed_by=confirmed_by, action=report.action)
+    logger.warning("Restore confirmed: the next start of the server applies it", stage_id=stage_id, confirmed_by=confirmed_by, confirmed_via=confirmed_via, action=report.action)
     return state
 
 

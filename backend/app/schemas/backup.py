@@ -41,7 +41,8 @@ class InstanceBackupOptions(BaseModel):
 # backup, an .lfbk envelope. file_sha256: the SHA-256 of the archive the download serves, 64 lowercase hex digits, once
 # done (L3: a hosting panel compares it with what it downloaded). instance_key_included: the archive carries the instance
 # key (a secure backup, when LibreFolio generated the key; never a hosting panel's). error_code: backup_no_space,
-# backup_failed (the server log has the cause) or backup_interrupted (the server stopped during the backup).
+# backup_failed (the server log has the cause) or backup_interrupted (the server stopped during the backup). sealed:
+# a hosting panel's sealed backup (L3): a .tar whose password only the private keys of sealed_recipients (age1…) open.
 class InstanceBackupJob(BaseModel):
     """A backup of the whole instance, built in the background: poll it until its status is done or failed."""
 
@@ -49,7 +50,7 @@ class InstanceBackupJob(BaseModel):
 
     job_id: str
     status: Literal["running", "done", "failed"]
-    phase: Literal["preparing", "database", "files", "finalizing", "encrypting"] | None = None
+    phase: Literal["preparing", "database", "files", "finalizing", "encrypting", "sealing"] | None = None
     done_bytes: int = Field(ge=0)
     total_bytes: int = Field(ge=0)
     created_at: datetime
@@ -61,6 +62,8 @@ class InstanceBackupJob(BaseModel):
     error_code: Literal["backup_no_space", "backup_failed", "backup_interrupted"] | None = None
     encrypted: bool
     instance_key_included: bool = False
+    sealed: bool = False
+    sealed_recipients: list[str] = []
 
 
 # kind: envelope for a secure backup (.lfbk), whose check needs its password; zip otherwise.
@@ -261,6 +264,7 @@ class RestoreStatus(BaseModel):
     stage_id: str | None = None
     confirmed_at: datetime | None = None
     confirmed_by: str | None = None
+    confirmed_via: Literal["admin", "cli", "panel"] | None = None
     backup_created_at: datetime | None = None
     backup_app_version: str | None = None
     action: Literal["same", "upgrade"] | None = None

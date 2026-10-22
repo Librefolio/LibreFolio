@@ -27,7 +27,8 @@
         "database": "Copia del database",
         "files": "Aggiunta dei file",
         "finalizing": "Chiusura",
-        "encrypting": "Cifratura con la tua password"
+        "encrypting": "Cifratura con la tua password",
+        "sealing": "Sigillatura per il pannello del fornitore"
       },
       "progress": "{done} di {total}",
       "ready": "Backup pronto",
@@ -254,6 +255,12 @@
         "unlimited": "Una verifica per un ripristino accetta archivi che scompattati hanno qualsiasi dimensione.",
         "invalid": "{variable} non si può usare (un numero intero di megabyte, 0 per nessun limite): le verifiche per un ripristino sono rifiutate finché non si corregge.",
         "profileTable": "Le impostazioni predefinite del profilo di LibreFolio non danno al limite di caricamento alcun valore, o gliene danno uno del tipo sbagliato, quindi le verifiche per un ripristino sono rifiutate: imposta LIBREFOLIO_BACKUP_MAX_RESTORE_MB a un numero intero di megabyte e segnala l'errore."
+      },
+      "recipients": {
+        "ok": "I backup del pannello del fornitore sono sigillati per {count, plural, one {# chiave} other {# chiavi}}: solo la chiave privata ne apre la password.",
+        "off": "Nessun destinatario è impostato per i backup del pannello del fornitore: il pannello riceve archivi zip in chiaro.",
+        "invalid": "LIBREFOLIO_BACKUP_RECIPIENTS non si può usare ({reason}): uno o due destinatari age1…, separati da virgola. I backup del pannello del fornitore rispondono 503 finché non si corregge.",
+        "missingManaged": "LIBREFOLIO_BACKUP_RECIPIENTS non è impostata: un'istanza gestita non consegna mai un backup in chiaro al pannello del fornitore, i cui backup rispondono 503 finché non si imposta."
       }
     }
   }

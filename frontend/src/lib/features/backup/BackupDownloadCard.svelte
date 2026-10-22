@@ -32,6 +32,7 @@
         files: 'backup.download.phase.files',
         finalizing: 'backup.download.phase.finalizing',
         encrypting: 'backup.download.phase.encrypting',
+        sealing: 'backup.download.phase.sealing',
     };
 
     const WARNING_KEYS: Record<BackupWarning, string> = {

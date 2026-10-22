@@ -27,7 +27,8 @@
         "database": "Copiando la base de datos",
         "files": "Añadiendo los archivos",
         "finalizing": "Finalizando",
-        "encrypting": "Cifrando con tu contraseña"
+        "encrypting": "Cifrando con tu contraseña",
+        "sealing": "Sellado para el panel del proveedor"
       },
       "progress": "{done} de {total}",
       "ready": "Copia de seguridad lista",
@@ -254,6 +255,12 @@
         "unlimited": "Una verificación para una restauración acepta archivos que, descomprimidos, ocupan cualquier tamaño.",
         "invalid": "{variable} no se puede usar (un número entero de megabytes, 0 para ningún límite): las verificaciones para una restauración se rechazan hasta que se corrija.",
         "profileTable": "Los valores predeterminados del perfil de LibreFolio no dan ningún valor al límite de subida, o le dan uno del tipo equivocado, así que las verificaciones para una restauración se rechazan: define LIBREFOLIO_BACKUP_MAX_RESTORE_MB como un número entero de megabytes e informa del error."
+      },
+      "recipients": {
+        "ok": "Las copias de seguridad del panel del proveedor están selladas para {count, plural, one {# clave} other {# claves}}: solo la clave privada abre su contraseña.",
+        "off": "No hay destinatarios para las copias de seguridad del panel del proveedor: el panel recibe archivos zip sin cifrar.",
+        "invalid": "LIBREFOLIO_BACKUP_RECIPIENTS no se puede usar ({reason}): uno o dos destinatarios age1…, separados por comas. Las copias de seguridad del panel del proveedor responden 503 hasta que se corrija.",
+        "missingManaged": "LIBREFOLIO_BACKUP_RECIPIENTS no está definida: una instancia gestionada nunca entrega una copia de seguridad sin cifrar al panel del proveedor, cuyas copias responden 503 hasta que se defina."
       }
     }
   }

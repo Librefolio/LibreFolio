@@ -506,6 +506,14 @@ def utils_backup_cli_secure(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Backup CLI secure backup tests", verbose=verbose)
 
 
+def utils_backup_cli_sealed(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the sealed backup from the command line: keygen, create --recipient / --sealed, a sealed tar read with an identity."""
+    print_section("Utils: Backup CLI sealed backup")
+    print_info("Testing: scripts/backup_cli.py (keygen, create --recipient / --sealed, inspect, decrypt and restore --dry-run of a sealed .tar with --identity-file)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_backup_cli_sealed.py", test_names)
+    return run_command(cmd, "Backup CLI sealed backup tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     if _common.nothing_left_to_run("utils"):
@@ -971,6 +979,16 @@ Tests for utility modules and helper functions:
         desc="scripts/backup_cli.py and a secure backup (lot B4): create with --password-file, --password-stdin or --encrypt (password_required without a terminal; the two sources exclusive; no --password option; password_too_weak with the failed rules, nothing written), an .lfbk the password opens; inspect and restore --dry-run of an envelope (wrong_password, password_required, a zip ignoring the source); decrypt to a new 0600 zip (an existing output refused untouched, not_an_envelope); the password never printed; no decrypted zip left in the data directory; B-38: a --password-file or --instance-key-file that is not a regular file (a FIFO, a folder) refused at once, as root and not (not a regular file, password_unreadable / instance_key_unreadable; a FIFO never waited on); as root, one that goes through a link inside the data directory (the file, or backups/ itself) refused with its target never opened; read as today: a plain file, a Kubernetes secret link outside the data directory, a link inside it when not root",
         # Data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables, as test_backup_cli.py
         # sets them: no lane DB, no server, no network, no writes outside tmp_path.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-cli-sealed",
+        utils_backup_cli_sealed,
+        name="Backup CLI Sealed Backup",
+        desc="scripts/backup_cli.py and the sealed nightly backup (lot L3-2): keygen (an age identity 0600, an existing file refused, the recipient printed, never the private key); create --recipient (one or two, three refused) and --sealed (LIBREFOLIO_BACKUP_RECIPIENTS, unset refused), exclusive with a password; inspect, decrypt and restore --dry-run of a sealed .tar with --identity-file (the L3 vectors: the good zip, the rotation; sealed_no_identity, wrong_password, sealed_tar_invalid, sealed_manifest_invalid, envelope_damaged; sealed_backup_needs_key without the identity; --identity-file on a zip refused); no temporary .lfbk left",
+        # Data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables, as test_backup_cli.py
+        # sets them; the L3 vectors copied into tmp_path: no lane DB, no server, no network, no writes outside tmp_path.
         isolation="pure",
     )
     add_test(

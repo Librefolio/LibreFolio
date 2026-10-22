@@ -330,6 +330,7 @@ def _status_view(state: RestoreState | None) -> RestoreStatus:
         stage_id=state.stage_id,
         confirmed_at=state.confirmed_at,
         confirmed_by=state.confirmed_by,
+        confirmed_via=state.confirmed_via,
         backup_created_at=state.backup_created_at,
         backup_app_version=state.backup_app_version,
         action=state.action,

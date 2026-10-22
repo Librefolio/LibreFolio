@@ -452,6 +452,31 @@ pipenv run ./dev.py backup inspect /mnt/nas/librefolio/librefolio-backup-2026101
 - 🔐 A secure archive, recognised by its first bytes whatever its name, asks its password first, once, from the same sources as `create` ([A Secure Archive](#backup-secure)). It is then decrypted (`🔓 Decrypting <path>`) into a private folder `.decrypt-…` of the data directory's `backups/`, removed at the end, also when the command fails: the command needs that data directory, and room in it for the decrypted archive, about the size of the `.lfbk`. A folder that an `inspect` killed outright (a power cut, `kill -9`) left behind is removed by the next `inspect`, or by the next start of LibreFolio, once it is an hour old: a younger one may be another `inspect`'s, still running. Its report adds `Secure backup: decrypted with its password`. A wrong password ends with `❌ The password does not open this backup (wrong_password)`; see also `password_required`, `envelope_damaged` and `envelope_unsupported` in the refusals of [Try a Restore on a Copy](#backup-restore-dry-run). A `.zip` ignores the password options.
 - ❌ It exits with `1` when entries are missing, differ from the manifest or are not in it (it names the first five of each), and when the file is not an archive it can read: the message then ends with a code, such as `archive_unreadable` (not a zip file, or one cut short), `manifest_missing`, `manifest_unknown_format` (not a LibreFolio backup) or `manifest_newer_format` (made by a newer LibreFolio: check it with that version or a newer one).
 
+### 🔏 A Sealed Archive {: #backup-sealed }
+
+A sealed archive is a `.tar` whose password LibreFolio draws itself and encrypts for one or two age public keys: only the matching private key opens it ([Sealed Backups](backup_restore.md#sealed)).
+
+```bash
+# A key pair: the private key into a file of its own (0600, never over a file), the public key printed
+pipenv run ./dev.py backup keygen --identity-file ~/librefolio-backup-key.txt
+
+# A sealed archive for that public key (twice --recipient while a key is being changed)
+pipenv run ./dev.py backup create --recipient age1…
+
+# The same, for the keys of LIBREFOLIO_BACKUP_RECIPIENTS
+pipenv run ./dev.py backup create --sealed
+
+# Check, restore or decrypt it where the private key is
+pipenv run ./dev.py backup inspect librefolio-backup-<date>-<time>.tar --identity-file ~/librefolio-backup-key.txt
+pipenv run ./dev.py backup restore librefolio-backup-<date>-<time>.tar --identity-file ~/librefolio-backup-key.txt --dry-run
+pipenv run ./dev.py backup decrypt librefolio-backup-<date>-<time>.tar --identity-file ~/librefolio-backup-key.txt -o backup.zip
+```
+
+- `--sealed` and `--recipient` go without `--encrypt`, `--password-file` and `--password-stdin`: a sealed archive has a password of its own, which nobody types.
+- `--identity-file` reads a key file as `age-keygen` writes it, before any switch of user, as `--password-file` does: a Docker secret works. The archive's `backup.lfbk` is copied into a private temporary folder, removed at the end.
+- A `.tar` without `--identity-file` stops with `sealed_backup_needs_key`; `--identity-file` with any other archive stops too.
+- The refusals: `sealed_no_identity` (no key of the file opens the password), `sealed_tar_invalid` (not the three files of a sealed archive, in order, as plain files), `sealed_manifest_invalid` (its `manifest.json` does not describe it), `sealed_identity_invalid` (the key file holds no age key), `sealed_password_invalid`, then those of a secure archive: `wrong_password`, `envelope_damaged`.
+
 ### 🧪 Try a Restore on a Copy {: #backup-restore-dry-run }
 
 ```bash

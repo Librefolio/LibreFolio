@@ -79,6 +79,22 @@ Under test, in ``backend/app/services/platform/instance_backup/``: ``jobs.py`` (
     ``cli`` or ``ui``) of a source whose key LibreFolio generated, exactly when the archive carries the entry; ``False``
     for a secure backup whose key is configured, not created yet or unusable (no entry), and for a backup without a
     password though the key was generated. Before L3 the field is missing, and each case says so (``l3_flag``).
+(k) Lot L3-2 (CP2, interface §5; contract L3 §3, §4, §7), the sealed backup of the hosting panel: ``run_backup`` and
+    ``start_backup`` with ``recipients`` (age X25519 ``age1…`` strings, made here by ``pyrage``) write one
+    ``librefolio-backup-YYYYMMDD-HHMMSS.tar`` (``archive_name(..., sealed=True)``), 0600, alone beside ``state.json``.
+    The tar, read with ``tarfile``: exactly ``manifest.json``, ``password.age``, ``backup.lfbk`` in this order, regular
+    files, 0600, uid/gid 0, no user or group name, no PAX header, ``mtime`` the job's creation second, a multiple of
+    10 240 bytes. ``password.age`` opens with the identity (``pyrage.decrypt``; with either one for two recipients) to a
+    43-character base64url password that unlocks ``backup.lfbk`` into a zip that checks ok, of the job's origin, without
+    the instance key though LibreFolio generated one (decision 39, contract §7). ``manifest.json``: the canonical bytes
+    of contract §3.2, its ``created_at`` the job's (UTC, to the second, ``Z``), ``recipients`` as given and in order,
+    ``lfbk_size``/``lfbk_sha256`` the member's, ``librefolio_version``/``db_revision`` the zip manifest's
+    ``app_version``/``alembic_revision``. The job: done, ``encrypted``, ``sealed``, ``sealed_recipients``,
+    ``instance_key_included`` false, ``file_size``/``file_sha256`` the tar's, written in ``state.json`` and read back;
+    the progress ends ``encrypting`` then ``sealing``. The password in no file of the data directory, not in
+    ``state.json``, not in the log. A password and recipients together: ``ValueError``, nothing started. A pyrage
+    failure while sealing (``pyrage.encrypt`` raising ``EncryptError``): ``failed`` / ``backup_failed``, only the
+    state left (no ``.tar``, ``.lfbk``, ``.zip`` or partial), the lock free.
 
 How. The database of every source is ``test_backup_staging.py``'s, made once by ``alembic upgrade`` at the head (its
 module fixture, imported), copied into a data directory of the test with that module's accounts and files. The live
@@ -114,6 +130,7 @@ before B-18 as after it.
 from __future__ import annotations
 
 import errno
+import hashlib
 import importlib
 import inspect
 import json
@@ -123,16 +140,20 @@ import re
 import shutil
 import sqlite3
 import sys
+import tarfile
 import uuid
 import zipfile
 from collections.abc import Callable
 from contextlib import closing
 from dataclasses import dataclass
+from datetime import UTC
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any
 
+import pyrage
 import pytest
+from pyrage import x25519
 from structlog.testing import capture_logs
 
 from backend.app.config import read_secret_file
@@ -1668,3 +1689,266 @@ def test_a_backup_without_a_password_never_says_it_carries_the_generated_key(tmp
     job = get_job(path.parent.name, data_dir=data)
     assert zip_contents(path)[1]["instance_key"]["included"] is False, "precondition: a clear zip, no key"
     assert l3_flag(job) is False, f"no password, no key carried: {job}"
+
+
+# =============================================================================
+# (k) Lot L3-2: the sealed backup of the hosting panel (interface §5; contract L3 §3, §4, §7)
+# =============================================================================
+
+#: The three members of a sealed tar, in their order (contract §3.1).
+SEALED_MEMBERS = ["manifest.json", "password.age", "backup.lfbk"]
+#: The keys of its manifest (contract §3.2): no more, no less.
+SEALED_MANIFEST_KEYS = {"created_at", "db_revision", "format", "lfbk_sha256", "lfbk_size", "librefolio_version", "password_member", "recipients", "version"}
+SEALED_NAME = re.compile(r"librefolio-backup-\d{8}-\d{6}\.tar")
+#: The password a sealed backup generates (contract §3.3): 32 random bytes in base64url without padding.
+SEALED_PASSWORD = re.compile(r"[A-Za-z0-9_-]{43}")
+#: A tar record: the file is padded to a multiple of it (contract §3.4).
+TAR_RECORD = 10240
+
+
+def l3_2_parameter(function: Callable[..., Any]) -> None:
+    """``function`` takes ``recipients``, which lot L3-2 adds (interface §5)."""
+    new_parameter(function, "recipients", by="lot L3-2 adds it (interface §5)")
+
+
+def l3_2_field(job: BackupJob, name: str) -> Any:
+    """``job.<name>``, a field lot L3-2 adds (``sealed``, ``sealed_recipients``)."""
+    assert hasattr(job, name), f"[new] BackupJob has no field {name!r} yet: lot L3-2 adds it (interface §5)"
+    return getattr(job, name)
+
+
+def new_identity() -> tuple[x25519.Identity, str]:
+    """A new age X25519 identity and its recipient, ``age1…``: test keys made for one test, never kept."""
+    identity = x25519.Identity.generate()
+    return identity, str(identity.to_public())
+
+
+def sealed_name(job: BackupJob) -> str:
+    """``archive_name(created_at, sealed=True)``: ``librefolio-backup-YYYYMMDD-HHMMSS.tar``."""
+    new_parameter(archive_name, "sealed", by="lot L3-2 adds it (interface §5)")
+    return archive_name(job.created_at, sealed=True)
+
+
+def sealed_backup(data: Path, recipients: tuple[str, ...], *, origin: str = "panel", progress: Callable[..., None] | None = None) -> tuple[BackupJob, Path]:
+    """A sealed backup of ``data`` for ``recipients``, in the calling thread: its end state and its folder."""
+    l3_2_parameter(run_backup)
+    return run_backup(origin=origin, data_dir=data, progress=progress, recipients=recipients)
+
+
+@dataclass(frozen=True)
+class SealedTar:
+    """A sealed tar read with ``tarfile``: each member's header and bytes, in the archive's order."""
+
+    infos: list[tarfile.TarInfo]
+    data: dict[str, bytes]
+
+    @property
+    def names(self) -> list[str]:
+        return [info.name for info in self.infos]
+
+
+def read_tar(path: Path) -> SealedTar:
+    """Every member of the tar at ``path``, read as a stream, never extracted to disk."""
+    with tarfile.open(path, mode="r:") as tar:
+        infos = tar.getmembers()
+        data = {}
+        for info in infos:
+            handle = tar.extractfile(info) if info.isreg() else None
+            data[info.name] = handle.read() if handle is not None else b""
+    return SealedTar(infos=infos, data=data)
+
+
+@dataclass(frozen=True)
+class OpenedSeal:
+    """A sealed tar opened with an identity: the password, the sealed manifest (JSON and bytes), the ``backup.lfbk``
+    member on disk, and the archive it holds."""
+
+    password: str
+    manifest: dict[str, Any]
+    manifest_bytes: bytes
+    lfbk: bytes
+    archive: Opened
+
+
+def open_seal(env: ModuleType, tar: SealedTar, identity: x25519.Identity, work: Path) -> OpenedSeal:
+    """``password.age`` decrypted with ``identity``; the password unlocks ``backup.lfbk``, decrypted into a zip of ``work``."""
+    password = pyrage.decrypt(tar.data["password.age"], [identity]).decode("ascii")
+    assert SEALED_PASSWORD.fullmatch(password), f"the sealed password is 43 base64url characters: {len(password)} characters"
+    work.mkdir(parents=True, exist_ok=True)
+    envelope = work / f"backup-{uuid.uuid4().hex[:8]}.lfbk"
+    envelope.write_bytes(tar.data["backup.lfbk"])
+    target = envelope.with_suffix(".zip")
+    env.decrypt_file(envelope, target, env.unlock(envelope, password))
+    entries, manifest = zip_contents(target)
+    return OpenedSeal(
+        password=password,
+        manifest=json.loads(tar.data["manifest.json"]),
+        manifest_bytes=tar.data["manifest.json"],
+        lfbk=tar.data["backup.lfbk"],
+        archive=Opened(zip=target, entries=entries, manifest=manifest),
+    )
+
+
+def utc_second(moment: Any) -> str:
+    """A moment as the sealed manifest writes it: UTC, to the second, with the ``Z``."""
+    return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def test_a_sealed_backup_is_one_tar_of_three_members_and_never_carries_the_instance_key(tmp_path, databases, monkeypatch):
+    """(k) Interface §5, contract §3, §4, §7: ``run_backup(origin="panel", recipients=(r,))`` of a source whose key
+    LibreFolio generated. One ``.tar`` (``archive_name(..., sealed=True)``), 0600, alone beside the state; its three
+    members in order, with the fields of §3.4; the password opens ``backup.lfbk`` into an archive that checks ok, without
+    the key; the manifest of §3.2; the job's sealed fields, in ``state.json`` too; ``sealing`` after ``encrypting``; the
+    password nowhere."""
+    print_section("A sealed backup of the hosting panel")
+    env = envelope_module()
+    identity, recipient = new_identity()
+    data = source_dir(tmp_path / "source", databases, monkeypatch, key=SOURCE_KEY)
+    status = instance_key_status()
+    assert (status.source, status.problem) == ("generated", None), f"precondition: a key LibreFolio generated, which a password backup would carry: {status}"
+    progress = cases.Progress()
+    with capture_logs() as events:
+        job, folder = sealed_backup(data, (recipient,), progress=progress)
+    assert (job.status, job.error_code, job.origin) == ("done", None, "panel"), f"the sealed backup is done: {job}"
+    assert SEALED_NAME.fullmatch(job.file_name or "") and job.file_name == sealed_name(job), f"librefolio-backup-YYYYMMDD-HHMMSS.tar, from the job's creation: {job.file_name}"
+    path = folder / job.file_name
+    assert sorted(os.listdir(folder)) == sorted([STATE_FILE, job.file_name]), f"the job's folder holds its state and its tar, no zip, no .lfbk, no partial: {sorted(os.listdir(folder))}"
+    assert cases.mode(path) == 0o600, f"the tar is readable by its owner only: {oct(cases.mode(path))}"
+    assert (job.file_size, job.file_sha256) == file_digest(path), "the job gives the tar's size and SHA-256"
+    assert job.file_size % TAR_RECORD == 0, f"the tar is padded to a multiple of {TAR_RECORD} bytes: {job.file_size}"
+
+    tar = read_tar(path)
+    assert tar.names == SEALED_MEMBERS, f"exactly three members, in the contract's order: {tar.names}"
+    mtime = int(job.created_at.replace(microsecond=0).timestamp())
+    fields_of = {info.name: (info.type, info.mode, info.uid, info.gid, info.uname, info.gname, info.mtime, dict(info.pax_headers)) for info in tar.infos}
+    assert fields_of == dict.fromkeys(SEALED_MEMBERS, (tarfile.REGTYPE, 0o600, 0, 0, "", "", mtime, {})), f"regular files, 0600, root, no names, the job's second, no PAX header: {fields_of}"
+
+    opened = open_seal(env, tar, identity, tmp_path / "opened")
+    check = check_archive(opened.archive.zip)
+    assert check.ok and check.manifest.origin == "panel", f"backup.lfbk holds an archive of the panel that checks ok: {check}"
+    keys = [name for name in opened.archive.entries if name.startswith("secrets/")]
+    assert keys == [] and opened.archive.manifest["instance_key"]["included"] is False, f"a panel job never carries the instance key (contract §7): {keys}, {opened.archive.manifest['instance_key']}"
+
+    manifest = opened.manifest
+    assert set(manifest) == SEALED_MANIFEST_KEYS, f"the manifest's keys, exactly: {sorted(manifest)}"
+    assert opened.manifest_bytes == json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode("utf-8"), f"canonical bytes: sorted keys, no spaces, no line break: {opened.manifest_bytes[:80]!r}"
+    expected = {
+        "format": "lfbk-tar",
+        "version": 1,
+        "password_member": "password.age",
+        "recipients": [recipient],
+        "created_at": utc_second(job.created_at),
+        "lfbk_size": len(opened.lfbk),
+        "lfbk_sha256": hashlib.sha256(opened.lfbk).hexdigest(),
+        "librefolio_version": opened.archive.manifest["app_version"],
+        "db_revision": opened.archive.manifest["alembic_revision"],
+    }
+    assert manifest == expected, f"the manifest of contract §3.2: {manifest}, expected {expected}"
+
+    assert (new_field(job, "encrypted"), l3_2_field(job, "sealed"), tuple(l3_2_field(job, "sealed_recipients")), l3_flag(job)) == (True, True, (recipient,), False), f"encrypted, sealed for its recipient, no instance key: {job}"
+    written = json.loads((folder / STATE_FILE).read_text(encoding="utf-8"))
+    assert (written.get("sealed", "<missing>"), written.get("sealed_recipients", "<missing>")) == (True, [recipient]), f"state.json records the seal: {written.get('sealed', '<missing>')!r}, {written.get('sealed_recipients', '<missing>')!r}"
+    assert get_job(job.job_id, data_dir=data) == job, "the state on disk is the one returned"
+
+    phases = progress.phases
+    assert "sealing" in phases and phases[-2:] == ["encrypting", "sealing"], f"sealing comes last, after encrypting: {phases}"
+    assert opened.password not in (folder / STATE_FILE).read_text(encoding="utf-8"), "the password is not in state.json"
+    assert any(event.get("job_id") == job.job_id for event in events), f"barrier: the backup's log reaches the capture: {[event.get('event') for event in events]}"
+    assert opened.password not in repr(events), "the password is not in the log"
+    assert files_holding(data, opened.password.encode("ascii")) == [], "the password is in no file of the data directory"
+    print_success(f"{job.file_name}: {job.file_size} bytes, sealed for {recipient[:12]}…")
+
+
+def test_a_backup_sealed_for_two_recipients_opens_with_either_identity(tmp_path, databases, monkeypatch):
+    """(k) Contract §2 (a rotation): two recipients, in the order given, in the manifest and in the job; the password
+    opens with either identity, to the same password."""
+    env = envelope_module()
+    (first, r1), (second, r2) = new_identity(), new_identity()
+    data = source_dir(tmp_path / "source", databases, monkeypatch)
+    job, folder = sealed_backup(data, (r1, r2))
+    assert (job.status, job.error_code) == ("done", None), f"the sealed backup is done: {job}"
+    tar = read_tar(folder / job.file_name)
+    opened = [open_seal(env, tar, identity, tmp_path / f"opened-{index}") for index, identity in enumerate((first, second))]
+    assert opened[0].password == opened[1].password, "both identities open the same password"
+    assert opened[0].manifest["recipients"] == [r1, r2], f"the manifest names both recipients, in order: {opened[0].manifest['recipients']}"
+    assert tuple(l3_2_field(job, "sealed_recipients")) == (r1, r2), f"the job names both recipients, in order: {job}"
+    print_success("two recipients: either identity opens the password")
+
+
+def test_a_sealed_backup_started_in_the_background_ends_as_a_tar(tmp_path, databases, monkeypatch):
+    """(k) Interface §5: ``start_backup(origin="panel", recipients=(r,))`` returns the first state at once, then its
+    thread ends with the sealed tar alone beside the state."""
+    env = envelope_module()
+    l3_2_parameter(start_backup)
+    identity, recipient = new_identity()
+    data = source_dir(tmp_path / "source", databases, monkeypatch)
+    first = start_backup(origin="panel", data_dir=data, recipients=(recipient,))
+    assert (first.status, first.file_name) == ("running", None), f"the first state of a run: {first}"
+    job = jobs_cases.wait_until_finished(first.job_id, data)
+    folder = job_dir(data, job.job_id)
+    assert (job.status, job.error_code, l3_2_field(job, "sealed")) == ("done", None, True), f"the run ends done, sealed: {job}"
+    assert job.file_name == sealed_name(job) and sorted(os.listdir(folder)) == sorted([STATE_FILE, job.file_name]), f"the state and the tar, nothing else: {sorted(os.listdir(folder))}"
+    opened = open_seal(env, read_tar(folder / job.file_name), identity, tmp_path / "opened")
+    assert check_archive(opened.archive.zip).ok, "the tar holds an archive that checks ok"
+    assert opened.password not in (folder / STATE_FILE).read_text(encoding="utf-8"), "the password is not in state.json"
+    print_success(f"{job.file_name}, in the background")
+
+
+@pytest.mark.parametrize("start", ["run_backup", "start_backup"])
+def test_a_password_and_recipients_together_are_refused_before_anything_starts(tmp_path, databases, monkeypatch, start):
+    """(k) Interface §5: ``password`` and ``recipients`` together raise ``ValueError``; no job folder, the lock free."""
+    function = run_backup if start == "run_backup" else start_backup
+    l3_2_parameter(function)
+    _identity, recipient = new_identity()
+    data = source_dir(tmp_path / "source", databases, monkeypatch)
+    with pytest.raises(ValueError):
+        function(origin="panel", data_dir=data, password=PASSWORD, recipients=(recipient,))
+    assert jobs_cases.job_folders(data) == [], f"no job was created: {jobs_cases.job_folders(data)}"
+    assert not jobs._run_lock_held(data), "the lock is free"
+    print_success(f"{start}: password and recipients → ValueError")
+
+
+class FailingAgeEncryption:
+    """``pyrage.encrypt`` failing as pyrage does (``EncryptError``): the calls it received."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def __call__(self, *args: Any, **kwargs: Any) -> bytes:
+        self.calls += 1
+        raise pyrage.EncryptError("age encryption failed (a stand-in of the test)")
+
+
+def replace_age_encryption(monkeypatch: pytest.MonkeyPatch, replacement: Callable[..., Any]) -> None:
+    """``pyrage.encrypt`` replaced, in ``pyrage`` and in every module of the package that bound it by name (the sealed
+    module imported first, when it exists, so that a name it binds at import is replaced too)."""
+    sealed_module_name = f"{PACKAGE}.sealed"
+    try:
+        importlib.import_module(sealed_module_name)
+    except ModuleNotFoundError as exc:
+        if exc.name != sealed_module_name:
+            raise
+    original = pyrage.encrypt
+    monkeypatch.setattr(pyrage, "encrypt", replacement)
+    for name, module in list(sys.modules.items()):
+        if name.startswith(PACKAGE + ".") and getattr(module, "encrypt", None) is original:
+            monkeypatch.setattr(module, "encrypt", replacement)
+
+
+def test_a_pyrage_failure_while_sealing_ends_the_job_failed_with_only_its_state_left(tmp_path, databases, monkeypatch):
+    """(k) Interface §5: ``pyrage.encrypt`` raising ``EncryptError`` while the password is sealed: the job ``failed``,
+    ``backup_failed``, no archive; its folder holds its state only (no ``.tar``, ``.lfbk``, ``.zip`` nor partial), the
+    lock free."""
+    l3_2_parameter(run_backup)
+    _identity, recipient = new_identity()
+    data = source_dir(tmp_path / "source", databases, monkeypatch)
+    failing = FailingAgeEncryption()
+    replace_age_encryption(monkeypatch, failing)
+    job, folder = run_backup(origin="panel", data_dir=data, recipients=(recipient,))
+    assert failing.calls >= 1, f"barrier: the backup reached pyrage.encrypt through a name this test replaced: the job {job}"
+    assert (job.status, job.error_code, job.phase, job.file_name) == ("failed", "backup_failed", None, None), f"the job failed, backup_failed: {job}"
+    assert os.listdir(folder) == [STATE_FILE], f"the job's folder keeps its state only: {sorted(os.listdir(folder))}"
+    left = sorted(path.name for path in jobs_dir(data).rglob("*") if path.suffix in (".tar", ".lfbk", ".zip", ".part"))
+    assert left == [], f"no archive nor partial left anywhere in the jobs folder: {left}"
+    assert not jobs._run_lock_held(data), "the lock is free once the run returned"
+    print_success("EncryptError → backup_failed, the state alone")

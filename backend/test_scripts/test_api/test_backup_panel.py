@@ -59,6 +59,24 @@ the administrators' routes of ``instance.py``.
   administrators' routes (PANEL-019's), for a job of the panel. PANEL-027: a secure job of the Backup tab whose archive
   carries the key (``jobs.BackupJob.instance_key_included`` true) reads ``instance_key_included`` true to an
   administrator; before L3 the dataclass has no such field, and the test says so.
+- PANEL-028..034 (lot L3-2, interface §5; contract L3 §2, §4), the sealed backup of the panel. The start reads
+  ``LIBREFOLIO_BACKUP_RECIPIENTS`` at each request: one ``age1…`` (an X25519 recipient made here by ``pyrage``), or two
+  (spaces around each ignored, the order kept), and the start asks for a run of origin ``panel`` with
+  ``recipients=(…)`` and no password. A value it cannot use (garbage, an ``AGE-SECRET-KEY-1…`` private key, an empty
+  item, three recipients, one twice): 503 ``backup_panel_unavailable``, one error line naming the variable and never the
+  value, the jobs never reached. Unset in the ``managed`` profile: 503 ``backup_panel_unavailable``, one error line, the
+  jobs never reached (barrier: set, the same profile starts a sealed run). Unset ``selfhosted``: the start of before,
+  no recipients. A sealed done job reads ``sealed`` true and ``sealed_recipients``; one not sealed, false and ``[]``;
+  a running job's ``phase`` may be ``sealing``. The download of a ``.tar`` is ``application/x-tar``.
+- PANEL-035..038 (lot L3-2 addendum, contract L3 §6), the «awaiting restore» mode of workstream H (H-62), read through
+  ``backend.app.config.platform.await_restore()``, which H adds later: the start looks it up at each request
+  (``getattr``, absent: never awaiting). Awaiting: the start answers 409 ``backup_awaiting_restore``, detail exactly
+  ``{code, message}``, and ``start_backup`` is never called — recipients unset, set, unusable (the mode wins over the
+  503 of a value it cannot use) or unset in ``managed``: a backup of an empty instance is never made, whatever the
+  config. Not awaiting (``False``, or no such function): the start of before, 202. The poll, the download and the
+  deletion are not touched by the mode. OpenAPI documents the start's 409 ``backup_awaiting_restore``. Written RED:
+  the route does not read the mode yet; the rows without it (absent, ``False``) and the routes the mode leaves alone
+  are guards, green today.
 - Every request of this module: the token, and whatever the caller presented, never appears in the answer, its body or
   its headers, nor in the log.
 
@@ -93,11 +111,14 @@ from uuid import uuid4
 import httpx
 import pytest
 from fastapi import FastAPI
+from pyrage import x25519
 from structlog.testing import capture_logs
 
+from backend.app import config
 from backend.app.api.v1.backup import backup_router, job_views
 from backend.app.api.v1.settings import require_admin
 from backend.app.config import SecretFileError
+from backend.app.config import platform as platform_module
 from backend.app.config.backup import PANEL_TOKEN_MIN_LENGTH, PANEL_TOKEN_VARIABLE, BackupConfigError, backup_download_token
 from backend.app.services.platform.instance_backup import jobs
 from backend.app.services.platform.instance_backup.paths import BackupPathError
@@ -108,6 +129,9 @@ TOKEN_VARIABLE = "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN"
 TOKEN_FILE_VARIABLE = "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN_FILE"
 #: The shortest token the server takes.
 MIN_LENGTH = 32
+#: Lot L3-2 (contract L3 §2): the age recipients a panel job is sealed for, and the instance's profile.
+RECIPIENTS_VARIABLE = "LIBREFOLIO_BACKUP_RECIPIENTS"
+PROFILE_VARIABLE = "LIBREFOLIO_PROFILE"
 
 PANEL = "/api/v1/backup/panel/jobs"
 INSTANCE = "/api/v1/backup/instance"
@@ -161,6 +185,8 @@ class FakeJobs:
     calls: list[tuple[str, str]] = field(default_factory=list)
     #: The ``password`` of each ``start_backup``, in order: None for a backup in the clear.
     start_passwords: list[str | None] = field(default_factory=list)
+    #: The ``recipients`` of each ``start_backup`` (lot L3-2), in order: None for a backup that is not sealed.
+    start_recipients: list[tuple[str, ...] | None] = field(default_factory=list)
     known: dict[str, jobs.BackupJob] = field(default_factory=dict)
     #: What ``start_backup`` raises instead of starting a run; None: it starts one.
     start_error: BaseException | None = None
@@ -195,9 +221,10 @@ class FakeJobs:
 
     # --- the service, as the routes call it ------------------------------------------------------------------------
 
-    def start_backup(self, *, origin: str = "ui", data_dir: Path | None = None, password: str | None = None) -> jobs.BackupJob:
+    def start_backup(self, *, origin: str = "ui", data_dir: Path | None = None, password: str | None = None, recipients: tuple[str, ...] | None = None) -> jobs.BackupJob:
         self.calls.append(("start_backup", origin))
         self.start_passwords.append(password)
+        self.start_recipients.append(None if recipients is None else tuple(recipients))
         if self.start_error is not None:
             raise self.start_error
         return self.running(origin)
@@ -239,9 +266,12 @@ def service(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> FakeJobs:
 
 @pytest.fixture(autouse=True)
 def no_inherited_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Every test starts with neither variable of the token: nothing comes from the runner's environment."""
+    """Every test starts with neither variable of the token, no backup recipients (lot L3-2) and the ``selfhosted``
+    profile: nothing comes from the runner's environment."""
     monkeypatch.delenv(TOKEN_VARIABLE, raising=False)
     monkeypatch.delenv(TOKEN_FILE_VARIABLE, raising=False)
+    monkeypatch.delenv(RECIPIENTS_VARIABLE, raising=False)
+    monkeypatch.setenv(PROFILE_VARIABLE, "selfhosted")
 
 
 def backup_app(*, administrator: bool = False) -> FastAPI:
@@ -1024,3 +1054,325 @@ async def test_an_administrator_reads_that_a_secure_job_carries_the_instance_key
     assert polled.response.status_code == 200, f"precondition: an administrator polls the job: {polled.answer}"
     view = polled.response.json()
     assert (view.get("encrypted"), *archive_facts(view).values()) == (True, secure.file_sha256, True), f"a secure job carrying the key: {view}"
+
+
+# =============================================================================
+# PANEL-028..034 (lot L3-2): the sealed backup of the panel
+# =============================================================================
+
+
+def a_recipient() -> str:
+    """A new age X25519 recipient, ``age1…``: the public half of an identity made for one test."""
+    return str(x25519.Identity.generate().to_public())
+
+
+def a_private_key() -> str:
+    """A new age X25519 identity, ``AGE-SECRET-KEY-1…``: a test key, given where a recipient belongs."""
+    return str(x25519.Identity.generate())
+
+
+def use_profile(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, profile: str) -> None:
+    """``get_settings()`` reads ``LIBREFOLIO_PROFILE`` as ``profile`` from this environment alone, in test mode and with
+    a data directory of the test (as ``test_donation_managed_profile.py`` sets it); barrier: it reads that profile."""
+    monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "1")
+    monkeypatch.setenv("LIBREFOLIO_TEST_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv(PROFILE_VARIABLE, profile)
+    cache_clear = getattr(config.get_settings, "cache_clear", None)
+    if callable(cache_clear):
+        cache_clear()
+    resolved = config.get_settings().LIBREFOLIO_PROFILE
+    assert resolved == profile, f"barrier: get_settings() reads the profile {profile!r}, not {resolved!r}"
+
+
+async def panel_start(app: FastAPI, service: FakeJobs, token: str, *, never: Iterable[str] = ()) -> tuple[Exchange, list[tuple[str, str]], list[tuple[str, ...] | None], list[str | None]]:
+    """``POST`` the panel's start with the token: the exchange, the calls, and the recipients and passwords each start
+    received meanwhile."""
+    marks = (len(service.start_recipients), len(service.start_passwords))
+    exchange, calls = await with_calls(service, send(app, "POST", PANEL, authorization=f"Bearer {token}", never=[token, *never]))
+    return exchange, calls, service.start_recipients[marks[0] :], service.start_passwords[marks[1] :]
+
+
+def sealed_fields_exist() -> None:
+    """Lot L3-2's fields of ``jobs.BackupJob``; before it, a failure that says so."""
+    missing = [name for name in ("sealed", "sealed_recipients") if name not in {item.name for item in fields(jobs.BackupJob)}]
+    if missing:
+        pytest.fail(f"red until L3-2: jobs.BackupJob has no field {', '.join(missing)}", pytrace=False)
+
+
+def sealed_done(service: FakeJobs, recipients: tuple[str, ...]) -> jobs.BackupJob:
+    """A done job of the panel, sealed for ``recipients``: its archive a ``.tar`` (bytes of its own), as a sealed run
+    leaves it."""
+    sealed_fields_exist()
+    job = service.running("panel")
+    name = archive_name_tar(job.created_at)
+    archive = service.folder / job.job_id / name
+    archive.parent.mkdir(parents=True)
+    archive.write_bytes(b"manifest.json\0" + job.job_id.encode() + bytes(range(256)))
+    size = archive.stat().st_size
+    done = replace(
+        job,
+        status="done",
+        phase=None,
+        done_bytes=size,
+        total_bytes=size,
+        finished_at=FINISHED_AT,
+        file_name=name,
+        file_size=size,
+        file_sha256=hashlib.sha256(archive.read_bytes()).hexdigest(),
+        encrypted=True,
+        sealed=True,
+        sealed_recipients=recipients,
+    )
+    service.known[job.job_id] = done
+    return done
+
+
+def archive_name_tar(created_at: datetime) -> str:
+    """The name of a sealed archive (contract §3.1): ``librefolio-backup-YYYYMMDD-HHMMSS.tar``, in UTC."""
+    return f"librefolio-backup-{created_at.astimezone(UTC):%Y%m%d-%H%M%S}.tar"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("count", [1, 2])
+@pytest.mark.parametrize("spaced", [False, True], ids=["as-written", "spaces-around"])
+async def test_with_recipients_the_panel_starts_a_sealed_run_without_a_password(app, monkeypatch, service, count, spaced):
+    """PANEL-028 (L3-2): ``LIBREFOLIO_BACKUP_RECIPIENTS`` set to one or two recipients (spaces around each ignored): the
+    start answers 202 and asks for one run of origin ``panel`` with exactly those recipients, in order, and no
+    password."""
+    print_section(f"Backup panel: a sealed start, {count} recipient(s)")
+    token = a_token()
+    monkeypatch.setenv(TOKEN_VARIABLE, token)
+    recipients = tuple(a_recipient() for _ in range(count))
+    monkeypatch.setenv(RECIPIENTS_VARIABLE, f"  {' , '.join(recipients)} " if spaced else ",".join(recipients))
+
+    started, calls, given, passwords = await panel_start(app, service, token)
+
+    assert started.response.status_code == 202 and calls == [("start_backup", "panel")], f"one run of origin panel: {started.answer}, calls {calls}"
+    assert given == [recipients], f"the start carries the recipients, in order: {given}, expected {[recipients]}"
+    assert passwords == [None], f"a sealed run takes no password from the panel: {passwords}"
+    print_success(f"{count} recipient(s): start_backup('panel', recipients=…)")
+
+
+#: Values of ``LIBREFOLIO_BACKUP_RECIPIENTS`` the server cannot use (contract L3 §2), each built at the call.
+UNUSABLE_RECIPIENTS: dict[str, Callable[[], list[str]]] = {
+    "garbage": lambda: ["not-an-age-recipient"],
+    "a-private-key": lambda: [a_private_key()],
+    "an-empty-item": lambda: [a_recipient(), "", a_recipient()],
+    "three-recipients": lambda: [a_recipient(), a_recipient(), a_recipient()],
+    "one-twice": lambda: [recipient := a_recipient(), recipient],
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", sorted(UNUSABLE_RECIPIENTS))
+async def test_recipients_the_server_cannot_use_answer_503_with_one_log_line_and_reach_no_job(app, monkeypatch, service, kind):
+    """PANEL-029 (L3-2, D1): a value of ``LIBREFOLIO_BACKUP_RECIPIENTS`` the server cannot use: the start answers 503
+    ``backup_panel_unavailable``, never a clear zip; one error line naming the variable and never the value (nor an item
+    of it); the jobs never reached."""
+    print_section(f"Backup panel: recipients the server cannot use ({kind})")
+    token = a_token()
+    monkeypatch.setenv(TOKEN_VARIABLE, token)
+    items = UNUSABLE_RECIPIENTS[kind]()
+    monkeypatch.setenv(RECIPIENTS_VARIABLE, ",".join(items))
+
+    refused, calls, _given, _passwords = await panel_start(app, service, token, never=[",".join(items), *items])
+
+    assert refused.code == UNAVAILABLE, f"a value it cannot use closes the start: {refused.answer}"
+    logged = [RECIPIENTS_VARIABLE in repr(event) for event in refused.errors]
+    assert logged == [True], f"one error line, naming {RECIPIENTS_VARIABLE}: {[event.get('event') for event in refused.errors]}"
+    assert calls == [], f"the jobs must never be reached: {calls}"
+    print_success(f"{kind}: 503 backup_panel_unavailable, one error line, no job")
+
+
+@pytest.mark.asyncio
+async def test_without_recipients_a_managed_instance_answers_503_and_reaches_no_job(app, monkeypatch, tmp_path, service):
+    """PANEL-030 (L3-2, D1): ``LIBREFOLIO_BACKUP_RECIPIENTS`` unset in the ``managed`` profile: 503
+    ``backup_panel_unavailable``, one error line, the jobs never reached. Barrier: set, the same profile starts a sealed
+    run."""
+    print_section("Backup panel: managed, no recipients")
+    token = a_token()
+    monkeypatch.setenv(TOKEN_VARIABLE, token)
+    use_profile(monkeypatch, tmp_path, "managed")
+
+    refused, calls, _given, _passwords = await panel_start(app, service, token)
+    recipient = a_recipient()
+    monkeypatch.setenv(RECIPIENTS_VARIABLE, recipient)
+    started, started_calls, given, _ = await panel_start(app, service, token)
+
+    assert started.response.status_code == 202 and started_calls == [("start_backup", "panel")] and given == [(recipient,)], f"barrier: managed with recipients starts a sealed run: {started.answer}, {started_calls}, {given}"
+    assert refused.code == UNAVAILABLE, f"managed without recipients: never a clear zip: {refused.answer}"
+    assert len(refused.errors) == 1, f"one error line: {[event.get('event') for event in refused.errors]}"
+    assert calls == [], f"the jobs must never be reached: {calls}"
+    print_success("managed, unset: 503; set: a sealed start")
+
+
+@pytest.mark.asyncio
+async def test_without_recipients_a_selfhosted_instance_starts_the_clear_backup_of_before(app, monkeypatch, tmp_path, service):
+    """PANEL-031 (L3-2): unset in the ``selfhosted`` profile: the start of before, origin ``panel``, no recipients, no
+    password."""
+    token = a_token()
+    monkeypatch.setenv(TOKEN_VARIABLE, token)
+    use_profile(monkeypatch, tmp_path, "selfhosted")
+
+    started, calls, given, passwords = await panel_start(app, service, token)
+
+    assert started.response.status_code == 202 and calls == [("start_backup", "panel")], f"the start of before: {started.answer}, calls {calls}"
+    assert (given, passwords) == ([None], [None]), f"no recipients, no password: {given}, {passwords}"
+
+
+@pytest.mark.asyncio
+async def test_the_panel_s_view_of_a_sealed_job_carries_the_seal_and_its_tar_downloads_as_x_tar(app, monkeypatch, service):
+    """PANEL-032, PANEL-034 (L3-2, contract §4): a sealed done job reads ``encrypted`` and ``sealed`` true,
+    ``sealed_recipients`` its recipients, ``instance_key_included`` false and ``file_sha256`` the SHA-256 of the bytes
+    its download serves; the download is ``application/x-tar``, an attachment under its name, ``no-store``. A job not
+    sealed reads ``sealed`` false and ``sealed_recipients`` ``[]``."""
+    print_section("Backup panel: the view and the download of a sealed job")
+    token = a_token()
+    monkeypatch.setenv(TOKEN_VARIABLE, token)
+    bearer = f"Bearer {token}"
+    recipients = (a_recipient(), a_recipient())
+    sealed = sealed_done(service, recipients)
+    clear = service.done("panel")
+
+    polled = await send(app, "GET", f"{PANEL}/{sealed.job_id}", authorization=bearer, never=[token])
+    downloaded = await send(app, "GET", f"{PANEL}/{sealed.job_id}/file", authorization=bearer, never=[token])
+    clear_polled = await send(app, "GET", f"{PANEL}/{clear.job_id}", authorization=bearer, never=[token])
+
+    assert (polled.response.status_code, downloaded.response.status_code, clear_polled.response.status_code) == (200, 200, 200), f"precondition: the polls and the download answer: {polled.answer}, {downloaded.answer}, {clear_polled.answer}"
+    view = polled.response.json()
+    facts = {name: view.get(name, "<missing>") for name in ("file_name", "encrypted", "sealed", "sealed_recipients", "instance_key_included", "file_sha256")}
+    expected = {"file_name": sealed.file_name, "encrypted": True, "sealed": True, "sealed_recipients": list(recipients), "instance_key_included": False, "file_sha256": hashlib.sha256(downloaded.response.content).hexdigest()}
+    assert facts == expected, f"the view of a sealed job: {facts}"
+    headers = {name: downloaded.response.headers.get(name) for name in ("content-type", "cache-control", "content-disposition")}
+    assert headers == {"content-type": "application/x-tar", "cache-control": "no-store", "content-disposition": f'attachment; filename="{sealed.file_name}"'}, f"a .tar downloads as application/x-tar: {headers}"
+    clear_view = clear_polled.response.json()
+    assert (clear_view.get("sealed", "<missing>"), clear_view.get("sealed_recipients", "<missing>")) == (False, []), f"a job not sealed: {clear_view}"
+    print_success(f"{sealed.file_name}: sealed for 2, application/x-tar")
+
+
+@pytest.mark.asyncio
+async def test_a_running_panel_job_reads_its_phase_sealing(app, monkeypatch, service):
+    """PANEL-033 (L3-2): the phase ``sealing`` is one of a job's view: a running job in it answers 200 with that phase."""
+    token = a_token()
+    monkeypatch.setenv(TOKEN_VARIABLE, token)
+    job = service.running("panel")
+    service.known[job.job_id] = replace(job, phase="sealing", done_bytes=10, total_bytes=10)
+
+    polled = await send(app, "GET", f"{PANEL}/{job.job_id}", authorization=f"Bearer {token}", never=[token])
+
+    assert polled.response.status_code == 200, f"a job sealing is answered: {polled.answer}"
+    assert polled.response.json()["phase"] == "sealing", f"its phase is sealing: {polled.answer}"
+
+
+# =============================================================================
+# PANEL-035..038 (lot L3-2 addendum): the «awaiting restore» mode refuses the start
+# =============================================================================
+
+#: The mode's refusal of a start (contract L3 §6): status and code.
+AWAITING_RESTORE = (409, "backup_awaiting_restore")
+
+
+def awaiting_restore(monkeypatch: pytest.MonkeyPatch, value: bool | None) -> None:
+    """``config.platform.await_restore()``, which workstream H adds (H-62), answering ``value``; ``None``: no such
+    function, as in this tree before H."""
+    if value is None:
+        monkeypatch.delattr(platform_module, "await_restore", raising=False)
+    else:
+        monkeypatch.setattr(platform_module, "await_restore", lambda: value, raising=False)
+
+
+def recipients_unset(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[str]:
+    return []
+
+
+def one_recipient(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[str]:
+    monkeypatch.setenv(RECIPIENTS_VARIABLE, a_recipient())
+    return []
+
+
+def unusable_recipients(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[str]:
+    items = UNUSABLE_RECIPIENTS["a-private-key"]()
+    monkeypatch.setenv(RECIPIENTS_VARIABLE, ",".join(items))
+    return [",".join(items), *items]
+
+
+def managed_without_recipients(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[str]:
+    use_profile(monkeypatch, tmp_path, "managed")
+    return []
+
+
+AWAITING_CONFIGS = [
+    pytest.param(recipients_unset, id="recipients-unset"),
+    pytest.param(one_recipient, id="one-recipient"),
+    pytest.param(unusable_recipients, id="recipients-unusable"),
+    pytest.param(managed_without_recipients, id="managed-recipients-unset"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("configure", AWAITING_CONFIGS)
+async def test_awaiting_restore_the_panel_start_answers_409_and_starts_no_backup(app, monkeypatch, tmp_path, service, configure):
+    """PANEL-035 (L3-2, contract §6): with ``await_restore()`` true the panel's start answers 409
+    ``backup_awaiting_restore``, detail exactly ``{code, message}``, and never calls ``start_backup``: a backup of an
+    empty instance is never made, whatever ``LIBREFOLIO_BACKUP_RECIPIENTS`` says — unset, set, a value the server cannot
+    use (the mode wins over its 503), unset in ``managed`` (the mode wins over that 503 too)."""
+    print_section(f"Backup panel: awaiting restore, {configure.__name__}")
+    token = a_token()
+    monkeypatch.setenv(TOKEN_VARIABLE, token)
+    never = configure(monkeypatch, tmp_path)
+    awaiting_restore(monkeypatch, True)
+
+    refused, calls, _given, _passwords = await panel_start(app, service, token, never=never)
+
+    assert refused.code == AWAITING_RESTORE, f"awaiting a restore, the start is refused with 409 backup_awaiting_restore: {refused.answer}"
+    detail = refused.response.json()["detail"]
+    assert set(detail) == {"code", "message"} and isinstance(detail["message"], str) and detail["message"], f"the detail is exactly {{code, message}}: {detail}"
+    assert calls == [], f"no backup is ever started while awaiting a restore: {calls}"
+    print_success(f"{configure.__name__}: 409 backup_awaiting_restore, start_backup never called")
+
+
+@pytest.mark.asyncio
+async def test_the_mode_is_read_at_each_request_and_its_absence_is_never_awaiting(app, monkeypatch, service):
+    """PANEL-036 (L3-2): the start looks ``await_restore`` up at each request on the same app: absent (this tree before
+    workstream H) → 202, the start of before; true → 409 ``backup_awaiting_restore`` and no call; false → 202 again,
+    one run of origin ``panel``."""
+    token = a_token()
+    monkeypatch.setenv(TOKEN_VARIABLE, token)
+    answers: dict[str, tuple[tuple[int, str | None], list[tuple[str, str]]]] = {}
+    for label, value in (("absent", None), ("true", True), ("false", False)):
+        awaiting_restore(monkeypatch, value)
+        exchange, calls, _given, _passwords = await panel_start(app, service, token)
+        answers[label] = ((exchange.response.status_code, exchange.code[1]), calls)
+
+    started = ((202, None), [("start_backup", "panel")])
+    assert answers["absent"] == started, f"no await_restore: never awaiting, the start of before: {answers['absent']}"
+    assert answers["true"] == (AWAITING_RESTORE, []), f"await_restore() true: 409 backup_awaiting_restore, no call: {answers['true']}"
+    assert answers["false"] == started, f"await_restore() false, read at this request: the start of before: {answers['false']}"
+    print_success("absent 202, true 409, false 202: read at each request")
+
+
+@pytest.mark.asyncio
+async def test_awaiting_restore_the_poll_download_and_delete_keep_working(app, monkeypatch, service):
+    """PANEL-037 (L3-2): the mode refuses only the start. The panel's done job is polled (200), downloaded (200, its
+    bytes) and deleted (204) with the calls of before, while ``await_restore()`` is true."""
+    token = a_token()
+    monkeypatch.setenv(TOKEN_VARIABLE, token)
+    bearer = f"Bearer {token}"
+    job = service.done("panel")
+    archive = service.archive(job).read_bytes()
+    awaiting_restore(monkeypatch, True)
+
+    polled, poll_calls = await with_calls(service, send(app, "GET", f"{PANEL}/{job.job_id}", authorization=bearer, never=[token]))
+    downloaded, file_calls = await with_calls(service, send(app, "GET", f"{PANEL}/{job.job_id}/file", authorization=bearer, never=[token]))
+    deleted, delete_calls = await with_calls(service, send(app, "DELETE", f"{PANEL}/{job.job_id}", authorization=bearer, never=[token]))
+
+    assert (polled.response.status_code, poll_calls) == (200, [("get_job", job.job_id)]), f"the poll answers as before: {polled.answer}, {poll_calls}"
+    assert (downloaded.response.status_code, downloaded.response.content, file_calls) == (200, archive, [("get_job", job.job_id), ("job_archive", job.job_id)]), f"the download answers as before: {downloaded.answer}, {file_calls}"
+    assert (deleted.response.status_code, delete_calls) == (204, [("get_job", job.job_id), ("delete_job", job.job_id)]), f"the deletion answers as before: {deleted.answer}, {delete_calls}"
+    print_success("awaiting restore: poll 200, download 200, delete 204")
+
+
+def test_openapi_documents_409_backup_awaiting_restore_on_the_panel_start():
+    """PANEL-038 (L3-2): the panel's start documents its 409 ``backup_awaiting_restore`` (beside ``backup_busy``)."""
+    description = backup_app().openapi()["paths"][PANEL]["post"]["responses"].get("409", {}).get("description", "")
+    assert "backup_awaiting_restore" in description and "backup_busy" in description, f"the start's 409 names backup_awaiting_restore and backup_busy: {description!r}"

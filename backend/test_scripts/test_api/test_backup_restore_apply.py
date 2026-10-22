@@ -100,6 +100,13 @@ Under test: ``backend/app/api/v1/backup/restore.py`` (the routes), ``restore_job
     (§10). B-41: only the right ticket of a restart that has not expired makes ``GET /outcome`` read the state (b5);
     every case of (i) the ticket alone decides, the state file then made unreadable, is the one 404 without the state
     file ever opened, nor «The state of the restore cannot be read» logged — else anyone could repeat that error.
+(k) Lot L3-2 (contract L3 §5): ``RestoreStatus`` gains ``confirmed_via`` (``admin``, ``cli`` or ``panel``; null
+    without a restore), in ``GET /status`` and in the confirmation's answer. The administrators' route confirms via
+    ``admin`` — an administrator whose username is literally ``cli`` or ``panel`` too —, written in ``restore.json``.
+    ``GET /status`` reads each value as recorded, and a state written before L3-2 (no key) as ``cli`` when
+    ``confirmed_by`` is ``cli``, ``admin`` otherwise. Written RED: ``STATUS_FIELDS`` holds ``confirmed_via``, so every
+    test that compares a whole ``RestoreStatus`` (the confirmation of (a), ``none`` of (c), the OpenAPI schema) is red
+    on that one field too, until L3-2.
 
 Pure, as ``test_backup_restore.py`` (lot B2b), whose fixtures and helpers are imported: an app of each test holds
 ``backup_router``, ``get_current_user`` overridden; the data directory of the routes under ``tmp_path`` (``apply``'s
@@ -174,7 +181,7 @@ RESTART = f"{api.API}/restart"
 #: The administrator who confirms: ``confirmed_by`` must be its username, not a constant.
 B3_ADMIN = SimpleNamespace(id=7, username="b3-admin", is_superuser=True)
 #: Every field of ``RestoreStatus`` (``extra="forbid"``): an answer has these and no other.
-STATUS_FIELDS = {"state", "stage_id", "confirmed_at", "confirmed_by", "backup_created_at", "backup_app_version", "action", "finished_at", "reason", "waiting", "upload_limit_mb"}
+STATUS_FIELDS = {"state", "stage_id", "confirmed_at", "confirmed_by", "confirmed_via", "backup_created_at", "backup_app_version", "action", "finished_at", "reason", "waiting", "upload_limit_mb"}
 ACTIVE = ["pending", "applying", "applied", "rolling_back"]
 TERMINAL = ["committed", "rolled_back"]
 #: The state ``GET /status`` answers for each phase on disk.
@@ -1470,7 +1477,7 @@ def test_openapi_documents_the_four_routes_their_answers_and_codes():
     drop = document["paths"][api.STAGE_ITEM]["delete"]["responses"].get("409", {}).get("description", "")
     assert "restore_pending" in drop, f"the drop of a check documents restore_pending: {drop!r}"
     schema = document["components"]["schemas"]["RestoreStatus"]
-    assert set(schema["properties"]) == STATUS_FIELDS, f"RestoreStatus has its 11 fields, upload_limit_mb included: {sorted(schema['properties'])}"
+    assert set(schema["properties"]) == STATUS_FIELDS, f"RestoreStatus has its 12 fields, upload_limit_mb and confirmed_via (L3-2) included: {sorted(schema['properties'])}"
     waiting = schema["properties"]["waiting"]
     reasons = {value for option in waiting.get("anyOf", [waiting]) for value in option.get("enum", [])}
     assert reasons == set(WAIT_REASONS), f"RestoreStatus.waiting lists exactly the four reasons, instance_blocked included (§11): {waiting}"
@@ -2284,3 +2291,87 @@ def test_openapi_documents_the_state_that_cannot_be_read():
     undocumented = sorted(operation for operation, description in described.items() if "restore_state_unreadable" not in description)
     assert undocumented == [], f"a 500 naming restore_state_unreadable, missing from: {undocumented}"
     print_success("restore_state_unreadable documented: status, cancel, restart, confirmation")
+
+
+# =============================================================================
+# (k) Lot L3-2: confirmed_via
+# =============================================================================
+
+#: Administrators whose username is one of the other ways to confirm: the username never decides ``confirmed_via``.
+ADMIN_NAMED_CLI = SimpleNamespace(id=8, username="cli", is_superuser=True)
+ADMIN_NAMED_PANEL = SimpleNamespace(id=9, username="panel", is_superuser=True)
+
+
+def write_recorded_state(root: Path, stage_id: str, *, confirmed_by: str, confirmed_via: str | None) -> dict[str, Any]:
+    """A pending restore's ``restore.json``, written by hand: ``confirmed_via`` as given, or no such key (``None``), as
+    a state written before L3-2. The record."""
+    record: dict[str, Any] = {
+        "format": 1,
+        "status": "pending",
+        "stage_id": stage_id,
+        "data_dir": str(root.resolve()),
+        "confirmed_at": CONFIRMED_AT.isoformat(),
+        "confirmed_by": confirmed_by,
+        "backup_created_at": BACKUP_CREATED_AT.isoformat(),
+        "backup_app_version": "v1.2.0",
+        "action": "same",
+    }
+    if confirmed_via is not None:
+        record["confirmed_via"] = confirmed_via
+    path = state_path(root)
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    path.write_text(json.dumps(record), encoding="utf-8")
+    path.chmod(0o600)
+    return record
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("user", [B3_ADMIN, ADMIN_NAMED_CLI, ADMIN_NAMED_PANEL], ids=["b3-admin", "named-cli", "named-panel"])
+async def test_the_administrators_route_confirms_via_admin_whatever_the_username(instance, head_archive, user):
+    """(k) L3-2: a confirmation through ``POST /backup/restore/stage/{id}/confirm`` answers ``confirmed_via`` ``admin``
+    and ``confirmed_by`` the username, writes ``admin`` in ``restore.json``, and ``GET /status`` says the same — for an
+    administrator literally named ``cli`` or ``panel`` too."""
+    print_section(f"(k) L3-2 confirmed_via, {user.username}")
+    stage_id = await checked(head_archive)
+    response = await confirm(stage_id, user=user)
+    assert response.status_code == 202, f"precondition: confirmed: {api.shown(response)}"
+    body = response.json()
+    assert (body["confirmed_by"], body.get("confirmed_via", "<missing>")) == (user.username, "admin"), f"confirmed by {user.username}, via admin: {body}"
+    written = json.loads(state_path(instance.root).read_text(encoding="utf-8")).get("confirmed_via", "<missing>")
+    assert written == "admin", f"restore.json says via admin: {written!r}"
+    status = await restore_status()
+    assert status.json().get("confirmed_via", "<missing>") == "admin", f"GET /status says via admin: {status.json()}"
+    print_success(f"{user.username}: via admin")
+
+
+#: ``restore.json`` as recorded → what ``GET /status`` says: ``confirmed_by``, ``confirmed_via`` (None: no key, a state
+#: of before L3-2), and the ``confirmed_via`` answered.
+RECORDED_VIA = [
+    pytest.param("panel", "panel", "panel", id="via-panel"),
+    pytest.param("cli", "cli", "cli", id="via-cli"),
+    pytest.param("b3-admin", "admin", "admin", id="via-admin"),
+    pytest.param("cli", None, "cli", id="before-l3-2-cli"),
+    pytest.param("b3-admin", None, "admin", id="before-l3-2-an-administrator"),
+    pytest.param("panel", None, "admin", id="before-l3-2-an-administrator-named-panel"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("confirmed_by", "recorded", "answered"), RECORDED_VIA)
+async def test_the_status_says_confirmed_via_as_recorded(instance, confirmed_by, recorded, answered):
+    """(k) L3-2: ``GET /status`` answers ``confirmed_via`` as ``restore.json`` records it; a state written before L3-2
+    (no key) answers ``cli`` when ``confirmed_by`` is ``cli``, ``admin`` otherwise. ``confirmed_by`` as recorded."""
+    write_recorded_state(instance.root, api.UNKNOWN_ID, confirmed_by=confirmed_by, confirmed_via=recorded)
+    response = await restore_status()
+    assert response.status_code == 200, api.shown(response)
+    body = response.json()
+    assert (body["state"], body["confirmed_by"], body.get("confirmed_via", "<missing>")) == ("pending", confirmed_by, answered), f"{confirmed_by!r}/{recorded!r}: via {answered}: {body}"
+    print_success(f"{confirmed_by!r}, recorded {recorded!r}: via {answered}")
+
+
+@pytest.mark.asyncio
+async def test_without_a_restore_confirmed_via_is_null(instance):
+    """(k) L3-2: ``none`` answers ``confirmed_via`` null, present."""
+    response = await restore_status()
+    body = response.json()
+    assert (response.status_code, body["state"], body.get("confirmed_via", "<missing>")) == (200, "none", None), f"none: confirmed_via null: {body}"
