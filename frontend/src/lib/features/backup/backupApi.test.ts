@@ -353,7 +353,8 @@ type RestoreStage = z.infer<typeof schemas.RestoreStage>;
 /** B4 (§5): an upload says what was stored, a zip or an envelope. Written out until the client is generated again from the B4 backend. */
 type RestoreUpload = z.infer<typeof schemas.RestoreUpload> & {kind: 'zip' | 'envelope'};
 type UploadOptions = {onProgress?: (loaded: number, total: number) => void; signal?: AbortSignal};
-type RestoreOutcomeAnswer = {kind: 'signed_out'} | {kind: 'status'; status: RestoreStatus} | {kind: 'blocked'} | {kind: 'down'};
+/** `unreadable` (SEC-3/4/5 wave, «the status 500»): the server cannot read the state of the restore, with why when it says. */
+type RestoreOutcomeAnswer = {kind: 'signed_out'} | {kind: 'status'; status: RestoreStatus} | {kind: 'blocked'} | {kind: 'unreadable'; reason: string | null} | {kind: 'down'};
 /** The answer of an accepted restart (B5c): the status, and the one-time ticket that reads its outcome. Not generated yet. */
 type RestoreRestartAccepted = RestoreStatus & {outcome_ticket: string};
 type RollbackReason = NonNullable<RestoreStatus['reason']>;
@@ -993,6 +994,129 @@ describe('probeServer and restoreOutcome: a plain fetch on this origin, never Zo
             expect(requests[0].headers.has('X-Restore-Ticket')).toBe(false);
             expect(requests[0].init).toMatchObject({credentials: 'same-origin', cache: 'no-store'});
             expect(zodiosCalls()).toEqual([]);
+        });
+    });
+
+    // -----------------------------------------------------------------------------------------------------------------
+    // The status 500 — a state of the restore the server cannot read (SEC-3/4/5 wave, written red first)
+    // -----------------------------------------------------------------------------------------------------------------
+
+    /*
+     * `GET /api/v1/backup/restore/status` answers `500 {detail: {code: 'restore_state_unreadable', message, reason}}`,
+     * `reason` one of `io`, `not_a_file`, `invalid`, when the server cannot read the state of the restore. The status read
+     * (`readStatusWithSession`, today's read: without a ticket, or after the outcome route answered 404, 401 or 423) gives
+     * `{kind: 'unreadable', reason}` for it — `reason` the detail's when it is a string, `null` when it is absent or not a
+     * string —, so the restart page stops polling a state that will not become readable by waiting. Any other 500, the
+     * code anywhere but in `detail`, the code on another status, or a body that is not JSON stays `down`.
+     *
+     * Red today: the read knows no `unreadable`, and gives `down` for every 500.
+     */
+    describe('restoreOutcome: the status route answers 500 restore_state_unreadable → unreadable, with its reason', () => {
+        const OUTCOME_PATH = '/api/v1/backup/restore/outcome';
+        const STATUS_PATH = '/api/v1/backup/restore/status';
+        const NO_OUTCOME = JSON.stringify({detail: {code: 'restore_outcome_not_found', message: 'No outcome for this ticket'}});
+        const STATE_REASONS = ['io', 'not_a_file', 'invalid'] as const;
+        const MESSAGE = 'The state of the pending restore cannot be read';
+
+        /** The refusal of an unreadable state, `reason` written in the detail as given (left out when `undefined`). */
+        const unreadable = (reason?: unknown) => JSON.stringify({detail: {code: 'restore_state_unreadable', message: MESSAGE, ...(reason === undefined ? {} : {reason})}});
+
+        it.each(STATE_REASONS)('without a ticket, 500 restore_state_unreadable, reason %s → unreadable with that reason; one GET of the status, nothing through Zodios', async (reason) => {
+            fetchStub.mockResolvedValueOnce(answer(500, unreadable(reason)));
+
+            const read = await restore('restoreOutcome')();
+
+            expect(read).toStrictEqual({kind: 'unreadable', reason});
+            const requests = fetched();
+            expect(
+                requests.map((request) => request.path),
+                'one read, one request',
+            ).toEqual([STATUS_PATH]);
+            expect(requests[0].origin).toBe(ORIGIN);
+            expect(requests[0].init).toMatchObject({credentials: 'same-origin', cache: 'no-store'});
+            expect(zodiosCalls()).toEqual([]);
+        });
+
+        it.each<[string, unknown]>([
+            ['left out', undefined],
+            ['null', null],
+            ['a number', 3],
+            ['an object', {kind: 'io'}],
+            ['a list', ['io']],
+            ['a boolean', true],
+        ])('without a ticket, 500 restore_state_unreadable whose reason is %s → unreadable, reason null', async (_case, reason) => {
+            fetchStub.mockResolvedValueOnce(answer(500, unreadable(reason)));
+
+            const read = await restore('restoreOutcome')();
+
+            expect(read).toStrictEqual({kind: 'unreadable', reason: null});
+            expect(fetchStub).toHaveBeenCalledTimes(1);
+        });
+
+        it.each(STATE_REASONS)('with a ticket, the outcome route answers 404, then the status read answers 500 restore_state_unreadable (%s) → unreadable with that reason; two requests, the status without the ticket', async (reason) => {
+            fetchStub.mockResolvedValueOnce(answer(404, NO_OUTCOME)).mockResolvedValueOnce(answer(500, unreadable(reason)));
+
+            const read = await restore('restoreOutcome')(TICKET);
+
+            expect(read).toStrictEqual({kind: 'unreadable', reason});
+            const requests = fetched();
+            expect(
+                requests.map((request) => request.path),
+                "the outcome route cannot be reached: today's read follows, once",
+            ).toEqual([OUTCOME_PATH, STATUS_PATH]);
+            expect(requests[1].headers.has('X-Restore-Ticket'), 'the ticket went to the status route too').toBe(false);
+            expect(zodiosCalls()).toEqual([]);
+        });
+
+        it.each<[string, () => Response]>([
+            ['401', () => answer(401, JSON.stringify({detail: 'Not authenticated'}))],
+            ['423 instance_blocked', () => answer(423, JSON.stringify({detail: {code: 'instance_blocked', message: 'blocked'}}))],
+        ])('with a ticket, the outcome route answers %s, then the status read answers 500 restore_state_unreadable → unreadable, as after a 404', async (_case, first) => {
+            fetchStub.mockResolvedValueOnce(first()).mockResolvedValueOnce(answer(500, unreadable('io')));
+
+            const read = await restore('restoreOutcome')(TICKET);
+
+            expect(fetched().map((request) => request.path)).toEqual([OUTCOME_PATH, STATUS_PATH]);
+            expect(read).toStrictEqual({kind: 'unreadable', reason: 'io'});
+        });
+
+        it('with a ticket, the outcome route answers 404, then the status read answers 500 restore_state_unreadable without a reason → unreadable, reason null', async () => {
+            fetchStub.mockResolvedValueOnce(answer(404, NO_OUTCOME)).mockResolvedValueOnce(answer(500, unreadable()));
+
+            await expect(restore('restoreOutcome')(TICKET)).resolves.toStrictEqual({kind: 'unreadable', reason: null});
+        });
+
+        /** The answers of the status route that are not the refusal of an unreadable state: each stays `down`. */
+        const NOT_UNREADABLE: [string, number, string | null, string?][] = [
+            ['500 with another code', 500, JSON.stringify({detail: {code: 'backup_upload_failed', message: 'failed', reason: 'io'}})],
+            ['500 with a detail without a code', 500, JSON.stringify({detail: {message: MESSAGE, reason: 'io'}})],
+            ["500 with a detail that is a string (FastAPI's default)", 500, JSON.stringify({detail: 'Internal Server Error'})],
+            ['500 with the code outside detail', 500, JSON.stringify({code: 'restore_state_unreadable', reason: 'io'})],
+            ['500 whose body is JSON null', 500, 'null'],
+            ['500 with no body', 500, null],
+            ['500 with a page that is not JSON, naming the code', 500, '<html><body>restore_state_unreadable</body></html>', 'text/html'],
+            ['500 with a broken JSON body', 500, '{"detail": {"code": "restore_state_unreadable"'],
+            ['the code restore_state_unreadable on a 503', 503, unreadable('io')],
+            ['the code restore_state_unreadable on a 502', 502, unreadable('io')],
+            ['the code restore_state_unreadable on a 409', 409, unreadable('io')],
+            ['the code restore_state_unreadable on a 200, a body that is not a status', 200, unreadable('io')],
+        ];
+
+        it.each(NOT_UNREADABLE)('without a ticket, %s → down, never unreadable', async (_case, status, body, contentType) => {
+            fetchStub.mockResolvedValueOnce(answer(status, body, contentType));
+
+            await expect(restore('restoreOutcome')()).resolves.toEqual({kind: 'down'});
+
+            expect(fetchStub, 'one read, one request').toHaveBeenCalledTimes(1);
+            expect(zodiosCalls()).toEqual([]);
+        });
+
+        it.each(NOT_UNREADABLE)('with a ticket, the outcome route answers 404, then %s → down, never unreadable', async (_case, status, body, contentType) => {
+            fetchStub.mockResolvedValueOnce(answer(404, NO_OUTCOME)).mockResolvedValueOnce(answer(status, body, contentType));
+
+            await expect(restore('restoreOutcome')(TICKET)).resolves.toEqual({kind: 'down'});
+
+            expect(fetched().map((request) => request.path)).toEqual([OUTCOME_PATH, STATUS_PATH]);
         });
     });
 });

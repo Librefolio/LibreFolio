@@ -51,7 +51,7 @@ import {
 
 export type RestoreFlowState = 'loading' | 'idle' | 'password' | 'uploading' | 'checking' | 'report' | 'confirming' | 'pending' | 'in_progress' | 'cancelling' | 'restarting' | 'failed';
 export type RestoreFailure = 'status' | 'upload' | 'check' | 'confirm' | 'cancel' | 'restart';
-export type RestartOutcome = 'waiting' | 'restored' | 'rolled_back' | 'still_pending';
+export type RestartOutcome = 'waiting' | 'restored' | 'rolled_back' | 'still_pending' | 'state_unreadable';
 export type RestoreEventName = 'backup.restore.uploaded' | 'backup.restore.staged' | 'backup.restore.confirmed' | 'backup.restore.cancelled' | 'backup.restore.restart.requested' | 'backup.restore.failed' | 'backup.restore.restored' | 'backup.restore.rolled_back';
 
 export const RESTORE_STAGE_STORAGE_KEY = 'librefolio.backup.restore.stage';
@@ -162,6 +162,8 @@ export class RestoreFlowController {
     /** A running check the administrator dropped: it is removed once it ends. */
     dropRequested = $state(false);
     outcome = $state<RestartOutcome | null>(null);
+    /** Why the restarted server cannot read the state of the restore (`state_unreadable`, B-33). */
+    unreadableReason = $state<string | null>(null);
     slow = $state(false);
     /** The server never went down after the restart was asked, and the restore still waits, past `slowAfterMs` (B-16). */
     notStopping = $state(false);
@@ -212,6 +214,7 @@ export class RestoreFlowController {
         this.#setError(null, null);
         this.outcome = null;
         this.outcomeStatus = null;
+        this.unreadableReason = null;
         this.slow = false;
         this.notStopping = false;
         this.#ticket = null;
@@ -642,6 +645,14 @@ export class RestoreFlowController {
     /** What the restarted server says; whether the wait is over. */
     #settle(read: RestoreOutcomeRead, fast: boolean): boolean {
         if (read.kind === 'down') return false;
+        if (read.kind === 'unreadable') {
+            // The server is up but cannot tell what became of the restore: asking again would never end (B-33).
+            this.slow = false;
+            this.notStopping = false;
+            this.outcome = 'state_unreadable';
+            this.unreadableReason = read.reason;
+            return true;
+        }
         if (read.kind === 'blocked') {
             // Never applied on a blocked instance (P7), which refuses the status route too: the page says why itself.
             this.slow = false;
