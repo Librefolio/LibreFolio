@@ -178,7 +178,7 @@ graph LR
 
 ### ⚙️ Backend
 
-- 🚀 **[FastAPI](https://fastapi.tiangolo.com/)**: A high-performance web framework for building APIs with Python (LibreFolio requires Python 3.13), based on standard Python type hints. It provides automatic interactive documentation (Swagger UI and ReDoc).
+- 🚀 **[FastAPI](https://fastapi.tiangolo.com/)**: A high-performance web framework for building APIs with Python (LibreFolio requires Python 3.13), based on standard Python type hints. It generates the OpenAPI schema and can serve interactive documentation (Swagger UI and ReDoc); LibreFolio serves them on debug and test instances only ([API Reference](../api/index.md)).
 - 🗃️ **[SQLAlchemy](https://www.sqlalchemy.org/)**: The SQL toolkit and Object-Relational Mapper (ORM) used for all database interactions. LibreFolio uses SQLAlchemy's **asyncio support** for non-blocking database queries.
 - 📋 **[Pydantic](https://docs.pydantic.dev/)**: A data validation and settings management library. Used extensively for defining data schemas, validating API requests, and managing application settings.
 - 🔄 **[Alembic](https://alembic.sqlalchemy.org/)**: A lightweight database migration tool for SQLAlchemy. See [Database Migrations](patterns/alembic.md).

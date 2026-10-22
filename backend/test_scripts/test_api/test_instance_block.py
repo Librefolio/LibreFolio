@@ -28,9 +28,13 @@ and ``ALLOWED_WHEN_BLOCKED``) and the block page ``GET /api/v1/system/block`` (`
 (c) The guard. FastAPI gives router dependencies to an ``APIRoute`` (and its subclasses) only, never to a plain
     ``Route``, a ``WebSocketRoute`` or a ``Mount``. So every route or mount of the app under ``/api/v1`` must be an
     ``APIRoute`` resolving ``refuse_when_blocked`` first, before the route's own dependencies, so that a signed-in
-    caller of a refused route meets the block before any other answer. The one exception, pinned, is FastAPI's own
-    documentation (``openapi_url``, ``docs_url``, ``redoc_url`` of ``main.py``): three plain routes, which the block does
-    not reach. Every function of ``ALLOWED_WHEN_BLOCKED`` is the endpoint of a registered route, and the list is pinned
+    caller of a refused route meets the block before any other answer. The one exception, pinned, is the API
+    documentation (H-55 R5): ``/api/v1/docs`` and ``/api/v1/redoc``, our own pages, and their start scripts
+    ``/api/v1/docs/swagger-init.js`` and ``/api/v1/redoc/redoc-init.js`` (``install_api_docs``: four ``APIRoute``
+    endpoints of ``backend/app/api/api_docs.py``, registered on the app itself and out of the OpenAPI schema, so no router
+    dependency reaches them) and ``/api/v1/openapi.json`` (FastAPI's ``openapi_url``, a plain ``Route``). They carry the
+    API's schema and no data, exist only where the documentation is on (the app of this test runs in test mode, so it is),
+    and the block does not reach them. Every function of ``ALLOWED_WHEN_BLOCKED`` is the endpoint of a registered route, and the list is pinned
     by name and by route, so an addition shows in review.
 (d) OpenAPI documents ``GET /api/v1/system/block`` with ``InstanceBlockResponse``: ``blocked`` required, the deletion
     date and the billing link optional.
@@ -157,9 +161,20 @@ ALLOWED_ROUTES = {
     "backend.app.api.v1.panel.get_panel_status": ("GET", "/api/v1/panel/status"),
 }
 
-#: The routes under /api/v1 that are not API routes: FastAPI's own documentation (openapi_url, docs_url, redoc_url of
-#: main.py), each a plain Route. No router dependency reaches them, so they answer on a blocked instance too.
-DOCUMENTATION_ROUTES = {"/api/v1/docs": "Route", "/api/v1/openapi.json": "Route", "/api/v1/redoc": "Route"}
+#: The routes under /api/v1 the block does not reach first: the API documentation (H-55 R5). Our two pages and their two
+#: start scripts are APIRoutes registered on the app itself by ``install_api_docs`` (no router dependency reaches them:
+#: their first dependency is None), and the schema is FastAPI's ``openapi_url``, a plain Route. They answer on a blocked
+#: instance too.
+DOCUMENTATION_ROUTES = {
+    "/api/v1/docs": "APIRoute GET, first dependency None",
+    "/api/v1/docs/swagger-init.js": "APIRoute GET, first dependency None",
+    "/api/v1/openapi.json": "Route",
+    "/api/v1/redoc": "APIRoute GET, first dependency None",
+    "/api/v1/redoc/redoc-init.js": "APIRoute GET, first dependency None",
+}
+#: Our pages and start scripts, of the documentation routes: served by the endpoints of this module, out of the OpenAPI schema.
+API_DOCS_PAGES = ("/api/v1/docs", "/api/v1/docs/swagger-init.js", "/api/v1/redoc", "/api/v1/redoc/redoc-init.js")
+API_DOCS_MODULE = "backend.app.api.api_docs"
 
 
 # =============================================================================
@@ -1242,8 +1257,24 @@ def test_every_route_under_api_v1_is_an_api_route_resolving_the_block_first(app)
 
     unexpected = {path: reason for path, reason in flagged.items() if DOCUMENTATION_ROUTES.get(path) != reason}
     assert not unexpected, "under /api/v1 only FastAPI's documentation may stay out of the block; these routes are not reached first by refuse_when_blocked:\n" + "\n".join(f"  {path}: {reason}" for path, reason in sorted(unexpected.items()))
-    assert flagged == DOCUMENTATION_ROUTES, f"FastAPI's documentation routes under /api/v1 changed: expected {DOCUMENTATION_ROUTES}, found {flagged}"
+    assert flagged == DOCUMENTATION_ROUTES, f"The documentation routes under /api/v1 changed: expected {DOCUMENTATION_ROUTES}, found {flagged}"
     print_success(f"{len(walked)} API paths under {API_V1_PREFIX}, each resolving refuse_when_blocked first; outside: the {len(DOCUMENTATION_ROUTES)} documentation routes")
+
+
+def test_the_documentation_pages_outside_the_block_are_ours_and_out_of_the_schema(app):
+    """(c) The pages and start scripts that stay out of the block are the ones ``install_api_docs`` registers (APIRoutes whose endpoints
+    live in ``backend/app/api/api_docs.py``, answering GET, out of the schema), not a FastAPI page and not a route of
+    another module: an endpoint that moved elsewhere would slip past the pin above under the same reason."""
+    contexts = {_path_of(context): context for context in iter_route_contexts(app.routes) if _path_of(context) in API_DOCS_PAGES}
+
+    assert sorted(contexts) == sorted(API_DOCS_PAGES), f"the app must serve exactly the pages {API_DOCS_PAGES}: found {sorted(contexts)}"
+    for path, context in contexts.items():
+        route = context.original_route
+        assert isinstance(route, APIRoute), f"{path} is a {type(route).__name__}, wanted an APIRoute of install_api_docs"
+        assert context.endpoint.__module__ == API_DOCS_MODULE, f"{path} is served by {_endpoint_name(context.endpoint)}, wanted an endpoint of {API_DOCS_MODULE}"
+        assert set(context.methods or ()) == {"GET"}, f"{path} answers {sorted(context.methods or ())}, wanted GET only"
+        assert route.include_in_schema is False, f"{path} is in the OpenAPI schema"
+    assert not set(app.openapi()["paths"]) & set(API_DOCS_PAGES), "the OpenAPI schema lists the documentation pages"
 
 
 def test_every_allowed_endpoint_serves_a_registered_route(app):

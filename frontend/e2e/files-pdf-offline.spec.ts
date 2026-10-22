@@ -26,15 +26,16 @@
  *      log does see the worker; every viewer font asked for was a 200 from the app (a Latin text needs none: PDFium
  *      has its own faces for the standard fonts); and from the page jsDelivr is out of reach, its refusal recorded.
  *      Under the Content-Security-Policy the backend enforces on every page of the app (H-55 v2, `connect-src`
- *      without jsDelivr: `security_headers.py`, `PDF_VIEWER_CDN_ORIGIN`), the browser stops that fetch itself, before
+ *      without jsDelivr: `security_headers.py`; the CJK fonts come from the instance, H-55 wave 4), the browser stops
+ *      that fetch itself, before
  *      the network layer and so before this spec's route sees it. The control proves the refusal either way — the
  *      browser's (an enforced `connect-src` violation for exactly that address, recorded by the H-43 collector) or
  *      the route's (the request in `refused`) — and if the policy ever allows the CDN, the route's. The violation is
  *      raised on purpose: this test alone opts out of the collector's failure on an unknown violation
  *      (`cspFailOnUnknown: false`), and checks itself that the probe is the only one the baseline does not know.
  *
- * Chinese, Japanese and Korean are out of scope on purpose: those fallback fonts, tens of megabytes each, still come
- * from the CDN on demand — a residual the decision above accepts — so a CJK PDF asks jsDelivr by design.
+ * Chinese, Japanese and Korean are out of scope here (this PDF is Latin), but not exempt: since H-55 wave 4 their fallback
+ * fonts come from the app's own `/api/v1/files/pdf-fonts/` route, so no preview asks jsDelivr, whatever it draws.
  *
  * Signed in through the API, not through the login page: a sign-in lands on the Dashboard, which can draw broker icons,
  * and a broker icon falls back on the broker's own site («portal_url → origin + /favicon.ico», `brokerHelpers.ts`) —
@@ -286,6 +287,12 @@ test.describe('PDF preview without internet (1.2 gap 7)', () => {
         // The subject: from the first navigation to the page drawn, nothing asked of another origin.
         const asked = askedOfOtherOrigins(offline, origin);
         expect(asked, `the browser asked other origins while previewing the PDF (${offline.refused.length} refused):\n${asked.join('\n')}`).toEqual([]);
+
+        // Not jsDelivr, in particular, by any request of the context (the page's, the worker's, the service worker's), whether
+        // the route refused it or not: the engine, the fonts and the fallback all come from the app (H-55 wave 4). The only
+        // address of that host the log may hold is the positive control's own probe, fetched below on purpose.
+        const cdnRequests = offline.requests.filter(({url}) => url.hostname === 'cdn.jsdelivr.net' && url.href !== OFFLINE_PROBE_URL).map(({method, url}) => `${method} ${url.href}`);
+        expect(cdnRequests, `the browser asked cdn.jsdelivr.net while previewing the PDF:\n${cdnRequests.join('\n')}`).toEqual([]);
 
         // Positive control: the log sees the engine's worker. The page only probes the engine with a HEAD
         // (pdfViewerAssets.ts); the GET is the worker fetching it. Without that GET in the log, the list above could be
