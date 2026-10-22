@@ -5,7 +5,9 @@ All models use SQLModel (SQLAlchemy 2.x) with the following conventions:
 - Decimal columns: RealDecimal(18, 6) for amounts and event values (W-B60), RealDecimal(22, 10) for quantities and
   RealDecimal(24, 12) for prices and the per-unit cost basis, read back as the decimal written (C-97,
   db/real_decimal.py); Numeric(24, 10) for FX
-- Timestamps in UTC (created_at, updated_at, fetched_at)
+- Timestamps in UTC (created_at, updated_at, fetched_at), written by utcnow() and stored without an offset:
+  every datetime field declares sa_type=DateTime, the plain column; SQLModel >= 0.0.48 would otherwise map it to
+  its UTCDateTime, which refuses naive values and reads aware ones back (D-UTC, 1.4: moving to aware datetimes)
 - Daily-point policy: one record per day for prices and FX rates
 - Foreign keys enforced with PRAGMA foreign_keys=ON
 - Currency fields validated against ISO 4217 via Currency.validate_code()
@@ -23,6 +25,7 @@ from sqlalchemy import (
     JSON,
     CheckConstraint,
     Column,
+    DateTime,
     ForeignKey,
     Index,
     Integer,
@@ -391,19 +394,19 @@ class User(SQLModel, table=True):
     # Kept independent from the donation-popup logic below for future/generic use.
     login_count: int = Field(default=0, nullable=False)
     # Donation-popup trigger bookkeeping (see services/accounts/donation_popup_service.py).
-    donation_popup_last_shown_at: Optional[datetime] = Field(default=None, nullable=True)
+    donation_popup_last_shown_at: Optional[datetime] = Field(default=None, nullable=True, sa_type=DateTime)
     donation_popup_logins_since_shown: int = Field(default=0, nullable=False)
 
     # Session version of the account, carried by the session JWT as `sv`: raising it (user_service.end_sessions)
     # ends every session issued before.
     session_version: int = Field(default=0, nullable=False)
     # When the email address was verified; NULL for the accounts that existed before migration 005.
-    email_verified_at: Optional[datetime] = Field(default=None, nullable=True)
+    email_verified_at: Optional[datetime] = Field(default=None, nullable=True, sa_type=DateTime)
     # The release whose changelog this user last saw.
     last_seen_version: Optional[str] = Field(default=None, max_length=40, nullable=True)
 
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
 
 # Email addresses are unique regardless of case (P18, migration 005, step 6). SQLite's lower() folds A–Z only, so letters outside
@@ -429,8 +432,8 @@ class UserSettings(SQLModel, table=True):
     theme: str = Field(default="light", max_length=20)  # e.g., "light", "dark"
     avatar_url: Optional[str] = Field(default=None, max_length=500)  # URL to user avatar image
 
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
     @field_validator("base_currency", mode="before")
     @classmethod
@@ -470,10 +473,10 @@ class UserOnboardingProgress(SQLModel, table=True):
     )
     version: int = Field(default=1, ge=1, nullable=False)
 
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
-    completed_at: Optional[datetime] = Field(default=None, nullable=True)
-    skipped_at: Optional[datetime] = Field(default=None, nullable=True)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    completed_at: Optional[datetime] = Field(default=None, nullable=True, sa_type=DateTime)
+    skipped_at: Optional[datetime] = Field(default=None, nullable=True, sa_type=DateTime)
 
 
 class UserOnboardingStepProgress(SQLModel, table=True):
@@ -513,10 +516,10 @@ class UserOnboardingStepProgress(SQLModel, table=True):
     )
     version: int = Field(default=1, ge=1, nullable=False)
 
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
-    completed_at: Optional[datetime] = Field(default=None, nullable=True)
-    skipped_at: Optional[datetime] = Field(default=None, nullable=True)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    completed_at: Optional[datetime] = Field(default=None, nullable=True, sa_type=DateTime)
+    skipped_at: Optional[datetime] = Field(default=None, nullable=True, sa_type=DateTime)
 
 
 class AccountToken(SQLModel, table=True):
@@ -551,10 +554,10 @@ class AccountToken(SQLModel, table=True):
         default=None,
         sa_column=Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
     )
-    created_at: datetime = Field(default_factory=utcnow)
-    expires_at: datetime = Field(nullable=False)
-    consumed_at: Optional[datetime] = Field(default=None, nullable=True)
-    revoked_at: Optional[datetime] = Field(default=None, nullable=True)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    expires_at: datetime = Field(nullable=False, sa_type=DateTime)
+    consumed_at: Optional[datetime] = Field(default=None, nullable=True, sa_type=DateTime)
+    revoked_at: Optional[datetime] = Field(default=None, nullable=True, sa_type=DateTime)
     consumed_by_user_id: Optional[int] = Field(
         default=None,
         sa_column=Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
@@ -580,7 +583,7 @@ class GlobalSetting(SQLModel, table=True):
     value: str = Field(...)  # Stored as string, converted based on value_type
     value_type: str = Field(max_length=20)  # "string", "int", "bool", "json"
     description: Optional[str] = Field(default=None)
-    updated_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
     updated_by_user_id: Optional[int] = Field(default=None, foreign_key="users.id", nullable=True)
 
 
@@ -607,7 +610,7 @@ class PluginSystemSetting(SQLModel, table=True):
     value_json: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     secret_ciphertext: Optional[bytes] = Field(default=None, sa_column=Column(LargeBinary, nullable=True))
     key_id: Optional[str] = Field(default=None, sa_column=Column(String(32), nullable=True))
-    updated_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
     updated_by_user_id: Optional[int] = Field(
         default=None,
         sa_column=Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
@@ -637,7 +640,7 @@ class PluginUserSetting(SQLModel, table=True):
     value_json: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     secret_ciphertext: Optional[bytes] = Field(default=None, sa_column=Column(LargeBinary, nullable=True))
     key_id: Optional[str] = Field(default=None, sa_column=Column(String(32), nullable=True))
-    updated_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
 
 # ============================================================================
@@ -675,8 +678,8 @@ class Broker(SQLModel, table=True):
     is_active: bool = Field(default=True, description="Whether the broker account is currently active")
     opened_at: Optional[date_type] = Field(default=None, description="Date when the account was opened in reality")
 
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
 
 class BrokerUserAccess(SQLModel, table=True):
@@ -715,8 +718,8 @@ class BrokerUserAccess(SQLModel, table=True):
         description="Ownership fraction (0.000000 to 1.000000) for portfolio aggregation",
     )
 
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
 
 # ============================================================================
@@ -786,8 +789,8 @@ class Asset(SQLModel, table=True):
     identifier_uuid: Optional[str] = Field(default=None, max_length=36, description="UUID for custom assets")
     identifier_other: Optional[List[str]] = Field(default=None, sa_column=Column(JSON), description="JSON list of other/soft identifiers (technical codes without a dedicated column + soft broker labels); additive across imports")
 
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
     @field_validator("currency", mode="before")
     @classmethod
@@ -967,8 +970,8 @@ class Transaction(SQLModel, table=True):
         description="FK to AssetEvent this transaction realizes. RESTRICT on delete.",
     )
 
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
     @field_validator("currency", "cost_basis_currency", mode="before")
     @classmethod
@@ -1011,7 +1014,7 @@ class PriceHistory(SQLModel, table=True):
 
     currency: str = Field(nullable=False)  # ISO 4217
     source_plugin_key: str = Field(nullable=False)
-    fetched_at: datetime = Field(default_factory=utcnow)
+    fetched_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
     @field_validator("currency", mode="before")
     @classmethod
@@ -1061,8 +1064,8 @@ class AssetEvent(SQLModel, table=True):
         description="FK to provider config that generated this event. NULL = user-created manual event.",
     )
     notes: Optional[str] = Field(default=None, sa_column=Column(Text))
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
     @field_validator("currency", mode="before")
     @classmethod
@@ -1104,7 +1107,7 @@ class FxRate(SQLModel, table=True):
     rate: Decimal = Field(sa_column=Column(Numeric(24, 10), nullable=False))
 
     source: str = Field(default="ECB")
-    fetched_at: datetime = Field(default_factory=utcnow)
+    fetched_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
     @field_validator("base", "quote", mode="before")
     @classmethod
@@ -1156,8 +1159,8 @@ class FxConversionRoute(SQLModel, table=True):
         description="JSON array of conversion steps [{from, to, provider}, ...]",
     )
 
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
     @field_validator("base", "quote", mode="before")
     @classmethod
@@ -1248,10 +1251,10 @@ class AssetProviderAssignment(SQLModel, table=True):
         sa_column=Column(Text),
         description="JSON configuration for provider (validated by plugin)",
     )
-    last_fetch_at: Optional[datetime] = Field(default=None, description="Last fetch attempt timestamp (NULL = never fetched)")
+    last_fetch_at: Optional[datetime] = Field(default=None, description="Last fetch attempt timestamp (NULL = never fetched)", sa_type=DateTime)
 
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
 
 # ============================================================================
