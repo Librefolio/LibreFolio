@@ -7134,3 +7134,39 @@ riduzione sull'endpoint dei cambi (`max_points`, `sample_like`, `sample_bounds`,
    ripopolata, `LC_ALL=en_US.UTF-8`): 43 passati in 2,3 min, avviso di sync C-66 compreso.
    > **⚠️ Fuori pista**: O2 resta con una soluzione della pagina (`signalBaseData`), non un parametro `basePoint` di
    > `renderBackendResults` (file di Y-39b).
+
+### Z-29fx — i cambi campionati, il backend di `/fx/currencies/convert` (21→22/10, ondata 3, base `2879ae3e4`)
+
+> Brief dell'ondata 3: solo backend; la pagina dei cambi è di Y (Y-40, parte cambi). Stessa regola della query dei
+> prezzi (Z-29a, Z-29s-a, O1), nessuna seconda implementazione.
+
+**Decisioni tecniche prese di notte** (da rivedere con MF e Y):
+- Risposta additiva: ogni `FXConversionResult` ha `request_index`; `FXConvertResponse.samples` ha una voce per
+  conversione (`resolution`, `sample_bounds` con il primo e l'ultimo risultato). I risultati restano una lista piatta.
+- Il rendimento mobile dei cambi è lo stesso plugin `ASSET_CALENDAR_ROLLING_RETURN`, ora anche nel dominio FX (il calcolo
+  non dipende dal dominio; nome del codice invariato per non rompere le impostazioni salvate e AI Export). Alternativa
+  scartata per ora: un plugin `FX_CALENDAR_ROLLING_RETURN` gemello.
+- La funzione che riduce un risultato di segnale (`sample_signal_result`) si sposta da `price_query.py` a
+  `services/signals/sampling.py`: la usano la query dei prezzi e i cambi.
+
+1. ✅ 21/10 ~19:10 — Rossi: `test_api/test_fx_convert_sampling.py` (FXS-01…09, PURE, l'handler con `convert_bulk`
+   sostituito); azione nuova `api fx-convert-sampling` (una riga in `_backend_api.py`). 27 rossi per la ragione giusta
+   (campi ignorati, nessun `samples`, ogni giorno restituito, il rendimento mobile rifiutato nel dominio FX), 2 verdi per
+   costruzione (il controllo delle annotazioni, il budget).
+2. ✅ 21/10 ~19:30 — Cura: `schemas/fx.py` (i quattro campi e `validate_sampling`, `request_index`, `FXSampleBounds`,
+   `FXConversionSample`, `samples`); `services/fx/sampling.py` (`plan_conversion_samples`, puro: F, passo, follower dal
+   giorno più tardo); `api/v1/fx/currencies.py` (422 `sample_reference` prima di tutto; la riduzione in memoria dopo il
+   calcolo giornaliero; i segnali ridotti e allineati); `signals/sampling.py`; il plugin del rendimento mobile con
+   `SignalDomain.FX`.
+   > **Note implementazione**: verdi `api fx-convert-sampling` 29/29, `services signal-plugin-matrix` 91,
+   > `signal-aggregation` 228, `price-query-sampling` 197 (il refactor non cambia nulla), `signal-service` 69,
+   > `fx-conversion` 44, `api fx-unit` 64.
+   > **⚠️ Fuori pista**: la doc utente `user/fx/chart-settings.en.md` diceva «9 indicators work on FX rates»: ora 10
+   > (solo l'inglese; IT/FR/ES restano a 9, debito di traduzione da fare su richiesta).
+3. ✅ 21/10 — Doc per sviluppatori: `developer/backend/fx/architecture.md` («Sampled conversions», `#convert-sampling`) e il
+   rimando da `developer/backend/assets/architecture.md`.
+4. ✅ 22/10 — Verdi pesanti in `flock`: `front check` 0/0 (dopo `api sync`), `api fx` 34, `api fx-signals` 8,
+   `api signal-request-validation` 2, `api signal-catalogs` 5 (dopo aver portato il conteggio FX da 9 a 10);
+   `services signal-registry` 66 (i perni «solo asset» del rendimento mobile aggiornati), `asset-signals` 30,
+   `test_risk_signal_plugins.py` 45. Richiesta del coordinatore: i 5 test Vitest di Z-29b registrati in
+   `_frontend_utility.py` (core-unit); `check-orphans` pulito (596 unitari, 515 backend).

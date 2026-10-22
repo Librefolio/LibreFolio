@@ -8195,3 +8195,132 @@ toccherà con FE4), ma separato: niente conflitti con X.
    > dove si costruisce la serie. Una guardia: la prop `pendingColor` vince ancora. `LineChart.test.ts` **25/25**; `front check`
    > 0 errori e 0 avvisi (in `flock`); Prettier, `theme-roles --check`, `git diff --check` puliti. Non toccati `echarts.init` né `chartTheme.ts`.
 
+## 21/10 notte · Il lotto Y-40 (asset) e il test di `OtherPeriodEffectsTable` (ondata 3)
+
+> **Base:** `2879ae3e4` (= `dev_release2`, treno 7), `api sync` fatto. Brief: `ondata3/kickoff-Y.md`. Le pagine di dettaglio
+> sono di X (Y-42): qui solo il contratto della vista d'apertura, che X legge dopo il commit.
+
+### Il contratto (V-1…V-8 tutti (a))
+- **Lo store** (`chartSettingsStore.svelte.ts`), versione di archivio sempre 3: due campi nuovi, riempiti dalla pulizia
+  (`sanitizeSettings`) e riscritti all'idratazione:
+  - `primaryView: 'absolute' | 'percentage' | 'calendar-return'`, predefinito `'percentage'`;
+  - `calendarReturnWindowAuto: boolean`: vero finché l'utente non sceglie una finestra; un archivio di prima vale vero solo
+    se la sua finestra è quella predefinita (1M). Un salvataggio con una finestra diversa da quella salvata la segna scelta,
+    chiunque salvi (anche il dettaglio di oggi, che salva `...settings` con la finestra nuova).
+- **Le funzioni:**
+  - `setScopePrimaryView(view, scope)`: la barra in alto e le impostazioni globali; azzera la vista di ogni scheda dello
+    scope (V-3 a), il resto dei loro salvataggi resta; l'altro scope non cambia;
+  - `setItemPrimaryView(slug, view, scope)`: il pulsante della scheda e il dettaglio (V-1 a, V-2 a);
+  - `nextCardPrimaryView`: % → rendimento → Abs → %;
+  - `detailModesForPrimaryView(view)` → `{primaryMode, viewMode}` e `primaryViewForDetailModes(primaryMode, viewMode)`:
+    **il contratto per X** (il dettaglio si apre con `getSettingsForPair('asset-<id>', 'assets').primaryView`, e salva il
+    suo cambio con `setItemPrimaryView`);
+  - `effectiveCalendarReturnWindow(settings, rangeDays)`: la scelta, o in automatico il preset più grande che sta nel
+    periodo (`largestCalendarReturnPresetFor` in `calendarReturnWindow.ts`; sotto i 7 giorni, 1S). Anche questa è per X.
+
+### I passi
+0. ✅ 21/10 · `OtherPeriodEffectsTable.test.ts`: `plainAmount` scriveva l'importo atteso con `toLocaleString(undefined, …)`, la
+   lingua del sistema; il componente con `uiLocale()`. Rosso: con `LC_ALL=it_IT.UTF-8` **3 rossi su 4**, con `en_US` 4/4.
+   Cura nel test: `toLocaleString(uiLocale(), …)`. Verde **4/4 con `it_IT.UTF-8` e 4/4 con `en_US.UTF-8`**.
+1. ✅ 21/10 · Lo store: i rossi e la cura.
+   > **Note implementazione**: rossi in `chartSettingsStore.test.ts` (nuovo `describe` «the primary view and the rolling-return
+   > window (Y-40)»): **15 rossi** su 55, gli altri 40 verdi; la causa: funzioni e campi assenti. Cura nello store e in
+   > `calendarReturnWindow.ts`. Il caso dell'archivio di prima spostato in `chartSettingsStore.migration.test.ts` (nuovo
+   > `describe` «a payload from before Y-40»), con le stesse asserzioni. Tutti i test degli store: **29 file, 720/720**.
+   >
+   > **⚠️ Fuori pista**: niente salto di versione (3 → 4): i due campi nuovi hanno un predefinito, e la pulizia li riempie
+   > già; un salto avrebbe cambiato solo il numero nei test della migrazione di CP-10a.
+2. ✅ 21/10 · La richiesta della lista: `reducedPriceQuery.ts`.
+   > **Note implementazione**: rosso in `reducedPriceQuery.test.ts` (nuovo `describe` «a card in the rolling-return view
+   > (Y-40)»): **2 rossi**, la guardia verde. Cura: `CardQueryInput.calendar = {signals, targetCurrency}`; con questo ogni
+   > bersaglio di un confronto parte sempre (un segnale non è in cache), `sample_like` della scheda, `include_price: false`,
+   > con il segnale e `target_currency` = la valuta della scheda (come il dettaglio chiede i confronti). **29/29**.
+3. ✅ 21/10 · La scheda: `AssetCard.svelte`, nuovo `AssetCard.test.ts` (una riga additiva nel runner, `front_component_unit`,
+   dopo `AssetTable.test.ts`).
+   > **Note implementazione**: **9 rossi, 2 verdi** su 11 (le due prove in %, che non cambiano). Cura: via
+   > `globalViewMode` e la scelta in memoria della scheda; props `primaryView`, `onprimaryviewchange`, `calendarReturn`,
+   > `calendarOverlaySignals`; il pulsante dice dove va (`data-next-view`) e gira % → rendimento → Abs; in vista rendimento il
+   > grafico disegna il rendimento (già in %, base 0) con i confronti, scala %; mentre carica un segnaposto
+   > (`asset-card-calendar-loading`), senza dati il messaggio del dettaglio (`asset-card-calendar-problem`, `data-state`,
+   > `data-problem-code`); la scheda pubblica `data-calendar-state`. `AssetTable.test.ts`: la prop rinominata
+   > (`globalViewMode` → `primaryView`). **28/28** con `AssetTable.test.ts`.
+   >
+   > **⚠️ Fuori pista**: l'icona del rendimento. Nel dettaglio (`AssetChartModeToggle`) il rendimento usa `Percent`, la
+   > stessa icona della percentuale: sul pulsante a rotazione «vai in %» e «vai al rendimento» sarebbero uguali. Messo
+   > `CalendarSync` per il rendimento (e `ChartLine` per «torna in Abs»), da confermare: DOMANDA V-8b nel checkpoint.
+4. ✅ 21/10 · `chartSignalRendering.ts`: `renderCalendarComparisons` (i confronti in vista rendimento, come
+   `calendarComparisonSignals` del dettaglio, per la scheda, l'anteprima e, quando lo adotta, X). **3 rossi** → **51/51**.
+5. ✅ 21/10 · La modale: tre viste, la finestra, l'anteprima del rendimento.
+   > **Note implementazione**: rossi in `ChartSettingsModal.test.ts` (nuovo `describe` «the three views, and the rolling-return
+   > preview»): **4 rossi**, la guardia FX verde. Cura: il selettore è la vista salvata (`previewView`, Apply la salva);
+   > il terzo pulsante solo per gli asset e solo con `calendarPreviewResolver`; in vista rendimento i controlli della
+   > finestra del dettaglio (`AssetCalendarWindowControls`), la finestra in vigore con `effectiveCalendarReturnWindow` e
+   > `calendarRangeDays`, una scelta la segna `calendarReturnWindowAuto: false`; il grafico come il dettaglio
+   > (`valueUnit: 'percentage'`, `externalViewMode: 'absolute'`, `showMainDelta: false`), i confronti come sovrapposizioni;
+   > nel globale la curva sintetica allungata della finestra, mostrato solo l'anno. **18/18**.
+   >
+   > **⚠️ Fuori pista**: lo stand-in del test non toglie il suo elemento quando Svelte smonta il grafico; con la vista
+   > iniziale scritta da un `$effect` il grafico si montava due volte (prezzo, poi rendimento). La vista iniziale ora nasce
+   > dalle impostazioni (`openingView`): niente primo disegno nella vista sbagliata, anche nell'app.
+6. ✅ 21/10 · La pagina della lista (`assets/+page.svelte`).
+   > **Note implementazione**: la vista globale dallo store (`globalPrimaryView`), la barra tripla
+   > (`assets-global-view-calendar-return`, `aria-pressed`, `data-view` sul gruppo); `handleListPrimaryView`
+   > (`setScopePrimaryView`) e `handleCardPrimaryView` (`setItemPrimaryView`) ricaricano solo le schede che entrano o escono
+   > dal rendimento; in `fetchPriceSeries` una scheda in vista rendimento chiede il suo segnale (finestra in vigore per il
+   > periodo della lista), nessun altro segnale del backend (V-5 a), e i bersagli con il segnale; le risposte dei bersagli non
+   > toccano la cache dei campioni; `calendarByCard` tiene i rendimenti (mentre carica restano i vecchi punti); in errore
+   > lo stato `error`. Il risolutore dell'anteprima (`resolveCalendarPreview`): per una scheda una richiesta come quella delle
+   > schede (600 px di piano), per il globale `/signals/preview` sulla curva sintetica. Il salvataggio delle impostazioni
+   > ricarica se il rendimento è coinvolto prima o dopo.
+7. ✅ 22/10 · E2E riscritte in `asset-list.spec.ts` (verdi nello slot, passo 12): «the top bar’s three views…» (tre viste, il
+   segnale chiesto, ogni scheda che si assesta), «one AssetCard turns its own view, keeps it across a reload…» (V-1 a, V-3 a);
+   le due prove del Δ della scheda passano per il rendimento prima dell'assoluto. `onboarding-tour.spec.ts` resta valida
+   (usa Abs e %).
+   >
+   > **⚠️ Fuori pista**: per provare il backend ho avviato `dev.py server --test` sulla 6189: con la build vecchia ha lanciato
+   > da solo `build:debug` (un comando pesante, fuori dal lucchetto). Fermato subito (solo i miei processi; la build di
+   > un'altra sessione non l'ho toccata). La prova a mano si fa nello slot, dopo `server --build-only` dentro `flock`.
+8. ✅ 21/10 · Le prove leggere (carico 2-4).
+   > **Note implementazione**:
+   > - Vitest, a gruppi di 3 file (il lucchetto era tenuto da un `all-frontend` di un'altra sessione, coda di 7): **16 file,
+   >   802/802** (store ×3, `reducedPriceQuery`, `AssetCard`, `AssetTable`, `ChartSettingsModal`, `chartSignalRendering`,
+   >   `chartCoreHelpers`, `signalRendering.gate`, `LineChart`, `priceChartHelpers`, `AssetCalendarWindowControls`, `FxCard`,
+   >   `OtherPeriodEffectsTable`, `themeRoles.gate`); `OtherPeriodEffectsTable` anche con `LC_ALL=it_IT.UTF-8`: 4/4.
+   > - `dev.py front check` in `flock`: **0 errori, 0 avvisi** (un secondo giro sullo stato finale è in coda nel lucchetto).
+   > - Prettier `--check` sui file toccati, `theme-roles --check`, `git diff --check`: puliti.
+   > - `dev.py test check-orphans`: rc 1 per **5 orfani preesistenti di Z-29b** (`bulkBatchesGroups.test.ts`,
+   >   `compactDensity.test.ts`, `reducedPriceCache.test.ts`, `chartUtils.test.ts`, `reducedPriceQuery.test.ts`), non miei;
+   >   `AssetCard.test.ts` è registrato.
+9. ✅ 22/10 · Doc (agente `docs-writer`, solo inglese): `user/assets/index.en.md` (la nota delle tre viste),
+   `user/fx/chart-settings.en.md` (il selettore è la vista salvata; «🔁 Rolling Return view»),
+   `developer/frontend/components/charts.md` («Three views», `#primary-views`: il contratto dello store, la richiesta della
+   lista, `renderCalendarComparisons`, il contratto per il dettaglio). `mkdocs build` (strict) exit 0, `check-links` exit 0
+   (97 link). Tolta da me la frase «the asset detail page uses the same window» (vera solo quando X adotta
+   `effectiveCalendarReturnWindow`). Debito di traduzione: `user/assets/index` e `user/fx/chart-settings` (IT/FR/ES).
+   V-8b decisa dal developer: (a) `CalendarSync` (come già nel codice).
+10. ✅ 22/10 · Slot: build di debug (`server --build-only` in `flock`), prova a mano del backend (la richiesta delle schede con il
+    segnale, i bersagli `sample_like` senza prezzi con `target_currency`), poi E2E `front-asset asset-list` e
+    `front-fx fx-settings`.
+   > **Note implementazione (22/10)**: build di debug in `flock` (`server --test --debug --build-only`, rc 0, log
+   > `ondata3/y40-build.log`); server sulla 6189 avviato dopo, senza ricompilare. Prova a mano (`ondata3/y40-probe.log`),
+   > `POST /assets/prices/query` come lo fanno le schede: 200; la scheda (Apple, USD, `max_points` 377, finestra 1A) ha i
+   > punti con la provenienza (30, stato `partial`: la storia dei dati di prova è corta); un bersaglio `sample_like`,
+   > `include_price: false`, nella stessa valuta, con finestra 3M: 305 punti come la scheda; un bersaglio in EUR con
+   > `target_currency: USD`: `unavailable`, senza problema dichiarato (nei dati di prova manca il cambio, credo; il dettaglio
+   > lo chiede allo stesso modo). Server fermato, porta libera.
+11. ✅ 22/10 · Primo giro E2E nello slot (`--workers 2`, `nice`, in `flock`): `front-fx fx-settings` **3/3**;
+    `front-asset asset-list` **41/43**, due rossi veri, nelle due prove nuove, tutti e due del prodotto:
+    - «the top bar’s three views…»: dopo il clic sul rendimento `waitForSettled` è tornato con 16 schede ancora `loading`:
+      `data-busy` della pagina non contava il caricamento del rendimento. Cura: `busy` include le schede con
+      `calendarByCard` in `loading` (la regola «publish state»: lo stato c'era, il segnale della pagina no);
+    - «one AssetCard turns its own view, keeps it across a reload…»: dopo il clic e un ricaricamento subito la scheda era
+      tornata in %: lo store scrive `localStorage` 250 ms dopo l'ultima modifica e un ricaricamento in quella finestra
+      perdeva la scelta. Rosso di unità in `chartSettingsStore.test.ts` («a pending write is done when the page goes away»,
+      1 rosso), cura: al `pagehide` la scrittura in attesa si fa subito. Store **72/72**.
+    Log: `ondata3/y40-e2e-asset-list.log`, `ondata3/y40-e2e-fx-settings.log`.
+12. ✅ 22/10 · Secondo giro nello slot, dopo le due cure (in `flock`): build di debug rc 0 (`ondata3/y40-build2.log`);
+    `front-asset asset-list` **43/43** (2,0 min, `ondata3/y40-e2e-asset-list-2.log`); `dev.py front check` **0 errori,
+    0 avvisi** (`ondata3/y40-front-check.log`). Prettier, `theme-roles --check`, `git diff --check` puliti;
+    `OtherPeriodEffectsTable` con `it_IT.UTF-8` 4/4. Porta 6189 libera.
+13. ✅ 22/10 · CHECKPOINT READY (asset). La parte cambi (V-9, passo 2 del brief) aspetta il via del coordinatore dopo Z-29fx.
+

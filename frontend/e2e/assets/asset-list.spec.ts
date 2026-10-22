@@ -230,23 +230,50 @@ test.describe('Asset List Page', () => {
         await expect(page.locator('[data-testid="dt-select-all"]')).toHaveCount(0);
     });
 
-    test('global Abs/% controls update every rendered AssetCard data-view-mode', async ({page}) => {
+    /**
+     * Y-40 — the top bar's three views: absolute, percent and the rolling return. Every card takes the one chosen; in the
+     * rolling-return view each card asks its rolling return (ASSET_CALENDAR_ROLLING_RETURN, on its own item of the bulk
+     * request) and settles (`data-calendar-state`: ready, partial or unavailable — never stuck loading, never an error).
+     */
+    test('the top bar’s three views update every rendered AssetCard, and the rolling return is asked and drawn', async ({page}) => {
+        const asked: unknown[] = [];
+        page.on('request', (request) => {
+            if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return;
+            asked.push(...((request.postDataJSON() as unknown[]) ?? []));
+        });
         await goToAssetsPage(page);
         await page.getByTestId('view-mode-grid').click();
         await waitForSettled(page.getByTestId('assets-page'), 20_000);
         const cards = page.locator('[data-testid^="asset-card-"][data-view-mode]');
         await expect.poll(() => cards.count(), {timeout: 10_000}).toBeGreaterThan(0);
 
-        const everyCardUses = async (mode: 'absolute' | 'percentage') => cards.evaluateAll((nodes, expected) => nodes.length > 0 && nodes.every((node) => (node as HTMLElement).dataset.viewMode === expected), mode);
+        const everyCardUses = async (mode: 'absolute' | 'percentage' | 'calendar-return') => cards.evaluateAll((nodes, expected) => nodes.length > 0 && nodes.every((node) => (node as HTMLElement).dataset.viewMode === expected), mode);
 
         await page.getByTestId('assets-global-view-absolute').click();
         await expect.poll(() => everyCardUses('absolute'), {timeout: 5_000}).toBe(true);
+
+        await page.getByTestId('assets-global-view-calendar-return').click();
+        await expect.poll(() => everyCardUses('calendar-return'), {timeout: 5_000}).toBe(true);
+        await expect(page.getByTestId('assets-global-view-calendar-return')).toHaveAttribute('aria-pressed', 'true');
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+        const states = await cards.evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.calendarState));
+        expect(
+            states.filter((state) => !['ready', 'partial', 'unavailable'].includes(String(state))),
+            'every card settles its rolling return: ready, partial or unavailable',
+        ).toEqual([]);
+        expect(states, 'the seeded assets have the history for a rolling return').toContain('ready');
+        const signalCodes = asked.flatMap((item) => ((item as {signals?: Array<{signal_code?: string}>}).signals ?? []).map((signal) => signal.signal_code));
+        expect(signalCodes, 'the cards asked their rolling return').toContain('ASSET_CALENDAR_ROLLING_RETURN');
 
         await page.getByTestId('assets-global-view-percentage').click();
         await expect.poll(() => everyCardUses('percentage'), {timeout: 5_000}).toBe(true);
     });
 
-    test('one AssetCard can override Abs/% until a later global change', async ({page}) => {
+    /**
+     * Y-40 (V-1 a, V-3 a) — a card's button turns percent → rolling return → absolute, and that card keeps its view, across a
+     * reload too (it is saved); a later change of the top bar resets every card to it.
+     */
+    test('one AssetCard turns its own view, keeps it across a reload, until a later global change', async ({page}) => {
         await goToAssetsPage(page);
         await page.getByTestId('view-mode-grid').click();
         await waitForSettled(page.getByTestId('assets-page'), 20_000);
@@ -254,11 +281,10 @@ test.describe('Asset List Page', () => {
         const cards = page.getByTestId(/^asset-card-\d+$/);
         const chosenCard = cards.filter({hasText: 'Apple Inc.'});
         await expect(chosenCard).toHaveCount(1);
-        await expect(chosenCard).toHaveAttribute('data-testid', /^asset-card-\d+$/);
         const chosenCardTestId = await chosenCard.getAttribute('data-testid');
         if (!chosenCardTestId) throw new Error('Seeded Apple Inc. card must expose its data-testid.');
 
-        const everyOtherCardUses = async (mode: 'absolute' | 'percentage') =>
+        const everyOtherCardUses = async (mode: 'absolute' | 'percentage' | 'calendar-return') =>
             cards.evaluateAll(
                 (nodes, expected) => {
                     let foundOtherCard = false;
@@ -276,20 +302,31 @@ test.describe('Asset List Page', () => {
             await expect.poll(() => everyOtherCardUses(mode), {timeout: 5_000}).toBe(true);
         };
 
-        await page.getByTestId('assets-global-view-absolute').click();
-        await expectEveryCardToUse('absolute');
-
-        await chosenCard.getByTestId('asset-card-view-toggle').click();
-        await expect(chosenCard).toHaveAttribute('data-view-mode', 'percentage');
-        await expect.poll(() => everyOtherCardUses('absolute'), {timeout: 5_000}).toBe(true);
-
         await page.getByTestId('assets-global-view-percentage').click();
         await expectEveryCardToUse('percentage');
 
-        // Changing again proves the local override was cleared, not merely
-        // hidden because it happened to match the first new global mode.
+        const toggle = chosenCard.getByTestId('asset-card-view-toggle');
+        await expect(toggle).toHaveAttribute('data-next-view', 'calendar-return');
+        await toggle.click();
+        await expect(chosenCard).toHaveAttribute('data-view-mode', 'calendar-return');
+        await expect(chosenCard).toHaveAttribute('data-calendar-state', /^(ready|partial|unavailable)$/, {timeout: 15_000});
+        await expect.poll(() => everyOtherCardUses('percentage'), {timeout: 5_000}).toBe(true);
+
+        await toggle.click();
+        await expect(chosenCard).toHaveAttribute('data-view-mode', 'absolute');
+        await expect.poll(() => everyOtherCardUses('percentage'), {timeout: 5_000}).toBe(true);
+
+        // Saved (V-1 a): the card opens in its own view after a reload.
+        await page.reload();
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+        await expect(page.getByTestId(chosenCardTestId)).toHaveAttribute('data-view-mode', 'absolute', {timeout: 10_000});
+        await expect.poll(() => everyOtherCardUses('percentage'), {timeout: 5_000}).toBe(true);
+
+        // A change of the top bar resets every card to it (V-3 a); changing again proves the card's view was cleared.
         await page.getByTestId('assets-global-view-absolute').click();
         await expectEveryCardToUse('absolute');
+        await page.getByTestId('assets-global-view-percentage').click();
+        await expectEveryCardToUse('percentage');
     });
 
     // ========================================================================
@@ -1790,7 +1827,9 @@ test.describe('Assets list — each card shows the backend’s Δ over the range
             await expect(delta, 'the card shows the answer’s change_ratio 0.4242 as a percentage').toHaveText(arrowedPercent('+42.42'), {timeout: 10_000});
             await expect(delta).toHaveAttribute('data-mode', 'percentage');
 
-            // The card's own Abs/% switch: the same answer, its change_abs in the asset's currency.
+            // The card's own button (Y-40: percent → rolling return → absolute): the same answer, its change_abs in the asset's currency.
+            await card.getByTestId('asset-card-view-toggle').click();
+            await expect(card, 'the card shows its rolling return').toHaveAttribute('data-view-mode', 'calendar-return');
             await card.getByTestId('asset-card-view-toggle').click();
             await expect(card, 'the card shows absolute values').toHaveAttribute('data-view-mode', 'absolute');
             await expect(delta, 'the card shows the answer’s change_abs 12.34, in euros').toHaveText(arrowedAmount('+12.34', 'EUR'));
@@ -1839,6 +1878,9 @@ test.describe('Assets list — each card shows the backend’s Δ over the range
             await expect(subjectToggle).toBeVisible();
             await expect(subjectDelta, 'every field of range_change is null: no Δ in percent').toHaveCount(0);
 
+            // Y-40: percent → rolling return → absolute.
+            await subjectToggle.click();
+            await expect(subject, 'the subject shows its rolling return').toHaveAttribute('data-view-mode', 'calendar-return');
             await subjectToggle.click();
             await expect(subject, 'the subject shows absolute values').toHaveAttribute('data-view-mode', 'absolute');
             await expect(subjectDelta, 'every field of range_change is null: no Δ in the asset’s currency either').toHaveCount(0);

@@ -484,7 +484,7 @@ bespoke `LineChart`. It is configured as follows:
 | Prop | Value |
 |------|-------|
 | `data` | the **absolute** series: the card's real data in `pair` mode, a synthetic curve in `global` mode |
-| `externalViewMode` | the modal's own **Abs** / **%** switch: the chart takes the percentage view itself |
+| `externalViewMode` | the modal's view selector (**Abs** / **%**, plus **Rolling Return** on asset charts, see [Three views](#primary-views)): the chart takes the percentage view itself |
 | `externalChartType` | `'line'` (no candlesticks) |
 | `hideToolbar` | `true` |
 | `chartHeight` | `'220px'` |
@@ -509,6 +509,57 @@ series is green from the baseline up and red below it, with a dashed baseline li
 
 `baselineValue` is an optional prop of `LineChart`, forwarded by `PriceChartCompact`, for a page
 that knows a better base than the first point of the data it hands over. No list page uses it today.
+
+### Three views: Abs, % and Rolling Return {: #primary-views }
+
+A chart's saved view is `ChartSettings.primaryView` (`ChartPrimaryView`: `'absolute' | 'percentage' |
+'calendar-return'`, default `'percentage'`), next to `calendarReturnWindow` and
+`calendarReturnWindowAuto`. The Assets list uses all three; the FX list and the FX preview stay on
+the first two (`ChartSettingsModal` falls back to `'percentage'` when a non-asset chart opens on
+`'calendar-return'`). `STORAGE_VERSION` is unchanged: a document saved before these fields existed
+is filled by the sanitiser (`primaryView` = `'percentage'`; `calendarReturnWindowAuto` = `true` only
+when the stored window is the default one).
+
+| Function | Role |
+|----------|------|
+| `setScopePrimaryView(view, scope)` | the list's top bar: sets the scope default (`__global_<scope>__`) and resets every override of the scope to `view`, keeping their other fields; the other scope is untouched |
+| `setItemPrimaryView(slug, view, scope?)` | one chart (a card's button, the detail page); an override it creates starts from the scope's settings |
+| `nextCardPrimaryView(view)` | the card button's order: `'percentage'` → `'calendar-return'` → `'absolute'` → `'percentage'`; the button shows the view it goes to |
+| `effectiveCalendarReturnWindow(settings, rangeDays)` | the window in force: the saved one, or, while `calendarReturnWindowAuto` is `true`, the preset chosen by `largestCalendarReturnPresetFor(rangeDays)` (`calendarReturnWindow.ts`: the largest preset whose days fit the range, the smallest when none does) |
+| `detailModesForPrimaryView(view)` / `primaryViewForDetailModes(mode, viewMode)` | the mapping with the detail page's `primaryMode` and `viewMode` (below) |
+
+`calendarReturnWindowAuto` stays `true` until the user chooses a window. The rule is in the store:
+any save through `setPairSettings` or `setGlobalSettings` whose `calendarReturnWindow` differs from
+the one stored before sets it to `false`, whoever saves (modal, detail page). From then on the saved
+window is used as it is, whatever the period.
+
+**How the list asks for the rolling return.** For a card whose view is `'calendar-return'`, the list
+(`routes/(app)/assets/+page.svelte`) sends the card's item with a calendar signal
+(`ASSET_CALENDAR_ROLLING_RETURN`, `window_days` from `effectiveCalendarReturnWindow()` over the
+list's range) instead of the card's backend signals. `buildReducedQuery()` (`lib/utils/reducedPriceQuery.ts`),
+given the card's `calendar` option, adds one item for every comparison target — cached or not — as
+`sample_like` the card's item, with the same signal, `include_price: false` and `target_currency` =
+the card's currency, so every line has one window and one currency. The list keeps the answers per
+card in `calendarByCard` (the card's own view and its targets'), read with
+`extractCalendarReturnView()`. A card in this view draws the own points and
+`renderCalendarComparisons(configs, views, target, fallbackName, selfAssetId)`
+(`chartSignalRendering.ts`): the asset-comparison configs whose target view is `ready` or `partial`,
+each as a percentage line with the config's style, in the asset's name and icon; a comparison with
+the chart's own asset or without a ready view draws nothing. The other signals stay saved and are
+not requested. With no points, `AssetCard` shows the problem message (for example, less history than
+the window) instead of the chart.
+
+**Contract for the detail page.** The asset detail page keeps its own `primaryMode` (`'price'` or
+`'calendar-return'`, above) and does not read `primaryView` yet; the workstream that wires it should:
+
+- open with `detailModesForPrimaryView(settings.primaryView)`: `'calendar-return'` gives
+  `{primaryMode: 'calendar-return', viewMode: 'percentage'}`, the two others give
+  `{primaryMode: 'price', viewMode: view}`;
+- save with `setItemPrimaryView()` the result of `primaryViewForDetailModes(primaryMode, viewMode)`
+  when the user changes mode or view;
+- take its window from `effectiveCalendarReturnWindow(settings, rangeDays)`, so that the detail page
+  and the list use the same window, and save a chosen one through the settings, which marks it as
+  chosen.
 
 ## Responsive Date Axis
 
