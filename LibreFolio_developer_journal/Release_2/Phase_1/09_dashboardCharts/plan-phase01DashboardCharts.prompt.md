@@ -8324,3 +8324,58 @@ toccherà con FE4), ma separato: niente conflitti con X.
     `OtherPeriodEffectsTable` con `it_IT.UTF-8` 4/4. Porta 6189 libera.
 13. ✅ 22/10 · CHECKPOINT READY (asset). La parte cambi (V-9, passo 2 del brief) aspetta il via del coordinatore dopo Z-29fx.
 
+### Y-40, parte cambi (22/10, ondata 3, passo 2)
+
+> **Base:** `71e615cf8` (merge di Z-29fx in Y, genitori `816a4b6c1` = Y-40 asset e `46455857a` = Z-29fx), `api sync` fatto.
+> Regole di file: `assets/+page.svelte` e `reducedPriceQuery.ts` sono di Z (Z-29d): non toccati; la richiesta dei cambi
+> in un file mio, `lib/utils/reducedFxQuery.ts`. Le pagine di dettaglio restano di X.
+
+1. ✅ 22/10 · Lo store: per i cambi la vista predefinita resta **Abs**, come la barra della lista prima (la lista asset e il
+   dettaglio restano in %). Rossi in `chartSettingsStore.test.ts` («the FX list opens on absolute rates»): **2 rossi**, il
+   terzo caso verde. Cura: `scopeDefaultView('fx') = 'absolute'`, applicata al ripiego sulle impostazioni di base
+   (`forScope`) e alla pulizia di un archivio di prima (le chiavi `__global_fx__` e quelle delle coppie). Il caso di Y-40
+   asset che leggeva «fx in %» ora legge «fx in Abs». Store **58/58**.
+2. ✅ 22/10 · `reducedFxQuery.ts` (nuovo) e `reducedFxQuery.test.ts` (nuovo, una riga nel runner dopo
+   `reducedPriceQuery.test.ts`): una conversione di 1 per scheda, nel verso in cui la scheda mostra la coppia, con il
+   rendimento, `key` `fx:<slug>` e `max_points`; ogni coppia confrontata (`fx-pair`) `sample_like` la scheda, nel verso del
+   suo segnale; la propria coppia non si chiede. Rosso: il modulo assente. **7/7**.
+3. ✅ 22/10 · `chartSignalRendering.ts`: `renderCalendarPairComparisons` (le coppie confrontate in vista rendimento, con il
+   nome del loro segnale). **2 rossi** → **53/53**.
+4. ✅ 22/10 · `FxCard.svelte` e `FxCard.primaryView.test.ts` (nuovo, una riga nel runner dopo `FxCard.test.ts`).
+   > **Note implementazione**: **9 rossi, 2 verdi** (le due prove della conversione: lo stesso risultato di oggi, come
+   > diceva X). Cura come `AssetCard`: `primaryView`, `onprimaryviewchange`, `calendarReturn`, `calendarOverlaySignals`,
+   > `data-view-mode`, `data-calendar-state`, il pulsante `fx-card-view-toggle` con `data-next-view`, segnaposto e messaggio.
+   > La richiesta di X: i punti si convertono una volta sola con `fxPointToLineDataPoint(d, inverted)`, per il grafico e per
+   > i segnali. `FxCard.test.ts` e il nuovo: **15/15**.
+5. ✅ 22/10 · La modale: il terzo pulsante dove la pagina calcola il rendimento (`calendarPreviewResolver`), non più solo per
+   gli asset. Rosso: «offers the rolling return to the FX settings too…»; guardia: senza risolutore niente rendimento, e una
+   vista salvata in rendimento si apre in %. **19/19**.
+6. ✅ 22/10 · La pagina dei cambi (`fx/+page.svelte`): la vista globale dallo store, la barra tripla (`fx-global-view-*`,
+   prima senza `data-testid`), `fetchCalendarReturns` (in `fetchAllPairData` con prezzi e Δ, al cambio di vista, di verso
+   della scheda o della tabella, al salvataggio delle impostazioni; un numero di richiesta per scheda scarta le risposte
+   vecchie; le conversioni non entrano negli store dei tassi), `data-busy` che conta il rendimento, il risolutore
+   dell'anteprima (una coppia: la richiesta delle schede su 600 px; il globale: `/signals/preview` con `domain: 'fx'`).
+   > **⚠️ Fuori pista**: le schede dei cambi disegnano ancora i tassi giornalieri degli store (non `max_points`): solo il
+   > rendimento usa le conversioni ridotte di Z-29fx. Ridurre anche i tassi delle schede è un lotto a sé (come Z-29b per gli
+   > asset), proposto nel checkpoint.
+7. ✅ 22/10 · E2E in `fx-list.spec.ts` (verdi nello slot, passo 9): «the top bar’s three views update every FX card, opening on Abs…» e
+   «one FX card turns its own view, keeps it across a reload…». La prova «loads all FX cards through exactly one bulk
+   conversion request» resta valida (in Abs nessuna richiesta del rendimento).
+8. ✅ 22/10 · Prove leggere e doc.
+   > **Note implementazione**: Vitest a gruppi di 3 file: **14 file, 705/705** (store ×3, `reducedFxQuery`,
+   > `FxCard.primaryView`, `FxCard`, `ChartSettingsModal`, `chartSignalRendering`, `chartCoreHelpers`,
+   > `signalRendering.gate`, `AssetCard`, `reducedPriceQuery`, `themeRoles.gate`, `fxStoreRegistry`); `dev.py front check`
+   > in `flock` **0 errori, 0 avvisi**; Prettier, `theme-roles --check`, `git diff --check` puliti; `check-orphans` rc 0.
+   > Doc (`docs-writer`, solo inglese): `user/fx/index.en.md`, `user/fx/chart-settings.en.md`, il lato FX in
+   > `developer/frontend/components/charts.md` (`#primary-views`); `mkdocs build` e `check-links` exit 0. Debito di
+   > traduzione: `user/fx/index` e `user/fx/chart-settings`.
+9. ✅ 22/10 · Slot (in `flock`): build di debug rc 0 (`ondata3/y40fx-build.log`); `front-fx fx-list` **27/27** (1,0 min);
+   `front-fx fx-settings` **3/3** (la modale è cambiata). Log `ondata3/y40fx-e2e-{fx-list,fx-settings}.log`. Porta libera.
+10. ✅ 22/10 · CHECKPOINT READY (cambi).
+11. ✅ 22/10 · Due richieste di X (il dettaglio dell'asset legge ora la vista della lista, `b64c3f4c6` sul ramo di X):
+    `charts.md` (`#primary-views`): il paragrafo del dettaglio dice ora quello che fa (si apre nella vista della scheda e
+    la salva, con la stessa finestra della lista: rimessa la frase tolta il 21/10); nello store il commento di
+    `setItemPrimaryView`: ricostruisce l'override dalla copia dello store e perde ciò che una pagina scrive nelle sue
+    configurazioni (`_resolvedData`), quindi una pagina con le sue impostazioni salva con
+    `setPairSettings(slug, {...settings, primaryView, signals})`, come fa il dettaglio. Nessun cambio di comportamento.
+

@@ -8,14 +8,16 @@
     import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
-    import {ArrowLeftRight, Percent, RefreshCw, RotateCw, Settings, Trash2} from 'lucide-svelte';
+    import {ArrowLeftRight, CalendarSync, ChartLine, Percent, RefreshCw, RotateCw, Settings, Trash2} from 'lucide-svelte';
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
     import {displayFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import type {RangeDelta} from '$lib/utils/rangeChange';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {isCardInverted, setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {nextCardPrimaryView, type ChartPrimaryView, type ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import type {CalendarReturnViewState} from '$lib/components/charts/priceChartHelpers';
+    import {fxPointToLineDataPoint} from '$lib/charts/chartSignalRendering';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {normalizeToPercentage} from '$lib/utils/chartUtils';
     import {formatPrice} from '$lib/utils/core/formatFixed';
@@ -40,8 +42,14 @@
         dateEnd?: string;
         /** Whether this pair has only a MANUAL sentinel provider */
         manualOnly?: boolean;
-        /** Global view mode from parent */
-        globalViewMode?: 'absolute' | 'percentage';
+        /** The view the page resolves for this card (Y-40): the pair's saved choice, else the FX list's. */
+        primaryView?: ChartPrimaryView;
+        /** The card's button asks the next view of the turn (percent → rolling return → absolute); the page saves it. */
+        onprimaryviewchange?: (slug: string, view: ChartPrimaryView) => void;
+        /** The pair's rolling return, in percent, for the rolling-return view (Y-40); with the detail's problem when there is none. */
+        calendarReturn?: {state: CalendarReturnViewState; points: LineDataPoint[]; problemCode?: string | null; problemMessage?: string | null};
+        /** The compared pairs' rolling returns, drawn over the pair's in the rolling-return view (V-5 a). */
+        calendarOverlaySignals?: RenderedSignal[];
         /** Chart settings for this card (resolved from store by parent) */
         chartSettings?: ChartSettings;
         /**
@@ -59,7 +67,28 @@
         oninversionchange?: (info: {slug: string; inverted: boolean}) => void;
     }
 
-    let {base, quote, slug, data = [], rangeDeltas = null, loading = false, dateStart, dateEnd, manualOnly = false, globalViewMode = 'absolute', chartSettings, renderSignals, ondelete, onrefresh, onsync, onsettings, oninversionchange}: Props = $props();
+    let {
+        base,
+        quote,
+        slug,
+        data = [],
+        rangeDeltas = null,
+        loading = false,
+        dateStart,
+        dateEnd,
+        manualOnly = false,
+        primaryView = 'absolute',
+        onprimaryviewchange,
+        calendarReturn,
+        calendarOverlaySignals = [],
+        chartSettings,
+        renderSignals,
+        ondelete,
+        onrefresh,
+        onsync,
+        onsettings,
+        oninversionchange,
+    }: Props = $props();
 
     // =========================================================================
     // State
@@ -71,19 +100,11 @@
     }
 
     let inverted = $state(getInitialInversion());
-    let localViewModeOverride: 'absolute' | 'percentage' | null = $state(null);
 
-    // Card view mode: local override takes precedence, otherwise follows global
-    let cardViewMode = $derived(localViewModeOverride ?? globalViewMode);
-
-    // Reset local override when global changes
-    let prevGlobal: string | undefined;
-    $effect(() => {
-        if (prevGlobal !== undefined && globalViewMode !== prevGlobal) {
-            localViewModeOverride = null;
-        }
-        prevGlobal = globalViewMode;
-    });
+    /** The price views draw the rates; the rolling-return view draws the return, already in percent (Y-40). */
+    let isCalendarView = $derived(primaryView === 'calendar-return');
+    let cardViewMode: 'absolute' | 'percentage' = $derived(primaryView === 'absolute' ? 'absolute' : 'percentage');
+    let nextView = $derived(nextCardPrimaryView(primaryView));
 
     // =========================================================================
     // Derived
@@ -101,35 +122,18 @@
     /** The backend's Δ over the range, the way the card shows the pair (X-R59). */
     let deltaPercent = $derived((inverted ? rangeDeltas?.inverse : rangeDeltas?.direct)?.pct ?? null);
 
-    let chartData = $derived.by((): LineDataPoint[] => {
-        const absolute = data.map((d): LineDataPoint => {
-            const rate = displayFxRate(d.rate, inverted);
-            return {
-                date: d.date,
-                value: rate ?? 0,
-                missing: rate === null,
-                staleDays: d.backwardFillInfo?.daysBack ?? 0,
-            };
-        });
-        if (cardViewMode === 'absolute' || absolute.length === 0) return absolute;
-        return normalizeToPercentage(absolute);
-    });
+    /** The rates the way the card shows the pair, each point converted once (the shared converter): the chart's and its signals'. */
+    let absoluteData = $derived(data.map((point) => fxPointToLineDataPoint(point, inverted)));
 
-    /** Absolute data for signal rendering (before % conversion) */
-    let absoluteData = $derived.by((): LineDataPoint[] =>
-        data.map((d): LineDataPoint => {
-            const rate = displayFxRate(d.rate, inverted);
-            return {
-                date: d.date,
-                value: rate ?? 0,
-                missing: rate === null,
-                staleDays: d.backwardFillInfo?.daysBack ?? 0,
-            };
-        }),
-    );
+    let chartData = $derived.by((): LineDataPoint[] => {
+        if (isCalendarView) return calendarReturn?.points ?? [];
+        if (cardViewMode === 'absolute' || absoluteData.length === 0) return absoluteData;
+        return normalizeToPercentage(absoluteData);
+    });
 
     /** Overlay signals — re-rendered reactively when cardViewMode or inverted changes */
     let overlaySignals = $derived.by((): RenderedSignal[] => {
+        if (isCalendarView) return calendarOverlaySignals;
         if (!renderSignals || absoluteData.length === 0) return [];
         return renderSignals(absoluteData, cardViewMode);
     });
@@ -165,6 +169,8 @@
        transition-all duration-200 hover:shadow-lg hover:border-lf-focus/30 hover:bg-lf-hover
        focus:outline-none focus:ring-2 focus:ring-lf-focus focus:ring-offset-2"
     data-testid="fx-card-{slug}"
+    data-view-mode={primaryView}
+    data-calendar-state={isCalendarView ? (calendarReturn?.state ?? 'idle') : undefined}
     onclick={handleCardClick}
     onkeydown={(e) => e.key === 'Enter' && handleCardClick()}
     role="button"
@@ -198,15 +204,24 @@
             </div>
 
             <div class="flex items-center gap-1.5 shrink-0">
+                <!-- One button, three views in turn (Y-40): it shows where it goes -->
                 <button
-                    class="p-1 rounded-md transition-colors {cardViewMode === 'percentage' ? 'bg-lf-selected text-lf-link' : 'text-lf-muted hover:bg-lf-neutral hover:text-lf-secondary'}"
+                    class="p-1 rounded-md transition-colors {primaryView === 'absolute' ? 'text-lf-muted hover:bg-lf-neutral hover:text-lf-secondary' : 'bg-lf-selected text-lf-link'}"
+                    data-testid="fx-card-view-toggle"
+                    data-next-view={nextView}
                     onclick={(e) => {
                         stop(e);
-                        localViewModeOverride = cardViewMode === 'absolute' ? 'percentage' : 'absolute';
+                        onprimaryviewchange?.(slug, nextView);
                     }}
-                    title={cardViewMode === 'absolute' ? $t('chart.showPercentage') : $t('chart.showAbsolute')}
+                    title={nextView === 'percentage' ? $t('chart.showPercentage') : nextView === 'absolute' ? $t('chart.showAbsolute') : $t('signals.riskRollingReturn.name')}
                 >
-                    <Percent size={14} />
+                    {#if nextView === 'percentage'}
+                        <Percent size={14} />
+                    {:else if nextView === 'calendar-return'}
+                        <CalendarSync size={14} />
+                    {:else}
+                        <ChartLine size={14} />
+                    {/if}
                 </button>
                 {#if manualOnly}
                     <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-lf-warning-soft text-lf-warning-on-soft"> ✏️ Manual </span>
@@ -238,7 +253,15 @@
 
     <!-- Mini Chart -->
     <div class="px-4">
-        {#if chartData.length > 0}
+        {#if isCalendarView && calendarReturn?.state === 'loading' && chartData.length === 0}
+            <div class="h-20 flex items-center justify-center" data-testid="fx-card-calendar-loading">
+                <div class="animate-pulse bg-lf-neutral rounded w-full h-12"></div>
+            </div>
+        {:else if isCalendarView && chartData.length === 0}
+            <div class="h-20 flex items-center justify-center px-2 text-center text-xs text-lf-muted" data-testid="fx-card-calendar-problem" data-state={calendarReturn?.state ?? 'idle'} data-problem-code={calendarReturn?.problemCode ?? undefined}>
+                {calendarReturn?.problemMessage ?? $t('chartSettings.signalProblems.unavailable')}
+            </div>
+        {:else if chartData.length > 0}
             <PriceChartCompact
                 axisScale={chartSettings?.axisScales[cardViewMode]}
                 data={chartData}

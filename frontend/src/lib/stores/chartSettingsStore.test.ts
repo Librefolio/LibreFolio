@@ -1071,7 +1071,7 @@ describe('chartSettingsStore — the primary view and the rolling-return window 
         expect(viewOf(getSettingsForPair('asset-8', 'assets')), 'a chart without settings of its own follows the scope').toBe('calendar-return');
         expect({view: viewOf(getSettingsForPair('asset-7', 'assets')), signals: getSettingsForPair('asset-7', 'assets').signals}, 'a chart with its own settings is reset to the scope’s view, its signals kept').toEqual({view: 'calendar-return', signals: [comparison]});
         expect(viewOf(getSettingsForPair('EUR-USD', 'fx')), 'the FX scope is not touched').toBe('absolute');
-        expect(viewOf(getGlobalSettings('fx'))).toBe('percentage');
+        expect(viewOf(getGlobalSettings('fx')), 'the FX scope keeps its own view: absolute, its default').toBe('absolute');
     });
 
     it('setItemPrimaryView sets that chart only; an override it creates starts from the scope’s settings', () => {
@@ -1153,5 +1153,51 @@ describe('chartSettingsStore — a pending write is done when the page goes away
         expect(new Map(persistedFor(user)?.pairOverrides).get('asset-7')?.primaryView).toBe('absolute');
         flushWrite();
         expect(setItem, 'the timer has nothing left to write').toHaveBeenCalledTimes(1);
+    });
+});
+
+/**
+ * Y-40, the FX half — the FX list opens on absolute rates, as it always did (its top bar started on Abs), while the asset
+ * list and the detail open in percent. The contract: the FX scope's view is `'absolute'` until it is set — a fresh store,
+ * a pair without settings of its own, and settings stored before Y-40 (the FX scope's and a pair's, which name no view) —
+ * and what the FX scope sets is what it reads; the asset scope keeps percent.
+ *
+ * Red today: the FX scope reads percent, the store's one default.
+ */
+describe('chartSettingsStore — the FX list opens on absolute rates (Y-40, FX)', () => {
+    const viewOf = (value: ChartSettings): unknown => (value as unknown as Record<string, unknown>).primaryView;
+
+    it('reads absolute for the FX scope and its pairs until set, percent for the assets', () => {
+        freshUser();
+        expect({fx: viewOf(getGlobalSettings('fx')), pair: viewOf(getSettingsForPair('EUR-USD', 'fx')), assets: viewOf(getGlobalSettings('assets')), asset: viewOf(getSettingsForPair('asset-7', 'assets'))}).toEqual({
+            fx: 'absolute',
+            pair: 'absolute',
+            assets: 'percentage',
+            asset: 'percentage',
+        });
+    });
+
+    it('reads absolute for FX settings stored before Y-40, the scope’s and a pair’s', () => {
+        const user = `chart-settings-u${userSeq + 1}`;
+        const {primaryView: _view, ...before} = settings() as unknown as Record<string, unknown>;
+        seed(user, {
+            version: 3,
+            globalSettings: before,
+            pairOverrides: [
+                ['__global_fx__', before],
+                ['EUR-USD', before],
+                ['asset-7', before],
+            ],
+        });
+        freshUser();
+
+        expect({fx: viewOf(getGlobalSettings('fx')), pair: viewOf(getSettingsForPair('EUR-USD', 'fx')), asset: viewOf(getSettingsForPair('asset-7', 'assets'))}).toEqual({fx: 'absolute', pair: 'absolute', asset: 'percentage'});
+    });
+
+    it('reads what the FX scope sets', () => {
+        freshUser();
+        (chartSettingsStoreModule as unknown as {setScopePrimaryView: (view: string, scope: string) => void}).setScopePrimaryView('percentage', 'fx');
+
+        expect([viewOf(getGlobalSettings('fx')), viewOf(getSettingsForPair('EUR-USD', 'fx'))]).toEqual(['percentage', 'percentage']);
     });
 });

@@ -12,7 +12,7 @@
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
-    import {ArrowLeftRight, Coins, Plus, RefreshCw, RotateCw, Settings, Trash2, X} from 'lucide-svelte';
+    import {ArrowLeftRight, CalendarSync, Coins, Plus, RefreshCw, RotateCw, Settings, Trash2, X} from 'lucide-svelte';
     import FxCard from '$lib/components/fx/FxCard.svelte';
     import type {FxRow} from '$lib/components/fx/FxTable.svelte';
     import FxTable from '$lib/components/fx/FxTable.svelte';
@@ -25,9 +25,16 @@
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
-    import {type ChartSettings, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {type ChartPrimaryView, type ChartSettings, effectiveCalendarReturnWindow, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setItemPrimaryView, setPairSettings, setScopePrimaryView} from '$lib/stores/chartSettingsStore.svelte';
+    import {CALENDAR_RETURN_INSTANCE_ID, emptyCalendarReturnView, extractCalendarReturnView, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
+    import {calendarReturnRangeDays, calendarReturnWindowDays} from '$lib/components/charts/calendarReturnWindow';
+    import {formatSignalProblem} from '$lib/components/charts/chartSignalsHelpers';
+    import {DEFAULT_COMPACT_PLOT_WIDTH_PX} from '$lib/components/charts/timeSeriesAggregation';
+    import {buildFxCalendarQuery, estimateFxCalendarDays, fxCalendarRequest, type FxCalendarCardInput, type FxCalendarEntry} from '$lib/utils/reducedFxQuery';
+    import {sendBulkBatches} from '$lib/api/bulkBatches';
+    import {todayIso} from '$lib/utils/dateOnly';
     import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
-    import {fxPointToLineDataPoint, renderBackendResults, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
+    import {fxPointToLineDataPoint, renderBackendResults, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {createPairSlug, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, loadFxRatesAndSignalsBulk, removeFxStore} from '$lib/stores/fxStoreRegistry';
     import {bulkRefusalMessage} from '$lib/api/bulkRefusal';
@@ -100,7 +107,17 @@
     let urlDateEnd = $derived(activePreset === 'MAX' ? 'max' : dateEnd);
     let syncDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
 
-    let globalViewMode = $state<'absolute' | 'percentage'>('absolute');
+    // The view of the FX cards (Y-40): the list's, saved with the chart settings, which the top bar sets for every card; a
+    // card's button keeps its own (V-1 a, V-3 a). The FX list opens on absolute rates.
+    let globalPrimaryView = $derived.by((): ChartPrimaryView => {
+        void getSettingsVersion();
+        return getGlobalSettings('fx').primaryView;
+    });
+    /** The rolling return of each card in that view, and its compared pairs' by signal id (Y-40), by pair. */
+    let calendarBySlug = $state(new Map<string, {own: CalendarReturnView; targets: Map<string, CalendarReturnView>}>());
+    /** The last request of each card's rolling return: an older answer arriving later is dropped. */
+    const calendarRequestOfSlug = new Map<string, number>();
+    let calendarRequestSeq = 0;
     let refreshing = $state(false);
 
     // View mode (grid/list)
@@ -396,7 +413,161 @@
      * columns come both ways and depend on none of them (X-R60).
      */
     async function fetchAllPairData(propagateError = false) {
-        await Promise.all([fetchAllPairSeries(propagateError), loadPeriodChanges()]);
+        await Promise.all([fetchAllPairSeries(propagateError), loadPeriodChanges(), fetchCalendarReturns()]);
+    }
+
+    /** The view a card shows: its own saved one, else the FX list's (Y-40). */
+    function cardPrimaryView(slug: string): ChartPrimaryView {
+        void getSettingsVersion();
+        return getSettingsForPair(slug, 'fx').primaryView;
+    }
+
+    /** The top bar (V-3 a): every card takes the view; the cards entering or leaving the rolling return ask it, or drop it. */
+    function handleListPrimaryView(view: ChartPrimaryView) {
+        const toCalendar = view === 'calendar-return';
+        const changed = new Set(pairs.filter((pair) => (cardPrimaryView(pair.config.slug) === 'calendar-return') !== toCalendar).map((pair) => pair.config.slug));
+        setScopePrimaryView(view, 'fx');
+        if (changed.size > 0) void pageBusy.track('fx-view', () => fetchCalendarReturns(changed));
+    }
+
+    /** A card's button (V-1 a): that card keeps the view; entering or leaving the rolling return, it asks it, or drops it. */
+    function handleCardPrimaryView(slug: string, view: ChartPrimaryView) {
+        const wasCalendar = cardPrimaryView(slug) === 'calendar-return';
+        setItemPrimaryView(slug, view, 'fx');
+        if (wasCalendar !== (view === 'calendar-return')) void pageBusy.track('fx-view', () => fetchCalendarReturns(new Set([slug])));
+    }
+
+    /** The FX pairs a card's `fx-pair` signals compare, the way each shows its pair. */
+    function pairTargetsOf(configs: SignalConfig[]): FxCalendarCardInput['pairTargets'] {
+        return configs.filter((config) => config.signalType === 'fx-pair' && config.params.pairSlug).map((config) => ({configId: config.id, pairSlug: String(config.params.pairSlug), inverted: Boolean(config.params._inverted)}));
+    }
+
+    /** The cards' rolling returns and their compared pairs', by entry, from the answers of a convert request (Y-40). */
+    function calendarViewsOf(answers: ReadonlyArray<{batch: {items: readonly FxCalendarEntry[]}; answer: unknown}>) {
+        const own = new Map<string, CalendarReturnView>();
+        const targets = new Map<string, Map<string, CalendarReturnView>>();
+        for (const {batch, answer} of answers) {
+            // A request_index is local to the request that carried it: it points into that batch's entries.
+            const groups: unknown[] = (answer as {signal_results?: unknown[]})?.signal_results ?? [];
+            for (const group of groups) {
+                const {request_index: index, signals} = group as {request_index?: number; signals?: unknown};
+                const entry = typeof index === 'number' ? batch.items[index] : undefined;
+                if (!entry) continue;
+                const view = extractCalendarReturnView(signals, CALENDAR_RETURN_INSTANCE_ID);
+                if (entry.role === 'card') own.set(entry.cardSlug, view);
+                else if (entry.configId) {
+                    if (!targets.has(entry.cardSlug)) targets.set(entry.cardSlug, new Map());
+                    targets.get(entry.cardSlug)!.set(entry.configId, view);
+                }
+            }
+        }
+        return {own, targets};
+    }
+
+    /**
+     * The rolling return of the cards in that view (Y-40), with their compared pairs', from the backend's sampled
+     * conversions (Z-29fx, `utils/reducedFxQuery.ts`); the cards in another view drop theirs. `only` limits it to some cards.
+     * The conversions' rates are not the cards' daily rates: they never reach the FX stores.
+     */
+    async function fetchCalendarReturns(only?: ReadonlySet<string>) {
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
+        if (!current()) return;
+        const rangeDays = calendarReturnRangeDays(dateStart, dateEnd);
+        const next = new Map(calendarBySlug);
+        const cards: FxCalendarCardInput[] = [];
+        const requestId = ++calendarRequestSeq;
+        for (const pair of pairs) {
+            const slug = pair.config.slug;
+            if (only && !only.has(slug)) continue;
+            const settings = getSettingsForPair(slug, 'fx');
+            if (settings.primaryView !== 'calendar-return') {
+                next.delete(slug);
+                continue;
+            }
+            const windowDays = calendarReturnWindowDays(effectiveCalendarReturnWindow(settings, rangeDays)) ?? 30;
+            cards.push({slug, base: pair.config.base, quote: pair.config.quote, inverted: isCardInverted(slug), plotWidthPx: DEFAULT_COMPACT_PLOT_WIDTH_PX, start: dateStart, end: dateEnd, windowDays, pairTargets: pairTargetsOf(settings.signals)});
+            calendarRequestOfSlug.set(slug, requestId);
+            // While the new return loads, the old one stays on screen.
+            const previous = next.get(slug);
+            next.set(slug, {own: {...(previous?.own ?? emptyCalendarReturnView()), state: 'loading'}, targets: previous?.targets ?? new Map()});
+        }
+        calendarBySlug = next;
+        if (cards.length === 0) return;
+
+        const settle = (views: ReturnType<typeof calendarViewsOf> | null) => {
+            const settled = new Map(calendarBySlug);
+            for (const card of cards) {
+                const previous = settled.get(card.slug);
+                if (!previous || calendarRequestOfSlug.get(card.slug) !== requestId) continue;
+                const own = views?.own.get(card.slug);
+                settled.set(card.slug, own ? {own, targets: views?.targets.get(card.slug) ?? new Map()} : {own: {...previous.own, state: 'error'}, targets: previous.targets});
+            }
+            calendarBySlug = settled;
+        };
+        const today = todayIso();
+        try {
+            const outcome = await sendBulkBatches(
+                buildFxCalendarQuery(cards),
+                (entry) => estimateFxCalendarDays(entry, today),
+                (batch) => zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(batch.map((entry) => entry.request)),
+                {groupOf: (entry) => entry.group},
+            );
+            if (!current()) return;
+            settle(calendarViewsOf(outcome.answers));
+            if (outcome.failed) {
+                console.error('Failed to fetch the FX rolling returns:', outcome.error);
+                const refusal = bulkRefusalMessage(outcome.error, $_);
+                if (refusal !== null) toasts.error(refusal);
+            }
+        } catch (requestError) {
+            if (!current()) return;
+            console.error('Failed to fetch the FX rolling returns:', requestError);
+            settle(null);
+        }
+    }
+
+    function translateCalendarProblem(key: string, values?: Record<string, string | number>): string {
+        return values ? $_(key, {values}) : $_(key);
+    }
+
+    /** A card's rolling return, with the detail's message when the backend has none (V-7 a). */
+    function cardCalendarReturn(slug: string) {
+        const view = calendarBySlug.get(slug)?.own ?? emptyCalendarReturnView('loading');
+        const problemMessage = view.problem ? formatSignalProblem(view.problem, translateCalendarProblem, (field) => $_(`signals.dataFields.${field}`)) : view.state === 'error' ? $_('chartSettings.signalResultsUnavailable') : null;
+        return {state: view.state, points: view.points, problemCode: view.problem?.code ?? null, problemMessage};
+    }
+
+    /** A card's compared pairs in the rolling-return view (V-5 a): their returns. */
+    function cardCalendarOverlays(slug: string): RenderedSignal[] {
+        const views = calendarBySlug.get(slug)?.targets;
+        return views ? renderCalendarPairComparisons(getSettingsForPair(slug, 'fx').signals, views) : [];
+    }
+
+    /** The plot width the settings preview asks its rolling return for (Y-40): about the preview chart's. */
+    const CALENDAR_PREVIEW_PLOT_WIDTH_PX = 600;
+
+    /**
+     * The rolling return of the settings preview (Y-40). A card's: its pair's over the range on screen, the way the card
+     * shows it, with its compared pairs', as the card asks them. The global settings': the synthetic curve the modal hands,
+     * through `/signals/preview`, as the other backend signals of that preview.
+     */
+    async function resolveCalendarPreview(windowDays: number, configs: SignalConfig[], points: LineDataPoint[]): Promise<{points: LineDataPoint[]; overlays: RenderedSignal[]} | null> {
+        const slug = settingsTargetSlug;
+        if (!slug) {
+            if (points.length === 0) return null;
+            const response = await zodiosApi.compute_signal_preview_api_v1_signals_preview_post({domain: 'fx', points: points.map((point) => ({date: point.date, value: point.value})), signals: [fxCalendarRequest(windowDays)]});
+            const view = extractCalendarReturnView(response.signals ?? [], CALENDAR_RETURN_INSTANCE_ID);
+            return view.state === 'ready' || view.state === 'partial' ? {points: view.points, overlays: []} : null;
+        }
+        const pair = pairs.find((item) => item.config.slug === slug);
+        if (!pair) return null;
+        const entries = buildFxCalendarQuery([{slug, base: pair.config.base, quote: pair.config.quote, inverted: isCardInverted(slug), plotWidthPx: CALENDAR_PREVIEW_PLOT_WIDTH_PX, start: dateStart, end: dateEnd, windowDays, pairTargets: pairTargetsOf(configs)}]);
+        const answer = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(entries.map((entry) => entry.request));
+        const views = calendarViewsOf([{batch: {items: entries}, answer}]);
+        const own = views.own.get(slug);
+        if (!own || (own.state !== 'ready' && own.state !== 'partial')) return null;
+        return {points: own.points, overlays: renderCalendarPairComparisons(configs, views.targets.get(slug) ?? new Map())};
     }
 
     /** The Δ columns of every configured pair up to the end of the range, and each pair's Δ over the range, both ways, from the backend (X-R53, X-R59). */
@@ -649,13 +820,19 @@
 
     function handleSettingsSave(s: ChartSettings) {
         const shouldReloadBackend = backendRequestFingerprint(settingsForModal.signals) !== backendRequestFingerprint(s.signals);
-        if (settingsTargetSlug) {
-            setPairSettings(settingsTargetSlug, s);
+        const target = settingsTargetSlug;
+        // The rolling-return view asks its own data (Y-40): entering it, leaving it, or a window or a pair changed in it.
+        const calendarBefore = target ? cardPrimaryView(target) === 'calendar-return' : pairs.some((pair) => cardPrimaryView(pair.config.slug) === 'calendar-return');
+        if (target) {
+            setPairSettings(target, s);
         } else {
             setGlobalSettings(s, 'fx');
         }
         if (shouldReloadBackend) {
             void pageBusy.track('fx-settings', () => fetchAllPairSeries());
+        }
+        if (calendarBefore || s.primaryView === 'calendar-return') {
+            void pageBusy.track('fx-settings', () => fetchCalendarReturns(target ? new Set([target]) : undefined));
         }
     }
 
@@ -977,7 +1154,8 @@
      * Same two-wave load as the assets page: the pair list first, then rates per pair. See the
      * note there — until this is false, the rates on screen are not the final ones.
      */
-    let busy = $derived(loading || periodChangesLoading || pairs.some((p) => p.loading));
+    // The cards' rolling returns are a load wave too (Y-40): `data-busy` holds until they are in.
+    let busy = $derived(loading || periodChangesLoading || pairs.some((p) => p.loading) || [...calendarBySlug.values()].some((entry) => entry.own.state === 'loading'));
 </script>
 
 <div class="space-y-6 text-lf-primary" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-testid="fx-page">
@@ -1091,20 +1269,31 @@
             {#if viewMode === 'list'}
                 <ColumnVisibilityToggle tableRef={fxTableComponent?.getTableRef()} showLabel={showActionLabels} />
             {:else}
-                <div class="flex rounded-lg border border-lf-subtle overflow-hidden">
+                <!-- The cards' view (Y-40): absolute, percent, rolling return -->
+                <div class="flex rounded-lg border border-lf-subtle overflow-hidden" data-testid="fx-global-view" data-view={globalPrimaryView}>
                     <button
-                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
-                        onclick={() => {
-                            globalViewMode = 'absolute';
-                        }}
+                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                        data-testid="fx-global-view-absolute"
+                        aria-pressed={globalPrimaryView === 'absolute'}
+                        onclick={() => handleListPrimaryView('absolute')}
                         >Abs
                     </button>
                     <button
-                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
-                        onclick={() => {
-                            globalViewMode = 'percentage';
-                        }}
+                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                        data-testid="fx-global-view-percentage"
+                        aria-pressed={globalPrimaryView === 'percentage'}
+                        onclick={() => handleListPrimaryView('percentage')}
                         >%
+                    </button>
+                    <button
+                        class="flex-1 inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'calendar-return' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                        data-testid="fx-global-view-calendar-return"
+                        aria-pressed={globalPrimaryView === 'calendar-return'}
+                        aria-label={$_('signals.riskRollingReturn.name')}
+                        title={$_('signals.riskRollingReturn.name')}
+                        onclick={() => handleListPrimaryView('calendar-return')}
+                    >
+                        <CalendarSync size={14} />
                     </button>
                 </div>
             {/if}
@@ -1178,14 +1367,21 @@
                     dateStart={urlDateStart}
                     dateEnd={urlDateEnd}
                     manualOnly={pair.config.providers.length === 1 && pair.config.providers[0].providerCode === 'MANUAL'}
-                    {globalViewMode}
+                    primaryView={cardPrimaryView(pair.config.slug)}
+                    onprimaryviewchange={handleCardPrimaryView}
+                    calendarReturn={cardPrimaryView(pair.config.slug) === 'calendar-return' ? cardCalendarReturn(pair.config.slug) : undefined}
+                    calendarOverlaySignals={cardPrimaryView(pair.config.slug) === 'calendar-return' ? cardCalendarOverlays(pair.config.slug) : []}
                     chartSettings={getSettingsForPair(pair.config.slug, 'fx')}
                     renderSignals={(chartData, vm) => getRenderedSignals(pair.config.slug, chartData, vm)}
                     ondelete={handleDeletePair}
                     onrefresh={handleRefreshPair}
                     onsync={handleSyncPair}
                     onsettings={handleCardSettings}
-                    oninversionchange={() => void fetchAllPairSeries()}
+                    oninversionchange={({slug}) => {
+                        void fetchAllPairSeries();
+                        // The rolling return of a swapped pair is the swapped rate's.
+                        if (cardPrimaryView(slug) === 'calendar-return') void fetchCalendarReturns(new Set([slug]));
+                    }}
                 />
             {/each}
         </div>
@@ -1201,7 +1397,11 @@
             onsync={handleSyncPair}
             onrefresh={handleRefreshPair}
             ondelete={handleDeletePair}
-            oninversionchange={() => void fetchAllPairSeries()}
+            oninversionchange={() => {
+                void fetchAllPairSeries();
+                // A pair swapped in the table: the cards in the rolling-return view read the swapped rate's return.
+                void fetchCalendarReturns();
+            }}
             onselectionchange={(rows) => {
                 selectedFxRows = rows;
             }}
@@ -1273,4 +1473,6 @@
         : undefined}
     signalSources={fxListSignalSources}
     settings={settingsForModal}
+    calendarRangeDays={calendarReturnRangeDays(dateStart, dateEnd)}
+    calendarPreviewResolver={resolveCalendarPreview}
 />
