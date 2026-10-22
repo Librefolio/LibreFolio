@@ -8899,3 +8899,111 @@ sonda lo legge come «nessun suggerimento» e `call_provider` mette in pausa.
 - **Prove** (in `flock`, `nice`, `LC_ALL=en_US.UTF-8`, corsia 6191, `ondata3/X-gate8-*.log`): `front-portfolio
   price-refresh` **8/8** due volte di fila (10:00 e 10:04); `front-asset asset-detail` intero `--workers 2` **53/53**.
   Porta 6191 libera, `git diff --check` pulito.
+
+---
+
+## Ondata 4 (22/10, base `5333837b7`)
+
+> Analisi consegnata: `side-session-notes/local_9987587d…/X-ondata4-analisi.md`. Via del coordinatore (22/10): #50 in un
+> checkpoint a parte; N64b anche sulla pagina del cambio (stesso meccanismo, stesse decisioni di N64); poi Y-41 nei
+> dettagli e N64c/d. Ordine: #50 → N64b/c/d → Y-41 dettagli → revisione W-BS.
+
+### #50 — i dati dei fondi da Yahoo (backend)
+
+1. ✅ 22/10 · I rossi.
+   > **Note implementazione**: `backend/test_scripts/test_services/test_yahoo_finance_fund_metadata.py` (nuovo, 19 casi su
+   > un `funds_data` finto con la forma di yfinance 1.7.0: settori con il trattino basso, TER come frazione, `None` come
+   > VWCE.DE, descrizione vuota, taglio a 500, TER non usabile `nan`/0/negativo, fondo comune, `funds_data` che solleva
+   > quattro eccezioni diverse, settori che falliscono, 429, azione invariata che non legge `funds_data`). Registrato con
+   > una riga additiva in `scripts/test_runner/_backend_services.py` (`PROVIDER_ERROR_TEST_PATHS`). Visti **13 rossi su 19**
+   > per il motivo giusto (`X-50-red.log`); i 6 verdi sono le guardie che già valevano (fondo senza dati, azione, il riassunto
+   > che vince sulla descrizione del fondo).
+2. ✅ 22/10 · La cura, `yahoo_finance/plugin.py` (+~150 righe, 4 toccate).
+   > **Note implementazione**: `_YAHOO_FUND_SECTORS` (mappa esplicita: `FinancialSector.from_string` non conosce
+   > `consumer_cyclical` & co. e li manderebbe tutti in «Other»), `_read_fund_piece` (ogni pezzo letto a parte dentro
+   > `_yf_with_retry`: un guasto costa solo quel pezzo, un 429 sale come `AssetRateLimitedError`), `_fund_sector_area`
+   > (pesi float → `Decimal(str())`, scartati i non positivi, rinormalizzati), `_fund_ter` (frazione ×100, due decimali,
+   > `NaN`/≤0 fuori), `_read_fund_extras`, `_fund_description` (il tetto di 500 taglia la testa, mai la coda). Solo per
+   > `quoteType` `etf`/`mutualfund`: un'azione non legge `funds_data`. Prova dal vivo (una chiamata ciascuno): VWCE.DE →
+   > «… | Issuer: Vanguard Group (Ireland) Limited», 11 settori; VOO → «… | TER: 0.03% | Issuer: Vanguard»; AAPL invariata.
+   >
+   > **⚠️ Fuori pista**: la mappatura «su `validate_sector`» del brief, alla lettera, non funzionava (sopra); `utils/asset/
+   > sector.py` è condiviso con justETF e non l'ho toccato. Il TER di Yahoo è una frazione, non una percentuale.
+3. ✅ 22/10 · Prove leggere: `pytest test_yahoo_finance_fund_metadata.py test_yahoo_finance_errors.py` **97/97**
+   (`X-50-green.log`); `ruff check` e `black --check` puliti.
+4. ✅ 22/10 · Doc (EN): `user/assets/providers/yahoo-finance.en.md` (voce «Fund details») e `developer/backend/assets/
+   provider_yahoo_finance.md` (sezione «Fund data»). Debito di traduzione `yahoo-finance.{it,fr,es}` (non timbrato:
+   contenuto nuovo, non un ritocco).
+
+### Y-41 nei dettagli — `fx-pair` salvato che non si disegna in un caricamento pulito (base `94fa5fd08`)
+
+1. ✅ 22/10 · Verifica del codice: `ensureFxRangeLoaded` per le coppie dei segnali girava solo in Refresh e Sync (asset
+   `:1707`, `:2077`, `:2157`; cambio `:1045`, `:1177`); **né l'apertura, né il cambio di periodo, né la scelta della
+   coppia** (`handleSignalsChange`) la caricavano, in nessuna delle due pagine. Dei quattro sensi di confronto ne mancavano
+   due: asset→cambio (`fx-pair`) e cambio→altro cambio; asset→asset e cambio→asset funzionavano.
+2. ✅ 22/10 · I rossi. Vitest di cablaggio in `chartPageSignals.test.ts` («Y-41 wiring», 2 rossi per pagina: import di
+   `ensureSignalFxPairs`, funzione `loadSignalFxPairs`, chiamata dai punti di ingresso `reloadPage`/`initializePage`,
+   `trackChartAndComparison`, `handleSignalsChange`, e `setPrimaryMode` sull'asset). E2E (`test-author`, **non lanciati**,
+   serve lo slot): `fixtures/pairLine.ts` (legge la serie dall'opzione ECharts di `__lfChart`), 2 casi in
+   `asset-detail.spec.ts` e 2 in `fx-detail.spec.ts` (`-g Y-41`): caricamento pulito, e coppia scelta/periodo allargato.
+3. ✅ 22/10 · La cura: in ognuna delle due pagine `loadSignalFxPairs(configs)` (`ensureSignalFxPairs` di Y, poi
+   `overlayDataVersion++` se la pagina non si è mossa) chiamata all'apertura, in `trackChartAndComparison`, in
+   `handleSignalsChange` quando cambiano le coppie dei segnali, e sull'asset al ritorno alla vista prezzi; nella pagina
+   dell'asset non in modo calendario. Nessun gettone: `ensureFxRangeLoaded` non chiede nulla se i tassi ci sono già.
+   Vitest di cablaggio 99/99 (`X-y41-green-1.log`).
+   > **Nota**: `comparisonSeries.ts` di Y **non toccato**.
+4. ✅ 22/10 · Osservazione «Apple 3M, vista %, Bitcoin sale in verticale a ~400 %»: nel DB della mia corsia l'ultimo
+   giorno di Bitcoin (2026-10-22) vale 82 096,58 contro 12 231,90 del giorno prima, su una storia sintetica 11–25 mila:
+   82 096 / 17 337 (base di 3M) − 1 = +374 %. Un dato (prezzo reale su storia finta), non un difetto del codice;
+   `AssetComparisonSignal.render` normalizza al primo valore allineato come da decisione Q-Y41-1 a. Da confermare nella
+   corsia di Y se serve.
+
+### N64b / N64c / N64d (base `94fa5fd08`)
+
+1. ✅ 22/10 · N64c **non fatto, valutato**: motivo scritto nel backlog (X-N64c ✅ «valutato e non fatto»).
+2. ✅ 22/10 · N64b, i rossi (`test-author`): `loadComparisonData.test.ts` (+15), `signalResultCache.test.ts` (+7),
+   `chartPageSignals.test.ts` («N64b wiring», 4 pagine-test rossi + controlli). Visti rossi: **26 nuovi rossi** (+30
+   preesistenti rossi perché l'`afterEach` leggeva un export mancante) (`X-n64b-red.log`). Tutti per il motivo giusto
+   (export/chiamata mancante). Ho stretto il controllo `!force` (deve stare nell'enunciato della lettura dalla cache, non
+   in uno precedente) con un controllo in più.
+3. ✅ 22/10 · N64b, la cura. `loadComparisonData.ts`: `comparisonAnswerKey` (ids distinti ordinati, intervallo, valuta
+   di destinazione), `comparisonAnswerGenerations` (store del peer nella valuta di destinazione, o la propria; `null` se un
+   peer non è noto alla pagina), `comparisonAnswerIsCacheable` (no `_conversionFailed`). `signalResultCache.ts`:
+   `comparisonSeriesAnswers` (terza istanza, svuotata al cambio di sessione) e `clearAssetPageAnswers()`. Le due pagine:
+   in `maybeLoadComparison`, dopo il memo per impronta e prima della richiesta, lettura **sincrona** se non forzato →
+   `applyComparisonAssetsData` nello stesso tick, `lastComparisonLoadAskedServer` resta `false` (niente gettone); dopo una
+   risposta applicata si scrive. Asset: i 3 `assetChartAnswers.clear()` ora `clearAssetPageAnswers()`. Cambio:
+   `comparisonSeriesAnswers.clear()` in `runSyncAsset` e in `handleRefresh` (decisione del coordinatore: dopo Refresh o Sync
+   si richiede di nuovo). 195/195 in 3 file (`X-n64b-green-3.log`).
+   > **⚠️ Fuori pista**: la cache dei confronti non passa dallo store dei prezzi (la risposta viene dal backend, già
+   > convertita), quindi la generazione dello store del peer mostra solo le invalidazioni che passano da lui (editor,
+   > catch-up, cambio valuta); Sync e Refresh sono i `clear` espliciti sopra.
+4. ✅ 22/10 · N64b E2E (`test-author`, **non lanciati**): `asset-detail.spec.ts` (nel blocco N64) e `fx-detail.spec.ts`,
+   `-g N64b`: periodo nuovo → una richiesta per il peer; ritorno al periodo visto → nessuna richiesta, nessun gettone;
+   Refresh → di nuovo (e sulla pagina del cambio anche un periodo visto prima del Refresh).
+5. ✅ 22/10 · N64d: guardia di premessa in `asset-detail.spec.ts` (~`:1420`, dopo `buildFailedCalendarResult`): i due peer
+   `errorPeer`/`invalidCalendarPeer` devono restare non validi, con un commento in inglese che spiega che i ~60 passi
+   chiedono a ogni ritorno SOLO per questo. I passi non sono riscritti.
+6. ✅ 22/10 · Doc (EN): `developer/frontend/state/registries.md` (terza istanza, tabella, regole di clear, sezione «comparison
+   series (N64b)»).
+7. ✅ 22/10 · Prove pesanti, in `flock` e `nice`, `LC_ALL=en_US.UTF-8`, una alla volta (`X-check.log`, `X-check2.log`,
+   `X-units.log`): `api sync` rc 0; `front check` **0 errori, 0 avvisi** (alla prima corsa 1 errore: un cast di tipo nel
+   mio `signalResultCache.test.ts`, corretto); `front-utility core-unit` (rc 0), `component-unit` (rc 0), `front-asset
+   asset-unit` (rc 0), `front-fx fx-unit` (rc 0).
+8. ✅ 22/10 · E2E nello slot del coordinatore (corsia 6191, `--workers 2`, in `flock`, `X-e2e-*.log`, `X-final-*.log`).
+   - Primo giro: `-g Y-41` asset **2/2**, cambio **2/2**; `-g N64b` asset **1/1**; `-g N64b` cambio **rosso**.
+   - **Difetto trovato dall'E2E, non dagli unit**: la lista asset della pagina del cambio non portava la `currency`, quindi
+     `comparisonAnswerGenerations` dava `null` e la cache non teneva mai nulla. Cura: `currency` nella mappa di
+     `loadAssetList` + una guardia di cablaggio nel Vitest (`chartPageSignals.test.ts`, 111/111).
+   - Il test lungo `:577` (N64d) è diventato rosso a un solo passo (`I60H new Calendar fingerprint reloads matching Price
+     authority…`, ~`:5176`): dopo la correzione degli FX tutte le conversioni riescono, la risposta è cacheable e il ritorno alla
+     vista prezzi viene dalla cache. Adattato (`test-author`, un passo): nessuna richiesta, contatori fermi, stesse asserzioni
+     di stato; commento nella guardia N64d aggiornato. I ritorni precedenti passano com'erano (qualche peer non convertiva, non
+     cacheable). Il ritorno `:5337` dopo un Refresh in calendario non chiede perché è il memo per impronta (i dati restano
+     autorevoli nelle config), non la cache.
+   - Il caso FX N64b aveva un passo mio sbagliato (riusava l'aiuto «periodo mai visto» dopo il Refresh): `seenBefore`.
+   - **Giro finale** (`X-final.summary`): `front-asset asset-detail` **56/56**, `front-fx fx-detail` **33/33**,
+     `front-portfolio risk-asset-detail` **5/5**; `front check` **0 errori, 0 avvisi**; `asset-unit` e `core-unit` verdi.
+   - **Prova che i casi mordono** (mutazione, file ripristinati con `cmp`): `loadSignalFxPairs` spenta in tutte e due le
+     pagine → `-g Y-41` **4 rossi su 4** (`X-mut-y41-*.log`).
+   Porta 6191 libera.
