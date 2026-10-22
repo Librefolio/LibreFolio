@@ -197,10 +197,6 @@ html.dark .bg-white {
     background-color: var(--theme-bg-card) !important;
 }
 
-html.dark .bg-gray-100 {
-    background-color: var(--theme-bg-tertiary) !important;
-}
-
 html.dark .text-gray-600 {
     color: var(--theme-text-secondary) !important;
 }
