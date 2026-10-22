@@ -20,7 +20,7 @@ The order of the refusals, on every route:
 
 A caller without a valid ticket learns neither the mode nor the block. The panel sees no personal or portfolio data
 (R1): the report of a check is ``PanelRestoreStageReport`` (the administrators counted, the control totals as a verdict)
-and the status names who confirmed only as ``confirmed_via``. Only an ``.lfbk`` envelope is accepted (D2): a zip or the
+and the status names who confirmed only as ``confirmed_via``. The panel sees only the checks it started (``origin``). Only an ``.lfbk`` envelope is accepted (D2): a zip or the
 coordinator's ``.tar`` is refused and removed. Repeating a request never makes two restores: the same confirmation or a
 restart already under way answers 202 with the state it finds. The routes never echo the password (``NoInputEchoRoute``).
 """
@@ -50,7 +50,7 @@ from backend.app.config import get_data_dir
 from backend.app.config.platform import awaiting_restore, instance_blocked
 from backend.app.logging_config import get_logger
 from backend.app.schemas.backup import RestoreStageRequest, RestoreUpload
-from backend.app.schemas.hosting_panel import ConfirmedVia, PanelRestoreStage, PanelRestoreStageReport, PanelRestoreStatus
+from backend.app.schemas.hosting_panel import PanelRestoreStage, PanelRestoreStageReport, PanelRestoreStatus
 from backend.app.services.platform.hosting_panel.access import PanelCaller, PanelScope, panel_access
 from backend.app.services.platform.instance_backup import apply as restore_apply
 from backend.app.services.platform.instance_backup import restart, restore_jobs
@@ -63,8 +63,8 @@ logger = get_logger(__name__)
 
 panel_restore_router = APIRouter(route_class=NoInputEchoRoute)
 
-#: What a confirmation by the panel records as its author (``RestoreState.confirmed_by``).
-PANEL_CONFIRMER = "panel"
+#: The origin of the panel's checks, and how its confirmations are recorded (``confirmed_via``): it sees only its own.
+PANEL_ORIGIN = "panel"
 
 _GATE_RESPONSES: dict[int | str, dict] = {
     401: {
@@ -94,16 +94,19 @@ def _responses(**more: dict) -> dict[int | str, dict]:
     return {**_GATE_RESPONSES, **{int(code.removeprefix("_")): description for code, description in more.items()}}
 
 
-def _confirmed_via(state: restore_apply.RestoreState) -> ConfirmedVia:
-    """Who confirmed a restore, without the name: the state's own field when it has one, else read from its author."""
-    via = getattr(state, "confirmed_via", None)
-    if via is not None:
-        return via
-    return {PANEL_CONFIRMER: "panel", "cli": "cli"}.get(state.confirmed_by, "admin")
-
-
 def _panel_status(state: restore_apply.RestoreState | None) -> PanelRestoreStatus:
-    return PanelRestoreStatus.of(_status_view(state), _confirmed_via(state) if state is not None else None)
+    return PanelRestoreStatus.of(_status_view(state))
+
+
+def _panel_check(stage_id: str) -> restore_jobs.RestoreCheck:
+    """A check the panel started; any other (an administrator's, the command line's) is 404 to it, as an unknown id."""
+    try:
+        check = restore_jobs.read_check(stage_id)
+    except restore_jobs.CheckNotFoundError:
+        check = None
+    if check is None or check.origin != PANEL_ORIGIN:
+        raise backup_error(status.HTTP_404_NOT_FOUND, "restore_stage_not_found", "No check has this id")
+    return check
 
 
 def _panel_stage(check: restore_jobs.RestoreCheck) -> PanelRestoreStage:
@@ -172,11 +175,15 @@ async def upload_panel_restore_archive(request: Request, _caller: RestoreCaller)
     },
 )
 def start_panel_restore_check(body: RestoreStageRequest, _caller: RestoreCaller) -> PanelRestoreStage:
-    """Check the uploaded envelope on a copy, in the background, with its password; return the check to poll."""
+    """Check the uploaded envelope on a copy, in the background, with its password; return the check to poll. The same
+    start again while its check runs answers 202 with that check (the panel retrying), never a second one."""
+    running = restore_jobs.running_check(body.upload_id)
+    if running is not None and running.origin == PANEL_ORIGIN:
+        return _panel_stage(running)
     password = body.password.get_secret_value() if body.password is not None else None
     max_unpacked = _restore_limit()
     try:
-        return _panel_stage(restore_jobs.start_check(body.upload_id, password=password, max_unpacked=max_unpacked))
+        return _panel_stage(restore_jobs.start_check(body.upload_id, password=password, max_unpacked=max_unpacked, origin=PANEL_ORIGIN))
     except restore_jobs.UploadNotFoundError:
         raise backup_error(status.HTTP_404_NOT_FOUND, "backup_upload_not_found", "No uploaded archive has this id") from None
     except StagingBusyError:
@@ -202,11 +209,9 @@ def start_panel_restore_check(body: RestoreStageRequest, _caller: RestoreCaller)
     responses={**_GATE_RESPONSES, 404: {"description": "No check has this id (code `restore_stage_not_found`); or the restore routes are off"}},
 )
 def get_panel_restore_check(stage_id: str, _caller: RestoreCaller) -> PanelRestoreStage:
-    """The state of a check: its phase and progress while it runs, then the panel's report, or the code of its refusal."""
-    try:
-        return _panel_stage(restore_jobs.read_check(stage_id))
-    except restore_jobs.CheckNotFoundError:
-        raise backup_error(status.HTTP_404_NOT_FOUND, "restore_stage_not_found", "No check has this id") from None
+    """The state of a check the panel started: its phase and progress while it runs, then the panel's report, or the
+    code of its refusal."""
+    return _panel_stage(_panel_check(stage_id))
 
 
 @panel_restore_router.post(
@@ -228,8 +233,10 @@ def confirm_panel_restore_check(stage_id: str, caller: RestoreCaller) -> PanelRe
     """Confirm the restore of a checked copy; the next start applies it. Confirming the same stage again answers 202
     with the same status; no word to type: the ticket is the authority."""
     data_dir = get_data_dir()
+    _panel_check(stage_id)
     try:
-        state = restore_jobs.confirm_check(stage_id, confirmed_by=PANEL_CONFIRMER, data_dir=data_dir)
+        # The author is the ticket's key, never a person; the state says it came from the panel
+        state = restore_jobs.confirm_check(stage_id, confirmed_by=caller.kid or PANEL_ORIGIN, confirmed_via=PANEL_ORIGIN, data_dir=data_dir)
     except restore_jobs.CheckNotFoundError:
         raise backup_error(status.HTTP_404_NOT_FOUND, "restore_stage_not_found", "No check has this id") from None
     except restore_jobs.CheckRunningError:
