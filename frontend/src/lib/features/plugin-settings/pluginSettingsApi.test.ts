@@ -5,7 +5,8 @@
  * The contract under test:
  *   - `fieldOf` and `entryOf` narrow what the server answers into what the components trust: the generated type of an
  *     optional field is wider than its runtime schema, so a value of the wrong shape is dropped to its default, never
- *     carried — a type, a source or a family it does not know reads as `string`, `none`, `asset`; a scope other than
+ *     carried — a type, a source or a family it does not know reads as `string`, `none`, `asset` (`asset`, `fx` and `brim`
+ *     are the families it knows: the import sources, W-BS, keep theirs); a scope other than
  *     `system` as `user`; a flag that is not `true` as false; a key text that is empty or not text as null; a bound
  *     that is not a finite number as null; a label missing as the key (a name missing as the code); a problem that is not
  *     one of its three words, as text, as none (a list included, which the generated type admits); options and fields
@@ -272,6 +273,17 @@ describe('entryOf — a plugin’s entry as the components trust it', () => {
         expect(entryOf({family: 'crypto', plugin_code: 'x', plugin_name: 'X', configured: 'true', fields: {api_key: {}}})).toStrictEqual({family: 'asset', plugin_code: 'x', plugin_name: 'X', icon_url: null, configured: false, fields: []});
     });
 
+    it('keeps brim, the family of the import sources (W-BS): it is not read as asset', () => {
+        expect(entryOf({family: 'brim', plugin_code: 'broker_x', plugin_name: 'Broker X', icon_url: REMOTE_ICON, configured: true, fields: [CURRENCY]})).toStrictEqual({
+            family: 'brim',
+            plugin_code: 'broker_x',
+            plugin_name: 'Broker X',
+            icon_url: REMOTE_ICON,
+            configured: true,
+            fields: [CURRENCY],
+        });
+    });
+
     it('narrows every field: a secret’s value does not survive the entry', () => {
         const narrowed = entryOf({...JUSTETF, fields: [CURRENCY, {...RAW_API_KEY, value: LEAKED_SECRET}, 'garbage']});
 
@@ -536,6 +548,16 @@ describe('through the real client, only the transport faked: what is sent, and w
         serverAnswers(200, {plugins: [withIcon]});
 
         await expect(fetchPluginEntry('asset', 'justetf')).resolves.toStrictEqual(withIcon);
+    });
+
+    it('the import sources’ family passes the generated client both ways: asked as a query, answered as an entry of its own (W-BS)', async () => {
+        // The generated schema is a zod enum: a client generated before `brim` joined it refuses both the query and the answer.
+        const importer: PluginSettingsEntry = {...JUSTETF, family: 'brim', plugin_code: 'broker_x', plugin_name: 'Broker X'};
+        serverAnswers(200, {plugins: [importer]});
+
+        await expect(fetchPluginSettings({family: 'brim'})).resolves.toStrictEqual([importer]);
+
+        expect(received[0]?.params).toEqual({family: 'brim'});
     });
 
     it('PATCH /api/v1/settings/plugins/bulk carries {items} as given, and a 200 is saved', async () => {

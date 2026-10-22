@@ -116,6 +116,17 @@ converter.
       `ROW_SKIPS_BY_PLUGIN` with an unknown and an unreadable row, and bump its
       `plugin_version`. Fineco did it when it left the beta (W-B92, 1.5.0).
 
+## ⚙️ Settings (prepared, not used yet)
+
+The plugin settings of the foundation (`services/plugin_settings/`) have a family `brim`, with the same rules as the price
+sources: personal and instance-wide values, and secrets encrypted with the instance key. **No real plugin declares a field
+today** (W-BS): a plugin that does not declare `settings_fields` is untouched. The day one needs a value (a date format, a
+key), declare `settings_fields` on the class, as the asset and FX plugins do (skill `asset-plugin`); the card appears in the
+Plugins tab by itself and a secret never comes back in clear. Read `self.settings.get("key")` and `self.settings.secret("key")`
+**inside `parse`**, never in `__init__`: the parse runs in a worker process that re-creates the plugin, and the values are
+bound to it just before it parses. **Only the parse delivers settings**: detection, report sets and the gap fix create the plugin
+without values (defaults, no secret), so nothing they use may depend on a setting. Never log a secret nor put one in a notice.
+
 ## 🛠️ Rough shape of the work
 
 1. Create the folder `backend/app/services/brim_providers/broker_<name>/`: `__init__.py`

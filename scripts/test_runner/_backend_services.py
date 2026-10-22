@@ -940,6 +940,16 @@ def services_brim_parse_race(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "BRIM parse race tests", verbose=verbose)
 
 
+def services_brim_parse_settings(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the BRIM parse hook of the plugin settings: the parent resolves, the child binds, a secret never leaves."""
+    print_section("Services: BRIM Parse Settings")
+    print_info("Testing: backend/app/services/brim/brim_parse_pool.py (parse_file_offloaded, user_id), brim_provider.parse_file (settings), plugin_settings/runtime.py (bound_settings_for)")
+    print_info("Tests: no field = parsed exactly as before, fields = BoundSettings handed to the child, errors and logs masked, the endpoint passes the user, pickle round-trip")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_settings.py", test_names)
+    return run_command(cmd, "BRIM parse settings tests", verbose=verbose)
+
+
 def services_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test settings service: user settings CRUD, get_effective_base_currency."""
     print_section("Services: Settings Service")
@@ -2518,6 +2528,14 @@ Note: No backend server required.
         desc="Process-pool off-loading, pickle round-trip, thread fallback; W-B53: workers born from a forkserver preloaded with the BRIM module, its plugins and the discovery (brim_parse_preload, whose import never raises), started early by prewarm() (never raises, the pool stays lazy), importing the pool stays light",
     )
     add_test(cat, "brim-parse-race", services_brim_parse_race, name="BRIM Parse Race", desc="Parse survives the uploaded→parsed rename; genuine read errors still fail; re-detection; the broker metadata lock (refuses a symlink, created 0o600)")
+    add_test(
+        cat,
+        "brim-parse-settings",
+        services_brim_parse_settings,
+        name="BRIM Parse Settings",
+        desc="Plugin settings on the BRIM parse: no field = called as before, fields = BoundSettings resolved in the parent and bound in the child, secrets masked in errors and logs, the endpoint passes the user",
+        isolation="pure",
+    )
     add_test(cat, "settings", services_settings, name="Settings Service", desc="User settings CRUD, get_effective_base_currency")
     add_test(cat, "current-price-bootstrap", services_current_price_bootstrap, name="Current Price Bootstrap", desc="OHLC widening helper (F.2/F.3)")
     add_test(cat, "scheduled-investment-param-change", services_scheduled_investment_param_change, name="Scheduled Investment Param Change", desc="Symmetric wipe on provider_params change")

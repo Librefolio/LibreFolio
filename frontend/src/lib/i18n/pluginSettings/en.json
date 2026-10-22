@@ -9,7 +9,8 @@
     "loadError": "The plugin settings could not be loaded.",
     "families": {
       "asset": "Prices",
-      "fx": "Exchange rates"
+      "fx": "Exchange rates",
+      "brim": "Broker imports"
     },
     "status": {
       "configured": "Configured",
