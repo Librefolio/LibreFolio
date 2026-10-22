@@ -9238,3 +9238,79 @@ lettura di Q1 nelle date comuni. Con Y, per un'uscita a gradini: solo se il deve
 
 **Consegna (22/10 ~00:25)**: CHECKPOINT READY di A (TC-23) e B (L1b) insieme, poi FROZEN. Residuo nuovo: **J-71** (le
 due copie in linea di `buildSyncTargets`). TC-23 sta nella sezione T del backlog: la chiude il coordinatore.
+
+#### Passo C (22/10 notte) — Q-G29-1: un tooltip su tutti i segni del Gantt
+
+- **Via del coordinatore** (22/10 ~00:40, dopo i commit `2744d8d20` TC-23, `c10bea915` L1b, `e1f14f5fd` giornale):
+  opzione (a) del developer (21/10): titolo, data, quantità mascherata in privacy, broker («From A / To B» per un
+  trasferimento interno); i segni fusi nello stesso punto elencano tutti gli eventi. File: `lotGanttChartHelpers.ts`,
+  `LotGanttChart.svelte`, Vitest; le 4 classi categoriali legacy del Gantt restano alla designer.
+- **Base**: `e1f14f5fd0bd20f20c07e0770d638e0621399d2a` (verificata, albero pulito).
+- **Stato del codice** (riletto su questa base):
+  - la serie `__event-markers` ha `tooltip: {show: false}`; il formatter del grafico legge solo `segmentSeriesData`;
+  - i bottoni invisibili sopra i segmenti (`OverlayRect`) coprono anche i segni, che stanno sui bordi dei segmenti:
+    il passaggio del mouse non arriva mai alla tela. Per i segni servono bersagli loro, come per i segmenti;
+  - la chiave di deduplica `${kind}:${lotId}:${laneIndex}:${dateMs}` butta il secondo evento uguale nello stesso
+    punto; due tipi diversi nello stesso punto sono due glifi sovrapposti;
+  - un arrivo interno prende l'etichetta `TRANSFER_DEPART` (oggi lo stesso testo nelle 4 lingue);
+  - nessuna chiave i18n nuova: titoli `brokers.lots.chartMarkers.eventType.*`, righe `common.date`,
+    `common.quantity`, `common.broker`, `common.from`, `common.to`.
+  - **J-68**: un trasferimento in un giorno solo ha solo TRANSFER_ARRIVE, con `broker_id` B e senza origine né
+    destinazione. Il tooltip scrive allora «To B» e nessun «From»: niente origine inventata nel frontend. Il
+    rimedio vero è nel backend (`_build_transfer_rows`), fuori dai file di questo passo: resta J-68.
+
+**Passi**
+1. ✅ 22/10 ~00:45 — Rossi (test-author) in `lotGanttChartHelpers.test.ts`.
+   > **Note implementazione**: sul codice di HEAD **135 verdi** (i casi esistenti, intatti) e **84 rossi**, tutti
+   > «lotGanttChartHelpers exports <name>: expected 'undefined' to be 'function'» (`markerLabelKind`,
+   > `ganttMarkerEvent`, `ganttMarkerTooltipBlocks`, `groupMarkerEvents`, `markerTooltipHtml`), letti dal namespace
+   > del modulo. Blocchi: la chiave dell'arrivo (`TRANSFER_ARRIVE`, non `TRANSFER_DEPART`); la riga dell'API resa
+   > evento (la gamba al bordo tiene solo il suo broker); i blocchi del tooltip (Date, Quantity, Broker; From A / To
+   > B su partenza e arrivo; l'arrivo d'un giorno solo con il solo «To B», nessun «—»; quantità senza segno; privacy
+   > con il vero `maskableQuantity`: `•••` acceso, cifre spento); i punti fusi (due BUY → un glifo con due eventi; BUY
+   > e SELL → due glifi che elencano tutti e due); l'HTML escapato, un divisore fra due blocchi.
+   > Il test-author ha provato i casi contro una cura di prova sua (219 verdi) e 9 mutazioni, 8 intercettate al primo
+   > colpo, la nona dopo aver corretto il suo schema di sostituzione.
+2. ✅ 22/10 ~00:52 — Cura: aiutanti puri in `lotGanttChartHelpers.ts`; in `LotGanttChart.svelte` i bersagli dei segni, il
+   formatter per serie, i segni fusi.
+   > **Note implementazione**:
+   > - `lotGanttChartHelpers.ts`: i cinque aiutanti del contratto, più le interfacce `GanttMarkerEvent`,
+   >   `GanttMarkerTooltipBlock`, `GanttMarkerTooltipDeps`.
+   > - `LotGanttChart.svelte`:
+   >   - i segni si raccolgono come voci (`EventMarkerEntry`) e `groupMarkerEvents` dà i dati: gli stessi glifi di prima
+   >     (uno per tipo, corsia e giorno), ognuno con tutti gli eventi del suo punto;
+   >   - un evento senza broker legge quello del suo segmento; i segni dedotti (risposta senza eventi) prendono il broker
+   >     del segmento, o i suoi due capi in transito;
+   >   - la serie `__event-markers` ha `tooltip: {show: true}`; il formatter del grafico distingue la serie
+   >     (`params.seriesName`);
+   >   - un bottone invisibile e focalizzabile per punto (`lot-gantt-marker-<lotId>`, `data-date`, `data-kinds`,
+   >     `aria-label` con i titoli e la data), dopo quelli dei segmenti nel DOM, quindi sopra: hover, focus e tocco
+   >     mostrano il tooltip via `dispatchAction`, come per i segmenti; clic e doppio clic come la barra;
+   >   - `activeTooltipSeries`, perché `reassertActiveTooltip` rimostri il tooltip giusto dopo un cambio di selezione.
+   > - Nessun colore nuovo; le 4 classi categoriali legacy non toccate. Nessuna chiave i18n nuova.
+   > - Verdi: `lotGanttChartHelpers.test.ts` **219/219**; con `chartCoreHelpers` e `chartFlagFont` **542/542**;
+   >   `currencyFormat` + `htmlInterpolation.gate` + `htmlSink.gate` **58/58**; `moneyRenderSites` +
+   >   `themeRoles.gate` + `maskable` **120/120**; prettier pulito.
+   > **⚠️ Fuori pista**: un rischio per l'E2E, da guardare nel treno. `brokers-detail.spec.ts:409` clicca il centro del
+   > primo bottone di segmento: se quel segmento fosse più stretto di un segno (18 px), il bottone del segno lo
+   > coprirebbe e Playwright direbbe «intercepts pointer events». Coi dati del populate il primo segmento è il lotto del
+   > 1/9 fino al 1/10, centinaia di pixel: non dovrebbe succedere.
+3. ✅ 22/10 02:28 — Verdi: Vitest, cancelli HTML/privacy/colori, `front check` in `flock`, prettier.
+   > **Note implementazione**: Vitest e cancelli come al passo 2. `LC_ALL=en_US.UTF-8 flock … dev.py front check`
+   > (partito 00:56, ~1 h e mezza in coda dietro un blocco E2E d'altri): **svelte-check 0 errori, 0 avvisi**, exit 0
+   > (`ondata3/J-c/front-check.log`). Le 32 segnalazioni che il test-author vedeva nel file di test prima della cura
+   > (le tre interfacce non ancora esportate) sono sparite.
+4. ✅ 22/10 ~00:58 — Documentazione (docs-writer).
+   > **Note implementazione**:
+   > - `user/dashboard/positions.en.md`, «Lot Life & Custody»: un punto nuovo con i glifi e cosa dice il tooltip
+   >   (From/To, il broker fuori dal pannello mai nominato, il punto con più eventi); il caso di J-68 resta fuori dalla
+   >   pagina utente.
+   > - `developer/frontend/components/features/lots-analysis.md`: la sottosezione nuova «Marker tooltips»
+   >   (`#gantt-marker-tooltips`), il rimando nel punto del Gantt, `markerLabelKind()` in «Transfers across the scope's
+   >   edge», `lot-gantt-marker-{lotId}` nella tabella dei `data-testid`.
+   > - `mkdocs check-links`: 97 validi. Build stretto non lanciato (coda sul lucchetto). **Nessun timbro**: debito di
+   >   traduzione di un punto in `positions.{it,fr,es}.md`.
+
+**Consegna C (22/10 ~02:30)**: CHECKPOINT READY (C), poi FROZEN. Nessun residuo nuovo; J-68 resta aperta (backend),
+con la nota del 22/10. E2E proposti al coordinatore: `front-broker detail` (il clic sul primo segmento,
+`brokers-detail.spec.ts:409`), ed eventualmente un caso nuovo che passi sopra `lot-gantt-marker-*`.

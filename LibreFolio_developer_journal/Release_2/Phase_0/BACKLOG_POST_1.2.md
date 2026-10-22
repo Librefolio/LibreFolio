@@ -7927,6 +7927,8 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     sia in «Da» sia in «A». Nessun numero.
   - Da guardare insieme al §29 punto 1 (il tooltip dei marcatori vuole «Da A / A B»): l'origine sta nel frammento di
     partenza, oppure nel motore, che può scriverla sul frammento di destinazione.
+  - 22/10: il tooltip dei segni del Gantt (Q-G29-1, passo C) c'è. Per questo caso scrive solo «To B», senza inventare
+    l'origine nel frontend. Il rimedio resta nel backend (`_build_transfer_rows`).
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «Gantt §29, punto
     2», passo 1.
 - **J-70 · Costi di carico negativi già salvati, e la media Auto che ne nasce** — basso, numeri e dati; J, 20/10
