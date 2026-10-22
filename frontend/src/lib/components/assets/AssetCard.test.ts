@@ -178,3 +178,23 @@ describe('AssetCard — its settings button (Y-41, lot 0)', () => {
         expect(navigation.goto).not.toHaveBeenCalled();
     });
 });
+
+/**
+ * Y-41 — as the FX card does: `data-overlay-count`, the overlay lines the chart is handed, so that a pair drawn over an
+ * asset is told from one that is not (the asset list drew a pair only after a later redraw).
+ *
+ * Red today: the card publishes no count.
+ */
+describe('AssetCard — the overlay lines it draws (Y-41)', () => {
+    it('publishes the number of overlay lines of a price view, and of the rolling-return view', () => {
+        const renderSignals = vi.fn((): RenderedSignal[] => [PEER_RETURN, {...PEER_RETURN, id: 'pair'}]);
+        const price = mount({primaryView: 'percentage', renderSignals});
+        expect(price.card).toHaveAttribute('data-overlay-count', '2');
+    });
+
+    it('counts the comparisons’ returns in the rolling-return view', () => {
+        const {card} = mount({primaryView: 'calendar-return', calendarReturn: {state: 'ready', points: RETURNS}, calendarOverlaySignals: [PEER_RETURN]});
+
+        expect(card).toHaveAttribute('data-overlay-count', '1');
+    });
+});

@@ -338,6 +338,8 @@
 
     // FX pair slugs for cross-domain signal selection (loaded lazily)
     let fxPairSlugs = $state<string[]>([]);
+    /** Bumped when the FX stores are filled: they are not reactive, and the cards' compared pairs read them (Y-41). */
+    let fxRatesVersion = $state(0);
 
     // =========================================================================
     // Derived
@@ -1065,6 +1067,8 @@
         // the "All" badge doesn't look stuck on a specific historical date.
         gotoDateRange(newStart, newEnd);
         void pageBusy.track('assets-period', () => fetchAllPriceData());
+        // The compared pairs' rates over the new period (the stores gap-detect: a period already seen asks nothing).
+        if (fxPairSlugs.length > 0) void loadFxRateData();
     }
 
     /** Fetch live current prices for all assets (fire-and-forget, non-blocking); the outcome spaces the next poll (Z7). */
@@ -1457,6 +1461,8 @@
             await ensureFxRangeLoaded(slug, dateStart, dateEnd);
         });
         await Promise.allSettled(promises);
+        // The FX stores are not reactive: the cards that draw a compared pair read this, and draw again (Y-41).
+        fxRatesVersion++;
     }
 
     /**
@@ -1491,10 +1497,12 @@
      */
     function signalSourcesFor(selfAssetId: number | null, readMissing = false): SignalDataSources {
         return {
-            fxPairData: (pairSlug) =>
-                getFxStore(pairSlug)
+            fxPairData: (pairSlug) => {
+                void fxRatesVersion;
+                return getFxStore(pairSlug)
                     .getAllSorted()
-                    .map((point) => fxPointToLineDataPoint(point, false)),
+                    .map((point) => fxPointToLineDataPoint(point, false));
+            },
             comparisonTarget: (assetId) => {
                 const target = assets.find((asset) => asset.id === assetId);
                 if (!target) return null;
