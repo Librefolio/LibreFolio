@@ -18,6 +18,7 @@ logged. A required field left without a value makes the family boundary refuse t
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
@@ -26,9 +27,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import PluginSystemSetting, PluginUserSetting
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import get_logger
-from backend.app.services.plugin_settings.contract import PluginSettingsMixin
+from backend.app.services.plugin_settings.contract import BoundSettings, PluginSettingsMixin
 from backend.app.services.plugin_settings.fields import SettingScope
 from backend.app.services.plugin_settings.resolver import StoredValue, build_bound_settings
+
+if TYPE_CHECKING:
+    from backend.app.services.provider_registry import AbstractProviderRegistry
 
 logger = get_logger(__name__)
 
@@ -46,6 +50,23 @@ async def read_plugin_rows(session: AsyncSession, family: str, plugin_code: str,
         return system_rows, None
     user = await session.execute(select(PluginUserSetting).where(PluginUserSetting.user_id == user_id, PluginUserSetting.family == family, PluginUserSetting.plugin_code == plugin_code))
     return system_rows, {row.field_key: stored_value(row) for row in user.scalars()}
+
+
+async def bound_settings_for(registry: type[AbstractProviderRegistry], plugin_code: str, *, user_id: int | None = None) -> BoundSettings | None:
+    """The values of the plugin ``plugin_code`` of ``registry``'s family for one use, or ``None`` when it declares no field.
+
+    For a caller that cannot bind them itself: the BRIM parse runs in a worker process that re-creates the plugin by its code
+    (W-BS), so the parent resolves the values here — the instance's, and the user's when ``user_id`` is given — and hands the
+    ``BoundSettings`` over, which pickles. A plugin without fields, or one the registry does not know, gives ``None``: no
+    database read, no key.
+    """
+    family = registry.settings_family()
+    plugin_class = registry.get_plugin(plugin_code)
+    if family is None or plugin_class is None or not getattr(plugin_class, "settings_fields", ()):
+        return None
+    instance = plugin_class()
+    await configure_instance(instance, family, user_id=user_id)
+    return instance.settings
 
 
 async def configure_instance[PluginT: PluginSettingsMixin](instance: PluginT, family: str, *, user_id: int | None = None) -> PluginT:

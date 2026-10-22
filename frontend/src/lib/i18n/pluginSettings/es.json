@@ -9,7 +9,8 @@
     "loadError": "No se pudieron cargar los ajustes de los plugins.",
     "families": {
       "asset": "Precios",
-      "fx": "Tipos de cambio"
+      "fx": "Tipos de cambio",
+      "brim": "Importaciones de brókeres"
     },
     "status": {
       "configured": "Configurado",

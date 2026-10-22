@@ -524,6 +524,16 @@ def services_transaction_cost_basis_rule(verbose: bool = False, test_names: list
     return run_command(cmd, "Transaction cost basis rule tests", verbose=verbose)
 
 
+def services_linked_adjustment_pair(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a batch refuses to link two ADJUSTMENTs (pairAdjustmentNotAllowed), and what it still lets through."""
+    print_section("Services: Linked Adjustment Pair")
+    print_info("Testing: backend/app/services/transactions/validation.py (_validate_linked_pair) + batch_creates.py (the link_uuid groups)")
+    print_info("Tests: two ADJUSTMENTs under one link_uuid refused on the first create, commit and validate; a TRANSFER pair, the Bulk promote, unlinked ADJUSTMENTs and stored pairs untouched; the message in 4 languages")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_linked_adjustment_pair.py", test_names)
+    return run_command(cmd, "Linked adjustment pair tests", verbose=verbose)
+
+
 def services_transaction_decimal_places(verbose: bool = False, test_names: list = None) -> bool:
     """Test how many decimal places a transaction keeps, where a batch refuses more, and the balances summed exactly (C-97a)."""
     print_section("Services: Transaction Decimal Places")
@@ -939,6 +949,16 @@ def services_brim_parse_race(verbose: bool = False, test_names: list = None) -> 
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_race.py", test_names)
     return run_command(cmd, "BRIM parse race tests", verbose=verbose)
+
+
+def services_brim_parse_settings(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the BRIM parse hook of the plugin settings: the parent resolves, the child binds, a secret never leaves."""
+    print_section("Services: BRIM Parse Settings")
+    print_info("Testing: backend/app/services/brim/brim_parse_pool.py (parse_file_offloaded, user_id), brim_provider.parse_file (settings), plugin_settings/runtime.py (bound_settings_for)")
+    print_info("Tests: no field = parsed exactly as before, fields = BoundSettings handed to the child, errors and logs masked, the endpoint passes the user, pickle round-trip")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_settings.py", test_names)
+    return run_command(cmd, "BRIM parse settings tests", verbose=verbose)
 
 
 def services_settings(verbose: bool = False, test_names: list = None) -> bool:
@@ -2167,6 +2187,13 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "linked-adjustment-pair",
+        services_linked_adjustment_pair,
+        name="Linked Adjustment Pair",
+        desc="Two ADJUSTMENTs under one link_uuid are refused on the first create (pairAdjustmentNotAllowed, commit and validate); a TRANSFER pair, the Bulk promote, unlinked ADJUSTMENTs and a stored pair are not touched; the message exists in EN/IT/FR/ES",
+    )
+    add_test(
+        cat,
         "transaction-decimal-places",
         services_transaction_decimal_places,
         name="Transaction Decimal Places",
@@ -2519,6 +2546,14 @@ Note: No backend server required.
         desc="Process-pool off-loading, pickle round-trip, thread fallback; W-B53: workers born from a forkserver preloaded with the BRIM module, its plugins and the discovery (brim_parse_preload, whose import never raises), started early by prewarm() (never raises, the pool stays lazy), importing the pool stays light",
     )
     add_test(cat, "brim-parse-race", services_brim_parse_race, name="BRIM Parse Race", desc="Parse survives the uploaded→parsed rename; genuine read errors still fail; re-detection; the broker metadata lock (refuses a symlink, created 0o600)")
+    add_test(
+        cat,
+        "brim-parse-settings",
+        services_brim_parse_settings,
+        name="BRIM Parse Settings",
+        desc="Plugin settings on the BRIM parse: no field = called as before, fields = BoundSettings resolved in the parent and bound in the child, secrets masked in errors and logs, the endpoint passes the user",
+        isolation="pure",
+    )
     add_test(cat, "settings", services_settings, name="Settings Service", desc="User settings CRUD, get_effective_base_currency")
     add_test(cat, "current-price-bootstrap", services_current_price_bootstrap, name="Current Price Bootstrap", desc="OHLC widening helper (F.2/F.3)")
     add_test(cat, "scheduled-investment-param-change", services_scheduled_investment_param_change, name="Scheduled Investment Param Change", desc="Symmetric wipe on provider_params change")

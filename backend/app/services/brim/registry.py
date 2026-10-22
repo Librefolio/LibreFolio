@@ -20,6 +20,11 @@ class BRIMProviderRegistry(AbstractProviderRegistry):
         return "brim_providers"
 
     @classmethod
+    def settings_family(cls) -> str | None:
+        """The plugin settings family of the import plugins (W-BS): prepared, no real plugin declares a field yet."""
+        return "brim"
+
+    @classmethod
     def auto_detect_plugin(cls, file_path) -> str | None:
         """
         Auto-detect the best plugin for a file based on content analysis.

@@ -9,7 +9,8 @@
     "loadError": "Impossible de charger les paramètres des plugins.",
     "families": {
       "asset": "Prix",
-      "fx": "Taux de change"
+      "fx": "Taux de change",
+      "brim": "Imports des courtiers"
     },
     "status": {
       "configured": "Configuré",

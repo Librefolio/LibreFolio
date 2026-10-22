@@ -6,7 +6,9 @@ core resolves them, stores them, protects the secret ones and hands them to the 
 - **Declaration**: `PluginSettingField` in `backend/app/services/plugin_settings/fields.py`
 - **Plugin side**: `PluginSettingsMixin` (`settings_fields`, `test_only`, `self.settings`) and
   `BoundSettings`, in `backend/app/services/plugin_settings/contract.py`
-- **Families**: asset providers (`AssetSourceProvider`) and FX providers (`FXRateProvider`)
+- **Families**: asset providers (`AssetSourceProvider`), FX providers (`FXRateProvider`) and the
+  broker-import plugins (`BRIMProvider`, `brim`: prepared, no plugin declares a field yet:
+  [BRIM settings](../../backend/brim/architecture.md#brim-settings)). Tools are still to come
 - **API**: `GET /api/v1/settings/plugins` and `PATCH /api/v1/settings/plugins/bulk`
 - **Interface**: the **Plugins** tab of Settings, and **Configure** in the asset dialog and in the
   asset search, in `frontend/src/lib/features/plugin-settings/` ([The Interface](#interface))
@@ -33,13 +35,14 @@ Paths are relative to `backend/`.
 | `app/services/plugin_settings/fields.py` | `PluginSettingField` and `SettingOption`, the rules of each family (`FAMILY_RULES`), the checks of a declaration and of a value, the variables of a field (`env_name()`, `env_variables()`) and their single owner (`claim_env_variables()`) |
 | `app/services/plugin_settings/contract.py` | `PluginSettingsMixin`, inherited by the family bases, and `BoundSettings`, the values bound to one instance |
 | `app/services/plugin_settings/resolver.py` | The value each field takes (variable, saved row, default), its problems, the fields that leave a plugin not configured (`missing_field_keys()`, one rule for a call and for the catalogue), and the fingerprint of the cache keys |
-| `app/services/plugin_settings/runtime.py` | `configure_instance()`: reads the plugin's rows and binds the values to a new instance |
+| `app/services/plugin_settings/runtime.py` | `configure_instance()`: reads the plugin's rows and binds the values to a new instance; `bound_settings_for()`: the values of a plugin that cannot be bound where it is created, as the `BoundSettings` to hand over (`None` when it declares no field) |
 | `app/services/plugin_settings/crypto.py` | The encryption of the secret values, and `plugin_secrets_key_status()` |
 | `app/services/plugin_settings/service.py` | The catalogue (`configured` and the plugin's icon included) and the all-or-nothing writes behind the API |
 | `app/api/v1/plugin_settings.py`, `app/schemas/plugin_settings.py` | The two endpoints and their schemas |
 | `app/services/assets/core.py` | `configured_provider()`, `call_provider()` (the boundary of every asset provider call), `public_asset_url()` (an asset URL withheld when it shows a secret), `settings_cache_part()`, `settings_cache_part_for()` |
 | `app/services/assets/search.py` | Search for a user: `providers_not_configured`, and the stream's `provider_error` with its `error_code` ([NOT_CONFIGURED](#not-configured)) |
 | `app/services/fx/runtime.py` | `configured_fx_provider()`, `call_fx_provider()` (the boundary of every FX provider call), `settings_cache_part()` |
+| `app/services/brim/brim_parse_pool.py`, `app/services/brim/brim_provider.py` | The BRIM parse: `parse_file_offloaded()` resolves the values in the parent, `parse_file()` binds them in the worker and holds the secrets in flight ([BRIM](#brim-parse)) |
 | `app/utils/runtime/secret_masking.py` | The masking of the secrets in flight, in log lines and in exceptions, each text either masked in place or, with `whole`, hidden entirely; and the check that an error still shows one |
 | `app/config/plugins.py` | `plugin_setting_env()` and `plugin_setting_env_origin()`: the environment variables of the fields |
 | `app/db/models.py`, `alembic/versions/005_release_1_3_0_schema.py` (step 4) | The tables `plugin_system_settings` and `plugin_user_settings` |
@@ -92,6 +95,30 @@ A new call site follows the same path: an instance from `configured_provider()` 
 taken straight from the registry has no settings bound. `call_provider()` also accepts a `scope`
 argument, the part of the provider a pause after «too many requests» covers
 (`core.cooldown_scope_for()`).
+
+### 📥 The BRIM Parse {: #brim-parse }
+
+The broker-import family (`brim`) cannot follow this path as it is: a parse runs in a worker process
+that re-creates the plugin from its code, so no instance bound by the caller reaches it. The parent
+resolves the values instead, and only for a plugin that declares fields:
+
+1. `parse_file_offloaded(file_id, plugin_code, broker_id, *, user_id=None)`
+   (`app/services/brim/brim_parse_pool.py`) asks `bound_settings_for(BRIMProviderRegistry,
+   plugin_code, user_id=…)` (`runtime.py`; the family comes from `registry.settings_family()`) for the instance's values and the personal ones of `user_id`: the
+   route passes the user who imports. A plugin without fields gets `None`: no database read, and the
+   worker is called with the three arguments it always had.
+2. The picklable `BoundSettings` travels as the fourth argument of `parse_file()`
+   (`app/services/brim/brim_provider.py`). The worker binds it on the plugin before the parse and
+   holds the secrets in flight for its length, masked in every log line and in the exception; the
+   parent masks the exception too, hiding its texts whole when a personal secret is bound
+   ([Secrets](#secrets)).
+3. The plugin reads `self.settings` inside `parse()`, never in `__init__`.
+
+**Only the parse delivers settings.** No shipped BRIM plugin declares a field yet, and the other places that
+create a plugin (the detection of the plugin, `api/v1/brokers.py` for the preview and the report sets,
+`brim_report_sets.get_set_plugin`, `brim_gap_fix`) see the defaults and no secret: a value a plugin needs there
+must not depend on a setting. The details are in
+[BRIM settings](../../backend/brim/architecture.md#brim-settings).
 
 ---
 
@@ -186,7 +213,7 @@ under the branch of its settings:
 | `pluginSettings.<family>.<code>.description.<key>` | the field's `description_key` |
 | `pluginSettings.<family>.<code>.option.<key>.<value>` | an option's `label_key` |
 
-`<family>` is `asset` or `fx`, and `<code>` the code as the registry has it: the `provider_code` of
+`<family>` is `asset`, `fx` or `brim`, and `<code>` the code as the registry has it: the `provider_code` of
 an asset provider (`justetf`, `borsa_italiana`), the FX code with its case (`pluginSettings.fx.ECB`).
 justETF's field, for example:
 
@@ -243,9 +270,10 @@ What a family may declare (`FAMILY_RULES` in `fields.py`):
 |--------|:-------------:|:-------:|-----|
 | `asset` | ✅ | ✅ | Search and the probe of a configuration are made for a user |
 | `fx` | ❌ | ✅ | A sync serves every user: an FX provider receives the instance's values only |
+| `brim` | ✅ | ✅ | A parse runs for the user who imports: a personal value reaches it, and so does the instance's. Prepared: no shipped plugin declares a field yet |
 
-No other family supports settings yet: the BRIM, signal and risk registries refuse a plugin that
-declares them.
+No other family supports settings yet (Tools are still to come): the signal and risk registries
+refuse a plugin that declares them.
 
 **What a call receives.** The instance's values always; the user's values only when the call is made
 for a user. Prices, history and metadata are shared by every user of an asset, and scheduled jobs run
@@ -257,6 +285,7 @@ for nobody in particular, so they never depend on one user's values:
 | Asset probe (`POST /api/v1/assets/provider/probe`): current value, history, metadata | The instance's values | The caller's values |
 | Asset current value, history, metadata and their refreshes, scheduled jobs included | The instance's values | Their defaults |
 | FX `fetch_rates()` and `get_supported_currencies()` | The instance's values | — (none declared) |
+| BRIM `parse()` (`POST /api/v1/brokers/import/files/{file_id}/parse`), only for a plugin that declares a field | The instance's values | The values of the user who imports |
 
 So give a required `user` field a default. Without one, every call made for nobody, prices and
 scheduled jobs included, finds the field empty and answers [`NOT_CONFIGURED`](#not-configured), while
@@ -639,13 +668,15 @@ does not set the flag (every real provider, every plugin of the other families) 
 `./dev.py test services test-only-providers` covers the registries, the family runtimes and the
 validation of an assignment and of a probe, in both modes.
 
-**Asset and FX plugins only (X-R44c).** Only their bases inherit `PluginSettingsMixin`, and their
-registries serve plugins only through the lookups and lists above. Elsewhere, methods that never ask
-`_withheld()` would still serve a flagged plugin in production: signal and risk `list_definitions()`,
-BRIM's `auto_detect_plugin()`, `get_compatible_plugins()` and `list_plugin_info()`, the tool snapshot
-(`get_snapshot()`, `get_definition()`, `get_plugin_instance()`). A guard in the same suite reads every
+**Asset and FX plugins only (X-R44c).** The flag is for these two families. `BRIMProvider` inherits
+`PluginSettingsMixin` too, and with it the attribute, but a flagged BRIM plugin would still be served
+in production by methods of its registry that never ask `_withheld()`: BRIM's `auto_detect_plugin()`,
+`get_compatible_plugins()` and `list_plugin_info()`, like signal and risk `list_definitions()` and the
+tool snapshot (`get_snapshot()`, `get_definition()`, `get_plugin_instance()`). A guard in the same suite reads every
 `services/*/registry.py` in test mode, a new family too, and fails on such a plugin, naming registry,
 code, class and methods: make them ask `_withheld()`, then add the registry to `TEST_ONLY_FAMILIES`.
+The test plugin of the BRIM family therefore lives in a test module, never under `brim_providers/`
+([BRIM settings](../../backend/brim/architecture.md#brim-settings)).
 
 ---
 
@@ -673,7 +704,7 @@ sees: [Search Preferences](../../../user/settings/plugins.md#search-preferences)
 
 | Endpoint | Caller | What it does |
 |----------|--------|--------------|
-| `GET /api/v1/settings/plugins` | Any signed-in user | Every plugin that declares settings, with `configured` (see [NOT_CONFIGURED](#not-configured)), its `icon_url` (the icon its family's provider list publishes: the `get_icon` property of a price provider, `icon` of an exchange-rate provider; null without one) and each field as the caller sees it: its declaration (type, scope, labels and i18n keys, bounds, options, default) and its state (`value` for a plain field, `is_set`, `source`: `env`, `db`, `default` or `none`, `locked`, `editable`, `problem`, `updated_at`; `env_variable` for administrators). Filters: `family`, `plugin_code`. |
+| `GET /api/v1/settings/plugins` | Any signed-in user | Every plugin that declares settings, with `configured` (see [NOT_CONFIGURED](#not-configured)), its `icon_url` (the icon its family's provider list publishes: the `get_icon` property of a price provider, `icon` of an exchange-rate provider, `icon_url` of an import plugin; null without one) and each field as the caller sees it: its declaration (type, scope, labels and i18n keys, bounds, options, default) and its state (`value` for a plain field, `is_set`, `source`: `env`, `db`, `default` or `none`, `locked`, `editable`, `problem`, `updated_at`; `env_variable` for administrators). Filters: `family`, `plugin_code`. |
 | `PATCH /api/v1/settings/plugins/bulk` | Any signed-in user; `system` fields need an administrator | Writes 1 to 100 items, all or nothing. Each item names `family`, `plugin_code`, `field_key` and `scope`, and gives exactly one of `value` (a plain field), `secret_value` (a secret field) and `clear: true` (deletes the saved value, so the default applies again). |
 
 A write checks every item before writing anything, then writes them all in one transaction:
@@ -712,9 +743,10 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
   `Puzzle`, order 25, visible to everyone; `?tab=plugins` opens it: see
   [Tab registry](../../frontend/components/features/settings.md#tab-registry)). It reads the whole
   catalogue once, unfiltered, so a test-only plugin is never listed, and groups it under **Prices**
-  (`asset`) then **Exchange rates** (`fx`), leaving out a family without entries. Each title follows
-  its family's icon from `FAMILY_ICONS` (`ChartColumn`, `Coins`: the icons the families have on the
-  documentation's home), so a new family adds one row there. Each plugin is a
+  (`asset`), **Exchange rates** (`fx`) then **Broker imports** (`brim`), leaving out a family without
+  entries, which is every one of them for `brim` until a plugin declares a field. Each title follows
+  its family's icon from `FAMILY_ICONS` (`ChartColumn`, `Coins`, `Briefcase`: the first two are the
+  icons the families have on the documentation's home), so a new family adds one row there. Each plugin is a
   `PluginSettingsForm`, saved on its own; an empty catalogue and a failed read have their own message.
   Its book icon (`DocsLink`) opens the user page.
 - **The form.** A control per type: a text or number input, a `SimpleSelect`, a checkbox, and a
@@ -837,6 +869,7 @@ The other units that touch the plugin settings:
 | `./dev.py test utils gate-plugin-i18n-ownership` | The settings' keys in each plugin's fragment ([Labels and Translations](#translations)) |
 | `./dev.py test services provider-errors` | Among the provider error paths, justETF's `preferred_currency` declaration and the rows its search keeps |
 | `./dev.py test services borsa-italiana-search` | Borsa Italiana's `preferred_language` on a fund and on a share, the site searched in Italian whatever the preference |
+| `./dev.py test services brim-parse-settings` | The BRIM parse hook ([The BRIM Parse](#brim-parse)): no field, called as before; fields, `BoundSettings` resolved in the parent and bound in the worker; errors and logs masked; the route passes the user; the pickle round trip. It uses the test plugin `_brim_settings_lab.py` |
 | `./dev.py test services plugin-secrets-check` | The startup check of the stored secrets ([Plugin Secrets Check](../security.md#plugin-secrets-check)): `ok` without an unreadable `system` secret, otherwise an `error` that counts them alone; nothing logged and no key file generated without a stored secret; a check that cannot run is a warning, never an exception |
 | `./dev.py test front-utility core-unit` | `pluginSettingsForm.test.ts` (the rules without the DOM, `FAMILY_ICONS` included) and `pluginSettingsApi.test.ts` (the narrowing of the answers, `icon_url` included, and every outcome of a save through the real client, only the transport faked) |
 | `./dev.py test front-utility component-unit` | `PluginSettingsForm.component.test.ts` (PSF-01…30, the plugin's icon and its fallback in PSF-26…30), `PluginSettingsTab.test.ts` (PST-01…09, the families' icons in PST-07…09) and `PluginSettingsModal.test.ts` (PSM-01…09); **Configure**, the badge, the search's row and the 👑 legend in `ProviderAssignmentSection.test.ts` and `AssetSearchAutocomplete.test.ts` |

@@ -57,6 +57,9 @@ import structlog
 from backend.app.config.brim import BrimConfigError, brim_prewarm_enabled
 from backend.app.schemas.brim import BRIMParseOutput
 from backend.app.services.brim import brim_provider
+from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.plugin_settings.runtime import bound_settings_for
+from backend.app.utils.runtime.secret_masking import mask_exception, secrets_in_flight
 
 logger = structlog.get_logger(__name__)
 
@@ -126,19 +129,39 @@ def prewarm() -> None:
         logger.warning("BRIM parse pool prewarm failed; the first parse will start the pool", error=str(exc))
 
 
-async def parse_file_offloaded(file_id: str, plugin_code: str, broker_id: int) -> BRIMParseOutput:
+async def parse_file_offloaded(file_id: str, plugin_code: str, broker_id: int, *, user_id: Optional[int] = None) -> BRIMParseOutput:
     """
     Parse a file without blocking the event loop, on a real core when possible.
 
     Falls back to a worker thread if the process pool cannot be built or dies mid-flight
     (a segfaulting C parser takes its worker with it, and that must not take the import
     down too).
+
+    W-BS (prepared, no plugin declares a field yet): a plugin that declares settings has its values resolved here, in the
+    parent, which can read the database and the instance key — the instance's, and the personal ones of ``user_id``, who
+    imports — and handed to the worker as a fourth argument of ``parse_file``. A secret never leaves the parent unmasked: the
+    exception of the parse is masked here too. A plugin without fields is called exactly as before: no database read, three
+    arguments.
     """
+    bound = await bound_settings_for(BRIMProviderRegistry, plugin_code, user_id=user_id)
+    if bound is None:
+        return await _parse_offloaded((file_id, plugin_code, broker_id))
+    secrets = bound.secret_values()
+    with secrets_in_flight(secrets):
+        try:
+            return await _parse_offloaded((file_id, plugin_code, broker_id, bound))
+        except BaseException as error:
+            mask_exception(error, secrets, whole=bound.carries_user_secrets)
+            raise
+
+
+async def _parse_offloaded(args: tuple) -> BRIMParseOutput:
+    """``brim_provider.parse_file(*args)`` on the pool, or on a thread when the pool is out."""
     pool = _get_pool()
     if pool is not None:
         loop = asyncio.get_running_loop()
         try:
-            future = loop.run_in_executor(pool, brim_provider.parse_file, file_id, plugin_code, broker_id)
+            future = loop.run_in_executor(pool, brim_provider.parse_file, *args)
         except Exception as exc:  # pragma: no cover - environment dependent
             # Submitting is our own machinery: a failure here is never the parser's.
             _disable_pool(exc)
@@ -150,7 +173,7 @@ async def parse_file_offloaded(file_id: str, plugin_code: str, broker_id: int) -
                 # re-raised untouched, because turning "unsupported layout" into a silent
                 # retry would hide the only useful message the user gets.
                 _disable_pool(exc)
-    return await asyncio.to_thread(brim_provider.parse_file, file_id, plugin_code, broker_id)
+    return await asyncio.to_thread(brim_provider.parse_file, *args)
 
 
 def _disable_pool(exc: BaseException) -> None:
