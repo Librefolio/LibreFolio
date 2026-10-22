@@ -5008,6 +5008,14 @@ A-21b, A-31, A-41, A-49 e A-58 aspettano una decisione; A-4 e A-10 sono lavoro d
     `#invite`, `#reset-link`, `#reset-onboarding`, `#invitation-link`, `#password-reset-link`), da tenere uguali
     in ogni lingua.
   - Finché non sono tradotte il build stretto resta verde: le pagine vecchie non puntano alle ancore nuove.
+  - 22/10, N69c (ondata 4): `admin/settings` (EN) ha in più il punto «👥 The same setting is in the Users tab» in «Who Can
+    Sign Up» e il paragrafo del pulsante 📖 **Guide** nella scheda Security; IT, FR ed ES di `admin/settings` non hanno né
+    questi né l'ancora `{: #registration }` sulla sezione. `admin/users` non è tradotta, quindi la build italiana serve la
+    pagina inglese: il suo punto «Who Can Sign Up» linkava `settings.md#registration` e il build stretto avvisava che
+    `settings.it.md` non ha l'ancora. Cura di oggi: il link punta a `settings.md` senza ancora e nomina la sezione («Who Can
+    Sign Up»), come le altre pagine non tradotte di `admin/`. **Quando `admin/settings` si traduce**: l'ancora
+    `{: #registration }` va scritta uguale in IT, FR ed ES (la usano già `configuration`, `cli_tools` e `service_exposure`
+    in EN), e allora il link di `users.en.md` può tornare a `settings.md#registration`.
   - Si fa dopo A6–A9, che toccano di nuovo le stesse pagine. La prepara il lotto A10, solo su richiesta
     esplicita del developer (coordinatore, 15/10).
   - Da A6b (15/10) in più: la pagina nuova `admin/users` (senza traduzioni: IT, FR ed ES mostrano l'inglese) e le
