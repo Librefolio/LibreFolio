@@ -246,7 +246,8 @@
         "admin": "Admin",
         "inactive": "Deactivated",
         "protected": "Protected",
-        "pendingSetup": "Waiting for setup"
+        "pendingSetup": "Waiting for setup",
+        "pendingVerification": "Waiting for verification"
       },
       "actions": {
         "deactivate": "Deactivate",
@@ -350,7 +351,8 @@
         "resetLinkCreated": "Reset link created for {username}.",
         "setupCancelled": "The setup link of {username} no longer works."
       },
-      "pendingSetupHint": "This administrator account activates through its setup link. If the link is lost, run «dev.py user setup-link» on the server, or ask your hosting provider."
+      "pendingSetupHint": "This administrator account activates through its setup link. If the link is lost, run «dev.py user setup-link» on the server, or ask your hosting provider.",
+      "pendingVerificationHint": "Its owner has not opened the verification link yet: signing in offers to send a new one. Reactivate lets the account in at once, without the email."
     },
     "linkShare": {
       "addressLabel": "Server address",

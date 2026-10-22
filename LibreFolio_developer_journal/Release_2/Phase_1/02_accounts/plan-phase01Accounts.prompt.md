@@ -8837,3 +8837,130 @@ Ognuno con i rossi prima e uno slot. Uno slot API (`users-admin`) per N69-4 e N6
 - **Previsione dei conflitti** con dev `b844f83f2` (base = HEAD `a35f40c48`): solo `access_control.md` (1 commit di dev),
   `git merge-file` pulito.
 - **Delta**: 4 file, +948/−1. Checkpoint mandato; FROZEN. Poi A-62.
+
+## H-61 entrato; la fixture di G; A-62 col segnale dei controlli (20/10, 14:28–; base `50d1f29c6`)
+- **Coordinatore** (14:28): H-61 è committato, `64b8b9fa3`, `bdb083782`, `50d1f29c6`; lo porta lui a H.
+  - Sì alla riga `desc` di `services admin-bootstrap`, dentro A-62.
+  - Va controllata la fixture della galleria di G.
+  - Il segnale `pending|ready`: lo decido io, e se è piccolo va in A-62. Poi A-62.
+- **La fixture di G** (`frontend/e2e/fixtures/gallerySecurity.ts`, in dev da `b844f83f2`), controllata con
+  `work/a62/check_gallery_fixture.py` sul ref `dev_release2`: **17/17 giuste**.
+  - Ogni `check_id` esiste: i 16 di `CONFIG_CHECKS`, più `platform.plugin_secrets`.
+  - Ogni chiave è una chiave `ok` che quel controllo produce, ed è nel catalogo inglese.
+  - Nessun mio lotto aggiunge un controllo.
+  - A H ho scritto direttamente: la 18ª voce, `platform.hosting_panel`, arriva con H-61, e H dà la chiave `ok` a G.
+    Nulla protegge la fixture dal registro (`checkGuides.test.ts` invece lo fa), e decide G.
+- **Il segnale: sì, dentro A-62** (decisione mia, delegata dal coordinatore). È invisibile all'utente e serve ai test e
+  alla galleria. Sulla radice della riga, `data-security-checks`:
+  - `off` per chi non è admin;
+  - `pending` fino alla prima risposta;
+  - `ready` dopo, anche durante «Controlla di nuovo»;
+  - `error` se la prima lettura è fallita.
+  - Solo Vitest; ADOT-E-03 tiene la sua barriera, quindi nessuno slot.
+- **A-62**: `test-author` `c3acb2f4` per i rossi (`Header.test.ts`, `ConnectionSecurityIndicator.test.ts`). Bozza
+  `work/a62/apply_a62.py`, 4 modifiche, prova a vuoto pulita: l'etichetta del menu, il segnale (due), la riga del
+  registro. Più `work/a62/i18n_add.py` (`nav.toggleMenu`).
+- **Coordinatore** (14:32): va bene su tutti e tre, cioè il segnale dentro A-62 e `nav.toggleMenu` coi testi proposti.
+  - **In arrivo dopo A-62: E-26 (b)**, deciso dal developer. La risposta di `POST /auth/register` avrà un campo che
+    dice quando l'email di verifica è trattenuta, e il messaggio di `RegisterCard` cambierà di conseguenza.
+  - Il lavoro è di E, ma tocca file miei (lo schema della risposta, `RegisterCard`): E mi scrive per il contratto, e la
+    revisione è mia.
+
+## Ondata 3 (21→22/10, notte): A-62, poi E-7 (base `4a053da4c`)
+- **Brief** (`salvataggi-worktrees-20261021/ondata3/kickoff-A.md`): passo A = A-62 (tre ritocchi, decisi il 20/10);
+  passo C = E-7 (deciso dal developer il 21/10: Q1 sì, il badge anche a link scaduto; Q2 en «Waiting for verification»,
+  it «In attesa di verifica», più il suggerimento al passaggio del mouse; Q3 no, `user list` resta senza segno). Il
+  passo B (revisione di E-26) arriva dopo. Lavoro come sotto-agente in background del coordinatore; niente commit, niente
+  E2E. Corsia `6185` `/tmp/librefolio-r13-a`.
+- **Base**: HEAD `4a053da4c` = quello atteso, albero pulito; `dev_release2` `2879ae3e4`. Le bozze di Copilot
+  (`copilot-enel/session-state/119ed166…/files/work/a62/`) riusate come riferimento, non lanciate (percorsi del Mac).
+
+### A62.1 — Rossi ✅ (21/10, 21:37–21:45)
+- Base dei due file Vitest: **75 passed** (`ondata3/A-a62-baseline.log`).
+- `test-author` (sonnet): 14 casi nuovi, tutti rossi sull'asserzione giusta; i 75 restano verdi: **14 failed, 75 passed**
+  (`ondata3/A-a62-red.log`).
+  - `Header.test.ts`: describe dentro quello di N69b, «the burger's name starts with the translated toggle menu (A-62)»,
+    4 casi (membro sicuro e insicuro; admin con avvisi, sicuro e insicuro). La chiave riceve un marcatore suo
+    (`⟦nav.toggleMenu⟧`, `addMessages`): oggi l'etichetta comincia con «Toggle menu».
+  - `ConnectionSecurityIndicator.test.ts`: ultimo describe, «the checks signal on the root (A-62)», 10 casi (`off` per
+    membro ×3 e per nessuno; `pending`; `ready` alla risposta, già pronta al mount, tenuto durante «Controlla di nuovo» e
+    dopo un ricontrollo fallito; `error` alla prima lettura fallita, senza seconda richiesta). Oggi l'attributo manca.
+> **Note implementazione**: casi etichettati `// red until A-62`, come la convenzione del repo.
+
+### A62.2 — Cura ✅ (21/10, 21:45–21:50)
+- `Header.svelte`: `menuLabel` comincia con `$_('nav.toggleMenu')`.
+- `ConnectionSecurityIndicator.svelte`: `checksState` derivato
+  (`!isAdmin ? 'off' : answered ? 'ready' : status === 'error' ? 'error' : 'pending'`) e `data-security-checks` sulla
+  radice.
+- `_backend_services.py`: la riga `desc` di `services admin-bootstrap` nomina `admin_setup_status` (H-61).
+- `dev.py i18n add nav.toggleMenu` (sorgente `base`, ×4, i testi approvati il 20/10), `i18n build` e `i18n check`
+  puliti: **5123 chiavi**, strict (`ondata3/A-a62-i18n.log`).
+- Doc (`docs-writer`, sonnet): `developer/frontend/components/features/settings.md`, la radice (`data-security-checks`),
+  il pulsante del menu (`$_('nav.toggleMenu')`) e i 14 casi nel paragrafo dei test; `check-links` pulito.
+
+### A62.3 — Verdi ✅ (21/10, 21:50–22:14)
+- Vitest: `Header.test.ts`, `ConnectionSecurityIndicator.test.ts`, `Header.managed.test.ts`: **94 passed** (3 file;
+  `ondata3/A-a62-green.log`).
+- `services admin-bootstrap`: **310 passed** (`ondata3/A-a62-services-admin-bootstrap.log`; il brief diceva 302, ma
+  dopo «il fatto vince» di H61.2 i casi sono 310).
+- `api sync` (`ondata3/A-api-sync-1.log`), poi `front check` in `flock`: **0 errori, 0 avvisi**
+  (`ondata3/A-a62-front-check.log`).
+> **⚠️ Fuori pista**: il `front check` ha aspettato il lucchetto ~28 minuti (E2E di C1 e altri in coda). Nel frattempo
+> ho scritto solo file di backend di E-7 e il test di `test-author` su `UserRow.verification.test.ts`: lo 0/0 vale per
+> l'albero di A-62 più quelle righe, nessuna delle quali tocca i tipi di A-62.
+
+### E7.1 — Rossi backend ✅ (21/10, 22:00–22:08)
+- I test vanno nel file mio, `test_api/test_users_admin_api.py` (il piano di E li metteva in EVH, file di E: ora che il
+  lotto è mio, stanno dove sta il contratto di `GET /users`, e non toccano i file di E-26).
+- `test-author` (sonnet): punto 21 nel docstring, `USER_ITEM_KEYS` a undici campi, `_user_item_violations` con
+  `pending_verification`; classe nuova `TestAnAccountWaitingForItsVerificationInTheUsersTab`, UADM-VER-01…05, solo in
+  processo sull'istanza privata (9 scene per stato del link; per account; la risposta del PATCH dopo promozione e
+  disattivazione; la riattivazione a link scaduto; lo schema).
+- Rossi: **32 failed** (`ondata3/A-e7-red-1.log`) e **25 failed** (`A-e7-red-2.log`), tutti sulla regola degli undici
+  campi o sul campo mancante; i premessi (`awaiting_verification`, `holds_place`) verdi già oggi.
+> **Note implementazione**: le corse con `--no-shared-server` e `-k` sui soli casi in processo: nessun server, nessuna
+> build.
+
+### E7.2 — Cura backend ✅ (21/10, 22:08–22:11)
+- `schemas/users.py`: `AdminUserRead.pending_verification: bool = False`.
+- `services/email/verification.py`: `waiting_ids(session)`, una query (come `place_holders()` senza la scadenza);
+  aggiunta, nessuna riga esistente toccata.
+- `api/v1/users.py`: la lista con `waiting_ids`, la risposta del PATCH con `awaiting_verification`.
+- black e ruff puliti (black ha ricomposto il test; `ondata3/`).
+- Verde in processo: **57 passed** (`ondata3/A-e7-green-inprocess-2.log`).
+> **⚠️ Fuori pista**: UADM-060 (A7b) ha un account «waiting» con un link di verifica vivo: col contratto nuovo è
+> `pending_verification` vero. Prima corsa 1 failed / 56 passed; corretta l'attesa del caso (e il suo docstring), poi 57.
+- Regressioni in processo: `api email-verification-hooks` **26**, `api email-verification` **60**, `api admin-setup`
+  **52**, `api panel-status` **20**, tutti verdi.
+
+### E7.3 — Rossi e cura frontend, i18n, doc ✅ (21/10, 22:12–22:30)
+- `api sync` dopo lo schema (`ondata3/A-api-sync-2.log`): nessun file tracciato cambiato (`generated.ts` è ignorato).
+- `test-author` (sonnet), `UserRow.verification.test.ts`: UVR-04…11, 23 casi rossi; gli altri due file verdi: **23
+  failed, 77 passed** (`ondata3/A-e7-vitest-red.log`).
+- Cura: `types.ts` (`pending_verification?`); `UserRow.svelte`: `pendingVerification` derivato
+  (`pending_verification && !is_active && !pending_setup`), il badge `users-badge-pending-verification` al posto di
+  «Disattivato» col suggerimento in `title`, il suggerimento nel pannello (`users-pending-verification-hint`),
+  `data-pending-verification` sulla riga, e `data-testid="users-badge-inactive"` al badge «Disattivato».
+- i18n (`settings`, ×4): `settings.usersTab.badges.pendingVerification` e `settings.usersTab.pendingVerificationHint`;
+  fr ed es e il testo del suggerimento sono le proposte di E (piano 08, «E-7 — analisi»), da confermare dal developer.
+  `i18n check`: **5125 chiavi**, strict.
+- Verde: i tre file di `UserRow` **100 passed** (`ondata3/A-e7-vitest-green.log`); `UsersTab.test.ts` **62 passed**.
+- Doc (`docs-writer`, sonnet; solo inglese, nessun timbro): `admin/users.en.md`, `admin/email.en.md`,
+  `developer/backend/email.md`, `developer/architecture/access_control.md`,
+  `developer/frontend/components/features/settings.md`; `check-links` pulito. Le due pagine admin non hanno traduzioni.
+> **Note implementazione**: il suggerimento «al passaggio del mouse» del brief e quello «nel pannello» dell'analisi di E
+> ci sono tutti e due: `title` sul badge (desktop) e il paragrafo nel pannello (telefono, lettori di schermo). Domanda
+> al developer nel checkpoint.
+> **⚠️ Fuori pista**: `settings.md` porta righe di A-62 e di E-7: due patch per il coordinatore,
+> `ondata3/A-62-settings-md.patch` e `ondata3/E-7-settings-md.patch` (`git apply --cached --check` pulito per tutte e due).
+
+### A62 + E7 — Prove finali sull'albero intero ✅ (22/10, 00:03–00:09; in `flock`)
+- Script `ondata3/A-heavy-final.sh`, in coda sul lucchetto dalle 22:23 alle 00:03 (E2E di H e di C2 davanti).
+  - `front check`: **0 errori, 0 avvisi** (`ondata3/A-final-front-check.log`), dopo `api sync` (`A-api-sync-2.log`).
+  - Vitest, 7 file (Header, Header.managed, ConnectionSecurityIndicator, i tre UserRow, UsersTab): **256 passed**
+    (`A-final-vitest.log`).
+  - `mkdocs build`: pulito, 0 `WARNING`, 3091 URL relativi risolti (`A-final-mkdocs-build.log`).
+  - Corsia: `db populate --force --clean` su `/tmp/librefolio-r13-a`, poi `api users-admin` sul file intero, coi casi
+    della corsia: **184 passed** (`A-final-api-users-admin.log`).
+  - Porta 6185 libera alla fine (`lsof` rc 1); `git diff --check` pulito; HEAD ancora `4a053da4c`.
+- Checkpoint mandato (A-62 ed E-7 separati); FROZEN.

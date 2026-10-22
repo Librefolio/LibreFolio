@@ -571,8 +571,10 @@ address with a link that LibreFolio emails to the account. The switch is in
 
 ### ⏳ Waiting Accounts {: #verification-waiting }
 
-In **Settings › Administration › Users**, a waiting account shows as **Deactivated**: this version
-does not tell it apart from an account an administrator deactivated.
+In **Settings › Administration › Users**, a waiting account shows the badge **Waiting for
+verification**, not **Deactivated**, even once its link has expired. Hover over the badge, or open
+the row, for the hint: its owner has not opened the link yet, signing in offers a new one, and
+**Reactivate** lets the account in at once.
 
 - **It takes a place** of the user limit (`LIBREFOLIO_MAX_USERS`) while its link is live, like an
   open invitation. When the last link sent expires, 24 hours later, the place is free again, and
@@ -586,9 +588,9 @@ does not tell it apart from an account an administrator deactivated.
 - **To turn it away**, delete it ([Delete an Account](users.md#delete)), or deactivate it: with
   `user deactivate` on the command line, or with the administrator API
   (`PATCH /api/v1/users/{id}` with `is_active: false`). Deactivated, it stops waiting: its links stop
-  working, its place is free, and signing in tells its owner that the account is disabled. The
-  Users tab itself offers no **Deactivate** for an account that is not active: there, **Delete** is
-  the way.
+  working, its place is free, its row reads **Deactivated** from then on, and signing in tells its
+  owner that the account is disabled. The Users tab itself offers no **Deactivate** for an account
+  that is not active: there, **Delete** is the way.
 
 ### 📏 Limits of the Verification Emails {: #verification-limits }
 

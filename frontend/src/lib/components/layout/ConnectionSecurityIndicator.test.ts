@@ -4,7 +4,8 @@
  *
  * The line reads `connectionSecurityStore` and asks it to refresh on mount. The contract, by test id:
  *   - `connection-security`, the root: `data-level`, `data-reason` and `data-server-checked` ("true"/"false") are
- *     the store's;
+ *     the store's; `data-security-checks` (`off` | `pending` | `ready` | `error`, A-62) is the checks' store's, seen by
+ *     an administrator only;
  *   - `connection-security-toggle`, a button with `aria-expanded`;
  *   - `connection-security-label`, the visible label, only while the sidebar is expanded;
  *   - `connection-security-details`, only while open, holding the reason (`connection-security-reason`), the admin
@@ -32,10 +33,11 @@
  * (plan 48, C3): every red fails on an assertion. Never a translated string: test ids, attributes, the focus, the
  * clock and the store's values only.
  *
- * N69b, the security-attention dot, is the last describe; its contract and its doubles are written above it. The checks'
- * store (`$lib/features/settings/security/securityChecks.svelte`) is a fake for the whole file — the real one is a
- * module singleton nothing can reset between cases —, idle and empty unless a case says otherwise, so the line as it was
- * before N69b meets it unchanged.
+ * N69b, the security-attention dot, is the last describe but one, and A-62, the checks signal on the root, the last; the
+ * contract and the doubles of each are written above it. The checks' store
+ * (`$lib/features/settings/security/securityChecks.svelte`) is a fake for the whole file — the real one is a module
+ * singleton nothing can reset between cases —, idle and empty unless a case says otherwise, so the line as it was before
+ * N69b meets it unchanged.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 
@@ -962,5 +964,160 @@ describe('ConnectionSecurityIndicator — the security-attention dot (N69b)', ()
         expect(securityStore.ensureLoaded, 'once: the store changing under the line does not make it ask again').toHaveBeenCalledTimes(1);
         expect(securityStore.reload, 'the line never forces a read').not.toHaveBeenCalled();
         expect(api.securityChecks, 'and never goes around the store').not.toHaveBeenCalled();
+    });
+});
+
+/**
+ * A-62 — the checks signal on the root. For an administrator the line asks the checks' store (N69b) and shows what it
+ * learns as the dot; but «no dot» says both «nothing to look at» and «not asked yet», and a reader of the DOM (the
+ * sidebar's own E2E, above all) has to tell them apart. So the root `connection-security` publishes
+ * `data-security-checks`, one of:
+ *   - `off`: the user is not an administrator (`$auth.user?.is_superuser !== true`, nobody signed in included), whatever
+ *     the store holds — a member is never shown the checks, so the store's state is none of the line's business;
+ *   - `ready`: an administrator and the store has answered (`securityChecks.answered`), an answer with nothing to look at
+ *     included. It stays `ready` while a «check again» reload is under way (status `loading`) and after a later reload
+ *     failed (status `error`): the answer on screen is the last good one, and the signal does not flicker under it;
+ *   - `error`: an administrator, the store has not answered and its status is `error` — the first read failed;
+ *   - `pending`: an administrator, the store has not answered and it is idle or loading.
+ * The intended expression is `!isAdmin ? 'off' : answered ? 'ready' : status === 'error' ? 'error' : 'pending'`: the
+ * answer wins over the status, the status only matters while there is no answer.
+ *
+ * The doubles are the file's own: the fake checks' store, the user signed in through the auth store's seam (`signInAs`)
+ * and the connection primed on a LAN page (`primeAt`). One thing to mind: the line's own `ensureLoaded()` runs from the
+ * mount effect and, as the real store does, moves an idle or failed fake to `loading`. So a case that needs the store
+ * somewhere else — failed, reloading — moves it after the mount, as the real store would have moved by itself; an
+ * `error` set before the mount would be retried by the line and read `pending`.
+ */
+describe('ConnectionSecurityIndicator — the checks signal on the root (A-62)', () => {
+    const LAN_PAGE = 'http://lf.lan/';
+    const LAN: ServerView = {clientClass: 'lan', cookieSecure: false};
+    type StoreStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+    /** The root's `data-security-checks`, or `null` while the line does not publish it. */
+    function checksSignal(): string | null {
+        return present('connection-security').getAttribute('data-security-checks');
+    }
+
+    /** The checks' store as a state of its own: what a case needs it to say, landed and rendered. */
+    async function storeSays(state: {status: StoreStatus; answered?: boolean}): Promise<void> {
+        securityStore.state.status = state.status;
+        if (state.answered !== undefined) securityStore.state.answered = state.answered;
+        flushSync();
+        await tick();
+    }
+
+    /** The checks' answer: nothing to look at, which is still an answer. */
+    async function storeAnswersNothing(): Promise<void> {
+        securityStore.state.attention = [];
+        await storeSays({status: 'ready', answered: true});
+    }
+
+    /** An administrator on a LAN page; the store as the case left it (idle, unless a case answered before the mount). */
+    async function administratorOnLanPage(): Promise<void> {
+        await signInAs(true);
+        await primeAt(LAN_PAGE, LAN);
+        expect(get(connectionSecurity).level, 'premise: a LAN page, the level local').toBe('local');
+    }
+
+    // red until A-62
+    it.each([
+        ['a member, the checks answered', {status: 'ready' as StoreStatus, answered: true}],
+        ['a member, the first read failed', {status: 'error' as StoreStatus, answered: false}],
+        ['a member, a read under way', {status: 'loading' as StoreStatus, answered: false}],
+    ])('%s: off, whatever the store holds', async (_title, held) => {
+        await signInAs(false);
+        await primeAt(LAN_PAGE, LAN);
+        securityStore.state.status = held.status;
+        securityStore.state.answered = held.answered;
+        expect([securityStore.store.status, securityStore.store.answered], 'premise: the store holds what an administrator earlier in this runtime left').toEqual([held.status, held.answered]);
+
+        await mountIndicator();
+
+        expect(checksSignal(), 'only an administrator is shown the checks').toBe('off');
+        expect(securityStore.ensureLoaded, 'premise: a member’s line never asks the checks').not.toHaveBeenCalled();
+    });
+
+    // red until A-62
+    it('nobody signed in, the checks answered: off', async () => {
+        await primeAt(LAN_PAGE, LAN);
+        expect(get(auth).user, 'premise: nobody is signed in').toBeNull();
+        await storeAnswersNothing();
+
+        await mountIndicator();
+
+        expect(checksSignal(), 'no administrator, no checks').toBe('off');
+    });
+
+    // red until A-62
+    it('an administrator before any answer: pending — the line’s own request moves the store to loading, still pending', async () => {
+        await administratorOnLanPage();
+        expect([securityStore.state.status, securityStore.state.answered], 'premise: nothing has asked the checks on this page load').toEqual(['idle', false]);
+
+        await mountIndicator();
+
+        expect(securityStore.ensureLoaded, 'premise: the line asked, once').toHaveBeenCalledTimes(1);
+        expect([securityStore.state.status, securityStore.state.answered], 'premise: the store started its request and has no answer').toEqual(['loading', false]);
+        expect(checksSignal(), 'asked, not answered: pending').toBe('pending');
+    });
+
+    // red until A-62
+    it('an administrator, the checks already answered at mount: ready — an answer with nothing to look at included', async () => {
+        await administratorOnLanPage();
+        await storeAnswersNothing();
+        expect(securityStore.store.attentionCount, 'premise: the answer has nothing for the administrator to look at').toBe(0);
+
+        await mountIndicator();
+
+        expect(checksSignal(), 'answered: ready, whether or not there is attention').toBe('ready');
+    });
+
+    // red until A-62
+    it('an administrator: pending until the answer lands, ready from then on', async () => {
+        await administratorOnLanPage();
+        await mountIndicator();
+        expect(checksSignal(), 'before the answer').toBe('pending');
+
+        await storeAnswersNothing();
+
+        expect(checksSignal(), 'the root follows the answer').toBe('ready');
+    });
+
+    // red until A-62
+    it('an administrator, answered, then a «check again» reload under way (loading, answered): still ready', async () => {
+        await administratorOnLanPage();
+        await storeAnswersNothing();
+        await mountIndicator();
+        expect(checksSignal(), 'premise: answered, the root says ready').toBe('ready');
+
+        await storeSays({status: 'loading'});
+
+        expect([securityStore.store.status, securityStore.store.answered], 'premise: a reload is under way over an answered store').toEqual(['loading', true]);
+        expect(checksSignal(), 'the answer on screen is still the last good one').toBe('ready');
+    });
+
+    // red until A-62
+    it('an administrator, answered, then a later reload failed (error, answered): still ready', async () => {
+        await administratorOnLanPage();
+        await storeAnswersNothing();
+        await mountIndicator();
+        expect(checksSignal(), 'premise: answered, the root says ready').toBe('ready');
+
+        await storeSays({status: 'error'});
+
+        expect([securityStore.store.status, securityStore.store.answered], 'premise: a reload failed over an answered store').toEqual(['error', true]);
+        expect(checksSignal(), 'a failed reload does not take the answer back').toBe('ready');
+    });
+
+    // red until A-62
+    it('an administrator whose first read failed (error, not answered): error', async () => {
+        await administratorOnLanPage();
+        await mountIndicator();
+        expect(securityStore.ensureLoaded, 'premise: the line asked, once').toHaveBeenCalledTimes(1);
+
+        await storeSays({status: 'error', answered: false});
+
+        expect([securityStore.store.status, securityStore.store.answered], 'premise: the read failed and there is no answer').toEqual(['error', false]);
+        expect(checksSignal(), 'no answer and a failed read: error').toBe('error');
+        expect(securityStore.ensureLoaded, 'the store failing under the line does not make it ask again').toHaveBeenCalledTimes(1);
     });
 });

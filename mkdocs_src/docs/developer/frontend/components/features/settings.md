@@ -530,16 +530,19 @@ toast, when there is one, is a field of the same call.
 #### UserRow {: #userrow }
 
 `lib/features/settings/users/UserRow.svelte`. Props: `account` (`AdminAccount`, the `GET /users`
-item, with `holds_place`, `pending_setup` and `avatar_url` when they are sent: all three optional
-in `users/types.ts`), `isSelf`, `isOnlyActiveAdmin`, `full`, `onAction(action, account)`.
+item, with `holds_place`, `pending_setup`, `pending_verification` and `avatar_url` when they are sent:
+all four optional in `users/types.ts`), `isSelf`, `isOnlyActiveAdmin`, `full`,
+`onAction(action, account)`.
 
 - The `<li>` is `users-row`, with `data-user-id`, `data-username`, `data-active`, `data-admin`,
-  `data-pending-setup`, `data-protected` and `data-self` (`"true"` or `"false"`; `data-pending-setup`
-  is `"false"` when the field is absent, the answer of an older server).
+  `data-pending-setup`, `data-pending-verification`, `data-protected` and `data-self` (`"true"` or
+  `"false"`; `data-pending-setup` is `"false"` when the field is absent, the answer of an older
+  server; `data-pending-verification` is the derived state of an account waiting for its email
+  verification, described below, not the raw flag).
 - `users-row-toggle`, a button with `aria-expanded` and `aria-controls`, shows the chevron, the
   account's avatar, the username, the badges (`settings.usersTab.badges.you`, `admin`, `inactive`,
-  `protected`), the email and `settings.usersTab.createdOn`, and opens or closes the panel of
-  actions under the row.
+  with the test id `users-badge-inactive`, `protected`, and the two of a waiting account below), the
+  email and `settings.usersTab.createdOn`, and opens or closes the panel of actions under the row.
 - **The avatar** (lot N69-4, decision D8 a): a [`UserAvatar`](../core-ui/file-upload.md#useravatar)
   right after the chevron, given `account.avatar_url ?? null`, its root `users-row-avatar` with
   `data-avatar="image"` or `"initial"`: an image uploaded to the app asked for as its 48×48
@@ -574,13 +577,32 @@ in `users/types.ts`), `isSelf`, `isOnlyActiveAdmin`, `full`, `onAction(action, a
 
     Its other buttons are those of any inactive account.
 
+- **An account waiting for its email verification** (`pending_verification`, lot E-7, the developer's
+  decisions of 21/10/2026): the row derives
+  `pendingVerification = account.pending_verification === true && !account.is_active && !pendingSetup`,
+  so an active account that arrives with the flag is drawn as any active account, and the setup's wait
+  wins over it. Then:
+    - the badge `users-badge-pending-verification` (`settings.usersTab.badges.pendingVerification`,
+      *Waiting for verification*, in the tab's neutral style) is drawn in place of `inactive`, whose
+      `users-badge-inactive` is then absent; its `title` is the hover hint
+      `settings.usersTab.pendingVerificationHint`. `holds_place` takes no part in it: the badge is the
+      same for a live link and for one that has expired, and an older server that sends no flag leaves
+      the row with **Deactivated**;
+    - the opened panel shows `users-pending-verification-hint`, the same
+      `settings.usersTab.pendingVerificationHint`, under the buttons (the setup's
+      `users-pending-setup-hint` takes that place for `pending_setup`);
+    - the buttons are those of any inactive account, `users-action-reactivate` included: the badge
+      changes what the row says, not what it offers. On a full instance **Reactivate** is turned off
+      with the `limit` reason unless `holds_place`, so a waiting account whose link has expired reads
+      **Waiting for verification** with a **Reactivate** turned off.
+
 A button the backend would certainly refuse is `disabled`, with `data-disabled-reason`; the first
 condition that holds gives the reason:
 
 | Button | `data-disabled-reason` |
 |---|---|
 | `users-action-deactivate` | `protected` when `account.protected`; `last-admin` when the account is an administrator and `isOnlyActiveAdmin` |
-| `users-action-reactivate` | `limit` when `full`, unless `account.holds_place`: an account waiting for its email verification with a live link already holds its place ([Email Verification](../../../backend/email.md#verification)). Never drawn for an account with `pending_setup` |
+| `users-action-reactivate` | `limit` when `full`, unless `account.holds_place`: an account waiting for its email verification with a live link already holds its place ([Email Verification](../../../backend/email.md#verification)); `pending_verification` changes nothing here, so once the link has expired the reason comes back. Never drawn for an account with `pending_setup` |
 | `users-action-cancel-setup` | `protected` when `account.protected`: the backend refuses the cancellation of a protected account (`409` `ACCOUNT_PROTECTED`). Drawn only for an account with `pending_setup` |
 | `users-action-demote` | `protected` when `account.protected`; `pending-setup` when the account has `pending_setup`; `last-admin` when the account is active and `isOnlyActiveAdmin` |
 | `users-action-delete` | `protected` when `account.protected`; `demote-first` when the account is an administrator, active or not, unless it has `pending_setup` |
@@ -764,7 +786,14 @@ own from [ProfileTab](#profiletab) or another's from [UsersTab](#userstab). A `M
   **Reactivate** and no `limit` reason, the hint; since lot A-43, UPS-12 to UPS-23:
   `users-action-cancel-setup` in its place, turned off with `protected` on a protected account
   (UPS-23), `users-action-demote` off with `pending-setup`, `users-action-delete` enabled; every
-  other row unchanged), `users/UserRow.avatar.test.ts` (URA-01 to URA-04, lot N69-4: the avatar
+  other row unchanged), `users/UserRow.verification.test.ts` (UVR-01 to UVR-03, lot E5b:
+  **Reactivate** on a full instance usable with `holds_place`, off with `limit` without it; UVR-04 to
+  UVR-11, lot E-7: the badge `users-badge-pending-verification` with its hover hint in place of
+  `users-badge-inactive`, for a live link, an expired one and `holds_place` absent alike;
+  `data-pending-verification` as the derived state; an inactive account without the flag keeping
+  **Deactivated**; the hint in the opened panel, with **Reactivate** still offered, usable on a full
+  instance only with a live link; `pending_setup` winning over the flag; an active account with the flag
+  drawn with no badge), `users/UserRow.avatar.test.ts` (URA-01 to URA-04, lot N69-4: the avatar
   in the toggle, between the chevron and the username, an uploaded image asked for as its 48×48
   preview, an address as it is, the initial without one, and the toggle still opening its panel),
   `AccountDeletionDialog.test.ts` (both modes; ADEL-28 and ADEL-29, lot A-16: a refused own
@@ -927,7 +956,14 @@ store. Neither has a branch for the managed profile (D1 a): the dot is the same 
   never asks either: it reads what the line loaded.
 - **The root**, `connection-security`, publishes `data-security-attention`, the count (`0` for anyone
   not an administrator, and until the answer), and `data-security-severity`, `error`, `warning` or
-  `none`, beside `data-level`, `data-reason` and `data-server-checked`.
+  `none`, beside `data-level`, `data-reason` and `data-server-checked`. Since lot A-62 it also
+  publishes `data-security-checks`, where the checks stand: `off` for anyone not an administrator,
+  `pending` for an administrator until the first answer, `ready` from the first answer on (while
+  **Check again** reloads, and after a later reload failed, too), `error` when the first read failed
+  and nothing has answered yet. The expression is
+  `!isAdmin ? 'off' : securityChecks.answered ? 'ready' : securityChecks.status === 'error' ? 'error' : 'pending'`.
+  Invisible to the user, it is there for the tests and the gallery to wait on the checks instead of
+  guessing a delay.
 - **The dot**, `connection-security-attention-dot`: on the corner of the level's icon, inside the
   toggle (`connection-security-toggle`), with `data-severity` the severity and
   `aria-hidden="true"`; drawn while `attention > 0`, with the sidebar expanded or collapsed. A dot,
@@ -950,9 +986,10 @@ store. Neither has a branch for the managed profile (D1 a): the dot is the same 
   alone (plan 36), is drawn while the connection is insecure or an administrator's `attentionCount`
   is above `0`: one dot either way. Its `data-severity` is `error` when the connection is insecure or
   `attentionSeverity` is `error`, `warning` otherwise; `bg-lf-danger` or `bg-lf-warning`, with
-  `ring-2 ring-lf-header` and `aria-hidden="true"`. The button's `aria-label` is `Toggle menu`,
-  followed by the insecure level's label when the connection is insecure and by the attention text
-  with attention, each after « — ».
+  `ring-2 ring-lf-header` and `aria-hidden="true"`. The button's `aria-label` starts with
+  `$_('nav.toggleMenu')`, the translated «Toggle menu» (a key of the base catalogue since lot A-62;
+  it was an English literal), followed by the insecure level's label when the connection is insecure
+  and by the attention text with attention, each after « — ».
 
 Tests: `./dev.py test front-utility component-unit` runs
 `lib/components/layout/ConnectionSecurityIndicator.test.ts` and `lib/components/layout/Header.test.ts`
@@ -960,7 +997,8 @@ Tests: `./dev.py test front-utility component-unit` runs
 box, one list of findings from which `findings`, `attentionCount` and `attentionSeverity` derive as in
 the real store, with `ensureLoaded` and `reload` spied and the answer landed by the case; and each
 gives `connectionSecurity.attention` an ICU message of its own, so that a name reads the key, the
-plural branch and the count, never a translation. Their last describe is N69b's:
+plural branch and the count, never a translation. N69b's describe closes `Header.test.ts` (A-62's
+nests inside it) and comes just before A-62's, the last, in `ConnectionSecurityIndicator.test.ts`:
 
 - the line, 6 cases: an administrator with warnings (`2` and `warning` on the root, the dot in the
   toggle, the count in the name, the link after the reason, which closes the details); with an error
@@ -976,6 +1014,22 @@ plural branch and the count, never a translation. Their last describe is N69b's:
   the name carries the level, then the count); a member over an administrator's warnings, then an
   administrator signed in on the same header, the control. The header never calls `ensureLoaded()`
   nor `reload()`.
+
+Lot A-62 adds the last describe of the indicator's file and one inside N69b's in the header's:
+
+- the line, «the checks signal on the root (A-62)», 10 cases: a member over a store that holds the
+  answer, a failed first read or a read under way, and nobody signed in (`off` each time, and a
+  member's line never asks the checks); an administrator before the answer (`pending`, the line's own
+  request having moved the store to `loading`); an answer already there at mount (`ready`, an answer
+  with nothing to look at included); `pending` then `ready` when the answer lands; `ready` kept
+  during a **Check again** reload and after a later reload failed; a first read that failed (`error`,
+  and no second request);
+- the header, «the burger's name starts with the translated toggle menu (A-62)», 4 cases: a member on
+  a secure connection (the first part alone) and on an insecure one (then the level); an
+  administrator with warnings, on a secure connection (then the count) and on an insecure one (the
+  level, then the count, in that order). The describe gives `nav.toggleMenu` a marker of its own
+  (`⟦nav.toggleMenu⟧`, through `addMessages`), so that the name must start with that key's text and
+  not with a literal.
 
 `./dev.py test front-utility connection-security` runs
 `frontend/e2e/layout/connection-security.spec.ts` on the desktop and the mobile projects. Its describe
