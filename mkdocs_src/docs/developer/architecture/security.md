@@ -1883,11 +1883,11 @@ there, where its session may be gone (without `JWT_SECRET` every start ends them
 or `423`. Any other
 addition goes through the developer first. `./dev.py test api instance-block` (`backend/test_scripts/test_api/test_instance_block.py`)
 pins the list by name and by route, checks that every API route under `/api/v1` resolves
-`refuse_when_blocked` first, and that the only other routes under `/api/v1` are FastAPI's
-documentation, so an addition, or a route the guard does not reach, shows in review.
+`refuse_when_blocked` first, and that the only other routes under `/api/v1` are the API's
+documentation (H-55 R5: the two pages, their start scripts and `openapi.json`), so an addition, or a route the guard does not reach, shows in review.
 
 **Outside the guard.** Routes outside the `/api/v1` router, such as the built web app, `/mkdocs` and
-FastAPI's own documentation (`/api/v1/docs`, `/api/v1/redoc`, `/api/v1/openapi.json`), are not
+the API's documentation where it is on (`/api/v1/docs`, `/api/v1/redoc`, `/api/v1/openapi.json`: debug and test instances only), are not
 covered: the browser still loads the app, which turns the first `423` into the block page (see
 [Instance block](../frontend/state/app-state.md#instance-block)). The scheduler does not go through
 HTTP, so the guard does not reach it: `run_due_jobs()` checks `instance_blocked()` itself and runs no
@@ -3146,6 +3146,7 @@ One `Content-Security-Policy` field per response (never two), and the module's d
 | Response | Enforced directives | Constant |
 |----------|---------------------|----------|
 | A document, any path: HTML (the web app's pages, the documentation, Swagger UI and ReDoc), XHTML, SVG, XML, any type ending with `+xml` (H-45); not a PDF | `object-src 'none'; base-uri 'self'; form-action 'self'` | `DOCUMENT_DIRECTIVES` |
+| The API's documentation pages, `/api/v1/docs` and `/api/v1/redoc` (`text/html`; **only where `LIBREFOLIO_API_DOCS` or test mode is on**, R5), in addition | `script-src 'self' https://cdn.jsdelivr.net`; `worker-src 'self' blob:`; `connect-src 'self'` | `API_DOCS_PAGES`, `api_docs_policy()`, `WEB_APP_WORKER_SRC` |
 | A page of the web app (`text/html` exactly, outside `/mkdocs` and `/api`), in addition | `script-src 'self' 'wasm-unsafe-eval' 'report-sample'` and the sorted hashes of the build's inline scripts; `worker-src 'self' blob:`; `connect-src 'self'`, then the origin of `LIBREFOLIO_PUBLIC_URL`, then `https://api.github.com` in the `selfhosted` profile only | `WEB_APP_SCRIPT_SRC`, `WEB_APP_WORKER_SRC`, `web_app_policy()`, `connect_sources()` |
 | A script of the web app's build (R4, H-55 wave 4): a response of type `text/javascript` or `application/javascript` (parameters ignored) on a path starting with `/_app/` | `script-src 'self'; connect-src 'self'` and the same extra sources as the pages; `worker-src 'self' blob:; object-src 'none'; base-uri 'self'` | `SCRIPT_MEDIA_TYPES`, `APP_ASSETS_PREFIX`, `worker_policy()` |
 | Every response, with `LIBREFOLIO_FRAME_PROTECTION` on | `frame-ancestors 'self'` (first), and the `X-Frame-Options: SAMEORIGIN` header | `FRAME_ANCESTORS`, `PAGE_POLICY` |
@@ -3188,10 +3189,26 @@ legitimate self-hosted use, controlled by frame protection alone. What each dire
   (`""` when there is none); `_is_document()` holds when that type is in `DOCUMENT_MEDIA_TYPES` (`text/html`,
   `application/xhtml+xml`, `image/svg+xml`, `application/xml`, `text/xml`) or ends with `+xml`; `_is_web_app_page()`
   requires exactly `text/html` and a path outside `/mkdocs` (bare or `/mkdocs/…`) and `/api` (bare or `/api/…`).
-  The middleware is outside GZip, so a compressed page still says `text/html`. The pages of the documentation, Swagger
-  UI and ReDoc, the HTML 404 for an unknown API path and any non-HTML document get the trio (and `frame-ancestors`) but
-  no `script-src`: the documentation is a separate site this policy does not describe, and Swagger UI and ReDoc load
-  their scripts from a CDN.
+  The middleware is outside GZip, so a compressed page still says `text/html`. The pages of the documentation
+  (`/mkdocs`), the HTML 404 for an unknown API path and any non-HTML document get the trio (and `frame-ancestors`) but
+  no `script-src`: the documentation is a separate site this policy does not describe. Swagger UI and ReDoc, where they
+  are on, are the exception: they get `api_docs_policy()`, described below. The check is by path
+  (`API_DOCS_PAGES`, the two page paths, whole) and by type (`text/html` exactly), after the web-app and `/_app/` checks;
+  the start scripts (`text/javascript`, outside `/_app/`) and `openapi.json` keep the plain headers, with no policy.
+- **The API's documentation pages** (R5, `api_docs_policy()`, `backend/app/api/api_docs.py`): off everywhere except where
+  `config.api_docs_enabled()` holds, that is `LIBREFOLIO_API_DOCS` (which `./dev.py server --debug` sets) or test mode;
+  anywhere else the routes are not registered and answer `404`, `openapi.json` included, so an instance in use publishes
+  no map of its API. FastAPI's own pages are never used (`main.py` passes `docs_url=None` and `redoc_url=None`): they load
+  `swagger-ui-dist@5` and `redoc@2` from jsDelivr at a moving version, with no integrity, and start them with an inline
+  script. Ours: the page is a fixed HTML string; the libraries come from `https://cdn.jsdelivr.net` at an **exact
+  version**, each `<script>` and `<link>` with its Subresource Integrity hash (`integrity="sha384-…"`) and
+  `crossorigin="anonymous"`, so the browser refuses a file whose bytes changed; the start script is a separate response
+  of the instance (`/api/v1/docs/swagger-init.js`, `/api/v1/redoc/redoc-init.js`) reading the schema's address from a
+  `data-openapi-url` attribute, so there is no inline script and no inline handler; no Google Fonts, no third-party
+  favicon, no validator badge. The policy follows: `script-src 'self' https://cdn.jsdelivr.net` (the origin, not the
+  hashes: the browser checks the integrity of each tag), `worker-src 'self' blob:` (ReDoc's search worker) and
+  `connect-src 'self'` (the schema), with the trio and, with frame protection on, `frame-ancestors 'self'`. No `'unsafe-inline'`,
+  no `'unsafe-eval'`. The routes sit outside the instance-block guard, as before. The libraries and how to bump one: [The Pinned Libraries of the API Docs](#api-docs-libraries).
 - **No policy on a `304`** (H-45). `self.not_modified_headers` has no `content-security-policy`: a browser freshens the
   response it cached with the header fields of a `304` (RFC 9111 §4.3.4), and Starlette's `NotModifiedResponse`
   (`StaticFiles`, the `/_app` mount) has no `Content-Type`, so a policy on it would replace the cached document's
@@ -3199,6 +3216,28 @@ legitimate self-hosted use, controlled by frame protection alone. What each dire
   the documentation) never answers `304`, so the guard is latent.
 - **A header the route set is kept**, names compared whole: a route's own `Content-Security-Policy` leaves the middleware's
   out, and the report-only one is its own field.
+
+#### 📌 The Pinned Libraries of the API Docs {: #api-docs-libraries }
+
+`api_docs.LIBRARIES` holds the three files the pages load: `SWAGGER_JS` and `SWAGGER_CSS` (`swagger-ui-dist@5.33.1`) and
+`REDOC_JS` (`redoc@2.5.4`, the standalone bundle). Each is a `Library(url, integrity)`; the pages are built from the same
+constants, and `LIBRARY_ORIGIN` (`https://cdn.jsdelivr.net`) is the only host the policy names. To bump a version:
+
+1. Change the version in the `url`: an exact one, never a range or a tag such as `@5`.
+2. Compute the hash of the file jsDelivr **publishes** at that URL, never of a copy or of the previous version's:
+
+    ```bash
+    curl -s https://cdn.jsdelivr.net/npm/swagger-ui-dist@<version>/swagger-ui-bundle.js | openssl dgst -sha384 -binary | base64
+    ```
+
+3. Write it as `sha384-<that output>` in the `integrity` of the same `Library`.
+4. Check both pages on a `./dev.py server --debug` server, then run `./dev.py test api api-docs`
+   (`backend/test_scripts/test_api/test_api_docs.py`), which pins the contract of the pages: an exact version, an
+   integrity and `crossorigin` on every external tag, the only external host, no inline script, the routes out of the
+   schema and `404` when off.
+
+A wrong hash is not silent: the browser refuses the file, and the page does not load that library (the console names
+the integrity failure).
 
 #### 🔤 The PDF Viewer's CJK Fonts {: #pdf-fonts }
 
