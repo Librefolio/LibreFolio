@@ -321,6 +321,10 @@ async function openSelect(trigger: Locator): Promise<void> {
     await expect(trigger).toHaveAttribute('aria-expanded', 'true');
 }
 
+/**
+ * Choose ADJUSTMENT as the form's type. It does NOT wait for the cost section: N78-1 (developer's decision, 21/10/2026)
+ * shows it only once a positive quantity is typed, so the caller asserts it after `fillQuantity` with a positive value.
+ */
 async function chooseAdjustment(page: Page, form: Locator): Promise<void> {
     const select = form.getByTestId('tx-form-type');
     await openSelect(selectTrigger(select));
@@ -328,7 +332,6 @@ async function chooseAdjustment(page: Page, form: Locator): Promise<void> {
     await expect(option).toBeVisible({timeout: UI_TIMEOUT});
     await option.click();
     await optionsClosed(page);
-    await expect(form.getByTestId('tx-form-cost-basis-inline'), 'an ADJUSTMENT carries its cost basis in the required section').toBeVisible({timeout: UI_TIMEOUT});
 }
 
 /** Pick an owned broker by id; selecting is a setter, so the broker the form may have preset is picked again, harmlessly. */
@@ -703,6 +706,7 @@ test.describe('J-57 · the single form refuses an Auto cost with nothing to aver
             await pickBroker(page, form.getByTestId('tx-form-broker-wrap'), broker);
             await pickAsset(page, form, asset);
             await fillQuantity(form, '5');
+            await expect(form.getByTestId('tx-form-cost-basis-inline'), 'N78-1: an ADJUSTMENT carries its cost basis in the required section once its quantity is positive').toBeVisible({timeout: UI_TIMEOUT});
             await expect(costToggle(form, 'auto'), 'the cost basis is in Auto, the default, untouched').toHaveAttribute('aria-pressed', 'true');
             await expect(costToggle(form, 'manual')).toHaveAttribute('aria-pressed', 'false');
         });
