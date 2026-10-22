@@ -161,6 +161,33 @@ is read back (`backend/app/db/models.py`; C-97, issue #43).
   declaration, so both read the same. The release 1.3 migration's docstring
   (`005_release_1_3_0_schema.py`, «Not a step») gives the reasoning.
 
+## 🕒 Timestamps {: #timestamps }
+
+Every timestamp column (`created_at`, `updated_at`, `fetched_at`, `expires_at`,
+`email_verified_at`, `last_fetch_at`…) holds **UTC without an offset**: SQLite has no
+timezone type, and the text on disk reads `2026-10-22 10:00:00.123456`.
+
+- **Write.** The application writes `utcnow()` (`backend/app/utils/datetime_utils.py`), an
+  aware UTC datetime. The plain `DateTime` column drops the offset when it binds the value:
+  an aware datetime in another zone would be stored as its local wall-clock time, so convert
+  it to UTC first.
+- **Read.** A value read back is naive. Treat it as UTC: `ensure_utc()` adds the offset, and
+  the API schemas' `UTCDateTime` type serializes it with `Z`.
+- **Declare the column.** Every `datetime` field of a model sets `sa_type=DateTime`. Since
+  SQLModel 0.0.48 a field without it maps to SQLModel's `UTCDateTime`, which refuses a naive
+  value on write and in a filter, and reads every value back aware: the same column would
+  then answer differently from the rest of the schema. A new timestamp field follows the
+  same pattern:
+
+    ```python
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    ```
+
+- **Moving to aware datetimes** (backlog D-UTC, release 1.4) needs no migration: both
+  mappings store the same text and declare the same `DATETIME` column. What changes is
+  every naive value written or compared by the tests, and the API fields that format a
+  stored value with `isoformat()`.
+
 ## 🧬 Migrations {: #migrations }
 
 Schema changes ship as Alembic revisions in `backend/alembic/versions/` (workflow:

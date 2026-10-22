@@ -108,7 +108,7 @@ setup_test_database()
 
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm.attributes import AttributeImpl
+from sqlalchemy.orm.attributes import _AttributeImpl as AttributeImpl  # private since SQLAlchemy 2.1
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User, UserRole
