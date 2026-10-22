@@ -148,12 +148,26 @@ interface MainDocument {
 
 /** What the spec saw of the policy during one test. */
 interface PolicyLog {
+    /** The documents the page loaded, in the order their responses arrived; filled by `settleDocuments`, never read before it. */
     mainDocuments: MainDocument[];
 }
 
+/**
+ * A response's headers are read asynchronously (`headersArray()` returns a Promise), so a listener can only start the
+ * read: the pending ones are kept here, in the order of the responses, beside the log and out of its JSON.
+ */
+const pendingDocuments = new WeakMap<PolicyLog, Array<Promise<MainDocument>>>();
+
 /** An empty log, for one test. */
 function newLog(): PolicyLog {
-    return {mainDocuments: []};
+    const log: PolicyLog = {mainDocuments: []};
+    pendingDocuments.set(log, []);
+    return log;
+}
+
+/** Waits for every document read started so far and puts them, in the order of the responses, in `log.mainDocuments`. A read that failed fails here. */
+async function settleDocuments(log: PolicyLog): Promise<void> {
+    log.mainDocuments = await Promise.all(pendingDocuments.get(log) ?? []);
 }
 
 /** The runner's baseURL, as an origin: the lane. */
@@ -168,8 +182,8 @@ function fieldsOf(headers: ReadonlyArray<{name: string; value: string}>, wanted:
 }
 
 /** The document `response` answers, as the browser received it. */
-function documentOf(response: Response): MainDocument {
-    const headers = response.headersArray();
+async function documentOf(response: Response): Promise<MainDocument> {
+    const headers = await response.headersArray();
     return {path: new URL(response.url()).pathname, status: response.status(), policies: fieldsOf(headers, 'content-security-policy'), frameOptions: fieldsOf(headers, 'x-frame-options')[0] ?? null};
 }
 
@@ -241,7 +255,10 @@ function recordMainDocuments(page: Page, log: PolicyLog): void {
     page.on('response', (response) => {
         const status = response.status();
         if (!isMainFrameNavigation(page, response) || (status >= 300 && status < 400)) return;
-        log.mainDocuments.push(documentOf(response));
+        const read = documentOf(response);
+        // A read nobody awaited (the test ended first) must not surface as an unhandled rejection; the real one is awaited by `settleDocuments`
+        read.catch(() => undefined);
+        pendingDocuments.get(log)?.push(read);
     });
 }
 
@@ -300,7 +317,8 @@ async function framesDrawn(page: Page): Promise<void> {
  * its trio (`policyProblems`). The violations it holds are then the whole flow's: a document loaded since would have
  * taken the earlier ones away with it.
  */
-function expectOneDocumentUnderPolicy(log: PolicyLog, path: string, what: string): void {
+async function expectOneDocumentUnderPolicy(log: PolicyLog, path: string, what: string): Promise<void> {
+    await settleDocuments(log);
     expect(
         log.mainDocuments.map((loaded) => loaded.path),
         `${what}: the page loaded one document, ${path} — so the violations read are the whole flow's (documents: ${JSON.stringify(log.mainDocuments)})`,
@@ -311,7 +329,7 @@ function expectOneDocumentUnderPolicy(log: PolicyLog, path: string, what: string
 /** The flow raised no enforced violation of the policy, in any document still on the page; the list is printed on a red. */
 async function expectNoEnforcedViolation(page: Page, log: PolicyLog, path: string, what: string): Promise<void> {
     await framesDrawn(page);
-    expectOneDocumentUnderPolicy(log, path, what);
+    await expectOneDocumentUnderPolicy(log, path, what);
     const raised = enforced(await readViolations(page));
     expect(raised, `${what} raised enforced violations of the page policy:\n${listed(raised)}`).toEqual([]);
 }
@@ -421,6 +439,7 @@ test.describe('The page policy of H-42, as the lane itself sends it: the app and
         for (const fileId of ownedStaticFiles) await deleteStaticFile(page, fileId);
         const violations = await readViolations(page).catch((error: unknown) => `unreadable: ${error instanceof Error ? error.message : String(error)}`);
         await context.unrouteAll({behavior: 'ignoreErrors'});
+        await settleDocuments(log).catch(() => undefined);
         await testInfo.attach('page-policy.json', {body: JSON.stringify({...log, violations}, null, 1), contentType: 'application/json'});
     });
 
@@ -435,7 +454,7 @@ test.describe('The page policy of H-42, as the lane itself sends it: the app and
 
             const response = await page.goto('/', {timeout: PAGE_TIMEOUT_MS});
             if (!response) throw new Error('the sign-in page: goto returned no response');
-            expect(policyProblems(documentOf(response)), 'the sign-in page reached the browser with the lane’s enforced policy and its trio: without it, every green of this spec would be the policy’s absence').toEqual([]);
+            expect(policyProblems(await documentOf(response)), 'the sign-in page reached the browser with the lane’s enforced policy and its trio: without it, every green of this spec would be the policy’s absence').toEqual([]);
             await expect(page.getByTestId('login-page'), 'the app drew its sign-in page under the policy').toBeVisible({timeout: PAGE_TIMEOUT_MS});
 
             // One breach per directive, at absolute addresses, so that each control stands alone whatever the <base> does.
@@ -483,7 +502,7 @@ test.describe('The page policy of H-42, as the lane itself sends it: the app and
             // Blocked, not merely reported: the page kept the lane as its base URL, never left, and no control's request was made.
             expect(new URL(await page.evaluate(() => document.baseURI)).origin, 'the blocked <base> retargeted nothing: the page’s base URL is still on the lane').toBe(origin);
             expect(reached, 'no request of a control was made: the policy stopped each one before it left').toEqual([]);
-            expectOneDocumentUnderPolicy(log, '/', 'the sign-in page');
+            await expectOneDocumentUnderPolicy(log, '/', 'the sign-in page');
             // And nothing else: the sign-in page itself needs nothing the policy forbids.
             const others = enforced(await readViolations(page)).filter((violation) => !isControl(violation));
             expect(others, `the sign-in page raised enforced violations of its own under the policy:\n${listed(others)}`).toEqual([]);
@@ -494,7 +513,7 @@ test.describe('The page policy of H-42, as the lane itself sends it: the app and
         const response = await page.goto(DOCS_PAGE, {timeout: PAGE_TIMEOUT_MS});
         expect(response?.status(), `precondition: the lane serves ${DOCS_PAGE} (a 404 is a page that moved: point this spec at another nested page)`).toBe(200);
         await expect(page.locator('meta[name="generator"]'), `precondition: ${DOCS_PAGE} is a page of the built documentation — an unbuilt site answers «Documentation not generated»: build it, see this file's header`).toHaveAttribute('content', /\bmkdocs-/);
-        expectOneDocumentUnderPolicy(log, DOCS_PAGE, 'the documentation page');
+        await expectOneDocumentUnderPolicy(log, DOCS_PAGE, 'the documentation page');
 
         const query = page.locator('.md-search__input');
         // Material's own way in: the field itself, in a desktop header; on a phone, the header's search button, which opens the field and focuses it.
@@ -516,7 +535,7 @@ test.describe('The page policy of H-42, as the lane itself sends it: the app and
         console.log(`owned static file ${fileId} uploaded: ${filename}`);
 
         await navigateTo(page, `/files?tab=static&filename=${encodeURIComponent(filename)}`);
-        expectOneDocumentUnderPolicy(log, '/files', 'the Files page');
+        await expectOneDocumentUnderPolicy(log, '/files', 'the Files page');
         await openPdfPreview(page, fileId, filename);
 
         await expectNoEnforcedViolation(page, log, '/files', 'the Files page and the PDF preview');
@@ -525,7 +544,7 @@ test.describe('The page policy of H-42, as the lane itself sends it: the app and
     test('the app: the Dashboard draws its main view — no enforced violation', async ({page}) => {
         await signInThroughApi(page);
         await navigateTo(page, '/dashboard');
-        expectOneDocumentUnderPolicy(log, '/dashboard', 'the Dashboard');
+        await expectOneDocumentUnderPolicy(log, '/dashboard', 'the Dashboard');
 
         const dashboard = page.getByTestId('dashboard-page');
         await expect(dashboard, `precondition: ${TEST_USER.username} lands on the Dashboard, an account with no onboarding due`).toBeVisible({timeout: PAGE_TIMEOUT_MS});

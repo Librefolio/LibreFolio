@@ -5,8 +5,9 @@ header (the ``connect-src`` of the Content-Security-Policy). The contract pinned
 
 1. ``scheme://host[:port]``: scheme and host in lower case, the scheme's default port (80 for http, 443 for https)
    left out, any other port kept, nothing of the path, the query, the fragment, a trailing slash or a user info.
-2. An IPv4 host stays as it is; an IPv6 host stays in brackets with its port; an international name is given in
-   punycode (``https://münchen.de`` → ``https://xn--mnchen-3ya.de``).
+2. An IPv4 host stays as it is; an IPv6 host stays in brackets with its port; a name already in punycode
+   (``https://xn--mnchen-3ya.de``) stays as it is. H-55 v2 review: an international name written with non-ASCII
+   characters (``https://münchen.de``) gives None, no conversion (see 6).
 3. ``None`` for nothing, blank, a scheme that is not http(s) (or no scheme), no host, a port that is not a number or out
    of range.
 4. The hardening: the origin is written into a header, so a host holding anything outside letters, digits, dots and
@@ -15,8 +16,13 @@ header (the ``connect-src`` of the Content-Security-Policy). The contract pinned
 5. Property: an accepted origin holds no character outside ``[a-z0-9.:/\\[\\]-]``, and canonicalising it again changes
    nothing.
 
-Pure: no database, no server, no network, no environment read. The hardening is already in the module: this file is its
-regression test and is green on arrival.
+6. H-55 v2 review (R3): ``None`` for a host with any non-ASCII character, without any IDNA conversion: Python's IDNA2003
+   codec and the browser's UTS46 can disagree on a name (``ß``, final sigma), and a wrong origin in the header is worse
+   than none; an international name is written in punycode in ``LIBREFOLIO_PUBLIC_URL``. And ``None`` for any URL that
+   holds a backslash: ``urlsplit`` keeps it in the host or the path where a browser reads it as a slash.
+
+Pure: no database, no server, no network, no environment read. The hardening of 4 is already in the module and green on
+arrival; ORG-008 and ORG-009 (point 6) are red until the review cure lands.
 """
 
 from __future__ import annotations
@@ -56,9 +62,8 @@ ACCEPTED = [
     pytest.param("http://[::1]:6040", "http://[::1]:6040", id="ipv6-with-port"),
     pytest.param("http://[::1]:80/x", "http://[::1]", id="ipv6-default-port-dropped"),
     pytest.param("https://[2001:DB8::1]:8443", "https://[2001:db8::1]:8443", id="ipv6-lower-cased"),
-    pytest.param("https://münchen.de", "https://xn--mnchen-3ya.de", id="international-name-in-punycode"),
-    pytest.param("https://MÜNCHEN.de:8443/x", "https://xn--mnchen-3ya.de:8443", id="international-name-lower-cased-first"),
     pytest.param("https://xn--mnchen-3ya.de", "https://xn--mnchen-3ya.de", id="punycode-name-unchanged"),
+    pytest.param("https://xn--mnchen-3ya.de:8443/x", "https://xn--mnchen-3ya.de:8443", id="punycode-name-with-port-and-path"),
     pytest.param("https://my-host.example.com", "https://my-host.example.com", id="hyphen-in-name"),
 ]
 
@@ -97,6 +102,24 @@ REFUSED_HARDENING = [
     pytest.param("https://a b.example.com", id="space"),
     pytest.param("https://folio.example.com'", id="trailing-single-quote"),
     pytest.param("https://user@a;b.com", id="semicolon-behind-user-info"),
+]
+
+#: H-55 v2 review: a host with any non-ASCII character gives no origin (IDNA2003 and UTS46 may disagree on it).
+REFUSED_NON_ASCII = [
+    pytest.param("https://münchen.de", id="international-name"),
+    pytest.param("https://MÜNCHEN.de", id="international-name-upper-case"),
+    pytest.param("https://MÜNCHEN.de:8443/x", id="international-name-with-port-and-path"),
+    pytest.param("https://straße.example.com", id="sharp-s-idna2003-and-uts46-differ"),
+    pytest.param("http://folio.exämple.com", id="non-ascii-inside-a-label"),
+]
+
+#: H-55 v2 review: a backslash anywhere gives no origin (``urlsplit`` and a browser read it differently).
+REFUSED_BACKSLASH = [
+    pytest.param("https://a.com\\b", id="backslash-after-host"),
+    pytest.param("https://evil.com\\@good.com", id="backslash-before-at-sign"),
+    pytest.param("http://a.com\\", id="trailing-backslash"),
+    pytest.param("https://a.com/path\\x", id="backslash-in-path"),
+    pytest.param("https://a.com?x=\\y", id="backslash-in-query"),
 ]
 
 #: IPv6-looking hosts that are not an IPv6 address.
@@ -141,6 +164,22 @@ def test_no_origin_for_an_ipv6_looking_host_that_is_not_an_address(url: str) -> 
     """ORG-004: a host in brackets that is not an IPv6 address gives None."""
     print_section(f"ORG-004: no origin for {url!r}")
     assert canonical_origin(url) is None
+    print_success(f"{url!r} → None")
+
+
+@pytest.mark.parametrize("url", REFUSED_NON_ASCII)
+def test_no_origin_for_an_international_name_written_in_unicode(url: str) -> None:
+    """ORG-008: a host with a non-ASCII character gives None; its punycode form is the accepted spelling (``punycode-name-unchanged``)."""
+    print_section(f"ORG-008: no origin for {url!r}")
+    assert canonical_origin(url) is None, f"{url!r}: no IDNA conversion, the variable holds punycode"
+    print_success(f"{url!r} → None")
+
+
+@pytest.mark.parametrize("url", REFUSED_BACKSLASH)
+def test_no_origin_for_a_url_with_a_backslash(url: str) -> None:
+    """ORG-009: any URL holding a backslash gives None."""
+    print_section(f"ORG-009: no origin for {url!r}")
+    assert canonical_origin(url) is None, f"{url!r}: urlsplit and the browser read the backslash differently"
     print_success(f"{url!r} → None")
 
 

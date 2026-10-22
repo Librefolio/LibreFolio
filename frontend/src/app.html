@@ -31,7 +31,9 @@
             try {
                 window.__lfCspViolations = [];
                 document.addEventListener('securitypolicyviolation', function (e) {
-                    if (e.disposition === 'enforce') window.__lfCspViolations.push({directive: e.effectiveDirective, blockedURI: e.blockedURI, sample: e.sample, sourceFile: e.sourceFile});
+                    var buffer = window.__lfCspViolations;
+                    // Bounded, and stopped once cspNotice.ts drained it (it sets the global to null)
+                    if (e.disposition === 'enforce' && Array.isArray(buffer) && buffer.length < 100) buffer.push({directive: e.effectiveDirective, blockedURI: e.blockedURI, sample: e.sample, sourceFile: e.sourceFile});
                 });
             } catch (e) {}
             // Early PWA install prompt capture (before Svelte mounts)

@@ -51,7 +51,9 @@ middleware of the stack: when a request fails before its answer started, this mi
 the headers, then lets the exception go on, so it is still logged.
 """
 
+import asyncio
 import mimetypes
+import threading
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -191,9 +193,18 @@ class _BuildScriptHashes:
     def __init__(self) -> None:
         self._signature: tuple[tuple[str, int, int], ...] | None = None
         self._hashes: tuple[str, ...] = ()
+        # current() runs in worker threads (the middleware never reads the build on the event loop): one read at a time
+        self._lock = threading.Lock()
 
     def current(self) -> tuple[str, ...]:
-        """The hashes of the build as it is now; the last good ones while a page of the last good build is missing."""
+        """The hashes of the build as it is now; the last good ones while a page of the last good build is missing.
+
+        Blocking file I/O: called through ``asyncio.to_thread``. Thread-safe: concurrent callers read a changed build once.
+        """
+        with self._lock:
+            return self._current()
+
+    def _current(self) -> tuple[str, ...]:
         from backend.app.services.platform import static_site  # noqa: PLC0415 — static_site imports this module
 
         build_dir = static_site.FRONTEND_BUILD_DIR
@@ -272,9 +283,19 @@ class SecurityHeadersMiddleware:
         self.script_hashes = _BuildScriptHashes()
         self._page_policies: tuple[tuple[str, ...], tuple[tuple[bytes, bytes], ...]] | None = None
 
-    def _web_app_policies(self) -> tuple[tuple[bytes, bytes], ...]:
-        """The policy fields of a page of the web app, for the build as it is now: rebuilt only when its hashes change."""
-        hashes = self.script_hashes.current()
+    async def _script_hashes(self) -> tuple[str, ...]:
+        """The hashes of the build as it is now, read off the event loop; none when the build cannot be read.
+
+        Without hashes the app's inline scripts are blocked, never allowed: the page still gets every header (fail closed).
+        """
+        try:
+            return await asyncio.to_thread(self.script_hashes.current)
+        except Exception as exc:  # an isolation boundary: a page always gets its headers, whatever the build's state
+            logger.warning("The build's inline scripts could not be hashed: the page's policy allows none of them", exc_info=exc)
+            return ()
+
+    def _web_app_policies(self, hashes: tuple[str, ...]) -> tuple[tuple[bytes, bytes], ...]:
+        """The policy fields of a page of the web app for ``hashes``: rebuilt only when they change."""
         if self._page_policies is None or self._page_policies[0] != hashes:
             fields = [(_CSP_FIELD, web_app_policy(hashes, self.connect_sources, self.frame_protection).encode())]
             if self.csp_report_only:
@@ -282,12 +303,12 @@ class SecurityHeadersMiddleware:
             self._page_policies = (hashes, tuple(fields))
         return self._page_policies[1]
 
-    def _added(self, path: str, status: int, headers: list[tuple[bytes, bytes]]) -> tuple[tuple[bytes, bytes], ...]:
+    async def _added(self, path: str, status: int, headers: list[tuple[bytes, bytes]]) -> tuple[tuple[bytes, bytes], ...]:
         """The headers a response of ``status`` and ``headers`` at ``path`` gets, before the ones it set are dropped."""
         if status == 304:
             return self.not_modified_headers
         if _is_web_app_page(path, headers):
-            return ALWAYS_HEADERS + ((_X_FRAME_OPTIONS,) if self.frame_protection else ()) + self._web_app_policies()
+            return ALWAYS_HEADERS + ((_X_FRAME_OPTIONS,) if self.frame_protection else ()) + self._web_app_policies(await self._script_hashes())
         return self.document_headers if _is_document(headers) else self.headers
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -300,11 +321,12 @@ class SecurityHeadersMiddleware:
         async def send_with_headers(message: Message) -> None:
             nonlocal started
             if message["type"] == "http.response.start":
-                started = True
                 headers = list(message.get("headers") or [])
                 present = {name.lower() for name, _ in headers}
-                headers.extend(header for header in self._added(scope["path"], message["status"], headers) if header[0] not in present)
+                headers.extend(header for header in await self._added(scope["path"], message["status"], headers) if header[0] not in present)
                 message = {**message, "headers": headers}
+                # Only once the headers are built: a failure before this point still gets the middleware's own 500
+                started = True
             await send(message)
 
         try:

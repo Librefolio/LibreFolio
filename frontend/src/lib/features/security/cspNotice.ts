@@ -142,8 +142,9 @@ export function startCspNotice({win, storage, log}: CspNoticeOptions = {}): void
             const entry = (item ?? {}) as Record<string, unknown>;
             handle({directive: text(entry.directive), blockedURI: text(entry.blockedURI), sample: text(entry.sample)});
         }
-        buffered.length = 0;
     }
+    // Drained: app.html's early listener stops collecting (it pushes only into an array), this module's takes over
+    target.__lfCspViolations = null;
 
     // At the document only: the event bubbles to the window, and a second listener there would see it twice
     target.document?.addEventListener('securitypolicyviolation', (event: unknown) => {
