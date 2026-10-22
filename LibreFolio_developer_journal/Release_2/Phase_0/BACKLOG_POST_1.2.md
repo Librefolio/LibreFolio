@@ -7312,6 +7312,15 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   restano al mercato del giorno. Dettagli: piano 04, «N78-1 · Una rettifica in uscita non ha valore: cura»; analisi e decisioni in
   `ondata3/N78-1-analisi.md`.
   ✅ 22/10 (riconciliazione): in dev con `79068afe5` (entrato con `2469c0852`)
+  - ✅ **Q-N78-1k chiusa senza codice** (22/10, decisione del developer): le coppie di ADJUSTMENT collegati non si producono più da prima della 1.0.0,
+    quindi non si gestiscono in modo speciale (niente `linked_adjustments.py`, niente bonifiche); vale la regola N78-1 com'è. Parere di MF:
+    `ondata4/MF-parere-N78-1k-turno1.md`. **Verifica di W (22/10, sonda di servizio su dati di test, poi cancellata)**: due creazioni ADJUSTMENT con lo
+    stesso `link_uuid` e la stessa descrizione, −2 e +2 con un costo, **si salvano collegate** (`related_transaction_id` nei due sensi): l'API le accetta ancora
+    (`_validate_linked_pair` non ha regole per l'ADJUSTMENT). Se rifiutarle in ingresso (una validazione, non una bonifica) lo decide il developer.
+  - ✅ **22/10 (decisione del developer): l'API rifiuta la coppia di rettifiche collegate.** «Proteggere l'ingresso dei dati dove un errore può succedere, niente bonifiche per casi mai
+    successi»: in `_validate_linked_pair` (`validation.py:39`) due ADJUSTMENT con lo stesso `link_uuid` sono rifiutati sul primo create con `pairAdjustmentNotAllowed`
+    (commit e validate; il promote del Bulk, con una sola creazione che porta il `link_uuid`, passa da un'altra strada e non cambia); messaggio nelle 4 lingue
+    (`transactions.errors.pairAdjustmentNotAllowed`). Nessuna modifica ai dati salvati, nessuna migrazione. Piano 04, «N78-1 · cura», punto 7.
 - **W-B94 · La metà che entra di un trasferimento come stima del prezzo** — medio, dati; W, 22/10 (idea del developer, dopo la 1.3).
   Quando un asset non ha un prezzo affidabile in un giorno, il costo per unità della gamba che entra di un TRANSFER (o di un
   ADJUSTMENT in entrata) potrebbe servire a stimarlo. Oggi un ADJUSTMENT non è mai un prezzo (P2, J-17: `price_marks`). Da

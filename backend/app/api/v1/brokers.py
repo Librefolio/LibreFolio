@@ -980,7 +980,7 @@ async def parse_file(
 
     try:
         # 1. Parse file using plugin (plugin only reads file format)
-        parse_output = await parse_file_offloaded(file_id, plugin_code, request.broker_id)
+        parse_output = await parse_file_offloaded(file_id, plugin_code, request.broker_id, user_id=current_user.id)
         transactions = parse_output.transactions
         warnings = parse_output.warnings
         validation_issues = parse_output.validation_issues

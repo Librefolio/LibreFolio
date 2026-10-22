@@ -42,6 +42,8 @@ class TransactionValidationMixin:
 
         Rules:
         - Both items must share the same `type` (no mixing e.g. TRANSFER + SELL).
+        - Two ADJUSTMENTs cannot be linked (the developer's decision, 22/10/2026: protect the entry of data): a move of units
+          between brokers is a TRANSFER. Pairs of ADJUSTMENTs already stored are never judged or changed.
         - TRANSFER requires distinct brokers (same-broker TRANSFER is a no-op), one
           asset, and exactly opposite quantities: what leaves one broker arrives at
           the other, no unit is created or lost.
@@ -57,6 +59,12 @@ class TransactionValidationMixin:
                 f"linked pair must share the same type (got {a.type.value} + {b.type.value})",
                 "pairTypeMismatch",
                 {"typeA": a.type.value, "typeB": b.type.value},
+            )
+        if a.type == TransactionType.ADJUSTMENT:
+            return (
+                "two Adjustments cannot be linked: use an Asset Transfer to move units between brokers",
+                "pairAdjustmentNotAllowed",
+                {"type": a.type.value},
             )
         if a.type == TransactionType.TRANSFER and a.broker_id == b.broker_id:
             return (

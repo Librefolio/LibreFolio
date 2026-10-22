@@ -67,7 +67,6 @@ ROW_SKIPS_PENDING = frozenset(
         "broker_cryptocom",
         "broker_delta",
         "broker_disnat",
-        "broker_fineco",
         "broker_finpension",
         "broker_freetrade",
         "broker_generic_csv",
@@ -93,6 +92,7 @@ NEW_VERSIONS = {
     "broker_traderepublic": "1.1.0",
     "broker_swissquote": "1.1.0",
     "broker_ibkr": "1.1.0",
+    "broker_fineco": "1.5.0",
 }
 
 
@@ -325,6 +325,8 @@ def _degiro_row(description: str, day: str = "22-09-2025") -> List[str]:
 _DIRECTA_ROW = ["27-12-2024", "27-12-2024", "Provento etf", "IEMB", "IE00B2NPKV68", "YYYYYYY", "ISHARES JPMORGAN", "0", "20.95", "0", "EUR", ""]
 _SWISSQUOTE_ROW = ["10-08-2022 15:30:02", "113947121", "Buy", "ORFN", "CONSTRAINED CAPITAL", "US8863645383", "200.0", "19.85", "5.96", "0.00", "-3975.96", "168660.08", "USD"]
 _IBKR_ROW = ["BUY", "20240130", "US0378331005", "5", "190", "950", "USD", "-1", "USD"]
+# A Fineco «Movimenti Dossier Titoli» row (15 cells, the sample's header is physical line 6): a settled purchase, long past, so the N74 rule «only settled rows» never leaves it out first.
+_FINECO_ROW = ["15/01/2024", "17/01/2024", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "106.30000", "", "531.50", "", "", "", "2.95"]
 _TR_ROW = ["2025-02-03", "Aankoop", "-10", "Test fund", "IE00BKX55T58", "1", "", ""]
 
 
@@ -397,6 +399,11 @@ SKIP_CASES: Tuple[SkipCase, ...] = (
     SkipCase("swissquote-missing-currency", "broker_swissquote", "swissquote-export.csv", _with(_SWISSQUOTE_ROW, c12=""), ROWS_UNREADABLE, kind="unreadable"),
     SkipCase("swissquote-missing-isin-and-symbol", "broker_swissquote", "swissquote-export.csv", _with(_SWISSQUOTE_ROW, c3="", c5=""), ROWS_UNREADABLE, kind="unreadable"),
     SkipCase("swissquote-non-positive-quantity", "broker_swissquote", "swissquote-export.csv", _with(_SWISSQUOTE_ROW, c6="0"), ROWS_UNREADABLE, kind="unreadable"),
+    # --- Fineco (left the beta in W-B92): an operation nobody maps is unknown; a row that cannot be read (date, description, too few cells) is unreadable
+    SkipCase("fineco-unknown-operation", "broker_fineco", "fineco-export.csv", _with(_FINECO_ROW, c2="Zorglub", c3="TITOLO PROVA"), ROWS_NOT_RECOGNIZED, delimiter=",", reason_has="zorglub"),
+    SkipCase("fineco-unreadable-date", "broker_fineco", "fineco-export.csv", _with(_FINECO_ROW, c0="99/99/2026", c1="99/99/2026"), ROWS_UNREADABLE, kind="unreadable", delimiter=","),
+    SkipCase("fineco-empty-description", "broker_fineco", "fineco-export.csv", _with(_FINECO_ROW, c2=""), ROWS_UNREADABLE, kind="unreadable", delimiter=","),
+    SkipCase("fineco-insufficient-columns", "broker_fineco", "fineco-export.csv", _FINECO_ROW[:8], ROWS_UNREADABLE, kind="unreadable", delimiter=","),
     # --- IBKR: an unknown direction and a trade without an ISIN (an FX trade) are unknown; a date that cannot be read is unreadable
     SkipCase("ibkr-unknown-direction", "broker_ibkr", "ibkr-trades-export.csv", _with(_IBKR_ROW, c0="TRANSFER"), ROWS_NOT_RECOGNIZED, delimiter=",", reason_has="transfer"),
     SkipCase("ibkr-no-isin", "broker_ibkr", "ibkr-trades-export.csv", _with(_IBKR_ROW, c2=""), ROWS_NOT_RECOGNIZED, delimiter=","),
@@ -414,6 +421,7 @@ ONLY_ROW_CASES: Tuple[OnlyRowCase, ...] = (
     OnlyRowCase("directa-no-valid-transactions", "broker_directa", "directa-export.csv", _with(_DIRECTA_ROW, c2="Zorglub"), 10, ",", "Nessuna transazione valida"),
     OnlyRowCase("traderepublic-no-valid-transactions", "broker_traderepublic", "traderepublic-export.csv", _with(_TR_ROW, c1="Zorglub"), 1, ";", "No valid transactions found"),
     OnlyRowCase("swissquote-no-valid-transactions", "broker_swissquote", "swissquote-export.csv", _with(_SWISSQUOTE_ROW, c2="Zorglub"), 1, ";", "No valid transactions found"),
+    OnlyRowCase("fineco-no-valid-transactions", "broker_fineco", "fineco-export.csv", _with(_FINECO_ROW, c2="Zorglub"), 6, ",", "No valid transactions found"),
     OnlyRowCase("ibkr-no-valid-transactions", "broker_ibkr", "ibkr-trades-export.csv", _with(_IBKR_ROW, c2=""), 1, ",", "No valid transactions found"),
 )
 
@@ -480,6 +488,31 @@ class TestRowsLeftOut:
         assert out.transactions == [] and len(legacy) == 1, f"{case.id}: {[(n.code, n.message) for n in out.warnings]}"
         assert not (legacy[0].context or {}).get("report_issue")
 
+    def test_fineco_the_four_rows_it_cannot_import_are_grouped_into_the_two_shared_notices(self, tmp_path: Path):
+        """Fineco (W-B92): an unknown operation is one ``rows_not_recognized`` row; an unreadable date, an empty description and a row with too
+        few cells are three ``rows_unreadable`` rows. Every one is listed on its own line, none gives a transaction, and not one plain
+        string warning is left (the four used to be ``Row N: …`` strings)."""
+        rows = {
+            "unknown": _with(_FINECO_ROW, c2="Zorglub"),
+            "date": _with(_FINECO_ROW, c0="99/99/2026", c1="99/99/2026"),
+            "description": _with(_FINECO_ROW, c2=""),
+            "columns": _FINECO_ROW[:8],
+        }
+        buffer = io.StringIO()
+        csv.writer(buffer, delimiter=",", lineterminator="\n").writerows(rows.values())
+        path = tmp_path / "fineco-export.csv"
+        path.write_bytes((SAMPLE_DIR / "fineco-export.csv").read_bytes() + buffer.getvalue().encode("utf-8"))
+        first = len((SAMPLE_DIR / "fineco-export.csv").read_bytes().splitlines()) + 1
+        line = {name: first + index for index, name in enumerate(rows)}
+
+        base, out = _parse_sample("broker_fineco", "fineco-export.csv"), _plugin("broker_fineco").parse(path, broker_id=BROKER_ID)
+
+        assert len(out.transactions) == len(base.transactions), "none of the four rows gives a transaction"
+        assert _lines_of(out, ROWS_NOT_RECOGNIZED) == [line["unknown"]]
+        assert _lines_of(out, ROWS_UNREADABLE) == sorted([line["date"], line["description"], line["columns"]])
+        assert {notice.code: (notice.context or {}).get("count") for notice in out.warnings if notice.code in SHARED_CODES} == {ROWS_NOT_RECOGNIZED: 1, ROWS_UNREADABLE: 3}
+        assert [(notice.code, notice.message) for notice in out.warnings if notice.code == "legacy"] == []
+
     def test_the_revolut_crypto_layout_keeps_its_plain_string_warnings(self):
         """Guard (green today and after): the crypto sample's unsupported types (Send, Receive, Stake, Staking reward) stay six plain strings, none of them a shared code."""
         out = _parse_sample("broker_revolut", "revolut-crypto-export.csv")
@@ -531,6 +564,11 @@ SAMPLE_LISTINGS: Tuple[SampleListing, ...] = (
     # The three FX trades of the trades sample (no ISIN)
     SampleListing("broker_ibkr", "ibkr-trades-export.csv", not_recognized={10: "SELL", 11: "SELL", 12: "SELL"}),
     SampleListing("broker_ibkr", "ibkr-default-currency-export.csv"),
+    # The four Fineco samples hold only rows it knows and can read
+    SampleListing("broker_fineco", "fineco-export.csv"),
+    SampleListing("broker_fineco", "fineco_btp_market.csv"),
+    SampleListing("broker_fineco", "fineco_btp_placement.csv"),
+    SampleListing("broker_fineco", "fineco_variant_a.csv"),
 )
 
 # What each sample imported before the cure and must keep importing: a normal row of the sample still gives its transaction.
@@ -551,6 +589,10 @@ SAMPLE_TRANSACTIONS = {
     ("broker_swissquote", "swissquote-export.csv"): 17,
     ("broker_ibkr", "ibkr-trades-export.csv"): 16,
     ("broker_ibkr", "ibkr-default-currency-export.csv"): 2,
+    ("broker_fineco", "fineco-export.csv"): 20,
+    ("broker_fineco", "fineco_btp_market.csv"): 6,
+    ("broker_fineco", "fineco_btp_placement.csv"): 4,
+    ("broker_fineco", "fineco_variant_a.csv"): 5,
 }
 CA_CODES = ("ca_securities_unknown_causale", "ca_unknown_causale", "ca_account_invalid_amount")
 
@@ -653,6 +695,7 @@ ROW_SKIPS_BY_PLUGIN: Dict[str, PluginSkips] = {
     "broker_traderepublic": PluginSkips("traderepublic-unknown-type", "traderepublic-invalid-date"),
     "broker_swissquote": PluginSkips("swissquote-unknown-transaction", "swissquote-invalid-date"),
     "broker_ibkr": PluginSkips("ibkr-unknown-direction", "ibkr-invalid-date"),
+    "broker_fineco": PluginSkips("fineco-unknown-operation", "fineco-unreadable-date", "left the beta in W-B92: too few cells, unreadable date and empty description are rows_unreadable"),
     OWN_CODE_DANSKE: PluginSkips(None, None, "own code, tested in test_brim_danske_bank.py (W-B85)", own_test="test_brim_danske_bank.py"),
 }
 

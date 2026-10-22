@@ -2,10 +2,12 @@
  * pluginSettingsForm — the plugin settings form without the DOM (workstream X, lot CP11b; plan 03 §4.4).
  *
  * `PluginSettingsForm.svelte` only draws what these functions decide, so the rules are pinned here, once:
- *   - `groupByFamily`: the entries by family, the price sources (`asset`) before the exchange-rate sources (`fx`)
- *     whatever the order of the answer, each family in the answer's order, a family without entries left out;
+ *   - `groupByFamily`: the entries by family, the price sources (`asset`) before the exchange-rate sources (`fx`) before
+ *     the import sources (`brim`, W-BS) whatever the order of the answer, each family in the answer's order, a family
+ *     without entries left out;
  *   - `FAMILY_ICONS`: one icon per family of `FAMILY_ORDER`, no more and no fewer, the one the family has on the
- *     documentation's home — lucide's `ChartColumn` for the price sources, `Coins` for the exchange-rate sources;
+ *     documentation's home — lucide's `ChartColumn` for the price sources, `Coins` for the exchange-rate sources — and
+ *     an icon of its own for the import sources, which is neither of those;
  *   - the texts: `fieldLabel`, `fieldDescription` and `optionLabel` say the plugin's key when it is translated and the
  *     plugin's English text otherwise (a key answered with itself, or with nothing, is no translation), and never ask
  *     for a key the plugin did not declare; `displayValue` writes the value in force of a field the caller cannot
@@ -155,14 +157,35 @@ describe('groupByFamily — the groups of the Plugins tab', () => {
         expect(groupByFamily([])).toStrictEqual([]);
     });
 
-    it('names both families, asset first, each with a whole key for its title', () => {
-        expect(FAMILY_ORDER).toEqual(['asset', 'fx']);
-        expect(FAMILY_TITLE_KEYS).toStrictEqual({asset: 'pluginSettings.families.asset', fx: 'pluginSettings.families.fx'});
+    it('names the three families, asset first and the import sources last, each with a whole key for its title', () => {
+        expect(FAMILY_ORDER).toEqual(['asset', 'fx', 'brim']);
+        expect(FAMILY_TITLE_KEYS).toStrictEqual({asset: 'pluginSettings.families.asset', fx: 'pluginSettings.families.fx', brim: 'pluginSettings.families.brim'});
+    });
+
+    it('puts the import sources after the exchange-rate sources and the price sources, whatever the order of the answer', () => {
+        const IMPORTER = entry([], {family: 'brim', plugin_code: 'broker_x'});
+        const OTHER_IMPORTER = entry([], {family: 'brim', plugin_code: 'broker_y'});
+
+        expect(groupByFamily(frozen([IMPORTER, ECB, OTHER_IMPORTER, JUSTETF]))).toStrictEqual([
+            {family: 'asset', entries: [JUSTETF]},
+            {family: 'fx', entries: [ECB]},
+            {family: 'brim', entries: [IMPORTER, OTHER_IMPORTER]},
+        ]);
+        expect(groupByFamily([ECB, JUSTETF]), 'no import source: no brim group').toStrictEqual([
+            {family: 'asset', entries: [JUSTETF]},
+            {family: 'fx', entries: [ECB]},
+        ]);
     });
 
     it('has one icon per family of FAMILY_ORDER, no more and no fewer: a new family adds its row', () => {
         expect(Object.keys(FAMILY_ICONS).sort(), 'a row for each family, and for nothing else').toEqual([...FAMILY_ORDER].sort());
         for (const family of FAMILY_ORDER) expect(FAMILY_ICONS[family], `${family}: a component, not an empty row`).toBeTypeOf('function');
+    });
+
+    it('gives the import sources an icon of their own: neither the price sources’ nor the exchange-rate sources’', () => {
+        expect(FAMILY_ICONS.brim, 'a component, not an empty row').toBeTypeOf('function');
+        expect(FAMILY_ICONS.brim).not.toBe(ChartColumn);
+        expect(FAMILY_ICONS.brim).not.toBe(Coins);
     });
 
     it('gives each family the icon of the documentation’s home: lucide’s ChartColumn to the price sources, Coins to the exchange-rate sources', () => {

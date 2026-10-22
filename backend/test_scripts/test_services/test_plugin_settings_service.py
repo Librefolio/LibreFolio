@@ -37,6 +37,15 @@ doubles ``mockprov`` (asset: four system fields, three user fields, a secret of 
 6. **FX**: ``MOCKFX``'s two system fields are written here (never over HTTP, where they would change the cache keys
    of every FX call of the lane) and reach a configured ``MOCKFX``.
 
+7. **The BRIM family** (W-BS): a ``test_only`` BRIM plugin that declares settings (``_brim_settings_lab``, registered for the
+   length of a test) is listed in family ``brim`` when named, with its name and its icon (``FAMILY_ICON_ATTRIBUTES["brim"]``
+   is ``icon_url``, the property ``BRIMProvider`` has) and never in the full catalogue; ``FAMILY_REGISTRIES["brim"]`` is the
+   BRIM registry and ``PluginSettingFamily.BRIM`` the enum value; the real BRIM plugins declare nothing, so none is listed. A
+   secret of either scope is stored encrypted with the instance key's sub-key, bound to its row (family ``brim``), and never
+   comes back, only «set» or «not set»; a personal value reaches its owner only, an instance value is an administrator's;
+   an environment variable locks an instance field as for the other families; writing a real BRIM plugin's setting is
+   ``UNKNOWN_FIELD``.
+
 **X-R43** (workstream X): an integer past the double range is refused like any value its field refuses — ``INVALID_VALUE``
 «too large», never with its digits, nothing written — instead of an ``OverflowError`` escaping the write. «Red today» is
 the state before the cure; a guard passes before and after.
@@ -69,17 +78,19 @@ from structlog.testing import capture_logs
 
 from backend.app.db.base import SQLModel  # imports every model, and backend.app.db.session with its PRAGMA listener
 from backend.app.db.models import PluginSystemSetting, PluginUserSetting, User
-from backend.app.schemas.plugin_settings import PluginSettingErrorCode, PluginSettingsCatalogResponse, PluginSettingsPluginRead, PluginSettingWriteItem, PluginSettingWriteResult
+from backend.app.schemas.plugin_settings import PluginSettingErrorCode, PluginSettingFamily, PluginSettingsCatalogResponse, PluginSettingsPluginRead, PluginSettingWriteItem, PluginSettingWriteResult
 from backend.app.services.asset_source_providers.mockprov.plugin import MockProvider
+from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.fx import runtime as fx_runtime
 from backend.app.services.fx_providers.mockfx.plugin import MockFXProvider
 from backend.app.services.platform.instance_key import InstanceKeyError
 from backend.app.services.plugin_settings import resolver, runtime, service
 from backend.app.services.plugin_settings.contract import PluginSettingsMixin
-from backend.app.services.plugin_settings.crypto import decrypt_secret, key_id_of, secret_aad, settings_subkey
+from backend.app.services.plugin_settings.crypto import UnreadableSecretError, decrypt_secret, key_id_of, secret_aad, settings_subkey
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingScope, SettingType, env_name, env_variables
 from backend.app.services.plugin_settings.service import PluginSettingsKeyUnavailable, PluginSettingsRefused, read_catalogue, write_settings
 from backend.app.services.provider_registry import AbstractProviderRegistry
+from backend.test_scripts.test_services import _brim_settings_lab as brim_lab
 from backend.test_scripts.test_utils import print_section, print_success
 
 KEY_A = "LibreFolio-plugin-settings-test-key-A-0123456789"
@@ -137,7 +148,7 @@ def isolated_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
     monkeypatch.delenv("LIBREFOLIO_INSTANCE_KEY_FILE", raising=False)
     monkeypatch.setenv("LIBREFOLIO_INSTANCE_KEY", KEY_A)
     monkeypatch.setenv("LIBREFOLIO_PROFILE", "selfhosted")
-    for family, plugin in (("asset", MockProvider), ("fx", MockFXProvider), ("asset", _LabPlugin)):
+    for family, plugin in (("asset", MockProvider), ("fx", MockFXProvider), ("asset", _LabPlugin), ("brim", brim_lab.SettingsBrimPlugin)):
         code = plugin().provider_code
         for declared in plugin.settings_fields:
             for name in {*env_variables(family, code, declared), env_name(family, code, declared.key)}:
@@ -1099,3 +1110,173 @@ async def test_the_fx_fields_are_written_here_and_reach_a_configured_mockfx(engi
     assert (configured.settings.get("decimals"), configured.settings.secret("api_key")) == (3, secret)
     assert (_state(view["decimals"]), _state(view["api_key"])) == ((3, True, "db", False, False, None), (None, True, "db", False, False, None))
     print_success("written, encrypted for the FX family, delivered to MOCKFX")
+
+
+# =============================================================================
+# 7. THE BRIM FAMILY (W-BS)
+# =============================================================================
+
+BRIM_CODE = brim_lab.CODE
+BRIM_KEYS = [declared.key for declared in brim_lab.SETTINGS_FIELDS]
+BRIM_REGION_VARIABLE = env_name("brim", BRIM_CODE, "region")
+
+
+@pytest.fixture
+def brim_plugin():
+    """The lab BRIM plugin registered in the real BRIM registry (test mode is set by ``isolated_environment``), then out again."""
+    with brim_lab.registered_settings_brim() as plugin_class:
+        yield plugin_class
+
+
+def _brim(key: str, scope: str, **write: Any) -> PluginSettingWriteItem:
+    return _item(key, scope, family="brim", code=BRIM_CODE, **write)
+
+
+def test_the_brim_family_is_wired_into_the_service():
+    """7: the registry of the family and the attribute its icon is read from (``BRIMProvider.icon_url``, a property)."""
+    assert service.FAMILY_REGISTRIES.get("brim") is BRIMProviderRegistry
+    assert service.FAMILY_ICON_ATTRIBUTES.get("brim") == "icon_url"
+
+
+def test_the_brim_family_is_a_value_of_the_family_enum():
+    """7: the enum of the API (the catalogue's ``family`` filter and every write item) accepts ``brim``."""
+    assert PluginSettingFamily("brim") is PluginSettingFamily.BRIM and PluginSettingFamily.BRIM.value == "brim"
+    assert [family.value for family in PluginSettingFamily][:2] == ["asset", "fx"], "the two families that were there keep their values"
+
+
+def test_the_icon_of_a_brim_plugin_is_the_property_its_provider_list_publishes():
+    """7: ``icon_url``, stripped; never the price sources' ``get_icon`` or the FX ``icon``; the lab plugin's own is read."""
+    assert service._plugin_identity("brim", brim_lab.SettingsBrimPlugin, BRIM_CODE) == (brim_lab.NAME, brim_lab.ICON)
+    assert service._plugin_identity("brim", _stand_in(provider_name=STAND_IN_NAME, icon_url=f"  {ASSET_ICON}\n"), STAND_IN_CODE) == (STAND_IN_NAME, ASSET_ICON)
+    assert service._plugin_identity("brim", _stand_in(provider_name=STAND_IN_NAME, get_icon=ASSET_ICON, icon=FX_ICON), STAND_IN_CODE) == (STAND_IN_NAME, None), "the other families' attributes are not this one's"
+
+
+@pytest.mark.asyncio
+async def test_a_brim_plugin_is_listed_in_its_family_with_its_name_and_its_icon(engine: AsyncEngine, people: dict[str, User], brim_plugin: type):
+    """7: named, a ``test_only`` BRIM plugin is in the catalogue: family ``brim``, name, icon, the fields in their order;
+    asked under another family it is not there."""
+    print_section("7: a BRIM plugin in the catalogue")
+    for user in (people["admin"], people["alice"]):
+        entry = await _entry(engine, user, BRIM_CODE)
+
+        assert (entry.family, entry.plugin_code, entry.plugin_name, entry.icon_url, entry.configured) == ("brim", BRIM_CODE, brim_lab.NAME, brim_lab.ICON, True)
+        assert [field.key for field in entry.fields] == BRIM_KEYS
+    assert list(await _fields(engine, people["alice"], BRIM_CODE, family="brim")) == BRIM_KEYS
+    assert await _fields(engine, people["alice"], BRIM_CODE, family="asset") == {}
+    assert await _fields(engine, people["alice"], BRIM_CODE, family="fx") == {}
+    print_success("family brim, with its name and its icon")
+
+
+@pytest.mark.asyncio
+async def test_a_test_only_brim_plugin_is_never_in_the_unnamed_catalogue(engine: AsyncEngine, people: dict[str, User], brim_plugin: type):
+    """7: the lab plugin is registered and declares fields, and is still hidden unless named; no real BRIM plugin declares
+    a field, so the BRIM group of the unnamed catalogue is empty. The count is the subject: nothing else is in the family."""
+    everything = await _catalogue(engine, people["admin"])
+    brim_only = await _catalogue(engine, people["admin"], family="brim")
+
+    assert BRIM_CODE in BRIMProviderRegistry.list_plugin_codes(), "barrier: registered and served in test mode"
+    assert [plugin.plugin_code for plugin in everything.plugins if plugin.family == "brim"] == []
+    assert brim_only.plugins == []
+
+
+@pytest.mark.asyncio
+async def test_the_real_brim_plugins_are_absent_from_the_catalogue(engine: AsyncEngine, people: dict[str, User]):
+    """7, guard: they declare nothing, so none is listed, named or not, under any family."""
+    codes = BRIMProviderRegistry.list_plugin_codes()
+    assert codes, "barrier: the BRIM registry holds plugins"
+    everything = await _catalogue(engine, people["admin"])
+
+    assert not set(codes) & {plugin.plugin_code for plugin in everything.plugins if plugin.family == "brim"}
+    for code in codes:
+        assert await _fields(engine, people["admin"], code, family="brim") == {}, code
+        assert await _fields(engine, people["admin"], code) == {}, code
+
+
+@pytest.mark.asyncio
+async def test_a_brim_secret_is_stored_encrypted_for_its_row_and_never_comes_back(engine: AsyncEngine, people: dict[str, User], brim_plugin: type, tmp_path: Path):
+    """7: the instance's secret and a user's own: a ciphertext the instance key's sub-key opens — for that row only, never
+    with another key or another row's AAD —, no plaintext in the database, and in the catalogue only «set» or «not set»."""
+    print_section("7: BRIM secrets")
+    admin, alice, bob = people["admin"], people["alice"], people["bob"]
+    instance_secret, personal_secret = _secret(), _secret()
+
+    by_admin = await _write(engine, admin, [_brim("api_key", "system", secret_value=instance_secret), _brim("region", "system", value="us")])
+    by_alice = await _write(engine, alice, [_brim("personal_token", "user", secret_value=personal_secret), _brim("statement_language", "user", value="it")])
+
+    assert (by_admin.success_count, by_alice.success_count) == (2, 2)
+    system, user = await _rows(engine)
+    subkey = settings_subkey()
+    (system_row,) = [row for row in system if row.field_key == "api_key"]
+    (user_row,) = [row for row in user if row.field_key == "personal_token"]
+    assert (system_row.family, system_row.plugin_code, system_row.value_json, system_row.key_id, system_row.updated_by_user_id) == ("brim", BRIM_CODE, None, key_id_of(subkey), admin.id)
+    assert (user_row.user_id, user_row.family, user_row.plugin_code, user_row.value_json) == (alice.id, "brim", BRIM_CODE, None)
+    system_aad, user_aad = secret_aad("brim", BRIM_CODE, "api_key", "system", None), secret_aad("brim", BRIM_CODE, "personal_token", "user", alice.id)
+    assert decrypt_secret(subkey, system_aad, system_row.secret_ciphertext) == instance_secret
+    assert decrypt_secret(subkey, user_aad, user_row.secret_ciphertext) == personal_secret
+    for blob, aad, foreign_aad in ((system_row.secret_ciphertext, system_aad, secret_aad("asset", BRIM_CODE, "api_key", "system", None)), (user_row.secret_ciphertext, user_aad, secret_aad("brim", BRIM_CODE, "personal_token", "user", bob.id))):
+        with pytest.raises(UnreadableSecretError):
+            decrypt_secret(bytes([9]) * 32, aad, blob)  # the secret is not readable without the instance key
+        with pytest.raises(UnreadableSecretError):
+            decrypt_secret(subkey, foreign_aad, blob)  # nor for another family, nor for another user's row
+    database = _database_text(tmp_path / "settings.db")
+    assert instance_secret not in database and personal_secret not in database, "a secret's plaintext reached the database"
+
+    views = {name: await _catalogue(engine, person, plugin_code=BRIM_CODE) for name, person in (("admin", admin), ("alice", alice), ("bob", bob))}
+    for name, catalogue in views.items():
+        dumped = json.dumps(catalogue.model_dump(mode="json"))
+        assert instance_secret not in dumped and personal_secret not in dumped, f"the catalogue of {name} shows a secret"
+    by_view = {name: {field.key: field for field in catalogue.plugins[0].fields} for name, catalogue in views.items()}
+    assert _state(by_view["admin"]["api_key"]) == (None, True, "db", False, True, None), "the instance secret: only «set»; the administrator may change it"
+    assert _state(by_view["alice"]["api_key"]) == (None, True, "db", False, False, None), "a member sees only that the instance secret is set"
+    assert _state(by_view["alice"]["personal_token"]) == (None, True, "db", False, True, None)
+    for other in ("admin", "bob"):
+        assert _state(by_view[other]["personal_token"]) == (None, False, "none", False, True, None), f"{other} must not see that alice has a token"
+        assert by_view[other]["statement_language"].value == "all", f"{other} must not see alice's language"
+    assert by_view["alice"]["statement_language"].value == "it" and {view["region"].value for view in by_view.values()} == {"us"}
+    print_success("ciphertext for its row, nothing in clear, «set» only")
+
+
+@pytest.mark.asyncio
+async def test_personal_and_instance_fields_of_a_brim_plugin_keep_their_scopes(engine: AsyncEngine, people: dict[str, User], brim_plugin: type):
+    """7: a member writes personal fields only; the instance's need an administrator; a field in the wrong scope is
+    unknown; a refused value says why and never what it was. Nothing of a refused write is stored."""
+    admin, alice = people["admin"], people["alice"]
+    too_short = "x7"
+
+    assert _outcomes(await _refused(engine, alice, [_brim("region", "system", value="us")])) == [("region", False, FORBIDDEN)]
+    assert _outcomes(await _refused(engine, alice, [_brim("statement_language", "system", value="it")])) == [("statement_language", False, UNKNOWN)], "a personal field is not the instance's"
+    assert _outcomes(await _refused(engine, admin, [_brim("region", "user", value="us")])) == [("region", False, UNKNOWN)], "an instance field is not personal"
+    results = await _refused(engine, admin, [_brim("statement_language", "user", value="xx"), _brim("api_key", "system", secret_value=too_short)])
+    assert _outcomes(results) == [("statement_language", False, INVALID), ("api_key", False, INVALID)]
+    assert all(too_short not in (result.message or "") for result in results), "a refusal never repeats the value"
+    await _assert_nothing_written(engine)
+
+
+@pytest.mark.asyncio
+async def test_an_environment_variable_locks_the_instance_field_of_a_brim_plugin(engine: AsyncEngine, people: dict[str, User], brim_plugin: type, monkeypatch: pytest.MonkeyPatch):
+    """7: ``LIBREFOLIO_PLUGIN_BRIM_<CODE>_<FIELD>`` sets the field, shows to an administrator as the lock, and a write is
+    ``LOCKED_BY_ENV``; the secret's alias locks the secret, which stays «set» and never shows its value."""
+    secret = _secret()
+    monkeypatch.setenv(BRIM_REGION_VARIABLE, "us")
+    monkeypatch.setenv(brim_lab.API_KEY_ALIAS, secret)
+
+    admins, members = await _fields(engine, people["admin"], BRIM_CODE, family="brim"), await _fields(engine, people["alice"], BRIM_CODE, family="brim")
+
+    assert (admins["region"].value, admins["region"].source, admins["region"].locked, admins["region"].env_variable) == ("us", "env", True, BRIM_REGION_VARIABLE)
+    assert (admins["api_key"].value, admins["api_key"].is_set, admins["api_key"].locked, admins["api_key"].env_variable) == (None, True, True, brim_lab.API_KEY_ALIAS)
+    assert (members["region"].locked, members["region"].env_variable) == (True, None), "the variable's name is the administrator's"
+    assert _outcomes(await _refused(engine, people["admin"], [_brim("region", "system", value="eu"), _brim("api_key", "system", secret_value=_secret())])) == [("region", False, LOCKED), ("api_key", False, LOCKED)]
+    assert secret not in json.dumps((await _catalogue(engine, people["admin"], plugin_code=BRIM_CODE)).model_dump(mode="json"))
+    await _write(engine, people["alice"], [_brim("statement_language", "user", value="en")])  # the personal field is never locked
+
+
+@pytest.mark.asyncio
+async def test_a_setting_of_a_real_brim_plugin_is_an_unknown_field(engine: AsyncEngine, people: dict[str, User]):
+    """7: the family exists, the plugin declares nothing: a write names no such setting, whoever writes it."""
+    codes = BRIMProviderRegistry.list_plugin_codes()
+    assert codes, "barrier: the BRIM registry holds plugins"
+    code = "broker_generic_csv" if "broker_generic_csv" in codes else codes[0]
+    item = _item("api_key", "system", family="brim", code=code, secret_value=_secret())
+
+    assert _outcomes(await _refused(engine, people["admin"], [item])) == [("api_key", False, UNKNOWN)]
+    await _assert_nothing_written(engine)

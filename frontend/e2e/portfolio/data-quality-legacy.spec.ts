@@ -37,21 +37,18 @@
  * assets with their prices, then the account. Nothing is routed or mocked: every response read is real.
  */
 
-import {execFileSync} from 'child_process';
-import * as path from 'path';
-import {fileURLToPath} from 'url';
 import {expect, test as base, type APIRequestContext, type Locator, type Page, type Request} from '../fixtures/playwright';
 import {schemas} from '../../src/lib/api/generated';
 import {waitForSettled} from '../fixtures/app-events';
 import {daysAgoIso, todayIso} from '../fixtures/dates';
+import {writeLegacyRows} from '../fixtures/legacy-cost-rows';
+import type {LegacyRows} from '../fixtures/legacy-cost-rows';
 import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {uniqueSuffix} from '../fixtures/unique';
 
 const API = '/api/v1';
 const REPORT_PATH = `${API}/portfolio/report`;
 const LOTS_PATH = `${API}/portfolio/lots/analysis`;
-const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const HELPER_MODULE = 'backend.test_scripts.test_db.legacy_cost_rows';
 /** d0: the deposit; d1: the purchase, priced at its cost; d2: the legacy rows, and the last price. */
 const DEPOSIT_DAYS_AGO = 60;
 const BUY_DAYS_AGO = 50;
@@ -65,7 +62,6 @@ const COST_COLUMNS = ['pnl', 'pnl-percent', 'pmc'] as const;
 
 type Owned = {user: DisposableUser | null; brokerIds: number[]; assetIds: number[]};
 type Seeded = {brokerA: number; brokerB: number; assetT: number; assetJ: number; nameT: string; nameJ: string};
-type LegacyRows = {transfer_out: number; transfer_in: number; adjustment_in: number};
 type Decimalish = string | number | null | undefined;
 type ReportIssue = {code: string; severity: string; cta_action?: string | null; message_params?: Record<string, unknown> | null; affected_asset_ids?: number[]; affected_asset_names?: string[]};
 type ReportHolding = {asset_id: number; broker_id: number | null; quantity: Decimalish; wac_per_unit?: Decimalish; gain_loss?: Decimalish; gain_loss_percent?: Decimalish};
@@ -218,59 +214,6 @@ async function seedThroughTheApi(page: Page, owned: Owned, suffix: string): Prom
     return {brokerA, brokerB, assetT, assetJ, nameT, nameJ};
 }
 
-type LegacyRequest = {userId: number; sourceBroker: number; destBroker: number; transferAsset: number; adjustmentAsset: number; date: string; marker: string};
-
-/**
- * Write the legacy rows with `legacy_cost_rows.py`, the way global-setup.ts runs Python: from the repo
- * root, with this process's environment — TEST_PORT and LIBREFOLIO_TEST_DATA_DIR, so the helper resolves
- * this lane's database and nothing else. When the runner's `pipenv run` has already activated the
- * environment (VIRTUAL_ENV), its interpreter is called directly — no `pipenv`, which could create an
- * environment of its own; otherwise `pipenv run python`, as global-setup.ts does. Arguments travel as an
- * argv array, never through a shell. A non-zero exit fails with the helper's own explanation.
- */
-function writeLegacyRows(legacy: LegacyRequest): LegacyRows {
-    const helperArgs = [
-        '-m',
-        HELPER_MODULE,
-        '--user-id',
-        String(legacy.userId),
-        '--source-broker',
-        String(legacy.sourceBroker),
-        '--dest-broker',
-        String(legacy.destBroker),
-        '--transfer-asset',
-        String(legacy.transferAsset),
-        '--adjustment-asset',
-        String(legacy.adjustmentAsset),
-        '--date',
-        legacy.date,
-        '--transfer-qty',
-        String(TRANSFER_QTY),
-        '--adjustment-qty',
-        String(ADJUSTMENT_QTY),
-        '--marker',
-        legacy.marker,
-    ];
-    const venv = process.env.VIRTUAL_ENV;
-    const command = venv ? path.join(venv, 'bin', 'python') : 'pipenv';
-    const argv = venv ? helperArgs : ['run', 'python', ...helperArgs];
-    let stdout: string;
-    try {
-        stdout = execFileSync(command, argv, {cwd: PROJECT_ROOT, env: process.env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 90_000});
-    } catch (error) {
-        const failed = error as {status?: number | null; signal?: string | null; stdout?: string; stderr?: string; message?: string};
-        throw new Error(`legacy_cost_rows (${command}) exited with ${failed.status ?? failed.signal ?? 'no status'}:\n${failed.stderr || failed.message || ''}\n${failed.stdout ?? ''}`);
-    }
-    // The helper's contract is one line of JSON on stdout; anything else is a failure worth reading.
-    const lines = stdout.split('\n').filter((line) => line.trim() !== '');
-    expect(lines, `legacy_cost_rows prints one line of JSON; it printed:\n${stdout}`).toHaveLength(1);
-    const rows = JSON.parse(lines[0]) as LegacyRows;
-    expect(rows, `legacy_cost_rows printed ${lines[0]}`).toEqual({transfer_out: expect.any(Number), transfer_in: expect.any(Number), adjustment_in: expect.any(Number)});
-    // For the run log: which interpreter wrote the rows, and their ids.
-    console.log(`legacy_cost_rows ran with ${venv ? `VIRTUAL_ENV ${command}` : 'the pipenv fallback (pipenv run python)'}: ${lines[0]}`);
-    return rows;
-}
-
 /**
  * The precondition, read back through the app rather than taken on the helper's word: the three rows are
  * the legacy shape the app now refuses — no cost basis, no cash, no asset event, the pair linked both
@@ -362,7 +305,7 @@ test.describe('MISSING_COST_BASIS from legacy rows — dashboard (item 22)', () 
         // What the app no longer accepts, written as an old version left it.
         const legacyDate = daysAgoIso(LEGACY_DAYS_AGO);
         const marker = `legacy-cost-rows ${suffix}`;
-        const legacy = writeLegacyRows({userId: user.id, sourceBroker: brokerA, destBroker: brokerB, transferAsset: assetT, adjustmentAsset: assetJ, date: legacyDate, marker});
+        const legacy = writeLegacyRows({userId: user.id, sourceBroker: brokerA, destBroker: brokerB, transferAsset: assetT, adjustmentAsset: assetJ, date: legacyDate, transferQty: TRANSFER_QTY, adjustmentQty: ADJUSTMENT_QTY, marker});
         await expectLegacyShape(page, legacy, seeded, legacyDate, marker);
 
         // Full load: a fresh document, so neither the report nor the lots analysis can come from a client
