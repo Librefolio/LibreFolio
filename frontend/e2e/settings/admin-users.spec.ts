@@ -19,12 +19,7 @@
  *              (`unverifiable`), not http (`invalid`, no copy), a stubbed stranger (`mismatch`), the prefill (`idle`);
  *   AUSR-E-08  a deletion: the preview of the broker that goes, the username typed, the broker gone with the account;
  *   AUSR-E-09  signed out everywhere (confirmed): the account's open session is refused, the account stays active;
- *   AUSR-E-10  guides restarted (confirmed): every flow the account had skipped is pending again;
- *   AUSR-E-11  who can sign up, from Users (N69c): saved at the choice, asked about only for «open», read back in Global settings.
- * AUSR-E-11 writes no setting of the lane: `registration_mode` is shared by every spec (the lane registers openly), so the
- * page's own routes stand in for the server — the bulk PATCH is recorded and answered, and the two reads that carry the
- * mode (`GET /system/instance`, `GET /settings/global`) follow it. What is proved is the tab's side: the request it makes and
- * the way the two tabs read the same setting.
+ *   AUSR-E-10  guides restarted (confirmed): every flow the account had skipped is pending again.
  * Every action is asserted on what the page publishes — `data-*` attributes and the app events of `notify` — then read
  * back on the server: through the administrator's own API session, or the account's for its session and its guides.
  * Not here, left to the Vitest of plan A6b.1: the usage line, the limit banner and the billing link, an invitation
@@ -37,8 +32,8 @@
  * decision D4 a): no group, no second bar, and no `settings-tab-users` anywhere.
  *
  * Ownership. `e2e_test_admin` only acts: no test changes its role or state, nor those of any other fixture user. Each
- * test registers its own disposable accounts anonymously (the lane registers openly: checked first, and no spec changes
- * it) and writes its own unique invitation addresses, each recorded before the request that creates it goes. The `users`
+ * test registers its own disposable accounts anonymously (the lane registers openly: checked first; the one spec that changes
+ * it, registration-mode.spec.ts, runs alone and puts it back) and writes its own unique invitation addresses, each recorded before the request that creates it goes. The `users`
  * fixture removes them after the test, red or green: every pending invitation carrying one of its addresses is revoked
  * (found through `GET /users/invites`); every account still alive deletes itself (`DELETE /auth/users/me`, signed in as
  * that very account, its identity checked), reactivated first when the test left it deactivated, since a deactivated
@@ -139,7 +134,7 @@ async function expectRegistrationOpen(api: APIRequestContext): Promise<void> {
     const response = await api.get(INSTANCE_CONFIG_PATH);
     expect(response.status(), `GET ${INSTANCE_CONFIG_PATH}: ${await response.text()}`).toBe(200);
     const mode = ((await response.json()) as {accounts?: {registration_mode?: unknown}}).accounts?.registration_mode;
-    expect(mode, `The lane must register accounts openly (accounts.registration_mode 'open'): this spec registers its disposable accounts anonymously and invites through the tab, and no E2E spec changes the mode. The lane answered ${JSON.stringify(mode)}`).toBe('open');
+    expect(mode, `The lane must register accounts openly (accounts.registration_mode 'open'): this spec registers its disposable accounts anonymously and invites through the tab, and the spec that changes the mode runs alone. The lane answered ${JSON.stringify(mode)}`).toBe('open');
 }
 
 async function signInAdministrator(admin: APIRequestContext): Promise<void> {
@@ -853,83 +848,5 @@ test.describe('Sessions and guides, on disposable accounts', () => {
             'Every guide starts again, as for a new account',
         ).toEqual([]);
         expect(after.map((flow) => flow.flow).sort(), 'the same guides as before').toEqual(before.map((flow) => flow.flow).sort());
-    });
-});
-
-test.describe('Who can sign up, from the Users tab (N69c)', () => {
-    test('AUSR-E-11: the mode is chosen beside «Invite» and saved at once, «open» asks first, and Global settings reads the same setting', async ({page}) => {
-        // The lane's mode is shared and no spec changes it: the page answers for the server, with one mode it holds itself.
-        let mode = 'invite';
-        const saved: unknown[] = [];
-        await page.route(
-            (url) => url.pathname === '/api/v1/settings/global/bulk',
-            async (route, request) => {
-                if (request.method() !== 'PATCH') return route.fallback();
-                const body = request.postDataJSON() as {items: {key: string; value: string}[]};
-                saved.push(body);
-                mode = body.items[0].value;
-                return route.fulfill({status: 200, json: {}});
-            },
-        );
-        await page.route(
-            (url) => url.pathname === INSTANCE_CONFIG_PATH,
-            async (route, request) => {
-                if (request.method() !== 'GET') return route.fallback();
-                const response = await route.fetch();
-                const body = (await response.json()) as {accounts: Record<string, unknown>};
-                return route.fulfill({response, json: {...body, accounts: {...body.accounts, registration_mode: mode, registration_locked: false}}});
-            },
-        );
-        await page.route(
-            (url) => url.pathname === '/api/v1/settings/global',
-            async (route, request) => {
-                if (request.method() !== 'GET') return route.fallback();
-                const response = await route.fetch();
-                const body = (await response.json()) as {items: {key: string; value: string}[]};
-                return route.fulfill({response, json: {...body, items: body.items.map((item) => (item.key === 'registration_mode' ? {...item, value: mode} : item))}});
-            },
-        );
-
-        await openUsersTab(page);
-        const control = page.getByTestId('users-registration');
-        await expect(control, 'The control sits in the Users tab and shows the mode in force').toHaveAttribute('data-mode', 'invite', {timeout: LOAD_MS});
-        await expect(control).toHaveAttribute('data-locked', 'false');
-        const choose = async (value: string) => {
-            await page.getByTestId('users-registration-mode-button').click();
-            await page.getByTestId(`users-registration-option-${value}`).click();
-        };
-
-        await test.step('closed: saved at the choice, no confirmation, and the invitation goes off', async () => {
-            const since = await eventSeq(page);
-            await choose('disabled');
-            await waitForEvent(page, 'settings.global.saved', {since, timeout: ACTION_MS});
-            expect(saved, 'one bulk PATCH, with that mode').toEqual([{items: [{key: 'registration_mode', value: 'disabled'}]}]);
-            await expect(control, 'the configuration is read again').toHaveAttribute('data-mode', 'disabled', {timeout: ACTION_MS});
-            await expect(page.getByTestId('users-invite-button')).toHaveAttribute('data-disabled-reason', 'registration-disabled', {timeout: UI_MS});
-        });
-
-        await test.step('open: a confirmation first; cancelled, nothing is sent and the select goes back', async () => {
-            await choose('open');
-            await expect(page.getByTestId('users-confirm'), '«open» lets in anyone: asked first').toBeVisible({timeout: UI_MS});
-            expect(saved, 'nothing sent yet').toHaveLength(1);
-            await page.getByTestId('confirm-modal-cancel').click();
-            await expect(page.getByTestId('users-confirm')).toHaveCount(0, {timeout: UI_MS});
-            await expect(control).toHaveAttribute('data-shown', 'disabled', {timeout: UI_MS});
-            expect(saved, 'cancelling sends nothing').toHaveLength(1);
-        });
-
-        await test.step('open, confirmed: saved', async () => {
-            const since = await eventSeq(page);
-            await choose('open');
-            await page.getByTestId('confirm-modal-confirm').click();
-            await waitForEvent(page, 'settings.global.saved', {since, timeout: ACTION_MS});
-            expect(saved[1], 'the second PATCH carries open').toEqual({items: [{key: 'registration_mode', value: 'open'}]});
-            await expect(control).toHaveAttribute('data-mode', 'open', {timeout: ACTION_MS});
-        });
-
-        await test.step('Global settings shows the same setting', async () => {
-            await openSettingsTab(page, 'admin');
-            await expect(page.getByTestId('global-setting-registration_mode'), 'the other tab reads the mode just saved').toHaveAttribute('data-value', 'open', {timeout: LOAD_MS});
-        });
     });
 });
