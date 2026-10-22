@@ -27,7 +27,8 @@
         "database": "Copie de la base de données",
         "files": "Ajout des fichiers",
         "finalizing": "Finalisation",
-        "encrypting": "Chiffrement avec votre mot de passe"
+        "encrypting": "Chiffrement avec votre mot de passe",
+        "sealing": "Scellement pour le panneau de l'hébergeur"
       },
       "progress": "{done} sur {total}",
       "ready": "Sauvegarde prête",
@@ -254,6 +255,12 @@
         "unlimited": "Une vérification pour une restauration accepte des archives qui, décompressées, font n'importe quelle taille.",
         "invalid": "{variable} est inutilisable (un nombre entier de mégaoctets, 0 pour aucune limite) : les vérifications pour une restauration sont refusées tant qu'il n'est pas corrigé.",
         "profileTable": "Les valeurs par défaut du profil de LibreFolio ne donnent aucune valeur à la limite de téléversement, ou une valeur du mauvais type, donc les vérifications pour une restauration sont refusées : définissez LIBREFOLIO_BACKUP_MAX_RESTORE_MB à un nombre entier de mégaoctets et signalez l'erreur."
+      },
+      "recipients": {
+        "ok": "Les sauvegardes du panneau de l'hébergeur sont scellées pour {count, plural, one {# clé} many {# clés} other {# clés}} : seule la clé privée ouvre leur mot de passe.",
+        "off": "Aucun destinataire n'est défini pour les sauvegardes du panneau de l'hébergeur : le panneau reçoit des archives zip en clair.",
+        "invalid": "LIBREFOLIO_BACKUP_RECIPIENTS ne peut pas être utilisée ({reason}) : un ou deux destinataires age1…, séparés par une virgule. Les sauvegardes du panneau de l'hébergeur répondent 503 tant qu'elle n'est pas corrigée.",
+        "missingManaged": "LIBREFOLIO_BACKUP_RECIPIENTS n'est pas définie : une instance gérée ne remet jamais une sauvegarde en clair au panneau de l'hébergeur, dont les sauvegardes répondent 503 tant qu'elle n'est pas définie."
       }
     }
   }

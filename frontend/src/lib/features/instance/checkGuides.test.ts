@@ -16,7 +16,7 @@
  *     the guide of an own key only (`Object.hasOwn`), so `undefined` for an unknown id and for `constructor`,
  *     `__proto__`, `toString` and `hasOwnProperty`.
  *   - A guide is `admin/<page>/#<anchor>`, matching `^admin/[a-z0-9_]+/#[a-z0-9-]+$`: no language prefix (`DocsLink`
- *     adds it), no leading `/`, no `.md`, a folder URL, an explicit anchor. The 20 guides are `EXPECTED_GUIDES` below.
+ *     adds it), no leading `/`, no `.md`, a folder URL, an explicit anchor. The 21 guides are `EXPECTED_GUIDES` below.
  *
  * The cases: §2's five — the shape, the anchors exist, the lookup, the browser half, the translation ratchet — and §1's
  * table pinned whole, so that a changed guide is a visible change of this file.
@@ -94,7 +94,7 @@ vi.mock('$lib/api', () => {
 // =============================================================================
 
 /**
- * The 20 guides of §1, whole: check id → guide. A changed guide is a change of this table. Written in the order of the
+ * The 21 guides of §1, whole: check id → guide. A changed guide is a change of this table. Written in the order of the
  * checks (`CONFIG_CHECKS`, then `platform.plugin_secrets`), then the browser's finding, and compared as a record: the
  * order is pinned by §3, against the checks themselves.
  */
@@ -113,6 +113,8 @@ const EXPECTED_GUIDES: Readonly<Record<string, string>> = {
     'backup.panel_token': 'admin/hosting_providers/#panel-token',
     'backup.upload_limit': 'admin/hosting_providers/#restore-upload-limit',
     'backup.restore_limit': 'admin/hosting_providers/#restore-upload-limit',
+    // L3 (B, 22/10): the recipients of the hosting panel's sealed backups.
+    'backup.recipients': 'admin/backup_restore/#sealed',
     'accounts.login_limit': 'admin/configuration/#login-limit',
     'email.smtp': 'admin/email/#variables',
     'email.smtp_encryption': 'admin/email/#encryption-modes',
@@ -459,7 +461,7 @@ describe('checkGuides — the guide of each finding of the Security tab (N69d)',
     // red until N69d §1: checkGuides.ts does not exist
     // H-61: red until checkGuides.json holds platform.hosting_panel (contract §5)
     // H-55 v2: red until checkGuides.json holds platform.blockedScript → admin/configuration/#csp
-    it('§1 pinned whole: CHECK_GUIDES is the table of the 20 guides — a changed guide is a change of this file', async () => {
+    it('§1 pinned whole: CHECK_GUIDES is the table of the 21 guides — a changed guide is a change of this file', async () => {
         expect((await checkGuides()).CHECK_GUIDES, 'CHECK_GUIDES, check id → guide').toEqual(EXPECTED_GUIDES);
     });
 });
