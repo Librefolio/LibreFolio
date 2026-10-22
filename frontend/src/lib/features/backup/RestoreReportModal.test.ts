@@ -10,6 +10,11 @@
  *     (`same`, `changed`, `absent`, `other_version`, `unreadable`) and, for `changed`, one line per difference given,
  *     `restore-report-admins` (each administrator of the backup), `restore-report-links` (one notice, P11),
  *     `restore-report-warnings` (only with warnings), `restore-report-blocker` (only with the blocker);
+ *   - L3 (workstream B, lot L3 CP1): `restore-report-warnings` lists every warning but `credentials_from_backup`
+ *     (which every report ends with: `backup.restore.report.signInAgain` already says it, under the administrators)
+ *     and `confirming_account_not_in_backup`, and is absent when no other warning is left; the second code draws
+ *     `restore-report-own-account` instead (`role="alert"`, the danger roles, `backup.restore.report.ownAccountMissing`),
+ *     absent without the code, never blocking the confirmation;
  *   - P11: one notice about the links, `restore-report-links`, worded by `backup.restore.report.linksExpired`, and
  *     nothing about accounts waiting for an email verification — no test id, no key;
  *   - the word (§0.4): picked once when the modal opens, `pickConfirmationWord(confirmationWords(<backup.restore.confirm
@@ -95,7 +100,10 @@ vi.mock('$lib/api', () => {
     return {zodiosApi, schemas: {}, axiosInstance: {}, ApiError: class ApiError extends Error {}};
 });
 
-type RestoreStageReport = z.infer<typeof schemas.RestoreStageReport>;
+type GeneratedStageReport = z.infer<typeof schemas.RestoreStageReport>;
+/** L3: the two warnings of the accounts, written out until the client is generated again. */
+type Warning = GeneratedStageReport['warnings'][number] | 'credentials_from_backup' | 'confirming_account_not_in_backup';
+type RestoreStageReport = Omit<GeneratedStageReport, 'warnings'> & {warnings: Warning[]};
 type Difference = RestoreStageReport['control_totals_differences'][number];
 
 // --- The component ----------------------------------------------------------------------------------------------------
@@ -133,7 +141,15 @@ const QUANTITY_LINE: Difference = {kind: 'quantity', broker_id: 7, currency: nul
 /** B4 (§5): what a report says of the archive's encryption and of the plugin secrets. Written out until the client is generated again. */
 type ReportB4Fields = {encrypted: boolean; secrets_unreadable: {system: number; user: number}; secrets_rekeyed: number};
 
-/** An upgrade: two migrations, two tables changed and one not, the totals changed, two administrators, two warnings. */
+/** L3: the warning every report ends with, as the server sends it now. */
+const CREDENTIALS = 'credentials_from_backup';
+/** L3: the administrator confirming is not among the backup's administrators. */
+const OWN_ACCOUNT = 'confirming_account_not_in_backup';
+
+/**
+ * An upgrade: two migrations, two tables changed and one not, the totals changed, two administrators, two warnings
+ * shown, and `credentials_from_backup` last, as the server sends it in every report (L3).
+ */
 function report(overrides: Partial<RestoreStageReport & ReportB4Fields> = {}): RestoreStageReport & ReportB4Fields {
     return {
         backup_created_at: '2026-10-15T12:00:00Z',
@@ -160,7 +176,7 @@ function report(overrides: Partial<RestoreStageReport & ReportB4Fields> = {}): R
         database_size: 8 * MIB,
         instance_key_included: true,
         administrators: ['giulia.bianchi', 'operator7'],
-        warnings: ['rows_changed', 'control_totals_changed'],
+        warnings: ['rows_changed', 'control_totals_changed', CREDENTIALS],
         blockers: [],
         control_totals: 'changed',
         control_totals_differences: [CASH_LINE, QUANTITY_LINE],
@@ -234,10 +250,10 @@ describe('RestoreReportModal — the sections', () => {
     });
 
     it.each<[RestoreStageReport['control_totals'], Partial<RestoreStageReport>]>([
-        ['same', {control_totals: 'same', control_totals_differences: [], control_totals_differences_count: 0, warnings: []}],
-        ['absent', {control_totals: 'absent', control_totals_differences: [], control_totals_differences_count: 0, warnings: []}],
-        ['other_version', {control_totals: 'other_version', control_totals_differences: [], control_totals_differences_count: 0, warnings: []}],
-        ['unreadable', {control_totals: 'unreadable', control_totals_differences: [], control_totals_differences_count: 0, warnings: ['control_totals_unreadable']}],
+        ['same', {control_totals: 'same', control_totals_differences: [], control_totals_differences_count: 0, warnings: [CREDENTIALS]}],
+        ['absent', {control_totals: 'absent', control_totals_differences: [], control_totals_differences_count: 0, warnings: [CREDENTIALS]}],
+        ['other_version', {control_totals: 'other_version', control_totals_differences: [], control_totals_differences_count: 0, warnings: [CREDENTIALS]}],
+        ['unreadable', {control_totals: 'unreadable', control_totals_differences: [], control_totals_differences_count: 0, warnings: ['control_totals_unreadable', CREDENTIALS]}],
     ])('the ledger totals %s: data-status, and no difference line', (status, overrides) => {
         mount(report(overrides));
 
@@ -279,12 +295,12 @@ describe('RestoreReportModal — the sections', () => {
         ).toEqual([]);
     });
 
-    it('the warnings: shown with the warnings, absent without', () => {
+    it('the warnings: shown with the warnings, absent without (L3: credentials_from_backup alone is none)', () => {
         const withWarnings = mount();
         expect(section('restore-report-warnings')).toBeInTheDocument();
         withWarnings.unmount();
 
-        mount(report({warnings: []}));
+        mount(report({warnings: [CREDENTIALS]}));
         expect(within(screen.getByTestId('restore-report')).queryByTestId('restore-report-warnings')).toBeNull();
     });
 });
@@ -507,5 +523,95 @@ describe('B4 — RestoreReportModal: the plugin secrets of the checked copy', ()
         expect(within(root()).getByTestId('restore-report-links')).toBeInTheDocument();
         expect(within(root()).queryByTestId('restore-report-secrets-rekeyed')).toBeNull();
         expect(within(root()).queryByTestId('restore-report-secrets-unreadable')).toBeNull();
+    });
+});
+
+// =====================================================================================================================
+// L3 CP1 — the warnings of the accounts (workstream B, lot L3; written red first)
+// =====================================================================================================================
+
+/*
+ * The contract: every report the server sends ends with the warning `credentials_from_backup` (after the restart, the
+ * accounts and passwords are the backup's). `backup.restore.report.signInAgain`, under the administrators, already
+ * says it: the yellow box `restore-report-warnings` does not list it, and is not drawn when it is the only warning.
+ *
+ * `confirming_account_not_in_backup`: the administrator reading the report is not among the backup's administrators,
+ * so after the restart this account cannot sign in. Not a line of the yellow box: a strong alert of its own,
+ * `restore-report-own-account`, `role="alert"`, in the danger roles (`bg-lf-danger-soft`), worded by
+ * `backup.restore.report.ownAccountMissing`. Absent without the code. It does not block: a restorable report with no
+ * blocker can still be confirmed.
+ *
+ * Red today: the box lists both codes (as the `unknown` warning) and nothing draws the alert. The case «absent without
+ * the code» is green today: the guard.
+ */
+
+describe('L3 — RestoreReportModal: the warnings of the accounts', () => {
+    const root = () => screen.getByTestId('restore-report');
+    const listed = () =>
+        within(section('restore-report-warnings'))
+            .getAllByTestId('restore-report-warning')
+            .map((line) => line.getAttribute('data-warning'));
+
+    it('credentials_from_backup is not a line of the yellow box: the other warnings are, in order', () => {
+        mount();
+
+        expect(listed()).toEqual(['rows_changed', 'control_totals_changed']);
+        expect(root().querySelector(`[data-warning="${CREDENTIALS}"]`), 'credentials_from_backup drawn as a warning').toBeNull();
+        expect(i18n.asked, 'a warning shown as the unknown fallback').not.toContain('backup.restore.report.warning.unknown');
+    });
+
+    it('credentials_from_backup the only warning: no yellow box, and the administrators still say to sign in again', () => {
+        mount(report({warnings: [CREDENTIALS]}));
+
+        // The presence barrier: the section that already says it is drawn.
+        expect(within(root()).getByTestId('restore-report-admins')).toHaveTextContent('backup.restore.report.signInAgain');
+        expect(within(root()).queryByTestId('restore-report-warnings')).toBeNull();
+    });
+
+    it('confirming_account_not_in_backup: restore-report-own-account, role alert, the danger roles, worded by backup.restore.report.ownAccountMissing', () => {
+        mount(report({warnings: ['rows_changed', OWN_ACCOUNT, CREDENTIALS]}));
+
+        const alert = within(root()).getByTestId('restore-report-own-account');
+        expect(alert).toHaveAttribute('role', 'alert');
+        expect(alert.className, 'the alert is not drawn in the danger roles').toContain('bg-lf-danger-soft');
+        expect(alert).toHaveTextContent('backup.restore.report.ownAccountMissing');
+        expect(i18n.asked).toContain('backup.restore.report.ownAccountMissing');
+    });
+
+    it('confirming_account_not_in_backup is not a line of the yellow box', () => {
+        mount(report({warnings: ['rows_changed', OWN_ACCOUNT, CREDENTIALS]}));
+
+        expect(within(root()).getByTestId('restore-report-own-account')).toBeInTheDocument();
+        expect(listed()).toEqual(['rows_changed']);
+        expect(root().querySelector(`[data-warning="${OWN_ACCOUNT}"]`), 'confirming_account_not_in_backup drawn as a warning').toBeNull();
+    });
+
+    it('confirming_account_not_in_backup and credentials_from_backup only: the alert, and no yellow box', () => {
+        mount(report({warnings: [OWN_ACCOUNT, CREDENTIALS]}));
+
+        expect(within(root()).getByTestId('restore-report-own-account')).toBeInTheDocument();
+        expect(within(root()).queryByTestId('restore-report-warnings')).toBeNull();
+    });
+
+    it('without the code: no restore-report-own-account (green today: the guard)', () => {
+        mount();
+
+        // The presence barrier: the report drew its sections, the yellow box included.
+        expect(within(root()).getByTestId('restore-report-warnings')).toBeInTheDocument();
+        expect(within(root()).queryByTestId('restore-report-own-account')).toBeNull();
+        expect(i18n.asked).not.toContain('backup.restore.report.ownAccountMissing');
+    });
+
+    it('confirming_account_not_in_backup does not block: a restorable report with no blocker is confirmed with the word', async () => {
+        const {onConfirm} = mount(report({warnings: [OWN_ACCOUNT, CREDENTIALS], restorable: true, blockers: []}));
+        expect(within(root()).getByTestId('restore-report-own-account'), 'precondition: the alert is drawn').toBeInTheDocument();
+        expect(within(root()).queryByTestId('restore-report-blocker')).toBeNull();
+
+        expect(field()).toBeEnabled();
+        await type('violet');
+        expect(confirmButton()).toBeEnabled();
+        await fireEvent.click(confirmButton());
+
+        expect(onConfirm).toHaveBeenCalledTimes(1);
     });
 });

@@ -37,7 +37,7 @@ def backup_error(status_code: int, code: str, message: str) -> HTTPException:
 
 
 def job_view(job: jobs.BackupJob) -> InstanceBackupJob:
-    """The job as the API shows it: no hash, no list of the files left out."""
+    """The job as the API shows it: the archive's SHA-256 once done (L3), never the list of the files left out."""
     return InstanceBackupJob(
         job_id=job.job_id,
         status=job.status,
@@ -48,9 +48,11 @@ def job_view(job: jobs.BackupJob) -> InstanceBackupJob:
         finished_at=job.finished_at,
         file_name=job.file_name,
         file_size=job.file_size,
+        file_sha256=job.file_sha256 if job.status == "done" else None,
         warnings=list(job.warnings),
         error_code=job.error_code,
         encrypted=job.encrypted,
+        instance_key_included=job.instance_key_included,
     )
 
 

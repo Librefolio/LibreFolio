@@ -74,6 +74,11 @@ Under test, in ``backend/app/services/platform/instance_backup/``: ``jobs.py`` (
     progress), neither the key nor what ``derive_key_from`` says of its length in the message or the log. A secure
     archive carrying K1, given another key: its own key wins. Guards: ``instance_key=None`` is today's check; a wrong key
     on an archive of this very instance (its secrets under K2 already) changes nothing.
+(j) Lot L3, the job says whether its archive carries the instance key: ``BackupJob.instance_key_included``, written in
+    ``state.json`` and read back by ``get_job``. ``True`` for a secure backup (``run_backup`` as ``start_backup``, origin
+    ``cli`` or ``ui``) of a source whose key LibreFolio generated, exactly when the archive carries the entry; ``False``
+    for a secure backup whose key is configured, not created yet or unusable (no entry), and for a backup without a
+    password though the key was generated. Before L3 the field is missing, and each case says so (``l3_flag``).
 
 How. The database of every source is ``test_backup_staging.py``'s, made once by ``alembic upgrade`` at the head (its
 module fixture, imported), copied into a data directory of the test with that module's accounts and files. The live
@@ -1603,3 +1608,63 @@ def test_a_generated_key_of_4096_bytes_travels_in_a_secure_backup_and_a_check_re
     assert (report.instance_key_included, report.restorable) == (True, True), f"the key included, the archive restorable: {report.instance_key_included}, {report.blockers}"
     assert_rekeyed_to(own, root, report, source)
     print_success(f"{shown_key(key)}: exported, read back, {len(SECRET_ROWS)} secrets re-encrypted")
+
+
+# =============================================================================
+# (j) Lot L3: the job says whether its archive carries the instance key
+# =============================================================================
+
+
+def l3_flag(job: BackupJob) -> bool:
+    """``job.instance_key_included``, the field lot L3 adds; before it, a failure that says so."""
+    if not hasattr(job, "instance_key_included"):
+        pytest.fail("[new] BackupJob has no field 'instance_key_included' yet: lot L3 adds it", pytrace=False)
+    return job.instance_key_included
+
+
+@pytest.mark.parametrize("start", ["run_backup", "start_backup"])
+def test_a_secure_backup_carrying_the_generated_key_says_so_in_its_job(tmp_path, databases, monkeypatch, start):
+    """(j) L3: a secure backup of a source whose key LibreFolio generated carries the key entry, and its job says
+    ``instance_key_included`` ``True``: in the state returned, in ``state.json``, and as ``get_job`` reads it back."""
+    print_section(f"instance_key_included, a secure backup carrying the generated key ({start})")
+    env = envelope_module()
+    data = source_dir(tmp_path / "source", databases, monkeypatch, key=SOURCE_KEY)
+    if start == "run_backup":
+        job, path = secure_backup(data)
+    else:
+        first = start_backup(origin="ui", data_dir=data, password=PASSWORD)
+        job = jobs_cases.wait_until_finished(first.job_id, data)
+        assert (job.status, job.error_code) == ("done", None), f"precondition: the secure backup is done: {job}"
+        path = job_dir(data, job.job_id) / job.file_name
+    opened = open_envelope(env, path, tmp_path / "opened")
+    assert KEY_ENTRY in opened.entries and opened.manifest["instance_key"]["included"] is True, f"precondition: the archive carries the key: {sorted(opened.entries)[:5]}, {opened.manifest['instance_key']}"
+    assert l3_flag(job) is True, f"the job says its archive carries the key: {job}"
+    written = json.loads((job_dir(data, job.job_id) / STATE_FILE).read_text(encoding="utf-8"))
+    assert written.get("instance_key_included", "<missing>") is True, f"state.json records it: {written.get('instance_key_included', '<missing>')!r}"
+    assert l3_flag(get_job(job.job_id, data_dir=data)) is True, "get_job reads it back"
+    print_success(f"{start}: the key carried, instance_key_included True")
+
+
+@pytest.mark.parametrize(("arrange", "source", "problem", "warnings"), NOT_EXPORTABLE)
+def test_a_secure_backup_without_the_key_entry_says_false_in_its_job(tmp_path, databases, monkeypatch, arrange, source, problem, warnings):
+    """(j) L3: a secure backup whose key is configured, not created yet or unusable carries no key entry ((b)), and its
+    job says ``instance_key_included`` ``False``, in ``state.json`` too."""
+    env = envelope_module()
+    data = source_dir(tmp_path / "source", databases, monkeypatch)
+    arrange(data, monkeypatch, tmp_path)
+    job, path = secure_backup(data)
+    opened = open_envelope(env, path, tmp_path / "opened")
+    assert opened.manifest["instance_key"]["included"] is False, f"precondition: no key entry: {opened.manifest['instance_key']}"
+    assert l3_flag(job) is False, f"no key carried: {job}"
+    written = json.loads((job_dir(data, job.job_id) / STATE_FILE).read_text(encoding="utf-8"))
+    assert written.get("instance_key_included", "<missing>") is False, f"state.json records it: {written.get('instance_key_included', '<missing>')!r}"
+
+
+def test_a_backup_without_a_password_never_says_it_carries_the_generated_key(tmp_path, databases, monkeypatch):
+    """(j) L3: without a password the archive never carries the key, though LibreFolio generated it ((a)(b)): its job
+    says ``instance_key_included`` ``False``."""
+    data = source_dir(tmp_path / "source", databases, monkeypatch, key=SOURCE_KEY)
+    path = clear_backup(data)
+    job = get_job(path.parent.name, data_dir=data)
+    assert zip_contents(path)[1]["instance_key"]["included"] is False, "precondition: a clear zip, no key"
+    assert l3_flag(job) is False, f"no password, no key carried: {job}"

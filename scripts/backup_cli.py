@@ -528,7 +528,12 @@ _STAGE_WARNINGS = {
     "control_totals_changed": "The ledger's totals differ from those the backup recorded (listed above)",
     "control_totals_unreadable": "The ledger's totals could not be read on the copy",
     "non_iso_currencies": "Some currency codes in the backup are not ISO 4217 codes, names or numbers an earlier version saved: an edit of their rows is refused until they are corrected (./dev.py db currencies lists them after the restore)",
+    "credentials_from_backup": "After a restore you sign in with the backup's credentials; every session open now ends",
+    "confirming_account_not_in_backup": "Your account is not among the administrators of this backup: after the restart you cannot sign in with it",
 }
+#: Said apart, never as a ⚠️ line (L3): the first is the sentence under the administrators; the second comes only from
+#: the API, for the administrator who reads the report.
+_STAGE_WARNINGS_SAID_APART = frozenset({"credentials_from_backup", "confirming_account_not_in_backup"})
 _STAGE_BLOCKERS = {
     "no_administrator": "The backup has no active administrator: after a restore nobody could manage the instance",
 }
@@ -616,7 +621,8 @@ def _print_stage_report(report, *, instance_key_given: bool = False) -> None:
         print("   After a restore you sign in with one of them, with the password of then; every session open now ends.")
         print("   Invitations and links sent before the restore will have expired: send them again if needed.")
     for code in report.warnings:
-        print(f"⚠️  {_STAGE_WARNINGS.get(code, code)}")
+        if code not in _STAGE_WARNINGS_SAID_APART:
+            print(f"⚠️  {_STAGE_WARNINGS.get(code, code)}")
     for code in report.blockers:
         print(f"❌ {_STAGE_BLOCKERS.get(code, code)}")
 
