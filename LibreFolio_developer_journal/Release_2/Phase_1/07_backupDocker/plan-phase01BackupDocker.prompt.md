@@ -7707,3 +7707,74 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >
 > **⚠️ Fuori pista**: il 409 nuovo dell'OpenAPI sostituiva quello condiviso (`backup_busy`): ora la descrizione li dice
 > tutti e due.
+
+#### B5 — il round trip L3 in rosso ✅ 2026-10-22 (rosso atteso fino al merge di H-62)
+
+> **Note implementazione**: `backend/test_scripts/test_e2e/test_backup_roundtrip_l3.py` (agente `test-author`),
+> registrato come `e2e backup-roundtrip-l3`. Istanze vere (`uvicorn` su socket Unix, nessuna porta TCP), biglietti L2
+> firmati con una chiave di prova, destinatario e identità dei vettori. Oggi: **1 verde** (il backup del pannello è
+> sigillato: `sealed`, `.tar`, sha256, manifest, password aperta con l'identità 1, rifiutata con la 2), **2 rossi** solo
+> per la parte di H (`panel/status` senza `mode`; `PUT …/panel/restore/upload` → 405, la rotta non c'è). Le ipotesi sul
+> contratto sono segnate `# H-62 contract §…` nel test.
+>
+> **⚠️ Fuori pista**: il contratto §4 diceva `…/download`, il codice è `…/jobs/{id}/file`; il coordinatore l'aveva già
+> corretto nel contratto.
+
+#### B-33 — uno stato del ripristino illeggibile (parte senza H) ✅ 2026-10-22
+
+> **Note implementazione** (interfaccia `ondata4/B-b33-interface.md`; rossi di un agente `test-author`):
+> - `apply._read_state`: `None` solo senza file di stato; `RestoreStateUnreadableError.reason` = `io` (il file system
+>   lo rifiuta: il messaggio resta quello di B-32), `not_a_file` (link, cartella, FIFO), `invalid` (non è uno stato che
+>   questa versione legge). Prima gli ultimi due valevano «nessuno» (§10). L'avvio (`_state_at_start`) non cambia.
+> - `apply.restore_state_problem(data_dir)` (non solleva mai): il gancio per H-62.
+> - `apply.protected_stage` → `EVERY_STAGE` con uno stato illeggibile: `prune` non tocca nessuna copia né la sua prova;
+>   `remove_check` rifiuta se la copia c'è ancora.
+> - `apply.recover_unreadable_restore` (`RecoveredRestore`, `RestoreNothingToRecoverError`): rimette i dati di prima da
+>   ciò che dicono i file (`previous/` → posto, il vivo in `failed/`), mette da parte lo stato come
+>   `restore.json.unreadable-<UTC>`, sotto `_apply_lock` e il lucchetto esclusivo di servizio (`RestoreInUseError` se
+>   un server è vivo).
+> - CLI: `backup pending` racconta (codice, motivo, cosa c'è in `previous/`, quante copie, il comando);
+>   `backup pending --recover` (esclusivo con `--cancel`).
+> - **Rossi**: `services backup-leftovers` 6, `backup-apply` 71, `utils backup-cli-restore` 13, `api backup-restore-apply`
+>   25. **Verdi**: 199, 331, 120, 241; regressione del backup tutta verde (staging 221, jobs 167, outcome 166, archive
+>   176, secure 90, sealed 124, envelope 100, checks 127, restore 166, panel 89, CLI 106/106/35, `e2e backup-roundtrip` 3).
+>
+> **⚠️ Fuori pista**: con `.restore` non attraversabile, l'elenco di cosa c'è su disco sollevava `PermissionError` e il
+> comando non arrivava al suggerimento `--recover`: ora lo dice e va avanti.
+>
+> **Non fatto, per H-62** (il blocco dell'avvio e la pagina) e **proposto** per `GET /backup/restore/status`: `409
+> restore_state_unreadable` con `reason` al posto del `500`.
+
+#### B4 — la doc del backup notturno sigillato ✅ 2026-10-22
+
+> **Note implementazione** (agente `docs-writer`, più le righe di B-33 scritte da me):
+> - `backup_restore.en.md`: «Sealed Backups» diventa una sezione `##` (ancora `#sealed` tenuta) con schema Mermaid,
+>   `#sealed-contents`, `#sealed-key` (installare `age`: apt, pacman/yay, dnf, brew, winget), `#sealed-recipients` (i 4
+>   stati del controllo, il 503 nel managed) con `#sealed-rotation`, `#sealed-open` e `#sealed-by-hand`,
+>   `#sealed-cron`, `#sealed-problems`; la riga di B-33 nella tabella dei problemi del ripristino.
+> - `cli_tools.en.md`: `#backup-sealed` riscritta; `#backup-pending-unreadable` (B-33) e `--recover` nell'esempio.
+> - `developer/architecture/security.md`: «🔏 Sealed Backups (`.tar`)» `{#sealed-backups}`, la tabella dei controlli con
+>   `backup.recipients`.
+> - `mkdocs build` stretta e `check-links` verdi.
+>
+> **⚠️ Fuori pista**:
+> - La revisione della doc ha trovato un difetto: durante `sealing` c'erano zip in chiaro, `.lfbk` e `.tar` insieme
+>   (3× invece di 2×, e il chiaro su disco più a lungo). Rosso `test_while_sealing_the_clear_zip_is_already_gone`
+>   (`services backup-secure`), cura in `jobs._protect` (lo zip si toglie appena la busta è scritta). Verdi: backup-secure
+>   91, backup-jobs 167, api backup-panel 89, utils backup-cli-sealed 35.
+> - Il link `cli_tools.md#backup-pending-unreadable` rompeva la build stretta (il sito italiano usa la pagina inglese, e
+>   `cli_tools.it.md` non ha l'ancora): ora nomina la sezione, come il resto della pagina.
+> - Debito di traduzione: `cli_tools` (la sezione sigillata, B-33, una frase in testa e una in Docker); nessun
+>   `translate-stamp`.
+
+#### Revisione di sicurezza backup + H-62 (`ondata4/SEC-review-backup-H62.md`), i punti di B
+
+> - **Punto 1** (zip in chiaro durante il sigillo): già curato nel checkpoint B4 (`jobs._protect`), con il suo rosso.
+> - **Punto 2** ✅ 2026-10-22: il lettore del `.tar` sigillato chiede due blocchi di zeri e poi solo zeri fino alla
+>   fine (`sealed._end_of_archive`). Rossi: due vettori nuovi (`neg-hidden-member.tar`, `neg-trailing-garbage.tar`),
+>   scritti con `generate_vectors.py --extend` senza toccare i file già copiati dal cloud: `services backup-sealed` 2
+>   rossi → 130 verdi; `utils backup-cli-sealed` 35, `services backup-secure` 91, `e2e backup-roundtrip-l3` 1 verde e i
+>   2 rossi attesi (H non ancora unito qui).
+> - **Punti 3, 4, 5** (caricamento sostituito dopo il controllo del tipo; `abort()` che toglie anche il file finale;
+>   permessi della chiave e `keygen` atomico): ⏳ dopo il commit del checkpoint B4 + B-33 + B5, perché toccano
+>   `restore_jobs.py` e `backup_cli.py`, già modificati lì.
