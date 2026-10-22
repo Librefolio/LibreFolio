@@ -270,13 +270,37 @@ test.describe('FX Sync', () => {
  * Both periods are chosen by data, read through the endpoint the page reads its rates from (`storedFxRates`), never
  * assumed from the seed:
  *   · the 30 days up to yesterday, where some pair the dialog syncs stores rates — verified;
- *   · a week starting a week from now: no day of it has happened, so nothing is stored there, while every pair with a
- *     history shows its last stored rate carried forward — filled backward. The page shows rates in that period and
- *     must not count them: the negative is the rule, not an empty period.
+ *   · a past weekend where no pair the dialog syncs stores a rate while some pair shows its Friday's rate carried
+ *     forward — filled backward (the seed stores weekdays only: populate_mock_data.py, populate_fx_rates). The page
+ *     shows rates in that period and must not count them: the negative is the rule, not an empty period. Chosen by
+ *     data among the weekends from two weeks back (`pastWeekendFilledBackward`), never a period still to come: since
+ *     X-R55 (17/10) a conversion range ends at tomorrow, so a week from now shows nothing at all.
  *
  * Neither test starts the dialog — no sync request may leave the page — and neither writes anything: the list does not
  * poll live rates, and every request here is a read.
  */
+/** How many past weekends `pastWeekendFilledBackward` looks at, from two weeks back. */
+const WEEKENDS_PROBED = 8;
+
+/**
+ * The most recent weekend, from two weeks back, where no pair «Sync all» syncs stores a rate and some pair shows one
+ * filled backward — read through `storedFxRates`, the endpoint the page reads its rates from — with what each pair shows
+ * of it; null when none of the `WEEKENDS_PROBED` weekends is one (the failure message then lists what each showed).
+ */
+async function pastWeekendFilledBackward(page: Page): Promise<{period: SyncPeriod; targets: Awaited<ReturnType<typeof storedFxRates>>} | {period: null; seen: string[]}> {
+    // Fourteen days back is today's weekday again; `getDay()` days further back (Sunday 0 … Saturday 6) is a Sunday.
+    const firstSundayBack = 14 + new Date().getDay();
+    const seen: string[] = [];
+    for (let weekend = 0; weekend < WEEKENDS_PROBED; weekend += 1) {
+        const sundayBack = firstSundayBack + 7 * weekend;
+        const period: SyncPeriod = {start: daysAgoIso(sundayBack + 1), end: daysAgoIso(sundayBack)};
+        const targets = await storedFxRates(page, period);
+        if (targets.every((target) => target.stored === 0) && targets.some((target) => target.shown > 0)) return {period, targets};
+        seen.push(`${period.start} → ${period.end}: ${describeShown(targets)}`);
+    }
+    return {period: null, seen};
+}
+
 test.describe('FX Sync — the list dialog warns before replacing stored rates (C-66)', () => {
     // A ceiling, never a delay: each test converts every syncable pair over its period before loading the list's two
     // waves, and a describe's timeout also covers the sign-in below. Only the timeout is set: the file's parallel mode
@@ -325,16 +349,18 @@ test.describe('FX Sync — the list dialog warns before replacing stored rates (
     });
 
     test('sync all over a period whose rates are all filled backward does not warn', async ({page}) => {
-        // A week, starting a week from now: no day of it has happened.
-        const period: SyncPeriod = {start: daysAgoIso(-7), end: daysAgoIso(-14)};
-        const targets = await storedFxRates(page, period);
+        // A past weekend, chosen by data: nothing stored, some rate shown filled backward from the Friday.
+        const probe = await pastWeekendFilledBackward(page);
+        if (probe.period === null) {
+            throw new Error(
+                `precondition: none of the last ${WEEKENDS_PROBED} weekends from two weeks back has every pair «Sync all» syncs without a stored rate and some pair showing one filled backward (${probe.seen.join(' | ')}) — check populate_mock_data.py (populate_fx_rates stores weekdays only): this test is about rates shown but not stored, not about an empty period`,
+            );
+        }
+        const {period, targets} = probe;
         expect(
             targets.filter((target) => target.stored > 0).map((target) => target.name),
-            'precondition: no pair stores a rate on a day that has not happened',
+            'precondition: no pair stores a rate on the weekend',
         ).toEqual([]);
-        if (!targets.some((target) => target.shown > 0)) {
-            throw new Error(`precondition: no pair «Sync all» syncs shows a rate filled backward between ${period.start} and ${period.end} (${describeShown(targets)}) — check populate_mock_data.py (populate_fx_rates): this test is about rates shown but not stored, not about an empty period`);
-        }
 
         const syncRequests = recordSyncRequests(page);
         await goToFxPage(page, period);
