@@ -56,6 +56,7 @@ from backend.app.schemas.common import (
     StrictModel,
     iso_currency_code,
 )
+from backend.app.schemas.prices import SAMPLE_KEY_PATTERN
 from backend.app.schemas.signals import (
     SignalAnnotationRequest,
     SignalBandValueSource,
@@ -64,6 +65,7 @@ from backend.app.schemas.signals import (
     SignalRequest,
     SignalResult,
 )
+from backend.app.services.assets.price_sampling import SampleResolution  # Z-29: a pure module of dates, no service
 from backend.app.utils.datetime_utils import parse_ISO_date
 
 # ============================================================================
@@ -120,6 +122,23 @@ class FXConversionRequest(BaseModel):
         default_factory=list,
         description="Optional cross/threshold rules evaluated on extended signal output",
     )
+    key: Optional[str] = Field(None, pattern=SAMPLE_KEY_PATTERN, description="A name for this conversion, unique in the request, that another conversion's sample_like can give (Z-29fx)")
+    max_points: Optional[int] = Field(
+        None,
+        ge=1,
+        le=10_000,
+        description=(
+            "Sample the conversion for a compact chart (Z-29fx), as the price query's max_points: the most points the chart's plot takes. The finest of daily, weekly (ISO, Monday to Sunday) and monthly whose count over the "
+            "conversion's own fill fits, monthly when none does; a weekly or monthly conversion answers the daily result of the last day of each week or month, and samples its first and last results. "
+            "The step is in samples. At most one of max_points, resolution and sample_like; not with annotation_requests. Signals are computed every day, then each series reduced to the same dates by its output's aggregation_profile. None: every day."
+        ),
+    )
+    resolution: Optional[SampleResolution] = Field(None, description="Sample the conversion at this step whatever its length (Z-29fx): daily, weekly (ISO, Monday to Sunday) or monthly; as max_points does otherwise")
+    sample_like: Optional[str] = Field(
+        None,
+        pattern=SAMPLE_KEY_PATTERN,
+        description="Sample the conversion like the conversion of this request whose key this is (Z-29fx): its step and buckets, from the later of its first day and this conversion's own; the same date_range. A comparison's target, on its card. That conversion has no sample_like itself.",
+    )
 
     @field_validator("to_currency", mode="before")
     @classmethod
@@ -144,6 +163,17 @@ class FXConversionRequest(BaseModel):
                     raise ValueError(f"annotation source '{source.instance_id}' is not in signals")
         return self
 
+    @model_validator(mode="after")
+    def validate_sampling(self) -> FXConversionRequest:
+        """One way to sample the conversion at most, and not with annotations, which need every day (Z-29fx, as the price
+        query's ``validate_sampling``). Signals are computed every day, then reduced with the results."""
+        asked = [name for name in ("max_points", "resolution", "sample_like") if getattr(self, name) is not None]
+        if len(asked) > 1:
+            raise ValueError(f"at most one of max_points, resolution and sample_like, not {' and '.join(asked)}")
+        if asked and self.annotation_requests:
+            raise ValueError(f"{asked[0]} samples the conversion: not with annotation_requests")
+        return self
+
 
 class FXConversionResult(BaseModel):
     """Single conversion result.
@@ -162,6 +192,7 @@ class FXConversionResult(BaseModel):
         None,
         description="Backward-fill info (only present if rate from a different date was used). " "If null, rate_date = conversion_date",
     )
+    request_index: Optional[int] = Field(None, ge=0, description="The position in the request of the conversion this result belongs to (Z-29fx)")
 
     @field_validator("conversion_date", mode="before")
     @classmethod
@@ -182,6 +213,25 @@ class FXSignalQueryResult(BaseModel):
     signals: List[SignalResult] = Field(default_factory=list)
 
 
+class FXSampleBounds(BaseModel):
+    """The ends of a sampled conversion (Z-29fx): the chart draws the last result of each week or month, and these two
+    apart — the fill's first, from which the percentage view starts, and its last."""
+
+    first: FXConversionResult = Field(..., description="The fill's first result: the range's start when a rate precedes it, else the pair's first rate day in the range (with sample_like, the later of that and the conversion named's)")
+    last: FXConversionResult = Field(..., description="The fill's last result, on the range's end once cut at the ceiling: the conversion's last result too")
+
+
+class FXConversionSample(BaseModel):
+    """How one conversion of the request was sampled (Z-29fx): its step and, weekly or monthly, its first and last results."""
+
+    request_index: int = Field(..., ge=0, description="The position of the conversion in the request")
+    resolution: SampleResolution = Field(
+        "daily",
+        description="The step of the conversion's results (Z-29fx): daily, or weekly or monthly when its max_points, resolution or sample_like sampled it. Its signals' series have the same step: one point per bucket, the one each output's aggregation_profile picks",
+    )
+    sample_bounds: Optional[FXSampleBounds] = Field(None, description="A weekly or monthly conversion's first and last results (Z-29fx); None for a daily one or one without results")
+
+
 class FXConvertResponse(BaseBulkResponse[FXConversionResult]):
     """Response model for bulk currency conversion."""
 
@@ -191,6 +241,7 @@ class FXConvertResponse(BaseBulkResponse[FXConversionResult]):
         default_factory=list,
         description="Signal results grouped by original conversion request",
     )
+    samples: List[FXConversionSample] = Field(default_factory=list, description="One entry per conversion of the request, in its order: the step of its results and, sampled, their bounds (Z-29fx)")
 
 
 # ============================================================================

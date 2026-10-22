@@ -125,3 +125,50 @@ export function renderBackendResults(configs: readonly SignalConfig[], results: 
     }
     return rendered;
 }
+
+/** A target's rolling return, as far as the chart reads it (`CalendarReturnView` of `priceChartHelpers.ts`). */
+export interface CalendarReturnSeries {
+    state: string;
+    points: LineDataPoint[];
+}
+
+/**
+ * The comparisons of a chart in the rolling-return view (lot Y-40): each saved comparison drawn with its target's rolling
+ * return (`views`, by asset), as the asset detail page draws them. A return not ready nor partial, the chart's own asset and
+ * an unset target draw nothing. `target` names the target (its icon and type too); `fallbackName` when it does not.
+ */
+export function renderCalendarComparisons(
+    configs: readonly SignalConfig[],
+    views: ReadonlyMap<number, CalendarReturnSeries>,
+    target: (assetId: number) => Pick<ComparisonTarget, 'displayName' | 'iconUrl' | 'assetType'> | null,
+    fallbackName: (assetId: number) => string,
+    selfAssetId?: number | null,
+): RenderedSignal[] {
+    const rendered: RenderedSignal[] = [];
+    for (const config of configs) {
+        if (config.signalType !== 'asset-comparison') continue;
+        const assetId = Number(config.params.assetId);
+        if (!Number.isInteger(assetId) || assetId <= 0 || assetId === selfAssetId) continue;
+        const view = views.get(assetId);
+        if (!view || (view.state !== 'ready' && view.state !== 'partial')) continue;
+        const names = target(assetId);
+        rendered.push({
+            id: `${config.id}:calendar-return`,
+            label: names?.displayName ?? fallbackName(assetId),
+            data: view.points,
+            color: config.style.color,
+            lineWidth: config.style.lineWidth,
+            lineType: config.style.lineType,
+            markerStart: config.style.markerStart,
+            markerEnd: config.style.markerEnd,
+            yAxisIndex: 0,
+            axisRole: 'price',
+            unit: 'percentage',
+            connectNulls: false,
+            aggregationProfile: 'last_with_range',
+            iconUrl: names?.iconUrl ?? null,
+            assetType: names?.assetType ?? null,
+        });
+    }
+    return rendered;
+}
