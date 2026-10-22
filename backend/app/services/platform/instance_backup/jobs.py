@@ -388,6 +388,9 @@ def _protect(folder: Path, name: str, created_at: datetime, password: str, recip
     envelope = _encrypt(folder, name, envelope_name, password, on_progress)
     if not recipients:
         return envelope_name, envelope
+    # The clear zip goes before the seal: the disk holds 2× the envelope at most, never zip, envelope and tar together
+    # (contract L3 §4), and the data in clear no longer than needed.
+    (folder / name).unlink(missing_ok=True)
     sealed_name = archive_name(created_at, sealed=True)
     return sealed_name, _seal(folder, envelope, envelope_name, sealed_name, password, recipients, created_at, manifest, on_progress)
 
