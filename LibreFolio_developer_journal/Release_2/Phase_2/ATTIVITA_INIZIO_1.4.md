@@ -28,6 +28,9 @@ della 1.4, non litiga con i lavori in corso. Ogni lotto è un riordino puro: ste
 | FE5a | il frontend degli asset in `lib/features/assets/` (il resto di CP8) | X | [piano 03, «4.2 Riordino frontend»](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md) |
 | CP-8 | il taglio di `services/portfolio_service.py` (2 238 righe) e dei suoi schemi | J | [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md); backlog «T-P2.2» |
 | CP-9b/9c | `schemas/risk.py` e `schemas/signals.py` in pacchetti (~45 importatori) | J | [piano 05, «CP-9b», «CP-9c»](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md) |
+| U-B2 | le sorgenti dei sottosistemi accanto al codice (dipende dal riordino) | U/W | backlog «U-B2» |
+| X-R23 | il caricamento dei dati della pagina dell'asset esce dalla pagina (dopo FE5a) | X | backlog «X-R23» |
+| Y-7 | le primitive dei grafici importano dalla feature dei segnali (dopo FE4/FE5a) | Y | backlog «Y-7» |
 | T-SG | i moduli sciolti in cima a `backend/app/services/` raggruppati per dominio (`accounts/`, `platform/`, `files/`) | T | backlog [«T-SG»](../Phase_0/BACKLOG_POST_1.2.md) |
 
 **Vincoli noti**:
