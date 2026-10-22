@@ -10484,5 +10484,17 @@ mescolare le righe del runner dei due lotti:
    > **Rossi → verdi** (test-author): 12 nuovi casi in `ToastContainer.test.ts` rossi (nessun elemento live, nessuna
    > regione) → 25/25 verdi; con i gate `htmlSink` e `themeRoles` 112/112; `front check` 0 errori, 0 avvisi.
    > **⚠️ Fuori pista** (non fatto, da segnalare): l'`aria-label="Dismiss"` del ✕ è scritto in inglese, senza i18n.
+9. ✅ **H-18b, il ✕ dei toast tradotto** (22/10, sì del coordinatore). Il nome del pulsante viene dalla chiave comune
+   esistente `common.close` («Close», «Chiudi», «Fermer», «Cerrar»), già usata per lo stesso scopo altrove: nessuna chiave nuova.
+   > **Rossi → verdi** (test-author): 4 casi in `ToastContainer.test.ts`, con la lingua marcatore, rossi su
+   > `aria-label="Dismiss"` → verdi; il file 31/31, con i gate `themeRoles` e `htmlSink` 118/118; i vicini (layout,
+   > `InstanceBlockedPage`) 56/56.
+   > **⚠️ Fuori pista**: i 25 test vecchi del file montavano il componente senza una lingua di svelte-i18n (prima il nome
+   > era un letterale): il `beforeEach` del file ora parte in inglese, come l'app.
+10. ✅ **E2E `front-utility api-docs` nello slot** (22/10, corsia 6181). Primo giro 2/3: ReDoc e il bundle alterato verdi,
+    Swagger rosso. Causa (vista dal vivo nel browser): Swagger UI 5.33 disegna le operazioni in una lista virtualizzata,
+    solo quelle vicine alla finestra; `/api/v1/system/health` non era mai montata. La pagina era sana (157 percorsi,
+    28 tag, nessun errore). Il test-author ha cambiato il controllo: almeno 3 operazioni disegnate, ognuna un percorso del
+    documento che la pagina stessa ha scaricato. Secondo giro **3/3 verdi** (log `ondata4/h-r5-e2e-api-docs-2.log`).
    > **⚠️ Fuori pista**: `"scarfSettings"` messo e poi tolto da `package.json`, dopo il cambio di Q-C: il file coincide col
    > commit.
