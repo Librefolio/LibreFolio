@@ -101,6 +101,11 @@ Under test: ``backend/app/services/platform/instance_backup/leftovers.py`` (new:
     ``read_check`` judges it: one recorded running while the lock of the checks is free was left by a dead process, and
     is not —, else ``None``: an unknown or malformed upload id, a finished check of it, a running check of another
     upload, no ``.restore`` at all.
+(k) B-33 §2 (written RED before it): while the restore's ``restore.json`` cannot be read — refused by the file system
+    (``io``), a folder (``not_a_file``), no state (``invalid``) — ``apply.protected_stage`` is ``EVERY_STAGE``: ``prune``
+    keeps every old copy and its check, and an old copy no check records; once the state is readable and says no
+    restore, the next ``prune`` removes them as before. ``remove_check`` of every ended check whose copy exists raises
+    ``CheckPendingError``, the copy and its state kept; a check whose copy is gone is removed as before.
 
 How. Every data directory is a folder of ``tmp_path`` built file by file: the sweep never opens a database nor reads
 an archive, and none is made. A check's state is written as ``restore_jobs`` writes it (a ``RestoreCheck`` as JSON in
@@ -2451,3 +2456,102 @@ def test_running_check_without_a_restore_folder_is_none_and_creates_nothing(tmp_
     assert found is None, f"no check at all: None, not {found}"
     assert not os.path.lexists(restore_dir(root)), "nothing created: no .restore"
     print_success("no .restore: None")
+
+
+# =============================================================================
+# (k) B-33 §2: a restore state that cannot be read protects every copy
+# =============================================================================
+#
+# Which copy a restore waits for is not known while its state cannot be read: ``apply.protected_stage`` is then
+# ``EVERY_STAGE``, and no copy is touched — ``remove_check`` refuses every check whose copy exists, ``prune`` removes no
+# stage copy and no check of a stage, however old. Written RED, before B-33: today the state reads as no restore (or
+# ``protected_stage`` swallows the error), nothing is protected, and the old copies go.
+
+#: (k) B-33 §1: how the restore's state cannot be read: the file system refuses it (``io``), it is a folder
+#: (``not_a_file``), its content is no state (``invalid``).
+RESTORE_STATE_UNREADABLE = [pytest.param("io", id="io"), pytest.param("not_a_file", id="not_a_file"), pytest.param("invalid", id="invalid")]
+
+
+def restore_state_unreadable(root: Path, how: str, patch: pytest.MonkeyPatch) -> None:
+    """``.restore/restore.json`` a state that cannot be read, as ``how`` says, while ``patch`` lasts for ``io`` (a pending
+    restore whose opening ``os.open`` refuses, EIO). Checked: ``protected_stage`` no longer names a single stage."""
+    path = restore_state_path(root)
+    if how == "io":
+        pending_restore(root, new_stage_id())
+        refuse_open(patch, path, errno.EIO)
+    elif how == "not_a_file":
+        path.mkdir(mode=0o700)
+    else:
+        path.write_bytes(b'{"format": 1, "status": "pending", "stage_id": "half a sta')
+        path.chmod(0o600)
+
+
+def readable_again(root: Path, patch: pytest.MonkeyPatch) -> None:
+    """The restore's state readable again, and no restore: the refusal undone, the state file removed (whatever it is)."""
+    patch.undo()
+    path = restore_state_path(root)
+    if is_plain_dir(path):
+        path.rmdir()
+    else:
+        path.unlink()
+    assert protected_stage(root) is None, f"precondition: no restore, no stage protected: {protected_stage(root)!r}"
+
+
+def ended_long_ago(root: Path) -> tuple[str, Path]:
+    """A check ended ``PAST_LIFETIME`` ago, with its copy (aged the same): its stage id and its copy."""
+    stage_id = new_stage_id()
+    copy = stage_holding(root, stage_id, archive=None, report=True)
+    recorded_check(root, stage_id, new_stage_id(), status="done", ended_ago=PAST_LIFETIME)
+    for path in sorted(copy.rglob("*"), reverse=True):
+        cli_secure.aged(path, PAST_LIFETIME.total_seconds())
+    cli_secure.aged(copy, PAST_LIFETIME.total_seconds())
+    return stage_id, copy
+
+
+@pytest.mark.parametrize("how", RESTORE_STATE_UNREADABLE)
+def test_prune_keeps_every_old_copy_and_its_check_while_the_restore_state_cannot_be_read(tmp_path, how):
+    """(k) B-33 §2: two checks ended longer ago than ``STAGE_LIFETIME``, each with its copy, and an old copy no check
+    records (the command line's): while the restore's state cannot be read, ``prune`` removes none of them — the copies
+    and the checks' states as they were. Once the state is readable again and says no restore, the next ``prune`` removes
+    them all, as before. Red before B-33: they go at the first ``prune``."""
+    print_section("(k) B-33: a restore state that cannot be read protects every copy")
+    root = data_root(tmp_path)
+    restore_folders(root)
+    old = [ended_long_ago(root) for _ in range(2)]
+    unrecorded = made_old(stage_holding(root, archive=None))
+    with pytest.MonkeyPatch.context() as patch:
+        restore_state_unreadable(root, how, patch)
+        kept = (cli_secure.entries(stages_dir(root)), cli_secure.entries(checks_dir(root)))
+        prune(root)
+        after = (cli_secure.entries(stages_dir(root)), cli_secure.entries(checks_dir(root)))
+        assert after == kept, f"{how}: every copy and every check kept while the state cannot be read: {cli_secure.differences(kept[0], after[0])} {cli_secure.differences(kept[1], after[1])}"
+        readable_again(root, patch)
+    prune(root)
+    left = [stage_id for stage_id, copy in old if os.path.lexists(copy) or os.path.lexists(check_state_path(root, stage_id))]
+    assert (left, os.path.lexists(unrecorded)) == ([], False), f"{how}: the state readable, no restore: the old copies and checks pruned as before: {left}, {unrecorded.name}"
+    print_success(f"{how}: kept while unreadable, pruned once readable")
+
+
+@pytest.mark.parametrize("how", RESTORE_STATE_UNREADABLE)
+def test_remove_check_refuses_every_check_with_a_copy_while_the_restore_state_cannot_be_read(tmp_path, how):
+    """(k) B-33 §2: while the restore's state cannot be read, ``remove_check`` of any ended check whose copy exists
+    raises ``CheckPendingError``, the copy and the check's state as they were; a check whose copy is gone is removed as
+    before (§2: «every check whose copy exists»). Red before B-33: the copies go."""
+    root = data_root(tmp_path)
+    restore_folders(root)
+    with_copies = [new_stage_id() for _ in range(2)]
+    for stage_id in with_copies:
+        stage_holding(root, stage_id, archive=None, report=True)
+        recorded_check(root, stage_id, new_stage_id(), status="done")
+    without_copy = new_stage_id()
+    recorded_check(root, without_copy, new_stage_id(), status="failed")
+    with pytest.MonkeyPatch.context() as patch:
+        restore_state_unreadable(root, how, patch)
+        kept = (cli_secure.entries(stages_dir(root)), {stage_id: check_state(root, stage_id) for stage_id in with_copies})
+        refused = {stage_id: type(raised_by(lambda stage_id=stage_id: restore_jobs.remove_check(stage_id, data_dir=root))).__name__ for stage_id in with_copies}
+        assert refused == dict.fromkeys(with_copies, "CheckPendingError"), f"{how}: every check with a copy refused, CheckPendingError: {refused}"
+        after = (cli_secure.entries(stages_dir(root)), {stage_id: check_state(root, stage_id) for stage_id in with_copies})
+        assert after == kept, f"{how}: the copies and the checks as they were: {cli_secure.differences(kept[0], after[0])}"
+        gone = raised_by(lambda: restore_jobs.remove_check(without_copy, data_dir=root))
+    assert gone is None and check_state(root, without_copy) is None, f"{how}: a check without a copy is removed as before: {gone!r}"
+    print_success(f"{how}: CheckPendingError for every copy; a check without one removed")
