@@ -294,7 +294,7 @@ When every row is known, the rows and the other period effects together close $\
 
 ## 📐 8. Realized Gain/Loss {: #8-realized-gain-loss }
 
-On a disposal of $|q_s|$ units from position $(a,b)$ on date $t$ — a SELL, or an outgoing ADJUSTMENT with a cost basis:
+On a disposal of $|q_s|$ units from position $(a,b)$ on date $t$ — a SELL, or an outgoing ADJUSTMENT not linked to a split:
 
 $$
 C = |q_s| \cdot w_{\text{pre}}(a,b)
@@ -304,9 +304,9 @@ $$
 \mathrm{Realized} = P \cdot \mathrm{fx}(c_P, C^*, t) - C
 $$
 
-$P$ is what the units leave for, in its currency $c_P$: a SELL's proceeds, in the currency of its cash; an outgoing ADJUSTMENT's value handed over, $|q_s| \cdot k$ for its per-unit cost basis $k$, in the cost basis's currency, or the asset's when the row has none. $w_{\text{pre}}$ is the WAC in $C^*$ **before** the pool reduction (same value used by 3-pool SELL rule above): the units leave at their historical cost, with no conversion at $t$, while $P$ converts at $t$. A disposal whose $P$ cannot be converted, or drawn from a position whose cost is incomplete, is left out of Realized.
+$P$ is what the units leave for, in its currency $c_P$: a SELL's proceeds, in the currency of its cash; $0$ for an outgoing ADJUSTMENT, which has no value whatever cost basis the row holds ([Outgoing Adjustments](../../../instruments/transaction-types/adjustment.md#outgoing-adjustments)), so it realizes $-C$. $w_{\text{pre}}$ is the WAC in $C^*$ **before** the pool reduction (same value used by 3-pool SELL rule above): the units leave at their historical cost, with no conversion at $t$, while $P$ converts at $t$. A disposal whose $P$ cannot be converted, or drawn from a position whose cost is incomplete, is left out of Realized.
 
-An outgoing ADJUSTMENT moves no cash, so no pool of §6 changes: its value $P \cdot \mathrm{fx}(c_P, C^*, t)$ leaves the capital baseline instead, or $C$ when that value cannot be converted ([Deposited Capital — Outgoing Adjustments](deposited-capital.md#outgoing-adjustments)).
+An outgoing ADJUSTMENT moves no cash, so no pool of §6 changes, and no capital either: the capital baseline does not move ([Deposited Capital — Outgoing Adjustments](deposited-capital.md#outgoing-adjustments)).
 
 ---
 

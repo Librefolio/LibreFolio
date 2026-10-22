@@ -226,7 +226,7 @@
         const roles = chartRoles(isDark, container);
         const poles = shadePoles(isDark, roles.color('--lf-surface-card'));
         const rankByKey = new Map([...slices].sort(compareKeys).map((slice, rank) => [slice, rank]));
-        const ownerColor = (slice: OwnerSlice) => sequenceColor(CATEGORY_SEQUENCE, rankByKey.get(slice) ?? 0, isDark, poles);
+        const ownerColor = (slice: OwnerSlice) => sequenceColor(CATEGORY_SEQUENCE, rankByKey.get(slice) ?? 0, isDark, poles, container);
 
         // Pre-load circular avatars in parallel
         const avatarPromises: Array<{index: number; promise: Promise<string>}> = [];

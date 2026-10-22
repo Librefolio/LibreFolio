@@ -146,7 +146,7 @@
                             <div class="grid grid-cols-2 gap-2 mb-2">
                                 <button
                                     type="button"
-                                    class="w-full text-left text-xs text-gray-600 dark:text-gray-300 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-2 break-words min-h-[2.5rem] hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-600 transition-all whitespace-pre-wrap"
+                                    class="w-full text-left text-xs text-lf-secondary bg-lf-info-soft border border-lf-info-line rounded p-2 break-words min-h-[2.5rem] hover:ring-2 hover:ring-lf-info transition-all whitespace-pre-wrap"
                                     onclick={() => {
                                         interacted = true;
                                         resDescription = txA?.description ?? '';
@@ -184,12 +184,7 @@
                                         {$t('transactions.promote.descriptionTooLong', {values: {max: formatFixed(TX_DESCRIPTION_MAX_LENGTH, 0)}})}
                                     </p>
                                 {/if}
-                                <p
-                                    id="promote-merge-desc-counter"
-                                    class="ml-auto text-xs tabular-nums {descriptionTooLong ? 'text-lf-danger' : 'text-lf-muted'}"
-                                    data-testid="promote-merge-desc-counter"
-                                    data-state={descriptionTooLong ? 'over' : 'ok'}
-                                >
+                                <p id="promote-merge-desc-counter" class="ml-auto text-xs tabular-nums {descriptionTooLong ? 'text-lf-danger' : 'text-lf-muted'}" data-testid="promote-merge-desc-counter" data-state={descriptionTooLong ? 'over' : 'ok'}>
                                     {formatFixed(descriptionLength, 0)} / {formatFixed(TX_DESCRIPTION_MAX_LENGTH, 0)}
                                 </p>
                             </div>
@@ -216,7 +211,7 @@
                             <div class="grid grid-cols-2 gap-2 mb-2">
                                 <button
                                     type="button"
-                                    class="w-full text-left text-xs text-gray-600 dark:text-gray-300 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-2 min-h-[2.5rem] hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-600 transition-all"
+                                    class="w-full text-left text-xs text-lf-secondary bg-lf-info-soft border border-lf-info-line rounded p-2 min-h-[2.5rem] hover:ring-2 hover:ring-lf-info transition-all"
                                     onclick={() => {
                                         interacted = true;
                                         resTags = [...(txA?.tags ?? [])];
@@ -259,7 +254,7 @@
                 <!-- Global actions — below fields, above footer -->
                 <div class="flex justify-between gap-2">
                     <Tooltip text={$t('transactions.promote.allLeft')}>
-                        <button type="button" class="px-3 py-1.5 text-xs rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800/40" onclick={allLeft} data-testid="promote-merge-all-left">
+                        <button type="button" class="px-3 py-1.5 text-xs rounded-lg bg-lf-info-soft text-lf-info-on-soft hover:bg-lf-info-line" onclick={allLeft} data-testid="promote-merge-all-left">
                             {$t('transactions.promote.allLeft')} ▶
                         </button>
                     </Tooltip>

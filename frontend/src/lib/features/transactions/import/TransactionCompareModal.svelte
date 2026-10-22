@@ -178,6 +178,7 @@
                                 <th class="border-b border-l border-lf-subtle px-2 py-2 text-left align-top" data-testid="import-wizard-compare-col-{col.id}">
                                     <div class="flex items-center gap-1.5">
                                         {#if showKeep && col.selectable}
+                                            <!-- colour: closest role, to review: the on track was emerald-500 (a success green); switch role bg-lf-checked, alt bg-lf-success -->
                                             <button
                                                 type="button"
                                                 role="switch"
@@ -185,10 +186,10 @@
                                                 onclick={() => toggleKept(col.id)}
                                                 aria-label={$t('importWizard.compareModal.keep')}
                                                 title={$t('importWizard.compareModal.keep')}
-                                                class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors {kept.has(col.id) ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-slate-600'}"
+                                                class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors {kept.has(col.id) ? 'bg-lf-checked' : 'bg-lf-switch-off'}"
                                                 data-testid="import-wizard-compare-keep-{col.id}"
                                             >
-                                                <span class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform {kept.has(col.id) ? 'translate-x-5' : 'translate-x-1'}"></span>
+                                                <span class="inline-block h-3.5 w-3.5 transform rounded-full shadow transition-transform {kept.has(col.id) ? 'translate-x-5 bg-lf-switch-knob-on' : 'translate-x-1 bg-lf-switch-knob-off border border-lf-input'}"></span>
                                             </button>
                                         {:else}
                                             <span class="shrink-0 text-xs text-lf-muted">{colBadge(i)}</span>

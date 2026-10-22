@@ -93,6 +93,9 @@ BLOCKED_MIME_TYPES: frozenset[str] = frozenset(
         "text/x-php",
         "application/javascript",
         "text/javascript",
+        "application/x-javascript",
+        "text/ecmascript",
+        "application/ecmascript",
         # Archives that can contain executables
         # (optional - can be enabled if needed)
         # "application/x-tar",

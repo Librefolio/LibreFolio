@@ -172,3 +172,35 @@ export function renderCalendarComparisons(
     }
     return rendered;
 }
+
+/**
+ * The FX pairs compared on an FX chart in the rolling-return view (lot Y-40, the FX half): each saved `fx-pair` signal drawn
+ * with its pair's rolling return (`views`, by the signal's id), named as the signal names itself. A return not ready nor
+ * partial, and any other signal, draw nothing.
+ */
+export function renderCalendarPairComparisons(configs: readonly SignalConfig[], views: ReadonlyMap<string, CalendarReturnSeries>): RenderedSignal[] {
+    const rendered: RenderedSignal[] = [];
+    for (const config of configs) {
+        if (config.signalType !== 'fx-pair') continue;
+        const view = views.get(config.id);
+        if (!view || (view.state !== 'ready' && view.state !== 'partial')) continue;
+        const instance = signalFromConfig(config);
+        if (!instance) continue;
+        rendered.push({
+            id: `${config.id}:calendar-return`,
+            label: instance.getLabel(),
+            data: view.points,
+            color: config.style.color,
+            lineWidth: config.style.lineWidth,
+            lineType: config.style.lineType,
+            markerStart: config.style.markerStart,
+            markerEnd: config.style.markerEnd,
+            yAxisIndex: 0,
+            axisRole: 'price',
+            unit: 'percentage',
+            connectNulls: false,
+            aggregationProfile: 'last_with_range',
+        });
+    }
+    return rendered;
+}

@@ -6,8 +6,9 @@ around an orphan cash leg (CASH LEGS).
 Workstream W (lot N1b-1) writes the conversion of the surviving half; workstream J ("Numeri e
 analisi") reviewed the expected numbers below on 15/10. What N1b-1 converts (coordinator, point 47):
 an incoming TRANSFER half into an ADJUSTMENT, a CASH_TRANSFER / FX_CONVERSION half into a DEPOSIT or
-a WITHDRAWAL by its sign; and, with decision 47, an outgoing TRANSFER half into an ADJUSTMENT −q handed
-over at its own broker's Auto cost (MIRROR).
+a WITHDRAWAL by its sign; and, with decision 47 as N78-1 changed it (the developer's decision, 21/10/2026), an
+outgoing TRANSFER half into an ADJUSTMENT −q WITHOUT a value (MIRROR; before N78-1, handed over at its own broker's
+Auto cost).
 
 THE SCENARIO — S7 of test_portfolio_cost_currency.py, with a cost basis on the arrival. One user
 owns brokers A and B, 100 % each. On 1 Oct 2018 A receives 200 EUR and buys 10 X for 200 EUR, 20
@@ -87,46 +88,41 @@ basis 0, and S5's MISSING_COST_BASIS banner (test_portfolio_cost_currency.py:556
 finds it, a TRANSFER without its pair, reads 100 invested and 20 of P&L: the change J declares before the
 migration, 100 → 0 and 20 → 120. Controls, green today.
 
-MIRROR — B deleted: A's outgoing leg survives. Decision 47 (W's part; J's CP-16 reads it,
-financial_math/fifo/engine.py): the deletion makes it an ADJUSTMENT −4 handed over at cost —
-cost_basis_override and cost_basis_currency written together, A's Auto cost:
-TransactionService._handover_cost, compute_wac_iterative over A up to 3 Oct without the leg, the 10 X
-bought for 200 EUR, so 20 EUR a unit (BR-U-073/078/086 in test_broker_service.py). The numbers are
-those of J's book (test_adjustment_out_with_cost_numbers.py: the same scenario, the leg written
-directly), run twice as case 1's are: on a control book whose A holds that ADJUSTMENT −4 at 20 EUR
-written as such — green today, after CP-16 — and on the orphan the deletion leaves, RED until decision
-47. A alone on 5 Oct:
+MIRROR — B deleted: A's outgoing leg survives. Decision 47 as N78-1 changed it: the deletion makes it an
+ADJUSTMENT −4 WITHOUT a value — no cost_basis_override, no cost_basis_currency (BR-U-073/078/086 in
+test_broker_service.py) —, and an ADJUSTMENT-out has no value: it only lowers the quantity. The numbers are
+those of J's book (test_adjustment_out_with_cost_numbers.py: the same scenario, the leg written directly),
+run twice as case 1's are: on a control book whose A holds that ADJUSTMENT −4 without a value written as
+such, and on the orphan the deletion leaves, RED until N78-1. A alone on 5 Oct:
 - lots: COMPLETE, no issue. The only lot is A's BUY of 1 Oct, 10 at 20; the ADJUSTMENT_OUT closes 4 of
-  it at the row's 20 EUR (engine._handover_unit_price): realized 4 × (20 − 20) = 0, proceeds 4 × 20 =
-  80, the value handed over at cost. Open 6, value 6 × 30 = 180, pnl 180 + 80 − 200 = 60, market 60,
-  total 60, total return 60 / 200 = 0.3. A BUY lot opens with no reference price of its own, so its
-  reference is its own unit price, 20, "exact" (lots/prices.py, opening_reference_price): relative
-  return 30 / 20 − 1 = 0.5. The WAC lines are today's — 10 at 20, then 6 at 20 from 3 Oct: a reduction
+  it at 0: realized 4 × (0 − 20) = −80, proceeds 0. Open 6, value 6 × 30 = 180, pnl 180 + 0 − 200 = −20,
+  market 60, total −20, total return −20 / 200 = −0.1. A BUY lot opens with no reference price of its
+  own, so its reference is its own unit price, 20, "exact" (lots/prices.py, opening_reference_price):
+  relative return 30 / 20 − 1 = 0.5. The WAC lines — 10 at 20, then 6 at 20 from 3 Oct: a reduction
   leaves the average as it was (financial_math/average_cost.py).
-- Dashboard: invested 200 − 4 × 20 = 120 — an ADJUSTMENT −4 with a cost is a capital distribution
-  (DailyStateBuilder._is_capital_adjustment) —, net worth 6 × 30 = 180, P&L 60; A's X 6 at 20, value
-  180, gain 60; open cost basis 120; no warning.
-Today the leg stays a TRANSFER without its pair: the lots FAIL on TRANSFER_PAIR_MISSING — and that
-FAILED analysis still lists A's lot of 1 Oct with its 10 X open, value 300, P&L 100 —, and the Dashboard
-books the orphan at market (_transfer_leg_capital, 4 × 25): invested 100, P&L 80. Not pinned here: a leg
-whose Auto cost needs a missing conversion stays that TRANSFER (BR-U-087).
+- Dashboard: invested 200 — the exit moves no capital —, net worth 6 × 30 = 180, P&L −20; A's X 6 at 20,
+  value 180, gain 60; open cost basis 120; no warning.
+Before N78-1 (decision 47, CP-16) the leg was handed over at A's Auto cost, 20 EUR (proceeds 80, realized
+0, total 60; invested 120, P&L 60); and before decision 47 it stayed a TRANSFER without its pair: the lots
+FAILED on TRANSFER_PAIR_MISSING and the Dashboard booked the orphan at market (invested 100, P&L 80). The
+control book stored the 20 EUR before N78-1; it stores no value now, as the deletion leaves it.
 
 MIRROR IN ANOTHER CURRENCY (W-B55) — the MIRROR with X″, a USD asset, read in EUR: from the deletion to the numbers.
-A's Auto cost (decision 47) is compute_wac_iterative's without a currency hint, so in the currency of A's last
-purchase, each purchase converted at the rate of its own day; J-24 makes the Dashboard realize the exchange difference
-on the handover day, as the lots already did (CP-7a): D at that day's rate, minus C, the historical cost the pool gives
-up. One user owns A and B, 100 % each. On 3 Dec 2018 A receives 1000 USD and buys 10 X″ for 1000 USD, 100 USD a unit,
+Since N78-1 A's leg leaves without a value: no capital moves, and both the Dashboard and the lots realize 0 − C, C the
+historical cost the pool gives up, each purchase converted at the rate of its own day. (Before N78-1 it left at A's
+Auto cost in the currency of A's last purchase, and J-24 realized D at the exit day's rate minus C.) One user owns A and B, 100 % each. On 3 Dec 2018 A receives 1000 USD and buys 10 X″ for 1000 USD, 100 USD a unit,
 when 1 EUR = 1.25 USD (1 USD = 0.80 EUR): capital 800 EUR, 80 EUR a unit. On 5 Dec 4 X″ move from A to B by a linked
 TRANSFER pair, when 1 EUR = 1.60 USD (1 USD = 0.625 EUR) and X″ is quoted 110 USD; B's leg carries no cost basis, it
-goes with B. B deleted, A's −4 becomes an ADJUSTMENT at 100 USD a unit, in USD. A alone on 5 Dec, in EUR:
-- Dashboard: D = 400 USD × 0.625 = 250 leaves the capital, invested 800 − 250 = 550; C = 4 × 80 = 320, realized
-  D − C = −70; the 6 X″ left are worth 6 × 110 × 0.625 = 412.5 against 6 × 80 = 480, −67.5 unrealized; net worth
-  412.5 (no cash: 1000 − 1000 USD), P&L 412.5 − 550 = −137.5; no warning.
-- lots: COMPLETE, no issue; A's BUY lot of 10 at 800 hands 4 over at the handover's rate — proceeds 250, realized
-  −70 —; open 6 worth 412.5, market −67.5, total −137.5. Its reference is its own unit price at the opening's rate,
-  80: relative return 68.75 / 80 − 1. The WAC lines 10, then 6, at 80: a reduction leaves the average.
-- the J-24 parity: the Dashboard's realized and P&L are the lot's, −70 and −137.5.
-Control and orphan as in the MIRROR. Every reading stops on 5 Dec: ``fx_rates`` is global, and a later day would
+goes with B. B deleted, A's −4 becomes an ADJUSTMENT without a value. A alone on 5 Dec, in EUR:
+- Dashboard: invested 800 (nothing leaves the capital); C = 4 × 80 = 320, realized 0 − C = −320; the 6 X″ left are
+  worth 6 × 110 × 0.625 = 412.5 against 6 × 80 = 480, −67.5 unrealized; net worth 412.5 (no cash: 1000 − 1000 USD),
+  P&L 412.5 − 800 = −387.5; no warning. (Before N78-1: invested 550, realized −70, P&L −137.5.)
+- lots: COMPLETE, no issue; A's BUY lot of 10 at 800 closes 4 at 0 — proceeds 0, realized −320 —; open 6 worth 412.5,
+  market −67.5, total −387.5. Its reference is its own unit price at the opening's rate, 80: relative return
+  68.75 / 80 − 1. The WAC lines 10, then 6, at 80: a reduction leaves the average. (Before N78-1: proceeds 250,
+  realized −70, total −137.5.)
+- the parity: the Dashboard's realized and P&L are the lot's, −320 and −387.5.
+Control and orphan as in the MIRROR: the control stores no value either (before N78-1 it stored 100 USD). Every reading stops on 5 Dec: ``fx_rates`` is global, and a later day would
 value the 6 X″ at a rate the test did not write.
 
 CASH LEGS — J (15/10): an orphan cash leg already counts as an external flow
@@ -322,20 +318,19 @@ DASHBOARD_LEFT_WITHOUT_COST_BASIS = {
 # banner read the same; capital and P&L are what J declares before the migration: 100 → 0, 20 → 120.
 DASHBOARD_BEFORE_THE_FIX = {**DASHBOARD_LEFT_WITHOUT_COST_BASIS, "total_invested": Decimal("100"), "total_gain_loss": Decimal("20")}  # 120 − 100
 
-# MIRROR: A once B is deleted, read on 5 Oct. Decision 47: A's outgoing leg handed over at A's Auto cost.
-HANDOVER_COST_PER_UNIT = "20"  # A's average on 3 Oct without its outgoing leg: 200 / 10
+# MIRROR: A once B is deleted, read on 5 Oct. Decision 47 as N78-1 changed it: A's outgoing leg leaves without a value.
 MIRROR_LEG = {
     "broker": "A",
     "asset": "X",
-    "type": TransactionType.ADJUSTMENT,  # today a TRANSFER without its pair
+    "type": TransactionType.ADJUSTMENT,  # before decision 47 a TRANSFER without its pair
     "date": TRANSFER_DAY,
     "quantity": Decimal("-4"),
-    "cost_basis_override": Decimal(HANDOVER_COST_PER_UNIT),  # A's Auto cost (today None)
-    "cost_basis_currency": "EUR",  # written with it: the model wants both or neither (today None)
+    "cost_basis_override": None,  # no value (before N78-1: A's Auto cost, 20 EUR)
+    "cost_basis_currency": None,  # neither: the model wants both or neither (before N78-1: EUR)
     "related_transaction_id": None,  # its pair is gone
 }
 _SIX_AT_TWENTY, _TEN_AT_TWENTY = (Decimal("20"), Decimal("6")), (Decimal("20"), Decimal("10"))  # WAC line points
-# The figures of a lot that its closures move: what a handover at cost changes.
+# The figures of a lot that its closures move: what an exit changes.
 _CLOSURE_FIELDS = ("cumulative_proceeds", "realized_pnl", "market_pnl", "total_pnl")
 MIRROR_LOTS = {
     "calculation_status": "COMPLETE",  # today FAILED: the FIFO engine meets a TRANSFER without its pair
@@ -349,18 +344,18 @@ MIRROR_LOTS = {
             "original_quantity": Decimal("10"),
             "opening_unit_price": Decimal("20"),  # 200 / 10
             "original_cost": Decimal("200"),
-            "open_quantity": Decimal("6"),  # 4 handed over on 3 Oct
+            "open_quantity": Decimal("6"),  # 4 gone on 3 Oct
             "open_value": Decimal("180"),  # 6 × 30
-            "pnl": Decimal("60"),  # 180 + 80 of proceeds − 200
+            "pnl": Decimal("-20"),  # 180 + 0 of proceeds − 200 (before N78-1: 60)
             # A BUY lot has no reference price of its own: opening_reference_price falls back to its unit price, "exact".
             "reference_unit_price": Decimal("20"),
             "reference_price_source": "exact",
             "relative_return": Decimal("0.5"),  # 30 / 20 − 1
-            "total_return": Decimal("0.3"),  # total_pnl / original_cost = 60 / 200
-            "cumulative_proceeds": Decimal("80"),  # 4 × 20, the value handed over at cost (CP-16)
-            "realized_pnl": Decimal("0"),  # 4 × (20 − 20): closed at the row's cost, which is the lot's
+            "total_return": Decimal("-0.1"),  # total_pnl / original_cost = −20 / 200 (before N78-1: 0.3)
+            "cumulative_proceeds": Decimal("0"),  # no value leaves (before N78-1: 80, 4 × 20)
+            "realized_pnl": Decimal("-80"),  # 4 × (0 − 20) (before N78-1: 0)
             "market_pnl": Decimal("60"),  # pnl − realized
-            "total_pnl": Decimal("60"),  # market + realized + 0 of income: the Dashboard's P&L
+            "total_pnl": Decimal("-20"),  # market + realized + 0 of income: the Dashboard's P&L (before N78-1: 60)
         }
     ],
     # As today: 10 at 20, then 6 at 20 from 3 Oct — a reduction leaves the average as it was.
@@ -377,9 +372,9 @@ MIRROR_DASHBOARD = {
     },
     "open_cost_basis": Decimal("120"),  # 6 × 20
     "net_worth": Decimal("180"),  # 6 × 30, and no cash: 200 − 200
-    # 200 deposited − 4 × 20 handed over at cost, a capital distribution (today 100: the orphan leg at market, 4 × 25)
-    "total_invested": Decimal("120"),
-    "total_gain_loss": Decimal("60"),  # 180 − 120 (today 80: 180 − 100)
+    # 200 deposited; the exit moves no capital (before N78-1: 120, 4 × 20 handed over; before decision 47: 100, at market)
+    "total_invested": Decimal("200"),
+    "total_gain_loss": Decimal("-20"),  # 180 − 200 (before N78-1: 60)
     "warnings and errors": [],
 }
 
@@ -392,16 +387,15 @@ FOREIGN_TRANSFER_DAY = date(2018, 12, 5)  # 4 X″ leave A for B
 FOREIGN_READING_DAY = FOREIGN_TRANSFER_DAY  # date_to of every reading: no rate or price after the ones the test wrote
 FOREIGN_EUR_USD_RATES = {FOREIGN_FUNDING_DAY: "1.25", FOREIGN_TRANSFER_DAY: "1.6"}  # 1 USD = 0.80 EUR, then 0.625
 FOREIGN_PRICES = {FOREIGN_TRANSFER_DAY: "110"}  # USD
-FOREIGN_HANDOVER_COST_PER_UNIT = "100"  # A's Auto cost: in USD, the currency of its last purchase, 1000 / 10
-# (a) A's row once B is deleted: decision 47's ADJUSTMENT −4, its cost in the currency compute_wac_iterative chose.
+# (a) A's row once B is deleted: decision 47's ADJUSTMENT −4, without a value since N78-1.
 FOREIGN_MIRROR_LEG = {
     "broker": "A",
     "asset": "X",
     "type": TransactionType.ADJUSTMENT,
     "date": FOREIGN_TRANSFER_DAY,
     "quantity": Decimal("-4"),
-    "cost_basis_override": Decimal(FOREIGN_HANDOVER_COST_PER_UNIT),  # per unit, not converted: no currency hint
-    "cost_basis_currency": FOREIGN_CURRENCY,  # the currency of A's last purchase, written with the cost
+    "cost_basis_override": None,  # no value (before N78-1: A's Auto cost, 100 USD, the currency of its last purchase)
+    "cost_basis_currency": None,  # (before N78-1: USD)
     "related_transaction_id": None,  # its pair is gone
 }
 _SIX_AT_EIGHTY, _TEN_AT_EIGHTY = (Decimal("80"), Decimal("6")), (Decimal("80"), Decimal("10"))  # WAC line points, in EUR
@@ -418,25 +412,25 @@ FOREIGN_MIRROR_LOTS = {
             "original_quantity": Decimal("10"),
             "opening_unit_price": Decimal("80"),  # 100 USD at 0.80, the opening's rate
             "original_cost": Decimal("800"),  # 1000 USD at 0.80
-            "open_quantity": Decimal("6"),  # 4 handed over on 5 Dec
+            "open_quantity": Decimal("6"),  # 4 gone on 5 Dec
             "open_value": Decimal("412.5"),  # 6 × 110 USD at 0.625, the reading day's rate
-            "pnl": Decimal("-137.5"),  # 412.5 + 250 of proceeds − 800
+            "pnl": Decimal("-387.5"),  # 412.5 + 0 of proceeds − 800 (before N78-1: −137.5)
             # A BUY lot has no reference price of its own: its unit price, at the opening's rate, "exact".
             "reference_unit_price": Decimal("80"),
             "reference_price_source": "exact",
             "relative_return": Decimal("-0.140625"),  # 68.75 / 80 − 1: 110 USD at 0.625 against 100 USD at 0.80
-            "total_return": Decimal("-0.171875"),  # total_pnl / original_cost = −137.5 / 800
-            "cumulative_proceeds": Decimal("250"),  # D: 4 × 100 USD at 0.625, the handover's rate
-            "realized_pnl": Decimal("-70"),  # D − C = 250 − 4 × 80, the cost at the opening's rate
+            "total_return": Decimal("-0.484375"),  # total_pnl / original_cost = −387.5 / 800 (before N78-1: −0.171875)
+            "cumulative_proceeds": Decimal("0"),  # no value leaves (before N78-1: 250, 4 × 100 USD at 0.625)
+            "realized_pnl": Decimal("-320"),  # 0 − 4 × 80, the cost at the opening's rate (before N78-1: −70)
             "market_pnl": Decimal("-67.5"),  # pnl − realized: 412.5 − 6 × 80
-            "total_pnl": Decimal("-137.5"),  # market + realized + 0 of income: the Dashboard's P&L
+            "total_pnl": Decimal("-387.5"),  # market + realized + 0 of income: the Dashboard's P&L (before N78-1: −137.5)
         }
     ],
     # 10 at 80, then 6 at 80 from 5 Dec: each purchase at its own day's rate, and a reduction leaves the average.
     "A's WAC line": {FOREIGN_FUNDING_DAY: _TEN_AT_EIGHTY, date(2018, 12, 4): _TEN_AT_EIGHTY, FOREIGN_TRANSFER_DAY: _SIX_AT_EIGHTY},
     "cumulative WAC line": {FOREIGN_FUNDING_DAY: _TEN_AT_EIGHTY, date(2018, 12, 4): _TEN_AT_EIGHTY, FOREIGN_TRANSFER_DAY: _SIX_AT_EIGHTY},
 }
-# (b) The Dashboard of A, in EUR: D leaves the capital, D − C is realized (J-24).
+# (b) The Dashboard of A, in EUR: nothing leaves the capital, 0 − C is realized (N78-1; before it J-24's D − C).
 FOREIGN_MIRROR_DASHBOARD = {
     "brokers holding X": ["A"],
     "A": {
@@ -447,13 +441,13 @@ FOREIGN_MIRROR_DASHBOARD = {
     },
     "open_cost_basis": Decimal("480"),  # 6 × 80
     "net_worth": Decimal("412.5"),  # the 6 X″, and no cash: 1000 − 1000 USD
-    "total_invested": Decimal("550"),  # 1000 USD at 0.80 − D, the 400 USD handed over at 0.625: 800 − 250
-    "total_gain_loss": Decimal("-137.5"),  # 412.5 − 550: −70 realized, −67.5 unrealized
+    "total_invested": Decimal("800"),  # 1000 USD at 0.80; nothing leaves (before N78-1: 550, 800 − 250)
+    "total_gain_loss": Decimal("-387.5"),  # 412.5 − 800: −320 realized, −67.5 unrealized (before N78-1: −137.5)
     "warnings and errors": [],
-    "period_realized_gain_loss": Decimal("-70"),  # D − C = 250 − 320, from the first row to 5 Dec
+    "period_realized_gain_loss": Decimal("-320"),  # 0 − C = 0 − 320, from the first row to 5 Dec (before N78-1: −70)
 }
-# (c) The J-24 parity, the point of W-B55: the Dashboard's realized and P&L are A's lot's realized_pnl and total_pnl.
-FOREIGN_PARITY = {"realized": Decimal("-70"), "P&L": Decimal("-137.5")}
+# (c) The parity, the point of W-B55: the Dashboard's realized and P&L are A's lot's realized_pnl and total_pnl.
+FOREIGN_PARITY = {"realized": Decimal("-320"), "P&L": Decimal("-387.5")}
 
 # CASH LEGS (module docstring). Every reading is on 7 Oct.
 CASH_READING_DAY = date(2018, 10, 7)
@@ -650,8 +644,8 @@ async def _mirror_book(session: AsyncSession) -> Book:
 
 
 async def _mirror_control_book(session: AsyncSession) -> Book:
-    """A alone, its −4 written as the ADJUSTMENT decision 47 makes the deletion of B leave — handed over at A's
-    average, 20 EUR a unit, with its currency — and never a B. The book of A, as J's book of CP-16."""
+    """A alone, its −4 written as the ADJUSTMENT the deletion of B leaves since N78-1 — without a value — and never a B.
+    The book of A, as J's book of CP-16. (Before N78-1 it stored A's average, 20 EUR a unit, with its currency.)"""
     user, asset = await _user_and_asset(session, "mirror control")
     broker_a = await _owned_broker(session, user, "A")
     purchase = Transaction(broker_id=broker_a.id, asset_id=asset.id, type=TransactionType.BUY, date=FUNDING_DAY, quantity=Decimal("10"), amount=Decimal("-200"), currency=REPORT)
@@ -661,8 +655,6 @@ async def _mirror_control_book(session: AsyncSession) -> Book:
         type=TransactionType.ADJUSTMENT,
         date=TRANSFER_DAY,
         quantity=Decimal("-4"),
-        cost_basis_override=Decimal(HANDOVER_COST_PER_UNIT),
-        cost_basis_currency=REPORT,
     )
     session.add_all([Transaction(broker_id=broker_a.id, type=TransactionType.DEPOSIT, date=FUNDING_DAY, amount=Decimal("200"), currency=REPORT), purchase, handover])
     await session.flush()
@@ -700,7 +692,7 @@ async def _foreign_mirror_book(session: AsyncSession) -> Book:
     user, asset, broker_a, purchase = await _foreign_purchase(session, "foreign mirror")
     broker_b = await _owned_broker(session, user, "B")
     departure = Transaction(broker_id=broker_a.id, asset_id=asset.id, type=TransactionType.TRANSFER, date=FOREIGN_TRANSFER_DAY, quantity=Decimal("-4"))
-    # B's leg carries no cost basis: it goes with B, and A's leg leaves at A's own Auto cost (decision 47) whatever it said.
+    # B's leg carries no cost basis: it goes with B, and A's leg leaves without a value (N78-1) whatever it said.
     arrival = Transaction(broker_id=broker_b.id, asset_id=asset.id, type=TransactionType.TRANSFER, date=FOREIGN_TRANSFER_DAY, quantity=Decimal("4"))
     session.add_all([departure, arrival])
     await session.flush()
@@ -712,8 +704,8 @@ async def _foreign_mirror_book(session: AsyncSession) -> Book:
 
 
 async def _foreign_mirror_control_book(session: AsyncSession) -> Book:
-    """A alone, its −4 written as the ADJUSTMENT decision 47 makes the deletion of B leave — at A's Auto cost, 100 USD a
-    unit, with its currency — and never a B. The book of A."""
+    """A alone, its −4 written as the ADJUSTMENT the deletion of B leaves since N78-1 — without a value — and never a B.
+    The book of A. (Before N78-1 it stored A's Auto cost, 100 USD a unit, with its currency.)"""
     user, asset, broker_a, purchase = await _foreign_purchase(session, "foreign mirror control")
     handover = Transaction(
         broker_id=broker_a.id,
@@ -721,8 +713,6 @@ async def _foreign_mirror_control_book(session: AsyncSession) -> Book:
         type=TransactionType.ADJUSTMENT,
         date=FOREIGN_TRANSFER_DAY,
         quantity=Decimal("-4"),
-        cost_basis_override=Decimal(FOREIGN_HANDOVER_COST_PER_UNIT),
-        cost_basis_currency=FOREIGN_CURRENCY,
     )
     session.add(handover)
     await session.flush()
@@ -754,12 +744,12 @@ _ORIGINS = [
 ]
 _MIRROR_BUILDERS = {"control": _mirror_control_book, "orphan": _mirror_book}
 _MIRROR_ORIGINS = [
-    pytest.param("control", id="control-adjustment-out-at-cost-written-as-such"),
+    pytest.param("control", id="control-adjustment-out-without-a-value-written-as-such"),
     pytest.param("orphan", id="orphan-left-by-deleting-broker-b"),
 ]
 _FOREIGN_MIRROR_BUILDERS = {"control": _foreign_mirror_control_book, "orphan": _foreign_mirror_book}
 _FOREIGN_MIRROR_ORIGINS = [
-    pytest.param("control", id="control-adjustment-out-at-cost-in-usd-written-as-such"),
+    pytest.param("control", id="control-adjustment-out-without-a-value-in-usd-written-as-such"),
     pytest.param("orphan", id="orphan-left-by-deleting-broker-b"),
 ]
 
@@ -1042,7 +1032,7 @@ class TestReceivedTransferLeftWithoutCostBasis:
 
 
 # =============================================================================
-# MIRROR — B deleted: A's outgoing leg handed over at A's Auto cost (decision 47, module docstring)
+# MIRROR — B deleted: A's outgoing leg leaves without a value (decision 47 as N78-1 changed it, module docstring)
 # =============================================================================
 
 
@@ -1050,7 +1040,7 @@ class TestOrphanOutgoingTransfer:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("origin", _MIRROR_ORIGINS)
     async def test_lots_of_x_at_a_once_broker_b_is_deleted(self, session, origin):
-        """MIRROR (a) — control green, orphan RED until decision 47: A's leg an ADJUSTMENT −4 at A's Auto cost, 20 EUR; the lots COMPLETE, A's BUY lot handing 4 over at 20 — realized 0, proceeds 80, open 6 worth 180, P&L 60, total 60 —, the WAC lines 10 then 6 at 20. Today the orphan stays a TRANSFER and the lots FAIL on TRANSFER_PAIR_MISSING."""
+        """MIRROR (a) — control green, orphan RED until N78-1: A's leg an ADJUSTMENT −4 without a value; the lots COMPLETE, A's BUY lot closing 4 at 0 — realized −80, proceeds 0, open 6 worth 180, P&L −20, total −20 —, the WAC lines 10 then 6 at 20. Before N78-1 the leg was handed over at 20 EUR: realized 0, proceeds 80, total 60."""
         print_section(f"V-3 mirror (a) — lots of X once B is deleted ({origin})")
         book = await _MIRROR_BUILDERS[origin](session)
 
@@ -1062,12 +1052,12 @@ class TestOrphanOutgoingTransfer:
             print(f"{part}: {view}")
 
         assert observed == {"A's row": MIRROR_LEG, "lots": MIRROR_LOTS}
-        print_success(f"V-3 mirror (a) {origin}: A's leg handed over at 20, the lots COMPLETE")
+        print_success(f"V-3 mirror (a) {origin}: A's leg without a value, the lots COMPLETE, realized −80")
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("origin", _MIRROR_ORIGINS)
     async def test_dashboard_of_a_once_broker_b_is_deleted(self, session, origin):
-        """MIRROR (b) — control green, orphan RED until decision 47: 120 invested — 200 less the 4 × 20 handed over at cost —, net worth 180, P&L 60; A's X 6 at 20, value 180, gain 60. Today the orphan reads 100 invested (the leg at market, 4 × 25) and 80 of P&L."""
+        """MIRROR (b) — control green, orphan RED until N78-1: 200 invested — the exit moves no capital —, net worth 180, P&L −20; A's X 6 at 20, value 180, gain 60. Before N78-1: 120 invested (200 less 4 × 20 handed over), P&L 60."""
         print_section(f"V-3 mirror (b) — Dashboard of A once B is deleted ({origin})")
         book = await _MIRROR_BUILDERS[origin](session)
 
@@ -1075,12 +1065,12 @@ class TestOrphanOutgoingTransfer:
         print(f"dashboard: {observed}")
 
         assert observed == MIRROR_DASHBOARD
-        print_success(f"V-3 mirror (b) {origin}: 120 invested, 60 of P&L")
+        print_success(f"V-3 mirror (b) {origin}: 200 invested, −20 of P&L")
 
 
 # =============================================================================
-# MIRROR IN ANOTHER CURRENCY (W-B55) — B deleted: A's leg in USD handed over at A's Auto cost, the exchange
-# difference realized at the rate of its day (decision 47, J-24; module docstring)
+# MIRROR IN ANOTHER CURRENCY (W-B55) — B deleted: A's leg leaves without a value, realizing 0 − its historical cost
+# (decision 47 as N78-1 changed it; module docstring)
 # =============================================================================
 
 
@@ -1088,7 +1078,7 @@ class TestOrphanOutgoingTransferInAnotherCurrency:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("origin", _FOREIGN_MIRROR_ORIGINS)
     async def test_lots_of_x_at_a_once_broker_b_is_deleted(self, session, origin):
-        """W-B55 (a): A's leg an ADJUSTMENT −4 at A's Auto cost, 100 USD — the currency of A's last purchase —; the lots COMPLETE, A's BUY lot of 10 at 800 EUR handing 4 over at the handover's rate — proceeds 250, realized −70 —, open 6 worth 412.5, market −67.5, total −137.5; the WAC lines 10 then 6 at 80."""
+        """W-B55 (a), RED until N78-1 (control and orphan): A's leg an ADJUSTMENT −4 without a value; the lots COMPLETE, A's BUY lot of 10 at 800 EUR closing 4 at 0 — proceeds 0, realized −320 —, open 6 worth 412.5, market −67.5, total −387.5; the WAC lines 10 then 6 at 80. Before N78-1: the leg at 100 USD, proceeds 250, realized −70, total −137.5."""
         print_section(f"W-B55 (a) — lots of X″ at A once B is deleted ({origin})")
         book = await _FOREIGN_MIRROR_BUILDERS[origin](session)
 
@@ -1100,12 +1090,12 @@ class TestOrphanOutgoingTransferInAnotherCurrency:
             print(f"{part}: {view}")
 
         assert observed == {"A's row": FOREIGN_MIRROR_LEG, "lots": FOREIGN_MIRROR_LOTS}
-        print_success(f"W-B55 (a) {origin}: A's leg handed over at 100 USD, the lot realizes −70")
+        print_success(f"W-B55 (a) {origin}: A's leg without a value, the lot realizes −320")
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("origin", _FOREIGN_MIRROR_ORIGINS)
     async def test_dashboard_of_a_once_broker_b_is_deleted(self, session, origin):
-        """W-B55 (b): 550 invested — 800 less D, the 400 USD handed over at 0.625 —, realized D − C = 250 − 320 = −70, net worth 412.5, P&L −137.5; A's X″ 6 at 80, value 412.5, gain −67.5."""
+        """W-B55 (b), RED until N78-1 (control and orphan): 800 invested — nothing leaves —, realized 0 − C = −320, net worth 412.5, P&L −387.5; A's X″ 6 at 80, value 412.5, gain −67.5. Before N78-1: 550 invested, realized −70, P&L −137.5."""
         print_section(f"W-B55 (b) — Dashboard of A once B is deleted ({origin})")
         book = await _FOREIGN_MIRROR_BUILDERS[origin](session)
 
@@ -1114,12 +1104,12 @@ class TestOrphanOutgoingTransferInAnotherCurrency:
         print(f"dashboard: {observed}")
 
         assert observed == FOREIGN_MIRROR_DASHBOARD
-        print_success(f"W-B55 (b) {origin}: 550 invested, −70 realized, −137.5 of P&L")
+        print_success(f"W-B55 (b) {origin}: 800 invested, −320 realized, −387.5 of P&L")
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("origin", _FOREIGN_MIRROR_ORIGINS)
     async def test_the_dashboards_realized_is_the_lots_realized(self, session, origin):
-        """W-B55 (c), the point: J-24's parity from the deletion on — one lot, A's BUY's, so the Dashboard's realized and P&L are the lot's realized_pnl and total_pnl, −70 and −137.5 on both sides."""
+        """W-B55 (c), the point, RED until N78-1: the parity from the deletion on — one lot, A's BUY's, so the Dashboard's realized and P&L are the lot's realized_pnl and total_pnl, −320 and −387.5 on both sides (before N78-1: −70 and −137.5)."""
         print_section(f"W-B55 (c) — the Dashboard's realized and P&L against A's lot ({origin})")
         book = await _FOREIGN_MIRROR_BUILDERS[origin](session)
 
@@ -1134,7 +1124,7 @@ class TestOrphanOutgoingTransferInAnotherCurrency:
         print(f"parity: {observed}")
 
         assert observed == {"Dashboard": FOREIGN_PARITY, "A's lot": FOREIGN_PARITY}
-        print_success(f"W-B55 (c) {origin}: the Dashboard and A's lot both realize −70, −137.5 of P&L")
+        print_success(f"W-B55 (c) {origin}: the Dashboard and A's lot both realize −320, −387.5 of P&L")
 
 
 # =============================================================================

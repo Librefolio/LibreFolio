@@ -438,7 +438,7 @@ values, within the field's `min`/`max` when set) and the `.lf-compact-number-inp
 ([Mobile CSS](../pwa.md#mobile-css)) sets every input without `.zoom-guard-exempt` to 16 px; the
 class then only resets the line height.
 
-### Signal rendering shared by cards and preview {: #signal-rendering }
+### Signal rendering shared by cards, preview and detail pages {: #signal-rendering }
 
 `lib/charts/chartSignalRendering.ts` is the one place that turns a chart's saved signals into
 `RenderedSignal[]`. It is pure (no Svelte state, no store read): the caller says where the series
@@ -455,7 +455,26 @@ The Assets list (`routes/(app)/assets/+page.svelte`), the FX list (`routes/(app)
 and `ChartSettingsModal` call these functions with their own `SignalDataSources`, so a signal
 looks the same on a card and in its preview: a comparison is named after its target, a comparison
 with the chart's own asset (`selfAssetId`) is never drawn, and an FX pair follows the direction of
-the card. The two detail pages still keep their own loop (backlog Y-42); `signalRendering.gate.test.ts` keeps any other file from calling `signalFromConfig()` outside this module.
+the card.
+
+The two detail pages (`routes/(app)/assets/[id]/+page.svelte` and `routes/(app)/fx/[pair]/+page.svelte`)
+use the same functions: `renderLocalSignals` for their saved local signals, `renderBackendResults`
+for their backend results and, on the FX page, the module's `fxPointToLineDataPoint` to turn store
+points into chart points. They build their `SignalDataSources` with the pure helper
+`detailPageSignalSources({configs, assets, fxPairPoints, selfAssetId?})`
+(`lib/charts/chartPageSignals.ts`):
+
+- an FX pair reads the points of the FX store, straight (the signal's own `_inverted` turns them),
+  asked lazily, one pair at a time;
+- a comparison reads the series that the comparison load wrote into its config
+  (`params._resolvedData`), named with icon and type by the assets the page knows (an unknown asset
+  gets the catalogue fallback name);
+- there is no base point, because the detail pages draw daily data;
+- the asset detail page passes its own asset as `selfAssetId`.
+
+So a signal looks the same on a card, in the preview and on a detail page.
+`signalRendering.gate.test.ts` keeps it that way: no file outside the module calls
+`signalFromConfig()`, and the list of known copies (`KNOWN_COPIES`) is empty and can only shrink.
 
 ### Preview chart in the modal {: #settings-preview-chart }
 
@@ -465,7 +484,7 @@ bespoke `LineChart`. It is configured as follows:
 | Prop | Value |
 |------|-------|
 | `data` | the **absolute** series: the card's real data in `pair` mode, a synthetic curve in `global` mode |
-| `externalViewMode` | the modal's view selector (**Abs** / **%**, plus **Rolling Return** on asset charts, see [Three views](#primary-views)): the chart takes the percentage view itself |
+| `externalViewMode` | the modal's view selector (**Abs** / **%** / **Rolling Return**, see [Three views](#primary-views)): the chart takes the percentage view itself |
 | `externalChartType` | `'line'` (no candlesticks) |
 | `hideToolbar` | `true` |
 | `chartHeight` | `'220px'` |
@@ -495,9 +514,11 @@ that knows a better base than the first point of the data it hands over. No list
 
 A chart's saved view is `ChartSettings.primaryView` (`ChartPrimaryView`: `'absolute' | 'percentage' |
 'calendar-return'`, default `'percentage'`), next to `calendarReturnWindow` and
-`calendarReturnWindowAuto`. The Assets list uses all three; the FX list and the FX preview stay on
-the first two (`ChartSettingsModal` falls back to `'percentage'` when a non-asset chart opens on
-`'calendar-return'`). `STORAGE_VERSION` is unchanged: a document saved before these fields existed
+`calendarReturnWindowAuto`. The Assets list and the FX list use all three; the FX list opens on
+`'absolute'` (`scopeDefaultView('fx')` in the store, as before), every other chart on `'percentage'`.
+`ChartSettingsModal` offers the third view only when the page passes `calendarPreviewResolver`
+(otherwise it falls back to `'percentage'` when a chart opens on `'calendar-return'`); both lists
+pass it. `STORAGE_VERSION` is unchanged: a document saved before these fields existed
 is filled by the sanitiser (`primaryView` = `'percentage'`; `calendarReturnWindowAuto` = `true` only
 when the stored window is the default one).
 
@@ -530,17 +551,32 @@ the chart's own asset or without a ready view draws nothing. The other signals s
 not requested. With no points, `AssetCard` shows the problem message (for example, less history than
 the window) instead of the chart.
 
-**Contract for the detail page.** The asset detail page keeps its own `primaryMode` (`'price'` or
-`'calendar-return'`, above) and does not read `primaryView` yet; the workstream that wires it should:
+**The FX side.** The FX list (`routes/(app)/fx/+page.svelte`) works the same way, with
+`buildFxCalendarQuery()` (`lib/utils/reducedFxQuery.ts`) over `POST /fx/currencies/convert` (sampling:
+[backend FX architecture](../../backend/fx/architecture.md#convert-sampling)). For each card in the
+view it builds one conversion of 1 unit in the direction the card shows the pair (a flipped card asks
+the flipped rate), with the calendar signal, `key` `fx:<slug>` and `max_points` from the card's plot
+width. Every compared `fx-pair` signal adds a conversion of 1 unit in the direction its signal shows
+its pair, with the same signal and `sample_like` the card's key; the members of a card share a group,
+so `bulkBatches.ts` never cuts between them. The page reads the signals from `signal_results`, matched
+to its entries by `request_index` (local to the batch), into `calendarBySlug` (`extractCalendarReturnView()`);
+the rates of these conversions are never merged into the FX stores, and the cards' daily rates stay
+the stores' (not sampled). A card draws the own points and `renderCalendarPairComparisons(configs,
+views)` (`chartSignalRendering.ts`): each `fx-pair` signal whose view is `ready` or `partial`, as a
+percentage line with the signal's style; asset comparisons on FX cards are not drawn. The modal's
+preview (`resolveCalendarPreview`) for one pair converts the same way; for all charts it posts the
+demo points to `/signals/preview`.
 
-- open with `detailModesForPrimaryView(settings.primaryView)`: `'calendar-return'` gives
-  `{primaryMode: 'calendar-return', viewMode: 'percentage'}`, the two others give
-  `{primaryMode: 'price', viewMode: view}`;
-- save with `setItemPrimaryView()` the result of `primaryViewForDetailModes(primaryMode, viewMode)`
-  when the user changes mode or view;
-- take its window from `effectiveCalendarReturnWindow(settings, rangeDays)`, so that the detail page
-  and the list use the same window, and save a chosen one through the settings, which marks it as
-  chosen.
+**The detail page.** The asset detail page opens in the view of its card: it reads
+`primaryView` with `detailModesForPrimaryView(settings.primaryView)` (`'calendar-return'` gives
+`{primaryMode: 'calendar-return', viewMode: 'percentage'}`, the two others give
+`{primaryMode: 'price', viewMode: view}`), and saves the user's change of mode or view as the card's
+view, `primaryViewForDetailModes(primaryMode, viewMode)`. It saves it with `setPairSettings()` and the
+settings it holds, its signals included, not with `setItemPrimaryView()`, which rebuilds the override
+from the store's copy and would drop what the page writes into its signal configs (a comparison's
+`_resolvedData`). Its window is `effectiveCalendarReturnWindow(settings, rangeDays)`, so the asset
+detail page uses the same window as the list, and a window chosen there is saved through the
+settings, which marks it as chosen.
 
 ## Responsive Date Axis
 

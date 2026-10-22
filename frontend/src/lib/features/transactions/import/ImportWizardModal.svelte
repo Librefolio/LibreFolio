@@ -1650,7 +1650,7 @@
                     const arrow = isPair ? '<span class="shrink-0 mr-0.5">↔</span>' : '';
                     return {
                         type: 'html',
-                        html: `<span class="inline-flex items-center gap-1.5 text-xs leading-snug"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" onerror="this.style.display='none'"/>${arrow}<span>${escapeHtml(label)}</span></span>`,
+                        html: `<span class="inline-flex items-center gap-1.5 text-xs leading-snug"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" data-hide-on-error="display"/>${arrow}<span>${escapeHtml(label)}</span></span>`,
                     };
                 },
             },
@@ -2133,7 +2133,7 @@
                     return {
                         type: 'html',
                         html: `<span class="inline-flex items-center gap-1.5 text-xs leading-snug">\
-<img src="/icons/transactions/${slug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" onerror="this.style.display='none'"/>\
+<img src="/icons/transactions/${slug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" data-hide-on-error="display"/>\
 ${arrow}<span>${label}</span></span>`,
                     };
                 },
@@ -2204,7 +2204,7 @@ ${arrow}<span>${label}</span></span>`,
                             const rInfo = getAssetInfo(res.resolvedAssetId);
                             const rName = rInfo?.display_name ?? `#${res.resolvedAssetId}`;
                             const rIconUrl = rInfo?.icon_url ?? (rInfo?.asset_type ? getAssetTypeIconUrl(rInfo.asset_type) : null);
-                            const rIconHtml = rIconUrl ? `<img src="${escapeHtml(rIconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
+                            const rIconHtml = rIconUrl ? `<img src="${escapeHtml(rIconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" data-hide-on-error="display" />` : '';
                             const origName = getAssetDisplayName(assetId);
                             return {type: 'html', html: `<span class="inline-flex items-center gap-1.5 truncate text-lf-success" title="${escapeHtml(origName)} → ${escapeHtml(rName)}">${rIconHtml}<span class="truncate">${escapeHtml(rName)}</span></span>`};
                         }
@@ -2214,7 +2214,7 @@ ${arrow}<span>${label}</span></span>`,
                     const info = getAssetInfo(assetId);
                     const name = info?.display_name ?? `#${assetId}`;
                     const iconUrl = info?.icon_url ?? (info?.asset_type ? getAssetTypeIconUrl(info.asset_type) : null);
-                    const iconHtml = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
+                    const iconHtml = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" data-hide-on-error="display" />` : '';
                     return {type: 'html', html: `<span class="inline-flex items-center gap-1.5 truncate">${iconHtml}<span class="truncate">${escapeHtml(name)}</span></span>`};
                 },
             },
@@ -2249,7 +2249,7 @@ ${arrow}<span>${label}</span></span>`,
                     const b = brokers.find((x) => x.id === brokerId) ?? getBrokerInfo(brokerId);
                     const name = b?.name ?? `#${brokerId}`;
                     const iconUrl = b?.icon_url ?? null;
-                    const iconHtml = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
+                    const iconHtml = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" data-hide-on-error="display" />` : '';
                     // For rows blocked by the broker's opening date, surface a discoverable
                     // "edit opening date" affordance directly in the destination-broker column.
                     if (beforeOpeningIndices.has(mt.index)) {
