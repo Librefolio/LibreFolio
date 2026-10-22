@@ -53,6 +53,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/charts/__tests__/signalLabel.test.ts",
             "src/lib/charts/__tests__/chartPageSignals.test.ts",
             "src/lib/charts/__tests__/chartSignalRendering.test.ts",
+            "src/lib/charts/__tests__/comparisonSeries.test.ts",
             "src/lib/services/fxCreationSync.test.ts",
             "src/lib/utils/sync/__tests__/syncToastHelpers.test.ts",
             "src/lib/utils/sync/__tests__/syncRange.test.ts",

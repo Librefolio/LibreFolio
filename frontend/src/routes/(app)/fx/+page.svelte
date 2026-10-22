@@ -32,6 +32,8 @@
     import {DEFAULT_COMPACT_PLOT_WIDTH_PX} from '$lib/components/charts/timeSeriesAggregation';
     import {buildFxCalendarQuery, estimateFxCalendarDays, fxCalendarRequest, type FxCalendarCardInput, type FxCalendarEntry} from '$lib/utils/reducedFxQuery';
     import {sendBulkBatches} from '$lib/api/bulkBatches';
+    import {comparisonTargetFromStore, ensureComparisonSeries} from '$lib/charts/comparisonSeries';
+    import {comparisonTargetIds} from '$lib/utils/reducedPriceQuery';
     import {todayIso} from '$lib/utils/dateOnly';
     import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
     import {fxPointToLineDataPoint, renderBackendResults, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
@@ -172,7 +174,7 @@
     let signalBackendError = $derived(signalCatalogFailed ? $_('chartSettings.signalCatalogUnavailable') : signalRequestFailed ? $_('chartSettings.signalResultsUnavailable') : null);
 
     // Asset list for cross-domain signal selection (loaded lazily)
-    let availableAssetsList = $state<Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}>>([]);
+    let availableAssetsList = $state<Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; currency?: string | null}>>([]);
 
     // Filter bar adaptive layout is now owned by PageToolbar (shared with dashboard/broker-detail/
     // assets) — see the {#snippet filters}/{#snippet actions} below. Tune live via
@@ -413,7 +415,7 @@
      * columns come both ways and depend on none of them (X-R60).
      */
     async function fetchAllPairData(propagateError = false) {
-        await Promise.all([fetchAllPairSeries(propagateError), loadPeriodChanges(), fetchCalendarReturns()]);
+        await Promise.all([fetchAllPairSeries(propagateError), loadPeriodChanges(), fetchCalendarReturns(), fetchComparisonSeries()]);
     }
 
     /** The view a card shows: its own saved one, else the FX list's (Y-40). */
@@ -831,6 +833,8 @@
         if (shouldReloadBackend) {
             void pageBusy.track('fx-settings', () => fetchAllPairSeries());
         }
+        // A comparison with an asset saved in this window: its series, if the cache lacks them (the window asked them while open).
+        void fetchComparisonSeries(comparisonTargetIds(s.signals, 0));
         if (calendarBefore || s.primaryView === 'calendar-return') {
             void pageBusy.track('fx-settings', () => fetchCalendarReturns(target ? new Set([target]) : undefined));
         }
@@ -846,24 +850,93 @@
                 display_name: a.display_name,
                 icon_url: a.icon_url ?? null,
                 asset_type: a.asset_type ?? null,
+                currency: a.currency ?? null,
             }));
+            // The cards' comparisons with an asset need its currency (the key of its cached series): ask them now.
+            void fetchComparisonSeries();
         } catch {
             // Non-critical — asset dropdown will just be empty
         }
     }
 
+    // =========================================================================
+    // The comparisons with an asset (Y-41)
+    // =========================================================================
+
     /**
-     * Where the cards — and their settings preview — get the series their FX pair signals read (Y-39a): the FX stores,
-     * straight, each signal turning its pair by its own `_inverted`. The FX list holds no asset series, so a comparison
-     * is not drawn here (backlog Y-41).
+     * Bumped when asset series reach the cache: the price stores are not reactive, so what reads them (the cards' signals)
+     * reads this too, and draws again.
      */
-    const fxListSignalSources: SignalDataSources = {
-        fxPairData: (pairSlug) =>
-            getFxStore(pairSlug)
-                .getAllSorted()
-                .map((point) => fxPointToLineDataPoint(point, false)),
-        comparisonTarget: () => null,
-    };
+    let comparisonSeriesVersion = $state(0);
+    let comparisonSeriesLoading = $state(0);
+    let comparisonSeriesChain: Promise<void> = Promise.resolve();
+
+    /**
+     * The daily series of the assets the cards compare (`comparisonSeries.ts`): one request for all of them, only for the
+     * cards that have such a comparison, and only for what the cache does not cover (the asset detail page fills the same
+     * cache). `extraIds` adds assets the settings window is about to draw. Never throws.
+     */
+    function fetchComparisonSeries(extraIds: readonly number[] = []): Promise<void> {
+        // One at a time: a call that follows another finds what it loaded in the cache, and asks nothing twice.
+        comparisonSeriesChain = comparisonSeriesChain.then(() => loadComparisonSeries(extraIds));
+        return comparisonSeriesChain;
+    }
+
+    async function loadComparisonSeries(extraIds: readonly number[]) {
+        const sessionGeneration = getClientSessionGeneration();
+        const ids = new Set(extraIds);
+        for (const pair of pairs) {
+            for (const id of comparisonTargetIds(getSettingsForPair(pair.config.slug, 'fx').signals, 0)) ids.add(id);
+        }
+        const assets = [...ids].flatMap((id) => {
+            const asset = availableAssetsList.find((candidate) => candidate.id === id);
+            return asset?.currency ? [{id, currency: asset.currency}] : [];
+        });
+        if (assets.length === 0) return;
+        const range = {start: dateStart, end: dateEnd};
+        comparisonSeriesLoading++;
+        try {
+            await ensureComparisonSeries(assets, range);
+        } finally {
+            comparisonSeriesLoading--;
+        }
+        if (pageAlive && isClientSessionCurrent(sessionGeneration)) comparisonSeriesVersion++;
+    }
+
+    /** An asset the settings window draws and the cache lacks is asked once per range, as the list of assets asks a target (Z-29d). */
+    const wantedForPreview = new Set<string>();
+    function wantComparisonSeries(assetId: number) {
+        const key = `${assetId}|${dateStart}|${dateEnd}`;
+        if (wantedForPreview.has(key)) return;
+        wantedForPreview.add(key);
+        // Read from a derived: the load starts after it, never inside it.
+        queueMicrotask(() => void fetchComparisonSeries([assetId]));
+    }
+
+    /**
+     * Where the cards — and their settings preview — get the series their saved comparisons read (Y-39a, Y-41): an FX
+     * pair from the FX stores, straight, each signal turning its pair by its own `_inverted`; an asset from the price
+     * cache, its daily series in its own currency (`comparisonSeries.ts`, as the FX detail page draws it). With `readMissing`
+     * (the settings window) an asset the cache lacks is asked.
+     */
+    function signalSourcesFor(readMissing: boolean): SignalDataSources {
+        return {
+            fxPairData: (pairSlug) =>
+                getFxStore(pairSlug)
+                    .getAllSorted()
+                    .map((point) => fxPointToLineDataPoint(point, false)),
+            comparisonTarget: (assetId) => {
+                void comparisonSeriesVersion;
+                const asset = availableAssetsList.find((candidate) => candidate.id === assetId);
+                if (!asset?.currency) return null;
+                const target = comparisonTargetFromStore({id: asset.id, currency: asset.currency, display_name: asset.display_name, icon_url: asset.icon_url, asset_type: asset.asset_type});
+                if (!target && readMissing) wantComparisonSeries(assetId);
+                return target;
+            },
+        };
+    }
+    const fxListSignalSources = signalSourcesFor(false);
+    const settingsSignalSources = signalSourcesFor(true);
 
     /**
      * Render overlay signals for a pair. Called by FxCard reactively whenever
@@ -1155,7 +1228,8 @@
      * note there — until this is false, the rates on screen are not the final ones.
      */
     // The cards' rolling returns are a load wave too (Y-40): `data-busy` holds until they are in.
-    let busy = $derived(loading || periodChangesLoading || pairs.some((p) => p.loading) || [...calendarBySlug.values()].some((entry) => entry.own.state === 'loading'));
+    // The assets the cards compare are one too (Y-41).
+    let busy = $derived(loading || periodChangesLoading || comparisonSeriesLoading > 0 || pairs.some((p) => p.loading) || [...calendarBySlug.values()].some((entry) => entry.own.state === 'loading'));
 </script>
 
 <div class="space-y-6 text-lf-primary" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-testid="fx-page">
@@ -1471,7 +1545,7 @@
                   return fxPointToLineDataPoint(d, inv);
               })
         : undefined}
-    signalSources={fxListSignalSources}
+    signalSources={settingsSignalSources}
     settings={settingsForModal}
     calendarRangeDays={calendarReturnRangeDays(dateStart, dateEnd)}
     calendarPreviewResolver={resolveCalendarPreview}

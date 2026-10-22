@@ -15,6 +15,7 @@ import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {goToAssetsPage} from './assets-helpers';
+import {assetIdByName, pairComparison, seedChartComparisons} from '../fixtures/chartComparisons';
 import {deleteOwned, jsonFrom, type Owned} from './asset-events-owned';
 import {uniqueSuffix, uniqueToken} from '../fixtures/unique';
 import {t} from '../fixtures/i18n-data';
@@ -2593,4 +2594,32 @@ test.describe('Assets list — the table’s fixed columns stay opaque and the c
             await highlighted.evaluate((element) => element.classList.remove('highlighted'));
         });
     }
+});
+
+/**
+ * Assets list — a pair compared on a card is drawn at the first load (lot Y-41).
+ *
+ * A card reads a compared FX pair's rates from the FX stores, which the page fills after the cards first draw; the stores
+ * are not reactive, so the pair appeared only after a later redraw (a click on the card's view button). Since Y-41 the page
+ * redraws the cards when the rates are in. The card publishes how many overlay lines it draws (`data-overlay-count`).
+ * The comparison is seeded in this browser's storage; nothing shared is written.
+ *
+ * Red today: the card has 0 lines after the load settles.
+ */
+test.describe('Assets list — a compared pair is drawn at the first load (Y-41)', () => {
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('a card with a saved comparison with an FX pair draws it once the page has settled', async ({page}) => {
+        await goToAssetsPage(page);
+        const appleId = await assetIdByName(page, 'Apple Inc.');
+        await seedChartComparisons(page, [[`asset-${appleId}`, [pairComparison('e2e-y41-pair', 'EUR-USD')]]]);
+
+        await goToAssetsPage(page);
+        await page.getByTestId('view-mode-grid').click();
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+
+        await expect(page.getByTestId(`asset-card-${appleId}`), 'the pair is drawn without a later redraw').toHaveAttribute('data-overlay-count', '1', {timeout: 15_000});
+    });
 });

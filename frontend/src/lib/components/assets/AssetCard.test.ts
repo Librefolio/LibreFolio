@@ -159,3 +159,42 @@ describe('AssetCard — the three views of its chart (Y-40)', () => {
         expect({data: live.data, viewMode: live.viewMode, axisScale: live.axisScale}).toEqual({data: PRICES, viewMode: 'absolute', axisScale: SETTINGS.axisScales.absolute});
     });
 });
+
+/**
+ * The settings button of a card has a test id (`asset-card-settings`), as the merge and the delete buttons have theirs: the
+ * E2E of the comparison (Z-29d) opens a card's settings through it. A click asks the page for that card's settings
+ * (`onsettings(asset)`) and never opens the detail page.
+ *
+ * Red today: the button has no test id.
+ */
+describe('AssetCard — its settings button (Y-41, lot 0)', () => {
+    it('is found by its test id, and a click asks the page for this card’s settings without opening the detail', async () => {
+        const onsettings = vi.fn();
+        const {card} = mount({primaryView: 'percentage', onsettings});
+
+        await fireEvent.click(within(card).getByTestId('asset-card-settings'));
+
+        expect(onsettings).toHaveBeenCalledWith(expect.objectContaining({id: ASSET.id}));
+        expect(navigation.goto).not.toHaveBeenCalled();
+    });
+});
+
+/**
+ * Y-41 — as the FX card does: `data-overlay-count`, the overlay lines the chart is handed, so that a pair drawn over an
+ * asset is told from one that is not (the asset list drew a pair only after a later redraw).
+ *
+ * Red today: the card publishes no count.
+ */
+describe('AssetCard — the overlay lines it draws (Y-41)', () => {
+    it('publishes the number of overlay lines of a price view, and of the rolling-return view', () => {
+        const renderSignals = vi.fn((): RenderedSignal[] => [PEER_RETURN, {...PEER_RETURN, id: 'pair'}]);
+        const price = mount({primaryView: 'percentage', renderSignals});
+        expect(price.card).toHaveAttribute('data-overlay-count', '2');
+    });
+
+    it('counts the comparisons’ returns in the rolling-return view', () => {
+        const {card} = mount({primaryView: 'calendar-return', calendarReturn: {state: 'ready', points: RETURNS}, calendarOverlaySignals: [PEER_RETURN]});
+
+        expect(card).toHaveAttribute('data-overlay-count', '1');
+    });
+});

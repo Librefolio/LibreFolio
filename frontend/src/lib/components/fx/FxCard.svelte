@@ -171,6 +171,7 @@
     data-testid="fx-card-{slug}"
     data-view-mode={primaryView}
     data-calendar-state={isCalendarView ? (calendarReturn?.state ?? 'idle') : undefined}
+    data-overlay-count={overlaySignals.length}
     onclick={handleCardClick}
     onkeydown={(e) => e.key === 'Enter' && handleCardClick()}
     role="button"
@@ -290,6 +291,7 @@
         <div class="flex items-center gap-0.5">
             <button
                 class="p-1.5 rounded-md hover:bg-lf-neutral text-lf-muted hover:text-lf-secondary transition-colors"
+                data-testid="fx-card-settings"
                 onclick={(e) => {
                     stop(e);
                     onsettings?.({slug});

@@ -91,6 +91,7 @@ Quelles positions ont gagné ou perdu de l'argent au cours de la période, et co
 - **Les positions fermées** sont en italique, ou portent un badge **Fermé** dans le graphique ; pour n'en lister qu'un type, affichez **Statut** et filtrez-le.
 - **Dans la carte**, les gains s'empilent à droite de zéro et les pertes à gauche, le résultat net fermant la ligne ; chaque pourcentage se compare à la valeur de début de la position.
 - **Le P&L période d'une position** peut différer de son gain depuis l'origine : seule la période compte.
+- **Valeur Initiale** et **Valeur Finale** se calculent comme la **Valeur** du **Portefeuille** — mêmes prix, un actif sans prix à ce qu'il vous a coûté, le taux de change de chaque jour — de sorte que les lignes plus les **Autres effets de la période** rejoignent la [carte P&L période](kpi-cards.md#card-1-period-pl). Un **`—`** dans **Variation non réalisée** signifie qu'une valeur n'a pas pu être calculée, par exemple faute d'un taux de change ou d'un coût d'achat : ce n'est pas un zéro.
 
 ??? tip "🙈 Masquer les montants — ce que le graphique affiche encore"
 
