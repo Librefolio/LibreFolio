@@ -8,11 +8,12 @@ Supports both current values and historical OHLC (Open, High, Low, Close) data.
 # Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
 
+import math
 import re
 import time as _time_mod
 from dataclasses import dataclass
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Dict
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -135,6 +136,144 @@ def _yf_with_retry(fn, *, label: str = "yfinance"):
             logger.warning(f"{label} transient error (attempt {attempt}/{_YF_MAX_RETRIES}): {e}, " f"retrying in {delay:.1f}s")
             _time_mod.sleep(delay)
     raise last_exc  # pragma: no cover – safety net
+
+
+# ── Fund data (lot #50) ──────────────────────────────────────────────────
+
+#: The ``quoteType`` values whose ``Ticker.funds_data`` is read besides ``info``.
+_FUND_QUOTE_TYPES = frozenset({"etf", "mutualfund"})
+
+#: The longest ``short_description`` the metadata keeps.
+_DESCRIPTION_LIMIT = 500
+
+#: Yahoo's eleven fund sectors (``funds_data.sector_weightings`` keys, written with underscores) on the standard
+#: sectors. ``FinancialSector.from_string`` does not know these spellings: through it they would all land in «Other».
+_YAHOO_FUND_SECTORS = {
+    "realestate": "Real Estate",
+    "consumer_cyclical": "Consumer Discretionary",
+    "basic_materials": "Basic Materials",
+    "consumer_defensive": "Consumer Staples",
+    "technology": "Technology",
+    "communication_services": "Telecommunication",
+    "financial_services": "Financials",
+    "utilities": "Utilities",
+    "industrials": "Industrials",
+    "energy": "Energy",
+    "healthcare": "Health Care",
+}
+
+
+@dataclass(frozen=True)
+class _FundExtras:
+    """What ``funds_data`` adds to a fund's metadata; each piece is None when Yahoo has none or it could not be read."""
+
+    sector_area: FASectorArea | None = None
+    description: str | None = None
+    ter: str | None = None  # already formatted, «0.03»: a percentage
+    issuer: str | None = None
+
+
+def _read_fund_piece(read, *, identifier: str, piece: str):
+    """One piece of a fund's data, or None when it is missing or cannot be read.
+
+    A «too many requests» refusal is the exception: it leaves as ``AssetRateLimitedError`` (the core pauses the
+    provider), the rule of every other Yahoo call. Any other failure (a fund Yahoo has no profile for, a field that is
+    absent, a malformed answer) costs only this piece: it is isolation by design, so the asset's metadata still comes
+    back, and the failure is logged where it is caught.
+    """
+    try:
+        return _yf_with_retry(read, label=f"fund_{piece}({identifier})")
+    except AssetRateLimitedError:
+        raise
+    except Exception as exc:  # isolation boundary: fund data is best effort, never a reason to lose the metadata
+        logger.warning("Fund data unavailable from Yahoo Finance", identifier=identifier, piece=piece, exc_info=exc)
+        return None
+
+
+def _fund_sector_area(weightings, identifier: str) -> FASectorArea | None:
+    """Yahoo's sector weightings as a ``FASectorArea``: names on the standard sectors, weights renormalised to 1.
+
+    A key Yahoo adds that is not in the table goes to «Other», as an unknown sector of any provider does. A weight that
+    is not a positive finite number is dropped.
+    """
+    if not weightings:
+        return None
+    distribution: dict[str, Decimal] = {}
+    for key, raw in dict(weightings).items():
+        try:
+            weight = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(weight) or weight <= 0:
+            continue
+        sector = _YAHOO_FUND_SECTORS.get(str(key).strip().lower())
+        if sector is None:
+            logger.warning("Unknown sector from provider, mapped to Other", provider_code="yfinance", identifier=identifier, original_sector=str(key), mapped_to="Other")
+            sector = "Other"
+        distribution[sector] = distribution.get(sector, Decimal("0")) + Decimal(str(weight))
+    total = sum(distribution.values(), Decimal("0"))
+    if total <= 0:
+        return None
+    return FASectorArea(distribution={sector: share / total for sector, share in distribution.items()})
+
+
+def _fund_ter(operations) -> str | None:
+    """The annual report expense ratio as a percentage string («0.03»), or None when Yahoo has none.
+
+    Yahoo gives a fraction (0.0003 = 0.03 %): it is shown as a percentage, rounded to two decimals. A missing value
+    (``None``, ``NaN``), or one that is not positive, is left out.
+    """
+    if operations is None or len(operations) == 0:
+        return None
+    try:
+        ratio = float(operations.iloc[0, 0])
+    except (TypeError, ValueError, IndexError):
+        return None
+    if not math.isfinite(ratio) or ratio <= 0:
+        return None
+    percentage = (Decimal(str(ratio)) * 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return format(percentage.normalize(), "f") if percentage > 0 else None
+
+
+def _read_fund_extras(ticker, identifier: str) -> _FundExtras:
+    """Read a fund's sectors, description, expense ratio and issuer from ``Ticker.funds_data`` (lot #50).
+
+    Every piece is read apart, so the one Yahoo lacks (VWCE.DE has no expense ratio and an empty description) does not
+    cost the others. Runs in the core's thread, like every provider call: the sync yfinance reads are safe here.
+    """
+    funds_data = _read_fund_piece(lambda: ticker.funds_data, identifier=identifier, piece="funds_data")
+    if funds_data is None:
+        return _FundExtras()
+    weightings = _read_fund_piece(lambda: funds_data.sector_weightings, identifier=identifier, piece="sectors")
+    overview = _read_fund_piece(lambda: funds_data.fund_overview, identifier=identifier, piece="overview")
+    operations = _read_fund_piece(lambda: funds_data.fund_operations, identifier=identifier, piece="operations")
+    description = _read_fund_piece(lambda: funds_data.description, identifier=identifier, piece="description")
+
+    issuer = overview.get("family") if isinstance(overview, dict) else None
+    return _FundExtras(
+        sector_area=_fund_sector_area(weightings, identifier),
+        description=description.strip() if isinstance(description, str) and description.strip() else None,
+        ter=_fund_ter(operations),
+        issuer=issuer.strip() if isinstance(issuer, str) and issuer.strip() else None,
+    )
+
+
+def _fund_description(head: str, extras: _FundExtras) -> str:
+    """The description with the expense ratio and the issuer after it («head | TER: 0.03% | Issuer: X»).
+
+    The 500-character cap cuts the head, never the tail: the figures are the point of the addition.
+    """
+    tail = ""
+    if extras.ter:
+        tail += f" | TER: {extras.ter}%"
+    if extras.issuer:
+        tail += f" | Issuer: {extras.issuer}"
+    if not tail:
+        return head[:_DESCRIPTION_LIMIT]
+    room = _DESCRIPTION_LIMIT - len(tail)
+    if len(head) > room:
+        head = head[: max(room - 3, 0)] + "..."
+    return head + tail
 
 
 @dataclass(frozen=True)
@@ -836,27 +975,35 @@ class YahooFinanceProvider(AssetSourceProvider):
             }
             asset_type = asset_type_map.get(quote_type, "OTHER")
 
+            # A fund (ETF, mutual fund) also has its own data: sectors, description, expense ratio, issuer (lot #50)
+            extras = _read_fund_extras(t, identifier) if quote_type in _FUND_QUOTE_TYPES else None
+
             # Get description (truncate to 500 chars)
             long_business_summary = info.get("longBusinessSummary", "")
             short_name = info.get("shortName", "")
             long_name = info.get("longName", "")
 
-            # Prefer longBusinessSummary, fallback to names
+            # Prefer longBusinessSummary, then the fund's own description, fallback to names
             if long_business_summary:
-                short_description = long_business_summary[:500]
+                short_description = long_business_summary
+            elif extras is not None and extras.description:
+                short_description = extras.description
             elif long_name:
                 short_description = long_name
             elif short_name:
                 short_description = short_name
             else:
                 short_description = f"{identifier} from Yahoo Finance"
+            short_description = _fund_description(short_description, extras) if extras is not None else short_description[:_DESCRIPTION_LIMIT]
 
             # Get sector
             sector = info.get("sector")
 
             # Build FAClassificationParams
             classification_data = {"short_description": short_description}
-            if sector:
+            if extras is not None and extras.sector_area is not None:
+                classification_data["sector_area"] = extras.sector_area
+            elif sector:
                 # Log warning if sector is not in standard classification
                 if not validate_sector(sector):
                     logger.warning(
