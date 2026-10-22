@@ -13,7 +13,8 @@
  *   declaration in roleColors.ts: a role added to the union enters the gate the day it is declared. The union is read
  *   on one line or as Prettier breaks it, one member per line after a leading `|`, and a member written otherwise is
  *   named, never skipped. Positive control: every role of the union is read by chart code — directly,
- *   `.color('--lf-…')` in a production source, or through `readableText`, whose reads are recorded at run time — so the
+ *   `.color('--lf-…')` in a production source, a category role named in the table of `chartCategories.ts` (DV-11), or
+ *   through `readableText`, whose reads are recorded at run time — so the
  *   gate checks no dead role. A role declared ahead of its reader waits in `PENDING_READERS`, named with the batch that
  *   will read it; the list only shrinks: once production code reads a role, a red asks that batch to remove its line.
  * - **The paths without a page.** An injected reader answers before any element is looked for, so it works here, and
@@ -85,6 +86,9 @@ function chartCodeReads(): {direct: Set<string>; readableTextCallers: string[]} 
         if (rel === 'lib/theme/roleColors.ts') continue;
         const text = readFileSync(path.join(SRC_DIR, rel), 'utf-8');
         for (const match of text.matchAll(/\.color\(\s*'(--lf-[a-z0-9-]+)'\s*\)/g)) direct.add(match[1]);
+        // The category roles (DV-11): `categoryColor` reads them through `pageRoles(dark).color(role)`, the role taken from
+        // the table of chartCategories.ts, where each is written once as a literal.
+        if (rel === 'lib/theme/chartCategories.ts') for (const match of text.matchAll(/'(--lf-cat-[a-z0-9-]+)'/g)) direct.add(match[1]);
         if (/\.readableText\(/.test(text)) readableTextCallers.push(rel);
     }
     return {direct, readableTextCallers};

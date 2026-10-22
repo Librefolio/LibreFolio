@@ -14,8 +14,8 @@ import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync}
 import {tmpdir} from 'node:os';
 import {dirname, join} from 'node:path';
 import {CATALOG_SCHEMA, CATEGORY_FILE, categoryLines, FRONTEND_DIR, isTestPath, LAB_DIRS, listSourceFiles, scanColors, scanSource, scriptTestidValues, STATIC_SOURCES, testidValues} from '../../../../scripts/designer-lab/scan-colors.mjs';
-import {CATEGORY_BUCKETS, CATEGORY_KEYS, categoryColor as chartCategoryColor} from '$lib/theme/chartCategories';
-import {isInlineAlias} from './catalogView';
+import {CATEGORY_BUCKETS, CATEGORY_KEYS, CATEGORY_ROLES, categoryColor as chartCategoryColor} from '$lib/theme/chartCategories';
+import {categoryRows, isInlineAlias} from './catalogView';
 import type {CatalogLiteral, ColorCatalog, TestidVia, ThemeContext, Zone} from './types';
 
 type Literal = Omit<CatalogLiteral, 'id' | 'file'>;
@@ -1179,22 +1179,21 @@ describe('scanColors — the real tree, invariants only', () => {
         expect(lf.reduce((n, p) => n + p.uses, 0)).toBeLessThanOrEqual(first.meta.parity.custom);
     });
 
-    it('catalogues every chart category of DV’s tables once, each theme on the line that writes the colour the charts read', () => {
+    it('catalogues every chart category of DV’s file once — the sectors and «Unknown» — each theme on the line that writes the colour the charts read', () => {
         const categories = first.categories ?? [];
-        // In table order: the types and the sectors as `CATEGORY_KEYS` lists them, then the buckets.
-        const kinds = categories.map((c) => c.kind);
-        expect(kinds).toEqual([...kinds].sort((a, b) => ['type', 'sector', 'bucket'].indexOf(a) - ['type', 'sector', 'bucket'].indexOf(b)));
-        expect(categories.filter((c) => c.kind === 'type').map((c) => c.key)).toEqual([...CATEGORY_KEYS.type]);
+        // In table order: the sectors as `CATEGORY_KEYS` lists them, then the bucket. The asset types and the cash are
+        // roles of tokens.css since DV-11 (`CATEGORY_ROLES`): no line of the file writes them, the Lab shows the roles.
+        expect(categories.map((c) => c.kind)).toEqual([...CATEGORY_KEYS.sector.map(() => 'sector'), 'bucket']);
         expect(categories.filter((c) => c.kind === 'sector').map((c) => c.key)).toEqual([...CATEGORY_KEYS.sector]);
+        expect(categories.filter((c) => c.kind === 'bucket').map((c) => c.key)).toEqual(['Unknown']);
         expect(
-            categories
-                .filter((c) => c.kind === 'bucket')
-                .map((c) => c.key)
-                .sort(),
-        ).toEqual([...CATEGORY_BUCKETS].sort());
+            categories.filter((c) => CATEGORY_ROLES.some((r) => r.target === c.target)),
+            'a category drawn in a role has no line of its own',
+        ).toEqual([]);
+        expect(CATEGORY_BUCKETS, 'barrier: the engine adds the cash and «Unknown»').toEqual(['Liquidity', 'Unknown']);
 
         const bad: string[] = [];
-        const expected = [...(['type', 'sector'] as const).flatMap((kind) => CATEGORY_KEYS[kind].map((key) => ({kind, key}))), ...CATEGORY_BUCKETS.map((key) => ({kind: 'bucket' as const, key}))];
+        const expected = [...CATEGORY_KEYS.sector.map((key) => ({kind: 'sector' as const, key})), {kind: 'bucket' as const, key: 'Unknown'}];
         for (const {kind, key} of expected) {
             const target = `${kind}:${key}`;
             const found = categories.filter((c) => c.target === target);
@@ -1209,14 +1208,26 @@ describe('scanColors — the real tree, invariants only', () => {
                     bad.push(`${target} ${theme}: no literal`);
                     continue;
                 }
-                // A bucket answers for both kinds: asked as a type, as the charts of the asset types do.
-                const read = chartCategoryColor(kind === 'bucket' ? 'type' : kind, key, theme === 'dark');
+                const read = chartCategoryColor(kind === 'bucket' ? 'sector' : kind, key, theme === 'dark');
                 if (lit.raw.toLowerCase() !== read.toLowerCase()) bad.push(`${target} ${theme}: the line writes ${lit.raw}, the charts read ${read}`);
                 if (first.files[lit.file] !== CATEGORY_FILE || lit.category !== target || lit.theme !== theme) bad.push(`${target} ${theme}: literal ${lit.id} is ${first.files[lit.file]}:${lit.line} ${lit.category ?? '-'} ${lit.theme}`);
             }
         }
         expect(bad).toEqual([]);
         expect(categories).toHaveLength(expected.length);
+    });
+
+    it('shows each asset type and the cash as a view of its role, at the value tokens.css gives it and the charts read (DV-11)', () => {
+        const rows = categoryRows(first).filter((r) => r.role);
+        expect(rows.map((r) => r.target)).toEqual(CATEGORY_ROLES.map((r) => r.target));
+        const bad = rows.flatMap((r) =>
+            (['light', 'dark'] as const).flatMap((theme) => {
+                const shown = (theme === 'dark' ? r.darkValue : r.lightValue) ?? '';
+                const read = chartCategoryColor('type', r.key, theme === 'dark');
+                return shown.toLowerCase() === read.toLowerCase() ? [] : [`${r.target} ${theme}: the Lab shows ${shown || '—'}, the charts read ${read}`];
+            }),
+        );
+        expect(bad).toEqual([]);
     });
 
     it('writes no colour in the categories file outside its tables, and names no category anywhere else (C2)', () => {

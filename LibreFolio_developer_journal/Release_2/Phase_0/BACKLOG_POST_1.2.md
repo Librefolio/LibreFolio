@@ -3112,7 +3112,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   il 16/10 sera (`bab52635d`, `0c3275057`); la spec è ferma dal 13/10. Verdetto della triage: difetto del prodotto. Cura
   per il proprietario del WAC: arrotondare il costo proposto alla scala della colonna prima del commit, o quantizzarlo
   nel backend; il test resta com'è. Dettagli: piano di T, «`CompactCashCell`», passo 4.
-- **TC-19 · La pagina per sviluppatori del banner della qualità dei dati dice ancora «amber/sky»** — minimo, docs; T,
+- ✅ **TC-19 · La pagina per sviluppatori del banner della qualità dei dati dice ancora «amber/sky»** (riscritta il
+  22/10 da C2, solo inglese: tono del problema peggiore, regola dei banner, disposizione T2) — minimo, docs; T,
   17/10, R3-a (giro 3). `mkdocs_src/docs/developer/frontend/data-quality-banner.md`, riga ~46, descrive il modo
   raggruppato come «Single amber/sky container»: da R3-a il contenitore prende il tono del problema più grave (`danger`,
   `warning` o `info`, via `DATA_QUALITY_TONE`), ogni riga il suo, e i chip stanno sulla card col bordo nel colore dello
@@ -3133,13 +3134,15 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   L1 vince e l'intestazione resta rosa: rosso deterministico, anche sul target senza DV (`7845fc3d3`: 11 verdi e 1
   rosso). Verdetto della triage: un'assunzione del test. La spec era di L (archiviato): la prende T. Dettagli: piano di
   T, «Una verifica per l'ingresso di DV» e «R3-c e TC-20».
-- **TC-21 · Una riga cancellata lascia vedere sotto le colonne fisse di `DataTable`** — minimo; T, 19/10, cura delle
+- ✅ **TC-21 · Una riga cancellata lascia vedere sotto le colonne fisse di `DataTable`** (curata il 22/10 da C2: cella
+  opaca e velo `::after` sul contenuto) — minimo; T, 19/10, cura delle
   colonne fisse. `tr.row-deleted td` (bulk delle transazioni, `DataEditor`) sbiadisce ogni cella con `opacity: 0.55`,
   le fisse comprese (la selezione, e le azioni in `DataEditor`), che lasciano vedere al 45 % il contenuto che scorre
   sotto. C'era già prima del lotto delle tabelle; non è una tinta di riga e la riga opaca non la cura: va sbiadito il
   contenuto, non lo sfondo, senza cambiare l'aspetto delle celle normali. Dettagli: piano di T, «Le colonne fisse
   trasparenti», Fuori pista.
-- **TC-22 · La pagina per sviluppatori di `DataTable` non dice come si tinge una riga** — minimo, docs; T, 19/10, cura
+- ✅ **TC-22 · La pagina per sviluppatori di `DataTable` non dice come si tinge una riga** (scritta il 22/10 da C2,
+  solo inglese, con la riga cancellata di TC-21) — minimo, docs; T, 19/10, cura
   delle colonne fisse. `mkdocs_src/docs/developer/frontend/components/core-ui/data-table.md`, «Sticky columns»: una riga
   dipinge la card e la tinta del suo stato, `--dt-row-tint` (registrata con `@property`), e le celle fisse ereditano i
   due strati; chi tinge le righe con `getRowClass` imposta `--dt-row-tint`, mai lo sfondo della riga (`AssetTable`).
@@ -3331,7 +3334,10 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     oklab`); da estendere se una miscela o una modifica del Lab usa un altro spazio.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
     «B4».
-- **DV-11 · I colori dei tipi in due copie, finché il Lab non passa ai ruoli** — medio; DV, 17/10 (giro 3, §1.9).
+- ✅ **DV-11 · I colori dei tipi in due copie, finché il Lab non passa ai ruoli** — medio; DV, 17/10 (giro 3, §1.9).
+  **Chiusa il 22/10 da C2 (ondata 3):** `chartCategories.ts` legge i tipi e la liquidità dai ruoli `--lf-cat-*`
+  (`pageRoles`), il Lab mostra le righe dei tipi come viste dei ruoli e migra le vecchie modifiche `category`; piano di
+  DV, «Ondata 3 di C2».
   - Decisione (A) del coordinatore, in due passi. Il primo è del giro 3: i valori in `lib/theme/chartCategories.ts`,
     i ruoli `--lf-cat-*` di T in `tokens.css` coi valori uguali, e il test di parità di `chartCategories.test.ts` che
     blocca le due copie (flag di consegna alla `PENDING_READERS`).
@@ -3342,8 +3348,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     (archiviato), coordinatore, 17/10.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
     «Giro 3».
-- **DV-12 · L'E2E del pannello posizioni trattiene la «prima» richiesta del report, non quella della pagina sotto
-  prova** — minimo, test; DV, 18/10 (slot del giro 3, fuori area: `e2e/portfolio/dashboard.spec.ts`, «Positions panel
+- ✅ **DV-12 · L'E2E del pannello posizioni trattiene la «prima» richiesta del report, non quella della pagina sotto
+  prova** (curata il 22/10 da C2: `goto('about:blank')` prima della rotta; verde da confermare nello slot) — minimo, test; DV, 18/10 (slot del giro 3, fuori area: `e2e/portfolio/dashboard.spec.ts`, «Positions panel
   publishes its loading state through data-busy»).
   - Rosso nella run intera su `08512c952`, verde da solo; verde nello slot di B4 (`f35fd9026`), con lo stesso ordine.
   - `login()` atterra su `/dashboard` e aspetta solo che l'app arrivi: una POST `/portfolio/report` della pagina
@@ -3351,7 +3357,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Rimedio nel test (`test-author`, proprietario dello spec): `page.goto('about:blank')` prima della rotta, oppure
     trattenere la richiesta della pagina sotto prova.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), passo G3-9.
-- **DV-13 · L'E2E «export JSON, reset all, import back» del Lab vuole due fonti di colore che dal 16/10 sono una** —
+- ✅ **DV-13 · L'E2E «export JSON, reset all, import back» del Lab vuole due fonti di colore che dal 16/10 sono una**
+  (superata da TC-20, verificato il 22/10 da C2: lo spec usa `transactionsPageRoot`) —
   minimo, test; DV, 18/10 (slot del giro 3, fuori area: `e2e/designer-lab/designer-lab-live.spec.ts`).
   - Deterministico: il sottotitolo delle transazioni e l'intestazione di `DataTable` leggono tutti e due
     `--lf-text-muted` (`546204732` e `77bfa6a39`, 16/10). La modifica della variabile vince su quella del letterale, e

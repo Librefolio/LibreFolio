@@ -31,10 +31,12 @@
  * their state in this context's localStorage, and the context dies with the test.
  *
  * The chart categories (contracts C1–C4 with DV) are edited by key: every chart asks `categoryColor(kind, key, dark)` when
- * it draws, the Lab's engine answers for the category it changed, and the charts that read categories or roles rebuild
- * their option on `lf:chart-colors-change` (C4) — which the engine also fires for an L1 edit of a role. The allocation pie
- * of the dashboard is read through the same hook as the growth chart, its values never written down: the «Categories»
- * tab lists them. The signal itself is counted in the app tab: one each for an L1 edit, a literal inside a role's
+ * it draws, the Lab's engine answers for what changed, and the charts that read categories or roles rebuild their option
+ * on `lf:chart-colors-change` (C4) — which the engine also fires for an L1 edit of a role. The asset types and the cash
+ * have no literal line any more: their colour is a role (`--lf-cat-<key>`, DV-11), so the «Categories» tab opens their
+ * editor on that role and an edit is an L1 change of one variable, which `categoryColor` reads from the page; the sectors
+ * stay literal lines of lib/theme/chartCategories.ts. The allocation pie of the dashboard is read through the same hook
+ * as the growth chart, its values never written down: the «Categories» tab lists them. The signal itself is counted in the app tab: one each for an L1 edit, a literal inside a role's
  * definition, and a reset.
  */
 import {expect, test, type Page} from '../fixtures/playwright';
@@ -141,11 +143,8 @@ async function translucentVariable(lab: Page): Promise<{name: string; from: stri
     return found;
 }
 
-/**
- * The one file of the chart categories (contracts C1–C2 with DV): every chart reads a category colour through it, one
- * literal per line, so the Lab exports a category edit as that file and that line.
- */
-const CATEGORY_TABLES_FILE = 'src/lib/theme/chartCategories.ts';
+/** The file that defines the colour roles (`--lf-*`): an asset type's colour is the role `--lf-cat-<key>` defined there (DV-11). */
+const ROLE_TOKENS_FILE = /(^|\/)tokens\.css$/;
 
 /** The roles the charts read through `chartRoles` (`ChartRole`, lib/theme/roleColors.ts): their names, never their values. */
 const CHART_ROLES = ['--lf-surface-card', '--lf-surface-panel', '--lf-text-primary', '--lf-text-secondary', '--lf-text-on-inverse', '--lf-danger', '--lf-info'];
@@ -153,26 +152,42 @@ const CHART_ROLES = ['--lf-surface-card', '--lf-surface-panel', '--lf-text-prima
 /** The app tab's window, with what the C4 test leaves on it: its count of chart-colours signals, and its no-reload mark. */
 type C4Window = Window & {__e2eLabC4?: number; __e2eLabNoReload?: boolean};
 
-/** An asset type to edit, with its light value as the canvas writes it, and whether a sector shares that value. */
+/** An asset type to edit, with its light value as the canvas writes it, the role that colours it, and whether a sector shares that value. */
 interface TypeToEdit {
     category: CategoryValue & {light: string};
+    /** The colour role the «Categories» row opens the editor on (`--lf-cat-etf`): what the Lab changes for the type. */
+    role: string;
     key: string;
     sharedWith: 'the sector pie' | 'a sector of the tables' | 'no sector';
 }
 
 /**
- * The asset type to edit: one whose light value the type pie draws, read from the «Categories» tab — never named here,
- * DV tunes the tables. Its value must be its own among what the type pie can draw (the types and the two buckets), so
- * that «the old value is gone» speaks of it alone. Preferred: a type whose value a sector also has on the sector pie,
- * then one a sector has in the tables — the cases where an edit by value would leak into the sectors. `lightKey` maps a
- * category's target to its light value as the canvas writes it. Fails, naming the assumption, when the pie draws none.
+ * The role each row of the «Categories» tab opens the editor on (its `data-role`): the asset types and the cash are
+ * colour roles (`--lf-cat-<key>`, DV-11), the sectors have none and are left out. Read with the tab open and its search
+ * cleared, as `categoryValues` leaves it.
  */
-function typeToEdit(categories: CategoryValue[], lightKey: Map<string, string | null>, typePie: string[], sectorPie: string[]): TypeToEdit {
+async function categoryRoles(lab: Page): Promise<Map<string, string>> {
+    const prefix = 'lab-item-category-';
+    const rows = lab.locator(`[data-testid^="${prefix}"]`);
+    await expect(rows, 'the «Categories» tab lists the chart categories').not.toHaveCount(0);
+    const read = await rows.evaluateAll((nodes, start) => nodes.map((node) => [(node.getAttribute('data-testid') ?? '').slice(start.length), node.getAttribute('data-role') ?? ''] as const), prefix);
+    return new Map(read.filter(([, role]) => role !== ''));
+}
+
+/**
+ * The asset type to edit: one whose light value the type pie draws, read from the «Categories» tab — never named here,
+ * DV tunes the roles. It must be a type the tab edits as a role (`roles`: the row's `data-role`). Its value must be its
+ * own among what the type pie can draw (the types and the two buckets), so that «the old value is gone» speaks of it
+ * alone. Preferred: a type whose value a sector also has on the sector pie, then one a sector has in the tables — the
+ * cases where an edit by value would leak into the sectors. `lightKey` maps a category's target to its light value as the
+ * canvas writes it. Fails, naming the assumption, when the pie draws none.
+ */
+function typeToEdit(categories: CategoryValue[], roles: Map<string, string>, lightKey: Map<string, string | null>, typePie: string[], sectorPie: string[]): TypeToEdit {
     const drawable = categories.filter((c) => c.kind === 'type' || c.kind === 'bucket');
     const candidates = categories
         .filter((c): c is CategoryValue & {light: string} => c.kind === 'type' && c.light !== null)
-        .map((category) => ({category, key: lightKey.get(category.target) ?? null}))
-        .filter((c): c is {category: CategoryValue & {light: string}; key: string} => c.key !== null && typePie.includes(c.key))
+        .map((category) => ({category, role: roles.get(category.target) ?? null, key: lightKey.get(category.target) ?? null}))
+        .filter((c): c is {category: CategoryValue & {light: string}; role: string; key: string} => c.role !== null && c.key !== null && typePie.includes(c.key))
         .filter((c) => !drawable.some((other) => other.target !== c.category.target && lightKey.get(other.target) === c.key));
     const sectorHas = (key: string) => categories.some((c) => c.kind === 'sector' && lightKey.get(c.target) === key);
     const onScreen = candidates.find((c) => sectorHas(c.key) && sectorPie.includes(c.key));
@@ -181,8 +196,10 @@ function typeToEdit(categories: CategoryValue[], lightKey: Map<string, string | 
     if (inTables) return {...inTables, sharedWith: 'a sector of the tables'};
     const [any] = candidates;
     if (any) return {...any, sharedWith: 'no sector'};
-    const types = categories.filter((c) => c.kind === 'type').map((c) => `${c.key} ${c.light ?? '—'}`);
-    throw new Error(`no colour of the type pie is the light value of an asset type the «Categories» tab lists, a value of its own among the types and buckets: the pie must draw each family in categoryColor('type', family, false) (C1). Pie: ${typePie.join(', ')}; types: ${types.join(', ')}`);
+    const types = categories.filter((c) => c.kind === 'type').map((c) => `${c.key} ${roles.get(c.target) ?? 'no role'} ${c.light ?? '—'}`);
+    throw new Error(
+        `no colour of the type pie is the light value of an asset type the «Categories» tab lists as a role, a value of its own among the types and buckets: the pie must draw each family in categoryColor('type', family, false) (C1). Pie: ${typePie.join(', ')}; types: ${types.join(', ')}`,
+    );
 }
 
 test.describe('Designer Lab — live preview in another tab', () => {
@@ -240,7 +257,7 @@ test.describe('Designer Lab — live preview in another tab', () => {
         await expect.poll(() => labStats(page)).toEqual(IDLE_STATS);
     });
 
-    test('category: one asset type changes in the charts of another tab, by key', async ({page, context}, testInfo) => {
+    test('category: one asset type changes in the charts of another tab, by its role', async ({page, context}, testInfo) => {
         await login(page, TEST_USER);
         await openDashboard(page);
         await waitForLabClient(page);
@@ -267,26 +284,30 @@ test.describe('Designer Lab — live preview in another tab', () => {
             categories.map((c) => c.dark ?? ''),
         );
         const lightKey = new Map(categories.map((c, i) => [c.target, lightKeys[i]]));
-        const chosen = typeToEdit(categories, lightKey, typeBefore, sectorBefore);
+        const roles = await categoryRoles(lab);
+        const chosen = typeToEdit(categories, roles, lightKey, typeBefore, sectorBefore);
         const {target, light} = chosen.category;
+        const {role} = chosen;
         // A colour no category has, in either theme, and neither pie draws: nothing on screen can be mistaken for it.
         const taken = new Set([...typeBefore, ...sectorBefore, ...lightKeys, ...darkKeys]);
         const fresh = NEW_COLOURS.find((c) => !taken.has(c.hex));
-        if (!fresh) throw new Error(`no new colour left: ${NEW_COLOURS.map((c) => c.hex).join(', ')} are all drawn by a pie or written in the category tables`);
-        testInfo.annotations.push({type: 'category', description: `${target}: ${light} → ${fresh.hex}; its value shared with ${chosen.sharedWith}`});
+        if (!fresh) throw new Error(`no new colour left: ${NEW_COLOURS.map((c) => c.hex).join(', ')} are all drawn by a pie or written in the category tables or the roles`);
+        testInfo.annotations.push({type: 'category', description: `${target} (${role}): ${light} → ${fresh.hex}; its value shared with ${chosen.sharedWith}`});
 
-        // The editor opens on the category: its value in the edited theme, what an edit reaches, the lines it is written at.
-        await openEditor(lab, {tab: 'categories', search: chosen.category.key, item: `lab-item-category-${target}`, layer: 'category', target});
-        await expect(lab.getByTestId('lab-editor-from'), `the editor starts from the light value of ${target}`).toHaveText(light);
-        await expect(lab.getByTestId('lab-editor-category-reach'), 'the editor says an edit reaches this category only').toBeVisible();
-        await expect(lab.getByTestId('lab-editor-category-lines'), 'the editor lists the lines the tables write the category at').toBeVisible();
-        await applyChange(lab, {tab: 'categories', search: chosen.category.key, item: `lab-item-category-${target}`, layer: 'category', target, to: fresh.hex});
+        // The row opens the editor on the role, not on a category (DV-11): an L1 variable, its value in the edited theme.
+        const item = `lab-item-category-${target}`;
+        const editor = await openEditor(lab, {tab: 'categories', search: chosen.category.key, item, layer: 'css-var', target: role});
+        await expect(lab.getByTestId('lab-editor-from'), `the editor starts from the light value of ${role}`).toHaveText(light);
+        await expect(lab.getByTestId('lab-editor-category-reach'), 'a role is edited as a variable: the category-only notes are not shown').toBeHidden();
+        await expect(editor).toHaveAttribute('data-layer', 'css-var');
+        await applyChange(lab, {tab: 'categories', search: chosen.category.key, item, layer: 'css-var', target: role, to: fresh.hex});
 
         // The pie on screen redraws (C4) with the new colour for the type, and only for it.
         const typeAfter = [...typeBefore.filter((c) => c !== chosen.key), fresh.hex].sort();
-        await expect.poll(() => chartColourValues(page, ALLOCATION_PIE), {...CROSS_TAB, message: `${target} turns ${fresh.hex} in the type pie: ${chosen.key} gone, every other colour as it was`}).toEqual(typeAfter);
+        await expect.poll(() => chartColourValues(page, ALLOCATION_PIE), {...CROSS_TAB, message: `${role} turns ${fresh.hex} in the type pie: ${chosen.key} gone, every other colour as it was`}).toEqual(typeAfter);
         await expect.poll(() => labActive(page)).toBe(true);
-        await expect.poll(() => labStats(page)).toMatchObject({categoryOverrides: 1, varOverrides: 0, elementRules: 0});
+        // One L1 variable, no category: the type is its role now.
+        await expect.poll(() => labStats(page)).toMatchObject({varOverrides: 1, categoryOverrides: 0, elementRules: 0});
 
         // By key, not by value: the sector pie, drawn with the change on, keeps every colour it had — a sector whose
         // value is the one the type had included.
@@ -297,31 +318,39 @@ test.describe('Designer Lab — live preview in another tab', () => {
             })
             .toEqual(sectorBefore);
 
-        // The export names the category and the one line the tables write its light value at.
+        // The export names the role, a css-var change: where the sources define it is the one place its colour is written.
         const {text, doc} = await downloadExport(lab);
         expect(doc.schema).toBe('lf-designer-lab/1');
-        expect(doc.changes.map((c) => [c.id, c.layer, c.scope, c.target, c.to])).toEqual([[`category:${target}@light`, 'category', 'light', target, fresh.hex]]);
+        expect(doc.changes.map((c) => [c.id, c.layer, c.scope, c.target, c.to])).toEqual([[`css-var:${role}@light`, 'css-var', 'light', role, fresh.hex]]);
         const [change] = doc.changes;
-        expect(change.category, 'the export names the category by its kind and its key').toEqual({kind: 'type', key: chosen.category.key});
+        expect(change.category, 'a role is no category: the export does not name one').toBeUndefined();
+        const definitions = change.definitions ?? [];
+        expect(definitions.length, `the export says where the sources define ${role}`).toBeGreaterThan(0);
         expect(
-            change.occurrences.map((o) => o.file),
-            `one occurrence: the light line of ${target} in the tables (C2: one literal per line)`,
-        ).toEqual([CATEGORY_TABLES_FILE]);
-        const [occurrence] = change.occurrences;
-        expect((occurrence.raw ?? '').toLowerCase(), `the occurrence is the value the table writes for ${target}`).toBe(light.toLowerCase());
-        const lines = await sourceLines(occurrence.file);
-        expect((lines?.[occurrence.line - 1] ?? '').toLowerCase(), `${occurrence.file}:${occurrence.line} writes ${light} on disk`).toContain(light.toLowerCase());
+            definitions.filter((d) => !ROLE_TOKENS_FILE.test(d.file)).map((d) => `${d.file}:${d.line}`),
+            'a role is defined in the token file only',
+        ).toEqual([]);
+        const lightDefinition = definitions.find((d) => d.value.toLowerCase() === light.toLowerCase());
+        expect(lightDefinition, `a definition of ${role} writes the light value ${light} the type had: ${definitions.map((d) => `${d.file}:${d.line} ${d.theme ?? 'any'} ${d.value}`).join('; ')}`).toBeDefined();
+        const lines = await sourceLines(lightDefinition!.file);
+        expect((lines?.[lightDefinition!.line - 1] ?? '').toLowerCase(), `${lightDefinition!.file}:${lightDefinition!.line} defines ${role} as ${light} on disk`).toContain(`${role}:`);
+        expect((lines?.[lightDefinition!.line - 1] ?? '').toLowerCase()).toContain(light.toLowerCase());
         const verified = await verifyExport(text, testInfo.outputPath('designer-lab-changes.json'));
         const report = verified.report;
         if (!report) throw new Error(`verify-export.mjs printed no JSON report (exit ${verified.status}): ${verified.stderr}`);
         expect(report.totals.changes, 'the verifier read the one change').toBe(1);
         expect(
             report.changes.flatMap((c) => c.missing.map((m) => `${c.id} ${m.file}:${m.line} ${m.raw ?? ''}`)),
-            'the line the export lists still writes the value',
+            'every occurrence the export lists is still written in the code',
         ).toEqual([]);
         expect(report.totals.missing).toBe(0);
+        const checked = report.changes.flatMap((c) => c.definitions);
+        expect(checked.length, `positive control: the verifier checked the definitions of ${role}`).toBe(definitions.length);
+        expect(
+            checked.filter((d) => d.status !== 'ok' || d.value_now !== undefined).map((d) => `${d.file}:${d.line} ${d.status}`),
+            `the definitions of ${role} are where the export says, with the value it says`,
+        ).toEqual([]);
         expect(verified.status, `verify-export.mjs exits 0 when nothing is missing: ${verified.stderr}`).toBe(0);
-        expect(report.totals.ok, 'positive control: the verifier found the occurrence in place').toBeGreaterThan(0);
 
         // Back on the type pie, the change still on: mounted again, it draws the new colour from its first pass. Then reset
         // all: the pie on screen redraws with its own colours, without a reload.
