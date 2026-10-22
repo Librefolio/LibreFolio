@@ -38,8 +38,10 @@ class InstanceBackupOptions(BaseModel):
 # total_bytes is 0 until the database is copied. warnings are stable codes: database_integrity (the database failed
 # its integrity check), foreign_key_violations, files_skipped (files that changed or vanished during the backup, left
 # out), instance_key_unusable (a secure backup left out the instance key, which cannot be used). encrypted: a secure
-# backup, an .lfbk envelope. error_code: backup_no_space, backup_failed (the server log has the cause) or
-# backup_interrupted (the server stopped during the backup).
+# backup, an .lfbk envelope. file_sha256: the SHA-256 of the archive the download serves, 64 lowercase hex digits, once
+# done (L3: a hosting panel compares it with what it downloaded). instance_key_included: the archive carries the instance
+# key (a secure backup, when LibreFolio generated the key; never a hosting panel's). error_code: backup_no_space,
+# backup_failed (the server log has the cause) or backup_interrupted (the server stopped during the backup).
 class InstanceBackupJob(BaseModel):
     """A backup of the whole instance, built in the background: poll it until its status is done or failed."""
 
@@ -54,9 +56,11 @@ class InstanceBackupJob(BaseModel):
     finished_at: datetime | None = None
     file_name: str | None = None
     file_size: int | None = Field(default=None, ge=0)
+    file_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     warnings: list[Literal["database_integrity", "foreign_key_violations", "files_skipped", "instance_key_unusable"]] = []
     error_code: Literal["backup_no_space", "backup_failed", "backup_interrupted"] | None = None
     encrypted: bool
+    instance_key_included: bool = False
 
 
 # kind: envelope for a secure backup (.lfbk), whose check needs its password; zip otherwise.
@@ -150,6 +154,7 @@ RestoreErrorCode = Literal[
     "password_required",
     "envelope_damaged",
     "instance_key_invalid",
+    "sealed_backup_needs_key",
 ]
 
 
@@ -166,7 +171,10 @@ class RestoreSecretCounts(BaseModel):
 # by migrations). administrators: after the restore one signs in with one of them, with the password of then. warnings
 # let the restore go on: rows_changed, foreign_key_violations, foreign_key_violations_added, and non_iso_currencies
 # (E-19b1: the copy holds currency values an earlier version saved that are not ISO 4217 codes, such as 978 or EURO; an
-# edit that saves their rows is refused until they are corrected). blockers forbid it:
+# edit that saves their rows is refused until they are corrected); credentials_from_backup, always, last of the check's
+# own (after the restore one signs in with the backup's credentials, and every session open now ends); and
+# confirming_account_not_in_backup, added for the administrator who reads the report when their username is not among
+# administrators (after the restart they cannot sign in with it; L3). blockers forbid it:
 # no_administrator. The copy is kept until expires_at. encrypted: a secure backup. secrets_rekeyed: the plugin secrets
 # re-encrypted with this instance's key (a secure backup carries its own); secrets_unreadable: those that stay
 # unreadable, to enter again after the restore (another instance's, without its key).
@@ -195,7 +203,18 @@ class RestoreStageReport(BaseModel):
     secrets_rekeyed: int = Field(ge=0)
     secrets_unreadable: RestoreSecretCounts
     administrators: list[str]
-    warnings: list[Literal["rows_changed", "foreign_key_violations", "foreign_key_violations_added", "control_totals_changed", "control_totals_unreadable", "non_iso_currencies"]]
+    warnings: list[
+        Literal[
+            "rows_changed",
+            "foreign_key_violations",
+            "foreign_key_violations_added",
+            "control_totals_changed",
+            "control_totals_unreadable",
+            "non_iso_currencies",
+            "credentials_from_backup",
+            "confirming_account_not_in_backup",
+        ]
+    ]
     blockers: list[Literal["no_administrator"]]
     control_totals: Literal["same", "changed", "absent", "other_version", "unreadable"]
     control_totals_differences: list[RestoreTotalsDifference]

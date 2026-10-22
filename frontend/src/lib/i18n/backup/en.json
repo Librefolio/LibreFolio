@@ -149,7 +149,8 @@
           "non_iso_currencies": "Some currency codes in the backup are not ISO codes (names or numbers an earlier version saved): an edit of those rows is refused until the code is corrected."
         },
         "expires": "The checked copy is kept until {date}.",
-        "drop": "Drop this archive"
+        "drop": "Drop this archive",
+        "ownAccountMissing": "Your account is not among the administrators of this backup: after the restart you cannot sign in with it."
       },
       "confirm": {
         "word": "restore",
@@ -224,7 +225,8 @@
         "password_required": "This is a secure backup: type its password.",
         "envelope_damaged": "The secure backup is damaged or was changed: it cannot be opened.",
         "envelope_unsupported": "The secure backup comes from a newer LibreFolio: update LibreFolio first.",
-        "proxy_too_large": "A proxy in front of LibreFolio refused an archive this large: ask whoever runs it to accept larger uploads, or restore from the command line."
+        "proxy_too_large": "A proxy in front of LibreFolio refused an archive this large: ask whoever runs it to accept larger uploads, or restore from the command line.",
+        "sealed_backup_needs_key": "This is a sealed backup of a hosting panel: its password is encrypted for the provider's key. Extract backup.lfbk, open password.age with age, then restore backup.lfbk with that password."
       },
       "password": {
         "intro": "A secure backup: type the password it was made with.",

@@ -149,7 +149,8 @@
           "non_iso_currencies": "Alcuni codici valuta del backup non sono codici ISO (nomi o numeri salvati da una versione precedente): la modifica di quelle righe è rifiutata finché il codice non viene corretto."
         },
         "expires": "La copia controllata resta disponibile fino al {date}.",
-        "drop": "Scarta questo archivio"
+        "drop": "Scarta questo archivio",
+        "ownAccountMissing": "Il tuo account non è tra gli amministratori di questo backup: dopo il riavvio non potrai accedere con questo account."
       },
       "confirm": {
         "word": "ripristina",
@@ -224,7 +225,8 @@
         "password_required": "È un backup sicuro: scrivi la sua password.",
         "envelope_damaged": "Il backup sicuro è danneggiato o è stato modificato: non si può aprire.",
         "envelope_unsupported": "Il backup sicuro viene da un LibreFolio più recente: aggiorna prima LibreFolio.",
-        "proxy_too_large": "Un proxy davanti a LibreFolio ha rifiutato un archivio così grande: chiedi a chi lo gestisce di accettare caricamenti più grandi, oppure ripristina dalla riga di comando."
+        "proxy_too_large": "Un proxy davanti a LibreFolio ha rifiutato un archivio così grande: chiedi a chi lo gestisce di accettare caricamenti più grandi, oppure ripristina dalla riga di comando.",
+        "sealed_backup_needs_key": "Questo è un backup sigillato di un pannello di hosting: la sua password è cifrata per la chiave del fornitore. Estrai backup.lfbk, apri password.age con age, poi ripristina backup.lfbk con quella password."
       },
       "password": {
         "intro": "Un backup sicuro: scrivi la password con cui è stato fatto.",

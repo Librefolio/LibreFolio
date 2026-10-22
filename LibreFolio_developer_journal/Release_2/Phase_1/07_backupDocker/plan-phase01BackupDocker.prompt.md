@@ -7600,3 +7600,53 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   - `fix(backup): one reader for job, check and report files (B-53, B-54, B-55)`: i 6 file di servizio, i 7 di test,
 >     `security.md`, `backup_restore.en.md`;
 >   - `docs(journal): B-53 to B-56`: questo piano e il backlog.
+
+### L3 — il backup notturno sigillato (ondata 4, dal 2026-10-22)
+
+> **Fonti**: decisioni `LibreFolio_prj/BACKUP-decisioni-20261022.md` §10 (il formato: `.lfbk` v1 con password casuale,
+> password cifrata con `age` via `pyrage`, i due file in un `.tar`) e il contratto **CONCORDATO** il 22/10 con il
+> coordinatore cloud, `LibreFolio_prj/BACKUP-contratto-L3.md`. La rotta di ripristino del pannello e il modo «ripristino
+> in corso» sono di H (H-62), sullo stesso contratto. Base: `c97c96dd6` (`pyrage==1.4.0` nel lock).
+>
+> **⚠️ Fuori pista — il formato** (22/10): la prima analisi metteva a confronto `.lfbk` v2 e `age` v1 scritto da noi
+> (`salvataggi-worktrees-20261021/ondata4/B-analisi-turno1.md`). Il developer ha scelto una terza via, senza
+> crittografia nostra: le due varianti sono cadute.
+
+| Passo | Cosa | Stato |
+|---|---|---|
+| L3-0 | Contratto comune con il cloud (bozze 1-3, R1-R4, D1-D5) | ✅ 2026-10-22 |
+| L3-1 (CP1) | Senza `pyrage`: `file_sha256` e `instance_key_included` nella vista del job; gli avvisi `credentials_from_backup` e `confirming_account_not_in_backup` (rapporto e `RestoreReportModal`, 4 lingue); il codice `sealed_backup_needs_key` per un `.tar` caricato dall'admin; doc «Backups with backrest or restic» | ✅ 2026-10-22 |
+| L3-2 (CP2) | Con `pyrage`: `LIBREFOLIO_BACKUP_RECIPIENTS` e il controllo `backup.recipients`; `503` nel managed senza destinatari; il job sigillato del pannello (fase `sealing`, `manifest.json`, `.tar` deterministico, chiave d'istanza esclusa, `sealed`/`sealed_recipients`); i vettori comuni (§9.1 del contratto, più `cloud-derivation`); la CLI (`keygen`, `create --sealed/--recipient`, `inspect/decrypt/restore` di un `.tar` con `--identity-file`) | ⏳ |
+
+#### L3-1 (CP1) ✅ 2026-10-22
+
+> **Note implementazione**: rossi scritti da due agenti `test-author` (backend e frontend), poi la cura.
+> - **Rossi** (log `salvataggi-worktrees-20261021/ondata4/B-cp1-red-*.log`): `api backup-panel` 3, `services backup-jobs`
+>   5, `services backup-secure` 7, `services backup-staging` 49 (46 uguaglianze esatte sugli avvisi, aggiornate con
+>   l'helper `warned(...)`), `services restore-non-iso-warning` 16, `api backup-restore` 15; Vitest 11 (modale 7,
+>   `restoreI18n` 4). Tutti per il campo o il codice mancante.
+> - **Cura**: `schemas/backup.py` (`file_sha256`, `instance_key_included`; i due avvisi nel `Literal`;
+>   `sealed_backup_needs_key` in `RestoreErrorCode`), `jobs.py` (`BackupJob.instance_key_included`), `job_views.py`
+>   (lo SHA-256 solo a lavoro finito), `staging.py` (`credentials_from_backup` sempre, in fondo; un tar ustar →
+>   `sealed_backup_needs_key`), `restore.py` (`confirming_account_not_in_backup` per l'admin che legge, mai nel
+>   rapporto salvato), `backup_cli.py` (i testi dei due codici, detti a parte e mai come «⚠️»), `restoreText.ts`
+>   (`WARNINGS_SHOWN_APART`, il codice d'errore), `RestoreReportModal.svelte` (avviso rosso `restore-report-own-account`,
+>   l'elenco giallo senza i due codici), 2 chiavi in 4 lingue, `backup_restore.en.md` (restic e Backrest, il codice
+>   nuovo, l'avviso rosso).
+> - **Verdi**: le 6 suite rosse (163, 84, 221, 46, 69, 166), più `utils backup-cli` 106, `backup-cli-restore` 109,
+>   `backup-cli-secure` 106, `services backup-checks` 93, `backup-apply` 258, `api backup` 23, `backup-secure` 24,
+>   `backup-restore-apply` 215, `backup-instance-errors` 16, `utils gate-i18n-catalog` 176, `schemas
+>   openapi-client-text` 78; Vitest `features/backup/` 9 file, 1 087; `front check` 0/0; `mkdocs build` stretta e
+>   `check-links` verdi; `ruff`, `black`, `prettier`, `git diff --check` puliti.
+>
+> **⚠️ Fuori pista**:
+> - `test_backup_staging.py` chiamava `get_restore_check(stage_id, None)`: la rotta ora legge lo username di chi
+>   legge. Il test passa un admin finto, la rotta non tollera un admin assente (in esercizio non succede).
+> - `front check` ha trovato 3 errori di tipo nei test (`job()` senza `instance_key_included`, campo con default e
+>   quindi obbligatorio nel tipo d'uscita di zod): aggiunto alle tre fabbriche.
+> - Vitest su 9 file lanciato **senza** `flock` (la regola lo chiede sopra 3 file): carico 5-7, nessun effetto, ma è
+>   una svista.
+> - I vettori comuni (`backend/test_scripts/fixtures/backup_l3/`) sono già scritti, prima del CP2: sono dati di test,
+>   il cloud li aspettava. Cartella spostata rispetto al contratto (registro del contratto aggiornato). Controllo
+>   incrociato con `age` 1.3.2 del developer: la `password.age` del caso buono e della rotazione si apre.
+

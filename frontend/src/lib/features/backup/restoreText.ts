@@ -27,7 +27,14 @@ export const WARNING_KEYS: Record<string, string> = {
     control_totals_changed: 'backup.restore.report.warning.control_totals_changed',
     control_totals_unreadable: 'backup.restore.report.warning.control_totals_unreadable',
     non_iso_currencies: 'backup.restore.report.warning.non_iso_currencies',
+    // L3: neither is a line of the warnings box. The first is the sentence under the administrators, the second a red
+    // notice of its own (RestoreReportModal).
+    credentials_from_backup: 'backup.restore.report.signInAgain',
+    confirming_account_not_in_backup: 'backup.restore.report.ownAccountMissing',
 };
+
+/** The warnings the report shows apart, never as a line of its warnings box. */
+export const WARNINGS_SHOWN_APART: ReadonlySet<string> = new Set(['credentials_from_backup', 'confirming_account_not_in_backup']);
 
 /** How the ledger's control totals compare (lot B-13). */
 export const TOTALS_KEYS: Record<string, string> = {
@@ -87,6 +94,8 @@ export const ERROR_KEYS: Record<string, string> = {
     password_required: 'backup.restore.errors.password_required',
     envelope_damaged: 'backup.restore.errors.envelope_damaged',
     envelope_unsupported: 'backup.restore.errors.envelope_unsupported',
+    // A sealed nightly backup of a hosting panel (L3): its password is encrypted for the provider's key
+    sealed_backup_needs_key: 'backup.restore.errors.sealed_backup_needs_key',
     // The confirmation, the cancellation, the restart
     restore_stage_expired: 'backup.restore.errors.restore_stage_expired',
     restore_stage_outdated: 'backup.restore.errors.restore_stage_outdated',

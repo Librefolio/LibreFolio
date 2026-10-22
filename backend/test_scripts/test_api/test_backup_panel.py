@@ -51,6 +51,14 @@ the administrators' routes of ``instance.py``.
   ``pre-restore``), or with no job read: the detail stays exactly ``{code, message}``, no ``job_id`` nor ``origin``. A
   job of another origin is as invisible in a refusal as at its poll (PANEL-015). The refusal is built as PANEL-018's,
   its ``running`` set on it: the test does not depend on how the constructor takes it.
+- PANEL-025..027 (lot L3), what a job's view tells of its archive. ``InstanceBackupJob`` gains ``file_sha256`` (64
+  lowercase hex digits, the SHA-256 of the very bytes the download serves; null while the job runs) and
+  ``instance_key_included`` (false unless the archive carries the instance key). PANEL-025: the panel's poll of its done
+  job gives the SHA-256 of the bytes its download returns, and ``instance_key_included`` false (the panel never
+  encrypts, so never carries the key); a running job answers ``file_sha256`` null. PANEL-026: the same through the
+  administrators' routes (PANEL-019's), for a job of the panel. PANEL-027: a secure job of the Backup tab whose archive
+  carries the key (``jobs.BackupJob.instance_key_included`` true) reads ``instance_key_included`` true to an
+  administrator; before L3 the dataclass has no such field, and the test says so.
 - Every request of this module: the token, and whatever the caller presented, never appears in the answer, its body or
   its headers, nor in the log.
 
@@ -69,11 +77,13 @@ with ``raise_app_exceptions=False``, so an exception a route does not turn into 
 from __future__ import annotations
 
 import errno
+import hashlib
 import os
+import re
 import secrets
 import shutil
 from collections.abc import Awaitable, Callable, Iterable
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, fields, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -162,13 +172,15 @@ class FakeJobs:
         return job
 
     def finish(self, job_id: str) -> jobs.BackupJob:
-        """The job ``job_id`` done, with its archive: bytes of its own, every byte value included."""
+        """The job ``job_id`` done, with its archive: bytes of its own, every byte value included; its ``file_sha256`` the
+        SHA-256 of those bytes, as a run records it."""
         job = self.known[job_id]
         archive = self.folder / job_id / jobs.archive_name(job.created_at)
         archive.parent.mkdir(parents=True)
         archive.write_bytes(job_id.encode() + bytes(range(256)))
         size = archive.stat().st_size
-        done = replace(job, status="done", phase=None, done_bytes=size, total_bytes=size, finished_at=FINISHED_AT, file_name=archive.name, file_size=size)
+        sha256 = hashlib.sha256(archive.read_bytes()).hexdigest()
+        done = replace(job, status="done", phase=None, done_bytes=size, total_bytes=size, finished_at=FINISHED_AT, file_name=archive.name, file_size=size, file_sha256=sha256)
         self.known[job_id] = done
         return done
 
@@ -938,3 +950,77 @@ async def test_a_panel_start_refused_while_a_job_it_cannot_see_runs_names_no_job
     assert service.calls[:1] == [("start_backup", "panel")], f"Precondition: the route asked for a run of origin panel: {service.calls}"
     assert started.answer == (409, {"detail": {"code": "backup_busy", "message": BUSY_MESSAGE}}), f"a job of origin {origin} is not the panel's: the refusal must not name it: {started.answer}"
     print_success(f"origin {origin}: 409 backup_busy, code and message only")
+
+
+# =============================================================================
+# PANEL-025..027: what a job's view tells of its archive (lot L3)
+# =============================================================================
+
+#: A SHA-256 as a job's view gives it: 64 lowercase hex digits.
+SHA256_HEX = re.compile(r"[0-9a-f]{64}")
+
+
+def archive_facts(view: dict[str, Any]) -> dict[str, object]:
+    """What lot L3 adds to a job's view, or ``<missing>`` where the view has no such field."""
+    return {name: view.get(name, "<missing>") for name in ("file_sha256", "instance_key_included")}
+
+
+@pytest.mark.asyncio
+async def test_the_panel_s_poll_gives_the_sha256_of_the_bytes_its_download_serves(app, monkeypatch, service):
+    """PANEL-025 (L3): the panel's poll of its done job gives ``file_sha256``, the SHA-256 of the exact bytes its download
+    returns, 64 lowercase hex digits, and ``instance_key_included`` false; a running job of the panel answers
+    ``file_sha256`` null and ``instance_key_included`` false."""
+    print_section("Backup panel: the SHA-256 of the archive, in the job's view (L3)")
+    token = a_token()
+    monkeypatch.setenv(TOKEN_VARIABLE, token)
+    bearer = f"Bearer {token}"
+    done, running = service.done("panel"), service.running("panel")
+
+    polled = await send(app, "GET", f"{PANEL}/{done.job_id}", authorization=bearer, never=[token])
+    downloaded = await send(app, "GET", f"{PANEL}/{done.job_id}/file", authorization=bearer, never=[token])
+    still_running = await send(app, "GET", f"{PANEL}/{running.job_id}", authorization=bearer, never=[token])
+
+    assert (polled.response.status_code, downloaded.response.status_code, still_running.response.status_code) == (200, 200, 200), f"precondition: the poll and the download answer: {polled.answer}, {downloaded.answer}, {still_running.answer}"
+    served = hashlib.sha256(downloaded.response.content).hexdigest()
+    facts = archive_facts(polled.response.json())
+    assert facts == {"file_sha256": served, "instance_key_included": False}, f"the done job's view: the SHA-256 of the bytes served ({served}), no instance key: {facts}"
+    assert SHA256_HEX.fullmatch(str(facts["file_sha256"])), f"64 lowercase hex digits: {facts['file_sha256']!r}"
+    assert archive_facts(still_running.response.json()) == {"file_sha256": None, "instance_key_included": False}, f"a running job has no archive yet: {archive_facts(still_running.response.json())}"
+    print_success(f"done: sha256 {served[:12]}…, no key; running: null")
+
+
+@pytest.mark.asyncio
+async def test_an_administrator_s_poll_gives_the_same_sha256_of_a_panel_job(monkeypatch, service):
+    """PANEL-026 (L3): the administrators' routes (PANEL-019's) answer a job of the panel with the same
+    ``file_sha256``, that of the bytes their own download serves, and ``instance_key_included`` false; a running job,
+    ``file_sha256`` null."""
+    app = backup_app(administrator=True)
+    done, running = service.done("panel"), service.running("panel")
+
+    polled = await send(app, "GET", f"{INSTANCE}/jobs/{done.job_id}")
+    downloaded = await send(app, "GET", f"{INSTANCE}/jobs/{done.job_id}/file")
+    still_running = await send(app, "GET", f"{INSTANCE}/jobs/{running.job_id}")
+
+    assert (polled.response.status_code, downloaded.response.status_code, still_running.response.status_code) == (200, 200, 200), f"precondition: the poll and the download answer: {polled.answer}, {downloaded.answer}, {still_running.answer}"
+    served = hashlib.sha256(downloaded.response.content).hexdigest()
+    assert archive_facts(polled.response.json()) == {"file_sha256": served, "instance_key_included": False}, f"an administrator reads the SHA-256 of the bytes served, no instance key: {archive_facts(polled.response.json())}"
+    assert archive_facts(still_running.response.json()) == {"file_sha256": None, "instance_key_included": False}, f"a running job has no archive yet: {archive_facts(still_running.response.json())}"
+
+
+@pytest.mark.asyncio
+async def test_an_administrator_reads_that_a_secure_job_carries_the_instance_key(monkeypatch, service):
+    """PANEL-027 (L3): a secure job of the Backup tab whose archive carries the instance key
+    (``jobs.BackupJob.instance_key_included`` true, as ``_run`` records it) reads ``instance_key_included`` true to an
+    administrator, beside the SHA-256 of its archive."""
+    if "instance_key_included" not in {item.name for item in fields(jobs.BackupJob)}:
+        pytest.fail("red until L3: jobs.BackupJob has no field instance_key_included", pytrace=False)
+    app = backup_app(administrator=True)
+    done = service.done("ui")
+    secure = replace(done, encrypted=True, instance_key_included=True)
+    service.known[done.job_id] = secure
+
+    polled = await send(app, "GET", f"{INSTANCE}/jobs/{done.job_id}")
+
+    assert polled.response.status_code == 200, f"precondition: an administrator polls the job: {polled.answer}"
+    view = polled.response.json()
+    assert (view.get("encrypted"), *archive_facts(view).values()) == (True, secure.file_sha256, True), f"a secure job carrying the key: {view}"
