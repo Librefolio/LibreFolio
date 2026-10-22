@@ -20,16 +20,18 @@
  * here reads a translated sentence: the banner, its folding toggle, its chips and its button are found by test id.
  * The controller is a plain object with the three fields the header reads.
  */
-import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 
 import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
 import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
 import type {RiskPanelController} from '$lib/features/risk/riskPanelController.svelte';
+import {mergeAssets, resetAssetStore} from '$lib/stores/reference/assetStore';
 
 import RiskPanelHeader from './RiskPanelHeader.svelte';
 
 const mocks = vi.hoisted(() => ({
     goto: vi.fn((_href: string) => Promise.resolve()).mockName('goto'),
+    buildSyncTargets: vi.fn().mockName('buildSyncTargets'),
 }));
 
 vi.mock('$app/navigation', () => ({
@@ -44,6 +46,12 @@ vi.mock('$app/navigation', () => ({
     beforeNavigate: vi.fn(),
     onNavigate: vi.fn(),
 }));
+// The shared sync rule, kept as it is and watched: J-71 pins that the header asks it instead of keeping a copy.
+vi.mock('$lib/features/risk/syncTargets', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('$lib/features/risk/syncTargets')>();
+    mocks.buildSyncTargets.mockImplementation(actual.buildSyncTargets);
+    return {...actual, buildSyncTargets: mocks.buildSyncTargets};
+});
 // The dialog is the subject's neighbour, not the subject: a stub that publishes the props it was given.
 vi.mock('$lib/components/fx/FxPairAddModal.svelte', async () => ({default: (await import('$test/harness/FxPairAddModalStub.svelte')).default}));
 // The sync modal fetches providers and rates when it opens, and no case here opens it.
@@ -122,6 +130,11 @@ beforeAll(async () => {
 
 beforeEach(() => {
     mocks.goto.mockClear();
+    mocks.buildSyncTargets.mockClear();
+});
+
+afterEach(() => {
+    resetAssetStore();
 });
 
 describe('RiskPanelHeader — an add_fx_pair issue opens the add-pair dialog', () => {
@@ -187,5 +200,31 @@ describe('RiskPanelHeader — which issues leave for the FX page', () => {
         await eventually(() => expect(mocks.goto).toHaveBeenCalledWith('/fx/EUR-USD'));
         expect(mocks.goto).toHaveBeenCalledTimes(1);
         expect(openDialog(), 'a navigate_fx chip opens no add-pair dialog').toBeNull();
+    });
+});
+
+describe('RiskPanelHeader — its sync button reads the shared rule (J-71)', () => {
+    const KNOWN_ASSET_ID = 71_001;
+    const UNKNOWN_ASSET_ID = 71_999;
+
+    function mountWithAssets(assetIds: number[]) {
+        const {controller} = fakeController([]);
+        render(RiskPanelHeader, {props: {controller, assetIds, dateStart: '2026-01-01', dateEnd: '2026-06-30', targetCurrency: 'EUR', showActions: true}});
+    }
+
+    it('asks buildSyncTargets for its assets and target currency, and enables the sync button when the rule finds an asset to sync', () => {
+        mergeAssets([{id: KNOWN_ASSET_ID, display_name: 'J-71 USD asset', currency: 'USD', active: true}]);
+
+        mountWithAssets([KNOWN_ASSET_ID]);
+
+        expect(mocks.buildSyncTargets, 'the header calls the shared rule, it keeps no copy of it').toHaveBeenCalledWith([KNOWN_ASSET_ID], 'EUR', expect.any(Function), expect.any(Set));
+        expect(screen.getByTestId('risk-sync-button'), 'an asset the store knows is there to sync').not.toBeDisabled();
+    });
+
+    it('control: an asset the store does not know has nothing to sync, and the button stays disabled', () => {
+        mountWithAssets([UNKNOWN_ASSET_ID]);
+
+        expect(mocks.buildSyncTargets, 'the rule was asked, and found nothing').toHaveBeenCalledWith([UNKNOWN_ASSET_ID], 'EUR', expect.any(Function), expect.any(Set));
+        expect(screen.getByTestId('risk-sync-button')).toBeDisabled();
     });
 });
