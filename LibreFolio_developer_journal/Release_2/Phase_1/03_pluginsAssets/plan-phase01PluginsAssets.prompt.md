@@ -8652,7 +8652,7 @@ sonda lo legge come «nessun suggerimento» e `call_provider` mette in pausa.
    > mai stata usata.
 6. ✅ 22/10 · Doc: fatta al passo 4 (`charts.md#signal-rendering`). CHANGELOG: **nessuna riga visibile** (nessun
    cambio di disegno trovato: stesso nome, icona, tipo, linea fantasma, verso della coppia).
-7. ⏳ 22/10 · CHECKPOINT READY al coordinatore; E2E nello slot del coordinatore: `front-asset asset-detail`,
+7. ✅ 22/10 · CHECKPOINT READY al coordinatore; E2E nello slot del coordinatore: `front-asset asset-detail`,
    `front-fx fx-detail` (consigliata anche `front-portfolio risk-asset-detail`: i segnali di rischio del dettaglio
    filtrano `backendOverlaySignals`).
    - **Richiesta a Y** (FxCard è di Y in questa ondata): `FxCard.svelte:106-111` e `:121-126` convertono i punti in
@@ -8660,3 +8660,138 @@ sonda lo legge come «nessun suggerimento» e `call_provider` mette in pausa.
      modulo (stesso risultato: `extractDaysBack` legge prima `backward_fill_info.days_back`, poi lo stesso campo).
    - **Backlog**: Y-42 sta nella sezione di Y (`BACKLOG_POST_1.2.md:9860`): non la tocco; al coordinatore la chiusura
      (✅ le due pagine e il cancello; resta il punto `FxCard`, a Y).
+   > **Note implementazione**: committato dal coordinatore come `087769e44` (genitore `c788e51be`), dopo la sua verifica
+   > (101/101). Gli E2E di dettaglio li mette lui nel gate del treno; la richiesta su `FxCard` la gira a Y.
+
+### N64 — la cache dei risultati dei segnali, come quella dei prezzi (22/10 notte, passo C)
+
+> **Via del coordinatore** (22/10, dopo il commit di Y-42): «Via al passo C, N64 … Q1 sì (cache colpita: nessuna
+> richiesta, nessun token, nessuna rotellina, «Refresh» fermo), Q2 sì (dopo un aggiornamento dei prezzi in background il
+> passaggio successivo richiede di nuovo, con la rotellina)». Decisioni del developer del 21/10 nel brief `kickoff-X.md`
+> (Q3: in 1.3). HEAD `087769e44`, albero pulito. Sporchi di Y (da non toccare): `chartSettingsStore.svelte.ts`,
+> `calendarReturnWindow.ts`, `reducedPriceQuery.ts`, `chartSignalRendering.ts`, `AssetCard.svelte`,
+> `ChartSettingsModal.svelte`, `assets/+page.svelte`, i loro test, `asset-list.spec.ts`, `_frontend_utility.py`,
+> `charts.md`, due pagine utente.
+
+#### Analisi breve (sul codice di `087769e44`)
+- **Oggi**: la pagina dell'asset (`loadChartData`, `:1245-1446`) chiede segnali del backend ed eventi a ogni cambio di
+  modalità (`setPrimaryMode`), di finestra (`setCalendarPreset/Custom`), di periodo, di valuta, anche quando i prezzi
+  vengono dalla loro cache; i rendimenti di calendario dei confronti viaggiano nella stessa richiesta. La pagina della
+  coppia (`loadChartData`, `:743-852`) con un segnale riscarica tutto l'intervallo. `pageBusy.track` prende il gettone
+  sul clic, anche quando la funzione poi non chiede niente (lampo del «Refresh»).
+- **Disegno** (solo frontend, nessuna API):
+  1. `TimeSeriesStore.generation`: un numero unico in tutta l'app (contatore globale), nuovo a ogni `invalidateAll`,
+     `invalidateRange`, `markStale`; non cambia con `merge`/`markFetched`. Così ogni invalidazione dei prezzi o dei cambi
+     — Refresh, Sync, salvataggio dell'editor, cambio di valuta, recupero in background (Q2), store rimosso e ricreato —
+     invalida per costruzione i risultati calcolati su quei dati, senza toccare gli 11 chiamanti.
+  2. `lib/stores/signalResultCache.ts`, nuovo: `canonicalCacheKey(value)` (JSON con chiavi ordinate) e
+     `SignalResultCache<T>` (get/set con le generazioni lette all'inizio della richiesta, LRU, copie isolate con
+     `structuredClone`), due istanze: `assetChartAnswers` (la risposta della pagina dell'asset senza prezzi) e
+     `fxSignalAnswers` (i risultati validati della coppia). Svuotate al cambio di sessione.
+  3. Pagina dell'asset: chiave = il corpo esatto della richiesta senza `include_price` (asset, intervallo risolto,
+     valuta, segnali con id/codice/parametri, rendimenti con la finestra, confronti); generazioni = store dei prezzi
+     dell'asset e di ogni confronto nella valuta effettiva. Colpo solo se anche i prezzi sono in cache. Si scrive solo una
+     risposta applicata: elemento dell'asset presente, segnali validi (modo prezzi), rendimento non in `error`.
+  4. Pagina della coppia: chiave = il corpo della richiesta con i segnali; generazione = store della coppia. Colpo solo se
+     i tassi coprono l'intervallo.
+  5. Gettone (Q1): `loadChartData` e `maybeLoadComparison` dicono se hanno chiesto al server (bandierina sincrona, letta
+     subito dopo la chiamata); i trigger (modalità, finestra, periodo, valuta, segnali, verso) prendono il gettone solo
+     allora. Su un colpo tutto succede nello stesso tick: niente rotellina, niente gettone.
+- **Fuori**: le serie dei confronti in modalità prezzi restano col loro memo per impronta (non sono indicatori; un periodo
+  nuovo le richiede, con il gettone, come oggi) → residuo X-N64b. Granularità per segnale (togliere un indicatore
+  richiede di nuovo) → residuo. Il ramo X-R83 resta morto.
+- **Superfici**: `stores/core/TimeSeriesStore.ts`, `stores/signalResultCache.ts` (nuovo),
+  `components/assets/detail/assetDetailPriceQuery.ts` (chiave e risposta da tenere), le due pagine; test
+  `TimeSeriesStore.test.ts`, `assetPriceStoreRegistry.test.ts`, `fxStoreRegistry.test.ts`, `signalResultCache.test.ts`
+  (nuovo, una riga in `_frontend_asset.py`, non sporco in Y), `assetDetailPriceQuery.test.ts`, `chartPageSignals.test.ts`
+  (cablaggio letto nei sorgenti), E2E `asset-detail.spec.ts` e `fx-detail.spec.ts`; doc
+  `developer/frontend/state/registries.md`. `charts.md` è sporco in Y: niente.
+- **Rossi**: Vitest (generazioni, cache, chiave, cablaggio) visti rossi; E2E scritti ora, girano nello slot (non visti
+  rossi: la coda del lucchetto è di ore).
+- **Peso**: medio-alto. **CHANGELOG**: una riga 🔄 proposta (visibile: i ritorni sono istantanei).
+
+#### Passi
+1. ✅ 22/10 · Analisi breve (sopra).
+2. ✅ 22/10 · I rossi (`test-author`, due agenti su file diversi).
+   > **Note implementazione**:
+   > - Vitest: `TimeSeriesStore.test.ts` (8: generazione unica, nuova a ogni invalidazione e a `markStale`, ferma con
+   >   `merge`/`markFetched`/letture), `assetPriceStoreRegistry.test.ts` (6) e `fxStoreRegistry.test.ts` (5: invalidazioni,
+   >   bus `prices` sì, `mutation`/`refresh` no, store rimosso e ricreato), `signalResultCache.test.ts` nuovo (30: chiave
+   >   canonica, generazioni posizione per posizione, mancata = voce tolta, LRU di 32, copie isolate, i due singoli svuotati
+   >   al cambio d'utente e all'uscita, non per lo stesso utente), `assetDetailPriceQuery.test.ts` (15: chiave senza
+   >   `include_price`, risposta senza `prices`), `chartPageSignals.test.ts` (15: cablaggio letto nei sorgenti — cache
+   >   letta/scritta, `.generation`, i tre `track*`, le etichette dei trigger non più su `pageBusy.track(`; guardie per
+   >   Refresh, primo caricamento, riprova). Una riga in `_frontend_asset.py` (`front_asset_unit`).
+   > - E2E (non lanciati): `asset-detail.spec.ts` 3 (la sequenza del developer con osservatore di `data-busy` e del
+   >   caricatore; periodo e ritorno con SMA; guardia Refresh), `fx-detail.spec.ts` 2 (periodo e ritorno con RSI, server
+   >   finto; guardia Refresh). `tsc --noEmit -p tsconfig.e2e.json` exit 0, Prettier pulito.
+3. ✅ 22/10 · Rossi visti rossi (`ondata3/X-n64-red-{1,2}.log`): 19 rossi per `generation` mancante, 30 per il modulo
+   mancante (file non raccolto), 15 per i due aiutanti mancanti, 6 di cablaggio (3 per pagina); verdi tutti i 399 test
+   di prima, le 2 guardie e 7 controlli delle forme. L'agente ha provato i test su una copia usa e getta con
+   un'implementazione di riferimento (250/250) e ~30 mutazioni, tutte prese.
+4. ✅ 22/10 · La cura.
+   > **Note implementazione**:
+   > - `stores/core/TimeSeriesStore.ts`: `generation` (contatore globale del modulo), rinnovata in `invalidateAll`,
+   >   `invalidateRange`, `markStale`.
+   > - `stores/signalResultCache.ts` (nuovo): `canonicalCacheKey`, `SignalResultCache<T>` (Map in ordine d'uso = LRU di 32,
+   >   `structuredClone` in entrata e in uscita, mancata con generazioni diverse = voce tolta), `assetChartAnswers`,
+   >   `fxSignalAnswers`, svuotate da `registerClientSessionReset`.
+   > - `assetDetailPriceQuery.ts`: `assetChartAnswerKey(body)` e `assetChartAnswerForCache(answer)`.
+   > - `assets/[id]/+page.svelte`: in `loadChartData` il corpo della richiesta è costruito una volta (`requestBody`), la
+   >   chiave e le generazioni (store dell'asset e dei confronti di calendario nella valuta effettiva) lette prima della
+   >   richiesta; `const response = cachedAnswer ?? (await …)` — un colpo non attende mai, quindi tutto il caricamento
+   >   finisce prima che la chiamata ritorni. Si scrive solo una risposta valida (elemento dell'asset presente, segnali
+   >   validi in modo prezzi, nessuna vista di calendario in `error`, confronti compresi). `lastChartLoadAskedServer` e
+   >   `lastComparisonLoadAskedServer` (sincrone) e i tre aiutanti `trackChartLoad`, `trackComparisonLoad`,
+   >   `trackChartAndComparison` al posto di `pageBusy.track` nei trigger di modalità, finestra, periodo, valuta,
+   >   segnali, confronti. Refresh (`handleRefresh`) e ogni Sync dalla pagina (`runSyncAsset`, `handleSyncPair`, appena
+   >   arriva la risposta, anche se la pagina è cambiata) svuotano `assetChartAnswers`.
+   > - `fx/[pair]/+page.svelte`: stesso schema; chiave = corpo della richiesta con i segnali, generazione dello store della
+   >   coppia; colpo solo se i tassi coprono l'intervallo; si scrivono solo risultati validi.
+   >
+   > **⚠️ Fuori pista**:
+   > - Revisione delle E2E esistenti (agente `Explore`, sola lettura): nessuna rottura in `fx-detail.spec.ts` e
+   >   `risk-asset-detail.spec.ts`; in `asset-detail.spec.ts` il test lungo «calendar-return primary mode queries exact
+   >   windows…» (`:575`) aveva 5 passi che, dopo un Sync o un Sync scaduto, si aspettano di nuovo la richiesta del
+   >   periodo di 90 giorni. Ha anche trovato un buco vero del disegno: dopo il Sync di un confronto (o il ramo
+   >   `canMergeOnly`, ≤50 punti) `runSyncAsset` ricarica senza forzare, e i rendimenti del confronto in cache sarebbero
+   >   rimasti vecchi. Cura: ogni Sync dalla pagina svuota `assetChartAnswers` appena arriva la risposta (anche scaduta),
+   >   e Refresh pure: dopo un Sync tutto si richiede, come prima di N64. Con questo i 5 passi tornano a chiedere (da
+   >   provare nello slot).
+   > - La revisione nota che i passi di calendario di quel test non entrano mai in cache solo perché due confronti finti
+   >   rispondono `error`: se un giorno diventassero validi, ~60 passi andrebbero rivisti. Lo registro come rischio.
+5. ✅ 22/10 · Le prove leggere.
+   - Vitest dei 6 file di N64, dopo la cura, in 2 gruppi da 3 (fuori dal lucchetto, carico 3,3): **155/155** e
+     **216/216** (`ondata3/X-n64-cure-b{1,2}.log`); dopo le cancellazioni sui Sync, di nuovo i 3 file d'uso più 9
+     vicini che leggono le due pagine o toccano lo store (`comparisonSignalPages`, `signalRendering.gate`,
+     `fxDetailConvertQuery`, `AssetBrowseNav`, `layout.authGate`, `PriceChartFull.tooltipEscape`, `designer-lab/anchor`,
+     `assetDetailLive.svelte`, `pageBusy`): **538/538** (`X-n64-light-b{1..4}.log`).
+   - In `flock`, `LC_ALL=en_US.UTF-8`, `nice` (`X-n64-verify.sh`, un'ora di coda): `front-asset asset-unit` **25 file,
+     1181/1181**; `front-fx fx-unit` **4 file, 161/161**; `front-utility core-unit` **227 file, 9988/9988**;
+     `dev.py front check` **0 errori, 0 avvisi**.
+   - Prettier `--check` sui 5 file di codice: pulito. `git diff --check`: pulito. Porta 6191 mai usata (`lsof` vuoto).
+   - `dev.py test check-orphans`: 5 file orfani, **nessuno mio** (`bulkBatchesGroups`, `compactDensity`,
+     `reducedPriceCache`, `chartUtils`, `reducedPriceQuery`: vengono da dev); `signalResultCache.test.ts` è registrato.
+6. ✅ 22/10 · Doc (`docs-writer`, solo inglese): `developer/frontend/state/registries.md` (sezione «Signal result
+   cache» con «Invalidation, by construction» e «Cache hits and the busy token», più tabella e passo 5) e
+   `core-infrastructure.md` (la riga di `TimeSeriesStore`: `generation`). Backlog, sezione X: X-N64b, X-N64c, X-N64d.
+   CHANGELOG: una riga 🔄 proposta al coordinatore. `mkdocs check-links` in `flock`: rc 0, 97 link validi (`X-n64-docs-checklinks.log`); `mkdocs build` non lanciato (le ancore nuove controllate a mano dal `docs-writer`).
+7. ✅ 22/10 · CHECKPOINT READY (N64), poi lo slot E2E del coordinatore («slot concesso adesso», 02:40-03:03).
+   > **Note implementazione**: corsia 6191 + `/tmp/librefolio-r13-x` popolata da zero (rc 0, 7 s); ogni corsa in `flock`,
+   > `nice`, `LC_ALL=en_US.UTF-8`, una alla volta; log `ondata3/X-n64-e2e-*.log`.
+   > - `front-asset asset-detail N64`: **3/3**; `front-fx fx-detail N64`: **2/2**;
+   > - `front-asset asset-detail` intero, `--workers 2`: **45 passati, 1 rosso** (`:8555`, sotto); il test lungo `:575`
+   >   (i 5 passi della revisione) è verde: la cancellazione sui Sync funziona;
+   > - `front-fx fx-detail` intero, `--workers 2`: **30/30**; `front-portfolio risk-asset-detail`: **5/5**.
+   > - Prova che i nuovi casi mordono (non li avevo visti rossi): lettura della cache spenta per finta
+   >   (`SignalResultCache.get` → `null`, copia di riserva nel scratchpad), stessi filtri: asset **2 rossi** (le due
+   >   «nessuna richiesta», «Expected 1 / Received 3» richieste), guardia Refresh verde; FX **1 rosso** («the return… posts
+   >   no conversion request»), guardia verde. File ripristinato (`cmp` uguale alla copia), poi di nuovo `N64` asset 3/3 e
+   >   FX 2/2 sul codice vero. Porta 6191 libera (`lsof` vuoto).
+   >
+   > **⚠️ Fuori pista**: `asset-detail.spec.ts:8555` («keeps the event markers when the detail opens from a list that
+   > already cached All») è rosso **anche con la cache spenta**: non dipende da N64. La premessa del test non vale più dopo
+   > Z-29b (`686691e3d`): la lista non riempie più lo store giornaliero dei prezzi (solo `reducedPrices`), quindi il
+   > dettaglio non ha i prezzi in cache, chiede `include_price: true`, e la richiesta «solo eventi» che il test aspetta non
+   > parte. N64 non può sopprimerla: la lista non scrive `assetChartAnswers` e il contesto del browser è nuovo. Da girare
+   > a Z (o al proprietario della spec): riscrivere il percorso A o toglierlo.

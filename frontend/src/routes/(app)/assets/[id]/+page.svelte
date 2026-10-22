@@ -90,7 +90,8 @@
     import {percentageAxisLabel, priceAxisLabel, secondaryAxisLabel} from '$lib/components/charts/axisLabelHelpers';
     import {formatSignalProblem} from '$lib/components/charts/chartSignalsHelpers';
     import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, extractCalendarReturnViewsByAsset, isCalendarReturnSignalResult, type CalendarReturnView, type CalendarReturnViewState} from '$lib/components/charts/priceChartHelpers';
-    import {calendarComparisonFxFailuresFromResponse, calendarComparisonProblemsFromResponse, parseAssetPriceQueryWithSignalIsolation, preserveFactualCalendarPeersForCurrentUnavailable} from '$lib/components/assets/detail/assetDetailPriceQuery';
+    import {assetChartAnswerForCache, assetChartAnswerKey, calendarComparisonFxFailuresFromResponse, calendarComparisonProblemsFromResponse, parseAssetPriceQueryWithSignalIsolation, preserveFactualCalendarPeersForCurrentUnavailable} from '$lib/components/assets/detail/assetDetailPriceQuery';
+    import {assetChartAnswers} from '$lib/stores/signalResultCache';
     import {mergeChartPointsIncremental} from '$lib/components/assets/detail/assetDetailChartPoints';
     import {AssetDetailLive} from '$lib/components/assets/detail/assetDetailLive.svelte';
     import {buildAssetDetailIssues, buildRequiredFxPairs, type AssetDetailIssuesInput, type RequiredFxPairInfo, type RequiredFxPairsInput} from '$lib/components/assets/detail/assetDetailFxRequirements';
@@ -222,6 +223,13 @@
     let refreshRequestGeneration = 0;
     let comparisonAppliedFingerprint: string | null = null;
     let comparisonInFlight: {fingerprint: string; promise: Promise<void>} | null = null;
+    /**
+     * N64 (Q1): whether the last call of `loadChartData` / `maybeLoadComparison` asked the server. Set before their first
+     * await, so the trigger reads it right after the call: the busy token goes with a request, never with a load the
+     * caches answered whole (`trackChartLoad`, `trackComparisonLoad`, `trackChartAndComparison`).
+     */
+    let lastChartLoadAskedServer = false;
+    let lastComparisonLoadAskedServer = false;
 
     // Foldable panels
     let showAesthetics = $state(false);
@@ -390,12 +398,12 @@
         }
         primaryMode = mode;
         if (mode === 'calendar-return') {
-            void pageBusy.track('asset-mode', () => loadChartData(false));
+            void trackChartLoad('asset-mode');
         } else {
             calendarCustomEditing = false;
-            void pageBusy.track('asset-mode', () => maybeLoadComparison());
+            void trackComparisonLoad('asset-mode');
             const hasBackendSignals = signals.some((config) => signalDefinitionsByType.get(config.signalType)?.source === 'backend');
-            if (hasBackendSignals) void pageBusy.track('asset-mode', () => loadChartData(false));
+            if (hasBackendSignals) void trackChartLoad('asset-mode');
         }
     }
 
@@ -418,7 +426,7 @@
             preset,
         });
         if (primaryMode === 'calendar-return') {
-            void pageBusy.track('asset-calendar-window', () => loadChartData(false));
+            void trackChartLoad('asset-calendar-window');
         }
     }
 
@@ -433,7 +441,7 @@
         const changed = calendarWindowSelection.kind !== 'custom' || calendarWindowSelection.customAmount !== customAmount || calendarWindowSelection.customUnit !== customUnit;
         persistCalendarWindow(selection);
         if (changed && primaryMode === 'calendar-return') {
-            void pageBusy.track('asset-calendar-window', () => loadChartData(false));
+            void trackChartLoad('asset-calendar-window');
         }
     }
 
@@ -1161,7 +1169,7 @@
         }
         if (cur !== prevDisplayCurrency) {
             prevDisplayCurrency = cur;
-            void pageBusy.track('asset-currency', () => loadChartData().then(() => maybeLoadComparison()));
+            void trackChartAndComparison('asset-currency');
         }
     });
 
@@ -1243,6 +1251,7 @@
     }
 
     async function loadChartData(force = false, requestedSignalConfigs: SignalConfig[] = signals, propagateError = false) {
+        lastChartLoadAskedServer = false;
         const requestedAssetId = data.assetId;
         const sessionGeneration = getClientSessionGeneration();
         const current = () => pageAlive && data.assetId === requestedAssetId && isClientSessionCurrent(sessionGeneration);
@@ -1321,11 +1330,36 @@
             }
         }
 
+        const requestBody: AssetPriceBulkQueryBody = [
+            {
+                asset_id: data.assetId,
+                date_range: {start: dateStart, end: dateEnd},
+                include_price: !pricesFromCache,
+                include_events: true,
+                target_currency: targetCurrency,
+                signals: [...requestPlan.requests, ...calendarRequests],
+            },
+            ...calendarComparisonAssetIds.map((assetId) => ({
+                asset_id: assetId,
+                date_range: {start: dateStart, end: dateEnd},
+                include_price: false,
+                include_events: true,
+                target_currency: effectiveCurrency || undefined,
+                signals: calendarRequests,
+            })),
+        ];
+        // N64: the same request, answered over the same price data (the generations of this asset's store and of each
+        // peer's, read now), comes back from the signal cache with its events: no request, no spinner, no token (Q1).
+        // Any invalidation of those stores — Refresh, a sync, a save, a catch-up marking them stale (Q2) — misses.
+        const answerKey = effectiveCurrency ? assetChartAnswerKey(requestBody) : null;
+        const answerGenerations = answerKey ? [requestedAssetId, ...calendarComparisonAssetIds].map((assetId) => getAssetPriceStore(assetId, effectiveCurrency).generation) : [];
+        const cachedAnswer = answerKey && pricesFromCache && !force ? assetChartAnswers.get(answerKey, answerGenerations) : null;
+
         // Cache miss fetches prices + signals; cache hit requests events (+ signals) only.
         loading = !pricesFromCache;
         error = null;
         signalRequestFailed = false;
-        signalsLoading = requestPlan.requests.length > 0 || calendarComparisonAssetIds.length > 0;
+        signalsLoading = cachedAnswer === null && (requestPlan.requests.length > 0 || calendarComparisonAssetIds.length > 0);
         if (requestedCalendarFingerprint !== null) {
             calendarSnapshotFingerprint = requestedCalendarFingerprint;
             if (retainCurrentCalendarDiagnostics) {
@@ -1341,25 +1375,10 @@
                 comparisonEvents = new Map();
             }
         }
+        lastChartLoadAskedServer = cachedAnswer === null;
         try {
-            const response = await queryAssetPricesBulkWithSignalIsolation([
-                {
-                    asset_id: data.assetId,
-                    date_range: {start: dateStart, end: dateEnd},
-                    include_price: !pricesFromCache,
-                    include_events: true,
-                    target_currency: targetCurrency,
-                    signals: [...requestPlan.requests, ...calendarRequests],
-                },
-                ...calendarComparisonAssetIds.map((assetId) => ({
-                    asset_id: assetId,
-                    date_range: {start: dateStart, end: dateEnd},
-                    include_price: false,
-                    include_events: true,
-                    target_currency: effectiveCurrency || undefined,
-                    signals: calendarRequests,
-                })),
-            ]);
+            // A hit never awaits: the whole load runs before this call returns, in the same tick.
+            const response = cachedAnswer ?? (await queryAssetPricesBulkWithSignalIsolation(requestBody));
             if (!dataRequestIsCurrent()) return;
             const responseItems: any[] = Array.isArray((response as any)?.items) ? (response as any).items : [];
             const result = responseItems.find((item) => item?.asset_id === requestedAssetId);
@@ -1369,8 +1388,11 @@
                 }
                 events = result.events ?? [];
                 const rawSignalResults: unknown[] = Array.isArray(result.signals) ? result.signals : [];
-                if (wantsCalendarReturn && calendarRequestIsCurrent() && requestedCalendarWindow === calendarWindowDays) {
-                    calendarReturnView = extractCalendarReturnView(rawSignalResults, CALENDAR_RETURN_INSTANCE_ID);
+                const answeredCalendarView = wantsCalendarReturn ? extractCalendarReturnView(rawSignalResults, CALENDAR_RETURN_INSTANCE_ID) : null;
+                // N64: only an answer the page can apply is kept — valid signal results, a calendar return that is not an error.
+                let answerIsValid = answeredCalendarView === null || (answeredCalendarView.state !== 'error' && [...extractCalendarReturnViewsByAsset(responseItems, calendarComparisonAssetIds, CALENDAR_RETURN_INSTANCE_ID).values()].every((view) => view.state !== 'error'));
+                if (wantsCalendarReturn && calendarRequestIsCurrent() && requestedCalendarWindow === calendarWindowDays && answeredCalendarView) {
+                    calendarReturnView = answeredCalendarView;
                     if (calendarComparisonsAreCurrent()) {
                         const nextComparisonViews = extractCalendarReturnViewsByAsset(responseItems, calendarComparisonAssetIds, CALENDAR_RETURN_INSTANCE_ID);
                         calendarComparisonViews = retainCurrentCalendarDiagnostics ? preserveFactualCalendarPeersForCurrentUnavailable(calendarComparisonViews, nextComparisonViews, responseItems, calendarComparisonAssetIds) : nextComparisonViews;
@@ -1395,7 +1417,9 @@
                         signalRequestFailed = requestPlan.requests.length > 0;
                     }
                     if (backendSignalResults !== null) applyBackendSignalResults(backendSignalConfigs, requestVersion, backendSignalResults);
+                    else answerIsValid = false;
                 }
+                if (cachedAnswer === null && answerKey !== null && answerIsValid) assetChartAnswers.set(answerKey, answerGenerations, assetChartAnswerForCache(response));
                 // Populate the price cache (derive currency from response if not known yet)
                 const cacheCurrency = effectiveCurrency || chartData[0]?.currency || '';
                 if (!pricesFromCache && cacheCurrency && chartData.length > 0) {
@@ -1514,10 +1538,12 @@
      * Called explicitly from onMount, handleRefresh, handleDateRangeChange, handleSignalsChange.
      */
     function maybeLoadComparison(propagateError = false, requestedSignalConfigs: SignalConfig[] = signals, force = false): Promise<void> {
+        lastComparisonLoadAskedServer = false;
         const requestedAssetId = data.assetId;
         const sessionGeneration = getClientSessionGeneration();
         const requestedFingerprint = priceComparisonLoadFingerprint(requestedSignalConfigs);
         if (!force && comparisonInFlight?.fingerprint === requestedFingerprint) {
+            lastComparisonLoadAskedServer = true;
             return comparisonInFlight.promise;
         }
         if (!force && comparisonAppliedFingerprint === requestedFingerprint && priceComparisonRuntimeIsAuthoritative(requestedSignalConfigs)) {
@@ -1537,6 +1563,7 @@
             return Promise.resolve();
         }
         if (lineData.length === 0) return Promise.resolve();
+        lastComparisonLoadAskedServer = true;
         const promise = (async () => {
             try {
                 const loaded = await loadComparisonAssetsData(requestedAssetIds, {start: dateStart, end: dateEnd}, allAssets, requestedAssetId, displayCurrency || undefined);
@@ -1559,6 +1586,35 @@
         };
         void promise.then(clearInFlight, clearInFlight);
         return promise;
+    }
+
+    /** N64 (Q1): the chart load under the page's busy token only when it asks the server; one the caches answer runs without. */
+    function trackChartLoad(label: string, requestedSignalConfigs: SignalConfig[] = signals): Promise<void> {
+        const running = loadChartData(false, requestedSignalConfigs);
+        return lastChartLoadAskedServer ? pageBusy.track(label, () => running) : running;
+    }
+
+    /** N64 (Q1): the price-mode comparisons under the busy token only when they ask the server; their memo answers without. */
+    function trackComparisonLoad(label: string, requestedSignalConfigs: SignalConfig[] = signals): Promise<void> {
+        const running = maybeLoadComparison(false, requestedSignalConfigs);
+        return lastComparisonLoadAskedServer ? pageBusy.track(label, () => running) : running;
+    }
+
+    /**
+     * N64 (Q1): the chart, then the comparisons, as a change of period or currency always loaded them, with one busy
+     * token if either asks the server: a period and currency already seen change the chart at once, with no token.
+     */
+    async function trackChartAndComparison(label: string): Promise<void> {
+        const chart = loadChartData();
+        if (lastChartLoadAskedServer) {
+            await pageBusy.track(label, async () => {
+                await chart;
+                await maybeLoadComparison();
+            });
+            return;
+        }
+        await chart;
+        await trackComparisonLoad(label);
     }
 
     // =========================================================================
@@ -1609,6 +1665,8 @@
         const requestedSignals = signals;
         const requestedSignalDataFingerprint = signalDataContextFingerprint(requestedSignals);
         invalidateAssetPriceStore(requestedAssetId);
+        // N64: Refresh asks everything again — the signal answers too, the comparisons' calendar returns included.
+        assetChartAnswers.clear();
         rearmMaxPendingBeforeReload();
         const requestedUrlStart = urlDateStart;
         const requestedUrlEnd = urlDateEnd;
@@ -1759,10 +1817,7 @@
         // stays meaningful across reloads/shares and the "All" badge doesn't
         // look stuck on a specific historical date.
         replaceHistoryDateRange(newStart, newEnd);
-        await pageBusy.track('asset-period', async () => {
-            await loadChartData();
-            await maybeLoadComparison();
-        });
+        await trackChartAndComparison('asset-period');
     }
 
     function handleMeasureClick(date: string, value: number) {
@@ -1833,10 +1888,10 @@
         const shouldReloadPriceComparisons = priceComparisonLoadFingerprint(signals) !== priceComparisonLoadFingerprint(newSignals);
         setPairSettings(`asset-${data.assetId}`, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
         if (primaryMode === 'price' && shouldReloadPriceComparisons) {
-            void pageBusy.track('asset-comparison', () => maybeLoadComparison(false, newSignals));
+            void trackComparisonLoad('asset-comparison', newSignals);
         }
         if ((primaryMode === 'calendar-return' && shouldReloadCalendarComparisons) || (primaryMode === 'price' && shouldReloadBackend)) {
-            void pageBusy.track('asset-signals', () => loadChartData(false, newSignals));
+            void trackChartLoad('asset-signals', newSignals);
         }
     }
 
@@ -1903,6 +1958,9 @@
                   })
                 : Promise.resolve(null);
         const [assetOutcome, fxOutcome] = await Promise.allSettled([assetRequest, fxRequest]);
+        // N64: a sync may have changed what a kept signal answer was computed from — this asset, a comparison peer, a
+        // pair — even when its answer finds the page moved on: every answer is asked again, as before the cache.
+        assetChartAnswers.clear();
         if (!current()) return;
 
         const tr = get(t);
@@ -2066,6 +2124,8 @@
                 start: requestedStart,
                 end: requestedEnd,
             });
+            // N64: the rates may have changed under a converted answer, even when this one finds the page moved on.
+            assetChartAnswers.clear();
             if (!current()) return;
             const tr = get(t);
             const r = (syncResponse as any)?.results?.[0];
