@@ -14,7 +14,7 @@
  *        an ADJUSTMENT linked to a SPLIT, saved in Auto, whose event is then retyped — is closed too (the retype is
  *        refused with EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST, pinned by E2 of `data-quality-real.spec.ts`). Such rows
  *        exist only in data an older version left behind, so the test writes one the way `data-quality-legacy.spec.ts`
- *        does: `backend/test_scripts/test_db/legacy_cost_rows.py`, run against this lane's test database only, adds an
+ *        does, through the shared `fixtures/legacy-cost-rows.ts`: `backend/test_scripts/test_db/legacy_cost_rows.py`, run against this lane's test database only, adds an
  *        ADJUSTMENT-in with no cost to the position (plus the TRANSFER pair the helper always writes, on a second owned
  *        broker and asset that nothing here asserts on). The position has a dividend in the window, so the dash means
  *        «unknown cost», not «no income»: the report answers unavailable / missing_wac and the cell shows the dash
@@ -38,13 +38,11 @@
  * routed or mocked, and every response read is the application's own.
  */
 
-import {execFileSync} from 'child_process';
-import * as path from 'path';
-import {fileURLToPath} from 'url';
 import {expect, test as base, type APIRequestContext, type Locator, type Page, type Request} from '../fixtures/playwright';
 import {schemas} from '../../src/lib/api/generated';
 import {waitForSettled} from '../fixtures/app-events';
 import {daysAgoIso, todayIso} from '../fixtures/dates';
+import {writeLegacyRows} from '../fixtures/legacy-cost-rows';
 import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {uniqueSuffix} from '../fixtures/unique';
 
@@ -56,9 +54,6 @@ const PERIOD_START_DAYS_AGO = 60;
 const WINDOW_START_DAYS_BEFORE_END = 364;
 /** The YOC column, as `DataTable` publishes it on its header (`dt-header-…`) and on every cell (`data-column-id`). */
 const YOC_COLUMN = 'yield-on-cost';
-const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-/** Writes acquisitions without a cost the way an older version stored them (see Y2 above). */
-const LEGACY_HELPER_MODULE = 'backend.test_scripts.test_db.legacy_cost_rows';
 
 type Money = {code: string; amount: string};
 type Period = {start: string; end: string};
@@ -81,8 +76,6 @@ type ReportRequestBody = {include_summary?: boolean; date_range?: {start?: strin
 type ReportBody = {metadata?: {target_currency?: string} | null; summary?: {holdings?: unknown[]} | null};
 type CommitBody = {committed: boolean; issues?: unknown[]; results?: Array<{operation: string; index: number; ids: number[]}>};
 type TransactionRead = {id: number; broker_id: number; asset_id?: number | null; type: string; date: string; quantity: string; cash?: unknown; description?: string | null; asset_event_id?: number | null; cost_basis_override?: Money | null};
-type LegacyRows = {transfer_out: number; transfer_in: number; adjustment_in: number};
-type LegacyRequest = {userId: number; sourceBroker: number; destBroker: number; transferAsset: number; adjustmentAsset: number; date: string; transferQty: number; adjustmentQty: number; marker: string};
 type HttpResponse = {ok(): boolean; status(): number; text(): Promise<string>; json(): Promise<unknown>};
 type Owned = {user: DisposableUser | null; brokerIds: number[]; assetIds: number[]};
 
@@ -166,56 +159,6 @@ async function readTransaction(page: Page, id: number): Promise<TransactionRead>
     const row = rows.find((candidate) => candidate.id === id);
     if (!row) throw new Error(`GET /transactions?ids=${id} did not return the transaction: ${JSON.stringify(rows)}`);
     return row;
-}
-
-/**
- * Write acquisitions without a cost with `legacy_cost_rows.py`, as `data-quality-legacy.spec.ts` does (a minimal
- * copy of its `writeLegacyRows`, quantities as arguments; that spec exports nothing and no fixture holds it): from the
- * repo root, with this process's environment — TEST_PORT and LIBREFOLIO_TEST_DATA_DIR, exported by
- * playwright.config.ts, so the helper resolves this lane's database and nothing else, and refuses brokers the account
- * does not own. When the runner's `pipenv run` has already activated the environment (VIRTUAL_ENV), its interpreter is
- * called directly; otherwise `pipenv run python`. Arguments travel as an argv array, never through a shell. A non-zero
- * exit fails with the helper's own explanation.
- */
-function writeLegacyRows(legacy: LegacyRequest): LegacyRows {
-    const helperArgs = [
-        '-m',
-        LEGACY_HELPER_MODULE,
-        '--user-id',
-        String(legacy.userId),
-        '--source-broker',
-        String(legacy.sourceBroker),
-        '--dest-broker',
-        String(legacy.destBroker),
-        '--transfer-asset',
-        String(legacy.transferAsset),
-        '--adjustment-asset',
-        String(legacy.adjustmentAsset),
-        '--date',
-        legacy.date,
-        '--transfer-qty',
-        String(legacy.transferQty),
-        '--adjustment-qty',
-        String(legacy.adjustmentQty),
-        '--marker',
-        legacy.marker,
-    ];
-    const venv = process.env.VIRTUAL_ENV;
-    const command = venv ? path.join(venv, 'bin', 'python') : 'pipenv';
-    const argv = venv ? helperArgs : ['run', 'python', ...helperArgs];
-    let stdout: string;
-    try {
-        stdout = execFileSync(command, argv, {cwd: PROJECT_ROOT, env: process.env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 90_000});
-    } catch (error) {
-        const failed = error as {status?: number | null; signal?: string | null; stdout?: string; stderr?: string; message?: string};
-        throw new Error(`legacy_cost_rows (${command}) exited with ${failed.status ?? failed.signal ?? 'no status'}:\n${failed.stderr || failed.message || ''}\n${failed.stdout ?? ''}`);
-    }
-    // The helper's contract is one line of JSON on stdout; anything else is a failure worth reading.
-    const lines = stdout.split('\n').filter((line) => line.trim() !== '');
-    expect(lines, `legacy_cost_rows prints one line of JSON; it printed:\n${stdout}`).toHaveLength(1);
-    const rows = JSON.parse(lines[0]) as LegacyRows;
-    expect(rows, `legacy_cost_rows printed ${lines[0]}`).toEqual({transfer_out: expect.any(Number), transfer_in: expect.any(Number), adjustment_in: expect.any(Number)});
-    return rows;
 }
 
 /**
