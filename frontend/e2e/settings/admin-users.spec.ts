@@ -32,8 +32,8 @@
  * decision D4 a): no group, no second bar, and no `settings-tab-users` anywhere.
  *
  * Ownership. `e2e_test_admin` only acts: no test changes its role or state, nor those of any other fixture user. Each
- * test registers its own disposable accounts anonymously (the lane registers openly: checked first, and no spec changes
- * it) and writes its own unique invitation addresses, each recorded before the request that creates it goes. The `users`
+ * test registers its own disposable accounts anonymously (the lane registers openly: checked first; the one spec that changes
+ * it, registration-mode.spec.ts, runs alone and puts it back) and writes its own unique invitation addresses, each recorded before the request that creates it goes. The `users`
  * fixture removes them after the test, red or green: every pending invitation carrying one of its addresses is revoked
  * (found through `GET /users/invites`); every account still alive deletes itself (`DELETE /auth/users/me`, signed in as
  * that very account, its identity checked), reactivated first when the test left it deactivated, since a deactivated
@@ -134,7 +134,7 @@ async function expectRegistrationOpen(api: APIRequestContext): Promise<void> {
     const response = await api.get(INSTANCE_CONFIG_PATH);
     expect(response.status(), `GET ${INSTANCE_CONFIG_PATH}: ${await response.text()}`).toBe(200);
     const mode = ((await response.json()) as {accounts?: {registration_mode?: unknown}}).accounts?.registration_mode;
-    expect(mode, `The lane must register accounts openly (accounts.registration_mode 'open'): this spec registers its disposable accounts anonymously and invites through the tab, and no E2E spec changes the mode. The lane answered ${JSON.stringify(mode)}`).toBe('open');
+    expect(mode, `The lane must register accounts openly (accounts.registration_mode 'open'): this spec registers its disposable accounts anonymously and invites through the tab, and the spec that changes the mode runs alone. The lane answered ${JSON.stringify(mode)}`).toBe('open');
 }
 
 async function signInAdministrator(admin: APIRequestContext): Promise<void> {

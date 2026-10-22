@@ -289,6 +289,12 @@ const deleteOwn = () => handle(zodiosApi.delete_own_account_api_v1_auth_users_me
 const createInvite = () => handle(zodiosApi.create_invite_api_v1_users_invites_post);
 const revokeInvite = () => handle(zodiosApi.revoke_invite_api_v1_users_invites__invite_id__delete);
 const issueProbe = () => handle(zodiosApi.issue_address_probe_api_v1_users_address_probe_post);
+/** `PATCH /settings/global/bulk`, the registration mode's write: the mock client hands `axios` out as a bare spy, so its `patch` is given here (N69c). */
+const bulkPatch = (): Mocked => {
+    const axios = zodiosApi.axios as unknown as {patch?: Mocked};
+    axios.patch ??= vi.fn();
+    return axios.patch;
+};
 
 /** The identity translator of the `$lib/i18n` mock, a spy: the values a message was given, which it drops (A-43's toast). */
 const translator = () => handle(get(translatorStore));
@@ -303,6 +309,7 @@ const WRITES: Record<string, () => Mocked> = {
     'DELETE /auth/users/me': deleteOwn,
     'POST /users/invites': createInvite,
     'DELETE /users/invites/{id}': revokeInvite,
+    'PATCH /settings/global/bulk': bulkPatch,
 };
 
 function expectNothingWritten(): void {
@@ -429,6 +436,7 @@ beforeEach(() => {
     session.signIn(sessionUser(ME));
     instance.box.config = instance.OPEN;
     instance.load.mockResolvedValue(undefined);
+    bulkPatch().mockReset().mockResolvedValue({data: null});
 
     listUsers().mockImplementation(async () => usersAnswer());
     listInvites().mockImplementation(async () => invitesAnswer());
@@ -1236,6 +1244,194 @@ describe('UsersTab — cancelling the setup link of the waiting administrator (U
             await waitFor(() => expect(rowOf(WAITING_ADMIN.id), 'the reloaded row waits no more').toHaveAttribute('data-pending-setup', 'false'));
             expect(rowOf(WAITING_ADMIN.id), 'it is active, as the server has it').toHaveAttribute('data-active', 'true');
             await settled();
+        });
+    });
+});
+
+// =========================================================================
+// N69c (release 1.3, workstream A — decision D5 b of 19/10/2026, D6 only the mode, D7 beside «Invite»): who can sign up,
+// from the Users tab. The mode is the global setting `registration_mode`; this control and the Global settings one are the
+// same source (`registrationMode.ts`, `registrationMode.test.ts`). The control sits in the first section, next to the
+// invitation button, and saves at the choice — no «Save» button —, asking first only for `open`: it lets in anyone who
+// reaches the login page. Published on `users-registration`: `data-mode` (the mode in force, from the public configuration),
+// `data-shown` (what the select shows), `data-locked` (`LIBREFOLIO_REGISTRATION` pins it), `data-saving`. The select is
+// `users-registration-mode` (its trigger `…-button`, its options `users-registration-option-<mode>`), the confirmation
+// `users-confirm`, the tab's own (buttons `confirm-modal-confirm` / `confirm-modal-cancel`), the line naming the variable
+// `users-registration-locked`. Red until N69c, every case below.
+describe('UsersTab — who can sign up, from here (UTAB-63…72, N69c)', () => {
+    const registration = (mode: 'open' | 'invite' | 'disabled', locked = false): void => {
+        instance.box.config = {profile: 'selfhosted', accounts: {registration_mode: mode, registration_locked: locked}};
+    };
+    const control = () => screen.getByTestId('users-registration');
+
+    /** Opens the select and picks a mode, as a person does. */
+    async function choose(mode: 'open' | 'invite' | 'disabled'): Promise<void> {
+        await fireEvent.click(screen.getByTestId('users-registration-mode-button'));
+        await fireEvent.click(await screen.findByTestId(`users-registration-option-${mode}`));
+    }
+
+    const bulkBody = (mode: string) => ({items: [{key: 'registration_mode', value: mode}]});
+
+    it('UTAB-63: shows the mode in force, in the first section beside «Invite», and follows the configuration while on screen', async () => {
+        registration('invite');
+        await mount();
+
+        expect(control()).toHaveAttribute('data-mode', 'invite');
+        expect(control()).toHaveAttribute('data-shown', 'invite');
+        expect(control()).toHaveAttribute('data-locked', 'false');
+        expect(control().closest('section')).toBe(screen.getByTestId('users-invite-button').closest('section'));
+        expect(screen.queryByTestId('users-registration-locked')).not.toBeInTheDocument();
+
+        registration('disabled');
+
+        await waitFor(() => expect(control()).toHaveAttribute('data-mode', 'disabled'));
+        expect(control()).toHaveAttribute('data-shown', 'disabled');
+    });
+
+    it.each([
+        {id: 'UTAB-64', from: 'invite', to: 'disabled'},
+        {id: 'UTAB-65', from: 'open', to: 'invite'},
+        {id: 'UTAB-66', from: 'disabled', to: 'invite'},
+    ] as const)('$id: $from → $to saves at the choice — one bulk PATCH, the configuration read again, no confirmation, an event and no toast', async ({from, to}) => {
+        registration(from);
+        await mount();
+        const loads = instance.load.mock.calls.length;
+
+        await choose(to);
+
+        await waitFor(() => expect(bulkPatch()).toHaveBeenCalledTimes(1));
+        expect(bulkPatch()).toHaveBeenCalledWith('/api/v1/settings/global/bulk', bulkBody(to));
+        await waitFor(() => expect(instance.load.mock.calls.length).toBeGreaterThan(loads));
+        expect(instance.load).toHaveBeenLastCalledWith({force: true});
+        expect(screen.queryByTestId('users-confirm')).not.toBeInTheDocument();
+        const note = await oneNote('settings.global.saved');
+        expect(note.detail).toEqual({keys: ['registration_mode'], count: 1});
+        expect(note.toast, 'the select already shows the new mode: no toast').toBeUndefined();
+    });
+
+    it('UTAB-67: «open» asks first — a confirmation, nothing sent — and confirmed saves it', async () => {
+        registration('invite');
+        await mount();
+
+        await choose('open');
+
+        await confirmation();
+        expect(bulkPatch()).not.toHaveBeenCalled();
+        expect(control()).toHaveAttribute('data-mode', 'invite');
+
+        await acceptConfirmation();
+
+        await waitFor(() => expect(bulkPatch()).toHaveBeenCalledWith('/api/v1/settings/global/bulk', bulkBody('open')));
+        expect(bulkPatch()).toHaveBeenCalledTimes(1);
+        await waitFor(() => expect(screen.queryByTestId('users-confirm')).not.toBeInTheDocument());
+        await oneNote('settings.global.saved');
+    });
+
+    it('UTAB-68: the confirmation of «open» is not a danger one, and cancelling it sends nothing and puts the select back on the mode in force', async () => {
+        registration('disabled');
+        await mount();
+
+        await choose('open');
+
+        const dialog = await confirmation();
+        expect(within(dialog).getByTestId('confirm-modal-confirm').className).not.toContain('btn-danger');
+        expect(control()).toHaveAttribute('data-shown', 'open');
+
+        await declineConfirmation();
+
+        expect(bulkPatch()).not.toHaveBeenCalled();
+        expect(notes('settings.global.saved')).toHaveLength(0);
+        await waitFor(() => expect(control()).toHaveAttribute('data-shown', 'disabled'));
+        expect(control()).toHaveAttribute('data-mode', 'disabled');
+    });
+
+    it('UTAB-69: pinned by LIBREFOLIO_REGISTRATION — the select is off, shows the mode in force, and the line names the variable', async () => {
+        registration('invite', true);
+        await mount();
+
+        expect(control()).toHaveAttribute('data-locked', 'true');
+        expect(control()).toHaveAttribute('data-shown', 'invite');
+        expect(screen.getByTestId('users-registration-mode-button')).toBeDisabled();
+        expect(screen.getByTestId('users-registration-locked')).toBeInTheDocument();
+        const asked = translator().mock.calls.filter(([key]) => key === 'settings.lockedByEnv');
+        expect(asked.at(-1)?.[1], 'the line is given the variable').toEqual({values: {variable: 'LIBREFOLIO_REGISTRATION'}});
+        expect(bulkPatch()).not.toHaveBeenCalled();
+    });
+
+    it('UTAB-70: a save the server refuses with 409 SETTING_LOCKED_BY_ENV (a configuration read before the pin) — the variable named in an error toast, the select back on the mode in force, the configuration read again', async () => {
+        registration('invite');
+        await mount();
+        bulkPatch().mockRejectedValue(conflict('SETTING_LOCKED_BY_ENV', {variable: 'LIBREFOLIO_REGISTRATION'}));
+        const loads = instance.load.mock.calls.length;
+
+        await choose('disabled');
+
+        const note = await oneNote('accounts.registration.failed');
+        expect(note.toast?.variant).toBe('error');
+        expect(note.detail).toMatchObject({code: 'SETTING_LOCKED_BY_ENV'});
+        expect(notes('settings.global.saved')).toHaveLength(0);
+        await waitFor(() => expect(control()).toHaveAttribute('data-shown', 'invite'));
+        expect(instance.load.mock.calls.length, 'the pin is learnt from the server').toBeGreaterThan(loads);
+        const asked = translator().mock.calls.filter(([key]) => key === 'settings.lockedByEnv');
+        expect(asked.at(-1)?.[1]).toEqual({values: {variable: 'LIBREFOLIO_REGISTRATION'}});
+    });
+
+    it('UTAB-71: any other refusal — an error toast worded by settings.usersTab.registration.saveFailed, the select back on the mode in force, nothing announced as saved', async () => {
+        registration('invite');
+        await mount();
+        bulkPatch().mockRejectedValue(refusal(500, 'boom'));
+
+        await choose('disabled');
+
+        const note = await oneNote('accounts.registration.failed');
+        expect(note.toast).toEqual({variant: 'error', message: 'settings.usersTab.registration.saveFailed'});
+        expect(notes('settings.global.saved')).toHaveLength(0);
+        await waitFor(() => expect(control()).toHaveAttribute('data-shown', 'invite'));
+        expect(control()).toHaveAttribute('data-mode', 'invite');
+    });
+
+    it('UTAB-72: while the save runs the select is off and the control says so; once done, it is usable again', async () => {
+        registration('invite');
+        await mount();
+        const pending = deferred<{data: null}>();
+        bulkPatch().mockReturnValue(pending.promise);
+
+        await choose('disabled');
+
+        await waitFor(() => expect(control()).toHaveAttribute('data-saving', 'true'));
+        expect(screen.getByTestId('users-registration-mode-button')).toBeDisabled();
+
+        pending.resolve({data: null});
+
+        await waitFor(() => expect(control()).toHaveAttribute('data-saving', 'false'));
+        expect(screen.getByTestId('users-registration-mode-button')).toBeEnabled();
+    });
+
+    describe('its keys are sentences in the four catalogues', () => {
+        const CATALOGUES: Record<string, unknown> = {en, it: itCatalogue, fr, es};
+        /** Each key, and the values the tab fills into it. */
+        const KEYS: Record<string, string[]> = {
+            'settings.usersTab.registration.label': [],
+            'settings.usersTab.registration.confirm.title': [],
+            'settings.usersTab.registration.confirm.message': [],
+            'settings.usersTab.registration.confirm.confirm': [],
+            'settings.usersTab.registration.saveFailed': [],
+        };
+
+        const leafOf = (catalogue: unknown, key: string): unknown => key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
+
+        it('UTAB-73: every key is a non-empty sentence in en, it, fr and es, naming no value the tab does not fill', () => {
+            const defects = Object.entries(KEYS).flatMap(([key, filled]) =>
+                Object.entries(CATALOGUES).flatMap(([language, catalogue]) => {
+                    const message = leafOf(catalogue, key);
+                    if (typeof message !== 'string' || message.trim() === '') return [`${language}: no sentence at ${key}`];
+                    return [...message.matchAll(/\{\s*([A-Za-z_]\w*)\s*[,}]/g)]
+                        .map((match) => match[1])
+                        .filter((name) => !filled.includes(name))
+                        .map((name) => `${language}: ${key} names {${name}}`);
+                }),
+            );
+            expect(defects).toEqual([]);
         });
     });
 });
