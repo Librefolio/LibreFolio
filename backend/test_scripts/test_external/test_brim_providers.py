@@ -3343,11 +3343,11 @@ class TestFinecoSafeRows:
         assert [sorted(line for evidence in note.evidence for line in evidence.row_numbers) for note in notes] == [[9]], "the value date still decides whether the row is settled"
         assert [(notice.severity, notice.code) for notice in out.warnings if notice.severity == "warning"] == []
 
-    def test_guard_fineco_a_row_without_a_readable_date_is_skipped(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-        """Guard (D), green today and after. If neither ``Operazione`` nor ``Data valuta`` can be read, the row is skipped
-        with today's «invalid date» warning: a plain-string warning, so its code is ``legacy``, and its words are not pinned.
-        It gives no transaction and no N74 note. The row after it imports; it is traded and valued on the same day, so its
-        date is the same before and after B-52."""
+    def test_fineco_a_row_without_a_readable_date_is_skipped_and_listed_as_unreadable(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Red today: the row is skipped with a plain-string warning (code ``legacy``, no ``report_issue``). Contract (Fineco left the
+        beta, W-B92): if neither ``Operazione`` nor ``Data valuta`` can be read, the row gives no transaction and is listed, on its
+        line (7), by one ``rows_unreadable`` warning that asks for a report; no ``legacy`` notice and no N74 note. The row after it
+        imports; it is traded and valued on the same day, so its date is the same before and after B-52."""
         _pin_fineco_today(monkeypatch)
         rows = [
             _fineco_row("", "n.d.", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "106.30000", "", "531.50", "2.95"),
@@ -3357,12 +3357,15 @@ class TestFinecoSafeRows:
         out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
 
         assert _fineco_transactions(out) == [_fineco_tx("ADJUSTMENT", "2024-06-19", "3", None, "IE00B4L5Y983", "Aumento capitale: ISHARES MSCI WORLD ACC")]
-        assert [(notice.severity, notice.code) for notice in out.warnings] == [("warning", "legacy")], "one warning, the skipped row's; no N74 note"
+        assert [(notice.severity, notice.code) for notice in out.warnings] == [("warning", "rows_unreadable")], [(n.severity, n.code, n.message) for n in out.warnings]
+        (notice,) = out.warnings
+        assert (notice.context or {}).get("report_issue") is True and (notice.context or {}).get("count") == 1
+        assert sorted(line for evidence in notice.evidence for line in evidence.row_numbers) == [_FINECO_FIRST_LINE], "the notice lists the skipped row's line"
 
-    def test_fineco_plugin_version_is_1_4_0(self):
-        """Red today: 1.3.0 (B-52). Contract (solution B, 21/10/2026): taking the commission out of a trade's cash changes what
-        the plugin outputs (see ``TestFinecoControvaloreIncludesCommission``), so its version becomes 1.4.0."""
-        assert FinecoBrokerProvider().plugin_version == "1.4.0"
+    def test_fineco_plugin_version_is_1_5_0(self):
+        """Red today: 1.4.0. Contract (Fineco left the beta, W-B92): the rows it leaves out are now the shared ``rows_not_recognized``
+        and ``rows_unreadable`` notices instead of plain strings, so the output for the same file changes and its version becomes 1.5.0."""
+        assert FinecoBrokerProvider().plugin_version == "1.5.0"
 
 
 # =============================================================================
