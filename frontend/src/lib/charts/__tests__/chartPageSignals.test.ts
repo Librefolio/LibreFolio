@@ -25,6 +25,15 @@
  *   `detailPageSignalSources(`; the FX page keeps no `fxPointToLineDataPoint` of its own and imports the module's.
  *   The gate `signalRendering.gate.test.ts` is the other half: no page calls `signalFromConfig(` any more.
  *
+ * Lot N64 puts a client cache of the backend's signal answers (`$lib/stores/signalResultCache`) between the two detail
+ * pages and the backend, filed by request and by the generations of the price stores the answer was drawn over; one more
+ * part reads its wiring from the same two sources («N64 wiring», last in the file): each page asks and fills its cache
+ * (the asset page also through `assetChartAnswerKey(` and `assetChartAnswerForCache(`) and reads a store's `.generation`;
+ * each declares `trackChartLoad(`, `trackComparisonLoad(` and `trackChartAndComparison(`, the three helpers that start a
+ * busy token only when the load will really ask the backend; the triggers a cache hit may answer (a period, a signal
+ * set, a mode, a currency, an orientation) go through them, and the ones that always ask (a refresh, a first load, a
+ * retry) stay on `pageBusy.track(`.
+ *
  * A comparison's fallback name is a catalogue message (`ChartSignal.text`), which throws before svelte-i18n is
  * initialised: the file boots it once, in English, and compares a fallback with the catalogue's own text for its key,
  * never with a literal. The names the parity cases give to assets («Synthetic peer») are data they inject.
@@ -748,6 +757,184 @@ describe('the detail pages draw their saved signals through lib/charts/chartSign
             expect(converterProblems(`${imported}\nconst fxPointToLineDataPoint = (point) => point;`)).toEqual(['declares its own fxPointToLineDataPoint']);
             expect(converterProblems(`${imported}\n// function fxPointToLineDataPoint(point) {}`)).toEqual([]);
             expect(converterProblems("import {renderLocalSignals} from '$lib/charts/chartSignalRendering';\nfunction fxPointToLineDataPoint(point) {}")).toHaveLength(2);
+        });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// N64 wiring: the two detail pages draw from the cache of the backend's signal answers
+// ---------------------------------------------------------------------------
+
+/**
+ * The cache of signal answers is read from the pages' sources like the adoption above, and for the same reason: mounting a
+ * page loads a dozen endpoints. A form here is a floor, not a proof: what the cache answers, and when it asks again, is
+ * pinned by `signalResultCache.test.ts` and the generation cases of the stores; what a page shows by its E2E.
+ *
+ * The three helpers wrap `pageBusy.track(` for the triggers a cache hit can answer without a request: a busy token that
+ * opened for a load that then asked nothing is a spinner on an idle page. A refresh, a first load and a retry always ask:
+ * they keep `pageBusy.track(` as it is.
+ */
+const TRACK_HELPERS = ['trackChartLoad', 'trackComparisonLoad', 'trackChartAndComparison'] as const;
+
+const N64_PAGES = [
+    {
+        page: 'asset detail',
+        path: DETAIL_PAGES[0][1],
+        cache: 'assetChartAnswers',
+        functions: ['assetChartAnswerKey', 'assetChartAnswerForCache'],
+        helped: ['asset-mode', 'asset-calendar-window', 'asset-period', 'asset-currency', 'asset-signals', 'asset-comparison'],
+        forced: ['asset-refresh', 'asset-first-load', 'asset-signals-retry'],
+    },
+    {
+        page: 'FX detail',
+        path: DETAIL_PAGES[1][1],
+        cache: 'fxSignalAnswers',
+        functions: [],
+        helped: ['fx-detail-period', 'fx-detail-signals', 'fx-detail-comparison', 'fx-detail-orientation'],
+        forced: ['fx-detail-refresh', 'fx-detail-first-load', 'fx-detail-signals-retry'],
+    },
+] as const;
+
+/** Whether `code` calls `object.method(`: the name itself, not `other.object.method(` nor a longer name; a line break before the dot is allowed. */
+const callsMethodOf = (code: string, object: string, method: string): boolean => new RegExp(`(?<![\\w$.])${object}\\s*\\.\\s*${method}\\s*\\(`).test(code);
+
+/** Whether `code` reads a `.generation` of something: not `sessionGeneration`, not `.generations`. */
+const readsGeneration = (code: string): boolean => /\.\s*generation\b/.test(code);
+
+/** Whether `code` declares `function name(`, async or not. */
+const declaresFunction = (code: string, name: string): boolean => new RegExp(`\\bfunction\\s+${name}\\s*\\(`).test(code);
+
+/** Whether `label` is the first argument of `pageBusy.track(`, a line break between the parts allowed as `void pageBusy\n.track(` writes it. */
+const trackedDirectly = (code: string, label: string): boolean => new RegExp(`(?<![\\w$.])pageBusy\\s*\\.\\s*track\\s*\\(\\s*['"]${label}['"]`).test(code);
+
+/** Whether `label` is the first argument of a call of one of the three helpers. */
+const trackedByHelper = (code: string, label: string): boolean => new RegExp(`(?<![\\w$.])(?:${TRACK_HELPERS.join('|')})\\s*\\(\\s*['"]${label}['"]`).test(code);
+
+/** What keeps a page from asking and filling its cache, keying it, and filing an answer under the generations of its stores. */
+function cacheWiringProblems(source: string, cache: string, functions: readonly string[]): string[] {
+    const code = withoutComments(source);
+    const problems: string[] = [];
+    for (const method of ['get', 'set']) {
+        if (!callsMethodOf(code, cache, method)) problems.push(`${cache}.${method}( is never called`);
+    }
+    for (const name of functions) {
+        if (!callsFunction(code, name)) problems.push(`${name}( is never called`);
+    }
+    if (!readsGeneration(code)) problems.push('no store `.generation` is read: an answer cannot be filed with the generations of the stores it was drawn over');
+    return problems;
+}
+
+/** What keeps a page from the three helpers that open a busy token only for a load that asks. */
+function helperDeclarationProblems(source: string): string[] {
+    const code = withoutComments(source);
+    return TRACK_HELPERS.filter((name) => !declaresFunction(code, name)).map((name) => `function ${name}( is not declared`);
+}
+
+/** What keeps the triggers a cache hit may answer on `pageBusy.track(`, or off the helpers. */
+function triggerProblems(source: string, labels: readonly string[]): string[] {
+    const code = withoutComments(source);
+    return labels.flatMap((label) => [...(trackedDirectly(code, label) ? [`'${label}' is still the first argument of pageBusy.track(`] : []), ...(trackedByHelper(code, label) ? [] : [`'${label}' is not the first argument of ${TRACK_HELPERS.join('( nor ')}(`])]);
+}
+
+/** What takes a forced or first load off `pageBusy.track(`. */
+function forcedLoadProblems(source: string, labels: readonly string[]): string[] {
+    const code = withoutComments(source);
+    return labels.filter((label) => !trackedDirectly(code, label)).map((label) => `'${label}' is no longer the first argument of pageBusy.track(`);
+}
+
+/** The finding list as the failure message gives it: the rule, how many, then each one. */
+const listedN64 = (page: string, what: string, problems: readonly string[]): string => ['', `The ${page} page ${what} (N64). ${problems.length} finding(s):`, '', ...problems, ''].join('\n  ');
+
+describe('N64 wiring, read from the two detail pages’ sources', () => {
+    it.each(N64_PAGES)('the $page page asks its cache of signal answers, fills it, and reads a store generation', ({page, path, cache, functions}) => {
+        const problems = cacheWiringProblems(readFileSync(path, 'utf8'), cache, functions);
+
+        expect(problems, listedN64(page, `does not use the cache of signal answers: ask ${cache}.get( before the request, fill it with ${cache}.set( after, and file the answer under the generations of the price stores it was drawn over`, problems)).toEqual([]);
+    });
+
+    it.each(N64_PAGES)('the $page page declares trackChartLoad, trackComparisonLoad and trackChartAndComparison', ({page, path}) => {
+        const problems = helperDeclarationProblems(readFileSync(path, 'utf8'));
+
+        expect(problems, listedN64(page, 'has no helper that opens a busy token only for a load that asks the backend: declare the three of them as functions of the page', problems)).toEqual([]);
+    });
+
+    it.each(N64_PAGES)('the $page page starts the loads a cache hit may answer through the three helpers, no longer straight on pageBusy.track(', ({page, path, helped}) => {
+        const problems = triggerProblems(readFileSync(path, 'utf8'), helped);
+
+        expect(problems, listedN64(page, 'still opens a busy token for loads that may be answered from the cache: pass each of these triggers to trackChartLoad(, trackComparisonLoad( or trackChartAndComparison( as the first argument', problems)).toEqual([]);
+    });
+
+    it.each(N64_PAGES)('the $page page keeps the forced and first loads on pageBusy.track(: they always ask', ({page, path, forced}) => {
+        const problems = forcedLoadProblems(readFileSync(path, 'utf8'), forced);
+
+        expect(problems, listedN64(page, 'moved a load that always asks off pageBusy.track(: a refresh, a first load and a retry must open their token whether or not a cache could answer', problems)).toEqual([]);
+    });
+
+    describe('the forms read what they claim (controls)', () => {
+        const ASSET_FUNCTIONS = ['assetChartAnswerKey', 'assetChartAnswerForCache'];
+        const WIRED = ['const key = assetChartAnswerKey(body);', 'const hit = assetChartAnswers.get(key, [priceStore.generation]);', 'assetChartAnswers.set(key, [priceStore.generation], assetChartAnswerForCache(answer));'].join('\n');
+        const HELPERS = ['function trackChartLoad(label, work) {}', 'async function trackComparisonLoad(label, work) {}', 'function trackChartAndComparison(label, work) {}'].join('\n');
+
+        it('pass a page that keys, asks, fills and reads a generation, however the calls are laid out', () => {
+            expect(cacheWiringProblems(WIRED, 'assetChartAnswers', ASSET_FUNCTIONS)).toEqual([]);
+            expect(cacheWiringProblems(WIRED.replace('assetChartAnswers.get(', 'assetChartAnswers\n    .get('), 'assetChartAnswers', ASSET_FUNCTIONS), 'a line break before the dot').toEqual([]);
+            expect(cacheWiringProblems(WIRED.replaceAll('priceStore.generation', 'priceStore?.generation'), 'assetChartAnswers', ASSET_FUNCTIONS), 'an optional chain').toEqual([]);
+            expect(cacheWiringProblems('fxSignalAnswers.get(key, gens);\nfxSignalAnswers.set(key, gens, results);\nconst gens = [store.generation];', 'fxSignalAnswers', [])).toEqual([]);
+            expect(helperDeclarationProblems(HELPERS)).toEqual([]);
+        });
+
+        it('fail a call only in a comment, on another object, or of another method, and a generation of another name', () => {
+            expect(cacheWiringProblems(WIRED.replace('const hit = assetChartAnswers.get(key,', '// const hit = assetChartAnswers.get(key,\nconst hit = lookup(key,'), 'assetChartAnswers', ASSET_FUNCTIONS)).toEqual(['assetChartAnswers.get( is never called']);
+            expect(cacheWiringProblems(WIRED.replace('assetChartAnswers.get(', 'other.assetChartAnswers.get('), 'assetChartAnswers', ASSET_FUNCTIONS)).toEqual(['assetChartAnswers.get( is never called']);
+            expect(cacheWiringProblems(WIRED.replace('assetChartAnswers.get(', 'assetChartAnswers.getAll('), 'assetChartAnswers', ASSET_FUNCTIONS)).toEqual(['assetChartAnswers.get( is never called']);
+            expect(cacheWiringProblems(WIRED.replace('assetChartAnswers.set(', 'myassetChartAnswers.set('), 'assetChartAnswers', ASSET_FUNCTIONS)).toEqual(['assetChartAnswers.set( is never called']);
+            expect(cacheWiringProblems(WIRED.replace('assetChartAnswerKey(body)', '/* assetChartAnswerKey(body) */ JSON.stringify(body)'), 'assetChartAnswers', ASSET_FUNCTIONS)).toEqual(['assetChartAnswerKey( is never called']);
+            expect(cacheWiringProblems(WIRED.replace('assetChartAnswerForCache(answer)', 'other.assetChartAnswerForCache(answer)'), 'assetChartAnswers', ASSET_FUNCTIONS)).toEqual(['assetChartAnswerForCache( is never called']);
+            expect(cacheWiringProblems(WIRED.replaceAll('priceStore.generation', 'sessionGeneration'), 'assetChartAnswers', ASSET_FUNCTIONS), 'a name that merely ends in Generation').toHaveLength(1);
+            expect(cacheWiringProblems(WIRED.replaceAll('priceStore.generation', 'priceStore.generations'), 'assetChartAnswers', ASSET_FUNCTIONS), 'a longer property').toHaveLength(1);
+            expect(cacheWiringProblems(WIRED.replaceAll('priceStore.generation', '/* priceStore.generation */ 0'), 'assetChartAnswers', ASSET_FUNCTIONS), 'a read in a comment').toHaveLength(1);
+        });
+
+        it('fail a helper that is not declared as a function of its own name', () => {
+            expect(helperDeclarationProblems(HELPERS.replace('function trackChartLoad(', 'const trackChartLoad = ('))).toEqual(['function trackChartLoad( is not declared']);
+            expect(helperDeclarationProblems(HELPERS.replace('function trackChartAndComparison(', 'function trackChartAndComparisonNow(')), 'a longer name').toEqual(['function trackChartAndComparison( is not declared']);
+            expect(helperDeclarationProblems(HELPERS.replace('function trackChartLoad(label, work) {}', '// function trackChartLoad(label, work) {}')), 'a comment').toEqual(['function trackChartLoad( is not declared']);
+            expect(helperDeclarationProblems('')).toHaveLength(3);
+        });
+
+        it('pass a trigger that is the first argument of a helper, in either quote and over several lines', () => {
+            const code = ["trackChartLoad('asset-period', () => load());", "trackComparisonLoad(\n    'asset-comparison',\n    () => compare(),\n);", 'void trackChartAndComparison("asset-mode", () => both());'].join('\n');
+
+            expect(triggerProblems(code, ['asset-period', 'asset-comparison', 'asset-mode'])).toEqual([]);
+        });
+
+        it('fail a trigger that is still on pageBusy.track(, one in a comment, one that is not the first argument, and one that is nowhere', () => {
+            const direct = "void pageBusy.track('asset-period', () => load());";
+            expect(triggerProblems(direct, ['asset-period'])).toEqual(["'asset-period' is still the first argument of pageBusy.track(", "'asset-period' is not the first argument of trackChartLoad( nor trackComparisonLoad( nor trackChartAndComparison("]);
+
+            const broken = "void pageBusy\n    .track(\n        'asset-period',\n        () => load(),\n    );";
+            expect(triggerProblems(broken, ['asset-period']), 'a call over several lines is still the direct form').toHaveLength(2);
+
+            const both = "void pageBusy.track('asset-period', () => a());\ntrackChartLoad('asset-period', () => b());";
+            expect(triggerProblems(both, ['asset-period']), 'one of each: the direct one is the finding').toEqual(["'asset-period' is still the first argument of pageBusy.track("]);
+
+            expect(triggerProblems("// trackChartLoad('asset-period', () => load());", ['asset-period']), 'a comment is no call').toHaveLength(1);
+            expect(triggerProblems("trackChartLoad(load, 'asset-period');", ['asset-period']), 'the label as the second argument is not the trigger').toHaveLength(1);
+            expect(triggerProblems("other.trackChartLoad('asset-period', load);", ['asset-period']), 'a method of something else is no call of the helper').toHaveLength(1);
+            expect(triggerProblems("trackChartLoad('asset-period-x', load);", ['asset-period']), 'a longer label is another trigger').toHaveLength(1);
+        });
+
+        it('pass a forced load that is the first argument of pageBusy.track(, even over several lines', () => {
+            const code = ["onrefresh={() => void pageBusy.track('asset-refresh', () => handleRefresh())}", "await pageBusy\n    .track(\n        'asset-first-load',\n        () => reloadPage(),\n    );"].join('\n');
+
+            expect(forcedLoadProblems(code, ['asset-refresh', 'asset-first-load'])).toEqual([]);
+        });
+
+        it('fail a forced load moved to a helper, one in a comment, and one that is nowhere', () => {
+            expect(forcedLoadProblems("trackChartLoad('asset-refresh', () => handleRefresh());", ['asset-refresh'])).toEqual(["'asset-refresh' is no longer the first argument of pageBusy.track("]);
+            expect(forcedLoadProblems("// pageBusy.track('asset-refresh', () => handleRefresh());", ['asset-refresh']), 'a comment is no call').toHaveLength(1);
+            expect(forcedLoadProblems("other.pageBusy.track('asset-refresh', () => handleRefresh());", ['asset-refresh']), 'another object’s pageBusy is not the page’s').toHaveLength(1);
+            expect(forcedLoadProblems('', ['asset-refresh', 'asset-first-load'])).toHaveLength(2);
         });
     });
 });
