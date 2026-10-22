@@ -320,6 +320,7 @@
         <div class="flex items-center gap-0.5">
             <button
                 class="p-1.5 rounded-md hover:bg-lf-neutral text-lf-muted hover:text-lf-secondary transition-colors"
+                data-testid="asset-card-settings"
                 onclick={(e) => {
                     stop(e);
                     onsettings?.(asset);
