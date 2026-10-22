@@ -15,6 +15,7 @@ from backend.app.api.v1 import (
     email,
     fx,
     panel,
+    pdf_fonts,
     plugin_settings,
     portfolio_api,
     risk,
@@ -45,6 +46,7 @@ router.include_router(settings.router)  # Settings
 router.include_router(plugin_settings.router)  # Plugin settings (/settings/plugins)
 router.include_router(system.router)  # System info
 router.include_router(uploads.router)  # File uploads
+router.include_router(pdf_fonts.router)  # The PDF viewer's CJK fonts, fetched once and served by the instance (H-55)
 router.include_router(users.router)  # User search
 router.include_router(email.router)  # Email: state and test email (admin)
 router.include_router(security.router)  # Security: the checks of the «Security» tab (admin)

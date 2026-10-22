@@ -314,8 +314,10 @@ def cmd_server(args):
     print(f" ├── 🏠 {Colors.YELLOW}Frontend:  http://localhost:{port}/{Colors.NC}")
     if _frontend_build_has_designer_lab():
         print(f" ├── 🎨 {Colors.YELLOW}Designer Lab: http://localhost:{port}/designer-lab{Colors.NC}")
-    print(f" ├── 💻 {Colors.YELLOW}API Redoc: http://localhost:{port}/api/v1/redoc{Colors.NC}")
-    print(f" ├── 🚀 {Colors.YELLOW}API Docs:  http://localhost:{port}/api/v1/docs{Colors.NC}")
+    # The API's documentation exists only with --debug or in test mode (H-55 R5): no link to a page that answers 404
+    if debug_mode or test_mode:
+        print(f" ├── 💻 {Colors.YELLOW}API Redoc: http://localhost:{port}/api/v1/redoc{Colors.NC}")
+        print(f" ├── 🚀 {Colors.YELLOW}API Docs:  http://localhost:{port}/api/v1/docs{Colors.NC}")
     print(f" └── 📚 {Colors.YELLOW}User Doc:  http://localhost:{port}/mkdocs/{Colors.NC}")
     print()
 
@@ -346,6 +348,8 @@ def cmd_server(args):
         env["LIBREFOLIO_TEST_MODE"] = "0"
     if debug_mode:
         env["LIBREFOLIO_LOG_LEVEL"] = "DEBUG"
+        # The API's documentation, off on every other instance (H-55 R5)
+        env["LIBREFOLIO_API_DOCS"] = "1"
     if no_scheduler:
         env["LIBREFOLIO_NO_SCHEDULER"] = "1"
     # Generate a shared JWT secret for all workers.
