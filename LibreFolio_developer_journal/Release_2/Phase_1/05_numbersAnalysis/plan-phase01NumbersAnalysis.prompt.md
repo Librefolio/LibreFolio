@@ -9314,3 +9314,123 @@ due copie in linea di `buildSyncTargets`). TC-23 sta nella sezione T del backlog
 **Consegna C (22/10 ~02:30)**: CHECKPOINT READY (C), poi FROZEN. Nessun residuo nuovo; J-68 resta aperta (backend),
 con la nota del 22/10. E2E proposti al coordinatore: `front-broker detail` (il clic sul primo segmento,
 `brokers-detail.spec.ts:409`), ed eventualmente un caso nuovo che passi sopra `lot-gantt-marker-*`.
+
+#### Ondata 4 (22/10/2026) — J-68, J-71, R1 (base `c042f2481`; corsia 6190, `/tmp/librefolio-r13-j`)
+
+> Coordinatore (22/10): via a J-68 con la cura in due righe, a J-71, e R1 rimandata. Prima i rossi. Checkpoint separati.
+> Analisi del primo turno: `side-session-notes/…/J-analisi-turno1.md`.
+
+1. ✅ 22/10 — **R1 verificata: entra nell'ondata 5, dopo X-Q1.** (Correzione del coordinatore, 22/10: la prima stesura la rimandava «dopo la 1.3»; il developer tiene nella 1.3 le formule veloci, MF-FV e X-Q1.)
+   > **Note implementazione**: nessun codice.
+   > - Q1 di X (i prezzi per osservazioni) non esiste: `price_query._build_backward_filled_series` (`assets/price_query.py:189`)
+   >   è ancora la serie densa; nessun commit di Q1 nel log; nessun simbolo «per osservazioni» nel codice.
+   > - R1 legge la serie che Q1 produce, quindi parte dopo X-Q1. La prima stesura di questa nota lo diceva fuori dalla 1.3,
+   >   dal consiglio della domanda 12 di `PIANO-ondata4.md`; il developer ha deciso il contrario: le formule veloci (MF-FV e
+   >   X-Q1) restano nella 1.3, e R1 va nell'ondata 5.
+   > - Casi di test pronti: 0. Gli scenari di parità sono 7, descritti in «Analisi breve di R1 e L1» (festivi, prezzi
+   >   portati, date comuni, buchi, split, esteri, replay dello stress `3.0.1`), nessuno scritto.
+   > - Il pavimento SEC8-1b non si toglie finché R1 non c'è (i test che lo fissano: `test_risk_replay_range_bounds.py`
+   >   r2/r5/r6/r7, `test_range_ceiling.py`).
+   > - Da riprendere nell'ondata 5, dopo X-Q1: ~3 h più la parità; con X va concordata la lettura nelle date comuni
+   >   (l'ultimo prezzo ≤ d al cambio di d).
+
+2. ✅ 22/10 — **J-68, i rossi** (prima della cura).
+   > **Note implementazione**:
+   > - `test_lots_analysis_pure.py`, classe nuova `TestTheTransferRowsOfASameDayMove` (6 casi, tramite `_build_lot_event_rows`
+   >   con un replay a doppio): **4 rossi** (una partenza e un arrivo che nominano i due broker; la partenza prima
+   >   dell'arrivo; quantità e prezzo del frammento; due righe per ogni lotto della coppia) e **2 guardie verdi** (un
+   >   trasferimento di giorni tiene le sue due righe; una coppia mai classificata, la gamba al bordo, tiene la sua riga sola
+   >   senza inventare l'origine). Motivi letti nel log (`ondata4/J-j68-red-2.log`): la sola riga è ARRIVE, senza origine.
+   > - `test_lots_closure_broker.py::test_s29_c4_…[same-day]`: la guardia che fissava la riga unica diventa il rosso
+   >   (`[("TRANSFER_ARRIVE", d, B, A, B), ("TRANSFER_DEPART", d, None, A, B)]`); `[in-transit]` resta verde. Rosso per il
+   >   motivo giusto (`J-j68-red-3.log`: 1 failed, 1 passed). Il test è stato rinominato (`…_name_their_brokers`).
+   > **⚠️ Fuori pista**: i due eventi della coppia hanno lo stesso `transaction_id` (l'id della coppia) e lo stesso giorno;
+   > la chiave di ordinamento di `_build_lot_event_rows` cadeva sul nome del tipo e metteva ARRIVE prima di DEPART. Lo Storico
+   > ordina in modo stabile per data e id, quindi leggeva l'arrivo prima della partenza: rosso proprio, e cura nella chiave.
+3. ✅ 22/10 — **J-68, la cura** (solo `lots_analysis_service.py`; `financial_math/` non toccato).
+   > **Note implementazione**:
+   > - `_transfer_brokers(classified_events)`: `pair_id → (source, destination)` dagli eventi `TRANSFER_DEPART`; passato a
+   >   `_build_transfer_rows(..., transfer_brokers=…)` (parametro con default vuoto).
+   > - Ramo `/to:` senza transito: se la coppia è nella mappa scrive TRANSFER_DEPART (`broker_id=None`, origine e
+   >   destinazione, `fragment_id`/quantità/prezzo del frammento d'arrivo) e TRANSFER_ARRIVE (`broker_id` invariato, in più
+   >   origine e destinazione). Coppia assente: come prima. Il controllo del frammento di transito usa un insieme calcolato
+   >   una volta, non più un ciclo per frammento.
+   > - Chiave di ordinamento: la partenza prima dell'arrivo.
+   > - Verdi: pure **253 passed** (247 + 6); `test_lots_closure_broker.py` **5 passed**; `lots_change_days_parity`,
+   >   `lots_transfer_*`, `lots_analysis_service`, `lots_fx_steps_parity`, `lots_closure_*`, `lots_market_*`, `lots_failed_*`,
+   >   `lots_performance_*` **546 passed** (`roi-fifo-utils`, corsia 6190; `J-j68-green-lots.log`). `api sync`: nessuna
+   >   differenza tracciata (lo schema non cambia).
+4. ✅ 22/10 — **J-68, guardie del frontend e documentazione.**
+   > **Note implementazione**:
+   > - `LotCustodyModal.test.ts`: la partenza nomina l'origine, l'arrivo la destinazione, la partenza prima (guardia verde,
+   >   il modale non cambia). `lotGanttChartHelpers.test.ts`: due righe nello stesso giorno leggono entrambe «Da A / A B»;
+   >   i due casi che parlavano di «same-day arrival» ora dicono «arrival row without source or destination» (restano come
+   >   fixture di una gamba senza origine). Commenti di `lotGanttChartHelpers.ts` allineati. Vitest: 3 file **259 passed**.
+   > - Documentazione: `developer/backend/transactions/lots_analysis_service.md` (sezione nuova «A Transfer That Leaves
+   >   and Arrives the Same Day»), `developer/frontend/components/features/lots-analysis.md` (la frase del tooltip),
+   >   `user/dashboard/positions.en.md` (una frase sullo Storico). **Nessun timbro di traduzione**: debito di una frase in
+   >   `positions.{it,fr,es}.md`.
+   > - Nessun E2E in `frontend/e2e` legge le righe di trasferimento né i marcatori `lot-gantt-marker-*` con un
+   >   trasferimento nello stesso giorno: nessuna corsa E2E proposta.
+5. ✅ 22/10 — **J-71, rossi e cura.**
+   > **Note implementazione**:
+   > - Rossi: `RiskPanelHeader.test.ts` (spia su `buildSyncTargets` + bottone abilitato/disabilitato) e
+   >   `riskAnalysisHelpers.test.ts` (guardia di sorgente sul pannello): **3 rossi** per il motivo giusto, 115 verdi attorno
+   >   (`J-j71-red.log`).
+   > - Cura: `RiskPanelHeader.svelte` e `RiskAnalysisPanel.svelte` usano `syncTargets = $derived.by(…buildSyncTargets(…))`
+   >   al posto di `syncAssets`/`syncFxPairs`; commenti di `syncTargets.ts` e `AssetSetRiskPanel.svelte` aggiornati.
+   >   Vitest dei 2 file: **118 passed**.
+   > **⚠️ Fuori pista**: `RiskAnalysisPanel` non ordinava gli asset per id (la funzione sì): nella modale di sync l'ordine
+   > passa a quello per id. Nessun dato cambia.
+
+#### Ondata 4, secondo giro (22/10/2026) — J-62 con T-U4, B12, J-8 (base `93a8625df`; corsia 6190)
+
+> Coordinatore (22/10): via ai tre lotti nell'ordine J-62+T-U4, B12, J-8. Un checkpoint per lotto. Analisi:
+> `side-session-notes/…/J-analisi-turno2.md`.
+
+6. ✅ 22/10 — **J-62 con T-U4 (R11).**
+   > **Note implementazione**:
+   > - J-62 e T-U4 sono lo stesso lotto. La parità non mancava: `test_risk_metrics_oracle.py`, blocco (g) «M1», c'è dal
+   >   18/09 (`f5fe80d44`) e confronta i due vettoriali con il loop di riferimento. Restava la parte 2: le due copie del
+   >   validatore in `signals/risk_adapters.py` (`:191-193`, `:222-224`).
+   > - Rossi (`J-j62-red.log`): `test_the_vectorised_rolling_helpers_read_the_annualization_rule_of_the_house` (spia su
+   >   `risk_adapters.positive_annualization_factor`: volatilità e Sharpe) **2 rossi** (`AttributeError`: il modulo non
+   >   legge quel nome); la guardia `…refuse_a_bad_annualization_factor_as_the_loop_does` (0, −1, nan, inf, −inf, i due
+   >   percorsi, stesso messaggio) **5 verdi**.
+   > - Cura: `factor = positive_annualization_factor(annualization_factor)` al posto delle due copie, stesso punto di
+   >   prima (dopo il ritorno anticipato `observations < window`).
+   > - Verdi: oracolo + `test_risk_signal_plugins.py` + `test_layer_boundaries.py` **320 passed**;
+   >   `test_signal_plugin_matrix.py` **91 passed**; ruff e black puliti.
+   > **⚠️ Fuori pista**: l'ordine degli import del file di test è stato riordinato da `ruff --fix` (un `import … as` in testa).
+   > Altre due regole simili restano com'erano, con i loro contratti d'errore: `risk/quant/estimation.py:33` e
+   > `risk/analytic_helpers.py:75` (decisione del coordinatore implicita: lasciarle).
+7. ✅ 22/10 — **B12 (base `534c280c6`).**
+   > **Note implementazione**:
+   > - Rosso (`J-b12-red.log`), in `test_holding_window_service.py`, classe `TestAContributionWithoutAnEndDateStopsAtToday`: BUY 10
+   >   venti giorni fa, SELL 10 tra cinque giorni, nessun `date_to`: la riga ha 10 unità oggi (precondizione verde) ma
+   >   `oldest_open_lot_date` è `None`, invece della data del BUY (la vendita futura consumava il lotto aperto). Guardia verde
+   >   prima e dopo: lo stesso con `date_to=today`.
+   > - Cura (una riga, `portfolio_service.py:1655`): `_get_transactions(broker_id, date_to=effective_end)`. Con una data
+   >   esplicita `effective_end` è quella data: nessun cambiamento per `get_report`.
+   > - Verdi: `holding_window`, `positions_contribution`, `test_portfolio_service`, `portfolio_cost_currency`, `native_cash`,
+   >   `single_flight`, `period_and_unit_costs`, `portfolio_contributions` **286 passed** (`roi-fifo-utils`, corsia 6190,
+   >   `J-b12-green.log`); ruff e black puliti.
+   > **⚠️ Fuori pista**: un `pipenv run` lanciato per errore da una cartella sbagliata ha creato un `Pipfile` vuoto in
+   > `salvataggi-worktrees-20261021/ondata4/`; l'ho tolto subito (nessun altro file toccato).
+8. ✅ 22/10 — **J-8 (base `407d019b1`).**
+   > **Note implementazione**:
+   > - Più semplice dell'analisi: i tre ingressi proposti sono uno solo. Ogni `./dev.py test` passa da `_cli._run_passes`
+   >   (lo dice la sua docstring), quindi il controllo sta lì, prima di `_run_exclusive_setups`, del backend condiviso e
+   >   del dispatch. Nessuna delle 23 righe `npx` toccata, nessuna lista di test toccata.
+   > - Rossi (`J-j8-red.log`, `test_test_server_preparation.py`, classi `TestTheRunnerChecksTheFrontendToolsFirst` e
+   >   `TestTheDeadCodeCheckNeedsKnip`): **10 rossi** (la funzione e l'elenco dei binari non esistono; per `front-user`,
+   >   `front-utility`, `front-portfolio`, `all-frontend` e `all` senza `node_modules` la corsa parte lo stesso; knip senza
+   >   installazione costruisce il catalogo) e **11 verdi** (controlli positivi con i binari presenti, una categoria
+   >   backend non chiede i binari, `--list` neppure, knip installato prosegue).
+   > - Cura: `FRONTEND_TEST_BINARIES` e `require_frontend_tools()` in `_frontend_common.py`; `_runs_frontend_tools()` e la
+   >   chiamata in `_cli._run_passes`; in `dev.py` il controllo di `knip` in `_run_knip_on_generated_catalogue`.
+   > - Verdi: `test_test_server_preparation.py` **112 passed** (91 + 21); con `test_test_runner_cli.py`,
+   >   `test_runtime_isolation.py`, `test_coverage_combine.py`, `test_dev_cli_db_path.py` **1262 passed, 4 skipped**
+   >   (`J-j8-green-runner.log`); ruff e black puliti. Sull'albero vero `require_frontend_tools()` dà `True`.
+   > **⚠️ Fuori pista**: `cmd_install` (`npx playwright install chromium`) non è guardata di proposito: gira dopo il suo
+   > `npm ci`. Non ho lanciato una corsa `front-*` vera (avvierebbe backend e build): i test coprono il percorso.

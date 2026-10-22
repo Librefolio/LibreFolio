@@ -22,6 +22,7 @@ from backend.app.schemas.signals import (
     SignalWarning,
     SignalWarningCode,
 )
+from backend.app.services.financial_math.returns import positive_annualization_factor
 from backend.app.services.risk.metrics import ZERO_TOLERANCE, daily_risk_free_rate
 from backend.app.services.signals.base import SignalUnavailableError
 
@@ -188,9 +189,7 @@ def rolling_annualized_volatility_values(
     if observations < window:
         return [None] * (observations + 1), 0
     _require_dispersion_window(window)
-    factor = float(annualization_factor)
-    if factor <= 0 or not math.isfinite(factor):
-        raise ValueError("annualization_factor must be finite and positive")
+    factor = positive_annualization_factor(annualization_factor)
     series = pd.Series(returns, dtype="float64")
     volatility = series.rolling(window).std(ddof=1) * math.sqrt(factor) * scale
     return _assemble_rolling_values(
@@ -219,9 +218,7 @@ def rolling_annualized_sharpe_values(
     if observations < window:
         return [None] * (observations + 1), 0
     _require_dispersion_window(window)
-    factor = float(annualization_factor)
-    if factor <= 0 or not math.isfinite(factor):
-        raise ValueError("annualization_factor must be finite and positive")
+    factor = positive_annualization_factor(annualization_factor)
     period_risk_free_rate = daily_risk_free_rate(annual_risk_free_rate, factor)
     series = pd.Series(returns, dtype="float64")
     deviation = series.rolling(window).std(ddof=1)

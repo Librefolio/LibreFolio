@@ -23,6 +23,21 @@ from ._common import (
     print_warning,
 )
 
+#: The frontend tools the runner's actions call: Vitest, and Playwright (`npx vitest`, `npx playwright test`, `npm run test:e2e`).
+FRONTEND_TEST_BINARIES = ("vitest", "playwright")
+
+
+def require_frontend_tools() -> bool:
+    """True when ``frontend/node_modules/.bin`` holds the tools the frontend actions call; otherwise say what is missing.
+
+    The actions call ``npx`` directly, and without ``node_modules`` ``npx`` does not fail: it fetches whatever version the
+    registry serves instead of the one the lock pins (J-8). The check is dev.py's own, with its message (and ``npm ci``).
+    """
+    from dev import require_frontend_dependencies  # noqa: PLC0415 — avoid dev.py import cycle
+
+    return require_frontend_dependencies(FRONTEND_TEST_BINARIES, purpose="the frontend tests") == 0
+
+
 # Setup already performed in the current scope. A scope is one run of one
 # category: `reset_setup_scope()` opens it, and the first `_ensure_*` call
 # inside it does the real work while the rest find it warm.

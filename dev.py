@@ -2133,6 +2133,9 @@ def _extract_json(text):
 
 def _run_knip_on_generated_catalogue(frontend_dir, exclude):
     """knip resolves the imports of the generated src/lib/i18n/<lang>.json: write them first, or it reports false findings."""
+    # The check calls `npx knip`: without it installed npx would fetch an unpinned one (J-8). A stop counts as a finding.
+    if require_frontend_dependencies(("knip",), purpose="the frontend dead-code check") != 0:
+        return True
     if i18n_catalog.build(quiet=True) != 0:
         print_error("  translation catalogue could not be generated - knip skipped")
         return True

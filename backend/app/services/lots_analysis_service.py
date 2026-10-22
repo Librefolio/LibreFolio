@@ -84,6 +84,7 @@ _CUSTODY_KINDS = {
 
 _NO_BOUNDARY_LEGS: Mapping[int, BoundaryLeg] = MappingProxyType({})
 _NO_FRAGMENT_BROKERS: Mapping[str, int | None] = MappingProxyType({})
+_NO_TRANSFER_BROKERS: Mapping[int, tuple[int | None, int | None]] = MappingProxyType({})
 
 
 class LotsAnalysisService:
@@ -986,10 +987,12 @@ class LotsAnalysisService:
         selected = set(selected_ids)
         rows: list[LotTimelineEventSchema] = []
         rows.extend(self._build_opening_and_split_rows(engine_result, selected, fx_resolver, lots_by_id, boundary_legs))
-        rows.extend(self._build_transfer_rows(engine_result.fragment_intervals, selected, lots_by_id, fx_resolver))
+        rows.extend(self._build_transfer_rows(engine_result.fragment_intervals, selected, lots_by_id, fx_resolver, transfer_brokers=_transfer_brokers(engine_result.classified_events)))
         fragment_brokers = {fragment.fragment_id: fragment.broker_id for fragment in engine_result.fragment_intervals}
         rows.extend(self._build_closure_rows(engine_result.closures, selected, lots_by_id, fx_resolver, boundary_legs, fragment_brokers=fragment_brokers))
-        return sorted(rows, key=lambda row: (row.date, row.lot_id, row.transaction_id, row.kind))
+        # A departure reads before the arrival of a move that takes one day (J-68): both rows carry the pair id as their
+        # transaction id, so the name of the kind would put the arrival first.
+        return sorted(rows, key=lambda row: (row.date, row.lot_id, row.transaction_id, row.kind != LotTimelineEventKind.TRANSFER_DEPART, row.kind))
 
     def _build_opening_and_split_rows(
         self,
@@ -1063,8 +1066,20 @@ class LotsAnalysisService:
         selected: set[int],
         lots_by_id: dict[int, FifoLot],
         fx_resolver: FxRateResolver,
+        *,
+        transfer_brokers: Mapping[int, tuple[int | None, int | None]] = _NO_TRANSFER_BROKERS,
     ) -> list[LotTimelineEventSchema]:
+        """The TRANSFER rows of the history, off the fragments of the replay.
+
+        A move that takes days leaves an IN_TRANSIT fragment, which names its source and destination: one departure row
+        and one arrival row. A move that leaves and arrives on one day leaves only its destination piece, which names
+        neither; the pair's brokers come from ``transfer_brokers`` (the engine's classified events, ``pair id`` →
+        (source, destination), J-68) and give it the same two rows, on that day. A piece whose pair is not in
+        ``transfer_brokers`` (a leg read at the scope's edge, whose partner sits outside it) keeps its one arrival row and
+        invents no origin.
+        """
         rows: list[LotTimelineEventSchema] = []
+        fragment_ids = {fragment.fragment_id for fragment in fragments}
         earliest_by_fragment: dict[str, FragmentInterval] = {}
         for fragment in fragments:
             previous = earliest_by_fragment.get(fragment.fragment_id)
@@ -1120,8 +1135,30 @@ class LotsAnalysisService:
                         ratio=None,
                     )
                 )
-            elif "/to:" in fragment_id and all(existing.fragment_id != f"lot:{fragment.lot_id}/transfer:{_parse_transfer_pair_id(fragment_id)}/transit" for existing in fragments):
+            elif "/to:" in fragment_id and f"lot:{fragment.lot_id}/transfer:{_parse_transfer_pair_id(fragment_id)}/transit" not in fragment_ids:
                 transfer_pair_id = _parse_transfer_pair_id(fragment_id)
+                source_broker_id, destination_broker_id = transfer_brokers.get(transfer_pair_id, (fragment.source_broker_id, fragment.destination_broker_id))
+                if transfer_pair_id in transfer_brokers:
+                    rows.append(
+                        LotTimelineEventSchema(
+                            lot_id=fragment.lot_id,
+                            date=fragment.start_date,
+                            kind=LotTimelineEventKind.TRANSFER_DEPART,
+                            transaction_id=transfer_pair_id,
+                            related_transaction_id=transfer_pair_id,
+                            broker_id=None,
+                            source_broker_id=source_broker_id,
+                            destination_broker_id=destination_broker_id,
+                            fragment_id=fragment.fragment_id,
+                            quantity=fragment.quantity,
+                            unit_price=converted_unit_price,
+                            open_unit_price=None,
+                            close_unit_price=None,
+                            realized_pnl=None,
+                            proceeds=None,
+                            ratio=None,
+                        )
+                    )
                 rows.append(
                     LotTimelineEventSchema(
                         lot_id=fragment.lot_id,
@@ -1130,8 +1167,8 @@ class LotsAnalysisService:
                         transaction_id=transfer_pair_id,
                         related_transaction_id=transfer_pair_id,
                         broker_id=fragment.broker_id,
-                        source_broker_id=fragment.source_broker_id,
-                        destination_broker_id=fragment.destination_broker_id,
+                        source_broker_id=source_broker_id,
+                        destination_broker_id=destination_broker_id,
                         fragment_id=fragment.fragment_id,
                         quantity=fragment.quantity,
                         unit_price=converted_unit_price,
@@ -1297,6 +1334,11 @@ def _boundary_direction(legs: Mapping[int, BoundaryLeg], transaction_id: int) ->
     """J-48: the direction of a TRANSFER leg read at the scope's edge, for its rows' label; None for any other row."""
     leg = legs.get(transaction_id)
     return leg.direction if leg is not None else None
+
+
+def _transfer_brokers(events: Sequence[FifoEvent]) -> dict[int, tuple[int | None, int | None]]:
+    """The brokers of each TRANSFER pair the replay classified: ``pair id`` → (source, destination) (J-68)."""
+    return {event.pair_id: (event.source_broker_id, event.destination_broker_id) for event in events if event.kind == "TRANSFER_DEPART" and event.pair_id is not None}
 
 
 def _parse_transfer_pair_id(fragment_id: str) -> int:

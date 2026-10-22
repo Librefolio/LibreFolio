@@ -157,9 +157,9 @@
     /**
      * R2-128 — the price and exchange-rate sync, scoped to the selection.
      *
-     * The same rule `RiskPanelHeader` applies on the single-scope pages, through
-     * the shared `buildSyncTargets`: the selection's prices, plus every configured
-     * pair that converts one of them into the target currency.
+     * The same rule `RiskPanelHeader` and `RiskAnalysisPanel` apply on the single-scope
+     * pages, through the shared `buildSyncTargets`: the selection's prices, plus every
+     * configured pair that converts one of them into the target currency.
      */
     let syncOpen = $state(false);
     let syncGeneration = $state(0);

@@ -34,11 +34,12 @@ from pydantic import ValidationError
 from riskfolio.src.AuxFunctions import numBins
 from scipy.stats import kurtosis as scipy_excess_kurtosis
 
+import backend.app.services.signals.risk_adapters as risk_adapters_module
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.portfolio import DataQualityReport
 from backend.app.schemas.risk import RiskKpiOutput, RiskMode, RiskReturnBasis, RiskScopeKind
 from backend.app.schemas.signals import SignalWarningCode
-from backend.app.services.financial_math.returns import calendar_days_to_observations
+from backend.app.services.financial_math.returns import calendar_days_to_observations, positive_annualization_factor
 from backend.app.services.risk.base import RiskExecutionContext
 from backend.app.services.risk.metrics import (
     ZERO_TOLERANCE,
@@ -2493,6 +2494,56 @@ def test_a_window_of_one_refuses_a_dispersion_statistic_on_both_paths():
     # A series too short to hold even one window still short-circuits instead of raising,
     # on both paths: the loop never enters its body, so it never reaches the refusal.
     _assert_rolling_paths_agree(rolling_annualized_sharpe_values([], 1, _ANNUALIZATION), _loop_annualized_sharpe([], 1, _ANNUALIZATION), observations=0, label="annualized sharpe, empty series, window=1")
+
+
+_BAD_ANNUALIZATION_FACTORS = pytest.param(0.0, id="zero"), pytest.param(-1.0, id="negative"), pytest.param(float("nan"), id="nan"), pytest.param(float("inf"), id="inf"), pytest.param(float("-inf"), id="minus-inf")
+
+
+@pytest.mark.parametrize("factor", _BAD_ANNUALIZATION_FACTORS)
+def test_the_vectorised_rolling_helpers_refuse_a_bad_annualization_factor_as_the_loop_does(factor):
+    """GUARD, green before and after J-62: a factor that is not finite and positive is refused, on both paths, with the house's message.
+
+    The loop reaches ``positive_annualization_factor`` through ``annualized_volatility`` / ``annualized_sharpe`` on its first full
+    window; the vectorised helpers refuse it before the pandas pass. A window too short to hold one is another matter (pinned
+    above): neither path reaches the factor.
+    """
+    returns = _rolling_sample(5)[:12]
+    for label, loop_call, vectorised_call in (
+        ("annualized volatility", lambda: _loop_annualized_volatility(returns, 5, factor, scale=100.0), lambda: rolling_annualized_volatility_values(returns, 5, factor, scale=100.0)),
+        ("annualized sharpe", lambda: _loop_annualized_sharpe(returns, 5, factor), lambda: rolling_annualized_sharpe_values(returns, 5, factor)),
+    ):
+        with pytest.raises(ValueError) as loop_error:
+            loop_call()
+        with pytest.raises(ValueError) as vectorised_error:
+            vectorised_call()
+        assert str(vectorised_error.value) == str(loop_error.value) == "annualization_factor must be finite and positive", label
+
+
+@pytest.mark.parametrize(
+    ("label", "call"),
+    [
+        pytest.param("annualized volatility", lambda returns, factor: rolling_annualized_volatility_values(returns, 5, factor, scale=100.0), id="volatility"),
+        pytest.param("annualized sharpe", lambda returns, factor: rolling_annualized_sharpe_values(returns, 5, factor), id="sharpe"),
+    ],
+)
+def test_the_vectorised_rolling_helpers_read_the_annualization_rule_of_the_house(monkeypatch, label, call):
+    """J-62 / T-U4 (R11): the rule «the factor is finite and positive» has one home, ``financial_math.returns``.
+
+    The two helpers each wrote it again (``risk_adapters.py:191-193`` and ``:222-224``). Reading ``risk_adapters`` for the house's
+    function and replacing it by a spy shows whether they ask: each must call it once with the factor it was given, and the
+    values stay what the loop gives (the parity blocks above). RED before the cure: the module has no such name to replace.
+    """
+    asked: list[float] = []
+
+    def spy(annualization_factor: float) -> float:
+        asked.append(annualization_factor)
+        return positive_annualization_factor(annualization_factor)
+
+    monkeypatch.setattr(risk_adapters_module, "positive_annualization_factor", spy)
+
+    call(_rolling_sample(5)[:12], _ANNUALIZATION)
+
+    assert asked == [_ANNUALIZATION], f"{label} reads the house's rule once, with the factor it was given"
 
 
 def test_the_vectorised_rolling_beta_rejects_series_that_are_not_on_one_joint_calendar():

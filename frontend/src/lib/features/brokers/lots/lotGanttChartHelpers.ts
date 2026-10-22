@@ -348,7 +348,7 @@ export function ganttMarkerEvent(row: {kind: string; date: unknown; quantity?: u
 
 /**
  * The broker rows of an event: «From A / To B» for a transfer between the user's brokers — the side a row does not
- * carry is left out, never guessed: a same-day transfer's arrival names only where it went (J-68) —, else the event's
+ * carry is left out, never guessed: an arrival row with no source names only where it went —, else the event's
  * broker.
  */
 function markerBrokerRows(event: GanttMarkerEvent, deps: GanttMarkerTooltipDeps): Array<{label: string; value: string}> {
