@@ -8,15 +8,15 @@ su una voce guarda prima il segno.
 
 | Segno | Cosa vuol dire | Voci |
 | --- | --- | --- |
-| 🌊 | **Buona idea, si fa.** «ondata 4, in corso» = già assegnata; «ondata 5» = nuova ondata dopo la 4; «ondata 6» = ondata nuova, nata da questa classifica. Tra parentesi il proprietario | 110 (7 in ondata 4, 20 in ondata 5, 83 in ondata 6) |
-| ✖️ | **Scartata** dal developer, con il motivo in una riga (lana caprina: pulizie senza effetto, casi mai visti, ottimizzazioni senza misura, bonifiche contro il principio «proteggere l'ingresso, niente bonifiche») | 125 |
+| 🌊 | **Buona idea, si fa.** «ondata 4, in corso» = già assegnata; «ondata 5» = nuova ondata dopo la 4; «ondata 6» = ondata nuova, nata da questa classifica. Tra parentesi il proprietario | 130 (8 in ondata 4, 20 in ondata 5, 102 in ondata 6) |
+| ✖️ | **Scartata** dal developer, con il motivo in una riga (lana caprina: pulizie senza effetto, casi mai visti, ottimizzazioni senza misura, bonifiche contro il principio «proteggere l'ingresso, niente bonifiche») | 131 |
 | ⏳ | **Aspetta**: la designer (programma colori), il giro finale della galleria (dopo la designer e il treno 10), un utente o una misura reale, oppure una decisione «dopo la 1.3» | 48 (20 designer, 9 giro finale della galleria, 10 utente/report/misura, 9 dopo la 1.3) |
 | 🌐 | **Debito di traduzione**: si salda nel giro di traduzione unico di fine release (solo su richiesta del developer, pipeline Aphra), dopo M-3 e M-11 | 15 (più 3 nuove dall'ondata 6: 32-2, W-B91, X-R63) |
-| ❓ | **Da raffinare**: serve una risposta del developer prima di decidere; le risposte arrivano dopo | 26 |
+| ❓ | **Da raffinare**: serve una risposta del developer prima di decidere. Il 22/10 sera il developer ha risposto a tutte e 26 | 0 |
 | ✅ | **Chiusa** (già in uso: chi chiude marca con data e commit). Il 22/10 il developer ha chiuso A-1 (comportamento voluto) | 1 nuova il 22/10 |
 | ⏭️ | **Rimandata alla 1.4** (già in uso, vedi `ATTIVITA_INIZIO_1.4.md`) | già presenti, non toccate |
 
-Controllo: 110 + 26 + 125 + 48 + 15 + 1 = 325. La classifica completa (ondate, proprietari, lotti, motivi) e il brief
+Controllo: 130 + 0 + 131 + 48 + 15 + 1 = 325. Le 26 voci «da raffinare» sono andate così: 20 🌊 (1 in ondata 4, 19 in ondata 6; 2 di loro si dividono, TC-5 e W-B63, con una parte scartata), 6 ✖️, 0 ❓. N68, decisa il 19/10, non ha una voce sua nel file: va in ondata 5 (X) e non è nel conto. La classifica completa (ondate, proprietari, lotti, motivi) e il brief
 dell'ondata 6 sono nella cartella del coordinatore della 1.3 (`BACKLOG-classifica-20261022.md`, `BRIEF-ondata6.md`).
 
 > **Aperto il 2026-10-11** dal coordinatore della Release 2, su proposta del developer (testuale): «materializzare in
@@ -671,16 +671,16 @@ debito di traduzione di F-5 (di M).
   prende prima da R poi da K, l'arrivo mette tutto in K («Approximate»). Le metà `linked_external_*` e le gambe normali
   non toccano K/R. Cambia solo la ripartizione dei BUY fra nuovo e reinvestito (`acquisition_funding`). Dettagli:
   idem, §14.
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  🌊 22/10: ondata 6 (proprietario MF), insieme a MF-J3 (è la stessa cosa): le gambe esterne di un trasferimento di cassa muovono i pool versato/generato (K/R) come un versamento/prelievo dall'esterno del perimetro
 - **B5 · Nel waterfall, una voce per i trasferimenti al valore di mercato** — basso; I, 10/10. Nelle viste filtrate
   (D2, D5) i titoli che entrano o escono dalla selezione sono capitale al valore di mercato, mentre i contributi
   spostano l'unrealized al costo (B8): la differenza, ∓(valore di mercato − costo), è il guadagno maturato presso
   l'altro broker e finisce nel residuo «Other». Da decidere con B8: se i contributi valutano il trasferimento al
   mercato, la voce può non servire. Dettagli: idem, §14.
   🌊 22/10: ondata 5 (proprietario MF)
-- **B6 · Coppie ADJUSTMENT coi flussi al valore di mercato** — basso; I, 10/10. Escluse da D4: restano capitale al
+- ~~**B6 · Coppie ADJUSTMENT coi flussi al valore di mercato**~~ — basso; I, 10/10. Escluse da D4: restano capitale al
   costo, e una coppia di più giorni è un intervallo «cash» a valore 0. Dettagli: idem, §14.
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  ✖️ 22/10: scartata (developer), motivo: invecchiata; le coppie di rettifiche collegate ora sono rifiutate dall'API (commit `0af0f3593`)
 - ~~**B7 · Uno split durante il viaggio**~~ — basso, da verificare; I, 10/10. Dettagli: idem, §14.
   ✖️ 22/10: scartata (developer), motivo: mai visto: uno split mentre il titolo è in viaggio fra due broker
 - ✅ **B8 · Il prezzo proprio dei contributi** — medio; I, 10/10. `get_positions_contribution`
@@ -858,7 +858,7 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
   ha chiuso F (O2; X5 sui movimenti): le 4 conversioni dei prezzi di X5 restano qui e in U5. Comprende il servizio
   dei lotti, che con FEE/TAX presenti converte ogni BUY/SELL come peso possibile e può segnalare il cambio di un trade
   che nessun pool legge (docs-writer di B3b). Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezioni «2.3» e «7.1».
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  🌊 22/10: ondata 6 (proprietario MF), importante (developer): prima un'analisi dei ~17 punti che chiamano `convert_bulk` (cosa fanno dei tassi mancanti e della provenienza: stessa idea reimplementata o scopo diverso), poi la fattorizzazione in un'unica politica in `financial_math`; dentro anche MF-A13 e l'avviso `STALE_FX`
 - ✅ **T-U2 · Frazionamenti: caricamento, validazione, rapporto cumulato** — medio-basso; T, 11/10. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
   sezioni «2.7» e «7.1».
   ✅ Chiusa nella 1.3 (19/10, contabilità del coordinatore): MF-I, un caricatore solo in `financial_math/splits.py`
@@ -901,7 +901,7 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
   trovato con C-55 (12/10): `broker_summary_unavailable` (`broker_concentration_context.py:390`) esce anche quando il
   riepilogo del broker c'è ma non ha posizioni, mai avute o tutte chiuse. Il messaggio è esatto, il codice no; cambiarlo
   cambia il contratto, quindi la v2. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezioni «7.1» e «C-55 — analisi».
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  🌊 22/10: ondata 6 (proprietario MF), tutte e due le parti nella 1.3: le due percentuali scritte a mano diventano `percent_of`, e il `reason_code` di `broker.concentration_comparison` con il passaggio alla v2 di quella componente. L'AI Export ha già cambiato contratto nella 1.3: la componente del drawdown è passata alla v2 (`4aa2d8cc3`) e `broker.concentration_comparison` ha già cambiato valori con `3fcce359d`
 - ✅ **T-U10 · Interessi e convenzioni di calendario (`interest.py`)** — basso-medio; T, 11/10, decisione D-8. Dettagli:
   [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezioni «2.10» e «7.1».
   ✅ Chiusa nella 1.3 (19/10, contabilità del coordinatore): CP-14a di J, convenzioni di calendario e interesse
@@ -1382,7 +1382,7 @@ Dettagli: [cartella 21](21_onboarding/) e [piano della 32](32_docsEnglish12/plan
 - ~~**21-6 · La telemetria su completamento e salto**~~ — basso, facoltativa. Dettagli: idem, punto 6.
   ✖️ 22/10: scartata (developer), motivo: telemetria su un prodotto self-hosted: mai richiesta → togliere
 - **21-7 · L'ancora `tools.hub` senza guida** — basso; candidata per una guida Tools. Dettagli: idem, punto 7.
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  🌊 22/10: ondata 6 (proprietario A): una sezione «Tools» nella guida, pronta per i tool futuri
 
 Le voci 32-1…32-5 vengono dai reperti dei docs-writer di S22 e S23, mai girati prima: i dettagli stanno solo qui
 (trascritte dal coordinatore dalla ricognizione finale di Q, 11/10, verificate a `251067435`). Q è archiviata: le
@@ -3168,7 +3168,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     schermate d'attesa della shell scrivono «Loading...» e «Checking authentication...» in inglese.
 
   Dettagli: piano di T, passo T-3.
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  🌊 22/10: ondata 6 (proprietario H), la voce si divide: (a) i testi inglesi della cornice dell'app (Sidebar, «Loading…», «Checking authentication…») si fanno; (b) ✖️ scartata (developer): dopo il login è giusto che valgano le impostazioni dell'utente
 - **TC-6 · Alla prima visita il selettore della lingua mostra l'inglese mentre l'interfaccia è nella lingua del
   browser** — basso; T, 15/10. Da instradare: non è di colore.
   - Visto sugli scatti di T-5: browser `it-IT`, nessuna preferenza salvata, pagina di accesso in italiano con la
@@ -3949,7 +3949,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     succede se il file sparisce, perché nel cloud è più sicuro, e l'opzione A con il suo peso. Il consiglio è
     rimandarla dopo la 1.3: l'opzione B, già entrata, basta, e la A migliora solo il self-hosted.
 
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  🌊 22/10: ondata 6 (proprietario H), opzione A con le due strade di recupero: al primo avvio si salva un'impronta della chiave d'istanza; se all'avvio la chiave non corrisponde, LibreFolio si ferma e offre di ripristinare un backup fornito dall'utente oppure di ricreare la chiave perdendo i dati cifrati (segreti dei plugin e altre chiavi API). L'opzione B (avviso col conteggio dei segreti illeggibili) è già nel codice. Il caso hosted è da concordare con il coordinatore cloud
 - ✅ **H-4 · `validate_test_data_dir` solleva un `PermissionError` grezzo per una cartella gestita non attraversabile** —
   minimo; H, 15/10.
   - In modalità test, `_same_filesystem_location` chiama `Path.exists()`, che su Python 3.13 solleva con `EACCES`.
@@ -5158,7 +5158,7 @@ A-21b, A-31, A-41, A-49 e A-58 aspettano una decisione; A-4 e A-10 sono lavoro d
   indifferente alle maiuscole prima dell'unicità (punto b di E: ricreerebbe il DoS fra «Bob» e «bob»). Facoltativo,
   per H: il conteggio delle collisioni storiche nei controlli di Sicurezza. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md),
   «A-21 — Analisi».
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  🌊 22/10: ondata 6 (proprietario A): rifiuto solo in ingresso (un nome nuovo che collide senza distinzione di maiuscole), nessuna migrazione dei doppioni già esistenti; il testo della voce cita una «010» che non esiste: da riscrivere
 - ✅ **A-22 · I login falliti scrivono nel log l'identificativo digitato, anche un indirizzo email** — basso; chiusa in A-22
   (16/10); dal `test-author` di A7c (16/10).
   - `api/v1/auth.py` ~160–167: «Login failed: user not found», «…wrong password», «…user inactive» con
@@ -5238,11 +5238,11 @@ A-21b, A-31, A-41, A-49 e A-58 aspettano una decisione; A-4 e A-10 sono lavoro d
   il frontend è statico e non passa di lì. Cura possibile: le quattro pagine dei link (`isLinkPage`) fra le pubbliche.
   Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b.5».
   ✖️ 22/10: scartata (developer), motivo: solo `vite dev`: una riga in `PUBLIC_ROUTES` quando serve a chi sviluppa
-- **A-30 · Un nuovo link di setup dall'API e dalla scheda Utenti** — basso; deciso dal coordinatore (A7b, 16/10).
+- ~~**A-30 · Un nuovo link di setup dall'API e dalla scheda Utenti**~~ — basso; deciso dal coordinatore (A7b, 16/10).
   Oggi l'admin iniziale in attesa riceve un link nuovo solo da `dev.py user setup-link` (o dal pannello di chi ospita):
   la scheda Utenti mostra il suggerimento, nessun pulsante. Dettagli: [piano
   02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b — Analisi e contratto».
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  ✖️ 22/10: scartata (developer), motivo: il coordinatore cloud non la usa nella 1.3; resta il TODO futuro della rotta `admin:reset` del pannello (vedi anche B-10). Nota per quel TODO, preferenza del cloud: biglietto L2 con scopo `admin:reset`, risposta 202 senza il link nel corpo, link solo all'email dell'admin che l'istanza ha già, un evento per richiesta con un limite di frequenza
 - ~~**A-31 · Il ripristino revoca il link di setup che l'avvio ha appena riarmato**~~ — basso, non è un difetto della 1.3;
   da B tramite il coordinatore (16/10); A e B insieme.
   - Il caso: un archivio con l'admin iniziale ancora in attesa **e** un altro admin attivo, ripristinato su
@@ -5951,7 +5951,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - `onsave` non è atteso: un errore nel ricaricamento della pagina dopo il salvataggio non viene mai mostrato.
   - Il banner d'errore dell'editor dei cambi non ha un `data-testid` (quello degli asset l'ha avuto con O-8).
 
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  🌊 22/10: ondata 6 (proprietario X): solo il messaggio di scrittura parziale (il salvataggio in tre richieste); gli altri tre residui sono lana caprina e restano fuori
 - ✅ **X-R40 · Prezzo corrente: la quotazione rifiutata torna lo stesso come prezzo dal vivo** (chiusa il 17/10 insieme a W-B62: `a7b572ce2`, entrata in dev `fd6886bb0`; resta il seguito X-R51) — basso, **dopo X-R38**; X,
   17/10 (le mie due note alla revisione di W-B58, accettate dal coordinatore).
   - `services/assets/price_query.py` ~862–866: una quotazione che `storable_price` non può tenere non si salva, ma la
@@ -6109,14 +6109,14 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     rettifica +q collegata a uno SPLIT, senza costo, diventa `MISSING_COST_BASIS`.
   - **Deciso**: una guardia come quella di P-10, cioè un rifiuto 409 con i dettagli (evento, data, transazioni), tramite
     `financial_math.splits.costless_incoming_split_adjustments`, che arriva con CP-14a.
-- ⏸️ **X-R48b · La modale del cambio di valuta non avvisa prima della conferma** (sospesa il 19/10 con i rossi scritti,
+- ⏸️ ~~**X-R48b · La modale del cambio di valuta non avvisa prima della conferma**~~ (sospesa il 19/10 con i rossi scritti,
   messi da parte in patch: N68 può cambiare la modale; piano 03, «X-R16 + X-R48b») — basso, UX, non urgente; X, 17/10 (J,
   revisione di X-R48, girata dal coordinatore).
   - Il riepilogo (dry run) non rifiuta mai, quindi il pannello di conferma non può avvisare: l'utente incontra il 409
     solo dopo aver confermato.
   - Cura facoltativa: il riepilogo porta il numero degli SPLIT che bloccano, e la modale avvisa prima della conferma.
 
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  ✖️ 22/10: scartata (developer), motivo: non più applicabile, la modale del cambio di valuta cambia con N68. N68 (decisione del 19/10: niente blocco al cambio di valuta di un asset, gli split sopravvivono al cambio di valuta, un bottone «Ricollega eventi» in Transazioni) non ha una voce sua in questo file: 🌊 22/10: ondata 5 (proprietario X)
 - ✅ **X-R49 · Lo stesso buco di X-R48 dal cambio dei parametri di un Scheduled Investment** (chiusa il 17/10, `589f15607`, entrata in dev `e710cf552`: rifiuto 409 `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST` prima di ogni scrittura, frase tradotta nella modale dell'asset; dettagli nel piano 03, «X-R49») — basso; X, 17/10 (J, F2,
   girato dal coordinatore).
   - `provider_management.py:212-221`: vale solo se un utente ha scritto uno SPLIT fra gli eventi del piano.
@@ -6183,14 +6183,14 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
       cambiano, e va una riga 🐛 nel CHANGELOG;
     - altre differenze: 1D c'è anche con un intervallo di un giorno; una serie nativa con valute miste, o una
       conversione fallita, dà null più un errore; un prezzo ≤ 0 dà null.
-- **X-R56 · Uno SPLIT di un provider con un rapporto non valido, salvato prima di X-R47, non si può correggere** — basso,
+- ~~**X-R56 · Uno SPLIT di un provider con un rapporto non valido, salvato prima di X-R47, non si può correggere**~~ — basso,
   **dopo X-R53**, prima l'analisi; X, 17/10 (MF-D4, girato dal coordinatore).
   - Non si modifica per id (`EVENT_NOT_EDITABLE`, è di un provider) e non si cancella finché ha transazioni collegate
     (`EVENT_IN_USE`): la CTA `navigate_asset` del nuovo avviso `INVALID_SPLIT_RATIO` porta a un vicolo cieco.
   - Direzione: un refresh del provider riscrive o scarta quell'evento (con la regola dei collegamenti), oppure una via
     di recupero.
 
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  ✖️ 22/10: scartata (developer), motivo: il caso non si è mai presentato
 - ✅ **X-R58 · Le liste di asset e cambi tacciono quando la richiesta bulk supera i limiti di Z-25** (chiusa il 17/10, `2b48340b6`, entrata in dev `1bef78be1`: un toast tradotto da `bulkRefusalMessage`; il caricatore FX continua a rilanciare, per scelta) — piccolo, **subito
   dopo X-R53, quando Z-25 entra**; X, 17/10 (coordinatore, N77).
   - Z-25 aggiunge due 422 con codice a `POST /assets/prices/query` e `POST /fx/currencies/convert`:
@@ -7017,7 +7017,7 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   così va saltata, con un avviso. Analisi (17/10): una correzione post-migrazione che annulla o cancella gli inf ricavabili e
   riporta quelli dell'utente, più due guardie puntuali; decisione D-W63-1. Dettagli: piano 04, sezioni «W-B58 e W-B59», «W-B60» e
   «W-B62 e W-B63».
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  🌊 22/10: ondata 6 (proprietario W), la voce si divide: (1) `volume` e `rate` come `RealDecimal` e (2) la query degli eventi su `None` si fanno; (3) la correzione dopo la migrazione degli `inf` già salvati è una bonifica: ✖️ scartata (developer); se un DB reale ha un `inf`, script esterno
 - ✅ **W-B69 · Il costo Auto si calcola saltando una riga illeggibile (regressione di W-B58)** — medio, numeri; W, 17/10 (all-backend di
   W-B60, approvata dal coordinatore: **blocca il rilascio**). Da W-B58 una quantità o un importo illeggibile si legge `None` invece di
   sollevare: `compute_wac_iterative` carica la riga e `cost_movement_from_transaction` (`financial_math/average_cost.py`) la salta, e
@@ -7304,7 +7304,7 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   ADJUSTMENT in entrata) potrebbe servire a stimarlo. Oggi un ADJUSTMENT non è mai un prezzo (P2, J-17: `price_marks`). Da
   decidere: quale fonte vince fra un prezzo osservato e questa stima, come la si segna (prezzo stimato, non osservato), se vale anche
   per l'ADJUSTMENT in entrata. Dopo la 1.3.
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  🌊 22/10: ondata 6 (proprietario MF): è diventata una buona idea (developer). La gamba che entra in un trasferimento si usa come stima del prezzo, come già si fa per BUY e SELL
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
@@ -8206,7 +8206,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-21».
 
   ✖️ 22/10: scartata (developer), motivo: un gradino nel secchio del taglio, settimanale/mensile: minimo e raro
-- **J-59 · Una serie sola per uscita, con i vuoti dichiarati e i giorni assenti uniti** — basso, prestazioni e
+- ~~**J-59 · Una serie sola per uscita, con i vuoti dichiarati e i giorni assenti uniti**~~ — basso, prestazioni e
   chiarezza; J, 17/10 (nota di Y su J-21). **Dopo la 1.3**, file dei grafici, Y (FE2).
   - Da J-21 una linea si divide in tratti ai punti senza valore, e ogni tratto è una serie ECharts lunga quanto
     l'asse. Misurato sulle metriche mobili vere: con la finestra di default (90) c'è un tratto solo; con una finestra
@@ -8224,7 +8224,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     valori del tooltip giusti. Stima ~3 h. Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md),
     sezione «J-21».
 
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  ✖️ 22/10: scartata (developer), motivo: prestazioni senza misura (una serie sola per uscita); resta fuori. Il tetto `MAX_LINE_RUNS = 30` si guarda con J-61
 - ✅ **J-57 · Una rettifica in Auto senza nulla da mediare si salva a costo 0** — medio, numeri (utenti non esperti);
   J, 17/10 (analisi di J-41), letta nel codice. Area di W; da decidere insieme a J-11/J-35 (costo zero o ignoto).
   - Un pool vuoto dà un costo medio di **0** nella valuta dell'asset, non None (`compute_wac_iterative`,
@@ -8306,7 +8306,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - **CHANGELOG, riga 308**: «more than 30 gaps» → «30 gaps or more». La linea si unisce oltre 30 tratti
     (`runs.length > MAX_LINE_RUNS`), cioè da 30 vuoti in su.
 
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  🌊 22/10: ondata 6 (proprietario Y): si toglie l'avviso «troppe lacune, la linea le unisce» (non arriva mai all'utente) e si ritoccano CHANGELOG e guida; J-59 è scartata
 - **J-62 · R11: i gemelli pandas di volatilità e Sharpe mobili, senza parità e con due copie del validatore** — basso,
   numeri (regola 10); J, 19/10 (revisione della voce 1 di J-1 di MF, `068d5dd51`). Coordinatore, 19/10: in R11, nella
   sezione J.
@@ -8996,7 +8996,7 @@ sulla base `23f6578f3`.
   cataloghi, per la scheda «Sicurezza» (A8b). Test: `services backup-checks` (57), più nel file di H le 2 voci di
   `CHECK_IDS` e un blocco «Workstream B» in `_configure`. Dettagli: piano 07, «B-9».
   **In dev**: `997dc7ecf` (17/10 07:37), merge di `0f3f72961`.
-- **B-10 · Un pulsante del pannello che chiede all'istanza il link di reset dell'admin** — piccolo; B, 15/10 (decisione
+- ~~**B-10 · Un pulsante del pannello che chiede all'istanza il link di reset dell'admin**~~ — piccolo; B, 15/10 (decisione
   40, assegnata a B dal coordinatore). Recupero dell'admin dopo un ripristino o una password persa: oggi passa da
   «password dimenticata» via email (E), o dall'assistenza con `dev.py user reset-link`.
   - Cura: una rotta col token del pannello, come B8 (`require_panel_token`, permessa sull'istanza bloccata se il
@@ -9004,7 +9004,7 @@ sulla base `23f6578f3`.
   - Non per la 1.3, a meno che resti tempo (coordinatore, 15/10).
 
   Dettagli: piano 07, §13, «Base `10697e618`, prove d'ingresso e decisioni 40–43».
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  ✖️ 22/10: scartata (developer), motivo: il coordinatore cloud non la usa nella 1.3; resta il TODO futuro della rotta `admin:reset` del pannello (vedi A-30, con la nota per quel TODO: biglietto L2 con scopo `admin:reset`, risposta 202 senza il link nel corpo, link solo all'email dell'admin che l'istanza ha già, un evento per richiesta con un limite di frequenza)
 - **B-11 · Debito di traduzione delle pagine admin di B2, B3 e B8** — piccolo, doc; B, 15/10 (B2; B3 il 16/10). Pagine
   inglesi scritte da docs-writer, senza timbro. In it, fr ed es mancano:
   - in `cli_tools`, la sezione «🧪 Try a Restore on a Copy»; da B3, le sezioni «♻️ Restore an Archive» (`#backup-restore`)
@@ -9316,7 +9316,7 @@ sulla base `23f6578f3`.
     per sempre: due righe d'errore a ogni giro col biglietto, una dopo la sua ora. E non dice perché. Va con la stessa
     decisione.
   Dettagli: piano 07, «B-32».
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  🌊 22/10: ondata 4 (proprietario B, con H; il caso hosted è da concordare con il coordinatore cloud), nel lotto del backup (H-62/B). Lo stato del ripristino illeggibile all'avvio non serve i dati: pagina «ripristino interrotto, serve l'amministratore», `dev.py backup pending` dice cosa è successo, e l'admin sceglie da riga di comando fra il database di prima e un nuovo ripristino
 - ✅ **B-34 · `--instance-key-file`: la causa giusta quando questa istanza non ha ancora una chiave, e due frasi della doc**
   — basso; B, 17/10 (revisione di H su B-18: LOW-1 e due appunti; piano di H §14 «Review di B-18»).
   - **LOW-1**: su un'istanza senza chiave (dal cloud a un server nuovo), se la verifica non può crearla (`secrets/` non
@@ -10092,7 +10092,7 @@ da Y il 15/10.
   Restano le larghezze dichiarate di `TargetsStep` (`features/tools/pac-allocator/planner/steps/TargetsStep.svelte`:
   la tabella supera i 500 px). Va giudicato sugli scatti mobile `pac-step-targets` e `pac-step-review` della galleria
   d'ingresso di Y7, insieme alle altre note del developer. Dettagli: piano di Y, §4 «Y7».
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  🌊 22/10: ondata 6 (proprietario Y): colonne fluide da telefono nel PAC, con una larghezza minima alle colonne del DataTable
 - ~~**Y-10 · Su un telefono la maniglia di ridimensionamento è invisibile**~~ — minimo, UX; `test-author` di Y, 15/10 (Y7).
   - Dopo Y7 un dito ridimensiona una colonna (D-Y18). Ma la maniglia
     (`table/DataTableColumnHeader.svelte`, `.resize-handle`) resta trasparente finché la cella non è in hover, e un dito
@@ -10491,7 +10491,7 @@ punto di partenza, l'audit dello stesso giorno:
   **Entrato** il 16/10: K1 e K2 in dev `8d244d1c6`. Seguito: MF-K3 (decisione).
 - **MF-L · `BRSummary.holdings`: togliere o valutare col motore** — piccolo/medio, API; audit 16/10. Decisione D-MF1,
   file di W. Dettagli: piano MF, sezione «MF-L».
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  🌊 22/10: ondata 6 (proprietario W): opzione (a), togliere `BRSummary.holdings` (rottura API: ⚠️ nel CHANGELOG e `api sync`); nessuna pagina lo legge. La decisione D-MF1 è questa
 - ✅ **MF-M · PAC: prova del cambio del WAC da `CostStep.conversion`** — piccolo; audit 16/10. Dettagli: piano MF, sezione
   «MF-M».
   **Entrato** il 16/10: dev `8d244d1c6`.
@@ -10522,7 +10522,7 @@ punto di partenza, l'audit dello stesso giorno:
   l'intervallo comincia prima del primo giorno del portafoglio, quindi ROI 0. Proposta: le stesse regole (D-MF5, N54)
   anche per TWRR e ROI, nella casa, con i rossi prima; serve l'ok del developer (cambia card e grafico). Dettagli: piano
   MF, sezione «Ondata 1b», K2.
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  🌊 22/10: ondata 6 (proprietario MF): card e linea coerenti («—» entrambe) a portafoglio svuotato; ROI semplice dal primo giorno con capitale
 - **MF-C2 · Le fette d'allocazione su una somma che si annulla o va sotto zero** — basso, numeri (proposta, da decidere);
   test-author di MF, 16/10 (lotto C). Le fette dei grafici d'allocazione (`derived_views.py`, `_alloc` e
   `build_allocation_history`, ora `weights.slice_percents`) dividono per la somma con segno, e per 1 quando la somma è 0:
@@ -10532,7 +10532,7 @@ punto di partenza, l'audit dello stesso giorno:
   «negative-sum»). Proposta: con una somma ≤ 0 le fette restano `value` null («—») e gli importi restano; serve l'ok
   del developer (cambia il grafico, lo schema — `AllocationItem.value` oggi obbligatorio — e il dataset AI Export
   che lo copia, `portfolio_financial.py:251-253`). Dettagli: piano MF, sezione «Lotto C».
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  🌊 22/10: ondata 6 (proprietario MF), nella 1.3: fette `null` e grafico vuoto con un avviso; se tocca il dataset dell'AI Export, entra nello stesso passaggio di versione di T-U9
 - ✅ **MF-W56 · L'anteprima del WAC arrotondata alla colonna dov'è usata** — basso, numeri oltre la 12ª cifra; W (W-B56) e
   MF, 17/10. `compute_wac_iterative` (facciata di `portfolio_service`) restituisce un WAC non arrotondato, a volte
   periodico: «congelato» in un costo manuale è rifiutato da C-97a (D2), e il costo automatico
@@ -10552,7 +10552,7 @@ punto di partenza, l'audit dello stesso giorno:
   `period_annualized` ricade sulla regola generale, |StartValue| su t₀→t₁: una posizione tenuta a t₀ e venduta dopo 10
   giorni d'un periodo d'un anno è annualizzata sull'anno. Documentato com'è (`net-annualized-return` «Positions Closed
   in the Period»). Scelte: (a) com'è; (b) «—» quando la regola chiusa non vale. Dettagli: piano MF, «MF-A2».
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  🌊 22/10: ondata 6 (proprietario MF), insieme a MF-A11: sotto 30 giorni «—» (come già per le posizioni chiuse); la base unica di MF-A11 solo se MF la conferma coi numeri
 - ✅ **MF-A4 · Doc: il «non realizzato» della card punta alla pagina sbagliata** — minimo, doc; docs-writer di MF, 17/10.
   **Chiusa il 17/10**: il collegamento a `period-pnl` nelle quattro lingue e le descrizioni API, dev `a228b9d30`.
   `book-value.en.md` definisce il non realizzato come NAV − Book; `user/dashboard/kpi-cards.en.md:31` collega la card
@@ -10568,7 +10568,7 @@ punto di partenza, l'audit dello stesso giorno:
   Proposta: la gamba esterna in entrata come un DEPOSIT in K (senza il recupero di W, che è globale), in uscita come un
   WITHDRAWAL (K prima, poi R → W); da verificare anche le gambe orfane. Rossi prima; serve l'ok del developer (cambia
   la scomposizione della cassa nelle viste filtrate per broker). Dettagli: piano MF, sezione «MF-J2 — codice e misura».
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  🌊 22/10: ondata 6 (proprietario MF), insieme a B3 (è la stessa cosa): le gambe esterne di un trasferimento di cassa muovono i pool versato/generato (K/R) come un versamento/prelievo dall'esterno del perimetro
 - **MF-J4 · L'avviso di quote diverse non scatta per una coppia dello stesso giorno** — minimo, qualità dei dati;
   test-author di MF, 17/10 (J2). In `classifier.py` l'avviso «share mismatch» d'una coppia interna fra broker posseduti
   a quote diverse sta dentro il ramo `tx.date != paired.date`: una coppia dello stesso giorno non lo produce. Il divario
@@ -10716,7 +10716,7 @@ punto di partenza, l'audit dello stesso giorno:
   del developer (coordinatore). Caso estremo trovato col test di MF-A10: a broker intero un residuo di 0,000012 (sopra
   la polvere) lascia una riga tenuta con costo alla fine 0,0012, e l'annualizzato vale 1 774 600,33 (oggi): con la base
   proposta (0,0012 + il costo venduto) torna sensato. Dettagli: piano MF, «MF-A10».
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  🌊 22/10: ondata 6 (proprietario MF), insieme a MF-A3: la base unica per le righe aperte nel periodo solo se MF la conferma coi numeri; per i casi sotto 30 giorni vale MF-A3
 - ✅ **MF-A12 · La variazione d'un giorno delle posizioni scritta in linea** — minimo, nessun valore (salvo un pareggio
   **Chiusa il 17/10 (N92)**: dev `5a6d71a1e`, CHANGELOG `5d87dec28`; `change_ratio` per le due colonne; identico al bit per ogni prezzo positivo, un prezzo negativo
   prende il segno della mossa.
@@ -10735,7 +10735,7 @@ punto di partenza, l'audit dello stesso giorno:
   (serie di mercato, AI Export: la sonda mirata dice se serve un aumento di versione). File di X (`price_query`, schema
   dei prezzi), di J (`market_series`) e AI Export; dopo il PL4 di X (D-J17). Dettagli: piano MF, «J-1 —
   riconciliazione».
-  ❓ 22/10: da raffinare, risposta del developer in arrivo
+  🌊 22/10: ondata 6 (proprietario MF, con X; dopo PL4 di X): il tasso salvato sul punto di prezzo invece di ricavarlo di nuovo per divisione (nata dalla divisione di T-U1)
 - ~~**MF-SEC9f · Altri OR per elemento, censiti da E**~~ — minimo, informazione; E, 17/10 (revisione di MF-SEC9a).
   `scheduler/jobs.py:100` costruisce un termine per coppia configurata: rifiutato solo con ~1 000 coppie, improbabile.
   `portfolio/engine.py:133` è sicuro. Nessuna azione ora. Dettagli: piano 08 di E, «MF-SEC9a».
