@@ -181,8 +181,25 @@ function sameWindow(left: CalendarReturnWindowSelection, right: CalendarReturnWi
     return left.kind === right.kind && left.preset === right.preset && left.customAmount === right.customAmount && left.customUnit === right.customUnit;
 }
 
-function sanitizeSettings(value: unknown): ChartSettings {
-    if (!isRecord(value)) return deepClone(DEFAULT_CHART_SETTINGS);
+/** The view a scope opens in until it is set (Y-40): the FX list on absolute rates, as before; every other chart in percent. */
+function scopeDefaultView(scope?: string): ChartPrimaryView {
+    return scope === 'fx' ? 'absolute' : DEFAULT_CHART_SETTINGS.primaryView;
+}
+
+/** The scope a stored key belongs to: a scope's own settings, an asset's, else an FX pair's. */
+function scopeOfKey(key: string): string | undefined {
+    if (key.startsWith('__global_')) return key.slice('__global_'.length, -2);
+    if (key.startsWith('__')) return undefined;
+    return key.startsWith('asset-') ? 'assets' : 'fx';
+}
+
+/** Settings the store falls back on for a scope that has none of its own: the base ones, opening on the scope's view. */
+function forScope(settings: ChartSettings, scope?: string): ChartSettings {
+    return scope === 'fx' ? {...settings, primaryView: scopeDefaultView(scope)} : settings;
+}
+
+function sanitizeSettings(value: unknown, defaultView: ChartPrimaryView = DEFAULT_CHART_SETTINGS.primaryView): ChartSettings {
+    if (!isRecord(value)) return {...deepClone(DEFAULT_CHART_SETTINGS), primaryView: defaultView};
     const calendarReturnWindow = sanitizeCalendarReturnWindow(value.calendarReturnWindow);
 
     return {
@@ -194,7 +211,7 @@ function sanitizeSettings(value: unknown): ChartSettings {
         calendarReturnWindow,
         // Stored before Y-40: a window other than the shipped default was chosen by the user.
         calendarReturnWindowAuto: typeof value.calendarReturnWindowAuto === 'boolean' ? value.calendarReturnWindowAuto : sameWindow(calendarReturnWindow, DEFAULT_CALENDAR_RETURN_WINDOW),
-        primaryView: isPrimaryView(value.primaryView) ? value.primaryView : DEFAULT_CHART_SETTINGS.primaryView,
+        primaryView: isPrimaryView(value.primaryView) ? value.primaryView : defaultView,
         signals: normalizeSignalConfigs(value.signals),
     };
 }
@@ -207,8 +224,8 @@ function normalizeSignalConfigs(value: unknown): SignalConfig[] {
     });
 }
 
-function sanitizeStoredSettings(value: unknown): ChartSettings {
-    const sanitized = sanitizeSettings(value);
+function sanitizeStoredSettings(value: unknown, defaultView?: ChartPrimaryView): ChartSettings {
+    const sanitized = sanitizeSettings(value, defaultView);
     sanitized.signals = sanitized.signals.map((signal) => {
         const {_resolvedData: _discarded, ...serializableParams} = signal.params;
         return {
@@ -276,7 +293,7 @@ function parsePersistedSettings(raw: string | null): PersistedChartSettings | nu
         if (Array.isArray(parsed.pairOverrides)) {
             for (const entry of parsed.pairOverrides) {
                 if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string') continue;
-                overrides.set(entry[0], sanitizeStoredSettings(entry[1]));
+                overrides.set(entry[0], sanitizeStoredSettings(entry[1], scopeDefaultView(scopeOfKey(entry[0]))));
             }
         }
 
@@ -395,7 +412,7 @@ export function getGlobalSettings(scope?: string): ChartSettings {
         const scoped = pairOverrides.get(`__global_${scope}__`);
         if (scoped) return deepClone(scoped);
     }
-    return deepClone(globalSettings);
+    return forScope(deepClone(globalSettings), scope);
 }
 
 /**
@@ -413,7 +430,7 @@ export function getSettingsForPair(slug: string, scope?: string): ChartSettings 
         const scoped = pairOverrides.get(`__global_${scope}__`);
         if (scoped) return deepClone(scoped);
     }
-    return deepClone(globalSettings);
+    return forScope(deepClone(globalSettings), scope);
 }
 
 /**
@@ -499,8 +516,11 @@ export function setScopePrimaryView(view: ChartPrimaryView, scope: string): void
 }
 
 /**
- * The view of one chart (Y-40, V-1 a and V-2 a): a card's button, the detail page. An override it creates starts from the
- * scope's settings.
+ * The view of one chart (Y-40, V-1 a and V-2 a): a card's button. An override it creates starts from the scope's settings.
+ *
+ * It rebuilds the override from the store's own copy: what a page wrote into the settings it holds — a comparison's
+ * `_resolvedData` in its signal configs — is not in it. A page that holds such settings saves its view with them instead:
+ * `setPairSettings(slug, {...settings, primaryView, signals})`, as the asset detail page does.
  */
 export function setItemPrimaryView(slug: string, view: ChartPrimaryView, scope?: string): void {
     loadFromStorage();
