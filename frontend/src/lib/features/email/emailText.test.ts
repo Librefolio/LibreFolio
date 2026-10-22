@@ -22,14 +22,19 @@
  *     literal or arbitrary value, no `dark:`, no important modifier, every role declared in tokens.css; and each state
  *     is drawn in its own family, a tinted box pairing its soft surface with the on-soft text — `LINKS_PROBE_CLASSES`
  *     included: `checking` muted, `match` in the success family, the four warnings in the warning family's box;
- *   - the verification of an address (lot E5a): `VERIFY_PAGE_KEYS` words each of the eight states of the page of a
- *     verification link — `checking`, the four refusals of the link, `missing`, `error`, and `blocked` since lot E-10 —
- *     with `email.verification.page.<state>`; `resendFailureMessage` makes exactly one translator call per failure —
+ *   - the verification of an address (lot E5a): `VERIFY_PAGE_KEYS` words each of the nine states of the page of a
+ *     verification link — `checking`, `ready` since lot E-25 (the link is read, and only a click spends it), the four
+ *     refusals of the link, `missing`, `error`, and `blocked` since lot E-10 — with `email.verification.page.<state>`;
+ *     the «confirm» button and the line for whoever did not sign up of the `ready` state (lot E-25), the page's own
+ *     `email.verification.page.confirm` and `…notSignedUp`, are in the four catalogues without a placeholder;
+ *     `resendFailureMessage` makes exactly one translator call per failure —
  *     `email.verification.resendErrors.<CODE>` for the five codes the owner can act on, the minutes until the next
  *     request for a rate limit, `…resendErrors.unavailable` for the four ways the instance cannot send, and
  *     `…resendErrors.generic` for anything else, an inherited name included —; every one of these keys, and the
  *     notice's and the page's own (`loginRequired`, `resend`, `resending`, `resent`, `verified` with its
- *     `{username}`), is in the four catalogues with exactly the placeholders the code fills;
+ *     `{username}`), and the two sentences the sign-up leaves the sign-in with (lot E-26 (b): `registered` once the
+ *     email is queued, `registeredHeld` when the client address's limit holds it), is in the four catalogues with
+ *     exactly the placeholders the code fills — `registered` and `registeredHeld` none;
  *   - the page on a blocked instance (lot E-10): its eighth state, `blocked`, has a key of its own, in the four
  *     catalogues without a placeholder — `email.verification.page.blocked` names nothing the page fills;
  *   - «send the link again» on a blocked instance (lot E-11): `resendFailureMessage` words `INSTANCE_BLOCKED` with one
@@ -379,8 +384,12 @@ describe('the class maps — whole strings of colour roles (theme-roles skill)',
 });
 
 // =====================================================================================================================
-/** The eight states of the page of a verification link: `blocked` since lot E-10, the instance blocked by its provider. */
-const VERIFY_PAGE_STATES: VerifyPageStatus[] = ['checking', 'expired', 'consumed', 'revoked', 'unknown', 'missing', 'error', 'blocked'];
+/**
+ * The nine states of the page of a verification link: `ready` since lot E-25, the link read and waiting for the click
+ * that spends it (a mail scanner opening it must not verify the address); `blocked` since lot E-10, the instance blocked
+ * by its provider.
+ */
+const VERIFY_PAGE_STATES: VerifyPageStatus[] = ['checking', 'ready', 'expired', 'consumed', 'revoked', 'unknown', 'missing', 'error', 'blocked'];
 
 /** What `resendFailureMessage` asked the translator for, how many times, and what it returned. */
 function askedResend(failure: ResendFailure): {calls: number; key: string | undefined; values: Values | undefined; answer: string} {
@@ -405,17 +414,23 @@ const RESEND_FAILURES: Array<{label: string; failure: ResendFailure; key: string
 ];
 
 describe('the verification of an address (lot E5a) — its words', () => {
-    it('ETX-07: VERIFY_PAGE_KEYS words each of the eight states of the page with a key of its own', () => {
+    it('ETX-07: VERIFY_PAGE_KEYS words each of the nine states of the page with a key of its own, `ready` (lot E-25) included', () => {
+        expect(VERIFY_PAGE_KEYS.ready, 'the state of a link read and not yet spent').toBe('email.verification.page.ready');
         expect(VERIFY_PAGE_KEYS).toEqual(Object.fromEntries(VERIFY_PAGE_STATES.map((state) => [state, `email.verification.page.${state}`])));
     });
 
+    // The key is the one ETX-07 pins `VERIFY_PAGE_KEYS` to: so that a state the map lacks fails here as a missing message, not as a TypeError.
     it.each(VERIFY_PAGE_STATES)('ETX-07: the page’s %s is in the four catalogues, without a placeholder', (state) => {
-        expectInEveryCatalogue(VERIFY_PAGE_KEYS[state], []);
+        expectInEveryCatalogue(`email.verification.page.${state}`, []);
     });
 
-    it('ETX-08: the notice’s and the page’s own keys are in the four catalogues: «verified» names the {username} the page fills, the others nothing', () => {
+    it('ETX-08: the notice’s and the page’s own keys are in the four catalogues: «verified» names the {username} the page fills, the others nothing — `registered` and `registeredHeld`, the sign-up’s two sentences (lot E-26 (b)), included', () => {
         expectInEveryCatalogue('email.verification.verified', ['username']);
-        for (const key of ['loginRequired', 'resend', 'resending', 'resent']) expectInEveryCatalogue(`email.verification.${key}`, []);
+        for (const key of ['loginRequired', 'resend', 'resending', 'resent', 'registered', 'registeredHeld']) expectInEveryCatalogue(`email.verification.${key}`, []);
+    });
+
+    it.each(['confirm', 'notSignedUp'])('ETX-08b: the page’s %s (lot E-25: the click that spends the link, and the line for whoever did not sign up) is in the four catalogues, without a placeholder', (key) => {
+        expectInEveryCatalogue(`email.verification.page.${key}`, []);
     });
 
     it.each(RESEND_FAILURES)('ETX-09: resendFailureMessage of $label — one call, its key and values, the answer untouched', ({failure, key, values}) => {

@@ -31,6 +31,7 @@ import asyncio
 import mimetypes
 import uuid
 from datetime import date
+from pathlib import Path
 from typing import Annotated, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
@@ -38,6 +39,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.api.file_fetch_guard import refuse_script_destination
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import User, UserRole
 from backend.app.db.session import get_session_generator
@@ -95,6 +97,7 @@ from backend.app.services.files.file_preview import (
     build_image_preview_url,
     build_preview_response,
 )
+from backend.app.services.files.static_uploads import BLOCKED_EXTENSIONS
 
 logger = get_logger(__name__)
 
@@ -645,6 +648,12 @@ async def upload_file(
 
     # Get filename: prefer user-provided custom_filename over original file.filename
     filename = custom_filename.strip() if custom_filename and custom_filename.strip() else (file.filename or "unknown")
+    # A report is never a script or a program (H-55 v2): the static uploads' blocklist, before anything is written
+    for name in {filename, file.filename or ""}:
+        extension = Path(name).suffix.lower()
+        if extension in BLOCKED_EXTENSIONS:
+            logger.warning("Broker report upload blocked by its extension", extension=extension, user_id=current_user.id, broker_id=broker_id)
+            raise HTTPException(status_code=400, detail=f"File extension '{extension}' is not allowed")
 
     # Save file with user_id and broker_id.
     # Writing the payload, sniffing the compatible plugins (which re-reads it) and writing
@@ -801,7 +810,7 @@ async def delete_file(
     return {"success": True, "file_id": file_id}
 
 
-@brim_router.get("/files/{file_id}/download")
+@brim_router.get("/files/{file_id}/download", dependencies=[Depends(refuse_script_destination)])
 async def download_file(
     file_id: str,
     download: bool = True,
@@ -821,10 +830,12 @@ async def download_file(
     if not file_path or not file_path.exists():
         raise HTTPException(status_code=404, detail="File content not found")
 
-    media_type = mimetypes.guess_type(file_info.filename)[0] or "application/octet-stream"
+    guessed = mimetypes.guess_type(file_info.filename)[0] or "application/octet-stream"
 
-    # Shown in the browser only when the type cannot carry active content; anything else is a download.
-    inline = not download and media_type in INLINE_SAFE_MEDIA_TYPES
+    # Shown in the browser only when the type cannot carry active content; anything else is a download, and a download
+    # is application/octet-stream whatever its name, so no file of a report is ever served as a script (H-55 v2)
+    inline = not download and guessed in INLINE_SAFE_MEDIA_TYPES
+    media_type = guessed if inline else "application/octet-stream"
 
     return FileResponse(
         path=file_path,

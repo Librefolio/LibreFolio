@@ -54,21 +54,22 @@ Not covered, on purpose:
   take a cost — ``TestDecisionP5AnExplicitNullEmptiesTheCost``, below;
 - Auto with no average (P-1, ``auto_cost.py``) and SPLIT-linked ADJUSTMENTs: outside N2, unchanged.
 
-Decision 47 (workstream W, release 1.3) — the giving leg of a TRANSFER, ``TestDecision47TheGivingLegOfATransfer``,
-RED until its cure. J's CP-16 (``financial_math/fifo/engine.py``) reads a negative ADJUSTMENT carrying a
-``cost_basis_override`` as units handed over at that cost; W's part writes that cost where a TRANSFER loses its giving
-leg in a batch:
+Decision 47 as N78-1 changed it (the developer's decision, 21/10/2026) — the giving leg of a TRANSFER,
+``TestDecision47TheGivingLegOfATransfer``, RED until the N78-1 cure but for the promote. An ADJUSTMENT with a negative
+quantity has no value: the engines ignore any cost it stores, and the API refuses one (``costBasisNotAllowed``). So
+where a batch takes a TRANSFER's giving leg out of its pair, the leg leaves WITHOUT a value:
 
-- a split of a TRANSFER pair hands its giving leg over at the Auto cost of the leg's OWN broker
-  (``TransactionService._handover_cost``: its broker, up to its date, without itself), computed in the batch's WAC
-  stage (``compute_wac_and_fx_issues``) after the other stages: an ADJUSTMENT −4 at ``source``'s 100 EUR — or 200 when
-  the same batch adds a purchase before the move —, the receiving leg keeping its own cost. A cost an update of the
-  same batch gives the giving leg stays (the coordinator's decision 4, 16/10: a guard, green today);
-- a split whose giving leg's cost needs a conversion no rate gives is refused, on /commit and on /validate:
-  ``WAC_FX_UNAVAILABLE`` on the split's index, ``ref_id`` the giving leg, ``field`` ``cost_basis_override``, params
-  ``pairs`` and ``pair_details`` as for an Auto row;
-- a promote of an ADJUSTMENT −4 carrying a cost and an ADJUSTMENT +4 into a TRANSFER takes the cost (and its currency)
-  off the side whose new type takes none (``cost_basis_allowed``: the giving side); the receiving side keeps its own.
+- a split of a TRANSFER pair makes its giving leg an ADJUSTMENT −4 without ``cost_basis_override`` nor
+  ``cost_basis_currency`` — whatever its broker's pool holds, a purchase of the same batch included —, the receiving
+  leg keeping its own cost. Before N78-1 the leg left at its OWN broker's Auto cost (``_handover_cost``: 100 EUR, or 200
+  with the purchase), computed in the batch's WAC stage;
+- an update of the same batch that gives the giving leg a cost is refused with ``costBasisNotAllowed`` (before N78-1:
+  the coordinator's decision 4, 16/10, kept it);
+- a split whose giving leg's broker paid in a currency no rate converts commits all the same: no cost is computed, so
+  no conversion is missing (before N78-1: ``WAC_FX_UNAVAILABLE`` on the split's index, refused);
+- a promote of an ADJUSTMENT −4 carrying a cost (as an old row may hold it) and an ADJUSTMENT +4 into a TRANSFER takes
+  the cost (and its currency) off the side whose new type takes none (``cost_basis_allowed``: the giving side); the
+  receiving side keeps its own. Unchanged by N78-1.
 
 Why here: these are rules about where a batch writes or removes a cost basis — this file's subject, its ``World``
 (``source`` holding 10 units at 100 EUR, the Auto cost), its stored pair (``_store``) and its vocabulary. The broker
@@ -92,8 +93,9 @@ once —; and each caller refuses. That core — the guard in ``_auto_cost``, ``
 - a batch's Auto row (a create or an update in ``auto`` or ``auto-detail``), on /commit and on /validate: one issue
   ``autoCostUnreadable`` on its operation and index, ``field`` ``cost_basis_override``, ``params`` ``{"count": N}``, and no
   transaction id anywhere in it (the pool may be another user's broker); nothing committed, nothing saved, nothing raised;
-- the split of a TRANSFER pair whose giving leg's handover pool holds such a row: one ``autoCostUnreadable`` on the split's
-  index, ``ref_id`` the giving leg (as ``wacFxUnavailable`` on a split); not committed, the pair intact;
+- the split of a TRANSFER pair whose giving leg's broker pool holds such a row: since N78-1 the split computes no cost
+  for the giving leg, so no ``autoCostUnreadable`` on it — only W-B74's ``ledgerUnreadable``, the split replaying that
+  broker (before N78-1: one ``autoCostUnreadable`` on the split's index, ``ref_id`` the giving leg);
 - ``TXValidationCode.AUTO_COST_UNREADABLE`` exists and ``GET /transactions/types`` lists it; a gate, green today, holds
   every code to its ``transactions.errors.<code>`` message in EN, IT, FR and ES.
 
@@ -1248,25 +1250,24 @@ def _issue_view(issue: TXValidationIssue) -> dict:
 
 
 class TestDecision47TheGivingLegOfATransfer:
-    """RED until decision 47 (but for one guard): where a batch takes a TRANSFER's giving leg out of its pair, the leg
-    leaves at its own broker's Auto cost — unless an update of the same batch gives it a cost of its own, which stays
-    (the coordinator's decision 4, 16/10) —, and a promote that makes a leg the giving side of a TRANSFER takes its cost
-    away.
+    """Decision 47 as N78-1 changed it (the developer's decision, 21/10/2026), RED until its cure but for the promote:
+    where a batch takes a TRANSFER's giving leg out of its pair, the leg leaves as an ADJUSTMENT WITHOUT a value — an
+    update of the same batch that gives it one is refused (``costBasisNotAllowed``) —, and a promote that makes a leg the
+    giving side of a TRANSFER takes its cost away.
 
-    ``source`` holds 10 units bought for 1 000 EUR (the ``world`` fixture): 100 EUR is its Auto cost, the cost its
-    giving leg is handed over at. The receiving leg carries 42 EUR (``STORED_COST``), never 100: a cure that copied the
-    partner's cost, or averaged ``dest`` — whose only units are that leg's — would show.
+    ``source`` holds 10 units bought for 1 000 EUR (the ``world`` fixture): 100 EUR is its Auto cost, the cost its giving
+    leg was handed over at before N78-1. The receiving leg carries 42 EUR (``STORED_COST``), never 100: a cure that copied
+    the partner's cost — or still wrote the Auto cost on the giving leg — would show.
     """
 
     @pytest.mark.asyncio
-    async def test_split_keeps_the_cost_an_update_of_the_same_batch_gives_the_giving_leg(self, world):
-        """Guard, green today and after decision 47 (decision 4): the batch splits the pair and, in an update, gives the
-        giving leg a cost of 77 EUR — no ``cost_basis_mode``, as an API client sends a cost, the mode being refused on an
-        ADJUSTMENT −4 (rule 12). It commits; the giving leg is an ADJUSTMENT −4 at 77 EUR, never overwritten with
-        ``source``'s Auto cost, 100 EUR; the receiving leg keeps its 42.
+    async def test_split_with_an_update_giving_the_giving_leg_a_cost_is_refused(self, world):
+        """RED until N78-1: the batch splits the pair and, in an update, gives the giving leg a cost of 77 EUR — no
+        ``cost_basis_mode``, as an API client sends a cost. The leg the split leaves is an ADJUSTMENT −4, which takes no
+        value: one ``costBasisNotAllowed`` on update 0, ``ref_id`` the giving leg, and nothing else; not committed.
 
-        The update runs after the split (``execute_batch``: split, then update), on the ADJUSTMENT the split left; the
-        handover cost is computed in the WAC stage, later still, and must leave a cost the batch wrote alone.
+        Before N78-1 (the coordinator's decision 4, 16/10, a guard then): it committed, the giving leg an ADJUSTMENT −4 at
+        77 EUR. The update runs after the split (``execute_batch``: split, then update), on the ADJUSTMENT the split left.
         """
         stored = await _store(world, "transfer_in", cost=STORED_COST)
         giving, receiving = stored.rows
@@ -1275,20 +1276,18 @@ class TestDecision47TheGivingLegOfATransfer:
 
         response = await _run_batch(world, commit=True, splits=[{"id_a": giving.id, "id_b": receiving.id}], updates=[{"id": giving.id, "cost_basis_override": {"code": own_cost.code, "amount": str(own_cost.amount)}}])
 
-        assert response.committed is True and response.issues == [], f"A split with an update giving its giving leg a cost was refused: {_render(response.issues)}"
-        assert sorted((result.operation, result.index, result.status) for result in response.results) == [("split", 0, "success"), ("update", 0, "success")], f"results: {response.results}"
-        assert await _legs_now(world, giving, receiving) == {
-            "giving": (TransactionType.ADJUSTMENT, -TRANSFER_QUANTITY, None, own_cost.amount, own_cost.code),
-            "receiving": (TransactionType.ADJUSTMENT, TRANSFER_QUANTITY, None, STORED_COST.amount, STORED_COST.code),
-        }
+        refused = [(issue.operation, issue.index, issue.ref_id, issue.code) for issue in response.issues]
+        assert (response.committed, refused) == (False, [("update", 0, giving.id, COST_BASIS_NOT_ALLOWED)]), (
+            f"N78-1: the giving leg a split leaves is an ADJUSTMENT −{TRANSFER_QUANTITY}, which takes no value, so an update giving it {own_cost.amount} {own_cost.code} must be refused with "
+            f"{COST_BASIS_NOT_ALLOWED} on update 0, ref_id {giving.id}, and nothing else; today committed={response.committed}, issues [{_render(response.issues)}]"
+        )
 
     @pytest.mark.asyncio
-    async def test_split_hands_the_giving_leg_over_at_its_own_brokers_auto_cost(self, world):
-        """RED until decision 47: the split commits; the giving leg becomes an ADJUSTMENT −4 at ``source``'s Auto cost,
-        100 EUR (its BUY, the leg left out), with its currency; the receiving leg an ADJUSTMENT +4 that keeps its 42 EUR.
+    async def test_split_leaves_the_giving_leg_an_adjustment_without_a_value(self, world):
+        """RED until N78-1: the split commits; the giving leg becomes an ADJUSTMENT −4 without ``cost_basis_override`` nor
+        ``cost_basis_currency``; the receiving leg an ADJUSTMENT +4 that keeps its 42 EUR.
 
-        Today the giving leg is left without a cost: an ADJUSTMENT-out that CP-16 closes at price 0, its units read as
-        destroyed.
+        Before N78-1 (decision 47): the giving leg left at ``source``'s Auto cost, 100 EUR (its BUY, the leg left out).
         """
         stored = await _store(world, "transfer_in", cost=STORED_COST)
         giving, receiving = stored.rows
@@ -1298,15 +1297,16 @@ class TestDecision47TheGivingLegOfATransfer:
         assert response.committed is True and response.issues == [], f"The split of the TRANSFER pair {giving.id}/{receiving.id} was refused: {_render(response.issues)}"
         assert [(result.operation, result.index, tuple(result.ids), result.status) for result in response.results] == [("split", 0, (giving.id, receiving.id), "success")]
         assert await _legs_now(world, giving, receiving) == {
-            "giving": (TransactionType.ADJUSTMENT, -TRANSFER_QUANTITY, None, UNIT_COST, EUR),
+            "giving": (TransactionType.ADJUSTMENT, -TRANSFER_QUANTITY, None, None, None),
             "receiving": (TransactionType.ADJUSTMENT, TRANSFER_QUANTITY, None, STORED_COST.amount, STORED_COST.code),
-        }
+        }, f"N78-1: the giving leg id={giving.id} leaves without a value"
 
     @pytest.mark.asyncio
-    async def test_split_prices_the_giving_leg_after_the_rest_of_its_batch(self, world):
-        """RED until decision 47: the giving leg's cost is computed in the batch's WAC stage, after the other stages, so it
-        sees the batch's final state — the same batch buys 10 more units on ``source`` for 3 000 EUR before the move,
-        and the leg leaves at (1 000 + 3 000) / 20 = 200 EUR, not at the 100 a cost computed in the split stage reads."""
+    async def test_split_leaves_the_giving_leg_without_a_value_beside_a_purchase_of_its_batch(self, world):
+        """RED until N78-1: the same batch buys 10 more units on ``source`` for 3 000 EUR before the move; the split still
+        leaves the giving leg an ADJUSTMENT −4 without a value — no average of the batch's final state is written.
+
+        Before N78-1 (decision 47): the leg left at (1 000 + 3 000) / 20 = 200 EUR, computed in the batch's WAC stage."""
         stored = await _store(world, "transfer_in", cost=STORED_COST)
         giving, receiving = stored.rows
         purchase = {
@@ -1325,20 +1325,20 @@ class TestDecision47TheGivingLegOfATransfer:
 
         assert response.committed is True and response.issues == [], f"A split beside a purchase was refused: {_render(response.issues)}"
         legs = await _legs_now(world, giving, receiving)
-        assert legs["giving"] == (TransactionType.ADJUSTMENT, -TRANSFER_QUANTITY, None, expected_cost, EUR), f"The giving leg id={giving.id} must leave at the average of the batch's final state, {expected_cost} EUR: {legs['giving']}"
+        assert legs["giving"] == (TransactionType.ADJUSTMENT, -TRANSFER_QUANTITY, None, None, None), f"N78-1: the giving leg id={giving.id} leaves without a value, never at the batch's average ({expected_cost} EUR): {legs['giving']}"
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("commit", [pytest.param(True, id="commit"), pytest.param(False, id="validate")])
-    async def test_split_whose_handover_cost_needs_a_missing_conversion_is_refused(self, world, commit):
-        """RED until decision 47: part of ``source``'s units were paid in PYG, which no rate converts — the giving leg has
-        no Auto cost to leave at, and the split is refused as an Auto row without one would be: one WAC_FX_UNAVAILABLE on
-        split 1 (index 0 is the split of an FX_CONVERSION pair, which needs no cost), ``ref_id`` the giving leg,
-        ``field`` ``cost_basis_override``, params ``pairs`` and ``pair_details``; nothing committed. /validate
-        (``commit=False``) shows the same issue. Today the split goes through and leaves the giving leg without a cost.
+    async def test_split_whose_giving_legs_broker_lacks_a_conversion_still_goes_through(self, world, commit):
+        """RED until N78-1: part of ``source``'s units were paid in PYG, which no rate converts — no average of ``source``
+        exists, and none is needed: the giving leg leaves without a value. Both splits go through (index 0 is the split of
+        an FX_CONVERSION pair), no issue; on /commit the giving leg is an ADJUSTMENT −4 without a value and the receiving
+        leg keeps its 42 EUR; /validate (``commit=False``) answers clean.
 
-        A real missing conversion: PYG is first proven absent from every rate and route, then the oracle — the call
-        ``_handover_cost`` makes, ``compute_wac_iterative`` on ``source`` up to the move without the leg — confirms there
-        is no average and names PYG/EUR on the PYG purchase's day.
+        Before N78-1 (decision 47): one WAC_FX_UNAVAILABLE on split 1, ``ref_id`` the giving leg, params ``pairs`` and
+        ``pair_details`` PYG/EUR; nothing committed. A real missing conversion: PYG is first proven absent from every rate
+        and route, then the oracle — ``compute_wac_iterative`` on ``source`` up to the move without the leg — confirms
+        there is no average and names PYG/EUR on the PYG purchase's day.
         """
         await _assert_no_rate_nor_route(world.session, PYG)
         now = utcnow()
@@ -1351,24 +1351,21 @@ class TestDecision47TheGivingLegOfATransfer:
 
         response = await _run_batch(world, commit=commit, splits=[{"id_a": sold.id, "id_b": bought.id}, {"id_a": giving.id, "id_b": receiving.id}])
 
-        assert response.committed is False, f"A split whose giving leg has no cost to leave at was committed: {response.results}"
-        assert [_issue_view(issue) for issue in response.issues] == [
-            {
-                "operation": "split",
-                "index": 1,
-                "ref_id": giving.id,
-                "code": WAC_FX_UNAVAILABLE,
-                "field": "cost_basis_override",
-                "params": {"pairs": ["PYG/EUR"], "pair_details": [{"pair": "PYG/EUR", "dates": [PYG_DAY.isoformat()]}]},
+        endpoint = "/commit" if commit else "/validate"
+        today = f"today committed={response.committed}, issues [{_render(response.issues)}]"
+        assert (response.committed, [_issue_view(issue) for issue in response.issues]) == (commit, []), f"N78-1: the giving leg leaves without a value, so no conversion is missing and the splits go through ({endpoint}); {today}"
+        if commit:
+            assert await _legs_now(world, giving, receiving) == {
+                "giving": (TransactionType.ADJUSTMENT, -TRANSFER_QUANTITY, None, None, None),
+                "receiving": (TransactionType.ADJUSTMENT, TRANSFER_QUANTITY, None, STORED_COST.amount, STORED_COST.code),
             }
-        ], f"Expected one {WAC_FX_UNAVAILABLE} on split 1, the TRANSFER pair's: {_render(response.issues)}"
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("giving_first", [pytest.param(True, id="giving-side-as-id-a"), pytest.param(False, id="giving-side-as-id-b")])
     async def test_promote_into_a_transfer_takes_the_cost_off_the_giving_side(self, world, giving_first):
-        """RED until decision 47: an ADJUSTMENT −4 on ``source`` carrying a cost — 100 EUR, as a split of decision 47
-        leaves it — and an ADJUSTMENT +4 on ``dest`` carrying 42 EUR, promoted into a TRANSFER, in either order: the
-        promote commits; the giving side loses ``cost_basis_override`` and ``cost_basis_currency`` — its new type takes
+        """Green since decision 47, unchanged by N78-1: an ADJUSTMENT −4 on ``source`` carrying a cost — 100 EUR, as an
+        old row may hold it (decision 47 wrote such costs before N78-1) — and an ADJUSTMENT +4 on ``dest`` carrying 42 EUR,
+        promoted into a TRANSFER, in either order: the promote commits; the giving side loses ``cost_basis_override`` and ``cost_basis_currency`` — its new type takes
         no cost basis, ``cost_basis_allowed(TRANSFER, −4)`` is False — and the receiving side keeps its 42 EUR.
 
         Today the promote keeps both costs: a TRANSFER giving leg carrying a cost no screen can show or edit.
@@ -1800,24 +1797,23 @@ class TestWB69AnAutoRowOverAnUnreadablePool:
 
 
 class TestWB69TheSplitOfATransferOverAnUnreadablePool:
-    """W-B69 (b): the split of a TRANSFER pair hands its giving leg over at the Auto cost of ``source`` up to the move,
-    without the leg (decision 47: ``_handover_cost``, in the batch's WAC stage). Refused since W-B69's cure when that pool
-    holds an unreadable row — and, a contract update RED until W-B74's cure, with ``ledgerUnreadable`` too, the split
-    replaying ``source``; a guard with every row readable."""
+    """W-B69 (b), as N78-1 changed it (the developer's decision, 21/10/2026): the split of a TRANSFER pair leaves its
+    giving leg an ADJUSTMENT without a value, so it computes no Auto cost over ``source`` — and never refuses with
+    ``autoCostUnreadable``. A pool with an unreadable row still refuses the split through W-B74 alone
+    (``ledgerUnreadable``: the split replays ``source``). RED until N78-1. Before it the split handed the giving leg over at
+    ``source``'s Auto cost (decision 47, ``_handover_cost``), refused with ``autoCostUnreadable`` over such a pool."""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("commit", ENDPOINTS)
     @pytest.mark.parametrize("column", UNREADABLE_COLUMNS)
-    async def test_split_whose_handover_pool_holds_an_unreadable_row_is_refused(self, world, column, commit):
-        """W-B69 (b): ``autoCostUnreadable`` on split 1 — index 0 is the split of an FX_CONVERSION pair, which needs no
-        cost —, ``ref_id`` the giving leg (as ``wacFxUnavailable`` on a split), ``field`` ``cost_basis_override``,
-        ``params`` ``{"count": 1}``; not committed; the pair intact — two TRANSFER legs linked both ways, the receiving one
-        at its 42 EUR — and every other row as it was. Before W-B69's cure the split went through and handed the giving leg
-        over at the average of what reads.
+    async def test_split_over_a_pool_with_an_unreadable_row_computes_no_auto_cost(self, world, column, commit):
+        """RED until N78-1: no ``autoCostUnreadable`` on the split — the giving leg needs no cost —; the split replays the
+        brokers of its legs — ``dest``, then ``source`` —, and ``source`` holds the BUY whose quantity or amount reads
+        None: the one issue is W-B74's ``ledgerUnreadable`` ``{brokerId: source, count: 1}`` at index -1; not committed;
+        the pair intact and every other row as it was.
 
-        Contract update for W-B74, RED until its cure: the split replays the brokers of its legs — ``dest``, then
-        ``source`` —, and ``source`` holds the BUY whose quantity or amount reads None: the issues are exactly two, that
-        one and ``ledgerUnreadable`` ``{brokerId: source, count: 1}`` at index -1."""
+        Before N78-1: ``autoCostUnreadable`` on split 1, ``ref_id`` the giving leg, ``params`` ``{"count": 1}``, beside
+        ``ledgerUnreadable``."""
         await _plant(world, unreadable=(column,))
         sold, bought = await _fx_conversion_pair(world)
         stored = await _store(world, "transfer_in", cost=STORED_COST)
@@ -1828,22 +1824,22 @@ class TestWB69TheSplitOfATransferOverAnUnreadablePool:
         response = await _as_the_endpoint(world, commit=commit, splits=[{"id_a": sold.id, "id_b": bought.id}, {"id_a": giving.id, "id_b": receiving.id}])
 
         after = await _raw_rows(world, brokers)
-        expected = _unreadable_issue("split", 1, ref_id=giving_id, count=1)
         on_the_split = [view for view in (_issue_view(issue) for issue in response.issues) if view["code"] == AUTO_COST_UNREADABLE]
-        assert (response.committed, on_the_split) == (False, [expected]), (
-            f"W-B69: the split of a TRANSFER pair whose giving leg's handover pool holds an unreadable row (a BUY of source whose {column} is 'n/a') must be refused with "
-            f"{AUTO_COST_UNREADABLE} {{count: 1}} on split 1, ref_id the giving leg id={giving_id} ({_endpoint(commit)}); today the batch answers committed={response.committed}, "
-            f"issues [{_render(response.issues)}], and leaves the giving leg {_leg_shown(after.get(giving_id))} — {TODAY_OVER_AN_UNREADABLE[column]}"
+        assert (response.committed, on_the_split) == (False, []), (
+            f"N78-1: the split leaves the giving leg id={giving_id} without a value, so it computes no Auto cost over source (a BUY of source whose {column} is 'n/a') and never answers "
+            f"{AUTO_COST_UNREADABLE}; W-B74 still refuses the replay ({_endpoint(commit)}); today the batch answers committed={response.committed}, issues [{_render(response.issues)}], "
+            f"and leaves the giving leg {_leg_shown(after.get(giving_id))}"
         )
-        _assert_with_the_ledger(response, [expected], (source_id, 1), f"split 1 ({_endpoint(commit)})")
+        _assert_with_the_ledger(response, [], (source_id, 1), f"split 1 ({_endpoint(commit)})")
         changed = _changed(before, after)
         assert changed == {}, f"W-B69: the refused split changed rows of source and dest (before, after): {changed}"
 
     @pytest.mark.asyncio
-    async def test_split_over_a_readable_pool_hands_the_giving_leg_over_at_its_average(self, world):
-        """Guard, green today and after W-B69: with the planted BUY readable the split commits; the giving leg leaves as an
-        ADJUSTMENT −4 at ``source``'s average, (1 000 + 3 000) / 20 = 200 EUR, and the receiving leg becomes an ADJUSTMENT
-        +4 that keeps its 42 EUR."""
+    async def test_split_over_a_readable_pool_leaves_the_giving_leg_without_a_value(self, world):
+        """RED until N78-1: with the planted BUY readable the split commits; the giving leg leaves as an ADJUSTMENT −4
+        without a value, and the receiving leg becomes an ADJUSTMENT +4 that keeps its 42 EUR.
+
+        Before N78-1 (decision 47): the giving leg left at ``source``'s average, (1 000 + 3 000) / 20 = 200 EUR."""
         await _plant(world)
         stored = await _store(world, "transfer_in", cost=STORED_COST)
         giving_id, receiving_id = stored.rows[0].id, stored.rows[1].id
@@ -1852,9 +1848,9 @@ class TestWB69TheSplitOfATransferOverAnUnreadablePool:
 
         assert response.committed is True and response.issues == [], f"The split of a TRANSFER pair over a readable pool was refused: {_render(response.issues)}"
         assert await _rows_by_id(world, [giving_id, receiving_id]) == {
-            giving_id: (TransactionType.ADJUSTMENT, -TRANSFER_QUANTITY, None, READABLE_POOL_COST, EUR),
+            giving_id: (TransactionType.ADJUSTMENT, -TRANSFER_QUANTITY, None, None, None),
             receiving_id: (TransactionType.ADJUSTMENT, TRANSFER_QUANTITY, None, STORED_COST.amount, STORED_COST.code),
-        }
+        }, f"N78-1: the giving leg id={giving_id} leaves without a value, never at source's average ({READABLE_POOL_COST} EUR)"
 
 
 class TestWB69GuardsReadablePoolsAndRowsOutsideThePool:
@@ -1968,7 +1964,7 @@ N78_CODES = (COST_BASIS_NOT_ALLOWED, COST_BASIS_MODE_INCOMPATIBLE)
 # What the other leg of a pair gets when a refusal at the parse leaves it alone in its link_uuid.
 LINK_UUID_PAIR_COUNT = TXValidationCode.LINK_UUID_PAIR_COUNT.value
 # The creates N78 refuses (_n78_refused_create), each at index 1 behind a row valid on its own. The giving side of an
-# ADJUSTMENT is not one of them: the refined N78 (the coordinator's (a), 17/10) leaves it to decisions 4 and 47.
+# ADJUSTMENT has its own class since N78-1 (TestN78ACostBasisOnTheGivingSideOfAnAdjustment): refused too.
 N78_CREATE_CASES = ("buy", "fx-conversion-leg")
 N78_MODES = ("auto", "manual")
 # The form's currency hint: the cost_basis_override it sends beside cost_basis_mode "auto", of which the batch reads the
@@ -2110,8 +2106,8 @@ def _error_text(messages: dict, code: str) -> str:
 
 class TestN78ACostBasisWhereNoneIsTaken:
     """RED until N78 (W-B72): a ``cost_basis_override`` sent without a ``cost_basis_mode`` on a type and side that take none
-    (``cost_basis_allowed`` False) — but the giving side of an ADJUSTMENT, the refined N78's exception
-    (``TestN78GuardsTheGivingSideOfAnAdjustment``) — is refused with ``costBasisNotAllowed`` ``{type, qty}``.
+    (``cost_basis_allowed`` False) is refused with ``costBasisNotAllowed`` ``{type, qty}`` — the giving side of an
+    ADJUSTMENT too since N78-1, in its own class (``TestN78ACostBasisOnTheGivingSideOfAnAdjustment``).
 
     Today rule 12 reads only ``cost_basis_mode``: the batch commits the row with its cost basis stored — noise the math
     ignores on a row of quantity 0, but that the list, the export and the backup carry. Each test runs the batch as
@@ -2129,7 +2125,7 @@ class TestN78ACostBasisWhereNoneIsTaken:
         subject = batch.creates[batch.index]
         side = (TransactionType(subject["type"]), Decimal(subject.get("quantity", "0")))
         assert "cost_basis_mode" not in subject and not cost_basis_allowed(*side), f"precondition broken: {batch.label} must carry no cost_basis_mode, on a type and side that take no cost basis; cost_basis_allowed{side} = {cost_basis_allowed(*side)}"
-        assert not (side[0] == TransactionType.ADJUSTMENT and side[1] < 0), f"precondition broken: {batch.label} is the giving side of an ADJUSTMENT, which the refined N78 leaves to decisions 4 and 47"
+        assert not (side[0] == TransactionType.ADJUSTMENT and side[1] < 0), f"scaffold: {batch.label} is the giving side of an ADJUSTMENT, whose class is TestN78ACostBasisOnTheGivingSideOfAnAdjustment"
 
         response = await _n78_as_the_endpoint(world, creates=batch.creates)
 
@@ -2224,45 +2220,60 @@ class TestN78GuardsWhereACostBasisIsTaken:
         assert stored == (UNIT_COST, EUR), f"Auto cost of the {SHAPE_LABELS[shape]}: expected {UNIT_COST} {EUR}, the average of source's BUY; it holds {_show(stored)} (wac_results={response.wac_results})"
 
 
-class TestN78GuardsTheGivingSideOfAnAdjustment:
-    """Guards, green today and after the refined N78 (the coordinator's (a), 17/10): rule 12b leaves alone an ADJUSTMENT
-    with a quantity below 0, although ``cost_basis_allowed`` refuses it a cost basis. Its stored cost is decision 47's
-    handover cost — the cost CP-16 hands its units over at — and decision 4 lets an update of the same batch set it
-    (``test_split_keeps_the_cost_an_update_of_the_same_batch_gives_the_giving_leg``, unchanged). Decisions 4 and 47 are the
-    developer's, and win. A cure that applied rule 12b to every side ``cost_basis_allowed`` refuses turns these red: each
-    checks first that the table does refuse the side, so the commit rests on the exception and not on the table.
+class TestN78ACostBasisOnTheGivingSideOfAnAdjustment:
+    """N78-1 (the developer's decision, 21/10/2026), RED until its cure: an ADJUSTMENT with a quantity below 0 has no value,
+    so rule 12b loses its exception — a cost basis the request sets on it, without a mode, is refused with
+    ``costBasisNotAllowed`` ``{type, qty}``, as on every type and side ``cost_basis_allowed`` refuses (with a mode, rule 12's
+    ``costBasisModeIncompatible`` speaks already). An update that does not send a cost on an old row storing one stays
+    valid: ``TestN78GuardsStrayCostsAndNulls``, unchanged.
+
+    Before N78-1 these were guards of the refined N78 (the coordinator's (a), 17/10): the stored cost was decision 47's
+    handover cost, and both requests committed and held 42 EUR. Each test checks first that the table does refuse the side.
     """
 
     @pytest.mark.asyncio
-    async def test_create_of_an_adjustment_out_with_a_cost_basis_commits_and_holds_it(self, world):
-        """Guard: an ADJUSTMENT −5 on ``source`` — which holds the ``world``'s 10 units, so it does not go short — created
-        with 42 EUR and no mode commits, and holds 42 EUR."""
-        assert not cost_basis_allowed(TransactionType.ADJUSTMENT, -ADJUSTMENT_QUANTITY), "precondition broken: TX_TYPE_METADATA must refuse a cost basis on an ADJUSTMENT's giving side, or this commit rests on the table and not on the exception"
+    async def test_create_of_an_adjustment_out_with_a_cost_basis_is_refused_at_the_parse(self, world):
+        """RED until N78-1: an ADJUSTMENT −5 on ``source`` — which holds the ``world``'s 10 units, so it does not go short —
+        created with 42 EUR and no mode gets one ``costBasisNotAllowed`` on create 0, ``params`` ``{type: ADJUSTMENT,
+        qty: -5}`` (the quantity compared as a number), and nothing else; refused at the parse, so create 0 has no result;
+        not committed, nothing it sent stored. Before N78-1 it committed and held 42 EUR."""
+        assert not cost_basis_allowed(TransactionType.ADJUSTMENT, -ADJUSTMENT_QUANTITY), "precondition broken: TX_TYPE_METADATA must refuse a cost basis on an ADJUSTMENT's giving side"
         created = {**_created_adjustment(world, broker=world.source, quantity=-ADJUSTMENT_QUANTITY), "cost_basis_override": _cost_sent(), "description": _n78_description(world)}
 
         response = await _n78_as_the_endpoint(world, creates=[created])
 
-        assert response.committed is True and response.issues == [], f"N78 refined (the coordinator's (a), 17/10): an ADJUSTMENT -{ADJUSTMENT_QUANTITY} created with a cost basis and no mode is the exception decisions 4 and 47 keep, so it must commit; it was refused: {_render(response.issues)}"
-        stored = await _stored_cost(world, _created_id(response, 0))
-        assert stored == (STORED_COST.amount, STORED_COST.code), f"The ADJUSTMENT -{ADJUSTMENT_QUANTITY} was committed with {_show(stored)}, not the {STORED_COST.amount} {STORED_COST.code} it was sent with"
+        refusal = f"{COST_BASIS_NOT_ALLOWED} {{type: ADJUSTMENT, qty: -{ADJUSTMENT_QUANTITY}}} on create 0"
+        found = [(issue.operation, issue.index, _type_and_qty(issue.params)) for issue in response.issues]
+        today = await _n78_today(world, response, "create", 0)
+        what = f"an ADJUSTMENT -{ADJUSTMENT_QUANTITY} created with a cost basis of {STORED_COST.amount} {STORED_COST.code} and no mode"
+        assert found == [("create", 0, ("ADJUSTMENT", -ADJUSTMENT_QUANTITY))] and all(issue.code == COST_BASIS_NOT_ALLOWED for issue in response.issues), f"N78-1: {what} has no value, so it must be refused with exactly {refusal}; today {today}"
+        assert response.committed is False, f"N78-1: the create was refused, yet the batch answered committed: {response.results}"
+        assert ("create", 0) not in {(result.operation, result.index) for result in response.results}, f"N78-1: refused at the parse, create 0 has no result: {response.results}"
+        assert await _n78_batch_rows(world) == [], "N78-1: the batch was refused, yet the row it sent is stored"
 
     @pytest.mark.asyncio
-    async def test_update_setting_a_cost_basis_on_a_stored_adjustment_out_commits_and_holds_it(self, world):
-        """Guard: ``{id, cost_basis_override: 42 EUR}``, no mode, on an ADJUSTMENT −4 stored on ``source`` without a cost
-        commits, and the row holds 42 EUR: decision 4's update of a giving leg, on a row stored as one."""
+    async def test_update_setting_a_cost_basis_on_a_stored_adjustment_out_is_refused(self, world):
+        """RED until N78-1: ``{id, cost_basis_override: 42 EUR}``, no mode, on an ADJUSTMENT −4 stored on ``source`` without
+        a cost gets one ``costBasisNotAllowed`` on update 0, ``ref_id`` the row, ``params`` ``{type: ADJUSTMENT, qty: -4}``,
+        and nothing else; not committed, and the row still holds no cost basis. Before N78-1 it committed and held 42 EUR
+        (decision 4's update of a giving leg)."""
         row = _stored_row(world, broker=world.source, tx_type=TransactionType.ADJUSTMENT, quantity=-TRANSFER_QUANTITY)
         world.session.add(row)
         await world.session.flush()
         row_id = row.id
-        assert not cost_basis_allowed(TransactionType.ADJUSTMENT, -TRANSFER_QUANTITY), "precondition broken: TX_TYPE_METADATA must refuse a cost basis on an ADJUSTMENT's giving side, or this commit rests on the table and not on the exception"
+        assert not cost_basis_allowed(TransactionType.ADJUSTMENT, -TRANSFER_QUANTITY), "precondition broken: TX_TYPE_METADATA must refuse a cost basis on an ADJUSTMENT's giving side"
         assert await _stored_cost(world, row_id) == (None, None), f"scaffold: the ADJUSTMENT -{TRANSFER_QUANTITY} id={row_id} must be stored without a cost basis"
 
         response = await _n78_as_the_endpoint(world, updates=[{"id": row_id, "cost_basis_override": _cost_sent()}])
 
-        assert response.committed is True and response.issues == [], f"N78 refined (coordinator's (a), 17/10): a cost basis set with no mode on the ADJUSTMENT -{TRANSFER_QUANTITY} id={row_id} is the exception decisions 4 and 47 keep, so the update must commit: {_render(response.issues)}"
-        assert _update_results(response) == [(0, (row_id,), "success")], f"Committed, but the row was not updated: {response.results}"
+        refusal = f"{COST_BASIS_NOT_ALLOWED} {{type: ADJUSTMENT, qty: -{TRANSFER_QUANTITY}}} on update 0"
+        found = [(issue.operation, issue.index, issue.ref_id, issue.code, _type_and_qty(issue.params)) for issue in response.issues]
+        today = await _n78_today(world, response, "update", 0)
+        expected = [("update", 0, row_id, COST_BASIS_NOT_ALLOWED, ("ADJUSTMENT", -TRANSFER_QUANTITY))]
+        assert found == expected, f"N78-1: a cost basis set with no mode on the ADJUSTMENT -{TRANSFER_QUANTITY} id={row_id} must be refused with exactly {refusal}, ref_id {row_id}; today {today}"
+        assert response.committed is False, f"N78-1: the update was refused, yet the batch answered committed: {response.results}"
         stored = await _stored_cost(world, row_id)
-        assert stored == (STORED_COST.amount, STORED_COST.code), f"The update committed, yet the ADJUSTMENT -{TRANSFER_QUANTITY} id={row_id} holds {_show(stored)}, not {STORED_COST.amount} {STORED_COST.code}"
+        assert stored == (None, None), f"N78-1: the update was refused, yet the ADJUSTMENT -{TRANSFER_QUANTITY} id={row_id} holds {_show(stored)}"
 
 
 class TestN78GuardsStrayCostsAndNulls:
@@ -3126,8 +3137,8 @@ async def _j60_auto_batch(world: World, case: str, mode: str) -> AutoBatch:
 
 class TestJ60ANegativeManualCostOnACreate:
     """J-60 — RED until its cure: a create that sends a manual cost basis below 0 is refused on its own row, wherever a cost
-    basis goes in: an ADJUSTMENT adding units, a TRANSFER's receiving leg, and an ADJUSTMENT taking units out, whose handover
-    cost N78 lets in (decision 47). Today each commits with −1 EUR stored, and /validate answers clean.
+    basis goes in: an ADJUSTMENT adding units and a TRANSFER's receiving leg. An ADJUSTMENT taking units out takes no cost
+    at all since N78-1: any cost on it, below 0 or not, is ``costBasisNotAllowed`` (RED until N78-1).
 
     Each batch runs as ``POST /transactions/commit`` or ``/validate`` runs it, its transaction included
     (``_j60_as_the_endpoint``), and the rows of the test's brokers are read back raw, before and after (``_raw_rows``).
@@ -3168,20 +3179,27 @@ class TestJ60ANegativeManualCostOnACreate:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("commit", ENDPOINTS)
-    async def test_adjustment_out_at_a_negative_handover_cost_is_refused(self, world, commit):
-        """RED until J-60: an ADJUSTMENT −5 on ``source`` — which holds the ``world``'s 10 units, so it does not go short — at
-        a handover cost of −1 EUR, no mode. N78 lets the giving side carry a cost, decision 47's handover cost
-        (``TestN78GuardsTheGivingSideOfAnAdjustment``), never one below 0: one ``costBasisNegative`` on create 0, ``ref_id``
-        None; not committed, nothing written. Today its units are handed over at −1 EUR."""
-        assert not cost_basis_allowed(TransactionType.ADJUSTMENT, -ADJUSTMENT_QUANTITY), "precondition broken: TX_TYPE_METADATA must refuse a cost basis on an ADJUSTMENT's giving side, or this row is not N78's exception"
+    async def test_adjustment_out_at_a_negative_cost_is_refused_as_any_cost_on_its_side(self, world, commit):
+        """RED until N78-1: an ADJUSTMENT −5 on ``source`` — which holds the ``world``'s 10 units, so it does not go short —
+        at a cost of −1 EUR, no mode. Its side takes no cost at all: one ``costBasisNotAllowed`` on create 0, refused at the
+        parse — so no ``costBasisNegative``, the sign never read —, and nothing else; not committed, nothing written.
+
+        Before N78-1 (J-60, the giving side then carrying decision 47's handover cost): one ``costBasisNegative`` on create
+        0, ``ref_id`` None."""
+        assert not cost_basis_allowed(TransactionType.ADJUSTMENT, -ADJUSTMENT_QUANTITY), "precondition broken: TX_TYPE_METADATA must refuse a cost basis on an ADJUSTMENT's giving side"
         created = {**_created_adjustment(world, broker=world.source, quantity=-ADJUSTMENT_QUANTITY), "cost_basis_override": _cost_sent(J60_NEGATIVE_COST)}
         brokers = await _world_brokers(world)
         before = await _raw_rows(world, brokers)
 
         response = await _j60_as_the_endpoint(world, commit=commit, creates=[created])
 
-        what = f"an ADJUSTMENT -{ADJUSTMENT_QUANTITY} on source created at a handover cost of {J60_NEGATIVE_COST.amount} {EUR} (no mode)"
-        await _assert_cost_basis_negative(world, response, row=("create", 0, None), what=what, commit=commit, brokers=brokers, before=before)
+        views = [(issue.operation, issue.index, issue.code) for issue in response.issues]
+        assert (response.committed, views) == (False, [("create", 0, COST_BASIS_NOT_ALLOWED)]), (
+            f"N78-1: an ADJUSTMENT -{ADJUSTMENT_QUANTITY} on source created at a cost of {J60_NEGATIVE_COST.amount} {EUR} (no mode) takes no cost, so it must be refused with exactly "
+            f"{COST_BASIS_NOT_ALLOWED} on create 0 ({_endpoint(commit)}); today {await _j60_today(world, response, 'create', 0)}"
+        )
+        changed = _changed(before, await _raw_rows(world, brokers))
+        assert changed == {}, f"N78-1: the refused batch changed rows of the test's brokers (before, after): {changed}"
 
 
 class TestJ60ANegativeManualCostOnAnUpdate:
@@ -3271,13 +3289,20 @@ class TestJ60ANegativeCostDoesNotStopTheBatch:
     @pytest.mark.parametrize("commit", ENDPOINTS)
     @pytest.mark.parametrize("beside", J60_BESIDE_CASES)
     async def test_a_negative_cost_comes_with_the_rows_other_refusal(self, world, beside, commit):
-        """RED until J-60: an ADJUSTMENT on ``dest`` at −1 EUR, no mode, also refused for something else, gets both issues on
-        create 0 in one answer; not committed, nothing written. Today the other refusal comes alone.
+        """A row at −1 EUR, no mode, also refused for something else — on itself or on its pair's other leg — gets both
+        issues in one answer; not committed, nothing written.
 
-        ``decimal-places``: +0.12345678901 units, 11 decimal places where a quantity keeps 10 — ``decimalPlacesExceeded`` on
-        ``quantity``, from ``check_decimal_limits``, which does not stop the batch either. ``short-balance``: −5 units, at a
-        handover cost of −1, on ``dest``, which holds nothing of the asset and refuses shorting — ``balanceAssetNegative``,
-        from the balance replay, the batch's last stage: the case that tells a check that runs on from one that stops.
+        ``decimal-places``: an ADJUSTMENT +0.12345678901 on ``dest``, 11 decimal places where a quantity keeps 10 —
+        ``decimalPlacesExceeded`` on ``quantity``, from ``check_decimal_limits``, which does not stop the batch either; both
+        issues on create 0. ``short-balance``: a TRANSFER pair source → dest of 15 units, its receiving leg (create 1) at −1
+        EUR; ``source`` holds 10 and refuses shorting — ``balanceAssetNegative`` on the giving leg (create 0), from the
+        balance replay, the batch's last stage: the case that tells a check that runs on from one that stops.
+
+        N78-1 (the developer's decision, 21/10/2026): ``short-balance`` used to be an ADJUSTMENT −5 on ``dest`` at a handover
+        cost of −1. An ADJUSTMENT taking units out takes no cost at all since, and that row is refused at the parse with
+        ``costBasisNotAllowed`` alone, before the balance replay
+        (``test_adjustment_out_at_a_negative_cost_is_refused_as_any_cost_on_its_side``): the subject — a negative cost
+        beside a refusal only the last stage finds — moved to a TRANSFER's receiving leg, a side that takes a cost.
         """
         if beside == "decimal-places":
             limit = decimal_limit_issue(J60_QUANTITY_11_DECIMALS, Transaction, "quantity")
@@ -3286,19 +3311,23 @@ class TestJ60ANegativeCostDoesNotStopTheBatch:
                 DECIMAL_PLACES_EXCEEDED,
                 None,
             ), f"precondition broken: {J60_QUANTITY_11_DECIMALS} must be refused for its decimal places, its integer digits within the limit (past it the batch stops early); decimal_limit_issue gives {limit}, integer_digits_issue {digits}"
-            quantity, other = J60_QUANTITY_11_DECIMALS, {"operation": "create", "index": 0, "ref_id": None, "code": DECIMAL_PLACES_EXCEEDED, "field": "quantity"}
+            other = {"operation": "create", "index": 0, "ref_id": None, "code": DECIMAL_PLACES_EXCEEDED, "field": "quantity"}
+            creates = [{**_created_adjustment(world, broker=world.dest, quantity=J60_QUANTITY_11_DECIMALS), "cost_basis_override": _cost_sent(J60_NEGATIVE_COST)}]
+            row, what = ("create", 0, None), f"an ADJUSTMENT +{J60_QUANTITY_11_DECIMALS} on dest at a manual cost of {J60_NEGATIVE_COST.amount} {EUR}"
         else:
-            pool = await _pool(world, world.dest)
-            assert (pool, world.dest.allow_asset_shorting) == ([], False), f"precondition broken: dest must hold nothing of the asset and refuse shorting; its pool on {MOVE_DAY} holds {pool}, allow_asset_shorting={world.dest.allow_asset_shorting}"
-            quantity, other = -ADJUSTMENT_QUANTITY, {"operation": "create", "index": 0, "ref_id": None, "code": BALANCE_ASSET_NEGATIVE, "field": None}
-        created = {**_created_adjustment(world, broker=world.dest, quantity=quantity), "cost_basis_override": _cost_sent(J60_NEGATIVE_COST)}
+            moved = BUY_QUANTITY + ADJUSTMENT_QUANTITY
+            assert world.source.allow_asset_shorting is False, "precondition broken: source must refuse shorting, or moving more than it holds is no refusal"
+            other = {"operation": "create", "index": 0, "ref_id": None, "code": BALANCE_ASSET_NEGATIVE, "field": None}
+            creates = _created_pair(world)
+            creates[0]["quantity"], creates[1]["quantity"] = str(-moved), str(moved)
+            creates[1]["cost_basis_override"] = _cost_sent(J60_NEGATIVE_COST)
+            row, what = ("create", 1, None), f"a TRANSFER of {moved} units out of source, which holds {BUY_QUANTITY}, its receiving leg at a manual cost of {J60_NEGATIVE_COST.amount} {EUR}"
         brokers = await _world_brokers(world)
         before = await _raw_rows(world, brokers)
 
-        response = await _j60_as_the_endpoint(world, commit=commit, creates=[created])
+        response = await _j60_as_the_endpoint(world, commit=commit, creates=creates)
 
-        what = f"an ADJUSTMENT {quantity:+} on dest at a manual cost of {J60_NEGATIVE_COST.amount} {EUR}, also refused with {other['code']}"
-        await _assert_cost_basis_negative(world, response, row=("create", 0, None), what=what, commit=commit, brokers=brokers, before=before, beside=(other,))
+        await _assert_cost_basis_negative(world, response, row=row, what=f"{what}, also refused with {other['code']}", commit=commit, brokers=brokers, before=before, beside=(other,))
 
 
 class TestJ60GuardsWhatTheSignLeavesAlone:

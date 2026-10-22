@@ -80,16 +80,18 @@
     // Event type config
     // =========================================================================
 
+    /* colour: closest role, to review: event-type tiles on state tints (dividend warning, interest info, maturity success,
+       price adjustment neutral); they are kinds, not states. SPLIT stays purple (categorical). */
     const typeConfig: Record<string, {icon: string; bg: string}> = {
-        DIVIDEND: {icon: '💰', bg: 'bg-amber-50 dark:bg-amber-900/20'},
-        INTEREST: {icon: '🏦', bg: 'bg-blue-50 dark:bg-blue-900/20'},
+        DIVIDEND: {icon: '💰', bg: 'bg-lf-warning-soft'},
+        INTEREST: {icon: '🏦', bg: 'bg-lf-info-soft'},
         SPLIT: {icon: '✂️', bg: 'bg-purple-50 dark:bg-purple-900/20'},
-        PRICE_ADJUSTMENT: {icon: '📊', bg: 'bg-gray-100 dark:bg-gray-800'},
-        MATURITY_SETTLEMENT: {icon: '📅', bg: 'bg-green-50 dark:bg-green-900/20'},
+        PRICE_ADJUSTMENT: {icon: '📊', bg: 'bg-lf-neutral'},
+        MATURITY_SETTLEMENT: {icon: '📅', bg: 'bg-lf-success-soft'},
     };
 
     function getTypeConfig(type: string) {
-        return typeConfig[type] ?? {icon: '📋', bg: 'bg-gray-100 dark:bg-gray-800'};
+        return typeConfig[type] ?? {icon: '📋', bg: 'bg-lf-neutral'};
     }
 
     function typeLabel(type: string): string {

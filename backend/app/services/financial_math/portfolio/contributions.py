@@ -76,7 +76,7 @@ def closed_position_base(cost_sold: Decimal, sales: int, moved_out: tuple[Decima
     did while there (the tract adjustment), so the base is the cost of both: ``cost_sold`` over its ``sales`` disposals
     counted in Realized, plus the cost its counted tracts moved out. When a unit left any other way — ``exits``, the
     position's outgoing quantity moves of the period, outnumber those disposals and tracts: a transfer outside the scope
-    or still in transit at the end, a tract or a sale whose value or cost is unknown, an ADJUSTMENT without a cost —
+    or still in transit at the end, a tract or a sale whose value or cost is unknown —
     the row's result is not covered by a base, and None leaves the general rule standing.
 
     ``moved_in``, the mirror (MF-A8): the units the row received by counted tracts enter its result at their value on

@@ -379,22 +379,27 @@ class TestScenarioBInTransitShareFix:
 
 
 class TestInKindAdjustmentBrokerAttribution:
-    """A priced in-kind ADJUSTMENT (opening/transfer/succession) is a capital
-    contribution/distribution, not profit — its cost must move
-    cumulative_ecf_by_broker for the SPECIFIC broker that carries it, symmetric to
-    the scope-aggregate cumulative_ecf, whether the transaction falls before
-    date_from (replayed, not emitted) or on an emitted day. J1: one replay with the
-    same rules every day; before J1 the first case ran in a separate pre-frame.
+    """A priced in-kind ADJUSTMENT-in (opening/transfer/succession) is a capital
+    contribution, not profit — its cost moves cumulative_ecf_by_broker for the
+    SPECIFIC broker that carries it, symmetric to the scope-aggregate cumulative_ecf,
+    whether the transaction falls before date_from (replayed, not emitted) or on an
+    emitted day. J1: one replay with the same rules every day; before J1 the first
+    case ran in a separate pre-frame.
+
+    An ADJUSTMENT-out has no value (N78-1, the developer's decision, 21/10/2026),
+    whatever cost it stores: it moves no capital and realizes 0 − the cost the pool
+    gives up, at the broker that carries it. Before N78-1 it was the mirror capital
+    distribution at its stored value.
     """
 
-    def test_in_before_date_from_and_out_after_track_broker_ecf(self):
+    def test_in_before_date_from_moves_broker_capital_and_out_after_realizes_minus_its_cost(self):
         # Broker 10: opening in-kind ADJUSTMENT-in, dated BEFORE date_from (replayed, not emitted).
         adj_in = _tx(id=1, broker_id=10, type="ADJUSTMENT", dt="2025-01-02", quantity="10", asset_id=100, cost_basis_override="100", cost_basis_currency="EUR")
         # Broker 20: unrelated external deposit (also before date_from) — isolation control:
         # its own capital baseline must stay untouched by broker 10's in-kind event.
         dep20 = _tx(id=2, broker_id=20, type="DEPOSIT", dt="2025-01-03", amount="500")
-        # Broker 10: in-kind ADJUSTMENT-out on an emitted day, same
-        # qty/cost -> fully unwinds the capital contributed above.
+        # Broker 10: ADJUSTMENT-out on an emitted day storing the same cost: no value since
+        # N78-1 -> the capital stays, the 1000 of cost are realized as a loss at broker 10.
         adj_out = _tx(id=3, broker_id=10, type="ADJUSTMENT", dt="2025-01-12", quantity="-10", asset_id=100, cost_basis_override="100", cost_basis_currency="EUR")
 
         txs = [_ctxn(adj_in), _ctxn(dep20), _ctxn(adj_out)]
@@ -418,13 +423,15 @@ class TestInKindAdjustmentBrokerAttribution:
         assert first.cumulative_external_cash_flow == Decimal("1500")
         _assert_broker_contribution_invariant(first)
 
-        # After the ADJUSTMENT-out: broker 10's in-kind capital fully
-        # unwinds; broker 20 is untouched (isolation control holds).
+        # After the ADJUSTMENT-out: broker 10's capital stays 1000 and its P&L is −1000 (before N78-1:
+        # capital 0, P&L 0); broker 20 is untouched (isolation control holds).
         last = result.daily_states[-1]
-        assert last.broker_contributions[10].capital_contribution == Decimal("0")
+        assert (last.broker_contributions[10].capital_contribution, last.broker_contributions[10].pnl_contribution) == (Decimal("1000"), Decimal("-1000"))
         assert last.broker_contributions[20].capital_contribution == Decimal("500")
-        assert last.cumulative_external_cash_flow == Decimal("500")
+        assert last.cumulative_external_cash_flow == Decimal("1500")
         _assert_broker_contribution_invariant(last)
+        # The exit's realized: 0 − the 1000 the pool gives up, at broker 10 (before N78-1: proceeds 1000, cost 1000).
+        assert [(sale.broker_id, sale.proceeds, sale.cost) for sale in result.realized_sales if sale.transaction_id == 3] == [(10, Decimal("0"), Decimal("1000"))]
 
         _assert_invariant_every_day(result.daily_states)
 

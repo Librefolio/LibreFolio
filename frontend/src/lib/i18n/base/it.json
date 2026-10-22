@@ -305,7 +305,8 @@
   },
   "nav": {
     "dashboard": "Dashboard",
-    "settings": "Impostazioni"
+    "settings": "Impostazioni",
+    "toggleMenu": "Apri o chiudi il menu"
   },
   "prices": {
     "sync": {

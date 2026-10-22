@@ -11,18 +11,14 @@ lib/features/risk/RiskReturnLevel.svelte	4
 lib/features/settings/tabs/AboutTab.svelte	5
 lib/features/support/supportLinks.ts	14
 lib/features/tools/pac-allocator/planner/result/BackendTimingBar.svelte	12
-lib/features/transactions/bulk/PromoteMergeModal.svelte	62
+lib/features/transactions/bulk/PromoteMergeModal.svelte	40
 lib/features/transactions/bulk/TransactionBulkModal.svelte	9
 lib/features/transactions/bulk/TxBulkBanners.svelte	2
 lib/features/transactions/bulk/TxBulkToolbar.svelte	4
-lib/features/transactions/events/AssetEventPicker.svelte	12
+lib/features/transactions/events/AssetEventPicker.svelte	2
 lib/features/transactions/form/TxFormOptionalSection.svelte	6
 lib/features/transactions/form/TxFormPairSection.svelte	4
-lib/features/transactions/import/AssetGroupStep.svelte	8
-lib/features/transactions/import/GapFixToggle.svelte	4
-lib/features/transactions/import/TransactionCompareModal.svelte	4
 lib/features/transactions/import/pairCellHtml.ts	2
-lib/features/transactions/wac/WacPreviewSection.svelte	21
 lib/stores/app/themeStore.ts	0	#1b4334×2
 lib/utils/providerHelpers.ts	12
 routes/(app)/assets/[id]/+page.svelte	6

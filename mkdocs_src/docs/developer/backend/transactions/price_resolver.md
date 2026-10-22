@@ -105,10 +105,8 @@ composes one synthetic P&L candle per day:
   skipped.
 - **An `ADJUSTMENT` is never a price**, incoming or outgoing, with or without a cost basis
   (developer decision P2): its `cost_basis_override` is a cost — often the position's average
-  cost — not what the asset was worth that day. So is the one that takes units out at the Auto
-  cost of its own broker, as a broker deletion, a split of a `TRANSFER` pair or the
-  [lone giving legs step](../../architecture/database/index.md#lone-transfer-legs) writes it
-  (decision 47). Only market quotes and `BUY`/`SELL` trades mark an asset.
+  cost — not what the asset was worth that day. One that takes units out has no value at all
+  (N78-1). Only market quotes and `BUY`/`SELL` trades mark an asset.
 
 ## 🧾 No observation: valued at cost {: #valued-at-cost }
 
@@ -147,7 +145,7 @@ book cost, except for units in transit, which keep the cost recorded on the tran
 | Where | Value |
 |-------|-------|
 | Held position, daily and end-date snapshot (`_value_held_position()`) | The book cost of the held quantity |
-| Orphan `TRANSFER` leg (`_transfer_leg_capital()`) | The cost the leg moves in its pool (`step.cost_report_change`): the cost it adds, or the average cost it removes — the capital follows the pool's book cost both ways, as for an incoming in-kind `ADJUSTMENT` (an outgoing one takes out the value it hands over instead). An unknown cost counts as zero, the pool's own convention. While the pool's cost is complete the leg is neutral, the holding being valued at that same cost; with the pool's cost incomplete the holding is `MISSING`, yet the leg still moves its known cost, so nothing is left in capital once the units are gone |
+| Orphan `TRANSFER` leg (`_transfer_leg_capital()`) | The cost the leg moves in its pool (`step.cost_report_change`): the cost it adds, or the average cost it removes — the capital follows the pool's book cost both ways, as for an incoming in-kind `ADJUSTMENT` (an outgoing one, which has no value, moves no capital). An unknown cost counts as zero, the pool's own convention. While the pool's cost is complete the leg is neutral, the holding being valued at that same cost; with the pool's cost incomplete the holding is `MISSING`, yet the leg still moves its known cost, so nothing is left in capital once the units are gone |
 | Internal `TRANSFER` pair between two brokers (`_internal_pair_value()`) | The book cost the arrival adds to the receiver's pool (`_movement_cost_step()` of the receiving leg: the cost recorded on that leg, converted at its date), rescaled from the receiver's share to the sender's, whether or not the receiver's pool is complete; an arrival of unknown cost adds 0, so there is no flow. With the receiver's pool complete, that is what its NAV takes the units at. With it incomplete, the receiver's holding is `MISSING`: the receiver's line takes the gap — its own unknown cost, with the NAV incomplete — and the sender's line is the same as with a complete pool |
 | Units in transit (`_compute_in_transit()`) | The cost recorded on the transfer, converted at the arrival date |
 

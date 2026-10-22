@@ -17,6 +17,7 @@ def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = Fal
         "vitest",
         "run",
         "src/lib/stores/__tests__/assetPriceStoreRegistry.test.ts",
+        "src/lib/stores/__tests__/signalResultCache.test.ts",
         "src/lib/utils/__tests__/assetPriceDerived.test.ts",
         "src/lib/utils/__tests__/periodChanges.test.ts",
         "src/lib/utils/__tests__/periodChanges.rangeChange.test.ts",

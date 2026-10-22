@@ -234,7 +234,7 @@
             mode === 'type'
                 ? buildAllocationHierarchy(
                       mappedEntries.map((item) => ({key: item.rawName, weight: item.value, item})),
-                      {resolvePrimary: assetTypeFamily, colorOf: (primary) => categoryColor('type', primary, isDark), shade},
+                      {resolvePrimary: assetTypeFamily, colorOf: (primary) => categoryColor('type', primary, isDark, chartContainer), shade},
                   )
                 : [];
         const chartData =
@@ -246,7 +246,7 @@
                       groupSize,
                       primaryTotal,
                   }))
-                : mappedEntries.sort((a, b) => b.value - a.value).map((item) => ({...item, itemStyle: {color: categoryColor('sector', item.rawName, isDark)}}));
+                : mappedEntries.sort((a, b) => b.value - a.value).map((item) => ({...item, itemStyle: {color: categoryColor('sector', item.rawName, isDark, chartContainer)}}));
 
         // D72: as soon as one family contains a subtype, the relation is drawn as a
         // second ring, separate from the first, instead of a shade (R12). With no

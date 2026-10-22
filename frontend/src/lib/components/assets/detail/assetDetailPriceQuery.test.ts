@@ -12,10 +12,23 @@
  * Real schemas throughout: the fixtures are valid, or deliberately invalid, against the generated
  * `FAPriceQueryResult` and `SignalResult`, and the item errors copy the backend's own wording
  * (`price_query.py`, `fx/conversion.py`). Problems are asserted by code, never by a sentence.
+ *
+ * The last two blocks (N64) are the two helpers the page hands the client cache of signal answers
+ * (`$lib/stores/signalResultCache`):
+ * - `assetChartAnswerKey(body)`: which answer a request asks for. The request body the page posts, canonical, with
+ *   each item's `include_price` removed — whether the prices travel or come from the price store does not change which
+ *   signal answer it is — and so different for anything that does: the range, the target currency, a signal's id or
+ *   params, a comparison peer. The order of the signals is not pinned.
+ * - `assetChartAnswerForCache(answer)`: what the cache keeps of an answer, its items without `prices` (the price store
+ *   holds them), every other field kept, the input untouched.
+ *
+ * Red first: both are read by name, so that their absence fails each case with the contract in the message, and the
+ * type check does not wait for them.
  */
 import {describe, expect, it} from 'vitest';
 import type {SignalConfig} from '$lib/charts/signals';
 import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, type CalendarReturnView, type CalendarReturnViewState} from '$lib/components/charts/priceChartHelpers';
+import * as priceQuery from './assetDetailPriceQuery';
 import {calendarComparisonFxFailuresFromResponse, calendarComparisonProblemsFromResponse, parseAssetPriceQueryWithSignalIsolation, preserveFactualCalendarPeersForCurrentUnavailable, priceConversionErrorFromItem, type CalendarComparisonContext} from './assetDetailPriceQuery';
 
 type ViewPoint = CalendarReturnView['points'][number];
@@ -449,5 +462,217 @@ describe('preserveFactualCalendarPeersForCurrentUnavailable: a peer reported una
         expect(previousViews.get(7)).toBe(previous);
         expect(nextViews).toEqual(nextBefore);
         expect(previousViews).toEqual(previousBefore);
+    });
+});
+
+// =============================================================================
+//  The two helpers of the cache of signal answers (N64)
+// =============================================================================
+
+/** `assetChartAnswerKey(body)`, read by name (see the header). */
+function answerKeyOf(body: readonly Record<string, unknown>[]): string {
+    const key = (priceQuery as unknown as {assetChartAnswerKey?: (body: readonly Record<string, unknown>[]) => string}).assetChartAnswerKey;
+    expect(typeof key, 'assetDetailPriceQuery.ts exports no assetChartAnswerKey(): the page cannot tell which signal answer a request asks for, so the client cache of signal answers has no key (N64)').toBe('function');
+    return (key as (body: readonly Record<string, unknown>[]) => string)(body);
+}
+
+/** `assetChartAnswerForCache(answer)`, read by name (see the header). */
+function forCache(answer: {items: Record<string, unknown>[]}): {items: Record<string, unknown>[]} {
+    const keep = (priceQuery as unknown as {assetChartAnswerForCache?: (answer: {items: Record<string, unknown>[]}) => {items: Record<string, unknown>[]}}).assetChartAnswerForCache;
+    expect(typeof keep, 'assetDetailPriceQuery.ts exports no assetChartAnswerForCache(): the cache would keep the prices the price store already holds (N64)').toBe('function');
+    return (keep as (answer: {items: Record<string, unknown>[]}) => {items: Record<string, unknown>[]})(answer);
+}
+
+/** The item without one property. */
+function without(item: Record<string, unknown>, key: string): Record<string, unknown> {
+    return Object.fromEntries(Object.entries(item).filter(([name]) => name !== key));
+}
+
+/** The same value with the keys of every object written in the opposite order: the same request, said another way. */
+function reordered(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map(reordered);
+    if (value !== null && typeof value === 'object') {
+        return Object.fromEntries(
+            Object.entries(value)
+                .reverse()
+                .map(([key, inner]) => [key, reordered(inner)]),
+        );
+    }
+    return value;
+}
+
+interface BodyOptions {
+    start?: string;
+    end?: string;
+    targetCurrency?: string;
+    includePrice?: boolean;
+    ownSignals?: Record<string, unknown>[];
+    peers?: number[];
+    includeEvents?: boolean;
+}
+
+/** An SMA of the page's own chart, as the request plan writes it. */
+const SMA_20 = {instance_id: 'sma-1', signal_code: 'SMA', params: {window: 20}};
+
+/** The calendar-return signal, as the page writes it into the request. */
+function calendarSignal(windowDays = 30): Record<string, unknown> {
+    return {instance_id: CALENDAR_RETURN_INSTANCE_ID, signal_code: CALENDAR_RETURN_SIGNAL_CODE, params: {window_days: windowDays}};
+}
+
+/**
+ * The body the asset page posts to `/api/v1/assets/prices/query`: its own item, then one item per comparison peer.
+ * The peers never ask for prices, whatever the page's own item does.
+ */
+function chartBody(options: BodyOptions = {}): Record<string, unknown>[] {
+    const {start = '2026-01-01', end = '2026-06-30', targetCurrency = 'EUR', includePrice = true, ownSignals = [SMA_20, calendarSignal()], peers = [8], includeEvents = true} = options;
+    return [
+        {asset_id: 7, date_range: {start, end}, include_price: includePrice, include_events: includeEvents, target_currency: targetCurrency, signals: ownSignals},
+        ...peers.map((assetId) => ({asset_id: assetId, date_range: {start, end}, include_price: false, include_events: includeEvents, target_currency: targetCurrency, signals: [calendarSignal()]})),
+    ];
+}
+
+describe('assetChartAnswerKey: the same answer for the same request, whether the prices travel or not', () => {
+    it('is the same for bodies that differ only in include_price, on the page’s own item or on every item', () => {
+        const withPrices = answerKeyOf(chartBody({includePrice: true}));
+
+        expect(answerKeyOf(chartBody({includePrice: false})), 'the price store serving the prices changed the key: the answer of a cache hit and of a cache miss would be filed apart').toBe(withPrices);
+
+        const everyFlag = chartBody().map((item) => ({...item, include_price: true}));
+        const noFlag = chartBody().map((item) => without(item, 'include_price'));
+        expect(answerKeyOf(everyFlag), 'the peers’ include_price is part of the key').toBe(withPrices);
+        expect(answerKeyOf(noFlag), 'a body with no include_price at all is another request').toBe(withPrices);
+    });
+
+    it('is the same for bodies that differ only in the order of their properties, at any depth', () => {
+        const body = chartBody();
+
+        expect(answerKeyOf(reordered(body) as Record<string, unknown>[]), 'the order the page wrote the properties in changed the key: the same request would miss').toBe(answerKeyOf(body));
+    });
+
+    it('is the same whether an undefined target currency is absent or undefined', () => {
+        const native = chartBody().map((item) => ({...item, target_currency: undefined}));
+        const absent = chartBody().map((item) => without(item, 'target_currency'));
+
+        expect(answerKeyOf(native)).toBe(answerKeyOf(absent));
+    });
+
+    it('is a string that does not carry include_price', () => {
+        const key = answerKeyOf(chartBody());
+
+        expect(typeof key).toBe('string');
+        expect(key, 'the flag that does not change the answer is in the key').not.toContain('include_price');
+    });
+
+    it('differs when the start or the end of the range differs', () => {
+        const base = answerKeyOf(chartBody());
+
+        expect(answerKeyOf(chartBody({start: '2026-02-01'})), 'start').not.toBe(base);
+        expect(answerKeyOf(chartBody({end: '2026-05-31'})), 'end').not.toBe(base);
+    });
+
+    it('differs when the target currency differs, or the chart is not converted', () => {
+        const base = answerKeyOf(chartBody({targetCurrency: 'EUR'}));
+        const unconverted = chartBody().map((item) => without(item, 'target_currency'));
+
+        expect(answerKeyOf(chartBody({targetCurrency: 'USD'})), 'another currency').not.toBe(base);
+        expect(answerKeyOf(unconverted), 'no conversion').not.toBe(base);
+    });
+
+    it('differs when a signal’s params differ — a calendar window or an indicator’s own', () => {
+        const base = answerKeyOf(chartBody());
+
+        expect(answerKeyOf(chartBody({ownSignals: [SMA_20, calendarSignal(90)]})), 'the calendar window_days').not.toBe(base);
+        expect(answerKeyOf(chartBody({ownSignals: [{...SMA_20, params: {window: 50}}, calendarSignal()]})), 'an indicator’s window').not.toBe(base);
+    });
+
+    it('differs when a signal’s instance_id differs, or a signal is added or removed', () => {
+        const base = answerKeyOf(chartBody());
+
+        expect(answerKeyOf(chartBody({ownSignals: [{...SMA_20, instance_id: 'sma-2'}, calendarSignal()]})), 'the instance_id: the answer is read back by it').not.toBe(base);
+        expect(answerKeyOf(chartBody({ownSignals: [SMA_20]})), 'a signal removed').not.toBe(base);
+        expect(answerKeyOf(chartBody({ownSignals: [SMA_20, calendarSignal(), {instance_id: 'rsi-1', signal_code: 'RSI', params: {window: 14}}]})), 'a signal added').not.toBe(base);
+    });
+
+    it('differs when a comparison peer differs: another peer, one more, or none', () => {
+        const base = answerKeyOf(chartBody({peers: [8]}));
+
+        expect(answerKeyOf(chartBody({peers: [9]})), 'another peer').not.toBe(base);
+        expect(answerKeyOf(chartBody({peers: [8, 9]})), 'one more peer').not.toBe(base);
+        expect(answerKeyOf(chartBody({peers: []})), 'no peer').not.toBe(base);
+    });
+
+    it('differs when the page asks for another asset, or for the events or not', () => {
+        const base = answerKeyOf(chartBody());
+        const another = chartBody().map((item, index) => (index === 0 ? {...item, asset_id: 70} : item));
+
+        expect(answerKeyOf(another), 'another asset').not.toBe(base);
+        expect(answerKeyOf(chartBody({includeEvents: false})), 'the events are part of the answer').not.toBe(base);
+    });
+
+    it('leaves the body as it found it: include_price stays on the page’s item', () => {
+        const body = chartBody();
+        const before = structuredClone(body);
+
+        answerKeyOf(body);
+
+        expect(body, 'the key edited the caller’s body: the request that follows would carry no include_price').toEqual(before);
+        expect(body[0].include_price).toBe(true);
+        expect(body[1].include_price).toBe(false);
+    });
+});
+
+describe('assetChartAnswerForCache: the answer without the prices, which the price store holds', () => {
+    /** An answer as the page reads it: prices, events, signals and errors on each item, and a field the cache has no business with. */
+    function anAnswer(): {items: Record<string, unknown>[]} {
+        return {
+            items: [
+                {
+                    asset_id: 7,
+                    prices: [
+                        {date: '2026-01-02', close: 101.5},
+                        {date: '2026-01-05', close: 102},
+                    ],
+                    events: [{date: '2026-01-03', type: 'DIVIDEND'}],
+                    signals: [signalResult('sma-1'), signalResult(CALENDAR_RETURN_INSTANCE_ID)],
+                    errors: ['Conversion 0: No FX rate found'],
+                    currency: 'EUR',
+                },
+                {asset_id: 8, prices: [], events: [], signals: [signalResult(CALENDAR_RETURN_INSTANCE_ID)], errors: []},
+            ],
+        };
+    }
+
+    it('drops the prices field from every item', () => {
+        const kept = forCache(anAnswer());
+
+        expect(kept.items).toHaveLength(2);
+        for (const item of kept.items) expect('prices' in item, `item ${String(item.asset_id)} kept its prices: the cache would hold what the price store already does, twice`).toBe(false);
+    });
+
+    it('keeps everything else of each item: asset_id, events, signals, errors and any other field', () => {
+        const original = anAnswer();
+
+        const kept = forCache(original);
+
+        expect(kept.items, 'the items keep their order and every field but prices').toEqual(original.items.map((item) => without(item, 'prices')));
+        expect(kept.items[0]).toMatchObject({asset_id: 7, events: [{type: 'DIVIDEND'}], errors: ['Conversion 0: No FX rate found'], currency: 'EUR'});
+        expect((kept.items[0].signals as unknown[]).length, 'the signals are the point of the cache').toBe(2);
+    });
+
+    it('leaves an item with no prices field as it is, and an empty answer empty', () => {
+        const noPrices = {items: [{asset_id: 8, events: [], signals: [], errors: []}]};
+
+        expect(forCache(noPrices)).toEqual({items: [{asset_id: 8, events: [], signals: [], errors: []}]});
+        expect(forCache({items: []})).toEqual({items: []});
+    });
+
+    it('does not change its input: the page keeps drawing from the answer it passed', () => {
+        const input = anAnswer();
+        const before = structuredClone(input);
+
+        forCache(input);
+
+        expect(input, 'the helper edited the page’s answer in place').toEqual(before);
+        expect(input.items[0].prices, 'the page’s own answer lost its prices').toHaveLength(2);
     });
 });

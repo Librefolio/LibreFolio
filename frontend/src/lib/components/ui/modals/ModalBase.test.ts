@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
-import type {ComponentProps} from 'svelte';
+import {tick, type ComponentProps} from 'svelte';
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
 import Harness from '$test/harness/ReviewSupportModalBaseHarness.svelte';
 import ConfirmModal from './ConfirmModal.svelte';
@@ -175,5 +175,110 @@ describe('ConfirmModal — typed result actions', () => {
         expect(action.tagName).toBe('A');
         expect(action).toHaveAttribute('href', '/transactions?asset_id=74001');
         expect(screen.getByTestId('confirm-safe-action-link-detail')).toHaveTextContent('Blocked <a href="/backend-supplied">backend markup</a>');
+    });
+});
+
+/**
+ * Escape right after the open, before any animation frame.
+ *
+ * ModalBase handles Escape only through `onkeydown` on its backdrop, so a key event reaches it only when the focus is
+ * inside the modal. The focus used to move in a `requestAnimationFrame` scheduled by the open effect: until that frame
+ * ran, the focus stayed on the opener outside, and an Escape dispatched there never reached the backdrop. The modal
+ * ignored it (E2E FSCH-004b on a loaded machine: the key landed between the open and the frame).
+ *
+ * The frames are held, not run: `requestAnimationFrame` only queues, and a test releases the queue when it wants the
+ * frame to have happened. That makes the state «open, frame not yet run» a state the test builds, instead of a race it
+ * hopes to win. The event goes where a browser delivers it: to `document.activeElement`, bubbling.
+ */
+describe('ModalBase — Escape before the first animation frame', () => {
+    let queue: FrameRequestCallback[] = [];
+    let opener: HTMLButtonElement;
+
+    beforeEach(() => {
+        queue = [];
+        vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => queue.push(callback));
+        vi.stubGlobal('cancelAnimationFrame', (id: number) => {
+            // ids are 1-based queue positions; a cancelled slot is left as a no-op so the other ids stay valid
+            if (queue[id - 1]) queue[id - 1] = () => {};
+        });
+        opener = document.createElement('button');
+        opener.type = 'button';
+        document.body.appendChild(opener);
+        opener.focus();
+        expect(opener, 'premise: the opener holds the focus').toHaveFocus();
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        opener.remove();
+    });
+
+    /** Release every held frame, as the browser would have done by the next paint. */
+    function runFrames() {
+        const pending = queue;
+        queue = [];
+        for (const callback of pending) callback(performance.now());
+    }
+
+    /** The user opens the modal from the opener: closed first, then flipped to open. Frames stay held. */
+    async function openFromOpener(props: Partial<{trapFocus: boolean; restoreFocus: boolean}> = {}) {
+        const onRequestClose = vi.fn().mockName('onRequestClose');
+        const base = {trapFocus: false, restoreFocus: false, onRequestClose, ...props};
+        const view = render(Harness, {open: false, ...base});
+        await view.rerender({open: true, ...base});
+        await tick();
+        const dialog = screen.getByTestId('review-support-modal-base');
+        return {view, dialog, onRequestClose, base};
+    }
+
+    /** Press Escape where the browser sends it: the element that holds the focus right now. */
+    async function pressEscapeOnFocused() {
+        await fireEvent.keyDown(document.activeElement ?? document.body, {key: 'Escape'});
+    }
+
+    it('closes on an Escape pressed straight after the open, with no frame run', async () => {
+        const {onRequestClose} = await openFromOpener();
+        expect(queue.length, 'premise: the open scheduled its frame and the frame has not run').toBeGreaterThan(0);
+
+        await pressEscapeOnFocused();
+
+        expect(onRequestClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('moves the focus into the modal as it opens, with no frame run', async () => {
+        const {dialog} = await openFromOpener();
+        expect(queue.length, 'premise: the open scheduled its frame and the frame has not run').toBeGreaterThan(0);
+
+        expect(dialog.contains(document.activeElement), 'the focus is still outside the open modal').toBe(true);
+        expect(opener).not.toHaveFocus();
+    });
+
+    it('closes on Escape once the frames have run (control)', async () => {
+        const {onRequestClose} = await openFromOpener();
+        runFrames();
+
+        await pressEscapeOnFocused();
+
+        expect(onRequestClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('with trapFocus, gives the first control the focus once the frame has run', async () => {
+        const {dialog} = await openFromOpener({trapFocus: true});
+        runFrames();
+
+        const first = screen.getByTestId('review-support-first');
+        expect(dialog.contains(document.activeElement)).toBe(true);
+        expect(first).toHaveFocus();
+    });
+
+    it('with restoreFocus, gives the focus back to the opener when the modal closes', async () => {
+        const {view, base} = await openFromOpener({restoreFocus: true});
+        runFrames();
+        expect(opener, 'premise: the modal took the focus from the opener').not.toHaveFocus();
+
+        await view.rerender({...base, open: false});
+        await waitFor(() => expect(screen.queryByTestId('review-support-modal-base')).toBeNull());
+
+        expect(opener).toHaveFocus();
     });
 });

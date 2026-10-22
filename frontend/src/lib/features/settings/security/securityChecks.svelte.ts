@@ -12,6 +12,7 @@
  *   `attentionSeverity`; the phone's menu button reads the same (N69-1).
  */
 import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
+import {readBlockedScripts} from '$lib/features/security/cspNotice';
 import {fetchSecurityChecks, type SecurityCheck} from './securityChecksApi';
 import {attentionCount, attentionSeverity, securityFindings, type BrowserSecurityState, type SecurityFindings} from './securityFindings';
 
@@ -22,13 +23,15 @@ export interface SecurityChecksDependencies {
     browser?: () => BrowserSecurityState;
 }
 
-/** The public configuration once the server gave it (before, an open instance would warn for nothing) and the host. */
+/** The public configuration once the server gave it (before, an open instance would warn for nothing), the host, and
+ * the scripts the Content-Security-Policy blocked in this tab. */
 function browserState(): BrowserSecurityState {
     const accounts = instanceConfig.loaded ? instanceConfig.config.accounts : null;
     return {
         registrationMode: accounts?.registration_mode ?? '',
         registrationLocked: accounts?.registration_locked === true,
         hostname: typeof window === 'undefined' ? '' : window.location.hostname,
+        blockedScripts: readBlockedScripts(),
     };
 }
 

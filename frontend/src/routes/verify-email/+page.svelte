@@ -1,10 +1,13 @@
 <script lang="ts">
     /**
-     * The page of an email-verification link, `/verify-email#token=…` (workstream E, lot E5; developer decision 44).
+     * The page of an email-verification link, `/verify-email#token=…` (workstream E, lots E5 and E-25; developer
+     * decision 44).
      *
-     * The token leaves the address bar at once and is spent right away: there is nothing to fill in. Once the address
-     * is verified the account is active, and the page sends its owner to the sign-in with a message. A link that
-     * cannot be used says why; signing in then offers a new one.
+     * The token leaves the address bar at once, but only its owner's click spends it (lot E-25): a mail filter that
+     * opens the links of a message in a browser of its own to check them runs this page too, and must not verify the
+     * address in place of its owner. Once the address is verified the account is active, and the page sends its owner
+     * to the sign-in with a message. A link that cannot be used says why, after the click; signing in then offers a
+     * new one.
      */
     import {onMount} from 'svelte';
     import {goto} from '$app/navigation';
@@ -20,9 +23,17 @@
 
     let token = $state<string | null>(null);
     let status = $state<VerifyPageStatus>('checking');
-    /** Only the latest attempt writes: a link pasted meanwhile outruns an older answer. */
+    /** Only the latest link writes: an answer about an older one, arriving late, is dropped. */
     let generation = 0;
 
+    /** A link read from the address: it waits for the click; none is `missing`. Any answer still on its way is dropped. */
+    function takeLink(next: string | null): void {
+        generation++;
+        token = next;
+        status = next ? 'ready' : 'missing';
+    }
+
+    /** Spends the link: the click on «confirm», or the retry of a check that failed. */
     async function confirm(): Promise<void> {
         const mine = ++generation;
         if (!token) {
@@ -42,14 +53,12 @@
     }
 
     onMount(() => {
-        token = takeLinkToken(new URL(window.location.href), replaceAddress);
-        void confirm();
+        takeLink(takeLinkToken(new URL(window.location.href), replaceAddress));
         // A link pasted into a tab already on this page changes only the fragment: no reload, so read it here
         const onHashChange = (): void => {
             const next = takeLinkToken(new URL(window.location.href), replaceAddress);
             if (next === null) return;
-            token = next;
-            void confirm();
+            takeLink(next);
         };
         window.addEventListener('hashchange', onHashChange);
         return () => window.removeEventListener('hashchange', onHashChange);
@@ -63,5 +72,5 @@
 <AnimatedBackground />
 
 <AuthPageFrame testId="verify-email-page">
-    <VerifyEmailCard onretry={confirm} {status} />
+    <VerifyEmailCard onconfirm={confirm} onretry={confirm} {status} />
 </AuthPageFrame>

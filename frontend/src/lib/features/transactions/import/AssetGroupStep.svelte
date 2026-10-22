@@ -227,6 +227,7 @@
     }
 
     /** Badge palette, one hue per kind, so "which of these is an ISIN" needs no reading. */
+    // Primary-badge star and ring: amber → the warning role, nearest match; to review with the designer.
     const badgeTone: Record<IdentifierKind, string> = KIND_TONES.identifier;
 
     /** The kind's name as it appears in the tooltip. Literal `$t` calls so the audit sees them. */
@@ -350,7 +351,7 @@
             <span class="inline-flex items-center gap-1"><span class="h-3 w-5 rounded border-2 border-solid border-lf-success-line"></span>{$t('importWizard.assetUnify.legendConfirmed')}</span>
             <span class="inline-flex items-center gap-1"><span class="h-3 w-5 rounded border-2 border-dashed border-lf-warning-line"></span>{$t('importWizard.assetUnify.legendProposed')}</span>
             <span class="inline-flex items-center gap-1"><span class="h-3 w-5 rounded border border-lf-subtle"></span>{$t('importWizard.assetUnify.legendSingle')}</span>
-            <span class="inline-flex items-center gap-1"><Star class="h-3 w-3 fill-amber-400 text-amber-500" />{$t('importWizard.assetUnify.legendPrimary')}</span>
+            <span class="inline-flex items-center gap-1"><Star class="h-3 w-3 fill-lf-warning text-lf-warning" />{$t('importWizard.assetUnify.legendPrimary')}</span>
         </div>
         <button
             type="button"
@@ -446,7 +447,7 @@
                             {#if badge.electable}
                                 <button
                                     type="button"
-                                    class="inline-flex max-w-full cursor-pointer items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] {badgeTone[badge.kind]} {badge.primary ? 'ring-2 ring-amber-400 ring-offset-1 dark:ring-offset-gray-900' : 'opacity-70 hover:opacity-100'}"
+                                    class="inline-flex max-w-full cursor-pointer items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] {badgeTone[badge.kind]} {badge.primary ? 'ring-2 ring-lf-warning ring-offset-1 ring-offset-lf-card' : 'opacity-70 hover:opacity-100'}"
                                     onclick={() => elect(group, badge.kind, badge.value)}
                                     title={badgeTitle(badge)}
                                     data-testid="asset-group-badge-{group.groupId}-{badge.value}"
@@ -454,12 +455,12 @@
                                 >
                                     <!-- The hollow star is the affordance: without it the runner-up
                                          badges look decorative and nobody discovers the choice. -->
-                                    <Star class="h-2.5 w-2.5 shrink-0 {badge.primary ? 'fill-amber-400 text-amber-500' : 'text-current opacity-50'}" />
+                                    <Star class="h-2.5 w-2.5 shrink-0 {badge.primary ? 'fill-lf-warning text-lf-warning' : 'text-current opacity-50'}" />
                                     <span class="truncate {badge.kind === 'name' ? '' : 'font-mono'}">{badge.value}</span>
                                 </button>
                             {:else}
                                 <span class="inline-flex max-w-full items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] {badgeTone[badge.kind]}" title={badgeTitle(badge)} data-testid="asset-group-badge-{group.groupId}-{badge.value}" data-primary={badge.primary}>
-                                    {#if badge.primary && hasChoice(badges)}<Star class="h-2.5 w-2.5 shrink-0 fill-amber-400 text-amber-500" />{/if}
+                                    {#if badge.primary && hasChoice(badges)}<Star class="h-2.5 w-2.5 shrink-0 fill-lf-warning text-lf-warning" />{/if}
                                     <span class="truncate {badge.kind === 'name' ? '' : 'font-mono'}">{badge.value}</span>
                                 </span>
                             {/if}

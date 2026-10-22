@@ -149,6 +149,27 @@ Lot N69-4 (N69 point 4, decision D8 (a): each account's avatar in the Users tab)
     carries it as the list does: the answer replaces the account's row in the Users tab. Nothing else changes in either
     answer: an account is exactly its ten fields, A7b's nine and ``avatar_url``; ``usage`` counts as before.
 
+Lot E-7 (the Users tab tells the account waiting for its email verification from a deactivated one; the developer's
+decision of 21/10/2026, Q1 yes) adds:
+
+21. ``pending_verification: bool`` on every account ``GET /users`` lists and ``PATCH /users/{user_id}`` answers, false by
+    default in ``AdminUserRead``. True exactly when the account is inactive and holds at least one token of purpose
+    ``email_verification`` neither consumed nor revoked — that link live or already expired: the badge stays once the link
+    expired —, the criterion of ``email_verification.awaiting_verification``, which the sign-in's 403 EMAIL_NOT_VERIFIED
+    reads. ``holds_place`` stays its own flag, whether the place is still held: true only with a live link, so an account
+    whose link expired is ``pending_verification`` true and ``holds_place`` false. False for every other account: an
+    active one — a stray unspent verification token changes nothing, an active account never waits —; an inactive one
+    with no token, with a token of another purpose (a reset link; a setup link: the initial administrator waiting for its
+    setup is ``pending_setup`` true and ``pending_verification`` false), or whose verification links were all revoked —
+    what an administrator's deactivation of a waiting account leaves, an ordinary deactivated account — or consumed. It
+    is decided account by account: another account's link counts for nothing. A «send the link again» — a revoked link,
+    then a live one — leaves the account waiting. The ``PATCH`` answer carries the flag of the account as it returns it,
+    the one ``GET /users`` lists right after: a waiting account with a live link, promoted, stays inactive and waiting
+    (``pending_verification`` and ``holds_place`` true); ``{is_active: false}`` on it ends the wait, its links revoked, and
+    the answer says false and false; an account whose link expired, reactivated on an instance with a free place, is
+    active and not pending. Nothing else changes in either answer: an account is exactly its eleven fields, A7b's nine,
+    ``avatar_url`` and ``pending_verification``; ``usage`` counts as before.
+
 Coded refusals are read from ``detail.error_code``, the shape ``POST /auth/login`` gives ``ACCOUNT_DISABLED`` and
 ``test_registration_api.py`` reads; the administrator's ``USER_LIMIT_REACHED`` carries ``limit``, ``used`` and
 ``billing_url`` in the same ``detail``.
@@ -275,6 +296,23 @@ of the case's own account, which goes with it at teardown by the schema's cascad
 characters at most and checks no file, so an uploaded avatar is an address of that shape, never a file. UADM-AV-03 runs
 in-process, on the private instance of ``create_all``: every account and settings row there is the test's, so the whole
 list is asserted, and each settings row is written with the id of another account. UADM-AV-04 reads the schema.
+
+Red until E-7 (label ``# red until E-7``; point 21): UADM-VER-01 to UADM-VER-05 — ``pending_verification`` is no field of
+``AdminUserRead`` today, and no item carries it —; and, by construction, every case that reads an account through
+``_user_item_violations`` or ``USER_ITEM_KEYS`` — UADM-003, 007, 008, 028, 052, 060 to 064, 068 to 071, 073 to 075, 079,
+A51-001, A51-003, UADM-LOCK-06 and UADM-AV-01 to UADM-AV-04 —: an account is now exactly eleven fields, its
+``pending_verification`` false for every account of theirs, none of which waits for a verification link (their
+docstrings, older than point 21, still say nine or ten). Left alone, those cases would turn red the day
+``pending_verification`` lands. The cases of E-7 run in-process only, on the private instance of ``create_all`` — none on
+the lane: every account and token row there is the test's, so the whole list is asserted; a lane's neighbours cannot
+make an account of theirs wait, and a run killed mid-test leaves nothing behind. Every state of a verification link is a
+token of the token service (``_private_link``: live, expired — issued its lifetime and a minute ago, never waited for —,
+revoked, consumed), and each scene first reads the service's own criterion (``email_verification.awaiting_verification``
+and ``holds_place``) so that its premise is the scene, not an assumption: that reading is green today, only the field is
+missing. UADM-VER-01 is one scene per state, the initial administrator waiting for its setup included; UADM-VER-02 reads
+five accounts beside each other, one of them waiting; UADM-VER-03 promotes a waiting account and then ends its wait with
+a ``PATCH``; UADM-VER-04 reactivates an account whose link expired, on an instance with one free place; UADM-VER-05 reads
+the schema.
 """
 
 import ast
@@ -323,6 +361,7 @@ from backend.app.services.accounts.settings_service import initialize_global_set
 from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, TokenStatus, consume_token, hash_token, inspect_token, issue_token, revoke_tokens
 from backend.app.services.brim import brim_provider
 from backend.app.services.brokers.broker_service import BrokerService
+from backend.app.services.email import verification as email_verification
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 from backend.test_scripts.test_db.test_autoincrement_schema import _alembic_upgrade_head
@@ -352,8 +391,8 @@ PUBLIC_URL = "https://librefolio.example.test/base/"
 PUBLIC_ORIGIN = "https://librefolio.example.test/base"
 BILLING_LINK = "https://billing.example.test/plans/family"
 
-#: An account as GET /users lists it and PATCH /users/{user_id} answers it; ``avatar_url`` is lot N69-4's (point 20).
-USER_ITEM_KEYS = frozenset({"id", "username", "email", "is_active", "is_superuser", "created_at", "protected", "holds_place", "pending_setup", "avatar_url"})
+#: An account as GET /users lists it and PATCH /users/{user_id} answers it; ``avatar_url`` is lot N69-4's (point 20), ``pending_verification`` lot E-7's (point 21).
+USER_ITEM_KEYS = frozenset({"id", "username", "email", "is_active", "is_superuser", "created_at", "protected", "holds_place", "pending_setup", "pending_verification", "avatar_url"})
 INVITE_ITEM_KEYS = frozenset({"id", "grants_admin", "email", "created_at", "expires_at", "created_by_user_id"})
 USAGE_KEYS = frozenset({"used", "max_users", "billing_url"})
 ISSUED_INVITE_KEYS = frozenset({"invite", "token", "path", "url"})
@@ -491,17 +530,29 @@ def _comparable(item: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
     return {key: _instant(value) if key.endswith("_at") else value for key, value in item.items()}
 
 
-def _user_item_violations(item: Any, account: _Account, *, active: bool, superuser: bool, protected: bool = False, holds_place: bool = False, pending_setup: bool = False, avatar_url: Optional[str] = None) -> list[str]:
-    """What is wrong with an account as GET /users lists it, and PATCH answers it: exactly its ten fields, with these values.
+def _user_item_violations(item: Any, account: _Account, *, active: bool, superuser: bool, protected: bool = False, holds_place: bool = False, pending_setup: bool = False, pending_verification: bool = False, avatar_url: Optional[str] = None) -> list[str]:
+    """What is wrong with an account as GET /users lists it, and PATCH answers it: exactly its eleven fields, with these values.
 
     ``protected`` is False unless the test replaced the hook: today the hook protects nobody (lot A6a).
     ``holds_place`` is workstream E's flag, true only for an inactive account whose live verification link holds its place (``api email-verification-hooks``, EVH-006…012); false unless the case wrote such a link (UADM-060).
     ``pending_setup`` is lot A7b's flag (C5), true only for the account waiting for its F02 setup (UADM-060 to UADM-064); false unless the case made one.
+    ``pending_verification`` is lot E-7's flag (point 21), true only for an inactive account holding a verification link neither consumed nor revoked, live or expired (UADM-VER-01 to UADM-VER-04); false unless the case made one. ``holds_place`` is then its own: true only with a live link.
     ``avatar_url`` is lot N69-4's field (point 20), the account's avatar as its user settings store it; None — null — unless the case gave the account one (UADM-AV-01 to UADM-AV-03).
     """
     if not isinstance(item, dict) or set(item) != USER_ITEM_KEYS:
         return [f"{account.username}: an account must be exactly {sorted(USER_ITEM_KEYS)}, no hash and no secret: {item}"]
-    expected = {"id": account.user_id, "username": account.username, "email": account.email, "is_active": active, "is_superuser": superuser, "protected": protected, "holds_place": holds_place, "pending_setup": pending_setup, "avatar_url": avatar_url}
+    expected = {
+        "id": account.user_id,
+        "username": account.username,
+        "email": account.email,
+        "is_active": active,
+        "is_superuser": superuser,
+        "protected": protected,
+        "holds_place": holds_place,
+        "pending_setup": pending_setup,
+        "pending_verification": pending_verification,
+        "avatar_url": avatar_url,
+    }
     found = {key: item[key] for key in expected}
     violations = [] if found == expected else [f"{account.username}: expected {expected}, got {found}"]
     _expect(violations, _instant(item["created_at"]) is not None, f"{account.username}: created_at is not a timestamp: {item['created_at']!r}")
@@ -2466,7 +2517,7 @@ class TestThePendingAdministratorInTheUsersTab:
 
     @pytest.mark.asyncio
     async def test_the_pending_administrator_is_listed_pending_setup_and_nobody_else(self, private: _Private) -> None:
-        """UADM-060: the bootstrap made the pending administrator; root (the caller), a member, a deactivated account and an account waiting for its email verification (a live verification link, written directly) are there too. GET /users → pending_setup true for the pending administrator only, false for every other account; holds_place true for the waiting account only — false for the pending administrator, whose place another rule counts —; each account exactly its nine fields; usage as before: used 4 (root, the member, the waiting account, the pending administrator), no limit, no billing link."""
+        """UADM-060: the bootstrap made the pending administrator; root (the caller), a member, a deactivated account and an account waiting for its email verification (a live verification link, written directly) are there too. GET /users → pending_setup true for the pending administrator only, false for every other account; holds_place true for the waiting account only — false for the pending administrator, whose place another rule counts —, and since E-7 (point 21) pending_verification true for it only; each account exactly its nine fields; usage as before: used 4 (root, the member, the waiting account, the pending administrator), no limit, no billing link."""
         print_section("UADM-060: GET /users with the pending administrator")
         pending = await _bootstrap_pending_admin(private)
         root, cookie = await _admin(private)
@@ -2487,7 +2538,8 @@ class TestThePendingAdministratorInTheUsersTab:
         _expect(violations, sorted(items) == sorted(row[0].user_id for row in expected), f"GET /users must list every account of the instance: {sorted(items)}")
         _expect(violations, flags == {F02_USERNAME: True, "root": False, "member": False, "dormant": False, "waiting": False}, f"pending_setup must be true for the pending administrator only: {flags}")
         for account, active, superuser, holds_place, pending_setup in expected:
-            violations += _user_item_violations(items.get(account.user_id), account, active=active, superuser=superuser, holds_place=holds_place, pending_setup=pending_setup)
+            # The waiting account is also lot E-7's (point 21): an inactive account with a live verification link waits for it
+            violations += _user_item_violations(items.get(account.user_id), account, active=active, superuser=superuser, holds_place=holds_place, pending_setup=pending_setup, pending_verification=account is waiting)
         _expect(violations, body["usage"] == {"used": 4, "max_users": None, "billing_url": None}, f"usage must count as before — root, the member, the waiting account and the pending administrator: {body['usage']}")
         assert not violations, f"GET /users must tell the pending administrator apart, and only it:{_verdict(violations)}"
         print_success("pending_setup true for the pending administrator only; holds_place its own flag; usage unchanged")
@@ -4428,3 +4480,207 @@ class TestAccountAvatarsInProcess:
         _expect(violations, set(AdminUserRead.model_fields) == USER_ITEM_KEYS, f"AdminUserRead must be exactly {sorted(USER_ITEM_KEYS)}: {sorted(AdminUserRead.model_fields)}")
         assert not violations, f"AdminUserRead.avatar_url broke its contract:{_verdict(violations)}"
         print_success("an Optional[str], null by default, ten fields")
+
+
+# ============================================================================
+# E-7: THE ACCOUNT WAITING FOR ITS EMAIL VERIFICATION IN THE USERS TAB (point 21)
+# ============================================================================
+
+
+@dataclass(frozen=True)
+class _VerificationScene:
+    """An account of the private instance: whether it is active and an administrator, its tokens as ``(purpose, state)`` in the order they are issued (``_private_link``), and what point 21 expects of it in GET /users: ``pending_verification`` (it waits for its verification link), ``holds_place`` (a live link holds its place) and ``pending_setup`` (the initial administrator waiting for its F02 setup, which waits for no verification)."""
+
+    active: bool
+    tokens: tuple[tuple[AccountTokenPurpose, str], ...]
+    pending_verification: bool
+    holds_place: bool
+    superuser: bool = False
+    pending_setup: bool = False
+
+
+#: Every state of the links of an account that point 21 tells apart. The first two are the ones that wait — the badge stays
+#: once the link expired, the place does not —; the rest are the accounts that do not.
+VERIFICATION_SCENES = [
+    pytest.param(_VerificationScene(active=False, tokens=((EMAIL_VERIFICATION, "live"),), pending_verification=True, holds_place=True), id="inactive-with-a-live-verification-link"),
+    pytest.param(_VerificationScene(active=False, tokens=((EMAIL_VERIFICATION, "expired"),), pending_verification=True, holds_place=False), id="inactive-with-an-expired-verification-link"),
+    pytest.param(_VerificationScene(active=False, tokens=((EMAIL_VERIFICATION, "revoked"),), pending_verification=False, holds_place=False), id="inactive-with-a-revoked-verification-link"),
+    pytest.param(_VerificationScene(active=False, tokens=((EMAIL_VERIFICATION, "consumed"),), pending_verification=False, holds_place=False), id="inactive-with-a-consumed-verification-link"),
+    pytest.param(_VerificationScene(active=False, tokens=((EMAIL_VERIFICATION, "revoked"), (EMAIL_VERIFICATION, "live")), pending_verification=True, holds_place=True), id="inactive-asked-for-the-link-again"),
+    pytest.param(_VerificationScene(active=False, tokens=(), pending_verification=False, holds_place=False), id="inactive-without-any-link"),
+    pytest.param(_VerificationScene(active=False, tokens=((PASSWORD_RESET, "live"),), pending_verification=False, holds_place=False), id="inactive-with-a-reset-link-only"),
+    pytest.param(_VerificationScene(active=True, tokens=((EMAIL_VERIFICATION, "live"),), pending_verification=False, holds_place=False), id="active-with-a-stray-live-verification-link"),
+    pytest.param(_VerificationScene(active=False, superuser=True, tokens=((ADMIN_SETUP, "live"),), pending_verification=False, holds_place=False, pending_setup=True), id="the-initial-administrator-waiting-for-its-setup"),
+]
+
+
+async def _waiting_by_the_service(private: _Private, user_id: int) -> tuple[bool, bool]:
+    """``(awaiting_verification, holds_place)`` as ``email_verification`` answers them for the account, read fresh from the private database: the service's own criterion — the one the sign-in's 403 EMAIL_NOT_VERIFIED reads —, which point 21 reuses for ``pending_verification``, and the place a live link holds."""
+    async with AsyncSession(private.engine) as session:
+        user = await user_service.get_user_by_id(session, user_id)
+        assert user is not None, f"Setup: the account {user_id} must exist in the private database"
+        return await email_verification.awaiting_verification(session, user), await email_verification.holds_place(session, user)
+
+
+async def _unspent_verification_links(private: _Private, user_id: int) -> list[int]:
+    """The ids of the account's ``email_verification`` tokens neither consumed nor revoked, live or expired: the rows a waiting account is made of, read from the table."""
+    return [row.id for row in await _private_tokens(private) if row.user_id == user_id and row.purpose == EMAIL_VERIFICATION.value and row.consumed_at is None and row.revoked_at is None]
+
+
+def _waiting_answer_violations(step: str, response: httpx.Response, listed: Optional[dict[str, Any]], account: _Account, *, active: bool, superuser: bool, holds_place: bool, pending_verification: bool) -> list[str]:
+    """What is wrong with the answer of a PATCH on ``account`` and with the item GET /users listed right after (``listed``): a 200, the account exactly its eleven fields with these values, whatever state the PATCH left it in, and the answer the very item listed — it replaces the account's row in the Users tab."""
+    if response.status_code != 200:
+        return [f"{step}: expected 200, got {response.status_code} {response.text}"]
+    answer = response.json()
+    flags = {"active": active, "superuser": superuser, "holds_place": holds_place, "pending_verification": pending_verification}
+    violations = [f"{step}, its answer: {problem}" for problem in _user_item_violations(answer, account, active=active, superuser=superuser, holds_place=holds_place, pending_verification=pending_verification)]
+    violations += [f"{step}, listed right after: {problem}" for problem in _user_item_violations(listed, account, active=active, superuser=superuser, holds_place=holds_place, pending_verification=pending_verification)]
+    _expect(violations, _comparable(answer) == _comparable(listed), f"{step}: the answer must be the account as GET /users lists it right after ({flags}): answered {answer}, listed {listed}")
+    return violations
+
+
+class TestAnAccountWaitingForItsVerificationInTheUsersTab:
+    """Lot E-7, point 21: the Users tab tells the account waiting for its email verification link from a deactivated one. In-process only, on the private instance: every account and token row is the test's, and the whole item — ``holds_place``, ``pending_setup`` and ``pending_verification`` together — is read."""
+
+    # red until E-7
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("scene", VERIFICATION_SCENES)
+    async def test_pending_verification_is_an_inactive_account_with_an_unspent_verification_link(self, private: _Private, scene: _VerificationScene) -> None:
+        """UADM-VER-01: an account in one state of its links, beside root, the caller. GET /users → its pending_verification is true exactly when it is inactive and holds an email_verification token neither consumed nor revoked — live or expired alike: the badge stays after the link expired — (the criterion of email_verification.awaiting_verification, which the sign-in's 403 EMAIL_NOT_VERIFIED reads); its holds_place is true only with a live link (an expired one holds no place), its pending_setup true only for the initial administrator waiting for its setup, which waits for no verification. The whole item is read, its eleven fields with the three flags together; root's are all false.
+
+        The scenes: one live link; one expired; one revoked only — what an administrator's deactivation of a waiting account
+        leaves, an ordinary deactivated account —; one consumed only; a revoked link then a live one — «send the link
+        again» —; no token at all; a live reset link only; an ACTIVE account with a stray unspent live verification token
+        (an active account never waits, and holds no place); the initial administrator, an inactive superuser with a live
+        setup link.
+
+        Premise first: the service's own reading of the scene — awaiting_verification, holds_place, and
+        pending_admin_filter() — says what the scene says. If one no longer does, the criterion has moved, and this
+        expectation moves with it, not the flag.
+        """
+        print_section(f"UADM-VER-01: pending_verification of an account active={scene.active}, administrator={scene.superuser}, tokens {[(purpose.value, state) for purpose, state in scene.tokens]}")
+        root, cookie = await _admin(private)
+        subject = await _add_user(private, "subject", admin=scene.superuser, active=scene.active)
+        for purpose, state in scene.tokens:
+            await _private_link(private, subject.user_id, purpose, state)
+        awaiting, holds = await _waiting_by_the_service(private, subject.user_id)
+        setup = subject.user_id in await _pending_admin_ids(private)
+        assert (awaiting, holds, setup) == (
+            scene.pending_verification,
+            scene.holds_place,
+            scene.pending_setup,
+        ), f"premise: (awaiting_verification, holds_place, pending_admin_filter selects it) is {(awaiting, holds, setup)}; point 21 expects {(scene.pending_verification, scene.holds_place, scene.pending_setup)} because it is the same notion — if the criterion moved, this expectation moves with it"
+
+        items = await _private_listed(private, cookie)
+
+        violations = _user_item_violations(items.get(subject.user_id), subject, active=scene.active, superuser=scene.superuser, holds_place=scene.holds_place, pending_setup=scene.pending_setup, pending_verification=scene.pending_verification)
+        violations += _user_item_violations(items.get(root.user_id), root, active=True, superuser=True)
+        assert not violations, f"pending_verification must be the criterion of awaiting_verification, holds_place and pending_setup unchanged:{_verdict(violations)}"
+        print_success(f"pending_verification {scene.pending_verification}, holds_place {scene.holds_place}, pending_setup {scene.pending_setup}; root false")
+
+    # red until E-7
+    @pytest.mark.asyncio
+    async def test_pending_verification_is_decided_per_account(self, private: _Private) -> None:
+        """UADM-VER-02: root (the caller), an active member, an inactive account with a live verification link, an inactive one with no token at all, and an inactive one whose only verification link was revoked. GET /users → pending_verification true for the account with the live link only — with holds_place true —, false for every other account: another account's live link makes nobody else wait, the inactive account without a link, and the one whose own link was revoked beside it, included. Every account of the instance is listed, each exactly its eleven fields.
+
+        Premise first: the service reads each account as the case built it — the waiting one waits and holds its place,
+        no other does.
+        """
+        print_section("UADM-VER-02: pending_verification account by account")
+        root, cookie = await _admin(private)
+        member = await _add_user(private, "member")
+        waiting = await _add_user(private, "waiting", active=False)
+        idle = await _add_user(private, "idle", active=False)
+        spent = await _add_user(private, "spent", active=False)
+        await _private_link(private, waiting.user_id, EMAIL_VERIFICATION, "live")
+        await _private_link(private, spent.user_id, EMAIL_VERIFICATION, "revoked")
+        # (account, is_active, is_superuser, holds_place, pending_verification)
+        expected = [(root, True, True, False, False), (member, True, False, False, False), (waiting, False, False, True, True), (idle, False, False, False, False), (spent, False, False, False, False)]
+        read = {account.username: await _waiting_by_the_service(private, account.user_id) for account, *_ in expected}
+        assert read == {"root": (False, False), "member": (False, False), "waiting": (True, True), "idle": (False, False), "spent": (False, False)}, f"premise: the service reads the waiting account as waiting and holding its place, no other: {read}"
+
+        items = await _private_listed(private, cookie)
+
+        found = {item.get("username"): item.get("pending_verification", "<missing>") for item in items.values()}
+        violations: list[str] = []
+        _expect(violations, sorted(items) == sorted(row[0].user_id for row in expected), f"GET /users must list every account of the instance: {sorted(items)}")
+        _expect(violations, found == {"root": False, "member": False, "waiting": True, "idle": False, "spent": False}, f"pending_verification must be true for the account with the live link only: {found}")
+        for account, active, superuser, holds_place, pending_verification in expected:
+            violations += _user_item_violations(items.get(account.user_id), account, active=active, superuser=superuser, holds_place=holds_place, pending_verification=pending_verification)
+        assert not violations, f"pending_verification must be decided account by account:{_verdict(violations)}"
+        print_success("true for the waiting account only; another account's link makes nobody else wait")
+
+    # red until E-7
+    @pytest.mark.asyncio
+    async def test_the_patch_answer_carries_pending_verification_and_ending_the_wait_clears_it(self, private: _Private) -> None:
+        """UADM-VER-03: an inactive account with a live verification link, beside root. PATCH {is_superuser: true} → 200, the account exactly its eleven fields, still inactive, now an administrator, pending_verification true and holds_place true — promoting it ends no wait: its link is still unspent —, and the answer is the item GET /users lists right after. Then PATCH {is_active: false}, the administrator ending the wait → 200, still inactive and an administrator, pending_verification false and holds_place false — its verification links are revoked: an ordinary deactivated account —, the answer again the item GET /users lists right after, and no verification token left unspent.
+
+        Premise first: the service reads the account as waiting, holding its place, and it holds exactly one unspent verification link.
+        """
+        print_section("UADM-VER-03: PATCH on an account waiting for its verification link")
+        _, cookie = await _admin(private)
+        waiting = await _add_user(private, "waiting", active=False)
+        await _private_link(private, waiting.user_id, EMAIL_VERIFICATION, "live")
+        assert await _waiting_by_the_service(private, waiting.user_id) == (True, True), "premise: the account waits for its verification link and holds its place"
+        assert len(await _unspent_verification_links(private, waiting.user_id)) == 1, "premise: the account holds exactly one unspent verification link"
+
+        promote = await _call(private, "PATCH", f"/users/{waiting.user_id}", cookie=cookie, json={"is_superuser": True})
+        promoted_list = (await _private_listed(private, cookie)).get(waiting.user_id)
+        waiting_after_promotion = await _waiting_by_the_service(private, waiting.user_id)
+        links_after_promotion = await _unspent_verification_links(private, waiting.user_id)
+        end = await _call(private, "PATCH", f"/users/{waiting.user_id}", cookie=cookie, json={"is_active": False})
+        ended_list = (await _private_listed(private, cookie)).get(waiting.user_id)
+        links_after_end = await _unspent_verification_links(private, waiting.user_id)
+
+        violations = _waiting_answer_violations("PATCH {is_superuser: true}", promote, promoted_list, waiting, active=False, superuser=True, holds_place=True, pending_verification=True)
+        _expect(violations, waiting_after_promotion == (True, True) and len(links_after_promotion) == 1, f"promoting the account must end no wait: (awaiting_verification, holds_place) {waiting_after_promotion}, unspent verification links {links_after_promotion}")
+        violations += _waiting_answer_violations("PATCH {is_active: false}", end, ended_list, waiting, active=False, superuser=True, holds_place=False, pending_verification=False)
+        _expect(violations, links_after_end == [], f"ending the wait must revoke its verification links, none unspent: {links_after_end}")
+        assert not violations, f"The PATCH answer must carry pending_verification as the list does, and ending the wait must clear it:{_verdict(violations)}"
+        print_success("promoted: still waiting, place held; wait ended: false, false; each answer as listed right after")
+
+    # red until E-7
+    @pytest.mark.asyncio
+    async def test_an_account_whose_link_expired_is_pending_and_its_reactivation_clears_it(self, private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+        """UADM-VER-04: root, an active member, and an inactive account whose only verification link expired, with LIBREFOLIO_MAX_USERS=3: two places taken — the active accounts; the expired link holds none —, one free. GET /users → the account pending_verification true and holds_place false: the badge stays after the link expired, the place does not; usage used 2 of 3. PATCH {is_active: true} → 200, the account exactly its eleven fields, active, pending_verification false and holds_place false, the answer the item GET /users lists right after, its verification link revoked (none unspent), usage used 3.
+
+        Premise first: the service reads the account as waiting without holding a place, and it holds exactly one unspent
+        verification link, expired.
+        """
+        print_section("UADM-VER-04: an expired verification link, then the reactivation")
+        _, cookie = await _admin(private)
+        await _add_user(private, "member")
+        waiting = await _add_user(private, "waiting", active=False)
+        await _private_link(private, waiting.user_id, EMAIL_VERIFICATION, "expired")
+        monkeypatch.setenv(MAX_USERS_VARIABLE, "3")
+        assert await _waiting_by_the_service(private, waiting.user_id) == (True, False), "premise: the account waits for its verification link, whose expiry freed its place"
+        assert len(await _unspent_verification_links(private, waiting.user_id)) == 1, "premise: the account holds exactly one unspent verification link, expired"
+
+        before, usage_before = await _private_view(private, cookie, waiting.user_id)
+        response = await _call(private, "PATCH", f"/users/{waiting.user_id}", cookie=cookie, json={"is_active": True})
+        after, usage_after = await _private_view(private, cookie, waiting.user_id)
+        links_after = await _unspent_verification_links(private, waiting.user_id)
+
+        violations = [f"listed before the reactivation: {problem}" for problem in _user_item_violations(before, waiting, active=False, superuser=False, holds_place=False, pending_verification=True)]
+        _expect(violations, usage_before == {"used": 2, "max_users": 3, "billing_url": None}, f"before the reactivation the expired link holds no place, one is free: usage {usage_before}")
+        violations += _waiting_answer_violations("PATCH {is_active: true}", response, after, waiting, active=True, superuser=False, holds_place=False, pending_verification=False)
+        _expect(violations, links_after == [], f"the reactivation must revoke its verification link, none unspent: {links_after}")
+        _expect(violations, usage_after == {"used": 3, "max_users": 3, "billing_url": None}, f"after the reactivation the account takes the free place: usage {usage_after}")
+        assert not violations, f"An account whose link expired must be pending, and its reactivation must clear it:{_verdict(violations)}"
+        print_success("expired link: pending, place free; reactivated: 200, active, not pending")
+
+    # red until E-7
+    def test_admin_user_read_declares_pending_verification_false_by_default(self) -> None:
+        """UADM-VER-05: AdminUserRead declares ``pending_verification: bool``, false by default — an AdminUserRead built without it, as UADM-064 and UADM-AV-04 build one, does not wait for a verification link —, and nothing else changes: its fields are exactly the eleven an account is listed with."""
+        print_section("UADM-VER-05: AdminUserRead.pending_verification")
+        declared = AdminUserRead.model_fields.get("pending_verification")
+        assert declared is not None, f"AdminUserRead must declare pending_verification (lot E-7, point 21); it declares {sorted(AdminUserRead.model_fields)}"
+        built = AdminUserRead(id=1, username="built", email="built@example.com", is_active=False, is_superuser=False, created_at=utcnow(), protected=False)
+
+        violations: list[str] = []
+        _expect(violations, declared.annotation is bool, f"pending_verification must be a bool: {declared.annotation!r}")
+        _expect(violations, not declared.is_required() and declared.default is False, f"pending_verification must default to false: required {declared.is_required()}, default {declared.default!r}")
+        _expect(violations, getattr(built, "pending_verification", "<missing>") is False, f"an account built without it must not wait for a verification link: {getattr(built, 'pending_verification', '<missing>')!r}")
+        _expect(violations, set(AdminUserRead.model_fields) == USER_ITEM_KEYS, f"AdminUserRead must be exactly {sorted(USER_ITEM_KEYS)}: {sorted(AdminUserRead.model_fields)}")
+        assert not violations, f"AdminUserRead.pending_verification broke its contract:{_verdict(violations)}"
+        print_success("a bool, false by default, eleven fields")

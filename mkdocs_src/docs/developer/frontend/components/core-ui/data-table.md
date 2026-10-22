@@ -203,6 +203,19 @@ The source of truth is the `Props` interface of `lib/components/table/DataTable.
   their horizontal pin (`left: auto; right: auto`) and keep `position: sticky` — and, with
   `stickyHeader`, `top: 0` — so the header row still sticks inside its scroll area. Data columns
   with `pinned` keep their pin at every width.
+- A **row's tint** keeps the fixed cells opaque. A body row paints the card and, over it, the tint
+  of its state, `--dt-row-tint` (hover, selected, highlighted, analyzed), as one image layer
+  (`linear-gradient(tint, tint)` over `--lf-surface-card`). `--dt-row-tint` is registered with
+  `@property` (`<color>`), so a change of state fades. The row is therefore opaque, and the fixed
+  cells, which inherit its background, hide what scrolls under them. A list that tints its rows
+  through `getRowClass` sets `--dt-row-tint` on the row, **never the row's `background`** — a
+  translucent background would let the scrolling cells show through the fixed ones. Example:
+  `AssetTable`, whose `asset-row-inactive` class sets `--dt-row-tint: var(--lf-warning-soft)` for
+  the inactive asset.
+- A **deleted row** (`tr.row-deleted`, set through `getRowClass` by the data editor and the transactions bulk editor) is not faded with `opacity`: its cells are
+  opaque (the danger tint at 55 % over the card) and a veil (`td::after`, the same background at
+  45 %, `pointer-events: none`) fades the content, so fixed cells never show what scrolls beneath
+  (TC-21).
 
 The header and body cells of the two columns carry test ids: `dt-select-header` and
 `dt-select-cell-{rowId}`, `dt-actions-header` and `dt-actions-cell-{rowId}` (the footer cells have

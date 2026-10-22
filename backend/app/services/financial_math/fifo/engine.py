@@ -239,9 +239,10 @@ class FifoLotEngine:
                 adjustment_unit_price = tx.cost_basis_override if tx.cost_basis_override is not None else Decimal("0")
                 events.append(FifoEvent(kind="ADJUSTMENT_IN", date=tx.date, transaction_id=tx.id, broker_id=tx.broker_id, quantity=tx.quantity, unit_price=adjustment_unit_price, raw_transaction_ids=(tx.id,)))
             elif tx.type == "ADJUSTMENT" and tx.quantity < Decimal("0"):
-                # A negative ADJUSTMENT that carries a per-unit cost_basis_override hands its units over at
-                # that cost (_apply_adjustment_out); without the override it remains a zero-price correction, unless it
-                # hands each fragment over at its own FIFO cost (hands_over_at_own_cost, J-10).
+                # A negative ADJUSTMENT has no value (N78-1): its units leave at 0 and the lots realize their cost as a
+                # loss. Only a scope-boundary reading (J-10) carries a value: the market price of its day, or each
+                # fragment's own FIFO cost (hands_over_at_own_cost); a row read from the database never does
+                # (FifoInputTransaction.from_transaction).
                 handover_unit_price = tx.cost_basis_override if tx.cost_basis_override is not None else Decimal("0")
                 events.append(FifoEvent(kind="ADJUSTMENT_OUT", date=tx.date, transaction_id=tx.id, broker_id=tx.broker_id, quantity=abs(tx.quantity), unit_price=handover_unit_price, raw_transaction_ids=(tx.id,)))
         ordered = sorted(events, key=self._event_sort_key)
@@ -431,10 +432,10 @@ class FifoLotEngine:
     def _handover_currency(self, tx: FifoInputTransaction, fragment: FragmentInterval) -> str | None:
         """The currency in which an ADJUSTMENT-out hands ``fragment`` over.
 
-        With a cost basis, every fragment leaves at the row's per-unit cost basis — the value the row hands over, as
-        the Dashboard reads it (J-24) — not at the fragment's own FIFO cost. That cost is in ``cost_basis_currency``,
-        or in the lot's when it has none. Without a cost the units leave at 0 — or, ``hands_over_at_own_cost``, at
-        their own FIFO cost — in the lot's currency. Another currency than the lot's leaves the native realized P&L
+        A row read from the database carries no cost basis on an exit (N78-1): its units leave at 0 — or, a
+        scope-boundary reading with ``hands_over_at_own_cost``, at their own FIFO cost — in the lot's currency. Only a
+        scope-boundary reading at the market price of its day (J-10) carries one, in ``cost_basis_currency`` or the
+        lot's. Another currency than the lot's leaves the native realized P&L
         unknown; the lots analysis converts each leg at its own date (decision 26).
         """
         lot_currency = self._lots[fragment.lot_id].currency
@@ -668,7 +669,7 @@ class FifoLotEngine:
         realized_pnl: Decimal | None
         if lot.direction == "LONG":
             realized_pnl = matched_quantity * (close_unit_price - fragment.unit_price) if same_currency else None
-            # A sale's cash, or the value an ADJUSTMENT-out hands over at cost (0 when it carries no cost).
+            # A sale's cash, or the value an ADJUSTMENT-out hands over (0 for a row read from the database, N78-1).
             proceeds = matched_quantity * close_unit_price if close_reason in ("SELL", "ADJUSTMENT_OUT") else Decimal("0")
         else:
             realized_pnl = matched_quantity * (fragment.unit_price - close_unit_price) if same_currency else None

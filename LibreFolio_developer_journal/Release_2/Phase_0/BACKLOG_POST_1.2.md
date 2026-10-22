@@ -3112,7 +3112,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   il 16/10 sera (`bab52635d`, `0c3275057`); la spec è ferma dal 13/10. Verdetto della triage: difetto del prodotto. Cura
   per il proprietario del WAC: arrotondare il costo proposto alla scala della colonna prima del commit, o quantizzarlo
   nel backend; il test resta com'è. Dettagli: piano di T, «`CompactCashCell`», passo 4.
-- **TC-19 · La pagina per sviluppatori del banner della qualità dei dati dice ancora «amber/sky»** — minimo, docs; T,
+- ✅ **TC-19 · La pagina per sviluppatori del banner della qualità dei dati dice ancora «amber/sky»** (riscritta il
+  22/10 da C2, solo inglese: tono del problema peggiore, regola dei banner, disposizione T2) — minimo, docs; T,
   17/10, R3-a (giro 3). `mkdocs_src/docs/developer/frontend/data-quality-banner.md`, riga ~46, descrive il modo
   raggruppato come «Single amber/sky container»: da R3-a il contenitore prende il tono del problema più grave (`danger`,
   `warning` o `info`, via `DATA_QUALITY_TONE`), ogni riga il suo, e i chip stanno sulla card col bordo nel colore dello
@@ -3133,13 +3134,15 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   L1 vince e l'intestazione resta rosa: rosso deterministico, anche sul target senza DV (`7845fc3d3`: 11 verdi e 1
   rosso). Verdetto della triage: un'assunzione del test. La spec era di L (archiviato): la prende T. Dettagli: piano di
   T, «Una verifica per l'ingresso di DV» e «R3-c e TC-20».
-- **TC-21 · Una riga cancellata lascia vedere sotto le colonne fisse di `DataTable`** — minimo; T, 19/10, cura delle
+- ✅ **TC-21 · Una riga cancellata lascia vedere sotto le colonne fisse di `DataTable`** (curata il 22/10 da C2: cella
+  opaca e velo `::after` sul contenuto) — minimo; T, 19/10, cura delle
   colonne fisse. `tr.row-deleted td` (bulk delle transazioni, `DataEditor`) sbiadisce ogni cella con `opacity: 0.55`,
   le fisse comprese (la selezione, e le azioni in `DataEditor`), che lasciano vedere al 45 % il contenuto che scorre
   sotto. C'era già prima del lotto delle tabelle; non è una tinta di riga e la riga opaca non la cura: va sbiadito il
   contenuto, non lo sfondo, senza cambiare l'aspetto delle celle normali. Dettagli: piano di T, «Le colonne fisse
   trasparenti», Fuori pista.
-- **TC-22 · La pagina per sviluppatori di `DataTable` non dice come si tinge una riga** — minimo, docs; T, 19/10, cura
+- ✅ **TC-22 · La pagina per sviluppatori di `DataTable` non dice come si tinge una riga** (scritta il 22/10 da C2,
+  solo inglese, con la riga cancellata di TC-21) — minimo, docs; T, 19/10, cura
   delle colonne fisse. `mkdocs_src/docs/developer/frontend/components/core-ui/data-table.md`, «Sticky columns»: una riga
   dipinge la card e la tinta del suo stato, `--dt-row-tint` (registrata con `@property`), e le celle fisse ereditano i
   due strati; chi tinge le righe con `getRowClass` imposta `--dt-row-tint`, mai lo sfondo della riga (`AssetTable`).
@@ -3331,7 +3334,10 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     oklab`); da estendere se una miscela o una modifica del Lab usa un altro spazio.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
     «B4».
-- **DV-11 · I colori dei tipi in due copie, finché il Lab non passa ai ruoli** — medio; DV, 17/10 (giro 3, §1.9).
+- ✅ **DV-11 · I colori dei tipi in due copie, finché il Lab non passa ai ruoli** — medio; DV, 17/10 (giro 3, §1.9).
+  **Chiusa il 22/10 da C2 (ondata 3):** `chartCategories.ts` legge i tipi e la liquidità dai ruoli `--lf-cat-*`
+  (`pageRoles`), il Lab mostra le righe dei tipi come viste dei ruoli e migra le vecchie modifiche `category`; piano di
+  DV, «Ondata 3 di C2».
   - Decisione (A) del coordinatore, in due passi. Il primo è del giro 3: i valori in `lib/theme/chartCategories.ts`,
     i ruoli `--lf-cat-*` di T in `tokens.css` coi valori uguali, e il test di parità di `chartCategories.test.ts` che
     blocca le due copie (flag di consegna alla `PENDING_READERS`).
@@ -3342,8 +3348,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     (archiviato), coordinatore, 17/10.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
     «Giro 3».
-- **DV-12 · L'E2E del pannello posizioni trattiene la «prima» richiesta del report, non quella della pagina sotto
-  prova** — minimo, test; DV, 18/10 (slot del giro 3, fuori area: `e2e/portfolio/dashboard.spec.ts`, «Positions panel
+- ✅ **DV-12 · L'E2E del pannello posizioni trattiene la «prima» richiesta del report, non quella della pagina sotto
+  prova** (curata il 22/10 da C2: `goto('about:blank')` prima della rotta; verde da confermare nello slot) — minimo, test; DV, 18/10 (slot del giro 3, fuori area: `e2e/portfolio/dashboard.spec.ts`, «Positions panel
   publishes its loading state through data-busy»).
   - Rosso nella run intera su `08512c952`, verde da solo; verde nello slot di B4 (`f35fd9026`), con lo stesso ordine.
   - `login()` atterra su `/dashboard` e aspetta solo che l'app arrivi: una POST `/portfolio/report` della pagina
@@ -3351,7 +3357,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Rimedio nel test (`test-author`, proprietario dello spec): `page.goto('about:blank')` prima della rotta, oppure
     trattenere la richiesta della pagina sotto prova.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), passo G3-9.
-- **DV-13 · L'E2E «export JSON, reset all, import back» del Lab vuole due fonti di colore che dal 16/10 sono una** —
+- ✅ **DV-13 · L'E2E «export JSON, reset all, import back» del Lab vuole due fonti di colore che dal 16/10 sono una**
+  (superata da TC-20, verificato il 22/10 da C2: lo spec usa `transactionsPageRoot`) —
   minimo, test; DV, 18/10 (slot del giro 3, fuori area: `e2e/designer-lab/designer-lab-live.spec.ts`).
   - Deterministico: il sottotitolo delle transazioni e l'intestazione di `DataTable` leggono tutti e due
     `--lf-text-muted` (`546204732` e `77bfa6a39`, 16/10). La modifica della variabile vince su quella del letterale, e
@@ -5169,7 +5176,7 @@ A-21b, A-31, A-41, A-49 e A-58 aspettano una decisione; A-4 e A-10 sono lavoro d
   - Da N69b lo store si riempie su ogni pagina di un admin, non più solo in Impostazioni.
   - Cura: un reset alla transizione della sessione (`checks`, `answered`, `status`), con il suo test. Dettagli: [piano
     02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «N69b.1».
-- **A-62 · Il nome accessibile del pulsante del menu è in inglese in ogni lingua** — basso, a11y; A, 20/10 (N69b;
+- ✅ **A-62 · Il nome accessibile del pulsante del menu è in inglese in ogni lingua** — basso, a11y; A, 20/10 (N69b;
   visto in F2.2).
   - `Header.svelte`: «Toggle menu» è scritto a mano dal piano 36. Da N69b il nome aggiunge, dopo «—», il livello della
     connessione e il conto degli avvisi nella lingua dell'utente, quindi in italiano diventa per esempio «Toggle menu
@@ -5177,6 +5184,9 @@ A-21b, A-31, A-41, A-49 e A-58 aspettano una decisione; A-4 e A-10 sono lavoro d
   - Nel catalogo non c'è una chiave per il menu.
   - Cura (chiesta al coordinatore nel checkpoint di N69b): una chiave nuova nelle 4 lingue e l'asserzione di
     `Header.test.ts`. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «F2.2».
+  - 21/10, A (ondata 3): consegnata. `nav.toggleMenu` nella base ×4 e `menuLabel` che comincia di lì; in più il segnale
+    `data-security-checks` (`off`/`pending`/`ready`/`error`) sulla riga dei controlli e la riga `desc` di
+    `services admin-bootstrap`. Commit: del coordinatore. Dettagli: piano 02_accounts, «A62.1»…«A62.3».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -6048,6 +6058,20 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Strade possibili, da decidere: ricaricare una volta su un import dinamico fallito, oppure una pagina d'errore che
     lo dice e offre di riprovare.
 
+- **X-N64b · Dettaglio dell'asset: le serie dei confronti in modalità prezzi, in cache per periodo** — basso; X, 22/10
+  (N64). Con N64 indicatori e rendimenti tornano dalla cache; le serie dei confronti in modalità prezzi
+  (`loadComparisonAssetsData`) tengono il loro memo per impronta, quindi un periodo già visto con un confronto configurato
+  le richiede di nuovo, con il gettone. Stessa cache, chiave sul corpo, generazioni degli store dei confronti. Dettagli:
+  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «N64 — la cache dei risultati dei
+  segnali».
+- **X-N64c · La cache dei segnali per singolo segnale** — basso; X, 22/10 (N64). La chiave è la richiesta intera: togliere
+  uno di due indicatori, o riordinarli, chiede di nuovo anche quello rimasto. Una voce per segnale lo eviterebbe (gli
+  eventi e i rendimenti dei confronti viaggiano nella stessa risposta). Dettagli: come sopra.
+- **X-N64d · `asset-detail.spec.ts:575`: i passi di calendario non entrano in cache solo per due confronti in `error`** —
+  basso; X, 22/10 (revisione delle E2E per N64). `errorPeer` e `invalidCalendarPeer` rendono ogni risposta di calendario
+  non valida, quindi mai tenuta: se diventassero validi, una sessantina di passi che si aspettano una richiesta a ogni
+  ritorno andrebbero rivisti. Dettagli: come sopra, passo 4, «Fuori pista».
+
 ## W · Import e transazioni (fase 01)
 
 Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md).
@@ -6853,6 +6877,18 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   aperte al developer (casi dubbi, non scelti dal plugin): Q-WB-1 il Controvalore di un `Rimborso` con commissione la contiene? (oggi
   invariato); Q-WB-2 una commissione maggiore del Controvalore; Q-WB-3 una riga in valuta (Divisa USD): il Controvalore è nella Divisa o
   in euro? Dettagli: piano 04, «W-B92».
+- **W-B93 · Una rettifica in uscita non ha valore (N78-1)** — alto, numeri; W, 22/10 (decisione del developer del 21/10 sera). Un
+  ADJUSTMENT con quantità negativa abbassa solo la quantità: nessun valore, nessun flusso per il TWRR; il realizzato della Dashboard =
+  0 − costo, come i lotti; la decisione 47 converte la gamba sola che cede senza valore (anche il passo `lone-transfer-legs`); l'API
+  rifiuta un costo su un'uscita (`costBasisNotAllowed`); Form e Bulk mostrano il costo solo in entrata. Nessun codice bonifica i
+  valori già salvati (i motori li ignorano; il database del developer lo controlla il coordinatore). Le gambe al bordo di J-10
+  restano al mercato del giorno. Dettagli: piano 04, «N78-1 · Una rettifica in uscita non ha valore: cura»; analisi e decisioni in
+  `ondata3/N78-1-analisi.md`.
+- **W-B94 · La metà che entra di un trasferimento come stima del prezzo** — medio, dati; W, 22/10 (idea del developer, dopo la 1.3).
+  Quando un asset non ha un prezzo affidabile in un giorno, il costo per unità della gamba che entra di un TRANSFER (o di un
+  ADJUSTMENT in entrata) potrebbe servire a stimarlo. Oggi un ADJUSTMENT non è mai un prezzo (P2, J-17: `price_marks`). Da
+  decidere: quale fonte vince fra un prezzo osservato e questa stima, come la si segna (prezzo stimato, non osservato), se vale anche
+  per l'ADJUSTMENT in entrata. Dopo la 1.3.
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
@@ -7850,9 +7886,11 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     sui giorni in cui un ingresso cambia, e `expand_to_days` riempie la finestra
     (`financial_math/lots/change_days.py`). Uscita identica al byte: 0 differenze su quattro copie di DB, dati veri
     compresi. Col 1900 il tempo si dimezza.
-  - **L1b**, dopo P3 di MF: i giorni del mercato presi dai gradini di P3 invece che dalla scansione di ogni giorno.
-    Restano giornalieri la conversione del segno, i cambi chiesti giorno per giorno e la scansione stessa: è il resto
-    del tempo col 1900. Da coordinare con Y per i grafici.
+  - ✅ **L1b** 21/10 (checkpoint L1b; commit del coordinatore). Il resolver dei cambi dei lotti legge i gradini di
+    P3 (`unit_rate_steps`, una chiamata per `load`) invece di un `convert_bulk` d'un'unità al giorno, e il mercato
+    chiede una finestra per valuta (`need_days`). Uscita identica: 214 casi di parità contro la copia del vecchio
+    resolver, 5 mutazioni intercettate. Restano giornalieri, per progetto: la conversione del segno di ogni giorno, la
+    registrazione dei giorni senza tasso e la scansione dei giorni di cambiamento.
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «L1a — i lotti
     calcolati solo nei giorni in cui cambia qualcosa».
 - **J-64 · Il CSV generico chiede il costo dove c'è già o dove non si può dare** — basso, dati e chiarezza; docs-writer
@@ -7925,6 +7963,8 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     sia in «Da» sia in «A». Nessun numero.
   - Da guardare insieme al §29 punto 1 (il tooltip dei marcatori vuole «Da A / A B»): l'origine sta nel frammento di
     partenza, oppure nel motore, che può scriverla sul frammento di destinazione.
+  - 22/10: il tooltip dei segni del Gantt (Q-G29-1, passo C) c'è. Per questo caso scrive solo «To B», senza inventare
+    l'origine nel frontend. Il rimedio resta nel backend (`_build_transfer_rows`).
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «Gantt §29, punto
     2», passo 1.
 - **J-70 · Costi di carico negativi già salvati, e la media Auto che ne nasce** — basso, numeri e dati; J, 20/10
@@ -7942,6 +7982,12 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     - (c) nessuno, se il conteggio è zero.
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «J-60 — un costo di
     carico negativo si rifiuta nel batch», passo 1.
+- **J-71 · Due copie in linea di `buildSyncTargets` nei pannelli del rischio** — minimo, riordino senza effetti; J, 21/10
+  (durante TC-23). `levels/RiskPanelHeader.svelte` e `RiskAnalysisPanel.svelte` calcolano ancora da soli
+  `syncAssets`/`syncFxPairs`, la regola che `features/risk/syncTargets.ts::buildSyncTargets` ha sollevato «so a second
+  surface does not become a second copy». Oggi danno lo stesso risultato; da sostituire con la funzione, con un test che
+  ne fissi l'uso. Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10
+  «Ondata 3 (21/10 notte) — TC-23 poi L1b», passo A2.
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -9453,11 +9499,20 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   titolare. Proposta: uno stato «Conferma» col pulsante, solo file di E. Da decidere (sviluppatore). Dettagli:
   [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-25 ed E-26».
   - 20/10, sviluppatore (13:4x): approvata coi testi proposti; nella 1.3, via del coordinatore (14:28).
+  - ✅ 21/10 (E, ondata 3): fatta, solo frontend. Lo stato `ready` col pulsante `verify-email-confirm`, la richiesta
+    solo al clic, anche dopo un `hashchange`; tre chiavi ×4; doc inglese (traduzioni a debito, senza timbro).
+    Checkpoint (A) su `2879ae3e4`, commit del coordinatore. Dettagli: piano 08, «E-25.2».
 - **E-26 · Dopo la registrazione «We sent you an email» anche quando l'email è trattenuta** — minimo, chiarezza; E,
   16/10 (E6, lista del mattino), analisi 20/10. Il messaggio non dice la via d'uscita (accedere e chiedere un nuovo
   link). Proposta: solo il testo, una chiave di E ×4. Da decidere (sviluppatore). Dettagli: piano 08, «E-25 ed E-26».
   - 20/10, sviluppatore (14:3x): la (b), un campo nella risposta di `POST /auth/register` per l'email trattenuta, più il
     testo (a) per il caso normale. File di A e `api sync`: prima l'accordo con A sul contratto. Dopo E-25.
+  - ✅ 22/10 (E, ondata 3): fatta. Contratto rivisto da A: `verification_email: null | "sending" | "held"` nella
+    risposta di `POST /auth/register`, «held» oltre le 10 email di registrazione all'ora dallo stesso indirizzo; la
+    scheda di registrazione lo dice (`registeredHeld`), `registered` col testo (a), `loginRequired` corretto. I testi
+    vanno confermati dallo sviluppatore. Resta invisibile ciò che succede dopo la risposta (limite per casella,
+    budget orario, SMTP): scritto nella doc. Checkpoint su `bb11f1479`, commit del coordinatore. Dettagli: piano 08,
+    «E-26.2» e «E-26.3».
 
 ## Y · Cruscotto e grafici (fase 01)
 

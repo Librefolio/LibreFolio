@@ -30,7 +30,7 @@ export interface CmpSource {
  */
 export function compareTypeCellHtml(type: string, label: string): string {
     const slug = type.toLowerCase().replace(/_/g, '-');
-    return `<span class="inline-flex items-center gap-1.5"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.15rem;height:1.15rem" class="shrink-0 object-contain" onerror="this.style.display='none'"/><span>${escapeHtml(label)}</span></span>`;
+    return `<span class="inline-flex items-center gap-1.5"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.15rem;height:1.15rem" class="shrink-0 object-contain" data-hide-on-error="display"/><span>${escapeHtml(label)}</span></span>`;
 }
 
 /** Collapse a freshly-parsed transaction into a `CmpSource`, unwrapping array-wrapped fields. */

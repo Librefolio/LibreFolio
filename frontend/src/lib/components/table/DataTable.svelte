@@ -1630,9 +1630,31 @@
     }
 
     /* Row status classes (used via getRowClass prop) */
+    /* A deleted row fades its content, never its background (TC-21): a translucent cell let the content scrolling under
+       a fixed cell show through. The cell is opaque, the danger tint at the strength the old 0.55 opacity gave it over
+       the card; a veil of that background at 45 % over the content fades it as before, and lets the pointer through. */
     :global(tr.row-deleted) td {
-        background: var(--lf-danger-soft) !important;
-        opacity: 0.55;
+        --dt-deleted-bg: color-mix(in srgb, var(--lf-danger-soft) 55%, var(--lf-surface-card));
+        background: var(--dt-deleted-bg) !important;
+    }
+
+    :global(tr.row-deleted) td:not(.td-fixed) {
+        position: relative;
+    }
+
+    :global(tr.row-deleted) td::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: color-mix(in srgb, var(--dt-deleted-bg) 45%, transparent);
+        pointer-events: none;
+    }
+
+    /* Phones unpin the selection and actions cells (`position: static`): the veil needs its cell positioned there too. */
+    @media (max-width: 768px) {
+        :global(tr.row-deleted) td.td-fixed {
+            position: relative;
+        }
     }
 
     :global(tr.row-edited) td {

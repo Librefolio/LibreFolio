@@ -30,7 +30,7 @@
     const insecure = $derived($connectionSecurity.level === 'insecure');
     const menuAttention = $derived($auth.user?.is_superuser === true ? securityChecks.attentionCount : 0);
     const menuDot = $derived(insecure || (menuAttention > 0 && securityChecks.attentionSeverity === 'error') ? 'error' : menuAttention > 0 ? 'warning' : null);
-    const menuLabel = $derived(['Toggle menu', insecure ? $_('connectionSecurity.level.insecure') : null, menuAttention > 0 ? $_('connectionSecurity.attention', {values: {count: menuAttention}}) : null].filter(Boolean).join(' — '));
+    const menuLabel = $derived([$_('nav.toggleMenu'), insecure ? $_('connectionSecurity.level.insecure') : null, menuAttention > 0 ? $_('connectionSecurity.attention', {values: {count: menuAttention}}) : null].filter(Boolean).join(' — '));
 
     const HIDE_SCROLL_THRESHOLD = 8;
     const SHOW_SCROLL_THRESHOLD = 4;
