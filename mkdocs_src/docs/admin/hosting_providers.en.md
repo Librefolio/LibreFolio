@@ -978,6 +978,7 @@ curl -sS -X DELETE -H "Authorization: Bearer $TOKEN" "$JOBS/<job_id>"
 | `409` | A start while another backup runs. When it is a backup your panel started, the answer adds its `job_id` and `origin` (`panel`): follow that job instead of starting another | `backup_busy` |
 | `409` | A download of a job that has no archive: still running, or failed | `backup_job_not_ready` |
 | `409` | A delete while the job runs | `backup_job_running` |
+| `409` | A start while the instance [awaits a restore](#await-restore): a backup of its empty data never starts | `backup_awaiting_restore` |
 | `507` | A start while the disk of the data directory, or a quota, is full: free some space, then start again | `backup_no_space` |
 | `500` | The backup cannot start: the `backups/` folder of the data directory is a link or a file, or cannot be written for another reason. The log has the cause | `backup_folder_unusable`, `backup_failed` |
 
@@ -1034,7 +1035,7 @@ While the mode is on, only these API calls answer:
 | The public configuration of the instance, with `"mode": "awaiting_restore"` | `GET /api/v1/system/instance` |
 | The [scheduled wake-up](sleep_wake.md#wake-sync), with its own token: it answers `awaiting_restore` and runs no job | `POST /api/v1/system/wake-sync` |
 | Your panel's [status](#panel-status), with `mode` and `restore` | `GET /api/v1/panel/status` |
-| Your panel's [backup jobs](#panel-jobs) | The four `/api/v1/backup/panel/jobs…` routes |
+| Your panel's [backup jobs](#panel-jobs): a start answers `409` with the code `backup_awaiting_restore`, since a backup of the empty data never starts | The four `/api/v1/backup/panel/jobs…` routes |
 | Your panel's restore | The [seven routes](#panel-restore-routes) below |
 
 Every other call answers `423 Locked`, to anyone, signed in or not, registration, the sign-in and the
@@ -1072,9 +1073,14 @@ paths are under `/api/v1/backup/panel/restore`:
   warnings and blockers (`no_administrator`), the control totals as a verdict (`same`, `changed`,
   `absent`, `other_version` or `unreadable`) with the number of differences, `administrators_count`,
   `restorable` and `expires_at`. Never a username, an amount, a table or a size.
-- **The status names who confirmed only as `confirmed_via`**: `admin`, `cli` or `panel`.
-- **Repeating a call never makes two restores.** Confirming the same check again answers `202`
-  with the same status; a restart while the restore is already under way, or committed, answers
+- **Your panel sees only the checks it started.** A check started by an administrator or from the
+  command line answers `404` with the code `restore_stage_not_found`, as an unknown id.
+- **The status names who confirmed only as `confirmed_via`**: `admin`, `cli` or `panel`. A
+  confirmation by your panel is `panel`, and the instance records your ticket's `kid` as who
+  confirmed it.
+- **Repeating a call never makes two restores.** Starting the check again with the same
+  `upload_id` while its check runs answers `202` with that same check; confirming the same check
+  again answers `202` with the same status; a restart while the restore is already under way, or committed, answers
   `202` with its state and stops nothing.
 - **The password is never echoed**, in an answer or in a validation error.
 - **What the next start does** is the restore of an administrator: see
