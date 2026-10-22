@@ -124,6 +124,7 @@ PUBLIC_READS_OUTSIDE_THE_LIST = [
     pytest.param("/utilities/currencies", id="utilities-currencies"),
     pytest.param("/ai-export/catalog", id="ai-export-catalog"),
     pytest.param("/auth/address-probe", id="address-probe"),
+    pytest.param("/auth/address-probe.png", id="address-probe-image"),
 ]
 
 #: Every endpoint allowed on a blocked instance, by name, with the one route it serves. An addition goes through the
@@ -153,6 +154,7 @@ ALLOWED_ROUTES = {
     "backend.app.api.v1.system.ready.get_readiness": ("GET", "/api/v1/system/ready"),
     "backend.app.api.v1.system.info.get_system_info": ("GET", "/api/v1/system/info"),
     "backend.app.api.v1.system.wake.wake_sync": ("POST", "/api/v1/system/wake-sync"),
+    "backend.app.api.v1.panel.get_panel_status": ("GET", "/api/v1/panel/status"),
 }
 
 #: The routes under /api/v1 that are not API routes: FastAPI's own documentation (openapi_url, docs_url, redoc_url of

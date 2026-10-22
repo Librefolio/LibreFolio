@@ -9651,3 +9651,713 @@ all'AI Export, al rischio e ai lotti; X al PAC.
 3. ✅ **Verdi**: il file singolo 4/4; `front-utility component-unit` 189 file, 4989 test; `front check` 0 errori;
    Prettier pulito.
 4. ⏳ Checkpoint, prima di quello della mappa: inviato al coordinatore, che informa W.
+
+### Lotto «H-61: Hosting panel» (20/10, 11:33) — analisi, sola lettura
+
+> Decisione del developer (20/10, 11:2x), testuale: «l1 ed l2 ora in 1.3, l3 e litestream vanno analizzati assieme»;
+> sulla rotta di stato: «si mi torna e sono daccordo». Il lotto viene prima di H-55 v2: il Cloud è la priorità della
+> 1.3. Fonti:
+> - il contratto del Cloud, `LibreFolio_subRepo/librefolio-cloud/docs/contratto-istanza.md` §2, §6, §10, §11, letto in
+>   sola lettura. Il percorso del messaggio non aveva la cartella `LibreFolio_subRepo`;
+> - il codice su `74b4c9c88`.
+
+**Stato vero**:
+- **Due token del pannello esistono già**, con le stesse regole:
+  - `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, di B, per le 4 rotte `backup/panel/jobs…`;
+  - `LIBREFOLIO_WAKE_TOKEN`, di Z, per `POST /system/wake-sync`.
+  - In comune: `Authorization: Bearer`, `hmac.compare_digest`, almeno 32 caratteri ASCII visibili; non impostato dà
+    404; assente o sbagliato dà 401 (`backup_panel_unauthorized` / `wake_unauthorized`); inutilizzabile dà 503
+    (`…_unavailable`).
+  - Le due dipendenze sono copie quasi identiche (`require_panel_token`, `require_wake_token`).
+- **All'avvio** si controlla solo il token del backup (`backup.panel_token`); quello del risveglio si scopre rotto
+  solo alla chiamata.
+- **Manca**:
+  - un limite ai tentativi falliti;
+  - una riga di log per chiamata;
+  - un tag comune: oggi le rotte ereditano «Backup & Export» e «System».
+- **Blocco**: le 5 rotte sono in `ALLOWED_WHEN_BLOCKED`.
+- **Attività**: `wake-sync` è «in volo ma non l'utente» (`WAKE_PATHS`); **le rotte del backup del pannello contano
+  come visite**, quindi il polling del pannello tiene sveglia la macchina altri `IDLE_SUSPEND_MINUTES`.
+- **Lo stato del setup** si ricava dall'ultimo token `admin_setup` (`bootstrap_admin_service.py`, A):
+  - consumato: `done`;
+  - revocato senza uso, o scaduto: `expired`;
+  - vivo: `pending`;
+  - nessuno: `none`.
+- **Librerie**: PyJWT 2.13 e cryptography 50 sono già nel lock. Verificare un JWS EdDSA (RFC 8037) non chiede
+  dipendenze nuove.
+
+#### 1. Contratto proposto
+
+##### 1.1 Scopi e credenziali
+Tre scopi; le rotte esistenti **non cambiano percorso**:
+
+| Scopo | Rotte | Token L1 (con `_FILE`) |
+|---|---|---|
+| `backup` | `POST/GET/GET file/DELETE /api/v1/backup/panel/jobs…` (B) | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` (esiste) |
+| `wake` | `POST /api/v1/system/wake-sync` (Z) | `LIBREFOLIO_WAKE_TOKEN` (esiste) |
+| `status` | `GET /api/v1/panel/status` (**nuova**, R1) | `LIBREFOLIO_PANEL_STATUS_TOKEN` (**nuova**) |
+
+- Una chiamata porta **una** credenziale in `Authorization: Bearer <credenziale>`. Mai nell'URL, mai un altro header.
+- Uno scopo accetta:
+  - il suo token L1, se impostato, confrontato a tempo costante;
+  - **oppure** un biglietto L2 (§1.2), se `LIBREFOLIO_PANEL_PUBLIC_KEYS` è impostata.
+- Uno scopo senza nessuna delle due risponde **404**, come una rotta che non esiste. Così il self-hosted resta
+  invariato: tutto spento di default.
+- Un token del risveglio non apre mai `backup` né `status`, e un biglietto vale per un solo scopo.
+- **Una dipendenza comune** `panel_access(scope)` sostituisce `require_panel_token` (B) e `require_wake_token` (Z).
+- **Un tag OpenAPI unico, «Hosting panel»**, con uno schema di sicurezza `HostingPanel` (Bearer). Il router del
+  pannello si include direttamente sotto `/backup`, per non ereditare «Backup & Export».
+
+##### 1.2 Il biglietto L2: un JWS compatto (un JWT), EdDSA/Ed25519 (RFC 7515, RFC 8037)
+
+**Header**: `{"alg": "EdDSA", "typ": "lf-panel+jwt", "kid": "<kid>"}`.
+- Si accetta solo `alg` = `EdDSA` e `typ` = `lf-panel+jwt`. Il `typ` impedisce di usare qui altri JWT firmati con la
+  stessa chiave.
+- `kid` = base64url senza padding dei primi 8 byte dello SHA-256 della chiave pubblica grezza (32 byte), cioè 11
+  caratteri.
+
+**Payload** (JSON):
+
+| Claim | Regola |
+|---|---|
+| `aud` | uguale a `LIBREFOLIO_PANEL_INSTANCE_ID` (l'impronta dell'istanza, §1.3) |
+| `scope` | `"backup"`, `"wake"` o `"status"`, uguale allo scopo della rotta |
+| `iat`, `exp` | secondi Unix interi; `exp − iat ≤ 300`; `iat ≤ ora + tolleranza`; `exp > ora − tolleranza` |
+| `jti` | 16–64 caratteri `[A-Za-z0-9_-]`, **monouso**: un `jti` già accettato è rifiutato fino al suo `exp + tolleranza` |
+
+Le altre claim (per esempio `iss`) sono ignorate. Un biglietto si rifiuta prima di leggerlo se supera i 2048 byte.
+
+**Firma**: Ed25519 su `base64url(header) "." base64url(payload)`, cioè il JWS standard.
+
+- **Un biglietto per chiamata.** Il polling di un backup vuole un biglietto nuovo a ogni `GET`, e un nuovo tentativo
+  vuole un `jti` nuovo.
+- **Nessun legame con metodo e percorso** (proposta, Q4): bastano scopo, `jti` monouso, 5 minuti e TLS.
+- **Il firmatario**, cioè il coordinatore:
+  - `iat` = l'ora della firma, `exp` = `iat + 300`;
+  - `jti` = 16 byte casuali in base64url;
+  - una sola chiave privata Ed25519 per tutte le istanze, nel vault.
+- **Vettori di prova**: una coppia di chiavi di test fissa, un biglietto e l'esito atteso a un'ora data, nella guida.
+  Così il firmatario del Cloud verifica di parlare la stessa lingua.
+
+##### 1.3 Variabili nuove (default: tutto spento, self-hosted invariato)
+
+| Variabile | Valore | Note |
+|---|---|---|
+| `LIBREFOLIO_PANEL_STATUS_TOKEN` (o `_FILE`) | come gli altri token: ≥ 32 caratteri ASCII visibili | accende `status` in L1 |
+| `LIBREFOLIO_PANEL_PUBLIC_KEYS` (o `_FILE`) | una o **due** chiavi pubbliche Ed25519, grezze, base64url senza padding (43 caratteri), separate da virgola | accende L2 su tutti e tre gli scopi; due chiavi servono per la rotazione |
+| `LIBREFOLIO_PANEL_INSTANCE_ID` | 8–128 caratteri `[A-Za-z0-9._~-]`, unico per istanza, non segreto | obbligatoria con le chiavi; il `aud` dei biglietti |
+| `LIBREFOLIO_PANEL_CLOCK_SKEW_SECONDS` | intero da 0 a 300, default **60** | tolleranza dell'orologio (§2.3) |
+
+Un valore inutilizzabile (chiave illeggibile, terza chiave, id mancante con le chiavi):
+- **controllo all'avvio** con un errore nel log;
+- `503 <scopo>_unavailable` alla chiamata, come per i token di oggi.
+
+##### 1.4 Codici di risposta (**quelli di oggi restano**; il contratto del Cloud li documenta)
+
+| Risposta | `detail.code` | Quando |
+|---|---|---|
+| `404` | — | Scopo spento: niente token né chiavi |
+| `401` + `WWW-Authenticate: Bearer` | `backup_panel_unauthorized` / `wake_unauthorized` / `panel_status_unauthorized` | Credenziale assente, token sbagliato, biglietto che non si verifica |
+| `401` | lo stesso codice, con `detail.reason` | Biglietto **con firma valida** ma rifiutato: `ticket_expired`, `ticket_not_yet_valid` (con `Retry-After: 5`), `ticket_too_long`, `ticket_wrong_instance`, `ticket_wrong_scope`, `ticket_replayed`; in più `ticket_unknown_key` (il `kid` non è fra le chiavi: serve alla rotazione) |
+| `429` + `Retry-After` | `panel_too_many_attempts` | Troppe credenziali rifiutate dallo stesso indirizzo: 20 in 10 minuti, in memoria e per processo, su tutti gli scopi insieme. Contano solo i 401 |
+| `503` | `backup_panel_unavailable` / `wake_unavailable` / `panel_status_unavailable` | Credenziali configurate ma inutilizzabili, o registro dei `jti` irraggiungibile |
+
+- Un biglietto malformato o con firma sbagliata non ha `reason`: il perché lo impara solo chi ha in mano un biglietto
+  firmato davvero (Q8).
+- Poi vengono i codici propri di ogni rotta: 409, 507… del backup; 409 del risveglio.
+
+##### 1.5 Il log
+- Ogni chiamata del pannello scrive **una** riga, `Hosting panel request`: INFO se accettata, WARNING se rifiutata, 429
+  o 503.
+- Campi: `scope`, `method`, `path` (senza query), `outcome`, `credential` (`token` / `ticket`), `kid`, `jti` (solo per
+  un biglietto verificato), `reason`, più `request_id` (H-60).
+- **Mai** il token, il biglietto o l'header `Authorization`, e niente indirizzo: la riga d'accesso di uvicorn lo ha
+  già.
+- Uno scopo spento (404) non scrive righe, come una rotta che non esiste.
+
+##### 1.6 R1, `GET /api/v1/panel/status` (scopo `status`)
+- Risposta 200: `{"admin_setup": "none" | "pending" | "done" | "expired", "setup_expires_at": "<ISO 8601 UTC>" | null}`.
+  Nient'altro: niente email, username o conteggi.
+- **Gli stati** si leggono dall'ultimo token `admin_setup`:
+  - `none`: nessun token, le `ADMIN_*` non sono mai servite;
+  - `pending`: un link vivo; `setup_expires_at` è la sua scadenza;
+  - `done`: link consumato da un `POST /auth/setup` riuscito;
+  - `expired`: link scaduto (72 ore) o ritirato senza uso.
+
+  `setup_expires_at` vale solo in `pending`, `null` altrimenti (Q10).
+- **Lettura**: una funzione di A in `bootstrap_admin_service.py`, `admin_setup_status(session, now)`, con i suoi test.
+  H fa la rotta.
+- Risponde anche **a istanza bloccata** (`ALLOWED_WHEN_BLOCKED`) e **non conta come visita** (§2.5).
+
+#### 2. I punti da analizzare
+
+##### 2.1 Come convivono L1 e L2 (Q1)
+- **Proposta β, consigliata: i due insieme**, scopo per scopo. Il Cloud passa senza un giorno X:
+  1. imposta chiavi e id d'istanza;
+  2. fa firmare il pannello;
+  3. toglie i token e riavvia.
+- Il self-hosted, un cron di casa e gli altri hoster restano con i token, che si usano con `curl`.
+- Un controllo all'avvio, nel profilo gestito, dà un **avviso** se uno scopo ha ancora il token accanto alle chiavi:
+  «toglilo quando il pannello firma».
+- **Alternativa α**: con le chiavi impostate, i token sono ignorati. È più netta, ma serve un passaggio sincrono
+  istanza per istanza.
+
+##### 2.2 La rotazione
+- `LIBREFOLIO_PANEL_PUBLIC_KEYS` accetta **due chiavi**, e il `kid` del biglietto sceglie quale.
+- Procedura:
+  1. chiave B generata;
+  2. `A,B` su ogni istanza, con un riavvio, oppure il `_FILE` aggiornato, che si rilegge a ogni chiamata;
+  3. il pannello firma con B;
+  4. passati 5 minuti, si toglie A.
+- Un `kid` sconosciuto risponde `ticket_unknown_key`, così una rotazione a metà si riconosce subito.
+
+##### 2.3 L'orologio dopo il risveglio
+- **Il fatto**: Fly sospende con un'istantanea della memoria. Alla ripresa l'orologio dell'ospite può restare indietro
+  finché non si riallinea. Va misurato nella prova Fly A1–A9.
+- **La tolleranza**: `LIBREFOLIO_PANEL_CLOCK_SKEW_SECONDS`, default 60, vale sia su `iat` sia su `exp`.
+- **Un orologio ancora indietro** dà `401` con `reason: ticket_not_yet_valid` e `Retry-After: 5`: il pannello
+  riprova con un biglietto nuovo. È il caso tipico della prima chiamata dopo il risveglio, cioè `wake-sync` stessa.
+- La durata massima resta 5 minuti, anche se il firmatario chiede di più.
+
+##### 2.4 Il registro dei `jti`
+- **Proposta, consigliata**: una tabella SQLite `panel_ticket_use` (`jti` chiave primaria, `scope`, `expires_at`).
+  - Si scrive nella richiesta, prima che la rotta lavori.
+  - Il vincolo di unicità è il controllo del riuso, anche fra più worker.
+  - Si sfoltisce a ogni scrittura: via le righe con `expires_at < ora − tolleranza`.
+  - **Sopravvive al riavvio e alla sospensione**: con Fly la memoria sopravvive alla sospensione ma non a un riavvio,
+    un deploy o «Ripristina e riavvia». Su un'istanza bloccata il DB è scrivibile.
+  - **È un cambio di schema**: va nella migrazione unica della 1.3 (Q6).
+- **Alternativa**: in memoria. Basterebbe per la sospensione di Fly, ma dopo un riavvio un biglietto ancora nei suoi 5
+  minuti varrebbe una seconda volta. Sconsigliata.
+
+##### 2.5 L'impatto sulle rotte di B e di Z
+- **B** (`api/v1/backup/panel.py`): `require_panel_token` diventa `panel_access("backup")`, con codici, 404, 401 e 503
+  di oggi. I test di B non cambiano attese, al più un import.
+- **Z** (`api/v1/system/wake.py`): `require_wake_token` diventa `panel_access("wake")`, con gli stessi codici.
+  - In più, il token del risveglio si controlla anche all'avvio, come quello del backup.
+- **Z** (`sleep_wake/activity.py`), una **proposta** (Q5): **tutte le rotte del pannello sono «in volo ma non
+  l'utente»**, come `wake-sync`. Oggi il polling del backup del pannello conta come visita e tiene sveglia la macchina
+  altri 5 minuti dopo l'ultimo `GET`; il lavoro di backup, invece, la tiene sveglia da sé mentre gira.
+- I percorsi e i corpi di risposta non cambiano. Il contratto del Cloud cambia solo per le aggiunte: il biglietto, il
+  `429`, `reason` e la rotta di stato.
+
+#### 3. File toccati
+
+- **H, nuovi**:
+  - `backend/app/services/platform/hosting_panel/`: `access.py` (la dipendenza, il limite, la riga di log),
+    `tickets.py` (la verifica L2, le chiavi, il `kid`), `ticket_registry.py`;
+  - `backend/app/config/hosting_panel.py` (le variabili);
+  - `backend/app/api/v1/panel.py` (`status` e il tag);
+  - il modello della tabella in `db/models/`, più la migrazione unica.
+- **H, modificati**:
+  - `api/v1/router.py`, `api/v1/backup/__init__.py` (il router del pannello col suo tag);
+  - `api/v1/instance_block.py`;
+  - `services/platform/config_audit.py` (il token del risveglio all'avvio, il token di stato, le chiavi e l'id,
+    l'avviso di convivenza);
+  - `frontend/src/lib/features/instance/checkGuides.json` (i controlli nuovi hanno bisogno della loro guida: lo impone
+    il test);
+  - `.env.example`, una sezione «Hosting panel».
+- **H, docs**:
+  - `admin/hosting_providers.en.md`, con una sezione nuova «Hosting panel API»: scopi, token, biglietti, rotazione,
+    orologio, codici, vettori di prova;
+  - `admin/sleep_wake.en.md`, solo il rimando;
+  - `developer/architecture/security.md`.
+- **B**: `api/v1/backup/panel.py` (la dipendenza); i test del pannello si rileggono.
+- **Z**: `api/v1/system/wake.py` (la dipendenza); `services/platform/sleep_wake/activity.py` (se Q5 è sì); i loro test
+  di `request_kind` e del risveglio.
+- **A**: `services/accounts/bootstrap_admin_service.py`, `admin_setup_status()` con i suoi test.
+- **Test di H**, scritti dal test-author:
+  - la matrice L1 e L2 per scopo;
+  - il limite e la riga di log senza segreti;
+  - la sicurezza dei biglietti: `alg: none`, HS256 con la chiave pubblica come segreto, `typ` sbagliato, `kid`
+    sconosciuto, troppo lungo, scaduto, nel futuro, `exp − iat > 300`, riuso, riuso dopo un nuovo processo, istanza o
+    scopo sbagliati, due chiavi;
+  - gli stati della rotta di stato, il blocco, «non è una visita»;
+  - la migrazione.
+- **Condivisi**: la migrazione unica della 1.3, `api sync` (cambia `openapi.json`, non i client) e il CHANGELOG
+  (coordinatore).
+
+#### 4. Stima e ordine
+
+| Passo | Cosa | Taglia |
+|---|---|---|
+| 1 | L1: dipendenza comune, tag, limite, riga di log, token del risveglio all'avvio, B e Z che la adottano | S–M, circa 0,75 g |
+| 2 | R1: la rotta di stato, con la lettura di A, il blocco e l'attività | S, circa 0,5 g (+ A circa 0,25 g) |
+| → | **Checkpoint 1**: il Cloud usa subito lo stato con i token | |
+| 3 | L2: biglietti, chiavi, rotazione, tolleranza, tabella dei `jti` e migrazione, test di sicurezza | M, circa 1,5 g |
+| 4 | Doc (guida con i vettori di prova), `.env.example`, voci della mappa delle guide | circa 0,5 g |
+| → | **Checkpoint 2** | |
+
+Totale: circa 3–3,5 giorni di H, circa 0,25 di A, e una rilettura di B e di Z. Prima i rossi, come sempre.
+
+#### 5. Domande (per il developer o il coordinatore Cloud)
+
+1. **Q1, la convivenza**: β, i due insieme con l'avviso nel gestito (**consiglio**), oppure α, le chiavi che spengono
+   i token.
+2. **Q2, il token di `status` in L1**: una variabile sua, `LIBREFOLIO_PANEL_STATUS_TOKEN` (**consiglio**, «un token per
+   scopo»), oppure il riuso del token del risveglio.
+3. **Q3, «404 senza token»**: lo leggo come «scopo non configurato → 404», come oggi. Una credenziale assente o
+   sbagliata resta `401`, perché i codici sono nel contratto e servono alla diagnosi. Va bene?
+4. **Q4, il legame del biglietto con metodo e percorso**: no (**consiglio**), oppure sì, con le claim `htm` e `htu`.
+5. **Q5, le rotte del pannello «non l'utente»**: tutte, anche quelle del backup (**consiglio**), oppure solo `status`.
+   Serve l'OK di Z.
+6. **Q6, il registro dei `jti` nel DB**: è un cambio di schema nella migrazione unica della 1.3. Chi la scrive: H, come
+   per H-57?
+7. **Q7, l'impronta dell'istanza**: una variabile esplicita, `LIBREFOLIO_PANEL_INSTANCE_ID`, scelta dal pannello
+   (**consiglio**), oppure ricavata dalla chiave d'istanza. Ricavarla la legherebbe alla rotazione di quella chiave e
+   non vale per le istanze che la chiave se la generano da sé.
+8. **Q8, `reason` nel 401**: solo per i biglietti con firma valida, più `ticket_unknown_key` (**consiglio**).
+9. **Q9, i codici**: restano quelli di oggi, scopo per scopo (**consiglio**), oppure diventano tutti `panel_*`. Sarebbe
+   un cambio di contratto per il Cloud.
+10. **Q10, `setup_expires_at`**: solo in `pending` (**consiglio**), oppure anche la scadenza passata in `expired`.
+
+**Stato**: analisi inviata al coordinatore (20/10), che la gira al coordinatore Cloud. Niente codice prima del via.
+
+#### H-61, revisione dopo le proposte del coordinatore Cloud (20/10)
+
+**Verifiche sul codice**:
+- **PyJWT 2.13.0**: `jwt.algorithms.has_crypto` è vero ed `EdDSA` è fra gli algoritmi. **cryptography 50.0.2**. Sono
+  già nel lock, quindi nessuna dipendenza nuova.
+- **Processi**: l'immagine Docker ne fa girare **uno** (`CMD uvicorn …`, senza `--workers`). Un'installazione
+  sull'host può averne più d'uno con `dev.py server --workers N` (`dev.py:131`), e le corsie di test pure.
+
+**Cosa cambia nel contratto proposto**:
+1. **Il biglietto** è un JWT EdDSA standard, verificato con PyJWT: era già la proposta.
+   - Il `kid` non è più calcolato: lo sceglie il pannello e lo dichiara nella variabile delle chiavi.
+   - Resta l'header `typ: lf-panel+jwt`, che costa al firmatario un parametro in più e separa questi biglietti da ogni
+     altro JWT (è da confermare con loro).
+2. **`aud`** è **l'origine di `LIBREFOLIO_PUBLIC_URL`**, nella forma canonica `schema://host[:porta]`: minuscole,
+   senza porta di default, percorso o `/` finale. **Cade `LIBREFOLIO_PANEL_INSTANCE_ID`**.
+   - L2 richiede `LIBREFOLIO_PUBLIC_URL`: senza, c'è un errore all'avvio e `503 …_unavailable`.
+   - Un'istanza per origine: LibreFolio si serve dalla radice.
+   - Mai il `support_ref` (`?i=`), che è pubblico.
+3. **Le chiavi**: `LIBREFOLIO_PANEL_PUBLIC_KEYS=kid:chiave[,kid:chiave…]`.
+   - Non è segreta, quindi non ha `_FILE`.
+   - `kid` è `[A-Za-z0-9._-]{1,64}`, unico; la chiave è Ed25519 grezza in base64url, 43 caratteri; al massimo 4 voci.
+   - La rotazione: si aggiunge la nuova, si toglie la vecchia.
+4. **I codici dedicati del biglietto**, sempre 401, per un biglietto **con firma valida** ma rifiutato:
+   - `panel_ticket_expired`;
+   - `panel_ticket_not_yet_valid`, con `Retry-After: 5`: l'orologio dell'istanza è indietro;
+   - `panel_ticket_replayed`, `panel_ticket_wrong_audience`, `panel_ticket_wrong_scope`, `panel_ticket_unknown_key`.
+
+   Un biglietto non verificabile, o un token L1 sbagliato, prende il codice dello scopo di oggi. La tolleranza resta
+   ±60 s su `iat` ed `exp` (`LIBREFOLIO_PANEL_CLOCK_SKEW_SECONDS`).
+5. **Il registro dei `jti`**: al Cloud va bene in memoria, perché il processo è uno. Nell'immagine è vero, ma:
+   - con `--workers N` un biglietto si potrebbe riusare su un altro worker;
+   - dopo un riavvio si riapre una finestra di 5 minuti al massimo.
+
+   Le opzioni per il developer:
+   - (a) in memoria, documentato come «un solo processo» (+0);
+   - (b) una tabella nel DB, nella migrazione unica (+0,25 g) — **consiglio**, perché L2 vale per tutti gli hoster e
+     non solo per il Cloud;
+   - (c) un file in `DATA_DIR` con un lock, senza cambio di schema (+0,25 g).
+
+#### H-61, il via e le decisioni (20/10, 11:43) — passi del checkpoint 1 (L1 + R1)
+
+> Decisioni del coordinatore (tecniche, nel perimetro del developer):
+> - Q1: β, con l'avviso nel gestito;
+> - Q2: un token apposta per `status`;
+> - Q3: 404 solo per uno scopo spento;
+> - Q4: nessun legame con metodo e percorso;
+> - Q5: Z decide; intanto si assume «tutte le rotte del pannello non sono l'utente»;
+> - Q10: `setup_expires_at` solo in `pending`;
+> - `typ: lf-panel+jwt`: sì.
+>
+> **Il registro dei `jti`: (c), un file con un lock in `DATA_DIR`, non una tabella.** La `005` fusa è già applicata
+> ai DB veri del developer (il prod del Mac e la nightly Linux): una tabella aggiunta oggi alla `005` non ci
+> arriverebbe mai. Via al checkpoint 1, poi al 2.
+
+**Contratto del checkpoint 1**: `files/h61/cp1_contract.md`. In sintesi:
+- **Lettore**: `config/hosting_panel.py` (`panel_status_token()`).
+- **La dipendenza comune** `services/platform/hosting_panel/access.py`:
+  - `PanelScope`, `panel_access(scope)`, `PanelCaller`;
+  - codici e corpi di oggi per backup e risveglio;
+  - un limite di 20 rifiuti in 10 minuti per indirizzo, condiviso fra gli scopi (`PANEL_ATTEMPTS`), con 429
+    `panel_too_many_attempts`;
+  - una riga `Hosting panel request` per chiamata, senza segreti.
+- **Il tag unico «Hosting panel»**, con i router del pannello inclusi da `router.py`.
+- **La rotta** `GET /api/v1/panel/status`.
+- **Il controllo** `platform.hosting_panel`.
+- **La voce della mappa** delle guide, `#panel-api`.
+
+**Il contratto di A** è concordato direttamente con A (20/10): `AdminSetupState`, e `AdminSetupStatus(state,
+setup_expires_at)` con `admin_setup_status(session, *, now=None)`. Un link ritirato da A-32 vale `done`; un admin
+eliminato dopo il setup vale `none`. A lo scrive dopo N69b; i miei test lo sostituiscono con un finto.
+
+**Passi**:
+1. ✅ **Rossi** (20/10, 12:00–12:50), tutti per il motivo giusto:
+   - TA-P1, `test_hosting_panel_access.py`: 35 test, 102 casi; 47 falliti e 55 errori, per i moduli mancanti;
+   - TA-P2, `test_hosting_panel_routes.py`: 15 falliti. In `test_config_audit.py`, la sezione (k): 36 falliti e 219
+     passati. In `checkGuides.test.ts` la voce nuova: 2 falliti;
+   - TA-P3, `test_panel_status_api.py`: 7 test, 20 casi falliti. In `test_instance_block.py`, la riga dell'elenco: 1
+     fallito.
+
+   Il runner ha tre azioni nuove: `services hosting-panel-access`, `api hosting-panel-routes` e `api panel-status`.
+   > **⚠️ Fuori pista: il tag.** Spostare i router avrebbe rotto tutti i test di richiesta di B e di Z, perché
+   > `backup_app()` e `system_app()` montano solo il loro router. Ho cambiato strada: il tag passa dal router padre a
+   > ogni include. Cambiano solo BACKUP-001 (B) e WAKE-025 (Z), una riga ciascuno, con l'OK chiesto al coordinatore.
+   > **⚠️ Fuori pista: il limite nei test.** Il limitatore è per processo, e PANEL-012 di B da solo manda 36 rifiuti.
+   > La cura segue lo schema del limite ai login: un `autouse` nella conftest condivisa dà a ogni test un limitatore
+   > senza limite pratico, e i test del limitatore se ne mettono uno loro. `access.py` costruisce il limitatore con
+   > `new_panel_attempts()`, e HPA-010 controlla quella funzione.
+2. ✅ **Cura di L1**:
+   - `config/hosting_panel.py` e `services/platform/hosting_panel/{__init__,access}.py`;
+   - B (`backup/panel.py`) e Z (`system/wake.py`) adottano `panel_access`, con il 429 documentato;
+   - i tag sugli include (`backup/__init__.py`, `system/__init__.py`);
+   - `check_hosting_panel` in `config_audit.py`, prima di `check_test_mode`;
+   - i tre testi in 4 lingue;
+   - la voce `platform.hosting_panel` nella mappa delle guide;
+   - la sezione «Hosting Panel» in `.env.example`;
+   - la conftest.
+
+   **Verdi** (`files/runs/h61/green1-*`): `hosting-panel-access` 102, `config-audit` 255, `config-env-example` 39,
+   `backup-checks` 93, `api system` 122, `sleep-wake-activity` 111.
+
+   **Rossi attesi**:
+   - BACKUP-001 e WAKE-025, che aspettano l'OK di B e Z;
+   - `instance-block`, che aspetta R1;
+   - PANEL-012, che ha visto il 429 dentro il test (si cura con la conftest qui sopra).
+   **Dopo la cura della conftest** (`green2`):
+   - `hosting-panel-access` 102; `backup-panel` 61, con PANEL-012 di nuovo verde;
+   - `hosting-panel-routes` 11 su 15: i 4 rossi sono tutti della rotta di stato, cioè R1;
+   - `core-unit` 9510 (`green3`), con la mappa e l'ancora `#panel-api`;
+   - ruff e black puliti. Black ha toccato solo le mie righe nei file condivisi del runner.
+3. ✅ **R1** (21/10, ondata 1 su Linux; la funzione di A è nella base da `f9f417bfa`).
+   > **Note implementazione**: quattro file toccati, due nuovi.
+   > - `backend/app/schemas/hosting_panel.py` (nuovo): `PanelStatusResponse`, `extra="forbid"`, due chiavi esatte;
+   > - `backend/app/api/v1/panel.py` (nuovo): `get_panel_status` con `panel_access(PanelScope.STATUS)` e la sessione della
+   >   richiesta; `admin_setup_status(session, now=utcnow())`; la mappatura è `status.state.value`, e `setup_expires_at`
+   >   passa solo per `pending` (Q10), con `ensure_utc`;
+   > - `backend/app/api/v1/router.py`: `panel.panel_router` incluso con `prefix="/panel"` e `tags=[HOSTING_PANEL_TAG]`,
+   >   subito dopo `backup_router`;
+   > - `backend/app/api/v1/instance_block.py`: `panel.get_panel_status` in `ALLOWED_WHEN_BLOCKED` (+ la frase nel
+   >   docstring del modulo).
+   >
+   > Il codice di `files/h61/dry/` è stato ripreso con una sola differenza: niente `hasattr(status.state, "value")`
+   > (lo stato di A è sempre un `StrEnum`), si legge `status.state.value` come dice il contratto.
+   > **Verdi** (corsia 6181, `db populate --force --clean` prima): `api panel-status` 20 su 20; `api hosting-panel-routes`
+   > 15 su 15 (i 4 rossi di R1 sono verdi); `api instance-block` 62 su 62 (la riga dell'elenco).
+   > **Rimandi in doc a `access_control.md#setup-status`** (l'ancora di A, già nella base): `admin/hosting_providers.en.md`
+   > (voce «For developers» in «Related»), `developer/architecture/security.md` (la riga `status` della tabella degli scopi
+   > e la riga di `GET /panel/status` nella tabella delle rotte) e `developer/api/index.md` (la voce `/panel`).
+   > **Rilettura dei file fusi**: per `admin/settings.en.md`, `security.md`, `settings.md` e `access_control.md` ho
+   > confrontato `ad4effcf9` (A fuso in `dev_release2`) con `HEAD`: le sole righe tolte sono quelle che avevo riscritto
+   > io (i token di wake e stato, le rotte del pannello, la riga del limite per indirizzo); nessuna riga di A è andata
+   > persa e l'ancora `{: #setup-status }` c'è.
+4. ✅ **Doc**, con il docs-writer, in due giri:
+   - `hosting_providers.en.md`: la sezione `## 🔌 Hosting Panel API {: #panel-api }`, con sette sottosezioni, la riga
+     dell'istanza bloccata e il 429 nella tabella del backup;
+   - `sleep_wake.en.md`: il rimando, e la correzione «il token si controlla anche all'avvio»;
+   - `security.md`: `### 🔌 The Hosting Panel's Access {: #panel-access }`, e le frasi rese false dal codice
+     (`require_panel_token`, il conteggio dei messaggi, l'ordine dei controlli);
+   - poi `configuration.en.md` (le righe del token di stato, del `_FILE`, del controllo all'avvio), `settings.en.md`
+     (la riga della scheda Sicurezza), `developer/settings.md` («Eight exist today»), `developer/api/index.md` (la voce
+     `/panel`, dal contratto).
+
+   Nessuno stamp: testo nuovo, debito vero di `configuration` e `settings`. I link dalle pagine tradotte puntano solo
+   ad ancore presenti in tutte le lingue. `mkdocs build` stretto e `check-links` ok (97).
+   > **⚠️ Fuori pista**: il docstring di `access.py` diceva «da step 2» mentre il codice scrive la riga anche per il
+   > 503; ho corretto il docstring. Anche il docstring di `test_hosting_panel_routes.py` è allineato al tag per include
+   > (TA-P2).
+5. ✅ **Q5, con le condizioni di Z** (20/10, 13:16; gli OK su BACKUP-001, WAKE-025 e conftest dal coordinatore a nome
+   di B e Z):
+   - le rotte del pannello sono classificate come `wake-sync`: in volo sì, presenza dell'utente no, perché il download
+     dell'archivio arriva dopo il rilascio del lock del backup;
+   - il confronto è per prefisso, `PANEL_PATH_PREFIXES` = `/api/v1/backup/panel/` e `/api/v1/panel/`; le rotte del
+     backup delle Impostazioni restano dell'utente.
+
+   I test (TA-Z) in `test_sleep_wake_activity.py`, 28 casi:
+   - 22 rossi per il motivo giusto: il tipo di ogni percorso, l'inattività che non si azzera, nessun listener al
+     ritorno, lo streaming in volo fino all'ultimo pezzo;
+   - 6 di guardia, verdi da sempre: i percorsi delle Impostazioni e i confini dei prefissi.
+
+   Più BACKUP-001 e WAKE-025, una riga ciascuno con i loro docstring.
+
+   **Cura**: `activity.py`, cioè la docstring, `PANEL_PATH_PREFIXES` e un ramo in `request_kind`. `RequestKind` e
+   `WAKE_PATHS` non cambiano.
+
+   **Verdi**: `sleep-wake-activity` 139, `api backup` 23, `api system-wake` 76, `sleep-wake-suspend` 141. La pagina
+   admin della sospensione è chiesta al docs-writer. Z rivede.
+6. ⏳ Checkpoint 1.
+   > **20/10, 14:30 — FROZEN per un commit intermedio** (richiesta del coordinatore). Il `wip` del checkpoint 1
+   > senza R1: 37 percorsi, cioè 31 modificati e 6 nuovi; restano fuori i tre file di test del checkpoint 2.
+   >
+   > Poi il coordinatore fa il merge del ramo di A: `64b8b9fa3` (la funzione), `bdb083782` (la doc), `50d1f29c6` (il
+   > giornale).
+   >
+   > La previsione, in sola lettura:
+   > - `git merge-tree` di HEAD con A è pulito: sei file si fondono da soli, senza conflitti;
+   > - `git merge-file` sulle tre doc sporche (`admin/settings.en.md`, `developer/architecture/security.md`,
+   >   `developer/architecture/settings.md`) è pulito;
+   > - i nomi di A coincidono con la bozza di R1.
+   >
+   > Dopo il merge:
+   > - R1, dove la mappatura dello stato diventa `status.state.value`;
+   > - il rimando da `#panel-status` a `access_control.md#setup-status`, l'ancora nuova di A;
+   > - le corse, poi il checkpoint.
+
+   ✅ **21/10, chiusura del checkpoint 1** (base `8db27b418`, `dev_release2` `208199bf6`). R1 e i rimandi sopra (passo 3);
+   inoltre la **18ª voce della fixture di G**.
+   > **Note implementazione**: in `frontend/e2e/fixtures/gallerySecurity.ts`, `platform.hosting_panel` (ramo `ok`
+   > `instance.checks.hostingPanel.off`) tra `platform.log_level` e `platform.test_mode`, come in `CONFIG_CHECKS`; il commento
+   > in testa dice «18» e nomina i token del pannello fra i default del self-hosted. `prettier --check` (da `frontend/`, il
+   > plugin svelte si trova solo lì) e `tsc -p tsconfig.e2e.json` puliti. Nessuna corsa della galleria.
+   >
+   > **Corse** (corsia `--test-port 6181 --data-dir /tmp/librefolio-r13-h`, prima `db populate --force --clean`, una alla
+   > volta, carico sotto 8), tutte verdi:
+   > - le tre ex rosse: `api panel-status` 20, `api hosting-panel-routes` 15, `api instance-block` 62;
+   > - il resto di CP1: `services hosting-panel-access` 102, `services config-audit` 255, `services config-env-example`
+   >   39, `api backup-panel` 66, `api backup` 23, `api system-wake` 76, `api system` 122,
+   >   `services sleep-wake-activity` 139, `services sleep-wake-suspend` 141, `services backup-checks` 93,
+   >   `front-utility core-unit` 9771 su 9771 (223 file);
+   > - `ruff check` e `black --check` sui 22 file Python del checkpoint: puliti; `git diff --check` pulito;
+   > - `dev.py mkdocs build` (passa `--strict`) esce 0; `dev.py mkdocs check-links` 97 link validi.
+   >
+   > **⚠️ Fuori pista**: `api backup-panel` è 66 e non 61, e `core-unit` 9771 e non 9510: i numeri del 20/10 precedono il
+   > merge di `dev_release2`, che porta cinque casi nuovi di B (B-8, `0b8037b75`) e i test di altri lotti. Non è una deriva
+   > di H.
+   > **⚠️ Fuori pista**: `prettier --check` lanciato dalla radice del worktree fallisce con «Cannot find package
+   > 'prettier-plugin-svelte'»: la configurazione sta in `frontend/`, quindi si lancia lì dentro.
+   > Server: l'avvio e lo stop del server condiviso sono del runner, non miei; dopo l'ultima corsa
+   > `lsof -nP -iTCP:6181 -sTCP:LISTEN` è vuoto.
+
+#### H-61, checkpoint 2 (L2, i biglietti firmati) — preparazione mentre il checkpoint 1 aspetta A (20/10, 13:30–14:25)
+
+> Via del coordinatore: il checkpoint 1 resta intero con R1; intanto il checkpoint 2 in **file nuovi**. Contratto in
+> `files/h61/cp2_contract.md`, con il §7 delle aggiunte. Segnalati al coordinatore due punti nuovi: il codice
+> `panel_ticket_invalid`, e il limite che conta solo ciò che non prova nulla.
+
+**Decisione presa con A (20/10, 14:00): «done vince».** Un link `admin_setup` consumato, speso o ritirato da A-32, dà
+`done`; altrimenti decide l'ultimo degli altri. È il caso che A ha trovato: un link più recente rimasto revocato
+avrebbe fatto leggere `expired` per un admin già attivo.
+
+**I rossi del checkpoint 2, scritti e non ancora eseguiti**. Si eseguono dopo il commit del checkpoint 1, per non
+mescolare le righe del runner dei due lotti:
+- TA-T1, `test_hosting_panel_tickets.py`: 27 funzioni, circa 212 casi (i lettori e `verify_ticket`, con l'orologio
+  fisso nel 2033);
+- TA-T2, `test_hosting_panel_registry.py`: 11 test, 23 casi (riuso, riavvio, thread e processi, potatura, file
+  inservibile → 503, permessi 600, fuori dall'archivio);
+- TA-T3, `test_hosting_panel_access_tickets.py`: 14 funzioni, 84 casi (biglietti in `panel_access`, il limitatore,
+  i codici, il controllo all'avvio).
+
+**Il codice è pronto in `files/h61/dry2/`**: `tickets.py`, `ticket_registry.py`, `config_l2_additions.py`,
+`apply_access_l2.py`.
+> **⚠️ Fuori pista, l'ordine dei controlli**: PyJWT controlla audience e claim obbligatorie dentro `decode`, prima
+> dei tempi. Quindi verifica solo la firma, e le claim le controlla tutte `verify_ticket`, nell'ordine del contratto.
+> Un `aud` mancante dà `wrong_audience` (HPT-029).
+> **Da aggiungere nel checkpoint 2**: `panel_tickets.sqlite3` nei `managed_paths` di `validate_test_data_dir`
+> (segnalato da TA-T2).
+
+**Passi del checkpoint 2** (21/10, ondata 2 su Linux, base `89e8b2e61`, corsia 6181):
+1. ✅ **Rossi confermati** (21/10). Tre azioni nel runner (`services hosting-panel-tickets`, `hosting-panel-registry`,
+   `hosting-panel-access-tickets`), poi le corse: 212 falliti, 23 errori, 84 falliti, tutti per il motivo giusto (moduli
+   e lettori mancanti; il controllo all'avvio che non legge le chiavi; 404 dove servono 200/401).
+2. ✅ **Cura di L2** (21/10).
+   > **Note implementazione**: `config/hosting_panel.py` (i tre lettori), `hosting_panel/tickets.py`,
+   > `hosting_panel/ticket_registry.py`, `access.py` (biglietti dopo il token, `PanelCaller` con `kid`/`jti`), il controllo
+   > `check_hosting_panel` (chiavi, tolleranza, indirizzo → `error` `hostingPanel.ticketsUnusable`; nel gestito un token
+   > accanto alle chiavi → `warning` `hostingPanel.coexisting`, anche il token del backup), `panel_tickets.sqlite3` nei
+   > `managed_paths`, due chiavi nuove e i testi `off`/`ok` aggiornati in `i18n/instance/*.json` (4 lingue), `.env.example`,
+   > le descrizioni OpenAPI della rotta di stato e degli schemi Bearer.
+   > **⚠️ Fuori pista**: le bozze `dry2/` riprese con tre differenze. (a) PyJWT verifica solo la firma con `PyJWS.decode`
+   > e il JSON lo legge `tickets.py`: con `jwt.decode` PyJWT 2.10+ controlla da sé `jti`/`sub`/`iss` e un `jti` non stringa
+   > diventava «non verificabile» invece di `panel_ticket_invalid`. (b) Il `kid` di una chiave sconosciuta nel log è
+   > tagliato a 64 caratteri (è testo del chiamante). (c) Il registro chiude in `TicketRegistryError` anche un errore di
+   > configurazione della tolleranza, crea il file con `O_NOFOLLOW`, e l'errore si scrive con `exc_info`. Ruff C901:
+   > `verify_ticket` e la dipendenza spezzate in funzioni piccole (`_signed_claims`/`_checked_claims`,
+   > `_read_ticket_settings`/`_ticket_caller`).
+   > Le descrizioni 401/404/503 delle rotte di B (`backup/panel.py`) e Z (`system/wake.py`) parlano ancora solo di token:
+   > non le ho toccate (file di B e Z), segnalate al coordinatore.
+3. ✅ **Verdi** (21/10): `hosting-panel-tickets` 212, `hosting-panel-registry` 23, `hosting-panel-access-tickets` 84,
+   `hosting-panel-vectors` 11; vicine: `hosting-panel-access` 102, `config-audit` 255, `config-env-example` 39,
+   `backup-checks` 93, `sleep-wake-activity` 139, `api hosting-panel-routes` 15, `panel-status` 20, `backup-panel` 66,
+   `instance-block` 62, `system-wake` 76, `backup` 23, `system` 122. `api sync` senza diff tracciati; `i18n check` ok;
+   ruff e black puliti sui file toccati.
+4. ✅ **Doc e vettori di prova** (21/10, docs-writer): `hosting_providers.en.md` (`#panel-api-tickets`,
+   `#panel-api-ticket-refusals`, `#panel-api-registry`, `#panel-api-rotation`, `#panel-api-test-vectors`, più le frasi rese
+   false da L2), `security.md#panel-access`. Il blocco JSON dei vettori (chiave di prova da un seme pubblicato, biglietto,
+   7 verdetti ai bordi della tolleranza) lo legge `test_hosting_panel_vectors.py` (test-author, HPV-001..005, azione
+   `services hosting-panel-vectors`). `mkdocs build` (stretto) ok, `check-links` 97 validi. Debito di traduzione vero per
+   `hosting_providers` it/fr/es: niente stamp.
+5. ✅ **Auto-revisione di sicurezza** (21/10, `security-review` sul solo diff di CP2): nessuna vulnerabilità alta o
+   media. Scartati sotto soglia: audience per origine (due istanze sotto un host con prefissi diversi), enumerazione dei
+   `kid` con `unknown_key`.
+6. ✅ **I tre punti bassi della revisione indipendente** (21/10, richiesta del coordinatore dopo il primo CHECKPOINT READY).
+   > **Note implementazione**:
+   > - **Potatura**: il registro cancella le righe con `expires_at < now − PRUNE_MARGIN_SECONDS`, cioè 600 s
+   >   (`PANEL_CLOCK_SKEW_MAX_SECONDS` + `TICKET_MAX_LIFETIME_SECONDS`), e non legge più la tolleranza. Prima potava al bordo
+   >   di `verify_ticket` (`now − skew`): un orologio che torna indietro (passo NTP, ripresa di una VM) o una tolleranza
+   >   alzata al riavvio facevano passare due volte un biglietto potato. Test: HPR-006 riscritto, HPR-012 nuovo (orologio
+   >   indietro, tolleranza alzata).
+   > - **Link simbolico**: `_create` usa `os.path.lexists`, poi `_ensure_regular_file` (`os.lstat`) rifiuta tutto ciò che
+   >   non è un file regolare con `TicketRegistryError` (il 503 dello scopo) prima di `sqlite3.connect`. Test: due ostacoli
+   >   nuovi in HPR-007/HPR-008 (link pendente, link a un SQLite valido); HPR-007 ora esige la classe `TicketRegistryError`.
+   > - **Audience con un percorso**: `panel_public_url_path()` in `config/hosting_panel.py`; con chiavi usabili e un
+   >   `LIBREFOLIO_PUBLIC_URL` con un percorso, `check_hosting_panel` dà `warning` `hostingPanel.audiencePath` `{path}` in ogni
+   >   profilo, prima dell'avviso `coexisting`. Il contratto non cambia (`aud` resta l'origine). Testo in 4 lingue. Test:
+   >   HPT-043a..d.
+   > - **Guida**: «un'origine per istanza», il fail closed voluto delle impostazioni inservibili, la potatura con margine e il
+   >   rifiuto del link (`hosting_providers.en.md`); la riga del registro in `security.md`.
+   > **⚠️ Fuori pista**: al primo giro i due ostacoli «link» di HPR-007 erano verdi e HPR-008 dava 500 per il motivo
+   > sbagliato. In modalità test `validate_test_data_dir` (la riga `panel_tickets.sqlite3` dei `managed_paths`) vede il link
+   > uscire dalla cartella dati e solleva `ValueError` prima del registro. I bersagli dei link sono ora dentro la cartella
+   > dati, così decide il controllo del registro. Rossi poi giusti: 13 nel registro (link seguito → `True`/200; potatura al
+   > bordo), 3 nel controllo all'avvio.
+   > **⚠️ Fuori pista**: `pipenv run` lanciato da `/tmp` per una prova ha creato un `/tmp/Pipfile` vuoto: rimosso subito.
+   > **Verdi**: `hosting-panel-tickets` 212, `hosting-panel-registry` 33, `hosting-panel-access-tickets` 93,
+   > `hosting-panel-vectors` 11, `config-audit` 255, `hosting-panel-access` 102, `config-env-example` 39; `i18n check` ok;
+   > ruff e black puliti; `mkdocs build` stretto ok, `check-links` 97.
+7. ⏳ Checkpoint 2: CHECKPOINT READY aggiornato al coordinatore, FROZEN.
+
+#### H-55 v2, la CSP sempre applicata — esecuzione (ondata 3, notte 21→22/10, base `2879ae3e4`, corsia 6181)
+
+> Via del coordinatore (21/10, sera): kickoff `salvataggi-worktrees-20261021/ondata3/kickoff-H.md`. Contratto dei rossi,
+> scritto da H sul piano breve del 20/10: `h55_contract.md` (scratchpad della sessione), passi 1–5. I rossi
+> parcheggiati di H-55 v1 sono stati rifatti dai test-author sulla base di oggi, non applicati.
+
+**Passi**:
+0. ⏳ **Inventario**: slot chiesto al coordinatore (21/10, sera), comando
+   `... dev.py test --test-port 6181 --data-dir /tmp/librefolio-r13-h --lane-setting LIBREFOLIO_CSP_REPORT_ONLY=true all-frontend`.
+1. ✅ **Gli hash seguono la build** (21/10). Rossi in `test_managed_headers.py` (test-author), poi la cura.
+   > **Note implementazione**: `security_headers._BuildScriptHashes`: firma `(nome, st_mtime_ns, st_size)` delle pagine
+   > `*.html` della build (non nascoste); stessa firma → nessuna rilettura; firma nuova → hash ricalcolati; una pagina
+   > dell'ultima build buona mancante → restano gli ultimi hash buoni e la risposta dopo ricontrolla. Solo le pagine della
+   > web app fanno lo `stat`. La cache è per istanza del middleware.
+2. ✅ **La sonda a immagine, lato backend** (21/10). `GET /api/v1/auth/address-probe.png` in un modulo suo,
+   `api/v1/address_probe_image.py`, registrato da `router.py`: **`auth.py` non è toccato** (E-26 può partire). PNG 1×1
+   se il nonce è di questa istanza, 2×1 altrimenti, `Cache-Control: no-store`. Azione nuova `api address-probe-image`.
+   > **⚠️ Fuori pista**: il contratto diceva «nell'elenco di chi risponde a istanza bloccata, come la sonda JSON»; il
+   > test-author ha visto che la sonda JSON **non** ci sta (decisione A6a: il 401 fuori elenco si legge «non
+   > verificabile»), e un ingresso nuovo passa dal developer. Corretto: anche l'immagine resta fuori, ed è in
+   > `PUBLIC_READS_OUTSIDE_THE_LIST` di `test_instance_block.py`.
+   > **⚠️ Fuori pista**: l'helper di AP-IMG-06 leggeva `app.routes` piatto; con questa FastAPI un router incluso è un
+   > `_IncludedRouter` pigro. Riparato con `iter_route_contexts`, come in `test_instance_block.py`.
+3. ✅ **La politica applicata, lato backend** (21/10).
+   > **Note implementazione**: un solo `Content-Security-Policy` per risposta. Ogni documento: `object-src 'none'; base-uri
+   > 'self'; form-action 'self'` in ogni profilo; le pagine della web app in più `script-src 'self' 'wasm-unsafe-eval'
+   > 'report-sample' <hash>`, `worker-src 'self' blob:`, `connect-src 'self' <origine di LIBREFOLIO_PUBLIC_URL>
+   > [https://api.github.com nel self-hosted]`; `frame-ancestors` e `X-Frame-Options` con la protezione dai frame. Niente
+   > `default-src` né `style-src`. Il report-only resta, con le stesse sorgenti di `connect-src`. L'origine canonica ha una
+   > casa sola, `utils/runtime/origins.canonical_origin`, che ora usa anche `panel_audience` (H-61). Un
+   > `LIBREFOLIO_PUBLIC_URL` inservibile: nessuna origine aggiunta, un warning nel log alla costruzione (domanda aperta).
+   > **Rossi → verdi**: `managed-headers` 230 rossi (asserzioni sulla politica mancante) → 593 verdi; `security-headers` 15,
+   > `server-errors` 43, `config-audit` 255, i biglietti (212, 93, 11), `api address-probe-image` 14 (13 rossi prima),
+   > `address-probe` 28, `instance-block` 63 (1 rosso prima).
+4. ⏳ **Frontend (passi 2, 4 e 5): rossi scritti** (21/10, test-author), cura in bozza, ferma finché l'inventario non ha
+   fatto la sua build (altrimenti misurerebbe un frontend diverso da quello dichiarato).
+   > **Rossi** (Vitest, gruppi di 3 file, carico sotto 8): `addressProbe`, `emailLinks`, `cspNotice` → 60 falliti e 69
+   > passati; `securityFindings`, `checkGuides`, `cspEarlyListener.gate` → 15 falliti e 46 passati. Tutti per il motivo
+   > giusto: mancano `probeImageUrl` e il loader d'immagine, `cspNotice.ts`, il blocco di `app.html`, la voce
+   > `platform.blockedScript` e l'ancora `#csp`. E2E riscritti ma non lanciati (serve lo slot): `csp-collector.spec.ts`,
+   > AUSR-E-07 di `admin-users.spec.ts`.
+   > **Da adeguare**: `LinkShare.component.test.ts` (test-author in corso), `page-policy.spec.ts` (dopo l'inventario), le
+   > due azioni `core-unit` per i file Vitest nuovi nel runner.
+   > **⚠️ Fuori pista**: l'inventario era «senza codice»; quando lo slot è arrivato, il worktree aveva già i passi backend
+   > 1–3. Gira quindi sotto la politica applicata con il report-only sopra. Detto al coordinatore prima di partire.
+0. ✅ **Inventario** (21/10, 21:56 → 23:55; la corsa vera dura 1 h 37 min, il resto è l'attesa del lucchetto). Log in
+   `salvataggi-worktrees-20261021/ondata3/h55-inventory.log`; smistamento di un sotto-agente, verificato da me.
+   > **Attese**: F1, cheetah-grid (`eval`), già in baseline; F3, sonda d'indirizzo (`connect-src`), è AUSR-E-07. Più i rossi
+   > nuovi del lotto, prima della cura (`csp-collector`, i Vitest di sonda, avviso e scheda Sicurezza).
+   > **Da correggere nel codice**: `script-src-attr` inline su `/assets` (12), `/transactions` (26) e `/brokers/1` (1):
+   > 20 gestori `onerror="…"` scritti nelle stringhe HTML delle celle, in 10 file. Facevano fallire 21 test.
+   > **Nuove da coprire nella politica (decisione)**: `connect-src https://cdn.jsdelivr.net`, il CDN del visore PDF (i font
+   > CJK sempre, il motore se la copia locale non risponde). Bloccato; la sonda di `files-pdf-offline` ne è la prova.
+   > **Non CSP** (6): la cache di `asset-detail`, l'Esc del modale di `brokers-detail`, la finestra di date di `fx-sync`,
+   > `data-busy` della dashboard, il 409 del seed di YOC, e il ripiego sul CDN di `files.spec.ts:826`, che è CSP ma senza
+   > violazione registrata (il worker del motore).
+5. ✅ **Cura del frontend** (22/10, notte).
+   > **Note implementazione**:
+   > - `addressProbe.ts`: la sonda a immagine, con un `loadImage` iniettabile; `emailLinks.ts` passa `loadImage`;
+   > - `security/cspNotice.ts` (avviato nel layout radice): il buffer di `app.html`, l'ascoltatore, un `ReportingObserver`
+   >   bufferizzato; una riga in console per pagina; le sorgenti in `sessionStorage`; `readBlockedScripts()`;
+   > - la scheda Sicurezza: `platform.blockedScript` (`securityFindings.ts`, `securityChecks.svelte.ts`), il testo in 4
+   >   lingue, la voce `browser` di `checkGuides.json` → `admin/configuration/#csp`;
+   > - `app.html`: un blocco suo, in un `try`, **dopo** l'IIFE anti-FOUC; tema, `theme-color` e splash non toccati;
+   > - `security/imageErrorFallback.ts`: un solo ascoltatore in cattura sugli errori delle immagini, che legge
+   >   `data-hide-on-error` (display, visibility, next-sibling), `data-fallback-text` e `data-fallbacks`. I 20 gestori
+   >   inline sono diventati attributi; `getExhaustedScript` di `brokerHelpers.ts` è tolto. Il gate
+   >   `noInlineEventHandlers` vieta di riscriverne;
+   > - `csp-baseline.json`: F3 tolta, F1 col motivo corretto (istanbul usa `globalThis`);
+   > - il CDN del visore PDF in un punto solo: `security_headers.PDF_VIEWER_CDN_ORIGIN` ed `EXTRA_CONNECT_SOURCES = ()`.
+   > **Verdi** (Vitest a gruppi di 3): sonda, link e avviso 129; scheda Sicurezza, guide e gate di `app.html` 61; ripiego delle
+   > icone, gate degli inline e `LinkShare` 60; `managed-headers` 593.
+   > **⚠️ Fuori pista**: il gate degli inline ha trovato due casi che non si limitano a nascondere l'icona: le iniziali del
+   > fornitore (`providerHelpers.ts:61`) e la catena delle icone del broker (`brokerHelpers.ts`). Coperti da due attributi
+   > in più, con i loro rossi.
+6. ✅ **Spec E2E, controlli pesanti, auto-revisione** (22/10, notte).
+   > **Note implementazione**:
+   > - `page-policy.spec.ts` non inietta più `PAGE_POLICY`: legge l'header della corsia (un solo campo, il trio,
+   >   `frame-ancestors` se e solo se `X-Frame-Options`);
+   > - `files-pdf-offline.spec.ts`: la sonda del CDN la rifiuta o la CSP (violazione `connect-src` attesa da quel test) o la
+   >   rotta;
+   > - `files.spec.ts:826` (il ripiego del motore PDF sul CDN) resta rosso per scelta, legato alla domanda sul CDN: senza
+   >   CDN il visore non ha uno stato di errore e gira all'infinito, come già oggi senza internet.
+   > **Controlli** (in `flock`): gate dei temi e degli HTML 211, `core-unit` 9 955, `component-unit` 5 245, `front check` 0
+   > errori, `mkdocs build` stretto ok, `check-links` 97.
+   > **⚠️ Fuori pista**: `front check` cadeva (1 errore) su `ForgotPasswordCard.email.test.ts` di E, «Type instantiation is
+   > excessively deep», in un `vi.spyOn(zodiosApi, …)`. La causa era la mia rotta a immagine, un alias in più nel client
+   > generato. Ora è fuori dallo schema OpenAPI (`include_in_schema=False`: la legge un `<img>`, mai il client), e il
+   > controllo dà 0. Il tipo di `zodiosApi` resta al limite: la prossima rotta nuova potrebbe rifarlo cadere.
+   > **⚠️ Fuori pista**: `mkdocs build` stretto cadeva su due link `configuration.md#csp` da pagine con traduzioni (ancora
+   > assente in it/fr/es): ora puntano alla pagina senza ancora, nominando la sezione. `check-links` cadeva sulla costante
+   > della guida in `cspNotice.ts`. `MKDOCS_ANCHOR_EXCEPTIONS` «deve solo accorciarsi» e non l'ho toccata: la riga in
+   > console legge la guida da `checkGuides.json` (la stessa della scheda Sicurezza), dove il debito
+   > `es/fr/it:configuration#csp` è dichiarato dalla ratchet del suo test.
+   > **Auto-revisione di sicurezza** (sotto-agente, sul diff di H-55): nessun problema alto o medio. Accolto il
+   > rafforzamento proposto: `canonical_origin` rifiuta un host con `;`, virgolette, spazi o virgole, un IPv6 che non è un
+   > indirizzo e un id di zona; i nomi internazionali in punycode. Test nuovo `utils origins`, 67 casi (2 rossi prima della
+   > cura dell'id di zona).
+7. ⏳ **Passo 5**: la corsa E2E completa sotto la politica, nello slot del coordinatore.
+7. ✅ **Passo 5, la corsa completa sotto la politica** (22/10, 00:52 → 02:26, corsa 1 h 33 min, HEAD `a1f1cc5fb`; log
+   `ondata3/h55-step5.log`). Verdi: Transazioni, Broker, Utenti, AI Export, Designer Lab, e `csp-collector` intero. Rossi:
+   > - `page-policy` (4): un difetto dello spec, `headersArray()` è asincrono; riparato (test-author), non rilanciato in E2E;
+   > - `files-uploader:416` (desktop e mobile): il mio ascoltatore globale camminava la catena `data-fallbacks` di un
+   >   componente Svelte (l'icona di un'opzione del filtro). Curato: agisce solo su un'immagine con `data-hide-on-error` o
+   >   `data-fallback-text`; rosso nuovo in `imageErrorFallback.test.ts`;
+   > - `files.spec.ts:826`: legato a Q-CDN;
+   > - non CSP: `asset-detail:8555`, `fx-sync:327`, `dashboard:323`, `yield-on-cost-real:455`, `scheduler:89`
+   >   (FSCH-004b, l'Esc del modale mentre carica; nell'inventario cadde allo stesso modo `brokers-detail:253`, stavolta verde).
+8. ✅ **La cura della revisione indipendente di `a1f1cc5fb`** (22/10). Prima i rossi (test-author), poi la cura.
+   > **Note implementazione**:
+   > - R1 (medio), un file caricato servito come script: il download BRIM non mostrato in pagina esce come
+   >   `application/octet-stream` qualunque sia il nome; `api/file_fetch_guard.refuse_script_destination` (403
+   >   `file_not_a_script` per un `Sec-Fetch-Dest` da script, worker o worklet) sul download BRIM e su
+   >   `/uploads/file/{id}`; `BLOCKED_EXTENSIONS` anche all'upload BRIM (400, niente scritto); tre tipi JavaScript in più in
+   >   `BLOCKED_MIME_TYPES`;
+   > - R2: gli hash della build si leggono in un thread (`asyncio.to_thread`) sotto un lock (una lettura per firma anche in
+   >   parallelo); se la lettura fallisce la pagina ha tutte le intestazioni con la politica senza hash, e un warning con la
+   >   causa; `started` dopo le intestazioni;
+   > - R3: il buffer di `app.html` ha un tetto (100) e si ferma quando `cspNotice` lo azzera a `null`; `canonical_origin`
+   >   rifiuta host non ASCII (un nome internazionale va scritto in punycode) e qualunque backslash;
+   > - R4 (worker sotto `/_app`) proposto, non fatto: cambierebbe ciò che caricano i worker del visore PDF e del rischio, e
+   >   chiede un'altra corsa completa;
+   > - R5 (docs dell'API da jsDelivr senza versione né SRI) portato al developer.
+   > **Rossi → verdi**: `served-content-types` 50 rossi → 105; `api brim` 8 → 131; `static-uploads` 2 → 75;
+   > `managed-headers` 9 → 602; `origins` 8 → 76; Vitest dell'avviso, del buffer e del ripiego 6 → 80. Più `security-headers`
+   > 15, `server-errors` 43, i biglietti 212, `address-probe-image` 14; gate di `app.html` e dei temi 44, 27, 53; ruff,
+   > black e prettier puliti.
+9. ✅ **FSCH-004b, l'Esc del modale del log** (22/10, mattina presto; triage con `test-triage`). Verdetto: **difetto** di
+   `ModalBase.svelte`, non del test. L'Esc è ascoltato solo sul backdrop, e il focus ci entrava in un
+   `requestAnimationFrame`: un Esc premuto nel primo fotogramma (macchina carica, utente veloce) andava al bottone che apre
+   il modale e si perdeva; 3 s dopo il modale era ancora aperto (contesto della corsa del passo 5). Nell'inventario era
+   caduto allo stesso modo `brokers-detail:253`.
+   > **Note implementazione**: il focus entra nel backdrop subito, nell'effetto, dopo aver memorizzato chi ha aperto il
+   > modale; il fotogramma porta il focus sul primo elemento (con `trapFocus`) solo se il focus è ancora sul backdrop o
+   > fuori dal modale. Rossi in `ModalBase.test.ts` (2 rossi, 3 guardie verdi) → verdi.
+   > **⚠️ Fuori pista**: la prima cura (solo il focus sincrono) faceva cadere una guardia di `ModalBase.escapeLayers`: il
+   > fotogramma riprendeva il focus alla ricerca di una select aperta nel frattempo. Da qui il controllo «non rubare il
+   > focus». Poi `SocialShareModal.test.ts` contava 1 timer dopo lo smontaggio: è il `setTimeout 0` con cui jsdom accoda
+   > `selectionchange` quando il focus si sposta (trovato con una sonda temporanea, poi cancellata), non un timer
+   > dell'app. Il test ora scarica i compiti a 0 ms prima di contare (test-author).
+   > **Prove** (in `flock`, log `ondata3/h-scheduler-*.log`): `scheduler` 17 su 17 per 3 volte di fila; `brokers-detail` 40
+   > su 40; `component-unit` 5 256, `core-unit` 9 959, `front check` 0 errori.
+10. ✅ **Gate del treno 8, `csp-collector.spec.ts:1345`** (22/10, base `23111e2f0`; triage con `test-triage`). Verdetto:
+    **assumption**, uno spec rimasto indietro rispetto a un contratto cambiato da me; nessun incrocio con altri lotti. La
+    riga 1390 pretendeva `Array.isArray(window.__lfCspViolations)` ad app avviata, ma la cura R3 della revisione fa
+    azzerare quel buffer a `null` da `cspNotice.ts` dopo lo svuotamento. Il passo 5, verde, era prima di R3.
+    > **Note implementazione**: l'asserzione ora pretende `null` (buffer svuotato, R3); le prove che lo script iniettato è
+    > stato visto restano (violazione registrata, `sessionStorage` `['inline']`, una riga in console). `csp-collector:1158`
+    > non è un rosso: è un `test.fail()`, che il reporter `list` segna con ✘ quando fallisce come atteso (così anche nel
+    > passo 5 verde), e non conta fra i falliti.
+    > **Prove** (corsia 6181, in `flock`, log `ondata3/h-gate8-*.log`): `csp-collector` 23 verdi (1 saltato) due volte;
+    > `front-utility all` (30 min 36 s) rosso solo su `files.spec.ts:826`, atteso finché il developer non decide Q-CDN.

@@ -305,7 +305,8 @@
   },
   "nav": {
     "dashboard": "Tableau de bord",
-    "settings": "Paramètres"
+    "settings": "Paramètres",
+    "toggleMenu": "Ouvrir ou fermer le menu"
   },
   "prices": {
     "sync": {

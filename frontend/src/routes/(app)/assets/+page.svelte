@@ -18,7 +18,7 @@
     import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
     import {zodiosApi, axiosInstance} from '$lib/api';
-    import {BarChart3, Check, Network, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
+    import {BarChart3, CalendarSync, Check, Network, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
     import AssetCard from '$lib/components/assets/AssetCard.svelte';
     import type {AssetRow} from '$lib/components/assets/AssetTable.svelte';
     import AssetTable from '$lib/components/assets/AssetTable.svelte';
@@ -45,9 +45,12 @@
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
-    import {hasStoredPointInRange, type AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
-    import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
-    import {getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {hasStoredRowBehindSample, type AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
+    import type {ChartPrimaryView, ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {effectiveCalendarReturnWindow, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setItemPrimaryView, setPairSettings, setScopePrimaryView} from '$lib/stores/chartSettingsStore.svelte';
+    import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
+    import {calendarReturnRangeDays, calendarReturnWindowDays} from '$lib/components/charts/calendarReturnWindow';
+    import {formatSignalProblem} from '$lib/components/charts/chartSignalsHelpers';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
@@ -58,16 +61,21 @@
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
     import {todayIso} from '$lib/utils/dateOnly';
-    import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, renderBackendSignalResult, signalFromConfig, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
+    import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
+    import {fxPointToLineDataPoint, renderBackendResults, renderCalendarComparisons, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import {createPairSlug, displayFxRate, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
-    import {getAssetPriceStore, invalidateAssetPriceStore} from '$lib/stores/assetPriceStoreRegistry';
-    import {computeDerivedPriceState} from '$lib/utils/assetPriceDerived';
+    import {createPairSlug, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {invalidateAssetPriceStore} from '$lib/stores/assetPriceStoreRegistry';
+    import {reducedPrices, type ReducedEntry} from '$lib/stores/reducedPriceCache';
+    import type {DerivedBase} from '$lib/utils/assetPriceDerived';
+    import {buildReducedQuery, cardsOfAnotherStep, comparisonTargetFrom, comparisonTargetIds, estimateEntryDays, signalBaseData, type CardQueryInput} from '$lib/utils/reducedPriceQuery';
+    import {DEFAULT_COMPACT_PLOT_WIDTH_PX, compactMaxPoints, type ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
     import {fetchAssetPeriodChanges, PeriodChangesLedger, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
     import type {RangeDelta} from '$lib/utils/rangeChange';
     import {processPriceItemsInParallel} from '$lib/workers/priceProcessingPool';
-    import {BULK_SIGNAL_MARGIN_DAYS, bulkRangeDays, sendBulkBatches} from '$lib/api/bulkBatches';
+    import {TargetSampleLoader, type TargetSampleRequest} from '$lib/utils/targetSampleLoader';
+    import {sendBulkBatches} from '$lib/api/bulkBatches';
     import {bulkRefusalMessage} from '$lib/api/bulkRefusal';
     import type {ProcessedAssetResult} from '$lib/workers/priceProcessing.worker';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
@@ -99,7 +107,12 @@
 
     interface AssetState extends AssetInfo {
         lastPrice: number | null;
+        /** The card's series, as the backend sampled it for the card's plot (Z-29b): one point a day, a week or a month. */
         chartData: Array<{date: string; value: number; staleDays?: number}>;
+        /** The step of `chartData`: `daily`, or `weekly` or `monthly` when the card's plot is narrower than its days. */
+        resolution?: ChartResolution;
+        /** The point on the fill's first day (`sample_bounds.first`, else the first price): the base of the percentage view and of the line's colour. */
+        base?: DerivedBase | null;
         loadingPrices: boolean;
     }
 
@@ -162,7 +175,10 @@
     let assetModalEditData = $state<AssetEditData | null>(null);
     let assetEditLoading = $state(false);
     let assetEditRequest = 0;
-    onDestroy(() => (assetEditRequest += 1));
+    onDestroy(() => {
+        assetEditRequest += 1;
+        clearTimeout(widthReloadTimer);
+    });
 
     // Filters
     let searchText = $state('');
@@ -210,8 +226,20 @@
     let urlDateEnd = $derived(activePreset === 'MAX' ? 'max' : dateEnd);
     let syncDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
     /** The sync dialog's assets whose shown prices hold a stored row in its range (C-66): the dialog warns that the sync
-     * replaces them. */
-    let syncModalWithData = $derived(syncModalOpen ? syncModalAssets.filter((a) => hasStoredPointInRange(getAssetPriceStore(a.id, a.currency).getRange(dateStart, dateEnd).data, syncDateStart, dateEnd)).map((a) => a.id) : []);
+     * replaces them. The prices shown are a weekly or monthly sample on a wide range (Z-29b), so it reads the row behind each point. */
+    let syncModalWithData = $derived(
+        syncModalOpen
+            ? syncModalAssets
+                  .filter((a) =>
+                      hasStoredRowBehindSample(
+                          (assets.find((shown) => shown.id === a.id)?.chartData ?? []).map((point) => ({date: point.date, staleDays: point.staleDays ?? 0})),
+                          syncDateStart,
+                          dateEnd,
+                      ),
+                  )
+                  .map((a) => a.id)
+            : [],
+    );
 
     /** True when the date range ends today (or later) → show live prices from providers. Today on the user's calendar,
      *  like `dateEnd`: the UTC date is already tomorrow in the evening west of Greenwich (Z-3). */
@@ -245,8 +273,14 @@
         void goto(buildTabUrl($page.url, tabId), {replaceState: true, noScroll: true});
     }
 
-    // Grid delta display mode: absolute or percentage (E3)
-    let globalViewMode = $state<'percentage' | 'absolute'>('percentage');
+    // The view of the grid's cards (Y-40): the list's, saved with the chart settings, which the top bar sets for every card;
+    // a card's button keeps its own (V-1 a, V-3 a).
+    let globalPrimaryView = $derived.by((): ChartPrimaryView => {
+        void getSettingsVersion();
+        return getGlobalSettings('assets').primaryView;
+    });
+    /** The rolling return of each card in the rolling-return view, and its comparisons' (Y-40), by card. */
+    let calendarByCard = $state(new Map<number, {own: CalendarReturnView; targets: Map<number, CalendarReturnView>}>());
 
     // Asset type → icon: getAssetTypeIconUrl() is the single source. The local
     // TYPE_ICON_MAP that used to live here knew nine types, so every value added to
@@ -293,6 +327,13 @@
     let signalCatalogFailed = $state(false);
     let signalRequestFailed = $state(false);
     const signalResultStates = new Map<number, SignalResultState>();
+    /**
+     * The comparison targets of each card, sampled like the card (Z-29b), by `<card>|<target>`: what its comparison
+     * signals draw, with the target's own point on the day the comparison starts as the percentage base.
+     */
+    let targetSamples = $state(new Map<string, ReducedEntry>());
+    /** The plot width each card reported (`AssetCard`'s `onplotwidth`), in pixels; what its `max_points` is sized by. */
+    const plotWidths = new Map<number, number>();
     let signalBackendError = $derived(signalCatalogFailed ? $t('chartSettings.signalCatalogUnavailable') : signalRequestFailed ? $t('chartSettings.signalResultsUnavailable') : null);
 
     // FX pair slugs for cross-domain signal selection (loaded lazily)
@@ -608,11 +649,19 @@
      * generic "min"/"max" sentinel (set in handleDateRangeChange) so the
      * "All" selection survives reloads/shares instead of freezing to a
      * specific historical date. No-op once already resolved or if no asset
-     * has any price data yet.
+     * has any price data yet. The earliest date of an asset is the first day of its fill (`base`):
+     * on a sampled series its first point is the end of the first bucket (Z-29b).
      */
+    /** An asset's prices changed (a sync, a refresh, a merge): the daily cache and the cards' sampled one forget it. */
+    function invalidateAssetPrices(assetId: number) {
+        invalidateAssetPriceStore(assetId);
+        reducedPrices.invalidateAsset(assetId);
+        targetSampleLoader.reset();
+    }
+
     function resolveMaxStartFromAssets() {
         if (!isMaxPending) return;
-        const firstDates = assets.map((a) => a.chartData?.[0]?.date).filter((d): d is string => !!d);
+        const firstDates = assets.map((a) => a.base?.date ?? a.chartData?.[0]?.date).filter((d): d is string => !!d);
         if (firstDates.length === 0) return;
         dateStart = firstDates.reduce((min, d) => (d < min ? d : min));
         displayDateStart = dateStart;
@@ -679,19 +728,89 @@
         }
     }
 
-    async function fetchPriceSeries() {
+    /**
+     * The point of an asset's card on screen from a series the backend sampled for it (or none: what the card already drew
+     * stays, a stale-but-valid previous read included, and only its loading flag clears).
+     */
+    function assetWithEntry(asset: AssetState, entry: ReducedEntry | null): AssetState {
+        if (!entry || entry.derived.chartData.length === 0) return {...asset, loadingPrices: false};
+        return {...asset, ...entry.derived, resolution: entry.resolution, loadingPrices: false};
+    }
+
+    /**
+     * The rolling return a card in that view asks (Y-40): over the window in force for the range on screen — the one chosen,
+     * else the largest preset that fits it.
+     */
+    function calendarReturnRequest(settings: ChartSettings, start: string, end: string) {
+        const windowDays = calendarReturnWindowDays(effectiveCalendarReturnWindow(settings, calendarReturnRangeDays(start, end))) ?? 30;
+        return {instance_id: CALENDAR_RETURN_INSTANCE_ID, signal_code: CALENDAR_RETURN_SIGNAL_CODE, params: {window_days: windowDays}};
+    }
+
+    /** The view a card shows: its own saved one, else the list's (Y-40). */
+    function cardPrimaryView(assetId: number): ChartPrimaryView {
+        void getSettingsVersion();
+        return getSettingsForPair(`asset-${assetId}`, 'assets').primaryView;
+    }
+
+    /** The top bar (V-3 a): every card takes the view; the cards that enter or leave the rolling return ask their data again. */
+    function handleListPrimaryView(view: ChartPrimaryView) {
+        const toCalendar = view === 'calendar-return';
+        const changed = assets.filter((asset) => (cardPrimaryView(asset.id) === 'calendar-return') !== toCalendar).map((asset) => asset.id);
+        setScopePrimaryView(view, 'assets');
+        if (changed.length > 0) void pageBusy.track('assets-view', () => fetchPriceSeries(new Set(changed)));
+    }
+
+    /** A card's button (V-1 a): that card keeps the view; entering or leaving the rolling return, it asks its data again. */
+    function handleCardPrimaryView(assetId: number, view: ChartPrimaryView) {
+        const wasCalendar = cardPrimaryView(assetId) === 'calendar-return';
+        setItemPrimaryView(`asset-${assetId}`, view, 'assets');
+        if (wasCalendar !== (view === 'calendar-return')) void pageBusy.track('assets-view', () => fetchPriceSeries(new Set([assetId])));
+    }
+
+    function translateCalendarProblem(key: string, values?: Record<string, string | number>): string {
+        return values ? $t(key, {values}) : $t(key);
+    }
+
+    /** A card's rolling return, with the detail's message when the backend has none (V-7 a). */
+    function cardCalendarReturn(assetId: number) {
+        const view = calendarByCard.get(assetId)?.own ?? emptyCalendarReturnView('loading');
+        const problemMessage = view.problem ? formatSignalProblem(view.problem, translateCalendarProblem, (field) => $t(`signals.dataFields.${field}`)) : view.state === 'error' ? $t('chartSettings.signalResultsUnavailable') : null;
+        return {state: view.state, points: view.points, problemCode: view.problem?.code ?? null, problemMessage};
+    }
+
+    /** A card's comparisons in the rolling-return view: their targets' returns (V-5 a), drawn as the detail draws them. */
+    function cardCalendarOverlays(assetId: number): RenderedSignal[] {
+        const views = calendarByCard.get(assetId)?.targets;
+        if (!views) return [];
+        const target = (id: number) => {
+            const asset = assets.find((item) => item.id === id);
+            return asset ? {displayName: asset.display_name, iconUrl: asset.icon_url, assetType: asset.asset_type} : null;
+        };
+        return renderCalendarComparisons(getSettingsForPair(`asset-${assetId}`, 'assets').signals, views, target, (id) => $t('chartSettings.signals.assetFallback', {values: {id: String(id)}}), assetId);
+    }
+
+    /**
+     * The prices and backend signals of the cards (Z-29b). Each card asks for the series its plot takes, one point a day, a
+     * week or a month (`max_points` from its measured width; `utils/reducedPriceQuery.ts`), and each comparison target for
+     * the same buckets (`sample_like`). Only what the reduced cache (`stores/reducedPriceCache.ts`) does not hold, or holds
+     * for another step or stale, is asked; the answers go to the cache and the cards draw them as they are. `only` limits it
+     * to some cards: a settings change reloads its own card, a width that changes the step its own.
+     */
+    async function fetchPriceSeries(only?: ReadonlySet<number>) {
         if (assets.length === 0) return;
         void getSettingsVersion();
 
-        // Build one request item per asset that needs prices and/or backend signals.
-        const cached: Map<number, any[]> = new Map();
-        const needFetch: AssetState[] = [];
-        const queryItems: Array<{
-            asset_id: number;
-            date_range: {start: string; end: string};
-            include_price: boolean;
-            signals: ReturnType<typeof buildBackendSignalRequestPlan>['requests'];
-        }> = [];
+        const wanted = only ? assets.filter((asset) => only.has(asset.id)) : assets;
+        if (wanted.length === 0) return;
+        const wantedIds = new Set(wanted.map((asset) => asset.id));
+        const listedIds = new Set(assets.map((asset) => asset.id));
+        // The range the answers belong to: the page may move on while the request is in flight.
+        const rangeStart = dateStart;
+        const rangeEnd = dateEnd;
+
+        const cards: CardQueryInput[] = [];
+        const cached = new Map<number, ReducedEntry>();
+        const needFetchIds = new Set<number>();
         const requestContexts = new Map<
             number,
             {
@@ -701,59 +820,76 @@
             }
         >();
         const nextSignalResults = new Map(signalResultsByAsset);
+        const nextTargetSamples = new Map(targetSamples);
+        /** The cards in the rolling-return view (Y-40): each asks its return, and its comparisons' on its buckets. */
+        const calendarCards = new Set<number>();
 
-        for (const asset of assets) {
-            const configs = getSettingsForPair(`asset-${asset.id}`, 'assets').signals;
+        for (const asset of wanted) {
+            const settings = getSettingsForPair(`asset-${asset.id}`, 'assets');
+            const calendarRequest = settings.primaryView === 'calendar-return' ? calendarReturnRequest(settings, rangeStart, rangeEnd) : null;
+            if (calendarRequest) calendarCards.add(asset.id);
+            // V-5 a: in the rolling-return view the comparisons are the only signals; the others stay saved and are not asked.
+            const configs = calendarRequest ? [] : settings.signals;
             const plan = buildBackendSignalRequestPlan(configs, signalDefinitions);
             const state = resultStateForAsset(asset.id);
             const requestVersion = state.beginRequest();
-            requestContexts.set(asset.id, {
-                configs,
-                plan,
-                requestVersion,
-            });
+            requestContexts.set(asset.id, {configs, plan, requestVersion});
 
-            const store = getAssetPriceStore(asset.id, asset.currency);
-            const gaps = store.getMissingIntervals(dateStart, dateEnd);
-            const needsPrice = gaps.length > 0;
-            if (gaps.length === 0) {
-                const rangeData = store.getRange(dateStart, dateEnd).data;
-                cached.set(
-                    asset.id,
-                    rangeData.map((p) => ({
-                        date: p.date,
-                        close: p.close,
-                        open: p.open,
-                        high: p.high,
-                        low: p.low,
-                        volume: p.volume,
-                        currency: p.currency,
-                        backward_fill_info: p.backwardFillInfo ? {days_back: p.backwardFillInfo.daysBack} : null,
-                    })),
-                );
-            } else {
-                needFetch.push(asset);
+            const plotWidthPx = plotWidths.get(asset.id) ?? DEFAULT_COMPACT_PLOT_WIDTH_PX;
+            const own = reducedPrices.getCard(asset.id, rangeStart, rangeEnd, compactMaxPoints(plotWidthPx));
+            const needsPrice = own === null || own.stale;
+            if (own) cached.set(asset.id, own);
+            if (needsPrice) needFetchIds.add(asset.id);
+
+            const targetIds = comparisonTargetIds(settings.signals, asset.id).filter((id) => listedIds.has(id));
+            const prefix = `${asset.id}|`;
+            for (const key of [...nextTargetSamples.keys()]) {
+                if (key.startsWith(prefix) && !targetIds.includes(Number(key.slice(prefix.length)))) nextTargetSamples.delete(key);
             }
+            const targets = targetIds.map((assetId) => {
+                const sample = own ? reducedPrices.getTarget(assetId, asset.id, rangeStart, rangeEnd, own.resolution) : null;
+                if (sample) nextTargetSamples.set(`${asset.id}|${assetId}`, sample);
+                return {assetId, needsRead: needsPrice || sample === null || sample.stale};
+            });
+            cards.push({
+                assetId: asset.id,
+                plotWidthPx,
+                start: rangeStart,
+                end: rangeEnd,
+                needsPrice,
+                signals: calendarRequest ? [calendarRequest] : plan.requests,
+                targets,
+                // The comparisons' returns in the card's currency, as the detail page asks them.
+                ...(calendarRequest ? {calendar: {signals: [calendarRequest], targetCurrency: asset.currency}} : {}),
+            });
+        }
 
-            if (needsPrice || plan.requests.length > 0) {
-                queryItems.push({
-                    asset_id: asset.id,
-                    date_range: {start: dateStart, end: dateEnd},
-                    include_price: needsPrice,
-                    signals: plan.requests,
-                });
-            } else {
-                const mapped = mapSignalInstanceResults(configs, plan, []);
-                if (state.apply(requestVersion, mapped)) {
-                    nextSignalResults.set(asset.id, [...state.values()]);
-                }
+        // The cards leaving the rolling-return view drop their returns; those in it keep theirs on screen while the new ones load.
+        const nextCalendar = new Map(calendarByCard);
+        for (const asset of wanted) {
+            const previous = nextCalendar.get(asset.id);
+            if (!calendarCards.has(asset.id)) nextCalendar.delete(asset.id);
+            else nextCalendar.set(asset.id, {own: {...(previous?.own ?? emptyCalendarReturnView()), state: 'loading'}, targets: previous?.targets ?? new Map()});
+        }
+        calendarByCard = nextCalendar;
+
+        const entries = buildReducedQuery(cards);
+        const sentCardIds = new Set(entries.map((entry) => entry.cardId));
+        // A card with nothing to ask has no backend signals either: its signal results are emptied, as for a card without any.
+        for (const [assetId, context] of requestContexts) {
+            if (sentCardIds.has(assetId)) continue;
+            const state = resultStateForAsset(assetId);
+            const mapped = mapSignalInstanceResults(context.configs, context.plan, []);
+            if (state.apply(context.requestVersion, mapped)) {
+                nextSignalResults.set(assetId, [...state.values()]);
             }
         }
 
-        // If all prices are cached and no backend signals are selected, update instantly.
-        if (queryItems.length === 0) {
-            assets = assets.map((asset) => buildAssetStateFromPrices(asset, cached.get(asset.id) ?? []));
+        // If everything is cached and no backend signals are selected, update instantly.
+        if (entries.length === 0) {
+            assets = assets.map((asset) => (wantedIds.has(asset.id) ? assetWithEntry(asset, cached.get(asset.id) ?? null) : asset));
             signalResultsByAsset = nextSignalResults;
+            targetSamples = nextTargetSamples;
             signalRequestFailed = false;
             resolveMaxStartFromAssets();
             return;
@@ -761,111 +897,160 @@
 
         refreshing = true;
         signalRequestFailed = false;
-        assets = assets.map((a) => ({...a, loadingPrices: needFetch.some((nf) => nf.id === a.id)}));
+        assets = assets.map((a) => (wantedIds.has(a.id) ? {...a, loadingPrices: needFetchIds.has(a.id)} : a));
 
         try {
-            // One request for the assets with gaps or backend signals while they stay under the
-            // backend's caps: the backend then runs one SQL query for all of them. A larger list is
-            // split into batches (lot Z-27, `lib/api/bulkBatches.ts`), sent one after the other and
-            // applied together at the end. Each batch uses axiosInstance directly (bypassing Zodios'
-            // automatic response validation) so its raw, not-yet-validated body can be handed to the
-            // shared worker pool: validating + computing derived state for every asset in one
-            // synchronous main-thread block was what monopolized the thread long enough to delay
-            // click/navigation handling on large "ALL date range" loads.
+            // One request for the cards with something to ask while it stays under the backend's caps: the backend then runs
+            // one SQL query for all of them. A larger list is split into batches (lot Z-27, `lib/api/bulkBatches.ts`) cut
+            // between cards, never between a card and its targets (they name its `key`), sent one after the other and applied
+            // together at the end. Each batch uses axiosInstance directly (bypassing Zodios' automatic response validation)
+            // so its raw, not-yet-validated body can be handed to the shared worker pool: validating + computing derived
+            // state for every asset in one synchronous main-thread block was what monopolized the thread long enough to
+            // delay click/navigation handling on large "ALL date range" loads.
             const today = todayIso();
             const outcome = await sendBulkBatches(
-                queryItems,
-                (item) => bulkRangeDays(item.date_range.start, item.date_range.end, today) + (item.signals.length > 0 ? BULK_SIGNAL_MARGIN_DAYS : 0),
-                async (items) => {
-                    const rawResponse = await axiosInstance.post('/api/v1/assets/prices/query', items);
+                entries,
+                (entry) => estimateEntryDays(entry, today),
+                async (batch) => {
+                    const rawResponse = await axiosInstance.post(
+                        '/api/v1/assets/prices/query',
+                        batch.map((entry) => entry.item),
+                    );
                     const rawItems: unknown[] = rawResponse.data?.items ?? [];
                     return processPriceItemsInParallel(rawItems);
                 },
+                {groupOf: (entry) => entry.group},
             );
-            const results = outcome.answers.flatMap(({answer}) => answer.results);
             const invalidItemErrors = outcome.answers.flatMap(({answer}) => answer.invalidItemErrors);
             if (invalidItemErrors.length > 0) {
                 console.error('Some price-query items failed validation:', invalidItemErrors);
             }
-            // The assets of a batch that got no answer are left as the catch below leaves them:
+            // The cards of a batch that got no answer are left as the catch below leaves them:
             // their cache kept, their signals untouched and reported as failed.
-            const answeredIds = new Set(outcome.answers.flatMap(({batch}) => batch.items.map((item) => item.asset_id)));
-            const unansweredIds = new Set(queryItems.filter((item) => !answeredIds.has(item.asset_id)).map((item) => item.asset_id));
+            const answeredCardIds = new Set(outcome.answers.flatMap(({batch}) => batch.items.map((entry) => entry.cardId)));
+            const unansweredCardIds = new Set([...sentCardIds].filter((assetId) => !answeredCardIds.has(assetId)));
             if (outcome.failed) {
                 console.error('Failed to fetch prices bulk:', outcome.error);
                 // X-R58: a request the backend refused as too large is said, not left as cards without prices.
                 const refusal = bulkRefusalMessage(outcome.error, $t);
                 if (refusal !== null) toasts.error(refusal);
             }
-            const anySignals = [...requestContexts.values()].some((context) => context.plan.requests.length > 0);
-            const unansweredSignals = [...requestContexts].some(([assetId, context]) => unansweredIds.has(assetId) && context.plan.requests.length > 0);
+            const sentContexts = [...requestContexts].filter(([assetId]) => sentCardIds.has(assetId));
+            const anySignals = sentContexts.some(([, context]) => context.plan.requests.length > 0);
+            const unansweredSignals = sentContexts.some(([assetId, context]) => unansweredCardIds.has(assetId) && context.plan.requests.length > 0);
             signalRequestFailed = (invalidItemErrors.length > 0 && anySignals) || unansweredSignals;
 
-            // Populate caches (cheap: just Map.set calls) and build a per-asset lookup
-            // of the already-computed derived UI state (last price, chart data).
-            const derivedByAssetId = new Map<number, ProcessedAssetResult>();
-            const needFetchIds = new Set(needFetch.map((asset) => asset.id));
-            for (const result of results) {
-                derivedByAssetId.set(result.assetId, result);
-                const asset = needFetch.find((a) => a.id === result.assetId);
-                if (asset && needFetchIds.has(result.assetId) && result.mappedPoints.length > 0) {
-                    const store = getAssetPriceStore(asset.id, asset.currency);
-                    store.merge(result.mappedPoints);
-                    store.markFetched(dateStart, dateEnd);
+            // Put what was read into the cache (cheap: Map.set calls); a result is tied to its entry by its position in the batch.
+            const read = new Map<number, ReducedEntry>();
+            const signalsByCard = new Map<number, ProcessedAssetResult['signals']>();
+            const calendarTargets = new Map<number, Map<number, CalendarReturnView>>();
+            for (const {batch, answer} of outcome.answers) {
+                for (const result of answer.results) {
+                    const entry = batch.items[result.requestIndex];
+                    if (!entry) continue;
+                    if (entry.role === 'target' && calendarCards.has(entry.cardId)) {
+                        // A comparison's return, asked without prices: its sample in the cache is not touched.
+                        if (!calendarTargets.has(entry.cardId)) calendarTargets.set(entry.cardId, new Map());
+                        calendarTargets.get(entry.cardId)!.set(entry.targetId!, extractCalendarReturnView(result.signals, CALENDAR_RETURN_INSTANCE_ID));
+                        continue;
+                    }
+                    if (entry.role === 'target') {
+                        nextTargetSamples.set(`${entry.cardId}|${entry.targetId}`, reducedPrices.putTarget(entry.targetId!, entry.cardId, rangeStart, rangeEnd, {resolution: result.resolution, derived: result.derived}));
+                        continue;
+                    }
+                    signalsByCard.set(entry.cardId, result.signals);
+                    // An item without prices (its signals only, or a step for its targets) has no series to keep.
+                    if (entry.item.include_price) read.set(entry.cardId, reducedPrices.putCard(entry.cardId, rangeStart, rangeEnd, {resolution: result.resolution, derived: result.derived}));
                 }
             }
 
-            for (const [assetId, context] of requestContexts) {
-                if (unansweredIds.has(assetId)) continue;
+            for (const [assetId, context] of sentContexts) {
+                if (unansweredCardIds.has(assetId)) continue;
                 const state = resultStateForAsset(assetId);
-                const processed = derivedByAssetId.get(assetId);
-                const mapped = mapSignalInstanceResults(context.configs, context.plan, processed?.signals ?? []);
+                const mapped = mapSignalInstanceResults(context.configs, context.plan, signalsByCard.get(assetId) ?? []);
                 if (state.apply(context.requestVersion, mapped)) {
                     nextSignalResults.set(assetId, [...state.values()]);
                 }
             }
             signalResultsByAsset = nextSignalResults;
+            targetSamples = nextTargetSamples;
+            const answeredCalendar = new Map(calendarByCard);
+            for (const assetId of calendarCards) {
+                const previous = answeredCalendar.get(assetId);
+                if (!previous) continue;
+                answeredCalendar.set(assetId, unansweredCardIds.has(assetId) ? {own: {...previous.own, state: 'error'}, targets: previous.targets} : {own: extractCalendarReturnView(signalsByCard.get(assetId) ?? [], CALENDAR_RETURN_INSTANCE_ID), targets: calendarTargets.get(assetId) ?? new Map()});
+            }
+            calendarByCard = answeredCalendar;
 
-            // Merge cached + fresh results
-            assets = assets.map((asset) => {
-                if (cached.has(asset.id)) {
-                    return buildAssetStateFromPrices(asset, cached.get(asset.id) ?? []);
-                }
-                const processed = derivedByAssetId.get(asset.id);
-                if (processed) {
-                    return {...asset, ...processed.derived, loadingPrices: false};
-                }
-                return {...asset, loadingPrices: false};
-            });
+            // The series read now, else the cached one (a card that asked only for its targets or signals).
+            assets = assets.map((asset) => (wantedIds.has(asset.id) ? assetWithEntry(asset, read.get(asset.id) ?? cached.get(asset.id) ?? null) : asset));
             // As before a failure: «All» resolves only from a complete load, never from part of it.
             if (!outcome.failed) resolveMaxStartFromAssets();
         } catch (e: any) {
             console.error('Failed to fetch prices bulk:', e);
             signalRequestFailed = [...requestContexts.values()].some((context) => context.plan.requests.length > 0);
+            const failedCalendar = new Map(calendarByCard);
+            for (const assetId of calendarCards) {
+                const previous = failedCalendar.get(assetId);
+                if (previous) failedCalendar.set(assetId, {own: {...previous.own, state: 'error'}, targets: previous.targets});
+            }
+            calendarByCard = failedCalendar;
             // For cached assets, still use cached data; for others, clear loading
-            assets = assets.map((a) => {
-                const cachedPrices = cached.get(a.id);
-                if (cachedPrices) return buildAssetStateFromPrices(a, cachedPrices);
-                return {...a, loadingPrices: false};
-            });
+            assets = assets.map((a) => (wantedIds.has(a.id) ? assetWithEntry(a, cached.get(a.id) ?? null) : a));
         } finally {
             refreshing = false;
+            // A card measured while this was in flight asked for its width then: look again.
+            scheduleWidthReload([...plotWidths.keys()]);
         }
     }
 
-    function buildAssetStateFromPrices(asset: AssetState, prices: any[]): AssetState {
-        // Empty prices: preserve whatever chart data the asset already had (e.g. a
-        // stale-but-valid previous fetch) — only reset loadingPrices, matching the
-        // pre-extraction behavior exactly (do NOT wipe lastPrice/chartData to null/empty).
-        // No Δ here: the backend computes the columns and the cards' Δ over the range (loadPeriodChanges, X-R53, X-R59).
-        if (prices.length === 0) {
-            return {...asset, loadingPrices: false};
+    // =========================================================================
+    // The cards' widths (Z-29b)
+    // =========================================================================
+
+    let widthReloadTimer: ReturnType<typeof setTimeout> | undefined;
+    const widthReloadIds = new Set<number>();
+    /** The width and range each card was last reloaded for: a card is read again once for a width, however its answer reads. */
+    const widthReloaded = new Map<number, string>();
+
+    /** A card's plot was measured or changed width: remember it, and look at whether its series still fits. */
+    function handlePlotWidth(assetId: number, plotWidthPx: number) {
+        if (plotWidths.get(assetId) === plotWidthPx) return;
+        plotWidths.set(assetId, plotWidthPx);
+        scheduleWidthReload([assetId]);
+    }
+
+    /** Debounced: a resize drag fires many measures, and only the width it settles on matters (MF n2). */
+    function scheduleWidthReload(assetIds: Iterable<number>) {
+        for (const id of assetIds) widthReloadIds.add(id);
+        clearTimeout(widthReloadTimer);
+        widthReloadTimer = setTimeout(reloadCardsOfAnotherStep, 250);
+    }
+
+    /**
+     * The cards whose width now asks another step than the series they hold are read again, each from the backend: a
+     * weekly sample is never re-aggregated into months, nor turned back into days (MF n2). A width that keeps the step reads
+     * nothing, and a card still loading is left to the read in flight (it looks again when it ends).
+     */
+    function reloadCardsOfAnotherStep() {
+        const candidates = [...widthReloadIds];
+        widthReloadIds.clear();
+        if (loading || refreshing) {
+            for (const id of candidates) widthReloadIds.add(id);
+            return;
         }
-        return {
-            ...asset,
-            ...computeDerivedPriceState(prices),
-            loadingPrices: false,
-        };
+        const changed = cardsOfAnotherStep(candidates, (id) => {
+            const asset = assets.find((item) => item.id === id);
+            const width = plotWidths.get(id);
+            return {
+                settled: asset !== undefined && !asset.loadingPrices && asset.chartData.length > 0,
+                plotWidthPx: width,
+                holds: (maxPoints) => reducedPrices.getCard(id, dateStart, dateEnd, maxPoints) !== null,
+                reloadedForWidth: widthReloaded.get(id) === `${width}|${dateStart}|${dateEnd}`,
+            };
+        });
+        for (const id of changed) widthReloaded.set(id, `${plotWidths.get(id)}|${dateStart}|${dateEnd}`);
+        if (changed.length > 0) void fetchPriceSeries(new Set(changed));
     }
 
     function handleDateRangeChange(newStart: string, newEnd: string) {
@@ -977,7 +1162,7 @@
             if (!assets.some((a) => a.id === assetId)) await loadAssets();
             const created = assets.find((a) => a.id === assetId);
             if (created) reportSyncResult(created, result, true);
-            invalidateAssetPriceStore(assetId);
+            invalidateAssetPrices(assetId);
             rearmMaxPendingBeforeReload();
             await fetchAllPriceData();
         } finally {
@@ -995,7 +1180,7 @@
                 },
             ]);
             reportSyncResult(asset, (response as any)?.results?.[0]);
-            invalidateAssetPriceStore(asset.id);
+            invalidateAssetPrices(asset.id);
             rearmMaxPendingBeforeReload();
             await fetchAllPriceData();
         } catch (e: any) {
@@ -1018,7 +1203,7 @@
     }
 
     async function handleRefreshAsset(asset: any) {
-        invalidateAssetPriceStore(asset.id);
+        invalidateAssetPrices(asset.id);
         rearmMaxPendingBeforeReload();
         await fetchAllPriceData();
     }
@@ -1095,7 +1280,7 @@
     }
 
     async function handleBulkRefreshAssets() {
-        for (const a of assets) invalidateAssetPriceStore(a.id);
+        for (const a of assets) invalidateAssetPrices(a.id);
         rearmMaxPendingBeforeReload();
         await pageBusy.track('assets-bulk-refresh', () => fetchAllPriceData());
         clearAllTableSelections();
@@ -1164,16 +1349,84 @@
         settingsModalOpen = true;
     }
 
+    /** The assets the comparison signals of `configs` draw: a card asks the backend for each, sampled like itself (Z-29b). */
+    function comparisonFingerprint(configs: SignalConfig[], selfAssetId: number): string {
+        return comparisonTargetIds(configs, selfAssetId).join(',');
+    }
+
     function handleSettingsSave(s: ChartSettings) {
+        const targetCardId = settingsTargetId ? Number(settingsTargetId) : null;
         const shouldReloadBackend = backendRequestFingerprint(settingsForModal.signals) !== backendRequestFingerprint(s.signals);
+        // A saved comparison with another asset asks for that asset's sample on the card's buckets.
+        const shouldReloadTargets =
+            targetCardId !== null
+                ? comparisonFingerprint(settingsForModal.signals, targetCardId) !== comparisonFingerprint(s.signals, targetCardId)
+                : assets.some((asset) => comparisonFingerprint(getSettingsForPair(`asset-${asset.id}`, 'assets').signals, asset.id) !== comparisonFingerprint(s.signals, asset.id));
+        const calendarBefore = targetCardId !== null ? cardPrimaryView(targetCardId) === 'calendar-return' : assets.some((asset) => cardPrimaryView(asset.id) === 'calendar-return');
         if (settingsTargetId) {
             setPairSettings(`asset-${settingsTargetId}`, s);
         } else {
             setGlobalSettings(s, 'assets');
         }
-        if (shouldReloadBackend) {
-            void pageBusy.track('assets-settings', () => fetchPriceSeries());
+        // The rolling-return view asks its own data (Y-40): entering it, leaving it, or a window changed in it reloads.
+        const shouldReloadCalendar = calendarBefore || s.primaryView === 'calendar-return';
+        if (shouldReloadBackend || shouldReloadTargets || shouldReloadCalendar) {
+            // A card's own settings reload that card; only the global ones reload them all (Q-Z29-2).
+            const only = targetCardId !== null ? new Set([targetCardId]) : undefined;
+            void pageBusy.track('assets-settings', () => fetchPriceSeries(only));
         }
+    }
+
+    /** The plot width the settings preview asks its rolling return for (Y-40): about the preview chart's. */
+    const CALENDAR_PREVIEW_PLOT_WIDTH_PX = 600;
+
+    /**
+     * The rolling return of the settings preview (Y-40). A card's: its own return over the range on screen, and its
+     * comparisons', as the card asks them. The global settings': the synthetic curve the modal hands, through
+     * `/signals/preview`, as the other backend signals of that preview.
+     */
+    async function resolveCalendarPreview(windowDays: number, configs: SignalConfig[], points: LineDataPoint[]): Promise<{points: LineDataPoint[]; overlays: RenderedSignal[]} | null> {
+        const request = {instance_id: CALENDAR_RETURN_INSTANCE_ID, signal_code: CALENDAR_RETURN_SIGNAL_CODE, params: {window_days: windowDays}};
+        const cardId = settingsTargetId ? Number(settingsTargetId) : null;
+        if (cardId === null) {
+            if (points.length === 0) return null;
+            const response = await zodiosApi.compute_signal_preview_api_v1_signals_preview_post({domain: 'asset', points: points.map((point) => ({date: point.date, value: point.value})), signals: [request]});
+            const view = extractCalendarReturnView(response.signals ?? [], CALENDAR_RETURN_INSTANCE_ID);
+            return view.state === 'ready' || view.state === 'partial' ? {points: view.points, overlays: []} : null;
+        }
+        const card = assets.find((asset) => asset.id === cardId);
+        if (!card) return null;
+        const targets = comparisonTargetIds(configs, cardId).filter((assetId) => assets.some((asset) => asset.id === assetId));
+        const entries = buildReducedQuery([
+            {
+                assetId: cardId,
+                plotWidthPx: CALENDAR_PREVIEW_PLOT_WIDTH_PX,
+                start: dateStart,
+                end: dateEnd,
+                needsPrice: false,
+                signals: [request],
+                targets: targets.map((assetId) => ({assetId, needsRead: false})),
+                calendar: {signals: [request], targetCurrency: card.currency},
+            },
+        ]);
+        const response = await axiosInstance.post(
+            '/api/v1/assets/prices/query',
+            entries.map((entry) => entry.item),
+        );
+        // The answer's items come in the request's order.
+        const items: unknown[] = Array.isArray(response.data?.items) ? response.data.items : [];
+        const signalsOf = (index: number): unknown => {
+            const item = items[index];
+            return typeof item === 'object' && item !== null ? (item as {signals?: unknown}).signals : undefined;
+        };
+        const own = extractCalendarReturnView(signalsOf(0), CALENDAR_RETURN_INSTANCE_ID);
+        if (own.state !== 'ready' && own.state !== 'partial') return null;
+        const views = new Map(entries.slice(1).map((entry, index) => [entry.targetId!, extractCalendarReturnView(signalsOf(index + 1), CALENDAR_RETURN_INSTANCE_ID)]));
+        const target = (id: number) => {
+            const asset = assets.find((item) => item.id === id);
+            return asset ? {displayName: asset.display_name, iconUrl: asset.icon_url, assetType: asset.asset_type} : null;
+        };
+        return {points: own.points, overlays: renderCalendarComparisons(configs, views, target, (id) => $t('chartSettings.signals.assetFallback', {values: {id: String(id)}}), cardId)};
     }
 
     function handleCardSettings(asset: {id: number}) {
@@ -1206,31 +1459,63 @@
         await Promise.allSettled(promises);
     }
 
-    function fxPointToLineDataPoint(point: {date: string; rate: number | null; backwardFillInfo?: {daysBack: number} | null}): LineDataPoint {
-        const rate = displayFxRate(point.rate, false);
+    /**
+     * A comparison target the settings preview of a sampled card asks for before it is saved (Z-29d, reduced): read once,
+     * sampled like the card, into the reduced cache and `targetSamples`, where the preview reads it and redraws. The card's
+     * item gives only its step (`include_price: false`, no signals: Z-29a-f).
+     */
+    async function readTargetSample(request: TargetSampleRequest): Promise<void> {
+        const width = plotWidths.get(request.cardId) ?? DEFAULT_COMPACT_PLOT_WIDTH_PX;
+        const entries = buildReducedQuery([{assetId: request.cardId, plotWidthPx: width, start: request.start, end: request.end, needsPrice: false, signals: [], targets: [{assetId: request.targetId, needsRead: true}]}]);
+        const response = await axiosInstance.post(
+            '/api/v1/assets/prices/query',
+            entries.map((entry) => entry.item),
+        );
+        const {results} = await processPriceItemsInParallel(response.data?.items ?? []);
+        const next = new Map(targetSamples);
+        for (const result of results) {
+            const entry = entries[result.requestIndex];
+            if (entry?.role !== 'target' || entry.targetId === null) continue;
+            next.set(`${entry.cardId}|${entry.targetId}`, reducedPrices.putTarget(entry.targetId, entry.cardId, request.start, request.end, {resolution: result.resolution, derived: result.derived}));
+        }
+        targetSamples = next;
+    }
+
+    const targetSampleLoader = new TargetSampleLoader(readTargetSample, (request, error) => console.error('Failed to read a comparison target for the settings preview:', request, error));
+
+    /**
+     * Where the cards — and their settings preview — get the series their FX pair and comparison signals read (Y-39a):
+     * the pairs from the FX stores, straight; the comparison targets sampled like the card (Z-29b), or, before they are
+     * read, from the cards of the list when both are daily. A card never draws a comparison with its own asset. With
+     * `readMissing` (the settings preview), a target a sampled card has not read yet is asked for (Z-29d, reduced).
+     */
+    function signalSourcesFor(selfAssetId: number | null, readMissing = false): SignalDataSources {
         return {
-            date: point.date,
-            value: rate ?? 0,
-            missing: rate === null,
-            staleDays: point.backwardFillInfo?.daysBack ?? 0,
+            fxPairData: (pairSlug) =>
+                getFxStore(pairSlug)
+                    .getAllSorted()
+                    .map((point) => fxPointToLineDataPoint(point, false)),
+            comparisonTarget: (assetId) => {
+                const target = assets.find((asset) => asset.id === assetId);
+                if (!target) return null;
+                const names = {displayName: target.display_name, iconUrl: target.icon_url, assetType: target.asset_type};
+                // The target sampled like the card (Z-29b): its dates are the card's, and its percentage base the day it starts.
+                const sample = selfAssetId === null ? undefined : targetSamples.get(`${selfAssetId}|${assetId}`);
+                if (sample) return comparisonTargetFrom(sample, names);
+                // Not read yet: its own series, only where it has the card's dates, both daily (the preview of the global settings has none).
+                const self = selfAssetId === null ? undefined : assets.find((asset) => asset.id === selfAssetId);
+                if (readMissing && self && (self.resolution ?? 'daily') !== 'daily') {
+                    targetSampleLoader.want({cardId: self.id, targetId: assetId, start: dateStart, end: dateEnd, maxPoints: compactMaxPoints(plotWidths.get(self.id) ?? DEFAULT_COMPACT_PLOT_WIDTH_PX)});
+                }
+                if ((self?.resolution ?? 'daily') !== 'daily' || (target.resolution ?? 'daily') !== 'daily' || !target.chartData.length) return null;
+                return {data: target.chartData, ...names};
+            },
+            selfAssetId,
         };
     }
 
-    /** Build pairsDataMap from FX stores for ChartSettingsModal preview */
-    function buildPairsDataMap(): Record<string, LineDataPoint[]> {
-        const entries: Array<[string, LineDataPoint[]]> = [];
-        for (const slug of fxPairSlugs) {
-            try {
-                const store = getFxStore(slug);
-                const data = store.getAllSorted();
-                if (data.length === 0) continue;
-                entries.push([slug, data.map(fxPointToLineDataPoint)]);
-            } catch {
-                /* skip */
-            }
-        }
-        return Object.fromEntries(entries);
-    }
+    /** The settings preview reads the series as the cards do: in a card's settings, with that card's own sources. */
+    let settingsSignalSources = $derived(signalSourcesFor(settingsTargetId ? Number(settingsTargetId) : null, true));
 
     /**
      * Global (filter-bar) mode: compute backend overlay signals live on the
@@ -1246,20 +1531,7 @@
             signals: plan.requests,
         });
         const mapped = mapSignalInstanceResults(configs, plan, response.signals ?? []);
-        const rendered: RenderedSignal[] = [];
-        for (const item of mapped) {
-            if (item.source !== 'backend' || !item.result) continue;
-            const definition = signalDefinitionsByType.get(item.config.signalType);
-            if (!definition || definition.source !== 'backend') continue;
-            const outcome = renderBackendSignalResult(item.result, item.config, {
-                baseData: points,
-                viewMode,
-                definition,
-                translate: (key) => $t(key),
-            });
-            rendered.push(...outcome.signals);
-        }
-        return rendered;
+        return renderBackendResults(configs, mapped, signalDefinitionsByType, points, viewMode, (key) => $t(key));
     }
 
     function resolveSettingsBackendPreview(viewMode: 'absolute' | 'percentage'): RenderedSignal[] {
@@ -1277,60 +1549,10 @@
         void getSettingsVersion();
         const settings = getSettingsForPair(`asset-${assetId}`, 'assets');
         if (!settings.signals.length) return [];
-        const rendered: RenderedSignal[] = [];
-        for (const cfg of settings.signals) {
-            const definition = signalDefinitionsByType.get(cfg.signalType);
-            if (!definition || definition.source === 'backend') continue;
-            const instance = signalFromConfig(cfg);
-            if (!instance) continue;
-
-            // Resolve FxPairSignal data from FX stores
-            if (cfg.signalType === 'fx-pair') {
-                const pairSlug = String(cfg.params.pairSlug || '');
-                if (!pairSlug) continue;
-                try {
-                    const store = getFxStore(pairSlug);
-                    const storeData = store.getAllSorted();
-                    if (storeData.length === 0) continue;
-                    instance.params._resolvedData = storeData.map(fxPointToLineDataPoint);
-                } catch {
-                    continue;
-                }
-            }
-
-            // Resolve AssetComparisonSignal data from local assets array
-            if (cfg.signalType === 'asset-comparison') {
-                const targetId = Number(cfg.params.assetId);
-                if (!targetId || targetId === assetId) continue;
-                const targetAsset = assets.find((a) => a.id === targetId);
-                if (!targetAsset?.chartData?.length) continue;
-                instance.params._resolvedData = targetAsset.chartData;
-                instance.params._assetDisplayName = targetAsset.display_name;
-            }
-
-            const results = instance.renderMulti(absoluteData, vm);
-            for (const result of results) {
-                if (result.data.length > 0) rendered.push(result);
-            }
-        }
-
-        for (const item of signalResultsByAsset.get(assetId) ?? []) {
-            if (item.source !== 'backend' || !item.result) continue;
-            const currentConfig = settings.signals.find((config) => config.id === item.config.id) ?? item.config;
-            const definition = signalDefinitionsByType.get(currentConfig.signalType);
-            if (!definition || definition.source !== 'backend') {
-                console.error(`Missing backend signal definition for '${currentConfig.signalType}'`);
-                continue;
-            }
-            const outcome = renderBackendSignalResult(item.result, currentConfig, {
-                baseData: absoluteData,
-                viewMode: vm,
-                definition,
-                translate: (key) => $t(key),
-            });
-            rendered.push(...outcome.signals);
-        }
-        return rendered;
+        const asset = assets.find((item) => item.id === assetId);
+        // The backend signals measure a percentage from the first point they are given: a sampled card gives the point on the first day (MF n3).
+        const backendBase = signalBaseData(absoluteData, asset?.base, asset?.resolution);
+        return [...renderLocalSignals(settings.signals, signalDefinitionsByType, absoluteData, vm, signalSourcesFor(assetId)), ...renderBackendResults(settings.signals, signalResultsByAsset.get(assetId) ?? [], signalDefinitionsByType, backendBase, vm, (key) => $t(key))];
     }
 
     function clearFilters() {
@@ -1348,7 +1570,8 @@
      * is readable by assistive tech (`aria-busy`) and by anything else that needs to know
      * whether what it is looking at is final.
      */
-    let busy = $derived(loading || assetEditLoading || periodChangesLoading || assets.some((a) => a.loadingPrices));
+    // The cards' rolling returns are a load wave too (Y-40): `data-busy` holds until they are in.
+    let busy = $derived(loading || assetEditLoading || periodChangesLoading || assets.some((a) => a.loadingPrices) || [...calendarByCard.values()].some((entry) => entry.own.state === 'loading'));
 </script>
 
 <div class="space-y-6 text-lf-primary" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-live-updates={liveUpdatesState} data-testid="assets-page">
@@ -1683,24 +1906,34 @@
                 {#if viewMode === 'list'}
                     <ColumnVisibilityToggle tableRef={assetTableRefs['own']?.getTableRef()} additionalTableRefs={[assetTableRefs['others']?.getTableRef(), assetTableRefs['analysis']?.getTableRef()].filter((r) => r != null)} showLabel={showActionLabels} />
                 {:else}
-                    <div class="flex rounded-lg border border-lf-subtle overflow-hidden">
+                    <!-- The cards' view (Y-40): absolute, percent, rolling return -->
+                    <div class="flex rounded-lg border border-lf-subtle overflow-hidden" data-testid="assets-global-view" data-view={globalPrimaryView}>
                         <button
                             type="button"
-                            class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                             data-testid="assets-global-view-absolute"
-                            onclick={() => {
-                                globalViewMode = 'absolute';
-                            }}
+                            aria-pressed={globalPrimaryView === 'absolute'}
+                            onclick={() => handleListPrimaryView('absolute')}
                             >Abs
                         </button>
                         <button
                             type="button"
-                            class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                             data-testid="assets-global-view-percentage"
-                            onclick={() => {
-                                globalViewMode = 'percentage';
-                            }}
+                            aria-pressed={globalPrimaryView === 'percentage'}
+                            onclick={() => handleListPrimaryView('percentage')}
                             >%
+                        </button>
+                        <button
+                            type="button"
+                            class="flex-1 inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'calendar-return' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            data-testid="assets-global-view-calendar-return"
+                            aria-pressed={globalPrimaryView === 'calendar-return'}
+                            aria-label={$t('signals.riskRollingReturn.name')}
+                            title={$t('signals.riskRollingReturn.name')}
+                            onclick={() => handleListPrimaryView('calendar-return')}
+                        >
+                            <CalendarSync size={14} />
                         </button>
                     </div>
                 {/if}
@@ -1726,7 +1959,7 @@
                     data-busy={pageBusy.busy ? 'true' : 'false'}
                     disabled={pageBusy.busy}
                     onclick={() => {
-                        for (const a of assets) invalidateAssetPriceStore(a.id);
+                        for (const a of assets) invalidateAssetPrices(a.id);
                         rearmMaxPendingBeforeReload();
                         void pageBusy.track('assets-refresh', () => fetchAllPriceData());
                         refreshLivePricesNow();
@@ -1764,7 +1997,7 @@
                 {dateEnd}
                 targetCurrency={$defaultDisplayCurrency}
                 onsynced={async () => {
-                    for (const asset of assets) invalidateAssetPriceStore(asset.id);
+                    for (const asset of assets) invalidateAssetPrices(asset.id);
                     rearmMaxPendingBeforeReload();
                     await fetchAllPriceData();
                 }}
@@ -1833,10 +2066,15 @@
                                     deltaAbs={rangeDeltas.get(asset.id)?.abs ?? null}
                                     dateStart={urlDateStart}
                                     dateEnd={urlDateEnd}
-                                    {globalViewMode}
+                                    primaryView={cardPrimaryView(asset.id)}
+                                    onprimaryviewchange={handleCardPrimaryView}
+                                    calendarReturn={cardPrimaryView(asset.id) === 'calendar-return' ? cardCalendarReturn(asset.id) : undefined}
+                                    calendarOverlaySignals={cardPrimaryView(asset.id) === 'calendar-return' ? cardCalendarOverlays(asset.id) : []}
                                     chartSettings={getSettingsForPair(`asset-${asset.id}`, 'assets')}
                                     renderSignals={(chartData, vm) => getRenderedSignals(asset.id, chartData, vm)}
                                     chartData={asset.chartData}
+                                    baseValue={asset.base?.value ?? null}
+                                    onplotwidth={handlePlotWidth}
                                     loading={asset.loadingPrices}
                                     syncing={syncingAssetIds.has(asset.id)}
                                     onsync={handleSyncAsset}
@@ -1913,8 +2151,9 @@
     pairData={settingsTargetId ? assets.find((a) => a.id === Number(settingsTargetId))?.chartData : undefined}
     availablePairs={fxPairSlugs}
     availableAssets={assets.map((a) => ({id: a.id, display_name: a.display_name, icon_url: a.icon_url, asset_type: a.asset_type}))}
-    assetsDataMap={Object.fromEntries(assets.filter((a) => a.chartData.length > 0).map((a) => [String(a.id), a.chartData]))}
-    pairsDataMap={buildPairsDataMap()}
+    signalSources={settingsSignalSources}
+    calendarRangeDays={calendarReturnRangeDays(dateStart, dateEnd)}
+    calendarPreviewResolver={resolveCalendarPreview}
 />
 
 <!-- Delete Asset Confirm Dialog (single) -->
@@ -1961,7 +2200,7 @@
         syncModalOpen = false;
     }}
     onsynced={() => {
-        for (const a of assets) invalidateAssetPriceStore(a.id);
+        for (const a of assets) invalidateAssetPrices(a.id);
         rearmMaxPendingBeforeReload();
         fetchAllPriceData();
         refreshLivePricesNow();

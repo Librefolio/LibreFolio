@@ -31,9 +31,17 @@ Open **Assets** in the sidebar, then:
 
 Click a card or a row to open the asset's **[detail page](detail/index.md)**. There, the **‹ ›** arrows step through the assets in the order this list shows them, filters and sort included.
 
-??? note "📉 Abs or % on the cards — grid view only"
+??? note "📉 Abs, % or Rolling Return on the cards — grid view only"
 
-    **Abs / %** in the toolbar switches every card, its chart and its change, between prices and percentages; the **%** button on a card switches that card only, until you change the toolbar again. The page always opens on **%**.
+    The switch in the toolbar has three options: **Abs** (prices), **%** (the change over the period) and **Rolling Return** (the icon). Your choice applies to every card, its chart and its change, and it is remembered in this browser, for your user, with the chart settings.
+
+    The view button on a card goes to the next view, **%** → **Rolling Return** → **Abs** → **%**, and shows the view it will go to. A card keeps its own choice, even after you reload, until you change the toolbar again: that resets every card to the toolbar's view.
+
+    In **Rolling Return**, a card draws the asset's rolling return, the same calendar-window return as the **Rolling Return** mode of the [asset detail page](detail/index.md), and over it the rolling returns of the asset comparisons saved on that card. The other indicators stay saved, only hidden in this view. The price and the change at the top of the card do not change. If the asset has less history than the window, the card shows a short message instead of the chart.
+
+    The window is chosen in [Chart Settings](../fx/chart-settings.md): 1W, 1M, 3M, 1Y or a custom one. Until you choose one, it is automatic: the largest preset that fits the period shown in the list, so a 3-month range uses 3M and a range of one year or more uses 1Y.
+
+    The asset's [detail page](detail/index.md) opens in the view of its card, and with the card's Rolling Return window. A view chosen there becomes the card's.
 
 ??? note "⚙️ The look of the card charts"
 

@@ -166,10 +166,55 @@ its conversions in batches under both (Z-27,
 [Bulk requests in batches](../../frontend/state/registries.md#bulk-requests-in-batches)).
 {: #convert-request-limits }
 
+### 🗜️ Sampled conversions {: #convert-sampling }
+
+A card of the FX list draws a few hundred points at most. `POST /api/v1/fx/currencies/convert` can
+answer a conversion with the results of one day a week or a month instead of every day (Z-29fx),
+with the rule of the asset price query
+([Sampled Price Series](../assets/architecture.md#price-query-sampling)):
+
+- **The fields.** `FXConversionRequest` takes `key`, `max_points` (1 … 10,000), `resolution`
+  (`daily`, `weekly`, `monthly`) and `sample_like`: at most one of the last three, none of them with
+  `annotation_requests`. `key` and `sample_like` take 1 to 64 characters among ASCII letters,
+  digits, `_`, `.`, `:` and `-` (`SAMPLE_KEY_PATTERN`).
+- **The step.** A conversion's fill starts on its first day F, the first day of its cut range that
+  converts: the range's start when a rate precedes it, else the pair's first rate in the range.
+  With `max_points` the step is `choose_resolution(F, end, max_points)`, the finest of daily,
+  weekly (ISO, Monday to Sunday) and monthly whose count fits, monthly the floor; with `resolution`
+  the one asked. A `sample_like` follower takes the step of the conversion it names, on that
+  conversion's own fill (on its own fill when the named one has none), from the later of the two
+  first days. `plan_conversion_samples()` in `backend/app/services/fx/sampling.py` plans them; the
+  dates are `sample_dates()`, the last day of each bucket, the last one cut at the range's end.
+- **The results.** The conversion is still computed day by day — its signals and the day budget
+  need every day — and a weekly or monthly one keeps, in `results`, only the daily results on its
+  dates, each unchanged (amount, rate, backward fill). A daily one answers every day, a follower
+  from its later first day. Every result carries `request_index`, the position of its conversion in
+  the request.
+- **`samples`.** One `FXConversionSample` per conversion, in request order: its `resolution`
+  (`daily` by default) and, weekly or monthly, `sample_bounds` (`FXSampleBounds`): the daily result
+  on F (`first`, the base of a card's percentage view and of its line's colour) and on the end
+  (`last`). A conversion with nothing to fill answers no result and a daily step.
+- **References.** `resolve_sample_references()` checks every `sample_like` before anything runs:
+  a fault is the price query's 422 `{"code": "sample_reference", "reason", "item", "key",
+  "message"}` (`unknown_key`, `duplicate_key`, `chained`, `range_mismatch`).
+- **Signals.** Computed every day, as without the fields; on a weekly or monthly conversion each
+  series is then reduced onto its dates by its output's `aggregation_profile` and the series of one
+  signal aligned, through `sample_signal_result()` (`backend/app/services/signals/sampling.py`), the
+  function the price query uses too. The calendar rolling return (`ASSET_CALENDAR_ROLLING_RETURN`)
+  is offered in the FX domain: its points are the elements themselves (`last_with_range`), with
+  their provenance.
+- **Budget.** A sampled conversion costs the days of its fill, as the daily one does
+  ([request limits](#convert-request-limits)).
+
+Tests: `backend/test_scripts/test_api/test_fx_convert_sampling.py`
+(`./dev.py test api fx-convert-sampling`, PURE: the handler in process, `convert_bulk()` replaced
+by a double). The web app's FX list does not send these fields yet (the FX half of Y-40).
+
 ### 🪟 Loading only the usable rate window {: #convert-bulk-window }
 
 Calculations call `convert_bulk()` with thousands of items (before P3 the portfolio engine preloaded a rate
-for every non-reporting currency and every day of the range; it now reads [steps](#unit-rate-steps)). So the
+for every non-reporting currency and every day of the range, and before L1b the lots analysis asked one conversion
+per day of its market price series; both now read [steps](#unit-rate-steps)). So the
 function reads only the rows the batch can
 use, in one query for up to `FX_PAIRS_PER_QUERY` (500) pairs — more pairs take several queries
 (R13-SEC9-2: SQLite refuses an `OR` of about a thousand terms, «Expression tree is too large», and a
@@ -210,7 +255,9 @@ The [portfolio engine](../financial_math.md#portfolio-package) (`_preload_fx_rat
 currency on every day of long ranges: asked of `convert_bulk()`, one item per currency and per day. A rate only changes on the
 days a row is stored, so `unit_rate_steps(session, requests)`, in the same module (P3 of MF's fast-formulas plan),
 answers the same values as steps, with far fewer items. Since MF's P3 both read it: the engine in a map that answers
-on the asked days only (`financial_math/fx_rates.AskedDayRates`), the native cash through the steps themselves.
+on the asked days only (`financial_math/fx_rates.AskedDayRates`), the native cash through the steps themselves. Since
+lot L1b the [lots analysis](../transactions/lots_analysis_service.md#fx-conversion) reads it too: its `FxRateResolver`
+asks one window per currency of the market price series, and keeps the rates in the same `AskedDayRates`.
 
 `requests` maps `(source, destination)`, two currency codes as stored, whichever of them is the stored base, to its
 windows `(first_day, last_day)`, both days included; the windows of a pair may touch, overlap or lie apart. Every pair

@@ -3100,3 +3100,249 @@ test.describe('X-R16 FX detail: an invalid signal result keeps the rates and the
         await expect(panel.getByTestId('signal-backend-error'), 'a valid answer raises no banner').toHaveCount(0);
     });
 });
+
+// ============================================================================
+// N64 — FX pair detail: a signal result already answered is not asked again
+// ============================================================================
+// The pair page keeps a client cache of the backend's signal results beside its rate cache. Before N64 every load with a
+// backend indicator configured re-posted `/api/v1/fx/currencies/convert`, even for a period the page had already
+// answered with that very indicator. Now the return to such a period asks nothing, and the Refresh button — which empties
+// the caches — still does.
+//
+// The pair is the seeded EUR-USD, read and never written: its rates (130 daily rates ending yesterday), its signal catalog
+// (RSI alone, as in the X-R16 block above) and its signal results come from route mocks, so that every request is
+// answered the same way and the period change is a cache question, not a data one. The RSI signal is stored in this
+// context's localStorage, where the chart settings live: Playwright gives each test a context of its own, so the signal
+// never reaches another test, and nothing reaches the database — there is nothing to clean up.
+//
+// The requests are counted by a listener armed right before the last action and removed right after it. «Drawn» is read
+// from the number of series the chart's ECharts option holds, never from the points of a series: the chart re-chooses its
+// resolution (daily, weekly, monthly) with hysteresis, so the same range can legitimately draw another number of points.
+// ============================================================================
+test.describe('N64 FX detail: a signal result already answered is not asked again', () => {
+    // A ceiling, never a delay: a sign-in, the stored signal, a page load and the round trips each test waits for by name.
+    test.describe.configure({timeout: 60_000});
+
+    /** The seeded pair, canonical: read, never written — every rate on screen comes from the route below. */
+    const PAIR = 'EUR-USD';
+    /** The RSI signal stored on the pair: the page asks for it under this `instance_id`. */
+    const RSI_ID = 'n64-rsi';
+    const CONVERT_PATH = '/api/v1/fx/currencies/convert';
+    /** The FX signal catalog the page loads: RSI alone, without parameters, so the stored signal needs none (as in the X-R16 block above). */
+    const RSI_DEFINITION = {
+        signal_code: 'RSI',
+        implementation_version: '1.0.0',
+        category: 'momentum',
+        display_name_key: 'signals.rsi',
+        description_key: 'signals.rsi.description',
+        semantic_id: 'technical.rsi',
+        semantic_description: 'Relative Strength Index.',
+        icon: '📊',
+        params_schema: {type: 'object', properties: {}},
+        default_params: {},
+        input_requirements: {price_fields: ['close'], data_policy: 'strict_contiguous', minimum_coverage: 1},
+        output_specs: [
+            {
+                key: 'rsi',
+                label_key: 'signals.rsi.value',
+                semantic_id: 'technical.rsi.value',
+                semantic_description: 'Relative Strength Index values.',
+                unit: 'index',
+                axis: {key: 'rsi', role: 'independent', minimum: 0, maximum: 100},
+                view_transform: 'none',
+                kind: 'line',
+                aggregation_profile: 'last_with_range',
+            },
+        ],
+        compatible_domains: ['fx'],
+    };
+    /** The RSI series of a valid answer, without its points. */
+    const RSI_SERIES = {key: 'rsi', label_key: 'signals.rsi.value', semantic_id: 'technical.rsi.value', semantic_description: 'Relative Strength Index values.', unit: 'index', axis: {key: 'rsi', role: 'independent', minimum: 0, maximum: 100}, view_transform: 'none', kind: 'line'};
+
+    /** The fields of a `/fx/currencies/convert` item these tests read. */
+    type ConvertAsk = {from_amount?: {code?: string}; to?: string; date_range?: {start?: string; end?: string | null}; signals?: Array<{instance_id?: string; signal_code?: string}>};
+    /** An item the route has answered: logged once its answer is delivered, not when it is asked. */
+    type DeliveredAsk = {start: string | null; signalCodes: string[]};
+
+    /** Stores the RSI signal on the pair where the page reads it: this context's localStorage, under the signed-in user's key. */
+    async function storeRsiSignal(page: Page): Promise<void> {
+        const me = await page.request.get('/api/v1/auth/me');
+        expect(me.ok(), `GET /api/v1/auth/me answered HTTP ${me.status()}`).toBe(true);
+        const userId = ((await me.json()) as {user?: {id?: unknown}}).user?.id;
+        if (typeof userId !== 'number' || !Number.isSafeInteger(userId)) throw new Error('GET /api/v1/auth/me returned no user id, and the chart settings are stored under it');
+        const settings = (signals: object[]) => ({colorByBaseline: true, areaFill: true, gridLines: true, staleGradient: true, axisScales: {absolute: {mode: 'auto'}, percentage: {mode: 'include0'}, secondary: {}}, signals});
+        const rsi = {id: RSI_ID, signalType: 'rsi', params: {}, style: {color: '#7c3aed', lineWidth: 2, lineType: 'solid', markerStart: null, markerEnd: null}};
+        await page.evaluate(({key, value}) => localStorage.setItem(key, value), {key: `lf_${userId}_chartSettingsStore`, value: JSON.stringify({version: 3, globalSettings: settings([]), pairOverrides: [[PAIR, settings([rsi])]]})});
+    }
+
+    /** The FX signal catalog, RSI alone. */
+    async function routeRsiCatalog(page: Page): Promise<void> {
+        await page.route(
+            (url) => url.pathname === '/api/v1/fx/currencies/signals',
+            (route) => route.fulfill({status: 200, contentType: 'application/json', json: {items: [RSI_DEFINITION]}}),
+        );
+    }
+
+    /**
+     * Serves the pair's conversions: 130 daily rates ending yesterday, those inside each item's range, and for an item that
+     * asks for signals its `signal_results` group with a valid RSI series over the rates it answers. Returns the items
+     * delivered — logged once their answer is out, not when they are asked.
+     */
+    async function routePairRates(page: Page): Promise<DeliveredAsk[]> {
+        const history = Array.from({length: 130}, (_, index) => daysAgoIso(130 - index));
+        const rateAt = (index: number) => (1.1 + index / 1000).toFixed(4);
+        const delivered: DeliveredAsk[] = [];
+        await page.route(
+            (url) => url.pathname === CONVERT_PATH,
+            async (route) => {
+                // postDataJSON throws on an empty or non-JSON body, and nobody awaits a route callback: read it as no item.
+                let asks: ConvertAsk[] = [];
+                try {
+                    const body: unknown = route.request().postDataJSON();
+                    asks = Array.isArray(body) ? body.filter((ask): ask is ConvertAsk => ask !== null && typeof ask === 'object') : [];
+                } catch {
+                    asks = [];
+                }
+                const results: object[] = [];
+                const signalResults: object[] = [];
+                asks.forEach((ask, requestIndex) => {
+                    const from = ask.from_amount?.code ?? 'EUR';
+                    const to = ask.to ?? 'USD';
+                    const start = ask.date_range?.start ?? '';
+                    const end = ask.date_range?.end ?? start;
+                    const days = history.flatMap((date, index) => (date >= start && date <= end ? [{date, rate: rateAt(index)}] : []));
+                    for (const day of days) results.push({from_amount: {code: from, amount: '1'}, to_amount: {code: to, amount: day.rate}, conversion_date: day.date, rate: day.rate, backward_fill_info: null});
+                    const asked = ask.signals ?? [];
+                    if (asked.length === 0) return;
+                    signalResults.push({
+                        request_index: requestIndex,
+                        from_currency: from,
+                        to_currency: to,
+                        date_range: {start, end},
+                        signals: asked.map((signal) => {
+                            const identity = {instance_id: signal.instance_id ?? RSI_ID, signal_code: signal.signal_code ?? 'RSI'};
+                            if (days.length === 0) return {...identity, status: 'unavailable'};
+                            return {...identity, implementation_version: '1.0.0', normalized_params: {}, status: 'ok', series: [{...RSI_SERIES, points: days.map((day, index) => ({date: day.date, value: 40 + (index % 20)}))}]};
+                        }),
+                    });
+                });
+                await route.fulfill({status: 200, contentType: 'application/json', json: {results, success_count: results.length, signal_results: signalResults}});
+                for (const ask of asks) delivered.push({start: ask.date_range?.start ?? null, signalCodes: (ask.signals ?? []).map((signal) => signal.signal_code ?? '')});
+            },
+        );
+        return delivered;
+    }
+
+    /** True for a `/fx/currencies/convert` POST one of whose items asks for the RSI signal. */
+    function asksForRsi(request: Request): boolean {
+        if (request.method() !== 'POST' || new URL(request.url()).pathname !== CONVERT_PATH) return false;
+        let body: unknown;
+        try {
+            body = request.postDataJSON();
+        } catch {
+            return false;
+        }
+        return Array.isArray(body) && body.some((item) => item !== null && typeof item === 'object' && ((item as ConvertAsk).signals ?? []).some((signal) => signal.signal_code === 'RSI'));
+    }
+
+    /** The `/fx/currencies/convert` POSTs the page sends from now until `stop()`. Armed before the action it measures, so none it sends is missed. */
+    function watchConvertPosts(page: Page) {
+        const sent: Request[] = [];
+        const onRequest = (request: Request) => {
+            if (request.method() === 'POST' && new URL(request.url()).pathname === CONVERT_PATH) sent.push(request);
+        };
+        page.on('request', onRequest);
+        return {sent, stop: () => page.off('request', onRequest)};
+    }
+
+    /** How many series the pair chart's ECharts option holds: the rates, the indicators, the event markers. 0 while no chart is mounted. */
+    async function readSeriesCount(page: Page): Promise<number> {
+        return page.evaluate((): number => {
+            type ChartHost = HTMLElement & {__lfChart?: {getOption: () => {series?: unknown}}};
+            const root = document.querySelector<HTMLElement>('[data-testid="fx-detail-chart"]');
+            if (!root) return 0;
+            const candidates = [root, ...root.querySelectorAll<HTMLElement>('*')];
+            const host = candidates.find((candidate) => typeof (candidate as ChartHost).__lfChart?.getOption === 'function') as ChartHost | undefined;
+            const series = host?.__lfChart?.getOption().series;
+            return Array.isArray(series) ? series.length : 0;
+        });
+    }
+
+    /**
+     * Opens the pair with its stored RSI on the page's default period and waits until the first load has asked for the
+     * indicator, been answered and released the page token. 1M and 3M are core presets of the picker, drawn at any width.
+     */
+    async function openPairWithRsi(page: Page) {
+        await storeRsiSignal(page);
+        await routeRsiCatalog(page);
+        const delivered = await routePairRates(page);
+        await goToFxDetailPage(page, PAIR);
+        await expect.poll(() => delivered.some((ask) => ask.signalCodes.includes('RSI')), {message: 'the first load asked for the stored RSI signal, and the route answered', timeout: 15_000}).toBe(true);
+        const refresh = page.getByTestId('fx-detail-refresh-btn');
+        await expect(refresh, 'the first load has released the page token').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+        const picker = page.getByTestId('fx-detail-filter-bar').getByTestId('date-range-picker-root');
+        const startInput = picker.getByTestId('date-range-input-start');
+        const shortPeriod = picker.getByTestId('date-preset-1m');
+        const longPeriod = picker.getByTestId('date-preset-3m');
+        // The stored RSI is on the chart beside the rates: more than one series, or the returns below could not tell it was drawn.
+        await expect.poll(() => readSeriesCount(page), {message: 'the stored RSI is drawn beside the rates', timeout: 10_000}).toBeGreaterThan(1);
+
+        /** A period nothing has answered yet: the click asks the server, with the indicator, and the page is waited on until it is quiet again. */
+        const pickPeriodAsked = async (period: Locator): Promise<string> => {
+            await period.click();
+            await expect(period, 'the period is selected').toHaveAttribute('data-active', 'true');
+            const start = await startInput.inputValue();
+            await expect.poll(() => delivered.some((ask) => ask.start === start && ask.signalCodes.includes('RSI')), {message: `the page asked for the RSI over the rates from ${start}, and the route answered`, timeout: 15_000}).toBe(true);
+            await expect(refresh, 'the page token of the period change is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+            await expect.poll(() => readSeriesCount(page), {message: 'the RSI is drawn over this period', timeout: 10_000}).toBeGreaterThan(1);
+            return start;
+        };
+        return {refresh, startInput, shortPeriod, longPeriod, pickPeriodAsked};
+    }
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    // The pair's own version of the developer's test: with a backend indicator configured, period A, period B, period A.
+    // Before N64 every load with a signal re-posted the conversion; the return to A now asks nothing.
+    test('N64 returning to a period already answered, with an indicator configured, posts no conversion request', async ({page}) => {
+        const {refresh, startInput, shortPeriod, longPeriod, pickPeriodAsked} = await openPairWithRsi(page);
+        const root = page.getByTestId('fx-detail-page');
+        const shortStart = await pickPeriodAsked(shortPeriod);
+        const seriesOfShortPeriod = await readSeriesCount(page);
+        const longStart = await pickPeriodAsked(longPeriod);
+        expect(longStart, 'the second period is another range, or the return below proves nothing').not.toBe(shortStart);
+
+        // The return: asked and answered once, so it comes from the cache — rates and indicator alike.
+        const converts = watchConvertPosts(page);
+        await shortPeriod.click();
+        await expect(shortPeriod, 'the period is selected again').toHaveAttribute('data-active', 'true');
+        await expect(startInput, 'the range is the first period again').toHaveValue(shortStart);
+        await expect(refresh, 'the page token of the period change is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+        await waitForSettled(root, 20_000);
+        await expect.poll(() => readSeriesCount(page), {message: 'the cached period draws its indicator again', timeout: 10_000}).toBe(seriesOfShortPeriod);
+        converts.stop();
+
+        expect(
+            converts.sent.map((request) => request.postData() ?? ''),
+            'the return to a period already answered posts no conversion request',
+        ).toEqual([]);
+    });
+
+    // GUARD — the cache must not make the page deaf: Refresh empties the caches, so it still asks, with the indicator.
+    test('N64 the Refresh button still posts a conversion request after a period was served from the cache', async ({page}) => {
+        const {refresh, shortPeriod, longPeriod, pickPeriodAsked} = await openPairWithRsi(page);
+        await pickPeriodAsked(shortPeriod);
+        await pickPeriodAsked(longPeriod);
+        await shortPeriod.click();
+        await expect(shortPeriod, 'the period is selected again').toHaveAttribute('data-active', 'true');
+        await expect(refresh).toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+
+        const refreshAsked = page.waitForRequest(asksForRsi, {timeout: 15_000});
+        refreshAsked.catch(() => undefined);
+        await refresh.click();
+        await refreshAsked;
+        await expect(refresh, 'the page token of the refresh is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+    });
+});

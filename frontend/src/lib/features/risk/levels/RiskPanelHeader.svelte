@@ -1,12 +1,15 @@
 <script lang="ts">
+    import {onDestroy} from 'svelte';
     import {goto} from '$app/navigation';
 
+    import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import {_ as t} from '$lib/i18n';
     import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {fxRoutesVersion, getConfiguredPairSlugs} from '$lib/stores/reference/fxRoutesStore';
     import type {RiskPanelController} from '$lib/features/risk/riskPanelController.svelte';
+    import {addPairSides, labQualityAction} from '$lib/features/risk/syncTargets';
 
     import {RotateCw} from 'lucide-svelte';
 
@@ -63,11 +66,29 @@
         return [...pairs].sort();
     });
 
+    /** The «add FX pair» dialog an `add_fx_pair` chip opens (TC-23), and the sides it opens on. */
+    let addPairOpen = $state(false);
+    let addPairInitial = $state({base: '', quote: ''});
+    let alive = true;
+    onDestroy(() => (alive = false));
+
+    /** The banner's actions, through the one rule every risk panel reads (`labQualityAction`). */
     function handleQualityAction(action: string, target: string | null): void {
-        if (action.includes('sync')) syncOpen = true;
-        else if (action === 'navigate_asset' && target) void goto(`/assets/${target}`);
-        else if (action === 'navigate_fx' && target) void goto(`/fx/${target}`);
-        else if (action === 'add_fx_pair') void goto('/fx');
+        const next = labQualityAction(action, target);
+        if (next?.kind === 'sync') syncOpen = true;
+        else if (next?.kind === 'navigate') void goto(next.href);
+        else if (next?.kind === 'add_pair') {
+            addPairInitial = addPairSides(next.pair);
+            addPairOpen = true;
+        }
+    }
+
+    /**
+     * Once the pair is saved, and again once its rates are synced, the answer is asked again, as
+     * after this panel's own sync. Not once the panel is gone: the dialog's rate sync can outlive it.
+     */
+    async function refreshAfterPair(): Promise<void> {
+        if (alive) await controller.handleSynced();
     }
 </script>
 
@@ -101,3 +122,7 @@
 {/if}
 
 <PageSyncModal bind:open={syncOpen} {dateStart} {dateEnd} assets={syncAssets} fxPairs={syncFxPairs} onsynced={() => controller.handleSynced()} onclose={() => (syncOpen = false)} />
+
+{#if addPairOpen}
+    <FxPairAddModal bind:open={addPairOpen} initialBase={addPairInitial.base} initialQuote={addPairInitial.quote} oncreated={refreshAfterPair} onsynced={refreshAfterPair} />
+{/if}

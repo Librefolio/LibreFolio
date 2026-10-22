@@ -184,7 +184,7 @@ The latest acquisition's currency is the currency paid by the most recent transa
 ## 🎯 Where WAC is Used in LibreFolio
 
 - **Cost basis**: $\text{CB}(a,b,t) = q(a,b,t) \times \text{WAC}^{T}(a,b,t)$, historical, with no conversion at $t$
-- **Realized P&L on SELL**: $\text{realized} = P_{\text{sell}} - q_{\text{sold}} \times \text{WAC}^{T}_{\text{pre-sell}}$, with the proceeds $P_{\text{sell}}$ converted at the sale date and the units sold leaving at their historical cost. An outgoing adjustment with a cost basis realizes the same way, its proceeds being the value it hands over, quantity × cost basis converted at its date (see [Outgoing Adjustments](../../instruments/transaction-types/adjustment.md#outgoing-adjustments))
+- **Realized P&L on SELL**: $\text{realized} = P_{\text{sell}} - q_{\text{sold}} \times \text{WAC}^{T}_{\text{pre-sell}}$, with the proceeds $P_{\text{sell}}$ converted at the sale date and the units sold leaving at their historical cost. An outgoing adjustment realizes the same way with proceeds of zero, since it has no value: minus the historical cost of its units (see [Outgoing Adjustments](../../instruments/transaction-types/adjustment.md#outgoing-adjustments))
 - **Cash pool decomposition**: SELL returns $C = q_{\text{sold}} \times \text{WAC}^{T}_{\text{pre-sell}}$ to Capital Pool
 - **Yield on Cost**: the average purchase price of the [Yield on Cost](portfolio-engine/yield-on-cost.md) denominator
 - **Transfer form**: auto-suggests the receiving side's cost_basis_override from the sending position's WAC

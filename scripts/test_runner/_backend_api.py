@@ -57,6 +57,14 @@ def api_fx_unit(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "FX API unit tests", verbose=verbose)
 
 
+def api_fx_convert_sampling(verbose: bool = False, test_names: list = None) -> bool:
+    """Run Z-29fx: POST /fx/currencies/convert sampled for a compact chart (handler in process, no server)."""
+    print_section("FX Convert Sampling Tests")
+    print_info("Testing max_points/resolution/sample_like on conversions, samples and their bounds, reduced and aligned signals")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_fx_convert_sampling.py", test_names)
+    return run_command(cmd, "FX convert sampling tests", verbose=verbose)
+
+
 def api_fx_sync(verbose: bool = False, test_names: list = None) -> bool:
     """Run FX Sync API endpoint tests."""
     print_section("FX Sync API Endpoint Tests")
@@ -819,6 +827,30 @@ def api_address_probe(verbose: bool = False, test_names: list[str] | None = None
     return run_command(cmd, "Address probe API tests", verbose=verbose)
 
 
+def api_address_probe_image(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the address probe image tests: GET /auth/address-probe.png, 1x1 for this instance's nonce, 2x1 otherwise (H-55 v2)."""
+    print_section("Address Probe Image API Tests")
+    print_info("Testing GET /auth/address-probe.png (public): a PNG, 1x1 or 2x1, no-store, no session; its own module; outside the blocked list")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_address_probe_image.py", test_names)
+    return run_command(cmd, "Address probe image API tests", verbose=verbose)
+
+
+def api_hosting_panel_routes(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the hosting panel's route tests: the six routes under the single tag Hosting panel, their bearer schemes and documented answers (H-61)."""
+    print_section("Hosting Panel Routes")
+    print_info("Testing: the real app's route table and OpenAPI document: tag, endpoints, operation ids, BackupPanelToken/WakeToken/PanelStatusToken, 401/404/429/503")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_hosting_panel_routes.py", test_names)
+    return run_command(cmd, "Hosting panel route tests", verbose=verbose)
+
+
+def api_panel_status(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the hosting panel's status route tests: GET /panel/status (H-61, R1)."""
+    print_section("Hosting Panel Status API")
+    print_info("Testing: GET /api/v1/panel/status: off 404, its own 401, the four setup states with the expiry of a pending one only, no personal data, a blocked instance, OpenAPI")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_panel_status_api.py", test_names)
+    return run_command(cmd, "Hosting panel status API tests", verbose=verbose)
+
+
 def api_broker_multiuser(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run broker multi-user role tests."""
     print_section("Broker Multi-User Role Tests")
@@ -1040,6 +1072,8 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "preview-cache", api_preview_cache, name="Preview Cache", desc="PreviewCache in uploads API")
     add_test(api, "fx-unit", api_fx_unit, name="FX API Unit", desc="Direct handler unit tests, no live server")
     add_test(api, "fx-sync", api_fx_sync, name="FX Sync API", desc="FX rate synchronization endpoints")
+    # PURE: the handler runs in process with convert_bulk replaced by a double; no database, no server.
+    add_test(api, "fx-convert-sampling", api_fx_convert_sampling, name="FX Convert Sampling", desc="Z-29fx: max_points, resolution and sample_like on POST /fx/currencies/convert: the step from the fill's first day, the bucket results, samples with resolution and sample_bounds, request_index, sample_reference 422s, signals reduced and aligned (O1), the calendar rolling return in the FX domain, the day budget", isolation="pure")
     add_test(api, "assets-price", api_assets_price, name="Assets Price API", desc="Bulk upsert, delete, query, sync; X-R65 422 date_out_of_range; X-R71 422 price_currency_mismatch")
     # Write-scoped (the category default): own user, own asset (deleted), rates only on AWG/TMT, a pair no other test uses.
     add_test(api, "period-changes", api_period_changes, name="Period Changes API", desc="MF-P2: login, base == quote 422, answer shape, and the Assets/FX pages' numbers from the price query and the conversions; MF-P2b: list caps, ≤ 5 distinct as_of, as_of ≥ 1900")
@@ -1054,7 +1088,7 @@ Tests for REST API endpoints (server auto-started):
         "ai-export-unpriced-asset",
         api_ai_export_unpriced_asset,
         name="AI Export Unpriced Asset API",
-        desc="E-AI503: POST /ai-export/snapshot with a held asset of any type and no stored price is 200, not 503: the asset is listed without a price series, with its reason",
+        desc="E-AI503, E-23: POST /ai-export/snapshot with a held asset of any type and no stored price, or prices stored only before the period, is 200, not 503: the asset is listed without a price series, with its reason (and its last stored price)",
         # PURE: the real AI Export router runs in-process on a private SQLite file under tmp_path, with the real snapshot
         # service, portfolio report and price query; the portfolio caches are emptied around each test: the lane's backend
         # is never called.
@@ -1291,6 +1325,29 @@ Tests for REST API endpoints (server auto-started):
     # global row is written; the one write is the login counters of e2e_test_admin / e2e_test_user, which no unit asserts.
     # The instance key is switched in this process only (monkeypatch), never while the lane's server is asked.
     add_test(api, "address-probe", api_address_probe, name="Address Probe API", desc="Admin nonce 401/403/200, public {match} with ACAO * and no-store, Origin from elsewhere through the CORSMiddleware, forged/expired/foreign nonces false, cookies ignored, another instance in process")
+    add_test(
+        api,
+        "address-probe-image",
+        api_address_probe_image,
+        name="Address Probe Image API",
+        desc="H-55 v2: GET /auth/address-probe.png, a valid PNG 1x1 for a nonce this instance issued, 2x1 for forged, foreign, expired, empty, missing or too long, same status and type, no-store, no session; in address_probe_image.py, not auth.py; not allowed when blocked; the JSON probe unchanged",
+    )
+    add_test(
+        api,
+        "hosting-panel-routes",
+        api_hosting_panel_routes,
+        name="Hosting Panel Routes",
+        desc="H-61: the four backup panel routes, the wake-up and the status route carry the single tag Hosting panel, keep their endpoints and operation ids, ask for their own bearer scheme and document 429 beside 401, 404 and 503",
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "panel-status",
+        api_panel_status,
+        name="Hosting Panel Status API",
+        desc="H-61 R1: GET /panel/status off 404 without a token, panel_status_unauthorized, the four states of the initial administrator's setup with the expiry of a pending one only, no personal data, answered on a blocked instance, its OpenAPI schema",
+        isolation="pure",
+    )
     add_test(api, "broker-multiuser", api_broker_multiuser, name="Broker Multi-User", desc="Role-based permissions")
     add_test(api, "users-search", api_users_search, name="User Search API", desc="User search, share validation")
     add_test(api, "portfolio", api_portfolio, name="Portfolio API", desc="Summary, history, asset-history, FIFO lots endpoints")

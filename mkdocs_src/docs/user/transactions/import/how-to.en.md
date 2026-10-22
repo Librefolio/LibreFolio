@@ -137,7 +137,8 @@ a row's **⋮** menu, opens the details, with the warnings and the notes listed 
 </div>
 
 - **Warnings and notes**: **Continue** lists the warnings first, then the notes; read them, then
-  click **Continue anyway**.
+  click **Continue anyway**. A warning about rows the importer left out, because it does not
+  know or cannot read them, has a link to open an issue on GitHub.
 - **A file failed**: a banner says why. Fix its plugin in **Select Files**, then click
   **Re-parse all**.
 
@@ -299,7 +300,7 @@ cost, 0 for a gift.
 
 Rows whose missing cost the importer flags are the exception: a position added by
 **Align with the bank**, a new line of a Danske Bank [demerger](danske-bank.md#demergers), an
-`ADJUSTMENT` row of a [Generic CSV](generic-csv.md) file without a cost. They are listed in red,
+`ADJUSTMENT` row of a [Generic CSV](generic-csv.md) file that adds units without a cost. They are listed in red,
 and their form opens in **Manual** with the cost empty: type it by hand, even if it is 0 — choosing
 **Auto** does not take them off the list.
 

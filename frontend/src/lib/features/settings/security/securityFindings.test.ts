@@ -16,6 +16,9 @@
  *      (`settings.securityTab.openPlugins`, `/settings?tab=plugins`); any other check has none.
  *   5. `attentionCount({attention})` counts the attention findings that are errors or warnings: an `info` is listed,
  *      not counted.
+ *   6. (N69b, the security-attention dot) `attentionSeverity({attention})` says how serious the attention is: `'error'`
+ *      when any attention finding is an error, else `'warning'` when any is a warning, else `null`; an `info` never
+ *      counts, as in `attentionCount`, so it is `null` exactly when the badge counts nothing.
  *
  * How the cases read it. The expected findings are written from the fixtures with the contract's own mapping (`server()`
  * below), never read from the module under test. The browser's finding is compared with literals for the two notices of
@@ -28,6 +31,12 @@
  *   - a finding is exactly its six fields: a notice's `dismissible` does not come along.
  * Not pinned: the `severity` of a passed finding (a `FindingSeverity` has no `ok`, so «mapped the same way» cannot
  * keep it), and whether `params` is the check's own `detail` object or a copy.
+ *
+ * H-55 v2 (step 4): the browser knows a second thing, `platform.blockedScript` — a warning while the tab holds at least one
+ * source of a script the enforced Content-Security-Policy blocked and this instance did not send (`cspNotice.ts`). It is
+ * fed through the same `browser` state, as an optional `blockedScripts` list of source names (the caller reads
+ * `sessionStorage['librefolio-csp-blocked']`: the contract names the storage, not this field — an interface decision the
+ * cases below pin as `blockedScripts`). The last block of this file reads it; red until the check exists.
  *
  * Red until A8b: `securityFindings.ts` does not exist yet. It is loaded by a computed specifier, so each case fails on
  * its own with the contract in its message rather than the whole file at import, and the type check does not depend on
@@ -90,6 +99,8 @@ interface BrowserState {
     registrationMode: string;
     registrationLocked: boolean;
     hostname: string;
+    /** H-55 v2: the sources of the scripts the policy blocked on this tab (`sessionStorage['librefolio-csp-blocked']`), read by the caller; absent means none. */
+    blockedScripts?: readonly string[];
 }
 
 interface Findings {
@@ -113,6 +124,18 @@ async function loadFindings(): Promise<FindingsModule> {
         expect(typeof module[name], `securityFindings.ts exports no ${name}()`).toBe('function');
     }
     return module as unknown as FindingsModule;
+}
+
+type AttentionSeverity = (findings: {attention: SecurityFinding[]}) => 'error' | 'warning' | null;
+
+/**
+ * `attentionSeverity` (N69b), read from the module's namespace rather than imported by name: until it lands, each case
+ * fails on this assertion, and the cases of A8b above keep running.
+ */
+async function loadAttentionSeverity(): Promise<AttentionSeverity> {
+    const module = (await loadFindings()) as unknown as Record<string, unknown>;
+    expect(typeof module.attentionSeverity, 'securityFindings.ts exports no attentionSeverity(): nothing says how serious the attention findings are (red until N69b)').toBe('function');
+    return module.attentionSeverity as AttentionSeverity;
 }
 
 // --- The contract's literals, never read from the module under test --------------------------------------------------
@@ -442,5 +465,194 @@ describe('attentionCount — what needs doing', () => {
 
         expect(attentionCount({attention: []})).toBe(0);
         expect(attentionCount({attention: [finding('a', 'info'), finding('b', 'warning'), finding('c', 'error'), finding('d', 'info'), finding('e', 'warning')]})).toBe(3);
+    });
+});
+
+/**
+ * attentionSeverity (N69b): the colour of the dot an administrator sees on the sidebar's connection line and on the
+ * phone's menu button. It reads the attention list alone, like `attentionCount`, and is passed lists in any order: the
+ * error is placed after the warnings on purpose, so that «the first one decides» cannot pass.
+ */
+describe('attentionSeverity — how serious the attention is (N69b)', () => {
+    const finding = (id: string, severity: FindingSeverity): SecurityFinding => ({id, severity, messageKey: `test.${id}`, params: {}, source: 'server'});
+
+    // red until N69b
+    it('an error beats any number of warnings, wherever it sits in the list', async () => {
+        const attentionSeverity = await loadAttentionSeverity();
+
+        expect(attentionSeverity({attention: [finding('a', 'warning'), finding('b', 'warning'), finding('c', 'error'), finding('d', 'info')]}), 'two warnings, then an error').toBe('error');
+        expect(attentionSeverity({attention: [finding('d', 'info'), finding('c', 'error')]}), 'an info, then an error').toBe('error');
+        expect(attentionSeverity({attention: [finding('c', 'error')]}), 'an error alone').toBe('error');
+    });
+
+    // red until N69b
+    it('warnings and no error: warning, with or without infos around them', async () => {
+        const attentionSeverity = await loadAttentionSeverity();
+
+        expect(attentionSeverity({attention: [finding('a', 'warning')]}), 'one warning').toBe('warning');
+        expect(attentionSeverity({attention: [finding('d', 'info'), finding('a', 'warning'), finding('e', 'info'), finding('b', 'warning')]}), 'warnings among infos').toBe('warning');
+    });
+
+    // red until N69b
+    it('infos only: null — an info is listed, never counted', async () => {
+        const attentionSeverity = await loadAttentionSeverity();
+
+        expect(attentionSeverity({attention: [finding('d', 'info')]})).toBeNull();
+        expect(attentionSeverity({attention: [finding('d', 'info'), finding('e', 'info')]})).toBeNull();
+    });
+
+    // red until N69b
+    it('nothing to look at: null', async () => {
+        const attentionSeverity = await loadAttentionSeverity();
+
+        expect(attentionSeverity({attention: []})).toBeNull();
+    });
+
+    // red until N69b
+    it('on what securityFindings lists: the browser’s warning counts like the server’s, and it is null exactly when attentionCount is 0', async () => {
+        const {securityFindings, attentionCount} = await loadFindings();
+        const attentionSeverity = await loadAttentionSeverity();
+        const CASES: Array<[label: string, checks: SecurityCheck[], browser: BrowserState, expected: 'error' | 'warning' | null]> = [
+            ['the ten of today, every severity', MIXED, SILENT, 'error'],
+            ['the same, the browser warning too', MIXED, OPEN_EXTERNAL, 'error'],
+            ['every check ok, open registration reached from outside', ALL_OK, OPEN_EXTERNAL, 'warning'],
+            ['every check ok, open registration pinned', ALL_OK, OPEN_LOCKED_EXTERNAL, 'warning'],
+            ['a warning and an info', [SMTP_PLAIN, LOG_VERBOSE], SILENT, 'warning'],
+            ['an error alone', [KEY_UNUSABLE], SILENT, 'error'],
+            ['infos only', [LOG_VERBOSE, LINKS_MISSING], SILENT, null],
+            ['every check ok, nothing to warn about', ALL_OK, SILENT, null],
+            ['no check at all', [], SILENT, null],
+        ];
+
+        for (const [label, checks, browser, expected] of CASES) {
+            const findings = securityFindings(structuredClone(checks), browser);
+            expect(attentionSeverity(findings), label).toBe(expected);
+            expect(attentionSeverity(findings) === null, `${label}: null exactly when the badge counts nothing`).toBe(attentionCount(findings) === 0);
+        }
+    });
+
+    // red until N69b
+    it('changes nothing it reads: a frozen list, the error last, comes out as it went in', async () => {
+        const attentionSeverity = await loadAttentionSeverity();
+        const attention = deepFreeze([finding('a', 'warning'), finding('d', 'info'), finding('c', 'error')]);
+        const before = structuredClone(attention);
+
+        let severity: 'error' | 'warning' | null | undefined;
+        expect(() => {
+            severity = attentionSeverity({attention});
+        }, 'a sort in place throws on a frozen list').not.toThrow();
+
+        expect(severity).toBe('error');
+        expect(attention).toEqual(before);
+    });
+});
+
+/**
+ * The browser's second check (H-55 v2, step 4): `platform.blockedScript`, a warning while the tab holds a source of a script
+ * the policy blocked. Fed as `blockedScripts` of the browser state — the sources `cspNotice.ts` notes in the tab's
+ * `sessionStorage`. Not pinned: the message key (a catalogue key of the lot), its params' names, an action.
+ */
+describe('securityFindings — the browser’s second check: a script the policy blocked (H-55 v2)', () => {
+    const BLOCKED_ID = 'platform.blockedScript';
+    const CDN = 'https://cdn.example.com';
+    const withBlocked = (blockedScripts: readonly string[], base: BrowserState = SILENT): BrowserState => ({...base, blockedScripts});
+    const blockedOf = (findings: Findings): SecurityFinding[] => findings.attention.filter((finding) => finding.id === BLOCKED_ID);
+    /** What a finding says of its params, as one string: the sources it names are found in it, whatever the param is called. */
+    const paramsText = (finding: SecurityFinding): string => Object.values(finding.params).map(String).join(' | ');
+
+    // red until H-55 v2 step 4
+    it('BSC-01: a source noted: one warning of the browser, `platform.blockedScript`, naming it — after nothing else is needed to see it', async () => {
+        const {securityFindings} = await loadFindings();
+
+        const {attention, passed} = securityFindings([], withBlocked(['inline']));
+
+        expect(attention, 'one finding, the browser’s').toHaveLength(1);
+        const [finding] = attention;
+        expect({id: finding.id, severity: finding.severity, source: finding.source}).toEqual({id: BLOCKED_ID, severity: 'warning', source: 'browser'});
+        expect(typeof finding.messageKey === 'string' && finding.messageKey.length > 0, 'a catalogue key for the message').toBe(true);
+        expect(finding.messageKey, 'not the open-registration warning’s').not.toBe(BROWSER_OPEN.messageKey);
+        expect(paramsText(finding), 'the message names the source').toContain('inline');
+        expect(passed, 'a browser finding is never passed').toEqual([]);
+        expect(
+            Object.keys(finding).filter((key) => !['id', 'severity', 'messageKey', 'params', 'action', 'source'].includes(key)),
+            'a finding is its fields, nothing else',
+        ).toEqual([]);
+    });
+
+    // red until H-55 v2 step 4
+    it('BSC-02: several sources: still one finding, naming every one of them', async () => {
+        const {securityFindings} = await loadFindings();
+
+        const findings = securityFindings([], withBlocked([CDN, 'inline', 'eval']));
+
+        const blocked = blockedOf(findings);
+        expect(blocked, 'one finding for the tab, not one per source').toHaveLength(1);
+        for (const source of [CDN, 'inline', 'eval']) expect(paramsText(blocked[0]), `names ${source}`).toContain(source);
+    });
+
+    // red until H-55 v2 step 4
+    it.each<[string, BrowserState]>([
+        ['an empty list', withBlocked([])],
+        ['no list at all (nothing noted, or a storage that cannot be read)', SILENT],
+        ['an undefined list', {...SILENT, blockedScripts: undefined}],
+    ])('BSC-03: with %s, no finding — and with a source, the same state has one', async (_label, silent) => {
+        const {securityFindings} = await loadFindings();
+
+        expect(blockedOf(securityFindings(structuredClone(ALL_OK), {...silent})), 'nothing noted: nothing to warn about').toEqual([]);
+        expect(securityFindings([], {...silent}).attention, 'and no other finding either').toEqual([]);
+        expect(blockedOf(securityFindings([], {...silent, blockedScripts: ['inline']})), 'control: one source makes the finding').toHaveLength(1);
+    });
+
+    // red until H-55 v2 step 4
+    it('BSC-04: after the server’s errors and warnings and before its infos — beside the open-registration warning, in either order', async () => {
+        const {securityFindings} = await loadFindings();
+
+        const {attention} = securityFindings(structuredClone(MIXED), withBlocked(['inline'], OPEN_EXTERNAL));
+
+        expect(
+            ids(attention).filter((id) => id !== BLOCKED_ID && id !== BROWSER_ID),
+            'the server’s findings keep their order',
+        ).toEqual(ids(MIXED_ATTENTION));
+        const isBrowser = (finding: SecurityFinding): boolean => finding.id === BLOCKED_ID || finding.id === BROWSER_ID;
+        expect(
+            attention
+                .filter(isBrowser)
+                .map((finding) => finding.id)
+                .sort(),
+            'both of the browser’s warnings are listed',
+        ).toEqual([BROWSER_ID, BLOCKED_ID].sort());
+        const lastServerWarning = Math.max(...attention.map((finding, index) => (!isBrowser(finding) && finding.severity !== 'info' ? index : -1)));
+        const firstServerInfo = attention.findIndex((finding) => !isBrowser(finding) && finding.severity === 'info');
+        attention.forEach((finding, index) => {
+            if (!isBrowser(finding)) return;
+            expect(index, `${finding.id}: after the server’s warnings`).toBeGreaterThan(lastServerWarning);
+            expect(index, `${finding.id}: before its infos`).toBeLessThan(firstServerInfo);
+        });
+    });
+
+    // red until H-55 v2 step 4
+    it('BSC-05: it counts, as a warning: the badge and the dot see it', async () => {
+        const {securityFindings, attentionCount} = await loadFindings();
+        const attentionSeverity = await loadAttentionSeverity();
+
+        expect(attentionCount(securityFindings(structuredClone(MIXED), SILENT)), 'premise: 2 errors and 4 warnings').toBe(6);
+        expect(attentionCount(securityFindings(structuredClone(MIXED), withBlocked(['inline']))), 'and the blocked script’s warning').toBe(7);
+        expect(attentionCount(securityFindings(structuredClone(MIXED), withBlocked(['inline'], OPEN_EXTERNAL))), 'and both of the browser’s').toBe(8);
+        expect(attentionSeverity(securityFindings(structuredClone(ALL_OK), withBlocked(['inline']))), 'every check ok: it alone makes the dot a warning').toBe('warning');
+    });
+
+    // red until H-55 v2 step 4
+    it('BSC-06: reads the list without changing it: a frozen list of sources comes out as it went in', async () => {
+        const {securityFindings} = await loadFindings();
+        const sources = deepFreeze([CDN, 'inline']);
+        const browser = deepFreeze({...SILENT, blockedScripts: sources});
+
+        let findings: Findings | undefined;
+        expect(() => {
+            findings = securityFindings([], browser);
+        }, 'a write into the list throws on a frozen input').not.toThrow();
+
+        expect(sources).toEqual([CDN, 'inline']);
+        expect(blockedOf(findings ?? {attention: [], passed: []}), 'premise: it was read').toHaveLength(1);
     });
 });

@@ -368,6 +368,18 @@ const INJECTED_COLOURS: Readonly<Record<ChartRole, string>> = {
     '--lf-action': '#1e0014',
     '--lf-on-action': '#1e0015',
     '--lf-mark-bg': '#1e0016',
+    '--lf-cat-stock': '#1e0017',
+    '--lf-cat-etf': '#1e0018',
+    '--lf-cat-bond': '#1e0019',
+    '--lf-cat-crypto': '#1e001a',
+    '--lf-cat-fund': '#1e001b',
+    '--lf-cat-hold': '#1e001c',
+    '--lf-cat-crowdfund': '#1e001d',
+    '--lf-cat-commodity': '#1e001e',
+    '--lf-cat-real-estate': '#1e001f',
+    '--lf-cat-index': '#1e0020',
+    '--lf-cat-other': '#1e0021',
+    '--lf-cat-liquidity': '#1e0022',
 };
 
 /** What the neutral `read` draws in a theme when every role answers its injected colour. */

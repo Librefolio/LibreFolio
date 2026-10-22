@@ -50,6 +50,7 @@ from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.market_series import mark_market_closed_carries, prepare_asset_series_set
 from backend.app.services.signals.execution import SignalPreparedSeriesBundle
+from backend.app.services.signals.sampling import sample_signal_result
 from backend.app.services.signals.service import SignalService
 from backend.app.utils.date_range_limits import MAX_BULK_ITEM_DAYS, BulkTooManyDaysError
 from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, latest_range_end, utcnow
@@ -381,6 +382,20 @@ class PriceQueryOperations:
         return sampled
 
     @staticmethod
+    def _reduce_signal_sample(result: FAPriceQueryResult, plan: _SamplePlan) -> None:
+        """Z-29s: the answer of an item with signals sampled weekly or monthly, computed day by day and cut to its range,
+        reduced to ``plan``'s dates: its prices and bounds as a bucket read gives them (each the daily answer's point, the
+        first day's in ``sample_bounds``), its step, and each signal series as the compact chart reduces it
+        (``signals/sampling.py``, ``sample_signal_result``). Without prices (``include_price=False``): the step and the signals."""
+        if result.prices:
+            first = next((point for point in result.prices if point.date == plan.first), None)
+            dates = set(plan.dates)
+            result.prices = [point for point in result.prices if point.date in dates]
+            result.sample_bounds = FAPriceSampleBounds(first=first, last=result.prices[-1]) if first is not None and result.prices else None
+        result.resolution = plan.resolution
+        result.signals = [sample_signal_result(signal, plan.resolution, plan.dates) for signal in result.signals]
+
+    @staticmethod
     def _fill_span(
         price_map: dict[date_type, PriceHistory],
         start_date: date_type,
@@ -462,7 +477,12 @@ class PriceQueryOperations:
         once — from the day-by-day rows when the request reads its asset whole, else one statement per range and step
         for every such asset (``_read_samples``). Each result says its step (``resolution``); a sampled one carries its
         first and last points apart (``sample_bounds``). A ``sample_like`` that cannot be followed raises
-        ``SampleReferenceError`` before any read.
+        ``SampleReferenceError`` before any read. Such an item sent with ``include_price=False`` only gives its step
+        (Z-29a-f): its plan stays, but no price row is read for it past the plan and it counts nothing against the
+        budget, whatever its step. With signals, such an item is read, computed and counted day by day as without these
+        fields (Z-29s); once its signals are computed and its answer cut, a weekly or monthly plan reduces it: its prices
+        and bounds as a bucket read gives them, each signal series by its output's ``aggregation_profile``
+        (``sample_signal_series``).
         """
         if not requests:
             return []
@@ -489,6 +509,14 @@ class PriceQueryOperations:
         sample_plans, daily_starts = await PriceQueryOperations._plan_samples(requests, session)
         for index, start in daily_starts.items():
             requests[index] = requests[index].model_copy(update={"date_range": DateRangeModel(start=start, end=requests[index].date_range.end or requests[index].date_range.start)})
+        # Z-29s: an item with signals is read, computed and counted day by day, as without a sampling field; its plan
+        # reduces its answer once the signals are computed (_reduce_signal_sample)
+        signal_samples = {index: plan for index, plan in sample_plans.items() if requests[index].signals}
+        sample_plans = {index: plan for index, plan in sample_plans.items() if index not in signal_samples}
+        # Z-29a-f: an item that asks a sampling and no prices only gives its step (a comparison's card, beside its target):
+        # its plan stays, but it reads no price row past it and counts nothing against the day budget, whatever its step;
+        # one with signals needs its rows (Z-29s)
+        placeholders = {index for index, req in enumerate(requests) if not req.include_price and not req.signals and (req.max_points is not None or req.resolution is not None or req.sample_like is not None)}
 
         signal_service = SignalService()
         signal_plans = []
@@ -536,7 +564,7 @@ class PriceQueryOperations:
             request_ranges.append(requested_range)
             load_ranges.append(load_range)
             signal_plans.append(plan)
-            if index in sample_plans:
+            if index in sample_plans or index in placeholders:
                 continue
             for asset_id in (
                 req.asset_id,
@@ -599,9 +627,13 @@ class PriceQueryOperations:
         # Z-25: the per-day points the fills will build, comparison series included, against the request's budget. The
         # count follows the fill, not the request: a full-history signal loads from 1900-01-01 at the latest (Z-30), and
         # its fill emits from the first stored price, or from the load start when an older row seeds it, even when the
-        # visible range is one day. A sampled item counts its points and its two bounds (Z-29).
+        # visible range is one day. A sampled item counts its points and its two bounds (Z-29); an item without prices
+        # that only gives its step, nothing (Z-29a-f); a sampled item with signals, its fill, as any item with signals
+        # (Z-29s).
         item_days = 0
         for index, (req, plan, (start, end)) in enumerate(zip(requests, signal_plans, load_ranges, strict=True)):
+            if index in placeholders:
+                continue
             if index in sample_plans:
                 item_days += len(sample_plans[index].dates) + 2 if sample_plans[index].dates else 0
                 continue
@@ -612,7 +644,8 @@ class PriceQueryOperations:
                         item_days += PriceQueryOperations._fill_span(price_maps.get(comparison_asset_id, {}), start, end, seed_prices.get(comparison_asset_id))
         if item_days > MAX_BULK_ITEM_DAYS:
             raise BulkTooManyDaysError(item_days=item_days, max_item_days=MAX_BULK_ITEM_DAYS)
-        sampled = await PriceQueryOperations._read_samples(requests, sample_plans, session, price_maps, seed_prices, asset_ranges)
+        sampled = await PriceQueryOperations._read_samples(requests, {index: plan for index, plan in sample_plans.items() if index not in placeholders}, session, price_maps, seed_prices, asset_ranges)
+        sampled.update({index: ([], False) for index in placeholders})
 
         # Build backward-filled series per asset (preserving request order)
         results = []
@@ -660,7 +693,7 @@ class PriceQueryOperations:
         for index, (req, (start, end)) in enumerate(zip(requests, load_ranges, strict=True)):
             aid = req.asset_id
             if index in sampled:
-                results.append(FAPriceQueryResult(asset_id=aid, prices=sampled[index][0], resolution=sample_plans[index].resolution))
+                results.append(FAPriceQueryResult(asset_id=aid, prices=sampled[index][0], resolution=sample_plans[index].resolution if index in sample_plans else "daily"))
                 continue
             price_map = price_maps.get(aid, {})
             in_memory_seed = max(
@@ -1055,6 +1088,11 @@ class PriceQueryOperations:
             if not req.include_price:
                 result.sample_bounds = None
             result.events = [event for event in result.events if requested_start <= event.date <= requested_end] if req.include_events else []
+
+        # Z-29s: an item with signals sampled weekly or monthly, read and computed day by day, reduced to its plan's dates
+        for index, plan in signal_samples.items():
+            if plan.resolution != "daily" and plan.dates:
+                PriceQueryOperations._reduce_signal_sample(results[index], plan)
 
         return results
 

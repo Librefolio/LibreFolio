@@ -357,10 +357,11 @@
                         {#if rows.length}
                             <h3>{$labT(`categories.${group}`)}</h3>
                             {#each rows as r (r.target)}
-                                <button type="button" class="row" class:modified={changed.has(`category:${r.target}`)} onclick={() => select('category', r.target)} data-testid="lab-item-category-{r.target}">
+                                <button type="button" class="row" class:modified={changed.has(r.role ? `css-var:${r.role}` : `category:${r.target}`)} onclick={() => (r.role ? select('css-var', r.role) : select('category', r.target))} data-testid="lab-item-category-{r.target}" data-role={r.role}>
                                     <span class="swatch" style:background={r.lightValue ?? 'transparent'} title={$labT('scope.light')}></span>
                                     <span class="swatch" style:background={r.darkValue ?? 'transparent'} title={$labT('scope.dark')}></span>
                                     <code>{r.key}</code>
+                                    {#if r.role}<code class="muted">{r.role}</code>{/if}
                                     <span class="muted">{r.lightValue ?? '—'} · {r.darkValue ?? '—'}</span>
                                 </button>
                             {/each}

@@ -1471,6 +1471,46 @@ def services_server_errors(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "Request id and server error tests", verbose=verbose)
 
 
+def services_hosting_panel_access(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the hosting panel's shared access (H-61, L1): the status token's reader, panel_access per scope (off 404, unusable 503, Bearer 401), the limiter's 429 and the line of each call, without secrets."""
+    print_section("Services: Hosting Panel Access")
+    print_info("Testing: backend/app/config/hosting_panel.py, backend/app/services/platform/hosting_panel/access.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_hosting_panel_access.py", test_names)
+    return run_command(cmd, "Hosting panel access tests", verbose=verbose)
+
+
+def services_hosting_panel_tickets(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the hosting panel's signed tickets (H-61, L2): the readers of the keys, the clock tolerance and the audience, and verify_ticket, pure."""
+    print_section("Services: Hosting Panel Tickets")
+    print_info("Testing: backend/app/config/hosting_panel.py (L2 readers), backend/app/services/platform/hosting_panel/tickets.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_hosting_panel_tickets.py", test_names)
+    return run_command(cmd, "Hosting panel ticket tests", verbose=verbose)
+
+
+def services_hosting_panel_registry(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the registry of used panel tickets (H-61, L2): one jti accepted once, across restarts, threads and processes; pruning; an unusable file gives 503."""
+    print_section("Services: Hosting Panel Ticket Registry")
+    print_info("Testing: backend/app/services/platform/hosting_panel/ticket_registry.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_hosting_panel_registry.py", test_names)
+    return run_command(cmd, "Hosting panel ticket registry tests", verbose=verbose)
+
+
+def services_hosting_panel_access_tickets(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the signed tickets inside panel_access (H-61, L2): scopes, refusal codes, replay, the limiter counting only what proves nothing, the lines, the startup check."""
+    print_section("Services: Hosting Panel Access with Tickets")
+    print_info("Testing: backend/app/services/platform/hosting_panel/access.py (L2), backend/app/services/platform/config_audit.py (check_hosting_panel)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_hosting_panel_access_tickets.py", test_names)
+    return run_command(cmd, "Hosting panel access ticket tests", verbose=verbose)
+
+
+def services_hosting_panel_vectors(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the hosting panel's ticket test vectors in the admin guide (H-61, L2): the key, the ticket and every verdict, checked against the code."""
+    print_section("Services: Hosting Panel Ticket Test Vectors")
+    print_info("Testing: mkdocs_src/docs/admin/hosting_providers.en.md (#panel-api-test-vectors) against backend/app/services/platform/hosting_panel/tickets.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_hosting_panel_vectors.py", test_names)
+    return run_command(cmd, "Hosting panel ticket vector tests", verbose=verbose)
+
+
 def services_client_address(verbose: bool = False, test_names: list = None) -> bool:
     """Test the client address behind a trusted proxy: LIBREFOLIO_CLIENT_IP_HEADER, client_address and client_rate_key (P17); no function only for the tests (N58)."""
     print_section("Services: Client Address")
@@ -2050,7 +2090,7 @@ Note: No backend server required.
         "price-query-sampling",
         services_price_query_sampling,
         name="Price Query Sampling",
-        desc="Z-29a (N90, revised 19/10): FAPriceQueryItem.key and sample_like (1 … 64 of A-Z a-z 0-9 _ . : -), max_points (1 … 10 000), resolution (daily, weekly, monthly), at most one of the three, none with signals, annotations or events; FAPriceQueryResult.resolution always, sample_bounds (FAPriceSampleBounds: first, last) on weekly and monthly answers only; price_sampling's buckets (ISO week, calendar month), counts, step, sampled dates (the last day of each bucket, the first day only when it closes its own) and SampleReferenceError; per item on its own fill after the X-R55 ceiling, daily as without the fields, else each point and bound the daily answer's, converted per point; sample_like: the card's step from the later first day, a card with nothing to fill lending its max_points or resolution; wrong references (unknown or duplicate key, chained, range mismatch) refused before any statement, the route's 422 sample_reference; the day budget counts points + 2 bounds, before the bucket rows are read; no daily fill built, at most buckets + 2 rows read; one read per asset, one bucket statement per range and step; request order kept; the case table shared with the chart (compactDensityCases.json)",
+        desc="Z-29a (N90, revised 19/10), Z-29a-f (an item without prices only gives its step: no row read past its plan, nothing counted) and Z-29s (with signals: read, computed and counted day by day, then prices and bounds as without signals and each signal series reduced by its output's aggregation_profile): FAPriceQueryItem.key and sample_like (1 … 64 of A-Z a-z 0-9 _ . : -), max_points (1 … 10 000), resolution (daily, weekly, monthly), at most one of the three, none with annotations or events; FAPriceQueryResult.resolution always, sample_bounds (FAPriceSampleBounds: first, last) on weekly and monthly answers only; price_sampling's buckets (ISO week, calendar month), counts, step, sampled dates (the last day of each bucket, the first day only when it closes its own) and SampleReferenceError; per item on its own fill after the X-R55 ceiling, daily as without the fields, else each point and bound the daily answer's, converted per point; sample_like: the card's step from the later first day, a card with nothing to fill lending its max_points or resolution; wrong references (unknown or duplicate key, chained, range mismatch) refused before any statement, the route's 422 sample_reference; the day budget counts points + 2 bounds, before the bucket rows are read; no daily fill built, at most buckets + 2 rows read; one read per asset, one bucket statement per range and step; request order kept; the case table shared with the chart (compactDensityCases.json)",
         # PURE: no lane DB, no server, no network. The price queries run on a private SQLite file under tmp_path built
         # with create_all, its assets on ids of their own; the X-R55 ceiling and the day budget replaced by monkeypatch in
         # price_query; the FX rates of the conversion case are rows of that file; the route is called as a function on a
@@ -2083,7 +2123,7 @@ Note: No backend server required.
         "signal-aggregation",
         services_signal_aggregation,
         name="Signal Aggregation",
-        desc="Z-29r: the per-bucket rule of the signals' aggregation_profile in one home, services/signals/aggregation.py: Selector, the read-only profile and envelope selector maps, select_point / scalar_representative / band_envelope picking as the chart (timeSeriesAggregation.ts; ties to the earliest, any input order, any element type through keyword-only accessors, the element itself) and as the shared aggregation_profiles.v1.json; AI Export's temporal aggregators going through it (aggregation.select_point and the two maps, read at the call), their outputs unchanged",
+        desc="Z-29r: the per-bucket rule of the signals' aggregation_profile in one home, services/signals/aggregation.py: Selector, the read-only profile and envelope selector maps, select_point / scalar_representative / band_envelope picking as the chart (timeSeriesAggregation.ts; ties to the earliest, any input order, any element type through keyword-only accessors, the element itself) and as the shared aggregation_profiles.v1.json; AI Export's temporal aggregators going through it (aggregation.select_point and the two maps, read at the call), their outputs unchanged; Z-29s: sample_signal_series reduces one series as the compact chart does (a run at a time between null points, a gap marker, the later run where two meet in a bucket, bars whole, bands by envelope, the element itself re-dated), on the shared signal_sampling_cases.v1.json",
         # PURE: no lane DB, no server, no network. Pure functions over points built in memory; AI Export's aggregators
         # called directly on hand-built plans; the module attributes the tests replace (select_point, the two maps) put
         # back by monkeypatch; the shared fixture read from the repository.
@@ -2179,7 +2219,7 @@ Note: No backend server required.
         "admin-bootstrap",
         services_admin_bootstrap,
         name="Initial Administrator (F02)",
-        desc="LIBREFOLIO_ADMIN_* read and refused by code, the startup bootstrap (created, ignored, pending, rearmed, expired, two workers), the link logged once and emailed, complete_admin_setup, the waiting administrator in user_usage, user setup-link",
+        desc="LIBREFOLIO_ADMIN_* read and refused by code, the startup bootstrap (created, ignored, pending, rearmed, expired, two workers), the link logged once and emailed, complete_admin_setup, the waiting administrator in user_usage, user setup-link, admin_setup_status for a hosting panel (H-61: none, pending with its expiry, done wins, expired)",
         # PURE: every database is a private file under tmp_path built with create_all; variables set with monkeypatch; the
         # email faked in this process; the race holds two connections to that private file only. No lane DB, no server.
         isolation="pure",
@@ -2616,7 +2656,7 @@ Note: No backend server required.
         desc="SHORT lots, estimated_mode, price gaps, ADJUSTMENT cost basis, transfer scope, FX resolver, reference price and days at cost",
         # PURE: no database, server or network. The builders under test are sync methods that take all
         # of their inputs as arguments, so the service is built with db=None; the async cases stub
-        # convert_bulk, and the reference-price and at-cost cases drive get_lots_analysis on loader
+        # unit_rate_steps, and the reference-price and at-cost cases drive get_lots_analysis on loader
         # doubles and a session double, all in EUR, so no rate is asked and nothing reaches a database.
         # Kept out of the DB-backed lots units on purpose: folding it in would declass it to the
         # category default (write-scoped).
@@ -2894,6 +2934,51 @@ Note: No backend server required.
         desc="H-60: X-Request-Id on every answer and request_id in every line of the request; 4xx as FastAPI; a 5xx with request_id and error_type, its cause logged once (error with traceback, warning without a cause, nothing when the route logged it); the unhandled 500 as JSON, logged once and re-raised; H-33's 500 as JSON; no request secret in an answer or a line; client_log_level follows LOG_LEVEL; H-60r: requests failing on one shared exception (a shared build, one object raised twice) each leave their id in the log, the traceback once, the later ones a short warning pointing to the first",
         # PURE: fresh FastAPI apps in process; the real app for its handler table, its stack and D4, its session on an
         # in-memory SQLite built with create_all; the activity record monkeypatched per request. No lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "hosting-panel-access",
+        services_hosting_panel_access,
+        name="Hosting Panel Access",
+        desc="H-61 L1: LIBREFOLIO_PANEL_STATUS_TOKEN read as the backup and wake tokens are; panel_access(scope) for backup, wake and status: off 404 without a line, unusable 503 with the scope's code, Bearer only, constant-time compare, missing or different 401 with the scope's code, a token never opens another scope; 20 refused credentials per address in 10 minutes across scopes then 429 panel_too_many_attempts with Retry-After, none behind an untrusted proxy; one line per call, never a secret, a header, the query or the address",
+        # PURE: fresh FastAPI apps in process, tokens through monkeypatch, the limiter replaced by one on a fake clock. No DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "hosting-panel-tickets",
+        services_hosting_panel_tickets,
+        name="Hosting Panel Tickets",
+        desc="H-61 L2: LIBREFOLIO_PANEL_PUBLIC_KEYS (kid:key, 1 to 4 entries, no _FILE, the entry named by position, never a key), LIBREFOLIO_PANEL_CLOCK_SKEW_SECONDS (0 to 300, default 60), the audience as the canonical origin of LIBREFOLIO_PUBLIC_URL; verify_ticket per scope: unverifiable (alg none, HS256 with the public key, typ, signature, over 2048 bytes) without a code, unknown kid, expired, not yet valid at the tolerance edges, lifetime 300/301, wrong or missing audience, wrong scope, jti rule, missing claims, the first defect wins",
+        # PURE: keys from fixed seeds, tickets signed with PyJWT, now fixed in 2033, variables through monkeypatch. No DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "hosting-panel-registry",
+        services_hosting_panel_registry,
+        name="Hosting Panel Ticket Registry",
+        desc="H-61 L2: DATA_DIR/panel_tickets.sqlite3, a jti accepted once in one process, after a module reload and in a new process; threads and spawned processes released together, exactly one accepted; pruning at the tolerance edges; an unusable file raises, is left as it was, and gives the scope's 503 through panel_access; created on first use with mode 0600, outside every archived entry, in the data directory of the moment",
+        # PURE: a data directory of its own under tmp_path per test, fixed clocks, barriers; spawned processes on the same file. No lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "hosting-panel-access-tickets",
+        services_hosting_panel_access_tickets,
+        name="Hosting Panel Access with Tickets",
+        desc="H-61 L2 in panel_access: the keys alone turn a scope on, token and keys together (beta), two keys, the canonical audience; each signed refusal its panel_ticket_* code with a Bearer challenge, never counted, Retry-After 5 when not yet valid; unverifiable tickets the scope's 401, counted; replay; registry out of reach 503; 20 refusals that prove nothing close the address, signed refusals never do; no ticket or Authorization in any answer or line; check_hosting_panel error, ok and the managed coexisting warning",
+        # PURE: fresh FastAPI apps in process, keys from fixed seeds, the registry under tmp_path, the limiter on a fake clock. No lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "hosting-panel-vectors",
+        services_hosting_panel_vectors,
+        name="Hosting Panel Ticket Test Vectors",
+        desc="H-61 L2: the JSON block after #panel-api-test-vectors in the admin guide: the seed derives the public key and LIBREFOLIO_PANEL_PUBLIC_KEYS, the ticket is the header and payload signed by it (byte for byte), each verdict row is what verify_ticket answers through the real readers, and the rows cover both tolerance edges, the wrong scope and the wrong audience",
+        # PURE: reads one docs page from the repository; variables through monkeypatch; no clock, DB or server.
         isolation="pure",
     )
     add_test(

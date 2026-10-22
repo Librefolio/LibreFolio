@@ -113,7 +113,8 @@
 
     function directionCell(direction: 'LONG' | 'SHORT'): HtmlCell {
         const long = direction === 'LONG';
-        const classes = long ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-300' : 'border border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800/70 dark:bg-rose-950/40 dark:text-rose-300';
+        /* colour: closest role, to review: LONG/SHORT is a direction, not a state; success and danger tints are the nearest (not gain/loss, rule 7) */
+        const classes = long ? 'border border-lf-success-line bg-lf-success-soft text-lf-success-on-soft' : 'border border-lf-danger-line bg-lf-danger-soft text-lf-danger-on-soft';
         const arrow = long ? '↗' : '↘';
         return {
             type: 'html',
@@ -138,18 +139,19 @@
     }
 
     function statusBadgeHtml(state: LotState, secondary: boolean): string {
+        /* colour: closest role, to review: lot states on success, warning, neutral, info and danger tints; DISTRIBUTED stays violet (categorical) */
         const classes =
             state === 'OPEN'
-                ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-300'
+                ? 'border border-lf-success-line bg-lf-success-soft text-lf-success-on-soft'
                 : state === 'PARTIALLY_CLOSED'
-                  ? 'border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800/70 dark:bg-amber-950/40 dark:text-amber-300'
+                  ? 'border border-lf-warning-line bg-lf-warning-soft text-lf-warning-on-soft'
                   : state === 'CLOSED'
-                    ? 'border border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                    ? 'border border-lf-subtle bg-lf-neutral text-lf-secondary'
                     : state === 'DISTRIBUTED'
                       ? 'border border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800/70 dark:bg-violet-950/40 dark:text-violet-300'
                       : state === 'IN_TRANSIT'
-                        ? 'border border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/40 dark:text-sky-300'
-                        : 'border border-red-200 bg-red-50 text-red-700 dark:border-red-800/70 dark:bg-red-950/40 dark:text-red-300';
+                        ? 'border border-lf-info-line bg-lf-info-soft text-lf-info-on-soft'
+                        : 'border border-lf-danger-line bg-lf-danger-soft text-lf-danger-on-soft';
         const size = secondary ? 'px-1.5 py-0.5 text-[11px]' : 'px-2 py-1 text-xs';
         return `<span class="inline-flex items-center rounded-full font-semibold ${size} ${classes}">${escapeHtml(stateLabel(state))}</span>`;
     }
@@ -272,7 +274,8 @@
         }
 
         const distributedLabel = brokerIds.length > 1 ? label('brokers.lots.brokersCount', '{count} brokers').replace('{count}', String(brokerIds.length)) : label('brokers.lots.inTransit', 'In transit');
-        const transitBadge = hasInTransit ? `<span class="rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/40 dark:text-sky-300">${escapeHtml(label('brokers.lots.inTransitShort', 'Transit'))}</span>` : '';
+        /* colour: closest role, to review: the transit badge, sky blue as in the status badge, on the info tint */
+        const transitBadge = hasInTransit ? `<span class="rounded-full border border-lf-info-line bg-lf-info-soft px-1.5 py-0.5 text-[11px] font-semibold text-lf-info-on-soft">${escapeHtml(label('brokers.lots.inTransitShort', 'Transit'))}</span>` : '';
         return {
             type: 'html',
             html: `<span class="inline-flex max-w-full items-center gap-1.5" data-testid="unified-lots-custody-${row.lotId}"><span class="rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-700 dark:border-violet-800/70 dark:bg-violet-950/40 dark:text-violet-300">${escapeHtml(distributedLabel)}</span>${transitBadge}</span>`,

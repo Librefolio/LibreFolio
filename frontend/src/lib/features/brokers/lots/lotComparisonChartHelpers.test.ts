@@ -124,14 +124,13 @@ describe('lotColor', () => {
 describe('incomeEventColor', () => {
     it('uses gold for dividends and violet for interest, per theme', () => {
         // WHY: the developer's decision «Dividendo oro, anche nel pannello lotti» — the
-        // dividend is gold here as in the dashboard's Income bars, the same pair of hexes
-        // (GrowthChart's COLORS.dividend). Light '#b08d00' is 3.16:1 on white, above the
-        // 3:1 that WCAG 1.4.11 asks of a graphical object, which Tailwind's yellow-600
-        // (#ca8a04, 2.94:1) misses; dark '#facc15'. Interest keeps its violet.
-        expect(incomeEventColor('DIVIDEND', false)).toBe('#b08d00');
-        expect(incomeEventColor('DIVIDEND', true)).toBe('#facc15');
-        expect(incomeEventColor('INTEREST', false)).toBe('#6d28d9');
-        expect(incomeEventColor('INTEREST', true)).toBe('#a78bfa');
+        // dividend is gold here as in the dashboard's Income bars, the same pair
+        // (GrowthChart's COLORS.dividend). Since D-T28 (C2) the pair is the role --lf-cat-crypto,
+        // which tokens.css keeps at 3:1 on the card (WCAG 1.4.11); interest is --lf-cat-stock.
+        expect(incomeEventColor('DIVIDEND', false)).toBe('#b87916');
+        expect(incomeEventColor('DIVIDEND', true)).toBe('#e8bd69');
+        expect(incomeEventColor('INTEREST', false)).toBe('#7041c6');
+        expect(incomeEventColor('INTEREST', true)).toBe('#b69af0');
     });
 });
 
@@ -1006,12 +1005,12 @@ function anchorParam(day: string): TooltipParam {
 
 /** A per-lot hover dot's param on `day`: x in epoch ms and a colour, no bucket meta. */
 function hoverDotParam(day: string): TooltipParam {
-    return {seriesId: 'per-lot-hover-dots', data: {value: [Date.parse(`${day}T00:00:00Z`), 1234.5], itemStyle: {color: '#2563eb'}}};
+    return {seriesId: 'per-lot-hover-dots', data: {value: [Date.parse(`${day}T00:00:00Z`), 1234.5], itemStyle: {color: '#155eef'}}};
 }
 
 /** An income marker's param on `day`: an ISO x and its income event, no bucket meta. */
 function incomeMarkerParam(day: string): TooltipParam {
-    return {seriesId: 'lot-income-markers', data: {value: [day, 1234.5], incomeEvent: {type: 'DIVIDEND', date: day, broker_id: 1, transaction_id: 41, amount: '12.50', lot_ids: [1]}, itemStyle: {color: '#16a34a', opacity: 0.95}}};
+    return {seriesId: 'lot-income-markers', data: {value: [day, 1234.5], incomeEvent: {type: 'DIVIDEND', date: day, broker_id: 1, transaction_id: 41, amount: '12.50', lot_ids: [1]}, itemStyle: {color: '#18794e', opacity: 0.95}}};
 }
 
 /** The helper, once a barrier has proved the module exports it. */

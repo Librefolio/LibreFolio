@@ -12,6 +12,7 @@ vi.mock('$lib/api', () => ({
 import {transitionClientSession} from '$lib/stores/app/clientSession';
 import type {SignalConfig} from '$lib/charts/signals';
 
+import * as chartSettingsStoreModule from './chartSettingsStore.svelte';
 import {DEFAULT_CHART_SETTINGS, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings, type ChartSettings} from './chartSettingsStore.svelte';
 
 /**
@@ -1006,5 +1007,197 @@ describe('chartSettingsStore — persistence', () => {
         flushWrite();
 
         expect(setItem).not.toHaveBeenCalled();
+    });
+});
+
+// =========================================================================
+// Y-40 — the primary view of the charts, and the window of the rolling return
+// =========================================================================
+
+/**
+ * Y-40 — which of the three views a chart opens in, and the window of its rolling return (developer's decisions V-1…V-8,
+ * all (a), 20/10).
+ *
+ * The contract, after the cure:
+ * - `ChartSettings.primaryView`: `'absolute' | 'percentage' | 'calendar-return'`, `'percentage'` by default (the list and
+ *   the detail open in percent today). Global (scoped: `'assets'`, `'fx'`) and per chart, in the same localStorage.
+ * - `setScopePrimaryView(view, scope)` is the list's top bar and the global settings: it sets the scope's view and
+ *   resets every chart of the scope to it (V-3 a), keeping everything else they saved; the other scope is untouched.
+ * - `setItemPrimaryView(slug, view, scope)` is a card's button and the detail (V-1 a, V-2 a): that chart only; an override
+ *   it creates starts from the scope's settings.
+ * - `nextCardPrimaryView`: the card's button turns percent → rolling return → absolute → percent.
+ * - `detailModesForPrimaryView` / `primaryViewForDetailModes`: how the detail page reads and writes the view (its
+ *   `primaryMode` and `viewMode`).
+ * - `calendarReturnWindowAuto`: true until the user chooses a window. While it is, the window in force is the largest
+ *   preset of the selector that fits the period on screen (`effectiveCalendarReturnWindow`); a saved window that differs
+ *   from the stored one marks it chosen, whoever saves it.
+ * - A payload stored before Y-40 (no `primaryView`, no `calendarReturnWindowAuto`) reads back in percent, its window
+ *   chosen unless it is the shipped default, and is rewritten with both fields.
+ *
+ * Red today: none of these exists.
+ */
+describe('chartSettingsStore — the primary view and the rolling-return window (Y-40)', () => {
+    type View = 'absolute' | 'percentage' | 'calendar-return';
+    const store = chartSettingsStoreModule as unknown as Record<string, (...args: unknown[]) => unknown>;
+    const call = (name: string, ...args: unknown[]) => {
+        const fn = store[name];
+        if (typeof fn !== 'function') throw new Error(`chartSettingsStore exports no ${name}()`);
+        return fn(...args);
+    };
+    const viewOf = (value: ChartSettings): unknown => (value as unknown as Record<string, unknown>).primaryView;
+    const autoOf = (value: ChartSettings): unknown => (value as unknown as Record<string, unknown>).calendarReturnWindowAuto;
+
+    it('opens in percent by default, everywhere', () => {
+        freshUser();
+        expect([viewOf(DEFAULT_CHART_SETTINGS), viewOf(getGlobalSettings('assets')), viewOf(getSettingsForPair('asset-7', 'assets'))]).toEqual(['percentage', 'percentage', 'percentage']);
+    });
+
+    it('drops a stored view it does not know, to percent', () => {
+        const user = `chart-settings-u${userSeq + 1}`;
+        seed(user, {version: 3, globalSettings: {...settings(), primaryView: 'candles'}, pairOverrides: [['asset-7', {...settings(), primaryView: 'calendar-return'}]]});
+        freshUser();
+        expect([viewOf(getGlobalSettings()), viewOf(getSettingsForPair('asset-7', 'assets'))]).toEqual(['percentage', 'calendar-return']);
+    });
+
+    it('setScopePrimaryView sets the scope and resets each of its charts to it, keeping what else they saved; the other scope stays', () => {
+        freshUser();
+        const comparison = comparisonSignal('cmp-9', {assetId: 9});
+        setPairSettings('asset-7', settings({signals: [comparison], primaryView: 'absolute'} as Partial<ChartSettings>));
+        setPairSettings('EUR-USD', settings({primaryView: 'absolute'} as Partial<ChartSettings>));
+
+        call('setScopePrimaryView', 'calendar-return', 'assets');
+
+        expect(viewOf(getGlobalSettings('assets'))).toBe('calendar-return');
+        expect(viewOf(getSettingsForPair('asset-8', 'assets')), 'a chart without settings of its own follows the scope').toBe('calendar-return');
+        expect({view: viewOf(getSettingsForPair('asset-7', 'assets')), signals: getSettingsForPair('asset-7', 'assets').signals}, 'a chart with its own settings is reset to the scope’s view, its signals kept').toEqual({view: 'calendar-return', signals: [comparison]});
+        expect(viewOf(getSettingsForPair('EUR-USD', 'fx')), 'the FX scope is not touched').toBe('absolute');
+        expect(viewOf(getGlobalSettings('fx')), 'the FX scope keeps its own view: absolute, its default').toBe('absolute');
+    });
+
+    it('setItemPrimaryView sets that chart only; an override it creates starts from the scope’s settings', () => {
+        freshUser();
+        setGlobalSettings(settings({gridLines: false}), 'assets');
+
+        call('setItemPrimaryView', 'asset-7', 'absolute', 'assets');
+
+        expect({view: viewOf(getSettingsForPair('asset-7', 'assets')), gridLines: getSettingsForPair('asset-7', 'assets').gridLines}).toEqual({view: 'absolute', gridLines: false});
+        expect(viewOf(getSettingsForPair('asset-8', 'assets'))).toBe('percentage');
+        expect(viewOf(getGlobalSettings('assets'))).toBe('percentage');
+    });
+
+    it('the card’s button turns percent → rolling return → absolute → percent', () => {
+        expect((['percentage', 'calendar-return', 'absolute'] as View[]).map((view) => call('nextCardPrimaryView', view))).toEqual(['calendar-return', 'absolute', 'percentage']);
+    });
+
+    it('the detail reads the view as its primary mode and view mode, and writes it back the same way', () => {
+        expect((['absolute', 'percentage', 'calendar-return'] as View[]).map((view) => call('detailModesForPrimaryView', view))).toEqual([
+            {primaryMode: 'price', viewMode: 'absolute'},
+            {primaryMode: 'price', viewMode: 'percentage'},
+            {primaryMode: 'calendar-return', viewMode: 'percentage'},
+        ]);
+        expect([call('primaryViewForDetailModes', 'price', 'absolute'), call('primaryViewForDetailModes', 'price', 'percentage'), call('primaryViewForDetailModes', 'calendar-return', 'absolute')]).toEqual(['absolute', 'percentage', 'calendar-return']);
+    });
+
+    it.each([
+        {days: 3, preset: '1w'},
+        {days: 7, preset: '1w'},
+        {days: 31, preset: '1m'},
+        {days: 92, preset: '3m'},
+        {days: 365, preset: '1y'},
+        {days: 3650, preset: '1y'},
+    ])('while the window is automatic, $days days on screen take the preset $preset', ({days, preset}) => {
+        const window = call('effectiveCalendarReturnWindow', settings(), days) as {kind: string; preset: string};
+        expect({kind: window.kind, preset: window.preset}).toEqual({kind: 'preset', preset});
+    });
+
+    it('a chosen window is the one in force, whatever the period', () => {
+        const chosen = {kind: 'custom' as const, preset: '1m' as const, customAmount: 2, customUnit: 'weeks' as const};
+        expect(call('effectiveCalendarReturnWindow', settings({calendarReturnWindow: chosen, calendarReturnWindowAuto: false} as Partial<ChartSettings>), 3650)).toEqual(chosen);
+    });
+
+    it('saving a window other than the stored one marks it chosen, whoever saves it', () => {
+        freshUser();
+        expect(autoOf(getSettingsForPair('asset-7', 'assets')), 'precondition: automatic until chosen').toBe(true);
+
+        // As the detail page saves it: the settings it read, with the new window.
+        setPairSettings('asset-7', {...getSettingsForPair('asset-7', 'assets'), calendarReturnWindow: {kind: 'preset', preset: '3m', customAmount: 3, customUnit: 'years'}});
+        expect(autoOf(getSettingsForPair('asset-7', 'assets'))).toBe(false);
+
+        // The same window saved again by a writer that read it automatic keeps it chosen; another field saved leaves auto as it is.
+        setPairSettings('asset-8', {...getSettingsForPair('asset-8', 'assets'), gridLines: false});
+        expect(autoOf(getSettingsForPair('asset-8', 'assets'))).toBe(true);
+    });
+});
+
+/**
+ * Y-40 — a choice is not lost when the page goes away before the debounced write. The store writes localStorage 250 ms
+ * after the last change (a burst is one write); a view chosen on a card and a reload at once used to lose it (the E2E
+ * «one AssetCard turns its own view, keeps it across a reload» found it). The contract: when the page is hidden for good
+ * (`pagehide`, which a reload, a close and a navigation away all fire), a pending write is done at once.
+ *
+ * Red today: nothing listens to `pagehide`.
+ */
+describe('chartSettingsStore — a pending write is done when the page goes away (Y-40)', () => {
+    it('writes at once on pagehide what the debounce still holds, and nothing again when the timer fires', () => {
+        const page = new EventTarget();
+        vi.stubGlobal('window', page);
+        const user = freshUser();
+        setItem.mockClear();
+
+        setPairSettings('asset-7', settings({primaryView: 'absolute'} as Partial<ChartSettings>));
+        expect(setItem, 'precondition: the write waits for the debounce').not.toHaveBeenCalled();
+
+        page.dispatchEvent(new Event('pagehide'));
+
+        expect(setItem).toHaveBeenCalledTimes(1);
+        expect(new Map(persistedFor(user)?.pairOverrides).get('asset-7')?.primaryView).toBe('absolute');
+        flushWrite();
+        expect(setItem, 'the timer has nothing left to write').toHaveBeenCalledTimes(1);
+    });
+});
+
+/**
+ * Y-40, the FX half — the FX list opens on absolute rates, as it always did (its top bar started on Abs), while the asset
+ * list and the detail open in percent. The contract: the FX scope's view is `'absolute'` until it is set — a fresh store,
+ * a pair without settings of its own, and settings stored before Y-40 (the FX scope's and a pair's, which name no view) —
+ * and what the FX scope sets is what it reads; the asset scope keeps percent.
+ *
+ * Red today: the FX scope reads percent, the store's one default.
+ */
+describe('chartSettingsStore — the FX list opens on absolute rates (Y-40, FX)', () => {
+    const viewOf = (value: ChartSettings): unknown => (value as unknown as Record<string, unknown>).primaryView;
+
+    it('reads absolute for the FX scope and its pairs until set, percent for the assets', () => {
+        freshUser();
+        expect({fx: viewOf(getGlobalSettings('fx')), pair: viewOf(getSettingsForPair('EUR-USD', 'fx')), assets: viewOf(getGlobalSettings('assets')), asset: viewOf(getSettingsForPair('asset-7', 'assets'))}).toEqual({
+            fx: 'absolute',
+            pair: 'absolute',
+            assets: 'percentage',
+            asset: 'percentage',
+        });
+    });
+
+    it('reads absolute for FX settings stored before Y-40, the scope’s and a pair’s', () => {
+        const user = `chart-settings-u${userSeq + 1}`;
+        const {primaryView: _view, ...before} = settings() as unknown as Record<string, unknown>;
+        seed(user, {
+            version: 3,
+            globalSettings: before,
+            pairOverrides: [
+                ['__global_fx__', before],
+                ['EUR-USD', before],
+                ['asset-7', before],
+            ],
+        });
+        freshUser();
+
+        expect({fx: viewOf(getGlobalSettings('fx')), pair: viewOf(getSettingsForPair('EUR-USD', 'fx')), asset: viewOf(getSettingsForPair('asset-7', 'assets'))}).toEqual({fx: 'absolute', pair: 'absolute', asset: 'percentage'});
+    });
+
+    it('reads what the FX scope sets', () => {
+        freshUser();
+        (chartSettingsStoreModule as unknown as {setScopePrimaryView: (view: string, scope: string) => void}).setScopePrimaryView('percentage', 'fx');
+
+        expect([viewOf(getGlobalSettings('fx')), viewOf(getSettingsForPair('EUR-USD', 'fx'))]).toEqual(['percentage', 'percentage']);
     });
 });

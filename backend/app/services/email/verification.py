@@ -164,6 +164,23 @@ async def place_holders(session: AsyncSession, *, now: datetime | None = None) -
     return {user_id for user_id in (await session.execute(statement)).scalars().all() if user_id is not None}
 
 
+async def waiting_ids(session: AsyncSession) -> set[int]:
+    """The ids of the inactive accounts waiting for their verification, in one query (for a list): ``awaiting_verification``
+    for every account at once, an unspent link live or expired (E-7)."""
+    statement = (
+        select(AccountToken.user_id)
+        .distinct()
+        .join(User, User.id == AccountToken.user_id)  # type: ignore[arg-type]
+        .where(
+            AccountToken.purpose == VERIFICATION,
+            AccountToken.consumed_at.is_(None),  # type: ignore[union-attr]
+            AccountToken.revoked_at.is_(None),  # type: ignore[union-attr]
+            User.is_active.is_(False),  # type: ignore[attr-defined]
+        )
+    )
+    return {user_id for user_id in (await session.execute(statement)).scalars().all() if user_id is not None}
+
+
 async def holds_place(session: AsyncSession, user: User, *, now: datetime | None = None) -> bool:
     """Whether ``user`` already holds a place under ``LIBREFOLIO_MAX_USERS`` without being active: it waits for its
     verification with a live link, which ``registration_service.user_usage`` counts. Activating it takes no new place."""

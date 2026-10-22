@@ -8619,3 +8619,348 @@ Ognuno con i rossi prima e uno slot. Uno slot API (`users-admin`) per N69-4 e N6
     coppia `muted` su `neutral` che il cancello non misura: la decide il programma colori);
   - `git merge-file` con dev (34 commit sull'indice) è pulito.
 - **Delta finale**: 32 percorsi (30 modificati, 2 nuovi), +933/−206; porta 6182 libera. Checkpoint mandato; FROZEN.
+
+## N69a entrato; N69b; un pezzo di H-61 (20/10, 11:43–; base `0bcd5d99f`)
+- **N69a è committato dal coordinatore**: `ac24fdf92` feat, `4e26692c5` doc, `0bcd5d99f` giornale. HEAD è in dev;
+  dev locale `6e1761121`, con 165 commit oltre HEAD (fra cui la mappa `checkGuides.ts` di H, per N69d). Nessun file
+  di N69b è cambiato in dev: si parte sulla base di oggi.
+- **N69b**: il via è quello di N69a–c (19/10, 17:01). Due `test-author` in parallelo, su file distinti:
+  - `ece4ff22`, Vitest: `securityFindings`/`securityChecks` per `attentionSeverity`, l'indicatore, l'Header;
+  - `a88fe98b`, E2E: `layout/connection-security.spec.ts`.
+  - Al contratto scritto il 19/10 si aggiunge una cosa: la gravità ha una fonte sola, `attentionSeverity(findings)`
+    in `securityFindings.ts`, più il getter `securityChecks.attentionSeverity`, letti dall'indicatore e dall'Header.
+  - L'E2E esistente usa solo TEST_USER: resta valido. Sul localhost della corsia il ritrovamento del browser
+    (registrazione aperta) non vale.
+
+### H-61 · `admin_setup_status()` — contratto concordato con H (11:43–12:00)
+- **Coordinatore** (11:43): un piccolo lotto dentro H-61 (Hosting panel). H fa `GET /api/v1/panel/status`; ad A
+  chiede `admin_setup_status()` in `bootstrap_admin_service.py`, con i suoi test. Va dopo N69b: prima i rossi, poi il
+  checkpoint.
+- **Proposta di A, accettata da H così com'è**:
+  - `class AdminSetupState(StrEnum)`: `none`, `pending`, `done`, `expired`;
+  - `@dataclass(frozen=True) class AdminSetupStatus`: `state`, e `setup_expires_at: Optional[datetime] = None` (UTC,
+    solo per `pending`);
+  - `async def admin_setup_status(session, *, now=None) -> AdminSetupStatus`, in sola lettura: niente commit, niente
+    lock.
+- **Lettura**: l'ultimo token `admin_setup` di tutti gli account, per `created_at desc, id desc`, con quest'ordine:
+  1. nessun token → `none`;
+  2. `consumed_at` → `done`, compreso il link ritirato da A-32 (`retire_tokens`: account attivato, o con password, senza
+     il link);
+  3. `revoked_at` → `expired`: ritirato davvero (A-43 annullato, A-33 indirizzo cambiato, sostituito da un link
+     nuovo);
+  4. `expires_at <= now` → `expired`;
+  5. altrimenti `pending`, con `setup_expires_at`.
+- **Risposte di H**:
+  - «ritirato» vuol dire solo la revoca senza uso, e A-32 conta come `done`; l'ordine `consumed_at` prima di
+    `revoked_at` è giusto;
+  - `setup_expires_at` solo in `pending` (Q10 del coordinatore);
+  - `none` dopo l'eliminazione dell'admin va bene: dall'app non si elimina (§3.7 del contratto del Cloud); da riga di
+    comando, `none` è la lettura onesta, e H lo scrive nella guida;
+  - la rotta è di H, che si adegua ai miei nomi. I test della rotta sostituiscono la funzione e non mi aspettano; il
+    codice della rotta aspetta la mia funzione nella sua base, dopo il mio checkpoint e l'aggiornamento del coordinatore.
+- **Bozze pronte** (nella cartella di sessione, l'albero non è toccato):
+  - `work/h61/apply_h61.py`: due modifiche a corrispondenza esatta, prova a vuoto pulita. Si applica dopo il checkpoint
+    di N69b, coi rossi prima, nella sezione nuova di `test_admin_bootstrap.py` (unità `services admin-bootstrap`, pura:
+    file SQLite privati, senza corsia);
+  - `work/n69b/apply_n69b.py`: 15 modifiche su `securityFindings.ts`, `securityChecks.svelte.ts`, l'indicatore e
+    l'Header, prova a vuoto pulita;
+  - `work/n69b/i18n_add.py`: `connectionSecurity.attention`, plurale ICU nelle 4 lingue, poi `i18n build` e `i18n
+    check`.
+- **Correzione al mio contratto di N69b**: l'effetto dell'indicatore chiama `ensureLoaded()` dentro `untrack`.
+  Altrimenti l'effetto seguirebbe lo `status` dello store, e dopo una lettura fallita riproverebbe senza fine. È lo
+  stesso motivo per cui il prefetch della pagina Impostazioni non traccia.
+
+### N69b.1 — Rossi, codice, verdi locali ✅ (20/10, 11:50–12:40)
+- **Rossi Vitest** (`test-author` `ece4ff22`), in `work/n69b/red-final.log`: **19 failed, 115 passed**, tutti su
+  asserzioni:
+  - `securityFindings.test.ts`, 6: `attentionSeverity` letta dall'oggetto del modulo;
+  - `securityChecks.test.ts`, 2: il getter;
+  - `ConnectionSecurityIndicator.test.ts`, 6, e `Header.test.ts`, 5.
+  - Nei due file dei componenti c'è un falso reattivo di `securityChecks.svelte`, con `ensureLoaded` e `reload` spiati.
+    Lo stato ha una lista sola di ritrovamenti, quindi il falso non può avere stati che lo store vero non avrebbe.
+- **Rossi E2E scritti** (`test-author` `a88fe98b`, senza esecuzione): ADOT-E-01…05 in
+  `e2e/layout/connection-security.spec.ts`, su desktop e mobile:
+  - E-01: la corsia com'è. La lettura dei controlli fatta dalla pagina stessa (catturata dalla rete) dà il conto
+    atteso, perché `platform.client_address` vale per processo; ogni corsia ha `LIBREFOLIO_LOGIN_LIMIT=off`, quindi
+    c'è sempre almeno un avviso;
+  - E-02: uno stub con un errore e due avvisi, anche con la barra compatta e sul telefono;
+  - E-03: uno stub tutto ok;
+  - E-04: uno stub con un avviso;
+  - E-05: un membro, con zero richieste.
+  - prettier e tsc puliti.
+- **Codice**: `work/n69b/apply_n69b.py` (15 modifiche) e `work/n69b/i18n_add.py` (`connectionSecurity.attention`,
+  plurale ICU, 4 lingue; `i18n build` e `check` puliti). Poi `prettier --write` sui due componenti: solo l'impaginazione.
+- **Verdi**:
+  - Vitest 15 file **376/376**, nessun avviso di Svelte né di navigazione jsdom. Oltre ai 4 file: SecurityTab,
+    securityChecksApi, Header.managed, i due Sidebar, openRegistrationNotice, settingsTabs, layout.authGate e
+    layout.gate, settings/page.tabs, themeModeReads;
+  - dopo la formattazione, ConnectionSecurityIndicator, Header e Header.managed **80/80**;
+  - `front check` **0/0**; `theme-roles.mjs --check` pulito; i cancelli `themeRoles` e `themeTokens` **101/101**;
+    prettier pulito.
+- **Chiesti al coordinatore**: lo slot E2E (`work/slot_n69b/slot.sh`: rosso con i 4 file a HEAD e il filtro
+  `ADOT-E`, verde sull'unità intera) e l'ok di scrittura sulla riga `desc` di `connection-security` (`:1165`).
+- **Doc**: `docs-writer` `n69b-docs`, solo inglese, senza stamp.
+- **Da archiviare nel checkpoint**: lo store `securityChecks` non si azzera al cambio d'account (niente
+  `registerClientSessionReset`). È così da A8b; i componenti filtrano per ruolo, quindi un membro non vede niente,
+  ma la risposta di un admin resta in memoria nella stessa scheda dopo un'uscita. Da proporre come residuo.
+- **Doc fatte** (`docs-writer` `cf60de4c`, solo inglese, senza stamp). Sei pagine:
+  - `user/connection-security.en.md`: la sezione nuova «🛡️ Security Warnings for Administrators» `#security-warnings`;
+  - `admin/settings.en.md`: «The Number on the Tab», e «When It Checks» riscritto (la riga della barra legge i
+    controlli appena l'app si apre);
+  - `admin/connection_checks.en.md`, il punto 2 della lista;
+  - `developer/frontend/components/features/settings.md`: la sottosezione «The sidebar's dot»
+    `#security-attention-dot`, `attentionSeverity`, i test;
+  - `developer/frontend/components/index.md`: il puntino del menu;
+  - `developer/architecture/security.md`, «The Checks on Demand».
+  - Build strict (3085 risorse) e `check-links` (97) puliti.
+  - Il debito nuovo delle traduzioni: `user/connection-security` (era senza debito: ora le manca una sezione intera),
+    `admin/connection_checks` e `admin/settings`.
+- **⚠️ Fuori pista, per G**: la foto della galleria `security/connection-indicator` (`e2e/gallery.spec.ts`
+  ~1831–1975) si scatta come admin su una corsia con il limite d'accesso spento, cioè sempre con un avviso.
+  - Mostrerà il puntino e il link, e il suo testo alternativo sarà vecchio.
+  - Su mobile la riga più alta può rompere il controllo che la riga stia tutta nello schermo.
+  - Le cure possibili: scattarla come utente normale, o con uno stub di `GET /security/checks` tutto ok. Il file è di
+    G: lo segnalo nel checkpoint.
+
+### N69b.2 — Slot E2E, la riga `desc`, l'indice, il checkpoint ✅ (20/10, 13:16–13:40)
+- **Slot pesante 2** (coordinatore, 13:16; `work/slot_n69b/slot.sh 0bcd5d99f`, carico 12–19):
+  - **rosso** con i 4 file del prodotto a HEAD, `front-utility connection-security ADOT-E`: **10 failed** (5 test, su
+    desktop e mobile), tutti sull'attributo `data-security-attention` mancante dalla radice (Expected «0», «1», «3» o
+    ≥ 1; Received «»);
+  - **verde** con la cura rimessa e controllata byte per byte, sull'unità intera: **18 passed** (i 4 test vecchi e i 5
+    nuovi, su tutti e due i progetti);
+  - porta libera; «slot libero» al coordinatore alle 13:26.
+- **La riga `desc` di `connection-security`** (`_frontend_utility.py:1165`, ok del coordinatore delle 13:16):
+  aggiunto il puntino dell'admin (N69-1, ADOT-E-01…05) con `work/n69b/apply_desc.py`; ruff, black e ast puliti.
+- **`front check` sull'albero finale formattato**: 0/0; `git diff --check` pulito.
+- **Indice**:
+  - A-61: lo store dei controlli non si azzera al cambio d'account (preesistente da A8b; da N69b si riempie su ogni
+    pagina di un admin);
+  - A-62: il nome del pulsante del menu, «Toggle menu», è in inglese in ogni lingua. Da N69b gli si aggiungono parti
+    tradotte; nel catalogo non c'è una chiave.
+- **Previsione dei conflitti** con dev `6e1761121` (165 commit; base = HEAD), tutti puliti con `git merge-file`:
+  - `admin/connection_checks.en.md` (1 commit di dev);
+  - `developer/architecture/security.md` (14);
+  - `_frontend_utility.py` (15);
+  - `BACKLOG_POST_1.2.md` (72).
+- Checkpoint mandato; FROZEN.
+
+## N69b entrato; H-61 · `admin_setup_status()`; A-62 dopo (20/10, 13:34–; base `a35f40c48`)
+- **Coordinatore** (13:34): N69b è committato, `84c1329c4` codice, `1b6f2354d` doc, `a35f40c48` giornale; entra col
+  treno 4, con la riga ✨. **A-62: sì alla (a)**, come piccolo seguito dopo H-61. La nota per G la gira lui al
+  coordinatore dei colori. Via a H-61, prima i rossi.
+- **Base**: HEAD `a35f40c48`, nell'albero di dev (dev locale `15fa228ef`), albero pulito.
+- **H-61, rossi**: `test-author` `73892fb5`, in una sezione nuova in fondo a
+  `backend/test_scripts/test_services/test_admin_bootstrap.py`. L'unità è `services admin-bootstrap`, pura: niente
+  server né corsia, leggera. I test seguono il contratto concordato con H; `account_tokens.user_id` ha `ON DELETE
+  CASCADE`, quindi un admin eliminato dà `none`.
+- **A-62, bozza** (`work/a62/`):
+  - `apply_a62.py`: una modifica, `menuLabel` di `Header.svelte` comincia con `$_('nav.toggleMenu')`;
+  - `i18n_add.py`: la chiave `nav.toggleMenu` va nella sorgente `base`, accanto a `nav.dashboard` e `nav.settings`.
+    `i18n add` la manda lì da solo (nessun sottosistema dichiara il prefisso `nav`).
+  - I testi: en «Toggle menu», it «Apri o chiudi il menu», fr «Ouvrir ou fermer le menu», es «Abrir o cerrar el menú».
+  - Il test: `Header.test.ts` legge già la prima parte dell'etichetta dal pulsante, senza scriverla. Il rosso nuovo
+    darà alla chiave un testo marcatore (`addMessages`) e chiederà che l'etichetta cominci con quello.
+
+### H61.1 — Rossi, codice, verdi ✅; una domanda a H (20/10, 13:40–14:05)
+- **Rossi** (`test-author` `73892fb5`): 17 test, H61-001…017, 76 casi, in una sezione nuova di `test_admin_bootstrap.py`
+  (+683 righe, più un paragrafo «Lot H-61» nel docstring del modulo).
+  - Tutti rossi sulla stessa asserzione: «red until H-61: bootstrap_admin_service has no AdminSetupState,
+    AdminSetupStatus, admin_setup_status».
+  - I 226 test che c'erano restano verdi (`work/h61/red-setup-status.log`, `full-unit.log`).
+  - Il filtro `setup_status` prende esattamente i 76.
+  - Coprono:
+    - il vocabolario e la firma;
+    - `none`, anche con i token di altri scopi;
+    - `pending` dal bootstrap, con la scadenza in UTC = `NOW + DEFAULT_TTL`;
+    - il confine esatto della scadenza;
+    - `done` per il setup e per A-32 (quattro vie);
+    - `expired` per annullamento, disattivazione, cambio d'indirizzo (A-33) e revoca diretta;
+    - il link che sostituisce un altro;
+    - l'ultimo che decide, i pareggi su `created_at` (vince l'id più alto);
+    - qualunque account;
+    - `none` dopo l'eliminazione (cascata, `foreign_keys=1`);
+    - la sola lettura in ogni stato;
+    - l'orologio senza `now`.
+- **Codice**: `work/h61/apply_h61.py`, poi `black` (una riga ricomposta).
+  - Verde dell'unità intera `services admin-bootstrap`: **302 passed** (226 + 76).
+  - Dopo la formattazione, `setup_status`: **76 passed**.
+  - ruff e black puliti.
+- **Domanda a H** (14:05), dai dubbi 1 e 3 del `test-author`: un setup fatto può leggere `expired`.
+  - Come succede: `complete_admin_setup` revoca soltanto gli altri link vivi. Se c'è un link nuovo randagio, diventa
+    l'ultimo, revocato senza uso.
+  - Nessun flusso di oggi ci arriva; ci arrivano la scena di SETUP-001 e un DB di una build 1.3 precedente.
+  - (i) Lasciare «decide l'ultimo». (ii) **«Il fatto vince»**, il mio consiglio: un link consumato → `done`, altrimenti
+    decide l'ultimo degli altri; due coppie irraggiungibili di H61-012 passano a `done`.
+  - Anche, salvo obiezioni: «qualunque account» (H61-014) e `none` per un admin eliminato prima del setup (H61-015).
+- **Prossimo**: la risposta di H, l'eventuale ritocco con rosso e verde, la riga della doc (`docs-writer`), il
+  checkpoint; poi A-62.
+- **Risposta di H** (14:10): **(ii), «il fatto vince»**.
+  - Un link `admin_setup` consumato, speso o ritirato da A-32, dà `done`; altrimenti decide l'ultimo degli altri:
+    revocato o scaduto → `expired`, vivo → `pending`.
+  - Per il pannello il consumo è definitivo: il cliente ha attivato l'istanza.
+  - Le due coppie irraggiungibili di H61-012 si capovolgono. «Qualunque account» e `none` per l'admin eliminato prima
+    del setup restano così.
+  - H chiude il suo checkpoint 1 col mio.
+- **Rosso prima**: lo stesso `test-author` `73892fb5`:
+  - capovolge le coppie e allinea ogni caso in cui un link consumato non è l'ultimo;
+  - aggiunge il caso del flusso vero: un setup fatto col link più vecchio di due vivi → `done` (oggi `expired`);
+  - riscrive il paragrafo del docstring.
+  - La cura è pronta in `work/h61/apply_h61_ii.py`, prova a vuoto pulita: un `EXISTS` sui link consumati prima
+    dell'ultimo, e il docstring della funzione riscritto.
+
+### H61.2 — «Il fatto vince»: rossi, cura, verdi ✅ (20/10, 14:10–14:35)
+- **Rossi** (`test-author` `73892fb5`, secondo giro), contro il codice «decide l'ultimo»: `setup_status` dà **11 failed,
+  73 passed**; l'unità intera 11 failed / 299 passed, nessun rosso fuori dalla sezione
+  (`work/h61/red-done-wins.log`, `full-unit-done-wins.log`).
+  - Capovolti a `done` 6 casi: tre di H61-012 (un consumato più vecchio con un più nuovo revocato, vivo o scaduto),
+    due di H61-013 (pareggi e ordine, rinominati), uno di H61-014 (il link consumato di un altro account).
+  - Nuovo **H61-018**, 4 casi, il flusso vero del dubbio 1: due link vivi come nella scena di SETUP-001; il setup col
+    più vecchio; `complete_admin_setup` revoca il più nuovo → `done`. Più H61-016
+    `[done-through-the-older-of-two-links]`.
+  - H61-013 ha tre casi nuovi senza link consumati, che tengono la copertura dell'ordine: verdi prima e dopo.
+  - Docstring «Lot H-61» e commenti riscritti alle tre regole.
+- **Cura**: `work/h61/apply_h61_ii.py`, poi una pulizia: la seconda query non legge più `consumed_at`, che non serve dopo
+  il controllo dei consumati.
+  - Unità intera `services admin-bootstrap`: **310 passed** (226 + 84 casi di H-61), prima e dopo la pulizia
+    (`work/h61/green-final-full.log`).
+  - ruff, black e `git diff --check` puliti.
+- **Doc**: `docs-writer` `h61-docs`, `developer/architecture/access_control.md` (`#initial-admin`), solo inglese. La
+  guida del pannello è di H.
+- **Doc fatta** (`docs-writer` `a792c5a8`): in `developer/architecture/access_control.md` la sottosezione «The setup's
+  status, for a hosting panel» `#setup-status`, dopo i punti «At startup»; più H61-001…018 nel paragrafo dei test.
+  Build strict (3085) e `check-links` (97) puliti.
+  - La rotta di H e la sua guida non sono ancora nell'albero, quindi nessun link a H.
+- **Ritocco del docstring**, dalla nota del `docs-writer`: «a newer link issued» non poteva decidere `expired`, perché il
+  link nuovo è l'ultimo e decide (H61-011). Ora: «A replaced link is revoked, but the newer one is the latest and
+  decides». In più «no write lock», che è ciò che H61-016 controlla. L'unità è di nuovo **310 passed**.
+- **Previsione dei conflitti** con dev `b844f83f2` (base = HEAD `a35f40c48`): solo `access_control.md` (1 commit di dev),
+  `git merge-file` pulito.
+- **Delta**: 4 file, +948/−1. Checkpoint mandato; FROZEN. Poi A-62.
+
+## H-61 entrato; la fixture di G; A-62 col segnale dei controlli (20/10, 14:28–; base `50d1f29c6`)
+- **Coordinatore** (14:28): H-61 è committato, `64b8b9fa3`, `bdb083782`, `50d1f29c6`; lo porta lui a H.
+  - Sì alla riga `desc` di `services admin-bootstrap`, dentro A-62.
+  - Va controllata la fixture della galleria di G.
+  - Il segnale `pending|ready`: lo decido io, e se è piccolo va in A-62. Poi A-62.
+- **La fixture di G** (`frontend/e2e/fixtures/gallerySecurity.ts`, in dev da `b844f83f2`), controllata con
+  `work/a62/check_gallery_fixture.py` sul ref `dev_release2`: **17/17 giuste**.
+  - Ogni `check_id` esiste: i 16 di `CONFIG_CHECKS`, più `platform.plugin_secrets`.
+  - Ogni chiave è una chiave `ok` che quel controllo produce, ed è nel catalogo inglese.
+  - Nessun mio lotto aggiunge un controllo.
+  - A H ho scritto direttamente: la 18ª voce, `platform.hosting_panel`, arriva con H-61, e H dà la chiave `ok` a G.
+    Nulla protegge la fixture dal registro (`checkGuides.test.ts` invece lo fa), e decide G.
+- **Il segnale: sì, dentro A-62** (decisione mia, delegata dal coordinatore). È invisibile all'utente e serve ai test e
+  alla galleria. Sulla radice della riga, `data-security-checks`:
+  - `off` per chi non è admin;
+  - `pending` fino alla prima risposta;
+  - `ready` dopo, anche durante «Controlla di nuovo»;
+  - `error` se la prima lettura è fallita.
+  - Solo Vitest; ADOT-E-03 tiene la sua barriera, quindi nessuno slot.
+- **A-62**: `test-author` `c3acb2f4` per i rossi (`Header.test.ts`, `ConnectionSecurityIndicator.test.ts`). Bozza
+  `work/a62/apply_a62.py`, 4 modifiche, prova a vuoto pulita: l'etichetta del menu, il segnale (due), la riga del
+  registro. Più `work/a62/i18n_add.py` (`nav.toggleMenu`).
+- **Coordinatore** (14:32): va bene su tutti e tre, cioè il segnale dentro A-62 e `nav.toggleMenu` coi testi proposti.
+  - **In arrivo dopo A-62: E-26 (b)**, deciso dal developer. La risposta di `POST /auth/register` avrà un campo che
+    dice quando l'email di verifica è trattenuta, e il messaggio di `RegisterCard` cambierà di conseguenza.
+  - Il lavoro è di E, ma tocca file miei (lo schema della risposta, `RegisterCard`): E mi scrive per il contratto, e la
+    revisione è mia.
+
+## Ondata 3 (21→22/10, notte): A-62, poi E-7 (base `4a053da4c`)
+- **Brief** (`salvataggi-worktrees-20261021/ondata3/kickoff-A.md`): passo A = A-62 (tre ritocchi, decisi il 20/10);
+  passo C = E-7 (deciso dal developer il 21/10: Q1 sì, il badge anche a link scaduto; Q2 en «Waiting for verification»,
+  it «In attesa di verifica», più il suggerimento al passaggio del mouse; Q3 no, `user list` resta senza segno). Il
+  passo B (revisione di E-26) arriva dopo. Lavoro come sotto-agente in background del coordinatore; niente commit, niente
+  E2E. Corsia `6185` `/tmp/librefolio-r13-a`.
+- **Base**: HEAD `4a053da4c` = quello atteso, albero pulito; `dev_release2` `2879ae3e4`. Le bozze di Copilot
+  (`copilot-enel/session-state/119ed166…/files/work/a62/`) riusate come riferimento, non lanciate (percorsi del Mac).
+
+### A62.1 — Rossi ✅ (21/10, 21:37–21:45)
+- Base dei due file Vitest: **75 passed** (`ondata3/A-a62-baseline.log`).
+- `test-author` (sonnet): 14 casi nuovi, tutti rossi sull'asserzione giusta; i 75 restano verdi: **14 failed, 75 passed**
+  (`ondata3/A-a62-red.log`).
+  - `Header.test.ts`: describe dentro quello di N69b, «the burger's name starts with the translated toggle menu (A-62)»,
+    4 casi (membro sicuro e insicuro; admin con avvisi, sicuro e insicuro). La chiave riceve un marcatore suo
+    (`⟦nav.toggleMenu⟧`, `addMessages`): oggi l'etichetta comincia con «Toggle menu».
+  - `ConnectionSecurityIndicator.test.ts`: ultimo describe, «the checks signal on the root (A-62)», 10 casi (`off` per
+    membro ×3 e per nessuno; `pending`; `ready` alla risposta, già pronta al mount, tenuto durante «Controlla di nuovo» e
+    dopo un ricontrollo fallito; `error` alla prima lettura fallita, senza seconda richiesta). Oggi l'attributo manca.
+> **Note implementazione**: casi etichettati `// red until A-62`, come la convenzione del repo.
+
+### A62.2 — Cura ✅ (21/10, 21:45–21:50)
+- `Header.svelte`: `menuLabel` comincia con `$_('nav.toggleMenu')`.
+- `ConnectionSecurityIndicator.svelte`: `checksState` derivato
+  (`!isAdmin ? 'off' : answered ? 'ready' : status === 'error' ? 'error' : 'pending'`) e `data-security-checks` sulla
+  radice.
+- `_backend_services.py`: la riga `desc` di `services admin-bootstrap` nomina `admin_setup_status` (H-61).
+- `dev.py i18n add nav.toggleMenu` (sorgente `base`, ×4, i testi approvati il 20/10), `i18n build` e `i18n check`
+  puliti: **5123 chiavi**, strict (`ondata3/A-a62-i18n.log`).
+- Doc (`docs-writer`, sonnet): `developer/frontend/components/features/settings.md`, la radice (`data-security-checks`),
+  il pulsante del menu (`$_('nav.toggleMenu')`) e i 14 casi nel paragrafo dei test; `check-links` pulito.
+
+### A62.3 — Verdi ✅ (21/10, 21:50–22:14)
+- Vitest: `Header.test.ts`, `ConnectionSecurityIndicator.test.ts`, `Header.managed.test.ts`: **94 passed** (3 file;
+  `ondata3/A-a62-green.log`).
+- `services admin-bootstrap`: **310 passed** (`ondata3/A-a62-services-admin-bootstrap.log`; il brief diceva 302, ma
+  dopo «il fatto vince» di H61.2 i casi sono 310).
+- `api sync` (`ondata3/A-api-sync-1.log`), poi `front check` in `flock`: **0 errori, 0 avvisi**
+  (`ondata3/A-a62-front-check.log`).
+> **⚠️ Fuori pista**: il `front check` ha aspettato il lucchetto ~28 minuti (E2E di C1 e altri in coda). Nel frattempo
+> ho scritto solo file di backend di E-7 e il test di `test-author` su `UserRow.verification.test.ts`: lo 0/0 vale per
+> l'albero di A-62 più quelle righe, nessuna delle quali tocca i tipi di A-62.
+
+### E7.1 — Rossi backend ✅ (21/10, 22:00–22:08)
+- I test vanno nel file mio, `test_api/test_users_admin_api.py` (il piano di E li metteva in EVH, file di E: ora che il
+  lotto è mio, stanno dove sta il contratto di `GET /users`, e non toccano i file di E-26).
+- `test-author` (sonnet): punto 21 nel docstring, `USER_ITEM_KEYS` a undici campi, `_user_item_violations` con
+  `pending_verification`; classe nuova `TestAnAccountWaitingForItsVerificationInTheUsersTab`, UADM-VER-01…05, solo in
+  processo sull'istanza privata (9 scene per stato del link; per account; la risposta del PATCH dopo promozione e
+  disattivazione; la riattivazione a link scaduto; lo schema).
+- Rossi: **32 failed** (`ondata3/A-e7-red-1.log`) e **25 failed** (`A-e7-red-2.log`), tutti sulla regola degli undici
+  campi o sul campo mancante; i premessi (`awaiting_verification`, `holds_place`) verdi già oggi.
+> **Note implementazione**: le corse con `--no-shared-server` e `-k` sui soli casi in processo: nessun server, nessuna
+> build.
+
+### E7.2 — Cura backend ✅ (21/10, 22:08–22:11)
+- `schemas/users.py`: `AdminUserRead.pending_verification: bool = False`.
+- `services/email/verification.py`: `waiting_ids(session)`, una query (come `place_holders()` senza la scadenza);
+  aggiunta, nessuna riga esistente toccata.
+- `api/v1/users.py`: la lista con `waiting_ids`, la risposta del PATCH con `awaiting_verification`.
+- black e ruff puliti (black ha ricomposto il test; `ondata3/`).
+- Verde in processo: **57 passed** (`ondata3/A-e7-green-inprocess-2.log`).
+> **⚠️ Fuori pista**: UADM-060 (A7b) ha un account «waiting» con un link di verifica vivo: col contratto nuovo è
+> `pending_verification` vero. Prima corsa 1 failed / 56 passed; corretta l'attesa del caso (e il suo docstring), poi 57.
+- Regressioni in processo: `api email-verification-hooks` **26**, `api email-verification` **60**, `api admin-setup`
+  **52**, `api panel-status` **20**, tutti verdi.
+
+### E7.3 — Rossi e cura frontend, i18n, doc ✅ (21/10, 22:12–22:30)
+- `api sync` dopo lo schema (`ondata3/A-api-sync-2.log`): nessun file tracciato cambiato (`generated.ts` è ignorato).
+- `test-author` (sonnet), `UserRow.verification.test.ts`: UVR-04…11, 23 casi rossi; gli altri due file verdi: **23
+  failed, 77 passed** (`ondata3/A-e7-vitest-red.log`).
+- Cura: `types.ts` (`pending_verification?`); `UserRow.svelte`: `pendingVerification` derivato
+  (`pending_verification && !is_active && !pending_setup`), il badge `users-badge-pending-verification` al posto di
+  «Disattivato» col suggerimento in `title`, il suggerimento nel pannello (`users-pending-verification-hint`),
+  `data-pending-verification` sulla riga, e `data-testid="users-badge-inactive"` al badge «Disattivato».
+- i18n (`settings`, ×4): `settings.usersTab.badges.pendingVerification` e `settings.usersTab.pendingVerificationHint`;
+  fr ed es e il testo del suggerimento sono le proposte di E (piano 08, «E-7 — analisi»), da confermare dal developer.
+  `i18n check`: **5125 chiavi**, strict.
+- Verde: i tre file di `UserRow` **100 passed** (`ondata3/A-e7-vitest-green.log`); `UsersTab.test.ts` **62 passed**.
+- Doc (`docs-writer`, sonnet; solo inglese, nessun timbro): `admin/users.en.md`, `admin/email.en.md`,
+  `developer/backend/email.md`, `developer/architecture/access_control.md`,
+  `developer/frontend/components/features/settings.md`; `check-links` pulito. Le due pagine admin non hanno traduzioni.
+> **Note implementazione**: il suggerimento «al passaggio del mouse» del brief e quello «nel pannello» dell'analisi di E
+> ci sono tutti e due: `title` sul badge (desktop) e il paragrafo nel pannello (telefono, lettori di schermo). Domanda
+> al developer nel checkpoint.
+> **⚠️ Fuori pista**: `settings.md` porta righe di A-62 e di E-7: due patch per il coordinatore,
+> `ondata3/A-62-settings-md.patch` e `ondata3/E-7-settings-md.patch` (`git apply --cached --check` pulito per tutte e due).
+
+### A62 + E7 — Prove finali sull'albero intero ✅ (22/10, 00:03–00:09; in `flock`)
+- Script `ondata3/A-heavy-final.sh`, in coda sul lucchetto dalle 22:23 alle 00:03 (E2E di H e di C2 davanti).
+  - `front check`: **0 errori, 0 avvisi** (`ondata3/A-final-front-check.log`), dopo `api sync` (`A-api-sync-2.log`).
+  - Vitest, 7 file (Header, Header.managed, ConnectionSecurityIndicator, i tre UserRow, UsersTab): **256 passed**
+    (`A-final-vitest.log`).
+  - `mkdocs build`: pulito, 0 `WARNING`, 3091 URL relativi risolti (`A-final-mkdocs-build.log`).
+  - Corsia: `db populate --force --clean` su `/tmp/librefolio-r13-a`, poi `api users-admin` sul file intero, coi casi
+    della corsia: **184 passed** (`A-final-api-users-admin.log`).
+  - Porta 6185 libera alla fine (`lsof` rc 1); `git diff --check` pulito; HEAD ancora `4a053da4c`.
+- Checkpoint mandato (A-62 ed E-7 separati); FROZEN.

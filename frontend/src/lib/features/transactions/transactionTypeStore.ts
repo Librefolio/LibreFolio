@@ -16,6 +16,7 @@
 import {zodiosApi} from '$lib/api';
 import {schemas} from '$lib/api/generated';
 import {writable} from 'svelte/store';
+import {decimalDigitCounts, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
 import type {z} from 'zod';
 
 // =============================================================================
@@ -270,7 +271,8 @@ export function isDraftReadyForValidation(d: ValidatableDraft): boolean {
     if (!d.broker_id || d.broker_id <= 0) return false;
     const r = getTypeRule(d.type);
     if (r.assetField === 'required' && d.asset_id == null) return false;
-    if (r.cashField === 'required' && (!d.cash || !d.cash.amount || d.cash.amount.trim() === '' || d.cash.amount === '0')) return false;
+    // B-47: a zero in any form (`0.00`, `-0`), read exactly: not only the text `0`.
+    if (r.cashField === 'required' && (!d.cash || !d.cash.amount || d.cash.amount.trim() === '' || decimalDigitCounts(normalizeDecimalInput(d.cash.amount))?.stripped === '0')) return false;
     if (r.quantityMode !== 'forbidden') {
         const q = (d.quantity ?? '').trim();
         if (q === '' || Number(q) === 0) return false;

@@ -12,7 +12,7 @@ $$
 \boxed{\mathrm{PnL}_{\text{period}} = \mathrm{NAV}(t_1)-\mathrm{NAV}(t_0)-\Delta \mathrm{CapitalBaseline}_{[t_0,t_1]}}
 $$
 
-The baseline delta comes from `cumulative_external_cash_flow`, so it includes cash flows and priced in-kind ADJUSTMENT/TRANSFER capital. An outgoing ADJUSTMENT with a cost basis takes out the value it hands over, converted at its date ([Deposited Capital — Outgoing Adjustments](deposited-capital.md#outgoing-adjustments)).
+The baseline delta comes from `cumulative_external_cash_flow`, so it includes cash flows and priced in-kind ADJUSTMENT/TRANSFER capital. An outgoing ADJUSTMENT has no value and takes nothing out ([Deposited Capital — Outgoing Adjustments](deposited-capital.md#outgoing-adjustments)).
 
 ---
 
@@ -25,7 +25,7 @@ $$
 | Component | Definition |
 |-----------|-----------|
 | $\Delta\mathrm{UGL}$ | Change in unrealized gain/loss over the period: market value − open cost basis of the positions held at each boundary, securities in transit left out ([the period unrealized](index.md#two-unrealized-figures)) — for assets priced in another currency, including the exchange-rate effect on their historical cost |
-| Realized | Sum of (proceeds − historical cost of the units given up) for the SELLs in period and the outgoing ADJUSTMENTs with a cost basis, whose proceeds are the value they hand over; proceeds are converted at the transaction's date ([Portfolio Engine — §8](index.md#8-realized-gain-loss)) |
+| Realized | Sum of (proceeds − historical cost of the units given up) for the SELLs in period and the outgoing ADJUSTMENTs not linked to a split, whose proceeds are zero; proceeds are converted at the transaction's date ([Portfolio Engine — §8](index.md#8-realized-gain-loss)) |
 | Income | DIVIDEND + INTEREST in period |
 | FeesTaxes | FEE + TAX in period |
 | Other | What closes the identity: the exchange result on cash held in another currency (FX on cash) plus a residual |

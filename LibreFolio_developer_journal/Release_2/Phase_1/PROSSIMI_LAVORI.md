@@ -11,9 +11,33 @@ prima parte può diventare un `BACKLOG_POST_1.3`.
 
 ---
 
+## Esito del filtro del 22/10 (developer)
+
+Il 22/10 il developer ha riletto ogni voce con una sessione dedicata. Lo stato è stato verificato su git
+(`dev_release2` = `e2d3b8a51`), sul CHANGELOG, sul backlog e sul codice, non sul testo di questo file. Ogni voce sotto
+ha la sua riga **Esito 22/10**. Le voci fatte hanno ✅; quelle tolte sono barrate, con il motivo.
+
+**Le ondate** (parole del developer): l'**ondata 4** è quella in pianificazione adesso; l'**ondata 5** raccoglie il
+lavoro della 1.3 da fare quando finiamo i lavori già iniziati. Quello che faremo di certo all'inizio della 1.4 sta in
+[`../Phase_2/ATTIVITA_INIZIO_1.4.md`](../Phase_2/ATTIVITA_INIZIO_1.4.md); le idee da ponderare stanno in
+[`TODO_FUTURI.md`](../../../TODO_FUTURI.md).
+
+| Gruppo | Voci |
+|---|---|
+| ✅ Già fatte | K3a (treno 7); W-B86/W-B87, la parte della 1.3 (treno 7); #49, Fineco fuori dalla beta (treno 7) |
+| 1.3, ondata 4 | #49, tooltip e frase in 4 lingue (Y); la regola dei plugin in beta nella skill e nella guida, più Fineco su `RowSkips` (W); #50, i dati dei fondi da Yahoo (X) |
+| 1.3, ondata 5 | V-37b (W); Crédit Agricole sui report set, solo l'analisi (W); W-B88, anche i plugin in beta (W); CP12 (X, con W); C-70b (E, W rivede); E-21 (E, W rivede); MF-P1c (MF); #47 (W); #48 più la torta per asset (Y, con J/MF per il backend) |
+| Inizio 1.4 | il blocco del riordino: W3, W4/CP7, W5–W6, CP5, CP7/FE4, FE5a (e, dal backlog, CP-8/9b/9c di J e T-SG); la issue #25 |
+| `TODO_FUTURI` | #51 (c'era già), #52 (aggiunto il 22/10 al «🧬 Profilo dei dati dell'asset») |
+| Tolte | K2b/K2c: doppione di C-70b |
+| Issue GitHub | vedi «Issue GitHub aperte: verifica del 22/10» più sotto: #58 e #43 risolte; #25 era persa, va all'inizio della 1.4 |
+| Restano come regola | W-B86/W-B87 per i plugin in beta: si fanno quando il plugin esce dalla beta |
+
+---
+
 ## Lotti della 1.3 non ancora iniziati (dopo lo sprint attuale)
 
-Elenco del 19/10, dal resoconto del coordinatore e dai piani dei workstream. Non ci sono i lotti già dentro lo sprint.
+Elenco del 19/10, dal resoconto del coordinatore e dai piani dei workstream. Non ci sono i lotti già dentro lo sprint. Filtrato il 22/10: vedi «Esito del filtro» sopra.
 Per ogni lotto: chi lo fa, cos'è, lo stato e il link al punto dove è descritto bene. I link sono relativi a questa
 cartella; il testo del link riporta il titolo della sezione da cercare nel file.
 
@@ -32,6 +56,7 @@ Quattro lotti del riordino pianificato in testa alla 1.3 non sono mai partiti. A
 - **Dove**: [piano 04, «7. Lotti e checkpoint» (riga W3) e «5.1 Coordinamento» (Q7–Q10,
   C2)](04_importTransactions/plan-phase01ImportTransactions.prompt.md);
   nel backlog [«T-P2.2 · I file grandi del backend, divisi per cuciture»](../Phase_0/BACKLOG_POST_1.2.md).
+- **Esito 22/10**: dopo la 1.3, nel blocco del riordino → [`../Phase_2/ATTIVITA_INIZIO_1.4.md`](../Phase_2/ATTIVITA_INIZIO_1.4.md). Il riordino del piano 43 è fatto per circa due terzi; il resto (questa voce compresa) si fa insieme, a codice fermo, all'inizio della 1.4.
 
 #### W4 CP7 · Il taglio di `brim_provider.py` per tema
 
@@ -45,6 +70,7 @@ Quattro lotti del riordino pianificato in testa alla 1.3 non sono mai partiti. A
 - **Dove**: [piano 04, «W4 — CP6–CP7, PL5: `services/brim/`», nota «Disegno di CP7
   (taglio)»](04_importTransactions/plan-phase01ImportTransactions.prompt.md);
   nel backlog [«T-PL5 · `brim_provider.py` diventa `services/brim/`»](../Phase_0/BACKLOG_POST_1.2.md).
+- **Esito 22/10**: dopo la 1.3, nel blocco del riordino → [`../Phase_2/ATTIVITA_INIZIO_1.4.md`](../Phase_2/ATTIVITA_INIZIO_1.4.md). Il riordino del piano 43 è fatto per circa due terzi; il resto (questa voce compresa) si fa insieme, a codice fermo, all'inizio della 1.4.
 
 #### W5–W6 · Icone e report d'esempio nella cartella di ogni plugin (U-B3, U-B4)
 
@@ -58,8 +84,15 @@ Quattro lotti del riordino pianificato in testa alla 1.3 non sono mai partiti. A
   U-B4)](04_importTransactions/plan-phase01ImportTransactions.prompt.md); nel backlog [«U-B3 · Le icone dentro la
   cartella del plugin» e «U-B4 · `sample_reports/` per plugin»](../Phase_0/BACKLOG_POST_1.2.md);
   [piano 45, «9. Backlog post-1.2 (sezione U)»](../Phase_0/45_pluginModules/plan-phase00PluginModules.prompt.md).
+- **Esito 22/10**: dopo la 1.3, nel blocco del riordino → [`../Phase_2/ATTIVITA_INIZIO_1.4.md`](../Phase_2/ATTIVITA_INIZIO_1.4.md). Il riordino del piano 43 è fatto per circa due terzi; il resto (questa voce compresa) si fa insieme, a codice fermo, all'inizio della 1.4.
+  Chiarito il 22/10: non tocca la regola dei favicon via URL. Oggi in `brim_providers/static/` c'è solo `scalable/`
+  (l'unica icona fatta da noi); U-B3 sposta solo quella. U-B4 sposta i 62 report d'esempio di
+  `brim_providers/sample_reports/` nella cartella del loro plugin (`malformed/` e il README restano alla radice).
 
-#### K2b/K2c · Il 400 del parse e l'anteprima illeggibile, a codice
+#### ~~K2b/K2c · Il 400 del parse e l'anteprima illeggibile, a codice~~
+
+- **Esito 22/10**: ~~tolta~~. Doppione: K2b è C-70b (più sotto, ondata 5); K2c non ha un contenuto suo. K2a ✅ 15/10.
+
 
 - **Chi**: W in origine; K2b è stato preso da E come **C-70b** (più sotto).
 - **Cos'è**: le parti (b) e (c) di C-70: il 400 del parse strutturato a codice e tradotto nel wizard, e il codice
@@ -71,7 +104,11 @@ Quattro lotti del riordino pianificato in testa alla 1.3 non sono mai partiti. A
 
 ### W · Import e transazioni: difetti, richieste ed esplorazioni
 
-#### K3a · La sicurezza dei dati del Bulk e del Form
+#### ✅ K3a · La sicurezza dei dati del Bulk e del Form
+
+- **Esito 22/10**: ✅ fatta, nel treno 7 del 21/10 (`bc01226f4`, merge `d07959985`), insieme a #58. Le domande di
+  W sono state decise dal developer: PC5 diviso, valori nel dominio, K-3b nel lotto.
+
 
 - **Chi**: W (i rossi dal test-author).
 - **Cos'è**: 5 difetti della modifica multipla e del form, da curare prima di ogni funzione nuova di K3:
@@ -103,8 +140,9 @@ Quattro lotti del riordino pianificato in testa alla 1.3 non sono mai partiti. A
   analisi in sola lettura», punto 7](04_importTransactions/plan-phase01ImportTransactions.prompt.md) (il punto di
   partenza nel codice di oggi); nel backlog
   [«V-37 · Nel form, «valid» accanto a un errore che blocca Apply»](../Phase_0/BACKLOG_POST_1.2.md).
+- **Esito 22/10**: 1.3, **ondata 5**, a W. K3a, che la precedeva, è fatta.
 
-#### W-B86 e W-B87 · «Noto in silenzio, ignoto con avviso» negli altri plugin di import
+#### ✅ W-B86 e W-B87 · «Noto in silenzio, ignoto con avviso» negli altri plugin di import (parte 1.3)
 
 - **Chi**: W.
 - **Cos'è**: il principio deciso dal developer il 19/10. Una riga che il plugin sa scartare con certezza esce in
@@ -127,11 +165,18 @@ Quattro lotti del riordino pianificato in testa alla 1.3 non sono mai partiti. A
   avuto con W-B85. Il CSV generico resta fuori: è la mappatura dell'utente.
 - **Da decidere (D-W85-4)**: i plugin di W-B87 sono tutti in beta. Per la regola sopra resterebbero fuori, ma lì il
   problema non è la chiarezza: sono numeri sbagliati in silenzio.
-- **Stato**: ❌ non iniziato; analisi e inventario fatti.
+- **Stato**: ✅ 21/10 (backend, solo ciò che era in 1.3): l'aiuto `RowSkips`, i 4 plugin stabili e la versione minima di D-W85-4 (3 plugin con l'avviso aggregato, 3 convertiti ai codici). Restano i plugin in beta (W-B86) e l'import vero delle righe con effetto economico (W-B87), dopo la 1.3.
 - **Dove**: [piano 04, «W-B85 · «Noto in silenzio, ignoto con avviso»: analisi», punti 3 e
   4](04_importTransactions/plan-phase01ImportTransactions.prompt.md);
   nel backlog [«W-B86 · Gli altri plugin BRIM col principio …» e «W-B87 · Plugin che saltano in silenzio righe con un
   effetto economico»](../Phase_0/BACKLOG_POST_1.2.md).
+- **Esito 22/10**: ✅ la parte della 1.3 (treno 7, `fcf39fab0`, merge `065cfa49e`).
+  - **I plugin in beta** (W-B86) e **l'import vero delle righe con effetto economico** (W-B87): non abbiamo report
+    affidabili, quindi si fanno **quando il plugin esce dalla beta**. Resta una regola, non un lotto.
+  - **Ondata 4, a W** (lotto piccolo): la regola va scritta, con i livelli di avviso, nella skill `brim-plugin`
+    (oggi non parla della beta) e nella guida developer `brim_plugin_guide.md` (oggi la dice a metà): «uscire dalla
+    beta = adottare `RowSkips` o i propri codici con `report_issue`». In più **Fineco**, uscito dalla beta nel
+    treno 7, è ancora in `ROW_SKIPS_PENDING` (`test_brim_row_skips.py`): va portato su `RowSkips` e tolto da lì.
 
 #### Crédit Agricole sui report set: esplorazione, prima l'analisi
 
@@ -152,6 +197,8 @@ Quattro lotti del riordino pianificato in testa alla 1.3 non sono mai partiti. A
   [backlog della 38, «L3 · Crédit Agricole sui report set (§2.9, A10)»](../Phase_0/38_postReleaseBacklog/README.md);
   doc per sviluppatori [`credit_agricole.md`](../../../mkdocs_src/docs/developer/backend/brim/credit_agricole.md) e
   [`danske_bank.md`](../../../mkdocs_src/docs/developer/backend/brim/danske_bank.md).
+- **Esito 22/10**: 1.3, **ondata 5**, a W: **solo l'analisi** con gli export veri, senza codice. In base all'esito
+  il developer decide se e quando farla.
 
 #### W-B88 · Quale data registra ogni plugin, contro il principio di B-52
 
@@ -165,6 +212,9 @@ Quattro lotti del riordino pianificato in testa alla 1.3 non sono mai partiti. A
 - **Stato**: ❌ non iniziato (analisi di W, 19/10).
 - **Dove**: [piano 04, «B-52 · La data dell'operazione: analisi»](04_importTransactions/plan-phase01ImportTransactions.prompt.md);
   nel backlog [«W-B88»](../Phase_0/BACKLOG_POST_1.2.md).
+- **Esito 22/10**: 1.3, **ondata 5**, a W. Inventario e correzioni su **tutti e 10 i plugin, anche quelli in beta**:
+  i loro export di prova sono poco affidabili, ma non da buttare. **Nessuna bonifica dei dati già salvati**: se
+  escono date sbagliate, l'utente le corregge reimportando o a mano. Non si toccano dati salvati: si rischiano danni.
 
 ### X · Plugin, asset e ricerca
 
@@ -180,6 +230,7 @@ Proposta di X (19/10) per tutti e quattro: dopo la 1.3. CP6 (F05) e K-20 sono gi
   cambia.
 - **Dove**: [piano 03, «Stato vero di CP5, CP6, CP7, CP8, CP12»](03_pluginsAssets/plan-phase01PluginsAssets.prompt.md);
   nel backlog [«T-PL7 · Un router proprio per i segnali, con gli URL invariati»](../Phase_0/BACKLOG_POST_1.2.md).
+- **Esito 22/10**: dopo la 1.3, nel blocco del riordino → [`../Phase_2/ATTIVITA_INIZIO_1.4.md`](../Phase_2/ATTIVITA_INIZIO_1.4.md). Il riordino del piano 43 è fatto per circa due terzi; il resto (questa voce compresa) si fa insieme, a codice fermo, all'inizio della 1.4.
 
 #### CP7 · FE4, il frontend dei cambi in `lib/features/fx/`
 
@@ -190,6 +241,7 @@ Proposta di X (19/10) per tutti e quattro: dopo la 1.3. CP6 (F05) e K-20 sono gi
   ratchet.
 - **Dove**: [piano 03, «4.2 Riordino frontend» e «Stato vero di CP5, CP6, CP7, CP8,
   CP12»](03_pluginsAssets/plan-phase01PluginsAssets.prompt.md).
+- **Esito 22/10**: dopo la 1.3, nel blocco del riordino → [`../Phase_2/ATTIVITA_INIZIO_1.4.md`](../Phase_2/ATTIVITA_INIZIO_1.4.md). Il riordino del piano 43 è fatto per circa due terzi; il resto (questa voce compresa) si fa insieme, a codice fermo, all'inizio della 1.4.
 
 #### FE5a · Il frontend degli asset in `lib/features/assets/` (il resto di CP8)
 
@@ -202,6 +254,7 @@ Proposta di X (19/10) per tutti e quattro: dopo la 1.3. CP6 (F05) e K-20 sono gi
   Rischio (developer, 06/10).
 - **Dove**: [piano 03, «4.2 Riordino frontend» e «Stato vero di CP5, CP6, CP7, CP8,
   CP12»](03_pluginsAssets/plan-phase01PluginsAssets.prompt.md).
+- **Esito 22/10**: dopo la 1.3, nel blocco del riordino → [`../Phase_2/ATTIVITA_INIZIO_1.4.md`](../Phase_2/ATTIVITA_INIZIO_1.4.md). Il riordino del piano 43 è fatto per circa due terzi; il resto (questa voce compresa) si fa insieme, a codice fermo, all'inizio della 1.4.
 
 #### CP12 · Le impostazioni dei plugin anche per BRIM e Tool
 
@@ -211,11 +264,18 @@ Proposta di X (19/10) per tutti e quattro: dopo la 1.3. CP6 (F05) e K-20 sono gi
 - **Stato**: ❌ non iniziato; le precondizioni ci sono (CP10, PL5). Oggi nessun plugin BRIM o Tool chiede impostazioni.
 - **Dove**: [piano 03, «9. Lotti e checkpoint (ordine proposto)», punto 12, e «Stato vero di CP5, CP6, CP7, CP8,
   CP12»](03_pluginsAssets/plan-phase01PluginsAssets.prompt.md).
+- **Esito 22/10**: 1.3, **ondata 5**, a X (la parte BRIM con W).
+  - **Precisazione del developer** (al coordinatore, 22/10), parola per parola: «per brim non credo ci saranno
+    segreti, i parametri è molto più probabile, il sistema però deve supportare, se arrivasse, tutto». Quindi:
+    l'interfaccia dei plugin BRIM va **predisposta** per parametri **e** segreti, senza realizzare ora impostazioni
+    concrete. Proprietario suggerito per la parte BRIM: W.
 
 ### E e W · Le traduzioni dei rifiuti dell'import
 
-**Scelta aperta** (resoconto del 19/10): (a) C-70b così com'è, E-21 dopo; (b) C-70b ed E-21 insieme, più grande
-(circa 60 messaggi per 4 lingue).
+~~**Scelta aperta** (resoconto del 19/10): (a) C-70b così com'è, E-21 dopo; (b) C-70b ed E-21 insieme, più grande
+(circa 60 messaggi per 4 lingue).~~
+**Esito 22/10**: tutte e due nella 1.3, **ondata 5**; cambia la decisione del 21/10 («dopo la 1.3»). Prima C-70b,
+perché la patch parcheggiata invecchia, poi E-21.
 
 #### C-70b · I rifiuti del parse e dell'anteprima tradotti (K2b di W)
 
@@ -230,6 +290,7 @@ Proposta di X (19/10) per tutti e quattro: dopo la 1.3. CP6 (F05) e K-20 sono gi
 - **Dove**: [piano 08, «C-70b — I rifiuti del parse e dell'anteprima tradotti (K2b di W)», fino a «C-70b.2 —
   Parcheggiato»](08_email/plan-phase01Email.prompt.md); nel backlog [«C-70 · I rifiuti di lettura dei plugin di
   import sono solo in inglese»](../Phase_0/BACKLOG_POST_1.2.md).
+- **Esito 22/10**: 1.3, **ondata 5**, a E (W rivede), ripartendo dalla patch parcheggiata.
 
 #### E-21 · Le frasi dei plugin tradotte
 
@@ -242,6 +303,7 @@ Proposta di X (19/10) per tutti e quattro: dopo la 1.3. CP6 (F05) e K-20 sono gi
 - **Dove**: nel backlog [«E-21 · Le frasi `BRIMParseError` dei plugin arrivano in inglese, dentro la cornice
   tradotta»](../Phase_0/BACKLOG_POST_1.2.md); [piano 08, «C-70b.1 — Le risposte, e i rossi al
   `test-author`»](08_email/plan-phase01Email.prompt.md).
+- **Esito 22/10**: 1.3, **ondata 5**, a E (W rivede), dopo C-70b.
 
 ### MF · Matematica finanziaria
 
@@ -258,6 +320,8 @@ Proposta di X (19/10) per tutti e quattro: dopo la 1.3. CP6 (F05) e K-20 sono gi
 - **Stato**: ❌ non iniziato; domanda per dopo (coordinatore, 20/10).
 - **Dove**: [piano 11, «P1b — le due debolezze del MWRR già presenti», «PAUSA GENERALE 19/10» e «Ripresa
   20/10»](11_financialMath/plan-phase01FinancialMath.prompt.md).
+- **Esito 22/10**: 1.3, **ondata 5**, a MF. Il developer accetta il prezzo della cura: nei casi estremi «—» invece
+  di un MWRR finto. Prima i conteggi sui corpora e sui dati veri.
 
 ---
 
@@ -274,6 +338,50 @@ Convenzioni:
   task che nascono da una richiesta si tengono qui (e nel backlog quando entrano in un rilascio). Le issue #54, #55 e
   #56, aperte da noi il 18/10, sono state cancellate il 19/10; il loro testo è nei file della sessione del
   coordinatore.
+
+---
+
+## Issue GitHub aperte: verifica del 22/10
+
+Lette con `gh` il 22/10 in sola lettura: 8 issue aperte e la discussione #49. Le risposte qui sotto sono **bozze**:
+le pubblica solo il developer, quando esce la 1.3.
+
+| Issue | Esito 22/10 |
+|---|---|
+| #58 · asset cambiato nel Bulk che non si salva | ✅ risolta nel treno 7 (`bc01226f4`, CHANGELOG `[Unreleased]`). Il developer ha già risposto «la chiudiamo all'uscita della 1.3» |
+| #43 · 6 cifre al massimo (crypto) | ✅ risolta: C-97 nel backlog, CHANGELOG `[Unreleased]` («Crypto quantities and prices keep their decimals»). CoinGecko, suggerito qui, è C-98 nel backlog: dopo la 1.3 |
+| #47 · prezzo unitario invece dell'importo | 1.3, ondata 5 (sotto, sezione #47) |
+| #48 · grafico delle posizioni sovrapposte | 1.3, ondata 5 (sotto, sezione #48) |
+| #50 · Investing.com e Yahoo | la parte Yahoo nella 1.3, ondata 4; il resto in `TODO_FUTURI.md` |
+| #51 · TER | dopo la 1.3, `TODO_FUTURI.md` |
+| #52 · portafoglio per obiettivi | dopo la 1.3, `TODO_FUTURI.md` |
+| #27 · OIDC esterno | dopo la 1.3: resta in `TODO_FUTURI.md` («🔐 Accesso con un provider OIDC esterno»), che ha già le risposte dell'utente |
+| #25 · commissione dentro acquisto e vendita | **era persa**: promessa all'utente per la 1.3 il 28/09, poi «parcheggiata per qualche settimana», e mai scritta nel backlog né nei piani. Decisione del 22/10: **inizio della 1.4**, in [`../Phase_2/ATTIVITA_INIZIO_1.4.md`](../Phase_2/ATTIVITA_INIZIO_1.4.md), con una risposta all'utente che lo dice |
+| Discussione #49 | coperta: Fineco ✅, i due task nella 1.3, ondata 4 (sotto, sezione #49) |
+
+### Bozze delle risposte (da pubblicare dal developer)
+
+**#58**, alla chiusura, quando esce la 1.3:
+
+> Fixed in 1.3.0: the asset and the broker of a saved transaction are now locked in the editor, so it no longer
+> offers a change it cannot save. To move a transaction to another asset or broker, delete it and create it again
+> (the clone feature helps). Closing — thanks again @jaska087 for the report and the screenshots!
+
+**#43**, alla chiusura, quando esce la 1.3:
+
+> Hi @r4kd7hch5v-source, this is fixed in 1.3.0. A quantity now keeps up to 10 decimal places, a price and a
+> per-unit cost up to 12, so BTC's 8 digits and tokens like PEPE fit. If you paste more digits than allowed, the
+> form tells you the maximum instead of rounding behind your back. The values you saved earlier with 7 or 8 digits
+> were kept in full in the database, so they show up again, unless a transaction was saved again while its value
+> was shown rounded. CoinGecko is on our list for after 1.3. Closing — thanks again for the clear report!
+
+**#25**, adesso o all'uscita della 1.3 (sceglie il developer):
+
+> Hi @jaska087, an honest update on this one: the fee linked to its buy or sell won't make it into 1.3, sorry. Doing
+> it properly means linking the fee to its trade and using it in the lot calculations, so that the cost of each lot
+> is exact instead of estimated, and we want to give it the time it deserves. It is planned for the start of 1.4.
+> Meanwhile we are working on entering the unit price instead of the total in the transaction form (#47), which
+> you asked for here too. Thanks for your patience!
 
 ---
 
@@ -325,7 +433,20 @@ intero, «base 100», con la possibilità di escludere una posizione dal grafico
 **Prossimo passo.** Risposta pubblicata dal developer il 18/10 (in attesa della replica dell'utente); poi analisi
 tecnica e codice del backlog quando entra in un rilascio.
 
+**Esito 22/10.** 1.3, **ondata 5**: Y per il frontend, J/MF per la serie per posizione (matematica in
+`financial_math/`). Il developer aggiunge un'idea 💡:
+- **accanto al grafico delle linee, una torta per asset**: come quella per tipo, ma ogni fetta è il peso % di un
+  asset nel portafoglio di oggi;
+- **nella parte storica, l'evoluzione della distribuzione per asset nel tempo**, comprese le posizioni chiuse nel
+  periodo (solo nella storia);
+- si estendono e si riusano i componenti UI che ci sono già, con dati nuovi;
+- **colori**: la palette categoriale della designer, assegnata per peso di oggi, dal più grande; poi agli asset
+  chiusi, andando indietro nel tempo.
+
 ### #52 · Portafoglio diviso in sezioni / obiettivi — 💬 chiesto all'utente come raffinare l'idea (18/10)
+
+**Esito 22/10.** Dopo la 1.3: aggiunto in `TODO_FUTURI.md`, «🧬 Profilo dei dati dell'asset», «Prime idee d'uso dei
+dati in comune». La discussione con l'utente resta aperta qui.
 
 **Richiesta.** Raggruppare gli asset per obiettivo («i pilastri di Coletti»: fondo emergenze, pensione…), con
 sottogruppi o tag, e filtrare la Dashboard per gruppo.
@@ -345,6 +466,8 @@ Estese») e il benchmark persistente per portafoglio/broker (Risk Analysis).
   obiettivo per il PAC?
 
 ### #51 · TER degli ETF e del portafoglio — 📋 nel TODO (18/10), dopo l'ambiente centralizzato degli asset
+
+**Esito 22/10.** Confermato dopo la 1.3: è già in `TODO_FUTURI.md`, «🧬 Profilo dei dati dell'asset».
 
 **Richiesta.** Vedere il TER di ogni ETF e il TER complessivo del portafoglio.
 
@@ -414,6 +537,10 @@ prezzi, dividendi e split.
 - **Risposta pubblicata dal developer (18/10)**: ha invitato l'utente a scrivere lui i plugin e a proporre una PR
   («il sistema è modulare apposta»).
 
+**Esito 22/10.** Il potenziamento di Yahoo non è iniziato (`funds_data` non è letto da nessuna parte): 1.3,
+**ondata 4**, a X, come deciso il 18/10. L'inventario del 21/10 l'aveva messo «dopo la 1.3» per errore. Il resto
+resta in `TODO_FUTURI.md`.
+
 ### #49 (discussione) · «Valore Iniziale» e «Valore Finale» — ✅ risposto (17/10), task aperti
 
 **Risposta data.** Valore della posizione a inizio e a fine periodo, come la colonna «Valore» del Portafoglio; 0 se
@@ -428,6 +555,15 @@ la posizione non c'era all'inizio o era chiusa alla fine; il Valore Iniziale è 
 **Domanda aperta all'utente.** Fineco funziona bene con i suoi report? Se sì, togliere l'etichetta Beta (collegata a
 C-91 del backlog: collaudare gli import di Interactive Brokers e Fineco su report veri).
 
+**Esito 22/10.**
+- ✅ **Fineco fuori dalla beta**: treno 7 (`a7c6db19f`, W-B92). Le commissioni non sono più contate due volte, e la
+  guida usa le schermate dell'utente.
+- **I due task** (oggi non ci sono né la frase in it/fr/es né il tooltip, verificato): 1.3, **ondata 4**, a Y.
+  Questa volta **tutte e quattro le lingue subito**, per non perderle: la frase in `positions.{it,fr,es}.md` e il
+  tooltip con le sue chiavi in EN/IT/FR/ES. Poi `./dev.py mkdocs translate-stamp --file
+  user/dashboard/positions.en.md` per aggiornare l'hash della pagina, **solo se questa è l'unica modifica** della
+  pagina.
+
 ### #47 · Inserire il prezzo unitario invece dell'importo — 📋 risposto (18/10)
 
 **Richiesta.** Nel modulo «Nuova transazione», poter scrivere il prezzo medio unitario invece dell'importo totale.
@@ -439,3 +575,6 @@ acquisto o l'ultima vendita.
 
 **Task.** Il selettore nel modulo (`TransactionFormModal`, sezioni singola e coppia), con la quantità e la regola dei
 decimali già in uso (W-B64, N63); valutare lo stesso selettore nella modifica multipla.
+
+**Esito 22/10.** 1.3, **ondata 5**, a W, dopo V-37b (stesso form). L'aspetto: un selettore a piccoli badge, come
+quello «manuale / auto» del PMC.

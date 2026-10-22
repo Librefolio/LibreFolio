@@ -190,12 +190,12 @@ class UnrealizedSplit:
 
 @dataclass(frozen=True, slots=True)
 class RealizedSale:
-    """A disposal replayed by the engine: a SELL, or a priced outgoing ADJUSTMENT (J-24), with its proceeds and the
+    """A disposal replayed by the engine: a SELL, or an outgoing ADJUSTMENT (N78-1), with its proceeds and the
     historical cost it took from the pool.
 
     Amounts are in the target currency and scaled by the owner's share of the broker. A SELL's ``proceeds`` are
-    its amount converted at its date; a priced outgoing ADJUSTMENT's are the value it hands over, quantity × cost
-    basis converted at its date. ``proceeds`` is None when they could not be converted (the pair is in the result's
+    its amount converted at its date; an outgoing ADJUSTMENT's are 0: it has no value, so its cost is realized as a
+    loss. ``proceeds`` is None when they could not be converted (the pair is in the result's
     ``missing_fx``); ``cost_complete`` is False when the pool already lacked part of its cost.
     """
 

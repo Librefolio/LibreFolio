@@ -256,6 +256,8 @@ test.describe('Broker Detail Page', () => {
         await goToTransazioniTab(page);
         await page.getByTestId('broker-show-import-history').click();
         await expect(page.getByTestId('import-files-modal')).toBeVisible({timeout: 5000});
+        // ModalBase focuses its backdrop (which owns the keydown handler) one frame after opening: Escape before that reaches the opener.
+        await expect(page.getByTestId('import-files-modal')).toBeFocused();
 
         // Close by pressing Escape
         await page.keyboard.press('Escape');

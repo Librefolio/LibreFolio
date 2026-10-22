@@ -28,8 +28,13 @@ settings: changing the FX charts never touches the asset charts.
 
 ## 👀 Preview before you apply
 
-The window shows a preview chart with its own **Abs** / **%** switch. Your charts change only when
-you click **Apply**; **Cancel** asks before discarding your changes.
+The window shows a preview chart with a view selector. It is the chart's saved view, and **Apply**
+saves it: **Abs**, **%** or **Rolling Return**. It is the same chart as on the
+[pair](detail/index.md) and [asset](../assets/detail/chart.md) detail pages, only taller than a
+card's chart: a line (no candlesticks), without the toolbar, event markers or measure tool, and you
+can zoom it with the mouse wheel like on the detail page. It draws with the look and the axis ranges
+you are editing, and a comparison signal shows its asset's icon and type in the tooltip. Your charts
+change only when you click **Apply**; **Cancel** asks before discarding your changes.
 
 <div class="screenshot-container" style="max-width: 620px; margin: 1rem auto;">
     <img class="gallery-img" data-category="assets" data-name="chart-settings" alt="Chart settings modal with the live preview">
@@ -40,13 +45,25 @@ you click **Apply**; **Cancel** asks before discarding your changes.
 - 🎯 **For one chart**, the preview uses that chart's real data. Indicators show the last applied
   settings until you click **Apply**, and a banner reminds you of it.
 
+A signal looks the same in the preview as on the card, so what you see here is what the card draws
+after **Apply**.
+
+### 🔁 Rolling Return view
+
+On **Rolling Return** the preview draws the rolling return of the rate or of the asset, with the
+rolling returns of its comparisons. For one chart it uses the card's real data and, on an FX chart,
+the FX pairs compared on it (asset comparisons are not drawn on FX cards); for all charts it draws
+a demo curve. Two more controls choose the window: **1W**, **1M**, **3M**, **1Y** or a custom
+amount. Until you choose one, the window is automatic: the largest preset that fits the period
+shown in the list. The other indicators stay saved but are hidden in this view.
+
 ---
 
 ## 🎨 Appearance
 
 | Setting | What it does |
 |---------|--------------|
-| **Baseline Colors** | Green above, red below the start of the period |
+| **Baseline Colors** | Green above, red below the start of the period, with a dashed baseline. It applies to the cards in the lists, the detail pages and the preview |
 | **Area Fill** | Gradient under the line |
 | **Grid Lines** | Horizontal dashed grid |
 | **Stale Gradient** | Fades the days without a new value, which repeat an earlier one |
@@ -70,7 +87,7 @@ percentage one.
 
 Add overlays from three dropdowns, the same as in the detail page's [Signals panel](detail/signals.md):
 
-- 🧮 **Technical Indicators** — 9 indicators work on FX rates (asset charts offer more), grouped by
+- 🧮 **Technical Indicators** — 10 indicators work on FX rates (asset charts offer more), grouped by
   family with a search box. The math is in
   [Technical Indicators — Financial Theory](../../financial-theory/technical-analysis/indicators/index.md).
 - ↔️ **Data Comparison** — another FX pair or an asset on the same chart.

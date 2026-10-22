@@ -161,6 +161,18 @@ def front_tx_bulk_operations(verbose: bool = False, ui: bool = False, headed: bo
     return _run_playwright("transactions/tx-bulk-operations.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_edit_save_gate(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the issue #58 E2E tests (a type or asset edit keeps Apply and Save-all enabled)."""
+    print_section("Frontend TX Edit Save Gate Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-edit-save-gate.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_split_promote(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run Transaction Split & Promote E2E tests (split, promote, merge modal, guards)."""
     print_section("Frontend TX Split & Promote Tests")
@@ -219,6 +231,19 @@ def front_tx_bulk_promote_exec(verbose: bool = False, ui: bool = False, headed: 
     if not _ensure_test_users():
         return False
     return _run_playwright("transactions/tx-bulk-promote-exec.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_bulk_promote_split(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run BulkModal merged-pair sign + «Split pair» before the save E2E tests (J-67: F3 split of a mixed merge, F1 the paying leg shown, F2 its cash sign, G create+create guard)."""
+    print_section("Frontend TX Bulk Promote Split Tests")
+    if not _ensure_frontend_build():
+        return False
+    # Every test registers its own account and writes only there: no seeded row is read.
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-bulk-promote-split.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_tx_bulk_promote_cost_basis(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -670,11 +695,20 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "tx-picker-pagination", front_tx_picker_pagination, name="TX Picker Pagination Tests", desc="PickerModal pagination, reset on reopen, tooltip richness, validation banners", tests="transactions/tx-picker-pagination.spec.ts")
     add_test(cat, "tx-clone", front_tx_clone, name="TX Clone Tests", desc="Clone standalone, paired, qty=0, commit pair, viewer guard", tests="transactions/tx-clone.spec.ts")
     add_test(cat, "tx-bulk-operations", front_tx_bulk_operations, name="TX Bulk Operations Tests", desc="Mixed commit, reset, picker guard, pair validation, mark delete", tests="transactions/tx-bulk-operations.spec.ts")
+    add_test(cat, "tx-edit-save-gate", front_tx_edit_save_gate, name="TX Edit Save Gate Tests", desc="Issue #58: changing the type or the asset of a stored row keeps Apply and Save-all enabled, and the discard question agrees", tests="transactions/tx-edit-save-gate.spec.ts")
     add_test(cat, "tx-split-promote", front_tx_split_promote, name="TX Split & Promote Tests", desc="Split paired, promote standalone, merge modal, guards, non-regression", tests="transactions/tx-split-promote.spec.ts")
     add_test(cat, "tx-crud-full", front_tx_crud_full, name="TX CRUD Full Lifecycle Tests", desc="Full CRUD lifecycle: standalone, paired, split, promote, bulk, suggest, cash sign", tests="transactions/tx-crud-full.spec.ts")
     add_test(cat, "tx-commit-all-types", front_tx_commit_all_types, name="TX Commit All Types Tests", desc="End-to-end commit for every TX type: standalone + paired create, edit, delete", tests="transactions/tx-commit-all-types.spec.ts")
     add_test(cat, "tx-bulk-suggest-ux", front_tx_bulk_suggest_ux, name="TX Bulk Suggest UX Tests", desc="Split badge, type preview, undo split, suggest banner, ActionModal AFTER rows", tests="transactions/tx-bulk-suggest-ux.spec.ts")
     add_test(cat, "tx-bulk-promote-exec", front_tx_bulk_promote_exec, name="TX Bulk Promote Execution Tests", desc="Promote execution: edit+edit/create+create/mixed, merge modal confirm/cancel, banner link, restore-and-edit", tests="transactions/tx-bulk-promote-exec.spec.ts")
+    add_test(
+        cat,
+        "tx-bulk-promote-split",
+        front_tx_bulk_promote_split,
+        name="TX Bulk Promote Split Tests",
+        desc="J-67, each test on a disposable account with two brokers of its own: the editor holds a withdrawal's cash as its magnitude, and a merge with a saved row (mixed, edit+edit) changes the type without moving the sign — F3 (red) a saved DEPOSIT on B + a new WITHDRAWAL on A merged by the banner, then «Split pair» before the save: the grid gives each leg its type back, the commit sends one WITHDRAWAL create on A, no update, no promote, and the account holds it (soft; the grid, the request, the answer and the rows read back in every message, annotation «J-67 F3 verdict»: REFUSED / WRONG DATA SAVED / RIGHT); F1 (red) a saved WITHDRAWAL + a new DEPOSIT merged → the pair is shown as the withdrawal («From:»); F2 (red) its cash cell reads −X / +X; G (guard) two new rows merged (shown as the withdrawal, −X / +X), split (WITHDRAWAL / DEPOSIT again), saved as two creates and no promote",
+        tests="transactions/tx-bulk-promote-split.spec.ts",
+    )
     add_test(
         cat,
         "tx-bulk-promote-cost-basis",
