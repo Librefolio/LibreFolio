@@ -26,6 +26,8 @@ response:
   ``LIBREFOLIO_PUBLIC_URL`` and, self-hosted, ``https://api.github.com`` (the update check, run in the administrator's
   browser). A script the app did not send (a proxy's, a CDN's, an extension's) is blocked; the page reports it in the
   console and in the Security tab (``app.html``, ``lib/features/security/cspNotice.ts``);
+- the API's **documentation pages** (debug instances only) get ``api_docs_policy()``: scripts of the instance and of the
+  pinned jsDelivr files they load with Subresource Integrity (R5);
 - a **script of the build** (JavaScript under ``/_app/``) gets ``worker_policy()``: a browser applies it only to a worker
   started from that script (R4): the build's own modules, ``connect-src`` like the pages, nothing from elsewhere;
 - with ``LIBREFOLIO_FRAME_PROTECTION`` (on in the managed profile), every response also gets ``frame-ancestors 'self'``
@@ -62,6 +64,7 @@ from pathlib import Path
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from backend.app.api.api_docs import DOCS_PATH, LIBRARY_ORIGIN, REDOC_PATH
 from backend.app.config import get_settings
 from backend.app.config.accounts import public_url
 from backend.app.logging_config import get_logger
@@ -141,6 +144,18 @@ def web_app_policy(script_hashes: Iterable[str], connect_sources: Iterable[str],
     ``worker-src`` and ``connect-src`` with ``connect_sources``; ``frame-ancestors`` first when frame protection is on."""
     directives = ((FRAME_ANCESTORS,) if frame_protection else ()) + DOCUMENT_DIRECTIVES + (WEB_APP_SCRIPT_SRC, WEB_APP_WORKER_SRC, "connect-src 'self'")
     return _with_sources(directives, {"script-src": tuple(script_hashes), "connect-src": tuple(connect_sources)})
+
+
+#: The API's documentation pages (H-55 R5, ``api/api_docs.py``: debug instances only), whose policy is ``api_docs_policy()``.
+API_DOCS_PAGES = frozenset({DOCS_PATH, REDOC_PATH})
+
+
+def api_docs_policy(frame_protection: bool) -> str:
+    """The enforced policy of the API's documentation pages: the document's directives, and scripts only of the instance
+    and of the pinned files of jsDelivr the pages load with their integrity hashes (``api_docs.LIBRARIES``); ReDoc's
+    search worker from a blob; the OpenAPI document from the instance."""
+    directives = ((FRAME_ANCESTORS,) if frame_protection else ()) + DOCUMENT_DIRECTIVES + (f"script-src 'self' {LIBRARY_ORIGIN}", WEB_APP_WORKER_SRC, "connect-src 'self'")
+    return "; ".join(directives)
 
 
 #: The media types of a script: under ``/_app/`` one gets ``worker_policy()`` (R4).
@@ -297,6 +312,7 @@ class SecurityHeadersMiddleware:
         # A 304 carries no policy (H-45): the browser keeps the one of the response it cached
         self.not_modified_headers = ALWAYS_HEADERS + frame
         self.connect_sources = connect_sources(settings.LIBREFOLIO_PROFILE)
+        self.api_docs_headers = ALWAYS_HEADERS + frame + ((_CSP_FIELD, api_docs_policy(self.frame_protection).encode()),)
         self.script_headers = ALWAYS_HEADERS + frame + ((_CSP_FIELD, worker_policy(self.connect_sources, self.frame_protection).encode()),)
         self.csp_report_only = settings.LIBREFOLIO_CSP_REPORT_ONLY
         self.script_hashes = _BuildScriptHashes()
@@ -330,6 +346,8 @@ class SecurityHeadersMiddleware:
             return ALWAYS_HEADERS + ((_X_FRAME_OPTIONS,) if self.frame_protection else ()) + self._web_app_policies(await self._script_hashes())
         if _is_app_script(path, headers):
             return self.script_headers
+        if path in API_DOCS_PAGES and _media_type(headers) == "text/html":
+            return self.api_docs_headers
         return self.document_headers if _is_document(headers) else self.headers
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:

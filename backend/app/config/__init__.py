@@ -307,6 +307,10 @@ class Settings(BaseSettings):
     # Report-only Content-Security-Policy on the web app's pages (D5): violations show in the browser console, nothing
     # is blocked. Off by default
     LIBREFOLIO_CSP_REPORT_ONLY: bool = False
+    # The API's documentation, /api/v1/docs, /api/v1/redoc and /api/v1/openapi.json (H-55 R5): off by default in every
+    # profile, Docker included, so an instance publishes no map of its API; `dev.py server --debug` turns it on, and test
+    # mode always has it (api_docs_enabled()). The managed profile keeps the code default: no PROFILE_DEFAULTS entry
+    LIBREFOLIO_API_DOCS: bool = False
 
     # The header in which a trusted reverse proxy passes the visitor's address (P17), such as Fly.io's Fly-Client-IP:
     # services/platform/client_address.py. Empty by default: the connection's address. No profile sets it
@@ -583,6 +587,13 @@ def get_settings() -> Settings:
         settings.LOG_LEVEL = log_level_override.upper()
 
     return settings
+
+
+def api_docs_enabled() -> bool:
+    """Whether the API's documentation is served (H-55 R5): ``LIBREFOLIO_API_DOCS`` (``dev.py server --debug`` sets it), or
+    test mode, whose lanes read ``/api/v1/openapi.json`` in their tests. Read at each call; ``main.py`` reads it once, when
+    the app is built."""
+    return is_test_mode() or get_settings().LIBREFOLIO_API_DOCS
 
 
 class ProfileDefaultError(TypeError):
