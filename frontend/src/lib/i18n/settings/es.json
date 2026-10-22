@@ -246,7 +246,8 @@
         "admin": "Admin",
         "inactive": "Desactivada",
         "protected": "Protegida",
-        "pendingSetup": "Pendiente de configuración"
+        "pendingSetup": "Pendiente de configuración",
+        "pendingVerification": "Pendiente de verificación"
       },
       "actions": {
         "deactivate": "Desactivar",
@@ -350,7 +351,8 @@
         "resetLinkCreated": "Enlace de restablecimiento creado para {username}.",
         "setupCancelled": "El enlace de configuración de {username} ya no funciona."
       },
-      "pendingSetupHint": "Esta cuenta de administrador se activa con su enlace de configuración. Si el enlace se ha perdido, ejecuta «dev.py user setup-link» en el servidor o pídelo a tu proveedor."
+      "pendingSetupHint": "Esta cuenta de administrador se activa con su enlace de configuración. Si el enlace se ha perdido, ejecuta «dev.py user setup-link» en el servidor o pídelo a tu proveedor.",
+      "pendingVerificationHint": "Su titular aún no ha abierto el enlace de verificación: al iniciar sesión puede pedir uno nuevo. Reactivar le deja entrar de inmediato, sin el correo."
     },
     "linkShare": {
       "addressLabel": "Dirección del servidor",

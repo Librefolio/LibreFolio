@@ -56,8 +56,9 @@ username in a plain circle.
 |---|---|
 | **You** | Your own account |
 | **Admin** | An administrator: it manages the instance, its settings, its users and its invitations |
-| **Deactivated** | The account cannot sign in, and takes no place — unless it is [waiting for its email](#waiting) |
+| **Deactivated** | The account cannot sign in, and takes no place. An account [waiting for its email](#waiting) has a badge of its own, below |
 | **Waiting for setup** | The [initial administrator](hosting_providers.md#initial-admin), not active yet: nobody has used its setup link, nor set the account up another way. Shown instead of **Deactivated**: see [Waiting for Its Setup Link](#pending-setup) |
+| **Waiting for verification** | An account that has not opened the verification link LibreFolio emailed to its address yet, even once that link has expired. It cannot sign in, and takes a place while its link is live. Shown instead of **Deactivated**: see [Accounts Waiting for Their Email](#waiting) |
 | **Protected** | Nobody can deactivate, demote or delete it: see [When an Action Is Off](#action-off) |
 
 Click a row to open its actions, and again to close them. Your own row has none: it says *This is
@@ -69,7 +70,7 @@ your account. Manage it from:* with a link to **Profile**, the tab where you cha
 | Action | What it does | Asks first |
 |---|---|---|
 | **Deactivate** | The account can no longer sign in, and is signed out of every device. Its brokers and transactions stay, and its place is freed. Shown for an active account | ✅ |
-| **Reactivate** | The account can sign in again, with its data as it was; its old sessions do not come back. It takes a place again, so it needs a free one. Shown for a deactivated account, but not for the initial administrator [waiting for its setup link](#pending-setup) | — |
+| **Reactivate** | The account can sign in again, with its data as it was; its old sessions do not come back. It takes a place again, so it needs a free one, unless the account is [waiting for its email](#waiting) with a live link: its place is already counted. Shown for a deactivated account, one waiting for its email included, but not for the initial administrator [waiting for its setup link](#pending-setup) | — |
 | **Cancel setup link** | The setup link of the initial administrator [waiting for its setup](#pending-setup) stops working, the one already handed over included; the account keeps waiting for a new link. Shown for that account only, in the place of **Reactivate**: see [Cancel Its Setup Link](#cancel-setup) | ✅ |
 | **Make administrator** | The account manages the instance too: settings, users and invitations | ✅ |
 | **Remove administrator** | The account stays, as a regular user, and is signed out of every device | ✅ |
@@ -102,7 +103,11 @@ LibreFolio turns off the actions it knows the server would refuse, and says why 
 With **Require Email Verification** on ([Global Settings](settings.md)), a new account waits until
 its owner confirms the address with the link LibreFolio emails to it. Until then:
 
-- its row shows **Deactivated**: this version has no badge of its own for a waiting account;
+- its row shows **Waiting for verification** instead of **Deactivated**, even once its link has
+  expired. Hover over the badge for the hint, or open the row, where it reads under the buttons: *Its
+  owner has not opened the verification link yet: signing in offers to send a new one. Reactivate
+  lets the account in at once, without the email.* An account deactivated while it waits (see the
+  last point) stops waiting, and its row reads **Deactivated** again;
 - it takes a place while its link is live, that is for 24 hours after the last link sent;
 - **Reactivate** lets it in at once: it can sign in, and the links already sent stop working. While
   its link is live, this takes no extra place, since its place is already counted: **Reactivate**
