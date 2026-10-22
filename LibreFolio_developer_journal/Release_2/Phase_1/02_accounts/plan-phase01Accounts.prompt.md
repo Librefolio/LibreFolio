@@ -8992,7 +8992,7 @@ Via del coordinatore: E2E di N69c con **stub** (scelta di disegno del test). `Us
   - `GlobalSettingsTab.svelte`: usa il modulo per opzioni, variabile, 409 e rilettura; in più `data-value` sul riquadro di
     `registration_mode` (additivo, lo legge l'E2E).
   - i18n (`settings`, ×4): `settings.usersTab.registration.{label,confirm.title,confirm.message,confirm.confirm,saveFailed}`.
-- **E2E**: `admin-users.spec.ts` AUSR-E-11, con stub delle tre richieste (PATCH, `GET /system/instance`, `GET /settings/global`):
+- **E2E** (prima versione, sostituita il 22/10 sera, vedi «N69c — E2E vero ed esclusivo»): `admin-users.spec.ts` AUSR-E-11, con stub delle tre richieste (PATCH, `GET /system/instance`, `GET /settings/global`):
   scelta → PATCH col corpo atteso → configurazione riletta → «Invita» spento; «aperta» chiede, annulla non manda nulla, conferma
   manda; «Impostazioni globali» legge lo stesso modo.
 - Doc: `admin/users.en.md` (`#registration`), `admin/settings.en.md`; timbro Aphra su `settings.en.md`.
@@ -9014,3 +9014,21 @@ Via del coordinatore: E2E di N69c con **stub** (scelta di disegno del test). `Us
 - Vitest (`settings`, `instance`, ratchet colori): **1409 passed**, 36 file. `registrationMode.test.ts` 9, `UsersTab.test.ts` 73, `SecurityTab.test.ts` (cartella `security`) 94.
 - `front check` dopo `api sync`: **0 errori, 0 avvisi** (`ondata4/a-frontcheck.log`). `i18n check`: 5136 chiavi, strict. `check-orphans` pulito.
 - Corsia 6185 (`/tmp/librefolio-r13-a`, `db populate --force --clean`): E2E `admin-users` **11 passed** (AUSR-E-11 compreso), `security-tab` **4 passed** (ASEC-E-04 compreso), `api users-admin` **184 passed** (`ondata4/a-heavy-e2e.log`). Porta libera alla fine; `git diff --check` pulito; HEAD `c042f2481`.
+
+### N69c — E2E vero ed esclusivo (sostituzione) ✅ (22/10, sera; base `b1044c9ab`)
+Correzione del developer: niente stub. L'AUSR-E-11 con `page.route` è tolto da `admin-users.spec.ts` (resta a 10 test) e sostituito da
+`settings/registration-mode.spec.ts` (RMOD-E-01), scritto con `test-author`.
+- Test reale: e2e_test_admin sceglie «chiusa» dalla scheda Utenti (nessuna conferma, un PATCH, `settings.global.saved`), legge il modo dal
+  server, da Impostazioni globali (`data-value`) e da `GET /system/instance` anonimo; «aperta» chiede, annulla non scrive, conferma scrive.
+- Ripristino: la fixture `registration` legge il modo dal server prima di toccare, lo riscrive via API in un `finally` (verde o rosso) e lo
+  rilegge; rosso subito se `LIBREFOLIO_REGISTRATION` lo blocca.
+- Runner: azione `registration-mode` di `front-utility`, con `exclusive_because` (`global_settings.registration_mode`, una riga condivisa):
+  l'inventario la classifica `write-global`. Una riga di catalogo in `_frontend_utility.py`.
+> **⚠️ Fuori pista**: il test-author ha scoperto che il runner non rispetta `exclusive_because` per Playwright con `--workers > 1`
+> (`front-utility all` lancia le spec in una sola invocazione). Ha scritto una correzione di `_consolidate.py` (+36 righe), **non provata con
+> `--workers 4` e fuori dal perimetro**: l'ho tolta dall'albero e salvata come patch per il coordinatore
+> (`side-session-notes/…/A-consolidate-exclusive-playwright.patch`). A un worker (il default) tutto è già in serie.
+- Prove (corsia 6185, in `flock`): `registration-mode` due volte **1 passed** (24,0 s e 22,3 s, `ondata4/a-rmod-run1.log`, `a-rmod-run2.log`), con
+  «restored: open» in entrambe; `admin-users` **10 passed** (`a-rmod-admin2.log`); fallimento simulato dopo il cambio a `disabled`: rosso, ma
+  il DB della lane legge `registration_mode|open` (`a-rmod-fail.log`, `a-rmod-fail-dbread.log`); `test_test_runner_cli.py` 785 passed;
+  `check-orphans` pulito.

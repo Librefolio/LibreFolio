@@ -593,6 +593,16 @@ def front_admin_users(verbose: bool = False, ui: bool = False, headed: bool = Fa
     return _run_playwright("settings/admin-users.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_registration_mode(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run «Who can sign up» from Settings → Users against the real backend (lot N69c): the instance's registration mode is really changed and put back."""
+    print_section("Frontend Registration Mode Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("settings/registration-mode.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_security_tab(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the Settings › Security tab (accounts lot A8b) and its «Administration» group: the badge, the findings, a re-read; a member's view."""
     print_section("Frontend Security Tab Tests")
@@ -1043,6 +1053,16 @@ def populate_registry(registry: dict) -> None:
         desc="Settings → Users (accounts lot A6b), e2e_test_admin acting on disposable accounts only: the tab for administrators alone (a member has none, ?tab=users opens Profile); the own row with users-self-hint and no action; deactivate/reactivate and promote/demote through users-confirm, with their accounts.user.* events and a server read-back, delete disabled demote-first while admin; a password-reset link and an invitation through LinkShare, each token inspected live, the invitation listed then revoked; the address check on the lane's other loopback origin (match through the real CORS path), a closed port (unverifiable), ftp (invalid, copy off), a stubbed stranger (mismatch), back to the prefill (idle); deletion with preview (one broker with one deposit, typed username, brokers_deleted 1, broker gone); sign-out everywhere (the account's session gets 401) and restart guides (every skipped flow pending again); every invitation it wrote revoked and every account self-deleted after each test",
         prereq="Test users created (e2e_test_admin an administrator, e2e_test_user an ordinary member); registration_mode open on the lane; no user limit on the lane",
         tests="settings/admin-users.spec.ts",
+    )
+    add_test(
+        cat,
+        "registration-mode",
+        front_registration_mode,
+        name="Registration Mode Tests",
+        desc="Who can sign up, from Settings → Users (lot N69c), against the real backend and no stub: e2e_test_admin chooses disabled (saved at the choice, no confirmation, one bulk PATCH, settings.global.saved, users-invite-button data-disabled-reason registration-disabled), reads it back from the server (GET /settings/global), from Global settings (data-value) and from the public GET /system/instance; chooses open (users-confirm first, nothing written, cancelled: data-shown back, server unchanged), confirms, and the server, Global settings and the public configuration say open; the mode the lane had is read first and written back through the API in a finally, red or green, then read again; red at once when LIBREFOLIO_REGISTRATION pins the mode",
+        prereq="Test users created (e2e_test_admin an administrator); registration_mode not pinned by LIBREFOLIO_REGISTRATION on the lane",
+        tests="settings/registration-mode.spec.ts",
+        exclusive_because="rewrites global_settings.registration_mode, one row shared by every user and every spec: a concurrent spec that registers or invites anonymously (the lane registers openly) would meet the disabled or invite this test leaves in force while it runs",
     )
     add_test(
         cat,
