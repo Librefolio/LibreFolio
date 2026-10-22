@@ -8510,3 +8510,373 @@ risposta»):
 
 **Con Z**: stesso file, pezzi diversi. Quando Z-32 (d) entra, `suggest_quote_base` eredita la cura: un rifiuto sale, la
 sonda lo legge come «nessun suggerimento» e `call_provider` mette in pausa.
+
+### Y-39 e il cancello dei segnali — nota per FE4, FE5a e Y-42 (20/10)
+
+- **Y-39** (deciso dal developer; il lotto di Y) riunisce la scheda degli asset, quella dei cambi e l'anteprima delle
+  impostazioni. Tocca `fx/+page.svelte` solo per questo. Nessuna obiezione da parte mia.
+- **Il mio messaggio a Y**: le copie del ciclo dei segnali locali sono cinque, non tre. Ci sono anche
+  `assets/[id]/+page.svelte` (`overlaySignals`) e `fx/[pair]/+page.svelte`, con le loro differenze: `staleDays` nei
+  punti del cambio; nome, icona e tipo nel confronto. Gli ho proposto un contratto non legato alla scheda.
+- **Y l'ha adottato** (13:30). Il modulo è `lib/charts/chartSignalRendering.ts`:
+  - `SignalDataSources`: `fxPairData(slug)` e `comparisonTarget(id)`, che dà `{data, displayName?, iconUrl?,
+    assetType?, basePoint?}`, più `selfAssetId?`;
+  - `fxPointToLineDataPoint(point, inverted)`, con `missing` e `staleDays`;
+  - `renderLocalSignal(s)` e `renderBackendResults`.
+- **Il cancello nuovo**, `src/signalRendering.gate.test.ts`, permette `signalFromConfig(` solo nel modulo e nelle mie
+  due pagine di dettaglio, copie note in una lista che può solo accorciarsi.
+  - Verificato oggi: la mia HEAD (`6011a9ff0`) e `dev_release2` hanno gli stessi 7 file con `signalFromConfig(`.
+    Fuori dalle pagine ci sono solo la definizione (`signals/registry.ts:196`) e un commento (`ChartSignal.ts:173`).
+    Il mio ramo non porta quindi nessun chiamante in più.
+- **Per i miei lotti**:
+  - **Y-42**, l'adozione del modulo nelle due pagine di dettaglio, la proporrà il coordinatore. Quando tolgo il ciclo
+    da una pagina, il cancello mi chiede di toglierla dalla lista.
+  - **FE4 e FE5a**: se spostano il ciclo fuori da una pagina di rotta, per esempio in un componente di
+    `lib/features/…`, il cancello lo rifiuta, perché la lista non si allunga. Quindi o adottano il modulo nello
+    stesso lotto, o lasciano il ciclo nella pagina.
+  - **N64** tocca le richieste dei segnali del backend, non questo ciclo: nessun conflitto.
+
+### Y-42 — i due dettagli disegnano i segnali con il modulo comune (21/10 notte, ondata 3)
+
+> **Via**: piano dell'ondata 3 «APPROVATO dal developer» (`salvataggi-worktrees-20261021/ondata3/PIANO-ondata3.md`,
+> «Decisioni del developer (21/10 sera)»: «Y-42 dentro questa ondata (sessione X)»), brief `kickoff-X.md`, lavoro
+> notturno: sotto-agente in background del coordinatore, il checkpoint è l'unico messaggio. Solo Y-42; N64 dopo.
+>
+> - Worktree `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-cuddly-engine`, ramo
+>   `e-alfy-x-plugin-asset-e-ricerca`, HEAD `c788e51be` (= atteso; merge di `dev_release2` `2879ae3e4`), albero pulito.
+> - Corsia 6191 + `/tmp/librefolio-r13-x`; pesanti in `flock /tmp/librefolio-heavy.lock`, `LC_ALL=en_US.UTF-8`.
+> - Grafo graphify assente nel worktree (ignorato): wiki letto a mano (`decisions/signal-label-unification.md`).
+
+#### Analisi (sola lettura, prima del codice)
+- **Stato reale** (verificato sul codice): `assets/[id]/+page.svelte` `overlaySignals` `:711-751` e
+  `fx/[pair]/+page.svelte` `:397-437` hanno ancora il ciclo `signalFromConfig(cfg)` → `_resolvedData` → `renderMulti`;
+  tutte e due hanno anche `backendOverlaySignals` (`:686-706` e `:375-395`), copia identica di `renderBackendResults`.
+  Il dettaglio del cambio ha il suo `fxPointToLineDataPoint` (`:337-345`), uguale a quello del modulo. Il cancello
+  `src/signalRendering.gate.test.ts` ha le due pagine in `KNOWN_COPIES` (`:76-85`) e le usa anche nei casi sintetici
+  (`CLEAN`, `KNOWN_COPIES[0]`/`[1]`) e nel test «bite on these very files».
+- **Le differenze fra le due copie e il modulo**, caso per caso:
+  - coppia FX nel dettaglio dell'asset: punto scritto in linea senza `staleDays`; il modulo lo aggiunge, ma
+    `FxPairSignal.computePoints` legge solo `value` (e scarta lo 0 dei mancanti): **disegno identico**;
+  - confronto: i dati stanno nei parametri della configurazione (`applyComparisonAssetsData` scrive `_resolvedData`,
+    `_assetIconUrl`, `_assetType`, `_assetCurrency`, `_targetCurrency`, `_conversionFailed`); `signalFromConfig` li
+    copia nell'istanza. Il nome: l'asset dà `display_name` o lascia il nome al catalogo; il cambio scrive a mano la
+    stessa chiave `chartSettings.signals.assetFallback` (stesso testo di `ChartSignal.text`). Icona e tipo: dalla lista
+    degli asset (cambio) o dai parametri caricati dalla stessa lista (asset): **stessi valori**;
+  - confronto con sé stesso: escluso nel dettaglio dell'asset (`data.assetId`), che diventa `selfAssetId`;
+  - `try/catch` intorno a `getFxStore`: non lancia mai (nota di Y in Y-39a); serie vuota = non disegnata, come nel modulo.
+  - **Nessuna differenza visibile trovata**: Y-42 è un cambio di struttura. Unica sfumatura: due confronti sullo
+    stesso asset, uno appena aggiunto e non ancora caricato, prendono i dati già caricati dall'altro (stesso asset,
+    stessi dati) invece di aspettare il caricamento.
+- **Superfici**:
+  - `lib/charts/chartPageSignals.ts` (di X, aiutanti dei dettagli): nuova funzione pura `detailPageSignalSources`
+    (le fonti dei dettagli: i cambi dallo store passato come funzione, diritti; il confronto dai `_resolvedData` della
+    configurazione con nome, icona e tipo dalla lista degli asset; `selfAssetId`);
+  - le due pagine: `renderLocalSignals` + `renderBackendResults` + `fxPointToLineDataPoint` dal modulo; via
+    `signalFromConfig`, `renderBackendSignalResult`, il convertitore locale e gli import rimasti senza uso;
+  - test: `lib/charts/__tests__/chartPageSignals.test.ts` (contratto delle fonti, parità con il vecchio disegno,
+    adozione letta nei sorgenti) e `src/signalRendering.gate.test.ts` (lista vuota, casi sintetici su copie finte,
+    morso sulle pagine reali). Tutti già registrati in `front_utility_unit` (`core-unit`): nessuna riga del runner.
+  - doc per sviluppatori `developer/frontend/components/charts.md` `#signal-rendering`, se nomina le copie.
+- **Non tocco**: `chartSignalRendering.ts` (di Y: nessuna aggiunta serve), `FxCard.svelte` (di Y in questa ondata:
+  converte due volte in linea, `:106-111` e `:121-126` → richiesta a Y nel checkpoint), le liste, lo store.
+- **Conflitti**: le due pagine sono mie in questa ondata; `signalRendering.gate.test.ts` nato con Y-39a (lo scrivo io
+  per ordine del brief); Y-40 leggerà `primaryView` nei dettagli dopo, in un secondo passo.
+- **Rischi**: reattività (`overlayDataVersion` resta letto nel `$derived`); i casi sintetici del cancello che oggi
+  indicizzano `KNOWN_COPIES[0]`/`[1]` vanno riscritti su copie finte, o il cancello si rompe con la lista vuota.
+- **Passi**: 1 analisi → 2 rossi (`test-author`) → 3 rossi visti rossi → 4 cura → 5 verdi leggeri (Vitest, `core-unit`,
+  `front check` dopo `api sync`, Prettier, `git diff --check`) → 6 doc → 7 checkpoint. E2E solo nello slot del
+  coordinatore: `front-asset asset-detail`, `front-fx fx-detail`.
+- **Fatto quando**: nessun `signalFromConfig(` nelle due pagine, `KNOWN_COPIES` vuota, rossi→verdi, `front check` 0/0,
+  E2E di dettaglio verdi nello slot, doc e piano aggiornati, CHANGELOG: nessuna riga visibile.
+
+#### Passi
+1. ✅ 21/10 · Analisi (sopra). `api sync` rc 0 (`ondata3/X-api-sync.log`), albero pulito dopo.
+2. ✅ 21/10 · I rossi (`test-author`, solo due file di test):
+   > **Note implementazione**:
+   > - `lib/charts/__tests__/chartPageSignals.test.ts`: tre parti nuove — il contratto di `detailPageSignalSources`
+   >   (fxPairData pigra e per coppia, diritta con `fxPointToLineDataPoint(p, false)`; comparisonTarget dai
+   >   `_resolvedData` della configurazione, nome/icona/tipo dagli asset, null senza dati; `selfAssetId`; purezza),
+   >   la parità attraverso il modulo (confronto con nome/icona/tipo, ripiego del catalogo, niente confronto con sé,
+   >   niente senza dati, la linea fantasma della conversione, coppia diritta e girata dal suo `_inverted`, store vuoto),
+   >   l'adozione letta nei sorgenti delle due pagine (import per valore di `renderLocalSignals` e
+   >   `renderBackendResults`, chiamati; `detailPageSignalSources(` chiamato; nessun convertitore locale nel cambio).
+   > - `src/signalRendering.gate.test.ts`: `KNOWN_COPIES = []`; i casi sintetici su `SYNTHETIC_COPIES` passate
+   >   esplicitamente; la camminata legge registro, modulo e le due pagine (`DETAIL_PAGES`); il «morso» rifatto sui file
+   >   veri (il testo del modulo copiato altrove; una pagina con una chiamata iniettata; una pagina come copia nota
+   >   finta, che risulta superata); nuovo «KNOWN_COPIES è vuota».
+3. ✅ 21/10 · I rossi visti rossi (carico 4,5): 2 file, **50 rossi, 51 verdi su 101**
+   (`ondata3/X-y42-red.log`).
+   - `chartPageSignals.test.ts` 79: 45 rossi (42 `detailPageSignalSources is not a function`, 3 adozione con le
+     pagine non adottate), 34 verdi (i 31 di prima, intatti, + 3 controlli delle forme).
+   - `signalRendering.gate.test.ts` 22: 5 rossi (le due pagine chiamano ancora `signalFromConfig(`, `:717` e `:403`;
+     iniezione e copia superata, una per pagina, per la stessa ragione), 17 verdi (tutti i sintetici).
+   - Prettier `--check` sui due file: pulito.
+4. ✅ 21/10 · La cura.
+   > **Note implementazione**:
+   > - `lib/charts/chartPageSignals.ts`: `DetailPageAsset`, `DetailPageSignalSourcesInput` e la funzione pura
+   >   `detailPageSignalSources` (il contratto dell'analisi). Importa solo da `chartSignalRendering.ts`, che resta
+   >   intatto: nessuna richiesta a Y.
+   > - `assets/[id]/+page.svelte`: `backendOverlaySignals = $derived(renderBackendResults(…, (key) => $t(key)))`;
+   >   `signalSources = $derived(detailPageSignalSources({configs: signals, assets: allAssets, fxPairPoints: (slug) =>
+   >   getFxStore(slug).getAllSorted(), selfAssetId: data.assetId}))`; `overlaySignals` = `renderLocalSignals(…)` più i
+   >   risultati del backend, con `void overlayDataVersion` ancora letto. Via `signalFromConfig`,
+   >   `renderBackendSignalResult`, `displayFxRate` dagli import (non più usati).
+   > - `fx/[pair]/+page.svelte`: stesso cambio senza `selfAssetId`; via il convertitore locale (ora
+   >   `fxPointToLineDataPoint` dal modulo, anche per `lineData`), `extractDaysBack`, `signalFromConfig`,
+   >   `renderBackendSignalResult` dagli import.
+   > - Doc (`docs-writer`, solo inglese): `developer/frontend/components/charts.md`, `#signal-rendering`: titolo «…cards,
+   >   preview and detail pages», un paragrafo sui dettagli e `detailPageSignalSources`, il cancello con la lista vuota.
+   >   `mkdocs check-links` in `flock`: rc 0, 97 link validi (`ondata3/X-y42-docs-checklinks.log`).
+   >
+   > **⚠️ Fuori pista**:
+   > - Il test d'adozione non vedeva una chiamata dopo lo spread (`[...renderLocalSignals(`): lo sguardo indietro
+   >   `(?<![\w$.])` rifiutava il `.` dello spread. Riparato da `test-author` (`(?<![\w$])(?<!(?<!\.)\.)`, due controlli
+   >   in più: spread accettato, `other.renderLocalSignals(` rifiutato). `chartPageSignals.test.ts` 79/79
+   >   (`ondata3/X-y42-repair.log`).
+5. ✅ 22/10 · Le prove leggere.
+   - Vitest, 11 file in 4 gruppi da al più 3 (fuori dal lucchetto, carico 3,5-4,1), `LC_ALL=en_US.UTF-8`:
+     **603/603** (`ondata3/X-y42-light-b{1..4}.log`): `chartPageSignals` + `signalRendering.gate` +
+     `comparisonSignalPages` 112; `chartSignalRendering` + `fxDetailConvertQuery` + `AssetBrowseNav` 117;
+     `layout.authGate` + `PriceChartFull.tooltipEscape` + `designer-lab/anchor` 58 (i test che leggono i sorgenti delle
+     due pagine); `ChartSettingsModal` + `chartCoreHelpers` 316.
+   - Prettier `--check` sui 3 file di codice e sui 2 di test: pulito. `git diff --check`: pulito.
+   - Nessun `signalFromConfig(` fuori dal modulo (grep: solo `chartSignalRendering.ts:72`, la dichiarazione in
+     `registry.ts:196` e un commento in `ChartSignal.ts:173`).
+   - In `flock`, `LC_ALL=en_US.UTF-8`, `nice` (`ondata3/X-y42-verify.sh`, riassunto `X-y42-verify.summary`; due ore di coda
+     dietro l'inventario CSP di H e le corse degli altri):
+     - `dev.py test --test-port 6191 --data-dir /tmp/librefolio-r13-x front-utility core-unit`: **227 file, 9958/9958**
+       (`X-y42-core-unit.log`, 00:03);
+     - `dev.py front check` (dopo `api sync`): **0 errori, 0 avvisi** (`X-y42-front-check.log`, 00:33).
+   > **⚠️ Fuori pista**: il passo «vicini» dello script, ancora in coda al lucchetto, l'ho annullato (rc 143, mai
+   > partito): gli stessi 11 file erano già verdi nei 4 gruppi qui sopra. Nessun server avviato; la porta 6191 non è
+   > mai stata usata.
+6. ✅ 22/10 · Doc: fatta al passo 4 (`charts.md#signal-rendering`). CHANGELOG: **nessuna riga visibile** (nessun
+   cambio di disegno trovato: stesso nome, icona, tipo, linea fantasma, verso della coppia).
+7. ✅ 22/10 · CHECKPOINT READY al coordinatore; E2E nello slot del coordinatore: `front-asset asset-detail`,
+   `front-fx fx-detail` (consigliata anche `front-portfolio risk-asset-detail`: i segnali di rischio del dettaglio
+   filtrano `backendOverlaySignals`).
+   - **Richiesta a Y** (FxCard è di Y in questa ondata): `FxCard.svelte:106-111` e `:121-126` convertono i punti in
+     linea con `staleDays: d.backwardFillInfo?.daysBack ?? 0`; possono usare `fxPointToLineDataPoint(d, inverted)` del
+     modulo (stesso risultato: `extractDaysBack` legge prima `backward_fill_info.days_back`, poi lo stesso campo).
+   - **Backlog**: Y-42 sta nella sezione di Y (`BACKLOG_POST_1.2.md:9860`): non la tocco; al coordinatore la chiusura
+     (✅ le due pagine e il cancello; resta il punto `FxCard`, a Y).
+   > **Note implementazione**: committato dal coordinatore come `087769e44` (genitore `c788e51be`), dopo la sua verifica
+   > (101/101). Gli E2E di dettaglio li mette lui nel gate del treno; la richiesta su `FxCard` la gira a Y.
+
+### N64 — la cache dei risultati dei segnali, come quella dei prezzi (22/10 notte, passo C)
+
+> **Via del coordinatore** (22/10, dopo il commit di Y-42): «Via al passo C, N64 … Q1 sì (cache colpita: nessuna
+> richiesta, nessun token, nessuna rotellina, «Refresh» fermo), Q2 sì (dopo un aggiornamento dei prezzi in background il
+> passaggio successivo richiede di nuovo, con la rotellina)». Decisioni del developer del 21/10 nel brief `kickoff-X.md`
+> (Q3: in 1.3). HEAD `087769e44`, albero pulito. Sporchi di Y (da non toccare): `chartSettingsStore.svelte.ts`,
+> `calendarReturnWindow.ts`, `reducedPriceQuery.ts`, `chartSignalRendering.ts`, `AssetCard.svelte`,
+> `ChartSettingsModal.svelte`, `assets/+page.svelte`, i loro test, `asset-list.spec.ts`, `_frontend_utility.py`,
+> `charts.md`, due pagine utente.
+
+#### Analisi breve (sul codice di `087769e44`)
+- **Oggi**: la pagina dell'asset (`loadChartData`, `:1245-1446`) chiede segnali del backend ed eventi a ogni cambio di
+  modalità (`setPrimaryMode`), di finestra (`setCalendarPreset/Custom`), di periodo, di valuta, anche quando i prezzi
+  vengono dalla loro cache; i rendimenti di calendario dei confronti viaggiano nella stessa richiesta. La pagina della
+  coppia (`loadChartData`, `:743-852`) con un segnale riscarica tutto l'intervallo. `pageBusy.track` prende il gettone
+  sul clic, anche quando la funzione poi non chiede niente (lampo del «Refresh»).
+- **Disegno** (solo frontend, nessuna API):
+  1. `TimeSeriesStore.generation`: un numero unico in tutta l'app (contatore globale), nuovo a ogni `invalidateAll`,
+     `invalidateRange`, `markStale`; non cambia con `merge`/`markFetched`. Così ogni invalidazione dei prezzi o dei cambi
+     — Refresh, Sync, salvataggio dell'editor, cambio di valuta, recupero in background (Q2), store rimosso e ricreato —
+     invalida per costruzione i risultati calcolati su quei dati, senza toccare gli 11 chiamanti.
+  2. `lib/stores/signalResultCache.ts`, nuovo: `canonicalCacheKey(value)` (JSON con chiavi ordinate) e
+     `SignalResultCache<T>` (get/set con le generazioni lette all'inizio della richiesta, LRU, copie isolate con
+     `structuredClone`), due istanze: `assetChartAnswers` (la risposta della pagina dell'asset senza prezzi) e
+     `fxSignalAnswers` (i risultati validati della coppia). Svuotate al cambio di sessione.
+  3. Pagina dell'asset: chiave = il corpo esatto della richiesta senza `include_price` (asset, intervallo risolto,
+     valuta, segnali con id/codice/parametri, rendimenti con la finestra, confronti); generazioni = store dei prezzi
+     dell'asset e di ogni confronto nella valuta effettiva. Colpo solo se anche i prezzi sono in cache. Si scrive solo una
+     risposta applicata: elemento dell'asset presente, segnali validi (modo prezzi), rendimento non in `error`.
+  4. Pagina della coppia: chiave = il corpo della richiesta con i segnali; generazione = store della coppia. Colpo solo se
+     i tassi coprono l'intervallo.
+  5. Gettone (Q1): `loadChartData` e `maybeLoadComparison` dicono se hanno chiesto al server (bandierina sincrona, letta
+     subito dopo la chiamata); i trigger (modalità, finestra, periodo, valuta, segnali, verso) prendono il gettone solo
+     allora. Su un colpo tutto succede nello stesso tick: niente rotellina, niente gettone.
+- **Fuori**: le serie dei confronti in modalità prezzi restano col loro memo per impronta (non sono indicatori; un periodo
+  nuovo le richiede, con il gettone, come oggi) → residuo X-N64b. Granularità per segnale (togliere un indicatore
+  richiede di nuovo) → residuo. Il ramo X-R83 resta morto.
+- **Superfici**: `stores/core/TimeSeriesStore.ts`, `stores/signalResultCache.ts` (nuovo),
+  `components/assets/detail/assetDetailPriceQuery.ts` (chiave e risposta da tenere), le due pagine; test
+  `TimeSeriesStore.test.ts`, `assetPriceStoreRegistry.test.ts`, `fxStoreRegistry.test.ts`, `signalResultCache.test.ts`
+  (nuovo, una riga in `_frontend_asset.py`, non sporco in Y), `assetDetailPriceQuery.test.ts`, `chartPageSignals.test.ts`
+  (cablaggio letto nei sorgenti), E2E `asset-detail.spec.ts` e `fx-detail.spec.ts`; doc
+  `developer/frontend/state/registries.md`. `charts.md` è sporco in Y: niente.
+- **Rossi**: Vitest (generazioni, cache, chiave, cablaggio) visti rossi; E2E scritti ora, girano nello slot (non visti
+  rossi: la coda del lucchetto è di ore).
+- **Peso**: medio-alto. **CHANGELOG**: una riga 🔄 proposta (visibile: i ritorni sono istantanei).
+
+#### Passi
+1. ✅ 22/10 · Analisi breve (sopra).
+2. ✅ 22/10 · I rossi (`test-author`, due agenti su file diversi).
+   > **Note implementazione**:
+   > - Vitest: `TimeSeriesStore.test.ts` (8: generazione unica, nuova a ogni invalidazione e a `markStale`, ferma con
+   >   `merge`/`markFetched`/letture), `assetPriceStoreRegistry.test.ts` (6) e `fxStoreRegistry.test.ts` (5: invalidazioni,
+   >   bus `prices` sì, `mutation`/`refresh` no, store rimosso e ricreato), `signalResultCache.test.ts` nuovo (30: chiave
+   >   canonica, generazioni posizione per posizione, mancata = voce tolta, LRU di 32, copie isolate, i due singoli svuotati
+   >   al cambio d'utente e all'uscita, non per lo stesso utente), `assetDetailPriceQuery.test.ts` (15: chiave senza
+   >   `include_price`, risposta senza `prices`), `chartPageSignals.test.ts` (15: cablaggio letto nei sorgenti — cache
+   >   letta/scritta, `.generation`, i tre `track*`, le etichette dei trigger non più su `pageBusy.track(`; guardie per
+   >   Refresh, primo caricamento, riprova). Una riga in `_frontend_asset.py` (`front_asset_unit`).
+   > - E2E (non lanciati): `asset-detail.spec.ts` 3 (la sequenza del developer con osservatore di `data-busy` e del
+   >   caricatore; periodo e ritorno con SMA; guardia Refresh), `fx-detail.spec.ts` 2 (periodo e ritorno con RSI, server
+   >   finto; guardia Refresh). `tsc --noEmit -p tsconfig.e2e.json` exit 0, Prettier pulito.
+3. ✅ 22/10 · Rossi visti rossi (`ondata3/X-n64-red-{1,2}.log`): 19 rossi per `generation` mancante, 30 per il modulo
+   mancante (file non raccolto), 15 per i due aiutanti mancanti, 6 di cablaggio (3 per pagina); verdi tutti i 399 test
+   di prima, le 2 guardie e 7 controlli delle forme. L'agente ha provato i test su una copia usa e getta con
+   un'implementazione di riferimento (250/250) e ~30 mutazioni, tutte prese.
+4. ✅ 22/10 · La cura.
+   > **Note implementazione**:
+   > - `stores/core/TimeSeriesStore.ts`: `generation` (contatore globale del modulo), rinnovata in `invalidateAll`,
+   >   `invalidateRange`, `markStale`.
+   > - `stores/signalResultCache.ts` (nuovo): `canonicalCacheKey`, `SignalResultCache<T>` (Map in ordine d'uso = LRU di 32,
+   >   `structuredClone` in entrata e in uscita, mancata con generazioni diverse = voce tolta), `assetChartAnswers`,
+   >   `fxSignalAnswers`, svuotate da `registerClientSessionReset`.
+   > - `assetDetailPriceQuery.ts`: `assetChartAnswerKey(body)` e `assetChartAnswerForCache(answer)`.
+   > - `assets/[id]/+page.svelte`: in `loadChartData` il corpo della richiesta è costruito una volta (`requestBody`), la
+   >   chiave e le generazioni (store dell'asset e dei confronti di calendario nella valuta effettiva) lette prima della
+   >   richiesta; `const response = cachedAnswer ?? (await …)` — un colpo non attende mai, quindi tutto il caricamento
+   >   finisce prima che la chiamata ritorni. Si scrive solo una risposta valida (elemento dell'asset presente, segnali
+   >   validi in modo prezzi, nessuna vista di calendario in `error`, confronti compresi). `lastChartLoadAskedServer` e
+   >   `lastComparisonLoadAskedServer` (sincrone) e i tre aiutanti `trackChartLoad`, `trackComparisonLoad`,
+   >   `trackChartAndComparison` al posto di `pageBusy.track` nei trigger di modalità, finestra, periodo, valuta,
+   >   segnali, confronti. Refresh (`handleRefresh`) e ogni Sync dalla pagina (`runSyncAsset`, `handleSyncPair`, appena
+   >   arriva la risposta, anche se la pagina è cambiata) svuotano `assetChartAnswers`.
+   > - `fx/[pair]/+page.svelte`: stesso schema; chiave = corpo della richiesta con i segnali, generazione dello store della
+   >   coppia; colpo solo se i tassi coprono l'intervallo; si scrivono solo risultati validi.
+   >
+   > **⚠️ Fuori pista**:
+   > - Revisione delle E2E esistenti (agente `Explore`, sola lettura): nessuna rottura in `fx-detail.spec.ts` e
+   >   `risk-asset-detail.spec.ts`; in `asset-detail.spec.ts` il test lungo «calendar-return primary mode queries exact
+   >   windows…» (`:575`) aveva 5 passi che, dopo un Sync o un Sync scaduto, si aspettano di nuovo la richiesta del
+   >   periodo di 90 giorni. Ha anche trovato un buco vero del disegno: dopo il Sync di un confronto (o il ramo
+   >   `canMergeOnly`, ≤50 punti) `runSyncAsset` ricarica senza forzare, e i rendimenti del confronto in cache sarebbero
+   >   rimasti vecchi. Cura: ogni Sync dalla pagina svuota `assetChartAnswers` appena arriva la risposta (anche scaduta),
+   >   e Refresh pure: dopo un Sync tutto si richiede, come prima di N64. Con questo i 5 passi tornano a chiedere (da
+   >   provare nello slot).
+   > - La revisione nota che i passi di calendario di quel test non entrano mai in cache solo perché due confronti finti
+   >   rispondono `error`: se un giorno diventassero validi, ~60 passi andrebbero rivisti. Lo registro come rischio.
+5. ✅ 22/10 · Le prove leggere.
+   - Vitest dei 6 file di N64, dopo la cura, in 2 gruppi da 3 (fuori dal lucchetto, carico 3,3): **155/155** e
+     **216/216** (`ondata3/X-n64-cure-b{1,2}.log`); dopo le cancellazioni sui Sync, di nuovo i 3 file d'uso più 9
+     vicini che leggono le due pagine o toccano lo store (`comparisonSignalPages`, `signalRendering.gate`,
+     `fxDetailConvertQuery`, `AssetBrowseNav`, `layout.authGate`, `PriceChartFull.tooltipEscape`, `designer-lab/anchor`,
+     `assetDetailLive.svelte`, `pageBusy`): **538/538** (`X-n64-light-b{1..4}.log`).
+   - In `flock`, `LC_ALL=en_US.UTF-8`, `nice` (`X-n64-verify.sh`, un'ora di coda): `front-asset asset-unit` **25 file,
+     1181/1181**; `front-fx fx-unit` **4 file, 161/161**; `front-utility core-unit` **227 file, 9988/9988**;
+     `dev.py front check` **0 errori, 0 avvisi**.
+   - Prettier `--check` sui 5 file di codice: pulito. `git diff --check`: pulito. Porta 6191 mai usata (`lsof` vuoto).
+   - `dev.py test check-orphans`: 5 file orfani, **nessuno mio** (`bulkBatchesGroups`, `compactDensity`,
+     `reducedPriceCache`, `chartUtils`, `reducedPriceQuery`: vengono da dev); `signalResultCache.test.ts` è registrato.
+6. ✅ 22/10 · Doc (`docs-writer`, solo inglese): `developer/frontend/state/registries.md` (sezione «Signal result
+   cache» con «Invalidation, by construction» e «Cache hits and the busy token», più tabella e passo 5) e
+   `core-infrastructure.md` (la riga di `TimeSeriesStore`: `generation`). Backlog, sezione X: X-N64b, X-N64c, X-N64d.
+   CHANGELOG: una riga 🔄 proposta al coordinatore. `mkdocs check-links` in `flock`: rc 0, 97 link validi (`X-n64-docs-checklinks.log`); `mkdocs build` non lanciato (le ancore nuove controllate a mano dal `docs-writer`).
+7. ✅ 22/10 · CHECKPOINT READY (N64), poi lo slot E2E del coordinatore («slot concesso adesso», 02:40-03:03).
+   > **Note implementazione**: corsia 6191 + `/tmp/librefolio-r13-x` popolata da zero (rc 0, 7 s); ogni corsa in `flock`,
+   > `nice`, `LC_ALL=en_US.UTF-8`, una alla volta; log `ondata3/X-n64-e2e-*.log`.
+   > - `front-asset asset-detail N64`: **3/3**; `front-fx fx-detail N64`: **2/2**;
+   > - `front-asset asset-detail` intero, `--workers 2`: **45 passati, 1 rosso** (`:8555`, sotto); il test lungo `:575`
+   >   (i 5 passi della revisione) è verde: la cancellazione sui Sync funziona;
+   > - `front-fx fx-detail` intero, `--workers 2`: **30/30**; `front-portfolio risk-asset-detail`: **5/5**.
+   > - Prova che i nuovi casi mordono (non li avevo visti rossi): lettura della cache spenta per finta
+   >   (`SignalResultCache.get` → `null`, copia di riserva nel scratchpad), stessi filtri: asset **2 rossi** (le due
+   >   «nessuna richiesta», «Expected 1 / Received 3» richieste), guardia Refresh verde; FX **1 rosso** («the return… posts
+   >   no conversion request»), guardia verde. File ripristinato (`cmp` uguale alla copia), poi di nuovo `N64` asset 3/3 e
+   >   FX 2/2 sul codice vero. Porta 6191 libera (`lsof` vuoto).
+   >
+   > **⚠️ Fuori pista**: `asset-detail.spec.ts:8555` («keeps the event markers when the detail opens from a list that
+   > already cached All») è rosso **anche con la cache spenta**: non dipende da N64. La premessa del test non vale più dopo
+   > Z-29b (`686691e3d`): la lista non riempie più lo store giornaliero dei prezzi (solo `reducedPrices`), quindi il
+   > dettaglio non ha i prezzi in cache, chiede `include_price: true`, e la richiesta «solo eventi» che il test aspetta non
+   > parte. N64 non può sopprimerla: la lista non scrive `assetChartAnswers` e il contesto del browser è nuovo. Da girare
+   > a Z (o al proprietario della spec): riscrivere il percorso A o toglierlo.
+   > **Note implementazione** (dopo il commit `34b6d45c0` del coordinatore): N64 committato.
+
+### `asset-detail.spec.ts:8555` — il percorso A dopo Z-29b ✅ 22/10 (richiesta del coordinatore, HEAD `34b6d45c0`)
+- **Perché**: il test supponeva che la lista su «Tutto» riempisse lo store giornaliero dei prezzi, così il dettaglio aperto
+  da una card chiedesse solo gli eventi. Da Z-29b (scelta di progetto) la lista tiene le serie delle card in una cache
+  ridotta sua, accanto alla giornaliera senza toccarla: il dettaglio chiede i suoi prezzi giornalieri con gli eventi.
+  Nessun riuso possibile da chiedere al developer: la serie ridotta è campionata (settimane, mesi), il dettaglio disegna
+  i giorni.
+- **Cosa** (`test-author`, solo la spec, +33/−14): titolo «keeps the event markers when the detail opens from a list on
+  All: the detail asks its own daily prices with the events»; dopo il clic sulla card, la prima risposta per l'asset ha
+  `include_price: true` e `include_events: true`, nessuna richiesta «solo eventi» prima di lei, e il grafico disegna i due
+  dividendi (l'inizio chiesto letto dalla risposta consegnata, non supposto). Controlli della lista invariati; il caso
+  fratello `:8595` (percorso B, il colpo nella cache) e il blocco N64 non toccati; il titolo del `describe` resta
+  (rinominarlo cambierebbe il titolo completo del fratello). Prettier pulito, `tsc --noEmit -p tsconfig.e2e.json` exit 0.
+- **Prove** (in `flock`, `nice`, `LC_ALL=en_US.UTF-8`, corsia 6191): il test da solo **1/1** (`ondata3/X-8555-single.log`);
+  `front-asset asset-detail` intero, `--workers 2`: **46/46** (`X-8555-asset-detail.log`). Porta 6191 libera.
+
+### Y-40, il dettaglio dell'asset legge la vista scelta in lista (22/10 notte, HEAD `17ed982c2`)
+
+> **Via del coordinatore** (22/10): «il dettaglio legge la vista scelta in lista (Y-40), con il contratto scritto da Y»:
+> apertura con `getSettingsForPair('asset-<id>', 'assets').primaryView` → `detailModesForPrimaryView`; salvataggio con
+> `setItemPrimaryView(slug, primaryViewForDetailModes(…), 'assets')`; finestra `effectiveCalendarReturnWindow(settings,
+> rangeDays)`; icona `CalendarSync` per il rendimento (V-8b). Solo il dettaglio degli asset; store e
+> `chartSignalRendering.ts` di Y (sporchi nel suo worktree): non li tocco. HEAD `17ed982c2` (merge di Y-40 asset e Z-29fx),
+> albero pulito, `api sync` rc 0.
+
+#### Analisi breve
+- **Oggi** (`assets/[id]/+page.svelte`): `reloadPage` rimette `primaryMode = 'price'`; `viewMode` parte da `'percentage'`;
+  la finestra è uno `$state` idratato una volta per asset da `settings.calendarReturnWindow` (`:262-274`) e scritto da
+  `persistCalendarWindow`; `AssetChartModeToggle` usa `Percent` anche per il rendimento.
+- **Disegno**:
+  1. apertura: in `reloadPage`, `{primaryMode, viewMode} = detailModesForPrimaryView(settings.primaryView)`;
+  2. salvataggio: in `setPrimaryMode` e nel cambio Abs/% (`onViewModeChange`) la pagina salva
+     `primaryViewForDetailModes(primaryMode, viewMode)`. **Con `setPairSettings({...settings, primaryView, signals:
+     [...signals]})`, non con `setItemPrimaryView`**: quest'ultimo riparte dall'override salvato e rifà le
+     configurazioni senza i dati del confronto che la pagina vi scrive (`_resolvedData`…): un cambio Abs/% farebbe
+     sparire le linee dei confronti. Per lo store il risultato è lo stesso (stessa base: override, poi scope, poi
+     globale); è il modo in cui la pagina salva già estetica, assi e segnali. Lo scrivo nel checkpoint per Y;
+  3. finestra: `calendarWindowSelection` diventa `$derived(effectiveCalendarReturnWindow(settings, calendarRangeDays))`
+     — sincrona, quindi un cambio di periodo legge subito la finestra nuova; la scelta dell'utente si salva con
+     `calendarReturnWindowAuto: false` esplicito (lo store la segna scelta solo se diversa da quella salvata: con la
+     finestra salvata uguale a quella cliccata resterebbe in automatico);
+  4. icona: `CalendarSync` in `AssetChartModeToggle` (non sporco in Y).
+- **Fuori**: `renderCalendarComparisons` (disponibile, non serve: il dettaglio ha già la sua copia, e il file è sporco in
+  Y) → eventuale seguito; il dettaglio dei cambi (con la parte cambi di Y).
+- **Rossi**: Vitest `AssetChartModeToggle.test.ts` (l'icona); E2E in `asset-detail.spec.ts` (apertura nella vista
+  salvata, salvataggio e riapertura, finestra automatica uguale a quella della scheda, scelta dell'utente tenuta), visti
+  rossi nello slot.
+
+#### Passi
+1. ✅ 22/10 · Analisi breve (sopra).
+2. ✅ 22/10 · I rossi (`test-author`): `AssetChartModeToggle.test.ts` (l'icona letta dalla classe `lucide-<nome>`: rendimento
+   `calendar-sync`, prezzi `chart-line`, nessun `percent`) **4 rossi, 7 verdi**; E2E `asset-detail.spec.ts`, describe «Y-40
+   asset detail opens in the view chosen in the list» (7 casi: vista rendimento e assoluta scelte in lista; modalità e
+   Abs/% scelte nel dettaglio salvate e riaperte; la scheda della lista apre nella vista scelta nel dettaglio, due casi;
+   finestra automatica = il preset più grande che sta nel periodo; finestra scelta tenuta dopo il ricaricamento, anche
+   quella uguale alla predefinita). La vista si sceglie col pulsante vero della scheda (`asset-card-view-toggle`).
+   Visti rossi nello slot: **7/7 rossi** per le ragioni dichiarate (`ondata3/X-y40-red-e2e.log`).
+3. ✅ 22/10 · La cura.
+   > **Note implementazione**:
+   > - `assets/[id]/+page.svelte`: in `reloadPage` `{primaryMode, viewMode}` da `detailModesForPrimaryView(settings.primaryView)`;
+   >   `persistPrimaryView()` in `setPrimaryMode` e in `onViewModeChange` (`setPairSettings` con `primaryView` e i segnali
+   >   della pagina, vedi analisi); `calendarWindowSelection` ora `$derived(effectiveCalendarReturnWindow(settings,
+   >   calendarRangeDays))`, spostato dopo `settings`; l'effetto d'idratazione tiene solo i campi della finestra
+   >   personalizzata; `persistCalendarWindow` salva con `calendarReturnWindowAuto: false`.
+   > - `AssetChartModeToggle.svelte`: `CalendarSync` al posto di `Percent` (V-8b).
+   >
+   > **⚠️ Fuori pista**: il test lungo `:575` partiva dalla finestra 1M predefinita e con Y-40 la finestra automatica
+   > diventa 1Y sul periodo lungo (timeout a `:2720`). Riparato (`test-author`): il seme delle impostazioni segna la
+   > finestra come scelta (`calendarReturnWindowAuto: false`), così il test tiene le sue finestre esatte (la finestra
+   > automatica la provano i casi Y-40); l'unico `page.reload()` (`~:7080`) ora si aspetta di riaprire in Abs (l'ultima
+   > vista usata) invece di cliccarla.
+4. ✅ 22/10 · Le prove (slot del coordinatore, `flock`, `nice`, `LC_ALL=en_US.UTF-8`, corsia 6191):
+   - E2E `front-asset asset-detail Y-40`: **7/7**; `front-asset asset-detail` intero `--workers 2`: prima 52/53 (`:575`),
+     dopo la riparazione **53/53** (`X-y40-asset-detail-full-2.log`); `front-asset asset-mobile-layout` **21/21**;
+     `front-portfolio page-busy` **17/17** (le due spec che aprono il dettaglio sul grafico dei prezzi).
+   - Vitest: `AssetChartModeToggle` + `chartPageSignals` + `comparisonSignalPages` **116/116**; `front-utility
+     component-unit` **200 file, 5233/5233**; `front-utility core-unit` **232 file, 10100/10100**; `front check` **0/0**.
+   - Prettier pulito, `git diff --check` pulito, porta 6191 libera.
+5. ✅ 22/10 · Doc (`docs-writer`, solo inglese): `user/assets/detail/chart.en.md` (`#primary-modes`: si apre nella vista
+   della scheda e la salva; `#rolling-return`: finestra come la scheda, automatica finché non se ne sceglie una) e
+   `user/assets/index.en.md` (una frase nella nota delle tre viste). `mkdocs build` (strict) rc 0. Debito di traduzione:
+   `chart.{it,fr,es}` e `index.{it,fr,es}` (non timbrato). `charts.md` è sporco in Y: la frase sul dettaglio («the asset
+   detail page uses the same window», tolta da Y) è una richiesta a Y.
+6. ⏳ 22/10 · CHECKPOINT READY (vista del dettaglio).

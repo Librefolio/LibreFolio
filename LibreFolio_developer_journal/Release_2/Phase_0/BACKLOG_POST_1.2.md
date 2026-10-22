@@ -6055,6 +6055,20 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Strade possibili, da decidere: ricaricare una volta su un import dinamico fallito, oppure una pagina d'errore che
     lo dice e offre di riprovare.
 
+- **X-N64b · Dettaglio dell'asset: le serie dei confronti in modalità prezzi, in cache per periodo** — basso; X, 22/10
+  (N64). Con N64 indicatori e rendimenti tornano dalla cache; le serie dei confronti in modalità prezzi
+  (`loadComparisonAssetsData`) tengono il loro memo per impronta, quindi un periodo già visto con un confronto configurato
+  le richiede di nuovo, con il gettone. Stessa cache, chiave sul corpo, generazioni degli store dei confronti. Dettagli:
+  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «N64 — la cache dei risultati dei
+  segnali».
+- **X-N64c · La cache dei segnali per singolo segnale** — basso; X, 22/10 (N64). La chiave è la richiesta intera: togliere
+  uno di due indicatori, o riordinarli, chiede di nuovo anche quello rimasto. Una voce per segnale lo eviterebbe (gli
+  eventi e i rendimenti dei confronti viaggiano nella stessa risposta). Dettagli: come sopra.
+- **X-N64d · `asset-detail.spec.ts:575`: i passi di calendario non entrano in cache solo per due confronti in `error`** —
+  basso; X, 22/10 (revisione delle E2E per N64). `errorPeer` e `invalidCalendarPeer` rendono ogni risposta di calendario
+  non valida, quindi mai tenuta: se diventassero validi, una sessantina di passi che si aspettano una richiesta a ogni
+  ritorno andrebbero rivisti. Dettagli: come sopra, passo 4, «Fuori pista».
+
 ## W · Import e transazioni (fase 01)
 
 Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md).

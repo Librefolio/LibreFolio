@@ -41,6 +41,8 @@ Click a card or a row to open the asset's **[detail page](detail/index.md)**. Th
 
     The window is chosen in [Chart Settings](../fx/chart-settings.md): 1W, 1M, 3M, 1Y or a custom one. Until you choose one, it is automatic: the largest preset that fits the period shown in the list, so a 3-month range uses 3M and a range of one year or more uses 1Y.
 
+    The asset's [detail page](detail/index.md) opens in the view of its card, and with the card's Rolling Return window. A view chosen there becomes the card's.
+
 ??? note "⚙️ The look of the card charts"
 
     **Settings** in the toolbar sets the look and the overlays of every asset chart at once, and applying it replaces each asset's own settings, detail pages included. The ⚙️ on a card changes that card only. See [Chart Settings](../fx/chart-settings.md).
