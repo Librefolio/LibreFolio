@@ -9314,3 +9314,70 @@ due copie in linea di `buildSyncTargets`). TC-23 sta nella sezione T del backlog
 **Consegna C (22/10 ~02:30)**: CHECKPOINT READY (C), poi FROZEN. Nessun residuo nuovo; J-68 resta aperta (backend),
 con la nota del 22/10. E2E proposti al coordinatore: `front-broker detail` (il clic sul primo segmento,
 `brokers-detail.spec.ts:409`), ed eventualmente un caso nuovo che passi sopra `lot-gantt-marker-*`.
+
+#### Ondata 4 (22/10/2026) — J-68, J-71, R1 (base `c042f2481`; corsia 6190, `/tmp/librefolio-r13-j`)
+
+> Coordinatore (22/10): via a J-68 con la cura in due righe, a J-71, e R1 rimandata. Prima i rossi. Checkpoint separati.
+> Analisi del primo turno: `side-session-notes/…/J-analisi-turno1.md`.
+
+1. ✅ 22/10 — **R1 verificata e rimandata dopo la 1.3.**
+   > **Note implementazione**: nessun codice.
+   > - Q1 di X (i prezzi per osservazioni) non esiste: `price_query._build_backward_filled_series` (`assets/price_query.py:189`)
+   >   è ancora la serie densa; nessun commit di Q1 nel log; nessun simbolo «per osservazioni» nel codice.
+   > - La decisione del developer lascia fuori dalla 1.3 le formule veloci di X (X-Q1…Q3/S1; domanda 12 di
+   >   `PIANO-ondata4.md`, `kickoff-X.md`): R1 le segue, perché legge la serie che Q1 produce.
+   > - Casi di test pronti: 0. Gli scenari di parità sono 7, descritti in «Analisi breve di R1 e L1» (festivi, prezzi
+   >   portati, date comuni, buchi, split, esteri, replay dello stress `3.0.1`), nessuno scritto.
+   > - Il pavimento SEC8-1b non si toglie finché R1 non c'è (i test che lo fissano: `test_risk_replay_range_bounds.py`
+   >   r2/r5/r6/r7, `test_range_ceiling.py`).
+   > - Da riprendere con Q1 dopo la 1.3: ~3 h più la parità; con X va concordata la lettura nelle date comuni
+   >   (l'ultimo prezzo ≤ d al cambio di d).
+
+2. ✅ 22/10 — **J-68, i rossi** (prima della cura).
+   > **Note implementazione**:
+   > - `test_lots_analysis_pure.py`, classe nuova `TestTheTransferRowsOfASameDayMove` (6 casi, tramite `_build_lot_event_rows`
+   >   con un replay a doppio): **4 rossi** (una partenza e un arrivo che nominano i due broker; la partenza prima
+   >   dell'arrivo; quantità e prezzo del frammento; due righe per ogni lotto della coppia) e **2 guardie verdi** (un
+   >   trasferimento di giorni tiene le sue due righe; una coppia mai classificata, la gamba al bordo, tiene la sua riga sola
+   >   senza inventare l'origine). Motivi letti nel log (`ondata4/J-j68-red-2.log`): la sola riga è ARRIVE, senza origine.
+   > - `test_lots_closure_broker.py::test_s29_c4_…[same-day]`: la guardia che fissava la riga unica diventa il rosso
+   >   (`[("TRANSFER_ARRIVE", d, B, A, B), ("TRANSFER_DEPART", d, None, A, B)]`); `[in-transit]` resta verde. Rosso per il
+   >   motivo giusto (`J-j68-red-3.log`: 1 failed, 1 passed). Il test è stato rinominato (`…_name_their_brokers`).
+   > **⚠️ Fuori pista**: i due eventi della coppia hanno lo stesso `transaction_id` (l'id della coppia) e lo stesso giorno;
+   > la chiave di ordinamento di `_build_lot_event_rows` cadeva sul nome del tipo e metteva ARRIVE prima di DEPART. Lo Storico
+   > ordina in modo stabile per data e id, quindi leggeva l'arrivo prima della partenza: rosso proprio, e cura nella chiave.
+3. ✅ 22/10 — **J-68, la cura** (solo `lots_analysis_service.py`; `financial_math/` non toccato).
+   > **Note implementazione**:
+   > - `_transfer_brokers(classified_events)`: `pair_id → (source, destination)` dagli eventi `TRANSFER_DEPART`; passato a
+   >   `_build_transfer_rows(..., transfer_brokers=…)` (parametro con default vuoto).
+   > - Ramo `/to:` senza transito: se la coppia è nella mappa scrive TRANSFER_DEPART (`broker_id=None`, origine e
+   >   destinazione, `fragment_id`/quantità/prezzo del frammento d'arrivo) e TRANSFER_ARRIVE (`broker_id` invariato, in più
+   >   origine e destinazione). Coppia assente: come prima. Il controllo del frammento di transito usa un insieme calcolato
+   >   una volta, non più un ciclo per frammento.
+   > - Chiave di ordinamento: la partenza prima dell'arrivo.
+   > - Verdi: pure **253 passed** (247 + 6); `test_lots_closure_broker.py` **5 passed**; `lots_change_days_parity`,
+   >   `lots_transfer_*`, `lots_analysis_service`, `lots_fx_steps_parity`, `lots_closure_*`, `lots_market_*`, `lots_failed_*`,
+   >   `lots_performance_*` **546 passed** (`roi-fifo-utils`, corsia 6190; `J-j68-green-lots.log`). `api sync`: nessuna
+   >   differenza tracciata (lo schema non cambia).
+4. ✅ 22/10 — **J-68, guardie del frontend e documentazione.**
+   > **Note implementazione**:
+   > - `LotCustodyModal.test.ts`: la partenza nomina l'origine, l'arrivo la destinazione, la partenza prima (guardia verde,
+   >   il modale non cambia). `lotGanttChartHelpers.test.ts`: due righe nello stesso giorno leggono entrambe «Da A / A B»;
+   >   i due casi che parlavano di «same-day arrival» ora dicono «arrival row without source or destination» (restano come
+   >   fixture di una gamba senza origine). Commenti di `lotGanttChartHelpers.ts` allineati. Vitest: 3 file **259 passed**.
+   > - Documentazione: `developer/backend/transactions/lots_analysis_service.md` (sezione nuova «A Transfer That Leaves
+   >   and Arrives the Same Day»), `developer/frontend/components/features/lots-analysis.md` (la frase del tooltip),
+   >   `user/dashboard/positions.en.md` (una frase sullo Storico). **Nessun timbro di traduzione**: debito di una frase in
+   >   `positions.{it,fr,es}.md`.
+   > - Nessun E2E in `frontend/e2e` legge le righe di trasferimento né i marcatori `lot-gantt-marker-*` con un
+   >   trasferimento nello stesso giorno: nessuna corsa E2E proposta.
+5. ✅ 22/10 — **J-71, rossi e cura.**
+   > **Note implementazione**:
+   > - Rossi: `RiskPanelHeader.test.ts` (spia su `buildSyncTargets` + bottone abilitato/disabilitato) e
+   >   `riskAnalysisHelpers.test.ts` (guardia di sorgente sul pannello): **3 rossi** per il motivo giusto, 115 verdi attorno
+   >   (`J-j71-red.log`).
+   > - Cura: `RiskPanelHeader.svelte` e `RiskAnalysisPanel.svelte` usano `syncTargets = $derived.by(…buildSyncTargets(…))`
+   >   al posto di `syncAssets`/`syncFxPairs`; commenti di `syncTargets.ts` e `AssetSetRiskPanel.svelte` aggiornati.
+   >   Vitest dei 2 file: **118 passed**.
+   > **⚠️ Fuori pista**: `RiskAnalysisPanel` non ordinava gli asset per id (la funzione sì): nella modale di sync l'ordine
+   > passa a quello per id. Nessun dato cambia.

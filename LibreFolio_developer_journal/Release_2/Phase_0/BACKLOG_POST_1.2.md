@@ -7953,7 +7953,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     - Con la riga salvata in vista, lo split non faceva nulla.
   - Cura: il segno passa nell'importo in tutti i rami. «Split pair» su un merge non salvato lo annulla
     (`undoPendingPromote`). Spec nuovo `tx-bulk-promote-split` (F1–F3, guardia G).
-- **J-68 · Un trasferimento in un giorno solo non nomina l'origine nelle viste dei lotti** — basso, chiarezza; J, 20/10
+- ✅ **J-68 · Un trasferimento in un giorno solo non nomina l'origine nelle viste dei lotti** — basso, chiarezza; J, 20/10
   (test-author durante il §29 punto 2, verificato da J nel codice).
   - Per un trasferimento che parte e arriva lo stesso giorno, `_build_transfer_rows` (`lots_analysis_service.py`)
     scrive solo TRANSFER_ARRIVE, dal frammento di destinazione, con `broker_id` B ma senza `source_broker_id` né
@@ -7967,6 +7967,11 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     l'origine nel frontend. Il rimedio resta nel backend (`_build_transfer_rows`).
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «Gantt §29, punto
     2», passo 1.
+  - ✅ 22/10 (ondata 4): `_build_transfer_rows` legge i broker della coppia dagli eventi classificati del motore
+    (`_transfer_brokers`) e scrive anche TRANSFER_DEPART per un trasferimento nello stesso giorno, con origine e
+    destinazione su entrambe le righe; la partenza viene prima dell'arrivo. Niente in `financial_math/`. Lo Storico legge
+    «A → In transit» e «In transit → B» alla stessa data (due righe, come nei trasferimenti di più giorni). La riga fusa
+    «A → B» in una riga sola resta una scelta d'interfaccia, non fatta.
 - **J-70 · Costi di carico negativi già salvati, e la media Auto che ne nasce** — basso, numeri e dati; J, 20/10
   (residui di J-60, raccolti in una voce dal coordinatore).
   - J-60 rifiuta un costo negativo nuovo o mandato di nuovo. Le righe salvate prima con un costo manuale negativo
@@ -7982,12 +7987,18 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     - (c) nessuno, se il conteggio è zero.
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «J-60 — un costo di
     carico negativo si rifiuta nel batch», passo 1.
-- **J-71 · Due copie in linea di `buildSyncTargets` nei pannelli del rischio** — minimo, riordino senza effetti; J, 21/10
+- ✅ **J-71 · Due copie in linea di `buildSyncTargets` nei pannelli del rischio** — minimo, riordino senza effetti; J, 21/10
   (durante TC-23). `levels/RiskPanelHeader.svelte` e `RiskAnalysisPanel.svelte` calcolano ancora da soli
   `syncAssets`/`syncFxPairs`, la regola che `features/risk/syncTargets.ts::buildSyncTargets` ha sollevato «so a second
   surface does not become a second copy». Oggi danno lo stesso risultato; da sostituire con la funzione, con un test che
   ne fissi l'uso. Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10
   «Ondata 3 (21/10 notte) — TC-23 poi L1b», passo A2.
+  - ✅ 22/10 (ondata 4): `RiskPanelHeader` e `RiskAnalysisPanel` leggono `buildSyncTargets`. Unico effetto visibile: nella
+    modale di sync di `RiskAnalysisPanel` gli asset stanno in ordine di id, non nell'ordine dell'ambito.
+- **R1 · Il rischio sulle osservazioni, dopo Q1 di X** — medio-basso, prestazioni; J, 22/10. Rimandata dopo la 1.3,
+  insieme a X-Q1…Q3/S1 (domanda 12 dell'ondata 4). Q1 non esiste: `price_query._build_backward_filled_series` è ancora la
+  serie densa. Nessun caso di test scritto; 7 scenari di parità descritti nel [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md),
+  «Analisi breve di R1 e L1». Il pavimento SEC8-1b resta finché R1 non c'è. ~3 h più la parità.
 
 ## Z · Sospensione e risveglio (fase 01)
 
