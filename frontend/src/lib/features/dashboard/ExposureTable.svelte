@@ -219,7 +219,7 @@
                 const info = getAssetInfo(row.assetId);
                 const typeIconSrc = info?.icon_url || getAssetTypeIconUrl(row.assetType) || '';
                 const nameHtml = escapeHtml(row.assetName);
-                const typeIconHtml = typeIconSrc ? `<img src="${escapeHtml(typeIconSrc)}" alt="${escapeHtml(row.assetType)}" class="w-4 h-4 rounded object-contain shrink-0" onerror="this.style.display='none'" />` : '';
+                const typeIconHtml = typeIconSrc ? `<img src="${escapeHtml(typeIconSrc)}" alt="${escapeHtml(row.assetType)}" class="w-4 h-4 rounded object-contain shrink-0" data-hide-on-error="display" />` : '';
                 return {
                     type: 'html',
                     html: `<div class="flex items-center gap-1.5 min-w-0">${typeIconHtml}<span class="flex-1 min-w-0 ${overflowScrollTextClass} font-medium text-lf-secondary" title="${nameHtml}">${nameHtml}</span></div>`,

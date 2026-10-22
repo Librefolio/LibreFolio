@@ -34,7 +34,7 @@
         "offManaged": "La protezione dai frame è spenta nel profilo managed: qualunque sito può mostrare LibreFolio in un frame. Accendi LIBREFOLIO_FRAME_PROTECTION, come fa per default il profilo managed."
       },
       "cspReportOnly": {
-        "on": "Le pagine dell'app hanno una Content-Security-Policy in sola segnalazione: il browser elenca nella console ciò che bloccherebbe, e non blocca nulla.",
+        "on": "Oltre alla politica sempre applicata, le pagine dell'app hanno una Content-Security-Policy più ampia in sola segnalazione: il browser elenca nella console ciò che bloccherebbe in più, e non lo blocca.",
         "offSelfHosted": "Nessuna Content-Security-Policy in sola segnalazione: il default di un'installazione tua.",
         "offManaged": "La Content-Security-Policy in sola segnalazione è spenta nel profilo managed: i browser non elencano nulla di ciò che bloccherebbe. Accendi LIBREFOLIO_CSP_REPORT_ONLY, come fa per default il profilo managed."
       },

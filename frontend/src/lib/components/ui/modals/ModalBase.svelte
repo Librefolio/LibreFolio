@@ -105,7 +105,13 @@
         const root = backdropEl;
         const opener = restoreFocus && document.activeElement instanceof HTMLElement ? document.activeElement : null;
         const shouldTrap = trapFocus;
+        // Into the modal at once: its Escape handler listens on the backdrop, so a key pressed before the next frame
+        // (a fast user, a loaded machine) would otherwise reach the opener and be lost (FSCH-004b)
+        root.focus({preventScroll: true});
         const frame = requestAnimationFrame(() => {
+            // Never steal the focus from what took it since (a select's search box, an input of the content)
+            const active = document.activeElement;
+            if (active !== root && active instanceof Node && root.contains(active)) return;
             const target = shouldTrap ? (focusableElements(root)[0] ?? root) : root;
             target.focus({preventScroll: true});
         });

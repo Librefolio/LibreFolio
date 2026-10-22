@@ -26,6 +26,16 @@
                 var meta = document.querySelector('meta[name="theme-color"]');
                 if (meta) meta.setAttribute('content', theme === 'dark' ? '#1b4334' : '#1b4334');
             })();
+            // H-55 v2: the scripts the enforced Content-Security-Policy blocks before the app loads (a proxy's, a CDN's, an
+            // extension's), kept for lib/features/security/cspNotice.ts. In its own try, after the theme: never in its way.
+            try {
+                window.__lfCspViolations = [];
+                document.addEventListener('securitypolicyviolation', function (e) {
+                    var buffer = window.__lfCspViolations;
+                    // Bounded, and stopped once cspNotice.ts drained it (it sets the global to null)
+                    if (e.disposition === 'enforce' && Array.isArray(buffer) && buffer.length < 100) buffer.push({directive: e.effectiveDirective, blockedURI: e.blockedURI, sample: e.sample, sourceFile: e.sourceFile});
+                });
+            } catch (e) {}
             // Early PWA install prompt capture (before Svelte mounts)
             window.addEventListener('beforeinstallprompt', function (e) {
                 e.preventDefault();
