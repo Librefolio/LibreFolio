@@ -4,9 +4,24 @@
  * Loading owns request normalization and detached response shaping. Applying owns
  * the deliberate mutation of only the signal configs that are still current.
  */
-import {beforeEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import type {SignalConfig} from '$lib/charts/signals';
-import {applyComparisonAssetsData, buildComparisonSyncRange, clearComparisonAssetsData, collectConfiguredComparisonFxSlugs, getComparisonEventFxDependency, loadComparisonAssetsData, type ComparisonAssetLoadItem, type ComparisonAssetMeta, type ComparisonAssetsLoadResult} from '../loadComparisonData';
+import {getAssetPriceStore, removeAssetPriceStore, type AssetPricePoint} from '$lib/stores/assetPriceStoreRegistry';
+import {canonicalCacheKey} from '$lib/stores/signalResultCache';
+import {
+    applyComparisonAssetsData,
+    buildComparisonSyncRange,
+    clearComparisonAssetsData,
+    collectConfiguredComparisonFxSlugs,
+    comparisonAnswerGenerations,
+    comparisonAnswerIsCacheable,
+    comparisonAnswerKey,
+    getComparisonEventFxDependency,
+    loadComparisonAssetsData,
+    type ComparisonAssetLoadItem,
+    type ComparisonAssetMeta,
+    type ComparisonAssetsLoadResult,
+} from '../loadComparisonData';
 
 const {queryPrices} = vi.hoisted(() => ({queryPrices: vi.fn()}));
 vi.mock('$lib/api', () => ({
@@ -728,5 +743,153 @@ describe('clearComparisonAssetsData', () => {
         expect(clearedEvents).toEqual(new Map());
         expect(nextClearedEvents).toEqual(new Map());
         expect(clearedEvents).not.toBe(nextClearedEvents);
+    });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// N64b: the client cache of the comparison series. The three helpers below give the page the key of an answer, the
+// generations of the price stores it was drawn over, and whether it may be kept. Red first: none exists yet.
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** Asset ids no other case of the file uses: the stores of the registry are shared by the whole module. */
+const N64B_IDS = [9101, 9102, 9103] as const;
+
+const N64B_ASSETS: ComparisonAssetMeta[] = [
+    {id: 9101, display_name: 'Peer EUR', currency: 'EUR'},
+    {id: 9102, display_name: 'Peer GBP', currency: 'GBP'},
+    {id: 9103, display_name: 'Peer without currency'},
+];
+
+const N64B_RANGE = {start: '2024-01-01', end: '2024-03-31'};
+
+function storePoint(date: string): AssetPricePoint {
+    return {date, close: 10, open: null, high: null, low: null, volume: null, currency: 'EUR', originalClose: null, backwardFillInfo: null};
+}
+
+afterEach(() => {
+    for (const id of N64B_IDS) removeAssetPriceStore(id);
+});
+
+describe('comparisonAnswerKey: the canonical text of the request, blind to the order and the repeats of the ids', () => {
+    it('is the canonical text of the distinct ids ascending, the range and the target currency (null when none)', () => {
+        expect(comparisonAnswerKey([8, 7], N64B_RANGE, 'USD')).toBe(canonicalCacheKey({assets: [7, 8], range: {start: '2024-01-01', end: '2024-03-31'}, targetCurrency: 'USD'}));
+        expect(comparisonAnswerKey([7], N64B_RANGE)).toBe(canonicalCacheKey({assets: [7], range: N64B_RANGE, targetCurrency: null}));
+    });
+
+    it('gives one key to the same ids in another order or repeated', () => {
+        const key = comparisonAnswerKey([7, 8, 9], N64B_RANGE, 'EUR');
+
+        expect(comparisonAnswerKey([9, 7, 8], N64B_RANGE, 'EUR')).toBe(key);
+        expect(comparisonAnswerKey([8, 8, 9, 7, 7], N64B_RANGE, 'EUR')).toBe(key);
+    });
+
+    it('does not mutate the ids it is given', () => {
+        const ids: readonly number[] = Object.freeze([9, 7, 9]);
+
+        expect(() => comparisonAnswerKey(ids, N64B_RANGE)).not.toThrow();
+        expect(ids).toEqual([9, 7, 9]);
+    });
+
+    it('tells apart another range, another set of ids and another currency', () => {
+        const keys = [
+            comparisonAnswerKey([7, 8], N64B_RANGE, 'EUR'),
+            comparisonAnswerKey([7, 8], {start: '2024-01-02', end: N64B_RANGE.end}, 'EUR'),
+            comparisonAnswerKey([7, 8], {start: N64B_RANGE.start, end: '2024-04-01'}, 'EUR'),
+            comparisonAnswerKey([7, 9], N64B_RANGE, 'EUR'),
+            comparisonAnswerKey([7], N64B_RANGE, 'EUR'),
+            comparisonAnswerKey([7, 8], N64B_RANGE, 'USD'),
+            comparisonAnswerKey([7, 8], N64B_RANGE),
+        ];
+
+        expect(new Set(keys).size).toBe(keys.length);
+    });
+
+    it('takes an undefined and an empty target currency as one: no conversion asked, and EUR is another request', () => {
+        expect(comparisonAnswerKey([7], N64B_RANGE, '')).toBe(comparisonAnswerKey([7], N64B_RANGE, undefined));
+        expect(comparisonAnswerKey([7], N64B_RANGE, '')).not.toBe(comparisonAnswerKey([7], N64B_RANGE, 'EUR'));
+    });
+});
+
+describe('comparisonAnswerGenerations: the generations of the price stores the answer is drawn over', () => {
+    it('is, for each distinct id ascending, the generation of the store of that asset in its own currency', () => {
+        const generations = comparisonAnswerGenerations([9102, 9101, 9102], N64B_ASSETS);
+
+        expect(generations).toEqual([getAssetPriceStore(9101, 'EUR').generation, getAssetPriceStore(9102, 'GBP').generation]);
+    });
+
+    it('changes when a peer’s store is marked stale or emptied, and only that peer’s position moves', () => {
+        const before = comparisonAnswerGenerations([9101, 9102], N64B_ASSETS);
+        expect(before, 'premise: every peer has a currency').not.toBeNull();
+
+        getAssetPriceStore(9102, 'GBP').markStale();
+        const afterStale = comparisonAnswerGenerations([9101, 9102], N64B_ASSETS);
+        expect(afterStale).not.toEqual(before);
+        expect(afterStale?.[0]).toBe(before?.[0]);
+        expect(afterStale?.[1]).not.toBe(before?.[1]);
+
+        getAssetPriceStore(9101, 'EUR').invalidateAll();
+        const afterEmptied = comparisonAnswerGenerations([9101, 9102], N64B_ASSETS);
+        expect(afterEmptied?.[0]).not.toBe(afterStale?.[0]);
+        expect(afterEmptied?.[1]).toBe(afterStale?.[1]);
+    });
+
+    it('does not change when points are merged or a range is marked fetched: the answer is still the same data', () => {
+        const before = comparisonAnswerGenerations([9101, 9102], N64B_ASSETS);
+        expect(before).not.toBeNull();
+
+        getAssetPriceStore(9101, 'EUR').merge([storePoint('2024-02-01'), storePoint('2024-02-02')]);
+        getAssetPriceStore(9102, 'GBP').markFetched('2024-01-01', '2024-03-31');
+
+        expect(comparisonAnswerGenerations([9101, 9102], N64B_ASSETS)).toEqual(before);
+    });
+
+    it('reads the stores of the TARGET currency when one is given, never the asset’s own', () => {
+        const generations = comparisonAnswerGenerations([9101, 9102], N64B_ASSETS, 'USD');
+        expect(generations).toEqual([getAssetPriceStore(9101, 'USD').generation, getAssetPriceStore(9102, 'USD').generation]);
+
+        getAssetPriceStore(9101, 'EUR').invalidateAll(); // the native store: not what the converted answer was drawn over
+        expect(comparisonAnswerGenerations([9101, 9102], N64B_ASSETS, 'USD'), 'a native store moved and the converted answer was dropped').toEqual(generations);
+
+        getAssetPriceStore(9101, 'USD').markStale();
+        expect(comparisonAnswerGenerations([9101, 9102], N64B_ASSETS, 'USD')).not.toEqual(generations);
+    });
+
+    it('takes an empty target currency as none: the asset’s own store', () => {
+        expect(comparisonAnswerGenerations([9101], N64B_ASSETS, '')).toEqual([getAssetPriceStore(9101, 'EUR').generation]);
+    });
+
+    it('needs no currency of the asset when a target currency names the stores', () => {
+        expect(comparisonAnswerGenerations([9103], N64B_ASSETS, 'EUR')).toEqual([getAssetPriceStore(9103, 'EUR').generation]);
+    });
+
+    it('is null when a peer has no meta in the asset list, or no currency can be found: nothing is cacheable', () => {
+        expect(comparisonAnswerGenerations([9101, 9999], N64B_ASSETS)).toBeNull();
+        expect(comparisonAnswerGenerations([9101, 9999], N64B_ASSETS, 'USD')).toBeNull();
+        expect(comparisonAnswerGenerations([9101, 9103], N64B_ASSETS)).toBeNull();
+        expect(comparisonAnswerGenerations([9103], N64B_ASSETS)).toBeNull();
+    });
+
+    it('gives an empty list for no ids, and does not mutate its inputs', () => {
+        const ids: readonly number[] = Object.freeze([9102, 9101]);
+        const assets = N64B_ASSETS.map((asset) => Object.freeze({...asset}));
+
+        expect(comparisonAnswerGenerations([], N64B_ASSETS)).toEqual([]);
+        expect(comparisonAnswerGenerations(ids, assets)).toHaveLength(2);
+        expect(ids).toEqual([9102, 9101]);
+    });
+});
+
+describe('comparisonAnswerIsCacheable: an answer with a failed conversion is not kept', () => {
+    const item = (assetId: number, runtimeParams: Record<string, unknown>): ComparisonAssetLoadItem => ({assetId, runtimeParams, events: []});
+
+    it('is false when any item failed its conversion', () => {
+        expect(comparisonAnswerIsCacheable({items: [item(7, {_conversionFailed: false}), item(8, {_conversionFailed: true})]})).toBe(false);
+        expect(comparisonAnswerIsCacheable({items: [item(7, {_conversionFailed: true, _conversionError: 'no rate'})]})).toBe(false);
+    });
+
+    it('is true when no item failed, an item with no prices included, and for no items at all', () => {
+        expect(comparisonAnswerIsCacheable({items: [item(7, {_conversionFailed: false, _resolvedData: [{date: '2024-02-01', value: 10}]}), item(8, {})]})).toBe(true);
+        expect(comparisonAnswerIsCacheable({items: [item(7, {_resolvedData: []})]})).toBe(true);
+        expect(comparisonAnswerIsCacheable({items: []})).toBe(true);
     });
 });

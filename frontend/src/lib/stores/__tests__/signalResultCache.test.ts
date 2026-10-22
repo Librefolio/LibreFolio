@@ -18,7 +18,8 @@ import {afterEach, describe, expect, it} from 'vitest';
 import type {BackendSignalResult} from '$lib/charts/signals/backendTypes';
 import {transitionClientSession} from '$lib/stores/app/clientSession';
 
-import {assetChartAnswers, canonicalCacheKey, fxSignalAnswers, SignalResultCache, type AssetChartAnswer} from '$lib/stores/signalResultCache';
+import type {ComparisonAssetsLoadResult} from '$lib/charts/loadComparisonData';
+import {assetChartAnswers, canonicalCacheKey, clearAssetPageAnswers, comparisonSeriesAnswers, fxSignalAnswers, SignalResultCache, type AssetChartAnswer} from '$lib/stores/signalResultCache';
 
 /** An answer with a shape of its own: nested arrays and objects, so that a shallow copy shows. */
 interface Answer {
@@ -42,6 +43,7 @@ const G = [4, 9] as const;
 
 afterEach(() => {
     assetChartAnswers.clear();
+    comparisonSeriesAnswers.clear();
     fxSignalAnswers.clear();
 });
 
@@ -377,5 +379,91 @@ describe('the two singletons of the app', () => {
 
         expect(assetChartAnswers.get('asset-key', G), 'a same-user call emptied the asset answers: every re-resolved session would ask them all again').toEqual(ASSET_ANSWER);
         expect(fxSignalAnswers.get('fx-key', G), 'a same-user call emptied the FX answers').toEqual(FX_ANSWER);
+    });
+});
+
+describe('comparisonSeriesAnswers: the comparison peers’ series the asset and FX pages loaded (N64b)', () => {
+    const SERIES: ComparisonAssetsLoadResult = {
+        items: [{assetId: 7, runtimeParams: {_resolvedData: [{date: '2026-03-02', value: 10}], _conversionFailed: false}, events: [{date: '2026-03-02', type: 'DIVIDEND'}]}],
+    };
+    let nextUser = 0;
+    const freshUser = (): string => `n64b-user-${++nextUser}`;
+
+    it('is a cache of its own, apart from the asset and the FX answers', () => {
+        comparisonSeriesAnswers.set('shared-key', G, SERIES);
+
+        expect(comparisonSeriesAnswers).toBeInstanceOf(SignalResultCache);
+        expect(comparisonSeriesAnswers).not.toBe(assetChartAnswers);
+        expect(comparisonSeriesAnswers).not.toBe(fxSignalAnswers);
+        expect(assetChartAnswers.get('shared-key', G)).toBeNull();
+        expect(fxSignalAnswers.get('shared-key', G)).toBeNull();
+        expect(comparisonSeriesAnswers.get('shared-key', G)).toEqual(SERIES);
+    });
+
+    it('keeps and gives back deep copies: no caller can change what another reads later', () => {
+        const given = structuredClone(SERIES) as unknown as {items: {runtimeParams: {_resolvedData: {value: number}[]}}[]};
+        comparisonSeriesAnswers.set('k', G, given as unknown as ComparisonAssetsLoadResult);
+        given.items[0].runtimeParams._resolvedData[0].value = 999; // after the set: must not reach the cache
+
+        const first = comparisonSeriesAnswers.get('k', G) as unknown as typeof given;
+        expect(first.items[0].runtimeParams._resolvedData[0].value).toBe(10);
+        expect(first).not.toBe(given);
+        first.items[0].runtimeParams._resolvedData[0].value = 555; // after the get: must not reach the cache
+
+        expect(comparisonSeriesAnswers.get('k', G)).toEqual(SERIES);
+    });
+
+    it('misses with other generations and drops the entry', () => {
+        comparisonSeriesAnswers.set('k', G, SERIES);
+
+        expect(comparisonSeriesAnswers.get('k', [4, 10]), 'a store moved on: the series was drawn over other data').toBeNull();
+        expect(comparisonSeriesAnswers.size).toBe(0);
+        expect(comparisonSeriesAnswers.get('k', G), 'the entry was dropped by the mismatch').toBeNull();
+    });
+
+    it('is emptied when the signed-in account changes, and by a sign-out', () => {
+        transitionClientSession(freshUser());
+        comparisonSeriesAnswers.set('k', G, SERIES);
+        expect(transitionClientSession(freshUser()), 'premise: a real change of account').toBe(true);
+        expect(comparisonSeriesAnswers.size, 'the next user could read the previous one’s series').toBe(0);
+
+        comparisonSeriesAnswers.set('k', G, SERIES);
+        expect(transitionClientSession(null), 'premise: signing out is a change of account').toBe(true);
+        expect(comparisonSeriesAnswers.size).toBe(0);
+    });
+
+    it('stays on a call for the same account', () => {
+        const user = freshUser();
+        transitionClientSession(user);
+        comparisonSeriesAnswers.set('k', G, SERIES);
+
+        expect(transitionClientSession(user), 'premise: the same account is no change').toBe(false);
+
+        expect(comparisonSeriesAnswers.get('k', G)).toEqual(SERIES);
+    });
+});
+
+describe('clearAssetPageAnswers: what a sync or a refresh of the asset page empties (N64b)', () => {
+    it('empties the asset answers and the comparison series, and leaves the FX answers alone', () => {
+        assetChartAnswers.set('asset-key', G, {items: [{asset_id: 7}]});
+        comparisonSeriesAnswers.set('comparison-key', G, {items: []});
+        const fxAnswer = [{instance_id: 'sma', signal_code: 'SMA', status: 'ok'}] as unknown as BackendSignalResult[];
+        fxSignalAnswers.set('fx-key', G, fxAnswer);
+        expect(assetChartAnswers.size + comparisonSeriesAnswers.size, 'premise: both asset caches hold an entry').toBe(2);
+
+        clearAssetPageAnswers();
+
+        expect(assetChartAnswers.size).toBe(0);
+        expect(comparisonSeriesAnswers.size).toBe(0);
+        expect(assetChartAnswers.get('asset-key', G)).toBeNull();
+        expect(comparisonSeriesAnswers.get('comparison-key', G)).toBeNull();
+        expect(fxSignalAnswers.get('fx-key', G), 'the asset page’s clear reached the FX page’s answers').toEqual(fxAnswer);
+    });
+
+    it('takes empty caches without complaint, and the caches take entries again', () => {
+        expect(() => clearAssetPageAnswers()).not.toThrow();
+
+        comparisonSeriesAnswers.set('k', G, {items: []});
+        expect(comparisonSeriesAnswers.get('k', G)).toEqual({items: []});
     });
 });
