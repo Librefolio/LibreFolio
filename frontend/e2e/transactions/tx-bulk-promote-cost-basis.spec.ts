@@ -535,29 +535,38 @@ async function applyForm(page: Page): Promise<void> {
  * `+ Add row` → the form → one ADJUSTMENT typed in, short of Apply: its type, broker, asset, quantity (read back
  * after the blur, `fillQuantity`) and description. PC5 stops here; `addAdjustment` goes on to Apply.
  *
- * `withoutCostBasis` is the receiver under test, NOT in Auto mode: Manual is chosen first, before
- * the form is complete enough to validate (Auto is the form's default for a positive ADJUSTMENT,
- * and an Auto validate writes the computed cost into the field), and the field is then left alone,
- * as by a user who skips it. The form's own warning (`tx-form-cost-basis-warning`: positive
- * quantity, not Auto, no amount) proves the draft is in exactly that state when it is applied.
+ * `withoutCostBasis` is the receiver under test, NOT in Auto mode: Manual is chosen before the
+ * form is complete enough to validate (Auto is the form's default for a positive ADJUSTMENT, and
+ * an Auto validate writes the computed cost into the field), and the field is then left alone, as
+ * by a user who skips it. N78-1 (developer's decision, 21/10/2026) shows the cost section only
+ * once the quantity is positive, so the (positive) quantity is typed first, then Manual, then the
+ * broker and the asset: without the asset the draft is not ready (`isDraftReadyForValidation`
+ * gates the form's automatic validation), so no Auto validate can have run — the empty amount
+ * read just before switching proves it. The form's own warning (`tx-form-cost-basis-warning`:
+ * positive quantity, not Auto, no amount) proves the draft is in exactly that state when it is
+ * applied. Every other row keeps the order type → broker → asset → quantity → description.
  */
 async function fillAdjustment(page: Page, row: {broker: Broker; asset: Asset; quantity: string; description: string; withoutCostBasis?: boolean}): Promise<void> {
     await page.getByTestId('tx-bulk-add-row').click();
     await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: UI_TIMEOUT});
     await selectType(page, 'ADJUSTMENT');
     const manual = page.getByTestId('tx-form-cost-basis-toggle-manual');
+    const amount = page.getByTestId('tx-form-cost-basis-input-amount');
     if (row.withoutCostBasis) {
-        await expect(manual).toBeVisible({timeout: UI_TIMEOUT});
+        await fillQuantity(page, row.quantity);
+        await expect(page.getByTestId('tx-form-cost-basis-inline'), 'N78-1: the cost section appears once the ADJUSTMENT quantity is positive').toBeVisible({timeout: UI_TIMEOUT});
+        await expect(amount, 'no broker nor asset yet: no Auto validate has written a cost').toHaveValue('');
+        await expect(manual).toBeVisible();
         await manual.click();
         await expect(manual).toHaveAttribute('aria-pressed', 'true');
     }
     await pickBroker(page, row.broker);
     await pickAsset(page, row.asset);
-    await fillQuantity(page, row.quantity);
+    if (!row.withoutCostBasis) await fillQuantity(page, row.quantity);
     await fillDescription(page, row.description);
     if (row.withoutCostBasis) {
         await expect(manual, 'the receiver stays in Manual mode').toHaveAttribute('aria-pressed', 'true');
-        await expect(page.getByTestId('tx-form-cost-basis-input-amount'), 'with no cost basis typed').toHaveValue('');
+        await expect(amount, 'with no cost basis typed').toHaveValue('');
         await expect(page.getByTestId('tx-form-cost-basis-warning'), 'the form says it: Manual, positive quantity, no amount').toBeVisible();
     }
 }
