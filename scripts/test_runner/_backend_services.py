@@ -523,6 +523,16 @@ def services_transaction_cost_basis_rule(verbose: bool = False, test_names: list
     return run_command(cmd, "Transaction cost basis rule tests", verbose=verbose)
 
 
+def services_linked_adjustment_pair(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a batch refuses to link two ADJUSTMENTs (pairAdjustmentNotAllowed), and what it still lets through."""
+    print_section("Services: Linked Adjustment Pair")
+    print_info("Testing: backend/app/services/transactions/validation.py (_validate_linked_pair) + batch_creates.py (the link_uuid groups)")
+    print_info("Tests: two ADJUSTMENTs under one link_uuid refused on the first create, commit and validate; a TRANSFER pair, the Bulk promote, unlinked ADJUSTMENTs and stored pairs untouched; the message in 4 languages")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_linked_adjustment_pair.py", test_names)
+    return run_command(cmd, "Linked adjustment pair tests", verbose=verbose)
+
+
 def services_transaction_decimal_places(verbose: bool = False, test_names: list = None) -> bool:
     """Test how many decimal places a transaction keeps, where a batch refuses more, and the balances summed exactly (C-97a)."""
     print_section("Services: Transaction Decimal Places")
@@ -2173,6 +2183,13 @@ Note: No backend server required.
         services_transaction_cost_basis_rule,
         name="Transaction Cost Basis Rule",
         desc="Which rows need a cost basis, read from TX_TYPE_METADATA; creates refused without one; updates held to it only when they change type, quantity or cost; notes/tags edits of rows stored without a cost commit",
+    )
+    add_test(
+        cat,
+        "linked-adjustment-pair",
+        services_linked_adjustment_pair,
+        name="Linked Adjustment Pair",
+        desc="Two ADJUSTMENTs under one link_uuid are refused on the first create (pairAdjustmentNotAllowed, commit and validate); a TRANSFER pair, the Bulk promote, unlinked ADJUSTMENTs and a stored pair are not touched; the message exists in EN/IT/FR/ES",
     )
     add_test(
         cat,
