@@ -57,6 +57,8 @@ FX_CODES = {
     "STOCH_RSI",
     "KAMA",
     "PPO",
+    # Z-29fx (the FX half of Y-40, V-9 of 20/10): the calendar rolling return works on an FX pair's rates too.
+    "ASSET_CALENDAR_ROLLING_RETURN",
 }
 
 
@@ -160,7 +162,8 @@ async def test_the_one_rolling_return_is_the_calendar_one_with_an_open_ended_win
     """Decision 29 (CP-10a): the Asset catalog serves ONE Rolling Return, the calendar one.
 
     Its window counts calendar days from a floor of one (``minimum: 1``, inclusive) and has no ceiling: the
-    asset page sends long custom windows. The FX catalog serves neither: both are Asset-only.
+    asset page sends long custom windows. The FX catalog serves the calendar one too since Z-29fx (an FX pair's rates
+    are a resolved daily series), never the removed one.
     """
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
@@ -179,7 +182,7 @@ async def test_the_one_rolling_return_is_the_calendar_one_with_an_open_ended_win
     fx_codes = {item["signal_code"] for item in fx.json()["items"]}
 
     assert sorted(code for code in asset_by_code if "ROLLING_RETURN" in code) == [CALENDAR_SIGNAL_CODE]
-    assert {REMOVED_SIGNAL_CODE, CALENDAR_SIGNAL_CODE}.isdisjoint(fx_codes)
+    assert REMOVED_SIGNAL_CODE not in fx_codes and CALENDAR_SIGNAL_CODE in fx_codes
 
     calendar = asset_by_code[CALENDAR_SIGNAL_CODE]
     window_schema = calendar["params_schema"]["properties"]["window_days"]
@@ -188,7 +191,7 @@ async def test_the_one_rolling_return_is_the_calendar_one_with_an_open_ended_win
     assert window_schema["type"] == "integer"
     assert window_schema["default"] == 30
     assert calendar["default_params"] == {"window_days": 30}
-    assert calendar["compatible_domains"] == ["asset"]
+    assert calendar["compatible_domains"] == ["asset", "fx"]
 
 
 @pytest.mark.asyncio
@@ -230,4 +233,4 @@ async def test_catalog_handlers_have_no_db_or_history_dependency():
     asset = await list_asset_signal_catalog(_current_user=object())
     fx = await list_fx_signal_catalog(_current_user=object())
     assert len(asset.items) == 22
-    assert len(fx.items) == 9
+    assert len(fx.items) == 10  # Z-29fx: the calendar rolling return joined the FX catalog

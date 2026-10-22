@@ -363,7 +363,7 @@ describe('AssetTable and AssetCard — a price keeps its significant digits (C-9
     }
 
     /** Mount the card of asset `id` (USD, manual, active) with `props`, and return its root. */
-    function mountCard(id: number, props: {livePrice?: number | null; deltaAbs?: number | null; globalViewMode?: 'percentage' | 'absolute'}): HTMLElement {
+    function mountCard(id: number, props: {livePrice?: number | null; deltaAbs?: number | null; primaryView?: 'percentage' | 'absolute'}): HTMLElement {
         render(AssetCard, {asset: {id, display_name: 'Quoted asset', currency: 'USD', asset_type: 'STOCK', provider_code: null, active: true}, ...props});
         return screen.getByTestId(`asset-card-${id}`);
     }
@@ -375,7 +375,7 @@ describe('AssetTable and AssetCard — a price keeps its significant digits (C-9
 
     /** The card's absolute Δ over the range, as text: `asset-range-delta`, checked to be in the absolute mode. */
     function absoluteDeltaOf(id: number, deltaAbs: number): string {
-        const delta = within(mountCard(id, {deltaAbs, globalViewMode: 'absolute'})).getByTestId('asset-range-delta');
+        const delta = within(mountCard(id, {deltaAbs, primaryView: 'absolute'})).getByTestId('asset-range-delta');
         expect(delta, 'barrier: the Δ shown is the absolute one').toHaveAttribute('data-mode', 'absolute');
         return (delta.textContent ?? '').replace(/\s+/g, ' ').trim();
     }
