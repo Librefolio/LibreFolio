@@ -63,6 +63,11 @@ Under test, the four places a warning code lives:
    default text factory as the server reads, is what fails on it (since E-20 the E-19a audit reads such a text as its
    bytes).
 
+Lot L3 (workstream B): every report ends with ``credentials_from_backup``, once, after every other warning. So
+"after the others" reads here "after the others, before ``credentials_from_backup``": the code stands second to last
+(``_then_code``). The comparisons stay relative (the same arguments, the same archive's twin), and the twin's warnings
+carry ``credentials_from_backup`` too.
+
 "RED" tests (marked ``# red until E-19b1``) fail before E-19b1, those marked ``# red until E-19b1.3`` before that lot,
 the one marked ``# red until B-49`` before that lot; "GUARD (green today)" ones pass before and after. The
 new keyword is looked up inside each test (``inspect.signature``), never at import: the file collects, and each red
@@ -122,6 +127,8 @@ CODE = "non_iso_currencies"
 FLAG = "non_iso_currencies"
 #: What the CLI text points to: the command that lists the stored values (E-19a).
 CLI_COMMAND = "db currencies"
+#: Lot L3: the warning every report carries, last; ``non_iso_currencies`` stands just before it.
+CREDENTIALS_FROM_BACKUP = "credentials_from_backup"
 #: The warnings the API schema accepts today, written out: the positive control of RNW-001.
 WARNINGS_OF_TODAY = ("rows_changed", "foreign_key_violations", "foreign_key_violations_added", "control_totals_changed", "control_totals_unreadable")
 
@@ -131,6 +138,12 @@ OLDER = "older_e19b1"
 VALID_ID = "0123456789abcdef0123456789abcdef"
 CREATED = datetime(2026, 10, 15, 10, 15, tzinfo=UTC)
 ADMINISTRATORS = ("ada_admin", "zoe_admin")
+
+
+def _then_code(warnings: list[str]) -> list[str]:
+    """``warnings`` (a report's without the code) with ``non_iso_currencies`` once, after every other warning but
+    ``credentials_from_backup``, which every report carries last (lot L3)."""
+    return [*(code for code in warnings if code != CREDENTIALS_FROM_BACKUP), CODE, CREDENTIALS_FROM_BACKUP]
 
 
 @pytest.fixture(autouse=True)
@@ -345,7 +358,7 @@ def test_the_flag_adds_the_warning_after_the_others_and_nothing_else(scenario): 
     with_flag = _build_with_flag(scenario, True)
     assert CODE not in without.warnings and CODE not in omitted.warnings, f"no {CODE} without the flag: {without.warnings}, {omitted.warnings}"
     assert omitted.warnings == without.warnings, f"omitted is False: {omitted.warnings} != {without.warnings}"
-    assert with_flag.warnings == [*without.warnings, CODE], f"{CODE} once, after the others: {with_flag.warnings}"
+    assert with_flag.warnings == _then_code(without.warnings), f"{CODE} once, after the others, before {CREDENTIALS_FROM_BACKUP}: {with_flag.warnings}"
     assert (with_flag.blockers, with_flag.restorable) == (without.blockers, without.restorable) == (omitted.blockers, omitted.restorable), f"a warning, not a blocker: {with_flag.blockers}"
 
 
@@ -494,8 +507,8 @@ def _warned_once_after_the_others(report: StagingReport, twin: StagingReport, re
     if CODE not in report.warnings:
         pytest.fail(f"{red}: the copy holds stored currencies that are not ISO codes, yet the check warns {report.warnings}", pytrace=False)
     assert report.warnings.count(CODE) == 1, f"{CODE} once, whatever the number of findings: {report.warnings}"
-    assert report.warnings[-1] == CODE, f"{CODE} after every other warning: {report.warnings}"
-    assert report.warnings == [*twin.warnings, CODE], f"the twin's warnings, then {CODE}: {report.warnings} != {[*twin.warnings, CODE]}"
+    assert report.warnings[-2:] == [CODE, CREDENTIALS_FROM_BACKUP], f"{CODE} after every other warning, before {CREDENTIALS_FROM_BACKUP}: {report.warnings}"
+    assert report.warnings == _then_code(twin.warnings), f"the twin's warnings, {CODE} before {CREDENTIALS_FROM_BACKUP}: {report.warnings} != {_then_code(twin.warnings)}"
     assert (report.blockers, report.restorable) == (twin.blockers, twin.restorable), f"a warning, not a blocker: {report.blockers}, restorable={report.restorable}; the twin's: {twin.blockers}, restorable={twin.restorable}"
 
 
@@ -545,7 +558,7 @@ def test_the_report_written_beside_the_copy_carries_the_warning_as_the_api_reads
     assert written == report, "report.json is the report the check returned"
     if CODE not in written.warnings:
         pytest.fail(f"{STAGE_RED}: report.json carries the warnings {written.warnings}", pytrace=False)
-    assert (written.warnings.count(CODE), written.warnings[-1]) == (1, CODE), f"{CODE} once, last: {written.warnings}"
+    assert (written.warnings.count(CODE), written.warnings[-2:]) == (1, [CODE, CREDENTIALS_FROM_BACKUP]), f"{CODE} once, last but {CREDENTIALS_FROM_BACKUP}: {written.warnings}"
     try:
         served = _api_report(warnings=written.warnings, blockers=written.blockers, restorable=written.restorable)
     except ValidationError as refused:

@@ -27,7 +27,8 @@
         "database": "Copying the database",
         "files": "Adding the files",
         "finalizing": "Finishing",
-        "encrypting": "Encrypting with your password"
+        "encrypting": "Encrypting with your password",
+        "sealing": "Sealing for the hosting panel"
       },
       "progress": "{done} of {total}",
       "ready": "Backup ready",
@@ -149,7 +150,8 @@
           "non_iso_currencies": "Some currency codes in the backup are not ISO codes (names or numbers an earlier version saved): an edit of those rows is refused until the code is corrected."
         },
         "expires": "The checked copy is kept until {date}.",
-        "drop": "Drop this archive"
+        "drop": "Drop this archive",
+        "ownAccountMissing": "Your account is not among the administrators of this backup: after the restart you cannot sign in with it."
       },
       "confirm": {
         "word": "restore",
@@ -224,7 +226,8 @@
         "password_required": "This is a secure backup: type its password.",
         "envelope_damaged": "The secure backup is damaged or was changed: it cannot be opened.",
         "envelope_unsupported": "The secure backup comes from a newer LibreFolio: update LibreFolio first.",
-        "proxy_too_large": "A proxy in front of LibreFolio refused an archive this large: ask whoever runs it to accept larger uploads, or restore from the command line."
+        "proxy_too_large": "A proxy in front of LibreFolio refused an archive this large: ask whoever runs it to accept larger uploads, or restore from the command line.",
+        "sealed_backup_needs_key": "This is a sealed backup of a hosting panel: its password is encrypted for the provider's key. Extract backup.lfbk, open password.age with age, then restore backup.lfbk with that password."
       },
       "password": {
         "intro": "A secure backup: type the password it was made with.",
@@ -252,6 +255,12 @@
         "unlimited": "A restore check accepts archives that unpack to any size.",
         "invalid": "{variable} cannot be used (a whole number of megabytes, 0 for no limit): restore checks are refused until it is fixed.",
         "profileTable": "LibreFolio's own profile defaults give the upload limit no value, or one of the wrong type, so restore checks are refused: set LIBREFOLIO_BACKUP_MAX_RESTORE_MB to a whole number of megabytes and report the error."
+      },
+      "recipients": {
+        "ok": "The hosting panel's backups are sealed for {count, plural, one {# key} other {# keys}}: only the private key opens their password.",
+        "off": "No recipients are set for the hosting panel's backups: the panel gets plain zip archives.",
+        "invalid": "LIBREFOLIO_BACKUP_RECIPIENTS cannot be used ({reason}): one or two age1… recipients, comma-separated. The hosting panel's backups answer 503 until it is fixed.",
+        "missingManaged": "LIBREFOLIO_BACKUP_RECIPIENTS is not set: a managed instance never hands a plain backup to its hosting panel, whose backups answer 503 until it is set."
       }
     }
   }

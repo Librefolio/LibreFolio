@@ -27,7 +27,8 @@
         "database": "Copie de la base de données",
         "files": "Ajout des fichiers",
         "finalizing": "Finalisation",
-        "encrypting": "Chiffrement avec votre mot de passe"
+        "encrypting": "Chiffrement avec votre mot de passe",
+        "sealing": "Scellement pour le panneau de l'hébergeur"
       },
       "progress": "{done} sur {total}",
       "ready": "Sauvegarde prête",
@@ -149,7 +150,8 @@
           "non_iso_currencies": "Certains codes de devise de la sauvegarde ne sont pas des codes ISO (noms ou numéros enregistrés par une version précédente) : la modification de ces lignes est refusée tant que le code n'est pas corrigé."
         },
         "expires": "La copie vérifiée est conservée jusqu'au {date}.",
-        "drop": "Abandonner cette archive"
+        "drop": "Abandonner cette archive",
+        "ownAccountMissing": "Votre compte ne fait pas partie des administrateurs de cette sauvegarde : après le redémarrage, vous ne pourrez plus vous connecter avec ce compte."
       },
       "confirm": {
         "word": "restaurer",
@@ -224,7 +226,8 @@
         "password_required": "C'est une sauvegarde sécurisée : saisissez son mot de passe.",
         "envelope_damaged": "La sauvegarde sécurisée est endommagée ou a été modifiée : elle ne peut pas être ouverte.",
         "envelope_unsupported": "La sauvegarde sécurisée provient d'un LibreFolio plus récent : mettez d'abord LibreFolio à jour.",
-        "proxy_too_large": "Un proxy placé devant LibreFolio a refusé une archive aussi grande : demandez à la personne qui le gère d'accepter des téléversements plus volumineux, ou restaurez depuis la ligne de commande."
+        "proxy_too_large": "Un proxy placé devant LibreFolio a refusé une archive aussi grande : demandez à la personne qui le gère d'accepter des téléversements plus volumineux, ou restaurez depuis la ligne de commande.",
+        "sealed_backup_needs_key": "Ceci est une sauvegarde scellée d'un panneau d'hébergement : son mot de passe est chiffré pour la clé du fournisseur. Extrayez backup.lfbk, ouvrez password.age avec age, puis restaurez backup.lfbk avec ce mot de passe."
       },
       "password": {
         "intro": "Une sauvegarde sécurisée : saisissez le mot de passe avec lequel elle a été faite.",
@@ -252,6 +255,12 @@
         "unlimited": "Une vérification pour une restauration accepte des archives qui, décompressées, font n'importe quelle taille.",
         "invalid": "{variable} est inutilisable (un nombre entier de mégaoctets, 0 pour aucune limite) : les vérifications pour une restauration sont refusées tant qu'il n'est pas corrigé.",
         "profileTable": "Les valeurs par défaut du profil de LibreFolio ne donnent aucune valeur à la limite de téléversement, ou une valeur du mauvais type, donc les vérifications pour une restauration sont refusées : définissez LIBREFOLIO_BACKUP_MAX_RESTORE_MB à un nombre entier de mégaoctets et signalez l'erreur."
+      },
+      "recipients": {
+        "ok": "Les sauvegardes du panneau de l'hébergeur sont scellées pour {count, plural, one {# clé} many {# clés} other {# clés}} : seule la clé privée ouvre leur mot de passe.",
+        "off": "Aucun destinataire n'est défini pour les sauvegardes du panneau de l'hébergeur : le panneau reçoit des archives zip en clair.",
+        "invalid": "LIBREFOLIO_BACKUP_RECIPIENTS ne peut pas être utilisée ({reason}) : un ou deux destinataires age1…, séparés par une virgule. Les sauvegardes du panneau de l'hébergeur répondent 503 tant qu'elle n'est pas corrigée.",
+        "missingManaged": "LIBREFOLIO_BACKUP_RECIPIENTS n'est pas définie : une instance gérée ne remet jamais une sauvegarde en clair au panneau de l'hébergeur, dont les sauvegardes répondent 503 tant qu'elle n'est pas définie."
       }
     }
   }

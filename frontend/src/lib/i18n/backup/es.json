@@ -27,7 +27,8 @@
         "database": "Copiando la base de datos",
         "files": "Añadiendo los archivos",
         "finalizing": "Finalizando",
-        "encrypting": "Cifrando con tu contraseña"
+        "encrypting": "Cifrando con tu contraseña",
+        "sealing": "Sellado para el panel del proveedor"
       },
       "progress": "{done} de {total}",
       "ready": "Copia de seguridad lista",
@@ -149,7 +150,8 @@
           "non_iso_currencies": "Algunos códigos de divisa de la copia de seguridad no son códigos ISO (nombres o números guardados por una versión anterior): la edición de esas filas se rechaza hasta que se corrija el código."
         },
         "expires": "La copia comprobada se conserva hasta el {date}.",
-        "drop": "Descartar este archivo"
+        "drop": "Descartar este archivo",
+        "ownAccountMissing": "Tu cuenta no está entre los administradores de esta copia de seguridad: después del reinicio no podrás iniciar sesión con ella."
       },
       "confirm": {
         "word": "restaurar",
@@ -224,7 +226,8 @@
         "password_required": "Es una copia segura: escribe su contraseña.",
         "envelope_damaged": "La copia segura está dañada o fue modificada: no se puede abrir.",
         "envelope_unsupported": "La copia segura viene de un LibreFolio más reciente: actualiza primero LibreFolio.",
-        "proxy_too_large": "Un proxy delante de LibreFolio rechazó un archivo tan grande: pide a quien lo gestiona que acepte subidas más grandes, o restaura desde la línea de comandos."
+        "proxy_too_large": "Un proxy delante de LibreFolio rechazó un archivo tan grande: pide a quien lo gestiona que acepte subidas más grandes, o restaura desde la línea de comandos.",
+        "sealed_backup_needs_key": "Esta es una copia de seguridad sellada de un panel de alojamiento: su contraseña está cifrada para la clave del proveedor. Extrae backup.lfbk, abre password.age con age y luego restaura backup.lfbk con esa contraseña."
       },
       "password": {
         "intro": "Una copia segura: escribe la contraseña con la que se hizo.",
@@ -252,6 +255,12 @@
         "unlimited": "Una verificación para una restauración acepta archivos que, descomprimidos, ocupan cualquier tamaño.",
         "invalid": "{variable} no se puede usar (un número entero de megabytes, 0 para ningún límite): las verificaciones para una restauración se rechazan hasta que se corrija.",
         "profileTable": "Los valores predeterminados del perfil de LibreFolio no dan ningún valor al límite de subida, o le dan uno del tipo equivocado, así que las verificaciones para una restauración se rechazan: define LIBREFOLIO_BACKUP_MAX_RESTORE_MB como un número entero de megabytes e informa del error."
+      },
+      "recipients": {
+        "ok": "Las copias de seguridad del panel del proveedor están selladas para {count, plural, one {# clave} other {# claves}}: solo la clave privada abre su contraseña.",
+        "off": "No hay destinatarios para las copias de seguridad del panel del proveedor: el panel recibe archivos zip sin cifrar.",
+        "invalid": "LIBREFOLIO_BACKUP_RECIPIENTS no se puede usar ({reason}): uno o dos destinatarios age1…, separados por comas. Las copias de seguridad del panel del proveedor responden 503 hasta que se corrija.",
+        "missingManaged": "LIBREFOLIO_BACKUP_RECIPIENTS no está definida: una instancia gestionada nunca entrega una copia de seguridad sin cifrar al panel del proveedor, cuyas copias responden 503 hasta que se defina."
       }
     }
   }

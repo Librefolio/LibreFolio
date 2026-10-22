@@ -61,6 +61,7 @@ const GALLERY_SECURITY_CHECKS = {
         {check_id: 'backup.panel_token', severity: 'ok', i18n_key: 'backup.checks.panelToken.off', detail: {}},
         {check_id: 'backup.upload_limit', severity: 'ok', i18n_key: 'backup.checks.uploadLimit.unlimited', detail: {}},
         {check_id: 'backup.restore_limit', severity: 'ok', i18n_key: 'backup.checks.restoreLimit.unlimited', detail: {}},
+        {check_id: 'backup.recipients', severity: 'ok', i18n_key: 'backup.checks.recipients.off', detail: {}},
         {check_id: 'accounts.login_limit', severity: 'ok', i18n_key: 'auth.checks.loginLimit.ok', detail: {}},
         {check_id: 'email.smtp', severity: 'ok', i18n_key: 'email.checks.smtp.ok', detail: {}},
         {check_id: 'email.smtp_encryption', severity: 'ok', i18n_key: 'email.checks.smtpEncryption.ok', detail: {}},
