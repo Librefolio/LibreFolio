@@ -7778,3 +7778,24 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > - **Punti 3, 4, 5** (caricamento sostituito dopo il controllo del tipo; `abort()` che toglie anche il file finale;
 >   permessi della chiave e `keygen` atomico): ⏳ dopo il commit del checkpoint B4 + B-33 + B5, perché toccano
 >   `restore_jobs.py` e `backup_cli.py`, già modificati lì.
+
+#### Revisione di sicurezza, punti 3-5 e il 500 con `reason` ✅ 2026-10-22
+
+> **Note implementazione** (interfaccia `ondata4/B-sec345-interface.md`; rossi di due agenti `test-author`):
+> - **SEC-3**: `UploadWriter.finish(*, replace_others=True)`; `restore_jobs.remove_replaced_uploads` pubblica. La rotta
+>   del pannello di H chiamerà `finish(replace_others=False)`, controllerà il tipo, poi `remove_replaced_uploads`.
+> - **SEC-4**: `abort()` toglie anche il file finale quando `finish()` non è tornato (fallito dopo il rename).
+> - **SEC-5**: la CLI avvisa (`⚠️ … mode 0644 … chmod 600`) per un file di chiave leggibile da altri; `keygen` scrive in
+>   un file temporaneo con `os.write` e `fsync`, poi `os.link` (mai sopra un file; ripiego sul rename dove il file system
+>   non ha link fisici), il temporaneo sempre tolto.
+> - **Status**: il 500 `restore_state_unreadable` porta `reason` (status, conferma, annullamento, riavvio), messaggio
+>   invariato. Frontend: `readStatusWithSession` → `{kind: 'unreadable', reason}`; `restoreFlow` smette di interrogare
+>   (`outcome = 'state_unreadable'`, `unreadableReason`); `RestartOverlay` lo dice con
+>   `backup.restore.restart.stateUnreadable` (4 lingue) e il pulsante Indietro.
+> - **Rossi**: `services backup-leftovers` 4, `api backup-restore` 1, `api backup-restore-apply` 21, `utils
+>   backup-cli-sealed` 11; Vitest 30 (più 7 errori di `#settle`). **Verdi**: 207, 167, 262, 49; Vitest `backup/` 1 143;
+>   regressione del backup verde (`e2e backup-roundtrip` 3; `backup-roundtrip-l3` 1 verde e i 2 rossi di H, non unito
+>   qui); `front check` 0/0; `ruff`, `black`, `prettier`, `git diff --check` puliti.
+>
+> **⚠️ Fuori pista**: avevo cambiato il testo del messaggio del 500; i test lo fissano: rimesso com'era, l'informazione
+> nuova è in `reason`.

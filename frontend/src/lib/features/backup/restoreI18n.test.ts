@@ -541,3 +541,25 @@ describe('L3 — a sealed nightly backup; the warnings of the accounts', () => {
         expect(carrying.success, `the generated client refuses the warnings of the accounts: run ./dev.py api sync — ${carrying.success ? '' : carrying.error.message}`).toBe(true);
     });
 });
+
+// =====================================================================================================================
+// The status 500 — a state of the restore the server cannot read, on the restart page (SEC-3/4/5 wave, written red first)
+// =====================================================================================================================
+
+/*
+ * RestartOverlay.svelte words the outcome `state_unreadable` by `backup.restore.restart.stateUnreadable`, naming the
+ * placeholder `{reason}` (the reason the server gave: `io`, `not_a_file`, `invalid`): a message of the four catalogues,
+ * naming exactly `reason` in each. Once the overlay names it, the scan of the restore modules above requires it too; the
+ * positive control proves the scan reads it there. Red today: neither the key nor its use exists.
+ */
+describe('the status 500 — the restart page says the state of the restore cannot be read', () => {
+    it('backup.restore.restart.stateUnreadable is a message of the four catalogues, naming the placeholder {reason} and only it', () => {
+        expectMessage('backup.restore.restart.stateUnreadable');
+
+        expect(placeholdersOf(messageOf(en, 'backup.restore.restart.stateUnreadable') as string)).toEqual(['reason']);
+    });
+
+    it('positive control: the scan finds backup.restore.restart.stateUnreadable in RestartOverlay.svelte', () => {
+        expect(namedKeys(source('RestartOverlay.svelte')).keys).toContain('backup.restore.restart.stateUnreadable');
+    });
+});

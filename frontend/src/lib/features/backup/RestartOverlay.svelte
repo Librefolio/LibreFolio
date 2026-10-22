@@ -19,16 +19,25 @@
         notStopping?: boolean;
         /** The status read once the server came back: its `reason` (rolled back) or `waiting` (not applied). */
         status?: RestoreStatus | null;
+        /** Why the state of the restore cannot be read (`state_unreadable`, B-33). */
+        unreadableReason?: string | null;
         /** Back to the Backup tab, with the status read again. */
         onBack: () => void;
     }
 
-    let {outcome, slow = false, notStopping = false, status = null, onBack}: Props = $props();
+    let {outcome, slow = false, notStopping = false, status = null, unreadableReason = null, onBack}: Props = $props();
 
-    const reason = $derived(status?.reason ?? null);
+    const reason = $derived(outcome === 'state_unreadable' ? unreadableReason : (status?.reason ?? null));
     const waiting = $derived(status?.waiting ?? null);
 
-    const failed = $derived(outcome === 'rolled_back' || outcome === 'still_pending');
+    const failed = $derived(outcome === 'rolled_back' || outcome === 'still_pending' || outcome === 'state_unreadable');
+    const detail = $derived(
+        outcome === 'state_unreadable'
+            ? $_('backup.restore.restart.stateUnreadable', {values: {reason: reason ?? '?'}})
+            : outcome === 'rolled_back'
+              ? $_('backup.restore.restart.rolledBack', {values: {reason: $_(restoreReasonKey(reason))}})
+              : $_('backup.restore.restart.stillPending', {values: {waiting: $_(restoreWaitingKey(waiting))}}),
+    );
 </script>
 
 <ModalBase open zIndex={80} maxWidth="md" closeOnBackdropClick={false} closeOnEscape={false} labelledBy="restart-overlay-title" trapFocus>
@@ -39,7 +48,7 @@
                 {$_('backup.restore.restart.failedTitle')}
             </h2>
             <p class="text-sm text-lf-secondary" data-testid="restart-detail">
-                {outcome === 'rolled_back' ? $_('backup.restore.restart.rolledBack', {values: {reason: $_(restoreReasonKey(reason))}}) : $_('backup.restore.restart.stillPending', {values: {waiting: $_(restoreWaitingKey(waiting))}})}
+                {detail}
             </p>
             <button class="inline-flex items-center gap-2 rounded-lg border border-lf-subtle px-4 py-2 text-sm text-lf-secondary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus" type="button" data-testid="restart-back" onclick={onBack}>
                 {$_('backup.restore.restart.back')}
