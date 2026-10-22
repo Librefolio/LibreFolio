@@ -11,6 +11,8 @@
  * - Invalidation: per-range or full cache clear (for refresh)
  * - Staleness: after a price catch-up on the server, markStale() keeps the points and makes the next read of any
  *   range ask again (Z-14)
+ * - Generation: a number, unique in the whole app, renewed by every invalidation and by markStale(): what was computed
+ *   from the store's data (the signal results of `signalResultCache`, N64) holds only while it is the same
  *
  * Design principle: the chart component asks "what do I need for this range?",
  * the store responds with existing data + gaps. The controller fetches only the gaps
@@ -71,6 +73,10 @@ function addDays(date: Date, days: number): Date {
 // STORE
 // ============================================================================
 
+/** The last generation handed out, by any store: a generation is never given twice, not even to a store made anew. */
+let lastGeneration = 0;
+const nextGeneration = (): number => ++lastGeneration;
+
 export class TimeSeriesStore<T extends TimeSeriesPoint> {
     private data: Map<string, T> = new Map();
     /** Intervals already fetched from the API (may have returned no data). */
@@ -80,6 +86,16 @@ export class TimeSeriesStore<T extends TimeSeriesPoint> {
      * counts as missing whether or not the store has a point; the points stay readable. Ended by invalidateAll().
      */
     private stale = false;
+    /** Renewed by invalidateAll(), invalidateRange() and markStale(); kept by merge(), markFetched() and every read. */
+    private currentGeneration = nextGeneration();
+
+    /**
+     * The generation of the store's data, unique in the app (N64). It changes when the data may have changed under what
+     * was computed from it — an invalidation, a catch-up marking it stale — and never when points are only added.
+     */
+    get generation(): number {
+        return this.currentGeneration;
+    }
 
     /** Number of data points currently in the store */
     get size(): number {
@@ -173,6 +189,7 @@ export class TimeSeriesStore<T extends TimeSeriesPoint> {
     markStale(): void {
         this.fetchedRanges = [];
         this.stale = true;
+        this.currentGeneration = nextGeneration();
     }
 
     /** The parts of [start, end] that no fetch since the last markStale() covers, in date order. */
@@ -250,6 +267,7 @@ export class TimeSeriesStore<T extends TimeSeriesPoint> {
 
         // Clear fetched marks that overlap the invalidated range
         this.fetchedRanges = this.fetchedRanges.filter((r) => r.end < startDate || r.start > endDate);
+        this.currentGeneration = nextGeneration();
     }
 
     /**
@@ -259,6 +277,7 @@ export class TimeSeriesStore<T extends TimeSeriesPoint> {
         this.data.clear();
         this.fetchedRanges = [];
         this.stale = false;
+        this.currentGeneration = nextGeneration();
     }
 
     /**

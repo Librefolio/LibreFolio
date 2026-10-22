@@ -2,6 +2,12 @@
  * Unit tests for TimeSeriesStore — Generic client-side cache for time-series data.
  *
  * Tests 16–24: the stale state a price catch-up puts every store in (`markStale()`, Z-14).
+ *
+ * Tests 25–32: the generation of a store (N64) — the one number that says which state of the store an answer was drawn
+ * over. A client cache of the backend's signal answers keeps an answer together with the generations of the stores it
+ * depends on, and takes it back only while they are the same; so the generation must move whenever what the store
+ * stands for may have changed (`invalidateAll()`, `invalidateRange()`, `markStale()`) and stay put when it did not
+ * (`merge()`, `markFetched()`, any read).
  */
 import {describe, expect, it} from 'vitest';
 import type {TimeSeriesPoint} from '../core/TimeSeriesStore';
@@ -425,5 +431,197 @@ describe('TimeSeriesStore.markStale (Z-14)', () => {
         empty.markFetched('2026-01-11', '2026-01-20');
         expect(empty.getMissingIntervals('2026-01-01', '2026-01-10'), 'a gap inside one fetched range is not missing').toEqual([]);
         expect(empty.getMissingIntervals('2026-01-01', '2026-01-20'), 'a gap spanning two fetched ranges is still missing outside the stale state: one range has to cover it whole').toEqual([{start: '2026-01-01', end: '2026-01-20'}]);
+    });
+});
+
+// =============================================================================
+//  generation — which state of the store an answer was drawn over (N64)
+//
+//  A signal answer comes from the backend over the prices of one or two stores.
+//  The cache that keeps it files it with the stores' generations and takes it
+//  back only when every one is what it was: a store that was emptied, had a
+//  range invalidated or was marked stale by a price catch-up has moved on, and
+//  the answer drawn over its old state must be asked again. A merge or a
+//  `markFetched` only adds what the server already held, and a read changes
+//  nothing, so neither may move it.
+//
+//  The counter is global to the app, not per store: a number is never given
+//  twice, to two stores or to the same store after a change, so a store that was
+//  removed and made again can never be mistaken for the one it replaced.
+//
+//  Red first: `generation` is read by name, so that its absence fails each case
+//  with the contract in the message, and the type check does not wait for it.
+//  Every "does not change" case asserts that the number exists before comparing,
+//  or `undefined === undefined` would pass it for the wrong reason.
+// =============================================================================
+
+/** `store.generation`, read by name (see above). */
+function generationOf(store: TimeSeriesStore<TestPoint>): number {
+    const generation = (store as unknown as {generation?: unknown}).generation;
+    expect(typeof generation, 'TimeSeriesStore has no numeric generation: a cache of signal answers cannot tell whether the prices an answer was drawn over have changed (N64)').toBe('number');
+    return generation as number;
+}
+
+/**
+ * Runs `change` and asserts the store moved to a generation nobody had: not its own before, not one of the other
+ * stores', not one it had earlier. `seen` is every generation observed so far, and gains the new one.
+ */
+function expectFreshGeneration(store: TimeSeriesStore<TestPoint>, seen: Set<number>, what: string, change: () => void): void {
+    seen.add(generationOf(store));
+    change();
+    const after = generationOf(store);
+    expect(seen.has(after), `${what} left the store with a generation it, or another store, already had: an answer drawn over the old state would still be taken for current (N64)`).toBe(false);
+    seen.add(after);
+}
+
+/** Asserts `read` leaves the generation of `store` alone. */
+function expectSameGeneration(store: TimeSeriesStore<TestPoint>, what: string, read: () => unknown): void {
+    const before = generationOf(store);
+    read();
+    expect(generationOf(store), `${what} moved the generation: the cached answers drawn over this store would be asked again for nothing (N64)`).toBe(before);
+}
+
+describe('TimeSeriesStore.generation (N64)', () => {
+    // =========================================================================
+    // Test 25: every store has one, from construction, and none shares it
+    // =========================================================================
+    it('gives every store a numeric generation from construction, and never the same one to two stores', () => {
+        const stores = Array.from({length: 25}, () => new TimeSeriesStore<TestPoint>());
+
+        const generations = stores.map(generationOf);
+
+        expect(new Set(generations).size, 'two stores share a generation: an answer drawn over one would be taken for current over the other (N64)').toBe(generations.length);
+    });
+
+    // =========================================================================
+    // Test 26: a number is never given twice
+    // =========================================================================
+    it('never gives a number twice: a store made after others changed or were left behind gets one nobody had', () => {
+        const first = new TimeSeriesStore<TestPoint>();
+        const seen = new Set<number>([generationOf(first)]);
+        expectFreshGeneration(first, seen, 'invalidateAll()', () => first.invalidateAll());
+        expectFreshGeneration(first, seen, 'markStale()', () => first.markStale());
+        expectFreshGeneration(first, seen, 'invalidateRange()', () => first.invalidateRange('2026-01-01', '2026-01-02'));
+        expect(seen.size, 'the store gave the same number twice').toBe(4);
+
+        // `first` is not read again: the numbers it held are gone with it, and still taken.
+        const later = new TimeSeriesStore<TestPoint>();
+
+        expect(seen.has(generationOf(later)), 'a store made later got a number an earlier store already had: removing a store and making it again would hand the new one the old answers (N64)').toBe(false);
+    });
+
+    // =========================================================================
+    // Test 27: invalidateAll moves it, empty or not
+    // =========================================================================
+    it('moves to a fresh generation on invalidateAll(), whether the store holds points or not', () => {
+        const other = new TimeSeriesStore<TestPoint>();
+        const otherGeneration = generationOf(other);
+        const seen = new Set<number>([otherGeneration]);
+
+        const empty = new TimeSeriesStore<TestPoint>();
+        expectFreshGeneration(empty, seen, 'invalidateAll() on an empty store', () => empty.invalidateAll());
+
+        const filled = new TimeSeriesStore<TestPoint>();
+        filled.merge(everyDay('2026-01-01', '2026-01-10'));
+        filled.markFetched('2026-01-01', '2026-01-10');
+        expectFreshGeneration(filled, seen, 'invalidateAll() on a loaded store', () => filled.invalidateAll());
+        expectFreshGeneration(filled, seen, 'a second invalidateAll()', () => filled.invalidateAll());
+
+        expect(generationOf(other), 'the other store did not take part: its generation stays').toBe(otherGeneration);
+    });
+
+    // =========================================================================
+    // Test 28: invalidateRange moves it even when the range held nothing
+    // =========================================================================
+    it('moves to a fresh generation on invalidateRange(), even for a range that held no point and on an empty store', () => {
+        const seen = new Set<number>();
+        const store = new TimeSeriesStore<TestPoint>();
+        store.merge(everyDay('2026-01-01', '2026-01-10'));
+        store.markFetched('2026-01-01', '2026-01-10');
+
+        expectFreshGeneration(store, seen, 'invalidateRange() over points', () => store.invalidateRange('2026-01-04', '2026-01-06'));
+        expect(store.size, 'premise: the range held points and they went').toBe(7);
+        expectFreshGeneration(store, seen, 'invalidateRange() over a range that held no point (a fetched mark may be all it drops)', () => store.invalidateRange('2025-06-01', '2025-06-30'));
+        expect(store.size, 'premise: nothing was there to delete').toBe(7);
+
+        const empty = new TimeSeriesStore<TestPoint>();
+        expectFreshGeneration(empty, seen, 'invalidateRange() on an empty store', () => empty.invalidateRange('2026-01-01', '2026-01-31'));
+    });
+
+    // =========================================================================
+    // Test 29: markStale moves it, every time
+    // =========================================================================
+    it('moves to a fresh generation on markStale(), and again on a second markStale()', () => {
+        const seen = new Set<number>();
+        const store = new TimeSeriesStore<TestPoint>();
+        store.merge(everyDay('2026-01-01', '2026-01-05'));
+        store.markFetched('2026-01-01', '2026-01-05');
+
+        expectFreshGeneration(store, seen, 'markStale()', () => store.markStale());
+        expectFreshGeneration(store, seen, 'a second markStale(): what was fetched after the first is stale in turn', () => {
+            store.markFetched('2026-01-01', '2026-01-05');
+            store.markStale();
+        });
+
+        const empty = new TimeSeriesStore<TestPoint>();
+        expectFreshGeneration(empty, seen, 'markStale() on an empty store', () => empty.markStale());
+    });
+
+    // =========================================================================
+    // Test 30: merge and markFetched leave it
+    // =========================================================================
+    it('keeps its generation on merge() and markFetched(): they add what the server already held', () => {
+        const store = new TimeSeriesStore<TestPoint>();
+        const points = [pt('2026-01-01', 1), pt('2026-01-02', 1.1), pt('2026-01-03', 1.2)];
+
+        expectSameGeneration(store, 'merge() into an empty store', () => store.merge(points));
+        expectSameGeneration(store, 'merge() of the same points again', () => store.merge(points));
+        expectSameGeneration(store, 'merge() that replaces a point with another value', () => store.merge([pt('2026-01-02', 9.9)]));
+        expectSameGeneration(store, 'merge() of nothing', () => store.merge([]));
+        expectSameGeneration(store, 'markFetched()', () => store.markFetched('2026-01-01', '2026-01-03'));
+        expectSameGeneration(store, 'markFetched() of the same range again', () => store.markFetched('2026-01-01', '2026-01-03'));
+
+        // The same two, in the stale state a catch-up leaves: a fetch that follows the mark is not a change either.
+        store.markStale();
+        expectSameGeneration(store, 'merge() after markStale()', () => store.merge([pt('2026-01-04', 2)]));
+        expectSameGeneration(store, 'markFetched() after markStale()', () => store.markFetched('2026-01-01', '2026-01-04'));
+    });
+
+    // =========================================================================
+    // Test 31: no read moves it
+    // =========================================================================
+    it('keeps its generation on every read: get, has, getRange, getMissingIntervals, getAllSorted and size, fresh or stale', () => {
+        const store = new TimeSeriesStore<TestPoint>();
+        store.merge(everyDay('2026-01-01', '2026-01-05'));
+        store.markFetched('2026-01-01', '2026-01-03');
+
+        const reads: Array<[string, () => unknown]> = [
+            ['get()', () => store.get('2026-01-02')],
+            ['has()', () => store.has('2026-01-09')],
+            ['getRange()', () => store.getRange('2026-01-01', '2026-01-09')],
+            ['getMissingIntervals()', () => store.getMissingIntervals('2026-01-01', '2026-01-09')],
+            ['getAllSorted()', () => store.getAllSorted()],
+            ['size', () => store.size],
+        ];
+        for (const [what, read] of reads) expectSameGeneration(store, what, read);
+
+        // In the stale state getMissingIntervals walks every day by coverage: still a read.
+        store.markStale();
+        for (const [what, read] of reads) expectSameGeneration(store, `${what} on a stale store`, read);
+    });
+
+    // =========================================================================
+    // Test 32: a change belongs to its store
+    // =========================================================================
+    it('moves only the generation of the store that changed', () => {
+        const changed = new TimeSeriesStore<TestPoint>();
+        const neighbour = new TimeSeriesStore<TestPoint>();
+        const before = generationOf(neighbour);
+
+        changed.invalidateAll();
+        changed.markStale();
+        changed.invalidateRange('2026-01-01', '2026-01-02');
+
+        expect(generationOf(neighbour), 'a change of one store moved the generation of another: the answers drawn over it would be asked again for nothing (N64)').toBe(before);
     });
 });

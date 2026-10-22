@@ -19,12 +19,17 @@
  * the real one, with `sendBulkBatches` passed through a spy so one case can
  * read the estimate the loader gives it.
  *
+ * Then the generation (N64): the number each store carries, which a cache of signal answers files an answer under, comes
+ * through the registry with no change of its own. A price catch-up on the bus moves every pair's generation, the
+ * mutation and refresh signals none, `invalidateAllFxStores()` every pair's, and a pair removed and made again never
+ * keeps the number of the store it replaced.
+ *
  * One behaviour the suite deliberately pins rather than asserts as correct,
  * flagged in the coverage report:
  *   - `loadFxRatesAndSignalsBulk` re-throws where the two `ensureFxRangeLoaded*`
  *     siblings swallow.
  */
-import {beforeEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
 // vi.mock is hoisted by Vitest — the factory runs before any imports below
 vi.mock('$lib/api', () => ({
@@ -1471,6 +1476,121 @@ describe('fxStoreRegistry after a price catch-up (Z-14)', () => {
         mockConvert.mockResolvedValueOnce(converted(...ratesAt('EUR', 'USD', '1.20')));
         await ensureFxRangeLoaded('EUR-USD', START, END);
         expect(mockConvert, 'the control: a price catch-up did not make the range stale either, so the silence above proves nothing (Z-14)').toHaveBeenCalledOnce();
+    });
+});
+
+// =============================================================================
+//  The generation of an FX store, through the registry (N64)
+//
+//  The registry adds no state of its own: a store's generation moves because
+//  the store's own operations move it (`TimeSeriesStore.test.ts`). What is
+//  pinned here is which stores the registry reaches with them.
+//
+//  - `{kind: 'prices'}` on the portfolio bus (`notifyPricesCaughtUp()`) marks
+//    every pair's store stale, so it moves every generation;
+//    `{kind: 'mutation'}` (the live poll, a commit) and `{kind: 'refresh'}`
+//    («Aggiorna») move none.
+//  - `invalidateAllFxStores()` moves every pair's generation.
+//  - `removeFxStore(slug)` followed by `getFxStore(slug)` makes a new store,
+//    and its generation is a number neither the removed store nor its last
+//    change (the removal empties it before dropping it) had.
+//
+//  `generation` is read by name, and every case asserts it is a number before
+//  it compares: red first, for the right reason. Isolation: the `beforeEach` at
+//  the top removes every registered pair, and the cases below remove theirs
+//  again when they are done.
+// =============================================================================
+
+describe('fxStoreRegistry generations (N64)', () => {
+    const SLUGS = ['EUR-USD', 'GBP-USD', 'CHF-EUR'] as const;
+
+    afterEach(() => {
+        for (const slug of SLUGS) removeFxStore(slug);
+    });
+
+    type FxStore = ReturnType<typeof getFxStore>;
+
+    /** `store.generation`, read by name (see above). */
+    function generationOf(store: FxStore): number {
+        const generation = (store as unknown as {generation?: unknown}).generation;
+        expect(typeof generation, 'TimeSeriesStore has no numeric generation: a cache of signal answers cannot tell whether the rates an answer was drawn over have changed (N64)').toBe('number');
+        return generation as number;
+    }
+
+    /** One store per pair of the case, in the order of SLUGS. */
+    function pairStores(): FxStore[] {
+        return SLUGS.map((slug) => getFxStore(slug));
+    }
+
+    /** Asserts every store moved to a number nobody had — not its own before, not another store's — and no two share one. */
+    function expectAllFresh(stores: readonly FxStore[], before: readonly number[], also: readonly number[], what: string): void {
+        const after = stores.map(generationOf);
+        const taken = new Set([...before, ...also]);
+        expect(
+            after.map((generation) => taken.has(generation)),
+            `${what} left a store with a generation it, or another store, already had: an answer drawn over its old rates would still be taken for current (N64)`,
+        ).toEqual(after.map(() => false));
+        expect(new Set(after).size, `${what} gave two stores the same new generation`).toBe(after.length);
+    }
+
+    it('a price catch-up on the bus ({kind: prices}) changes the generation of every pair’s store', () => {
+        const stores = pairStores();
+        const before = stores.map(generationOf);
+
+        notifyPricesCaughtUp();
+
+        expectAllFresh(stores, before, [], 'a price catch-up');
+    });
+
+    it('a portfolio mutation and «Aggiorna» change no generation — a price catch-up, the control, changes them all', () => {
+        const stores = pairStores();
+        const before = stores.map(generationOf);
+
+        // The live poll's write (every 30 s on an asset page that reaches today), a commit, and «Aggiorna».
+        notifyPortfolioMutation('POST', '/api/v1/assets/prices/current', {results: [], success_count: 0, errors: []});
+        expect(stores.map(generationOf), 'the live poll’s write moved the generations: every cached signal answer would be asked again every 30 s (N64)').toEqual(before);
+        notifyPortfolioMutation('POST', '/api/v1/transactions/commit');
+        expect(stores.map(generationOf), 'a commit moved the generations').toEqual(before);
+        requestPortfolioRefresh();
+        expect(stores.map(generationOf), '«Aggiorna» moved the generations').toEqual(before);
+
+        // The control, on the same stores: the catch-up does reach them, so the silence above is the listener's choice.
+        notifyPricesCaughtUp();
+        expectAllFresh(stores, before, [], 'the control: a price catch-up');
+    });
+
+    it('invalidateAllFxStores changes the generation of every pair’s store', () => {
+        const stores = pairStores();
+        const before = stores.map(generationOf);
+
+        invalidateAllFxStores();
+
+        expectAllFresh(stores, before, [], 'invalidateAllFxStores()');
+        expect(getRegisteredPairs(), 'premise: invalidating empties the stores, it does not unregister the pairs').toEqual(expect.arrayContaining([...SLUGS]));
+    });
+
+    it('removeFxStore then getFxStore gives a store whose generation is neither the removed one’s nor the one its removal left', () => {
+        const removed = getFxStore('EUR-USD');
+        const before = generationOf(removed);
+
+        expect(removeFxStore('EUR-USD'), 'premise: the pair was registered').toBe(true);
+        const afterRemoval = generationOf(removed); // whatever the removal did to it: a number the new store must not take
+        const reborn = getFxStore('EUR-USD');
+
+        expect(reborn, 'premise: the registry made a new store, not the removed one again').not.toBe(removed);
+        expectAllFresh([reborn], [before], [afterRemoval], 'removeFxStore(slug) then getFxStore(slug)');
+    });
+
+    it('asking the registry for a pair again returns the same store with the same generation, by slug or by pair', () => {
+        const store = getFxStore('EUR-USD');
+        const generation = generationOf(store);
+
+        const again = getFxStore('EUR-USD');
+        const byPair = getFxStoreByPair('USD', 'EUR');
+
+        expect(again, 'premise: one store per slug').toBe(store);
+        expect(byPair, 'premise: the pair USD/EUR is the slug EUR-USD').toBe(store);
+        expect(generationOf(again), 'a read of the registry moved a generation').toBe(generation);
     });
 });
 

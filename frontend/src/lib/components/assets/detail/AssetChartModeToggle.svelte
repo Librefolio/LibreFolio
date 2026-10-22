@@ -8,7 +8,7 @@
 
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {ChartLine, Percent} from 'lucide-svelte';
+    import {CalendarSync, ChartLine} from 'lucide-svelte';
 
     interface Props {
         primaryMode: AssetChartPrimaryMode;
@@ -34,7 +34,8 @@
         aria-pressed={primaryMode === 'calendar-return'}
         onclick={() => onselect('calendar-return')}
     >
-        <Percent size={14} data-testid="asset-chart-primary-calendar-return-icon" />
+        <!-- The rolling-return icon of the list cards and of the Chart Settings (developer decision V-8b). -->
+        <CalendarSync size={14} data-testid="asset-chart-primary-calendar-return-icon" />
         {$t('signals.riskRollingReturn.name')}
     </button>
 </div>

@@ -1,5 +1,5 @@
 /**
- * Gate: a chart's saved signals are drawn through one renderer, `lib/charts/chartSignalRendering.ts` (lot Y-39a).
+ * Gate: a chart's saved signals are drawn through one renderer, `lib/charts/chartSignalRendering.ts` (lots Y-39a, Y-42).
  *
  * ## What this protects
  *
@@ -9,8 +9,10 @@
  * preview (`ChartSettingsModal`'s `renderLocalPreview`) and the two detail pages. The copies drifted: the preview named a
  * comparison «Asset #id» where the card named it after its target, drew a comparison with the chart's own asset where
  * the card skipped it, and turned an FX pair by its card where the card let the signal's own `_inverted` turn it. Each
- * copy is one more place the next rule has to reach. Y-39a moved the loop into `lib/charts/chartSignalRendering.ts`; this
- * gate keeps it there: a sixth copy is red the day it is written.
+ * copy is one more place the next rule has to reach. Y-39a moved the loop of the lists and the preview into
+ * `lib/charts/chartSignalRendering.ts`, and Y-42 moved the two detail pages after them, handing the module their data
+ * through `detailPageSignalSources(…)` (`lib/charts/chartPageSignals.ts`); this gate keeps the loop there: another copy
+ * is red the day it is written.
  *
  * ## The rule, as this file checks it
  *
@@ -18,16 +20,19 @@
  *     `lib/charts/chartSignalRendering.ts` and in the files of KNOWN_COPIES. Its declaration in
  *     `lib/charts/signals/registry.ts` is no call. `signalFromConfig` imported or re-exported under another name
  *     (`signalFromConfig as rebuild`) counts as a call: under another name, its calls are out of the gate's sight.
- *   - KNOWN_COPIES only shrinks. It names the two detail pages, another workstream's files, which adopt the module later
- *     (Y-42), each with its reason. An entry whose file no longer calls `signalFromConfig(` fails until it is removed, so
- *     a copy once gone cannot come back unnoticed.
- *   - The scan reads something: the walk reaches the components; the registry declares `signalFromConfig` exactly once,
- *     where the scanner sees it; and the module exists and draws through `signalFromConfig(` — «no call outside the
- *     module» is also what a scanner matching nothing would report.
+ *   - KNOWN_COPIES only shrinks, and Y-42 emptied it: it named the two detail pages, which adopted the module in that lot.
+ *     The list stays empty — a new copy of the loop does not join it, it renders through the module. The machinery stays:
+ *     an entry whose file no longer calls `signalFromConfig(` fails until it is removed, so a copy once gone cannot come
+ *     back unnoticed. It is proven on synthetic known copies (SYNTHETIC_COPIES), passed to the checks explicitly, and on
+ *     a real detail page standing in for one.
+ *   - The scan reads something: the walk reaches the components, the registry, the module and the two detail pages; the
+ *     registry declares `signalFromConfig` exactly once, where the scanner sees it; and the module exists and draws
+ *     through `signalFromConfig(` — «no call outside the module» is also what a scanner matching nothing would report.
  *
  * Every check is a pure function of a `{path: text}` tree, read as the walk reads `src`: it is run first on synthetic
  * trees that break the rule once — the proof that it can fail — then on the files of `src`, and last on those files
- * mutated in memory. Comments are blanked before anything is matched; the blanking keeps offsets, so the lines in the
+ * mutated in memory: the module's own text copied elsewhere, a detail page with a call injected, a detail page standing
+ * in for a known copy. Comments are blanked before anything is matched; the blanking keeps offsets, so the lines in the
  * messages are the files' own. Findings are judged by file, never by line.
  *
  * ## What it cannot see
@@ -60,6 +65,9 @@ const MODULE = 'src/lib/charts/chartSignalRendering.ts';
 /** Where `signalFromConfig` is declared: its declaration is no call, and the control that the scanner reads its name. */
 const REGISTRY = 'src/lib/charts/signals/registry.ts';
 
+/** The two detail pages: the last copies of the loop, adopted in Y-42. The walk must reach them, and the checks bite on them. */
+const DETAIL_PAGES = ['src/routes/(app)/assets/[id]/+page.svelte', 'src/routes/(app)/fx/[pair]/+page.svelte'] as const;
+
 /** What every offender is told. */
 const RULE = 'render saved signals through lib/charts/chartSignalRendering.ts';
 
@@ -70,18 +78,10 @@ interface KnownCopy {
 
 /**
  * The copies of the loop that may remain for now, each with its reason. The list only shrinks: an entry whose file no
- * longer calls `signalFromConfig(` fails the gate until it is removed.
+ * longer calls `signalFromConfig(` fails the gate until it is removed. Y-42 moved the two detail pages onto the module
+ * and emptied it, so it stays empty: a new copy renders through `lib/charts/chartSignalRendering.ts`.
  */
-const KNOWN_COPIES: readonly KnownCopy[] = [
-    {
-        file: 'src/routes/(app)/assets/[id]/+page.svelte',
-        why: 'The asset detail page, a file of workstream X (FE4/FE5) outside lot Y-39a: its overlay loop adopts chartSignalRendering.ts with Y-42.',
-    },
-    {
-        file: 'src/routes/(app)/fx/[pair]/+page.svelte',
-        why: 'The FX pair detail page, a file of workstream X (FE4/FE5) outside lot Y-39a: its overlay loop adopts chartSignalRendering.ts with Y-42.',
-    },
-];
+const KNOWN_COPIES: readonly KnownCopy[] = [];
 
 /** The types the walk reads: every one that can hold a script. */
 const SCANNED = /\.(svelte|ts|js)$/;
@@ -271,12 +271,27 @@ const COPY_TEXT = ['<script lang="ts">', "    import {signalFromConfig} from '$l
 /** A tree without one of its files. */
 const without = (tree: Tree, path: string): Tree => Object.fromEntries(Object.entries(tree).filter(([file]) => file !== path));
 
-/** A tree that keeps the rule: the registry, the module, the two known copies and a page that only imports the module. */
+/**
+ * Two synthetic known copies: KNOWN_COPIES is empty, so the allowance and the staleness checks are proven on these. The
+ * synthetic checks below pass them to `offenders` and `staleCopies` explicitly — never through the default, the real list.
+ */
+const SYNTHETIC_COPIES: readonly KnownCopy[] = [
+    {
+        file: 'src/routes/(app)/synthetic-old/+page.svelte',
+        why: 'A synthetic page that still draws its saved signals with a loop of its own: what the allowance and the staleness checks are proven on.',
+    },
+    {
+        file: 'src/routes/(app)/synthetic-older/+page.svelte',
+        why: 'A second synthetic page with a loop of its own: the one whose file the staleness check finds gone.',
+    },
+];
+
+/** A tree that keeps the rule: the registry, the module, the two synthetic known copies and a page that only imports the module. */
 const CLEAN: Tree = {
     [REGISTRY]: REGISTRY_TEXT,
     [MODULE]: MODULE_TEXT,
-    [KNOWN_COPIES[0].file]: COPY_TEXT,
-    [KNOWN_COPIES[1].file]: COPY_TEXT,
+    [SYNTHETIC_COPIES[0].file]: COPY_TEXT,
+    [SYNTHETIC_COPIES[1].file]: COPY_TEXT,
     [PAGE]: ['<script lang="ts">', "    import {renderLocalSignals} from '$lib/charts/chartSignalRendering';", '</script>', '', '<p>{renderLocalSignals.name}</p>'].join('\n'),
 };
 
@@ -285,7 +300,7 @@ describe('Saved signals are drawn through lib/charts/chartSignalRendering.ts onl
         it('a tree that keeps the rule passes every check', () => {
             const result = audit(CLEAN);
 
-            expect({offenders: offenders(result), stale: staleCopies(result), empty: emptyScans(result), module: moduleProblems(result)}).toEqual({offenders: [], stale: [], empty: [], module: []});
+            expect({offenders: offenders(result, SYNTHETIC_COPIES), stale: staleCopies(result, SYNTHETIC_COPIES), empty: emptyScans(result), module: moduleProblems(result)}).toEqual({offenders: [], stale: [], empty: [], module: []});
         });
 
         it('finds a call wherever the code puts it — in a script, in the markup, through a namespace, across a line break — and names the file and the rule', () => {
@@ -301,7 +316,7 @@ describe('Saved signals are drawn through lib/charts/chartSignalRendering.ts onl
                 '<p>{signalFromConfig(cfg)?.getLabel()}</p>',
             ].join('\n');
 
-            const found = offenders(audit({...CLEAN, [PAGE]: page}));
+            const found = offenders(audit({...CLEAN, [PAGE]: page}), SYNTHETIC_COPIES);
 
             expect(found.map(placeIn)).toEqual([`${PAGE}:3`, `${PAGE}:4`, `${PAGE}:5`, `${PAGE}:9`]);
             expect(found.every((message) => message.endsWith(`→ ${RULE}`))).toBe(true);
@@ -323,15 +338,15 @@ describe('Saved signals are drawn through lib/charts/chartSignalRendering.ts onl
             ].join('\n');
             const markup = ['<!-- signalFromConfig(cfg) -->', '<script lang="ts">', '    // signalFromConfig(cfg)', '</script>'].join('\n');
 
-            expect(offenders(audit({...CLEAN, [helper]: text, [PAGE]: markup}))).toEqual([]);
+            expect(offenders(audit({...CLEAN, [helper]: text, [PAGE]: markup}), SYNTHETIC_COPIES)).toEqual([]);
             // The declaration is no call, in the registry or in a copy of it.
-            expect(offenders(audit({...CLEAN, [helper]: REGISTRY_TEXT}))).toEqual([]);
+            expect(offenders(audit({...CLEAN, [helper]: REGISTRY_TEXT}), SYNTHETIC_COPIES)).toEqual([]);
         });
 
         it('counts signalFromConfig under another name as a call', () => {
             const text = ["import {signalFromConfig as rebuild} from '$lib/charts/signals';", 'const one = rebuild(cfg);'].join('\n');
 
-            const found = offenders(audit({...CLEAN, 'src/lib/charts/somewhereHelper.ts': text}));
+            const found = offenders(audit({...CLEAN, 'src/lib/charts/somewhereHelper.ts': text}), SYNTHETIC_COPIES);
 
             expect(found.map(placeIn)).toEqual(['src/lib/charts/somewhereHelper.ts:1']);
             expect(found[0]).toContain('under another name');
@@ -340,18 +355,18 @@ describe('Saved signals are drawn through lib/charts/chartSignalRendering.ts onl
         it('allows the module and the known copies only: a copy of a known copy anywhere else is an offender', () => {
             const elsewhere = 'src/lib/components/charts/SomewhereCard.svelte';
 
-            expect(offenders(audit({...CLEAN, [elsewhere]: COPY_TEXT})).map(placeIn)).toEqual([`${elsewhere}:3`]);
-            expect(offenders(audit({...CLEAN, [elsewhere]: MODULE_TEXT})).map(placeIn)).toEqual([`${elsewhere}:4`]);
+            expect(offenders(audit({...CLEAN, [elsewhere]: COPY_TEXT}), SYNTHETIC_COPIES).map(placeIn)).toEqual([`${elsewhere}:3`]);
+            expect(offenders(audit({...CLEAN, [elsewhere]: MODULE_TEXT}), SYNTHETIC_COPIES).map(placeIn)).toEqual([`${elsewhere}:4`]);
         });
 
         it('a known copy that no longer calls signalFromConfig( is stale — and so is one whose file is gone', () => {
-            const adopted = audit({...CLEAN, [KNOWN_COPIES[0].file]: ['<script lang="ts">', "    import {renderLocalSignals} from '$lib/charts/chartSignalRendering';", '</script>'].join('\n')});
+            const adopted = audit({...CLEAN, [SYNTHETIC_COPIES[0].file]: ['<script lang="ts">', "    import {renderLocalSignals} from '$lib/charts/chartSignalRendering';", '</script>'].join('\n')});
 
-            expect(staleCopies(adopted).map(placeIn)).toEqual([KNOWN_COPIES[0].file]);
-            expect(staleCopies(audit(without(CLEAN, KNOWN_COPIES[1].file))).map(placeIn)).toEqual([KNOWN_COPIES[1].file]);
+            expect(staleCopies(adopted, SYNTHETIC_COPIES).map(placeIn)).toEqual([SYNTHETIC_COPIES[0].file]);
+            expect(staleCopies(audit(without(CLEAN, SYNTHETIC_COPIES[1].file)), SYNTHETIC_COPIES).map(placeIn)).toEqual([SYNTHETIC_COPIES[1].file]);
             // An alias alone keeps no copy alive: it is no call.
-            const aliased = audit({...CLEAN, [KNOWN_COPIES[0].file]: "import {signalFromConfig as rebuild} from '$lib/charts/signals';"});
-            expect(staleCopies(aliased).map(placeIn)).toEqual([KNOWN_COPIES[0].file]);
+            const aliased = audit({...CLEAN, [SYNTHETIC_COPIES[0].file]: "import {signalFromConfig as rebuild} from '$lib/charts/signals';"});
+            expect(staleCopies(aliased, SYNTHETIC_COPIES).map(placeIn)).toEqual([SYNTHETIC_COPIES[0].file]);
         });
 
         it('fails a scan that reads nothing: no registry, a registry declaring it twice or not at all, no component', () => {
@@ -375,7 +390,12 @@ describe('Saved signals are drawn through lib/charts/chartSignalRendering.ts onl
             expect(isScanned('src/signalRendering.gate.test.ts')).toBe(false);
             expect(isScanned('src/lib/components/charts/__tests__/Recorder.svelte')).toBe(false);
             expect(isScanned('src/__mocks__/$app/stores.ts')).toBe(false);
-            expect(offenders(audit({...CLEAN, 'src/lib/components/charts/ChartSettingsModal.test.ts': 'const instance = signalFromConfig(cfg);'}))).toEqual([]);
+            expect(offenders(audit({...CLEAN, 'src/lib/components/charts/ChartSettingsModal.test.ts': 'const instance = signalFromConfig(cfg);'}), SYNTHETIC_COPIES)).toEqual([]);
+        });
+
+        it('the synthetic known copies are explained and name each file once, as a real known copy must', () => {
+            expect(SYNTHETIC_COPIES.filter((copy) => copy.why.trim().length < 40).map((copy) => copy.file)).toEqual([]);
+            expect(new Set(SYNTHETIC_COPIES.map((copy) => copy.file)).size).toBe(SYNTHETIC_COPIES.length);
         });
     });
 
@@ -384,7 +404,7 @@ describe('Saved signals are drawn through lib/charts/chartSignalRendering.ts onl
             const files = Object.keys(srcTree());
 
             expect(files.filter((file) => file.endsWith('.svelte')).length, 'the walk reaches the components').toBeGreaterThan(100);
-            expect(files, 'the registry and the known copies').toEqual(expect.arrayContaining([REGISTRY, ...KNOWN_COPIES.map((copy) => copy.file)]));
+            expect(files, 'the registry, the module and the two detail pages').toEqual(expect.arrayContaining([REGISTRY, MODULE, ...DETAIL_PAGES]));
             const unwanted = files.filter((file) => file.endsWith('.test.ts') || file.includes('/__tests__/') || file.includes('/__mocks__/') || file.includes('/node_modules/'));
             expect(unwanted, 'tests and mocks are not opened at all: they may call signalFromConfig( in any form, and none of them is the app').toEqual([]);
         });
@@ -396,7 +416,7 @@ describe('Saved signals are drawn through lib/charts/chartSignalRendering.ts onl
         it('signalFromConfig( is called only in lib/charts/chartSignalRendering.ts and in the known copies', () => {
             const found = offenders(srcAudit());
 
-            expect(found, ['', `Saved signals are drawn in one place: ${RULE} (Y-39a). ${found.length} call(s) outside it:`, '', ...found, ''].join('\n  ')).toEqual([]);
+            expect(found, ['', `Saved signals are drawn in one place: ${RULE} (Y-39a, Y-42). ${found.length} call(s) outside it:`, '', ...found, ''].join('\n  ')).toEqual([]);
         });
 
         it('KNOWN_COPIES only shrinks: every known copy still calls signalFromConfig(', () => {
@@ -407,30 +427,62 @@ describe('Saved signals are drawn through lib/charts/chartSignalRendering.ts onl
             expect(moduleProblems(srcAudit()), 'the one renderer of saved signals is missing, or rebuilds no signal through the registry: «no call outside the module» says nothing until it does').toEqual([]);
         });
 
+        it('KNOWN_COPIES is empty: the list only shrinks, and Y-42 emptied it', () => {
+            expect(
+                KNOWN_COPIES.map((copy) => copy.file),
+                `KNOWN_COPIES only shrinks, and Y-42 emptied it: a copy of the loop does not join the list — ${RULE}`,
+            ).toEqual([]);
+        });
+
         it('KNOWN_COPIES is explained, and names each file once', () => {
             expect(KNOWN_COPIES.filter((copy) => copy.why.trim().length < 40).map((copy) => copy.file)).toEqual([]);
             expect(new Set(KNOWN_COPIES.map((copy) => copy.file)).size).toBe(KNOWN_COPIES.length);
         });
 
-        it('the checks bite on these very files: one mutation each, in memory, turns them red', () => {
-            const tree = srcTree();
-            const [copy] = KNOWN_COPIES;
-            const copyText = tree[copy.file];
-            if (!copyText) throw new Error(`${copy.file} is not read by the walk`);
-            const base: Tree = {[REGISTRY]: tree[REGISTRY], [copy.file]: copyText};
-            const copies = [copy];
-            expect({offenders: offenders(audit(base), copies), stale: staleCopies(audit(base), copies)}, 'the files the mutations start from keep the rule on their own').toEqual({offenders: [], stale: []});
+        describe('the checks bite on these very files: one mutation each, in memory, turns them red', () => {
+            /** A call of the registry's function, as a page that rebuilds a signal itself writes it, put at the head of the page's script. */
+            const injectCall = (text: string): string => text.replace(/(<script\b[^>]*>)/, '$1\n    const injected = signalFromConfig(cfg);');
 
-            // A known copy, copied anywhere else.
-            const elsewhere = 'src/routes/(app)/somewhere/+page.svelte';
-            const copied = offenders(audit({...base, [elsewhere]: copyText}), copies);
-            expect(copied.length, 'the copy of a known copy elsewhere').toBeGreaterThan(0);
-            expect(copied.every((message) => message.startsWith(`${elsewhere}:`))).toBe(true);
+            /** The files of `src` a mutation starts from: the registry and the module, and — for a detail page — the page. */
+            function base(...pages: string[]): Tree {
+                const tree = srcTree();
+                const files = [REGISTRY, MODULE, ...pages];
+                const missing = files.filter((file) => !tree[file]);
+                if (missing.length) throw new Error(`${missing.join(', ')} is not read by the walk`);
+                return Object.fromEntries(files.map((file) => [file, tree[file]]));
+            }
 
-            // The known copy adopting the module: its calls replaced, so it must leave the list.
-            const adopted = copyText.replace(/(?<![\w$])signalFromConfig\s*\(/g, 'rebuildSignal(');
-            expect(adopted, 'the mutation applies').not.toBe(copyText);
-            expect(staleCopies(audit({...base, [copy.file]: adopted}), copies).map(placeIn)).toEqual([copy.file]);
+            it('the module, and the registry, keep the rule on their own — and the module’s real text, copied to another path, is an offender', () => {
+                const start = base();
+                const moduleText = start[MODULE];
+                expect({offenders: offenders(audit(start), []), stale: staleCopies(audit(start), [])}, 'the files the mutation starts from keep the rule on their own').toEqual({offenders: [], stale: []});
+
+                const elsewhere = 'src/routes/(app)/somewhere/+page.svelte';
+                const copied = offenders(audit({...start, [elsewhere]: moduleText}), []);
+
+                expect(copied.length, 'the module’s text copied elsewhere').toBeGreaterThan(0);
+                expect(copied.every((message) => message.startsWith(`${elsewhere}:`))).toBe(true);
+            });
+
+            it.each(DETAIL_PAGES)('%s, with one signalFromConfig(cfg) call injected, is an offender — and is none without it', (page) => {
+                const start = base(page);
+                expect({offenders: offenders(audit(start), []), stale: staleCopies(audit(start), [])}, `${page} keeps the rule on its own: it calls signalFromConfig( — render saved signals through the module`).toEqual({offenders: [], stale: []});
+
+                const injected = injectCall(start[page]);
+                expect(injected, 'the mutation applies').not.toBe(start[page]);
+                const found = offenders(audit({...start, [page]: injected}), []);
+
+                expect(found.map(placeIn), 'one injected call, one offender').toHaveLength(1);
+                expect(found[0].startsWith(`${page}:`)).toBe(true);
+            });
+
+            it.each(DETAIL_PAGES)('%s, standing in for a known copy, is stale — and is not once a call is injected', (page) => {
+                const start = base(page);
+                const copies: readonly KnownCopy[] = [{file: page, why: 'A real detail page standing in for a known copy: the staleness check is proven on a real file, not only on a synthetic one.'}];
+
+                expect(staleCopies(audit(start), copies).map(placeIn), `${page} calls signalFromConfig( — it has not adopted the module`).toEqual([page]);
+                expect(staleCopies(audit({...start, [page]: injectCall(start[page])}), copies), 'a copy that calls signalFromConfig( is alive: the check is not stale on everything').toEqual([]);
+            });
         });
     });
 });
