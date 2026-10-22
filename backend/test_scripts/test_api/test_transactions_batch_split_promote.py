@@ -1204,6 +1204,77 @@ class TestBatchPromote:
             assert any(i.get("code") == "pairQuantityMismatch" for i in data["issues"]), f"Expected pairQuantityMismatch: {data}"
             print_success("TRANSFER pair create -3 / +5 → pairQuantityMismatch ✓")
 
+    @pytest.mark.parametrize("endpoint", ["commit", "validate"])
+    async def test_adjustment_pair_create_is_rejected(self, endpoint):
+        """ADJUSTMENT -2 on A / +2 on B under one link_uuid → pairAdjustmentNotAllowed on create 0, not committed, nothing written.
+
+        Two Adjustments cannot be linked (decision of 22/10/2026): units that move between brokers are an Asset
+        Transfer. The refusal is at entry only: this is a create of a linked pair that no promote consumes.
+        """
+        print_section(f"B2.13b — ADJUSTMENT pair create under one link_uuid (/{endpoint}) → pairAdjustmentNotAllowed")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_a = await create_broker(client, "PairAdjA")
+            broker_b = await create_broker(client, "PairAdjB")
+            asset_id = await get_or_create_asset(client)
+
+            # A: +10 (the helper adds its USD 50 cost basis), enough units for the outgoing -2
+            seed_id = await create_standalone_tx(
+                client,
+                broker_a,
+                "ADJUSTMENT",
+                asset_id=asset_id,
+                quantity="10",
+                tx_date="2026-03-01",
+            )
+
+            link_uuid = str(uuid.uuid4())
+            description = f"adjustment pair {uuid.uuid4().hex[:8]}"
+            resp = await client.post(
+                f"{API_BASE}/transactions/{endpoint}",
+                json={
+                    "creates": [
+                        {
+                            "broker_id": broker_a,
+                            "asset_id": asset_id,
+                            "type": "ADJUSTMENT",
+                            "date": "2026-03-02",
+                            "quantity": "-2",
+                            "description": description,
+                            "link_uuid": link_uuid,
+                        },
+                        {
+                            "broker_id": broker_b,
+                            "asset_id": asset_id,
+                            "type": "ADJUSTMENT",
+                            "date": "2026-03-02",
+                            "quantity": "2",
+                            "description": description,
+                            "link_uuid": link_uuid,
+                            # The receiver carries its cost basis: the cost basis is not the issue here
+                            "cost_basis_override": {"code": "EUR", "amount": "10"},
+                        },
+                    ],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, resp.text
+            data = resp.json()
+            refusal = [(i["operation"], i["index"], i.get("ref_id"), i["code"], i.get("params")) for i in data["issues"]]
+            expected = [("create", 0, None, "pairAdjustmentNotAllowed", {"type": "ADJUSTMENT"})]
+            what = f"ADJUSTMENT pair create -2 on broker {broker_a} / +2 on broker {broker_b} (link_uuid {link_uuid}, /{endpoint})"
+            assert refusal == expected, f"{what}: expected exactly one pairAdjustmentNotAllowed on create 0 and none on create 1, got {data['issues']}"
+            assert data["committed"] is False, f"ADJUSTMENT pair create (/{endpoint}) was reported committed: {data}"
+
+            # Nothing was written: broker B (this test's own) holds no row, broker A only its seed
+            rows_b = await client.get(f"{API_BASE}/transactions", params={"broker_id": broker_b}, timeout=TIMEOUT)
+            assert rows_b.status_code == 200, rows_b.text
+            assert [tx["id"] for tx in rows_b.json()] == [], f"A refused ADJUSTMENT pair left rows on broker {broker_b}: {rows_b.json()}"
+            rows_a = await client.get(f"{API_BASE}/transactions", params={"broker_id": broker_a}, timeout=TIMEOUT)
+            assert rows_a.status_code == 200, rows_a.text
+            assert {tx["id"] for tx in rows_a.json()} == {seed_id}, f"A refused ADJUSTMENT pair changed broker {broker_a}: {rows_a.json()}"
+            print_success(f"ADJUSTMENT pair -2 / +2 (/{endpoint}) → pairAdjustmentNotAllowed, nothing written ✓")
+
     async def test_transfer_pair_create_different_assets_is_rejected(self):
         """TRANSFER pair create asset X -3 on A / asset Y +3 on B under one link_uuid → pairAssetMismatch, not committed."""
         print_section("B2.14 — TRANSFER pair create across two assets → pairAssetMismatch")
