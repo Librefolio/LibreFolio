@@ -8405,6 +8405,12 @@ test.describe('Live price direction flash', () => {
 // Everything is served by route mocks for synthetic asset ids that no other
 // spec uses. Nothing is written to the database, so there is nothing to clean
 // up.
+//
+// Two paths. Inside the detail, "All" after a shorter preset is a cache hit
+// (the case above). From the Assets list, "All" has been a cache miss since
+// Z-29b: the list keeps its card series in a reduced cache of its own, so the
+// detail asks its daily prices with the events, and its first answer must
+// still draw the markers.
 // ============================================================================
 
 /** One price-query item that the cache-hit mock below has already delivered. */
@@ -8544,19 +8550,26 @@ test.describe('All-range event markers on a price-cache hit', () => {
         await login(page, TEST_USER);
     });
 
-    // Path A, from the list. With the range on "All", the list bulk-queries
-    // ['2000-01-01', today] and marks that range as fetched in the shared
-    // in-memory price store. The detail opened from that list is therefore a
-    // cache hit: it resolves "All" and drops its own events-only answer.
+    // Path A, from the list: the first answer of a detail that misses the daily
+    // cache. With the range on "All", the list bulk-queries ['2000-01-01',
+    // today] for its cards. Since Z-29b it keeps that series in its own reduced
+    // cache (`stores/reducedPriceCache.ts`), beside the shared daily price store
+    // and without touching it. The detail opened from that list therefore finds
+    // no daily prices: it asks prices AND events in one request (`include_price:
+    // true`) and resolves "All" from that answer. A regression here would be the
+    // detail dropping the events of its first answer, so the chart would draw no
+    // markers. Before Z-29b the list filled the daily store and this path was a
+    // cache hit; Path B below keeps covering the hit.
     //
     // The navigation MUST be the client-side card click. A `page.goto` reloads
-    // the app and empties the store. The detail then misses the cache and the
-    // defect does not show.
-    test('keeps the event markers when the detail opens from a list that already cached All', async ({page}) => {
+    // the app and empties every in-memory store: the list's own All query would
+    // no longer have run in this page session, and the test would stop showing
+    // that the detail still asks its own daily prices after it.
+    test('keeps the event markers when the detail opens from a list on All: the detail asks its own daily prices with the events', async ({page}) => {
         // Two page loads and several mocked round trips, each awaited on its own signal.
         test.setTimeout(60_000);
         const assetId = 920_071;
-        const {log, oldNotes, recentNotes, firstPriceDate} = await mockCacheHitEventsAsset(page, assetId);
+        const {log, oldNotes, recentNotes} = await mockCacheHitEventsAsset(page, assetId);
         await goToAssetsPage(page);
 
         const listMaxPreset = page.getByTestId('assets-date-range').getByTestId('date-preset-max');
@@ -8565,12 +8578,12 @@ test.describe('All-range event markers on a price-cache hit', () => {
         const listMark = log.length;
         await listMaxPreset.click();
         await waitForDeliveredPriceQuery(log, listMark, (entry) => entry.assetId === assetId && entry.includePrice === true && entry.start === '2000-01-01', 'the list must query the All prices from the 2000-01-01 sentinel');
-        // data-busy turns false only after that answer is merged and its range is marked as fetched.
+        // data-busy turns false only after that answer is merged into the list's own cache.
         await waitForSettled(page.getByTestId('assets-page'), 20_000);
 
-        const detailMark = log.length;
         const card = page.getByTestId(`asset-card-${assetId}`);
         await expect(card).toBeVisible({timeout: 10_000});
+        const detailMark = log.length;
         await card.click();
         // The URL, then the root, each with its own ceiling — why: goToSeededAssetDetail's Y-33 paragraph.
         await expect(page, 'the card click navigates to the detail page of this asset').toHaveURL(new RegExp(`/assets/${assetId}(?:\\?|$)`), {timeout: 30_000});
@@ -8578,11 +8591,17 @@ test.describe('All-range event markers on a price-cache hit', () => {
         await expect(detail, 'the asset detail page renders once its URL has landed').toBeVisible({timeout: 10_000});
         await waitForSettled(detail, 20_000);
 
-        const eventsOnly = await waitForDeliveredPriceQuery(log, detailMark, (entry) => entry.assetId === assetId && entry.includePrice === false && entry.includeEvents === true, 'the detail must reuse the list cache and ask only for events');
-        expect(eventsOnly.start, 'All must resolve to the first cached close before asking for events').toBe(firstPriceDate);
+        // The detail asks its own daily prices together with the events: the list's reduced cache does not stand in for them.
+        const answer = await waitForDeliveredPriceQuery(log, detailMark, (entry) => entry.assetId === assetId && entry.includePrice === true && entry.includeEvents === true, 'the detail must ask its own daily prices together with the events');
+        // Delivery order is log order: no prices-less (events-only) item for this asset came before that first answer.
+        expect(
+            log.slice(detailMark, log.indexOf(answer)).filter((entry) => entry.assetId === assetId && entry.includePrice === false),
+            'the detail must not ask events alone before its first answer',
+        ).toEqual([]);
 
-        // Red before the fix: that events-only answer was discarded, so the chart drew no markers.
-        await expect.poll(() => readDetailChartEventNotes(page), {message: 'the chart must draw both dividends of the All range', timeout: 10_000}).toEqual([oldNotes, recentNotes(firstPriceDate)].sort());
+        // The recent dividend names the start the answer was asked from, read from the delivered item, not assumed.
+        // Red when the detail drops the events of that first answer: the chart then draws no markers.
+        await expect.poll(() => readDetailChartEventNotes(page), {message: 'the chart must draw both dividends of the All range', timeout: 10_000}).toEqual([oldNotes, recentNotes(answer.start ?? '')].sort());
     });
 
     // Path B, inside the detail.
