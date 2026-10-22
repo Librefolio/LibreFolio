@@ -8880,3 +8880,22 @@ sonda lo legge come «nessun suggerimento» e `call_provider` mette in pausa.
    `chart.{it,fr,es}` e `index.{it,fr,es}` (non timbrato). `charts.md` è sporco in Y: la frase sul dettaglio («the asset
    detail page uses the same window», tolta da Y) è una richiesta a Y.
 6. ⏳ 22/10 · CHECKPOINT READY (vista del dettaglio).
+
+### Gate del treno 8 — `price-refresh-reload.spec.ts:1158` (g), triage (22/10 mattina, base `23111e2f0`)
+- **Il rosso** (gate `all-frontend`, 2 worker): il passo di controllo di (g) — ritorno in-app sul dettaglio dopo un giro
+  sul Dashboard **senza** catch-up — aspetta un `POST /assets/prices/query` per l'asset con `include_price: false` (solo
+  eventi) e va in timeout a 30 s («the page never asked for its events»). Riprodotto nella mia corsia, deterministico,
+  stessa riga (`:1181`; `ondata3/X-gate8-g-red.log`, dopo `db populate --force --clean` sulla base nuova).
+- **Verdetto: assunzione del test**, non difetto. Con N64 (decisione Q1 del developer) un colpo pieno — prezzi in cache e
+  la stessa richiesta già risposta sulla stessa generazione degli store — non chiede niente, **eventi compresi**: il
+  ritorno in-app senza catch-up oggi non manda alcuna richiesta. Il cuore di (g) (Q2/Z-14: dopo un catch-up il dettaglio
+  richiede i prezzi, `include_price: true`) non cambia: il catch-up marca gli store stale, la generazione si rinnova, la
+  risposta tenuta non vale più.
+- **Riparazione** (`test-author`, solo la spec, +25/−12): il controllo ora aspetta una barriera (radice ferma —
+  `loading` è vero dal montaggio fino al caricamento del grafico —, pulsante Refresh fermo — il gettone del primo
+  caricamento resta fino alla fine di `reloadPage()` —, grafico `data-series-state="ready"`) e poi verifica che **nessuna**
+  richiesta di prezzi per l'asset sia partita dopo il ritorno, con un messaggio che elenca le richieste trovate e la
+  causa; intestazione della spec allineata; passo finale e (h) invariati. Prettier e `tsc` dell'e2e puliti.
+- **Prove** (in `flock`, `nice`, `LC_ALL=en_US.UTF-8`, corsia 6191, `ondata3/X-gate8-*.log`): `front-portfolio
+  price-refresh` **8/8** due volte di fila (10:00 e 10:04); `front-asset asset-detail` intero `--workers 2` **53/53**.
+  Porta 6191 libera, `git diff --check` pulito.
