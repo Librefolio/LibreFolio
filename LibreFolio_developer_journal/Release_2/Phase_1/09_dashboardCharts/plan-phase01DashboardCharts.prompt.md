@@ -8506,3 +8506,24 @@ base della percentuale o le date del confronto.
 9. ✅ 22/10 · CHECKPOINT READY (Y-41). #49: la frase in `positions.{it,fr,es}.md` è già scritta (fuori dal commit di Y-41); il tooltip e le chiavi
    sono il passo seguente, checkpoint a parte.
 
+## 22/10 · #49 — il tooltip su «Valore Iniziale» e «Valore Finale», e la frase in it/fr/es (ondata 4)
+
+> **Base:** `5333837b7` (Y-41 committato dal coordinatore). Discussione #49, promessa a un utente il 17/10.
+1. ✅ 22/10 · Il rosso: `ContributionTable.test.ts`, nuovo `describe` «the tooltips of Start Value and End Value (#49)» (3 casi: le due colonne restano
+   nascoste di default; il tooltip della colonna è quello del catalogo, `dashboard.startValueTooltip` / `endValueTooltip`, letto in lingua d'interfaccia, mai
+   scritto nel test). Le colonne si mostrano con gli override salvati della tabella (uno `localStorage` in memoria: il jsdom di qui non lo ha).
+   Rosso per il motivo giusto: la colonna c'è (precondizione verde) e `Unable to find role="tooltip"`; dopo la cura 5/5; tolta e rimessa la cura per rivederlo.
+   > **⚠️ Fuori pista**: una colonna con un tooltip e senza link alla documentazione porta il tooltip **sul suo pulsante di ordinamento**
+   > (`DataTableColumnHeader`), non su un'icona «i» (che c'è solo con il link): il primo rosso cercava l'icona sbagliata.
+2. ✅ 22/10 · La cura: `ContributionTable.svelte` `headerTooltip` sulle due colonne (stesso meccanismo di `annualized-return`); le chiavi nelle quattro lingue
+   con `./dev.py i18n add` (`i18n/dashboard/{en,it,fr,es}.json`): «Valore della posizione a inizio/fine periodo, calcolato come la colonna Valore del
+   Portafoglio; 0 se la posizione non c'era ancora / era già chiusa. È la base delle percentuali del periodo (solo l'inizio)». `i18n check` rc 0 (5132 chiavi).
+3. ✅ 22/10 · La frase in `positions.{it,fr,es}.md`: il punto «**Valore Iniziale** e **Valore Finale** si calcolano come il **Valore** nel **Portafoglio** …» (la riga ~96
+   di `positions.en.md`), con i nomi dell'interfaccia; nella pagina spagnola anche la riga 86 («Valor inicial» → «Valor Inicial», come il catalogo).
+   > **⚠️ Fuori pista**: `positions.en.md` non l'ho toccata, e **non ho messo il timbro Aphra**: l'hash della pagina EN è cambiato da altri commit
+   > (`bd22b078 → 34c40c89`) e `translate-diff` segnala 2 anomalie per lingua (struttura: mancano, per esempio, la sezione YOC e il punto «Titoli spostati tra
+   > due broker»). Timbrare nasconderebbe un debito vero, non il mio. Il debito della pagina resta per la traduzione di Aphra.
+4. ✅ 22/10 · Prove: `ContributionTable` + `PerformanceChart` + `DataTableHeaderTooltip` **41/41**; Prettier, `theme-roles --check`, `git diff --check`
+   puliti; in `flock` (dopo oltre un'ora di coda): `front check` **0 errori, 0 avvisi**, `mkdocs build` exit 0, `check-links` exit 0 (97 link validi); log
+   `ondata4/y-y49-{check,mkdocs-build,mkdocs-links}.log`.
+

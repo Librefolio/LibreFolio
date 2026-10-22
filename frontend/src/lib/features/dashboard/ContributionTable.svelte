@@ -388,6 +388,7 @@
             {
                 id: 'start-value',
                 header: () => label('dashboard.startValue', 'Start Value'),
+                headerTooltip: () => label('dashboard.startValueTooltip', "The position's value at the start of the period, worked out as the Value column of the Portfolio; 0 if the position did not exist yet. It is the base of the period's percentages."),
                 type: 'number',
                 width: 170,
                 minWidth: 150,
@@ -401,6 +402,7 @@
             {
                 id: 'end-value',
                 header: () => label('dashboard.endValue', 'End Value'),
+                headerTooltip: () => label('dashboard.endValueTooltip', "The position's value at the end of the period, worked out as the Value column of the Portfolio; 0 if the position was already closed."),
                 type: 'number',
                 width: 170,
                 minWidth: 150,
