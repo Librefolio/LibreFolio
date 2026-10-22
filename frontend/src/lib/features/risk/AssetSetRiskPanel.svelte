@@ -68,12 +68,13 @@
      * own — and it reaches this panel's modal through `openSync`, with `canSync`
      * telling the page when there is nothing to sync.
      */
-    import {untrack} from 'svelte';
+    import {onDestroy, untrack} from 'svelte';
     import {AlertTriangle, Briefcase, CheckCheck, ChevronDown, FlipHorizontal, Info, RefreshCw, Square, Wallet, X} from 'lucide-svelte';
 
     import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
+    import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
@@ -98,7 +99,7 @@
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {applyBulkAction, labBenchmarkId, labL3Waits, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionSource} from './assetSetSelection';
     import {dayFormatter, describeEligibility, eligibilityBatches, EMPTY_VERDICTS, fitPeriodOffer, isSelectable, mergeEligibilityAnswers, type DayRange, type EligibilityView, type EligibilityVerdicts} from './eligibility';
-    import {buildSyncTargets, labQualityAction} from './syncTargets';
+    import {addPairSides, buildSyncTargets, labQualityAction} from './syncTargets';
     import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface AssetOption {
@@ -617,7 +618,8 @@
      * controllers — the replay's included, as the Dashboard's banner reads its replay — merged
      * by Risk's one rule, `mergeQualityIssues`, on the key the banner renders them by. Its
      * actions go through `labQualityAction`: a sync opens this panel's own sync (the
-     * selection's prices and rates), the rest navigate.
+     * selection's prices and rates), `add_fx_pair` this panel's «add FX pair» dialog on the
+     * pressed pair (TC-23), the rest navigate.
      */
     let correlationSection = $state<ReturnType<typeof AssetSetCorrelationSection>>();
     let levelsSection = $state<ReturnType<typeof AssetSetComparisonLevels>>();
@@ -632,10 +634,28 @@
     );
     let qualityIssues = $derived(mergeQualityIssues(qualitySources.flatMap((source) => source.issues)));
 
+    /** The «add FX pair» dialog an `add_fx_pair` chip opens, and the sides it opens on. */
+    let addPairOpen = $state(false);
+    let addPairInitial = $state({base: '', quote: ''});
+    let alive = true;
+    onDestroy(() => (alive = false));
+
     function handleQualityAction(action: string, target: string | null): void {
         const next = labQualityAction(action, target);
         if (next?.kind === 'sync') openSync();
         else if (next?.kind === 'navigate') void goto(next.href);
+        else if (next?.kind === 'add_pair') {
+            addPairInitial = addPairSides(next.pair);
+            addPairOpen = true;
+        }
+    }
+
+    /**
+     * Once the pair is saved, and again once its rates are synced, every section asks its base
+     * again (`reload`). Not once the panel is gone: the dialog's rate sync can outlive it.
+     */
+    function refreshAfterPair(): void {
+        if (alive) reload();
     }
 
     function runBulkAction(action: BulkAction): void {
@@ -865,3 +885,7 @@
 </div>
 
 <PageSyncModal bind:open={syncOpen} {dateStart} {dateEnd} assets={syncTargets.assets} fxPairs={syncTargets.fxPairs} onsynced={handleSynced} onclose={() => (syncOpen = false)} />
+
+{#if addPairOpen}
+    <FxPairAddModal bind:open={addPairOpen} initialBase={addPairInitial.base} initialQuote={addPairInitial.quote} oncreated={refreshAfterPair} onsynced={refreshAfterPair} />
+{/if}
