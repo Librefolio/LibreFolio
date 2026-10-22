@@ -19,7 +19,7 @@
     import {get} from 'svelte/store';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {parseFxConvertWithSignalIsolation, type FxConvertAnswer} from '$lib/components/fx/fxDetailConvertQuery';
-    import {canonicalCacheKey, fxSignalAnswers} from '$lib/stores/signalResultCache';
+    import {canonicalCacheKey, comparisonSeriesAnswers, fxSignalAnswers} from '$lib/stores/signalResultCache';
     import {goBack} from '$lib/stores/app/navigationStore';
     import {ArrowLeft, ArrowLeftRight, ChevronDown, Pencil, RefreshCw, RotateCw, Ruler, Settings, TrendingUp, Wrench, X} from 'lucide-svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
@@ -69,7 +69,8 @@
     import {replaceHistoryDateRange} from '$lib/utils/url/dateRangeUrl';
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
-    import {applyComparisonAssetsData, clearComparisonAssetsData, COMPARISON_ASSET_RUNTIME_PARAM_KEYS, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
+    import {ensureSignalFxPairs, fxPairSlugsOf} from '$lib/charts/comparisonSeries';
+    import {applyComparisonAssetsData, clearComparisonAssetsData, COMPARISON_ASSET_RUNTIME_PARAM_KEYS, comparisonAnswerGenerations, comparisonAnswerIsCacheable, comparisonAnswerKey, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
     import {detailPageSignalSources} from '$lib/charts/chartPageSignals';
     import {fxPointToLineDataPoint, renderBackendResults, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
@@ -218,7 +219,7 @@
     let allConfiguredSlugs: string[] = $state([]);
 
     // All assets (for asset comparison signals in ChartSignalsSection)
-    let allAssets: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}> = $state([]);
+    let allAssets: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; currency?: string}> = $state([]);
 
     // Comparison events (asset-comparison signals)
     let comparisonEvents = $state<Map<number, any[]>>(new Map());
@@ -644,6 +645,7 @@
             if (!current()) return;
             flagVersion++;
             await maybeLoadComparison();
+            await loadSignalFxPairs();
         } catch (initializationError) {
             if (!current() || initialLoadVersion !== chartLoadVersion) return;
             console.error('Failed to initialize FX detail:', initializationError);
@@ -671,6 +673,7 @@
                         .track('fx-detail-session', async () => {
                             await loadChartData();
                             await maybeLoadComparison();
+                            await loadSignalFxPairs();
                         })
                         .then(() => {
                             if (pageMounted) onboardingGuide.maybeStartContextual('fx_detail_guide');
@@ -914,6 +917,8 @@
                 display_name: a.display_name,
                 icon_url: a.icon_url ?? null,
                 asset_type: a.asset_type ?? null,
+                // N64b: a comparison series is cached over the peer's price store, named by the asset's own currency.
+                currency: a.currency ?? undefined,
             }));
         } catch (e) {
             console.error('Failed to load asset list:', e);
@@ -952,11 +957,27 @@
             return Promise.resolve();
         }
         if (lineData.length === 0) return Promise.resolve();
+        // N64b: the same request over the same price data comes back from the cache, in this very tick: nothing is asked, no
+        // busy token opens (`lastComparisonLoadAskedServer` stays false). A peer's invalidated store, a sync of a peer, a
+        // refresh (forced) miss.
+        const answerKey = comparisonAnswerKey(requestedAssetIds, {start: dateStart, end: dateEnd});
+        const answerGenerations = comparisonAnswerGenerations(requestedAssetIds, allAssets);
+        const cachedLoad = !force && answerGenerations !== null ? comparisonSeriesAnswers.get(answerKey, answerGenerations) : null;
+        if (cachedLoad !== null) {
+            comparisonEvents = applyComparisonAssetsData(
+                signals.filter((signal) => signal.signalType === 'asset-comparison'),
+                cachedLoad,
+            );
+            comparisonAppliedFingerprint = requestedFingerprint;
+            overlayDataVersion++;
+            return Promise.resolve();
+        }
         lastComparisonLoadAskedServer = true;
         const promise = (async () => {
             try {
                 const loaded = await loadComparisonAssetsData(requestedAssetIds, {start: dateStart, end: dateEnd}, allAssets);
                 if (!current()) return;
+                if (answerGenerations !== null && comparisonAnswerIsCacheable(loaded)) comparisonSeriesAnswers.set(answerKey, answerGenerations, loaded);
                 comparisonEvents = applyComparisonAssetsData(
                     signals.filter((signal) => signal.signalType === 'asset-comparison'),
                     loaded,
@@ -974,6 +995,22 @@
         };
         void promise.then(clearInFlight, clearInFlight);
         return promise;
+    }
+
+    /**
+     * Y-41: load into the FX store the rates of the other pairs the saved `fx-pair` signals name, over the period on screen,
+     * then redraw. A signal draws from the store, which only a sync or a refresh filled before: on a clean load, or on a pair
+     * just chosen, it said «no data». The store finds its own gaps, so a pair it already holds asks nothing; the page's own
+     * pair is loaded by the chart. Never throws (`ensureSignalFxPairs`).
+     */
+    async function loadSignalFxPairs(requestedSignalConfigs: SignalConfig[] = signals): Promise<void> {
+        if (fxPairSlugsOf(requestedSignalConfigs, data.canonicalSlug).length === 0) return;
+        const slug = data.canonicalSlug;
+        const sessionGeneration = getClientSessionGeneration();
+        const range = {start: dateStart, end: dateEnd};
+        await ensureSignalFxPairs(requestedSignalConfigs, slug, range);
+        if (!pageMounted || data.canonicalSlug !== slug || !isClientSessionCurrent(sessionGeneration) || dateStart !== range.start || dateEnd !== range.end) return;
+        overlayDataVersion++;
     }
 
     /** N64 (Q1): the chart load under the page's busy token only when it asks the server; one the caches answer runs without. */
@@ -998,11 +1035,13 @@
             await pageBusy.track(label, async () => {
                 await chart;
                 await maybeLoadComparison();
+                await loadSignalFxPairs();
             });
             return;
         }
         await chart;
         await trackComparisonLoad(label);
+        await loadSignalFxPairs();
     }
 
     // =========================================================================
@@ -1031,6 +1070,8 @@
             urlDateEnd === requestedUrlEnd &&
             signalDataContextFingerprint(signals) === requestedSignalDataFingerprint;
         if (!current()) return;
+        // N64b: a refresh asks everything again, the comparison series of every period seen included.
+        comparisonSeriesAnswers.clear();
         const store = getFxStore(slug);
         store.invalidateRange(dateStart, dateEnd);
         rangeDeltaRefresh++;
@@ -1147,7 +1188,9 @@
     function handleSignalsChange(newSignals: SignalConfig[]) {
         const shouldReloadBackend = backendRequestFingerprint(signals) !== backendRequestFingerprint(newSignals);
         const shouldReloadComparison = comparisonLoadFingerprint(signals) !== comparisonLoadFingerprint(newSignals);
+        const shouldLoadFxPairs = fxPairSlugsOf(signals, data.canonicalSlug).join() !== fxPairSlugsOf(newSignals, data.canonicalSlug).join();
         setPairSettings(data.canonicalSlug, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
+        if (shouldLoadFxPairs) void loadSignalFxPairs(newSignals);
         if (shouldReloadComparison) void trackComparisonLoad('fx-detail-comparison', newSignals);
         if (shouldReloadBackend) {
             void trackChartLoad('fx-detail-signals', newSignals);
@@ -1230,6 +1273,9 @@
                     date_range: {start: requestedStart, end: requestedEnd},
                 },
             ]);
+            // N64b: the synced asset's prices may have changed under every kept comparison series, even when this answer finds
+            // the page moved on: each is asked again.
+            comparisonSeriesAnswers.clear();
             if (!current()) return;
             const r = (response as any)?.results?.[0];
             const tr = get(t);
