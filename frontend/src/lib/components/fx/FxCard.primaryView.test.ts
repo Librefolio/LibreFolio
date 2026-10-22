@@ -160,3 +160,51 @@ describe('FxCard — the three views of its chart (Y-40, FX)', () => {
         expect(chart(card).data).toEqual(RATES.map((point) => fxPointToLineDataPoint(point, true)));
     });
 });
+
+/**
+ * Y-41 — a card publishes how many overlay lines it draws (`data-overlay-count`), so a test, and a person debugging, can
+ * tell a comparison that is drawn from one that is not without reading a canvas. The count is the overlays the chart is
+ * handed: the signals the page rendered in a price view, the compared pairs' returns in the rolling-return view.
+ *
+ * Red today: the card publishes no count.
+ */
+describe('FxCard — the overlay lines it draws (Y-41)', () => {
+    const line = (id: string): RenderedSignal => ({...PEER_RETURN, id});
+
+    it('publishes the number of overlay lines of a price view', () => {
+        const renderSignals = vi.fn((): RenderedSignal[] => [line('fx'), line('asset')]);
+        const {card} = mount({primaryView: 'percentage', renderSignals});
+
+        expect(card).toHaveAttribute('data-overlay-count', '2');
+    });
+
+    it('publishes the compared pairs’ lines in the rolling-return view', () => {
+        const {card} = mount({primaryView: 'calendar-return', calendarReturn: {state: 'ready', points: RETURNS}, calendarOverlaySignals: [PEER_RETURN]});
+
+        expect(card).toHaveAttribute('data-overlay-count', '1');
+    });
+
+    it('publishes 0 for a card with no overlay', () => {
+        const {card} = mount({primaryView: 'absolute'});
+
+        expect(card).toHaveAttribute('data-overlay-count', '0');
+    });
+});
+
+/**
+ * Y-41 — the settings button of an FX card has a test id (`fx-card-settings`), as the asset card's has: the E2E of the
+ * comparison opens a card's settings through it. A click asks the page for that pair's settings and never opens the detail.
+ *
+ * Red today: the button has no test id.
+ */
+describe('FxCard — its settings button (Y-41)', () => {
+    it('is found by its test id, and a click asks the page for this pair’s settings without opening the detail', async () => {
+        const onsettings = vi.fn();
+        const {card} = mount({primaryView: 'percentage', onsettings});
+
+        await fireEvent.click(within(card).getByTestId('fx-card-settings'));
+
+        expect(onsettings).toHaveBeenCalledWith({slug: SLUG});
+        expect(navigation.goto).not.toHaveBeenCalled();
+    });
+});

@@ -12,6 +12,7 @@ import {expect, test} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToFxPage} from './fx-helpers';
+import {assetComparison, assetIdByName, seedChartComparisons} from '../fixtures/chartComparisons';
 
 test.describe('FX Chart Settings', () => {
     test.beforeEach(async ({page}) => {
@@ -75,5 +76,21 @@ test.describe('FX Chart Settings', () => {
                 }
             }
         }
+    });
+
+    // ========================================================================
+    // Y-41 — the preview of a card's settings draws its comparison with an asset
+    // ========================================================================
+    test('a card’s settings preview draws its saved comparison with an asset', async ({page}) => {
+        await goToFxPage(page);
+        const appleId = await assetIdByName(page, 'Apple Inc.');
+        await seedChartComparisons(page, [['EUR-USD', [assetComparison('e2e-y41-asset', appleId)]]]);
+        await goToFxPage(page);
+
+        await page.getByTestId('fx-card-EUR-USD').getByTestId('fx-card-settings').click();
+        const modal = page.getByTestId('chart-settings-modal');
+        await expect(modal).toBeVisible({timeout: 5_000});
+
+        await expect(modal.getByTestId('chart-settings-preview'), 'the preview draws the comparison with the asset').toHaveAttribute('data-overlay-count', '1', {timeout: 15_000});
     });
 });

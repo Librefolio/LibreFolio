@@ -47,6 +47,9 @@ the list to one pair; ✕ clears both.
   compared on that card. The rate and its change at the top stay as they are, and with too little
   history the card shows a short message instead of the chart. The window is the one set in
   [Chart Settings](chart-settings.md).
+- A card draws the comparisons saved in its [Chart Settings](chart-settings.md), with another FX pair
+  or with an asset. The line of an asset is its price in the asset's own currency, so compare it in
+  the **%** view; the prices load once for all the cards that compare an asset.
 - **Sync All** downloads new rates ([Synchronization](sync.md)); **Reload All** reads the stored
   ones again. **Settings** sets the look of every card ([Chart Settings](chart-settings.md)).
 - On a card, ⇄ flips the direction shown (USD → EUR instead of EUR → USD); the buttons at the bottom

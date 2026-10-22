@@ -491,7 +491,7 @@
                         <AssetCalendarWindowControls selection={effectiveWindow} bind:customAmount={calendarCustomAmount} bind:customUnit={calendarCustomUnit} bind:customEditing={calendarCustomEditing} onpreset={chooseCalendarPreset} oncustom={chooseCalendarCustom} />
                     </div>
                 {/if}
-                <div class="rounded-lg border border-lf-subtle overflow-hidden bg-lf-panel">
+                <div class="rounded-lg border border-lf-subtle overflow-hidden bg-lf-panel" data-testid="chart-settings-preview" data-overlay-count={previewOverlays.length}>
                     <!-- The detail pages' chart (Y-39b): absolute data, the view chosen above, the line only, no events, measure or edit -->
                     {#if previewIsCalendar && calendarPreview.points.length === 0}
                         <div class="h-[220px] flex items-center justify-center text-xs text-lf-muted" data-testid="chart-settings-calendar-preview-state" data-state={calendarPreview.state}>
