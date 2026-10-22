@@ -93,6 +93,12 @@ restore_jobs.py`` (the upload, the check in a thread followed through a state fi
     administrators, so the exact warnings of every report it reads end with both codes (``as_read_by_admin``). A sealed
     nightly backup (a POSIX ustar ``.tar``) ends its check ``failed`` with ``sealed_backup_needs_key``, a code
     ``RestoreStage.error_code`` declares (``REFUSED``). OpenAPI lists both warnings among those of the report.
+(j) SEC-4 of the security review of H-62 (finding 4; interface ``B-sec345-interface.md``): the archive renamed into
+    place, the removal of the uploads it replaces then raises an ``OSError`` (replaced in ``restore_jobs`` under its
+    private name of today and its public name ``remove_replaced_uploads`` of the cure): the route's ``abort`` leaves no
+    file of that upload in ``.restore/upload/`` — a clear zip, for this route —, the upload before as it was, and the
+    answer is the existing 500 ``backup_upload_failed``, one error logged, neither the system's words nor a path in it.
+    Written RED: ``abort`` unlinks the partial alone, and the final file stays.
 
 Pure: an app of each test holds ``backup_router`` under ``/api/v1``, as ``router.py`` mounts it; ``get_current_user`` is
 overridden by an administrator or a regular user, so the real ``require_admin`` decides and no session or database is
@@ -2254,3 +2260,38 @@ async def test_two_administrators_reading_one_check_each_get_their_own_answer_an
     assert (stored_before, stored) == ([CREDENTIALS_FROM_BACKUP], [CREDENTIALS_FROM_BACKUP]), f"report.json carries the credentials, never the per-viewer code: before {stored_before}, after {stored}"
     assert NOT_IN_BACKUP.encode() not in path.read_bytes(), "the per-viewer code is never written into report.json"
     print_success(f"{read}; report.json {stored}")
+
+
+# =============================================================================
+# (j) SEC-4: an upload whose end fails past its rename leaves nothing
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_an_upload_whose_replaced_uploads_cannot_be_removed_is_500_and_leaves_no_file_of_it(instance, monkeypatch):
+    """(j) SEC-4: an upload before, then a clear zip whose end renames it into place and fails removing the upload it
+    replaces (``OSError``, EIO): 500 ``backup_upload_failed``, one error logged with the system's words, which stay out
+    of the answer with any path; ``.restore/upload/`` holds the upload before alone, as it was. Barrier: the removal ran
+    once, with the new archive in place under its id and no partial. Red until the cure: the new archive stays."""
+    print_section("(j) SEC-4: the end of an upload fails past its rename")
+    root = instance.root
+    earlier = await uploaded(b"the upload before, kept")
+    seen: list[list[str]] = []
+
+    def fail(data_dir: Path, *, keep: str) -> None:
+        seen.append(files_in(uploads_dir(root)))
+        raise OSError(errno.EIO, os.strerror(errno.EIO))
+
+    monkeypatch.setattr(restore_jobs, "_remove_replaced_uploads", fail, raising=False)
+    monkeypatch.setattr(restore_jobs, "remove_replaced_uploads", fail, raising=False)
+    with capture_logs() as events:
+        response = await upload(b"PK\x03\x04 a clear zip, every user's data" * 64)
+    assert len(seen) == 1 and len(seen[0]) == 2 and earlier in seen[0] and all(AN_ID.fullmatch(name) for name in seen[0]), f"barrier: the removal ran once, the new archive in place under its id, no partial: {seen}"
+    assert code(response) == (500, "backup_upload_failed"), f"500 backup_upload_failed: {shown(response)}"
+    assert files_in(uploads_dir(root)) == [earlier], f"no file of the failed upload left, the upload before kept: {files_in(uploads_dir(root))}"
+    assert upload_path(root, earlier).read_bytes() == b"the upload before, kept", "the upload before as it was"
+    errors = [event for event in events if event.get("log_level") == "error"]
+    assert len(errors) == 1 and os.strerror(errno.EIO) in str(errors[0].get("error")), f"one error in the log, with the system's words: {errors}"
+    leaked = [word for word in (os.strerror(errno.EIO), str(root)) if word in response.text]
+    assert leaked == [], f"the answer carries neither the system's words nor a path: {leaked}"
+    print_success("removal failed past the rename: 500 backup_upload_failed, nothing of the upload left")

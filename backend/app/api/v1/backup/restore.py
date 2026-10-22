@@ -75,16 +75,22 @@ _OUTCOME_NOT_FOUND = {"description": "No restore outcome for this ticket: none, 
 _RESTART_NOT_PREPARED = {
     "description": "The restore folder of the data directory is a link or a file (code `restore_folder_unusable`), the ticket of the outcome could not be written (code `restore_restart_failed`), or the state of the restore cannot be read (code `restore_state_unreadable`): no restart"
 }
-_STATE_UNREADABLE = {"description": "The state of the restore cannot be read: its owner or permissions, a disk error (code `restore_state_unreadable`); whether a restore waits is not known"}
+_STATE_UNREADABLE = {
+    "description": "The state of the restore cannot be read (code `restore_state_unreadable`, with `reason`: `io`, its owner or permissions or a disk error; `not_a_file`, a link or a folder in its place; `invalid`, no state this LibreFolio reads); whether a restore waits is not known: `dev.py backup pending` on the server says what to do"
+}
 
 
 def _folder_unusable() -> HTTPException:
     return backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "restore_folder_unusable", "The restore folder of the data directory is not a plain folder")
 
 
-def _state_unreadable() -> HTTPException:
-    """A state of the restore the file system does not let be read (logged by the reader): never taken for none (B-32)."""
-    return backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "restore_state_unreadable", "The state of the restore cannot be read: the server's log has the cause")
+def _state_unreadable(exc: RestoreStateUnreadableError | None = None) -> HTTPException:
+    """A state of the restore that cannot be used (logged by the reader): never taken for none (B-32). ``reason`` in the
+    detail (B-33): the page tells it from a server down, and says what to do."""
+    refusal = backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "restore_state_unreadable", "The state of the restore cannot be read: the server's log has the cause")
+    if exc is not None:
+        refusal.detail = {**refusal.detail, "reason": exc.reason}
+    return refusal
 
 
 def _declared_size(request: Request) -> int | None:
@@ -367,8 +373,8 @@ def confirm_restore_check(stage_id: str, admin: User = Depends(require_admin)) -
         raise backup_error(status.HTTP_404_NOT_FOUND, "restore_stage_not_found", "No check has this id") from None
     except restore_jobs.CheckRunningError:
         raise backup_error(status.HTTP_409_CONFLICT, "restore_stage_running", "The check still runs") from None
-    except RestoreStateUnreadableError:
-        raise _state_unreadable() from None
+    except RestoreStateUnreadableError as exc:
+        raise _state_unreadable(exc) from None
     except RestoreStateError as exc:
         raise backup_error(_CONFIRM_STATUS.get(exc.code, status.HTTP_409_CONFLICT), exc.code, str(exc)) from None
     except BackupPathError:
@@ -388,8 +394,8 @@ def get_restore_status(_admin: User = Depends(require_admin)) -> RestoreStatus:
     restore may wait behind it (B-32)."""
     try:
         return _status_view(read_restore(get_data_dir()))
-    except RestoreStateUnreadableError:
-        raise _state_unreadable() from None
+    except RestoreStateUnreadableError as exc:
+        raise _state_unreadable(exc) from None
 
 
 @restore_router.delete("/restore/pending", status_code=status.HTTP_204_NO_CONTENT, responses={404: {"description": f"{_NOT_PENDING} (code `restore_not_pending`)"}, 500: _CANCEL_FAILED})
@@ -402,8 +408,8 @@ def cancel_pending_restore(_admin: User = Depends(require_admin)) -> Response:
         cancel_restore(data_dir=get_data_dir(), drop_copy=True)
     except RestoreNotPendingError:
         raise backup_error(status.HTTP_404_NOT_FOUND, "restore_not_pending", _NOT_PENDING) from None
-    except RestoreStateUnreadableError:
-        raise _state_unreadable() from None
+    except RestoreStateUnreadableError as exc:
+        raise _state_unreadable(exc) from None
     except OSError as exc:
         logger.error("A pending restore could not be cancelled", error=f"{type(exc).__name__}: {exc.strerror or exc}")
         raise backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "restore_cancel_failed", "The restore could not be cancelled: the server's log has the cause") from None
@@ -427,8 +433,8 @@ def restart_for_restore(background_tasks: BackgroundTasks, response: Response, _
         state, ticket = prepare_restart(data_dir=data_dir)
     except RestoreNotPendingError:
         raise backup_error(status.HTTP_409_CONFLICT, "restore_not_pending", _NOT_PENDING) from None
-    except RestoreStateUnreadableError:
-        raise _state_unreadable() from None
+    except RestoreStateUnreadableError as exc:
+        raise _state_unreadable(exc) from None
     except BackupPathError:
         raise _folder_unusable() from None
     except OSError as exc:
