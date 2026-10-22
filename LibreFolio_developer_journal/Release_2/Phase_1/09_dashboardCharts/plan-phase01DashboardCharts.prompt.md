@@ -8379,3 +8379,130 @@ toccherà con FE4), ma separato: niente conflitti con X.
     configurazioni (`_resolvedData`), quindi una pagina con le sue impostazioni salva con
     `setPairSettings(slug, {...settings, primaryView, signals})`, come fa il dettaglio. Nessun cambio di comportamento.
 
+## 22/10 · Y-41 e #49 — analisi delle quattro superfici (ondata 4, sola lettura e prova a mano)
+
+> **Base:** `6f816aad8` (il checkpoint 0, `data-testid="asset-card-settings"`, sopra `c042f2481`). `api sync` fatto. Prova a mano
+> sulla corsia 6189: build di debug in `flock` (`ondata4/y-y41-build.log`), server avviato dopo, fermato, porta libera.
+> **Metodo della prova:** nel browser ho scritto le impostazioni di due schede nel `localStorage`
+> (`lf_2_chartSettingsStore`): la scheda EUR-USD con un confronto con Apple (asset 1) e con la coppia EUR-GBP, la scheda di
+> Apple con la coppia EUR-USD e con Bitcoin (asset 6); colori puri (magenta per la coppia, ciano per l'asset), poi ho contato
+> i pixel del canvas.
+
+### La tabella
+
+| Superficie | Funziona (provato) | Manca | Chi |
+|---|---|---|---|
+| **Lista asset** | un asset sopra un asset: sì (ciano 368 px sulla scheda di Apple al primo caricamento) | **una coppia sopra un asset non compare al primo caricamento** (magenta 0 dopo 12 s); compare dopo un ridisegno (il pulsante della scheda ×3: 36 px). Causa: `fxPairData` legge `getFxStore(...)`, che non è reattivo, e `loadFxRateData` finisce dopo che le schede hanno disegnato; nessun segnale le fa ridisegnare | **Y** |
+| **Lista cambi** | una coppia sopra una coppia: sì (smeraldo 418 px su EUR-USD al primo caricamento) | **un asset sopra un cambio non si disegna** (arancio 0): `fxListSignalSources.comparisonTarget: () => null` (`fx/+page.svelte:865`), la lista non carica serie di asset; vale anche per l'anteprima della scheda | **Y** |
+| **Dettaglio cambio** | un asset sopra il cambio: sì (ciano 2696 px, ricaricamento pulito) | **una coppia sopra il cambio non compare in un caricamento pulito** (magenta 0 dopo 15 s): le coppie dei segnali `fx-pair` si caricano nello store solo nel percorso «aggiorna» (`fx/[pair]/+page.svelte:1041-1048`), mai all'apertura, al cambio di periodo o alla scelta della coppia | **X** |
+| **Dettaglio asset** | un asset sopra l'asset: sì (ciano 1270 px) | **una coppia sopra l'asset non compare in un caricamento pulito** (magenta 0, e la scheda del segnale è rossa con ⚠: «nessun dato»); **compare se arrivi dalla lista** (store già caldo: magenta 438 px). Stessa causa: `ensureFxRangeLoaded` solo nei gestori di sync/aggiorna (`assets/[id]/+page.svelte:1707`, `:2077`, `:2157`), non all'apertura né alla scelta | **X** |
+
+**Osservazione a margine per X**, vista una volta, non analizzata: nel dettaglio di Apple (3M, % ) con il confronto con Bitcoin la linea ciana
+sale in verticale al bordo destro fino a circa 400 % (mentre nella lista la stessa linea è una curva intera). Da guardare: la
+base della percentuale o le date del confronto.
+
+### Il contratto dello store (punto 2 del brief)
+- **`chartSettingsStore` basta così com'è.** Salva solo le **configurazioni** (`signalType`, `params.assetId`, `params.pairSlug`,
+  stile): i dati (`_resolvedData`…) sono del momento e si tolgono prima di scrivere (`sanitizeStoredSettings`). Nessun campo
+  nuovo, nessuna migrazione.
+- **La forma che i disegnatori leggono c'è già:** `SignalDataSources.comparisonTarget(assetId) → ComparisonTarget | null` e
+  `fxPairData(pairSlug)` in `chartSignalRendering.ts`. Chi disegna costruisce le fonti dalla sua pagina: la lista asset da
+  `targetSamples`, i dettagli da `_resolvedData` (`detailPageSignalSources`).
+- **Quello che manca è dove la lista dei cambi trova la serie di un asset.** Proposta: un piccolo modulo mio, `lib/charts/comparisonSeries.ts`,
+  con (1) `comparisonTargetFromStore(assetId, currency, names)`, che legge la cache esistente delle serie giornaliere
+  (`assetPriceStoreRegistry`, `getAssetPriceStore`, con il suo rilevamento dei buchi, già usata dal dettaglio) e dà la forma
+  `ComparisonTarget`; (2) `ensureComparisonSeries(items, range)`, **una sola richiesta** `POST /assets/prices/query` (giornaliera, senza
+  eventi, in lotti con `sendBulkBatches`) per gli asset che mancano; (3) `fxPairSlugsOf(configs, ownSlug)` e
+  `ensureSignalFxPairs(configs, ownSlug, range)` per le coppie dei segnali `fx-pair`, **che X chiama dai due dettagli** all'apertura,
+  al cambio di periodo e alla scelta della coppia (poi `overlayDataVersion++`). Così X ha due righe da aggiungere per pagina, non un
+  caricamento da scrivere.
+
+### Il piano per Y (dopo il via)
+1. **Rossi** (nessuna cura prima):
+   - Vitest del modulo `comparisonSeries.ts`: `comparisonTargetFromStore` dà una serie giornaliera con nome, icona e tipo; `ensureComparisonSeries`
+     manda **una** richiesta per gli asset che mancano e **nessuna** se la cache copre il periodo; le coppie dei segnali senza la propria.
+   - Vitest `FxCard.primaryView.test.ts`: la scheda con un `asset-comparison` pubblica la linea (`data-overlay-count`, nuovo, sulla scheda,
+     e lo stesso su `AssetCard` e sull'anteprima della modale): oggi 1 (la coppia), dopo 2.
+   - E2E `front-fx fx-list`: con le impostazioni scritte nel browser (lo schema di `fx-list.spec.ts:574`) la scheda EUR-USD ha 2 linee e la
+     lista fa **una** richiesta di prezzi, solo per gli asset confrontati; `front-asset asset-list`: la scheda di un asset con una
+     coppia ha la linea al primo caricamento; `front-fx fx-settings`: l'anteprima di una scheda con un asset confrontato la disegna.
+2. **La cura:**
+   - `fx/+page.svelte`: le fonti reali (`comparisonTarget`) dalla cache; il caricamento solo per le schede con un confronto configurato
+     (`comparisonTargetIds`), nel percorso che già carica tassi e rendimento; un contatore `$state` che i getter leggono, perché lo store
+     non è reattivo; l'anteprima della scheda legge le stesse fonti (e chiede la serie mancante come l'anteprima della lista asset).
+     `loadAssetList` porta anche la valuta (serve alla chiave della cache).
+   - `assets/+page.svelte`: lo stesso contatore, alzato quando `loadFxRateData` finisce, letto da `getRenderedSignals` e `signalSourcesFor`.
+   - `FxCard.svelte`, `AssetCard.svelte`, `ChartSettingsModal.svelte`: l'attributo `data-overlay-count`.
+   - Doc: `charts.md` (il contratto sopra, per X) e la pagina utente delle impostazioni dei grafici (un confronto con un asset ora si vede anche
+     sulle schede dei cambi).
+3. **Costi** (decisione 11: va bene qualche richiesta in più): una sola `POST /assets/prices/query` per tutte le schede dei cambi, solo per gli asset
+   confrontati (distinti), solo se la cache non copre il periodo; zero richieste per una lista senza confronti. Serie **giornaliere**, non
+   ridotte: le schede dei cambi disegnano ancora i tassi giornalieri (Y-43, dopo la 1.3).
+4. **File toccati (stima 11-13):** `fx/+page.svelte`, `assets/+page.svelte`, `FxCard.svelte`, `AssetCard.svelte`, `ChartSettingsModal.svelte`,
+   `comparisonSeries.ts` (+ test), `FxCard.primaryView.test.ts`, i tre E2E, `charts.md`, la pagina utente, piano e backlog. Non tocco
+   `chartSettingsStore.svelte.ts`, né i file di X.
+
+### #49 — l'analisi
+- **Il meccanismo c'è:** `ContributionTable.svelte` ha già `headerTooltip` per le altre colonne (`:268`, `:281`, `:294`, `:307`, `:417`, con la
+  chiave nel catalogo e il testo di ripiego). Le due colonne `start-value` (`:388`) ed `end-value` (`:401`) ne sono senza. Aggiungo
+  `headerTooltip: () => label('dashboard.startValueTooltip', …)` e `endValueTooltip`, con le chiavi accanto a `oldestOpenLotDateTooltip`
+  (`i18n/dashboard/{en,it,fr,es}.json:106`) con `./dev.py i18n add`; le intestazioni delle colonne nelle quattro lingue sono già
+  «Start/End Value», «Valore Iniziale/Finale», «Valeur Initiale/Finale», «Valor Inicial/Final».
+- **Il test:** `DataTableHeaderTooltip.test.ts` mostra come si legge un tooltip d'intestazione; in `ContributionTable.test.ts` non c'è un
+  caso sui tooltip: ne aggiungo uno che fissa il testo delle due colonne (in inglese, dal catalogo) e che la colonna resta nascosta di
+  default.
+- **La frase:** sta in `user/dashboard/positions.en.md:96` (verificato il 22/10: «**Start Value** and **End Value** are worked out as the **Value** in
+  **Portfolio** …»; il grep del brief non la trovava, ma c'è). In `positions.{it,fr,es}.md` **manca** (la riga 86 elenca
+  solo i nomi delle colonne): la scrivo nelle tre lingue con i nomi dell'interfaccia (**Valore Iniziale**, **Valeur Initiale**, **Valor Inicial**; nella
+  pagina spagnola oggi c'è «Valor inicial» minuscolo: uso quello del catalogo). Non modifico `positions.en.md`: il timbro Aphra si guarda con
+  `translate-validate` al momento, e si mette solo se serve.
+- **Stima:** mezza giornata. Checkpoint a parte.
+
+### Le domande per il developer
+- **Q-Y41-1 · Vista assoluta di una scheda dei cambi con un asset in un'altra valuta.** Il confronto si disegna sullo stesso asse del tasso: un asset da 340 USD
+  sopra un cambio da 1,08 appiattisce il tasso. Il dettaglio dei cambi fa già così (nessuna conversione); in % non c'è problema.
+  (a) **Come il dettaglio, senza conversione** (consiglio: coerente, e la vista sensata è la %); (b) convertire nella valuta di quotazione della coppia
+  (più richieste e un cambio in più da caricare).
+- **Nota, non domanda:** nella finestra delle impostazioni **globali** (curva sintetica) un confronto con un asset non si disegna, come nella lista asset:
+  non c'è un asset vero da mettere.
+
+### Y-41 — i passi (22/10, dopo il via del coordinatore; Q-Y41-1: (a), senza conversione)
+1. ✅ 22/10 · `lib/charts/comparisonSeries.ts` (nuovo) e il suo test `lib/charts/__tests__/comparisonSeries.test.ts` (nuovo, una riga nel
+   runner dopo `chartSignalRendering.test.ts`).
+   > **Note implementazione**: rosso: il modulo assente. Il contratto: `comparisonTargetFromStore(asset)` (la serie giornaliera della cache,
+   > con nome, icona e tipo, nella valuta dell'asset; null senza punti), `ensureComparisonSeries(assets, range)` (**una** richiesta per gli
+   > asset con un buco, giornaliera, senza eventi né conversione, in lotti; niente se la cache copre; una richiesta fallita non segna nulla,
+   > un 404 è definitivo; non lancia mai), `fxPairSlugsOf(configs, ownSlug)`, `ensureSignalFxPairs(configs, ownSlug, range)` (le coppie dei
+   > segnali `fx-pair` negli store dei tassi, una che fallisce non ferma le altre). **13/13**.
+2. ✅ 22/10 · `data-overlay-count` e `data-testid="fx-card-settings"`.
+   > **Note implementazione**: rossi (7 + 1) in `FxCard.primaryView.test.ts`, `AssetCard.test.ts`, `ChartSettingsModal.test.ts`; cura: l'attributo
+   > sulle due schede (`overlaySignals.length`) e sull'anteprima della modale (`chart-settings-preview`, `previewOverlays.length`), il test id sul
+   > pulsante delle impostazioni della scheda dei cambi (parallelo a `asset-card-settings` del checkpoint 0).
+3. ✅ 22/10 · La lista dei cambi (`fx/+page.svelte`).
+   > **Note implementazione**: `signalSourcesFor(readMissing)` al posto della costante: `comparisonTarget` legge `comparisonTargetFromStore` (la
+   > cache delle serie giornaliere condivisa con il dettaglio asset) e legge `comparisonSeriesVersion`, un contatore `$state` alzato quando le
+   > serie arrivano (gli store non sono reattivi); `fetchComparisonSeries()` (in `fetchAllPairData`, dopo `loadAssetList`, al salvataggio delle
+   > impostazioni; una alla volta, così la seconda chiamata trova la cache piena) chiede gli asset confrontati **solo dalle schede che hanno un
+   > confronto** (`comparisonTargetIds`); l'anteprima legge `settingsSignalSources` (con `readMissing`: un asset non ancora in cache si chiede,
+   > fuori dal derived, con `queueMicrotask`); `data-busy` conta il caricamento; `loadAssetList` porta anche la valuta (la chiave della cache).
+4. ✅ 22/10 · La lista asset (`assets/+page.svelte`): `fxRatesVersion` alzato quando `loadFxRateData` finisce e letto da `fxPairData`: una coppia
+   confrontata si disegna al primo caricamento; `loadFxRateData` riparte anche al cambio di periodo (prima solo all'apertura).
+5. ✅ 22/10 · E2E scritte (da lanciare nello slot): `front-fx fx-list` (nuovo describe «a card draws its saved comparisons (Y-41)»: una scheda con
+   un asset e una coppia ha 2 linee e la lista chiede i prezzi **una** volta, per il solo asset confrontato; guardia: senza confronto con un
+   asset nessuna richiesta di prezzi, la coppia 1 linea); `front-fx fx-settings` (l'anteprima di una scheda disegna il confronto con un asset);
+   `front-asset asset-list` (la scheda con una coppia ha la linea al primo caricamento). Il fixture nuovo `e2e/fixtures/chartComparisons.ts` scrive
+   le impostazioni nel browser (nessun dato condiviso).
+   > **⚠️ Fuori pista**: i rossi delle E2E non sono stati lanciati prima della cura (una build e tre spec in coda nel lucchetto per un rosso
+   > già misurato): lo stato rosso è la prova a mano del 22/10 (arancio 0, magenta 0 sul sorgente di `6f816aad8`, `ondata4/y-y41-build.log`) e i
+   > 7+1 rossi di unità.
+6. ✅ 22/10 · Prove leggere: Vitest a gruppi di 3 file, **12 file, 420/420** (`comparisonSeries`, `FxCard` ×2, `AssetCard`, `AssetTable`,
+   `ChartSettingsModal`, `chartSignalRendering`, `chartPageSignals`, `reducedPriceQuery`, `signalRendering.gate`, `themeRoles.gate`,
+   `chartSettingsStore`); `dev.py front check` in `flock` **0 errori, 0 avvisi** (`ondata4/y-y41-check.log`).
+7. ✅ 22/10 · Doc (agente `docs-writer`, solo inglese): `charts.md` (nuova sezione «Series for comparisons», `#comparison-series`, il contratto per i
+   dettagli; tolta la frase «i confronti con un asset non si disegnano sulle schede dei cambi»), `user/fx/chart-settings.en.md`, `user/fx/index.en.md`;
+   `mkdocs build` e `check-links` exit 0. Debito di traduzione: `user/fx/chart-settings` e `user/fx/index` (it/fr/es).
+8. ✅ 22/10 · Slot (in `flock`): build di debug rc 0 (`ondata4/y-y41-build2.log`); `front-fx fx-list` **29/29**, `front-fx fx-settings` **4/4**,
+   `front-asset asset-list` **44/44** (log `ondata4/y-y41-e2e-*.log`); Prettier, `theme-roles --check`, `git diff --check` puliti. Porta 6189 libera.
+9. ✅ 22/10 · CHECKPOINT READY (Y-41). #49: la frase in `positions.{it,fr,es}.md` è già scritta (fuori dal commit di Y-41); il tooltip e le chiavi
+   sono il passo seguente, checkpoint a parte.
+
