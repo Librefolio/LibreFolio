@@ -8795,3 +8795,19 @@ sonda lo legge come «nessun suggerimento» e `call_provider` mette in pausa.
    > dettaglio non ha i prezzi in cache, chiede `include_price: true`, e la richiesta «solo eventi» che il test aspetta non
    > parte. N64 non può sopprimerla: la lista non scrive `assetChartAnswers` e il contesto del browser è nuovo. Da girare
    > a Z (o al proprietario della spec): riscrivere il percorso A o toglierlo.
+   > **Note implementazione** (dopo il commit `34b6d45c0` del coordinatore): N64 committato.
+
+### `asset-detail.spec.ts:8555` — il percorso A dopo Z-29b ✅ 22/10 (richiesta del coordinatore, HEAD `34b6d45c0`)
+- **Perché**: il test supponeva che la lista su «Tutto» riempisse lo store giornaliero dei prezzi, così il dettaglio aperto
+  da una card chiedesse solo gli eventi. Da Z-29b (scelta di progetto) la lista tiene le serie delle card in una cache
+  ridotta sua, accanto alla giornaliera senza toccarla: il dettaglio chiede i suoi prezzi giornalieri con gli eventi.
+  Nessun riuso possibile da chiedere al developer: la serie ridotta è campionata (settimane, mesi), il dettaglio disegna
+  i giorni.
+- **Cosa** (`test-author`, solo la spec, +33/−14): titolo «keeps the event markers when the detail opens from a list on
+  All: the detail asks its own daily prices with the events»; dopo il clic sulla card, la prima risposta per l'asset ha
+  `include_price: true` e `include_events: true`, nessuna richiesta «solo eventi» prima di lei, e il grafico disegna i due
+  dividendi (l'inizio chiesto letto dalla risposta consegnata, non supposto). Controlli della lista invariati; il caso
+  fratello `:8595` (percorso B, il colpo nella cache) e il blocco N64 non toccati; il titolo del `describe` resta
+  (rinominarlo cambierebbe il titolo completo del fratello). Prettier pulito, `tsc --noEmit -p tsconfig.e2e.json` exit 0.
+- **Prove** (in `flock`, `nice`, `LC_ALL=en_US.UTF-8`, corsia 6191): il test da solo **1/1** (`ondata3/X-8555-single.log`);
+  `front-asset asset-detail` intero, `--workers 2`: **46/46** (`X-8555-asset-detail.log`). Porta 6191 libera.
