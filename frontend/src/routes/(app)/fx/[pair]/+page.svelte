@@ -19,6 +19,7 @@
     import {get} from 'svelte/store';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {parseFxConvertWithSignalIsolation, type FxConvertAnswer} from '$lib/components/fx/fxDetailConvertQuery';
+    import {canonicalCacheKey, fxSignalAnswers} from '$lib/stores/signalResultCache';
     import {goBack} from '$lib/stores/app/navigationStore';
     import {ArrowLeft, ArrowLeftRight, ChevronDown, Pencil, RefreshCw, RotateCw, Ruler, Settings, TrendingUp, Wrench, X} from 'lucide-svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
@@ -225,6 +226,13 @@
     let refreshRequestGeneration = 0;
     let comparisonAppliedFingerprint: string | null = null;
     let comparisonInFlight: {fingerprint: string; promise: Promise<void>} | null = null;
+    /**
+     * N64 (Q1): whether the last call of `loadChartData` / `maybeLoadComparison` asked the server. Set before their first
+     * await, so the trigger reads it right after the call: the busy token goes with a request, never with a load the
+     * caches answered whole (`trackChartLoad`, `trackComparisonLoad`, `trackChartAndComparison`).
+     */
+    let lastChartLoadAskedServer = false;
+    let lastComparisonLoadAskedServer = false;
     const assetSyncRequestGenerations = new Map<number, number>();
     const activeAssetSyncRequests = new Map<number, number>();
     let syncingComparisonAssetIds = $state<Set<number>>(new Set());
@@ -695,10 +703,7 @@
                 connectCreationCompletion();
                 invalidateComparisonState();
                 if (signalDefinitionsReady) {
-                    void pageBusy.track('fx-detail-orientation', async () => {
-                        await loadChartData();
-                        await maybeLoadComparison();
-                    });
+                    void trackChartAndComparison('fx-detail-orientation');
                 }
             }
         }
@@ -741,6 +746,7 @@
     }
 
     async function loadChartData(requestedSignalConfigs: SignalConfig[] = signals, propagateError = false) {
+        lastChartLoadAskedServer = false;
         if (!pageMounted) return;
         const slug = data.canonicalSlug;
         const base = data.urlBase;
@@ -780,20 +786,34 @@
             return;
         }
 
+        // Keep gap requests canonical; only signal requests follow the displayed orientation.
+        const ranges = withSignals ? [{start, end}] : gaps;
+        const requestBody: FxConvertBulkBody = ranges.map((range) => ({
+            from_amount: {code: withSignals ? base : canonicalBase, amount: '1'},
+            to: withSignals ? quote : canonicalQuote,
+            date_range: {start: range.start, end: range.end},
+            ...(withSignals ? {signals: requestPlan.requests} : {}),
+        }));
+        // N64: the same signal request, answered over the same rates (the generation of the pair's store, read now), comes
+        // back from the signal cache while the rates cover the range: no request, no spinner, no token (Q1). Any
+        // invalidation of the store — Refresh, a sync, a catch-up marking it stale (Q2) — misses.
+        const answerKey = withSignals ? canonicalCacheKey(requestBody) : null;
+        const answerGenerations = [store.generation];
+        const cachedSignalResults = answerKey !== null && hasCachedRange ? fxSignalAnswers.get(answerKey, answerGenerations) : null;
+        if (cachedSignalResults !== null) {
+            applyBackendSignalResults(requestedSignalConfigs, requestVersion, cachedSignalResults);
+            signalRequestFailed = false;
+            loading = false;
+            signalsLoading = false;
+            return;
+        }
+
         loading = !hasCachedRange;
         signalRequestFailed = false;
         signalsLoading = withSignals;
-        // Keep gap requests canonical; only signal requests follow the displayed orientation.
-        const ranges = withSignals ? [{start, end}] : gaps;
+        lastChartLoadAskedServer = true;
         try {
-            const response = await convertBulkWithSignalIsolation(
-                ranges.map((range) => ({
-                    from_amount: {code: withSignals ? base : canonicalBase, amount: '1'},
-                    to: withSignals ? quote : canonicalQuote,
-                    date_range: {start: range.start, end: range.end},
-                    ...(withSignals ? {signals: requestPlan.requests} : {}),
-                })),
-            );
+            const response = await convertBulkWithSignalIsolation(requestBody);
             if (discardObsoleteResponse()) return;
             const canonicalPoints = apiResultsToCanonicalFxDataPoints(response.results, withSignals && inverted);
             if (canonicalPoints.length > 0) {
@@ -812,7 +832,11 @@
                 console.error('Invalid FX signal results:', signalError);
                 signalRequestFailed = withSignals;
             }
-            if (signalResults !== null) applyBackendSignalResults(requestedSignalConfigs, requestVersion, signalResults);
+            if (signalResults !== null) {
+                applyBackendSignalResults(requestedSignalConfigs, requestVersion, signalResults);
+                // N64: only valid signal results are kept, never a failed request or an invalid answer.
+                if (answerKey !== null) fxSignalAnswers.set(answerKey, answerGenerations, signalResults);
+            }
             if (chartData.length === 0 && !error) {
                 error = '_i18n:fxDetail.noData';
             }
@@ -905,8 +929,10 @@
         const base = data.urlBase;
         const quote = data.urlQuote;
         const sessionGeneration = getClientSessionGeneration();
+        lastComparisonLoadAskedServer = false;
         const requestedFingerprint = comparisonLoadFingerprint(requestedSignalConfigs);
         if (!force && comparisonInFlight?.fingerprint === requestedFingerprint) {
+            lastComparisonLoadAskedServer = true;
             return comparisonInFlight.promise;
         }
         if (!force && comparisonAppliedFingerprint === requestedFingerprint) {
@@ -926,6 +952,7 @@
             return Promise.resolve();
         }
         if (lineData.length === 0) return Promise.resolve();
+        lastComparisonLoadAskedServer = true;
         const promise = (async () => {
             try {
                 const loaded = await loadComparisonAssetsData(requestedAssetIds, {start: dateStart, end: dateEnd}, allAssets);
@@ -947,6 +974,35 @@
         };
         void promise.then(clearInFlight, clearInFlight);
         return promise;
+    }
+
+    /** N64 (Q1): the chart load under the page's busy token only when it asks the server; one the caches answer runs without. */
+    function trackChartLoad(label: string, requestedSignalConfigs: SignalConfig[] = signals): Promise<void> {
+        const running = loadChartData(requestedSignalConfigs);
+        return lastChartLoadAskedServer ? pageBusy.track(label, () => running) : running;
+    }
+
+    /** N64 (Q1): the comparisons under the busy token only when they ask the server; their memo answers without. */
+    function trackComparisonLoad(label: string, requestedSignalConfigs: SignalConfig[] = signals): Promise<void> {
+        const running = maybeLoadComparison(requestedSignalConfigs);
+        return lastComparisonLoadAskedServer ? pageBusy.track(label, () => running) : running;
+    }
+
+    /**
+     * N64 (Q1): the chart, then the comparisons, as a change of period or orientation always loaded them, with one busy
+     * token if either asks the server: a period already seen changes the chart at once, with no token.
+     */
+    async function trackChartAndComparison(label: string): Promise<void> {
+        const chart = loadChartData();
+        if (lastChartLoadAskedServer) {
+            await pageBusy.track(label, async () => {
+                await chart;
+                await maybeLoadComparison();
+            });
+            return;
+        }
+        await chart;
+        await trackComparisonLoad(label);
     }
 
     // =========================================================================
@@ -1049,10 +1105,7 @@
         // stays meaningful across reloads/shares and the "All" badge doesn't
         // look stuck on a specific historical date.
         replaceHistoryDateRange(newStart, newEnd);
-        await pageBusy.track('fx-detail-period', async () => {
-            await loadChartData();
-            await maybeLoadComparison();
-        });
+        await trackChartAndComparison('fx-detail-period');
     }
 
     function handleMeasureClick(date: string, value: number) {
@@ -1095,9 +1148,9 @@
         const shouldReloadBackend = backendRequestFingerprint(signals) !== backendRequestFingerprint(newSignals);
         const shouldReloadComparison = comparisonLoadFingerprint(signals) !== comparisonLoadFingerprint(newSignals);
         setPairSettings(data.canonicalSlug, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
-        if (shouldReloadComparison) void pageBusy.track('fx-detail-comparison', () => maybeLoadComparison(newSignals));
+        if (shouldReloadComparison) void trackComparisonLoad('fx-detail-comparison', newSignals);
         if (shouldReloadBackend) {
-            void pageBusy.track('fx-detail-signals', () => loadChartData(newSignals));
+            void trackChartLoad('fx-detail-signals', newSignals);
         }
     }
 

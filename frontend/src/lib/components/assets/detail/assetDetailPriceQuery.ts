@@ -7,7 +7,9 @@
  *   the prices of its item;
  * - the FX conversion error an item reports, if any;
  * - for each comparison peer: its calendar-return problem, its FX failure, and its last
- *   factual view, kept while a refresh reports the peer unavailable.
+ *   factual view, kept while a refresh reports the peer unavailable;
+ * - for the client cache of signal answers (N64): which answer a request asks for, and what of
+ *   an answer is kept.
  *
  * @module components/assets/detail/assetDetailPriceQuery
  */
@@ -18,6 +20,7 @@ import type {SignalConfig} from '$lib/charts/signals/ChartSignal';
 import type {SignalInstanceResult} from '$lib/charts/signals/resultMapper';
 import {getSignalProblem, type SignalProblem} from '$lib/charts/signals/signalProblem';
 import {CALENDAR_RETURN_INSTANCE_ID, isCalendarReturnSignalResult, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
+import {canonicalCacheKey, type AssetChartAnswer} from '$lib/stores/signalResultCache';
 
 /** What the calendar problems need to know about the page: the assets and the currency the chart shows. */
 export interface CalendarComparisonContext {
@@ -207,4 +210,18 @@ export function preserveFactualCalendarPeersForCurrentUnavailable(previousViews:
         }
     }
     return merged;
+}
+
+/**
+ * Which signal answer a request asks for (N64): the body the page posts, canonical, with each item's `include_price`
+ * left out — whether the prices travel or come from the price store, the events, the signals and the calendar returns
+ * asked are the same.
+ */
+export function assetChartAnswerKey(body: readonly Record<string, unknown>[]): string {
+    return canonicalCacheKey(body.map(({include_price: _includePrice, ...item}) => item));
+}
+
+/** What the signal cache keeps of an answer (N64): its items without their `prices`, which the price store holds. */
+export function assetChartAnswerForCache(answer: AssetChartAnswer): AssetChartAnswer {
+    return {items: answer.items.map(({prices: _prices, ...item}) => item)};
 }
