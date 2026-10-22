@@ -10521,5 +10521,18 @@ mescolare le righe del runner dei due lotti:
     > **⚠️ Fuori pista**: rese pubbliche le funzioni di `restore.py` e poi rimesse private su richiesta del coordinatore
     > (B tocca quel file in B-33); il `getattr` di B in `panel.py` resta, perché i test di B sostituiscono `await_restore`
     > sul modulo.
+12. ✅ **H-62, le cure della revisione di sicurezza** (22/10, `SEC-review-backup-H62.md`, nessun HIGH né MEDIUM; punti
+    3, 5, 6, 9 a H).
+    > **Note implementazione**: (3) l'upload guarda i primi byte: senza `LFBK` risponde 400 `restore_envelope_required`
+    > prima di scrivere e senza leggere il resto; il caricamento buono di prima resta (il writer non arriva a `finish`).
+    > (5) su `StagingBusyError` un secondo `running_check`: chi perde la corsa risponde con lo stage del vincitore.
+    > (6) il secondo SIGTERM è innocuo (uvicorn 0.52.4: `should_exit` idempotente, nel master `should_exit.set()`; il
+    > watchdog si arma una volta), ma resta una finestra dopo il ripristino dei gestori: flag di processo
+    > `_restart_requested`, un riavvio ripetuto risponde 202 senza segnale. (9) il 503 dell'upload documenta
+    > `backup_upload_unavailable`; `api sync`.
+    > **Rossi → verdi** (test-author): 9 rossi (PR-060 ×4, PR-062 ×2, PR-070, PR-073, HPR-008) → `panel-restore` 123/123,
+    > `hosting-panel-routes` 39/39; `front check` 0 errori.
+    > **⚠️ Fuori pista**: PR-022 (413 su corpo in streaming) mandava byte zero: ora risponde prima il magic, il test manda
+    > `LFBK` + riempitivo. Uso anche `_WRITE_CHUNK` di `restore.py` (privata, come le altre).
    > **⚠️ Fuori pista**: `"scarfSettings"` messo e poi tolto da `package.json`, dopo il cambio di Q-C: il file coincide col
    > commit.
