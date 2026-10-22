@@ -129,6 +129,21 @@ un'architettura unica, pensata bene prima di scrivere codice.
 
 ---
 
+## 📐 Chiusura «rendimento totale» calcolata da noi (idea remota, 22/10/2026)
+
+**Origine**: Z-35 (decisione del developer del 22/10): i prezzi Yahoo si chiedono senza la correzione per i dividendi
+(`auto_adjust=False`) e la storia salvata si riscrive, perché la correzione di Yahoo riscala **tutte le chiusure
+precedenti** a ogni nuovo dividendo e farebbe contare il dividendo due volte (nel prezzo e nella transazione).
+
+**Idea, solo se un giorno serve** (per esempio un grafico «rendimento totale» o un confronto con un indice total return):
+la chiusura corretta si calcola da sé, con il metodo standard (lo stesso di CRSP e di Yahoo). Per ogni dividendo `D` con
+data di stacco `t`, fattore `f = 1 − D / P(t−1)` (`P(t−1)` = chiusura del giorno prima dello stacco); la chiusura corretta
+di un giorno è la chiusura vera per il prodotto dei fattori di tutti i dividendi successivi (gli split allo stesso modo,
+con fattore `1/rapporto`). Dati che servono: le chiusure vere (dopo Z-35) e i dividendi salvati come eventi dell'asset.
+Il calcolo andrebbe nella casa della matematica finanziaria (`backend/app/services/financial_math/`).
+
+---
+
 ## 🔄 Self-update in-app (da F14)
 
 **Data aggiunta**: 1 Settembre 2026
