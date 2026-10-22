@@ -798,13 +798,15 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
   (`broker_cost_efficiency.py:150-157`); in più l'`abs` sul reddito (`portfolio_income.py:379`). La cura: una regola
   sola per export, quella della pagina da cui parte. Dettagli: [piano della 41](41_brokerPnlFlows/plan-phase00BrokerPnlFlows.prompt.md),
   §14 B9 e §17.6.
-- **T-U4 · Rendimenti e annualizzazione** — medio; T, 11/10. Comprende R1 (il ribasamento scritto due volte) e la
+- ✅ **T-U4 · Rendimenti e annualizzazione** — medio; T, 11/10. Comprende R1 (il ribasamento scritto due volte) e la
   riprova R2, il rendimento netto, il 365 osservato, la parità fra rischio e segnali, P1 (il P&L di periodo del servizio) e C1 di I
   (`_wac_qualifying_txs`, il costo unitario dell'anteprima). Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezioni «2.1» e «7.1».
   Stato (19/10): fatta da J la parte di CP-4, cioè R1/R2, R3, R5, P1 e C1 (`58f8e3967`, entrato in `dev_release2` con
   `322d55042`; `70bc2d290`, con `a180ea0b7`; `4ea6cc61e`, con `40f44f364`), e da MF la parte R6–R10 (MF-D, entrato
   con `8d244d1c6`, `aca75c7ca`, `482343eb3` e `c2feaf3e4`); resta R11, a J: il test di parità fra le versioni pandas di
   volatilità e Sharpe mobili (`signals/risk_adapters.py`) e `risk/metrics.py`.
+  ✅ Chiusa il 22/10 (ondata 4) con J-62: R11 era già coperta dalla parità M1; sono state tolte le due copie del
+  validatore del fattore.
 - **T-U5 · Prezzo del giorno e valorizzazione** — medio-alto; T, 11/10. Comprende R4 (il P&L di periodo della posizione),
   con B8 di I. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezioni «2.2» e «7.1».
 - ✅ **T-U6 · Finestre di detenzione dal FIFO** — medio; T, 11/10. Comprende L1 e L2 di I e T-B4. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
@@ -7867,7 +7869,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     sempre una linea o un'area dove manca il valore: manca la frase sul tetto dei 30 tratti.
   - **CHANGELOG, riga 308**: «more than 30 gaps» → «30 gaps or more». La linea si unisce oltre 30 tratti
     (`runs.length > MAX_LINE_RUNS`), cioè da 30 vuoti in su.
-- **J-62 · R11: i gemelli pandas di volatilità e Sharpe mobili, senza parità e con due copie del validatore** — basso,
+- ✅ **J-62 · R11: i gemelli pandas di volatilità e Sharpe mobili, senza parità e con due copie del validatore** — basso,
   numeri (regola 10); J, 19/10 (revisione della voce 1 di J-1 di MF, `068d5dd51`). Coordinatore, 19/10: in R11, nella
   sezione J.
   - `signals/risk_adapters.py` calcola volatilità e Sharpe mobili con pandas, gemelli di `risk/metrics.py`
@@ -7880,6 +7882,13 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     cambia. Dopo J-48.
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «Revisione della
     voce 1 di J-1 di MF».
+  - ✅ 22/10 (ondata 4): la parità c'era già (`test_risk_metrics_oracle.py`, blocco (g), M1, dal 18/09, `f5fe80d44`: i due
+    vettoriali contro il loop di riferimento, valori, maschera e conteggio degli indefiniti). Le due copie del
+    validatore ora sono `positive_annualization_factor` della casa (`signals/risk_adapters.py`). Rossi: una spia per
+    ciascun vettoriale (la casa è chiamata una volta, col fattore dato); guardia: un fattore 0, negativo, nan o inf è
+    rifiutato dai due percorsi con lo stesso messaggio. Valori identici. Restano due regole simili con contratti
+    d'errore propri, non portate alla casa: `risk/quant/estimation.py:33` (`ValueError` «GBM estimation…») e
+    `risk/analytic_helpers.py:75` (`RiskUnavailableError`, senza controllo di finitezza).
 - **J-63 · L1 delle «formule veloci» di MF: i lotti calcolati sui giorni di cambiamento** — medio, prestazioni (numeri
   identici); coordinatore, 19/10 (il piano «formule veloci» di MF entra nella 1.3).
   - ✅ **L1a** 19/10 (checkpoint L1a; commit del coordinatore). I sette costruttori giornalieri dei lotti girano solo
@@ -7995,8 +8004,9 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   «Ondata 3 (21/10 notte) — TC-23 poi L1b», passo A2.
   - ✅ 22/10 (ondata 4): `RiskPanelHeader` e `RiskAnalysisPanel` leggono `buildSyncTargets`. Unico effetto visibile: nella
     modale di sync di `RiskAnalysisPanel` gli asset stanno in ordine di id, non nell'ordine dell'ambito.
-- **R1 · Il rischio sulle osservazioni, dopo Q1 di X** — medio-basso, prestazioni; J, 22/10. Rimandata dopo la 1.3,
-  insieme a X-Q1…Q3/S1 (domanda 12 dell'ondata 4). Q1 non esiste: `price_query._build_backward_filled_series` è ancora la
+- **R1 · Il rischio sulle osservazioni, dopo Q1 di X** — medio-basso, prestazioni; J, 22/10. **Ondata 5 della 1.3,
+  dopo X-Q1** (correzione del coordinatore, 22/10: il developer tiene nella 1.3 le formule veloci, MF-FV e X-Q1; la prima
+  stesura la diceva «dopo la 1.3»). Q1 non esiste ancora: `price_query._build_backward_filled_series` è ancora la
   serie densa. Nessun caso di test scritto; 7 scenari di parità descritti nel [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md),
   «Analisi breve di R1 e L1». Il pavimento SEC8-1b resta finché R1 non c'è. ~3 h più la parità.
 
