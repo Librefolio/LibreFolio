@@ -6072,6 +6072,9 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   non valida, quindi mai tenuta: se diventassero validi, una sessantina di passi che si aspettano una richiesta a ogni
   ritorno andrebbero rivisti. Dettagli: come sopra, passo 4, «Fuori pista».
 
+- **X-50t · Tradurre la pagina utente di Yahoo (settori, TER, emittente dei fondi)** — minimo, documentazione; X, 22/10
+  (#50). `yahoo-finance.en.md` ha la voce «Fund details»; mancano `.it/.fr/.es`, non timbrati. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «Ondata 4».
+
 ## W · Import e transazioni (fase 01)
 
 Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md).

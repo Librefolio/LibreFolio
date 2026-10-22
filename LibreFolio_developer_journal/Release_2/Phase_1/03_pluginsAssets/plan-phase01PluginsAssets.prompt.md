@@ -8899,3 +8899,38 @@ sonda lo legge come «nessun suggerimento» e `call_provider` mette in pausa.
 - **Prove** (in `flock`, `nice`, `LC_ALL=en_US.UTF-8`, corsia 6191, `ondata3/X-gate8-*.log`): `front-portfolio
   price-refresh` **8/8** due volte di fila (10:00 e 10:04); `front-asset asset-detail` intero `--workers 2` **53/53**.
   Porta 6191 libera, `git diff --check` pulito.
+
+---
+
+## Ondata 4 (22/10, base `5333837b7`)
+
+> Analisi consegnata: `side-session-notes/local_9987587d…/X-ondata4-analisi.md`. Via del coordinatore (22/10): #50 in un
+> checkpoint a parte; N64b anche sulla pagina del cambio (stesso meccanismo, stesse decisioni di N64); poi Y-41 nei
+> dettagli e N64c/d. Ordine: #50 → N64b/c/d → Y-41 dettagli → revisione W-BS.
+
+### #50 — i dati dei fondi da Yahoo (backend)
+
+1. ✅ 22/10 · I rossi.
+   > **Note implementazione**: `backend/test_scripts/test_services/test_yahoo_finance_fund_metadata.py` (nuovo, 19 casi su
+   > un `funds_data` finto con la forma di yfinance 1.7.0: settori con il trattino basso, TER come frazione, `None` come
+   > VWCE.DE, descrizione vuota, taglio a 500, TER non usabile `nan`/0/negativo, fondo comune, `funds_data` che solleva
+   > quattro eccezioni diverse, settori che falliscono, 429, azione invariata che non legge `funds_data`). Registrato con
+   > una riga additiva in `scripts/test_runner/_backend_services.py` (`PROVIDER_ERROR_TEST_PATHS`). Visti **13 rossi su 19**
+   > per il motivo giusto (`X-50-red.log`); i 6 verdi sono le guardie che già valevano (fondo senza dati, azione, il riassunto
+   > che vince sulla descrizione del fondo).
+2. ✅ 22/10 · La cura, `yahoo_finance/plugin.py` (+~150 righe, 4 toccate).
+   > **Note implementazione**: `_YAHOO_FUND_SECTORS` (mappa esplicita: `FinancialSector.from_string` non conosce
+   > `consumer_cyclical` & co. e li manderebbe tutti in «Other»), `_read_fund_piece` (ogni pezzo letto a parte dentro
+   > `_yf_with_retry`: un guasto costa solo quel pezzo, un 429 sale come `AssetRateLimitedError`), `_fund_sector_area`
+   > (pesi float → `Decimal(str())`, scartati i non positivi, rinormalizzati), `_fund_ter` (frazione ×100, due decimali,
+   > `NaN`/≤0 fuori), `_read_fund_extras`, `_fund_description` (il tetto di 500 taglia la testa, mai la coda). Solo per
+   > `quoteType` `etf`/`mutualfund`: un'azione non legge `funds_data`. Prova dal vivo (una chiamata ciascuno): VWCE.DE →
+   > «… | Issuer: Vanguard Group (Ireland) Limited», 11 settori; VOO → «… | TER: 0.03% | Issuer: Vanguard»; AAPL invariata.
+   >
+   > **⚠️ Fuori pista**: la mappatura «su `validate_sector`» del brief, alla lettera, non funzionava (sopra); `utils/asset/
+   > sector.py` è condiviso con justETF e non l'ho toccato. Il TER di Yahoo è una frazione, non una percentuale.
+3. ✅ 22/10 · Prove leggere: `pytest test_yahoo_finance_fund_metadata.py test_yahoo_finance_errors.py` **97/97**
+   (`X-50-green.log`); `ruff check` e `black --check` puliti.
+4. ✅ 22/10 · Doc (EN): `user/assets/providers/yahoo-finance.en.md` (voce «Fund details») e `developer/backend/assets/
+   provider_yahoo_finance.md` (sezione «Fund data»). Debito di traduzione `yahoo-finance.{it,fr,es}` (non timbrato:
+   contenuto nuovo, non un ritocco).

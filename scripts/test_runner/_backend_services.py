@@ -71,6 +71,7 @@ PROVIDER_ERROR_TEST_PATHS = (
     "backend/test_scripts/test_services/test_justetf_errors.py",
     "backend/test_scripts/test_services/test_snb_errors.py",
     "backend/test_scripts/test_services/test_yahoo_finance_errors.py",
+    "backend/test_scripts/test_services/test_yahoo_finance_fund_metadata.py",
 )
 
 RISK_SERVICE_TEST_PATHS = (
