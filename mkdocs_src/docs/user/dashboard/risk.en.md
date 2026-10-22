@@ -133,6 +133,7 @@ A risk figure is only as good as the prices behind it. When data is missing or o
 **How to read it**
 
 - **The banner at the top** lists missing or old prices and exchange rates: fix them with its buttons, or with **Sync** at the top right.
+- **A currency pair with no exchange-rate route** gets its own button in the banner, one per pair (tooltip **Add FX pair**): it opens the **Add New Currency Pair** window right there, already filled in with that pair, and the tab recalculates by itself once the pair is saved and its rates are downloaded → [Adding a Currency Pair](../fx/add-pair.md)
 - **The notice above the blocks** says which results are partial, and why.
 - **A banner inside a block** names a figure that could not be computed, with the reason.
 - **A dash (—)** means a figure could not be measured: it never means zero.

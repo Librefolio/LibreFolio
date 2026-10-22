@@ -1,5 +1,5 @@
 <script lang="ts">
-    import {untrack} from 'svelte';
+    import {onDestroy, untrack} from 'svelte';
     import {goto} from '$app/navigation';
     import {Play, RotateCw} from 'lucide-svelte';
     import type {z} from 'zod';
@@ -13,6 +13,7 @@
     import type {RiskBenchmarkState} from '$lib/features/risk/riskBenchmarkStore.svelte';
     import LineChart, {type LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import KpiCard from '$lib/features/dashboard/KpiCard.svelte';
+    import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
@@ -26,6 +27,7 @@
     import {getRiskDefinition, hasRiskCapability, type RiskAnalyticResult, type RiskScope} from '$lib/features/risk/riskStore.svelte';
     import {createRiskPanelController} from '$lib/features/risk/riskPanelController.svelte';
     import {riskDataQuality, riskMetadata, riskOutput, singleValue, type RiskDataQualityReport} from '$lib/features/risk/riskTypes';
+    import {addPairSides, labQualityAction} from '$lib/features/risk/syncTargets';
     import CorrelationHeatmap from './CorrelationHeatmap.svelte';
     import RiskBetaBanner from './RiskBetaBanner.svelte';
     import RiskResultFrame from './RiskResultFrame.svelte';
@@ -116,6 +118,11 @@
     let simulationSobolStartIndex = $state(123456);
     let simulationView = $state<SimulationView>('evolution');
     let syncOpen = $state(false);
+    /** The «add FX pair» dialog an `add_fx_pair` chip opens (TC-23), and the sides it opens on. */
+    let addPairOpen = $state(false);
+    let addPairInitial = $state({base: '', quote: ''});
+    let alive = true;
+    onDestroy(() => (alive = false));
     let referenceLabelsVersion = $state(0);
 
     const samplingOptions = [
@@ -526,16 +533,25 @@
         await onsynced?.(detail);
     }
 
+    /** The banner's actions, through the one rule every risk panel reads (`labQualityAction`). */
     function handleQualityAction(action: string, target: string | null): void {
-        if (action.includes('sync')) {
+        const next = labQualityAction(action, target);
+        if (next?.kind === 'sync') {
             syncOpen = true;
-        } else if (action === 'navigate_asset' && target) {
-            void goto(`/assets/${target}`);
-        } else if (action === 'navigate_fx' && target) {
-            void goto(`/fx/${target}`);
-        } else if (action === 'add_fx_pair') {
-            void goto('/fx');
+        } else if (next?.kind === 'navigate') {
+            void goto(next.href);
+        } else if (next?.kind === 'add_pair') {
+            addPairInitial = addPairSides(next.pair);
+            addPairOpen = true;
         }
+    }
+
+    /**
+     * Once the pair is saved, and again once its rates are synced, this panel asks its answer
+     * again. Not once the panel is gone: the dialog's rate sync can outlive it.
+     */
+    async function refreshAfterPair(): Promise<void> {
+        if (alive) await controller.handleSynced();
     }
 
     /** Fractions from the risk API, hence scale 100. Unlike the lot charts this
@@ -1081,4 +1097,8 @@
     <div class="hidden" data-testid="risk-frontier-capability" data-available={hasRiskCapability(catalog, 'frontier', scope.kind, 'current_composition') ? 'true' : 'false'}></div>
 
     <PageSyncModal bind:open={syncOpen} {dateStart} {dateEnd} assets={syncAssets} fxPairs={syncFxPairs} onsynced={handleSynced} onclose={() => (syncOpen = false)} />
+
+    {#if addPairOpen}
+        <FxPairAddModal bind:open={addPairOpen} initialBase={addPairInitial.base} initialQuote={addPairInitial.quote} oncreated={refreshAfterPair} onsynced={refreshAfterPair} />
+    {/if}
 </div>
