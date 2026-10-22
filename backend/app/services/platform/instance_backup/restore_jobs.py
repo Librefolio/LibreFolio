@@ -33,7 +33,7 @@ from typing import Literal
 
 from backend.app.config import get_data_dir
 from backend.app.logging_config import get_logger
-from backend.app.services.platform.instance_backup.apply import RestoreNotRestorableError, RestoreState, confirm_restore, protected_stage
+from backend.app.services.platform.instance_backup.apply import ConfirmedVia, RestoreNotRestorableError, RestoreState, confirm_restore, protected_stage
 from backend.app.services.platform.instance_backup.envelope import EnvelopeKey, is_envelope, read_header, unlock
 from backend.app.services.platform.instance_backup.jobs import _lock_held, _RunLock, out_of_space
 from backend.app.services.platform.instance_backup.paths import (
@@ -63,6 +63,8 @@ _STATE_INTERVAL = 1.0
 _PARTIAL_SUFFIX = ".part"
 
 CheckStatus = Literal["running", "done", "failed"]
+#: Who started a check (L3): an administrator's session, the command line, or a hosting panel, which sees only its own.
+CheckOrigin = Literal["admin", "cli", "panel"]
 
 
 class UploadTooLargeError(RuntimeError):
@@ -123,6 +125,8 @@ class RestoreCheck:
     created_at: datetime
     finished_at: datetime | None = None
     error_code: str | None = None
+    #: Who started it (L3); a state written before reads ``admin``, the only caller then.
+    origin: CheckOrigin = "admin"
 
 
 def _now() -> datetime:
@@ -232,7 +236,7 @@ def _remove_replaced_uploads(data_dir: Path, *, keep: str) -> None:
 # =============================================================================
 
 
-def start_check(upload_id: str, *, data_dir: Path | None = None, password: str | None = None, max_unpacked: int | None = None) -> RestoreCheck:
+def start_check(upload_id: str, *, data_dir: Path | None = None, password: str | None = None, max_unpacked: int | None = None, origin: CheckOrigin = "admin") -> RestoreCheck:
     """Check the upload ``upload_id`` in the background, on a copy; its first state.
 
     ``UploadNotFoundError`` when there is no such upload, ``StagingBusyError`` while another check runs,
@@ -240,6 +244,7 @@ def start_check(upload_id: str, *, data_dir: Path | None = None, password: str |
     ``PasswordRequiredError`` without one, ``EnvelopeError`` (``wrong_password``, ``envelope_damaged``,
     ``envelope_unsupported``) when it does not open it; the upload then stays, and no check starts. A zip ignores it.
     ``max_unpacked``: the most bytes the archive may unpack to (B-35, ``staging.stage_archive``); ``None``: no limit.
+    ``origin``: who starts it (L3), kept in its state.
     """
     data_dir = data_dir or get_data_dir()
     if not is_job_id(upload_id):
@@ -255,7 +260,7 @@ def start_check(upload_id: str, *, data_dir: Path | None = None, password: str |
     try:
         key = _envelope_key(upload_path(data_dir, upload_id), password)
         phase: StagePhase = "decrypting" if key is not None else "checking"
-        check = RestoreCheck(stage_id=new_stage_id(), upload_id=upload_id, status="running", phase=phase, done_bytes=0, total_bytes=0, created_at=_now())
+        check = RestoreCheck(stage_id=new_stage_id(), upload_id=upload_id, status="running", phase=phase, done_bytes=0, total_bytes=0, created_at=_now(), origin=origin)
         _write_state(data_dir, check)
         threading.Thread(target=_run_check, args=(data_dir, check, lock, key, max_unpacked), name=f"restore-check-{check.stage_id[:8]}", daemon=True).start()
     except BaseException:
@@ -333,6 +338,23 @@ def read_check(stage_id: str, *, data_dir: Path | None = None) -> RestoreCheck:
     return check
 
 
+def running_check(upload_id: str, *, data_dir: Path | None = None) -> RestoreCheck | None:
+    """The check of the upload ``upload_id`` that still runs, as ``read_check`` judges it; ``None`` otherwise. A caller
+    that sends the same start again (a hosting panel retrying, L3) is answered with it instead of a refusal."""
+    data_dir = data_dir or get_data_dir()
+    if not is_job_id(upload_id):
+        return None
+    for check in _checks(data_dir):
+        if check.upload_id == upload_id and check.status == "running":
+            try:
+                current = read_check(check.stage_id, data_dir=data_dir)
+            except CheckNotFoundError:
+                continue
+            if current.status == "running":
+                return current
+    return None
+
+
 def remove_check(stage_id: str, *, data_dir: Path | None = None) -> None:
     """Remove an ended check, its copy and its upload. ``CheckNotFoundError``, or ``CheckRunningError`` while it runs."""
     data_dir = data_dir or get_data_dir()
@@ -344,7 +366,7 @@ def remove_check(stage_id: str, *, data_dir: Path | None = None) -> None:
     _remove(data_dir, check)
 
 
-def confirm_check(stage_id: str, *, confirmed_by: str, data_dir: Path | None = None) -> RestoreState:
+def confirm_check(stage_id: str, *, confirmed_by: str, confirmed_via: ConfirmedVia = "admin", data_dir: Path | None = None) -> RestoreState:
     """Confirm the restore of a finished check: the next start of the server applies its copy (``apply.py``).
 
     ``BackupPathError`` when ``.restore`` is a link or a file: the confirmation writes there, and a link is refused rather
@@ -360,7 +382,7 @@ def confirm_check(stage_id: str, *, confirmed_by: str, data_dir: Path | None = N
         raise CheckRunningError("The check still runs")
     if check.status == "failed":
         raise RestoreNotRestorableError("The check refused the archive")
-    return confirm_restore(stage_id, confirmed_by=confirmed_by, data_dir=data_dir)
+    return confirm_restore(stage_id, confirmed_by=confirmed_by, confirmed_via=confirmed_via, data_dir=data_dir)
 
 
 def prune(data_dir: Path, now: datetime | None = None) -> int:

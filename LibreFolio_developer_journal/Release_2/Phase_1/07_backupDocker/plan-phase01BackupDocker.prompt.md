@@ -7600,3 +7600,110 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   - `fix(backup): one reader for job, check and report files (B-53, B-54, B-55)`: i 6 file di servizio, i 7 di test,
 >     `security.md`, `backup_restore.en.md`;
 >   - `docs(journal): B-53 to B-56`: questo piano e il backlog.
+
+### L3 — il backup notturno sigillato (ondata 4, dal 2026-10-22)
+
+> **Fonti**: decisioni `LibreFolio_prj/BACKUP-decisioni-20261022.md` §10 (il formato: `.lfbk` v1 con password casuale,
+> password cifrata con `age` via `pyrage`, i due file in un `.tar`) e il contratto **CONCORDATO** il 22/10 con il
+> coordinatore cloud, `LibreFolio_prj/BACKUP-contratto-L3.md`. La rotta di ripristino del pannello e il modo «ripristino
+> in corso» sono di H (H-62), sullo stesso contratto. Base: `c97c96dd6` (`pyrage==1.4.0` nel lock).
+>
+> **⚠️ Fuori pista — il formato** (22/10): la prima analisi metteva a confronto `.lfbk` v2 e `age` v1 scritto da noi
+> (`salvataggi-worktrees-20261021/ondata4/B-analisi-turno1.md`). Il developer ha scelto una terza via, senza
+> crittografia nostra: le due varianti sono cadute.
+
+| Passo | Cosa | Stato |
+|---|---|---|
+| L3-0 | Contratto comune con il cloud (bozze 1-3, R1-R4, D1-D5) | ✅ 2026-10-22 |
+| L3-1 (CP1) | Senza `pyrage`: `file_sha256` e `instance_key_included` nella vista del job; gli avvisi `credentials_from_backup` e `confirming_account_not_in_backup` (rapporto e `RestoreReportModal`, 4 lingue); il codice `sealed_backup_needs_key` per un `.tar` caricato dall'admin; doc «Backups with backrest or restic» | ✅ 2026-10-22 |
+| L3-2 (CP2) | Con `pyrage`: `LIBREFOLIO_BACKUP_RECIPIENTS` e il controllo `backup.recipients`; `503` nel managed senza destinatari; il job sigillato del pannello (fase `sealing`, `manifest.json`, `.tar` deterministico, chiave d'istanza esclusa, `sealed`/`sealed_recipients`); i vettori comuni (§9.1 del contratto, più `cloud-derivation`); la CLI (`keygen`, `create --sealed/--recipient`, `inspect/decrypt/restore` di un `.tar` con `--identity-file`) | ✅ 2026-10-22 |
+
+#### L3-1 (CP1) ✅ 2026-10-22
+
+> **Note implementazione**: rossi scritti da due agenti `test-author` (backend e frontend), poi la cura.
+> - **Rossi** (log `salvataggi-worktrees-20261021/ondata4/B-cp1-red-*.log`): `api backup-panel` 3, `services backup-jobs`
+>   5, `services backup-secure` 7, `services backup-staging` 49 (46 uguaglianze esatte sugli avvisi, aggiornate con
+>   l'helper `warned(...)`), `services restore-non-iso-warning` 16, `api backup-restore` 15; Vitest 11 (modale 7,
+>   `restoreI18n` 4). Tutti per il campo o il codice mancante.
+> - **Cura**: `schemas/backup.py` (`file_sha256`, `instance_key_included`; i due avvisi nel `Literal`;
+>   `sealed_backup_needs_key` in `RestoreErrorCode`), `jobs.py` (`BackupJob.instance_key_included`), `job_views.py`
+>   (lo SHA-256 solo a lavoro finito), `staging.py` (`credentials_from_backup` sempre, in fondo; un tar ustar →
+>   `sealed_backup_needs_key`), `restore.py` (`confirming_account_not_in_backup` per l'admin che legge, mai nel
+>   rapporto salvato), `backup_cli.py` (i testi dei due codici, detti a parte e mai come «⚠️»), `restoreText.ts`
+>   (`WARNINGS_SHOWN_APART`, il codice d'errore), `RestoreReportModal.svelte` (avviso rosso `restore-report-own-account`,
+>   l'elenco giallo senza i due codici), 2 chiavi in 4 lingue, `backup_restore.en.md` (restic e Backrest, il codice
+>   nuovo, l'avviso rosso).
+> - **Verdi**: le 6 suite rosse (163, 84, 221, 46, 69, 166), più `utils backup-cli` 106, `backup-cli-restore` 109,
+>   `backup-cli-secure` 106, `services backup-checks` 93, `backup-apply` 258, `api backup` 23, `backup-secure` 24,
+>   `backup-restore-apply` 215, `backup-instance-errors` 16, `utils gate-i18n-catalog` 176, `schemas
+>   openapi-client-text` 78; Vitest `features/backup/` 9 file, 1 087; `front check` 0/0; `mkdocs build` stretta e
+>   `check-links` verdi; `ruff`, `black`, `prettier`, `git diff --check` puliti.
+>
+> **⚠️ Fuori pista**:
+> - `test_backup_staging.py` chiamava `get_restore_check(stage_id, None)`: la rotta ora legge lo username di chi
+>   legge. Il test passa un admin finto, la rotta non tollera un admin assente (in esercizio non succede).
+> - `front check` ha trovato 3 errori di tipo nei test (`job()` senza `instance_key_included`, campo con default e
+>   quindi obbligatorio nel tipo d'uscita di zod): aggiunto alle tre fabbriche.
+> - Vitest su 9 file lanciato **senza** `flock` (la regola lo chiede sopra 3 file): carico 5-7, nessun effetto, ma è
+>   una svista.
+> - I vettori comuni (`backend/test_scripts/fixtures/backup_l3/`) sono già scritti, prima del CP2: sono dati di test,
+>   il cloud li aspettava. Cartella spostata rispetto al contratto (registro del contratto aggiornato). Controllo
+>   incrociato con `age` 1.3.2 del developer: la `password.age` del caso buono e della rotazione si apre.
+
+#### L3-2 (CP2) ✅ 2026-10-22
+
+> **Note implementazione**: interfaccia fissata prima dei rossi in
+> `salvataggi-worktrees-20261021/ondata4/B-cp2-interface.md`; rossi di due agenti `test-author` (parte A: `sealed.py`,
+> destinatari, controllo; parte B: job, rotta, CLI, fase della UI), poi la cura.
+> - **Rossi** (log `ondata4/B-cp2-red-*.log`): `services backup-sealed` 109 (nuovo: 124 casi), `backup-checks` 41,
+>   `config-audit` 1, `backup-jobs` 4, `backup-secure` 6, `api backup-panel` 12, `utils backup-cli-sealed` 35 (nuovo),
+>   Vitest 1. Tutti per il modulo, la funzione, il campo o la chiave mancante.
+> - **Cura**: `sealed.py` nuovo (password casuale, `pyrage`, manifest canonico, tar scritto con `tarfile`, letto con un
+>   lettore ustar nostro: magic, checksum, solo file regolari, niente PAX/GNU), `envelope.unlock_header` (il formato non
+>   cambia), `config/backup.py` (`backup_recipients`, `backup_requires_recipients`), `checks.py` (`backup.recipients`),
+>   `jobs.py` (fase `sealing`, `_protect`/`_seal`, chiave d'istanza mai nel sigillato, `sealed`/`sealed_recipients`),
+>   `schemas/backup.py`, `job_views.py` (`application/x-tar`), `panel.py` (503 con valore illeggibile o managed senza
+>   destinatari, una riga di log senza il valore), `backup_cli.py` (`keygen`, `create --sealed/--recipient`,
+>   `--identity-file` per `inspect/restore/decrypt`), `BackupDownloadCard.svelte` (fase `sealing`), 5 chiavi in 4 lingue,
+>   `checkGuides.json` e la galleria, `.env.example`, doc (`backup_restore` «Sealed Backups», `configuration`,
+>   `cli_tools`).
+> - **Verdi**: `services backup-sealed` 124, `backup-checks` 127, `config-audit` 255, `config-env-example` 39,
+>   `backup-jobs` 167, `backup-secure` 90, `backup-envelope` 100, `backup-staging` 221, `backup-apply` 258,
+>   `backup-archive` 176, `backup-leftovers` 177, `backup-outcome` 166, `backup-secure-rules` 24,
+>   `restore-non-iso-warning` 46; `api backup-panel` 82, `backup` 23, `backup-secure` 24, `backup-restore` 166,
+>   `backup-restore-apply` 215, `backup-instance-errors` 16; `utils backup-cli` 106, `backup-cli-secure` 106,
+>   `backup-cli-restore` 109, `backup-cli-sealed` 35, `gate-i18n-catalog` 176; `schemas openapi-client-text` 78;
+>   `e2e backup-roundtrip` 3; Vitest `backup/` + `instance/` 16 file, 1 205; `front check` 0/0; `mkdocs build` stretta
+>   e `check-links` verdi; `ruff`, `black`, `prettier`, `git diff --check` puliti.
+>
+> **⚠️ Fuori pista**:
+> - **Una gara vera, non «flaky»**: `api backup-secure` è fallito una volta, un backup in chiaro `backup_failed` per
+>   `FileNotFoundError` su `app.db-wal`. `archive.required_space` faceva `exists()` poi `stat()`, e SQLite toglie il WAL
+>   quando chiude l'ultima connessione. Rosso scritto (`test_a_wal_that_goes_while_the_space_is_counted_counts_as_none`),
+>   cura `_size_or_none`. Un backup notturno poteva fallire a caso: importante per L3.
+> - `front check`: le tre fabbriche `job()` dei test senza `sealed`/`sealed_recipients` (come al CP1): aggiunti.
+> - `ruff` C901 su `_run`, `cmd_create`, `_recipients_for`: spezzati in `_protect`, `_create_protection`,
+>   `_given_recipients`. Un backup sigillato non dà più l'avviso `instance_key_unusable` (non porta mai la chiave).
+> - Il lettore del tar è nostro e non `tarfile`: il contratto lo permette (registro aggiornato).
+> - Debito di traduzione: `configuration` e `cli_tools` hanno it/fr/es; le righe nuove sono solo in inglese, nessun
+>   `translate-stamp` (è contenuto nuovo).
+
+
+#### L3-2 aggiunta: i quattro ganci per H-62 ✅ 2026-10-22
+
+> **Note implementazione** (richiesta del coordinatore, per la rotta di ripristino del pannello di H):
+> `restore_jobs.CheckOrigin` e `RestoreCheck.origin` (`admin`/`cli`/`panel`; uno stato vecchio legge `admin`),
+> `start_check(…, origin=)`; `restore_jobs.running_check(upload_id)` (la prova ancora in corso di un caricamento, per
+> ripetere POST stage); `apply.ConfirmedVia` e `RestoreState.confirmed_via` (uno stato vecchio lo ricava da
+> `confirmed_by`), `confirm_restore`/`confirm_check(…, confirmed_via=)`, la CLI passa `cli`, `RestoreStatus.confirmed_via`
+> nella vista dell'admin; `POST /backup/panel/jobs` → `409 backup_awaiting_restore` quando
+> `config.platform.await_restore()` (di H, H-62) dice sì, cercata con `getattr` finché H non la porta; il 409 vince sul
+> 503 dei destinatari.
+> - **Rossi** (agente `test-author`, log `ondata4/B-cp2h-red-*.log`): `api backup-panel` 6, `services backup-leftovers`
+>   16, `backup-apply` 18, `api backup-restore-apply` 16, `utils backup-cli-restore` 2.
+> - **Verdi**: `api backup-panel` 89, `services backup-leftovers` 193, `backup-apply` 272, `backup-staging` 221,
+>   `api backup-restore-apply` 225, `backup-restore` 166, `utils backup-cli-restore` 111, `e2e backup-roundtrip` 3;
+>   Vitest `backup/` 1 088; `front check` 0/0; `ruff`, `black`, `git diff --check` puliti.
+>
+> **⚠️ Fuori pista**: il 409 nuovo dell'OpenAPI sostituiva quello condiviso (`backup_busy`): ora la descrizione li dice
+> tutti e due.

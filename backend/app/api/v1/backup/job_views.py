@@ -14,6 +14,7 @@ from backend.app.services.platform.instance_backup import jobs
 from backend.app.services.platform.instance_backup.envelope import FILE_SUFFIX
 from backend.app.services.platform.instance_backup.manifest import BackupOrigin
 from backend.app.services.platform.instance_backup.paths import BackupPathError
+from backend.app.services.platform.instance_backup.sealed import FILE_SUFFIX as SEALED_SUFFIX
 
 logger = get_logger(__name__)
 
@@ -24,7 +25,7 @@ START_RESPONSES = {
     507: {"description": "Not enough free space to start the backup (code `backup_no_space`)"},
 }
 FILE_RESPONSES = {
-    200: {"content": {"application/zip": {}, "application/octet-stream": {}}, "description": "The backup archive: a .zip, or the .lfbk envelope of a secure backup"},
+    200: {"content": {"application/zip": {}, "application/octet-stream": {}, "application/x-tar": {}}, "description": "The backup archive: a .zip, the .lfbk envelope of a secure backup, or the .tar of a hosting panel's sealed one"},
     404: NOT_FOUND,
     409: {"description": "The job has not produced an archive: still running, or failed (code `backup_job_not_ready`)"},
 }
@@ -37,7 +38,7 @@ def backup_error(status_code: int, code: str, message: str) -> HTTPException:
 
 
 def job_view(job: jobs.BackupJob) -> InstanceBackupJob:
-    """The job as the API shows it: no hash, no list of the files left out."""
+    """The job as the API shows it: the archive's SHA-256 once done (L3), never the list of the files left out."""
     return InstanceBackupJob(
         job_id=job.job_id,
         status=job.status,
@@ -48,20 +49,25 @@ def job_view(job: jobs.BackupJob) -> InstanceBackupJob:
         finished_at=job.finished_at,
         file_name=job.file_name,
         file_size=job.file_size,
+        file_sha256=job.file_sha256 if job.status == "done" else None,
         warnings=list(job.warnings),
         error_code=job.error_code,
         encrypted=job.encrypted,
+        instance_key_included=job.instance_key_included,
+        sealed=job.sealed,
+        sealed_recipients=list(job.sealed_recipients),
     )
 
 
-def start_job(origin: BackupOrigin, password: str | None = None) -> InstanceBackupJob:
+def start_job(origin: BackupOrigin, password: str | None = None, recipients: tuple[str, ...] | None = None) -> InstanceBackupJob:
     """Start a backup in the background; its first state. 409 while another runs, 507 on a full disk, 500 when it cannot
     start.
 
-    ``password``: a secure backup (the Backup tab only; the hosting panel's backups never take one).
+    ``password``: a secure backup (the Backup tab only; the hosting panel's backups never take one). ``recipients``: a
+    sealed backup (the hosting panel's, L3).
     """
     try:
-        job = jobs.start_backup(origin=origin, password=password)
+        job = jobs.start_backup(origin=origin, password=password, recipients=recipients) if recipients else jobs.start_backup(origin=origin, password=password)
     except jobs.BackupBusyError as exc:
         refusal = backup_error(status.HTTP_409_CONFLICT, "backup_busy", "Another backup is running")
         running = exc.running
@@ -112,8 +118,8 @@ def job_file(job_id: str, *, origin: BackupOrigin | None = None) -> FileResponse
         raise _not_found("No such backup archive") from None
     except jobs.BackupJobStateError:
         raise backup_error(status.HTTP_409_CONFLICT, "backup_job_not_ready", "The backup has no archive yet") from None
-    # A secure backup's envelope is not a zip: a browser or a mail filter must not take it for one.
-    media_type = "application/octet-stream" if name.endswith(FILE_SUFFIX) else "application/zip"
+    # A secure backup's envelope is not a zip: a browser or a mail filter must not take it for one. A sealed one is a tar.
+    media_type = "application/x-tar" if name.endswith(SEALED_SUFFIX) else "application/octet-stream" if name.endswith(FILE_SUFFIX) else "application/zip"
     return FileResponse(path, media_type=media_type, filename=name, headers={"Cache-Control": "no-store"})
 
 
