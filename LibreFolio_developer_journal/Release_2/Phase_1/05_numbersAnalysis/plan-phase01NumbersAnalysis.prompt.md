@@ -9417,3 +9417,20 @@ con la nota del 22/10. E2E proposti al coordinatore: `front-broker detail` (il c
    >   `J-b12-green.log`); ruff e black puliti.
    > **⚠️ Fuori pista**: un `pipenv run` lanciato per errore da una cartella sbagliata ha creato un `Pipfile` vuoto in
    > `salvataggi-worktrees-20261021/ondata4/`; l'ho tolto subito (nessun altro file toccato).
+8. ✅ 22/10 — **J-8 (base `407d019b1`).**
+   > **Note implementazione**:
+   > - Più semplice dell'analisi: i tre ingressi proposti sono uno solo. Ogni `./dev.py test` passa da `_cli._run_passes`
+   >   (lo dice la sua docstring), quindi il controllo sta lì, prima di `_run_exclusive_setups`, del backend condiviso e
+   >   del dispatch. Nessuna delle 23 righe `npx` toccata, nessuna lista di test toccata.
+   > - Rossi (`J-j8-red.log`, `test_test_server_preparation.py`, classi `TestTheRunnerChecksTheFrontendToolsFirst` e
+   >   `TestTheDeadCodeCheckNeedsKnip`): **10 rossi** (la funzione e l'elenco dei binari non esistono; per `front-user`,
+   >   `front-utility`, `front-portfolio`, `all-frontend` e `all` senza `node_modules` la corsa parte lo stesso; knip senza
+   >   installazione costruisce il catalogo) e **11 verdi** (controlli positivi con i binari presenti, una categoria
+   >   backend non chiede i binari, `--list` neppure, knip installato prosegue).
+   > - Cura: `FRONTEND_TEST_BINARIES` e `require_frontend_tools()` in `_frontend_common.py`; `_runs_frontend_tools()` e la
+   >   chiamata in `_cli._run_passes`; in `dev.py` il controllo di `knip` in `_run_knip_on_generated_catalogue`.
+   > - Verdi: `test_test_server_preparation.py` **112 passed** (91 + 21); con `test_test_runner_cli.py`,
+   >   `test_runtime_isolation.py`, `test_coverage_combine.py`, `test_dev_cli_db_path.py` **1262 passed, 4 skipped**
+   >   (`J-j8-green-runner.log`); ruff e black puliti. Sull'albero vero `require_frontend_tools()` dà `True`.
+   > **⚠️ Fuori pista**: `cmd_install` (`npx playwright install chromium`) non è guardata di proposito: gira dopo il suo
+   > `npm ci`. Non ho lanciato una corsa `front-*` vera (avvierebbe backend e build): i test coprono il percorso.
