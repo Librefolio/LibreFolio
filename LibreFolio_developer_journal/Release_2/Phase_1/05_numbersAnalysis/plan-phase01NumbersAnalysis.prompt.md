@@ -9320,17 +9320,18 @@ con la nota del 22/10. E2E proposti al coordinatore: `front-broker detail` (il c
 > Coordinatore (22/10): via a J-68 con la cura in due righe, a J-71, e R1 rimandata. Prima i rossi. Checkpoint separati.
 > Analisi del primo turno: `side-session-notes/…/J-analisi-turno1.md`.
 
-1. ✅ 22/10 — **R1 verificata e rimandata dopo la 1.3.**
+1. ✅ 22/10 — **R1 verificata: entra nell'ondata 5, dopo X-Q1.** (Correzione del coordinatore, 22/10: la prima stesura la rimandava «dopo la 1.3»; il developer tiene nella 1.3 le formule veloci, MF-FV e X-Q1.)
    > **Note implementazione**: nessun codice.
    > - Q1 di X (i prezzi per osservazioni) non esiste: `price_query._build_backward_filled_series` (`assets/price_query.py:189`)
    >   è ancora la serie densa; nessun commit di Q1 nel log; nessun simbolo «per osservazioni» nel codice.
-   > - La decisione del developer lascia fuori dalla 1.3 le formule veloci di X (X-Q1…Q3/S1; domanda 12 di
-   >   `PIANO-ondata4.md`, `kickoff-X.md`): R1 le segue, perché legge la serie che Q1 produce.
+   > - R1 legge la serie che Q1 produce, quindi parte dopo X-Q1. La prima stesura di questa nota lo diceva fuori dalla 1.3,
+   >   dal consiglio della domanda 12 di `PIANO-ondata4.md`; il developer ha deciso il contrario: le formule veloci (MF-FV e
+   >   X-Q1) restano nella 1.3, e R1 va nell'ondata 5.
    > - Casi di test pronti: 0. Gli scenari di parità sono 7, descritti in «Analisi breve di R1 e L1» (festivi, prezzi
    >   portati, date comuni, buchi, split, esteri, replay dello stress `3.0.1`), nessuno scritto.
    > - Il pavimento SEC8-1b non si toglie finché R1 non c'è (i test che lo fissano: `test_risk_replay_range_bounds.py`
    >   r2/r5/r6/r7, `test_range_ceiling.py`).
-   > - Da riprendere con Q1 dopo la 1.3: ~3 h più la parità; con X va concordata la lettura nelle date comuni
+   > - Da riprendere nell'ondata 5, dopo X-Q1: ~3 h più la parità; con X va concordata la lettura nelle date comuni
    >   (l'ultimo prezzo ≤ d al cambio di d).
 
 2. ✅ 22/10 — **J-68, i rossi** (prima della cura).
@@ -9381,3 +9382,25 @@ con la nota del 22/10. E2E proposti al coordinatore: `front-broker detail` (il c
    >   Vitest dei 2 file: **118 passed**.
    > **⚠️ Fuori pista**: `RiskAnalysisPanel` non ordinava gli asset per id (la funzione sì): nella modale di sync l'ordine
    > passa a quello per id. Nessun dato cambia.
+
+#### Ondata 4, secondo giro (22/10/2026) — J-62 con T-U4, B12, J-8 (base `93a8625df`; corsia 6190)
+
+> Coordinatore (22/10): via ai tre lotti nell'ordine J-62+T-U4, B12, J-8. Un checkpoint per lotto. Analisi:
+> `side-session-notes/…/J-analisi-turno2.md`.
+
+6. ✅ 22/10 — **J-62 con T-U4 (R11).**
+   > **Note implementazione**:
+   > - J-62 e T-U4 sono lo stesso lotto. La parità non mancava: `test_risk_metrics_oracle.py`, blocco (g) «M1», c'è dal
+   >   18/09 (`f5fe80d44`) e confronta i due vettoriali con il loop di riferimento. Restava la parte 2: le due copie del
+   >   validatore in `signals/risk_adapters.py` (`:191-193`, `:222-224`).
+   > - Rossi (`J-j62-red.log`): `test_the_vectorised_rolling_helpers_read_the_annualization_rule_of_the_house` (spia su
+   >   `risk_adapters.positive_annualization_factor`: volatilità e Sharpe) **2 rossi** (`AttributeError`: il modulo non
+   >   legge quel nome); la guardia `…refuse_a_bad_annualization_factor_as_the_loop_does` (0, −1, nan, inf, −inf, i due
+   >   percorsi, stesso messaggio) **5 verdi**.
+   > - Cura: `factor = positive_annualization_factor(annualization_factor)` al posto delle due copie, stesso punto di
+   >   prima (dopo il ritorno anticipato `observations < window`).
+   > - Verdi: oracolo + `test_risk_signal_plugins.py` + `test_layer_boundaries.py` **320 passed**;
+   >   `test_signal_plugin_matrix.py` **91 passed**; ruff e black puliti.
+   > **⚠️ Fuori pista**: l'ordine degli import del file di test è stato riordinato da `ruff --fix` (un `import … as` in testa).
+   > Altre due regole simili restano com'erano, con i loro contratti d'errore: `risk/quant/estimation.py:33` e
+   > `risk/analytic_helpers.py:75` (decisione del coordinatore implicita: lasciarle).
