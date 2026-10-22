@@ -27,7 +27,7 @@
     import {getRiskDefinition, hasRiskCapability, type RiskAnalyticResult, type RiskScope} from '$lib/features/risk/riskStore.svelte';
     import {createRiskPanelController} from '$lib/features/risk/riskPanelController.svelte';
     import {riskDataQuality, riskMetadata, riskOutput, singleValue, type RiskDataQualityReport} from '$lib/features/risk/riskTypes';
-    import {addPairSides, labQualityAction} from '$lib/features/risk/syncTargets';
+    import {addPairSides, buildSyncTargets, labQualityAction} from '$lib/features/risk/syncTargets';
     import CorrelationHeatmap from './CorrelationHeatmap.svelte';
     import RiskBetaBanner from './RiskBetaBanner.svelte';
     import RiskResultFrame from './RiskResultFrame.svelte';
@@ -305,30 +305,10 @@
     let carriedFxPoints = $derived(Math.max(0, ...qualityReports.map((report) => report?.carried_forward_fx_points ?? 0)));
 
     let syncAssetIds = $derived([...new Set([...scopeAssetIds, ...(comparisonAssetId ? [comparisonAssetId] : [])])]);
-    let syncAssets = $derived.by(() => {
+    let syncTargets = $derived.by(() => {
         void $assetStoreVersion;
-        return syncAssetIds
-            .map((assetId) => getAssetInfo(assetId))
-            .filter((asset) => Boolean(asset))
-            .map((asset) => ({
-                id: asset!.id,
-                display_name: asset!.display_name,
-                currency: asset!.currency,
-                icon_url: asset!.icon_url,
-                asset_type: asset!.asset_type,
-                provider_code: asset!.provider_code,
-            }));
-    });
-    let syncFxPairs = $derived.by(() => {
         void $fxRoutesVersion;
-        const configured = getConfiguredPairSlugs();
-        const pairs = new Set<string>();
-        for (const asset of syncAssets) {
-            if (!asset || asset.currency === targetCurrency) continue;
-            const slug = [asset.currency, targetCurrency].sort().join('-');
-            if (configured.has(slug)) pairs.add(slug);
-        }
-        return [...pairs].sort();
+        return buildSyncTargets(syncAssetIds, targetCurrency, getAssetInfo, getConfiguredPairSlugs());
     });
 
     $effect(() => {
@@ -599,7 +579,7 @@
                     type="button"
                     class="flex items-center gap-1.5 rounded-lg border border-lf-subtle bg-lf-card px-3 py-1.5 text-xs text-lf-secondary disabled:opacity-50"
                     onclick={() => (syncOpen = true)}
-                    disabled={syncAssets.length === 0 && syncFxPairs.length === 0}
+                    disabled={syncTargets.assets.length === 0 && syncTargets.fxPairs.length === 0}
                     data-testid="risk-sync-button"
                 >
                     <RotateCw size={14} />
@@ -1096,7 +1076,7 @@
 
     <div class="hidden" data-testid="risk-frontier-capability" data-available={hasRiskCapability(catalog, 'frontier', scope.kind, 'current_composition') ? 'true' : 'false'}></div>
 
-    <PageSyncModal bind:open={syncOpen} {dateStart} {dateEnd} assets={syncAssets} fxPairs={syncFxPairs} onsynced={handleSynced} onclose={() => (syncOpen = false)} />
+    <PageSyncModal bind:open={syncOpen} {dateStart} {dateEnd} assets={syncTargets.assets} fxPairs={syncTargets.fxPairs} onsynced={handleSynced} onclose={() => (syncOpen = false)} />
 
     {#if addPairOpen}
         <FxPairAddModal bind:open={addPairOpen} initialBase={addPairInitial.base} initialQuote={addPairInitial.quote} oncreated={refreshAfterPair} onsynced={refreshAfterPair} />

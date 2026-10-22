@@ -1012,6 +1012,18 @@ describe('sync completion source contracts', () => {
         expect(handlerBody).not.toMatch(/\bonsynced\?\.\(\s*\{/);
     });
 
+    // J-71: the rule behind the sync button is `syncTargets.ts::buildSyncTargets`; RiskPanelHeader and AssetSetRiskPanel read it,
+    // and the panel used to keep the copy "so a second surface does not become a second copy" it was lifted to avoid.
+    it('reads the assets and pairs of its sync modal from buildSyncTargets, with no copy of the rule of its own', () => {
+        expect(riskAnalysisPanelSource, 'the panel imports the shared rule').toMatch(/import\s*\{[^}]*\bbuildSyncTargets\b[^}]*\}\s*from\s*'\$lib\/features\/risk\/syncTargets'|import\s*\{[^}]*\bbuildSyncTargets\b[^}]*\}\s*from\s*'\.\/syncTargets'/);
+        expect(riskAnalysisPanelSource, 'and calls it').toMatch(/\bbuildSyncTargets\(/);
+        const modalTag = riskAnalysisPanelSource.match(/<PageSyncModal\b[\s\S]*?\/>/)?.at(0) ?? '';
+        expect(modalTag, 'the sync modal is given what the rule answers').toMatch(/assets=\{syncTargets\.assets\}/);
+        expect(modalTag).toMatch(/fxPairs=\{syncTargets\.fxPairs\}/);
+        expect(riskAnalysisPanelSource, 'no local list of assets to sync').not.toMatch(/\blet\s+syncAssets\b/);
+        expect(riskAnalysisPanelSource, 'no local list of pairs to sync').not.toMatch(/\blet\s+syncFxPairs\b/);
+    });
+
     it('types and forwards AssetRiskScenariosView completion callbacks unchanged', () => {
         expect(assetRiskScenariosViewSource).toMatch(/\bonsynced\?\s*:\s*\(\s*detail\s*:\s*\{\s*accepted\s*:\s*boolean\s*\}\s*\)\s*=>\s*void\s*\|\s*Promise<void>\s*;/);
 
