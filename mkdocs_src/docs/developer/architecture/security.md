@@ -3147,6 +3147,7 @@ One `Content-Security-Policy` field per response (never two), and the module's d
 |----------|---------------------|----------|
 | A document, any path: HTML (the web app's pages, the documentation, Swagger UI and ReDoc), XHTML, SVG, XML, any type ending with `+xml` (H-45); not a PDF | `object-src 'none'; base-uri 'self'; form-action 'self'` | `DOCUMENT_DIRECTIVES` |
 | A page of the web app (`text/html` exactly, outside `/mkdocs` and `/api`), in addition | `script-src 'self' 'wasm-unsafe-eval' 'report-sample'` and the sorted hashes of the build's inline scripts; `worker-src 'self' blob:`; `connect-src 'self'`, then the origin of `LIBREFOLIO_PUBLIC_URL`, then `https://api.github.com` in the `selfhosted` profile only | `WEB_APP_SCRIPT_SRC`, `WEB_APP_WORKER_SRC`, `web_app_policy()`, `connect_sources()` |
+| A script of the web app's build (R4, H-55 wave 4): a response of type `text/javascript` or `application/javascript` (parameters ignored) on a path starting with `/_app/` | `script-src 'self'; connect-src 'self'` and the same extra sources as the pages; `worker-src 'self' blob:; object-src 'none'; base-uri 'self'` | `SCRIPT_MEDIA_TYPES`, `APP_ASSETS_PREFIX`, `worker_policy()` |
 | Every response, with `LIBREFOLIO_FRAME_PROTECTION` on | `frame-ancestors 'self'` (first), and the `X-Frame-Options: SAMEORIGIN` header | `FRAME_ANCESTORS`, `PAGE_POLICY` |
 | A non-document with frame protection off | no policy | |
 
@@ -3165,6 +3166,15 @@ legitimate self-hosted use, controlled by frame protection alone. What each dire
   endpoint, so they never leave the browser (if one is ever added, they would).
 - **`worker-src 'self' blob:`**: without it workers follow `script-src`, which has no `blob:`, and the PDF viewer's
   workers are blocked.
+- **The policy of a worker script** (R4, `worker_policy()`): a browser applies the `Content-Security-Policy` of a *script
+  response* only to a worker it starts from that URL, and ignores it on any other script. So every JavaScript file of the
+  build (`/_app/…`) carries one: `script-src 'self'` (the worker loads the build's own modules and nothing else), the same
+  `connect-src` as the pages, `worker-src 'self' blob:` (a worker may start workers from the build or a blob),
+  `object-src 'none'` and `base-uri 'self'`; `frame-ancestors 'self'` first when frame protection is on. No
+  `default-src`, no `'unsafe-inline'`, no `'unsafe-eval'` and no `'wasm-unsafe-eval'`: the only worker started from a URL today,
+  `priceProcessing.worker`, compiles no WebAssembly. The PDF engine's worker starts from a `blob:` URL and keeps the policy of
+  the page that started it. Not on a `304` (below), not on JavaScript outside `/_app/` (plugin assets, `/mkdocs`), and a
+  header the route set is kept.
 - **`connect-src`**: the app's origin, the canonical origin of `LIBREFOLIO_PUBLIC_URL` (`canonical_origin()`,
   `backend/app/utils/runtime/origins.py`: `scheme://host[:port]`, lower case, no default port, the same form as the
   hosting panel's audience), and GitHub's API for the update check, which runs in the administrator's browser
@@ -3189,6 +3199,48 @@ legitimate self-hosted use, controlled by frame protection alone. What each dire
   the documentation) never answers `304`, so the guard is latent.
 - **A header the route set is kept**, names compared whole: a route's own `Content-Security-Policy` leaves the middleware's
   out, and the report-only one is its own field.
+
+#### 🔤 The PDF Viewer's CJK Fonts {: #pdf-fonts }
+
+The PDF preview asks nothing of a third party, and `connect-src` stays `'self'` (H-55 wave 4, decision (c) of the
+developer). The viewer's engine is always the instance's own copy: when it does not answer, `pdfViewerAssets()`
+(`frontend/src/lib/utils/files/pdfViewerAssets.ts`) throws, and the preview shows the browser's own PDF viewer
+(`file-preview-pdf-fallback`) instead of falling back to a CDN. The Chinese, Japanese and Korean fallback fonts
+(`@embedpdf/fonts-jp`, `-kr`, `-sc`, `-tc`) are tens of megabytes each, too heavy for the image, so the viewer asks the
+instance for one only when a PDF needs it, and the **server** gets it.
+
+- **The route**: `GET /api/v1/files/pdf-fonts/{package}/{file}` (`backend/app/api/v1/pdf_fonts.py`), out of the OpenAPI schema
+  (the viewer's worker reads it, never the generated client) and for signed-in users only (`get_current_user`: an anonymous
+  caller must not make the instance fetch tens of megabytes; `401` without a session). A name that is not exactly an entry of
+  the list is a `404`. `200` is the file as `font/otf`, `Cache-Control: private, max-age=31536000, immutable`. The blocking
+  work runs through `asyncio.to_thread`.
+- **The list**: `backend/app/services/files/pdf_font_hashes.json`, the version of the packages and, for each of the 26 files,
+  its package, name, size and sha256. Only these files are ever fetched, from one fixed host
+  (`PDF_FONT_SOURCE`, `https://cdn.jsdelivr.net/npm/@embedpdf`, at `<package>@<version>`): no name from a request reaches the
+  network.
+- **The fetch** (`cached_font()` in `backend/app/services/files/pdf_fonts.py`): the file is
+  `<data dir>/cache/pdf-fonts/<package>/<file>` when it exists with the entry's size. Otherwise `fetch_font_bytes()` (the one
+  network call, httpx, no redirects, at most the entry's size) gets it, the sha256 is checked **before** anything is written,
+  and the file is written under a temporary name in the same folder, then renamed. One fetch at a time per file: two
+  concurrent requests fetch once. `cache/` is a managed path of `validate_test_data_dir()` and is not in the backup
+  (`ARCHIVED_FOLDERS`); deleting it only means the fonts are fetched again.
+- **The failures**: the source cannot be reached, answers other than `200`, or sends more than the entry's size:
+  `PdfFontUnavailable`, a `503` with `detail.code` `pdf_font_unavailable`, and the PDF shows without those glyphs. A file whose
+  hash or size is not the entry's: `PdfFontMismatch`, a `502` with `pdf_font_mismatch`, never written, one warning naming
+  package and file.
+- **Regenerating the list**: it is not written by hand but read from the copies the lock installed in
+  `frontend/node_modules/@embedpdf/fonts-{jp,kr,sc,tc}` (the same files, byte for byte). After updating those packages, run
+  `node frontend/scripts/pdf-font-hashes.mjs`; `node frontend/scripts/pdf-font-hashes.mjs --check` exits `1` when the file
+  differs from what it would write, without writing. The Vitest guard
+  `frontend/src/lib/utils/files/pdfFontHashes.test.ts` does the same in the unit lane (the list equals the script's output
+  for the installed packages, holds the 26 files of the four packages and no other, and carries their `package.json`
+  version): a package updated without regenerating the list turns it red, instead of production refusing every font with a
+  hash mismatch.
+
+Tests: `./dev.py test services pdf-fonts` (`backend/test_scripts/test_services/test_pdf_fonts.py`: the list, the cache,
+a wrong hash thrown away and logged, the source unreachable, one fetch per file under concurrency, the route's session,
+type, cache header and absence from the schema), and in the browser `frontend/e2e/files.spec.ts` and
+`frontend/e2e/files-pdf-offline.spec.ts` (no request to `cdn.jsdelivr.net`).
 
 #### 🔄 The Hashes Follow the Build {: #csp-build-hashes }
 

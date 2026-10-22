@@ -24,6 +24,7 @@ backend/data/
 │   ├── 📝 logs/                      # Application log files
 │   ├── 💾 backups/                   # Archives written by ./dev.py backup create
 │   ├── 🎭 scenario_catalog/          # Optional: your own stress scenarios
+│   ├── 🗄️ cache/                     # Safe to delete: PDF preview fonts, fetched again
 │   ├── 🔐 secrets/                   # Created when LibreFolio first needs the key
 │   │   └── 🔑 instance.key           # The instance key: back it up, never change it
 │   └── 📋 scheduler_state.json       # Scheduled syncs: last run, pending retry
@@ -93,6 +94,10 @@ jq -rR 'fromjson? | select(.level == "ERROR" or .level == "CRITICAL") | "\(.time
 ```
 
 `fromjson?` skips the few lines that are not JSON, such as those of the libraries LibreFolio uses. For an archived week, unpack it on the way: `gzip -dc librefolio.log.2026-10-12.gz | jq -cR …`. A line about a failed request names its method and path, never its query string, its headers or its body.
+
+### 🗄️ `cache/`
+
+Copies LibreFolio can fetch again. Today it holds `pdf-fonts/`, the Chinese, Japanese and Korean fonts the PDF preview needs for a PDF that uses them, kept after the first download: see [The Content-Security-Policy](configuration.md#csp). Deleting it loses nothing, and it is not part of a [backup](backup_restore.md).
 
 ### 🔐 `secrets/`
 
