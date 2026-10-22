@@ -13,7 +13,8 @@
  * 2. **C1, one read point.** The module exports exactly what its header documents, and no colour at any depth: the
  *    tables cannot be read past the hook, and the sequences hold references to categories, never colours.
  * 3. **C2, one literal per line.** Every colour of the file sits alone on a `light:`/`dark:` line, and those lines are
- *    the colours `categoryColor` returns: the Lab exports an edit by file and line.
+ *    the colours `categoryColor` returns for the sectors and «Unknown»: the Lab exports an edit by file and line. The
+ *    asset types and the cash have no line since DV-11: they are the roles `CATEGORY_ROLES` names.
  * 4. **The sequences (GR5, §1.4, §1.5).** `CATEGORY_SEQUENCE` is the first eight types of her table; `COUNTRY_SEQUENCE`
  *    fourteen references to the two tables whose colours are her §1.4 table — the type, where a type and a sector
  *    share a colour. A sequence in order, then one shade further at each round: 98 distinct colours for the 14
@@ -53,7 +54,7 @@ import {afterEach, describe, expect, it, vi} from 'vitest';
 import {contrastRatio, parseTokens, readTokens, resolveColour, TOKEN_BLOCKS, tokenValue, toHex} from '../../../scripts/theme/theme-roles.mjs';
 import {ciede2000, deltaE00, labOf, OKLAB_XYZ, oklabOfXyz, oklchOf, SHARMA_PAIRS, SRGB_LAB, SRGB_OKLCH} from '$test/colorDistance';
 
-import {CATEGORY_BUCKETS, CATEGORY_KEYS, CATEGORY_SEQUENCE, categoryColor, type CategoryKind, type CategoryRef, COUNTRY_SEQUENCE, isUnclassifiedCountry, lookupKey, sequenceColor} from './chartCategories';
+import {CATEGORY_BUCKETS, CATEGORY_KEYS, CATEGORY_ROLES, CATEGORY_SEQUENCE, categoryColor, type CategoryKind, type CategoryRef, COUNTRY_SEQUENCE, isUnclassifiedCountry, lookupKey, sequenceColor} from './chartCategories';
 import {growthBrokerColor} from './chartPalettes';
 import {familyShade, shadePoles} from './chartShades';
 import {setRoleReader} from './roleColors';
@@ -250,7 +251,7 @@ describe('categoryColor — the lookup', () => {
 const NAMESPACE: Record<string, unknown> = await vi.importActual('./chartCategories');
 
 /** What the module's header documents, the types aside (`CategoryKind` and `CategoryRef` are erased). */
-const DOCUMENTED_EXPORTS = ['CATEGORY_BUCKETS', 'CATEGORY_KEYS', 'CATEGORY_SEQUENCE', 'COUNTRY_SEQUENCE', 'categoryColor', 'isUnclassifiedCountry', 'lookupKey', 'sequenceColor'];
+const DOCUMENTED_EXPORTS = ['CATEGORY_BUCKETS', 'CATEGORY_KEYS', 'CATEGORY_ROLES', 'CATEGORY_SEQUENCE', 'COUNTRY_SEQUENCE', 'categoryColor', 'isUnclassifiedCountry', 'lookupKey', 'sequenceColor'];
 
 /** Every path under `value`, at any depth, that holds a colour or a `{light, dark}` pair. */
 function colourLeaks(value: unknown, at: string): string[] {
@@ -306,7 +307,7 @@ function read(file: string): string {
 }
 
 describe('C2 — one literal per line: the Lab edits a colour by its file and line', () => {
-    it('sets every colour of the file alone on a `light:` or `dark:` line, one line per value categoryColor returns', () => {
+    it('sets every colour of the file alone on a `light:` or `dark:` line, one line per sector and for «Unknown»', () => {
         const source = read(CHART_CATEGORIES_TS);
         const literalLines = source
             .split('\n')
@@ -317,14 +318,47 @@ describe('C2 — one literal per line: the Lab edits a colour by its file and li
         expect(literalLines.length, 'barrier: the scan finds the literal lines').toBeGreaterThan(0);
         expect(everyHex.length, 'a colour of the file sits elsewhere than alone on its own light:/dark: line — inline in a pair, in an expression, in a comment').toBe(literalLines.length);
 
-        // The buckets are declared once and shared by both tables.
         for (const dark of THEMES) {
             const theme = themeName(dark);
             const onLines = literalLines.filter((match) => match[1] === theme).map((match) => same(match[2]));
-            const returned = [...KINDS.flatMap((kind) => CATEGORY_KEYS[kind].map((key) => categoryColor(kind, key, dark))), ...CATEGORY_BUCKETS.map((bucket) => categoryColor('type', bucket, dark))].map(same);
-            expect(onLines.length, `${theme}: one line per key of both tables and per bucket`).toBe(CATEGORY_KEYS.type.length + CATEGORY_KEYS.sector.length + CATEGORY_BUCKETS.length);
+            const returned = [...CATEGORY_KEYS.sector.map((key) => categoryColor('sector', key, dark)), categoryColor('sector', 'Unknown', dark)].map(same);
+            expect(onLines.length, `${theme}: one line per sector and one for «Unknown»`).toBe(CATEGORY_KEYS.sector.length + 1);
             expect([...onLines].sort(), `${theme}: the lines hold exactly the colours categoryColor returns`).toEqual([...returned].sort());
         }
+    });
+
+    it('draws each asset type and the cash in its role (DV-11): one per type of the table and the cash, the role read where the page shows the theme', () => {
+        expect(CATEGORY_ROLES.map((c) => c.key)).toEqual([...CATEGORY_KEYS.type, 'Liquidity']);
+        expect(CATEGORY_ROLES.map((c) => c.target)).toEqual([...CATEGORY_KEYS.type.map((key) => `type:${key}`), 'bucket:Liquidity']);
+        expect(
+            CATEGORY_ROLES.filter(({key, role}) => role !== `--lf-cat-${key.toLowerCase().replace(/_/g, '-')}`).map(({role}) => role),
+            'the role is the key lower-cased, `_` → `-`',
+        ).toEqual([]);
+
+        const read: string[] = [];
+        setRoleReader((role) => {
+            read.push(role);
+            return '#123456';
+        });
+        for (const kind of KINDS) expect(categoryColor(kind, 'Liquidity', false), `${kind}: the cash is its role in both kinds`).toBe('#123456');
+        expect(categoryColor('type', 'ETF', true)).toBe('#123456');
+        expect(categoryColor('sector', 'Technology', false), 'a sector is a line of the file, no role').not.toBe('#123456');
+        expect(read).toEqual(['--lf-cat-liquidity', '--lf-cat-liquidity', '--lf-cat-etf']);
+        setRoleReader(null);
+    });
+
+    it('reads the role on the chart’s own element when it is given one, as chartRoles does; a sector reads nothing', () => {
+        const element = {nodeName: 'DIV'} as unknown as Element;
+        const scopes: Array<Element | null> = [];
+        setRoleReader((_role, scope) => {
+            scopes.push(scope);
+            return scope === element ? '#654321' : '';
+        });
+        expect(categoryColor('type', 'ETF', false, element)).toBe('#654321');
+        expect(sequenceColor(CATEGORY_SEQUENCE, 1, true, shadePoles(true, '#151b19'), element), 'a sequence passes the element on').toBe('#654321');
+        expect(categoryColor('sector', 'Technology', false, element)).not.toBe('#654321');
+        expect(scopes).toEqual([element, element]);
+        setRoleReader(null);
     });
 });
 
@@ -433,7 +467,8 @@ describe('growthBrokerColor — the Growth chart’s broker lines (GR5, TD-1b, D
         });
         draw();
         setRoleReader(null);
-        return read;
+        // The base colours of the types are roles since DV-11: what is measured here is the card the shades read.
+        return read.filter((role) => !role.startsWith('--lf-cat-'));
     }
 
     afterEach(() => {
@@ -639,7 +674,7 @@ describe('C3 in a release build — the minifier drops the hook', () => {
         ] as const) {
             // Barriers: each output is the module, minified, with the define applied — not an empty or failed transform.
             expect(output.code, `${name} (esbuild ${esbuild.version}): the module's exports`).toMatch(/export\s*\{[^}]*\bcategoryColor\b/);
-            expect(output.code, `${name}: the designer's values`).toContain(designerValue('type', 'STOCK', false));
+            expect(output.code, `${name}: the designer's values`).toContain(designerValue('sector', 'Industrials', false));
             expect(output.code, `${name}: the define was replaced`).not.toContain('__LF_DESIGNER_LAB__');
         }
         expect(release.code, `release (esbuild ${esbuild.version}): the hook's branch survived the minifier`).not.toContain('__lfDesignerLab');
@@ -1173,12 +1208,13 @@ describe('distinguishability (§1.8) — no pair of a table under ΔE00 5; under
  * badge's tint and its text, are T's contrast gate (`src/themeTokens.gate.test.ts`), not this test.
  *
  * True since 18/10/2026: T's roles landed first (R3-b, `7845fc3d3`), and DV flipped the flag at its merge of the target.
- * A type colour now lives in two places until the Designer Lab moves to the roles (DV-11): change both together.
+ * Since DV-11 (22/10/2026) a type colour lives in one place, its role: `categoryColor` reads it (the stand-ins of
+ * `roleColors.ts` here, where no page is loaded), so this block now checks that the read and tokens.css agree.
  */
 const CATEGORY_ROLES_IN_TOKENS = true;
 
 /** The base role of each type of the table and of the cash: the type key lower-cased, `_` → `-`; `Liquidity`, the bucket. */
-const CATEGORY_ROLES: ReadonlyArray<readonly [role: string, key: string]> = [
+const TOKEN_CATEGORY_ROLES: ReadonlyArray<readonly [role: string, key: string]> = [
     ['--lf-cat-stock', 'STOCK'],
     ['--lf-cat-etf', 'ETF'],
     ['--lf-cat-bond', 'BOND'],
@@ -1197,7 +1233,7 @@ type Tokens = ReturnType<typeof readTokens>;
 
 /** The category roles a token set declares, theme by theme. */
 function declaredCategoryRoles(tokens: Tokens): string[] {
-    return CATEGORY_ROLES.flatMap(([role]) => THEMES.filter((dark) => tokenValue(tokens, role, themeName(dark)) !== undefined).map((dark) => `${role} (${themeName(dark)})`));
+    return TOKEN_CATEGORY_ROLES.flatMap(([role]) => THEMES.filter((dark) => tokenValue(tokens, role, themeName(dark)) !== undefined).map((dark) => `${role} (${themeName(dark)})`));
 }
 
 /**
@@ -1205,7 +1241,7 @@ function declaredCategoryRoles(tokens: Tokens): string[] {
  * opaque, and resolves to `categoryColor('type', key)` of its theme, whatever the case of either hex.
  */
 function categoryRoleMismatches(tokens: Tokens): string[] {
-    return CATEGORY_ROLES.flatMap(([role, key]) =>
+    return TOKEN_CATEGORY_ROLES.flatMap(([role, key]) =>
         THEMES.flatMap((dark) => {
             const theme = themeName(dark);
             if (tokenValue(tokens, role, theme) === undefined) return [`${role} (${theme}): not declared`];
@@ -1227,12 +1263,12 @@ function tokenSet(light: Readonly<Record<string, string>>, dark: Readonly<Record
 }
 
 /** The twelve roles at the charts' colours of a theme, as `categoryColor` writes them. */
-const chartRoleValues = (dark: boolean): Record<string, string> => Object.fromEntries(CATEGORY_ROLES.map(([role, key]) => [role, categoryColor('type', key, dark)]));
+const chartRoleValues = (dark: boolean): Record<string, string> => Object.fromEntries(TOKEN_CATEGORY_ROLES.map(([role, key]) => [role, categoryColor('type', key, dark)]));
 
 describe("parity with T's category roles (§1.9, decision A) — one colour per type, in tokens.css and in the charts", () => {
     it('names one role per type of the table and one for the cash, by the rule: the key lower-cased, `_` → `-`', () => {
-        expect(CATEGORY_ROLES.map(([, key]) => key)).toEqual([...CATEGORY_KEYS.type, 'Liquidity']);
-        expect(CATEGORY_ROLES.filter(([role, key]) => role !== `--lf-cat-${key.toLowerCase().replace(/_/g, '-')}`).map(([role]) => role)).toEqual([]);
+        expect(TOKEN_CATEGORY_ROLES.map(([, key]) => key)).toEqual([...CATEGORY_KEYS.type, 'Liquidity']);
+        expect(TOKEN_CATEGORY_ROLES.filter(([role, key]) => role !== `--lf-cat-${key.toLowerCase().replace(/_/g, '-')}`).map(([role]) => role)).toEqual([]);
     });
 
     it(CATEGORY_ROLES_IN_TOKENS ? 'tokens.css declares each role in both themes, at the colour categoryColor gives its key' : 'tokens.css declares no category role yet: T’s batch has not landed', () => {
@@ -1248,7 +1284,7 @@ describe("parity with T's category roles (§1.9, decision A) — one colour per 
         // Dark: lower case, and the cash through a var() of its own, as a role may be written.
         const dark = {...Object.fromEntries(Object.entries(chartRoleValues(true)).map(([role, value]) => [role, value.toLowerCase()])), '--lf-slate': chartRoleValues(true)['--lf-cat-liquidity'], '--lf-cat-liquidity': 'var(--lf-slate)'};
         const matching = tokenSet(light, dark);
-        expect(declaredCategoryRoles(matching), 'barrier: the set declares the twelve roles in both themes').toHaveLength(CATEGORY_ROLES.length * THEMES.length);
+        expect(declaredCategoryRoles(matching), 'barrier: the set declares the twelve roles in both themes').toHaveLength(TOKEN_CATEGORY_ROLES.length * THEMES.length);
         expect(categoryRoleMismatches(matching)).toEqual([]);
 
         const without = (roles: Readonly<Record<string, string>>, ...gone: string[]) => Object.fromEntries(Object.entries(roles).filter(([role]) => !gone.includes(role)));
