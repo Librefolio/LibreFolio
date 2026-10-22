@@ -33,8 +33,9 @@
  * It reads source text and runs one script against fakes, not a browser: that Chromium dispatches the event, and what its
  * fields hold, is the E2E's (`layout/csp-collector.spec.ts`: an injected inline script is blocked and recorded).
  *
- * Red today: `app.html` has no such block: the buffer is never created and no listener is registered. The pins of (b) are
- * green today, and must stay so.
+ * Red today: the block does not cap its buffer (101 enforced violations leave 101 entries) and pushes without asking whether
+ * the buffer is still an array (cspNotice sets it to null once drained: the next violation throws in the listener). The pins
+ * of (b) are green today, and must stay so.
  *
  * Registered in `front_utility_unit` (`scripts/test_runner/_frontend_utility.py`, action `core-unit`).
  */
@@ -233,6 +234,32 @@ describe('app.html — the early collector of enforced CSP violations', () => {
             {directive: 'script-src-elem', blockedURI: 'inline', sample: 'window.__injected = 1;', sourceFile: 'http://localhost:6041/'},
             {directive: 'script-src', blockedURI: 'eval', sample: '1 + 1', sourceFile: ''},
         ]);
+    });
+
+    it('(a3b) the buffer is bounded: 101 enforced violations leave 100 entries, the first hundred (the bundle is not loaded yet, nothing drains it)', () => {
+        const run = runScript(script);
+
+        for (let index = 0; index < 101; index += 1) dispatch(run, violation('enforce', {blockedURI: `https://cdn.example.com/${index}.js`}));
+
+        const kept = run.window.__lfCspViolations as Array<{blockedURI: string}>;
+        expect(kept, 'the buffer is still an array').toBeInstanceOf(Array);
+        expect(kept, 'a cap of 100: the 101st is dropped').toHaveLength(100);
+        expect(kept[0].blockedURI, 'the first ones are kept, in order').toBe('https://cdn.example.com/0.js');
+        expect(kept[99].blockedURI, 'and the last kept is the 100th').toBe('https://cdn.example.com/99.js');
+        // One more, with the buffer full: still no growth, still no throw
+        expect(() => dispatch(run, violation('enforce'))).not.toThrow();
+        expect(kept, 'a full buffer stays at 100').toHaveLength(100);
+    });
+
+    it('(a3c) the listener pushes only while the buffer is an array: with the global set to null (cspNotice drained it) nothing is pushed and nothing throws', () => {
+        const run = runScript(script);
+        dispatch(run, violation('enforce'));
+        expect(run.window.__lfCspViolations, 'premise: the buffer collected while it was an array').toHaveLength(1);
+
+        run.window.__lfCspViolations = null;
+
+        expect(() => dispatch(run, violation('enforce', {blockedURI: 'https://cdn.example.com/late.js'})), 'a listener that throws on a null buffer fills the console of every later violation').not.toThrow();
+        expect(run.window.__lfCspViolations, 'null stays null: the notice’s own listener takes over, the early one does not recreate the buffer').toBeNull();
     });
 
     it('(a4) a listener that cannot be registered changes nothing else: the theme, the install-prompt capture and the service worker are as without the block', () => {

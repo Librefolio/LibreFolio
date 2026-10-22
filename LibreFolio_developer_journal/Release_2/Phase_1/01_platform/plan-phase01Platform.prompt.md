@@ -10308,3 +10308,31 @@ mescolare le righe del runner dei due lotti:
    > indirizzo e un id di zona; i nomi internazionali in punycode. Test nuovo `utils origins`, 67 casi (2 rossi prima della
    > cura dell'id di zona).
 7. ⏳ **Passo 5**: la corsa E2E completa sotto la politica, nello slot del coordinatore.
+7. ✅ **Passo 5, la corsa completa sotto la politica** (22/10, 00:52 → 02:26, corsa 1 h 33 min, HEAD `a1f1cc5fb`; log
+   `ondata3/h55-step5.log`). Verdi: Transazioni, Broker, Utenti, AI Export, Designer Lab, e `csp-collector` intero. Rossi:
+   > - `page-policy` (4): un difetto dello spec, `headersArray()` è asincrono; riparato (test-author), non rilanciato in E2E;
+   > - `files-uploader:416` (desktop e mobile): il mio ascoltatore globale camminava la catena `data-fallbacks` di un
+   >   componente Svelte (l'icona di un'opzione del filtro). Curato: agisce solo su un'immagine con `data-hide-on-error` o
+   >   `data-fallback-text`; rosso nuovo in `imageErrorFallback.test.ts`;
+   > - `files.spec.ts:826`: legato a Q-CDN;
+   > - non CSP: `asset-detail:8555`, `fx-sync:327`, `dashboard:323`, `yield-on-cost-real:455`, `scheduler:89`
+   >   (FSCH-004b, l'Esc del modale mentre carica; nell'inventario cadde allo stesso modo `brokers-detail:253`, stavolta verde).
+8. ✅ **La cura della revisione indipendente di `a1f1cc5fb`** (22/10). Prima i rossi (test-author), poi la cura.
+   > **Note implementazione**:
+   > - R1 (medio), un file caricato servito come script: il download BRIM non mostrato in pagina esce come
+   >   `application/octet-stream` qualunque sia il nome; `api/file_fetch_guard.refuse_script_destination` (403
+   >   `file_not_a_script` per un `Sec-Fetch-Dest` da script, worker o worklet) sul download BRIM e su
+   >   `/uploads/file/{id}`; `BLOCKED_EXTENSIONS` anche all'upload BRIM (400, niente scritto); tre tipi JavaScript in più in
+   >   `BLOCKED_MIME_TYPES`;
+   > - R2: gli hash della build si leggono in un thread (`asyncio.to_thread`) sotto un lock (una lettura per firma anche in
+   >   parallelo); se la lettura fallisce la pagina ha tutte le intestazioni con la politica senza hash, e un warning con la
+   >   causa; `started` dopo le intestazioni;
+   > - R3: il buffer di `app.html` ha un tetto (100) e si ferma quando `cspNotice` lo azzera a `null`; `canonical_origin`
+   >   rifiuta host non ASCII (un nome internazionale va scritto in punycode) e qualunque backslash;
+   > - R4 (worker sotto `/_app`) proposto, non fatto: cambierebbe ciò che caricano i worker del visore PDF e del rischio, e
+   >   chiede un'altra corsa completa;
+   > - R5 (docs dell'API da jsDelivr senza versione né SRI) portato al developer.
+   > **Rossi → verdi**: `served-content-types` 50 rossi → 105; `api brim` 8 → 131; `static-uploads` 2 → 75;
+   > `managed-headers` 9 → 602; `origins` 8 → 76; Vitest dell'avviso, del buffer e del ripiego 6 → 80. Più `security-headers`
+   > 15, `server-errors` 43, i biglietti 212, `address-probe-image` 14; gate di `app.html` e dei temi 44, 27, 53; ruff,
+   > black e prettier puliti.
