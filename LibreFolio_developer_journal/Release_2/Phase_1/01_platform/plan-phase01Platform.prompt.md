@@ -10475,5 +10475,14 @@ mescolare le righe del runner dei due lotti:
    > **Docs** (docs-writer, solo inglese): `admin/configuration`, `admin/cli_tools`, `developer/architecture/security`
    > (nuova sezione `#api-docs-libraries`), `developer/architecture/overview`, `developer/api/{index,overview,curl-testing}`.
    > `mkdocs build` strict esce 0, `check-links` 97 link validi. Debito di traduzione: `configuration`, `cli_tools`.
+8. ✅ **H-18, i toast letti dai lettori di schermo** (22/10, lotto piccolo approvato dal developer, dopo R5).
+   > **Note implementazione**: in `ToastContainer.svelte` icona e messaggio di ogni toast stanno in un elemento live:
+   > l'errore in `role="alert"` (`aria-live="assertive"`, interrompe), le altre varianti, avviso compreso, in
+   > `role="status"` (`aria-live="polite"`); `aria-atomic="true"`, icona `aria-hidden`. Il pulsante ✕ resta fuori
+   > dall'elemento live, così la sua etichetta non viene letta col messaggio. Il contenitore (`toast-region`,
+   > `pointer-events-none`) resta nel DOM anche vuoto: i toast arrivano in un genitore che esiste già. Nessun colore toccato.
+   > **Rossi → verdi** (test-author): 12 nuovi casi in `ToastContainer.test.ts` rossi (nessun elemento live, nessuna
+   > regione) → 25/25 verdi; con i gate `htmlSink` e `themeRoles` 112/112; `front check` 0 errori, 0 avvisi.
+   > **⚠️ Fuori pista** (non fatto, da segnalare): l'`aria-label="Dismiss"` del ✕ è scritto in inglese, senza i18n.
    > **⚠️ Fuori pista**: `"scarfSettings"` messo e poi tolto da `package.json`, dopo il cambio di Q-C: il file coincide col
    > commit.
