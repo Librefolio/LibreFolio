@@ -1,20 +1,29 @@
 // @vitest-environment jsdom
 /**
- * VerifyEmailCard — what the page of a verification link shows (workstream E, lot E5a; developer decision 44).
+ * VerifyEmailCard — what the page of a verification link shows (workstream E, lots E5a and E-25; developer decision 44).
  *
  * The contract under test:
  *   - the card is the `verify-email-status` card of `AuthCard`, carrying its status in `data-status`, and words each of
- *     the eight statuses of the page with `VERIFY_PAGE_KEYS[status]` (`email.verification.page.<status>`) in
+ *     the nine statuses of the page with `VERIFY_PAGE_KEYS[status]` (`email.verification.page.<status>`) in
  *     `verify-email-message`, a polite live region;
+ *   - `ready` (lot E-25): the link is read but not spent — a corporate mail scanner opens links in a sandboxed browser
+ *     that runs scripts, so only a click may spend it. The card then shows a primary «confirm»
+ *     (`verify-email-confirm`, `email.verification.page.confirm`), only when the page gave an `onconfirm`: a click calls
+ *     it once and goes nowhere; and a hint for whoever did not sign up (`verify-email-hint`,
+ *     `email.verification.page.notSignedUp`), with or without `onconfirm`. There is no «try again» and no way back to
+ *     the sign-in: the only thing to do is confirm. Without an `onconfirm` there is no button at all, as with a retry
+ *     without an `onretry`;
+ *   - the «confirm» and the hint appear in `ready` and nowhere else, `onconfirm` given or not;
  *   - «back to the sign-in» (`verify-email-goto-login`, `auth.backToLogin`) goes to `/`, offered for every status but
- *     `checking` — a dead link is never the end: signing in offers a new one, and nothing sends anyone to an
- *     administrator;
+ *     `checking` and `ready` — a dead link is never the end: signing in offers a new one, and nothing sends anyone to
+ *     an administrator;
  *   - «try again» (`verify-email-retry`, `common.retry`) only for `error`, and only when the page gave an `onretry`; a
  *     click calls it once and goes nowhere;
  *   - a blocked instance (lot E-10): `blocked` is worded like the others, `email.verification.page.blocked`, and offers
  *     the way back to the sign-in but no «try again», even with the `onretry` the page always gives: trying again
  *     changes nothing while the instance is blocked;
- *   - the card follows its props and the language: a new status, or a new translator, rewords it in place.
+ *   - the card follows its props and the language: a new status, or a new translator, rewords it in place; leaving
+ *     `ready` takes the «confirm» and the hint away from the same card.
  *
  * Mocks: `$app/navigation` (`goto`, a spy); `$lib/i18n`: `_` is a writable translator owned by this file, answering
  * `[<language>] <key>`, so an assertion names the key the card chose, never a sentence of the catalogue. What runs for
@@ -43,14 +52,18 @@ import type {VerifyPageStatus} from './emailText';
 
 const translator = _ as unknown as Writable<(key: string) => string>;
 
-const STATUSES: VerifyPageStatus[] = ['checking', 'expired', 'consumed', 'revoked', 'unknown', 'missing', 'error', 'blocked'];
-/** Every status but the wait: the card then offers the way back to the sign-in. */
-const SETTLED = STATUSES.filter((status) => status !== 'checking');
+const STATUSES: VerifyPageStatus[] = ['checking', 'ready', 'expired', 'consumed', 'revoked', 'unknown', 'missing', 'error', 'blocked'];
+/** Every status but the wait and the click still to come: the card then offers the way back to the sign-in. */
+const SETTLED = STATUSES.filter((status) => status !== 'checking' && status !== 'ready');
+/** Every status but `ready`: the «confirm» and the hint belong to the click still to come, and to nothing else. */
+const NOT_READY = STATUSES.filter((status) => status !== 'ready');
 
 const card = () => screen.getByTestId('verify-email-status');
 const message = () => screen.getByTestId('verify-email-message');
 const backToLogin = () => screen.queryByTestId('verify-email-goto-login');
 const retry = () => screen.queryByTestId('verify-email-retry');
+const confirmButton = () => screen.queryByTestId('verify-email-confirm');
+const hint = () => screen.queryByTestId('verify-email-hint');
 
 beforeAll(() => {
     // The absences asserted below would pass vacuously in an environment where effects never run.
@@ -76,11 +89,12 @@ describe('VerifyEmailCard — one card per status', () => {
         expect(within(card()).queryAllByRole('link'), 'no link: nothing sends anyone elsewhere, to an administrator least of all').toEqual([]);
     });
 
-    it('VEC-02: while checking, there is nothing to do — no way back, no retry', () => {
-        render(VerifyEmailCard, {props: {status: 'checking', onretry: vi.fn()}});
+    it('VEC-02: while checking, there is nothing to do — no way back, no retry, no confirm, even with both callbacks', () => {
+        render(VerifyEmailCard, {props: {status: 'checking', onretry: vi.fn(), onconfirm: vi.fn()}});
 
         expect(backToLogin()).toBeNull();
         expect(retry()).toBeNull();
+        expect(confirmButton(), 'the click is already given: it is spent once').toBeNull();
         expect(within(card()).queryAllByRole('button')).toEqual([]);
     });
 
@@ -116,10 +130,10 @@ describe('VerifyEmailCard — «try again», for a check that failed', () => {
     });
 
     it.each(SETTLED.filter((status) => status !== 'error'))('VEC-06: %s — only a check that failed is tried again: no retry even with an onretry', (status) => {
-        render(VerifyEmailCard, {props: {status, onretry: vi.fn()}});
+        render(VerifyEmailCard, {props: {status, onretry: vi.fn(), onconfirm: vi.fn()}});
 
         expect(retry()).toBeNull();
-        expect(within(card()).getAllByRole('button')).toHaveLength(1);
+        expect(within(card()).getAllByRole('button'), 'the way back is all there is: no retry, no confirm').toHaveLength(1);
     });
 });
 
@@ -159,5 +173,71 @@ describe('VerifyEmailCard — a blocked instance (lot E-10)', () => {
         expect(fake.goto).toHaveBeenCalledTimes(1);
         expect(fake.goto).toHaveBeenCalledWith('/');
         expect(onretry).not.toHaveBeenCalled();
+    });
+});
+
+describe('VerifyEmailCard — «confirm», the click that spends the link (lot E-25)', () => {
+    it('VEC-09: ready with an onconfirm — a primary confirm and the hint, no retry, no way back; the click calls onconfirm once and goes nowhere', async () => {
+        const onconfirm = vi.fn();
+        render(VerifyEmailCard, {props: {status: 'ready', onconfirm, onretry: vi.fn()}});
+
+        expect(card()).toHaveAttribute('data-status', 'ready');
+        expect(confirmButton(), 'the click that spends the link').not.toBeNull();
+        expect(confirmButton()).toHaveTextContent('[en] email.verification.page.confirm');
+        expect(hint(), 'a line for whoever did not sign up').not.toBeNull();
+        expect(hint()).toHaveTextContent('[en] email.verification.page.notSignedUp');
+        expect(message()).toHaveTextContent('[en] email.verification.page.ready');
+        expect(retry(), 'there is nothing to try again before the first click').toBeNull();
+        expect(backToLogin(), 'the only thing to do is confirm').toBeNull();
+        expect(within(card()).getAllByRole('button')).toHaveLength(1);
+
+        await fireEvent.click(confirmButton()!);
+
+        expect(onconfirm).toHaveBeenCalledTimes(1);
+        expect(fake.goto).not.toHaveBeenCalled();
+    });
+
+    it('VEC-10: ready without an onconfirm — no confirm button, no way back, and the hint still shown', () => {
+        render(VerifyEmailCard, {props: {status: 'ready'}});
+
+        expect(card()).toHaveAttribute('data-status', 'ready');
+        expect(hint(), 'the hint does not depend on the callback').not.toBeNull();
+        expect(hint()).toHaveTextContent('[en] email.verification.page.notSignedUp');
+        expect(message()).toHaveTextContent('[en] email.verification.page.ready');
+        expect(confirmButton(), 'no callback, no button').toBeNull();
+        expect(retry()).toBeNull();
+        expect(backToLogin(), 'a missing callback is no way out either').toBeNull();
+        expect(within(card()).queryAllByRole('button')).toEqual([]);
+    });
+
+    it.each(NOT_READY)('VEC-11: %s — no confirm and no hint, even with an onconfirm: they belong to ready alone', (status) => {
+        render(VerifyEmailCard, {props: {status, onconfirm: vi.fn()}});
+
+        expect(card(), 'the card is there: the absences below are not an empty page').toHaveAttribute('data-status', status);
+        expect(message()).toHaveTextContent(`[en] email.verification.page.${status}`);
+        expect(confirmButton()).toBeNull();
+        expect(hint()).toBeNull();
+    });
+
+    it('VEC-12: leaving ready takes the confirm and the hint away from the same card, and a change of language rewords them while they are there', async () => {
+        const onconfirm = vi.fn();
+        const view = render(VerifyEmailCard, {props: {status: 'ready', onconfirm}});
+        const before = card();
+        expect(confirmButton(), 'ready offers the confirm').not.toBeNull();
+        expect(confirmButton()).toHaveTextContent('[en] email.verification.page.confirm');
+
+        translator.set(fake.translatorFor('it'));
+        await view.rerender({status: 'ready', onconfirm});
+
+        expect(confirmButton()).toHaveTextContent('[it] email.verification.page.confirm');
+        expect(hint()).toHaveTextContent('[it] email.verification.page.notSignedUp');
+
+        await view.rerender({status: 'checking', onconfirm});
+
+        expect(card(), 'the same card, not a new one').toBe(before);
+        expect(card()).toHaveAttribute('data-status', 'checking');
+        expect(confirmButton(), 'once clicked, it cannot be clicked again').toBeNull();
+        expect(hint()).toBeNull();
+        expect(within(card()).queryAllByRole('button')).toEqual([]);
     });
 });

@@ -5,13 +5,19 @@
  *
  * The contract under test:
  *   - an answer with `verification_required: true` sends the user to the sign-in with `email.verification.registered`
- *     (open the link in the email first), instead of `auth.accountCreated`;
- *   - an answer without it, or with it false, keeps `auth.accountCreated`, as before;
+ *     (open the link in the email first), instead of `auth.accountCreated` — whether `verification_email` says
+ *     `"sending"` (the email is queued) or the field is absent (an older server, which never sent it: the fallback);
+ *   - an answer with `verification_required: true` and `verification_email: "held"` (lot E-26 (b): the client address
+ *     sent too many registration emails, so this account's email is held) sends the user to the sign-in with
+ *     `email.verification.registeredHeld` instead — the sign-in's «send the link again» is how the account gets it;
+ *   - an answer without `verification_required`, or with it false (`verification_email` then `null`, or absent), keeps
+ *     `auth.accountCreated`, as before;
  *   - a 409 `EMAIL_VERIFICATION_UNAVAILABLE` stays on the form, saying `email.verification.signUpUnavailable` in the
  *     general error banner, and goes nowhere.
  *
  * Mocks, as in workstream A's `RegisterCard.test.ts` (left to A): the identity translator — a message renders as its
- * key — and the generated client's register alias, answered per test. Red until E5b is applied.
+ * key — and the generated client's register alias, answered per test. Red until E5b is applied; RCV-04 until lot E-26 (b)
+ * is (RCV-01, RCV-02 and RCV-05 pass before and after it: RCV-05 pins the fallback of an older server).
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {readable} from 'svelte/store';
@@ -28,9 +34,18 @@ const register = vi.mocked(zodiosApi.register_api_v1_auth_register_post);
 /** Satisfies all five password rules: length, upper, lower, digit, special. */
 const GOOD_PASSWORD = 'Str0ng!pass';
 
-function answer(verificationRequired: boolean | undefined) {
+/** What `verification_email` says: the email is queued, held by the per-address limit, or none is expected. */
+type VerificationEmail = 'sending' | 'held' | null;
+
+/** One register answer. A field passed as `undefined` is left out of the body altogether, as an older server leaves it out. */
+function answer(verificationRequired: boolean | undefined, verificationEmail?: VerificationEmail) {
     const user = {id: 2, username: 'zq_vera', email: 'zq_vera@example.com', is_active: verificationRequired !== true, is_superuser: false, created_at: '2026-10-16T00:00:00Z'};
-    return verificationRequired === undefined ? {user, message: 'Registration successful'} : {user, message: 'Registration successful', verification_required: verificationRequired};
+    return {
+        user,
+        message: 'Registration successful',
+        ...(verificationRequired === undefined ? {} : {verification_required: verificationRequired}),
+        ...(verificationEmail === undefined ? {} : {verification_email: verificationEmail}),
+    };
 }
 
 function mount(): {gotoLogin: ReturnType<typeof vi.fn>} {
@@ -56,8 +71,8 @@ afterEach(() => {
 });
 
 describe('RegisterCard — a sign-up that waits for its email verification', () => {
-    it('RCV-01: verification_required true → to the sign-in with email.verification.registered', async () => {
-        register.mockResolvedValueOnce(answer(true) as never);
+    it('RCV-01: verification_required true, verification_email "sending" → to the sign-in with email.verification.registered', async () => {
+        register.mockResolvedValueOnce(answer(true, 'sending') as never);
         const {gotoLogin} = mount();
 
         await fillValidAndSubmit();
@@ -67,10 +82,11 @@ describe('RegisterCard — a sign-up that waits for its email verification', () 
     });
 
     it.each([
-        ['false', false],
-        ['absent (an older server)', undefined],
-    ])('RCV-02: verification_required %s → auth.accountCreated, as before', async (_label, required) => {
-        register.mockResolvedValueOnce(answer(required) as never);
+        ['false, verification_email absent', false, undefined],
+        ['false, verification_email null', false, null],
+        ['absent (an older server)', undefined, undefined],
+    ] as const)('RCV-02: verification_required %s → auth.accountCreated, as before', async (_label, required, verificationEmail) => {
+        register.mockResolvedValueOnce(answer(required, verificationEmail) as never);
         const {gotoLogin} = mount();
 
         await fillValidAndSubmit();
@@ -94,5 +110,27 @@ describe('RegisterCard — a sign-up that waits for its email verification', () 
         expect(screen.getByTestId('info-banner-error')).not.toHaveTextContent('An English sentence');
         expect(gotoLogin).not.toHaveBeenCalled();
         expect(screen.getByTestId('register-form')).toBeInTheDocument();
+    });
+
+    it('RCV-04: verification_required true, verification_email "held" → to the sign-in with email.verification.registeredHeld', async () => {
+        register.mockResolvedValueOnce(answer(true, 'held') as never);
+        const {gotoLogin} = mount();
+
+        await fillValidAndSubmit();
+
+        await waitFor(() => expect(gotoLogin).toHaveBeenCalledTimes(1));
+        expect(gotoLogin).toHaveBeenCalledWith({message: 'email.verification.registeredHeld'});
+    });
+
+    it('RCV-05: verification_required true and no verification_email key at all (an older server) → email.verification.registered, the fallback', async () => {
+        const fromAnOlderServer = answer(true);
+        expect('verification_email' in fromAnOlderServer, 'setup: the answer must not carry the field at all').toBe(false);
+        register.mockResolvedValueOnce(fromAnOlderServer as never);
+        const {gotoLogin} = mount();
+
+        await fillValidAndSubmit();
+
+        await waitFor(() => expect(gotoLogin).toHaveBeenCalledTimes(1));
+        expect(gotoLogin).toHaveBeenCalledWith({message: 'email.verification.registered'});
     });
 });

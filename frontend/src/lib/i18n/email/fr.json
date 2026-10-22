@@ -92,10 +92,13 @@
         "unknown": "Ce lien n'est pas valide : rouvrez-le en entier depuis l'e-mail. S'il échoue encore, connectez-vous pour en demander un nouveau.",
         "blocked": "Cette instance est bloquée par son hébergeur : le lien ne peut pas être vérifié pour le moment. Rouvrez-le une fois l'instance débloquée ; si le lien a expiré entre-temps, connectez-vous pour en obtenir un nouveau.",
         "missing": "Ce lien est incomplet : rouvrez-le depuis l'e-mail.",
-        "error": "Le lien n'a pas pu être vérifié : réessayez."
+        "error": "Le lien n'a pas pu être vérifié : réessayez.",
+        "ready": "Confirmez votre adresse e-mail pour activer votre compte.",
+        "confirm": "Confirmer mon adresse e-mail",
+        "notSignedUp": "Si vous n'avez pas créé de compte sur cette instance, fermez cette page : rien ne se passe."
       },
       "verified": "Votre adresse e-mail est vérifiée, {username} : vous pouvez vous connecter.",
-      "loginRequired": "Votre adresse e-mail n'est pas encore vérifiée : ouvrez le lien de l'e-mail que nous vous avons envoyé, puis connectez-vous.",
+      "loginRequired": "Votre adresse e-mail n'est pas encore vérifiée : ouvrez le lien de l'e-mail d'activation, ou demandez-en un nouveau ci-dessous.",
       "resend": "Renvoyer le lien",
       "resending": "Envoi…",
       "resent": "Un nouveau lien est en route : vérifiez votre boîte de réception, et les spams. Les liens précédents ne fonctionnent plus.",
@@ -108,10 +111,11 @@
         "unavailable": "L'e-mail ne peut pas partir pour le moment : réessayez plus tard, ou demandez à l'administrateur de cette instance.",
         "generic": "Le lien n'a pas pu être envoyé : réessayez."
       },
-      "registered": "Compte créé. Nous vous avons envoyé un e-mail avec un lien pour l'activer : ouvrez-le dans les 24 heures, puis connectez-vous.",
+      "registered": "Compte créé. Nous vous envoyons un e-mail avec un lien pour l'activer : ouvrez-le dans les 24 heures, puis connectez-vous. Pas d'e-mail après quelques minutes ? Vérifiez les spams, puis connectez-vous avec votre nom d'utilisateur et votre mot de passe : un nouveau lien vous sera proposé.",
       "signUpUnavailable": "L'inscription n'est pas possible pour le moment : cette instance ne peut pas envoyer l'e-mail de vérification. Réessayez plus tard, ou demandez à son administrateur.",
       "settingNeedsEmail": "Il faut qu'un e-mail avec un lien puisse partir : configurez d'abord SMTP et LIBREFOLIO_PUBLIC_URL (Paramètres › Administration › E-mail).",
-      "settingUnavailable": "La vérification de l'e-mail demande qu'un e-mail avec un lien puisse partir, et aucun ne peut partir maintenant : vérifiez Paramètres › Administration › E-mail."
+      "settingUnavailable": "La vérification de l'e-mail demande qu'un e-mail avec un lien puisse partir, et aucun ne peut partir maintenant : vérifiez Paramètres › Administration › E-mail.",
+      "registeredHeld": "Compte créé, mais l'e-mail d'activation ne peut pas partir pour le moment : trop d'inscriptions depuis votre réseau au cours de la dernière heure. Connectez-vous avec votre nom d'utilisateur et votre mot de passe : un nouveau lien vous sera proposé."
     },
     "sendLink": {
       "button": "Envoyer par e-mail",
