@@ -7217,3 +7217,40 @@ caricatore divergerebbe dalla versione di Y. Riprendo dopo il commit di Y-40.
    > **⚠️ Fuori pista**: il caso E2E proposto (scelto un bersaglio nel dialogo di una scheda settimanale, la richiesta
    > `sample_like` parte prima del salvataggio) ha bisogno di un `data-testid` sul pulsante delle impostazioni della scheda
    > (`AssetCard.svelte`, oggi solo un `title` tradotto): non è un file mio stanotte. Proposto come seguito.
+
+### E2E di Z-29d — l'anteprima del dialogo dei confronti (22/10, ondata 4, base `c042f2481`)
+
+> Brief dell'ondata 4 (Sonnet): lo spec, registrato nel runner, verde due volte nello slot; il `data-testid` sul pulsante
+> delle impostazioni di `AssetCard` lo aggiunge Y. Questo turno: analisi e spec scritto, **non ancora lanciato**.
+
+**Analisi.**
+- Nessuna modifica di prodotto serve: il dialogo e il suo flusso hanno già i `data-testid` che servono (`chart-settings-modal`,
+  `signals-comparison-select-button`, `signal-tree-option-asset-comparison`, `signal-card-<id>` con `data-signal-type`,
+  `signal-param-<id>-assetId-select-{trigger,search}`, `search-select-option-<id>`: lo stesso percorso del gallery) e
+  `confirm-modal-confirm` per lo scarto. Manca solo il pulsante delle impostazioni della scheda (Y).
+- Cancellare: `Escape` chiede la chiusura e, con un confronto non salvato, il dialogo apre la conferma di scarto
+  (`ChartSettingsModal.svelte` `handleClose` → `confirmCloseOpen`): lo spec la conferma, ed è lo «Annulla».
+- **Come si osserva che l'anteprima «disegna»** (nessun hook in prodotto): (1) la rete, la richiesta con una voce
+  `sample_like` della chiave della scheda per l'asset scelto parte prima di Apply, risposta settimanale o mensile con prezzi,
+  una sola volta; (2) il canvas dell'anteprima: la sua impronta (hash dei pixel, letta finché non cambia più) è diversa
+  da prima della scelta, perché prima la nuova linea non ha un asset e non disegna nulla.
+  > **⚠️ Possibile fragilità**: l'impronta del canvas è un'osservabile indiretta (animazioni di ECharts, tema). Se in corsa
+  > risultasse instabile, la cura robusta è un attributo nel dialogo (per esempio `data-overlay-count` sul wrapper
+  > dell'anteprima, in `ChartSettingsModal.svelte`, file di Y): una domanda, non la faccio io.
+
+**Lavoro.**
+1. ✅ 22/10 — Spec nuovo `frontend/e2e/assets/asset-card-comparison-preview.spec.ts` (un caso): due asset propri con 900
+   giorni di prezzi, la lista ristretta da un token nel nome, premessa (la scheda è letta settimanale o mensile), apertura
+   delle impostazioni dalla scheda, aggiunta del confronto come lo aggiunge l'utente, lettura del bersaglio prima di
+   Apply, impronta del canvas cambiata, una sola lettura, annulla (scarto), niente nel localStorage, riapertura senza
+   confronto. Nessun conteggio di vicini, nessuna posizione, nessun testo tradotto. Non lanciato.
+2. ✅ 22/10 — Registrato in `_frontend_asset.py` (`asset-card-comparison-preview`, una funzione e una riga); `check-orphans`
+   pulito (149 E2E, 607 Vitest, 518 backend raggiungibili).
+3. ✅ 22/10 — Il `data-testid` di Y è `asset-card-settings` (commit `6f816aad8`, nella base): la costante dello spec coincideva,
+   nessuna modifica. `front check` 0/0 (tipi dello spec compresi). **Nello slot** (corsia 6186, `LC_ALL=en_US.UTF-8`, `flock`):
+   verde due volte di fila (7,9 s e 7,3 s) e una terza dopo la prova sotto.
+4. ✅ 22/10 — **Prova che lo spec discrimina** (mutazione locale, ripristinata): tolta per una corsa la scrittura
+   `targetSamples = next` di `readTargetSample` (`assets/+page.svelte`), la richiesta parte ma l'anteprima non è alimentata:
+   lo spec cade sull'asserzione del disegno («the preview still draws what it drew before the comparison was picked»), non
+   altrove. La pagina è stata ripristinata byte per byte (`git status` pulito su di lei) e la terza corsa, con la build
+   rifatta, è verde. La fragilità temuta dell'impronta del canvas non si è vista in tre corse.
