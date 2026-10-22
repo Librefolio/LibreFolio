@@ -20,7 +20,7 @@ The service keeps the orchestration (`get_lots_analysis()`), the database loader
 | `summary.py` | A lot's figures, read by the lot summary and the histories: `residual_cost()`, the original cost of the quantity still open (also the AI Export's `lot_residual_cost_basis()`); `lot_value()`, a lot's total value and P&L by direction; `lot_summary_figures()` → `LotSummaryFigures`, the lot summary's computed figures from its converted inputs — `_build_lot_summaries()` gathers those inputs and maps the result |
 | `average_cost_lines.py` | `ALL_BROKERS`, and the broker and cumulative WAC history points (`build_broker_wac_history()`, `build_cumulative_wac_history()`, `average_cost_points()`) |
 
-`FxRateResolver.load()` is the package's only async step and its only I/O: one `convert_bulk()` call for the rates registered since the previous load. The FIFO replay is in `financial_math/fifo/` ([FIFO Lot Engine](fifo_lot_engine.md)), the daily marks in `financial_math/price_marks.py` ([Price Resolver](price_resolver.md)). The functions of `lots/` and the service's sync builders are tested by `./dev.py test services lots-analysis-pure`.
+`FxRateResolver.load()` is the package's only async step and its only I/O: one `unit_rate_steps()` call for the rates asked since the previous load, read as steps (L1b, see [FX Conversion](#fx-conversion)). The FIFO replay is in `financial_math/fifo/` ([FIFO Lot Engine](fifo_lot_engine.md)), the daily marks in `financial_math/price_marks.py` ([Price Resolver](price_resolver.md)). The functions of `lots/` and the service's sync builders are tested by `./dev.py test services lots-analysis-pure`.
 
 ---
 
@@ -242,10 +242,11 @@ analysis is not concerned: its gaps are isolable, and its figures stay.
 
 ### 💱 FX Conversion {: #fx-conversion }
 
-`FxRateResolver` (`financial_math/lots/conversions.py`) is a thin prefetch + conversion helper:
+`FxRateResolver` (`financial_math/lots/conversions.py`) is a thin prefetch + conversion helper. It reads its rates as steps (L1b): a rate only changes on the days a row is stored, so it asks for the windows of days it needs, never for one conversion a day.
 
-- `need(currency, as_of_date)` registers required pairs
-- `load(session)` calls `convert_bulk(...)` once, for the pairs registered since the previous load
+- `need(currency, as_of_date)` asks the rate of one day; a day inside a window `need_days()` already asked adds nothing
+- `need_days(currency, first, last)` asks every day of `[first, last]` for one currency: nothing for a blank code, for the target currency, or for a window that ends before it starts
+- `load(session)` makes **one** `unit_rate_steps()` call ([FX Architecture](../fx/architecture.md#unit-rate-steps)) for every currency asked since the previous load — a single-day `need()` is a one-day window, and a load with nothing new asks nothing. It keeps the rates as steps, answered on the asked days only (`AskedDayRates`, `financial_math/fx_rates.py`): one map per load, and a day nobody asked has no rate. Each currency is still read as `Currency(code=…)` writes it, so `usd` reads the USD rates and a code `Currency` refuses raises at load; a currency that is the target under another spelling (`eur` for `EUR`) converts at exactly 1. The values are, digit for digit, those of one `convert_bulk()` unit per day, the contract of `unit_rate_steps()`
 - `convert(amount, currency, as_of_date)` applies date-specific conversion into `target_currency` — an amount without a currency is taken as already in it; a conversion it cannot make — a non-`None` amount in a currency other than the target, with no loaded rate for that `(currency, date)` — returns `None` and is recorded
 - `missing_pairs()` returns the recorded misses as `WACMissingPairInfo(pair, dates)`, one entry per `FROM/TO` pair with its dates sorted
 
@@ -256,9 +257,11 @@ Service converts:
 - event-history opening rows (`BUY` / `ADJUSTMENT_IN`, `_build_opening_and_split_rows()`): the opening unit price, from the **lot's** currency at the opening date — a `BUY`'s own currency, the cost basis's for an `ADJUSTMENT_IN` priced by its `cost_basis_override` (see `FifoLot.currency` in [FIFO Lot Engine](fifo_lot_engine.md)); and `opening_value`, the lot's original cost at the opening date — the summary's `original_cost`, in the currency of `unit_price`; for these rows `collect_fx_needs()` registers the lot's currency on every opening event
 - closures, through `convert_closure()` alone: each leg in its own currency at its own date — the lot's side at the lot's opening date, the closing side at the closure date — an `ADJUSTMENT_OUT`'s value handed over at cost included (see [Closures: each leg at its own date](#closure-conversion))
 - Gantt fragment unit prices
-- native resolver marks from `build_asset_price_series()`, each at the date it values: `collect_fx_needs()` registers every history day's rate of the marks' currencies — the price rows' and the `BUY` / `SELL` trades' — when an analysis reads the market series (`needs_market_series()`) or `MARKET_PRICE_HISTORY` is requested, even alone
+- native resolver marks from `build_asset_price_series()`, each at the date it values: when an analysis reads the market series (`needs_market_series()`) or `MARKET_PRICE_HISTORY` is requested, even alone, `collect_fx_needs()` asks one window per currency of the marks — the price rows' and the `BUY` / `SELL` trades' — `need_days(currency, computed_from, actual_to)`, every history day of it
 - dividend / interest and FEE / TAX amounts, and the BUY / SELL amounts that weight the FEE / TAX split (economic-stage inputs)
 - performance-history external flows
+
+**One window, not one need a day.** Before L1b the market series asked each currency one `need()` a day and `load()` handed `convert_bulk()` one conversion per need: a lot bought on 2 January 1900 meant about 44 000 needs and a 44 000-conversion call, to answer a window of a month. Now it is one window per currency, read in one `unit_rate_steps()` call per load — the cost follows the rows stored, not the days asked. What stays daily, by design: the conversion of each day's mark (the service's per-day loop over `history_dates`, `FxRateResolver.convert()` on each), the record of each day without a rate in `missing_pairs()`, and the scan of `lot_change_days()` over those marks (see [Change Days](#change-days)).
 
 **No native fallback.** A figure that needs a missing rate is never computed from the unconverted amount — it is `None`, or it has no point:
 
@@ -694,14 +697,16 @@ Some series change on the day after an input, with no input of their own changin
 
 **Why the figures are the same, byte for byte.** Between two change days every input a builder reads for a day is the same `Decimal`, in the same representation, as on the last change day — the converted mark (its price and its rate together), the open fragments, the closures' running sums, the income, fee and tax prefixes, the withheld pools, the average-cost step, the at-cost flag — so a day computed there would repeat that change day's figures. The two series that accumulate from day to day do not move either: on such a day the TWRR multiplies by exactly `Decimal("1")` — `(x − x) / x` has exponent 0 — and the ROI adds a zero cash flow. The readers of `history_dates[-1]` (`_lot_value_basis()`, `lot_history_end_date()`) still see the last day, which is always a change day. The output contract is unchanged: one point per day of the window, the same JSON.
 
-Still read on every day of `history_dates`: the two valuation maps, for the histories that read the marks (`daily_series`, see [FX Conversion](#fx-conversion)) — a `resolve()` and a conversion a day — and the scan of `lot_change_days()` over them. No lot is valued there.
+Still read on every day of `history_dates`: the two valuation maps, for the histories that read the marks (`daily_series`, see [FX Conversion](#fx-conversion)) — a `resolve()` and a conversion a day — and the scan of `lot_change_days()` over them. No lot is valued there. The rates behind those conversions are no longer a request a day (L1b, [FX Conversion](#fx-conversion)): they are read as steps in one `unit_rate_steps()` call per load, so what stays daily is the in-memory conversion, the scan and the record of the days without a rate.
 
 **One rule with the engine.** The change days are the lots' application of the portfolio engine's rule, developer decision 28 «recompute whenever a term of the formula changes» (see [The Days the Engine Recomputes](../financial_math.md#recomputed-days)). Not the same function: the engine and the native cash share `native_cash.change_days()`, the one home of «the day a rate changes», which compares rates; the lots compare the converted marks themselves, in their exact representation, because their output must stay byte-identical.
 
-**Tests.**
+**Tests.** The first two cover the change days (L1a), the last two the rates read as steps (L1b, see [FX Conversion](#fx-conversion)).
 
 - `test_services/test_financial_math/test_lot_change_days.py` (`./dev.py test services financial-math`, pure): the contract of `lot_change_days()` and `expand_to_days()`, and `last_day_without_observation()` against a day-by-day walk, in at most 34 `resolve()` calls over 20 000 days.
 - `test_services/test_financial/test_lots_change_days_parity.py` (`./dev.py test services roi-fifo-utils`): the service against itself with every day a change day (`lot_change_days` replaced by «every day»): the same JSON, `generated_at` aside, on 13 books × their windows × their scopes, 178 cases; and the two reds on the 1900 book — at most 400 calls of the two snapshot helpers, and one call of `lot_change_days()`.
+- `test_services/test_financial/test_lots_fx_steps_parity.py` (`./dev.py test services roi-fifo-utils`): the rates read as steps against a verbatim copy of the old resolver (one `convert_bulk()` unit per need) — the same JSON, `generated_at` aside, over the books of the change-days parity test and their windows and scopes, read in EUR, plus `fx-daily` read in HUF and the 1900 book read in USD; the resolver alone, asked the same needs as the old one over seeded rates, answers alike on every asked day and on the days around, digits and exponent included (`Decimal.as_tuple()`), and reports the same `missing_pairs()`; and the two reds on the 1900 book read in USD — at most 400 conversions handed to `convert_bulk()` and one or two `unit_rate_steps()` calls.
+- `test_services/test_lots_analysis_pure.py` (`./dev.py test services lots-analysis-pure`, pure): `TestFxRateResolverLoad` and `TestFxRateResolverNeedDays` stub `unit_rate_steps` where `conversions` reads it — the pending windows of each load, the days a window answers and the days around it that it does not, nothing asked for a blank code, the target or a reversed window — and `collect_fx_needs()` asks the market currencies as windows, not a `need()` a day.
 
 ---
 

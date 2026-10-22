@@ -156,6 +156,7 @@ When was each lot open, and which broker held it?
 - **Open / Closed** keeps only open lots, only closed ones, or both.
 - **A thinner bar** lost part of its quantity, for example to a partial sale.
 - **Click** a bar to select its lot, **double-click** it to find its row in the table.
+- **The markers on a bar** are the lot's events: ▲ purchase, ▼ sale, ◆ transfer, **+** adjustment in, **×** adjustment out and │ split. Hover a marker, tap it or reach it with the keyboard to see what happened, the date, the quantity (hidden as ••• in privacy mode) and the broker: a transfer between your brokers reads **From** and **To**, one with a broker outside the panel names only the broker you are looking at, and a point where several events fall on the same day lists them all. Click or double-click a marker as you would its bar.
 
 ### 📋 3. Lots Table
 

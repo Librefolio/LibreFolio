@@ -20,9 +20,10 @@
  * @module brokers/lots/lotGanttChartHelpers
  */
 
+import {buildTooltipDivider, buildTooltipRow} from '$lib/components/charts/echartsTooltipHelpers';
 import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
-import {clamp, LOT_QUANTITY_FRACTION_DIGITS, type ScopeBoundary} from './lotChartShared';
+import {clamp, LOT_QUANTITY_FRACTION_DIGITS, scopeBoundaryOf, type ScopeBoundary} from './lotChartShared';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {themed} from '$lib/theme/themePair';
 import {CHART_GAIN_LOSS, LOT_GANTT_COLORS} from '$lib/theme/chartTheme';
@@ -271,6 +272,142 @@ export function eventMarkerKind(kind: string, scopeBoundary?: ScopeBoundary | nu
  *  marker kind's own, a transfer reading the departure's. */
 export function eventMarkerLabelKey(kind: EventMarkerKind, labelKind?: string | null): string {
     return `brokers.lots.chartMarkers.eventType.${labelKind ?? (kind === 'TRANSFER' ? 'TRANSFER_DEPART' : kind)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Marker tooltips (Q-G29-1)
+// ---------------------------------------------------------------------------
+
+/**
+ * One event behind a marker, as its tooltip names it (Q-G29-1, the developer's option (a)): every marker says what
+ * happened, when, how many units and at which broker.
+ */
+export interface GanttMarkerEvent {
+    /** The marker kind ({@link eventMarkerKind}). */
+    kind: EventMarkerKind;
+    /** `TRANSFER_IN`/`TRANSFER_OUT` at the scope's edge, `TRANSFER_DEPART`/`TRANSFER_ARRIVE` for an internal leg, else `null`. */
+    labelKind: string | null;
+    /** `YYYY-MM-DD`, as sent. */
+    date: string;
+    quantity: number | null;
+    brokerId: number | null;
+    sourceBrokerId: number | null;
+    destinationBrokerId: number | null;
+}
+
+/** One block of a marker tooltip: the event's title and its rows, as plain text (escaped by {@link markerTooltipHtml}). */
+export interface GanttMarkerTooltipBlock {
+    title: string;
+    rows: Array<{label: string; value: string}>;
+}
+
+/** What {@link ganttMarkerTooltipBlocks} needs from the page: the translator, the broker names and the formats. */
+export interface GanttMarkerTooltipDeps {
+    t: (key: string) => string;
+    brokerName: (brokerId: number | null) => string;
+    formatDate: (date: string) => string;
+    formatQuantity: (value: number) => string;
+    /** `maskableQuantity`: the placeholder while privacy mode is on. */
+    maskQuantity: (formatted: string) => string;
+}
+
+/**
+ * The label kind of a `lot_events` row: `TRANSFER_IN`/`TRANSFER_OUT` when it crosses the scope (any kind, J-48), its
+ * own kind for an internal transfer leg — so an arrival reads `TRANSFER_ARRIVE`, not the departure's label —, else
+ * `null` (the marker kind's own label).
+ */
+export function markerLabelKind(event: {kind: string; scope_boundary?: unknown}): string | null {
+    const boundary = scopeBoundaryOf(event);
+    if (boundary === 'IN') return 'TRANSFER_IN';
+    if (boundary === 'OUT') return 'TRANSFER_OUT';
+    if (event.kind === 'TRANSFER_DEPART' || event.kind === 'TRANSFER_ARRIVE') return event.kind;
+    return null;
+}
+
+function parseBrokerId(value: unknown): number | null {
+    const parsed = parseUnknownNumber(value);
+    return parsed != null && Number.isInteger(parsed) ? parsed : null;
+}
+
+/**
+ * A `lot_events` row as the event of a marker. A row at the scope's edge keeps its own broker only: the partner of a
+ * transfer leg read at the edge is never named (J-48), whatever ids the row carries.
+ */
+export function ganttMarkerEvent(row: {kind: string; date: unknown; quantity?: unknown; broker_id?: unknown; source_broker_id?: unknown; destination_broker_id?: unknown; scope_boundary?: unknown}): GanttMarkerEvent {
+    const boundary = scopeBoundaryOf(row);
+    return {
+        kind: eventMarkerKind(row.kind, boundary),
+        labelKind: markerLabelKind(row),
+        date: safeUnknownString(row.date) ?? '',
+        quantity: parseUnknownNumber(row.quantity),
+        brokerId: parseBrokerId(row.broker_id),
+        sourceBrokerId: boundary ? null : parseBrokerId(row.source_broker_id),
+        destinationBrokerId: boundary ? null : parseBrokerId(row.destination_broker_id),
+    };
+}
+
+/**
+ * The broker rows of an event: «From A / To B» for a transfer between the user's brokers — the side a row does not
+ * carry is left out, never guessed: a same-day transfer's arrival names only where it went (J-68) —, else the event's
+ * broker.
+ */
+function markerBrokerRows(event: GanttMarkerEvent, deps: GanttMarkerTooltipDeps): Array<{label: string; value: string}> {
+    const internalTransfer = event.kind === 'TRANSFER' && (event.labelKind == null || event.labelKind === 'TRANSFER_DEPART' || event.labelKind === 'TRANSFER_ARRIVE');
+    if (internalTransfer) {
+        const from = event.sourceBrokerId ?? (event.labelKind === 'TRANSFER_DEPART' ? event.brokerId : null);
+        const to = event.destinationBrokerId ?? (event.labelKind === 'TRANSFER_ARRIVE' ? event.brokerId : null);
+        if (from != null || to != null) {
+            const rows: Array<{label: string; value: string}> = [];
+            if (from != null) rows.push({label: deps.t('common.from'), value: deps.brokerName(from)});
+            if (to != null) rows.push({label: deps.t('common.to'), value: deps.brokerName(to)});
+            return rows;
+        }
+    }
+    return event.brokerId != null ? [{label: deps.t('common.broker'), value: deps.brokerName(event.brokerId)}] : [];
+}
+
+/**
+ * One tooltip block per event, in the given order: its label as the title, then its date, its quantity (unsigned, the
+ * title says which way the units went; masked in privacy mode) and its broker rows.
+ */
+export function ganttMarkerTooltipBlocks(events: readonly GanttMarkerEvent[], deps: GanttMarkerTooltipDeps): GanttMarkerTooltipBlock[] {
+    return events.map((event) => {
+        const rows: Array<{label: string; value: string}> = [{label: deps.t('common.date'), value: deps.formatDate(event.date)}];
+        if (event.quantity != null) rows.push({label: deps.t('common.quantity'), value: deps.maskQuantity(deps.formatQuantity(Math.abs(event.quantity)))});
+        rows.push(...markerBrokerRows(event, deps));
+        return {title: deps.t(eventMarkerLabelKey(event.kind, event.labelKind)), rows};
+    });
+}
+
+/**
+ * The markers to draw, one per kind, lane and day in first-appearance order — the glyphs the chart always drew —, each
+ * with every event of its point (same lane, same day, whatever the kind), in input order: two events on one point are
+ * one glyph or two overlapping ones, and the tooltip lists them all instead of dropping the second.
+ */
+export function groupMarkerEvents<T extends {kind: EventMarkerKind; laneIndex: number; dateMs: number; event: GanttMarkerEvent}>(entries: readonly T[]): Array<{first: T; events: GanttMarkerEvent[]}> {
+    const eventsByPoint = new Map<string, GanttMarkerEvent[]>();
+    const markers: Array<{first: T; events: GanttMarkerEvent[]}> = [];
+    const drawn = new Set<string>();
+    for (const entry of entries) {
+        const point = `${entry.laneIndex}:${entry.dateMs}`;
+        let events = eventsByPoint.get(point);
+        if (!events) {
+            events = [];
+            eventsByPoint.set(point, events);
+        }
+        events.push(entry.event);
+        const glyph = `${entry.kind}:${point}`;
+        if (drawn.has(glyph)) continue;
+        drawn.add(glyph);
+        markers.push({first: entry, events});
+    }
+    return markers;
+}
+
+/** The HTML of a marker tooltip: each block's title, then its rows, blocks apart by a divider; every text escaped. */
+export function markerTooltipHtml(blocks: readonly GanttMarkerTooltipBlock[], theme: {bg: string; border: string; textColor: string; mutedColor: string}): string {
+    const body = blocks.map((block) => `<div style="font-weight:700;margin-bottom:2px">${escapeHtml(block.title)}</div>${block.rows.map((row) => buildTooltipRow(escapeHtml(row.label), escapeHtml(row.value))).join('')}`).join(buildTooltipDivider(theme.border));
+    return `<div style="min-width:180px;font-size:11px;color:${theme.textColor}">${body}</div>`;
 }
 
 /** The glyph drawn for a marker kind. */
