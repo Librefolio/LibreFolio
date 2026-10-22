@@ -7077,7 +7077,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   (`playwright.config.ts:31-39`) porta la strumentazione della copertura JS, e un passo `--build-only` senza
   quell'env costruirebbe un'altra cosa. Deciso il tipo di build, anche quei percorsi possono avere il passo prima di
   Playwright. Dettagli: piano J, §10 «C-94».
-- **J-8 · Il runner frontend chiama ancora `npx` senza controllare `node_modules`** — basso, robustezza; J, 15/10
+- ✅ **J-8 · Il runner frontend chiama ancora `npx` senza controllare `node_modules`** — basso, robustezza; J, 15/10
   (C-94), runner condiviso: da spostare nella sezione C se il coordinatore preferisce. C-94 ferma con un messaggio
   chiaro il percorso delle build (`dev.py front build`, `api client|sync`, quindi il server di test e
   `_ensure_frontend_build`); restano fuori le chiamate dirette del runner, che senza `frontend/node_modules` vanno al
@@ -7087,6 +7087,14 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   Playwright passano prima da `_ensure_frontend_build`, che ora si ferma, e lanciano `npm run test:e2e`, non `npx`;
   quelle solo Vitest no. Cura possibile: lo stesso controllo di `dev.require_frontend_dependencies` in un punto comune
   del runner, oppure i binari di `frontend/node_modules/.bin` al posto di `npx`. Dettagli: piano J, §10 «C-94».
+  ✅ 22/10 (ondata 4, J): il controllo sta in un punto solo, `_cli._run_passes` (l'ingresso di ogni `./dev.py test`),
+  prima dei setup, del backend condiviso e dell'azione: per una categoria `front-*`, `all-frontend` e `all` chiama
+  `_frontend_common.require_frontend_tools()` (Vitest e Playwright, il controllo e il messaggio con `npm ci` di
+  `dev.require_frontend_dependencies`). Una categoria solo backend e `--list` non lo chiedono. In più `dev.py lint
+  --dead-code` controlla `knip` prima del catalogo e di `npx`. Le 23 chiamate `npx` restano: con `node_modules` presente
+  `npx` usa già il binario locale, e la riga di `cmd_install` (`npx playwright install`) viene dopo il suo `npm ci`.
+  Resta una frase di `CLAUDE.md` («some runner actions still call npx directly (Vitest, J-8)») da aggiornare: file
+  condiviso, lasciato al coordinatore.
 - ✅ **J-9 · Il lotto da ADJUSTMENT-in prende la valuta della riga, non quella del costo** — medio, numeri; trovata dal
   test-author di W (V-3), verificata da J il 15/10. `fifo/engine.py:353` apre il lotto con la `currency` della riga,
   mentre il prezzo è `cost_basis_override`, che sta in `cost_basis_currency`. Con `currency` nulla, ammessa perché
