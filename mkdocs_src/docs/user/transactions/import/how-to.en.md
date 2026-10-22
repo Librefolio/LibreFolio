@@ -300,7 +300,7 @@ cost, 0 for a gift.
 
 Rows whose missing cost the importer flags are the exception: a position added by
 **Align with the bank**, a new line of a Danske Bank [demerger](danske-bank.md#demergers), an
-`ADJUSTMENT` row of a [Generic CSV](generic-csv.md) file without a cost. They are listed in red,
+`ADJUSTMENT` row of a [Generic CSV](generic-csv.md) file that adds units without a cost. They are listed in red,
 and their form opens in **Manual** with the cost empty: type it by hand, even if it is 0 — choosing
 **Auto** does not take them off the list.
 

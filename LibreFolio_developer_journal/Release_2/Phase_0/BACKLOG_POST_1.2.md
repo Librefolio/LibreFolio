@@ -6877,6 +6877,18 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   aperte al developer (casi dubbi, non scelti dal plugin): Q-WB-1 il Controvalore di un `Rimborso` con commissione la contiene? (oggi
   invariato); Q-WB-2 una commissione maggiore del Controvalore; Q-WB-3 una riga in valuta (Divisa USD): il Controvalore è nella Divisa o
   in euro? Dettagli: piano 04, «W-B92».
+- **W-B93 · Una rettifica in uscita non ha valore (N78-1)** — alto, numeri; W, 22/10 (decisione del developer del 21/10 sera). Un
+  ADJUSTMENT con quantità negativa abbassa solo la quantità: nessun valore, nessun flusso per il TWRR; il realizzato della Dashboard =
+  0 − costo, come i lotti; la decisione 47 converte la gamba sola che cede senza valore (anche il passo `lone-transfer-legs`); l'API
+  rifiuta un costo su un'uscita (`costBasisNotAllowed`); Form e Bulk mostrano il costo solo in entrata. Nessun codice bonifica i
+  valori già salvati (i motori li ignorano; il database del developer lo controlla il coordinatore). Le gambe al bordo di J-10
+  restano al mercato del giorno. Dettagli: piano 04, «N78-1 · Una rettifica in uscita non ha valore: cura»; analisi e decisioni in
+  `ondata3/N78-1-analisi.md`.
+- **W-B94 · La metà che entra di un trasferimento come stima del prezzo** — medio, dati; W, 22/10 (idea del developer, dopo la 1.3).
+  Quando un asset non ha un prezzo affidabile in un giorno, il costo per unità della gamba che entra di un TRANSFER (o di un
+  ADJUSTMENT in entrata) potrebbe servire a stimarlo. Oggi un ADJUSTMENT non è mai un prezzo (P2, J-17: `price_marks`). Da
+  decidere: quale fonte vince fra un prezzo osservato e questa stima, come la si segna (prezzo stimato, non osservato), se vale anche
+  per l'ADJUSTMENT in entrata. Dopo la 1.3.
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di

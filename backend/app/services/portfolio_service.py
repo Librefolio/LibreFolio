@@ -689,7 +689,7 @@ class PortfolioService:
                 if pos_key not in first_position_dates or tx.date < first_position_dates[pos_key]:
                     first_position_dates[pos_key] = tx.date
 
-        # Realized G/L of the SELLs and priced outgoing ADJUSTMENTs in the period (J-24): proceeds minus the
+        # Realized G/L of the SELLs and outgoing ADJUSTMENTs (proceeds 0, N78-1) in the period: proceeds minus the
         # historical cost the engine's average-cost pool gave up, both in base currency with the owner's share.
         _realized_accum = sum((gain for sale in _period_realized_sales(engine_result.realized_sales, date_from, date_to) if (gain := realized_gain(sale.proceeds, sale.cost)) is not None), Decimal("0"))
 
@@ -1668,7 +1668,7 @@ class PortfolioService:
                     continue
                 position_info[(broker_id, asset_id)] = {"asset": asset, "broker_name": broker_name}
 
-        # ── Realized gain/loss from SELLs and priced outgoing ADJUSTMENTs in period (J-24): proceeds minus the
+        # ── Realized gain/loss from SELLs and outgoing ADJUSTMENTs (proceeds 0, N78-1) in period: proceeds minus the
         # historical cost the engine's average-cost pool gave up (base currency, owner share applied) ──
         for sale in _period_realized_sales(engine_result.realized_sales, date_from, date_to):
             gain = realized_gain(sale.proceeds, sale.cost)

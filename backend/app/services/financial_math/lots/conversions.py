@@ -294,8 +294,6 @@ def collect_performance_fx_needs(
                 fx_resolver.need(tx.cost_basis_currency or asset_currency, tx.date)
             elif tx.amount != Decimal("0"):
                 fx_resolver.need(tx.currency or asset_currency, tx.date)
-        elif tx_type == "ADJUSTMENT" and tx.quantity < 0 and tx.cost_basis_override not in (None, Decimal("0")):
-            fx_resolver.need(tx.cost_basis_currency or asset_currency, tx.date)
     for closure in closures:
         lot = lots_by_id.get(closure.lot_id)
         if lot is not None and lot.direction == "LONG" and closure.close_reason == "SELL":

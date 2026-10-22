@@ -509,12 +509,21 @@ class TestDustResidual:
         print_success("residual above dust: the first BUY's date")
 
     @pytest.mark.asyncio
-    async def test_the_fallback_window_of_a_dust_closed_row_starts_with_the_period(self, session, keep_alive):
-        """J's case. 10 held since EARLY_DAY, worth 1200 at PERIOD_FROM (cost 1000); BUY 10 for 1000 (BUY_DAY); an
-        ADJUSTMENT −19.999999 without a cost (LATE_DAY) leaves 0.000001 of the BUY_DAY lot. The exit is no sale, so the
-        closed-position rule has no base and the general rule stands: −200 (the unrealized 200 of the start gone) over the
-        start value 1200, −0.1667, annualized from max(PERIOD_FROM, oldest open lot). No lot is open: the whole period,
-        365 days. HEAD: from BUY_DAY, the dust residual's lot, 305 days."""
+    async def test_a_dust_closed_row_emptied_by_an_adjustment_out_is_a_total_loss_without_annualized_return(self, session, keep_alive):
+        """J's case, as N78-1 changed it (the developer's decision, 21/10/2026). 10 held since EARLY_DAY, worth 1200 at
+        PERIOD_FROM (cost 1000); BUY 10 for 1000 (BUY_DAY); an ADJUSTMENT −19.999999 without a cost (LATE_DAY) leaves
+        0.000001 of the BUY_DAY lot, dust: no lot is open.
+
+        Since N78-1 the exit realizes 0 − its cost, −1999.9999 (decision 3): the row reads P&L −2199.9999 (−200 of the
+        start's unrealized gone, −1999.9999 realized), −1.8333 of the start value. The exit now counts as a disposal in the
+        closed-position rule — one exit, one disposal —, so its base is the cost given up, 1999.9999: −2199.9999 / 1999.9999
+        = −1.1000, a loss beyond the whole base, which ``cumulative_to_annualized`` refuses (≤ −1); the general rule's
+        −1.8333 is refused alike. So no annualized return, whatever the window.
+
+        Before N78-1 the exit realized nothing: P&L −200, realized None, no closed-position base, and the general rule
+        annualized −0.1667 over the whole period (365 days, the fallback window starting with the period; on MF-A7's HEAD
+        from BUY_DAY, 305 days). The fallback window of a dust-closed row is no longer reached by this book: an exit that
+        is no counted disposal is needed for it (MF's rule; reported to the coordinator)."""
         print_section("MF-A7 contribution: the fallback window of a dust-closed row")
         scope = await _scope(session, keep_alive, "a7fallback")
         exit_without_cost = Transaction(broker_id=scope.broker.id, asset_id=scope.asset.id, type=TransactionType.ADJUSTMENT, date=LATE_DAY, quantity=Decimal("-19.999999"), amount=Decimal("0"))
@@ -526,16 +535,16 @@ class TestDustResidual:
             _trade(scope, TransactionType.BUY, BUY_DAY, "10", "-1000"),
             exit_without_cost,
         )
-        expected = cumulative_to_annualized(Decimal("-0.1667"), (AS_OF - PERIOD_FROM).days)
-        head = cumulative_to_annualized(Decimal("-0.1667"), (AS_OF - BUY_DAY).days)
-        assert expected is not None and expected != head, "precondition: the two windows must give two annualized returns"
+        closed_ratio = (Decimal("-2199.9999") / Decimal("1999.9999")).quantize(RETURN_STEP)
+        assert closed_ratio <= Decimal("-1") and cumulative_to_annualized(closed_ratio, (LATE_DAY - BUY_DAY).days) is None, f"precondition: the closed-position ratio {closed_ratio} is a loss beyond its base, which no annualization reads"
 
         row = await _row(session, scope, scope.broker)
 
-        assert (row.start_value, row.end_value, row.period_pnl, row.period_realized_gain_loss, row.is_fully_sold) == (Decimal("1200"), Decimal("0"), Decimal("-200"), None, True), "precondition: a dust-closed row with a start value and no realized sale"
+        observed = (row.start_value, row.end_value, row.period_pnl, row.period_realized_gain_loss, row.period_pnl_percent, row.is_fully_sold)
+        assert observed == (Decimal("1200"), Decimal("0"), Decimal("-2199.9999"), Decimal("-1999.9999"), Decimal("-1.8333"), True), f"N78-1: the exit realizes 0 − its cost; (start, end, P&L, realized, P&L %, fully sold) = {observed}"
         assert row.oldest_open_lot_date is None, f"HEAD gave {BUY_DAY}"
-        assert row.annualized_return == expected, f"expected {expected} over {(AS_OF - PERIOD_FROM).days} days; HEAD gave {head} over {(AS_OF - BUY_DAY).days}"
-        print_success(f"fallback window over the whole period: {row.annualized_return}")
+        assert row.annualized_return is None, f"N78-1: a loss beyond the base has no annualized return; the row gives {row.annualized_return} (before N78-1: −0.1667 over the whole period)"
+        print_success("dust-closed by an ADJUSTMENT-out: a total loss, no annualized return")
 
 
 # =============================================================================

@@ -14,9 +14,11 @@ The cure's core, MF's (the coordinator's assignment, 17/10): ``TransactionAutoCo
 None in its quantity, its amount, or a cost basis it stores (``cost_basis_override`` not NULL in SQL; a BUY's NULL cost
 basis is legitimate). The pool is the facade's filters — broker, asset, date up to the pool's date, quantity not NULL and
 not 0 — minus the rows left out; ``count`` is the number of such rows, a row unreadable in two columns counting once. Every
-caller of ``_auto_cost`` meets it: ``_handover_cost``, the batch, ``TransactionService.delete_by_broker`` — reached from
-``BrokerService.delete_bulk`` with force, which turns an exception into that broker's failed result — and the lone legs
-(``lone_transfer_legs.py``, pinned in ``test_lone_transfer_legs.py``).
+caller of ``_auto_cost`` meets it: the batch and ``TransactionService.delete_by_broker`` — reached from
+``BrokerService.delete_bulk`` with force, which turns an exception into that broker's failed result. Since N78-1 (the
+developer's decision, 21/10/2026) a TRANSFER's giving leg left alone becomes an ADJUSTMENT-out WITHOUT a value: no cost is
+computed for it, by the deletion, the split or the lone legs (``lone_transfer_legs.py``), so none of them meets an
+unreadable pool for that leg any more.
 
 What this file pins:
 
@@ -27,9 +29,11 @@ What this file pins:
 - ``TestAutoCostOverItsPoolAlone``, guards, green before the cure and after it: over a readable pool ``_auto_cost`` raises
   nothing and gives 200 EUR; an unreadable row outside the pool — of another asset, dated past the pool's date, or left out
   of it — raises nothing, and the average is the ``world``'s BUY alone, 100 EUR.
-- ``TestBrokerDeletionOverAnUnreadablePool`` (case (c)): RED until the cure, a deletion with force whose surviving
-  TRANSFER leg needs a cost over such a pool fails, with a message, and deletes nothing; guards, green before and after, a
-  readable pool gives the survivor 200 EUR, and a deletion that computes no cost takes the unreadable row with its broker.
+- ``TestBrokerDeletionOverAnUnreadablePool`` (case (c)): a deletion with force whose surviving receiving leg needs a cost
+  over such a pool fails, with a message, and deletes nothing; a readable pool gives that survivor 200 EUR; a deletion
+  that computes no cost takes the unreadable row with its broker. N78-1, RED until its cure: deleting the receiver leaves
+  the giving leg an ADJUSTMENT −4 without a value, over a readable pool or an unreadable one alike (before N78-1 it took
+  ``source``'s Auto cost, and an unreadable pool failed the deletion).
 
 W's half — the issue ``autoCostUnreadable`` on a batch's Auto row and on the split of a TRANSFER pair, the code
 ``TXValidationCode.AUTO_COST_UNREADABLE`` and its messages — stays in ``test_transaction_cost_basis_rule.py``.
@@ -119,7 +123,7 @@ TODAY_OVER_AN_UNREADABLE = {
 }
 # Case (c): the broker a deletion takes, and the leg of the pair that survives it.
 DELETIONS = {
-    "receiver": "dest, the receiver — the giving leg on source survives, handed over at source's Auto cost (_handover_cost)",
+    "receiver": "dest, the receiver — the giving leg on source survives as an ADJUSTMENT without a value (N78-1; before it, at source's Auto cost)",
     "sender": "source, the sender — the receiving leg on dest, stored without a cost basis, survives with source's Auto cost (_auto_cost)",
 }
 # What _raw_rows reads of a row: its raw values, and the storage class of the three columns a plant may overwrite.
@@ -493,16 +497,20 @@ class TestAutoCostOverItsPoolAlone:
 
 class TestBrokerDeletionOverAnUnreadablePool:
     """Case (c): ``BrokerService.delete_bulk`` with force turns the surviving leg of a cross-broker TRANSFER into an
-    ADJUSTMENT, with a cost computed before any row changes (``TransactionService.delete_by_broker``): the giving leg's
-    handover cost, or the Auto cost of a receiving leg stored without one — both over ``source``'s pool up to the move. Each
-    broker goes in a savepoint of its own, and an exception becomes that broker's failed result (W-B20)."""
+    ADJUSTMENT (``TransactionService.delete_by_broker``): a receiving leg stored without a cost takes the Auto cost over
+    ``source``'s pool up to the move, computed before any row changes; a giving leg leaves without a value since N78-1 (the
+    developer's decision, 21/10/2026), no cost computed. Each broker goes in a savepoint of its own, and an exception becomes
+    that broker's failed result (W-B20)."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("deleted", tuple(DELETIONS))
+    @pytest.mark.parametrize("deleted", ["sender"])
     async def test_deletion_whose_survivor_needs_an_unreadable_pool_fails_and_deletes_nothing(self, world, deleted):
-        """RED until W-B69 (c): the deletion fails — ``success`` False and a message, its text not pinned — and deletes
-        nothing: both brokers stay, and every row of theirs as it was, the survivor a TRANSFER still linked, without the cost
-        it would have taken. Today the deletion succeeds and writes on the survivor the average of what reads, 100 EUR."""
+        """Green since W-B69 (c): deleting the sender, the receiving leg stored without a cost needs ``source``'s Auto cost
+        over a pool with an unreadable row — the deletion fails (``success`` False and a message, its text not pinned) and
+        deletes nothing: both brokers stay, and every row of theirs as it was, the survivor a TRANSFER still linked.
+
+        The receiver's side was a case here until N78-1: the giving leg needs no cost since, so its deletion goes through
+        (``test_deletion_of_the_receiver_over_an_unreadable_pool_leaves_the_giving_leg_without_a_value``)."""
         await _plant(world, unreadable=("quantity",))
         stored = await _store(world, "transfer_in", cost=STORED_COST if deleted == "receiver" else None)
         giving, receiving = stored.rows
@@ -523,25 +531,42 @@ class TestBrokerDeletionOverAnUnreadablePool:
         assert (brokers_now, changed) == (sorted(brokers), {}), f"W-B69: the failed deletion must leave both brokers and every row as they were; brokers {brokers_now}, changed rows (before, after): {changed}"
 
     @pytest.mark.asyncio
+    async def test_deletion_of_the_receiver_over_an_unreadable_pool_leaves_the_giving_leg_without_a_value(self, world):
+        """RED until N78-1: deleting the receiver computes no cost for the giving leg, so a BUY of ``source`` whose quantity
+        reads 'n/a' stops nothing: the deletion succeeds, ``dest`` goes, and the giving leg becomes an ADJUSTMENT −4,
+        unlinked, without a value. Before N78-1 (W-B69 (c)) the deletion failed and deleted nothing: the giving leg needed
+        ``source``'s Auto cost (``_handover_cost``) over that pool."""
+        await _plant(world, unreadable=("quantity",))
+        stored = await _store(world, "transfer_in", cost=STORED_COST)
+        giving_id, receiving_id = stored.rows[0].id, stored.rows[1].id
+        source_id, dest_id = world.source.id, world.dest.id
+
+        response = await _delete_with_force(world, dest_id)
+
+        assert [(result.id, result.success, result.message) for result in response.results] == [(dest_id, True, None)], f"N78-1: deleting {DELETIONS['receiver']}, needs no cost, yet it failed: {response.results}"
+        assert await _brokers_now(world, [source_id, dest_id]) == [source_id]
+        assert await _rows_by_id(world, [giving_id, receiving_id]) == {giving_id: (TransactionType.ADJUSTMENT, -TRANSFER_QUANTITY, None, None, None)}
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("deleted", tuple(DELETIONS))
-    async def test_deletion_over_a_readable_pool_writes_its_average_on_the_survivor(self, world, deleted):
-        """Guard, green today and after W-B69: with the planted BUY readable the deletion succeeds, the broker goes, and the
-        survivor becomes an ADJUSTMENT, unlinked, at ``source``'s average, (1 000 + 3 000) / 20 = 200 EUR: the giving leg
-        −4 (handover), or the receiving leg +4 (its missing cost)."""
+    async def test_deletion_over_a_readable_pool_converts_the_survivor(self, world, deleted):
+        """With the planted BUY readable the deletion succeeds, the broker goes, and the survivor becomes an ADJUSTMENT,
+        unlinked: the receiving leg +4 at ``source``'s average, (1 000 + 3 000) / 20 = 200 EUR (its missing cost; a guard,
+        green before and after); the giving leg −4 without a value (N78-1, RED until its cure; before it, at that average)."""
         await _plant(world)
         stored = await _store(world, "transfer_in", cost=STORED_COST if deleted == "receiver" else None)
         giving_id, receiving_id = stored.rows[0].id, stored.rows[1].id
         source_id, dest_id = world.source.id, world.dest.id
         if deleted == "receiver":
-            deleted_id, kept_id, survivor_id, quantity = dest_id, source_id, giving_id, -TRANSFER_QUANTITY
+            deleted_id, kept_id, survivor_id, survivor = dest_id, source_id, giving_id, (TransactionType.ADJUSTMENT, -TRANSFER_QUANTITY, None, None, None)
         else:
-            deleted_id, kept_id, survivor_id, quantity = source_id, dest_id, receiving_id, TRANSFER_QUANTITY
+            deleted_id, kept_id, survivor_id, survivor = source_id, dest_id, receiving_id, (TransactionType.ADJUSTMENT, TRANSFER_QUANTITY, None, READABLE_POOL_COST, EUR)
 
         response = await _delete_with_force(world, deleted_id)
 
         assert [(result.id, result.success, result.message) for result in response.results] == [(deleted_id, True, None)], f"Deleting {DELETIONS[deleted]}, over a readable pool, failed: {response.results}"
         assert await _brokers_now(world, [source_id, dest_id]) == [kept_id]
-        assert await _rows_by_id(world, [giving_id, receiving_id]) == {survivor_id: (TransactionType.ADJUSTMENT, quantity, None, READABLE_POOL_COST, EUR)}
+        assert await _rows_by_id(world, [giving_id, receiving_id]) == {survivor_id: survivor}
 
     @pytest.mark.asyncio
     async def test_deletion_that_computes_no_cost_takes_the_unreadable_row_with_its_broker(self, world):

@@ -415,17 +415,11 @@ class DailyStateBuilder:
                         if tx.type == TransactionType.SELL:
                             realized_sales.append(self._realized_sale(ctxn, tx_qty, sell_cb_target, previous))
 
-                        # In-kind ADJUSTMENT-out (no cash proceeds): capital distribution of the value it hands over,
-                        # converted at the rate of its date (J-24, the developer's rule), the mirror of the in-kind
-                        # contribution on ADJUSTMENT-in; the difference from the historical cost the pool gives up is
-                        # realized, as for a SELL. Without a rate the realized is unknown and the capital takes the
-                        # historical cost, as before J-24.
-                        if self._is_capital_adjustment(tx) and step is not None:
-                            handed_over = self._handed_over_value(ctxn, tx_qty)
-                            distributed = handed_over if handed_over is not None else sell_cb_target
-                            cumulative_ecf -= distributed
-                            cumulative_ecf_by_broker[bid] -= distributed
-                            realized_sales.append(self._realized_disposal(ctxn, tx_qty, sell_cb_target, previous, handed_over))
+                        # ADJUSTMENT-out (N78-1, the developer's decision of 21/10/2026): it has no value, whatever cost
+                        # basis the row holds. No capital leaves, so no flow for the returns either; its units leave at 0,
+                        # and the historical cost the pool gives up is realized as a loss, as the lots close them.
+                        if tx.type == TransactionType.ADJUSTMENT and step is not None:
+                            realized_sales.append(self._realized_disposal(ctxn, tx_qty, sell_cb_target, previous, zero))
 
                         # 3-pool per-broker: SELL → K[bid] += cost_basis, R[bid] += gain
                         if amount_target is not None:
@@ -762,16 +756,6 @@ class DailyStateBuilder:
             cost=cost,
             cost_complete=previous.report_complete if previous is not None else True,
         )
-
-    def _handed_over_value(self, ctxn: ClassifiedTransaction, tx_qty: Decimal) -> Decimal | None:
-        """J-24 — what a priced outgoing ADJUSTMENT hands over: ``|tx_qty| × cost_basis_override`` at the rate of its date.
-
-        In ``cost_basis_currency``, or in the asset's currency without one (the pool's rule for incoming adjustments);
-        ``tx_qty`` is already at the broker's share. None when the rate is missing, which is recorded with its date.
-        """
-        tx = ctxn.tx
-        currency = tx.cost_basis_currency or self.asset_currencies.get(tx.asset_id) or self.target_currency
-        return self._convert_movement(abs(tx_qty) * tx.cost_basis_override, currency, tx.date)
 
     def _add_unrealized_part(
         self,
@@ -1170,22 +1154,21 @@ class DailyStateBuilder:
         return it_cash, it_asset_mv, it_asset_cb
 
     def _is_capital_adjustment(self, tx: Transaction) -> bool:
-        """True when a transaction is a priced in-kind ADJUSTMENT (a capital event).
+        """True when a transaction is a priced in-kind ADJUSTMENT-in (a capital event).
 
         An opening / transfer / succession ADJUSTMENT that carries a per-unit
-        ``cost_basis_override`` injects (qty>0) or removes (qty<0) real book value
-        WITHOUT any cash counterpart. Economically this is a capital contribution /
-        distribution in kind (opening equity), NOT profit — so it must move the
-        capital baseline (``cumulative_ecf``), leaving total P&L = NAV − capital to
-        reflect only genuine market / realized / income effects: in at the cost it
-        adds to the pool, out at the value it hands over at the rate of its date
-        (J-24), the difference from the pool's cost being realized. Without this the
-        injected book value leaks into the "Other / reconciliation residual".
+        ``cost_basis_override`` injects real book value WITHOUT any cash counterpart.
+        Economically this is a capital contribution in kind (opening equity), NOT
+        profit — so it must move the capital baseline (``cumulative_ecf``), leaving
+        total P&L = NAV − capital to reflect only genuine market / realized / income
+        effects. Without this the injected book value leaks into the "Other /
+        reconciliation residual". An ADJUSTMENT-out has no value (N78-1): it is never
+        a capital event, whatever cost basis the row holds.
 
         SPLIT-linked adjustments are excluded: a split redistributes existing cost
         over a new quantity, it neither adds nor removes economic capital.
         """
-        return tx.type == TransactionType.ADJUSTMENT and tx.cost_basis_override is not None and tx.quantity is not None and tx.quantity != 0 and (tx.id is None or tx.id not in self.split_linked_tx_ids)
+        return tx.type == TransactionType.ADJUSTMENT and tx.cost_basis_override is not None and tx.quantity is not None and tx.quantity > 0 and (tx.id is None or tx.id not in self.split_linked_tx_ids)
 
     def _internal_pairs(self) -> list[tuple[ClassifiedTransaction, ClassifiedTransaction, date_type, bool]]:
         """The linked internal pairs between two brokers: ``(sender, receiver, arrival_date, is_cash)``, once each.
@@ -1323,7 +1306,7 @@ class DailyStateBuilder:
         With the pool's cost incomplete the holding is MISSING, and the leg still moves its known
         cost (an unknown one counts as zero), as an incoming in-kind ADJUSTMENT moves the cost it
         adds: the capital follows the pool's book cost, so nothing is left behind once the units are
-        gone. (An outgoing priced ADJUSTMENT leaves at the value it hands over instead, J-24.)
+        gone. (An outgoing ADJUSTMENT has no value instead, N78-1: no capital moves.)
         None for any other row, for an internal-pair leg (step 3b handles it), for a
         split-linked row, or when the security cannot be valued that day.
         """

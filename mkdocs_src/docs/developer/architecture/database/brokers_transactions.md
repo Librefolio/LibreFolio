@@ -143,7 +143,7 @@ See **[📊 Weighted Average Cost (WAC)](../../../financial-theory/technical-ana
 
 | Side | `cost_basis_override` |
 |------|----------------------|
-| Sender (qty < 0) | Never required. A `TRANSFER` sender takes none: a promote clears it from that side, with or without `resolved_fields`. An `ADJUSTMENT` taking units out may carry one, at which the FIFO lots hand its units over; a split of a `TRANSFER` pair or a broker deletion writes the Auto cost of its own broker on the former sender (decision 47, see [Broker Deletion](../../backend/transactions/service.md#broker-deletion)) |
+| Sender (qty < 0) | Never required. A `TRANSFER` sender takes none: a promote clears it from that side, with or without `resolved_fields`. An `ADJUSTMENT` taking units out has no value (developer decision N78-1, 21/10/2026): the API refuses one (`costBasisNotAllowed`, rule 12b), and every engine ignores one an older row still stores (`FifoInputTransaction.from_transaction()`). A split of a `TRANSFER` pair or a broker deletion clears it on the former sender (decision 47, see [Broker Deletion](../../backend/transactions/service.md#broker-deletion)) |
 | Receiver (qty > 0) | Required for `TRANSFER` and `ADJUSTMENT`; supplied manually, resolved by promote, or computed for a create/update auto mode |
 
 ### 🧮 How batch auto-WAC is staged
@@ -159,9 +159,8 @@ See **[📊 Weighted Average Cost (WAC)](../../../financial-theory/technical-ana
 - `compute_wac_iterative()` reads the session-visible transaction history and
   returns the WAC; `_compute_wac_for_auto_items()` writes its per-unit amount and
   currency to `cost_basis_override` and `cost_basis_currency`.
-- After the Auto rows, the same stage gives the giving leg of each `TRANSFER` pair
-  the batch splits the Auto cost of its own broker (`_handover_cost()`), unless an
-  update of the batch gives it a cost (see
+- The giving leg of each `TRANSFER` pair the batch splits needs no cost: the split
+  itself (`apply_splits()`) leaves it an `ADJUSTMENT` without a value (see
   [Split & Promote](../../backend/transactions/split_promote.md#transfer-giving-leg)).
 - Missing FX data becomes a `wacFxUnavailable` batch issue instead of silently
   persisting an unresolved cost.

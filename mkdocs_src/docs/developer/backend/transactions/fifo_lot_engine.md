@@ -89,7 +89,7 @@ One FIFO lot. Usually opened by a `BUY`, by the remainder of an `ADJUSTMENT_IN`,
 | `open_quantity` | Remaining open quantity after FIFO closures. |
 | `realized_quantity` | Quantity already closed. |
 | `realized_pnl` | Cumulative native realized P&L from closures, in the lot's currency; `None` from the first closure in another currency on (see [Closure currency](#closure-currency)). |
-| `cumulative_proceeds` | Native, in the lot's currency. LONG lots: cumulative closure `proceeds` — a `SELL`'s cash, plus the value an `ADJUSTMENT_OUT` with a cost basis hands over at that cost — `None` from the first closure in another currency on. SHORT lots: the opening proceeds, which closures never change. |
+| `cumulative_proceeds` | Native, in the lot's currency. LONG lots: cumulative closure `proceeds` — a `SELL`'s cash, plus the value a transfer leg read at the scope's edge hands over (an `ADJUSTMENT_OUT` read from the database adds 0) — `None` from the first closure in another currency on. SHORT lots: the opening proceeds, which closures never change. |
 | `reference_unit_price` | Optional reference price the engine resolves for a lot (e.g. when an `ADJUSTMENT_IN` opens a new LONG lot), consumed downstream by `LotsAnalysisService`. |
 | `reference_price_source` | `"exact"`, `"fallback"`, `"unavailable"`, or `None`. |
 
@@ -126,10 +126,10 @@ Single FIFO close operation against one fragment, in native amounts: the lots an
 | `close_reason` | `"SELL"`, `"BUY"`, or `"ADJUSTMENT_OUT"`. |
 | `fragment_id` | Exact fragment consumed. |
 | `open_unit_price` | Cost carried by the consumed fragment, in the lot's currency. |
-| `close_unit_price` | Price the piece closed at, in `close_currency`: the `SELL` / `BUY` unit price; for an `ADJUSTMENT_IN` closing a SHORT, its `cost_basis_override` (0 without one); for an `ADJUSTMENT_OUT`, its `cost_basis_override` — the same for every fragment — or 0 without one. |
+| `close_unit_price` | Price the piece closed at, in `close_currency`: the `SELL` / `BUY` unit price; for an `ADJUSTMENT_IN` closing a SHORT, its `cost_basis_override` (0 without one); for an `ADJUSTMENT_OUT`, 0 — a row read from the database never carries a cost basis (N78-1) — or, for a transfer leg read at the scope's edge, the `cost_basis_override` of its copy, the same for every fragment, or each fragment's own unit cost (`hands_over_at_own_cost`). |
 | `realized_pnl` | Native realized P&L of the piece, in the lot's currency; `None` when `close_currency` is not the lot's. |
-| `proceeds` | `quantity × close_unit_price`, in `close_currency`, on LONG closures — a `SELL`'s cash, or the value an `ADJUSTMENT_OUT` hands over at cost (0 without a cost basis); 0 on every SHORT closure. |
-| `close_currency` | Currency of `close_unit_price` and `proceeds`, `None` counting as the report currency: a `SELL`'s or `BUY`'s `currency`; for an `ADJUSTMENT_IN` closing a SHORT, its cost basis's (`cost_basis_currency`, or the row's `currency` when empty) when it carries a `cost_basis_override`, else the row's `currency`; for an `ADJUSTMENT_OUT`, `_handover_currency()`: `cost_basis_currency` when it carries a cost basis, the lot's currency when that is empty or when it carries none. |
+| `proceeds` | `quantity × close_unit_price`, in `close_currency`, on LONG closures — a `SELL`'s cash, or the value a transfer leg read at the scope's edge hands over (0 for an `ADJUSTMENT_OUT` read from the database); 0 on every SHORT closure. |
+| `close_currency` | Currency of `close_unit_price` and `proceeds`, `None` counting as the report currency: a `SELL`'s or `BUY`'s `currency`; for an `ADJUSTMENT_IN` closing a SHORT, its cost basis's (`cost_basis_currency`, or the row's `currency` when empty) when it carries a `cost_basis_override`, else the row's `currency`; for an `ADJUSTMENT_OUT`, `_handover_currency()`: the lot's currency without a cost basis (every row read from the database); for a scope-edge copy that carries one, its `cost_basis_currency`, the lot's when empty. |
 
 ### 📊 `FifoEngineResult`
 
@@ -200,7 +200,7 @@ EventKind = Literal[
 - `BUY` transaction → `BUY`
 - `SELL` transaction → `SELL`
 - positive `ADJUSTMENT` → `ADJUSTMENT_IN`, its `unit_price` the row's `cost_basis_override` (0 without one)
-- negative `ADJUSTMENT` → `ADJUSTMENT_OUT`, its `unit_price` the row's `cost_basis_override` (0 without one): every fragment closes at that price, in a currency resolved per fragment when the event is applied (see [Hand-over at cost](#handover-at-cost))
+- negative `ADJUSTMENT` → `ADJUSTMENT_OUT`, its `unit_price` the row's `cost_basis_override` (0 without one), which `FifoInputTransaction.from_transaction()` drops for a row read from the database: such a row has no value, so every fragment closes at 0 (see [An `ADJUSTMENT_OUT` has no value](#handover-at-cost))
 - transaction ID found in `split_ratios_by_tx_id` → `SPLIT`, when its ratio passes `is_valid_split_ratio()`; otherwise the row is skipped: never an `ADJUSTMENT_IN` / `ADJUSTMENT_OUT`, no rescale, no exception (lot MF-D4)
 - paired `TRANSFER` legs → synthesized `TRANSFER_DEPART` + `TRANSFER_ARRIVE`
 
@@ -211,7 +211,7 @@ EventKind = Literal[
 | `BUY` | First closes existing `SHORT` fragments on same broker (`close_reason="BUY"`). Any remainder opens new `LONG` lot. |
 | `SELL` | Closes `LONG` fragments FIFO on same broker. Any remainder opens new `SHORT` lot only if `broker_shorting[broker_id]` is true; otherwise emits `FIFO_SOURCE_QUANTITY_MISSING`. |
 | `ADJUSTMENT_IN` | First closes existing `SHORT` fragments on same broker (`close_reason="BUY"`) at the event's `unit_price` — the row's `cost_basis_override`, 0 without one — in the cost basis's currency when the row carries one (`cost_basis_currency`, else the row's `currency`), else in the row's `currency`. Any remainder opens a new `LONG` lot at that price, in that currency, and resolves its reference price. |
-| `ADJUSTMENT_OUT` | Closes `LONG` fragments FIFO on same broker (`close_reason="ADJUSTMENT_OUT"`): with a `cost_basis_override`, every fragment at that per-unit cost, in `cost_basis_currency` (the lot's currency when empty) — the units are handed over at cost; without one, at `close_unit_price = 0` in the lot's currency — a write-off; flagged `hands_over_at_own_cost` (a transfer leg leaving the lots' scope on a day without a price, see [Transfers Across the Scope's Edge](lots_analysis_service.md#scope-edge-transfers)), every fragment at its own FIFO unit cost in the lot's currency — realized 0. If quantity still missing, engine emits issue; it never opens/consumes unsupported SHORT adjustment legs. |
+| `ADJUSTMENT_OUT` | Closes `LONG` fragments FIFO on same broker (`close_reason="ADJUSTMENT_OUT"`): a row read from the database at `close_unit_price = 0` in the lot's currency — it has no value, so it realizes minus the fragments' cost; a transfer leg read at the scope's edge on a day with a price, at its copy's `cost_basis_override`, the market value of one unit that day, in `cost_basis_currency` (the lot's currency when empty); flagged `hands_over_at_own_cost` (a transfer leg leaving the lots' scope on a day without a price, see [Transfers Across the Scope's Edge](lots_analysis_service.md#scope-edge-transfers)), every fragment at its own FIFO unit cost in the lot's currency — realized 0. If quantity still missing, engine emits issue; it never opens/consumes unsupported SHORT adjustment legs. |
 | `TRANSFER_DEPART` | Extracts `LONG` broker fragments FIFO from source broker, optionally opens `IN_TRANSIT` fragments, records pending transfer pieces, realizes **no P&L**. |
 | `TRANSFER_ARRIVE` | Closes matching transit fragments and reopens broker custody at destination with same quantity and unit price. |
 | `SPLIT` | Multiplies active fragment quantities by ratio, divides unit prices by ratio, then recomputes lot-level quantities/reference price while preserving cost. |
@@ -246,18 +246,18 @@ Then `_consume_broker_fragments()` walks oldest fragments first:
 4. Reduce fragment or close it entirely
 5. Continue until requested quantity is satisfied or inventory runs out
 
-Every fragment closes at the one `close_unit_price` the caller passes, in the `close_currency` it passes or in the one the optional per-fragment hook `close_currency_of(fragment)` gives it. `_apply_sell()` and `_apply_buy()` pass the row's `currency`, `_apply_adjustment_in()` the currency of its price; only `_apply_adjustment_out()` passes the hook, `_handover_currency()`, since a fragment it closes without a cost basis, or with one that has no currency, closes in its own lot's currency (see [Hand-over at cost](#handover-at-cost)).
+Every fragment closes at the one `close_unit_price` the caller passes, in the `close_currency` it passes or in the one the optional per-fragment hook `close_currency_of(fragment)` gives it. `_apply_sell()` and `_apply_buy()` pass the row's `currency`, `_apply_adjustment_in()` the currency of its price; only `_apply_adjustment_out()` passes the hook, `_handover_currency()`, since a fragment it closes without a cost basis, or with one that has no currency, closes in its own lot's currency (see [An `ADJUSTMENT_OUT` has no value](#handover-at-cost)).
 
 ### 🧮 Realized P&L math
 
 - **LONG close**: `matched_quantity * (close_unit_price - fragment.unit_price)`
 - **SHORT close**: `matched_quantity * (fragment.unit_price - close_unit_price)`
 
-Both are native, in the lot's currency, and computed only when the closure is in that currency (see [Closure currency](#closure-currency)). `SELL` and `ADJUSTMENT_OUT` — the two closures of LONG inventory — create `proceeds = matched_quantity * close_unit_price`: a sale's cash, or the value an `ADJUSTMENT_OUT` hands over at cost. An `ADJUSTMENT_OUT` without a cost basis closes at 0, in the lot's currency: no proceeds, and it realizes `-matched_quantity * fragment.unit_price` (a write-off). `BUY` and `ADJUSTMENT_IN` close SHORT inventory but do not add proceeds.
+Both are native, in the lot's currency, and computed only when the closure is in that currency (see [Closure currency](#closure-currency)). `SELL` and `ADJUSTMENT_OUT` — the two closures of LONG inventory — create `proceeds = matched_quantity * close_unit_price`: a sale's cash, or the value a scope-edge transfer leg hands over. An `ADJUSTMENT_OUT` read from the database closes at 0, in the lot's currency: no proceeds, and it realizes `-matched_quantity * fragment.unit_price`. `BUY` and `ADJUSTMENT_IN` close SHORT inventory but do not add proceeds.
 
 ### 💱 Closure currency {: #closure-currency }
 
-A closure's two prices can be in two currencies: `open_unit_price` in the lot's (`FifoLot.currency`), `close_unit_price` and `proceeds` in `close_currency` (see the `LotClosure` table). A lot moved to a broker of another currency and sold there closes in the sale's currency; an `ADJUSTMENT_OUT` whose cost basis is in another currency than the lot's closes in the cost basis's.
+A closure's two prices can be in two currencies: `open_unit_price` in the lot's (`FifoLot.currency`), `close_unit_price` and `proceeds` in `close_currency` (see the `LotClosure` table). A lot moved to a broker of another currency and sold there closes in the sale's currency; a scope-edge transfer leg whose price is in another currency than the lot's closes in that price's.
 
 The engine has no rates, so `_close_position_piece()` computes the native realized P&L only when the two currencies are the same — `None` counts as `target_currency` on both sides, as the lots analysis reads an amount without a currency. Otherwise:
 
@@ -266,11 +266,13 @@ The engine has no rates, so `_close_position_piece()` computes the native realiz
 
 The figures in the report currency are the lots analysis's: `convert_closure()` converts each leg at its own date — the lot's side at the lot's opening date, the closing side at the closure date — and never reads the native `realized_pnl` (developer decision 26; see [Closures: each leg at its own date](lots_analysis_service.md#closure-conversion)).
 
-### 📤 Hand-over at cost {: #handover-at-cost }
+### 📤 An `ADJUSTMENT_OUT` has no value {: #handover-at-cost }
 
-A negative `ADJUSTMENT` carrying a per-unit `cost_basis_override` hands its units over at that cost (developer decision 47: the principle of a priced `ADJUSTMENT_IN`, in the opposite direction). The Dashboard treats it so: the value handed over, converted at the row's date, leaves the capital baseline, and its difference from the average cost the pool gives up is realized (`DailyStateBuilder._handed_over_value()`, see [WAC & Cost Basis — Portfolio engine](wac.md#portfolio-engine)). The lots agree: every fragment closes at the row's `cost_basis_override` — the event's `unit_price`, **not** the fragment's own `unit_price` — so a fragment of a cheaper lot realizes the difference. Example, in one currency: 10 units bought at 10 and 10 at 20 (average 15); an `ADJUSTMENT_OUT` of 10 at cost 15 closes the first lot at 15 — `realized_pnl = +50`, `proceeds = 150` — and the lots total equals the Dashboard's P&L. With a single lot and a cost equal to the lot's, the realized part is 0.
+A negative `ADJUSTMENT` has no value, whatever `cost_basis_override` the row holds (developer decision N78-1, 21/10/2026): its units only leave the quantity. `FifoInputTransaction.from_transaction()` drops the override and its currency of every such row read from the database, so the event's `unit_price` is 0 and every fragment closes at 0 in its lot's currency: `proceeds = 0`, `realized_pnl = -matched_quantity * fragment.unit_price`. The Dashboard agrees: no capital leaves, and the average cost the pool gives up is realized as a loss (`DailyStateBuilder`, see [WAC & Cost Basis — Portfolio engine](wac.md#portfolio-engine)). Example, in one currency: 10 units bought at 50; an `ADJUSTMENT_OUT` of 2 closes 2 units of that lot at 0 — `realized_pnl = -100`, `proceeds = 0` — and the 8 left keep their unit cost of 50.
 
-The cost applies to every fragment, whatever its lot's currency. `_handover_currency(tx, fragment)` gives each closure its `close_currency`: the cost basis's — `tx.cost_basis_currency`, or the lot's currency when empty — or, for a row without a cost basis, the lot's. A cost basis in another currency than the lot's leaves the closure's native `realized_pnl` `None` (see [Closure currency](#closure-currency)); the lots analysis realizes the value handed over, converted at the row's date, against the lot's cost converted at its opening date. With `cost_basis_currency` empty, the Dashboard reads the cost basis in the asset's currency instead (`_handed_over_value()`): the two agree when the lot was opened in the asset's currency.
+Until N78-1 a cost basis on the row handed the units over at that cost (decision 47, J-24): every fragment closed at it, and the Dashboard took that value out of the capital. The API now refuses one on such a row (`costBasisNotAllowed`, rule 12b); one an older version stored stays in the database, ignored.
+
+The engine keeps the mechanics of a priced `ADJUSTMENT_OUT` for the copies the lots analysis builds itself (J-10, `financial_math/lots/scope_boundary.py`): a transfer leg leaving the analysed brokers is read as an `ADJUSTMENT_OUT` at the market value of one unit on its day, in the mark's currency, or, on a day without a price, flagged `hands_over_at_own_cost` (see [Transfers Across the Scope's Edge](lots_analysis_service.md#scope-edge-transfers)). `_handover_currency(tx, fragment)` gives each closure its `close_currency`: the copy's `cost_basis_currency`, or the lot's currency when it is empty or the row carries no cost basis. A price in another currency than the lot's leaves the closure's native `realized_pnl` `None` (see [Closure currency](#closure-currency)); the lots analysis converts each leg at its own date.
 
 ---
 

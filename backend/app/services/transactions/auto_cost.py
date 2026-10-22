@@ -245,16 +245,6 @@ class TransactionAutoCostMixin:
             where.append(Transaction.id.notin_(excluded))
         return await count_unreadable_rows(self.session, *where, with_cost_basis=True)
 
-    async def _handover_cost(self, db_tx: Transaction) -> WACPreviewResultItem:
-        """The Auto cost a giving TRANSFER leg leaves with when it becomes an ADJUSTMENT-out (decision 47).
-
-        The average cost of its own broker up to its date, without itself: not ``_auto_cost_source``, which names the
-        partner's broker for a TRANSFER still linked. The lots then hand its units over at that cost. Writes nothing
-        (``_write_auto_cost`` does). Called by ``delete_by_broker``, by the split of a TRANSFER pair
-        (``compute_wac_and_fx_issues``) and by the step for the lone legs older deletions left (``lone_transfer_legs``).
-        """
-        return await self._auto_cost(db_tx, (db_tx.broker_id, [db_tx.id], db_tx.date))
-
     @staticmethod
     def _write_auto_cost(db_tx: Transaction, wac_result: WACPreviewResultItem) -> None:
         """Write an Auto cost on ``db_tx``: the override and its currency together, and only when the average

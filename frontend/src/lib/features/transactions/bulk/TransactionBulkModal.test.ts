@@ -753,3 +753,47 @@ describe('TransactionBulkModal — C-46: the selection toolbar never offers to m
         ).toHaveLength(2);
     });
 });
+
+// ---------------------------------------------------------------------------
+// N78-1 — an outgoing ADJUSTMENT loads into the editor without a cost mode
+// ---------------------------------------------------------------------------
+
+/** A saved ADJUSTMENT of asset 101 on broker 77, `quantity` signed, storing `cost` or no value. */
+function savedAdjustment(id: number, quantity: string, cost: {code: string; amount: string} | null): TXReadItem {
+    return {
+        id,
+        broker_id: 77,
+        asset_id: 101,
+        type: 'ADJUSTMENT',
+        date: '2026-09-27',
+        quantity,
+        cash: null,
+        related_transaction_id: null,
+        partner_broker_id: null,
+        tags: [],
+        description: `N78-1 adjustment ${quantity}`,
+        cost_basis_override: cost,
+        asset_event_id: null,
+    } as TXReadItem;
+}
+
+describe('TransactionBulkModal — N78-1: an outgoing ADJUSTMENT has no cost mode', () => {
+    // N78-1 (the developer's decision, 21/10/2026): an ADJUSTMENT taking units out has no value, so the editor loads it
+    // (`fieldsFromTx`) without a cost mode — the grid shows no cost for it, and the Form it opens is handed none. RED until
+    // the cure for the outgoing rows: today every ADJUSTMENT read from the store loads as 'manual'. The incoming row is the
+    // guard: it keeps 'manual'. Read through the props the editor hands its Form (`opToTxLike`), on the row it opens.
+    it.each([
+        ['an outgoing ADJUSTMENT without a value', null, 91_501, '-3.000000', null],
+        ['an outgoing ADJUSTMENT storing a value (an old row)', null, 91_502, '-3.000000', {code: 'EUR', amount: '20.000000'}],
+        ['an incoming ADJUSTMENT (guard)', 'manual', 91_503, '3.000000', {code: 'EUR', amount: '20.000000'}],
+    ] as const)('N78-1: %s loads with cost mode %j', async (_label, expectedMode, id, quantity, cost) => {
+        const saved = savedAdjustment(id, quantity, cost ? {...cost} : null);
+        txStoreSetAll([saved], []);
+        mountEditor({action: 'edit', txIds: [saved.id]});
+
+        await waitFor(() => expect(formProbe().open, 'one selected row auto-opens its Form').toBe(true));
+        const item = (formProbe().items as TXReadItem[] | null)?.[0] as (TXReadItem & {cost_basis_mode?: unknown}) | undefined;
+        expect(item?.id, 'the Form is on the saved ADJUSTMENT').toBe(saved.id);
+        expect(item?.cost_basis_mode ?? null, `N78-1: ${_label} — an ADJUSTMENT of quantity ${quantity} takes a cost mode only when it adds units`).toBe(expectedMode);
+    });
+});

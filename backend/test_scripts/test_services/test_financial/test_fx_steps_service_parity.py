@@ -6,7 +6,7 @@ The developer's rule: «è imperativo non sbagliare i calcoli, veloci sì, ma pr
 
 Today (HEAD ``2f4ab1962``):
 - ``PortfolioCalculationEngine._preload_fx_rates`` collects ``(currency, day)`` needs — transaction amounts at their date,
-  priced outgoing ADJUSTMENTs at their date, external cash flows, price and asset currencies on every day of
+  priced outgoing ADJUSTMENTs at their date (dropped from the oracle by N78-1: such a row has no value), external cash flows, price and asset currencies on every day of
   ``[date_from, date_to]``, TRANSFER legs before the range, in-transit cash on every day of the transit from
   ``max(start, EARLIEST_RANGE_START)``, in-transit cost at the arrival — asks ``convert_bulk`` one unit of each, and
   returns ``fx_rate_map[(currency, target, day)]`` holding the answered needs. ``DailyStateBuilder`` reads it with
@@ -281,13 +281,9 @@ def _fx_needs_today(  # noqa: C901 — HEAD's collection loops, copied as they a
         tx = ctxn.tx
         if tx.amount and tx.amount != 0 and tx.currency and tx.currency != target_currency:
             fx_needs.add((tx.currency, tx.date))
-    for ctxn in classified_txs:
-        tx = ctxn.tx
-        if tx.type != TransactionType.ADJUSTMENT or tx.cost_basis_override is None or not tx.quantity or tx.quantity > 0:
-            continue
-        handover_ccy = tx.cost_basis_currency or asset_currencies.get(tx.asset_id)
-        if handover_ccy and handover_ccy != target_currency:
-            fx_needs.add((handover_ccy, tx.date))
+    # N78-1 (the developer's decision, 21/10/2026): an outgoing ADJUSTMENT has no value, so the value it may store is never
+    # converted and is no need. HEAD 2f4ab1962 asked (cost currency, row date) for each one (J-24); that loop is gone from
+    # this oracle, which follows the rule and no longer HEAD alone (RED until the cure on the book's two such rows).
     for dt, _, _, ccy in external_cash_flows:
         if ccy != target_currency:
             fx_needs.add((ccy, dt))
@@ -552,8 +548,8 @@ def _interval(tx_type: str, departure: Transaction, arrival: Transaction, *, cos
 
 
 def _main_inputs(date_from: date = START, date_to: date = END) -> dict[str, Any]:
-    """Every source of need of ``_preload_fx_rates``: amounts on legacy-row and gap days, priced outgoing ADJUSTMENTs (the
-    asset's currency, then GBP before its first rate), a TRANSFER leg before the range, external flows, price currencies
+    """Every source of need of ``_preload_fx_rates``: amounts on legacy-row and gap days, outgoing ADJUSTMENTs storing a
+    value (the asset's currency, then GBP before its first rate: no need since N78-1, they have no value), a TRANSFER leg before the range, external flows, price currencies
     (USD, CHF, GBP for an EUR asset), a cash transit across the USD gap, one past ``date_to``, an in-transit cost in CHF
     arriving after the range, a JPY fee (no rate at all), an EUR deposit (nothing to ask)."""
     txs = _classified(
