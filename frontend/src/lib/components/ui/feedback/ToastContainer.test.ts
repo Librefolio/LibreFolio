@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {cleanup, fireEvent, render, screen, waitFor, within} from '$test/component';
+import {get} from 'svelte/store';
+import {addMessages} from 'svelte-i18n';
+import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {_ as translate} from '$lib/i18n';
+import en from '$lib/i18n/en.json';
+import itCatalogue from '$lib/i18n/it.json';
+import fr from '$lib/i18n/fr.json';
+import es from '$lib/i18n/es.json';
 import {toasts} from '$lib/stores/app/toastStore.svelte';
 import {entityDetailLinkHtml} from '$lib/utils/core/entityLink';
 import ToastContainer from './ToastContainer.svelte';
@@ -12,7 +19,11 @@ import ToastContainer from './ToastContainer.svelte';
  * The close-button cases require the production owner's additive
  * data-testid="toast-dismiss" hook, requested during source-only authoring.
  */
-beforeEach(() => toasts.clear());
+// The dismiss button reads its name from the catalogues: every test starts in English, as the app does.
+beforeEach(async () => {
+    toasts.clear();
+    await setupI18n('en');
+});
 afterEach(() => {
     cleanup();
     toasts.clear();
@@ -305,7 +316,7 @@ describe('H-18 — toasts announced to screen readers', () => {
 
         const dismiss = within(root).getByTestId('toast-dismiss');
         expect(root).toContainElement(dismiss);
-        expect(live, 'the "Dismiss" label must not be read as part of the message').not.toContainElement(dismiss);
+        expect(live, 'the label of the dismiss button must not be read as part of the message').not.toContainElement(dismiss);
     });
 
     it.each(['success', 'info', 'warning', 'error'] as Variant[])('hides every icon inside the %s live element from assistive tech', (variant) => {
@@ -347,5 +358,78 @@ describe('H-18 — toasts announced to screen readers', () => {
         expect(successRoot).toContainElement(statuses[0]);
         expect(liveOf(errorRoot)).toBe(alerts[0]);
         expect(liveOf(successRoot)).toBe(statuses[0]);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Marker locale — the pattern of DataEditor.test.ts (W-B8). A private-use language where every key of the
+// English catalogue reads as a marker of itself (`⟦common.close⟧`): a label the component takes from the
+// catalogue reads its marker, a literal written in the component reads as itself. That asks whether the
+// code uses the key, never what a language says; whether the four catalogues have it is asked of the JSON.
+
+/** A private-use language (BCP 47 reserves qaa–qtz): Intl accepts it, and it is none of the app's catalogues. */
+const MARKER_LOCALE = 'qaa';
+/** The four shipped catalogues, by language. */
+const SHIPPED_CATALOGUES: Record<string, unknown> = {en, it: itCatalogue, fr, es};
+
+/** How a label reads in the marker locale: `⟦key⟧`. */
+const marked = (key: string): string => `⟦${key}⟧`;
+
+/** The value behind a dotted key of a catalogue, if any. */
+const leafOf = (catalogue: unknown, key: string): unknown => key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
+
+/** Every dotted key of a catalogue that holds a string. */
+function stringKeysOf(node: unknown, prefix = ''): string[] {
+    if (typeof node === 'string') return [prefix];
+    if (node === null || typeof node !== 'object') return [];
+    return Object.entries(node).flatMap(([part, child]) => stringKeysOf(child, prefix ? `${prefix}.${part}` : part));
+}
+
+/** Switch svelte-i18n to the marker locale: every key of the English catalogue reads as its marker. */
+async function useMarkerLocale(): Promise<void> {
+    addMessages(MARKER_LOCALE, Object.fromEntries(stringKeysOf(en).map((key) => [key, marked(key)])));
+    await setupI18n(MARKER_LOCALE);
+}
+
+describe('H-18 — the dismiss button is named from the catalogues', () => {
+    // The ✕ of every toast is named aria-label «Dismiss», English written in the component: a screen reader
+    // in Italian, French or Spanish hears English. The contract: the button's accessible name is the
+    // existing common key `common.close` — the key the app already uses to name a close ✕ (e.g.
+    // AssetModalSelectionPrompts, DataImportModal) — present in all four catalogues.
+    //
+    // Read in the marker locale: the name reads `⟦common.close⟧` when the component takes it from the
+    // catalogue, «Dismiss» when it is a literal. The control: the i18n store itself reads the marker, or the
+    // locale never switched and nothing here means anything.
+    //
+    // Red today: «Dismiss».
+
+    type Variant = 'success' | 'info' | 'warning' | 'error';
+    const VARIANTS: Variant[] = ['success', 'info', 'warning', 'error'];
+
+    beforeEach(async () => {
+        await useMarkerLocale();
+    });
+
+    afterEach(async () => {
+        await setupI18n('en');
+    });
+
+    it('common.close has a string in all four shipped catalogues', () => {
+        const missing = Object.entries(SHIPPED_CATALOGUES).flatMap(([lang, catalogue]) => (typeof leafOf(catalogue, 'common.close') === 'string' ? [] : [lang]));
+        expect(missing).toEqual([]);
+    });
+
+    it('control: the marker locale is live', () => {
+        expect(get(translate)('common.close')).toBe(marked('common.close'));
+    });
+
+    it.each(VARIANTS)('the dismiss button of a %s toast is named common.close', (variant) => {
+        toasts[variant](`Owned ${variant} notification`, 0);
+        render(ToastContainer);
+        expect(get(translate)('common.close'), 'control: the marker locale is live').toBe(marked('common.close'));
+        const dismiss = within(screen.getByTestId(`toast-${variant}`)).getByTestId('toast-dismiss');
+
+        expect(dismiss).toHaveAttribute('aria-label', marked('common.close'));
+        expect(dismiss).toHaveAccessibleName(marked('common.close'));
     });
 });

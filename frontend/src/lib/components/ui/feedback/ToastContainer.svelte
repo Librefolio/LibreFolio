@@ -5,7 +5,7 @@
   Screen readers (H-18): each toast's icon and message sit in one live element, an error in
   role="alert" (assertive: it interrupts), every other variant in role="status" (polite: read when
   the reader is idle); the dismiss button stays outside it, so its label is not read as part of the
-  message. The stack is always in the DOM, even empty, so the toasts arrive in a parent that exists.
+  message; its name is the catalogues' common.close. The stack is always in the DOM, even empty, so the toasts arrive in a parent that exists.
 
   Usage (from any component):
     import { toasts } from '$lib/stores/app/toastStore.svelte';
@@ -14,6 +14,7 @@
 -->
 <script lang="ts">
     import {fly} from 'svelte/transition';
+    import {_ as t} from '$lib/i18n';
     import {toasts, type ToastVariant} from '$lib/stores/app/toastStore.svelte';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import {AlertCircle, AlertTriangle, CheckCircle, Info, X} from 'lucide-svelte';
@@ -97,7 +98,7 @@
                     <Icon size={15} class="shrink-0 mt-0.5 {styles.icon}" aria-hidden="true" />
                     <span class="flex-1 whitespace-pre-line text-left">{@html sanitizeHtml(toast.message)}</span>
                 </div>
-                <button class="shrink-0 p-0.5 rounded transition-colors absolute top-1.5 right-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lf-focus {styles.dismiss}" onclick={() => toasts.dismiss(toast.id)} aria-label="Dismiss" data-testid="toast-dismiss">
+                <button class="shrink-0 p-0.5 rounded transition-colors absolute top-1.5 right-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lf-focus {styles.dismiss}" onclick={() => toasts.dismiss(toast.id)} aria-label={$t('common.close')} data-testid="toast-dismiss">
                     <X size={12} />
                 </button>
             </div>
