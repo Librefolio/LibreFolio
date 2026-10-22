@@ -6,6 +6,8 @@
  * event and applies the state itself.
  */
 
+import {CATEGORY_ROLES, lookupKey} from '$lib/theme/chartCategories';
+
 import type {LabChange, LabState} from './types';
 
 export const STORAGE_KEY = 'lf-designer-lab/v1';
@@ -27,7 +29,7 @@ export function readState(storage: Storage = localStorage): LabState | null {
     try {
         const parsed = JSON.parse(raw) as Partial<LabState>;
         if (parsed?.schema !== STATE_SCHEMA || !Array.isArray(parsed.changes)) return null;
-        return {...emptyState(), ...parsed} as LabState;
+        return {...emptyState(), ...parsed, changes: parsed.changes.map(asRoleChange)} as LabState;
     } catch {
         return null;
     }
@@ -74,4 +76,21 @@ export function removeChange(state: LabState, id: string): LabState {
 /** The changes that apply to a theme: those scoped to it and those scoped to both. */
 export function changesForTheme(changes: LabChange[], dark: boolean): LabChange[] {
     return changes.filter((c) => c.scope === 'both' || (dark ? c.scope === 'dark' : c.scope === 'light'));
+}
+
+/** The role an asset type or the cash is drawn in, by the lookup key of its category target (`type:REALESTATE`). */
+const ROLE_OF_CATEGORY = new Map(CATEGORY_ROLES.map((c) => [`${c.kind}:${lookupKey(c.key)}`, c.role]));
+
+/**
+ * A `category` change of an asset type or of the cash, as the Lab made it before DV-11, becomes a change of its role
+ * (`css-var`): their colour is that role now, so an edit reaches the badges and the charts together. Any other change
+ * comes back as it is. Applied to a saved state when it is read, and to an import.
+ */
+export function asRoleChange(change: LabChange): LabChange {
+    if (change.layer !== 'category') return change;
+    const m = /^(type|bucket):(.+)$/.exec(change.target);
+    const role = m ? ROLE_OF_CATEGORY.get(`${m[1]}:${lookupKey(m[2])}`) : undefined;
+    if (!role) return change;
+    const next: LabChange = {...change, layer: 'css-var', target: role};
+    return {...next, id: changeId(next)};
 }

@@ -321,6 +321,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/table/DataTableColumnFilter.test.ts",
             "src/lib/components/table/DataTable.test.ts",
             "src/lib/components/table/DataTable.rowOrder.test.ts",
+            "src/lib/components/table/DataTable.rowDeleted.test.ts",
             "src/lib/components/table/DataTablePagination.test.ts",
             "src/lib/components/assets/ScheduledInvestmentEditor.test.ts",
             "src/lib/components/assets/AssetModal.test.ts",
