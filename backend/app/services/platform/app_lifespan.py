@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import ensure_data_dirs, get_settings, is_test_mode
 from backend.app.config.brim import BrimConfigError, brim_prewarm_enabled
+from backend.app.config.platform import awaiting_restore
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import get_logger
 from backend.app.services.accounts.bootstrap_admin_service import startup_admin_bootstrap
@@ -217,6 +218,9 @@ def _shutdown_brim_parse_pool() -> None:
 # The steps, in order
 # =============================================================================
 
+#: H-62: an instance awaiting its restore (``LIBREFOLIO_AWAIT_RESTORE``) skips the steps marked ``skip_when=awaiting_restore``:
+#: no initial administrator nor ``/setup`` link (a backup brings its own), no scheduler nor background warm-ups on an
+#: empty database. The database, the restore's own steps and the idle monitor still run.
 STARTUP_STEPS: tuple[Step, ...] = (
     # First: from here on a SIGTERM or a SIGINT starts the shutdown budget (only under uvicorn's own signal handlers)
     Step("shutdown-watchdog", lambda: install_shutdown_watchdog()),
@@ -240,7 +244,7 @@ STARTUP_STEPS: tuple[Step, ...] = (
     # Initialize global settings with defaults (if not already present)
     Step("global-settings", lambda: _initialize_global_settings()),
     # The initial administrator of LIBREFOLIO_ADMIN_EMAIL (F02, workstream A), once the settings exist
-    Step("admin-bootstrap", lambda: startup_admin_bootstrap()),
+    Step("admin-bootstrap", lambda: startup_admin_bootstrap(), skip_when=awaiting_restore),
     # The first start on restored data completed: commit the restore (B3), before any step reports on or serves the data.
     # A step before this one that raises rolls the restore back at the next start; one after it no longer does (N57).
     Step("restore-commit", lambda: asyncio.to_thread(finish_pending_restore)),
@@ -251,11 +255,11 @@ STARTUP_STEPS: tuple[Step, ...] = (
     Step("plugin-secrets-check", lambda: log_plugin_secrets_check()),
     # The audit of the stored currency codes, in background: one warning when some are not ISO 4217 codes (E-19a). After
     # both repairs and once the restore is settled, since it reports on the data (N57); read-only, never a stop or a wait
-    Step("stored-currencies", lambda: _start_stored_currency_audit()),
-    Step("provider-prewarm", lambda: _start_provider_prewarm()),
-    Step("market-holidays", lambda: _start_market_holiday_prewarm()),
-    Step("brim-parse-pool", lambda: _start_brim_parse_pool_prewarm()),
-    Step("scheduler", lambda: _start_scheduler()),
+    Step("stored-currencies", lambda: _start_stored_currency_audit(), skip_when=awaiting_restore),
+    Step("provider-prewarm", lambda: _start_provider_prewarm(), skip_when=awaiting_restore),
+    Step("market-holidays", lambda: _start_market_holiday_prewarm(), skip_when=awaiting_restore),
+    Step("brim-parse-pool", lambda: _start_brim_parse_pool_prewarm(), skip_when=awaiting_restore),
+    Step("scheduler", lambda: _start_scheduler(), skip_when=awaiting_restore),
     Step("idle-monitor", lambda: start_idle_monitor()),
 )
 

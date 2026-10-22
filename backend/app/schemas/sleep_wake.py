@@ -33,7 +33,7 @@ class WakeSyncJob(StrictModel):
 class WakeSyncResponse(StrictModel):
     """The JSON that ends the answer of the scheduled wake-up, after the whitespace streamed while the jobs run."""
 
-    status: str = Field(description="How the run ended: `ok`, `partial`, `error`, `disabled` (scheduler off), `not_leader` (another worker runs the jobs) or `blocked` (instance blocked: no job runs)")
+    status: str = Field(description="How the run ended: `ok`, `partial`, `error`, `disabled` (scheduler off), `not_leader` (another worker runs the jobs), `blocked` (instance blocked: no job runs) or `awaiting_restore` (the hosting panel restores the instance: no job runs)")
     started_at: datetime = Field(description="When the run started, in UTC")
     finished_at: datetime = Field(description="When the run ended, in UTC")
     error: str | None = Field(default=None, description="The class of the error that stopped the run, never its message; null otherwise")

@@ -2,7 +2,8 @@
 
 Owner: workstream H (platform). A hosting panel calls an instance without a user session, with a credential per scope
 (decision Q2): ``backup`` (``/backup/panel/jobs…``, workstream B), ``wake`` (``POST /system/wake-sync``, workstream Z)
-and ``status`` (``GET /panel/status``). ``panel_access(scope)`` is the dependency of each route:
+``status`` (``GET /panel/status``) and ``backup:restore`` (``/backup/panel/restore…``, lot H-62: a ticket only, no
+token, so it is off without the panel's keys). ``panel_access(scope)`` is the dependency of each route:
 
 1. The scope's token is read at each call (``config/backup.py``, ``config/sleep_wake.py``,
    ``config/hosting_panel.py``), and so are the panel's public keys of L2, with the audience and the clock tolerance
@@ -80,6 +81,8 @@ class PanelScope(StrEnum):
     BACKUP = "backup"
     WAKE = "wake"
     STATUS = "status"
+    #: The restore of the whole instance (lot H-62): a signed ticket only, never a token
+    BACKUP_RESTORE = "backup:restore"
 
 
 @dataclass(frozen=True)
@@ -140,6 +143,18 @@ _RULES: dict[PanelScope, _ScopeRules] = {
         unavailable_code="panel_status_unavailable",
         unavailable_message="The panel status token of this instance cannot be used",
         bearer=HTTPBearer(auto_error=False, scheme_name="PanelStatusToken", description="LIBREFOLIO_PANEL_STATUS_TOKEN, or a hosting panel's signed ticket when LIBREFOLIO_PANEL_PUBLIC_KEYS is set, sent as `Authorization: Bearer <credential>`"),
+    ),
+    # H-62: no token opens the restore (contract L3 §5): only a ticket of this scope, so without the panel's keys it is off
+    PanelScope.BACKUP_RESTORE: _ScopeRules(
+        read_token=lambda: None,
+        config_errors=(),
+        unusable_line="",
+        unusable_fields=lambda exc: {},
+        unauthorized_code="backup_restore_unauthorized",
+        unauthorized_message="A valid panel ticket for the restore is required",
+        unavailable_code="backup_restore_unavailable",
+        unavailable_message="The panel's ticket settings of this instance cannot be used",
+        bearer=HTTPBearer(auto_error=False, scheme_name="BackupRestorePanelTicket", description="A hosting panel's signed ticket of scope `backup:restore` (LIBREFOLIO_PANEL_PUBLIC_KEYS), sent as `Authorization: Bearer <ticket>`; no token is accepted"),
     ),
 }
 

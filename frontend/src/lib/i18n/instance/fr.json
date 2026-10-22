@@ -67,6 +67,12 @@
       "deletionDate": "L'instance et ses données seront supprimées le {date}.",
       "manageSubscription": "Gérer l'abonnement",
       "backupTitle": "Gardez une copie des données"
+    },
+    "awaitingRestore": {
+      "title": "Restauration de vos données",
+      "message": "Nous remettons vos données en place : réessayez dans quelques minutes.",
+      "autoReload": "Cette page se recharge d'elle-même quand vos données sont prêtes.",
+      "retry": "Réessayer"
     }
   }
 }

@@ -67,6 +67,12 @@
       "deletionDate": "La instancia y sus datos se eliminarán el {date}.",
       "manageSubscription": "Gestionar la suscripción",
       "backupTitle": "Guarda una copia de los datos"
+    },
+    "awaitingRestore": {
+      "title": "Restaurando tus datos",
+      "message": "Estamos poniendo tus datos en su sitio: inténtalo de nuevo en unos minutos.",
+      "autoReload": "Esta página se recarga sola cuando tus datos estén listos.",
+      "retry": "Reintentar"
     }
   }
 }

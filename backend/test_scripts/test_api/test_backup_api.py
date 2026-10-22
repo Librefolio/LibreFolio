@@ -469,6 +469,15 @@ BACKUP_ROUTES = [
     ("GET", "/backup/panel/jobs/{job_id}", "panel.get_panel_backup_job"),
     ("GET", "/backup/panel/jobs/{job_id}/file", "panel.download_panel_backup"),
     ("DELETE", "/backup/panel/jobs/{job_id}", "panel.delete_panel_backup_job"),
+    # H-62 (contract L3 §5): the hosting panel's restore, panel_restore.py, included right after panel.py (assumed: the
+    # panel's routes together); red until H-62
+    ("PUT", "/backup/panel/restore/upload", "panel_restore.upload_panel_restore_archive"),
+    ("POST", "/backup/panel/restore/stage", "panel_restore.start_panel_restore_check"),
+    ("GET", "/backup/panel/restore/stage/{stage_id}", "panel_restore.get_panel_restore_check"),
+    ("POST", "/backup/panel/restore/stage/{stage_id}/confirm", "panel_restore.confirm_panel_restore_check"),
+    ("POST", "/backup/panel/restore/restart", "panel_restore.restart_panel_restore"),
+    ("GET", "/backup/panel/restore/status", "panel_restore.get_panel_restore_status"),
+    ("DELETE", "/backup/panel/restore/pending", "panel_restore.cancel_panel_pending_restore"),
     ("PUT", "/backup/restore/upload", "restore.upload_restore_archive"),
     ("POST", "/backup/restore/stage", "restore.start_restore_check"),
     ("GET", "/backup/restore/stage/{stage_id}", "restore.get_restore_check"),
@@ -491,7 +500,9 @@ def test_the_backup_router_registers_its_routes_in_order():
     served = [(",".join(sorted(ctx.methods or ())), ctx.path, f"{getattr(ctx.endpoint, '__module__', '?').removeprefix(backup_module.__name__ + '.')}.{getattr(ctx.endpoint, '__name__', '?')}") for ctx in contexts]
     assert served == BACKUP_ROUTES, f"the /backup router changed: it must register the five routes of instance.py, the four of panel.py, the nine of restore.py, then the three exports of exports.py, in this order:\n  expected {BACKUP_ROUTES}\n  got      {served}"
     tags = [(ctx.path, list(getattr(ctx, "tags", []))) for ctx in contexts]
-    assert tags == [(path, ["Hosting panel"] if endpoint.startswith("panel.") else ["Backup & Export"]) for _method, path, endpoint in BACKUP_ROUTES], f"each route of the /backup router must carry a single tag, Hosting panel on the four of panel.py, Backup & Export on the others:\n  got {tags}"
+    assert tags == [
+        (path, ["Hosting panel"] if endpoint.startswith(("panel.", "panel_restore.")) else ["Backup & Export"]) for _method, path, endpoint in BACKUP_ROUTES
+    ], f"each route of the /backup router must carry a single tag, Hosting panel on the four of panel.py, Backup & Export on the others:\n  got {tags}"
     print_success(f"{len(served)} routes, in their order: {[f'{method} {path}' for method, path, _endpoint in served]}")
 
 

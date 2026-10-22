@@ -851,6 +851,22 @@ def api_hosting_panel_routes(verbose: bool = False, test_names: list[str] | None
     return run_command(cmd, "Hosting panel route tests", verbose=verbose)
 
 
+def api_panel_restore(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the hosting panel's restore route tests: /backup/panel/restore/* (H-62, contract L3 §5)."""
+    print_section("Hosting Panel Restore API")
+    print_info("Testing: the scope backup:restore (ticket only), the order of the refusals (credential, block, mode), upload, check, the panel's report (R1), confirm, restart, status, cancel, no echo; Needs B (Q1, Q2, Q4) apart")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_panel_restore_api.py", test_names)
+    return run_command(cmd, "Hosting panel restore API tests", verbose=verbose)
+
+
+def api_await_restore_mode(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the «awaiting restore» mode's API tests: refuse_when_awaiting_restore, its allowed set, ready/instance/wake/panel status (H-62, §6)."""
+    print_section("Awaiting Restore Mode API")
+    print_info("Testing: 423 instance_awaiting_restore for anyone outside the allowed set (pinned), mode in /system/ready and /system/instance, wake-sync awaiting_restore, both switches and R4, GET /panel/status mode and restore; Needs B (Q3) apart")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_await_restore_mode_api.py", test_names)
+    return run_command(cmd, "Awaiting restore mode API tests", verbose=verbose)
+
+
 def api_panel_status(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the hosting panel's status route tests: GET /panel/status (H-61, R1)."""
     print_section("Hosting Panel Status API")
@@ -1362,6 +1378,29 @@ Tests for REST API endpoints (server auto-started):
         api_panel_status,
         name="Hosting Panel Status API",
         desc="H-61 R1: GET /panel/status off 404 without a token, panel_status_unauthorized, the four states of the initial administrator's setup with the expiry of a pending one only, no personal data, answered on a blocked instance, its OpenAPI schema",
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "panel-restore",
+        api_panel_restore,
+        name="Hosting Panel Restore API",
+        desc="H-62 (L3 §5): /backup/panel/restore/* with the ticket-only scope backup:restore: 404 without keys, 401 backup_restore_unauthorized to any L1 token (counted), wrong scope, replay, 429, 503 backup_restore_unavailable, then 423 instance_blocked, then 409 restore_mode_required, the same in every state; .lfbk only (400 restore_envelope_required), 413, R3 slow body; wrong_password keeps the upload; PanelRestoreStageReport (20 fields, administrators_count, no portfolio data); confirm via panel with the kid logged, restart once after the answer, status, cancel; no echo of the password; Needs B Q1/Q2/Q4 apart",
+        # PURE: the app of main.py in this process (ASGI), the switches and the panel's variables by monkeypatch, the data
+        # directory under tmp_path, the database session a stand-in that fails if reached, restart recorded, fake
+        # threads; the archives from test_backup_staging.py's alembic databases under tmp_path: no lane server, DB or
+        # network is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "await-restore-mode",
+        api_await_restore_mode,
+        name="Awaiting Restore Mode API",
+        desc="H-62 (L3 §6): LIBREFOLIO_AWAIT_RESTORE → 423 instance_awaiting_restore for anyone on every /api/v1 route but ALLOWED_WHEN_AWAITING_RESTORE (pinned by name and route), registration, setup, login and me included; the dependency right after refuse_when_blocked on every route; ready and instance say mode; wake-sync awaiting_restore with nothing past the switches; both switches 423; R4 the block at the first request; GET /panel/status mode and restore, 500 restore_state_unreadable (Q7); Needs B Q3 apart",
+        # PURE: the app of main.py in this process (ASGI), every request's session on a private SQLite file under
+        # tmp_path, the switches by monkeypatch, the data directory under tmp_path: the lane's backend and DB are never
+        # reached.
         isolation="pure",
     )
     add_test(api, "broker-multiuser", api_broker_multiuser, name="Broker Multi-User", desc="Role-based permissions")

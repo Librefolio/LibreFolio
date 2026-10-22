@@ -12,6 +12,9 @@ from backend.app.schemas.common import StrictModel
 from backend.app.schemas.email import EmailInstanceConfig
 from backend.app.utils.runtime.network import ClientClass
 
+#: ``normal``, or ``awaiting_restore`` while ``LIBREFOLIO_AWAIT_RESTORE`` is on (lot H-62, contract L3 §6).
+InstanceMode = Literal["normal", "awaiting_restore"]
+
 
 class DependencyInfo(StrictModel):
     """Information about a dependency."""
@@ -76,6 +79,7 @@ class ReadinessResponse(StrictModel):
 
     status: Literal["ready", "not_ready"] = Field(description="ready when every check is ok")
     checks: ReadinessChecks
+    mode: InstanceMode = Field(default="normal", description="normal, or awaiting_restore while the hosting panel restores the instance (H-62): ready then means ready to receive the backup")
 
 
 class ContainerImageStatusResponse(StrictModel):
@@ -122,6 +126,7 @@ class InstanceConfigResponse(StrictModel):
     """
 
     profile: InstanceProfile = Field(description="selfhosted: an install run by its owner; managed: an instance a hosting provider runs for its customers")
+    mode: InstanceMode = Field(default="normal", description="normal, or awaiting_restore while the hosting panel restores the instance (H-62): every API route but a few answers 423 `instance_awaiting_restore`, and the app shows a waiting page")
     accounts: AccountsInstanceConfig = Field(description="Who may create an account (workstream A)")
     email: EmailInstanceConfig = Field(default_factory=EmailInstanceConfig, description="Whether the instance can send emails (workstream E)")
     support_url: str | None = Field(

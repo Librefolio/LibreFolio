@@ -85,7 +85,8 @@ LEGAL_FIELD = "legal"
 LEGAL_KEYS = {"terms_url", "privacy_url"}
 NO_LEGAL_LINK = {"terms_url": None, "privacy_url": None}
 #: The public configuration after A9 and H-60: the fields of before, legal, and client_log_level.
-INSTANCE_KEYS = {"profile", "accounts", "email", "support_url", LEGAL_FIELD, "client_log_level"}
+# H-62 (contract L3 §6): ``mode``, normal or awaiting_restore; red until H-62
+INSTANCE_KEYS = {"profile", "accounts", "email", "support_url", LEGAL_FIELD, "client_log_level", "mode"}
 
 TERMS_ADDRESS = "https://legal.example.org/terms"
 PRIVACY_ADDRESS = "https://legal.example.org/privacy"

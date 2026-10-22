@@ -957,7 +957,8 @@ def test_the_module_gives_the_scopes_one_dependency_per_scope_a_frozen_caller_an
 
     assert isinstance(scope_class, type) and issubclass(scope_class, enum.StrEnum), f"PanelScope is a StrEnum: {scope_class!r}"
     members = {member.name: member.value for member in scope_class}
-    assert members == {"BACKUP": BACKUP, "WAKE": WAKE, "STATUS": STATUS}, f"PanelScope holds exactly backup, wake and status: {members}"
+    # H-62 (contract L3 §5): the restore's scope, ticket only, joins the three; red until H-62
+    assert members == {"BACKUP": BACKUP, "WAKE": WAKE, "STATUS": STATUS, "BACKUP_RESTORE": "backup:restore"}, f"PanelScope holds exactly backup, wake, status and backup:restore: {members}"
     dependencies = {scope: panel_access(scope_class(scope)) for scope in SCOPES}
     again = {scope: panel_access(scope_class(scope)) for scope in SCOPES}
     assert all(callable(dependency) for dependency in dependencies.values()), f"panel_access gives a FastAPI dependency, a callable: {dependencies}"
