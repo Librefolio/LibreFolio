@@ -7134,3 +7134,86 @@ riduzione sull'endpoint dei cambi (`max_points`, `sample_like`, `sample_bounds`,
    ripopolata, `LC_ALL=en_US.UTF-8`): 43 passati in 2,3 min, avviso di sync C-66 compreso.
    > **⚠️ Fuori pista**: O2 resta con una soluzione della pagina (`signalBaseData`), non un parametro `basePoint` di
    > `renderBackendResults` (file di Y-39b).
+
+### Z-29fx — i cambi campionati, il backend di `/fx/currencies/convert` (21→22/10, ondata 3, base `2879ae3e4`)
+
+> Brief dell'ondata 3: solo backend; la pagina dei cambi è di Y (Y-40, parte cambi). Stessa regola della query dei
+> prezzi (Z-29a, Z-29s-a, O1), nessuna seconda implementazione.
+
+**Decisioni tecniche prese di notte** (da rivedere con MF e Y):
+- Risposta additiva: ogni `FXConversionResult` ha `request_index`; `FXConvertResponse.samples` ha una voce per
+  conversione (`resolution`, `sample_bounds` con il primo e l'ultimo risultato). I risultati restano una lista piatta.
+- Il rendimento mobile dei cambi è lo stesso plugin `ASSET_CALENDAR_ROLLING_RETURN`, ora anche nel dominio FX (il calcolo
+  non dipende dal dominio; nome del codice invariato per non rompere le impostazioni salvate e AI Export). Alternativa
+  scartata per ora: un plugin `FX_CALENDAR_ROLLING_RETURN` gemello.
+- La funzione che riduce un risultato di segnale (`sample_signal_result`) si sposta da `price_query.py` a
+  `services/signals/sampling.py`: la usano la query dei prezzi e i cambi.
+
+1. ✅ 21/10 ~19:10 — Rossi: `test_api/test_fx_convert_sampling.py` (FXS-01…09, PURE, l'handler con `convert_bulk`
+   sostituito); azione nuova `api fx-convert-sampling` (una riga in `_backend_api.py`). 27 rossi per la ragione giusta
+   (campi ignorati, nessun `samples`, ogni giorno restituito, il rendimento mobile rifiutato nel dominio FX), 2 verdi per
+   costruzione (il controllo delle annotazioni, il budget).
+2. ✅ 21/10 ~19:30 — Cura: `schemas/fx.py` (i quattro campi e `validate_sampling`, `request_index`, `FXSampleBounds`,
+   `FXConversionSample`, `samples`); `services/fx/sampling.py` (`plan_conversion_samples`, puro: F, passo, follower dal
+   giorno più tardo); `api/v1/fx/currencies.py` (422 `sample_reference` prima di tutto; la riduzione in memoria dopo il
+   calcolo giornaliero; i segnali ridotti e allineati); `signals/sampling.py`; il plugin del rendimento mobile con
+   `SignalDomain.FX`.
+   > **Note implementazione**: verdi `api fx-convert-sampling` 29/29, `services signal-plugin-matrix` 91,
+   > `signal-aggregation` 228, `price-query-sampling` 197 (il refactor non cambia nulla), `signal-service` 69,
+   > `fx-conversion` 44, `api fx-unit` 64.
+   > **⚠️ Fuori pista**: la doc utente `user/fx/chart-settings.en.md` diceva «9 indicators work on FX rates»: ora 10
+   > (solo l'inglese; IT/FR/ES restano a 9, debito di traduzione da fare su richiesta).
+3. ✅ 21/10 — Doc per sviluppatori: `developer/backend/fx/architecture.md` («Sampled conversions», `#convert-sampling`) e il
+   rimando da `developer/backend/assets/architecture.md`.
+4. ✅ 22/10 — Verdi pesanti in `flock`: `front check` 0/0 (dopo `api sync`), `api fx` 34, `api fx-signals` 8,
+   `api signal-request-validation` 2, `api signal-catalogs` 5 (dopo aver portato il conteggio FX da 9 a 10);
+   `services signal-registry` 66 (i perni «solo asset» del rendimento mobile aggiornati), `asset-signals` 30,
+   `test_risk_signal_plugins.py` 45. Richiesta del coordinatore: i 5 test Vitest di Z-29b registrati in
+   `_frontend_utility.py` (core-unit); `check-orphans` pulito (596 unitari, 515 backend).
+
+### Z-29d ridotto — l'anteprima del dialogo dei confronti: analisi (22/10, ondata 3, base `46455857a`, sola lettura)
+
+**Il problema, oggi in dev (dopo Z-29b).** Nel dialogo delle impostazioni di una scheda ridotta (settimanale o mensile),
+se l'utente sceglie un nuovo asset da confrontare, l'anteprima non disegna la linea finché non salva. Il motivo:
+`signalSourcesFor(...).comparisonTarget` (`assets/+page.svelte:1310-1321`) restituisce `null` quando il bersaglio non
+è ancora stato letto «come la scheda» (`targetSamples`) e la scheda non è giornaliera. Dopo il salvataggio la ricarica
+per scheda (Z-29b) lo legge e la linea compare. Esempio: scheda AAPL settimanale, scelgo «confronta con MSFT» → nessuna
+linea nell'anteprima; salvo → la linea compare sulla scheda.
+
+**La cura proposta (0,5 giorni).**
+1. `assets/+page.svelte`: quando `comparisonTarget(assetId)` non trova il campione di `<scheda>|<bersaglio>`, chiede
+   alla pagina di leggerlo in differita (`queueMicrotask`, mai dentro un `$derived`: Svelte rifiuta le scritture di
+   stato lì), una sola volta per scheda, bersaglio, intervallo e `max_points`; la lettura usa `buildReducedQuery` con la
+   scheda in `include_price: false` (solo il passo, Z-29a-f) e il bersaglio in `sample_like`, scrive in
+   `reducedPrices.putTarget` e in `targetSamples`; l'anteprima si ridisegna da sola (legge `targetSamples`, che è
+   `$state`). Un errore non riprova finché non cambia l'intervallo.
+2. Con la vista «rendimento mobile» di Y-40 lo stesso bersaglio deve chiedere anche il suo rendimento mobile (il
+   `calendar` che Y aggiunge a `CardQueryInput` in `reducedPriceQuery.ts`): la lettura differita va costruita sulla
+   versione di Y.
+3. `ChartSettingsModal.svelte` non cambia: legge già le fonti dalla pagina (`signalSources`).
+
+**Rossi previsti.** Vitest su un caricatore puro (`lib/utils/targetSampleLoader.ts`, nuovo: deduplica, una lettura per
+chiave, nessun nuovo tentativo dopo un errore, chiave con intervallo e `max_points`); E2E `front-asset asset-list`: su
+una scheda settimanale, scelto un bersaglio nel dialogo, l'anteprima ha la linea di confronto prima del salvataggio.
+
+**Perché aspetto.** I file da toccare sono `assets/+page.svelte` e, per il punto 2, `reducedPriceQuery.ts`: tutti e due
+sporchi nel worktree di Y (Y-40, 196 righe nuove nella pagina, proprio su bersagli e richieste). Scritto ora, il
+caricatore divergerebbe dalla versione di Y. Riprendo dopo il commit di Y-40.
+
+### Z-29d ridotto — lavoro (22/10, ondata 3, base `35101193c`, dopo il merge di Y-40 asset)
+
+> Via del coordinatore: stanotte `assets/+page.svelte` e `reducedPriceQuery.ts` sono miei; `ChartSettingsModal.svelte`
+> e lo store delle impostazioni restano di Y.
+
+1. ✅ 22/10 — Il punto 2 dell'analisi non serve: Y-40 legge già da sé il rendimento mobile dell'anteprima, bersagli
+   compresi (`resolveCalendarPreview`, una richiesta con `calendar`). Resta il confronto nelle viste assoluto e %.
+2. ✅ 22/10 — Rosso: `utils/__tests__/targetSampleLoader.test.ts` (6 casi: la lettura dopo la chiamata, mai dentro; una per
+   chiave; chiavi diverse per bersaglio, intervallo e `max_points`; nessun nuovo tentativo dopo un errore, detto una volta;
+   `reset`). Rosso per `Cannot find module '../targetSampleLoader'`; registrato in `_frontend_utility.py`.
+3. ✅ 22/10 — Cura: `utils/targetSampleLoader.ts` (puro); nella pagina `readTargetSample` (la scheda senza prezzi e senza
+   segnali dà solo il passo, il bersaglio in `sample_like`; scrive in `reducedPrices.putTarget` e in `targetSamples`),
+   `signalSourcesFor(selfAssetId, readMissing)`: solo l'anteprima del dialogo (`settingsSignalSources`) chiede un bersaglio
+   mancante di una scheda ridotta; `invalidateAssetPrices` azzera il caricatore. `ChartSettingsModal.svelte` non cambia.
+   > **⚠️ Fuori pista**: il caso E2E proposto (scelto un bersaglio nel dialogo di una scheda settimanale, la richiesta
+   > `sample_like` parte prima del salvataggio) ha bisogno di un `data-testid` sul pulsante delle impostazioni della scheda
+   > (`AssetCard.svelte`, oggi solo un `title` tradotto): non è un file mio stanotte. Proposto come seguito.

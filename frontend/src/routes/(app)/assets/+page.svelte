@@ -18,7 +18,7 @@
     import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
     import {zodiosApi, axiosInstance} from '$lib/api';
-    import {BarChart3, Check, Network, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
+    import {BarChart3, CalendarSync, Check, Network, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
     import AssetCard from '$lib/components/assets/AssetCard.svelte';
     import type {AssetRow} from '$lib/components/assets/AssetTable.svelte';
     import AssetTable from '$lib/components/assets/AssetTable.svelte';
@@ -46,8 +46,11 @@
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {hasStoredRowBehindSample, type AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
-    import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
-    import {getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import type {ChartPrimaryView, ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {effectiveCalendarReturnWindow, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setItemPrimaryView, setPairSettings, setScopePrimaryView} from '$lib/stores/chartSettingsStore.svelte';
+    import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
+    import {calendarReturnRangeDays, calendarReturnWindowDays} from '$lib/components/charts/calendarReturnWindow';
+    import {formatSignalProblem} from '$lib/components/charts/chartSignalsHelpers';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
@@ -59,7 +62,7 @@
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
     import {todayIso} from '$lib/utils/dateOnly';
     import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
-    import {fxPointToLineDataPoint, renderBackendResults, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
+    import {fxPointToLineDataPoint, renderBackendResults, renderCalendarComparisons, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {createPairSlug, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
@@ -71,6 +74,7 @@
     import {fetchAssetPeriodChanges, PeriodChangesLedger, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
     import type {RangeDelta} from '$lib/utils/rangeChange';
     import {processPriceItemsInParallel} from '$lib/workers/priceProcessingPool';
+    import {TargetSampleLoader, type TargetSampleRequest} from '$lib/utils/targetSampleLoader';
     import {sendBulkBatches} from '$lib/api/bulkBatches';
     import {bulkRefusalMessage} from '$lib/api/bulkRefusal';
     import type {ProcessedAssetResult} from '$lib/workers/priceProcessing.worker';
@@ -269,8 +273,14 @@
         void goto(buildTabUrl($page.url, tabId), {replaceState: true, noScroll: true});
     }
 
-    // Grid delta display mode: absolute or percentage (E3)
-    let globalViewMode = $state<'percentage' | 'absolute'>('percentage');
+    // The view of the grid's cards (Y-40): the list's, saved with the chart settings, which the top bar sets for every card;
+    // a card's button keeps its own (V-1 a, V-3 a).
+    let globalPrimaryView = $derived.by((): ChartPrimaryView => {
+        void getSettingsVersion();
+        return getGlobalSettings('assets').primaryView;
+    });
+    /** The rolling return of each card in the rolling-return view, and its comparisons' (Y-40), by card. */
+    let calendarByCard = $state(new Map<number, {own: CalendarReturnView; targets: Map<number, CalendarReturnView>}>());
 
     // Asset type → icon: getAssetTypeIconUrl() is the single source. The local
     // TYPE_ICON_MAP that used to live here knew nine types, so every value added to
@@ -646,6 +656,7 @@
     function invalidateAssetPrices(assetId: number) {
         invalidateAssetPriceStore(assetId);
         reducedPrices.invalidateAsset(assetId);
+        targetSampleLoader.reset();
     }
 
     function resolveMaxStartFromAssets() {
@@ -727,6 +738,58 @@
     }
 
     /**
+     * The rolling return a card in that view asks (Y-40): over the window in force for the range on screen — the one chosen,
+     * else the largest preset that fits it.
+     */
+    function calendarReturnRequest(settings: ChartSettings, start: string, end: string) {
+        const windowDays = calendarReturnWindowDays(effectiveCalendarReturnWindow(settings, calendarReturnRangeDays(start, end))) ?? 30;
+        return {instance_id: CALENDAR_RETURN_INSTANCE_ID, signal_code: CALENDAR_RETURN_SIGNAL_CODE, params: {window_days: windowDays}};
+    }
+
+    /** The view a card shows: its own saved one, else the list's (Y-40). */
+    function cardPrimaryView(assetId: number): ChartPrimaryView {
+        void getSettingsVersion();
+        return getSettingsForPair(`asset-${assetId}`, 'assets').primaryView;
+    }
+
+    /** The top bar (V-3 a): every card takes the view; the cards that enter or leave the rolling return ask their data again. */
+    function handleListPrimaryView(view: ChartPrimaryView) {
+        const toCalendar = view === 'calendar-return';
+        const changed = assets.filter((asset) => (cardPrimaryView(asset.id) === 'calendar-return') !== toCalendar).map((asset) => asset.id);
+        setScopePrimaryView(view, 'assets');
+        if (changed.length > 0) void pageBusy.track('assets-view', () => fetchPriceSeries(new Set(changed)));
+    }
+
+    /** A card's button (V-1 a): that card keeps the view; entering or leaving the rolling return, it asks its data again. */
+    function handleCardPrimaryView(assetId: number, view: ChartPrimaryView) {
+        const wasCalendar = cardPrimaryView(assetId) === 'calendar-return';
+        setItemPrimaryView(`asset-${assetId}`, view, 'assets');
+        if (wasCalendar !== (view === 'calendar-return')) void pageBusy.track('assets-view', () => fetchPriceSeries(new Set([assetId])));
+    }
+
+    function translateCalendarProblem(key: string, values?: Record<string, string | number>): string {
+        return values ? $t(key, {values}) : $t(key);
+    }
+
+    /** A card's rolling return, with the detail's message when the backend has none (V-7 a). */
+    function cardCalendarReturn(assetId: number) {
+        const view = calendarByCard.get(assetId)?.own ?? emptyCalendarReturnView('loading');
+        const problemMessage = view.problem ? formatSignalProblem(view.problem, translateCalendarProblem, (field) => $t(`signals.dataFields.${field}`)) : view.state === 'error' ? $t('chartSettings.signalResultsUnavailable') : null;
+        return {state: view.state, points: view.points, problemCode: view.problem?.code ?? null, problemMessage};
+    }
+
+    /** A card's comparisons in the rolling-return view: their targets' returns (V-5 a), drawn as the detail draws them. */
+    function cardCalendarOverlays(assetId: number): RenderedSignal[] {
+        const views = calendarByCard.get(assetId)?.targets;
+        if (!views) return [];
+        const target = (id: number) => {
+            const asset = assets.find((item) => item.id === id);
+            return asset ? {displayName: asset.display_name, iconUrl: asset.icon_url, assetType: asset.asset_type} : null;
+        };
+        return renderCalendarComparisons(getSettingsForPair(`asset-${assetId}`, 'assets').signals, views, target, (id) => $t('chartSettings.signals.assetFallback', {values: {id: String(id)}}), assetId);
+    }
+
+    /**
      * The prices and backend signals of the cards (Z-29b). Each card asks for the series its plot takes, one point a day, a
      * week or a month (`max_points` from its measured width; `utils/reducedPriceQuery.ts`), and each comparison target for
      * the same buckets (`sample_like`). Only what the reduced cache (`stores/reducedPriceCache.ts`) does not hold, or holds
@@ -758,9 +821,15 @@
         >();
         const nextSignalResults = new Map(signalResultsByAsset);
         const nextTargetSamples = new Map(targetSamples);
+        /** The cards in the rolling-return view (Y-40): each asks its return, and its comparisons' on its buckets. */
+        const calendarCards = new Set<number>();
 
         for (const asset of wanted) {
-            const configs = getSettingsForPair(`asset-${asset.id}`, 'assets').signals;
+            const settings = getSettingsForPair(`asset-${asset.id}`, 'assets');
+            const calendarRequest = settings.primaryView === 'calendar-return' ? calendarReturnRequest(settings, rangeStart, rangeEnd) : null;
+            if (calendarRequest) calendarCards.add(asset.id);
+            // V-5 a: in the rolling-return view the comparisons are the only signals; the others stay saved and are not asked.
+            const configs = calendarRequest ? [] : settings.signals;
             const plan = buildBackendSignalRequestPlan(configs, signalDefinitions);
             const state = resultStateForAsset(asset.id);
             const requestVersion = state.beginRequest();
@@ -772,7 +841,7 @@
             if (own) cached.set(asset.id, own);
             if (needsPrice) needFetchIds.add(asset.id);
 
-            const targetIds = comparisonTargetIds(configs, asset.id).filter((id) => listedIds.has(id));
+            const targetIds = comparisonTargetIds(settings.signals, asset.id).filter((id) => listedIds.has(id));
             const prefix = `${asset.id}|`;
             for (const key of [...nextTargetSamples.keys()]) {
                 if (key.startsWith(prefix) && !targetIds.includes(Number(key.slice(prefix.length)))) nextTargetSamples.delete(key);
@@ -782,8 +851,27 @@
                 if (sample) nextTargetSamples.set(`${asset.id}|${assetId}`, sample);
                 return {assetId, needsRead: needsPrice || sample === null || sample.stale};
             });
-            cards.push({assetId: asset.id, plotWidthPx, start: rangeStart, end: rangeEnd, needsPrice, signals: plan.requests, targets});
+            cards.push({
+                assetId: asset.id,
+                plotWidthPx,
+                start: rangeStart,
+                end: rangeEnd,
+                needsPrice,
+                signals: calendarRequest ? [calendarRequest] : plan.requests,
+                targets,
+                // The comparisons' returns in the card's currency, as the detail page asks them.
+                ...(calendarRequest ? {calendar: {signals: [calendarRequest], targetCurrency: asset.currency}} : {}),
+            });
         }
+
+        // The cards leaving the rolling-return view drop their returns; those in it keep theirs on screen while the new ones load.
+        const nextCalendar = new Map(calendarByCard);
+        for (const asset of wanted) {
+            const previous = nextCalendar.get(asset.id);
+            if (!calendarCards.has(asset.id)) nextCalendar.delete(asset.id);
+            else nextCalendar.set(asset.id, {own: {...(previous?.own ?? emptyCalendarReturnView()), state: 'loading'}, targets: previous?.targets ?? new Map()});
+        }
+        calendarByCard = nextCalendar;
 
         const entries = buildReducedQuery(cards);
         const sentCardIds = new Set(entries.map((entry) => entry.cardId));
@@ -855,10 +943,17 @@
             // Put what was read into the cache (cheap: Map.set calls); a result is tied to its entry by its position in the batch.
             const read = new Map<number, ReducedEntry>();
             const signalsByCard = new Map<number, ProcessedAssetResult['signals']>();
+            const calendarTargets = new Map<number, Map<number, CalendarReturnView>>();
             for (const {batch, answer} of outcome.answers) {
                 for (const result of answer.results) {
                     const entry = batch.items[result.requestIndex];
                     if (!entry) continue;
+                    if (entry.role === 'target' && calendarCards.has(entry.cardId)) {
+                        // A comparison's return, asked without prices: its sample in the cache is not touched.
+                        if (!calendarTargets.has(entry.cardId)) calendarTargets.set(entry.cardId, new Map());
+                        calendarTargets.get(entry.cardId)!.set(entry.targetId!, extractCalendarReturnView(result.signals, CALENDAR_RETURN_INSTANCE_ID));
+                        continue;
+                    }
                     if (entry.role === 'target') {
                         nextTargetSamples.set(`${entry.cardId}|${entry.targetId}`, reducedPrices.putTarget(entry.targetId!, entry.cardId, rangeStart, rangeEnd, {resolution: result.resolution, derived: result.derived}));
                         continue;
@@ -879,6 +974,13 @@
             }
             signalResultsByAsset = nextSignalResults;
             targetSamples = nextTargetSamples;
+            const answeredCalendar = new Map(calendarByCard);
+            for (const assetId of calendarCards) {
+                const previous = answeredCalendar.get(assetId);
+                if (!previous) continue;
+                answeredCalendar.set(assetId, unansweredCardIds.has(assetId) ? {own: {...previous.own, state: 'error'}, targets: previous.targets} : {own: extractCalendarReturnView(signalsByCard.get(assetId) ?? [], CALENDAR_RETURN_INSTANCE_ID), targets: calendarTargets.get(assetId) ?? new Map()});
+            }
+            calendarByCard = answeredCalendar;
 
             // The series read now, else the cached one (a card that asked only for its targets or signals).
             assets = assets.map((asset) => (wantedIds.has(asset.id) ? assetWithEntry(asset, read.get(asset.id) ?? cached.get(asset.id) ?? null) : asset));
@@ -887,6 +989,12 @@
         } catch (e: any) {
             console.error('Failed to fetch prices bulk:', e);
             signalRequestFailed = [...requestContexts.values()].some((context) => context.plan.requests.length > 0);
+            const failedCalendar = new Map(calendarByCard);
+            for (const assetId of calendarCards) {
+                const previous = failedCalendar.get(assetId);
+                if (previous) failedCalendar.set(assetId, {own: {...previous.own, state: 'error'}, targets: previous.targets});
+            }
+            calendarByCard = failedCalendar;
             // For cached assets, still use cached data; for others, clear loading
             assets = assets.map((a) => (wantedIds.has(a.id) ? assetWithEntry(a, cached.get(a.id) ?? null) : a));
         } finally {
@@ -1254,16 +1362,71 @@
             targetCardId !== null
                 ? comparisonFingerprint(settingsForModal.signals, targetCardId) !== comparisonFingerprint(s.signals, targetCardId)
                 : assets.some((asset) => comparisonFingerprint(getSettingsForPair(`asset-${asset.id}`, 'assets').signals, asset.id) !== comparisonFingerprint(s.signals, asset.id));
+        const calendarBefore = targetCardId !== null ? cardPrimaryView(targetCardId) === 'calendar-return' : assets.some((asset) => cardPrimaryView(asset.id) === 'calendar-return');
         if (settingsTargetId) {
             setPairSettings(`asset-${settingsTargetId}`, s);
         } else {
             setGlobalSettings(s, 'assets');
         }
-        if (shouldReloadBackend || shouldReloadTargets) {
+        // The rolling-return view asks its own data (Y-40): entering it, leaving it, or a window changed in it reloads.
+        const shouldReloadCalendar = calendarBefore || s.primaryView === 'calendar-return';
+        if (shouldReloadBackend || shouldReloadTargets || shouldReloadCalendar) {
             // A card's own settings reload that card; only the global ones reload them all (Q-Z29-2).
             const only = targetCardId !== null ? new Set([targetCardId]) : undefined;
             void pageBusy.track('assets-settings', () => fetchPriceSeries(only));
         }
+    }
+
+    /** The plot width the settings preview asks its rolling return for (Y-40): about the preview chart's. */
+    const CALENDAR_PREVIEW_PLOT_WIDTH_PX = 600;
+
+    /**
+     * The rolling return of the settings preview (Y-40). A card's: its own return over the range on screen, and its
+     * comparisons', as the card asks them. The global settings': the synthetic curve the modal hands, through
+     * `/signals/preview`, as the other backend signals of that preview.
+     */
+    async function resolveCalendarPreview(windowDays: number, configs: SignalConfig[], points: LineDataPoint[]): Promise<{points: LineDataPoint[]; overlays: RenderedSignal[]} | null> {
+        const request = {instance_id: CALENDAR_RETURN_INSTANCE_ID, signal_code: CALENDAR_RETURN_SIGNAL_CODE, params: {window_days: windowDays}};
+        const cardId = settingsTargetId ? Number(settingsTargetId) : null;
+        if (cardId === null) {
+            if (points.length === 0) return null;
+            const response = await zodiosApi.compute_signal_preview_api_v1_signals_preview_post({domain: 'asset', points: points.map((point) => ({date: point.date, value: point.value})), signals: [request]});
+            const view = extractCalendarReturnView(response.signals ?? [], CALENDAR_RETURN_INSTANCE_ID);
+            return view.state === 'ready' || view.state === 'partial' ? {points: view.points, overlays: []} : null;
+        }
+        const card = assets.find((asset) => asset.id === cardId);
+        if (!card) return null;
+        const targets = comparisonTargetIds(configs, cardId).filter((assetId) => assets.some((asset) => asset.id === assetId));
+        const entries = buildReducedQuery([
+            {
+                assetId: cardId,
+                plotWidthPx: CALENDAR_PREVIEW_PLOT_WIDTH_PX,
+                start: dateStart,
+                end: dateEnd,
+                needsPrice: false,
+                signals: [request],
+                targets: targets.map((assetId) => ({assetId, needsRead: false})),
+                calendar: {signals: [request], targetCurrency: card.currency},
+            },
+        ]);
+        const response = await axiosInstance.post(
+            '/api/v1/assets/prices/query',
+            entries.map((entry) => entry.item),
+        );
+        // The answer's items come in the request's order.
+        const items: unknown[] = Array.isArray(response.data?.items) ? response.data.items : [];
+        const signalsOf = (index: number): unknown => {
+            const item = items[index];
+            return typeof item === 'object' && item !== null ? (item as {signals?: unknown}).signals : undefined;
+        };
+        const own = extractCalendarReturnView(signalsOf(0), CALENDAR_RETURN_INSTANCE_ID);
+        if (own.state !== 'ready' && own.state !== 'partial') return null;
+        const views = new Map(entries.slice(1).map((entry, index) => [entry.targetId!, extractCalendarReturnView(signalsOf(index + 1), CALENDAR_RETURN_INSTANCE_ID)]));
+        const target = (id: number) => {
+            const asset = assets.find((item) => item.id === id);
+            return asset ? {displayName: asset.display_name, iconUrl: asset.icon_url, assetType: asset.asset_type} : null;
+        };
+        return {points: own.points, overlays: renderCalendarComparisons(configs, views, target, (id) => $t('chartSettings.signals.assetFallback', {values: {id: String(id)}}), cardId)};
     }
 
     function handleCardSettings(asset: {id: number}) {
@@ -1297,11 +1460,36 @@
     }
 
     /**
+     * A comparison target the settings preview of a sampled card asks for before it is saved (Z-29d, reduced): read once,
+     * sampled like the card, into the reduced cache and `targetSamples`, where the preview reads it and redraws. The card's
+     * item gives only its step (`include_price: false`, no signals: Z-29a-f).
+     */
+    async function readTargetSample(request: TargetSampleRequest): Promise<void> {
+        const width = plotWidths.get(request.cardId) ?? DEFAULT_COMPACT_PLOT_WIDTH_PX;
+        const entries = buildReducedQuery([{assetId: request.cardId, plotWidthPx: width, start: request.start, end: request.end, needsPrice: false, signals: [], targets: [{assetId: request.targetId, needsRead: true}]}]);
+        const response = await axiosInstance.post(
+            '/api/v1/assets/prices/query',
+            entries.map((entry) => entry.item),
+        );
+        const {results} = await processPriceItemsInParallel(response.data?.items ?? []);
+        const next = new Map(targetSamples);
+        for (const result of results) {
+            const entry = entries[result.requestIndex];
+            if (entry?.role !== 'target' || entry.targetId === null) continue;
+            next.set(`${entry.cardId}|${entry.targetId}`, reducedPrices.putTarget(entry.targetId, entry.cardId, request.start, request.end, {resolution: result.resolution, derived: result.derived}));
+        }
+        targetSamples = next;
+    }
+
+    const targetSampleLoader = new TargetSampleLoader(readTargetSample, (request, error) => console.error('Failed to read a comparison target for the settings preview:', request, error));
+
+    /**
      * Where the cards — and their settings preview — get the series their FX pair and comparison signals read (Y-39a):
      * the pairs from the FX stores, straight; the comparison targets sampled like the card (Z-29b), or, before they are
-     * read, from the cards of the list when both are daily. A card never draws a comparison with its own asset.
+     * read, from the cards of the list when both are daily. A card never draws a comparison with its own asset. With
+     * `readMissing` (the settings preview), a target a sampled card has not read yet is asked for (Z-29d, reduced).
      */
-    function signalSourcesFor(selfAssetId: number | null): SignalDataSources {
+    function signalSourcesFor(selfAssetId: number | null, readMissing = false): SignalDataSources {
         return {
             fxPairData: (pairSlug) =>
                 getFxStore(pairSlug)
@@ -1316,6 +1504,9 @@
                 if (sample) return comparisonTargetFrom(sample, names);
                 // Not read yet: its own series, only where it has the card's dates, both daily (the preview of the global settings has none).
                 const self = selfAssetId === null ? undefined : assets.find((asset) => asset.id === selfAssetId);
+                if (readMissing && self && (self.resolution ?? 'daily') !== 'daily') {
+                    targetSampleLoader.want({cardId: self.id, targetId: assetId, start: dateStart, end: dateEnd, maxPoints: compactMaxPoints(plotWidths.get(self.id) ?? DEFAULT_COMPACT_PLOT_WIDTH_PX)});
+                }
                 if ((self?.resolution ?? 'daily') !== 'daily' || (target.resolution ?? 'daily') !== 'daily' || !target.chartData.length) return null;
                 return {data: target.chartData, ...names};
             },
@@ -1324,7 +1515,7 @@
     }
 
     /** The settings preview reads the series as the cards do: in a card's settings, with that card's own sources. */
-    let settingsSignalSources = $derived(signalSourcesFor(settingsTargetId ? Number(settingsTargetId) : null));
+    let settingsSignalSources = $derived(signalSourcesFor(settingsTargetId ? Number(settingsTargetId) : null, true));
 
     /**
      * Global (filter-bar) mode: compute backend overlay signals live on the
@@ -1379,7 +1570,8 @@
      * is readable by assistive tech (`aria-busy`) and by anything else that needs to know
      * whether what it is looking at is final.
      */
-    let busy = $derived(loading || assetEditLoading || periodChangesLoading || assets.some((a) => a.loadingPrices));
+    // The cards' rolling returns are a load wave too (Y-40): `data-busy` holds until they are in.
+    let busy = $derived(loading || assetEditLoading || periodChangesLoading || assets.some((a) => a.loadingPrices) || [...calendarByCard.values()].some((entry) => entry.own.state === 'loading'));
 </script>
 
 <div class="space-y-6 text-lf-primary" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-live-updates={liveUpdatesState} data-testid="assets-page">
@@ -1714,24 +1906,34 @@
                 {#if viewMode === 'list'}
                     <ColumnVisibilityToggle tableRef={assetTableRefs['own']?.getTableRef()} additionalTableRefs={[assetTableRefs['others']?.getTableRef(), assetTableRefs['analysis']?.getTableRef()].filter((r) => r != null)} showLabel={showActionLabels} />
                 {:else}
-                    <div class="flex rounded-lg border border-lf-subtle overflow-hidden">
+                    <!-- The cards' view (Y-40): absolute, percent, rolling return -->
+                    <div class="flex rounded-lg border border-lf-subtle overflow-hidden" data-testid="assets-global-view" data-view={globalPrimaryView}>
                         <button
                             type="button"
-                            class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                             data-testid="assets-global-view-absolute"
-                            onclick={() => {
-                                globalViewMode = 'absolute';
-                            }}
+                            aria-pressed={globalPrimaryView === 'absolute'}
+                            onclick={() => handleListPrimaryView('absolute')}
                             >Abs
                         </button>
                         <button
                             type="button"
-                            class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                             data-testid="assets-global-view-percentage"
-                            onclick={() => {
-                                globalViewMode = 'percentage';
-                            }}
+                            aria-pressed={globalPrimaryView === 'percentage'}
+                            onclick={() => handleListPrimaryView('percentage')}
                             >%
+                        </button>
+                        <button
+                            type="button"
+                            class="flex-1 inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'calendar-return' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            data-testid="assets-global-view-calendar-return"
+                            aria-pressed={globalPrimaryView === 'calendar-return'}
+                            aria-label={$t('signals.riskRollingReturn.name')}
+                            title={$t('signals.riskRollingReturn.name')}
+                            onclick={() => handleListPrimaryView('calendar-return')}
+                        >
+                            <CalendarSync size={14} />
                         </button>
                     </div>
                 {/if}
@@ -1864,7 +2066,10 @@
                                     deltaAbs={rangeDeltas.get(asset.id)?.abs ?? null}
                                     dateStart={urlDateStart}
                                     dateEnd={urlDateEnd}
-                                    {globalViewMode}
+                                    primaryView={cardPrimaryView(asset.id)}
+                                    onprimaryviewchange={handleCardPrimaryView}
+                                    calendarReturn={cardPrimaryView(asset.id) === 'calendar-return' ? cardCalendarReturn(asset.id) : undefined}
+                                    calendarOverlaySignals={cardPrimaryView(asset.id) === 'calendar-return' ? cardCalendarOverlays(asset.id) : []}
                                     chartSettings={getSettingsForPair(`asset-${asset.id}`, 'assets')}
                                     renderSignals={(chartData, vm) => getRenderedSignals(asset.id, chartData, vm)}
                                     chartData={asset.chartData}
@@ -1947,6 +2152,8 @@
     availablePairs={fxPairSlugs}
     availableAssets={assets.map((a) => ({id: a.id, display_name: a.display_name, icon_url: a.icon_url, asset_type: a.asset_type}))}
     signalSources={settingsSignalSources}
+    calendarRangeDays={calendarReturnRangeDays(dateStart, dateEnd)}
+    calendarPreviewResolver={resolveCalendarPreview}
 />
 
 <!-- Delete Asset Confirm Dialog (single) -->
