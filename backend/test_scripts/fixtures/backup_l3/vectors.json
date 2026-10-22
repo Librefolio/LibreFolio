@@ -136,6 +136,26 @@
         "test-identity-1.txt"
       ],
       "password": "dxuCTq8RDj8JabdjMGTzKEaTSpvWo_jubTNrrGN0J1g"
+    },
+    {
+      "file": "neg-hidden-member.tar",
+      "expect": "sealed_tar_invalid",
+      "note": "a fourth member after a single zero block: tar -i would extract it",
+      "tar_sha256": "f6d0ea272a9a2ec5254dea078a71631ce91360a67a1cb2dddc3b22281f76f1fa",
+      "tar_size": 10240,
+      "identities": [
+        "test-identity-1.txt"
+      ]
+    },
+    {
+      "file": "neg-trailing-garbage.tar",
+      "expect": "sealed_tar_invalid",
+      "note": "100 bytes that are not zeros after the end of the archive",
+      "tar_sha256": "cb6e32776f3dea1e883aa0862655791177f492d0607910aad46de0dd86ffdb02",
+      "tar_size": 10340,
+      "identities": [
+        "test-identity-1.txt"
+      ]
     }
   ],
   "cloud_derivation": [
