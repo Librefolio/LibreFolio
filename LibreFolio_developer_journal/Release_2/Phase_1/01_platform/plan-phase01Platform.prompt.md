@@ -10361,3 +10361,92 @@ mescolare le righe del runner dei due lotti:
     > passo 5 verde), e non conta fra i falliti.
     > **Prove** (corsia 6181, in `flock`, log `ondata3/h-gate8-*.log`): `csp-collector` 23 verdi (1 saltato) due volte;
     > `front-utility all` (30 min 36 s) rosso solo su `files.spec.ts:826`, atteso finché il developer non decide Q-CDN.
+
+#### H-55, il visore PDF senza CDN, R4 e R5 — analisi (ondata 4, 22/10, base `c042f2481`, sola lettura)
+
+> Decisioni del developer (22/10), via coordinatore: R5 (a), le docs dell'API servite da noi e spente nel managed; font
+> CJK (c), il nostro server li scarica una volta da jsDelivr, controlla l'hash atteso (lista generata dalla copia in
+> `node_modules`, versione fissata), li tiene in cache sul volume e li serve: `connect-src` resta `'self'`; il ripiego del
+> motore si toglie; R4 nello stesso lotto.
+
+**Stato vero**:
+- `pdfViewerAssets(base)` (`frontend/src/lib/utils/files/pdfViewerAssets.ts`): se la sonda HEAD del motore locale fallisce
+  torna `{}`, e il visore usa i suoi default (`https://cdn.jsdelivr.net/npm/@embedpdf/pdfium@2.14.3/dist/pdfium.wasm` e i
+  font dal CDN); sotto la politica è bloccato e l'anteprima gira all'infinito. `localFontFallback` manda i 4 set CJK al CDN
+  (`CDN_FONTS_VERSION = '1.0.0'`); latino, arabo ed ebraico sono già nostri.
+- `FilePreviewModal.svelte`: un errore di `EmbedPDF.init` (o un'eccezione prima) mette `pdfError` e mostra il visore del
+  browser in un `iframe` (`file-preview-pdf-fallback`, testo `uploads.previewFallbackPdf`, già in 4 lingue).
+- I pacchetti CJK: `fonts-jp` 7 pesi, `fonts-kr` 7, `fonts-sc` 5, `fonts-tc` 7 (26 file, ~141 MB in tutto; Regular + Bold
+  ~47 MB). Il visore chiede un file solo quando un PDF lo richiede, e sceglie il peso più vicino.
+- I worker: uno solo caricato da URL, `priceProcessing.worker-*.js` (`/_app/immutable/workers/`, modulo, importa chunk di
+  `/_app`); il motore del visore gira in un worker da `blob`, che eredita già la politica della pagina; i calcoli del
+  rischio sono nel backend.
+- Le docs dell'API: `main.py:53-55` (`docs_url`, `redoc_url`, `openapi_url`) con le pagine di FastAPI, che caricano
+  `swagger-ui-dist@5` e `redoc@2` da jsDelivr. Nei `node_modules` non c'è né `swagger-ui-dist` né `redoc`.
+
+**Proposta**:
+1. **Font CJK dal nostro server** (backend, nuovo `services/files/pdf_fonts.py` + `api/v1/pdf_fonts.py`, registrato da
+   `router.py`): `GET /api/v1/files/pdf-fonts/{package}/{file}` per i soli 26 file della lista (nient'altro: nessun
+   nome libero verso jsDelivr). Alla prima richiesta di un file: scaricato da
+   `https://cdn.jsdelivr.net/npm/@embedpdf/{package}@{versione}/fonts/{file}` (host e versione fissi nel codice), fuori
+   dal loop degli eventi, un download alla volta per file (lock), dimensione massima, hash `sha256` confrontato con la
+   lista **prima** di scriverlo; scritto in `DATA_DIR/cache/pdf-fonts/` con un nome temporaneo e un rename atomico; poi
+   servito come `font/otf`, `Cache-Control: public, max-age=31536000, immutable`. Hash diverso: scartato, warning, 502;
+   CDN irraggiungibile: 503 (il PDF si vede senza quei glifi). La lista: `backend/app/services/files/pdf_font_hashes.json`
+   (pacchetto, versione, file, sha256, dimensione), generata da uno script (`frontend/scripts/pdf-font-hashes.mjs`) dalla
+   copia in `node_modules`; un Vitest la tiene uguale ai pacchetti installati, come oggi `CDN_FONTS_VERSION`.
+   Frontend: `localFontFallback` punta i 4 set CJK a `/api/v1/files/pdf-fonts/…`.
+2. **Il ripiego del motore tolto**: `pdfViewerAssets` lancia un errore se la copia locale non risponde (mai `{}`); il
+   visore riceve sempre `wasmUrl` e `fontFallback` nostri.
+3. **R4**: ogni risposta JavaScript sotto `/_app/` riceve una politica da worker:
+   `script-src 'self'; connect-src 'self' <sorgenti della pagina>; worker-src 'self' blob:; object-src 'none';
+   base-uri 'self'`. Un browser la applica solo a uno script caricato come worker (sugli altri script è ignorata): oggi
+   cambia solo per `priceProcessing.worker`, che importa solo da `/_app` e non chiama la rete. Niente su un 304.
+4. **R5**: le pagine di Swagger e ReDoc fatte da noi, con le librerie servite dall'immagine (versione fissata, hash
+   controllato da un test) e lo script d'avvio in un file nostro, non inline: così anche lì `script-src 'self'`. Nel
+   profilo managed `docs_url` e `redoc_url` spenti (404).
+
+**I rossi**:
+- `test_pdf_fonts.py` (nuovo, puro, scaricamento finto): la lista (26 file, nomi sicuri); un file servito e messo in
+  cache, poi servito dalla cache senza scaricare; hash sbagliato → scartato, niente in cache, warning, 502; rete giù →
+  503; nome fuori lista o con `..` → 404; due richieste insieme → un solo download; dimensione oltre il massimo →
+  scartato; risposta `font/otf` con `immutable` e `nosniff`; scaricamento fuori dal loop; serve una sessione (se la
+  domanda Q-B ha risposta (a)).
+- `test_managed_headers.py`: la politica dei worker sui `.js` sotto `/_app/` (anche quelli non worker), nessuna politica
+  sul 304, nessuna sui `.js` fuori da `/_app`; R5: le pagine delle docs con librerie locali e `script-src 'self'`, 404
+  nel managed.
+- Vitest: `pdfViewerAssets` (CJK verso `/api/v1/files/pdf-fonts/`, errore senza motore locale, nessuna URL di
+  `cdn.jsdelivr.net` nella configurazione del visore); la lista degli hash uguale ai pacchetti installati.
+- E2E: `files.spec.ts:826` al contrario (motore locale irraggiungibile → nessuna richiesta al CDN, l'anteprima ripiega
+  come da Q-A); `files-pdf-offline` con i font chiesti solo alla nostra origine. Corsa completa nello slot (R4).
+
+**File**: nuovi `services/files/pdf_fonts.py`, `services/files/pdf_font_hashes.json`, `api/v1/pdf_fonts.py`,
+`frontend/scripts/pdf-font-hashes.mjs`, i test; modificati `router.py`, `security_headers.py`, `main.py` (R5),
+`config/__init__.py` (`cache` nei `managed_paths`), `pdfViewerAssets.ts`, `FilePreviewModal.svelte` (se serve per Q-A),
+`files.spec.ts`, `files-pdf-offline.spec.ts`, il runner (righe additive), la doc (`configuration.en.md#csp`,
+`security.md`).
+
+**Passi (ondata 4, parte 1)**:
+1. ✅ **La lista degli hash** (22/10): `frontend/scripts/pdf-font-hashes.mjs` scrive
+   `backend/app/services/files/pdf_font_hashes.json` dalla copia in `node_modules` (versione 1.0.0, 26 file, 138 MB);
+   `--check` esce 1 se il file non corrisponde. Guardia: Vitest `pdfFontHashes.test.ts` (in `core-unit`).
+2. ✅ **I font CJK dal nostro server** (22/10). Rossi `test_pdf_fonts.py` (33, modulo mancante) → verdi 33.
+   > **Note implementazione**: `services/files/pdf_fonts.py` (lista letta come il JSON, solo i nomi esatti, scaricamento
+   > da host e versione fissi senza redirect e con il tetto della dimensione attesa, `sha256` prima di scrivere, rename
+   > atomico in `DATA_DIR/cache/pdf-fonts/`, un lucchetto per file); `api/v1/pdf_fonts.py` (sessione richiesta, 404, 503
+   > `pdf_font_unavailable`, 502 `pdf_font_mismatch`, `font/otf` `private, max-age=31536000, immutable`, fuori dallo schema
+   > OpenAPI per non allungare il client generato), registrato da `router.py`; `cache` nei `managed_paths`.
+   > **⚠️ Fuori pista**: PFT-015 leggeva `app.routes` piatto (`_IncludedRouter`), riparato con `iter_route_contexts`;
+   > `source_url` accetta anche una voce in forma di `dict`, come la lista.
+3. ✅ **Il ripiego del motore tolto** (22/10). Rossi Vitest `pdfViewerAssets.test.ts` (4) → verdi (66 con
+   `pdfFontHashes` e `FilePreviewModal`). `pdfViewerAssets` lancia un errore senza motore locale; i CJK puntano a
+   `/api/v1/files/pdf-fonts/`; `FilePreviewModal` mostra il visore del browser (Q-A (a), in attesa di conferma). E2E
+   `files.spec.ts:826` rovesciato e `files-pdf-offline` (nessuna richiesta a jsDelivr) riscritti, da provare nello slot.
+4. ✅ **R4** (22/10). Rossi `test_managed_headers.py` (118) → verdi 720; 13 test vecchi aggiornati alla politica dei
+   worker (test-author). `worker_policy()` su ogni JavaScript sotto `/_app/`, mai su un 304.
+   > **⚠️ Fuori pista**: tolte `PDF_VIEWER_CDN_ORIGIN` ed `EXTRA_CONNECT_SOURCES`: con la decisione (c) il CDN non entra
+   > mai in `connect-src`, e una manopola vuota inviterebbe ad allargare la maglia.
+5. ⏳ **R5**, preparato e fermo (in attesa di Q-C e Q-D). Disegno: `docs_url` e `redoc_url` a `None` in `main.py`; un
+   modulo nostro (`api/api_docs.py`) con le due pagine, senza script inline (l'avvio in un file nostro), senza Google
+   Fonts, con le librerie servite dalla build (copiate da `node_modules` se Q-C (a)); nessuna rotta nel managed (404),
+   e `openapi.json` spento lì se Q-D sì; sulle due pagine `script-src 'self'` (e `worker-src 'self' blob:` per ReDoc).

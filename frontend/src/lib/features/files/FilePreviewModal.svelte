@@ -204,8 +204,8 @@
         void (async () => {
             try {
                 const [{default: EmbedPDF, DocumentManagerPlugin, TilingPlugin}, {pdfViewerAssets, pdfViewerOfflineOptions}] = await Promise.all([import('@embedpdf/snippet'), import('$lib/utils/files/pdfViewerAssets')]);
-                // Our engine and fallback fonts when they answer, the viewer's CDN defaults otherwise; nothing else is
-                // asked of a third party (pdfViewerAssets.ts).
+                // Our engine and fallback fonts, never the viewer's CDN defaults: without our engine this throws, and
+                // the catch below shows the browser's own viewer (pdfViewerAssets.ts, lot H-55)
                 const assets = await pdfViewerAssets(document.baseURI);
                 if (disposed) return;
                 const viewer = await Promise.resolve(

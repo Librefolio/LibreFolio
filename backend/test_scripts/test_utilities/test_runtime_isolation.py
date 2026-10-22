@@ -476,7 +476,9 @@ class TestDataDirResolution:
 
         assert not production_dir.exists() and not candidate.exists()
 
-    @pytest.mark.parametrize("managed_relative", ["sqlite", "sqlite/app.db", "secrets", "secrets/instance.key", "backups", ".restore", "scheduler_state.json", SCHEDULER_LOCK])
+    # "cache": the volume's cache folder (H-55 wave 4: ``cache/pdf-fonts/``, the CJK fonts the instance fetched once), a managed path
+    # of the guard like "backups": a test root whose ``cache`` leads into the production one is refused. Red until ``cache`` is in ``managed_paths``.
+    @pytest.mark.parametrize("managed_relative", ["sqlite", "sqlite/app.db", "secrets", "secrets/instance.key", "backups", ".restore", "scheduler_state.json", SCHEDULER_LOCK, "cache"])
     def test_managed_symlink_escaping_into_another_root_is_rejected_before_mutation(self, runtime_env, tmp_path, managed_relative):
         # Both roots are synthetic: the only thing under test is whether the guard
         # resolves symlinks instead of comparing unresolved path strings.

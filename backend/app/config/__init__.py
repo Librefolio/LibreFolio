@@ -513,6 +513,8 @@ def validate_test_data_dir(  # noqa: C901 — ordered safety boundary: identity,
         Path(".restore"),
         # The registry of the hosting panel's used tickets (workstream H, H-61 L2: ticket_registry.REGISTRY_FILE)
         Path("panel_tickets.sqlite3"),
+        # The caches the app keeps on the volume: the PDF viewer's CJK fonts (workstream H, H-55: pdf_fonts.cache_dir)
+        Path("cache"),
     )
     for relative in managed_paths:
         test_target = (candidate / relative).resolve()

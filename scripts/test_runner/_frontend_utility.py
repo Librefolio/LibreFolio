@@ -135,6 +135,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/utils/files/imageCrop.test.ts",
             "src/lib/utils/files/pdfPreviewState.test.ts",
             "src/lib/utils/files/pdfViewerAssets.test.ts",
+            "src/lib/utils/files/pdfFontHashes.test.ts",
             "src/lib/utils/currency/fxConversionHelper.test.ts",
             "src/lib/utils/currency/currencyFormat.test.ts",
             "src/lib/utils/currency/currencyGraph.test.ts",

@@ -1511,6 +1511,14 @@ def services_hosting_panel_vectors(verbose: bool = False, test_names: list = Non
     return run_command(cmd, "Hosting panel ticket vector tests", verbose=verbose)
 
 
+def services_pdf_fonts(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the PDF viewer's CJK fonts served by the instance (H-55): the hash list, the cache, a wrong hash thrown away, the route."""
+    print_section("Services: PDF Fonts")
+    print_info("Testing: backend/app/services/files/pdf_fonts.py, backend/app/api/v1/pdf_fonts.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_pdf_fonts.py", test_names)
+    return run_command(cmd, "PDF font tests", verbose=verbose)
+
+
 def services_client_address(verbose: bool = False, test_names: list = None) -> bool:
     """Test the client address behind a trusted proxy: LIBREFOLIO_CLIENT_IP_HEADER, client_address and client_rate_key (P17); no function only for the tests (N58)."""
     print_section("Services: Client Address")
@@ -2979,6 +2987,15 @@ Note: No backend server required.
         name="Hosting Panel Ticket Test Vectors",
         desc="H-61 L2: the JSON block after #panel-api-test-vectors in the admin guide: the seed derives the public key and LIBREFOLIO_PANEL_PUBLIC_KEYS, the ticket is the header and payload signed by it (byte for byte), each verdict row is what verify_ticket answers through the real readers, and the rows cover both tolerance edges, the wrong scope and the wrong audience",
         # PURE: reads one docs page from the repository; variables through monkeypatch; no clock, DB or server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pdf-fonts",
+        services_pdf_fonts,
+        name="PDF Fonts",
+        desc="H-55: the CJK fonts of the PDF viewer served by the instance: the list of 26 files with their sha256 (pdf_font_hashes.json), only exact names of it; fetched once from the fixed source, checked before writing, renamed atomically into DATA_DIR/cache/pdf-fonts, one fetch per file under concurrency, a wrong size fetched again; a wrong hash thrown away and logged (502 pdf_font_mismatch), the source unreachable (503 pdf_font_unavailable); the route needs a session, answers font/otf private immutable, runs off the event loop, and stays out of the OpenAPI schema",
+        # PURE: a data directory of its own under tmp_path, the network replaced by a fake fetch, fresh apps in process.
         isolation="pure",
     )
     add_test(

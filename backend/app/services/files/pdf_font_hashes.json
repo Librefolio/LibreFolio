@@ -1,0 +1,161 @@
+{
+  "version": "1.0.0",
+  "files": [
+    {
+      "package": "fonts-jp",
+      "file": "NotoSansJP-Black.otf",
+      "size": 4808724,
+      "sha256": "dbc16d1b4116e6fa08672b148e6f5d0bdb836044fb1d0de3531241a5f6a96bd9"
+    },
+    {
+      "package": "fonts-jp",
+      "file": "NotoSansJP-Bold.otf",
+      "size": 4666284,
+      "sha256": "f9dccc1ed9cf1c6c431cf7b29d884ae745f1db6477bf00503a3714f627599f40"
+    },
+    {
+      "package": "fonts-jp",
+      "file": "NotoSansJP-DemiLight.otf",
+      "size": 4531488,
+      "sha256": "f204dc02510fa3be76c7630e0ec607d3dbc0e82ee94bc3d08e34b8152816b2f6"
+    },
+    {
+      "package": "fonts-jp",
+      "file": "NotoSansJP-Light.otf",
+      "size": 4497864,
+      "sha256": "2fe18ed5fe8b4a6cc368f78cf54b184c012f93bad115f3de09b2db7db2d6ab46"
+    },
+    {
+      "package": "fonts-jp",
+      "file": "NotoSansJP-Medium.otf",
+      "size": 4559248,
+      "sha256": "2ee91a06b006207c9f82abb97bb8d71557149e952d81ea7bdbc18e5812ff7e5c"
+    },
+    {
+      "package": "fonts-jp",
+      "file": "NotoSansJP-Regular.otf",
+      "size": 4538888,
+      "sha256": "dcc75e20d91d09c793fa5a97c9c7678e8b580d0fc255314cbc45c08b075f46f1"
+    },
+    {
+      "package": "fonts-jp",
+      "file": "NotoSansJP-Thin.otf",
+      "size": 4190420,
+      "sha256": "5f95be718879bafef35eeaad5c0955fda24345f0cf7a7e7c50666920abbac833"
+    },
+    {
+      "package": "fonts-kr",
+      "file": "NotoSansKR-Black.otf",
+      "size": 4835828,
+      "sha256": "5f0fc047330d614ff2595ff694c31ff6fc250e3bec03ccbe73a967a30b22a404"
+    },
+    {
+      "package": "fonts-kr",
+      "file": "NotoSansKR-Bold.otf",
+      "size": 4731480,
+      "sha256": "4c42058a372749625eeda2dc8c2e54716abd197eeae8249c877cec6ca188c729"
+    },
+    {
+      "package": "fonts-kr",
+      "file": "NotoSansKR-DemiLight.otf",
+      "size": 4565592,
+      "sha256": "c969f7039abc030b55bf19fdddf10bc6c678b531cffe0a2ddb590ec6c2fdc746"
+    },
+    {
+      "package": "fonts-kr",
+      "file": "NotoSansKR-Light.otf",
+      "size": 4534608,
+      "sha256": "43ff24ad9f68a6c6e44d33ee2a97cfbe810150bfb111697e9fd075748fef1cf0"
+    },
+    {
+      "package": "fonts-kr",
+      "file": "NotoSansKR-Medium.otf",
+      "size": 4591008,
+      "sha256": "c4b332b131beb3941dfeb6ca76172ac84d0fb792a5fc6b5416a3e5b88abcb156"
+    },
+    {
+      "package": "fonts-kr",
+      "file": "NotoSansKR-Regular.otf",
+      "size": 4579008,
+      "sha256": "ff59f91fe8d6e6246f548bb67bf371810af3d5cc53b65e8680461fabd043b506"
+    },
+    {
+      "package": "fonts-kr",
+      "file": "NotoSansKR-Thin.otf",
+      "size": 4217324,
+      "sha256": "587d4a322e9c9d9e35c87a4e8f2613865258a3a1d707e29f1a13eab00742c745"
+    },
+    {
+      "package": "fonts-sc",
+      "file": "NotoSansHans-Bold.otf",
+      "size": 8607960,
+      "sha256": "9e7729ef993ca4c647882f798644f4bbf6da69bd822eac593fc68717dd6c8e2a"
+    },
+    {
+      "package": "fonts-sc",
+      "file": "NotoSansHans-DemiLight.otf",
+      "size": 8344000,
+      "sha256": "f3e035dbcb69d828d6b61f9ea42f87f361977252ec398b8afaed484b50723472"
+    },
+    {
+      "package": "fonts-sc",
+      "file": "NotoSansHans-Light.otf",
+      "size": 8297272,
+      "sha256": "8f64e48d480449ed82c125d79d673940c10afdd0d72c9d76082ee1913b9811bd"
+    },
+    {
+      "package": "fonts-sc",
+      "file": "NotoSansHans-Medium.otf",
+      "size": 8389940,
+      "sha256": "25033438cfa41f1873d4902b8555956557b765117756bcef96406e023e49578c"
+    },
+    {
+      "package": "fonts-sc",
+      "file": "NotoSansHans-Regular.otf",
+      "size": 8364644,
+      "sha256": "7db3c634bbd0301b3082a80ffcac2f422e8ef9ce0730f8b279c3e8f756598f68"
+    },
+    {
+      "package": "fonts-tc",
+      "file": "NotoSansHant-Black.otf",
+      "size": 5963204,
+      "sha256": "fe9afe2f8521179343ad214e9ee9441d59a42ab9453a29d9d95a53f7627f31f1"
+    },
+    {
+      "package": "fonts-tc",
+      "file": "NotoSansHant-Bold.otf",
+      "size": 5833296,
+      "sha256": "31cad711fe815243664b16fe9f38d39585cffb6db0613c02f38e0bcf4917010b"
+    },
+    {
+      "package": "fonts-tc",
+      "file": "NotoSansHant-DemiLight.otf",
+      "size": 5645384,
+      "sha256": "0e63f3802524757c91390da53926159441c97c0be18409288cd41e2baf0443ab"
+    },
+    {
+      "package": "fonts-tc",
+      "file": "NotoSansHant-Light.otf",
+      "size": 5615852,
+      "sha256": "bb0e411c526b555e18896f397bfc0181e9311afba03a188220b246eed447159a"
+    },
+    {
+      "package": "fonts-tc",
+      "file": "NotoSansHant-Medium.otf",
+      "size": 5679704,
+      "sha256": "83fdce2e2508d9ef01e249994271ff48e0ab8a2db41b5fa8433200d5ca8cd702"
+    },
+    {
+      "package": "fonts-tc",
+      "file": "NotoSansHant-Regular.otf",
+      "size": 5663120,
+      "sha256": "81f39cffba8b45367a21249720782603b852bee71aad710f8f66fec3d3776af3"
+    },
+    {
+      "package": "fonts-tc",
+      "file": "NotoSansHant-Thin.otf",
+      "size": 5263620,
+      "sha256": "78134c5de91f6d5e5473fa6a90f4bfda93c26c45405cefe2771edad0747b1528"
+    }
+  ]
+}
