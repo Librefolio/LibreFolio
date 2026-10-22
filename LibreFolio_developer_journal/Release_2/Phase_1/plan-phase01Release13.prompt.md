@@ -1483,3 +1483,15 @@ hosting: L1, R1, L2), A-62, E-25, E-26 (b), TC-23 (a), L1b, P4. Ordine deciso: Y
 - W-front: K3a + #58 `bc01226f4` (decisioni del developer: PC5 diviso, valori nel dominio, K-3b nel lotto; asset e broker bloccati in modifica).
 - Colori: C1 `ce3bc869a` + `1778fd328`, C2 `6fc379b1b`; ratchet m1 590 → 243 sull'albero unito; marchi di `supportLinks.ts` accettati come eccezione.
 - Treno 7 in `dev_release2` = `9e3575452` (candidato `23d31392a` + correzione d'integrazione `KNOWN_COPIES`): `all-backend` 7/7, `core-unit` 9904, `component-unit` 5211, E2E `asset-list` 43, `fx-list` 25, `theme-roles` 24, `front-transaction all` 365 (32 saltati), `mkdocs build` stretto e `check-links`, `front check` 0/0, `i18n check`.
+
+**Ondata 3 e treno 8 ✅ (2026-10-22).** Coordinatore Opus, 10 lavori in parallelo (Y, Z, H, C1, C2, W come sessioni; E, A, J, X come sotto-agenti in background, perché sotto Remote Control l'app non apre sessioni nuove), lavoro notturno in autonomia, un comando pesante alla volta (`flock`); ogni consegna verificata rilanciando le prove prima del commit. Piano, brief, recap della notte e log in `LibreFolio_prj/salvataggi-worktrees-20261021/ondata3/`.
+- Y-40: asset `816a4b6c1`, cambi `5e5c6b64a`; X sul dettaglio `b64c3f4c6` (si apre nella vista della scheda, icona `CalendarSync`, decisione V-8b).
+- Z-29fx `46455857a` (stesso plugin del rendimento mobile per i cambi), Z-29d `9331a2dd0`.
+- H-55 v2 `a1f1cc5fb`, revisione di sicurezza indipendente (un medio: file caricati serviti come script) curata in `9e2e35782`; FSCH-004b `ad99d8791` (difetto vero: l'Esc premuto appena aperto un modale si perdeva).
+- E-25 `bb11f1479`, E-26 `5086e9244` (testi consigliati, da confermare dal developer); A-62 `bffca2884`, E-7 `5fa5cdeb9`.
+- J: TC-23 `2744d8d20`, L1b `c10bea915` (parità su 214 casi, −40% su un libro dal 1900), Q-G29-1 `dd9f8a78b`.
+- X: Y-42 `087769e44`, N64 `34b6d45c0`.
+- W: N78-1 `79068afe5` (decisioni del developer: in uscita nessun valore, anche per il TWRR; nessun codice di bonifica dati).
+- Colori: C1 `25f4cc6d0` (m1 243 → 174), C2 `1655edd9b`.
+- Gate del treno 8 sul candidato `23111e2f0`: primo giro con 11 rossi nati dall'incrocio dei lotti, tutti di test e nessun difetto del prodotto: RC-F04 (`request_index` di Z-29fx), `auth.test.ts` (testo di E-26), `fx-sync` C-66 (stato globale della corsia), `csp-collector` (cura R3), `price-refresh-reload` (g) (N64, decisione Q1), quattro E2E delle transazioni e `tooltip` (N78-1 e una gara di tempi). Curati dai proprietari sui loro rami e riprovati sul candidato.
+- Treno 8 in `dev_release2` = `3c09d3052` (candidato `f6456bcc4` + CHANGELOG): `api sync` senza diff, ratchet, `front check` 0/0, `i18n check`, `check-orphans`, `all-backend` (con RC-F04 riprovato), 15 929 Vitest, `all-frontend` più le riprove dei rossi, `mkdocs build` stretto e `check-links`. **Rosso noto**: `files.spec.ts:826` (ripiego CDN dei font CJK del visore PDF, bloccato dalla CSP), in attesa del lotto «file serviti da noi + hash» (H, ondata 4).
