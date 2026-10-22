@@ -74,6 +74,7 @@
     import {fetchAssetPeriodChanges, PeriodChangesLedger, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
     import type {RangeDelta} from '$lib/utils/rangeChange';
     import {processPriceItemsInParallel} from '$lib/workers/priceProcessingPool';
+    import {TargetSampleLoader, type TargetSampleRequest} from '$lib/utils/targetSampleLoader';
     import {sendBulkBatches} from '$lib/api/bulkBatches';
     import {bulkRefusalMessage} from '$lib/api/bulkRefusal';
     import type {ProcessedAssetResult} from '$lib/workers/priceProcessing.worker';
@@ -655,6 +656,7 @@
     function invalidateAssetPrices(assetId: number) {
         invalidateAssetPriceStore(assetId);
         reducedPrices.invalidateAsset(assetId);
+        targetSampleLoader.reset();
     }
 
     function resolveMaxStartFromAssets() {
@@ -1458,11 +1460,36 @@
     }
 
     /**
+     * A comparison target the settings preview of a sampled card asks for before it is saved (Z-29d, reduced): read once,
+     * sampled like the card, into the reduced cache and `targetSamples`, where the preview reads it and redraws. The card's
+     * item gives only its step (`include_price: false`, no signals: Z-29a-f).
+     */
+    async function readTargetSample(request: TargetSampleRequest): Promise<void> {
+        const width = plotWidths.get(request.cardId) ?? DEFAULT_COMPACT_PLOT_WIDTH_PX;
+        const entries = buildReducedQuery([{assetId: request.cardId, plotWidthPx: width, start: request.start, end: request.end, needsPrice: false, signals: [], targets: [{assetId: request.targetId, needsRead: true}]}]);
+        const response = await axiosInstance.post(
+            '/api/v1/assets/prices/query',
+            entries.map((entry) => entry.item),
+        );
+        const {results} = await processPriceItemsInParallel(response.data?.items ?? []);
+        const next = new Map(targetSamples);
+        for (const result of results) {
+            const entry = entries[result.requestIndex];
+            if (entry?.role !== 'target' || entry.targetId === null) continue;
+            next.set(`${entry.cardId}|${entry.targetId}`, reducedPrices.putTarget(entry.targetId, entry.cardId, request.start, request.end, {resolution: result.resolution, derived: result.derived}));
+        }
+        targetSamples = next;
+    }
+
+    const targetSampleLoader = new TargetSampleLoader(readTargetSample, (request, error) => console.error('Failed to read a comparison target for the settings preview:', request, error));
+
+    /**
      * Where the cards — and their settings preview — get the series their FX pair and comparison signals read (Y-39a):
      * the pairs from the FX stores, straight; the comparison targets sampled like the card (Z-29b), or, before they are
-     * read, from the cards of the list when both are daily. A card never draws a comparison with its own asset.
+     * read, from the cards of the list when both are daily. A card never draws a comparison with its own asset. With
+     * `readMissing` (the settings preview), a target a sampled card has not read yet is asked for (Z-29d, reduced).
      */
-    function signalSourcesFor(selfAssetId: number | null): SignalDataSources {
+    function signalSourcesFor(selfAssetId: number | null, readMissing = false): SignalDataSources {
         return {
             fxPairData: (pairSlug) =>
                 getFxStore(pairSlug)
@@ -1477,6 +1504,9 @@
                 if (sample) return comparisonTargetFrom(sample, names);
                 // Not read yet: its own series, only where it has the card's dates, both daily (the preview of the global settings has none).
                 const self = selfAssetId === null ? undefined : assets.find((asset) => asset.id === selfAssetId);
+                if (readMissing && self && (self.resolution ?? 'daily') !== 'daily') {
+                    targetSampleLoader.want({cardId: self.id, targetId: assetId, start: dateStart, end: dateEnd, maxPoints: compactMaxPoints(plotWidths.get(self.id) ?? DEFAULT_COMPACT_PLOT_WIDTH_PX)});
+                }
                 if ((self?.resolution ?? 'daily') !== 'daily' || (target.resolution ?? 'daily') !== 'daily' || !target.chartData.length) return null;
                 return {data: target.chartData, ...names};
             },
@@ -1485,7 +1515,7 @@
     }
 
     /** The settings preview reads the series as the cards do: in a card's settings, with that card's own sources. */
-    let settingsSignalSources = $derived(signalSourcesFor(settingsTargetId ? Number(settingsTargetId) : null));
+    let settingsSignalSources = $derived(signalSourcesFor(settingsTargetId ? Number(settingsTargetId) : null, true));
 
     /**
      * Global (filter-bar) mode: compute backend overlay signals live on the

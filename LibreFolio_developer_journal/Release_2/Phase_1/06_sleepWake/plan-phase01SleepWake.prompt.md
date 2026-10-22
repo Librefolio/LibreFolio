@@ -7199,3 +7199,21 @@ una scheda settimanale, scelto un bersaglio nel dialogo, l'anteprima ha la linea
 **Perché aspetto.** I file da toccare sono `assets/+page.svelte` e, per il punto 2, `reducedPriceQuery.ts`: tutti e due
 sporchi nel worktree di Y (Y-40, 196 righe nuove nella pagina, proprio su bersagli e richieste). Scritto ora, il
 caricatore divergerebbe dalla versione di Y. Riprendo dopo il commit di Y-40.
+
+### Z-29d ridotto — lavoro (22/10, ondata 3, base `35101193c`, dopo il merge di Y-40 asset)
+
+> Via del coordinatore: stanotte `assets/+page.svelte` e `reducedPriceQuery.ts` sono miei; `ChartSettingsModal.svelte`
+> e lo store delle impostazioni restano di Y.
+
+1. ✅ 22/10 — Il punto 2 dell'analisi non serve: Y-40 legge già da sé il rendimento mobile dell'anteprima, bersagli
+   compresi (`resolveCalendarPreview`, una richiesta con `calendar`). Resta il confronto nelle viste assoluto e %.
+2. ✅ 22/10 — Rosso: `utils/__tests__/targetSampleLoader.test.ts` (6 casi: la lettura dopo la chiamata, mai dentro; una per
+   chiave; chiavi diverse per bersaglio, intervallo e `max_points`; nessun nuovo tentativo dopo un errore, detto una volta;
+   `reset`). Rosso per `Cannot find module '../targetSampleLoader'`; registrato in `_frontend_utility.py`.
+3. ✅ 22/10 — Cura: `utils/targetSampleLoader.ts` (puro); nella pagina `readTargetSample` (la scheda senza prezzi e senza
+   segnali dà solo il passo, il bersaglio in `sample_like`; scrive in `reducedPrices.putTarget` e in `targetSamples`),
+   `signalSourcesFor(selfAssetId, readMissing)`: solo l'anteprima del dialogo (`settingsSignalSources`) chiede un bersaglio
+   mancante di una scheda ridotta; `invalidateAssetPrices` azzera il caricatore. `ChartSettingsModal.svelte` non cambia.
+   > **⚠️ Fuori pista**: il caso E2E proposto (scelto un bersaglio nel dialogo di una scheda settimanale, la richiesta
+   > `sample_like` parte prima del salvataggio) ha bisogno di un `data-testid` sul pulsante delle impostazioni della scheda
+   > (`AssetCard.svelte`, oggi solo un `title` tradotto): non è un file mio stanotte. Proposto come seguito.
