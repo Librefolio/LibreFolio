@@ -2,7 +2,9 @@
 UsersTab — administrators only: the accounts of the instance and the invitations still open (decision D-A10).
 
 At the top, the places taken against the limit («N / max», «Manage subscription» when the hoster set a billing page,
-decision D-A9) and the invitation button, off while registration is closed or the instance is full. Each account opens
+decision D-A9), who can sign up (N69c: the registration mode, saved at the choice, asked about only for «open»; the Global
+settings tab shows the same setting) and the invitation button, off while registration is closed or the instance is full.
+Each account opens
 its actions (UserRow); the confirmations, the invitation, the reset link and the deletion each have their dialog.
 Every action reloads the tab: the backend decides, the tab shows its answer.
 -->
@@ -13,6 +15,7 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
     import {zodiosApi} from '$lib/api';
     import {notify} from '$lib/stores/app/notify.svelte';
     import {currentUser} from '$lib/stores/app/auth';
+    import {SimpleSelect} from '$lib/components/ui/select';
     import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import AccountDeletionDialog from '../AccountDeletionDialog.svelte';
@@ -21,10 +24,11 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
     import InviteDialog from '../users/InviteDialog.svelte';
     import ResetLinkDialog from '../users/ResetLinkDialog.svelte';
     import {accountErrorText, describeAccountError} from '../users/accountErrors';
+    import {lockedByEnv, refreshRegistrationConfig, registrationModeOptions, saveRegistrationMode, REGISTRATION_VARIABLE, type RegistrationMode} from '../registrationMode';
     import type {AccountsUsage, AdminAccount, OpenInvite, UserAction} from '../users/types';
 
     type Confirmable = 'deactivate' | 'cancel-setup' | 'promote' | 'demote' | 'sign-out' | 'restart-guides';
-    type Pending = {kind: Confirmable; account: AdminAccount} | {kind: 'revoke-invite'; invite: OpenInvite};
+    type Pending = {kind: Confirmable; account: AdminAccount} | {kind: 'revoke-invite'; invite: OpenInvite} | {kind: 'registration-open'};
 
     const CONFIRM_KEYS: Record<Pending['kind'], {title: string; message: string; confirm: string; danger: boolean}> = {
         deactivate: {
@@ -70,6 +74,13 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
             confirm: 'settings.usersTab.confirm.revokeInvite.confirm',
             danger: true,
         },
+        // «Open» lets in anyone who reaches the login page: asked about first, once chosen (N69c)
+        'registration-open': {
+            title: 'settings.usersTab.registration.confirm.title',
+            message: 'settings.usersTab.registration.confirm.message',
+            confirm: 'settings.usersTab.registration.confirm.confirm',
+            danger: false,
+        },
     };
 
     let accounts = $state<AdminAccount[]>([]);
@@ -89,6 +100,14 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
     const full = $derived(usage !== null && maxUsers !== null && usage.used >= maxUsers);
     const registrationClosed = $derived(instanceConfig.config.accounts.registration_mode === 'disabled');
     const registrationLocked = $derived(instanceConfig.config.accounts.registration_locked);
+    const registrationMode = $derived(instanceConfig.config.accounts.registration_mode);
+    const modeOptions = $derived(registrationModeOptions((key) => $_(key)));
+    // What the select shows: the mode in force, until a choice that is saved or refused sends it back to it
+    let shownMode = $state<string>(instanceConfig.config.accounts.registration_mode);
+    let savingMode = $state(false);
+    $effect(() => {
+        shownMode = registrationMode;
+    });
     // The backend's order: a closed registration refuses an invitation before the limit is counted
     const inviteBlocked = $derived<'registration-disabled' | 'limit' | null>(registrationClosed ? 'registration-disabled' : full ? 'limit' : null);
     const confirmCopy = $derived.by(() => {
@@ -96,7 +115,7 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
             return null;
         }
         const keys = CONFIRM_KEYS[pending.kind];
-        const values = pending.kind === 'revoke-invite' ? {email: pending.invite.email || $_('settings.usersTab.invites.noEmail')} : {username: pending.account.username};
+        const values = pending.kind === 'registration-open' ? {} : pending.kind === 'revoke-invite' ? {email: pending.invite.email || $_('settings.usersTab.invites.noEmail')} : {username: pending.account.username};
         return {title: $_(keys.title, {values}), message: $_(keys.message, {values}), confirm: $_(keys.confirm), danger: keys.danger};
     });
 
@@ -136,6 +155,42 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
         return perform(action, {user_id: account.id}, () => zodiosApi.update_account_api_v1_users__user_id__patch(body, {params: {user_id: account.id}}), event);
     }
 
+    /** Saves a mode chosen here: no «Save» button, the select already shows it, so an event and no toast; a refusal is toasted and the select goes back. */
+    async function applyMode(mode: RegistrationMode) {
+        savingMode = true;
+        try {
+            await saveRegistrationMode(mode);
+            notify({name: 'settings.global.saved', detail: {keys: ['registration_mode'], count: 1}});
+        } catch (e) {
+            const variable = lockedByEnv(e);
+            const message = variable !== null ? $_('settings.lockedByEnv', {values: {variable}}) : $_('settings.usersTab.registration.saveFailed');
+            notify({name: 'accounts.registration.failed', detail: {mode, code: variable !== null ? 'SETTING_LOCKED_BY_ENV' : describeAccountError(e).code}, toast: {variant: 'error', message}});
+            shownMode = registrationMode;
+            // A pin the tab did not know about: the configuration says so now
+            if (variable !== null) void refreshRegistrationConfig();
+        } finally {
+            savingMode = false;
+        }
+    }
+
+    function onModeChange(value: string) {
+        if (value === registrationMode) {
+            return;
+        }
+        if (value === 'open') {
+            pending = {kind: 'registration-open'};
+            return;
+        }
+        void applyMode(value as RegistrationMode);
+    }
+
+    function cancelPending() {
+        if (pending?.kind === 'registration-open') {
+            shownMode = registrationMode;
+        }
+        pending = null;
+    }
+
     function onAction(action: UserAction, account: AdminAccount) {
         if (action === 'reactivate') {
             void setStatus(account, {is_active: true}, 'reactivate', 'accounts.user.reactivated');
@@ -152,6 +207,10 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
         const current = pending;
         pending = null;
         if (current === null) {
+            return;
+        }
+        if (current.kind === 'registration-open') {
+            await applyMode('open');
             return;
         }
         if (current.kind === 'revoke-invite') {
@@ -221,18 +280,36 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
                     </a>
                 {/if}
             </div>
-            <button
-                class="inline-flex items-center gap-1.5 rounded-md bg-lf-action px-3 py-1.5 text-sm font-medium text-lf-on-action hover:bg-lf-action-hover disabled:cursor-not-allowed disabled:opacity-50"
-                data-disabled-reason={inviteBlocked ?? undefined}
-                data-testid="users-invite-button"
-                disabled={inviteBlocked !== null}
-                onclick={() => (inviteOpen = true)}
-                type="button"
-            >
-                <UserPlus class="h-4 w-4" />{$_('settings.usersTab.invite.button')}
-            </button>
+            <div class="flex flex-wrap items-center gap-3">
+                <div class="flex items-center gap-2" data-locked={String(registrationLocked)} data-mode={registrationMode} data-saving={String(savingMode)} data-shown={shownMode} data-testid="users-registration">
+                    <span class="text-sm text-lf-secondary">{$_('settings.usersTab.registration.label')}</span>
+                    <SimpleSelect
+                        ariaLabel={$_('settings.usersTab.registration.label')}
+                        bind:value={shownMode}
+                        compact
+                        disabled={registrationLocked || savingMode}
+                        onchange={onModeChange}
+                        optionTestId={(option) => `users-registration-option-${option.value}`}
+                        options={modeOptions}
+                        testId="users-registration-mode"
+                    />
+                </div>
+                <button
+                    class="inline-flex items-center gap-1.5 rounded-md bg-lf-action px-3 py-1.5 text-sm font-medium text-lf-on-action hover:bg-lf-action-hover disabled:cursor-not-allowed disabled:opacity-50"
+                    data-disabled-reason={inviteBlocked ?? undefined}
+                    data-testid="users-invite-button"
+                    disabled={inviteBlocked !== null}
+                    onclick={() => (inviteOpen = true)}
+                    type="button"
+                >
+                    <UserPlus class="h-4 w-4" />{$_('settings.usersTab.invite.button')}
+                </button>
+            </div>
         </div>
         <p class="mt-1 text-xs text-lf-muted">{$_('settings.usersTab.usageHint')}</p>
+        {#if registrationLocked}
+            <p class="mt-2 text-xs text-lf-muted" data-testid="users-registration-locked">{$_('settings.lockedByEnv', {values: {variable: REGISTRATION_VARIABLE}})}</p>
+        {/if}
 
         {#if full}
             <div class="mt-3 rounded-md border border-lf-warning-line bg-lf-warning-soft px-3 py-2 text-sm text-lf-warning-on-soft" data-testid="users-limit-banner" role="status">
@@ -268,7 +345,7 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
         </div>
     </section>
 
-    <ConfirmModal confirmText={confirmCopy?.confirm} danger={confirmCopy?.danger ?? false} message={confirmCopy?.message ?? ''} onCancel={() => (pending = null)} onConfirm={confirmPending} open={pending !== null} testId="users-confirm" title={confirmCopy?.title ?? ''} />
+    <ConfirmModal confirmText={confirmCopy?.confirm} danger={confirmCopy?.danger ?? false} message={confirmCopy?.message ?? ''} onCancel={cancelPending} onConfirm={confirmPending} open={pending !== null} testId="users-confirm" title={confirmCopy?.title ?? ''} />
 
     <InviteDialog
         onClose={() => {
