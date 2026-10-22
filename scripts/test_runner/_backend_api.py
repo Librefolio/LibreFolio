@@ -835,6 +835,14 @@ def api_address_probe_image(verbose: bool = False, test_names: list[str] | None 
     return run_command(cmd, "Address probe image API tests", verbose=verbose)
 
 
+def api_api_docs(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the API documentation tests: our Swagger UI and ReDoc pages, pinned with SRI, off without the debug flag (H-55 R5)."""
+    print_section("API Docs Tests")
+    print_info("Testing /api/v1/docs, /api/v1/redoc and their start scripts; LIBREFOLIO_API_DOCS and test mode; main.py's wiring")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_api_docs.py", test_names)
+    return run_command(cmd, "API docs tests", verbose=verbose)
+
+
 def api_hosting_panel_routes(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the hosting panel's route tests: the six routes under the single tag Hosting panel, their bearer schemes and documented answers (H-61)."""
     print_section("Hosting Panel Routes")
@@ -1331,6 +1339,14 @@ Tests for REST API endpoints (server auto-started):
         api_address_probe_image,
         name="Address Probe Image API",
         desc="H-55 v2: GET /auth/address-probe.png, a valid PNG 1x1 for a nonce this instance issued, 2x1 for forged, foreign, expired, empty, missing or too long, same status and type, no-store, no session; in address_probe_image.py, not auth.py; not allowed when blocked; the JSON probe unchanged",
+    )
+    add_test(
+        api,
+        "api-docs",
+        api_api_docs,
+        name="API Docs",
+        desc="H-55 R5: /api/v1/docs, /api/v1/redoc and openapi.json only with LIBREFOLIO_API_DOCS or test mode (404 otherwise, Docker included); our pages, no inline script, the libraries from jsDelivr at an exact version with SRI and crossorigin, the start scripts served by the instance, out of the schema; main.py wiring; app.openapi() with openapi_url None",
+        isolation="pure",
     )
     add_test(
         api,

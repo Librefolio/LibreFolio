@@ -10450,3 +10450,30 @@ mescolare le righe del runner dei due lotti:
    modulo nostro (`api/api_docs.py`) con le due pagine, senza script inline (l'avvio in un file nostro), senza Google
    Fonts, con le librerie servite dalla build (copiate da `node_modules` se Q-C (a)); nessuna rotta nel managed (404),
    e `openapi.json` spento lì se Q-D sì; sulle due pagine `script-src 'self'` (e `worker-src 'self' blob:` per ReDoc).
+6. ✅ **La corsa completa nello slot** (22/10, 13:39 → 15:21, 1 h 42 min, HEAD `9736ea90e`, corsia 6181; log
+   `ondata4/h-w4-step5.log`): `all-frontend` **9 categorie su 9 verdi**, con la politica dei worker (R4), il visore senza
+   CDN (`files.spec.ts:826` rovesciato verde, `files-pdf-offline` verde) e la politica applicata. Nessun rosso.
+7. ✅ **R5, le docs dell'API** (22/10, decisioni del developer: Q-A (a); Q-C cambiata in corsa, niente pacchetti npm: le
+   librerie da jsDelivr a versione esatta con l'SRI; Q-D più larga: spente su ogni istanza senza il flag di debug).
+   > **Note implementazione**: `LIBREFOLIO_API_DOCS` (spenta di default in ogni profilo, Docker compreso; il managed
+   > tiene il default) e `config.api_docs_enabled()` (la variabile, oppure il test mode, perché sei test API leggono
+   > `/api/v1/openapi.json` dal server della corsia); `main.py`: `docs_url`/`redoc_url` sempre `None`, `openapi_url` solo
+   > se acceso; `api/api_docs.py`: le due pagine nostre, senza script inline né Google Fonts, le tre librerie
+   > (`swagger-ui-dist@5.33.1` js e css, `redoc@2.5.4`) con `integrity` sha384 e `crossorigin`, calcolati due volte dai
+   > file pubblicati, e gli script d'avvio serviti dall'istanza; `security_headers.api_docs_policy()` per le due pagine
+   > (`script-src 'self' https://cdn.jsdelivr.net`, `worker-src 'self' blob:`, `connect-src 'self'` + trio); `dev.py
+   > server --debug` mette `LIBREFOLIO_API_DOCS=1`, e il banner stampa i due link solo con `--debug` o in test mode.
+   > **Rossi → verdi**: `api api-docs` 56 rossi (2 guardie verdi) → 58; `managed-headers` 147 → 867; `instance-block` 2 →
+   > 64; banner 11 → 46. `api sync` fuori dal test mode e senza flag: esce 0, lo schema ha 157 percorsi.
+   > **⚠️ Fuori pista**: ho passato `dev.py` e `_backend_api.py` a ruff `--fix` e black, che li hanno riformattati
+   > interi (anche righe di altri lotti); li ho ricostruiti dalla versione committata con le mie sole aggiunte (+6 −2 e +16).
+   > **⚠️ Fuori pista**: un caso di R5 in `managed-headers` metteva la pagina «barriera» e la risposta finta sullo stesso
+   > percorso (rispondeva sempre la prima): riparato, la barriera usa l'altra pagina.
+   > **E2E** (test-author): `frontend/e2e/layout/api-docs.spec.ts`, registrata come `front-utility api-docs`: Swagger e
+   > ReDoc si disegnano dai tre file fissati, sotto la loro politica, senza violazioni; un bundle cambiato è rifiutato
+   > dall'SRI. Prettier pulito; **non ancora eseguita** (chiede internet verso jsDelivr e uno slot E2E).
+   > **Docs** (docs-writer, solo inglese): `admin/configuration`, `admin/cli_tools`, `developer/architecture/security`
+   > (nuova sezione `#api-docs-libraries`), `developer/architecture/overview`, `developer/api/{index,overview,curl-testing}`.
+   > `mkdocs build` strict esce 0, `check-links` 97 link validi. Debito di traduzione: `configuration`, `cli_tools`.
+   > **⚠️ Fuori pista**: `"scarfSettings"` messo e poi tolto da `package.json`, dopo il cambio di Q-C: il file coincide col
+   > commit.

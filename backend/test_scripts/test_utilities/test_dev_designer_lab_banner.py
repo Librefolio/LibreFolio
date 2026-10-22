@@ -21,6 +21,11 @@ The contracts held here:
   «Available endpoints» when the build it is about to serve (after its auto-build) carries the Lab, and no such line
   otherwise; the other endpoint lines stay as they were; a build it cannot read never stops the start; ``--build-only``
   prints no endpoint list and never asks.
+* H-55 R5 (the API docs off without the debug flag): the «API Redoc» and «API Docs» lines are printed only when the server
+  it starts will have the documentation on, which is ``--debug`` or test mode (``--test``, which turns debug on too), and
+  neither otherwise («Frontend» and «User Doc» unchanged, the Lab line unchanged). ``./dev.py server --debug`` puts
+  ``LIBREFOLIO_API_DOCS=1`` in the server's environment (beside ``LIBREFOLIO_LOG_LEVEL=DEBUG``); a plain
+  ``./dev.py server`` never sets it, and leaves an operator's own value as it is.
 * ``cmd_fe_dev`` (``./dev.py front dev``, Vite on 5173) prints ``🎨 Designer Lab: http://localhost:5173/designer-lab``
   right after its URL unless ``LF_DESIGNER_LAB`` is exactly ``"0"``, the only value that turns the Lab off under
   ``vite dev`` in ``designerLabEnabled``; then it launches ``npm run dev`` and returns its result.
@@ -282,6 +287,9 @@ class ServerStart:
     lines: list[str]
     steps: list[str]
     launches: list[Launch]
+    #: R5: whether the server it started will have the API documentation on (``--debug`` or ``--test``), so whether the
+    #: «API Redoc» and «API Docs» lines are expected.
+    docs_expected: bool = False
 
 
 def start_server(monkeypatch, capsys, tmp_path: Path, lab_check: Callable[[], bool], *, frontend_build: Callable[[bool], object] | None = None, **options) -> ServerStart:
@@ -335,7 +343,8 @@ def start_server(monkeypatch, capsys, tmp_path: Path, lab_check: Callable[[], bo
     printed = capsys.readouterr().out
     changed = sorted(key for key in environ_before.keys() | os.environ.keys() if environ_before.get(key) != os.environ.get(key))
     assert not changed, f"cmd_server changed os.environ, which none of its stand-ins writes (names only): {changed}"
-    return ServerStart(returned=returned, lines=ANSI.sub("", printed).splitlines(), steps=steps, launches=launches)
+    docs_expected = bool(options.get("debug") or options.get("test"))
+    return ServerStart(returned=returned, lines=ANSI.sub("", printed).splitlines(), steps=steps, launches=launches, docs_expected=docs_expected)
 
 
 def only_line(lines: list[str], pattern: re.Pattern[str], what: str) -> int:
@@ -346,24 +355,31 @@ def only_line(lines: list[str], pattern: re.Pattern[str], what: str) -> int:
 
 
 def assert_endpoints(start: ServerStart, *, lab_listed: bool) -> None:
-    """«Available endpoints:», Frontend, the Lab line when ``lab_listed``, API Redoc, API Docs, User Doc.
+    """«Available endpoints:», Frontend, the Lab line when ``lab_listed``, API Redoc and API Docs when the server has the
+    documentation on (``start.docs_expected``: ``--debug`` or test mode), User Doc.
 
-    One per line, in this order, nothing between them; the Lab mentioned nowhere else; the helper asked exactly once,
-    after the frontend build, so about the build the server is going to serve.
+    One per line, in this order, nothing between them; the Lab mentioned nowhere else; the documentation's two addresses
+    mentioned nowhere when it is off; the helper asked exactly once, after the frontend build, so about the build the
+    server is going to serve.
     """
     lines = start.lines
     shown = "\n".join(lines)
     header = only_line(lines, re.compile(r"^Available endpoints:\s*$"), "«Available endpoints:»")
-    endpoints = {label: only_line(lines, re.compile(rf"{re.escape(label)}:\s+{re.escape(url)}\s*$"), f"{label} ({url})") for label, url in OTHER_ENDPOINTS.items()}
+    docs_labels = ("API Redoc", "API Docs")
+    wanted = {label: url for label, url in OTHER_ENDPOINTS.items() if start.docs_expected or label not in docs_labels}
+    endpoints = {label: only_line(lines, re.compile(rf"{re.escape(label)}:\s+{re.escape(url)}\s*$"), f"{label} ({url})") for label, url in wanted.items()}
+    if not start.docs_expected:
+        shown_docs = [line for line in lines if re.search(r"API (Redoc|Docs)|/api/v1/(redoc|docs)", line)]
+        assert not shown_docs, f"the server has no API documentation (no --debug, no test mode): cmd_server must print neither its lines nor its addresses; it printed:\n{shown}"
     mentions = [index for index, line in enumerate(lines) if LAB_MENTION.search(line)]
     if lab_listed:
         assert len(mentions) == 1 and SERVER_LAB_LINE in lines[mentions[0]], f"the build carries the Lab: cmd_server must print one line with {SERVER_LAB_LINE!r} and mention the Lab nowhere else; it printed:\n{shown}"
-        order = [header, endpoints["Frontend"], mentions[0], endpoints["API Redoc"], endpoints["API Docs"], endpoints["User Doc"]]
+        order = [header, endpoints["Frontend"], mentions[0], *(endpoints[label] for label in wanted if label != "Frontend")]
     else:
         assert not mentions, f"the build does not carry the Lab: cmd_server must not mention it; it printed:\n{shown}"
         order = [header, *endpoints.values()]
-    listed = "Frontend, Designer Lab, API Redoc" if lab_listed else "Frontend, API Redoc"
-    assert order == list(range(header, header + len(order))), f"«Available endpoints:» must be followed by {listed}, API Docs and User Doc, one per line in this order; it printed:\n{shown}"
+    listed = ", ".join(["Frontend", *(["Designer Lab"] if lab_listed else []), *(label for label in wanted if label != "Frontend")])
+    assert order == list(range(header, header + len(order))), f"«Available endpoints:» must be followed by {listed}, one per line in this order; it printed:\n{shown}"
     asked = start.steps.count("lab-check") == 1 and "frontend-build" in start.steps and start.steps.index("lab-check") > start.steps.index("frontend-build")
     assert asked, f"cmd_server must ask about the Lab once, after the frontend build it is going to serve: steps {start.steps}"
 
@@ -595,6 +611,98 @@ def test_server_banner_reads_the_build_the_auto_build_left(monkeypatch, capsys, 
     assert rebuilds == [debug], f"the stood-in auto-build must run once, in the mode asked for (debug={debug}): {rebuilds}"
     assert_endpoints(start, lab_listed=lab_listed)
     assert_launched(start)
+
+
+# ---------------------------------------------------------------------------
+# H-55 R5: the API documentation lines and LIBREFOLIO_API_DOCS
+# ---------------------------------------------------------------------------
+
+API_DOCS_VARIABLE = "LIBREFOLIO_API_DOCS"
+#: What a server that is started with the documentation on is started with.
+DOCS_ON_OPTIONS = {"debug": {"debug": True}, "test-mode": {"test": True}, "debug-and-test-mode": {"debug": True, "test": True}}
+
+
+def release_server(monkeypatch, capsys, tmp_path: Path, **options) -> ServerStart:
+    """``start_server`` on a release build with no Lab, with neither ``LIBREFOLIO_API_DOCS`` nor ``LIBREFOLIO_LOG_LEVEL`` in the
+    process environment the launch copies (an operator's own would hide what dev.py sets or does not)."""
+    monkeypatch.delenv(API_DOCS_VARIABLE, raising=False)
+    monkeypatch.delenv("LIBREFOLIO_LOG_LEVEL", raising=False)
+    fake_build(tmp_path, RELEASE_BUILD)
+    return start_server(monkeypatch, capsys, tmp_path, lambda: False, **options)
+
+
+def test_plain_server_prints_no_api_documentation_lines(monkeypatch, capsys, tmp_path):
+    """R5: ``./dev.py server`` (no ``--debug``, no ``--test``): «Available endpoints» lists Frontend and User Doc, with neither
+    «API Redoc» nor «API Docs» nor their addresses anywhere in the output; the start goes on to the launch."""
+    start = release_server(monkeypatch, capsys, tmp_path)
+
+    assert start.docs_expected is False, "premise: a plain start has no documentation"
+    assert_endpoints(start, lab_listed=False)
+    assert_launched(start)
+
+
+@pytest.mark.parametrize("options", list(DOCS_ON_OPTIONS.values()), ids=list(DOCS_ON_OPTIONS))
+def test_server_with_the_documentation_on_prints_the_api_documentation_lines(monkeypatch, capsys, tmp_path, options):
+    """R5: ``--debug``, ``--test`` (test mode turns debug on) or both: «API Redoc» and «API Docs» are listed between the
+    Frontend and the User Doc lines, on the server port, as before."""
+    start = release_server(monkeypatch, capsys, tmp_path, **options)
+
+    assert start.docs_expected is True, "premise: this start has the documentation on"
+    assert_endpoints(start, lab_listed=False)
+    assert_launched(start)
+    redoc, docs = (only_line(start.lines, re.compile(rf"{label}:\s+{re.escape(OTHER_ENDPOINTS[label])}\s*$"), label) for label in ("API Redoc", "API Docs"))
+    assert docs == redoc + 1, f"API Docs must follow API Redoc: {start.lines}"
+
+
+def test_plain_server_lists_the_lab_without_the_documentation_lines(monkeypatch, capsys, tmp_path):
+    """R5 and L together: a build with the Lab, no ``--debug``: the Lab line stays right after Frontend, and the documentation
+    lines are still absent."""
+    monkeypatch.delenv(API_DOCS_VARIABLE, raising=False)
+    build = fake_build(tmp_path, PRODUCTION_BUILD_WITH_LAB)
+
+    start = start_server(monkeypatch, capsys, tmp_path, functools.partial(REAL_HELPER, build))
+
+    assert_endpoints(start, lab_listed=True)
+    assert_launched(start)
+
+
+def test_server_debug_puts_the_api_docs_flag_in_the_server_environment(monkeypatch, capsys, tmp_path):
+    """R5: ``./dev.py server --debug`` launches uvicorn with ``LIBREFOLIO_API_DOCS=1``, beside ``LIBREFOLIO_LOG_LEVEL=DEBUG``;
+    the process's own environment is left as it is (``start_server`` checks)."""
+    start = release_server(monkeypatch, capsys, tmp_path, debug=True)
+
+    assert_launched(start)
+    env = start.launches[0].env
+    assert env is not None, "the launch must pass the server its environment"
+    assert env.get("LIBREFOLIO_LOG_LEVEL") == "DEBUG", f"barrier: the debug start must set the log level in the launch environment: {env.get('LIBREFOLIO_LOG_LEVEL')!r}"
+    assert env.get(API_DOCS_VARIABLE) == "1", f"{API_DOCS_VARIABLE} is {env.get(API_DOCS_VARIABLE)!r} in the environment of ./dev.py server --debug, wanted '1'"
+
+
+def test_plain_server_never_sets_the_api_docs_flag(monkeypatch, capsys, tmp_path):
+    """R5: ``./dev.py server`` launches uvicorn without ``LIBREFOLIO_API_DOCS``: the documentation is off unless an operator
+    turns it on."""
+    start = release_server(monkeypatch, capsys, tmp_path)
+
+    assert_launched(start)
+    env = start.launches[0].env
+    assert env is not None, "the launch must pass the server its environment"
+    assert env.get("LIBREFOLIO_TEST_MODE") == "0", f"barrier: the launch environment is the production start's: LIBREFOLIO_TEST_MODE={env.get('LIBREFOLIO_TEST_MODE')!r}"
+    assert API_DOCS_VARIABLE not in env, f"{API_DOCS_VARIABLE}={env.get(API_DOCS_VARIABLE)!r} in the environment of a plain ./dev.py server: it never sets it"
+
+
+@pytest.mark.parametrize("value", ["1", "true"])
+def test_plain_server_leaves_an_operators_api_docs_flag_as_it_is(monkeypatch, capsys, tmp_path, value):
+    """R5: an operator who sets ``LIBREFOLIO_API_DOCS`` in the shell keeps it in the server's environment; dev.py neither
+    sets nor strips it (so the banner, which follows ``--debug`` and test mode, is not the operator's concern)."""
+    monkeypatch.delenv("LIBREFOLIO_LOG_LEVEL", raising=False)
+    monkeypatch.setenv(API_DOCS_VARIABLE, value)
+    fake_build(tmp_path, RELEASE_BUILD)
+
+    start = start_server(monkeypatch, capsys, tmp_path, lambda: False)
+
+    assert_launched(start)
+    env = start.launches[0].env
+    assert env is not None and env.get(API_DOCS_VARIABLE) == value, f"{API_DOCS_VARIABLE} is {None if env is None else env.get(API_DOCS_VARIABLE)!r} in the launch environment, wanted the operator's {value!r}"
 
 
 # ---------------------------------------------------------------------------

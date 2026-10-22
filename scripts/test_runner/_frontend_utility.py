@@ -785,6 +785,18 @@ def front_page_policy(verbose: bool = False, ui: bool = False, headed: bool = Fa
     return _run_playwright("layout/page-policy.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_api_docs(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the API documentation pages of H-55 R5: Swagger UI and ReDoc render from the pinned jsDelivr files under the documentation policy, and a changed bundle is refused by its integrity hash."""
+    print_section("Frontend API Docs Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/api-docs.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 #: The cloud smoke (H-43): existing specs over the main pages and the surfaces the managed profile's policies touch (the
 #: PDF preview, forms, frames), run on a managed lane so that the report-only policy's violations reach the collector of
 #: e2e/fixtures/playwright.ts. Desktop only. layout/legal-and-managed.spec.ts stays out until its «lane's answer» tests
@@ -1213,6 +1225,15 @@ def populate_registry(registry: dict) -> None:
         desc="The page policy of H-42, enforced by every lane since H-55 v2 (security_headers.py): each main document read as the browser got it, exactly one Content-Security-Policy field with object-src 'none', base-uri 'self', form-action 'self', and frame-ancestors 'self' if and only if X-Frame-Options is SAMEORIGIN, with service workers blocked; positive controls on the sign-in page (a <base>, a form aimed at another origin and an <object> each raising an enforced violation, nothing else); the documentation with its search, the PDF viewer and the Dashboard with no enforced violation",
         prereq="Docs site built (dev.py mkdocs build), populated DB + test users (TEST_USER with no onboarding due)",
         tests="layout/page-policy.spec.ts",
+    )
+    add_test(
+        cat,
+        "api-docs",
+        front_api_docs,
+        name="API Docs",
+        desc="H-55 R5: /api/v1/docs (Swagger UI) and /api/v1/redoc as the lane serves them (test mode turns them on): 200 text/html with one Content-Security-Policy field (script-src 'self' https://cdn.jsdelivr.net, worker-src 'self' blob:, connect-src 'self', the trio, frame-ancestors iff frame protection); the only requests leaving the lane are GETs to the pinned jsDelivr files, each 200, none to Google Fonts or validator.swagger.io; the library draws the API from /api/v1/openapi.json with no enforced CSP violation; a changed Swagger bundle is refused by its SRI hash",
+        prereq="Internet access to cdn.jsdelivr.net (the render tests fail naming it); populated DB + test users",
+        tests="layout/api-docs.spec.ts",
     )
     add_test(
         cat,
