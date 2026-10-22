@@ -197,7 +197,9 @@ def read_sealed(path: Path) -> SealedArchive:
 
 
 def _members(handle: BinaryIO) -> list[tuple[str, int, int]]:
-    """The three members as ``(name, data offset, size)``, every header checked; then only the end of the archive."""
+    """The three members as ``(name, data offset, size)``, every header checked; then only the end of the archive: two
+    zero blocks, and nothing but zeros up to the end of the file. A member after a single zero block, which ``tar -i``
+    would extract, or bytes after the end, are refused (security review of 22/10, finding 2)."""
     members: list[tuple[str, int, int]] = []
     position = 0
     while True:
@@ -206,6 +208,7 @@ def _members(handle: BinaryIO) -> list[tuple[str, int, int]]:
         if len(block) < _BLOCK:
             raise SealedError("sealed_tar_invalid", "The archive is cut short")
         if block == bytes(_BLOCK):
+            _end_of_archive(handle)
             break
         if len(members) == len(MEMBERS):
             raise SealedError("sealed_tar_invalid", "The archive holds more than the three members of a sealed backup")
@@ -218,6 +221,15 @@ def _members(handle: BinaryIO) -> list[tuple[str, int, int]]:
         if size > SMALL_MEMBER_MAX:
             raise SealedError("sealed_tar_invalid", f"{name} is larger than {SMALL_MEMBER_MAX} bytes")
     return members
+
+
+def _end_of_archive(handle: BinaryIO) -> None:
+    """After the first zero block (just read): a second one, then only zeros to the end of the file."""
+    if handle.read(_BLOCK) != bytes(_BLOCK):
+        raise SealedError("sealed_tar_invalid", "The archive goes on after a single zero block: it hides something, or is not a sealed backup")
+    while chunk := handle.read(_COPY_CHUNK):
+        if chunk.count(0) != len(chunk):
+            raise SealedError("sealed_tar_invalid", "The archive holds bytes after its end")
 
 
 def _header(block: bytes) -> tuple[str, int]:
