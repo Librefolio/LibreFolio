@@ -196,7 +196,7 @@ The whole story of one lot. Open it with **View lot detail** (⋮) or by clickin
 
 - **Summary** — opening and current value, proceeds, **FIFO P&L**, **Total P&L**, **Total return**, and **Cash yield** when the lot received income → [FIFO Lot Analysis](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
 - **Net breakdown** — the total P&L minus the fees and taxes allocated to the lot → [Costs & Net Metrics](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md#costs-and-net-metrics)
-- **Current Custody** and **History** — where the lot is now, and every event since its opening
+- **Current Custody** and **History** — where the lot is now, and every event since its opening. A transfer between two of your brokers reads as two rows, *A → In transit* and *In transit → B*, even when the units leave and arrive on the same day
 
 **How to read it**
 

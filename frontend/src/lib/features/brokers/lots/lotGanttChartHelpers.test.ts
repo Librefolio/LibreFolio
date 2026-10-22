@@ -870,8 +870,8 @@ describe('J-48 — scope boundary', () => {
 // - `ganttMarkerEvent(row)`: the row as the tooltip names it (`GanttMarkerEvent`), every scalar-or-array field parsed. A row
 //   at the scope's edge keeps only its own broker: the partner is never named (J-48);
 // - `ganttMarkerTooltipBlocks(events, deps)`: one block per event — title, then the Date, Quantity and broker rows, plain
-//   text. A same-day internal transfer has only an arrival row, with no source or destination (backlog J-68): its tooltip says
-//   «To B» and never invents the origin;
+//   text. An arrival row with no source or destination (a transfer whose pair the replay did not classify; a same-day move had
+//   no other until J-68) says «To B» and never invents the origin;
 // - `groupMarkerEvents(entries)`: the markers to draw, one per (kind, lane, day), each carrying every event at its point;
 // - `markerTooltipHtml(blocks, theme)`: the blocks as HTML, every text escaped, one divider between two blocks.
 // Red, before the cure: each case fails on its first line — lotGanttChartHelpers does not export the helper it names (read off
@@ -1067,7 +1067,7 @@ describe('Q-G29-1 — ganttMarkerEvent: a lot_events row as its tooltip names it
         });
     });
 
-    it('a same-day arrival (broker only, no source or destination) keeps just its broker', () => {
+    it('an arrival row without source or destination (broker only) keeps just its broker', () => {
         expect(ganttMarkerEvent({kind: 'TRANSFER_ARRIVE', date: '2024-03-15', quantity: 4, broker_id: 2})).toEqual({kind: 'TRANSFER', labelKind: 'TRANSFER_ARRIVE', date: '2024-03-15', quantity: 4, brokerId: 2, sourceBrokerId: null, destinationBrokerId: null});
     });
 
@@ -1170,7 +1170,21 @@ describe('Q-G29-1 — ganttMarkerTooltipBlocks: one block per event', () => {
             ]);
         });
 
-        it('a same-day arrival (no source, no destination) says only «To B»: no From row, and nothing written for the origin it does not know', () => {
+        it('J-68: a same-day move writes both rows on one day, and each reads From A, To B — the departure with no broker of its own', () => {
+            const departure = ganttMarkerEvent({kind: 'TRANSFER_DEPART', date: '2024-03-15', quantity: 3, broker_id: null, source_broker_id: 1, destination_broker_id: 2});
+            const arrival = ganttMarkerEvent({kind: 'TRANSFER_ARRIVE', date: '2024-03-15', quantity: 3, broker_id: 2, source_broker_id: 1, destination_broker_id: 2});
+            const blocks = ganttMarkerTooltipBlocks([departure, arrival], fakeDeps());
+
+            expect(blocks.map((block) => block.title)).toEqual([`${TITLE_KEY}.TRANSFER_DEPART`, `${TITLE_KEY}.TRANSFER_ARRIVE`]);
+            for (const block of blocks) {
+                expect(block.rows.filter((row) => row.label === 'common.from' || row.label === 'common.to')).toEqual([
+                    {label: 'common.from', value: 'Broker A'},
+                    {label: 'common.to', value: 'Broker B'},
+                ]);
+            }
+        });
+
+        it('an arrival row without source or destination says only «To B»: no From row, and nothing written for the origin it does not know', () => {
             const [block] = ganttMarkerTooltipBlocks([ganttMarkerEvent({kind: 'TRANSFER_ARRIVE', date: '2024-03-15', quantity: 3, broker_id: 2})], fakeDeps());
             expect(block.title).toBe(`${TITLE_KEY}.TRANSFER_ARRIVE`);
             expect(rowPairs(block)).toEqual([

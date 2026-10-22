@@ -696,12 +696,17 @@ debito di traduzione di F-5 (di M).
   NAV e linee anche con la sola cassa in valuta base, quindi il golden della guardia andrebbe rigenerato: serve una
   decisione. Va in T-U1 o T-U5. Dettagli: idem, §14 e §17.6.
   - **Chiusa** (16/10, 03:55) da J CP-6 (decisione 28, `58c10197c`), entrato col treno 87 (`628e3e49e`); golden W1 rigenerato.
-- ~~**B12 · Le quantità dei contributi leggono le date future**~~ — minimo, latente; I, 11/10. Senza `date_to`,
+- ✅ **B12 · Le quantità dei contributi leggono le date future** — minimo, latente; I, 11/10. Senza `date_to`,
   `_get_transactions` (`portfolio_service.py:1721`) legge anche le righe future; l'unico chiamante, `get_report`
   (`:2234`), passa sempre la data di fine, quindi nessun effetto in produzione. Va in T-U5 con B8. Validare le date
   future è una scelta di prodotto. Dettagli: idem, §14.
-  ✖️ 22/10: scartata (developer), motivo: mai visto: l'unico chiamante passa sempre la data di fine
-- ✅ **B15 · Il PAC e la pagina del broker rifanno la custodia** — medio-basso, ½ g; I (T7), 11/10. Il PAC somma
+  ✅ 22/10 (ondata 4, J): `get_positions_contribution` legge le transazioni del broker fino a `effective_end`
+  (`date_to or oggi`), come il resto della chiamata. Rosso: una vendita futura consumava, nel FIFO di
+  `oldest_open_lot_date`, un lotto ancora aperto oggi (riga senza lotto aperto); nessun effetto con una data esplicita.
+  La validazione delle date future alla scrittura resta una scelta di prodotto, non fatta.
+- **B15 · Il PAC e la pagina del broker rifanno la custodia** — medio-basso, ½ g; I (T7), 11/10. Il PAC somma
+  ↩️ 22/10 (coordinatore): lo scarto della classificazione è superato, J l'aveva già curata nell'ondata 4 (`407d019b1`):
+  una vendita futura consumava un lotto ancora aperto oggi.
   `Transaction.amount` per broker e valuta senza quota (`portfolio_allocation_source.py:109-137`; le quantità a `:45`);
   la pagina del broker passa da `transaction_service.get_cash_balances` (`broker_service.py:392`). Entrambi potrebbero
   leggere `NativeCash.balances()` (`native_cash.py:281`), ciascuno con la sua regola di quota. Va in T-U5 o T-U7.
@@ -875,14 +880,15 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
   (`broker_cost_efficiency.py:150-157`); in più l'`abs` sul reddito (`portfolio_income.py:379`). La cura: una regola
   sola per export, quella della pagina da cui parte. Dettagli: [piano della 41](41_brokerPnlFlows/plan-phase00BrokerPnlFlows.prompt.md),
   §14 B9 e §17.6.
-- **T-U4 · Rendimenti e annualizzazione** — medio; T, 11/10. Comprende R1 (il ribasamento scritto due volte) e la
+- ✅ **T-U4 · Rendimenti e annualizzazione** — medio; T, 11/10. Comprende R1 (il ribasamento scritto due volte) e la
   riprova R2, il rendimento netto, il 365 osservato, la parità fra rischio e segnali, P1 (il P&L di periodo del servizio) e C1 di I
   (`_wac_qualifying_txs`, il costo unitario dell'anteprima). Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezioni «2.1» e «7.1».
   Stato (19/10): fatta da J la parte di CP-4, cioè R1/R2, R3, R5, P1 e C1 (`58f8e3967`, entrato in `dev_release2` con
   `322d55042`; `70bc2d290`, con `a180ea0b7`; `4ea6cc61e`, con `40f44f364`), e da MF la parte R6–R10 (MF-D, entrato
   con `8d244d1c6`, `aca75c7ca`, `482343eb3` e `c2feaf3e4`); resta R11, a J: il test di parità fra le versioni pandas di
   volatilità e Sharpe mobili (`signals/risk_adapters.py`) e `risk/metrics.py`.
-  🌊 22/10: ondata 6 (proprietario J; resta R11: il validatore dell'annualizzazione)
+  ✅ Chiusa il 22/10 (ondata 4) con J-62: R11 era già coperta dalla parità M1; sono state tolte le due copie del
+  validatore del fattore.
 - **T-U5 · Prezzo del giorno e valorizzazione** — medio-alto; T, 11/10. Comprende R4 (il P&L di periodo della posizione),
   con B8 di I. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezioni «2.2» e «7.1».
   🌊 22/10: ondata 6 (proprietario MF)
@@ -7498,7 +7504,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   quell'env costruirebbe un'altra cosa. Deciso il tipo di build, anche quei percorsi possono avere il passo prima di
   Playwright. Dettagli: piano J, §10 «C-94».
   🌊 22/10: ondata 6 (proprietario C)
-- **J-8 · Il runner frontend chiama ancora `npx` senza controllare `node_modules`** — basso, robustezza; J, 15/10
+- ✅ **J-8 · Il runner frontend chiama ancora `npx` senza controllare `node_modules`** — basso, robustezza; J, 15/10
   (C-94), runner condiviso: da spostare nella sezione C se il coordinatore preferisce. C-94 ferma con un messaggio
   chiaro il percorso delle build (`dev.py front build`, `api client|sync`, quindi il server di test e
   `_ensure_frontend_build`); restano fuori le chiamate dirette del runner, che senza `frontend/node_modules` vanno al
@@ -7508,7 +7514,14 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   Playwright passano prima da `_ensure_frontend_build`, che ora si ferma, e lanciano `npm run test:e2e`, non `npx`;
   quelle solo Vitest no. Cura possibile: lo stesso controllo di `dev.require_frontend_dependencies` in un punto comune
   del runner, oppure i binari di `frontend/node_modules/.bin` al posto di `npx`. Dettagli: piano J, §10 «C-94».
-  🌊 22/10: ondata 6 (proprietario C)
+  ✅ 22/10 (ondata 4, J): il controllo sta in un punto solo, `_cli._run_passes` (l'ingresso di ogni `./dev.py test`),
+  prima dei setup, del backend condiviso e dell'azione: per una categoria `front-*`, `all-frontend` e `all` chiama
+  `_frontend_common.require_frontend_tools()` (Vitest e Playwright, il controllo e il messaggio con `npm ci` di
+  `dev.require_frontend_dependencies`). Una categoria solo backend e `--list` non lo chiedono. In più `dev.py lint
+  --dead-code` controlla `knip` prima del catalogo e di `npx`. Le 23 chiamate `npx` restano: con `node_modules` presente
+  `npx` usa già il binario locale, e la riga di `cmd_install` (`npx playwright install`) viene dopo il suo `npm ci`.
+  Resta una frase di `CLAUDE.md` («some runner actions still call npx directly (Vitest, J-8)») da aggiornare: file
+  condiviso, lasciato al coordinatore.
 - ✅ **J-9 · Il lotto da ADJUSTMENT-in prende la valuta della riga, non quella del costo** — medio, numeri; trovata dal
   test-author di W (V-3), verificata da J il 15/10. `fifo/engine.py:353` apre il lotto con la `currency` della riga,
   mentre il prezzo è `cost_basis_override`, che sta in `cost_basis_currency`. Con `currency` nulla, ammessa perché
@@ -8314,7 +8327,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     (`runs.length > MAX_LINE_RUNS`), cioè da 30 vuoti in su.
 
   🌊 22/10: ondata 6 (proprietario Y): si toglie l'avviso «troppe lacune, la linea le unisce» (non arriva mai all'utente) e si ritoccano CHANGELOG e guida; J-59 è scartata
-- **J-62 · R11: i gemelli pandas di volatilità e Sharpe mobili, senza parità e con due copie del validatore** — basso,
+- ✅ **J-62 · R11: i gemelli pandas di volatilità e Sharpe mobili, senza parità e con due copie del validatore** — basso,
   numeri (regola 10); J, 19/10 (revisione della voce 1 di J-1 di MF, `068d5dd51`). Coordinatore, 19/10: in R11, nella
   sezione J.
   - `signals/risk_adapters.py` calcola volatilità e Sharpe mobili con pandas, gemelli di `risk/metrics.py`
@@ -8327,8 +8340,13 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     cambia. Dopo J-48.
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «Revisione della
     voce 1 di J-1 di MF».
-
-  🌊 22/10: ondata 6 (proprietario J)
+  - ✅ 22/10 (ondata 4): la parità c'era già (`test_risk_metrics_oracle.py`, blocco (g), M1, dal 18/09, `f5fe80d44`: i due
+    vettoriali contro il loop di riferimento, valori, maschera e conteggio degli indefiniti). Le due copie del
+    validatore ora sono `positive_annualization_factor` della casa (`signals/risk_adapters.py`). Rossi: una spia per
+    ciascun vettoriale (la casa è chiamata una volta, col fattore dato); guardia: un fattore 0, negativo, nan o inf è
+    rifiutato dai due percorsi con lo stesso messaggio. Valori identici. Restano due regole simili con contratti
+    d'errore propri, non portate alla casa: `risk/quant/estimation.py:33` (`ValueError` «GBM estimation…») e
+    `risk/analytic_helpers.py:75` (`RiskUnavailableError`, senza controllo di finitezza).
 - ✅ **J-63 · L1 delle «formule veloci» di MF: i lotti calcolati sui giorni di cambiamento** — medio, prestazioni (numeri
   identici); coordinatore, 19/10 (il piano «formule veloci» di MF entra nella 1.3).
   ✅ 22/10 (riconciliazione): in dev con L1a `197a421fd` (entrato con `2a8e3f3f8`) e L1b `c10bea915` (entrato con `ae4740d43`)
@@ -8405,7 +8423,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     - Con la riga salvata in vista, lo split non faceva nulla.
   - Cura: il segno passa nell'importo in tutti i rami. «Split pair» su un merge non salvato lo annulla
     (`undoPendingPromote`). Spec nuovo `tx-bulk-promote-split` (F1–F3, guardia G).
-- **J-68 · Un trasferimento in un giorno solo non nomina l'origine nelle viste dei lotti** — basso, chiarezza; J, 20/10
+- ✅ **J-68 · Un trasferimento in un giorno solo non nomina l'origine nelle viste dei lotti** — basso, chiarezza; J, 20/10
   (test-author durante il §29 punto 2, verificato da J nel codice).
   - Per un trasferimento che parte e arriva lo stesso giorno, `_build_transfer_rows` (`lots_analysis_service.py`)
     scrive solo TRANSFER_ARRIVE, dal frammento di destinazione, con `broker_id` B ma senza `source_broker_id` né
@@ -8419,8 +8437,11 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     l'origine nel frontend. Il rimedio resta nel backend (`_build_transfer_rows`).
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «Gantt §29, punto
     2», passo 1.
-
-  🌊 22/10: ondata 4, in corso
+  - ✅ 22/10 (ondata 4): `_build_transfer_rows` legge i broker della coppia dagli eventi classificati del motore
+    (`_transfer_brokers`) e scrive anche TRANSFER_DEPART per un trasferimento nello stesso giorno, con origine e
+    destinazione su entrambe le righe; la partenza viene prima dell'arrivo. Niente in `financial_math/`. Lo Storico legge
+    «A → In transit» e «In transit → B» alla stessa data (due righe, come nei trasferimenti di più giorni). La riga fusa
+    «A → B» in una riga sola resta una scelta d'interfaccia, non fatta.
 - ~~**J-70 · Costi di carico negativi già salvati, e la media Auto che ne nasce**~~ — basso, numeri e dati; J, 20/10
   (residui di J-60, raccolti in una voce dal coordinatore).
   - J-60 rifiuta un costo negativo nuovo o mandato di nuovo. Le righe salvate prima con un costo manuale negativo
@@ -8438,13 +8459,19 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     carico negativo si rifiuta nel batch», passo 1.
 
   ✖️ 22/10: scartata (developer), motivo: bonifica: il rifiuto in ingresso di un costo negativo esiste già (`costBasisNegative`, `transaction_batch_stages.py:196`); le righe salvate prima le corregge l'utente col Manual
-- **J-71 · Due copie in linea di `buildSyncTargets` nei pannelli del rischio** — minimo, riordino senza effetti; J, 21/10
+- ✅ **J-71 · Due copie in linea di `buildSyncTargets` nei pannelli del rischio** — minimo, riordino senza effetti; J, 21/10
   (durante TC-23). `levels/RiskPanelHeader.svelte` e `RiskAnalysisPanel.svelte` calcolano ancora da soli
   `syncAssets`/`syncFxPairs`, la regola che `features/risk/syncTargets.ts::buildSyncTargets` ha sollevato «so a second
   surface does not become a second copy». Oggi danno lo stesso risultato; da sostituire con la funzione, con un test che
   ne fissi l'uso. Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10
   «Ondata 3 (21/10 notte) — TC-23 poi L1b», passo A2.
-  🌊 22/10: ondata 4, in corso
+  - ✅ 22/10 (ondata 4): `RiskPanelHeader` e `RiskAnalysisPanel` leggono `buildSyncTargets`. Unico effetto visibile: nella
+    modale di sync di `RiskAnalysisPanel` gli asset stanno in ordine di id, non nell'ordine dell'ambito.
+- **R1 · Il rischio sulle osservazioni, dopo Q1 di X** — medio-basso, prestazioni; J, 22/10. **Ondata 5 della 1.3,
+  dopo X-Q1** (correzione del coordinatore, 22/10: il developer tiene nella 1.3 le formule veloci, MF-FV e X-Q1; la prima
+  stesura la diceva «dopo la 1.3»). Q1 non esiste ancora: `price_query._build_backward_filled_series` è ancora la
+  serie densa. Nessun caso di test scritto; 7 scenari di parità descritti nel [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md),
+  «Analisi breve di R1 e L1». Il pavimento SEC8-1b resta finché R1 non c'è. ~3 h più la parità.
 
 ## Z · Sospensione e risveglio (fase 01)
 

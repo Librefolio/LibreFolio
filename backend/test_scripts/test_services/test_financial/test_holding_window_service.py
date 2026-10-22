@@ -80,7 +80,7 @@ backend/app/services/financial_math/holding_window.py.
 
 import sys
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -686,3 +686,58 @@ class TestCoOwnedBrokerShare:
         assert (holding.oldest_open_lot_date, row.oldest_open_lot_date) == (BUY_DAY, BUY_DAY)
         assert row.annualized_return == expected
         print_success("residual above dust at the share: the first BUY's date")
+
+
+# =============================================================================
+# B12 — a contribution read without an end date stops at today
+# =============================================================================
+
+
+class TestAContributionWithoutAnEndDateStopsAtToday:
+    """B12: ``get_positions_contribution`` without ``date_to`` reads the day's transactions up to today, as the rest of the call does.
+
+    ``effective_end = date_to or today`` bounds the period, the flows and the exits, but the broker's transactions were read
+    with ``date_to=None``, every row of the broker, the future ones too: a SELL dated after today consumed, in the FIFO that
+    gives ``oldest_open_lot_date``, a lot still open today. No production caller leaves the date out (``get_report`` always
+    passes one), so the defect was latent; the tests below are the only way to reach it. Read on 22/10/2026 (base
+    ``534c280c6``).
+    """
+
+    @staticmethod
+    async def _row_today(session: AsyncSession, scope: _Scope, today: date) -> AssetPeriodContribution:
+        """The scope's asset at its broker in the contribution from 30 days ago, with no end date: one row by construction."""
+        contribution = await PortfolioService(session).get_positions_contribution(user_id=scope.user.id, target_currency_override=EUR, date_from=today - timedelta(days=30))
+        rows = [row for row in contribution.positions if row.asset_id == scope.asset.id and row.broker_id == scope.broker.id]
+        assert len(rows) == 1, f"expected one row of asset {scope.asset.id}, got {[(r.asset_id, r.broker_id) for r in contribution.positions]}"
+        return rows[0]
+
+    @pytest.mark.asyncio
+    async def test_a_sale_dated_after_today_does_not_close_the_lot_open_today(self, session, keep_alive):
+        """BUY 10 for 1000 twenty days ago, SELL 10 five days from now, close 110 today and the day of the BUY: 10 are held today,
+        in the BUY's lot — ``oldest_open_lot_date`` is the BUY's date, as with an explicit ``date_to`` of today.
+
+        RED before the cure: the future SELL was read, consumed the lot, and the row had no open lot (None)."""
+        print_section("B12: a future sale, no date_to")
+        today = date.today()
+        buy_day = today - timedelta(days=20)
+        scope = await _scope(session, keep_alive, "b12sale")
+        await _persist(session, keep_alive, _trade(scope, TransactionType.BUY, buy_day, "10", "-1000"), _trade(scope, TransactionType.SELL, today + timedelta(days=5), "-10", "1200"), _close(scope, buy_day, "100"), _close(scope, today, "110"))
+
+        row = await self._row_today(session, scope, today)
+
+        assert (row.end_value, row.is_fully_sold) == (Decimal("1100"), False), "precondition: the 10 units are held today, worth 10 × 110"
+        assert row.oldest_open_lot_date == buy_day, f"the lot of {buy_day} is open today"
+        print_success("oldest open lot: the BUY's date")
+
+    @pytest.mark.asyncio
+    async def test_guard_the_same_read_with_an_explicit_end_date_is_unchanged(self, session, keep_alive):
+        """GUARD, green before and after: the same ledger read to today explicitly dates the open lot from the BUY."""
+        today = date.today()
+        buy_day = today - timedelta(days=20)
+        scope = await _scope(session, keep_alive, "b12explicit")
+        await _persist(session, keep_alive, _trade(scope, TransactionType.BUY, buy_day, "10", "-1000"), _trade(scope, TransactionType.SELL, today + timedelta(days=5), "-10", "1200"), _close(scope, buy_day, "100"), _close(scope, today, "110"))
+
+        contribution = await PortfolioService(session).get_positions_contribution(user_id=scope.user.id, target_currency_override=EUR, date_from=today - timedelta(days=30), date_to=today)
+        rows = [row for row in contribution.positions if row.asset_id == scope.asset.id and row.broker_id == scope.broker.id]
+
+        assert [row.oldest_open_lot_date for row in rows] == [buy_day]
