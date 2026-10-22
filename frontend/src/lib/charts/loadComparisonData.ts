@@ -11,7 +11,9 @@
 
 import {zodiosApi} from '$lib/api';
 import type {SignalConfig} from '$lib/charts/signals';
+import {getAssetPriceStore} from '$lib/stores/assetPriceStoreRegistry';
 import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+import {canonicalCacheKey} from '$lib/stores/signalResultCache';
 import {todayIso} from '$lib/utils/dateOnly';
 import {padSyncRange, subtractCalendarDaysOrMin} from '$lib/utils/sync/syncRange';
 
@@ -181,6 +183,41 @@ export async function loadComparisonAssetsData(assetIds: readonly number[], date
     });
 
     return {items};
+}
+
+/** The distinct positive ids, ascending: the assets a comparison load asks, whatever the order the signals name them in. */
+function distinctAscending(assetIds: readonly number[]): number[] {
+    return [...new Set(assetIds)].sort((left, right) => left - right);
+}
+
+/**
+ * The key a comparison load is kept under (N64b): the assets, the range and the target currency it asks for, and nothing
+ * else. The same request in another order of assets, or with a duplicate, is the same key.
+ */
+export function comparisonAnswerKey(assetIds: readonly number[], dateRange: {start: string; end: string}, targetCurrency?: string): string {
+    return canonicalCacheKey({assets: distinctAscending(assetIds), range: {start: dateRange.start, end: dateRange.end}, targetCurrency: targetCurrency || null});
+}
+
+/**
+ * The generations of the price stores a comparison load is drawn over, one per asset, ascending by id (N64b): the store of
+ * the target currency when there is one, else the asset's own. A comparison answer is kept only while they are the same.
+ *
+ * Null when an asset is unknown to the page (no meta) or has no currency to name its store: nothing can be filed, and the load always asks.
+ */
+export function comparisonAnswerGenerations(assetIds: readonly number[], allAssets: readonly ComparisonAssetMeta[], targetCurrency?: string): number[] | null {
+    const generations: number[] = [];
+    for (const assetId of distinctAscending(assetIds)) {
+        const meta = allAssets.find((asset) => asset.id === assetId);
+        const currency = meta && (targetCurrency || meta.currency);
+        if (!currency) return null;
+        generations.push(getAssetPriceStore(assetId, currency).generation);
+    }
+    return generations;
+}
+
+/** Whether a comparison answer may be kept (N64b): not one with a price the backend could not convert, which a later request may. */
+export function comparisonAnswerIsCacheable(loaded: ComparisonAssetsLoadResult): boolean {
+    return loaded.items.every((item) => item.runtimeParams._conversionFailed !== true);
 }
 
 export function applyComparisonAssetsData(compSignals: SignalConfig[], loaded: ComparisonAssetsLoadResult): Map<number, any[]> {

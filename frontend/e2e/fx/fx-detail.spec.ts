@@ -16,6 +16,8 @@ import {schemas} from '../../src/lib/api/generated';
 import {eventSeq, waitForEvent, waitForSettled} from '../fixtures/app-events';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {expectChartCanvas} from '../fixtures/charts';
+import {assetComparison, assetIdByName, pairComparison, seedChartComparisons} from '../fixtures/chartComparisons';
+import {expectPairLineDrawn, expectPairLineReaches} from '../fixtures/pairLine';
 import {daysAgoIso, localIso, todayIso} from '../fixtures/dates';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToFxDetailPage} from './fx-helpers';
@@ -3344,5 +3346,205 @@ test.describe('N64 FX detail: a signal result already answered is not asked agai
         await refresh.click();
         await refreshAsked;
         await expect(refresh, 'the page token of the refresh is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+    });
+
+    // N64b — an asset compared on the pair page: the price series of the peer are kept too. The peer is asked once per period;
+    // the return to a period already seen asks nothing and takes no page token. Served by the real backend (the seeded
+    // EUR-USD compared with the seeded Apple asset); no route mock here, and the comparison is seeded in this context's
+    // localStorage, so nothing shared is written.
+    const PRICE_QUERY_PATH = '/api/v1/assets/prices/query';
+    /** The fields of a `/assets/prices/query` item the peer's comparison request is read by. */
+    type PeerAsk = {asset_id?: number; date_range?: {start?: string; end?: string}; include_price?: boolean; include_events?: boolean};
+
+    /** The items of a `/assets/prices/query` POST that ask for `peerId`. */
+    function peerAsksOf(request: Request, peerId: number): PeerAsk[] {
+        if (request.method() !== 'POST' || new URL(request.url()).pathname !== PRICE_QUERY_PATH) return [];
+        let body: unknown;
+        try {
+            body = request.postDataJSON();
+        } catch {
+            return [];
+        }
+        return Array.isArray(body) ? body.filter((item): item is PeerAsk => item !== null && typeof item === 'object' && (item as PeerAsk).asset_id === peerId) : [];
+    }
+
+    /** The items asking for `peerId` the page sends from now until `stop()`. Armed before the action it measures, so none it sends is missed. */
+    function watchPeerAsks(page: Page, peerId: number) {
+        const sent: PeerAsk[] = [];
+        const onRequest = (request: Request) => void sent.push(...peerAsksOf(request, peerId));
+        page.on('request', onRequest);
+        return {sent, stop: () => page.off('request', onRequest)};
+    }
+
+    /** Arms an in-page observer for what a cached return must never show: the Refresh button publishing `data-busy="true"`, even for one render pass. Read and removed by `stopRefreshBusyWatch`. */
+    async function armRefreshBusyWatch(page: Page): Promise<void> {
+        await page.evaluate(() => {
+            type BusyWatch = {stop: () => boolean};
+            const host = window as Window & {__lfN64bRefreshWatch?: BusyWatch};
+            host.__lfN64bRefreshWatch?.stop();
+            let seen = false;
+            const note = (records: MutationRecord[]) => {
+                for (const record of records) {
+                    if (record.target instanceof Element && record.target.getAttribute('data-testid') === 'fx-detail-refresh-btn' && (record.oldValue === 'true' || record.target.getAttribute('data-busy') === 'true')) seen = true;
+                }
+            };
+            const observer = new MutationObserver(note);
+            observer.observe(document.body, {subtree: true, attributes: true, attributeFilter: ['data-busy'], attributeOldValue: true});
+            host.__lfN64bRefreshWatch = {
+                stop: () => {
+                    note(observer.takeRecords());
+                    observer.disconnect();
+                    return seen;
+                },
+            };
+        });
+    }
+
+    /** Whether the Refresh button published busy since `armRefreshBusyWatch`, and removes the watch. Fails loudly when none was armed. */
+    async function stopRefreshBusyWatch(page: Page): Promise<boolean> {
+        return page.evaluate(() => {
+            const watch = (window as Window & {__lfN64bRefreshWatch?: {stop: () => boolean}}).__lfN64bRefreshWatch;
+            if (!watch) throw new Error('no Refresh busy watch was armed');
+            return watch.stop();
+        });
+    }
+
+    test('N64b a comparison peer is asked once per period: the return to a period seen asks nothing and takes no page token, Refresh asks again', async ({page}) => {
+        const appleId = await assetIdByName(page, 'Apple Inc.');
+        await seedChartComparisons(page, [[PAIR, [assetComparison('e2e-n64b-peer', appleId)]]]);
+
+        // A full load on the page's default period (3M): the first load asks the peer, and is not the subject.
+        const firstLoad = watchPeerAsks(page, appleId);
+        await goToFxDetailPage(page, PAIR);
+        await expect.poll(() => firstLoad.sent.length, {message: 'the first load asked for the saved comparison peer', timeout: 15_000}).toBeGreaterThan(0);
+        firstLoad.stop();
+
+        const root = page.getByTestId('fx-detail-page');
+        const refresh = page.getByTestId('fx-detail-refresh-btn');
+        const picker = page.getByTestId('fx-detail-filter-bar').getByTestId('date-range-picker-root');
+        const startInput = picker.getByTestId('date-range-input-start');
+        const firstPeriod = picker.getByTestId('date-preset-1m');
+        const secondPeriod = picker.getByTestId('date-preset-6m');
+        await expect(refresh, 'the first load has released the page token').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+        const seenStarts = new Set<string>([await startInput.inputValue()]);
+
+        /** A period nothing has answered yet: the click asks the peer exactly once, for this period, and the page is waited on until it is quiet again. */
+        const pickPeriodAsked = async (period: Locator, options: {seenBefore?: boolean} = {}): Promise<string> => {
+            const asked = watchPeerAsks(page, appleId);
+            await period.click();
+            await expect(period, 'the period is selected').toHaveAttribute('data-active', 'true');
+            const start = await startInput.inputValue();
+            // `seenBefore`: a period a Refresh made the page forget, so asking again is exactly what is proved.
+            if (!options.seenBefore) expect(seenStarts.has(start), 'a period not seen before, or the ask below proves nothing').toBe(false);
+            seenStarts.add(start);
+            await expect.poll(() => asked.sent.length, {message: `the page asked for the comparison peer over the period from ${start}`, timeout: 15_000}).toBeGreaterThan(0);
+            await expect(refresh, 'the page token of the period change is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+            await waitForSettled(root, 20_000);
+            asked.stop();
+            expect(asked.sent, 'a new period asks the peer once').toHaveLength(1);
+            expect(asked.sent[0].date_range?.start, 'the peer is asked over the period on screen').toBe(start);
+            expect(asked.sent[0].include_events, 'the comparison asks for the peer events').toBe(true);
+            expect(asked.sent[0].include_price, 'the comparison asks for the peer prices (the flag is true or absent)').not.toBe(false);
+            return start;
+        };
+        const firstStart = await pickPeriodAsked(firstPeriod);
+        const seriesOfFirstPeriod = await readSeriesCount(page);
+        await pickPeriodAsked(secondPeriod);
+
+        // The return: asked and answered once, so it comes from the cache, in the same tick — no request for the peer, no page token.
+        const returned = watchPeerAsks(page, appleId);
+        await armRefreshBusyWatch(page);
+        await firstPeriod.click();
+        await expect(firstPeriod, 'the period is selected again').toHaveAttribute('data-active', 'true');
+        await expect(startInput, 'the range is the first period again').toHaveValue(firstStart);
+        await expect(refresh, 'the page token of the period change is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+        await waitForSettled(root, 20_000);
+        await expect.poll(() => readSeriesCount(page), {message: 'the cached period draws the comparison again', timeout: 10_000}).toBe(seriesOfFirstPeriod);
+        returned.stop();
+        const refreshWasBusy = await stopRefreshBusyWatch(page);
+        expect(returned.sent, 'the return to a period already answered does not ask the comparison peer').toEqual([]);
+        expect(refreshWasBusy, 'the return takes no page token (the Refresh button stays not busy)').toBe(false);
+
+        // GUARD — Refresh is a forced load: the period on screen asks the peer again, whatever was kept for it.
+        const refreshAsked = page.waitForRequest((request) => peerAsksOf(request, appleId).length > 0, {timeout: 15_000});
+        refreshAsked.catch(() => undefined);
+        await refresh.click();
+        await refreshAsked;
+        await expect(refresh, 'the page token of the refresh is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+        await waitForSettled(root, 20_000);
+
+        // And it forgets the other periods too: the one seen before the Refresh is asked again, not served from the cache.
+        await pickPeriodAsked(secondPeriod, {seenBefore: true});
+    });
+});
+
+// ============================================================================
+// Y-41 — FX pair detail: a compared pair is drawn
+// ============================================================================
+// A saved `fx-pair` signal on another pair than the page's own reads its rates from the FX store, which the detail page
+// filled only from its Refresh and Sync handlers. Opening the page and changing the period asked the server for nothing
+// of the compared pair, so its card said «no data» and no line was drawn. The chart publishes no overlay count (a list
+// card does): «drawn» is read from the series the chart handed ECharts (`fixtures/pairLine.ts`), the one named after the
+// pair's two currency codes, with values.
+//
+// The signal is seeded in this browser's storage and the rates are the seeded mock data's (EUR-GBP, daily, years back):
+// nothing shared is written.
+// ============================================================================
+test.describe('Y-41 FX detail: a compared pair is drawn', () => {
+    test.describe.configure({timeout: 90_000});
+
+    /** The pair the page shows, and the one compared with it. */
+    const OWN = 'EUR-USD';
+    const OTHER = 'EUR-GBP';
+    const CHART = 'fx-detail-chart';
+    /** The period the page opens on, and a longer one: both end yesterday, like the neighbouring periods. */
+    const narrow = () => ({start: daysAgoIso(30), end: daysAgoIso(1)});
+    const wide = () => ({start: daysAgoIso(180), end: daysAgoIso(1)});
+    /** The wide period's first day plus room for the chart's resolution and a weekend: still a line from the part the narrow period lacked. */
+    const reachesWideStart = () => daysAgoIso(135);
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+        await seedChartComparisons(page, [[OWN, [pairComparison('e2e-y41-fx-pair', OTHER)]]]);
+    });
+
+    /** A full load of the pair over `range`: the FX store is cold and the page owes the compared pair its rates. */
+    async function openOwnPair(page: Page, range: {start: string; end: string}): Promise<Locator> {
+        await navigateTo(page, `/fx/${OWN}?start=${range.start}&end=${range.end}`);
+        const root = page.getByTestId('fx-detail-page');
+        await expect(root).toBeVisible({timeout: 15_000});
+        await waitForSettled(root, 20_000);
+        return root;
+    }
+
+    test('Y-41 a saved comparison with another pair is drawn on a clean load', async ({page}) => {
+        await openOwnPair(page, narrow());
+
+        await expectPairLineDrawn(page, CHART, OTHER, `the saved ${OTHER} comparison is drawn once the ${OWN} detail has loaded`);
+    });
+
+    test('Y-41 the compared pair covers the period after it grows', async ({page}) => {
+        const root = await openOwnPair(page, narrow());
+
+        // The precondition, from the path that always loaded the pair (Refresh): the line is drawn over the short period.
+        const refresh = page.getByTestId('fx-detail-refresh-btn');
+        await expect(refresh).toBeEnabled();
+        await refresh.click();
+        await expectPairLineDrawn(page, CHART, OTHER, `the ${OTHER} comparison is drawn over the short period`);
+        await expect(refresh, 'the refresh has released the page').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+
+        const picker = page.getByTestId('fx-detail-filter-bar').getByTestId('date-range-picker-root');
+        const startInput = picker.getByTestId('date-range-input-start');
+        const endInput = picker.getByTestId('date-range-input-end');
+        const period = wide();
+        await startInput.fill(period.start);
+        await expect(startInput).toHaveValue(period.start);
+        await endInput.fill(period.end);
+        await expect(endInput).toHaveValue(period.end);
+        await endInput.press('Enter');
+        await expect(picker).toHaveAttribute('data-open', 'false');
+        await waitForSettled(root, 20_000);
+
+        await expectPairLineReaches(page, CHART, OTHER, reachesWideStart(), `the ${OTHER} line reaches back into the part the longer period added`);
     });
 });

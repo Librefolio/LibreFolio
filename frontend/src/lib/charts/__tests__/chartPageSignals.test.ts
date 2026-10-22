@@ -34,6 +34,13 @@
  * set, a mode, a currency, an orientation) go through them, and the ones that always ask (a refresh, a first load, a
  * retry) stay on `pageBusy.track(`.
  *
+ * Lot N64b adds the same cache for the comparison series the two pages load for their asset-comparison signals
+ * (`comparisonSeriesAnswers`, keyed by `comparisonAnswerKey(` and filed under `comparisonAnswerGenerations(`, never
+ * when `comparisonAnswerIsCacheable(` says a conversion failed): the last part of the file («N64b wiring») reads from the
+ * two sources that `maybeLoadComparison` asks it unless the load is forced and fills it, that the asset page's sync and
+ * refresh points call `clearAssetPageAnswers(` instead of emptying only the chart answers, and that the FX page's
+ * `runSyncAsset` empties the comparison cache.
+ *
  * A comparison's fallback name is a catalogue message (`ChartSignal.text`), which throws before svelte-i18n is
  * initialised: the file boots it once, in English, and compares a fallback with the catalogue's own text for its key,
  * never with a literal. The names the parity cases give to assets («Synthetic peer») are data they inject.
@@ -936,5 +943,235 @@ describe('N64 wiring, read from the two detail pages’ sources', () => {
             expect(forcedLoadProblems("other.pageBusy.track('asset-refresh', () => handleRefresh());", ['asset-refresh']), 'another object’s pageBusy is not the page’s').toHaveLength(1);
             expect(forcedLoadProblems('', ['asset-refresh', 'asset-first-load'])).toHaveLength(2);
         });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Y-41 wiring: the two detail pages load the rates of the pairs their saved fx-pair signals name
+// ---------------------------------------------------------------------------
+
+/**
+ * A saved `fx-pair` signal draws from the FX store, which a detail page filled only in its Sync and Refresh handlers: on a
+ * clean load, or on a pair just chosen, the store was empty and the signal card said «no data» (Y-41). The pages now load
+ * the pairs of their signals (`ensureSignalFxPairs(`, `lib/charts/comparisonSeries.ts`) when they open, when the period
+ * changes and when the signals change, through a page function `loadSignalFxPairs(`. Read from the sources like the
+ * wiring above: what the line shows is pinned by the pages' E2E (`Y-41`).
+ */
+const Y41_PAGES = [
+    {page: 'asset detail', path: DETAIL_PAGES[0][1], opens: 'reloadPage', triggers: ['reloadPage', 'trackChartAndComparison', 'handleSignalsChange', 'setPrimaryMode']},
+    {page: 'FX detail', path: DETAIL_PAGES[1][1], opens: 'initializePage', triggers: ['initializePage', 'trackChartAndComparison', 'handleSignalsChange']},
+] as const;
+
+/** The body of `function name(` (async or not) in `code`, braces matched, or null when there is no such function. */
+function functionBody(code: string, name: string): string | null {
+    const header = new RegExp(`\\bfunction\\s+${name}\\s*\\(`).exec(code);
+    if (!header) return null;
+    const open = code.indexOf('{', code.indexOf(')', header.index) + 1);
+    if (open < 0) return null;
+    let depth = 0;
+    for (let index = open; index < code.length; index++) {
+        if (code[index] === '{') depth++;
+        else if (code[index] === '}' && --depth === 0) return code.slice(open, index + 1);
+    }
+    return null;
+}
+
+/** Whether `code` imports `name` as a value from the module `from`. */
+function importsValue(code: string, name: string, from: string): boolean {
+    return [...code.matchAll(/import\s+(type\s+)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)].some(([, typeOnly, clause, source]) => !typeOnly && source === from && clause.split(',').some((specifier) => specifier.trim().split(/\s+as\s+/)[0] === name));
+}
+
+/** What keeps a page from loading the rates of its fx-pair signals. */
+function signalFxPairProblems(source: string, triggers: readonly string[]): string[] {
+    const code = withoutComments(source);
+    const problems: string[] = [];
+    if (!importsValue(code, 'ensureSignalFxPairs', '$lib/charts/comparisonSeries')) problems.push('ensureSignalFxPairs is not imported as a value from $lib/charts/comparisonSeries');
+    const loader = functionBody(code, 'loadSignalFxPairs');
+    if (loader === null) problems.push('function loadSignalFxPairs( is not declared');
+    else if (!callsFunction(loader, 'ensureSignalFxPairs')) problems.push('loadSignalFxPairs( never calls ensureSignalFxPairs(');
+    for (const trigger of triggers) {
+        const body = functionBody(code, trigger);
+        if (body === null) problems.push(`function ${trigger}( is not declared`);
+        else if (!callsFunction(body, 'loadSignalFxPairs')) problems.push(`${trigger}( never calls loadSignalFxPairs(`);
+    }
+    return problems;
+}
+
+const listedY41 = (page: string, problems: readonly string[]): string => ['', `The ${page} page does not load the pairs of its fx-pair signals (Y-41). ${problems.length} finding(s):`, '', ...problems, ''].join('\n  ');
+
+describe('Y-41 wiring, read from the two detail pages’ sources', () => {
+    it.each(Y41_PAGES)('the $page page loads the pairs of its fx-pair signals when it opens, when the period changes and when the signals change', ({page, path, triggers}) => {
+        const problems = signalFxPairProblems(readFileSync(path, 'utf8'), triggers);
+
+        expect(problems, listedY41(page, problems)).toEqual([]);
+    });
+
+    describe('the form reads what it claims (controls)', () => {
+        const WIRED = ["import {ensureSignalFxPairs} from '$lib/charts/comparisonSeries';", 'async function loadSignalFxPairs() {', '    await ensureSignalFxPairs(signals, undefined, range);', '}', 'async function reloadPage() {', '    await loadSignalFxPairs();', '}'].join('\n');
+
+        it('passes a page that imports the helper, wraps it in loadSignalFxPairs and calls that from the trigger', () => {
+            expect(signalFxPairProblems(WIRED, ['reloadPage'])).toEqual([]);
+        });
+
+        it('fails an import of the type only, a call only in a comment, a trigger that does not call it, and a trigger that is nowhere', () => {
+            expect(signalFxPairProblems(WIRED.replace('import {', 'import type {'), ['reloadPage'])).toEqual(['ensureSignalFxPairs is not imported as a value from $lib/charts/comparisonSeries']);
+            expect(signalFxPairProblems(WIRED.replace('await ensureSignalFxPairs(signals, undefined, range);', '// await ensureSignalFxPairs(signals, undefined, range);'), ['reloadPage'])).toEqual(['loadSignalFxPairs( never calls ensureSignalFxPairs(']);
+            expect(signalFxPairProblems(WIRED.replace('    await loadSignalFxPairs();', '    await somethingElse();'), ['reloadPage'])).toEqual(['reloadPage( never calls loadSignalFxPairs(']);
+            expect(signalFxPairProblems(WIRED, ['reloadPage', 'handleSignalsChange'])).toEqual(['function handleSignalsChange( is not declared']);
+            expect(signalFxPairProblems('', [])).toEqual(['ensureSignalFxPairs is not imported as a value from $lib/charts/comparisonSeries', 'function loadSignalFxPairs( is not declared']);
+        });
+
+        it('reads a function body with nested braces up to its own closing brace', () => {
+            const code = 'function a() { if (x) { y(); } }\nfunction b() { loadSignalFxPairs(); }';
+
+            expect(functionBody(code, 'a')).toBe('{ if (x) { y(); } }');
+            expect(callsFunction(functionBody(code, 'a') ?? '', 'loadSignalFxPairs')).toBe(false);
+            expect(callsFunction(functionBody(code, 'b') ?? '', 'loadSignalFxPairs')).toBe(true);
+        });
+    });
+});
+
+/**
+ * Lot N64b: the comparison series, cached like the chart answers. Read from the two sources, as the blocks above:
+ * - in `maybeLoadComparison(`: the key of the request, the generations of the stores it reads, a `get` that a forced
+ *   load does not make (`!force` before it), a `set` and the check that the answer may be kept;
+ * - the asset page's sync and refresh points empty both of its caches (`clearAssetPageAnswers(`), not only the chart
+ *   answers; the FX page's `runSyncAsset(` empties the comparison cache, as the sync may have changed the prices.
+ * A form here is a floor, not a proof: that a hit answers and a miss asks is the cache's own tests and the pages' E2E.
+ */
+const N64B_PAGES = [
+    {page: 'asset detail', path: DETAIL_PAGES[0][1]},
+    {page: 'FX detail', path: DETAIL_PAGES[1][1]},
+] as const;
+
+const N64B_CALLS = ['comparisonAnswerKey', 'comparisonAnswerGenerations', 'comparisonAnswerIsCacheable'] as const;
+
+/** What keeps `maybeLoadComparison` from asking its cache before the request, filing the answer, and skipping both on a forced load. */
+function comparisonCacheProblems(source: string): string[] {
+    const code = withoutComments(source);
+    const body = functionBody(code, 'maybeLoadComparison');
+    if (body === null) return ['function maybeLoadComparison( is not declared'];
+    const problems: string[] = [];
+    for (const name of N64B_CALLS) {
+        if (!callsFunction(body, name)) problems.push(`maybeLoadComparison( never calls ${name}(`);
+    }
+    for (const method of ['get', 'set']) {
+        if (!callsMethodOf(body, 'comparisonSeriesAnswers', method)) problems.push(`maybeLoadComparison( never calls comparisonSeriesAnswers.${method}(`);
+    }
+    const firstGet = body.search(/(?<![\w$.])comparisonSeriesAnswers\s*\.\s*get\s*\(/);
+    // The `!force` must belong to the statement that reads the cache, not to an earlier one (the memo check above it has its own).
+    if (firstGet >= 0 && !body.slice(Math.max(body.lastIndexOf(';', firstGet), body.lastIndexOf('{', firstGet), body.lastIndexOf('}', firstGet)) + 1, firstGet).includes('!force'))
+        problems.push('no `!force` before the first comparisonSeriesAnswers.get(: a forced load (refresh, sync) would be answered from the cache');
+    return problems;
+}
+
+/** What keeps the asset page's sync and refresh points from emptying both of its caches. */
+function assetPageClearProblems(source: string): string[] {
+    const code = withoutComments(source);
+    const problems: string[] = [];
+    const chartOnly = code.match(/(?<![\w$.])assetChartAnswers\s*\.\s*clear\s*\(/g)?.length ?? 0;
+    if (chartOnly > 0) problems.push(`assetChartAnswers.clear( is called ${chartOnly} time(s): it leaves the comparison series; call clearAssetPageAnswers( instead`);
+    const both = code.match(/(?<![\w$.])clearAssetPageAnswers\s*\(/g)?.length ?? 0;
+    if (both < 3) problems.push(`clearAssetPageAnswers( is called ${both} time(s), at least 3 are expected (the three sync and refresh points)`);
+    return problems;
+}
+
+/** What keeps the FX page's sync from emptying the comparison cache. */
+function fxSyncClearProblems(source: string): string[] {
+    const body = functionBody(withoutComments(source), 'runSyncAsset');
+    if (body === null) return ['function runSyncAsset( is not declared'];
+    return callsMethodOf(body, 'comparisonSeriesAnswers', 'clear') ? [] : ['runSyncAsset( never calls comparisonSeriesAnswers.clear('];
+}
+
+const listedN64b = (page: string, what: string, problems: readonly string[]): string => ['', `The ${page} page ${what} (N64b). ${problems.length} finding(s):`, '', ...problems, ''].join('\n  ');
+
+describe('N64b wiring, the comparison series cache read from the two detail pages’ sources', () => {
+    it.each(N64B_PAGES)('the $page page asks the comparison cache unless the load is forced, and fills it with answers that may be kept', ({page, path}) => {
+        const problems = comparisonCacheProblems(readFileSync(path, 'utf8'));
+
+        expect(problems, listedN64b(page, 'does not cache its comparison series: in maybeLoadComparison key the request, read the store generations, ask comparisonSeriesAnswers.get( only when not forced, and file with .set( what comparisonAnswerIsCacheable( accepts', problems)).toEqual([]);
+    });
+
+    it('the asset detail page empties both of its caches at its sync and refresh points', () => {
+        const problems = assetPageClearProblems(readFileSync(DETAIL_PAGES[0][1], 'utf8'));
+
+        expect(problems, listedN64b('asset detail', 'leaves a cached comparison series after a sync or a refresh: replace each assetChartAnswers.clear( by clearAssetPageAnswers(', problems)).toEqual([]);
+    });
+
+    it('the FX detail page empties the comparison cache when it syncs an asset', () => {
+        const problems = fxSyncClearProblems(readFileSync(DETAIL_PAGES[1][1], 'utf8'));
+
+        expect(problems, listedN64b('FX detail', 'keeps a cached comparison series after a sync: runSyncAsset must call comparisonSeriesAnswers.clear(', problems)).toEqual([]);
+    });
+
+    describe('the form reads what it claims (controls)', () => {
+        const WIRED = [
+            'function maybeLoadComparison(force = false) {',
+            '    const key = comparisonAnswerKey(ids, range, currency);',
+            '    const generations = comparisonAnswerGenerations(ids, allAssets, currency);',
+            '    const hit = !force && generations ? comparisonSeriesAnswers.get(key, generations) : null;',
+            '    if (hit) return;',
+            '    const loaded = await loadComparisonAssetsData(ids, range, allAssets);',
+            '    if (generations && comparisonAnswerIsCacheable(loaded)) comparisonSeriesAnswers.set(key, generations, loaded);',
+            '}',
+        ].join('\n');
+
+        it('passes a body that keys, reads the generations, asks unless forced, checks and files', () => {
+            expect(comparisonCacheProblems(WIRED)).toEqual([]);
+        });
+
+        it('fails a call only in a comment, a call of another object, a get not conditioned on !force, and a missing function', () => {
+            expect(comparisonCacheProblems(WIRED.replace('    const key = comparisonAnswerKey(ids, range, currency);', '    // const key = comparisonAnswerKey(ids, range, currency);'))).toEqual(['maybeLoadComparison( never calls comparisonAnswerKey(']);
+            expect(comparisonCacheProblems(WIRED.replace('comparisonSeriesAnswers.set(', 'assetChartAnswers.set('))).toEqual(['maybeLoadComparison( never calls comparisonSeriesAnswers.set(']);
+            expect(comparisonCacheProblems(WIRED.replace('comparisonSeriesAnswers.get(', 'other.comparisonSeriesAnswers.get('))).toEqual(['maybeLoadComparison( never calls comparisonSeriesAnswers.get(']);
+            expect(comparisonCacheProblems(WIRED.replace('!force && ', ''))).toEqual(['no `!force` before the first comparisonSeriesAnswers.get(: a forced load (refresh, sync) would be answered from the cache']);
+            expect(comparisonCacheProblems(WIRED.replace('!force && ', '').replace('function maybeLoadComparison(force = false) {', 'function maybeLoadComparison(force = false) {\n    if (!force) {\n        memo();\n    }')), 'a !force of an earlier statement is not the cache read’s own').toEqual([
+                'no `!force` before the first comparisonSeriesAnswers.get(: a forced load (refresh, sync) would be answered from the cache',
+            ]);
+            expect(comparisonCacheProblems(WIRED.replace('comparisonAnswerIsCacheable(loaded)', 'true'))).toEqual(['maybeLoadComparison( never calls comparisonAnswerIsCacheable(']);
+            expect(comparisonCacheProblems(WIRED.replace('function maybeLoadComparison(', 'function loadComparison('))).toEqual(['function maybeLoadComparison( is not declared']);
+        });
+
+        it('takes a call in another function as no call in maybeLoadComparison', () => {
+            const elsewhere = ['function other() { comparisonAnswerKey(); comparisonAnswerGenerations(); comparisonAnswerIsCacheable(); comparisonSeriesAnswers.get(); comparisonSeriesAnswers.set(); }', 'function maybeLoadComparison() { return; }'].join('\n');
+
+            expect(comparisonCacheProblems(elsewhere)).toHaveLength(5);
+        });
+
+        const ASSET_WIRED = 'clearAssetPageAnswers();\nclearAssetPageAnswers();\nclearAssetPageAnswers();';
+
+        it('passes an asset page that clears through clearAssetPageAnswers( at three points and keeps no assetChartAnswers.clear(', () => {
+            expect(assetPageClearProblems(ASSET_WIRED)).toEqual([]);
+        });
+
+        it('fails a leftover assetChartAnswers.clear(, too few calls, and calls only in a comment', () => {
+            expect(assetPageClearProblems(`${ASSET_WIRED}\nassetChartAnswers.clear();`)).toHaveLength(1);
+            expect(assetPageClearProblems('clearAssetPageAnswers();\nclearAssetPageAnswers();')).toEqual(['clearAssetPageAnswers( is called 2 time(s), at least 3 are expected (the three sync and refresh points)']);
+            expect(assetPageClearProblems('// clearAssetPageAnswers();\n'.repeat(3))).toHaveLength(1);
+            expect(assetPageClearProblems(`${ASSET_WIRED}\n// assetChartAnswers.clear();`)).toEqual([]);
+        });
+
+        const FX_WIRED = 'async function runSyncAsset(id) {\n    comparisonSeriesAnswers.clear();\n}';
+
+        it('passes an FX page whose runSyncAsset empties the comparison cache', () => {
+            expect(fxSyncClearProblems(FX_WIRED)).toEqual([]);
+        });
+
+        it('fails a comment-only call, another object, a call outside runSyncAsset, and a missing function', () => {
+            expect(fxSyncClearProblems(FX_WIRED.replace('    comparisonSeriesAnswers.clear();', '    // comparisonSeriesAnswers.clear();'))).toEqual(['runSyncAsset( never calls comparisonSeriesAnswers.clear(']);
+            expect(fxSyncClearProblems(FX_WIRED.replace('comparisonSeriesAnswers', 'fxSignalAnswers'))).toEqual(['runSyncAsset( never calls comparisonSeriesAnswers.clear(']);
+            expect(fxSyncClearProblems(`function elsewhere() { comparisonSeriesAnswers.clear(); }\nasync function runSyncAsset(id) { return; }`)).toEqual(['runSyncAsset( never calls comparisonSeriesAnswers.clear(']);
+            expect(fxSyncClearProblems('')).toEqual(['function runSyncAsset( is not declared']);
+        });
+    });
+});
+
+describe('N64b wiring: the FX page’s asset list carries the currency its comparison cache is keyed on', () => {
+    it('maps `currency` of each asset in loadAssetList, or comparisonAnswerGenerations( finds no store and nothing is ever kept', () => {
+        const code = withoutComments(readFileSync(DETAIL_PAGES[1][1], 'utf8'));
+        const body = functionBody(code, 'loadAssetList');
+
+        expect(body, 'function loadAssetList( is not declared').not.toBeNull();
+        expect(body, 'the assets of the list are mapped without a `currency:`').toMatch(/\bcurrency\s*:/);
     });
 });
