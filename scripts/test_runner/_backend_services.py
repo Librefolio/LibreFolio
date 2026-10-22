@@ -1687,6 +1687,14 @@ def services_backup_envelope(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Secure backup envelope tests", verbose=verbose)
 
 
+def services_backup_sealed(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the sealed nightly backup (.tar of manifest, password.age, backup.lfbk; lot L3) against the common vectors."""
+    print_section("Services: Sealed Backup")
+    print_info("Testing: backend/app/services/platform/instance_backup/sealed.py, envelope.py (unlock_header), fixtures/backup_l3/")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_sealed.py", test_names)
+    return run_command(cmd, "Sealed backup tests", verbose=verbose)
+
+
 def services_backup_secure_rules(verbose: bool = False, test_names: list = None) -> bool:
     """Test the rules of a secure backup: its password (the accounts' rules, at least 12 characters) and the key it carries."""
     print_section("Services: Secure Backup Rules")
@@ -3142,6 +3150,16 @@ Note: No backend server required.
         name="Secure Backup Envelope",
         desc="The .lfbk envelope (lot B4, decisions 38 and P12): its constants; round trips at the chunk edges; the 52-byte header at its offsets; known answers built with cryptography's Scrypt and AESGCM; bounds refused before any derivation (envelope_unsupported), too short or not ours (envelope_damaged); wrong_password, also for changed key parameters; every tampering of the chunks (a byte, a tag, truncations, an appended, swapped, dropped or repeated chunk) envelope_damaged with nothing left; NFC, not NFKC; no overwrite, 0600, .part only while writing, progress; the key never in its repr; constant memory",
         # PURE: files under tmp_path only. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-sealed",
+        services_backup_sealed,
+        name="Sealed Backup",
+        desc="The sealed nightly backup (lot L3, contract §3 and §9): every case of fixtures/backup_l3/vectors.json through read_sealed, open_password, check_password, extract_envelope and the envelope's decryption with its expected outcome; write_sealed rebuilding the good .tar byte for byte (0600, no .part, no overwrite); build_manifest's bytes; new_password; seal_password binary age and open_password (sealed_no_identity, sealed_password_invalid); read_sealed refusals (PAX, GNU, directory, link, members, small members over 4096, not LFBK v1, truncated; manifest UTF-8 JSON object, duplicate, unknown or missing keys, types, format, version, recipients, size and hash, password_member); read_identities and identity_file_text; is_sealed; the cloud derivation rows; interop with the age binary when installed (skipped visibly otherwise); envelope.unlock_header",
+        # PURE: committed vectors read only, files under tmp_path; the optional age binary run on tmp_path files. No DB,
+        # no server, no network.
         isolation="pure",
     )
     add_test(

@@ -1,6 +1,6 @@
 """Configuration checks of the backup, in the shape of the platform's (``config_audit.ConfigCheck``), lot B-9.
 
-Three checks: the hosting panel's token (``LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`` or its ``_FILE``), the largest archive a
+Four checks: the recipients a hosting panel's backups are sealed for (``LIBREFOLIO_BACKUP_RECIPIENTS``, L3), the hosting panel's token (``LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`` or its ``_FILE``), the largest archive a
 restore accepts (``LIBREFOLIO_BACKUP_MAX_UPLOAD_MB``) and the most it may unpack to (``LIBREFOLIO_BACKUP_MAX_RESTORE_MB``,
 B-35). Without them, a value that cannot be used shows only at the panel's first request, or at the first restore upload
 or check: a 503 and a line in the log. Like every configuration check, they
@@ -17,7 +17,19 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from backend.app.config import ProfileDefaultError, SecretFileError
-from backend.app.config.backup import MAX_RESTORE_VARIABLE, MAX_UPLOAD_VARIABLE, PANEL_TOKEN_MIN_LENGTH, PANEL_TOKEN_VARIABLE, BackupConfigError, backup_download_token, backup_max_restore_mb, backup_max_upload_mb
+from backend.app.config.backup import (
+    MAX_RESTORE_VARIABLE,
+    MAX_UPLOAD_VARIABLE,
+    PANEL_TOKEN_MIN_LENGTH,
+    PANEL_TOKEN_VARIABLE,
+    RECIPIENTS_VARIABLE,
+    BackupConfigError,
+    backup_download_token,
+    backup_max_restore_mb,
+    backup_max_upload_mb,
+    backup_recipients,
+    backup_requires_recipients,
+)
 
 if TYPE_CHECKING:
     from backend.app.services.platform.config_audit import ConfigCheck
@@ -87,4 +99,21 @@ def check_restore_limit() -> ConfigCheck:
     return ConfigCheck(check_id, "ok", "backup.checks.restoreLimit.limited", {"limit_mb": limit_mb})
 
 
-BACKUP_CONFIG_CHECKS = (check_panel_token, check_upload_limit, check_restore_limit)
+def check_recipients() -> ConfigCheck:
+    """``LIBREFOLIO_BACKUP_RECIPIENTS`` (L3): the age recipients a hosting panel's backups are sealed for. Unset, the panel
+    gets clear zips on a self-hosted instance (ok) and none on a managed one (error: 503); unusable, none either (error)."""
+    from backend.app.services.platform.config_audit import ConfigCheck  # noqa: PLC0415 — config_audit imports this module
+
+    check_id = "backup.recipients"
+    try:
+        recipients = backup_recipients()
+    except BackupConfigError as exc:
+        return ConfigCheck(check_id, "error", "backup.checks.recipients.invalid", {"reason": exc.code}, f"{exc}; the hosting panel's backups answer 503 until it is fixed")
+    if recipients is None:
+        if backup_requires_recipients():
+            return ConfigCheck(check_id, "error", "backup.checks.recipients.missingManaged", summary=f"{RECIPIENTS_VARIABLE} is not set: a managed instance never hands a clear backup to its hosting panel, whose backups answer 503 until it is set")
+        return ConfigCheck(check_id, "ok", "backup.checks.recipients.off")
+    return ConfigCheck(check_id, "ok", "backup.checks.recipients.ok", {"count": len(recipients)})
+
+
+BACKUP_CONFIG_CHECKS = (check_panel_token, check_upload_limit, check_restore_limit, check_recipients)

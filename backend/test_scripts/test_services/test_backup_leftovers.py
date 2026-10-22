@@ -93,6 +93,14 @@ Under test: ``backend/app/services/platform/instance_backup/leftovers.py`` (new:
     state's. The startup sweep returns in time beside a FIFO in a check state's place, and (point 7, 10:39) beside a FIFO
     in place of a job's ``state.json``: the jobs part does its usual work, dates such a folder by its modification time,
     and logs no error.
+(j) Lot L3-2, the hooks of the panel's restore route (H-62; contract L3 §5). ``restore_jobs.CheckOrigin`` is
+    ``Literal["admin", "cli", "panel"]``; ``RestoreCheck.origin`` defaults to ``admin``, is written in the check's state
+    file, and a state written before (no key) reads ``admin``. ``start_check(..., origin=)`` records it (``admin``
+    without one), and ``read_check`` returns it while the check runs, after it ended and once it was ended as
+    interrupted. ``running_check(upload_id, *, data_dir=None)``: the check of that upload still running — as
+    ``read_check`` judges it: one recorded running while the lock of the checks is free was left by a dead process, and
+    is not —, else ``None``: an unknown or malformed upload id, a finished check of it, a running check of another
+    upload, no ``.restore`` at all.
 
 How. Every data directory is a folder of ``tmp_path`` built file by file: the sweep never opens a database nor reads
 an archive, and none is made. A check's state is written as ``restore_jobs`` writes it (a ``RestoreCheck`` as JSON in
@@ -141,6 +149,11 @@ an aware one (``TypeError``) or uses to remove the check; and ``prune`` never re
 The jobs' reader, too, waits forever on a FIFO in place of a job's ``state.json``. The rows of (i) that meet one of those
 fail on it; the links, the names that are no state's and most rows of the keepers are guards, green today. Each test of
 (i) names its red rows.
+
+Written RED again for L3-2 (j), before the hooks: ``CheckOrigin``, ``RestoreCheck.origin``, the ``origin`` parameter
+of ``start_check`` and ``running_check`` do not exist. Each is looked up by the test that needs it (``l3_2_name``,
+``l3_2_parameter``) and fails with a "[new] L3-2 …" message; a state file holding an ``origin`` key reads as no check
+today (``RestoreCheck(**record)`` refuses the key), which is the red of the rows that write one.
 """
 
 from __future__ import annotations
@@ -155,11 +168,11 @@ import sys
 import threading
 import time
 from collections.abc import Callable, Iterator
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, fields, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 
@@ -2215,3 +2228,226 @@ def test_the_startup_sweep_returns_in_time_beside_a_fifo_as_a_job_state(tmp_path
     counts = summary_counts(events)
     assert counts == {**dict.fromkeys(COUNTS, 0), "jobs_interrupted": 1, "jobs_expired": 2}, f"the sweep says what it did, and nothing else: {counts}"
     print_success("the sweep returned in time; 1 job ended, the expired job and the FIFO folder two hours old removed")
+
+
+# =============================================================================
+# (j) Lot L3-2: the origin of a check, the running check of an upload
+# =============================================================================
+
+#: The origins of a check (contract L3 §5): the Backup tab of an administrator, the command line, the hosting panel.
+CHECK_ORIGINS = ("admin", "cli", "panel")
+#: What a check's origin reads as before L3-2, when ``RestoreCheck`` has no such attribute: never a valid origin.
+NO_ORIGIN = "<missing: RestoreCheck has no origin before L3-2>"
+
+
+def l3_2_name(module: ModuleType, name: str) -> Any:
+    """``module.<name>``, a name lot L3-2 adds, read when the test needs it: its absence fails that test alone."""
+    value = getattr(module, name, None)
+    if value is None:
+        pytest.fail(f"[new] L3-2: {module.__name__}.{name} does not exist yet (contract L3 §5)", pytrace=False)
+    return value
+
+
+def l3_2_parameter(function: Callable[..., Any], name: str) -> None:
+    """The keyword ``name`` of ``function``, which lot L3-2 adds; before it, a failure that says so."""
+    if name not in inspect.signature(function).parameters:
+        pytest.fail(f"[new] L3-2: {function.__qualname__}() takes no {name!r} yet (contract L3 §5)", pytrace=False)
+
+
+def origin_field() -> Any:
+    """The field ``origin`` of ``RestoreCheck`` (L3-2); before it, a failure that says so."""
+    found = {item.name: item for item in fields(RestoreCheck)}.get("origin")
+    if found is None:
+        pytest.fail("[new] L3-2: restore_jobs.RestoreCheck has no field origin yet (contract L3 §5)", pytrace=False)
+    return found
+
+
+def origin_of(check: RestoreCheck) -> str:
+    return getattr(check, "origin", NO_ORIGIN)
+
+
+def check_recorded(root: Path, stage_id: str, upload_id: str, *, status: str = "running", origin: str | None = None) -> None:
+    """A check's state file as ``restore_jobs`` writes it (``recorded_check``), its ``origin`` key set to ``origin``, or
+    left out (``None``): a state written before L3-2."""
+    recorded_check(root, stage_id, upload_id, status=status)
+    path = check_state_path(root, stage_id)
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record.pop("origin", None)
+    if origin is not None:
+        record["origin"] = origin
+    path.write_text(json.dumps(record), encoding="utf-8")
+
+
+def running_check(upload_id: str, root: Path | None) -> RestoreCheck | None:
+    """``restore_jobs.running_check(upload_id, data_dir=root)``, looked up at the call (L3-2)."""
+    return l3_2_name(restore_jobs, "running_check")(upload_id, data_dir=root)
+
+
+def test_the_origins_of_a_check_are_admin_cli_and_panel_and_admin_by_default():
+    """(j) L3-2: ``CheckOrigin`` is ``Literal["admin", "cli", "panel"]``, in this order, and ``RestoreCheck.origin``
+    defaults to ``admin``: every check of before was an administrator's."""
+    print_section("(j) L3-2 The origin of a check")
+    origins = get_args(l3_2_name(restore_jobs, "CheckOrigin"))
+    assert origins == CHECK_ORIGINS, f"CheckOrigin is Literal{list(CHECK_ORIGINS)}: {origins}"
+    assert origin_field().default == "admin", f"RestoreCheck.origin defaults to admin: {origin_field().default!r}"
+    print_success("admin, cli, panel; admin by default")
+
+
+@pytest.mark.parametrize("origin", [None, *CHECK_ORIGINS], ids=["not-given", *CHECK_ORIGINS])
+def test_a_check_records_its_origin_from_its_start_to_its_end(tmp_path, monkeypatch, origin):
+    """(j) L3-2: ``start_check(..., origin=)`` records the origin: in the first state it answers, in the check's state
+    file and in what ``read_check`` answers once the check ended (here at once, ``failed``/``not_a_backup``: the upload
+    is no backup). Without one, ``admin``."""
+    l3_2_parameter(restore_jobs.start_check, "origin")
+    root = data_root(tmp_path)
+    restore_folders(root)
+    upload_id = new_stage_id()
+    upload = upload_path(root, upload_id)
+    upload.write_bytes(NOT_A_BACKUP)
+    upload.chmod(0o600)
+    monkeypatch.setattr(restore_jobs, "threading", InlineThreads())
+    expected = origin or "admin"
+    given = {} if origin is None else {"origin": origin}
+    first = restore_jobs.start_check(upload_id, data_dir=root, **given)
+    assert (first.status, origin_of(first)) == ("running", expected), f"the first state says the origin {expected}: {first}"
+    ended = restore_jobs.read_check(first.stage_id, data_dir=root)
+    assert (ended.status, ended.error_code) == ("failed", "not_a_backup"), f"precondition: the check ran to its end: {ended}"
+    assert origin_of(ended) == expected, f"read_check of the ended check says the origin {expected}: {ended}"
+    written = (check_state(root, first.stage_id) or {}).get("origin")
+    assert written == expected, f"the origin is written in the check's state file: {written!r}"
+    print_success(f"{origin or 'not given'}: {expected} from the start to the end")
+
+
+@pytest.mark.parametrize("status", ["running", "done"])
+def test_a_check_state_written_before_l3_2_reads_origin_admin(tmp_path, status):
+    """(j) L3-2: a check's state file without the key ``origin`` — every one written before L3-2 — reads ``admin``,
+    running (its lock held, as while it runs) or ended."""
+    origin_field()
+    root = data_root(tmp_path)
+    restore_folders(root)
+    stage_id, upload_id = new_stage_id(), new_stage_id()
+    check_recorded(root, stage_id, upload_id, status=status)
+    holder = cases.hold_the_lock(root) if status == "running" else None
+    try:
+        read = restore_jobs.read_check(stage_id, data_dir=root)
+    finally:
+        if holder is not None:
+            holder.release()
+    assert (read.status, origin_of(read)) == (status, "admin"), f"a state without an origin is an administrator's check: {read}"
+    print_success(f"{status}, no origin key: admin")
+
+
+@pytest.mark.parametrize("origin", ["cli", "panel"])
+def test_a_check_its_stopped_server_left_running_keeps_its_origin(tmp_path, origin):
+    """(j) L3-2: a check recorded running while the lock of the checks is free was left by a stopped server; ``read_check``
+    ends it ``failed``/``restore_interrupted`` and keeps its origin, in its answer and in its state file."""
+    origin_field()
+    root = data_root(tmp_path)
+    restore_folders(root)
+    stage_id, upload_id = new_stage_id(), new_stage_id()
+    an_upload(root, upload_id)
+    check_recorded(root, stage_id, upload_id, origin=origin)
+    read = restore_jobs.read_check(stage_id, data_dir=root)
+    assert (read.status, read.error_code) == ("failed", "restore_interrupted"), f"precondition: the check is ended as interrupted: {read}"
+    assert origin_of(read) == origin, f"an interrupted check keeps its origin {origin}: {read}"
+    assert (check_state(root, stage_id) or {}).get("origin") == origin, f"its state file too: {check_state(root, stage_id)}"
+    print_success(f"{origin}: interrupted, origin kept")
+
+
+def test_running_check_answers_the_running_check_of_that_upload(tmp_path):
+    """(j) L3-2: ``running_check(upload_id)`` answers the check of that upload that is still running (its lock held, as
+    while it runs): its stage, its upload, ``running`` and its origin — what ``read_check`` of its stage answers — beside
+    an ended check of another upload."""
+    print_section("(j) L3-2 running_check")
+    root = data_root(tmp_path)
+    restore_folders(root)
+    stage_id, upload_id = new_stage_id(), new_stage_id()
+    check_recorded(root, stage_id, upload_id, origin="panel")
+    check_recorded(root, new_stage_id(), new_stage_id(), status="done", origin="admin")
+    holder = cases.hold_the_lock(root)
+    try:
+        found = running_check(upload_id, root)
+        read = restore_jobs.read_check(stage_id, data_dir=root)
+    finally:
+        holder.release()
+    assert found is not None, "the running check of the upload is found"
+    assert (found.stage_id, found.upload_id, found.status, origin_of(found)) == (stage_id, upload_id, "running", "panel"), f"its stage, its upload, running, its origin: {found}"
+    assert found == read, f"what read_check of its stage answers: {found} != {read}"
+    print_success("the running check of the upload, origin panel")
+
+
+def _unknown_upload(root: Path) -> tuple[str, str | None]:
+    """A check of another upload runs; the upload asked for has none."""
+    other = new_stage_id()
+    check_recorded(root, new_stage_id(), other)
+    return new_stage_id(), other
+
+
+def _malformed_id(root: Path) -> tuple[str, str | None]:
+    """A check runs, and the id asked for is no upload id: a path, capitals."""
+    other = new_stage_id()
+    check_recorded(root, new_stage_id(), other)
+    return "../../etc/passwd", other
+
+
+def _capital_id(root: Path) -> tuple[str, str | None]:
+    """A check runs; the id asked for is its upload's, in capitals: no upload id."""
+    other = new_stage_id()
+    check_recorded(root, new_stage_id(), other)
+    return other.upper(), other
+
+
+def _finished_check(root: Path) -> tuple[str, str | None]:
+    """The upload's check ended (done, then failed), and a check of another upload runs."""
+    upload_id, other = new_stage_id(), new_stage_id()
+    check_recorded(root, new_stage_id(), upload_id, status="done")
+    check_recorded(root, new_stage_id(), upload_id, status="failed")
+    check_recorded(root, new_stage_id(), other)
+    return upload_id, other
+
+
+def _left_by_a_dead_process(root: Path) -> tuple[str, str | None]:
+    """The upload's check is recorded running, and no check holds the lock: a stopped server left it."""
+    upload_id = new_stage_id()
+    an_upload(root, upload_id)
+    check_recorded(root, new_stage_id(), upload_id, origin="panel")
+    return upload_id, None
+
+
+NOT_RUNNING = [
+    pytest.param(_unknown_upload, id="unknown-upload"),
+    pytest.param(_malformed_id, id="malformed-id-a-path"),
+    pytest.param(_capital_id, id="malformed-id-capitals"),
+    pytest.param(_finished_check, id="finished-check-another-runs"),
+    pytest.param(_left_by_a_dead_process, id="left-running-by-a-dead-process"),
+]
+
+
+@pytest.mark.parametrize("arrange", NOT_RUNNING)
+def test_running_check_answers_none_when_no_check_of_that_upload_runs(tmp_path, arrange):
+    """(j) L3-2: ``None`` for an unknown upload id, an id that is no upload id, an upload whose checks ended while a
+    check of another upload runs, and a check left running by a dead process (as ``read_check`` judges it: not running).
+    Barrier: where a check of another upload runs, ``running_check`` of that upload finds it."""
+    root = data_root(tmp_path)
+    restore_folders(root)
+    asked, other = arrange(root)
+    holder = cases.hold_the_lock(root) if other is not None else None
+    try:
+        found = running_check(asked, root)
+        barrier = running_check(other, root) if other is not None else None
+    finally:
+        if holder is not None:
+            holder.release()
+    assert found is None, f"no check of {asked!r} runs: None, not {found}"
+    if other is not None:
+        assert barrier is not None and barrier.upload_id == other, f"barrier: the check of the other upload runs and is found: {barrier}"
+    print_success(f"{arrange.__name__.strip('_')}: None")
+
+
+def test_running_check_without_a_restore_folder_is_none_and_creates_nothing(tmp_path):
+    """(j) L3-2: a data directory without ``.restore``: ``None``, and nothing created to say so."""
+    root = data_root(tmp_path)
+    found = running_check(new_stage_id(), root)
+    assert found is None, f"no check at all: None, not {found}"
+    assert not os.path.lexists(restore_dir(root)), "nothing created: no .restore"
+    print_success("no .restore: None")

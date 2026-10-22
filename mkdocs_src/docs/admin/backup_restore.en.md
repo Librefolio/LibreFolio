@@ -142,6 +142,29 @@ For [secure](#secure) archives, add `--password-file` with the path of a file th
 - 🗑️ LibreFolio deletes none of these archives: remove the old ones yourself. Keep several, and the last one made before each update.
 - 🔑 Keep a copy of `.env` as well, as private as the archives: no archive holds it. Keep one of `secrets/` too, unless your archives are secure: a clear archive leaves the instance key out, a secure one carries the key LibreFolio generated.
 
+### 🧰 Backups with restic or Backrest {: #restic }
+
+LibreFolio writes the archive; a backup tool can then send it off-site and keep a history of it. [restic](https://restic.net/) sends a folder to an S3 bucket, Backblaze B2, a server over SFTP and other places, encrypted, and forgets the old copies by a rule you give it. [Backrest](https://github.com/garethgeorge/backrest) is a web interface for restic, with its own scheduler. LibreFolio needs neither: they only read the folder its archives are written to.
+
+A nightly recipe for a host installation, with restic's variables in a private file (`chmod 600`):
+
+```bash
+# /etc/librefolio-restic.env: where the copies go, and the file with restic's password
+RESTIC_REPOSITORY=sftp:backup@nas.example:/srv/restic/librefolio
+RESTIC_PASSWORD_FILE=/root/.restic-librefolio-password
+```
+
+```text
+30 3 * * * cd /path/to/LibreFolio && pipenv run ./dev.py backup create --output /var/backups/librefolio/ && . /etc/librefolio-restic.env && restic backup /var/backups/librefolio/ && restic forget --keep-daily 7 --keep-weekly 4 --prune && find /var/backups/librefolio/ -name 'librefolio-backup-*' -mtime +2 -delete
+```
+
+The line makes the archive, sends the folder, keeps seven daily and four weekly copies in the repository, and removes the local archives older than two days. With Docker, make the archive with the command of [Keep Copies Off the Server](#keep-copies) and give restic the host folder `LibreFolio-data/backups/`. With Backrest, add a plan on that same folder, with its schedule and its retention, and leave `backup create` in cron.
+
+- 🔐 **restic's password is a key to all your data.** restic encrypts the repository with it, but anyone who has it reads every copy in it: keep it as private as the password of a [secure backup](#secure), and a copy of it elsewhere. Lost, the repository cannot be read.
+- 🔑 **No public key.** restic needs its password to write as well as to read, so the server that sends the copies can also read them. If that matters to you, send [secure backups](#secure) (`--password-file`): restic then stores files that only their own password opens.
+- 📦 **Little to deduplicate.** Each archive is compressed, and a secure one is encrypted: two nights look different to restic, which stores each archive almost whole. Plan the repository's space for the copies you keep.
+- 🧪 **Try a restore before you need one.** `restic restore latest --target /tmp/librefolio-check`, then check the archive with [`backup restore --dry-run`](#check).
+
 ---
 
 ## 🔐 Secure Backups {: #secure }
@@ -156,6 +179,36 @@ A secure backup is the archive of a clear backup, encrypted with a password you 
 - 💽 **On the server, while it is made,** the clear archive is written first, in the work folder of the backup inside `backups/`, which only the server's user can open; it is removed as soon as the `.lfbk` is written, and when the backup fails. A check decrypts the backup the same way, in a private folder of the data directory, and removes the decrypted archive once it has used it. A run killed outright, by a power cut or `kill -9`, cannot clean up: the next start of LibreFolio removes what it left in clear, and a backup cut short that way must be made again. The folder of a `backup inspect` killed that way goes once it is an hour old.
 
 The design, for developers: [Secure Backups (`.lfbk`)](../developer/architecture/security.md#secure-backups).
+
+### 🔏 Sealed Backups: a Key Instead of a Password {: #sealed }
+
+A sealed backup is for a server that makes backups on its own, such as every night, without anyone typing a password and without keeping one on its disk. LibreFolio makes a [secure backup](#secure) with a random password of its own, encrypts that password with [age](https://age-encryption.org/) for a public key you give it, and forgets it: only the private key that goes with it opens the password, and the server that made the backup cannot open it again. A hosting panel's nightly backups work this way, and so can yours.
+
+```bash
+# Once, on a computer of yours (not the server): a key pair; the file holds the private key
+pipenv run ./dev.py backup keygen --identity-file ~/librefolio-backup-key.txt
+
+# On the server: a sealed backup for that public key (the age1… line keygen printed)
+pipenv run ./dev.py backup create --recipient age1… --output /mnt/nas/librefolio/
+
+# Wherever the private key is: check, unpack or restore it
+pipenv run ./dev.py backup restore librefolio-backup-<date>-<time>.tar --identity-file ~/librefolio-backup-key.txt
+```
+
+- 📦 **The file** is `librefolio-backup-<date>-<time>.tar`, with three files inside: `manifest.json` (what the backup is, in clear), `password.age` (its password, encrypted for the key) and `backup.lfbk` (the secure backup that password opens).
+- 🗝️ **The keys** are age's: `keygen` writes the file `age-keygen` writes (readable by its owner only, never over an existing file) and prints the public key, `age1…`. A key made by `age-keygen` works too.
+- 🔁 **Two keys at once.** `--recipient` can be given twice: either private key then opens the password. Use it to change key without a night uncovered, then drop the old one.
+- 🌙 **Every night, with the variable.** `LIBREFOLIO_BACKUP_RECIPIENTS` holds one or two `age1…` keys, comma-separated, and `backup create --sealed` reads it. It is not a secret: a public key opens nothing. The same variable seals every backup a [hosting panel](hosting_providers.md) asks for; Settings › Administration › Security checks it (`backup.recipients`).
+- 🔑 **What it carries.** Never the instance key, even one LibreFolio generated: whoever restores it on another installation gives that key there (`LIBREFOLIO_INSTANCE_KEY`), or enters the providers' keys again.
+- `inspect`, `restore` and `decrypt` take a `.tar` only with `--identity-file`; without it they stop with `sealed_backup_needs_key`, as Settings › Administration › Backup does: open such a backup where the private key is.
+
+Without LibreFolio at hand, the standard tools open it too:
+
+```bash
+tar xf librefolio-backup-<date>-<time>.tar
+age -d -i ~/librefolio-backup-key.txt password.age   # prints the password
+pipenv run ./dev.py backup restore backup.lfbk --password-file <a file with that password>
+```
 
 ---
 
@@ -410,6 +463,8 @@ Update the receiving LibreFolio first ([Updating LibreFolio](../user/installatio
 | `database_damaged` | The archive's database fails SQLite's integrity check, SQLite cannot read its schema, or it holds text that is not UTF-8: LibreFolio never writes such text, and after a restore every list holding it would fail to load. Settings › Administration › Backup: *The backup's database is damaged: it cannot be restored.* | Copy the archive again from where you keep it, or use another one. Text that is not UTF-8 means another program wrote to the database, or the archive was changed |
 | `database_foreign_objects` | The archive's database holds a trigger, a view or a virtual table. LibreFolio never creates them, and their SQL would run during the check and in the server after a restore, so the check refuses them before it opens the copy for anything else. Settings › Administration › Backup: *The backup's database holds triggers, views or other objects LibreFolio never creates: it was not made by LibreFolio, or it was changed, and it cannot be restored.* | The archive was not made by LibreFolio, or was changed after: use another backup |
 | `not_a_backup` | Not an archive LibreFolio wrote, such as a data directory zipped by hand | Put such a copy back [by hand](#by-hand), into an empty data directory |
+| `sealed_backup_needs_key` | A sealed nightly backup of a hosting panel (`.tar`): its password is inside, encrypted for the provider's key, and the check cannot open it. Settings › Administration › Backup: *This is a sealed backup of a hosting panel: its password is encrypted for the provider's key. Extract backup.lfbk, open password.age with age, then restore backup.lfbk with that password.* | Restore it where its private key is: `backup restore <archive>.tar --identity-file <key file>` ([Sealed Backups](#sealed)), or the way your hosting provider tells you |
+| `sealed_no_identity`, `sealed_identity_invalid`, `sealed_tar_invalid`, `sealed_manifest_invalid` | A [sealed backup](#sealed) given with `--identity-file`: no key of the file opens its password; the file holds no age key; the `.tar` is not the three files of a sealed backup; or its `manifest.json` does not describe it | Give the key file whose public key the backup was sealed for (its `manifest.json` names them). A `.tar` that does not read: copy it again from where you keep it |
 | `no_space` | The copy needs more free space than the disk of the data directory has | Free some space: the archive unpacked, plus twice its database, plus 64 MB, and for a secure backup the size of its `.lfbk` too |
 | `archive_unreadable` | The archive cannot be opened, most often because the server's user may not read it | With Docker and the official image, `sudo chown 1000:1000 <archive>` on the host gives it to that user |
 | `restore_already_pending` | Another restore waits for the next start | Restart LibreFolio to apply it, or drop it with `backup pending --cancel` or **Cancel the restore** in Settings › Administration › Backup |
@@ -425,8 +480,9 @@ Two more messages:
 
 Every code: «Refusals — what the codes mean» in [CLI Admin Tools](cli_tools.md).
 
-One warning lets the restore go on, but read it before you confirm:
+Two notices let the restore go on, but read them before you confirm.
 
+- 🔑 *Your account is not among the administrators of this backup: after the restart you cannot sign in with it.* This one is shown only in the report of Settings › Administration › Backup, in red. After a restore you sign in with an account of the backup, with the password it had then, and the account you are using now is not in it. Before you confirm, make sure you know the password of one of the administrators the report names. If you do not know it, use another backup.
 - `⚠️ Ledger totals differ from the backup's (<n> lines):`, or *Ledger totals differ from the backup's on 2 lines:* in the report of Settings › Administration › Backup: the cash of a broker or the quantity of a position in the copy, once up to date, is not the one the backup recorded. Transactions were lost, added or changed between the backup and the copy, by a migration that corrects data for instance. Read the lines that follow: each gives a broker's number, then a currency or an asset's number, with the backup's amount before the arrow and the copy's after it. The numbers are those in the addresses of the broker's and the asset's pages in the app, `/brokers/<id>` and `/assets/<id>`. Compare these lines with the instance the backup comes from. The warning never blocks the restore: whether you confirm it is up to you.
 
 ### 🔁 The Restore Does Not Go Through {: #restart-problems }

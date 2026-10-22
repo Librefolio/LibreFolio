@@ -89,6 +89,8 @@ it), printed by ``pending`` and by a confirmation on a blocked instance.
     ``IN_AN_INDEX``, on this module's database at the head): SQLite fails the copy's integrity check, «unknown function».
     Exactly one ❌ line, after the 🔎 line, ending in ``(database_damaged)``, exit 1, no traceback; no copy left, the live
     data untouched, the function's name (the archive's text) on neither output.
+(k) Lot L3-2 (red until it lands; contract L3 §5): a restore the command line confirms — with ``--yes``, or the word
+    typed on a terminal — records ``confirmed_via`` ``cli`` in ``restore.json``, beside ``confirmed_by`` ``cli``.
 
 Pure, as ``test_backup_cli.py``, whose fixtures and helpers are imported: data directories under ``tmp_path`` seen through
 ``LIBREFOLIO_DATA_DIR`` (production mode, checked); a real database at the head made once by ``alembic upgrade`` for the
@@ -1427,3 +1429,28 @@ def test_a_dry_run_of_an_archive_whose_index_calls_a_function_this_librefolio_la
     assert staging_cases.B43_FUNCTION not in captured.out + captured.err, f"the function's name, the archive's text, on neither output: {lines}"
     assert (cli.stages_left(root), live(root)) == ([], before), f"no copy left, the live data untouched: {cli.stages_left(root)}"
     print_success("restore --dry-run: ❌ … (database_damaged), exit 1, no traceback")
+
+
+# =============================================================================
+# (k) Lot L3-2: confirmed_via cli
+# =============================================================================
+
+
+@pytest.mark.parametrize("how", ["--yes", "typed-on-a-terminal"])
+def test_a_restore_the_command_line_confirms_is_recorded_via_cli(tmp_path, monkeypatch, capsys, head_database, how):
+    """(k) L3-2: the command line's confirmation writes ``confirmed_via`` ``cli`` in ``restore.json``, beside
+    ``confirmed_by`` ``cli``, with ``--yes`` as with the word typed on a terminal."""
+    print_section(f"(k) L3-2 confirmed_via cli, {how}")
+    root = instance(tmp_path, monkeypatch)
+    archive = cli.restorable(tmp_path, head_database)
+    if how == "--yes":
+        code = run("restore", str(archive), "--yes")
+    else:
+        with stdin_with(monkeypatch, "restore", terminal=True):
+            code = run("restore", str(archive))
+    out = capsys.readouterr().out
+    assert code == 0 and "waits for the next start" in out, f"precondition: the restore is confirmed: exit {code}: {out}"
+    state = json.loads(state_path(root).read_text(encoding="utf-8"))
+    recorded = (state["status"], state["confirmed_by"], state.get("confirmed_via", "<missing: no confirmed_via before L3-2>"))
+    assert recorded == ("pending", "cli", "cli"), f"pending, confirmed by cli, via cli: {state}"
+    print_success(f"{how}: confirmed_via cli")

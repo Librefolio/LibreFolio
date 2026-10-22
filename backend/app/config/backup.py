@@ -11,6 +11,10 @@ answer 404, as if they did not exist.
 it, since in the cloud the customer is the administrator. Unset, there is no limit on a self-hosted instance, and the
 managed profile's value (500 MB) comes from ``ENVIRONMENT_PROFILE_DEFAULTS`` of ``config/__init__.py`` (H-17).
 
+``LIBREFOLIO_BACKUP_RECIPIENTS`` (L3) is one or two age recipients (``age1…``), comma-separated: the public keys a
+hosting panel's nightly backups are sealed for (``instance_backup/sealed.py``). Not a secret: no ``_FILE``. Unset, the
+panel's backups are clear zips on a self-hosted instance, and refused on a managed one.
+
 ``LIBREFOLIO_BACKUP_MAX_RESTORE_MB`` is the most an archive may unpack to in a restore's check (B-35): the upload limit
 bounds only the compressed archive. Unset, there is no limit on a self-hosted instance; in any other profile it is
 ``RESTORE_TO_UPLOAD_RATIO`` times the upload limit (decision N82), so it follows the provider's own upload limit.
@@ -19,6 +23,11 @@ bounds only the compressed archive. Unset, there is no limit on a self-hosted in
 import os
 
 from backend.app.config import env_secret, get_settings, profile_default
+
+#: The variable of the recipients a hosting panel's backups are sealed for (L3).
+RECIPIENTS_VARIABLE = "LIBREFOLIO_BACKUP_RECIPIENTS"
+#: Two during a rotation of the key, one otherwise.
+MAX_RECIPIENTS = 2
 
 #: The variable of the hosting panel's token; ``env_secret`` also reads it from ``<name>_FILE``.
 PANEL_TOKEN_VARIABLE = "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN"
@@ -113,3 +122,40 @@ def backup_max_restore_mb() -> int:
     if not (raw.isascii() and raw.isdigit()):
         raise BackupConfigError(MAX_RESTORE_VARIABLE, "BACKUP_MAX_RESTORE_MB_INVALID", "expected a whole number of megabytes, 0 for no limit")
     return int(raw)
+
+
+def backup_recipients() -> tuple[str, ...] | None:
+    """``LIBREFOLIO_BACKUP_RECIPIENTS``: the age recipients a hosting panel's backups are sealed for, in their canonical
+    form (``age1…`` in lower case) and the order written; ``None`` when unset or blank.
+
+    Comma-separated, the spaces around each one ignored. ``BackupConfigError``: ``BACKUP_RECIPIENTS_INVALID`` (an empty
+    item, or anything but an X25519 ``age1…`` recipient: an SSH key, a private key), ``BACKUP_RECIPIENTS_TOO_MANY``
+    (more than ``MAX_RECIPIENTS``), ``BACKUP_RECIPIENTS_DUPLICATE``. The message never quotes the value: a private key
+    pasted by mistake must not reach a log.
+    """
+    from pyrage import RecipientError, x25519  # noqa: PLC0415 — only when the variable is read
+
+    raw = os.environ.get(RECIPIENTS_VARIABLE, "")
+    if not raw.strip():
+        return None
+    items = [item.strip() for item in raw.split(",")]
+    recipients: list[str] = []
+    for position, item in enumerate(items, start=1):
+        if not item.lower().startswith("age1"):
+            raise BackupConfigError(RECIPIENTS_VARIABLE, "BACKUP_RECIPIENTS_INVALID", f"item {position} is not an age recipient: expected age1… as age-keygen prints it")
+        try:
+            recipient = str(x25519.Recipient.from_str(item))
+        except RecipientError:
+            raise BackupConfigError(RECIPIENTS_VARIABLE, "BACKUP_RECIPIENTS_INVALID", f"item {position} is not an age recipient: expected age1… as age-keygen prints it") from None
+        if recipient in recipients:
+            raise BackupConfigError(RECIPIENTS_VARIABLE, "BACKUP_RECIPIENTS_DUPLICATE", f"item {position} repeats an earlier recipient")
+        recipients.append(recipient)
+    # Counted once every item is one: an empty item between two commas is a typo, said as such.
+    if len(recipients) > MAX_RECIPIENTS:
+        raise BackupConfigError(RECIPIENTS_VARIABLE, "BACKUP_RECIPIENTS_TOO_MANY", f"expected at most {MAX_RECIPIENTS} recipients, comma-separated")
+    return tuple(recipients)
+
+
+def backup_requires_recipients() -> bool:
+    """Whether a hosting panel's backup must be sealed: the managed profile never hands out a clear zip (decision D1, L3)."""
+    return get_settings().LIBREFOLIO_PROFILE == "managed"

@@ -44,6 +44,16 @@ lot B-9 froze them, its revision of 06:42 included (an unset token is ``ok``: a 
     closed. The check, ``check_restore_limit()``, ``backup.restore_limit`` (§1b): limited ``{limit_mb}``, unlimited,
     invalid ``{variable}`` (the variable the reader's error names: the restore limit's, or the upload limit's it derives
     from), profileTable; never raises.
+(i) Lot L3 checkpoint 2, the instance's age recipients (``LIBREFOLIO_BACKUP_RECIPIENTS``, contract L3 §2, interface §1
+    and §2). The reader, ``config.backup.backup_recipients()``: ``RECIPIENTS_VARIABLE``, ``MAX_RECIPIENTS`` 2; unset or
+    blank ``None``; else comma-separated, spaces around each ignored, each read with pyrage's X25519 ``Recipient`` and
+    given back canonical (lowercase ``age1…``), in the order written. ``BackupConfigError`` naming the variable:
+    ``BACKUP_RECIPIENTS_INVALID`` (an empty item, garbage, an ssh key, an ``AGE-SECRET-KEY-1…`` private key, never
+    echoed), ``BACKUP_RECIPIENTS_TOO_MANY`` (three), ``BACKUP_RECIPIENTS_DUPLICATE`` (the same recipient twice, in any
+    case). The check, ``check_recipients()``, ``backup.recipients``: unset self-hosted ok ``.off``; set ok ``.ok``
+    ``{count}``; unusable error ``.invalid`` ``{reason: <the code>}``; unset managed error ``.missingManaged``; never
+    raises, never shows a private key. It closes ``BACKUP_CONFIG_CHECKS`` (four checks), so the audit's rows of a
+    managed profile set a valid recipient, and its four messages join the catalogues.
 
 Pure: no database, no server, no network. Every variable the checks read is removed by an autouse fixture, the profile
 set to self-hosted; each test sets its own with ``monkeypatch``, and token files live in ``tmp_path``. The startup audit
@@ -93,6 +103,17 @@ LIMIT_VARIABLE = "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB"
 #: (B-35) The restore limit: what an archive may unpack to, in megabytes; unset, 8 × the upload limit off self-hosted.
 RESTORE_VARIABLE = "LIBREFOLIO_BACKUP_MAX_RESTORE_MB"
 RATIO = 8
+#: (L3) The instance's age recipients: 1 or 2 X25519 ``age1…``, comma-separated; never a secret.
+RECIPIENTS_VARIABLE = "LIBREFOLIO_BACKUP_RECIPIENTS"
+MAX_RECIPIENTS = 2
+#: TEST ONLY recipients: the two of ``fixtures/backup_l3`` and the first of the cloud derivation rows (contract §9).
+RECIPIENT_1 = "age1r7hr6nule5dwh69r76kn65y70dudk6xuyf2vel5g5kv8mvlszf8qrdp3av"
+RECIPIENT_2 = "age1vf5mr7hereqyawsjnzugqd03xs20wwpt8nnu86nv7fkvzaw3gdkqz5xadk"
+RECIPIENT_3 = "age158ex3dmayyml4rx9md6pzehzlc96zlh8w7zn4vd0t6ya8dmn4egqn87h8q"
+SSH_KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
+RECIPIENTS_INVALID_CODE = "BACKUP_RECIPIENTS_INVALID"
+RECIPIENTS_TOO_MANY_CODE = "BACKUP_RECIPIENTS_TOO_MANY"
+RECIPIENTS_DUPLICATE_CODE = "BACKUP_RECIPIENTS_DUPLICATE"
 PROFILE_VARIABLE = "LIBREFOLIO_PROFILE"
 #: The shortest token the panel's routes take.
 MINIMUM = 32
@@ -100,6 +121,7 @@ MINIMUM = 32
 PANEL_TOKEN_ID = "backup.panel_token"
 UPLOAD_LIMIT_ID = "backup.upload_limit"
 RESTORE_LIMIT_ID = "backup.restore_limit"
+RECIPIENTS_ID = "backup.recipients"
 PANEL_OFF = "backup.checks.panelToken.off"
 PANEL_OK = "backup.checks.panelToken.ok"
 NOT_VISIBLE_ASCII = "backup.checks.panelToken.notVisibleAscii"
@@ -113,6 +135,10 @@ RESTORE_LIMITED = "backup.checks.restoreLimit.limited"
 RESTORE_UNLIMITED = "backup.checks.restoreLimit.unlimited"
 RESTORE_INVALID = "backup.checks.restoreLimit.invalid"
 RESTORE_PROFILE_TABLE = "backup.checks.restoreLimit.profileTable"
+RECIPIENTS_OFF = "backup.checks.recipients.off"
+RECIPIENTS_OK = "backup.checks.recipients.ok"
+RECIPIENTS_INVALID = "backup.checks.recipients.invalid"
+RECIPIENTS_MISSING_MANAGED = "backup.checks.recipients.missingManaged"
 #: Every message of the checks, with the placeholders it names: the keys of the detail that goes with it.
 MESSAGES: dict[str, set[str]] = {
     PANEL_OFF: set(),
@@ -128,6 +154,10 @@ MESSAGES: dict[str, set[str]] = {
     RESTORE_UNLIMITED: set(),
     RESTORE_INVALID: {"variable"},
     RESTORE_PROFILE_TABLE: set(),
+    RECIPIENTS_OFF: set(),
+    RECIPIENTS_OK: {"count"},
+    RECIPIENTS_INVALID: {"reason"},
+    RECIPIENTS_MISSING_MANAGED: set(),
 }
 
 #: A usable token: 64 visible ASCII characters, as ``openssl rand -hex 32`` gives one.
@@ -190,7 +220,7 @@ FRESH_IMPORT = textwrap.dedent("""
 def _no_inherited_backup_variables(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every variable the backup checks read is removed (the restore limit's included), and the profile set to
     self-hosted (the environment wins over a ``.env``): a test sees only what it sets itself."""
-    for variable in (TOKEN_VARIABLE, TOKEN_FILE_VARIABLE, LIMIT_VARIABLE, RESTORE_VARIABLE):
+    for variable in (TOKEN_VARIABLE, TOKEN_FILE_VARIABLE, LIMIT_VARIABLE, RESTORE_VARIABLE, RECIPIENTS_VARIABLE):
         monkeypatch.delenv(variable, raising=False)
     monkeypatch.setenv(PROFILE_VARIABLE, "selfhosted")
 
@@ -320,7 +350,7 @@ def flattened(catalogue: object, prefix: str = "") -> dict[str, object]:
 def fresh_environment(tmp_path: Path) -> dict[str, str]:
     """This process's environment for a fresh interpreter: no backup variable, test mode, its data directory in
     ``tmp_path``, the self-hosted profile, the project root importable."""
-    environment = {name: value for name, value in os.environ.items() if name not in (TOKEN_VARIABLE, TOKEN_FILE_VARIABLE, LIMIT_VARIABLE, RESTORE_VARIABLE)}
+    environment = {name: value for name, value in os.environ.items() if name not in (TOKEN_VARIABLE, TOKEN_FILE_VARIABLE, LIMIT_VARIABLE, RESTORE_VARIABLE, RECIPIENTS_VARIABLE)}
     environment.update(LIBREFOLIO_TEST_MODE="1", LIBREFOLIO_TEST_DATA_DIR=str(tmp_path / "data"), LIBREFOLIO_PROFILE="selfhosted")
     environment["PYTHONPATH"] = os.pathsep.join(filter(None, [str(PROJECT_ROOT), environment.get("PYTHONPATH")]))
     return environment
@@ -588,6 +618,8 @@ READER_ERRORS = [
     pytest.param("check_restore_limit", "backup_max_restore_mb", lambda: BackupConfigError(RESTORE_VARIABLE, "BACKUP_MAX_RESTORE_MB_INVALID", "expected a whole number of megabytes"), RESTORE_INVALID, {"variable": RESTORE_VARIABLE}, id="restore-limit-invalid"),
     pytest.param("check_restore_limit", "backup_max_restore_mb", lambda: BackupConfigError(LIMIT_VARIABLE, "BACKUP_MAX_UPLOAD_MB_INVALID", "expected a whole number of megabytes"), RESTORE_INVALID, {"variable": LIMIT_VARIABLE}, id="restore-limit-from-an-invalid-upload-limit"),
     pytest.param("check_restore_limit", "backup_max_restore_mb", lambda: ProfileDefaultError(f"{LIMIT_VARIABLE}: the managed profile gives it no value"), RESTORE_PROFILE_TABLE, {}, id="restore-limit-profile-table"),
+    pytest.param("check_recipients", "backup_recipients", lambda: BackupConfigError(RECIPIENTS_VARIABLE, RECIPIENTS_INVALID_CODE, "expected age1 recipients"), RECIPIENTS_INVALID, {"reason": RECIPIENTS_INVALID_CODE}, id="recipients-invalid"),
+    pytest.param("check_recipients", "backup_recipients", lambda: BackupConfigError(RECIPIENTS_VARIABLE, RECIPIENTS_TOO_MANY_CODE, "at most 2"), RECIPIENTS_INVALID, {"reason": RECIPIENTS_TOO_MANY_CODE}, id="recipients-too-many"),
 ]
 
 
@@ -602,7 +634,7 @@ def test_a_check_never_raises_on_a_documented_error_of_its_reader(checks, monkey
         calls.append(reader_name)
         raise error()
 
-    assert hasattr(checks, check_name) and hasattr(backup_config, reader_name), f"[new] checks.{check_name}() or config.backup.{reader_name}() does not exist yet: lot B-35 adds the restore limit's (contract §1, §1b)"
+    assert hasattr(checks, check_name) and hasattr(backup_config, reader_name), f"[new] checks.{check_name}() or config.backup.{reader_name}() does not exist yet: lot B-35 adds the restore limit's (contract §1, §1b), lot L3 checkpoint 2 the recipients' (interface §1, §2)"
     monkeypatch.setattr(backup_config, reader_name, failing_reader)
     monkeypatch.setattr(checks, reader_name, failing_reader, raising=False)
     try:
@@ -659,14 +691,14 @@ def test_no_token_reaches_a_result_or_the_startup_audit(checks, platform, logged
 # =============================================================================
 
 
-def test_backup_config_checks_is_the_three_checks_in_order(checks):
-    """(e) The panel's token, the upload limit, then the restore limit (lot B-35, §1b): the tuple the platform's
-    ``CONFIG_CHECKS`` takes."""
+def test_backup_config_checks_is_the_four_checks_in_order(checks):
+    """(e) The panel's token, the upload limit, the restore limit (lot B-35, §1b), then the recipients (lot L3, interface
+    §2): the tuple the platform's ``CONFIG_CHECKS`` takes."""
     print_section("BACKUP_CONFIG_CHECKS")
 
-    expected = (checks.check_panel_token, checks.check_upload_limit, getattr(checks, "check_restore_limit", None))
-    assert checks.BACKUP_CONFIG_CHECKS == expected, f"BACKUP_CONFIG_CHECKS ([new] check_restore_limit last, lot B-35 §1b): {checks.BACKUP_CONFIG_CHECKS!r}"
-    print_success("check_panel_token, check_upload_limit, check_restore_limit")
+    expected = (checks.check_panel_token, checks.check_upload_limit, getattr(checks, "check_restore_limit", None), getattr(checks, "check_recipients", None))
+    assert checks.BACKUP_CONFIG_CHECKS == expected, f"BACKUP_CONFIG_CHECKS ([new] check_recipients last, lot L3 checkpoint 2 interface §2): {checks.BACKUP_CONFIG_CHECKS!r}"
+    print_success("check_panel_token, check_upload_limit, check_restore_limit, check_recipients")
 
 
 def test_config_checks_runs_the_backup_checks_together_before_the_email_checks(checks, platform):
@@ -697,7 +729,7 @@ def test_config_checks_runs_the_backup_checks_together_before_the_email_checks(c
 def test_either_module_can_be_imported_first_in_a_fresh_interpreter(tmp_path, order):
     """(e) §1: ``config_audit`` imports ``checks``, so ``checks`` imports ``ConfigCheck`` only when a check runs. A fresh
     interpreter (no backup variable, test mode, its data directory in ``tmp_path``) imports ``order`` and exits 0, finds
-    the three checks in ``CONFIG_CHECKS`` and runs them: ``.off`` and the two ``.unlimited``, all ok. Barrier first: no
+    the four checks in ``CONFIG_CHECKS`` and runs them: ``.off``, the two ``.unlimited`` and the recipients' ``.off``, all ok. Barrier first: no
     watched module was loaded before the first import, so the order is the one the case names."""
     completed = subprocess.run([sys.executable, "-c", FRESH_IMPORT, *order], cwd=PROJECT_ROOT, env=fresh_environment(tmp_path), capture_output=True, text=True, timeout=FRESH_INTERPRETER_TIMEOUT_SECONDS, check=False)
 
@@ -708,8 +740,8 @@ def test_either_module_can_be_imported_first_in_a_fresh_interpreter(tmp_path, or
     assert report["preloaded"] == [], f"barrier: a fresh interpreter loads no watched module before the first import: {report['preloaded']}"
     expected = {
         "preloaded": [],
-        "registered": ["check_panel_token", "check_upload_limit", "check_restore_limit"],
-        "ran": [[PANEL_TOKEN_ID, "ok", PANEL_OFF], [UPLOAD_LIMIT_ID, "ok", UNLIMITED], [RESTORE_LIMIT_ID, "ok", RESTORE_UNLIMITED]],
+        "registered": ["check_panel_token", "check_upload_limit", "check_restore_limit", "check_recipients"],
+        "ran": [[PANEL_TOKEN_ID, "ok", PANEL_OFF], [UPLOAD_LIMIT_ID, "ok", UNLIMITED], [RESTORE_LIMIT_ID, "ok", RESTORE_UNLIMITED], [RECIPIENTS_ID, "ok", RECIPIENTS_OFF]],
     }
     assert report == expected, f"{' then '.join(order)}: {report}"
     print_success(f"{' then '.join(order)}: {report['registered']}")
@@ -723,16 +755,19 @@ def test_either_module_can_be_imported_first_in_a_fresh_interpreter(tmp_path, or
 #: (variables, the token's ``_FILE``, H's managed entry for the upload limit, the checks that speak with their keys, in
 #: the order the audit runs them): unusable configurations, every other check left at its default (ok). Unset in the
 #: managed profile, the restore limit derives from the upload limit (lot B-35): a broken upload limit there is two errors.
+#: (L3) The managed rows set a valid recipient, since unset in the managed profile the recipients' check is an error too.
 UNUSABLE = [
     pytest.param({TOKEN_VARIABLE: "k" * (MINIMUM - 1)}, None, AS_SHIPPED, [("check_panel_token", TOO_SHORT)], id="token-too-short"),
     pytest.param({TOKEN_VARIABLE: GOOD_TOKEN + " "}, None, AS_SHIPPED, [("check_panel_token", NOT_VISIBLE_ASCII)], id="token-not-visible-ascii"),
     pytest.param({}, MISSING_FILE, AS_SHIPPED, [("check_panel_token", UNREADABLE)], id="token-file-missing"),
     pytest.param({}, b"\n", AS_SHIPPED, [("check_panel_token", UNREADABLE)], id="token-file-blank"),
     pytest.param({LIMIT_VARIABLE: "abc"}, None, AS_SHIPPED, [("check_upload_limit", INVALID)], id="limit-invalid"),
-    pytest.param({PROFILE_VARIABLE: "managed"}, None, "500", [("check_upload_limit", PROFILE_TABLE), ("check_restore_limit", RESTORE_PROFILE_TABLE)], id="profile-table-wrong"),
-    pytest.param({PROFILE_VARIABLE: "managed"}, None, REMOVED, [("check_upload_limit", PROFILE_TABLE), ("check_restore_limit", RESTORE_PROFILE_TABLE)], id="profile-table-entry-removed"),
+    pytest.param({PROFILE_VARIABLE: "managed", RECIPIENTS_VARIABLE: RECIPIENT_1}, None, "500", [("check_upload_limit", PROFILE_TABLE), ("check_restore_limit", RESTORE_PROFILE_TABLE)], id="profile-table-wrong"),
+    pytest.param({PROFILE_VARIABLE: "managed", RECIPIENTS_VARIABLE: RECIPIENT_1}, None, REMOVED, [("check_upload_limit", PROFILE_TABLE), ("check_restore_limit", RESTORE_PROFILE_TABLE)], id="profile-table-entry-removed"),
     pytest.param({RESTORE_VARIABLE: "abc"}, None, AS_SHIPPED, [("check_restore_limit", RESTORE_INVALID)], id="restore-limit-invalid"),
-    pytest.param({PROFILE_VARIABLE: "managed", LIMIT_VARIABLE: "abc"}, None, AS_SHIPPED, [("check_upload_limit", INVALID), ("check_restore_limit", RESTORE_INVALID)], id="managed-upload-limit-invalid"),
+    pytest.param({PROFILE_VARIABLE: "managed", RECIPIENTS_VARIABLE: RECIPIENT_1, LIMIT_VARIABLE: "abc"}, None, AS_SHIPPED, [("check_upload_limit", INVALID), ("check_restore_limit", RESTORE_INVALID)], id="managed-upload-limit-invalid"),
+    pytest.param({RECIPIENTS_VARIABLE: "garbage"}, None, AS_SHIPPED, [("check_recipients", RECIPIENTS_INVALID)], id="recipients-invalid"),
+    pytest.param({PROFILE_VARIABLE: "managed"}, None, AS_SHIPPED, [("check_recipients", RECIPIENTS_MISSING_MANAGED)], id="recipients-missing-managed"),
 ]
 
 
@@ -747,7 +782,7 @@ def test_the_startup_audit_logs_an_unusable_backup_configuration_as_an_error_and
     configure_token(monkeypatch, tmp_path, None, file)
     set_managed_entry(monkeypatch, table)
     missing = [name for name, _key in speaking if not hasattr(checks, name)]
-    assert missing == [], f"[new] {', '.join(missing)} does not exist yet: lot B-35 adds the restore limit's check (contract §1b)"
+    assert missing == [], f"[new] {', '.join(missing)} does not exist yet: lot B-35 adds the restore limit's check (contract §1b), lot L3 checkpoint 2 the recipients' (interface §2)"
     expected = [getattr(checks, name)() for name, _key in speaking]
     states = [(result.severity, result.i18n_key) for result in expected]
     assert states == [("error", key) for _name, key in speaking], f"precondition: each check named is an error with its key: {states}"
@@ -804,3 +839,159 @@ def test_every_message_of_the_checks_is_in_the_catalogue_with_its_placeholders(l
 
     assert problems == [], f"{path.relative_to(PROJECT_ROOT)}:\n- " + "\n- ".join(problems)
     print_success(f"{language}: {len(MESSAGES)} messages")
+
+
+# =============================================================================
+# (i) Lot L3 checkpoint 2: the instance's age recipients and check_recipients
+# =============================================================================
+
+
+def recipients_reader() -> Callable[[], tuple[str, ...] | None]:
+    """``config.backup.backup_recipients`` (lot L3), looked up by the test that needs it, never at collection."""
+    reader = getattr(backup_config, "backup_recipients", None)
+    if reader is None:
+        pytest.fail("[new] config.backup.backup_recipients() does not exist yet: lot L3 checkpoint 2 adds it (interface §1)")
+    return reader
+
+
+def recipients_check(checks: ModuleType) -> Callable[[], ConfigCheck]:
+    """``checks.check_recipients`` (lot L3), looked up the same way."""
+    check = getattr(checks, "check_recipients", None)
+    if check is None:
+        pytest.fail("[new] checks.check_recipients() does not exist yet: lot L3 checkpoint 2 adds it (interface §2)")
+    return check
+
+
+def a_private_key() -> str:
+    """A fresh ``AGE-SECRET-KEY-1…``: what an admin may paste by mistake, and what must never be echoed."""
+    from pyrage import x25519  # noqa: PLC0415 — only the recipients' tests need pyrage
+
+    return str(x25519.Identity.generate())
+
+
+def test_the_recipients_variable_and_its_maximum():
+    """(i) interface §1: ``RECIPIENTS_VARIABLE`` and ``MAX_RECIPIENTS`` (2, for a key rotation); not a secret, so no
+    ``_FILE``."""
+    print_section("L3: the recipients' variable")
+    found = (getattr(backup_config, "RECIPIENTS_VARIABLE", None), getattr(backup_config, "MAX_RECIPIENTS", None))
+    assert found == (RECIPIENTS_VARIABLE, MAX_RECIPIENTS), f"[new] config.backup.RECIPIENTS_VARIABLE and MAX_RECIPIENTS (lot L3, interface §1): {found}"
+    print_success(f"{RECIPIENTS_VARIABLE}, at most {MAX_RECIPIENTS}")
+
+
+#: (the variable, unless ``None``; what ``backup_recipients()`` gives).
+RECIPIENTS_READ = [
+    pytest.param(None, None, id="unset"),
+    pytest.param("", None, id="empty"),
+    pytest.param("   ", None, id="blank"),
+    pytest.param(RECIPIENT_1, (RECIPIENT_1,), id="one"),
+    pytest.param(f"  {RECIPIENT_1} ,\t{RECIPIENT_2}  ", (RECIPIENT_1, RECIPIENT_2), id="two-with-spaces"),
+    pytest.param(f"{RECIPIENT_2},{RECIPIENT_1}", (RECIPIENT_2, RECIPIENT_1), id="two-in-the-order-written"),
+    pytest.param(RECIPIENT_1.upper(), (RECIPIENT_1,), id="upper-case-given-back-canonical"),
+]
+
+
+@pytest.mark.parametrize(("value", "expected"), RECIPIENTS_READ)
+def test_the_recipients_reader_in_each_state(monkeypatch, value, expected):
+    """(i) interface §1: unset or blank ``None``; else a tuple of canonical lowercase ``age1…``, in the order written,
+    the spaces around each item ignored."""
+    reader = recipients_reader()
+    if value is not None:
+        monkeypatch.setenv(RECIPIENTS_VARIABLE, value)
+
+    assert reader() == expected
+    print_success(f"{value!r} → {expected}")
+
+
+#: (the variable, the ``BackupConfigError`` code, what the message must never hold or ``None``).
+RECIPIENTS_REFUSED = [
+    pytest.param("garbage", RECIPIENTS_INVALID_CODE, None, id="garbage"),
+    pytest.param(SSH_KEY, RECIPIENTS_INVALID_CODE, None, id="an-ssh-key"),
+    pytest.param(f"{RECIPIENT_1},,{RECIPIENT_2}", RECIPIENTS_INVALID_CODE, None, id="an-empty-item-between-commas"),
+    pytest.param(f"{RECIPIENT_1},", RECIPIENTS_INVALID_CODE, None, id="a-trailing-comma"),
+    pytest.param(f"{RECIPIENT_1}, ,{RECIPIENT_2}", RECIPIENTS_INVALID_CODE, None, id="a-blank-item"),
+    pytest.param(RECIPIENT_1[:-1] + ("q" if RECIPIENT_1[-1] != "q" else "p"), RECIPIENTS_INVALID_CODE, None, id="a-bad-checksum"),
+    pytest.param(f"{RECIPIENT_1},{RECIPIENT_2},{RECIPIENT_3}", RECIPIENTS_TOO_MANY_CODE, None, id="three"),
+    pytest.param(f"{RECIPIENT_1},{RECIPIENT_1}", RECIPIENTS_DUPLICATE_CODE, None, id="the-same-twice"),
+    pytest.param(f"{RECIPIENT_1},{RECIPIENT_1.upper()}", RECIPIENTS_DUPLICATE_CODE, None, id="the-same-twice-in-another-case"),
+]
+
+
+@pytest.mark.parametrize(("value", "code", "hidden"), RECIPIENTS_REFUSED)
+def test_an_unusable_recipients_value_is_refused_naming_the_variable(monkeypatch, value, code, hidden):
+    """(i) interface §1: ``BackupConfigError`` with its code, ``variable`` the recipients', the message naming it."""
+    reader = recipients_reader()
+    monkeypatch.setenv(RECIPIENTS_VARIABLE, value)
+
+    with pytest.raises(BackupConfigError) as raised:
+        reader()
+
+    assert (raised.value.variable, raised.value.code) == (RECIPIENTS_VARIABLE, code), f"expected {RECIPIENTS_VARIABLE} {code}, not {raised.value.variable} {raised.value.code}"
+    assert RECIPIENTS_VARIABLE in str(raised.value), f"the message names the variable: {raised.value}"
+    print_success(f"{code}: {raised.value}")
+
+
+@pytest.mark.parametrize("shape", ["alone", "beside-a-recipient"])
+def test_a_private_key_as_recipient_is_refused_and_never_echoed(monkeypatch, shape):
+    """(i) interface §1: an ``AGE-SECRET-KEY-1…`` pasted in place of the public recipient is ``BACKUP_RECIPIENTS_INVALID``,
+    and its message never holds the key, in any case."""
+    reader = recipients_reader()
+    secret = a_private_key()
+    monkeypatch.setenv(RECIPIENTS_VARIABLE, secret if shape == "alone" else f"{RECIPIENT_1}, {secret}")
+
+    with pytest.raises(BackupConfigError) as raised:
+        reader()
+
+    assert raised.value.code == RECIPIENTS_INVALID_CODE
+    shown = f"{raised.value} {raised.value!r} {raised.value.args!r}"
+    assert secret not in shown and secret.lower() not in shown and secret[16:] not in shown, "the error echoes the private key"
+    print_success("a private key refused, never echoed")
+
+
+#: (profile, the variable unless ``None``, severity, i18n key, detail): the four states of ``backup.recipients`` (§2).
+RECIPIENTS_STATES = [
+    pytest.param("selfhosted", None, "ok", RECIPIENTS_OFF, {}, id="self-hosted-unset-off"),
+    pytest.param("selfhosted", "   ", "ok", RECIPIENTS_OFF, {}, id="self-hosted-blank-off"),
+    pytest.param("selfhosted", RECIPIENT_1, "ok", RECIPIENTS_OK, {"count": 1}, id="one"),
+    pytest.param("managed", f"{RECIPIENT_1}, {RECIPIENT_2}", "ok", RECIPIENTS_OK, {"count": 2}, id="managed-two"),
+    pytest.param("selfhosted", "garbage", "error", RECIPIENTS_INVALID, {"reason": RECIPIENTS_INVALID_CODE}, id="invalid"),
+    pytest.param("managed", SSH_KEY, "error", RECIPIENTS_INVALID, {"reason": RECIPIENTS_INVALID_CODE}, id="managed-invalid"),
+    pytest.param("selfhosted", f"{RECIPIENT_1},{RECIPIENT_2},{RECIPIENT_3}", "error", RECIPIENTS_INVALID, {"reason": RECIPIENTS_TOO_MANY_CODE}, id="too-many"),
+    pytest.param("selfhosted", f"{RECIPIENT_2},{RECIPIENT_2}", "error", RECIPIENTS_INVALID, {"reason": RECIPIENTS_DUPLICATE_CODE}, id="duplicate"),
+    pytest.param("managed", None, "error", RECIPIENTS_MISSING_MANAGED, {}, id="managed-unset-missing"),
+    pytest.param("managed", "   ", "error", RECIPIENTS_MISSING_MANAGED, {}, id="managed-blank-missing"),
+]
+
+
+@pytest.mark.parametrize(("profile", "value", "severity", "key", "detail"), RECIPIENTS_STATES)
+def test_the_recipients_check_in_each_state(checks, monkeypatch, profile, value, severity, key, detail):
+    """(i) interface §2: the state of ``backup.recipients`` follows ``backup_recipients()`` and the profile read from
+    ``get_settings()``; an error's summary is one line naming the variable."""
+    check = recipients_check(checks)
+    monkeypatch.setenv(PROFILE_VARIABLE, profile)
+    if value is not None:
+        monkeypatch.setenv(RECIPIENTS_VARIABLE, value)
+    if key == RECIPIENTS_INVALID:
+        reader_failure(recipients_reader(), BackupConfigError)
+
+    result = check()
+
+    assert_state(result, RECIPIENTS_ID, severity, key, detail, RECIPIENTS_VARIABLE)
+    print_success(f"{profile}: {severity} {result.i18n_key} {result.detail}")
+
+
+def test_no_private_key_reaches_the_recipients_check_or_the_startup_audit(checks, platform, logged, monkeypatch):
+    """(i) A private key pasted as the recipient: ``.invalid``, and the key is in no field of the result, no record and no
+    event of the startup audit."""
+    check = recipients_check(checks)
+    secret = a_private_key()
+    monkeypatch.setenv(RECIPIENTS_VARIABLE, secret)
+    result = check()
+    assert (result.severity, result.i18n_key) == ("error", RECIPIENTS_INVALID), f"precondition: the private key is refused: {result}"
+
+    with capture_logs() as events:
+        returned = config_audit.log_configuration_audit()
+
+    assert secret not in repr(result) and secret not in repr(config_audit.run_config_checks()), "a configuration check put the private key in its result"
+    assert secret not in repr(logged) and secret not in repr(events), "the startup audit logged the private key"
+    assert returned is None, "the startup audit returns: the start goes on"
+    print_success("the private key shown nowhere")

@@ -138,6 +138,13 @@ case of (f), a copy that cannot be removed, before B-31; those of (o) before B-3
     is, the route's 500 ``restore_confirm_failed``, which the tab retries; nothing confirmed, written or removed. A
     report that is a folder is still no checked copy, nothing written, and twenty confirmations of it leave no
     descriptor open on it; a report of mode 000 is still no checked copy (skipped as root).
+(q) Lot L3-2, how a restore was confirmed (contract L3 §5: the panel sees ``confirmed_via``, never a username).
+    ``apply.ConfirmedVia`` is ``Literal["admin", "cli", "panel"]``; ``RestoreState.confirmed_via`` is written in
+    ``restore.json``; ``confirm_restore(..., confirmed_via=)`` and ``restore_jobs.confirm_check(..., confirmed_via=)``
+    record it, ``admin`` without one — whatever ``confirmed_by`` says, a username ``cli`` or ``panel`` included. A state
+    written before L3-2 (no key) reads ``cli`` when ``confirmed_by`` is ``cli``, ``admin`` otherwise. Written RED: the
+    names are looked up by the test that needs them (``l3_2_name``, ``l3_2_parameter``), each failing with a "[new]
+    L3-2 …" message; (e)'s state and (h)'s ``STATE_FIELDS`` now hold ``confirmed_via`` too, red on the same field.
 
 How. Real databases and archives come from ``test_backup_staging.py`` (its module fixtures, imported: two databases made
 once by ``alembic upgrade`` in a process of their own, the archives at the head and at ``OLDER``). The head archive is
@@ -1141,6 +1148,7 @@ def test_confirm_writes_a_pending_state_from_the_report_atomically_and_privately
         "data_dir": str(instance.root.resolve()),
         "confirmed_at": instance.confirm_at,
         "confirmed_by": CONFIRMED_BY,
+        "confirmed_via": "admin",
         "backup_created_at": report.backup.created_at,
         "backup_app_version": report.backup.app_version,
         "action": report.action,
@@ -2694,7 +2702,7 @@ def test_finish_leaves_a_restore_that_is_not_applied_alone(tmp_path, databases, 
 # =============================================================================
 
 #: The fields of a restore's state (contract §2): the commit adds none; its count of revoked links goes to the log.
-STATE_FIELDS = {"format", "status", "stage_id", "data_dir", "confirmed_at", "confirmed_by", "backup_created_at", "backup_app_version", "action", "swap", "boot", "applied_at", "finished_at", "reason", "waiting", "session_version"}
+STATE_FIELDS = {"format", "status", "stage_id", "data_dir", "confirmed_at", "confirmed_by", "confirmed_via", "backup_created_at", "backup_app_version", "action", "swap", "boot", "applied_at", "finished_at", "reason", "waiting", "session_version"}
 #: How SQLAlchemy stores a datetime in SQLite: UTC, no offset, always six digits of microseconds.
 SQLALCHEMY_DATETIME = "%Y-%m-%d %H:%M:%S.%f"
 #: How long after its issue a link of the plans below was consumed or revoked.
@@ -3812,3 +3820,115 @@ def test_a_report_the_server_may_not_read_is_no_checked_copy(tmp_path, databases
     assert refusal_of(raised) == ("RestoreStageMissingError", "restore_stage_not_found"), f"a report of mode 000: no checked copy, not {refusal_of(raised)}: {raised}"
     assert (cases.fingerprint(instance.root), restore_items(instance.root)) == (data, items), f"nothing written: {cases.changed(items, restore_items(instance.root))}"
     print_success("a report of mode 000: restore_stage_not_found, nothing written")
+
+
+# =============================================================================
+# (q) Lot L3-2: how a restore was confirmed
+# =============================================================================
+
+#: How a restore may be confirmed (contract L3 §5): the administrators' route, the command line, the hosting panel.
+CONFIRMED_VIA = ("admin", "cli", "panel")
+#: What ``confirmed_via`` reads as before L3-2, when ``RestoreState`` has no such attribute: never a valid value.
+NO_VIA = "<missing: RestoreState has no confirmed_via before L3-2>"
+
+
+def l3_2_name(module: Any, name: str) -> Any:
+    """``module.<name>``, a name lot L3-2 adds, read when the test needs it: its absence fails that test alone."""
+    value = getattr(module, name, None)
+    if value is None:
+        pytest.fail(f"[new] L3-2: {module.__name__}.{name} does not exist yet (contract L3 §5)", pytrace=False)
+    return value
+
+
+def l3_2_parameter(function: Callable[..., Any], name: str) -> None:
+    """The keyword ``name`` of ``function``, which lot L3-2 adds; before it, a failure that says so."""
+    if name not in inspect.signature(function).parameters:
+        pytest.fail(f"[new] L3-2: {function.__qualname__}() takes no {name!r} yet (contract L3 §5)", pytrace=False)
+
+
+def via_of(state: Any) -> str:
+    return getattr(state, "confirmed_via", NO_VIA)
+
+
+def via_on_disk(root: Path) -> object:
+    return json.loads(state_file(root).read_text(encoding="utf-8")).get("confirmed_via", NO_VIA)
+
+
+def test_a_restore_is_confirmed_via_admin_cli_or_panel():
+    """(q) L3-2: ``ConfirmedVia`` is ``Literal["admin", "cli", "panel"]``, in this order, and ``RestoreState`` has the
+    field ``confirmed_via``."""
+    print_section("(q) L3-2 confirmed_via")
+    apply = apply_module()
+    via = get_args(l3_2_name(apply, "ConfirmedVia"))
+    assert via == CONFIRMED_VIA, f"ConfirmedVia is Literal{list(CONFIRMED_VIA)}: {via}"
+    assert "confirmed_via" in apply.RestoreState.model_fields, f"RestoreState has confirmed_via: {sorted(apply.RestoreState.model_fields)}"
+    print_success("admin, cli, panel")
+
+
+@pytest.mark.parametrize("via", CONFIRMED_VIA)
+def test_confirm_restore_records_how_it_was_confirmed(tmp_path, databases, checked, via):
+    """(q) L3-2: ``confirm_restore(..., confirmed_via=)`` records it, in the state it returns, in ``restore.json`` and
+    in what ``read_restore`` reads; ``confirmed_by`` stays as given."""
+    apply = apply_module()
+    l3_2_parameter(apply.confirm_restore, "confirmed_via")
+    instance = build(tmp_path / "instance", databases, checked)
+    state = apply.confirm_restore(instance.stage_id, confirmed_by=CONFIRMED_BY, confirmed_via=via, data_dir=instance.root, now=instance.confirm_at)
+    assert (state.confirmed_by, via_of(state)) == (CONFIRMED_BY, via), f"confirmed by {CONFIRMED_BY}, via {via}: {state}"
+    assert via_on_disk(instance.root) == via, f"restore.json says via {via}: {via_on_disk(instance.root)}"
+    assert via_of(apply.read_restore(instance.root)) == via, "read_restore reads it back"
+    print_success(f"via {via}")
+
+
+@pytest.mark.parametrize("confirmed_by", [CONFIRMED_BY, "cli", "panel"])
+def test_confirm_restore_without_confirmed_via_is_admin_whatever_the_username(tmp_path, databases, checked, confirmed_by):
+    """(q) L3-2: without ``confirmed_via`` a confirmation is the administrators' route's, ``admin``, even for an
+    administrator whose username is literally ``cli`` or ``panel``: the username never decides how it was confirmed."""
+    apply = apply_module()
+    l3_2_parameter(apply.confirm_restore, "confirmed_via")
+    instance = build(tmp_path / "instance", databases, checked)
+    state = apply.confirm_restore(instance.stage_id, confirmed_by=confirmed_by, data_dir=instance.root, now=instance.confirm_at)
+    assert (state.confirmed_by, via_of(state), via_on_disk(instance.root)) == (confirmed_by, "admin", "admin"), f"{confirmed_by!r}: via admin: {state}"
+    print_success(f"{confirmed_by!r}: via admin")
+
+
+@pytest.mark.parametrize("via", [None, *CONFIRMED_VIA], ids=["not-given", *CONFIRMED_VIA])
+def test_confirm_check_records_how_it_was_confirmed(tmp_path, databases, checked, via):
+    """(q) L3-2: ``restore_jobs.confirm_check(..., confirmed_via=)`` hands it to ``confirm_restore``: the state says it;
+    without one, ``admin``."""
+    apply = apply_module()
+    l3_2_parameter(restore_jobs.confirm_check, "confirmed_via")
+    instance = build(tmp_path / "instance", databases, checked)
+    given = {} if via is None else {"confirmed_via": via}
+    state = restore_jobs.confirm_check(instance.stage_id, confirmed_by=CONFIRMED_BY, data_dir=instance.root, **given)
+    expected = via or "admin"
+    assert (state.status, via_of(state), via_on_disk(instance.root)) == ("pending", expected, expected), f"pending, via {expected}: {state}"
+    assert via_of(apply.read_restore(instance.root)) == expected, "read_restore reads it back"
+    print_success(f"{via or 'not given'}: via {expected}")
+
+
+@pytest.mark.parametrize(("confirmed_by", "via"), [("cli", "cli"), (CONFIRMED_BY, "admin"), ("panel", "admin")])
+def test_a_state_written_before_l3_2_reads_its_confirmed_via_from_confirmed_by(tmp_path, confirmed_by, via):
+    """(q) L3-2: ``restore.json`` without the key ``confirmed_via`` — every state written before L3-2 — reads ``cli``
+    when ``confirmed_by`` is ``cli`` (the command line's mark), ``admin`` otherwise: before L3-2 the panel confirmed
+    nothing, so a username ``panel`` was an administrator's."""
+    apply = apply_module()
+    root = tmp_path / "instance"
+    root.mkdir(mode=0o700)
+    ensure_private_dir(restore_dir(root), root)
+    record = {
+        "format": 1,
+        "status": "pending",
+        "stage_id": UNRELATED_CHECK,
+        "data_dir": str(root.resolve()),
+        "confirmed_at": "2026-10-15T22:00:00Z",
+        "confirmed_by": confirmed_by,
+        "backup_created_at": "2026-10-14T09:00:00Z",
+        "backup_app_version": "v1.2.0",
+        "action": "same",
+    }
+    state_file(root).write_text(json.dumps(record), encoding="utf-8")
+    state_file(root).chmod(0o600)
+    state = apply.read_restore(root)
+    assert state is not None, "precondition: a state of before L3-2 is read"
+    assert (state.confirmed_by, via_of(state)) == (confirmed_by, via), f"{confirmed_by!r} without confirmed_via reads via {via}: {state}"
+    print_success(f"{confirmed_by!r}: via {via}")
