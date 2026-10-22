@@ -35,8 +35,9 @@ Under test: ``backend/app/api/v1/backup/restore.py`` (the routes), ``restore_job
 (c) ``GET /backup/restore/status``: ``none`` without a restore, and nothing created to say so; each phase on disk as
     its state (applying, applied and rolling back are ``in_progress``), its fields as recorded; a pending restore says
     why a start left it waiting, for each of the four reasons (§11, P7: ``instance_blocked``, on an instance not blocked
-    itself, since a blocked one answers no restore route); a ``restore.json`` that is a link is never followed, one that
-    cannot be read is ``none``.
+    itself, since a blocked one answers no restore route); a ``restore.json`` that is a link is never followed. B-33 §1:
+    a ``restore.json`` that is a link, or that holds no state this LibreFolio reads (not JSON, §10's strict cases), is
+    a state that cannot be read: 500 ``restore_state_unreadable`` (it was ``none``), nothing changed.
 (d) ``DELETE /backup/restore/pending``: 204, the state removed and, since B-17 (lot B5c, as the command line's
     ``pending --cancel``), the checked copy and its check with it: polling it or confirming it again is 404
     ``restore_stage_not_found``; another check is not the restore's, and stays. The ticket of a restart goes too (i).
@@ -96,10 +97,16 @@ Under test: ``backend/app/api/v1/backup/restore.py`` (the routes), ``restore_job
     still waits. ``GET /outcome`` with that restore's ticket keeps today's one 404 ``restore_outcome_not_found`` and
     leaves the ticket as it was (a guard): readable again, the same ticket opens the outcome. OpenAPI: the status
     documents a 500 naming ``restore_state_unreadable``; the 500s of the cancel, the restart and the confirmation name
-    it too. Not the content: a state no restore can hold, the (c) case named «unreadable» included, stays ``none``
-    (§10). B-41: only the right ticket of a restart that has not expired makes ``GET /outcome`` read the state (b5);
+    it too. B-33 §1 (m): the content too — a state no restore can hold, the (c) case named «unreadable» included, is no
+    longer ``none`` but the same 500. B-41: only the right ticket of a restart that has not expired makes ``GET /outcome`` read the state (b5);
     every case of (i) the ticket alone decides, the state file then made unreadable, is the one 404 without the state
     file ever opened, nor «The state of the restore cannot be read» logged — else anyone could repeat that error.
+(m) B-33 §1 (interface ``B-b33-interface.md``; written RED before it, the status code unchanged in this lot): a
+    ``restore.json`` that is not a file (a folder, a link) or not valid (not JSON, ``format`` 2) cannot be read either.
+    ``GET /status``, ``DELETE /pending``, ``POST /restart`` with that state, and the confirmation of a fresh check
+    beside it: 500 ``restore_state_unreadable`` (the status's message as (j)'s), never ``none``, a 404, a 409 or a 202;
+    no ticket, no restart, no signal; nothing written, removed or replaced, here or where a link points. (a)'s state
+    file that is a link is refused so too (it was replaced before B-33), the link and its target as they were.
 (k) Lot L3-2 (contract L3 §5): ``RestoreStatus`` gains ``confirmed_via`` (``admin``, ``cli`` or ``panel``; null
     without a restore), in ``GET /status`` and in the confirmation's answer. The administrators' route confirms via
     ``admin`` — an administrator whose username is literally ``cli`` or ``panel`` too —, written in ``restore.json``.
@@ -728,19 +735,20 @@ async def test_a_confirmation_that_cannot_be_made_is_refused_with_its_code(insta
 
 @pytest.mark.asyncio
 @pytest.mark.skipif(os.name == "nt", reason="symbolic links need a privilege on Windows")
-async def test_a_state_file_that_is_a_link_is_replaced_never_written_through(instance, head_archive, tmp_path):
-    """(a) The state is written beside, then renamed into place: a ``restore.json`` that is a link (a finished restore's
-    state is not ACTIVE, and a link is never read) is replaced by the new state, its target left as it was."""
+async def test_a_state_file_that_is_a_link_refuses_the_confirmation_never_written_through(instance, head_archive, tmp_path):
+    """(a) B-33 §1 (replaced by the new state before B-33): a ``restore.json`` that is a link is a state that cannot be
+    read (``not_a_file``): a restore may have stopped half way behind it. The confirmation is 500
+    ``restore_state_unreadable``; the link left as it is, its target never written."""
     root = instance.root
     stage_id = await checked(head_archive)
     elsewhere = tmp_path / "elsewhere.json"
     elsewhere.write_text("a file a link points to", encoding="utf-8")
     state_path(root).symlink_to(elsewhere)
     response = await confirm(stage_id)
-    assert response.status_code == 202, f"confirmed: {api.shown(response)}"
-    assert not state_path(root).is_symlink() and json.loads(state_path(root).read_text(encoding="utf-8"))["stage_id"] == stage_id, "the link is replaced by the state"
+    assert api.code(response) == (500, "restore_state_unreadable"), f"refused: 500 restore_state_unreadable, not {api.shown(response)}"
+    assert state_path(root).is_symlink() and os.readlink(state_path(root)) == str(elsewhere), "the link left as it is"
     assert elsewhere.read_text(encoding="utf-8") == "a file a link points to", "nothing written through the link"
-    print_success("restore.json a link: replaced, target untouched")
+    print_success("restore.json a link: 500 restore_state_unreadable, link and target untouched")
 
 
 @pytest.mark.asyncio
@@ -1019,9 +1027,9 @@ async def test_a_restore_waiting_says_why(instance, waiting):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("case", ["a-link", "unreadable"])
-async def test_a_state_file_that_is_a_link_or_unreadable_reads_as_no_restore(instance, tmp_path, case):
-    """(c) A ``restore.json`` that is a link is never followed, even to a valid state; one that cannot be read is no
-    restore either."""
+async def test_a_state_file_that_is_a_link_or_unreadable_is_a_500_never_followed(instance, tmp_path, case):
+    """(c) A ``restore.json`` that is a link is never followed, even to a valid state. B-33 §1 (``none`` before B-33):
+    it, and one whose content is no state, cannot be read: 500 ``restore_state_unreadable``, nothing changed."""
     root = instance.root
     if case == "a-link":
         valid = write_state(root, "pending", api.UNKNOWN_ID)
@@ -1032,9 +1040,11 @@ async def test_a_state_file_that_is_a_link_or_unreadable_reads_as_no_restore(ins
     else:
         restore_dir(root).mkdir(mode=0o700)
         state_path(root).write_text("{not a state", encoding="utf-8")
-    body = (await restore_status()).json()
-    assert body["state"] == "none", f"{case}: no restore: {body}"
-    print_success(f"{case}: none")
+    before = api.tree(root)
+    response = await restore_status()
+    assert api.refusal(response) == (500, "restore_state_unreadable", STATE_UNREADABLE), f"{case}: 500 restore_state_unreadable, not {api.shown(response)}"
+    assert api.tree(root) == before, f"{case}: nothing changed: {cases.changed(before, api.tree(root))}"
+    print_success(f"{case}: 500 restore_state_unreadable")
 
 
 def broken_state(root: Path, case: str) -> None:
@@ -1060,20 +1070,20 @@ def broken_state(root: Path, case: str) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("case", ["stage-id-a-path", "stage-id-uppercase", "stage-id-31-digits", "stage-id-trailing-newline", "swap-entry-secrets", "swap-entry-a-path"])
-async def test_a_state_no_restore_can_hold_reads_as_no_restore(instance, case):
+async def test_a_state_no_restore_can_hold_is_a_500_and_nothing_it_names_is_followed(instance, case):
     """(c) §10, a strict state: its ``stage_id`` 32 lowercase hexadecimal digits, each swap entry one of the swapped
-    folders. A state file that breaks either is unreadable: no restore, an error logged, and nothing it names is ever
-    followed."""
+    folders. A state file that breaks either is unreadable: an error logged, and nothing it names is ever followed.
+    B-33 §1 (``none`` before B-33): 500 ``restore_state_unreadable``."""
     root = instance.root
     broken_state(root, case)
     before = api.tree(root)
     with capture_logs() as events:
         response = await restore_status()
-    assert (response.status_code, response.json()["state"]) == (200, "none"), f"{case}: no restore: {api.shown(response)}"
+    assert api.refusal(response) == (500, "restore_state_unreadable", STATE_UNREADABLE), f"{case}: 500 restore_state_unreadable, not {api.shown(response)}"
     errors = [event for event in events if event.get("log_level") == "error"]
     assert errors, f"{case}: the unreadable state is logged as an error: {events}"
     assert api.tree(root) == before, f"{case}: nothing created or changed: {cases.changed(before, api.tree(root))}"
-    print_success(f"{case}: none, logged")
+    print_success(f"{case}: 500 restore_state_unreadable, logged")
 
 
 # =============================================================================
@@ -2375,3 +2385,83 @@ async def test_without_a_restore_confirmed_via_is_null(instance):
     response = await restore_status()
     body = response.json()
     assert (response.status_code, body["state"], body.get("confirmed_via", "<missing>")) == (200, "none", None), f"none: confirmed_via null: {body}"
+
+
+# =============================================================================
+# (m) B-33 §1: a state that is not a file or not valid
+# =============================================================================
+
+
+#: (m) What a state nobody can read holds: never in an answer.
+B33_STATE_MARK = "b33-the-content-of-a-state-nobody-can-read"
+
+
+def _b33_a_folder(root: Path, elsewhere: Path) -> None:
+    state_path(root).unlink()
+    state_path(root).mkdir(mode=0o700)
+    (state_path(root) / "inside.json").write_text(B33_STATE_MARK, encoding="utf-8")
+
+
+def _b33_a_link(root: Path, elsewhere: Path) -> None:
+    # A link to the valid state it replaced: never followed, so never read.
+    target = elsewhere / "restore.json"
+    state_path(root).rename(target)
+    state_path(root).symlink_to(target)
+
+
+def _b33_not_json(root: Path, elsewhere: Path) -> None:
+    state_path(root).write_text("{" + B33_STATE_MARK, encoding="utf-8")
+
+
+def _b33_format_2(root: Path, elsewhere: Path) -> None:
+    record = json.loads(state_path(root).read_text(encoding="utf-8"))
+    state_path(root).write_text(json.dumps({**record, "format": 2}), encoding="utf-8")
+
+
+#: (m) B-33 §1: a pending restore's state made one that cannot be read, not as a file (a folder, a link) or not as a
+#: state (not JSON, ``format`` 2).
+B33_WAYS = [
+    pytest.param(_b33_a_folder, id="not_a_file-a-folder"),
+    pytest.param(_b33_a_link, id="not_a_file-a-link", marks=pytest.mark.skipif(os.name == "nt", reason="symbolic links need a privilege on Windows")),
+    pytest.param(_b33_not_json, id="invalid-not-json"),
+    pytest.param(_b33_format_2, id="invalid-format-2"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("way", B33_WAYS)
+@pytest.mark.parametrize("route", ["status", "cancel", "restart", "confirm"])
+async def test_a_state_that_is_not_a_file_or_not_valid_is_a_500_of_every_route_and_nothing_changes(instance, head_archive, tmp_path, monkeypatch, signals, route, way):
+    """(m) B-33 §1: a pending restore whose ``restore.json`` is a folder, a link, not JSON, or of ``format`` 2. ``GET
+    /status``, ``DELETE /pending``, ``POST /restart`` and the confirmation of a fresh check: 500
+    ``restore_state_unreadable`` (the status with (j)'s message), never ``none``, the 404 or 409 ``restore_not_pending``,
+    nor a 202 that wrote a new state over it; neither the state's content nor a path in the answer; no restart requested,
+    no signal, no ticket; nothing written, removed or replaced, here or where a link points. Red before B-33: the state
+    read as none."""
+    print_section("(m) B-33: a state that is not a file or not valid")
+    root = instance.root
+    fresh = None
+    if route == "confirm":
+        await confirmed(head_archive)
+        fresh = await checked(head_archive)
+    else:
+        write_state(root, "pending", api.UNKNOWN_ID)
+    restarts: list[str] = []
+    monkeypatch.setattr(restore, "_restart", lambda: restarts.append("restart"))
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    way(root, elsewhere)
+    before = (api.tree(root), api.tree(elsewhere))
+    calls = {"status": restore_status, "cancel": cancel, "restart": restart, "confirm": lambda: confirm(fresh)}
+    response = await calls[route]()
+    case = f"{route}, {way.__name__}"
+    if route == "status":
+        assert api.refusal(response) == (500, "restore_state_unreadable", STATE_UNREADABLE), f"{case}: 500 restore_state_unreadable, not {api.shown(response)}"
+    else:
+        assert api.code(response) == (500, "restore_state_unreadable"), f"{case}: 500 restore_state_unreadable, not {api.shown(response)}"
+    assert B33_STATE_MARK not in response.text, f"{case}: never the state's content: {response.text}"
+    no_path_in(response, root)
+    assert (restarts, signals.sent, signals.around) == ([], [], []), f"{case}: no restart requested, no signal: {restarts} {signals.sent} {signals.around}"
+    assert not os.path.lexists(ticket_path(root)), f"{case}: no ticket written"
+    assert (api.tree(root), api.tree(elsewhere)) == before, f"{case}: nothing written, removed or replaced: {cases.changed(before[0], api.tree(root))}"
+    print_success(f"{case}: 500 restore_state_unreadable, nothing changed")
