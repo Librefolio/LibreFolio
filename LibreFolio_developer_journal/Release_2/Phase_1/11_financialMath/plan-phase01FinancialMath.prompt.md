@@ -4566,3 +4566,22 @@ di `scipy.optimize.newton` (un Newton scritto a mano con gli stessi passi e la s
   (`P4_FLOOR`, `files/p4/memory_states.py`). **Prima** (codice di oggi): 192 410 stati, **720 MB tenuti**, 3,7 kB a stato,
   17–18 s con `tracemalloc` acceso.
 - In corso: test-author `p4-tests` (i rossi).
+
+### Revisione N78-1k (ondata 4) — MF rivede, W scrive
+
+Base `c1b4ba49c` (= `dev_release2` `c042f2481`). MF in sola lettura: nessun codice in `financial_math/` mentre W è aperto.
+
+- ✅ **Parere sull'analisi di W** (2026-10-22): `salvataggi-worktrees-20261021/ondata4/MF-parere-N78-1k-turno1.md`.
+  > **Note implementazione**: i numeri della tabella P/M sono giusti (ricalcolati su `daily_state.py`, `returns.py:546`,
+  > `derived_views.py:211-219`), ma valgono solo con un lotto solo, gambe nello stesso giorno e gamba B al PMC di A. Casa unica:
+  > il modulo `linked_adjustments.py` tiene solo il predicato (il valore d'uscita c'è già: passo del costo medio e
+  > `_own_fifo_cost`); un solo punto di marcatura FIFO (non nel motore); il flusso dei lotti dai `proceeds` delle chiusure
+  > `ADJUSTMENT_OUT`; YOC senza codice (legge solo i lotti aperti). Casi mancanti: gamba B senza costo o ≠ PMC (P&L del totale
+  > +500 / −100 inventati), più lotti nella vista FIFO (−6,25 % di TWRR dei lotti), gambe in giorni diversi (classificatore:
+  > intervallo «contanti» a 0). Domande nuove Q-N78-1k-3 (costo della gamba B) e Q-N78-1k-4 (giorni diversi).
+  > **⚠️ Fuori pista**: l'Auto cost di una rettifica collegata in entrata fa la media del proprio broker, non del partner
+  > (`services/transactions/auto_cost.py:265`, solo TRANSFER): con P il «totale 0» non è garantito dai dati.
+- ✖️ Revisione del diff di W — superata (2026-10-22): il developer ha chiuso Q-N78-1k senza codice di calcolo; W rifiuta
+  una coppia di rettifiche collegate all'inserimento (`0af0f3593`, «proteggere l'inserimento, niente bonifiche»). Le domande
+  Q-N78-1k-3/4 cadono con lei.
+- ✖️ P4/D-P4 «fuori dalla 1.3» — no: il developer le tiene nella 1.3 («formule veloci», 19/10); P4 e i floor vanno in ondata 5.
