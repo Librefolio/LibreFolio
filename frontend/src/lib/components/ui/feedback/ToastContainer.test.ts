@@ -257,3 +257,95 @@ describe('ToastContainer — a hostile message is sanitised, not executed (K ste
         expect.soft(inPage('window.__k13Toast'), 'the payload ran as script in the toast').toBe('undefined');
     });
 });
+
+describe('H-18 — toasts announced to screen readers', () => {
+    type Variant = 'success' | 'info' | 'warning' | 'error';
+
+    const LIVE_SELECTOR = '[role="alert"], [role="status"]';
+
+    /** The single live element of one toast root — fails when there is none, or more than one. */
+    function liveOf(root: HTMLElement): HTMLElement {
+        const live = [...root.querySelectorAll<HTMLElement>(LIVE_SELECTOR)];
+        expect(live, 'each toast exposes exactly one live element').toHaveLength(1);
+        return live[0];
+    }
+
+    it.each([
+        {variant: 'error' as Variant, role: 'alert', politeness: 'assertive', otherRole: 'status'},
+        {variant: 'success' as Variant, role: 'status', politeness: 'polite', otherRole: 'alert'},
+        {variant: 'info' as Variant, role: 'status', politeness: 'polite', otherRole: 'alert'},
+        {variant: 'warning' as Variant, role: 'status', politeness: 'polite', otherRole: 'alert'},
+    ])('a $variant toast is one $role live region, aria-live=$politeness, atomic', ({variant, role, politeness, otherRole}) => {
+        toasts[variant](`Owned ${variant} notification`, 0);
+        render(ToastContainer);
+        const root = screen.getByTestId(`toast-${variant}`);
+
+        const live = liveOf(root);
+        expect(live).toHaveAttribute('role', role);
+        expect(live).toHaveAttribute('aria-live', politeness);
+        expect(live).toHaveAttribute('aria-atomic', 'true');
+        expect(within(root).getAllByRole(role)).toHaveLength(1);
+        expect(within(root).queryAllByRole(otherRole)).toHaveLength(0);
+    });
+
+    it.each([
+        {name: 'plain text', message: 'Owned plain message', expected: 'Owned plain message'},
+        {
+            name: 'HTML with a span',
+            message: '<span data-testid="toast-html-part">Owned</span> rich message',
+            expected: 'Owned rich message',
+        },
+    ])('reads the $name message alone, with the dismiss button outside the live element', ({message, expected}) => {
+        toasts.success(message, 0);
+        render(ToastContainer);
+        const root = screen.getByTestId('toast-success');
+
+        const live = liveOf(root);
+        expect(live.textContent?.trim()).toBe(expected);
+
+        const dismiss = within(root).getByTestId('toast-dismiss');
+        expect(root).toContainElement(dismiss);
+        expect(live, 'the "Dismiss" label must not be read as part of the message').not.toContainElement(dismiss);
+    });
+
+    it.each(['success', 'info', 'warning', 'error'] as Variant[])('hides every icon inside the %s live element from assistive tech', (variant) => {
+        toasts[variant](`Owned ${variant} notification`, 0);
+        render(ToastContainer);
+        const live = liveOf(screen.getByTestId(`toast-${variant}`));
+
+        for (const svg of live.querySelectorAll('svg')) expect(svg).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it('keeps the toast region in the DOM before, during and after toasts, without intercepting clicks', async () => {
+        render(ToastContainer);
+        // Live-region parents must exist before content arrives, or the first toast goes unheard.
+        const region = screen.getByTestId('toast-region');
+        expect(region.classList.contains('pointer-events-none')).toBe(true);
+
+        toasts.info('Owned arriving notification', 0);
+        const root = await screen.findByTestId('toast-info');
+        expect(region).toContainElement(root);
+
+        toasts.clear();
+        await waitFor(() => expect(root).not.toBeInTheDocument());
+        expect(screen.getByTestId('toast-region')).toBe(region);
+        expect(region.classList.contains('pointer-events-none')).toBe(true);
+    });
+
+    it('announces an error and a success shown together, each from its own toast', () => {
+        toasts.error('Owned failure', 0);
+        toasts.success('Owned success', 0);
+        render(ToastContainer);
+        const errorRoot = screen.getByTestId('toast-error');
+        const successRoot = screen.getByTestId('toast-success');
+
+        const alerts = screen.getAllByRole('alert');
+        const statuses = screen.getAllByRole('status');
+        expect(alerts).toHaveLength(1);
+        expect(statuses).toHaveLength(1);
+        expect(errorRoot).toContainElement(alerts[0]);
+        expect(successRoot).toContainElement(statuses[0]);
+        expect(liveOf(errorRoot)).toBe(alerts[0]);
+        expect(liveOf(successRoot)).toBe(statuses[0]);
+    });
+});
