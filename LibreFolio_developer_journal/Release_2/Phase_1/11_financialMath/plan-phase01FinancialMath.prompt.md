@@ -4498,3 +4498,90 @@ mostra; nessuno short nei dati veri). L'esempio del 19/10, vendo allo scoperto 1
   FROZEN. Riga ⚡ proposta: «**Faster portfolio reports on long histories.** The exchange rates a report needs are read as
   the days they change, not one day at a time: on a history that starts in 1900 a one-month report now takes about 1.4 s
   instead of 3–6 s, with the same numbers.»
+
+#### P4 — analisi breve (20/10, sola lettura; base `d1f75a3df` = P3 `e71012c67` + giornale)
+**Misure** (copia del 1900 EUR, 46 313 giorni, cache vuote; `files/p4/`: `time_sections.py` a orologio senza profilatore,
+`profile_engine.py` dentro il thread del motore, `memory_states.py` con `tracemalloc`):
+
+| | «tutto» | 1A |
+|---|---|---|
+| `get_report` | **13,0 s** (+ 1,0 s di JSON, **85 MB**) | **1,44 s** |
+| motore (`calculate`) | **0,65 s** (di cui 0,4 s le 45 919 copie dei giorni fermi) | 0,78 s |
+| storia (`get_history`) | 5,9 s: linea del MWRR 3,6 s, punti 1,6 s, TWRR 0,4 s | 0,04 s |
+| P&L per broker | 3,9 s (7 broker × 46 313 punti: ~2 s di oggetti pydantic) | 0,01 s |
+| allocazioni | 1,0 s | 0,02 s |
+
+**Che cosa vuol dire.** Dopo P1–P3 il motore costa ~1 s anche sul caso del 1900: i segmenti di P4 sul caso di oggi non
+cambierebbero quasi nulla. Il costo di «tutto» è **l'uscita stessa**: un punto al giorno (D1) per 46 313 giorni in sei serie,
+1,5 milioni di oggetti, 85 MB. Ma il motore **conserva uno stato per ogni giorno da t=0 per qualunque finestra** (la cache unica
+di 24 ore serve tutte le finestre): **176 MB per 46 313 stati (3,8 kB l'uno)**. Senza pavimenti, un errore di battitura all'anno
+1 (~740 000 giorni) darebbe per **ogni** rapporto, anche di un mese, ~12 s di copie e **~2,8 GB in cache** per ambito e valuta:
+è questo che P4 deve togliere prima dei pavimenti.
+
+**Disegno (P4).**
+- Il motore conserva **solo gli stati dei giorni sporchi** (segmenti: uno stato vale fino al giorno prima del successivo) e dà
+  `daily_states` come una **sequenza pigra** (`Sequence`): `len`, indice, fetta e iterazione producono la copia di un giorno
+  fermo come oggi (`replace` con `date`, `external_cash_flow = 0`, `acquisition_funding = None`, contenitori copiati), solo
+  quando la si legge. Memoria e tempo del motore ∝ giorni sporchi.
+- I lettori che scandiscono **ogni** giorno passano ai segmenti: il rapporto sulla qualità dei dati (gli insiemi di un giorno
+  fermo sono quelli del suo stato sporco; i conteggi dei giorni = la lunghezza del segmento), la storia delle allocazioni
+  (finestra come P2), `period.state_as_of` e `period_boundaries` (bisezione sugli inizi dei segmenti invece di una lista di
+  tutte le date a ogni chiamata), il ciclo di `portfolio_service` su tutti gli stati (~:347) e il ripiego del P&L per broker;
+  `DerivedViewsBuilder._window` con l'aritmetica delle date (niente lista di tutte le date).
+- Sette moduli in tutto (`daily_state`, `engine`, `models`, `derived_views`, `data_quality`, `period`, `portfolio_service`);
+  l'AI Export e il rischio passano dal rapporto.
+- **Prove**: la parità di tutto `get_report` al bit (albero di HEAD contro il nuovo, come P3) sulle 4 copie e su più finestre;
+  test di costo (memoria e copie ∝ giorni sporchi); un audit di chi **modifica** uno stato dopo averlo letto (una copia creata
+  alla lettura non conserva una modifica tra due letture: oggi ogni giorno ha i suoi contenitori); una copia del DB con un
+  errore all'anno 1500 (~190 000 giorni) per le misure prima/dopo, estrapolate all'anno 1.
+- **Costo**: medio-grande (2–3 giorni con i test). **Rischio**: medio-alto (ogni lettore degli stati), contenuto dalla parità
+  sull'uscita intera.
+
+**Ciò che P4 non cambia, e la domanda per il developer (D-P4).** Con «un punto al giorno» (D1), il rapporto «tutto» d'una storia
+dall'anno 1 avrebbe ~740 000 punti in ogni serie: ~200 s e ~1,3 GB di JSON (16× quello di oggi), e la linea del MWRR da sola
+~60 s. Non è calcolo ma volume d'uscita. Opzioni: (A, consigliata) l'API tiene un punto al giorno, e la Dashboard chiede la
+storia **campionata** per i grafici lunghi, come Z-29 fa per i prezzi delle schede (`max_points`: l'ultimo punto d'ogni
+settimana/mese, uguale al punto giornaliero) — lavoro di Y/Z, dopo P4; (B) accettare il volume (solo un errore di battitura lo
+produce); (C) un tetto di punti sul solo «tutto» (contro D1). Facoltativo, lotto a parte (P4b): la linea del MWRR senza il peso
+di `scipy.optimize.newton` (un Newton scritto a mano con gli stessi passi e la stessa verifica, uguale al bit: il profilo dà
+~70 % del tempo a `numpy.isclose` e alle chiamate di scipy).
+
+**Ordine proposto**: P4 → (D-P4) → i pavimenti, uno per lotto (N74 per ultimo).
+
+#### P4 — via (coordinatore, 20/10 14:28)
+- «P4: hai il via. Segmenti e `daily_states` pigri, con le prove che hai elencato (la parità bit per bit di tutto
+  `get_report`, i test di costo, l'audit di chi modifica uno stato, la copia del DB con il refuso dell'anno 1500). Prima i
+  rossi.» **D-P4** al developer con la raccomandazione A (coordinatore). **P4b** (Newton scritto a mano, al bit) in coda come
+  lotto separato, dopo P4.
+- ✅ **Audit di chi modifica uno stato** (sola lettura, prima dei rossi): nessun codice di produzione assegna un campo di
+  `DailyPortfolioState` o modifica un suo contenitore dopo la costruzione (grep su tutti i 39 campi e sui metodi dei
+  contenitori in `backend/app`); il calcolo d'un giorno sporco non legge i campi di `previous_state` (solo i totali del ciclo):
+  tenere i soli stati calcolati e fare la copia d'un giorno fermo alla lettura dà gli stessi stati. `date_from` e il primo giorno
+  del replay sono sempre sporchi (`_collect_dirty_days`), quindi il primo stato emesso è calcolato. La cache del blob restituisce
+  il risultato com'è. Sette moduli leggono `daily_states`: le scansioni piene (qualità dei dati, storia delle allocazioni,
+  `period.state_as_of`/`period_boundaries`, `_engine_missing_fx_pairs`, il ripiego del P&L per broker, `DerivedViewsBuilder._dates`)
+  passano ai segmenti o alla bisezione con `key`.
+- ✅ **Copia del DB con il refuso all'anno 1500** (`files/n74/data_typo_1500`, dalla copia del 1900 EUR, il DEPOSIT 167 al
+  1500-01-02); per misurarla prima dei lotti dei pavimenti il pavimento si abbassa **solo nel processo di misura**
+  (`P4_FLOOR`, `files/p4/memory_states.py`). **Prima** (codice di oggi): 192 410 stati, **720 MB tenuti**, 3,7 kB a stato,
+  17–18 s con `tracemalloc` acceso.
+- In corso: test-author `p4-tests` (i rossi).
+
+### Revisione N78-1k (ondata 4) — MF rivede, W scrive
+
+Base `c1b4ba49c` (= `dev_release2` `c042f2481`). MF in sola lettura: nessun codice in `financial_math/` mentre W è aperto.
+
+- ✅ **Parere sull'analisi di W** (2026-10-22): `salvataggi-worktrees-20261021/ondata4/MF-parere-N78-1k-turno1.md`.
+  > **Note implementazione**: i numeri della tabella P/M sono giusti (ricalcolati su `daily_state.py`, `returns.py:546`,
+  > `derived_views.py:211-219`), ma valgono solo con un lotto solo, gambe nello stesso giorno e gamba B al PMC di A. Casa unica:
+  > il modulo `linked_adjustments.py` tiene solo il predicato (il valore d'uscita c'è già: passo del costo medio e
+  > `_own_fifo_cost`); un solo punto di marcatura FIFO (non nel motore); il flusso dei lotti dai `proceeds` delle chiusure
+  > `ADJUSTMENT_OUT`; YOC senza codice (legge solo i lotti aperti). Casi mancanti: gamba B senza costo o ≠ PMC (P&L del totale
+  > +500 / −100 inventati), più lotti nella vista FIFO (−6,25 % di TWRR dei lotti), gambe in giorni diversi (classificatore:
+  > intervallo «contanti» a 0). Domande nuove Q-N78-1k-3 (costo della gamba B) e Q-N78-1k-4 (giorni diversi).
+  > **⚠️ Fuori pista**: l'Auto cost di una rettifica collegata in entrata fa la media del proprio broker, non del partner
+  > (`services/transactions/auto_cost.py:265`, solo TRANSFER): con P il «totale 0» non è garantito dai dati.
+- ✖️ Revisione del diff di W — superata (2026-10-22): il developer ha chiuso Q-N78-1k senza codice di calcolo; W rifiuta
+  una coppia di rettifiche collegate all'inserimento (`0af0f3593`, «proteggere l'inserimento, niente bonifiche»). Le domande
+  Q-N78-1k-3/4 cadono con lei.
+- ✖️ P4/D-P4 «fuori dalla 1.3» — no: il developer le tiene nella 1.3 («formule veloci», 19/10); P4 e i floor vanno in ondata 5.
