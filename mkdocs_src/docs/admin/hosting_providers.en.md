@@ -11,6 +11,8 @@ them are the **hosting provider**. A few settings exist for them:
   paid;
 - the **panel tokens** let your hosting panel take backups of the instance, run its scheduled
   wake-up and follow the setup of its administrator, each with a token of its own;
+- the **awaiting restore** mode lets your hosting panel put an instance's backup back on a new
+  machine, with a signed ticket, before anyone can use that machine;
 - the **upload limit** caps the size of the archives uploaded for a restore;
 - the **legal pages** are your terms of service and privacy policy, linked by the legal notice
   every user sees.
@@ -477,6 +479,9 @@ On a blocked instance, only these API calls answer as usual:
 
 - Your monitoring keeps working: `/system/health` and `/system/ready` answer as on any other
   instance.
+- Your panel's [restore routes](#panel-restore) pass the block too, so that a call without a valid
+  ticket learns nothing about it; a call with a valid ticket gets `423` with the code
+  `instance_blocked`, and no restore: the block lets the data leave, never come in.
 - The web app itself is still served: the block covers the API, not the pages of the app.
 
 The list is short on purpose, and it is fixed in the code: there is no setting to change it.
@@ -520,18 +525,21 @@ every start, blocked or not, but users see it only on the block page.
 ## 🔌 Hosting Panel API {: #panel-api }
 
 Your hosting panel calls the instance without a user's session. Each of its calls belongs to a
-**scope**, and each scope has a token of its own, which opens that scope and nothing else:
+**scope**, and each scope but the restore has a token of its own, which opens that scope and nothing
+else:
 
 | Scope | For | Routes | Token |
 | --- | --- | --- | --- |
 | `backup` | Back up the whole instance and download the archive: [Backups for Your Hosting Panel](#panel-backups) | `POST /api/v1/backup/panel/jobs`, then `GET`, `GET …/file` and `DELETE` on `/api/v1/backup/panel/jobs/{job_id}` | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` |
 | `wake` | Run the price and exchange rate updates that are due, for example right after your panel wakes the instance: [Scheduled Wake-up](sleep_wake.md#wake-sync) | `POST /api/v1/system/wake-sync` | `LIBREFOLIO_WAKE_TOKEN` |
-| `status` | Follow the setup of the [initial administrator](#initial-admin): [The Setup Status](#panel-status) | `GET /api/v1/panel/status` | `LIBREFOLIO_PANEL_STATUS_TOKEN` |
+| `status` | Follow the setup of the [initial administrator](#initial-admin), the instance's mode and its restore: [The Setup Status](#panel-status) | `GET /api/v1/panel/status` | `LIBREFOLIO_PANEL_STATUS_TOKEN` |
+| `backup:restore` | Put a backup back on an instance that awaits it: [Restoring an Instance from Your Panel](#panel-restore) | The seven routes under `/api/v1/backup/panel/restore` | None: a [signed ticket](#panel-api-tickets) only |
 
 Beside the tokens, a panel that runs many instances can sign a short-lived **ticket** for each call:
-see [Signed Tickets](#panel-api-tickets). A scope accepts its token, its tickets, or both.
+see [Signed Tickets](#panel-api-tickets). A scope accepts its token, its tickets, or both; the
+`backup:restore` scope accepts tickets only, so it is off while the panel's public keys are not set.
 
-The rules of this section hold for the three scopes alike. None of your panel's calls counts as a
+The rules of this section hold for the four scopes alike. None of your panel's calls counts as a
 visit for the [idle suspension](sleep_wake.md#idle-suspend-activity): each keeps the machine awake
 only while it runs.
 
@@ -610,7 +618,7 @@ Give each instance an origin of its own, for example its own host name. With the
 | Header | `typ` | exactly `lf-panel+jwt` |
 | Header | `kid` | one of the configured labels |
 | Claims | `aud` | the instance's audience, above |
-| Claims | `scope` | `backup`, `wake` or `status`: it must be the scope of the route |
+| Claims | `scope` | `backup`, `wake`, `status` or `backup:restore`: it must be the scope of the route |
 | Claims | `iat`, `exp` | Unix seconds, whole numbers; `exp − iat` is positive and at most 300 |
 | Claims | `jti` | a unique id of 16 to 64 characters among `A-Z a-z 0-9 _ -`, used once |
 
@@ -738,11 +746,11 @@ only: the private key is public, so **never use it for a real instance**.
 
 | Answer | When | `code` |
 | --- | --- | --- |
-| `404` | The scope is off: neither its token nor the panel's public keys are set. The body is `{"detail": "Not Found"}`, as for a path that does not exist | — |
-| `401` | No credential, or one that is not the scope's token and not a ticket LibreFolio can verify, another scope's token included. The answer carries `WWW-Authenticate: Bearer` | `backup_panel_unauthorized`, `wake_unauthorized` or `panel_status_unauthorized`, by scope |
+| `404` | The scope is off: neither its token nor the panel's public keys are set (for `backup:restore`, the keys are not set). The body is `{"detail": "Not Found"}`, as for a path that does not exist | — |
+| `401` | No credential, or one that is not the scope's token and not a ticket LibreFolio can verify, another scope's token included (any token, for `backup:restore`). The answer carries `WWW-Authenticate: Bearer` | `backup_panel_unauthorized`, `wake_unauthorized`, `panel_status_unauthorized` or `backup_restore_unauthorized`, by scope |
 | `401` | A ticket signed by your panel, but refused: see [Why a Ticket Is Refused](#panel-api-ticket-refusals). The answer carries `WWW-Authenticate: Bearer` | `panel_ticket_…`, in every scope |
 | `429` | Too many refused credentials from your panel's address: see [The Limit on Refused Credentials](#panel-api-limit). The answer carries `Retry-After`, the seconds to wait | `panel_too_many_attempts`, in every scope |
-| `503` | The scope's token is set but cannot be used: shorter than 32 characters, a character that is not visible ASCII, or a `_FILE` that cannot give it. Or the [ticket settings](#panel-api-tickets) cannot be used, or the registry of used tickets. Each call logs an error that names the variable, never the token | `backup_panel_unavailable`, `wake_unavailable` or `panel_status_unavailable`, by scope |
+| `503` | The scope's token is set but cannot be used: shorter than 32 characters, a character that is not visible ASCII, or a `_FILE` that cannot give it. Or the [ticket settings](#panel-api-tickets) cannot be used, or the registry of used tickets. Each call logs an error that names the variable, never the token | `backup_panel_unavailable`, `wake_unavailable`, `panel_status_unavailable` or `backup_restore_unavailable`, by scope |
 
 A scope that is off, or whose token or ticket settings cannot be used, answers before anything else:
 the credential of the call is not read, and nothing is counted. The `code` comes in the `detail` of the answer, with a
@@ -762,7 +770,7 @@ LibreFolio counts the credentials it refuses, per address:
   token waits too.
 - **A refusal counts when it proves nothing**: no credential, a wrong token, another scope's token,
   a ticket that cannot be verified, or a ticket signed with a key the instance does not hold. The
-  three scopes share one count: a panel that keeps sending a wrong backup token also waits for its
+  four scopes share one count: a panel that keeps sending a wrong backup token also waits for its
   wake-up and its status calls.
 - **A ticket with a valid signature is never counted**, whatever is wrong with it (expired, not
   yet valid, another instance, already used…): only the panel can sign one, so a panel whose clock
@@ -786,7 +794,7 @@ Every call to a scope that is on writes one line, `Hosting panel request`:
 | ⚠️ `warning` | `limited` | The `429` | `retry_after`, the seconds of `Retry-After` |
 | ⚠️ `warning` | `unavailable` | The `503` | `reason`: `unusable`, or `registry` when the registry of used tickets cannot be used. Just before it, an error line names the variable and what is wrong |
 
-- Every line also carries `scope` (`backup`, `wake` or `status`), `method`, `path` (without the
+- Every line also carries `scope` (`backup`, `wake`, `status` or `backup:restore`), `method`, `path` (without the
   query string), `credential`, the kind of credential the call presented (`token` or `ticket`), and
   the `request_id` of the request.
 - It never carries the token, the ticket, the value sent, a header, the query string or your panel's
@@ -805,7 +813,7 @@ Every call to a scope that is on writes one line, `Hosting panel request`:
 
 ### 🩺 The Startup Check {: #panel-api-check }
 
-At every start, LibreFolio checks the tokens of the three scopes and the ticket settings, in two
+At every start, LibreFolio checks the tokens of the three scopes that have one and the ticket settings, in two
 checks, and logs an error for each one that fails. The **Security** tab of Settings › Administration shows the same checks
 («Security» in [Global Settings](settings.md)).
 
@@ -831,8 +839,9 @@ checks, and logs an error for each one that fails. The **Security** tab of Setti
 
 `GET /api/v1/panel/status` tells your panel where the setup of the
 [initial administrator](#initial-admin) stands: whether your customer has used the setup link, and
-until when the link works. Turn it on with a token of its own in `LIBREFOLIO_PANEL_STATUS_TOKEN`, as
-in [A Token per Scope](#panel-api-tokens), then:
+until when the link works. It also gives the instance's `mode` and its `restore`
+([Restoring an Instance from Your Panel](#panel-restore)). Turn it on with a token of its own in
+`LIBREFOLIO_PANEL_STATUS_TOKEN`, as in [A Token per Scope](#panel-api-tokens), then:
 
 ```bash
 curl -sS -H "Authorization: Bearer $LIBREFOLIO_PANEL_STATUS_TOKEN" \
@@ -840,7 +849,7 @@ curl -sS -H "Authorization: Bearer $LIBREFOLIO_PANEL_STATUS_TOKEN" \
 ```
 
 ```json
-{"admin_setup": "pending", "setup_expires_at": "2026-10-23T09:12:44.512312Z"}
+{"admin_setup": "pending", "setup_expires_at": "2026-10-23T09:12:44.512312Z", "mode": "normal", "restore": null}
 ```
 
 | `admin_setup` | What it means | `setup_expires_at` |
@@ -850,9 +859,16 @@ curl -sS -H "Authorization: Bearer $LIBREFOLIO_PANEL_STATUS_TOKEN" \
 | `done` | The setup is complete: your customer chose the password through the link, or the account was set up another way ([Once the Account Is Active](#initial-admin-active)) | `null` |
 | `expired` | The latest link is more than 72 hours old, or was withdrawn: cancelled, or the administrator's address changed. A new link makes it `pending` again: [A New Link](#initial-admin-new-link) | `null` |
 
-- The answer holds these two keys and nothing else: no username, no email address, no count of
-  accounts.
+| Key | What it holds |
+| --- | --- |
+| `mode` | `normal`, or `awaiting_restore` while [`LIBREFOLIO_AWAIT_RESTORE`](#await-restore) is on |
+| `restore` | `null` when no restore was ever recorded on this instance; otherwise `state` (`pending`, `in_progress`, `committed` or `rolled_back`), `reason` (why a restore was rolled back: `first_start_failed`, `swap_interrupted`, `swap_failed` or `stage_missing`), `waiting` (why a confirmed restore still waits: `backup_running`, `other_data_directory`, `server_running` or `instance_blocked`), `backup_created_at` and `stage_id`. Each is `null` when it does not apply. It never says who confirmed the restore |
+
+- The answer holds these four keys and nothing else: no username, no email address, no count of
+  accounts. Ignore the keys you do not know: a later version may add some.
 - `setup_expires_at` is an ISO 8601 date and time in UTC, given only while the state is `pending`.
+- When the state of the restore cannot be read, the answer is `500` with the code
+  `restore_state_unreadable`, never `restore: null`: a restore may be waiting behind it.
 - It answers on a [blocked instance](#instance-block) too, as on any other. A `pending` link there
   still waits for the unblock: the setup is refused until then, and its 72 hours keep running.
 - Without `LIBREFOLIO_PANEL_STATUS_TOKEN` and without the panel's keys it answers `404`. Its other
@@ -970,6 +986,139 @@ The `code` comes in the `detail` of the answer, with a `message` in English:
 ```json
 {"detail": {"code": "backup_panel_unauthorized", "message": "A valid panel token is required"}}
 ```
+
+---
+
+## ♻️ Restoring an Instance from Your Panel {: #panel-restore }
+
+When the server of an instance is gone, your hosting panel can put the instance's backup back on a
+new machine. The new machine starts in the **awaiting restore** mode: nobody can sign in, register or
+set up an administrator there, until your panel has restored the data and ended the mode.
+
+The restore takes the instance's [secure backup](backup_restore.md#secure), the `.lfbk` file, still
+encrypted, with its password. Its routes are the `backup:restore` scope of the
+[Hosting Panel API](#panel-api): they accept a [signed ticket](#panel-api-tickets) of that scope and
+nothing else, never a token. Without `LIBREFOLIO_PANEL_PUBLIC_KEYS` they answer `404`.
+
+### ⏳ The Awaiting Restore Mode {: #await-restore }
+
+| Variable | Values | What it does |
+| --- | --- | --- |
+| `LIBREFOLIO_AWAIT_RESTORE` | The values of `LIBREFOLIO_BLOCKED`: `1`, `true`, `yes` or `on` turn it on; `0`, `false`, `no` or `off` do not, in any case. Not set or empty: off | The instance waits for your panel to restore its data |
+
+Set it on the new machine, before its first start on the empty data directory:
+
+```bash
+LIBREFOLIO_AWAIT_RESTORE=true
+```
+
+- Leave it unset on every other instance. A change applies when the server restarts, as for the
+  block.
+- Any other value stops the server at startup, and the error names the variable:
+  `LIBREFOLIO_AWAIT_RESTORE must be one of 1/0, true/false, yes/no, on/off, or unset`.
+- While it is on, every start logs a warning,
+  `Instance awaiting its restore by the hosting panel (LIBREFOLIO_AWAIT_RESTORE): only the panel's routes and the probes answer`.
+- The start skips what would make the machine a new instance: no
+  [initial administrator](#initial-admin) and no setup link, even with `LIBREFOLIO_ADMIN_EMAIL` (the
+  backup brings its own accounts), no [market data scheduler](settings.md#market-data-scheduler),
+  and none of the background warm-ups. The log has one `Startup step skipped` line for each, naming
+  the step: `admin-bootstrap`, `stored-currencies`, `provider-prewarm`, `market-holidays`,
+  `brim-parse-pool` and `scheduler`. The database, the steps of the restore and the idle monitor
+  still run.
+
+While the mode is on, only these API calls answer:
+
+| For | Endpoints |
+| --- | --- |
+| Probes and version | `GET /api/v1/system/health`, `GET /api/v1/system/ready`, `GET /api/v1/system/info`. `/system/ready` adds `"mode": "awaiting_restore"`, and `ready` then means ready to receive the backup |
+| The public configuration of the instance, with `"mode": "awaiting_restore"` | `GET /api/v1/system/instance` |
+| The [scheduled wake-up](sleep_wake.md#wake-sync), with its own token: it answers `awaiting_restore` and runs no job | `POST /api/v1/system/wake-sync` |
+| Your panel's [status](#panel-status), with `mode` and `restore` | `GET /api/v1/panel/status` |
+| Your panel's [backup jobs](#panel-jobs) | The four `/api/v1/backup/panel/jobs…` routes |
+| Your panel's restore | The [seven routes](#panel-restore-routes) below |
+
+Every other call answers `423 Locked`, to anyone, signed in or not, registration, the sign-in and the
+setup of an administrator included:
+
+```json
+{"detail": {"code": "instance_awaiting_restore", "message": "This instance is waiting for its hosting provider to restore its data"}}
+```
+
+Users who open the instance get a full page instead of every page of the app, the sign-in page
+included: **Restoring your data**, on the sign-in page's background. It asks the instance every 30
+seconds whether the mode has ended, and reloads itself when it has; **Try again** reloads it at once.
+
+### 🔄 Upload, Check, Confirm, Restart {: #panel-restore-routes }
+
+Each call carries a new ticket of scope `backup:restore`, in `Authorization: Bearer <ticket>`. The
+paths are under `/api/v1/backup/panel/restore`:
+
+| Step | Route | Answer |
+| --- | --- | --- |
+| Upload the `.lfbk` file, as the raw body | `PUT …/upload` | `201`, with its `upload_id` |
+| Check it on a copy, with its password | `POST …/stage`, body `{"upload_id": "…", "password": "…"}` | `202`, and the check with its `stage_id` |
+| Follow the check | `GET …/stage/{stage_id}` | The check: its `status` is `running`, with `phase` and `done_bytes` of `total_bytes`, then `done`, with the report, or `failed`, with an `error_code` |
+| Confirm the restore | `POST …/stage/{stage_id}/confirm` | `202`, and the restore's status, `pending` |
+| Restart the server, to apply it | `POST …/restart` | `202`, and the status. The server stops once the answer is sent; your restart policy starts it again, and that start applies the restore |
+| Follow the restore | `GET …/status` | Its status: `none`, `pending`, `in_progress`, `committed` or `rolled_back` |
+| Drop a confirmed restore before the restart | `DELETE …/pending` | `204`, its checked copy removed |
+
+- **Only the `.lfbk` file.** A zip or the sealed `.tar` that holds it is refused with `400` and the
+  code `restore_envelope_required`, and removed. The [upload limit](#restore-upload-limit) and the
+  limit on what an archive unpacks to apply, as for an administrator's restore.
+- **The report holds no personal or portfolio data.** It gives the backup's date, version, origin
+  and revision, the version this instance runs, whether the restore keeps the version (`same`) or
+  upgrades it (`upgrade`) and with which migrations, whether the instance key is included, the
+  warnings and blockers (`no_administrator`), the control totals as a verdict (`same`, `changed`,
+  `absent`, `other_version` or `unreadable`) with the number of differences, `administrators_count`,
+  `restorable` and `expires_at`. Never a username, an amount, a table or a size.
+- **The status names who confirmed only as `confirmed_via`**: `admin`, `cli` or `panel`.
+- **Repeating a call never makes two restores.** Confirming the same check again answers `202`
+  with the same status; a restart while the restore is already under way, or committed, answers
+  `202` with its state and stops nothing.
+- **The password is never echoed**, in an answer or in a validation error.
+- **What the next start does** is the restore of an administrator: see
+  [What the Next Start Does](backup_restore.md#next-start).
+
+### 🏁 Ending the Mode {: #await-restore-end }
+
+The instance never leaves the mode by itself. When the status reads `committed`, your panel removes
+`LIBREFOLIO_AWAIT_RESTORE` from the machine and restarts it: from then on it is the instance again,
+with its accounts. A restore that ends `rolled_back` stays in the mode, with its `reason`.
+
+!!! warning "Restoring a blocked instance: change the variables in one update"
+
+    To restore an instance that was [blocked](#instance-block), start the new machine with
+    `LIBREFOLIO_AWAIT_RESTORE` on and `LIBREFOLIO_BLOCKED` off: with the block on, the restore
+    routes answer `423 instance_blocked`. Every user route still answers `423` while the mode is on,
+    so the instance is never usable in the meantime.
+
+    Once the status reads `committed`, change the variables in **one** update of the machine,
+    followed by one restart: `LIBREFOLIO_AWAIT_RESTORE` off, `LIBREFOLIO_BLOCKED` on, and
+    `LIBREFOLIO_DELETION_DATE` unchanged. The first request after that restart already gets the
+    block. Two updates, the mode removed first and the block set again later, leave the instance
+    running unblocked between the two restarts.
+
+### 🚫 When a Restore Call Is Refused {: #panel-restore-refusals }
+
+Each route checks, in this order: the ticket, then the block, then the mode. A call without a valid
+ticket learns neither whether the instance is blocked nor whether it awaits a restore.
+
+| Answer | When | `code` |
+| --- | --- | --- |
+| `404` | `LIBREFOLIO_PANEL_PUBLIC_KEYS` is not set: the routes answer as a path that does not exist | — |
+| `401` | No credential, any token, or a ticket that cannot be verified. A refused signed ticket has its own `panel_ticket_…` code: [Why a Ticket Is Refused](#panel-api-ticket-refusals) | `backup_restore_unauthorized` |
+| `429` | Too many refused credentials from your panel's address: [The Limit on Refused Credentials](#panel-api-limit) | `panel_too_many_attempts` |
+| `503` | The ticket settings, or the registry of used tickets, cannot be used; or the limit on what an archive unpacks to cannot be read | `backup_restore_unavailable` |
+| `423` | The instance is blocked: no restore | `instance_blocked` |
+| `409` | `LIBREFOLIO_AWAIT_RESTORE` is off: a restore never writes over an instance that runs | `restore_mode_required` |
+| `400` | The upload is empty, incomplete, or not an `.lfbk` file; the check has no password, a wrong one, or a damaged file (the upload stays, for another try) | `backup_upload_empty`, `backup_upload_incomplete`, `restore_envelope_required`, `password_required`, `wrong_password`, `envelope_damaged` |
+| `413` | The file is larger than the [upload limit](#restore-upload-limit) | `backup_too_large` |
+| `404` | No upload or no check has this id; or no restore is confirmed, for `DELETE …/pending` | `backup_upload_not_found`, `restore_stage_not_found`, `restore_not_pending` |
+| `409` | Another file is being checked, a secure backup this version cannot read, a check still running or that refused the file, LibreFolio updated since the check, another restore already confirmed, or a restart with no restore confirmed | `restore_busy`, `envelope_unsupported`, `restore_stage_running`, `restore_not_restorable`, `restore_stage_outdated`, `restore_already_pending`, `restore_not_pending` |
+| `410` | The check expired: check the file again | `restore_stage_expired` |
+| `507` | Not enough free space in the data directory | `backup_no_space`, `no_space` |
+| `500` | The data directory's restore folder cannot be used, the state of the restore cannot be read, or a step could not be done; the log has the cause | `restore_folder_unusable`, `restore_state_unreadable`, `backup_upload_failed`, `stage_failed`, `restore_confirm_failed`, `restore_restart_failed`, `restore_cancel_failed` |
 
 ---
 
@@ -1104,6 +1253,8 @@ LIBREFOLIO_PRIVACY_URL=https://hosting.example.com/privacy
 - 🐳 **[Advanced Docker](docker_advanced.md)** — Compose file, health check and monitoring
 - 🔒 For developers: **[Instance Block](../developer/architecture/security.md#instance-block)** —
   The guard on the API and its list
+- ⏳ For developers: **[Awaiting Restore](../developer/architecture/security.md#await-restore)** —
+  The mode's guard and its list, the skipped startup steps and the panel's restore routes
 - 🔌 For developers: **[The Hosting Panel's Access](../developer/architecture/security.md#panel-access)** —
   The dependency of the panel's routes, its limit and its log line
 - 🖼️ For developers: **[The Content-Security-Policy and Frame Protection](../developer/architecture/security.md#managed-headers)** —

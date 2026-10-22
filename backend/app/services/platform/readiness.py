@@ -13,6 +13,7 @@ from sqlalchemy import column, literal, select, table
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import PROJECT_ROOT
+from backend.app.config.platform import awaiting_restore
 from backend.app.logging_config import get_logger
 from backend.app.schemas.system import ReadinessChecks, ReadinessDatabaseState, ReadinessMigrationsState, ReadinessResponse
 
@@ -79,4 +80,5 @@ async def check_readiness(session: AsyncSession) -> ReadinessResponse:
     database, migrations, problem = await _run_checks(session)
     checks = ReadinessChecks(database=database, migrations=migrations)
     _log_change(checks, problem)
-    return ReadinessResponse(status="ready" if problem is None else "not_ready", checks=checks)
+    # H-62: an instance awaiting its restore says so; ready then means ready to receive the backup
+    return ReadinessResponse(status="ready" if problem is None else "not_ready", checks=checks, mode="awaiting_restore" if awaiting_restore() else "normal")

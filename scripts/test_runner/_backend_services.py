@@ -1583,6 +1583,14 @@ def services_platform_readiness(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Instance readiness tests", verbose=verbose)
 
 
+def services_await_restore_mode(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the «awaiting restore» mode's switch and startup (H-62, §6): awaiting_restore(), the startup check, Step.skip_when, the six skipped steps."""
+    print_section("Services: Awaiting Restore Mode")
+    print_info("Testing: config/platform.awaiting_restore(), config_audit on LIBREFOLIO_AWAIT_RESTORE, lifecycle.Step.skip_when, app_lifespan.STARTUP_STEPS")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_await_restore_mode.py", test_names)
+    return run_command(cmd, "Awaiting restore mode tests", verbose=verbose)
+
+
 def services_app_lifecycle(verbose: bool = False, test_names: list = None) -> bool:
     """Test the app's startup and shutdown steps and their runner, the middleware stack and the static site's routes."""
     print_section("Services: App Lifecycle")
@@ -3022,6 +3030,14 @@ Note: No backend server required.
     add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")
     add_test(cat, "platform-readiness", services_platform_readiness, name="Instance Readiness", desc="Database and migration checks: ready, mismatch, unknown, unreachable; head read once, failure not kept; codes only in the response", isolation="pure")
     add_test(cat, "app-lifecycle", services_app_lifecycle, name="App Lifecycle", desc="Step runner (order, awaits, deadline cuts, a failure never skips the shutdown, step in progress); app steps in relative order, late-bound; middleware outermost first; SPA catch-all last", isolation="pure")
+    add_test(
+        cat,
+        "await-restore-mode",
+        services_await_restore_mode,
+        name="Awaiting Restore Mode",
+        desc="H-62 (L3 §6): LIBREFOLIO_AWAIT_RESTORE read at each call with the values of LIBREFOLIO_BLOCKED, a typo stops the start; Step.skip_when skips a step at its turn; exactly admin-bootstrap, scheduler, provider-prewarm, market-holidays, brim-parse-pool, stored-currencies skipped in the mode",
+        isolation="pure",
+    )
     add_test(
         cat,
         "static-cache-policy",

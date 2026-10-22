@@ -1463,9 +1463,11 @@ Docker health checks, Uptime Kuma, orchestrators and hosting panels. `check_read
 shape:
 
 ```json
-{"status": "ready", "checks": {"database": "ok", "migrations": "ok"}}
+{"status": "ready", "checks": {"database": "ok", "migrations": "ok"}, "mode": "normal"}
 ```
 
+- **`mode`** is `normal`, or `awaiting_restore` while the hosting panel restores the instance
+  ([Awaiting Restore](#await-restore)): `ready` then means ready to receive the backup.
 - **Codes only.** The body never carries an error message, a path or a revision id. The details go to the server
   log, once per change of state: `Instance not ready` (warning, with both codes and the problem) or `Instance ready`
   (info). A monitor that asks every few seconds adds no log line while the state holds.
@@ -1476,7 +1478,7 @@ shape:
 
 ### 🔒 Private Endpoints (auth required)
 
-All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and the global settings: any signed-in user reads them through `GET /settings/global` and `GET /settings/global/{key}`, only an administrator writes them; the login page needs none of them, it reads `/system/instance`), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), the catch-up of the prices (`/system/price-refresh`, see [Catch-up Progress](../backend/scheduler.md#price-refresh)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. The routes of the hosting panel take a token of their own instead of a session cookie, one per scope, sent as `Authorization: Bearer`: the backup routes (`/backup/panel/*`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`), the [scheduled wake-up](../../admin/sleep_wake.md#wake-sync) (`/system/wake-sync`, `LIBREFOLIO_WAKE_TOKEN`) and the setup status (`/panel/status`, `LIBREFOLIO_PANEL_STATUS_TOKEN`). One dependency checks them all, `panel_access(scope)`: a missing or wrong token answers `401`, too many refused ones from an address `429`, and while a scope's token is not set its routes answer `404`, as a path that does not exist: see [The Hosting Panel's Access](#panel-access) below. The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api). So does `GET /security/checks`, the configuration checks on demand: see [The Checks on Demand](#security-checks-endpoint).
+All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and the global settings: any signed-in user reads them through `GET /settings/global` and `GET /settings/global/{key}`, only an administrator writes them; the login page needs none of them, it reads `/system/instance`), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), the catch-up of the prices (`/system/price-refresh`, see [Catch-up Progress](../backend/scheduler.md#price-refresh)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. The routes of the hosting panel take a token of their own instead of a session cookie, one per scope, sent as `Authorization: Bearer`: the backup routes (`/backup/panel/*`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`), the [scheduled wake-up](../../admin/sleep_wake.md#wake-sync) (`/system/wake-sync`, `LIBREFOLIO_WAKE_TOKEN`) and the setup status (`/panel/status`, `LIBREFOLIO_PANEL_STATUS_TOKEN`); the panel's restore (`/backup/panel/restore/*`, scope `backup:restore`) takes a signed ticket only, never a token. One dependency checks them all, `panel_access(scope)`: a missing or wrong token answers `401`, too many refused ones from an address `429`, and while a scope's token is not set its routes answer `404`, as a path that does not exist: see [The Hosting Panel's Access](#panel-access) below. The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api). So does `GET /security/checks`, the configuration checks on demand: see [The Checks on Demand](#security-checks-endpoint).
 
 !!! info "📁 Files are protected too"
 
@@ -1494,7 +1496,8 @@ dependency checks all its routes: `panel_access(scope)` in `backend/app/services
 |-------|--------|------------------------------|---------------|---------------------|
 | `backup` | The four `/backup/panel/jobs…` routes, `backend/app/api/v1/backup/panel.py` (workstream B) | `backup_download_token()`: `SecretFileError`, `BackupConfigError` | `BackupPanelToken` | `backup_panel_unauthorized` / `backup_panel_unavailable` |
 | `wake` | `POST /system/wake-sync`, `backend/app/api/v1/system/wake.py` (workstream Z) | `wake_token()`: `SecretFileError`, `SleepWakeConfigError` | `WakeToken` | `wake_unauthorized` / `wake_unavailable` |
-| `status` | `GET /panel/status`, the [setup status](../../admin/hosting_providers.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status) | `panel_status_token()` (`backend/app/config/hosting_panel.py`): `SecretFileError`, `HostingPanelConfigError` | `PanelStatusToken` | `panel_status_unauthorized` / `panel_status_unavailable` |
+| `status` | `GET /panel/status`, the [setup status](../../admin/hosting_providers.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status), with the instance's `mode` and its `restore` (lot H-62) | `panel_status_token()` (`backend/app/config/hosting_panel.py`): `SecretFileError`, `HostingPanelConfigError` | `PanelStatusToken` | `panel_status_unauthorized` / `panel_status_unavailable` |
+| `backup:restore` (`PanelScope.BACKUP_RESTORE`) | The seven `/backup/panel/restore…` routes, `backend/app/api/v1/backup/panel_restore.py` (lot H-62): see [Awaiting Restore](#await-restore) | None: `read_token` always answers `None`, so no token opens it and, without the panel's public keys, it is off (`404`); a signed ticket of this scope only | `BackupRestorePanelTicket` | `backup_restore_unauthorized` / `backup_restore_unavailable` |
 
 `panel_access(scope)` returns the same function for the same scope, so FastAPI runs it once per request. It takes the
 `Request` and the scope's `HTTPBearer(auto_error=False)`, and returns `PanelCaller(scope, credential="token")`, a frozen
@@ -1517,7 +1520,7 @@ Every refusal but the `404` has the body `{"detail": {"code": …, "message": �
 routes are the ones they had before.
 
 - **The limiter.** `PANEL_ATTEMPTS`, built by `new_panel_attempts()`: one
-  [sliding-window limiter](../backend/email.md#rate-window) for the three scopes, `PANEL_ATTEMPT_LIMIT` (20) refused
+  [sliding-window limiter](../backend/email.md#rate-window) for the four scopes, `PANEL_ATTEMPT_LIMIT` (20) refused
   credentials per key in `PANEL_ATTEMPT_WINDOW_SECONDS` (600), in memory and per process. The dependency reads the
   module attribute at each call, so a test puts one of its own in place:
   `monkeypatch.setattr(access, "PANEL_ATTEMPTS", SlidingWindowLimiter(20, 600, clock=fake))`. In every test process
@@ -1529,17 +1532,19 @@ routes are the ones they had before.
   query) and `credential` (`"token"`), with the `request_id` from structlog's context variables
   ([Request Logs](#request-logs)). Never the token, the value sent, a header, the query or the client's address:
   uvicorn's access line has the address.
-- **The OpenAPI tag.** `HOSTING_PANEL_TAG`, «Hosting panel», is the only tag of the six routes. FastAPI adds the tags
+- **The OpenAPI tag.** `HOSTING_PANEL_TAG`, «Hosting panel», is the only tag of the thirteen routes. FastAPI adds the tags
   of a router to those of what it includes, and never replaces them, so the tag sits on each include and the parent
-  routers have none: `backend/app/api/v1/backup/__init__.py` includes `panel.panel_router` with it and its other
+  routers have none: `backend/app/api/v1/backup/__init__.py` includes `panel.panel_router` and
+  `panel_restore.panel_restore_router` with it and its other
   routers with `Backup & Export`, `backend/app/api/v1/system/__init__.py` includes `wake.wake_router` with it and the
   others with `System`, and `backend/app/api/v1/router.py` includes the status route's router with the prefix `/panel`
   and the tag. Paths, methods and endpoint names did not move, so the operation ids and the aliases of the web app's
   client are those of before.
-- **The bearer schemes.** Each route asks for its scope's scheme alone, `BackupPanelToken`, `WakeToken` or
-  `PanelStatusToken`, an HTTP bearer whose description names its variable: the OpenAPI document tells which token
-  opens which route.
-- **On a blocked instance** the six routes stay allowed: see [Instance Block](#instance-block).
+- **The bearer schemes.** Each route asks for its scope's scheme alone, `BackupPanelToken`, `WakeToken`,
+  `PanelStatusToken` or `BackupRestorePanelTicket`, an HTTP bearer whose description names its variable: the OpenAPI
+  document tells which token, or ticket, opens which route.
+- **On a blocked instance** the thirteen routes stay allowed: see [Instance Block](#instance-block). The seven restore
+  routes then answer `423 instance_blocked` themselves, past the ticket ([Awaiting Restore](#await-restore)).
 
 **Level L2: signed tickets.** Beside the tokens, `panel_access()` accepts a ticket signed by the panel's Ed25519
 key (lot H-61, checkpoint 2), scope by scope. The panel's public keys are read at each call
@@ -1795,8 +1800,9 @@ profile:
 [Configuration Checks](#configuration-checks)).
 
 **The guard.** `refuse_when_blocked` (`backend/app/api/v1/instance_block.py`) is a dependency of the
-`/api/v1` router, `APIRouter(dependencies=[Depends(refuse_when_blocked)])` in
-`backend/app/api/v1/router.py`, so it covers every API route (`APIRoute`) under it, today's and
+`/api/v1` router, `APIRouter(dependencies=[Depends(refuse_when_blocked), Depends(refuse_when_awaiting_restore)])` in
+`backend/app/api/v1/router.py` (the second one is [Awaiting Restore](#await-restore), read after the block), so it
+covers every API route (`APIRoute`) under it, today's and
 tomorrow's. FastAPI gives no router dependency to a plain `Route`, a `WebSocketRoute` or a `Mount`, so
 none of them belongs under `/api/v1`. FastAPI hands
 a dependency the endpoint function of the matched route (`request.scope["endpoint"]`), not its full
@@ -1815,6 +1821,7 @@ path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint func
 | `GET /system/test-lane-health` | `health.test_lane_health` | The test runner's probe, `404` outside test mode |
 | `POST /system/wake-sync` | `wake.wake_sync` | The [scheduled wake-up](../../admin/sleep_wake.md#wake-sync), with its own token instead of a session: on a blocked instance it runs no job and answers `200` with `status: "blocked"` (decision D-W3) |
 | `GET /panel/status` | `panel.get_panel_status` | The hosting panel's [setup status](../../admin/hosting_providers.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status), with its own token instead of a session (lot H-61): it answers as on any other instance |
+| The seven `/backup/panel/restore…` routes | `_PANEL_RESTORE_ROUTES` of `instance_block.py` (`backup_panel_restore.*`) | The panel's restore, with its ticket instead of a session (lot H-62): past the ticket each route answers `423 instance_blocked` itself, so a caller without a valid ticket learns nothing of the block. No restore happens on a blocked instance ([Awaiting Restore](#await-restore)) |
 
 **The refusal.** On a blocked instance, an endpoint outside the list first runs `get_current_user()`
 with the request's own database session (FastAPI caches the dependency), then refuses:
@@ -1880,7 +1887,8 @@ reads `LIBREFOLIO_BLOCKED` and leaves it waiting (`instance_blocked`) until the 
 the restart (`GET /backup/restore/outcome`, lot B5c): it starts nothing, changes nothing but its own ticket, and
 returns three fields and no data. When the block takes effect at the restart that a page asked, that page reads `instance_blocked`
 there, where its session may be gone (without `JWT_SECRET` every start ends them) and the status route answers `401`
-or `423`. Any other
+or `423`. The panel's restore routes (`/backup/panel/restore…`, lot H-62) are on the list only so that the ticket is
+read first: each one then refuses a blocked instance itself, `423 instance_blocked`, and restores nothing. Any other
 addition goes through the developer first. `./dev.py test api instance-block` (`backend/test_scripts/test_api/test_instance_block.py`)
 pins the list by name and by route, checks that every API route under `/api/v1` resolves
 `refuse_when_blocked` first, and that the only other routes under `/api/v1` are the API's
@@ -1892,6 +1900,67 @@ covered: the browser still loads the app, which turns the first `423` into the b
 [Instance block](../frontend/state/app-state.md#instance-block)). The scheduler does not go through
 HTTP, so the guard does not reach it: `run_due_jobs()` checks `instance_blocked()` itself and runs no
 job on a blocked instance ([Scheduler](../backend/scheduler.md#run-checks)).
+
+### ⏳ Awaiting Restore {: #await-restore }
+
+Lot H-62. A hosting panel that restores an instance onto a new machine starts it with `LIBREFOLIO_AWAIT_RESTORE`; the
+administrator's side is [Restoring an Instance from Your Panel](../../admin/hosting_providers.md#panel-restore).
+`awaiting_restore()` (`backend/app/config/platform.py`) reads it from the process environment at each call, with the
+values of `instance_blocked()`: any other value raises `ValueError`, and `log_configuration_audit()` stops the start
+on it, or logs a warning while it is on.
+
+**The guard.** `refuse_when_awaiting_restore` (`backend/app/api/v1/instance_block.py`) is the second dependency of the
+`/api/v1` router, right after `refuse_when_blocked`. While the mode is on, every endpoint outside
+`ALLOWED_WHEN_AWAITING_RESTORE` answers `423` with the code `INSTANCE_AWAITING_RESTORE_CODE`,
+`instance_awaiting_restore`, to anyone, signed in or not (decision Q5): unlike the block, it never asks for a session,
+since the volume is empty or holds the data being restored. The list:
+
+| Endpoints | Functions |
+|-----------|-----------|
+| `GET /system/health`, `GET /system/test-lane-health`, `GET /system/ready`, `GET /system/info` | `health.health_check`, `health.test_lane_health`, `ready.get_readiness`, `info.get_system_info` |
+| `GET /system/instance` | `instance.get_instance_config` |
+| `POST /system/wake-sync` | `wake.wake_sync`: `_wake_run()` answers `status: "awaiting_restore"` and runs no job |
+| `GET /panel/status` | `panel.get_panel_status` |
+| The four `/backup/panel/jobs…` routes | `backup_panel.start_panel_backup`, `get_panel_backup_job`, `download_panel_backup`, `delete_panel_backup_job` |
+| The seven `/backup/panel/restore…` routes | `_PANEL_RESTORE_ROUTES` |
+
+`InstanceMode` (`backend/app/schemas/system.py`), `normal` or `awaiting_restore`, is the `mode` field of
+`ReadinessResponse` (`/system/ready`), `InstanceConfigResponse` (`/system/instance`) and `PanelStatusResponse`
+(`/panel/status`). The web app's root layout reads it from `/system/instance`: `AwaitingRestoreGate.svelte` shows
+`InstanceAwaitingRestorePage.svelte` instead of every route, which asks `/system/instance` every 30 seconds and
+reloads once the mode reads `normal` (`frontend/src/lib/features/instance/components/`).
+
+**The start.** `Step.skip_when` (`backend/app/services/platform/lifecycle.py`) is asked when a startup step comes; a
+step whose predicate answers `True` is not run, with one `Startup step skipped` info line. `STARTUP_STEPS`
+(`backend/app/services/platform/app_lifespan.py`) marks six with `skip_when=awaiting_restore`: `admin-bootstrap`,
+`stored-currencies`, `provider-prewarm`, `market-holidays`, `brim-parse-pool` and `scheduler`. The database, the
+restore's own steps (`pending-restore`, `restore-commit`) and the idle monitor still run.
+
+**The restore routes.** `backend/app/api/v1/backup/panel_restore.py` reuses the administrator's restore
+(`api/v1/backup/restore.py`: the same upload writer, limits, check on a copy, confirmation and restart); only the
+caller changes. Every route depends on `_restore_gate`, in this order: `panel_access(PanelScope.BACKUP_RESTORE)`
+(ticket only, [The Hosting Panel's Access](#panel-access)), then `423 instance_blocked` on a blocked instance, then
+`409 restore_mode_required` outside the mode, so a stolen signing key can at most fill an empty volume. Only an `.lfbk`
+envelope is kept (`400 restore_envelope_required` otherwise, the file removed). The panel's views are closed models
+with `extra="forbid"` (`backend/app/schemas/hosting_panel.py`): `PanelRestoreStageReport` (the administrators as
+`administrators_count`, the control totals as a verdict and `control_totals_differences_count`, no tables, files or
+sizes), `PanelRestoreStatus` (`confirmed_via` instead of the username) and, in `/panel/status`,
+`PanelRestoreSummary` (`state`, `reason`, `waiting`, `backup_created_at`, `stage_id`; `500 restore_state_unreadable`
+when the state cannot be read, never `null`). A repeated confirmation of the same stage, or a restart while the restore
+is under way or committed, answers `202` with the state found. The router is `NoInputEchoRoute`: a `422` never
+repeats the password.
+
+**Ending the mode.** Only the panel ends it, removing the variable and restarting once the status reads `committed`.
+For a blocked instance (contract R4), the panel starts the machine with the block off and, at `committed`, changes the
+variables in one machine update (mode off, `LIBREFOLIO_BLOCKED` on, `LIBREFOLIO_DELETION_DATE` unchanged): both
+guards read the environment at each request, so the first request after that single restart already gets
+`423 instance_blocked`.
+
+Tests: `./dev.py test api await-restore-mode` (`backend/test_scripts/test_api/test_await_restore_mode_api.py`: the
+list pinned by name and route, both switches, R4), `./dev.py test api panel-restore`
+(`backend/test_scripts/test_api/test_panel_restore_api.py`: the scope, the order of the refusals, the routes, the
+report) and `./dev.py test services await-restore-mode`
+(`backend/test_scripts/test_services/test_await_restore_mode.py`).
 
 ## 🎟️ Single-use Account Tokens {: #account-tokens }
 

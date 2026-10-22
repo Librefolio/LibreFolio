@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_settings
+from backend.app.config.platform import awaiting_restore
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import client_log_level
 from backend.app.schemas.auth import AccountsInstanceConfig
@@ -29,6 +30,8 @@ async def get_instance_config(session: AsyncSession = Depends(get_session_genera
     registration = await effective_registration_mode(session)
     return InstanceConfigResponse(
         profile=get_settings().LIBREFOLIO_PROFILE,
+        # H-62: while the hosting panel restores the instance, the app shows its waiting page
+        mode="awaiting_restore" if awaiting_restore() else "normal",
         accounts=AccountsInstanceConfig(registration_mode=registration.mode, registration_locked=registration.locked, first_account_open=await first_account_open(session), password_rules=password_rules_public()),
         # The email configuration may come from a password file: read off the event loop.
         email=await asyncio.to_thread(email_instance_config),

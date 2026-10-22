@@ -39,6 +39,11 @@ tags, whichever router or include adds them: the tests pin the outcome, never th
   nothing else; no other operation asks for any of the three, and none asks for two of them.
 - HPR-005, each of the six documents 429 beside its 401, 404 and 503.
 
+H-62 (contract L3 §5) adds the seven routes of the panel's restore (``api/v1/backup/panel_restore.py``, scope
+``backup:restore``, ticket only) to ``PANEL_ROUTES``: HPR-002, HPR-003 and HPR-005 cover them as the six; HPR-004 stays on
+the six token routes (``TOKEN_ROUTES``); HPR-006 pins that the seven share one bearer scheme of their own, and HPR-007
+that each documents 409 and 423 too. Red until H-62.
+
 Red at the base, ``74b4c9c88``: ``hosting_panel/access.py`` did not exist (HPR-001); the four backup routes carried
 «Backup & Export» and the wake-up «System», and the status route did not exist (HPR-002, HPR-003); nor did
 ``PanelStatusToken`` (HPR-004); no panel route documented a 429 (HPR-005). With the includes above and the shared
@@ -88,15 +93,16 @@ class PanelRoute:
     path: str
     endpoint: str
     operation_id: str
-    scheme: str
+    scheme: str | None
 
     @property
     def operation(self) -> str:
         return f"{self.method} {self.path}"
 
 
-#: The six routes of the hosting panel (contract §3): the five of today as they are, and the status route of §4.
-PANEL_ROUTES = (
+#: The six routes of the hosting panel with a token scope (contract §3): the five of today as they are, and the status
+#: route of §4.
+TOKEN_ROUTES = (
     PanelRoute(
         "start",
         "POST",
@@ -146,6 +152,30 @@ PANEL_ROUTES = (
         "PanelStatusToken",
     ),
 )
+#: H-62 (contract L3 §5): the seven routes of the panel's restore, scope ``backup:restore``, ticket only. Their scheme's
+#: name is the implementation's (``None`` here): HPR-006 pins that it is one bearer scheme of their own. Red until H-62.
+_RESTORE = "backend.app.api.v1.backup.panel_restore"
+RESTORE_ROUTES = (
+    PanelRoute("restore-upload", "PUT", "/api/v1/backup/panel/restore/upload", f"{_RESTORE}.upload_panel_restore_archive", "upload_panel_restore_archive_api_v1_backup_panel_restore_upload_put", None),
+    PanelRoute("restore-stage", "POST", "/api/v1/backup/panel/restore/stage", f"{_RESTORE}.start_panel_restore_check", "start_panel_restore_check_api_v1_backup_panel_restore_stage_post", None),
+    PanelRoute("restore-poll", "GET", "/api/v1/backup/panel/restore/stage/{stage_id}", f"{_RESTORE}.get_panel_restore_check", "get_panel_restore_check_api_v1_backup_panel_restore_stage__stage_id__get", None),
+    PanelRoute(
+        "restore-confirm",
+        "POST",
+        "/api/v1/backup/panel/restore/stage/{stage_id}/confirm",
+        f"{_RESTORE}.confirm_panel_restore_check",
+        "confirm_panel_restore_check_api_v1_backup_panel_restore_stage__stage_id__confirm_post",
+        None,
+    ),
+    PanelRoute("restore-restart", "POST", "/api/v1/backup/panel/restore/restart", f"{_RESTORE}.restart_panel_restore", "restart_panel_restore_api_v1_backup_panel_restore_restart_post", None),
+    PanelRoute("restore-status", "GET", "/api/v1/backup/panel/restore/status", f"{_RESTORE}.get_panel_restore_status", "get_panel_restore_status_api_v1_backup_panel_restore_status_get", None),
+    PanelRoute("restore-cancel", "DELETE", "/api/v1/backup/panel/restore/pending", f"{_RESTORE}.cancel_panel_pending_restore", "cancel_panel_pending_restore_api_v1_backup_panel_restore_pending_delete", None),
+)
+#: Every route of the hosting panel: the six with a token scope and, since H-62, the seven of the restore.
+PANEL_ROUTES = TOKEN_ROUTES + RESTORE_ROUTES
+RESTORE_CASES = [pytest.param(route, id=route.name) for route in RESTORE_ROUTES]
+#: H-62: what the restore routes document besides: 409 ``restore_mode_required`` and 423 ``instance_blocked``.
+RESTORE_GATE_ANSWERS = frozenset({"409", "423"})
 #: One case per route.
 ROUTE_CASES = [pytest.param(route, id=route.name) for route in PANEL_ROUTES]
 #: The security schemes of the three scopes (contract §2).
@@ -296,12 +326,12 @@ def test_each_scope_has_its_bearer_scheme_and_each_route_asks_for_its_own_alone(
 
     kinds = {name: ((schemes.get(name) or {}).get("type"), (schemes.get(name) or {}).get("scheme")) for name in SCHEMES}
     asking = {name: sorted(operation_name for operation_name, operation in operations.items() if name in _asked(operation)) for name in SCHEMES}
-    security = {route.operation: (operations.get(route.operation) or {}).get("security") for route in PANEL_ROUTES}
+    security = {route.operation: (operations.get(route.operation) or {}).get("security") for route in TOKEN_ROUTES}
     doubles = sorted(operation_name for operation_name, operation in operations.items() if len(set(_asked(operation)) & set(SCHEMES)) > 1)
 
     expected_kinds = dict.fromkeys(SCHEMES, ("http", "bearer"))
-    expected_asking = {name: sorted(route.operation for route in PANEL_ROUTES if route.scheme == name) for name in SCHEMES}
-    expected_security = {route.operation: [{route.scheme: []}] for route in PANEL_ROUTES}
+    expected_asking = {name: sorted(route.operation for route in TOKEN_ROUTES if route.scheme == name) for name in SCHEMES}
+    expected_security = {route.operation: [{route.scheme: []}] for route in TOKEN_ROUTES}
     assert kinds == expected_kinds, f"each scope's scheme is an HTTP bearer scheme of the document:\n  expected {expected_kinds}\n  got      {kinds}"
     assert asking == expected_asking, f"each scheme is asked for by its scope's routes, and by no other operation:\n  expected {expected_asking}\n  got      {asking}"
     assert security == expected_security, f"each panel route asks for its scope's scheme and nothing else:\n  expected {expected_security}\n  got      {security}"
@@ -326,3 +356,36 @@ def test_each_panel_route_documents_429_beside_401_404_and_503(document, route):
     missing = sorted(PANEL_ANSWERS - documented)
     assert missing == [], f"{route.operation} must document {sorted(PANEL_ANSWERS)}: {missing} missing; it documents {sorted(documented)}"
     print_success(f"{route.operation}: documents {sorted(PANEL_ANSWERS & documented)}")
+
+
+# =============================================================================
+# HPR-006..007: the routes of the panel's restore (H-62)
+# =============================================================================
+
+
+def test_the_restore_routes_ask_for_one_bearer_scheme_of_their_own(document):
+    """HPR-006 (H-62, contract L3 §5): the seven routes of the panel's restore each ask for exactly one security scheme,
+    the same for the seven, an HTTP bearer, none of the three token scopes' schemes, and asked for by no other
+    operation: the restore's scope is ticket only."""
+    operations = _operations(document)
+    schemes = document.get("components", {}).get("securitySchemes", {})
+    asked = {route.operation: _asked(operations.get(route.operation) or {}) for route in RESTORE_ROUTES}
+    assert all(len(names) == 1 for names in asked.values()), f"each restore route asks for exactly one scheme: {asked}"
+    names = {names[0] for names in asked.values()}
+    assert len(names) == 1, f"the seven ask for the same scheme: {asked}"
+    name = names.pop()
+    assert name not in SCHEMES, f"the restore's scheme is its own, not one of {list(SCHEMES)}: {name}"
+    assert ((schemes.get(name) or {}).get("type"), (schemes.get(name) or {}).get("scheme")) == ("http", "bearer"), f"{name} is an HTTP bearer scheme: {schemes.get(name)}"
+    others = sorted(operation_name for operation_name, operation in operations.items() if name in _asked(operation) and operation_name not in asked)
+    assert others == [], f"no other operation asks for {name}: {others}"
+    print_success(f"the seven restore routes: {name} (bearer), theirs alone")
+
+
+@pytest.mark.parametrize("route", RESTORE_CASES)
+def test_each_restore_route_documents_the_mode_and_the_block(document, route):
+    """HPR-007 (H-62, contract L3 §5): each restore route documents 409 (``restore_mode_required``) and 423
+    (``instance_blocked``) beside the four answers of the shared dependency."""
+    operation = _operations(document).get(route.operation)
+    assert operation is not None, f"{route.operation} must be in the document"
+    missing = sorted((PANEL_ANSWERS | RESTORE_GATE_ANSWERS) - set(operation.get("responses", {})))
+    assert missing == [], f"{route.operation} must document {sorted(PANEL_ANSWERS | RESTORE_GATE_ANSWERS)}: {missing} missing"

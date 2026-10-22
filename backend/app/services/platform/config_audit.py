@@ -23,7 +23,7 @@ from backend.app.config.accounts import admin_bootstrap_config, login_limit_enab
 from backend.app.config.backup import PANEL_TOKEN_VARIABLE as BACKUP_PANEL_TOKEN_VARIABLE
 from backend.app.config.backup import BackupConfigError, backup_download_token
 from backend.app.config.hosting_panel import PANEL_STATUS_TOKEN_VARIABLE, HostingPanelConfigError, panel_audience, panel_clock_skew_seconds, panel_public_keys, panel_public_url_path, panel_status_token
-from backend.app.config.platform import TEST_LANE_ID_MAX_LENGTH, TEST_LANE_ID_MIN_LENGTH, configured_jwt_secret, configured_jwt_secret_origin, instance_blocked, instance_deletion_date, owning_test_lane_id
+from backend.app.config.platform import TEST_LANE_ID_MAX_LENGTH, TEST_LANE_ID_MIN_LENGTH, awaiting_restore, configured_jwt_secret, configured_jwt_secret_origin, instance_blocked, instance_deletion_date, owning_test_lane_id
 from backend.app.config.sleep_wake import WAKE_TOKEN_VARIABLE, SleepWakeConfigError, wake_token
 from backend.app.logging_config import get_logger
 from backend.app.services.accounts.checks import ACCOUNTS_CONFIG_CHECKS
@@ -357,7 +357,7 @@ def log_configuration_audit() -> None:
     used raises ``InstanceKeyError``: the admin asked for that source, so the server must not start without it. In the
     managed profile, a ``JWT_SECRET`` shorter than ``JWT_SECRET_MIN_LENGTH`` raises ``WeakSecretError``, and test mode
     on outside a test lane raises ``ManagedTestModeError`` (H-46): elsewhere it is an error of the checks. A
-    ``LIBREFOLIO_BLOCKED`` or ``LIBREFOLIO_DELETION_DATE`` that cannot be read raises ``ValueError``, and so do a
+    ``LIBREFOLIO_BLOCKED``, ``LIBREFOLIO_AWAIT_RESTORE`` or ``LIBREFOLIO_DELETION_DATE`` that cannot be read raises ``ValueError``, and so do a
     ``LIBREFOLIO_ADMIN_*`` variable of the initial administrator that cannot be used (``AdminBootstrapConfigError``,
     F02, workstream A) and a ``LIBREFOLIO_LOGIN_LIMIT`` other than ``on`` or ``off`` (F15, workstream A), each naming
     its variable. A generated key file gone bad is logged as an error instead, like every check that is not ``ok`` (the
@@ -376,6 +376,9 @@ def log_configuration_audit() -> None:
         logger.warning("Instance blocked by its hosting provider (LIBREFOLIO_BLOCKED): only a few API routes answer", deletion_date=deletion_date.isoformat() if deletion_date else None)
     else:
         instance_deletion_date()
+    # H-62: a LIBREFOLIO_AWAIT_RESTORE that cannot be read raises ValueError, naming it
+    if awaiting_restore():
+        logger.warning("Instance awaiting its restore by the hosting panel (LIBREFOLIO_AWAIT_RESTORE): only the panel's routes and the probes answer")
     # F02 (workstream A): an unusable LIBREFOLIO_ADMIN_* variable raises AdminBootstrapConfigError, naming it
     admin_bootstrap_config()
     # F15 (workstream A): a LIBREFOLIO_LOGIN_LIMIT other than on or off raises ValueError, naming it
