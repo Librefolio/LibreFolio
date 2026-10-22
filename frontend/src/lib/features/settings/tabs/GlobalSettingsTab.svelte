@@ -11,6 +11,7 @@
     import type {GlobalSetting} from '$lib/types';
     import {globalSettings} from '$lib/stores/app/globalSettings';
     import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
+    import {REGISTRATION_KEY, REGISTRATION_VARIABLE, lockedByEnv, refreshRegistrationConfig, registrationModeOptions} from '$lib/features/settings/registrationMode';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
@@ -86,17 +87,13 @@
     // LIBREFOLIO_REGISTRATION pins the registration mode on the server (`GET /system/instance`): the field then shows
     // the mode in force, read-only, and the bulk reset leaves it alone — a save would only meet 409 SETTING_LOCKED_BY_ENV.
     let registrationLocked = $derived(instanceConfig.config.accounts.registration_locked);
-    let registrationModeOptions: SelectOption[] = $derived.by(() => {
+    let modeOptions: SelectOption[] = $derived.by(() => {
         $currentLanguage;
-        return [
-            {value: 'open', label: $_('settings.registrationModes.open')},
-            {value: 'invite', label: $_('settings.registrationModes.invite')},
-            {value: 'disabled', label: $_('settings.registrationModes.disabled')},
-        ];
+        return registrationModeOptions((key) => $_(key));
     });
 
     function isLockedByEnv(key: string): boolean {
-        return key === 'registration_mode' && registrationLocked;
+        return key === REGISTRATION_KEY && registrationLocked;
     }
 
     let settings: GlobalSetting[] = $state([]);
@@ -277,8 +274,9 @@
         if (!isAxiosError(e)) return $_('settings.saveFailed');
         if (e.response?.status === 403) return $_('settings.adminRequired');
         const detail = e.response?.data?.detail;
-        if (e.response?.status === 409 && detail?.error_code === 'SETTING_LOCKED_BY_ENV') {
-            return $_('settings.lockedByEnv', {values: {variable: detail.variable}});
+        const variable = lockedByEnv(e);
+        if (variable !== null) {
+            return $_('settings.lockedByEnv', {values: {variable}});
         }
         if (e.response?.status === 409 && detail?.error_code === 'EMAIL_VERIFICATION_UNAVAILABLE') {
             return $_('email.verification.settingUnavailable');
@@ -288,7 +286,7 @@
 
     /** The public configuration carries the registration mode: ask for it again once the mode has changed. */
     function refreshInstanceConfig(savedKeys: string[]): void {
-        if (savedKeys.includes('registration_mode')) void instanceConfig.load({force: true});
+        if (savedKeys.includes(REGISTRATION_KEY)) void refreshRegistrationConfig();
     }
 
     /**
@@ -658,7 +656,7 @@
                         </div>
                     {:else}
                         <!-- Language / Currency / Theme use the shared wrappers (same controls as PreferencesTab); any other string setting keeps the generic text row -->
-                        <div class="bg-lf-panel rounded-lg p-4" data-locked={setting.key === 'registration_mode' ? String(registrationLocked) : undefined} data-testid="global-setting-{setting.key}">
+                        <div class="bg-lf-panel rounded-lg p-4" data-locked={setting.key === REGISTRATION_KEY ? String(registrationLocked) : undefined} data-value={setting.key === REGISTRATION_KEY ? editedValues[setting.key] : undefined} data-testid="global-setting-{setting.key}">
                             {#if setting.key === 'default_language'}
                                 <SettingSelect
                                     value={editedValues[setting.key]}
@@ -682,9 +680,9 @@
                             {:else if setting.key === 'registration_mode'}
                                 <SettingSelect
                                     value={registrationLocked ? instanceConfig.config.accounts.registration_mode : editedValues[setting.key]}
-                                    options={registrationModeOptions}
+                                    options={modeOptions}
                                     label={getSettingLabel(setting.key)}
-                                    hint={registrationLocked ? $_('settings.lockedByEnv', {values: {variable: 'LIBREFOLIO_REGISTRATION'}}) : getSettingHint(setting.key)}
+                                    hint={registrationLocked ? $_('settings.lockedByEnv', {values: {variable: REGISTRATION_VARIABLE}}) : getSettingHint(setting.key)}
                                     icon={category?.icon ?? null}
                                     isModified={changedKeys.includes(setting.key)}
                                     isNonDefault={nonDefaultKeys.includes(setting.key)}
