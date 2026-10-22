@@ -10336,3 +10336,18 @@ mescolare le righe del runner dei due lotti:
    > `managed-headers` 9 → 602; `origins` 8 → 76; Vitest dell'avviso, del buffer e del ripiego 6 → 80. Più `security-headers`
    > 15, `server-errors` 43, i biglietti 212, `address-probe-image` 14; gate di `app.html` e dei temi 44, 27, 53; ruff,
    > black e prettier puliti.
+9. ✅ **FSCH-004b, l'Esc del modale del log** (22/10, mattina presto; triage con `test-triage`). Verdetto: **difetto** di
+   `ModalBase.svelte`, non del test. L'Esc è ascoltato solo sul backdrop, e il focus ci entrava in un
+   `requestAnimationFrame`: un Esc premuto nel primo fotogramma (macchina carica, utente veloce) andava al bottone che apre
+   il modale e si perdeva; 3 s dopo il modale era ancora aperto (contesto della corsa del passo 5). Nell'inventario era
+   caduto allo stesso modo `brokers-detail:253`.
+   > **Note implementazione**: il focus entra nel backdrop subito, nell'effetto, dopo aver memorizzato chi ha aperto il
+   > modale; il fotogramma porta il focus sul primo elemento (con `trapFocus`) solo se il focus è ancora sul backdrop o
+   > fuori dal modale. Rossi in `ModalBase.test.ts` (2 rossi, 3 guardie verdi) → verdi.
+   > **⚠️ Fuori pista**: la prima cura (solo il focus sincrono) faceva cadere una guardia di `ModalBase.escapeLayers`: il
+   > fotogramma riprendeva il focus alla ricerca di una select aperta nel frattempo. Da qui il controllo «non rubare il
+   > focus». Poi `SocialShareModal.test.ts` contava 1 timer dopo lo smontaggio: è il `setTimeout 0` con cui jsdom accoda
+   > `selectionchange` quando il focus si sposta (trovato con una sonda temporanea, poi cancellata), non un timer
+   > dell'app. Il test ora scarica i compiti a 0 ms prima di contare (test-author).
+   > **Prove** (in `flock`, log `ondata3/h-scheduler-*.log`): `scheduler` 17 su 17 per 3 volte di fila; `brokers-detail` 40
+   > su 40; `component-unit` 5 256, `core-unit` 9 959, `front check` 0 errori.
