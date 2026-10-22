@@ -55,6 +55,7 @@ pyscipopt = "==6.2.1"
 borsa-italiana-scraping = {ref = "main", git = "https://github.com/Librefolio/borsaItaliana-scraping.git"}
 uvicorn = {extras = ["standard"], version = "==0.52.4"}
 cryptography = "*"
+pyrage = "==1.4.0"
 
 [dev-packages]
 pytest = "*"
