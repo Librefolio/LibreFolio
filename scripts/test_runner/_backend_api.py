@@ -1046,6 +1046,15 @@ def e2e_backup_roundtrip(verbose: bool = False, test_names: list = None) -> bool
     return run_command(cmd, "Backup round trip E2E tests", verbose=verbose)
 
 
+def e2e_backup_roundtrip_l3(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the sealed nightly backup restored through the hosting panel: two real servers on Unix sockets (contract L3)."""
+    print_section("E2E: Sealed Backup Restored by the Panel (L3)")
+    print_info("Testing: POST /backup/panel/jobs sealed (L3-2), sealed.read_sealed/open_password, the panel's restore routes and LIBREFOLIO_AWAIT_RESTORE (H-62)")
+    print_info("Tests: sealed backup → awaiting-restore instance → upload, stage, confirm, restart → committed in a new process → out of the mode, same totals")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_e2e/test_backup_roundtrip_l3.py", test_names)
+    return run_command(cmd, "Backup round trip L3 E2E tests", verbose=verbose)
+
+
 def e2e_test(verbose: bool = False) -> bool:
     """Run all E2E tests."""
     if _common.nothing_left_to_run("e2e"):
@@ -1487,6 +1496,18 @@ Complete workflow tests via REST API:
         # PURE: the source, the target and the archives are data directories under tmp_path, made by child processes in
         # test mode pointed at them (populate, alembic, the start); the lane's data directory, database and server are
         # never read nor written (the shared conftest's session fixture aside, as for every pure unit).
+        isolation="pure",
+    )
+    add_test(
+        e2e,
+        "backup-roundtrip-l3",
+        e2e_backup_roundtrip_l3,
+        name="Backup Round Trip L3",
+        desc="Contract L3 (lot B5): a populated instance served with LIBREFOLIO_BACKUP_RECIPIENTS makes a sealed backup for the hosting panel (a backup ticket): a .tar without the instance key, its download the job's SHA-256, read with read_sealed, its password opened by the test identity and checked against the envelope; an empty instance in LIBREFOLIO_AWAIT_RESTORE (the source's instance key) answers mode awaiting_restore, 423 instance_awaiting_restore, 409 backup_awaiting_restore; the panel uploads the envelope, checks it (R1: no administrators, differences or tables), confirms, restarts; a new process commits it; out of the mode the target has the source's rows, files, ledger totals and reports, and its administrator signs in; a backup ticket never opens the restore routes, and out of the mode they answer 409 restore_mode_required. RED until H-62",
+        tests="Sealed backup → Await restore → Upload, Stage, Confirm, Restart → Committed → Same totals",
+        # PURE: every data directory and archive under tmp_path, every server a child uvicorn of the test on a Unix socket
+        # under /tmp (never a TCP port), in test mode on its own data directory; the lane's data directory, database and
+        # server are never read nor written.
         isolation="pure",
     )
     add_test(e2e, "all", e2e_test, test_names=False, name="All E2E Tests", desc="Run all E2E tests")

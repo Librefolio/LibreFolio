@@ -33,7 +33,7 @@ from typing import Literal
 
 from backend.app.config import get_data_dir
 from backend.app.logging_config import get_logger
-from backend.app.services.platform.instance_backup.apply import ConfirmedVia, RestoreNotRestorableError, RestoreState, confirm_restore, protected_stage
+from backend.app.services.platform.instance_backup.apply import EVERY_STAGE, ConfirmedVia, RestoreNotRestorableError, RestoreState, confirm_restore, protected_stage
 from backend.app.services.platform.instance_backup.envelope import EnvelopeKey, is_envelope, read_header, unlock
 from backend.app.services.platform.instance_backup.jobs import _lock_held, _RunLock, out_of_space
 from backend.app.services.platform.instance_backup.paths import (
@@ -48,6 +48,7 @@ from backend.app.services.platform.instance_backup.paths import (
     is_plain_dir,
     read_regular_file,
     restore_dir,
+    stage_dir,
     stages_dir,
     upload_path,
     uploads_dir,
@@ -361,7 +362,9 @@ def remove_check(stage_id: str, *, data_dir: Path | None = None) -> None:
     check = read_check(stage_id, data_dir=data_dir)
     if check.status == "running":
         raise CheckRunningError("The check still runs")
-    if protected_stage(data_dir) == check.stage_id:
+    protected = protected_stage(data_dir)
+    # An unreadable state protects every copy still there: which one a restore needs is not known (B-33).
+    if protected == check.stage_id or (protected == EVERY_STAGE and os.path.lexists(stage_dir(data_dir, check.stage_id))):
         raise CheckPendingError("A restore waits to apply this copy")
     _remove(data_dir, check)
 
@@ -401,7 +404,7 @@ def prune(data_dir: Path, now: datetime | None = None) -> int:
     protected = protected_stage(data_dir)
     recorded, interrupted = _prune_checks(data_dir, cutoff, idle=idle, protected=protected)
     if idle:
-        _prune_unrecorded(data_dir, cutoff, recorded if protected is None else recorded | {protected})
+        _prune_unrecorded(data_dir, cutoff, recorded if protected is None else recorded | {protected}, keep_stages=protected == EVERY_STAGE)
     return interrupted
 
 
@@ -411,7 +414,8 @@ def _prune_checks(data_dir: Path, cutoff: datetime, *, idle: bool, protected: st
     checks = _checks(data_dir)
     interrupted = 0
     for check in checks:
-        if check.stage_id == protected:
+        # An unreadable state of the restore protects every copy, with its check (B-33).
+        if protected in (check.stage_id, EVERY_STAGE):
             continue
         if check.status == "running" and idle:
             try:
@@ -425,10 +429,12 @@ def _prune_checks(data_dir: Path, cutoff: datetime, *, idle: bool, protected: st
     return {check.stage_id for check in checks}, interrupted
 
 
-def _prune_unrecorded(data_dir: Path, cutoff: datetime, recorded: set[str]) -> None:
+def _prune_unrecorded(data_dir: Path, cutoff: datetime, recorded: set[str], *, keep_stages: bool = False) -> None:
     """Remove what no check records, older than ``cutoff``: uploads never checked, the copies of a command-line check
     stopped before its end, and the states in ``checks/`` no check could be read from, or half written (B-54)."""
     for folder, keep in ((uploads_dir(data_dir), set()), (stages_dir(data_dir), recorded)):
+        if keep_stages and folder == stages_dir(data_dir):
+            continue
         if is_plain_dir(folder):
             for path in folder.iterdir():
                 if is_job_id(path.name.removesuffix(_PARTIAL_SUFFIX)) and path.name not in keep and _older_than(path, cutoff):
