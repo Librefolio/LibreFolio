@@ -21,7 +21,9 @@
  *     origin are GETs to exactly the pinned URLs of that page, each answered 200 — nothing for `fonts.googleapis.com`,
  *     nothing for `validator.swagger.io`;
  *   - the pinned files were *used*, not only fetched: a fetched file the browser refused (a wrong hash) would still show
- *     as a 200. Swagger UI draws the operations of the lane's own API (`/api/v1/system/health`), ReDoc its menu;
+ *     as a 200. Swagger UI draws operations of the lane's own API — at least a few, each one's `data-path` a key of the
+ *     `paths` of the OpenAPI document the page itself fetched (its response body, read from the request log: no second
+ *     request of the spec's own) — and ReDoc its menu;
  *   - the OpenAPI document was fetched from the lane (`/api/v1/openapi.json`, 200);
  *   - the H-43 collector (`cspViolations`, fixtures/playwright.ts) saw no enforced violation.
  *
@@ -37,6 +39,9 @@
  * Selectors: Swagger UI and ReDoc carry no `data-testid`, so their own markup is the contract, as the documentation's
  * Material markup is in page-policy.spec.ts: Swagger's `#swagger-ui` container and its operations' `.opblock` with the
  * `data-path` of their summary; ReDoc's `#redoc` container and its menu (`[role=menu]`, `.menu-content`). No translated text.
+ * Swagger UI 5.33 draws its operations in a virtualized list: only those in or near the viewport are in the DOM, in the
+ * order of the document's tags. So no named operation is waited for (one far down the document is never mounted without
+ * a scroll): whichever operations are drawn, each must be one of the document's.
  *
  * Waiting: on the states the pages produce (an operation drawn, a menu drawn, an error raised), never on the clock.
  * Desktop only: ReDoc's menu is a drawer on a phone. Nothing is written to the lane.
@@ -47,8 +52,8 @@ const API = '/api/v1';
 const DOCS_PATH = `${API}/docs`;
 const REDOC_PATH = `${API}/redoc`;
 const OPENAPI_PATH = `${API}/openapi.json`;
-/** An operation Swagger UI must draw: the lane's own health check, a GET that exists in every build. */
-const KNOWN_OPERATION_PATH = `${API}/system/health`;
+/** Swagger UI's first screen holds at least this many operations: the start of the virtualized list, whatever its first tag. */
+const MIN_DRAWN_OPERATIONS = 3;
 
 /** The origin of the libraries: the only third party the pages may ask. */
 const LIBRARY_ORIGIN = 'https://cdn.jsdelivr.net';
@@ -79,7 +84,13 @@ interface DocsPage {
     /** The pinned files of this page: each is requested once, with its hash. */
     libraries: string[];
     /** Resolves once the library has drawn the lane's API; the wait fails on its own timeout. */
-    rendered(page: Page): Promise<void>;
+    rendered(page: Page, lane: Lane): Promise<void>;
+}
+
+/** The lane under test, as `rendered` reads it: its origin and the requests the context made. */
+interface Lane {
+    origin: string;
+    log: RequestLog;
 }
 
 const DOCS_PAGES: DocsPage[] = [
@@ -87,10 +98,18 @@ const DOCS_PAGES: DocsPage[] = [
         name: 'Swagger UI',
         path: DOCS_PATH,
         libraries: [SWAGGER_JS, SWAGGER_CSS],
-        async rendered(page) {
-            const operation = page.locator(`#swagger-ui .opblock [data-path="${KNOWN_OPERATION_PATH}"]`);
-            // Filtered to one known path: .first() resolves to that path's operation (its summary may repeat per method).
-            await expect(operation.first(), `Swagger UI drew the operation ${KNOWN_OPERATION_PATH}: the bundle ran, read ${OPENAPI_PATH} and rendered it`).toBeVisible({timeout: RENDER_TIMEOUT_MS});
+        async rendered(page, lane) {
+            const operations = page.locator('#swagger-ui .opblock [data-path]');
+            // Any operation will do — the list is virtualized and ordered by tag — so .first() names no position the test relies on: what it is gets checked below.
+            await expect(operations.first(), `Swagger UI drew an operation: the bundle ran, read ${OPENAPI_PATH} and rendered it`).toBeVisible({timeout: RENDER_TIMEOUT_MS});
+            await expect.poll(() => operations.count(), {message: `Swagger UI drew at least ${MIN_DRAWN_OPERATIONS} operations`, timeout: RENDER_TIMEOUT_MS}).toBeGreaterThanOrEqual(MIN_DRAWN_OPERATIONS);
+            // Read once the barriers above hold: the operations drawn are the document's, not a placeholder or another API's.
+            const drawn = [...new Set(await operations.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-path') ?? '')))].sort();
+            const paths = await servedOpenApiPaths(lane);
+            expect(
+                drawn.filter((path) => !paths.has(path)),
+                `every operation Swagger UI drew (${drawn.join(', ')}) is a path of the ${OPENAPI_PATH} the page fetched`,
+            ).toEqual([]);
         },
     },
     {
@@ -118,6 +137,21 @@ interface SeenRequest {
 
 /** Everything the context asked, in the order the requests started; the map keeps each `Request` apart, redirects included. */
 type RequestLog = Map<Request, SeenRequest>;
+
+/**
+ * The keys of `paths` of the OpenAPI document the page fetched from the lane: the body of the browser's own response,
+ * found in the request log — the spec asks the lane nothing itself, so the request accounting stays the page's alone.
+ */
+async function servedOpenApiPaths({origin, log}: Lane): Promise<Set<string>> {
+    const request = [...log.entries()].find(([, seen]) => seen.url === `${origin}${OPENAPI_PATH}` && seen.method === 'GET' && seen.status === 200)?.[0];
+    if (!request) throw new Error(`${OPENAPI_PATH}: the page fetched no 200 from the lane, so there is no document to compare the drawn operations with`);
+    const response = await request.response();
+    if (!response) throw new Error(`${OPENAPI_PATH}: the request has no response`);
+    const document = (await response.json()) as {paths?: Record<string, unknown>};
+    const paths = new Set(Object.keys(document.paths ?? {}));
+    if (paths.size === 0) throw new Error(`${OPENAPI_PATH}: the document the page fetched has no paths`);
+    return paths;
+}
 
 /** Records every request of every page of the context, from before the first navigation: a state read when the test chooses. */
 function recordRequests(context: BrowserContext): RequestLog {
@@ -252,7 +286,7 @@ test.describe('The API documentation pages of H-55 R5: the policy lets the pinne
             // The `load` event waits for the synchronous library scripts: a CDN that cannot be reached has failed by now.
             assertCdnReachable(log, origin);
             for (const url of docs.libraries) await expectIntegrity(page, url);
-            await orPreconditionRed(log, origin, () => docs.rendered(page));
+            await orPreconditionRed(log, origin, () => docs.rendered(page, {origin, log}));
 
             // The requests: what left the lane is exactly the pinned files, GETs, each answered 200.
             const left = offOrigin(log, origin);
