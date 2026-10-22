@@ -1387,7 +1387,9 @@ test.describe('H-55 v2, a script the instance did not send: blocked, recorded, a
 
         await expect(page.getByTestId('login-page'), 'the app booted all the same: a script it did not send is refused, the page goes on').toBeVisible({timeout: PAGE_TIMEOUT_MS});
         expect(await page.evaluate((mark) => ({ran: mark in window, title: document.title}), INJECTED_MARK), 'the injected script did not run: the policy blocked it').toEqual({ran: false, title: expect.not.stringContaining(token)});
-        expect(await page.evaluate(() => Array.isArray((window as unknown as {__lfCspViolations?: unknown}).__lfCspViolations)), 'the early collector of app.html is in the page: its buffer exists').toBe(true);
+        // The early buffer of app.html is drained by cspNotice.ts at startup and the global set to null (R3): so app.html's early
+        // listener, which pushes only into an array, stops collecting. Exactly null, not undefined: present, and drained.
+        expect(await page.evaluate(() => (window as unknown as {__lfCspViolations?: unknown}).__lfCspViolations), 'app.html’s early buffer was drained by cspNotice.ts at startup (R3): null once the bundle runs').toBeNull();
 
         // The collector: one enforced script-src-elem violation of the document, an inline script, whose sample is its first characters
         const url = new URL(SIGN_IN_PATH, origin).href;
