@@ -8,7 +8,7 @@
 import {isAxiosError} from 'axios';
 import {ApiError, zodiosApi} from '$lib/api';
 
-export type SettingsFamily = 'asset' | 'fx';
+export type SettingsFamily = 'asset' | 'fx' | 'brim';
 export type SettingType = 'string' | 'number' | 'integer' | 'boolean' | 'select';
 export type SettingScope = 'user' | 'system';
 /** Where a value comes from: an environment variable of the server, a saved value, the declared default, nowhere. */
@@ -96,7 +96,7 @@ export interface PluginSettingWriteResult {
  */
 export type SaveOutcome = {kind: 'saved'} | {kind: 'refused'; results: PluginSettingWriteResult[]} | {kind: 'conflict'} | {kind: 'keyUnavailable'} | {kind: 'failed'};
 
-const FAMILIES: readonly string[] = ['asset', 'fx'];
+const FAMILIES: readonly string[] = ['asset', 'fx', 'brim'];
 const TYPES: readonly string[] = ['string', 'number', 'integer', 'boolean', 'select'];
 const SOURCES: readonly string[] = ['env', 'db', 'default', 'none'];
 const PROBLEMS: readonly string[] = ['unreadable', 'invalid_env', 'invalid_stored'];

@@ -9,7 +9,8 @@
     "loadError": "Impossibile caricare le impostazioni dei plugin.",
     "families": {
       "asset": "Prezzi",
-      "fx": "Tassi di cambio"
+      "fx": "Tassi di cambio",
+      "brim": "Importazione dai broker"
     },
     "status": {
       "configured": "Configurato",
