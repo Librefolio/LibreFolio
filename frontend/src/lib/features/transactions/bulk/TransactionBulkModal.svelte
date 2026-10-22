@@ -209,7 +209,8 @@
         const side: 'from' | 'to' | 'self' = tx.related_transaction_id != null ? (rawQty < 0 ? 'from' : 'to') : 'self';
         const cbRule = getCostBasisRule(tx.type, side);
         let cbMode: 'auto' | 'manual' | null = null;
-        if (cbRule !== 'forbidden') {
+        // A cost only where units come in: an ADJUSTMENT taking units out has no value (N78-1).
+        if (cbRule !== 'forbidden' && !(cbRule === 'required_qty_pos' && rawQty <= 0)) {
             cbMode = 'manual';
         }
         return {
@@ -1610,7 +1611,7 @@
         const slug = type.toLowerCase().replace(/_/g, '-');
         const isPair = getTypeRule(type).requiresPair;
         const arrow = isPair ? '<span class="shrink-0">↔</span>' : '';
-        return `<span class="inline-flex items-center gap-1.5 text-xs leading-snug" style="white-space:normal"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.75rem;height:1.75rem" class="object-contain shrink-0" onerror="this.style.display='none'"/>${arrow}<span>${label}</span></span>`;
+        return `<span class="inline-flex items-center gap-1.5 text-xs leading-snug" style="white-space:normal"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.75rem;height:1.75rem" class="object-contain shrink-0" data-hide-on-error="display"/>${arrow}<span>${label}</span></span>`;
     }
 
     /** Format a cash value as "±amount CODE". */
@@ -1628,7 +1629,7 @@
         const name = info?.display_name ?? `#${assetId}`;
         // Bug11-fix: use asset type icon as fallback when icon_url is null
         const iconUrl = info?.icon_url ?? (info?.asset_type ? getAssetTypeIconUrl(info.asset_type) : null);
-        const iconHtml = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
+        const iconHtml = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" data-hide-on-error="display" />` : '';
         return `<span class="inline-flex items-center gap-1.5 text-sm truncate">${iconHtml}${escapeHtml(name)}</span>`;
     }
 
@@ -1747,7 +1748,7 @@
                             const origSlug = origType.toLowerCase().replace(/_/g, '-');
                             return {
                                 type: 'html',
-                                html: `<span class="inline-flex items-center gap-1 text-[11px]"><img src="/icons/transactions/${origSlug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" onerror="this.style.display='none'"/> <span class="text-lf-muted">→</span> ${renderTypeHtml(targetType)}</span>`,
+                                html: `<span class="inline-flex items-center gap-1 text-[11px]"><img src="/icons/transactions/${origSlug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" data-hide-on-error="display"/> <span class="text-lf-muted">→</span> ${renderTypeHtml(targetType)}</span>`,
                             };
                         }
                         return {type: 'html', html: `<span class="text-[11px]">${renderTypeHtml(row.fields.type)} → <span class="text-purple-600 dark:text-purple-400">✂️ ADJUSTMENT</span></span>`};

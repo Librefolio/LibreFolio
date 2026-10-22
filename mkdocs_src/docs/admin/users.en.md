@@ -56,8 +56,9 @@ username in a plain circle.
 |---|---|
 | **You** | Your own account |
 | **Admin** | An administrator: it manages the instance, its settings, its users and its invitations |
-| **Deactivated** | The account cannot sign in, and takes no place — unless it is [waiting for its email](#waiting) |
+| **Deactivated** | The account cannot sign in, and takes no place. An account [waiting for its email](#waiting) has a badge of its own, below |
 | **Waiting for setup** | The [initial administrator](hosting_providers.md#initial-admin), not active yet: nobody has used its setup link, nor set the account up another way. Shown instead of **Deactivated**: see [Waiting for Its Setup Link](#pending-setup) |
+| **Waiting for verification** | An account that has not opened the verification link LibreFolio emailed to its address yet, even once that link has expired. It cannot sign in, and takes a place while its link is live. Shown instead of **Deactivated**: see [Accounts Waiting for Their Email](#waiting) |
 | **Protected** | Nobody can deactivate, demote or delete it: see [When an Action Is Off](#action-off) |
 
 Click a row to open its actions, and again to close them. Your own row has none: it says *This is
@@ -69,7 +70,7 @@ your account. Manage it from:* with a link to **Profile**, the tab where you cha
 | Action | What it does | Asks first |
 |---|---|---|
 | **Deactivate** | The account can no longer sign in, and is signed out of every device. Its brokers and transactions stay, and its place is freed. Shown for an active account | ✅ |
-| **Reactivate** | The account can sign in again, with its data as it was; its old sessions do not come back. It takes a place again, so it needs a free one. Shown for a deactivated account, but not for the initial administrator [waiting for its setup link](#pending-setup) | — |
+| **Reactivate** | The account can sign in again, with its data as it was; its old sessions do not come back. It takes a place again, so it needs a free one, unless the account is [waiting for its email](#waiting) with a live link: its place is already counted. Shown for a deactivated account, one waiting for its email included, but not for the initial administrator [waiting for its setup link](#pending-setup) | — |
 | **Cancel setup link** | The setup link of the initial administrator [waiting for its setup](#pending-setup) stops working, the one already handed over included; the account keeps waiting for a new link. Shown for that account only, in the place of **Reactivate**: see [Cancel Its Setup Link](#cancel-setup) | ✅ |
 | **Make administrator** | The account manages the instance too: settings, users and invitations | ✅ |
 | **Remove administrator** | The account stays, as a regular user, and is signed out of every device | ✅ |
@@ -100,9 +101,13 @@ LibreFolio turns off the actions it knows the server would refuse, and says why 
 ### ⏳ Accounts Waiting for Their Email {: #waiting }
 
 With **Require Email Verification** on ([Global Settings](settings.md)), a new account waits until
-its owner opens the link LibreFolio emails to its address. Until then:
+its owner confirms the address with the link LibreFolio emails to it. Until then:
 
-- its row shows **Deactivated**: this version has no badge of its own for a waiting account;
+- its row shows **Waiting for verification** instead of **Deactivated**, even once its link has
+  expired. Hover over the badge for the hint, or open the row, where it reads under the buttons: *Its
+  owner has not opened the verification link yet: signing in offers to send a new one. Reactivate
+  lets the account in at once, without the email.* An account deactivated while it waits (see the
+  last point) stops waiting, and its row reads **Deactivated** again;
 - it takes a place while its link is live, that is for 24 hours after the last link sent;
 - **Reactivate** lets it in at once: it can sign in, and the links already sent stop working. While
   its link is live, this takes no extra place, since its place is already counted: **Reactivate**
@@ -301,7 +306,9 @@ Invitation and password-reset links show in the same panel:
   gives its expiry.
 
 When you change the address, your browser checks, half a second after you stop typing, that
-**this** instance answers there, and not just any server. The filled-in address itself is not
+**this** instance answers there, and not just any server: it loads a tiny image from
+`<address>/api/v1/auth/address-probe.png?nonce=…`, which is 1×1 when this instance answers and 2×1
+when another one does. The filled-in address itself is not
 checked.
 
 | Message | What it means |
@@ -309,7 +316,7 @@ checked.
 | *Checking that this LibreFolio answers at this address…* | The check is running |
 | *This instance answers at this address.* | The link reaches this LibreFolio |
 | *Something answers at this address, but not this instance: check it before sharing.* | Another LibreFolio answers there: probably not the address you meant |
-| *This address could not be checked from this browser: you can still share the link.* | The browser got no answer it could read. Nothing answers there (a wrong or closed address, or no answer within 8 seconds); a page opened with `https://` checks an `http://` address, which the browser blocks; a page on a public address checks a local one, which some browsers block or allow only after asking your permission; or an older LibreFolio answers, which cannot be checked |
+| *This address could not be checked from this browser: you can still share the link.* | The browser could not load the image. Nothing answers there (a wrong or closed address, or no answer within 8 seconds); a page opened with `https://` checks an `http://` address, which the browser blocks; a page on a public address checks a local one, which some browsers block or allow only after asking your permission; an instance that is blocked does not serve the image; or an older LibreFolio answers, which cannot be checked |
 | *Enter an address that starts with http:// or https://, without ? or #.* | Not an address: **Copy** stays off until you fix it |
 
 Whatever the result, except an address that is not one, you can copy the link: the check only
@@ -364,8 +371,8 @@ delete directly. The deletion follows the same rule as deleting one's own accoun
       with its role on each;
     - a warning when transactions on other brokers are halves of transfers with the brokers that
       go: they stay, without their other half. A received transfer becomes an adjustment at its
-      cost, and a transfer sent to one of those brokers an adjustment that takes the assets out at
-      their average cost on the broker that sent them (see
+      cost, and a transfer sent to one of those brokers an adjustment that takes the assets out of
+      the broker that sent them, without a value: their cost counts as a realized loss there (see
       [Edit or delete a broker](../user/brokers/index.md)).
 3. Type the account's username, then click **Delete Permanently**.
 

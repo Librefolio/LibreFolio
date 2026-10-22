@@ -38,7 +38,15 @@ the list to one pair; ✕ clears both.
 ### 🧰 Page and pair actions
 
 - The **period** picker at the top sets the range of every chart and change; in card view,
-  **Abs** / **%** shows all cards as rates or as % change.
+  **Abs** / **%** / **Rolling Return** shows all cards as rates, as % change or as rolling return. The
+  list opens on **Abs**; once you choose a view, it is remembered for you in this browser.
+- A card's view button cycles **%** → **Rolling Return** → **Abs** and shows the view it goes to. The
+  card keeps its own choice across reloads until you change the toolbar, which resets every card.
+  On **Rolling Return** a card draws the rolling return of the rate the way the card shows the pair
+  (flipped with ⇄: the return of the flipped rate), and over it the rolling returns of the FX pairs
+  compared on that card. The rate and its change at the top stay as they are, and with too little
+  history the card shows a short message instead of the chart. The window is the one set in
+  [Chart Settings](chart-settings.md).
 - **Sync All** downloads new rates ([Synchronization](sync.md)); **Reload All** reads the stored
   ones again. **Settings** sets the look of every card ([Chart Settings](chart-settings.md)).
 - On a card, ⇄ flips the direction shown (USD → EUR instead of EUR → USD); the buttons at the bottom

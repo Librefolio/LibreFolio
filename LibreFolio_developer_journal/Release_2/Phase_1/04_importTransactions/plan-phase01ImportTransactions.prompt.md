@@ -8406,3 +8406,96 @@ Il developer ha promesso all'utente il nome nel CHANGELOG. Numeri delle fixture:
   > eToro non hanno una riga «illeggibile» nel contratto: le loro altre stringhe restano com'erano (plugin in beta).
 - ✅ 4. Chiavi i18n (21/10, via del coordinatore): `importWizard.brimNotice.rows_not_recognized` e `rows_unreadable`, `importWizard.brimEvidence.*`
   (4 lingue); tolte `scalable_not_executed` (brimNotice e brimEvidence). `i18n check` verde (5119 chiavi).
+
+### N78-1 · A che valore esce un'unità in una rettifica in uscita: analisi (2026-10-21/22, sola lettura, base `2879ae3e4`)
+
+Ondata 3, lavoro notturno, solo analisi (con i fatti preparati da MF nel piano 11, «N78-1 con W — preparazione»). Il documento per
+il developer è fuori dal repo: `salvataggi-worktrees-20261021/ondata3/N78-1-analisi.md`.
+- ✅ 1. I fatti riletti sul codice: il PMC non cambia mai (`average_cost.py:302-303`); il valore d'uscita è `cost_basis_override`,
+  letto da Dashboard (`daily_state.py:418-428`, J-24), lotti (`fifo/engine.py:241-245`, `:397-410`) e performance dei lotti
+  (`lots/histories.py:146-152`); decisione 47 al PMC, gambe al bordo di J-10 al mercato del giorno.
+- ✅ 2. L'esempio (10 azioni a 50, valgono 80, 2 regalate) per (a) costo, (b) mercato, (c) correzione: P&L totale 240 / 300 / 140,
+  TWRR del giorno −7,5 % / 0 % / −20 %, realizzato dei lotti 0 / +60 / −100. Lotti e TWRR verificati con il vero motore FIFO e
+  `calculate_twrr` (script su dati sintetici, fuori dal repo); la Dashboard a mano sul codice, il caso con un valore già fissato dal
+  test J-24.
+  > **Note implementazione**: dal Form e dal Bulk oggi si arriva solo a (c): il valore digitato su una rettifica in uscita si perde in
+  > silenzio (`txPayloadHelpers.ts:274-277`, il difetto di N78-bis); nessun plugin mette un valore in uscita.
+  > **⚠️ Fuori pista**: in (c) la Dashboard realizza 0 e i lotti −100 (i −100 finiscono in «Altro»); il CSV generico chiede un costo
+  > bloccante anche sulle rettifiche in uscita, che il Bulk non lascia riempire.
+- ✅ 3. Raccomandazione di W: (b) come default (Auto = prezzo del giorno, al costo senza prezzo), (c) come scelta esplicita, la
+  decisione 47 allineata a J-10; N78-bis come primo passo in ogni caso. Domande Q-N78-1a…h nel documento.
+
+### N78-1 · Una rettifica in uscita non ha valore: cura (2026-10-22, base `2879ae3e4`)
+
+**Le decisioni del developer** (21/10 sera, via il coordinatore; testo intero in `ondata3/N78-1-analisi.md` § 8): (1) un
+ADJUSTMENT in uscita non ha valore, abbassa solo la quantità, anche per il TWRR; (2) decisione 47: la gamba sola che cede esce senza
+valore; (3) il realizzato della Dashboard = 0 − costo, come i lotti; (4) Form e Bulk: il costo solo con quantità positiva; (5) il passo
+`lone-transfer-legs` converte senza valore; (6) in 1.3; (7) backlog dopo la 1.3: stimare un prezzo dalla metà che entra.
+
+**Piano breve**
+1. **Regole** (`schemas/transactions/transactions.py:177-195`): la 12b perde l'eccezione dell'ADJUSTMENT in uscita. Un costo inviato
+   dall'API su un'uscita è **rifiutato** con `costBasisNotAllowed` (proposta di W: come ogni tipo e lato senza costo; ignorarlo in
+   silenzio nasconderebbe l'errore a chi lo manda). Nella 1.2.1 era salvabile (la regola 12 rifiutava solo la modalità): un update
+   che non tocca il costo non lo invia, quindi una riga vecchia con un valore resta modificabile.
+2. **Motori** (`financial_math`), un'uscita senza valore anche se il database ne ha uno:
+   - FIFO: `fifo/engine.py:241-245` chiude a 0 un ADJUSTMENT in uscita letto dal database; le letture di J-10
+     (`lots/scope_boundary.py`, al mercato o `hands_over_at_own_cost`) restano;
+   - Dashboard: `daily_state._is_capital_adjustment` solo per l'entrata; ogni ADJUSTMENT in uscita (non di uno split) realizza
+     0 − costo (`_realized_disposal` con proventi 0), senza flusso di capitale; `_handed_over_value` e il bisogno di cambio di
+     `portfolio/engine.py:640-645` tolti;
+   - performance dei lotti: `lots/histories.py:146-152` e `:821` senza flusso per l'uscita; `lots/conversions.py:244` senza il cambio.
+3. **Decisione 47**: `delete_by_broker` (`transaction_service.py:60-110`), lo split nel batch (`batch_costs._cost_split_handovers`) e
+   `lone_transfer_legs.py` convertono la gamba che cede in ADJUSTMENT in uscita **senza valore**, sempre (niente più cambio mancante
+   né `wacFxUnavailable`/`autoCostUnreadable` per quella gamba); `_handover_cost` tolto. Le righe già convertite al PMC **non si
+   riconoscono** (nessun segno): la cura dei motori le rende innocue; toglierne il valore è la domanda Q-N78-1i (pezzo in pausa).
+4. **CSV generico**: il todo bloccante del costo solo sulle rettifiche in entrata (`broker_generic_csv/plugin.py:455-470`).
+5. **Frontend**: Form (`TransactionFormModal.svelte:749`, `TxFormSingleSection.svelte:319`) e Bulk (`TransactionBulkModal.svelte:210-212`)
+   mostrano il costo solo con quantità positiva. I messaggi `costBasisNotAllowed` / `costBasisModeIncompatible` dicono già «solo le
+   unità che entrano portano un costo»: nessun cambio.
+6. **Test** (test-author, prima i rossi): invertire J-24/CP-16 (`test_adjustment_out_with_cost_numbers.py`), la decisione 47
+   (`delete_by_broker`, split nel batch, `lone_transfer_legs`), la regola 12b (`TestN78…`); nuovi: l'esempio 10 a 50 / 80 / 2 regalate
+   (Dashboard realizzato −100, «Altro» 0, P&L 140, TWRR −20 %; lotti −100); J-10 invariato (guardia).
+7. **Doc** (docs-writer, inglese): pagina utente delle transazioni, `brokers_transactions.md`, la sezione lotti/Dashboard di MF.
+8. **Backlog**: la voce del punto 7 del developer.
+
+**Domande** (pausa solo del pezzo): **Q-N78-1i** togliere il valore salvato a ogni ADJUSTMENT in uscita (passo d'avvio) o
+lasciarlo, ignorato dai motori? **Q-N78-1j** le gambe al bordo di J-10 restano al mercato del giorno?
+
+**Correzione del developer al punto 5** (via il coordinatore): niente codice che bonifica dati nell'app. Il passo `lone-transfer-legs`
+resta com'è nella sua funzione, cambia solo il valore che scrive (nessuno); nessuna rimozione dei valori già scritti (Q-N78-1i chiusa:
+no). Il database del developer lo controlla il coordinatore con uno script esterno. Allineare invece i dati di test (populate).
+
+**Avanzamento**
+- ✅ 1. Piano breve (22/10) e decisioni nel documento (`ondata3/N78-1-analisi.md` § 8).
+- ✅ 2. Rossi (test-author, 22/10): **70 backend e 5 Vitest** rossi per il motivo giusto in 12 file (J-24/CP-16 invertiti in
+  `test_adjustment_out_with_cost_numbers.py`, con l'esempio 10/50/80/2 parametrizzato su nessun valore, 50 e 80; Dashboard
+  `TestAdjustmentOutHasNoValue`; decisione 47 in `test_broker_service.py`, `test_transaction_cost_basis_rule.py`,
+  `test_lone_transfer_legs.py`, `test_orphan_transfer_after_broker_delete.py`, `test_auto_cost_unreadable_pool.py`; FIFO; CSV generico;
+  Form e Bulk). Guardie J-10 verdi. Log `ondata3/wn78_final_*.log`.
+- ✅ 3. Cura (22/10), in quattro script applicati insieme:
+  - motori: `FifoInputTransaction.from_transaction` toglie il valore a un ADJUSTMENT in uscita letto dal database (le letture di J-10
+    restano); Dashboard: `_is_capital_adjustment` solo in entrata, ogni ADJUSTMENT in uscita realizza 0 − costo, `_handed_over_value`
+    tolto; tolti i cambi chiesti per un'uscita (`portfolio/engine.py`, `lots/conversions.py`); performance dei lotti senza flusso;
+  - regola 12b senza l'eccezione: un costo su un'uscita → `costBasisNotAllowed`;
+  - decisione 47 senza valore: `delete_by_broker`, lo split nel batch (`handover_rows` e `_cost_split_handovers` tolti), il passo
+    `lone-transfer-legs` (converte sempre, `LoneLeg` senza costo), `_handover_cost` tolto;
+  - CSV generico: il todo del costo solo in entrata; Form e Bulk: il costo solo con quantità positiva;
+  - populate: la riga `[wac-test] ADJUSTMENT AAPL -3` non ha più il valore 160.
+  > **⚠️ Fuori pista**: dopo la cura 8 test vecchi asserivano ancora il vecchio contratto (5 in `test_lots_analysis_pure.py`, 1 in
+  > `test_portfolio_engine_vnext.py`, 2 casi J-60): aggiornati da test-author, nessuno era una lettura di J-10. Il caso J-60
+  > «short-balance» ora usa una coppia TRANSFER (un'uscita non può più portare un costo).
+  > **Note implementazione**: la proposta di W di lasciar togliere il valore con un `null` nell'update è stata ritirata prima di
+  > applicarla (la guardia P5 resta com'è; nessuna bonifica).
+- ✅ 4. Backlog: W-B93 (questa cura) e W-B94 (la metà che entra come stima del prezzo, dopo la 1.3).
+- ✅ 5. Verdi (22/10, corsia 6183): azioni `services` financial-math 2490, roi-fifo-utils 1739, portfolio-engine 41, transaction 130,
+  transaction-cost-basis-rule 244, broker 81, edge-cases 17, lone-transfer-legs 20, lots-analysis-pure 240, brim-create-transaction 18;
+  file: post_migration 45, post_migration_orphan_pairs 47, account_deletion_api 13, brim_providers 779 + 1 saltato, guardie J-10 verdi;
+  Vitest Form e Bulk 78/78. Log in `ondata3/wn78_*`.
+  > **⚠️ Fuori pista**: in `roi-fifo-utils` altri 3 test vecchi aggiornati. (a) Un'uscita in-kind con valore (contributi per broker):
+  > invertita. (b) `TestDustResidual`: l'uscita ora è una cessione contata (`per_sales`), la base della posizione chiusa diventa il costo
+  > ceduto e l'annualizzato è `None` (rapporto −1,10 sotto −100 %): il soggetto del test (la finestra di ripiego) va riportato su un altro
+  > libro, nota per MF. (c) **La coppia di ADJUSTMENT collegata fra due broker** (caso 15b): letta alla lettera, la gamba che esce non ha
+  > valore, A realizza −100 e l'aggregato perde 100 per uno spostamento fra broker propri: domanda **Q-N78-1k**, il test fissa per ora il
+  > comportamento letterale.
+- ✅ 6. Doc (docs-writer, 35 pagine inglesi: utente, teoria finanziaria, sviluppatore), build stretto 0 avvisi, check-links 97. Debito di
+  traduzione reale su 20 pagine tradotte. I commenti del backend che citavano ancora J-24 aggiornati da me.

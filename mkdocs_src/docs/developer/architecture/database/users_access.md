@@ -122,7 +122,8 @@ Step 1 of migration `005_release_1_3_0_schema` adds three columns:
   than the largest version either database held, when the clock is behind it): a time, not a counter, which a later
   `end_sessions()` still raises by one.
 - ✅ **`email_verified_at`** (`DATETIME`, nullable): when the email address was verified, set by `confirm_email()`
-  when an account opens its verification link ([Email Verification](../../backend/email.md#verification)). It is a
+  when the owner of an account confirms it on the page of its verification link
+  ([Email Verification](../../backend/email.md#verification)). It is a
   record, not a gate: nothing reads it to let an account in. The accounts that existed before the migration stay
   `NULL` — not verified, which is true — with no backfill, and so do the first account, the accounts created from
   the command line or while the option was off, and an account an administrator activated by hand: the wait is

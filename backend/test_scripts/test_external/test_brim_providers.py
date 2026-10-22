@@ -740,6 +740,25 @@ class TestGenericCSVPlugin:
         plugin = BRIMProviderRegistry.get_provider_instance("broker_generic_csv")
         assert plugin.test_file_pattern is None
 
+    def test_generic_asks_a_cost_basis_only_for_adjustments_that_add_units(self, tmp_path: Path):
+        """N78-1 (the developer's decision, 21/10/2026), RED until its cure: an ADJUSTMENT taking units out has no value,
+        so the blocker todo «missing cost basis» (``cost_basis_override``) is raised on the ADJUSTMENT rows with quantity
+        > 0 only, never on an outgoing one — which the Bulk would not let the user fill anyway. The incoming one keeps it
+        (a guard). Rows found by their type and sign, never by position. Before N78-1 both rows got the blocker."""
+        plugin = BRIMProviderRegistry.get_provider_instance(GENERIC_CSV_CODE)
+        csv_file = tmp_path / "generic_adjustments.csv"
+        csv_file.write_text("date,type,asset,quantity,amount,currency\n2025-01-03,adjustment,IE00B4L5Y983,5,0,EUR\n2025-01-04,adjustment,IE00B4L5Y983,-3,0,EUR\n", encoding="utf-8")
+
+        out = plugin.parse(csv_file, broker_id=1)
+
+        adjustments = {index: tx.quantity for index, tx in enumerate(out.transactions) if tx.type == TransactionType.ADJUSTMENT}
+        incoming = {index for index, quantity in adjustments.items() if quantity > 0}
+        outgoing = {index for index, quantity in adjustments.items() if quantity < 0}
+        assert (len(incoming), len(outgoing)) == (1, 1), f"precondition: one ADJUSTMENT +5 and one −3 parsed; quantities by index: {adjustments}, warnings: {out.warnings}"
+        blocked = {todo.tx_index for todo in out.field_todos if todo.field == "cost_basis_override" and todo.severity == "blocker"}
+        rows = f"blocked rows {sorted(blocked)}, incoming {sorted(incoming)}, outgoing {sorted(outgoing)}"
+        assert {"incoming": blocked & incoming, "outgoing": blocked & outgoing} == {"incoming": incoming, "outgoing": set()}, f"N78-1: the blocker «missing cost basis» belongs to the incoming ADJUSTMENT only; {rows}"
+
 
 # =============================================================================
 # CATEGORY 4b: THE GENERIC CSV DECLARES ONLY WHAT IT CAN READ (workstream L, step G — decision 1)

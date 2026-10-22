@@ -34,7 +34,7 @@
         "offManaged": "La protection contre l'affichage dans un cadre est désactivée dans le profil managed : n'importe quel site peut afficher LibreFolio dans un cadre. Activez LIBREFOLIO_FRAME_PROTECTION, comme le fait par défaut le profil managed."
       },
       "cspReportOnly": {
-        "on": "Les pages de l'application portent une Content-Security-Policy en mode rapport seul : le navigateur liste dans sa console ce qu'elle bloquerait, et ne bloque rien.",
+        "on": "En plus de la politique toujours appliquée, les pages de l'application portent une Content-Security-Policy plus large en mode rapport seul : le navigateur liste dans sa console ce qu'elle bloquerait en plus, sans le bloquer.",
         "offSelfHosted": "Aucune Content-Security-Policy en mode rapport seul : le réglage par défaut d'une installation personnelle.",
         "offManaged": "La Content-Security-Policy en mode rapport seul est désactivée dans le profil managed : les navigateurs ne listent rien de ce qu'elle bloquerait. Activez LIBREFOLIO_CSP_REPORT_ONLY, comme le fait par défaut le profil managed."
       },

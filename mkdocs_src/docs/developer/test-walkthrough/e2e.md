@@ -212,17 +212,17 @@ does not know. Its pure logic is in `e2e/fixtures/csp.ts` (`cspCollectorEnabled`
 
 What there is to record depends on the lane:
 
-- **Self-hosted**, the default: the lane sends no Content-Security-Policy header and
-  `frontend/src/app.html` has no `<meta>` policy, so the collector records nothing, unless a spec
-  adds a policy of its own (`layout/page-policy.spec.ts`, `layout/csp-collector.spec.ts`).
-- **Managed** (`--lane-setting LIBREFOLIO_PROFILE=managed`, see [Lane Settings](index.md#lane-settings)):
-  the app's pages carry `Content-Security-Policy-Report-Only` with `CSP_REPORT_ONLY_POLICY` and the
-  hashes of the build's inline scripts (`backend/app/services/platform/security_headers.py`, see
-  [Frame Protection and the Report-Only Policy](../architecture/security.md#managed-headers)), so
-  the app's own inline scripts report nothing. Its
-  violations, disposition `report`, are what an enforced policy would block. With frame protection
-  on, the managed default, the enforced `PAGE_POLICY` is there too, and its violations are recorded
-  as `enforce`.
+- **Every lane, self-hosted or managed**, sends the enforced policy on the web app's pages
+  (`web_app_policy()` in `backend/app/services/platform/security_headers.py`, see
+  [Frame Protection and the Report-Only Policy](../architecture/security.md#managed-headers)), with
+  the hashes of the build's inline scripts, so the app's own inline scripts report nothing. What the
+  collector records there are violations with disposition `enforce`: what the browser really
+  blocked.
+- **Where `LIBREFOLIO_CSP_REPORT_ONLY` is on** (the managed profile's default; a self-hosted lane
+  can set it with `--lane-setting`, see [Lane Settings](index.md#lane-settings)), the pages also
+  carry `Content-Security-Policy-Report-Only` with `CSP_REPORT_ONLY_POLICY`, the whole policy the
+  app aims at. Its violations, disposition `report`, are what that stricter policy would block.
+- A spec may add a policy of its own (`layout/page-policy.spec.ts`, `layout/csp-collector.spec.ts`).
 
 ### 📒 The baseline {: #csp-baseline }
 
@@ -241,12 +241,13 @@ a violation of its directive through three keys:
 An entry has exactly one of `blockedURI` and `blockedPath`. The app's own inline scripts need no
 entry: the policy allows them by their hashes (lot H-52).
 
-Two entries today:
+One entry today:
 
 | `id` | Matches | The violation, and who cures it |
 |------|---------|---------------------------------|
-| `cheetah-grid-global-probe` | `script-src`, `eval`, `sample` `(function anonymous(\n) {\nreturn this\n})` (`\n` a line break) | cheetah-grid's bundled webpack probe of the global object, `new Function("return this")()`, inside a `try`/`catch` that falls back to `window`: harmless under an enforced policy. Found by the first cloud smoke in the BRIM table preview (`files.spec.ts`). The sample is the source Chromium reports for `new Function("return this")`; istanbul's coverage preamble is the same probe, so a run under JS coverage matches it too, and any other `eval` fails a test. Removed when cheetah-grid stops probing the global object with `eval` (an upgrade, or a bundler that rewrites the probe) |
-| `address-probe-other-origin` | `connect-src`, `blockedPath` `/api/v1/auth/address-probe` | The address check of a link, in the Users tab of Settings › Administration, fetches the address the administrator typed, whatever its origin (`admin-users.spec.ts` types other origins on purpose). Under an enforced `connect-src 'self'`, a check of another origin than the page's would be blocked. Owners: workstream A (the check's experience) and H (the enforcement lot: the configured public origin in `connect-src`, or a check made by the server) |
+| `cheetah-grid-global-probe` | `script-src`, `eval`, `sample` `(function anonymous(\n) {\nreturn this\n})` (`\n` a line break) | cheetah-grid's bundled webpack probe of the global object, `new Function("return this")()`, inside a `try`/`catch` that falls back to `window`: harmless under an enforced policy. Found by the first cloud smoke in the BRIM table preview (`files.spec.ts`). The sample is the source Chromium reports for `new Function("return this")`, and any other `eval` fails a test. Coverage builds are not concerned: istanbul reaches the global object through `globalThis`, not through `new Function`. Removed when cheetah-grid stops probing the global object with `eval` (an upgrade, or a bundler that rewrites the probe) |
+
+The address check of a link no longer needs an entry: it loads an image (`GET /api/v1/auth/address-probe.png`), and `img-src` is not enforced, see [The Address Check Is an Image](../architecture/security.md#csp-address-probe).
 
 The baseline is a ratchet: an entry is added only by a recorded decision, with its reason and its
 owner, never to silence a red, and removed by the lot that cures it.
@@ -272,7 +273,7 @@ the switch would no longer reach Playwright.
    from the app's own origin), and the violation is gone. An inline `<script>` in a page of the
    build is allowed by its hash, which the server computes when it starts: after a new build,
    restart the server. An inline event handler (`onclick="…"`) is `script-src-attr`, which no hash
-   covers: listen from the page's script instead, as `frontend/static/offline.html` does.
+   covers: listen from the page's script instead, as `frontend/static/offline.html` does. The gate `frontend/src/noInlineEventHandlers.gate.test.ts` (Vitest) fails on any inline `on…="…"` attribute in the source, `src/app.html` included; icon fallbacks go through the attributes `data-hide-on-error`, `data-fallback-text` and `data-fallbacks`, handled by `frontend/src/lib/features/security/imageErrorFallback.ts`.
 3. Add a baseline entry only by a recorded decision: the violation understood, its `reason`
    written, its `owner` the lot that will cure it.
 4. `test.use({cspFailOnUnknown: false})` belongs only to a test whose subject is the violations

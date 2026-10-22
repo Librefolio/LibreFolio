@@ -271,6 +271,97 @@ def _days(start: date, count: int) -> list[date]:
 
 
 # --------------------------------------------------------------------------- #
+# L1b — the resolver reads its rates as steps: the reader stubbed where ``conversions`` reads it
+# --------------------------------------------------------------------------- #
+#
+# ``FxRateResolver.load`` asks ``unit_rate_steps`` (``fx/conversion.py``, imported by name into ``conversions``) for the
+# windows of days its pending currencies need, once per load, and no longer asks ``convert_bulk``. The new names are
+# read through ``conversions_module`` while a test runs (``raising=False`` when patched: before L1b the module does not
+# read ``unit_rate_steps``), never imported at module level, so only the tests that use them fail and the file still
+# collects. Each docstring says what HEAD does today.
+
+
+class _FlatSteps:
+    """A unit-rate reader in the shape of ``fx.conversion.UnitRateSteps`` with one rate from the first day of the calendar on:
+    ``at`` answers it on any day (the resolver, not the reader, keeps to the days asked); None for no rate at all."""
+
+    def __init__(self, rate: Decimal | None) -> None:
+        self.rate = rate
+        self.days = (date(1, 1, 1),) if rate is not None else ()
+        self.values = (rate,) if rate is not None else ()
+
+    def at(self, day: date) -> Decimal | None:
+        return self.rate
+
+
+def _stub_unit_rate_steps(monkeypatch, rates: dict[str, Decimal | None] | None = None, default: Decimal | None = D("1.25")) -> list[dict[tuple[str, str], list[tuple[date, date]]]]:
+    """``conversions.unit_rate_steps`` replaced by a reader of one flat rate per source currency (``rates[source]``, else
+    ``default``; None: no step), and the list it fills with the requests of each call, ``{(source, destination): windows}``.
+    ``conversions.convert_bulk``, which ``load`` no longer asks, is replaced by a stub that refuses the call, so a ``load`` that
+    still asks it fails on the spot instead of reaching a session. Both ``raising=False``: the first name is new in
+    ``conversions`` and the second is dropped by the cure."""
+    calls: list[dict[tuple[str, str], list[tuple[date, date]]]] = []
+
+    async def unit_rate_steps(_session, requests):
+        calls.append({pair: list(windows) for pair, windows in requests.items()})
+        return {pair: _FlatSteps((rates or {}).get(pair[0], default)) for pair in requests}
+
+    async def convert_bulk_refused(*_args, **_kwargs):
+        raise AssertionError("FxRateResolver.load asked convert_bulk: it must read unit_rate_steps")
+
+    monkeypatch.setattr(conversions_module, "unit_rate_steps", unit_rate_steps, raising=False)
+    monkeypatch.setattr(conversions_module, "convert_bulk", convert_bulk_refused, raising=False)
+    return calls
+
+
+def _need_days(resolver: FxRateResolver):
+    """``resolver.need_days``, read by name: before L1b it does not exist, and only the tests that call it fail."""
+    need_days = getattr(resolver, "need_days", None)
+    assert need_days is not None, "FxRateResolver has no need_days"
+    return need_days
+
+
+def _covered_days(windows: list[tuple[date, date]]) -> set[date]:
+    """The days of ``windows`` (both ends included); a window that ends before it starts is a defect."""
+    assert all(first <= last for first, last in windows), f"a window ends before it starts: {windows}"
+    return {first + timedelta(days=offset) for first, last in windows for offset in range((last - first).days + 1)}
+
+
+def _merged_windows(windows: list[tuple[date, date]]) -> list[tuple[date, date]]:
+    """Ascending windows with the overlapping and touching ones joined: what they cover, without a set of days."""
+    merged: list[tuple[date, date]] = []
+    for first, last in sorted(windows):
+        if merged and first <= merged[-1][1] + timedelta(days=1):
+            merged[-1] = (merged[-1][0], max(merged[-1][1], last))
+        else:
+            merged.append((first, last))
+    return merged
+
+
+class _Asked:
+    """What a resolver was asked, as single days (``need``: its ``_needs``) or as windows (``need_days``, L1b): a test of what
+    ``collect_fx_needs`` asks reads it the same before and after the cure. Wrap the resolver before the call."""
+
+    def __init__(self, resolver: FxRateResolver, monkeypatch) -> None:
+        self.resolver = resolver
+        self.windows: list[tuple[str, date, date]] = []
+        original = getattr(resolver, "need_days", None)
+        if original is not None:
+
+            def recording(currency, first, last):
+                self.windows.append((currency, first, last))
+                return original(currency, first, last)
+
+            monkeypatch.setattr(resolver, "need_days", recording)
+
+    def covers(self, currency: str, day: date) -> bool:
+        return (currency, day) in set(self.resolver._needs) or any(asked == currency and first <= day <= last for asked, first, last in self.windows)
+
+    def currencies(self) -> set[str]:
+        return {currency for currency, _day in self.resolver._needs} | {currency for currency, _first, _last in self.windows}
+
+
+# --------------------------------------------------------------------------- #
 # FxRateResolver
 # --------------------------------------------------------------------------- #
 
@@ -471,15 +562,18 @@ class TestCollectFxNeeds:
         )
         assert resolver._needs == []
 
-    def test_a_priced_adjustment_is_no_rate_the_market_series_reads(self):
+    def test_a_priced_adjustment_is_no_rate_the_market_series_reads(self, monkeypatch):
         """J-17: only BUY and SELL mark the asset, so the market series needs the currency a BUY was
         paid in on every day of the window, and never the cost-basis currency of an ADJUSTMENT — the
         adjustment carries a WAC, not a price, and leaves no mark to convert.
 
         Before J-17: the series also registered the ADJUSTMENT's cost-basis currency (GBP) on every day
         from 2024-01-01 to 2024-06-01, to convert the adjustment's mark.
+
+        Read through ``_Asked``: the days are asked one by one (``need``) or as a window (``need_days``, L1b), the same.
         """
         resolver = _resolver("EUR")
+        asked = _Asked(resolver, monkeypatch)
         self._call(
             resolver,
             analyses=[LotAnalysisType.PRICE_HISTORY],
@@ -488,9 +582,44 @@ class TestCollectFxNeeds:
                 _tx(2, tx_type=TransactionType.ADJUSTMENT, tx_date=date(2024, 2, 1), quantity=D("10"), amount=D("0"), currency=None, cost_basis_override=D("5"), cost_basis_currency="GBP"),
             ],
         )
-        needed = set(resolver._needs)
-        assert {("USD", date(2024, 1, 1)), ("USD", date(2024, 3, 15)), ("USD", date(2024, 6, 1))} <= needed, "guard: a BUY's currency is read on every day of the window"
-        assert {currency for currency, _day in needed} == {"USD"}, f"currencies the market series asks: {sorted({currency for currency, _day in needed})}"
+        assert all(asked.covers("USD", day) for day in (date(2024, 1, 1), date(2024, 3, 15), date(2024, 6, 1))), "guard: a BUY's currency is read on every day of the window"
+        assert asked.currencies() == {"USD"}, f"currencies the market series asks: {sorted(asked.currencies())}"
+
+    @pytest.mark.asyncio
+    async def test_the_market_series_asks_its_currencies_as_windows_not_day_by_day(self, monkeypatch):
+        """L1b: the market price line reads each mark's currency on every day from ``computed_from`` to ``actual_to``; over a
+        ~20 000-day range (1950-01-01, 20 000 days) a BUY in USD and a close in GBP are two currencies, asked as two windows —
+        ``need`` called at most 40 times, not one per day — and the next ``load`` hands ``unit_rate_steps`` those two
+        currencies over exactly [computed_from, actual_to] (the reader stubbed).
+
+        Today: ``need`` is called 40 000 times, one per currency per day; the windows are never asked.
+        """
+        computed_from = date(1950, 1, 1)
+        actual_to = computed_from + timedelta(days=19_999)
+        resolver = _resolver("EUR")
+        needs: list[str] = []
+        original_need = resolver.need
+
+        def counting_need(currency, day):
+            needs.append(currency)
+            original_need(currency, day)
+
+        monkeypatch.setattr(resolver, "need", counting_need)
+        self._call(
+            resolver,
+            analyses=[LotAnalysisType.PRICE_HISTORY],
+            transactions=[_tx(1, tx_type=TransactionType.BUY, tx_date=computed_from, quantity=D("10"), amount=D("-100"), currency="USD")],
+            prices=[_price(date(1950, 3, 1), D("11"), "GBP")],
+            computed_from=computed_from,
+            actual_to=actual_to,
+        )
+        assert len(needs) <= 40, f"{len(needs)} need() calls for 2 market currencies over {(actual_to - computed_from).days + 1} days; the cure asks them as windows"
+
+        calls = _stub_unit_rate_steps(monkeypatch)
+        await resolver.load(None)
+
+        assert len(calls) == 1, f"one load, one unit_rate_steps call; got {len(calls)}"
+        assert {pair: _merged_windows(windows) for pair, windows in calls[0].items()} == {("USD", "EUR"): [(computed_from, actual_to)], ("GBP", "EUR"): [(computed_from, actual_to)]}
 
 
 # --------------------------------------------------------------------------- #
@@ -2088,35 +2217,146 @@ class TestGetLotsAnalysisArgumentGuard:
 
 
 class TestFxRateResolverLoad:
-    """``load`` is the resolver's only async step; convert_bulk is stubbed where ``conversions`` reads it, so no session."""
+    """``load`` is the resolver's only async step; ``unit_rate_steps`` is stubbed where ``conversions`` reads it (and
+    ``convert_bulk``, which ``load`` no longer asks, refuses the call), so no session.
+
+    Today both cases fail the same way: ``load`` asks ``convert_bulk`` — refused, «FxRateResolver.load asked convert_bulk: it
+    must read unit_rate_steps» — and ``unit_rate_steps`` is never called.
+    """
 
     @pytest.mark.asyncio
     async def test_a_day_with_no_published_rate_is_left_unresolved(self, monkeypatch):
-        """convert_bulk returns None for that pair: the amount stays unknown, not zero."""
-
-        async def fake_convert_bulk(_session, conversions, raise_on_error=False):
-            return [None] * len(conversions), []
-
-        monkeypatch.setattr(conversions_module, "convert_bulk", fake_convert_bulk)
+        """The reader has no step for that pair: the amount stays unknown, not zero — and the reader was asked for exactly the
+        pair and the day."""
+        calls = _stub_unit_rate_steps(monkeypatch, default=None)
         resolver = FxRateResolver("EUR")
         resolver.need("USD", date(2024, 1, 10))
         await resolver.load(None)
+        assert [{pair: _covered_days(windows) for pair, windows in call.items()} for call in calls] == [{("USD", "EUR"): {date(2024, 1, 10)}}]
         assert resolver.convert(D("100"), "USD", date(2024, 1, 10)) is None
 
     @pytest.mark.asyncio
     async def test_a_resolved_rate_is_stored_and_reused(self, monkeypatch):
-        calls: list[int] = []
-
-        async def fake_convert_bulk(_session, conversions, raise_on_error=False):
-            calls.append(len(conversions))
-            return [(Currency(code="EUR", amount=D("0.9")), date(2024, 1, 10), False)], []
-
-        monkeypatch.setattr(conversions_module, "convert_bulk", fake_convert_bulk)
+        calls = _stub_unit_rate_steps(monkeypatch, {"USD": D("0.9")})
         resolver = FxRateResolver("EUR")
         resolver.need("USD", date(2024, 1, 10))
         await resolver.load(None)
         await resolver.load(None)  # nothing pending the second time
-        assert (resolver.convert(D("100"), "USD", date(2024, 1, 10)), calls) == (D("90.0"), [1])
+        assert (resolver.convert(D("100"), "USD", date(2024, 1, 10)), len(calls)) == (D("90.0"), 1)
+        assert {pair: _covered_days(windows) for pair, windows in calls[0].items()} == {("USD", "EUR"): {date(2024, 1, 10)}}
+
+    @pytest.mark.asyncio
+    async def test_an_invalid_code_raises_at_load(self, monkeypatch):
+        """GUARD (green today and after): a code pycountry rejects raises a ``ValueError`` at ``load`` — each pending currency is
+        validated through ``Currency(code=…, amount=1)`` — whatever the reader would have said."""
+        _stub_unit_rate_steps(monkeypatch)
+        resolver = FxRateResolver("EUR")
+        resolver.need("Z1", date(2024, 1, 10))
+        with pytest.raises(ValueError):
+            await resolver.load(None)
+
+
+class TestFxRateResolverNeedDays:
+    """L1b: ``need_days(currency, first, last)`` asks every day of a window; ``load`` hands the reader the pending windows of each
+    pending currency, once per load. The reader is stubbed (a flat rate per currency): the cases read what ``load`` handed it
+    by the days its windows cover — however the cure splits or joins them — and what ``convert`` then answers.
+
+    Today: ``FxRateResolver`` has no ``need_days`` — «FxRateResolver has no need_days».
+    """
+
+    _FIRST, _LAST = date(2024, 1, 10), date(2024, 1, 20)
+
+    @pytest.mark.asyncio
+    async def test_a_window_answers_on_each_of_its_days_and_not_around_it(self, monkeypatch):
+        """Two windows (one a single day) and a single-day ``need``: one reader call with one entry per currency, its windows
+        covering exactly the days asked; ``convert`` answers on each of them with the reader's rate and on the day before and
+        the day after a window with nothing."""
+        resolver = FxRateResolver("EUR")
+        need_days = _need_days(resolver)
+        calls = _stub_unit_rate_steps(monkeypatch, {"USD": D("1.25"), "GBP": D("0.5"), "JPY": D("0.01")})
+        need_days("USD", self._FIRST, self._LAST)
+        need_days("GBP", self._FIRST, self._FIRST)
+        resolver.need("JPY", date(2024, 2, 1))
+        await resolver.load(None)
+
+        assert len(calls) == 1, f"one load, one unit_rate_steps call; got {len(calls)}"
+        assert set(calls[0]) == {("USD", "EUR"), ("GBP", "EUR"), ("JPY", "EUR")}, f"one entry per pending currency: {sorted(calls[0])}"
+        assert _covered_days(calls[0][("USD", "EUR")]) == set(_days(self._FIRST, 11))
+        assert _covered_days(calls[0][("GBP", "EUR")]) == {self._FIRST}
+        assert _covered_days(calls[0][("JPY", "EUR")]) == {date(2024, 2, 1)}
+        around = _days(self._FIRST - timedelta(days=1), 13)
+        assert {day: resolver.convert(D("100"), "USD", day) for day in around} == {around[0]: None, **{day: D("125.00") for day in around[1:-1]}, around[-1]: None}
+        assert [resolver.convert(D("100"), "GBP", day) for day in (self._FIRST - timedelta(days=1), self._FIRST, self._FIRST + timedelta(days=1))] == [None, D("50.0"), None]
+        assert [resolver.convert(D("100"), "JPY", date(2024, 2, offset)) for offset in (1, 2)] == [D("1.00"), None]
+
+    @pytest.mark.asyncio
+    async def test_a_window_that_asks_nothing(self, monkeypatch):
+        """A window that ends before it starts, a missing or blank code and the target's own code ask nothing: ``load`` does not
+        call the reader, and the days of the reversed window stay unresolved (the target and the blanks convert as themselves)."""
+        resolver = FxRateResolver("EUR")
+        need_days = _need_days(resolver)
+        calls = _stub_unit_rate_steps(monkeypatch)
+        need_days("USD", self._LAST, self._FIRST)
+        for currency in (None, "", "EUR"):
+            need_days(currency, self._FIRST, self._LAST)
+        await resolver.load(None)
+
+        assert calls == [], f"nothing was asked, yet the reader was called with {calls}"
+        assert resolver.convert(D("100"), "USD", date(2024, 1, 15)) is None
+        assert [resolver.convert(D("100"), currency, date(2024, 1, 15)) for currency in ("EUR", None, "")] == [D("100")] * 3
+
+    @pytest.mark.asyncio
+    async def test_a_need_inside_a_loaded_window_is_already_answered(self, monkeypatch):
+        """A ``need`` on a day a loaded window covers is not pending: the second ``load``, with nothing new, does not call the
+        reader again, and the day answers."""
+        resolver = FxRateResolver("EUR")
+        need_days = _need_days(resolver)
+        calls = _stub_unit_rate_steps(monkeypatch, {"USD": D("1.25")})
+        need_days("USD", self._FIRST, self._LAST)
+        await resolver.load(None)
+        resolver.need("USD", date(2024, 1, 15))
+        await resolver.load(None)
+
+        assert len(calls) == 1, f"the reader was called {len(calls)} times, the second for a day the first window covers"
+        assert resolver.convert(D("100"), "USD", date(2024, 1, 15)) == D("125.00")
+
+    @pytest.mark.asyncio
+    async def test_several_loads_accumulate(self, monkeypatch):
+        """A second ``load`` hands the reader only what became pending — a new currency's window and a single day of the first
+        currency outside its window — and the first load's days still answer beside the second's."""
+        resolver = FxRateResolver("EUR")
+        need_days = _need_days(resolver)
+        calls = _stub_unit_rate_steps(monkeypatch, {"USD": D("1.25"), "GBP": D("0.5")})
+        need_days("USD", self._FIRST, self._LAST)
+        await resolver.load(None)
+        need_days("GBP", self._FIRST, self._FIRST + timedelta(days=2))
+        resolver.need("USD", date(2024, 2, 1))
+        await resolver.load(None)
+
+        assert len(calls) == 2, f"two loads, two reader calls; got {len(calls)}"
+        assert {pair: _covered_days(windows) for pair, windows in calls[1].items()} == {("GBP", "EUR"): set(_days(self._FIRST, 3)), ("USD", "EUR"): {date(2024, 2, 1)}}
+        assert [resolver.convert(D("100"), "USD", day) for day in (self._FIRST, self._LAST, date(2024, 2, 1), date(2024, 1, 25))] == [D("125.00"), D("125.00"), D("125.00"), None]
+        assert [resolver.convert(D("100"), "GBP", day) for day in (self._FIRST, self._FIRST + timedelta(days=2), self._FIRST + timedelta(days=3))] == [D("50.0"), D("50.0"), None]
+
+    @pytest.mark.asyncio
+    async def test_a_code_is_read_normalised_and_the_target_by_another_spelling_is_the_target(self, monkeypatch):
+        """'usd' and 'huf' read the USD and HUF rates (the reader is asked for ("USD", "EUR") and ("HUF", "EUR"), upper case);
+        'eur' normalises to the target 'EUR': no entry for it (``unit_rate_steps`` refuses a pair of one currency) and it
+        converts at exactly Decimal('1'), as ``convert_bulk``'s identity did. Each answer is read under the code as asked."""
+        resolver = FxRateResolver("EUR")
+        need_days = _need_days(resolver)
+        calls = _stub_unit_rate_steps(monkeypatch, {"USD": D("1.25"), "HUF": D("0.0025")})
+        day = date(2024, 1, 10)
+        resolver.need("usd", day)
+        resolver.need("eur", day)
+        need_days("huf", day, day + timedelta(days=2))
+        await resolver.load(None)
+
+        assert [set(call) for call in calls] == [{("USD", "EUR"), ("HUF", "EUR")}], f"the reader was asked for {[sorted(call) for call in calls]}"
+        assert resolver.convert(D("100"), "usd", day) == D("125.00")
+        assert resolver.convert(D("100"), "huf", day + timedelta(days=1)) == D("0.2500")
+        identity = resolver.convert(D("5"), "eur", day)
+        assert identity is not None and identity.as_tuple() == D("5").as_tuple(), f"'eur' converts at exactly 1, not {identity!r}"
 
 
 class TestParseTransferPairId:
@@ -2133,9 +2373,10 @@ class TestParseTransferPairId:
 # CP-16 — decision 47 and J-9 in the lots builders
 # =========================================================================== #
 #
-# Workstream J «Numeri e analisi», release 1.3. Decision 47: a negative ADJUSTMENT carrying cost_basis_override
-# hands its units over at that cost; in the lots performance history its value leaves as an external flow, the
-# mirror of an ADJUSTMENT-in with a cost. J-9: a lot opened by an ADJUSTMENT-in priced by its override is in
+# Workstream J «Numeri e analisi», release 1.3. N78-1 (the developer's decision, 21/10/2026) replaced decision 47's
+# reading: a negative ADJUSTMENT read from the database has no value, whatever cost_basis_override it stores — its
+# units leave at 0, the lots performance history sees no flow and asks no rate for it (before N78-1 the stored value
+# left as an external flow, the mirror of an ADJUSTMENT-in with a cost). J-9: a lot opened by an ADJUSTMENT-in priced by its override is in
 # cost_basis_currency, so every builder that converts that lot — the summary, the lot history's opening row and the
 # FX needs of that history — converts from that currency, not from the row's (usually None, which the FX resolver
 # reads as already in the report currency). The engine side is pinned in
@@ -2153,14 +2394,14 @@ def _engine_run(*transactions: Transaction, shorting: bool = False) -> FifoEngin
     return run_fifo_lot_engine(list(transactions), {1: shorting}, target_currency="EUR")
 
 
-class TestHandoverAtCostPerformanceHistory:
-    """Decision 47 in ``build_performance_history`` (lots/histories.py).
+class TestAdjustmentOutStoringAValuePerformanceHistory:
+    """N78-1 in ``build_performance_history`` (lots/histories.py): an ADJUSTMENT-out has no value.
 
-    The decision's example: 10 bought at 20 EUR on 1 Oct 2018, 4 handed over on 3 Oct by an ADJUSTMENT −4 carrying
-    20 EUR a unit; X at 20, 20, 25, 25, 30 from 1 to 5 Oct. An ADJUSTMENT-in with a cost is an external flow of
-    −cost; the handover is its mirror, +4 × 20 = +80 on 3 Oct, converted from cost_basis_currency at the row's date.
-    Before CP-16 an ADJUSTMENT with a cost was a flow only when its quantity was positive: the 80 never left, and the
-    series read the 4 units as lost.
+    Decision 47's example: 10 bought at 20 EUR on 1 Oct 2018, 4 taken out on 3 Oct by an ADJUSTMENT −4 — an in-memory
+    database row, not a J-10 scope-boundary reading — storing 20 EUR a unit; X at 20, 20, 25, 25, 30 from 1 to 5 Oct.
+    The stored value is ignored: the 4 units leave without a flow, as a row without a value. Before N78-1 (CP-16) the
+    exit was the mirror of an ADJUSTMENT-in with a cost, a flow of +4 × 20 = +80 on 3 Oct; before CP-16 there was no
+    flow either.
 
     No day is valued at cost here (``at_cost_until=None``): the rules of a day with a mark, or without one outside the days at cost; the days at cost are ``TestPerformanceHistoryAtCost``.
     """
@@ -2200,11 +2441,11 @@ class TestHandoverAtCostPerformanceHistory:
             at_cost_until=None,
         )
 
-    def test_the_handover_is_an_external_flow_of_its_cost(self, monkeypatch):
-        """The flows the series is computed from, net by date: −200 (the BUY) on 1 Oct, +80 (the handover at cost) on 3 Oct.
+    def test_the_exit_is_no_external_flow_whatever_it_stores(self, monkeypatch):
+        """The flows the series is computed from, net by date: −200 (the BUY) on 1 Oct, and nothing on 3 Oct.
 
         Read where build_performance_history hands them on — calculate_simple_roi_series, as histories imports it — and
-        netted by date, so a flow counted twice (from the row and again from its closure) shows. Before CP-16: {1 Oct: −200}.
+        netted by date, so a flow counted from the row or from its closure shows. Before N78-1 (CP-16): also +80 on 3 Oct.
         """
         received: list[list] = []
         original = histories_module.calculate_simple_roi_series
@@ -2221,30 +2462,29 @@ class TestHandoverAtCostPerformanceHistory:
         net_by_date: dict[date, Decimal] = {}
         for flow in received[0]:
             net_by_date[flow.date] = net_by_date.get(flow.date, D("0")) + flow.amount
-        assert net_by_date == {date(2018, 10, 1): D("-200"), date(2018, 10, 3): D("80")}
+        assert net_by_date == {date(2018, 10, 1): D("-200")}, f"N78-1: an ADJUSTMENT-out is no flow, whatever it stores; flows by date: {net_by_date}"
 
-    def test_roi_and_twrr_count_the_handover_as_money_taken_out(self):
+    def test_roi_and_twrr_read_the_exit_as_units_gone_without_a_flow(self):
         """The visible effect, from returns.py's definitions, on NAVs of 200, 200, 150 (6 × 25), 150 and 180 (6 × 30).
 
-        ROI = (NAV − invested) / invested with invested = −Σ flows: 200 until 2 Oct, 120 from 3 Oct → 0, 0, 0.25, 0.25,
-        0.5. TWRR compounds (NAV + the day's flow − previous NAV) / previous NAV: 3 Oct (150 + 80 − 200) / 200 = 0.15,
-        5 Oct (180 − 150) / 150 = 0.2, so 1.15 × 1.2 − 1 = 0.38 — the 4 units leave at their cost, 20, on a day X is
-        quoted 25, the mirror of an ADJUSTMENT-in costed below the market. No TWRR on the first day.
-        Before CP-16, without the flow: ROI −0.25, −0.25, −0.1 and TWRR −0.25, −0.25, −0.1 from 3 Oct.
+        ROI = (NAV − invested) / invested with invested = −Σ flows = 200 every day → 0, 0, −0.25, −0.25, −0.1. TWRR
+        compounds (NAV + the day's flow − previous NAV) / previous NAV: 3 Oct 150 / 200 − 1 = −0.25, 5 Oct 180 / 150 − 1 =
+        0.2, so 0.75 × 1.2 − 1 = −0.1. No TWRR on the first day.
+        Before N78-1 (CP-16, the +80 flow): ROI 0.25, 0.25, 0.5 and TWRR 0.15, 0.15, 0.38 from 3 Oct.
         """
         points = self._history()
 
         assert [(point.date, point.roi, point.twrr) for point in points] == [
             (date(2018, 10, 1), D("0"), None),
             (date(2018, 10, 2), D("0"), D("0")),
-            (date(2018, 10, 3), D("0.25"), D("0.15")),
-            (date(2018, 10, 4), D("0.25"), D("0.15")),
-            (date(2018, 10, 5), D("0.5"), D("0.38")),
+            (date(2018, 10, 3), D("-0.25"), D("-0.25")),
+            (date(2018, 10, 4), D("-0.25"), D("-0.25")),
+            (date(2018, 10, 5), D("-0.1"), D("-0.1")),
         ]
 
 
-class TestHandoverAtCostPerformanceFxNeeds:
-    """Decision 47's flow needs its rate: ``collect_performance_fx_needs`` asks for the handover's cost currency."""
+class TestAdjustmentOutPerformanceFxNeeds:
+    """N78-1: an ADJUSTMENT-out is no flow, so ``collect_performance_fx_needs`` asks no rate for it, whatever it stores."""
 
     def _call(self, resolver, **overrides):
         kwargs = {
@@ -2258,18 +2498,16 @@ class TestHandoverAtCostPerformanceFxNeeds:
         kwargs.update(overrides)
         collect_performance_fx_needs(**kwargs)
 
-    def test_a_handover_with_a_cost_needs_its_cost_currency_on_its_date(self):
-        """An ADJUSTMENT −4 at 18 USD a unit, report EUR: the 72 USD that leave are converted on the row's date.
-
-        So ("USD", that date) is asked for, as for an ADJUSTMENT-in with a cost. Before CP-16 only a positive ADJUSTMENT
-        registered it: nothing was asked, and the flow would have found no rate.
+    def test_an_adjustment_out_storing_a_value_needs_no_rate(self):
+        """An ADJUSTMENT −4 (an in-memory database row) storing 18 USD a unit, report EUR: nothing leaves, nothing is
+        converted, no rate is asked. Before N78-1 (CP-16) ("USD", the row's date) was asked for the 72 USD it handed over.
         """
         resolver = _resolver("EUR")
-        handover = _tx(1, tx_type=TransactionType.ADJUSTMENT, quantity=D("-4"), amount=D("0"), currency=None, cost_basis_override=D("18"), cost_basis_currency="USD")
+        exit_row = _tx(1, tx_type=TransactionType.ADJUSTMENT, quantity=D("-4"), amount=D("0"), currency=None, cost_basis_override=D("18"), cost_basis_currency="USD")
 
-        self._call(resolver, transactions=[handover])
+        self._call(resolver, transactions=[exit_row])
 
-        assert resolver._needs == [("USD", date(2024, 1, 10))]
+        assert resolver._needs == []
 
     def test_a_handover_without_a_cost_needs_nothing(self):
         """GUARD: an ADJUSTMENT −4 without an override moves no money, so no rate is asked — not even for an asset quoted in USD."""
@@ -2486,7 +2724,7 @@ def _gbp_lot_sold_in_usd() -> list[Transaction]:
 
 
 def _gbp_lot_handed_over_at_a_usd_cost() -> list[Transaction]:
-    """10 bought at 20 GBP; on 2 Jun an ADJUSTMENT −4 hands 4 over at 18 USD a unit (decision 47), its own currency None."""
+    """10 bought at 20 GBP; on 2 Jun an ADJUSTMENT −4 storing 18 USD a unit (decision 47 before N78-1; ignored since), its own currency None."""
     handover = _tx(2, tx_type=TransactionType.ADJUSTMENT, tx_date=_JUN_2, quantity=D("-4"), amount=D("0"), currency=None, cost_basis_override=D("18"), cost_basis_currency="USD")
     return [_bought_on_jan_2("10", "20", "GBP"), handover]
 
@@ -2756,13 +2994,15 @@ class TestTheRatesAClosureNeeds:
         assert {("USD", _JUN_2), ("GBP", _JAN_2)} <= _needs_of_the_lot_analysis(analysis, _gbp_lot_sold_in_usd())
 
     @pytest.mark.parametrize("analysis", [LotAnalysisType.EVENT_HISTORY, LotAnalysisType.CUSTODY_HISTORY])
-    def test_the_lot_history_asks_for_a_handovers_cost_currency_on_its_date(self, analysis):
-        """collect_fx_needs for 10 bought in GBP, 4 handed over at 18 USD on 2 Jun: ("USD", 2 Jun) and ("GBP", 2 Jan) among the needs.
+    def test_the_lot_history_asks_no_rate_for_the_value_an_adjustment_out_stores(self, analysis):
+        """collect_fx_needs for 10 bought in GBP, 4 taken out on 2 Jun by an ADJUSTMENT (an in-memory database row) storing
+        18 USD a unit: ("GBP", 2 Jan) among the needs, ("USD", 2 Jun) not — N78-1: the units leave at 0, in the lot's
+        currency, and nothing of the stored value is converted. No row is in USD, so only a closure in USD could ask.
 
-        No row is in USD — the ADJUSTMENT's own currency is None — so only its closure can ask. Before CP-7a: ("GBP", 2 Jan) and
-        ("GBP", 2 Jun) only; the units left at their own GBP cost (CP-16's fallback) and USD was never asked for.
+        Before N78-1 (CP-7a): the closure carried the stored 18 USD and asked ("USD", 2 Jun).
         """
-        assert {("USD", _JUN_2), ("GBP", _JAN_2)} <= _needs_of_the_lot_analysis(analysis, _gbp_lot_handed_over_at_a_usd_cost())
+        needs = _needs_of_the_lot_analysis(analysis, _gbp_lot_handed_over_at_a_usd_cost())
+        assert ("GBP", _JAN_2) in needs and ("USD", _JUN_2) not in needs, f"N78-1: no USD rate for the value an ADJUSTMENT-out stores; needs: {sorted(needs)}"
 
     def test_the_performance_history_asks_for_the_sales_currency_on_the_sales_date(self):
         """collect_performance_fx_needs for 1 bought in GBP and sold in USD: ("USD", 2 Jun) and ("GBP", 2 Jan) among the needs.
@@ -3119,7 +3359,8 @@ class TestLastDayWithoutObservation:
 # display_from clamped to it too — no price load, history point, income marker or daily rate before 1900 — while the
 # FIFO engine still opens the lot on its own date, with its own quantity, cost and income. The floor is a literal here:
 # the name is new. Driven like the CP-7b class above: get_lots_analysis on loader doubles and a session double; in EUR
-# no rate is asked, and the USD case replaces convert_bulk where conversions reads it. Each docstring says what HEAD
+# no rate is asked, and the USD case replaces the rates' reader where conversions reads it (convert_bulk; unit_rate_steps
+# since L1b). Each docstring says what HEAD
 # 94e170ae1 returns; GUARD marks a value the cure leaves as it was.
 
 _SEC8_FLOOR = date(1900, 1, 1)
@@ -3226,7 +3467,15 @@ class TestALotOpenedBeforeTheFloor:
             requested.update((amount.code, day) for amount, _to, day in conversions)
             return [(Currency(code="EUR", amount=amount.amount * D("0.9")), day, False) for amount, _to, day in conversions], []
 
-        monkeypatch.setattr(conversions_module, "convert_bulk", recording_convert_bulk)
+        async def recording_unit_rate_steps(_session, requests):
+            for (source, _destination), windows in requests.items():
+                requested.update((source, day) for day in _covered_days(list(windows)))
+            return {pair: _FlatSteps(D("0.9")) for pair in requests}
+
+        # The rates are read through whichever reader the resolver loads from: ``convert_bulk`` before L1b, ``unit_rate_steps``
+        # after (``raising=False``: each name is absent from ``conversions`` on the other side of the cure).
+        monkeypatch.setattr(conversions_module, "convert_bulk", recording_convert_bulk, raising=False)
+        monkeypatch.setattr(conversions_module, "unit_rate_steps", recording_unit_rate_steps, raising=False)
 
         await _sec8_analysis(monkeypatch, date_from=None, currency="USD")
 

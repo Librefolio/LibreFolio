@@ -18,8 +18,10 @@
  *     (readonly) holds `composeLink(normalized address, path)`; `link-share-expires` shows the expiry;
  *   - the probe runs only when the normalized address differs from the initial one, 500 ms after the last keystroke:
  *     `zodiosApi.issue_address_probe_api_v1_users_address_probe_post()` for a nonce, then `checkAddress` through the
- *     global `fetch` — `GET <base>/api/v1/auth/address-probe?nonce=…`, a CORS simple request: no headers, no
- *     credentials; `link-share-probe` publishes `data-state` ∈ idle | checking | match | mismatch | unverifiable |
+ *     default image loader (H-55 v2) — an `Image` of the global scope, no `crossOrigin`, `referrerPolicy`
+ *     `no-referrer`, whose `src` is `<base>/api/v1/auth/address-probe.png?nonce=…`: a 1×1 picture is a match, a 2×1
+ *     one a mismatch, anything else or an error is unverifiable; no `fetch` is sent (the enforced `connect-src`
+ *     would block it); `link-share-probe` publishes `data-state` ∈ idle | checking | match | mismatch | unverifiable |
  *     invalid; back to the initial address → idle; an address `normalizeBase` refuses → invalid, and `link-share-copy`
  *     disabled; every other state can copy;
  *   - each verdict is notified as `accounts.address.checked` `{state}`, without a toast;
@@ -31,15 +33,16 @@
  * Held still:
  *   - the clock, in every case that types into the address: `vi.useFakeTimers()` before the mount, and
  *     `advanceTimersByTimeAsync` to reach the debounce. Its async form fires the due timers and then yields one real
- *     macrotask, so the promise chain a timer starts (nonce, fetch, verdict, Svelte's microtask flush) has settled when
+ *     macrotask, so the promise chain a timer starts (nonce, image, verdict, Svelte's microtask flush) has settled when
  *     it returns. `waitFor` is never used on a frozen clock: its own interval is a faked timer, so it would hang
  *     instead of failing;
- *   - `fetch`, stubbed with `vi.stubGlobal` (the contract has `checkAddress` read `globalThis.fetch` at call time).
- *     Every call stays pending until the case answers it — `askedAt(base)` finds it by address, never by position —
- *     and, like a real fetch, rejects with an `AbortError` when its signal aborts, so an implementation that aborts a
- *     superseded request is held to the same "no stale verdict" as one that only ignores it. Answers are real
- *     `Response` objects: their body is read through microtasks only (undici closes the stream with `queueMicrotask`,
- *     which Vitest never fakes), so the frozen clock cannot stall them;
+ *   - `Image`, replaced by a fake class with `vi.stubGlobal` (the default loader of `checkAddress` builds one at call
+ *     time). Every image whose `src` is set stays pending until the case answers it — `askedAt(base)` finds it by
+ *     address, never by position — with `load(width, height)` (its natural size, as the browser reports it) or
+ *     `fail()` (its `error` event); both reach the handler set as a property or as a listener. Clearing `src` (the
+ *     abort of a superseded or late load) leaves the request on record, so an implementation that aborts a
+ *     superseded image is held to the same "no stale verdict" as one that only ignores it. The global `fetch` is a
+ *     failing stub: the probe is no fetch any more, and a case that sees it called says so;
  *   - the nonce endpoint, through the `$lib/api` Proxy mock (each alias a lazily created `vi.fn`);
  *   - the browser clipboard surface — `navigator.clipboard`, `window.isSecureContext`, `document.execCommand` —
  *     defined per case and put back exactly as jsdom had it (it has none of the three), as `clipboard.test.ts` does.
@@ -49,13 +52,13 @@
  *     `routes/(app)/settings/page.tabs.test.ts`: the probe publishes the props it was drawn with in `data-received`;
  *   - `$lib/i18n`, an identity translator: labels render as their key, and nothing here reads a label anyway.
  *
- * Not asserted: the probe's own ladder (non-2xx, invalid JSON, a non-boolean `match`, the 8 s timeout) and the exact
- * `init` beyond headers and credentials — `addressProbe.test.ts` (V1) owns them; `initialBase`/`composeLink` edge
- * cases — `linkShare.test.ts` (V1); the state shown *during* the debounce window, which the contract leaves open; the
- * wording and format of `link-share-expires`, which publishes no machine-readable value.
+ * Not asserted: the probe's own ladder (other natural sizes, a loader that throws, the 8 s timeout, the order in which
+ * the `Image` is set up beyond what C-04 reads) — `addressProbe.test.ts` (V1) owns them; `initialBase`/`composeLink`
+ * edge cases — `linkShare.test.ts` (V1); the state shown *during* the debounce window, which the contract leaves open;
+ * the wording and format of `link-share-expires`, which publishes no machine-readable value.
  *
- * Red today: `./LinkShare.svelte` and `./linkShareActions` do not exist (nor does the `users/` folder), so the import
- * fails and every case is red on that.
+ * Red until `addressProbe.ts` is cured (H-55 v2): it still probes with `fetch`, so no `Image` is ever built and every
+ * case that waits for the probe image (C-03, C-04, C-05, C-07, C-08, C-09, C-10, C-12) fails on `askedAt`.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {readable, writable} from 'svelte/store';
@@ -144,7 +147,7 @@ const OTHER_BASE = 'https://other.example/lf';
 const FIRST_BASE = 'https://first.example/lf';
 const SECOND_BASE = 'https://second.example/lf';
 
-const PROBE_PATH = '/api/v1/auth/address-probe';
+const PROBE_IMAGE_PATH = '/api/v1/auth/address-probe.png';
 /** A nonce with characters a query string must encode, and what it must look like once encoded. */
 const NONCE = 'n0nce+/=';
 const NONCE_IN_URL = 'n0nce%2B%2F%3D';
@@ -159,43 +162,86 @@ function apiRefusal(status: number): Error {
     return Object.assign(new Error(`Request failed with status code ${status}`), {isAxiosError: true, name: 'AxiosError', response: {status, data: {detail: 'Not allowed'}}});
 }
 
-// --- fetch: every request stays pending until the case answers it --------
+// --- Image: every probe image stays pending until the case answers it ----
 
+/** One probe image the component asked for, found by the address in its `src`, answered by the case. */
 interface Asked {
     url: string;
-    init: RequestInit | undefined;
-    resolve: (answer: Response) => void;
-    reject: (reason: unknown) => void;
+    image: FakeImage;
+    /** The browser's part: the picture loaded, at `width`×`height` (1×1 is the match, 2×1 the mismatch). */
+    load: (width: number, height: number) => void;
+    /** The browser's part: the picture failed (CORS-less refusal, closed port, mixed content, not an image). */
+    fail: () => void;
 }
 
-/** Every request the stub received, in the order received. */
+/** Every probe image the stub received, in the order its `src` was set. A cleared `src` (an abort) does not remove it. */
 const asked: Asked[] = [];
 
-const abortError = () => new DOMException('The operation was aborted.', 'AbortError');
+/** An `Image` of this file: records what the default loader does to it, and plays the browser's part on demand. */
+class FakeImage {
+    naturalWidth = 0;
+    naturalHeight = 0;
+    referrerPolicy = '';
+    crossOriginWrites = 0;
+    private listeners = new Map<string, Array<() => void>>();
+    private handlers = new Map<string, (() => void) | null>();
+    private current = '';
+    private cors: string | null | undefined = undefined;
 
-const fetchStub = vi.fn(
-    (input: string | URL | Request, init?: RequestInit): Promise<Response> =>
-        new Promise<Response>((resolve, reject) => {
-            asked.push({url: String(input), init, resolve, reject});
-            // A real fetch gives up on an aborted signal: so does this one.
-            if (init?.signal?.aborted) {
-                reject(abortError());
-                return;
-            }
-            init?.signal?.addEventListener('abort', () => reject(abortError()), {once: true});
-        }),
-);
-
-/** The one probe request made for `base`; fails loudly when there is none, or more than one. */
-function askedAt(base: string): Asked {
-    const hits = asked.filter((entry) => entry.url.startsWith(`${base}${PROBE_PATH}?`));
-    if (hits.length !== 1) throw new Error(`expected exactly one probe of ${base}, found ${hits.length} among: ${asked.map((entry) => entry.url).join(', ') || 'none'}`);
-    return hits[0];
+    get src(): string {
+        return this.current;
+    }
+    set src(value: string) {
+        this.current = value;
+        // Only a real request is a probe: `src = ''` is the loader giving up.
+        if (value !== '') {
+            asked.push({
+                url: value,
+                image: this,
+                load: (width, height) => this.fire('load', [width, height]),
+                fail: () => this.fire('error'),
+            });
+        }
+    }
+    get crossOrigin(): string | null | undefined {
+        return this.cors;
+    }
+    set crossOrigin(value: string | null | undefined) {
+        this.crossOriginWrites += 1;
+        this.cors = value;
+    }
+    set onload(handler: (() => void) | null) {
+        this.handlers.set('load', handler);
+    }
+    set onerror(handler: (() => void) | null) {
+        this.handlers.set('error', handler);
+    }
+    addEventListener(type: string, listener: () => void): void {
+        this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+    }
+    removeEventListener(type: string, listener: () => void): void {
+        this.listeners.set(
+            type,
+            (this.listeners.get(type) ?? []).filter((candidate) => candidate !== listener),
+        );
+    }
+    private fire(type: 'load' | 'error', size?: [number, number]): void {
+        if (size) [this.naturalWidth, this.naturalHeight] = size;
+        this.handlers.get(type)?.();
+        for (const listener of this.listeners.get(type) ?? []) listener();
+    }
 }
 
-/** A 200 answer of the probe endpoint: a real `Response`, as `fetch` resolves with. */
-function probeAnswer(match: boolean): Response {
-    return new Response(JSON.stringify({match}), {status: 200, headers: {'content-type': 'application/json'}});
+/** The global fetch: a failing stub, so a probe sent through it is seen and never leaves the process. */
+const fetchStub = vi.fn(async (_input?: string | URL | Request, _init?: RequestInit): Promise<Response> => {
+    throw new TypeError('the global fetch is not the transport of the probe: it is an image');
+});
+
+/** The one probe image requested for `base`; fails loudly when there is none, or more than one. */
+function askedAt(base: string): Asked {
+    const hits = asked.filter((entry) => entry.url.startsWith(`${base}${PROBE_IMAGE_PATH}?`));
+    if (hits.length !== 1) throw new Error(`expected exactly one probe image of ${base}, found ${hits.length} among: ${asked.map((entry) => entry.url).join(', ') || 'none'}`);
+    return hits[0];
 }
 
 // --- The clipboard surface: defined per case, put back as jsdom had it ---
@@ -313,6 +359,7 @@ beforeEach(() => {
     issueNonce().mockReset();
     issueNonce().mockResolvedValue(issued(NONCE));
     vi.stubGlobal('fetch', fetchStub);
+    vi.stubGlobal('Image', FakeImage);
     // jsdom has no clipboard surface at all; each case that copies says which one it has.
     setClipboard(undefined);
     setSecureContext(true);
@@ -343,6 +390,7 @@ describe('LinkShare — the address it starts from', () => {
         expect(copyButton()).toBeEnabled();
         expect(screen.getByTestId('link-share-expires')).toBeInTheDocument();
         expect(issueNonce()).not.toHaveBeenCalled();
+        expect(asked).toEqual([]);
         expect(fetchStub).not.toHaveBeenCalled();
     });
 
@@ -373,16 +421,17 @@ describe('LinkShare — checking a corrected address', () => {
         // 799 ms after the first keystroke, 499 after the last: the first one's check must have been called off.
         await elapse(499);
         expect(issueNonce()).not.toHaveBeenCalled();
-        expect(fetchStub).not.toHaveBeenCalled();
+        expect(asked).toEqual([]);
 
         await elapse(1);
         expect(issueNonce()).toHaveBeenCalledTimes(1);
-        expect(fetchStub).toHaveBeenCalledTimes(1);
-        expect(askedAt(SECOND_BASE).url).toBe(`${SECOND_BASE}${PROBE_PATH}?nonce=${NONCE_IN_URL}`);
+        expect(asked).toHaveLength(1);
+        expect(askedAt(SECOND_BASE).url).toBe(`${SECOND_BASE}${PROBE_IMAGE_PATH}?nonce=${NONCE_IN_URL}`);
         expect(asked.filter((entry) => entry.url.startsWith(FIRST_BASE))).toEqual([]);
+        expect(fetchStub).not.toHaveBeenCalled();
     });
 
-    it('LSH-C-04: the link follows the address at once; once asked, the probe is checking — a credential-less, header-less GET of the normalized address', async () => {
+    it('LSH-C-04: the link follows the address at once; once asked, the probe is checking — a no-referrer, CORS-less image of the normalized address', async () => {
         vi.useFakeTimers();
         mountLinkShare();
 
@@ -396,18 +445,21 @@ describe('LinkShare — checking a corrected address', () => {
         expect(issueNonce()).toHaveBeenCalledTimes(1);
 
         const request = askedAt(OTHER_BASE);
-        expect(request.url).toBe(`${OTHER_BASE}${PROBE_PATH}?nonce=${NONCE_IN_URL}`);
-        // A CORS simple request to a foreign origin: no cookie goes with it, and no header that would need a preflight.
-        expect(request.init).toEqual(expect.objectContaining({credentials: 'omit'}));
-        expect(request.init).not.toHaveProperty('headers');
+        expect(request.url).toBe(`${OTHER_BASE}${PROBE_IMAGE_PATH}?nonce=${NONCE_IN_URL}`);
+        // An image of a foreign origin: the address is not told which page asked, and no CORS is asked of it
+        // (the natural size of an image is readable across origins without it).
+        expect(request.image.referrerPolicy).toBe('no-referrer');
+        expect(request.image.crossOriginWrites).toBe(0);
+        // And no connect-src-governed request: the enforced policy would block a fetch to this address.
+        expect(fetchStub).not.toHaveBeenCalled();
     });
 
     it.each([
-        {verdict: 'match', answer: (request: Asked) => request.resolve(probeAnswer(true))},
-        {verdict: 'mismatch', answer: (request: Asked) => request.resolve(probeAnswer(false))},
-        // What a browser gives for a CORS refusal, a closed port or mixed content alike.
-        {verdict: 'unverifiable', answer: (request: Asked) => request.reject(new TypeError('Failed to fetch'))},
-    ])('LSH-C-05: an answer that means $verdict shows $verdict, is notified as accounts.address.checked without a toast, and leaves the link copyable', async ({verdict, answer}) => {
+        {verdict: 'match', answer: (request: Asked) => request.load(1, 1)},
+        {verdict: 'mismatch', answer: (request: Asked) => request.load(2, 1)},
+        // What a browser gives for a closed port, mixed content or a body that is no image alike: an `error` event.
+        {verdict: 'unverifiable', answer: (request: Asked) => request.fail()},
+    ])('LSH-C-05: an image that means $verdict shows $verdict, is notified as accounts.address.checked without a toast, and leaves the link copyable', async ({verdict, answer}) => {
         vi.useFakeTimers();
         mountLinkShare();
 
@@ -426,7 +478,7 @@ describe('LinkShare — checking a corrected address', () => {
         expect(copyButton()).toBeEnabled();
     });
 
-    it('LSH-C-06: a nonce our own server refuses makes the address unverifiable, and nothing is fetched from it', async () => {
+    it('LSH-C-06: a nonce our own server refuses makes the address unverifiable, and no image is requested from it', async () => {
         vi.useFakeTimers();
         issueNonce().mockRejectedValueOnce(apiRefusal(403));
         mountLinkShare();
@@ -438,6 +490,7 @@ describe('LinkShare — checking a corrected address', () => {
         // The check did run: it asked for its nonce.
         expect(issueNonce()).toHaveBeenCalledTimes(1);
         expect(probeState()).toBe('unverifiable');
+        expect(asked).toEqual([]);
         expect(fetchStub).not.toHaveBeenCalled();
         expect(checkedStates()).toEqual(['unverifiable']);
     });
@@ -448,7 +501,7 @@ describe('LinkShare — checking a corrected address', () => {
 
         await typeAddress(OTHER_BASE);
         await elapse(500);
-        askedAt(OTHER_BASE).resolve(probeAnswer(false));
+        askedAt(OTHER_BASE).load(2, 1);
         await settle();
         expect(probeState()).toBe('mismatch');
 
@@ -459,7 +512,7 @@ describe('LinkShare — checking a corrected address', () => {
         expect(probeState()).toBe('idle');
         expect(link().value).toBe(INVITE_URL);
         expect(issueNonce()).toHaveBeenCalledTimes(1);
-        expect(fetchStub).toHaveBeenCalledTimes(1);
+        expect(asked).toHaveLength(1);
     });
 
     it('LSH-C-08: an address changed and changed back within the debounce is never asked about — while a new one still is', async () => {
@@ -473,13 +526,14 @@ describe('LinkShare — checking a corrected address', () => {
 
         expect(probeState()).toBe('idle');
         expect(issueNonce()).not.toHaveBeenCalled();
-        expect(fetchStub).not.toHaveBeenCalled();
+        expect(asked).toEqual([]);
 
         // The silence above is the debounce, not a dead probe.
         await typeAddress(SECOND_BASE);
         await elapse(500);
         expect(issueNonce()).toHaveBeenCalledTimes(1);
-        expect(askedAt(SECOND_BASE).init).toEqual(expect.objectContaining({credentials: 'omit'}));
+        expect(askedAt(SECOND_BASE).url).toBe(`${SECOND_BASE}${PROBE_IMAGE_PATH}?nonce=${NONCE_IN_URL}`);
+        expect(asked).toHaveLength(1);
     });
 
     it('LSH-C-09: an address that is not an http(s) base is invalid: nothing is asked and the link cannot be copied — until the address is valid again', async () => {
@@ -493,13 +547,13 @@ describe('LinkShare — checking a corrected address', () => {
         expect(probeState()).toBe('invalid');
         expect(copyButton()).toBeDisabled();
         expect(issueNonce()).not.toHaveBeenCalled();
-        expect(fetchStub).not.toHaveBeenCalled();
+        expect(asked).toEqual([]);
 
         await typeAddress(OTHER_BASE);
         await elapse(500);
         expect(probeState()).toBe('checking');
         expect(copyButton()).toBeEnabled();
-        expect(askedAt(OTHER_BASE).url).toBe(`${OTHER_BASE}${PROBE_PATH}?nonce=${NONCE_IN_URL}`);
+        expect(askedAt(OTHER_BASE).url).toBe(`${OTHER_BASE}${PROBE_IMAGE_PATH}?nonce=${NONCE_IN_URL}`);
     });
 
     it.each([
@@ -516,23 +570,23 @@ describe('LinkShare — checking a corrected address', () => {
         await typeAddress(SECOND_BASE);
         await elapse(500);
         const newer = askedAt(SECOND_BASE);
-        expect(newer.url).toBe(`${SECOND_BASE}${PROBE_PATH}?nonce=nonce-newer`);
+        expect(newer.url).toBe(`${SECOND_BASE}${PROBE_IMAGE_PATH}?nonce=nonce-newer`);
 
         if (olderFirst) {
-            older.resolve(probeAnswer(true));
+            older.load(1, 1);
             await settle();
             // The address on screen is still being checked: the older verdict is about another one.
             expect(probeState()).toBe('checking');
             expect(checkedStates()).toEqual([]);
 
-            newer.resolve(probeAnswer(false));
+            newer.load(2, 1);
             await settle();
         } else {
-            newer.resolve(probeAnswer(false));
+            newer.load(2, 1);
             await settle();
             expect(probeState()).toBe('mismatch');
 
-            older.resolve(probeAnswer(true));
+            older.load(1, 1);
             await settle();
         }
 
@@ -572,7 +626,7 @@ describe('LinkShare — copying the link', () => {
 
         await typeAddress(OTHER_BASE);
         await elapse(500);
-        askedAt(OTHER_BASE).resolve(probeAnswer(false));
+        askedAt(OTHER_BASE).load(2, 1);
         await settle();
         expect(probeState()).toBe('mismatch');
 

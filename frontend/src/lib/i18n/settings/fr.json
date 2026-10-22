@@ -246,7 +246,8 @@
         "admin": "Admin",
         "inactive": "Désactivé",
         "protected": "Protégé",
-        "pendingSetup": "En attente de configuration"
+        "pendingSetup": "En attente de configuration",
+        "pendingVerification": "En attente de vérification"
       },
       "actions": {
         "deactivate": "Désactiver",
@@ -350,7 +351,8 @@
         "resetLinkCreated": "Lien de réinitialisation créé pour {username}.",
         "setupCancelled": "Le lien de configuration de {username} ne fonctionne plus."
       },
-      "pendingSetupHint": "Ce compte administrateur s'active par son lien de configuration. Si le lien est perdu, lancez « dev.py user setup-link » sur le serveur, ou demandez à votre hébergeur."
+      "pendingSetupHint": "Ce compte administrateur s'active par son lien de configuration. Si le lien est perdu, lancez « dev.py user setup-link » sur le serveur, ou demandez à votre hébergeur.",
+      "pendingVerificationHint": "Son titulaire n'a pas encore ouvert le lien de vérification : en se connectant, il peut s'en faire envoyer un nouveau. Réactiver le laisse entrer tout de suite, sans l'e-mail."
     },
     "linkShare": {
       "addressLabel": "Adresse du serveur",
@@ -405,7 +407,8 @@
         "error": "Erreur",
         "warning": "Avertissement",
         "info": "Information"
-      }
+      },
+      "blockedScript": "Cet onglet du navigateur a bloqué un script que LibreFolio n'a pas envoyé ({sources}) : un proxy, un CDN ou une extension du navigateur l'ajoute. Désactivez cette injection pour ce site."
     }
   }
 }

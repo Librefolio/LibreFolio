@@ -34,7 +34,7 @@
  * @vitest-environment node
  */
 
-import {afterAll, afterEach, describe, it, expect, vi} from 'vitest';
+import {afterAll, afterEach, beforeEach, describe, it, expect, vi} from 'vitest';
 
 // The browser, pinned before any import: the interface locale takes its region from it.
 vi.hoisted(() => {
@@ -47,6 +47,10 @@ import {_} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {getBrokerColor} from '$lib/utils/broker/brokerColors';
+import {buildTooltipDivider, buildTooltipRow} from '$lib/components/charts/echartsTooltipHelpers';
+import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+import {escapeHtml} from '$lib/utils/core/escapeHtml';
+import {maskableQuantity, PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import {
     THICKNESS_MIN,
     THICKNESS_MAX,
@@ -78,6 +82,9 @@ import {
 // O-16: the module itself too, so the helpers still to come are read as properties: a named import of an export that
 // does not exist yet would fail every case of this file, not only theirs.
 import * as ganttHelpers from './lotGanttChartHelpers';
+import {scopeBoundaryOf} from './lotChartShared';
+// Q-G29-1: the types of the tooltip contract (erased at runtime, so a missing export fails no import).
+import type {GanttMarkerEvent, GanttMarkerTooltipBlock, GanttMarkerTooltipDeps} from './lotGanttChartHelpers';
 
 afterAll(() => {
     vi.unstubAllGlobals();
@@ -846,5 +853,651 @@ describe('J-48 — scope boundary', () => {
             expect(labelKeyOf(kind), 'absent').toBe(`${EVENT_TYPE}.${key}`);
             expect(labelKeyOf(kind, null), 'null').toBe(`${EVENT_TYPE}.${key}`);
         });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Q-G29-1 — a tooltip on every marker of the Gantt
+// ---------------------------------------------------------------------------
+//
+// Developer decision Q-G29-1 (a): every marker the Gantt draws — ▲ BUY, ▼ SELL, ◆ TRANSFER, + ADJUSTMENT_IN, × ADJUSTMENT_OUT,
+// │ SPLIT — carries a tooltip on hover or tap: the event's title, its date, its quantity (masked in privacy mode) and its
+// broker — «From A / To B» for a transfer between the user's brokers. Markers that fall on the same point (same lane, same
+// day) list ALL their events. Six pure helpers carry it, pinned here before they exist; the component only wires them:
+// - `markerLabelKind(row)`: the label kind of a `lot_events` row. TRANSFER_IN / TRANSFER_OUT where it crosses the scope (J-48),
+//   the row's own kind for TRANSFER_DEPART / TRANSFER_ARRIVE (until now `eventMarkerLabelKey` read the departure's key for
+//   every transfer, arrivals included: same text in the four languages, the wrong key), else null;
+// - `ganttMarkerEvent(row)`: the row as the tooltip names it (`GanttMarkerEvent`), every scalar-or-array field parsed. A row
+//   at the scope's edge keeps only its own broker: the partner is never named (J-48);
+// - `ganttMarkerTooltipBlocks(events, deps)`: one block per event — title, then the Date, Quantity and broker rows, plain
+//   text. A same-day internal transfer has only an arrival row, with no source or destination (backlog J-68): its tooltip says
+//   «To B» and never invents the origin;
+// - `groupMarkerEvents(entries)`: the markers to draw, one per (kind, lane, day), each carrying every event at its point;
+// - `markerTooltipHtml(blocks, theme)`: the blocks as HTML, every text escaped, one divider between two blocks.
+// Red, before the cure: each case fails on its first line — lotGanttChartHelpers does not export the helper it names (read off
+// the module namespace, as O-16's and J-48's were, so a missing export fails each case and not the whole file at import). Types
+// only are imported by name: they are erased at runtime.
+
+/** A `lot_events` row as the helpers read it: the optional fields scalar-or-array, as the generated client types them. */
+interface RawMarkerRow {
+    kind: string;
+    date: unknown;
+    quantity?: unknown;
+    broker_id?: unknown;
+    source_broker_id?: unknown;
+    destination_broker_id?: unknown;
+    scope_boundary?: unknown;
+}
+
+/** An entry of `groupMarkerEvents`: the drawn marker's keys, an id the case reads it back by, and its event. */
+interface GroupEntry {
+    id: string;
+    kind: EventMarkerKind;
+    laneIndex: number;
+    dateMs: number;
+    event: GanttMarkerEvent;
+}
+
+/** The helper `name`, after the precondition that lotGanttChartHelpers exports it. */
+function contractHelper<T>(name: string): T {
+    const exported = (ganttHelpers as unknown as Record<string, unknown>)[name];
+    expect(typeof exported, `lotGanttChartHelpers exports ${name}`).toBe('function');
+    return exported as T;
+}
+
+function markerLabelKind(row: {kind: string; scope_boundary?: unknown}): string | null {
+    return contractHelper<(event: {kind: string; scope_boundary?: unknown}) => string | null>('markerLabelKind')(row);
+}
+
+function ganttMarkerEvent(row: RawMarkerRow): GanttMarkerEvent {
+    return contractHelper<(row: RawMarkerRow) => GanttMarkerEvent>('ganttMarkerEvent')(row);
+}
+
+function ganttMarkerTooltipBlocks(events: readonly GanttMarkerEvent[], deps: GanttMarkerTooltipDeps): GanttMarkerTooltipBlock[] {
+    return contractHelper<(events: readonly GanttMarkerEvent[], deps: GanttMarkerTooltipDeps) => GanttMarkerTooltipBlock[]>('ganttMarkerTooltipBlocks')(events, deps);
+}
+
+function groupMarkerEvents(entries: readonly GroupEntry[]): Array<{first: GroupEntry; events: GanttMarkerEvent[]}> {
+    return contractHelper<(entries: readonly GroupEntry[]) => Array<{first: GroupEntry; events: GanttMarkerEvent[]}>>('groupMarkerEvents')(entries);
+}
+
+type TooltipTheme = {bg: string; border: string; textColor: string; mutedColor: string};
+
+function markerTooltipHtml(blocks: readonly GanttMarkerTooltipBlock[], theme: TooltipTheme): string {
+    return contractHelper<(blocks: readonly GanttMarkerTooltipBlock[], theme: TooltipTheme) => string>('markerTooltipHtml')(blocks, theme);
+}
+
+const TITLE_KEY = 'brokers.lots.chartMarkers.eventType';
+const BROKER_NAMES: Record<number, string> = {1: 'Broker A', 2: 'Broker B', 3: 'Broker C'};
+
+/** Fake dependencies: the translator returns the key, every figure is wrapped by what handled it, an absent broker reads «—». */
+function fakeDeps(overrides: Partial<GanttMarkerTooltipDeps> = {}): GanttMarkerTooltipDeps {
+    return {
+        t: (key) => key,
+        brokerName: (brokerId) => (brokerId == null ? '—' : (BROKER_NAMES[brokerId] ?? `#${brokerId}`)),
+        formatDate: (date) => `D(${date})`,
+        formatQuantity: (value) => `Q(${value})`,
+        maskQuantity: (formatted) => `M(${formatted})`,
+        ...overrides,
+    };
+}
+
+/** A tooltip event: a plain BUY at Broker A unless overridden. */
+function markerEvent(overrides: Partial<GanttMarkerEvent> = {}): GanttMarkerEvent {
+    return {kind: 'BUY', labelKind: null, date: '2024-03-15', quantity: 10, brokerId: 1, sourceBrokerId: null, destinationBrokerId: null, ...overrides};
+}
+
+/** A block's rows as [label, value] pairs. */
+function rowPairs(block: GanttMarkerTooltipBlock): Array<[string, string]> {
+    return block.rows.map((row) => [row.label, row.value]);
+}
+
+describe('Q-G29-1 — markerLabelKind: the label kind of a lot_events row', () => {
+    // A loop, not `it.each('$name')`: vitest cuts a `$name` at forty characters, and these names are the failure report.
+    for (const {name, row, expected} of [
+        {name: 'a transfer arrival is labelled by its own kind', row: {kind: 'TRANSFER_ARRIVE'}, expected: 'TRANSFER_ARRIVE'},
+        {name: 'a transfer departure is labelled by its own kind', row: {kind: 'TRANSFER_DEPART'}, expected: 'TRANSFER_DEPART'},
+        {name: 'an ADJUSTMENT_IN across the IN boundary is TRANSFER_IN', row: {kind: 'ADJUSTMENT_IN', scope_boundary: 'IN'}, expected: 'TRANSFER_IN'},
+        {name: 'an ADJUSTMENT_IN across the IN boundary, array shape, is TRANSFER_IN', row: {kind: 'ADJUSTMENT_IN', scope_boundary: ['IN']}, expected: 'TRANSFER_IN'},
+        {name: 'an ADJUSTMENT_OUT across the OUT boundary is TRANSFER_OUT', row: {kind: 'ADJUSTMENT_OUT', scope_boundary: 'OUT'}, expected: 'TRANSFER_OUT'},
+        {name: 'an ADJUSTMENT_OUT across the OUT boundary, array shape, is TRANSFER_OUT', row: {kind: 'ADJUSTMENT_OUT', scope_boundary: ['OUT']}, expected: 'TRANSFER_OUT'},
+        {name: 'a boundary decides, whatever the kind: a BUY across IN is TRANSFER_IN', row: {kind: 'BUY', scope_boundary: 'IN'}, expected: 'TRANSFER_IN'},
+        {name: 'a boundary decides, whatever the kind: a SELL across OUT is TRANSFER_OUT', row: {kind: 'SELL', scope_boundary: 'OUT'}, expected: 'TRANSFER_OUT'},
+        {name: 'a BUY has no label kind', row: {kind: 'BUY'}, expected: null},
+        {name: 'a SELL has no label kind', row: {kind: 'SELL'}, expected: null},
+        {name: 'a SPLIT has no label kind', row: {kind: 'SPLIT'}, expected: null},
+        {name: 'an ADJUSTMENT_IN without a boundary has no label kind', row: {kind: 'ADJUSTMENT_IN'}, expected: null},
+        {name: 'an ADJUSTMENT_OUT without a boundary has no label kind', row: {kind: 'ADJUSTMENT_OUT'}, expected: null},
+        {name: 'a null boundary is no boundary', row: {kind: 'ADJUSTMENT_IN', scope_boundary: null}, expected: null},
+        {name: 'an empty boundary array is no boundary', row: {kind: 'ADJUSTMENT_OUT', scope_boundary: []}, expected: null},
+        {name: 'a boundary the scope does not know is no boundary', row: {kind: 'ADJUSTMENT_IN', scope_boundary: 'SIDEWAYS'}, expected: null},
+    ] as ReadonlyArray<{name: string; row: {kind: string; scope_boundary?: unknown}; expected: string | null}>) {
+        it(name, () => {
+            expect(markerLabelKind(row)).toBe(expected);
+        });
+    }
+
+    // The title key the tooltip reads: through `eventMarkerLabelKey` (which exists), so what is pinned is the pair — an arrival
+    // reads its own key, where `eventMarkerLabelKey('TRANSFER')` alone reads the departure's. Red on the missing `markerLabelKind`.
+    for (const {name, row, suffix} of [
+        {name: 'a transfer arrival', row: {kind: 'TRANSFER_ARRIVE'}, suffix: 'TRANSFER_ARRIVE'},
+        {name: 'a transfer departure', row: {kind: 'TRANSFER_DEPART'}, suffix: 'TRANSFER_DEPART'},
+        {name: 'an ADJUSTMENT_IN across the IN boundary', row: {kind: 'ADJUSTMENT_IN', scope_boundary: 'IN'}, suffix: 'TRANSFER_IN'},
+        {name: 'an ADJUSTMENT_OUT across the OUT boundary, array shape', row: {kind: 'ADJUSTMENT_OUT', scope_boundary: ['OUT']}, suffix: 'TRANSFER_OUT'},
+        {name: 'an ADJUSTMENT_IN without a boundary', row: {kind: 'ADJUSTMENT_IN'}, suffix: 'ADJUSTMENT_IN'},
+        {name: 'an ADJUSTMENT_OUT without a boundary', row: {kind: 'ADJUSTMENT_OUT'}, suffix: 'ADJUSTMENT_OUT'},
+        {name: 'a BUY', row: {kind: 'BUY'}, suffix: 'BUY'},
+        {name: 'a SELL', row: {kind: 'SELL'}, suffix: 'SELL'},
+        {name: 'a SPLIT', row: {kind: 'SPLIT'}, suffix: 'SPLIT'},
+    ] as ReadonlyArray<{name: string; row: {kind: string; scope_boundary?: unknown}; suffix: string}>) {
+        it(`the title key of ${name} ends in .${suffix}`, () => {
+            const labelKind = markerLabelKind(row);
+            const key = ganttHelpers.eventMarkerLabelKey(eventMarkerKind(row.kind, scopeBoundaryOf(row)), labelKind);
+            expect(key).toBe(`${TITLE_KEY}.${suffix}`);
+        });
+    }
+
+    it('an arrival’s title key is not the departure’s', () => {
+        const key = ganttHelpers.eventMarkerLabelKey(eventMarkerKind('TRANSFER_ARRIVE'), markerLabelKind({kind: 'TRANSFER_ARRIVE'}));
+        expect(key.endsWith('.TRANSFER_ARRIVE'), `the arrival reads ${key}`).toBe(true);
+        expect(key.endsWith('.TRANSFER_DEPART'), `the arrival reads ${key}`).toBe(false);
+    });
+});
+
+describe('Q-G29-1 — ganttMarkerEvent: a lot_events row as its tooltip names it', () => {
+    it('reads a plain BUY row: kind, date, quantity and broker; no label kind, no source or destination', () => {
+        expect(ganttMarkerEvent({kind: 'BUY', date: '2024-03-15', quantity: 10, broker_id: 1})).toEqual({kind: 'BUY', labelKind: null, date: '2024-03-15', quantity: 10, brokerId: 1, sourceBrokerId: null, destinationBrokerId: null});
+    });
+
+    it('keeps the date as sent and the sign of the quantity (the tooltip takes the absolute value, not the row)', () => {
+        const event = ganttMarkerEvent({kind: 'SELL', date: '2024-03-16', quantity: -5.5, broker_id: 2});
+        expect(event.kind).toBe('SELL');
+        expect(event.date).toBe('2024-03-16');
+        expect(event.quantity).toBe(-5.5);
+        expect(event.brokerId).toBe(2);
+    });
+
+    it('parses the scalar-or-array shape and numeric strings: quantity and the three broker ids', () => {
+        const event = ganttMarkerEvent({kind: 'TRANSFER_DEPART', date: '2024-03-15', quantity: ['3.25'], broker_id: ['1'], source_broker_id: '1', destination_broker_id: [2]});
+        expect(event.quantity).toBe(3.25);
+        expect(event.brokerId).toBe(1);
+        expect(event.sourceBrokerId).toBe(1);
+        expect(event.destinationBrokerId).toBe(2);
+    });
+
+    it('reads a numeric quantity and numeric ids as they are', () => {
+        const event = ganttMarkerEvent({kind: 'TRANSFER_ARRIVE', date: '2024-03-15', quantity: 7, broker_id: 2, source_broker_id: 1, destination_broker_id: 2});
+        expect([event.quantity, event.brokerId, event.sourceBrokerId, event.destinationBrokerId]).toEqual([7, 2, 1, 2]);
+    });
+
+    it('anything unparsable is null, never NaN or a guess: quantity and ids', () => {
+        const event = ganttMarkerEvent({kind: 'BUY', date: '2024-03-15', quantity: 'abc', broker_id: 'x', source_broker_id: [], destination_broker_id: null});
+        expect(event.quantity).toBeNull();
+        expect(event.brokerId).toBeNull();
+        expect(event.sourceBrokerId).toBeNull();
+        expect(event.destinationBrokerId).toBeNull();
+    });
+
+    it('absent fields are null', () => {
+        const event = ganttMarkerEvent({kind: 'SPLIT', date: '2024-03-15'});
+        expect(event).toEqual({kind: 'SPLIT', labelKind: null, date: '2024-03-15', quantity: null, brokerId: null, sourceBrokerId: null, destinationBrokerId: null});
+    });
+
+    it('an internal TRANSFER_DEPART is a TRANSFER marker labelled TRANSFER_DEPART, and keeps its source and destination', () => {
+        expect(ganttMarkerEvent({kind: 'TRANSFER_DEPART', date: '2024-03-15', quantity: '3', broker_id: 1, source_broker_id: [1], destination_broker_id: ['2']})).toEqual({
+            kind: 'TRANSFER',
+            labelKind: 'TRANSFER_DEPART',
+            date: '2024-03-15',
+            quantity: 3,
+            brokerId: 1,
+            sourceBrokerId: 1,
+            destinationBrokerId: 2,
+        });
+    });
+
+    it('an internal TRANSFER_ARRIVE is a TRANSFER marker labelled TRANSFER_ARRIVE, and keeps its source and destination', () => {
+        expect(ganttMarkerEvent({kind: 'TRANSFER_ARRIVE', date: '2024-03-18', quantity: '3', broker_id: 2, source_broker_id: 1, destination_broker_id: 2})).toEqual({
+            kind: 'TRANSFER',
+            labelKind: 'TRANSFER_ARRIVE',
+            date: '2024-03-18',
+            quantity: 3,
+            brokerId: 2,
+            sourceBrokerId: 1,
+            destinationBrokerId: 2,
+        });
+    });
+
+    it('a same-day arrival (broker only, no source or destination) keeps just its broker', () => {
+        expect(ganttMarkerEvent({kind: 'TRANSFER_ARRIVE', date: '2024-03-15', quantity: 4, broker_id: 2})).toEqual({kind: 'TRANSFER', labelKind: 'TRANSFER_ARRIVE', date: '2024-03-15', quantity: 4, brokerId: 2, sourceBrokerId: null, destinationBrokerId: null});
+    });
+
+    it.each([
+        {boundary: 'IN', kind: 'ADJUSTMENT_IN', labelKind: 'TRANSFER_IN'},
+        {boundary: 'OUT', kind: 'ADJUSTMENT_OUT', labelKind: 'TRANSFER_OUT'},
+    ])('a row at the scope’s edge ($boundary) is a TRANSFER marker labelled $labelKind and keeps only its broker: the partner is never named', ({boundary, kind, labelKind}) => {
+        const row = {kind, date: '2024-03-15', quantity: '4', broker_id: 1, source_broker_id: 2, destination_broker_id: 3};
+        expect(ganttMarkerEvent({...row, scope_boundary: boundary})).toEqual({kind: 'TRANSFER', labelKind, date: '2024-03-15', quantity: 4, brokerId: 1, sourceBrokerId: null, destinationBrokerId: null});
+        // The array shape of the generated client reads the same.
+        expect(ganttMarkerEvent({...row, source_broker_id: [2], destination_broker_id: [3], scope_boundary: [boundary]})).toEqual({kind: 'TRANSFER', labelKind, date: '2024-03-15', quantity: 4, brokerId: 1, sourceBrokerId: null, destinationBrokerId: null});
+    });
+});
+
+describe('Q-G29-1 — ganttMarkerTooltipBlocks: one block per event', () => {
+    it('is one block per event, in the given order, and none for no event', () => {
+        const events = [markerEvent({kind: 'SELL', quantity: 1}), markerEvent({kind: 'BUY', quantity: 2}), markerEvent({kind: 'SPLIT', quantity: 3})];
+        expect(ganttMarkerTooltipBlocks(events, fakeDeps()).map((block) => block.title)).toEqual([`${TITLE_KEY}.SELL`, `${TITLE_KEY}.BUY`, `${TITLE_KEY}.SPLIT`]);
+        expect(ganttMarkerTooltipBlocks([], fakeDeps())).toEqual([]);
+    });
+
+    it('a BUY: title key, then Date, Quantity, Broker, in that order', () => {
+        const [block] = ganttMarkerTooltipBlocks([markerEvent({kind: 'BUY', date: '2024-03-15', quantity: 10, brokerId: 1})], fakeDeps());
+        expect(block.title).toBe(`${TITLE_KEY}.BUY`);
+        expect(rowPairs(block)).toEqual([
+            ['common.date', 'D(2024-03-15)'],
+            ['common.quantity', 'M(Q(10))'],
+            ['common.broker', 'Broker A'],
+        ]);
+    });
+
+    it.each([
+        {kind: 'BUY', key: 'BUY'},
+        {kind: 'SELL', key: 'SELL'},
+        {kind: 'SPLIT', key: 'SPLIT'},
+        {kind: 'ADJUSTMENT_IN', key: 'ADJUSTMENT_IN'},
+        {kind: 'ADJUSTMENT_OUT', key: 'ADJUSTMENT_OUT'},
+    ] as ReadonlyArray<{kind: EventMarkerKind; key: string}>)('a $kind is titled $key and carries one Broker row, never a From or To', ({kind, key}) => {
+        const [block] = ganttMarkerTooltipBlocks([markerEvent({kind, brokerId: 2})], fakeDeps());
+        expect(block.title).toBe(`${TITLE_KEY}.${key}`);
+        expect(block.rows.map((row) => row.label)).toEqual(['common.date', 'common.quantity', 'common.broker']);
+        expect(block.rows.at(-1)?.value).toBe('Broker B');
+    });
+
+    it('the translator is the one the deps carry: the title is what it returns for the key', () => {
+        const [block] = ganttMarkerTooltipBlocks([markerEvent({kind: 'SELL'})], fakeDeps({t: (key) => (key === `${TITLE_KEY}.SELL` ? 'Sale' : key === 'common.broker' ? 'Broker' : key)}));
+        expect(block.title).toBe('Sale');
+        expect(block.rows.at(-1)?.label).toBe('Broker');
+    });
+
+    it('a SELL with a negative quantity shows the absolute value', () => {
+        const [block] = ganttMarkerTooltipBlocks([markerEvent({kind: 'SELL', quantity: -5.5})], fakeDeps());
+        expect(rowPairs(block)).toContainEqual(['common.quantity', 'M(Q(5.5))']);
+    });
+
+    it('a quantity of zero is a quantity: its row is shown', () => {
+        const [block] = ganttMarkerTooltipBlocks([markerEvent({quantity: 0})], fakeDeps());
+        expect(rowPairs(block)).toContainEqual(['common.quantity', 'M(Q(0))']);
+    });
+
+    it('a null quantity has no quantity row, and nothing stands in for it', () => {
+        const [block] = ganttMarkerTooltipBlocks([markerEvent({quantity: null})], fakeDeps());
+        expect(block.rows.map((row) => row.label)).toEqual(['common.date', 'common.broker']);
+    });
+
+    it('no broker, no Broker row: the tooltip does not write «—» for it', () => {
+        const [block] = ganttMarkerTooltipBlocks([markerEvent({brokerId: null})], fakeDeps());
+        expect(block.rows.map((row) => row.label)).toEqual(['common.date', 'common.quantity']);
+    });
+
+    it('the date reaches formatDate as sent', () => {
+        const dates: string[] = [];
+        const formatDate = (date: string): string => {
+            dates.push(date);
+            return date;
+        };
+        ganttMarkerTooltipBlocks([markerEvent({date: '2023-12-31'})], fakeDeps({formatDate}));
+        expect(dates).toEqual(['2023-12-31']);
+    });
+
+    describe('a transfer between the user’s brokers', () => {
+        it('a multi-day transfer: the departure and the arrival both read From A, To B, under their own titles', () => {
+            const departure = ganttMarkerEvent({kind: 'TRANSFER_DEPART', date: '2024-03-15', quantity: 3, broker_id: 1, source_broker_id: 1, destination_broker_id: 2});
+            const arrival = ganttMarkerEvent({kind: 'TRANSFER_ARRIVE', date: '2024-03-18', quantity: 3, broker_id: 2, source_broker_id: 1, destination_broker_id: 2});
+            const [depart, arrive] = ganttMarkerTooltipBlocks([departure, arrival], fakeDeps());
+
+            expect(depart.title).toBe(`${TITLE_KEY}.TRANSFER_DEPART`);
+            expect(rowPairs(depart)).toEqual([
+                ['common.date', 'D(2024-03-15)'],
+                ['common.quantity', 'M(Q(3))'],
+                ['common.from', 'Broker A'],
+                ['common.to', 'Broker B'],
+            ]);
+            expect(arrive.title).toBe(`${TITLE_KEY}.TRANSFER_ARRIVE`);
+            expect(rowPairs(arrive)).toEqual([
+                ['common.date', 'D(2024-03-18)'],
+                ['common.quantity', 'M(Q(3))'],
+                ['common.from', 'Broker A'],
+                ['common.to', 'Broker B'],
+            ]);
+        });
+
+        it('a same-day arrival (no source, no destination) says only «To B»: no From row, and nothing written for the origin it does not know', () => {
+            const [block] = ganttMarkerTooltipBlocks([ganttMarkerEvent({kind: 'TRANSFER_ARRIVE', date: '2024-03-15', quantity: 3, broker_id: 2})], fakeDeps());
+            expect(block.title).toBe(`${TITLE_KEY}.TRANSFER_ARRIVE`);
+            expect(rowPairs(block)).toEqual([
+                ['common.date', 'D(2024-03-15)'],
+                ['common.quantity', 'M(Q(3))'],
+                ['common.to', 'Broker B'],
+            ]);
+            expect(
+                block.rows.some((row) => row.label === 'common.from'),
+                'no From row',
+            ).toBe(false);
+            expect(
+                block.rows.filter((row) => row.value === '—' || /null|undefined|#/.test(row.value)),
+                'no row for an origin that is not known',
+            ).toEqual([]);
+        });
+
+        it('a departure that names no destination says «From A» alone: the broker is the origin, the destination is not invented', () => {
+            const [block] = ganttMarkerTooltipBlocks([markerEvent({kind: 'TRANSFER', labelKind: 'TRANSFER_DEPART', brokerId: 1})], fakeDeps());
+            expect(block.rows.filter((row) => row.label === 'common.from' || row.label === 'common.to' || row.label === 'common.broker')).toEqual([{label: 'common.from', value: 'Broker A'}]);
+        });
+
+        it('a departure whose destination is named reads From (its own broker) and To (the destination)', () => {
+            const [block] = ganttMarkerTooltipBlocks([markerEvent({kind: 'TRANSFER', labelKind: 'TRANSFER_DEPART', brokerId: 1, sourceBrokerId: null, destinationBrokerId: 3})], fakeDeps());
+            expect(block.rows.filter((row) => row.label === 'common.from' || row.label === 'common.to')).toEqual([
+                {label: 'common.from', value: 'Broker A'},
+                {label: 'common.to', value: 'Broker C'},
+            ]);
+        });
+
+        it('an arrival whose origin is named reads From (the source) and To (its own broker)', () => {
+            const [block] = ganttMarkerTooltipBlocks([markerEvent({kind: 'TRANSFER', labelKind: 'TRANSFER_ARRIVE', brokerId: 2, sourceBrokerId: 3, destinationBrokerId: null})], fakeDeps());
+            expect(block.rows.filter((row) => row.label === 'common.from' || row.label === 'common.to')).toEqual([
+                {label: 'common.from', value: 'Broker C'},
+                {label: 'common.to', value: 'Broker B'},
+            ]);
+        });
+
+        it('a source and a destination the row names win over its own broker, whichever side it is on', () => {
+            const [depart, arrive] = ganttMarkerTooltipBlocks(
+                [markerEvent({kind: 'TRANSFER', labelKind: 'TRANSFER_DEPART', brokerId: 3, sourceBrokerId: 1, destinationBrokerId: 2}), markerEvent({kind: 'TRANSFER', labelKind: 'TRANSFER_ARRIVE', brokerId: 3, sourceBrokerId: 1, destinationBrokerId: 2})],
+                fakeDeps(),
+            );
+            const sides = (block: GanttMarkerTooltipBlock) => block.rows.filter((row) => row.label === 'common.from' || row.label === 'common.to').map((row) => row.value);
+            expect(sides(depart)).toEqual(['Broker A', 'Broker B']);
+            expect(sides(arrive)).toEqual(['Broker A', 'Broker B']);
+        });
+
+        it('a TRANSFER with no label kind reads the source and the destination it carries', () => {
+            const [block] = ganttMarkerTooltipBlocks([markerEvent({kind: 'TRANSFER', labelKind: null, brokerId: 3, sourceBrokerId: 1, destinationBrokerId: 2})], fakeDeps());
+            expect(block.rows.filter((row) => row.label === 'common.from' || row.label === 'common.to')).toEqual([
+                {label: 'common.from', value: 'Broker A'},
+                {label: 'common.to', value: 'Broker B'},
+            ]);
+        });
+
+        it('a TRANSFER with no label kind and no source or destination falls back to one Broker row', () => {
+            const [block] = ganttMarkerTooltipBlocks([markerEvent({kind: 'TRANSFER', labelKind: null, brokerId: 2})], fakeDeps());
+            expect(block.rows.filter((row) => ['common.from', 'common.to', 'common.broker'].includes(row.label))).toEqual([{label: 'common.broker', value: 'Broker B'}]);
+        });
+
+        it('a transfer that names no broker at all has no broker row', () => {
+            const [block] = ganttMarkerTooltipBlocks([markerEvent({kind: 'TRANSFER', labelKind: 'TRANSFER_ARRIVE', brokerId: null})], fakeDeps());
+            expect(block.rows.map((row) => row.label)).toEqual(['common.date', 'common.quantity']);
+        });
+    });
+
+    describe('a transfer leg at the scope’s edge', () => {
+        it.each([
+            {labelKind: 'TRANSFER_IN', key: 'TRANSFER_IN'},
+            {labelKind: 'TRANSFER_OUT', key: 'TRANSFER_OUT'},
+        ])('$labelKind: one Broker row (its own broker), never From or To, even when the event carries a source and a destination', ({labelKind, key}) => {
+            const [block] = ganttMarkerTooltipBlocks([markerEvent({kind: 'TRANSFER', labelKind, brokerId: 1, sourceBrokerId: 2, destinationBrokerId: 3})], fakeDeps());
+            expect(block.title).toBe(`${TITLE_KEY}.${key}`);
+            expect(rowPairs(block)).toEqual([
+                ['common.date', 'D(2024-03-15)'],
+                ['common.quantity', 'M(Q(10))'],
+                ['common.broker', 'Broker A'],
+            ]);
+            expect(block.rows.some((row) => row.label === 'common.from' || row.label === 'common.to')).toBe(false);
+        });
+
+        it('end to end: a raw TRANSFER_IN row with a source and a destination names its own broker alone', () => {
+            const event = ganttMarkerEvent({kind: 'ADJUSTMENT_IN', date: '2024-03-15', quantity: '10', broker_id: 1, source_broker_id: 2, destination_broker_id: 3, scope_boundary: 'IN'});
+            const [block] = ganttMarkerTooltipBlocks([event], fakeDeps());
+            expect(block.title).toBe(`${TITLE_KEY}.TRANSFER_IN`);
+            expect(block.rows.filter((row) => ['common.from', 'common.to', 'common.broker'].includes(row.label))).toEqual([{label: 'common.broker', value: 'Broker A'}]);
+        });
+    });
+
+    it('the blocks are plain text: a broker name is not escaped here (markerTooltipHtml escapes it, once)', () => {
+        const name = 'Broker <A> & Co';
+        const [block] = ganttMarkerTooltipBlocks([markerEvent({brokerId: 1})], fakeDeps({brokerName: () => name}));
+        expect(block.rows.at(-1)?.value).toBe(name);
+    });
+
+    it('two events at one point are two blocks, each its own: a BUY and a TRANSFER_ARRIVE', () => {
+        const blocks = ganttMarkerTooltipBlocks([markerEvent({kind: 'BUY', quantity: 10, brokerId: 1}), ganttMarkerEvent({kind: 'TRANSFER_ARRIVE', date: '2024-03-15', quantity: 4, broker_id: 2})], fakeDeps());
+        expect(blocks.map((block) => block.title)).toEqual([`${TITLE_KEY}.BUY`, `${TITLE_KEY}.TRANSFER_ARRIVE`]);
+        expect(rowPairs(blocks[0])).toContainEqual(['common.broker', 'Broker A']);
+        expect(rowPairs(blocks[1])).toContainEqual(['common.to', 'Broker B']);
+    });
+});
+
+describe('Q-G29-1 — ganttMarkerTooltipBlocks: privacy masks the quantity', () => {
+    // The privacy flag is module level state: reset on both sides so a flag left on cannot mask a clear-text control.
+    beforeEach(() => setPrivacyEnabled(false));
+    afterEach(() => setPrivacyEnabled(false));
+
+    it('the quantity value is what maskQuantity returns, over the formatted absolute value (fake mask)', () => {
+        const seen: string[] = [];
+        const maskQuantity = (formatted: string): string => {
+            seen.push(formatted);
+            return 'MASKED';
+        };
+        const [block] = ganttMarkerTooltipBlocks([markerEvent({kind: 'SELL', quantity: -12})], fakeDeps({formatQuantity: (value) => `fmt:${value}`, maskQuantity}));
+        expect(seen, 'maskQuantity gets the formatted absolute value').toEqual(['fmt:12']);
+        expect(rowPairs(block)).toContainEqual(['common.quantity', 'MASKED']);
+    });
+
+    it('with privacy ON, the real maskableQuantity hides every digit of the quantity: in the row and in the whole block', () => {
+        const realDeps = fakeDeps({formatQuantity: (value) => formatQuantity(value, 'en-US'), maskQuantity: maskableQuantity});
+        // Control, privacy OFF: the same call shows the digits, so the masked lines below are a substitution.
+        const [clear] = ganttMarkerTooltipBlocks([markerEvent({kind: 'SELL', quantity: -4321.5})], realDeps);
+        expect(clear.rows.find((row) => row.label === 'common.quantity')?.value, 'privacy OFF shows the absolute quantity').toBe('4,321.5');
+
+        setPrivacyEnabled(true);
+        const [masked] = ganttMarkerTooltipBlocks([markerEvent({kind: 'SELL', quantity: -4321.5})], realDeps);
+        const value = masked.rows.find((row) => row.label === 'common.quantity')?.value ?? '';
+        expect(value, 'privacy ON: the placeholder, no sign, no digit').toBe(PRIVACY_PLACEHOLDER);
+        expect(/\d/.test(value), 'no digit of the quantity in the row').toBe(false);
+        const everything = JSON.stringify(masked);
+        for (const leak of ['4321', '4,321', '4.321', '4 321']) expect(everything.includes(leak), `the block leaks ${leak}`).toBe(false);
+        // The date and the broker are not masked: only the quantity is.
+        expect(rowPairs(masked)).toContainEqual(['common.date', 'D(2024-03-15)']);
+        expect(rowPairs(masked)).toContainEqual(['common.broker', 'Broker A']);
+    });
+
+    it('the mask follows the flag at each call: ON, then OFF again, the digits are back', () => {
+        const realDeps = fakeDeps({formatQuantity: (value) => formatQuantity(value, 'en-US'), maskQuantity: maskableQuantity});
+        const quantityOf = (): string | undefined => ganttMarkerTooltipBlocks([markerEvent({quantity: 250})], realDeps)[0]?.rows.find((row) => row.label === 'common.quantity')?.value;
+
+        setPrivacyEnabled(true);
+        expect(quantityOf()).toBe(PRIVACY_PLACEHOLDER);
+        setPrivacyEnabled(false);
+        expect(quantityOf()).toBe('250');
+    });
+});
+
+describe('Q-G29-1 — groupMarkerEvents: one marker per (kind, lane, day), carrying every event at its point', () => {
+    const DAY_1 = Date.UTC(2024, 2, 15);
+    const DAY_2 = Date.UTC(2024, 2, 16);
+
+    /** An entry whose event carries `quantity`, the identity the cases read the events back by. */
+    function entry(id: string, kind: EventMarkerKind, laneIndex: number, dateMs: number, quantity: number): GroupEntry {
+        return {id, kind, laneIndex, dateMs, event: markerEvent({kind, quantity})};
+    }
+
+    /** What the cases compare: each marker's first entry (by id) and its events (by quantity). */
+    function shape(groups: Array<{first: GroupEntry; events: GanttMarkerEvent[]}>) {
+        return groups.map((group) => ({first: group.first.id, events: group.events.map((event) => event.quantity)}));
+    }
+
+    it('two BUYs on the same lane and day are one marker whose events are both', () => {
+        const groups = groupMarkerEvents([entry('b1', 'BUY', 0, DAY_1, 1), entry('b2', 'BUY', 0, DAY_1, 2)]);
+        expect(shape(groups)).toEqual([{first: 'b1', events: [1, 2]}]);
+    });
+
+    it('a BUY and a SELL on the same lane and day are two markers, each listing both events in input order', () => {
+        const groups = groupMarkerEvents([entry('buy', 'BUY', 0, DAY_1, 1), entry('sell', 'SELL', 0, DAY_1, 2)]);
+        expect(shape(groups)).toEqual([
+            {first: 'buy', events: [1, 2]},
+            {first: 'sell', events: [1, 2]},
+        ]);
+    });
+
+    it('the events follow the input order, not the kinds’: a SELL before a BUY lists the SELL first, on both markers', () => {
+        const groups = groupMarkerEvents([entry('sell', 'SELL', 0, DAY_1, 1), entry('buy', 'BUY', 0, DAY_1, 2)]);
+        expect(shape(groups)).toEqual([
+            {first: 'sell', events: [1, 2]},
+            {first: 'buy', events: [1, 2]},
+        ]);
+    });
+
+    it('a marker keeps the first entry of its kind and every event around it: BUY, SELL, BUY at one point', () => {
+        const groups = groupMarkerEvents([entry('b1', 'BUY', 0, DAY_1, 1), entry('s', 'SELL', 0, DAY_1, 2), entry('b2', 'BUY', 0, DAY_1, 3)]);
+        expect(shape(groups)).toEqual([
+            {first: 'b1', events: [1, 2, 3]},
+            {first: 's', events: [1, 2, 3]},
+        ]);
+    });
+
+    it('another lane or another day is another point: its markers list only their own events', () => {
+        const groups = groupMarkerEvents([
+            entry('a', 'BUY', 0, DAY_1, 1), // lane 0, day 1
+            entry('b', 'BUY', 1, DAY_1, 2), // lane 1, day 1
+            entry('c', 'SELL', 1, DAY_1, 3), // lane 1, day 1, with b
+            entry('d', 'BUY', 0, DAY_2, 4), // lane 0, day 2
+        ]);
+        expect(shape(groups)).toEqual([
+            {first: 'a', events: [1]},
+            {first: 'b', events: [2, 3]},
+            {first: 'c', events: [2, 3]},
+            {first: 'd', events: [4]},
+        ]);
+    });
+
+    it('keeps the order of first appearance — not the date’s, not the lane’s — and folds a later duplicate into its marker', () => {
+        const groups = groupMarkerEvents([
+            entry('a', 'BUY', 1, DAY_2, 1), // appears first, though it is the latest day and the highest lane
+            entry('b', 'SELL', 0, DAY_1, 2),
+            entry('c', 'BUY', 1, DAY_2, 3), // the same point as a: folded into a’s marker
+            entry('d', 'BUY', 0, DAY_1, 4), // same lane and day as b, another kind: its own marker, after b’s
+        ]);
+        expect(shape(groups)).toEqual([
+            {first: 'a', events: [1, 3]},
+            {first: 'b', events: [2, 4]},
+            {first: 'd', events: [2, 4]},
+        ]);
+    });
+
+    it('a marker’s `first` is the entry itself, not a copy', () => {
+        const only = entry('only', 'SPLIT', 2, DAY_1, 9);
+        const [group] = groupMarkerEvents([only]);
+        expect(group.first).toBe(only);
+    });
+
+    it('no entry, no marker', () => {
+        expect(groupMarkerEvents([])).toEqual([]);
+    });
+});
+
+describe('Q-G29-1 — markerTooltipHtml: the tooltip HTML', () => {
+    const THEME: TooltipTheme = {bg: '#101010', border: '#2a2a2a', textColor: '#f0f0f0', mutedColor: '#9a9a9a'};
+    const BUY_BLOCK: GanttMarkerTooltipBlock = {
+        title: 'Buy',
+        rows: [
+            {label: 'Date', value: '15 Mar 2024'},
+            {label: 'Broker', value: 'Broker A'},
+        ],
+    };
+    const SELL_BLOCK: GanttMarkerTooltipBlock = {title: 'Sale', rows: [{label: 'Date', value: '16 Mar 2024'}]};
+
+    /** Whether the first `<div` of the markup closes only at its very end: one wrapper around everything. */
+    function isOneWrapper(html: string): boolean {
+        let depth = 0;
+        for (const token of html.matchAll(/<div\b|<\/div>/g)) {
+            depth += token[0] === '</div>' ? -1 : 1;
+            if (depth === 0 && (token.index ?? 0) + token[0].length < html.length) return false;
+        }
+        return depth === 0 && html.startsWith('<div');
+    }
+
+    const dividerCount = (html: string): number => html.split('<hr').length - 1;
+
+    it('escapes a broker name: markup becomes text, no raw tag comes out', () => {
+        const hostile = '<img src=x onerror=alert(1)>';
+        const html = markerTooltipHtml([{title: 'Buy', rows: [{label: 'Broker', value: hostile}]}], THEME);
+        expect(html.includes('<img'), 'a raw <img in the markup').toBe(false);
+        expect(html).toContain(escapeHtml(hostile));
+        expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    });
+
+    it('escapes a title and a row label too: «&» and tags in them', () => {
+        const html = markerTooltipHtml([{title: 'Buy & <b>hold</b>', rows: [{label: '<script>x</script>', value: 'a & b'}]}], THEME);
+        expect(html).toContain('Buy &amp; &lt;b&gt;hold&lt;/b&gt;');
+        expect(html).toContain('&lt;script&gt;x&lt;/script&gt;');
+        expect(html).toContain('a &amp; b');
+        expect(html.includes('<script'), 'a raw <script in the markup').toBe(false);
+        expect(html.includes('<b>hold'), 'a raw <b> from the title').toBe(false);
+    });
+
+    it('opens no tag of the text’s own, whatever it carries', () => {
+        const html = markerTooltipHtml(
+            [
+                {title: '<iframe src=x>', rows: [{label: '<a href=x>', value: '<svg onload=alert(1)>'}]},
+                {title: 'x', rows: [{label: 'y', value: '<hr>'}]},
+            ],
+            THEME,
+        );
+        const tags = new Set([...html.matchAll(/<\/?([a-z][a-z0-9]*)/gi)].map((match) => match[1].toLowerCase()));
+        expect([...tags].filter((tag) => ['iframe', 'a', 'svg', 'img', 'script'].includes(tag))).toEqual([]);
+    });
+
+    it('escapes once: the plain-text blocks of a hostile broker come out as &lt;, never &amp;lt;', () => {
+        const blocks = ganttMarkerTooltipBlocks([markerEvent({brokerId: 1})], fakeDeps({brokerName: () => '<img src=x onerror=alert(1)>'}));
+        const html = markerTooltipHtml(blocks, THEME);
+        expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+        expect(html.includes('&amp;lt;'), 'escaped twice').toBe(false);
+        expect(html.includes('<img')).toBe(false);
+    });
+
+    it('writes each block’s title, then its rows through buildTooltipRow, label and value escaped', () => {
+        const html = markerTooltipHtml([BUY_BLOCK], THEME);
+        const rows = BUY_BLOCK.rows.map((row) => buildTooltipRow(escapeHtml(row.label), escapeHtml(row.value)));
+        for (const row of rows) expect(html, 'a row written by buildTooltipRow').toContain(row);
+        expect(html.indexOf('Buy')).toBeGreaterThanOrEqual(0);
+        expect(html.indexOf('Buy'), 'the title comes before its rows').toBeLessThan(html.indexOf(rows[0]));
+        expect(html.indexOf(rows[0]), 'the rows keep their order').toBeLessThan(html.indexOf(rows[1]));
+    });
+
+    it('wraps everything in one <div>', () => {
+        expect(isOneWrapper(markerTooltipHtml([BUY_BLOCK], THEME)), 'one block').toBe(true);
+        expect(isOneWrapper(markerTooltipHtml([BUY_BLOCK, SELL_BLOCK], THEME)), 'two blocks').toBe(true);
+    });
+
+    it('two blocks have exactly one divider between them: after the first block’s rows, before the second’s title', () => {
+        const html = markerTooltipHtml([BUY_BLOCK, SELL_BLOCK], THEME);
+        const divider = buildTooltipDivider(THEME.border);
+        expect(dividerCount(html)).toBe(1);
+        expect(html, 'the divider is the shared one, in the theme’s border colour').toContain(divider);
+        const lastRowOfFirst = buildTooltipRow(escapeHtml('Broker'), escapeHtml('Broker A'));
+        expect(html.indexOf(lastRowOfFirst)).toBeLessThan(html.indexOf(divider));
+        expect(html.indexOf(divider)).toBeLessThan(html.indexOf('Sale'));
+    });
+
+    it('three blocks have two dividers: one between each pair, none before the first or after the last', () => {
+        const html = markerTooltipHtml([BUY_BLOCK, SELL_BLOCK, {title: 'Split', rows: [{label: 'Date', value: '17 Mar 2024'}]}], THEME);
+        expect(dividerCount(html)).toBe(2);
+        const divider = buildTooltipDivider(THEME.border);
+        const lastRowOfFirst = buildTooltipRow(escapeHtml('Broker'), escapeHtml('Broker A'));
+        expect(html.indexOf(divider), 'no divider before the first block’s rows end').toBeGreaterThan(html.indexOf(lastRowOfFirst));
+        expect(html.lastIndexOf(divider), 'no divider after the last block’s title').toBeLessThan(html.indexOf('Split'));
+    });
+
+    it('one block has no divider, and neither does text that merely looks like one', () => {
+        expect(dividerCount(markerTooltipHtml([BUY_BLOCK], THEME))).toBe(0);
+        expect(dividerCount(markerTooltipHtml([{title: 'Buy', rows: [{label: 'Broker', value: '<hr>'}]}], THEME)), 'an escaped <hr> is not a divider').toBe(0);
     });
 });

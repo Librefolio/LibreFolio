@@ -20,6 +20,7 @@
     "platform.plugin_secrets": "admin/configuration/#plugin-secrets"
   },
   "browser": {
-    "accounts.openRegistration": "admin/settings/#open-registration-warning"
+    "accounts.openRegistration": "admin/settings/#open-registration-warning",
+    "platform.blockedScript": "admin/configuration/#csp"
   }
 }

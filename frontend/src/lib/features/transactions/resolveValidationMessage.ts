@@ -174,7 +174,7 @@ export function resolveIssueMessage(issue: ResolvableIssue, t: (key: string, opt
         const broker = ctx.brokers.find((b) => b.id === rawParams.brokerId);
         const brokerIconHtml = ctx.getBrokerIconHtml?.(rawParams.brokerId) ?? null;
         const iconUrl = brokerIconHtml ? null : ctx.getBrokerIconUrl?.(rawParams.brokerId);
-        const brokerIcon = brokerIconHtml ?? (iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" width="16" height="16" style="display:inline;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">` : '');
+        const brokerIcon = brokerIconHtml ?? (iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" width="16" height="16" style="display:inline;vertical-align:middle;margin-right:2px" data-hide-on-error="display">` : '');
         enriched.brokerName = broker ? `${brokerIcon}${escapeHtml(broker.name)}` : `Broker #${rawParams.brokerId}`;
     } else if (rawParams.brokerId != null) {
         enriched.brokerName = `Broker #${rawParams.brokerId}`;
@@ -185,7 +185,7 @@ export function resolveIssueMessage(issue: ResolvableIssue, t: (key: string, opt
         const asset = ctx.assets.find((a) => a.id === rawParams.assetId);
         if (asset) {
             const iconSrc = asset.icon_url ?? getAssetTypeIconUrl(asset.asset_type);
-            const assetIcon = `<img src="${escapeHtml(iconSrc)}" alt="" width="16" height="16" style="display:inline;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">`;
+            const assetIcon = `<img src="${escapeHtml(iconSrc)}" alt="" width="16" height="16" style="display:inline;vertical-align:middle;margin-right:2px" data-hide-on-error="display">`;
             enriched.assetName = `${assetIcon}${escapeHtml(asset.display_name)}`;
         } else {
             enriched.assetName = `Asset #${rawParams.assetId}`;

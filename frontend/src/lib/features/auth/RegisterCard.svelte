@@ -101,8 +101,10 @@
         try {
             const answer = await zodiosApi.register_api_v1_auth_register_post(inviteToken ? {username, email, password, invite_token: inviteToken} : {username, email, password});
             // Success - go back to login with message
-            // An account waiting for its email verification (workstream E) is told to open the link first
-            dispatch('gotoLogin', {message: answer.verification_required ? $_('email.verification.registered') : $_('auth.accountCreated')});
+            // An account waiting for its email verification (workstream E) is told to open the link first, or, when its
+            // email was held (lot E-26), to sign in and ask for a new one; a server without the field means «sending»
+            const message = !answer.verification_required ? $_('auth.accountCreated') : answer.verification_email === 'held' ? $_('email.verification.registeredHeld') : $_('email.verification.registered');
+            dispatch('gotoLogin', {message});
         } catch (e: unknown) {
             const described = describeRegistrationError(e);
             error = 'key' in described ? $_(described.key) : described.raw;

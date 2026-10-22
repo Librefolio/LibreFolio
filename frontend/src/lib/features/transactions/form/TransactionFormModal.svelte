@@ -744,9 +744,9 @@
         return true;
     });
 
-    // cost_basis_override is meaningful only for the receiver of a TRANSFER pair
-    // or an ADJUSTMENT (asset entering/leaving portfolio without purchase history).
-    let showCostBasisField = $derived(draft.type === 'TRANSFER' || draft.type === 'ADJUSTMENT');
+    // cost_basis_override is meaningful only for units coming in: the receiver of a TRANSFER pair, or an ADJUSTMENT with
+    // a positive quantity. An ADJUSTMENT taking units out has no value (N78-1): it only lowers the quantity.
+    let showCostBasisField = $derived(draft.type === 'TRANSFER' || (draft.type === 'ADJUSTMENT' && (exactDecimalSign(draft.quantity) ?? 0) > 0));
 
     // Pair partner chip (only when editing an existing linked tx — non-dual mode).
     let pairPartnerId = $derived(pairLayout ? null : (mainRow?.related_transaction_id ?? null));

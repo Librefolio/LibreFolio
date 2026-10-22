@@ -326,6 +326,15 @@ test.describe('Dashboard charts and view matrix', () => {
         // is a promise the test resolves the instant it has seen "true". Only the
         // first request is held — any later report call (e.g. a re-fetch) passes
         // straight through so it cannot deadlock the page.
+        //
+        // `login()` lands on /dashboard and returns once the app is up, not once that
+        // landing page has fetched its report: a POST /portfolio/report it starts after
+        // the route below exists would become "the first" request, be held, and then be
+        // abandoned by the goto() to the page under test — whose own request would pass
+        // through and the panel would never be busy. Leaving for about:blank first
+        // (nothing there fetches) means every report request the route sees is one of
+        // the page under test.
+        await page.goto('about:blank');
         let release: () => void = () => {};
         const held = new Promise<void>((resolve) => (release = resolve));
         let firstHeld = false;

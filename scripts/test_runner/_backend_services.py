@@ -2219,7 +2219,7 @@ Note: No backend server required.
         "admin-bootstrap",
         services_admin_bootstrap,
         name="Initial Administrator (F02)",
-        desc="LIBREFOLIO_ADMIN_* read and refused by code, the startup bootstrap (created, ignored, pending, rearmed, expired, two workers), the link logged once and emailed, complete_admin_setup, the waiting administrator in user_usage, user setup-link",
+        desc="LIBREFOLIO_ADMIN_* read and refused by code, the startup bootstrap (created, ignored, pending, rearmed, expired, two workers), the link logged once and emailed, complete_admin_setup, the waiting administrator in user_usage, user setup-link, admin_setup_status for a hosting panel (H-61: none, pending with its expiry, done wins, expired)",
         # PURE: every database is a private file under tmp_path built with create_all; variables set with monkeypatch; the
         # email faked in this process; the race holds two connections to that private file only. No lane DB, no server.
         isolation="pure",
@@ -2656,7 +2656,7 @@ Note: No backend server required.
         desc="SHORT lots, estimated_mode, price gaps, ADJUSTMENT cost basis, transfer scope, FX resolver, reference price and days at cost",
         # PURE: no database, server or network. The builders under test are sync methods that take all
         # of their inputs as arguments, so the service is built with db=None; the async cases stub
-        # convert_bulk, and the reference-price and at-cost cases drive get_lots_analysis on loader
+        # unit_rate_steps, and the reference-price and at-cost cases drive get_lots_analysis on loader
         # doubles and a session double, all in EUR, so no rate is asked and nothing reaches a database.
         # Kept out of the DB-backed lots units on purpose: folding it in would declass it to the
         # category default (write-scoped).

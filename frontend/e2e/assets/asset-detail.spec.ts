@@ -832,6 +832,10 @@ test.describe('Asset Detail Page', () => {
             areaFill: true,
             gridLines: true,
             staleGradient: true,
+            // Y-40: this test pins exact windows starting from the 1M default, so it marks the window as chosen: the
+            // automatic window (the largest preset that fits the period on screen) does not move it when the period
+            // changes. The automatic window is covered by the «Y-40 asset detail opens in the view chosen in the list» describe.
+            calendarReturnWindowAuto: false,
             axisScales: {
                 absolute: {mode: 'auto'},
                 percentage: {mode: 'include0'},
@@ -7085,8 +7089,10 @@ test.describe('Asset Detail Page', () => {
         await expect(dateRangeStartInput).toHaveValue(longRange.start);
         await expect(dateRangeEndInput).toHaveValue(longRange.end);
         await expect(chart).toHaveAttribute('data-calendar-range-days', String(longRange.spanDays));
-        await chart.getByTestId('chart-view-absolute').click();
+        // Y-40: a reload reopens the detail in the view last used, saved when the mode changed back to price: Abs, where this test
+        // had left it (before the lot it reopened in percentage and the test had to press Abs here).
         await expect(chart).toHaveAttribute('data-view-mode', 'absolute');
+        await expect(chart.getByTestId('chart-view-absolute')).toHaveAttribute('aria-pressed', 'true');
         await chart.getByTestId('chart-type-candlestick').click();
         await expect(chart.getByTestId('candlestick-chart')).toBeVisible();
 
@@ -8405,6 +8411,12 @@ test.describe('Live price direction flash', () => {
 // Everything is served by route mocks for synthetic asset ids that no other
 // spec uses. Nothing is written to the database, so there is nothing to clean
 // up.
+//
+// Two paths. Inside the detail, "All" after a shorter preset is a cache hit
+// (the case above). From the Assets list, "All" has been a cache miss since
+// Z-29b: the list keeps its card series in a reduced cache of its own, so the
+// detail asks its daily prices with the events, and its first answer must
+// still draw the markers.
 // ============================================================================
 
 /** One price-query item that the cache-hit mock below has already delivered. */
@@ -8544,19 +8556,26 @@ test.describe('All-range event markers on a price-cache hit', () => {
         await login(page, TEST_USER);
     });
 
-    // Path A, from the list. With the range on "All", the list bulk-queries
-    // ['2000-01-01', today] and marks that range as fetched in the shared
-    // in-memory price store. The detail opened from that list is therefore a
-    // cache hit: it resolves "All" and drops its own events-only answer.
+    // Path A, from the list: the first answer of a detail that misses the daily
+    // cache. With the range on "All", the list bulk-queries ['2000-01-01',
+    // today] for its cards. Since Z-29b it keeps that series in its own reduced
+    // cache (`stores/reducedPriceCache.ts`), beside the shared daily price store
+    // and without touching it. The detail opened from that list therefore finds
+    // no daily prices: it asks prices AND events in one request (`include_price:
+    // true`) and resolves "All" from that answer. A regression here would be the
+    // detail dropping the events of its first answer, so the chart would draw no
+    // markers. Before Z-29b the list filled the daily store and this path was a
+    // cache hit; Path B below keeps covering the hit.
     //
     // The navigation MUST be the client-side card click. A `page.goto` reloads
-    // the app and empties the store. The detail then misses the cache and the
-    // defect does not show.
-    test('keeps the event markers when the detail opens from a list that already cached All', async ({page}) => {
+    // the app and empties every in-memory store: the list's own All query would
+    // no longer have run in this page session, and the test would stop showing
+    // that the detail still asks its own daily prices after it.
+    test('keeps the event markers when the detail opens from a list on All: the detail asks its own daily prices with the events', async ({page}) => {
         // Two page loads and several mocked round trips, each awaited on its own signal.
         test.setTimeout(60_000);
         const assetId = 920_071;
-        const {log, oldNotes, recentNotes, firstPriceDate} = await mockCacheHitEventsAsset(page, assetId);
+        const {log, oldNotes, recentNotes} = await mockCacheHitEventsAsset(page, assetId);
         await goToAssetsPage(page);
 
         const listMaxPreset = page.getByTestId('assets-date-range').getByTestId('date-preset-max');
@@ -8565,12 +8584,12 @@ test.describe('All-range event markers on a price-cache hit', () => {
         const listMark = log.length;
         await listMaxPreset.click();
         await waitForDeliveredPriceQuery(log, listMark, (entry) => entry.assetId === assetId && entry.includePrice === true && entry.start === '2000-01-01', 'the list must query the All prices from the 2000-01-01 sentinel');
-        // data-busy turns false only after that answer is merged and its range is marked as fetched.
+        // data-busy turns false only after that answer is merged into the list's own cache.
         await waitForSettled(page.getByTestId('assets-page'), 20_000);
 
-        const detailMark = log.length;
         const card = page.getByTestId(`asset-card-${assetId}`);
         await expect(card).toBeVisible({timeout: 10_000});
+        const detailMark = log.length;
         await card.click();
         // The URL, then the root, each with its own ceiling — why: goToSeededAssetDetail's Y-33 paragraph.
         await expect(page, 'the card click navigates to the detail page of this asset').toHaveURL(new RegExp(`/assets/${assetId}(?:\\?|$)`), {timeout: 30_000});
@@ -8578,11 +8597,17 @@ test.describe('All-range event markers on a price-cache hit', () => {
         await expect(detail, 'the asset detail page renders once its URL has landed').toBeVisible({timeout: 10_000});
         await waitForSettled(detail, 20_000);
 
-        const eventsOnly = await waitForDeliveredPriceQuery(log, detailMark, (entry) => entry.assetId === assetId && entry.includePrice === false && entry.includeEvents === true, 'the detail must reuse the list cache and ask only for events');
-        expect(eventsOnly.start, 'All must resolve to the first cached close before asking for events').toBe(firstPriceDate);
+        // The detail asks its own daily prices together with the events: the list's reduced cache does not stand in for them.
+        const answer = await waitForDeliveredPriceQuery(log, detailMark, (entry) => entry.assetId === assetId && entry.includePrice === true && entry.includeEvents === true, 'the detail must ask its own daily prices together with the events');
+        // Delivery order is log order: no prices-less (events-only) item for this asset came before that first answer.
+        expect(
+            log.slice(detailMark, log.indexOf(answer)).filter((entry) => entry.assetId === assetId && entry.includePrice === false),
+            'the detail must not ask events alone before its first answer',
+        ).toEqual([]);
 
-        // Red before the fix: that events-only answer was discarded, so the chart drew no markers.
-        await expect.poll(() => readDetailChartEventNotes(page), {message: 'the chart must draw both dividends of the All range', timeout: 10_000}).toEqual([oldNotes, recentNotes(firstPriceDate)].sort());
+        // The recent dividend names the start the answer was asked from, read from the delivered item, not assumed.
+        // Red when the detail drops the events of that first answer: the chart then draws no markers.
+        await expect.poll(() => readDetailChartEventNotes(page), {message: 'the chart must draw both dividends of the All range', timeout: 10_000}).toEqual([oldNotes, recentNotes(answer.start ?? '')].sort());
     });
 
     // Path B, inside the detail.
@@ -9435,4 +9460,562 @@ test.describe('X-R16 asset detail: an invalid signal result keeps the prices and
             expect(mainItem?.include_price, 'the calendar return reuses the cached «All» prices').toBe(false);
         });
     }
+});
+
+// ============================================================================
+// N64 — asset detail: a signal result already answered is not asked again
+// ============================================================================
+// The page keeps a client cache of the backend's signal results beside its price cache. When the very same request has
+// been answered — same asset, resolved period, currency, signals with their parameters, calendar-return window and
+// comparisons — and its prices are cached, the page asks nothing: no request, no page token (the Refresh button does
+// not spin, the root's `data-busy` stays 'false') and no loader on the chart. The Refresh button still asks the server,
+// because it empties the caches.
+//
+// Served by the real backend on the seeded Apple asset (`goToSeededAssetDetail`: the suite's known asset with a price
+// history), read only. The one thing a test here writes is the indicator of the second one, in the chart settings. Those
+// live in the browser's localStorage, and Playwright gives each test a context of its own, so the indicator never
+// reaches another test, and nothing reaches the database.
+//
+// How «nothing was asked» is measured:
+//   · the requests are counted by a listener armed right before the last action and removed right after it;
+//   · the states that flip true and back inside one settle — a busy flag, the chart's loader — are read by an in-page
+//     observer armed at the same moment, because after the settle there is nothing left for an assertion to read;
+//   · «drawn» is read from the chart's own state (`data-series-state`, the canvas) and from the number of series its
+//     ECharts option holds. Never from the points of a series: the chart re-chooses its resolution (daily, weekly,
+//     monthly) with hysteresis, so the same range can legitimately draw a different number of points the second time.
+// ============================================================================
+test.describe('N64 asset detail: a signal result already answered is not asked again', () => {
+    // A ceiling, never a delay: a sign-in, a cold navigation, an indicator and the round trips each test waits for by name.
+    test.describe.configure({timeout: 60_000});
+
+    const PRICE_QUERY_PATH = '/api/v1/assets/prices/query';
+    /** The calendar Rolling Return the page asks for in calendar mode (`CALENDAR_RETURN_SIGNAL_CODE`, `priceChartHelpers.ts`). */
+    const CALENDAR_RETURN_SIGNAL_CODE = 'ASSET_CALENDAR_ROLLING_RETURN';
+    /** The backend indicator the period test configures: SMA, in the trend family of the signals picker. */
+    const INDICATOR = {group: 'trend', option: 'sma', signalCode: 'SMA'} as const;
+
+    /** The fields of a `/assets/prices/query` item these tests read. */
+    type SignalAsk = {signals?: Array<{signal_code?: string}>};
+
+    /** True for a `/assets/prices/query` POST one of whose items asks for `signalCode`. */
+    function asksForSignal(request: Request, signalCode: string): boolean {
+        if (request.method() !== 'POST' || new URL(request.url()).pathname !== PRICE_QUERY_PATH) return false;
+        let body: unknown;
+        try {
+            body = request.postDataJSON();
+        } catch {
+            return false;
+        }
+        return Array.isArray(body) && body.some((item) => item !== null && typeof item === 'object' && ((item as SignalAsk).signals ?? []).some((signal) => signal.signal_code === signalCode));
+    }
+
+    /** The `/assets/prices/query` POSTs the page sends from now until `stop()`. Armed before the action it measures, so none it sends is missed. */
+    function watchPriceQueries(page: Page) {
+        const sent: Request[] = [];
+        const onRequest = (request: Request) => {
+            if (request.method() === 'POST' && new URL(request.url()).pathname === PRICE_QUERY_PATH) sent.push(request);
+        };
+        page.on('request', onRequest);
+        return {sent, stop: () => page.off('request', onRequest)};
+    }
+
+    /** How many series the detail chart's ECharts option holds: the main one, the indicators, the event markers. 0 while no chart is mounted. */
+    async function readSeriesCount(page: Page): Promise<number> {
+        return page.evaluate((): number => {
+            type ChartHost = HTMLElement & {__lfChart?: {getOption: () => {series?: unknown}}};
+            const root = document.querySelector<HTMLElement>('[data-testid="asset-detail-chart"]');
+            if (!root) return 0;
+            const candidates = [root, ...root.querySelectorAll<HTMLElement>('*')];
+            const host = candidates.find((candidate) => typeof (candidate as ChartHost).__lfChart?.getOption === 'function') as ChartHost | undefined;
+            const series = host?.__lfChart?.getOption().series;
+            return Array.isArray(series) ? series.length : 0;
+        });
+    }
+
+    /**
+     * Arms an in-page observer for what a cached switch must never show: the page root or its Refresh button publishing
+     * `data-busy="true"`, and the calendar chart's loader mounting. The old value of each mutation is read as well as the
+     * new one, so a flag that flips true and back inside one render pass is still seen. Read and removed by `stopBusyWatch`.
+     */
+    async function armBusyWatch(page: Page): Promise<void> {
+        await page.evaluate(() => {
+            type BusyWatch = {stop: () => string[]};
+            const host = window as Window & {__lfN64BusyWatch?: BusyWatch};
+            host.__lfN64BusyWatch?.stop();
+            const flagged = new Set(['asset-detail-page', 'asset-detail-refresh-btn']);
+            const loader = 'asset-calendar-return-loading';
+            const seen = new Set<string>();
+            const note = (records: MutationRecord[]) => {
+                for (const record of records) {
+                    if (record.type === 'attributes' && record.target instanceof Element) {
+                        const testid = record.target.getAttribute('data-testid') ?? '';
+                        if (flagged.has(testid) && (record.oldValue === 'true' || record.target.getAttribute('data-busy') === 'true')) seen.add(`${testid} published busy`);
+                    } else {
+                        for (const node of Array.from(record.addedNodes)) {
+                            if (node instanceof Element && (node.getAttribute('data-testid') === loader || node.querySelector(`[data-testid="${loader}"]`))) seen.add(`${loader} mounted`);
+                        }
+                    }
+                }
+            };
+            const observer = new MutationObserver(note);
+            observer.observe(document.body, {subtree: true, childList: true, attributes: true, attributeFilter: ['data-busy'], attributeOldValue: true});
+            host.__lfN64BusyWatch = {
+                stop: () => {
+                    note(observer.takeRecords());
+                    observer.disconnect();
+                    return [...seen];
+                },
+            };
+        });
+    }
+
+    /** What the watch armed by `armBusyWatch` saw, and removes it. Fails loudly when none was armed. */
+    async function stopBusyWatch(page: Page): Promise<string[]> {
+        return page.evaluate(() => (window as Window & {__lfN64BusyWatch?: {stop: () => string[]}}).__lfN64BusyWatch?.stop() ?? ['no busy watch was armed']);
+    }
+
+    /** The calendar returns are drawn: the chart is in that mode, not loading, unavailable or failed, and its canvas has a size. */
+    async function expectCalendarReturnsDrawn(page: Page): Promise<void> {
+        const chart = page.getByTestId('asset-detail-chart');
+        await expect(chart, 'the chart shows the calendar returns').toHaveAttribute('data-primary-mode', 'calendar-return');
+        // `partial` is drawn, with a coverage note; loading, unavailable and error are not.
+        await expect(chart, 'the returns are drawn, not loading, unavailable or failed').toHaveAttribute('data-series-state', /^(ready|partial)$/, {timeout: 15_000});
+        await expect(page.getByTestId('asset-calendar-return-loading')).toHaveCount(0);
+        await expectAssetDetailChartCanvas(page);
+        await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
+    }
+
+    /**
+     * The developer's sequence up to its last step: prices, calendar returns (waited until drawn), back to prices. Leaves the
+     * page on the prices with the returns answered once and the page quiet, and returns how many series the returns drew.
+     */
+    async function returnsDrawnThenBackToPrices(page: Page) {
+        await goToSeededAssetDetail(page);
+        const chart = page.getByTestId('asset-detail-chart');
+        const pricePrimary = chart.getByTestId('asset-chart-primary-price');
+        const calendarPrimary = chart.getByTestId('asset-chart-primary-calendar-return');
+        const refresh = page.getByTestId('asset-detail-refresh-btn');
+        await expect(chart, 'the prices are drawn').toHaveAttribute('data-series-state', 'ready', {timeout: 15_000});
+        await expect(refresh, 'the first load has released the page token').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+
+        await calendarPrimary.click();
+        await expectCalendarReturnsDrawn(page);
+        await expect.poll(() => readSeriesCount(page), {message: 'the returns are on the chart', timeout: 10_000}).toBeGreaterThan(0);
+        const returnsSeries = await readSeriesCount(page);
+
+        await pricePrimary.click();
+        await expect(chart).toHaveAttribute('data-primary-mode', 'price');
+        await expect(pricePrimary).toHaveAttribute('aria-pressed', 'true');
+        await expect(chart, 'the prices are drawn again').toHaveAttribute('data-series-state', 'ready', {timeout: 15_000});
+        await expectAssetDetailChartCanvas(page);
+        await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
+        await expect(refresh, 'the page is quiet before the measured step').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+        return {chart, calendarPrimary, refresh, returnsSeries};
+    }
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    // The developer's own test: prices, calendar returns, prices, calendar returns. Before N64 the second visit asked for the
+    // returns again — the Refresh button spun and the chart showed its loader; now they come back at once.
+    test('N64 the calendar returns come back from the cache: no prices request, no busy page, no chart loader', async ({page}) => {
+        const {calendarPrimary, refresh, returnsSeries} = await returnsDrawnThenBackToPrices(page);
+        const root = page.getByTestId('asset-detail-page');
+        // The measured step starts from a quiet page with no loader on it: whatever the watch sees afterwards is the switch's own.
+        await expect(root).toHaveAttribute('data-busy', 'false');
+        await expect(page.getByTestId('asset-calendar-return-loading')).toHaveCount(0);
+
+        const queries = watchPriceQueries(page);
+        await armBusyWatch(page);
+        await calendarPrimary.click();
+        await expectCalendarReturnsDrawn(page);
+        // The same returns are drawn, not merely some chart: the cached answer is the first one.
+        await expect.poll(() => readSeriesCount(page), {message: 'the cached returns draw the same series as the first time', timeout: 10_000}).toBe(returnsSeries);
+        await expect(refresh).toHaveAttribute('data-busy', 'false');
+        queries.stop();
+        const busyStates = await stopBusyWatch(page);
+
+        expect(
+            queries.sent.map((request) => request.postData() ?? ''),
+            'the second switch to the calendar returns posts no prices request',
+        ).toEqual([]);
+        expect(busyStates, 'the second switch takes no page token (Refresh and the root stay not busy) and mounts no chart loader').toEqual([]);
+    });
+
+    // The same for a period change and back, with an indicator configured: the backend indicator is part of the request,
+    // so before N64 every load of a period re-posted it. 6M and 1Y are core presets of the picker, drawn at any width.
+    test('N64 returning to a period already answered, with an indicator configured, posts no prices request', async ({page}) => {
+        await goToSeededAssetDetail(page);
+        const chart = page.getByTestId('asset-detail-chart');
+        const root = page.getByTestId('asset-detail-page');
+        const refresh = page.getByTestId('asset-detail-refresh-btn');
+        const picker = page.getByTestId('asset-detail-controls').getByTestId('asset-detail-filter-bar').getByTestId('date-range-picker-root');
+        const startInput = picker.getByTestId('date-range-input-start');
+        const firstPeriod = picker.getByTestId('date-preset-6m');
+        const secondPeriod = picker.getByTestId('date-preset-1y');
+        await expect(chart, 'the prices are drawn').toHaveAttribute('data-series-state', 'ready', {timeout: 15_000});
+        await expectAssetDetailChartCanvas(page);
+        await expect(refresh, 'the first load has released the page token').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+        const seriesWithoutIndicator = await readSeriesCount(page);
+
+        // The indicator, added through the signals panel; the answer that brings its series is waited for.
+        const signalsToggle = page.getByTestId('asset-detail-signals-toggle');
+        const signalsPanel = page.getByTestId('asset-detail-signals-panel');
+        const indicatorCards = signalsPanel.locator(`[data-testid^="signal-card-"][data-signal-type="${INDICATOR.option}"]`);
+        await expect(signalsToggle).toBeVisible({timeout: 10_000});
+        if ((await signalsToggle.getAttribute('aria-expanded')) !== 'true') await signalsToggle.click();
+        await expect(signalsToggle, 'the signals panel is open').toHaveAttribute('aria-expanded', 'true');
+        await expect(signalsPanel).toBeVisible({timeout: 5_000});
+        await expect(indicatorCards, 'a fresh context has no such indicator yet').toHaveCount(0);
+        const indicatorTrigger = signalsPanel.getByTestId('signals-indicator-select-button');
+        await expect(indicatorTrigger, 'the signal catalogue has loaded').toBeVisible({timeout: 15_000});
+        await indicatorTrigger.click();
+        const family = page.getByTestId(`signal-tree-group-${INDICATOR.group}`);
+        await expect(family).toBeVisible();
+        if ((await family.getAttribute('aria-expanded')) !== 'true') await family.click();
+        await expect(family).toHaveAttribute('aria-expanded', 'true');
+        const option = page.getByTestId(`signal-tree-option-${INDICATOR.option}`);
+        await expect(option).toBeVisible();
+        const indicatorAnswered = page.waitForResponse((response) => asksForSignal(response.request(), INDICATOR.signalCode), {timeout: 15_000});
+        indicatorAnswered.catch(() => undefined);
+        await option.click();
+        expect((await indicatorAnswered).ok(), 'the backend answered the indicator').toBe(true);
+        await expect(indicatorCards).toHaveCount(1);
+        await expect(indicatorCards.getByTestId('signal-loading')).toHaveCount(0);
+        // Same range as the count above, so the one series more is the indicator's: without it the returns below could not tell it was drawn.
+        await expect.poll(() => readSeriesCount(page), {message: 'the indicator is drawn over the chart', timeout: 10_000}).toBeGreaterThan(seriesWithoutIndicator);
+
+        /** A period nothing has answered yet: the click asks the server, with the indicator, and the page is waited on until it is quiet again. */
+        const pickPeriodAsked = async (period: Locator): Promise<string> => {
+            const answered = page.waitForResponse((response) => asksForSignal(response.request(), INDICATOR.signalCode), {timeout: 15_000});
+            answered.catch(() => undefined);
+            await period.click();
+            await expect(period, 'the period is selected').toHaveAttribute('data-active', 'true');
+            const start = await startInput.inputValue();
+            expect((await answered).ok(), 'the backend answered the period with its indicator').toBe(true);
+            await expect(refresh, 'the page token of the period change is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+            await expect(indicatorCards.getByTestId('signal-loading')).toHaveCount(0);
+            await expect.poll(() => readSeriesCount(page), {message: 'the indicator is drawn over this period', timeout: 10_000}).toBeGreaterThan(seriesWithoutIndicator);
+            return start;
+        };
+        const firstStart = await pickPeriodAsked(firstPeriod);
+        const seriesOfFirstPeriod = await readSeriesCount(page);
+        const secondStart = await pickPeriodAsked(secondPeriod);
+        expect(secondStart, 'the second period is another range, or the return below proves nothing').not.toBe(firstStart);
+
+        // The return: asked and answered once, so it comes from the cache — prices and indicator alike.
+        const queries = watchPriceQueries(page);
+        await firstPeriod.click();
+        await expect(firstPeriod, 'the period is selected again').toHaveAttribute('data-active', 'true');
+        await expect(startInput, 'the range is the first period again').toHaveValue(firstStart);
+        await expect(refresh, 'the page token of the period change is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+        await waitForSettled(root, 20_000);
+        await expect.poll(() => readSeriesCount(page), {message: 'the cached period draws its indicator again', timeout: 10_000}).toBe(seriesOfFirstPeriod);
+        queries.stop();
+
+        expect(
+            queries.sent.map((request) => request.postData() ?? ''),
+            'the return to a period already answered posts no prices request',
+        ).toEqual([]);
+    });
+
+    // GUARD — the cache must not make the page deaf: Refresh empties the caches, so it still asks. Same sequence as the first
+    // test, then Refresh in calendar mode.
+    test('N64 the Refresh button still posts a prices request after the returns were served from the cache', async ({page}) => {
+        const {calendarPrimary, refresh} = await returnsDrawnThenBackToPrices(page);
+        await calendarPrimary.click();
+        await expectCalendarReturnsDrawn(page);
+        await expect(refresh).toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+
+        const refreshAsked = page.waitForRequest((request) => asksForSignal(request, CALENDAR_RETURN_SIGNAL_CODE), {timeout: 15_000});
+        refreshAsked.catch(() => undefined);
+        await refresh.click();
+        await refreshAsked;
+        await expect(refresh, 'the page token of the refresh is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+        await expectCalendarReturnsDrawn(page);
+    });
+});
+
+// ============================================================================
+// Y-40 — asset detail: it opens in the view chosen in the list
+// ============================================================================
+// The list's card button and top bar choose the view of a chart: its prices (absolute), their change in percent, or the
+// rolling return over the calendar window. The detail page opens in the view the list chose for that asset, saves the mode
+// or the Abs/% view its user changes as that asset's view (so a reload of the detail, and the list card, open in it), and
+// uses the rolling-return window in force: while the user has chosen none, the largest preset that fits the period on
+// screen — the same the card shows — and, once one is picked, that one, also when it is the window stored by default.
+//
+// Served by the real backend on the seeded Apple asset (`goToSeededAssetDetail`: the suite's known asset with a price
+// history), read only. The view is chosen the way a user does, through the card's own button on the list
+// (`asset-card-view-toggle`), not seeded into storage. The chart settings live in the browser's localStorage and
+// Playwright gives each test a context of its own, so nothing here reaches another test and nothing reaches the database.
+//
+// The chart root publishes the state read here: `data-primary-mode`, `data-view-mode`, `data-window-days`,
+// `data-window-kind`, `data-calendar-range-days` and `data-series-state`.
+//
+// Red before the lot: the detail always opens in price/percentage, keeps no view of its own and keeps the window it has
+// stored, never the largest preset that fits the period.
+// ============================================================================
+test.describe('Y-40 asset detail opens in the view chosen in the list', () => {
+    // A ceiling, never a delay: a sign-in, the list, a cold navigation, up to three reloads and the rolling-return round trips each test waits for by name.
+    test.describe.configure({timeout: 90_000});
+
+    type PrimaryView = 'absolute' | 'percentage' | 'calendar-return';
+
+    /** The presets of the rolling-return window: `CALENDAR_RETURN_PRESETS` in `src/lib/components/charts/calendarReturnWindow.ts`, restated because a spec cannot resolve the `$lib` alias (see `fixtures/dates.ts`). */
+    const WINDOW_PRESETS = [
+        {key: '1w', days: 7},
+        {key: '1m', days: 30},
+        {key: '3m', days: 90},
+        {key: '1y', days: 365},
+    ] as const;
+    /** The window a chart stores before its user chooses one: `DEFAULT_CALENDAR_RETURN_WINDOW.preset`, in the same file. */
+    const DEFAULT_WINDOW = WINDOW_PRESETS[1];
+
+    /** The window in force while none is chosen: the largest preset whose days fit `rangeDays`, the smallest when none does (`largestCalendarReturnPresetFor`). */
+    function largestFittingPreset(rangeDays: number): (typeof WINDOW_PRESETS)[number] {
+        let chosen: (typeof WINDOW_PRESETS)[number] = WINDOW_PRESETS[0];
+        for (const preset of WINDOW_PRESETS) {
+            if (preset.days <= rangeDays) chosen = preset;
+        }
+        return chosen;
+    }
+
+    /** About one year ending today, as the URL query a full load of the list takes for its period; the card hands it on to the detail, and a reload keeps it. */
+    function aboutOneYear(): {start: string; end: string} {
+        return {start: daysAgoIso(365), end: daysAgoIso(0)};
+    }
+
+    function detailChart(page: Page): Locator {
+        return page.getByTestId('asset-detail-chart');
+    }
+
+    function appleCard(page: Page): Locator {
+        return page
+            .getByTestId(/^asset-card-\d+$/)
+            .filter({hasText: /Apple/i})
+            .first();
+    }
+
+    /**
+     * The seeded Apple asset's detail, entered the way a user does: from the list's card. `view` is first chosen with the card's
+     * own button (percent → rolling return → absolute → percent, so at most two presses reach any view) and the card is waited
+     * on until it shows it; `period` is the list's period, which the card hands on to the detail.
+     */
+    async function openAppleDetailFromList(page: Page, options: {view?: PrimaryView; period?: {start: string; end: string}} = {}): Promise<void> {
+        await goToAssetsPage(page, options.period ?? {});
+        const seeded = appleCard(page);
+        await expect(seeded, 'the seeded Apple asset must be on the list').toBeVisible({timeout: 10_000});
+        const cardTestId = await seeded.getAttribute('data-testid');
+        if (!cardTestId) throw new Error('The seeded Apple card must expose its data-testid.');
+        // Resolved once: from here on the card is addressed by its own id, not by a name a neighbour could share.
+        const card = page.getByTestId(cardTestId);
+
+        if (options.view) {
+            const toggle = card.getByTestId('asset-card-view-toggle');
+            for (let press = 0; press < 3 && (await card.getAttribute('data-view-mode')) !== options.view; press += 1) {
+                const next = await toggle.getAttribute('data-next-view');
+                if (!next) throw new Error('The card view button must publish the view it turns to (data-next-view).');
+                await toggle.click();
+                await expect(card, 'the card turns to the view its button announced').toHaveAttribute('data-view-mode', next);
+            }
+            await expect(card, 'the list card shows the view the test chose').toHaveAttribute('data-view-mode', options.view);
+        }
+
+        await card.click();
+        await expect(page, 'the card click navigates to the asset detail page').toHaveURL(/\/assets\/\d+(?:\?|$)/, {timeout: 30_000});
+        await expect(page.getByTestId('asset-detail-page'), 'the asset detail page renders once its URL has landed').toBeVisible({timeout: 10_000});
+        await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
+    }
+
+    /** The detail, loaded again from its URL: the saved view is all it has to open in. */
+    async function reloadDetail(page: Page): Promise<void> {
+        await page.reload();
+        await expect(page.getByTestId('asset-detail-page'), 'the detail renders again after the reload').toBeVisible({timeout: 15_000});
+        await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
+    }
+
+    /** The rolling returns are drawn: the chart is in that mode, not loading, unavailable or failed, and its canvas has a size. */
+    async function expectRollingReturnDrawn(page: Page): Promise<void> {
+        const chart = detailChart(page);
+        await expect(chart, 'the chart shows the rolling return').toHaveAttribute('data-primary-mode', 'calendar-return', {timeout: 15_000});
+        // `partial` is drawn, with a coverage note; loading, unavailable and error are not.
+        await expect(chart, 'the returns are drawn, not loading, unavailable or failed').toHaveAttribute('data-series-state', /^(ready|partial)$/, {timeout: 15_000});
+        await expectAssetDetailChartCanvas(page);
+        await expect(page.getByTestId('asset-calendar-return-loading')).toHaveCount(0);
+        await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
+    }
+
+    /** The detail is in price mode in `view`, with its prices drawn and that view's button pressed. */
+    async function expectPricesDrawnIn(page: Page, view: 'absolute' | 'percentage'): Promise<void> {
+        const chart = detailChart(page);
+        await expect(chart, 'the chart is in price mode').toHaveAttribute('data-primary-mode', 'price', {timeout: 15_000});
+        await expect(chart, `the prices are shown in ${view}`).toHaveAttribute('data-view-mode', view, {timeout: 15_000});
+        await expect(chart, 'the prices are drawn').toHaveAttribute('data-series-state', 'ready', {timeout: 15_000});
+        await expect(chart.getByTestId(`chart-view-${view}`), `the ${view} button is the one pressed`).toHaveAttribute('aria-pressed', 'true');
+        await expectAssetDetailChartCanvas(page);
+    }
+
+    /** The detail opened in the saved `view`: its rolling-return mode with the returns drawn, or its price mode in that view. */
+    async function expectDetailOpensIn(page: Page, view: PrimaryView): Promise<void> {
+        if (view === 'calendar-return') {
+            await expectRollingReturnDrawn(page);
+            await expect(detailChart(page).getByTestId('asset-chart-primary-calendar-return'), 'the rolling-return button is the one pressed').toHaveAttribute('aria-pressed', 'true');
+            return;
+        }
+        await expectPricesDrawnIn(page, view);
+    }
+
+    /**
+     * Chooses the rolling-return mode in the detail. The mode button selects, it does not flip: pressed on the mode already
+     * shown it changes nothing, so this holds on a page that opened in it as well as on one that did not — which keeps the window
+     * tests about the window, whatever the page opens in.
+     */
+    async function selectRollingReturn(page: Page): Promise<void> {
+        const chart = detailChart(page);
+        await expect(chart, 'the chart is drawn before its mode is chosen').toHaveAttribute('data-series-state', /^(ready|partial)$/, {timeout: 15_000});
+        await chart.getByTestId('asset-chart-primary-calendar-return').click();
+        await expect(chart, 'the chart shows the rolling return').toHaveAttribute('data-primary-mode', 'calendar-return');
+    }
+
+    /** What the chart root publishes about the window and the period, read in one go: the two always belong to the same render. NaN when an attribute is absent. */
+    async function readPublishedWindow(chart: Locator): Promise<{rangeDays: number; windowDays: number}> {
+        return chart.evaluate((node) => ({rangeDays: Number((node as HTMLElement).dataset.calendarRangeDays), windowDays: Number((node as HTMLElement).dataset.windowDays)}));
+    }
+
+    /** The period of about one year is on screen: if the URL's range were lost the window tests below would prove nothing. */
+    async function expectAboutOneYearOnScreen(chart: Locator): Promise<void> {
+        await expect.poll(async () => (await readPublishedWindow(chart)).rangeDays, {message: 'the period of about one year is on screen', timeout: 10_000}).toBeGreaterThanOrEqual(360);
+    }
+
+    /** The window in force is the largest preset whose days fit the period on screen. Names both numbers when it is not. */
+    async function expectLargestFittingWindowInForce(chart: Locator): Promise<void> {
+        await expect
+            .poll(
+                async () => {
+                    const {rangeDays, windowDays} = await readPublishedWindow(chart);
+                    const fitting = largestFittingPreset(rangeDays);
+                    return windowDays === fitting.days ? 'the largest preset that fits' : `a window of ${windowDays} days over a period of ${rangeDays} days, where the largest preset that fits is ${fitting.key} (${fitting.days} days)`;
+                },
+                {message: 'with no window chosen, the window in force is the largest preset that fits the period on screen', timeout: 10_000},
+            )
+            .toBe('the largest preset that fits');
+    }
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    // 1 — the headline: the card chose the rolling return, the detail opens in it and draws it.
+    test('Y-40 a rolling return chosen in the list opens the detail in its rolling-return mode, with the returns drawn', async ({page}) => {
+        await openAppleDetailFromList(page, {view: 'calendar-return'});
+
+        await expectDetailOpensIn(page, 'calendar-return');
+    });
+
+    // 2 — absolute is a price view: the detail opens in its price mode, in Abs.
+    test('Y-40 the absolute view chosen in the list opens the detail in its price mode, in absolute', async ({page}) => {
+        await openAppleDetailFromList(page, {view: 'absolute'});
+
+        await expectDetailOpensIn(page, 'absolute');
+    });
+
+    // 3 — the detail saves what its user changes: the mode (price / rolling return) and the Abs/% view, each as the asset's view.
+    // Each stage reloads the page from its URL, so only what was saved can bring the view back; the last write wins.
+    test('Y-40 a mode or an Abs/% view chosen in the detail is saved: a reload reopens the detail in it', async ({page}) => {
+        await goToSeededAssetDetail(page);
+        const chart = detailChart(page);
+
+        // The rolling return…
+        await selectRollingReturn(page);
+        await expectRollingReturnDrawn(page);
+        await reloadDetail(page);
+        await expectDetailOpensIn(page, 'calendar-return');
+
+        // …then the prices, in Abs.
+        await chart.getByTestId('asset-chart-primary-price').click();
+        await expect(chart, 'the chart is back on the prices').toHaveAttribute('data-primary-mode', 'price');
+        await expect(chart, 'the prices are drawn again').toHaveAttribute('data-series-state', 'ready', {timeout: 15_000});
+        await chart.getByTestId('chart-view-absolute').click();
+        await expect(chart, 'the prices are shown in absolute').toHaveAttribute('data-view-mode', 'absolute');
+        await reloadDetail(page);
+        await expectDetailOpensIn(page, 'absolute');
+
+        // …and back to %, so the view that comes back is the last one chosen, not the first one saved.
+        await chart.getByTestId('chart-view-percentage').click();
+        await expect(chart, 'the prices are shown in percent').toHaveAttribute('data-view-mode', 'percentage');
+        await reloadDetail(page);
+        await expectDetailOpensIn(page, 'percentage');
+    });
+
+    // 3b — the same view is the list card's: a view chosen in the detail is the one the card opens in (the card is a reader of
+    // the same saved view). The list is loaded from its URL, so only what was saved can reach it.
+    const CARD_FOLLOWS: ReadonlyArray<{view: 'calendar-return' | 'absolute'; title: string}> = [
+        {view: 'calendar-return', title: 'Y-40 the rolling return chosen in the detail is the view the list card opens in'},
+        {view: 'absolute', title: 'Y-40 the absolute view chosen in the detail is the view the list card opens in'},
+    ];
+    for (const {view, title} of CARD_FOLLOWS) {
+        test(title, async ({page}) => {
+            await goToSeededAssetDetail(page);
+            const chart = detailChart(page);
+            if (view === 'calendar-return') {
+                await selectRollingReturn(page);
+                await expectRollingReturnDrawn(page);
+            } else {
+                await expect(chart, 'the prices are drawn before the view is chosen').toHaveAttribute('data-series-state', 'ready', {timeout: 15_000});
+                await chart.getByTestId('chart-view-absolute').click();
+                await expect(chart, 'the prices are shown in absolute').toHaveAttribute('data-view-mode', 'absolute');
+            }
+
+            await goToAssetsPage(page);
+
+            await expect(appleCard(page), 'the list card opens in the view chosen in the detail').toHaveAttribute('data-view-mode', view, {timeout: 10_000});
+        });
+    }
+
+    // 4 — no window chosen: the window in force is the largest preset that fits the period on screen. A period of about one year
+    // is longer than the stored default (1M), so the default and the right answer differ; read today, the page shows the stored 1M.
+    test('Y-40 with no window chosen, the window in force is the largest preset that fits the period on screen', async ({page}) => {
+        await openAppleDetailFromList(page, {period: aboutOneYear()});
+        const chart = detailChart(page);
+
+        await selectRollingReturn(page);
+        await expectAboutOneYearOnScreen(chart);
+        await expectLargestFittingWindowInForce(chart);
+
+        const fitting = largestFittingPreset((await readPublishedWindow(chart)).rangeDays);
+        expect(fitting.days, 'the period is longer than the default window, or the largest preset that fits proves nothing').toBeGreaterThan(DEFAULT_WINDOW.days);
+        await expect(chart, 'the window in force is a preset').toHaveAttribute('data-window-kind', 'preset');
+        await expect(chart.getByTestId(`asset-calendar-window-${fitting.key}`), 'the button of the window in force is the one pressed').toHaveAttribute('aria-pressed', 'true');
+    });
+
+    // 5 — a window the user picks is chosen: it is kept after a reload even when it is the one stored by default (1M) while auto had
+    // put a larger one in force. Picking the default is the pick a "did the stored window change?" test would not see.
+    test('Y-40 a window picked in the detail survives a reload, also the one equal to the stored default while auto chose a larger one', async ({page}) => {
+        await openAppleDetailFromList(page, {period: aboutOneYear()});
+        const chart = detailChart(page);
+
+        await selectRollingReturn(page);
+        await expectAboutOneYearOnScreen(chart);
+        // The precondition, verified and not inferred: auto is in force and it is not the window about to be picked.
+        await expectLargestFittingWindowInForce(chart);
+        const auto = largestFittingPreset((await readPublishedWindow(chart)).rangeDays);
+        expect(auto.key, 'auto chose another window than the default one, or picking the default proves nothing').not.toBe(DEFAULT_WINDOW.key);
+
+        await chart.getByTestId(`asset-calendar-window-${DEFAULT_WINDOW.key}`).click();
+        await expect(chart, 'the picked window is in force').toHaveAttribute('data-window-days', String(DEFAULT_WINDOW.days));
+        await expect(chart.getByTestId(`asset-calendar-window-${DEFAULT_WINDOW.key}`), 'the picked window is the one pressed').toHaveAttribute('aria-pressed', 'true');
+        // The pick asked its rolling return: the page is quiet before it is loaded again.
+        await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
+
+        await reloadDetail(page);
+        await selectRollingReturn(page);
+        await expectAboutOneYearOnScreen(chart);
+
+        // Auto would put `auto.key` in force here again; the user's pick is what stays.
+        await expect(chart, 'the picked window is still in force after the reload, not the one auto would choose').toHaveAttribute('data-window-days', String(DEFAULT_WINDOW.days));
+        await expect(chart.getByTestId(`asset-calendar-window-${DEFAULT_WINDOW.key}`), 'the picked window is still the one pressed').toHaveAttribute('aria-pressed', 'true');
+        await expect(chart.getByTestId(`asset-calendar-window-${auto.key}`), 'the window auto chose is not pressed').toHaveAttribute('aria-pressed', 'false');
+    });
 });
