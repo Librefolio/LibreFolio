@@ -202,6 +202,23 @@ departure to the arrival; the lots do the same:
 - A partner outside the scope is read at the scope's edge instead (see
   [Transfers Across the Scope's Edge](#scope-edge-transfers)), whatever its date.
 
+### 📅 A Transfer That Leaves and Arrives the Same Day {: #same-day-transfer }
+
+A move that takes days leaves an `IN_TRANSIT` fragment, which names its source and destination broker: `_build_transfer_rows()`
+reads a `TRANSFER_DEPART` row and a `TRANSFER_ARRIVE` row off it. A move that leaves and arrives on one day opens no transit
+(`transfer_date < arrival_date` is false in the engine), so its only piece is the destination fragment
+`lot:{lot}/transfer:{pair}/to:{broker}`, which names neither (J-68). The pair's brokers are in the engine's classified
+`TRANSFER_DEPART` events: `_transfer_brokers()` maps each pair id to its (source, destination), and the service gives the move
+the same two rows on that day:
+
+- the `TRANSFER_DEPART` row names no broker of its own and carries both ids, as a move of days does;
+- the `TRANSFER_ARRIVE` row keeps the destination as its `broker_id` and carries both ids too;
+- both read the destination fragment (`fragment_id`, quantity and price), and the departure sorts first, though both share the
+  pair id as `transaction_id`.
+
+A piece whose pair the replay did not classify (a leg read at the scope's edge, whose partner sits outside it) keeps its one
+arrival row and names no origin. No figure changes: the histories read the fragments, not these rows.
+
 ### 🛑 A Failed Reconstruction {: #failed-reconstruction }
 
 A replay that hits a quantitative failure is `FAILED`: a code of `_QUANTITATIVE_FAILURE_CODES` — a sale or a transfer

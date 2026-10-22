@@ -176,8 +176,9 @@ mode) and the broker.
       source and destination ids are dropped, so the partner broker is never named (J-48);
     - `ganttMarkerTooltipBlocks(events, deps)` builds one block per event — the label as title, then **Date**, **Quantity**
       (unsigned: the title says which way the units went) and the broker rows. An internal transfer reads **From** / **To**;
-      the side a row does not carry is left out, never guessed, so a transfer that left on the day it arrived shows only
-      **To** (its origin is not in the data yet, backlog J-68). Anything else reads **Broker**;
+      the side a row does not carry is left out, never guessed, so an arrival row that names no origin shows only **To**.
+      A transfer that left and arrived on one day has both rows, each with both ids (J-68, see [A Transfer That Leaves and Arrives
+      the Same Day](../../../backend/transactions/lots_analysis_service.md#same-day-transfer)). Anything else reads **Broker**;
     - `groupMarkerEvents(entries)` keeps one glyph per kind, lane and day, in first-appearance order as before, and gives each
       the events of its whole point (same lane, same day, any kind), so two events on one point are listed together instead of
       the second being dropped;
