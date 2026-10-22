@@ -622,7 +622,7 @@ describe('login error keys — a sentence in all four catalogues', () => {
         'auth.loginServerError': 'The server ran into an error: try again in a moment, and if it happens again, tell an administrator.',
         'auth.tooManyAttempts': 'Too many login attempts: wait a few minutes and try again.',
         // Workstream E: an account waiting for its email verification (the sign-in card shows «send the link again»)
-        'email.verification.loginRequired': 'Your email address is not verified yet: open the link in the email we sent you, then sign in.',
+        'email.verification.loginRequired': 'Your email address is not verified yet: open the link in the activation email, or ask for a new one below.',
     };
     const CATALOGUES: Record<SupportedLocale, unknown> = {en, it: itCatalogue, fr, es};
 
