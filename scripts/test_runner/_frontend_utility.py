@@ -208,6 +208,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/settings/security/securityChecksApi.test.ts",
             "src/lib/features/settings/security/securityFindings.test.ts",
             "src/lib/features/settings/security/securityChecks.test.ts",
+            "src/lib/features/settings/registrationMode.test.ts",
             "src/lib/features/plugin-settings/pluginSettingsForm.test.ts",
             "src/lib/features/plugin-settings/pluginSettingsApi.test.ts",
             "src/lib/features/settings/users/linkShare.test.ts",

@@ -352,7 +352,16 @@
         "setupCancelled": "Il link di setup di {username} non funziona più."
       },
       "pendingSetupHint": "Questo account amministratore si attiva con il suo link di setup. Se il link è perso, esegui «dev.py user setup-link» sul server, o chiedi al tuo fornitore.",
-      "pendingVerificationHint": "Il titolare non ha ancora aperto il link di verifica: accedendo può farsene mandare uno nuovo. Riattiva lo fa entrare subito, senza l'email."
+      "pendingVerificationHint": "Il titolare non ha ancora aperto il link di verifica: accedendo può farsene mandare uno nuovo. Riattiva lo fa entrare subito, senza l'email.",
+      "registration": {
+        "label": "Chi può iscriversi",
+        "confirm": {
+          "title": "Far iscrivere chiunque?",
+          "message": "Con «Aperta» chiunque raggiunga la pagina di accesso può creare un account. Sceglila solo se l'istanza è pensata per essere pubblica.",
+          "confirm": "Apri le iscrizioni"
+        },
+        "saveFailed": "Non è stato possibile salvare chi può iscriversi."
+      }
     },
     "linkShare": {
       "addressLabel": "Indirizzo del server",
@@ -408,7 +417,8 @@
         "warning": "Avviso",
         "info": "Informazione"
       },
-      "blockedScript": "Questa scheda del browser ha bloccato uno script che LibreFolio non ha inviato ({sources}): lo aggiunge un proxy, una CDN o un'estensione del browser. Spegni quell'iniezione per questo sito."
+      "blockedScript": "Questa scheda del browser ha bloccato uno script che LibreFolio non ha inviato ({sources}): lo aggiunge un proxy, una CDN o un'estensione del browser. Spegni quell'iniezione per questo sito.",
+      "guide": "Guida"
     }
   }
 }
