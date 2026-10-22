@@ -2233,7 +2233,7 @@ def populate_wac_test_transactions(session: Session):
         tags="wac-test",
     )
 
-    # ADJUSTMENT -3 shares with cost_basis_override (simulates internal transfer)
+    # ADJUSTMENT -3 shares: units leaving without a value (N78-1, the developer's decision of 21/10/2026)
     tx_wac_transfer = Transaction(
         broker_id=ib.id,
         asset_id=apple.id,
@@ -2242,9 +2242,7 @@ def populate_wac_test_transactions(session: Session):
         quantity=Decimal("-3"),
         amount=Decimal("0"),
         currency="USD",
-        cost_basis_override=Decimal("160.00"),
-        cost_basis_currency="USD",
-        description="[wac-test] ADJUSTMENT AAPL -3 with override $160",
+        description="[wac-test] ADJUSTMENT AAPL -3, no value",
         tags="wac-test",
     )
 
@@ -2253,7 +2251,7 @@ def populate_wac_test_transactions(session: Session):
     print(f"  🛡️ WAC prefund DEPOSIT #{tx_wac_prefund.id}: +$3000 USD (day -60)")
     print(f"  📈 WAC test BUY #{tx_wac_buy1.id}: 10@$150 (day -50)")
     print(f"  📈 WAC test BUY #{tx_wac_buy2.id}: 5@$180 (day -36)")
-    print(f"  📈 WAC test ADJ #{tx_wac_transfer.id}: -3 override=$160 (day -20)")
+    print(f"  📈 WAC test ADJ #{tx_wac_transfer.id}: -3, no value (day -20)")
 
 
 def _daily_variation(

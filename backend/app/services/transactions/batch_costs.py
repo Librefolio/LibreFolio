@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any
 
 from backend.app.db.models import Transaction
 from backend.app.schemas.transactions.batch import TXValidationCode, TXValidationIssue
-from backend.app.services.transactions.auto_cost import UnreadablePoolError
 from backend.app.services.transactions.transaction_batch_context import TransactionBatchContext, cost_fields
 
 if TYPE_CHECKING:
@@ -45,7 +44,6 @@ async def compute_wac_and_fx_issues(
             context.issues.append(_auto_cost_unreadable(operation, index, None, count))
         for operation, index, code in nothing_to_average:
             context.issues.append(_auto_cost_nothing_to_average(operation, index, code))
-        await _cost_split_handovers(service, context)
 
     if context.wac_results:
         for wac_result in context.wac_results:
@@ -53,26 +51,6 @@ async def compute_wac_and_fx_issues(
                 operation = wac_result.operation or "create"
                 index = wac_result.index if wac_result.index is not None else 0
                 context.issues.append(_wac_fx_unavailable(operation, index, None, wac_result.wac_missing_pairs))
-
-
-async def _cost_split_handovers(service: TransactionService, context: TransactionBatchContext) -> None:
-    """Decision 47: the giving leg of a split TRANSFER pair leaves at its own broker's Auto cost, unless an update of the
-    same batch gives it one. Without it the split is refused like an Auto row, rather than leave an ADJUSTMENT-out without
-    a cost: a missing conversion (``wacFxUnavailable``), or a pool holding rows that cannot be read (``autoCostUnreadable``,
-    W-B69)."""
-    explicit = {item.id for _, item in context.parsed_updates if item.cost_basis_override is not None}
-    for split_index, row in context.handover_rows:
-        if row.id in explicit:
-            continue  # an update of the same batch gave this leg its cost: it stays
-        try:
-            handover = await service._handover_cost(row)
-        except UnreadablePoolError as exc:
-            context.issues.append(_auto_cost_unreadable("split", split_index, row.id, exc.count))
-            continue
-        if handover.wac:
-            service._write_auto_cost(row, handover)
-        elif handover.wac_missing_pairs:
-            context.issues.append(_wac_fx_unavailable("split", split_index, row.id, handover.wac_missing_pairs))
 
 
 def _auto_cost_nothing_to_average(operation: Any, index: int, code: str) -> TXValidationIssue:
