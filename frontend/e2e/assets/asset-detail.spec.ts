@@ -832,6 +832,10 @@ test.describe('Asset Detail Page', () => {
             areaFill: true,
             gridLines: true,
             staleGradient: true,
+            // Y-40: this test pins exact windows starting from the 1M default, so it marks the window as chosen: the
+            // automatic window (the largest preset that fits the period on screen) does not move it when the period
+            // changes. The automatic window is covered by the «Y-40 asset detail opens in the view chosen in the list» describe.
+            calendarReturnWindowAuto: false,
             axisScales: {
                 absolute: {mode: 'auto'},
                 percentage: {mode: 'include0'},
@@ -7085,8 +7089,10 @@ test.describe('Asset Detail Page', () => {
         await expect(dateRangeStartInput).toHaveValue(longRange.start);
         await expect(dateRangeEndInput).toHaveValue(longRange.end);
         await expect(chart).toHaveAttribute('data-calendar-range-days', String(longRange.spanDays));
-        await chart.getByTestId('chart-view-absolute').click();
+        // Y-40: a reload reopens the detail in the view last used, saved when the mode changed back to price: Abs, where this test
+        // had left it (before the lot it reopened in percentage and the test had to press Abs here).
         await expect(chart).toHaveAttribute('data-view-mode', 'absolute');
+        await expect(chart.getByTestId('chart-view-absolute')).toHaveAttribute('aria-pressed', 'true');
         await chart.getByTestId('chart-type-candlestick').click();
         await expect(chart.getByTestId('candlestick-chart')).toBeVisible();
 
@@ -9728,5 +9734,288 @@ test.describe('N64 asset detail: a signal result already answered is not asked a
         await refreshAsked;
         await expect(refresh, 'the page token of the refresh is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
         await expectCalendarReturnsDrawn(page);
+    });
+});
+
+// ============================================================================
+// Y-40 — asset detail: it opens in the view chosen in the list
+// ============================================================================
+// The list's card button and top bar choose the view of a chart: its prices (absolute), their change in percent, or the
+// rolling return over the calendar window. The detail page opens in the view the list chose for that asset, saves the mode
+// or the Abs/% view its user changes as that asset's view (so a reload of the detail, and the list card, open in it), and
+// uses the rolling-return window in force: while the user has chosen none, the largest preset that fits the period on
+// screen — the same the card shows — and, once one is picked, that one, also when it is the window stored by default.
+//
+// Served by the real backend on the seeded Apple asset (`goToSeededAssetDetail`: the suite's known asset with a price
+// history), read only. The view is chosen the way a user does, through the card's own button on the list
+// (`asset-card-view-toggle`), not seeded into storage. The chart settings live in the browser's localStorage and
+// Playwright gives each test a context of its own, so nothing here reaches another test and nothing reaches the database.
+//
+// The chart root publishes the state read here: `data-primary-mode`, `data-view-mode`, `data-window-days`,
+// `data-window-kind`, `data-calendar-range-days` and `data-series-state`.
+//
+// Red before the lot: the detail always opens in price/percentage, keeps no view of its own and keeps the window it has
+// stored, never the largest preset that fits the period.
+// ============================================================================
+test.describe('Y-40 asset detail opens in the view chosen in the list', () => {
+    // A ceiling, never a delay: a sign-in, the list, a cold navigation, up to three reloads and the rolling-return round trips each test waits for by name.
+    test.describe.configure({timeout: 90_000});
+
+    type PrimaryView = 'absolute' | 'percentage' | 'calendar-return';
+
+    /** The presets of the rolling-return window: `CALENDAR_RETURN_PRESETS` in `src/lib/components/charts/calendarReturnWindow.ts`, restated because a spec cannot resolve the `$lib` alias (see `fixtures/dates.ts`). */
+    const WINDOW_PRESETS = [
+        {key: '1w', days: 7},
+        {key: '1m', days: 30},
+        {key: '3m', days: 90},
+        {key: '1y', days: 365},
+    ] as const;
+    /** The window a chart stores before its user chooses one: `DEFAULT_CALENDAR_RETURN_WINDOW.preset`, in the same file. */
+    const DEFAULT_WINDOW = WINDOW_PRESETS[1];
+
+    /** The window in force while none is chosen: the largest preset whose days fit `rangeDays`, the smallest when none does (`largestCalendarReturnPresetFor`). */
+    function largestFittingPreset(rangeDays: number): (typeof WINDOW_PRESETS)[number] {
+        let chosen: (typeof WINDOW_PRESETS)[number] = WINDOW_PRESETS[0];
+        for (const preset of WINDOW_PRESETS) {
+            if (preset.days <= rangeDays) chosen = preset;
+        }
+        return chosen;
+    }
+
+    /** About one year ending today, as the URL query a full load of the list takes for its period; the card hands it on to the detail, and a reload keeps it. */
+    function aboutOneYear(): {start: string; end: string} {
+        return {start: daysAgoIso(365), end: daysAgoIso(0)};
+    }
+
+    function detailChart(page: Page): Locator {
+        return page.getByTestId('asset-detail-chart');
+    }
+
+    function appleCard(page: Page): Locator {
+        return page
+            .getByTestId(/^asset-card-\d+$/)
+            .filter({hasText: /Apple/i})
+            .first();
+    }
+
+    /**
+     * The seeded Apple asset's detail, entered the way a user does: from the list's card. `view` is first chosen with the card's
+     * own button (percent → rolling return → absolute → percent, so at most two presses reach any view) and the card is waited
+     * on until it shows it; `period` is the list's period, which the card hands on to the detail.
+     */
+    async function openAppleDetailFromList(page: Page, options: {view?: PrimaryView; period?: {start: string; end: string}} = {}): Promise<void> {
+        await goToAssetsPage(page, options.period ?? {});
+        const seeded = appleCard(page);
+        await expect(seeded, 'the seeded Apple asset must be on the list').toBeVisible({timeout: 10_000});
+        const cardTestId = await seeded.getAttribute('data-testid');
+        if (!cardTestId) throw new Error('The seeded Apple card must expose its data-testid.');
+        // Resolved once: from here on the card is addressed by its own id, not by a name a neighbour could share.
+        const card = page.getByTestId(cardTestId);
+
+        if (options.view) {
+            const toggle = card.getByTestId('asset-card-view-toggle');
+            for (let press = 0; press < 3 && (await card.getAttribute('data-view-mode')) !== options.view; press += 1) {
+                const next = await toggle.getAttribute('data-next-view');
+                if (!next) throw new Error('The card view button must publish the view it turns to (data-next-view).');
+                await toggle.click();
+                await expect(card, 'the card turns to the view its button announced').toHaveAttribute('data-view-mode', next);
+            }
+            await expect(card, 'the list card shows the view the test chose').toHaveAttribute('data-view-mode', options.view);
+        }
+
+        await card.click();
+        await expect(page, 'the card click navigates to the asset detail page').toHaveURL(/\/assets\/\d+(?:\?|$)/, {timeout: 30_000});
+        await expect(page.getByTestId('asset-detail-page'), 'the asset detail page renders once its URL has landed').toBeVisible({timeout: 10_000});
+        await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
+    }
+
+    /** The detail, loaded again from its URL: the saved view is all it has to open in. */
+    async function reloadDetail(page: Page): Promise<void> {
+        await page.reload();
+        await expect(page.getByTestId('asset-detail-page'), 'the detail renders again after the reload').toBeVisible({timeout: 15_000});
+        await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
+    }
+
+    /** The rolling returns are drawn: the chart is in that mode, not loading, unavailable or failed, and its canvas has a size. */
+    async function expectRollingReturnDrawn(page: Page): Promise<void> {
+        const chart = detailChart(page);
+        await expect(chart, 'the chart shows the rolling return').toHaveAttribute('data-primary-mode', 'calendar-return', {timeout: 15_000});
+        // `partial` is drawn, with a coverage note; loading, unavailable and error are not.
+        await expect(chart, 'the returns are drawn, not loading, unavailable or failed').toHaveAttribute('data-series-state', /^(ready|partial)$/, {timeout: 15_000});
+        await expectAssetDetailChartCanvas(page);
+        await expect(page.getByTestId('asset-calendar-return-loading')).toHaveCount(0);
+        await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
+    }
+
+    /** The detail is in price mode in `view`, with its prices drawn and that view's button pressed. */
+    async function expectPricesDrawnIn(page: Page, view: 'absolute' | 'percentage'): Promise<void> {
+        const chart = detailChart(page);
+        await expect(chart, 'the chart is in price mode').toHaveAttribute('data-primary-mode', 'price', {timeout: 15_000});
+        await expect(chart, `the prices are shown in ${view}`).toHaveAttribute('data-view-mode', view, {timeout: 15_000});
+        await expect(chart, 'the prices are drawn').toHaveAttribute('data-series-state', 'ready', {timeout: 15_000});
+        await expect(chart.getByTestId(`chart-view-${view}`), `the ${view} button is the one pressed`).toHaveAttribute('aria-pressed', 'true');
+        await expectAssetDetailChartCanvas(page);
+    }
+
+    /** The detail opened in the saved `view`: its rolling-return mode with the returns drawn, or its price mode in that view. */
+    async function expectDetailOpensIn(page: Page, view: PrimaryView): Promise<void> {
+        if (view === 'calendar-return') {
+            await expectRollingReturnDrawn(page);
+            await expect(detailChart(page).getByTestId('asset-chart-primary-calendar-return'), 'the rolling-return button is the one pressed').toHaveAttribute('aria-pressed', 'true');
+            return;
+        }
+        await expectPricesDrawnIn(page, view);
+    }
+
+    /**
+     * Chooses the rolling-return mode in the detail. The mode button selects, it does not flip: pressed on the mode already
+     * shown it changes nothing, so this holds on a page that opened in it as well as on one that did not — which keeps the window
+     * tests about the window, whatever the page opens in.
+     */
+    async function selectRollingReturn(page: Page): Promise<void> {
+        const chart = detailChart(page);
+        await expect(chart, 'the chart is drawn before its mode is chosen').toHaveAttribute('data-series-state', /^(ready|partial)$/, {timeout: 15_000});
+        await chart.getByTestId('asset-chart-primary-calendar-return').click();
+        await expect(chart, 'the chart shows the rolling return').toHaveAttribute('data-primary-mode', 'calendar-return');
+    }
+
+    /** What the chart root publishes about the window and the period, read in one go: the two always belong to the same render. NaN when an attribute is absent. */
+    async function readPublishedWindow(chart: Locator): Promise<{rangeDays: number; windowDays: number}> {
+        return chart.evaluate((node) => ({rangeDays: Number((node as HTMLElement).dataset.calendarRangeDays), windowDays: Number((node as HTMLElement).dataset.windowDays)}));
+    }
+
+    /** The period of about one year is on screen: if the URL's range were lost the window tests below would prove nothing. */
+    async function expectAboutOneYearOnScreen(chart: Locator): Promise<void> {
+        await expect.poll(async () => (await readPublishedWindow(chart)).rangeDays, {message: 'the period of about one year is on screen', timeout: 10_000}).toBeGreaterThanOrEqual(360);
+    }
+
+    /** The window in force is the largest preset whose days fit the period on screen. Names both numbers when it is not. */
+    async function expectLargestFittingWindowInForce(chart: Locator): Promise<void> {
+        await expect
+            .poll(
+                async () => {
+                    const {rangeDays, windowDays} = await readPublishedWindow(chart);
+                    const fitting = largestFittingPreset(rangeDays);
+                    return windowDays === fitting.days ? 'the largest preset that fits' : `a window of ${windowDays} days over a period of ${rangeDays} days, where the largest preset that fits is ${fitting.key} (${fitting.days} days)`;
+                },
+                {message: 'with no window chosen, the window in force is the largest preset that fits the period on screen', timeout: 10_000},
+            )
+            .toBe('the largest preset that fits');
+    }
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    // 1 — the headline: the card chose the rolling return, the detail opens in it and draws it.
+    test('Y-40 a rolling return chosen in the list opens the detail in its rolling-return mode, with the returns drawn', async ({page}) => {
+        await openAppleDetailFromList(page, {view: 'calendar-return'});
+
+        await expectDetailOpensIn(page, 'calendar-return');
+    });
+
+    // 2 — absolute is a price view: the detail opens in its price mode, in Abs.
+    test('Y-40 the absolute view chosen in the list opens the detail in its price mode, in absolute', async ({page}) => {
+        await openAppleDetailFromList(page, {view: 'absolute'});
+
+        await expectDetailOpensIn(page, 'absolute');
+    });
+
+    // 3 — the detail saves what its user changes: the mode (price / rolling return) and the Abs/% view, each as the asset's view.
+    // Each stage reloads the page from its URL, so only what was saved can bring the view back; the last write wins.
+    test('Y-40 a mode or an Abs/% view chosen in the detail is saved: a reload reopens the detail in it', async ({page}) => {
+        await goToSeededAssetDetail(page);
+        const chart = detailChart(page);
+
+        // The rolling return…
+        await selectRollingReturn(page);
+        await expectRollingReturnDrawn(page);
+        await reloadDetail(page);
+        await expectDetailOpensIn(page, 'calendar-return');
+
+        // …then the prices, in Abs.
+        await chart.getByTestId('asset-chart-primary-price').click();
+        await expect(chart, 'the chart is back on the prices').toHaveAttribute('data-primary-mode', 'price');
+        await expect(chart, 'the prices are drawn again').toHaveAttribute('data-series-state', 'ready', {timeout: 15_000});
+        await chart.getByTestId('chart-view-absolute').click();
+        await expect(chart, 'the prices are shown in absolute').toHaveAttribute('data-view-mode', 'absolute');
+        await reloadDetail(page);
+        await expectDetailOpensIn(page, 'absolute');
+
+        // …and back to %, so the view that comes back is the last one chosen, not the first one saved.
+        await chart.getByTestId('chart-view-percentage').click();
+        await expect(chart, 'the prices are shown in percent').toHaveAttribute('data-view-mode', 'percentage');
+        await reloadDetail(page);
+        await expectDetailOpensIn(page, 'percentage');
+    });
+
+    // 3b — the same view is the list card's: a view chosen in the detail is the one the card opens in (the card is a reader of
+    // the same saved view). The list is loaded from its URL, so only what was saved can reach it.
+    const CARD_FOLLOWS: ReadonlyArray<{view: 'calendar-return' | 'absolute'; title: string}> = [
+        {view: 'calendar-return', title: 'Y-40 the rolling return chosen in the detail is the view the list card opens in'},
+        {view: 'absolute', title: 'Y-40 the absolute view chosen in the detail is the view the list card opens in'},
+    ];
+    for (const {view, title} of CARD_FOLLOWS) {
+        test(title, async ({page}) => {
+            await goToSeededAssetDetail(page);
+            const chart = detailChart(page);
+            if (view === 'calendar-return') {
+                await selectRollingReturn(page);
+                await expectRollingReturnDrawn(page);
+            } else {
+                await expect(chart, 'the prices are drawn before the view is chosen').toHaveAttribute('data-series-state', 'ready', {timeout: 15_000});
+                await chart.getByTestId('chart-view-absolute').click();
+                await expect(chart, 'the prices are shown in absolute').toHaveAttribute('data-view-mode', 'absolute');
+            }
+
+            await goToAssetsPage(page);
+
+            await expect(appleCard(page), 'the list card opens in the view chosen in the detail').toHaveAttribute('data-view-mode', view, {timeout: 10_000});
+        });
+    }
+
+    // 4 — no window chosen: the window in force is the largest preset that fits the period on screen. A period of about one year
+    // is longer than the stored default (1M), so the default and the right answer differ; read today, the page shows the stored 1M.
+    test('Y-40 with no window chosen, the window in force is the largest preset that fits the period on screen', async ({page}) => {
+        await openAppleDetailFromList(page, {period: aboutOneYear()});
+        const chart = detailChart(page);
+
+        await selectRollingReturn(page);
+        await expectAboutOneYearOnScreen(chart);
+        await expectLargestFittingWindowInForce(chart);
+
+        const fitting = largestFittingPreset((await readPublishedWindow(chart)).rangeDays);
+        expect(fitting.days, 'the period is longer than the default window, or the largest preset that fits proves nothing').toBeGreaterThan(DEFAULT_WINDOW.days);
+        await expect(chart, 'the window in force is a preset').toHaveAttribute('data-window-kind', 'preset');
+        await expect(chart.getByTestId(`asset-calendar-window-${fitting.key}`), 'the button of the window in force is the one pressed').toHaveAttribute('aria-pressed', 'true');
+    });
+
+    // 5 — a window the user picks is chosen: it is kept after a reload even when it is the one stored by default (1M) while auto had
+    // put a larger one in force. Picking the default is the pick a "did the stored window change?" test would not see.
+    test('Y-40 a window picked in the detail survives a reload, also the one equal to the stored default while auto chose a larger one', async ({page}) => {
+        await openAppleDetailFromList(page, {period: aboutOneYear()});
+        const chart = detailChart(page);
+
+        await selectRollingReturn(page);
+        await expectAboutOneYearOnScreen(chart);
+        // The precondition, verified and not inferred: auto is in force and it is not the window about to be picked.
+        await expectLargestFittingWindowInForce(chart);
+        const auto = largestFittingPreset((await readPublishedWindow(chart)).rangeDays);
+        expect(auto.key, 'auto chose another window than the default one, or picking the default proves nothing').not.toBe(DEFAULT_WINDOW.key);
+
+        await chart.getByTestId(`asset-calendar-window-${DEFAULT_WINDOW.key}`).click();
+        await expect(chart, 'the picked window is in force').toHaveAttribute('data-window-days', String(DEFAULT_WINDOW.days));
+        await expect(chart.getByTestId(`asset-calendar-window-${DEFAULT_WINDOW.key}`), 'the picked window is the one pressed').toHaveAttribute('aria-pressed', 'true');
+        // The pick asked its rolling return: the page is quiet before it is loaded again.
+        await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
+
+        await reloadDetail(page);
+        await selectRollingReturn(page);
+        await expectAboutOneYearOnScreen(chart);
+
+        // Auto would put `auto.key` in force here again; the user's pick is what stays.
+        await expect(chart, 'the picked window is still in force after the reload, not the one auto would choose').toHaveAttribute('data-window-days', String(DEFAULT_WINDOW.days));
+        await expect(chart.getByTestId(`asset-calendar-window-${DEFAULT_WINDOW.key}`), 'the picked window is still the one pressed').toHaveAttribute('aria-pressed', 'true');
+        await expect(chart.getByTestId(`asset-calendar-window-${auto.key}`), 'the window auto chose is not pressed').toHaveAttribute('aria-pressed', 'false');
     });
 });

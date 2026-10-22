@@ -8811,3 +8811,72 @@ sonda lo legge come «nessun suggerimento» e `call_provider` mette in pausa.
   (rinominarlo cambierebbe il titolo completo del fratello). Prettier pulito, `tsc --noEmit -p tsconfig.e2e.json` exit 0.
 - **Prove** (in `flock`, `nice`, `LC_ALL=en_US.UTF-8`, corsia 6191): il test da solo **1/1** (`ondata3/X-8555-single.log`);
   `front-asset asset-detail` intero, `--workers 2`: **46/46** (`X-8555-asset-detail.log`). Porta 6191 libera.
+
+### Y-40, il dettaglio dell'asset legge la vista scelta in lista (22/10 notte, HEAD `17ed982c2`)
+
+> **Via del coordinatore** (22/10): «il dettaglio legge la vista scelta in lista (Y-40), con il contratto scritto da Y»:
+> apertura con `getSettingsForPair('asset-<id>', 'assets').primaryView` → `detailModesForPrimaryView`; salvataggio con
+> `setItemPrimaryView(slug, primaryViewForDetailModes(…), 'assets')`; finestra `effectiveCalendarReturnWindow(settings,
+> rangeDays)`; icona `CalendarSync` per il rendimento (V-8b). Solo il dettaglio degli asset; store e
+> `chartSignalRendering.ts` di Y (sporchi nel suo worktree): non li tocco. HEAD `17ed982c2` (merge di Y-40 asset e Z-29fx),
+> albero pulito, `api sync` rc 0.
+
+#### Analisi breve
+- **Oggi** (`assets/[id]/+page.svelte`): `reloadPage` rimette `primaryMode = 'price'`; `viewMode` parte da `'percentage'`;
+  la finestra è uno `$state` idratato una volta per asset da `settings.calendarReturnWindow` (`:262-274`) e scritto da
+  `persistCalendarWindow`; `AssetChartModeToggle` usa `Percent` anche per il rendimento.
+- **Disegno**:
+  1. apertura: in `reloadPage`, `{primaryMode, viewMode} = detailModesForPrimaryView(settings.primaryView)`;
+  2. salvataggio: in `setPrimaryMode` e nel cambio Abs/% (`onViewModeChange`) la pagina salva
+     `primaryViewForDetailModes(primaryMode, viewMode)`. **Con `setPairSettings({...settings, primaryView, signals:
+     [...signals]})`, non con `setItemPrimaryView`**: quest'ultimo riparte dall'override salvato e rifà le
+     configurazioni senza i dati del confronto che la pagina vi scrive (`_resolvedData`…): un cambio Abs/% farebbe
+     sparire le linee dei confronti. Per lo store il risultato è lo stesso (stessa base: override, poi scope, poi
+     globale); è il modo in cui la pagina salva già estetica, assi e segnali. Lo scrivo nel checkpoint per Y;
+  3. finestra: `calendarWindowSelection` diventa `$derived(effectiveCalendarReturnWindow(settings, calendarRangeDays))`
+     — sincrona, quindi un cambio di periodo legge subito la finestra nuova; la scelta dell'utente si salva con
+     `calendarReturnWindowAuto: false` esplicito (lo store la segna scelta solo se diversa da quella salvata: con la
+     finestra salvata uguale a quella cliccata resterebbe in automatico);
+  4. icona: `CalendarSync` in `AssetChartModeToggle` (non sporco in Y).
+- **Fuori**: `renderCalendarComparisons` (disponibile, non serve: il dettaglio ha già la sua copia, e il file è sporco in
+  Y) → eventuale seguito; il dettaglio dei cambi (con la parte cambi di Y).
+- **Rossi**: Vitest `AssetChartModeToggle.test.ts` (l'icona); E2E in `asset-detail.spec.ts` (apertura nella vista
+  salvata, salvataggio e riapertura, finestra automatica uguale a quella della scheda, scelta dell'utente tenuta), visti
+  rossi nello slot.
+
+#### Passi
+1. ✅ 22/10 · Analisi breve (sopra).
+2. ✅ 22/10 · I rossi (`test-author`): `AssetChartModeToggle.test.ts` (l'icona letta dalla classe `lucide-<nome>`: rendimento
+   `calendar-sync`, prezzi `chart-line`, nessun `percent`) **4 rossi, 7 verdi**; E2E `asset-detail.spec.ts`, describe «Y-40
+   asset detail opens in the view chosen in the list» (7 casi: vista rendimento e assoluta scelte in lista; modalità e
+   Abs/% scelte nel dettaglio salvate e riaperte; la scheda della lista apre nella vista scelta nel dettaglio, due casi;
+   finestra automatica = il preset più grande che sta nel periodo; finestra scelta tenuta dopo il ricaricamento, anche
+   quella uguale alla predefinita). La vista si sceglie col pulsante vero della scheda (`asset-card-view-toggle`).
+   Visti rossi nello slot: **7/7 rossi** per le ragioni dichiarate (`ondata3/X-y40-red-e2e.log`).
+3. ✅ 22/10 · La cura.
+   > **Note implementazione**:
+   > - `assets/[id]/+page.svelte`: in `reloadPage` `{primaryMode, viewMode}` da `detailModesForPrimaryView(settings.primaryView)`;
+   >   `persistPrimaryView()` in `setPrimaryMode` e in `onViewModeChange` (`setPairSettings` con `primaryView` e i segnali
+   >   della pagina, vedi analisi); `calendarWindowSelection` ora `$derived(effectiveCalendarReturnWindow(settings,
+   >   calendarRangeDays))`, spostato dopo `settings`; l'effetto d'idratazione tiene solo i campi della finestra
+   >   personalizzata; `persistCalendarWindow` salva con `calendarReturnWindowAuto: false`.
+   > - `AssetChartModeToggle.svelte`: `CalendarSync` al posto di `Percent` (V-8b).
+   >
+   > **⚠️ Fuori pista**: il test lungo `:575` partiva dalla finestra 1M predefinita e con Y-40 la finestra automatica
+   > diventa 1Y sul periodo lungo (timeout a `:2720`). Riparato (`test-author`): il seme delle impostazioni segna la
+   > finestra come scelta (`calendarReturnWindowAuto: false`), così il test tiene le sue finestre esatte (la finestra
+   > automatica la provano i casi Y-40); l'unico `page.reload()` (`~:7080`) ora si aspetta di riaprire in Abs (l'ultima
+   > vista usata) invece di cliccarla.
+4. ✅ 22/10 · Le prove (slot del coordinatore, `flock`, `nice`, `LC_ALL=en_US.UTF-8`, corsia 6191):
+   - E2E `front-asset asset-detail Y-40`: **7/7**; `front-asset asset-detail` intero `--workers 2`: prima 52/53 (`:575`),
+     dopo la riparazione **53/53** (`X-y40-asset-detail-full-2.log`); `front-asset asset-mobile-layout` **21/21**;
+     `front-portfolio page-busy` **17/17** (le due spec che aprono il dettaglio sul grafico dei prezzi).
+   - Vitest: `AssetChartModeToggle` + `chartPageSignals` + `comparisonSignalPages` **116/116**; `front-utility
+     component-unit` **200 file, 5233/5233**; `front-utility core-unit` **232 file, 10100/10100**; `front check` **0/0**.
+   - Prettier pulito, `git diff --check` pulito, porta 6191 libera.
+5. ✅ 22/10 · Doc (`docs-writer`, solo inglese): `user/assets/detail/chart.en.md` (`#primary-modes`: si apre nella vista
+   della scheda e la salva; `#rolling-return`: finestra come la scheda, automatica finché non se ne sceglie una) e
+   `user/assets/index.en.md` (una frase nella nota delle tre viste). `mkdocs build` (strict) rc 0. Debito di traduzione:
+   `chart.{it,fr,es}` e `index.{it,fr,es}` (non timbrato). `charts.md` è sporco in Y: la frase sul dettaglio («the asset
+   detail page uses the same window», tolta da Y) è una richiesta a Y.
+6. ⏳ 22/10 · CHECKPOINT READY (vista del dettaglio).
