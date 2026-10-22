@@ -389,3 +389,25 @@ def test_each_restore_route_documents_the_mode_and_the_block(document, route):
     assert operation is not None, f"{route.operation} must be in the document"
     missing = sorted((PANEL_ANSWERS | RESTORE_GATE_ANSWERS) - set(operation.get("responses", {})))
     assert missing == [], f"{route.operation} must document {sorted(PANEL_ANSWERS | RESTORE_GATE_ANSWERS)}: {missing} missing"
+
+
+#: SEC-review point 9: the codes of the 503 each restore route that reads a limit documents, beside the ticket settings'.
+RESTORE_503_CODES = {
+    "PUT /api/v1/backup/panel/restore/upload": ("backup_upload_unavailable", "backup_restore_unavailable"),
+    "POST /api/v1/backup/panel/restore/stage": ("backup_restore_unavailable",),
+}
+
+
+@pytest.mark.parametrize("operation_name", sorted(RESTORE_503_CODES))
+def test_the_restore_routes_that_read_a_limit_document_each_code_of_their_503(document, operation_name):
+    """HPR-008 (H-62, SEC-review point 9): ``PUT …/panel/restore/upload`` answers 503 ``backup_upload_unavailable`` when
+    the upload limit cannot be read, and 503 ``backup_restore_unavailable`` when the panel's ticket settings cannot be
+    used: its 503 documents both codes. ``POST …/stage`` documents ``backup_restore_unavailable``, for the restore limit
+    and for the ticket settings (guard)."""
+    operation = _operations(document).get(operation_name)
+    assert operation is not None, f"{operation_name} must be in the document"
+    description = ((operation.get("responses") or {}).get("503") or {}).get("description", "")
+
+    missing = [code for code in RESTORE_503_CODES[operation_name] if f"`{code}`" not in description]
+    assert missing == [], f"{operation_name}: its 503 must document {list(RESTORE_503_CODES[operation_name])}: {missing} missing from {description!r}"
+    print_success(f"{operation_name}: 503 documents {list(RESTORE_503_CODES[operation_name])}")

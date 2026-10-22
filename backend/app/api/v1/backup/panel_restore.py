@@ -21,7 +21,7 @@ The order of the refusals, on every route:
 A caller without a valid ticket learns neither the mode nor the block. The panel sees no personal or portfolio data
 (R1): the report of a check is ``PanelRestoreStageReport`` (the administrators counted, the control totals as a verdict)
 and the status names who confirmed only as ``confirmed_via``. The panel sees only the checks it started (``origin``). Only an ``.lfbk`` envelope is accepted (D2): a zip or the
-coordinator's ``.tar`` is refused and removed. Repeating a request never makes two restores: the same confirmation or a
+coordinator's ``.tar`` is refused on its first bytes, before anything of it is written. Repeating a request never makes two restores: the same confirmation or a
 restart already under way answers 202 with the state it finds. The routes never echo the password (``NoInputEchoRoute``).
 """
 
@@ -36,9 +36,9 @@ from backend.app.api.v1.backup.restore import (
     _CONFIRM_STATUS,
     _IN_PROGRESS,
     _NOT_PENDING,
+    _WRITE_CHUNK,
     _declared_size,
     _folder_unusable,
-    _receive,
     _restore_limit,
     _stage_view,
     _state_unreadable,
@@ -54,9 +54,9 @@ from backend.app.schemas.hosting_panel import PanelRestoreStage, PanelRestoreSta
 from backend.app.services.platform.hosting_panel.access import PanelCaller, PanelScope, panel_access
 from backend.app.services.platform.instance_backup import apply as restore_apply
 from backend.app.services.platform.instance_backup import restart, restore_jobs
-from backend.app.services.platform.instance_backup.envelope import EnvelopeError
+from backend.app.services.platform.instance_backup.envelope import MAGIC, EnvelopeError
 from backend.app.services.platform.instance_backup.jobs import out_of_space
-from backend.app.services.platform.instance_backup.paths import BackupPathError, upload_path
+from backend.app.services.platform.instance_backup.paths import BackupPathError
 from backend.app.services.platform.instance_backup.staging import StagingBusyError
 
 logger = get_logger(__name__)
@@ -65,6 +65,15 @@ panel_restore_router = APIRouter(route_class=NoInputEchoRoute)
 
 #: The origin of the panel's checks, and how its confirmations are recorded (``confirmed_via``): it sees only its own.
 PANEL_ORIGIN = "panel"
+
+#: Whether this process already asked for the restart of a confirmed restore: a retried ``restart`` answers its state
+#: without a second SIGTERM (the security review's point 6: harmless to uvicorn, but the shutdown it starts is one).
+_restart_requested = False
+
+
+class _NotAnEnvelope(Exception):
+    """The body of a panel upload does not start with the envelope's magic: refused before anything of it is written."""
+
 
 _GATE_RESPONSES: dict[int | str, dict] = {
     401: {
@@ -115,6 +124,31 @@ def _panel_stage(check: restore_jobs.RestoreCheck) -> PanelRestoreStage:
     return PanelRestoreStage(**stage.model_dump(exclude={"report"}), report=report)
 
 
+async def _receive_envelope(request: Request, writer: restore_jobs.UploadWriter) -> restore_jobs.RestoreUploaded:
+    """The admin's ``_receive``, after a look at the body's first bytes: one that does not start with ``LFBK`` raises
+    ``_NotAnEnvelope`` before a byte is written, and the rest of the body is never read (D2; the security review's
+    point 3: a zip in clear never reaches the disk, and the previous upload stays, since the writer never finishes)."""
+    stream = request.stream()
+    head = bytearray()
+    async for piece in stream:
+        head += piece
+        if len(head) >= len(MAGIC):
+            break
+    if head and not head.startswith(MAGIC):
+        raise _NotAnEnvelope
+    if head:
+        await asyncio.to_thread(writer.write, bytes(head))
+    buffer = bytearray()
+    async for piece in stream:
+        buffer += piece
+        if len(buffer) >= _WRITE_CHUNK:
+            await asyncio.to_thread(writer.write, bytes(buffer))
+            buffer.clear()
+    if buffer:
+        await asyncio.to_thread(writer.write, bytes(buffer))
+    return await asyncio.to_thread(writer.finish)
+
+
 def _read_state() -> restore_apply.RestoreState | None:
     try:
         return restore_apply.read_restore(get_data_dir())
@@ -127,9 +161,10 @@ def _read_state() -> restore_apply.RestoreState | None:
     status_code=status.HTTP_201_CREATED,
     response_model=RestoreUpload,
     responses=_responses(
-        _400={"description": "The body is empty (code `backup_upload_empty`), the client left before its end (code `backup_upload_incomplete`), or it is not an `.lfbk` envelope: a zip or the `.tar` (code `restore_envelope_required`), removed"},
+        _400={"description": "The body is empty (code `backup_upload_empty`), the client left before its end (code `backup_upload_incomplete`), or it does not start as an `.lfbk` envelope: a zip or the `.tar` (code `restore_envelope_required`), refused on its first bytes, nothing written"},
         _413={"description": "The archive is larger than `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` (code `backup_too_large`, with `limit_mb`)"},
         _500={"description": "The restore folder of the data directory is a link or a file (code `restore_folder_unusable`), or the archive could not be written (code `backup_upload_failed`)"},
+        _503={"description": "The upload limit of this instance cannot be read (code `backup_upload_unavailable`), or the panel's ticket settings cannot be used, or the registry of used tickets cannot be reached (code `backup_restore_unavailable`)"},
         _507={"description": "Not enough free space for the archive (code `backup_no_space`)"},
     ),
     openapi_extra={"requestBody": {"required": True, "content": {"application/octet-stream": {"schema": {"type": "string", "format": "binary"}}}}},
@@ -144,18 +179,18 @@ async def upload_panel_restore_archive(request: Request, _caller: RestoreCaller)
     except (restore_jobs.UploadTooLargeError, restore_jobs.UploadNoSpaceError, OSError) as exc:
         raise _upload_failure(exc, limit_mb) from None
     try:
-        uploaded = await _receive(request, writer)
+        uploaded = await _receive_envelope(request, writer)
+    except _NotAnEnvelope:
+        # D2: the coordinator sends the backup.lfbk member only; a zip in clear or the .tar is refused on its first bytes
+        await asyncio.to_thread(writer.abort)
+        logger.warning("A panel restore upload was not an envelope: refused on its first bytes")
+        raise backup_error(status.HTTP_400_BAD_REQUEST, "restore_envelope_required", "Only the backup's .lfbk envelope is accepted") from None
     except BaseException as exc:
         await asyncio.to_thread(writer.abort)
         failure = _upload_failure(exc, limit_mb)
         if failure is exc:
             raise
         raise failure from None
-    if uploaded.kind != "envelope":
-        # D2: the coordinator sends the backup.lfbk member only; a zip in clear or the .tar never stays on disk
-        await asyncio.to_thread(upload_path(get_data_dir(), uploaded.upload_id).unlink, missing_ok=True)
-        logger.warning("A panel restore upload was not an envelope: removed", upload_id=uploaded.upload_id, kind=uploaded.kind)
-        raise backup_error(status.HTTP_400_BAD_REQUEST, "restore_envelope_required", "Only the backup's .lfbk envelope is accepted")
     return RestoreUpload(upload_id=uploaded.upload_id, size=uploaded.size, kind=uploaded.kind)
 
 
@@ -187,6 +222,10 @@ def start_panel_restore_check(body: RestoreStageRequest, _caller: RestoreCaller)
     except restore_jobs.UploadNotFoundError:
         raise backup_error(status.HTTP_404_NOT_FOUND, "backup_upload_not_found", "No uploaded archive has this id") from None
     except StagingBusyError:
+        # Two identical starts at once (the security review's point 5): the one that lost the lock answers the winner
+        running = restore_jobs.running_check(body.upload_id)
+        if running is not None and running.origin == PANEL_ORIGIN:
+            return _panel_stage(running)
         raise backup_error(status.HTTP_409_CONFLICT, "restore_busy", "Another archive is being checked") from None
     except restore_jobs.PasswordRequiredError:
         raise backup_error(status.HTTP_400_BAD_REQUEST, "password_required", "The backup is protected by a password") from None
@@ -273,7 +312,8 @@ def confirm_panel_restore_check(stage_id: str, caller: RestoreCaller) -> PanelRe
 )
 def restart_panel_restore(background_tasks: BackgroundTasks, response: Response, _caller: RestoreCaller) -> PanelRestoreStatus:
     """Stop the server once this answer is sent, so that its next start applies the confirmed restore; the restart
-    policy starts it again. A restore already under way or committed answers 202 with its state, and no second stop."""
+    policy starts it again. A restore already under way or committed answers 202 with its state, and no second stop; so
+    does a retry in the process that already asked for the stop."""
     data_dir = get_data_dir()
     try:
         state, _ticket = restore_apply.prepare_restart(data_dir=data_dir)
@@ -289,8 +329,13 @@ def restart_panel_restore(background_tasks: BackgroundTasks, response: Response,
     except OSError as exc:
         logger.error("A panel restart for a restore could not be prepared", error=f"{type(exc).__name__}: {exc.strerror or exc}")
         raise backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "restore_restart_failed", "The restart could not be prepared: the server's log has the cause") from None
-    background_tasks.add_task(lambda: restart.request_restart())
+    global _restart_requested
     response.headers["Cache-Control"] = "no-store"
+    if _restart_requested:
+        # Asked already in this process: the server is stopping, and a second SIGTERM adds nothing
+        return _panel_status(state)
+    _restart_requested = True
+    background_tasks.add_task(lambda: restart.request_restart())
     return _panel_status(state)
 
 

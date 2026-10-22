@@ -115,6 +115,8 @@ databases = cases.databases
 # =============================================================================
 
 ROUTES_MODULE = "backend.app.api.v1.backup.panel_restore"
+#: SEC-review point 6: the module-level flag of ``panel_restore`` that remembers a restart already asked in this process.
+RESTART_FLAG = "_restart_requested"
 SCHEMAS_MODULE = "backend.app.schemas.hosting_panel"
 ACCESS_MODULE = "backend.app.services.platform.hosting_panel.access"
 
@@ -447,6 +449,9 @@ def panel(app: FastAPI, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iter
 
     monkeypatch.setattr(restart_module, "request_restart", recorded_restart)
     monkeypatch.setattr(restart_module, "send_signal", lambda pid, sig: pytest.fail(f"a signal was sent: {pid} {sig}"))
+    # SEC-review point 6: the process remembers a restart already asked (``panel_restore._restart_requested``); each test
+    # starts as a fresh process would, and the flag is put back at its end. ``raising=False``: set even before the cure.
+    monkeypatch.setattr(importlib.import_module(ROUTES_MODULE), RESTART_FLAG, False, raising=False)
     with client_address_state_kept():
         try:
             yield made
@@ -909,11 +914,13 @@ async def test_a_zip_or_the_tar_is_400_restore_envelope_required_and_nothing_is_
 @pytest.mark.asyncio
 @pytest.mark.parametrize("streamed", [False, True], ids=["with-its-content-length", "streamed"])
 async def test_a_body_over_the_limit_is_413_backup_too_large_and_leaves_nothing(panel, streamed):
-    """PR-022 (§5): the admin's limit, ``LIBREFOLIO_BACKUP_MAX_UPLOAD_MB``: 1 MB and one byte more → 413
-    ``backup_too_large`` with ``limit_mb`` 1, declared or streamed; nothing left."""
+    """PR-022 (§5): the admin's limit, ``LIBREFOLIO_BACKUP_MAX_UPLOAD_MB``: 1 MB and one byte more, starting with the
+    envelope's magic → 413 ``backup_too_large`` with ``limit_mb`` 1, declared or streamed; nothing left."""
     panel.state("awaiting-restore")
     panel.monkeypatch.setenv(LIMIT_VARIABLE, "1")
-    body = b"\0" * (api.MIB + 1)
+    # The body starts with the envelope's magic: the subject is the limit, not the kind (refused on its first bytes)
+    body = ENVELOPE_MAGIC + b"\0" * (api.MIB + 1 - len(ENVELOPE_MAGIC))
+    assert len(body) == api.MIB + 1, "precondition: 1 MB and one byte"
     response = await upload(panel, api.pieces(body) if streamed else body)
 
     assert api.too_large(response, 1), f"over the limit → 413 backup_too_large, limit_mb 1: {shown(response)}"
@@ -1186,6 +1193,229 @@ async def test_no_log_record_of_the_check_holds_its_password(panel, tmp_path, ca
     assert code(refused) == (400, "wrong_password") and started.status_code == 202, f"Barrier: wrong refused, right started: {shown(refused)} / {shown(started)}"
     logged = repr(events) + caplog.text + repr([record.args for record in caplog.records])
     assert [value for value in (right, wrong) if value in logged] == [], "a password reached a log line"
+
+
+# =============================================================================
+# PR-060..072: THE CURES OF THE SECURITY REVIEW (SEC-review-backup-H62.md, points 3, 5, 6)
+# =============================================================================
+
+#: The envelope's magic (``instance_backup.envelope.MAGIC``): what the first bytes of an accepted upload must be.
+ENVELOPE_MAGIC = b"LFBK"
+#: The size of the pieces a client streams in the tests of point 3: small, so a body is many pieces.
+SMALL_PIECE = 1024
+
+
+@dataclass
+class Pieces:
+    """A body streamed from an async generator, recording how many pieces the server pulled from it."""
+
+    chunks: list[bytes] = field(repr=False)
+    pulled: int = 0
+
+    async def stream(self) -> AsyncIterator[bytes]:
+        for chunk in self.chunks:
+            self.pulled += 1
+            yield chunk
+
+    @property
+    def needed_for_magic(self) -> int:
+        """The fewest pieces whose bytes reach the length of the magic."""
+        seen = 0
+        for index, chunk in enumerate(self.chunks, start=1):
+            seen += len(chunk)
+            if seen >= len(ENVELOPE_MAGIC):
+                return index
+        return len(self.chunks)
+
+
+def split(data: bytes, layout: str) -> list[bytes]:
+    """``data`` in pieces: ``SMALL_PIECE`` bytes each (``even``), or its first bytes one, then two, then one at a time
+    before the rest (``split-head``: the magic arrives over four pieces)."""
+    head: list[bytes] = []
+    offset = 0
+    if layout == "split-head":
+        for size in (1, 2, 1):
+            head.append(data[offset : offset + size])
+            offset += size
+    return head + [data[start : start + SMALL_PIECE] for start in range(offset, len(data), SMALL_PIECE)]
+
+
+def body_of(archives: Archives, kind: str) -> bytes:
+    return {"zip": archives.zip_bytes, "tar": archives.tar_bytes}[kind]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("layout", ["even", "split-head"])
+@pytest.mark.parametrize("kind", ["zip", "tar"])
+async def test_a_body_that_is_not_an_envelope_is_refused_on_its_first_bytes_and_never_read_whole(panel, archives, kind, layout):
+    """PR-060 (SEC-review point 3): a zip or the ``.tar``, streamed in many pieces → 400 ``restore_envelope_required``
+    decided on its first four bytes (``LFBK`` or not): the route pulls no more pieces than those that carry the first
+    four bytes, never the body to its end, and nothing of it (no file, no ``.part``) is under the uploads folder."""
+    panel.state("awaiting-restore")
+    data = body_of(archives, kind)
+    assert not data.startswith(ENVELOPE_MAGIC), f"precondition: a {kind} does not start with the magic"
+    body = Pieces(split(data, layout))
+    assert len(body.chunks) >= 4 and body.needed_for_magic < len(body.chunks), f"precondition: the {kind} is many pieces, more than the magic needs: {len(body.chunks)}"
+    response = await upload(panel, body.stream())
+    pulled, needed, total = body.pulled, body.needed_for_magic, len(body.chunks)
+
+    assert code(response) == (400, "restore_envelope_required"), f"a {kind} → 400 restore_envelope_required: {shown(response)}"
+    assert pulled <= needed, f"the route stops reading at the first four bytes: pulled {pulled} of {total} pieces, the magic needs {needed}"
+    assert api.files_in(uploads_dir(panel.root)) == [], f"nothing of the {kind} under the uploads folder: {api.files_in(uploads_dir(panel.root))}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("data", [b"P", b"PK", b"LFB", b"x\x00z"], ids=["one-byte", "two-bytes-of-a-zip", "three-bytes-of-the-magic", "three-other-bytes"])
+async def test_a_body_shorter_than_the_magic_is_400_restore_envelope_required_and_leaves_nothing(panel, data):
+    """PR-061 (SEC-review point 3), guard: one to three bytes, none of them the whole magic → 400
+    ``restore_envelope_required``, nothing under the uploads folder."""
+    panel.state("awaiting-restore")
+    response = await upload(panel, data)
+
+    assert code(response) == (400, "restore_envelope_required"), f"{data!r} → 400 restore_envelope_required: {shown(response)}"
+    assert api.files_in(uploads_dir(panel.root)) == [], f"nothing left: {api.files_in(uploads_dir(panel.root))}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["zip", "tar"])
+async def test_a_refused_upload_keeps_the_previous_good_envelope_on_disk_and_stageable(panel, archives, kind):
+    """PR-062 (SEC-review point 3): an ``.lfbk`` received (201), then a zip or the ``.tar`` refused (400
+    ``restore_envelope_required``): the good upload is still on disk, the only file of the uploads folder, and its check
+    still starts (202). Today the refused body, written whole, first removes the upload it would replace."""
+    panel.state("awaiting-restore")
+    good = await uploaded(panel, archives.changed_lfbk)
+    refused = await upload(panel, body_of(archives, kind))
+
+    assert code(refused) == (400, "restore_envelope_required"), f"a {kind} → 400 restore_envelope_required: {shown(refused)}"
+    assert api.files_in(uploads_dir(panel.root)) == [good], f"the good upload stays, alone, after the refused {kind}: {api.files_in(uploads_dir(panel.root))}"
+    assert upload_path(panel.root, good).read_bytes() == archives.changed_lfbk, "the good upload is whole"
+    started = await stage(panel, good)
+    assert started.status_code == 202, f"the good upload is still stageable: {shown(started)}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("streamed", [False, True], ids=["no-content", "a-stream-of-no-piece"])
+async def test_an_empty_body_is_still_400_backup_upload_empty(panel, streamed):
+    """PR-063 (SEC-review point 3), guard: an empty body is not a wrong kind but no archive: 400 ``backup_upload_empty``,
+    nothing left."""
+    panel.state("awaiting-restore")
+    response = await upload(panel, Pieces([]).stream() if streamed else b"")
+
+    assert code(response) == (400, "backup_upload_empty"), f"an empty body → 400 backup_upload_empty: {shown(response)}"
+    assert api.files_in(uploads_dir(panel.root)) == [], f"nothing left: {api.files_in(uploads_dir(panel.root))}"
+
+
+@pytest.mark.asyncio
+async def test_an_envelope_whose_magic_is_split_across_two_pieces_is_received_whole(panel, archives):
+    """PR-064 (SEC-review point 3), guard: an ``.lfbk`` streamed as ``b"LF"``, ``b"BK…"`` and more pieces → 201, kind
+    ``envelope``, its whole size, every piece read, the file on disk byte for byte."""
+    panel.state("awaiting-restore")
+    data = archives.changed_lfbk
+    assert data.startswith(ENVELOPE_MAGIC), "precondition: the envelope starts with the magic"
+    body = Pieces([data[:2], data[2:SMALL_PIECE], *(data[start : start + SMALL_PIECE] for start in range(SMALL_PIECE, len(data), SMALL_PIECE))])
+    response = await upload(panel, body.stream())
+    pulled, total = body.pulled, len(body.chunks)
+
+    assert response.status_code == 201, f"an envelope with its magic split → 201: {shown(response)}"
+    received = response.json()
+    assert (received["kind"], received["size"], pulled) == ("envelope", len(data), total), f"kind envelope, its whole size, every piece read: {received}, pulled {pulled} of {total}"
+    assert upload_path(panel.root, received["upload_id"]).read_bytes() == data, "the upload is on disk, byte for byte"
+
+
+def answering(*checks: Any) -> tuple[list[tuple], Any]:
+    """A stand-in for ``restore_jobs.running_check`` that answers ``checks`` in turn (then the last one again), and the
+    list of its calls."""
+    calls: list[tuple] = []
+
+    def running_check(*args: Any, **kwargs: Any) -> Any:
+        calls.append((args, kwargs))
+        return checks[min(len(calls), len(checks)) - 1]
+
+    return calls, running_check
+
+
+def busy(*_args: Any, **_kwargs: Any) -> Any:
+    staging = importlib.import_module("backend.app.services.platform.instance_backup.staging")
+    raise staging.StagingBusyError("another archive is being checked (the race of the test)")
+
+
+@pytest.mark.asyncio
+async def test_two_identical_starts_racing_the_loser_answers_202_with_the_winners_check(panel, archives):
+    """PR-070 (SEC-review point 5): two identical ``POST …/stage`` race: both see no running check, one takes the lock,
+    the other gets ``StagingBusyError``. Simulated: ``running_check`` answers ``None`` first, then the panel's check
+    that now runs; ``start_check`` raises ``StagingBusyError`` → the loser answers 202 with that check's ``stage_id``,
+    not 409 ``restore_busy``. Barrier: the check really runs, started by the panel."""
+    panel.state("awaiting-restore")
+    panel.threads.hold = True
+    upload_id = await uploaded(panel, archives.changed_lfbk)
+    winner = await stage(panel, upload_id)
+    assert winner.status_code == 202 and winner.json()["status"] == "running", f"precondition: the winner's check runs: {shown(winner)}"
+    running = restore_jobs.running_check(upload_id, data_dir=panel.root)
+    assert running is not None and running.origin == "panel" and running.stage_id == winner.json()["stage_id"], f"Barrier: the panel's check runs: {running!r}"
+
+    calls, raced = answering(None, running)
+    panel.monkeypatch.setattr(restore_jobs, "running_check", raced)
+    panel.monkeypatch.setattr(restore_jobs, "start_check", busy)
+    loser = await stage(panel, upload_id)
+    panel.threads.hold = False
+    panel.threads.run_held()
+
+    assert loser.status_code == 202 and loser.json().get("stage_id") == running.stage_id, f"the loser of the race → 202 with the winner's stage {running.stage_id}: {shown(loser)}"
+    assert len(calls) >= 2, f"the route looked again for the running check after StagingBusyError: {len(calls)} call(s)"
+
+
+@pytest.mark.asyncio
+async def test_a_busy_start_with_no_running_check_of_its_upload_is_still_409_restore_busy(panel, archives):
+    """PR-071 (SEC-review point 5), guard: ``running_check`` answers ``None`` every time and ``start_check`` raises
+    ``StagingBusyError`` (another upload is being checked) → 409 ``restore_busy``."""
+    panel.state("awaiting-restore")
+    upload_id = await uploaded(panel, archives.changed_lfbk)
+    calls, never = answering(None)
+    panel.monkeypatch.setattr(restore_jobs, "running_check", never)
+    panel.monkeypatch.setattr(restore_jobs, "start_check", busy)
+    response = await stage(panel, upload_id)
+
+    assert code(response) == (409, "restore_busy"), f"busy, and no running check of this upload → 409 restore_busy: {shown(response)}"
+    assert calls, "Barrier: the route asked for the running check"
+
+
+@pytest.mark.asyncio
+async def test_a_busy_start_whose_running_check_is_an_administrators_is_409_restore_busy(panel, archives):
+    """PR-072 (SEC-review point 5), guard: after ``StagingBusyError`` the running check of the same upload is one an
+    administrator started (origin ``admin``) → 409 ``restore_busy``: the panel is never answered with a check that is
+    not its own. Barrier: that check runs, with the admin's origin."""
+    panel.state("awaiting-restore")
+    panel.threads.hold = True
+    upload_id = await uploaded(panel, archives.changed_lfbk)
+    admin_check = restore_jobs.start_check(upload_id, data_dir=panel.root, password=PASSWORD)
+    assert admin_check.status == "running" and admin_check.origin == "admin", f"Barrier: the administrator's check runs: {admin_check!r}"
+
+    calls, raced = answering(None, admin_check)
+    panel.monkeypatch.setattr(restore_jobs, "running_check", raced)
+    panel.monkeypatch.setattr(restore_jobs, "start_check", busy)
+    response = await stage(panel, upload_id)
+    panel.threads.hold = False
+    panel.threads.run_held()
+
+    assert code(response) == (409, "restore_busy"), f"the running check is an administrator's → 409 restore_busy: {shown(response)}"
+    assert admin_check.stage_id not in response.text, f"the administrator's stage is not told to the panel: {response.text}"
+
+
+@pytest.mark.asyncio
+async def test_a_restart_asked_twice_while_still_pending_restarts_once(panel, archives):
+    """PR-073 (SEC-review point 6): the panel retries ``POST …/restart`` (it lost the first answer) while the restore is
+    still ``pending`` (the server has not stopped yet; here the restart is recorded, not real) → both answer 202 with
+    the pending status, and ``restart.request_restart`` runs exactly once in the process. Barrier: the state is still
+    pending after both."""
+    panel.state("awaiting-restore")
+    stage_id = await confirmed(panel, archives.changed_lfbk)
+    first = await restart(panel)
+    second = await restart(panel)
+
+    assert apply_module.read_restore(panel.root).status == "pending", "Barrier: the restore is still pending, as before the server stops"
+    for label, response in (("first", first), ("second", second)):
+        assert response.status_code == 202 and (response.json().get("state"), response.json().get("stage_id")) == ("pending", stage_id), f"the {label} restart → 202 pending, this stage: {shown(response)}"
+    assert panel.restarts == [True], f"one restart in the process, after the first answer: {panel.restarts}"
 
 
 # =============================================================================
