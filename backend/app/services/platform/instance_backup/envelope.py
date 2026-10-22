@@ -149,7 +149,12 @@ def read_header(path: Path) -> EnvelopeHeader:
 
 def unlock(path: Path, password: str) -> EnvelopeKey:
     """The key of the envelope at ``path`` for ``password``; ``EnvelopeError`` ``wrong_password`` when it does not open it."""
-    header = read_header(path)
+    return unlock_header(read_header(path), password)
+
+
+def unlock_header(header: EnvelopeHeader, password: str) -> EnvelopeKey:
+    """The key of the envelope whose header is ``header`` for ``password``; ``EnvelopeError`` ``wrong_password`` when it
+    does not open it. Without the file: a sealed backup (L3) checks the password of the envelope it holds this way."""
     key, check = _derive(password, header)
     if not hmac.compare_digest(check, header.check):
         raise EnvelopeError("wrong_password", "The password does not open this backup")
