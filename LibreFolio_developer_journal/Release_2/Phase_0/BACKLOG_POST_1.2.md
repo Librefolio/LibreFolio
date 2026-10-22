@@ -6058,19 +6058,26 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Strade possibili, da decidere: ricaricare una volta su un import dinamico fallito, oppure una pagina d'errore che
     lo dice e offre di riprovare.
 
-- **X-N64b · Dettaglio dell'asset: le serie dei confronti in modalità prezzi, in cache per periodo** — basso; X, 22/10
+- ✅ **X-N64b · Dettaglio dell'asset: le serie dei confronti in modalità prezzi, in cache per periodo** — basso; X, 22/10
   (N64). Con N64 indicatori e rendimenti tornano dalla cache; le serie dei confronti in modalità prezzi
   (`loadComparisonAssetsData`) tengono il loro memo per impronta, quindi un periodo già visto con un confronto configurato
   le richiede di nuovo, con il gettone. Stessa cache, chiave sul corpo, generazioni degli store dei confronti. Dettagli:
   [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «N64 — la cache dei risultati dei
   segnali».
-- **X-N64c · La cache dei segnali per singolo segnale** — basso; X, 22/10 (N64). La chiave è la richiesta intera: togliere
-  uno di due indicatori, o riordinarli, chiede di nuovo anche quello rimasto. Una voce per segnale lo eviterebbe (gli
-  eventi e i rendimenti dei confronti viaggiano nella stessa risposta). Dettagli: come sopra.
-- **X-N64d · `asset-detail.spec.ts:575`: i passi di calendario non entrano in cache solo per due confronti in `error`** —
+  Chiuso 22/10 (ondata 4): cache `comparisonSeriesAnswers`, pagina del cambio compresa; codice e Vitest verdi, E2E `-g N64b` da girare nello slot.
+- ✅ **X-N64c · La cache dei segnali per singolo segnale** — valutato e **non fatto**; X, 22/10 (N64), chiuso 22/10 (ondata 4).
+  La chiave è la richiesta intera: togliere uno di due indicatori, o riordinarli, chiede di nuovo anche quello rimasto.
+  Non conviene: la richiesta è un solo corpo bulk con tutti i segnali, gli eventi e i rendimenti dei confronti nella stessa
+  risposta; una voce per segnale vorrebbe dire spezzarlo in più richieste (o chiedere solo i mancanti e ricomporre la risposta)
+  e tenere una generazione per segnale, su una pagina di ~2900 righe il cui lettore di risposta lavora sull'insieme. Il
+  guadagno è una richiesta in più quando si toglie un indicatore (calcolo del backend, economico; prezzi già in cache) e non
+  tocca né il gettone né i ritorni di periodo, che N64 ha già reso istantanei. Se in futuro il costo di quella richiesta
+  diventa visibile, riaprirla con una misura. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «Ondata 4».
+- ✅ **X-N64d · `asset-detail.spec.ts:575`: i passi di calendario non entrano in cache solo per due confronti in `error`** —
   basso; X, 22/10 (revisione delle E2E per N64). `errorPeer` e `invalidCalendarPeer` rendono ogni risposta di calendario
   non valida, quindi mai tenuta: se diventassero validi, una sessantina di passi che si aspettano una richiesta a ogni
   ritorno andrebbero rivisti. Dettagli: come sopra, passo 4, «Fuori pista».
+  Chiuso 22/10 (ondata 4): guardia di premessa nella spec (`errorPeer`/`invalidCalendarPeer` devono restare non validi), i passi non riscritti; da girare nello slot.
 
 - **X-50t · Tradurre la pagina utente di Yahoo (settori, TER, emittente dei fondi)** — minimo, documentazione; X, 22/10
   (#50). `yahoo-finance.en.md` ha la voce «Fund details»; mancano `.it/.fr/.es`, non timbrati. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «Ondata 4».
