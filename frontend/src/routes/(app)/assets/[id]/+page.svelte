@@ -62,7 +62,7 @@
         type SignalInstanceResult,
         type SignalProblem,
     } from '$lib/charts/signals';
-    import {DEFAULT_AXIS_SCALE, normalizeAxisScaleSettings, setPairSettings, getSettingsForPair, type AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {DEFAULT_AXIS_SCALE, detailModesForPrimaryView, effectiveCalendarReturnWindow, normalizeAxisScaleSettings, primaryViewForDetailModes, setPairSettings, getSettingsForPair, type AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
     import {currentLanguage} from '$lib/stores/app/language';
@@ -204,14 +204,10 @@
     let chartType: ChartType = $state('line');
     let displayCurrency = $state('');
     let primaryMode = $state<AssetChartPrimaryMode>('price');
-    let calendarWindowSelection: CalendarReturnWindowSelection = $state({
-        ...DEFAULT_CALENDAR_RETURN_WINDOW,
-    });
     let calendarCustomAmount = $state(DEFAULT_CALENDAR_RETURN_WINDOW.customAmount);
     let calendarCustomUnit: CalendarReturnWindowUnit = $state(DEFAULT_CALENDAR_RETURN_WINDOW.customUnit);
     let calendarCustomEditing = $state(false);
     let calendarWindowHydratedScope: string | null = null;
-    let calendarWindowDays = $derived(calendarReturnWindowDays(calendarWindowSelection) ?? 30);
     let calendarRangeDays = $derived(calendarReturnRangeDays(dateStart, dateEnd));
     let calendarReturnView: CalendarReturnView = $state(emptyCalendarReturnView());
     let calendarComparisonViews: Map<number, CalendarReturnView> = $state(new Map());
@@ -253,6 +249,12 @@
     // Chart settings
     let settings = $derived(getSettingsForPair(`asset-${data.assetId}`, 'assets'));
     let signals = $derived<SignalConfig[]>([...settings.signals]);
+    /**
+     * Y-40: the rolling-return window in force, the one the asset's card shows too: the window chosen for this asset, else
+     * the largest preset that fits the period on screen. Derived, so a change of period reads the new window at once.
+     */
+    let calendarWindowSelection: CalendarReturnWindowSelection = $derived(effectiveCalendarReturnWindow(settings, calendarRangeDays));
+    let calendarWindowDays = $derived(calendarReturnWindowDays(calendarWindowSelection) ?? 30);
     let calendarSnapshotIsCurrent = $derived.by(() => calendarSnapshotFingerprint === calendarDataFingerprint(signals));
     let signalDefinitions = $state<SignalDefinition[]>([]);
     let signalInstanceResults = $state<SignalInstanceResult[]>([]);
@@ -265,9 +267,6 @@
     $effect(() => {
         const scope = `${getClientSessionGeneration()}:${data.assetId}`;
         if (calendarWindowHydratedScope === scope) return;
-        calendarWindowSelection = {
-            ...settings.calendarReturnWindow,
-        };
         calendarCustomAmount = settings.calendarReturnWindow.customAmount;
         calendarCustomUnit = settings.calendarReturnWindow.customUnit;
         calendarWindowHydratedScope = scope;
@@ -397,6 +396,7 @@
             calendarMeasurePanel?.stopMeasureMode();
         }
         primaryMode = mode;
+        persistPrimaryView();
         if (mode === 'calendar-return') {
             void trackChartLoad('asset-mode');
         } else {
@@ -407,11 +407,24 @@
         }
     }
 
+    /**
+     * Y-40 (V-2 a): the view the detail shows — its mode, and Abs or % under prices — is this asset's view: its card and its
+     * next visit open in it. Saved like the page's other settings, with its configs as they are: a save rebuilt from the
+     * stored override (`setItemPrimaryView`) would drop the comparison data the page wrote into them, and an Abs/% switch
+     * would lose the comparison lines.
+     */
+    function persistPrimaryView(): void {
+        const view = primaryViewForDetailModes(primaryMode, viewMode);
+        if (settings.primaryView === view) return;
+        setPairSettings(`asset-${data.assetId}`, {...settings, primaryView: view, signals: [...signals]});
+    }
+
     function persistCalendarWindow(selection: CalendarReturnWindowSelection): void {
-        calendarWindowSelection = selection;
         setPairSettings(`asset-${data.assetId}`, {
             ...settings,
             calendarReturnWindow: {...selection},
+            // Y-40: a window picked here is chosen, no longer the automatic one — also when it equals the window saved before.
+            calendarReturnWindowAuto: false,
             signals: [...signals],
         });
     }
@@ -1055,7 +1068,10 @@
         events = [];
         signalInstanceResults = [];
         signalRequestFailed = false;
-        primaryMode = 'price';
+        // Y-40 (V-1 a): the detail opens in the view chosen for this asset — in the list, or here last time.
+        const openingModes = detailModesForPrimaryView(settings.primaryView);
+        primaryMode = openingModes.primaryMode;
+        viewMode = openingModes.viewMode;
         chartRequestGeneration += 1;
         comparisonRequestGeneration += 1;
         comparisonAppliedFingerprint = null;
@@ -2538,6 +2554,7 @@
                             externalViewMode={primaryMode === 'price' ? viewMode : 'absolute'}
                             onViewModeChange={(mode) => {
                                 viewMode = mode;
+                                persistPrimaryView();
                             }}
                             editMode={primaryMode === 'price' && showDataEditor}
                             disableCandlestick={primaryMode === 'calendar-return'}
