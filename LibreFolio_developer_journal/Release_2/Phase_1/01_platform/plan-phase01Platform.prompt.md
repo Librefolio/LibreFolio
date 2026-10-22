@@ -10351,3 +10351,13 @@ mescolare le righe del runner dei due lotti:
    > dell'app. Il test ora scarica i compiti a 0 ms prima di contare (test-author).
    > **Prove** (in `flock`, log `ondata3/h-scheduler-*.log`): `scheduler` 17 su 17 per 3 volte di fila; `brokers-detail` 40
    > su 40; `component-unit` 5 256, `core-unit` 9 959, `front check` 0 errori.
+10. ✅ **Gate del treno 8, `csp-collector.spec.ts:1345`** (22/10, base `23111e2f0`; triage con `test-triage`). Verdetto:
+    **assumption**, uno spec rimasto indietro rispetto a un contratto cambiato da me; nessun incrocio con altri lotti. La
+    riga 1390 pretendeva `Array.isArray(window.__lfCspViolations)` ad app avviata, ma la cura R3 della revisione fa
+    azzerare quel buffer a `null` da `cspNotice.ts` dopo lo svuotamento. Il passo 5, verde, era prima di R3.
+    > **Note implementazione**: l'asserzione ora pretende `null` (buffer svuotato, R3); le prove che lo script iniettato è
+    > stato visto restano (violazione registrata, `sessionStorage` `['inline']`, una riga in console). `csp-collector:1158`
+    > non è un rosso: è un `test.fail()`, che il reporter `list` segna con ✘ quando fallisce come atteso (così anche nel
+    > passo 5 verde), e non conta fra i falliti.
+    > **Prove** (corsia 6181, in `flock`, log `ondata3/h-gate8-*.log`): `csp-collector` 23 verdi (1 saltato) due volte;
+    > `front-utility all` (30 min 36 s) rosso solo su `files.spec.ts:826`, atteso finché il developer non decide Q-CDN.
