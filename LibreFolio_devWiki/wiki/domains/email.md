@@ -176,9 +176,17 @@ the why.
   are FastAPI background tasks of the answering process. A verification email that does not go leaves the account
   waiting, and «Send the link again» recovers it; a forgotten-password email that does not go revokes its new link, and
   the person asks again; a failed change notice is only logged.
-- **Silent hold and early spend.** A registration email held by the per-client limit is silent: the page still says an
-  email was sent. The verification link is spent when its page loads, so a mail scanner that runs JavaScript could
-  spend it. Both are on the developer's list (a response field or a sentence; a «Confirm» button).
+- **The hold is no longer silent: lot E-26** (22/10). `POST /auth/register` answers `verification_email`:
+  `null | "sending" | "held"` (the state of the sending, not an address). «held» is the per-client-address limit (10
+  registration emails an hour); the sign-up then says so (`email.verification.registeredHeld`). «sending» means
+  queued, not delivered: what stops the email after the answer (the per-mailbox limit, the hourly budget, SMTP) is
+  only logged. The per-mailbox limit is deliberately not checked before answering: it would tell anyone registering
+  with another person's address whether that mailbox just received emails.
+- **Early spend: fixed by lot E-25** (21/10). The verification page spent its link on load, so a mail scanner that
+  runs JavaScript (Defender Safe Links and the like) could verify an address in place of its owner. The page now shows
+  a `ready` state with **Confirm my email address** and spends the link only on that click; a pasted link
+  (`hashchange`) goes back to `ready`. Frontend only: the route is unchanged. Lesson: a link page that spends a token
+  must never do it from `onMount`; reset, invite and setup already only inspect on load.
 - **Backlog E-7 and E-8.** A waiting account looks like any inactive one in the Users tab: the `holds_place` field
   exists, the badge is out of 1.3. «Send by email» always invites in the instance's default language:
   `POST /email/links` accepts `language`, the dialog has no selector.

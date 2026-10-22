@@ -565,7 +565,8 @@ describe('AllocationPieChart — every family in its own colour (GR1), every sub
 
         const drawn = await drawPie(ETF_FAMILY);
 
-        const etf = categoryColor('type', 'ETF', true);
+        // The ETF's colour is a role since DV-11: read on the pie's element, as the pie reads it.
+        const etf = categoryColor('type', 'ETF', true, chartInstances[0].getDom() as Element);
         const shadesOn = (card: string) => [1, 2].map((rank) => familyShade(etf, rank, shadePoles(true, card)));
         // Control: this card moves the shades, so the comparison below cannot pass on the stand-in.
         expect(shadesOn(CARD)).not.toEqual(shadesOn(standInCard));

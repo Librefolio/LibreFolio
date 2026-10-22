@@ -590,6 +590,8 @@ describe('SocialShareModal — copy and navigation flow', () => {
         expect(vi.getTimerCount()).toBeGreaterThan(0);
 
         view.unmount();
+        // Drain zero-delay platform tasks (jsdom queues a 0 ms `selectionchange` task when focus moves): never the 2 s reset.
+        await vi.advanceTimersByTimeAsync(0);
         expect(vi.getTimerCount()).toBe(0);
     });
 });

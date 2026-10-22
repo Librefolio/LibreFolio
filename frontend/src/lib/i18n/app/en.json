@@ -104,7 +104,8 @@
       "internet": "Not encrypted over the Internet: passwords and data travel in clear text."
     },
     "cookieWarning": "Your browser uses HTTPS, but the session cookie is not marked Secure. Make the reverse proxy send X-Forwarded-Proto (Nginx: proxy_set_header X-Forwarded-Proto $scheme;), or set SESSION_COOKIE_SECURE back to auto if it is never.",
-    "learnMore": "How to connect securely"
+    "learnMore": "How to connect securely",
+    "attention": "{count, plural, one {# security warning} other {# security warnings}}"
   },
   "legal": {
     "title": "Legal notice",

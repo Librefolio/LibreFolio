@@ -215,8 +215,11 @@ then keeps only this row's issues plus the global ones.
 
 The cost-basis editor is `WacPreviewSection`
 (`frontend/src/lib/features/transactions/wac/WacPreviewSection.svelte`). The form shows it where
-a cost basis applies: on the receiving side of a paired `TRANSFER`, and on an `ADJUSTMENT`. BUY and
-SELL do not show it.
+a cost basis applies: on the receiving side of a paired `TRANSFER`, and on an `ADJUSTMENT` with a
+positive quantity (`showCostBasisField` in `TransactionFormModal.svelte`). An `ADJUSTMENT` taking
+units out has no value (N78-1), so the form shows no cost basis for it, and the bulk editor gives
+such a saved row no `cbMode` (`TransactionBulkModal.svelte`). BUY and SELL do not
+show it.
 
 - `costBasisMode` is `'auto'` (the backend computes the weighted average cost) or `'manual'` (the
   user's `cost_basis_override`). In Auto mode the item is sent with `cost_basis_mode: 'auto'` and,

@@ -31,11 +31,12 @@
 
     const testid = 'pac-planner-distribution';
     /**
-     * The weight bar. The track is on the role of the tracks; the fill, the asset's current weight, is a data colour
-     * and stays a palette class (DV-7). Two constants, not one template: the gate reads each script string whole (G3).
+     * The weight bar. The track is on the role of the tracks; the fill is the asset's current weight. Two constants,
+     * not one template: the gate reads each script string whole (G3).
      */
     const TRACK = 'h-3 overflow-hidden rounded-full bg-lf-neutral';
-    const FILL = 'h-full rounded-full bg-libre-green';
+    /* colour: closest role, to review: the fill was the brand green as a data colour; bg-lf-checked (the visible accent green on the neutral track), alt bg-lf-action */
+    const FILL = 'h-full rounded-full bg-lf-checked';
     const load = new SourceLoad();
     let scope = $state<ScopeBroker[] | null>(null);
     let scopeFailed = $state(false);

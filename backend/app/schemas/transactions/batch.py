@@ -122,6 +122,9 @@ class TXValidationCode(StrEnum):
     LINK_UUID_PAIR_COUNT = "linkUuidPairCount"
     WAC_FX_UNAVAILABLE = "wacFxUnavailable"
     COST_BASIS_REQUIRED = "costBasisRequired"
+    # J-60: a manual cost basis below 0 (0 stays allowed: a gift, the new shares of a split); on cost_basis_override,
+    # no params.
+    COST_BASIS_NEGATIVE = "costBasisNegative"
     # C-97: a value over its column's limit, params {max}; the values of db/precision.decimal_limit_issue.
     DECIMAL_PLACES_EXCEEDED = "decimalPlacesExceeded"
     SIGNIFICANT_DIGITS_EXCEEDED = "significantDigitsExceeded"

@@ -1,6 +1,6 @@
 # 🛠️ Core Infrastructure
 
-*Status: Implemented (Mar 2026) · entityStore: Apr 2026 · TimeSeriesStore stale state: Oct 2026*
+*Status: Implemented (Mar 2026) · entityStore: Apr 2026 · TimeSeriesStore stale state: Oct 2026 · TimeSeriesStore generation: Oct 2026*
 
 The **Core Infrastructure** category contains the generic building blocks of the Store Client System. These modules hold no business data of their own: `entityStore` is the session cache behind `brokerStore` and `assetStore`, `TimeSeriesStore` the date-keyed cache behind the price and rate registries, and `EditBuffer` a buffer of pending time-series edits that no component uses yet — only its unit test does.
 
@@ -12,7 +12,7 @@ All these modules are located in `src/lib/stores/core/`.
 |:-------|:--------|
 | **`entityStore`** | Factory (`createEntityStore`) of a generic session cache for a user's list of entities, looked up by ID from many components; `brokerStore` and `assetStore` (Reference State) are built on it. It loads the list once (concurrent callers share the request), normalizes each entry, merges partial payloads — for example, after a successful create or edit, the fields the frontend just sent, since the backend answers with little more than the ID — and `invalidate` makes the next load fetch again. |
 | **`EditBuffer`** | Bidirectional edit buffer class for pending time-series modifications. Provides sync between chart click-to-edit, CSV textareas, and manual forms. |
-| **`TimeSeriesStore`** | A specialized generic cache for managing historical data points (keyed by ISO date). Handles gap detection (`getMissingIntervals`, which skips the ranges already marked with `markFetched`) to minimize API calls and merges partial time-series datasets (`merge`). `markStale()`, which the price and rate registries call on every store after a price catch-up, keeps the points readable and drops the fetched marks: until `invalidateAll()`, `getMissingIntervals` returns every part of a range that no `markFetched` made since the last mark covers, points or not ([Registries & Caches](registries.md#how-it-works)). |
+| **`TimeSeriesStore`** | A specialized generic cache for managing historical data points (keyed by ISO date). Handles gap detection (`getMissingIntervals`, which skips the ranges already marked with `markFetched`) to minimize API calls and merges partial time-series datasets (`merge`). `markStale()`, which the price and rate registries call on every store after a price catch-up, keeps the points readable and drops the fetched marks: until `invalidateAll()`, `getMissingIntervals` returns every part of a range that no `markFetched` made since the last mark covers, points or not ([Registries & Caches](registries.md#how-it-works)). `generation` is a number unique in the whole app (a module-level counter: never given twice, not even to a store made anew) that `invalidateAll()`, `invalidateRange()` and `markStale()` renew and `merge()`, `markFetched()` and the reads do not; whatever is computed from a store's data keeps the generation it was computed over and is dropped once it changes ([Signal result cache](registries.md#signal-result-cache)). |
 
 ## 📐 Architecture & Flow (EditBuffer Pattern)
 

@@ -7,6 +7,12 @@
  * The last block (Z-14): the registry listens to the portfolio bus from its import, and a price
  * catch-up (`notifyPricesCaughtUp()`, `{kind: 'prices'}`) makes every cached range stale. It is driven
  * through the real bus, never through a helper exported for the test (N58).
+ *
+ * And the one before it (N64): the generation each store carries comes through the registry with no change of its own.
+ * A cache of signal answers files an answer with the generations of the price stores it was drawn over, so the
+ * registry's operations must move them exactly where the prices may have changed: `invalidateAssetPriceStore(id)` for
+ * every currency of that asset and no other, the bus's `{kind: 'prices'}` for every store, and a store removed and made
+ * again never keeps the number of the one it replaced.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
@@ -391,5 +397,153 @@ describe('assetPriceStoreRegistry after a price catch-up (Z-14)', () => {
         mockQuery.mockResolvedValueOnce(pricesAt(assetId, '120.00'));
         await ensureAssetPriceRangeLoaded(assetId, 'USD', START, END);
         expect(mockQuery, 'the control: a price catch-up did not make the range stale either, so the silence above proves nothing (Z-14)').toHaveBeenCalledTimes(1);
+    });
+});
+
+// =============================================================================
+//  The generation of a price store, through the registry (N64)
+//
+//  The registry adds no state of its own: a store's generation moves because
+//  the store's own operations move it (`TimeSeriesStore.test.ts`). What is
+//  pinned here is which stores the registry reaches with them.
+//
+//  - `invalidateAssetPriceStore(id)` reaches every currency store of that asset
+//    — native and converted — and no other asset's, not even one whose id starts
+//    with the same digits.
+//  - `{kind: 'prices'}` on the portfolio bus (`notifyPricesCaughtUp()`) marks
+//    every store stale, so it moves every generation; `{kind: 'mutation'}` (the
+//    live poll, a commit) and `{kind: 'refresh'}` («Aggiorna») move none.
+//  - `removeAssetPriceStore(id)` followed by `getAssetPriceStore(id, cur)` makes
+//    a new store, and its generation is a number neither the removed store nor
+//    its last change had: the answers cached for the old one cannot be taken for
+//    the new one's.
+//
+//  `generation` is read by name, and every case asserts it is a number before
+//  it compares: red first, for the right reason. The registry is a module
+//  singleton: every case takes asset ids of its own and removes their stores
+//  afterwards.
+// =============================================================================
+
+describe('assetPriceStoreRegistry generations (N64)', () => {
+    const CURRENCIES = ['USD', 'EUR', 'GBP'] as const;
+    let nextAssetId = 19_000;
+    let owned: number[] = [];
+
+    /** An asset id no other case uses; its stores are removed after the case. */
+    function freshAssetId(): number {
+        const assetId = ++nextAssetId;
+        owned.push(assetId);
+        return assetId;
+    }
+
+    afterEach(() => {
+        for (const assetId of owned) removeAssetPriceStore(assetId);
+        owned = [];
+    });
+
+    type PriceStore = ReturnType<typeof getAssetPriceStore>;
+
+    /** `store.generation`, read by name (see above). */
+    function generationOf(store: PriceStore): number {
+        const generation = (store as unknown as {generation?: unknown}).generation;
+        expect(typeof generation, 'TimeSeriesStore has no numeric generation: a cache of signal answers cannot tell whether the prices an answer was drawn over have changed (N64)').toBe('number');
+        return generation as number;
+    }
+
+    /** The stores of an asset, one per currency: native and converted are cached apart. */
+    function storesOf(assetId: number): PriceStore[] {
+        return CURRENCIES.map((currency) => getAssetPriceStore(assetId, currency));
+    }
+
+    /** Asserts every store moved to a number nobody had — not its own before, not another store's — and no two share one. */
+    function expectAllFresh(stores: readonly PriceStore[], before: readonly number[], also: readonly number[], what: string): void {
+        const after = stores.map(generationOf);
+        const taken = new Set([...before, ...also]);
+        expect(
+            after.map((generation) => taken.has(generation)),
+            `${what} left a store with a generation it, or another store, already had: an answer drawn over its old prices would still be taken for current (N64)`,
+        ).toEqual(after.map(() => false));
+        expect(new Set(after).size, `${what} gave two stores the same new generation`).toBe(after.length);
+    }
+
+    it('invalidateAssetPriceStore changes the generation of every currency store of the asset, and of no other asset', () => {
+        const target = freshAssetId();
+        const neighbour = freshAssetId();
+        const longer = Number(`${target}0`); // shares the digits of the target's id: «190010» is not «19001»
+        owned.push(longer);
+        const targetStores = storesOf(target);
+        const otherStores = [...storesOf(neighbour), ...storesOf(longer)];
+        const targetBefore = targetStores.map(generationOf);
+        const otherBefore = otherStores.map(generationOf);
+
+        invalidateAssetPriceStore(target);
+
+        expectAllFresh(targetStores, targetBefore, otherBefore, 'invalidateAssetPriceStore(id)');
+        expect(otherStores.map(generationOf), 'the invalidation of one asset moved the generation of another asset’s store: its cached answers would be asked again for nothing (N64)').toEqual(otherBefore);
+    });
+
+    it('invalidateAssetPriceStore of an asset with no store changes no generation', () => {
+        const held = freshAssetId();
+        const never = freshAssetId();
+        const stores = storesOf(held);
+        const before = stores.map(generationOf);
+
+        invalidateAssetPriceStore(never);
+
+        expect(stores.map(generationOf)).toEqual(before);
+    });
+
+    it('a price catch-up on the bus ({kind: prices}) changes the generation of every store, every asset in every currency', () => {
+        const assetIds = [freshAssetId(), freshAssetId()];
+        const stores = assetIds.flatMap(storesOf);
+        const before = stores.map(generationOf);
+
+        notifyPricesCaughtUp();
+
+        expectAllFresh(stores, before, [], 'a price catch-up');
+    });
+
+    it('a portfolio mutation and «Aggiorna» change no generation — a price catch-up, the control, changes them all', () => {
+        const stores = [...storesOf(freshAssetId()), ...storesOf(freshAssetId())];
+        const before = stores.map(generationOf);
+
+        // The live poll's write (every 30 s on a page that reaches today), a commit, and «Aggiorna».
+        notifyPortfolioMutation('POST', '/api/v1/assets/prices/current', {results: [], success_count: 0, errors: []});
+        expect(stores.map(generationOf), 'the live poll’s write moved the generations: every cached signal answer would be asked again every 30 s (N64)').toEqual(before);
+        notifyPortfolioMutation('POST', '/api/v1/transactions/commit');
+        expect(stores.map(generationOf), 'a commit moved the generations').toEqual(before);
+        requestPortfolioRefresh();
+        expect(stores.map(generationOf), '«Aggiorna» moved the generations').toEqual(before);
+
+        // The control, on the same stores: the catch-up does reach them, so the silence above is the listener's choice.
+        notifyPricesCaughtUp();
+        expectAllFresh(stores, before, [], 'the control: a price catch-up');
+    });
+
+    it('removeAssetPriceStore then getAssetPriceStore gives a store whose generation is neither the removed one’s nor the one its removal left', () => {
+        const assetId = freshAssetId();
+        const removed = storesOf(assetId);
+        const before = removed.map(generationOf);
+
+        removeAssetPriceStore(assetId);
+        const afterRemoval = removed.map(generationOf); // whatever the removal did to them: a number the new stores must not take
+        const reborn = storesOf(assetId);
+
+        expect(
+            reborn.map((store, index) => store === removed[index]),
+            'premise: the registry made a new store, not the removed one again',
+        ).toEqual(reborn.map(() => false));
+        expectAllFresh(reborn, before, afterRemoval, 'removeAssetPriceStore(id) then getAssetPriceStore(id, currency)');
+    });
+
+    it('asking the registry for a store again returns the same store with the same generation', () => {
+        const assetId = freshAssetId();
+        const store = getAssetPriceStore(assetId, 'USD');
+        const generation = generationOf(store);
+
+        const again = getAssetPriceStore(assetId, 'usd');
+
+        expect(again, 'premise: one store per asset and currency, whatever the case of the code').toBe(store);
+        expect(generationOf(again), 'a read of the registry moved a generation').toBe(generation);
     });
 });

@@ -530,16 +530,19 @@ toast, when there is one, is a field of the same call.
 #### UserRow {: #userrow }
 
 `lib/features/settings/users/UserRow.svelte`. Props: `account` (`AdminAccount`, the `GET /users`
-item, with `holds_place`, `pending_setup` and `avatar_url` when they are sent: all three optional
-in `users/types.ts`), `isSelf`, `isOnlyActiveAdmin`, `full`, `onAction(action, account)`.
+item, with `holds_place`, `pending_setup`, `pending_verification` and `avatar_url` when they are sent:
+all four optional in `users/types.ts`), `isSelf`, `isOnlyActiveAdmin`, `full`,
+`onAction(action, account)`.
 
 - The `<li>` is `users-row`, with `data-user-id`, `data-username`, `data-active`, `data-admin`,
-  `data-pending-setup`, `data-protected` and `data-self` (`"true"` or `"false"`; `data-pending-setup`
-  is `"false"` when the field is absent, the answer of an older server).
+  `data-pending-setup`, `data-pending-verification`, `data-protected` and `data-self` (`"true"` or
+  `"false"`; `data-pending-setup` is `"false"` when the field is absent, the answer of an older
+  server; `data-pending-verification` is the derived state of an account waiting for its email
+  verification, described below, not the raw flag).
 - `users-row-toggle`, a button with `aria-expanded` and `aria-controls`, shows the chevron, the
   account's avatar, the username, the badges (`settings.usersTab.badges.you`, `admin`, `inactive`,
-  `protected`), the email and `settings.usersTab.createdOn`, and opens or closes the panel of
-  actions under the row.
+  with the test id `users-badge-inactive`, `protected`, and the two of a waiting account below), the
+  email and `settings.usersTab.createdOn`, and opens or closes the panel of actions under the row.
 - **The avatar** (lot N69-4, decision D8 a): a [`UserAvatar`](../core-ui/file-upload.md#useravatar)
   right after the chevron, given `account.avatar_url ?? null`, its root `users-row-avatar` with
   `data-avatar="image"` or `"initial"`: an image uploaded to the app asked for as its 48×48
@@ -574,13 +577,32 @@ in `users/types.ts`), `isSelf`, `isOnlyActiveAdmin`, `full`, `onAction(action, a
 
     Its other buttons are those of any inactive account.
 
+- **An account waiting for its email verification** (`pending_verification`, lot E-7, the developer's
+  decisions of 21/10/2026): the row derives
+  `pendingVerification = account.pending_verification === true && !account.is_active && !pendingSetup`,
+  so an active account that arrives with the flag is drawn as any active account, and the setup's wait
+  wins over it. Then:
+    - the badge `users-badge-pending-verification` (`settings.usersTab.badges.pendingVerification`,
+      *Waiting for verification*, in the tab's neutral style) is drawn in place of `inactive`, whose
+      `users-badge-inactive` is then absent; its `title` is the hover hint
+      `settings.usersTab.pendingVerificationHint`. `holds_place` takes no part in it: the badge is the
+      same for a live link and for one that has expired, and an older server that sends no flag leaves
+      the row with **Deactivated**;
+    - the opened panel shows `users-pending-verification-hint`, the same
+      `settings.usersTab.pendingVerificationHint`, under the buttons (the setup's
+      `users-pending-setup-hint` takes that place for `pending_setup`);
+    - the buttons are those of any inactive account, `users-action-reactivate` included: the badge
+      changes what the row says, not what it offers. On a full instance **Reactivate** is turned off
+      with the `limit` reason unless `holds_place`, so a waiting account whose link has expired reads
+      **Waiting for verification** with a **Reactivate** turned off.
+
 A button the backend would certainly refuse is `disabled`, with `data-disabled-reason`; the first
 condition that holds gives the reason:
 
 | Button | `data-disabled-reason` |
 |---|---|
 | `users-action-deactivate` | `protected` when `account.protected`; `last-admin` when the account is an administrator and `isOnlyActiveAdmin` |
-| `users-action-reactivate` | `limit` when `full`, unless `account.holds_place`: an account waiting for its email verification with a live link already holds its place ([Email Verification](../../../backend/email.md#verification)). Never drawn for an account with `pending_setup` |
+| `users-action-reactivate` | `limit` when `full`, unless `account.holds_place`: an account waiting for its email verification with a live link already holds its place ([Email Verification](../../../backend/email.md#verification)); `pending_verification` changes nothing here, so once the link has expired the reason comes back. Never drawn for an account with `pending_setup` |
 | `users-action-cancel-setup` | `protected` when `account.protected`: the backend refuses the cancellation of a protected account (`409` `ACCOUNT_PROTECTED`). Drawn only for an account with `pending_setup` |
 | `users-action-demote` | `protected` when `account.protected`; `pending-setup` when the account has `pending_setup`; `last-admin` when the account is active and `isOnlyActiveAdmin` |
 | `users-action-delete` | `protected` when `account.protected`; `demote-first` when the account is an administrator, active or not, unless it has `pending_setup` |
@@ -764,7 +786,14 @@ own from [ProfileTab](#profiletab) or another's from [UsersTab](#userstab). A `M
   **Reactivate** and no `limit` reason, the hint; since lot A-43, UPS-12 to UPS-23:
   `users-action-cancel-setup` in its place, turned off with `protected` on a protected account
   (UPS-23), `users-action-demote` off with `pending-setup`, `users-action-delete` enabled; every
-  other row unchanged), `users/UserRow.avatar.test.ts` (URA-01 to URA-04, lot N69-4: the avatar
+  other row unchanged), `users/UserRow.verification.test.ts` (UVR-01 to UVR-03, lot E5b:
+  **Reactivate** on a full instance usable with `holds_place`, off with `limit` without it; UVR-04 to
+  UVR-11, lot E-7: the badge `users-badge-pending-verification` with its hover hint in place of
+  `users-badge-inactive`, for a live link, an expired one and `holds_place` absent alike;
+  `data-pending-verification` as the derived state; an inactive account without the flag keeping
+  **Deactivated**; the hint in the opened panel, with **Reactivate** still offered, usable on a full
+  instance only with a live link; `pending_setup` winning over the flag; an active account with the flag
+  drawn with no badge), `users/UserRow.avatar.test.ts` (URA-01 to URA-04, lot N69-4: the avatar
   in the toggle, between the chevron and the username, an uploaded image asked for as its 48×48
   preview, an address as it is, the initial without one, and the toggle still opening its panel),
   `AccountDeletionDialog.test.ts` (both modes; ADEL-28 and ADEL-29, lot A-16: a refused own
@@ -793,7 +822,7 @@ evaluates, and one check that only the browser can make, most severe first. Admi
 |---|---|
 | `securityChecksApi.ts` | The seam over the generated client: `fetchSecurityChecks()` calls `list_security_checks_api_v1_security_checks_get` once and resolves to the `items` of the answer as they came, `SecurityCheck[]` (`{check_id, severity, i18n_key, detail}`, `severity` one of `ok`, `info`, `warning`, `error`); a refusal or a network error propagates |
 | `securityFindings.ts` | Pure: what the tab lists, from the server's checks and from what only the browser knows |
-| `securityChecks.svelte.ts` | The state: one read per page load, shared by the tab and the badges |
+| `securityChecks.svelte.ts` | The state: one read per page load, shared by the tab, the badges and, since lot N69b, the [sidebar's dot](#security-attention-dot) |
 | `SecurityTab.svelte` | The body |
 
 **The findings.** `securityFindings(checks, browser)`, where `browser` is
@@ -824,12 +853,16 @@ inputs.
   configuration: no link.
 - `attentionCount(findings)`: the errors and the warnings of `attention`, the browser's included,
   never an info. It is the badge.
+- `attentionSeverity(findings)` (lot N69b): how serious what `attentionCount` counts is: `'error'`
+  when an attention finding is an error, wherever it sits in the list, else `'warning'` when one is a
+  warning, else `null`. An info never counts, so it is `null` exactly when `attentionCount` is `0`. It
+  changes nothing it reads. It is the colour of the [sidebar's dot](#security-attention-dot).
 
 **The state.** `createSecurityChecks({fetch?, browser?})` builds a store; `securityChecks` is the
 app's, created at import, asking nothing until it is told to. Its getters are reactive: `status`
 (`idle`, `loading`, `ready` or `error`), `checks`, `answered` (true once a read has succeeded),
-`findings` and `attentionCount`, which are `securityFindings(checks, browser())` and its count once
-`answered`, empty lists and `0` before.
+`findings`, `attentionCount` and `attentionSeverity`, which are `securityFindings(checks, browser())`,
+its count and its severity once `answered`; empty lists, `0` and `null` before.
 
 - `ensureLoaded()` reads once: nothing while a read is under way, whose promise concurrent calls
   share, nor once `ready`; again after a failure. There is no retry of its own.
@@ -840,16 +873,17 @@ app's, created at import, asking nothing until it is told to. Its getters are re
   `open`, and an invite-only instance would warn for nothing. The host is `window.location.hostname`.
   As `findings` is computed on each read, the browser's finding follows `instanceConfig`: a save of
   `registration_mode` in [GlobalSettingsTab](#globalsettingstab-admin-only), which reloads it, adds
-  or removes the finding, badge included, without a new request.
+  or removes the finding, badge and dot included, without a new request.
 - The default `fetch` is `fetchSecurityChecks()`.
 
 **The badge.** The registry's `security` entry reads `securityChecks.attentionCount` as its `badge`,
 summed on the `administration` entry, and its `prefetch` calls `securityChecks.ensureLoaded()` for an
 administrator, nothing for a user. The page runs the prefetch when it opens, so the number shows
-before the tab is opened; the tab's own `onMount` calls `ensureLoaded()` too, which reads nothing
-more once the prefetch's read has succeeded. The store lives as long as the page load: leaving
-Settings and coming back reads nothing again (unless the last read failed), «check again» or a
-reload of the page does.
+before the tab is opened; the tab's own `onMount` calls `ensureLoaded()` too. Since lot N69b the
+sidebar's connection line has usually asked already, on the first page of the load
+([The sidebar's dot](#security-attention-dot)): the prefetch and the tab then share its read, or read
+nothing once it has succeeded. The store lives as long as the page load: leaving Settings and coming
+back reads nothing again (unless the last read failed), «check again» or a reload of the page does.
 
 **The body.** `SecurityTab.svelte`, prop `checks`: the store to show, `securityChecks` unless a test
 hands its own. The root, `security-tab`, carries `data-status` (the store's `status`), and
@@ -882,13 +916,141 @@ Tests: `./dev.py test front-utility core-unit` runs `security/securityChecksApi.
 of the generated client, its items as they came, an empty answer, a failure that propagates),
 `security/securityFindings.test.ts` (the order by severity and within one, the passed checks, which
 findings link where, the browser's finding against `openRegistrationNoticeFor()` for every mode, pin
-and host, the inputs left as they were, `attentionCount`) and `security/securityChecks.test.ts`
-(idle at creation, `ensureLoaded()` once and shared, `reload()` keeping the last checks, the
-failures, the findings following the browser's state, the reactive getters, the defaults: the
-generated client, `instanceConfig` and the page's host). `./dev.py test front-utility component-unit`
+and host, the inputs left as they were, `attentionCount`; since lot N69b, `attentionSeverity`: an
+error wherever it sits among warnings, warnings with or without infos, `null` for infos only or for
+nothing, `null` exactly when `attentionCount` is `0` on what `securityFindings` lists, the browser's
+warning included, a frozen list left as it was) and `security/securityChecks.test.ts` (idle at
+creation, `ensureLoaded()` once and shared, `reload()` keeping the last checks, the failures, the
+findings following the browser's state, the reactive getters, the defaults: the generated client,
+`instanceConfig` and the page's host; since lot N69b, the getter `attentionSeverity`: `null` before
+the first answer, even after a failed read, then the most severe of each answer, a reactive read
+following `reload()` and the browser's state). `./dev.py test front-utility component-unit`
 runs `security/SecurityTab.test.ts` (the store it is given, the placeholder, the findings and their
 words, the links, the all-clear, the passed checks, «check again», the failures, colour roles only,
 every key a message of the four catalogues).
+
+#### The sidebar's dot {: #security-attention-dot }
+
+Lot N69b (point 1 of N69; decisions D1 a, D2 a, D3 a) shows an administrator the tab's count from
+every page of the app shell: as a dot on the sidebar's connection line,
+`lib/components/layout/ConnectionSecurityIndicator.svelte` (plan 36), and, on a phone, on the menu
+button of [`Header.svelte`](../index.md#app-header). Both only read `securityChecks` and the auth
+store. Neither has a branch for the managed profile (D1 a): the dot is the same there.
+
+- **Who sees it.** `isAdmin` is `$auth.user?.is_superuser === true`. The line's count, `attention`,
+  is `securityChecks.attentionCount` for an administrator and `0` for anyone else; its severity is
+  `securityChecks.attentionSeverity` while `attention > 0`, none otherwise. The role is checked in
+  the components, not in the store: `securityChecks` is not reset when the account changes (it has
+  no `registerClientSessionReset`, as since lot A8b), so an administrator's answer stays in memory
+  for the rest of the page load, and a member who signs in after them in the same tab is shown none
+  of it.
+- **One read per page load.** An `$effect` of the line calls `securityChecks.ensureLoaded()` for an
+  administrator, inside `untrack()`: `ensureLoaded()` reads the store's `status` and moves it, and a
+  tracked call would run the effect again at each move — after a failure, a new request, in a loop.
+  The [page's prefetch](#settings-page) is untracked for the same reason. The effect depends on
+  `isAdmin` alone; the sidebar belongs to the app shell, on every page and on a phone too (off-screen
+  until the menu opens); and `ensureLoaded()` reads nothing more once a read has succeeded: one read
+  per page load, on its first page. A failed read is not retried by the line: the next page load
+  retries it, and so do Settings (its prefetch and the tab's mount) and **Try again**. Anyone else
+  never asks: no request to `GET /api/v1/security/checks`, which would answer them `403`. The header
+  never asks either: it reads what the line loaded.
+- **The root**, `connection-security`, publishes `data-security-attention`, the count (`0` for anyone
+  not an administrator, and until the answer), and `data-security-severity`, `error`, `warning` or
+  `none`, beside `data-level`, `data-reason` and `data-server-checked`. Since lot A-62 it also
+  publishes `data-security-checks`, where the checks stand: `off` for anyone not an administrator,
+  `pending` for an administrator until the first answer, `ready` from the first answer on (while
+  **Check again** reloads, and after a later reload failed, too), `error` when the first read failed
+  and nothing has answered yet. The expression is
+  `!isAdmin ? 'off' : securityChecks.answered ? 'ready' : securityChecks.status === 'error' ? 'error' : 'pending'`.
+  Invisible to the user, it is there for the tests and the gallery to wait on the checks instead of
+  guessing a delay.
+- **The dot**, `connection-security-attention-dot`: on the corner of the level's icon, inside the
+  toggle (`connection-security-toggle`), with `data-severity` the severity and
+  `aria-hidden="true"`; drawn while `attention > 0`, with the sidebar expanded or collapsed. A dot,
+  not a number (D3 a): `bg-lf-bar-danger` for an error, `bg-lf-bar-warning` for warnings only, with
+  a `ring-2 ring-lf-bar` in the bar's colour that cuts it out of the icon.
+- **The name.** Colour is not the only sign (WCAG 1.4.1): while `attention > 0`, the toggle's
+  `aria-label` is «‹level label› — ‹attention text›», expanded and collapsed, and its `title` the
+  same when collapsed. The attention text is `$_('connectionSecurity.attention', {values: {count}})`,
+  an ICU plural in the four catalogues of the `app` subsystem (*1 security warning*,
+  *2 security warnings*: the errors are counted in it). Without attention the toggle is named as
+  before: by the level label in `aria-label` and `title` when collapsed, by its visible label when
+  expanded.
+- **The link**, `connection-security-attention-link`: in the details, after the reason and before
+  the administrator's cookie line and the docs link, an `<a href="/settings?tab=security">` whose
+  text is the attention text after a `ShieldAlert` icon, with `data-severity` the severity and its
+  border and icon in `lf-bar-danger` or `lf-bar-warning`. A click calls `closeDetails()` while the app
+  navigates to the tab.
+- **The menu button** (D2 a). On a phone the sidebar, and the line with it, hide behind
+  `mobile-menu-toggle`. Its dot, `mobile-menu-security-dot`, until N69b for an insecure connection
+  alone (plan 36), is drawn while the connection is insecure or an administrator's `attentionCount`
+  is above `0`: one dot either way. Its `data-severity` is `error` when the connection is insecure or
+  `attentionSeverity` is `error`, `warning` otherwise; `bg-lf-danger` or `bg-lf-warning`, with
+  `ring-2 ring-lf-header` and `aria-hidden="true"`. The button's `aria-label` starts with
+  `$_('nav.toggleMenu')`, the translated «Toggle menu» (a key of the base catalogue since lot A-62;
+  it was an English literal), followed by the insecure level's label when the connection is insecure
+  and by the attention text with attention, each after « — ».
+
+Tests: `./dev.py test front-utility component-unit` runs
+`lib/components/layout/ConnectionSecurityIndicator.test.ts` and `lib/components/layout/Header.test.ts`
+(the latter also in `onboarding-component-unit`). Each file fakes the checks' store over a reactive
+box, one list of findings from which `findings`, `attentionCount` and `attentionSeverity` derive as in
+the real store, with `ensureLoaded` and `reload` spied and the answer landed by the case; and each
+gives `connectionSecurity.attention` an ICU message of its own, so that a name reads the key, the
+plural branch and the count, never a translation. N69b's describe closes `Header.test.ts` (A-62's
+nests inside it) and comes just before A-62's, the last, in `ConnectionSecurityIndicator.test.ts`:
+
+- the line, 6 cases: an administrator with warnings (`2` and `warning` on the root, the dot in the
+  toggle, the count in the name, the link after the reason, which closes the details); with an error
+  among them (`error` on the root and the dot); with infos only (`0` and `none`, no dot nor link, the
+  name as before, expanded and collapsed); a member over a store holding an administrator's warnings
+  (`0` and `none`, no dot nor link, and no call of `ensureLoaded()`, `reload()` or the generated
+  client); collapsed (the dot, and the singular in the name and the title); an administrator's line
+  asking the store once from its mount and following the answer when it lands;
+- the header, 5 cases: an administrator with warnings, then with an error among them, on a secure
+  connection (the dot and its severity, the count appended to the name, nothing for infos only); a
+  member on an insecure connection (the plan-36 dot, now `data-severity="error"`, nothing about the
+  checks in the name); an administrator with warnings on an insecure connection (one dot, `error`;
+  the name carries the level, then the count); a member over an administrator's warnings, then an
+  administrator signed in on the same header, the control. The header never calls `ensureLoaded()`
+  nor `reload()`.
+
+Lot A-62 adds the last describe of the indicator's file and one inside N69b's in the header's:
+
+- the line, «the checks signal on the root (A-62)», 10 cases: a member over a store that holds the
+  answer, a failed first read or a read under way, and nobody signed in (`off` each time, and a
+  member's line never asks the checks); an administrator before the answer (`pending`, the line's own
+  request having moved the store to `loading`); an answer already there at mount (`ready`, an answer
+  with nothing to look at included); `pending` then `ready` when the answer lands; `ready` kept
+  during a **Check again** reload and after a later reload failed; a first read that failed (`error`,
+  and no second request);
+- the header, «the burger's name starts with the translated toggle menu (A-62)», 4 cases: a member on
+  a secure connection (the first part alone) and on an insecure one (then the level); an
+  administrator with warnings, on a secure connection (then the count) and on an insecure one (the
+  level, then the count, in that order). The describe gives `nav.toggleMenu` a marker of its own
+  (`⟦nav.toggleMenu⟧`, through `addMessages`), so that the name must start with that key's text and
+  not with a literal.
+
+`./dev.py test front-utility connection-security` runs
+`frontend/e2e/layout/connection-security.spec.ts` on the desktop and the mobile projects. Its describe
+«An administrator: the security dot (N69-1)» runs under a loopback name, where the browser adds no
+open-registration finding of its own, and reads the root's two attributes, the dots and the link:
+
+- **ADOT-E-01**, the lane as it is: `accounts.login_limit` is a warning on every lane
+  (`dev.py server --test` sets `LIBREFOLIO_LOGIN_LIMIT=off`), read first as a precondition. The page
+  reads the checks once, and the line's count and severity are those of that very read
+  (`platform.client_address` may differ from one server process to another), with, on a phone, the
+  burger's dot. Its link opens **Settings › Administration › Security** and closes the details, and
+  the tab lists as many errors and warnings without a second read;
+- **ADOT-E-02**, stubbed (`page.route`), one error and two warnings, an info and an ok besides: `3`
+  and `error`, the dot expanded and, on desktop, collapsed, the burger's on a phone, the link;
+- **ADOT-E-03**, stubbed, every check ok: `0` and `none` once the Security tab has settled on the
+  same answer, no dot on the line nor, on a phone, on the burger, no link;
+- **ADOT-E-04**, stubbed, one warning: `1` and `warning`, on the line and, on a phone, on the burger;
+- **ADOT-E-05**, a member: `0` and `none`, no dot, and no read of the checks through a sign-in, a page
+  load and a navigation to Settings.
+
+A stubbed case counts one read for its page load, answered by the stub.
 
 ### ℹ️ AboutTab {: #abouttab }
 

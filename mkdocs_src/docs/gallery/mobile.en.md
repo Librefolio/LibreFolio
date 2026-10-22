@@ -332,6 +332,14 @@ System-wide configuration on mobile.
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Global Settings">
 </div>
 
+### 📧 Email (Admin)
+
+The instance's email status and the test email on mobile.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="settings" data-name="email" alt="Email">
+</div>
+
 ### 🕐 Market Data Scheduler — Config
 
 Configure the automatic market data sync daemon on mobile.

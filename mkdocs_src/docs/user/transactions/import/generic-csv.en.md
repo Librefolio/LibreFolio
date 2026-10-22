@@ -34,7 +34,8 @@ them by their names: there is nothing to map by hand.
   an empty `currency` — are skipped and listed among the warnings of the **Parse** step; rows with
   a wrong sign appear as validation issues. Fix them in the file and upload it again.
 - **The bulk workspace asks for a cost on an `ADJUSTMENT` row**: enter the cost of **one** unit,
-  not the total value of the position.
+  not the total value of the position. Only a row that adds units asks for it: one that removes
+  units (a negative quantity) has no value.
 
 ---
 

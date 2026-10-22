@@ -174,7 +174,14 @@ export interface DecimalDigitCounts {
     fractionDigits: number;
     /** The same number without those zeros, its sign kept unless it is zero: `-0012.5000` → `-12.5`, `-0.0` → `0`. */
     stripped: string;
+    /** From the first non-zero digit to the last, as a REAL keeps them (B-48): `999999999999999.5` → 16, `0.00123` → 3,
+     *  `1000` → 1, `100.001` → 6; a zero has 1, as in the backend. */
+    significantDigits: number;
 }
+
+/** The significant digits a transaction quantity or amount keeps: the backend's `REAL_SIGNIFICANT_DIGITS`
+ *  (`backend/app/db/real_decimal.py`), past which it refuses the value with `significantDigitsExceeded` (B-48). */
+export const REAL_SIGNIFICANT_DIGITS = 15;
 
 /**
  * The digits of a canonical decimal (the form `normalizeDecimalInput` returns) as the backend counts them
@@ -196,7 +203,26 @@ export function decimalDigitCounts(value: string): DecimalDigitCounts | null {
     const integerDigits = integer.length - start;
     const magnitude = `${integerDigits > 0 ? integer.slice(start) : '0'}${end > 0 ? `.${fraction.slice(0, end)}` : ''}`;
     const zero = integerDigits === 0 && end === 0;
-    return {integerDigits, fractionDigits: end, stripped: negative && !zero ? `-${magnitude}` : magnitude};
+    // B-48: the integer's own trailing zeros count only before kept decimals, a fraction's leading zeros only after an
+    // integer digit. Two more linear loops (W-B66).
+    let significantDigits = 1;
+    if (!zero && integerDigits > 0) {
+        let integerEnd = integer.length;
+        if (end === 0) while (integerEnd > start && integer[integerEnd - 1] === '0') integerEnd--;
+        significantDigits = integerEnd - start + end;
+    } else if (!zero) {
+        let fractionStart = 0;
+        while (fractionStart < end && fraction[fractionStart] === '0') fractionStart++;
+        significantDigits = end - fractionStart;
+    }
+    return {integerDigits, fractionDigits: end, stripped: negative && !zero ? `-${magnitude}` : magnitude, significantDigits};
+}
+
+/** Whether `value`, as typed (locale separators accepted), has more than `max` significant digits; false for a blank or
+ *  a text that is no decimal: other checks own those (B-48). */
+export function exceedsSignificantDigits(value: string | null | undefined, max: number): boolean {
+    const counts = decimalDigitCounts(normalizeDecimalInput(value ?? ''));
+    return counts !== null && counts.significantDigits > max;
 }
 
 /** Number of digits after the decimal point in a canonical string. */

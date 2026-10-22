@@ -104,7 +104,8 @@
       "internet": "Sin cifrar en Internet: las contraseñas y los datos viajan en texto claro."
     },
     "cookieWarning": "Tu navegador usa HTTPS, pero la cookie de sesión no está marcada como Secure. Haz que el proxy inverso envíe X-Forwarded-Proto (Nginx: proxy_set_header X-Forwarded-Proto $scheme;), o vuelve a poner SESSION_COOKIE_SECURE en auto si está en never.",
-    "learnMore": "Cómo conectarse de forma segura"
+    "learnMore": "Cómo conectarse de forma segura",
+    "attention": "{count, plural, one {# aviso de seguridad} other {# avisos de seguridad}}"
   },
   "legal": {
     "title": "Aviso legal",

@@ -17,10 +17,16 @@ when it is empty): the developer's principle, 19/10/2026. ``Data valuta`` only d
 after the server's today has not settled yet: it is left out whole (its fee and its maturity premium too), and an info
 note (``fineco_not_yet_settled``) lists it. It arrives with the next export, once settled.
 
-**Rows with a required number missing (W-B83).** The plugin is in beta: when a column a row's transaction is built from
+**Rows with a required number missing (W-B83).** When a column a row's transaction is built from
 (``Quantita`` for buys, sells, redemptions and capital increases; ``Controvalore`` for buys, sells, dividends and coupons)
 gives no number, the row is imported as before, and an info note (``fineco_incomplete_rows``, ``context.report_issue``)
 names it and asks the user to open an issue if the file is right.
+
+**The commission is inside the Controvalore (W-B92).** In a Fineco trade (``Compravendita titoli``) the Controvalore of a
+purchase already includes the commission and the Controvalore of a sale has it already taken off (the real export of
+discussion #49). So with commission columns the BUY is booked for ``Controvalore - commissions`` and the SELL for
+``Controvalore + commissions``, each with a separate FEE of the commissions: together they are the Controvalore. Dividends,
+coupons, capital increases, ``Rimborso`` rows, rows with no commission and the layout without commission columns are untouched.
 
 **Import philosophy (verbatim / no forex):**
 This plugin is a faithful transcriber, not a re-calculator. Numbers are imported
@@ -51,7 +57,7 @@ ignored — no conversion of any kind is performed.
 - 7  Divisa: Currency of the row's monetary figures
 - 8  Prezzo: Price (in Divisa)
 - 9  Cambio: Exchange rate — IGNORED
-- 10 Controvalore: Settled cash figure (imported verbatim, tagged with Divisa)
+- 10 Controvalore: Settled cash figure (tagged with Divisa). In a trade it already holds the commission (W-B92)
 - 11 Commissioni Fondi Sw/Ingr/Uscita       (Variant B only)
 - 12 Commissioni Fondi Banca Corrispondente  (Variant B only)
 - 13 Spese Fondi Sgr                          (Variant B only)
@@ -120,7 +126,7 @@ MIN_COLUMNS = COL_CONTROVALORE + 1
 FEE_CURRENCY = "EUR"
 
 # W-B83: the columns a row's transaction is built from, by type. When one gives no number, the row is still imported as
-# before, and a note names it (the plugin is in beta). Divisa (EUR when empty) and Prezzo (no transaction field) are not here.
+# before, and a note names it. Divisa (EUR when empty) and Prezzo (no transaction field) are not here.
 REQUIRED_NUMBER_COLUMNS: Dict[TransactionType, Tuple[int, ...]] = {
     TransactionType.BUY: (COL_QUANTITY, COL_CONTROVALORE),
     TransactionType.SELL: (COL_QUANTITY, COL_CONTROVALORE),
@@ -132,7 +138,7 @@ REQUIRED_NUMBER_COLUMNS: Dict[TransactionType, Tuple[int, ...]] = {
 # The notes' texts, in the export's language (the wizard shows the translation of each code, importWizard.brimNotice.*).
 NOT_SETTLED_MESSAGE = "Righe non ancora regolate (data valuta dopo oggi): {n}. Non sono state importate e arriveranno con il prossimo export."
 NOT_SETTLED_COMMENT = "La data valuta di queste righe è dopo oggi: non sono ancora regolate."
-INCOMPLETE_MESSAGE = "Il plugin Fineco è in beta, quindi questo import potrebbe essere sbagliato: righe senza un numero necessario (quantità o controvalore): {n}. Controlla le righe; se il file è giusto, è probabilmente un errore del plugin: apri una issue su GitHub " "per analizzarlo e risolverlo."
+INCOMPLETE_MESSAGE = "Questo import potrebbe essere sbagliato: righe senza un numero necessario (quantità o controvalore): {n}. Controlla le righe; se il file è giusto, è probabilmente un errore del plugin: apri una issue su GitHub " "per analizzarlo e risolverlo."
 INCOMPLETE_COMMENT = "L'ultima colonna nomina il campo senza numero; la riga è importata così com'è."
 INCOMPLETE_COLUMN = "Campo vuoto"
 
@@ -209,7 +215,8 @@ class FinecoBrokerProvider(BRIMProvider):
         # 1.1.0 — bond redeemed above par split into par SELL + INTEREST surplus.
         # 1.2.0 — only settled rows (N74); a note for rows with a required number missing (W-B83).
         # 1.3.0 — dated with the operation date, Operazione; the value date only decides whether a row has settled (B-52).
-        return "1.3.0"
+        # 1.4.0 — a trade's Controvalore already holds its commission, so the BUY/SELL are net of it (W-B92).
+        return "1.4.0"
 
     @property
     def detection_priority(self) -> int:
@@ -377,6 +384,13 @@ class FinecoBrokerProvider(BRIMProvider):
                             controvalore = model.principal_cash
                             maturity_surplus = model.surplus_cash
 
+                # W-B92: in a Fineco trade the Controvalore already holds the commission (a purchase) or has it taken off (a
+                # sale). The BUY/SELL is booked net of it, and the commission is its own FEE below, so the two together are
+                # exactly the Controvalore.
+                fee_total = self._sum_commissions(row) if has_commissions else Decimal("0")
+                if fee_total > 0 and _parse_fineco_number(row[COL_CONTROVALORE]) is not None and "compravendita" in descrizione.lower():
+                    controvalore = self._net_of_commission(tx_type, controvalore, fee_total)
+
                 # Apply per-type sign conventions (verbatim magnitude from source)
                 quantity, cash = self._apply_sign_rules(tx_type, quantity, controvalore, currency)
 
@@ -416,23 +430,21 @@ class FinecoBrokerProvider(BRIMProvider):
                     )
 
                 # Variant B: emit a separate FEE transaction for total commissions
-                if has_commissions:
-                    fee_total = self._sum_commissions(row)
-                    if fee_total > 0:
-                        self._create_transaction(
-                            row_num=row_num,
-                            transactions=transactions,
-                            validation_issues=validation_issues,
-                            context=f"Fineco commissions: {name}" if name else "Fineco commissions",
-                            broker_id=broker_id,
-                            asset_id=asset_id,
-                            type=TransactionType.FEE,
-                            date=tx_date,
-                            quantity=Decimal("0"),
-                            cash=Currency(code=FEE_CURRENCY, amount=-fee_total),
-                            description=f"Commissioni: {name}" if name else "Commissioni",
-                            tags=["import", "fineco", "fee"],
-                        )
+                if fee_total > 0:
+                    self._create_transaction(
+                        row_num=row_num,
+                        transactions=transactions,
+                        validation_issues=validation_issues,
+                        context=f"Fineco commissions: {name}" if name else "Fineco commissions",
+                        broker_id=broker_id,
+                        asset_id=asset_id,
+                        type=TransactionType.FEE,
+                        date=tx_date,
+                        quantity=Decimal("0"),
+                        cash=Currency(code=FEE_CURRENCY, amount=-fee_total),
+                        description=f"Commissioni: {name}" if name else "Commissioni",
+                        tags=["import", "fineco", "fee"],
+                    )
 
         except BRIMParseError:
             raise
@@ -532,6 +544,16 @@ class FinecoBrokerProvider(BRIMProvider):
             return qty, None
         # Fallback (should not happen given _map_transaction_type)
         return quantity, Currency(code=currency, amount=amount) if amount else None
+
+    @staticmethod
+    def _net_of_commission(tx_type: TransactionType, controvalore: Decimal, fee: Decimal) -> Decimal:
+        """The trade's amount without its commission (W-B92): a purchase's Controvalore holds the commission, a sale's has it
+        taken off. A purchase whose commission exceeds its Controvalore is inconsistent: it is left as printed, never inverted."""
+        if tx_type == TransactionType.BUY:
+            return controvalore - fee if controvalore >= fee else controvalore
+        if tx_type == TransactionType.SELL:
+            return controvalore + fee
+        return controvalore
 
     @staticmethod
     def _sum_commissions(row: List[str]) -> Decimal:

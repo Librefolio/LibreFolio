@@ -6925,6 +6925,15 @@ B-47 e B-48 sono nella sezione di B: chiusura chiesta al coordinatore); 7. simul
    > riceve, la coppia sparisce dalla griglia: il passo 1 di `collapsePairedOps` legge la cassa ignota del segnaposto come 0 e nasconde la
    > metà leggibile. Cura nello stesso lotto: il segnaposto è sempre il partner nascosto della metà leggibile, come nella prima costruzione.
 
+> **▶️ Ripresa il 21/10 (ondata 2, W frontend, base `89e8b2e61`)** — le tre scelte di W confermate dal developer (PC5 diviso, valori nel dominio ≤ 15 cifre, K-3b nello stesso lotto).
+> - ✅ 21/10 **Passo 1, rossi**: `git apply` della patch parcheggiata, pulito. Il secondo giro (K-3b, PC5 diviso, sei casi nel dominio) era già dentro la patch. Rilancio: **28 rossi Vitest** (26 del primo giro + 2 di K-3b), ciascuno per la sua causa.
+> - ✅ 21/10 **Passo 2, cura**: `k3a_cure.py` col dry run pulito su 8 file anche sul codice di `89e8b2e61`, poi `--apply`. Tocca `parseDecimalInput.ts`, `ExactQuantityInput`, `CompactCashCell`, `transactionTypeStore.ts`, `TransactionBulkModal`, `TransactionFormModal`, `TxFormSingleSection`, `TxFormPairSection` (+151/−28). Poi `prettier --write` su `CompactCashCell.svelte` (la cura lasciava un `<input>` su una riga).
+> - ✅ 21/10 **Passo 3, verdi leggeri**: i 9 file Vitest toccati 601/601; `front check` 0 errori / 0 avvisi; `core-unit` 9845/9845; `component-unit` 5186/5186 (con `TransactionBulkModal.test.ts` registrato); `theme-roles --check` pulito; prettier pulito.
+> - ✅ 21/10 **Passo 4, E2E nello slot** (corsia 6184, uno alla volta in `flock`): `tx-bulk-operations` 15/15, `tx-bulk-promote-cost-basis` 9/9, `tx-fx-completeness` 4/4, `tx-edit-save-gate` 3/3. Log in `salvataggi-worktrees-20261021/ondata2/wf-e2e-<nome>.log`.
+> - ✅ 21/10 **Passi 5–6**: nessuna pagina utente da cambiare; K-2…K-4 ✅ in `38_postReleaseBacklog`, B-47/B-48 con la nota «chiusura chiesta al coordinatore». Passo 7: CHECKPOINT READY al coordinatore.
+> - **⚠️ Fuori pista → ✅ 21/10 #58, decisione del developer**: durante la ripresa è arrivato #58 (E2E `tx-edit-save-gate.spec.ts`): il cambio di tipo è ok, il **cambio di asset** in una riga salvata non si poteva salvare (l'asset non è patchable, ma il form lo lasciava cambiare: «scartare?» sì, «Salva» no). Decisione del developer (21/10): **selettore asset bloccato in modifica**, per cambiarlo si cancella e si ricrea. Fatto in questo lotto: `assetImmutable` (`mode === 'edit' || 'view'`) in `TransactionFormModal`, passato a `TxFormSingleSection` e `TxFormPairSection`; la riga nuova (`create`, Bulk «Add row», wizard) sceglie ancora l'asset. Vitest `#58` ×4 in `TransactionFormModal.test.ts` (rosso senza il blocco, verde con); E2E riscritto. Verdi: `front check` 0/0, `src/lib/features/transactions` 1754/1754.
+> - ✅ 21/10 **Broker, decisione del developer (stessa regola dell'asset)**: una riga salvata non cambia broker, deep-edit del Bulk compreso. `assetImmutable` rinominato `rowSaved` (`mode === 'edit' || 'view'`): asset e broker bloccati (`brokerImmutable = rowSaved || forcedBroker`); nella coppia salvata bloccati i due broker e la freccia «scambia i lati» (scambiava i broker); la riga nuova e la coppia nuova scelgono ancora tutto. Vitest `#58 broker` ×4 (2 rossi per la causa giusta, poi verdi); E2E `tx-edit-save-gate` esteso. Verdi: `front check` 0/0, `src/lib/features/transactions` 1759/1759.
+
 > **⏸️ Parcheggiato il 19/10** (fermo del developer del 17/10 21:47; alla ripartenza K3 è fra gli ampliamenti che il developer sta leggendo,
 > N91). Il secondo giro del test-author era finito ma **mai girato**: K-3b (la metà ricevente, col reset di riga e con «Reset all»), PC5 diviso
 > (la guardia di C-46 nel Vitest del Bulk; l'E2E PC5 diventa quello di B-48), i sei casi portati nel dominio (5 del Form, uno di
@@ -8328,3 +8337,165 @@ cambiare, rimozioni comprese; lo zero in `text-lf-muted` va bene. Prima i rossi.
 - ✅ 6. CHECKPOINT READY al coordinatore (2026-10-20 ~11:42), FROZEN. Nel backlog: W-B90 (la `DataTable` senza colonne) e W-B91 (la
   guida, «un file è fallito»). B-51 sta nella sezione di B: la chiude il coordinatore. Fuori dal lotto: la galleria del passo 3
   (`import-wizard-step3`) mostra la colonna e il riquadro vecchi, da rigenerare in uno slot pesante.
+
+### W-B92 · Fineco: la commissione è già dentro il Controvalore — analisi e cura (2026-10-21, base `89e8b2e61`)
+
+**Il fatto.** Discussione #49 (`@Xgialippo`, con l'Excel vero): nel report di Fineco il **Controvalore** di un acquisto contiene già la
+commissione e quello di una vendita l'ha già tolta. Il plugin (layout con colonne di commissione) prendeva il Controvalore tal quale
+e aggiungeva una FEE a parte: ogni operazione con commissione era sbagliata della commissione. Decisione del developer (21/10),
+**soluzione B**: BUY = −(Controvalore − commissioni) più FEE −commissioni; SELL = +(Controvalore + commissioni) più FEE −commissioni.
+Il developer ha promesso all'utente il nome nel CHANGELOG. Numeri delle fixture: **scalati** (stessa struttura e aritmetica, importi diversi).
+
+- ✅ 1. Analisi (21/10). Il report vero ha **12 colonne** (una sola colonna di commissione, «Commissioni amministrato», in 11), non 15:
+  `has_commissions` (> 11 celle) vale lo stesso e `_sum_commissions` somma le colonne presenti. `Prezzo` = Controvalore / quantità.
+  > **Note implementazione**: l'Excel annotato dell'utente (solo uso interno, non pubblicato) mostra le 4 righe del brief.
+- ✅ 2. Rossi (21/10, test-author): `TestFinecoControvaloreIncludesCommission` (nuova) in `test_brim_providers.py` (4 righe scalate con date;
+  la forma vera a 12 colonne, `;` e virgole decimali; l'invariante «BUY/SELL + FEE = ± Controvalore»; più colonne di commissione;
+  guardie per Rimborso, Aumento capitale, dividendo e cedola, layout a 11 colonne, Controvalore vuoto o illeggibile; commissione sopra il
+  Controvalore; riga in valuta, provvisoria). Prima della cura: **24 falliti, 31 passati** (`-k Fineco`, log
+  `/tmp/librefolio_wb_fineco_red.log`). Le fixture esistenti con commissione hanno il Controvalore spostato (BUY + commissione, SELL −
+  commissione) perché le attese restassero uguali.
+- ✅ 3. Cura (21/10): `broker_fineco/plugin.py`, `_net_of_commission`; `plugin_version` 1.4.0. I tre `sample_reports/fineco*.csv` con
+  commissioni ora rispecchiano l'Excel vero (Controvalore = prezzo eseguito × quantità ± commissione, `Prezzo` = Controvalore / quantità;
+  le righe in USD tengono il `Prezzo` in USD); il `fineco_variant_a.csv` è invariato. Dopo la cura: **55/55** (`-k Fineco`, log
+  `/tmp/librefolio_wb_fineco_green.log`).
+- ✅ 4. Guida (21/10, docs-writer): `user/transactions/import/fineco.en.md` riscritta (percorso vero in 7 passi con
+  `static/broker-guides/fineco/Fineco_1..6.png`, commissioni, nota per chi ha importato con 1.2 o prima, ringraziamento a
+  `@Xgialippo`); `developer/backend/brim/architecture.md` («Fineco») aggiornata. Traduzioni IT/FR/ES: debito reale, non toccate.
+  > **⚠️ Fuori pista**: la guida chiama il report «Ordini e contabili» (la voce vera del sito) e non più «Movimenti Dossier
+  > Titoli», che resta nel docstring e nel rilevamento del file.
+- **Domande aperte al developer** (non scelte dal plugin): **Q-WB-1** il Controvalore di un `Rimborso` con commissione la contiene? (oggi
+  invariato: SELL = Controvalore più FEE); **Q-WB-2** una commissione maggiore del Controvalore di un acquisto (oggi: l'importo resta
+  quello stampato, mai invertito); **Q-WB-3** riga con Divisa non EUR: il Controvalore è nella Divisa o in euro? (oggi stessa
+  aritmetica, importo con la Divisa, FEE in EUR).
+- ✅ 5. Avviso nella guida (21/10, dal developer, parola dell'utente `@Xgialippo`): nel suo file l'unica colonna è «Commissioni
+  amministrato»; non ha mai avuto fondi né BTP; chi è in **regime dichiarativo** può avere colonne e valori diversi. Il riquadro
+  `!!! warning "Beta — community feedback welcome"` della guida lo dice e invita a una issue o alla discussione #49 con un file
+  anonimizzato. Nel codice nessuna congettura: colonne di commissione con altri nomi → somma delle colonne 11-14, come i test.
+- ✅ 6. Beta tolta (21/10, correzione del developer al punto 5): niente riquadro in testa; la guida chiude con «Known limitations»
+  (verificato su regime amministrato; dichiarativo, fondi e BTP non visti; issue o discussione #49 con file anonimizzato).
+  `index.en.md` (scheda Fineco) e `providers_list.md` (✅ Stable), il messaggio `INCOMPLETE_MESSAGE` e i docstring del plugin senza
+  «beta». mkdocs build stretto 0 avvisi, check-links 97 validi. Autorizzato dal developer (21/10): tolta la frase «in beta» dalle chiavi `fineco_incomplete_rows` (importWizard `en/it/es/fr.json:206`, solo
+  quella frase, senza ritradurre) e il riquadro Beta di `fineco.it/es/fr.md` (solo il riquadro); cataloghi generati rifatti con
+  `dev.py i18n build`, `i18n check` verde (5117 chiavi × 4 lingue), `test_i18n_catalog_gate.py` 176 verdi. La guida EN elenca in «Known
+  limitations» anche Q-WB-1/2/3 (Rimborso con commissione, commissione maggiore del Controvalore, righe non EUR). Resta al coordinatore
+  `CHANGELOG.md:99` («Fineco importer (beta)»).
+
+### W-B86 e W-B87 · «Noto in silenzio, ignoto con avviso» negli altri plugin (2026-10-21, base `a7c6db19f`)
+
+**Il via del coordinatore (21/10)**: il passo B del workstream W backend. Aiuto condiviso in `_brim_io.py`, W-B86 solo sui 4 plugin stabili
+(decisione del 19/10), D-W85-4 nella versione minima (approvata dal developer il 21/10). Le chiavi `importWizard.brimNotice.*` le scrive W.
+
+- ✅ 1. L'aiuto `RowSkips` (21/10): `unknown`, `unreadable`, `set_headers`, `notices()`: al più due avvisi `warning` (`rows_not_recognized`,
+  `rows_unreadable`), `context {count, report_issue: True}`, un'evidenza con l'intestazione del file e una colonna «Reason», i numeri di riga.
+  Accetta anche le righe di un `csv.DictReader`.
+- ✅ 2. Rossi (test-author, 21/10): `test_brim_row_skips.py` (nuovo, azione `external brim-row-skips`: aiuto, contratto su tutti i plugin
+  registrati con l'insieme `ROW_SKIPS_PENDING` per quelli in beta, chiavi del catalogo), più `TestRowsLeftOutAreReported` in
+  `test_brim_degiro.py` e `TestRowsLeftOut` in `test_brim_scalable.py`. Prima della cura: **row_skips 128 falliti / 71 passati, degiro 9 / 198,
+  scalable 50 / 133, providers 778 passati** (log `/tmp/librefolio_wb_rs_final_*.log`).
+- ✅ 3. La cura (21/10): DEGIRO 2.1.0 e Crédit Agricole 1.5.0 (`report_issue` sui codici «ignoto» e «illeggibile»); Scalable 1.1.0 (anche il
+  plugin dei depositi): `report_issue` su `scalable_unreadable_rows` e `scalable_not_imported`, stati `pending`/`cancelled`/`canceled`/`expired`/
+  `rejected` in silenzio con una riga di log, stato ignoto → `rows_not_recognized`, stato vuoto → `rows_unreadable`, `scalable_not_executed`
+  tolto (chiavi i18n tolte); Directa 1.1.0 (i 4 avvisi a stringa → codici condivisi); Revolut 1.2.0, Trading 212 1.1.0, eToro 1.2.0 (le righe
+  con effetto economico in un avviso aggregato, `Transfer` in silenzio); Trade Republic 1.1.0, Swissquote 1.1.0, IBKR 1.1.0 (dalle stringhe ai
+  codici condivisi). Dopo la cura: row_skips **199/199**, degiro **207/207**, scalable **183/183**, providers **778 + 1 saltato**, danske 359,
+  report sets 274, versioning 5, gate del catalogo 176.
+  > **Note implementazione**: i sample con righe che ora danno un avviso (Directa 34 e 35, Revolut Invest 9, Trading 212 11/13/14, eToro
+  > 24/26/27/29, Trade Republic 9/10, Swissquote 3/4/10/11, IBKR 10/11/12) sono fissati riga per riga nel test di contratto.
+  > **⚠️ Fuori pista**: `ca_unknown_causale` resta `info` (la riga è importata per segno) e porta `report_issue`; il Revolut crypto, T212 ed
+  > eToro non hanno una riga «illeggibile» nel contratto: le loro altre stringhe restano com'erano (plugin in beta).
+- ✅ 4. Chiavi i18n (21/10, via del coordinatore): `importWizard.brimNotice.rows_not_recognized` e `rows_unreadable`, `importWizard.brimEvidence.*`
+  (4 lingue); tolte `scalable_not_executed` (brimNotice e brimEvidence). `i18n check` verde (5119 chiavi).
+
+### N78-1 · A che valore esce un'unità in una rettifica in uscita: analisi (2026-10-21/22, sola lettura, base `2879ae3e4`)
+
+Ondata 3, lavoro notturno, solo analisi (con i fatti preparati da MF nel piano 11, «N78-1 con W — preparazione»). Il documento per
+il developer è fuori dal repo: `salvataggi-worktrees-20261021/ondata3/N78-1-analisi.md`.
+- ✅ 1. I fatti riletti sul codice: il PMC non cambia mai (`average_cost.py:302-303`); il valore d'uscita è `cost_basis_override`,
+  letto da Dashboard (`daily_state.py:418-428`, J-24), lotti (`fifo/engine.py:241-245`, `:397-410`) e performance dei lotti
+  (`lots/histories.py:146-152`); decisione 47 al PMC, gambe al bordo di J-10 al mercato del giorno.
+- ✅ 2. L'esempio (10 azioni a 50, valgono 80, 2 regalate) per (a) costo, (b) mercato, (c) correzione: P&L totale 240 / 300 / 140,
+  TWRR del giorno −7,5 % / 0 % / −20 %, realizzato dei lotti 0 / +60 / −100. Lotti e TWRR verificati con il vero motore FIFO e
+  `calculate_twrr` (script su dati sintetici, fuori dal repo); la Dashboard a mano sul codice, il caso con un valore già fissato dal
+  test J-24.
+  > **Note implementazione**: dal Form e dal Bulk oggi si arriva solo a (c): il valore digitato su una rettifica in uscita si perde in
+  > silenzio (`txPayloadHelpers.ts:274-277`, il difetto di N78-bis); nessun plugin mette un valore in uscita.
+  > **⚠️ Fuori pista**: in (c) la Dashboard realizza 0 e i lotti −100 (i −100 finiscono in «Altro»); il CSV generico chiede un costo
+  > bloccante anche sulle rettifiche in uscita, che il Bulk non lascia riempire.
+- ✅ 3. Raccomandazione di W: (b) come default (Auto = prezzo del giorno, al costo senza prezzo), (c) come scelta esplicita, la
+  decisione 47 allineata a J-10; N78-bis come primo passo in ogni caso. Domande Q-N78-1a…h nel documento.
+
+### N78-1 · Una rettifica in uscita non ha valore: cura (2026-10-22, base `2879ae3e4`)
+
+**Le decisioni del developer** (21/10 sera, via il coordinatore; testo intero in `ondata3/N78-1-analisi.md` § 8): (1) un
+ADJUSTMENT in uscita non ha valore, abbassa solo la quantità, anche per il TWRR; (2) decisione 47: la gamba sola che cede esce senza
+valore; (3) il realizzato della Dashboard = 0 − costo, come i lotti; (4) Form e Bulk: il costo solo con quantità positiva; (5) il passo
+`lone-transfer-legs` converte senza valore; (6) in 1.3; (7) backlog dopo la 1.3: stimare un prezzo dalla metà che entra.
+
+**Piano breve**
+1. **Regole** (`schemas/transactions/transactions.py:177-195`): la 12b perde l'eccezione dell'ADJUSTMENT in uscita. Un costo inviato
+   dall'API su un'uscita è **rifiutato** con `costBasisNotAllowed` (proposta di W: come ogni tipo e lato senza costo; ignorarlo in
+   silenzio nasconderebbe l'errore a chi lo manda). Nella 1.2.1 era salvabile (la regola 12 rifiutava solo la modalità): un update
+   che non tocca il costo non lo invia, quindi una riga vecchia con un valore resta modificabile.
+2. **Motori** (`financial_math`), un'uscita senza valore anche se il database ne ha uno:
+   - FIFO: `fifo/engine.py:241-245` chiude a 0 un ADJUSTMENT in uscita letto dal database; le letture di J-10
+     (`lots/scope_boundary.py`, al mercato o `hands_over_at_own_cost`) restano;
+   - Dashboard: `daily_state._is_capital_adjustment` solo per l'entrata; ogni ADJUSTMENT in uscita (non di uno split) realizza
+     0 − costo (`_realized_disposal` con proventi 0), senza flusso di capitale; `_handed_over_value` e il bisogno di cambio di
+     `portfolio/engine.py:640-645` tolti;
+   - performance dei lotti: `lots/histories.py:146-152` e `:821` senza flusso per l'uscita; `lots/conversions.py:244` senza il cambio.
+3. **Decisione 47**: `delete_by_broker` (`transaction_service.py:60-110`), lo split nel batch (`batch_costs._cost_split_handovers`) e
+   `lone_transfer_legs.py` convertono la gamba che cede in ADJUSTMENT in uscita **senza valore**, sempre (niente più cambio mancante
+   né `wacFxUnavailable`/`autoCostUnreadable` per quella gamba); `_handover_cost` tolto. Le righe già convertite al PMC **non si
+   riconoscono** (nessun segno): la cura dei motori le rende innocue; toglierne il valore è la domanda Q-N78-1i (pezzo in pausa).
+4. **CSV generico**: il todo bloccante del costo solo sulle rettifiche in entrata (`broker_generic_csv/plugin.py:455-470`).
+5. **Frontend**: Form (`TransactionFormModal.svelte:749`, `TxFormSingleSection.svelte:319`) e Bulk (`TransactionBulkModal.svelte:210-212`)
+   mostrano il costo solo con quantità positiva. I messaggi `costBasisNotAllowed` / `costBasisModeIncompatible` dicono già «solo le
+   unità che entrano portano un costo»: nessun cambio.
+6. **Test** (test-author, prima i rossi): invertire J-24/CP-16 (`test_adjustment_out_with_cost_numbers.py`), la decisione 47
+   (`delete_by_broker`, split nel batch, `lone_transfer_legs`), la regola 12b (`TestN78…`); nuovi: l'esempio 10 a 50 / 80 / 2 regalate
+   (Dashboard realizzato −100, «Altro» 0, P&L 140, TWRR −20 %; lotti −100); J-10 invariato (guardia).
+7. **Doc** (docs-writer, inglese): pagina utente delle transazioni, `brokers_transactions.md`, la sezione lotti/Dashboard di MF.
+8. **Backlog**: la voce del punto 7 del developer.
+
+**Domande** (pausa solo del pezzo): **Q-N78-1i** togliere il valore salvato a ogni ADJUSTMENT in uscita (passo d'avvio) o
+lasciarlo, ignorato dai motori? **Q-N78-1j** le gambe al bordo di J-10 restano al mercato del giorno?
+
+**Correzione del developer al punto 5** (via il coordinatore): niente codice che bonifica dati nell'app. Il passo `lone-transfer-legs`
+resta com'è nella sua funzione, cambia solo il valore che scrive (nessuno); nessuna rimozione dei valori già scritti (Q-N78-1i chiusa:
+no). Il database del developer lo controlla il coordinatore con uno script esterno. Allineare invece i dati di test (populate).
+
+**Avanzamento**
+- ✅ 1. Piano breve (22/10) e decisioni nel documento (`ondata3/N78-1-analisi.md` § 8).
+- ✅ 2. Rossi (test-author, 22/10): **70 backend e 5 Vitest** rossi per il motivo giusto in 12 file (J-24/CP-16 invertiti in
+  `test_adjustment_out_with_cost_numbers.py`, con l'esempio 10/50/80/2 parametrizzato su nessun valore, 50 e 80; Dashboard
+  `TestAdjustmentOutHasNoValue`; decisione 47 in `test_broker_service.py`, `test_transaction_cost_basis_rule.py`,
+  `test_lone_transfer_legs.py`, `test_orphan_transfer_after_broker_delete.py`, `test_auto_cost_unreadable_pool.py`; FIFO; CSV generico;
+  Form e Bulk). Guardie J-10 verdi. Log `ondata3/wn78_final_*.log`.
+- ✅ 3. Cura (22/10), in quattro script applicati insieme:
+  - motori: `FifoInputTransaction.from_transaction` toglie il valore a un ADJUSTMENT in uscita letto dal database (le letture di J-10
+    restano); Dashboard: `_is_capital_adjustment` solo in entrata, ogni ADJUSTMENT in uscita realizza 0 − costo, `_handed_over_value`
+    tolto; tolti i cambi chiesti per un'uscita (`portfolio/engine.py`, `lots/conversions.py`); performance dei lotti senza flusso;
+  - regola 12b senza l'eccezione: un costo su un'uscita → `costBasisNotAllowed`;
+  - decisione 47 senza valore: `delete_by_broker`, lo split nel batch (`handover_rows` e `_cost_split_handovers` tolti), il passo
+    `lone-transfer-legs` (converte sempre, `LoneLeg` senza costo), `_handover_cost` tolto;
+  - CSV generico: il todo del costo solo in entrata; Form e Bulk: il costo solo con quantità positiva;
+  - populate: la riga `[wac-test] ADJUSTMENT AAPL -3` non ha più il valore 160.
+  > **⚠️ Fuori pista**: dopo la cura 8 test vecchi asserivano ancora il vecchio contratto (5 in `test_lots_analysis_pure.py`, 1 in
+  > `test_portfolio_engine_vnext.py`, 2 casi J-60): aggiornati da test-author, nessuno era una lettura di J-10. Il caso J-60
+  > «short-balance» ora usa una coppia TRANSFER (un'uscita non può più portare un costo).
+  > **Note implementazione**: la proposta di W di lasciar togliere il valore con un `null` nell'update è stata ritirata prima di
+  > applicarla (la guardia P5 resta com'è; nessuna bonifica).
+- ✅ 4. Backlog: W-B93 (questa cura) e W-B94 (la metà che entra come stima del prezzo, dopo la 1.3).
+- ✅ 5. Verdi (22/10, corsia 6183): azioni `services` financial-math 2490, roi-fifo-utils 1739, portfolio-engine 41, transaction 130,
+  transaction-cost-basis-rule 244, broker 81, edge-cases 17, lone-transfer-legs 20, lots-analysis-pure 240, brim-create-transaction 18;
+  file: post_migration 45, post_migration_orphan_pairs 47, account_deletion_api 13, brim_providers 779 + 1 saltato, guardie J-10 verdi;
+  Vitest Form e Bulk 78/78. Log in `ondata3/wn78_*`.
+  > **⚠️ Fuori pista**: in `roi-fifo-utils` altri 3 test vecchi aggiornati. (a) Un'uscita in-kind con valore (contributi per broker):
+  > invertita. (b) `TestDustResidual`: l'uscita ora è una cessione contata (`per_sales`), la base della posizione chiusa diventa il costo
+  > ceduto e l'annualizzato è `None` (rapporto −1,10 sotto −100 %): il soggetto del test (la finestra di ripiego) va riportato su un altro
+  > libro, nota per MF. (c) **La coppia di ADJUSTMENT collegata fra due broker** (caso 15b): letta alla lettera, la gamba che esce non ha
+  > valore, A realizza −100 e l'aggregato perde 100 per uno spostamento fra broker propri: domanda **Q-N78-1k**, il test fissa per ora il
+  > comportamento letterale.
+- ✅ 6. Doc (docs-writer, 35 pagine inglesi: utente, teoria finanziaria, sviluppatore), build stretto 0 avvisi, check-links 97. Debito di
+  traduzione reale su 20 pagine tradotte. I commenti del backend che citavano ancora J-24 aggiornati da me.

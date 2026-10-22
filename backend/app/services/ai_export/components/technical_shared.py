@@ -26,8 +26,10 @@ the owning plugin's own `describe_for_ai()`/`output_specs` at call time via
 from __future__ import annotations
 
 import math
+from bisect import bisect_left
 from collections import Counter
 from collections.abc import Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
@@ -82,6 +84,7 @@ from backend.app.services.ai_export.components.technical_payloads import (
     IndicatorTablePayload,
     PriceBucket,
     PriceSeriesGapReason,
+    SeriesGap,
     TechnicalDatedValue,
     TechnicalEventBucket,
     TechnicalEventPayload,
@@ -120,6 +123,7 @@ from backend.app.services.ai_export.temporal.policy import (
 )
 from backend.app.services.ai_export.temporal.warmup import slice_to_requested_period
 from backend.app.services.assets.manager import AssetSourceManager
+from backend.app.services.assets.market_calendar import ensure_market_holidays
 from backend.app.services.financial_math.returns import price_return
 from backend.app.services.financial_math.weights import gross_weights
 from backend.app.services.fx.conversion import convert_bulk
@@ -798,24 +802,116 @@ def coherent_price_currency(result: FAPriceQueryResult | None) -> str | None:
     return next(iter(currencies))
 
 
-#: The reasons an eligible asset gets no technical price series (E-AI503).
+#: The reasons an eligible asset gets no technical price series (E-AI503, E-23).
 NO_STORED_PRICE: PriceSeriesGapReason = "no_stored_price"
 MIXED_PRICE_CURRENCIES: PriceSeriesGapReason = "mixed_price_currencies"
+NO_PRICE_IN_PERIOD: PriceSeriesGapReason = "no_price_in_period"
+
+
+def _is_observed(point) -> bool:
+    """A price point stored on its own day, not carried from an earlier one."""
+    return point.backward_fill_info is None or point.backward_fill_info.days_back == 0
 
 
 def price_series_gap(result: FAPriceQueryResult | None) -> PriceSeriesGapReason | None:
-    """Why ``result`` gives no native price series, or None when it gives one (E-AI503).
+    """Why ``result`` gives no native price series, or None when it gives one (E-AI503, E-23).
 
     Decided only on the price points the price history returned, never on the asset's type. ``result.prices`` is
     already sliced to the period with its carried points, so it is empty exactly when no price is stored up to the
     period end: ``no_stored_price``. Points that do not share one currency (``coherent_price_currency`` is None) are
-    ``mixed_price_currencies``.
+    ``mixed_price_currencies``. Points that are all carried, none stored inside the period, are ``no_price_in_period``.
     """
     if result is None or not result.prices:
         return NO_STORED_PRICE
     if coherent_price_currency(result) is None:
         return MIXED_PRICE_CURRENCIES
+    if not any(_is_observed(point) for point in result.prices):
+        return NO_PRICE_IN_PERIOD
     return None
+
+
+def price_series_seed(result: FAPriceQueryResult | None) -> tuple[date, float] | None:
+    """The last price stored before the period (E-23): the carried point that opens ``result.prices``, if it is one."""
+    if result is None or not result.prices:
+        return None
+    first = min(result.prices, key=lambda point: point.date)
+    info = first.backward_fill_info
+    if info is None or not info.days_back or first.close is None or info.actual_rate_date >= first.date:
+        return None
+    return info.actual_rate_date, float(first.close)
+
+
+def rate_series_seed(rate_series: FxRateSeriesResource, start: date) -> tuple[date, float] | None:
+    """The last FX rate stored before ``start`` (E-23): the first observation from ``start`` on, when it is carried."""
+    first = next((observation for observation in rate_series.observations if observation.requested_date >= start), None)
+    if first is None or not (first.backward_filled or first.actual_date != first.requested_date) or first.actual_date >= start:
+        return None
+    return first.actual_date, float(first.rate)
+
+
+def is_market_open(day: date, holidays: AbstractSet[date]) -> bool:
+    """Whether markets were open on ``day``: Monday to Friday, and not a market holiday (``market_calendar``, E-23)."""
+    return day.weekday() < 5 and day not in holidays
+
+
+def _empty_runs(dates: Sequence[date], plan: BucketPlan) -> list[tuple[date, date]]:
+    """The maximal runs of contiguous buckets of ``plan`` with no date of ``dates`` (sorted), as (first start, last end)."""
+    runs: list[tuple[date, date]] = []
+    run: tuple[date, date] | None = None
+    for bucket in plan.buckets:
+        index = bisect_left(dates, bucket.start_date)
+        if index == len(dates) or dates[index] > bucket.end_date:
+            run = (bucket.start_date if run is None else run[0], bucket.end_date)
+        elif run is not None:
+            runs.append(run)
+            run = None
+    if run is not None:
+        runs.append(run)
+    return runs
+
+
+def series_gaps(
+    points: Sequence[ContinuousMultiOutputPoint],
+    plan: BucketPlan,
+    *,
+    key: str,
+    seed: tuple[date, float] | None,
+    holidays: AbstractSet[date],
+) -> tuple[SeriesGap, ...]:
+    """The gaps of a series (E-23, developer's decisions of 20/10/2026): each maximal run of contiguous empty buckets
+    that holds a market-open day, merged, with the last value observed before it; for a run at the period's start, the
+    ``seed`` (the last value stored before the period), or None when none is. ``points`` are the period's observed
+    points. Weekends and market holidays alone never make a gap; nor does a run that reaches ``plan.end``, the snapshot
+    day, when that day is its only market-open day: that is the day's price not yet synchronized (E-23.3)."""
+    ordered = sorted(points, key=lambda point: point.date)
+    dates = [point.date for point in ordered]
+    gaps: list[SeriesGap] = []
+    for start, end in _empty_runs(dates, plan):
+        open_days = [day for day in (start + timedelta(days=offset) for offset in range((end - start).days + 1)) if is_market_open(day, holidays)]
+        if not open_days or (end == plan.end and open_days == [plan.end]):
+            continue
+        index = bisect_left(dates, start)
+        if index:
+            last_value, last_date = float(ordered[index - 1].values[key]), dates[index - 1]
+        elif seed is not None and seed[0] < start:
+            last_date, last_value = seed
+        else:
+            last_value = last_date = None
+        gaps.append(SeriesGap(start_date=start, end_date=end, calendar_days=(end - start).days + 1, last_value=last_value, last_value_date=last_date))
+    return tuple(gaps)
+
+
+async def load_series_gaps(
+    points: Sequence[ContinuousMultiOutputPoint],
+    plan: BucketPlan,
+    *,
+    key: str,
+    seed: tuple[date, float] | None,
+) -> tuple[SeriesGap, ...]:
+    """``series_gaps`` with the market holidays, read only when some run of empty buckets has to be judged (E-23)."""
+    if not _empty_runs(sorted(point.date for point in points), plan):
+        return ()
+    return series_gaps(points, plan, key=key, seed=seed, holidays=await ensure_market_holidays())
 
 
 def price_result_to_close_points(result: FAPriceQueryResult, *, start: date, end: date) -> tuple[ContinuousMultiOutputPoint, ...]:

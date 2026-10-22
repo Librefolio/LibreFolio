@@ -209,7 +209,8 @@
         const side: 'from' | 'to' | 'self' = tx.related_transaction_id != null ? (rawQty < 0 ? 'from' : 'to') : 'self';
         const cbRule = getCostBasisRule(tx.type, side);
         let cbMode: 'auto' | 'manual' | null = null;
-        if (cbRule !== 'forbidden') {
+        // A cost only where units come in: an ADJUSTMENT taking units out has no value (N78-1).
+        if (cbRule !== 'forbidden' && !(cbRule === 'required_qty_pos' && rawQty <= 0)) {
             cbMode = 'manual';
         }
         return {
@@ -415,6 +416,9 @@
     $effect(() => {
         if (!open) return;
         const {rows, status: initSt, autoForm} = resolveInitialRows();
+        // K-2: the nested form or wizard opens automatically once per open. Set when it is scheduled before the load
+        // ends; the load's end then opens nothing the user may have closed meanwhile.
+        let autoOpenScheduled = false;
         untrack(() => {
             issues = [];
             lastOpsIndexMap = new Map();
@@ -462,6 +466,7 @@
                 ops = next;
                 initialOpsKey = serializeOps(next);
                 scheduleAutoOpen(autoForm, next);
+                autoOpenScheduled = true;
             } else {
                 // Slow path: keep ops empty so DataTable doesn't render
                 // with FALLBACK_RULE. Ops will be assigned after Promise.all.
@@ -470,6 +475,7 @@
                 // empty key would make an untouched editor ask to discard.
                 initialOpsKey = serializeOps(ops);
                 if (rows.length === 0 && intent?.action !== 'import') {
+                    autoOpenScheduled = true;
                     queueMicrotask(() => {
                         formOpen = true;
                         formMode = 'create';
@@ -478,6 +484,7 @@
                     });
                 }
                 if (intent?.action === 'import') {
+                    autoOpenScheduled = true;
                     queueMicrotask(() => {
                         importWizardOpen = true;
                     });
@@ -485,7 +492,9 @@
             }
         });
         void (async () => {
-            await Promise.all([ensureBrokersLoaded(), ensureCurrenciesLoaded($currentLanguage), ensureAssetsLoaded(), ensureTypesLoaded()]);
+            // K-4: the language read untracked. Tracked, a language change re-ran this whole effect, which rebuilds the
+            // rows from the intent: every unsaved edit was lost.
+            await Promise.all([ensureBrokersLoaded(), ensureCurrenciesLoaded(untrack(() => $currentLanguage)), ensureAssetsLoaded(), ensureTypesLoaded()]);
             untrack(() => {
                 // B4-fix: if ops was deferred (slow path), rebuild + assign now.
                 if (ops.length === 0 && rows.length > 0) {
@@ -499,7 +508,7 @@
                     ops = next2;
                     initialOpsKey = serializeOps(next2);
                 }
-                if (!formOpen) {
+                if (!autoOpenScheduled && !formOpen) {
                     scheduleAutoOpen(autoForm, ops);
                 }
             });
@@ -630,6 +639,17 @@
             if (partnerId == null) continue;
             const pIdx = idToIdx.get(partnerId);
             if (pIdx == null || pIdx === i || toHide.has(pIdx)) continue;
+            // K-3b: a W4b placeholder (the half on a broker the user cannot read) has no row in the store, so the direction
+            // test below would read its cash as 0 and hide a readable receiver behind it: after a reset the pair left the
+            // grid. As in the first build (pass 2), the placeholder is always the hidden partner of the readable half.
+            if (opArr[pIdx].inaccessible) {
+                const sharedUuid = generateUUID();
+                d.link_uuid = sharedUuid;
+                opArr[pIdx].link_uuid = sharedUuid;
+                opArr[pIdx].pairedWith = d.tempId;
+                toHide.add(pIdx);
+                continue;
+            }
             // Determine from/to: "from" = negative cash or negative qty (the sender)
             const cashAmt = Number((d.op === 'edit' ? txStoreGet(d.txId) : undefined)?.cash?.amount ?? 0);
             const partnerCashAmt = Number((opArr[pIdx].op === 'edit' ? txStoreGet(opArr[pIdx].txId) : undefined)?.cash?.amount ?? 0);
@@ -909,8 +929,9 @@
         // BUG-C2: also undo pending splits
         // Remove partner rows added by split, then reset remaining edit rows
         ops = ops.filter((d) => !(d as any).addedBySplit);
+        // K-3: a W4b placeholder has nothing to reset, its half is not in the store (as in `resetRow`).
         ops = ops.map((d) => {
-            if (d.op !== 'edit') return d;
+            if (d.op !== 'edit' || d.inaccessible) return d;
             const reset = editOpFromTx(d.txId, {addedViaPicker: d.addedViaPicker});
             return reset;
         });
@@ -922,8 +943,40 @@
     /** Split a paired row in the BulkModal.
      *  Saved paired → backend split + 2 editable preview rows (DD-R2.1).
      *  New paired (link_uuid shared or pairedWith) → local transformation only. */
+    /** «Split pair» on a merge still waiting for the save (`pendingPromotes`: two saved rows, or a saved and a new one):
+     *  undo it, whichever row the pair shows (J-67). Each row gets its own type back — a saved row's from the store, a
+     *  new row's `promoteFromType` — with its amount in the editor's convention (a withdrawal as its magnitude, as
+     *  `fieldsFromTx` reads it); the new row loses the promote's link; both rows are visible; the merge leaves the
+     *  queue, so the save sends neither it nor a split. False for any other pair: one saved as such (Case A), two new
+     *  rows merged locally (Case B/C). */
+    function undoPendingPromote(a: PendingOp, b: PendingOp): boolean {
+        const saved = [a, b].filter((op) => op.op === 'edit').map((op) => (op as any).txId as number);
+        const created = [a, b].find((op) => op.op === 'create');
+        const index = pendingPromotes.findIndex((promote) =>
+            saved.length === 2 ? (promote.id_a === saved[0] && promote.id_b === saved[1]) || (promote.id_a === saved[1] && promote.id_b === saved[0]) : saved.length === 1 && !!created?.link_uuid && promote.id_a === saved[0] && promote.link_uuid_b === created.link_uuid,
+        );
+        if (index < 0) return false;
+        pendingPromotes = pendingPromotes.filter((_, at) => at !== index);
+        for (const op of [a, b]) {
+            const sourceType = op.op === 'edit' ? txStoreGet((op as any).txId)?.type : op.promoteFromType;
+            if (sourceType) {
+                const rule = getTypeRule(sourceType);
+                op.fields.type = sourceType as TransactionTypeCode;
+                op.fields.quantity = magnitudeForRule(op.fields.quantity, rule.quantityRule);
+                if (op.fields.cash) op.fields.cash = {code: op.fields.cash.code, amount: magnitudeForRule(op.fields.cash.amount, rule.cashSign)};
+            }
+            op.promoteFromType = null;
+            if (op.op === 'create') op.link_uuid = null;
+            op.pairedWith = undefined;
+        }
+        ops = [...ops];
+        lastSuggestKey = ''; // B9: invalidate suggest
+        return true;
+    }
+
     function handleSplitRow(row: PendingOp) {
         const partnerOp = getPartnerOp(row.tempId);
+        if (partnerOp && undoPendingPromote(row, partnerOp)) return;
 
         // Splitting undoes the pairing, so any pre-promote type kept for the wire is
         // now stale — left behind it would silently override the standalone type each
@@ -1558,7 +1611,7 @@
         const slug = type.toLowerCase().replace(/_/g, '-');
         const isPair = getTypeRule(type).requiresPair;
         const arrow = isPair ? '<span class="shrink-0">↔</span>' : '';
-        return `<span class="inline-flex items-center gap-1.5 text-xs leading-snug" style="white-space:normal"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.75rem;height:1.75rem" class="object-contain shrink-0" onerror="this.style.display='none'"/>${arrow}<span>${label}</span></span>`;
+        return `<span class="inline-flex items-center gap-1.5 text-xs leading-snug" style="white-space:normal"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.75rem;height:1.75rem" class="object-contain shrink-0" data-hide-on-error="display"/>${arrow}<span>${label}</span></span>`;
     }
 
     /** Format a cash value as "±amount CODE". */
@@ -1576,7 +1629,7 @@
         const name = info?.display_name ?? `#${assetId}`;
         // Bug11-fix: use asset type icon as fallback when icon_url is null
         const iconUrl = info?.icon_url ?? (info?.asset_type ? getAssetTypeIconUrl(info.asset_type) : null);
-        const iconHtml = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
+        const iconHtml = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" data-hide-on-error="display" />` : '';
         return `<span class="inline-flex items-center gap-1.5 text-sm truncate">${iconHtml}${escapeHtml(name)}</span>`;
     }
 
@@ -1695,7 +1748,7 @@
                             const origSlug = origType.toLowerCase().replace(/_/g, '-');
                             return {
                                 type: 'html',
-                                html: `<span class="inline-flex items-center gap-1 text-[11px]"><img src="/icons/transactions/${origSlug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" onerror="this.style.display='none'"/> <span class="text-lf-muted">→</span> ${renderTypeHtml(targetType)}</span>`,
+                                html: `<span class="inline-flex items-center gap-1 text-[11px]"><img src="/icons/transactions/${origSlug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" data-hide-on-error="display"/> <span class="text-lf-muted">→</span> ${renderTypeHtml(targetType)}</span>`,
                             };
                         }
                         return {type: 'html', html: `<span class="text-[11px]">${renderTypeHtml(row.fields.type)} → <span class="text-purple-600 dark:text-purple-400">✂️ ADJUSTMENT</span></span>`};
@@ -2250,9 +2303,8 @@
         let cash: {code: string; amount: string} | null = null;
         const rawCash = tx.cash && !Array.isArray(tx.cash) ? tx.cash : null;
         if (rawCash) {
-            const rawAmt = Number(rawCash.amount);
-            const displayAmt = rule.cashSign === 'negative' && rawAmt < 0 ? Math.abs(rawAmt) : rawAmt;
-            cash = {code: String(rawCash.code), amount: String(displayAmt)};
+            // B-47: the editor's convention (W-B65), as in `fieldsFromTx`: exact, never through Number.
+            cash = {code: String(rawCash.code), amount: magnitudeForRule(String(rawCash.amount), rule.cashSign)};
         }
 
         // cost_basis_override
@@ -2655,6 +2707,17 @@
             if (resolved.cost_basis_override != null) op.fields.cost_basis_override = resolved.cost_basis_override as any;
         }
 
+        // The editor shows a magnitude and lets the type carry the sign (fieldsFromTx, txCreateItemToPendingOp, the
+        // form). The target type is free-sign (CASH_TRANSFER, FX_CONVERSION), so in every branch the sign moves into the
+        // amount before the type changes, or the pair is shown, ordered and split as if the withdrawal were a deposit
+        // (J-67). The save is unchanged: a promoted saved row is not sent as an update, and a new row's create signs by
+        // its source type (`promoteFromType`), on which applySign is idempotent.
+        for (const op of [opA, opB]) {
+            const {signedQty, signedCash} = applySignRules(op.fields.quantity, op.fields.cash, getTypeRule(op.fields.type));
+            op.fields.quantity = signedQty;
+            op.fields.cash = signedCash;
+        }
+
         if (opA.op === 'edit' && opB.op === 'edit') {
             // 2 saved → batch promotes
             pendingPromotes = [
@@ -2671,12 +2734,6 @@
             // 2 new → local transformation (assign shared link_uuid)
             const sharedUuid = generateUUID();
             for (const op of [opA, opB]) {
-                // The editor shows a magnitude and lets the type carry the sign (txCreateItemToPendingOp,
-                // the form). The target type is free-sign (CASH_TRANSFER, FX_CONVERSION), so the sign has
-                // to move into the amount before the type changes, or the withdrawal leaves as a deposit.
-                const {signedQty, signedCash} = applySignRules(op.fields.quantity, op.fields.cash, getTypeRule(op.fields.type));
-                op.fields.quantity = signedQty;
-                op.fields.cash = signedCash;
                 op.link_uuid = sharedUuid;
                 op.fields.type = match.targetType as TransactionTypeCode;
             }

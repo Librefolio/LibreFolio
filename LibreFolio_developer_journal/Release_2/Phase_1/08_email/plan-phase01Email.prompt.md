@@ -9238,3 +9238,422 @@ pagine).
 2. i testi del badge e del suggerimento;
 3. il comando `user list` non mostra né questa attesa né quella del setup: lasciarlo com'è (consigliato) o un segno
    anche lì, come seguito.
+
+#### E-23.2 — Il via e il contratto (2026-10-20, 10:39; base `1ef19d8dc`, merge di `dev_release2` `f73514a77` con E-AI503, E-20 ed E-24)
+> **Il coordinatore** (10:39): checkpoint di E-24.2 in `d44210b59`; base aggiornata a `dev_release2` (`f73514a77`),
+> merge pulito, HEAD `1ef19d8dc`. **Via a E-23**, con le decisioni di E-23.1. Prima i rossi. Le domande di E-7 le porta
+> lui al developer.
+>
+> **Il merge** tocca la strada di E-23 solo in modo neutro: `temporal/aggregators.py` (Z-29r: le stesse statistiche,
+> da `signals.aggregation`) e `price_query.py` (Z-29: il campionamento vale solo per gli item con `max_points`,
+> `resolution` o `sample_like`, che l'AI Export non usa; il riempimento giornaliero resta quello: un punto riportato porta
+> `actual_rate_date` e il prezzo dell'ultimo salvato). `get_prices_bulk` non marca i ripetuti del fine settimana in
+> `result.prices` (solo nelle serie preparate per i segnali) e, con i segnali, attende già la tabella delle festività.
+
+**Il contratto** (rossi e cura lo seguono alla lettera):
+
+1. **Il buco** (`technical_payloads.py`, modello nuovo `SeriesGap`): `start_date`, `end_date`, `calendar_days` (≥ 1,
+   uguale ai giorni inclusi), `last_value: float | None`, `last_value_date: date | None` (nulli insieme; la data, quando
+   c'è, prima di `start_date`). Un buco è una sequenza **massima** di secchi contigui **vuoti** (nessun punto osservato,
+   `observation_count == 0`) che contiene **almeno un giorno di mercato aperto**: un giorno da lunedì a venerdì che non
+   sta nell'unione delle festività di `market_calendar.ensure_market_holidays()`. Sabati, domeniche e festività da soli
+   non fanno un buco. I secchi del buco si fondono: dal primo inizio all'ultima fine.
+2. **L'ultimo valore** prima del buco: l'ultimo punto **osservato** prima del suo inizio; per un buco in testa al
+   periodo, l'ultimo prezzo salvato prima del periodo, cioè il punto riportato che apre `result.prices`
+   (`backward_fill_info.actual_rate_date` e il suo `close`); per i cambi, la prima osservazione del periodo riportata
+   (`actual_date` e `rate`). Se la storia comincia dentro il periodo, il buco in testa ha `last_value` e la data nulli.
+3. **I payload** (nessun bump per i tre componenti dei prezzi, già v2 in questa release; `fx.rate_ohlc` passa da 1 a 2,
+   con il segnaposto di `components/catalog.py` e `COMPACT_COMPONENT_VERSIONS`):
+   - `AssetPriceSeriesPayload.price_gaps` e `AssetOhlcReturnsPayload.price_gaps`: `tuple[SeriesGap, ...] = ()`;
+   - `FxRateOhlcPayload.rate_gaps`: `tuple[SeriesGap, ...] = ()`;
+   - in ordine di data, senza sovrapposizioni, e mai sopra un secchio popolato (validatori).
+4. **La copertura** (`technical_shared.price_series_gap`): un terzo codice, `no_price_in_period`, quando
+   `result.prices` ha punti di una sola valuta ma nessuno osservato (solo riportati). L'ordine dei controlli: nessun
+   punto → `no_stored_price`; valute miste → `mixed_price_currencies`; nessun punto osservato → `no_price_in_period`.
+   Sempre sui punti, mai sul tipo.
+   - Portafoglio e broker: l'asset va in `uncovered_assets`; `AssetPriceSeriesGapPayload` prende `currency`,
+     `last_close`, `last_close_date`, valorizzati **esattamente** per `no_price_in_period` (l'ultimo prezzo salvato prima
+     del periodo) e nulli per gli altri due codici.
+   - Asset singolo: `reason_code = no_price_in_period`, la valuta resta; secchi tutti vuoti, `latest_*` nulli; il
+     buco dell'intero periodo (se contiene un giorno aperto) in `price_gaps`, con l'ultimo prezzo salvato. Il
+     validatore: valuta nulla esattamente per `no_stored_price` e `mixed_price_currencies`.
+5. **Le festività nei builder**: caricate solo quando c'è almeno una sequenza di secchi vuoti da giudicare, attraverso
+   `technical_shared.ensure_market_holidays` (importato in quel modulo), così i test lo sostituiscono con
+   `monkeypatch.setattr(technical_shared, "ensure_market_holidays", …)`. Le funzioni pure ricevono l'insieme.
+6. **Il renderer** (`snapshotDataRenderer.ts`):
+   - dopo BUCKETS, solo se c'è un buco: `PRICE GAPS` (`entity | from | to | days | last_price | last_price_date`) per
+     i prezzi, `RATE GAPS` (`… | last_rate | last_rate_date`) per i cambi, e una riga di significato
+     (`price_gap=…`, `rate_gap=…`), una volta;
+   - `ASSETS WITHOUT PRICE SERIES` prende `currency | last_price | last_price_date`;
+   - le celle «non applicabili» il renderer le passa come `undefined`, mai `null`: le tre colonne nuove di
+     `ASSETS WITHOUT PRICE SERIES` per i codici che non sono `no_price_in_period`, e l'ultimo valore di un buco in testa
+     senza prezzo prima. Una colonna così, vuota in ogni riga, sparisce in silenzio (nessuna riga «omitted null
+     columns»), e in una colonna con valori la cella resta vuota. Così i render di oggi (senza buchi, o solo
+     `no_stored_price` e `mixed_price_currencies`) restano byte per byte, `NULL_MEANS_NONE_COLUMNS` non cambia (il suo
+     elenco esatto è fissato in `snapshotDataRenderer.test.ts:3535`) e il testo approvato «(empty when none is stored
+     before it)» resta esatto;
+   - `no_price_in_period` entra in `PRICE_SERIES_GAP_MEANINGS`; una mappa esportata nuova, `SERIES_GAP_MEANINGS`
+     (`price_gap`, `rate_gap`), tiene le righe di significato dei buchi; una forma di buco che il renderer non conosce
+     manda la sezione al renderer generico, come per un codice sconosciuto;
+   - i testi: quelli approvati; per i cambi lo stesso testo coi tassi («no stored rate», `last_rate`, «the rate stayed
+     the same»).
+7. **I nomi** (`technical_shared.py`): `NO_PRICE_IN_PERIOD`; `is_market_open(day, holidays)`;
+   `series_gaps(points, plan, *, key, seed, holidays) -> tuple[SeriesGap, ...]` (pura: `points` sono i punti osservati
+   del periodo, `plan` il `BucketPlan`, `seed` l'ultimo valore prima del periodo o None);
+   `price_series_seed(result) -> tuple[date, float] | None`; `rate_series_seed(rate_series, start) -> tuple[date, float]
+   | None`; `async load_series_gaps(points, plan, *, key, seed)`, che chiama `ensure_market_holidays()` solo se c'è una
+   sequenza di secchi vuoti.
+
+**I passi:**
+1. ✅ **I rossi** (10:5x–11:2x), tre `test-author` in parallelo, file distinti, nessuna corsa loro:
+   - `e23-reds-renderer` — `snapshotDataRenderer.priceSeriesGap.test.ts`: PSG-08 (tre codici), PSG-09 (`fx.rate_ohlc`
+     v2 → v3, più v2 con schema 2), PSG-10…20 (le due mappe, PRICE GAPS e RATE GAPS, l'ordine delle serie, le celle
+     vuote, le colonne nuove decise dal codice, la caduta al renderer generico, le guardie byte per byte). Corsa
+     (11:0x): **21 failed / 27 passed**, come previsto, tutti per asserzione;
+   - `e23-reds-pure` — `test_ai_export_technical_shared_pure.py` (E23-S00…S16) e
+     `test_ai_export_technical_payload_invariants.py` (E23-P01…P16); AI503-S01 perde il caso «solo punti riportati →
+     None», che il contratto rovescia (ora in E23-S16). `services ai-export-pure` (11:12): **101 failed / 379
+     passed**, nessun rosso fuori dai `test_e23_*`;
+   - `e23-reds-components` — `test_ai_export_components_technical.py`: AI503-C09 e C10 ×2 rovesciati, E23-C01…C15
+     (portafoglio, broker, asset, cambi, festività, laziness), una fixture autouse che sostituisce
+     `technical_shared.ensure_market_holidays` (`raising=False`); AI503-C01/C02/C04 ristretti ai tre campi di E-AI503;
+     `test_api/test_ai_export_unpriced_asset.py`: UPA-06 e UPA-07 ×2 (un ETF e un CROWDFUND con prezzi solo prima del
+     periodo). `services ai-export` (11:19): **24 failed / 1103 passed**; `api ai-export-unpriced-asset`: **3 failed /
+     6 passed**. Tutti per asserzione sul comportamento mancante (campi dei buchi assenti, l'asset vecchio ancora in
+     `assets`, la versione 1, le festività mai lette); il piano dei secchi calcolato a mano regge.
+   > **⚠️ Fuori pista**: AI503-P09 vuole «reason_code» nel messaggio del primo controllo che scatta: corretto il
+   > messaggio della cura preparata prima di applicarla («currency is null exactly when reason_code is …»).
+2. ⏳ **La cura** backend (`files/e23/apply_backend.py`), poi frontend (`files/e23/apply_frontend.py`), provate a secco.
+2. ✅ **La cura** (11:2x): `files/e23/apply_backend.py` (5 file: `technical_payloads.py`, `technical_shared.py`,
+   `portfolio_broker_technical.py`, `asset_fx_technical.py`, `catalog.py`) e `files/e23/apply_frontend.py`
+   (`snapshotDataRenderer.ts`). `ruff --fix` ha riordinato due blocchi di import (I001: `NO_PRICE_IN_PERIOD` fuori
+   ordine); prettier ha rifluito tre righe del renderer allungate dalla cura.
+3. ✅ **I verdi** (11:20–11:3x, corsia 6188):
+   - `services ai-export-pure` **480 passed**; Vitest `src/lib/features/ai-export` **15 file, 362 passed**;
+   - `services ai-export` **1127 passed**; `api ai-export-unpriced-asset` **9 passed**; `api ai-export` **15
+     passed**; `utils ai-export-probe-helpers` **73 passed**;
+   - `ruff` e `black` puliti sui 5 file; prettier pulito; `front check` **0 errori, 0 avvisi**.
+   > **⚠️ Fuori pista**: il primo `front check` dava 1 errore in `instanceConfig.svelte.ts` (`client_log_level`,
+   > campo di H-60 arrivato col merge): il client generato e ignorato era del 19/10. `dev.py api sync` lo ha rigenerato
+   > (nessun file tracciato cambiato), poi 0/0. Le strutture dei payload dell'AI Export non stanno nell'OpenAPI: E-23
+   > non chiede un `api sync` suo.
+   - **I prompt letti** (`files/tools/e23_dump_snapshots.py` sul libro del test API in un SQLite privato, festività
+     vuote; `files/tools/e23_render.sh`): il portafoglio B1+B2+B3 (2 coperti su 6; A5 e A6 `no_price_in_period` con
+     EUR, 101.75, 2024-03-15; il buco di A1 dal 22 al 30 giugno dopo il 21); l'ETF vecchio da solo (`no_price_in_period`,
+     un buco di 91 giorni dopo il 15 marzo); l'ETF col buco dal 24 al 28 giugno (un buco solo, dal 22 al 30, perché i
+     due fine settimana ai bordi stanno nella sequenza). Tutto come da contratto.
+4. ✅ **La doc** (`docs-writer` `e23-docs`, 11:3x–11:4x): `ai_export_composition.md` (il paragrafo della copertura con il
+   terzo codice; la sezione nuova «🕳️ Price and Rate Gaps», ancora `#series-gaps`; il renderer delle serie; una riga
+   della tabella dei fallimenti che diventava falsa) e `ai_export_sampling.md` («Recent Daily Window», «Public Empty
+   Temporal Rows»). Rivista contro il codice. `mkdocs build` strict ok, `check-links` 97 ok. Pagine solo inglesi.
+   Backlog: E-23 ✅ nella mia sezione.
+5. ✅ **Il checkpoint** (11:4x), coi testi finali per il developer e una domanda: il buco del giorno dello snapshot.
+   Committato dal coordinatore (11:43): `32462b543` `feat(ai-export): merged price and rate gaps, no_price_in_period`,
+   `70bc6dc03` (il giornale).
+
+#### E-23.3 — Il buco finale del giorno dello snapshot (2026-10-20, 11:43; base `70bc6dc03`)
+> **La decisione del coordinatore** (11:43): «Una sequenza finale il cui unico giorno aperto è quello dello snapshot non
+> è un buco: è il prezzo di oggi non ancora sincronizzato, e un buco così in ogni asset sarebbe solo rumore, contro lo
+> spirito della regola del developer.» Prima il rosso, poi la cura e il checkpoint. Sì anche alla riga cosmetica del
+> runner per `api ai-export-unpriced-asset`. Poi E-7 (le domande le porta lui al developer).
+>
+> **Il giorno dello snapshot** nel codice: `snapshot_as_of`, che il runtime vuole uguale alla fine del periodo
+> esportato (`ai_export_runtime.py:414`) e che `technical_shared.py:1395` legge già come `plan.end`. Nessun orologio nei
+> builder né nei test. Conseguenza da dire nel checkpoint: anche un periodo storico che finisce in un giorno feriale
+> senza prezzo perde quel buco di un giorno.
+
+1. ✅ **Il rosso** (`test-author` `e23-3-red`, 11:4x–11:5x; corse 11:57): 23 casi. E23-S17 (la sequenza finale col solo
+   `plan.end` aperto: venerdì da solo; sab→lun; un secchio dom–lun; venerdì festivo + fine settimana → lunedì),
+   E23-S19 (resta un buco ogni sequenza che non arriva a `plan.end`), E23-S21 (lo stesso coi tassi), E23-C16
+   (portafoglio, asset e cambi col solo giorno dello snapshot mancante) rossi; barriere E23-S18 (un altro giorno
+   aperto: il buco resta, fuso fino a `plan.end`), E23-S20 (un periodo senza punti osservati resta un buco), il resto
+   di S21 e C16. Nessuna attesa di E-23 cambia: i piani dei test esistenti finiscono di sabato o di domenica.
+   `services ai-export-pure` **8 failed / 489 passed**; `services ai-export TestEmptyBucketGaps` **3 failed / 25
+   passed**: gli 11 rossi previsti, e nient'altro.
+   > Caso di confine lasciato senza pin e accettato: un periodo senza nessun prezzo il cui solo giorno aperto è
+   > `plan.end` (un giorno feriale da solo, o sab–lun) dà `no_price_in_period` senza riga di buco, quindi senza
+   > ultimo prezzo. Le esportazioni usano periodi di settimane o mesi.
+2. ✅ **La cura** (11:57, `files/e23/apply_e23_3.py`): in `series_gaps` i giorni aperti della sequenza; si salta una
+   sequenza senza giorni aperti, o che finisce a `plan.end` col solo `plan.end` aperto; la docstring. Una frase in
+   `ai_export_composition.md` («Price and Rate Gaps», col periodo storico che perde il buco di un giorno) e in
+   `ai_export_sampling.md`; la descrizione del runner di `api ai-export-unpriced-asset` (E-AI503, E-23).
+3. ✅ **I verdi** (11:57–12:10): `services ai-export-pure` **497 passed**; `services ai-export` **1133 passed**;
+   `api ai-export-unpriced-asset` **9 passed**; ruff e black puliti; `mkdocs build` strict e `check-links` ok. Il
+   renderer non cambia (decide il backend). Checkpoint al coordinatore.
+
+#### E-25 ed E-26 — I due residui di E6 per lo sviluppatore: analisi (2026-10-20, 13:1x–13:2x; sola lettura, base `4c6a12795`)
+> **La richiesta** (coordinatore, 13:16): checkpoint di E-23.3 in `d2388ea2c` e `4c6a12795`; l'interpretazione
+> «giorno dello snapshot = `plan.end`» va bene. Le domande di E-7 le porta ora allo sviluppatore; intanto, se nel piano
+> 08 c'è un altro lotto pronto, la sua analisi.
+
+**Cosa resta aperto di E** (sezione E del backlog e questo piano):
+- E-2, E-3, E-6: rimandate alla 1.4 dal coordinatore (16/10), toccano file condivisi.
+- E-19: resta la correzione, D1 e D2, dello sviluppatore; l'analisi del 17/10 («E-19») vale ancora, aggiornata da B-49 ed
+  E-20.
+- E-21 (dopo la 1.3, decisione (c) di C-70b) ed E-22 (idea di H, nessuna decisione).
+- In attesa di altri: E-7 (le risposte), C-70b (parcheggiata), N62 (la prova di Gmail), lo scatto della galleria
+  `settings/email` (preparato in E2b, `gallery.spec.ts:2074`, mai eseguito: G doveva metterlo nel giro di B5b e X;
+  nessuna pagina lo mostra).
+- **Due decisioni dello sviluppatore lasciate da E6** (16/10, «lista del mattino», righe ~1946-1949), mai prese e mai
+  messe nel backlog: il pulsante «Conferma» su `/verify-email` e il messaggio dopo un'email trattenuta. Sono di E e
+  piccole: le chiamo **E-25** ed **E-26**.
+
+**E-25 — Un passo «Conferma» su `/verify-email`:**
+- **Oggi**: `routes/verify-email/+page.svelte` spende il token in `onMount`, e di nuovo su `hashchange`, senza un clic.
+  Il frammento `#token=` protegge già dai controlli che non eseguono JavaScript (il frammento non arriva al server); un
+  filtro di posta che apre i link in un browser isolato per controllarli (Defender Safe Links, Proofpoint, Mimecast…)
+  esegue la pagina e spende il token.
+  - L'indirizzo risulta verificato senza il suo titolare: chi si registra con un indirizzo altrui, su un'istanza con la
+    registrazione aperta, ottiene un account attivo se il filtro della vittima apre i link. È proprio ciò che la verifica
+    deve impedire (decisione 44).
+  - Il titolare vero, cliccando dopo, legge «This link has already been used».
+- Gli altri link non hanno il problema: reset, invito e setup **ispezionano** il token all'apertura
+  (`inspectLinkToken`, nessuna spesa) e lo spendono con l'invio di un modulo.
+- **La proposta**, solo file di E, nessuna API:
+  - uno stato nuovo, `ready`: con un token la scheda chiede di confermare, con un pulsante `verify-email-confirm` e una
+    riga per chi non si è registrato; la richiesta parte solo al clic; anche il `hashchange` torna a `ready`;
+  - nessuna ispezione all'apertura: la rotta non accetta i token di verifica (`TokenInspectRequest.purpose`, di A), e
+    il nome utente non va mostrato, per la stessa regola dell'email (`messages.py:174`: niente nome utente, lo sceglie chi
+    si registra). Un link scaduto o usato dice il suo stato dopo il clic, come oggi dopo il caricamento;
+  - file: `routes/verify-email/+page.svelte`, `lib/features/email/VerifyEmailCard.svelte`, `emailText.ts`
+    (`VerifyPageStatus`, `VERIFY_PAGE_KEYS`), `i18n/email/{en,it,fr,es}.json` (tre chiavi);
+  - testi proposti (en): «Confirm your email address to activate your account.»; il pulsante «Confirm my email
+    address» (le parole del pulsante dell'email); «If you did not sign up on this instance, close this page: nothing
+    happens.»;
+  - test: `routes/verify-email/page.test.ts` (12 casi, oggi si aspettano la richiesta al caricamento: da rovesciare) e
+    `VerifyEmailCard.test.ts` (8, più lo stato `ready`). Nessuna E2E visita `/verify-email`
+    (`auth-email-verification.spec.ts` simula registrazione e accesso): un caso E2E è facoltativo, con uno slot breve;
+  - doc: `user/getting-started.en.md` («#verify-email», passo 3) e `admin/email.en.md` («Once the link is opened»);
+    `getting-started` ha le traduzioni: debito, o ritocco nelle quattro lingue se lo chiede lo sviluppatore;
+  - costo: piccolo, due ore circa.
+
+**E-26 — Il messaggio dopo la registrazione:**
+- **Oggi**: con la verifica accesa, `RegisterCard.svelte:105` (di A) mostra la chiave di E `email.verification.registered`:
+  «Account created. We sent you an email with a link to activate it: open it within 24 hours, then sign in.». Lo dice
+  anche quando l'email è trattenuta (`auth.py`, il limite di 10 l'ora per indirizzo, `registration_email_allowed`) e
+  quando fallisce dopo, in background (SMTP, il limite per casella, il budget orario: `registration_email_work` scrive
+  il log e l'account aspetta). E l'email parte dopo la risposta: «We sent» non è vero nemmeno quando il messaggio compare.
+  La via d'uscita c'è (accedere → 403 → «Send the link again») e la doc per l'utente la dice (`getting-started.en.md:80`),
+  il messaggio no.
+- Dietro un proxy senza intestazioni fidate tutti i client hanno lo stesso indirizzo: dopo 10 registrazioni in un'ora
+  ogni email è trattenuta. È il caso del proxy che il coordinatore aveva segnalato per il cloud: la configurazione è di
+  H, ma questo messaggio è ciò che vede l'utente.
+- **Le opzioni**:
+  - (a) **(consigliata)** solo il testo: «Account created. We are sending you an email with a link to activate it: open
+    it within 24 hours, then sign in. No email after a few minutes? Check the spam folder, then sign in with your
+    username and password: you will be offered a new link.». Vera in ogni caso, nessuna API, una chiave di E ×4; i test
+    leggono la chiave (`RegisterCard.verification.test.ts`, RCV-01) e non cambiano;
+  - (b) anche un campo nella risposta di `POST /auth/register` (`verification_email: "sending" | "held"`; rotta,
+    schema e `RegisterCard` di A, `api sync`): copre solo il limite per indirizzo, i fallimenti in background restano
+    invisibili. Più file, poco guadagno.
+- Doc: il messaggio citato in `user/getting-started.en.md:72` e in `admin/email.en.md:514-515`; le traduzioni di
+  `getting-started` lo citano (debito, o ritocco nelle quattro lingue).
+- Costo: (a) minimo, mezz'ora con la doc.
+
+**Insieme**: un lotto solo, piccolo, tutto in file di E (con (a)); i rossi col `test-author`, un checkpoint. Il passo
+«Conferma» cambia una rotta pubblica solo nel frontend: nessuna revisione di sicurezza del backend.
+
+**Domande per lo sviluppatore:**
+1. E-25: il passo «Conferma» nella 1.3 (consigliato) e i suoi testi;
+2. E-26: (a) solo il testo (consigliato) o (b) anche il campo, e il testo;
+3. per tutte e due: le traduzioni di `getting-started` adesso, o restano debito.
+
+> **⚠️ Fuori pista** (13:2x): mettendo E-25 ed E-26 nel backlog ho visto che manca l'intestazione
+> `## Y · Cruscotto e grafici (fase 01)`. L'ho tolta io alle 11:3x: lo script che chiudeva E-23 sostituiva un ancoraggio
+> che finiva con quell'intestazione, e il testo nuovo non la rimetteva. Il coordinatore l'ha committata in `70bc6dc03`,
+> non ancora in `dev_release2`; da allora le voci di Y si leggevano come parte della sezione E. Rimessa al suo posto, con
+> E-25 ed E-26 in fondo alla sezione E; contro `32462b543` (prima del mio errore) il file cambia solo per la chiusura di
+> E-23 e le due righe nuove. Da qui in poi controllo ogni modifica del backlog con un diff contro il commit precedente.
+
+#### Lo scatto `settings/email` della galleria — la domanda a G (2026-10-20, 13:3x; base `e1c4ab230`)
+> **Il coordinatore** (13:34): checkpoint `e1c4ab230` (il giornale con il titolo di Y ripristinato, verificato). E-25 ed
+> E-26 le porta lui allo sviluppatore. Intanto chiudere con G lo scatto `settings/email`: chiedere al coordinatore dei
+> colori («UI color analysis»), che coordina G, se lo mette nel prossimo blocco della galleria.
+
+- **Riverificato a lettura** su `e1c4ab230`: il test `gallery.spec.ts:2074` (nel `describe('Settings')`, fra
+  `global-settings` e `plugins`) regge ancora. `settings-tab-email` viene da `settings/+page.svelte:84`; `email-tab` ha
+  `data-busy`; `settings-page` c'è; i quattro testid di `expectGalleryEmailStatus` stanno in `EmailSettingsTab.svelte`.
+  La fixture valida il suo stato contro lo Zod generato. Senza `links`, `linksBase` è nullo: niente sezione dei link,
+  niente URL esterno, niente sonda. Non eseguito: la galleria va in uno slot, ed è di G.
+- **Manca, oltre alla corsa**: le voci nelle pagine della galleria (`gallery/{desktop,mobile}.{en,it,fr,es}.md`, accanto
+  a `global-settings`): senza, lo scatto non compare. Le hanno sempre scritte i workstream dei loro scatti
+  (`c8d23c544`, `dbf4263e9`).
+- **Chiesto** (13:3x, a «UI color analysis»): se lo scatto va nel prossimo blocco, e se le voci delle pagine le scrivo io a
+  immagini fatte o le scrive G nel blocco.
+- **La risposta** (13:38): lo scatto **c'è già**. G l'ha preso in tutte e tre le gallerie di riferimento del 18/10 (su
+  `ba8e06763` e `cd686f445`), 16 immagini per giro, tutto verde; ogni blocco gira tutto lo spec. Da N69b le scene da admin
+  mostrano un avviso di sicurezza (la corsia della galleria ha il limite dei login spento): G sceglie la cura, per me
+  niente. Le voci delle pagine: le scrivo io, anche subito (i PNG sono ignorati da git, la build stretta regge); poi il
+  timbro dei due `.en.md`.
+  > **⚠️ Fuori pista**: «mai eseguito» era falso. Lo avevo preso dalle note di E6 (16/10) senza chiederlo a G.
+- ✅ **Le voci** (13:4x): dopo `global-settings`, negli 8 file `gallery/{desktop,mobile}.{en,it,fr,es}.md`, scritte nelle
+  4 lingue coi termini dell'app (`email.tab.label`: Email, Email, E-mail, Correo; l'email di prova). `mkdocs build`
+  stretto ok, `check-links` ok.
+- **Il timbro, non fatto** (13:4x): `translate-stamp --file gallery/desktop.en.md gallery/mobile.en.md` l'ho lanciato e
+  poi tolto (il cache rimesso da `HEAD`). Le voci inglesi del cache erano già scadute rispetto a `HEAD` (md5 di
+  `desktop.en.md` a `HEAD` `5e3230dd…`, nel cache `7cd49d23…` del 13/10): la voce «🧩 Plugin Settings» di X
+  (`c8d23c544`, 16/10) c'è solo in inglese, in desktop e mobile (`translate-validate`: 133 titoli contro 132, prima della
+  mia voce 132 contro 131). Timbrare avrebbe nascosto quel debito vero. Il timbro va fatto dopo che quella voce è
+  tradotta.
+- **Il via del coordinatore** (14:28; checkpoint `b02611402` e `a7c7de18d`): tradurre io la voce di X in it/fr/es (sei
+  voci brevi; lo sviluppatore permette le correzioni piccole nelle 4 lingue), poi il timbro sulle due pagine, perché a
+  quel punto il debito è chiuso davvero. Seguito minimo, col checkpoint.
+- ✅ **Le sei voci** (14:3x), dopo `onboarding-replay` come in inglese: «🧩 Impostazioni dei plugin», «🧩 Paramètres des
+  plugins», «🧩 Ajustes de los plugins» (`pluginSettings.tab.title`), coi termini dell'app («le fonti dei prezzi e dei
+  tassi di cambio», la scheda «Plugin»/«Plugins») e quelli delle pagine (scheda/onglet/pestaña, modulo/formulaire/
+  formulario, badge/badge/insignia). Verificato prima: dal timbro (l'inglese di `810deabf9`) le due pagine inglesi sono
+  cambiate solo per la voce di X (`c8d23c544`) e per la mia (`b02611402`), quindi nient'altro resta da tradurre.
+- ✅ **Le prove** (14:3x): titoli 133/133 e 134/134 nelle quattro lingue, nello stesso ordine; `translate-validate`:
+  nessuna riga per le pagine della galleria (erano 684), gli errori del sito da 1544 a 1454; poi `translate-stamp --file
+  gallery/desktop.en.md gallery/mobile.en.md` (il cache cambia solo quelle due voci); `mkdocs build` stretto ok,
+  `check-links` ok.
+
+#### E-25.1 ed E-26.1 — Le decisioni (2026-10-20, 13:4x–14:3x)
+> - **E-25**: approvata dallo sviluppatore (13:4x), coi testi proposti. Via del coordinatore (14:28): prima i rossi.
+> - **E-26**: lo sviluppatore ha scelto la (b) (14:3x): anche un campo nella risposta di `POST /auth/register` che dice
+>   quando l'email è trattenuta, più il testo (a) per il caso normale. Tocca file di A (lo schema della risposta,
+>   `RegisterCard`) e chiede `api sync`: prima l'accordo con A sul contratto, e la revisione è di A. Prima un'analisi
+>   breve al coordinatore: il nome del campo, i valori, il testo del caso trattenuto, i file.
+> - **L'ordine** (coordinatore): E-25, la voce di X nella galleria (già fatta, sopra), poi E-26.
+> - Le traduzioni di `getting-started` restano debito, senza timbro, salvo diversa indicazione dello sviluppatore.
+
+#### E-25.2 — Il passo «Conferma»: esecuzione (2026-10-21, ondata 3, notte; base `2879ae3e4`)
+> **La richiesta** (coordinatore, brief `kickoff-E.md`, ondata 3): solo il passo A, E-25, approvato dallo sviluppatore il
+> 20/10 (13:4x) coi testi proposti. Corsia `6182`, `/tmp/librefolio-r13-e`; niente E2E (solo proporlo), `front check` e
+> Vitest su più di 3 file dentro `flock /tmp/librefolio-heavy.lock`, con `LC_ALL=en_US.UTF-8`. Nessun commit: il
+> coordinatore committa al checkpoint.
+
+**Le scelte di dettaglio** (dentro la proposta approvata, non decisioni di prodotto):
+- le tre chiavi sotto `email.verification.page`: `ready` (lo stato, accanto agli altri di `VERIFY_PAGE_KEYS`),
+  `confirm` (il pulsante, le parole del pulsante dell'email: `templates/<lang>.json`, `email_verification.action`, nelle
+  quattro lingue) e `notSignedUp` (la riga per chi non si è registrato; in it/fr/es con le parole di
+  `email_verification.ignore`, «non hai creato un account»);
+- in `ready` la scheda non offre «Torna all'accesso»: l'unica azione è confermare, e chi non si è registrato legge di
+  chiudere la pagina. Accedere prima di confermare porta al 403 e a «Send the link again», che renderebbe morto questo
+  link. Si cambia con una riga, se lo sviluppatore lo vuole;
+- il pulsante sparisce al clic (lo stato passa a `checking`, senza pulsanti): un doppio clic non spende due volte.
+
+- ✅ **Passo 1 — Base e `api sync`** (2026-10-21)
+  > **Note implementazione**: `git rev-parse HEAD` = `2879ae3e4d8d232f9fb29939addbef28ecc3bdd8` (branch `e-alfy-e-email`,
+  > albero pulito); `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py api sync` exit 0, nessun file
+  > tracciato cambiato. Rilette sul codice le affermazioni dell'analisi: `+page.svelte:44-56` spende il token in
+  > `onMount` e su `hashchange`; `VerifyEmailCard.svelte` ha otto stati; i bottoni dell'email in
+  > `backend/app/services/email/templates/{en,it,fr,es}.json:27`. Base dei Vitest: i tre file, 316 test verdi
+  > (`LC_ALL=en_US.UTF-8 node_modules/.bin/vitest run …`, log `ondata3/E-A-vitest-baseline.log`).
+  > **⚠️ Fuori pista**: i file di test sono tre, non due: `emailText.test.ts` (ETX-07) fissa gli otto stati di
+  > `VERIFY_PAGE_KEYS` e va allargato al nono.
+- ✅ **Passo 2 — I rossi** (`test-author`): `routes/verify-email/page.test.ts`, `VerifyEmailCard.test.ts`,
+  `emailText.test.ts` (ETX-07: nove stati) (2026-10-21)
+  > **Note implementazione**: `test-author` (sonnet), solo i tre file di test. Pagina 22 → 25 casi (VEP-01…15: VEP-01
+  > il cuore, aprire la pagina ed eseguire ogni effetto non chiama mai la conferma; VEP-13 il clic chiede una volta e il
+  > pulsante sparisce; VEP-14/15 i frammenti dopo un rifiuto e durante l'attesa); scheda 26 → 38 (VEC-09…12: `ready`
+  > con e senza `onconfirm`, conferma e riga solo in `ready`, il cambio di lingua e l'uscita da `ready`); `emailText`
+  > 268 → 271 (ETX-07 nove stati, ETX-08b le due chiavi nuove). Corsa: `LC_ALL=en_US.UTF-8 node_modules/.bin/vitest run
+  > <i tre file>` → **28 rossi, 306 verdi (334)**, ogni rosso per il comportamento mancante (VEP-01: «confirm called 1
+  > times» all'apertura; gli altri VEP: la pagina mostra `checking` invece di `ready`; VEC/ETX: chiave o pulsante
+  > assenti); nessun rosso da import o mock. Prettier pulito. Log `ondata3/E-A-vitest-red.log`. Rivisto il diff.
+  > **⚠️ Fuori pista**: `mkdocs_src/docs/developer/backend/email.md:1404` cita «VEC-01…08» e «VEP-01…12»: da
+  > aggiornare con la doc (passo 5).
+- ✅ **Passo 3 — La cura**: `emailText.ts`, `VerifyEmailCard.svelte`, `routes/verify-email/+page.svelte`, tre chiavi ×4
+  (2026-10-21)
+  > **Note implementazione**: `emailText.ts`: `VerifyPageStatus` col nono stato `ready`, `VERIFY_PAGE_KEYS.ready`.
+  > `VerifyEmailCard.svelte`: prop `onconfirm`; in `ready` il messaggio, il pulsante `verify-email-confirm` (stesse
+  > classi del «Riprova», solo con `onconfirm`) e la riga `verify-email-hint` (`text-xs text-lf-secondary`, come
+  > `link-status-hint`); «Torna all'accesso» in ogni stato tranne `checking` e `ready`. `+page.svelte`: `takeLink()`
+  > alza la generazione, tiene il token e mostra `ready` (o `missing`), all'apertura e su `hashchange`; `confirm()`
+  > resta com'era e parte solo dal pulsante o dal «Riprova» (`onconfirm={confirm} onretry={confirm}`). Le chiavi con
+  > `dev.py i18n add` (sorgente `frontend/src/lib/i18n/email/<lang>.json`): `ready`, `confirm`, `notSignedUp`, testi
+  > inglesi approvati, it/fr/es con le parole del pulsante e della riga «ignore» dell'email
+  > (`templates/<lang>.json`). Corsa dei tre Vitest: **334/334 verdi** (log `ondata3/E-A-vitest-green.log`).
+- ✅ **Passo 4 — Le prove**: i Vitest toccati, `i18n check`, prettier, `front check` (in `flock`) (2026-10-21/22)
+  > **Note implementazione**: i tre Vitest 334/334 (`ondata3/E-A-vitest-green.log`); prettier `--check` sui sei file
+  > toccati pulito; `dev.py i18n check` exit 0 («5125 keys … strict»); `utils gate-i18n-usage` 195 passed e
+  > `utils gate-i18n-catalog` 176 passed (corsia 6182, nessun server); i gate dei colori
+  > `themeRoles.gate.test.ts` + `themeComponentTokens.gate.test.ts` 98/98; `LC_ALL=en_US.UTF-8 flock
+  > /tmp/librefolio-heavy.lock … dev.py front check` exit 0, **svelte-check 0 errori e 0 avvisi** (log
+  > `ondata3/E-A-front-check.log`); `git diff --check` pulito.
+  > **⚠️ Fuori pista**: `front check` ha aspettato il lucchetto dalle 22:18 alle 00:02 (davanti l'`all-frontend` di H e
+  > altre dieci corse in coda): nessun intervento, solo attesa.
+- ✅ **Passo 5 — La doc**: `user/getting-started.en.md`, `admin/email.en.md` (solo inglese, traduzioni a debito, senza
+  timbro) (2026-10-21)
+  > **Note implementazione**: `docs-writer` (sonnet). `getting-started.en.md` passo 3 (la pagina chiede di confermare)
+  > e due punti (perché un clic in più; chi non si è registrato chiude la pagina); `admin/email.en.md` le due voci
+  > «Until the address is confirmed» / «Once the owner confirms», una voce nuova «Opening the link confirms nothing»
+  > (i filtri come Defender Safe Links), l'istanza bloccata dopo il clic, la riga 598 e due righe della tabella dei log;
+  > `developer/backend/email.md` «In the Frontend» (lo stato `ready`, il clic, `hashchange`, le risposte tardive), «Why
+  > a click», i testid, i casi VEC-01…12 e VEP-01…15. Rivisto il diff.
+  > `flock … dev.py mkdocs build` (stretto) exit 0; `dev.py mkdocs check-links` exit 0 (log `ondata3/E-A-mkdocs-*.log`).
+  > **⚠️ Fuori pista**: altre tre pagine dicevano che il link si spende all'apertura e sono state corrette:
+  > `admin/users.en.md:103` (ha traduzioni: debito piccolo), `developer/architecture/security.md:2206` («spends its
+  > token at once») e `developer/architecture/database/users_access.md:125`. Debito di traduzione senza timbro:
+  > `user/getting-started`, `admin/email`, `admin/users` (it/fr/es). La pagina del wiki `domains/email.md` («Silent hold
+  > and early spend») aggiornata: E-25 chiusa, E-26 con la scelta (b). Grafo non disponibile nel worktree (ignorato).
+- ✅ **Passo 6 — Checkpoint (A)** (2026-10-22): consegnato al coordinatore, poi FROZEN. E2E facoltativo proposto, non
+  eseguito (nessuno slot): aprire `/verify-email#token=<finto>`, verificare che nessuna `POST
+  /email/verification/confirm` parta prima del clic, poi il clic → `unknown`.
+
+#### E-26.2 — Il contratto dell'email trattenuta: analisi (2026-10-22, ondata 3, notte; base `bb11f1479`)
+> **La richiesta** (coordinatore): E-25 verificato e committato in `bb11f1479`; E-25-q1 va allo sviluppatore («lascia
+> com'è (a)»). Ora solo l'analisi del contratto di E-26 (b), niente codice, scritta in
+> `salvataggi-worktrees-20261021/ondata3/E-26-contratto.md`; `auth.py` è libero, A rivede dopo A-62.
+
+- ✅ **Analisi** (22/10): rilette `auth.py:292-332`, `schemas/auth.py:114-119`, `verification.py:57-64, 196-316`,
+  `RegisterCard.svelte:105`, `LoginCard.svelte:57-60`, `RegisterCard.verification.test.ts`, EVH-001…016, le righe di
+  doc. La proposta: `verification_email: Optional[Literal["sending", "held"]] = None` («sending» perché l'email parte
+  dopo la risposta; `null` senza verifica; il frontend confronta solo `=== 'held'`); il `message` inglese del caso
+  trattenuto non dice più «check your email»; il limite per casella resta fuori dalla risposta, che altrimenti
+  direbbe a chi si registra con l'indirizzo di un altro se quella casella ha appena ricevuto email. Rossi previsti:
+  EVH-001/002/003/005/013/014/015/016 sul campo, EVH-017 nuovo (il limite per casella: 201 «sending», nessuna email),
+  RCV-04/05, le chiavi in `emailText.test.ts`. Tre domande per lo sviluppatore (q1 il testo del caso trattenuto, q2 il
+  colore del riquadro, q3 `loginRequired`, che all'account trattenuto dice «the email we sent you»).
+  > **⚠️ Fuori pista**: `developer/backend/email.md:749` cita `client_address(http_request)`, il codice usa
+  > `rate_limit_address(http_request)` da H-36: da correggere con la doc di E-26.
+
+#### E-26.3 — L'email trattenuta: esecuzione (2026-10-22, ondata 3, notte; base `bb11f1479`)
+> **Il via** (coordinatore): la revisione di A approva il contratto (nullabile `null | "sending" | "held"`, nomi e
+> valori, il limite per casella fuori dalla risposta), con sette correzioni: (1) la descrizione del campo comincia con
+> «lo stato dell'invio, non un indirizzo», e quella di `verification_required` non dice più «a link is on its way»;
+> (2) il testo trattenuto sostituisce solo il pezzo centrale del `message`, `" (Admin)"` resta (un caso EVH di un
+> invitato amministratore trattenuto); (3) una variabile locale `verification_email = None`, impostata solo dentro
+> `if verification_required:`; (4) ogni EVH che legge la risposta controlla i due campi insieme; (5) la docstring
+> della route; (6) `RegisterCard.svelte:105` con le chiavi scritte intere, RCV-05 fissato; (7) q3 in inglese «open the
+> link **in** the activation email». Testi: q1 = (A), q2 = (a) verde, q3 = (a) corretta, **da confermare dallo
+> sviluppatore**, solo nei cataloghi.
+
+- ✅ **Passo 1 — I rossi** (`test-author`, 22/10): `test_email_verification_hooks_api.py` 26 → 28 casi, coppia
+  `(verification_required, verification_email)` ovunque si legge la risposta (helper `_verification()`), i tre
+  `message` esatti, EVH-017 nuovo (la casella piena: 201 «sending», nessuna email, il token senza indirizzo, il log
+  `Verification email: not sent` con `EMAIL_RATE_LIMITED`), EVH-018 nuovo (un invitato amministratore trattenuto:
+  «held» e il testo + `" (Admin)"`); `RegisterCard.verification.test.ts` 4 → 7 (RCV-04 «held», RCV-05 server senza il
+  campo); `emailText.test.ts` ETX-08 con `registered` e `registeredHeld`. Corse: pytest **22 rossi, 6 verdi**
+  (`api email-verification-hooks`, corsia 6182 ripopolata prima), Vitest **2 rossi, 276 verdi**; ogni rosso per il
+  campo o la chiave mancante (`(True, '<absent>') == (True, 'sending')`). Log `ondata3/E-B-*-red.log`.
+- ✅ **Passo 2 — La cura** (22/10):
+  - `schemas/auth.py`: il campo `verification_email: Optional[Literal["sending", "held"]] = None`, la descrizione
+    (1); `verification_required` ora rimanda al campo;
+  - `api/v1/auth.py`: la variabile locale (3), «sending» nel ramo accodato e «held» nell'altro, il pezzo centrale del
+    `message` da una mappa a tre voci, `" (Admin)"` intatto (2), la docstring (5);
+  - `RegisterCard.svelte:105`: `!verification_required` → `auth.accountCreated`; `=== 'held'` →
+    `email.verification.registeredHeld`; altrimenti `email.verification.registered` (6);
+  - cataloghi con `dev.py i18n update/add`: `registered` (testo (a)), `registeredHeld` (variante A) e
+    `loginRequired` (q3, «open the link in the activation email, or ask for a new one below»), ×4;
+  - `api sync` exit 0: in `generated.ts` (ignorato) `verification_email: z.union([z.enum(['sending', 'held']),
+    z.null()]).optional()`; nell'OpenAPI `anyOf [enum sending/held, null]`. Nessun file tracciato generato.
+- ✅ **Passo 3 — Le prove** (22/10): `api email-verification-hooks` **28/28**; `api auth` 95/95 e `api registration`
+  102/102 (leggono la risposta, nessun cambio); Vitest `RegisterCard.verification` + `emailText` +
+  `routes/invite/page.test.ts` **299/299**, `LoginCard.verification` + `RegisterCard` + `VerificationNotice` **114/114**;
+  ruff e black puliti sui tre file Python; prettier pulito; `i18n check` exit 0 (5126 chiavi); `gate-i18n-usage`
+  195 e `gate-i18n-catalog` 176 passed; `flock … front check` **0 errori, 0 avvisi**; `git diff --check` pulito;
+  porta 6182 libera dopo ogni corsa.
+  > **⚠️ Fuori pista**: la prima corsa verde di `api email-verification-hooks` è partita con il carico a 20 (sopra la
+  > soglia di 8 dei controlli leggeri): è un'azione in processo di 7 s, verde; le corse seguenti col carico sotto 8.
+- ✅ **Passo 4 — La doc** (`docs-writer`, 22/10), unita a quella di E-25 senza toccarla:
+  `user/getting-started.en.md` (il passo 1 col testo (a), il 📭 «below», un punto 🚦 per il caso trattenuto);
+  `admin/email.en.md` («Right after the registration» coi due testi e quando compare il secondo, «The email» parte
+  dopo la risposta, due righe della tabella dei limiti, un paragrafo «What stays invisible», due righe della tabella
+  dei log); `developer/backend/email.md` (il punto «Registration» col campo, i tre `message`, la deriva
+  `client_address` → `rate_limit_address` corretta; i componenti; EVH-001…018 e RCV-01…05);
+  `developer/architecture/access_control.md:270`; `developer/frontend/components/features/auth.md:186`.
+  `flock … mkdocs build` stretto exit 0, `check-links` exit 0. Debito di traduzione senza timbro: `user/getting-started`
+  e `admin/email` (it/fr/es).
+- ✅ **Passo 5 — Checkpoint (E-26)** (22/10): consegnato al coordinatore, poi FROZEN.

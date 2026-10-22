@@ -74,7 +74,7 @@ from scripts.i18n_catalog import load_catalog
 
 PLUGIN_CODE = "broker_degiro"
 PLUGIN_MODULE = "backend.app.services.brim_providers.broker_degiro.plugin"
-PLUGIN_VERSION = "2.0.0"
+PLUGIN_VERSION = "2.1.0"
 SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
 NL_SAMPLE = SAMPLE_DIR / "degiro-export.csv"
 EN_SAMPLE = SAMPLE_DIR / "degiro-account-en.csv"
@@ -804,8 +804,10 @@ def _reason_problem(plugin: BRIMProvider, path: Path, accepted: bool, label: str
 class TestIdentity:
     """G — the plugin's identity: the version is bumped (§1.7, the files already parsed show a re-parse); the rest stays."""
 
-    def test_the_version_is_2_0_0(self):
-        """The parse changes for the same input (amounts, currencies, types, pairs, notices): ``plugin_version`` 2.0.0, so the files already parsed offer a new parse."""
+    def test_the_version_is_2_1_0(self):
+        """The parse changes for the same input (amounts, currencies, types, pairs, notices): ``plugin_version`` 2.1.0, so the files already parsed offer a new parse.
+
+        2.1.0 (W-B86): the six notices of rows left out carry ``context.report_issue``."""
         assert _plugin().plugin_version == PLUGIN_VERSION, f"plugin_version is {_plugin().plugin_version!r}: the rewrite bumps it to {PLUGIN_VERSION}"
 
     def test_code_class_and_priority_are_unchanged(self):
@@ -1840,3 +1842,59 @@ class TestOrdersList:
         context = notice.context or {}
         assert (notice.severity, context.get("language"), isinstance(context.get("count"), int)) == ("warning", language, True), f"severity {notice.severity!r}, context {context}"
         assert notice.message == _messages()[language][ORDERS_LIST].format(n=context["count"])
+
+
+# =============================================================================
+# H. ROWS LEFT OUT — «open an issue on GitHub» (W-B86, skill rule 10)
+# =============================================================================
+
+# One small statement per code: the rows that make the plugin leave a row out, each with the line it lands on (data row ``i`` is line ``i + 2``).
+REPORTED_CASES = {
+    UNKNOWN_ROWS: [Row("Zorglub bonification", amount="5,00", time="09:30")],
+    UNEXPECTED_SIGN: [Row("Dividend", amount="-0,44", currency="USD", isin=APPLE, product=APPLE_NAME, time="09:01")],
+    FLATEX_WITHDRAWAL: [Row("flatex Withdrawal", amount="-100,00", time="13:30")],
+    UNPAIRED_FX: [Row("FX Debit", amount="-1,36", currency="USD", fx="1,0613", day="17-12-2022", time="08:37")],
+    NOT_IMPORTED: [Row("AANDELENSPLIT: Koop 20 @ 2,5 EUR", amount="-50,00", isin=KBC, product=KBC_NAME, order_id=_order(40), time="08:00")],
+    QUANTITY_UNREADABLE: [Row("Koop 0 @ 5 EUR", amount="-5,00", isin=KBC, product=KBC_NAME, order_id=_order(41), time="08:01")],
+}
+
+
+class TestRowsLeftOutAreReported:
+    """H — every notice of a row left out asks the user to report it: ``context.report_issue`` is True (the wizard then shows «open an issue on GitHub»).
+
+    The orders list is not one of them: it is a whole file of another kind, not a row the plugin failed to read. The ``language`` and ``count`` keys stay.
+    """
+
+    def test_the_cases_cover_every_code_of_a_row_left_out(self):
+        """Guard (green today): the table below names the six codes the plugin builds per row, so a seventh must be classified here."""
+        assert set(REPORTED_CASES) == set(NOTICE_CODES) - {ORDERS_LIST}
+
+    @pytest.mark.parametrize("code", sorted(REPORTED_CASES))
+    def test_the_notice_asks_for_a_report(self, code: str, tmp_path: Path):
+        """The one row of each case leaves no transaction and is listed under its code with ``report_issue`` True, its line in the evidence, ``language`` and ``count`` unchanged."""
+        rows = [Row("iDEAL Deposit", amount="20,00", time="09:31"), *REPORTED_CASES[code]]
+        out = _parse(_write(tmp_path, rows))
+
+        assert {tx.type.value for tx in out.transactions} == {"DEPOSIT"}, f"{code}: the row must leave no transaction, got {[tx.type.value for tx in out.transactions]}"
+        notice = _the_notice(out, code)
+        assert _row_numbers(notice) == [3], f"{code}: the evidence names the lines {_row_numbers(notice)}, the row is on line 3"
+        assert (notice.context or {}).get("report_issue") is True, f"{code}: context {notice.context}, report_issue must be True"
+        assert _context(notice) == {"language": "en", "count": 1}
+
+    def test_the_orders_list_does_not_ask_for_a_report(self, tmp_path: Path):
+        """Guard (green today and after): ``degiro_orders_list`` has no ``report_issue``."""
+        path = tmp_path / "Transactions.csv"
+        path.write_bytes(_orders_bytes(ORDERS_EN, ORDERS_EN_ROWS, "\r\n"))
+        out = _parse(path)
+
+        assert [notice.code for notice in out.warnings] == [ORDERS_LIST], f"presence barrier: the orders list gives {[notice.code for notice in out.warnings]}"
+        context = out.warnings[0].context or {}
+        assert not context.get("report_issue"), f"degiro_orders_list context {context}: the orders list is not a row to report"
+
+    @pytest.mark.parametrize("spec", SAMPLE_SPECS)
+    def test_the_samples_notices_all_ask_for_a_report(self, spec: SampleSpec):
+        """Both samples: every notice they give (their rows are known but not imported) carries ``report_issue`` True."""
+        out = _parse(spec.path)
+        assert out.warnings, f"presence barrier: {spec.path.name} gives no notice"
+
+        assert [notice.code for notice in out.warnings if (notice.context or {}).get("report_issue") is not True] == [], f"{spec.path.name}: notices without report_issue"

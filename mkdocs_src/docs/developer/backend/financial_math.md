@@ -36,7 +36,8 @@ The technical indicators (`services/signal_plugins/`, `services/signals/runtime.
 [risk engine](risk/architecture.md) (`services/risk/`) and the PAC allocator
 (`services/pac_allocator/`) stay where they are, but take the common math — returns,
 annualization, conversions, average cost, valuation — from the layer. FX conversion itself stays
-in the FX service: `convert_bulk()` in `services/fx/conversion.py` is the primitive the calculations call.
+in the FX service: `convert_bulk()` in `services/fx/conversion.py` is the primitive the calculations call,
+and `unit_rate_steps()`, in the same module, gives the rates of long ranges as steps (P3).
 
 ### 🪞 Declared Float Twins {: #float-twins }
 
@@ -93,7 +94,7 @@ backend/app/services/financial_math/
 └── lots/                    lots analysis math, called by lots_analysis_service.py
     ├── __init__.py          docstring only
     ├── prices.py            from the asset's AssetPriceSeries: a lot's reference price at its opening, the last day valued at cost
-    ├── conversions.py       FxRateResolver, a closure's legs at their own dates, and the conversions each view needs
+    ├── conversions.py       FxRateResolver (its rates read as steps), a closure's legs at their own dates, and the conversions each view needs
     ├── economic_events.py   income and FEE/TAX as engine inputs, their outputs, what is withheld
     ├── histories.py         value, return, price, market price and performance histories
     ├── change_days.py       the days the daily series can change on, and their expansion to every day of the window
@@ -563,8 +564,9 @@ flowchart LR
    report what cannot be computed instead of returning a number (see
    [Layer Rules](#layer-rules)).
 4. **Test it.** Write its unit tests, pure where possible: no database, the session `None`, and
-   `convert_bulk` replaced on the module that reads it. Adapted from `TestFxRateResolverLoad`
-   in `backend/test_scripts/test_services/test_lots_analysis_pure.py`:
+   the FX function replaced on the module that reads it: `convert_bulk`, or `unit_rate_steps` for
+   a module that reads its rates as steps, as the lots resolver does. Adapted from
+   `TestFxRateResolverLoad` in `backend/test_scripts/test_services/test_lots_analysis_pure.py`:
 
     ```python
     from datetime import date
@@ -576,22 +578,32 @@ flowchart LR
     from backend.app.services.financial_math.lots.conversions import FxRateResolver
 
 
+    class NoSteps:
+        """A unit-rate reader with no step: the pair has no published rate."""
+
+        days = ()
+        values = ()
+
+        def at(self, day):
+            return None
+
+
     @pytest.mark.asyncio
     async def test_a_day_with_no_published_rate_is_left_unresolved(monkeypatch):
-        async def fake_convert_bulk(_session, conversions, raise_on_error=False):
-            return [None] * len(conversions), []
+        async def fake_unit_rate_steps(_session, requests):
+            return {pair: NoSteps() for pair in requests}
 
         # Replaced where conversions.py reads it, not in backend.app.services.fx.conversion
-        monkeypatch.setattr(conversions_module, "convert_bulk", fake_convert_bulk)
+        monkeypatch.setattr(conversions_module, "unit_rate_steps", fake_unit_rate_steps)
         resolver = FxRateResolver("EUR")
         resolver.need("USD", date(2024, 1, 10))
         await resolver.load(None)
         assert resolver.convert(Decimal("100"), "USD", date(2024, 1, 10)) is None
     ```
 
-    The modules that read `convert_bulk` are `average_cost.py`, `native_cash.py`,
-    `yield_on_cost.py` and `lots/conversions.py`; `native_cash.py` and `portfolio/engine.py` also read
-    `unit_rate_steps` (P3). A pure test of a layer
+    The modules that read `convert_bulk` are `average_cost.py`, `native_cash.py` and
+    `yield_on_cost.py`; the modules that read `unit_rate_steps` (P3, and L1b for the lots) are
+    `native_cash.py`, `portfolio/engine.py` and `lots/conversions.py`. A pure test of a layer
     module can live in `backend/test_scripts/test_services/test_financial_math/`, which
     `services financial-math` runs as a whole, as a pure unit.
 5. **Update the maps.** The module map in the docstring of `financial_math/__init__.py` (and of

@@ -76,7 +76,8 @@
 {:else if cell.type === 'bars'}
     <span class="flex w-full min-w-24 flex-col gap-1" aria-hidden="true">
         <span class={TRACK}><span class="block h-full rounded-full bg-lf-secondary" style="width: {weightWidth(cell.target, cell.scale)}"></span></span>
-        <span class={TRACK}><span class="block h-full rounded-full bg-libre-green" style="width: {weightWidth(cell.final, cell.scale)}"></span></span>
+        <!-- colour: closest role, to review: the «after the plan» bar fill was the brand green as a data colour; bg-lf-checked, alt bg-lf-action (as the AssetTable legend) -->
+        <span class={TRACK}><span class="block h-full rounded-full bg-lf-checked" style="width: {weightWidth(cell.final, cell.scale)}"></span></span>
     </span>
 {:else if cell.type === 'money'}
     <span class="tabular-nums" data-testid={cell.testid}>{formatPlannerMoneyPlain(cell.amount, cell.currency, {digits: cell.digits, signed: cell.signed})}</span>

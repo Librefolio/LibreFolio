@@ -236,14 +236,22 @@ mandatory for every new plugin:
     - **Unknown or unreadable** — a type, status or description the plugin does not
       recognise; a date, amount or required field it cannot read: leave it out, and say so
       with one `severity="warning"` notice per reason (a `code`, `context.count`, the rows as
-      evidence) that carries `context.report_issue = True`. The wizard then shows the link
+      evidence) that carries `context.report_issue = True`. The helper `RowSkips` builds that
+      notice for you ([Rows left out](#row-skips)): a plugin collects the rows and returns two
+      shared notices, instead of writing a string warning for each row. The wizard then shows the link
       *open an issue on GitHub* under the warning, on every instance, self-hosted or hosted
       ([`context` keys](#context-keys-the-frontend-understands)): the users become the
       canaries of a broker whose export changes. Example: Danske Bank's `excluded_status`,
       the rows whose `Tila` is neither executed nor booked.
     - **Never silently** leave out a row that may carry an economic effect (a split, a fee, a
       tax, a currency conversion) unless the plugin knows that is safe: a row it cannot
-      import is unknown.
+      import is unknown. A row the plugin reads but only in part (Trade Republic's fee and tax
+      columns, not imported) is unknown too: list it.
+    - **A stable plugin follows the rule**: it uses `RowSkips`, or its own codes with
+      `context.report_issue`. The plugins the lot W-B86 did not reach yet (the *pending* set of its
+      contract test: most of the beta plugins, Intesa, Fineco, the Generic CSV) may still write one
+      plain string per skipped row (a `legacy` warning, no link), and are migrated later (decision of
+      19/10/2026; the ones that already use the helper are in [Rows left out](#row-skips)).
     - The provisional rows of *The operation date, and only settled rows* are neither: they
       keep their info note.
     - `report_issue` also serves a plugin in beta that imports a row but doubts its own
@@ -255,7 +263,10 @@ mandatory for every new plugin:
 Every figure a plugin emits must fit its `transactions` column (C-97; the types are in
 [Decimal Columns](../database/index.md#decimal-columns)): a `quantity` keeps 10 decimal
 places, a cash amount 6, a per-unit `cost_basis_override` 12 — the scale of the prices —
-and any of them at most 15 significant digits.
+and any of them at most 15 significant digits. A `cost_basis_override` is also never
+negative (0 for a gift or the new shares of a split): below 0, the batch refuses its row
+when the user saves it (`costBasisNegative`, J-60, see
+[Cost basis sign](../../backend/transactions/service.md#cost-basis-sign)).
 
 - **Read from the file: never rounded.** A figure the report states goes in as written,
   under the verbatim rule above. Over a limit, neither the plugin nor the import rounds
@@ -681,7 +692,7 @@ transaction breaks these rules, so flip source signs as needed:
   amount. Reference: `broker_bitvavo/plugin.py`, `broker_cointracking/plugin.py`, `broker_delta/plugin.py`,
   `broker_cryptocom/plugin.py` (note `cryptocom` emits `INTEREST` for fiat-valued rewards but a
   cashless `ADJUSTMENT` for coin-only rewards).
-- Prefer **skipping a row with a warning** over emitting a schema-invalid transaction.
+- Prefer **skipping a row with a notice** (`RowSkips`, [Rows left out](#row-skips)) over emitting a schema-invalid transaction.
 
 !!! tip "Warning language follows the input format"
 
@@ -691,6 +702,8 @@ transaction breaks these rules, so flip source signs as needed:
     (Italian), Danske Bank (Finnish) — emit the warnings in that language so they match the report the user is
     reading. Fineco is still an exception: it reads only the Italian export, but writes its plain warnings in English;
     only its two notices, `fineco_not_yet_settled` and `fineco_incomplete_rows`, are in Italian.
+    The two shared notices of `RowSkips` are the exception to the rule: the wizard words them in
+    the user's language, and only the *Reason* column of their evidence is the plugin's text.
     When a broker ships differently localized export layouts (a UK vs. IT Fineco
     file, a non-Italian Crédit Agricole entity), detect the format and emit each variant's
     warnings in its own language. Code, comments and docstrings stay in English.
@@ -763,7 +776,7 @@ transaction breaks these rules, so flip source signs as needed:
     cash row, a `TRANSFER`'s giving leg — `_create_transaction()` refuses the row, a
     `costBasisNotAllowed` validation issue instead of a transaction (rule 12b, W-B72, or
     rule 12's `costBasisModeIncompatible` when the row names a `cost_basis_mode`; an
-    `ADJUSTMENT` taking units out may still carry its handover cost: see
+    `ADJUSTMENT` taking units out is refused the same way, since it has no value: see
     [Per-type rules](../../backend/transactions/service.md#per-type-rules)).
 
 !!! tip "Matured-bond redemption: close at par, surplus → INTEREST"
@@ -842,7 +855,7 @@ gives them the same `link_uuid`; the batch turns the shared id into reciprocal
 `related_transaction_id`s and never stores the id itself (see
 [Transaction Service → Linked Pairs](../../backend/transactions/service.md#linked-pairs)).
 `broker_degiro/plugin.py` is the first plugin to emit pairs (`_pair_fx_legs`, `_fx_pair`): Swissquote
-skips its conversion legs with a warning, and the Generic CSV refuses the paired types.
+lists its conversion legs in the shared notice `rows_not_recognized` (it does not import them yet), and the Generic CSV refuses the paired types.
 
 **What the batch accepts** — `resolve_create_links` in `batch_creates.py`, with
 `_validate_linked_pair` and `_validate_pair_description_tags` in `validation.py` (all in
@@ -907,7 +920,7 @@ is the single most important design decision in a plugin:
 |---------|---------------------------|----------------------|----------------|
 | Transactions | `transactions` | "I read this row" | Review table |
 | Validation issues | `validation_issues` | "I read this row and the schema refused it" | Parse-detail modal, red |
-| Notices | `warnings` | "Something about the **file** you should know" | Parse-detail modal + confirmation modal |
+| Notices | `warnings` | "Something about the **file** you should know", the rows it left out included | Parse-detail modal + confirmation modal |
 | Field todos | `field_todos` | "I booked this row but a **specific field** is a guess" | **Correction step**, before the duplicate check |
 
 !!! danger "A notice is not a todo"
@@ -940,7 +953,8 @@ warnings.append(
   still surfaced in the confirmation modal.
 - `severity="warning"` — *the plugin had to fall back or guess*: look at it. Also a row left
   out because the plugin does not know it, with `context.report_issue` (the rule *Known rows
-  quietly, unknown rows loudly*, under [Import philosophy](#import-philosophy-currency-rules)).
+  quietly, unknown rows loudly*, under [Import philosophy](#import-philosophy-currency-rules); the
+  helper `RowSkips` writes these notices, see [Rows left out](#row-skips)).
   A row the plugin knows it may leave out gets no notice at all.
 - A bare `str` still works (coerced to `severity="warning"`, `code="legacy"`), but new code
   should never use it: the `code` is what lets the frontend and the tests address the notice.
@@ -978,6 +992,56 @@ BRIMEvidence(
   `comment` of a notice's table can be translated by code too — both are explained in the tip
   *Warning language follows the input format*, under
   [Sign conventions](#sign-conventions-enforced-by-the-test-suite).
+
+### 🚮 Rows left out: `RowSkips` {: #row-skips }
+
+The helper of the rule *Known rows quietly, unknown rows loudly* (lot W-B86), in the section *ROWS LEFT OUT* of
+`backend/app/services/brim_providers/_brim_io.py` (the plugins import that module as `io`). A plugin collects the rows
+it cannot import as they come, and returns the notices once at the end:
+
+```python
+from backend.app.services.brim_providers import _brim_io as io
+
+skips = io.RowSkips(header_cells)          # or io.RowSkips() and skips.set_headers(reader.fieldnames) later
+
+for line, row in enumerate(rows, start=2):
+    if not row_date:
+        skips.unreadable(line, row, "invalid date")                    # cannot read it
+        continue
+    if tx_type is None:
+        skips.unknown(line, row, f"unknown type: '{raw_type}'")        # does not recognise it, or does not import it yet
+        continue
+    if raw_type in KNOWN_NO_EFFECT:                                     # known and safe: nothing is collected
+        quiet += 1
+        continue
+    ...
+
+return BRIMParseOutput(transactions=transactions, warnings=[*warnings, *skips.notices()], ...)
+```
+
+| Method | The row is | Notice `code` |
+|---|---|---|
+| `unknown(line, row, reason)` | a type, status or description the plugin does not recognise, or recognises but does not import yet (a split, a currency conversion, a fee column) | `rows_not_recognized` |
+| `unreadable(line, row, reason)` | one whose date, amount, currency or required field cannot be read | `rows_unreadable` |
+
+- `row` is a list of cells or a `csv.DictReader` row (read in the order of the headers); `line` is its
+  **1-based line in the file**; `reason` is the short text of the last column.
+- `notices()` returns at most two notices, `rows_not_recognized` first: each is a `warning`, with
+  `context {"count": n, "report_issue": True}` and one `BRIMEvidence` (the file's header, a last column
+  *Reason*, the rows, their line numbers). A row shorter than the header is padded; a longer one gets
+  numbered headers.
+- **The wizard words them once for every plugin**: `importWizard.brimNotice.<code>` and
+  `importWizard.brimEvidence.<code>`, in the four catalogues (`frontend/src/lib/i18n/importWizard/`), with
+  `{count}` as an ICU variable. The message in `RowSkips` is the English fallback.
+- A known row that is safe to drop is **not** collected: count it and write one log line at the end
+  (`logger.info(…, count=…)`), as Revolut and Trading 212 do for `Transfer`, and Scalable for a cancelled order.
+- A plugin that already has a notice of its own for a case keeps it, with `context.report_issue = True`
+  (DEGIRO's six `degiro_*` notices, Crédit Agricole's `ca_securities_unknown_causale`, `ca_unknown_causale` and
+  `ca_account_invalid_amount`, Scalable's `scalable_unreadable_rows` and `scalable_not_imported`).
+- Contract test: `./dev.py test external brim-row-skips`
+  (`backend/test_scripts/test_external/test_brim_row_skips.py`). Every registered plugin must be in exactly one
+  of two sets: the plugins that follow the rule (and obey it), or the pending ones, which W-B86 does not
+  cover yet. A new plugin lands in one of them, or the test fails.
 
 ### 🧩 `BRIMFieldTodo` — one field, one question, one screen
 
@@ -1035,7 +1099,7 @@ A `BRIMNotice` has one key of its own, read by the notice list (`BrimNoticeList.
 
 | Key | Type | Effect in the wizard |
 |-----|------|----------------------|
-| `report_issue` | `bool` | Only the boolean `True` counts. The wizard then shows, under the notice's message, the link *open an issue on GitHub* (`importWizard.fixStep.reportIssueLink`, the same words as the correction step's link) to `https://github.com/Librefolio/LibreFolio/issues/new`, opened in a new tab (`data-testid="brim-notice-report-issue"`), on every instance, self-hosted or hosted. Two uses. A row the plugin does not know, left out: a warning, under the rule *Known rows quietly, unknown rows loudly* ([Import philosophy](#import-philosophy-currency-rules)) — Danske Bank's `excluded_status` asks the user to open an issue if the rows are real movements. A plugin in beta that suspects its own reading of rows it imported: an info note — Fineco's `fineco_incomplete_rows` asks the user to check the rows and, if the file is right, to open an issue. |
+| `report_issue` | `bool` | Only the boolean `True` counts. The wizard then shows, under the notice's message, the link *open an issue on GitHub* (`importWizard.fixStep.reportIssueLink`, the same words as the correction step's link) to `https://github.com/Librefolio/LibreFolio/issues/new`, opened in a new tab (`data-testid="brim-notice-report-issue"`), on every instance, self-hosted or hosted. Two uses. A row the plugin does not know, left out: a warning, under the rule *Known rows quietly, unknown rows loudly* ([Import philosophy](#import-philosophy-currency-rules)) — the two shared notices of `RowSkips` ([Rows left out](#row-skips)) always carry it, and so do Danske Bank's `excluded_status`, which asks the user to open an issue if the rows are real movements, and the notices of DEGIRO, Crédit Agricole and Scalable listed in [BRIM Architecture](../../backend/brim/architecture.md#brim-row-skips). A plugin in beta that suspects its own reading of rows it imported: an info note — Fineco's `fineco_incomplete_rows` asks the user to check the rows and, if the file is right, to open an issue. |
 
 Everything else in `context` is free: it is passed through untouched and is useful for tests
 and for i18n interpolation.

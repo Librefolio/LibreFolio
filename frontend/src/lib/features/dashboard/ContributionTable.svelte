@@ -254,7 +254,7 @@
                     const iconSrc = assetIconSrc(row);
                     const nameHtml = escapeHtml(row.assetName);
                     const iconHtml = iconSrc
-                        ? `<img src="${escapeHtml(iconSrc)}" alt="" class="w-5 h-5 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />`
+                        ? `<img src="${escapeHtml(iconSrc)}" alt="" class="w-5 h-5 rounded-full object-cover shrink-0" data-hide-on-error="display" />`
                         : `<div class="w-5 h-5 rounded-full bg-lf-selected flex items-center justify-center shrink-0 text-[10px] text-lf-link font-bold">${escapeHtml((row.assetName ?? '?')[0]?.toUpperCase() ?? '?')}</div>`;
                     return {
                         type: 'html',

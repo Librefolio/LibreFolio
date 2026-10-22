@@ -42,11 +42,13 @@
  * and that answer is checked before the notice is awaited. It is pressed on the control's round trip too, so that the
  * catch-up is the only difference between the two returns — and the control proves as well that a user's Refresh alone
  * (`{kind: 'refresh'}`) leaves the price caches alone. The range ends today: it is the one a catch-up changes.
- *   (g) Asset detail, the mock's asset with a provider. The control first: back without a catch-up, the page's
- *       `POST /assets/prices/query` item for the asset carries `include_price: false` — the prices from the cache, the
- *       events only — although the live poll on the way (`POST /assets/prices/current`, a portfolio mutation for the
- *       bus) and the Dashboard's Refresh ran. Then a catch-up that updated something ends on the Dashboard, and back on
- *       the asset the item carries `include_price: true`.
+ *   (g) Asset detail, the mock's asset with a provider. The control first: back without a catch-up, the page asks
+ *       nothing — no `POST /assets/prices/query` about the asset at all, events included (N64: its prices, events and
+ *       signals come from the client caches) — although the live poll on the way (`POST /assets/prices/current`, a
+ *       portfolio mutation for the bus) and the Dashboard's Refresh ran. The absence is read once the page's load has
+ *       ended (root and Refresh button idle, chart drawn): a cache hit applies in the tick the load runs. Then a
+ *       catch-up that updated something ends on the Dashboard, and back on the asset the page asks the prices again:
+ *       the item carries `include_price: true`.
  *   (h) FX detail, a configured pair, without backend signals (with them the page asks its whole range at every load,
  *       cached or not; the first load's request shows it has none). The control: back without a catch-up, no
  *       `POST /fx/currencies/convert` for the pair at all once the page is settled. After the catch-up, back on the pair,
@@ -123,7 +125,8 @@
  * the reload, `loadAll()` setting `reportLoading` — with its premises, its button pin and its control green before it;
  * (f) the same, its root raised by `contributionRefreshing` too (`loadContribution()`, on the stale cached contribution).
  * Before the code of Z-14: (g) and (h) red at the return after the catch-up — the page takes the range it had loaded from
- * its cache again (`include_price: false`; no convert at all) — with their premises and controls green.
+ * its caches again (in (g) an item with `include_price: false`, or since N64 no prices query at all; in (h) no convert at
+ * all) — with their premises and controls green.
  */
 
 import type {APIResponse} from '@playwright/test';
@@ -1174,18 +1177,28 @@ test.describe('A price page asks its prices again after a catch-up (Z-14)', () =
         expect(pricesOf(first.entry, assetId), `premise: the first answer carried no price of asset ${assetId} from ${range.start} to ${range.end}, so nothing was cached — check populate_mock_data.populate_price_history`).toBeGreaterThan(0);
         await expect.poll(() => live.served, {message: 'premise: the live poll of the asset page never answered — the range ends today and the asset has a provider, so it asks when the page opens (Z-8, Z-3)', timeout: PAGE_TIMEOUT}).toBeGreaterThan(0);
 
-        await test.step('control: through the Dashboard and its Refresh, back without a catch-up, the prices come from the cache', async () => {
+        await test.step('control: through the Dashboard and its Refresh, back without a catch-up, the caches answer and the page asks nothing', async () => {
             await leaveForDashboard(page);
             await refreshDashboard(page, 'the control: the Refresh on the Dashboard asked no main report, or its answer never came back — the control would not walk the path the catch-up walks');
             const mark = await backInApp(page, root);
-            const control = await assetQueryLanded(page, assetId, mark, `back on asset ${assetId}, the page never asked for its events, or the answer never came back`);
+            // The barrier comes first, so that the absence below is read after the load has decided. The root's `data-busy` is
+            // `loading` (true from the page's mount, a new instance, until its chart load applies — on a cache hit in the tick
+            // the load runs, with no await in it) and the Refresh button's the page's first load under its busy token, which
+            // lets go only once `reloadPage()` has returned — the chart load's request, if it asks one, sent and answered
+            // (`loading` alone drops when a request leaves). And the chart is drawn from the series. So a request this return
+            // asks has been sent and answered by now, and "none is in the record" is not "none yet".
             await waitForSettled(root, PAGE_TIMEOUT);
+            await expect(page.getByTestId('asset-detail-refresh-btn'), 'the load of the asset page never let go of its Refresh button').toHaveAttribute('data-busy', 'false', {timeout: PAGE_TIMEOUT});
+            await expect(root.getByTestId('asset-detail-chart'), `back on asset ${assetId} the chart shows no series: the load ended without the prices of the range on screen`).toHaveAttribute('data-series-state', 'ready', {timeout: PAGE_TIMEOUT});
             expect(await documentOrigin(page), 'the return was a document load, which empties every cache: nothing can be proved through it').toBe(origin);
-            expect(control.item.date_range, 'premise: back on the asset the page asks the same range').toEqual(range);
+            const asked = (await pageRecord(page)).queries
+                .filter((query) => query.seq > mark && query.path === PRICES_QUERY_PATH)
+                .flatMap((query) => assetItems(query, assetId))
+                .map((item) => ({include_price: item.include_price, include_events: item.include_events, date_range: item.date_range}));
             expect(
-                control.item.include_price,
-                "premise: back on the asset without a catch-up the prices must come from the cache (include_price false) — the cache did not survive the in-app navigation, or the portfolio mutation of the live poll or the Dashboard's Refresh ({kind: 'refresh'}) turned it stale, which Z-14 rules out; either way what follows proves nothing",
-            ).toBe(false);
+                asked,
+                `premise: back on asset ${assetId} without a catch-up the page asked its prices query again (the items listed, with their include_price) although nothing changed — its caches must answer, prices, events and signals, and nothing leave (N64): the cache did not survive the in-app navigation, or the portfolio mutation of the live poll or the Dashboard's Refresh ({kind: 'refresh'}) turned it stale, which Z-14 and N64 rule out; either way what follows proves nothing`,
+            ).toEqual([]);
         });
 
         // The live poll's mutations left the Dashboard's report stale, so its opening asks it again and that answer could

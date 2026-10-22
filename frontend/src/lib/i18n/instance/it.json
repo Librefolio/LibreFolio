@@ -34,7 +34,7 @@
         "offManaged": "La protezione dai frame è spenta nel profilo managed: qualunque sito può mostrare LibreFolio in un frame. Accendi LIBREFOLIO_FRAME_PROTECTION, come fa per default il profilo managed."
       },
       "cspReportOnly": {
-        "on": "Le pagine dell'app hanno una Content-Security-Policy in sola segnalazione: il browser elenca nella console ciò che bloccherebbe, e non blocca nulla.",
+        "on": "Oltre alla politica sempre applicata, le pagine dell'app hanno una Content-Security-Policy più ampia in sola segnalazione: il browser elenca nella console ciò che bloccherebbe in più, e non lo blocca.",
         "offSelfHosted": "Nessuna Content-Security-Policy in sola segnalazione: il default di un'installazione tua.",
         "offManaged": "La Content-Security-Policy in sola segnalazione è spenta nel profilo managed: i browser non elencano nulla di ciò che bloccherebbe. Accendi LIBREFOLIO_CSP_REPORT_ONLY, come fa per default il profilo managed."
       },
@@ -50,6 +50,14 @@
         "off": "La modalità di test è spenta.",
         "testLane": "La modalità di test è accesa, in una corsia del runner dei test.",
         "outsideTestLane": "La modalità di test è accesa fuori dal runner dei test: sono disponibili i fornitori di dati fatti per i test, i dati stanno in {data_dir} e il file .env non viene letto. Togli LIBREFOLIO_TEST_MODE."
+      },
+      "hostingPanel": {
+        "off": "Nessun token né chiave pubblica è impostato per il risveglio programmato o per la rotta di stato del pannello del fornitore: quelle rotte sono spente.",
+        "ok": "Le credenziali del pannello del fornitore che sono impostate (token del risveglio programmato e della rotta di stato, chiavi pubbliche dei biglietti firmati) si possono usare.",
+        "unusable": "{variables}: questi token del pannello del fornitore non si possono usare (un file che non si legge, troppo corti o con caratteri che un'intestazione di richiesta non porta): le loro rotte rispondono 503 finché non si corregge.",
+        "ticketsUnusable": "{variables}: le impostazioni dei biglietti firmati del pannello del fornitore non si possono usare (una chiave pubblica malformata, una tolleranza dell'orologio fuori da 0–300 secondi, o chiavi senza indirizzo pubblico): ogni rotta del pannello risponde 503 finché non si corregge.",
+        "coexisting": "{variables}: un token del pannello del fornitore è ancora impostato accanto alle chiavi pubbliche del pannello. Toglilo quando il pannello firma le sue chiamate con i biglietti.",
+        "audiencePath": "LIBREFOLIO_PUBLIC_URL contiene il percorso {path}, ma un biglietto del pannello del fornitore nomina solo l'origine (schema, host e porta): un'altra istanza sulla stessa origine accetterebbe i biglietti di questa. Servi un'istanza per origine."
       }
     },
     "block": {

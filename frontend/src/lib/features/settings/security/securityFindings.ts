@@ -34,12 +34,17 @@ export interface BrowserSecurityState {
     registrationLocked: boolean;
     /** The host the browser reached the instance through, as `location.hostname` writes it. */
     hostname: string;
+    /** The sources of the scripts the Content-Security-Policy blocked in this tab (`cspNotice.ts`, H-55 v2). */
+    blockedScripts?: readonly string[];
 }
 
 export interface SecurityFindings {
     attention: SecurityFinding[];
     passed: SecurityFinding[];
 }
+
+/** The browser's finding of a script the Content-Security-Policy blocked in this tab (H-55 v2). */
+export const BLOCKED_SCRIPT_ID = 'platform.blockedScript';
 
 const SEVERITY_RANK: Record<FindingSeverity, number> = {error: 0, warning: 1, info: 2};
 
@@ -84,7 +89,10 @@ export function securityFindings(checks: readonly SecurityCheck[], browser: Brow
             source: 'browser',
         });
     }
-    // A stable sort: within a severity the server's order holds, and the browser's finding, pushed last, comes after
+    if (browser.blockedScripts && browser.blockedScripts.length > 0) {
+        attention.push({id: BLOCKED_SCRIPT_ID, severity: 'warning', messageKey: 'settings.securityTab.blockedScript', params: {sources: browser.blockedScripts.join(', ')}, source: 'browser'});
+    }
+    // A stable sort: within a severity the server's order holds, and the browser's findings, pushed last, come after
     attention.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
     return {attention, passed};
 }
@@ -92,4 +100,11 @@ export function securityFindings(checks: readonly SecurityCheck[], browser: Brow
 /** The badge: the findings that ask for the administrator, errors and warnings. */
 export function attentionCount(findings: Pick<SecurityFindings, 'attention'>): number {
     return findings.attention.filter((finding) => finding.severity === 'error' || finding.severity === 'warning').length;
+}
+
+/** The dot's state (N69-1): the worst of the findings the badge counts, an error before a warning; null with none. */
+export function attentionSeverity(findings: Pick<SecurityFindings, 'attention'>): 'error' | 'warning' | null {
+    if (findings.attention.some((finding) => finding.severity === 'error')) return 'error';
+    if (findings.attention.some((finding) => finding.severity === 'warning')) return 'warning';
+    return null;
 }

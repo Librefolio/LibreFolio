@@ -296,6 +296,7 @@ findings keep the order of this table.
 | Frame protection | ⚠️ `LIBREFOLIO_FRAME_PROTECTION` is off in the `managed` profile: any site can show LibreFolio in a frame | — |
 | Report-only policy | ℹ️ `LIBREFOLIO_CSP_REPORT_ONLY` is off in the `managed` profile: browsers list nothing it would block | — |
 | Log level | ℹ️ `DEBUG` or `TRACE` | — |
+| Hosting panel's wake-up and status tokens | ❌ `LIBREFOLIO_WAKE_TOKEN` or `LIBREFOLIO_PANEL_STATUS_TOKEN`, which the finding names, is too short (at least 32 random characters), holds characters a request header cannot carry as written (spaces, tabs or characters outside visible ASCII), or cannot be read from its file: the scheduled wake-up or the panel's status route answers `503` until it is fixed. Passed when neither token is set, both routes off, or when each one that is set can be used | — |
 | Test mode | ❌ `LIBREFOLIO_TEST_MODE` is on outside LibreFolio's own test runs: data providers that exist only for the tests are served, and the data are kept in the test data folder | — |
 | Hosting panel's backup token | ❌ `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` is too short (at least 32 random characters), holds characters a request header cannot carry as written (spaces, tabs or characters outside visible ASCII), or cannot be read from its file: the panel's backup routes answer `503` until it is fixed. Passed when no token is set, the panel's backup routes off, or when the token can be used | — |
 | Upload limit of a restore | ❌ `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` cannot be used (a whole number of megabytes, `0` for no limit), or LibreFolio's own profile defaults give the upload limit no value, or one of the wrong type: restore uploads are refused until it is fixed. Passed with a limit, such as *A restore accepts archives of up to 500 MB.*, or with none | — |
@@ -306,6 +307,7 @@ findings keep the order of this table.
 | Links in emails | ℹ️ Email works, but `LIBREFOLIO_PUBLIC_URL` is not set. ⚠️ `LIBREFOLIO_PUBLIC_URL` cannot start a link | **Open the Email tab** |
 | Plugin secrets | ❌ Instance-wide plugin secrets cannot be read with the instance key | **Open the plugin settings**, to **Settings › Plugins** |
 | Open registration, checked by your browser | ⚠️ **Registration** is **Open**, and you reached LibreFolio at an address outside your local network, as for [the warning above the pages](#open-registration-warning) | **Change who can sign up**, to **Global Settings**. None when `LIBREFOLIO_REGISTRATION` sets the mode: the finding names that variable instead |
+| A blocked script, checked by your browser | ⚠️ A script that LibreFolio did not send, added by a proxy, a CDN or a browser extension, was blocked in this browser tab: the finding names its sources. It goes when you close the tab. Not fixed on the server, but in the proxy, the CDN or the extension: [A Script You Did Not Send](configuration.md#csp-blocked-script) | — |
 
 The findings without a link are fixed on the server, in its configuration, and need a restart: what
 to do for each one is in the table of «Startup Checks» in [Configuration](configuration.md), where
@@ -318,13 +320,20 @@ number, so you see it from every tab of Settings. Information is listed but neve
 information only, there is no number, and the tab does not say *Nothing needs your attention.*
 either.
 
+Outside Settings, the same count follows you on every page, as a dot on the connection line at the
+bottom of the sidebar: red with at least one error, amber with warnings only, none with information
+only. Click the line: after its reason, its details link to this tab with the count, such as
+**2 security warnings**, errors included. On a phone, the menu button carries the dot too. What it
+looks like: [Security Warnings for Administrators](../user/connection-security.md#security-warnings).
+
 ### 🔄 When It Checks {: #security-refresh }
 
-LibreFolio reads the checks the first time you open **Settings** after the app loads in your
-browser, before you open the tab, so that its number is already there. It keeps them while you use
-the app: after you change the server's configuration and restart it, click **Check again**, at the
-top of the tab, or reload the page. The open-registration finding follows **Registration** at once:
-saving it in Global Settings updates the list and the number.
+LibreFolio reads the checks once, as soon as it opens in your browser, whatever the page: the
+sidebar's connection line asks for them, so its dot, and the number on the tab, are already there
+when you open **Settings**. If that read fails, opening **Settings** tries again. LibreFolio keeps
+the checks while you use the app: after you change the server's configuration and restart it, click
+**Check again**, at the top of the tab, or reload the page. The open-registration finding follows
+**Registration** at once: saving it in Global Settings updates the list, the number and the dot.
 
 - ⏳ Until the first answer, the tab shows placeholder rows.
 - ⚠️ When the checks cannot be read, the tab says *The security checks could not be loaded.*, with

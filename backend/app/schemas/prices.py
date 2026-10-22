@@ -340,7 +340,10 @@ class FAPriceQueryItem(StrictModel):
 
     asset_id: int = Field(..., description="Asset ID to query")
     date_range: DateRangeModel = Field(..., description="Date range (end defaults to start)")
-    include_price: bool = Field(True, description="Include price history in response")
+    include_price: bool = Field(
+        True,
+        description="Include price history in response. False with max_points, resolution or sample_like (Z-29a-f): the item only gives its step (its resolution, and a sample_like's buckets), reads no price row past its plan and counts nothing against the day budget",
+    )
     include_events: bool = Field(False, description="Include asset events in response")
     target_currency: Optional[str] = Field(None, description="Convert prices to this currency via FX rates (None = native currency)")
     signals: List[SignalRequest] = Field(
@@ -359,7 +362,8 @@ class FAPriceQueryItem(StrictModel):
         description=(
             "Sample the series for a compact chart (Z-29): the most points the chart's plot takes. Per asset, the finest of daily, weekly (ISO, Monday to Sunday) and monthly whose count over the asset's own fill fits, "
             "monthly when none does; a weekly or monthly series is the last point of each week or month, each the point the daily series has on that date, and sample_bounds its first and last points. "
-            "The result's resolution says the step. At most one of max_points, resolution and sample_like; not with signals, annotation_requests or include_events. None: every day."
+            "The result's resolution says the step. At most one of max_points, resolution and sample_like; not with annotation_requests or include_events. "
+            "With signals (Z-29s), the series is read and the signals computed every day, then both reduced to the same dates: each signal series keeps one point per bucket, the one its output's aggregation_profile picks. None: every day."
         ),
     )
     resolution: Optional[SampleResolution] = Field(None, description="Sample the series at this step whatever its length (Z-29): daily, weekly (ISO, Monday to Sunday) or monthly; as max_points does otherwise")
@@ -399,13 +403,13 @@ class FAPriceQueryItem(StrictModel):
 
     @model_validator(mode="after")
     def validate_sampling(self) -> FAPriceQueryItem:
-        """One way to sample the series at most, and a sampled series alone: signals, their annotations and events need
-        every day (Z-29)."""
+        """One way to sample the series at most, and not with annotations or events, which need every day (Z-29). Signals
+        are computed every day, then reduced with the prices (Z-29s)."""
         asked = [name for name in ("max_points", "resolution", "sample_like") if getattr(self, name) is not None]
         if len(asked) > 1:
             raise ValueError(f"at most one of max_points, resolution and sample_like, not {' and '.join(asked)}")
-        if asked and (self.signals or self.annotation_requests or self.include_events):
-            raise ValueError(f"{asked[0]} samples the price series alone: not with signals, annotation_requests or include_events")
+        if asked and (self.annotation_requests or self.include_events):
+            raise ValueError(f"{asked[0]} samples the price series: not with annotation_requests or include_events")
         return self
 
 
@@ -429,10 +433,16 @@ class FAPriceQueryResult(StrictModel):
     errors: List[str] = Field(default_factory=list, description="Non-fatal warnings (e.g. FX pair missing)")
     signals: List[SignalResult] = Field(
         default_factory=list,
-        description="Technical signal results keyed by request instance_id",
+        description=(
+            "Technical signal results keyed by request instance_id. On a weekly or monthly result (Z-29s), each series holds one point per bucket, the one its output's aggregation_profile picks, "
+            "dated as prices; a line or an area keeps its gaps, a bucket where two runs meet showing the later one's point"
+        ),
     )
-    resolution: SampleResolution = Field("daily", description="The step of prices (Z-29): daily, or weekly or monthly when the item's max_points, resolution or sample_like sampled the series")
-    sample_bounds: Optional[FAPriceSampleBounds] = Field(None, description="A weekly or monthly series' first and last points (Z-29); None for a daily one")
+    resolution: SampleResolution = Field(
+        "daily",
+        description="The step of prices (Z-29): daily, or weekly or monthly when the item's max_points, resolution or sample_like sampled the series. The signals' series have the same step (Z-29s): one point per bucket, the one each output's aggregation_profile picks",
+    )
+    sample_bounds: Optional[FAPriceSampleBounds] = Field(None, description="A weekly or monthly series' first and last points (Z-29); None for a daily one or without prices")
 
 
 class FAPriceQueryResponse(BaseListResponse[FAPriceQueryResult]):

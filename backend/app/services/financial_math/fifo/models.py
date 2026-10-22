@@ -104,6 +104,9 @@ class FifoInputTransaction:
         if isinstance(tx, FifoInputTransaction):
             return tx
         tx_type = getattr(tx.type, "value", tx.type)
+        # N78-1 (the developer's decision, 21/10/2026): an ADJUSTMENT-out has no value, whatever cost basis the row holds.
+        # Its units leave at 0. The scope-boundary readings of J-10 build their own copies and keep their value.
+        outgoing_adjustment = str(tx_type) == "ADJUSTMENT" and tx.quantity is not None and tx.quantity < 0
         return cls(
             id=_require_id(tx.id),
             broker_id=tx.broker_id,
@@ -113,8 +116,8 @@ class FifoInputTransaction:
             quantity=tx.quantity,
             amount=tx.amount or Decimal("0"),
             currency=tx.currency,
-            cost_basis_override=tx.cost_basis_override,
-            cost_basis_currency=tx.cost_basis_currency,
+            cost_basis_override=None if outgoing_adjustment else tx.cost_basis_override,
+            cost_basis_currency=None if outgoing_adjustment else tx.cost_basis_currency,
             related_transaction_id=tx.related_transaction_id,
         )
 

@@ -151,9 +151,9 @@ async def apply_splits(
         make_standalone(transaction_from, from_type)
         make_standalone(transaction_to, to_type)
         if pair_type == TransactionType.TRANSFER:
-            # Decision 47: the giving leg becomes an ADJUSTMENT-out at its own broker's Auto cost, computed with the
-            # batch's other costs once every row of it is in place (compute_wac_and_fx_issues).
-            context.handover_rows.append((original_index, transaction_from))
+            # Decision 47 (N78-1, 21/10/2026): the giving leg becomes an ADJUSTMENT-out without a value.
+            transaction_from.cost_basis_override = None
+            transaction_from.cost_basis_currency = None
 
         for transaction in (transaction_from, transaction_to):
             previous = context.earliest_date_by_broker.get(transaction.broker_id)

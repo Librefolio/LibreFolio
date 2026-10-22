@@ -65,6 +65,51 @@ fails at ``_aggregation()`` — ``backend.app.services.signals.aggregation`` doe
 AI Export not yet moved, SAG-A01…A06 stay red (AI Export never calls the module and ignores its maps) while SAG-A07…A10
 pass (today's AI Export already agrees with the rule: the move must keep it so). Green then, written green:
 SAG-T01…T03 (they pin the table against the TypeScript, not the code).
+
+Z-29s-a (contract of 20/10 on 5bbadda95, coordinator's lot; developer's Q-Z29-2 of 19/10): a sampled card's signal
+series are reduced by the backend as the chart would reduce them, each output by its own ``aggregation_profile``. The
+module gains ``sample_signal_series(series, profile, resolution, render_dates)``, pure, pinned here (SAG-S):
+
+9. ``render_dates`` are the sampled price dates, ascending, one per bucket (``price_sampling.sample_dates``: the last day
+   of each ISO week or calendar month, the last one cut at the range's end). A point belongs to its own date's bucket; a
+   point whose bucket has no render date is dropped. Daily: the series itself, unchanged.
+10. A line or an area with a scalar profile is reduced run by run, as ``backendRenderer.ts`` (``renderScalarSeries``)
+    splits it before ``downsampleRenderedSignal`` reduces each run: a run is a stretch of points with a value, ended by
+    a point without one; leading and trailing nulls belong to no run and are dropped; a date absent is no gap. Per run
+    and bucket the representative is ``select_point``'s element itself, re-dated at the render date (a calendar-return
+    point keeps its ``provenance``; min / max ties the earliest's). Between two runs that both gave points, one marker
+    ``SignalValuePoint(date=d, value=None)``, ``d`` the earlier run's last representative's date + 1 day, only when ``d``
+    is before the later run's first representative's date; two runs with a representative in the same bucket keep the
+    later run's alone (residue R1), and two representatives on consecutive days get no marker (residue R3).
+11. A bar: its nulls dropped, one representative per bucket, no run, no marker. A band with ``band_envelope``: per
+    bucket over its complete points only, one ``SignalBandPoint`` (the lowest lower, the last middle, the highest upper);
+    a bucket without one gives none.
+12. A reduction that would leave no value: the series unchanged. A profile that does not fit the kind (``band_envelope``
+    on a scalar, a scalar profile on a band, ``events_verbatim``): ``ValueError``, as the chart throws. The result is the
+    series' own class, every field but ``points`` unchanged; the caller's series is not changed.
+
+13. O1 (developer's decision of 21/10, after the review of Y): the series of ONE signal, each reduced alone, may leave
+    different dates (a warm-up that ends inside the range, a gap one has and another has not), while a ``SignalResult``
+    wants its series on identical dates. ``align_signal_series(series)`` gives them the union of the dates the reductions
+    left, each series keeping its own points and getting, where it has none, a point without a value
+    (``SignalValuePoint(date=d)``; a band: ``SignalBandPoint(date=d)``, lower, middle and upper null). A list whose dates
+    agree is given back as it is; the series are in the order given, in their own class, every field but ``points``
+    unchanged, the caller's series not changed. The price query aligns the series it reduced and only those. Residue R5:
+    a gap marker of one series (a date the others have no point on) breaks the others there.
+
+The case table ``backend/test_scripts/fixtures/signals/signal_sampling_cases.v1.json`` holds the cases both stacks read:
+every case through ``sample_signal_series`` here (SAG-S02), the ``browser_parity`` ones through
+``downsampleRenderedSignal`` in ``timeSeriesAggregation.test.ts`` (each run apart, the expected split at its markers);
+its non-parity cases are the residues R1 and R3 and one synthetic input, each said in its note. Its ``series_sets`` hold the
+series of one signal reduced and aligned (point 13): each through ``align_signal_series`` here (SAG-S10), each series
+drawn alone by the browser as a case is (the Vitest), R5 the one that is not.
+
+Red at 5bbadda95 (before Z-29s-a), each for the reason its docstring gives: SAG-S02…S08 fail at ``_sampler()`` —
+``sample_signal_series`` does not exist. It is read from the module at the call, never imported at the top, so that the
+26 tests above still collect and pass. Green then, written green: SAG-S01 (it pins the table, not the code).
+
+O1 (21/10): SAG-S09 pins the ``series_sets`` of the table and is green by design; SAG-S10…S12 fail at ``_aligner()`` —
+``align_signal_series`` does not exist.
 """
 
 from __future__ import annotations
@@ -78,7 +123,7 @@ import json
 import re
 import typing
 from collections.abc import Callable, Mapping, MutableMapping, Sequence
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from operator import attrgetter, itemgetter
 from pathlib import Path
@@ -86,7 +131,29 @@ from types import MappingProxyType, ModuleType
 
 import pytest
 
-from backend.app.schemas.signals import SignalAggregationProfile
+from backend.app.schemas.signals import (
+    SignalAggregationProfile,
+    SignalAreaSeries,
+    SignalAxisRole,
+    SignalAxisSpec,
+    SignalBandPoint,
+    SignalBandSeries,
+    SignalBarSeries,
+    SignalCalendarReturnPointStatus,
+    SignalCalendarReturnProvenance,
+    SignalCalendarReturnValuePoint,
+    SignalColorRole,
+    SignalLinePattern,
+    SignalLineSeries,
+    SignalOutputStyle,
+    SignalReferenceLevel,
+    SignalRegionLineStyle,
+    SignalUnit,
+    SignalValuePoint,
+    SignalValueRegion,
+    SignalViewTransform,
+    _validate_series_alignment,
+)
 from backend.app.services.ai_export.temporal.aggregators import (
     ScalarBucketStatistics,
     aggregate_band_statistics,
@@ -885,3 +952,468 @@ def test_sag_t03_the_chart_throws_on_the_rows_out_of_order(rows):
     """
     with pytest.raises(ValueError, match="invalid aggregated envelope"):
         _ts_envelope(*_components(rows, _reading).values())
+
+
+# =============================================================================
+# SAG-S — Z-29s-a: ONE SIGNAL SERIES REDUCED ONTO A SAMPLED PRICE SERIES
+# =============================================================================
+
+#: The reducer of Z-29s-a (points 9-12), read from the module at the call (``_sampler``): a name imported at the top would
+#: stop the 26 tests above from collecting while it is missing.
+SAMPLER = "sample_signal_series"
+#: The case table both stacks read: every case through ``sample_signal_series`` here, the browser_parity ones through
+#: ``downsampleRenderedSignal`` in timeSeriesAggregation.test.ts.
+SAMPLING_TABLE = json.loads((Path(__file__).resolve().parents[1] / "fixtures" / "signals" / "signal_sampling_cases.v1.json").read_text(encoding="utf-8"))
+SAMPLING_CASE_KEYS = {"id", "kind", "profile", "resolution", "render_dates", "points", "expected", "browser_parity", "note"}
+SAMPLING_KINDS = {"line": SignalLineSeries, "area": SignalAreaSeries, "bar": SignalBarSeries, "band": SignalBandSeries}
+SAMPLING_RESOLUTIONS = ("daily", "weekly", "monthly")
+#: A profile that fits each kind, as the plugins declare them (a band: band_envelope; a scalar: one of the four).
+FITTING_PROFILE = {"line": "last_with_range", "area": "min_with_range", "bar": "last_with_range", "band": "band_envelope"}
+#: What every built output carries; only the points vary.
+_OUTPUT = {
+    "key": "output",
+    "label_key": "signals.test.output",
+    "semantic_id": "test.output",
+    "semantic_description": "A test output reduced onto the dates of a sampled price series.",
+    "unit": SignalUnit.NONE,
+    "axis": SignalAxisSpec(key="test", role=SignalAxisRole.INDEPENDENT),
+}
+
+
+def _sampler() -> Callable[..., object]:
+    """``aggregation.sample_signal_series``, read at the call: while it is missing each SAG-S test fails saying so."""
+    sample = getattr(_aggregation(), SAMPLER, None)
+    if sample is None:
+        pytest.fail(f"Z-29s-a: {AGGREGATION_MODULE}.{SAMPLER} is missing — sample_signal_series(series, profile, resolution, render_dates), one signal series reduced onto a sampled price series' dates")
+    return sample
+
+
+def _reduce(series: object, profile: str, resolution: str, render_dates: Sequence[date]) -> object:
+    """``sample_signal_series`` called as the contract writes it: the series, the profile (a ``SignalAggregationProfile``
+    member), the step, the render dates."""
+    return _sampler()(series, SignalAggregationProfile(profile), resolution, list(render_dates))
+
+
+def _dumped(series: object) -> list[dict]:
+    """A series' points as the wire writes them."""
+    return [point.model_dump(mode="json") for point in series.points]
+
+
+def _bucket_bounds(day: date, resolution: str) -> tuple[date, date]:
+    """The first and last day of ``day``'s bucket — the day; Monday to Sunday of its ISO week; the 1st to the last day of
+    its month — walked here, not read from ``price_sampling``."""
+    if resolution == "weekly":
+        monday = day - timedelta(days=day.isoweekday() - 1)
+        return monday, monday + timedelta(days=6)
+    if resolution == "monthly":
+        first = day.replace(day=1)
+        return first, (first + timedelta(days=31)).replace(day=1) - timedelta(days=1)
+    return day, day
+
+
+def _table_series(case: Mapping[str, typing.Any], field: str = "points") -> object:
+    """The case's ``points`` (or ``expected``) as the series a plugin sends: the class of its kind, ``_OUTPUT``'s fields."""
+    if case["kind"] == "band":
+        points = [SignalBandPoint(date=date.fromisoformat(point["date"]), lower=point["lower"], middle=point["middle"], upper=point["upper"]) for point in case[field]]
+    else:
+        points = [SignalValuePoint(date=date.fromisoformat(point["date"]), value=point["value"]) for point in case[field]]
+    return SAMPLING_KINDS[case["kind"]](**_OUTPUT, points=points)
+
+
+def _render_dates_wrong(case: Mapping[str, typing.Any]) -> list[str]:
+    """What breaks ``sample_dates``' shape in a case's render dates: one per bucket, the buckets one after the other (so
+    ascending), each the last day of its bucket but the last one, which may be cut (the range's end); daily, consecutive
+    days."""
+    resolution = case["resolution"]
+    days = [date.fromisoformat(day) for day in case["render_dates"]]
+    if not days:
+        return ["no render date"]
+    buckets = [_bucket_bounds(day, resolution) for day in days]
+    wrong = []
+    for (day, (_start, end)), (next_start, _next_end) in zip(zip(days, buckets, strict=True), buckets[1:], strict=False):
+        if day != end:
+            wrong.append(f"{day} is not the last day of its {resolution} bucket")
+        if next_start != end + timedelta(days=1):
+            wrong.append(f"the bucket after {day}'s does not start the day after it ends")
+    return wrong
+
+
+def test_sag_s01_the_case_table_is_sampled_dates_and_documents_its_residues():
+    """SAG-S01: the shared case table is well formed: version 1 and a description; each case with exactly its keys, a
+    unique id, a kind (line, area, bar, band), a profile that fits it (a band: band_envelope; else a scalar profile), a
+    step, render dates in ``sample_dates``' shape (one per bucket, the buckets one after the other, each the last day of
+    its bucket but the last one, cut at the range's end; daily, consecutive days), points and expected that build valid
+    series of that kind (dates strictly increasing, one value at least), and a note. At least one case is not drawn as
+    the browser draws it (browser_parity false: the residues R1 and R3, and a synthetic input), each said in its note —
+    the residues stay documented where both stacks read them.
+
+    Green before Z-29s-a, by design: it pins the table, not the code.
+    """
+    assert (SAMPLING_TABLE.get("version"), bool(str(SAMPLING_TABLE.get("description", "")).strip())) == (1, True), {key: SAMPLING_TABLE.get(key) for key in ("version", "description")}
+    cases = SAMPLING_TABLE["cases"]
+    assert len({case["id"] for case in cases}) == len(cases), "two cases share an id"
+    wrong: dict[str, list[str]] = {}
+    for case in cases:
+        found = []
+        if set(case) != SAMPLING_CASE_KEYS:
+            found.append(f"keys {sorted(set(case) ^ SAMPLING_CASE_KEYS)} differ")
+        elif case["kind"] not in SAMPLING_KINDS or case["resolution"] not in SAMPLING_RESOLUTIONS:
+            found.append(f"kind {case['kind']!r}, resolution {case['resolution']!r}")
+        else:
+            band = case["kind"] == "band"
+            if (case["profile"] == "band_envelope") != band or case["profile"] not in {*PROFILE_SELECTORS, SignalAggregationProfile.BAND_ENVELOPE}:
+                found.append(f"profile {case['profile']!r} does not fit a {case['kind']}")
+            found.extend(_render_dates_wrong(case))
+            for field in ("points", "expected"):
+                try:
+                    _table_series(case, field)
+                except ValueError as invalid:
+                    found.append(f"{field} build no valid {case['kind']} series: {invalid}")
+            if not str(case["note"]).strip():
+                found.append("no note")
+        if found:
+            wrong[case["id"]] = found
+    assert not wrong, wrong
+    residues = [case["id"] for case in cases if case["browser_parity"] is False]
+    assert residues, "no case with browser_parity false: the residues R1 and R3 are no longer documented in the table"
+    assert all(isinstance(case["browser_parity"], bool) for case in cases), [case["id"] for case in cases if not isinstance(case["browser_parity"], bool)]
+
+
+@pytest.mark.parametrize("case", SAMPLING_TABLE["cases"], ids=lambda case: case["id"])
+def test_sag_s02_every_table_case_through_sample_signal_series(case):
+    """SAG-S02: each case of the shared table, built as the series a plugin sends (``SignalLineSeries``,
+    ``SignalAreaSeries``, ``SignalBarSeries``, ``SignalBandSeries`` of ``SignalValuePoint`` / ``SignalBandPoint``), is
+    reduced by ``sample_signal_series(series, profile, resolution, render_dates)`` into a series of the same class whose
+    points, as the wire writes them, are the case's ``expected``, each gap marker included (points 9-12).
+
+    Red at 5bbadda95: ``sample_signal_series`` does not exist.
+    """
+    series = _table_series(case)
+    reduced = _reduce(series, case["profile"], case["resolution"], [date.fromisoformat(day) for day in case["render_dates"]])
+    assert type(reduced) is type(series), f"{type(reduced).__name__} for a {type(series).__name__}"
+    assert _dumped(reduced) == case["expected"], f"{case['id']}: {case['note']}"
+
+
+def _scalar_points(*values: tuple[int, float | None]) -> list[SignalValuePoint]:
+    """Plain points of January 2026, by (day, value)."""
+    return [SignalValuePoint(date=_day(day), value=value) for day, value in values]
+
+
+def _signal_band_points(*values: tuple[int, float | None, float | None, float | None]) -> list[SignalBandPoint]:
+    """Band points of January 2026, by (day, lower, middle, upper)."""
+    return [SignalBandPoint(date=_day(day), lower=lower, middle=middle, upper=upper) for day, lower, middle, upper in values]
+
+
+def _small_series(kind: str, **fields: typing.Any) -> object:
+    """A series of ``kind`` over two weeks of January 2026 (5 … 16), a null (a band: an incomplete point) among its
+    points, every week with a value: ``_OUTPUT``'s fields, or ``fields``."""
+    if kind == "band":
+        points = _signal_band_points((5, None, None, None), (6, 1.0, 2.0, 3.0), (9, 0.5, 2.5, 3.5), (12, 1.5, 3.0, 4.0), (13, None, 3.2, None), (16, 2.0, 3.5, 4.5))
+    else:
+        points = _scalar_points((5, 1.0), (6, None), (7, 3.0), (9, 2.0), (12, 4.0), (16, 5.0))
+    return SAMPLING_KINDS[kind](**(fields or _OUTPUT), points=points)
+
+
+#: The two weeks of ``_small_series`` and the week after, by their render dates (Sundays).
+_SMALL_WEEKS = (_day(11), _day(18), _day(25))
+
+
+def _rich_output() -> dict[str, typing.Any]:
+    """An output with every field a plugin may set, none at its default: a description, a unit, an axis with bounds, a
+    view transform, a style, a reference level and a value region with a line style."""
+    return {
+        **_OUTPUT,
+        "description_key": "signals.test.description",
+        "unit": SignalUnit.PERCENTAGE,
+        "axis": SignalAxisSpec(key="test_axis", role=SignalAxisRole.INDEPENDENT, minimum=-50.0, maximum=50.0),
+        "view_transform": SignalViewTransform.BASE_PERCENTAGE,
+        "style": SignalOutputStyle(color_role=SignalColorRole.ACCENT, line_pattern=SignalLinePattern.DASHED, width_delta=2, opacity=0.6, fill_opacity=0.35),
+        "reference_levels": [SignalReferenceLevel(key="zero", label_key="signals.reference.zero", semantic="No change.", value=0.0)],
+        "value_regions": [
+            SignalValueRegion(
+                key="high",
+                label_key="signals.test.high",
+                description_key="signals.test.highDescription",
+                semantic="Above ten.",
+                lower=10.0,
+                include_upper=True,
+                line_style=SignalRegionLineStyle(pattern=SignalLinePattern.DOTTED, color_role=SignalColorRole.NEGATIVE, width_delta=1, opacity=0.9),
+            )
+        ],
+    }
+
+
+@pytest.mark.parametrize("resolution", ["weekly", "monthly"])
+@pytest.mark.parametrize("kind", SAMPLING_KINDS)
+def test_sag_s03_the_reduced_series_keeps_every_field_but_its_points(kind, resolution):
+    """SAG-S03: a line, an area, a bar and a band carrying every field a plugin may set — a description, a unit, an axis
+    with bounds, a view transform, a style, a reference level, a value region with a line style — reduced weekly or
+    monthly: the result is the same class and, its points aside, equal to the series as the wire writes it; its points
+    are reduced (other dates than the input's).
+
+    Red at 5bbadda95: ``sample_signal_series`` does not exist.
+    """
+    series = _small_series(kind, **_rich_output())
+    render_dates = _SMALL_WEEKS if resolution == "weekly" else (date(2026, 1, 31),)
+    reduced = _reduce(series, FITTING_PROFILE[kind], resolution, render_dates)
+    assert type(reduced) is type(series), f"{type(reduced).__name__} for a {type(series).__name__}"
+    assert reduced.model_dump(mode="json", exclude={"points"}) == series.model_dump(mode="json", exclude={"points"})
+    assert reduced.points and {point.date for point in reduced.points} <= set(render_dates), f"not reduced onto the render dates: {_dumped(reduced)}"
+
+
+def _provenance(day: int, value: float | None) -> SignalCalendarReturnProvenance:
+    """A provenance of its own for the calendar-return point of January ``day``: its current price that day, so many days
+    back, and the reference a week before; a point without value misses its reference."""
+    current = _day(day)
+    reference = current - timedelta(days=7)
+    if value is None:
+        return SignalCalendarReturnProvenance(status=SignalCalendarReturnPointStatus.MISSING_REFERENCE, reference_target_date=reference, current_price_date=current, current_price_days_back=day % 3)
+    return SignalCalendarReturnProvenance(
+        status=SignalCalendarReturnPointStatus.AVAILABLE,
+        reference_target_date=reference,
+        current_price_date=current,
+        current_price_days_back=day % 3,
+        reference_price_date=reference,
+        reference_price_days_back=day % 2,
+    )
+
+
+def _calendar_points(*values: tuple[int, float | None]) -> list[SignalCalendarReturnValuePoint]:
+    """Calendar-return points of January 2026, by (day, value), each with its own provenance."""
+    return [SignalCalendarReturnValuePoint(date=_day(day), value=value, provenance=_provenance(day, value)) for day, value in values]
+
+
+#: A calendar-return series over three weeks of January 2026 (the last cut on the 20th), every day of the first week,
+#: with ties: the minimum of the first week on the 6th and the 8th, its maximum on the 7th and the 9th, the minimum of the
+#: second week on the 12th and the 18th.
+_CALENDAR_VALUES = ((5, 2.0), (6, 1.0), (7, 3.0), (8, 1.0), (9, 3.0), (10, 2.5), (11, 2.5), (12, 0.5), (14, 4.0), (18, 0.5), (19, 5.0), (20, 6.0))
+_CALENDAR_RENDER = (_day(11), _day(18), _day(20))
+#: The day of the point each profile's representative stands for, week by week: a tie keeps the earliest.
+_CALENDAR_PICKS = {
+    "first_with_range": (5, 12, 19),
+    "last_with_range": (11, 18, 20),
+    "min_with_range": (6, 12, 19),
+    "max_with_range": (7, 14, 20),
+}
+
+
+@pytest.mark.parametrize("profile", _CALENDAR_PICKS)
+def test_sag_s04_a_calendar_return_representative_keeps_its_provenance(profile):
+    """SAG-S04: a representative is the point itself, re-dated: in a calendar-return series (``SignalCalendarReturnValuePoint``,
+    each with a provenance of its own — the rolling return's) every reduced point is a calendar-return point whose value
+    and provenance are those of the point the profile picks in its week, and whose date is the week's render date; for a
+    tied minimum or maximum, the earliest's provenance (the 6th, not the 8th; the 7th, not the 9th; the 12th, not the
+    18th). Each scalar profile, weekly, the last week cut on the 20th.
+
+    Red at 5bbadda95: ``sample_signal_series`` does not exist.
+    """
+    points = _calendar_points(*_CALENDAR_VALUES)
+    series = SignalLineSeries(**_OUTPUT, points=points)
+    reduced = _reduce(series, profile, "weekly", _CALENDAR_RENDER)
+    by_day = {point.date.day: point for point in points}
+    expected = [by_day[day].model_copy(update={"date": render}).model_dump(mode="json") for day, render in zip(_CALENDAR_PICKS[profile], _CALENDAR_RENDER, strict=True)]
+    assert [type(point).__name__ for point in reduced.points] == ["SignalCalendarReturnValuePoint"] * len(expected), _dumped(reduced)
+    assert _dumped(reduced) == expected
+
+
+def test_sag_s05_a_gap_marker_is_a_value_point_without_value():
+    """SAG-S05: the marker between two runs is a ``SignalValuePoint`` without value — not a calendar-return point, which
+    would need a provenance — even in a calendar-return series: runs on the 5th-6th and the 20th-21st split by a point
+    without value on the 7th, last weekly (render dates the 11th, 18th and 25th) give the 6th's point re-dated on the
+    11th, a marker on the 12th, the 21st's point re-dated on the 25th, each representative with its own provenance.
+
+    Red at 5bbadda95: ``sample_signal_series`` does not exist.
+    """
+    points = _calendar_points((5, 1.0), (6, 2.0), (7, None), (20, 3.0), (21, 4.0))
+    series = SignalLineSeries(**_OUTPUT, points=points)
+    reduced = _reduce(series, "last_with_range", "weekly", (_day(11), _day(18), _day(25)))
+    said = [(type(point).__name__, point.date, point.value) for point in reduced.points]
+    assert said == [("SignalCalendarReturnValuePoint", _day(11), 2.0), ("SignalValuePoint", _day(12), None), ("SignalCalendarReturnValuePoint", _day(25), 4.0)], said
+    assert (reduced.points[0].provenance, reduced.points[2].provenance) == (points[1].provenance, points[4].provenance)
+
+
+@pytest.mark.parametrize("resolution", ["weekly", "monthly"])
+@pytest.mark.parametrize(
+    ("kind", "profile"),
+    [
+        pytest.param("line", "band_envelope", id="band-envelope-on-a-line"),
+        pytest.param("area", "band_envelope", id="band-envelope-on-an-area"),
+        pytest.param("bar", "band_envelope", id="band-envelope-on-a-bar"),
+        pytest.param("band", "last_with_range", id="last-on-a-band"),
+        pytest.param("band", "min_with_range", id="min-on-a-band"),
+        pytest.param("line", "events_verbatim", id="events-verbatim-on-a-line"),
+        pytest.param("band", "events_verbatim", id="events-verbatim-on-a-band"),
+    ],
+)
+def test_sag_s06_a_profile_that_does_not_fit_the_kind_is_refused(kind, profile, resolution):
+    """SAG-S06: a profile that does not fit the series' kind raises ``ValueError``, as the chart throws
+    (``downsampleRenderedSignal``: a band needs band_envelope, a scalar series refuses band_envelope and
+    events_verbatim): band_envelope on a line, an area or a bar; a scalar profile on a band; events_verbatim on either —
+    weekly or monthly, on a series with a value in every bucket (the refusal is not an empty reduction's).
+
+    Red at 5bbadda95: ``sample_signal_series`` does not exist.
+    """
+    sample = _sampler()
+    render_dates = list(_SMALL_WEEKS[:2]) if resolution == "weekly" else [date(2026, 1, 31)]
+    with pytest.raises(ValueError):
+        sample(_small_series(kind), SignalAggregationProfile(profile), resolution, render_dates)
+
+
+@pytest.mark.parametrize("kind", ["line", "band"])
+def test_sag_s07_the_callers_series_is_not_changed(kind):
+    """SAG-S07: ``sample_signal_series`` changes nothing of the series it is given: after a weekly reduction the series
+    (a calendar-return line with a gap and every field set; a band with an incomplete point) is, as the wire writes it,
+    what it was, with the same point objects in the same order, each on its own date.
+
+    Red at 5bbadda95: ``sample_signal_series`` does not exist.
+    """
+    if kind == "band":
+        series = _small_series("band", **_rich_output())
+    else:
+        series = SignalLineSeries(**_rich_output(), points=_calendar_points((5, 1.0), (6, 2.0), (7, None), (13, 3.0), (20, 4.0), (21, 0.5)))
+    before = series.model_dump(mode="json")
+    objects = [(id(point), point.date) for point in series.points]
+    reduced = _reduce(series, FITTING_PROFILE[kind] if kind == "band" else "min_with_range", "weekly", _SMALL_WEEKS)
+    assert reduced is not series, "the series given was reduced in place"
+    assert series.model_dump(mode="json") == before, "the series given was changed"
+    assert [(id(point), point.date) for point in series.points] == objects, "the points given were replaced, reordered or re-dated"
+
+
+@pytest.mark.parametrize("kind", SAMPLING_KINDS)
+def test_sag_s08_daily_gives_the_series_unchanged(kind):
+    """SAG-S08: daily, a line, an area, a bar and a band are given back unchanged — as the wire writes them, their nulls
+    and a band's incomplete point included, in their own class — as the chart's daily path draws the series as sent.
+
+    Red at 5bbadda95: ``sample_signal_series`` does not exist.
+    """
+    series = _small_series(kind)
+    reduced = _reduce(series, FITTING_PROFILE[kind], "daily", [_day(day) for day in range(5, 17)])
+    assert type(reduced) is type(series), f"{type(reduced).__name__} for a {type(series).__name__}"
+    assert reduced.model_dump(mode="json") == series.model_dump(mode="json")
+
+
+# =============================================================================
+# SAG-S (O1) — THE SERIES OF ONE SIGNAL, REDUCED EACH ALONE, ALIGNED ON THE UNION OF THEIR DATES
+# =============================================================================
+
+ALIGNER = "align_signal_series"
+SERIES_SET_KEYS = {"id", "resolution", "render_dates", "series", "browser_parity", "note"}
+SERIES_ENTRY_KEYS = {"key", "kind", "profile", "points", "expected"}
+
+
+def _aligner() -> Callable[..., list]:
+    """``aggregation.align_signal_series``, read at the call: while it is missing each SAG-S10…S12 test fails saying so."""
+    align = getattr(_aggregation(), ALIGNER, None)
+    if align is None:
+        pytest.fail(f"O1: {AGGREGATION_MODULE}.{ALIGNER} is missing — align_signal_series(series), the series of one signal reduced each alone, on the union of their dates")
+    return align
+
+
+def _entry_series(entry: Mapping[str, typing.Any], field: str) -> object:
+    """A series of a ``series_sets`` entry as a plugin sends it (``points``) or as the aligned reduction is (``expected``),
+    under the entry's own key."""
+    series = _table_series(entry, field)
+    return series.model_copy(update={"key": entry["key"], "semantic_id": f"test.{entry['key']}"})
+
+
+def _reduced_alone(set_case: Mapping[str, typing.Any]) -> list[object]:
+    """Each series of a set reduced on its own, as the price query does before it aligns them."""
+    render_dates = [date.fromisoformat(day) for day in set_case["render_dates"]]
+    return [_reduce(_entry_series(entry, "points"), entry["profile"], set_case["resolution"], render_dates) for entry in set_case["series"]]
+
+
+def _series_set_problems(set_case: Mapping[str, typing.Any]) -> list[str]:
+    """What is wrong with a ``series_sets`` entry of the table (SAG-S09), in words; empty when it is well formed."""
+    if set(set_case) != SERIES_SET_KEYS:
+        return [f"keys {sorted(set(set_case) ^ SERIES_SET_KEYS)} differ"]
+    if set_case["resolution"] not in SAMPLING_RESOLUTIONS or len(set_case["series"]) < 2 or len({entry["key"] for entry in set_case["series"]}) != len(set_case["series"]):
+        return ["a step, two series or more, each with its own key"]
+    if any(set(entry) != SERIES_ENTRY_KEYS for entry in set_case["series"]):
+        return ["a series entry's keys differ"]
+    found = _render_dates_wrong(set_case)
+    for entry in set_case["series"]:
+        if entry["kind"] not in SAMPLING_KINDS or (entry["profile"] == "band_envelope") != (entry["kind"] == "band") or entry["profile"] not in {*PROFILE_SELECTORS, SignalAggregationProfile.BAND_ENVELOPE}:
+            found.append(f"{entry['key']}: kind {entry['kind']!r} and profile {entry['profile']!r} do not fit")
+            continue
+        for field in ("points", "expected"):
+            try:
+                _entry_series(entry, field)
+            except ValueError as invalid:
+                found.append(f"{entry['key']}: {field} build no valid {entry['kind']} series: {invalid}")
+    if not found and len({tuple(point["date"] for point in entry["expected"]) for entry in set_case["series"]}) != 1:
+        found.append("the expected series are not on identical dates")
+    if not str(set_case["note"]).strip():
+        found.append("no note")
+    return found
+
+
+def test_sag_s09_the_series_sets_are_well_formed_and_document_their_residue():
+    """SAG-S09: the ``series_sets`` of the shared table are well formed: each with exactly its keys and a unique id, a
+    step and render dates in ``sample_dates``' shape, at least two series with a unique key, each with a kind and a
+    profile that fits it, ``points`` and ``expected`` that build valid series of that kind, a note; the ``expected`` of
+    all a set's series on identical dates (what ``SignalResult`` wants), and at least one set where the reductions alone
+    disagree on their dates (the O1 case); at least one set with browser_parity false (the residue R5).
+
+    Green before the cure, by design: it pins the table, not the code.
+    """
+    sets = SAMPLING_TABLE["series_sets"]
+    assert len({set_case["id"] for set_case in sets}) == len(sets), "two sets share an id"
+    wrong = {set_case["id"]: found for set_case in sets if (found := _series_set_problems(set_case))}
+    assert not wrong, wrong
+    disagreeing = [set_case["id"] for set_case in sets if len({tuple(point["date"] for point in series.model_dump(mode="json")["points"]) for series in _reduced_alone(set_case)}) > 1]
+    assert disagreeing, "no set where the series reduced alone disagree on their dates: O1 is no longer in the table"
+    assert [set_case["id"] for set_case in sets if set_case["browser_parity"] is False], "no set with browser_parity false: the residue R5 is no longer documented"
+
+
+@pytest.mark.parametrize("set_case", SAMPLING_TABLE["series_sets"], ids=lambda set_case: set_case["id"])
+def test_sag_s10_every_series_set_aligns_on_the_union_of_its_dates(set_case):
+    """SAG-S10: the series of a set of the shared table, each reduced alone by ``sample_signal_series``, go through
+    ``align_signal_series``: the same number of series, in the same order, each of its own class and key, its points —
+    as the wire writes them — the entry's ``expected``: the points it had, the union's other dates as points without a
+    value (a band's with lower, middle and upper null). The dates are identical across the series, as
+    ``_validate_series_alignment`` wants.
+
+    Red before the cure: ``align_signal_series`` does not exist (and the reductions alone disagree on their dates: SAG-S09).
+    """
+    reduced = _reduced_alone(set_case)
+    aligned = _aligner()(reduced)
+    assert [(type(series), series.key) for series in aligned] == [(type(series), series.key) for series in reduced]
+    assert [_dumped(series) for series in aligned] == [entry["expected"] for entry in set_case["series"]], set_case["note"]
+    _validate_series_alignment(aligned)
+
+
+def test_sag_s11_aligned_dates_are_left_alone_and_the_callers_series_are_not_changed():
+    """SAG-S11: series that agree on their dates are given back as they are (the same objects), a single series too; when
+    a series is completed, the caller's list and series are not changed (the completed one is a copy with every field but
+    ``points`` the same).
+
+    Red before the cure: ``align_signal_series`` does not exist.
+    """
+    steady = _small_series("line", **{**_OUTPUT, "key": "steady", "semantic_id": "test.steady"})
+    twin = steady.model_copy(update={"key": "twin", "semantic_id": "test.twin"})
+    assert _aligner()([steady]) == [steady]
+    together = _aligner()([steady, twin])
+    assert [id(series) for series in together] == [id(steady), id(twin)]
+    late = _scalar_points((12, 4.0), (16, 5.0))
+    other = SignalLineSeries(**{**_OUTPUT, "key": "late", "semantic_id": "test.late", "label_key": "signals.test.late"}, points=late)
+    before = (steady.model_dump(mode="json"), other.model_dump(mode="json"))
+    given = [steady, other]
+    aligned = _aligner()(given)
+    assert given == [steady, other] and (steady.model_dump(mode="json"), other.model_dump(mode="json")) == before, "the caller's list or series were changed"
+    assert aligned[0] is steady and aligned[1] is not other, "the series that holds every date is a copy, or the one that lacks some is not"
+    assert [point["date"] for point in _dumped(aligned[1])] == [point["date"] for point in _dumped(aligned[0])]
+    assert aligned[1].model_dump(mode="json", exclude={"points"}) == other.model_dump(mode="json", exclude={"points"}), "a field other than the points changed"
+
+
+def test_sag_s12_a_calendar_return_series_gets_plain_points_without_value():
+    """SAG-S12: a calendar-return series keeps its points with their ``provenance``; the dates the other series have and it
+    has not are plain ``SignalValuePoint`` without a value (no provenance to invent).
+
+    Red before the cure: ``align_signal_series`` does not exist.
+    """
+    returns = SignalLineSeries(**{**_OUTPUT, "key": "return", "semantic_id": "test.return"}, points=_calendar_points((12, 0.1)))
+    early = SignalLineSeries(**{**_OUTPUT, "key": "early", "semantic_id": "test.early"}, points=_scalar_points((5, 1.0), (12, 2.0)))
+    aligned = _aligner()([early, returns])
+    assert [type(point).__name__ for point in aligned[1].points] == ["SignalValuePoint", "SignalCalendarReturnValuePoint"]
+    assert aligned[1].points[0].model_dump(mode="json") == {"date": _day(5).isoformat(), "value": None}
+    assert aligned[1].points[1] is returns.points[0]

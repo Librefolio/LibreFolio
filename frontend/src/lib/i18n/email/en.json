@@ -92,10 +92,13 @@
         "unknown": "This link is not valid: open it again, whole, from the email. If it still fails, sign in to ask for a new one.",
         "blocked": "This instance is blocked by its hosting provider, so the link cannot be checked now. Open it again once the instance is unblocked; if the link has expired by then, sign in to get a new one.",
         "missing": "This link is incomplete: open it again from the email.",
-        "error": "The link could not be checked: try again."
+        "error": "The link could not be checked: try again.",
+        "ready": "Confirm your email address to activate your account.",
+        "confirm": "Confirm my email address",
+        "notSignedUp": "If you did not sign up on this instance, close this page: nothing happens."
       },
       "verified": "Your email address is verified, {username}: you can sign in.",
-      "loginRequired": "Your email address is not verified yet: open the link in the email we sent you, then sign in.",
+      "loginRequired": "Your email address is not verified yet: open the link in the activation email, or ask for a new one below.",
       "resend": "Send the link again",
       "resending": "Sending…",
       "resent": "A new link is on its way: check your inbox, and the spam folder. Older links no longer work.",
@@ -108,10 +111,11 @@
         "unavailable": "The email cannot be sent right now: try again later, or ask the administrator of this instance.",
         "generic": "The link could not be sent: try again."
       },
-      "registered": "Account created. We sent you an email with a link to activate it: open it within 24 hours, then sign in.",
+      "registered": "Account created. We are sending you an email with a link to activate it: open it within 24 hours, then sign in. No email after a few minutes? Check the spam folder, then sign in with your username and password: you will be offered a new link.",
       "signUpUnavailable": "Sign-up is not possible right now: this instance cannot send the verification email. Try again later, or ask its administrator.",
       "settingNeedsEmail": "Needs an email with a link to go out: set up SMTP and LIBREFOLIO_PUBLIC_URL first (Settings › Administration › Email).",
-      "settingUnavailable": "Email verification needs an email with a link to go out, and none can go now: check Settings › Administration › Email."
+      "settingUnavailable": "Email verification needs an email with a link to go out, and none can go now: check Settings › Administration › Email.",
+      "registeredHeld": "Account created, but the activation email could not leave now: too many sign-ups from your network in the last hour. Sign in with your username and password: you will be offered a new link."
     },
     "sendLink": {
       "button": "Send by email",

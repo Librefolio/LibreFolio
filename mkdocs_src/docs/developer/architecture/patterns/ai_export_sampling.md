@@ -63,8 +63,14 @@ $$
 The most recent seven calendar days therefore remain daily. This is calendar
 sampling, not market-session sampling. Empty intervals remain in bucket plans and
 diagnostics. Indicator payloads publish source/non-empty counts but omit empty rows;
-the public renderer also omits completely empty financial temporal rows. Neither
-path invents observations or converts absence to zero.
+the public renderer also omits completely empty financial temporal rows and the empty
+buckets of price and rate series. Neither path invents observations or converts
+absence to zero. Empty price and rate buckets are not silent, though: each maximal
+run of them that holds a market-open day is reported, merged, as one gap carrying the
+last value stored before it, if any, never a value inside it. A weekend or a market
+holiday alone, whole empty daily buckets in this window, is never a gap, and neither is
+the snapshot day alone at the end of the series, whose price may not be synchronized yet
+([Price and Rate Gaps](ai_export_composition.md#series-gaps)).
 
 ## 🧮 Full Policy Matrix
 
@@ -331,6 +337,17 @@ This presentation rule does not modify:
 - coverage or insufficient-history warnings.
 
 Probe diagnostics count empty rows detected/omitted and temporal rows remaining.
+
+Price and rate series apply the same principle in their own renderer: `BUCKETS` lists
+only the buckets with an observation, and the omitted ones count in the same
+diagnostics. Their open-market absences are not dropped, though: the backend reports
+each maximal run of contiguous empty buckets that holds a market-open day as one
+merged gap (`price_gaps`, `rate_gaps`) carrying the last value stored before it, and
+the renderer prints the gaps right after `BUCKETS`, in a `PRICE GAPS` or `RATE GAPS`
+table followed by one meaning line
+([Snapshot Data Tables](ai_export_composition.md#snapshot-data-tables)). A gap is
+missing data: not a zero, and not proof that the value stayed the same. Weekends and
+market holidays alone are never gaps.
 
 ### 🏷️ Latest-per-category Context Events
 
