@@ -573,3 +573,54 @@ describe('J-48 — a leg crossing the scope reads as a transfer in the History',
         expect(details, 'nothing was sold: no proceeds').not.toContain(proceeds);
     });
 });
+
+/**
+ * J-68 — a transfer that leaves and arrives on one day names its origin in the History.
+ *
+ * The backend writes the same two rows for it as for a move that takes days (a departure and an arrival, both naming the
+ * source and the destination, the departure first): the History reads «A → in transit» and «in transit → B», on one date. Before
+ * that the day's only row was the arrival, which could not say where the units came from. Guard, green before and after the
+ * modal itself: the modal reads the ids the rows carry and keeps the order it is given for rows of one date and one transaction id.
+ */
+describe('J-68 — a same-day transfer names its origin in the History', () => {
+    const ALFA = {id: 61, name: 'Broker Alfa'} satisfies BrokerLike;
+    const BETA = {id: 62, name: 'Broker Beta'} satisfies BrokerLike;
+    const PAIR_ID = 7_550;
+
+    /** A row of the lot's History, as the generated client parses it. */
+    function row(event: Record<string, unknown>): LotTimelineEvent {
+        return schemas.LotTimelineEventSchema.parse({lot_id: LOT_ID, ...event});
+    }
+
+    it('the departure row names the source and the arrival row the destination, the departure first', () => {
+        const toFragment = `lot:${LOT_ID}/transfer:${PAIR_ID}/to:${BETA.id}`;
+        const moved = {date: '2025-03-10', transaction_id: PAIR_ID, related_transaction_id: PAIR_ID, source_broker_id: ALFA.id, destination_broker_id: BETA.id, fragment_id: toFragment, quantity: '10', unit_price: '20'};
+        const lot = schemas.LotSummarySchema.parse({
+            lot_id: LOT_ID,
+            opening_transaction_id: LOT_ID,
+            asset_id: 9_031,
+            direction: 'LONG',
+            opening_broker_id: ALFA.id,
+            opening_date: '2025-02-03',
+            closing_date: '2025-09-15',
+            opening_unit_price: '20',
+            original_quantity: '10',
+            original_cost: '200',
+            open_quantity: '0',
+            realized_quantity: '10',
+            realized_pnl: '50',
+            cumulative_proceeds: '250',
+            states: ['LONG', 'CLOSED'],
+            current_custody: [],
+        });
+        const history = [row({date: '2025-02-03', kind: 'BUY', transaction_id: LOT_ID, broker_id: ALFA.id, quantity: '10', unit_price: '20', opening_value: '200'}), row({...moved, kind: 'TRANSFER_DEPART', broker_id: null}), row({...moved, kind: 'TRANSFER_ARRIVE', broker_id: BETA.id})];
+        render(LotCustodyModal, {open: true, lot, history, brokers: [ALFA, BETA], currency: CURRENCY, onClose: vi.fn()});
+
+        const historySection = within(screen.getByTestId('lot-custody-modal')).getByTestId('lot-custody-modal-history');
+        const text = (index: number) => (within(historySection).getByTestId(`lot-custody-modal-history-row-${index}`).textContent ?? '').replace(/\s+/g, ' ');
+        expect(text(1), 'the departure names where the units left').toContain(ALFA.name);
+        expect(text(1), 'the departure names no destination broker yet: they are in transit').not.toContain(BETA.name);
+        expect(text(2), 'the arrival names where the units landed').toContain(BETA.name);
+        expect(text(2), 'the arrival does not repeat the origin').not.toContain(ALFA.name);
+    });
+});

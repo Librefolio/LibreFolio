@@ -1939,6 +1939,104 @@ def _s29_closure_rows(closure: LotClosure, fragments: list[FragmentInterval]) ->
     return [{"kind": str(row.kind), "fragment_id": row.fragment_id, "broker_id": row.broker_id} for row in rows if row.transaction_id == closure.transaction_id]
 
 
+_J68_DAY = date(2024, 1, 12)
+_J68_PAIR = 42
+
+
+def _j68_transfer_events(pair_id: int = _J68_PAIR, *, source: int = 1, destination: int = 2, arrival: date = _J68_DAY) -> list[FifoEvent]:
+    """The two events the engine classifies a TRANSFER pair into: the departure on ``_J68_DAY`` and the arrival on ``arrival``,
+    both naming the brokers of the pair (``FifoLotEngine._classify_events``)."""
+    common = {"transaction_id": pair_id, "pair_id": pair_id, "source_broker_id": source, "destination_broker_id": destination, "quantity": D("4")}
+    return [FifoEvent(kind="TRANSFER_DEPART", date=_J68_DAY, **common), FifoEvent(kind="TRANSFER_ARRIVE", date=arrival, **common)]
+
+
+def _j68_same_day_fragments(lot_id: int = 1, *, pair_id: int = _J68_PAIR) -> list[FragmentInterval]:
+    """What the replay leaves of a TRANSFER that departs and arrives on ``_J68_DAY``: the source piece, closed that day, and the
+    destination piece ``lot:{lot}/transfer:{pair}/to:{broker}``; no IN_TRANSIT fragment, since ``transfer_date < arrival_date`` is false."""
+    return [
+        _fragment(lot_id, fragment_id=f"lot:{lot_id}/start", broker_id=1, quantity=D("4"), end_date=_J68_DAY),
+        _fragment(lot_id, fragment_id=f"lot:{lot_id}/transfer:{pair_id}/to:2", broker_id=2, quantity=D("4"), start_date=_J68_DAY),
+    ]
+
+
+def _j68_transfer_rows(fragments: list[FragmentInterval], events: list[FifoEvent], *, lot_ids: tuple[int, ...] = (1,)) -> list[dict]:
+    """(kind, lot, date, broker, source, destination, fragment, transaction) of the transfer rows ``_build_lot_event_rows`` writes, in the
+    order it returns them."""
+    lots = {lot_id: _lot(lot_id, opening_broker_id=1, original_quantity=D("4"), open_quantity=D("4")) for lot_id in lot_ids}
+    result = _engine_result(lots=list(lots.values()), fragments=fragments, events=events)
+    rows = _svc()._build_lot_event_rows(engine_result=result, selected_ids=list(lot_ids), fx_resolver=_resolver("EUR"), lots_by_id=lots)
+    return [
+        {"kind": str(row.kind), "lot": row.lot_id, "date": row.date, "broker": row.broker_id, "source": row.source_broker_id, "destination": row.destination_broker_id, "fragment": row.fragment_id, "transaction": row.transaction_id}
+        for row in rows
+        if str(row.kind) in {"TRANSFER_DEPART", "TRANSFER_ARRIVE"}
+    ]
+
+
+class TestTheTransferRowsOfASameDayMove:
+    """J-68: a TRANSFER that leaves and arrives on one day names its origin, as one that takes days does.
+
+    The replay keeps no IN_TRANSIT fragment for it (``transfer_date < arrival_date`` is false), so its only piece is the destination
+    one, ``lot:{lot}/transfer:{pair}/to:{broker}``, which carries no source and no destination. The pair's brokers are in the
+    engine's classified TRANSFER events, which ``_build_transfer_rows`` did not read. Read on 21/10/2026 (base ``c042f2481``):
+    the one row is a TRANSFER_ARRIVE at the destination broker with neither id, and no TRANSFER_DEPART at all.
+    """
+
+    def test_a_same_day_move_writes_a_departure_and_an_arrival_that_name_both_brokers(self):
+        """RED today: one row, TRANSFER_ARRIVE, broker 2, source and destination None."""
+        fragment_id = f"lot:1/transfer:{_J68_PAIR}/to:2"
+        rows = _j68_transfer_rows(_j68_same_day_fragments(), _j68_transfer_events())
+        assert rows == [
+            {"kind": "TRANSFER_DEPART", "lot": 1, "date": _J68_DAY, "broker": None, "source": 1, "destination": 2, "fragment": fragment_id, "transaction": _J68_PAIR},
+            {"kind": "TRANSFER_ARRIVE", "lot": 1, "date": _J68_DAY, "broker": 2, "source": 1, "destination": 2, "fragment": fragment_id, "transaction": _J68_PAIR},
+        ]
+
+    def test_the_departure_comes_before_the_arrival(self):
+        """RED today. Both rows share the pair id as ``transaction_id`` and the day, so the history reads them in the order the
+        service returns them (a stable sort by date and transaction id): the sort key falls to the kind's name, and
+        ``TRANSFER_ARRIVE`` < ``TRANSFER_DEPART`` would put the arrival first."""
+        rows = _j68_transfer_rows(_j68_same_day_fragments(), _j68_transfer_events())
+        assert [row["kind"] for row in rows] == ["TRANSFER_DEPART", "TRANSFER_ARRIVE"]
+
+    def test_the_quantity_and_the_price_are_those_of_the_piece(self):
+        """RED today (no departure row): both rows carry the piece's 4 units at 10."""
+        lots = {1: _lot(1, opening_broker_id=1)}
+        result = _engine_result(lots=list(lots.values()), fragments=_j68_same_day_fragments(), events=_j68_transfer_events())
+        rows = _svc()._build_lot_event_rows(engine_result=result, selected_ids=[1], fx_resolver=_resolver("EUR"), lots_by_id=lots)
+        assert [(str(row.kind), row.quantity, row.unit_price) for row in rows if str(row.kind).startswith("TRANSFER")] == [("TRANSFER_DEPART", D("4"), D("10")), ("TRANSFER_ARRIVE", D("4"), D("10"))]
+
+    def test_each_lot_the_pair_moves_gets_its_own_two_rows(self):
+        """RED today (one row per lot). Two lots move in the same pair, as one TRANSFER of 8 units takes the 4 of each."""
+        fragments = [*_j68_same_day_fragments(1), *_j68_same_day_fragments(2)]
+        rows = _j68_transfer_rows(fragments, _j68_transfer_events(), lot_ids=(1, 2))
+        assert [(row["lot"], row["kind"], row["source"], row["destination"]) for row in rows] == [
+            (1, "TRANSFER_DEPART", 1, 2),
+            (1, "TRANSFER_ARRIVE", 1, 2),
+            (2, "TRANSFER_DEPART", 1, 2),
+            (2, "TRANSFER_ARRIVE", 1, 2),
+        ]
+
+    def test_guard_a_move_that_takes_days_keeps_its_two_rows_unchanged(self):
+        """GUARD, green before and after: the departure and the arrival come off the IN_TRANSIT fragment, on their own days, with no
+        broker of their own and both ids."""
+        transit_id = f"lot:1/transfer:{_J68_PAIR}/transit"
+        fragments = [
+            _fragment(1, fragment_id="lot:1/start", broker_id=1, quantity=D("4"), end_date=_J68_DAY),
+            _fragment(1, fragment_id=transit_id, custody_type="IN_TRANSIT", broker_id=None, quantity=D("4"), start_date=_J68_DAY, end_date=date(2024, 1, 13), source_broker_id=1, destination_broker_id=2),
+            _fragment(1, fragment_id=f"lot:1/transfer:{_J68_PAIR}/to:2", broker_id=2, quantity=D("4"), start_date=date(2024, 1, 13)),
+        ]
+        rows = _j68_transfer_rows(fragments, _j68_transfer_events(arrival=date(2024, 1, 13)))
+        assert rows == [
+            {"kind": "TRANSFER_DEPART", "lot": 1, "date": _J68_DAY, "broker": None, "source": 1, "destination": 2, "fragment": transit_id, "transaction": _J68_PAIR},
+            {"kind": "TRANSFER_ARRIVE", "lot": 1, "date": date(2024, 1, 13), "broker": None, "source": 1, "destination": 2, "fragment": transit_id, "transaction": _J68_PAIR},
+        ]
+
+    def test_guard_a_piece_whose_pair_the_replay_never_classified_keeps_its_one_row_and_names_no_partner(self):
+        """GUARD, green before and after: a transfer leg read at the scope's edge has no pair in the classified events (its partner
+        sits outside the scope, J-10): its one TRANSFER_ARRIVE names the broker it landed at and invents no origin (J-48)."""
+        rows = _j68_transfer_rows(_j68_same_day_fragments(), [])
+        assert rows == [{"kind": "TRANSFER_ARRIVE", "lot": 1, "date": _J68_DAY, "broker": 2, "source": None, "destination": None, "fragment": f"lot:1/transfer:{_J68_PAIR}/to:2", "transaction": _J68_PAIR}]
+
+
 class TestSmallBuilders:
     def test_known_cumulative_proceeds_of_a_short_lot_uses_the_lot_total(self):
         """A short's proceeds arrived at opening, not at each closure."""

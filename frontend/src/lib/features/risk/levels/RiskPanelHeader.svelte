@@ -9,7 +9,7 @@
     import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {fxRoutesVersion, getConfiguredPairSlugs} from '$lib/stores/reference/fxRoutesStore';
     import type {RiskPanelController} from '$lib/features/risk/riskPanelController.svelte';
-    import {addPairSides, labQualityAction} from '$lib/features/risk/syncTargets';
+    import {addPairSides, buildSyncTargets, labQualityAction} from '$lib/features/risk/syncTargets';
 
     import {RotateCw} from 'lucide-svelte';
 
@@ -38,32 +38,11 @@
 
     let syncOpen = $state(false);
 
-    let syncAssets = $derived.by(() => {
+    /** The assets and the exchange-rate pairs this answer rests on: the one rule every risk surface reads. */
+    let syncTargets = $derived.by(() => {
         void $assetStoreVersion;
-        return [...new Set(assetIds)]
-            .sort((left, right) => left - right)
-            .map((assetId) => getAssetInfo(assetId))
-            .filter((asset) => Boolean(asset))
-            .map((asset) => ({
-                id: asset!.id,
-                display_name: asset!.display_name,
-                currency: asset!.currency,
-                icon_url: asset!.icon_url,
-                asset_type: asset!.asset_type,
-                provider_code: asset!.provider_code,
-            }));
-    });
-
-    let syncFxPairs = $derived.by(() => {
         void $fxRoutesVersion;
-        const configured = getConfiguredPairSlugs();
-        const pairs = new Set<string>();
-        for (const asset of syncAssets) {
-            if (!asset || asset.currency === targetCurrency) continue;
-            const slug = [asset.currency, targetCurrency].sort().join('-');
-            if (configured.has(slug)) pairs.add(slug);
-        }
-        return [...pairs].sort();
+        return buildSyncTargets(assetIds, targetCurrency, getAssetInfo, getConfiguredPairSlugs());
     });
 
     /** The «add FX pair» dialog an `add_fx_pair` chip opens (TC-23), and the sides it opens on. */
@@ -103,7 +82,13 @@
     </div>
     {#if showActions}
         <div class="flex items-center gap-2">
-            <button type="button" class="flex items-center gap-1.5 rounded-lg border border-lf-subtle bg-lf-card px-3 py-1.5 text-xs text-lf-secondary disabled:opacity-50" onclick={() => (syncOpen = true)} disabled={syncAssets.length === 0 && syncFxPairs.length === 0} data-testid="risk-sync-button">
+            <button
+                type="button"
+                class="flex items-center gap-1.5 rounded-lg border border-lf-subtle bg-lf-card px-3 py-1.5 text-xs text-lf-secondary disabled:opacity-50"
+                onclick={() => (syncOpen = true)}
+                disabled={syncTargets.assets.length === 0 && syncTargets.fxPairs.length === 0}
+                data-testid="risk-sync-button"
+            >
                 <RotateCw size={14} />
                 {$t('common.sync')}
             </button>
@@ -121,7 +106,7 @@
     <DataQualityBanner issues={controller.dataQualityIssues} mode="grouped" onaction={(action, target) => handleQualityAction(action, target)} />
 {/if}
 
-<PageSyncModal bind:open={syncOpen} {dateStart} {dateEnd} assets={syncAssets} fxPairs={syncFxPairs} onsynced={() => controller.handleSynced()} onclose={() => (syncOpen = false)} />
+<PageSyncModal bind:open={syncOpen} {dateStart} {dateEnd} assets={syncTargets.assets} fxPairs={syncTargets.fxPairs} onsynced={() => controller.handleSynced()} onclose={() => (syncOpen = false)} />
 
 {#if addPairOpen}
     <FxPairAddModal bind:open={addPairOpen} initialBase={addPairInitial.base} initialQuote={addPairInitial.quote} oncreated={refreshAfterPair} onsynced={refreshAfterPair} />

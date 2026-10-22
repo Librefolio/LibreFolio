@@ -9,9 +9,9 @@
  * prices-only sync and lost the only entry point that refreshed both.
  *
  * Pure on purpose: the lookup and the set of configured pairs are passed in, so
- * the rule can be pinned by a unit test instead of by a page. It is the same rule
- * `RiskPanelHeader` applies inline, lifted so a second surface does not become a
- * second copy that can drift from the first.
+ * the rule can be pinned by a unit test instead of by a page. Every risk surface reads it
+ * (`RiskPanelHeader`, `RiskAnalysisPanel`, `AssetSetRiskPanel`), so none keeps a copy that
+ * can drift from the others (J-71).
  *
  * The banner rule below (`labQualityAction`) is the one every risk panel reads —
  * the lab, the levels of the Dashboard and of a broker, and the asset detail (TC-23).
