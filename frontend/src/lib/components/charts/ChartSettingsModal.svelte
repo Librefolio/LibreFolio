@@ -150,10 +150,10 @@
         }
     });
 
-    /** The view the preview opens on: the saved one; the rolling return only where it is offered (the asset charts). */
+    /** The view the preview opens on: the saved one; the rolling return only where it is offered (its page computes it). */
     function openingView(saved: ChartSettings | undefined): ChartPrimaryView {
         const view = saved?.primaryView ?? 'percentage';
-        return view === 'calendar-return' && axisDomain !== 'asset' ? 'percentage' : view;
+        return view === 'calendar-return' && !calendarPreviewResolver ? 'percentage' : view;
     }
 
     // =========================================================================
@@ -471,7 +471,7 @@
                             type="button"
                             >%
                         </button>
-                        {#if axisDomain === 'asset' && calendarPreviewResolver}
+                        {#if calendarPreviewResolver}
                             <button
                                 class="inline-flex items-center px-2.5 py-1 text-[10px] font-medium transition-colors {previewView === 'calendar-return' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                                 data-testid="chart-settings-preview-view-calendar-return"

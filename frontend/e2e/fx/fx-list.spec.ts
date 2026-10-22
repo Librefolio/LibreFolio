@@ -236,6 +236,95 @@ test.describe('FX List Page', () => {
         expect(Array.isArray(bulkRequests[0].postData)).toBe(true);
         expect((bulkRequests[0].postData as unknown[]).length).toBeGreaterThan(0);
     });
+
+    /**
+     * Y-40, FX — the top bar's three views: the list opens on absolute rates; in the rolling-return view each card asks its
+     * pair's rolling return (a sampled conversion named `fx:<slug>`, with ASSET_CALENDAR_ROLLING_RETURN) and settles
+     * (`data-calendar-state`: ready, partial or unavailable, never stuck loading nor in error).
+     */
+    test('the top bar’s three views update every FX card, opening on Abs, and the rolling return is asked and drawn', async ({page}) => {
+        const asked: unknown[] = [];
+        page.on('request', (request) => {
+            if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/fx/currencies/convert') return;
+            asked.push(...((request.postDataJSON() as unknown[]) ?? []));
+        });
+        await goToFxPage(page);
+        await waitForSettled(page.getByTestId('fx-page'), 20_000);
+        const cards = page.locator('[data-testid^="fx-card-"][data-view-mode]');
+        await expect.poll(() => cards.count(), {timeout: 10_000}).toBeGreaterThan(0);
+        const everyCardUses = async (mode: 'absolute' | 'percentage' | 'calendar-return') => cards.evaluateAll((nodes, expected) => nodes.length > 0 && nodes.every((node) => (node as HTMLElement).dataset.viewMode === expected), mode);
+
+        await expect.poll(() => everyCardUses('absolute'), {message: 'the FX list opens on absolute rates', timeout: 5_000}).toBe(true);
+        await expect(page.getByTestId('fx-global-view-absolute')).toHaveAttribute('aria-pressed', 'true');
+
+        await page.getByTestId('fx-global-view-calendar-return').click();
+        await expect.poll(() => everyCardUses('calendar-return'), {timeout: 5_000}).toBe(true);
+        await waitForSettled(page.getByTestId('fx-page'), 20_000);
+        const states = await cards.evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.calendarState));
+        expect(
+            states.filter((state) => !['ready', 'partial', 'unavailable'].includes(String(state))),
+            'every card settles its rolling return: ready, partial or unavailable',
+        ).toEqual([]);
+        expect(states, 'the seeded pairs have the history for a rolling return').toContain('ready');
+        const calendarItems = asked.filter((item) => ((item as {signals?: Array<{signal_code?: string}>}).signals ?? []).some((signal) => signal.signal_code === 'ASSET_CALENDAR_ROLLING_RETURN'));
+        expect(calendarItems.length, 'the cards asked their rolling return').toBeGreaterThan(0);
+        expect(
+            calendarItems.every((item) => /^fx:[A-Z]{3}-[A-Z]{3}$/.test(String((item as {key?: string}).key)) || typeof (item as {sample_like?: string}).sample_like === 'string'),
+            'each card’s conversion is named for its compared pairs',
+        ).toBe(true);
+
+        await page.getByTestId('fx-global-view-percentage').click();
+        await expect.poll(() => everyCardUses('percentage'), {timeout: 5_000}).toBe(true);
+    });
+
+    /** Y-40, FX (V-1 a, V-3 a) — a card's button turns percent → rolling return → absolute; the card keeps its view across a reload until the top bar changes. */
+    test('one FX card turns its own view, keeps it across a reload, until a later global change', async ({page}) => {
+        await goToFxPage(page);
+        await waitForSettled(page.getByTestId('fx-page'), 20_000);
+        const cards = page.locator('[data-testid^="fx-card-"][data-view-mode]');
+        await expect.poll(() => cards.count(), {timeout: 10_000}).toBeGreaterThan(1);
+        const chosenTestId = await cards.evaluateAll(
+            (nodes) =>
+                nodes
+                    .map((node) => node.getAttribute('data-testid'))
+                    .filter(Boolean)
+                    .sort()[0],
+        );
+        if (!chosenTestId) throw new Error('the seeded FX list must show at least two cards');
+        const chosen = page.getByTestId(chosenTestId);
+        const everyOtherCardUses = async (mode: string) =>
+            cards.evaluateAll(
+                (nodes, expected) => {
+                    const others = nodes.filter((node) => node.getAttribute('data-testid') !== expected.chosenTestId);
+                    return others.length > 0 && others.every((node) => (node as HTMLElement).dataset.viewMode === expected.mode);
+                },
+                {chosenTestId, mode},
+            );
+
+        await page.getByTestId('fx-global-view-percentage').click();
+        await expect.poll(() => everyOtherCardUses('percentage'), {timeout: 5_000}).toBe(true);
+        await expect(chosen).toHaveAttribute('data-view-mode', 'percentage');
+
+        const toggle = chosen.getByTestId('fx-card-view-toggle');
+        await expect(toggle).toHaveAttribute('data-next-view', 'calendar-return');
+        await toggle.click();
+        await expect(chosen).toHaveAttribute('data-view-mode', 'calendar-return');
+        await expect(chosen).toHaveAttribute('data-calendar-state', /^(ready|partial|unavailable)$/, {timeout: 15_000});
+        await toggle.click();
+        await expect(chosen).toHaveAttribute('data-view-mode', 'absolute');
+        await expect.poll(() => everyOtherCardUses('percentage'), {timeout: 5_000}).toBe(true);
+
+        await page.reload();
+        await waitForSettled(page.getByTestId('fx-page'), 20_000);
+        await expect(page.getByTestId(chosenTestId), 'the card’s view is saved (V-1 a)').toHaveAttribute('data-view-mode', 'absolute', {timeout: 10_000});
+        await expect.poll(() => everyOtherCardUses('percentage'), {timeout: 5_000}).toBe(true);
+
+        await page.getByTestId('fx-global-view-calendar-return').click();
+        await expect(page.getByTestId(chosenTestId), 'the top bar resets every card (V-3 a)').toHaveAttribute('data-view-mode', 'calendar-return');
+        await page.getByTestId('fx-global-view-absolute').click();
+        await expect(page.getByTestId(chosenTestId)).toHaveAttribute('data-view-mode', 'absolute');
+        await expect.poll(() => everyOtherCardUses('absolute'), {timeout: 5_000}).toBe(true);
+    });
 });
 
 // ============================================================================

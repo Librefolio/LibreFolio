@@ -381,7 +381,8 @@ describe('ChartSettingsModal preview — the detail page’s chart (Y-39b, F-1)'
  * - The window is chosen there (`asset-calendar-window-<preset>`, the detail's controls): while the settings' window is
  *   automatic, the one in force is the largest preset that fits the period on screen (`calendarRangeDays`); a preset chosen
  *   is asked at once and saved as chosen (`calendarReturnWindowAuto: false`).
- * - The FX settings offer no rolling return yet (its backend is lot Z-29fx).
+ * - The third view is offered where the page computes the rolling return (`calendarPreviewResolver`): the asset settings,
+ *   and the FX ones since the FX half of Y-40; without it, a saved rolling return opens in percent.
  *
  * Red today: two views, no resolver, no window.
  */
@@ -454,9 +455,16 @@ describe('ChartSettingsModal — the three views, and the rolling-return preview
         expect(onsave).toHaveBeenCalledWith(expect.objectContaining({calendarReturnWindow: expect.objectContaining({kind: 'preset', preset: '1y'}), calendarReturnWindowAuto: false}));
     });
 
-    it('guard: the FX settings offer no rolling return yet', async () => {
-        await open({axisDomain: 'fx'});
+    it('offers the rolling return to the FX settings too, once their page computes it (Y-40, FX)', async () => {
+        await open({axisDomain: 'fx'}, {primaryView: 'calendar-return'} as Partial<ChartSettings>);
+
+        expect(viewButton('calendar-return'), 'the FX settings open on their saved rolling return').toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('guard: settings whose page computes no rolling return offer none, and open a saved one in percent', async () => {
+        await open({axisDomain: 'fx', calendarPreviewResolver: undefined}, {primaryView: 'calendar-return'} as Partial<ChartSettings>);
 
         expect(screen.queryByTestId('chart-settings-preview-view-calendar-return')).toBeNull();
+        expect(viewButton('percentage')).toHaveAttribute('aria-pressed', 'true');
     });
 });

@@ -593,3 +593,48 @@ describe('renderCalendarComparisons — the comparisons of the rolling-return vi
         expect(render([config('cmp-9', 9), config('cmp-7', 7), config('cmp-x', 'x')], views, () => null, String, 7)).toEqual([]);
     });
 });
+
+/**
+ * Y-40, the FX half — the FX pairs compared on an FX card in the rolling-return view: each saved `fx-pair` signal drawn
+ * with its pair's rolling return (`views`, by the signal's id), named as the signal names itself (its pair, the way it
+ * shows it), in its style, on the primary percent axis. A return not ready nor partial draws nothing, nor does any other
+ * signal.
+ *
+ * Red today: `renderCalendarPairComparisons` does not exist.
+ */
+describe('renderCalendarPairComparisons — the FX pairs of the rolling-return view (Y-40, FX)', () => {
+    const style = {color: '#10b981', lineWidth: 2, lineType: 'solid' as const, markerStart: null, markerEnd: null};
+    const pair = (id: string, pairSlug: string, inverted = false): SignalConfig => ({id, signalType: 'fx-pair', params: inverted ? {pairSlug, _inverted: true} : {pairSlug}, style});
+    const RETURNS: LineDataPoint[] = [{date: '2026-03-02', value: -0.5}];
+    const render = (Reflect.get(module, 'renderCalendarPairComparisons') ??
+        (() => {
+            throw new Error('chartSignalRendering exports no renderCalendarPairComparisons()');
+        })) as (configs: SignalConfig[], views: ReadonlyMap<string, {state: string; points: LineDataPoint[]}>) => RenderedSignal[];
+
+    it('draws a compared pair with its rolling return, named as its signal names it, in its style, on the percent axis', () => {
+        const config = pair('fx-gbp', 'EUR-GBP', true);
+        const [signal] = render([config], new Map([['fx-gbp', {state: 'ready', points: RETURNS}]]));
+
+        expect(signal).toMatchObject({
+            id: 'fx-gbp:calendar-return',
+            label: renderLocalSignal(config, [{date: '2026-03-02', value: 1}], 'absolute', {fxPairData: () => [{date: '2026-03-02', value: 2}], comparisonTarget: () => null})[0]?.label,
+            data: RETURNS,
+            color: '#10b981',
+            yAxisIndex: 0,
+            unit: 'percentage',
+        });
+    });
+
+    it('draws nothing for a return not ready, nor for another signal', () => {
+        const linear: SignalConfig = {id: 'lin', signalType: 'linear', params: {annualRate: 2, offset: 0}, style};
+        expect(
+            render(
+                [pair('fx-gbp', 'EUR-GBP'), linear],
+                new Map([
+                    ['fx-gbp', {state: 'error', points: []}],
+                    ['lin', {state: 'ready', points: RETURNS}],
+                ]),
+            ),
+        ).toEqual([]);
+    });
+});
