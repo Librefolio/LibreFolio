@@ -248,14 +248,16 @@ async def _seed_l1_same_day(session: AsyncSession) -> LedgerL1:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("transfer", ["in-transit", "same-day"])
-async def test_s29_c4_guard_the_transfer_rows_keep_their_brokers(session, transfer):
-    """§29 point 2, C4 — GUARD (green today and after): the cure touches the closure rows only. U sees the ledger whole
-    (``broker_ids=None``), COMPLETE without issue, and the transfer rows are as ``_build_transfer_rows`` writes them:
+async def test_s29_c4_the_transfer_rows_name_their_brokers(session, transfer):
+    """§29 point 2, C4 — the §29 cure touches the closure rows only. U sees the ledger whole (``broker_ids=None``), COMPLETE
+    without issue, and the transfer rows are as ``_build_transfer_rows`` writes them:
 
-    - ``in-transit``, L1 (12 → 13 Jan): both rows are read off the transit fragment — TRANSFER_DEPART on 12 Jan and
-      TRANSFER_ARRIVE on 13 Jan name no broker, A as the source and B as the destination;
-    - ``same-day``, L1 with B's leg dated 12 Jan: no transit, so the one transfer row is TRANSFER_ARRIVE on 12 Jan, read
-      off B's fragment — it names B, with no source or destination.
+    - ``in-transit``, L1 (12 → 13 Jan) — GUARD, green before and after: both rows are read off the transit fragment —
+      TRANSFER_DEPART on 12 Jan and TRANSFER_ARRIVE on 13 Jan name no broker, A as the source and B as the destination;
+    - ``same-day``, L1 with B's leg dated 12 Jan — J-68, RED before the cure (ondata 4, base ``c042f2481``: one
+      TRANSFER_ARRIVE on 12 Jan, read off B's fragment, naming B with no source or destination): no transit, yet the pair's
+      brokers are in the engine's events, so the move writes both rows on 12 Jan with A as the source and B as the
+      destination — the arrival keeps B as its broker, the departure names none (as a move of days does).
     """
     book = await seed_l1(session) if transfer == "in-transit" else await _seed_l1_same_day(session)
     a, b = book.broker_a.id, book.broker_b.id
@@ -265,7 +267,7 @@ async def test_s29_c4_guard_the_transfer_rows_keep_their_brokers(session, transf
     # (kind, date, broker, source, destination)
     expected_rows = {
         "in-transit": [("TRANSFER_DEPART", L1_DEPARTURE_DAY, None, a, b), ("TRANSFER_ARRIVE", L1_ARRIVAL_DAY, None, a, b)],
-        "same-day": [("TRANSFER_ARRIVE", L1_DEPARTURE_DAY, b, None, None)],
+        "same-day": [("TRANSFER_ARRIVE", L1_DEPARTURE_DAY, b, a, b), ("TRANSFER_DEPART", L1_DEPARTURE_DAY, None, a, b)],  # the helper sorts by kind, not by the order of the history
     }
     assert {"status": result.calculation_status, "issue codes": _issue_codes(result), "transfer rows": _transfer_rows(result)} == {
         "status": "COMPLETE",
