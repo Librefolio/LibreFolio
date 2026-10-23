@@ -16,6 +16,8 @@ on:
 permissions:
   contents: write     # Required to push to the gh-pages branch with mkdocs gh-deploy
   packages: write     # Required to push images to GHCR
+  id-token: write     # Required to sign the build attestation of the images (keyless: GitHub OIDC + Sigstore)
+  attestations: write # Required to store the build attestation of the images
 
 jobs:
   release-pipeline:
@@ -361,6 +363,7 @@ jobs:
       # is slower. The first tag is the real test: the check steps below verify both
       # platforms in every pushed manifest.
       - name: Build and Push Docker Image (Light Variant)
+        id: build-light
         if: steps.meta-light.outputs.tags != ''
         uses: docker/build-push-action@v7
         with:
@@ -374,8 +377,23 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Build attestation (SLSA provenance) of the light image, signed keyless with the OIDC token of this run and
+      # Sigstore: no secret to keep. It is attached to the image digest in GHCR, so it covers every tag of the
+      # variant. Verify with `gh attestation verify oci://ghcr.io/librefolio/librefolio@sha256:<digest> --owner Librefolio`
+      # (docs: admin/docker_advanced, «Verify the Image You Pull»). v4 wraps actions/attest; the storage record is
+      # off because it asks for one more permission (artifact-metadata) that nothing here uses.
+      - name: Attest the Light Image (build provenance)
+        if: steps.build-light.outputs.digest != ''
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ghcr.io/librefolio/librefolio
+          subject-digest: ${{ steps.build-light.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
       # Same platforms as the light variant (arm64 notes above).
       - name: Build and Push Docker Image
+        id: build-full
         if: steps.meta.outputs.tags != ''
         uses: docker/build-push-action@v7
         with:
@@ -386,6 +404,16 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # The same attestation for the full image.
+      - name: Attest the Full Image (build provenance)
+        if: steps.build-full.outputs.digest != ''
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ghcr.io/librefolio/librefolio
+          subject-digest: ${{ steps.build-full.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
 
       # Fail the job when a pushed tag lacks a platform. Tags come from the metadata step,
       # passed through env (not inline in the script).
