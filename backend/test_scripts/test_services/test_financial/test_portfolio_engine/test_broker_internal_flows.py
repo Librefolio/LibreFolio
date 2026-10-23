@@ -51,7 +51,7 @@ from backend.app.db.models import TransactionType
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
-from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, DailyPortfolioState, EngineEndState
+from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, DailyPortfolioState, DailyStates, EngineEndState
 from backend.app.services.financial_math.price_marks import build_asset_price_series
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
@@ -1232,12 +1232,15 @@ def _first_difference(a, b, path: str) -> str | None:
     """Path and values of the first difference between two results, or None.
 
     Dataclasses field by field (minus _EXCLUDED_FIELDS), dicts by key set then value,
-    sequences by length then item, Decimals byte for byte (as_tuple), the rest by ==.
+    sequences (a DailyStates as its list of days) by length then item, Decimals byte for byte (as_tuple), the rest by ==.
     """
     if a is b:
         return None
     if type(a) is not type(b):
         return f"{path}: type {type(a).__name__} != {type(b).__name__}"
+    if isinstance(a, DailyStates):
+        # P4: the engine's states as segments; compared day by day, as the dense list was, so the exclusions hold
+        return _sequence_difference(list(a), list(b), path)
     if dataclasses.is_dataclass(a):
         return _dataclass_difference(a, b, path)
     if isinstance(a, dict):

@@ -73,7 +73,7 @@ class WACAnalyticsResponse(StrictModel):
 
 
 class AllocationItem(StrictModel):
-    """Single allocation slice (by type, sector, or geography)."""
+    """Single allocation slice (by type, sector, geography, or asset)."""
 
     name: str = Field(..., description="Category name, e.g. 'ETF', 'Technology', 'US', 'Unknown'")
     value: SafeDecimal = Field(
@@ -82,6 +82,7 @@ class AllocationItem(StrictModel):
     )
     amount: SafeDecimal = Field(..., description="Absolute value in base currency")
     emoji: Optional[str] = Field(None, description="Display emoji for the category (sector/type/geo)")
+    id: Optional[int] = Field(None, description="Asset id of a slice of the asset dimension (the colour key); None for its Liquidity slice and in the other dimensions")
 
 
 # =============================================================================
@@ -575,6 +576,7 @@ class PortfolioSummary(StrictModel):
     allocation_by_type: List[AllocationItem] = Field(default_factory=list)
     allocation_by_sector: List[AllocationItem] = Field(default_factory=list)
     allocation_by_geography: List[AllocationItem] = Field(default_factory=list)
+    allocation_by_asset: List[AllocationItem] = Field(default_factory=list, description="Held market value by asset (id = asset id), plus the Liquidity slice")
     holdings: List[PortfolioHolding] = Field(default_factory=list)
     holding_groups: List[HoldingGroupGainLoss] = Field(
         default_factory=list,
@@ -1186,11 +1188,12 @@ class LotsAnalysisResponse(StrictModel):
 
 
 class AllocationHistoryDimensions(StrictModel):
-    """Allocation history for all three dimensions."""
+    """Allocation history for all four dimensions."""
 
     type: List[AllocationHistoryPoint] = Field(default_factory=list)
     sector: List[AllocationHistoryPoint] = Field(default_factory=list)
     geography: List[AllocationHistoryPoint] = Field(default_factory=list)
+    asset: List[AllocationHistoryPoint] = Field(default_factory=list, description="By asset (component id = asset id), plus Liquidity")
 
 
 class PortfolioReportMetadata(StrictModel):

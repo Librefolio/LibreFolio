@@ -198,6 +198,7 @@
             }
           },
           "broker_nav_value": "14000.00000000",
+          "by_asset": {},
           "by_geography": {},
           "by_sector": {
             "Liquidity": "14000.00000000"
@@ -266,6 +267,11 @@
             }
           },
           "broker_nav_value": "14000.00000000000",
+          "by_asset": {
+            "EQ": "1234.560000000",
+            "IDX": "987.65400000000",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "2472.46400000000"
           },
@@ -356,6 +362,11 @@
             }
           },
           "broker_nav_value": "13962.51481426625315208254833",
+          "by_asset": {
+            "EQ": "1254.3210000000",
+            "IDX": "930.4078142662531520825483320",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "2434.978814266253152082548332"
           },
@@ -442,6 +453,11 @@
             }
           },
           "broker_nav_value": "13959.30331432243901734521454",
+          "by_asset": {
+            "EQ": "1254.3210000000",
+            "IDX": "927.1963143224390173452145406",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "2431.767314322439017345214541"
           },
@@ -528,6 +544,11 @@
             }
           },
           "broker_nav_value": "13968.14331432243901734521454",
+          "by_asset": {
+            "EQ": "1254.3210000000",
+            "IDX": "927.1963143224390173452145406",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "2431.767314322439017345214541"
           },
@@ -614,6 +635,11 @@
             }
           },
           "broker_nav_value": "13968.14331432243901734521454",
+          "by_asset": {
+            "EQ": "1254.3210000000",
+            "IDX": "927.1963143224390173452145406",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "2431.767314322439017345214541"
           },
@@ -700,6 +726,11 @@
             }
           },
           "broker_nav_value": "14015.82231432243901734521454",
+          "by_asset": {
+            "EQ": "781.20000000",
+            "IDX": "927.1963143224390173452145406",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1958.646314322439017345214541"
           },
@@ -788,6 +819,11 @@
             }
           },
           "broker_nav_value": "14015.82231432243901734521454",
+          "by_asset": {
+            "EQ": "781.20000000",
+            "IDX": "927.1963143224390173452145406",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1958.646314322439017345214541"
           },
@@ -876,6 +912,11 @@
             }
           },
           "broker_nav_value": "13715.82231432243901734521454",
+          "by_asset": {
+            "EQ": "781.20000000",
+            "IDX": "927.1963143224390173452145406",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1958.646314322439017345214541"
           },
@@ -964,6 +1005,11 @@
             }
           },
           "broker_nav_value": "13315.82231432243901734521454",
+          "by_asset": {
+            "EQ": "781.20000000",
+            "IDX": "927.1963143224390173452145406",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1958.646314322439017345214541"
           },
@@ -1054,6 +1100,11 @@
             }
           },
           "broker_nav_value": "13315.82231432243901734521454",
+          "by_asset": {
+            "EQ": "781.20000000",
+            "IDX": "927.1963143224390173452145406",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1958.646314322439017345214541"
           },
@@ -1145,6 +1196,11 @@
             }
           },
           "broker_nav_value": "13515.82231432243901734521454",
+          "by_asset": {
+            "EQ": "781.20000000",
+            "IDX": "927.1963143224390173452145406",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1958.646314322439017345214541"
           },
@@ -1236,6 +1292,11 @@
             }
           },
           "broker_nav_value": "13255.42231432243901734521454",
+          "by_asset": {
+            "EQ": "520.80000000",
+            "IDX": "927.1963143224390173452145406",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1698.246314322439017345214541"
           },
@@ -1327,6 +1388,11 @@
             }
           },
           "broker_nav_value": "13255.42231432243901734521454",
+          "by_asset": {
+            "EQ": "520.80000000",
+            "IDX": "927.1963143224390173452145406",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1698.246314322439017345214541"
           },
@@ -1418,6 +1484,11 @@
             }
           },
           "broker_nav_value": "13255.42231432243901734521454",
+          "by_asset": {
+            "EQ": "520.80000000",
+            "IDX": "927.1963143224390173452145406",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1698.246314322439017345214541"
           },
@@ -1510,6 +1581,11 @@
             }
           },
           "broker_nav_value": "13385.62231432243901734521454",
+          "by_asset": {
+            "EQ": "651.00000000",
+            "IDX": "927.1963143224390173452145406",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1828.446314322439017345214541"
           },
@@ -1602,6 +1678,11 @@
             }
           },
           "broker_nav_value": "13385.62231432243901734521454",
+          "by_asset": {
+            "EQ": "651.00000000",
+            "IDX": "927.1963143224390173452145406",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1828.446314322439017345214541"
           },
@@ -1694,6 +1775,11 @@
             }
           },
           "broker_nav_value": "13392.06763867196021116007155",
+          "by_asset": {
+            "EQ": "651.00000000",
+            "IDX": "933.6416386719602111600715502",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1834.891638671960211160071550"
           },
@@ -1786,6 +1872,11 @@
             }
           },
           "broker_nav_value": "13392.06763867196021116007155",
+          "by_asset": {
+            "EQ": "651.00000000",
+            "IDX": "933.6416386719602111600715502",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1834.891638671960211160071550"
           },
@@ -1878,6 +1969,11 @@
             }
           },
           "broker_nav_value": "13458.95417721739889184590550",
+          "by_asset": {
+            "EQ": "655.35000000",
+            "IDX": "996.1781772173988918459055016",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1901.778177217398891845905502"
           },
@@ -1966,6 +2062,11 @@
             }
           },
           "broker_nav_value": "13458.95417721739889184590550",
+          "by_asset": {
+            "EQ": "655.35000000",
+            "IDX": "996.1781772173988918459055016",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1901.778177217398891845905502"
           },
@@ -2054,6 +2155,11 @@
             }
           },
           "broker_nav_value": "13454.09582633863965267727930",
+          "by_asset": {
+            "EQ": "655.35000000",
+            "IDX": "991.3198263386396526772793053",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1896.919826338639652677279305"
           },
@@ -2142,6 +2248,11 @@
             }
           },
           "broker_nav_value": "13454.09582633863965267727930",
+          "by_asset": {
+            "EQ": "655.35000000",
+            "IDX": "991.3198263386396526772793053",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1896.919826338639652677279305"
           },
@@ -2230,6 +2341,11 @@
             }
           },
           "broker_nav_value": "13454.09582633863965267727930",
+          "by_asset": {
+            "EQ": "655.35000000",
+            "IDX": "991.3198263386396526772793053",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1896.919826338639652677279305"
           },
@@ -2318,6 +2434,11 @@
             }
           },
           "broker_nav_value": "13454.09582633863965267727930",
+          "by_asset": {
+            "EQ": "655.35000000",
+            "IDX": "991.3198263386396526772793053",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1896.919826338639652677279305"
           },
@@ -5300,6 +5421,812 @@
         ]
       },
       "allocation_history": {
+        "asset": [
+          {
+            "components": [
+              {
+                "amount": "14000.00000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "100.00"
+              }
+            ],
+            "date": "2091-01-01"
+          },
+          {
+            "components": [
+              {
+                "amount": "11527.536000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "82.34"
+              },
+              {
+                "amount": "1234.560000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "8.82"
+              },
+              {
+                "amount": "987.65400000000",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "7.05"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.79"
+              }
+            ],
+            "date": "2091-01-02"
+          },
+          {
+            "components": [
+              {
+                "amount": "11527.536000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "82.56"
+              },
+              {
+                "amount": "1254.3210000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "8.98"
+              },
+              {
+                "amount": "930.4078142662531520825483320",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.66"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.79"
+              }
+            ],
+            "date": "2091-01-03"
+          },
+          {
+            "components": [
+              {
+                "amount": "11527.536000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "82.58"
+              },
+              {
+                "amount": "1254.3210000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "8.99"
+              },
+              {
+                "amount": "927.1963143224390173452145406",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.64"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.79"
+              }
+            ],
+            "date": "2091-01-04"
+          },
+          {
+            "components": [
+              {
+                "amount": "11536.376000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "82.59"
+              },
+              {
+                "amount": "1254.3210000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "8.98"
+              },
+              {
+                "amount": "927.1963143224390173452145406",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.64"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.79"
+              }
+            ],
+            "date": "2091-01-05"
+          },
+          {
+            "components": [
+              {
+                "amount": "11536.376000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "82.59"
+              },
+              {
+                "amount": "1254.3210000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "8.98"
+              },
+              {
+                "amount": "927.1963143224390173452145406",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.64"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.79"
+              }
+            ],
+            "date": "2091-01-06"
+          },
+          {
+            "components": [
+              {
+                "amount": "12057.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "86.03"
+              },
+              {
+                "amount": "927.1963143224390173452145406",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.62"
+              },
+              {
+                "amount": "781.20000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "5.57"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.79"
+              }
+            ],
+            "date": "2091-01-07"
+          },
+          {
+            "components": [
+              {
+                "amount": "12057.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "86.03"
+              },
+              {
+                "amount": "927.1963143224390173452145406",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.62"
+              },
+              {
+                "amount": "781.20000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "5.57"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.79"
+              }
+            ],
+            "date": "2091-01-08"
+          },
+          {
+            "components": [
+              {
+                "amount": "11757.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "85.72"
+              },
+              {
+                "amount": "927.1963143224390173452145406",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.76"
+              },
+              {
+                "amount": "781.20000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "5.70"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.82"
+              }
+            ],
+            "date": "2091-01-09"
+          },
+          {
+            "components": [
+              {
+                "amount": "11757.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "85.72"
+              },
+              {
+                "amount": "927.1963143224390173452145406",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.76"
+              },
+              {
+                "amount": "781.20000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "5.70"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.82"
+              }
+            ],
+            "date": "2091-01-10"
+          },
+          {
+            "components": [
+              {
+                "amount": "11757.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "85.72"
+              },
+              {
+                "amount": "927.1963143224390173452145406",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.76"
+              },
+              {
+                "amount": "781.20000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "5.70"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.82"
+              }
+            ],
+            "date": "2091-01-11"
+          },
+          {
+            "components": [
+              {
+                "amount": "11557.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "85.51"
+              },
+              {
+                "amount": "927.1963143224390173452145406",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.86"
+              },
+              {
+                "amount": "781.20000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "5.78"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.85"
+              }
+            ],
+            "date": "2091-01-12"
+          },
+          {
+            "components": [
+              {
+                "amount": "11557.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "87.19"
+              },
+              {
+                "amount": "927.1963143224390173452145406",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.99"
+              },
+              {
+                "amount": "520.80000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "3.93"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.89"
+              }
+            ],
+            "date": "2091-01-13"
+          },
+          {
+            "components": [
+              {
+                "amount": "11557.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "87.19"
+              },
+              {
+                "amount": "927.1963143224390173452145406",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.99"
+              },
+              {
+                "amount": "520.80000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "3.93"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.89"
+              }
+            ],
+            "date": "2091-01-14"
+          },
+          {
+            "components": [
+              {
+                "amount": "11557.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "87.19"
+              },
+              {
+                "amount": "927.1963143224390173452145406",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.99"
+              },
+              {
+                "amount": "520.80000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "3.93"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.89"
+              }
+            ],
+            "date": "2091-01-15"
+          },
+          {
+            "components": [
+              {
+                "amount": "11557.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "86.34"
+              },
+              {
+                "amount": "927.1963143224390173452145406",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.93"
+              },
+              {
+                "amount": "651.00000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "4.86"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.87"
+              }
+            ],
+            "date": "2091-01-16"
+          },
+          {
+            "components": [
+              {
+                "amount": "11557.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "86.34"
+              },
+              {
+                "amount": "927.1963143224390173452145406",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.93"
+              },
+              {
+                "amount": "651.00000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "4.86"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.87"
+              }
+            ],
+            "date": "2091-01-17"
+          },
+          {
+            "components": [
+              {
+                "amount": "11557.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "86.30"
+              },
+              {
+                "amount": "933.6416386719602111600715502",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.97"
+              },
+              {
+                "amount": "651.00000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "4.86"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.87"
+              }
+            ],
+            "date": "2091-01-18"
+          },
+          {
+            "components": [
+              {
+                "amount": "11557.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "86.30"
+              },
+              {
+                "amount": "933.6416386719602111600715502",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.97"
+              },
+              {
+                "amount": "651.00000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "4.86"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.87"
+              }
+            ],
+            "date": "2091-01-19"
+          },
+          {
+            "components": [
+              {
+                "amount": "11557.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "85.87"
+              },
+              {
+                "amount": "996.1781772173988918459055016",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "7.40"
+              },
+              {
+                "amount": "655.35000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "4.87"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.86"
+              }
+            ],
+            "date": "2091-01-20"
+          },
+          {
+            "components": [
+              {
+                "amount": "11557.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "85.87"
+              },
+              {
+                "amount": "996.1781772173988918459055016",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "7.40"
+              },
+              {
+                "amount": "655.35000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "4.87"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.86"
+              }
+            ],
+            "date": "2091-01-21"
+          },
+          {
+            "components": [
+              {
+                "amount": "11557.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "85.90"
+              },
+              {
+                "amount": "991.3198263386396526772793053",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "7.37"
+              },
+              {
+                "amount": "655.35000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "4.87"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.86"
+              }
+            ],
+            "date": "2091-01-22"
+          },
+          {
+            "components": [
+              {
+                "amount": "11557.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "85.90"
+              },
+              {
+                "amount": "991.3198263386396526772793053",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "7.37"
+              },
+              {
+                "amount": "655.35000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "4.87"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.86"
+              }
+            ],
+            "date": "2091-01-23"
+          },
+          {
+            "components": [
+              {
+                "amount": "11557.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "85.90"
+              },
+              {
+                "amount": "991.3198263386396526772793053",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "7.37"
+              },
+              {
+                "amount": "655.35000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "4.87"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.86"
+              }
+            ],
+            "date": "2091-01-24"
+          },
+          {
+            "components": [
+              {
+                "amount": "11557.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "85.90"
+              },
+              {
+                "amount": "991.3198263386396526772793053",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "7.37"
+              },
+              {
+                "amount": "655.35000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "4.87"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.86"
+              }
+            ],
+            "date": "2091-01-25"
+          }
+        ],
         "geography": [
           {
             "components": [],
@@ -5310,6 +6237,7 @@
               {
                 "amount": "2472.46400000000",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5321,6 +6249,7 @@
               {
                 "amount": "2434.978814266253152082548332",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5332,6 +6261,7 @@
               {
                 "amount": "2431.767314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5343,6 +6273,7 @@
               {
                 "amount": "2431.767314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5354,6 +6285,7 @@
               {
                 "amount": "2431.767314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5365,6 +6297,7 @@
               {
                 "amount": "1958.646314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5376,6 +6309,7 @@
               {
                 "amount": "1958.646314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5387,6 +6321,7 @@
               {
                 "amount": "1958.646314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5398,6 +6333,7 @@
               {
                 "amount": "1958.646314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5409,6 +6345,7 @@
               {
                 "amount": "1958.646314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5420,6 +6357,7 @@
               {
                 "amount": "1958.646314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5431,6 +6369,7 @@
               {
                 "amount": "1698.246314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5442,6 +6381,7 @@
               {
                 "amount": "1698.246314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5453,6 +6393,7 @@
               {
                 "amount": "1698.246314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5464,6 +6405,7 @@
               {
                 "amount": "1828.446314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5475,6 +6417,7 @@
               {
                 "amount": "1828.446314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5486,6 +6429,7 @@
               {
                 "amount": "1834.891638671960211160071550",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5497,6 +6441,7 @@
               {
                 "amount": "1834.891638671960211160071550",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5508,6 +6453,7 @@
               {
                 "amount": "1901.778177217398891845905502",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5519,6 +6465,7 @@
               {
                 "amount": "1901.778177217398891845905502",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5530,6 +6477,7 @@
               {
                 "amount": "1896.919826338639652677279305",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5541,6 +6489,7 @@
               {
                 "amount": "1896.919826338639652677279305",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5552,6 +6501,7 @@
               {
                 "amount": "1896.919826338639652677279305",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5563,6 +6513,7 @@
               {
                 "amount": "1896.919826338639652677279305",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -5576,6 +6527,7 @@
               {
                 "amount": "14000.00000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "100.00"
               }
@@ -5587,12 +6539,14 @@
               {
                 "amount": "11527.536000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "82.34"
               },
               {
                 "amount": "2472.46400000000",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "17.66"
               }
@@ -5604,12 +6558,14 @@
               {
                 "amount": "11527.536000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "82.56"
               },
               {
                 "amount": "2434.978814266253152082548332",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "17.44"
               }
@@ -5621,12 +6577,14 @@
               {
                 "amount": "11527.536000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "82.58"
               },
               {
                 "amount": "2431.767314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "17.42"
               }
@@ -5638,12 +6596,14 @@
               {
                 "amount": "11536.376000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "82.59"
               },
               {
                 "amount": "2431.767314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "17.41"
               }
@@ -5655,12 +6615,14 @@
               {
                 "amount": "11536.376000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "82.59"
               },
               {
                 "amount": "2431.767314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "17.41"
               }
@@ -5672,12 +6634,14 @@
               {
                 "amount": "12057.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "86.03"
               },
               {
                 "amount": "1958.646314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "13.97"
               }
@@ -5689,12 +6653,14 @@
               {
                 "amount": "12057.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "86.03"
               },
               {
                 "amount": "1958.646314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "13.97"
               }
@@ -5706,12 +6672,14 @@
               {
                 "amount": "11757.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.72"
               },
               {
                 "amount": "1958.646314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "14.28"
               }
@@ -5723,12 +6691,14 @@
               {
                 "amount": "11757.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.72"
               },
               {
                 "amount": "1958.646314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "14.28"
               }
@@ -5740,12 +6710,14 @@
               {
                 "amount": "11757.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.72"
               },
               {
                 "amount": "1958.646314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "14.28"
               }
@@ -5757,12 +6729,14 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.51"
               },
               {
                 "amount": "1958.646314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "14.49"
               }
@@ -5774,12 +6748,14 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "87.19"
               },
               {
                 "amount": "1698.246314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "12.81"
               }
@@ -5791,12 +6767,14 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "87.19"
               },
               {
                 "amount": "1698.246314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "12.81"
               }
@@ -5808,12 +6786,14 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "87.19"
               },
               {
                 "amount": "1698.246314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "12.81"
               }
@@ -5825,12 +6805,14 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "86.34"
               },
               {
                 "amount": "1828.446314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "13.66"
               }
@@ -5842,12 +6824,14 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "86.34"
               },
               {
                 "amount": "1828.446314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "13.66"
               }
@@ -5859,12 +6843,14 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "86.30"
               },
               {
                 "amount": "1834.891638671960211160071550",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "13.70"
               }
@@ -5876,12 +6862,14 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "86.30"
               },
               {
                 "amount": "1834.891638671960211160071550",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "13.70"
               }
@@ -5893,12 +6881,14 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.87"
               },
               {
                 "amount": "1901.778177217398891845905502",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "14.13"
               }
@@ -5910,12 +6900,14 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.87"
               },
               {
                 "amount": "1901.778177217398891845905502",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "14.13"
               }
@@ -5927,12 +6919,14 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.90"
               },
               {
                 "amount": "1896.919826338639652677279305",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "14.10"
               }
@@ -5944,12 +6938,14 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.90"
               },
               {
                 "amount": "1896.919826338639652677279305",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "14.10"
               }
@@ -5961,12 +6957,14 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.90"
               },
               {
                 "amount": "1896.919826338639652677279305",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "14.10"
               }
@@ -5978,12 +6976,14 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.90"
               },
               {
                 "amount": "1896.919826338639652677279305",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "14.10"
               }
@@ -5997,6 +6997,7 @@
               {
                 "amount": "14000.00000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "100.00"
               }
@@ -6008,24 +7009,28 @@
               {
                 "amount": "11527.536000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "82.34"
               },
               {
                 "amount": "1234.560000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "8.82"
               },
               {
                 "amount": "987.65400000000",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "7.05"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.79"
               }
@@ -6037,24 +7042,28 @@
               {
                 "amount": "11527.536000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "82.56"
               },
               {
                 "amount": "1254.3210000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "8.98"
               },
               {
                 "amount": "930.4078142662531520825483320",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.66"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.79"
               }
@@ -6066,24 +7075,28 @@
               {
                 "amount": "11527.536000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "82.58"
               },
               {
                 "amount": "1254.3210000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "8.99"
               },
               {
                 "amount": "927.1963143224390173452145406",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.64"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.79"
               }
@@ -6095,24 +7108,28 @@
               {
                 "amount": "11536.376000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "82.59"
               },
               {
                 "amount": "1254.3210000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "8.98"
               },
               {
                 "amount": "927.1963143224390173452145406",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.64"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.79"
               }
@@ -6124,24 +7141,28 @@
               {
                 "amount": "11536.376000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "82.59"
               },
               {
                 "amount": "1254.3210000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "8.98"
               },
               {
                 "amount": "927.1963143224390173452145406",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.64"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.79"
               }
@@ -6153,24 +7174,28 @@
               {
                 "amount": "12057.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "86.03"
               },
               {
                 "amount": "927.1963143224390173452145406",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.62"
               },
               {
                 "amount": "781.20000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "5.57"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.79"
               }
@@ -6182,24 +7207,28 @@
               {
                 "amount": "12057.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "86.03"
               },
               {
                 "amount": "927.1963143224390173452145406",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.62"
               },
               {
                 "amount": "781.20000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "5.57"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.79"
               }
@@ -6211,24 +7240,28 @@
               {
                 "amount": "11757.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.72"
               },
               {
                 "amount": "927.1963143224390173452145406",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.76"
               },
               {
                 "amount": "781.20000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "5.70"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.82"
               }
@@ -6240,24 +7273,28 @@
               {
                 "amount": "11757.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.72"
               },
               {
                 "amount": "927.1963143224390173452145406",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.76"
               },
               {
                 "amount": "781.20000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "5.70"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.82"
               }
@@ -6269,24 +7306,28 @@
               {
                 "amount": "11757.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.72"
               },
               {
                 "amount": "927.1963143224390173452145406",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.76"
               },
               {
                 "amount": "781.20000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "5.70"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.82"
               }
@@ -6298,24 +7339,28 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.51"
               },
               {
                 "amount": "927.1963143224390173452145406",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.86"
               },
               {
                 "amount": "781.20000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "5.78"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.85"
               }
@@ -6327,24 +7372,28 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "87.19"
               },
               {
                 "amount": "927.1963143224390173452145406",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.99"
               },
               {
                 "amount": "520.80000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "3.93"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.89"
               }
@@ -6356,24 +7405,28 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "87.19"
               },
               {
                 "amount": "927.1963143224390173452145406",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.99"
               },
               {
                 "amount": "520.80000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "3.93"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.89"
               }
@@ -6385,24 +7438,28 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "87.19"
               },
               {
                 "amount": "927.1963143224390173452145406",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.99"
               },
               {
                 "amount": "520.80000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "3.93"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.89"
               }
@@ -6414,24 +7471,28 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "86.34"
               },
               {
                 "amount": "927.1963143224390173452145406",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.93"
               },
               {
                 "amount": "651.00000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "4.86"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.87"
               }
@@ -6443,24 +7504,28 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "86.34"
               },
               {
                 "amount": "927.1963143224390173452145406",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.93"
               },
               {
                 "amount": "651.00000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "4.86"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.87"
               }
@@ -6472,24 +7537,28 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "86.30"
               },
               {
                 "amount": "933.6416386719602111600715502",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.97"
               },
               {
                 "amount": "651.00000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "4.86"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.87"
               }
@@ -6501,24 +7570,28 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "86.30"
               },
               {
                 "amount": "933.6416386719602111600715502",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.97"
               },
               {
                 "amount": "651.00000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "4.86"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.87"
               }
@@ -6530,24 +7603,28 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.87"
               },
               {
                 "amount": "996.1781772173988918459055016",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "7.40"
               },
               {
                 "amount": "655.35000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "4.87"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.86"
               }
@@ -6559,24 +7636,28 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.87"
               },
               {
                 "amount": "996.1781772173988918459055016",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "7.40"
               },
               {
                 "amount": "655.35000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "4.87"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.86"
               }
@@ -6588,24 +7669,28 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.90"
               },
               {
                 "amount": "991.3198263386396526772793053",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "7.37"
               },
               {
                 "amount": "655.35000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "4.87"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.86"
               }
@@ -6617,24 +7702,28 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.90"
               },
               {
                 "amount": "991.3198263386396526772793053",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "7.37"
               },
               {
                 "amount": "655.35000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "4.87"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.86"
               }
@@ -6646,24 +7735,28 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.90"
               },
               {
                 "amount": "991.3198263386396526772793053",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "7.37"
               },
               {
                 "amount": "655.35000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "4.87"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.86"
               }
@@ -6675,24 +7768,28 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.90"
               },
               {
                 "amount": "991.3198263386396526772793053",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "7.37"
               },
               {
                 "amount": "655.35000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "4.87"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.86"
               }
@@ -9516,10 +10613,41 @@
         ]
       },
       "summary": {
+        "allocation_by_asset": [
+          {
+            "amount": "11557.176000000",
+            "emoji": null,
+            "id": null,
+            "name": "Liquidity",
+            "value": "85.90"
+          },
+          {
+            "amount": "991.3198263386396526772793053",
+            "emoji": null,
+            "id": "IDX",
+            "name": "IDX",
+            "value": "7.37"
+          },
+          {
+            "amount": "655.35000000",
+            "emoji": null,
+            "id": "EQ",
+            "name": "EQ",
+            "value": "4.87"
+          },
+          {
+            "amount": "250.2500000",
+            "emoji": null,
+            "id": "MAN",
+            "name": "MAN",
+            "value": "1.86"
+          }
+        ],
         "allocation_by_geography": [
           {
             "amount": "1896.919826338639652677279305",
             "emoji": null,
+            "id": null,
             "name": "Unknown",
             "value": "100.00"
           }
@@ -9528,12 +10656,14 @@
           {
             "amount": "11557.176000000",
             "emoji": "\ud83d\udcb0",
+            "id": null,
             "name": "Liquidity",
             "value": "85.90"
           },
           {
             "amount": "1896.919826338639652677279305",
             "emoji": "\u2753",
+            "id": null,
             "name": "Unknown",
             "value": "14.10"
           }
@@ -9542,24 +10672,28 @@
           {
             "amount": "11557.176000000",
             "emoji": null,
+            "id": null,
             "name": "Liquidity",
             "value": "85.90"
           },
           {
             "amount": "991.3198263386396526772793053",
             "emoji": null,
+            "id": null,
             "name": "ETF",
             "value": "7.37"
           },
           {
             "amount": "655.35000000",
             "emoji": null,
+            "id": null,
             "name": "STOCK",
             "value": "4.87"
           },
           {
             "amount": "250.2500000",
             "emoji": null,
+            "id": null,
             "name": "HOLD",
             "value": "1.86"
           }
@@ -10093,10 +11227,41 @@
       }
     },
     "get_summary": {
+      "allocation_by_asset": [
+        {
+          "amount": "11557.176000000",
+          "emoji": null,
+          "id": null,
+          "name": "Liquidity",
+          "value": "85.90"
+        },
+        {
+          "amount": "991.3198263386396526772793053",
+          "emoji": null,
+          "id": "IDX",
+          "name": "IDX",
+          "value": "7.37"
+        },
+        {
+          "amount": "655.35000000",
+          "emoji": null,
+          "id": "EQ",
+          "name": "EQ",
+          "value": "4.87"
+        },
+        {
+          "amount": "250.2500000",
+          "emoji": null,
+          "id": "MAN",
+          "name": "MAN",
+          "value": "1.86"
+        }
+      ],
       "allocation_by_geography": [
         {
           "amount": "1896.919826338639652677279305",
           "emoji": null,
+          "id": null,
           "name": "Unknown",
           "value": "100.00"
         }
@@ -10105,12 +11270,14 @@
         {
           "amount": "11557.176000000",
           "emoji": "\ud83d\udcb0",
+          "id": null,
           "name": "Liquidity",
           "value": "85.90"
         },
         {
           "amount": "1896.919826338639652677279305",
           "emoji": "\u2753",
+          "id": null,
           "name": "Unknown",
           "value": "14.10"
         }
@@ -10119,24 +11286,28 @@
         {
           "amount": "11557.176000000",
           "emoji": null,
+          "id": null,
           "name": "Liquidity",
           "value": "85.90"
         },
         {
           "amount": "991.3198263386396526772793053",
           "emoji": null,
+          "id": null,
           "name": "ETF",
           "value": "7.37"
         },
         {
           "amount": "655.35000000",
           "emoji": null,
+          "id": null,
           "name": "STOCK",
           "value": "4.87"
         },
         {
           "amount": "250.2500000",
           "emoji": null,
+          "id": null,
           "name": "HOLD",
           "value": "1.86"
         }
@@ -10835,6 +12006,11 @@
             }
           },
           "broker_nav_value": "14015.82231432243901734521454",
+          "by_asset": {
+            "EQ": "781.20000000",
+            "IDX": "927.1963143224390173452145406",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1958.646314322439017345214541"
           },
@@ -10923,6 +12099,11 @@
             }
           },
           "broker_nav_value": "13715.82231432243901734521454",
+          "by_asset": {
+            "EQ": "781.20000000",
+            "IDX": "927.1963143224390173452145406",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1958.646314322439017345214541"
           },
@@ -11011,6 +12192,11 @@
             }
           },
           "broker_nav_value": "13315.82231432243901734521454",
+          "by_asset": {
+            "EQ": "781.20000000",
+            "IDX": "927.1963143224390173452145406",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1958.646314322439017345214541"
           },
@@ -11101,6 +12287,11 @@
             }
           },
           "broker_nav_value": "13315.82231432243901734521454",
+          "by_asset": {
+            "EQ": "781.20000000",
+            "IDX": "927.1963143224390173452145406",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1958.646314322439017345214541"
           },
@@ -11192,6 +12383,11 @@
             }
           },
           "broker_nav_value": "13515.82231432243901734521454",
+          "by_asset": {
+            "EQ": "781.20000000",
+            "IDX": "927.1963143224390173452145406",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1958.646314322439017345214541"
           },
@@ -11283,6 +12479,11 @@
             }
           },
           "broker_nav_value": "13255.42231432243901734521454",
+          "by_asset": {
+            "EQ": "520.80000000",
+            "IDX": "927.1963143224390173452145406",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1698.246314322439017345214541"
           },
@@ -11374,6 +12575,11 @@
             }
           },
           "broker_nav_value": "13255.42231432243901734521454",
+          "by_asset": {
+            "EQ": "520.80000000",
+            "IDX": "927.1963143224390173452145406",
+            "MAN": "250.2500000"
+          },
           "by_geography": {
             "Unknown": "1698.246314322439017345214541"
           },
@@ -12504,12 +13710,246 @@
         "points": []
       },
       "allocation_history": {
+        "asset": [
+          {
+            "components": [
+              {
+                "amount": "12057.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "86.03"
+              },
+              {
+                "amount": "927.1963143224390173452145406",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.62"
+              },
+              {
+                "amount": "781.20000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "5.57"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.79"
+              }
+            ],
+            "date": "2091-01-08"
+          },
+          {
+            "components": [
+              {
+                "amount": "11757.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "85.72"
+              },
+              {
+                "amount": "927.1963143224390173452145406",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.76"
+              },
+              {
+                "amount": "781.20000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "5.70"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.82"
+              }
+            ],
+            "date": "2091-01-09"
+          },
+          {
+            "components": [
+              {
+                "amount": "11757.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "85.72"
+              },
+              {
+                "amount": "927.1963143224390173452145406",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.76"
+              },
+              {
+                "amount": "781.20000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "5.70"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.82"
+              }
+            ],
+            "date": "2091-01-10"
+          },
+          {
+            "components": [
+              {
+                "amount": "11757.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "85.72"
+              },
+              {
+                "amount": "927.1963143224390173452145406",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.76"
+              },
+              {
+                "amount": "781.20000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "5.70"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.82"
+              }
+            ],
+            "date": "2091-01-11"
+          },
+          {
+            "components": [
+              {
+                "amount": "11557.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "85.51"
+              },
+              {
+                "amount": "927.1963143224390173452145406",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.86"
+              },
+              {
+                "amount": "781.20000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "5.78"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.85"
+              }
+            ],
+            "date": "2091-01-12"
+          },
+          {
+            "components": [
+              {
+                "amount": "11557.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "87.19"
+              },
+              {
+                "amount": "927.1963143224390173452145406",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.99"
+              },
+              {
+                "amount": "520.80000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "3.93"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.89"
+              }
+            ],
+            "date": "2091-01-13"
+          },
+          {
+            "components": [
+              {
+                "amount": "11557.176000000",
+                "emoji": null,
+                "id": null,
+                "name": "Liquidity",
+                "value": "87.19"
+              },
+              {
+                "amount": "927.1963143224390173452145406",
+                "emoji": null,
+                "id": "IDX",
+                "name": "IDX",
+                "value": "6.99"
+              },
+              {
+                "amount": "520.80000000",
+                "emoji": null,
+                "id": "EQ",
+                "name": "EQ",
+                "value": "3.93"
+              },
+              {
+                "amount": "250.2500000",
+                "emoji": null,
+                "id": "MAN",
+                "name": "MAN",
+                "value": "1.89"
+              }
+            ],
+            "date": "2091-01-14"
+          }
+        ],
         "geography": [
           {
             "components": [
               {
                 "amount": "1958.646314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -12521,6 +13961,7 @@
               {
                 "amount": "1958.646314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -12532,6 +13973,7 @@
               {
                 "amount": "1958.646314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -12543,6 +13985,7 @@
               {
                 "amount": "1958.646314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -12554,6 +13997,7 @@
               {
                 "amount": "1958.646314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -12565,6 +14009,7 @@
               {
                 "amount": "1698.246314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -12576,6 +14021,7 @@
               {
                 "amount": "1698.246314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "100.00"
               }
@@ -12589,12 +14035,14 @@
               {
                 "amount": "12057.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "86.03"
               },
               {
                 "amount": "1958.646314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "13.97"
               }
@@ -12606,12 +14054,14 @@
               {
                 "amount": "11757.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.72"
               },
               {
                 "amount": "1958.646314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "14.28"
               }
@@ -12623,12 +14073,14 @@
               {
                 "amount": "11757.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.72"
               },
               {
                 "amount": "1958.646314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "14.28"
               }
@@ -12640,12 +14092,14 @@
               {
                 "amount": "11757.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.72"
               },
               {
                 "amount": "1958.646314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "14.28"
               }
@@ -12657,12 +14111,14 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.51"
               },
               {
                 "amount": "1958.646314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "14.49"
               }
@@ -12674,12 +14130,14 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "87.19"
               },
               {
                 "amount": "1698.246314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "12.81"
               }
@@ -12691,12 +14149,14 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "87.19"
               },
               {
                 "amount": "1698.246314322439017345214541",
                 "emoji": null,
+                "id": null,
                 "name": "Unknown",
                 "value": "12.81"
               }
@@ -12710,24 +14170,28 @@
               {
                 "amount": "12057.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "86.03"
               },
               {
                 "amount": "927.1963143224390173452145406",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.62"
               },
               {
                 "amount": "781.20000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "5.57"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.79"
               }
@@ -12739,24 +14203,28 @@
               {
                 "amount": "11757.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.72"
               },
               {
                 "amount": "927.1963143224390173452145406",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.76"
               },
               {
                 "amount": "781.20000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "5.70"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.82"
               }
@@ -12768,24 +14236,28 @@
               {
                 "amount": "11757.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.72"
               },
               {
                 "amount": "927.1963143224390173452145406",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.76"
               },
               {
                 "amount": "781.20000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "5.70"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.82"
               }
@@ -12797,24 +14269,28 @@
               {
                 "amount": "11757.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.72"
               },
               {
                 "amount": "927.1963143224390173452145406",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.76"
               },
               {
                 "amount": "781.20000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "5.70"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.82"
               }
@@ -12826,24 +14302,28 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "85.51"
               },
               {
                 "amount": "927.1963143224390173452145406",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.86"
               },
               {
                 "amount": "781.20000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "5.78"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.85"
               }
@@ -12855,24 +14335,28 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "87.19"
               },
               {
                 "amount": "927.1963143224390173452145406",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.99"
               },
               {
                 "amount": "520.80000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "3.93"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.89"
               }
@@ -12884,24 +14368,28 @@
               {
                 "amount": "11557.176000000",
                 "emoji": null,
+                "id": null,
                 "name": "Liquidity",
                 "value": "87.19"
               },
               {
                 "amount": "927.1963143224390173452145406",
                 "emoji": null,
+                "id": null,
                 "name": "ETF",
                 "value": "6.99"
               },
               {
                 "amount": "520.80000000",
                 "emoji": null,
+                "id": null,
                 "name": "STOCK",
                 "value": "3.93"
               },
               {
                 "amount": "250.2500000",
                 "emoji": null,
+                "id": null,
                 "name": "HOLD",
                 "value": "1.89"
               }
@@ -13856,10 +15344,41 @@
         "unallocated": []
       },
       "summary": {
+        "allocation_by_asset": [
+          {
+            "amount": "11557.176000000",
+            "emoji": null,
+            "id": null,
+            "name": "Liquidity",
+            "value": "87.19"
+          },
+          {
+            "amount": "927.1963143224390173452145406",
+            "emoji": null,
+            "id": "IDX",
+            "name": "IDX",
+            "value": "6.99"
+          },
+          {
+            "amount": "520.80000000",
+            "emoji": null,
+            "id": "EQ",
+            "name": "EQ",
+            "value": "3.93"
+          },
+          {
+            "amount": "250.2500000",
+            "emoji": null,
+            "id": "MAN",
+            "name": "MAN",
+            "value": "1.89"
+          }
+        ],
         "allocation_by_geography": [
           {
             "amount": "1698.246314322439017345214541",
             "emoji": null,
+            "id": null,
             "name": "Unknown",
             "value": "100.00"
           }
@@ -13868,12 +15387,14 @@
           {
             "amount": "11557.176000000",
             "emoji": "\ud83d\udcb0",
+            "id": null,
             "name": "Liquidity",
             "value": "87.19"
           },
           {
             "amount": "1698.246314322439017345214541",
             "emoji": "\u2753",
+            "id": null,
             "name": "Unknown",
             "value": "12.81"
           }
@@ -13882,24 +15403,28 @@
           {
             "amount": "11557.176000000",
             "emoji": null,
+            "id": null,
             "name": "Liquidity",
             "value": "87.19"
           },
           {
             "amount": "927.1963143224390173452145406",
             "emoji": null,
+            "id": null,
             "name": "ETF",
             "value": "6.99"
           },
           {
             "amount": "520.80000000",
             "emoji": null,
+            "id": null,
             "name": "STOCK",
             "value": "3.93"
           },
           {
             "amount": "250.2500000",
             "emoji": null,
+            "id": null,
             "name": "HOLD",
             "value": "1.89"
           }
@@ -14381,10 +15906,41 @@
       }
     },
     "get_summary": {
+      "allocation_by_asset": [
+        {
+          "amount": "11557.176000000",
+          "emoji": null,
+          "id": null,
+          "name": "Liquidity",
+          "value": "87.19"
+        },
+        {
+          "amount": "927.1963143224390173452145406",
+          "emoji": null,
+          "id": "IDX",
+          "name": "IDX",
+          "value": "6.99"
+        },
+        {
+          "amount": "520.80000000",
+          "emoji": null,
+          "id": "EQ",
+          "name": "EQ",
+          "value": "3.93"
+        },
+        {
+          "amount": "250.2500000",
+          "emoji": null,
+          "id": "MAN",
+          "name": "MAN",
+          "value": "1.89"
+        }
+      ],
       "allocation_by_geography": [
         {
           "amount": "1698.246314322439017345214541",
           "emoji": null,
+          "id": null,
           "name": "Unknown",
           "value": "100.00"
         }
@@ -14393,12 +15949,14 @@
         {
           "amount": "11557.176000000",
           "emoji": "\ud83d\udcb0",
+          "id": null,
           "name": "Liquidity",
           "value": "87.19"
         },
         {
           "amount": "1698.246314322439017345214541",
           "emoji": "\u2753",
+          "id": null,
           "name": "Unknown",
           "value": "12.81"
         }
@@ -14407,24 +15965,28 @@
         {
           "amount": "11557.176000000",
           "emoji": null,
+          "id": null,
           "name": "Liquidity",
           "value": "87.19"
         },
         {
           "amount": "927.1963143224390173452145406",
           "emoji": null,
+          "id": null,
           "name": "ETF",
           "value": "6.99"
         },
         {
           "amount": "520.80000000",
           "emoji": null,
+          "id": null,
           "name": "STOCK",
           "value": "3.93"
         },
         {
           "amount": "250.2500000",
           "emoji": null,
+          "id": null,
           "name": "HOLD",
           "value": "1.89"
         }
