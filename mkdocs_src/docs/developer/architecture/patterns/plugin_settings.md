@@ -118,7 +118,8 @@ resolves the values instead, and only for a plugin that declares fields:
 create a plugin (the detection of the plugin, `api/v1/brokers.py` for the preview and the report sets,
 `brim_report_sets.get_set_plugin`, `brim_gap_fix`) see the defaults and no secret: a value a plugin needs there
 must not depend on a setting. The details are in
-[BRIM settings](../../backend/brim/architecture.md#brim-settings).
+[BRIM settings](../../backend/brim/architecture.md#brim-settings). How a BRIM plugin declares a field, and when a
+parse is stale because a setting changed: [A field in a BRIM plugin](../../backend/brim/architecture.md#brim-field-contract).
 
 ---
 

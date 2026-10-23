@@ -961,6 +961,16 @@ def services_brim_parse_settings(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "BRIM parse settings tests", verbose=verbose)
 
 
+def services_brim_field_contract(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the contract of a field in a BRIM plugin: declaration, default = old behaviour, per-user value, stale parse."""
+    print_section("Services: BRIM Field Contract")
+    print_info("Testing: plugin_settings/resolver.py (default_settings_fingerprint, settings_changed_since), the worked example of the BRIM plugin guide")
+    print_info("Tests: a BRIM plugin declares a field and registers, the default is the old behaviour, the parse sees the importing user's value, a parse is stale exactly when the values a re-parse would receive differ")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_field_contract.py", test_names)
+    return run_command(cmd, "BRIM field contract tests", verbose=verbose)
+
+
 def services_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test settings service: user settings CRUD, get_effective_base_currency."""
     print_section("Services: Settings Service")
@@ -2584,6 +2594,14 @@ Note: No backend server required.
         services_brim_parse_settings,
         name="BRIM Parse Settings",
         desc="Plugin settings on the BRIM parse: no field = called as before, fields = BoundSettings resolved in the parent and bound in the child, secrets masked in errors and logs, the endpoint passes the user",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-field-contract",
+        services_brim_field_contract,
+        name="BRIM Field Contract",
+        desc="A field in a BRIM plugin (CP12): declaration, default = the behaviour before the field, the importing user's value, and the stale-parse rule (settings_changed_since)",
         isolation="pure",
     )
     add_test(cat, "settings", services_settings, name="Settings Service", desc="User settings CRUD, get_effective_base_currency")
