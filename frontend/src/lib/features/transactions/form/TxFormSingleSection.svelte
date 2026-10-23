@@ -11,6 +11,8 @@
     import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import ExactQuantityInput from '$lib/components/ui/input/ExactQuantityInput.svelte';
+    import TxCellMark from '$lib/features/transactions/form/TxCellMark.svelte';
+    import type {TxFormCell, TxFormCheckKind} from '$lib/features/transactions/form/txFormChecks';
     import CompactCashCell from '$lib/features/transactions/form/CompactCashCell.svelte';
     import TransactionTypeSearchSelect from '../TransactionTypeSearchSelect.svelte';
     import WacPreviewSection from '../wac/WacPreviewSection.svelte';
@@ -49,6 +51,8 @@
         quantityHintId: string;
         quantityInputId: string;
         quantityInputSignRule: 'positive' | 'nonzero' | 'zero' | 'any';
+        /** V-37b: the cells «Validate now» found wrong, and why. */
+        markedCells: Partial<Record<TxFormCell, TxFormCheckKind>>;
         rule: ReturnType<typeof getTypeRule>;
         showCostBasisField: boolean;
         typeImmutable: boolean;
@@ -93,6 +97,7 @@
         quantityHintId,
         quantityInputId,
         quantityInputSignRule,
+        markedCells,
         rule,
         showCostBasisField,
         typeImmutable,
@@ -132,7 +137,7 @@
             {#if isReadonly}
                 <div class="px-3 py-2 bg-lf-panel border border-lf-subtle rounded-lg text-sm text-lf-secondary" data-testid="tx-form-date-readonly">{draft.date || '—'}</div>
             {:else}
-                <SingleDatePicker bind:value={draft.date} label="" inputStyle={true} onchange={(d) => setDate(d)} onvaliditychange={onDateMainValidityChange} />
+                <TxCellMark cell="date" marks={markedCells}><SingleDatePicker bind:value={draft.date} label="" inputStyle={true} onchange={(d) => setDate(d)} onvaliditychange={onDateMainValidityChange} /></TxCellMark>
             {/if}
         </div>
 
@@ -174,27 +179,29 @@
                     {$t('transactions.table.quantity')}{#if qtyLabel}
                         <span class="text-lf-warning">{qtyLabel}</span>{/if}
                 </span>
-                <ExactQuantityInput
-                    value={draft.quantity}
-                    onchange={setQuantity}
-                    onvaliditychange={onQuantityValidityChange}
-                    step="1"
-                    maxIntegerDigits={15}
-                    maxFractionDigits={10}
-                    maxSignificantDigits={REAL_SIGNIFICANT_DIGITS}
-                    allowNegative
-                    signRule={quantityInputSignRule}
-                    resetKey={`${open}:${openKey ?? 0}`}
-                    id={quantityInputId}
-                    name="qty-{autocompleteNonce}"
-                    placeholder="0"
-                    ariaLabel={$t('transactions.table.quantity')}
-                    ariaDescribedby={qtyHint ? quantityHintId : undefined}
-                    ariaErrormessage={quantitySignificantError ? `${quantityInputId}-significant-error` : undefined}
-                    className="qty-input !rounded-lg !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-lf-focus/30"
-                    disabled={isReadonly}
-                    testid="tx-form-quantity"
-                />
+                <TxCellMark cell="quantity" marks={markedCells}
+                    ><ExactQuantityInput
+                        value={draft.quantity}
+                        onchange={setQuantity}
+                        onvaliditychange={onQuantityValidityChange}
+                        step="1"
+                        maxIntegerDigits={15}
+                        maxFractionDigits={10}
+                        maxSignificantDigits={REAL_SIGNIFICANT_DIGITS}
+                        allowNegative
+                        signRule={quantityInputSignRule}
+                        resetKey={`${open}:${openKey ?? 0}`}
+                        id={quantityInputId}
+                        name="qty-{autocompleteNonce}"
+                        placeholder="0"
+                        ariaLabel={$t('transactions.table.quantity')}
+                        ariaDescribedby={qtyHint ? quantityHintId : undefined}
+                        ariaErrormessage={quantitySignificantError ? `${quantityInputId}-significant-error` : undefined}
+                        className="qty-input !rounded-lg !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-lf-focus/30"
+                        disabled={isReadonly}
+                        testid="tx-form-quantity"
+                    /></TxCellMark
+                >
                 {#if quantitySignificantError}
                     <p id="{quantityInputId}-significant-error" class="mt-1 text-xs text-lf-danger" data-testid="tx-form-quantity-significant-error">{$t('transactions.errors.significantDigitsExceeded', {values: {max: REAL_SIGNIFICANT_DIGITS}})}</p>
                 {/if}
@@ -207,16 +214,18 @@
                     {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}{#if cashLabel}
                         <span class="text-lf-warning">{cashLabel}</span>{/if}
                 </span>
-                <CompactCashCell
-                    value={draft.cash}
-                    onChange={setCash}
-                    signHint={rule.cashSign}
-                    disabled={isReadonly}
-                    testid="tx-form-cash"
-                    defaultCode={(draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR'}
-                    originalCurrency={draft.asset_id != null ? getAssetInfo(draft.asset_id)?.currency : undefined}
-                    maxSignificantDigits={REAL_SIGNIFICANT_DIGITS}
-                />
+                <TxCellMark cell="cash" marks={markedCells}
+                    ><CompactCashCell
+                        value={draft.cash}
+                        onChange={setCash}
+                        signHint={rule.cashSign}
+                        disabled={isReadonly}
+                        testid="tx-form-cash"
+                        defaultCode={(draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR'}
+                        originalCurrency={draft.asset_id != null ? getAssetInfo(draft.asset_id)?.currency : undefined}
+                        maxSignificantDigits={REAL_SIGNIFICANT_DIGITS}
+                    /></TxCellMark
+                >
                 {#if cashSignificantError}
                     <p class="mt-1 text-xs text-lf-danger" data-testid="tx-form-cash-significant-error">{$t('transactions.errors.significantDigitsExceeded', {values: {max: REAL_SIGNIFICANT_DIGITS}})}</p>
                 {/if}
@@ -231,27 +240,29 @@
                     {$t('transactions.table.quantity')}{#if qtyLabel}
                         <span class="text-lf-warning">{qtyLabel}</span>{/if}
                 </span>
-                <ExactQuantityInput
-                    value={draft.quantity}
-                    onchange={setQuantity}
-                    onvaliditychange={onQuantityValidityChange}
-                    step="1"
-                    maxIntegerDigits={15}
-                    maxFractionDigits={10}
-                    maxSignificantDigits={REAL_SIGNIFICANT_DIGITS}
-                    allowNegative
-                    signRule={quantityInputSignRule}
-                    resetKey={`${open}:${openKey ?? 0}`}
-                    id={quantityInputId}
-                    name="qty-{autocompleteNonce}"
-                    placeholder="0"
-                    ariaLabel={$t('transactions.table.quantity')}
-                    ariaDescribedby={qtyHint ? quantityHintId : undefined}
-                    ariaErrormessage={quantitySignificantError ? `${quantityInputId}-significant-error` : undefined}
-                    className="qty-input !rounded-lg !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-lf-focus/30"
-                    disabled={isReadonly}
-                    testid="tx-form-quantity"
-                />
+                <TxCellMark cell="quantity" marks={markedCells}
+                    ><ExactQuantityInput
+                        value={draft.quantity}
+                        onchange={setQuantity}
+                        onvaliditychange={onQuantityValidityChange}
+                        step="1"
+                        maxIntegerDigits={15}
+                        maxFractionDigits={10}
+                        maxSignificantDigits={REAL_SIGNIFICANT_DIGITS}
+                        allowNegative
+                        signRule={quantityInputSignRule}
+                        resetKey={`${open}:${openKey ?? 0}`}
+                        id={quantityInputId}
+                        name="qty-{autocompleteNonce}"
+                        placeholder="0"
+                        ariaLabel={$t('transactions.table.quantity')}
+                        ariaDescribedby={qtyHint ? quantityHintId : undefined}
+                        ariaErrormessage={quantitySignificantError ? `${quantityInputId}-significant-error` : undefined}
+                        className="qty-input !rounded-lg !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-lf-focus/30"
+                        disabled={isReadonly}
+                        testid="tx-form-quantity"
+                    /></TxCellMark
+                >
                 {#if quantitySignificantError}
                     <p id="{quantityInputId}-significant-error" class="mt-1 text-xs text-lf-danger" data-testid="tx-form-quantity-significant-error">{$t('transactions.errors.significantDigitsExceeded', {values: {max: REAL_SIGNIFICANT_DIGITS}})}</p>
                 {/if}
@@ -266,16 +277,18 @@
                     {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}{#if cashLabel}
                         <span class="text-lf-warning">{cashLabel}</span>{/if}
                 </span>
-                <CompactCashCell
-                    value={draft.cash}
-                    onChange={setCash}
-                    signHint={rule.cashSign}
-                    disabled={isReadonly}
-                    testid="tx-form-cash"
-                    defaultCode={(draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR'}
-                    originalCurrency={draft.asset_id != null ? getAssetInfo(draft.asset_id)?.currency : undefined}
-                    maxSignificantDigits={REAL_SIGNIFICANT_DIGITS}
-                />
+                <TxCellMark cell="cash" marks={markedCells}
+                    ><CompactCashCell
+                        value={draft.cash}
+                        onChange={setCash}
+                        signHint={rule.cashSign}
+                        disabled={isReadonly}
+                        testid="tx-form-cash"
+                        defaultCode={(draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR'}
+                        originalCurrency={draft.asset_id != null ? getAssetInfo(draft.asset_id)?.currency : undefined}
+                        maxSignificantDigits={REAL_SIGNIFICANT_DIGITS}
+                    /></TxCellMark
+                >
                 {#if cashSignificantError}
                     <p class="mt-1 text-xs text-lf-danger" data-testid="tx-form-cash-significant-error">{$t('transactions.errors.significantDigitsExceeded', {values: {max: REAL_SIGNIFICANT_DIGITS}})}</p>
                 {/if}
@@ -295,7 +308,16 @@
                 >{$t('common.asset')}{rule.assetField === 'required' ? ' *' : ''}{#if rule.assetField === 'optional'}
                     <span class="text-lf-muted italic">({$t('common.optional')})</span>{/if}</span
             >
-            <AssetSelect bind:value={draft.asset_id} disabled={isReadonly || rowSaved} onchange={setAsset} testid="tx-form-asset" createLabel={isReadonly || rowSaved ? undefined : $t('assets.create') || 'New asset'} onCreateNew={isReadonly || rowSaved ? undefined : () => (createAssetOpen = true)} />
+            <TxCellMark cell="asset" marks={markedCells}
+                ><AssetSelect
+                    bind:value={draft.asset_id}
+                    disabled={isReadonly || rowSaved}
+                    onchange={setAsset}
+                    testid="tx-form-asset"
+                    createLabel={isReadonly || rowSaved ? undefined : $t('assets.create') || 'New asset'}
+                    onCreateNew={isReadonly || rowSaved ? undefined : () => (createAssetOpen = true)}
+                /></TxCellMark
+            >
         </div>
     {/if}
 
@@ -311,7 +333,7 @@
                 <span class="font-medium">{b?.name ?? `#${draft.broker_id}`}</span>
             </div>
         {:else}
-            <BrokerSearchSelect brokers={brokersForSelect} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} />
+            <TxCellMark cell="broker" marks={markedCells}><BrokerSearchSelect brokers={brokersForSelect} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} /></TxCellMark>
         {/if}
     </div>
 
