@@ -4727,3 +4727,26 @@ valuation_source, unrealized_pnl`; niente `flow`; niente frame a quantità 0; Σ
   `check-links` 0 (slot 20:31–20:42, carico 1,9 → 2,7; log `ondata5/MF-p4b-verify.log`). Porte dopo le riparazioni (slot
   21:19–21:23, carico 3,9 → 4,5; `ondata5/MF-p4b-gates2.log`): `financial-math` **2736**, `portfolio-engine` **41**,
   `roi-fifo-utils` **1963**, `api portfolio` **55**. **CHECKPOINT READY** inviato, FROZEN.
+
+#### MF5-3 · B5 — «Transfers at market value» nel waterfall (23/10)
+Base `b6a25adcb` (MF5-1b committato). Il caso: vista filtrata su un broker; un titolo esce verso (o entra da) un broker
+fuori dalla vista: la gamba è capitale al valore di mercato (lotto 41, D2/D5) mentre il costo si sposta con la
+posizione, quindi MV − costo (mittente) o costo − MV (destinatario) restava nel residuo «Other».
+- ✅ **Rossi** (test-author): `test_financial_math/test_market_value_transfers.py` (20, puro) e
+  `test_financial/test_waterfall_market_value_transfers.py` (7, SQLite privata). Su HEAD 23 rossi (contratto assente;
+  nel servizio l'importo stava nel residuo: +300 / −300 / +420), 4 guardie verdi; 26/27 su una cura di riferimento.
+- ✅ **Cura**: `models.MarketValueTransfer` + `PortfolioCalculationResult.market_value_transfers` (ogni gamba per cui
+  `_transfer_leg_capital` dà un valore, col costo del suo passo); `period.market_value_transfer_results` (per broker,
+  Σ costo − capitale nelle gambe di (date_from, end]); `get_positions_contribution`: dopo le righe «FX on cash», una riga
+  «Transfers at market value» (categoria Other) per broker, nello stesso ordine, nascosta sotto `CONVERSION_DUST`, il
+  residuo scende dello stesso importo. Doc (docs-writer): `period-pnl.en.md` (sottosezione `#transfers-at-market-value`,
+  formula, esempio), `kpi-cards.en.md`, `developer/.../wac.md`.
+  > **⚠️ Fuori pista**: avevo chiesto a docs-writer il timbro Aphra su `period-pnl.en.md` e `kpi-cards.en.md`, ma sono
+  > aggiunte di contenuto (una sottosezione), non correzioni puntuali: ho tolto i due timbri a mano da
+  > `.translate-hashes.json` (file tornato identico a HEAD). Il debito di traduzione resta dichiarato.
+  > **Note implementazione**: B5 27 verdi; porte (slot 21:57–22:01): `financial-math` **2756**, `portfolio-engine` **41**,
+  > `roi-fifo-utils` **1970**, `api portfolio` **55**; parità contro `b6a25adcb`: copie del 1900/1500 48 casi 0 differenze;
+  > copia base 154 casi, **42 diversi, tutti e soli per la riga nuova** (`MF-p4/check_b5.py`: 48 righe nuove, residuo
+  > sceso esattamente della loro somma, nient'altro cambiato; il residuo diventa più piccolo in 42 casi su 42, in 6
+  > scompare; Σ|residuo| 126 130 → 105 010); `mkdocs build` 0, `check-links` 0. Log `ondata5/MF-b5-verify.log`.
+  > Richiesta a Y (frontend): `OtherPeriodEffectsTable.svelte:76` e `PerformanceChart.svelte:296`.

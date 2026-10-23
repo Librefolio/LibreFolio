@@ -557,6 +557,24 @@ class InternalAssetTransfer:
 
 
 @dataclass(frozen=True, slots=True)
+class MarketValueTransfer:
+    """A TRANSFER leg that crosses the scope's boundary (lot 41, D2/D5): in-kind capital at market value (B5).
+
+    ``capital`` is what ``DailyStateBuilder._transfer_leg_capital`` adds to the capital (+ received, − sent) and ``cost``
+    the cost the leg moved in its pool (signed; 0 without a cost step), both in the report currency at the owner's
+    share. Their difference is the gain the units accrued at the other broker: the period's breakdown shows it as a row
+    of its own (``period.market_value_transfer_results``).
+    """
+
+    transaction_id: int | None
+    broker_id: int
+    asset_id: int
+    date: date_type
+    capital: Decimal
+    cost: Decimal
+
+
+@dataclass(frozen=True, slots=True)
 class ShareMismatch:
     """A linked internal pair between two brokers owned at different shares (J-43).
 
@@ -637,6 +655,8 @@ class PortfolioCalculationResult:
     missing_fx: dict[str, set[date_type]] = field(default_factory=dict)
     # J-43: the classification's linked internal pairs between brokers owned at different shares.
     share_mismatches: list[ShareMismatch] = field(default_factory=list)
+    # B5: every TRANSFER leg replayed as in-kind capital at market value (any date), in replay order.
+    market_value_transfers: list[MarketValueTransfer] = field(default_factory=list)
     # The held positions' frames from date_from on (None unless asked: include_positions / compute_position_frames).
     # Grouped by position, in the order the replay first met each one, each group by start: summing from Decimal("0"), in
     # this order, the market values (not None) of the frames covering a day gives that day's market_value exactly.
