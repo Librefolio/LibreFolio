@@ -78,6 +78,8 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/utils/core/__tests__/chunkReload.dom.test.ts",
             "src/lib/utils/docs/searchLanguage.test.ts",
             "src/lib/utils/docs/searchLanguage.dom.test.ts",
+            "src/lib/utils/docs/movedAnchors.test.ts",
+            "src/lib/utils/docs/movedAnchors.dom.test.ts",
             "src/hooks.client.test.ts",
             "src/lib/utils/__tests__/text.test.ts",
             "src/lib/types/__tests__/safeAccessors.test.ts",

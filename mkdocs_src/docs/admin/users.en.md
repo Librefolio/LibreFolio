@@ -29,7 +29,7 @@ The header counts the places taken: **3 / 10 accounts** when the instance has a 
 account [waiting for its email](#waiting) while its link is live, and so does an
 initial administrator still [waiting for its setup link](#pending-setup); deactivated
 accounts do not. The limit is set on the server with `LIBREFOLIO_MAX_USERS`: see «When the Instance Is Full» in
-[Environment Variables](configuration.md).
+[Environment Variables](configuration_accounts.md#user-limit).
 
 - 💳 **Manage subscription** appears next to the count only when the server has a billing page
   (`LIBREFOLIO_BILLING_URL`), as a hosting provider sets one for a managed instance. It opens that
@@ -133,7 +133,7 @@ its owner confirms the address with the link LibreFolio emails to it. Until then
   (`PATCH /api/v1/users/{id}` with `is_active: false`), keeps it but ends the wait: its links stop
   working, its place is free, and it can sign in only once reactivated.
 
-How the verification works, and its limits: [Email Verification](email.md#verification).
+How the verification works, and its limits: [Email Verification](email_flows.md#verification).
 
 ### 👑 Waiting for Its Setup Link {: #pending-setup }
 
@@ -231,7 +231,7 @@ demoted before it can be deleted.*, since the account is now an active administr
 From version 1.3, a new username cannot contain `@`: at sign-in, LibreFolio reads anything with an
 `@` as an email address. Registration, a change of username in the Profile and `user create` on the
 [command line](cli_tools.md) refuse it, and a `LIBREFOLIO_ADMIN_USERNAME` with an `@` stops the
-server at startup («The Initial Administrator» in [Environment Variables](configuration.md)).
+server at startup («The Initial Administrator» in [Environment Variables](configuration_accounts.md#initial-admin)).
 Spaces, accented letters and signs such as `.`, `_`, `-` or `+` are still fine.
 
 An account created before version 1.3 may have one, such as `anna@example.com` as its username:
@@ -286,7 +286,7 @@ once, and its place is freed.
 ## 🔑 Password-Reset Links {: #reset-links }
 
 When someone forgot their password, send them a link to choose a new one themselves. With email,
-they can also ask for one from the login page: see [Forgotten Passwords](email.md#forgot-password).
+they can also ask for one from the login page: see [Forgotten Passwords](email_flows.md#forgot-password).
 On a [managed instance](hosting_providers.md#managed-profile), the login page's
 **Forgot Password?** shows no server command: it tells them to ask you for this link.
 
@@ -340,7 +340,7 @@ advises. Back on the filled-in address, the message goes away. How the check wor
 !!! tip "🌐 Set the address once"
 
     Set `LIBREFOLIO_PUBLIC_URL` to the address your users open, and the panel starts from it: see
-    «Accounts and Sign-ups» in [Environment Variables](configuration.md). The
+    «Accounts and Sign-ups» in [Environment Variables](configuration_accounts.md#accounts). The
     [command line](cli_tools.md) puts it in front of the links it prints, too.
 
 ---
@@ -348,7 +348,7 @@ advises. Back on the filled-in address, the message goes away. How the check wor
 ## 📧 Send by Email {: #send-by-email }
 
 While the instance can send emails with a link — email **Ready** and `LIBREFOLIO_PUBLIC_URL` set to
-an address LibreFolio can use ([Emails with a Link](email.md#public-url)) — both link dialogs have
+an address LibreFolio can use ([Emails with a Link](email_flows.md#public-url)) — both link dialogs have
 **Send by email** under the link:
 
 - **An invitation**: **Send to** starts with the address written in the invitation, and you can
@@ -361,10 +361,10 @@ an address LibreFolio can use ([Emails with a Link](email.md#public-url)) — bo
 - **The language**: an invitation goes in the language chosen in **Language of the email**, the
   instance's **Default Language** unless you pick another; a reset link goes in the account's.
 - **The result** shows in the dialog: *Sent to …* with the address and the language the email was
-  written in, or why the email did not go out ([Sending Errors](email.md#sending-errors)).
+  written in, or why the email did not go out ([Sending Errors](email_troubleshooting.md#sending-errors)).
 
 Without email, the button is not there: copy the link as before. The rules and the limits:
-[Links Sent by an Administrator](email.md#admin-links).
+[Links Sent by an Administrator](email_flows.md#admin-links).
 
 ---
 
@@ -404,7 +404,7 @@ for developers.
 
 ## 🔗 Related
 
-- 📝 **[Environment Variables](configuration.md)** — «Accounts and Sign-ups»: `LIBREFOLIO_MAX_USERS`,
+- 📝 **[Environment Variables](configuration_accounts.md#accounts)** — «Accounts and Sign-ups»: `LIBREFOLIO_MAX_USERS`,
   `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_PUBLIC_URL` and `LIBREFOLIO_BILLING_URL`
 - ⚙️ **[Global Settings](settings.md)** — «Who Can Sign Up»: the **Registration** setting
 - 🛠️ **[Command-Line Tools](cli_tools.md)** — «Manage Users»: most of these tasks, without a browser

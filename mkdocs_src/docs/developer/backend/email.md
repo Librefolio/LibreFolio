@@ -1517,7 +1517,7 @@ gives a new key, and only the hourly budget of the instance bounds them.
 
 * 📧 **[Email](../../admin/email.md)** — The administrator's guide: the variables, the Email tab, what to check
   when email does not work
-* 📝 **[Configuration](../../admin/configuration.md)** — `LIBREFOLIO_PUBLIC_URL`, in its «Accounts and Sign-ups»
+* 📝 **[Configuration](../../admin/configuration_accounts.md#accounts)** — `LIBREFOLIO_PUBLIC_URL`, in its «Accounts and Sign-ups»
   section
 * 🔐 **[Secrets from Files](../architecture/security.md#secrets-from-files)** — `env_secret()` and the `_FILE` form
   of a secret
