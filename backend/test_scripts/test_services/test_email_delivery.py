@@ -112,6 +112,8 @@ from backend.test_scripts.fixtures.email.fake_smtp import FakeSmtpServer, closed
 from backend.test_scripts.test_utils import print_section, print_success
 
 SMTP_PREFIX = "LIBREFOLIO_SMTP_"
+#: The one variable of the email section outside the ``LIBREFOLIO_SMTP_`` prefix: a bad value makes email unusable too.
+SIGNUP_PER_ADDRESS = "LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS"
 HOST = "LIBREFOLIO_SMTP_HOST"
 TLS = "LIBREFOLIO_SMTP_TLS"
 PORT = "LIBREFOLIO_SMTP_PORT"
@@ -178,6 +180,8 @@ PROBLEMS = [
     pytest.param({"from": "noreply"}, "SMTP_FROM_INVALID", FROM, id="from-invalid"),
     pytest.param({"reply_to": "a@example.com, b@example.com"}, "SMTP_REPLY_TO_INVALID", REPLY_TO, id="reply-to-invalid"),
     pytest.param({"max_per_hour": "0"}, "SMTP_MAX_PER_HOUR_INVALID", MAX_PER_HOUR, id="max-per-hour-invalid"),
+    pytest.param({"signup_emails_per_address": "0"}, "SIGNUP_EMAILS_PER_ADDRESS_INVALID", SIGNUP_PER_ADDRESS, id="signup-emails-per-address-invalid"),
+    pytest.param({"signup_emails_per_address": "abc"}, "SIGNUP_EMAILS_PER_ADDRESS_INVALID", SIGNUP_PER_ADDRESS, id="signup-emails-per-address-word"),
     pytest.param({"user": SMTP_USER_NAME, "password_file": MISSING_FILE}, "SMTP_PASSWORD_UNREADABLE", PASSWORD_FILE, id="password-file-missing"),
     pytest.param({"user": SMTP_USER_NAME, "password_file": EMPTY_FILE}, "SMTP_PASSWORD_UNREADABLE", PASSWORD_FILE, id="password-file-empty"),
     pytest.param({"user": SMTP_USER_NAME}, "SMTP_CREDENTIALS_INCOMPLETE", USER, id="user-without-password"),
@@ -204,7 +208,7 @@ class FakeClock:
 def _no_inherited_smtp_variables(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every ``LIBREFOLIO_SMTP_*`` and ``LIBREFOLIO_BLOCKED`` the lane inherited is removed: a test sees only the variables it sets itself."""
     for name in list(os.environ):
-        if name.startswith(SMTP_PREFIX) or name == BLOCKED:
+        if name.startswith(SMTP_PREFIX) or name in (BLOCKED, SIGNUP_PER_ADDRESS):
             monkeypatch.delenv(name, raising=False)
 
 
@@ -236,14 +240,14 @@ def _bounded_smtp_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _configure(monkeypatch: pytest.MonkeyPatch, variables: dict[str, str | None], tmp_path: Path | None = None) -> None:
-    """Set ``LIBREFOLIO_SMTP_<NAME>`` for each ``name: value``, ``None`` leaving it unset; the file markers become files in ``tmp_path``."""
+    """Set ``LIBREFOLIO_SMTP_<NAME>`` for each ``name: value`` (``signup_emails_per_address`` is ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS``), ``None`` leaving it unset; the file markers become files in ``tmp_path``."""
     for name, value in variables.items():
         if value == MISSING_FILE:
             value = str(tmp_path / "no-such-password-file")
         elif value == EMPTY_FILE:
             value = str(tmp_path / "empty-password-file")
             Path(value).write_text("", encoding="utf-8")
-        variable = SMTP_PREFIX + name.upper()
+        variable = SIGNUP_PER_ADDRESS if name == "signup_emails_per_address" else SMTP_PREFIX + name.upper()
         if value is None:
             monkeypatch.delenv(variable, raising=False)
         else:
@@ -855,6 +859,30 @@ def test_each_fault_is_named_alone_with_its_variable(monkeypatch: pytest.MonkeyP
 
     assert (state.configured, state.problem, state.variable, state.server, state.usable) == (True, problem, variable, None, False)
     print_success(f"{problem} on {variable}")
+
+
+def test_the_signup_limit_is_not_validated_without_a_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    """EMD-023b — contract 4: like every value of the section, ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS`` is read only with a host: without one email is off, and a value that cannot be used does not make it «configured» (nor logs anything)."""
+    print_section("EMD-023b: bad signup limit, no host")
+    _configure(monkeypatch, {"signup_emails_per_address": "0"})
+
+    with capture_logs() as events:
+        state = email_config_state()
+
+    assert (state.configured, state.problem, state.usable) == (False, None, False)
+    assert [event for event in events if event.get("log_level") == "error"] == []
+    print_success("off, not validated")
+
+
+def test_a_usable_signup_limit_leaves_the_configuration_usable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """EMD-023c — contract 4: a valid ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS`` beside a valid server does not touch the state: usable, no problem."""
+    print_section("EMD-023c: valid signup limit")
+    _configure(monkeypatch, {**BASE, "signup_emails_per_address": "3"})
+
+    state = email_config_state()
+
+    assert (state.configured, state.problem, state.usable) == (True, None, True)
+    print_success("usable")
 
 
 # =============================================================================

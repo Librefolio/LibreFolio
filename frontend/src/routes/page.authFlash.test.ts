@@ -25,12 +25,13 @@ const mocks = await vi.hoisted(async () => {
     return {
         instance: reactiveBox<{config: InstanceConfig}>({config: {profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}}}),
         takeAuthFlash: vi.fn<() => string>().mockName('takeAuthFlash'),
+        takeAuthFlashTone: vi.fn<() => 'success' | 'warning'>().mockName('takeAuthFlashTone'),
         setAuthFlash: vi.fn((_message: string) => {}).mockName('setAuthFlash'),
         noopComponent: () => {},
     };
 });
 
-vi.mock('$lib/features/auth/authFlash', () => ({setAuthFlash: mocks.setAuthFlash, takeAuthFlash: mocks.takeAuthFlash}));
+vi.mock('$lib/features/auth/authFlash', () => ({setAuthFlash: mocks.setAuthFlash, takeAuthFlash: mocks.takeAuthFlash, takeAuthFlashTone: mocks.takeAuthFlashTone}));
 vi.mock('$lib/stores/app/auth', async () => {
     const {readable} = await import('svelte/store');
     return {
@@ -99,6 +100,8 @@ async function loginPage(): Promise<HTMLElement> {
 beforeEach(() => {
     mocks.takeAuthFlash.mockReset();
     mocks.takeAuthFlash.mockReturnValue('');
+    mocks.takeAuthFlashTone.mockReset();
+    mocks.takeAuthFlashTone.mockReturnValue('success');
 });
 
 afterEach(cleanup);
@@ -113,6 +116,27 @@ describe('the login page — the message a link page left', () => {
         const page = await loginPage();
         await waitFor(() => expect(within(page).getByTestId('login-success')).toHaveTextContent('A message the link page left'));
         expect(mocks.takeAuthFlash, 'the page reads the flash').toHaveBeenCalled();
+    });
+
+    it('draws it as a warning when the link page left it with that tone (an activation email that was held)', async () => {
+        mocks.takeAuthFlash.mockReturnValueOnce('A held message');
+        mocks.takeAuthFlashTone.mockReturnValueOnce('warning');
+
+        render(LoginPage);
+
+        const page = await loginPage();
+        await waitFor(() => expect(within(page).getByTestId('login-success')).toHaveTextContent('A held message'));
+        expect(within(page).getByTestId('login-success')).toHaveAttribute('data-tone', 'warning');
+        expect(mocks.takeAuthFlashTone, 'the page reads the tone').toHaveBeenCalled();
+    });
+
+    it('draws it as a success when the link page gave no tone', async () => {
+        mocks.takeAuthFlash.mockReturnValueOnce('A message the link page left');
+
+        render(LoginPage);
+
+        const page = await loginPage();
+        await waitFor(() => expect(within(page).getByTestId('login-success')).toHaveAttribute('data-tone', 'success'));
     });
 
     it('shows no success message when no link page left one', async () => {

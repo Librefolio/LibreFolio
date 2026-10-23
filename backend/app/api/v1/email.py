@@ -167,7 +167,7 @@ async def request_password_reset_email(
     except EmailRateLimitedError as exc:
         _rate_limited(exc, "Too many requests: try again later")
     # The session of this request ends with it: the work opens its own, on the same database.
-    background.add_task(flows.forgotten_password_work, body.identifier, engine=session.bind)
+    background.add_task(flows.forgotten_password_work, body.identifier, engine=session.bind, address=address)
     return PasswordResetEmailAccepted()
 
 

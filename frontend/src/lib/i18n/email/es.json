@@ -26,7 +26,8 @@
       "SMTP_MAX_PER_HOUR_INVALID": "{variable} debe ser un número entero de al menos 1.",
       "SMTP_PASSWORD_UNREADABLE": "El archivo de la contraseña indicado por {variable} no se puede leer.",
       "SMTP_CREDENTIALS_INCOMPLETE": "{variable} está definida sola: define tanto el usuario SMTP como su contraseña, o ninguno de los dos.",
-      "unknown": "{variable} no se puede usar."
+      "unknown": "{variable} no se puede usar.",
+      "SIGNUP_EMAILS_PER_ADDRESS_INVALID": "{variable} debe ser un número entero de al menos 1."
     },
     "checks": {
       "smtp": {
@@ -115,7 +116,7 @@
       "signUpUnavailable": "Ahora no es posible registrarse: esta instancia no puede enviar el correo de verificación. Inténtalo más tarde o pregunta a su administrador.",
       "settingNeedsEmail": "Hace falta que pueda salir un correo con enlace: configura primero SMTP y LIBREFOLIO_PUBLIC_URL (Configuración › Administración › Correo).",
       "settingUnavailable": "La verificación del correo necesita que pueda salir un correo con enlace, y ahora no puede: revisa Configuración › Administración › Correo.",
-      "registeredHeld": "Cuenta creada, pero el correo de activación no puede salir ahora: demasiados registros desde tu red en la última hora. Inicia sesión con tu nombre de usuario y tu contraseña: se te ofrecerá un enlace nuevo."
+      "registeredHeld": "Cuenta creada. Correo de activación bloqueado por demasiados intentos: vuelve a intentarlo en unos {minutes, plural, one {# minuto} other {# minutos}} introduciendo tu usuario y contraseña en la página de inicio de sesión para recibir uno nuevo."
     },
     "sendLink": {
       "button": "Enviar por correo",

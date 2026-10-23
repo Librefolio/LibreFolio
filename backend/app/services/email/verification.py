@@ -14,6 +14,8 @@ NULL for every account that existed before) records when a link was clicked.
   account still waits, and «resend» works at once.
 - ``confirm_email()`` — the link: the account active, ``email_verified_at`` set, its other verification tokens revoked.
 - ``resend_verification()`` — the login's «resend»: the password checked as the login checks it, then a new link.
+- ``registration_email_verdict()`` — whether a registration's email may go: the client address's counter and the
+  instance's hourly budget, the same two «resend» looks at, and the wait when either refuses.
 - ``ensure_verification_can_be_enabled()`` — the option turns on only while an email with a link can go out.
 
 Every link comes from ``links.email_link`` (``LIBREFOLIO_PUBLIC_URL``, developer decision 45). No log line holds a
@@ -23,6 +25,7 @@ token, an address or an identifier.
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 import structlog
@@ -40,7 +43,6 @@ from backend.app.services.email.delivery import EmailError, EmailRateLimitedErro
 from backend.app.services.email.flows import account_language, link_ttl, require_email
 from backend.app.services.email.links import email_link, links_state, require_links
 from backend.app.services.email.messages import build_verification
-from backend.app.services.platform.client_address import client_rate_key
 from backend.app.utils.datetime_utils import ensure_utc, utcnow
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 
@@ -48,10 +50,6 @@ logger = structlog.get_logger(__name__)
 
 VERIFICATION = AccountTokenPurpose.EMAIL_VERIFICATION
 
-#: «Resend», per client address, before the password is checked: 10 requests every 15 minutes, an IPv6 client by its
-#: /64 (workstream H's ``client_rate_key()``). The route checks a password: without it, it would be a guessing oracle the
-#: login has not.
-RESEND_BY_ADDRESS = SlidingWindowLimiter(10, 15 * 60)
 #: Per account, counted on the verification links already emailed: one every 5 minutes, 3 an hour.
 VERIFICATION_EMAIL_MIN_INTERVAL = timedelta(minutes=5)
 VERIFICATION_EMAILS_PER_HOUR = 3
@@ -59,9 +57,9 @@ VERIFICATION_EMAILS_PER_HOUR = 3
 #: emails an hour, whatever account they are for, since several accounts may give the same mailbox, as with
 #: ``flows.FORGOT_BY_MAILBOX``. Counted on the emails that went out.
 VERIFICATION_BY_MAILBOX = SlidingWindowLimiter(3, 60 * 60)
-#: Registration emails per client address, an IPv6 client by its /64: 10 an hour. Past it the account is still created
-#: and waits, but its email does not go: its owner asks for the link again from the sign-in page (coordinator, 16/10).
-REGISTRATION_EMAILS_BY_ADDRESS = SlidingWindowLimiter(10, 60 * 60)
+# The activation emails per client address are counted by ``delivery.ADDRESS_BUDGET`` (``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS``,
+# 20 an hour by default, developer decision 23/10), the one count shared by a registration, «send the link again» and
+# «forgot password»; past it the account of a registration is still created and waits, its email held.
 
 
 class EmailVerificationUnavailableError(EmailError):
@@ -230,13 +228,17 @@ def _per_account_retry_after(created: list[datetime], now: datetime) -> float | 
     return max(waits).total_seconds() if waits else None
 
 
-async def _issue_and_send(session: AsyncSession, user: User, now: datetime, *, needs_place: bool = False) -> str:
+async def _issue_and_send(session: AsyncSession, user: User, now: datetime, *, needs_place: bool = False, count_address: bool = False, client_address: str | None = None) -> str:
     """Email the account a new verification link, which replaces its others; returns the email's language.
 
     Configuration, links, hourly budget and the recipient's mailbox first: nothing is created when the email cannot go.
     The new token carries the account's address, and is committed before the email; when the email does not go, it
     loses its address and stays as a hold, so the account still waits. ``needs_place``: the account holds no place yet
-    (its link expired), so the user limit is counted again inside the write transaction. Raises what ``send_email``
+    (its link expired), so the user limit is counted again inside the write transaction. ``count_address``: spend a unit of
+    the client ``client_address``'s counter (``delivery.ADDRESS_BUDGET``) once every check has admitted the email, just before
+    the commit and so before the email: a refusal then (another request took the last unit) rolls everything back. Only
+    «resend» counts; ``registration_email_work`` does not, the registration counted at its answer. The unit stays spent if the
+    SMTP server then fails: an email was tried. Raises what ``send_email``
     raises; ``EmailRateLimitedError`` when another request emailed a link meanwhile; ``VerificationUserLimitError`` when
     another took the last place meanwhile; ``EmailVerificationNotNeededError`` or ``VerificationAccountDisabledError``
     when the account stopped waiting meanwhile.
@@ -275,6 +277,11 @@ async def _issue_and_send(session: AsyncSession, user: User, now: datetime, *, n
         if usage.max_users is not None and usage.used > usage.max_users:
             await session.rollback()
             raise VerificationUserLimitError()
+    if count_address:
+        spent = delivery.address_budget_hit(client_address)
+        if not spent.allowed:
+            await session.rollback()
+            raise EmailRateLimitedError(spent.retry_after)
     await session.commit()
     token_id = issued.record.id
     try:
@@ -299,14 +306,42 @@ async def _issue_and_send(session: AsyncSession, user: User, now: datetime, *, n
     return language
 
 
-def registration_email_allowed(address: str | None) -> bool:
-    """Whether a registration from the client ``address`` may send its verification email now; counted when it may.
+@dataclass(frozen=True)
+class RegistrationEmailVerdict:
+    """Whether the verification email of a registration may go now, and if not, why and for how long."""
 
-    10 an hour per client address (``REGISTRATION_EMAILS_BY_ADDRESS``, an IPv6 client by its /64). A request without
-    an address is not limited here: the mailbox and the hourly budget still are.
+    allowed: bool
+    #: Seconds until a new try could pass the counters that stopped this one; 0 when ``allowed``.
+    retry_after: float = 0.0
+    #: Which counters stopped it: the client address's, the instance's hourly budget, or both.
+    by_address: bool = False
+    by_instance: bool = False
+
+
+async def registration_email_verdict(address: str | None) -> RegistrationEmailVerdict:
+    """Whether a registration from the client ``address`` may send its verification email now; the address counted when it may.
+
+    Two counters, the same as «send the link again» looks at: the client address's (``delivery.ADDRESS_BUDGET``,
+    ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS`` an hour, 20 by default, an IPv6 client by its /64; a request without an
+    address is not limited by it) and the instance's hourly budget (``LIBREFOLIO_SMTP_MAX_PER_HOUR``). Both are peeked
+    first; only when both admit is the address's hit recorded, so a refused registration spends nothing. When either
+    refuses, ``retry_after`` is the longest of the waits of the counters that refused. Never raises.
     """
-    key = client_rate_key(address)
-    return key is None or REGISTRATION_EMAILS_BY_ADDRESS.hit(key).allowed
+    state = await asyncio.to_thread(delivery.email_config_state)
+    by_address = delivery.address_budget_peek(address)
+    by_instance = delivery.instance_budget_peek(state)
+    if by_address.allowed and (by_instance is None or by_instance.allowed):
+        spent = delivery.address_budget_hit(address)
+        if spent.allowed:
+            return RegistrationEmailVerdict(allowed=True)
+        # Another registration took the last unit between the peek and the hit
+        by_address = spent
+    return RegistrationEmailVerdict(
+        allowed=False,
+        retry_after=delivery.longest_wait(by_address, by_instance),
+        by_address=not by_address.allowed,
+        by_instance=by_instance is not None and not by_instance.allowed,
+    )
 
 
 async def registration_email_work(user_id: int, *, engine: AsyncEngine | None = None, now: datetime | None = None) -> None:
@@ -376,7 +411,10 @@ async def confirm_email(session: AsyncSession, token: str, *, now: datetime | No
 async def resend_verification(session: AsyncSession, *, identifier: str, password: str, address: str | None, now: datetime | None = None) -> str:
     """The login's «resend»: a new verification link by email, for whoever gives the account's password.
 
-    The address limit first, then the sign-in's limit on failed passwords (``login_throttle``, F15: the same two counts as
+    The counter per client address first (``delivery.ADDRESS_BUDGET``, shared with the registration and «forgot
+    password»), only looked at: a full one refuses before the password is checked, with the longest wait of the address
+    and the instance counters, and a try costs it nothing. It is spent by ``_issue_and_send`` when the email is about to
+    leave, so wrong passwords never use it up (they have their own limit), then the sign-in's limit on failed passwords (``login_throttle``, F15: the same two counts as
     ``POST /auth/login``, by the identifier as typed and by the address), then the password as the login checks it (a
     dummy hash for an unknown account, the same refusal for both): a wrong one counts, the right one forgets the
     identifier's failures. Then: ``EmailVerificationNotNeededError`` for an active account, ``VerificationAccountDisabledError``
@@ -385,11 +423,14 @@ async def resend_verification(session: AsyncSession, *, identifier: str, passwor
     ``send_email`` raises.
     """
     moment = now or utcnow()
-    key = client_rate_key(address)
-    if key is not None:
-        decision = RESEND_BY_ADDRESS.hit(key)
-        if not decision.allowed:
-            raise EmailRateLimitedError(decision.retry_after)
+    # Only looked at here, to answer at once with the time to wait: the address's counter counts the emails that go, not the
+    # tries (wrong passwords have their own limit, ``login_throttle``). The hit is in ``_issue_and_send``, when the email
+    # is about to leave.
+    decision = delivery.address_budget_peek(address)
+    if not decision.allowed:
+        # The wait is the longest of the counters that stop the request: the instance's budget too, when it is spent
+        state = await asyncio.to_thread(delivery.email_config_state)
+        raise EmailRateLimitedError(delivery.longest_wait(decision, delivery.instance_budget_peek(state)))
     # The sign-in's limit (F15): the password is guessed no faster here than at the sign-in, refused before it is checked
     refused = login_throttle.refusal(identifier, address)
     if refused is not None:
@@ -418,4 +459,4 @@ async def resend_verification(session: AsyncSession, *, identifier: str, passwor
 
         if (await user_usage(session, now=moment)).full:
             raise VerificationUserLimitError()
-    return await _issue_and_send(session, user, moment, needs_place=needs_place)
+    return await _issue_and_send(session, user, moment, needs_place=needs_place, count_address=True, client_address=address)
