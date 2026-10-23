@@ -73,7 +73,7 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import OpenDateRangeModel
 from backend.app.schemas.portfolio import PortfolioReportQuery
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
-from backend.app.services.financial_math.portfolio.models import PortfolioCalculationResult
+from backend.app.services.financial_math.portfolio.models import DailyStates, PortfolioCalculationResult
 from backend.app.services.portfolio_service import PortfolioService
 from backend.test_scripts.test_services._range_bounds import lift_range_bound
 
@@ -373,6 +373,11 @@ def _canonical(item: Any) -> str:
     return json.dumps(item, sort_keys=True)
 
 
+def _walk_daily_states(value: DailyStates, field: str | None, labels: _Labels) -> list[Any]:
+    # P4: the engine keeps its computed days as segments; dumped as every day's state, the dump a list of them gave.
+    return _walk_sequence(list(value), field, labels)
+
+
 def _walk_set(value: set[Any] | frozenset[Any], field: str | None, labels: _Labels) -> list[Any]:
     # A set iterates in hash order, i.e. by absolute id: sorted once labelled.
     return sorted((_walk(item, field, labels) for item in value), key=_canonical)
@@ -394,6 +399,7 @@ _HANDLERS: tuple[tuple[type | tuple[type, ...], Callable[[Any, str | None, _Labe
     (date, _date_text),
     (BaseModel, _walk_model),
     (Mapping, _walk_mapping),
+    (DailyStates, _walk_daily_states),
     ((list, tuple), _walk_sequence),
     ((set, frozenset), _walk_set),
 )

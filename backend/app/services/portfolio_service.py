@@ -95,6 +95,7 @@ from backend.app.services.financial_math.portfolio.contributions import (
     transfer_tracts_moved_in,
     window_start,
 )
+from backend.app.services.financial_math.portfolio.models import DailyStates
 from backend.app.services.financial_math.returns import (
     annualized_to_cumulative,
     calculate_simple_roi,
@@ -344,13 +345,22 @@ def _engine_missing_fx_pairs(engine_result: Any, period_from: date_type | None, 
     dates_by_pair: dict[str, set[date_type]] = defaultdict(set)
     for pair, dates in (getattr(engine_result, "missing_fx", None) or {}).items():
         dates_by_pair[pair].update(dates)
-    for state in getattr(engine_result, "daily_states", None) or []:
-        if not state.missing_fx_pairs:
-            continue
-        if (period_from is not None and state.date < period_from) or (period_to is not None and state.date > period_to):
-            continue
-        for pair in state.missing_fx_pairs:
-            dates_by_pair[pair].add(state.date)
+    daily_states = getattr(engine_result, "daily_states", None) or []
+    if isinstance(daily_states, DailyStates):
+        # Every day of a segment reads its state's pairs (P4): the days are listed, no state is built
+        for segment in daily_states.iter_segments(period_from, period_to):
+            if segment.state.missing_fx_pairs:
+                days = [segment.start + timedelta(days=offset) for offset in range((segment.end - segment.start).days + 1)]
+                for pair in segment.state.missing_fx_pairs:
+                    dates_by_pair[pair].update(days)
+    else:
+        for state in daily_states:
+            if not state.missing_fx_pairs:
+                continue
+            if (period_from is not None and state.date < period_from) or (period_to is not None and state.date > period_to):
+                continue
+            for pair in state.missing_fx_pairs:
+                dates_by_pair[pair].add(state.date)
     return [WACMissingPairInfo(pair=pair, dates=sorted(dates)) for pair, dates in sorted(dates_by_pair.items())]
 
 
@@ -1330,7 +1340,8 @@ class PortfolioService:
         if not by_broker:
             # A window holding no state: the whole-history build still listed every broker, with no point. Otherwise
             # the window lists them all, in the same order: every state carries every broker of the scope (DailyStateBuilder)
-            by_broker = {broker_id: [] for state in result.daily_states for broker_id in state.broker_contributions}
+            states = (segment.state for segment in result.daily_states.segments) if isinstance(result.daily_states, DailyStates) else result.daily_states
+            by_broker = {broker_id: [] for state in states for broker_id in state.broker_contributions}
 
         broker_pnl_history: list[BrokerPnlHistory] = []
         for broker_id, points in by_broker.items():

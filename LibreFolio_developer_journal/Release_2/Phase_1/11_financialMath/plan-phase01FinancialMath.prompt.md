@@ -4585,3 +4585,106 @@ Base `c1b4ba49c` (= `dev_release2` `c042f2481`). MF in sola lettura: nessun codi
   una coppia di rettifiche collegate all'inserimento (`0af0f3593`, «proteggere l'inserimento, niente bonifiche»). Le domande
   Q-N78-1k-3/4 cadono con lei.
 - ✖️ P4/D-P4 «fuori dalla 1.3» — no: il developer le tiene nella 1.3 («formule veloci», 19/10); P4 e i floor vanno in ondata 5.
+
+### Ondata 5 (kickoff 23/10/2026) — HEAD `1fd80c481` (= `dev_release2`, treni 9 e 10)
+
+Sessione MF come sotto-agente del coordinatore (Claude Code, Linux). Worktree `LibreFolio-worktrees/e-alfy-turbo-waddle`,
+ramo `e-alfy-mf-matematica-finanziaria`, HEAD verificato `1fd80c481d2e…` (uguale al kickoff), albero pulito. Corsia: porta
+`6193`, dati `/tmp/librefolio-r13-mf`. Treno **11b** per tutti i lotti (MF5-1 P4, MF5-2 pavimenti, MF5-3 B5, MF5-4 P1c) e
+le revisioni (W-B87, X5-2, J5-1, numeri prima del gate). Graphify non disponibile nel worktree (ignorato): letti piano e backlog.
+
+#### Ripresa dopo la migrazione (23/10)
+- ⚠️ **Perso con la migrazione da macOS**: la cartella di sessione con `files/p4/` (`time_sections.py`, `profile_engine.py`,
+  `memory_states.py`), `files/p3/report_dump.py`, le 4 copie del DB (base + tre del 1900) e la copia col refuso al 1500; i
+  rossi `p4-tests` di test-author non sono mai arrivati in un commit (il salvataggio `e-alfy-mf-matematica-finanziaria.*` ha
+  solo il piano). **Da rifare**: l'imbracatura di parità (albero di HEAD da `git archive` contro il worktree, processi
+  separati, JSON confrontato), le copie del DB nella corsia (popolata, poi una riga al 1900 e una al 1500 inserite nella
+  copia, mai via API), e i rossi P4.
+- ✅ **Verifica delle righe del kickoff** (23/10): `portfolio/models.py:413` `daily_states: list[DailyPortfolioState]`;
+  `daily_state.py:312-339` copia ogni giorno fermo da `date_from` in poi (prima di `date_from` salta già al giorno sporco
+  successivo, R13-SEC8, `:313-318`); lettori pieni: `portfolio_service.py:347` (`_engine_missing_fx_pairs`), `:371`/`:947`/
+  `:1878` (`period_boundaries`/`period_pnl`), `:1333` (P&L per broker), `derived_views.py:76` (`_dates`), `:259`
+  (allocazioni), `period.py:30` e `:84` (liste di tutte le date), `data_quality.py:134`.
+
+#### MF5-1 · P4 — forma dei segmenti (primo messaggio, per J)
+- ✅ **Forma proposta** (23/10, inviata al coordinatore; il codice arriva con P4):
+  - `StateSegment` (frozen, slots): `start` (il giorno calcolato, `state.date == start`), `end` (l'ultimo giorno in cui
+    vale, incluso: il `start` del segmento dopo − 1, o `date_to`), `state: DailyPortfolioState` (mai modificato).
+  - Dentro un segmento ogni campo è costante tranne tre: `date`; `external_cash_flow` (0 nei giorni fermi);
+    `acquisition_funding` (None nei giorni fermi). Motivo: ogni giorno con un movimento, una quotazione, un cambio di tasso
+    letto, un bordo di transito, un prezzo che diventa vecchio, uno split, `date_from` e `period_start` è sporco
+    (`daily_state.py:804-834`).
+  - `DailyStates(Sequence[DailyPortfolioState])` in `models.py`: `segments` (tupla crescente e contigua), `first_date`,
+    `last_date`, `len` = giorni di calendario, indice/fetta/iterazione **costruiscono** il giorno fermo come oggi (`replace`
+    con i contenitori copiati), `segment_at(day)`, `state_as_of(day)`, `iter_segments(date_from, date_to)` (tagliati alla
+    finestra). `PortfolioCalculationResult.daily_states: DailyStates` (vuoto = `DailyStates(())`, falso come la lista).
+  - Per #48 (J): frame per posizione **sugli stessi segmenti**, a richiesta (`include_positions`, chiave di cache come le
+    candele), scritti dal motore (MF): bozza `PositionFrame` (broker, asset, quantità, valore di mercato, fonte, costo,
+    costo completo, flusso del giorno = 0 nei giorni fermi); la somma dei valori = `state.market_value` nello stesso ordine.
+    Campi e senso dei flussi: li fissa J nel contratto, MF li scrive nel motore (dopo P4, checkpoint a parte).
+
+#### Revisione X5-2 (Z-35) — domanda di X sugli split
+- ✅ **Risposta** (23/10, sola lettura): il motore **non** applica il rapporto di split alla quantità: la quantità cambia solo
+  con le rettifiche ADJUSTMENT legate all'evento (`daily_state.py:391`, `:396-397`); il rapporto riscrive solo i prezzi
+  dedotti dalle operazioni (`LAST_TRADE_PRICE`, `:1019-1027`), mai una quotazione di mercato (`:1035-1039`; `models.py:386-388`):
+  il motore tratta la quotazione come «nelle unità del suo giorno». Il `Close` Yahoo rettificato per split (anche con
+  `auto_adjust=False`) quindi **non è coerente** prima dello split: 10 AAPL al 28/08/2020 valgono 10 × 124,8 = 1 248 invece
+  di 4 990; il 31/08 40 × 129 = 5 160: un salto di +313 % nel TWRR, non un flusso. Dopo lo split i numeri sono giusti.
+  Preesistente a Z-35 (anche `auto_adjust=True` rettifica gli split); il «Sync completo» consigliato dalla doc lo estende a
+  tutta la storia prima di ogni split. Grafici, segnali e rischio (`market_series.py`, nessuna gestione degli split) invece
+  vogliono la serie rettificata. Decisione di prodotto → developer (opzioni nel messaggio).
+- ✅ **Decisione MF-SPL1 = C** (developer, 23/10, via coordinatore): nessun codice sugli split nella 1.3.
+  > **Note implementazione**: backlog MF-SPL1 completata (scelta C, obiettivo A + lettori che conoscono gli split); nota
+  > nella doc per sviluppatori `mkdocs_src/docs/developer/backend/transactions/price_resolver.md` («Design contract»: la
+  > quotazione nelle unità del suo giorno, lo split muove la quantità, esempio AAPL, limite noto della 1.3). La nota nella
+  > pagina utente di Yahoo è di X.
+
+#### MF5-1 · P4 — rossi e cura (23/10)
+- ✅ **Corsia creata** (17:38): `dev.py test --test-port 6193 --data-dir /tmp/librefolio-r13-mf db populate --force --clean`,
+  PASSED, 8 s (log `ondata5/MF-p4-populate.log`); DB 1,2 MB.
+- ✅ **Rossi P4** (test-author, 23/10): `test_financial_math/test_daily_states_segments.py` (87: contratto di
+  `StateSegment`/`DailyStates`) e `test_financial_math/test_engine_state_segments.py` (50: inizi dei segmenti = giorni
+  calcolati, parità materializzata su 3 libri, libro del secolo 46 021 giorni < 100 segmenti e 0 materializzazioni in
+  `build()`, i lettori uguali sulla lista densa e con materializzazioni limitate alla finestra o ai segmenti, ritorni
+  anticipati vuoti). Rosso su HEAD: 2 errori di raccolta, `ImportError: DailyStates` (log `ondata5/MF-p4-red-head.log`).
+  Denti: 137/137 su una cura di riferimento di test-author fuori dal worktree; 11 mutanti, tutti presi.
+  > **⚠️ Fuori pista**: `test_replay_floor.py::TestNoQuietDayBeforeDateFrom` conta `daily_state.replace` dopo
+  > `date_from` come precondizione: con P4 non c'è più, va riscritto (test-author, dopo la cura).
+- ✅ **Cura P4** (23/10): `models.py` `StateSegment` + `DailyStates` (contratto dei rossi); `daily_state.build()` non visita
+  più nessun giorno fermo (salto al giorno sporco successivo anche dopo `date_from`), tiene solo gli stati calcolati da
+  `date_from` e li consegna come segmenti (`_segments`); `engine.py` ritorni anticipati `DailyStates()`; lettori:
+  `period.state_as_of` (metodo di `DailyStates`) e `period_boundaries` (via `state_as_of`, niente lista di tutte le date),
+  `DerivedViewsBuilder` (finestre con l'aritmetica delle date, allocazioni dalla finestra, input di performance costruiti
+  una volta), `data_quality` (giorni a NAV incompleto dai segmenti), `portfolio_service._engine_missing_fx_pairs` e il
+  ripiego del P&L per broker (segmenti). Doc: `developer/backend/financial_math.md` (paragrafo «Segments (P4)»).
+  > **Note implementazione**: verdi `test_daily_states_segments` + `test_engine_state_segments` **137** (2,0 s);
+  > `services financial-math` **2627**; `portfolio-engine` **41**; `roi-fifo-utils` 26 rossi / 1929 (solo aiuti dei test
+  > che non conoscevano `DailyStates`), portati da test-author (4 file, solo aiuti, nessuna asserzione di valore toccata):
+  > 60 + 11 + 12 + 1 verdi.
+  > **⚠️ Fuori pista**: il runner (`services roi-fifo-utils`) ricrea il DB della corsia: la corsia non è un corpus stabile.
+  > Corpora copiati in `ondata5/MF-p4/corpora/` (base + eur1900, usd1900, buy1900, typo1500, una riga piantata con SQL,
+  > `make_copies.sh`). Un file vuoto ignorato `backend/data/test/sqlite/app.db` lasciato da un giro di test-author senza
+  > corsia: il suo `rm` è stato negato; segnalato al coordinatore.
+- ✅ **Imbracatura di parità ricostruita** (`ondata5/MF-p4/report_dump.py`, `compare.py`, `run_parity.sh`): l'albero di
+  HEAD da `git archive 1fd80c481 backend` contro il worktree, processi separati, ogni corpus su una copia fresca; ogni
+  sezione di `get_report` (tutti i flag) in JSON e, per ogni utente × valuta, l'impronta di **ogni** stato giornaliero del
+  motore da t=0 (campo per campo, Decimal con esponente, blocchi da 1 000 giorni).
+  > **Note implementazione**: copia base, 11 utenti × {base, USD} × 6 finestre + 22 motori: **154 casi, 0 differenze**
+  > (log `ondata5/MF-p4-parity-base.log`, ripetuto `-base2.log`); tempi rumorosi (carico 2–25): 22,5/57,9 s poi 29,7/23,9 s.
+- ✅ **Le viste leggono la finestra dai segmenti** (23/10): la prima parità era a 0 differenze, ma «tutto» sulle copie del
+  1900 era più lento (15–22 → 20–28 s): il profilo dava ~21 % a `state_on` (416 853 giorni costruiti, ~9 passate × 46 000).
+  `DerivedViewsBuilder._window_days()` dà `(giorno, stato del segmento)` senza costruire il giorno fermo (la data dal
+  giro; finanziamento degli acquisti solo nel giorno calcolato); storia, P&L per broker, candele, finanziamento,
+  allocazioni e input di performance la usano.
+  > **Note implementazione**: verdi di nuovo `financial-math` **2627**, `portfolio-engine` **41**, `roi-fifo-utils`
+  > **1955** (log `ondata5/MF-p4-green2-*.log`); 137 + `test_windowed_views` = 415 verdi.
+- ✅ **Parità finale** (18:46–18:57, sotto il lucchetto, carico 2,5 → 1,9; log `ondata5/MF-p4-parity-final.log`):
+  copia base **154** casi + eur1900, usd1900, buy1900, typo1500 **12** ciascuna = **202 casi, 0 differenze** (ogni sezione
+  di `get_report` con tutti i flag, e l'impronta di ogni stato del motore da t=0 per utente × valuta: 46 316 giorni sulle
+  copie del 1900). Tempi (somma per copia): base 30,5 → 20,8 s; copie del 1900 57,5–59,8 → 45,6–48,4 s; finestra 1M
+  0,8–3,5 → 0,3 s; «tutto» invariato (12–20 s: è il volume d'uscita, D-P4); motore 5–7 → 4,8–5,9 s.
+- ✅ **Memoria** (slot esclusivo = il lucchetto, 18:35–18:37, carico 4,7 → 3,4; `ondata5/MF-p4/run_memory.sh`, log
+  `ondata5/MF-p4-memory.log`): copia typo1500, pavimento abbassato al 1500 nel solo processo, `tracemalloc`:
+  HEAD **192 413 stati, 685,9 MB tenuti** (picco 686,9, 63,5 s); P4 **397 segmenti, 4,6 MB** (picco 10,2, 25,6 s).
+- ✅ **Doc** (23/10): `developer/backend/financial_math.md` («Segments (P4)», con le misure); `mkdocs build` 0 e
+  `check-links` 0 (97 link; log `ondata5/MF-p4-mkdocs-*.log`). **CHECKPOINT READY** inviato, FROZEN.
