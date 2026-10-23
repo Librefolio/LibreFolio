@@ -19,6 +19,8 @@ chart. LibreFolio computes the indicators from the pair's stored rates.
 
 The signals you add are kept with this pair's [chart settings](../chart-settings.md).
 
+In the chart's [Rolling Return](chart.md#rolling-return) mode the panel offers only the **FX Pair** comparisons, each drawing its own rolling return; your other signals stay saved and return with **Prices**.
+
 ---
 
 ## 🧮 Technical indicators — 9 for FX

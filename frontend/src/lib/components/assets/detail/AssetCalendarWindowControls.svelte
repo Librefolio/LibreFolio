@@ -18,9 +18,11 @@
         customEditing: boolean;
         onpreset: (preset: CalendarReturnPresetKey) => void;
         oncustom: (amount: number, unit: CalendarReturnWindowUnit) => void;
+        /** The first part of every test id: the asset detail's own, or `fx` on the pair detail (X5-F1). */
+        idPrefix?: string;
     }
 
-    let {selection, customAmount = $bindable(), customUnit = $bindable(), customEditing = $bindable(), onpreset, oncustom}: Props = $props();
+    let {selection, customAmount = $bindable(), customUnit = $bindable(), customEditing = $bindable(), onpreset, oncustom, idPrefix = 'asset'}: Props = $props();
 
     let durationOptions = $derived([
         {
@@ -38,12 +40,12 @@
     ]);
 </script>
 
-<div class="flex flex-wrap items-center gap-1.5" data-testid="asset-calendar-window-controls">
+<div class="flex flex-wrap items-center gap-1.5" data-testid={`${idPrefix}-calendar-window-controls`}>
     <span class="text-xs text-lf-muted">{$t('chartSettings.params.window')}</span>
     {#each CALENDAR_RETURN_PRESETS as preset}
         <button
             class="min-w-10 px-2 py-1 rounded-md border text-xs font-medium transition-colors {selection.kind === 'preset' && selection.preset === preset.key ? 'border-lf-checked bg-lf-checked text-lf-on-checked' : 'border-lf-subtle text-lf-secondary hover:bg-lf-hover'}"
-            data-testid={`asset-calendar-window-${preset.key}`}
+            data-testid={`${idPrefix}-calendar-window-${preset.key}`}
             aria-pressed={selection.kind === 'preset' && selection.preset === preset.key}
             title={`${$t('chartSettings.params.window')}: ${preset.windowDays} ${$t('chartSettings.units.days')}`}
             onclick={() => onpreset(preset.key)}
@@ -59,9 +61,9 @@
         options={durationOptions}
         customLabel={$t('common.custom')}
         min={1}
-        buttonTestId="asset-calendar-window-custom"
-        amountTestId="asset-calendar-custom-amount"
-        unitTestId="asset-calendar-custom-unit"
+        buttonTestId={`${idPrefix}-calendar-window-custom`}
+        amountTestId={`${idPrefix}-calendar-custom-amount`}
+        unitTestId={`${idPrefix}-calendar-custom-unit`}
         isAllowed={(amount, unit) =>
             unit !== 'days' &&
             calendarReturnWindowDays({
@@ -76,5 +78,5 @@
             }
         }}
     />
-    <DocsLink path="user/assets/detail/chart/#rolling-return" label={$t('signals.riskRollingReturn.description')} size={14} testId="asset-calendar-return-docs" />
+    <DocsLink path="user/assets/detail/chart/#rolling-return" label={$t('signals.riskRollingReturn.description')} size={14} testId={`${idPrefix}-calendar-return-docs`} />
 </div>
