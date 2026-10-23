@@ -95,7 +95,11 @@
       "eventCreateAmountRequired": "Amount is required",
       "eventCreateDateRequired": "Date is required",
       "fxDatesHint": "The 'From' and 'To' dates usually match: they differ when the broker credits the new currency on another day.",
-      "eventEditTitle": "Edit event for {asset}"
+      "eventEditTitle": "Edit event for {asset}",
+      "entryModeAmount": "Total amount",
+      "entryModeUnitPrice": "Unit price",
+      "unitPriceCalculated": "calculated",
+      "unitPriceHint": "The amount is calculated from the unit price and the quantity; you can still edit it."
     },
     "bulk": {
       "resetRow": "Reset row",

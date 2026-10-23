@@ -323,6 +323,33 @@ async function deleteApiOwnedRows(page: Page): Promise<void> {
     expect(body.committed, `cleanup of rows ${stillThere.join(', ')} was rolled back: ${JSON.stringify(body.issues ?? [])}`).toBe(true);
 }
 
+/**
+ * Assets created through `page.request`: deleted by id in `afterEach`, which runs for a red test too. A leftover asset
+ * would sit in every later test's asset picker.
+ */
+let apiOwnedAssetIds: number[] = [];
+
+/** An EUR stock this test owns, found again by its unique name; returns its id. Recorded before anything is asserted. */
+async function createOwnedAsset(page: Page, name: string): Promise<number> {
+    const resp = await page.request.post(`${API}/assets`, {data: [{display_name: name, currency: 'EUR', asset_type: 'STOCK'}]});
+    const body = (await resp.json().catch(() => null)) as {results?: Array<{asset_id: number | null; success: boolean; message?: string}>} | null;
+    const created = (body?.results ?? []).filter((r) => r.success && r.asset_id != null).map((r) => r.asset_id as number);
+    apiOwnedAssetIds.push(...created);
+    expect(resp.status(), `create the owned asset: ${JSON.stringify(body)}`).toBe(201);
+    expect(created, 'the call creates exactly the owned asset').toHaveLength(1);
+    return created[0];
+}
+
+/** Delete the API-created assets. Fails loud: a silent leftover is somebody else's picker entry. */
+async function deleteApiOwnedAssets(page: Page): Promise<void> {
+    const ids = apiOwnedAssetIds;
+    apiOwnedAssetIds = [];
+    if (ids.length === 0) return;
+    const res = await page.request.delete(`${API}/assets?${ids.map((id) => `asset_ids=${id}`).join('&')}`);
+    const body = (await res.json().catch(() => null)) as {success_count?: number} | null;
+    expect(res.ok() && body?.success_count === ids.length, `cleanup must delete assets ${ids.join(', ')}: ${JSON.stringify(body)}`).toBe(true);
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -781,7 +808,11 @@ test.describe('Transactions', () => {
         try {
             await tracker?.cleanup();
         } finally {
-            await deleteApiOwnedRows(page);
+            try {
+                await deleteApiOwnedRows(page);
+            } finally {
+                await deleteApiOwnedAssets(page);
+            }
         }
     });
 
@@ -828,6 +859,55 @@ test.describe('Transactions', () => {
             await expect(amountInput).toHaveValue('1234,');
             await amountInput.pressSequentially('56');
             await expect(amountInput).toHaveValue('1234,56');
+        });
+    });
+
+    // ===================================================================
+    // #47 — «Total amount / Unit price» in the single BUY / SELL form
+    // ===================================================================
+    test.describe('Total amount / Unit price (#47)', () => {
+        test('on Unit price, 83,40 for 12 units fills the amount; an edited amount gives the price back; nothing is committed', async ({page}) => {
+            // The asset is this test's own and the form is never saved: Apply is not even pressed.
+            const name = `E2E entry mode ${uniqueSuffix()}`;
+            await createOwnedAsset(page, name);
+            // A fresh load, so the asset picker's catalogue holds the asset just created.
+            await goToTransactions(page);
+
+            // An edge, armed before anything is typed: the whole test must not send a commit.
+            const commits: string[] = [];
+            page.on('request', (req) => {
+                if (req.method() === 'POST' && new URL(req.url()).pathname === `${API}/transactions/commit`) commits.push(req.url());
+            });
+
+            await openCreateFlow(page);
+            await pickBroker(page, OWNED_BROKER);
+            await pickAsset(page, name);
+            await page.getByTestId('tx-form-quantity').fill('12');
+
+            // A BUY single form: the badge is there and the amount drives by default.
+            const amountButton = page.getByTestId('tx-form-entry-mode-amount');
+            const unitPriceButton = page.getByTestId('tx-form-entry-mode-unit-price');
+            await expect(page.getByTestId('tx-form-entry-mode')).toBeVisible({timeout: 5_000});
+            await expect(amountButton).toHaveAttribute('aria-pressed', 'true');
+
+            // Switch to Unit price and type it the way the locale writes it: the backend calculates the amount.
+            await unitPriceButton.click();
+            await expect(unitPriceButton).toHaveAttribute('aria-pressed', 'true');
+            await expect(amountButton).toHaveAttribute('aria-pressed', 'false');
+            const unitPrice = page.getByTestId('tx-form-unit-price');
+            await expect(unitPrice).toBeVisible({timeout: 3_000});
+            await unitPrice.fill('83,40');
+
+            const cashAmount = page.getByTestId('tx-form-cash-amount');
+            // A number, polled: 12 × 83.4 is 1000.8 whatever zeros or separator the field shows.
+            await expect.poll(async () => Number((await cashAmount.inputValue()).replace(',', '.')), {timeout: 10_000, message: 'the amount the backend calculated for 12 units at 83.40'}).toBe(1000.8);
+
+            // Edit the amount: it drives again, and the price follows it. 1000.9 / 12 is 83.40833...
+            await fillCashAmount(page, '1000.9');
+            await expect(amountButton).toHaveAttribute('aria-pressed', 'true');
+            await expect(page.getByTestId('tx-form-unit-price-computed')).toHaveAttribute('data-value', /^83\.4083/, {timeout: 10_000});
+
+            expect(commits, 'typing prices and amounts never commits anything').toEqual([]);
         });
     });
 

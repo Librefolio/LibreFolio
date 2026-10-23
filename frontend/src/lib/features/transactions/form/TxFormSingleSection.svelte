@@ -11,6 +11,8 @@
     import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import ExactQuantityInput from '$lib/components/ui/input/ExactQuantityInput.svelte';
+    import TxTradePriceRow from '$lib/features/transactions/form/TxTradePriceRow.svelte';
+    import type {TradeAmountDriver} from '$lib/features/transactions/form/txTradeAmount';
     import TxCellMark from '$lib/features/transactions/form/TxCellMark.svelte';
     import type {TxFormCell, TxFormCheckKind} from '$lib/features/transactions/form/txFormChecks';
     import CompactCashCell from '$lib/features/transactions/form/CompactCashCell.svelte';
@@ -53,6 +55,12 @@
         quantityInputSignRule: 'positive' | 'nonzero' | 'zero' | 'any';
         /** V-37b: the cells «Validate now» found wrong, and why. */
         markedCells: Partial<Record<TxFormCell, TxFormCheckKind>>;
+        /** #47: the «Total amount / Unit price» row, shown for a BUY or SELL. */
+        showEntryMode: boolean;
+        entryMode: TradeAmountDriver;
+        unitPrice: string;
+        onEntryModeChange: (mode: TradeAmountDriver) => void;
+        onUnitPriceInput: (value: string) => void;
         rule: ReturnType<typeof getTypeRule>;
         showCostBasisField: boolean;
         typeImmutable: boolean;
@@ -98,6 +106,11 @@
         quantityInputId,
         quantityInputSignRule,
         markedCells,
+        showEntryMode,
+        entryMode,
+        unitPrice,
+        onEntryModeChange,
+        onUnitPriceInput,
         rule,
         showCostBasisField,
         typeImmutable,
@@ -231,6 +244,9 @@
                 {/if}
                 {#if cashHint}
                     <span class="text-[10px] text-lf-muted">{cashHint}</span>
+                {/if}
+                {#if showEntryMode}
+                    <TxTradePriceRow mode={entryMode} {unitPrice} disabled={isReadonly} onModeChange={onEntryModeChange} {onUnitPriceInput} />
                 {/if}
             </div>
         {:else if rule.quantityMode !== 'forbidden'}
