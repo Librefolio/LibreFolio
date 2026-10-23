@@ -54,7 +54,9 @@ On **Rolling Return** the preview draws the rolling return of the rate or of the
 rolling returns of its comparisons. For one chart it uses the card's real data and, on an FX chart,
 the FX pairs compared on it; for all charts it draws a demo curve. Two more controls choose the window: **1W**, **1M**, **3M**, **1Y** or a custom
 amount. Until you choose one, the window is automatic: the largest preset that fits the period
-shown in the list. The other indicators stay saved but are hidden in this view.
+shown in the list. The Signals list shows only the comparisons this view draws, with another FX pair on
+an FX chart and with another asset on an asset chart; technical indicators and benchmarks stay saved
+but are hidden until you switch the preview back to **Abs** or **%**.
 
 ---
 

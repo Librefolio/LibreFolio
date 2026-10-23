@@ -13,6 +13,7 @@
      * Uses Svelte 5 runes. Replaces old FxEditSection with FxDataEditorSection.
      */
     import {onMount, tick, untrack} from 'svelte';
+    import {onPricesCaughtUp} from '$lib/features/price-refresh/onPricesCaughtUp';
     import {goto} from '$app/navigation';
     import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
@@ -693,6 +694,18 @@
         };
     });
 
+    // A price catch-up (the bus's `{kind: 'prices'}`, Y5-1, Z-14b): the chart on screen is asked again, in silence — the stale points stay up,
+    // nothing says the page is busy — and outside `pageBusy`: it is not the user's Refresh. The comparisons and the compared pairs follow it.
+    onMount(() =>
+        onPricesCaughtUp(async () => {
+            if (!pageMounted) return;
+            await loadChartData(signals, false, true);
+            if (!pageMounted) return;
+            await maybeLoadComparison(signals, true);
+            await loadSignalFxPairs();
+        }),
+    );
+
     let previousDisplayOrientation = $state('');
     $effect(() => {
         const orientation = `${data.urlBase}-${data.urlQuote}`;
@@ -748,7 +761,11 @@
         displayDateStart = 'min';
     }
 
-    async function loadChartData(requestedSignalConfigs: SignalConfig[] = signals, propagateError = false) {
+    /**
+     * `silent`: the reload after a price catch-up (Y5-1) — the chart and the signals on screen stay as they are and nothing says
+     * the page is busy (no `loading`, no `signalsLoading`): it is not a load the user asked for.
+     */
+    async function loadChartData(requestedSignalConfigs: SignalConfig[] = signals, propagateError = false, silent = false) {
         lastChartLoadAskedServer = false;
         if (!pageMounted) return;
         const slug = data.canonicalSlug;
@@ -771,6 +788,10 @@
         const store = getFxStore(slug);
         const gaps = store.getMissingIntervals(start, end);
         const hasCachedRange = gaps.length === 0;
+        // A store a catch-up marked stale that still holds points for the range (Y5-1, D3): they go on screen at once and the rates
+        // are asked in background, with no loading state.
+        const staleHeld = !hasCachedRange && store.isStale ? store.getRange(start, end).data : [];
+        const staleShown = staleHeld.length > 0;
         const requestPlan = buildBackendSignalRequestPlan(requestedSignalConfigs, signalDefinitions);
         const requestVersion = signalResultState.beginRequest();
         const withSignals = requestPlan.requests.length > 0;
@@ -779,6 +800,9 @@
             chartData = store.getRange(start, end).data;
             if (chartData.length === 0) error = '_i18n:fxDetail.noData';
             resolveMaxStartFromChartData();
+        } else if (staleShown && (!silent || chartData.length === 0)) {
+            // A silent reload of the range already on screen leaves the chart alone; a return to the page, or another range, shows them.
+            chartData = staleHeld;
         }
 
         if (!withSignals && hasCachedRange) {
@@ -811,9 +835,9 @@
             return;
         }
 
-        loading = !hasCachedRange;
+        if (!silent) loading = !hasCachedRange && !staleShown;
         signalRequestFailed = false;
-        signalsLoading = withSignals;
+        signalsLoading = !silent && withSignals;
         lastChartLoadAskedServer = true;
         try {
             const response = await convertBulkWithSignalIsolation(requestBody);

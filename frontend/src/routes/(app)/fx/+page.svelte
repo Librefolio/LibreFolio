@@ -12,7 +12,7 @@
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
-    import {ArrowLeftRight, CalendarSync, Coins, Plus, RefreshCw, RotateCw, Settings, Trash2, X} from 'lucide-svelte';
+    import {ArrowLeftRight, CalendarSync, ChartLine, Coins, Plus, RefreshCw, RotateCw, Settings, Trash2, X} from 'lucide-svelte';
     import FxCard from '$lib/components/fx/FxCard.svelte';
     import type {FxRow} from '$lib/components/fx/FxTable.svelte';
     import FxTable from '$lib/components/fx/FxTable.svelte';
@@ -22,6 +22,7 @@
     import {ConfirmModal} from '$lib/components/table';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
@@ -32,6 +33,7 @@
     import {DEFAULT_COMPACT_PLOT_WIDTH_PX} from '$lib/components/charts/timeSeriesAggregation';
     import {buildFxCalendarQuery, estimateFxCalendarDays, fxCalendarRequest, type FxCalendarCardInput, type FxCalendarEntry} from '$lib/utils/reducedFxQuery';
     import {sendBulkBatches} from '$lib/api/bulkBatches';
+    import {onPricesCaughtUp} from '$lib/features/price-refresh/onPricesCaughtUp';
     import {comparisonTargetFromStore, ensureComparisonSeries} from '$lib/charts/comparisonSeries';
     import {comparisonTargetIds} from '$lib/utils/reducedPriceQuery';
     import {todayIso} from '$lib/utils/dateOnly';
@@ -414,9 +416,14 @@
      * signals' retry, a settings change and an inversion ask only the rates and signals (`fetchAllPairSeries`): the Δ
      * columns come both ways and depend on none of them (X-R60).
      */
-    async function fetchAllPairData(propagateError = false) {
-        await Promise.all([fetchAllPairSeries(propagateError), loadPeriodChanges(), fetchCalendarReturns(), fetchComparisonSeries()]);
+    async function fetchAllPairData(propagateError = false, silent = false) {
+        await Promise.all([fetchAllPairSeries(propagateError, silent), loadPeriodChanges(silent), fetchCalendarReturns(undefined, silent), fetchComparisonSeries([], silent)]);
     }
+
+    // A price catch-up (the bus's `{kind: 'prices'}`, Y5-1, Z-14b): the rates, the Δ columns, the rolling returns and the compared assets on
+    // screen are asked again, in silence — the cards keep their lines, nothing says the page is busy — and outside `pageBusy`: it is not the
+    // user's Refresh.
+    onMount(() => onPricesCaughtUp(() => (pageAlive ? fetchAllPairData(false, true) : undefined)));
 
     /** The view a card shows: its own saved one, else the FX list's (Y-40). */
     function cardPrimaryView(slug: string): ChartPrimaryView {
@@ -471,7 +478,7 @@
      * conversions (Z-29fx, `utils/reducedFxQuery.ts`); the cards in another view drop theirs. `only` limits it to some cards.
      * The conversions' rates are not the cards' daily rates: they never reach the FX stores.
      */
-    async function fetchCalendarReturns(only?: ReadonlySet<string>) {
+    async function fetchCalendarReturns(only?: ReadonlySet<string>, silent = false) {
         const sessionGeneration = getClientSessionGeneration();
         const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
         if (!current()) return;
@@ -490,9 +497,9 @@
             const windowDays = calendarReturnWindowDays(effectiveCalendarReturnWindow(settings, rangeDays)) ?? 30;
             cards.push({slug, base: pair.config.base, quote: pair.config.quote, inverted: isCardInverted(slug), plotWidthPx: DEFAULT_COMPACT_PLOT_WIDTH_PX, start: dateStart, end: dateEnd, windowDays, pairTargets: pairTargetsOf(settings.signals)});
             calendarRequestOfSlug.set(slug, requestId);
-            // While the new return loads, the old one stays on screen.
+            // While the new return loads, the old one stays on screen. A silent reload (a catch-up) keeps its state as well: the page does not say busy.
             const previous = next.get(slug);
-            next.set(slug, {own: {...(previous?.own ?? emptyCalendarReturnView()), state: 'loading'}, targets: previous?.targets ?? new Map()});
+            next.set(slug, {own: {...(previous?.own ?? emptyCalendarReturnView()), state: silent && previous ? previous.own.state : 'loading'}, targets: previous?.targets ?? new Map()});
         }
         calendarBySlug = next;
         if (cards.length === 0) return;
@@ -573,14 +580,14 @@
     }
 
     /** The Δ columns of every configured pair up to the end of the range, and each pair's Δ over the range, both ways, from the backend (X-R53, X-R59). */
-    async function loadPeriodChanges() {
+    async function loadPeriodChanges(silent = false) {
         const sessionGeneration = getClientSessionGeneration();
         const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
         if (!current() || pairs.length === 0) return;
         const ticket = periodChangesLedger.begin(dateEnd, true);
         const rangeStart = dateStart;
         const rangeTicket = rangeDeltaLedger.begin(rangeKey(rangeStart, ticket.asOf), true);
-        periodChangesLoading = periodChangesLedger.busy || rangeDeltaLedger.busy;
+        if (!silent) periodChangesLoading = periodChangesLedger.busy || rangeDeltaLedger.busy;
         try {
             const result = await fetchFxPeriodChanges(
                 pairs.map((pair) => ({base: pair.config.base, quote: pair.config.quote})),
@@ -642,7 +649,7 @@
         }
     }
 
-    async function fetchAllPairSeries(propagateError = false) {
+    async function fetchAllPairSeries(propagateError = false, silent = false) {
         const sessionGeneration = getClientSessionGeneration();
         const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
         if (!current() || pairs.length === 0) return;
@@ -687,7 +694,10 @@
                 pairs[i] = {...pair, data: store.getRange(dateStart, dateEnd).data, loading: false};
             } else {
                 needFetch.push({index: i, slug: pair.config.slug});
-                pairs[i] = {...pair, loading: true};
+                // A store a catch-up marked stale that still holds points for the range (Y5-1, D3): they go on screen at once and the rates
+                // are asked in background, with no skeleton. A silent reload of the range already on screen leaves the card as it is.
+                const staleHeld = store.isStale ? store.getRange(dateStart, dateEnd).data : [];
+                pairs[i] = staleHeld.length > 0 ? {...pair, data: silent && pair.data.length > 0 ? pair.data : staleHeld, loading: false} : silent ? pair : {...pair, loading: true};
             }
 
             if (needsRates || plan.requests.length > 0) {
@@ -876,13 +886,13 @@
      * cards that have such a comparison, and only for what the cache does not cover (the asset detail page fills the same
      * cache). `extraIds` adds assets the settings window is about to draw. Never throws.
      */
-    function fetchComparisonSeries(extraIds: readonly number[] = []): Promise<void> {
+    function fetchComparisonSeries(extraIds: readonly number[] = [], silent = false): Promise<void> {
         // One at a time: a call that follows another finds what it loaded in the cache, and asks nothing twice.
-        comparisonSeriesChain = comparisonSeriesChain.then(() => loadComparisonSeries(extraIds));
+        comparisonSeriesChain = comparisonSeriesChain.then(() => loadComparisonSeries(extraIds, silent));
         return comparisonSeriesChain;
     }
 
-    async function loadComparisonSeries(extraIds: readonly number[]) {
+    async function loadComparisonSeries(extraIds: readonly number[], silent: boolean) {
         const sessionGeneration = getClientSessionGeneration();
         const ids = new Set(extraIds);
         for (const pair of pairs) {
@@ -894,11 +904,11 @@
         });
         if (assets.length === 0) return;
         const range = {start: dateStart, end: dateEnd};
-        comparisonSeriesLoading++;
+        if (!silent) comparisonSeriesLoading++;
         try {
             await ensureComparisonSeries(assets, range);
         } finally {
-            comparisonSeriesLoading--;
+            if (!silent) comparisonSeriesLoading--;
         }
         if (pageAlive && isClientSessionCurrent(sessionGeneration)) comparisonSeriesVersion++;
     }
@@ -1346,11 +1356,14 @@
                 <!-- The cards' view (Y-40): absolute, percent, rolling return -->
                 <div class="flex rounded-lg border border-lf-subtle overflow-hidden" data-testid="fx-global-view" data-view={globalPrimaryView}>
                     <button
-                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                        class="flex-1 inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                         data-testid="fx-global-view-absolute"
                         aria-pressed={globalPrimaryView === 'absolute'}
+                        aria-label={$_('chart.showAbsolute')}
+                        title={$_('chart.showAbsolute')}
                         onclick={() => handleListPrimaryView('absolute')}
-                        >Abs
+                    >
+                        <ChartLine size={14} />
                     </button>
                     <button
                         class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
@@ -1371,27 +1384,52 @@
                     </button>
                 </div>
             {/if}
-            <!-- Settings -->
-            <button class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" data-testid="fx-chart-settings-button" onclick={handleGlobalSettings}>
-                <Settings size={14} />
-                {#if showActionLabels}<span>{$_('sharedResource.settings')}</span>{/if}
-            </button>
+            <!-- Settings. The three buttons say what they do in a delayed tooltip (Y5-F1); a click is theirs, so it
+                 stops before the tooltip's own click, which would pin the hint over the window it opens. -->
+            <Tooltip text={$_('sharedResource.settingsHint')} position="bottom" interactiveChild testId="fx-chart-settings-tooltip">
+                <button
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
+                    data-testid="fx-chart-settings-button"
+                    onclick={(event) => {
+                        event.stopPropagation();
+                        handleGlobalSettings();
+                    }}
+                >
+                    <Settings size={14} />
+                    {#if showActionLabels}<span>{$_('sharedResource.settings')}</span>{/if}
+                </button>
+            </Tooltip>
             <!-- Sync All -->
-            <button class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" data-testid="fx-sync-all-button" use:guideAnchor={'fx.page.sync'} onclick={handleSyncAll}>
-                <RotateCw size={14} />
-                {#if showActionLabels}<span>{$_('sharedResource.syncAll')}</span>{/if}
-            </button>
+            <Tooltip text={$_('sharedResource.syncAllHint')} position="bottom" interactiveChild testId="fx-sync-all-tooltip">
+                <button
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
+                    data-testid="fx-sync-all-button"
+                    use:guideAnchor={'fx.page.sync'}
+                    onclick={(event) => {
+                        event.stopPropagation();
+                        handleSyncAll();
+                    }}
+                >
+                    <RotateCw size={14} />
+                    {#if showActionLabels}<span>{$_('sharedResource.syncAll')}</span>{/if}
+                </button>
+            </Tooltip>
             <!-- Refresh All -->
-            <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
-                data-testid="fx-refresh-all-button"
-                data-busy={pageBusy.busy ? 'true' : 'false'}
-                disabled={pageBusy.busy}
-                onclick={handleRefreshAll}
-            >
-                <RefreshCw class={pageBusy.busy ? 'animate-spin' : ''} size={14} />
-                {#if showActionLabels}<span>{$_('sharedResource.refreshAll')}</span>{/if}
-            </button>
+            <Tooltip text={$_('sharedResource.refreshAllHint')} position="bottom" interactiveChild testId="fx-refresh-tooltip">
+                <button
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
+                    data-testid="fx-refresh-all-button"
+                    data-busy={pageBusy.busy ? 'true' : 'false'}
+                    disabled={pageBusy.busy}
+                    onclick={(event) => {
+                        event.stopPropagation();
+                        handleRefreshAll();
+                    }}
+                >
+                    <RefreshCw class={pageBusy.busy ? 'animate-spin' : ''} size={14} />
+                    {#if showActionLabels}<span>{$_('sharedResource.refreshAll')}</span>{/if}
+                </button>
+            </Tooltip>
         {/snippet}
     </PageToolbar>
 

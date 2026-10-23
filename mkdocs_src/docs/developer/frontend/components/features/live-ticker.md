@@ -376,7 +376,8 @@ schedule ([Scheduler](../../../backend/scheduler.md)).
 When the server catches up on prices — at its start, at the first request after a minute of
 silence, at a scheduled wake-up — the web app shows the instance notice **Updating prices…** while
 one of the catch-up's jobs runs and, once the catch-up has brought something up to date, marks the
-portfolio views stale and reloads the Dashboard or a broker's page on screen.
+portfolio views stale and reloads, by itself and in silence, the views already on screen: the
+Dashboard, a broker's page, the Assets and FX pages, the risk and lots panels.
 `lib/features/price-refresh/priceRefresh.ts` does it, on the
 `startActivePolling()` of the live prices. The server's side — what a catch-up is, the header, the
 route — is in [Catch-up Progress](../../../backend/scheduler.md#price-refresh); what users see, in
@@ -450,8 +451,54 @@ older catch-up's. The refresh is `notifyPricesCaughtUp()`
 bus. It is a signal of its own, so that a page on screen can tell the end of a catch-up from a write
 (`{kind: 'mutation', …}`) and from its own **Refresh** button (`requestPortfolioRefresh()`,
 `{kind: 'refresh'}`), which already reloads the page, with `force`. The report, risk and
-lots caches mark their answers stale on any signal and keep them, so each portfolio view asks again
-the next time it loads, showing what it has meanwhile ([Domain state](../../state/domain-state.md)).
+lots caches mark their answers stale on any signal and keep them, showing what they have while the
+view asks again ([Domain state](../../state/domain-state.md)). The views on screen ask again at
+once, as [The reload](#price-refresh-reload) says.
+
+### 🔁 The reload of the views on screen {: #price-refresh-reload }
+
+```mermaid
+---
+config:
+  layout: elk
+---
+flowchart LR
+    Done["priceRefresh.ts: the catch-up is over and updated something"] --> Notify["notifyPricesCaughtUp()"]
+    Notify --> Bus["portfolio bus: kind prices"]
+    Bus --> Marks["caches mark themselves stale and keep their answers:<br/>report, risk, lots, price and FX stores, reduced cache"]
+    Bus -->|"queueMicrotask, after the dispatch"| Views["views on screen reload without force"]
+    Marks -.->|"the mark is already there"| Views
+    Views --> Silent["the figures stay, no spinner, no aria-busy, outside pageBusy"]
+    Silent --> New["the new figures land"]
+```
+
+Two helpers do the second half:
+
+- **Dashboard and broker page** keep their own listener, `reloadAfterPriceCatchUp()`, described below.
+- **Every other view** calls `onPricesCaughtUp(reload)` (`lib/features/price-refresh/onPricesCaughtUp.ts`),
+  once per call, in its lifecycle, and keeps the function it returns to stop it. It ignores
+  `mutation` and `refresh`; on `{kind: 'prices'}` it queues `reload` with `queueMicrotask()`, so the
+  reload runs after the dispatch, when every cache has already marked itself stale. A `reload` that
+  throws or rejects is logged and never rethrown: the view's own request code reports its failures,
+  and one view must not stop another's reload.
+
+The views that call it, and what each reloads:
+
+| View | Reloads, without `force` |
+|:-----|:-------------------------|
+| Risk panels (`riskPanelController.svelte.ts`) | `loadBase(false, true)`, only when a base wave is on screen. The on-demand analyses the user ran (comparison, stress, replay, simulation) are left as they are |
+| Lots panel (`LotsAnalysisPanel.svelte`) | The main analysis and the selection histories, only while the panel is open, with an asset and `ready` |
+| Assets list (`assets/+page.svelte`) | The cards' prices and signals, the Δ columns and the compared pairs' rates |
+| Asset page (`assets/[id]/+page.svelte`) | `loadChartData(…, silent)` and the price-view comparisons |
+| FX list (`fx/+page.svelte`) | The rates, the Δ columns, the rolling returns and the compared assets |
+| FX pair page (`fx/[pair]/+page.svelte`) | `loadChartData(…, silent)`, the comparisons and the signal pairs |
+
+*In silence* means a `silent` argument down the page's own request code: the `loading`, `signalsLoading`
+and calendar `loading` flags stay off, and the risk controller keeps `refreshing` false, so nothing
+spins and nothing is dimmed. Rule D3: a price or FX store that a catch-up marked stale and that still
+holds points for the range (`TimeSeriesStore.isStale`) shows them at once, and the page asks the server
+in background with no loading state; a store with no points for the range loads as on a first visit.
+`isStale` is read-only and stays set until `invalidateAll()`: a fetch covering the range clears the gaps, not the flag.
 
 Two pages also reload while on screen: the Dashboard (`routes/(app)/dashboard/+page.svelte`) and the
 broker detail page (`routes/(app)/brokers/[id]/+page.svelte`). Each registers a bus listener in
@@ -464,8 +511,9 @@ The mark has made the report on screen stale, so the loader asks that question a
 stay until the new ones land.
 
 It touches neither `refreshVersion` nor `requestPortfolioRefresh()`, the signals of the user's
-**Refresh**: the caches are already marked, and the risk and lots panels on screen keep their
-answers, marked stale, until they next load. Nor does it hold the **Refresh** button. Since Y11
+**Refresh** (they spin the icon and say the page is busy): the caches are already marked, and the
+risk and lots panels on screen reload on their own `onPricesCaughtUp`. Nor does it hold the
+**Refresh** button. Since Y11
 (decision 48) the button of each page, `sync-button` on the Dashboard and `broker-refresh` on the
 broker page, follows `pageBusy.busy` (`lib/stores/app/pageBusy.svelte.ts`): it spins, disabled,
 while one of the page's big requests is pending — a load the page starts on a trigger (the first
@@ -487,20 +535,20 @@ while no figures are on screen yet, and the page's root publishes no `aria-busy`
 summary (`loadBroker()`) and the transactions, which that page's **Refresh** asks again too, are
 left as they are.
 
-No other page listens for `prices`. The broker list (`routes/(app)/brokers/+page.svelte`) and the
-risk panels of the asset pages read the caches the signal marked stale, so they ask again the next
-time they load; the live prices of the Assets list and of an asset's page keep their own polling
-([Where prices are polled](#polling)).
+The pages in the table above reload the same way. The broker list
+(`routes/(app)/brokers/+page.svelte`) does not listen: it reads the caches the signal marked stale,
+so it asks again the next time it loads; the live prices of the Assets list and of an asset's page
+keep their own polling ([Where prices are polled](#polling)).
 
 The price and rate series that the asset pages and the FX pages keep in their session caches
 (`lib/stores/assetPriceStoreRegistry.ts`, `lib/stores/fxStoreRegistry.ts`) go stale too, on
 `prices` and on no other kind: each registry listens on the bus from its import and marks every
 store stale, keeping its points ([Registries & Caches](../../state/registries.md#how-it-works)).
 The next visit of a price or FX page, or its next change of range, asks the server again, once,
-and shows the page's loading state, as on a first visit, instead of the prices of before; the
-market rate a transaction modal compares an exchange with (`lookupFxRate`) is asked again for its
-day. A page already open during the catch-up does not reload by itself: it keeps its chart until
-its next load — a change of range, a return to the page, its **Refresh** (backlog Z-14b).
+and puts on screen the points the store still holds (`isStale`), asking in background, instead of
+the loading state of a first visit; the market rate a transaction modal compares an exchange with
+(`lookupFxRate`) is asked again for its day. A page already open during the catch-up reloads by
+itself, as [The reload](#price-refresh-reload) says (Z-14b).
 
 #### 🚫 After a 4xx {: #price-refresh-4xx }
 
@@ -557,6 +605,7 @@ sink at once.
 | `lib/features/price-refresh/priceRefresh.test.ts` (Vitest, node) | `./dev.py test front-utility core-unit` | [Updating prices…](#price-refresh): `readPriceRefreshHeader`; the tracking that a header starts, one at a time; the notice; the ends of a tracking (`idle`, ten `starting`, five failures); a `4xx`, after which the headers are ignored until `reset()`; the portfolio refresh, only after a job seen running and with `last_refreshed`; `stop()`, and `reset()` at a change of account; the defaults, the `fetch` of the status route included, and the refresh of the app's tracker: `notifyPricesCaughtUp()` once a catch-up that updated something is over, never `requestPortfolioRefresh()`, and neither signal when nothing was updated or no job was seen running; the default `notices`: importing the module or building a tracker loads no `instanceNotices.svelte.ts`, the first notice loads it, once, and a `show()` and a `hide()` issued while it is loading reach it in their order |
 | `lib/api/apiClientRuneFree.gate.test.ts` (Vitest, node) | `./dev.py test front-utility core-unit` | The rule behind the lazy `notices` ([the probe's frontend bridge](../../../architecture/patterns/ai_export_probe_workflow.md#frontend-bridge)): from `lib/api/index.ts` and from `frontend/scripts/ai-export-render-prompt-probe.ts`, no static import reaches a `.svelte.ts` module or a `.svelte` component, each one reported with the chain of imports that reaches it, and `lib/api/zodios-client.ts` imports none directly. Imports are read on TypeScript's syntax tree: `import type` and `export type` are erased, `import {type X}` counts, since `verbatimModuleSyntax` keeps it, and a dynamic `import()` is not followed. It reads the generated client (`lib/api/generated.ts`, from `./dev.py api sync`): a local import that names no file fails it instead of being skipped. Synthetic graphs, and a real site that imports the instance block's face (`lib/features/email/verificationApi.ts`), check that the scanner reports what it must |
 | `lib/stores/portfolio/portfolioMutation.test.ts`, `lib/stores/portfolio/portfolioStore.test.ts`, `lib/features/brokers/lots/lotsAnalysisStore.test.ts` (Vitest, node) | `./dev.py test front-portfolio store-unit` | The cases of [Updating prices…](#price-refresh): `notifyPricesCaughtUp()` gives every listener exactly `{kind: 'prices'}`, once, kept apart from `refresh` and `mutation`; a listener that throws keeps none of the others from hearing it and is logged; a removed listener hears nothing. The report and lots caches mark their answers stale on it, keep them and ask nothing; the next report fetch without `force` asks the stale one again |
+| `lib/features/price-refresh/onPricesCaughtUp.test.ts` (Vitest, node) | `./dev.py test front-utility core-unit` | [The reload](#price-refresh-reload) helper: one reload per `{kind: 'prices'}`; `mutation` and `refresh` ignored; the reload runs after the dispatch, not inside it; one listener per call; the stop function, harmless twice; a reload that throws or rejects is swallowed and the others still run |
 | `lib/features/risk/riskStore.test.ts` (Vitest, node) | `./dev.py test front-portfolio risk-unit` | The case of [Updating prices…](#price-refresh): the risk answers marked stale on `{kind: 'prices'}`, kept, and nothing asked |
 | `lib/stores/__tests__/TimeSeriesStore.test.ts`, `lib/stores/__tests__/fxStoreRegistry.test.ts` (Vitest, node) | `./dev.py test front-fx fx-unit` | The stale price and rate caches of [Updating prices…](#price-refresh) (Z-14). `markStale()` keeps every point readable (`get`, `has`, `size`, `getRange().data`, `getAllSorted()`) and reports a loaded range missing whole, points or not; a merge covers nothing, only `markFetched` does; the fetches made after the mark add up, and what they leave uncovered comes back as contiguous intervals in date order; a fetch of the whole range makes the store fresh, a second mark stale again; `invalidateAll()` ends the state, and `invalidateRange()` still works in it; without a mark the gaps are the ones of before. On `{kind: 'prices'}` the FX registry marks every pair stale: `ensureFxRangeLoaded`, `ensureFxRangeLoadedBulk` and `loadFxRatesAndSignalsBulk` without signals ask a range loaded before again, in one interval for the whole range, then answer from the cache; `lookupFxRate` takes a stale day for a miss, asks it once and makes only that day fresh; `lookupFxRateSync` still returns the stale point and asks nothing; a `mutation` (the live poll's `POST /assets/prices/current`, a commit) or a `refresh` changes nothing |
 | `lib/stores/__tests__/assetPriceStoreRegistry.test.ts` (Vitest, node) | `./dev.py test front-asset asset-unit` | The same for the asset prices: on `{kind: 'prices'}` every store is stale, every asset in every currency, converted prices included; `ensureAssetPriceRangeLoaded` asks a range loaded before again, once, in one query for the whole range, then answers from the cache; the old points stay readable while the answer is in flight; a `mutation` or a `refresh` changes nothing |
