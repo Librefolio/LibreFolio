@@ -11,8 +11,12 @@
  * and Svelte's delegated handler runs, where a browser sends nothing.
  *
  * Lot E-7 (the developer's decision of 21/10/2026): an account waiting for its email verification shows the badge
- * «Waiting for verification» in place of «Deactivated» — even after its link expired (`holds_place` false) —, with a
- * hint on hover and in its panel. The contract under test, for `AdminAccount.pending_verification` (from `GET /users`,
+ * «Waiting for verification» in place of «Deactivated» — even after its link expired (`holds_place` false).
+ *
+ * Decision of 23/10/2026 (E7-Q4, replacing «hover and panel»): the explanation is an information icon beside the badge
+ * (`users-pending-verification-info`, a button holding a lucide icon, named by the hint) that opens `Tooltip` with the hint
+ * on hover, on keyboard focus and on a click or a tap — and the panel no longer repeats it. The badge has no `title`.
+ * The icon sits after the row's toggle, not inside it: a button cannot hold a button. The contract under test, for `AdminAccount.pending_verification` (from `GET /users`,
  * optional: absent on an older server):
  *   - the row is «waiting for verification» when `pending_verification === true && !is_active && !pending_setup`.
  *     `holds_place` takes no part in it: the badge is the same for a live link and for an expired one;
@@ -83,6 +87,13 @@ const BADGE_INACTIVE = 'settings.usersTab.badges.inactive';
 const BADGE_PENDING_SETUP = 'settings.usersTab.badges.pendingSetup';
 const HINT_PENDING_VERIFICATION = 'settings.usersTab.pendingVerificationHint';
 const HINT_PENDING_SETUP = 'settings.usersTab.pendingSetupHint';
+const INFO = 'users-pending-verification-info';
+
+/** The text of the tooltip a click on the icon opens, the shared `Tooltip`'s `tooltip-content`. */
+async function tooltipOpenedBy(icon: HTMLElement): Promise<string> {
+    await fireEvent.click(icon);
+    return (await screen.findByTestId('tooltip-content')).textContent?.trim() ?? '';
+}
 
 /** Waiting for its email verification, whatever `holds_place` says: a live link holds its place, an expired one does not, an older server sends nothing. */
 const WAITING = [
@@ -168,13 +179,18 @@ describe('UserRow — «Reactivate» on a full instance', () => {
 // =========================================================================
 describe('UserRow — an account waiting for its email verification (E-7)', () => {
     // red until E-7
-    it.each(WAITING)('UVR-04: $label — the badge «Waiting for verification» with its hover hint, not «Deactivated»', ({account}) => {
+    it.each(WAITING)('UVR-04: $label — the badge «Waiting for verification» with its information icon beside it, not «Deactivated»', ({account}) => {
         const {row} = mountRow(account);
 
         // Seen in the list, without opening the row: where «Deactivated» stood.
         const badge = within(row).getByTestId('users-badge-pending-verification');
         expect(badge.textContent?.trim()).toBe(BADGE_PENDING_VERIFICATION);
-        expect(badge).toHaveAttribute('title', HINT_PENDING_VERIFICATION);
+        expect(badge, "the explanation is the icon's, not a title").not.toHaveAttribute('title');
+        const icon = within(row).getByTestId(INFO);
+        expect(icon.tagName, 'a real button, so keyboard and touch reach it').toBe('BUTTON');
+        expect(icon, 'named by the hint').toHaveAccessibleName(HINT_PENDING_VERIFICATION);
+        expect(icon.querySelector('svg'), 'a lucide icon').not.toBeNull();
+        expect(within(row).getByTestId('users-row-toggle').contains(icon), 'not inside the toggle button').toBe(false);
         expectNoInactiveBadge(row);
         expect(within(row).queryByTestId('users-badge-pending-setup'), 'the setup badge').toBeNull();
     });
@@ -199,6 +215,7 @@ describe('UserRow — an account waiting for its email verification (E-7)', () =
         expect(within(row).getByTestId('users-badge-inactive').textContent?.trim()).toBe(BADGE_INACTIVE);
         expectNoVerificationBadge(row);
         expect(within(row).getByTestId('users-badge-inactive'), 'no hover hint on «Deactivated»').not.toHaveAttribute('title', HINT_PENDING_VERIFICATION);
+        expect(within(row).queryByTestId(INFO), 'no information icon').toBeNull();
         // The barrier of the absence: the panel is open, and offers «Reactivate».
         expect(within(panel).getByTestId('users-action-reactivate')).toBeInTheDocument();
         expect(within(panel).queryByTestId('users-pending-verification-hint'), 'the verification hint').toBeNull();
@@ -206,12 +223,33 @@ describe('UserRow — an account waiting for its email verification (E-7)', () =
     });
 
     // red until E-7
-    it.each(WAITING)('UVR-07: $label — opened, the panel shows the hint, and still offers «Reactivate»', async ({account}) => {
-        const {panel} = await openRow(account);
+    it.each(WAITING)('UVR-07: $label — a click on the icon opens a tooltip with the hint; the panel does not repeat it and still offers «Reactivate»', async ({account}) => {
+        const {row, panel} = await openRow(account);
 
-        expect(within(panel).getByTestId('users-pending-verification-hint').textContent?.trim()).toBe(HINT_PENDING_VERIFICATION);
+        expect(await tooltipOpenedBy(within(row).getByTestId(INFO))).toBe(HINT_PENDING_VERIFICATION);
+        expect(within(panel).queryByTestId('users-pending-verification-hint'), 'the panel no longer carries the hint').toBeNull();
+        expect(within(panel).queryByText(HINT_PENDING_VERIFICATION)).toBeNull();
         expect(within(panel).getByTestId('users-action-reactivate')).toBeInTheDocument();
         expect(within(panel).queryByTestId('users-pending-setup-hint'), 'the setup hint').toBeNull();
+    });
+
+    it('UVR-07b: a touch opens the tooltip as well', async () => {
+        const {row} = mountRow(makeAccount({is_active: false, pending_verification: true}));
+        const icon = within(row).getByTestId(INFO);
+
+        await fireEvent.touchStart(icon);
+        await fireEvent.click(icon);
+
+        expect((await screen.findByTestId('tooltip-content')).textContent?.trim()).toBe(HINT_PENDING_VERIFICATION);
+    });
+
+    it("UVR-07c: the icon opens nothing else — a click on it does not toggle the row's panel", async () => {
+        const {row} = mountRow(makeAccount({is_active: false, pending_verification: true}));
+        const toggle = within(row).getByTestId('users-row-toggle');
+
+        await fireEvent.click(within(row).getByTestId(INFO));
+
+        expect(toggle).toHaveAttribute('aria-expanded', 'false');
     });
 
     // red until E-7: the hint is the barrier that proves the row is drawn as waiting
@@ -220,9 +258,9 @@ describe('UserRow — an account waiting for its email verification (E-7)', () =
         ['a live link with room left', makeAccount({is_active: false, pending_verification: true, holds_place: true}), false],
         ['an expired link with room left', makeAccount({is_active: false, pending_verification: true, holds_place: false}), false],
     ])('UVR-08: waiting with %s — «Reactivate» is usable, no limit reason, and the click asks for it', async (_label, account, full) => {
-        const {panel, onAction} = await openRow(account, full);
+        const {row, panel, onAction} = await openRow(account, full);
 
-        expect(within(panel).getByTestId('users-pending-verification-hint')).toBeInTheDocument();
+        expect(within(row).getByTestId(INFO)).toBeInTheDocument();
         const reactivate = within(panel).getByTestId('users-action-reactivate');
         expect(reactivate).toBeEnabled();
         expect(reactivate).not.toHaveAttribute('data-disabled-reason');
@@ -233,9 +271,9 @@ describe('UserRow — an account waiting for its email verification (E-7)', () =
 
     // red until E-7: the hint is the barrier that proves the row is drawn as waiting
     it('UVR-09: waiting with an expired link on a full instance — «Reactivate» is turned off with the limit reason', async () => {
-        const {panel} = await openRow(makeAccount({is_active: false, pending_verification: true, holds_place: false}), true);
+        const {row, panel} = await openRow(makeAccount({is_active: false, pending_verification: true, holds_place: false}), true);
 
-        expect(within(panel).getByTestId('users-pending-verification-hint')).toBeInTheDocument();
+        expect(within(row).getByTestId(INFO)).toBeInTheDocument();
         const reactivate = within(panel).getByTestId('users-action-reactivate');
         expect(reactivate).toBeDisabled();
         expect(reactivate).toHaveAttribute('data-disabled-reason', 'limit');
@@ -253,6 +291,7 @@ describe('UserRow — an account waiting for its email verification (E-7)', () =
         expectNoInactiveBadge(row);
         expect(within(panel).queryByTestId('users-pending-verification-hint'), 'the verification hint').toBeNull();
         expect(within(panel).queryByText(HINT_PENDING_VERIFICATION)).toBeNull();
+        expect(within(row).queryByTestId(INFO), 'no verification icon').toBeNull();
         expect(row).toHaveAttribute('data-pending-setup', 'true');
         expect(row).toHaveAttribute('data-pending-verification', 'false');
     });
@@ -268,5 +307,6 @@ describe('UserRow — an account waiting for its email verification (E-7)', () =
         expect(within(panel).getByTestId('users-action-deactivate')).toBeInTheDocument();
         expect(within(panel).queryByTestId('users-pending-verification-hint'), 'the verification hint').toBeNull();
         expect(within(panel).queryByText(HINT_PENDING_VERIFICATION)).toBeNull();
+        expect(within(row).queryByTestId(INFO), 'no verification icon').toBeNull();
     });
 });

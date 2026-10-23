@@ -7,7 +7,7 @@
     import LoginCard from '$lib/features/auth/LoginCard.svelte';
     import RegisterCard from '$lib/features/auth/RegisterCard.svelte';
     import ForgotPasswordCard from '$lib/features/auth/ForgotPasswordCard.svelte';
-    import {takeAuthFlash} from '$lib/features/auth/authFlash';
+    import {takeAuthFlash, takeAuthFlashTone} from '$lib/features/auth/authFlash';
     import {auth} from '$lib/stores/app/auth';
     import {isAuthenticated} from '$lib/stores/app/auth';
     import {appBootstrap} from '$lib/features/onboarding/appBootstrap.svelte';
@@ -21,6 +21,8 @@
 
     // Success message: from the registration card, or left by a link page (invitation, password reset)
     let successMessage = takeAuthFlash();
+    // and how it is drawn: a warning when the account was created but its activation email was held
+    let successTone: 'success' | 'warning' = takeAuthFlashTone();
 
     // Loading state while checking auth
     let checkingAuth = true;
@@ -58,24 +60,28 @@
     function handleGotoRegister() {
         auth.clearError();
         successMessage = '';
+        successTone = 'success';
         currentView = 'register';
     }
 
     function handleGotoForgot() {
         auth.clearError();
         successMessage = '';
+        successTone = 'success';
         currentView = 'forgot-password';
     }
 
-    function handleGotoLogin(event: CustomEvent<{message?: string}>) {
+    function handleGotoLogin(event: CustomEvent<{message?: string; tone?: 'warning'}>) {
         auth.clearError();
         successMessage = event.detail?.message || '';
+        successTone = event.detail?.tone ?? 'success';
         currentView = 'login';
     }
 
     function handleGotoLoginSimple() {
         auth.clearError();
         successMessage = '';
+        successTone = 'success';
         currentView = 'login';
     }
 
@@ -110,7 +116,7 @@
     <AuthPageFrame testId="login-page">
         <!-- Card Container - instant swap, no transition -->
         {#if currentView === 'login'}
-            <LoginCard {redirectTo} {successMessage} onAuthenticated={routeAuthenticated} on:gotoRegister={handleGotoRegister} on:gotoForgot={handleGotoForgot} />
+            <LoginCard {redirectTo} {successMessage} {successTone} onAuthenticated={routeAuthenticated} on:gotoRegister={handleGotoRegister} on:gotoForgot={handleGotoForgot} />
         {:else if currentView === 'register'}
             <RegisterCard on:gotoLogin={handleGotoLogin} />
         {:else if currentView === 'forgot-password'}

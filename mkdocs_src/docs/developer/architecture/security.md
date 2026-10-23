@@ -467,7 +467,7 @@ address `rate_limit_address(http_request)` gives, and workstream E's «send the 
 | `POST /auth/login` | `_refuse_too_many_failures(request.username, address)`, before the account is looked up | `record_failure(request.username, address)`, then `401` *Invalid credentials*, an unknown identifier included | `record_success(request.username)`, once the cookie is set. The `403`s of an inactive account, `ACCOUNT_DISABLED` and `EMAIL_NOT_VERIFIED`, which only the right password gets, neither count nor reset |
 | `POST /auth/change-password` | `_refuse_too_many_failures(current_user.username, address)`, before `_refuse_weak_password()` | `record_failure(current_user.username, address)`, then `400` *Current password is incorrect* | `record_success(current_user.username)` |
 | `PUT /auth/profile`, when the email changes | `_refuse_too_many_failures(current_user.username, address)`, after the `400` `CURRENT_PASSWORD_REQUIRED` | `record_failure(current_user.username, address)`, then `400` `CURRENT_PASSWORD_INVALID` | `record_success(current_user.username)` |
-| `POST /email/verification/resend` | `refusal(identifier, address)`, `identifier` being the body's `username` as typed, after E's per-address limit (`RESEND_BY_ADDRESS`) and before the account is looked up: `EmailRateLimitedError` with its wait | `record_failure(identifier, address)`, then `401` *Invalid credentials*, an unknown identifier included | `record_success(identifier)`, as soon as the password is checked, before the account's state is read: whatever follows resets, the `409` `EMAIL_VERIFICATION_NOT_NEEDED` of an active account and the `403` `ACCOUNT_DISABLED` included |
+| `POST /email/verification/resend` | `refusal(identifier, address)`, `identifier` being the body's `username` as typed, after E's per-address counter (`delivery.ADDRESS_BUDGET`, shared with the registrations and «forgot password») and before the account is looked up: `EmailRateLimitedError` with its wait | `record_failure(identifier, address)`, then `401` *Invalid credentials*, an unknown identifier included | `record_success(identifier)`, as soon as the password is checked, before the account's state is read: whatever follows resets, the `409` `EMAIL_VERIFICATION_NOT_NEEDED` of an active account and the `403` `ACCOUNT_DISABLED` included |
 
 - **The refusal.** `_refuse_too_many_failures()` answers `429` with
   `{"error_code": "TOO_MANY_ATTEMPTS", "message": "Too many failed attempts: try again later"}` in `detail` and
@@ -494,9 +494,9 @@ address `rate_limit_address(http_request)` gives, and workstream E's «send the 
   the address, both ways: wrong passwords at the resend lock the sign-in, and failed sign-ins refuse the resend before
   its password is checked. Unlike the sign-in, whose `403`s neither count nor reset, the right password resets the
   identifier at once, as the password change and the email change do. E's own limits stay
-  ([Sending the Link Again](../backend/email.md#verification-resend)); `RESEND_BY_ADDRESS` counts a request first,
-  whatever happens next. Its address is the `rate_limit_address()` its route reads since lot E-13, as at the sign-in:
-  behind a local [proxy nobody trusts](#untrusted-proxy) neither `RESEND_BY_ADDRESS` nor the sign-in's address count
+  ([Sending the Link Again](../backend/email.md#verification-resend)); `delivery.ADDRESS_BUDGET` is only looked at first,
+  and counts the email that goes, never a try. Its address is the `rate_limit_address()` its route reads since lot E-13, as at the sign-in:
+  behind a local [proxy nobody trusts](#untrusted-proxy) neither `delivery.ADDRESS_BUDGET` nor the sign-in's address count
   the request, and the resend and the sign-in share the identifier's count alone.
 - **The switch.** `login_limit_enabled()` (`backend/app/config/accounts.py`) reads `LIBREFOLIO_LOGIN_LIMIT` at each
   call, through `login_limit_value()`: the value as set, stripped, or `None` when it is unset or blank. Unset, blank

@@ -301,9 +301,12 @@ async def register(request: AuthRegisterRequest, background: BackgroundTasks, ht
     With email verification required (workstream E), the new account waits for its link: ``verification_required`` is
     true, and ``verification_email`` says what became of its email (lot E-26). ``sending``: the email goes after the
     answer, so a failure then (the recipient mailbox's limit, the hourly budget, the SMTP server) is only logged.
-    ``held``: this client address already sent 10 of them in the hour, so the account waits without it, and its owner
-    asks for the link again from the sign-in page. Without verification ``verification_email`` is null. 409
-    ``EMAIL_VERIFICATION_UNAVAILABLE`` when the option is on and no email with a link can go out now.
+    ``held``: this client address already asked for as many activation or reset emails as the instance allows in the hour
+    (``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS``, 20 by default; registrations, «send the link again» and «forgot
+    password» share that count), or the hourly budget of the instance is spent, so the account waits without it.
+    ``verification_retry_after_seconds`` then says in how many seconds both counters will admit it (rounded up, at least 1);
+    its owner can ask for the link again from the sign-in page from then on. Without verification ``verification_email``
+    is null. 409 ``EMAIL_VERIFICATION_UNAVAILABLE`` when the option is on and no email with a link can go out now.
     """
     _refuse_weak_password(request.password)
     try:
@@ -321,15 +324,18 @@ async def register(request: AuthRegisterRequest, background: BackgroundTasks, ht
 
     verification_required = not user.is_active
     verification_email: Literal["sending", "held"] | None = None
+    verification_retry_after_seconds: int | None = None
     if verification_required:
-        if email_verification.registration_email_allowed(rate_limit_address(http_request)):
+        verdict = await email_verification.registration_email_verdict(rate_limit_address(http_request))
+        if verdict.allowed:
             # The session of this request ends with it: the work opens its own, on the same database.
             background.add_task(email_verification.registration_email_work, user.id, engine=session.bind)
             verification_email = "sending"
         else:
-            # Too many registration emails from this client address: the account waits without its email (workstream E).
-            logger.info("Verification email held: too many registrations from this address", user_id=user.id)
+            # The client address's counter or the instance's budget is full: the account waits without its email (workstream E).
+            logger.info("Verification email held: address limit or instance budget reached", user_id=user.id, by_address=verdict.by_address, by_instance=verdict.by_instance)
             verification_email = "held"
+            verification_retry_after_seconds = max(1, math.ceil(verdict.retry_after))
     outcome = {
         None: "",
         "sending": ": check your email to activate the account",
@@ -340,6 +346,7 @@ async def register(request: AuthRegisterRequest, background: BackgroundTasks, ht
         message="Registration successful" + outcome + (" (Admin)" if user.is_superuser else ""),
         verification_required=verification_required,
         verification_email=verification_email,
+        verification_retry_after_seconds=verification_retry_after_seconds,
     )
 
 

@@ -48,14 +48,17 @@ checks the configuration and the hourly budget, sends and logs (``test_email_del
     log event.
 11. ``admit_forgotten_password`` ships open (lot E4 removed its hold, ``FORGOT_PASSWORD_HELD``, once changing an
     account's email asked for the current password). It reads the configuration first — email, then links —,
-    counting nothing when it refuses; then 10 requests per 15 minutes per client address — keyed
-    by workstream H's ``client_rate_key``, the one home of the per-client key (decision P17; ``flows`` keeps no copy):
+    counting nothing when it refuses; then the counter per client address, ``delivery.ADDRESS_BUDGET`` — 20 an hour
+    (``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS``), one count shared with the registrations and «send the link again» —,
+    keyed by workstream H's ``client_rate_key``, the one home of the per-client key (decision P17; neither ``flows`` nor
+    the counter's home keeps a copy):
     an IPv4 address as is, an IPv6 one by its /64 (a zone ignored), an IPv4-mapped one as the IPv4, anything else as
     written — and 3 per hour per identifier (stripped, case-insensitive), each refusal an
-    ``EmailRateLimitedError`` with the seconds until the window frees; then the instance's hourly budget, peeked, never
+    ``EmailRateLimitedError`` with the seconds until the window frees — the longest wait among the counters that refuse
+    (address, identifier, instance budget), the others peeked; then the instance's hourly budget, peeked, never
     spent. Without a client address (a unix socket) the limit per address does not apply — one shared count would let
     a single client block everyone —, while the limit per identifier and the budget still do. The shipped limits are
-    10/900 s per address, 3/3600 s per identifier and per mailbox, and per account one email every 5 minutes and 3 an
+    20/3600 s per address, 3/3600 s per identifier and per mailbox, and per account one email every 5 minutes and 3 an
     hour.
 12. ``forgotten_password_work`` finds the account as the login does — by username or email, spaces around ignored —,
     active only; per account at most one reset link every 5 minutes and 3 an hour, counted on every password-reset row
@@ -110,8 +113,7 @@ settings (NullPool, disposed at teardown), users written as rows, tokens issued 
 the case needs; no server of the lane, no network beyond 127.0.0.1. An autouse fixture removes every inherited
 ``LIBREFOLIO_SMTP_*``, ``LIBREFOLIO_PUBLIC_URL`` and ``LIBREFOLIO_BLOCKED`` (C-96 removes them from the lanes; a
 developer's shell may still carry them) and each test sets its own with ``monkeypatch``; others replace
-``delivery.INSTANCE_BUDGET``, the three «forgot password» limiters (``flows.FORGOT_BY_ADDRESS``,
-``flows.FORGOT_BY_IDENTIFIER``, ``flows.FORGOT_BY_MAILBOX``) and the two of the notice
+``delivery.INSTANCE_BUDGET``, ``delivery.ADDRESS_BUDGET`` (the counter per client address, shared with the activation emails), the two other «forgot password» limiters (``flows.FORGOT_BY_IDENTIFIER``, ``flows.FORGOT_BY_MAILBOX``) and the two of the notice
 (``flows.EMAIL_CHANGE_NOTICES_BY_ACCOUNT``, ``flows.EMAIL_CHANGE_NOTICES_BY_MAILBOX``), these five with the shipped
 limits, with private limiters on a fake clock — «forgot password» has no hold left to lift (lot E4); the accounts of
 these new databases repeat their ids and addresses from test to test, which the process's limiters would count across
@@ -163,6 +165,8 @@ SMTP_PREFIX = "LIBREFOLIO_SMTP_"
 PUBLIC_URL_VARIABLE = "LIBREFOLIO_PUBLIC_URL"
 #: The hosting provider's block: a blocked instance sends nothing.
 BLOCKED_VARIABLE = "LIBREFOLIO_BLOCKED"
+#: How many activation and reset emails one client address may ask for in an hour: 20 unset.
+SIGNUP_PER_ADDRESS = "LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS"
 #: An http(s) address no link can start from (a space inside): ``PUBLIC_URL_INVALID``.
 NO_LINK_FROM_IT = "https://folio.zq-space.example.com/my folio"
 #: The public address of the instance, with a port and a path prefix: the links prove both kept.
@@ -199,7 +203,7 @@ NEVER_ISSUED = "never-issued-flows-0123456789abcdefghijklmnopq"
 DEAD_KINDS = ("expired", "consumed", "revoked", "unknown", "other-purpose")
 
 #: The «forgot password» limiters as the module ships them, read before any fixture replaces them.
-SHIPPED_BY_ADDRESS = flows.FORGOT_BY_ADDRESS
+SHIPPED_BY_ADDRESS = delivery.ADDRESS_BUDGET
 SHIPPED_BY_IDENTIFIER = flows.FORGOT_BY_IDENTIFIER
 SHIPPED_BY_MAILBOX = flows.FORGOT_BY_MAILBOX
 #: The limiters of the email-change notice as the module ships them (lot E4b), read before any fixture replaces them.
@@ -231,7 +235,7 @@ class FakeClock:
 def _no_inherited_email_variables(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every ``LIBREFOLIO_SMTP_*``, ``LIBREFOLIO_PUBLIC_URL`` and ``LIBREFOLIO_BLOCKED`` the lane inherited is removed: a test sees only the variables it sets itself."""
     for name in list(os.environ):
-        if name.startswith(SMTP_PREFIX) or name in (PUBLIC_URL_VARIABLE, BLOCKED_VARIABLE):
+        if name.startswith(SMTP_PREFIX) or name in (PUBLIC_URL_VARIABLE, BLOCKED_VARIABLE, SIGNUP_PER_ADDRESS):
             monkeypatch.delenv(name, raising=False)
 
 
@@ -273,7 +277,7 @@ def forgot_limits(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> ForgotLi
         by_identifier=SlidingWindowLimiter(SHIPPED_BY_IDENTIFIER.limit, SHIPPED_BY_IDENTIFIER.window_seconds, clock=clock),
         by_mailbox=SlidingWindowLimiter(SHIPPED_BY_MAILBOX.limit, SHIPPED_BY_MAILBOX.window_seconds, clock=clock),
     )
-    monkeypatch.setattr(flows, "FORGOT_BY_ADDRESS", limits.by_address)
+    monkeypatch.setattr(delivery, "ADDRESS_BUDGET", limits.by_address)
     monkeypatch.setattr(flows, "FORGOT_BY_IDENTIFIER", limits.by_identifier)
     monkeypatch.setattr(flows, "FORGOT_BY_MAILBOX", limits.by_mailbox)
     return limits
@@ -1026,25 +1030,31 @@ async def test_admission_reads_the_configuration_first_and_counts_nothing(monkey
 
 
 @pytest.mark.asyncio
-async def test_ten_requests_per_address_every_fifteen_minutes(monkeypatch: pytest.MonkeyPatch, clock: FakeClock, forgot_limits: ForgotLimits) -> None:
-    """EMF-021 — contract 11: ten requests from one IPv4 address pass, each for another identifier, and are counted under that address as is; two minutes later the eleventh is ``EmailRateLimitedError`` with ``900 - 120`` seconds to wait; another address passes meanwhile; fifteen minutes after the first ten, the address passes again."""
-    print_section("EMF-021: per address")
+async def test_a_full_address_counter_refuses_the_admission_and_an_admission_spends_nothing(monkeypatch: pytest.MonkeyPatch, clock: FakeClock, forgot_limits: ForgotLimits) -> None:
+    """EMF-021 — contract 11: the counter per address is only looked at by the admission. Twenty admissions from one IPv4 address, each for another identifier, all pass and leave the counter at 0 (``forgotten_password_work`` spends a unit when a reset email goes). With the counter holding twenty emails since START, two minutes later the next admission is ``EmailRateLimitedError`` with ``3600 - 120`` seconds to wait — the same for an identifier with an account and one without — and spends nothing; another address passes meanwhile; an hour after the first twenty, the address passes again."""
+    print_section("EMF-021: per address, peeked")
     _usable_without_a_server(monkeypatch)
 
     clock.now = START
-    for index in range(10):
+    for index in range(20):
         await flows.admit_forgotten_password(ADDRESS, f"zq_user_{index}")
-    counted = forgot_limits.by_address.count(ADDRESS)
+    counted_by_the_admissions = forgot_limits.by_address.count(ADDRESS)
+    for _email in range(20):
+        assert delivery.address_budget_hit(ADDRESS).allowed, "setup: twenty emails of the address"
     clock.now = START + 120
     with pytest.raises(EmailRateLimitedError) as refused:
-        await flows.admit_forgotten_password(ADDRESS, "zq_user_10")
-    await flows.admit_forgotten_password(OTHER_ADDRESS, "zq_user_10")
-    clock.now = START + 900
-    await flows.admit_forgotten_password(ADDRESS, "zq_user_11")
+        await flows.admit_forgotten_password(ADDRESS, "zq_user_20")
+    with pytest.raises(EmailRateLimitedError) as refused_again:
+        await flows.admit_forgotten_password(ADDRESS, ALICE)
+    await flows.admit_forgotten_password(OTHER_ADDRESS, "zq_user_20")
+    counted_after_the_refusals = forgot_limits.by_address.count(ADDRESS)
+    clock.now = START + 3600
+    await flows.admit_forgotten_password(ADDRESS, "zq_user_21")
 
-    assert counted == 10, f"the ten requests from {ADDRESS} must be counted under it: {counted}"
-    assert refused.value.retry_after == pytest.approx(900 - 120)
-    print_success(f"the eleventh refused for {refused.value.retry_after:.0f} s; another address and the next window pass")
+    assert counted_by_the_admissions == 0, "an admission spends nothing of the address's counter"
+    assert counted_after_the_refusals == 20 and forgot_limits.by_address.count(OTHER_ADDRESS) == 0
+    assert refused.value.retry_after == pytest.approx(3600 - 120) and refused_again.value.retry_after == refused.value.retry_after
+    print_success(f"the next admission refused for {refused.value.retry_after:.0f} s whoever the identifier is; nothing spent")
 
 
 @pytest.mark.asyncio
@@ -1088,24 +1098,25 @@ async def test_the_instance_budget_is_peeked_never_spent(monkeypatch: pytest.Mon
 
 
 def test_the_shipped_limits() -> None:
-    """EMF-024 — contract 11: the module ships ``FORGOT_BY_ADDRESS`` 10 per 900 s, ``FORGOT_BY_IDENTIFIER`` 3 per 3600 s, ``FORGOT_BY_MAILBOX`` 3 per 3600 s (all ``SlidingWindowLimiter``), and per account one email every 5 minutes and 3 an hour."""
+    """EMF-024 — contract 11: the module ships ``delivery.ADDRESS_BUDGET`` 20 per 3600 s (shared by the registrations, «send the link again» and «forgot password»; no ``FORGOT_BY_ADDRESS`` any more), ``FORGOT_BY_IDENTIFIER`` 3 per 3600 s, ``FORGOT_BY_MAILBOX`` 3 per 3600 s (all ``SlidingWindowLimiter``), and per account one email every 5 minutes and 3 an hour."""
     print_section("EMF-024: shipped limits")
 
-    assert isinstance(SHIPPED_BY_ADDRESS, SlidingWindowLimiter) and (SHIPPED_BY_ADDRESS.limit, SHIPPED_BY_ADDRESS.window_seconds) == (10, 900)
+    assert isinstance(SHIPPED_BY_ADDRESS, SlidingWindowLimiter) and (SHIPPED_BY_ADDRESS.limit, SHIPPED_BY_ADDRESS.window_seconds) == (20, 3600)
+    assert not hasattr(flows, "FORGOT_BY_ADDRESS"), "the counter per address has one home, delivery.ADDRESS_BUDGET"
     assert isinstance(SHIPPED_BY_IDENTIFIER, SlidingWindowLimiter) and (SHIPPED_BY_IDENTIFIER.limit, SHIPPED_BY_IDENTIFIER.window_seconds) == (3, 3600)
     assert isinstance(SHIPPED_BY_MAILBOX, SlidingWindowLimiter) and (SHIPPED_BY_MAILBOX.limit, SHIPPED_BY_MAILBOX.window_seconds) == (3, 3600)
     assert (flows.RESET_EMAIL_MIN_INTERVAL, flows.RESET_EMAILS_PER_HOUR) == (timedelta(minutes=5), 3)
-    print_success("10/15 min per address, 3/h per identifier and per mailbox; per account 1/5 min, 3/h")
+    print_success("20/h per address, 3/h per identifier and per mailbox; per account 1/5 min, 3/h")
 
 
 @pytest.mark.asyncio
 async def test_without_a_client_address_only_the_limit_per_address_is_skipped(monkeypatch: pytest.MonkeyPatch, clock: FakeClock, budget: SlidingWindowLimiter, forgot_limits: ForgotLimits) -> None:
-    """EMF-032 — contract 11: ``address=None`` — a unix socket —: eleven admissions for eleven identifiers pass, more than the ten one address may make, and the limiter per address holds no key at all, not even a shared one. The limit per identifier still applies — ``ZQ_ALICE`` a minute after three ``zq_alice``: ``3600 - 60`` seconds —, and so does the hourly budget (``LIBREFOLIO_SMTP_MAX_PER_HOUR=1``, its unit spent: ``3600 - 30`` seconds)."""
+    """EMF-032 — contract 11: ``address=None`` — a unix socket —: twenty-one admissions for twenty-one identifiers pass, more than the twenty one address may make, and the limiter per address holds no key at all, not even a shared one. The limit per identifier still applies — ``ZQ_ALICE`` a minute after three ``zq_alice``: ``3600 - 60`` seconds —, and so does the hourly budget (``LIBREFOLIO_SMTP_MAX_PER_HOUR=1``, its unit spent: ``3600 - 30`` seconds)."""
     print_section("EMF-032: no client address")
     _usable_without_a_server(monkeypatch, max_per_hour="1")
 
     clock.now = START
-    for index in range(11):
+    for index in range(21):
         await flows.admit_forgotten_password(None, f"zq_user_{index}")
     for _ in range(3):
         await flows.admit_forgotten_password(None, ALICE)
@@ -1398,38 +1409,141 @@ ONE_MAILBOX = ["zq-sh\u00e4r\u00f6d@example.com", "zq-sh\u00c4r\u00d6d@example.c
 
 
 def test_the_key_of_a_client_address_has_one_home() -> None:
-    """EMF-036 — contract 11: one home for the per-client key (decision P17). ``flows`` keys ``FORGOT_BY_ADDRESS`` with workstream H's ``client_rate_key`` — the very object ``backend.app.services.platform.client_address`` defines, not a copy — and keeps no key of its own: no ``address_key`` any more. The rule itself — an IPv4 address as is, an IPv4-mapped IPv6 one as the IPv4 it maps, any other IPv6 one by its /64 in canonical form, a zone ignored, anything that is not an IP address as written, no key without an address or with an empty one — is H's to pin, value by value, in ``test_services/test_client_address.py``, section (f); EMF-037 proves the limit per address counts by it."""
+    """EMF-036 — contract 11: one home for the per-client key (decision P17). ``delivery`` keys ``ADDRESS_BUDGET`` with workstream H's ``client_rate_key`` — the very object ``backend.app.services.platform.client_address`` defines, not a copy — and ``flows`` keeps no key of its own: no ``client_rate_key`` and no ``address_key`` any more. The rule itself — an IPv4 address as is, an IPv4-mapped IPv6 one as the IPv4 it maps, any other IPv6 one by its /64 in canonical form, a zone ignored, anything that is not an IP address as written, no key without an address or with an empty one — is H's to pin, value by value, in ``test_services/test_client_address.py``, section (f); EMF-037 proves the limit per address counts by it."""
     print_section("EMF-036: one home for the per-client key")
-    used = getattr(flows, "client_rate_key", None)
+    used = getattr(delivery, "client_rate_key", None)
 
-    assert used is client_rate_key, f"flows.client_rate_key is {used!r}, not workstream H's client_rate_key: the key of FORGOT_BY_ADDRESS has one home (P17)"
+    assert used is client_rate_key, f"delivery.client_rate_key is {used!r}, not workstream H's client_rate_key: the key of ADDRESS_BUDGET has one home (P17)"
+    assert not hasattr(flows, "client_rate_key"), "flows keeps its own copy of the per-client key: the counter per address is delivery.ADDRESS_BUDGET"
     assert not hasattr(flows, "address_key"), "flows still carries address_key, a second copy of the per-client key: its home is workstream H's client_rate_key (P17)"
-    print_success("flows holds H's client_rate_key itself, and no address_key of its own")
+    print_success("delivery holds H's client_rate_key itself; flows keeps no key of its own")
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("members", "one_more", "outsider", "key"),
     [
-        pytest.param([f"2001:db8:1:2::{index:x}" for index in range(1, 11)], "2001:db8:1:2:ffff:ffff:ffff:fffe", "2001:db8:1:3::1", "2001:db8:1:2::/64", id="ipv6-one-64"),
-        pytest.param(["198.51.100.7", "::ffff:198.51.100.7"] * 5, "::ffff:198.51.100.7", "198.51.100.8", "198.51.100.7", id="ipv4-and-its-mapped-form"),
+        pytest.param([f"2001:db8:1:2::{index:x}" for index in range(1, 21)], "2001:db8:1:2:ffff:ffff:ffff:fffe", "2001:db8:1:3::1", "2001:db8:1:2::/64", id="ipv6-one-64"),
+        pytest.param(["198.51.100.7", "::ffff:198.51.100.7"] * 10, "::ffff:198.51.100.7", "198.51.100.8", "198.51.100.7", id="ipv4-and-its-mapped-form"),
     ],
 )
 async def test_the_limit_per_address_counts_by_the_key(monkeypatch: pytest.MonkeyPatch, clock: FakeClock, forgot_limits: ForgotLimits, members: list[str], one_more: str, outsider: str, key: str) -> None:
-    """EMF-037 — contract 11: ten admissions from addresses with one key — ten addresses of one IPv6 /64, or an IPv4 address and its IPv4-mapped form in turn — pass; an eleventh from another address with that key is ``EmailRateLimitedError`` — one subscriber, one count —, while an address with another key passes. Each request names another identifier: only the limit per address can refuse."""
+    """EMF-037 — contract 11: twenty emails spent from addresses with one key — twenty addresses of one IPv6 /64, or an IPv4 address and its IPv4-mapped form in turn (``delivery.address_budget_hit``) — fill one count; an admission from another address with that key is ``EmailRateLimitedError`` — one subscriber, one count —, while an address with another key passes. Each request names another identifier: only the counter per address can refuse."""
     print_section(f"EMF-037: the count of {key}")
     _usable_without_a_server(monkeypatch)
 
     clock.now = START
     for index, address in enumerate(members):
-        await flows.admit_forgotten_password(address, f"zq_user_{index}")
+        assert delivery.address_budget_hit(address).allowed, f"setup: the email {index} of {key}"
     with pytest.raises(EmailRateLimitedError) as refused:
         await flows.admit_forgotten_password(one_more, "zq_user_one_more")
     await flows.admit_forgotten_password(outsider, "zq_user_outsider")
 
-    assert refused.value.retry_after == pytest.approx(900)
-    assert (forgot_limits.by_address.count(key), forgot_limits.by_address.count(client_rate_key(outsider))) == (10, 1)
-    print_success(f"ten under {key}, the eleventh refused; another key passes")
+    assert refused.value.retry_after == pytest.approx(3600)
+    assert (forgot_limits.by_address.count(key), forgot_limits.by_address.count(client_rate_key(outsider))) == (20, 0)
+    print_success(f"twenty under {key}, the next admission refused; another key passes")
+
+
+@pytest.mark.asyncio
+async def test_the_counter_per_address_is_shared_with_the_activation_emails(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, clock: FakeClock, forgot_limits: ForgotLimits) -> None:
+    """EMF-063 — one counter per client address for the three ways to ask for an email: ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS=5``; three activation emails of that address (spent through ``delivery.address_budget_hit``, as a registration and «send the link again» do) and two reset emails that really go (``forgotten_password_work`` for two accounts, from that address) make five: the next admission of «forgot password» is refused, and for ``3600 - 60`` seconds, and so is a sixth activation email; another address has a count of its own."""
+    print_section("EMF-063: shared counter")
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, "5")
+    await _add_user(engine, ALICE)
+    await _add_user(engine, BOB)
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        clock.now = START
+        spent = [delivery.address_budget_hit(ADDRESS).allowed for _activation in range(3)]
+        for who in (ALICE, BOB):
+            await flows.admit_forgotten_password(ADDRESS, who)
+            await flows.forgotten_password_work(who, engine=engine, address=ADDRESS)
+        clock.now = START + 60
+        with pytest.raises(EmailRateLimitedError) as forgot_refused:
+            await flows.admit_forgotten_password(ADDRESS, "zq_user_5")
+        activation_refused = delivery.address_budget_hit(ADDRESS)
+        await flows.admit_forgotten_password(OTHER_ADDRESS, "zq_user_6")
+
+    assert spent == [True] * 3 and len(fake.messages) == 2
+    assert forgot_limits.by_address.count(ADDRESS) == 5, "three activation emails and two reset emails: one count of five"
+    assert forgot_refused.value.retry_after == pytest.approx(3600 - 60)
+    assert (activation_refused.allowed, activation_refused.retry_after) == (False, pytest.approx(3600 - 60))
+    print_success("5 under one address, the next refused whichever way it asks")
+
+
+@pytest.mark.asyncio
+async def test_only_a_reset_email_that_goes_uses_the_address_counter(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, forgot_limits: ForgotLimits) -> None:
+    """EMF-065 — the address's unit is spent by ``forgotten_password_work`` when a reset email really goes, and by nothing else: for an identifier no account has, and for an inactive account, the work spends nothing; for an account that exists, one unit and one email; without a client address (``address=None``) nothing is counted under any key, and the email goes. The admission, whoever the identifier is, spends nothing — so what the request answers cannot depend on this."""
+    print_section("EMF-065: only a reset email that goes is counted")
+    alice = await _add_user(engine, ALICE)
+    await _add_user(engine, BOB, active=False)
+    carol = await _add_user(engine, "zq_carol")
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        for identifier in ("zq_nobody", BOB, ALICE):
+            await flows.admit_forgotten_password(ADDRESS, identifier)
+        counted_by_the_admissions = forgot_limits.by_address.count(ADDRESS)
+        await flows.forgotten_password_work("zq_nobody", engine=engine, address=ADDRESS)
+        await flows.forgotten_password_work(BOB, engine=engine, address=ADDRESS)
+        counted_for_nobody = forgot_limits.by_address.count(ADDRESS)
+        await flows.forgotten_password_work(ALICE, engine=engine, address=ADDRESS)
+        counted_for_alice = forgot_limits.by_address.count(ADDRESS)
+        await flows.forgotten_password_work("zq_carol", engine=engine, address=None)
+
+    assert (counted_by_the_admissions, counted_for_nobody, counted_for_alice) == (0, 0, 1)
+    assert [message.rcpt_tos for message in fake.messages] == [[alice.email], [carol.email]]
+    assert len(forgot_limits.by_address) == 1, "no key for a request without an address"
+    print_success("0 for the admissions and the unknown or inactive, 1 for the account whose email went")
+
+
+@pytest.mark.asyncio
+async def test_a_work_that_finds_the_address_counter_full_sends_nothing_and_keeps_nothing(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter, forgot_limits: ForgotLimits) -> None:
+    """EMF-066 — the counter filled between the admission and the work (``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS=1``, another request took the only unit): the work sends no email, makes no reset link, spends nothing of the hourly budget, raises nothing, and says so in the log without the identifier."""
+    print_section("EMF-066: the counter filled meanwhile")
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, "1")
+    alice = await _add_user(engine, ALICE)
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        await flows.admit_forgotten_password(ADDRESS, ALICE)
+        assert delivery.address_budget_hit(ADDRESS).allowed, "setup: another request takes the only unit"
+        with capture_logs() as events:
+            await flows.forgotten_password_work(ALICE, engine=engine, address=ADDRESS)
+
+    assert fake.messages == [] and await _reset_rows(engine, alice.id) == []
+    assert budget.count() == 0 and forgot_limits.by_address.count(ADDRESS) == 1
+    assert any(event.get("event") == "Forgotten password: the client address had its emails moments ago, nothing sent" for event in events), events
+    assert [event for event in events if ALICE in repr(event)] == []
+    print_success("nothing sent, nothing kept")
+
+
+@pytest.mark.asyncio
+async def test_a_refused_forgotten_password_says_the_longest_wait_of_the_counters_that_refuse(monkeypatch: pytest.MonkeyPatch, clock: FakeClock, budget: SlidingWindowLimiter, forgot_limits: ForgotLimits) -> None:
+    """EMF-064 — the wait of a request stopped by several counters is the longest of them. The address's counter full since START (``SIGNUP_EMAILS_PER_ADDRESS=1``), the identifier's three hits spent at START + 1000, 1100 and 1200 (three other addresses), the instance's budget (``LIBREFOLIO_SMTP_MAX_PER_HOUR=1``) spent at START + 2000: at START + 2500 the request is refused with the largest of ``3600 - 2500`` (address), ``3600 - 1500`` (identifier, its oldest hit at 1000) and ``3600 - 500`` (instance): ``3100`` — and it counts nothing in the counters it did not hit: the identifier's still holds three."""
+    print_section("EMF-064: the longest wait")
+    _usable_without_a_server(monkeypatch, max_per_hour="1")
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, "1")
+
+    clock.now = START
+    assert delivery.address_budget_hit(ADDRESS).allowed, "setup: the address's only unit"
+    for offset, other in ((1000, "203.0.113.1"), (1100, "203.0.113.2"), (1200, "203.0.113.3")):
+        clock.now = START + offset
+        monkeypatch.setenv(SIGNUP_PER_ADDRESS, "20")
+        await flows.admit_forgotten_password(other, ALICE)
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, "1")
+    clock.now = START + 2000
+    assert budget.hit(limit=1).allowed, "setup: the only unit of the hour"
+    clock.now = START + 2500
+    identifier_hits = forgot_limits.by_identifier.count(ALICE)
+    with pytest.raises(EmailRateLimitedError) as refused:
+        await flows.admit_forgotten_password(ADDRESS, ALICE)
+
+    assert identifier_hits == 3
+    assert refused.value.retry_after == pytest.approx(3600 - 500), "the instance's wait is the longest of the three"
+    assert forgot_limits.by_identifier.count(ALICE) == 3, "the identifier's counter was only peeked by the refusal of the address"
+    print_success("3100 s: the longest of address, identifier and instance")
 
 
 @pytest.mark.asyncio
@@ -1878,8 +1992,8 @@ async def test_forgot_password_ships_open(monkeypatch: pytest.MonkeyPatch, budge
     await flows.admit_forgotten_password(ADDRESS, ALICE)
 
     assert leftovers == [], f"«forgot password» ships open since lot E4: flows still carries {leftovers}"
-    assert (forgot_limits.by_address.count(ADDRESS), forgot_limits.by_identifier.count(ALICE), budget.count()) == (1, 1, 0)
-    print_success("admitted as shipped: counted once per address and per identifier, the budget peeked")
+    assert (forgot_limits.by_address.count(ADDRESS), forgot_limits.by_identifier.count(ALICE), budget.count()) == (0, 1, 0)
+    print_success("admitted as shipped: counted once per identifier, the address's counter and the budget only looked at")
 
 
 # =============================================================================

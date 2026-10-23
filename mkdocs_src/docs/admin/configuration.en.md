@@ -68,6 +68,7 @@ the same sample as `.env`.
 | `LIBREFOLIO_SMTP_FROM` | _not set_ | The sender of the emails, required as soon as a server is set. See [Email](email.md#variables). |
 | `LIBREFOLIO_SMTP_REPLY_TO` | _not set_: replies go to the sender | Where replies to LibreFolio's emails go. See [Email](email.md#variables). |
 | `LIBREFOLIO_SMTP_MAX_PER_HOUR` | `50` | How many emails the instance may send in an hour, per server process. See [Email](email.md#variables). |
+| `LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS` | `20` | How many registration emails one client address may trigger in an hour, per server process: a whole number, at least 1. One count for the registrations, **Send the link again** and **Forgot password?**. Past it, a new account is created and waits, and its email is held. See [Limits on Activation and Password-Reset Emails](email.md#activation-limits). |
 
 A value LibreFolio cannot use in `LIBREFOLIO_TOS_URL` or `LIBREFOLIO_PRIVACY_URL` never stops the
 server: that link stays hidden, and the legal notice shows without it. The first time each server

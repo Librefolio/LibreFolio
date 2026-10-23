@@ -69,9 +69,9 @@ The harness:
   ``LOGIN_BY_ADDRESS`` are replaced by fresh limiters of the contract's size — 10 and 50 failures in 15 minutes — on a
   fake clock only the test moves: a case starts clean, moves time instead of waiting for it, and never counts in, nor
   resets, the process's own limiters. The routes must read the two limiters through the module at request time (as
-  E's routes read ``verification.RESEND_BY_ADDRESS``), not bind them at import. The security-check cases replace no
+  E's routes read ``delivery.ADDRESS_BUDGET``, the counter per client address), not bind them at import. The security-check cases replace no
   limiter: they sign in with the limit off for that one request.
-- In the resend cases E's ``verification.RESEND_BY_ADDRESS`` — every resend hits it first — is replaced too, by a fresh
+- In the resend cases E's ``delivery.ADDRESS_BUDGET`` — every resend hits it first — is replaced too, by a fresh
   limiter of its shipped size (its limit and window, never its counts) on the same fake clock: the process's own is
   neither counted nor consulted. No address sends more than two resends — a case that needs ten sends each from a
   documentation address of its own —, so E's limit never answers in place of A's.
@@ -153,7 +153,7 @@ from backend.app.db.models import User
 from backend.app.db.session import get_session_generator
 from backend.app.services.accounts import auth_service
 from backend.app.services.accounts.settings_service import initialize_global_settings
-from backend.app.services.email import verification
+from backend.app.services.email import delivery
 from backend.app.services.platform import config_audit
 from backend.app.services.platform.client_address import client_address
 from backend.app.services.platform.plugin_secrets_check import check_plugin_secrets
@@ -222,7 +222,7 @@ SMTP_ENCRYPTION_CHECK = "email.smtp_encryption"
 
 SMTP_PREFIX = "LIBREFOLIO_SMTP_"
 #: The variables no case inherits: each case sets its own.
-INHERITED = (LIMIT_VARIABLE, "LIBREFOLIO_PUBLIC_URL", "LIBREFOLIO_BLOCKED", "LIBREFOLIO_REGISTRATION", "LIBREFOLIO_MAX_USERS")
+INHERITED = (LIMIT_VARIABLE, "LIBREFOLIO_PUBLIC_URL", "LIBREFOLIO_BLOCKED", "LIBREFOLIO_REGISTRATION", "LIBREFOLIO_MAX_USERS", "LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS")
 
 
 class FakeClock:
@@ -957,11 +957,11 @@ class TestSecurityChecks:
 
 @pytest.fixture
 def resend_limit(throttle: _Throttle, monkeypatch: pytest.MonkeyPatch) -> SlidingWindowLimiter:
-    """E's ``verification.RESEND_BY_ADDRESS`` — every resend hits it first, before the sign-in's limit and the password — replaced by a fresh limiter of the shipped size (its limit and window, never its counts) on the throttle's fake clock: the process's own is neither counted nor consulted. E's route reads it through the module at request time."""
-    shipped = verification.RESEND_BY_ADDRESS
-    assert isinstance(shipped, SlidingWindowLimiter), f"verification.RESEND_BY_ADDRESS must be E's SlidingWindowLimiter: {shipped!r}"
+    """E's ``delivery.ADDRESS_BUDGET`` — every resend hits it first, before the sign-in's limit and the password — replaced by a fresh limiter of the shipped size (its limit and window, never its counts) on the throttle's fake clock: the process's own is neither counted nor consulted. E's route reads it through the module at request time."""
+    shipped = delivery.ADDRESS_BUDGET
+    assert isinstance(shipped, SlidingWindowLimiter), f"delivery.ADDRESS_BUDGET must be E's SlidingWindowLimiter: {shipped!r}"
     limiter = SlidingWindowLimiter(shipped.limit, shipped.window_seconds, clock=throttle.clock)
-    monkeypatch.setattr(verification, "RESEND_BY_ADDRESS", limiter)
+    monkeypatch.setattr(delivery, "ADDRESS_BUDGET", limiter)
     return limiter
 
 

@@ -6,10 +6,11 @@
     import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
     import PasswordStrength from '$lib/components/ui/input/PasswordStrength.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
+    import {minutesUntil} from '$lib/features/email/emailText';
     import {describeRegistrationError} from './registrationErrors';
 
     type _DispatchEvents = {
-        gotoLogin: {message?: string};
+        gotoLogin: {message?: string; tone?: 'warning'};
     };
     const dispatch = createEventDispatcher();
 
@@ -103,8 +104,12 @@
             // Success - go back to login with message
             // An account waiting for its email verification (workstream E) is told to open the link first, or, when its
             // email was held (lot E-26), to sign in and ask for a new one; a server without the field means «sending»
-            const message = !answer.verification_required ? $_('auth.accountCreated') : answer.verification_email === 'held' ? $_('email.verification.registeredHeld') : $_('email.verification.registered');
-            dispatch('gotoLogin', {message});
+            // and the held case is a warning, not a success
+            const held = answer.verification_required && answer.verification_email === 'held';
+            const retryAfter = answer.verification_retry_after_seconds;
+            // and how long until it fits again: the server's time (the longest of the counters that stopped it), in minutes
+            const message = !answer.verification_required ? $_('auth.accountCreated') : held ? $_('email.verification.registeredHeld', {values: {minutes: minutesUntil(typeof retryAfter === 'number' ? retryAfter : null)}}) : $_('email.verification.registered');
+            dispatch('gotoLogin', held ? {message, tone: 'warning'} : {message});
         } catch (e: unknown) {
             const described = describeRegistrationError(e);
             error = 'key' in described ? $_(described.key) : described.raw;
