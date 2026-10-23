@@ -10551,5 +10551,18 @@ mescolare le righe del runner dei due lotti:
     > `await-restore-mode` 38 + 27, i pin della configurazione pubblica); frontend 34 → verdi (56 + 138); `front check` 0.
     > **⚠️ Fuori pista**: il merge di B ha cambiato la firma di `RestoreStateUnreadableError` (`reason` prima): un test
     > di H-62 la costruiva alla vecchia maniera (KeyError → 500), riparato dal test-author.
+14. ✅ **Ultimo lotto dell'ondata 4: adattamento a B (SEC-3/4/5) e D7** (23/10, base `d624b5458`; D7 confermata dal
+    developer, contratto L3 §10 opzione A; D6 rimandata a H-3).
+    > **Note implementazione**: `panel_restore.py`: ogni 500 `restore_state_unreadable` passa l'eccezione (`reason` nel
+    > detail); l'upload si chiude con `finish(replace_others=False)`, poi il controllo del tipo sul file finito (rifiutato
+    > → tolto con `upload_path(...).unlink`, perché `abort()` dopo un `finish` riuscito non fa più niente), poi
+    > `remove_replaced_uploads(keep=id)`; il controllo dei primi byte resta la prima difesa. D7: `GET /panel/status` con
+    > lo stato illeggibile → 200 `restore.state = "unreadable"` con la `reason` (al posto del 500 di Q7); nello stato
+    > «ripristino interrotto» l'avvio di un backup del pannello → 409 `backup_restore_interrupted`, dalla terza
+    > dipendenza del router, dopo il controllo della credenziale fatto a mano (`access.panel_caller`), così `backup/panel.py`
+    > di B resta com'è; la pagina «ripristino interrotto» mostra «Scrivi all'assistenza» con `LIBREFOLIO_SUPPORT_URL`
+    > (`supportChannel`, senza GitHub).
+    > **Rossi → verdi** (test-author): backend 27 rossi → verdi (`panel-restore` 136, `await-restore-mode` 36,
+    > `restore-interrupted` 34, `panel-status` 20, `hosting-panel-routes` 40); frontend 5 → verdi (130).
    > **⚠️ Fuori pista**: `"scarfSettings"` messo e poi tolto da `package.json`, dopo il cambio di Q-C: il file coincide col
    > commit.

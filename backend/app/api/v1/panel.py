@@ -3,7 +3,8 @@
 Owner: workstream H (platform). A hosting panel that created an instance with ``LIBREFOLIO_ADMIN_EMAIL`` reads here
 whether its customer has activated it: the state of the initial administrator's setup (workstream A,
 ``bootstrap_admin_service.admin_setup_status``) and, while a link works, until when; and, since H-62, the instance's
-``mode`` and its ``restore`` (state, reason, waiting, the backup's date and the stage). Nothing else: no email, no
+``mode`` and its ``restore`` (state, reason, waiting, the backup's date and the stage; ``unreadable`` with its reason
+when the state of the restore cannot be read, D7). Nothing else: no email, no
 username, no count. The route wants ``LIBREFOLIO_PANEL_STATUS_TOKEN`` (``services/platform/hosting_panel/access.py``):
 unset, it answers 404. It answers on a blocked instance (``api/v1/instance_block.py``).
 """
@@ -14,7 +15,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.api.v1.backup.restore import _IN_PROGRESS, _state_unreadable
+from backend.app.api.v1.backup.restore import _IN_PROGRESS
 from backend.app.config import get_data_dir
 from backend.app.config.platform import awaiting_restore
 from backend.app.db.session import get_session_generator
@@ -32,7 +33,6 @@ _RESPONSES: dict[int | str, dict] = {
     },
     404: {"description": "The status route is off: neither `LIBREFOLIO_PANEL_STATUS_TOKEN` nor `LIBREFOLIO_PANEL_PUBLIC_KEYS`"},
     429: {"description": "Too many refused panel credentials from this address (code `panel_too_many_attempts`, with `Retry-After`)"},
-    500: {"description": "The state of the instance's restore cannot be read (code `restore_state_unreadable`): whether a restore waits is not known"},
     503: {"description": "The status token or the ticket settings of this instance cannot be used, or the registry of used tickets cannot be reached (code `panel_status_unavailable`)"},
 }
 
@@ -50,12 +50,13 @@ async def get_panel_status(
 
 
 async def _restore_summary() -> PanelRestoreSummary | None:
-    """The restore of the data directory, or None when none was ever recorded; 500 when its state cannot be read (Q7:
-    never «none» then, a restore may wait behind it)."""
+    """The restore of the data directory, or None when none was ever recorded. A state that cannot be read is the state
+    ``unreadable`` with B's reason (D7: the panel always reads it, never a 500; never «none», a restore may wait behind
+    it)."""
     try:
         state = await asyncio.to_thread(restore_apply.read_restore, get_data_dir())
-    except restore_apply.RestoreStateUnreadableError:
-        raise _state_unreadable() from None
+    except restore_apply.RestoreStateUnreadableError as exc:
+        return PanelRestoreSummary(state="unreadable", reason=exc.reason)
     if state is None:
         return None
     return PanelRestoreSummary(state="in_progress" if state.status in _IN_PROGRESS else state.status, reason=state.reason, waiting=state.waiting, backup_created_at=state.backup_created_at, stage_id=state.stage_id)

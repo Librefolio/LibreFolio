@@ -44,6 +44,7 @@ from backend.app.api.v1.backup import restore as backup_restore
 from backend.app.api.v1.system import block, health, info, instance, ready, wake
 from backend.app.config.platform import awaiting_restore, instance_blocked
 from backend.app.db.session import get_session_generator
+from backend.app.services.platform.hosting_panel.access import PanelScope, panel_caller
 from backend.app.services.platform.restore_guard import restore_interrupted
 
 INSTANCE_BLOCKED_CODE = "instance_blocked"
@@ -158,6 +159,7 @@ async def refuse_when_awaiting_restore(request: Request) -> None:
 # =============================================================================
 
 INSTANCE_RESTORE_INTERRUPTED_CODE = "instance_restore_interrupted"
+BACKUP_RESTORE_INTERRUPTED_CODE = "backup_restore_interrupted"
 
 #: What answers while the state of the restore cannot be read: the same as while the instance awaits its restore —
 #: the probes, the public configuration (with ``restore_interrupted``), the scheduled wake-up (it runs nothing), and the
@@ -169,6 +171,16 @@ async def refuse_when_restore_interrupted(request: Request) -> None:
     """Router dependency of ``/api/v1``, third, after the block and the awaiting-restore mode: while this process found
     the state of the restore unreadable at its start (``services/platform/restore_guard.py``), every endpoint not in
     ``ALLOWED_WHEN_RESTORE_INTERRUPTED`` answers 423 ``instance_restore_interrupted`` — to anyone: LibreFolio cannot tell
-    which data it holds, and serves none until the administrator chooses with ``./dev.py backup pending --recover``."""
-    if restore_interrupted() and request.scope.get("endpoint") not in ALLOWED_WHEN_RESTORE_INTERRUPTED:
+    which data it holds, and serves none until the administrator chooses with ``./dev.py backup pending --recover``.
+
+    The hosting panel's backup start answers 409 ``backup_restore_interrupted`` instead (D7): a backup of data in doubt
+    would pass the coordinator's checks and push a good copy out of the seven it keeps. The panel's credential is
+    checked first, by hand, so a caller without one gets the same answer as outside the state."""
+    if not restore_interrupted():
+        return
+    endpoint = request.scope.get("endpoint")
+    if endpoint is backup_panel.start_panel_backup:
+        await panel_caller(request, PanelScope.BACKUP)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"code": BACKUP_RESTORE_INTERRUPTED_CODE, "message": "A restore of this instance stopped half way: no backup starts until its administrator recovers it"})
+    if endpoint not in ALLOWED_WHEN_RESTORE_INTERRUPTED:
         raise HTTPException(status_code=status.HTTP_423_LOCKED, detail={"code": INSTANCE_RESTORE_INTERRUPTED_CODE, "message": "A restore of this instance stopped half way: it serves no data until its administrator recovers it"})

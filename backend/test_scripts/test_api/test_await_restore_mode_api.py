@@ -1,7 +1,8 @@
 """
 The «awaiting restore» mode through the API (LibreFolio 1.3, workstream H, lot H-62): contract L3 §6, with R4, and the
-coordinator's answers Q5 (the mode's 423 is for anyone, no session asked) and Q7 (``GET /panel/status`` with a restore
-state it cannot read: 500 ``restore_state_unreadable``).
+coordinator's answers Q5 (the mode's 423 is for anyone, no session asked) and Q7, replaced by D7 (developer, contract L3
+§10, option A: ``GET /panel/status`` with a restore state it cannot read answers 200, ``restore.state == "unreadable"``
+with the reader's ``reason``, instead of Q7's 500 ``restore_state_unreadable``).
 
 Under test, written by H-62 and missing today:
 
@@ -21,8 +22,10 @@ Under test, written by H-62 and missing today:
   request of a signed-in user — the switches are read at each call, no window opens between the mode and the block.
 - ``GET /panel/status`` adds ``mode`` (``normal|awaiting_restore``) and ``restore``: null without a restore recorded,
   else exactly ``{state, reason, waiting, backup_created_at, stage_id}``, ``state`` as ``RestoreStatus.state`` (a
-  restore being applied is ``in_progress``), never the name of whoever confirmed it; a state it cannot read → 500
-  ``restore_state_unreadable`` (Q7).
+  restore being applied is ``in_progress``), never the name of whoever confirmed it; a state it cannot read (D7) → 200,
+  ``restore == {"state": "unreadable", "reason": <io|not_a_file|invalid>, "waiting": null, "backup_created_at": null,
+  "stage_id": null}``. ``PanelRestoreSummary.state`` admits ``unreadable``, its ``reason`` the reasons of a rollback or of
+  an unreadable state. Red until D7: the route answers Q7's 500.
 
 ``# Needs B (Q3)``, apart at the end (class ``TestNeedsB``): ``POST /backup/panel/jobs`` in the mode → 409
 ``backup_awaiting_restore``, and no backup starts (a backup of an empty volume never exists).
@@ -42,8 +45,10 @@ Isolation: pure. No server, no lane database, no network, no file outside ``tmp_
 
 from __future__ import annotations
 
+import errno
 import importlib
 import json
+import os
 import re
 import secrets
 from collections.abc import AsyncIterator, Iterator
@@ -136,6 +141,19 @@ STAGE_ID = "0123456789abcdef0123456789abcdef"
 BACKUP_CREATED_AT = datetime(2026, 10, 23, 3, 0, 12, tzinfo=UTC)
 #: Whoever confirmed a restore: a canary, never in the panel's status.
 CONFIRMED_BY = "h62canary_confirmer"
+
+#: D7: the reasons B's reader gives a restore state it cannot read (``apply.RestoreStateUnreadableError.reason``), and
+#: the panel status's ``restore`` for each (contract L3 §10, option A).
+UNREADABLE_REASONS = ("io", "not_a_file", "invalid")
+#: The reasons of a rolled-back restore (``RestoreStatus.reason``), which ``PanelRestoreSummary.reason`` keeps taking.
+ROLLBACK_REASONS = ("first_start_failed", "swap_interrupted", "swap_failed", "stage_missing")
+UNREADABLE_STATE = "unreadable"
+
+
+def unreadable_restore(reason: str) -> dict[str, Any]:
+    """The panel status's ``restore`` for a state that cannot be read (D7): its state and reason, nothing else known."""
+    return {"state": UNREADABLE_STATE, "reason": reason, "waiting": None, "backup_created_at": None, "stage_id": None}
+
 
 #: What the scheduler reaches past its switches (``test_system_wake.py``): none of it in the mode.
 PAST_THE_SWITCHES = ("am_i_leader", "load_scheduler_settings", "load_state", "save_state", "due_current_price", "due_history_sync", "run_current_price_refresh", "run_history_sync")
@@ -298,6 +316,32 @@ def write_state(root: Path, status: str, *, waiting: str | None = None) -> None:
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     path.write_text(state.model_dump_json(), encoding="utf-8")
     path.chmod(0o600)
+
+
+def write_unreadable_state(root: Path, reason: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The restore's state on disk, in a form B's reader refuses with ``reason`` (D7): a folder in its place
+    (``not_a_file``), bytes that are no state this LibreFolio reads (``invalid``), or a file the system refuses to read
+    (``io``: the reader's ``read_regular_file`` raising ``EACCES``, through ``monkeypatch``, so the case does not depend
+    on the user the tests run as). Barrier: ``apply.read_restore`` raises with that very reason."""
+    path = restore_state_path(root)
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if reason == "not_a_file":
+        path.mkdir(mode=0o700)
+    else:
+        path.write_text('{"status": "d7: no state this LibreFolio reads"}', encoding="utf-8")
+        path.chmod(0o600)
+    if reason == "io":
+
+        def refused(*_args: Any, **_kwargs: Any) -> NoReturn:
+            raise PermissionError(errno.EACCES, os.strerror(errno.EACCES))
+
+        monkeypatch.setattr(apply_module, "read_regular_file", refused)
+    try:
+        apply_module.read_restore(root)
+    except apply_module.RestoreStateUnreadableError as exc:
+        assert exc.reason == reason, f"Barrier: the reader refuses the state with {reason!r}, not {exc.reason!r}"
+    else:
+        pytest.fail(f"Barrier: the state written for {reason!r} must be unreadable to apply.read_restore")
 
 
 def _endpoint_name(endpoint: Any) -> str:
@@ -607,17 +651,43 @@ async def test_the_panel_status_says_why_a_restore_waits(instance):
 
 
 @pytest.mark.asyncio
-async def test_a_restore_state_that_cannot_be_read_is_500_restore_state_unreadable(instance):
-    """AM-043 (Q7): ``apply.read_restore`` raising ``RestoreStateUnreadableError`` → 500 ``restore_state_unreadable``,
-    never ``restore: null``."""
-
-    def unreadable(*_args: Any, **_kwargs: Any) -> NoReturn:
-        raise apply_module.RestoreStateUnreadableError("io", "Permission denied")
-
-    instance.monkeypatch.setattr(apply_module, "read_restore", unreadable)
+@pytest.mark.parametrize("awaiting", [False, True], ids=["normal", "awaiting-restore"])
+@pytest.mark.parametrize("reason", UNREADABLE_REASONS)
+async def test_a_restore_state_that_cannot_be_read_is_200_with_restore_unreadable_and_its_reason(instance, reason, awaiting):
+    """AM-043 (D7, contract L3 §10 option A; replaces Q7's 500): a restore state on disk that B's reader refuses with
+    ``reason`` (``io``, ``not_a_file``, ``invalid``) → ``GET /panel/status`` answers 200 with exactly its four keys,
+    ``mode`` as the switch says, and ``restore`` exactly ``{state: unreadable, reason, waiting: null,
+    backup_created_at: null, stage_id: null}``; never ``restore: null`` (a restore may wait behind it), never the 500."""
+    write_unreadable_state(instance.root, reason, instance.monkeypatch)
+    instance.switches(awaiting=awaiting)
     response = await panel_status(instance)
 
-    assert code(response) == (500, "restore_state_unreadable"), f"an unreadable state → 500 restore_state_unreadable: {shown(response)}"
+    assert response.status_code == 200, f"D7: an unreadable state ({reason}) → 200, not Q7's 500: {shown(response)}"
+    body = response.json()
+    assert set(body) == PANEL_STATUS_KEYS, f"exactly {sorted(PANEL_STATUS_KEYS)}: {sorted(body)}"
+    assert (body["mode"], body["restore"]) == ("awaiting_restore" if awaiting else "normal", unreadable_restore(reason)), f"D7: restore unreadable with its reason {reason!r}, the mode as the switch says: {body}"
+
+
+@pytest.mark.parametrize("reason", UNREADABLE_REASONS)
+def test_the_panel_restore_summary_admits_unreadable_with_each_reason_of_its_reader(reason):
+    """AM-044 (D7): ``PanelRestoreSummary`` validates ``state: unreadable`` with each reason of an unreadable state, and
+    keeps its five fields (``extra="forbid"``)."""
+    summary_class = h62("backend.app.schemas.hosting_panel", "PanelRestoreSummary")
+    summary = summary_class.model_validate({"state": UNREADABLE_STATE, "reason": reason})
+
+    assert set(summary_class.model_fields) == PANEL_RESTORE_KEYS, f"PanelRestoreSummary keeps exactly {sorted(PANEL_RESTORE_KEYS)}: {sorted(summary_class.model_fields)}"
+    assert summary.model_dump(mode="json") == unreadable_restore(reason), f"D7: unreadable with {reason!r}: {summary!r}"
+
+
+def test_guard_the_panel_restore_summary_keeps_the_rollback_reasons_and_refuses_an_unknown_state():
+    """Guard of AM-044: the reasons of a rolled-back restore stay valid, and a state nobody defined is refused."""
+    from pydantic import ValidationError  # noqa: PLC0415
+
+    summary_class = h62("backend.app.schemas.hosting_panel", "PanelRestoreSummary")
+    kept = [summary_class.model_validate({"state": "rolled_back", "reason": reason}).reason for reason in ROLLBACK_REASONS]
+    assert kept == list(ROLLBACK_REASONS), f"the rollback reasons stay: {kept}"
+    with pytest.raises(ValidationError):
+        summary_class.model_validate({"state": "d7_no_such_state"})
 
 
 # =============================================================================

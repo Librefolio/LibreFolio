@@ -870,7 +870,7 @@ def api_await_restore_mode(verbose: bool = False, test_names: list[str] | None =
 def api_restore_interrupted(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the interrupted restore's API tests: refuse_when_restore_interrupted, its allowed set, instance/wake/panel status (B-33, H)."""
     print_section("Restore Interrupted API")
-    print_info("Testing: 423 instance_restore_interrupted for anyone outside the allowed set (the mode's), the third router dependency, restore_interrupted in /system/instance, wake-sync restore_interrupted, GET /panel/status unchanged")
+    print_info("Testing: 423 instance_restore_interrupted for anyone outside the allowed set (the mode's), the third router dependency, restore_interrupted in /system/instance, wake-sync restore_interrupted, GET /panel/status restore unreadable (D7), the panel's backup start 409 backup_restore_interrupted")
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_restore_interrupted_api.py", test_names)
     return run_command(cmd, "Restore interrupted API tests", verbose=verbose)
 
@@ -1414,7 +1414,7 @@ Tests for REST API endpoints (server auto-started):
         "await-restore-mode",
         api_await_restore_mode,
         name="Awaiting Restore Mode API",
-        desc="H-62 (L3 §6): LIBREFOLIO_AWAIT_RESTORE → 423 instance_awaiting_restore for anyone on every /api/v1 route but ALLOWED_WHEN_AWAITING_RESTORE (pinned by name and route), registration, setup, login and me included; the dependency right after refuse_when_blocked on every route; ready and instance say mode; wake-sync awaiting_restore with nothing past the switches; both switches 423; R4 the block at the first request; GET /panel/status mode and restore, 500 restore_state_unreadable (Q7); Needs B Q3 apart",
+        desc="H-62 (L3 §6): LIBREFOLIO_AWAIT_RESTORE → 423 instance_awaiting_restore for anyone on every /api/v1 route but ALLOWED_WHEN_AWAITING_RESTORE (pinned by name and route), registration, setup, login and me included; the dependency right after refuse_when_blocked on every route; ready and instance say mode; wake-sync awaiting_restore with nothing past the switches; both switches 423; R4 the block at the first request; GET /panel/status mode and restore, an unreadable state as restore unreadable with its reason (D7); Needs B Q3 apart",
         # PURE: the app of main.py in this process (ASGI), every request's session on a private SQLite file under
         # tmp_path, the switches by monkeypatch, the data directory under tmp_path: the lane's backend and DB are never
         # reached.
@@ -1425,7 +1425,7 @@ Tests for REST API endpoints (server auto-started):
         "restore-interrupted",
         api_restore_interrupted,
         name="Restore Interrupted API",
-        desc="B-33 (H, 22/10): while restore_guard.restore_interrupted() every /api/v1 route but ALLOWED_WHEN_RESTORE_INTERRUPTED (= ALLOWED_WHEN_AWAITING_RESTORE, pinned by name and route) answers 423 instance_restore_interrupted to anyone, login, registration, setup, me and data included; refuse_when_restore_interrupted the third router dependency after block and mode; /system/instance restore_interrupted; wake-sync restore_interrupted with nothing past the switches; GET /panel/status still allowed (500 restore_state_unreadable, Q7)",
+        desc="B-33 (H, 22/10): while restore_guard.restore_interrupted() every /api/v1 route but ALLOWED_WHEN_RESTORE_INTERRUPTED (= ALLOWED_WHEN_AWAITING_RESTORE, pinned by name and route) answers 423 instance_restore_interrupted to anyone, login, registration, setup, me and data included; refuse_when_restore_interrupted the third router dependency after block and mode; /system/instance restore_interrupted; wake-sync restore_interrupted with nothing past the switches; GET /panel/status still allowed (restore unreadable with its reason, D7); the panel's backup start 409 backup_restore_interrupted after its credential (D7), its poll, download and delete allowed",
         # PURE: the app of main.py in this process (ASGI), every request's session on a private SQLite file under
         # tmp_path, the interruption and the switches by monkeypatch: the lane's backend and DB are never reached.
         isolation="pure",
