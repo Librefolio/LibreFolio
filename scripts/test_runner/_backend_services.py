@@ -1724,6 +1724,14 @@ def services_backup_sealed(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "Sealed backup tests", verbose=verbose)
 
 
+def services_backup_owner(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the owner's account after a restore in the managed profile (lot B5-1): the step after the commit."""
+    print_section("Services: Restore Owner")
+    print_info("Testing: backend/app/services/platform/instance_backup/owner.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_owner.py", test_names)
+    return run_command(cmd, "Restore owner tests", verbose=verbose)
+
+
 def services_backup_secure_rules(verbose: bool = False, test_names: list = None) -> bool:
     """Test the rules of a secure backup: its password (the accounts' rules, at least 12 characters) and the key it carries."""
     print_section("Services: Secure Backup Rules")
@@ -3214,6 +3222,16 @@ Note: No backend server required.
         desc="The sealed nightly backup (lot L3, contract §3 and §9): every case of fixtures/backup_l3/vectors.json through read_sealed, open_password, check_password, extract_envelope and the envelope's decryption with its expected outcome; write_sealed rebuilding the good .tar byte for byte (0600, no .part, no overwrite); build_manifest's bytes; new_password; seal_password binary age and open_password (sealed_no_identity, sealed_password_invalid); read_sealed refusals (PAX, GNU, directory, link, members, small members over 4096, not LFBK v1, truncated; manifest UTF-8 JSON object, duplicate, unknown or missing keys, types, format, version, recipients, size and hash, password_member); read_identities and identity_file_text; is_sealed; the cloud derivation rows; interop with the age binary when installed (skipped visibly otherwise); envelope.unlock_header",
         # PURE: committed vectors read only, files under tmp_path; the optional age binary run on tmp_path files. No DB,
         # no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-owner",
+        services_backup_owner,
+        name="Restore Owner",
+        desc="The owner's account after a restore in the managed profile (lot B5-1): owner_choice_required() reads the profile; assign_restored_owner() calls A's assign_owner_and_send_reset once (looked up through owner._assign_owner(), faked here with A's signature) for a committed restore confirmed via admin with an owner chosen and no outcome yet, on an AsyncSession of the data directory's database; records sent, link_only (with its reset path), already_issued, already_done, error:<CODE>; an unexpected failure or A not merged (ImportError) leaves the owner pending, nothing raised; anything else left alone byte for byte; idempotent; no email, username or reset path in the log",
+        # PURE: every data directory under tmp_path, a migrated copy of the staging tests' database (alembic in a process
+        # of its own), this process in test mode on that folder; A's function a fake. No lane DB, no server, no network.
         isolation="pure",
     )
     add_test(

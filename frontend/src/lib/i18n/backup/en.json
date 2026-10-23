@@ -212,7 +212,7 @@
         "post_migration_failed": "A fix of the copy failed: the server's log has the cause.",
         "restore_interrupted": "The check was interrupted: check the archive again.",
         "restore_stage_expired": "The check is too old: check the archive again.",
-        "restore_stage_outdated": "LibreFolio was updated since the check: check the archive again.",
+        "restore_stage_outdated": "LibreFolio was updated, or the owner's address changed, since the check: check the archive again.",
         "restore_not_restorable": "This archive cannot be restored.",
         "restore_already_pending": "Another restore already waits for the next start.",
         "restore_not_pending": "No restore waits for the next start.",
@@ -228,7 +228,11 @@
         "envelope_damaged": "The secure backup is damaged or was changed: it cannot be opened.",
         "envelope_unsupported": "The secure backup comes from a newer LibreFolio: update LibreFolio first.",
         "proxy_too_large": "A proxy in front of LibreFolio refused an archive this large: ask whoever runs it to accept larger uploads, or restore from the command line.",
-        "sealed_backup_needs_key": "This is a sealed backup of a hosting panel: its password is encrypted for the provider's key. Extract backup.lfbk, open password.age with age, then restore backup.lfbk with that password."
+        "sealed_backup_needs_key": "This is a sealed backup of a hosting panel: its password is encrypted for the provider's key. Extract backup.lfbk, open password.age with age, then restore backup.lfbk with that password.",
+        "owner_choice_required": "Choose the account that becomes the owner's before confirming.",
+        "owner_choice_invalid": "The chosen account cannot become the owner's: choose one of those offered.",
+        "owner_email_not_set": "LIBREFOLIO_ADMIN_EMAIL is not set: the owner's account cannot be chosen. Ask the hosting provider.",
+        "owner_conflict": "The backup holds two accounts with one address or one name, or the owner's address as another account's name: it cannot be restored here."
       },
       "password": {
         "intro": "A secure backup: type the password it was made with.",

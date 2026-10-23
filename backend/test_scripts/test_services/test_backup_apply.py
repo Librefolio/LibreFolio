@@ -161,6 +161,33 @@ case of (f), a copy that cannot be removed, before B-31; those of (o) before B-3
     serving the directory, ``RestoreInUseError``; nothing changed by a refusal or by a second call. Names looked up by
     the test that needs them (``b33_name``, "[new] B-33 …"). Data directories of (r) are bare (no database) but for the
     confirmation; a call that may meet a FIFO runs in a thread given a deadline (``in_time``), its reader let go after.
+(s) Lot B5-1 (interface ``B-b51-interface.md`` §0, §3; written RED before it): the owner's choice at the confirmation.
+    ``confirm_restore(..., owner_user_id=None)``; ``RestoreState`` gains ``owner_user_id``, ``owner_outcome`` and
+    ``owner_reset_path``, all ``None`` by default — a state written before B5-1 reads them ``None``, and (e)'s state and
+    (h)'s ``STATE_FIELDS`` hold them too. In the ``managed`` profile (``LIBREFOLIO_PROFILE``), a confirmation via
+    ``admin`` must name the owner's account among the report's ``owner_candidates``: none, ``owner_choice_required``;
+    ``LIBREFOLIO_ADMIN_EMAIL`` unset,
+    ``owner_email_not_set``; an id that is no candidate, a candidate that is neither an active administrator nor the
+    holder of the owner's email (A–Z case aside, read at the confirmation), or another account while a candidate holds
+    the owner's email (the choice is then forced), ``owner_choice_invalid`` — each a ``RestoreStateError`` with that
+    ``code``, nothing written. The forced account, even not an administrator, and an active administrator when nobody
+    holds the owner's email, are confirmed, ``owner_user_id`` recorded in the state returned and in ``restore.json``.
+    ``selfhosted`` asks nothing (``owner_user_id`` ``None``); ``panel`` and ``cli`` never need one, in ``managed`` too.
+    The candidates are written into the copy's ``report.json`` as B5-1's check writes them (raw JSON, so the file reads
+    before B5-1 too), with the addendum's ``owner_email_checked`` (the owner's email of the case) and ``owner_conflicts``
+    (``[]``) unless a case says otherwise. Security addendum §7.2: in ``managed`` via ``admin``, a report checked with
+    another address (``email_fold``), with none, or written before the addendum is ``restore_stage_outdated`` before
+    the choice is looked at; one whose ``owner_conflicts`` is not empty is ``owner_conflict``
+    (``RestoreOwnerConflictError``) whatever the choice; nothing written. Panel, CLI and ``selfhosted`` unaffected.
+(t) Lot B5-1, security addendum §7.5 (written RED before it): ``finish_pending_restore`` of a restore confirmed via
+    ``admin`` naming ``owner_user_id`` closes that account in the commit's transaction
+    (``_close_the_way_in(data_dir, now, owner_user_id=None)``): a real bcrypt hash the backup's password does not open;
+    with the owner's address set and held by no other account, that address, ``is_superuser`` and ``is_active`` 1, A's
+    ``is_instance_owner`` 1 only where the column exists. Another holder: only the password, a warning, committed; the
+    address unset: only the password; an id the database does not hold: nothing, a warning, committed; a restore
+    without an owner: no password touched. One line with the stage, the account and ``assigned``; no address, username,
+    hash or password in the log. The backup's accounts get real bcrypt hashes of a known password in the copy, and the
+    state's ``owner_user_id`` is rewritten after the confirmation where a case needs an account it would refuse.
 
 How. Real databases and archives come from ``test_backup_staging.py`` (its module fixtures, imported: two databases made
 once by ``alembic upgrade`` in a process of their own, the archives at the head and at ``OLDER``). The head archive is
@@ -1193,6 +1220,10 @@ def test_confirm_writes_a_pending_state_from_the_report_atomically_and_privately
         "reason": None,
         "waiting": None,
         "session_version": None,
+        # Lot B5-1 (s): the owner's choice and what became of it, nothing for a self-hosted confirmation.
+        "owner_user_id": None,
+        "owner_outcome": None,
+        "owner_reset_path": None,
     }
     assert state.model_dump() == expected, f"the state of a confirmed restore: {state.model_dump()}"
     written = state_file(instance.root)
@@ -3279,7 +3310,29 @@ def test_finish_leaves_a_restore_that_is_not_applied_alone(tmp_path, databases, 
 # =============================================================================
 
 #: The fields of a restore's state (contract §2): the commit adds none; its count of revoked links goes to the log.
-STATE_FIELDS = {"format", "status", "stage_id", "data_dir", "confirmed_at", "confirmed_by", "confirmed_via", "backup_created_at", "backup_app_version", "action", "swap", "boot", "applied_at", "finished_at", "reason", "waiting", "session_version"}
+#: Lot B5-1 (s) adds the owner's three fields, written at the confirmation and after the first start, not by the commit.
+STATE_FIELDS = {
+    "format",
+    "status",
+    "stage_id",
+    "data_dir",
+    "confirmed_at",
+    "confirmed_by",
+    "confirmed_via",
+    "backup_created_at",
+    "backup_app_version",
+    "action",
+    "swap",
+    "boot",
+    "applied_at",
+    "finished_at",
+    "reason",
+    "waiting",
+    "session_version",
+    "owner_user_id",
+    "owner_outcome",
+    "owner_reset_path",
+}
 #: How SQLAlchemy stores a datetime in SQLite: UTC, no offset, always six digits of microseconds.
 SQLALCHEMY_DATETIME = "%Y-%m-%d %H:%M:%S.%f"
 #: How long after its issue a link of the plans below was consumed or revoked.
@@ -4509,3 +4562,617 @@ def test_a_state_written_before_l3_2_reads_its_confirmed_via_from_confirmed_by(t
     assert state is not None, "precondition: a state of before L3-2 is read"
     assert (state.confirmed_by, via_of(state)) == (confirmed_by, via), f"{confirmed_by!r} without confirmed_via reads via {via}: {state}"
     print_success(f"{confirmed_by!r}: via {via}")
+
+
+# =============================================================================
+# (s) Lot B5-1: the owner's choice at the confirmation
+# =============================================================================
+
+PROFILE_VARIABLE = "LIBREFOLIO_PROFILE"
+OWNER_EMAIL_VARIABLE = "LIBREFOLIO_ADMIN_EMAIL"
+OWNER_SIDE_VARIABLES = ("LIBREFOLIO_ADMIN_USERNAME", "LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN", "LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE")
+#: The owner's email as the operator writes it; ``OWEN`` holds it in another A–Z case.
+OWNER_EMAIL = "Owner.B51@Example.COM"
+#: The candidates a B5-1 check writes into a report (``staging.OwnerCandidate``), by name. Their ids are the report's:
+#: the confirmation reads nothing else.
+ADA = {"user_id": 4, "username": "ada_admin", "email": "ada.b51@example.com", "is_superuser": True, "is_active": True}
+ZOE = {"user_id": 1, "username": "zoe_admin", "email": "zoe.b51@example.com", "is_superuser": True, "is_active": True}
+#: A candidate that is neither an active administrator nor the owner's email holder: an administrator now disabled, whose
+#: address was the owner's when the archive was checked (the variable changed since).
+OLGA = {"user_id": 3, "username": "olga_former_admin", "email": "olga.b51@example.com", "is_superuser": True, "is_active": False}
+#: A plain user holding the owner's email: the forced choice.
+OWEN = {"user_id": 5, "username": "owen_user", "email": "OWNER.b51@EXAMPLE.com", "is_superuser": False, "is_active": True}
+NO_SUCH_USER = 999
+
+
+def b51_parameter(function: Callable[..., Any], name: str) -> None:
+    """The keyword ``name`` of ``function``, which lot B5-1 adds; before it, a failure that says so."""
+    if name not in inspect.signature(function).parameters:
+        pytest.fail(f"[new] B5-1: {function.__qualname__}() takes no {name!r} yet (interface §3)", pytrace=False)
+
+
+def use_profile(monkeypatch: pytest.MonkeyPatch, profile: str) -> None:
+    """``LIBREFOLIO_PROFILE`` as ``profile`` in this process; barrier: ``get_settings()`` reads it."""
+    from backend.app.config import get_settings  # noqa: PLC0415 — read at each call, as the product reads it
+
+    monkeypatch.setenv(PROFILE_VARIABLE, profile)
+    assert get_settings().LIBREFOLIO_PROFILE == profile, f"barrier: get_settings() reads the profile {profile!r}"
+
+
+def owner_email_is(monkeypatch: pytest.MonkeyPatch, value: str | None) -> None:
+    """``LIBREFOLIO_ADMIN_EMAIL`` set to ``value`` (``None``: unset), the other F02 variables unset."""
+    for name in OWNER_SIDE_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+    if value is None:
+        monkeypatch.delenv(OWNER_EMAIL_VARIABLE, raising=False)
+    else:
+        monkeypatch.setenv(OWNER_EMAIL_VARIABLE, value)
+
+
+#: A key of ``report.json`` left out: the report was written before the addendum (§7.1).
+ABSENT = object()
+
+
+def with_candidates(instance: Instance, candidates: list[dict[str, Any]], **report: Any) -> None:
+    """The instance's checked copy, its report naming ``candidates`` as B5-1's check writes them, and the keys
+    ``report`` (``ABSENT``: left out): raw JSON, so that the report reads before B5-1 too (the keys then ignored)."""
+    path = stage_dir(instance.root, instance.stage_id) / STAGE_REPORT_FILE
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record["owner_candidates"] = candidates
+    for name, value in report.items():
+        if value is ABSENT:
+            record.pop(name, None)
+        else:
+            record[name] = value
+    path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+
+
+def owner_case(tmp_path: Path, databases: cases.Databases, checked: Checked, monkeypatch: pytest.MonkeyPatch, *, profile: str, owner_email: str | None, candidates: list[dict[str, Any]], **report: Any) -> Instance:
+    """An instance whose checked copy names ``candidates``, under ``profile`` with that owner's email. Its report says,
+    as the addendum's check writes it (§7.1), that it was checked with that same address and found no conflict, unless
+    ``report`` says otherwise (``owner_email_checked``, ``owner_conflicts``; ``ABSENT``: the key left out)."""
+    use_profile(monkeypatch, profile)
+    owner_email_is(monkeypatch, owner_email)
+    instance = build(tmp_path / "instance", databases, checked)
+    with_candidates(instance, candidates, **{"owner_email_checked": owner_email, "owner_conflicts": [], **report})
+    return instance
+
+
+def but_the_apply_lock(root: Path) -> dict[str, tuple]:
+    """Everything below ``.restore`` but its apply lock, which a refused confirmation may have taken: what it leaves."""
+    return {name: value for name, value in restore_items(root).items() if name != APPLY_LOCK_NAME}
+
+
+def on_disk_owner(root: Path) -> tuple[object, object, object]:
+    record = json.loads(state_file(root).read_text(encoding="utf-8"))
+    return tuple(record.get(name, "<missing>") for name in ("owner_user_id", "owner_outcome", "owner_reset_path"))
+
+
+#: (the candidates, the owner's email, the id chosen, the code of the refusal).
+REFUSED_CHOICES = [
+    pytest.param([ADA, OLGA, ZOE], OWNER_EMAIL, None, "owner_choice_required", id="none-chosen"),
+    pytest.param([ADA, OWEN, ZOE], OWNER_EMAIL, None, "owner_choice_required", id="none-chosen-a-forced-user-there"),
+    pytest.param([ADA, ZOE], None, ADA["user_id"], "owner_email_not_set", id="owner-email-unset"),
+    pytest.param([ADA, OLGA, ZOE], OWNER_EMAIL, NO_SUCH_USER, "owner_choice_invalid", id="not-a-candidate"),
+    pytest.param([ADA, OLGA, ZOE], OWNER_EMAIL, OLGA["user_id"], "owner_choice_invalid", id="neither-an-active-administrator-nor-the-owner"),
+    pytest.param([ADA, OWEN, ZOE], OWNER_EMAIL, ADA["user_id"], "owner_choice_invalid", id="another-administrator-while-a-forced-user-exists"),
+    pytest.param([ADA, OWEN, ZOE], "someone.else.b51@example.com", OWEN["user_id"], "owner_choice_invalid", id="the-holder-of-an-email-no-longer-the-owner-s"),
+]
+
+
+@pytest.mark.parametrize(("candidates", "owner_email", "chosen", "code"), REFUSED_CHOICES)
+def test_a_managed_confirmation_without_a_valid_owner_choice_is_refused_and_writes_nothing(tmp_path, databases, checked, monkeypatch, candidates, owner_email, chosen, code):
+    """(s) B5-1: ``managed``, confirmed via ``admin``: no choice, no owner's email, or a choice the candidates do not
+    allow is a ``RestoreStateError`` with its stable ``code``; no state written, nothing of ``.restore`` changed but
+    its apply lock."""
+    print_section("(s) B5-1 an owner choice refused")
+    apply = apply_module()
+    b51_parameter(apply.confirm_restore, "owner_user_id")
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=owner_email, candidates=candidates)
+    before = but_the_apply_lock(instance.root)
+    with pytest.raises(apply.RestoreStateError) as raised:
+        apply.confirm_restore(instance.stage_id, confirmed_by=CONFIRMED_BY, confirmed_via="admin", owner_user_id=chosen, data_dir=instance.root, now=instance.confirm_at)
+    assert raised.value.code == code, f"refused with {code}, not {raised.value.code}: {raised.value}"
+    assert not lexists(state_file(instance.root)), "a refused confirmation writes no state"
+    assert but_the_apply_lock(instance.root) == before, f"nothing of .restore changed: {cases.changed(before, but_the_apply_lock(instance.root))}"
+    assert apply.read_restore(instance.root) is None, "no restore waits"
+    print_success(f"{code}, nothing written")
+
+
+def test_a_managed_confirmation_without_the_keyword_is_refused_as_owner_choice_required(tmp_path, databases, checked, monkeypatch):
+    """(s) B5-1: ``owner_user_id`` defaults to ``None``: an administrators' confirmation that names nobody — as every
+    caller did before B5-1 — is refused ``owner_choice_required`` in ``managed``. Red before B5-1: it was confirmed."""
+    apply = apply_module()
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=OWNER_EMAIL, candidates=[ADA, ZOE])
+    try:
+        state = apply.confirm_restore(instance.stage_id, confirmed_by=CONFIRMED_BY, data_dir=instance.root, now=instance.confirm_at)
+    except apply.RestoreStateError as exc:
+        assert exc.code == "owner_choice_required", f"refused owner_choice_required, not {exc.code}: {exc}"
+    else:
+        pytest.fail(f"a managed confirmation naming no owner was confirmed: {state}")
+    assert not lexists(state_file(instance.root)), "a refused confirmation writes no state"
+    print_success("no keyword: owner_choice_required")
+
+
+#: (the candidates, the id chosen): what a managed administrator may confirm.
+ALLOWED_CHOICES = [
+    pytest.param([ADA, OWEN, ZOE], OWEN["user_id"], id="the-forced-user-even-not-an-administrator"),
+    pytest.param([ADA, OLGA, ZOE], ADA["user_id"], id="an-active-administrator-nobody-holding-the-owner-s-email"),
+    pytest.param([ADA, ZOE], ZOE["user_id"], id="another-active-administrator"),
+]
+
+
+@pytest.mark.parametrize(("candidates", "chosen"), ALLOWED_CHOICES)
+def test_a_managed_confirmation_with_a_valid_owner_choice_records_it(tmp_path, databases, checked, monkeypatch, candidates, chosen):
+    """(s) B5-1: the choice the candidates allow is confirmed: ``pending``, ``owner_user_id`` the id chosen in the state
+    returned, in ``restore.json`` and in what ``read_restore`` reads; ``owner_outcome`` and ``owner_reset_path`` ``None``
+    (only the first start writes them)."""
+    print_section("(s) B5-1 an owner choice recorded")
+    apply = apply_module()
+    b51_parameter(apply.confirm_restore, "owner_user_id")
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=OWNER_EMAIL, candidates=candidates)
+    state = apply.confirm_restore(instance.stage_id, confirmed_by=CONFIRMED_BY, confirmed_via="admin", owner_user_id=chosen, data_dir=instance.root, now=instance.confirm_at)
+    assert (state.status, state.owner_user_id, state.owner_outcome, state.owner_reset_path) == ("pending", chosen, None, None), f"pending, the owner {chosen} recorded: {state}"
+    assert on_disk_owner(instance.root) == (chosen, None, None), f"restore.json records the owner {chosen}: {on_disk_owner(instance.root)}"
+    assert apply.read_restore(instance.root).owner_user_id == chosen, "read_restore reads it back"
+    print_success(f"owner {chosen} recorded")
+
+
+def test_a_self_hosted_confirmation_asks_no_owner(tmp_path, databases, checked, monkeypatch):
+    """(s) B5-1: ``selfhosted``, the owner's email set or not: an administrators' confirmation naming nobody is
+    confirmed as before, ``owner_user_id`` ``None``."""
+    apply = apply_module()
+    b51_parameter(apply.confirm_restore, "owner_user_id")
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="selfhosted", owner_email=OWNER_EMAIL, candidates=[ADA, OWEN, ZOE])
+    state = apply.confirm_restore(instance.stage_id, confirmed_by=CONFIRMED_BY, confirmed_via="admin", owner_user_id=None, data_dir=instance.root, now=instance.confirm_at)
+    assert (state.status, state.owner_user_id) == ("pending", None), f"self-hosted: pending, no owner: {state}"
+    assert on_disk_owner(instance.root) == (None, None, None), f"restore.json: no owner: {on_disk_owner(instance.root)}"
+    print_success("selfhosted: no owner asked")
+
+
+@pytest.mark.parametrize("via", ["panel", "cli"])
+@pytest.mark.parametrize("owner_email", [OWNER_EMAIL, None], ids=["owner-email-set", "owner-email-unset"])
+def test_a_managed_confirmation_via_the_panel_or_the_command_line_never_needs_an_owner(tmp_path, databases, checked, monkeypatch, via, owner_email):
+    """(s) B5-1: the hosting panel and the command line never ask the owner's choice, in ``managed`` too, whatever the
+    owner's email: confirmed, ``owner_user_id`` ``None``."""
+    apply = apply_module()
+    b51_parameter(apply.confirm_restore, "owner_user_id")
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=owner_email, candidates=[ADA, OWEN, ZOE])
+    state = apply.confirm_restore(instance.stage_id, confirmed_by=via, confirmed_via=via, data_dir=instance.root, now=instance.confirm_at)
+    assert (state.status, state.confirmed_via, state.owner_user_id) == ("pending", via, None), f"managed via {via}: pending, no owner: {state}"
+    assert on_disk_owner(instance.root) == (None, None, None), f"restore.json: no owner: {on_disk_owner(instance.root)}"
+    print_success(f"managed via {via}: no owner needed")
+
+
+def test_confirm_check_hands_the_owner_choice_to_confirm_restore(tmp_path, databases, checked, monkeypatch):
+    """(s) B5-1: ``restore_jobs.confirm_check(..., owner_user_id=)`` hands it to ``confirm_restore``: the state says it."""
+    apply = apply_module()
+    b51_parameter(restore_jobs.confirm_check, "owner_user_id")
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=OWNER_EMAIL, candidates=[ADA, ZOE])
+    state = restore_jobs.confirm_check(instance.stage_id, confirmed_by=CONFIRMED_BY, owner_user_id=ADA["user_id"], data_dir=instance.root)
+    assert (state.status, state.owner_user_id) == ("pending", ADA["user_id"]), f"pending, owner ada: {state}"
+    assert apply.read_restore(instance.root).owner_user_id == ADA["user_id"], "read_restore reads it back"
+    print_success("confirm_check: owner handed on")
+
+
+def test_a_state_written_before_b5_1_reads_no_owner(tmp_path):
+    """(s) B5-1: ``restore.json`` without the owner's keys — every state written before B5-1 — still reads, its
+    ``owner_user_id``, ``owner_outcome`` and ``owner_reset_path`` ``None``."""
+    apply = apply_module()
+    root = tmp_path / "instance"
+    root.mkdir(mode=0o700)
+    ensure_private_dir(restore_dir(root), root)
+    record = {
+        "format": 1,
+        "status": "committed",
+        "stage_id": UNRELATED_CHECK,
+        "data_dir": str(root.resolve()),
+        "confirmed_at": "2026-10-15T22:00:00Z",
+        "confirmed_by": CONFIRMED_BY,
+        "confirmed_via": "admin",
+        "backup_created_at": "2026-10-14T09:00:00Z",
+        "backup_app_version": "v1.2.0",
+        "action": "same",
+        "finished_at": "2026-10-15T23:00:00Z",
+    }
+    state_file(root).write_text(json.dumps(record), encoding="utf-8")
+    state_file(root).chmod(0o600)
+    state = apply.read_restore(root)
+    assert state is not None, "precondition: a state of before B5-1 is read"
+    owner = tuple(getattr(state, name, "<missing>") for name in ("owner_user_id", "owner_outcome", "owner_reset_path"))
+    assert owner == (None, None, None), f"no owner: {owner}"
+    print_success("no keys: no owner")
+
+
+# -----------------------------------------------------------------------------
+# (s) Lot B5-1, security addendum §7.2: the owner's address the check used, and the copy's conflicts
+# -----------------------------------------------------------------------------
+
+#: The copy's conflicts a check may report (§7.1).
+OWNER_CONFLICTS = ["address_is_a_username", "duplicate_email", "duplicate_username"]
+#: A report checked with an address that is no longer the owner's, without one, or written before the addendum.
+STALE_CHECKS = [
+    pytest.param("someone.else.b51@example.com", id="checked-with-another-address"),
+    pytest.param(None, id="checked-without-an-address"),
+    pytest.param(ABSENT, id="a-report-written-before-the-addendum"),
+]
+
+
+def refused_with(apply: Any, instance: Instance, chosen: int | None) -> Any:
+    """``confirm_restore`` via ``admin`` naming ``chosen``, expected refused: the error, once checked that nothing was
+    written (no state, nothing of ``.restore`` changed but its apply lock, no restore waiting)."""
+    before = but_the_apply_lock(instance.root)
+    with pytest.raises(apply.RestoreStateError) as raised:
+        apply.confirm_restore(instance.stage_id, confirmed_by=CONFIRMED_BY, confirmed_via="admin", owner_user_id=chosen, data_dir=instance.root, now=instance.confirm_at)
+    assert not lexists(state_file(instance.root)), f"({raised.value.code}) a refused confirmation writes no state"
+    assert but_the_apply_lock(instance.root) == before, f"({raised.value.code}) nothing of .restore changed: {cases.changed(before, but_the_apply_lock(instance.root))}"
+    assert apply.read_restore(instance.root) is None, f"({raised.value.code}) no restore waits"
+    return raised.value
+
+
+@pytest.mark.parametrize("chosen", [None, ADA["user_id"]], ids=["none-chosen", "a-valid-choice"])
+@pytest.mark.parametrize("checked_with", STALE_CHECKS)
+def test_a_managed_confirmation_of_a_check_made_with_another_owner_address_is_outdated(tmp_path, databases, checked, monkeypatch, checked_with, chosen):
+    """(s) B5-1 §7.2: ``managed``, via ``admin``: the owner's address now differs (``email_fold``) from the one the
+    check used, the check used none, or its report predates the addendum: ``restore_stage_outdated`` («check the
+    archive again»), before the choice itself is looked at (none chosen, or a valid one); nothing written."""
+    print_section("(s) B5-1 §7.2 a check made with another owner's address")
+    apply = apply_module()
+    b51_parameter(apply.confirm_restore, "owner_user_id")
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=OWNER_EMAIL, candidates=[ADA, ZOE], owner_email_checked=checked_with)
+    shown = "<absent>" if checked_with is ABSENT else repr(checked_with)
+    error = refused_with(apply, instance, chosen)
+    assert error.code == "restore_stage_outdated", f"checked with {shown}: restore_stage_outdated, not {error.code}: {error}"
+    print_success(f"{shown}: restore_stage_outdated")
+
+
+@pytest.mark.parametrize("checked_with", [OWNER_EMAIL.lower(), OWNER_EMAIL.upper()], ids=["lower-case", "upper-case"])
+def test_a_check_made_with_the_owner_s_address_in_another_case_is_not_outdated(tmp_path, databases, checked, monkeypatch, checked_with):
+    """(s) B5-1 §7.2: the same address in another A–Z case is the same address: the confirmation goes on, the choice
+    recorded."""
+    apply = apply_module()
+    b51_parameter(apply.confirm_restore, "owner_user_id")
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=OWNER_EMAIL, candidates=[ADA, ZOE], owner_email_checked=checked_with)
+    state = apply.confirm_restore(instance.stage_id, confirmed_by=CONFIRMED_BY, confirmed_via="admin", owner_user_id=ADA["user_id"], data_dir=instance.root, now=instance.confirm_at)
+    assert (state.status, state.owner_user_id) == ("pending", ADA["user_id"]), f"checked with {checked_with!r}: confirmed: {state}"
+    print_success(f"{checked_with!r}: confirmed")
+
+
+#: (the candidates, the id chosen): every kind of choice, a valid one included.
+EVERY_CHOICE = [
+    pytest.param([ADA, ZOE], None, id="none-chosen"),
+    pytest.param([ADA, ZOE], ADA["user_id"], id="an-active-administrator"),
+    pytest.param([ADA, OWEN, ZOE], OWEN["user_id"], id="the-forced-user"),
+    pytest.param([ADA, ZOE], NO_SUCH_USER, id="not-a-candidate"),
+]
+
+
+@pytest.mark.parametrize(("candidates", "chosen"), EVERY_CHOICE)
+@pytest.mark.parametrize("conflicts", [[code] for code in OWNER_CONFLICTS] + [OWNER_CONFLICTS], ids=[*OWNER_CONFLICTS, "all-three"])
+def test_a_managed_confirmation_of_a_copy_with_owner_conflicts_is_refused_whatever_the_choice(tmp_path, databases, checked, monkeypatch, conflicts, candidates, chosen):
+    """(s) B5-1 §7.2: ``managed``, via ``admin``: a report whose ``owner_conflicts`` is not empty is refused
+    ``owner_conflict`` (``RestoreOwnerConflictError``, a ``RestoreStateError``), whatever the choice — none, a valid
+    one, the forced one, one that is no candidate; nothing written."""
+    print_section("(s) B5-1 §7.2 owner conflicts")
+    apply = apply_module()
+    b51_parameter(apply.confirm_restore, "owner_user_id")
+    conflict_error = getattr(apply, "RestoreOwnerConflictError", None)
+    if conflict_error is None:
+        pytest.fail("[new] B5-1 §7.2: apply.RestoreOwnerConflictError does not exist yet", pytrace=False)
+    assert issubclass(conflict_error, apply.RestoreStateError) and conflict_error.code == "owner_conflict", f"RestoreOwnerConflictError is a RestoreStateError of code owner_conflict: {conflict_error.__mro__}, {conflict_error.code}"
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=OWNER_EMAIL, candidates=candidates, owner_conflicts=conflicts)
+    error = refused_with(apply, instance, chosen)
+    assert (type(error).__name__, error.code) == ("RestoreOwnerConflictError", "owner_conflict"), f"{conflicts}, choice {chosen}: owner_conflict, not {type(error).__name__} {error.code}: {error}"
+    print_success(f"{conflicts}, choice {chosen}: owner_conflict")
+
+
+@pytest.mark.parametrize(("profile", "via"), [("managed", "panel"), ("managed", "cli"), ("selfhosted", "admin")])
+def test_only_a_managed_administrators_confirmation_reads_the_owner_s_address_and_conflicts(tmp_path, databases, checked, monkeypatch, profile, via):
+    """(s) B5-1 §7.2: the hosting panel, the command line and a self-hosted instance never ask the owner's choice: a
+    report checked with another address and holding every conflict is confirmed as before (a guard)."""
+    apply = apply_module()
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile=profile, owner_email=OWNER_EMAIL, candidates=[ADA, ZOE], owner_email_checked="someone.else.b51@example.com", owner_conflicts=OWNER_CONFLICTS)
+    state = apply.confirm_restore(instance.stage_id, confirmed_by=CONFIRMED_BY if via == "admin" else via, confirmed_via=via, data_dir=instance.root, now=instance.confirm_at)
+    assert (state.status, state.confirmed_via) == ("pending", via), f"{profile} via {via}: confirmed as before: {state}"
+    print_success(f"{profile} via {via}: confirmed")
+
+
+# =============================================================================
+# (t) Lot B5-1, security addendum §7.5: the chosen account closed at the commit
+# =============================================================================
+#
+# Whoever prepared the backup knows the password of the account the owner chose. From the commit on — before A's call,
+# and whether it ever comes — that password opens nothing: the account gets a bcrypt hash of a secret nobody sees, in
+# the commit's own transaction, and, when the owner's address is set and no other account holds it, that address and
+# the role of a protected administrator.
+
+#: The password whoever prepared the backup gave every account of it.
+BACKUP_PASSWORD = "b51-the-backup-s-own-password"
+#: A bcrypt hash, as ``auth_service.hash_password`` makes one.
+BCRYPT_HASH = re.compile(r"\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}")
+#: The backup's accounts by name (``test_backup_staging.ACCOUNTS``) and their ids in the copy.
+BOB_ID = 2
+#: Bob holding the owner's address, his account disabled: the forced choice, neither active nor an administrator.
+BOB_HOLDER = {"user_id": BOB_ID, "username": "bob_user", "email": "OWNER.b51@EXAMPLE.com", "is_superuser": False, "is_active": False}
+#: A's column (its migration 006, not in this branch): set to 1 for the chosen account only when it exists.
+OWNER_COLUMN = "is_instance_owner"
+
+
+def accounts_of(database: Path) -> dict[str, dict[str, Any]]:
+    """Every account of ``database``, each row by column name, by username."""
+    with closing(cases.read_only(database)) as conn:
+        cursor = conn.execute("SELECT * FROM users")
+        columns = [column[0] for column in cursor.description]
+        return {row["username"]: row for row in (dict(zip(columns, values, strict=True)) for values in cursor.fetchall())}
+
+
+def with_backup_passwords(database: Path) -> dict[str, str]:
+    """Every account of ``database`` given a real bcrypt hash of ``BACKUP_PASSWORD``, each its own salt: the hashes by
+    username."""
+    with closing(sqlite3.connect(database)) as conn, conn:
+        for (username,) in conn.execute("SELECT username FROM users").fetchall():
+            conn.execute("UPDATE users SET hashed_password = ? WHERE username = ?", (auth_service.hash_password(BACKUP_PASSWORD), username))
+    hashes = {name: row["hashed_password"] for name, row in accounts_of(database).items()}
+    assert all(auth_service.verify_password(BACKUP_PASSWORD, value) for value in hashes.values()), "precondition: the backup's password opens every account"
+    return hashes
+
+
+def state_owner_is(root: Path, user_id: int) -> None:
+    """``owner_user_id`` of the waiting restore rewritten in ``restore.json``: what the commit reads, whatever the
+    confirmation allowed."""
+    path = state_file(root)
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record["owner_user_id"] = user_id
+    path.write_text(json.dumps(record), encoding="utf-8")
+
+
+def committed_after(apply: Any, instance: Instance, *, via: str = "admin", owner_user_id: int | None = None, before_apply: Callable[[], None] | None = None, before_commit: Callable[[], None] | None = None) -> tuple[Any, list[dict[str, Any]]]:
+    """The instance's restore confirmed (via ``via``, naming ``owner_user_id``), applied and committed as a start does;
+    ``before_apply`` run once it is confirmed, ``before_commit`` once it is applied. The state, and what the commit
+    logged (its canary left out)."""
+    by = CONFIRMED_BY if via == "admin" else via
+    if owner_user_id is None:
+        apply.confirm_restore(instance.stage_id, confirmed_by=by, confirmed_via=via, data_dir=instance.root, now=instance.confirm_at)
+    else:
+        apply.confirm_restore(instance.stage_id, confirmed_by=by, confirmed_via=via, owner_user_id=owner_user_id, data_dir=instance.root, now=instance.confirm_at)
+    if before_apply is not None:
+        before_apply()
+    boot = never_ran(apply)
+    apply.apply_pending_restore(instance.root, boot=boot, now=instance.applied_at)
+    if before_commit is not None:
+        before_commit()
+    with logs() as events:
+        state = apply.finish_pending_restore(instance.root, boot=boot, now=instance.committed_at)
+    return state, [event for event in events if event.get("event") != LOG_CANARY]
+
+
+def configured_address() -> str:
+    """The owner's address as the configuration reads it (``configured_owner_email()``)."""
+    from backend.app.services.platform.instance_backup.owner import configured_owner_email  # noqa: PLC0415
+
+    address = configured_owner_email()
+    assert address is not None, "precondition: the owner's address is set"
+    return address
+
+
+def closed(chosen: dict[str, Any], backup_hash: str) -> None:
+    """The chosen account's password: a real bcrypt hash, not the backup's, which the backup's password no longer
+    opens."""
+    stored = chosen["hashed_password"]
+    assert stored != backup_hash, "the chosen account's hash is not the backup's"
+    assert BCRYPT_HASH.fullmatch(stored or ""), f"the chosen account holds a real bcrypt hash (length {len(stored or '')})"
+    assert not auth_service.verify_password(BACKUP_PASSWORD, stored), "the backup's password no longer opens the chosen account"
+
+
+def untouched_but(before: dict[str, dict[str, Any]], after: dict[str, dict[str, Any]], *names: str) -> None:
+    """Every account but ``names`` as the backup held it, its session version aside (the commit's own)."""
+    left = {name: {key: value for key, value in row.items() if key != "session_version"} for name, row in before.items() if name not in names}
+    now = {name: {key: value for key, value in row.items() if key != "session_version"} for name, row in after.items() if name not in names}
+    assert now == left, f"the other accounts as the backup held them: {sorted(name for name in left if left[name] != now.get(name))}"
+
+
+def nothing_secret_logged(events: list[dict[str, Any]], *texts: str) -> None:
+    """No log line of the commit holds an address, a username, a hash or the backup's password, in any case."""
+    lines = repr(events).lower()
+    shown = sorted({text for text in texts if text and text.lower() in lines})
+    assert shown == [], f"the commit's log holds {len(shown)} secret(s) or personal value(s): {shown}"
+
+
+def owner_line(events: list[dict[str, Any]], stage_id: str, user_id: int) -> list[Any]:
+    """The ``assigned`` of each line of the commit naming the restore's stage and the chosen account."""
+    return [event.get("assigned") for event in events if event.get("stage_id") == stage_id and event.get("user_id") == user_id and "assigned" in event]
+
+
+def b51_close_parameter(apply: Any) -> None:
+    """``_close_the_way_in`` takes ``owner_user_id`` (default ``None``); before §7.5, a failure that says so."""
+    parameter = inspect.signature(apply._close_the_way_in).parameters.get("owner_user_id")
+    if parameter is None:
+        pytest.fail("[new] B5-1 §7.5: apply._close_the_way_in() takes no owner_user_id yet", pytrace=False)
+    assert parameter.default is None, f"owner_user_id defaults to None: {parameter.default!r}"
+
+
+#: (the chosen account by name, what the copy holds for it first, the candidates).
+CHOSEN_ACCOUNTS = [
+    pytest.param("ada_admin", None, [ADA, ZOE], id="an-active-administrator"),
+    pytest.param("bob_user", BOB_HOLDER, [ADA, BOB_HOLDER, ZOE], id="the-address-holder-a-disabled-plain-user"),
+]
+
+
+@pytest.mark.parametrize(("chosen_name", "holder", "candidates"), CHOSEN_ACCOUNTS)
+def test_the_commit_closes_the_chosen_account_and_gives_it_the_owner_s_address(tmp_path, databases, checked, monkeypatch, chosen_name, holder, candidates):
+    """(t) B5-1 §7.5: a restore confirmed from the app of a managed instance, naming an account: at the commit, that
+    account holds a real bcrypt hash that is not the backup's and that the backup's password does not open; its email
+    is the owner's address, ``is_superuser`` and ``is_active`` 1 (A's ``is_instance_owner`` column absent here: no
+    error). Every other account as the backup held it; the restore committed. One line names the stage, the account and
+    ``assigned`` true; no line holds an address, a username, a hash or the password."""
+    print_section("(t) B5-1 §7.5 the chosen account closed at the commit")
+    apply = apply_module()
+    b51_parameter(apply.confirm_restore, "owner_user_id")
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=OWNER_EMAIL, candidates=candidates)
+    copy_database = instance.copy / DATABASE_ENTRY
+    if holder is not None:
+        cases.execute(copy_database, f"UPDATE users SET email = '{holder['email']}', is_active = 0 WHERE id = {holder['user_id']}")
+    hashes = with_backup_passwords(copy_database)
+    before = accounts_of(copy_database)
+    chosen_id = before[chosen_name]["id"]
+    assert OWNER_COLUMN not in before[chosen_name], f"precondition: A's {OWNER_COLUMN} is not in this branch's schema"
+    state, events = committed_after(apply, instance, owner_user_id=chosen_id)
+    assert (state.status, state.owner_user_id) == ("committed", chosen_id), f"committed, the owner {chosen_id}: {state}"
+    after = accounts_of(instance.root / DATABASE_ENTRY)
+    chosen = after[chosen_name]
+    closed(chosen, hashes[chosen_name])
+    address = configured_address()
+    assert (chosen["email"], chosen["is_superuser"], chosen["is_active"]) == (address, 1, 1), f"the owner's address, an active administrator: {(chosen['email'] == address, chosen['is_superuser'], chosen['is_active'])}"
+    untouched_but(before, after, chosen_name)
+    assert owner_line(events, instance.stage_id, chosen_id) == [True], f"one line: stage, account, assigned true: {logged(events)}"
+    nothing_secret_logged(events, OWNER_EMAIL, address, BOB_HOLDER["email"], BACKUP_PASSWORD, chosen["hashed_password"], *hashes.values(), *(row["email"] for row in before.values()), *before)
+    print_success(f"{chosen_name}: closed, the owner's address, an active administrator")
+
+
+def test_the_commit_marks_the_instance_owner_where_a_s_column_exists(tmp_path, databases, checked, monkeypatch):
+    """(t) B5-1 §7.5: where the restored database has A's ``is_instance_owner`` column (its migration 006), the chosen
+    account gets 1 there, every other account keeps its 0."""
+    apply = apply_module()
+    b51_parameter(apply.confirm_restore, "owner_user_id")
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=OWNER_EMAIL, candidates=[ADA, ZOE])
+    copy_database = instance.copy / DATABASE_ENTRY
+    cases.execute(copy_database, f"ALTER TABLE users ADD COLUMN {OWNER_COLUMN} BOOLEAN NOT NULL DEFAULT 0")
+    hashes = with_backup_passwords(copy_database)
+    state, _events = committed_after(apply, instance, owner_user_id=ADA["user_id"])
+    assert state.status == "committed", f"committed: {state}"
+    after = accounts_of(instance.root / DATABASE_ENTRY)
+    closed(after["ada_admin"], hashes["ada_admin"])
+    marked = {name: row[OWNER_COLUMN] for name, row in after.items()}
+    assert marked == {name: int(name == "ada_admin") for name in after}, f"{OWNER_COLUMN}: the chosen account only: {marked}"
+    print_success(f"{OWNER_COLUMN}: ada only")
+
+
+def test_when_another_account_holds_the_owner_s_address_only_the_password_changes(tmp_path, databases, checked, monkeypatch):
+    """(t) B5-1 §7.5: another account of the backup holds the owner's address (A–Z case aside): the chosen account's
+    password is closed and nothing else of it changes — its email, its role, its state —, the holder keeps its address
+    (the unique index never violated, no ``IntegrityError``), the restore committed. A warning names the stage and the
+    account, the line says ``assigned`` false; never the address."""
+    apply = apply_module()
+    b51_parameter(apply.confirm_restore, "owner_user_id")
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=OWNER_EMAIL, candidates=[ADA, ZOE])
+    copy_database = instance.copy / DATABASE_ENTRY
+    holder_email = "OWNER.b51@EXAMPLE.com"
+    # After the check: the report names no holder, so the confirmation allows ada; the commit reads the database.
+    cases.execute(copy_database, f"UPDATE users SET email = '{holder_email}' WHERE username = 'zoe_admin'")
+    hashes = with_backup_passwords(copy_database)
+    before = accounts_of(copy_database)
+    try:
+        state, events = committed_after(apply, instance, owner_user_id=ADA["user_id"])
+    except sqlite3.IntegrityError as exc:
+        pytest.fail(f"the commit violated the unique index of the addresses: {type(exc).__name__}", pytrace=False)
+    assert state.status == "committed", f"committed all the same: {state}"
+    after = accounts_of(instance.root / DATABASE_ENTRY)
+    ada = after["ada_admin"]
+    closed(ada, hashes["ada_admin"])
+    assert {key: value for key, value in ada.items() if key not in ("hashed_password", "session_version")} == {key: value for key, value in before["ada_admin"].items() if key not in ("hashed_password", "session_version")}, "only ada's password changed"
+    untouched_but(before, after, "ada_admin")
+    assert owner_line(events, instance.stage_id, ADA["user_id"]) == [False], f"one line: stage, account, assigned false: {logged(events)}"
+    warned = [event for event in events if event.get("log_level") in ("warning", "error", "critical") and event.get("user_id") == ADA["user_id"] and event.get("stage_id") == instance.stage_id]
+    assert warned, f"a warning names the stage and the account: {logged(events)}"
+    nothing_secret_logged(events, OWNER_EMAIL, holder_email, configured_address(), BACKUP_PASSWORD, ada["hashed_password"], *hashes.values(), *before)
+    print_success("another holder: only the password, committed")
+
+
+def test_without_the_owner_s_address_at_the_commit_only_the_password_changes(tmp_path, databases, checked, monkeypatch):
+    """(t) B5-1 §7.5: the owner's address unset when the commit runs: the chosen account (here a plain user, named in
+    the state) has its password closed, and keeps its email, its role and its state."""
+    apply = apply_module()
+    b51_parameter(apply.confirm_restore, "owner_user_id")
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=OWNER_EMAIL, candidates=[ADA, ZOE])
+    copy_database = instance.copy / DATABASE_ENTRY
+    hashes = with_backup_passwords(copy_database)
+    before = accounts_of(copy_database)
+    assert before["bob_user"]["id"] == BOB_ID and before["bob_user"]["is_superuser"] == 0, "precondition: bob is a plain user"
+    state, events = committed_after(apply, instance, owner_user_id=ADA["user_id"], before_apply=lambda: state_owner_is(instance.root, BOB_ID), before_commit=lambda: owner_email_is(monkeypatch, None))
+    assert (state.status, state.owner_user_id) == ("committed", BOB_ID), f"committed, the owner bob: {state}"
+    after = accounts_of(instance.root / DATABASE_ENTRY)
+    bob = after["bob_user"]
+    closed(bob, hashes["bob_user"])
+    assert {key: value for key, value in bob.items() if key not in ("hashed_password", "session_version")} == {key: value for key, value in before["bob_user"].items() if key not in ("hashed_password", "session_version")}, "only bob's password changed"
+    untouched_but(before, after, "bob_user")
+    nothing_secret_logged(events, OWNER_EMAIL, BACKUP_PASSWORD, bob["hashed_password"], *hashes.values(), *before)
+    print_success("no address: only the password")
+
+
+def test_an_owner_the_restored_database_does_not_hold_changes_nothing_and_the_commit_goes_on(tmp_path, databases, checked, monkeypatch):
+    """(t) B5-1 §7.5: the state names an account the restored database does not hold: no account touched, a warning
+    naming the stage and the id, the restore committed."""
+    apply = apply_module()
+    b51_parameter(apply.confirm_restore, "owner_user_id")
+    b51_close_parameter(apply)
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=OWNER_EMAIL, candidates=[ADA, ZOE])
+    copy_database = instance.copy / DATABASE_ENTRY
+    with_backup_passwords(copy_database)
+    before = accounts_of(copy_database)
+    state, events = committed_after(apply, instance, owner_user_id=ADA["user_id"], before_apply=lambda: state_owner_is(instance.root, NO_SUCH_USER))
+    assert (state.status, state.owner_user_id) == ("committed", NO_SUCH_USER), f"committed: {state}"
+    untouched_but(before, accounts_of(instance.root / DATABASE_ENTRY))
+    warned = [event for event in events if event.get("log_level") in ("warning", "error", "critical") and event.get("user_id") == NO_SUCH_USER and event.get("stage_id") == instance.stage_id]
+    assert warned, f"a warning names the stage and the id: {logged(events)}"
+    print_success("no such account: nothing touched, committed")
+
+
+@pytest.mark.parametrize(("profile", "via"), [("managed", "cli"), ("managed", "panel"), ("selfhosted", "admin")])
+def test_a_restore_without_an_owner_touches_no_password_at_the_commit(tmp_path, databases, checked, monkeypatch, profile, via):
+    """(t) B5-1 §7.5: a restore confirmed on the command line, by the hosting panel, or on a self-hosted instance names
+    no owner: at the commit every account is as the backup held it (its session version aside), as before.
+    Barrier: ``_close_the_way_in`` takes ``owner_user_id``."""
+    apply = apply_module()
+    b51_close_parameter(apply)
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile=profile, owner_email=OWNER_EMAIL, candidates=[ADA, ZOE])
+    copy_database = instance.copy / DATABASE_ENTRY
+    with_backup_passwords(copy_database)
+    before = accounts_of(copy_database)
+    state, _events = committed_after(apply, instance, via=via)
+    assert (state.status, state.owner_user_id) == ("committed", None), f"{profile} via {via}: committed, no owner: {state}"
+    untouched_but(before, accounts_of(instance.root / DATABASE_ENTRY))
+    print_success(f"{profile} via {via}: no password touched")
+
+
+@pytest.mark.asyncio
+async def test_close_the_way_in_without_an_owner_keeps_its_contract(tmp_path, databases, checked):
+    """(t) B5-1 §7.5: ``_close_the_way_in(data_dir, now)`` — no ``owner_user_id`` — answers ``(value, revoked)`` and
+    changes only the session versions and the live links, as (h) pins; ``owner_user_id`` defaults to ``None``."""
+    apply = apply_module()
+    b51_close_parameter(apply)
+    instance = build(tmp_path / "instance", databases, checked)
+    now = restore_time_of(instance, "utc")
+    await written(instance.copy / DATABASE_ENTRY, RESTORED_LINKS, now)
+    with_backup_passwords(instance.copy / DATABASE_ENTRY)
+    confirm(apply, instance)
+    apply.apply_pending_restore(instance.root, boot=never_ran(apply), now=instance.applied_at)
+    database = instance.root / DATABASE_ENTRY
+    before = accounts_of(database)
+    assert apply._close_the_way_in(instance.root, now) == (millis(now), LIVE_RESTORED), "(the session value, the links revoked)"
+    untouched_but(before, accounts_of(database))
+    print_success("no owner: the contract of (h)")
+
+
+@pytest.mark.asyncio
+async def test_the_owner_s_password_changes_with_the_sessions_and_the_links_or_not_at_all(tmp_path, databases, checked, monkeypatch):
+    """(t) B5-1 §7.5: the owner's account is closed in the commit's own transaction: a trigger of the restored database
+    refusing the update of a password leaves the session versions and the links unchanged too. Whether the refusal
+    reaches the caller is not this test's question."""
+    apply = apply_module()
+    b51_close_parameter(apply)
+    use_profile(monkeypatch, "managed")
+    owner_email_is(monkeypatch, OWNER_EMAIL)
+    instance = build(tmp_path / "instance", databases, checked)
+    now = restore_time_of(instance, "utc")
+    await written(instance.copy / DATABASE_ENTRY, RESTORED_LINKS, now)
+    apply.confirm_restore(instance.stage_id, confirmed_by="cli", confirmed_via="cli", data_dir=instance.root, now=instance.confirm_at)
+    apply.apply_pending_restore(instance.root, boot=never_ran(apply), now=instance.applied_at)
+    database = instance.root / DATABASE_ENTRY
+    cases.execute(database, "CREATE TRIGGER b51_refused BEFORE UPDATE OF hashed_password ON users BEGIN SELECT RAISE(ABORT, 'refused by the test'); END")
+    snapshot = rows_by_table(database)
+    try:
+        outcome: object = apply._close_the_way_in(instance.root, now, owner_user_id=ADA["user_id"])
+    except Exception as exc:  # whether the refusal reaches the caller is not this test's question
+        outcome = exc
+    assert rows_by_table(database) == snapshot, f"the owner's password refused: neither the sessions nor the links may have changed ({type(outcome).__name__})"
+    print_success("the password refused: nothing changed")
