@@ -549,7 +549,7 @@ passwords: wait a few minutes and try again.*): the modal for a `429` whose `det
 keeping its three fields; the tab for that code, published as `data-error-code`, keeping the new address and the typed
 password ([ProfileTab](../frontend/components/features/settings.md#profiletab)). While the limit is off, the «Security»
 tab of Settings › Administration lists the warning of `accounts.login_limit` and counts it in its badge. The
-administrator's side is [Configuration](../../admin/configuration.md), section «Failed Sign-ins».
+administrator's side is [Configuration](../../admin/configuration_accounts.md#login-limit), section «Failed Sign-ins».
 
 Tests: `./dev.py test services login-throttle` (`backend/test_scripts/test_services/test_login_throttle.py`: the two
 limits on an injected clock, the A–Z key, the IPv6 /64, no address and no shared count of «no address», a refusal not
@@ -813,7 +813,7 @@ only when no copy exists.
 Tests: `./dev.py test services config-secrets` (`env_secret()`) and
 `./dev.py test services config-instance-key`, whose section (g) pins `derive_key_from()` to three
 known answers computed with `derive_key()` before the two shared their helpers. What the
-administrator sees and does is in [Configuration](../../admin/configuration.md), section «The
+administrator sees and does is in [Configuration](../../admin/configuration_secrets.md#instance-key), section «The
 Instance Key».
 
 ### 🔐 Secure Backups (`.lfbk`) {: #secure-backups }
@@ -1147,7 +1147,7 @@ start log, not only at the hosting panel's first call, at the first restore uplo
 - **In `CONFIG_CHECKS`.** `BACKUP_CONFIG_CHECKS = (check_panel_token, check_upload_limit, check_restore_limit, check_recipients)` is unpacked in
   `CONFIG_CHECKS` right after `check_test_mode`, the last of the platform's, before workstream A's `ACCOUNTS_CONFIG_CHECKS` and E's
   `*EMAIL_CONFIG_CHECKS`, which still close the tuple. The startup audit logs their
-  error states as errors, each with its `summary`, a line naming its variable (quoted in «Startup Checks» of [Configuration](../../admin/configuration.md)), and the start goes on. The routes are unchanged: `503`, and their own
+  error states as errors, each with its `summary`, a line naming its variable (quoted in «Startup Checks» of [Configuration](../../admin/configuration_security.md#startup-checks)), and the start goes on. The routes are unchanged: `503`, and their own
   error line at each call.
 - **The import.** `config_audit` imports this module to build its tuple, so `checks.py` imports `ConfigCheck` only
   when a check runs, as E's `checks.py` does ([Email Service](../backend/email.md#configuration-checks)): either module
@@ -1392,7 +1392,7 @@ Tests: `./dev.py test services config-audit` (the order of `CONFIG_CHECKS` inclu
 A's, then E's three; and the two checks of the managed profile's switches in every state, a `PROFILE_DEFAULTS` entry
 removed included); the stop on a `LIBREFOLIO_ADMIN_*` value is in `./dev.py test services admin-bootstrap`, the check
 `accounts.login_limit` and the stop on a `LIBREFOLIO_LOGIN_LIMIT` value in `./dev.py test services accounts-checks`.
-What the administrator sees and does is in [Configuration](../../admin/configuration.md), section «Startup Checks»,
+What the administrator sees and does is in [Configuration](../../admin/configuration_security.md#startup-checks), section «Startup Checks»,
 and in the app in «Security» of [Global Settings](../../admin/settings.md).
 
 ### 🧩 Plugin Secrets Check {: #plugin-secrets-check }
@@ -1436,7 +1436,7 @@ entered again or the old key is restored.
 Tests: `./dev.py test services plugin-secrets-check`
 (`backend/test_scripts/test_services/test_plugin_secrets_check.py`), and the step's place in
 `./dev.py test services app-lifecycle`. What the administrator sees and does is in
-[Configuration](../../admin/configuration.md), section «Startup Checks».
+[Configuration](../../admin/configuration_security.md#startup-checks), section «Startup Checks».
 
 ### 📋 The Checks on Demand {: #security-checks-endpoint }
 
@@ -1467,7 +1467,7 @@ Each check has a guide, the section of the admin guide that explains it. The map
 its answer; `browser`, the findings the browser adds to the tab, today `accounts.openRegistration`
 (`OPEN_REGISTRATION_NOTICE_ID`, [The Open-Registration Warning](#open-registration-warning)). Each value is a path
 below `/mkdocs/` without the language, which `DocsLink` adds: `admin/<page>/#<anchor>`, such as
-`admin/configuration/#frame-protection` for `platform.frame_protection`. The tab's «Guide» button (workstream A, N69d)
+`admin/configuration_security/#frame-protection` for `platform.frame_protection`. The tab's «Guide» button (workstream A, N69d)
 reads it through `checkGuidePath(id)` of `checkGuides.ts`, beside the map. A new check needs its entry, and its anchor
 must be an explicit `{: #… }` of the English page: `./dev.py test services config-audit` fails when a check of the
 server has no entry, or an entry no check, and `./dev.py test front-utility core-unit` (`checkGuides.test.ts`) when an
@@ -1591,7 +1591,7 @@ shape:
 
 ### 🔒 Private Endpoints (auth required)
 
-All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and the global settings: any signed-in user reads them through `GET /settings/global` and `GET /settings/global/{key}`, only an administrator writes them; the login page needs none of them, it reads `/system/instance`), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), the catch-up of the prices (`/system/price-refresh`, see [Catch-up Progress](../backend/scheduler.md#price-refresh)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. The routes of the hosting panel take a token of their own instead of a session cookie, one per scope, sent as `Authorization: Bearer`: the backup routes (`/backup/panel/*`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`), the [scheduled wake-up](../../admin/sleep_wake.md#wake-sync) (`/system/wake-sync`, `LIBREFOLIO_WAKE_TOKEN`) and the setup status (`/panel/status`, `LIBREFOLIO_PANEL_STATUS_TOKEN`); the panel's restore (`/backup/panel/restore/*`, scope `backup:restore`) takes a signed ticket only, never a token. One dependency checks them all, `panel_access(scope)`: a missing or wrong token answers `401`, too many refused ones from an address `429`, and while a scope's token is not set its routes answer `404`, as a path that does not exist: see [The Hosting Panel's Access](#panel-access) below. The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api). So does `GET /security/checks`, the configuration checks on demand: see [The Checks on Demand](#security-checks-endpoint).
+All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and the global settings: any signed-in user reads them through `GET /settings/global` and `GET /settings/global/{key}`, only an administrator writes them; the login page needs none of them, it reads `/system/instance`), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), the catch-up of the prices (`/system/price-refresh`, see [Catch-up Progress](../backend/scheduler.md#price-refresh)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. The routes of the hosting panel take a token of their own instead of a session cookie, one per scope, sent as `Authorization: Bearer`: the backup routes (`/backup/panel/*`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`), the [scheduled wake-up](../../admin/wake_sync.md#wake-sync) (`/system/wake-sync`, `LIBREFOLIO_WAKE_TOKEN`) and the setup status (`/panel/status`, `LIBREFOLIO_PANEL_STATUS_TOKEN`); the panel's restore (`/backup/panel/restore/*`, scope `backup:restore`) takes a signed ticket only, never a token. One dependency checks them all, `panel_access(scope)`: a missing or wrong token answers `401`, too many refused ones from an address `429`, and while a scope's token is not set its routes answer `404`, as a path that does not exist: see [The Hosting Panel's Access](#panel-access) below. The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api). So does `GET /security/checks`, the configuration checks on demand: see [The Checks on Demand](#security-checks-endpoint).
 
 !!! info "📁 Files are protected too"
 
@@ -1933,7 +1933,7 @@ path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint func
 | `GET /system/block`, `GET /system/instance` | `block.get_instance_block`, `instance.get_instance_config` | The block page |
 | `GET /system/health`, `GET /system/ready`, `GET /system/info` | `health.health_check`, `ready.get_readiness`, `info.get_system_info` | Probes and version |
 | `GET /system/test-lane-health` | `health.test_lane_health` | The test runner's probe, `404` outside test mode |
-| `POST /system/wake-sync` | `wake.wake_sync` | The [scheduled wake-up](../../admin/sleep_wake.md#wake-sync), with its own token instead of a session: on a blocked instance it runs no job and answers `200` with `status: "blocked"` (decision D-W3) |
+| `POST /system/wake-sync` | `wake.wake_sync` | The [scheduled wake-up](../../admin/wake_sync.md#wake-sync), with its own token instead of a session: on a blocked instance it runs no job and answers `200` with `status: "blocked"` (decision D-W3) |
 | `GET /panel/status` | `panel.get_panel_status` | The hosting panel's [setup status](../../admin/hosting_providers.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status), with its own token instead of a session (lot H-61): it answers as on any other instance. Besides the setup, the `mode` and the `restore`, it holds two counts, `users_used` and `users_limit` (lot H5-1), never a name or an address |
 | The seven `/backup/panel/restore…` routes | `_PANEL_RESTORE_ROUTES` of `instance_block.py` (`backup_panel_restore.*`) | The panel's restore, with its ticket instead of a session (lot H-62): past the ticket each route answers `423 instance_blocked` itself, so a caller without a valid ticket learns nothing of the block. No restore happens on a blocked instance ([Awaiting Restore](#await-restore)) |
 
@@ -2832,7 +2832,7 @@ restore waiting and the ticket of its outcome ([The Outcome Ticket](#backup-rest
 a `BackgroundTask` calls `restart.request_restart()`, which logs a warning
 and sends SIGTERM to the server's root process (`restart.server_pid()`, as for the boot): uvicorn's master stops its
 workers, and the shutdown budget bounds the stop («Stopping the Server» in
-[Configuration](../../admin/configuration.md)). The route answers `409` `restore_not_pending` unless a restore waits,
+[Configuration](../../admin/configuration_security.md#shutdown)). The route answers `409` `restore_not_pending` unless a restore waits,
 so an administrator stops the server only to apply one; on a blocked instance it is refused like the others. The
 signal goes through `restart.send_signal`, `os.kill` by default, read at each call: the tests replace it and never
 stop a real server. Since the signal goes to the root process, the next start is one of the whole server, which finds
@@ -3392,7 +3392,7 @@ mesh widened only where it is truly needed). Two `bool` switches of `Settings`, 
 `.env` wins over the profile. In the managed profile, a switch that is off shows in the
 [configuration checks](#configuration-checks): `platform.frame_protection`, a `warning`, and `platform.csp_report_only`,
 an `info` (H-39). The enforced policy has no check: it cannot be off. For administrators:
-«The Content-Security-Policy» in [Configuration](../../admin/configuration.md).
+«The Content-Security-Policy» in [Configuration](../../admin/configuration_security.md#csp).
 
 One `Content-Security-Policy` field per response (never two), and the module's docstring
 (`backend/app/services/platform/security_headers.py`) is the reference:
@@ -3573,7 +3573,7 @@ else (`frontend/src/lib/features/security/cspNotice.ts`):
   `(function anonymous(\n) {\nreturn this\n})` (the same entry as
   [the E2E baseline](../test-walkthrough/e2e.md#csp-baseline)'s `cheetah-grid-global-probe`);
 - anything else enforced: one `console.error` per page load, `LibreFolio blocked a script it did not send (<origin, inline
-  or eval>): a proxy, a CDN or a browser extension adds it. Guide: <origin>/mkdocs/admin/configuration/#csp`, and its
+  or eval>): a proxy, a CDN or a browser extension adds it. Guide: <origin>/mkdocs/admin/configuration_security/#csp`, and its
   source added once to `sessionStorage['librefolio-csp-blocked']`, a JSON array of distinct strings; storage failures are
   swallowed;
 - the Security tab's browser check `platform.blockedScript` (`securityFindings.ts`, guide entry in `checkGuides.json`) is a
@@ -3787,7 +3787,7 @@ the lesser harm: `forwarded_by_untrusted_proxy()` recognises them, and `rate_lim
   the check asks for.
 
 For administrators: «The Visitor's Address» in
-[Checking Connection Security](../../admin/connection_checks.md#reverse-proxy).
+[Checking Connection Security](../../admin/connection_proxy.md#reverse-proxy).
 
 Tests: `./dev.py test services client-address` (`backend/test_scripts/test_services/test_client_address.py`).
 

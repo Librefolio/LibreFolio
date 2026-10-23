@@ -187,6 +187,17 @@ plugins:
             Host Installation: Installazione su Host
             Expose Securely: Esporre in Sicurezza
             Check Connection Security: Verificare la Sicurezza della Connessione
+            # DOC-1: the nav labels of the split admin guide
+            "Public Access (Funnel)": "Accesso pubblico (Funnel)"
+            "Reverse Proxy": "Reverse Proxy"
+            "Sleep and Wake": "Sospensione e risveglio"
+            "Scheduled Wake-up": "Risveglio programmato"
+            "Secrets and Plugins": "Segreti e plugin"
+            "Checks and Protections": "Controlli e protezioni"
+            "Accounts and Asset Search": "Account e ricerca asset"
+            "Setup": "Impostazione"
+            "Links and Messages": "Link e messaggi"
+            "Troubleshooting": "Risoluzione dei problemi"
             "📚 Financial Theory": "📚 Teoria Finanziaria"
             "🏷️ Asset Types": "🏷️ Tipi di Asset"
             "🔄 Transaction Types": "🔄 Tipi di Transazione"
@@ -435,6 +446,17 @@ plugins:
             Host Installation: Installation sur l'Hôte
             Expose Securely: Exposer en Sécurité
             Check Connection Security: Vérifier la Sécurité de la Connexion
+            # DOC-1: the nav labels of the split admin guide
+            "Public Access (Funnel)": "Accès public (Funnel)"
+            "Reverse Proxy": "Reverse proxy"
+            "Sleep and Wake": "Veille et réveil"
+            "Scheduled Wake-up": "Réveil programmé"
+            "Secrets and Plugins": "Secrets et plugins"
+            "Checks and Protections": "Contrôles et protections"
+            "Accounts and Asset Search": "Comptes et recherche d'actifs"
+            "Setup": "Mise en place"
+            "Links and Messages": "Liens et messages"
+            "Troubleshooting": "Dépannage"
             "📚 Financial Theory": "📚 Théorie Financière"
             "🏷️ Asset Types": "🏷️ Types d'Actifs"
             "🔄 Transaction Types": "🔄 Types de Transactions"
@@ -683,6 +705,17 @@ plugins:
             Host Installation: Instalación en Host
             Expose Securely: Exponer en Seguridad
             Check Connection Security: Comprobar la Seguridad de la Conexión
+            # DOC-1: the nav labels of the split admin guide
+            "Public Access (Funnel)": "Acceso público (Funnel)"
+            "Reverse Proxy": "Proxy inverso"
+            "Sleep and Wake": "Suspensión y reactivación"
+            "Scheduled Wake-up": "Reactivación programada"
+            "Secrets and Plugins": "Secretos y plugins"
+            "Checks and Protections": "Comprobaciones y protecciones"
+            "Accounts and Asset Search": "Cuentas y búsqueda de activos"
+            "Setup": "Puesta en marcha"
+            "Links and Messages": "Enlaces y mensajes"
+            "Troubleshooting": "Solución de problemas"
             "📚 Financial Theory": "📚 Teoría Financiera"
             "🏷️ Asset Types": "🏷️ Tipos de Activos"
             "🔄 Transaction Types": "🔄 Tipos de Transacciones"
@@ -845,6 +878,8 @@ extra_javascript:
   - javascripts/site-lang-selector.js
   # Gallery image loader - auto-resolves screenshot paths on any page
   - javascripts/gallery-img-loader.js
+  # Anchors that moved when the long admin pages were split (DOC-1): old addresses with an anchor reach the new page
+  - javascripts/moved-anchors.js
   # Buy Me a Coffee widget + header button
   - javascripts/bmc-widget.js
 
@@ -970,13 +1005,26 @@ nav:
       - 🐳 Deployment & Exposure:
           - Host Installation: admin/host_installation.md
           - Advanced Docker: admin/docker_advanced.md
-          - Expose Securely: admin/service_exposure.md
-          - Check Connection Security: admin/connection_checks.md
+          - Expose Securely:
+              - Overview: admin/service_exposure.md
+              - Public Access (Funnel): admin/service_exposure_funnel.md
+          - Check Connection Security:
+              - Overview: admin/connection_checks.md
+              - Reverse Proxy: admin/connection_proxy.md
           - Hosting for Others: admin/hosting_providers.md
-          - Sleep and Wake: admin/sleep_wake.md
+          - Sleep and Wake:
+              - Overview: admin/sleep_wake.md
+              - Scheduled Wake-up: admin/wake_sync.md
       - ⚙️ System Configuration:
-          - Environment Variables: admin/configuration.md
-          - Email: admin/email.md
+          - Environment Variables:
+              - Overview: admin/configuration.md
+              - Secrets and Plugins: admin/configuration_secrets.md
+              - Checks and Protections: admin/configuration_security.md
+              - Accounts and Asset Search: admin/configuration_accounts.md
+          - Email:
+              - Setup: admin/email.md
+              - Links and Messages: admin/email_flows.md
+              - Troubleshooting: admin/email_troubleshooting.md
           - Global Settings: admin/settings.md
           - Users & Invitations: admin/users.md
       - 🧹 Maintenance & Operations:
