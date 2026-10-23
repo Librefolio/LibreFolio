@@ -69,6 +69,19 @@ class UnreadablePreviewError(ValueError):
     """Raised when a file of a previewable format cannot be read: damaged, truncated or mislabelled."""
 
 
+def preview_failure_detail(error: ValueError) -> str | dict[str, str]:
+    """The ``detail`` of the 400 a preview that cannot be built answers (C-70b): a code the wizard translates and the English text.
+
+    ``preview_unsupported`` for a format with no preview, ``preview_unreadable`` for a file that is damaged; any other
+    ``ValueError`` (a sheet that does not exist, a bad parameter) keeps its plain text.
+    """
+    if isinstance(error, UnsupportedPreviewError):
+        return {"code": "preview_unsupported", "message": str(error)}
+    if isinstance(error, UnreadablePreviewError):
+        return {"code": "preview_unreadable", "message": str(error)}
+    return str(error)
+
+
 # What a damaged workbook raises through pandas: openpyxl (.xlsx) fails on the zip or
 # on its XML, xlrd (.xls) on its records. Caught only around the two pandas calls.
 _UNREADABLE_WORKBOOK_ERRORS: tuple[type[Exception], ...] = (zipfile.BadZipFile, KeyError, XMLParseError, IndexError, struct.error, *_XLRD_READ_ERRORS)

@@ -971,6 +971,16 @@ def services_brim_parse_settings(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "BRIM parse settings tests", verbose=verbose)
 
 
+def services_brim_parse_failure_detail(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the 400 of a failed BRIM parse: an object the wizard translates, not an English sentence (W5-5, C-70b)."""
+    print_section("Services: BRIM Parse Failure Detail")
+    print_info("Testing: backend/app/api/v1/brokers.py (parse_file), brim_parse_pool.parse_file_offloaded, brim_provider guard")
+    print_info("Tests: BRIMParseError with/without a code, the guard's coded and silent refusals, unknown plugin stays a string, 404 unchanged")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_failure_detail.py", test_names)
+    return run_command(cmd, "BRIM parse failure detail tests", verbose=verbose)
+
+
 def services_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test settings service: user settings CRUD, get_effective_base_currency."""
     print_section("Services: Settings Service")
@@ -2601,6 +2611,14 @@ Note: No backend server required.
         services_brim_parse_settings,
         name="BRIM Parse Settings",
         desc="Plugin settings on the BRIM parse: no field = called as before, fields = BoundSettings resolved in the parent and bound in the child, secrets masked in errors and logs, the endpoint passes the user",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-parse-failure-detail",
+        services_brim_parse_failure_detail,
+        name="BRIM Parse Failure Detail",
+        desc="W5-5 (C-70b): a failed BRIM parse answers 400 with a parse_failed object (plugin, English message, coded reason) the wizard translates; the guard's refusal carries the plugin's BRIMRefusal; an unknown plugin keeps a string, 404 unchanged",
         isolation="pure",
     )
     add_test(cat, "settings", services_settings, name="Settings Service", desc="User settings CRUD, get_effective_base_currency")

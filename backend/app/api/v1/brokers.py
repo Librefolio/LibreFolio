@@ -87,15 +87,15 @@ from backend.app.schemas.uploads import FilePreviewResponse
 from backend.app.services.accounts.global_settings_service import get_max_upload_mb
 from backend.app.services.brim import brim_gap_fix, brim_provider, brim_report_sets
 from backend.app.services.brim.brim_parse_pool import parse_file_offloaded
-from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError, detect_tx_duplicates, search_asset_candidates, search_asset_candidates_bulk
+from backend.app.services.brim.brim_provider import BRIMCannotParseError, BRIMParseError, BRIMProvider, BRIMSetRequiredError, detect_tx_duplicates, search_asset_candidates, search_asset_candidates_bulk
 from backend.app.services.brim.brim_report_sets import BRIMSetError, BRIMSetIncomplete
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brokers.broker_service import BROKER_NAME_RECOVERY, BrokerService
 from backend.app.services.files.file_preview import (
     FilePreviewLinks,
-    UnsupportedPreviewError,
     build_image_preview_url,
     build_preview_response,
+    preview_failure_detail,
 )
 from backend.app.services.files.static_uploads import BLOCKED_EXTENSIONS
 
@@ -773,10 +773,8 @@ async def get_brim_file_preview(
             links,
             sheet_name=sheet_name,
         )
-    except UnsupportedPreviewError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    except ValueError as e:  # UnsupportedPreviewError and UnreadablePreviewError are ValueErrors: coded by preview_failure_detail
+        raise HTTPException(status_code=400, detail=preview_failure_detail(e)) from e
     except Exception as e:
         logger.exception("Failed to build BRIM file preview", file_id=file_id, error=str(e))
         raise HTTPException(status_code=500, detail="Failed to build file preview") from e
@@ -1082,12 +1080,28 @@ async def parse_file(
     except ValueError as e:
         # Parse failed - move to failed folder
         await asyncio.to_thread(brim_provider.move_to_failed, file_id, str(e))
+        if isinstance(e, BRIMCannotParseError):
+            refusal = e.refusal or {}
+            reason = {"code": refusal.get("code"), "message": refusal.get("message"), "context": refusal.get("context") or {}}
+            raise HTTPException(status_code=400, detail=_parse_failed_detail(str(e), e.plugin_code or plugin_code, e.plugin_name, reason)) from e
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     except BRIMParseError as e:
         # Parse failed - move to failed folder
         await asyncio.to_thread(brim_provider.move_to_failed, file_id, e.message)
-        raise HTTPException(status_code=400, detail=f"Parse error: {e.message}") from e
+        reason = {"code": e.details.get("code"), "message": e.message, "context": e.details.get("context") or {}}
+        raise HTTPException(status_code=400, detail=_parse_failed_detail(f"Parse error: {e.message}", plugin_code, _plugin_name(plugin_code), reason)) from e
+
+
+def _plugin_name(plugin_code: str) -> str:
+    """The plugin's ``provider_name``, its code when it is not registered."""
+    plugin = BRIMProviderRegistry.get_provider_instance(plugin_code)
+    return (getattr(plugin, "provider_name", None) if plugin is not None else None) or plugin_code
+
+
+def _parse_failed_detail(message: str, plugin_code: str, plugin_name: str, reason: dict) -> dict:
+    """The 400 of a failed parse (C-70b): a code the wizard translates, the plugin and its reason; ``message`` is the English text."""
+    return {"code": "parse_failed", "message": message, "plugin_code": plugin_code, "plugin_name": plugin_name, "reason": reason}
 
 
 # =============================================================================

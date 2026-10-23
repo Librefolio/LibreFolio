@@ -532,6 +532,12 @@
       "rows_unreadable": "The last column says what could not be read on each row."
     },
     "notesCount": "{n, plural, one {# note} other {# notes}}",
-    "noNotices": "No warnings or notes"
+    "noNotices": "No warnings or notes",
+    "parseFailed": "The {plugin_name} plugin could not read the file: {reason}",
+    "parseFailedNoReason": "The file could not be read, and the plugin gave no reason.",
+    "previewFailed": {
+      "preview_unsupported": "This file type has no preview.",
+      "preview_unreadable": "The file looks damaged or is not what its extension says: it cannot be previewed."
+    }
   }
 }
