@@ -107,6 +107,21 @@ class BRIMParseError(Exception):
         self.details = details or {}
 
 
+class BRIMCannotParseError(ValueError):
+    """The parse guard refused the file: the plugin's ``can_parse`` said no (C-70b).
+
+    A ``ValueError``, as before, with the same English sentence as its message. It also carries what the API needs to
+    answer in a form the wizard translates: the plugin's code and name, and its refusal (``cannot_parse_detail``) as a plain
+    dict, never ``None`` fields apart. The attributes travel in ``__dict__``, so it survives the trip from a parse worker.
+    """
+
+    def __init__(self, message: str, *, plugin_code: str = "", plugin_name: str = "", refusal: Optional[Dict[str, Any]] = None):
+        super().__init__(message)
+        self.plugin_code = plugin_code
+        self.plugin_name = plugin_name
+        self.refusal = refusal
+
+
 class BRIMSetRequiredError(BRIMParseError):
     """Raised when a report-set member is parsed on its own instead of through its combined file."""
 
@@ -1208,6 +1223,21 @@ def _refusal_message(plugin: Any, plugin_code: str, file_name: str, checked_path
     return f"{message}: {reason}" if reason else message
 
 
+def _refusal_detail(plugin: Any, plugin_code: str, checked_path: Path) -> Optional[Dict[str, Any]]:
+    """The plugin's refusal (``cannot_parse_detail``) as a plain dict, or ``None``: it has nothing to add, or it raised (logged)."""
+    explain = getattr(plugin, "cannot_parse_detail", None)
+    if explain is None:
+        return None
+    try:
+        refusal = explain(checked_path)
+    except Exception as e:  # noqa: BLE001 — isolation boundary: a plugin that fails to explain must not turn a 400 into a 500
+        logger.warning("Plugin failed to explain its refusal", plugin_code=plugin_code, error=str(e))
+        return None
+    if refusal is None:
+        return None
+    return {"code": refusal.code, "message": refusal.message, "context": dict(refusal.context)}
+
+
 def _check_path(plugin: BRIMProvider, file_path: Path) -> BRIMPluginCheck:
     """``plugin``'s answer about one path. A check or an explanation that raises is logged: it never reaches the caller."""
     code = plugin.provider_code
@@ -1798,7 +1828,13 @@ def _parse_file(file_id: str, plugin_code: str, broker_id: int, settings: Option
         if moved_path is None or not plugin.can_parse(moved_path):
             file_info = get_file_info(file_id)
             file_name = file_info.filename if file_info else file_path.name
-            raise ValueError(_refusal_message(plugin, plugin_code, file_name, moved_path or file_path))
+            refused_path = moved_path or file_path
+            raise BRIMCannotParseError(
+                _refusal_message(plugin, plugin_code, file_name, refused_path),
+                plugin_code=plugin_code,
+                plugin_name=getattr(plugin, "provider_name", None) or plugin_code,
+                refusal=_refusal_detail(plugin, plugin_code, refused_path),
+            )
         logger.info("File moved before parse check, retrying at new location", file_id=file_id, new_path=str(moved_path))
         file_path = moved_path
 

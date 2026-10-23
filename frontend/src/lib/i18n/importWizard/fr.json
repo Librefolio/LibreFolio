@@ -532,6 +532,12 @@
       "rows_unreadable": "La dernière colonne indique ce qui n’a pas pu être lu dans chaque ligne."
     },
     "notesCount": "{n, plural, one {# note} many {# notes} other {# notes}}",
-    "noNotices": "Ni avertissement ni note"
+    "noNotices": "Ni avertissement ni note",
+    "parseFailed": "Le plugin {plugin_name} n'a pas pu lire le fichier : {reason}",
+    "parseFailedNoReason": "Le fichier n'a pas pu être lu et le plugin n'a donné aucune raison.",
+    "previewFailed": {
+      "preview_unsupported": "Ce type de fichier n'a pas d'aperçu.",
+      "preview_unreadable": "Le fichier semble endommagé ou ne correspond pas à son extension : l'aperçu est impossible."
+    }
   }
 }

@@ -8597,3 +8597,12 @@ Messaggio in 4 lingue: `transactions.errors.pairArrivalBeforeDeparture`. Regress
 `transaction-cost-basis-rule` 244 (incl. il cancello W-B69 «ogni codice ha il suo messaggio»), `i18n check` verde, `api sync` senza errori.
 > **Note implementazione**: la prima versione metteva il messaggio sotto `transactions.warnings.*`; il cancello W-B69 (e il frontend, che mappa `transactions.errors.{code}`) vuole `errors.<code>`: spostato, il test del test-author adeguato.
 > **⚠️ Fuori pista**: nessun frontend mostra ancora `warnings` (né il form né il Bulk): spetta a W2 dopo il commit. Una coppia già salvata invertita non è mai giudicata.
+
+#### W5-5 · C-70b — esito (2026-10-23)
+✅ 23/10: rossi → verdi. Prima della cura: 5 rossi + 2 guardie in `test_brim_parse_failure_detail.py`; 7 rossi + 1 guardia API (`test_brim_api.py`, `test_uploads_api.py`); `parseFailure.test.ts` rosso all'import; 1 rosso in `ImportWizardModal.test.ts`.
+Dopo: `services brim-parse-failure-detail` 7, `api brim` 133, `api uploads` 44 (+1 skip), `services brim-parse-settings` 15, `brim-parse-pool` 21, `external brim-providers` 779 (+1 skip), Vitest `parseFailure` + `ImportWizardModal` 51, `front check` 0/0, `i18n check` verde.
+Cura: il 400 del parse è `detail = {code: "parse_failed", message, plugin_code, plugin_name, reason: {code, message, context}}` (`api/v1/brokers.py`: `_parse_failed_detail`); la guardia di `can_parse` lancia `BRIMCannotParseError(ValueError)` (`brim_provider.py`) con plugin e rifiuto
+(`cannot_parse_detail`); `BRIMParseError.details` dà `reason.code/context`; le due anteprime (`brokers.py`, `uploads.py`) → `{code: preview_unsupported|preview_unreadable, message}` (`file_preview.preview_failure_detail`; altri `ValueError` restano stringa).
+Frontend: `parseFailure.ts` (`resolveParseFailureMessage`), cablato in `ImportWizardModal.svelte` (parse e anteprima) e `BrokerImportFilesModal.svelte` (anteprima); chiavi `importWizard.parseFailed`, `parseFailedNoReason`, `previewFailed.*` nelle 4 lingue. `brim_plugin_guide.md`: sezione «How a failed parse reaches the wizard».
+> **Note implementazione**: la pagina Files (`routes/(app)/files/+page.svelte:722`) usa ancora `getFilePreviewError`: mostra il testo inglese `message` come prima (file non assegnato a W: lo segnalo). Il testo salvato in `error_message` del file resta inglese (diagnostica).
+> **⚠️ Fuori pista**: lo spec nominava solo `uploads.py`; anche `GET /brokers/import/files/{id}/preview` aveva `detail=str(e)`: coperto.

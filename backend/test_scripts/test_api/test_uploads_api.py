@@ -23,6 +23,7 @@ import mimetypes
 import os
 import threading
 import uuid
+import zipfile
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -896,7 +897,7 @@ class TestStructuredPreview:
 
     @pytest.mark.asyncio
     async def test_damaged_xlsx_preview_returns_400(self, test_server):
-        """UPLOAD-005H: Preview of a damaged .xlsx answers 400 with a detail, not 500 (F2)."""
+        """UPLOAD-005H: Preview of a damaged .xlsx answers 400 (not 500, F2) with ``detail`` ``{"code": "preview_unreadable", "message": <English text>}`` (an object since lot W5-5, C-70b)."""
         print_section("UPLOAD-005H: Damaged XLSX preview answers 400")
 
         async with httpx.AsyncClient() as client:
@@ -918,13 +919,50 @@ class TestStructuredPreview:
 
                 assert response.status_code == 400, f"the preview of a damaged .xlsx answers {response.status_code} {response.text}: a damaged workbook is the user's file, not a fault of the server (F2)"
                 detail = response.json().get("detail")
-                assert isinstance(detail, str) and detail.strip(), f"the 400 says why, in a detail: {response.text}"
+                assert isinstance(detail, dict), f"the 400 says why in a detail object the wizard translates, not in an English sentence (C-70b): {response.text}"
+                assert detail.get("code") == "preview_unreadable", f"a damaged workbook is unreadable, not unsupported: {response.text}"
+                assert isinstance(detail.get("message"), str) and detail["message"].strip(), f"the English text stays as the diagnostic message: {response.text}"
+                assert set(detail) == {"code", "message"}, f"the keys of a preview failure: {response.text}"
             finally:
                 # Whoever uploads cleans up: the owner deletes the file, as UPLOAD-007 does.
                 delete_resp = await client.delete(f"{API_BASE}/uploads/{file_id}", timeout=TIMEOUT)
                 assert delete_resp.status_code == 200, delete_resp.text
 
             print_success("✓ Damaged XLSX preview answered 400")
+
+    @pytest.mark.asyncio
+    async def test_unsupported_preview_returns_400_with_the_unsupported_code(self, test_server):
+        """UPLOAD-005I: Preview of a file whose type has no preview (a zip archive: no image, text, table or PDF) answers 400 with
+        ``detail`` ``{"code": "preview_unsupported", "message": <English text naming the file>}`` (C-70b): an object, so the
+        wizard translates the failure instead of showing the English sentence."""
+        print_section("UPLOAD-005I: Unsupported preview answers 400 with its code")
+
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
+
+            name = f"archive_{uuid.uuid4().hex[:8]}.zip"
+            archive = BytesIO()
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.writestr("inside.txt", "a member of an archive the preview does not open\n")
+            files = {"file": (name, BytesIO(archive.getvalue()), "application/zip")}
+            upload_resp = await client.post(f"{API_BASE}/uploads", files=files, timeout=TIMEOUT)
+            assert upload_resp.status_code == 200, upload_resp.text
+            file_id = upload_resp.json()["file"]["id"]
+
+            try:
+                response = await client.get(f"{API_BASE}/uploads/{file_id}/preview", timeout=TIMEOUT)
+
+                assert response.status_code == 400, f"premise: a file with no preview type answers 400: {response.status_code} {response.text}"
+                detail = response.json().get("detail")
+                assert isinstance(detail, dict), f"the 400 says why in a detail object the wizard translates, not in an English sentence (C-70b): {response.text}"
+                assert set(detail) == {"code", "message"}, f"the keys of a preview failure: {response.text}"
+                assert detail["code"] == "preview_unsupported", response.text
+                assert isinstance(detail["message"], str) and name in detail["message"], f"the English text stays as the diagnostic message, naming the file: {response.text}"
+            finally:
+                delete_resp = await client.delete(f"{API_BASE}/uploads/{file_id}", timeout=TIMEOUT)
+                assert delete_resp.status_code == 200, delete_resp.text
+
+            print_success("✓ Unsupported preview answered 400 with preview_unsupported")
 
 
 # ============================================================================

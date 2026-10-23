@@ -532,6 +532,31 @@ ICU Messages*, in the [frontend i18n guide](../../frontend/i18n.md)). `TestGener
 file; `defaultPluginCheck.test.ts` (`./dev.py test front-transaction tx-unit`) checks that every
 code has its key in the four languages.
 
+### 📮 How a failed parse reaches the wizard {: #parse-failed }
+
+`POST /api/v1/brokers/import/files/{file_id}/parse` answers a failed parse with **400** and a `detail` **object**, never an
+English sentence the wizard would show as it is (lot W5-5, C-70b):
+
+```json
+{"code": "parse_failed", "message": "Parse error: …", "plugin_code": "broker_x", "plugin_name": "Broker X",
+ "reason": {"code": "missing_columns", "message": "…", "context": {"columns": "date", "count": 1}}}
+```
+
+- A `BRIMParseError(message, details={"code": …, "context": …})` gives `reason` from its `details` (`code` and `context` are
+  `null` and `{}` when the plugin gave none) and `message` as the diagnostic `Parse error: <message>`.
+- The parse guard (`can_parse` false, `BRIMCannotParseError`, a `ValueError`) gives `reason` from the plugin's
+  [`cannot_parse_detail`](#cannot-parse-detail); `message` is the guard's own sentence.
+- Any other `ValueError` (an unknown plugin) keeps a plain string `detail`; a missing file is still 404.
+- The file goes to `failed` with the English text as its stored `error_message`, as before: it is the diagnostic, not what the
+  user reads.
+
+The wizard (`resolveParseFailureMessage`, `parseFailure.ts`) shows `importWizard.parseFailed` with the plugin's name and the
+reason, translated as `importWizard.parseRefusal.<code>` with the `context` (the keys of the [refusals](#cannot-parse-detail),
+and the ones of every `BRIMParseError` code), else the plugin's own sentence. A failure with no reason at all shows
+`importWizard.parseFailedNoReason`. The same helper reads the 400 of the two file previews (`GET …/files/{file_id}/preview` and
+`GET /api/v1/uploads/file/{file_id}/preview`): `{"code": "preview_unsupported" | "preview_unreadable", "message": "…"}`,
+translated as `importWizard.previewFailed.<code>`.
+
 ### 🧰 Base-class helpers you should use
 
 Defined on `BRIMProvider` — call these instead of re-implementing:

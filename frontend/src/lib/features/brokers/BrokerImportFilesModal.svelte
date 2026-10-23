@@ -27,7 +27,8 @@
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import SelectionBar from '$lib/components/table/SelectionBar.svelte';
     import type {BrimFile, FilePreviewResponse} from '$lib/types';
-    import {fetchFilePreview, getFilePreviewError} from '$lib/utils/files/filePreview';
+    import {fetchFilePreview} from '$lib/utils/files/filePreview';
+    import {resolveParseFailureMessage} from '$lib/features/transactions/import/parseFailure';
 
     interface Props {
         /** Whether the modal is open */
@@ -286,7 +287,7 @@
         } catch (error) {
             if (token === previewRequestToken) {
                 previewData = null;
-                previewError = getFilePreviewError(error, 'Preview failed');
+                previewError = resolveParseFailureMessage(error, $_, 'Preview failed');
             }
         } finally {
             if (token === previewRequestToken) {
