@@ -47,6 +47,7 @@ LibreFolio/
 - **Code in English** — comments, docstrings, variables, README
 - **Multilingual UI** — only the graphical interface in EN/IT/FR/ES
 - **Edit > Rewrite** — prefer targeted edits to avoid regressions
+- **Diagrams for the developer** — when a Markdown document explains a flow, a state machine or who-calls-what, draw it as a Mermaid code block: the developer's editor (MarkText) renders it
 - **Incremental Alembic migrations (released)** — ship schema changes as new migrations to protect existing installs; edit `001_initial.py` only for brand-new never-shipped tables; `db create-clean` only for fresh/test DBs
 - **After modifying API** — run `./dev.py api sync` to regenerate TypeScript client
 - **After modifying DB models** — add an incremental Alembic migration (`./dev.py db migrate "…"`); use `db create-clean` only for fresh/test DBs
