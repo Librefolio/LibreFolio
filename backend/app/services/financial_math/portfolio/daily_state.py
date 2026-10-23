@@ -29,6 +29,7 @@ from backend.app.services.financial_math.portfolio.models import (
     EngineEndState,
     InternalAssetTransfer,
     InTransitInterval,
+    MarketValueTransfer,
     PnlCandleContribution,
     PortfolioCalculationResult,
     PositionFrame,
@@ -236,6 +237,7 @@ class DailyStateBuilder:
             for missing in average_cost.missing:
                 self._missing_fx[missing.pair].update(missing.dates)
         realized_sales: list[RealizedSale] = []
+        market_value_transfers: list[MarketValueTransfer] = []
 
         # ── 1. Cash ledger: sum amount deltas per day ──
         cash_deltas: dict[date_type, Decimal] = defaultdict(lambda: zero)
@@ -394,6 +396,17 @@ class DailyStateBuilder:
                     if transfer_capital is not None:
                         cumulative_ecf += transfer_capital
                         cumulative_ecf_by_broker[bid] += transfer_capital
+                        # B5: the leg, with the cost it moved, for the period breakdown's row of its own
+                        market_value_transfers.append(
+                            MarketValueTransfer(
+                                transaction_id=tx.id,
+                                broker_id=bid,
+                                asset_id=tx.asset_id,
+                                date=tx.date,
+                                capital=transfer_capital,
+                                cost=step.cost_report_change if step is not None else zero,
+                            )
+                        )
                     if tx.quantity > 0:
                         # In-kind ADJUSTMENT-in (priced, no cash): capital contribution.
                         # Add the cost it brings into the pool to the capital baseline so total
@@ -676,6 +689,7 @@ class DailyStateBuilder:
             date_to=self.date_to,
             average_costs=dict(self.average_costs),
             realized_sales=realized_sales,
+            market_value_transfers=market_value_transfers,
             missing_fx={pair: set(dates) for pair, dates in self._missing_fx.items()},
         )
 
