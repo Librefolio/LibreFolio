@@ -105,6 +105,7 @@ from backend.app.schemas.prices import FACurrentValue, FAHistoricalData, FAPrice
 from backend.app.schemas.signals import SignalRequest
 from backend.app.services.assets import core, price_query, refresh
 from backend.app.services.assets.price_query import PriceQueryOperations
+from backend.app.services.fx.conversion import UnitRateSteps
 from backend.app.services.signals.service import SignalService
 from backend.app.utils import date_range_limits, datetime_utils
 from backend.test_scripts.test_services._range_bounds import RANGE_BOUND_CONSUMERS, lift_range_bound
@@ -598,6 +599,15 @@ class _Converter:
                 results.append((Currency(code=to_currency, amount=amount.amount * _rate(on_day)), on_day, False))
         return results, errors
 
+    async def steps(self, _session: Any, requests: dict) -> dict:
+        """In-process ``unit_rate_steps`` to match: a rate row on every day for every pair but those without rates, so each
+        day is its own stretch and ``convert_by_stretch`` hands this converter the days (X-Q3)."""
+        found = {}
+        for (source, destination), windows in requests.items():
+            days = () if (source, destination) in self.without_rates else tuple(sorted({first + timedelta(days=n) for first, last in windows for n in range((last - first).days + 1)}))
+            found[(source, destination)] = UnitRateSteps(source=source, destination=destination, days=days, values=tuple(Decimal(1) for _ in days), rate_days=days)
+        return found
+
 
 def _conversion(amount: str, start: date, end: date | None, *, signals: Iterable[SignalRequest] = ()) -> FXConversionRequest:
     return FXConversionRequest(from_amount=Currency(code="EUR", amount=Decimal(amount)), to_currency="USD", date_range=DateRangeModel(start=start, end=end), signals=list(signals))
@@ -605,6 +615,7 @@ def _conversion(amount: str, start: date, end: date | None, *, signals: Iterable
 
 async def _convert(monkeypatch: pytest.MonkeyPatch, converter: _Converter, *conversions: FXConversionRequest) -> FXConvertResponse:
     monkeypatch.setattr(currencies, "convert_bulk", converter)
+    monkeypatch.setattr(currencies, "unit_rate_steps", converter.steps)
     return await currencies.convert_currency_bulk(request=list(conversions), session=None, _current_user=None)
 
 

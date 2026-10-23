@@ -7358,6 +7358,74 @@ dello slot visibile: da non spostare; (c) gli errori di conversione portano l'in
 (e) `api/v1/fx/currencies.py` ha il blocco dei segnali dentro `signal_start`: lo stesso calcolo, due viste.
 **Domande di prodotto**: nessuna.
 
+### Q1…Q3 + S1 — lavoro (23/10, ondata 5, treno 11b)
+
+> Concordato con J (via coordinatore): oggetto per asset `ObservedPrices` con `first_point_date`, `observation_dates`,
+> `point_on(d)`; nessuna vista densa di finestra; `market_series.py` non si tocca (J5-2 lo cambia dopo).
+
+1. ✅ 23/10 — Rossi. `test_price_query_observations.py` (nuovo): l'oracolo è una **copia** della catena di HEAD
+   `1fd80c481` (`head_dense` + `head_convert` + `head_signals`) dentro il test. OQ-01 parità, 18 casi
+   (asset × bersaglio × finestra: nativo, diretto, inverso, coppia senza tasso, tassi che cominciano tardi, storia corta,
+   chiusura 0, finestra di un giorno, prima della storia, dopo l'ultima riga, sopra il buco di tassi, festivi); OQ-02/03
+   errori e ordine; OQ-04 conteggio (le conversioni date a `convert_bulk` sono una per tratto di riga-prezzo e riga-tasso
+   invariate, non una per giorno); OQ-05 l'oggetto; OQ-06 sette casi di segnali (EMA, rolling return, drawdown, insieme
+   di tre). Verdi su HEAD per costruzione la parità (OQ-01…03, 06), **rossi OQ-04 (conteggio) e OQ-05 (l'oggetto non
+   esisteva)**, per la ragione giusta.
+2. ✅ 23/10 — Q1/Q2. `services/assets/observed_prices.py` (nuovo): `resolve_days` trova per ogni giorno la sua riga di
+   prezzo (cursore) e la sua riga di tasso (`unit_rate_steps`, le stesse righe usabili di `convert_bulk`), converte
+   **ogni coppia (riga-prezzo, riga-tasso) una volta** con lo stesso `convert_bulk` (nessuna moltiplicazione per il tasso
+   unitario: le coppie inverse dividono, la cifra finale sarebbe diversa), e costruisce il punto del giorno
+   (`point_of`). `price_query.py`: la serie densa, le dipendenze dei segnali di rischio e i campioni di Z-29 passano da
+   `observe`/`series_points`; il vecchio giro di conversione giorno per giorno (≈120 righe) è tolto; resta la
+   conversione degli eventi (E.8). `_build_backward_filled_series`/`_fill_point` restano (riferimento nativo; `_fill_point`
+   delega a `fill_point`). `PriceQueryOperations.observed_prices(request, session)` dà l'oggetto per J.
+   > **Note implementazione**: errori di conversione identici (stesso testo, stessa numerazione, stessi 10 + «… and N
+   > more»): i giorni senza tasso li scrive lo stesso `rate_not_found_error` (ora in `fx/stretch_conversion.py`), gli altri
+   > li dà `convert_bulk`. Un `close` a 0 resta nativo come oggi. Lo spia di `test_asset_signals.py` (`spy_load_starts`)
+   > ora guarda `observe` (è la funzione che riceve l'inizio del carico): i quattro test sul carico (400 giorni, storia
+   > completa, moltiplicatore del rischio, finestra di calendario) restano verdi.
+3. ✅ 23/10 — Q3. `services/fx/stretch_conversion.py` (nuovo): `convert_by_stretch(session, conversions, convert=…,
+   steps=…)` risponde a una lista come `convert_bulk(..., raise_on_error=False)` ma chiede a `convert` una sola
+   conversione per ogni (importo **come si stampa**, coppia, riga di tasso): `1` e `1.0` danno esponenti diversi, quindi
+   due conversioni. Identità e giorni senza tasso non passano da `convert`. `currencies.py` lo usa per il blocco dei
+   giorni visibili e per quello dei segnali. `test_fx_stretch_conversion.py` (nuovo, 28 test): parità elemento per elemento
+   su 12 liste, esponente, conteggio, risposta del gestore uguale a quella col giro «ogni giorno» (8 casi: segnali,
+   campionamento, importo 0, identità), conteggio del gestore (≈ giorni/2 su tre giorni della settimana).
+   > **⚠️ Fuori pista**: `test_bulk_limits.py` e `test_range_ceiling.py` chiamano il gestore con `session=None` e un
+   > convertitore finto che dà «un tasso ogni giorno»; col nuovo gestore serve anche un finto `unit_rate_steps` con lo
+   > stesso modello (un passo per giorno): aggiunto (`_every_day_a_step`, `_Converter.steps`). Un'asserzione cambia con
+   > ragione: 1 000 conversioni identiche di un giorno sono **una** conversione data (`len(handed) == 1`), 1 000 risultati.
+4. ✅ 23/10 — S1. Verificato, non c'è codice da cambiare in `planning.py`/`price_query.py`: il carico di un item con segnali
+   è già **finestra visibile − riscaldamento** (in giorni di calendario per i plugin di calendario, in sedute × 2 per quelli
+   di seduta), pinnato dallo spia di `asset-signals`. Fa eccezione solo un segnale a **storia completa** (drawdown): carica
+   dal 1900 e **resta denso**, perché Z-30/BL-L pinna che il drawdown riceva la serie dal 1900-01-01 e perché la serie
+   preparata (`market_series.prepare_asset_series_set`) la legge densa. Renderla solo-osservazioni è il lavoro di J5-2 su
+   `market_series.py`: dopo di lui la storia prima del riscaldamento può smettere di essere densa senza cambiare nulla qui.
+5. ✅ 23/10 — Misura (corpus: ETF in USD chiesto in EUR, 10 anni, 2 608 giorni feriali con prezzo e tasso): HEAD 3 650
+   conversioni, nuovo **2 608** (−29 %); punti **identici** (3 650 su 3 650, `model_dump` uguale); tempo **0,25 s contro
+   0,26 s**: nessun guadagno di velocità misurabile (il costo sta nel costruire i `FAPricePoint`, non nel `bisect`).
+   **CHANGELOG: nessuna** (nessun effetto visibile misurabile).
+6. ✅ 23/10 — Verdi. Nuovi: `services price-query-observations` 38, `services fx-stretch-conversion` 28. Vicini
+   (corsia 6186): `price-query-sampling`, `asset-signals` (30), `period-changes`, `signal-aggregation`,
+   `current-prices-bulk`, `fx-conversion`, `fx-rate-steps`, `series-preparation`, `signal-service`, `range-ceiling` (45),
+   `asset-source-guards` (55), `ai-export` (1 133); `api fx` (34), `fx-unit` (64), `fx-convert-sampling` (29),
+   `fx-signals` (8), `signal-request-validation` (2), `assets-price` (32); `test_bulk_limits.py` 29; `check-orphans`;
+   `mkdocs build` e `check-links` (97 link). Ruff e black puliti sui 14 file `.py` toccati.
+   > **⚠️ Fuori pista**: tre suite API con un convertitore finto (`fx-unit`, `fx-convert-sampling`, `fx-signals`) davano
+   > rosso come le due del passo 3: il gestore ora chiede anche `unit_rate_steps`. Doppio comune nuovo
+   > `backend/test_scripts/fx_steps_double.py` (`steps_double(rate_day_of)`); due asserzioni cambiano con ragione: il
+   > caso X-R41 con il giorno 2 riempito dal giorno 1 dà **una** conversione per importo (stesso tratto), e il test
+   > «una sola chiamata combinata» usa `EUR→USD` perché un'identità non passa più da `convert_bulk`.
+
+7. ✅ 23/10 — Revisione di X (una correzione, quattro note). (1) `test_price_query_sampling.py`: `_forbid_the_daily_fill` ora
+   blocca `price_query.observe` (la lettura giornaliera; `series_points` resta ammesso per i campioni), docstring aggiornati,
+   e un controllo nuovo (`PQS-Q11b`) dimostra che la guardia scatta: un item giornaliero solleva `_DailyFillBuilt`.
+   Prima passava per il motivo sbagliato (bloccava una funzione che la produzione non chiama più). Verdi: `price-query-sampling`
+   198. (2) `_build_backward_filled_series`: docstring «riferimento per i test», non tolto. (3) `observed_prices.py`: il
+   docstring dice «densa per giorno, convertita per tratto». (4) commento sulla numerazione degli errori di `convert_bulk`
+   (per posizione nell'elenco chiesto, non per punto). (5) `convert_by_stretch`: una risposta `None` senza spiegazione dà
+   comunque un errore per ogni giorno del tratto (`XQ3-06`, 29 test).
+
 ### Z5-F1 — l'avviso del rolling return arriva tradotto (23/10, ondata 5, treno 11a)
 
 > Il backend aggiunge nei `details` dell'avviso `undefined_metric_window` dove sono i punti non definiti e il periodo da
