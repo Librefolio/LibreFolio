@@ -5526,6 +5526,14 @@ A-21b, A-31, A-41, A-49 e A-58 aspettano una decisione; A-4 e A-10 sono lavoro d
     `data-security-checks` (`off`/`pending`/`ready`/`error`) sulla riga dei controlli e la riga `desc` di
     `services admin-bootstrap`. Commit: del coordinatore. Dettagli: piano 02_accounts, «A62.1»…«A62.3».
 
+- **A-63 · Note della revisione di sicurezza di A5-1 (non bloccanti)** — basso; A, 23/10 (revisione Opus del diff).
+  - (a) `./dev.py user create` salva l'email grezza (`scripts/user_cli.py:91-105`): un titolare creato dalla CLI con una forma non normalizzata (punycode, NFD) non corrisponde alla variabile normalizzata e resta senza protezione, senza avviso. Cura possibile: normalizzare con lo stesso `EmailStr` prima di `same_email`, o validare nella CLI.
+  - (b) `LIBREFOLIO_PROFILE` si legge da ambiente o da `.env`; `LIBREFOLIO_ADMIN_EMAIL` solo dall'ambiente: con l'email solo in `.env` la protezione si spegne senza avviso (il bootstrap si comporta uguale). Da documentare nella guida admin.
+  - (c) `account_protection` chiama `get_settings()` per ogni riga di `GET /users` (rilegge `.env`): calcolare profilo e titolare una volta per richiesta.
+  - (d) Nel `managed` senza `LIBREFOLIO_ADMIN_EMAIL` nessuno è protetto e nessun controllo lo dice: un check `warning` in `config_audit` (di H).
+  - (e) La CLI non ha `user delete`: per eliminare il titolare l'hoster toglie la variabile o cambia il profilo; la guida dice solo deactivate e demote.
+  - (f) Il limite di accesso (10 errori in 15 minuti per identificatore) permette a chiunque di bloccare per poco il login con l'email del titolare; con lo username funziona. Indipendente da A5-1.
+
 ## X · Plugin, asset e ricerca (fase 01)
 
 Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md).

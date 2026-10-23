@@ -707,6 +707,9 @@ describe('UsersTab — which actions a row offers, and why one is off (UTAB-23�
         const row = await openPanel(PROTECTED.id);
 
         for (const action of ['deactivate', 'demote', 'delete'] as const) expectDisabled(actionIn(row, action), 'protected');
+        // since A5-1 (23/10/2026) nobody else resets its password or signs it out either: the server answers 409, the row says why first
+        for (const action of ['reset-link', 'sign-out'] as const) expectDisabled(actionIn(row, action), 'protected');
+        expectEnabled(actionIn(row, 'restart-guides'));
         expect(offered(row, 'promote'), 'an administrator is not promoted').toBeNull();
         expect(offered(row, 'reactivate'), 'an active account is not reactivated').toBeNull();
     });
@@ -743,10 +746,10 @@ describe('UsersTab — which actions a row offers, and why one is off (UTAB-23�
         expect(offered(row, 'deactivate'), 'an inactive account is not deactivated again').toBeNull();
     });
 
-    it('UTAB-27: every other account offers a reset link, a sign-out and a restart of the guides — protected or not', async () => {
+    it('UTAB-27: every other account offers a reset link, a sign-out and a restart of the guides — the protected one only the restart (A5-1)', async () => {
         await mount();
 
-        for (const a of ACCOUNTS.filter((candidate) => candidate.id !== ME.id)) {
+        for (const a of ACCOUNTS.filter((candidate) => candidate.id !== ME.id && !candidate.protected)) {
             const row = await openPanel(a.id);
             for (const action of ['reset-link', 'sign-out', 'restart-guides'] as const) expectEnabled(actionIn(row, action));
         }
