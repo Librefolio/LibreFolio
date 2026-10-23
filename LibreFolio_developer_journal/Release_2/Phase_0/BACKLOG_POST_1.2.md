@@ -7276,6 +7276,12 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
     plugin per plugin. Dettagli: piano 04, «W-B86 e W-B87».
 
   🌊 22/10: ondata 5 (proprietario W)
+  📌 23/10 (developer), split nei report BRIM (Revolut, Trading 212): uno **split moltiplicativo** si importa come rettifica
+  in entrata della variazione di azioni (Trading 212: riga «open» meno riga «close»; Revolut: la quantità della riga, da
+  verificare su un file vero), senza costo; nel Bulk la riga porta un flag gestito, con un avviso in alto: «potrebbe essere
+  uno split», con le azioni «crea l'evento SPLIT e collega» o «collega a un evento esistente» (la rettifica collegata
+  ridistribuisce il costo, `financial_math/splits.py`); una nota a fine wizard lo ricorda. BRIM non crea eventi. Lo
+  **split inverso** resta un avviso «non importato»: si farà quando arriverà un caso reale.
 - **W-B88 · Quale data registra ogni plugin BRIM, contro il principio di B-52** — medio, numeri; W, 19/10 (analisi di B-52). Il
   principio del developer: registrare la data dell'operazione; usare la data valuta, o lo stato, solo per decidere se la riga è
   regolata. Nel lotto B-52 ci sono Fineco, Danske e il CSV generico. Altri 10 plugin nominano una data valuta o di regolamento:
