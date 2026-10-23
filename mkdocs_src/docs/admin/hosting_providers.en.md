@@ -138,7 +138,7 @@ your users sign in again after each restart. See
 
 - `LIBREFOLIO_PROFILE=managed`.
 - Its administrator, from `LIBREFOLIO_ADMIN_EMAIL`, with a setup link your panel delivers: see
-  [The Initial Administrator](#initial-admin).
+  [The Initial Administrator](#initial-admin). On a managed instance that administrator is protected: nobody can delete, deactivate or demote it, or reset its password or sign it out as another administrator, and it cannot delete itself or change its email address from the app (`409 ACCOUNT_PROTECTED`, a *Protected* badge in the Users tab), while `./dev.py user …` on the server still can, except deleting, which that command does not do: the emergency exit.
 - A `JWT_SECRET` of at least 32 random characters, so that sessions survive restarts. To keep it out
   of `.env`, use `JWT_SECRET_FILE`: see «Secrets» in [Environment Variables](configuration.md).
 - Its own instance key: never share one key between instances. See «The Instance Key» in

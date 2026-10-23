@@ -15,7 +15,8 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
-from backend.app.config.accounts import USERNAME_LENGTH_MESSAGE, USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, USERNAME_RESERVED_CHARACTER, USERNAME_RESERVED_MESSAGE
+from backend.app.config import get_settings
+from backend.app.config.accounts import USERNAME_LENGTH_MESSAGE, USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, USERNAME_RESERVED_CHARACTER, USERNAME_RESERVED_MESSAGE, owner_admin_email
 from backend.app.db.models import AccountTokenPurpose, Broker, BrokerUserAccess, Transaction, User, UserRole, UserSettings
 from backend.app.db.session import begin_writes
 from backend.app.services.accounts import token_service, whats_new_service
@@ -839,12 +840,24 @@ async def delete_account(session: AsyncSession, user: User) -> AccountDeletionRe
     return AccountDeletionResult(deleted_broker_ids=deleted_ids, files_removed=files_removed)
 
 
-def account_protection(user: User) -> Optional[str]:
-    """Why ``user`` may be neither deleted, deactivated nor demoted by anyone; ``None`` when nothing protects it.
+#: Why the account of ``LIBREFOLIO_ADMIN_EMAIL`` on a managed instance is protected: a stable word, sent as ``detail.reason``.
+PAYING_ADMINISTRATOR = "paying_administrator"
 
-    The hook of lot A7: on a managed instance the administrator created from the environment, who pays for it, is
-    protected. Until then no account is.
+
+def account_protection(user: User) -> Optional[str]:
+    """Why ``user`` may be neither deleted, deactivated nor demoted by anyone from the app; ``None`` when nothing protects it.
+
+    A5-1: on a managed instance (``LIBREFOLIO_PROFILE=managed``) the account whose email is ``LIBREFOLIO_ADMIN_EMAIL`` —
+    the administrator who pays for the instance — is protected (``PAYING_ADMINISTRATOR``), by email alone, administrator
+    or not, compared regardless of A–Z case. In any other profile, or with a variable that is unset, blank or not an
+    address, no account is. The routes of ``api/v1/users.py`` ask it; the command line (``./dev.py user``) does not: it is
+    the operator's emergency exit. Both settings are read at every call.
     """
+    if get_settings().LIBREFOLIO_PROFILE != "managed":
+        return None
+    owner = owner_admin_email()
+    if owner is not None and same_email(user.email, owner):
+        return PAYING_ADMINISTRATOR
     return None
 
 
