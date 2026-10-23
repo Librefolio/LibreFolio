@@ -947,6 +947,16 @@ def api_email_verification(verbose: bool = False, test_names: list[str] | None =
     return run_command(cmd, "Email verification API tests", verbose=verbose)
 
 
+def api_owner_email_change(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the API tests of the owner's email-change confirmation: POST /email/email-change/confirm, in-process."""
+    print_section("Owner Email Change API Tests")
+    print_info("Testing POST /email/email-change/confirm (anonymous: 200 {username}, the address moved and verified, sessions ended, notice to the old address scheduled; 400 TOKEN_INVALID with the token's status; revoked when the variable changed again, the address was taken, the profile is not managed or the account is not the owner; 422)")
+    print_info("In-process: the real auth and email routers on a private SQLite, profile and variables by monkeypatch; the lane's backend is never called")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_owner_email_change_api.py", test_names)
+    return run_command(cmd, "Owner email change API tests", verbose=verbose)
+
+
 def api_email_verification_hooks(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the tests of the email-verification hooks in A's routes (lot E5b): register, login, users, settings, in-process."""
     print_section("Email Verification Hooks API Tests")
@@ -1443,6 +1453,16 @@ Tests for REST API endpoints (server auto-started):
         # PURE: the real auth and email routers and the instance route run in-process on a private SQLite file under tmp_path, the
         # SMTP and LIBREFOLIO_PUBLIC_URL variables are set with monkeypatch in this process, the limiters are private on a fake clock
         # and the fake SMTP server listens on 127.0.0.1: the lane's backend is never called.
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "owner-email-change",
+        api_owner_email_change,
+        name="Owner Email Change API",
+        desc="POST /email/email-change/confirm (anonymous, no cookie set: 200 {username}, the owner's address moved and verified, its sessions ended (the cookie of before refused), the old address no longer signs in and the new one does with the same password, its other change links and reset links revoked, the notice to the old address scheduled, the owner protected by flag and address; 400 TOKEN_INVALID with expired/consumed/revoked/unknown, another purpose's token unknown and untouched, revoked when the host changed the variable again / another account took the address / not managed / not the owner / no address; 422 body); the whole flow from the startup sync's email to the click; no token or address in the logs; route name and models agreed with the web app",
+        # PURE: the real auth and email routers run in-process on a private SQLite file under tmp_path; profile and variables
+        # set with monkeypatch; email_changed_work replaced by a recorder; the lane's backend is never called.
         isolation="pure",
     )
     add_test(
