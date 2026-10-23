@@ -4688,3 +4688,42 @@ le revisioni (W-B87, X5-2, J5-1, numeri prima del gate). Graphify non disponibil
   HEAD **192 413 stati, 685,9 MB tenuti** (picco 686,9, 63,5 s); P4 **397 segmenti, 4,6 MB** (picco 10,2, 25,6 s).
 - ✅ **Doc** (23/10): `developer/backend/financial_math.md` («Segments (P4)», con le misure); `mkdocs build` 0 e
   `check-links` 0 (97 link; log `ondata5/MF-p4-mkdocs-*.log`). **CHECKPOINT READY** inviato, FROZEN.
+
+#### MF5-1b · frame per posizione, `position_period_pnl`, `position_flow_steps`, dimensione `asset` (23/10)
+Base `5dc68b650` (P4 committato dal coordinatore: financial-math 2627, portfolio-engine 41, roi-fifo-utils 1955, api
+portfolio 55). Via del coordinatore: i quattro pezzi insieme (sbloccano J e Y), poi B5, P1c, pavimenti. Precisazioni di J:
+frame compressi per posizione; campi `broker_id, asset_id, start, end, quantity, market_value, cost_basis, cost_complete,
+valuation_source, unrealized_pnl`; niente `flow`; niente frame a quantità 0; Σ `market_value` = `state.market_value` al bit.
+- ✅ **Rossi** (test-author, 23/10): 117 test in 6 file nuovi — `test_financial_math/test_position_frames.py` (41),
+  `test_financial/test_position_frames_engine.py` (4), `test_financial_math/test_position_period_pnl.py` (23),
+  `test_financial_math/test_native_cash_position_flow_steps.py` (24), `test_financial_math/test_asset_allocation.py` (21),
+  `test_financial/test_asset_allocation_report.py` (4). Su HEAD: 48 rossi, 1 verde (precondizione), 3 errori di raccolta
+  (`ImportError`), log `ondata5/MF-p4b-red-head.log`; 117/117 su una cura di riferimento fuori dal worktree; 5 mutanti presi.
+  Scelte: oracolo dei frame = lo stesso libro con `period_start=d`; un asset senza valore assente da `by_asset`;
+  Liquidity sempre presente; lo zero dell'altra colonna in `position_flow_steps` è `Decimal("0")`.
+- ✅ **Cura** (23/10):
+  - `models.py`: `PositionFrame`; `DailyPortfolioState.by_asset` (copiato da `state_on`); `position_frames` nel risultato.
+  - `daily_state.py`: `compute_position_frames`; nel ciclo 4c, per ogni posizione tenuta, i valori di
+    `_build_position_state` dalla stessa valutazione (`_extend_frame`: il frame aperto continua se i valori sono identici
+    con l'esponente, altrimenti si chiude il giorno prima); una posizione non più tenuta chiude il frame il giorno prima;
+    l'ordine finale per posizione segue `cumulative_qty` (l'ordine di somma del `market_value`); `by_asset` sommato
+    accanto a `market_value`.
+  - `engine.py`: `include_positions` (chiave del blob, docstring).
+  - `contributions.py`: `PositionPeriodPnl` + `position_period_pnl` (la formula tolta dal servizio, invariata);
+    `portfolio_service.get_positions_contribution` la chiama.
+  - `native_cash.py`: `position_flow_steps` (una passata, ordine per data stabile, regole di `flows`).
+  - `derived_views.py`: `allocation_asset_ids`, `build_asset_allocation_current/history` (+ Liquidity come in by_type).
+  - `schemas/portfolio.py`: `AllocationItem.id`, `PortfolioSummary.allocation_by_asset`, `AllocationHistoryDimensions.asset`;
+    il servizio li riempie (nomi `Asset.display_name`).
+  - Doc: `financial_math.md` («Position frames (#48)», «The asset dimension»), `transactions/wac.md` (`position_flow_steps`).
+  > **Note implementazione**: 117 nuovi + 137 di P4 verdi; porte (slot unico, 20:07–20:14, carico 3,5 → 1,8):
+  > `financial-math` 2735 / 1 rosso, `portfolio-engine` 41, `roi-fifo-utils` 1962 / 1 rosso, `api portfolio` **55**. I due
+  > rossi solo per il campo nuovo: aiuti riparati da test-author (`CONTAINER_FIELDS` + `_state`; tabelle di etichette
+  > del guard di cassa nativa + `"id": "asset"`; golden rigenerato: **1562 righe aggiunte, 0 tolte o cambiate**, solo le
+  > chiavi nuove). `api sync` 0 (nessun file tracciato cambiato), `front check` 0 errori.
+- ✅ **Parità e porte finali** (23/10): parità contro `5dc68b650` (albero da `git archive`), togliendo dal lato nuovo solo
+  i campi aggiunti (`allocation_by_asset`, `allocation_history.asset`, `id: null` delle voci, `by_asset` dalle impronte
+  degli stati): **202 casi, 0 differenze** (le righe di «Periodo» ora da `position_period_pnl` comprese); `mkdocs build` 0,
+  `check-links` 0 (slot 20:31–20:42, carico 1,9 → 2,7; log `ondata5/MF-p4b-verify.log`). Porte dopo le riparazioni (slot
+  21:19–21:23, carico 3,9 → 4,5; `ondata5/MF-p4b-gates2.log`): `financial-math` **2736**, `portfolio-engine` **41**,
+  `roi-fifo-utils` **1963**, `api portfolio` **55**. **CHECKPOINT READY** inviato, FROZEN.

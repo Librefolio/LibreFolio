@@ -31,6 +31,7 @@ from backend.app.services.financial_math.portfolio.models import (
     InTransitInterval,
     PnlCandleContribution,
     PortfolioCalculationResult,
+    PositionFrame,
     RealizedSale,
     SplitHistory,
     SplitRecord,
@@ -57,6 +58,11 @@ def _cumulative_split_ratio(history: SplitHistory, reference_date: date_type, va
             ratio *= split.ratio
             adjusted = True
     return ratio, adjusted
+
+
+def _exact(values: tuple) -> tuple:
+    """``values`` with every Decimal as its digits and exponent: equal only when the Decimals are the same."""
+    return tuple(value.as_tuple() if isinstance(value, Decimal) else value for value in values)
 
 
 def _calendar(first: date_type, last: date_type) -> list[date_type]:
@@ -154,6 +160,7 @@ class DailyStateBuilder:
         mark_series: dict[int, AssetPriceSeries] | None = None,
         compute_candles: bool = False,
         compute_acquisition_funding: bool = False,
+        compute_position_frames: bool = False,
     ) -> None:
         self.classified_txs = classified_txs
         self.in_transit_intervals = in_transit_intervals
@@ -210,6 +217,8 @@ class DailyStateBuilder:
         # but stays opt-in for consistency with compute_candles's "extra output stays
         # off ordinary reports unless requested" convention.
         self.compute_acquisition_funding = compute_acquisition_funding
+        # #48 (J): each held position's values as frames, from date_from on (PositionFrame). Off by default.
+        self.compute_position_frames = compute_position_frames
 
     def build(self) -> PortfolioCalculationResult:  # noqa: C901 — TODO(P2-refactor): monolithic daily-replay engine; extract the day's stages
         """Build daily states for [date_from, date_to] + position snapshots + period accumulators.
@@ -305,6 +314,10 @@ class DailyStateBuilder:
         frame_fx_days = set(self.native_cash.rate_change_days(self._replay_from, self.date_to))
         dirty_days = self._collect_dirty_days(set(cash_deltas) | set(position_txs_by_date) | set(ecf_by_date) | internal_flow_dates, set(position_txs_by_date), frame_fx_days)
         ordered_dirty_days = sorted(dirty_days)
+
+        # #48: each position's closed frames, and the frame still open on the last computed day (start, values)
+        closed_frames: dict[tuple[int, int], list[PositionFrame]] = defaultdict(list)
+        open_frames: dict[tuple[int, int], tuple[date_type, tuple]] = {}
 
         previous_state: DailyPortfolioState | None = None
         current = self._replay_from
@@ -425,6 +438,9 @@ class DailyStateBuilder:
             by_type: dict[str, Decimal] = defaultdict(lambda: zero)
             by_sector: dict[str, Decimal] = defaultdict(lambda: zero)
             by_geo: dict[str, Decimal] = defaultdict(lambda: zero)
+            by_asset: dict[int, Decimal] = {}
+            frames_today = self.compute_position_frames and current >= self.date_from
+            held_today: set[tuple[int, int]] = set()
             missing: set[int] = set()
             stale: set[int] = set()
             missing_fx: set[str] = set()
@@ -449,6 +465,7 @@ class DailyStateBuilder:
                 if valuation.market_value is not None:
                     market_value += valuation.market_value
                     market_value_by_broker[position_broker_id] += valuation.market_value
+                    by_asset[asset_id] = by_asset.get(asset_id, zero) + valuation.market_value
                     self._distribute_allocation(asset_id, valuation.market_value, by_type, by_sector, by_geo)
                     if self.compute_candles:
                         has_ohlc = valuation.market_value_open is not None and valuation.market_value_high is not None and valuation.market_value_low is not None
@@ -469,7 +486,17 @@ class DailyStateBuilder:
                 position_cost = cost_pool.get((asset_id, position_broker_id))
                 position_cost_report = position_cost.cost_report_for(qty) if position_cost is not None else zero
                 open_cost_basis += position_cost_report
+                if frames_today:
+                    key = (asset_id, position_broker_id)
+                    held_today.add(key)
+                    self._extend_frame(key, current, qty, valuation, position_cost, position_cost_report, open_frames, closed_frames)
                 self._add_unrealized_part(unrealized_parts, asset_id, qty, valuation.market_value, position_cost_report, position_cost, current, at_cost=valuation.source == ValuationSource.ESTIMATED_AT_COST)
+
+            if frames_today:
+                # A position no longer held ends its frame the day before: no frame where it is not held
+                for key in [key for key in open_frames if key not in held_today]:
+                    start, values = open_frames.pop(key)
+                    closed_frames[key].append(self._frame(key, start, current - timedelta(days=1), values))
 
             # 4d. In-transit values. `it_by_broker` is attributed to each interval's
             # departure-broker (cash+asset market value only — additive NAV
@@ -593,6 +620,7 @@ class DailyStateBuilder:
                 by_type=dict(by_type),
                 by_sector=dict(by_sector),
                 by_geography=dict(by_geo),
+                by_asset=by_asset,
                 missing_price_asset_ids=missing,
                 missing_fx_pairs=missing_fx,
                 stale_price_asset_ids=stale,
@@ -615,8 +643,16 @@ class DailyStateBuilder:
             ps = self._build_position_state(aid, bid, qty, self.date_to, cost_pool)
             position_states_end.append(ps)
 
+        position_frames: tuple[PositionFrame, ...] | None = None
+        if self.compute_position_frames:
+            for key, (start, values) in open_frames.items():
+                closed_frames[key].append(self._frame(key, start, self.date_to, values))
+            # Grouped in the order the replay met the positions (the market value's summing order), each by start
+            position_frames = tuple(frame for key in cumulative_qty for frame in closed_frames.get(key, ()))
+
         return PortfolioCalculationResult(
             daily_states=self._segments(computed),
+            position_frames=position_frames,
             position_states_start=position_states_start,
             position_states_start_date=self.period_start,
             position_states_end=position_states_end,
@@ -644,6 +680,49 @@ class DailyStateBuilder:
         )
 
     # ── Helper methods ──
+
+    @staticmethod
+    def _extend_frame(
+        key: tuple[int, int],
+        day: date_type,
+        qty: Decimal,
+        valuation: ValuationResult,
+        position_cost: CostStep | None,
+        cost_basis: Decimal,
+        open_frames: dict[tuple[int, int], tuple[date_type, tuple]],
+        closed_frames: dict[tuple[int, int], list[PositionFrame]],
+    ) -> None:
+        """Carry the position's open frame through ``day``, or close it the day before and open one when a value changed.
+
+        The values are those of ``_build_position_state`` for the day (the same valuation and cost the day's totals sum).
+        Values are compared with their exponent, so a frame holds exactly the Decimals of each of its days.
+        """
+        cost_complete = position_cost.report_complete if position_cost is not None else True
+        unrealized = valuation.market_value - cost_basis if valuation.market_value is not None and cost_complete else None
+        values = (qty, valuation.market_value, cost_basis, cost_complete, valuation.source, unrealized)
+        opened = open_frames.get(key)
+        if opened is not None:
+            if _exact(opened[1]) == _exact(values):
+                return
+            closed_frames[key].append(DailyStateBuilder._frame(key, opened[0], day - timedelta(days=1), opened[1]))
+        open_frames[key] = (day, values)
+
+    @staticmethod
+    def _frame(key: tuple[int, int], start: date_type, end: date_type, values: tuple) -> PositionFrame:
+        asset_id, broker_id = key
+        quantity, market_value, cost_basis, cost_complete, source, unrealized = values
+        return PositionFrame(
+            broker_id=broker_id,
+            asset_id=asset_id,
+            start=start,
+            end=end,
+            quantity=quantity,
+            market_value=market_value,
+            cost_basis=cost_basis,
+            cost_complete=cost_complete,
+            valuation_source=source,
+            unrealized_pnl=unrealized,
+        )
 
     def _segments(self, computed: list[DailyPortfolioState]) -> DailyStates:
         """The computed states from date_from on as segments: each holds up to the day before the next, the last one to

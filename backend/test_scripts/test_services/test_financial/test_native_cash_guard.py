@@ -251,13 +251,17 @@ _ID_FIELDS: dict[str, str] = {
     **dict.fromkeys(("asset_id", "affected_asset_ids", "carried_forward_price_asset_ids", "missing_price_asset_ids", "stale_price_asset_ids", "transaction_implied_asset_ids"), "asset"),
     **dict.fromkeys(("transaction_id", "movement_id", "unknown_cost_movement_ids", "oversold_movement_ids", "related_transaction_id", "source_transaction_ids", "opening_transaction_id", "operation_transaction_id"), "tx"),
     "user_id": "user",
+    # MF5-1b: AllocationItem.id, the asset of a slice of the asset dimension (None on the other dimensions' slices and
+    # on Liquidity). No other dumped field is named "id".
+    "id": "asset",
 }
 # Fields holding an id as a digit string: a data-quality issue about an asset points at str(asset_id).
 _DIGIT_ID_FIELDS: dict[str, str] = {"cta_target": "asset"}
 # Dicts keyed by broker id, dicts keyed by asset id (V-11: the day of the last market quote of
-# each transaction-implied asset), and dicts keyed by the (asset_id, broker_id) of a position.
+# each transaction-implied asset; MF5-1b: by_asset, the day's market value of each asset), and dicts keyed by the
+# (asset_id, broker_id) of a position.
 _BROKER_KEYED_FIELDS = frozenset({"broker_contributions", "capital_pool", "returns_pool", "cumulative_cash_by_broker", "cumulative_ecf_by_broker"})
-_ASSET_KEYED_FIELDS = frozenset({"transaction_implied_last_quote_dates"})
+_ASSET_KEYED_FIELDS = frozenset({"transaction_implied_last_quote_dates", "by_asset"})
 _POSITION_KEYED_FIELDS = frozenset({"cumulative_qty", "wac_pool_qty", "wac_pool_cost", "average_costs"})
 # AverageCost.key is the (asset_id, broker_id) tuple of its position.
 _POSITION_TUPLE_FIELDS = frozenset({"key"})

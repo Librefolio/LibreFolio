@@ -295,6 +295,9 @@ class DailyPortfolioState:
     by_type: dict[str, Decimal] = field(default_factory=dict)
     by_sector: dict[str, Decimal] = field(default_factory=dict)
     by_geography: dict[str, Decimal] = field(default_factory=dict)
+    # The held market value of each asset (asset_id -> amount, every broker, the values summed into market_value; no
+    # cash): the asset dimension of the allocations
+    by_asset: dict[int, Decimal] = field(default_factory=dict)
     # Data quality
     missing_price_asset_ids: set[int] = field(default_factory=set)
     missing_fx_pairs: set[str] = field(default_factory=set)
@@ -353,6 +356,7 @@ class StateSegment:
             by_type=dict(state.by_type),
             by_sector=dict(state.by_sector),
             by_geography=dict(state.by_geography),
+            by_asset=dict(state.by_asset),
             missing_price_asset_ids=set(state.missing_price_asset_ids),
             missing_fx_pairs=set(state.missing_fx_pairs),
             stale_price_asset_ids=set(state.stale_price_asset_ids),
@@ -482,6 +486,30 @@ class DailyStates(Sequence[DailyPortfolioState]):
                 yield StateSegment(start=start, end=end, state=segment.state_on(start))
 
 
+@dataclass(frozen=True, slots=True)
+class PositionFrame:
+    """One position's values over the days ``start``..``end`` (both included) during which none of them changes.
+
+    A frame changes only when its own position does (a movement, a quote, a rate, a cost step of its own), and two
+    consecutive frames of a position never carry the same values. A position not held on a day has no frame there.
+    """
+
+    broker_id: int
+    asset_id: int
+    start: date_type
+    end: date_type
+    # At the owner's share, as the engine's cumulative quantity
+    quantity: Decimal
+    # Report currency; None when the position cannot be valued that day (missing rate, no observation)
+    market_value: Decimal | None
+    # Historical cost of the open quantity in the report currency (the known part)
+    cost_basis: Decimal
+    cost_complete: bool
+    valuation_source: ValuationSource
+    # market_value - cost_basis; None when market_value is None or the cost is incomplete
+    unrealized_pnl: Decimal | None
+
+
 # =============================================================================
 # PORTFOLIO CALCULATION RESULT
 # =============================================================================
@@ -609,3 +637,7 @@ class PortfolioCalculationResult:
     missing_fx: dict[str, set[date_type]] = field(default_factory=dict)
     # J-43: the classification's linked internal pairs between brokers owned at different shares.
     share_mismatches: list[ShareMismatch] = field(default_factory=list)
+    # The held positions' frames from date_from on (None unless asked: include_positions / compute_position_frames).
+    # Grouped by position, in the order the replay first met each one, each group by start: summing from Decimal("0"), in
+    # this order, the market values (not None) of the frames covering a day gives that day's market_value exactly.
+    position_frames: tuple[PositionFrame, ...] | None = None
