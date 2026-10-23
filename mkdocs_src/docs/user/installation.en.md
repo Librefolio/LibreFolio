@@ -4,6 +4,8 @@ This guide installs LibreFolio with the official pre-built Docker image: the sim
 
 You only need Docker: no Python, Node.js or Pipenv, and nothing to compile.
 
+🍓 The official image is published for `amd64` and `arm64`, so it runs natively, without emulation, on a Raspberry Pi 4/5 (64-bit OS) and on Apple Silicon Macs (32-bit ARM is not published).
+
 ---
 
 ## ✅ Prerequisites
