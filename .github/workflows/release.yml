@@ -356,11 +356,16 @@ jobs:
       # pushing that tag last means `latest` and `X.Y.Z-light` already exist when
       # the prompt appears. If the light build fails, `X.Y.Z` is never pushed and
       # no admin is told to update to an image they cannot get from `latest`.
+      # Multi-arch: linux/amd64 + linux/arm64. arm64 runs natively on Raspberry Pi 4/5
+      # and Apple Silicon, without emulation. Here it is built under QEMU, so the build
+      # is slower. The first tag is the real test: the check steps below verify both
+      # platforms in every pushed manifest.
       - name: Build and Push Docker Image (Light Variant)
         if: steps.meta-light.outputs.tags != ''
         uses: docker/build-push-action@v7
         with:
           context: .
+          platforms: linux/amd64,linux/arm64
           push: true
           build-args: |
             DOCS_VARIANT=light
@@ -369,16 +374,56 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Same platforms as the light variant (arm64 notes above).
       - name: Build and Push Docker Image
         if: steps.meta.outputs.tags != ''
         uses: docker/build-push-action@v7
         with:
           context: .
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Fail the job when a pushed tag lacks a platform. Tags come from the metadata step,
+      # passed through env (not inline in the script).
+      - name: Check the light image manifests (amd64 and arm64)
+        if: steps.meta-light.outputs.tags != ''
+        env:
+          TAGS: ${{ steps.meta-light.outputs.tags }}
+        run: |
+          set -euo pipefail
+          while read -r tag; do
+            [ -n "$tag" ] || continue
+            manifest="$(docker buildx imagetools inspect "$tag")"
+            for platform in linux/amd64 linux/arm64; do
+              if ! grep -q "$platform" <<<"$manifest"; then
+                echo "::error::Tag $tag lacks platform $platform in its manifest" >&2
+                exit 1
+              fi
+            done
+            echo "OK: $tag has linux/amd64 and linux/arm64"
+          done <<<"$TAGS"
+
+      - name: Check the image manifests (amd64 and arm64)
+        if: steps.meta.outputs.tags != ''
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          while read -r tag; do
+            [ -n "$tag" ] || continue
+            manifest="$(docker buildx imagetools inspect "$tag")"
+            for platform in linux/amd64 linux/arm64; do
+              if ! grep -q "$platform" <<<"$manifest"; then
+                echo "::error::Tag $tag lacks platform $platform in its manifest" >&2
+                exit 1
+              fi
+            done
+            echo "OK: $tag has linux/amd64 and linux/arm64"
+          done <<<"$TAGS"
 
       # ==========================================
       # 5. GITHUB PAGES DEPLOY
