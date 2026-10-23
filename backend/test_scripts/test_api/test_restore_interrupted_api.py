@@ -2,8 +2,9 @@
 An unreadable restore state serves no data, through the API (LibreFolio 1.3, workstream H, lot B-33, the start's part).
 Developer decision (22/10, via the coordinator): while the state of the restore cannot be read, the instance serves no
 data; the web app shows «the restore stopped half way: call the administrator», and the administrator chooses with
-``./dev.py backup pending --recover`` (workstream B). Out of scope (D6/D7): the panel's backup jobs in this state,
-``panel/status`` saying it (it keeps answering 500 ``restore_state_unreadable``, Q7).
+``./dev.py backup pending --recover`` (workstream B). D7 (developer, contract L3 §10 option A), the last lot of wave
+4: ``panel/status`` says it (200, ``restore.state == "unreadable"`` with its reason, instead of Q7's 500), and the
+panel's backup does not start in this state.
 
 Under test, written by B-33 (H) and missing today:
 
@@ -18,8 +19,15 @@ Under test, written by B-33 (H) and missing today:
   interrupted.
 - ``POST /system/wake-sync`` (its token) while interrupted: 200, ``status: restore_interrupted``, no job, nothing past
   the scheduler's switches.
-- ``GET /panel/status`` while interrupted: still allowed, unchanged (an unreadable state → 500
-  ``restore_state_unreadable``, Q7), never the 423.
+- ``GET /panel/status`` while interrupted: still allowed, never the 423; an unreadable state → 200 with ``restore ==
+  {"state": "unreadable", "reason": <io|not_a_file|invalid>, "waiting": null, "backup_created_at": null, "stage_id":
+  null}`` (D7; red until D7, the route answers Q7's 500).
+- D7, ``POST /backup/panel/jobs`` while interrupted: with its valid token → 409 ``{"detail": {"code":
+  "backup_restore_interrupted", "message": ...}}``, no job created (``job_views.start_job`` never called), refused by
+  ``refuse_when_restore_interrupted`` for that endpoint only. The credential first: no token configured → 404, a token
+  configured and none (or another) presented → 401 ``backup_panel_unauthorized``, the same answers as outside the state,
+  never the 409. ``GET …/jobs/{id}``, ``…/file`` and ``DELETE …/jobs/{id}`` stay allowed (their own 404, not 409, not
+  423); outside the state the start works as before (guard).
 
 How. As ``test_await_restore_mode_api.py`` (H-62), whose fixtures and helpers this file reuses: the app of
 ``backend/app/main.py`` in this process through ``httpx.ASGITransport`` (its lifespan does not run, so nothing probes
@@ -37,27 +45,33 @@ from __future__ import annotations
 import importlib
 import json
 import secrets
+from datetime import UTC, datetime
 from types import ModuleType
-from typing import Any, NoReturn
+from typing import Any
 
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.api.v1.backup import job_views
 from backend.app.api.v1.instance_block import ALLOWED_WHEN_AWAITING_RESTORE, refuse_when_awaiting_restore, refuse_when_blocked
 from backend.app.api.v1.system import wake as wake_module
 from backend.app.config import API_V1_PREFIX
 from backend.app.db.models import User
-from backend.app.services.platform.instance_backup import apply as apply_module
+from backend.app.schemas.backup import InstanceBackupJob
+from backend.app.services.platform.instance_backup import jobs as backup_jobs
 from backend.app.services.platform.scheduler import scheduler
 from backend.app.services.platform.sleep_wake import idle_monitor
 from backend.test_scripts.test_api import test_await_restore_mode_api as h62
 from backend.test_scripts.test_api.test_await_restore_mode_api import (
     ALLOWED_WHEN_AWAITING_RESTORE_ROUTES,
     AWAITING_CODE,
+    BACKUP_TOKEN_VARIABLE,
     BLOCKED_CODE,
     DOCUMENTATION_PATHS,
+    PANEL_STATUS_KEYS,
     PAST_THE_SWITCHES,
+    UNREADABLE_REASONS,
     WAKE_TOKEN_VARIABLE,
     Instance,
     _api_routes,
@@ -70,6 +84,8 @@ from backend.test_scripts.test_api.test_await_restore_mode_api import (
     send,
     shown,
     signed_in,
+    unreadable_restore,
+    write_unreadable_state,
 )
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -338,18 +354,18 @@ async def test_the_wake_up_while_interrupted_answers_restore_interrupted_and_run
 
 
 @pytest.mark.asyncio
-async def test_while_interrupted_the_panel_status_still_answers_an_unreadable_state_with_500(instance):
-    """RI-030 (Q7 unchanged): interrupted, ``apply.read_restore`` raising ``RestoreStateUnreadableError``: ``GET
-    /panel/status`` with its token → 500 ``restore_state_unreadable``, never the 423 of the interruption."""
+@pytest.mark.parametrize("reason", UNREADABLE_REASONS)
+async def test_while_interrupted_the_panel_status_says_the_state_is_unreadable_with_its_reason(instance, reason):
+    """RI-030 (D7, replaces Q7's 500): interrupted, a restore state on disk B's reader refuses with ``reason``: ``GET
+    /panel/status`` with its token → 200, ``restore`` exactly ``{state: unreadable, reason, waiting: null,
+    backup_created_at: null, stage_id: null}``, ``mode`` normal; never the 423 of the interruption, never the 500."""
+    write_unreadable_state(instance.root, reason, instance.monkeypatch)
     interrupt(instance)
-
-    def unreadable(*_args: Any, **_kwargs: Any) -> NoReturn:
-        raise apply_module.RestoreStateUnreadableError("invalid")
-
-    instance.monkeypatch.setattr(apply_module, "read_restore", unreadable)
     response = await panel_status(instance)
 
-    assert code(response) == (500, "restore_state_unreadable"), f"while interrupted the panel's status still reads the restore: {shown(response)}"
+    assert response.status_code == 200, f"D7: while interrupted the panel's status answers 200 for an unreadable state ({reason}): {shown(response)}"
+    body = response.json()
+    assert set(body) == PANEL_STATUS_KEYS and (body["mode"], body["restore"]) == ("normal", unreadable_restore(reason)), f"D7: restore unreadable with {reason!r}, mode normal: {body}"
 
 
 @pytest.mark.asyncio
@@ -378,3 +394,121 @@ async def test_with_another_switch_on_a_signed_in_user_still_meets_423(instance,
     response = await send(instance, "GET", f"{API_V1_PREFIX}/brokers", headers=session)
 
     assert response.status_code == 423 and code(response)[1] in codes, f"423 with one of {codes}: {shown(response)}"
+
+
+# =============================================================================
+# RI-040..043 (D7): THE PANEL'S BACKUP WHILE INTERRUPTED
+# =============================================================================
+
+JOBS_PATH = f"{API_V1_PREFIX}/backup/panel/jobs"
+#: A job id of the right shape that no job has.
+UNKNOWN_JOB_ID = "0123456789abcdef0123456789abcdef"
+RESTORE_INTERRUPTED_BACKUP_CODE = "backup_restore_interrupted"
+BACKUP_UNAUTHORIZED_CODE = "backup_panel_unauthorized"
+NOT_FOUND_ANSWER = (404, {"detail": "Not Found"})
+
+
+class StartRecorder:
+    """Stands in for ``job_views.start_job``: records each start and answers a running job, so no backup is built."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[tuple, dict]] = []
+
+    def __call__(self, *args: Any, **kwargs: Any) -> InstanceBackupJob:
+        self.calls.append((args, kwargs))
+        return InstanceBackupJob(job_id=secrets.token_hex(16), status="running", done_bytes=0, total_bytes=0, created_at=datetime.now(UTC), encrypted=False)
+
+
+def no_backup(instance: Instance) -> tuple[StartRecorder, list[str]]:
+    """The start of a job recorded (``job_views.start_job``) and the backup service a trap (``jobs.start_backup``): what a
+    refused start must leave untouched."""
+    recorder = StartRecorder()
+    reached: list[str] = []
+    instance.monkeypatch.setattr(job_views, "start_job", recorder)
+    instance.monkeypatch.setattr(backup_jobs, "start_backup", _trap("jobs.start_backup", reached))
+    return recorder, reached
+
+
+def backup_token(instance: Instance) -> dict[str, str]:
+    """The panel's backup token configured, and the ``Authorization`` header that presents it."""
+    token = secrets.token_hex(32)
+    instance.monkeypatch.setenv(BACKUP_TOKEN_VARIABLE, token)
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _answer(response: Any) -> tuple[int, Any]:
+    try:
+        return response.status_code, response.json()
+    except ValueError:
+        return response.status_code, response.text[:300]
+
+
+@pytest.mark.asyncio
+async def test_while_interrupted_the_panels_backup_start_is_409_backup_restore_interrupted_and_starts_nothing(instance):
+    """RI-040 (D7): interrupted, the backup token configured and presented: ``POST /backup/panel/jobs`` → 409 ``{"detail":
+    {"code": "backup_restore_interrupted", "message": ...}}``; no job started, the backup service never reached. Barrier:
+    the same token passes the credential while interrupted (``GET …/jobs/{unknown}`` answers the route's own 404)."""
+    recorder, reached = no_backup(instance)
+    headers = backup_token(instance)
+    instance.switches()
+    interrupt(instance)
+    barrier = await send(instance, "GET", f"{JOBS_PATH}/{UNKNOWN_JOB_ID}", headers=headers)
+    assert code(barrier) == (404, "backup_job_not_found"), f"Barrier: the token passes the credential while interrupted: {shown(barrier)}"
+
+    response = await send(instance, "POST", JOBS_PATH, headers=headers)
+
+    detail = _detail(response)
+    assert code(response) == (409, RESTORE_INTERRUPTED_BACKUP_CODE), f"D7: a panel backup while interrupted → 409 {RESTORE_INTERRUPTED_BACKUP_CODE}: {shown(response)}"
+    assert isinstance(detail, dict) and set(detail) == {"code", "message"} and isinstance(detail["message"], str) and detail["message"], f"the refusal is a code and a message: {detail}"
+    assert (recorder.calls, reached) == ([], []), f"D7: no backup starts while interrupted: start_job {recorder.calls}, reached {reached}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case", ["no-token-configured", "no-credential", "another-token"])
+async def test_while_interrupted_the_panels_backup_start_checks_the_credential_first(instance, case):
+    """RI-041 (D7, guard of the credential-first order): no token configured and none presented → 404 ``Not Found``; a
+    token configured and none presented, or another one → 401 ``backup_panel_unauthorized``. The same answer interrupted
+    or not, never the 409 of the state; no job started either way."""
+    recorder, reached = no_backup(instance)
+    headers: dict[str, str] = {}
+    if case != "no-token-configured":
+        backup_token(instance)
+    if case == "another-token":
+        headers = {"Authorization": f"Bearer {secrets.token_hex(32)}"}
+    expected = NOT_FOUND_ANSWER if case == "no-token-configured" else (401, BACKUP_UNAUTHORIZED_CODE)
+    instance.switches()
+    answers = {}
+    for interrupted in (False, True):
+        interrupt(instance, interrupted)
+        response = await send(instance, "POST", JOBS_PATH, headers=headers)
+        answers[interrupted] = _answer(response) if case == "no-token-configured" else code(response)
+
+    assert answers == {False: expected, True: expected}, f"{case}: the credential's answer {expected}, interrupted or not, never the 409: {answers}"
+    assert (recorder.calls, reached) == ([], []), f"no backup starts without the credential: {recorder.calls}, {reached}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("method", "suffix"), [("GET", "/{job_id}"), ("GET", "/{job_id}/file"), ("DELETE", "/{job_id}")], ids=["poll", "download", "delete"])
+async def test_while_interrupted_the_panels_other_backup_routes_answer_on_their_own_terms(instance, method, suffix):
+    """RI-042 (D7, guard): interrupted, the backup token presented: the poll, the download and the delete of a job are
+    not refused by the state (neither 409 nor 423): an unknown job answers each route's own 404 ``backup_job_not_found``."""
+    headers = backup_token(instance)
+    instance.switches()
+    interrupt(instance)
+    response = await send(instance, method, JOBS_PATH + suffix.format(job_id=UNKNOWN_JOB_ID), headers=headers)
+
+    assert code(response) == (404, "backup_job_not_found"), f"D7: {method} …/jobs{suffix} stays allowed while interrupted, its own 404: {shown(response)}"
+
+
+@pytest.mark.asyncio
+async def test_guard_outside_the_interruption_the_panels_backup_starts_as_before(instance):
+    """RI-043 (D7, guard): not interrupted, the backup token presented: ``POST /backup/panel/jobs`` → 202 with the job
+    ``job_views.start_job`` answers, started once for the panel."""
+    recorder, reached = no_backup(instance)
+    headers = backup_token(instance)
+    instance.switches()
+    interrupt(instance, False)
+    response = await send(instance, "POST", JOBS_PATH, headers=headers)
+
+    assert response.status_code == 202, f"outside the interruption the panel's backup starts: {shown(response)}"
+    assert len(recorder.calls) == 1 and recorder.calls[0][0][:1] == ("panel",) and reached == [], f"one start, for the panel: {recorder.calls}, reached {reached}"

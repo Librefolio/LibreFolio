@@ -164,8 +164,9 @@ your users sign in again after each restart. See
   where the users of the instance ask for help, such as an asset the search does not find. Without
   it, the asset search offers no **Let us know** link: the public GitHub issue a self-hosted
   instance falls back to would publish the instance's profile, its provider codes and your
-  customer's asset identifiers. Other help links in the app may still point to LibreFolio's
-  GitHub. See «Main Options» in [Environment Variables](configuration.md).
+  customer's asset identifiers. It is also the **Contact support** link of the page shown while
+  [a restore has stopped half way](#restore-interrupted). Other help links in the app may still
+  point to LibreFolio's GitHub. See «Main Options» in [Environment Variables](configuration.md).
 
     **A support form that fills itself in.** With a page, **Let us know** opens it in a new tab
     with the report of the search added to its address, like a prefilled GitHub issue: `title`
@@ -862,13 +863,17 @@ curl -sS -H "Authorization: Bearer $LIBREFOLIO_PANEL_STATUS_TOKEN" \
 | Key | What it holds |
 | --- | --- |
 | `mode` | `normal`, or `awaiting_restore` while [`LIBREFOLIO_AWAIT_RESTORE`](#await-restore) is on |
-| `restore` | `null` when no restore was ever recorded on this instance; otherwise `state` (`pending`, `in_progress`, `committed` or `rolled_back`), `reason` (why a restore was rolled back: `first_start_failed`, `swap_interrupted`, `swap_failed` or `stage_missing`), `waiting` (why a confirmed restore still waits: `backup_running`, `other_data_directory`, `server_running` or `instance_blocked`), `backup_created_at` and `stage_id`. Each is `null` when it does not apply. It never says who confirmed the restore |
+| `restore` | `null` when no restore was ever recorded on this instance; otherwise `state` (`pending`, `in_progress`, `committed`, `rolled_back`, or `unreadable` when the state of the restore cannot be read), `reason` (why a restore was rolled back: `first_start_failed`, `swap_interrupted`, `swap_failed` or `stage_missing`; for `unreadable`, why the state cannot be read: `io`, `not_a_file` or `invalid`), `waiting` (why a confirmed restore still waits: `backup_running`, `other_data_directory`, `server_running` or `instance_blocked`), `backup_created_at` and `stage_id`. Each is `null` when it does not apply. It never says who confirmed the restore |
 
 - The answer holds these four keys and nothing else: no username, no email address, no count of
   accounts. Ignore the keys you do not know: a later version may add some.
 - `setup_expires_at` is an ISO 8601 date and time in UTC, given only while the state is `pending`.
-- When the state of the restore cannot be read, the answer is `500` with the code
-  `restore_state_unreadable`, never `restore: null`: a restore may be waiting behind it.
+- When the state of the restore cannot be read, the answer is still `200`, never `restore: null`:
+  a restore may be waiting behind it. `restore` then reads
+  `{"state": "unreadable", "reason": "io", "waiting": null, "backup_created_at": null, "stage_id": null}`,
+  with `reason` `io` (its owner, its permissions or a disk error), `not_a_file` (a link or a folder in
+  its place) or `invalid` (content no LibreFolio wrote): see
+  [When the State of a Restore Cannot Be Read](#restore-interrupted).
 - It answers on a [blocked instance](#instance-block) too, as on any other. A `pending` link there
   still waits for the unblock: the setup is refused until then, and its 72 hours keep running.
 - Without `LIBREFOLIO_PANEL_STATUS_TOKEN` and without the panel's keys it answers `404`. Its other
@@ -979,6 +984,7 @@ curl -sS -X DELETE -H "Authorization: Bearer $TOKEN" "$JOBS/<job_id>"
 | `409` | A download of a job that has no archive: still running, or failed | `backup_job_not_ready` |
 | `409` | A delete while the job runs | `backup_job_running` |
 | `409` | A start while the instance [awaits a restore](#await-restore): a backup of its empty data never starts | `backup_awaiting_restore` |
+| `409` | A start while a [restore stopped half way](#restore-interrupted): a backup of data in doubt never starts. Your panel's credential is checked first: without a valid one the answer is the `401` or `404` above | `backup_restore_interrupted` |
 | `507` | A start while the disk of the data directory, or a quota, is full: free some space, then start again | `backup_no_space` |
 | `500` | The backup cannot start: the `backups/` folder of the data directory is a link or a file, or cannot be written for another reason. The log has the cause | `backup_folder_unusable`, `backup_failed` |
 
@@ -1065,8 +1071,13 @@ paths are under `/api/v1/backup/panel/restore`:
 | Drop a confirmed restore before the restart | `DELETE …/pending` | `204`, its checked copy removed |
 
 - **Only the `.lfbk` file.** A zip or the sealed `.tar` that holds it is refused with `400` and the
-  code `restore_envelope_required`, and removed. The [upload limit](#restore-upload-limit) and the
+  code `restore_envelope_required`, and removed: on its first bytes, or once the whole file is
+  received and is no `.lfbk` after all. The [upload limit](#restore-upload-limit) and the
   limit on what an archive unpacks to apply, as for an administrator's restore.
+- **A new upload replaces the previous one only once it is accepted**: received to its end, then
+  found to be an `.lfbk` file. A refused upload, empty, incomplete, too large or not an `.lfbk`,
+  leaves the previous one in place, for its check. An upload that a running check reads is never
+  removed.
 - **The report holds no personal or portfolio data.** It gives the backup's date, version, origin
   and revision, the version this instance runs, whether the restore keeps the version (`same`) or
   upgrades it (`upgrade`) and with which migrations, whether the instance key is included, the
@@ -1124,7 +1135,7 @@ ticket learns neither whether the instance is blocked nor whether it awaits a re
 | `409` | Another file is being checked, a secure backup this version cannot read, a check still running or that refused the file, LibreFolio updated since the check, another restore already confirmed, or a restart with no restore confirmed | `restore_busy`, `envelope_unsupported`, `restore_stage_running`, `restore_not_restorable`, `restore_stage_outdated`, `restore_already_pending`, `restore_not_pending` |
 | `410` | The check expired: check the file again | `restore_stage_expired` |
 | `507` | Not enough free space in the data directory | `backup_no_space`, `no_space` |
-| `500` | The data directory's restore folder cannot be used, the state of the restore cannot be read, or a step could not be done; the log has the cause | `restore_folder_unusable`, `restore_state_unreadable`, `backup_upload_failed`, `stage_failed`, `restore_confirm_failed`, `restore_restart_failed`, `restore_cancel_failed` |
+| `500` | The data directory's restore folder cannot be used, the state of the restore cannot be read (the answer's `detail` then adds `reason`: `io`, `not_a_file` or `invalid`), or a step could not be done; the log has the cause | `restore_folder_unusable`, `restore_state_unreadable`, `backup_upload_failed`, `stage_failed`, `restore_confirm_failed`, `restore_restart_failed`, `restore_cancel_failed` |
 
 ### 🧩 When the State of a Restore Cannot Be Read {: #restore-interrupted }
 
@@ -1150,8 +1161,8 @@ The state of the restore cannot be read: LibreFolio serves no data until the adm
 - **The same API calls answer as in the [awaiting restore mode](#await-restore)**: the probes and
   the version, `GET /api/v1/system/instance`, the
   [scheduled wake-up](sleep_wake.md#wake-sync) and your panel's routes (its status, its backup jobs
-  and its restore). Every other call answers `423 Locked`, to anyone, signed in or not, the sign-in
-  included:
+  and its restore), but a backup start. Every other call answers `423 Locked`, to anyone, signed in
+  or not, the sign-in included:
 
     ```json
     {"detail": {"code": "instance_restore_interrupted", "message": "A restore of this instance stopped half way: it serves no data until its administrator recovers it"}}
@@ -1159,13 +1170,19 @@ The state of the restore cannot be read: LibreFolio serves no data until the adm
 
 - `GET /api/v1/system/instance` says `"restore_interrupted": true`.
 - The scheduled wake-up answers the status `restore_interrupted` and runs no job.
-- Your panel's [status](#panel-status) answers `500` with the code `restore_state_unreadable`, as
-  it does whenever the state of the restore cannot be read.
+- Your panel's [status](#panel-status) answers `200` with `restore.state` `unreadable` and its
+  `reason`, as it does whenever the state of the restore cannot be read.
+- Your panel's [backup jobs](#panel-jobs): a start answers `409` with the code
+  `backup_restore_interrupted`, once your panel's credential is checked (without a valid one, the
+  same `401` or `404` as always): a backup of data in doubt would take the place of a good one among
+  those you keep. Following a job, downloading its archive and deleting it still answer.
 - Users who open the instance get a full page instead of every page of the app, the sign-in page
   included: **The restore stopped half way**, on the sign-in page's background. It asks them to
   contact their administrator, links the steps to recover, asks the instance every 30 seconds
   whether it serves the data again, and reloads itself when it does; **Try again** reloads it at
-  once.
+  once. When `LIBREFOLIO_SUPPORT_URL` holds an address the page can use, a `mailto:` address or an
+  `http://` or `https://` page (the page checks it again), it adds a **Contact support** link to it.
+  Not set or not usable: no link, and no fallback to the project's GitHub.
 
 **The way out is on the machine**, for whoever runs it: stop LibreFolio, run
 `./dev.py backup pending` to see what happened, then `./dev.py backup pending --recover`, which puts

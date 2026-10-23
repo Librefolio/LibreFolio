@@ -52,6 +52,22 @@ and two administrators whose names are canaries, its control totals rewritten in
 with ``envelope.encrypt_file``. The only wait on the clock is R3's, which is the subject: the body's last piece is
 sent once the wall clock is past the ticket's ``exp``, polled with a deadline.
 
+The last lot of wave 4 (contract ``d7_contract.md`` §1, the adaptation to B's SEC-3/4/5), section PR-080..086 at the
+end, before ``TestNeedsB``:
+
+- Every panel restore route that answers 500 ``restore_state_unreadable`` passes the reader's exception to B's
+  ``restore._state_unreadable``: the detail is exactly ``{code, message, reason}``, ``reason`` the reader's (``io``,
+  ``not_a_file``, ``invalid``). On ``GET …/status``, ``POST …/restart`` and ``DELETE …/pending`` with each reason,
+  ``POST …/stage/{id}/confirm`` with one; the state is made unreadable on disk for real (a folder in its place, bytes no
+  state reads, or the reader's ``read_regular_file`` refusing with ``EACCES``). Red until then: the detail has no
+  ``reason``.
+- The upload finishes its writer with ``finish(replace_others=False)``, checks again that the finished file is an
+  envelope (``kind == "envelope"``), and only then calls ``restore_jobs.remove_replaced_uploads(data_dir,
+  keep=<its id>)``; a finished file of another kind → ``writer.abort()``, 400 ``restore_envelope_required``, the refused
+  file gone and the earlier upload kept. Simulated by ``restore_jobs.is_envelope`` answering ``False`` (the kind
+  ``finish`` reports) for a body that starts with ``LFBK``, so it passes the first-bytes defence. Red until then: the
+  body is accepted as a ``zip`` (201) and the earlier upload is already removed by ``finish``.
+
 Every name of H-62 (and of B) is imported by the test that needs it, so the file collects and each test reports its
 own red. Red today: the module, the routes, the scope and the schemas do not exist (each route answers the plain 404
 of a path that does not exist, which the presence barrier of each case turns into a red naming the route).
@@ -104,6 +120,7 @@ from backend.app.services.platform.sleep_wake import activity as activity_module
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 from backend.app.utils.runtime.version import get_git_version
 from backend.test_scripts.test_api import test_backup_restore as api
+from backend.test_scripts.test_api.test_await_restore_mode_api import UNREADABLE_REASONS, write_unreadable_state
 from backend.test_scripts.test_services import test_backup_staging as cases
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -936,6 +953,7 @@ async def test_a_second_upload_gets_a_new_id_and_the_first_is_dropped(panel, arc
 
     assert first != second, "a new upload id"
     assert (upload_path(panel.root, first).exists(), upload_path(panel.root, second).exists()) == (False, True), "the first upload is dropped, the second kept"
+    assert api.files_in(uploads_dir(panel.root)) == [second], f"D7 §1 (a): only the accepted second upload stays under the uploads folder: {api.files_in(uploads_dir(panel.root))}"
 
 
 @pytest.mark.asyncio
@@ -1416,6 +1434,161 @@ async def test_a_restart_asked_twice_while_still_pending_restarts_once(panel, ar
     for label, response in (("first", first), ("second", second)):
         assert response.status_code == 202 and (response.json().get("state"), response.json().get("stage_id")) == ("pending", stage_id), f"the {label} restart → 202 pending, this stage: {shown(response)}"
     assert panel.restarts == [True], f"one restart in the process, after the first answer: {panel.restarts}"
+
+
+# =============================================================================
+# PR-080..086: THE ADAPTATION TO B'S SEC-3/4/5 (d7_contract.md §1)
+# =============================================================================
+
+UNREADABLE_CODE = "restore_state_unreadable"
+UNREADABLE_DETAIL_KEYS = {"code", "message", "reason"}
+
+
+def unreadable_answer(response: httpx.Response, reason: str) -> bool:
+    """Whether ``response`` is the 500 of an unreadable restore state with B-33's ``reason``: exactly ``{code, message,
+    reason}``, the message a non-empty text."""
+    status_code, body = answer(response)
+    detail = body.get("detail") if isinstance(body, dict) else None
+    return status_code == 500 and isinstance(detail, dict) and set(detail) == UNREADABLE_DETAIL_KEYS and (detail["code"], detail["reason"]) == (UNREADABLE_CODE, reason) and isinstance(detail["message"], str) and bool(detail["message"])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reason", UNREADABLE_REASONS)
+async def test_the_status_of_an_unreadable_restore_state_is_500_with_its_reason(panel, reason):
+    """PR-080 (§1, B-33's ``reason``): in the mode, a restore state on disk the reader refuses with ``reason`` → ``GET
+    …/restore/status`` answers 500 ``{code: restore_state_unreadable, message, reason}``."""
+    panel.state("awaiting-restore")
+    write_unreadable_state(panel.root, reason, panel.monkeypatch)
+    response = await restore_status(panel)
+
+    assert unreadable_answer(response, reason), f"an unreadable state ({reason}) → 500 restore_state_unreadable with reason {reason!r}: {shown(response)}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reason", UNREADABLE_REASONS)
+async def test_a_restart_over_an_unreadable_restore_state_is_500_with_its_reason_and_no_restart(panel, reason):
+    """PR-081 (§1): in the mode, an unreadable restore state → ``POST …/restart`` answers 500 with its ``reason``; no
+    restart is asked, the state is left as it is."""
+    panel.state("awaiting-restore")
+    write_unreadable_state(panel.root, reason, panel.monkeypatch)
+    before = panel.snapshot()
+    response = await restart(panel)
+
+    assert unreadable_answer(response, reason), f"a restart over an unreadable state ({reason}) → 500 with reason {reason!r}: {shown(response)}"
+    assert (panel.restarts, panel.snapshot()) == ([], before), f"no restart, nothing written: {panel.restarts}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reason", UNREADABLE_REASONS)
+async def test_a_cancel_over_an_unreadable_restore_state_is_500_with_its_reason_and_drops_nothing(panel, reason):
+    """PR-082 (§1): in the mode, an unreadable restore state → ``DELETE …/pending`` answers 500 with its ``reason``;
+    nothing below ``.restore`` is dropped."""
+    panel.state("awaiting-restore")
+    write_unreadable_state(panel.root, reason, panel.monkeypatch)
+    before = panel.snapshot()
+    response = await cancel(panel)
+
+    assert unreadable_answer(response, reason), f"a cancel over an unreadable state ({reason}) → 500 with reason {reason!r}: {shown(response)}"
+    assert panel.snapshot() == before, "nothing dropped"
+
+
+@pytest.mark.asyncio
+async def test_a_confirmation_over_an_unreadable_restore_state_is_500_with_its_reason_and_confirms_nothing(panel, archives):
+    """PR-083 (§1): a check the panel started ended done; then the restore state is a folder in its place
+    (``not_a_file``) → ``POST …/stage/{id}/confirm`` answers 500 with ``reason: not_a_file``; nothing confirmed (the
+    folder is still there, no state written over it)."""
+    panel.state("awaiting-restore")
+    stage_id = (await checked(panel, archives.changed_lfbk))["stage_id"]
+    write_unreadable_state(panel.root, "not_a_file", panel.monkeypatch)
+    response = await confirm(panel, stage_id)
+
+    assert unreadable_answer(response, "not_a_file"), f"a confirmation over an unreadable state → 500 with reason 'not_a_file': {shown(response)}"
+    assert restore_state_path(panel.root).is_dir(), "nothing confirmed: the folder in the state's place is left as it is"
+
+
+def is_envelope_says_no(_path: Any) -> bool:
+    """Stands in for ``restore_jobs.is_envelope``: the finished file is not an envelope, whatever its first bytes."""
+    return False
+
+
+@pytest.mark.asyncio
+async def test_an_upload_the_final_kind_check_refuses_is_400_its_file_gone_and_the_earlier_upload_kept(panel, archives):
+    """PR-084 (§1 (b), SEC-3): a good ``.lfbk`` received (201); then a second body that starts with ``LFBK`` (it passes
+    the first-bytes defence) but whose finished file is not an envelope (``restore_jobs.is_envelope`` answering
+    ``False``) → 400 ``restore_envelope_required``; the refused file is gone, the earlier upload is the only file under
+    the uploads folder, whole."""
+    panel.state("awaiting-restore")
+    good = await uploaded(panel, archives.changed_lfbk)
+    assert archives.other_lfbk.startswith(ENVELOPE_MAGIC), "precondition: the second body passes the first-bytes check"
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(restore_jobs, "is_envelope", is_envelope_says_no)
+        refused = await upload(panel, archives.other_lfbk)
+
+    assert code(refused) == (400, "restore_envelope_required"), f"a finished file that is not an envelope → 400 restore_envelope_required: {shown(refused)}"
+    assert api.files_in(uploads_dir(panel.root)) == [good], f"the refused file is gone and the earlier upload stays, alone: {api.files_in(uploads_dir(panel.root))}"
+    assert upload_path(panel.root, good).read_bytes() == archives.changed_lfbk, "the earlier upload is whole"
+
+
+@dataclass
+class UploadSpies:
+    """What the upload route asks of ``restore_jobs``: each ``UploadWriter.finish`` keyword set, and each
+    ``remove_replaced_uploads`` call as ``(data_dir, keep, the uploads folder at that moment)``."""
+
+    finishes: list[dict[str, Any]] = field(default_factory=list)
+    removals: list[tuple[Path, str, list[str]]] = field(default_factory=list)
+
+
+def spy_on_uploads(panel: Panel) -> UploadSpies:
+    """``UploadWriter.finish`` and ``remove_replaced_uploads`` wrapped: recorded, then run as they are."""
+    spies = UploadSpies()
+    real_finish = restore_jobs.UploadWriter.finish
+    real_remove = restore_jobs.remove_replaced_uploads
+
+    def finish(self: Any, *args: Any, **kwargs: Any) -> Any:
+        spies.finishes.append(dict(kwargs, **({"positional": args} if args else {})))
+        return real_finish(self, *args, **kwargs)
+
+    def remove_replaced_uploads(*args: Any, **kwargs: Any) -> None:
+        data_dir = args[0] if args else kwargs.get("data_dir")
+        keep = kwargs.get("keep", args[1] if len(args) > 1 else None)
+        spies.removals.append((Path(data_dir).resolve(), keep, api.files_in(uploads_dir(panel.root))))
+        real_remove(*args, **kwargs)
+
+    panel.monkeypatch.setattr(restore_jobs.UploadWriter, "finish", finish)
+    panel.monkeypatch.setattr(restore_jobs, "remove_replaced_uploads", remove_replaced_uploads)
+    return spies
+
+
+@pytest.mark.asyncio
+async def test_each_accepted_upload_removes_the_replaced_ones_once_and_a_refused_one_never(panel, archives):
+    """PR-085 (§1 (c), SEC-3): two good uploads, then one the final kind check refuses: every writer is finished with
+    ``replace_others=False``; ``remove_replaced_uploads`` runs exactly once per accepted upload, with this data
+    directory and ``keep=<its id>``, once its file is in place; never for the refused one."""
+    panel.state("awaiting-restore")
+    spies = spy_on_uploads(panel)
+    first = await uploaded(panel, archives.changed_lfbk)
+    second = await uploaded(panel, archives.other_lfbk)
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(restore_jobs, "is_envelope", is_envelope_says_no)
+        refused = await upload(panel, archives.changed_lfbk)
+
+    assert spies.finishes == [{"replace_others": False}] * 3, f"every writer is finished with replace_others=False: {spies.finishes}"
+    removals = [(data_dir, keep) for data_dir, keep, _ in spies.removals]
+    assert removals == [(panel.root, first), (panel.root, second)], f"remove_replaced_uploads once per accepted upload, keep=its id, never for the refused one: {removals}"
+    assert all(keep in present for _, keep, present in spies.removals), f"each removal runs once its upload is in place: {spies.removals}"
+    assert code(refused) == (400, "restore_envelope_required"), f"the third upload is refused on its kind: {shown(refused)}"
+
+
+@pytest.mark.asyncio
+async def test_guard_an_accepted_envelope_still_answers_201_kind_envelope_with_the_spies_in_place(panel, archives):
+    """PR-086 (§1, guard): the spies run the real functions: a good ``.lfbk`` → 201 ``kind: envelope``, the only file of
+    the uploads folder."""
+    panel.state("awaiting-restore")
+    spy_on_uploads(panel)
+    response = await upload(panel, archives.changed_lfbk)
+
+    assert response.status_code == 201 and response.json().get("kind") == "envelope", f"a good envelope is received: {shown(response)}"
+    assert api.files_in(uploads_dir(panel.root)) == [response.json()["upload_id"]], f"only it: {api.files_in(uploads_dir(panel.root))}"
 
 
 # =============================================================================

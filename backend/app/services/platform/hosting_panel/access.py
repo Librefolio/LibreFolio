@@ -276,6 +276,13 @@ def _make_access(scope: PanelScope) -> Callable[..., PanelCaller]:
 _ACCESS: dict[PanelScope, Callable[..., PanelCaller]] = {scope: _make_access(scope) for scope in PanelScope}
 
 
+async def panel_caller(request: Request, scope: PanelScope) -> PanelCaller:
+    """The dependency of ``scope`` run by hand, for a guard that must check the panel's credential before its own answer
+    (``api/v1/instance_block.py``, D7). Only for a request it then ends: a ticket's ``jti`` is recorded here."""
+    credentials = await _RULES[scope].bearer(request)
+    return _ACCESS[scope](request, credentials)
+
+
 def panel_access(scope: PanelScope) -> Callable[..., PanelCaller]:
     """The dependency of the routes of ``scope``: the same object for the same scope, so FastAPI runs it once a request."""
     return _ACCESS[scope]
