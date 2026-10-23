@@ -191,7 +191,24 @@ export async function probeServer(): Promise<'up' | 'down'> {
  * when its hosting provider blocked the instance, whose restore routes then answer 423 `instance_blocked`: the restore
  * waits for the unblock (developer decision P7).
  */
-export type RestoreOutcomeRead = {kind: 'signed_out'} | {kind: 'blocked'} | {kind: 'status'; status: RestoreStatus} | {kind: 'down'};
+export type RestoreOutcomeRead = {kind: 'signed_out'} | {kind: 'blocked'} | {kind: 'unreadable'; reason: string | null} | {kind: 'status'; status: RestoreStatus} | {kind: 'down'};
+
+/**
+ * The reason of a 500 `restore_state_unreadable` (B-33: `io`, `not_a_file`, `invalid`; null when not given), or
+ * `undefined` for any other answer: a server that cannot read the state of the restore is up, and polling it again
+ * would never end.
+ */
+async function unreadableState(response: Response): Promise<string | null | undefined> {
+    try {
+        const body: unknown = await response.json();
+        const detail = body !== null && typeof body === 'object' ? (body as {detail?: unknown}).detail : null;
+        if (detail === null || typeof detail !== 'object' || (detail as {code?: unknown}).code !== 'restore_state_unreadable') return undefined;
+        const reason = (detail as {reason?: unknown}).reason;
+        return typeof reason === 'string' ? reason : null;
+    } catch {
+        return undefined;
+    }
+}
 
 /** Whether a 423 is the instance block (`detail.code` `instance_blocked`), and not another lock. */
 async function refusedForTheBlock(response: Response): Promise<boolean> {
@@ -241,6 +258,10 @@ async function readStatusWithSession(): Promise<RestoreOutcomeRead> {
         const response = await fetch('/api/v1/backup/restore/status', {credentials: 'same-origin', cache: 'no-store', headers: {Accept: 'application/json'}});
         if (response.status === 401) return {kind: 'signed_out'};
         if (response.status === 423) return (await refusedForTheBlock(response)) ? {kind: 'blocked'} : {kind: 'down'};
+        if (response.status === 500) {
+            const reason = await unreadableState(response);
+            return reason === undefined ? {kind: 'down'} : {kind: 'unreadable', reason};
+        }
         if (response.status !== 200) return {kind: 'down'};
         const parsed = schemas.RestoreStatus.safeParse(await response.json());
         return parsed.success ? {kind: 'status', status: parsed.data} : {kind: 'down'};

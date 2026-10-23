@@ -114,6 +114,12 @@ Under test: ``backend/app/api/v1/backup/restore.py`` (the routes), ``restore_job
     ``confirmed_by`` is ``cli``, ``admin`` otherwise. Written RED: ``STATUS_FIELDS`` holds ``confirmed_via``, so every
     test that compares a whole ``RestoreStatus`` (the confirmation of (a), ``none`` of (c), the OpenAPI schema) is red
     on that one field too, until L3-2.
+(n) The status of an unreadable state, with its reason (interface ``B-sec345-interface.md``, «Status»): every route of
+    ``/backup/restore`` that answers ``restore_state_unreadable`` — ``GET /status``, the confirmation of a fresh check,
+    ``DELETE /pending``, ``POST /restart`` — answers 500 with ``detail`` exactly ``{"code": "restore_state_unreadable",
+    "message": …, "reason": …}``, the message (j)'s, ``reason`` the ``RestoreStateUnreadableError.reason``: ``io`` (the
+    file system refuses the state file, EIO), ``not_a_file`` (a folder, a link), ``invalid`` (not JSON, ``format`` 2).
+    The OpenAPI description of the status's 500 names ``reason``. Written RED: the detail has no ``reason`` yet.
 
 Pure, as ``test_backup_restore.py`` (lot B2b), whose fixtures and helpers are imported: an app of each test holds
 ``backup_router``, ``get_current_user`` overridden; the data directory of the routes under ``tmp_path`` (``apply``'s
@@ -2465,3 +2471,78 @@ async def test_a_state_that_is_not_a_file_or_not_valid_is_a_500_of_every_route_a
     assert not os.path.lexists(ticket_path(root)), f"{case}: no ticket written"
     assert (api.tree(root), api.tree(elsewhere)) == before, f"{case}: nothing written, removed or replaced: {cases.changed(before[0], api.tree(root))}"
     print_success(f"{case}: 500 restore_state_unreadable, nothing changed")
+
+
+# =============================================================================
+# (n) The reason of a state that cannot be read, in the answer
+# =============================================================================
+
+
+def _n_refused_eio(root: Path, elsewhere: Path, monkeypatch: pytest.MonkeyPatch) -> UnreadableState:
+    state = UnreadableState(root, "EIO", monkeypatch)
+    state.now()
+    return state
+
+
+def _n_shape(way: Callable[[Path, Path], None]) -> Callable[[Path, Path, pytest.MonkeyPatch], None]:
+    def made(root: Path, elsewhere: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        way(root, elsewhere)
+
+    made.__name__ = way.__name__
+    return made
+
+
+#: (n) Each way a pending restore's state cannot be read, and the ``reason`` the answer must give.
+REASON_WAYS = [
+    pytest.param(_n_refused_eio, "io", id="io-EIO"),
+    pytest.param(_n_shape(_b33_a_folder), "not_a_file", id="not_a_file-a-folder"),
+    pytest.param(_n_shape(_b33_a_link), "not_a_file", id="not_a_file-a-link", marks=pytest.mark.skipif(os.name == "nt", reason="symbolic links need a privilege on Windows")),
+    pytest.param(_n_shape(_b33_not_json), "invalid", id="invalid-not-json"),
+    pytest.param(_n_shape(_b33_format_2), "invalid", id="invalid-format-2"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("way", "reason"), REASON_WAYS)
+@pytest.mark.parametrize("route", ["status", "confirm", "cancel", "restart"])
+async def test_every_route_says_why_the_state_cannot_be_read(instance, head_archive, tmp_path, monkeypatch, signals, route, way, reason):
+    """(n) A pending restore whose state cannot be read, in each way: ``GET /status``, the confirmation of a fresh check,
+    ``DELETE /pending`` and ``POST /restart`` answer 500, ``detail`` exactly ``code`` ``restore_state_unreadable``,
+    (j)'s message and ``reason`` the reader's (``io``, ``not_a_file``, ``invalid``); no restart requested, no signal.
+    Red until the cure: the detail carries no ``reason``."""
+    print_section("(n) The reason of a state that cannot be read")
+    root = instance.root
+    fresh = None
+    if route == "confirm":
+        await confirmed(head_archive)
+        fresh = await checked(head_archive)
+    else:
+        write_state(root, "pending", api.UNKNOWN_ID)
+    restarts: list[str] = []
+    monkeypatch.setattr(restore, "_restart", lambda: restarts.append("restart"))
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    made = way(root, elsewhere, monkeypatch)
+    calls = {"status": restore_status, "cancel": cancel, "restart": restart, "confirm": lambda: confirm(fresh)}
+    try:
+        response = await calls[route]()
+    finally:
+        if isinstance(made, UnreadableState):
+            made.cure()
+    case = f"{route}, {way.__name__}"
+    if isinstance(made, UnreadableState):
+        assert made.refused, f"barrier: {case}: the route opened the state file, and was refused"
+    detail = response.json().get("detail") if "json" in response.headers.get("content-type", "") else None
+    assert response.status_code == 500 and isinstance(detail, dict) and detail.get("code") == "restore_state_unreadable", f"{case}: 500 restore_state_unreadable, not {api.shown(response)}"
+    assert detail == {"code": "restore_state_unreadable", "message": STATE_UNREADABLE, "reason": reason}, f"{case}: the detail with reason {reason!r}, and nothing else: {detail}"
+    assert (restarts, signals.sent) == ([], []), f"{case}: no restart requested, no signal: {restarts} {signals.sent}"
+    print_success(f"{case}: 500 restore_state_unreadable, reason {reason}")
+
+
+def test_openapi_names_the_reason_of_a_state_that_cannot_be_read():
+    """(n) The OpenAPI description of the 500 of ``GET /status`` names ``reason`` beside ``restore_state_unreadable``.
+    Red until the cure."""
+    document = api.restore_app().openapi()
+    described = document["paths"].get(STATUS, {}).get("get", {}).get("responses", {}).get("500", {}).get("description", "")
+    assert "restore_state_unreadable" in described and "reason" in described, f"the status's 500 names restore_state_unreadable and reason: {described!r}"
+    print_success("the status's 500 names reason")

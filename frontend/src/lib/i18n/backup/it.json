@@ -168,7 +168,8 @@
         "rolledBack": "I dati sono come prima: {reason}.",
         "stillPending": "LibreFolio si è riavviato, ma il ripristino non è stato applicato. {waiting}",
         "back": "Torna al backup",
-        "failedTitle": "Il ripristino non è riuscito"
+        "failedTitle": "Il ripristino non è riuscito",
+        "stateUnreadable": "Lo stato del ripristino non si può leggere ({reason}): LibreFolio non serve dati finché l'amministratore non esegue ./dev.py backup pending sul server."
       },
       "errors": {
         "backup_upload_empty": "Il file è vuoto.",
