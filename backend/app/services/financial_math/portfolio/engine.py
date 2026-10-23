@@ -27,7 +27,7 @@ from backend.app.services.financial_math.native_cash import cash_movement_from_t
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.derived_views import build_cost_positions
-from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, InTransitInterval, InvalidSplitEvent, PortfolioCalculationResult, RowsBeforeFloor, SplitHistory, SplitRecord
+from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, DailyStates, InTransitInterval, InvalidSplitEvent, PortfolioCalculationResult, RowsBeforeFloor, SplitHistory, SplitRecord
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, build_asset_price_series
 from backend.app.services.financial_math.splits import is_valid_split_ratio, load_split_links
 from backend.app.services.fx.conversion import unit_rate_steps
@@ -234,7 +234,7 @@ class PortfolioCalculationEngine:
 
         if not accesses:
             return PortfolioCalculationResult(
-                daily_states=[],
+                daily_states=DailyStates(),
                 scope_broker_ids=[],
                 target_currency=target_currency,
                 date_from=date_from or date_type.today(),
@@ -254,7 +254,7 @@ class PortfolioCalculationEngine:
 
         if not all_txs:
             return PortfolioCalculationResult(
-                daily_states=[],
+                daily_states=DailyStates(),
                 scope_broker_ids=list(scope_broker_ids),
                 target_currency=target_currency,
                 date_from=date_from or date_type.today(),
@@ -304,7 +304,7 @@ class PortfolioCalculationEngine:
         actual_to = min(date_to or date_type.today(), latest_range_end())
         if actual_from > actual_to:
             return PortfolioCalculationResult(
-                daily_states=[],
+                daily_states=DailyStates(),
                 scope_broker_ids=list(scope_broker_ids),
                 target_currency=target_currency,
                 date_from=actual_to,

@@ -15,7 +15,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST
-from backend.app.services.financial_math.portfolio.models import DailyPortfolioState
+from backend.app.services.financial_math.portfolio.models import DailyPortfolioState, DailyStates
 from backend.app.services.financial_math.returns import change_ratio
 
 
@@ -25,6 +25,8 @@ def state_as_of(daily_states: Sequence[DailyPortfolioState], as_of: date_type) -
     ``daily_states`` are sorted by date. The engine's states should already end at the requested date;
     looking the end up by date guards against a cached result that reaches further.
     """
+    if isinstance(daily_states, DailyStates):
+        return daily_states.state_as_of(as_of)
     if not daily_states:
         return None
     dates = [state.date for state in daily_states]
@@ -79,10 +81,7 @@ def period_boundaries(daily_states: Sequence[DailyPortfolioState], date_from: da
     end = state_as_of(daily_states, as_of)
     if end is None:
         return None
-    start = None
-    if date_from:
-        pre_states = [state for state in daily_states if state.date <= date_from]
-        start = pre_states[-1] if pre_states else None
+    start = state_as_of(daily_states, date_from) if date_from else None
     return PeriodBoundaries(start=start, end=end)
 
 

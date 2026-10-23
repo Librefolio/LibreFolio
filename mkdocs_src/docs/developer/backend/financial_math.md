@@ -296,9 +296,8 @@ to R, a loss out of R then K). An arrival whose departure is unknown arrives in 
 departure is on the same day is applied last on that day. The replay emits one
 `DailyPortfolioState` for every day of `[date_from, date_to]`,
 so a later `date_from` gets for its days exactly the states of the full replay. It evaluates only
-the **dirty** days, which `_collect_dirty_days()` lists: any other day carries the previous state
-(`dataclasses.replace()`, its containers copied), dated that day, with no external flow and no
-acquisition funding. The rule is developer decision 28 of release 1.3, «recompute whenever a term
+the **dirty** days, which `_collect_dirty_days()` lists: any other day carries the previous state,
+dated that day, with no external flow and no acquisition funding. The rule is developer decision 28 of release 1.3, «recompute whenever a term
 of the formula changes». A replayed day is dirty when it has:
 
 - a cash movement, a transaction that moves a quantity, an external flow, or an internal flow
@@ -319,10 +318,26 @@ of the formula changes». A replayed day is dirty when it has:
 - a split;
 - or it is the first replayed day, `date_from`, or `period_start` when it falls in the replay.
 
-Before `date_from` a quiet day is not even visited: no state is emitted there, and it would only
-carry the previous one, so the loop jumps straight to the next dirty day (`bisect.bisect_right()`
-over the sorted dirty days; `date_from` is always one). The output is the one a day-by-day walk
-gives, and the part of the replay before `date_from` costs its dirty days, not its calendar days.
+A quiet day is never visited: the loop jumps straight to the next dirty day
+(`bisect.bisect_right()` over the sorted dirty days; `date_from` is always one), so the replay
+costs its dirty days, not its calendar days, before and after `date_from` (P4).
+
+**Segments (P4).** `PortfolioCalculationResult.daily_states` is a `DailyStates` (`models.py`), a
+read-only `Sequence` of one state a day held as `StateSegment`s: `start` (a computed day, with
+`state.date == start`), `end` (the last day it holds, included: the day before the next start, or
+`date_to`) and `state`. Inside a segment every field keeps its value except `date`,
+`external_cash_flow` (0) and `acquisition_funding` (None), because every day on which another field
+can change is dirty. Indexing, slicing and iteration build a quiet day when it is read
+(`StateSegment.state_on()`: `dataclasses.replace()`, its containers copied), so the output is the
+one a day-by-day walk gives, while memory grows with the computed days only. Measured on a copy of
+the test database with one deposit typed in 1500 (the floor lowered for the measure): 192 413
+states and 686 MB kept before P4, 397 segments and 5 MB after. A reader that needs the values,
+not one object a day, asks one day (`state_on()`, `state_as_of()`) or walks
+`iter_segments(date_from, date_to)` (segments clipped to the window): `period.state_as_of()`, the
+data-quality report's incomplete-NAV days, `_engine_missing_fx_pairs()`, and the derived views,
+whose windows are found by date arithmetic and read day by day from their segment's state
+(`DerivedViewsBuilder._window_days()`, the day's date taken from the walk, never from the state).
+Nobody mutates a state or its containers after the build.
 
 A movement stored before `EARLIEST_RANGE_START` (1 January 1900, `utils/datetime_utils.py`) is
 replayed exactly, on its own date and in its own order, never moved onto 1900; `calculate()` never

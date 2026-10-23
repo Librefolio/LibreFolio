@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import date as date_type
+from datetime import timedelta
 
 from sqlalchemy import select
 
@@ -17,7 +18,7 @@ from backend.app.schemas.portfolio import (
     IssueDomain,
     IssueSeverity,
 )
-from backend.app.services.financial_math.portfolio.models import DailyPortfolioState, RowsBeforeFloor, ShareMismatch
+from backend.app.services.financial_math.portfolio.models import DailyPortfolioState, DailyStates, RowsBeforeFloor, ShareMismatch
 from backend.app.utils.currency_units import minor_unit_factor
 
 
@@ -131,14 +132,20 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
     opening state, and its NAV does move the period P&L.
     """
     incomplete_nav: list[date_type] = []
-    for s in daily_states:
-        if s.nav_complete:
-            continue
-        if period_from is not None and s.date < period_from:
-            continue
-        if period_to is not None and s.date > period_to:
-            continue
-        incomplete_nav.append(s.date)
+    if isinstance(daily_states, DailyStates):
+        # Every day of a segment shares its state's completeness (P4): the days are listed, no state is built
+        for segment in daily_states.iter_segments(period_from, period_to):
+            if not segment.state.nav_complete:
+                incomplete_nav.extend(segment.start + timedelta(days=offset) for offset in range((segment.end - segment.start).days + 1))
+    else:
+        for s in daily_states:
+            if s.nav_complete:
+                continue
+            if period_from is not None and s.date < period_from:
+                continue
+            if period_to is not None and s.date > period_to:
+                continue
+            incomplete_nav.append(s.date)
 
     # NON_ISO_CURRENCY (E-19b): the stored values that are no ISO 4217 code, from the missing pairs' sides, the held assets
     # and the report currency; a missing pair with such a side leaves the MISSING_FX_* issues, which no FX pair can fix
