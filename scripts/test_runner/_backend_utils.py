@@ -514,6 +514,14 @@ def utils_backup_cli_sealed(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Backup CLI sealed backup tests", verbose=verbose)
 
 
+def utils_backup_cli_recover(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the restore recovery from the command line: pending --json and pending --recover <choice>."""
+    print_section("Utils: Backup CLI recover and --json")
+    print_info("Testing: scripts/backup_cli.py (pending --json: one line, the six states, privacy; pending --recover previous|cancel: exit codes 0/3/4/5, idempotency)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_backup_cli_recover.py", test_names)
+    return run_command(cmd, "Backup CLI recover tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     if _common.nothing_left_to_run("utils"):
@@ -989,6 +997,16 @@ Tests for utility modules and helper functions:
         desc="scripts/backup_cli.py and the sealed nightly backup (lot L3-2): keygen (an age identity 0600, an existing file refused, the recipient printed, never the private key); create --recipient (one or two, three refused) and --sealed (LIBREFOLIO_BACKUP_RECIPIENTS, unset refused), exclusive with a password; inspect, decrypt and restore --dry-run of a sealed .tar with --identity-file (the L3 vectors: the good zip, the rotation; sealed_no_identity, wrong_password, sealed_tar_invalid, sealed_manifest_invalid, envelope_damaged; sealed_backup_needs_key without the identity; --identity-file on a zip refused); no temporary .lfbk left",
         # Data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables, as test_backup_cli.py
         # sets them; the L3 vectors copied into tmp_path: no lane DB, no server, no network, no writes outside tmp_path.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-cli-recover",
+        utils_backup_cli_recover,
+        name="Backup CLI Recover",
+        desc="scripts/backup_cli.py (lot B5-2): pending --json (exactly one line on stdout for none, pending, in_progress, committed, rolled_back and unreadable io/not_a_file/invalid; keys, choices, waiting, backup_created_at in UTC with Z, safety_copy from .restore/previous/; no username, path or stage id; no log line on stdout; exit 5 for a missing data directory; usage errors exit 2); pending --recover previous|cancel (exit 0 done, 3 nothing to recover, 4 choice not valid, 5 failed; idempotent; with and without --json; --json adds recover and error)",
+        # Data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables, as test_backup_cli_restore.py
+        # sets them; a few cases run the script in a process of its own: no lane DB, no server, no network.
         isolation="pure",
     )
     add_test(
