@@ -46,6 +46,8 @@ vi.mock('$lib/features/risk/riskStore.svelte', async (importOriginal) => {
 });
 
 import {assertEffectsRun, effectRoot, reactiveBox, recordReads} from '$test/runes.svelte';
+import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
+import {notifyPortfolioMutation, notifyPricesCaughtUp, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
 import {
     ANSWER_DISCARDED_CODE,
     baseSignature,
@@ -1526,6 +1528,120 @@ describe('riskPanelController', () => {
             await settledController(labInputs(), {includeAssetSetLevels: true});
             expectIssuedToday(LAB_UNION_TODAY, 'the lab on the union');
         });
+    });
+});
+
+/**
+ * A risk panel on screen asks its base wave again, in silence, when the server has caught up on prices (lot Y5-1, plan
+ * «Z-14b + Z-15», N-Z15-1; the developer's decisions D1 and D2 of 22/10).
+ *
+ * The portfolio bus says `{kind: 'prices'}`; `riskStore` marks every answer stale on it (stubbed here, as in the rest of the file),
+ * and a controller that listens (`onPricesCaughtUp`) asks its base wave again, WITHOUT `force` — the stale mark is what makes the
+ * store ask — and outside `pageBusy`: it is not the user's «Aggiorna». D1: in silence — `refreshing`, which draws the spinning
+ * icon and dims the section, stays false, and `initialLoading` too; the figures stay until the new ones land. D2: the on-demand
+ * analyses the user ran (stress, replay, simulation, comparison) stay as they are: a simulation costs, and the user launched it.
+ * Nothing is asked for a signal that is not `prices` (a mutation, the user's Refresh), nor by a controller with nothing on screen
+ * yet (its first load is its own), nor after the controller is torn down.
+ *
+ * Red today: the controller listens to nothing but its inputs (the first case). The others are guards, green today and after.
+ */
+describe('riskPanelController — a catch-up reloads the base wave in silence (Y5-1)', () => {
+    beforeEach(() => {
+        fetchRiskCatalog.mockReset().mockResolvedValue(CATALOG);
+        fetchRiskScenarioCatalog.mockReset().mockResolvedValue({items: []});
+        queryRisk.mockReset().mockResolvedValue({items: [{analytic_code: 'historical_kpi'}]});
+        invalidateRisk.mockReset();
+        getRiskQuerySnapshot.mockReset().mockImplementation(nothingCached);
+        markRiskStale.mockReset();
+        capability.supported = true;
+        capability.only = null;
+    });
+
+    const baseCalls = () => queryRisk.mock.calls.filter(([request]) => onDemandAnalysisOf(request as RiskQueryRequest) === null);
+    const settled = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    it('asks the base wave again, without force, outside pageBusy, and never shows the refreshing state', async () => {
+        const {controller, stop} = mountController();
+        await vi.waitFor(() => expect(controller.historicalResults.length).toBe(1));
+        const before = baseCalls().length;
+        const slow = deferred<{items: {analytic_code: string}[]}>();
+        queryRisk.mockReturnValue(slow.promise);
+        const seen: Array<{refreshing: boolean; initialLoading: boolean; busy: boolean}> = [];
+        const watch = () => seen.push({refreshing: controller.refreshing, initialLoading: controller.initialLoading, busy: pageBusy.busy});
+
+        notifyPricesCaughtUp();
+        await settled();
+        watch();
+        slow.resolve({items: [{analytic_code: 'historical_kpi'}]});
+        await settled();
+        watch();
+
+        const asked = baseCalls().slice(before);
+        expect(asked.length, 'the base wave is asked again').toBeGreaterThan(0);
+        expect(
+            asked.every(([, force]) => force !== true),
+            'without force: the stale mark makes the store ask',
+        ).toBe(true);
+        expect(seen, 'in silence: no refreshing state, no initial loading, the page not busy').toEqual(seen.map(() => ({refreshing: false, initialLoading: false, busy: false})));
+        expect(controller.historicalResults.length, 'the figures stay').toBe(1);
+        stop();
+    });
+
+    it('leaves the on-demand analyses as they are', async () => {
+        const {controller, stop} = mountController();
+        await vi.waitFor(() => expect(controller.historicalResults.length).toBe(1));
+        controller.setResult('stress', {analytic_code: 'stress'} as never);
+        controller.setResult('simulation', {analytic_code: 'simulation'} as never);
+        const onDemandBefore = queryRisk.mock.calls.filter(([request]) => onDemandAnalysisOf(request as RiskQueryRequest) !== null).length;
+
+        notifyPricesCaughtUp();
+        await settled();
+
+        expect(controller.stressResult).toEqual({analytic_code: 'stress'});
+        expect(controller.simulationResult).toEqual({analytic_code: 'simulation'});
+        expect(queryRisk.mock.calls.filter(([request]) => onDemandAnalysisOf(request as RiskQueryRequest) !== null).length, 'no on-demand analysis is launched again').toBe(onDemandBefore);
+        stop();
+    });
+
+    it('asks nothing for the user’s Refresh or a mutation: they are the page’s own', async () => {
+        const {controller, stop} = mountController();
+        await vi.waitFor(() => expect(controller.historicalResults.length).toBe(1));
+        const before = baseCalls().length;
+
+        requestPortfolioRefresh();
+        notifyPortfolioMutation('POST', '/api/v1/transactions', {});
+        await settled();
+
+        expect(baseCalls().length).toBe(before);
+        stop();
+    });
+
+    it('asks nothing while nothing is on screen: its first load is its own', async () => {
+        const first = deferred<{items: never[]}>();
+        queryRisk.mockReturnValue(first.promise);
+        const {controller, stop} = mountController();
+        await vi.waitFor(() => expect(baseCalls().length, 'precondition: the first load is in flight').toBeGreaterThan(0));
+        expect(controller.initialLoading).toBe(true);
+        const before = baseCalls().length;
+
+        notifyPricesCaughtUp();
+        await settled();
+
+        expect(baseCalls().length).toBe(before);
+        first.resolve({items: []});
+        stop();
+    });
+
+    it('stops listening with the controller', async () => {
+        const {controller, stop} = mountController();
+        await vi.waitFor(() => expect(controller.historicalResults.length).toBe(1));
+        const before = baseCalls().length;
+
+        stop();
+        notifyPricesCaughtUp();
+        await settled();
+
+        expect(baseCalls().length).toBe(before);
     });
 });
 

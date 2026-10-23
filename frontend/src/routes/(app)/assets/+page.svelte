@@ -14,6 +14,7 @@
      * Svelte 5 runes throughout.
      */
     import {onDestroy, onMount, tick} from 'svelte';
+    import {onPricesCaughtUp} from '$lib/features/price-refresh/onPricesCaughtUp';
     import {goto} from '$app/navigation';
     import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
@@ -692,17 +693,26 @@
      * signals' retry and a settings change ask only the prices and signals (`fetchPriceSeries`): the Δ columns depend
      * on neither (X-R60).
      */
-    async function fetchAllPriceData() {
+    async function fetchAllPriceData(silent = false) {
         if (assets.length === 0) return;
-        await Promise.all([fetchPriceSeries(), loadPeriodChanges()]);
+        await Promise.all([fetchPriceSeries(undefined, silent), loadPeriodChanges(silent)]);
     }
 
+    // A price catch-up (the bus's `{kind: 'prices'}`, Y5-1, Z-14b): the cards' prices, signals and Δ, and the compared pairs' rates, are asked again
+    // in silence — the cards keep their lines, nothing says the page is busy — and outside `pageBusy`: it is not the user's Refresh.
+    onMount(() =>
+        onPricesCaughtUp(async () => {
+            if (fxPairSlugs.length > 0) void loadFxRateData();
+            await fetchAllPriceData(true);
+        }),
+    );
+
     /** The Δ columns of every listed asset up to the end of the range, and each card's Δ over the range, from the backend (X-R53, X-R59). */
-    async function loadPeriodChanges() {
+    async function loadPeriodChanges(silent = false) {
         const ticket = periodChangesLedger.begin(dateEnd, true);
         const rangeStart = dateStart;
         const rangeTicket = rangeDeltaLedger.begin(rangeKey(rangeStart, ticket.asOf), true);
-        periodChangesLoading = periodChangesLedger.busy || rangeDeltaLedger.busy;
+        if (!silent) periodChangesLoading = periodChangesLedger.busy || rangeDeltaLedger.busy;
         try {
             const result = await fetchAssetPeriodChanges(
                 assets.map((asset) => asset.id),
@@ -798,7 +808,7 @@
      * for another step or stale, is asked; the answers go to the cache and the cards draw them as they are. `only` limits it
      * to some cards: a settings change reloads its own card, a width that changes the step its own.
      */
-    async function fetchPriceSeries(only?: ReadonlySet<number>) {
+    async function fetchPriceSeries(only?: ReadonlySet<number>, silent = false) {
         if (assets.length === 0) return;
         void getSettingsVersion();
 
@@ -871,7 +881,7 @@
         for (const asset of wanted) {
             const previous = nextCalendar.get(asset.id);
             if (!calendarCards.has(asset.id)) nextCalendar.delete(asset.id);
-            else nextCalendar.set(asset.id, {own: {...(previous?.own ?? emptyCalendarReturnView()), state: 'loading'}, targets: previous?.targets ?? new Map()});
+            else nextCalendar.set(asset.id, {own: {...(previous?.own ?? emptyCalendarReturnView()), state: silent && previous ? previous.own.state : 'loading'}, targets: previous?.targets ?? new Map()});
         }
         calendarByCard = nextCalendar;
 
@@ -899,7 +909,9 @@
 
         refreshing = true;
         signalRequestFailed = false;
-        assets = assets.map((a) => (wantedIds.has(a.id) ? {...a, loadingPrices: needFetchIds.has(a.id)} : a));
+        // A silent reload (a catch-up) leaves the cards as they are: the page does not say it is busy. Otherwise a card whose cached series a
+        // catch-up marked stale shows it at once, and the read goes on in background with no skeleton (Y5-1, D3); the others load as before.
+        if (!silent) assets = assets.map((a) => (wantedIds.has(a.id) ? (needFetchIds.has(a.id) && (cached.get(a.id)?.derived.chartData.length ?? 0) > 0 ? assetWithEntry(a, cached.get(a.id)!) : {...a, loadingPrices: needFetchIds.has(a.id)}) : a));
 
         try {
             // One request for the cards with something to ask while it stays under the backend's caps: the backend then runs
