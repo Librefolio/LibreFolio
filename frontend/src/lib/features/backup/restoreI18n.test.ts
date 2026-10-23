@@ -287,6 +287,11 @@ const CODE_LISTS: Array<[string, string[]]> = [
             'restore_state_unreadable',
             // B-35: the restore limit of the instance cannot be read, so no check starts.
             'backup_restore_unavailable',
+            // B5-1b: the owner's choice refused at the confirmation, on a managed instance.
+            'owner_choice_required',
+            'owner_choice_invalid',
+            'owner_email_not_set',
+            'owner_conflict',
             'network',
             'unexpected',
         ],

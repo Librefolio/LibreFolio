@@ -106,6 +106,14 @@ it), printed by ``pending`` and by a confirmation on a blocked instance.
     Lot B5-2 (interface ``B-b52-interface.md``): ``--recover`` takes its choice (it was a bare flag, never released), and
     the exit codes of 1.3's development builds (1) became 3, 4 and 5; the rest of ``--recover`` and ``--json`` is pinned by
     ``test_backup_cli_recover.py``.
+(m) Lot B5-1 (interface ``B-b51-interface.md`` §5; written RED before it): ``pending`` of a committed restore confirmed
+    via ``admin`` with an owner chosen prints one more line than the same restore without one, naming the owner's
+    account: ``sent`` (the link went to the owner's mailbox), ``link_only`` (the reset path, once, with «only to the
+    owner»), ``already_issued`` and ``already_done``, ``error:<CODE>`` (the code), and nothing recorded yet («next
+    start»). Never the path but for ``link_only``. A restore confirmed via ``cli`` or ``panel``, or without an owner,
+    prints no such line (a guard). ``pending --json`` never holds the owner's id, outcome, reset path or email (a guard,
+    green before and after: its keys are B5-2's). The owner's fields are written into the state file as raw JSON, so
+    that what ``pending`` prints is what fails.
 
 Pure, as ``test_backup_cli.py``, whose fixtures and helpers are imported: data directories under ``tmp_path`` seen through
 ``LIBREFOLIO_DATA_DIR`` (production mode, checked); a real database at the head made once by ``alembic upgrade`` for the
@@ -1682,3 +1690,100 @@ def test_the_help_of_pending_names_recover(monkeypatch, capsys):
     pending_help = cli.help_of(monkeypatch, capsys, "backup", "pending")
     assert "--recover" in pending_help, f"[new] B-33 §3: pending --help names --recover: {pending_help}"
     print_success("pending --help: --recover")
+
+
+# =============================================================================
+# (m) Lot B5-1: what became of the owner's account
+# =============================================================================
+
+#: A's reset link for ``link_only``, recorded in the state: printed once by ``pending``, never by ``pending --json``.
+OWNER_RESET_PATH = "/reset-password#token=b51-cli-secret-0123456789abcdef"
+OWNER_EMAIL = "owner.b51@example.com"
+OWNER_ID = 42
+
+
+def committed_with_owner(root: Path, **owner: Any) -> None:
+    """A committed restore confirmed via ``admin``, the owner's fields ``owner`` written into the state file as raw JSON."""
+    write_state(root, "committed", confirmed_by="b51-admin", confirmed_via="admin")
+    path = state_path(root)
+    record = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(json.dumps({**record, **owner}), encoding="utf-8")
+
+
+def pending_lines(capsys) -> list[str]:
+    assert run("pending") == 0, "pending is exit 0"
+    return capsys.readouterr().out.splitlines()
+
+
+def owner_lines(tmp_path: Path, monkeypatch, capsys, **owner: Any) -> tuple[list[str], str]:
+    """The lines ``pending`` prints for a committed restore with ``owner``, beyond those of the same restore without an
+    owner; and the whole output."""
+    baseline_root = instance(tmp_path / "baseline", monkeypatch)
+    committed_with_owner(baseline_root)
+    baseline = pending_lines(capsys)
+    root = instance(tmp_path / "with-owner", monkeypatch)
+    committed_with_owner(root, **owner)
+    lines = pending_lines(capsys)
+    return [line for line in lines if line not in baseline], "\n".join(lines)
+
+
+#: (the outcome recorded, what its one line must hold besides «owner»).
+OWNER_OUTCOMES = [
+    pytest.param("sent", (), id="sent"),
+    pytest.param("link_only", ("only to the owner",), id="link_only"),
+    pytest.param("already_issued", (), id="already_issued"),
+    pytest.param("already_done", (), id="already_done"),
+    pytest.param("error:EMAIL_TAKEN", ("EMAIL_TAKEN",), id="error"),
+    pytest.param(None, ("next start",), id="not-yet"),
+]
+
+
+@pytest.mark.parametrize(("outcome", "words"), OWNER_OUTCOMES)
+def test_pending_says_what_became_of_the_owner_s_account_in_one_line(tmp_path, monkeypatch, capsys, outcome, words):
+    """(m) B5-1: one line more than without an owner, naming the owner, with what the outcome needs; the reset path,
+    for ``link_only`` only, printed exactly once."""
+    print_section(f"(m) B5-1 pending: owner {outcome}")
+    path = OWNER_RESET_PATH if outcome == "link_only" else None
+    extra, out = owner_lines(tmp_path, monkeypatch, capsys, owner_user_id=OWNER_ID, owner_outcome=outcome, owner_reset_path=path)
+    assert len(extra) == 1, f"[new] B5-1: one line about the owner's account, not {len(extra)}: {extra}\n{out}"
+    line = extra[0]
+    assert "owner" in line.lower(), f"the line names the owner: {line!r}"
+    missing = [word for word in words if word.lower() not in line.lower()]
+    assert missing == [], f"{outcome}: the line holds {missing}: {line!r}"
+    assert out.count(OWNER_RESET_PATH) == (1 if outcome == "link_only" else 0), f"{outcome}: the reset path printed {out.count(OWNER_RESET_PATH)} times: {out}"
+    print_success(f"{outcome}: {line}")
+
+
+@pytest.mark.parametrize(
+    "owner",
+    [
+        pytest.param({"confirmed_via": "cli", "confirmed_by": "cli", "owner_user_id": None}, id="via-cli"),
+        pytest.param({"confirmed_via": "panel", "confirmed_by": "panel", "owner_user_id": None}, id="via-panel"),
+        pytest.param({"owner_user_id": None, "owner_outcome": None}, id="admin-without-owner"),
+    ],
+)
+def test_pending_says_nothing_of_an_owner_nobody_chose(tmp_path, monkeypatch, capsys, owner):
+    """(m) B5-1, a guard: a committed restore without an owner chosen prints no line about one."""
+    root = instance(tmp_path, monkeypatch)
+    committed_with_owner(root, **owner)
+    out = "\n".join(pending_lines(capsys))
+    assert "owner" not in out.lower(), f"no owner line: {out}"
+    print_success(f"{owner}: no owner line")
+
+
+@pytest.mark.parametrize("outcome", ["link_only", "sent", None])
+def test_pending_json_never_holds_the_owner(tmp_path, monkeypatch, capsys, outcome):
+    """(m) B5-1, a guard: ``pending --json`` holds neither the owner's id, outcome or reset path, nor the owner's email,
+    whatever the state records."""
+    monkeypatch.setenv("LIBREFOLIO_ADMIN_EMAIL", OWNER_EMAIL)
+    root = instance(tmp_path, monkeypatch)
+    committed_with_owner(root, owner_user_id=OWNER_ID, owner_outcome=outcome, owner_reset_path=OWNER_RESET_PATH if outcome == "link_only" else None)
+    code = run("pending", "--json")
+    captured = capsys.readouterr()
+    assert code == 0, f"pending --json: exit 0: {captured.out} {captured.err}"
+    answer = json.loads(captured.out)
+    assert answer.get("state") == "committed", f"barrier: the committed restore is read: {answer}"
+    both = (captured.out + captured.err).lower()
+    shown = [secret for secret in ("owner", OWNER_RESET_PATH.lower(), "reset-password", OWNER_EMAIL) if secret in both]
+    assert shown == [], f"pending --json holds {shown}: {captured.out}"
+    print_success(f"{outcome}: nothing of the owner")

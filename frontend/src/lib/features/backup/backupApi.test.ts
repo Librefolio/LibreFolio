@@ -368,7 +368,8 @@ interface RestoreRequests {
     startRestoreCheck: (uploadId: string) => Promise<RestoreStage>;
     getRestoreCheck: (stageId: string) => Promise<RestoreStage>;
     deleteRestoreCheck: (stageId: string) => Promise<void>;
-    confirmRestore: (stageId: string) => Promise<RestoreStatus>;
+    /** B5-1b: `ownerUserId`, the account of the backup that becomes the owner's (managed only), `null` by default. */
+    confirmRestore: (stageId: string, ownerUserId?: number | null) => Promise<RestoreStatus>;
     cancelPendingRestore: () => Promise<void>;
     requestRestart: () => Promise<RestoreRestartAccepted>;
     probeServer: () => Promise<'up' | 'down'>;
@@ -503,17 +504,41 @@ describe('the restore requests (B5b §1)', () => {
         expect(touchedBesides(DROP)).toEqual([]);
     });
 
-    it('confirmRestore posts with no body, the id as the path parameter, and returns the status', async () => {
+    // B5-1b (interface §8): the body is `{owner_user_id}` — `null` when no owner is named (self-hosted, or the default).
+    it.each<[string, (fn: RestoreRequests['confirmRestore']) => Promise<RestoreStatus>, number | null]>([
+        ['no owner given: owner_user_id null', (fn) => fn(STAGE_ID), null],
+        ['null given: owner_user_id null', (fn) => fn(STAGE_ID, null), null],
+        ['the owner 7 given: owner_user_id 7', (fn) => fn(STAGE_ID, 7), 7],
+    ])('confirmRestore posts {owner_user_id} (%s), the id as the path parameter, and returns the status', async (_case, call, owner) => {
         const answer = restoreStatus({state: 'pending', stage_id: STAGE_ID});
         zodios[CONFIRM].mockResolvedValue(answer);
 
-        await expect(restore('confirmRestore')(STAGE_ID)).resolves.toBe(answer);
+        await expect(call(restore('confirmRestore'))).resolves.toBe(answer);
 
         expect(zodios[CONFIRM]).toHaveBeenCalledTimes(1);
         const [body, config] = argumentsOf(CONFIRM);
-        expect(body).toBeUndefined();
+        expect(body, 'the body of the confirmation (RestoreConfirmRequest)').toEqual({owner_user_id: owner});
         expect(config, 'the id travels as the path parameter, the second argument of a Zodios post').toEqual({params: {stage_id: STAGE_ID}});
         expect(touchedBesides(CONFIRM)).toEqual([]);
+    });
+
+    it('confirmRestore with an owner: the body replayed on the generated client is the JSON {"owner_user_id": 7}', async () => {
+        zodios[CONFIRM].mockResolvedValue(undefined);
+        await restore('confirmRestore')(STAGE_ID, 7);
+        const passed = argumentsOf(CONFIRM);
+
+        const {createApiClient} = await import('$lib/api/generated');
+        const requests: InternalAxiosRequestConfig[] = [];
+        const adapter: AxiosAdapter = async (config) => {
+            requests.push(config);
+            return {data: undefined, status: 200, statusText: 'OK', headers: new AxiosHeaders(), config, request: {}};
+        };
+        const client = createApiClient('/', {axiosInstance: axios.create({adapter}), validate: false}) as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>;
+        await client[CONFIRM](...passed);
+
+        expect(requests).toHaveLength(1);
+        const data = requests[0].data;
+        expect(typeof data === 'string' ? JSON.parse(data) : data).toEqual({owner_user_id: 7});
     });
 
     it('cancelPendingRestore deletes the pending restore with no body and no parameter, and resolves to nothing', async () => {

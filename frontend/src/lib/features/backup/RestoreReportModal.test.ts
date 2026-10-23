@@ -47,7 +47,7 @@ import {readable, writable} from 'svelte/store';
 import type {Component} from 'svelte';
 import type {z} from 'zod';
 import type {schemas} from '$lib/api';
-import {cleanup, fireEvent, render, screen, within} from '$test/component';
+import {cleanup, fireEvent, render, screen, waitFor, within} from '$test/component';
 
 const i18n = vi.hoisted(() => ({
     /** Every key the translator was asked, in order. */
@@ -613,5 +613,210 @@ describe('L3 — RestoreReportModal: the warnings of the accounts', () => {
         await fireEvent.click(confirmButton());
 
         expect(onConfirm).toHaveBeenCalledTimes(1);
+    });
+});
+
+// =====================================================================================================================
+// B5-1b — the owner's choice when confirming a restore (interface B-b51 §8; written red first)
+// =====================================================================================================================
+
+/*
+ * The contract: `onConfirm: (ownerUserId: number | null) => void`.
+ *   - `report.owner_choice` null or absent: as today, the word typed then `restore-confirm` → `onConfirm(null)`, and no
+ *     `owner-choice-modal`;
+ *   - present: `restore-confirm` (same word rule) does not call `onConfirm`: it opens `OwnerChoiceModal`
+ *     (`owner-choice-modal`) with `ownerEmail = owner_choice.owner_email` and as `users` only the candidate whose
+ *     `user_id === forced_user_id` when that is not null, otherwise the candidates with `administrator === true`, each
+ *     mapped `{id: user_id, username, email: email ?? '', is_superuser, is_active}`; `busy` passed through. Its confirm
+ *     closes it and calls `onConfirm(id)` once; its cancel closes it, confirms nothing, and leaves the report open with
+ *     the word typed.
+ *
+ * OwnerChoiceModal.svelte is workstream A's (a stand-in here, replaced whole at the merge): it is driven only through
+ * A's handles — `owner-choice-option` with `data-user-id` and `data-selected` (a click selects), `owner-choice-confirm`,
+ * `owner-choice-cancel`, and `data-locked` on `owner-choice-modal` (the owner's address is one of the users': only that
+ * one can be chosen). `ownerEmail` and the mapped `email` are seen through `data-locked`, which A's modal derives from
+ * them; nothing reads its text or its classes.
+ *
+ * Choice of this file where §8 is silent: the users keep the order of `owner_choice.candidates`. A candidate that is
+ * neither an administrator nor the owner's address cannot come from the server (the check selects only those), but one
+ * is in the fixture to pin the filter `administrator === true` on its own.
+ *
+ * Red today: the modal calls `onConfirm()` with no argument and knows no `owner_choice`, so no owner modal ever opens.
+ * The guards (green today): a report the word does not unlock opens nothing.
+ */
+
+/** The generated type also admits an array (an artefact of the OpenAPI union): the object is the contract. */
+type OwnerChoice = Exclude<NonNullable<GeneratedStageReport['owner_choice']>, unknown[]>;
+type OwnerCandidate = OwnerChoice['candidates'][number];
+
+const OWNER_EMAIL = 'owner@example.org';
+
+const ADMIN_GIULIA: OwnerCandidate = {user_id: 3, username: 'giulia.bianchi', email: 'giulia@example.org', owner_email: false, administrator: true, is_superuser: true, is_active: true};
+/** An administrator without an address: mapped with `email: ''`. */
+const ADMIN_NO_EMAIL: OwnerCandidate = {user_id: 7, username: 'operator7', email: null, owner_email: false, administrator: true, is_superuser: true, is_active: true};
+/** Neither an administrator nor the owner's address (see the docblock): never offered. */
+const NOT_OFFERED: OwnerCandidate = {user_id: 5, username: 'former.admin', email: 'former@example.org', owner_email: false, administrator: false, is_superuser: true, is_active: false};
+/** The account whose address is the owner's, in another case: the forced choice. */
+const OWNER_ACCOUNT: OwnerCandidate = {user_id: 9, username: 'owner.mailbox', email: 'Owner@Example.org', owner_email: true, administrator: false, is_superuser: false, is_active: true};
+
+function ownerChoice(overrides: Partial<OwnerChoice> = {}): OwnerChoice {
+    return {required: true, owner_email: OWNER_EMAIL, forced_user_id: null, candidates: [ADMIN_GIULIA, NOT_OFFERED, ADMIN_NO_EMAIL], ...overrides};
+}
+
+const forcedChoice = () => ownerChoice({forced_user_id: OWNER_ACCOUNT.user_id, candidates: [ADMIN_GIULIA, OWNER_ACCOUNT, ADMIN_NO_EMAIL]});
+
+const ownerModal = () => screen.getByTestId('owner-choice-modal');
+const offered = () =>
+    within(ownerModal())
+        .getAllByTestId('owner-choice-option')
+        .map((option) => Number(option.getAttribute('data-user-id')));
+const option = (userId: number) => {
+    const found = within(ownerModal())
+        .getAllByTestId('owner-choice-option')
+        .filter((element) => element.getAttribute('data-user-id') === String(userId));
+    expect(found, `no owner-choice-option for the user ${userId}`).toHaveLength(1);
+    return found[0];
+};
+
+/** The word typed and `restore-confirm` clicked. */
+async function typeAndConfirm(): Promise<void> {
+    await type('violet');
+    expect(confirmButton(), 'precondition: the word unlocks the confirmation').toBeEnabled();
+    await fireEvent.click(confirmButton());
+}
+
+/** The report of `choice`, the word typed and confirmed: the owner modal open. */
+async function ownerModalOpen(choice: OwnerChoice = ownerChoice(), props: Record<string, unknown> = {}) {
+    const view = mount(report({owner_choice: choice}), props);
+    await typeAndConfirm();
+    expect(screen.getByTestId('owner-choice-modal'), 'precondition: the owner modal is open').toBeInTheDocument();
+    return view;
+}
+
+describe('B5-1b — RestoreReportModal: no owner to choose (self-hosted)', () => {
+    it.each<[string, Partial<RestoreStageReport>]>([
+        ['owner_choice absent', {}],
+        ['owner_choice null', {owner_choice: null}],
+    ])('%s: the word typed, restore-confirm → onConfirm(null) once, and no owner modal', async (_case, overrides) => {
+        const {onConfirm} = mount(report(overrides));
+
+        await typeAndConfirm();
+
+        expect(onConfirm).toHaveBeenCalledTimes(1);
+        expect(onConfirm, 'a confirmation without an owner names none: null').toHaveBeenCalledWith(null);
+        expect(screen.queryByTestId('owner-choice-modal')).toBeNull();
+    });
+
+    it('owner_choice absent: Enter in the field confirms with onConfirm(null)', async () => {
+        const {onConfirm} = mount();
+        await type('violet');
+
+        await fireEvent.keyDown(field(), {key: 'Enter'});
+
+        expect(onConfirm).toHaveBeenCalledTimes(1);
+        expect(onConfirm).toHaveBeenCalledWith(null);
+    });
+});
+
+describe('B5-1b — RestoreReportModal: the owner to choose (managed)', () => {
+    it('restore-confirm with the word typed does not confirm: it opens owner-choice-modal', async () => {
+        const {onConfirm} = mount(report({owner_choice: ownerChoice()}));
+
+        await typeAndConfirm();
+
+        expect(onConfirm, 'the restore was confirmed before the owner was chosen').not.toHaveBeenCalled();
+        expect(screen.getByTestId('owner-choice-modal')).toBeInTheDocument();
+        expect(screen.getByTestId('restore-report'), 'the report stays under the owner modal').toBeInTheDocument();
+    });
+
+    it('Enter in the field does not confirm either: it opens owner-choice-modal', async () => {
+        const {onConfirm} = mount(report({owner_choice: ownerChoice()}));
+        await type('violet');
+
+        await fireEvent.keyDown(field(), {key: 'Enter'});
+
+        expect(onConfirm).not.toHaveBeenCalled();
+        expect(screen.getByTestId('owner-choice-modal')).toBeInTheDocument();
+    });
+
+    it.each<[string, Partial<RestoreStageReport & ReportB4Fields>, string]>([
+        ['nothing typed', {}, ''],
+        ['another word typed', {}, 'garden'],
+        ['an archive that cannot be restored', {restorable: false}, 'violet'],
+    ])('the word rule still holds — %s: restore-confirm disabled, no owner modal (green today: the guard)', async (_case, overrides, typed) => {
+        const {onConfirm} = mount(report({owner_choice: ownerChoice(), ...overrides}));
+        await type(typed);
+
+        expect(confirmButton()).toBeDisabled();
+        await fireEvent.click(confirmButton());
+        await fireEvent.keyDown(field(), {key: 'Enter'});
+
+        expect(screen.queryByTestId('owner-choice-modal')).toBeNull();
+        expect(onConfirm).not.toHaveBeenCalled();
+    });
+
+    it('forced_user_id null: the users are the administrators among the candidates, in their order — nothing locked', async () => {
+        await ownerModalOpen();
+
+        expect(offered(), 'the users offered as the owner').toEqual([ADMIN_GIULIA.user_id, ADMIN_NO_EMAIL.user_id]);
+        expect(ownerModal(), 'no user has the owner address: nothing is forced').toHaveAttribute('data-locked', 'false');
+    });
+
+    it('forced_user_id set: only that candidate, mapped with its address — locked on it, selected', async () => {
+        await ownerModalOpen(forcedChoice());
+
+        expect(offered(), 'a forced owner leaves no other choice').toEqual([OWNER_ACCOUNT.user_id]);
+        expect(ownerModal(), 'ownerEmail and the candidate email reached the modal: it locks on the owner address').toHaveAttribute('data-locked', 'true');
+        expect(option(OWNER_ACCOUNT.user_id)).toHaveAttribute('data-selected', 'true');
+    });
+
+    it('an administrator chosen, then owner-choice-confirm: the owner modal closes and onConfirm(id) is called once', async () => {
+        const {onConfirm} = await ownerModalOpen();
+
+        await fireEvent.click(option(ADMIN_NO_EMAIL.user_id));
+        expect(option(ADMIN_NO_EMAIL.user_id), 'precondition: the click selected it').toHaveAttribute('data-selected', 'true');
+        await fireEvent.click(within(ownerModal()).getByTestId('owner-choice-confirm'));
+
+        expect(onConfirm).toHaveBeenCalledTimes(1);
+        expect(onConfirm).toHaveBeenCalledWith(ADMIN_NO_EMAIL.user_id);
+        await waitFor(() => expect(screen.queryByTestId('owner-choice-modal')).toBeNull());
+    });
+
+    it('the forced owner, owner-choice-confirm: onConfirm(forced_user_id) once', async () => {
+        const {onConfirm} = await ownerModalOpen(forcedChoice());
+
+        await fireEvent.click(within(ownerModal()).getByTestId('owner-choice-confirm'));
+
+        expect(onConfirm).toHaveBeenCalledTimes(1);
+        expect(onConfirm).toHaveBeenCalledWith(OWNER_ACCOUNT.user_id);
+        await waitFor(() => expect(screen.queryByTestId('owner-choice-modal')).toBeNull());
+    });
+
+    it('owner-choice-cancel: the owner modal closes, nothing confirmed, the report still open with the word typed — and confirm opens it again', async () => {
+        const {onConfirm, onClose} = await ownerModalOpen();
+
+        await fireEvent.click(within(ownerModal()).getByTestId('owner-choice-cancel'));
+
+        await waitFor(() => expect(screen.queryByTestId('owner-choice-modal')).toBeNull());
+        expect(onConfirm).not.toHaveBeenCalled();
+        expect(onClose, 'cancelling the owner closed the report').not.toHaveBeenCalled();
+        expect(screen.getByTestId('restore-report')).toBeInTheDocument();
+        expect(field(), 'the word typed was lost').toHaveValue('violet');
+        expect(confirmButton()).toBeEnabled();
+
+        await fireEvent.click(confirmButton());
+
+        expect(screen.getByTestId('owner-choice-modal'), 'confirm again: the owner modal again').toBeInTheDocument();
+        expect(onConfirm).not.toHaveBeenCalled();
+    });
+
+    it('busy is passed through: while the confirmation is out, owner-choice-confirm is disabled', async () => {
+        const view = await ownerModalOpen(forcedChoice());
+        const answer = report({owner_choice: forcedChoice()});
+        expect(within(ownerModal()).getByTestId('owner-choice-confirm'), 'precondition: the forced owner can be confirmed').toBeEnabled();
+
+        await view.rerender({open: true, report: answer, busy: true, random: view.random, onConfirm: view.onConfirm, onDrop: view.onDrop, onClose: view.onClose});
+
+        expect(within(ownerModal()).getByTestId('owner-choice-confirm')).toBeDisabled();
     });
 });

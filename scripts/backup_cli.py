@@ -923,11 +923,36 @@ def _print_restore_state(state) -> None:
             print("⚠️  The hosting provider blocked this instance: the restore waits until it is unblocked (instance_blocked)")
     elif state.status == "committed":
         print(f"✅ The last restore was applied on {_when(state.finished_at)}: {backup}")
+        _print_owner_outcome(state)
     elif state.status == "rolled_back":
         reason = _ROLLBACK_REASONS.get(state.reason or "", "for a reason this LibreFolio does not know")
         print(f"⚠️  The last restore was rolled back on {_when(state.finished_at)}, the data is as it was before: {reason} ({state.reason})")
     else:
         print("⏳ A restore is being applied by the server")
+
+
+#: What the first start did with the account the owner chose (B5-1), as ``dev.py backup pending`` says it.
+_OWNER_OUTCOMES = {
+    "sent": "✉️  The owner's account is set: a link to choose its password went to the owner's address",
+    "already_issued": "✉️  The owner's account is set: a link to choose its password was already sent and is still valid",
+    "already_done": "✅ The owner's account is set, and its password chosen",
+}
+
+
+def _print_owner_outcome(state) -> None:
+    """The owner's account of a restore confirmed from the app of a managed instance (B5-1); nothing for any other."""
+    if getattr(state, "owner_user_id", None) is None:
+        return
+    outcome = state.owner_outcome
+    if outcome is None:
+        print("⏳ The owner's account is set at the next start of the server")
+    elif outcome in _OWNER_OUTCOMES:
+        print(_OWNER_OUTCOMES[outcome])
+    elif outcome == "link_only":
+        link = state.owner_reset_path or "no longer known: the owner uses «Forgot password?» once email works"
+        print(f"⚠️  The owner's account is set, but no email could be sent: give this link only to the owner, it sets the account's password: {link}")
+    else:
+        print(f"❌ The owner's account could not be set ({_safe(outcome.removeprefix('error:'))}): the server log has the cause")
 
 
 def cmd_decrypt(args) -> int:

@@ -485,6 +485,45 @@ Good to know:
 - ❌ A refused upload, check or confirmation, or a server that does not answer, shows on the card with the reason. **Try again** reads the state of the restore again; to send an archive again, choose it again with **Choose an archive…**. The check refuses the same archives as the command line: see [The Check Refuses the Archive](#check-refused).
 - 🖥️ With nothing that starts LibreFolio again, such as a host installation started by hand, [start the server](cli_tools.md#start-the-server) yourself once it has stopped: the page waits for it.
 - 🔒 On an instance its hosting provider has [blocked](hosting_providers.md#instance-block), the app shows the block page instead of Settings: there is no restore from the app there. A restore confirmed before the block waits for the unblock: the first start after it applies it. If the start that follows **Restore and restart** finds the instance blocked, the window says why the restore was not applied, and **Back to Backup** leads to the block page.
+- 👑 On an instance a hosting provider runs, the confirmation also asks which account of the backup becomes the owner's: see [The Owner's Account on a Hosted Instance](#owner-account).
+
+### 👑 The Owner's Account on a Hosted Instance {: #owner-account }
+
+On an instance a hosting provider runs for its users (the `managed` profile, see [The Managed Profile](hosting_providers.md#managed-profile)), the owner is the person whose address the provider set in `LIBREFOLIO_ADMIN_EMAIL`. A backup uploaded from the app may come from anywhere: in it, the owner's account may be missing, no longer an administrator, or have a password someone else knows. So, on such an instance, a restore confirmed from **Settings › Administration › Backup** names the account of the backup that becomes the owner's, and the owner then chooses its password.
+
+- 🖱️ **When it is asked.** When you confirm the restore of an archive you uploaded, after the word is typed, LibreFolio asks you to choose that account. The choice is mandatory: without it the restore is not confirmed. It is asked only there: a restore the hosting provider makes from its panel ([Restoring an Instance from Your Panel](hosting_providers.md#panel-restore)) or with `backup restore` on the command line never asks, and changes no account's password. On your own installation (`selfhosted`, the default) it is never asked.
+- 👥 **Which accounts are offered.**
+    - If an account of the backup already has the owner's address (the capitals of the letters do not matter), it is the only choice, whatever its role: no other account could take that address.
+    - Otherwise, any active administrator of the backup.
+- 🔄 **What the restore does with it.** At the first start on the restored data, as the restore is kept ([What the Next Start Does](#next-start)):
+    - the password of the chosen account stops working: nobody signs in with the password it had in the backup, and whoever prepared the backup cannot sign in as the owner. As for every account, its sessions end and every link of the backup is revoked;
+    - the account takes the owner's address and becomes an active administrator;
+    - then the owner receives by email a link to choose a new password, and signs in with it.
+- 📮 **Without email.** When the instance cannot send email ([Email](email.md)), no message goes out: whoever runs the server reads the link with `backup pending`, on the command line, and gives it **only to the owner**: whoever has it sets the password of the owner's account.
+- 🔑 The sentence of the report, *After the restore you sign in with one of them, with the password of then*, holds for the other administrators of the backup: the account chosen for the owner signs in only with the password set through its link.
+
+After a restore that was kept, `backup pending` adds one line about the owner's account:
+
+| Line | What it means |
+| --- | --- |
+| `✉️ The owner's account is set: a link to choose its password went to the owner's address` | Done: the owner chooses the password from the email |
+| `✉️ The owner's account is set: a link to choose its password was already sent and is still valid` | Done before: that link still works |
+| `✅ The owner's account is set, and its password chosen` | Nothing left to do |
+| `⚠️ The owner's account is set, but no email could be sent: give this link only to the owner, it sets the account's password: <link>` | No email went out: hand the link to the owner, and to nobody else. When the link is no longer known, the line says so: the owner uses **Forgot Password?** on the sign-in page once email works |
+| `⏳ The owner's account is set at the next start of the server` | The start has not given the owner the account yet: the next start does it |
+| `❌ The owner's account could not be set (<CODE>): the server log has the cause` | The account could not be given to the owner: the log of the start names the cause |
+
+`backup pending --json` does not carry this line.
+
+When the confirmation is refused, nothing is confirmed and the data stays as it is:
+
+| Code | Why | What to do |
+| --- | --- | --- |
+| `owner_choice_required` | No account was chosen for the owner | Choose one of the accounts offered, then confirm again |
+| `owner_choice_invalid` | The account chosen is not one the restore offers: not an active administrator of the backup, or another one than the account that already has the owner's address | Choose one of the accounts offered |
+| `owner_email_not_set` | The instance has no owner's address: `LIBREFOLIO_ADMIN_EMAIL` is not set | Ask the hosting provider to set it and restart LibreFolio, then choose the archive again to check it |
+| `restore_stage_outdated` | LibreFolio was updated since the check, or the owner's address changed since then: the accounts offered were read for the old address | Choose the archive again: a new check offers the accounts for the current address |
+| `owner_conflict` | The backup holds two accounts on one address or one name (the capitals of the letters aside), or an account named with the owner's address that does not have that address. The owner's account could not be set safely | Such a backup cannot be restored on a hosted instance. On the installation it comes from, give the accounts at fault their own name and address, then make a new backup |
 
 ### ⌨️ Restore from the Command Line {: #restore-command }
 
