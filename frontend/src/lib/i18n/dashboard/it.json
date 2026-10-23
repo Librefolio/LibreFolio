@@ -151,6 +151,7 @@
     "fxOnCash": "Effetto cambio sulla liquidità",
     "allocationNegativeCash": "Liquidità negativa: {amount}",
     "startValueTooltip": "Valore della posizione a inizio periodo, calcolato come la colonna Valore del Portafoglio; 0 se la posizione non c'era ancora. È la base delle percentuali del periodo.",
-    "endValueTooltip": "Valore della posizione a fine periodo, calcolato come la colonna Valore del Portafoglio; 0 se la posizione era già chiusa."
+    "endValueTooltip": "Valore della posizione a fine periodo, calcolato come la colonna Valore del Portafoglio; 0 se la posizione era già chiusa.",
+    "transfersAtMarketValue": "Trasferimenti al valore di mercato"
   }
 }
