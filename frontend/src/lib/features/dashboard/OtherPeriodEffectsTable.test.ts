@@ -72,6 +72,11 @@ function fxOnCash(brokerId: number, brokerName: string, periodPnl: string): Effe
     return {description: 'FX on cash', category: 'Other', period_pnl: periodPnl, broker_id: brokerId, broker_name: brokerName};
 }
 
+/** A «Transfers at market value» row as the backend sends it (one per broker): its English description is a contract, not a label. */
+function transfersAtMarket(brokerId: number, brokerName: string, periodPnl: string): Effect {
+    return {description: 'Transfers at market value', category: 'Other', period_pnl: periodPnl, broker_id: brokerId, broker_name: brokerName};
+}
+
 /** The key the component derives for the effect at `index`, the one its test ids carry. */
 function keyOf(index: number, effect: Effect): string {
     return `effect-${index}-${effect.category}-${effect.broker_id ?? 'global'}`;
@@ -228,5 +233,49 @@ describe('OtherPeriodEffectsTable — the FX on cash row (release 1.2, gap 2)', 
         for (const [index, key] of reversedKeys.entries()) {
             await waitFor(() => expect(screen.getByTestId(`other-period-effects-pnl-${key}`).textContent?.trim(), `${key} carries the amount of the reversed effects[${index}]`).toBe(amounts[effects.length - 1 - index]));
         }
+    });
+});
+
+describe('OtherPeriodEffectsTable — the Transfers at market value row (Y5-F5)', () => {
+    it("labels a Transfers at market value row with the catalogue's dashboard.transfersAtMarketValue beside the broker name, under the Other category, with the broker's badge", async () => {
+        await useMarkerLocale();
+        const effect = transfersAtMarket(51, 'Probe Transfer Broker', '-60');
+        const key = keyOf(0, effect);
+        render(OtherPeriodEffectsTable, {effects: [effect], displayCurrency: 'EUR'});
+
+        const header = screen.getByTestId('other-period-effects-header');
+        expect(header, 'control: the header already takes its title from the catalogue, so the marker locale is live').toHaveTextContent(marked('dashboard.otherPeriodEffects'));
+
+        const row = await rowOf(key);
+        expect(cellIn(row, 'description').textContent?.trim(), 'the backend string is mapped to its catalogue key, then the broker name').toBe(`${marked('dashboard.transfersAtMarketValue')} — Probe Transfer Broker`);
+        expect(screen.getByTestId(`other-period-effects-category-${key}`).textContent?.trim()).toBe(marked('dashboard.categoryOther'));
+        const badge = cellIn(row, 'broker').querySelector<HTMLElement>('[data-testid="broker-badge-51"]');
+        expect(badge, 'the broker column shows the badge of the broker the row belongs to').not.toBeNull();
+        expect(badge).toHaveTextContent('Probe Transfer Broker');
+    });
+
+    it('keeps the backend order of a row from two brokers, and each row shows its own broker name', async () => {
+        await useMarkerLocale();
+        // One row per broker, in the backend's access order (broker 62 before broker 61): nothing sorts them.
+        const effects: Effect[] = [transfersAtMarket(62, 'Second Access Broker', '40'), transfersAtMarket(61, 'First Id Broker', '-40')];
+        render(OtherPeriodEffectsTable, {effects, displayCurrency: 'EUR'});
+
+        const keys = effects.map((effect, index) => keyOf(index, effect));
+        await waitFor(() => expect(renderedKeys()).toEqual(keys));
+        const names = ['Second Access Broker', 'First Id Broker'];
+        for (const [index, key] of keys.entries()) {
+            const row = await rowOf(key);
+            expect(cellIn(row, 'description').textContent?.trim(), `${key} shows its own broker`).toBe(`${marked('dashboard.transfersAtMarketValue')} — ${names[index]}`);
+        }
+    });
+
+    it('guard: a description the table does not know is still printed as the backend sent it', async () => {
+        await useMarkerLocale();
+        const effect: Effect = {description: 'Probe unknown effect', category: 'Other', period_pnl: '5', broker_id: 71, broker_name: 'Probe Broker'};
+        const key = keyOf(0, effect);
+        render(OtherPeriodEffectsTable, {effects: [effect], displayCurrency: 'EUR'});
+
+        const row = await rowOf(key);
+        expect(cellIn(row, 'description').textContent?.trim()).toBe('Probe unknown effect — Probe Broker');
     });
 });
