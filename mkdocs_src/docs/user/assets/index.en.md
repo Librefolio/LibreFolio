@@ -25,7 +25,7 @@ Assets are shared by everyone on this LibreFolio: your transactions decide which
 Open **Assets** in the sidebar, then:
 
 - **Pick a layout** — the two buttons next to **Add Asset** switch between cards with a small chart (**Grid view**) and a sortable table (**Table view**). Your choice is remembered in this browser.
-- **Pick the period** — the date range sets the period of the card charts and of the change they show. In the table, the **Δ** columns give the change over one day and over each period, from 1W to 5Y, that fits in the range.
+- **Pick the period** — the date range sets the period of the card charts and of the change they show. When a card's chart groups the days into weeks or months because the plot is too narrow for so many days, a small **Weekly** or **Monthly** badge at its top left says so, like on the [detail page's chart](detail/chart.md). In the table, the **Δ** columns give the change over one day and over each period, from 1W to 5Y, that fits in the range.
 - **Filter** — type in **Search assets...** to filter by name, and pick one or more currencies and types in the two menus; the ✕ clears the search and both menus.
 - **Show archived assets** — the list starts with **Active** assets only: switch on **Inactive** to add the archived ones, or switch off **Active** to see only those.
 
@@ -33,7 +33,7 @@ Click a card or a row to open the asset's **[detail page](detail/index.md)**. Th
 
 ??? note "📉 Abs, % or Rolling Return on the cards — grid view only"
 
-    The switch in the toolbar has three options: **Abs** (prices), **%** (the change over the period) and **Rolling Return** (the icon). Your choice applies to every card, its chart and its change, and it is remembered in this browser, for your user, with the chart settings.
+    The switch in the toolbar has three options: the chart-line icon, the same as on the cards, for the absolute prices (its tooltip says **Show absolute**), **%** (the change over the period) and the calendar icon for **Rolling Return**. Your choice applies to every card, its chart and its change, and it is remembered in this browser, for your user, with the chart settings.
 
     The view button on a card goes to the next view, **%** → **Rolling Return** → **Abs** → **%**, and shows the view it will go to. A card keeps its own choice, even after you reload, until you change the toolbar again: that resets every card to the toolbar's view.
 
@@ -63,7 +63,7 @@ In the table view each panel is a table with its own pages; resizing, moving or 
 
 ## 🔄 Keep prices up to date
 
-- **Sync All** opens a window where **Start Sync** downloads the latest prices of every asset that has a provider; **Reload All** reloads the list from what LibreFolio has stored. When the period already holds stored prices for some of the assets, the window says so before you start: the sync replaces them with the provider's values, your manual edits included. On the **[Correlation](correlation.md)** tab they become **Sync selection**, which also downloads the exchange rates that convert the selected assets, and **Reload All**, which recomputes every analysis.
+- **Sync All** opens a window where **Start Sync** downloads the latest prices of every asset that has a provider; **Reload All** reloads the list from what LibreFolio has stored. Hover over **Settings**, **Sync All** or **Reload All** for half a second to read what the button does. When the period already holds stored prices for some of the assets, the window says so before you start: the sync replaces them with the provider's values, your manual edits included. On the **[Correlation](correlation.md)** tab they become **Sync selection**, which also downloads the exchange rates that convert the selected assets, and **Reload All**, which recomputes every analysis.
 - **Live prices** — while the date range ends today, prices refresh by themselves: every minute on this page, every 30 seconds on an asset's page. A price turns green when it went up since the previous refresh, red when it went down; when the market is closed you see the last close, uncoloured. To spare the server and the price providers, refreshing pauses while the browser tab is in the background, and after two minutes without using the page: then a small **Updates paused** label shows at the top of the page. There is nothing to click: as soon as you come back to the tab, move the mouse or press a key, prices refresh again on their own.
 - **In the background**, the server refreshes prices on a schedule your administrator sets ([Market Data Scheduler](../../admin/settings.md#market-data-scheduler)). The Dashboard shows the stored prices.
 

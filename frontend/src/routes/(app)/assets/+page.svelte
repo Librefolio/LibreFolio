@@ -19,7 +19,7 @@
     import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
     import {zodiosApi, axiosInstance} from '$lib/api';
-    import {BarChart3, CalendarSync, Check, Network, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
+    import {BarChart3, CalendarSync, ChartLine, Check, Network, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
     import AssetCard from '$lib/components/assets/AssetCard.svelte';
     import type {AssetRow} from '$lib/components/assets/AssetTable.svelte';
     import AssetTable from '$lib/components/assets/AssetTable.svelte';
@@ -1930,11 +1930,14 @@
                     <div class="flex rounded-lg border border-lf-subtle overflow-hidden" data-testid="assets-global-view" data-view={globalPrimaryView}>
                         <button
                             type="button"
-                            class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            class="flex-1 inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                             data-testid="assets-global-view-absolute"
                             aria-pressed={globalPrimaryView === 'absolute'}
+                            aria-label={$t('chart.showAbsolute')}
+                            title={$t('chart.showAbsolute')}
                             onclick={() => handleListPrimaryView('absolute')}
-                            >Abs
+                        >
+                            <ChartLine size={14} />
                         </button>
                         <button
                             type="button"
@@ -1957,37 +1960,55 @@
                         </button>
                     </div>
                 {/if}
-                <!-- Settings -->
-                <button class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" onclick={handleGlobalSettings} data-testid="assets-chart-settings-button">
-                    <Settings size={14} />
-                    {#if showActionLabels}<span>{$t('sharedResource.settings')}</span>{/if}
-                </button>
+                <!-- Settings. The three buttons say what they do in a delayed tooltip (Y5-F1); a click is theirs, so
+                     it stops before the tooltip's own click, which would pin the hint over the window it opens. -->
+                <Tooltip text={$t('sharedResource.settingsHint')} position="bottom" interactiveChild testId="assets-chart-settings-tooltip">
+                    <button
+                        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
+                        onclick={(event) => {
+                            event.stopPropagation();
+                            handleGlobalSettings();
+                        }}
+                        data-testid="assets-chart-settings-button"
+                    >
+                        <Settings size={14} />
+                        {#if showActionLabels}<span>{$t('sharedResource.settings')}</span>{/if}
+                    </button>
+                </Tooltip>
                 <!-- Sync All -->
-                <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
-                    onclick={handleSyncAllAssets}
-                    data-testid="assets-sync-all-button"
-                    use:guideAnchor={'asset.page.sync'}
-                >
-                    <RotateCw size={14} />
-                    {#if showActionLabels}<span>{$t('sharedResource.syncAll')}</span>{/if}
-                </button>
+                <Tooltip text={$t('sharedResource.syncAllHint')} position="bottom" interactiveChild testId="assets-sync-all-tooltip">
+                    <button
+                        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
+                        onclick={(event) => {
+                            event.stopPropagation();
+                            handleSyncAllAssets();
+                        }}
+                        data-testid="assets-sync-all-button"
+                        use:guideAnchor={'asset.page.sync'}
+                    >
+                        <RotateCw size={14} />
+                        {#if showActionLabels}<span>{$t('sharedResource.syncAll')}</span>{/if}
+                    </button>
+                </Tooltip>
                 <!-- Refresh All -->
-                <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
-                    data-testid="assets-refresh-button"
-                    data-busy={pageBusy.busy ? 'true' : 'false'}
-                    disabled={pageBusy.busy}
-                    onclick={() => {
-                        for (const a of assets) invalidateAssetPrices(a.id);
-                        rearmMaxPendingBeforeReload();
-                        void pageBusy.track('assets-refresh', () => fetchAllPriceData());
-                        refreshLivePricesNow();
-                    }}
-                >
-                    <RefreshCw class={pageBusy.busy ? 'animate-spin' : ''} size={14} />
-                    {#if showActionLabels}<span>{$t('sharedResource.refreshAll')}</span>{/if}
-                </button>
+                <Tooltip text={$t('sharedResource.refreshAllHint')} position="bottom" interactiveChild testId="assets-refresh-tooltip">
+                    <button
+                        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
+                        data-testid="assets-refresh-button"
+                        data-busy={pageBusy.busy ? 'true' : 'false'}
+                        disabled={pageBusy.busy}
+                        onclick={(event) => {
+                            event.stopPropagation();
+                            for (const a of assets) invalidateAssetPrices(a.id);
+                            rearmMaxPendingBeforeReload();
+                            void pageBusy.track('assets-refresh', () => fetchAllPriceData());
+                            refreshLivePricesNow();
+                        }}
+                    >
+                        <RefreshCw class={pageBusy.busy ? 'animate-spin' : ''} size={14} />
+                        {#if showActionLabels}<span>{$t('sharedResource.refreshAll')}</span>{/if}
+                    </button>
+                </Tooltip>
             {/if}
         {/snippet}
     </PageToolbar>
@@ -2094,6 +2115,7 @@
                                     renderSignals={(chartData, vm) => getRenderedSignals(asset.id, chartData, vm)}
                                     chartData={asset.chartData}
                                     baseValue={asset.base?.value ?? null}
+                                    resolution={asset.resolution}
                                     onplotwidth={handlePlotWidth}
                                     loading={asset.loadingPrices}
                                     syncing={syncingAssetIds.has(asset.id)}
