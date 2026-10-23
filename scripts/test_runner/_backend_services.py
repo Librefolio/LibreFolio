@@ -534,6 +534,16 @@ def services_linked_adjustment_pair(verbose: bool = False, test_names: list = No
     return run_command(cmd, "Linked adjustment pair tests", verbose=verbose)
 
 
+def services_transfer_pair_order(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a linked TRANSFER / CASH_TRANSFER arriving before it departs is saved as sent and warned (pairArrivalBeforeDeparture)."""
+    print_section("Services: Transfer Pair Order")
+    print_info("Testing: backend/app/services/transactions/batch_creates.py (resolve_create_links) + batch_edits.py (validate_updated_pairs) + TXBatchResponse.warnings")
+    print_info("Tests: arrival dated before departure on create and on a date edit gives a non-blocking warning; equal/normal order, FX_CONVERSION, ADJUSTMENT, unlinked rows and untouched stored pairs give none; the data is saved as sent; the message in 4 languages")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transfer_pair_order.py", test_names)
+    return run_command(cmd, "Transfer pair order tests", verbose=verbose)
+
+
 def services_transaction_decimal_places(verbose: bool = False, test_names: list = None) -> bool:
     """Test how many decimal places a transaction keeps, where a batch refuses more, and the balances summed exactly (C-97a)."""
     print_section("Services: Transaction Decimal Places")
@@ -2223,6 +2233,13 @@ Note: No backend server required.
         services_linked_adjustment_pair,
         name="Linked Adjustment Pair",
         desc="Two ADJUSTMENTs under one link_uuid are refused on the first create (pairAdjustmentNotAllowed, commit and validate); a TRANSFER pair, the Bulk promote, unlinked ADJUSTMENTs and a stored pair are not touched; the message exists in EN/IT/FR/ES",
+    )
+    add_test(
+        cat,
+        "transfer-pair-order",
+        services_transfer_pair_order,
+        name="Transfer Pair Order",
+        desc="W5-3: a linked TRANSFER / CASH_TRANSFER arriving before it departs is saved as sent (create and date edit) and the batch carries a non-blocking pairArrivalBeforeDeparture warning; none for equal or normal dates, FX_CONVERSION, ADJUSTMENT, unlinked rows or an untouched stored pair; the message exists in EN/IT/FR/ES",
     )
     add_test(
         cat,
