@@ -135,7 +135,7 @@ Docker downloads the official image from GHCR and starts LibreFolio. The `latest
 
 Open your browser at **`http://localhost:6040`**.
 
-On your first visit, LibreFolio shows the login page: click **Register here** to create your account. The first account automatically becomes the **administrator**; to let other people in, send them an [invitation link](../admin/users.md#invitations). To have LibreFolio create the administrator at its first start instead, for example in a scripted install, see [The Initial Administrator](../admin/configuration.md#initial-admin).
+On your first visit, LibreFolio shows the login page: click **Register here** to create your account. The first account automatically becomes the **administrator**; to let other people in, send them an [invitation link](../admin/users.md#invitations). To have LibreFolio create the administrator at its first start instead, for example in a scripted install, see [The Initial Administrator](../admin/configuration_accounts.md#initial-admin).
 
 ??? tip "🖥️ Watch the status and the logs (optional)"
 

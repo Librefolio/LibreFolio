@@ -480,6 +480,15 @@ def utils_docs_search_split(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Docs search language split tests", verbose=verbose)
 
 
+def utils_docs_admin_references(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that every reference to the admin guide reaches a page and an anchor, and no anchor was lost by the split (DOC-1)."""
+    print_section("Utils: Docs Admin References")
+    print_info("Testing: admin/<page>/#<anchor> in the non-test sources (frontend/src, backend/app, scripts, dev.py, README) vs mkdocs_src/docs/admin/*.en.md, backend/test_scripts/fixtures/docs_admin/old_anchors.json vs mkdocs_src/docs/javascripts/moved-anchors.js, the built site")
+    print_info("Tests: the scanner and the page reader on synthetic samples, the reader against MkDocs' own render, every reference reaches an existing page and anchor, every old anchor kept or moved, the map's stale entries, the built pages and ids and the built script")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_docs_admin_references.py", test_names)
+    return run_command(cmd, "Docs admin references tests", verbose=verbose)
+
+
 def utils_normalize_dashboard_fixture(verbose: bool = False, test_names: list = None) -> bool:
     """Test the gallery dashboard fixture normalizer: money scaled, shares and fractions left alone, invariants loud and value-free."""
     print_section("Utils: Dashboard Fixture Normalizer")
@@ -975,6 +984,16 @@ Tests for utility modules and helper functions:
         desc="The search_language_split MkDocs hook writes, after the build, one search index per language beside the full one (search_index.en/it/fr/es.json, same config): the language of a doc is its location's first path segment, exactly it, fr or es alone or before / or #, anything else (a name that only starts like one, a language that is not first, an English-only page) is en; every doc of the full index is in exactly one file, unchanged, none lost or duplicated, the input untouched; on_post_build writes four UTF-8 JSON files equal to the split and nothing else, leaves the full index byte for byte, and a missing index warns without raising; the real built index splits with counts adding up and the Italian pages not in en; mkdocs.yml lists the hook and not the script as extra_javascript, main.html loads search-language.js in extrahead; the built site has the four files, every page's html lang among the four languages, and each home page loads the script in the head before Material's bundle",
         # Dictionaries and files under tmp_path, the hook loaded by path. Reads mkdocs_src/mkdocs.yml, overrides/main.html
         # and (read only) the built mkdocs_src/site/. No DB, no server, no network, no writes outside tmp_path.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "docs-admin-references",
+        utils_docs_admin_references,
+        name="Docs Admin References",
+        desc="Every address of the admin guide that the app and the repository carry (admin/<page>/ and admin/<page>/#<anchor>, bare, under /mkdocs/ or as the public URL, in the non-test sources of frontend/src, backend/app, scripts, dev.py and the README) reaches an existing mkdocs_src/docs/admin/<page>.en.md that defines the anchor exactly once ({: #anchor } or the automatic slug of a heading, code fences ignored), the scanner and the page reader shown on synthetic samples (an invented page and an invented anchor both reported) and against MkDocs' own render; every anchor the five split pages had (fixture old_anchors.json) is still on its page or moved by MOVED_ANCHORS of moved-anchors.js to a page that defines it, no stale or foreign entry; the built site has each referenced id, every admin page and the built script loaded by a page (red until ./dev.py mkdocs build runs on the split)",
+        # Reads files (sources, docs, fixture, read-only built site) and renders pages in memory with MkDocs; synthetic samples under
+        # tmp_path. No DB, no server, no network, no writes outside tmp_path.
         isolation="pure",
     )
     add_test(

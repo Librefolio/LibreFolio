@@ -148,14 +148,14 @@ your users sign in again after each restart. See
 - On Fly.io, `LIBREFOLIO_CLIENT_IP_HEADER=Fly-Client-IP`, so that the limits per visitor's address
   count each visitor apart, not everyone as Fly's proxy. The managed profile does not set it, since
   the header depends on the proxy in front of the instance: see «The Visitor's Address» in
-  [Checking Connection Security](connection_checks.md#reverse-proxy).
+  [Checking Connection Security](connection_proxy.md#reverse-proxy).
 - A monitor on `GET /api/v1/system/ready`: see the monitoring tip in
   [Advanced Docker](docker_advanced.md).
 - If your hosting panel takes its backups: its own `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, never shared
   with another instance. See [Backups for Your Hosting Panel](#panel-backups).
 - Optionally, a wake-up token of its own, `LIBREFOLIO_WAKE_TOKEN`, if your panel brings the
   instance's prices and exchange rates up to date on its own schedule, for example right after it
-  wakes the instance: see [Scheduled Wake-up](sleep_wake.md#wake-sync).
+  wakes the instance: see [Scheduled Wake-up](wake_sync.md#wake-sync).
 - Optionally, a status token of its own, `LIBREFOLIO_PANEL_STATUS_TOKEN`, if your panel follows the
   setup of the instance's administrator: see [The Setup Status](#panel-status).
 - If your hosting panel shows the app inside a frame: `LIBREFOLIO_FRAME_PROTECTION=false`, since the
@@ -475,7 +475,7 @@ On a blocked instance, only these API calls answer as usual:
 | The outcome of a restore, for the page that asked the restart, with the one-time ticket of that request: when the block took effect at that restart, it says that the restore waits for the unblock, and starts nothing | `GET /api/v1/backup/restore/outcome` |
 | The block page | `GET /api/v1/system/block` (signed-in users only), `GET /api/v1/system/instance` |
 | Probes and version | `GET /api/v1/system/health`, `GET /api/v1/system/ready`, `GET /api/v1/system/info` |
-| The [scheduled wake-up](sleep_wake.md#wake-sync), with its own token: it answers `blocked` and runs no job | `POST /api/v1/system/wake-sync` |
+| The [scheduled wake-up](wake_sync.md#wake-sync), with its own token: it answers `blocked` and runs no job | `POST /api/v1/system/wake-sync` |
 | Your panel's [setup status](#panel-status), with its own token | `GET /api/v1/panel/status` |
 
 - Your monitoring keeps working: `/system/health` and `/system/ready` answer as on any other
@@ -532,7 +532,7 @@ else:
 | Scope | For | Routes | Token |
 | --- | --- | --- | --- |
 | `backup` | Back up the whole instance and download the archive: [Backups for Your Hosting Panel](#panel-backups) | `POST /api/v1/backup/panel/jobs`, then `GET`, `GET …/file` and `DELETE` on `/api/v1/backup/panel/jobs/{job_id}` | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` |
-| `wake` | Run the price and exchange rate updates that are due, for example right after your panel wakes the instance: [Scheduled Wake-up](sleep_wake.md#wake-sync) | `POST /api/v1/system/wake-sync` | `LIBREFOLIO_WAKE_TOKEN` |
+| `wake` | Run the price and exchange rate updates that are due, for example right after your panel wakes the instance: [Scheduled Wake-up](wake_sync.md#wake-sync) | `POST /api/v1/system/wake-sync` | `LIBREFOLIO_WAKE_TOKEN` |
 | `status` | Follow the setup of the [initial administrator](#initial-admin), the instance's mode and its restore: [The Setup Status](#panel-status) | `GET /api/v1/panel/status` | `LIBREFOLIO_PANEL_STATUS_TOKEN` |
 | `backup:restore` | Put a backup back on an instance that awaits it: [Restoring an Instance from Your Panel](#panel-restore) | The seven routes under `/api/v1/backup/panel/restore` | None: a [signed ticket](#panel-api-tickets) only |
 
@@ -781,7 +781,7 @@ LibreFolio counts the credentials it refuses, per address:
 - **One address, one count**: an IPv6 address counts by its `/64`. Behind a reverse proxy that
   LibreFolio does not trust, every caller has the proxy's address: LibreFolio then counts nothing,
   rather than let one caller's refusals make every caller wait. See «When LibreFolio Does Not Trust
-  Your Proxy» in [Checking Connection Security](connection_checks.md#reverse-proxy).
+  Your Proxy» in [Checking Connection Security](connection_proxy.md#reverse-proxy).
 - **In memory**: each server process keeps its own count, and a restart forgets it.
 
 ### 📋 In the Log {: #panel-api-log }
@@ -805,7 +805,7 @@ Every call to a scope that is on writes one line, `Hosting panel request`:
   `The hosting panel's backup token cannot be used: its routes refuse every request`
   ([The Token](#panel-token)),
   `The wake-up token cannot be used: the scheduled wake-up refuses every request`
-  ([Turning It On](sleep_wake.md#wake-sync-token)), or
+  ([Turning It On](wake_sync.md#wake-sync-token)), or
   `The panel status token cannot be used: the status route refuses every request`.
   For the ticket settings it is
   `The hosting panel's ticket settings cannot be used: its routes refuse every request`, with the
@@ -1048,7 +1048,7 @@ While the mode is on, only these API calls answer:
 | --- | --- |
 | Probes and version | `GET /api/v1/system/health`, `GET /api/v1/system/ready`, `GET /api/v1/system/info`. `/system/ready` adds `"mode": "awaiting_restore"`, and `ready` then means ready to receive the backup |
 | The public configuration of the instance, with `"mode": "awaiting_restore"` | `GET /api/v1/system/instance` |
-| The [scheduled wake-up](sleep_wake.md#wake-sync), with its own token: it answers `awaiting_restore` and runs no job | `POST /api/v1/system/wake-sync` |
+| The [scheduled wake-up](wake_sync.md#wake-sync), with its own token: it answers `awaiting_restore` and runs no job | `POST /api/v1/system/wake-sync` |
 | Your panel's [status](#panel-status), with `mode` and `restore` | `GET /api/v1/panel/status` |
 | Your panel's [backup jobs](#panel-jobs): a start answers `409` with the code `backup_awaiting_restore`, since a backup of the empty data never starts | The four `/api/v1/backup/panel/jobs…` routes |
 | Your panel's restore | The [seven routes](#panel-restore-routes) below |
@@ -1169,7 +1169,7 @@ The state of the restore cannot be read: LibreFolio serves no data until the adm
   the idle monitor still run.
 - **The same API calls answer as in the [awaiting restore mode](#await-restore)**: the probes and
   the version, `GET /api/v1/system/instance`, the
-  [scheduled wake-up](sleep_wake.md#wake-sync) and your panel's routes (its status, its backup jobs
+  [scheduled wake-up](wake_sync.md#wake-sync) and your panel's routes (its status, its backup jobs
   and its restore), but a backup start. Every other call answers `423 Locked`, to anyone, signed in
   or not, the sign-in included:
 

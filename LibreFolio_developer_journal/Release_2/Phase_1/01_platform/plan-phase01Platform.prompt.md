@@ -10626,6 +10626,26 @@ DOC-2 (ricerca per lingua), DOC-1 (riordino della guida admin, con le guide Tail
    con il suo test, `instance_block.py`, `hosting_providers.en.md`, `security.md`, `api/index.md`, il testo `adminHint` nei 4
    cataloghi, i commenti della pagina) dicono `--recover previous`. I file di B (`cli_tools.en.md`, `backup_cli.py`,
    `backup_restore.en.md`) restano a B.
-4. ⏳ **DOC-1 · riordino della guida admin**: inventario e albero in `ondata5/H-DOC1-inventario.md` (14 → 28 pagine piatte, la
-   gerarchia nella nav; mappa di reindirizzamento delle ancore). Albero approvato dal developer; **non si ristruttura** finché
-   non sono committati H5-1, il lotto di B (`backup pending`) e quelli di X sulla doc admin.
+4. ⏳ **DOC-1 · riordino della guida admin** (albero e inventario: `ondata5/H-DOC1-inventario.md`, approvato dal developer;
+   pagine piatte, gerarchia nella navigazione, che il developer vuole **annidata**). Due giri, per non fare conflitti con i rami
+   di B e A che toccavano tre pagine.
+   - ✅ **Giro 1** (23/10): `configuration` → 4 pagine, `email` → 3, `service_exposure` → 2, `sleep_wake` → 2, `connection_checks` → 2
+     (le due guide Tailscale incluse). Uno script deterministico (fuori dall'albero: scratchpad `doc1_split.py`) divide per
+     sezione H2 e riscrive 88 + 73 link e 3 citazioni; poi il `docs-writer` ha rivisto titoli, introduzioni, riquadri «in più pagine»
+     e l'indice admin. La divisione è stata provata prima su una copia fuori dall'albero (build strict ok).
+     **Difetti trovati dal build strict e curati**: (1) ancore su elementi che non sono titoli (`{: #session-cookie-secure }` su
+     una riga di tabella): il link intra-pagina punta ora a `configuration.md`; (2) nelle copie di ripiego `/it/` `/fr/` `/es/` le
+     pagine nuove (solo inglese) linkavano con ancora pagine che hanno traduzioni (`settings.md#registration`, `configuration.md
+     #main-options`…): togliamo l'ancora dove una traduzione non la possiede (25 link). In più 17 link semplici che nominavano una
+     sezione spostata («Accounts and Sign-ups», «Startup Checks»…) puntano ora alla pagina giusta (users, plugins, security.md,
+     email.md del developer). Resta da fare nello script per il giro 2: contare come ancore anche gli `{: #id }` fuori dai titoli.
+   - **Riferimenti dell'app** (tutti miei): 11 voci di `checkGuides.json` spostate; `cspNotice` le segue dal JSON; le specifiche
+     E2E `security-tab` (ASEC-E-04) e `csp-collector` aggiornate. **Mappa dei reindirizzamenti**:
+     `mkdocs_src/docs/javascripts/moved-anchors.js` (generata dalla divisione, senza dipendenze; `extra_javascript` in `mkdocs.yml`).
+   - **Navigazione annidata** in `mkdocs.yml` (gruppi con sottovoci) e `nav_translations` it/fr/es per le 10 etichette nuove.
+   - **Test** (test-author): `utils docs-admin-references` 47 (scansione di ogni riferimento dell'app, completezza della mappa
+     contro le ancore congelate `backend/test_scripts/fixtures/docs_admin/old_anchors.json`, il sito costruito, la nav);
+     Vitest `movedAnchors` (75 casi, 7 mutanti su 7 uccisi); `checkGuides` (debito di traduzione 33 → 3: le pagine nuove sono
+     solo inglesi). **E2E** nello slot: `security-tab` ASEC-E-04 1/1 e `csp-collector` 23 verdi (1 saltato).
+   - ⏳ **Giro 2**: `hosting_providers`, `backup_restore`, `cli_tools`, dopo il merge dei rami di B (B5-1) e A (A5-1b/A5-2) ancora
+     aperti; stesso metodo, stesso test.

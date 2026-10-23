@@ -26,7 +26,7 @@
  *     whichever way it arrives — the buffer, the listener or the observer. Any other eval is;
  *   - any other enforced violation is reported ONCE per page load, whichever way it arrives and however many there are,
  *     as `log(text)` with the text
- *     `LibreFolio blocked a script it did not send (<source>): a proxy, a CDN or a browser extension adds it. Guide: <docs>/admin/configuration/#csp`,
+ *     `LibreFolio blocked a script it did not send (<source>): a proxy, a CDN or a browser extension adds it. Guide: <docs>/admin/configuration_security/#csp`,
  *     `<source>` being the origin of the blocked address (`https://cdn.example.com`), or `inline`, or `eval`;
  *   - every distinct source, the first included, is added once to `sessionStorage['librefolio-csp-blocked']`, a JSON
  *     array of distinct strings, what is already there kept;
@@ -190,7 +190,7 @@ function report(body: Partial<{effectiveDirective: string; blockedURL: string; s
 /** The pattern of the one line, for `source`: the text of the contract, the guide path at its end. */
 function lineFor(source: string): RegExp {
     const escaped = source.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
-    return new RegExp(`^LibreFolio blocked a script it did not send \\(${escaped}\\): a proxy, a CDN or a browser extension adds it\\. Guide: \\S*/admin/configuration/#csp$`);
+    return new RegExp(`^LibreFolio blocked a script it did not send \\(${escaped}\\): a proxy, a CDN or a browser extension adds it\\. Guide: \\S*/admin/configuration_security/#csp$`);
 }
 
 let log: Mock<(message: string) => void>;
