@@ -633,14 +633,18 @@ A clear archive leaves the instance key out, and so does a secure one whose key 
 # The restore waiting for the next start, or the last one
 pipenv run ./dev.py backup pending
 
-# Drop the restore waiting, and its checked copy
+# Drop the restore waiting, and its checked copy (the same as --recover cancel)
 pipenv run ./dev.py backup pending --cancel
 
 # When the state of the restore cannot be read: put the data of before back (LibreFolio stopped)
-pipenv run ./dev.py backup pending --recover
+pipenv run ./dev.py backup pending --recover previous
+
+# For a script: the state as one JSON line, and the same actions with fixed exit codes
+pipenv run ./dev.py backup pending --json
+pipenv run ./dev.py backup pending --recover cancel --json
 ```
 
-`backup pending` changes nothing and exits with `0`, except when it cannot read the state of the restore: see [An Unreadable Restore State](#backup-pending-unreadable) below. Otherwise it shows one of these:
+`backup pending` changes nothing and exits with `0`, except when it cannot read the state of the restore: see [An Unreadable Restore State](#backup-pending-unreadable) below. `--json` and `--recover` are made for scripts: see [For Scripts](#backup-pending-json). Otherwise it shows one of these:
 
 | It prints | What it means |
 | --- | --- |
@@ -674,14 +678,73 @@ The state of the restore, `.restore/restore.json`, can become unreadable: its ow
 ❌ The state of the restore cannot be read: <why>: a restore may have stopped half way. LibreFolio serves no data until you choose (restore_state_unreadable: <reason>)
    The data of before is kept in .restore/previous/: sqlite, user_files
    Checked copies kept: 1 (none is removed while the state cannot be read)
-👉 Stop LibreFolio, then run ./dev.py backup pending --recover: it puts the data of before back.
+👉 Stop LibreFolio, then run ./dev.py backup pending --recover previous: it puts the data of before back.
 ```
 
 `<reason>` is `io` (the file system refuses it: give `.restore/` and its files back to the user that runs LibreFolio, then run `backup pending` again, which may be enough), `not_a_file` or `invalid`. While the state cannot be read, no checked copy is removed, by the server's clean-up or by Settings › Administration › Backup, and no restore can be confirmed.
 
-`backup pending --recover`, with LibreFolio stopped, puts the data of before back from what the folders say: each folder kept in `.restore/previous/` returns to its place, and the one it replaces goes to `.restore/failed/`. A restore that was committed kept no data of before, so its data stays. The unreadable state is kept as `.restore/restore.json.unreadable-<date>` for a look, and never read again. Then start LibreFolio on the data of before, or restore a backup again with `backup restore`. While LibreFolio runs, it stops with `(restore_in_use)`; with a state it can read, or none, with `(restore_nothing_to_recover)`.
+`backup pending --recover previous`, with LibreFolio stopped, puts the data of before back from what the folders say: each folder kept in `.restore/previous/` returns to its place, and the one it replaces goes to `.restore/failed/`. A restore that was committed kept no data of before, so its data stays. The unreadable state is kept as `.restore/restore.json.unreadable-<date>` for a look, and never read again. Then start LibreFolio on the data of before, or restore a backup again with `backup restore`. While LibreFolio runs, it stops with `(restore_in_use)` and exits with `5`; with a state it can read, or none, it stops with `(restore_nothing_to_recover)` and exits with `3`: the exit codes are the table of [For Scripts](#backup-pending-json). Run twice, the second run changes nothing.
 
-`--cancel` drops the restore waiting, with its checked copy, whoever confirmed it: `✅ The restore waiting for the next start was dropped, with its copy: the data stays as it is`, exit code `0`. If the copy cannot be removed, on a permission or disk error for instance, the restore is dropped all the same, exit code `0`, with two lines instead: `✅ The restore waiting for the next start was dropped: the data stays as it is` and `⚠️ Its checked copy could not be removed: it goes when its check expires`. When the removal failed with an error, the log above them has the warning `The copy of a cancelled restore could not be removed: it goes when its check expires`; a copy left without an error, such as one holding a read-only folder, has none. LibreFolio tries again at its first start once the check is 24 hours old. If the restore itself cannot be dropped, on a file-system error before it is (its lock, or removing its state): `❌ The restore could not be cancelled: <reason>. It still waits for the next start (restore_cancel_failed)`, exit code `1`. When the state of the restore cannot be read: the `restore_state_unreadable` line of `backup pending`, exit code `1`. When no restore waits, or one is already being applied: `❌ No restore waits for the next start: nothing to cancel (restore_not_pending)`, exit code `1`.
+`--cancel`, the same as `--recover cancel` but with the exit codes below, drops the restore waiting, with its checked copy, whoever confirmed it: `✅ The restore waiting for the next start was dropped, with its copy: the data stays as it is`, exit code `0`. If the copy cannot be removed, on a permission or disk error for instance, the restore is dropped all the same, exit code `0`, with two lines instead: `✅ The restore waiting for the next start was dropped: the data stays as it is` and `⚠️ Its checked copy could not be removed: it goes when its check expires`. When the removal failed with an error, the log above them has the warning `The copy of a cancelled restore could not be removed: it goes when its check expires`; a copy left without an error, such as one holding a read-only folder, has none. LibreFolio tries again at its first start once the check is 24 hours old. If the restore itself cannot be dropped, on a file-system error before it is (its lock, or removing its state): `❌ The restore could not be cancelled: <reason>. It still waits for the next start (restore_cancel_failed)`, exit code `1`. When the state of the restore cannot be read: the `restore_state_unreadable` line of `backup pending`, exit code `1`. When no restore waits, or one is already being applied: `❌ No restore waits for the next start: nothing to cancel (restore_not_pending)`, exit code `1`.
+
+#### 🤖 For Scripts: --json and --recover {: #backup-pending-json }
+
+A script, or a machine that reaches the server over `ssh`, reads the state with `--json` and acts with `--recover CHOICE`. Both are made to be run without a person: nothing is ever asked on the terminal, and the exit codes are fixed.
+
+**The JSON line.** With `--json`, `backup pending` writes exactly one line on stdout: a JSON object, then a newline, no colour. Everything it would say otherwise, and the log lines of LibreFolio, go to stderr. It exits with `0` whenever the line was printed: an unreadable state is a state, not a failure.
+
+| Key | Value |
+| --- | --- |
+| `state` | `none`, `pending`, `in_progress`, `committed`, `rolled_back` or `unreadable` |
+| `reason` | Why: the rollback reason of a `rolled_back` state (`first_start_failed`, `swap_interrupted`, `swap_failed`, `stage_missing`), or `io`, `not_a_file`, `invalid` for an `unreadable` one; `null` otherwise |
+| `waiting` | Why a start did not apply a restore that waits: `backup_running`, `other_data_directory`, `server_running`, `instance_blocked`, or `null` |
+| `backup_created_at` | When the backup of the restore was made, as `2026-10-23T03:00:12Z` (UTC); `null` with no state, or an unreadable one |
+| `safety_copy` | `{"present": true, "at": "<date>Z"}` when the data of before a swap is kept in `.restore/previous/`, otherwise `{"present": false, "at": null}` |
+| `choices` | The words `--recover` accepts now, in the table below |
+
+After a `--recover`, the line describes the state **after** it and adds `recover`, `{"choice": "<word>", "done": true}` or `false`, and, when the exit code is not `0`, `error`, the word of the exit-code table.
+
+| `state` | It means | `choices` |
+| --- | --- | --- |
+| `none` | No restore was confirmed, or the last one was dropped | none |
+| `pending` | A restore waits for the next start | `cancel` |
+| `in_progress` | A start is applying it, or has applied it and has not completed yet | none |
+| `committed` | The last restore is done | none |
+| `rolled_back` | The last restore was undone, with its `reason` | none |
+| `unreadable` | The state of the restore cannot be read: [An Unreadable Restore State](#backup-pending-unreadable) | `previous` |
+
+```json
+{"state":"unreadable","reason":"invalid","waiting":null,"backup_created_at":null,"safety_copy":{"present":true,"at":"2026-10-23T03:00:12Z"},"choices":["previous"]}
+{"state":"pending","reason":null,"waiting":"instance_blocked","backup_created_at":"2026-10-22T21:30:05Z","safety_copy":{"present":false,"at":null},"choices":["cancel"]}
+```
+
+The line never holds a username, an email, a path or an identifier: who confirmed the restore, the data directory and the checked copy are not in it. `safety_copy.at` is the moment the restore was applied, or, with an unreadable state, when `.restore/previous/` last changed.
+
+**The exit codes.** `--recover previous` puts the data of before back when the state cannot be read, with LibreFolio stopped; `--recover cancel` drops the restore waiting, with its checked copy. The exit codes are the same with or without `--json`:
+
+| Exit | When | `error` in the line |
+| --- | --- | --- |
+| `0` | Done: the data of before is back, or the restore waiting was dropped | none |
+| `2` | A usage error: `--recover` without a choice, `--recover` with `--cancel`, or `--json` with `--cancel` (use `--recover cancel`) | none: the line is not written |
+| `3` | Nothing to recover: no restore state, or the choice was already done | `nothing_to_recover` |
+| `4` | The choice is not valid in this state, such as `previous` while the state can be read, `cancel` while it cannot, or a word that is not a choice: nothing changes | `choice_not_valid` |
+| `5` | It failed: LibreFolio is running on this data directory (`restore_in_use`), a folder could not be moved back (`restore_apply_failed`), the restore could not be dropped (`failed`): nothing is claimed done. With a data directory that is missing, `5` too, but no line is written: stdout stays empty and stderr says why | `restore_in_use`, `restore_apply_failed` or `failed` |
+
+Run again, a choice changes nothing: the second `--recover previous` finds no unreadable state, moves no folder, adds nothing to `.restore/failed/`, and exits with `3`; so does a second `--recover cancel`. A script may therefore repeat it until it reads `0` or `3`.
+
+A script that reads the state and recovers, on a server where LibreFolio is stopped:
+
+```bash
+state=$(pipenv run ./dev.py backup pending --json 2>/dev/null)
+
+if [ "$(echo "$state" | jq -r '.choices | index("previous") != null')" = "true" ]; then
+    pipenv run ./dev.py backup pending --recover previous --json 2>/dev/null
+    case $? in
+        0|3) echo "data of before is back" ;;
+        5)   echo "failed: stop LibreFolio, read the log" >&2; exit 1 ;;
+    esac
+fi
+```
 
 ### 🔓 Decrypt a Secure Archive {: #backup-decrypt }
 

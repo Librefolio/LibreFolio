@@ -95,14 +95,17 @@ it), printed by ``pending`` and by a confirmation on a blocked instance.
     refused by the file system (``io``), a folder (``not_a_file``), no state (``invalid``): exit 1, exactly one ❌ line
     holding ``restore_state_unreadable`` and the reason word; then what is on disk — the swapped folders
     ``.restore/previous/`` holds, how many checked copies are kept — and the command ``./dev.py backup pending
-    --recover``; never the state's content, never a path, no traceback; nothing changed. (g)'s ``pending`` cases now
-    expect this (they pinned one line, the system's words in it); ``pending --cancel`` and ``restore --yes`` keep (g)'s
-    one line. ``pending --recover``: with such a state, exit 0, a ✅ line, the folders it moved named, ``./dev.py backup
-    restore`` named; each folder of ``previous/`` back in place, its live one in ``.restore/failed/``, the state renamed
-    ``restore.json.unreadable-<UTC>``; then ``pending`` says no restore. With a readable state, or none: exit 1, one
-    line ``❌ Nothing to recover…``, nothing moved. While a server serves the data directory (its serving lock held by
-    this process, as ``hold_serving_lock`` holds it): exit 1, one ❌ line, nothing moved. ``--recover`` with
-    ``--cancel``: refused by the parser (exit 2). The help names ``--recover``.
+    --recover previous``; never the state's content, never a path, no traceback; nothing changed. (g)'s ``pending`` cases
+    now expect this (they pinned one line, the system's words in it); ``pending --cancel`` and ``restore --yes`` keep (g)'s
+    one line. ``pending --recover previous``: with such a state, exit 0, a ✅ line, the folders it moved named, ``./dev.py
+    backup restore`` named; each folder of ``previous/`` back in place, its live one in ``.restore/failed/``, the state
+    renamed ``restore.json.unreadable-<UTC>``; then ``pending`` says no restore. With no state: exit 3, one line
+    ``❌ Nothing to recover…``; with a state this LibreFolio reads: exit 4; nothing moved. While a server serves the data
+    directory (its serving lock held by this process, as ``hold_serving_lock`` holds it): exit 5, one ❌ line, nothing
+    moved. ``--recover`` with ``--cancel``: refused by the parser (exit 2). The help names ``--recover``.
+    Lot B5-2 (interface ``B-b52-interface.md``): ``--recover`` takes its choice (it was a bare flag, never released), and
+    the exit codes of 1.3's development builds (1) became 3, 4 and 5; the rest of ``--recover`` and ``--json`` is pinned by
+    ``test_backup_cli_recover.py``.
 
 Pure, as ``test_backup_cli.py``, whose fixtures and helpers are imported: data directories under ``tmp_path`` seen through
 ``LIBREFOLIO_DATA_DIR`` (production mode, checked); a real database at the head made once by ``alembic upgrade`` for the
@@ -1478,8 +1481,8 @@ def test_a_restore_the_command_line_confirms_is_recorded_via_cli(tmp_path, monke
 # =============================================================================
 
 
-#: (l) B-33 §3: the command ``pending`` gives to run.
-RECOVER_COMMAND = "./dev.py backup pending --recover"
+#: (l) B-33 §3, as B-33's follow-up B5-2 amends it: the command ``pending`` gives to run (``--recover`` takes its choice).
+RECOVER_COMMAND = "./dev.py backup pending --recover previous"
 #: (l) What a state nobody can read holds: never printed.
 STATE_MARK = "b33-the-content-of-a-state-nobody-can-read"
 #: (l) The folders a restore swaps (``paths.SWAPPED_FOLDERS``), spelled out.
@@ -1591,7 +1594,7 @@ def test_recover_puts_the_data_of_before_back_and_pending_then_says_no_restore(t
     state = state_path(root).read_bytes()
     previous_holding(root, "custom-uploads", "broker_reports")
     live_before = {name: files_below(root / name) for name in SWAPPED}
-    code = run("pending", "--recover")
+    code = run("pending", "--recover", "previous")
     out = capsys.readouterr().out
     lines = said(out)
     assert code == 0 and any(line.startswith("✅") for line in lines) and not any(line.startswith("❌") for line in lines), f"[new] B-33 §3: --recover with an unreadable state: exit 0, a ✅ line, no ❌: exit {code}: {out}"
@@ -1618,24 +1621,27 @@ def _a_readable_pending_restore(monkeypatch, root: Path) -> None:
     previous_holding(root, "custom-uploads")
 
 
-@pytest.mark.parametrize("arrange", [_no_state_at_all, _a_readable_pending_restore], ids=["no-state", "readable-pending"])
-def test_recover_with_nothing_to_recover_exits_1_and_moves_nothing(tmp_path, monkeypatch, capsys, arrange):
-    """(l) B-33 §3: ``pending --recover`` with no state, or one this LibreFolio reads (``previous/`` there all the
-    same): exit 1, one line ``❌ Nothing to recover…``, nothing moved, written or removed."""
+@pytest.mark.parametrize(("arrange", "expected"), [(_no_state_at_all, 3), (_a_readable_pending_restore, 4)], ids=["no-state", "readable-pending"])
+def test_recover_previous_with_nothing_to_recover_exits_3_or_4_and_moves_nothing(tmp_path, monkeypatch, capsys, arrange, expected):
+    """(l) B-33 §3, with B5-2's exit codes (interface ``B-b52-interface.md``): ``pending --recover previous`` with no state:
+    exit 3, one line ``❌ Nothing to recover…``; with a state this LibreFolio reads (``previous/`` there all the same):
+    ``previous`` is not a valid choice in that state, exit 4, one ❌ line. Nothing moved, written or removed."""
     root = instance(tmp_path, monkeypatch)
     arrange(monkeypatch, root)
     before = everything(root)
-    code = run("pending", "--recover")
+    code = run("pending", "--recover", "previous")
     out = capsys.readouterr().out
     refusals = [line for line in said(out) if line.startswith("❌")]
-    assert code == 1 and len(refusals) == 1 and refusals[0].startswith("❌ Nothing to recover"), f"[new] B-33 §3: exit 1, one line ❌ Nothing to recover…: exit {code}: {out}"
+    assert code == expected and len(refusals) == 1, f"[new] B5-2: exit {expected}, one ❌ line: exit {code}: {out}"
+    if expected == 3:
+        assert refusals[0].startswith("❌ Nothing to recover"), f"[new] B-33 §3: the line says Nothing to recover…: {out}"
     assert everything(root) == before, "nothing moved, written or removed"
-    print_success(f"{arrange.__name__}: ❌ Nothing to recover, exit 1")
+    print_success(f"{arrange.__name__}: ❌, exit {expected}")
 
 
-def test_recover_while_a_server_serves_the_data_directory_exits_1_and_moves_nothing(tmp_path, monkeypatch, capsys):
+def test_recover_while_a_server_serves_the_data_directory_exits_5_and_moves_nothing(tmp_path, monkeypatch, capsys):
     """(l) B-33 §3: a server holds the serving lock of the data directory (this process, through a descriptor of its
-    own, as ``hold_serving_lock`` holds it; released at the end): ``pending --recover`` exits 1 with one ❌ line, nothing
+    own, as ``hold_serving_lock`` holds it; released at the end): ``pending --recover previous`` exits 5 (B5-2) with one ❌ line, nothing
     moved, written or removed."""
     root = instance(tmp_path, monkeypatch)
     unreadable_as(monkeypatch, root, "invalid")
@@ -1645,12 +1651,12 @@ def test_recover_while_a_server_serves_the_data_directory_exits_1_and_moves_noth
     assert apply.hold_serving_lock(root) is True, "precondition: a server serves the data directory"
     try:
         before = everything(root)
-        code = run("pending", "--recover")
+        code = run("pending", "--recover", "previous")
     finally:
         os.close(apply._SERVING.pop(key))
     out = capsys.readouterr().out
     refusals = [line for line in said(out) if line.startswith("❌")]
-    assert code == 1 and len(refusals) == 1, f"[new] B-33 §3: exit 1, one ❌ line while a server serves the data directory: exit {code}: {out}"
+    assert code == 5 and len(refusals) == 1, f"[new] B5-2: exit 5, one ❌ line while a server serves the data directory: exit {code}: {out}"
     assert everything(root) == before, "nothing moved, written or removed"
     print_success("served: ❌, exit 1, nothing moved")
 
@@ -1664,11 +1670,11 @@ def test_recover_and_cancel_together_are_refused_by_the_parser(tmp_path, monkeyp
     parser = argparse.ArgumentParser(prog="dev.py")
     backup_cli.register_subparser(parser.add_subparsers(dest="command"))
     with pytest.raises(SystemExit) as done:
-        parser.parse_args(["backup", "pending", "--recover", "--cancel"])
+        parser.parse_args(["backup", "pending", "--recover", "previous", "--cancel"])
     err = capsys.readouterr().err
     assert done.value.code == 2 and "not allowed with" in err and "--recover" in err, f"[new] B-33 §3: refused by the parser as exclusive (exit 2, «not allowed with», --recover named), not as an unknown argument: exit {done.value.code}: {err}"
     assert everything(root) == before, "nothing ran"
-    print_success("--recover --cancel: exit 2")
+    print_success("--recover previous --cancel: exit 2")
 
 
 def test_the_help_of_pending_names_recover(monkeypatch, capsys):
