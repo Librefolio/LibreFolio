@@ -1083,6 +1083,7 @@ def _run_sealed(args, path: Path, command) -> int:
     from backend.app.services.platform.instance_backup.sealed import SealedError, check_password, extract_envelope, open_password, read_identities, read_sealed  # noqa: PLC0415
 
     identity_path = _requested(args.identity_file)
+    _warn_open_key(identity_path)
     try:
         identities = read_identities(identity_path)
         archive = read_sealed(path)
@@ -1116,6 +1117,33 @@ def _run_sealed(args, path: Path, command) -> int:
         shutil.rmtree(folder, ignore_errors=True)
 
 
+def _publish_new(partial: Path, target: Path) -> None:
+    """``partial`` becomes ``target``, never over a file: a hard link where the file system has them, otherwise a rename
+    after a last look (``FileExistsError`` when ``target`` is there)."""
+    import errno  # noqa: PLC0415
+
+    try:
+        os.link(partial, target)
+    except FileExistsError:
+        raise
+    except OSError as exc:
+        if exc.errno not in (errno.EPERM, errno.ENOTSUP, errno.EOPNOTSUPP, errno.EXDEV):
+            raise
+        if os.path.lexists(target):
+            raise FileExistsError(errno.EEXIST, "The file already exists", str(target)) from None
+        os.rename(partial, target)
+
+
+def _warn_open_key(path: Path) -> None:
+    """A warning when the key file can be read by more than its owner (SEC-5): it opens every backup sealed for it."""
+    try:
+        mode = stat.S_IMODE(os.stat(path).st_mode)
+    except OSError:
+        return  # read_identities says why it cannot be read
+    if mode & 0o077:
+        print(f"⚠️  {path} can be read by others (mode {mode:04o}): it opens every backup sealed for its key. Run chmod 600 {path}")
+
+
 def cmd_keygen(args) -> int:
     """Write a new age key pair for sealed backups: the private key into ``--identity-file`` (``0600``, never over a
     file), in the format of ``age-keygen``; the public key printed, for ``--recipient`` or ``LIBREFOLIO_BACKUP_RECIPIENTS``."""
@@ -1130,16 +1158,26 @@ def cmd_keygen(args) -> int:
         print(f"❌ {target} already exists: a key file is never written over")
         return 1
     identity = x25519.Identity.generate()
+    # Written whole beside it, then linked into place, which never replaces a file: a failure leaves no half key (SEC-5).
+    partial = target.with_name(f".{target.name}.{os.getpid()}.part")
     try:
-        fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        fd = os.open(partial, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        try:
+            data = identity_file_text(identity, datetime.now(UTC)).encode("utf-8")
+            while data:
+                data = data[os.write(fd, data) :]
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        _publish_new(partial, target)
     except FileExistsError:
         print(f"❌ {target} already exists: a key file is never written over")
         return 1
     except OSError as exc:
         print(f"❌ Cannot write {target}: {exc.strerror or exc}")
         return 1
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        handle.write(identity_file_text(identity, datetime.now(UTC)))
+    finally:
+        partial.unlink(missing_ok=True)
     print(f"✅ Private key written: {target} (only its owner can read it). Keep it off this server, and a copy of it elsewhere: a lost key opens no backup.")
     print("🔑 Public key, for --recipient or LIBREFOLIO_BACKUP_RECIPIENTS:")
     print(str(identity.to_public()))

@@ -106,6 +106,16 @@ Under test: ``backend/app/services/platform/instance_backup/leftovers.py`` (new:
     keeps every old copy and its check, and an old copy no check records; once the state is readable and says no
     restore, the next ``prune`` removes them as before. ``remove_check`` of every ended check whose copy exists raises
     ``CheckPendingError``, the copy and its state kept; a check whose copy is gone is removed as before.
+(l) SEC-3 and SEC-4 of the security review of H-62 (findings 3 and 4; interface ``B-sec345-interface.md``). SEC-3: an
+    upload replaces the others only once its caller accepts it. ``UploadWriter.finish(replace_others=False)`` renames
+    its own file into place and keeps every other upload — a finished one, the one a running check reads, the partial
+    of an upload still arriving —; ``finish()`` and ``finish(replace_others=True)`` replace them as today (but the one
+    a running check reads, and the partial). The public ``remove_replaced_uploads(data_dir, *, keep)`` is today's
+    private one, same behaviour: the panel's route calls ``finish(replace_others=False)``, checks the kind, then it.
+    SEC-4: an ``abort()`` after a ``finish()`` that raised — before its rename (its ``fsync``, its ``os.replace``) or
+    after it (the removal of the replaced uploads, made to raise ``OSError``) — leaves neither the partial nor the
+    final file of that upload, the other uploads as they were; a second ``abort()`` is harmless. After a ``finish()``
+    that returned, ``abort()`` removes nothing.
 
 How. Every data directory is a folder of ``tmp_path`` built file by file: the sweep never opens a database nor reads
 an archive, and none is made. A check's state is written as ``restore_jobs`` writes it (a ``RestoreCheck`` as JSON in
@@ -159,6 +169,13 @@ Written RED again for L3-2 (j), before the hooks: ``CheckOrigin``, ``RestoreChec
 of ``start_check`` and ``running_check`` do not exist. Each is looked up by the test that needs it (``l3_2_name``,
 ``l3_2_parameter``) and fails with a "[new] L3-2 …" message; a state file holding an ``origin`` key reads as no check
 today (``RestoreCheck(**record)`` refuses the key), which is the red of the rows that write one.
+
+Written RED again for SEC-3 and SEC-4 (l), before their cure: ``finish`` takes no ``replace_others`` and
+``remove_replaced_uploads`` is not public yet (``sec_parameter``, ``sec_name``: a "[new] SEC-3 …" failure of the test
+that needs them); ``abort`` only unlinks the partial, so after a ``finish`` that failed past its rename the final file of
+the upload stays — the red of that row. A failure before the rename, a ``finish`` that returned and ``finish()`` without
+the keyword are guards, green today. The removal is made to fail by replacing it in ``restore_jobs`` under both names,
+the private one of today and the public one of the cure, so the same row reaches whichever ``finish`` calls.
 """
 
 from __future__ import annotations
@@ -2555,3 +2572,220 @@ def test_remove_check_refuses_every_check_with_a_copy_while_the_restore_state_ca
         gone = raised_by(lambda: restore_jobs.remove_check(without_copy, data_dir=root))
     assert gone is None and check_state(root, without_copy) is None, f"{how}: a check without a copy is removed as before: {gone!r}"
     print_success(f"{how}: CheckPendingError for every copy; a check without one removed")
+
+
+# =============================================================================
+# (l) SEC-3, SEC-4: an upload replaces the others once accepted; a failed end leaves nothing
+# =============================================================================
+#
+# SEC-3 (finding 3): the panel's route refuses a clear zip only after ``finish`` returned, and ``finish`` had already
+# removed the good upload before it. ``finish(replace_others=False)`` keeps the others; the route checks the kind, then
+# calls the public ``remove_replaced_uploads``. SEC-4 (finding 4): a ``finish`` that fails after its rename (the removal
+# of the replaced uploads raising) left the final file, ``abort`` unlinking the partial alone.
+
+#: (l) Where the interface of the cure is written: named by every "[new]" failure.
+SEC_INTERFACE = "B-sec345-interface.md"
+
+
+def sec_parameter(function: Callable[..., Any], name: str, finding: str) -> None:
+    """The keyword ``name`` of ``function``, which ``finding``'s cure adds; before it, a failure that says so."""
+    if name not in inspect.signature(function).parameters:
+        pytest.fail(f"[new] {finding}: {function.__qualname__}() takes no {name!r} yet ({SEC_INTERFACE})", pytrace=False)
+
+
+def sec_name(module: ModuleType, name: str, finding: str) -> Any:
+    """``module.<name>``, a public name ``finding``'s cure adds, read when the test needs it."""
+    value = getattr(module, name, None)
+    if value is None:
+        pytest.fail(f"[new] {finding}: {module.__name__}.{name} does not exist yet ({SEC_INTERFACE})", pytrace=False)
+    return value
+
+
+@dataclass(frozen=True)
+class OtherUploads:
+    """What ``.restore/upload/`` holds beside the upload under test: a finished upload, the one a running check reads
+    (its check recorded running, read so while the lock is held), and the partial of an upload still arriving."""
+
+    earlier: Path
+    read: Path
+    arriving: Path
+
+    def present(self) -> dict[str, bool]:
+        return {"earlier": self.earlier.is_file(), "read by a running check": self.read.is_file(), "still arriving": self.arriving.is_file()}
+
+
+def other_uploads(root: Path) -> OtherUploads:
+    restore_folders(root)
+    earlier = an_upload(root, new_stage_id())
+    read = an_upload(root, new_stage_id())
+    stage_id = new_stage_id()
+    recorded_check(root, stage_id, read.name)
+    read_as_running(root, stage_id)
+    arriving = upload_path(root, new_stage_id())
+    arriving = arriving.with_name(f"{arriving.name}.part")
+    arriving.write_bytes(CLEAR[:16])
+    arriving.chmod(0o600)
+    return OtherUploads(earlier, read, arriving)
+
+
+def received_upload(root: Path) -> restore_jobs.UploadWriter:
+    """An upload that received ``CLEAR`` and is not finished yet."""
+    writer = restore_jobs.UploadWriter(root, max_bytes=None, declared=None)
+    writer.write(CLEAR)
+    return writer
+
+
+def uploads_left(root: Path) -> list[str]:
+    return sorted(os.listdir(uploads_dir(root)))
+
+
+def of_this_upload(root: Path, writer: restore_jobs.UploadWriter) -> list[str]:
+    """The files of ``writer``'s upload still in ``.restore/upload/``: its final file, its partial."""
+    return [name for name in uploads_left(root) if name.startswith(writer.upload_id)]
+
+
+def removal_fails(monkeypatch: pytest.MonkeyPatch, root: Path) -> list[list[str]]:
+    """The removal of the replaced uploads raises ``OSError`` (EIO) before it removes anything, under its private name of
+    today and its public name of the cure: whichever ``finish`` calls. What ``.restore/upload/`` held at each call."""
+    seen: list[list[str]] = []
+
+    def fail(data_dir: Path, *, keep: str) -> None:
+        seen.append(uploads_left(root))
+        raise OSError(errno.EIO, os.strerror(errno.EIO))
+
+    monkeypatch.setattr(restore_jobs, "_remove_replaced_uploads", fail, raising=False)
+    monkeypatch.setattr(restore_jobs, "remove_replaced_uploads", fail, raising=False)
+    return seen
+
+
+class OsWith:
+    """``os`` as ``restore_jobs`` sees it, some of its functions replaced (the API tests' ``Patched``)."""
+
+    def __init__(self, real: ModuleType, **replaced: Callable[..., Any]) -> None:
+        self._real = real
+        self._replaced = replaced
+
+    def __getattr__(self, name: str) -> Any:
+        return self._replaced[name] if name in self._replaced else getattr(self._real, name)
+
+
+def test_an_upload_finished_without_replacing_keeps_every_other_upload(tmp_path):
+    """(l) SEC-3: ``finish(replace_others=False)`` keeps its archive under its id, as sent, and every other upload: the
+    one before, the one a running check reads, the partial of one still arriving. Red until the cure: ``finish`` takes no
+    ``replace_others``."""
+    print_section("(l) SEC-3, SEC-4: the end of an upload")
+    root = data_root(tmp_path)
+    others = other_uploads(root)
+    sec_parameter(restore_jobs.UploadWriter.finish, "replace_others", "SEC-3")
+    holder = cases.hold_the_lock(root)
+    try:
+        writer = received_upload(root)
+        received = writer.finish(replace_others=False)
+    finally:
+        holder.release()
+    assert received == restore_jobs.RestoreUploaded(upload_id=writer.upload_id, size=len(CLEAR), kind="zip"), f"the upload is received: {received}"
+    assert upload_path(root, writer.upload_id).read_bytes() == CLEAR, "the archive kept under its id, as sent"
+    assert others.present() == dict.fromkeys(others.present(), True), f"every other upload kept: {others.present()}"
+    print_success("finish(replace_others=False): every other upload kept")
+
+
+@pytest.mark.parametrize("call", ["default", "replace_others=True"])
+def test_an_upload_finished_replacing_removes_the_others_but_the_one_a_check_reads(tmp_path, call):
+    """(l) SEC-3: ``finish()`` (a guard, green today: the administrators' route) and ``finish(replace_others=True)``
+    (red until the cure) remove the upload before, keep the one a running check reads and the partial of one still
+    arriving, as today."""
+    root = data_root(tmp_path)
+    others = other_uploads(root)
+    if call != "default":
+        sec_parameter(restore_jobs.UploadWriter.finish, "replace_others", "SEC-3")
+    holder = cases.hold_the_lock(root)
+    try:
+        writer = received_upload(root)
+        received = writer.finish() if call == "default" else writer.finish(replace_others=True)
+    finally:
+        holder.release()
+    assert upload_path(root, received.upload_id).read_bytes() == CLEAR, "the archive kept under its id, as sent"
+    expected = {"earlier": False, "read by a running check": True, "still arriving": True}
+    assert others.present() == expected, f"{call}: the upload before removed, the one a check reads and the partial kept: {others.present()}"
+    print_success(f"finish({'' if call == 'default' else call}): the upload before replaced")
+
+
+def test_remove_replaced_uploads_is_public_and_removes_what_finish_used_to(tmp_path):
+    """(l) SEC-3, the panel's order: ``finish(replace_others=False)``, the kind checked, then
+    ``remove_replaced_uploads(data_dir, keep=upload_id)``: the upload before removed; the one kept, the one a running
+    check reads and the partial of one still arriving left. Red until the cure: the function is private, ``finish``
+    takes no keyword."""
+    root = data_root(tmp_path)
+    others = other_uploads(root)
+    remove = sec_name(restore_jobs, "remove_replaced_uploads", "SEC-3")
+    sec_parameter(restore_jobs.UploadWriter.finish, "replace_others", "SEC-3")
+    holder = cases.hold_the_lock(root)
+    try:
+        writer = received_upload(root)
+        received = writer.finish(replace_others=False)
+        assert others.earlier.is_file(), "precondition: the upload before is still there once the upload finished"
+        remove(root, keep=received.upload_id)
+    finally:
+        holder.release()
+    assert upload_path(root, received.upload_id).read_bytes() == CLEAR, "the upload kept stays, as sent"
+    expected = {"earlier": False, "read by a running check": True, "still arriving": True}
+    assert others.present() == expected, f"the upload before removed, the one a check reads and the partial kept: {others.present()}"
+    print_success("remove_replaced_uploads: the upload before removed")
+
+
+def test_an_abort_after_an_end_that_failed_past_its_rename_leaves_nothing_of_the_upload(tmp_path, monkeypatch):
+    """(l) SEC-4: the archive renamed into place, then the removal of the replaced uploads raises ``OSError``: ``finish``
+    raises it; ``abort()`` leaves neither the partial nor the final file of the upload, the upload before as it was; a
+    second ``abort()`` raises nothing and changes nothing. Barrier: the removal ran with the final file in place, the
+    partial gone. Red until the cure: ``abort`` unlinks only the partial, and the final file stays (finding 4)."""
+    root = data_root(tmp_path)
+    restore_folders(root)
+    earlier = an_upload(root, new_stage_id())
+    writer = received_upload(root)
+    seen = removal_fails(monkeypatch, root)
+    raised = raised_by(writer.finish)
+    assert the_eio(raised), f"finish raises the error of the removal: {what_it_did(raised)}"
+    assert seen == [sorted([earlier.name, writer.upload_id])], f"barrier: the removal ran once, the final file in place and the partial gone: {seen}"
+    writer.abort()
+    assert of_this_upload(root, writer) == [], f"abort after a finish that failed: nothing of the upload left: {of_this_upload(root, writer)}"
+    assert earlier.read_bytes() == b"LFBK the secure backup a check was reading", "the upload before as it was"
+    again = raised_by(writer.abort)
+    assert again is None and uploads_left(root) == [earlier.name], f"a second abort is harmless: {what_it_did(again)}, {uploads_left(root)}"
+    print_success("finish failed past its rename: abort left nothing of the upload")
+
+
+@pytest.mark.parametrize("failing", ["fsync", "replace"])
+def test_an_abort_after_an_end_that_failed_before_its_rename_leaves_nothing(tmp_path, monkeypatch, failing):
+    """(l) SEC-4, a GUARD (green today): ``finish`` fails before its rename (its ``fsync``, its ``os.replace``):
+    ``abort()`` leaves nothing of the upload, twice harmless, the upload before as it was."""
+    root = data_root(tmp_path)
+    restore_folders(root)
+    earlier = an_upload(root, new_stage_id())
+    writer = received_upload(root)
+    calls: list[str] = []
+
+    def fail(*args: Any, **kwargs: Any) -> None:
+        calls.append(failing)
+        raise OSError(errno.EIO, os.strerror(errno.EIO))
+
+    monkeypatch.setattr(restore_jobs, "os", OsWith(os, **{failing: fail}))
+    raised = raised_by(writer.finish)
+    assert the_eio(raised) and calls == [failing], f"barrier: finish fails at its {failing}: {what_it_did(raised)}, {calls}"
+    writer.abort()
+    again = raised_by(writer.abort)
+    assert again is None and of_this_upload(root, writer) == [], f"nothing of the upload left, a second abort harmless: {of_this_upload(root, writer)}, {what_it_did(again)}"
+    assert uploads_left(root) == [earlier.name], f"the upload before as it was: {uploads_left(root)}"
+    print_success(f"finish failed at its {failing}: abort left nothing")
+
+
+def test_an_abort_after_an_end_that_returned_removes_nothing(tmp_path):
+    """(l) SEC-4, a GUARD (green today): after a ``finish`` that returned, ``abort()`` (twice) removes nothing: the upload
+    is kept, as sent."""
+    root = data_root(tmp_path)
+    restore_folders(root)
+    writer = received_upload(root)
+    received = writer.finish()
+    writer.abort()
+    writer.abort()
+    assert upload_path(root, received.upload_id).read_bytes() == CLEAR and uploads_left(root) == [received.upload_id], f"the upload kept: {uploads_left(root)}"
+    print_success("abort after a finish that returned: the upload kept")

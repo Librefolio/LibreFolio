@@ -168,7 +168,8 @@
         "rolledBack": "The data is as it was before: {reason}.",
         "stillPending": "LibreFolio restarted, but the restore was not applied. {waiting}",
         "back": "Back to Backup",
-        "failedTitle": "The restore did not go through"
+        "failedTitle": "The restore did not go through",
+        "stateUnreadable": "The state of the restore cannot be read ({reason}): LibreFolio serves no data until the administrator runs ./dev.py backup pending on the server."
       },
       "errors": {
         "backup_upload_empty": "The file is empty.",

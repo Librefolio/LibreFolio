@@ -163,6 +163,8 @@ class UploadWriter:
         self.upload_id = new_stage_id()
         self._final = upload_path(data_dir, self.upload_id)
         self._partial = self._final.with_name(self._final.name + _PARTIAL_SUFFIX)
+        #: ``finish`` returned: the upload is kept, and ``abort`` no longer removes it (SEC-4).
+        self._finished = False
         try:
             self._fd: int | None = os.open(self._partial, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
         except OSError as exc:
@@ -187,10 +189,11 @@ class UploadWriter:
             raise
         self.size += len(data)
 
-    def finish(self) -> RestoreUploaded:
+    def finish(self, *, replace_others: bool = True) -> RestoreUploaded:
         """Keep the archive under its id, and drop the uploads it replaces. ``UploadEmptyError`` for an empty body;
         ``UploadNoSpaceError`` when the disk reports itself full only now, as a network file system or a quota may, at
-        ``fsync`` or ``close``."""
+        ``fsync`` or ``close``. ``replace_others=False``: the other uploads stay, for a caller that accepts this one only
+        after a look at it, then calls ``remove_replaced_uploads`` (the hosting panel's route, SEC-3)."""
         if self._fd is None:
             raise RuntimeError("the upload is closed")
         if self.size == 0:
@@ -209,20 +212,25 @@ class UploadWriter:
             if out_of_space(exc):
                 raise UploadNoSpaceError("Not enough free space for the archive") from None
             raise
-        _remove_replaced_uploads(self._data_dir, keep=self.upload_id)
+        if replace_others:
+            remove_replaced_uploads(self._data_dir, keep=self.upload_id)
         kind: Literal["zip", "envelope"] = "envelope" if is_envelope(self._final) else "zip"
         logger.info("Backup archive received for a restore", upload_id=self.upload_id, size=self.size, kind=kind)
+        self._finished = True
         return RestoreUploaded(upload_id=self.upload_id, size=self.size, kind=kind)
 
     def abort(self) -> None:
-        """Drop what was received; nothing when already finished or aborted."""
+        """Drop what was received, the file already renamed into place included when ``finish`` failed after it (SEC-4):
+        no upload is left without an id given back. Nothing once ``finish`` returned, or a second time."""
         if self._fd is not None:
             os.close(self._fd)
             self._fd = None
         self._partial.unlink(missing_ok=True)
+        if not self._finished:
+            self._final.unlink(missing_ok=True)
 
 
-def _remove_replaced_uploads(data_dir: Path, *, keep: str) -> None:
+def remove_replaced_uploads(data_dir: Path, *, keep: str) -> None:
     """Remove the finished uploads other than ``keep``, but the one a running check reads."""
     if not _plain_folders(data_dir, uploads_dir(data_dir)):
         return

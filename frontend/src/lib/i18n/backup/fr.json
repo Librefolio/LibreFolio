@@ -168,7 +168,8 @@
         "rolledBack": "Les données sont comme avant : {reason}.",
         "stillPending": "LibreFolio a redémarré, mais la restauration n'a pas été appliquée. {waiting}",
         "back": "Retour à la sauvegarde",
-        "failedTitle": "La restauration n'a pas abouti"
+        "failedTitle": "La restauration n'a pas abouti",
+        "stateUnreadable": "L'état de la restauration ne peut pas être lu ({reason}) : LibreFolio ne sert aucune donnée tant que l'administrateur n'exécute pas ./dev.py backup pending sur le serveur."
       },
       "errors": {
         "backup_upload_empty": "Le fichier est vide.",

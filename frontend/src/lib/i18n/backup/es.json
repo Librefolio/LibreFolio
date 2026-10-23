@@ -168,7 +168,8 @@
         "rolledBack": "Los datos están como antes: {reason}.",
         "stillPending": "LibreFolio se reinició, pero la restauración no se aplicó. {waiting}",
         "back": "Volver a la copia de seguridad",
-        "failedTitle": "La restauración no se completó"
+        "failedTitle": "La restauración no se completó",
+        "stateUnreadable": "El estado de la restauración no se puede leer ({reason}): LibreFolio no sirve datos hasta que el administrador ejecute ./dev.py backup pending en el servidor."
       },
       "errors": {
         "backup_upload_empty": "El archivo está vacío.",
