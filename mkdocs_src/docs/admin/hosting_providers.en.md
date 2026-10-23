@@ -841,7 +841,8 @@ checks, and logs an error for each one that fails. The **Security** tab of Setti
 `GET /api/v1/panel/status` tells your panel where the setup of the
 [initial administrator](#initial-admin) stands: whether your customer has used the setup link, and
 until when the link works. It also gives the instance's `mode` and its `restore`
-([Restoring an Instance from Your Panel](#panel-restore)). Turn it on with a token of its own in
+([Restoring an Instance from Your Panel](#panel-restore)), and how many places its users take, with the
+limit. Turn it on with a token of its own in
 `LIBREFOLIO_PANEL_STATUS_TOKEN`, as in [A Token per Scope](#panel-api-tokens), then:
 
 ```bash
@@ -850,7 +851,7 @@ curl -sS -H "Authorization: Bearer $LIBREFOLIO_PANEL_STATUS_TOKEN" \
 ```
 
 ```json
-{"admin_setup": "pending", "setup_expires_at": "2026-10-23T09:12:44.512312Z", "mode": "normal", "restore": null}
+{"admin_setup": "pending", "setup_expires_at": "2026-10-23T09:12:44.512312Z", "mode": "normal", "restore": null, "users_used": 3, "users_limit": 10}
 ```
 
 | `admin_setup` | What it means | `setup_expires_at` |
@@ -864,9 +865,17 @@ curl -sS -H "Authorization: Bearer $LIBREFOLIO_PANEL_STATUS_TOKEN" \
 | --- | --- |
 | `mode` | `normal`, or `awaiting_restore` while [`LIBREFOLIO_AWAIT_RESTORE`](#await-restore) is on |
 | `restore` | `null` when no restore was ever recorded on this instance; otherwise `state` (`pending`, `in_progress`, `committed`, `rolled_back`, or `unreadable` when the state of the restore cannot be read), `reason` (why a restore was rolled back: `first_start_failed`, `swap_interrupted`, `swap_failed` or `stage_missing`; for `unreadable`, why the state cannot be read: `io`, `not_a_file` or `invalid`), `waiting` (why a confirmed restore still waits: `backup_running`, `other_data_directory`, `server_running` or `instance_blocked`), `backup_created_at` and `stage_id`. Each is `null` when it does not apply. It never says who confirmed the restore |
+| `users_used` | The places the users take, a whole number from `0`: the active accounts, the invitations not yet used, revoked or expired, and the deactivated accounts that wait for their email verification while its link is live or, for the [initial administrator](#initial-admin), for the setup. Each account or invitation counts once. It is what `LIBREFOLIO_MAX_USERS` limits |
+| `users_limit` | The value of `LIBREFOLIO_MAX_USERS`, a whole number from `1`; `null` when it is not set, which means no limit |
 
-- The answer holds these four keys and nothing else: no username, no email address, no count of
-  accounts. Ignore the keys you do not know: a later version may add some.
+- The answer holds these six keys and nothing else: `admin_setup`, `setup_expires_at`, `mode`,
+  `restore`, `users_used` and `users_limit`. The two last are counts only, never a username, an email
+  address or an id. Ignore the keys you do not know: a later version may add some.
+- 📏 Compare `users_used` with `users_limit` to know when an instance is full. At the limit, nobody
+  can sign up without an invitation and administrators cannot create invitations: see
+  «When the Instance Is Full» in [Environment Variables](configuration.md), and
+  «Places and Subscription» in [Users & Invitations](users.md) for what the administrator
+  sees. With `users_limit` `null` there is nothing to compare.
 - `setup_expires_at` is an ISO 8601 date and time in UTC, given only while the state is `pending`.
 - When the state of the restore cannot be read, the answer is still `200`, never `restore: null`:
   a restore may be waiting behind it. `restore` then reads
