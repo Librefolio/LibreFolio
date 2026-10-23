@@ -80,7 +80,10 @@
       "adminHint": "Administrator: stop LibreFolio, then run ./dev.py backup pending to see what happened and --recover previous to put the data of before back.",
       "docs": "How to recover",
       "autoReload": "This page reloads by itself once LibreFolio serves the data again.",
-      "support": "Contact support"
+      "support": "Contact support",
+      "ownerTitle": "The owner's account is not ready",
+      "ownerMessage": "The data was restored, but the owner does not have their account yet, so LibreFolio shows none until your administrator sets it.",
+      "ownerAdminHint": "Administrator: stop LibreFolio, run ./dev.py backup pending --recover owner to set the owner's account again, then start LibreFolio again."
     }
   }
 }

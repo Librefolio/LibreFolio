@@ -45,7 +45,7 @@ from backend.app.api.v1.system import block, health, info, instance, ready, wake
 from backend.app.config.platform import awaiting_restore, instance_blocked
 from backend.app.db.session import get_session_generator
 from backend.app.services.platform.hosting_panel.access import PanelScope, panel_caller
-from backend.app.services.platform.restore_guard import restore_interrupted
+from backend.app.services.platform.restore_guard import refresh_restore_state, restore_interrupted
 
 INSTANCE_BLOCKED_CODE = "instance_blocked"
 
@@ -175,7 +175,11 @@ async def refuse_when_restore_interrupted(request: Request) -> None:
 
     The hosting panel's backup start answers 409 ``backup_restore_interrupted`` instead (D7): a backup of data in doubt
     would pass the coordinator's checks and push a good copy out of the seven it keeps. The panel's credential is
-    checked first, by hand, so a caller without one gets the same answer as outside the state."""
+    checked first, by hand, so a caller without one gets the same answer as outside the state.
+
+    The same refusal while the owner of a restored instance has no account yet (H5-3); a worker that found it ``pending``
+    first asks again whether another worker gave it (``refresh_restore_state``)."""
+    await refresh_restore_state()
     if not restore_interrupted():
         return
     endpoint = request.scope.get("endpoint")
