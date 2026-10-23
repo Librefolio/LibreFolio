@@ -17,8 +17,10 @@ replayed exactly, on their own dates and in their own order: quantities, cash, c
 - ``TestTheFloor`` — the constant (red on HEAD 94e170ae1: ``AttributeError``). Every other test reads the literal
   ``date(1900, 1, 1)``; this one ties that literal to the product's constant.
 - ``TestNoQuietDayBeforeDateFrom`` — red on HEAD: the ``replace`` calls made for days before ``date_from`` (a counting
-  wrapper records each one's ``date=``) number 49 301 (date_from D2) / 49 302 (D3); after the cure, none. Its
-  precondition (the carried path still runs after ``date_from``, on D4 and D6) keeps it from passing vacuously.
+  wrapper records each one's ``date=``) number 49 301 (date_from D2) / 49 302 (D3); after the cure, none. Since P4
+  (MF5-1) the engine builds no quiet day at all (segments, ``StateSegment.state_on`` for a reader): the test counts
+  ``state_on`` calls (none during ``build()``) and ``DailyPortfolioState`` constructions (one per computed day, those
+  from ``date_from`` on being the segment starts); D4 and D6 lying inside a segment keeps it from passing vacuously.
 - ``TestRateCalendarsStartAtTheFloor`` — red on HEAD: a recording wrapper of ``daily_state._calendar`` sees a calendar
   from 1889-12-31 (the valuation calendar of the USD stock; the USD cash in transit since 1890-01-02); after the cure no
   calendar starts before 1899-12-31. The precondition (the calendar of that currency still runs to its last day) keeps
@@ -67,7 +69,7 @@ import backend.app.services.financial_math.portfolio.daily_state as daily_state_
 from backend.app.db.models import TransactionType
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
-from backend.app.services.financial_math.portfolio.models import DailyPortfolioState, PortfolioCalculationResult
+from backend.app.services.financial_math.portfolio.models import DailyPortfolioState, PortfolioCalculationResult, StateSegment
 from backend.app.services.financial_math.price_marks import build_asset_price_series
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
@@ -299,25 +301,41 @@ class TestTheFloor:
 class TestNoQuietDayBeforeDateFrom:
     @pytest.mark.parametrize("date_from", [pytest.param(D2, id="quiet-date_from"), pytest.param(D3, id="rate-change-date_from")])
     def test_no_state_is_carried_before_date_from(self, monkeypatch, date_from):
-        """A quiet day before ``date_from`` is skipped, not carried: no ``replace(previous_state, date=…)`` for it. HEAD
-        carries every quiet day from 1890-01-01 on — about 49 000 calls. The carried path still runs after ``date_from``
-        (D4 and D6 are quiet), so the wrapper does see it."""
-        carried: list[date] = []
-        real_replace = daily_state_module.replace
+        """A quiet day before ``date_from`` is skipped, not carried. HEAD 94e170ae1 carried every quiet day from 1890-01-01
+        on through ``replace`` — about 49 000 calls. Since P4 (MF5-1) the engine builds no quiet day at all: it keeps one
+        ``StateSegment`` per computed day from ``date_from`` on, and a reader builds a quiet day through
+        ``StateSegment.state_on``. So during ``build()``: no ``state_on`` call; one ``DailyPortfolioState`` constructed per
+        computed day (``dataclasses.replace`` constructs through ``__init__`` too), those from ``date_from`` on being
+        exactly the segment starts; the few before it are the old rows' own days, each once. D4 and D6 are quiet: they lie
+        inside a segment, so the quiet path is still exercised (by the readers, not by the build)."""
+        built: list[date] = []
+        materialized: list[date] = []
+        real_init = DailyPortfolioState.__init__
+        real_state_on = StateSegment.state_on
 
-        def counting_replace(obj, /, **changes):
-            if isinstance(obj, DailyPortfolioState):
-                carried.append(changes.get("date"))
-            return real_replace(obj, **changes)
+        def counting_init(self, *args, **kwargs):
+            real_init(self, *args, **kwargs)
+            built.append(self.date)
 
-        monkeypatch.setattr(daily_state_module, "replace", counting_replace)
+        def counting_state_on(self, day):
+            materialized.append(day)
+            return real_state_on(self, day)
+
+        monkeypatch.setattr(DailyPortfolioState, "__init__", counting_init)
+        monkeypatch.setattr(StateSegment, "state_on", counting_state_on)
 
         result = _build(_old_book(), date_from)
+        built_during_build, materialized_during_build = list(built), list(materialized)
 
-        assert [s.date for s in result.daily_states] == _days(date_from, D6), "precondition: every day from date_from is emitted"
-        assert {D4, D6} <= set(carried), f"precondition: the quiet days after date_from are carried through replace, carried {sorted(set(carried))}"
-        before = [day for day in carried if day is None or day < date_from]
-        assert before == [], f"{len(before)} quiet days before date_from {date_from} were carried, from {min(before, default=None)} to {max(before, default=None)}"
+        starts = [segment.start for segment in result.daily_states.segments]
+        assert starts[:1] == [date_from], f"the first segment starts on {starts[:1]}, not on date_from {date_from}"
+        assert [start for start in starts if start < date_from] == [], "no segment starts before date_from"
+        assert not {D4, D6} & set(starts), f"precondition: D4 and D6 are quiet days, inside a segment; starts {starts}"
+        assert [s.date for s in result.daily_states] == _days(date_from, D6), "every day from date_from is emitted"
+        assert materialized_during_build == [], f"build() materialized {len(materialized_during_build)} quiet days"
+        assert sorted(day for day in built_during_build if day >= date_from) == starts, "one state constructed per computed day from date_from on"
+        before = [day for day in built_during_build if day < date_from]
+        assert len(before) == len(set(before)) and len(before) < 20, f"{len(before)} states constructed before date_from {date_from}, from {min(before, default=None)} to {max(before, default=None)}"
 
 
 # =============================================================================

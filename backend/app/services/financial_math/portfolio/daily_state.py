@@ -5,7 +5,6 @@ from __future__ import annotations
 import bisect
 from collections import defaultdict
 from collections.abc import Mapping
-from dataclasses import replace
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
@@ -26,6 +25,7 @@ from backend.app.services.financial_math.portfolio.models import (
     ClassifiedTransaction,
     DailyPortfolioState,
     DailyPositionState,
+    DailyStates,
     EngineEndState,
     InternalAssetTransfer,
     InTransitInterval,
@@ -34,6 +34,7 @@ from backend.app.services.financial_math.portfolio.models import (
     RealizedSale,
     SplitHistory,
     SplitRecord,
+    StateSegment,
     UnrealizedSplit,
     ValuationResult,
     ValuationSource,
@@ -272,7 +273,8 @@ class DailyStateBuilder:
             internal_flow_dates.add(flow_date)
 
         # ── 4. Accumulators ──
-        states: list[DailyPortfolioState] = []
+        # The states computed from date_from on, one per dirty day: each holds until the next one (P4)
+        computed: list[DailyPortfolioState] = []
         cumulative_cash = zero
         cumulative_ecf = zero
         # G1a — additive per-broker contribution accumulators. Mirrors of the scope
@@ -307,35 +309,12 @@ class DailyStateBuilder:
         previous_state: DailyPortfolioState | None = None
         current = self._replay_from
         while current <= self.date_to:
-            # Day skipping: if this day is stationary (no tx, ecf, price change, or
-            # in-transit boundary), reuse the previous state with updated date.
+            # A quiet day (no movement, flow, quote, rate change, in-transit boundary, stale turn or split) carries the
+            # previous state: it is never visited. The loop jumps to the next dirty day, and from date_from on the
+            # carried days live in the segment of the state they carry (P4: DailyStates builds one when it is read).
             if current not in dirty_days and previous_state is not None:
-                if current < self.date_from:
-                    # R13-SEC8: nothing is emitted before date_from, and a quiet day only carries the state: on to the
-                    # next dirty day (date_from is one). A row stored centuries back costs its dirty days, not a walk.
-                    position = bisect.bisect_right(ordered_dirty_days, current)
-                    current = ordered_dirty_days[position] if position < len(ordered_dirty_days) else self.date_to + timedelta(days=1)
-                    continue
-                # The containers are copied, never shared between two days' states.
-                previous_state = replace(
-                    previous_state,
-                    date=current,
-                    external_cash_flow=zero,
-                    by_type=dict(previous_state.by_type),
-                    by_sector=dict(previous_state.by_sector),
-                    by_geography=dict(previous_state.by_geography),
-                    missing_price_asset_ids=set(previous_state.missing_price_asset_ids),
-                    missing_fx_pairs=set(previous_state.missing_fx_pairs),
-                    stale_price_asset_ids=set(previous_state.stale_price_asset_ids),
-                    transaction_implied_asset_ids=set(previous_state.transaction_implied_asset_ids),
-                    transaction_implied_last_quote_dates=dict(previous_state.transaction_implied_last_quote_dates),
-                    broker_contributions=dict(previous_state.broker_contributions),
-                    acquisition_funding=None,
-                    unrealized_by_currency=dict(previous_state.unrealized_by_currency),
-                )
-                if current >= self.date_from:
-                    states.append(previous_state)
-                current += timedelta(days=1)
+                position = bisect.bisect_right(ordered_dirty_days, current)
+                current = ordered_dirty_days[position] if position < len(ordered_dirty_days) else self.date_to + timedelta(days=1)
                 continue
 
             # 4a. Update cash
@@ -626,7 +605,7 @@ class DailyStateBuilder:
                 unrealized_by_currency={currency: UnrealizedSplit(asset=part[0], fx=part[1], unsplit=part[2]) for currency, part in unrealized_parts.items()},
             )
             if current >= self.date_from:
-                states.append(previous_state)
+                computed.append(previous_state)
             current += timedelta(days=1)
 
         # End-of-frame position snapshot (t1)
@@ -637,7 +616,7 @@ class DailyStateBuilder:
             position_states_end.append(ps)
 
         return PortfolioCalculationResult(
-            daily_states=states,
+            daily_states=self._segments(computed),
             position_states_start=position_states_start,
             position_states_start_date=self.period_start,
             position_states_end=position_states_end,
@@ -665,6 +644,14 @@ class DailyStateBuilder:
         )
 
     # ── Helper methods ──
+
+    def _segments(self, computed: list[DailyPortfolioState]) -> DailyStates:
+        """The computed states from date_from on as segments: each holds up to the day before the next, the last one to
+        date_to. date_from is always computed (``_collect_dirty_days``), so the segments cover ``[date_from, date_to]``."""
+        if not computed:
+            return DailyStates()
+        ends = [state.date - timedelta(days=1) for state in computed[1:]] + [self.date_to]
+        return DailyStates(StateSegment(start=state.date, end=end, state=state) for state, end in zip(computed, ends, strict=True))
 
     def _build_position_state(
         self,
