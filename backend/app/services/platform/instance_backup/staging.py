@@ -101,6 +101,9 @@ UPGRADE_TIMEOUT_SECONDS = 3600
 _SPACE_MARGIN = 64 * 1024 * 1024
 _CHUNK = 1024 * 1024
 _ZIP_MAGIC = b"PK\x03\x04"
+#: Where a POSIX tar names its format: the sealed nightly backup of a hosting panel is one (L3).
+_USTAR_MAGIC_AT = 257
+_USTAR_MAGIC = b"ustar"
 _ZIP_READ_ERRORS = (zipfile.BadZipFile, zlib.error, EOFError)
 
 StagePhase = Literal["decrypting", "checking", "unpacking", "upgrading", "verifying"]
@@ -168,7 +171,8 @@ class StagingReport(BaseModel):
     control totals of the copy differ from those the backup recorded: ``control_totals_differences``),
     ``control_totals_unreadable`` (the copy's could not be read), ``non_iso_currencies`` (the copy holds stored currency
     values that are not ISO 4217 codes, which an edit of their rows refuses until they are corrected: ``./dev.py db
-    currencies`` lists them; E-19b1). A blocker forbids it: ``no_administrator``.
+    currencies`` lists them; E-19b1), and ``credentials_from_backup``, always, last (after a restore one signs in with
+    the backup's credentials, and every session open now ends; L3). A blocker forbids it: ``no_administrator``.
     ``control_totals``: ``same``, ``changed``, ``absent`` (not in the archive), ``other_version`` (another version of
     J's method: not compared) or ``unreadable``. ``encrypted``: a secure backup (lot B4). ``secrets_rekeyed``: the
     plugin secrets re-encrypted with this instance's key; ``secrets_unreadable``: those that stay unreadable.
@@ -386,13 +390,16 @@ def _decrypt(envelope: Path, root: Path, key: EnvelopeKey | None, progress: Stag
 
 
 def _open_archive(path: Path) -> zipfile.ZipFile:
-    """The archive, opened: a zip, by its first bytes as by its directory."""
+    """The archive, opened: a zip, by its first bytes as by its directory. A POSIX tar is the sealed nightly backup of
+    a hosting panel (L3), whose password only the provider's key opens: ``sealed_backup_needs_key``, said apart."""
     try:
         with path.open("rb") as handle:
-            magic = handle.read(len(_ZIP_MAGIC))
+            head = handle.read(_USTAR_MAGIC_AT + len(_USTAR_MAGIC))
     except OSError:
         raise StagingError("archive_unreadable", "The archive cannot be read") from None
-    if magic != _ZIP_MAGIC:
+    if head[_USTAR_MAGIC_AT:] == _USTAR_MAGIC:
+        raise StagingError("sealed_backup_needs_key", "The file is a sealed backup of a hosting panel: its password is encrypted for the provider's key")
+    if head[: len(_ZIP_MAGIC)] != _ZIP_MAGIC:
         raise StagingError("not_a_backup", "The file is not a LibreFolio backup")
     try:
         return zipfile.ZipFile(path)
@@ -848,6 +855,9 @@ def _report(
         warnings.append("control_totals_unreadable")
     if non_iso_currencies:
         warnings.append("non_iso_currencies")
+    # The truth of every restore (``_close_the_way_in``), said in the report too: the reader of an API, a hosting panel
+    # included, gets it as a code (L3).
+    warnings.append("credentials_from_backup")
     files = manifest.files[1:]
     staged_at = datetime.now(UTC)
     return StagingReport(

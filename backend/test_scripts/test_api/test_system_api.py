@@ -845,7 +845,8 @@ class TestConnectionSecurityInProcess:
 
 INSTANCE_URL = f"{API_BASE}/system/instance"
 #: The public configuration, exactly these fields.
-INSTANCE_KEYS = {"profile", "accounts", "email", "support_url", "legal", "client_log_level"}
+# H-62 (contract L3 §6): ``mode``, normal or awaiting_restore. B-33 (22/10): ``restore_interrupted``; red until B-33
+INSTANCE_KEYS = {"profile", "accounts", "email", "support_url", "legal", "client_log_level", "mode", "restore_interrupted"}
 #: accounts, exactly these fields.
 ACCOUNTS_KEYS = {"registration_mode", "registration_locked", "first_account_open", "password_rules"}
 #: Decision 37 (lot A6c): accounts.password_rules as (code, value) — a value left out and a null one read alike.
@@ -1184,7 +1185,8 @@ class TestReadinessLive:
             response = await client.get(READY_URL, headers=headers, timeout=TIMEOUT)
 
         assert response.status_code == 200, f"the lane's database is migrated to the head: expected 200, got {response.status_code}: {response.text}"
-        assert response.json() == {"status": "ready", "checks": {"database": "ok", "migrations": "ok"}}, f"exactly the status and the two codes: {response.text}"
+        # H-62 (contract L3 §6): readiness says the mode, normal on the lane; red until H-62
+        assert response.json() == {"status": "ready", "checks": {"database": "ok", "migrations": "ok"}, "mode": "normal"}, f"exactly the status, the two codes and the mode: {response.text}"
 
 
 def _readiness_app(session: object) -> FastAPI:
@@ -1223,7 +1225,8 @@ class TestReadinessInProcess:
 
         assert sessions == [session], f"Barrier: the route must check once, on the session it resolved: {sessions}"
         assert response.status_code == status_code, f"{status} ({database}, {migrations}): expected {status_code}, got {response.status_code}: {response.text}"
-        assert response.json() == {"status": status, "checks": {"database": database, "migrations": migrations}}, f"the body is the readiness answer, whatever the status code: {response.text}"
+        # H-62 (contract L3 §6): the mode beside it, normal outside the mode; red until H-62
+        assert response.json() == {"status": status, "checks": {"database": database, "migrations": migrations}, "mode": "normal"}, f"the body is the readiness answer and the mode, whatever the status code: {response.text}"
 
     def test_openapi_documents_200_and_503_with_the_readiness_body(self):
         responses = _instance_app().openapi()["paths"]["/api/v1/system/ready"]["get"]["responses"]

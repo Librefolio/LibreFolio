@@ -22,7 +22,7 @@ import {debug} from '$lib/debug';
 import {loginUrl} from '$lib/utils/internalPath';
 import {notifyPortfolioMutation} from '$lib/stores/portfolio/portfolioMutation';
 import {priceRefresh} from '$lib/features/price-refresh/priceRefresh';
-import {instanceBlockState, isInstanceBlockedError} from '$lib/features/instance/instanceBlockState';
+import {instanceBlockState, isInstanceAwaitingRestoreError, isInstanceBlockedError, isInstanceRestoreInterruptedError} from '$lib/features/instance/instanceBlockState';
 
 // =============================================================================
 // CONFIGURATION
@@ -159,6 +159,13 @@ axiosInstance.interceptors.response.use(
         // A 423 `instance_blocked`: the hosting provider blocked this instance, and the layout shows the block page.
         if (isInstanceBlockedError(error.response?.status, error.response?.data)) {
             instanceBlockState.markBlocked();
+        }
+
+        // A 423 `instance_awaiting_restore` (H-62: the hosting panel is restoring this instance) or
+        // `instance_restore_interrupted` (B-33: the state of the restore cannot be read). Read the instance's
+        // configuration again, so the root layout's gate shows its page even when it was read before the state began. A dynamic import: the configuration is a runes module that imports this client.
+        if (isInstanceAwaitingRestoreError(error.response?.status, error.response?.data) || isInstanceRestoreInterruptedError(error.response?.status, error.response?.data)) {
+            void import('$lib/features/instance/instanceConfig.svelte').then(({instanceConfig}) => instanceConfig.load({force: true}));
         }
 
         // Let the error propagate - Zodios will handle it

@@ -17,6 +17,11 @@ Usage:
                                                The same, with the instance key of the installation the archive
                                                came from: its saved provider keys are re-encrypted
     ./dev.py backup decrypt ARCHIVE -o ZIP     The archive inside a secure backup, as a plain .zip
+    ./dev.py backup keygen --identity-file F   A key pair for sealed backups: F holds the private key (L3)
+    ./dev.py backup create --recipient age1…   A sealed backup (.tar): only the private key opens its password
+    ./dev.py backup create --sealed            The same, for the recipients of LIBREFOLIO_BACKUP_RECIPIENTS
+    ./dev.py backup inspect|restore|decrypt ARCHIVE.tar --identity-file F
+                                               A sealed backup, its password opened with the private key in F
     ./dev.py backup pending [--cancel]         The restore waiting for the next start, or the last one; --cancel drops it
     ./dev.py backup --test-db create           Use the test data directory
 
@@ -133,6 +138,10 @@ def _password(args, *, twice: bool) -> str:
     none: no source, and no terminal to ask on."""
     from backend.app.config import SecretFileError, read_secret_file  # noqa: PLC0415 — keep dev.py's start light
 
+    # A sealed backup (L3): the password its key opened, handed to the command that opens the envelope inside.
+    sealed_password = getattr(args, "sealed_password", None)
+    if sealed_password is not None:
+        return sealed_password
     password_file = getattr(args, "password_file", None)
     if password_file:
         try:
@@ -366,10 +375,10 @@ def _print_warnings(job) -> None:
             print(f"     {_safe(entry)}")
 
 
-def _run_backup(data_dir: Path, password: str | None = None):
+def _run_backup(data_dir: Path, password: str | None = None, recipients: tuple[str, ...] | None = None):
     """Run the backup in this process, printing its phases: the job's end state and its folder, or ``None`` when the
     run could not start (another backup runs, ``backups/`` is not a plain folder, it cannot be written). ``password``:
-    a secure backup."""
+    a secure backup; ``recipients``: a sealed one (L3)."""
     from backend.app.services.platform.instance_backup import jobs  # noqa: PLC0415 — keep dev.py's start light
     from backend.app.services.platform.instance_backup.paths import BackupPathError, backups_dir  # noqa: PLC0415
 
@@ -381,6 +390,8 @@ def _run_backup(data_dir: Path, password: str | None = None):
             print(f"   … {phase}")
 
     try:
+        if recipients:
+            return jobs.run_backup(origin="cli", data_dir=data_dir, progress=progress, recipients=recipients)
         return jobs.run_backup(origin="cli", data_dir=data_dir, progress=progress, password=password)
     except jobs.BackupBusyError:
         print("❌ Another backup is running (from the web interface or another command): try again when it ends")
@@ -392,13 +403,11 @@ def _run_backup(data_dir: Path, password: str | None = None):
 
 
 def cmd_create(args) -> int:
-    """Write a backup archive of the instance; with a password, a secure backup (an ``.lfbk`` envelope)."""
-    password = None
-    # A namespace built by hand (a script, a test) may lack the password options: no password, as before lot B4.
-    if getattr(args, "encrypt", False) or getattr(args, "password_file", None) or getattr(args, "password_stdin", False):
-        password = _archive_password(args)
-        if password is None:
-            return 1
+    """Write a backup archive of the instance; with a password, a secure backup (an ``.lfbk`` envelope); with
+    recipients, a sealed one (a ``.tar``, L3)."""
+    ready, password, recipients = _create_protection(args)
+    if not ready:
+        return 1
     data_dir = _data_dir_for(args)
     if data_dir is None:
         return 1
@@ -410,7 +419,7 @@ def cmd_create(args) -> int:
 
     print(f"💾 Backing up {data_dir}")
     started = time.monotonic()
-    result = _run_backup(data_dir, password)
+    result = _run_backup(data_dir, password, recipients)
     if result is None:
         return 1
     job, folder = result
@@ -432,6 +441,18 @@ def cmd_create(args) -> int:
     return _print_written(job, placed, problem, started)
 
 
+def _create_protection(args) -> tuple[bool, str | None, tuple[str, ...] | None]:
+    """How ``create`` protects the archive: ``(ready, password, recipients)``, one of the two at most; not ready after
+    saying why. A namespace built by hand (a script, a test) may lack the options: no protection, as before lot B4."""
+    ready, recipients = _recipients_for(args)
+    if not ready:
+        return False, None, None
+    if recipients is None and (getattr(args, "encrypt", False) or getattr(args, "password_file", None) or getattr(args, "password_stdin", False)):
+        password = _archive_password(args)
+        return password is not None, password, None
+    return True, None, recipients
+
+
 def _print_written(job, placed: Path, problem: str | None, started: float) -> int:
     """Say where the archive went, what it holds and how to keep it; the exit code of ``create``."""
     if problem:
@@ -440,7 +461,9 @@ def _print_written(job, placed: Path, problem: str | None, started: float) -> in
         print(f"✅ Backup written: {placed}")
     print(f"   {_human(job.file_size or 0)} in {time.monotonic() - started:.1f} s")
     _print_warnings(job)
-    if job.encrypted:
+    if job.sealed:
+        print(f"🔏 Sealed for {len(job.sealed_recipients)} key{'s' if len(job.sealed_recipients) != 1 else ''}: only the matching private key opens its password, and this server cannot.")
+    elif job.encrypted:
         print("🔐 Encrypted with your password: only that password opens it, and LibreFolio cannot recover a lost one.")
     else:
         print("🔒 The archive holds every user's data: keep it private.")
@@ -449,11 +472,14 @@ def _print_written(job, placed: Path, problem: str | None, started: float) -> in
 
 def cmd_inspect(args) -> int:
     """Check an archive against its manifest and print what it holds; a secure backup is decrypted first, in a private
-    folder of the data directory removed at the end."""
+    folder of the data directory removed at the end; a sealed one is opened with its key first (L3)."""
     from backend.app.services.platform.instance_backup.archive import ArchiveError, check_archive  # noqa: PLC0415
     from backend.app.services.platform.instance_backup.envelope import is_envelope  # noqa: PLC0415
     from backend.app.services.platform.instance_backup.manifest import ManifestError  # noqa: PLC0415
 
+    sealed = _sealed_first(args, cmd_inspect)
+    if sealed is not None:
+        return sealed
     path = Path(args.archive).expanduser()
     if not path.is_file():
         print(f"❌ No file at {path}")
@@ -528,7 +554,12 @@ _STAGE_WARNINGS = {
     "control_totals_changed": "The ledger's totals differ from those the backup recorded (listed above)",
     "control_totals_unreadable": "The ledger's totals could not be read on the copy",
     "non_iso_currencies": "Some currency codes in the backup are not ISO 4217 codes, names or numbers an earlier version saved: an edit of their rows is refused until they are corrected (./dev.py db currencies lists them after the restore)",
+    "credentials_from_backup": "After a restore you sign in with the backup's credentials; every session open now ends",
+    "confirming_account_not_in_backup": "Your account is not among the administrators of this backup: after the restart you cannot sign in with it",
 }
+#: Said apart, never as a ⚠️ line (L3): the first is the sentence under the administrators; the second comes only from
+#: the API, for the administrator who reads the report.
+_STAGE_WARNINGS_SAID_APART = frozenset({"credentials_from_backup", "confirming_account_not_in_backup"})
 _STAGE_BLOCKERS = {
     "no_administrator": "The backup has no active administrator: after a restore nobody could manage the instance",
 }
@@ -616,7 +647,8 @@ def _print_stage_report(report, *, instance_key_given: bool = False) -> None:
         print("   After a restore you sign in with one of them, with the password of then; every session open now ends.")
         print("   Invitations and links sent before the restore will have expired: send them again if needed.")
     for code in report.warnings:
-        print(f"⚠️  {_STAGE_WARNINGS.get(code, code)}")
+        if code not in _STAGE_WARNINGS_SAID_APART:
+            print(f"⚠️  {_STAGE_WARNINGS.get(code, code)}")
     for code in report.blockers:
         print(f"❌ {_STAGE_BLOCKERS.get(code, code)}")
 
@@ -673,7 +705,7 @@ def _confirm(args, stage_id: str, data_dir: Path) -> bool:
         print("Nothing restored: the copy was removed.")
         return False
     try:
-        confirm_restore(stage_id, confirmed_by="cli", data_dir=data_dir)
+        confirm_restore(stage_id, confirmed_by="cli", confirmed_via="cli", data_dir=data_dir)
     except RestoreStateError as exc:
         print(f"❌ {exc} ({exc.code})")
         return False
@@ -752,6 +784,9 @@ def cmd_restore(args) -> int:
     restore, which the next start of the server applies."""
     from backend.app.services.platform.instance_backup.staging import remove_stage  # noqa: PLC0415
 
+    sealed = _sealed_first(args, cmd_restore)
+    if sealed is not None:
+        return sealed
     path = Path(args.archive).expanduser()
     if not path.is_file():
         print(f"❌ No file at {path}")
@@ -895,6 +930,9 @@ def cmd_decrypt(args) -> int:
     """Write the archive inside a secure backup as a plain ``.zip``: to move an instance by hand («Porta a casa»)."""
     from backend.app.services.platform.instance_backup.envelope import EnvelopeError, decrypt_file  # noqa: PLC0415
 
+    sealed = _sealed_first(args, cmd_decrypt)
+    if sealed is not None:
+        return sealed
     has_password, password = _password_file_first(args)
     if not has_password or not _decrypt_as_owner(args):
         return 1
@@ -959,6 +997,193 @@ def _carries_instance_key(path: Path) -> bool:
         return False
 
 
+# =============================================================================
+# Sealed backups (L3): a .tar whose password only an age private key opens
+# =============================================================================
+
+
+def _recipients_for(args) -> tuple[bool, tuple[str, ...] | None]:
+    """The recipients ``create`` seals the backup for: ``--recipient`` (at most two) or ``--sealed``
+    (``LIBREFOLIO_BACKUP_RECIPIENTS``). ``(True, None)`` for a backup that is not sealed; ``(False, None)`` after saying
+    why the options cannot be used."""
+    given = getattr(args, "recipient", None) or []
+    from_variable = getattr(args, "sealed", False)
+    if not given and not from_variable:
+        return True, None
+    from backend.app.config.backup import MAX_RECIPIENTS, RECIPIENTS_VARIABLE, BackupConfigError, backup_recipients  # noqa: PLC0415 — keep dev.py's start light
+
+    if getattr(args, "encrypt", False) or getattr(args, "password_file", None) or getattr(args, "password_stdin", False):
+        print("❌ A sealed backup draws a password of its own: --sealed and --recipient go without --encrypt, --password-file or --password-stdin")
+        return False, None
+    if given and from_variable:
+        print(f"❌ --sealed reads the recipients from {RECIPIENTS_VARIABLE}: give them there or with --recipient, not both")
+        return False, None
+    if from_variable:
+        try:
+            recipients = backup_recipients()
+        except BackupConfigError as exc:
+            print(f"❌ {exc} ({exc.code})")
+            return False, None
+        if recipients is None:
+            print(f"❌ {RECIPIENTS_VARIABLE} is not set: give the recipients there, or with --recipient age1…")
+            return False, None
+        return True, recipients
+    if len(given) > MAX_RECIPIENTS:
+        print(f"❌ At most {MAX_RECIPIENTS} recipients: --recipient twice, while a key is being changed")
+        return False, None
+    recipients = _given_recipients(given)
+    return recipients is not None, recipients
+
+
+def _given_recipients(given: list[str]) -> tuple[str, ...] | None:
+    """The ``--recipient`` values in their canonical form (``age1…``, lower case); ``None`` after saying why not."""
+    from pyrage import RecipientError, x25519  # noqa: PLC0415
+
+    canonical: list[str] = []
+    for item in given:
+        try:
+            recipient = str(x25519.Recipient.from_str(item.strip()))
+        except RecipientError:
+            print("❌ A --recipient is not an age recipient: expected age1…, as keygen or age-keygen prints it")
+            return None
+        if recipient in canonical:
+            print("❌ The same recipient is given twice")
+            return None
+        canonical.append(recipient)
+    return tuple(canonical)
+
+
+def _sealed_first(args, command) -> int | None:
+    """Run ``command`` on the envelope inside a sealed backup, its password opened with ``--identity-file``; its exit
+    code, or ``None`` when ``args.archive`` is no sealed backup and the command goes on as it is."""
+    from backend.app.services.platform.instance_backup.sealed import is_sealed  # noqa: PLC0415 — keep dev.py's start light
+
+    if getattr(args, "sealed_password", None) is not None:
+        return None
+    path = Path(args.archive).expanduser()
+    identity_file = getattr(args, "identity_file", None)
+    if is_sealed(path):
+        if not identity_file:
+            print("❌ A sealed backup of a hosting panel: its password is encrypted for a key. Give the file of the private key with --identity-file (sealed_backup_needs_key)")
+            return 1
+        return _run_sealed(args, path, command)
+    if identity_file:
+        print(f"❌ --identity-file opens a sealed backup (.tar) only: {path} is not one")
+        return 1
+    return None
+
+
+def _run_sealed(args, path: Path, command) -> int:
+    """Open the password of the sealed backup at ``path`` with the keys of ``--identity-file`` (read before any switch of
+    user, as a password file is), check it against the envelope, then run ``command`` on that envelope, copied into a
+    private temporary folder removed at the end."""
+    import tempfile  # noqa: PLC0415
+
+    from backend.app.services.platform.instance_backup.envelope import EnvelopeError  # noqa: PLC0415
+    from backend.app.services.platform.instance_backup.sealed import SealedError, check_password, extract_envelope, open_password, read_identities, read_sealed  # noqa: PLC0415
+
+    identity_path = _requested(args.identity_file)
+    _warn_open_key(identity_path)
+    try:
+        identities = read_identities(identity_path)
+        archive = read_sealed(path)
+        password = open_password(archive, identities)
+        check_password(archive, password)
+    except (SealedError, EnvelopeError) as exc:
+        print(f"❌ {exc} ({exc.code})")
+        return 1
+    except OSError as exc:
+        print(f"❌ Cannot read {path}: {exc.strerror or exc}")
+        return 1
+    if not _decrypt_as_owner(args):
+        return 1
+    print(f"🔏 Sealed backup {path}: its password opened with {identity_path}")
+    folder = Path(tempfile.mkdtemp(prefix="librefolio-sealed-"))
+    try:
+        envelope = folder / "backup.lfbk"
+        try:
+            extract_envelope(path, archive, envelope)
+        except SealedError as exc:
+            print(f"❌ {exc} ({exc.code})")
+            return 1
+        except OSError as exc:
+            print(f"❌ The envelope could not be copied into {folder}: {exc.strerror or exc}")
+            return 1
+        inner = argparse.Namespace(**vars(args))
+        inner.archive, inner.identity_file, inner.sealed_password = str(envelope), None, password
+        inner.password_file, inner.password_stdin = None, False
+        return command(inner)
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+def _publish_new(partial: Path, target: Path) -> None:
+    """``partial`` becomes ``target``, never over a file: a hard link where the file system has them, otherwise a rename
+    after a last look (``FileExistsError`` when ``target`` is there)."""
+    import errno  # noqa: PLC0415
+
+    try:
+        os.link(partial, target)
+    except FileExistsError:
+        raise
+    except OSError as exc:
+        if exc.errno not in (errno.EPERM, errno.ENOTSUP, errno.EOPNOTSUPP, errno.EXDEV):
+            raise
+        if os.path.lexists(target):
+            raise FileExistsError(errno.EEXIST, "The file already exists", str(target)) from None
+        os.rename(partial, target)
+
+
+def _warn_open_key(path: Path) -> None:
+    """A warning when the key file can be read by more than its owner (SEC-5): it opens every backup sealed for it."""
+    try:
+        mode = stat.S_IMODE(os.stat(path).st_mode)
+    except OSError:
+        return  # read_identities says why it cannot be read
+    if mode & 0o077:
+        print(f"⚠️  {path} can be read by others (mode {mode:04o}): it opens every backup sealed for its key. Run chmod 600 {path}")
+
+
+def cmd_keygen(args) -> int:
+    """Write a new age key pair for sealed backups: the private key into ``--identity-file`` (``0600``, never over a
+    file), in the format of ``age-keygen``; the public key printed, for ``--recipient`` or ``LIBREFOLIO_BACKUP_RECIPIENTS``."""
+    from datetime import UTC, datetime  # noqa: PLC0415
+
+    from pyrage import x25519  # noqa: PLC0415
+
+    from backend.app.services.platform.instance_backup.sealed import identity_file_text  # noqa: PLC0415
+
+    target = _requested(args.identity_file)
+    if target.exists() or target.is_symlink():
+        print(f"❌ {target} already exists: a key file is never written over")
+        return 1
+    identity = x25519.Identity.generate()
+    # Written whole beside it, then linked into place, which never replaces a file: a failure leaves no half key (SEC-5).
+    partial = target.with_name(f".{target.name}.{os.getpid()}.part")
+    try:
+        fd = os.open(partial, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        try:
+            data = identity_file_text(identity, datetime.now(UTC)).encode("utf-8")
+            while data:
+                data = data[os.write(fd, data) :]
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        _publish_new(partial, target)
+    except FileExistsError:
+        print(f"❌ {target} already exists: a key file is never written over")
+        return 1
+    except OSError as exc:
+        print(f"❌ Cannot write {target}: {exc.strerror or exc}")
+        return 1
+    finally:
+        partial.unlink(missing_ok=True)
+    print(f"✅ Private key written: {target} (only its owner can read it). Keep it off this server, and a copy of it elsewhere: a lost key opens no backup.")
+    print("🔑 Public key, for --recipient or LIBREFOLIO_BACKUP_RECIPIENTS:")
+    print(str(identity.to_public()))
+    return 0
+
+
 def cmd_pending(args) -> int:
     """Show the restore waiting for the next start, or the last one; ``--cancel`` drops the one waiting."""
     from backend.app.services.platform.instance_backup.apply import RestoreStateUnreadableError, read_restore  # noqa: PLC0415
@@ -968,12 +1193,65 @@ def cmd_pending(args) -> int:
         return 1
     if args.cancel:
         return _cancel_pending(data_dir)
+    if getattr(args, "recover", False):
+        return _recover_pending(data_dir)
     try:
         state = read_restore(data_dir)
     except RestoreStateUnreadableError as exc:
-        print(f"❌ {exc} ({exc.code})")
+        _print_unreadable_state(data_dir, exc)
         return 1
     _print_restore_state(state)
+    return 0
+
+
+def _print_unreadable_state(data_dir: Path, exc) -> None:
+    """What an unreadable state of the restore means, what is on disk, and the way out (B-33)."""
+    from backend.app.services.platform.instance_backup.paths import SWAPPED_FOLDERS, is_plain_dir, previous_dir, stages_dir  # noqa: PLC0415
+
+    print(f"❌ {exc}: a restore may have stopped half way. LibreFolio serves no data until you choose ({exc.code}: {exc.reason})")
+    previous = previous_dir(data_dir)
+    try:
+        kept = [name for name in SWAPPED_FOLDERS if is_plain_dir(previous) and os.path.lexists(previous / name)]
+        copies = sum(1 for _ in stages_dir(data_dir).iterdir()) if is_plain_dir(stages_dir(data_dir)) else 0
+    except OSError as error:
+        # The same refusal that hides the state may hide the folder: say so, and still give the way out.
+        print(f"   What .restore holds cannot be listed either: {error.strerror or type(error).__name__}")
+    else:
+        if kept:
+            print(f"   The data of before is kept in .restore/previous/: {', '.join(kept)}")
+        else:
+            print("   No data of before is kept in .restore/previous/: no folder was swapped, or the restore was committed")
+        print(f"   Checked copies kept: {copies} (none is removed while the state cannot be read)")
+    print("👉 Stop LibreFolio, then run ./dev.py backup pending --recover: it puts the data of before back.")
+    print("   Then start LibreFolio as it was, or restore a backup with ./dev.py backup restore ARCHIVE.")
+
+
+def _recover_pending(data_dir: Path) -> int:
+    """``backup pending --recover``: with an unreadable state, put the data of before back (B-33)."""
+    from backend.app.services.platform.instance_backup.apply import RestoreApplyError, RestoreInUseError, RestoreNothingToRecoverError, recover_unreadable_restore  # noqa: PLC0415
+
+    try:
+        recovered = recover_unreadable_restore(data_dir)
+    except RestoreNothingToRecoverError:
+        print("❌ Nothing to recover: the state of the restore can be read, or there is none. ./dev.py backup pending shows it (restore_nothing_to_recover)")
+        return 1
+    except RestoreInUseError:
+        print("❌ LibreFolio is running on this data directory: stop it first, then run the command again (restore_in_use)")
+        return 1
+    except RestoreApplyError as exc:
+        print(f"❌ {exc} ({exc.code}): the log above says which folder; do not start LibreFolio before it is fixed")
+        return 1
+    except OSError as exc:
+        print(f"❌ The restore could not be recovered: {exc.strerror or type(exc).__name__}")
+        return 1
+    if recovered.moved_back:
+        print(f"✅ The data of before is back: {', '.join(recovered.moved_back)}")
+    else:
+        print("✅ No folder had been swapped, or the restore was committed: the data stays as it is")
+    if recovered.set_aside:
+        print(f"   The restored folders were set aside in .restore/failed/: {', '.join(recovered.set_aside)}")
+    print(f"   The unreadable state is kept as .restore/{recovered.state_kept_as}, for a look; it is never read again")
+    print("👉 Start LibreFolio, or restore a backup with ./dev.py backup restore ARCHIVE.")
     return 0
 
 
@@ -1057,6 +1335,8 @@ A relative path starts from the project root, like every path given to dev.py. A
     create = commands.add_parser("create", help="Write a backup archive of the instance (safe while the server runs)", allow_abbrev=False)
     create.add_argument("--output", "-o", metavar="PATH", help="Archive file, or an existing folder for it (default: <data dir>/backups/); checked before the backup starts")
     create.add_argument("--encrypt", action="store_true", help="A secure backup: an .lfbk envelope that only its password opens, with the instance key LibreFolio generated (the password is asked twice at the terminal)")
+    create.add_argument("--sealed", action="store_true", help="A sealed backup (.tar, L3) for the recipients of LIBREFOLIO_BACKUP_RECIPIENTS: only their private keys open its password")
+    create.add_argument("--recipient", action="append", metavar="AGE1…", help="A sealed backup for this age recipient (age1…, as keygen prints it); twice during a change of key")
     _password_options(create)
     create.set_defaults(backup_func=cmd_create)
 
@@ -1064,6 +1344,7 @@ A relative path starts from the project root, like every path given to dev.py. A
     inspect.add_argument("archive", help="The backup archive (.zip, or .lfbk for a secure backup)")
     inspect.add_argument("--no-verify", action="store_true", help="Compare the entry names with the manifest without reading the entries (faster)")
     _password_options(inspect)
+    _identity_option(inspect)
     inspect.set_defaults(backup_func=cmd_inspect)
 
     restore = commands.add_parser("restore", help="Restore an archive at the next start of the server, once checked on a copy (--dry-run: only the check)", allow_abbrev=False)
@@ -1076,16 +1357,24 @@ A relative path starts from the project root, like every path given to dev.py. A
         help="The instance key of the installation the archive came from (a copy of its secrets/instance.key, or its LIBREFOLIO_INSTANCE_KEY in a file): the saved provider keys of an archive that does not carry its key are re-encrypted from it. Read before any switch of user: a Docker secret works",
     )
     _password_options(restore)
+    _identity_option(restore)
     restore.set_defaults(backup_func=cmd_restore)
 
     decrypt = commands.add_parser("decrypt", help="Write the archive inside a secure backup (.lfbk) as a plain .zip", allow_abbrev=False)
     decrypt.add_argument("archive", help="The secure backup (.lfbk)")
     decrypt.add_argument("--output", "-o", metavar="PATH", required=True, help="The .zip to write: it must not exist yet")
     _password_options(decrypt)
+    _identity_option(decrypt)
     decrypt.set_defaults(backup_func=cmd_decrypt)
 
+    keygen = commands.add_parser("keygen", help="Write a new key pair for sealed backups (L3): the private key into a file, the public key printed", allow_abbrev=False)
+    keygen.add_argument("--identity-file", metavar="FILE", required=True, help="The file of the private key, in the format of age-keygen; it must not exist yet. Keep it off the server")
+    keygen.set_defaults(backup_func=cmd_keygen)
+
     pending = commands.add_parser("pending", help="Show the restore waiting for the next start of the server, or the last one")
-    pending.add_argument("--cancel", action="store_true", help="Drop the restore waiting for the next start, and its checked copy")
+    pending_actions = pending.add_mutually_exclusive_group()
+    pending_actions.add_argument("--cancel", action="store_true", help="Drop the restore waiting for the next start, and its checked copy")
+    pending_actions.add_argument("--recover", action="store_true", help="When the state of the restore cannot be read: put the data of before back (stop LibreFolio first)")
     pending.set_defaults(backup_func=cmd_pending)
 
     parser.set_defaults(func=_dispatch)
@@ -1097,6 +1386,11 @@ def _password_options(command) -> None:
     sources = command.add_mutually_exclusive_group()
     sources.add_argument("--password-file", metavar="FILE", help="Read the password from FILE: its whole content, without a byte order mark and the line breaks at its end (a Docker secret works)")
     sources.add_argument("--password-stdin", action="store_true", help="Read the password from the standard input, one line; at a terminal, it is asked without being shown")
+
+
+def _identity_option(command) -> None:
+    """The private key that opens a sealed backup's password (L3)."""
+    command.add_argument("--identity-file", metavar="FILE", help="For a sealed backup (.tar): the file of the age private key that opens its password (age-keygen's format)")
 
 
 def _dispatch(args) -> int:

@@ -180,6 +180,7 @@ from backend.app.services.platform.config_audit import (
     log_configuration_audit,
     run_config_checks,
 )
+from backend.app.services.platform.instance_backup import checks as backup_checks
 from backend.app.services.platform.instance_backup.checks import BACKUP_CONFIG_CHECKS, check_panel_token, check_restore_limit, check_upload_limit
 from backend.app.services.platform.instance_key import INSTANCE_KEY_FILE, InstanceKeyError, derive_key, instance_key_path
 from backend.test_scripts.test_utils import print_section, print_success
@@ -195,6 +196,10 @@ _TEST_MODE_CHECK: Callable[[], ConfigCheck] | None = getattr(config_audit, "chec
 #: H-61: the check of the hosting panel's tokens of (k), read by name in the same way. ``None`` until then: ``CHECK_IDS``
 #: leaves it out, and the tests of (k), and of its place in (c), fail naming H-61 (``_h61``).
 _HOSTING_PANEL_CHECK: Callable[[], ConfigCheck] | None = getattr(config_audit, "check_hosting_panel", None)
+#: Lot L3 checkpoint 2: the check of the instance's age recipients (B's ``backup.recipients``, the last of
+#: ``BACKUP_CONFIG_CHECKS``), read by name in the same way. ``None`` until then: ``CHECK_IDS`` leaves it out, and the
+#: test of the whole tuple in (c) fails naming L3 (``_l3``).
+_RECIPIENTS_CHECK: Callable[[], ConfigCheck] | None = getattr(backup_checks, "check_recipients", None)
 
 #: The id of every check, in the order of ``CONFIG_CHECKS`` (c): the platform's, then workstream B's, A's and E's.
 CHECK_IDS: dict[Callable[[], ConfigCheck], str] = {
@@ -215,6 +220,8 @@ CHECK_IDS: dict[Callable[[], ConfigCheck], str] = {
     check_panel_token: "backup.panel_token",
     check_upload_limit: "backup.upload_limit",
     check_restore_limit: "backup.restore_limit",
+    # L3: the instance's age recipients, the last of B's checks; left out while the module has no check_recipients
+    **({_RECIPIENTS_CHECK: "backup.recipients"} if _RECIPIENTS_CHECK is not None else {}),
     check_login_limit: "accounts.login_limit",
     check_smtp_configuration: "email.smtp",
     check_smtp_encryption: "email.smtp_encryption",
@@ -295,7 +302,8 @@ def _configure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, production: b
         monkeypatch.delenv(variable)
     # Workstream B: no panel token, no upload limit and no restore limit (B-35) whatever the environment holds, so its
     # three checks are ok
-    for variable in ("LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN", "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB", "LIBREFOLIO_BACKUP_MAX_RESTORE_MB"):
+    # L3: and no age recipients, so its check is ok (off) under selfhosted
+    for variable in ("LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN", "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB", "LIBREFOLIO_BACKUP_MAX_RESTORE_MB", "LIBREFOLIO_BACKUP_RECIPIENTS"):
         monkeypatch.delenv(variable, raising=False)
     # Workstream A: the login limit on whatever the environment holds (the lane's server runs with it off), so its check
     # is ok and the variable cannot stop the audit
@@ -385,6 +393,13 @@ def _h49(name: str) -> Any:
     """``backend.app.config.platform.<name>``, a bound H-49 adds, read when the test runs, as ``_h46`` reads H-46's names: until the module has it, the test fails naming H-49, while the rest of this file collects and runs."""
     value = getattr(platform_config, name, None)
     assert value is not None, f"H-49: backend.app.config.platform has no {name}, {H49_NAMES[name]}"
+    return value
+
+
+def _l3(name: str) -> Any:
+    """``instance_backup.checks.<name>``, a name lot L3 checkpoint 2 adds, read when the test runs, as ``_h46`` reads H-46's: until the module has it, the test fails naming L3, while the rest of this file collects and runs."""
+    value = getattr(backup_checks, name, None)
+    assert value is not None, f"L3: instance_backup.checks has no {name}, the check of LIBREFOLIO_BACKUP_RECIPIENTS (backup.recipients), the last of BACKUP_CONFIG_CHECKS"
     return value
 
 
@@ -695,6 +710,8 @@ def test_config_checks_holds_every_check_in_its_place_with_its_id(configuration)
     _h46("check_test_mode")
     # H-61: and the hosting panel check, right before it, only once the module has that one
     _h61("check_hosting_panel")
+    # L3: and the recipients' check, the last of B's, only once the module has it
+    _l3("check_recipients")
     sections = (*BACKUP_CONFIG_CHECKS, *ACCOUNTS_CONFIG_CHECKS, *EMAIL_CONFIG_CHECKS)
     platform = tuple(check for check in CHECK_IDS if check not in sections)
 
@@ -1216,7 +1233,8 @@ def test_startup_logs_the_switches_off_in_the_managed_profile_and_goes_on(config
     CONFIG_CHECKS, each once with its summary word for word, its id and no detail; the start goes on."""
     print_section("Configuration checks: the managed profile's switches at startup")
     _noted(monkeypatch, set(), set())
-    configuration.set(LIBREFOLIO_PROFILE="managed", JWT_SECRET=GOOD_JWT_SECRET, LIBREFOLIO_FRAME_PROTECTION="false", LIBREFOLIO_CSP_REPORT_ONLY="false")
+    # L3: a valid age recipient (TEST ONLY, fixtures/backup_l3), since unset in the managed profile B's recipients check is an error
+    configuration.set(LIBREFOLIO_PROFILE="managed", JWT_SECRET=GOOD_JWT_SECRET, LIBREFOLIO_FRAME_PROTECTION="false", LIBREFOLIO_CSP_REPORT_ONLY="false", LIBREFOLIO_BACKUP_RECIPIENTS="age1r7hr6nule5dwh69r76kn65y70dudk6xuyf2vel5g5kv8mvlszf8qrdp3av")
     switch_ids = {CHECK_IDS[check] for check in SWITCHES}
     others = [(result.check_id, result.severity) for result in run_config_checks() if result.severity != "ok" and result.check_id not in switch_ids]
     assert others == [], f"Precondition: every other check ok, so the two switches are the only records: {others}"

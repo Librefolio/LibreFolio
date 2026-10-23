@@ -93,6 +93,29 @@ Under test: ``backend/app/services/platform/instance_backup/leftovers.py`` (new:
     state's. The startup sweep returns in time beside a FIFO in a check state's place, and (point 7, 10:39) beside a FIFO
     in place of a job's ``state.json``: the jobs part does its usual work, dates such a folder by its modification time,
     and logs no error.
+(j) Lot L3-2, the hooks of the panel's restore route (H-62; contract L3 §5). ``restore_jobs.CheckOrigin`` is
+    ``Literal["admin", "cli", "panel"]``; ``RestoreCheck.origin`` defaults to ``admin``, is written in the check's state
+    file, and a state written before (no key) reads ``admin``. ``start_check(..., origin=)`` records it (``admin``
+    without one), and ``read_check`` returns it while the check runs, after it ended and once it was ended as
+    interrupted. ``running_check(upload_id, *, data_dir=None)``: the check of that upload still running — as
+    ``read_check`` judges it: one recorded running while the lock of the checks is free was left by a dead process, and
+    is not —, else ``None``: an unknown or malformed upload id, a finished check of it, a running check of another
+    upload, no ``.restore`` at all.
+(k) B-33 §2 (written RED before it): while the restore's ``restore.json`` cannot be read — refused by the file system
+    (``io``), a folder (``not_a_file``), no state (``invalid``) — ``apply.protected_stage`` is ``EVERY_STAGE``: ``prune``
+    keeps every old copy and its check, and an old copy no check records; once the state is readable and says no
+    restore, the next ``prune`` removes them as before. ``remove_check`` of every ended check whose copy exists raises
+    ``CheckPendingError``, the copy and its state kept; a check whose copy is gone is removed as before.
+(l) SEC-3 and SEC-4 of the security review of H-62 (findings 3 and 4; interface ``B-sec345-interface.md``). SEC-3: an
+    upload replaces the others only once its caller accepts it. ``UploadWriter.finish(replace_others=False)`` renames
+    its own file into place and keeps every other upload — a finished one, the one a running check reads, the partial
+    of an upload still arriving —; ``finish()`` and ``finish(replace_others=True)`` replace them as today (but the one
+    a running check reads, and the partial). The public ``remove_replaced_uploads(data_dir, *, keep)`` is today's
+    private one, same behaviour: the panel's route calls ``finish(replace_others=False)``, checks the kind, then it.
+    SEC-4: an ``abort()`` after a ``finish()`` that raised — before its rename (its ``fsync``, its ``os.replace``) or
+    after it (the removal of the replaced uploads, made to raise ``OSError``) — leaves neither the partial nor the
+    final file of that upload, the other uploads as they were; a second ``abort()`` is harmless. After a ``finish()``
+    that returned, ``abort()`` removes nothing.
 
 How. Every data directory is a folder of ``tmp_path`` built file by file: the sweep never opens a database nor reads
 an archive, and none is made. A check's state is written as ``restore_jobs`` writes it (a ``RestoreCheck`` as JSON in
@@ -141,6 +164,18 @@ an aware one (``TypeError``) or uses to remove the check; and ``prune`` never re
 The jobs' reader, too, waits forever on a FIFO in place of a job's ``state.json``. The rows of (i) that meet one of those
 fail on it; the links, the names that are no state's and most rows of the keepers are guards, green today. Each test of
 (i) names its red rows.
+
+Written RED again for L3-2 (j), before the hooks: ``CheckOrigin``, ``RestoreCheck.origin``, the ``origin`` parameter
+of ``start_check`` and ``running_check`` do not exist. Each is looked up by the test that needs it (``l3_2_name``,
+``l3_2_parameter``) and fails with a "[new] L3-2 …" message; a state file holding an ``origin`` key reads as no check
+today (``RestoreCheck(**record)`` refuses the key), which is the red of the rows that write one.
+
+Written RED again for SEC-3 and SEC-4 (l), before their cure: ``finish`` takes no ``replace_others`` and
+``remove_replaced_uploads`` is not public yet (``sec_parameter``, ``sec_name``: a "[new] SEC-3 …" failure of the test
+that needs them); ``abort`` only unlinks the partial, so after a ``finish`` that failed past its rename the final file of
+the upload stays — the red of that row. A failure before the rename, a ``finish`` that returned and ``finish()`` without
+the keyword are guards, green today. The removal is made to fail by replacing it in ``restore_jobs`` under both names,
+the private one of today and the public one of the cure, so the same row reaches whichever ``finish`` calls.
 """
 
 from __future__ import annotations
@@ -155,11 +190,11 @@ import sys
 import threading
 import time
 from collections.abc import Callable, Iterator
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, fields, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 
@@ -2215,3 +2250,542 @@ def test_the_startup_sweep_returns_in_time_beside_a_fifo_as_a_job_state(tmp_path
     counts = summary_counts(events)
     assert counts == {**dict.fromkeys(COUNTS, 0), "jobs_interrupted": 1, "jobs_expired": 2}, f"the sweep says what it did, and nothing else: {counts}"
     print_success("the sweep returned in time; 1 job ended, the expired job and the FIFO folder two hours old removed")
+
+
+# =============================================================================
+# (j) Lot L3-2: the origin of a check, the running check of an upload
+# =============================================================================
+
+#: The origins of a check (contract L3 §5): the Backup tab of an administrator, the command line, the hosting panel.
+CHECK_ORIGINS = ("admin", "cli", "panel")
+#: What a check's origin reads as before L3-2, when ``RestoreCheck`` has no such attribute: never a valid origin.
+NO_ORIGIN = "<missing: RestoreCheck has no origin before L3-2>"
+
+
+def l3_2_name(module: ModuleType, name: str) -> Any:
+    """``module.<name>``, a name lot L3-2 adds, read when the test needs it: its absence fails that test alone."""
+    value = getattr(module, name, None)
+    if value is None:
+        pytest.fail(f"[new] L3-2: {module.__name__}.{name} does not exist yet (contract L3 §5)", pytrace=False)
+    return value
+
+
+def l3_2_parameter(function: Callable[..., Any], name: str) -> None:
+    """The keyword ``name`` of ``function``, which lot L3-2 adds; before it, a failure that says so."""
+    if name not in inspect.signature(function).parameters:
+        pytest.fail(f"[new] L3-2: {function.__qualname__}() takes no {name!r} yet (contract L3 §5)", pytrace=False)
+
+
+def origin_field() -> Any:
+    """The field ``origin`` of ``RestoreCheck`` (L3-2); before it, a failure that says so."""
+    found = {item.name: item for item in fields(RestoreCheck)}.get("origin")
+    if found is None:
+        pytest.fail("[new] L3-2: restore_jobs.RestoreCheck has no field origin yet (contract L3 §5)", pytrace=False)
+    return found
+
+
+def origin_of(check: RestoreCheck) -> str:
+    return getattr(check, "origin", NO_ORIGIN)
+
+
+def check_recorded(root: Path, stage_id: str, upload_id: str, *, status: str = "running", origin: str | None = None) -> None:
+    """A check's state file as ``restore_jobs`` writes it (``recorded_check``), its ``origin`` key set to ``origin``, or
+    left out (``None``): a state written before L3-2."""
+    recorded_check(root, stage_id, upload_id, status=status)
+    path = check_state_path(root, stage_id)
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record.pop("origin", None)
+    if origin is not None:
+        record["origin"] = origin
+    path.write_text(json.dumps(record), encoding="utf-8")
+
+
+def running_check(upload_id: str, root: Path | None) -> RestoreCheck | None:
+    """``restore_jobs.running_check(upload_id, data_dir=root)``, looked up at the call (L3-2)."""
+    return l3_2_name(restore_jobs, "running_check")(upload_id, data_dir=root)
+
+
+def test_the_origins_of_a_check_are_admin_cli_and_panel_and_admin_by_default():
+    """(j) L3-2: ``CheckOrigin`` is ``Literal["admin", "cli", "panel"]``, in this order, and ``RestoreCheck.origin``
+    defaults to ``admin``: every check of before was an administrator's."""
+    print_section("(j) L3-2 The origin of a check")
+    origins = get_args(l3_2_name(restore_jobs, "CheckOrigin"))
+    assert origins == CHECK_ORIGINS, f"CheckOrigin is Literal{list(CHECK_ORIGINS)}: {origins}"
+    assert origin_field().default == "admin", f"RestoreCheck.origin defaults to admin: {origin_field().default!r}"
+    print_success("admin, cli, panel; admin by default")
+
+
+@pytest.mark.parametrize("origin", [None, *CHECK_ORIGINS], ids=["not-given", *CHECK_ORIGINS])
+def test_a_check_records_its_origin_from_its_start_to_its_end(tmp_path, monkeypatch, origin):
+    """(j) L3-2: ``start_check(..., origin=)`` records the origin: in the first state it answers, in the check's state
+    file and in what ``read_check`` answers once the check ended (here at once, ``failed``/``not_a_backup``: the upload
+    is no backup). Without one, ``admin``."""
+    l3_2_parameter(restore_jobs.start_check, "origin")
+    root = data_root(tmp_path)
+    restore_folders(root)
+    upload_id = new_stage_id()
+    upload = upload_path(root, upload_id)
+    upload.write_bytes(NOT_A_BACKUP)
+    upload.chmod(0o600)
+    monkeypatch.setattr(restore_jobs, "threading", InlineThreads())
+    expected = origin or "admin"
+    given = {} if origin is None else {"origin": origin}
+    first = restore_jobs.start_check(upload_id, data_dir=root, **given)
+    assert (first.status, origin_of(first)) == ("running", expected), f"the first state says the origin {expected}: {first}"
+    ended = restore_jobs.read_check(first.stage_id, data_dir=root)
+    assert (ended.status, ended.error_code) == ("failed", "not_a_backup"), f"precondition: the check ran to its end: {ended}"
+    assert origin_of(ended) == expected, f"read_check of the ended check says the origin {expected}: {ended}"
+    written = (check_state(root, first.stage_id) or {}).get("origin")
+    assert written == expected, f"the origin is written in the check's state file: {written!r}"
+    print_success(f"{origin or 'not given'}: {expected} from the start to the end")
+
+
+@pytest.mark.parametrize("status", ["running", "done"])
+def test_a_check_state_written_before_l3_2_reads_origin_admin(tmp_path, status):
+    """(j) L3-2: a check's state file without the key ``origin`` — every one written before L3-2 — reads ``admin``,
+    running (its lock held, as while it runs) or ended."""
+    origin_field()
+    root = data_root(tmp_path)
+    restore_folders(root)
+    stage_id, upload_id = new_stage_id(), new_stage_id()
+    check_recorded(root, stage_id, upload_id, status=status)
+    holder = cases.hold_the_lock(root) if status == "running" else None
+    try:
+        read = restore_jobs.read_check(stage_id, data_dir=root)
+    finally:
+        if holder is not None:
+            holder.release()
+    assert (read.status, origin_of(read)) == (status, "admin"), f"a state without an origin is an administrator's check: {read}"
+    print_success(f"{status}, no origin key: admin")
+
+
+@pytest.mark.parametrize("origin", ["cli", "panel"])
+def test_a_check_its_stopped_server_left_running_keeps_its_origin(tmp_path, origin):
+    """(j) L3-2: a check recorded running while the lock of the checks is free was left by a stopped server; ``read_check``
+    ends it ``failed``/``restore_interrupted`` and keeps its origin, in its answer and in its state file."""
+    origin_field()
+    root = data_root(tmp_path)
+    restore_folders(root)
+    stage_id, upload_id = new_stage_id(), new_stage_id()
+    an_upload(root, upload_id)
+    check_recorded(root, stage_id, upload_id, origin=origin)
+    read = restore_jobs.read_check(stage_id, data_dir=root)
+    assert (read.status, read.error_code) == ("failed", "restore_interrupted"), f"precondition: the check is ended as interrupted: {read}"
+    assert origin_of(read) == origin, f"an interrupted check keeps its origin {origin}: {read}"
+    assert (check_state(root, stage_id) or {}).get("origin") == origin, f"its state file too: {check_state(root, stage_id)}"
+    print_success(f"{origin}: interrupted, origin kept")
+
+
+def test_running_check_answers_the_running_check_of_that_upload(tmp_path):
+    """(j) L3-2: ``running_check(upload_id)`` answers the check of that upload that is still running (its lock held, as
+    while it runs): its stage, its upload, ``running`` and its origin — what ``read_check`` of its stage answers — beside
+    an ended check of another upload."""
+    print_section("(j) L3-2 running_check")
+    root = data_root(tmp_path)
+    restore_folders(root)
+    stage_id, upload_id = new_stage_id(), new_stage_id()
+    check_recorded(root, stage_id, upload_id, origin="panel")
+    check_recorded(root, new_stage_id(), new_stage_id(), status="done", origin="admin")
+    holder = cases.hold_the_lock(root)
+    try:
+        found = running_check(upload_id, root)
+        read = restore_jobs.read_check(stage_id, data_dir=root)
+    finally:
+        holder.release()
+    assert found is not None, "the running check of the upload is found"
+    assert (found.stage_id, found.upload_id, found.status, origin_of(found)) == (stage_id, upload_id, "running", "panel"), f"its stage, its upload, running, its origin: {found}"
+    assert found == read, f"what read_check of its stage answers: {found} != {read}"
+    print_success("the running check of the upload, origin panel")
+
+
+def _unknown_upload(root: Path) -> tuple[str, str | None]:
+    """A check of another upload runs; the upload asked for has none."""
+    other = new_stage_id()
+    check_recorded(root, new_stage_id(), other)
+    return new_stage_id(), other
+
+
+def _malformed_id(root: Path) -> tuple[str, str | None]:
+    """A check runs, and the id asked for is no upload id: a path, capitals."""
+    other = new_stage_id()
+    check_recorded(root, new_stage_id(), other)
+    return "../../etc/passwd", other
+
+
+def _capital_id(root: Path) -> tuple[str, str | None]:
+    """A check runs; the id asked for is its upload's, in capitals: no upload id."""
+    other = new_stage_id()
+    check_recorded(root, new_stage_id(), other)
+    return other.upper(), other
+
+
+def _finished_check(root: Path) -> tuple[str, str | None]:
+    """The upload's check ended (done, then failed), and a check of another upload runs."""
+    upload_id, other = new_stage_id(), new_stage_id()
+    check_recorded(root, new_stage_id(), upload_id, status="done")
+    check_recorded(root, new_stage_id(), upload_id, status="failed")
+    check_recorded(root, new_stage_id(), other)
+    return upload_id, other
+
+
+def _left_by_a_dead_process(root: Path) -> tuple[str, str | None]:
+    """The upload's check is recorded running, and no check holds the lock: a stopped server left it."""
+    upload_id = new_stage_id()
+    an_upload(root, upload_id)
+    check_recorded(root, new_stage_id(), upload_id, origin="panel")
+    return upload_id, None
+
+
+NOT_RUNNING = [
+    pytest.param(_unknown_upload, id="unknown-upload"),
+    pytest.param(_malformed_id, id="malformed-id-a-path"),
+    pytest.param(_capital_id, id="malformed-id-capitals"),
+    pytest.param(_finished_check, id="finished-check-another-runs"),
+    pytest.param(_left_by_a_dead_process, id="left-running-by-a-dead-process"),
+]
+
+
+@pytest.mark.parametrize("arrange", NOT_RUNNING)
+def test_running_check_answers_none_when_no_check_of_that_upload_runs(tmp_path, arrange):
+    """(j) L3-2: ``None`` for an unknown upload id, an id that is no upload id, an upload whose checks ended while a
+    check of another upload runs, and a check left running by a dead process (as ``read_check`` judges it: not running).
+    Barrier: where a check of another upload runs, ``running_check`` of that upload finds it."""
+    root = data_root(tmp_path)
+    restore_folders(root)
+    asked, other = arrange(root)
+    holder = cases.hold_the_lock(root) if other is not None else None
+    try:
+        found = running_check(asked, root)
+        barrier = running_check(other, root) if other is not None else None
+    finally:
+        if holder is not None:
+            holder.release()
+    assert found is None, f"no check of {asked!r} runs: None, not {found}"
+    if other is not None:
+        assert barrier is not None and barrier.upload_id == other, f"barrier: the check of the other upload runs and is found: {barrier}"
+    print_success(f"{arrange.__name__.strip('_')}: None")
+
+
+def test_running_check_without_a_restore_folder_is_none_and_creates_nothing(tmp_path):
+    """(j) L3-2: a data directory without ``.restore``: ``None``, and nothing created to say so."""
+    root = data_root(tmp_path)
+    found = running_check(new_stage_id(), root)
+    assert found is None, f"no check at all: None, not {found}"
+    assert not os.path.lexists(restore_dir(root)), "nothing created: no .restore"
+    print_success("no .restore: None")
+
+
+# =============================================================================
+# (k) B-33 §2: a restore state that cannot be read protects every copy
+# =============================================================================
+#
+# Which copy a restore waits for is not known while its state cannot be read: ``apply.protected_stage`` is then
+# ``EVERY_STAGE``, and no copy is touched — ``remove_check`` refuses every check whose copy exists, ``prune`` removes no
+# stage copy and no check of a stage, however old. Written RED, before B-33: today the state reads as no restore (or
+# ``protected_stage`` swallows the error), nothing is protected, and the old copies go.
+
+#: (k) B-33 §1: how the restore's state cannot be read: the file system refuses it (``io``), it is a folder
+#: (``not_a_file``), its content is no state (``invalid``).
+RESTORE_STATE_UNREADABLE = [pytest.param("io", id="io"), pytest.param("not_a_file", id="not_a_file"), pytest.param("invalid", id="invalid")]
+
+
+def restore_state_unreadable(root: Path, how: str, patch: pytest.MonkeyPatch) -> None:
+    """``.restore/restore.json`` a state that cannot be read, as ``how`` says, while ``patch`` lasts for ``io`` (a pending
+    restore whose opening ``os.open`` refuses, EIO). Checked: ``protected_stage`` no longer names a single stage."""
+    path = restore_state_path(root)
+    if how == "io":
+        pending_restore(root, new_stage_id())
+        refuse_open(patch, path, errno.EIO)
+    elif how == "not_a_file":
+        path.mkdir(mode=0o700)
+    else:
+        path.write_bytes(b'{"format": 1, "status": "pending", "stage_id": "half a sta')
+        path.chmod(0o600)
+
+
+def readable_again(root: Path, patch: pytest.MonkeyPatch) -> None:
+    """The restore's state readable again, and no restore: the refusal undone, the state file removed (whatever it is)."""
+    patch.undo()
+    path = restore_state_path(root)
+    if is_plain_dir(path):
+        path.rmdir()
+    else:
+        path.unlink()
+    assert protected_stage(root) is None, f"precondition: no restore, no stage protected: {protected_stage(root)!r}"
+
+
+def ended_long_ago(root: Path) -> tuple[str, Path]:
+    """A check ended ``PAST_LIFETIME`` ago, with its copy (aged the same): its stage id and its copy."""
+    stage_id = new_stage_id()
+    copy = stage_holding(root, stage_id, archive=None, report=True)
+    recorded_check(root, stage_id, new_stage_id(), status="done", ended_ago=PAST_LIFETIME)
+    for path in sorted(copy.rglob("*"), reverse=True):
+        cli_secure.aged(path, PAST_LIFETIME.total_seconds())
+    cli_secure.aged(copy, PAST_LIFETIME.total_seconds())
+    return stage_id, copy
+
+
+@pytest.mark.parametrize("how", RESTORE_STATE_UNREADABLE)
+def test_prune_keeps_every_old_copy_and_its_check_while_the_restore_state_cannot_be_read(tmp_path, how):
+    """(k) B-33 §2: two checks ended longer ago than ``STAGE_LIFETIME``, each with its copy, and an old copy no check
+    records (the command line's): while the restore's state cannot be read, ``prune`` removes none of them — the copies
+    and the checks' states as they were. Once the state is readable again and says no restore, the next ``prune`` removes
+    them all, as before. Red before B-33: they go at the first ``prune``."""
+    print_section("(k) B-33: a restore state that cannot be read protects every copy")
+    root = data_root(tmp_path)
+    restore_folders(root)
+    old = [ended_long_ago(root) for _ in range(2)]
+    unrecorded = made_old(stage_holding(root, archive=None))
+    with pytest.MonkeyPatch.context() as patch:
+        restore_state_unreadable(root, how, patch)
+        kept = (cli_secure.entries(stages_dir(root)), cli_secure.entries(checks_dir(root)))
+        prune(root)
+        after = (cli_secure.entries(stages_dir(root)), cli_secure.entries(checks_dir(root)))
+        assert after == kept, f"{how}: every copy and every check kept while the state cannot be read: {cli_secure.differences(kept[0], after[0])} {cli_secure.differences(kept[1], after[1])}"
+        readable_again(root, patch)
+    prune(root)
+    left = [stage_id for stage_id, copy in old if os.path.lexists(copy) or os.path.lexists(check_state_path(root, stage_id))]
+    assert (left, os.path.lexists(unrecorded)) == ([], False), f"{how}: the state readable, no restore: the old copies and checks pruned as before: {left}, {unrecorded.name}"
+    print_success(f"{how}: kept while unreadable, pruned once readable")
+
+
+@pytest.mark.parametrize("how", RESTORE_STATE_UNREADABLE)
+def test_remove_check_refuses_every_check_with_a_copy_while_the_restore_state_cannot_be_read(tmp_path, how):
+    """(k) B-33 §2: while the restore's state cannot be read, ``remove_check`` of any ended check whose copy exists
+    raises ``CheckPendingError``, the copy and the check's state as they were; a check whose copy is gone is removed as
+    before (§2: «every check whose copy exists»). Red before B-33: the copies go."""
+    root = data_root(tmp_path)
+    restore_folders(root)
+    with_copies = [new_stage_id() for _ in range(2)]
+    for stage_id in with_copies:
+        stage_holding(root, stage_id, archive=None, report=True)
+        recorded_check(root, stage_id, new_stage_id(), status="done")
+    without_copy = new_stage_id()
+    recorded_check(root, without_copy, new_stage_id(), status="failed")
+    with pytest.MonkeyPatch.context() as patch:
+        restore_state_unreadable(root, how, patch)
+        kept = (cli_secure.entries(stages_dir(root)), {stage_id: check_state(root, stage_id) for stage_id in with_copies})
+        refused = {stage_id: type(raised_by(lambda stage_id=stage_id: restore_jobs.remove_check(stage_id, data_dir=root))).__name__ for stage_id in with_copies}
+        assert refused == dict.fromkeys(with_copies, "CheckPendingError"), f"{how}: every check with a copy refused, CheckPendingError: {refused}"
+        after = (cli_secure.entries(stages_dir(root)), {stage_id: check_state(root, stage_id) for stage_id in with_copies})
+        assert after == kept, f"{how}: the copies and the checks as they were: {cli_secure.differences(kept[0], after[0])}"
+        gone = raised_by(lambda: restore_jobs.remove_check(without_copy, data_dir=root))
+    assert gone is None and check_state(root, without_copy) is None, f"{how}: a check without a copy is removed as before: {gone!r}"
+    print_success(f"{how}: CheckPendingError for every copy; a check without one removed")
+
+
+# =============================================================================
+# (l) SEC-3, SEC-4: an upload replaces the others once accepted; a failed end leaves nothing
+# =============================================================================
+#
+# SEC-3 (finding 3): the panel's route refuses a clear zip only after ``finish`` returned, and ``finish`` had already
+# removed the good upload before it. ``finish(replace_others=False)`` keeps the others; the route checks the kind, then
+# calls the public ``remove_replaced_uploads``. SEC-4 (finding 4): a ``finish`` that fails after its rename (the removal
+# of the replaced uploads raising) left the final file, ``abort`` unlinking the partial alone.
+
+#: (l) Where the interface of the cure is written: named by every "[new]" failure.
+SEC_INTERFACE = "B-sec345-interface.md"
+
+
+def sec_parameter(function: Callable[..., Any], name: str, finding: str) -> None:
+    """The keyword ``name`` of ``function``, which ``finding``'s cure adds; before it, a failure that says so."""
+    if name not in inspect.signature(function).parameters:
+        pytest.fail(f"[new] {finding}: {function.__qualname__}() takes no {name!r} yet ({SEC_INTERFACE})", pytrace=False)
+
+
+def sec_name(module: ModuleType, name: str, finding: str) -> Any:
+    """``module.<name>``, a public name ``finding``'s cure adds, read when the test needs it."""
+    value = getattr(module, name, None)
+    if value is None:
+        pytest.fail(f"[new] {finding}: {module.__name__}.{name} does not exist yet ({SEC_INTERFACE})", pytrace=False)
+    return value
+
+
+@dataclass(frozen=True)
+class OtherUploads:
+    """What ``.restore/upload/`` holds beside the upload under test: a finished upload, the one a running check reads
+    (its check recorded running, read so while the lock is held), and the partial of an upload still arriving."""
+
+    earlier: Path
+    read: Path
+    arriving: Path
+
+    def present(self) -> dict[str, bool]:
+        return {"earlier": self.earlier.is_file(), "read by a running check": self.read.is_file(), "still arriving": self.arriving.is_file()}
+
+
+def other_uploads(root: Path) -> OtherUploads:
+    restore_folders(root)
+    earlier = an_upload(root, new_stage_id())
+    read = an_upload(root, new_stage_id())
+    stage_id = new_stage_id()
+    recorded_check(root, stage_id, read.name)
+    read_as_running(root, stage_id)
+    arriving = upload_path(root, new_stage_id())
+    arriving = arriving.with_name(f"{arriving.name}.part")
+    arriving.write_bytes(CLEAR[:16])
+    arriving.chmod(0o600)
+    return OtherUploads(earlier, read, arriving)
+
+
+def received_upload(root: Path) -> restore_jobs.UploadWriter:
+    """An upload that received ``CLEAR`` and is not finished yet."""
+    writer = restore_jobs.UploadWriter(root, max_bytes=None, declared=None)
+    writer.write(CLEAR)
+    return writer
+
+
+def uploads_left(root: Path) -> list[str]:
+    return sorted(os.listdir(uploads_dir(root)))
+
+
+def of_this_upload(root: Path, writer: restore_jobs.UploadWriter) -> list[str]:
+    """The files of ``writer``'s upload still in ``.restore/upload/``: its final file, its partial."""
+    return [name for name in uploads_left(root) if name.startswith(writer.upload_id)]
+
+
+def removal_fails(monkeypatch: pytest.MonkeyPatch, root: Path) -> list[list[str]]:
+    """The removal of the replaced uploads raises ``OSError`` (EIO) before it removes anything, under its private name of
+    today and its public name of the cure: whichever ``finish`` calls. What ``.restore/upload/`` held at each call."""
+    seen: list[list[str]] = []
+
+    def fail(data_dir: Path, *, keep: str) -> None:
+        seen.append(uploads_left(root))
+        raise OSError(errno.EIO, os.strerror(errno.EIO))
+
+    monkeypatch.setattr(restore_jobs, "_remove_replaced_uploads", fail, raising=False)
+    monkeypatch.setattr(restore_jobs, "remove_replaced_uploads", fail, raising=False)
+    return seen
+
+
+class OsWith:
+    """``os`` as ``restore_jobs`` sees it, some of its functions replaced (the API tests' ``Patched``)."""
+
+    def __init__(self, real: ModuleType, **replaced: Callable[..., Any]) -> None:
+        self._real = real
+        self._replaced = replaced
+
+    def __getattr__(self, name: str) -> Any:
+        return self._replaced[name] if name in self._replaced else getattr(self._real, name)
+
+
+def test_an_upload_finished_without_replacing_keeps_every_other_upload(tmp_path):
+    """(l) SEC-3: ``finish(replace_others=False)`` keeps its archive under its id, as sent, and every other upload: the
+    one before, the one a running check reads, the partial of one still arriving. Red until the cure: ``finish`` takes no
+    ``replace_others``."""
+    print_section("(l) SEC-3, SEC-4: the end of an upload")
+    root = data_root(tmp_path)
+    others = other_uploads(root)
+    sec_parameter(restore_jobs.UploadWriter.finish, "replace_others", "SEC-3")
+    holder = cases.hold_the_lock(root)
+    try:
+        writer = received_upload(root)
+        received = writer.finish(replace_others=False)
+    finally:
+        holder.release()
+    assert received == restore_jobs.RestoreUploaded(upload_id=writer.upload_id, size=len(CLEAR), kind="zip"), f"the upload is received: {received}"
+    assert upload_path(root, writer.upload_id).read_bytes() == CLEAR, "the archive kept under its id, as sent"
+    assert others.present() == dict.fromkeys(others.present(), True), f"every other upload kept: {others.present()}"
+    print_success("finish(replace_others=False): every other upload kept")
+
+
+@pytest.mark.parametrize("call", ["default", "replace_others=True"])
+def test_an_upload_finished_replacing_removes_the_others_but_the_one_a_check_reads(tmp_path, call):
+    """(l) SEC-3: ``finish()`` (a guard, green today: the administrators' route) and ``finish(replace_others=True)``
+    (red until the cure) remove the upload before, keep the one a running check reads and the partial of one still
+    arriving, as today."""
+    root = data_root(tmp_path)
+    others = other_uploads(root)
+    if call != "default":
+        sec_parameter(restore_jobs.UploadWriter.finish, "replace_others", "SEC-3")
+    holder = cases.hold_the_lock(root)
+    try:
+        writer = received_upload(root)
+        received = writer.finish() if call == "default" else writer.finish(replace_others=True)
+    finally:
+        holder.release()
+    assert upload_path(root, received.upload_id).read_bytes() == CLEAR, "the archive kept under its id, as sent"
+    expected = {"earlier": False, "read by a running check": True, "still arriving": True}
+    assert others.present() == expected, f"{call}: the upload before removed, the one a check reads and the partial kept: {others.present()}"
+    print_success(f"finish({'' if call == 'default' else call}): the upload before replaced")
+
+
+def test_remove_replaced_uploads_is_public_and_removes_what_finish_used_to(tmp_path):
+    """(l) SEC-3, the panel's order: ``finish(replace_others=False)``, the kind checked, then
+    ``remove_replaced_uploads(data_dir, keep=upload_id)``: the upload before removed; the one kept, the one a running
+    check reads and the partial of one still arriving left. Red until the cure: the function is private, ``finish``
+    takes no keyword."""
+    root = data_root(tmp_path)
+    others = other_uploads(root)
+    remove = sec_name(restore_jobs, "remove_replaced_uploads", "SEC-3")
+    sec_parameter(restore_jobs.UploadWriter.finish, "replace_others", "SEC-3")
+    holder = cases.hold_the_lock(root)
+    try:
+        writer = received_upload(root)
+        received = writer.finish(replace_others=False)
+        assert others.earlier.is_file(), "precondition: the upload before is still there once the upload finished"
+        remove(root, keep=received.upload_id)
+    finally:
+        holder.release()
+    assert upload_path(root, received.upload_id).read_bytes() == CLEAR, "the upload kept stays, as sent"
+    expected = {"earlier": False, "read by a running check": True, "still arriving": True}
+    assert others.present() == expected, f"the upload before removed, the one a check reads and the partial kept: {others.present()}"
+    print_success("remove_replaced_uploads: the upload before removed")
+
+
+def test_an_abort_after_an_end_that_failed_past_its_rename_leaves_nothing_of_the_upload(tmp_path, monkeypatch):
+    """(l) SEC-4: the archive renamed into place, then the removal of the replaced uploads raises ``OSError``: ``finish``
+    raises it; ``abort()`` leaves neither the partial nor the final file of the upload, the upload before as it was; a
+    second ``abort()`` raises nothing and changes nothing. Barrier: the removal ran with the final file in place, the
+    partial gone. Red until the cure: ``abort`` unlinks only the partial, and the final file stays (finding 4)."""
+    root = data_root(tmp_path)
+    restore_folders(root)
+    earlier = an_upload(root, new_stage_id())
+    writer = received_upload(root)
+    seen = removal_fails(monkeypatch, root)
+    raised = raised_by(writer.finish)
+    assert the_eio(raised), f"finish raises the error of the removal: {what_it_did(raised)}"
+    assert seen == [sorted([earlier.name, writer.upload_id])], f"barrier: the removal ran once, the final file in place and the partial gone: {seen}"
+    writer.abort()
+    assert of_this_upload(root, writer) == [], f"abort after a finish that failed: nothing of the upload left: {of_this_upload(root, writer)}"
+    assert earlier.read_bytes() == b"LFBK the secure backup a check was reading", "the upload before as it was"
+    again = raised_by(writer.abort)
+    assert again is None and uploads_left(root) == [earlier.name], f"a second abort is harmless: {what_it_did(again)}, {uploads_left(root)}"
+    print_success("finish failed past its rename: abort left nothing of the upload")
+
+
+@pytest.mark.parametrize("failing", ["fsync", "replace"])
+def test_an_abort_after_an_end_that_failed_before_its_rename_leaves_nothing(tmp_path, monkeypatch, failing):
+    """(l) SEC-4, a GUARD (green today): ``finish`` fails before its rename (its ``fsync``, its ``os.replace``):
+    ``abort()`` leaves nothing of the upload, twice harmless, the upload before as it was."""
+    root = data_root(tmp_path)
+    restore_folders(root)
+    earlier = an_upload(root, new_stage_id())
+    writer = received_upload(root)
+    calls: list[str] = []
+
+    def fail(*args: Any, **kwargs: Any) -> None:
+        calls.append(failing)
+        raise OSError(errno.EIO, os.strerror(errno.EIO))
+
+    monkeypatch.setattr(restore_jobs, "os", OsWith(os, **{failing: fail}))
+    raised = raised_by(writer.finish)
+    assert the_eio(raised) and calls == [failing], f"barrier: finish fails at its {failing}: {what_it_did(raised)}, {calls}"
+    writer.abort()
+    again = raised_by(writer.abort)
+    assert again is None and of_this_upload(root, writer) == [], f"nothing of the upload left, a second abort harmless: {of_this_upload(root, writer)}, {what_it_did(again)}"
+    assert uploads_left(root) == [earlier.name], f"the upload before as it was: {uploads_left(root)}"
+    print_success(f"finish failed at its {failing}: abort left nothing")
+
+
+def test_an_abort_after_an_end_that_returned_removes_nothing(tmp_path):
+    """(l) SEC-4, a GUARD (green today): after a ``finish`` that returned, ``abort()`` (twice) removes nothing: the upload
+    is kept, as sent."""
+    root = data_root(tmp_path)
+    restore_folders(root)
+    writer = received_upload(root)
+    received = writer.finish()
+    writer.abort()
+    writer.abort()
+    assert upload_path(root, received.upload_id).read_bytes() == CLEAR and uploads_left(root) == [received.upload_id], f"the upload kept: {uploads_left(root)}"
+    print_success("abort after a finish that returned: the upload kept")

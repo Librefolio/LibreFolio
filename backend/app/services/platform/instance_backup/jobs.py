@@ -12,6 +12,10 @@ A secure backup (lot B4, decisions 38 and 39) is the same archive, with the inst
 then encrypted with the password into an ``.lfbk`` envelope; the clear archive is removed with the job's work files. The
 password lives in the job's thread only: never in its state, its log or its folder.
 
+A sealed backup (L3, for a hosting panel) is a secure backup whose password LibreFolio draws itself, then encrypts with
+age for the panel's recipients into a ``.tar`` (``sealed.py``); the instance key never goes in. The password lives in
+the job's thread only, as a secure backup's does.
+
 Without ``fcntl`` (not POSIX) the lock only serialises the runs of one process.
 """
 
@@ -38,6 +42,7 @@ except ImportError:  # pragma: no cover - not POSIX: runs are serialised per pro
 
 from backend.app.config import get_data_dir
 from backend.app.logging_config import get_logger
+from backend.app.services.platform.instance_backup import sealed as sealed_backup
 from backend.app.services.platform.instance_backup.archive import BackupNoSpaceError, build_archive
 from backend.app.services.platform.instance_backup.envelope import FILE_SUFFIX, EncryptedFile, encrypt_file
 from backend.app.services.platform.instance_backup.manifest import BackupOrigin
@@ -61,8 +66,8 @@ _PROCESS_HOLDERS: dict[Path, str] = {}
 _HOLDER_MAX_BYTES = 64
 
 JobStatus = Literal["running", "done", "failed"]
-#: The archive's phases (``archive.Phase``), then the encryption of a secure backup.
-Phase = Literal["preparing", "database", "files", "finalizing", "encrypting"]
+#: The archive's phases (``archive.Phase``), then the encryption of a secure backup and the seal of a sealed one.
+Phase = Literal["preparing", "database", "files", "finalizing", "encrypting", "sealing"]
 #: Why a job failed, as a stable code: no space, an error during the build, or its process died while it ran.
 JobError = Literal["backup_no_space", "backup_failed", "backup_interrupted"]
 
@@ -119,6 +124,12 @@ class BackupJob:
     error_code: JobError | None = None
     #: A secure backup: its file is an ``.lfbk`` envelope.
     encrypted: bool = False
+    #: The archive carries the instance key (decision 39): a secure backup, when LibreFolio generated the key. A state
+    #: written before L3 has no such key and reads False.
+    instance_key_included: bool = False
+    #: A sealed backup (L3): its file is a ``.tar`` whose password only these recipients' private keys open.
+    sealed: bool = False
+    sealed_recipients: tuple[str, ...] = ()
 
     def to_json(self) -> str:
         data = asdict(self)
@@ -126,6 +137,7 @@ class BackupJob:
         data["finished_at"] = self.finished_at.isoformat() if self.finished_at else None
         data["warnings"] = list(self.warnings)
         data["skipped"] = list(self.skipped)
+        data["sealed_recipients"] = list(self.sealed_recipients)
         return json.dumps(data, sort_keys=True)
 
     @classmethod
@@ -141,6 +153,7 @@ class BackupJob:
         data["finished_at"] = _aware(datetime.fromisoformat(data["finished_at"])) if data.get("finished_at") else None
         data["warnings"] = tuple(data.get("warnings") or ())
         data["skipped"] = tuple(data.get("skipped") or ())
+        data["sealed_recipients"] = tuple(data.get("sealed_recipients") or ())
         return cls(**data)
 
 
@@ -151,10 +164,11 @@ def _aware(moment: datetime) -> datetime:
     return moment
 
 
-def archive_name(created_at: datetime, *, encrypted: bool = False) -> str:
+def archive_name(created_at: datetime, *, encrypted: bool = False, sealed: bool = False) -> str:
     """The file name of an archive made at ``created_at``: ``librefolio-backup-YYYYMMDD-HHMMSS.zip``, in UTC; ``.lfbk``
-    for the envelope of a secure backup."""
-    return f"librefolio-backup-{created_at.astimezone(UTC):%Y%m%d-%H%M%S}{FILE_SUFFIX if encrypted else '.zip'}"
+    for the envelope of a secure backup, ``.tar`` for a sealed one (L3)."""
+    suffix = sealed_backup.FILE_SUFFIX if sealed else FILE_SUFFIX if encrypted else ".zip"
+    return f"librefolio-backup-{created_at.astimezone(UTC):%Y%m%d-%H%M%S}{suffix}"
 
 
 class _RunLock:
@@ -264,12 +278,22 @@ def _prepare(data_dir: Path, origin: BackupOrigin) -> tuple[_RunLock, BackupJob]
     return lock, job
 
 
-def _run(data_dir: Path, job: BackupJob, lock: _RunLock, progress: Callable[[Phase, int, int], None] | None = None, password: str | None = None) -> BackupJob:
+def _run(
+    data_dir: Path,
+    job: BackupJob,
+    lock: _RunLock,
+    progress: Callable[[Phase, int, int], None] | None = None,
+    password: str | None = None,
+    recipients: tuple[str, ...] | None = None,
+) -> BackupJob:
     """Build the archive of a prepared job, keep its state up to date, and release the lock once the end is recorded.
 
     With ``password``, a secure backup: the archive carries the instance key when LibreFolio generated it (decision 39),
-    and is encrypted into the job's envelope.
+    and is encrypted into the job's envelope. With ``recipients``, a sealed backup (L3): a password of its own, never the
+    instance key, and the envelope sealed for them into a ``.tar``.
     """
+    if recipients:
+        password = sealed_backup.new_password()
     folder = job_dir(data_dir, job.job_id)
     name = archive_name(job.created_at)
     current = job
@@ -287,15 +311,16 @@ def _run(data_dir: Path, job: BackupJob, lock: _RunLock, progress: Callable[[Pha
 
     started = time.monotonic()
     try:
-        key = exportable_instance_key() if password is not None else None
+        # A sealed backup leaves for a hosting panel, which configured the instance key itself: never in it (decision 39).
+        key = exportable_instance_key() if password is not None and not recipients else None
         built = build_archive(data_dir, folder, folder / name, origin=job.origin, progress=on_progress, instance_key=key)
         file_name, file_size, file_sha256, warnings = name, built.size, built.sha256, built.warnings
         if password is not None:
-            if key is None and generated_key_unusable():
+            # Only a secure backup of its maker's misses a generated key it cannot use: a sealed one never takes it.
+            if key is None and not recipients and generated_key_unusable():
                 warnings = (*warnings, "instance_key_unusable")
-            file_name = archive_name(job.created_at, encrypted=True)
-            sealed = _encrypt(folder, name, file_name, password, on_progress)
-            file_size, file_sha256 = sealed.size, sealed.sha256
+            file_name, written = _protect(folder, name, job.created_at, password, recipients, built.manifest, on_progress)
+            file_size, file_sha256 = written.size, written.sha256
     except BackupNoSpaceError as exc:
         current = replace(current, status="failed", phase=None, finished_at=_now(), error_code="backup_no_space")
         logger.warning("Instance backup refused: not enough free space", job_id=job.job_id, needed_bytes=exc.needed, free_bytes=exc.free)
@@ -316,6 +341,9 @@ def _run(data_dir: Path, job: BackupJob, lock: _RunLock, progress: Callable[[Pha
             warnings=warnings,
             skipped=built.skipped[:_SKIPPED_KEPT],
             encrypted=password is not None,
+            instance_key_included=key is not None,
+            sealed=bool(recipients),
+            sealed_recipients=tuple(recipients or ()),
         )
         logger.info(
             "Instance backup written",
@@ -323,6 +351,8 @@ def _run(data_dir: Path, job: BackupJob, lock: _RunLock, progress: Callable[[Pha
             origin=job.origin,
             encrypted=password is not None,
             instance_key_included=key is not None,
+            sealed=bool(recipients),
+            recipients=len(recipients or ()),
             size_bytes=file_size,
             files=len(built.manifest.files),
             alembic_revision=built.manifest.alembic_revision,
@@ -351,6 +381,41 @@ def _encrypt(folder: Path, name: str, sealed_name: str, password: str, on_progre
     return encrypt_file(archive, folder / sealed_name, password, progress=lambda done, total: on_progress("encrypting", done, total))
 
 
+def _protect(folder: Path, name: str, created_at: datetime, password: str, recipients: tuple[str, ...] | None, manifest, on_progress: Callable[[Phase, int, int], None]) -> tuple[str, EncryptedFile]:
+    """Encrypt the job's archive with ``password`` into its envelope, then, for ``recipients``, seal it into its ``.tar``
+    (L3): the name of the file the job hands out, and its size and SHA-256."""
+    envelope_name = archive_name(created_at, encrypted=True)
+    envelope = _encrypt(folder, name, envelope_name, password, on_progress)
+    if not recipients:
+        return envelope_name, envelope
+    # The clear zip goes before the seal: the disk holds 2× the envelope at most, never zip, envelope and tar together
+    # (contract L3 §4), and the data in clear no longer than needed.
+    (folder / name).unlink(missing_ok=True)
+    sealed_name = archive_name(created_at, sealed=True)
+    return sealed_name, _seal(folder, envelope, envelope_name, sealed_name, password, recipients, created_at, manifest, on_progress)
+
+
+def _seal(folder: Path, envelope: EncryptedFile, envelope_name: str, sealed_name: str, password: str, recipients: tuple[str, ...], created_at: datetime, manifest, on_progress: Callable[[Phase, int, int], None]) -> EncryptedFile:
+    """Seal the job's envelope for ``recipients`` into its ``.tar`` (L3), once the space for it is checked; the envelope
+    is left to the clean-up. ``manifest``: the archive's, which names the LibreFolio and the revision that made it."""
+    needed = envelope.size + _ENVELOPE_MARGIN
+    free = shutil.disk_usage(folder).free
+    if free < needed:
+        raise BackupNoSpaceError(needed, free)
+    on_progress("sealing", 0, envelope.size)
+    document = sealed_backup.build_manifest(
+        created_at=created_at,
+        lfbk_sha256=envelope.sha256,
+        lfbk_size=envelope.size,
+        recipients=recipients,
+        librefolio_version=manifest.app_version,
+        db_revision=manifest.alembic_revision,
+    )
+    written = sealed_backup.write_sealed(folder / sealed_name, manifest=document, password_age=sealed_backup.seal_password(password, recipients), envelope=folder / envelope_name, mtime=int(created_at.timestamp()))
+    on_progress("sealing", envelope.size, envelope.size)
+    return written
+
+
 def _remove_work_files(folder: Path, keep: str | None) -> None:
     """Remove what a run leaves in its folder (the database copy, a partial archive) but its state and its archive."""
     for path in folder.iterdir():
@@ -371,15 +436,17 @@ def _end_interrupted(folder: Path, job: BackupJob) -> BackupJob:
     return job
 
 
-def start_backup(*, origin: BackupOrigin = "ui", data_dir: Path | None = None, password: str | None = None) -> BackupJob:
+def start_backup(*, origin: BackupOrigin = "ui", data_dir: Path | None = None, password: str | None = None, recipients: tuple[str, ...] | None = None) -> BackupJob:
     """Start a backup in a background thread and return its first state. ``BackupBusyError`` if one is running.
 
-    ``password``: a secure backup, whose password goes to the thread and nowhere else.
+    ``password``: a secure backup, whose password goes to the thread and nowhere else. ``recipients``: a sealed backup
+    (L3), never with a password.
     """
+    _one_protection(password, recipients)
     data_dir = data_dir or get_data_dir()
     lock, job = _prepare(data_dir, origin)
     try:
-        thread = threading.Thread(target=_run, args=(data_dir, job, lock, None, password), name=f"backup-{job.job_id[:8]}", daemon=True)
+        thread = threading.Thread(target=_run, args=(data_dir, job, lock, None, password, recipients), name=f"backup-{job.job_id[:8]}", daemon=True)
         thread.start()
     except BaseException:
         lock.release()
@@ -387,14 +454,28 @@ def start_backup(*, origin: BackupOrigin = "ui", data_dir: Path | None = None, p
     return job
 
 
-def run_backup(*, origin: BackupOrigin = "cli", data_dir: Path | None = None, progress: Callable[[Phase, int, int], None] | None = None, password: str | None = None) -> tuple[BackupJob, Path]:
+def run_backup(
+    *,
+    origin: BackupOrigin = "cli",
+    data_dir: Path | None = None,
+    progress: Callable[[Phase, int, int], None] | None = None,
+    password: str | None = None,
+    recipients: tuple[str, ...] | None = None,
+) -> tuple[BackupJob, Path]:
     """Run a backup in this thread, holding the same lock as the API's jobs: the job's end state and its folder.
 
-    ``password``: a secure backup.
+    ``password``: a secure backup. ``recipients``: a sealed backup (L3), never with a password.
     """
+    _one_protection(password, recipients)
     data_dir = data_dir or get_data_dir()
     lock, job = _prepare(data_dir, origin)
-    return _run(data_dir, job, lock, progress, password), job_dir(data_dir, job.job_id)
+    return _run(data_dir, job, lock, progress, password, recipients), job_dir(data_dir, job.job_id)
+
+
+def _one_protection(password: str | None, recipients: tuple[str, ...] | None) -> None:
+    """A backup has a password of its maker's or recipients to seal it for, never both: ``ValueError``."""
+    if password is not None and recipients:
+        raise ValueError("A backup is protected by a password or sealed for recipients, not both")
 
 
 def get_job(job_id: str, *, data_dir: Path | None = None) -> BackupJob:

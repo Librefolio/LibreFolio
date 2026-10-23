@@ -21,6 +21,9 @@ Under test, in ``backend/app/services/platform/instance_backup/``:
 (d) Without an active administrator: ``blockers == ["no_administrator"]``, not restorable, the report still written.
 (e) Refusals: every ``StagingError`` code. After each, no stage left, the lock free, a message holding no path, the
     archive unchanged and the live data directory untouched; a refusal decided before writing never began to unpack.
+    Lot L3: a sealed nightly backup, a POSIX ustar ``.tar`` (``b"ustar"`` at bytes 257..262; members ``manifest.json``,
+    ``password.age``, ``backup.lfbk``), is refused ``sealed_backup_needs_key`` (it opens with the key of the nightly
+    backups, never as it is), while any other file that is not a zip (text, random bytes) stays ``not_a_backup``.
 (f) One check at a time: while the lock is held (by this test, or by a check in progress) a check raises
     ``StagingBusyError`` and creates nothing; a lock passed by the caller (lot B2b) stays held after a success, a
     refusal and an invalid stage id, for the caller to release once the check's end is recorded; without one, the check
@@ -34,6 +37,10 @@ Under test, in ``backend/app/services/platform/instance_backup/``:
     and backups: every path of it but ``.restore/`` keeps its mode, size and SHA-256 through every check of the module.
 (j) The warnings: ``rows_changed`` with the post-migration fix that removed rows (``event_types``),
     ``foreign_key_violations`` for the backup's own broken references, ``foreign_key_violations_added`` for new ones.
+    Lot L3: every report carries ``credentials_from_backup`` (after the restore one signs in with the backup's
+    credentials, and every session open now ends), once and last, after every other warning: a backup at the head, an
+    upgraded one, one blocked ``no_administrator``, ``_report`` whatever its arguments; ``report.json`` keeps it. So the
+    exact warnings of every report of this module are written ``warned(*codes)``: those codes, then that one.
 (k) The ledger's control totals (lot B-13, as the contract's §7 decided them): the manifest records J's totals of the
     snapshot; the check reads them again on the copy, after its upgrade and its post-migration fixes, and compares.
     ``same`` for a ledger as recorded (at the head, after a real upgrade, after a fix that only reclassifies lone pair
@@ -161,6 +168,7 @@ import errno
 import hashlib
 import importlib
 import inspect
+import io
 import json
 import os
 import re
@@ -170,6 +178,7 @@ import stat
 import struct
 import subprocess
 import sys
+import tarfile
 import threading
 import unicodedata
 import warnings
@@ -323,6 +332,17 @@ ACCOUNTS = (("zoe_admin", 1, 1), ("bob_user", 1, 0), ("olga_former_admin", 0, 1)
 ADMINISTRATORS = ["ada_admin", "zoe_admin"]
 #: Accounts without an active administrator: a user, and an administrator whose account is disabled.
 WITHOUT_ADMINISTRATOR = (("bob_user", 1, 0), ("olga_former_admin", 0, 1))
+#: Lot L3: the warning every report carries, last: after the restore one signs in with the backup's credentials, and
+#: every session open now ends.
+CREDENTIALS_FROM_BACKUP = "credentials_from_backup"
+
+
+def warned(*codes: str) -> list[str]:
+    """The exact warnings of a report that raises ``codes``: those, in their order, then ``credentials_from_backup``,
+    which every report carries last (lot L3)."""
+    return [*codes, CREDENTIALS_FROM_BACKUP]
+
+
 INSERT_ACCOUNT = "INSERT INTO users (username, email, hashed_password, is_active, is_superuser, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
 
 LOGO = "custom-uploads/logo.png"
@@ -955,7 +975,7 @@ def test_a_backup_at_the_head_is_restored_as_it_is(instance, head_archive):
     assert report.database_size == copy.stat().st_size == manifest.files[0].size, f"the size of the copy's database: {report.database_size}"
     assert report.administrators == ADMINISTRATORS, f"the active administrators of the backup, in order, not the inactive one nor the user: {report.administrators}"
     assert rows_of(copy, "SELECT username FROM users ORDER BY id") == [(name,) for name, _active, _admin in ACCOUNTS], "the copy holds the backup's accounts, not the live instance's"
-    assert (report.warnings, report.blockers, report.restorable) == ([], [], True), f"nothing to warn, nothing blocking: {report.warnings}, {report.blockers}"
+    assert (report.warnings, report.blockers, report.restorable) == (warned(), [], True), f"nothing to warn but the credentials, nothing blocking: {report.warnings}, {report.blockers}"
     print_success(f"same, {len(report.tables)} tables, administrators {report.administrators}")
 
 
@@ -1112,7 +1132,7 @@ def test_rows_changed_is_warned_only_when_a_count_differs_an_absent_table_counti
     empty (0 → ``None``) changes no row; created or dropped with rows, or a count that moved, does. The table still
     appears in ``tables``, absent on one side as ``None``."""
     report = _report(VALID_ID, synthetic_manifest(before), description(before), description(after), "upgrade", AFTER_OLDER, HEAD, [], ADMINISTRATORS)
-    assert report.warnings == warnings, f"{before} → {after}: warnings {report.warnings}, expected {warnings}"
+    assert report.warnings == warned(*warnings), f"{before} → {after}: warnings {report.warnings}, expected {warned(*warnings)}"
     assert report.tables == {name: TableRows(before=before.get(name), after=after.get(name)) for name in before.keys() | after.keys()}, f"every table, absent as None: {report.tables}"
     print_success(f"{before} → {after}: {report.warnings}")
 
@@ -1139,7 +1159,9 @@ def test_an_older_backup_is_upgraded_on_the_copy(upgraded):
     copy_tables = {name: rows_of(copy, f'SELECT count(*) FROM "{name}"')[0][0] for name in names}
     expected = {name: TableRows(before=manifest_tables.get(name), after=copy_tables.get(name)) for name in manifest_tables.keys() | copy_tables.keys()}
     assert report.tables == expected, f"every table: before, the rows the manifest counts (none for a table the upgrade created); after, the copy's: {report.tables}"
-    assert report.warnings == (["rows_changed"] if any((rows.before or 0) != (rows.after or 0) for rows in expected.values()) else []), f"rows_changed exactly when a table's count differs, an absent table counting as empty (a table the upgrade creates empty changes no row): {report.warnings}"
+    assert report.warnings == warned(
+        *(["rows_changed"] if any((rows.before or 0) != (rows.after or 0) for rows in expected.values()) else [])
+    ), f"rows_changed exactly when a table's count differs, an absent table counting as empty (a table the upgrade creates empty changes no row): {report.warnings}"
     assert (report.post_migration_fixes, report.administrators, report.restorable) == ([], ADMINISTRATORS, True), f"nothing to fix, restorable: {report.post_migration_fixes}"
     print_success(f"{OLDER} → {HEAD}: {[m.revision for m in report.migrations]}")
 
@@ -1397,8 +1419,41 @@ def newer_revision(tmp, base, databases):
     return from_head_database(tmp, databases, f"UPDATE alembic_version SET version_num = '{NEWER_REVISION}'")
 
 
+#: Lot L3: where a POSIX tar says what it is (``ustar`` at bytes 257..262 of its first header), and the members of a
+#: sealed nightly backup, each a few dummy bytes: the check never reads them.
+USTAR_MAGIC = (257, b"ustar")
+SEALED_MEMBERS = {"manifest.json": b'{"format": "librefolio-sealed-backup"}\n', "password.age": b"age-encryption.org/v1 dummy\n", "backup.lfbk": b"LFBK dummy envelope bytes\n"}
+
+
+def sealed_nightly_backup(tmp, base, databases):
+    """A sealed nightly backup (lot L3): a POSIX ustar ``.tar`` of ``manifest.json``, ``password.age`` and ``backup.lfbk``,
+    written by ``tarfile``; checked to carry ``ustar`` where a tar says it."""
+    path = tmp / "librefolio-nightly-20261021-030000.tar"
+    with tarfile.open(path, "w", format=tarfile.USTAR_FORMAT) as tar:
+        for name, data in SEALED_MEMBERS.items():
+            member = tarfile.TarInfo(name)
+            member.size, member.mtime, member.mode = len(data), 1792569600, 0o600
+            tar.addfile(member, io.BytesIO(data))
+    offset, magic = USTAR_MAGIC
+    raw = path.read_bytes()
+    assert raw[offset : offset + len(magic)] == magic and raw[:4] != b"PK\x03\x04", f"precondition: a POSIX ustar tar, no zip: {raw[offset : offset + 8]!r}"
+    return path
+
+
+def random_bytes(tmp, base, databases):
+    """A file of 4 KiB of bytes that are neither a zip, nor an envelope, nor a tar (lot L3's guard): still ``not_a_backup``."""
+    path = tmp / "random.bin"
+    raw = b"".join(hashlib.sha256(f"l3-random-{index}".encode()).digest() for index in range(128))
+    offset, magic = USTAR_MAGIC
+    assert raw[:4] not in (b"PK\x03\x04", b"LFBK") and raw[offset : offset + len(magic)] != magic, "precondition: no zip, no envelope, no tar"
+    path.write_bytes(raw)
+    return path
+
+
 REFUSALS = [
     pytest.param(not_a_zip, "not_a_backup", "checking", id="not-a-zip"),
+    pytest.param(random_bytes, "not_a_backup", "checking", id="random-bytes"),
+    pytest.param(sealed_nightly_backup, "sealed_backup_needs_key", "checking", id="sealed-nightly-backup-a-ustar-tar"),
     pytest.param(empty_zip, "not_a_backup", "checking", id="empty-zip"),
     pytest.param(zipped_by_hand, "not_a_backup", "checking", id="data-directory-zipped-by-hand"),
     pytest.param(another_format, "not_a_backup", "checking", id="manifest-of-another-format"),
@@ -1946,7 +2001,7 @@ def test_a_post_migration_fix_that_removes_rows_is_listed_and_warned(instance, d
         f"INSERT INTO asset_events (asset_id, date, type, value, currency, created_at, updated_at) VALUES (1, '2026-10-01', 'NOT_A_KNOWN_TYPE', 1.5, 'EUR', '{CREATED}', '{CREATED}')",
     )
     report = stage_archive(archive, instance.root)
-    assert (report.post_migration_fixes, report.warnings, report.restorable) == (["event_types"], ["rows_changed"], True), f"{report.post_migration_fixes}, {report.warnings}"
+    assert (report.post_migration_fixes, report.warnings, report.restorable) == (["event_types"], warned("rows_changed"), True), f"{report.post_migration_fixes}, {report.warnings}"
     assert report.tables["asset_events"] == TableRows(before=1, after=0), f"the event deleted from the copy: {report.tables['asset_events']}"
     assert [name for name, rows in report.tables.items() if rows.before != rows.after] == ["asset_events"], "no other table changed"
     print_success("event_types applied: asset_events 1 → 0, rows_changed")
@@ -1956,7 +2011,7 @@ def test_broken_references_of_the_backup_are_kept_and_warned(instance, databases
     archive = from_head_database(tmp_path, databases, f"INSERT INTO user_settings (user_id, created_at, updated_at) VALUES (999, '{CREATED}', '{CREATED}')")
     report = stage_archive(archive, instance.root)
     assert (report.foreign_key_violations_before, report.foreign_key_violations_after) == (1, 1), "the backup's broken reference, kept as it is"
-    assert (report.warnings, report.restorable) == (["foreign_key_violations"], True), f"a warning, not a blocker: {report.warnings}"
+    assert (report.warnings, report.restorable) == (warned("foreign_key_violations"), True), f"a warning, not a blocker: {report.warnings}"
     print_success("1 broken reference kept: foreign_key_violations")
 
 
@@ -1968,9 +2023,65 @@ def test_broken_references_the_upgrade_adds_are_warned(instance, older_archive, 
     monkeypatch.setattr(staging, "_upgrade", upgrade_adding_a_broken_reference)
     report = stage_archive(older_archive.path, instance.root)
     assert (report.action, report.foreign_key_violations_before, report.foreign_key_violations_after) == ("upgrade", 0, 1), "a broken reference the upgrade added"
-    assert report.warnings == ["rows_changed", "foreign_key_violations_added"], f"both warned, in this order: {report.warnings}"
+    assert report.warnings == warned("rows_changed", "foreign_key_violations_added"), f"both warned, in this order, then the credentials: {report.warnings}"
     assert (report.tables["user_settings"], report.restorable) == (TableRows(before=0, after=1), True), f"{report.tables['user_settings']}"
     print_success("rows_changed, foreign_key_violations_added")
+
+
+def credentials_last_once(report: StagingReport) -> list[str]:
+    """What is wrong with where ``credentials_from_backup`` stands in ``report.warnings``: empty when it is there exactly
+    once, last (lot L3)."""
+    problems = []
+    if report.warnings.count(CREDENTIALS_FROM_BACKUP) != 1:
+        problems.append(f"{CREDENTIALS_FROM_BACKUP} {report.warnings.count(CREDENTIALS_FROM_BACKUP)} times, not once")
+    if not report.warnings or report.warnings[-1] != CREDENTIALS_FROM_BACKUP:
+        problems.append(f"not last: the last warning is {report.warnings[-1] if report.warnings else None!r}")
+    return problems
+
+
+def same_backup(instance: Instance, head_archive: BuiltArchive, older_archive: BuiltArchive, monkeypatch: pytest.MonkeyPatch) -> StagingReport:
+    return stage_archive(head_archive.path, instance.root)
+
+
+def upgraded_backup(instance: Instance, head_archive: BuiltArchive, older_archive: BuiltArchive, monkeypatch: pytest.MonkeyPatch) -> StagingReport:
+    """An older backup, its upgrade simulated (the head stamped), as (j) does: the real alembic run is (c)'s."""
+    monkeypatch.setattr(staging, "_upgrade", stamp_head)
+    return stage_archive(older_archive.path, instance.root)
+
+
+@pytest.mark.parametrize(("check", "action"), [pytest.param(same_backup, "same", id="same"), pytest.param(upgraded_backup, "upgrade", id="upgrade")])
+def test_every_report_ends_with_credentials_from_backup_exactly_once(instance, head_archive, older_archive, monkeypatch, check, action):
+    """(j) Lot L3: whatever else it warns, the report of a check carries ``credentials_from_backup`` exactly once, after
+    every other warning: after the restore one signs in with the backup's credentials, and every session open now ends.
+    A warning, never a blocker: restorable as before. ``report.json``, which the API reads back, carries it the same."""
+    print_section(f"credentials_from_backup, last, in a report of action {action}")
+    report = check(instance, head_archive, older_archive, monkeypatch)
+    assert report.action == action, f"precondition: a check of action {action}: {report.action}"
+    assert credentials_last_once(report) == [], f"{action}: {credentials_last_once(report)}: {report.warnings}"
+    assert (report.blockers, report.restorable) == ([], True), f"a warning, not a blocker: {report.blockers}, restorable={report.restorable}"
+    assert read_report(instance.root, report.stage_id).warnings == report.warnings, "report.json carries the same warnings"
+    print_success(f"{action}: {report.warnings}")
+
+
+#: ``_report``'s arguments as (j) and (k) build them, by what they make the report say besides the credentials.
+REPORT_ARGUMENTS = [
+    pytest.param({"users": 3}, {"users": 3}, ADMINISTRATORS, None, id="nothing-else-to-warn"),
+    pytest.param({"users": 3}, {"users": 4}, ADMINISTRATORS, None, id="rows-changed"),
+    pytest.param({"users": 3}, {"users": 3}, [], None, id="blocked-no-administrator"),
+    pytest.param({"users": 3}, {"users": 4}, [], "unreadable", id="rows-changed-totals-unreadable-blocked"),
+]
+
+
+@pytest.mark.parametrize(("before", "after", "administrators", "totals"), REPORT_ARGUMENTS)
+def test_report_appends_credentials_from_backup_last_whatever_its_arguments(before, after, administrators, totals):
+    """(j) Lot L3, on ``_report`` alone: every combination of warnings and blockers ends with ``credentials_from_backup``,
+    exactly once; the warnings before it are those the arguments raise, in their order; the blockers are unchanged."""
+    comparison = totals_module().compare_totals({"version": CONTROL_TOTALS_VERSION, "cash": [], "quantities": []}, None) if totals else None
+    report = _report(VALID_ID, synthetic_manifest(before), description(before), description(after), "upgrade", AFTER_OLDER, HEAD, [], administrators, comparison)
+    assert credentials_last_once(report) == [], f"{credentials_last_once(report)}: {report.warnings}"
+    raised = (["rows_changed"] if before != after else []) + (["control_totals_unreadable"] if totals else [])
+    assert report.warnings == warned(*raised), f"the warnings the arguments raise, then the credentials: {report.warnings}"
+    assert report.blockers == ([] if administrators else ["no_administrator"]), f"the blockers as before: {report.blockers}"
 
 
 # =============================================================================
@@ -1989,7 +2100,7 @@ def test_a_ledger_as_the_backup_recorded_it_reads_the_same(instance, databases, 
     assert recorded == expected, f"the manifest records J's totals of the ledger: {recorded} != {expected}"
     report = stage_archive(built.path, instance.root)
     assert totals_in(report) == ("same", [], 0), f"the ledger as recorded: same, nothing listed: {totals_in(report)}"
-    assert (report.warnings, report.blockers, report.restorable) == ([], [], True), f"nothing to warn, nothing blocking: {report.warnings}, {report.blockers}"
+    assert (report.warnings, report.blockers, report.restorable) == (warned(), [], True), f"nothing to warn but the credentials, nothing blocking: {report.warnings}, {report.blockers}"
     assert read_report(instance.root, report.stage_id) == report, "report.json keeps the totals' verdict"
     print_success(f"same: {len(expected['cash'])} cash lines, {len(expected['quantities'])} positions")
 
@@ -2028,7 +2139,7 @@ def test_totals_rewritten_in_the_manifest_alone_are_changed_listed_and_warned(in
         totals_difference("quantity", last_quantity["broker_id"], last_quantity["asset_id"], None, last_quantity["quantity"]),
     ]
     assert totals_in(report) == ("changed", expected, 3), f"the three lines that differ, in order: {totals_in(report)}"
-    assert (report.warnings, report.blockers, report.restorable) == (["control_totals_changed"], [], True), f"warned, not blocked: {report.warnings}, {report.blockers}"
+    assert (report.warnings, report.blockers, report.restorable) == (warned("control_totals_changed"), [], True), f"warned, not blocked: {report.warnings}, {report.blockers}"
     assert read_report(instance.root, report.stage_id) == report, "report.json keeps the differences"
     print_success(f"changed: {[(line['kind'], line['broker_id']) for line in expected]}")
 
@@ -2063,7 +2174,7 @@ def test_totals_a_manifest_does_not_record_are_absent_without_a_warning(instance
     lack or spoil is the field."""
     report = stage_archive(pack(tmp_path / "absent.zip", entries_of(head_archive), manifest_with_totals(head_archive, recorded, drop=drop)), instance.root)
     assert totals_in(report) == ("absent", [], 0), f"nothing comparable recorded: {totals_in(report)}"
-    assert (report.warnings, report.blockers, report.restorable) == ([], [], True), f"no warning: {report.warnings}"
+    assert (report.warnings, report.blockers, report.restorable) == (warned(), [], True), f"no warning but the credentials: {report.warnings}"
     print_success("absent")
 
 
@@ -2081,7 +2192,7 @@ def test_totals_recorded_otherwise_but_equal_read_the_same(instance, databases, 
     }
     report = stage_archive(pack(tmp_path / "otherwise.zip", entries_of(built), manifest_with_totals(built, recorded)), instance.root)
     assert totals_in(report) == ("same", [], 0), f"equal as maps: same: {totals_in(report)}"
-    assert report.warnings == [], f"no warning: {report.warnings}"
+    assert report.warnings == warned(), f"no warning but the credentials: {report.warnings}"
     print_success("reordered, zero lines, trailing zeros: same")
 
 
@@ -2091,7 +2202,7 @@ def test_a_report_made_without_totals_says_absent():
     tables = {"users": 3}
     report = _report(VALID_ID, synthetic_manifest(tables), description(tables), description(tables), "same", [], HEAD, [], ADMINISTRATORS)
     assert totals_in(report) == ("absent", [], 0), f"no comparison given: absent: {totals_in(report)}"
-    assert (report.warnings, report.blockers) == ([], []), f"nothing to warn: {report.warnings}"
+    assert (report.warnings, report.blockers) == (warned(), []), f"nothing to warn but the credentials: {report.warnings}"
 
 
 #: (recorded, current, the status, the warning of the report): ``_report`` given each comparison.
@@ -2120,7 +2231,7 @@ def test_a_report_carries_the_comparison_it_is_given(recorded, current, status, 
     report = _report(VALID_ID, synthetic_manifest(tables), description(tables), description(tables), "same", [], HEAD, [], ADMINISTRATORS, totals=comparison)
     differences = [totals_difference(line.kind, line.broker_id, line.currency if line.kind == "cash" else line.asset_id, line.before, line.after) for line in comparison.differences]
     assert totals_in(report) == (status, differences, comparison.differences_count), f"{status}: carried as given: {totals_in(report)}"
-    assert (report.warnings, report.blockers, report.restorable) == ([warning] if warning else [], [], True), f"{status}: {report.warnings}, {report.blockers}"
+    assert (report.warnings, report.blockers, report.restorable) == (warned(*([warning] if warning else [])), [], True), f"{status}: {report.warnings}, {report.blockers}"
 
 
 def test_a_report_written_before_lot_b13_still_reads_its_totals_absent(instance, head_archive):
@@ -2143,7 +2254,7 @@ def test_totals_of_another_version_of_the_method_are_not_compared(instance, head
     recorded = {"version": 99, "lines": "of a method this LibreFolio does not know"}
     report = stage_archive(pack(tmp_path / "other.zip", entries_of(head_archive), manifest_with_totals(head_archive, recorded)), instance.root)
     assert totals_in(report) == ("other_version", [], 0), f"not comparable: {totals_in(report)}"
-    assert (report.warnings, report.blockers, report.restorable) == ([], [], True), f"no warning: {report.warnings}"
+    assert (report.warnings, report.blockers, report.restorable) == (warned(), [], True), f"no warning but the credentials: {report.warnings}"
     print_success("other_version")
 
 
@@ -2163,7 +2274,7 @@ def test_totals_that_cannot_be_read_on_the_copy_are_unreadable_and_warned(instan
     copy = (stage_dir(instance.root, stage_id) / STAGE_DATA_FOLDER / DATABASE_ENTRY).resolve()
     assert asked == [copy], f"read once, on the copy (never {instance.root / DATABASE_ENTRY}): {asked}"
     assert totals_in(report) == ("unreadable", [], 0), f"unreadable: {totals_in(report)}"
-    assert (report.warnings, report.blockers, report.restorable) == (["control_totals_unreadable"], [], True), f"warned, not blocked: {report.warnings}"
+    assert (report.warnings, report.blockers, report.restorable) == (warned("control_totals_unreadable"), [], True), f"warned, not blocked: {report.warnings}"
     print_success("unreadable, warned")
 
 
@@ -2193,7 +2304,7 @@ def test_totals_j_cannot_read_back_on_the_copy_are_unreadable_never_a_failed_che
     except Exception as exc:
         pytest.fail(f"the check ends with its report, the totals unreadable; it raised {type(exc).__name__}: {exc} (stage_failed through the API)")
     assert totals_in(report) == ("unreadable", [], 0), f"what J cannot read back on the copy: unreadable: {totals_in(report)}"
-    assert (report.warnings, report.blockers, report.restorable) == (["control_totals_unreadable"], [], True), f"warned, not blocked: {report.warnings}, {report.blockers}"
+    assert (report.warnings, report.blockers, report.restorable) == (warned("control_totals_unreadable"), [], True), f"warned, not blocked: {report.warnings}, {report.blockers}"
     print_success("a position of 1E+70: unreadable, warned")
 
 
@@ -2210,7 +2321,7 @@ def test_the_totals_never_block_a_restore_nor_lift_a_blocker(instance, databases
         replace_ledger_totals(monkeypatch, lambda database: None)
     report = stage_archive(archive, instance.root)
     assert totals_in(report)[0] == status, f"precondition: {status}: {totals_in(report)}"
-    assert (report.warnings, report.blockers, report.restorable) == ([f"control_totals_{status}"], ["no_administrator"], False), f"{status}: {report.warnings}, {report.blockers}"
+    assert (report.warnings, report.blockers, report.restorable) == (warned(f"control_totals_{status}"), ["no_administrator"], False), f"{status}: {report.warnings}, {report.blockers}"
     print_success(f"{status}: no_administrator alone blocks")
 
 
@@ -2231,7 +2342,7 @@ def test_the_totals_are_read_on_the_copy_after_its_upgrade(instance, databases, 
     expected = [totals_difference("quantity", 1, 3, position_line["quantity"], str(Decimal(position_line["quantity"]) + 1))]
     assert report.action == "upgrade", f"precondition: an upgrade: {report.action}"
     assert totals_in(report) == ("changed", expected, 1), f"the position the upgrade moved: {totals_in(report)}"
-    assert report.warnings == ["control_totals_changed"], f"warned: {report.warnings}"
+    assert report.warnings == warned("control_totals_changed"), f"warned: {report.warnings}"
     print_success(f"broker 1, asset 3: {expected[0]['before']} → {expected[0]['after']}")
 
 
@@ -2267,7 +2378,7 @@ def test_a_fix_that_reclassifies_lone_pair_halves_changes_no_total(instance, dat
     assert report.post_migration_fixes == ["orphan_pair_halves"], f"precondition: the fix ran on the copy: {report.post_migration_fixes}"
     assert rows_of(copy, "SELECT type FROM transactions ORDER BY id DESC LIMIT 2") == [("WITHDRAWAL",), ("ADJUSTMENT",)], "precondition: both halves reclassified on the copy"
     assert totals_in(report) == ("same", [], 0), f"reclassified rows change no total: {totals_in(report)}"
-    assert report.warnings == [], f"nothing to warn: {report.warnings}"
+    assert report.warnings == warned(), f"nothing to warn but the credentials: {report.warnings}"
     print_success("orphan_pair_halves applied: same")
 
 
@@ -3128,7 +3239,7 @@ def test_a_check_calling_a_built_in_function_is_checked_as_usual(instance, datab
     assert kept and "CHECK (abs(x) >= 0)" in kept[0][0], f"precondition: the copy keeps the CHECK: {kept}"
     assert (report.action, report.migrations, report.post_migration_fixes) == ("same", [], []), f"at the head: nothing to upgrade, nothing to fix: {report.action}, {report.migrations}, {report.post_migration_fixes}"
     assert report.tables[BUILT_IN_CHECK.table] == TableRows(before=1, after=1), f"its table, with its row before and after: {report.tables.get(BUILT_IN_CHECK.table)}"
-    assert (report.warnings, report.blockers, report.restorable, report.administrators) == ([], [], True, ADMINISTRATORS), f"nothing to warn, restorable: {report.warnings}, {report.blockers}, {report.administrators}"
+    assert (report.warnings, report.blockers, report.restorable, report.administrators) == (warned(), [], True, ADMINISTRATORS), f"nothing to warn, restorable: {report.warnings}, {report.blockers}, {report.administrators}"
     print_success("abs() in a CHECK: same, restorable")
 
 
@@ -3175,7 +3286,7 @@ def test_this_librefolio_s_own_index_on_lower_reads_with_the_server_s_functions_
     error = server_schema_error(databases.head)
     assert error is None, f"a reader with the server's stand-ins reads this LibreFolio's own schema: {error!r}"
     report = stage_archive(head_archive.path, instance.root)
-    assert (report.action, report.warnings, report.blockers, report.restorable) == ("same", [], [], True), f"the head archive checks as a backup at the head, restorable: {report.action}, {report.warnings}, {report.blockers}"
+    assert (report.action, report.warnings, report.blockers, report.restorable) == ("same", warned(), [], True), f"the head archive checks as a backup at the head, restorable: {report.action}, {report.warnings}, {report.blockers}"
     print_success(f"{OWN_LOWER_INDEX} on lower(email): read with the stand-ins, the head archive restorable")
 
 
@@ -3608,7 +3719,7 @@ def test_valid_utf8_beyond_ascii_in_the_same_places_is_checked_as_usual_and_kept
     with staging_logs() as events:
         report = stage_archive(archive, instance.root)
     found = (report.action, report.post_migration_fixes, report.warnings, report.blockers, report.restorable)
-    assert found == ("same", [], [], [], True), f"checked as any backup at the head: {found}"
+    assert found == ("same", [], warned(), [], True), f"checked as any backup at the head: {found}"
     assert not [event for event in events if event.get("event") == UNDECODABLE_EVENT], "no warning of text that is not UTF-8"
     copy = stage_dir(instance.root, report.stage_id) / STAGE_DATA_FOLDER / DATABASE_ENTRY
     kept = {place.name: rows_of(copy, place.read) for place in places}
@@ -3624,7 +3735,7 @@ def test_the_same_bytes_stored_as_a_blob_are_no_text_and_are_checked_as_usual(in
     with staging_logs() as events:
         report = stage_archive(archive, instance.root)
     found = (report.action, report.warnings, report.blockers, report.restorable)
-    assert found == ("same", [], [], True), f"checked as any backup at the head: {found}"
+    assert found == ("same", warned(), [], True), f"checked as any backup at the head: {found}"
     assert not [event for event in events if event.get("event") == UNDECODABLE_EVENT], "no warning of text that is not UTF-8"
     copy = stage_dir(instance.root, report.stage_id) / STAGE_DATA_FOLDER / DATABASE_ENTRY
     kept = {place.name: stored_bytes(copy, place.read) for place in ALL_TEXT_PLACES}
@@ -3847,7 +3958,8 @@ def test_the_view_of_a_finished_check_whose_report_is_a_folder_answers_it_withou
         restore_routes.logger.warning(ROUTE_CANARY)
         assert any(event.get("event") == ROUTE_CANARY for event in events), f"barrier: the routes' logger does not reach capture_logs: {events}"
         try:
-            answered = restore_routes.get_restore_check(checked.stage_id, None)
+            # The administrator who reads it (L3: the route names them to the report): a stand-in, the dependency not run.
+            answered = restore_routes.get_restore_check(checked.stage_id, SimpleNamespace(username="b53-admin"))
         except Exception as exc:  # reported below: before B-53, a 500
             raised = exc
     assert raised is None, f"the view of the check raised {type(raised).__name__}: {raised} — a 500 on the read the tab polls"

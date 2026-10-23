@@ -27,7 +27,8 @@
         "database": "Copia del database",
         "files": "Aggiunta dei file",
         "finalizing": "Chiusura",
-        "encrypting": "Cifratura con la tua password"
+        "encrypting": "Cifratura con la tua password",
+        "sealing": "Sigillatura per il pannello del fornitore"
       },
       "progress": "{done} di {total}",
       "ready": "Backup pronto",
@@ -149,7 +150,8 @@
           "non_iso_currencies": "Alcuni codici valuta del backup non sono codici ISO (nomi o numeri salvati da una versione precedente): la modifica di quelle righe è rifiutata finché il codice non viene corretto."
         },
         "expires": "La copia controllata resta disponibile fino al {date}.",
-        "drop": "Scarta questo archivio"
+        "drop": "Scarta questo archivio",
+        "ownAccountMissing": "Il tuo account non è tra gli amministratori di questo backup: dopo il riavvio non potrai accedere con questo account."
       },
       "confirm": {
         "word": "ripristina",
@@ -166,7 +168,8 @@
         "rolledBack": "I dati sono come prima: {reason}.",
         "stillPending": "LibreFolio si è riavviato, ma il ripristino non è stato applicato. {waiting}",
         "back": "Torna al backup",
-        "failedTitle": "Il ripristino non è riuscito"
+        "failedTitle": "Il ripristino non è riuscito",
+        "stateUnreadable": "Lo stato del ripristino non si può leggere ({reason}): LibreFolio non serve dati finché l'amministratore non esegue ./dev.py backup pending sul server."
       },
       "errors": {
         "backup_upload_empty": "Il file è vuoto.",
@@ -224,7 +227,8 @@
         "password_required": "È un backup sicuro: scrivi la sua password.",
         "envelope_damaged": "Il backup sicuro è danneggiato o è stato modificato: non si può aprire.",
         "envelope_unsupported": "Il backup sicuro viene da un LibreFolio più recente: aggiorna prima LibreFolio.",
-        "proxy_too_large": "Un proxy davanti a LibreFolio ha rifiutato un archivio così grande: chiedi a chi lo gestisce di accettare caricamenti più grandi, oppure ripristina dalla riga di comando."
+        "proxy_too_large": "Un proxy davanti a LibreFolio ha rifiutato un archivio così grande: chiedi a chi lo gestisce di accettare caricamenti più grandi, oppure ripristina dalla riga di comando.",
+        "sealed_backup_needs_key": "Questo è un backup sigillato di un pannello di hosting: la sua password è cifrata per la chiave del fornitore. Estrai backup.lfbk, apri password.age con age, poi ripristina backup.lfbk con quella password."
       },
       "password": {
         "intro": "Un backup sicuro: scrivi la password con cui è stato fatto.",
@@ -252,6 +256,12 @@
         "unlimited": "Una verifica per un ripristino accetta archivi che scompattati hanno qualsiasi dimensione.",
         "invalid": "{variable} non si può usare (un numero intero di megabyte, 0 per nessun limite): le verifiche per un ripristino sono rifiutate finché non si corregge.",
         "profileTable": "Le impostazioni predefinite del profilo di LibreFolio non danno al limite di caricamento alcun valore, o gliene danno uno del tipo sbagliato, quindi le verifiche per un ripristino sono rifiutate: imposta LIBREFOLIO_BACKUP_MAX_RESTORE_MB a un numero intero di megabyte e segnala l'errore."
+      },
+      "recipients": {
+        "ok": "I backup del pannello del fornitore sono sigillati per {count, plural, one {# chiave} other {# chiavi}}: solo la chiave privata ne apre la password.",
+        "off": "Nessun destinatario è impostato per i backup del pannello del fornitore: il pannello riceve archivi zip in chiaro.",
+        "invalid": "LIBREFOLIO_BACKUP_RECIPIENTS non si può usare ({reason}): uno o due destinatari age1…, separati da virgola. I backup del pannello del fornitore rispondono 503 finché non si corregge.",
+        "missingManaged": "LIBREFOLIO_BACKUP_RECIPIENTS non è impostata: un'istanza gestita non consegna mai un backup in chiaro al pannello del fornitore, i cui backup rispondono 503 finché non si imposta."
       }
     }
   }

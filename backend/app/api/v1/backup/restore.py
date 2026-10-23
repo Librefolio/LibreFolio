@@ -75,16 +75,22 @@ _OUTCOME_NOT_FOUND = {"description": "No restore outcome for this ticket: none, 
 _RESTART_NOT_PREPARED = {
     "description": "The restore folder of the data directory is a link or a file (code `restore_folder_unusable`), the ticket of the outcome could not be written (code `restore_restart_failed`), or the state of the restore cannot be read (code `restore_state_unreadable`): no restart"
 }
-_STATE_UNREADABLE = {"description": "The state of the restore cannot be read: its owner or permissions, a disk error (code `restore_state_unreadable`); whether a restore waits is not known"}
+_STATE_UNREADABLE = {
+    "description": "The state of the restore cannot be read (code `restore_state_unreadable`, with `reason`: `io`, its owner or permissions or a disk error; `not_a_file`, a link or a folder in its place; `invalid`, no state this LibreFolio reads); whether a restore waits is not known: `dev.py backup pending` on the server says what to do"
+}
 
 
 def _folder_unusable() -> HTTPException:
     return backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "restore_folder_unusable", "The restore folder of the data directory is not a plain folder")
 
 
-def _state_unreadable() -> HTTPException:
-    """A state of the restore the file system does not let be read (logged by the reader): never taken for none (B-32)."""
-    return backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "restore_state_unreadable", "The state of the restore cannot be read: the server's log has the cause")
+def _state_unreadable(exc: RestoreStateUnreadableError | None = None) -> HTTPException:
+    """A state of the restore that cannot be used (logged by the reader): never taken for none (B-32). ``reason`` in the
+    detail (B-33): the page tells it from a server down, and says what to do."""
+    refusal = backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "restore_state_unreadable", "The state of the restore cannot be read: the server's log has the cause")
+    if exc is not None:
+        refusal.detail = {**refusal.detail, "reason": exc.reason}
+    return refusal
 
 
 def _declared_size(request: Request) -> int | None:
@@ -206,13 +212,17 @@ def _report_view(report: StagingReport) -> RestoreStageReport:
     )
 
 
-def _stage_view(check: restore_jobs.RestoreCheck) -> RestoreStage:
+def _stage_view(check: restore_jobs.RestoreCheck, *, reader: str | None = None) -> RestoreStage:
+    """A check as the API shows it. ``reader``: the username of the administrator who reads it; when the backup has no
+    such administrator, its report ends with ``confirming_account_not_in_backup`` (L3), for that reader only."""
     report = None
     if check.status == "done":
         try:
             report = _report_view(read_report(get_data_dir(), check.stage_id))
         except FileNotFoundError:
             logger.warning("A finished restore check has no readable report", stage_id=check.stage_id)
+    if report is not None and reader is not None and reader not in report.administrators:
+        report = report.model_copy(update={"warnings": [*report.warnings, "confirming_account_not_in_backup"]})
     return RestoreStage(
         stage_id=check.stage_id,
         status=check.status,
@@ -271,10 +281,11 @@ def start_restore_check(body: RestoreStageRequest, _admin: User = Depends(requir
 
 
 @restore_router.get("/restore/stage/{stage_id}", response_model=RestoreStage, responses={404: _STAGE_NOT_FOUND})
-def get_restore_check(stage_id: str, _admin: User = Depends(require_admin)) -> RestoreStage:
-    """The state of a check: its phase and progress while it runs, then its report, or the code of its refusal."""
+def get_restore_check(stage_id: str, admin: User = Depends(require_admin)) -> RestoreStage:
+    """The state of a check: its phase and progress while it runs, then its report, or the code of its refusal. The
+    report warns the administrator who reads it when the backup does not hold their account (L3)."""
     try:
-        return _stage_view(restore_jobs.read_check(stage_id))
+        return _stage_view(restore_jobs.read_check(stage_id), reader=admin.username)
     except restore_jobs.CheckNotFoundError:
         raise backup_error(status.HTTP_404_NOT_FOUND, "restore_stage_not_found", "No check has this id") from None
 
@@ -325,6 +336,7 @@ def _status_view(state: RestoreState | None) -> RestoreStatus:
         stage_id=state.stage_id,
         confirmed_at=state.confirmed_at,
         confirmed_by=state.confirmed_by,
+        confirmed_via=state.confirmed_via,
         backup_created_at=state.backup_created_at,
         backup_app_version=state.backup_app_version,
         action=state.action,
@@ -361,8 +373,8 @@ def confirm_restore_check(stage_id: str, admin: User = Depends(require_admin)) -
         raise backup_error(status.HTTP_404_NOT_FOUND, "restore_stage_not_found", "No check has this id") from None
     except restore_jobs.CheckRunningError:
         raise backup_error(status.HTTP_409_CONFLICT, "restore_stage_running", "The check still runs") from None
-    except RestoreStateUnreadableError:
-        raise _state_unreadable() from None
+    except RestoreStateUnreadableError as exc:
+        raise _state_unreadable(exc) from None
     except RestoreStateError as exc:
         raise backup_error(_CONFIRM_STATUS.get(exc.code, status.HTTP_409_CONFLICT), exc.code, str(exc)) from None
     except BackupPathError:
@@ -382,8 +394,8 @@ def get_restore_status(_admin: User = Depends(require_admin)) -> RestoreStatus:
     restore may wait behind it (B-32)."""
     try:
         return _status_view(read_restore(get_data_dir()))
-    except RestoreStateUnreadableError:
-        raise _state_unreadable() from None
+    except RestoreStateUnreadableError as exc:
+        raise _state_unreadable(exc) from None
 
 
 @restore_router.delete("/restore/pending", status_code=status.HTTP_204_NO_CONTENT, responses={404: {"description": f"{_NOT_PENDING} (code `restore_not_pending`)"}, 500: _CANCEL_FAILED})
@@ -396,8 +408,8 @@ def cancel_pending_restore(_admin: User = Depends(require_admin)) -> Response:
         cancel_restore(data_dir=get_data_dir(), drop_copy=True)
     except RestoreNotPendingError:
         raise backup_error(status.HTTP_404_NOT_FOUND, "restore_not_pending", _NOT_PENDING) from None
-    except RestoreStateUnreadableError:
-        raise _state_unreadable() from None
+    except RestoreStateUnreadableError as exc:
+        raise _state_unreadable(exc) from None
     except OSError as exc:
         logger.error("A pending restore could not be cancelled", error=f"{type(exc).__name__}: {exc.strerror or exc}")
         raise backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "restore_cancel_failed", "The restore could not be cancelled: the server's log has the cause") from None
@@ -421,8 +433,8 @@ def restart_for_restore(background_tasks: BackgroundTasks, response: Response, _
         state, ticket = prepare_restart(data_dir=data_dir)
     except RestoreNotPendingError:
         raise backup_error(status.HTTP_409_CONFLICT, "restore_not_pending", _NOT_PENDING) from None
-    except RestoreStateUnreadableError:
-        raise _state_unreadable() from None
+    except RestoreStateUnreadableError as exc:
+        raise _state_unreadable(exc) from None
     except BackupPathError:
         raise _folder_unusable() from None
     except OSError as exc:

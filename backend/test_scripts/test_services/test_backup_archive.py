@@ -1342,6 +1342,27 @@ def test_the_space_needed_is_the_database_twice_its_wal_included_plus_the_files_
     print_success(f"{expected} bytes")
 
 
+def test_a_wal_that_goes_while_the_space_is_counted_counts_as_none(tmp_path, monkeypatch):
+    """(d) L3-2: SQLite removes the ``-wal`` when its last connection closes, at any moment, so the file can be there when
+    it is looked for and gone when it is measured. Measured on the shared test server: a backup then failed with
+    ``backup_failed`` (``FileNotFoundError`` on ``app.db-wal``). The count takes it as absent and the backup goes on.
+    Red before L3-2: ``required_space`` checked ``exists()`` then called ``stat()``, and the second raised."""
+    database = tmp_path / DATABASE_ENTRY
+    database.parent.mkdir(parents=True)
+    database.write_bytes(b"\0" * 4096)
+    wal = database.with_name(database.name + "-wal")
+    real_exists = Path.exists
+    # The -wal is «there» when looked for, and gone when measured: the window of the race, held open.
+    monkeypatch.setattr(Path, "exists", lambda self, *args, **kwargs: True if self == wal else real_exists(self, *args, **kwargs))
+    assert not wal.is_file(), "precondition: the -wal is gone"
+    try:
+        needed = required_space(tmp_path, [])
+    except FileNotFoundError as exc:
+        pytest.fail(f"a -wal gone between its lookup and its size failed the count: {exc}")
+    assert needed == 2 * 4096 + 64 * 1024 * 1024, f"the database twice and the margin, the -wal none: {needed}"
+    print_success(f"{needed} bytes, the -wal gone")
+
+
 def test_without_enough_space_nothing_is_written(tmp_path, monkeypatch):
     """(d) The space is checked before the copy: one byte short and the build stops with nothing in the work folder."""
     data = small_data_dir(tmp_path / "data")

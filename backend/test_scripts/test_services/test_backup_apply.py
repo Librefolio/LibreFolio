@@ -25,7 +25,7 @@ case of (f), a copy that cannot be removed, before B-31; those of (o) before B-3
     steps create nothing. ``.restore`` or the state a link (never followed), a file, unreadable (logged as an error):
     ``None``, nothing touched. §10, strict: a journal entry that is not a swapped folder (``../x``, ``secrets``, an
     absolute path) or a stage id that is not 32 lowercase hex digits reads as unreadable, and the steps do nothing. The
-    stage of an ACTIVE restore only.
+    stage of an ACTIVE restore only. B-33 changed what the state file's own cases read as: (r).
 (e) §2 ``confirm_restore``. The refusals in the contract's order — the copy missing or unusable, blockers, expired
     (``expires_at <= now``), LibreFolio updated since the check (``apply.alembic_head_revision``), a restore already ACTIVE
     in each of its four phases — each writing nothing. The state written: ``pending``, the report's fields, the data
@@ -138,6 +138,29 @@ case of (f), a copy that cannot be removed, before B-31; those of (o) before B-3
     is, the route's 500 ``restore_confirm_failed``, which the tab retries; nothing confirmed, written or removed. A
     report that is a folder is still no checked copy, nothing written, and twenty confirmations of it leave no
     descriptor open on it; a report of mode 000 is still no checked copy (skipped as root).
+(q) Lot L3-2, how a restore was confirmed (contract L3 §5: the panel sees ``confirmed_via``, never a username).
+    ``apply.ConfirmedVia`` is ``Literal["admin", "cli", "panel"]``; ``RestoreState.confirmed_via`` is written in
+    ``restore.json``; ``confirm_restore(..., confirmed_via=)`` and ``restore_jobs.confirm_check(..., confirmed_via=)``
+    record it, ``admin`` without one — whatever ``confirmed_by`` says, a username ``cli`` or ``panel`` included. A state
+    written before L3-2 (no key) reads ``cli`` when ``confirmed_by`` is ``cli``, ``admin`` otherwise. Written RED: the
+    names are looked up by the test that needs them (``l3_2_name``, ``l3_2_parameter``), each failing with a "[new]
+    L3-2 …" message; (e)'s state and (h)'s ``STATE_FIELDS`` now hold ``confirmed_via`` too, red on the same field.
+(r) B-33 (interface ``B-b33-interface.md`` §1-§3, written RED before it; placed after (o)). §1: ``None`` only without a
+    state file (no ``.restore``, no ``restore.json``; a ``.restore`` that is a link or a file is ignored as before);
+    any state file that cannot be read is ``RestoreStateUnreadableError`` with ``reason`` ``io`` (the file system
+    refused it: (o)'s cases, whose ``reason`` was the system's words and is now ``io``, the message unchanged),
+    ``not_a_file`` (a folder, a link, a FIFO — never waited on) or ``invalid`` (not JSON, fields missing, ``format``
+    2, and (d)'s §10 strict cases), logged once; ``read_restore`` and ``confirm_restore`` raise it — (d)'s state link and
+    invalid state, (e)'s state link (replaced before B-33, refused now) and (o)'s folder (``None`` before B-33) were
+    updated so —, the startup steps keep ``None`` with an error logged. ``restore_state_problem(data_dir=None)``: that
+    error returned, or ``None``, never raised. §2: ``protected_stage`` is ``EVERY_STAGE`` (``"*"``) for every reason
+    (it left (o)'s lenient callers). §3: ``recover_unreadable_restore(data_dir=None)`` → ``RecoveredRestore``
+    (frozen: ``moved_back``, ``set_aside``, ``state_kept_as``): each swapped folder in ``previous/`` back in place, its
+    live one to ``failed/``; the state renamed ``restore.json.unreadable-<YYYYMMDDTHHMMSSZ>``; no previous/, nothing
+    moved; a readable state or none, ``RestoreNothingToRecoverError`` (``restore_nothing_to_recover``); a server
+    serving the directory, ``RestoreInUseError``; nothing changed by a refusal or by a second call. Names looked up by
+    the test that needs them (``b33_name``, "[new] B-33 …"). Data directories of (r) are bare (no database) but for the
+    confirmation; a call that may meet a FIFO runs in a thread given a deadline (``in_time``), its reader let go after.
 
 How. Real databases and archives come from ``test_backup_staging.py`` (its module fixtures, imported: two databases made
 once by ``alembic upgrade`` in a process of their own, the archives at the head and at ``OLDER``). The head archive is
@@ -178,6 +201,7 @@ and ``flock`` are POSIX-only.
 
 from __future__ import annotations
 
+import dataclasses
 import fcntl
 import importlib
 import inspect
@@ -185,9 +209,11 @@ import json
 import multiprocessing
 import os
 import queue
+import re
 import shutil
 import signal
 import sqlite3
+import stat
 import subprocess
 import sys
 import threading
@@ -1034,20 +1060,25 @@ def _state_unreadable(instance: Instance, elsewhere: Path) -> None:
     state_file(instance.root).write_text('{"format": 1, "status": "pending", "stage_id": "half a sta', encoding="utf-8")
 
 
-#: A pending restore made untrustworthy, and whether the contract has an error logged for it.
+#: A pending restore made untrustworthy, whether the contract has an error logged for it, and how ``read_restore`` reads
+#: it since B-33: ``None`` for a ``.restore`` that is a link or a file (ignored, as before), the ``reason`` of its
+#: ``RestoreStateUnreadableError`` for a state file that is a link (``not_a_file``) or not valid (``invalid``).
 UNTRUSTED = [
-    pytest.param(_restore_folder_a_link, True, id="restore-folder-a-link"),
-    pytest.param(_restore_folder_a_file, True, id="restore-folder-a-file"),
-    pytest.param(_state_a_link, False, id="state-a-link"),
-    pytest.param(_state_unreadable, True, id="state-unreadable"),
+    pytest.param(_restore_folder_a_link, True, None, id="restore-folder-a-link"),
+    pytest.param(_restore_folder_a_file, True, None, id="restore-folder-a-file"),
+    pytest.param(_state_a_link, False, "not_a_file", id="state-a-link"),
+    pytest.param(_state_unreadable, True, "invalid", id="state-unreadable"),
 ]
 
 
-@pytest.mark.parametrize(("untrust", "error_logged"), UNTRUSTED)
-def test_a_restore_that_cannot_be_trusted_is_not_read_applied_or_committed(tmp_path, databases, checked, untrust, error_logged):
-    """(d)(g)(h) ``.restore`` or the state a link (never followed), a file, unreadable: no restore is read, applied or
+@pytest.mark.parametrize(("untrust", "error_logged", "read_as"), UNTRUSTED)
+def test_a_restore_that_cannot_be_trusted_is_not_read_applied_or_committed(tmp_path, databases, checked, untrust, error_logged, read_as):
+    """(d)(g)(h) ``.restore`` or the state a link (never followed), a file, unreadable: no restore is applied or
     committed, nothing is moved, written or removed, neither here nor where a link points. For ``finish`` the contract
-    only says "no state, None": a link it must not follow either."""
+    only says "no state, None": a link it must not follow either. B-33 §1, §2: ``.restore`` a link or a file is still no
+    restore (``read_restore`` and ``protected_stage`` ``None``); a state file that is a link or not valid is a state that
+    cannot be read: ``read_restore`` raises ``RestoreStateUnreadableError`` with its reason, ``protected_stage`` is
+    ``EVERY_STAGE``. The startup steps unchanged: ``None``."""
     apply = apply_module()
     instance = build(tmp_path / "instance", databases, checked)
     confirm(apply, instance)
@@ -1056,9 +1087,15 @@ def test_a_restore_that_cannot_be_trusted_is_not_read_applied_or_committed(tmp_p
     untrust(instance, elsewhere)
     data, items, pointed, kind = cases.fingerprint(instance.root), restore_items(instance.root), cases.fingerprint(elsewhere), restore_kind(instance.root)
     with moving(apply) as mover, logs() as events:
-        found = (apply.read_restore(instance.root), apply.protected_stage(instance.root))
+        returned, raised = answer_of(lambda: apply.read_restore(instance.root))
+        protected = apply.protected_stage(instance.root)
         stepped = (apply.apply_pending_restore(instance.root, boot=never_ran(apply), now=instance.applied_at), apply.finish_pending_restore(instance.root, boot=never_ran(apply), now=instance.committed_at))
-    assert (found, stepped) == ((None, None), (None, None)), f"nothing to trust, nothing read: {found}, {stepped}"
+    if read_as is None:
+        assert (returned, raised, protected) == (None, None, None), f"{untrust.__name__}: no restore read, no stage protected: {returned!r}, {raised!r}, {protected!r}"
+    else:
+        assert_unreadable_for(apply, "read_restore", returned, raised, read_as, instance.root)
+        assert protected == b33_name(apply, "EVERY_STAGE"), f"{untrust.__name__}: a state that cannot be read protects every stage (B-33 §2), not {protected!r}"
+    assert stepped == (None, None), f"the startup steps read nothing to trust: {stepped}"
     assert mover.calls == 0, f"nothing moved: {mover.moved}"
     assert (cases.fingerprint(instance.root), restore_items(instance.root), cases.fingerprint(elsewhere), restore_kind(instance.root)) == (data, items, pointed, kind), "nothing written or removed, here or where a link points; .restore left as it stands"
     if error_logged:
@@ -1081,8 +1118,9 @@ UNTRUSTED_FIELDS = [
 def test_a_state_naming_anything_but_a_swapped_folder_or_a_stage_is_unreadable_and_nothing_is_done(tmp_path, databases, checked, field_name, value):
     """(d) §10 The state file lives in the data directory: a name read from it never becomes a path. A restore applied
     by a start that died (the next start would undo it, by the names of its journal) whose journal or stage id was
-    changed: ``read_restore`` is ``None``, the steps do nothing — nothing moved, written or removed, here or where a name
-    leads — and an error is logged."""
+    changed: the steps do nothing — nothing moved, written or removed, here or where a name leads — and an error is
+    logged. B-33 §1, §2: ``read_restore`` raises ``RestoreStateUnreadableError`` (``invalid``), ``protected_stage`` is
+    ``EVERY_STAGE`` (it was ``None``)."""
     apply = apply_module()
     instance = build(tmp_path / "instance", databases, checked)
     confirm(apply, instance)
@@ -1098,9 +1136,12 @@ def test_a_state_naming_anything_but_a_swapped_folder_or_a_stage_is_unreadable_a
     state_file(instance.root).write_text(json.dumps(document), encoding="utf-8")
     snapshot = (cases.fingerprint(instance.root), restore_items(instance.root), tree(elsewhere), tree(beside))
     with moving(apply) as mover, logs() as events:
-        found = (apply.read_restore(instance.root), apply.protected_stage(instance.root))
+        returned, raised = answer_of(lambda: apply.read_restore(instance.root))
+        protected = apply.protected_stage(instance.root)
         stepped = (apply.apply_pending_restore(instance.root, boot=never_ran(apply, 1), now=instance.committed_at), apply.finish_pending_restore(instance.root, boot=never_ran(apply, 1), now=instance.committed_at))
-    assert (found, stepped) == ((None, None), (None, None)), f"{field_name} = {value!r}: an unreadable state, nothing done: {found}, {stepped}"
+    assert stepped == (None, None), f"{field_name} = {value!r}: an unreadable state, nothing done: {stepped}"
+    assert_unreadable_for(apply, "read_restore", returned, raised, "invalid", instance.root)
+    assert protected == b33_name(apply, "EVERY_STAGE"), f"{field_name} = {value!r}: every stage protected (B-33 §2), not {protected!r}"
     assert mover.calls == 0, f"nothing moved: {mover.moved}"
     assert (cases.fingerprint(instance.root), restore_items(instance.root), tree(elsewhere), tree(beside)) == snapshot, "nothing written or removed, here or where a name leads; the state file left as it is"
     assert an_error(events), f"an error logged: {levels(events)}"
@@ -1141,6 +1182,7 @@ def test_confirm_writes_a_pending_state_from_the_report_atomically_and_privately
         "data_dir": str(instance.root.resolve()),
         "confirmed_at": instance.confirm_at,
         "confirmed_by": CONFIRMED_BY,
+        "confirmed_via": "admin",
         "backup_created_at": report.backup.created_at,
         "backup_app_version": report.backup.app_version,
         "action": report.action,
@@ -1342,19 +1384,23 @@ def test_confirm_refuses_a_restore_folder_that_is_not_a_plain_folder_and_writes_
     print_success(f"{make.__name__}: BackupPathError")
 
 
-def test_confirm_replaces_a_state_that_is_a_link_and_never_writes_through_it(tmp_path, databases, checked):
-    """(e) Written as ``.part`` then renamed over the name: a link there is replaced, what it points to never written."""
+def test_confirm_refuses_a_state_that_is_a_link_and_never_writes_through_it(tmp_path, databases, checked):
+    """(e) B-33 §1 (it replaced the link before B-33): a state file that is a link is a state that cannot be read
+    (``not_a_file``): a restore may have stopped half way behind it. ``confirm_restore`` raises
+    ``RestoreStateUnreadableError``; the link stays, what it points to never written, nothing else written."""
     apply = apply_module()
     instance = build(tmp_path / "instance", databases, checked)
     pointed = tmp_path / "elsewhere" / STATE_FILE_NAME
     pointed.parent.mkdir()
     pointed.write_text("a file a link points to\n", encoding="utf-8")
     state_file(instance.root).symlink_to(pointed)
-    state = confirm(apply, instance)
+    data, items = cases.fingerprint(instance.root), but_the_lock(restore_items(instance.root))
+    returned, raised = answer_of(lambda: confirm(apply, instance))
+    assert_unreadable_for(apply, "confirm_restore", returned, raised, "not_a_file", instance.root)
     assert pointed.read_text(encoding="utf-8") == "a file a link points to\n", "never written through the link"
-    assert state_file(instance.root).is_file() and not state_file(instance.root).is_symlink(), "the link replaced by the state"
-    assert apply.read_restore(instance.root) == state, "the state reads back"
-    print_success("link replaced, its target untouched")
+    assert state_file(instance.root).is_symlink(), "the link left as it is"
+    assert (cases.fingerprint(instance.root), but_the_lock(restore_items(instance.root))) == (data, items), "nothing written or removed (the apply lock aside)"
+    print_success("a link: restore_state_unreadable (not_a_file), the link and its target untouched")
 
 
 @pytest.mark.parametrize("value", cases.NOT_STAGE_IDS)
@@ -1485,8 +1531,9 @@ def test_a_cancel_that_keeps_the_copy_never_tries_to_remove_it(tmp_path, databas
 #
 # The state file is there, a regular file, and it cannot be read: opening it fails (EACCES or EIO: ``os.open`` failing
 # for that file alone, every other path opened as it is; or its mode 000), or ``.restore/`` cannot be searched. A
-# restore may still wait, so the callers that act on it say so (strict); the startup steps and ``protected_stage`` read
-# it as none, the error logged (lenient). A content no restore can hold stays «none», as (d) has it (``UNTRUSTED``).
+# restore may still wait, so the callers that act on it say so (strict); the startup steps read it as none, the error
+# logged (lenient). B-33: its ``reason`` is ``io``, and ``protected_stage`` is ``EVERY_STAGE`` (r); a state that is not a
+# file or not valid is unreadable too (r), no longer «none».
 
 #: (B-32) What ``RestoreStateUnreadableError`` says before its reason, the system's words.
 STATE_UNREADABLE = "The state of the restore cannot be read: "
@@ -1496,8 +1543,9 @@ UNREADABLE_STATES = [
     pytest.param("EIO", id="its-opening-fails-EIO"),
     pytest.param("mode-000", id="its-mode-000", marks=cases.needs_permission_checks),
 ]
-#: The callers that keep reading such a state as none (lenient): the two startup steps, and ``protected_stage``.
-LENIENT = ["apply_pending_restore", "finish_pending_restore", "protected_stage"]
+#: The callers that keep reading such a state as none (lenient): the two startup steps. ``protected_stage`` left them with
+#: B-33: it is ``EVERY_STAGE`` then (r).
+LENIENT = ["apply_pending_restore", "finish_pending_restore"]
 
 
 class Modes:
@@ -1553,17 +1601,31 @@ def answer_of(call: Callable[[], Any]) -> tuple[Any, Exception | None]:
         return None, exc
 
 
-def assert_state_unreadable(apply: Any, what: str, returned: Any, raised: Exception | None, reason: str, root: Path) -> None:
+def assert_unreadable_for(apply: Any, what: str, returned: Any, raised: Exception | None, reason: str, root: Path) -> None:
     """``what`` said that the state cannot be read: ``RestoreStateUnreadableError``, a ``RestoreStateError``, its code,
-    its reason the system's words, the contract's message, no path in it. Asked in this order, so that a failure shows
-    today's answer first (``None``, ``restore_not_pending``, a confirmation that went on)."""
+    its ``reason`` the word of B-33 §1 (``io``, ``not_a_file``, ``invalid``), its message the contract's opening, no path
+    in it. Asked in this order, so that a failure shows today's answer first (``None``, ``restore_not_pending``, a
+    confirmation that went on)."""
     assert raised is not None, f"{what} answered {returned!r} for a state it cannot read: a restore may still wait there, so it must raise, not answer as if none did"
     code = getattr(raised, "code", None)
     assert code == "restore_state_unreadable", f"{what} raised {type(raised).__name__} ({code}) for a state it cannot read: restore_state_unreadable expected: {raised}"
     unreadable = getattr(apply, "RestoreStateUnreadableError", None)
     assert unreadable is not None and isinstance(raised, unreadable) and isinstance(raised, apply.RestoreStateError), f"[new] {what}: an apply.RestoreStateUnreadableError, a RestoreStateError: {type(raised).__mro__}"
-    assert (getattr(raised, "reason", None), str(raised)) == (reason, STATE_UNREADABLE + reason), f"{what}: its reason the system's words, the contract's message: {getattr(raised, 'reason', None)!r}, {raised}"
+    assert getattr(raised, "reason", None) == reason, f"[new] B-33 §1: {what}: its reason is {reason!r}, not {getattr(raised, 'reason', None)!r}: {raised}"
+    assert str(raised).startswith(STATE_UNREADABLE.rstrip(": ")), f"{what}: the contract's message: {raised}"
     cases.holds_no_path(str(raised), state_file(root), root)
+
+
+def assert_state_unreadable(apply: Any, what: str, returned: Any, raised: Exception | None, words: str, root: Path) -> None:
+    """(o) B-32, as amended by B-33 §1: a state the file system refused, ``RestoreStateUnreadableError`` with the reason
+    ``io`` (it was the system's words before B-33); its message still the contract's with the system's ``words``."""
+    assert_unreadable_for(apply, what, returned, raised, "io", root)
+    assert str(raised) == STATE_UNREADABLE + words, f"{what}: the contract's message, the system's words in it: {raised}"
+
+
+def but_the_lock(items: dict[str, tuple]) -> dict[str, tuple]:
+    """What ``.restore`` holds (``restore_items``) but the apply lock, which a refusal taken under it may create."""
+    return {name: value for name, value in items.items() if name != APPLY_LOCK_NAME}
 
 
 def bytes_of(path: Path) -> bytes | None:
@@ -1675,10 +1737,10 @@ def test_a_confirmation_never_writes_over_a_state_it_cannot_read(tmp_path, datab
 
 @pytest.mark.parametrize("how", UNREADABLE_STATES)
 @pytest.mark.parametrize("caller", LENIENT)
-def test_the_startup_steps_and_protected_stage_read_a_state_they_cannot_read_as_none(tmp_path, databases, checked, monkeypatch, modes, caller, how):
+def test_the_startup_steps_read_a_state_they_cannot_read_as_none(tmp_path, databases, checked, monkeypatch, modes, caller, how):
     """(o) B-32 §3 (s6) A guard, green before B-32 too: lenient, the startup steps go on with the data as it is —
-    ``apply_pending_restore`` and ``finish_pending_restore`` give ``None``, nothing moved, written or removed — and
-    ``protected_stage`` gives ``None``; an error logged by the reader."""
+    ``apply_pending_restore`` and ``finish_pending_restore`` give ``None``, nothing moved, written or removed; an error
+    logged by the reader. B-33 left them so (§1); ``protected_stage`` is no longer lenient (r)."""
     apply = apply_module()
     instance = build(tmp_path / "instance", databases, checked)
     confirm(apply, instance)
@@ -1687,7 +1749,6 @@ def test_the_startup_steps_and_protected_stage_read_a_state_they_cannot_read_as_
     calls = {
         "apply_pending_restore": lambda: apply.apply_pending_restore(instance.root, boot=never_ran(apply), now=instance.applied_at),
         "finish_pending_restore": lambda: apply.finish_pending_restore(instance.root, boot=never_ran(apply), now=instance.committed_at),
-        "protected_stage": lambda: apply.protected_stage(instance.root),
     }
     with moving(apply) as mover, logs() as events:
         returned, raised = answer_of(calls[caller])
@@ -1699,20 +1760,544 @@ def test_the_startup_steps_and_protected_stage_read_a_state_they_cannot_read_as_
     print_success(f"{caller}, {how}: None, an error logged")
 
 
-def test_a_state_that_is_a_folder_reads_as_none(tmp_path, databases, checked):
-    """(o) B-32 §3 (s7) A guard, green before B-32 too: a state that is not a regular file — a folder — is never read as
-    one: ``read_restore`` gives ``None``, an error logged, nothing changed. A link and a content no restore can hold stay
-    as (d) has them."""
+# =============================================================================
+# (r) B-33: a state that cannot be read — its reason, the copies kept, the recovery
+# =============================================================================
+#
+# B-33 §1: ``None`` only without a state file; a state file that cannot be read for any reason is
+# ``RestoreStateUnreadableError`` with ``reason`` ``io`` (the file system refused it), ``not_a_file`` (a folder, a link,
+# a FIFO) or ``invalid`` (not JSON, wrong fields, a ``format`` other than 1). §2: ``protected_stage`` is then
+# ``EVERY_STAGE``. §3: ``recover_unreadable_restore`` puts the data of before back from what the files say.
+
+#: (r) B-33 §1: the reasons of a state that cannot be read.
+B33_REASONS = ("io", "not_a_file", "invalid")
+#: (r) B-33 §2: what ``protected_stage`` answers while the state cannot be read; no stage id can equal it.
+EVERY_STAGE_VALUE = "*"
+#: (r) Bytes a state that cannot be read holds: never a state, never shown.
+STATE_MARK = b"b33-the-content-of-a-state-nobody-can-read"
+#: (r) Seconds a call is given: a reader waiting on a FIFO never ends by itself (it is let go after).
+B33_DEADLINE_S = 20
+#: (r) The moment a hand-written state of (r) was confirmed.
+B33_CONFIRMED_AT = datetime(2026, 10, 15, 22, 0, tzinfo=UTC)
+#: (r) What a recovery renames the state file into: ``restore.json.unreadable-<YYYYMMDDTHHMMSSZ>`` (§3).
+KEPT_AS = re.compile(r"restore\.json\.unreadable-(\d{8}T\d{6}Z)")
+#: (r) The folders of a data directory a restore stopped half way: the restored data live, the data of before in
+#: ``previous/``, each folder its own files.
+RESTORED_FILES = {name: {"restored.bin": f"the restored {name}\n".encode()} for name in SWAPPED}
+BEFORE_FILES = {name: {"before.bin": f"the {name} of before\n".encode(), "deeper/kept.txt": b"kept\n"} for name in SWAPPED}
+
+
+def b33_name(module: Any, name: str) -> Any:
+    """``module.<name>``, a name B-33 adds, read when the test needs it: its absence fails that test alone."""
+    value = getattr(module, name, None)
+    if value is None:
+        pytest.fail(f"[new] B-33: {module.__name__}.{name} does not exist yet (interface §1-§3)", pytrace=False)
+    return value
+
+
+def bare_restore(apply: Any, root: Path, status: str = "pending", **fields: Any) -> bytes:
+    """A data directory without databases: what a restore never touches; ``.restore`` (0700) with its apply lock and the
+    state of a restore in ``status``, written as ``apply`` writes it (any field replaced by ``fields``). Its bytes."""
+    cases.write_files(root, UNTOUCHED)
+    restore_dir(root).mkdir(mode=0o700)
+    apply_lock_of(root).touch(mode=0o600)
+    state = apply.RestoreState(
+        status=status,
+        stage_id=cases.VALID_ID,
+        data_dir=str(root.resolve()),
+        confirmed_at=B33_CONFIRMED_AT,
+        confirmed_by=CONFIRMED_BY,
+        backup_created_at=B33_CONFIRMED_AT - timedelta(days=1),
+        backup_app_version="v1.2.0",
+        action="same",
+        **fields,
+    )
+    state_file(root).write_text(state.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    state_file(root).chmod(0o600)
+    return state_file(root).read_bytes()
+
+
+def journal_of(apply: Any) -> dict[str, Any]:
+    """The journal and the boot of a restore a start applied: every folder live and restored."""
+    return {"swap": [apply.SwapEntry(name=name, live=True, staged=True) for name in SWAPPED], "boot": never_ran(apply)}
+
+
+def _refused_eio(root: Path, elsewhere: Path, patch: pytest.MonkeyPatch) -> None:
+    make_state_unreadable(patch, None, root, "EIO")  # type: ignore[arg-type]  # no mode is changed for EIO
+
+
+def _a_folder(root: Path, elsewhere: Path, patch: pytest.MonkeyPatch) -> None:
+    state_file(root).unlink()
+    state_file(root).mkdir(mode=0o700)
+    (state_file(root) / "inside.json").write_bytes(STATE_MARK)
+
+
+def _a_link(root: Path, elsewhere: Path, patch: pytest.MonkeyPatch) -> None:
+    shutil.move(state_file(root), elsewhere / STATE_FILE_NAME)
+    state_file(root).symlink_to(elsewhere / STATE_FILE_NAME)
+
+
+def _a_fifo(root: Path, elsewhere: Path, patch: pytest.MonkeyPatch) -> None:
+    state_file(root).unlink()
+    os.mkfifo(state_file(root), 0o600)
+
+
+def _not_json(root: Path, elsewhere: Path, patch: pytest.MonkeyPatch) -> None:
+    state_file(root).write_bytes(b"{" + STATE_MARK)
+
+
+def _fields_missing(root: Path, elsewhere: Path, patch: pytest.MonkeyPatch) -> None:
+    state_file(root).write_text(json.dumps({"format": 1, "status": "pending", "note": STATE_MARK.decode()}), encoding="utf-8")
+
+
+def _format_2(root: Path, elsewhere: Path, patch: pytest.MonkeyPatch) -> None:
+    record = json.loads(state_file(root).read_text(encoding="utf-8"))
+    state_file(root).write_text(json.dumps({**record, "format": 2}), encoding="utf-8")
+
+
+#: (r) B-33 §1: a state file that cannot be read, each way, with its reason.
+NOT_A_FILE_OR_INVALID = [
+    pytest.param("not_a_file", _a_folder, id="not_a_file-a-folder"),
+    pytest.param("not_a_file", _a_link, id="not_a_file-a-link"),
+    pytest.param("not_a_file", _a_fifo, id="not_a_file-a-fifo"),
+    pytest.param("invalid", _not_json, id="invalid-not-json"),
+    pytest.param("invalid", _fields_missing, id="invalid-fields-missing"),
+    pytest.param("invalid", _format_2, id="invalid-format-2"),
+]
+B33_UNREADABLE = [pytest.param("io", _refused_eio, id="io-EIO"), *NOT_A_FILE_OR_INVALID]
+#: (r) One way for each reason: the recovery's cases.
+ONE_OF_EACH = [pytest.param("io", _refused_eio, id="io-EIO"), pytest.param("not_a_file", _a_folder, id="not_a_file-a-folder"), pytest.param("invalid", _not_json, id="invalid-not-json")]
+
+
+def on_disk(root: Path) -> dict[str, tuple]:
+    """Every path below ``root``, ``.restore`` included, never through a link and never read from a FIFO: a folder with
+    its mode, a link with its target, a file with its mode, size and SHA-256, anything else with its kind and mode."""
+    found: dict[str, tuple] = {}
+    for folder, names, files in os.walk(root):
+        for name in [*names, *files]:
+            path = Path(folder) / name
+            info = path.lstat()
+            relative = path.relative_to(root).as_posix()
+            if stat.S_ISLNK(info.st_mode):
+                found[relative] = ("link", os.readlink(path))
+            elif stat.S_ISDIR(info.st_mode):
+                found[relative] = ("folder", stat.S_IMODE(info.st_mode))
+            elif stat.S_ISREG(info.st_mode):
+                found[relative] = ("file", stat.S_IMODE(info.st_mode), info.st_size, cases.sha256(path.read_bytes()))
+            else:
+                found[relative] = ("special", stat.S_IFMT(info.st_mode), stat.S_IMODE(info.st_mode))
+    return dict(sorted(found.items()))
+
+
+def in_time(call: Callable[[], Any], root: Path) -> tuple[bool, Any, Exception | None]:
+    """``call`` in a thread of its own, given ``B33_DEADLINE_S``: whether it ended in time, what it returned, what it
+    raised. A reader left waiting on a FIFO at the state's place is let go before this returns (a writer opened without
+    waiting, closed at once), so that a red run never hangs the suite."""
+    ended: dict[str, Any] = {}
+
+    def run() -> None:
+        try:
+            ended["value"] = call()
+        except Exception as exc:
+            ended["raised"] = exc
+
+    thread = threading.Thread(target=run, name="b33-state-reader", daemon=True)
+    thread.start()
+    thread.join(B33_DEADLINE_S)
+    timely = not thread.is_alive()
+    deadline = time.monotonic() + B33_DEADLINE_S
+    while thread.is_alive() and time.monotonic() < deadline:
+        try:
+            os.close(os.open(state_file(root), os.O_WRONLY | os.O_NONBLOCK))
+        except OSError:
+            pass
+        thread.join(0.05)
+    return timely, ended.get("value"), ended.get("raised")
+
+
+def errors_in(events: list[dict[str, Any]]) -> list[tuple[str, str]]:
+    """The errors (and worse) logged in the block, (level, message)."""
+    return [(level, message) for level, message in logged(events) if level in ("error", "critical")]
+
+
+def test_b33_names_every_stage_the_two_errors_and_the_recovery():
+    """(r) B-33: ``EVERY_STAGE`` is ``"*"``, which no stage id can be; ``RestoreNothingToRecoverError`` a
+    ``RestoreStateError`` with the code ``restore_nothing_to_recover``; ``RecoveredRestore`` a frozen dataclass of
+    ``moved_back``, ``set_aside`` and ``state_kept_as``; ``restore_state_problem`` and ``recover_unreadable_restore`` take
+    ``data_dir``, ``None`` by default (the configured data directory)."""
+    print_section("(r) B-33: a state that cannot be read")
+    apply = apply_module()
+    assert (b33_name(apply, "EVERY_STAGE"), paths.is_job_id(EVERY_STAGE_VALUE)) == (EVERY_STAGE_VALUE, False), f"EVERY_STAGE is {EVERY_STAGE_VALUE!r}, no stage id: {apply.EVERY_STAGE!r}"
+    nothing = b33_name(apply, "RestoreNothingToRecoverError")
+    assert issubclass(nothing, apply.RestoreStateError) and nothing.code == "restore_nothing_to_recover", f"a RestoreStateError, restore_nothing_to_recover: {nothing.__mro__}, {getattr(nothing, 'code', None)}"
+    recovered = b33_name(apply, "RecoveredRestore")
+    assert dataclasses.is_dataclass(recovered) and recovered.__dataclass_params__.frozen, f"RecoveredRestore: a frozen dataclass: {recovered}"
+    assert [item.name for item in dataclasses.fields(recovered)] == ["moved_back", "set_aside", "state_kept_as"], f"its fields: {dataclasses.fields(recovered)}"
+    for name in ("restore_state_problem", "recover_unreadable_restore"):
+        parameter = inspect.signature(b33_name(apply, name)).parameters.get("data_dir")
+        assert parameter is not None and parameter.default is None, f"{name}(data_dir=None): {inspect.signature(getattr(apply, name))}"
+    print_success("EVERY_STAGE, RestoreNothingToRecoverError, RecoveredRestore, the two functions")
+
+
+@pytest.mark.parametrize(("reason", "make"), B33_UNREADABLE)
+def test_read_restore_raises_unreadable_with_its_reason_never_waiting_on_it(tmp_path, reason, make):
+    """(r) B-33 §1: a state file the file system refuses (``io``), that is a folder, a link or a FIFO (``not_a_file``),
+    or not a state this LibreFolio reads (``invalid``): ``read_restore`` raises ``RestoreStateUnreadableError`` with that
+    reason, the contract's message, no path; one error logged; within the deadline (a FIFO is never waited on); nothing
+    created or changed. Red before B-33 but for ``io``: ``None``, as if no restore were there."""
+    apply = apply_module()
+    root, elsewhere = tmp_path / "data", tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    bare_restore(apply, root)
+    with pytest.MonkeyPatch.context() as patch:
+        make(root, elsewhere, patch)
+        before = (on_disk(root), on_disk(elsewhere))
+        with logs() as events:
+            timely, returned, raised = in_time(lambda: apply.read_restore(root), root)
+    assert timely, f"{reason}: read_restore returns within {B33_DEADLINE_S} s: it waited on the state"
+    assert_unreadable_for(apply, "read_restore", returned, raised, reason, root)
+    assert len(errors_in(events)) == 1, f"{reason}: logged once, as an error: {logged(events)}"
+    assert (on_disk(root), on_disk(elsewhere)) == before, f"{reason}: nothing created or changed"
+    print_success(f"{make.__name__}: restore_state_unreadable ({reason})")
+
+
+def _no_restore_folder(root: Path) -> None:
+    shutil.rmtree(restore_dir(root))
+
+
+def _no_state_file(root: Path) -> None:
+    state_file(root).unlink()
+
+
+def _restore_folder_a_file_b33(root: Path) -> None:
+    shutil.rmtree(restore_dir(root))
+    restore_dir(root).write_bytes(STATE_MARK)
+
+
+def _restore_folder_a_link_b33(root: Path) -> None:
+    # A link to a folder holding a state no restore can hold: never followed, so never read.
+    target = root.parent / "linked-restore-folder"
+    target.mkdir()
+    (target / STATE_FILE_NAME).write_bytes(b"{" + STATE_MARK)
+    shutil.rmtree(restore_dir(root))
+    restore_dir(root).symlink_to(target, target_is_directory=True)
+
+
+@pytest.mark.parametrize("make", [_no_restore_folder, _no_state_file, _restore_folder_a_file_b33, _restore_folder_a_link_b33], ids=["no-restore-folder", "no-state-file", "restore-folder-a-file", "restore-folder-a-link"])
+def test_without_a_state_file_to_read_there_is_no_restore_and_no_problem(tmp_path, make):
+    """(r) B-33 §1: ``None`` only when there is no state file — no ``.restore``, no ``restore.json`` — or, as before, a
+    ``.restore`` that is a file or a link (ignored, never followed). ``read_restore``, ``protected_stage`` and
+    ``restore_state_problem`` all ``None``, nothing raised, nothing created."""
+    apply = apply_module()
+    root = tmp_path / "data"
+    bare_restore(apply, root)
+    make(root)
+    problem = b33_name(apply, "restore_state_problem")
+    before = on_disk(root)
+    found = (answer_of(lambda: apply.read_restore(root)), answer_of(lambda: apply.protected_stage(root)), answer_of(lambda: problem(root)))
+    assert found == ((None, None), (None, None), (None, None)), f"{make.__name__}: no restore, no stage protected, no problem: {found}"
+    assert on_disk(root) == before, f"{make.__name__}: nothing created"
+    print_success(f"{make.__name__}: None, None, None")
+
+
+def test_restore_state_problem_without_arguments_reads_the_configured_data_directory(configured_data_dir):
+    """(r) B-33 §1: ``restore_state_problem()`` reads the configured data directory (here a folder that must stay absent):
+    ``None``, nothing created."""
+    problem = b33_name(apply_module(), "restore_state_problem")
+    assert answer_of(problem) == (None, None), "the configured data directory has no restore: None"
+    assert not configured_data_dir.exists(), "nothing created in the configured data directory"
+    print_success("restore_state_problem(): None")
+
+
+@pytest.mark.parametrize(("reason", "make"), B33_UNREADABLE)
+def test_restore_state_problem_is_the_error_a_read_would_raise_and_never_raises(tmp_path, reason, make):
+    """(r) B-33 §1, the hook for H-62: ``restore_state_problem(data_dir)`` returns the ``RestoreStateUnreadableError`` a
+    read would raise, with its reason, never raising it; within the deadline; nothing changed."""
+    apply = apply_module()
+    problem = b33_name(apply, "restore_state_problem")
+    root, elsewhere = tmp_path / "data", tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    bare_restore(apply, root)
+    with pytest.MonkeyPatch.context() as patch:
+        make(root, elsewhere, patch)
+        before = on_disk(root)
+        timely, returned, raised = in_time(lambda: problem(root), root)
+    assert timely, f"{reason}: restore_state_problem returns within {B33_DEADLINE_S} s"
+    assert raised is None, f"{reason}: restore_state_problem never raises: {raised!r}"
+    assert isinstance(returned, apply.RestoreStateUnreadableError) and getattr(returned, "reason", None) == reason, f"{reason}: the error a read would raise, returned: {returned!r}"
+    assert on_disk(root) == before, f"{reason}: nothing changed"
+    print_success(f"{make.__name__}: returned ({reason})")
+
+
+@pytest.mark.parametrize("phase", [*ACTIVE_PHASES, *TERMINAL_PHASES])
+def test_restore_state_problem_of_a_readable_state_is_none(tmp_path, phase):
+    """(r) B-33 §1: a state this LibreFolio reads, in any phase: no problem, ``None``."""
+    apply = apply_module()
+    problem = b33_name(apply, "restore_state_problem")
+    root = tmp_path / "data"
+    bare_restore(apply, root, phase, **(journal_of(apply) if phase in ("applying", "applied", "rolling_back") else {}))
+    assert answer_of(lambda: problem(root)) == (None, None), f"{phase}: a readable state, no problem"
+    print_success(f"{phase}: None")
+
+
+@pytest.mark.parametrize(("reason", "make"), B33_UNREADABLE)
+def test_protected_stage_is_every_stage_while_the_state_cannot_be_read(tmp_path, reason, make):
+    """(r) B-33 §2: which copy a restore waits for is unknown, so no copy is touched: ``protected_stage`` is
+    ``EVERY_STAGE``, for each reason, within the deadline, nothing raised. Red before B-33: ``None``."""
+    apply = apply_module()
+    root, elsewhere = tmp_path / "data", tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    bare_restore(apply, root)
+    with pytest.MonkeyPatch.context() as patch:
+        make(root, elsewhere, patch)
+        timely, returned, raised = in_time(lambda: apply.protected_stage(root), root)
+    assert timely and raised is None, f"{reason}: protected_stage answers in time, never raises: {raised!r}"
+    assert returned == EVERY_STAGE_VALUE, f"[new] B-33 §2: {reason}: every stage protected ({EVERY_STAGE_VALUE!r}), not {returned!r}"
+    print_success(f"{make.__name__}: EVERY_STAGE")
+
+
+@pytest.mark.parametrize("step", ["apply_pending_restore", "finish_pending_restore"])
+@pytest.mark.parametrize(("reason", "make"), B33_UNREADABLE)
+def test_the_startup_steps_go_on_beside_a_state_that_cannot_be_read(tmp_path, reason, make, step):
+    """(r) B-33 §1, a guard: ``_state_at_start`` unchanged for every reason — the step logs an error and gives ``None``,
+    the start goes on; nothing moved, written or removed; within the deadline (H-62 adds the block)."""
+    apply = apply_module()
+    root, elsewhere = tmp_path / "data", tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    bare_restore(apply, root)
+    calls = {
+        "apply_pending_restore": lambda: apply.apply_pending_restore(root, boot=never_ran(apply), now=B33_CONFIRMED_AT),
+        "finish_pending_restore": lambda: apply.finish_pending_restore(root, boot=never_ran(apply), now=B33_CONFIRMED_AT),
+    }
+    with pytest.MonkeyPatch.context() as patch:
+        make(root, elsewhere, patch)
+        before = on_disk(root)
+        with moving(apply) as mover, logs() as events:
+            timely, returned, raised = in_time(calls[step], root)
+    assert timely and (returned, raised) == (None, None), f"{step}, {reason}: None in time, nothing raised: {timely}, {returned!r}, {raised!r}"
+    assert mover.calls == 0, f"{step}: nothing moved: {mover.moved}"
+    assert errors_in(events), f"{step}, {reason}: an error logged: {logged(events)}"
+    assert on_disk(root) == before, f"{step}, {reason}: nothing written or removed"
+    print_success(f"{step}, {make.__name__}: None, logged")
+
+
+@pytest.mark.parametrize(("reason", "make"), NOT_A_FILE_OR_INVALID)
+def test_a_confirmation_never_writes_over_a_state_that_is_not_a_file_or_not_valid(tmp_path, databases, checked, reason, make):
+    """(r) B-33 §1: another checked copy confirmed while the state is not a file or not valid: a restore may have stopped
+    half way behind it. ``confirm_restore`` raises ``RestoreStateUnreadableError`` with that reason; nothing written over
+    it, removed or created, within the deadline. Red before B-33: the confirmation went on and replaced the state."""
     apply = apply_module()
     instance = build(tmp_path / "instance", databases, checked)
-    state_file(instance.root).mkdir(mode=0o700)
-    data, items = cases.fingerprint(instance.root), restore_items(instance.root)
-    with logs() as events:
-        returned, raised = answer_of(lambda: apply.read_restore(instance.root))
-    assert (returned, raised) == (None, None), f"None, nothing raised: {returned!r}, {raised!r}"
-    assert an_error(events), f"an error logged: {logged(events)}"
-    assert (cases.fingerprint(instance.root), restore_items(instance.root)) == (data, items), "nothing changed"
-    print_success("a folder: None, an error logged")
+    confirm(apply, instance)
+    add_stage(instance, checked, OTHER_STAGE)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    with pytest.MonkeyPatch.context() as patch:
+        make(instance.root, elsewhere, patch)
+        before = (on_disk(instance.root), on_disk(elsewhere))
+        timely, returned, raised = in_time(lambda: confirm(apply, instance, OTHER_STAGE), instance.root)
+    assert timely, f"{reason}: the confirmation returns within {B33_DEADLINE_S} s"
+    assert_unreadable_for(apply, "confirm_restore", returned, raised, reason, instance.root)
+    assert (on_disk(instance.root), on_disk(elsewhere)) == before, f"{reason}: nothing written over the state, removed or created"
+    print_success(f"{make.__name__}: not confirmed ({reason})")
+
+
+@dataclass
+class Halfway:
+    """A data directory a restore stopped half way, its state then made unreadable: what each swapped folder held live
+    (the restored data) and in ``previous/`` (the data of before), what the copy and the rest held, before the
+    recovery."""
+
+    root: Path
+    live: dict[str, dict[str, tuple] | None]
+    before: dict[str, dict[str, tuple] | None]
+    copy: dict[str, tuple] | None
+    rest: dict[str, tuple]
+
+
+def halfway(apply: Any, root: Path, *, previous: tuple[str, ...] | None, live: tuple[str, ...] = SWAPPED) -> Halfway:
+    """A restore applied, then stopped half way: ``live`` folders hold the restored data, ``previous/`` (absent with
+    ``None``) the data of before of ``previous``; the copy it came from (``.restore/stage/<id>/``); the state, readable
+    still (an ``applying`` journal)."""
+    bare_restore(apply, root, "applying", **journal_of(apply))
+    for name in live:
+        cases.write_files(root / name, RESTORED_FILES[name])
+    if previous is not None:
+        previous_of(root).mkdir(mode=0o700)
+        for name in previous:
+            cases.write_files(previous_of(root) / name, BEFORE_FILES[name])
+    cases.write_files(stage_dir(root, cases.VALID_ID), {"report.json": b"{}\n"})
+    return Halfway(
+        root=root,
+        live={name: tree(root / name) for name in SWAPPED},
+        before={name: tree(previous_of(root) / name) for name in SWAPPED},
+        copy=tree(stage_dir(root, cases.VALID_ID)),
+        rest=outside(cases.fingerprint(root)),
+    )
+
+
+def the_state(root: Path, name: str = STATE_FILE_NAME) -> dict[str, tuple]:
+    """The state file of ``root``, under ``name``, as ``on_disk`` sees it (a folder with what it holds), keyed from it."""
+    entries = on_disk(restore_dir(root))
+    return {key.replace(name, "<state>", 1): value for key, value in entries.items() if key == name or key.startswith(f"{name}/")}
+
+
+def recovered_in_time(apply: Any, root: Path) -> tuple[Any, Exception | None]:
+    """``recover_unreadable_restore(root)`` within the deadline: what it returned, what it raised."""
+    recover = b33_name(apply, "recover_unreadable_restore")
+    timely, returned, raised = in_time(lambda: recover(root), root)
+    assert timely, f"recover_unreadable_restore returns within {B33_DEADLINE_S} s"
+    return returned, raised
+
+
+def assert_recovered(apply: Any, world: Halfway, result: Any, raised: Exception | None, moved: set[str], state: dict[str, tuple], started: datetime, ended: datetime) -> None:
+    """The recovery of ``world`` done: each folder of ``moved`` back from ``previous/`` (its live one, if any, in
+    ``failed/``), every other one as it was; the state file renamed ``restore.json.unreadable-<UTC>``, kept as it was;
+    nothing else touched; a ``RecoveredRestore`` saying so."""
+    root = world.root
+    assert raised is None, f"recover_unreadable_restore raised {type(raised).__name__}: {raised}"
+    assert isinstance(result, b33_name(apply, "RecoveredRestore")), f"a RecoveredRestore: {result!r}"
+    set_aside = {name for name in moved if world.live[name] is not None}
+    assert (sorted(result.moved_back), sorted(result.set_aside)) == (sorted(moved), sorted(set_aside)), f"moved back {sorted(moved)}, set aside {sorted(set_aside)}: {result}"
+    for name in SWAPPED:
+        if name in moved:
+            assert (tree(root / name), tree(previous_of(root) / name)) == (world.before[name], None), f"{name}: the data of before back in place, whole, out of previous/"
+            assert tree(failed_of(root) / name) == world.live[name], f"{name}: the live (restored) folder in failed/, whole{'' if world.live[name] else ': none was live'}"
+        else:
+            assert tree(root / name) == world.live[name], f"{name}: not in previous/, left as it was"
+            assert not lexists(failed_of(root) / name), f"{name}: nothing set aside"
+    kept = KEPT_AS.fullmatch(str(result.state_kept_as))
+    assert kept is not None, f"the state kept as restore.json.unreadable-<YYYYMMDDTHHMMSSZ>: {result.state_kept_as!r}"
+    at = datetime.strptime(kept.group(1), "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
+    assert started.replace(microsecond=0) <= at <= ended, f"its time, UTC, the recovery's: {at} not in [{started}, {ended}]"
+    assert not lexists(state_file(root)), "no state file left: no new state written"
+    assert the_state(root, result.state_kept_as) == state, "the state file renamed, kept as it was (never read again)"
+    assert (tree(stage_dir(root, cases.VALID_ID)), outside(cases.fingerprint(root))) == (world.copy, world.rest), "the copy and everything outside the swapped folders untouched"
+
+
+@pytest.mark.parametrize(("reason", "make"), ONE_OF_EACH)
+def test_recover_puts_the_data_of_before_back_and_sets_the_state_aside(tmp_path, reason, make):
+    """(r) B-33 §3 (a): ``previous/`` holds two of the swapped folders, every live one present: those two go live again
+    from ``previous/``, their live (restored) ones to ``failed/``; the two others stay as they are. The state renamed
+    ``restore.json.unreadable-<UTC>``; then ``read_restore`` is ``None`` and ``restore_state_problem`` too."""
+    apply = apply_module()
+    root, elsewhere = tmp_path / "data", tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    world = halfway(apply, root, previous=("sqlite", "custom-uploads"))
+    with pytest.MonkeyPatch.context() as patch:
+        make(root, elsewhere, patch)
+        state = the_state(root)
+        started = datetime.now(UTC)
+        result, raised = recovered_in_time(apply, root)
+        ended = datetime.now(UTC)
+    assert_recovered(apply, world, result, raised, {"sqlite", "custom-uploads"}, state, started, ended)
+    assert (answer_of(lambda: apply.read_restore(root)), answer_of(lambda: apply.restore_state_problem(root))) == ((None, None), (None, None)), "no restore left, no problem"
+    print_success(f"{make.__name__}: two folders back, two set aside, the state kept as {result.state_kept_as}")
+
+
+def test_recover_after_a_swap_cut_moves_back_a_folder_whose_live_one_is_missing(tmp_path):
+    """(r) B-33 §3 (b): the swap cut after a live folder went to ``previous/`` and before its restored one came in: it
+    moves back, nothing goes to ``failed/``; the other folders stay."""
+    apply = apply_module()
+    root, elsewhere = tmp_path / "data", tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    world = halfway(apply, root, previous=("broker_reports",), live=tuple(name for name in SWAPPED if name != "broker_reports"))
+    with pytest.MonkeyPatch.context() as patch:
+        _not_json(root, elsewhere, patch)
+        state = the_state(root)
+        started = datetime.now(UTC)
+        result, raised = recovered_in_time(apply, root)
+        ended = datetime.now(UTC)
+    assert_recovered(apply, world, result, raised, {"broker_reports"}, state, started, ended)
+    assert not tree(failed_of(root)), f"nothing set aside: {tree(failed_of(root))}"
+    print_success("broker_reports back, nothing set aside")
+
+
+def test_recover_without_previous_moves_nothing_and_sets_the_state_aside(tmp_path):
+    """(r) B-33 §3 (c): no ``previous/``: nothing to put back, every live folder as it was; the state set aside all the
+    same, so that nothing waits any more."""
+    apply = apply_module()
+    root, elsewhere = tmp_path / "data", tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    world = halfway(apply, root, previous=None)
+    with pytest.MonkeyPatch.context() as patch:
+        _not_json(root, elsewhere, patch)
+        state = the_state(root)
+        started = datetime.now(UTC)
+        result, raised = recovered_in_time(apply, root)
+        ended = datetime.now(UTC)
+    assert_recovered(apply, world, result, raised, set(), state, started, ended)
+    assert not lexists(failed_of(root)), "no failed/ made"
+    print_success("nothing moved, the state set aside")
+
+
+def _nothing_to_recover_no_state(apply: Any, root: Path) -> None:
+    halfway(apply, root, previous=("sqlite",))
+    state_file(root).unlink()
+
+
+def _nothing_to_recover_pending(apply: Any, root: Path) -> None:
+    halfway(apply, root, previous=None)
+    bare_state = apply.RestoreState.model_validate_json(state_file(root).read_bytes()).model_copy(update={"status": "pending", "swap": [], "boot": None})
+    state_file(root).write_text(bare_state.model_dump_json(), encoding="utf-8")
+
+
+def _nothing_to_recover_applied(apply: Any, root: Path) -> None:
+    halfway(apply, root, previous=("sqlite", "custom-uploads"))
+    applied = apply.RestoreState.model_validate_json(state_file(root).read_bytes()).model_copy(update={"status": "applied", "applied_at": B33_CONFIRMED_AT})
+    state_file(root).write_text(applied.model_dump_json(), encoding="utf-8")
+
+
+@pytest.mark.parametrize("arrange", [_nothing_to_recover_no_state, _nothing_to_recover_pending, _nothing_to_recover_applied], ids=["no-state-previous-there", "readable-pending", "readable-applied-previous-there"])
+def test_recover_with_a_readable_state_or_none_has_nothing_to_recover_and_moves_nothing(tmp_path, arrange):
+    """(r) B-33 §3 (d): a readable state (a restore waiting; one applied, ``previous/`` holding the data of before) or no
+    state at all (``previous/`` there all the same): ``RestoreNothingToRecoverError`` (``restore_nothing_to_recover``, a
+    ``RestoreStateError``); nothing moved, written or removed."""
+    apply = apply_module()
+    root = tmp_path / "data"
+    arrange(apply, root)
+    before = on_disk(root)
+    result, raised = recovered_in_time(apply, root)
+    nothing = b33_name(apply, "RestoreNothingToRecoverError")
+    assert isinstance(raised, nothing) and isinstance(raised, apply.RestoreStateError) and raised.code == "restore_nothing_to_recover", f"{arrange.__name__}: restore_nothing_to_recover, not {result!r} / {raised!r}"
+    assert on_disk(root) == before, f"{arrange.__name__}: nothing moved, written or removed"
+    print_success(f"{arrange.__name__}: restore_nothing_to_recover")
+
+
+def test_recover_while_a_server_serves_the_data_directory_is_refused_and_moves_nothing(tmp_path, serving_here):
+    """(r) B-33 §3 (e): a server holds the serving lock (here this process, through its own descriptor, as
+    ``hold_serving_lock`` holds it): the recovery cannot take it exclusively, ``RestoreInUseError``
+    (``restore_in_use``); nothing moved, written or removed, the state left where it is."""
+    apply = serving_here
+    root, elsewhere = tmp_path / "data", tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    halfway(apply, root, previous=("sqlite", "custom-uploads"))
+    with pytest.MonkeyPatch.context() as patch:
+        _not_json(root, elsewhere, patch)
+        assert apply.hold_serving_lock(root) is True, "precondition: a server serves the data directory"
+        before = on_disk(root)
+        result, raised = recovered_in_time(apply, root)
+    assert isinstance(raised, apply.RestoreInUseError), f"restore_in_use while a server serves the data directory, not {result!r} / {raised!r}"
+    assert on_disk(root) == before, "nothing moved, written or removed"
+    print_success("restore_in_use, nothing moved")
+
+
+def test_a_second_recovery_finds_nothing_to_recover_and_changes_nothing(tmp_path):
+    """(r) B-33 §3 (f): idempotent outcome. Once recovered, a second call finds no state that cannot be read:
+    ``RestoreNothingToRecoverError``, nothing changed since the first."""
+    apply = apply_module()
+    root, elsewhere = tmp_path / "data", tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    halfway(apply, root, previous=("sqlite", "custom-uploads"))
+    with pytest.MonkeyPatch.context() as patch:
+        _not_json(root, elsewhere, patch)
+    first, raised = recovered_in_time(apply, root)
+    assert raised is None, f"precondition: the first recovery is done: {raised!r}"
+    after_first = on_disk(root)
+    again, raised = recovered_in_time(apply, root)
+    assert isinstance(raised, b33_name(apply, "RestoreNothingToRecoverError")), f"nothing to recover the second time, not {again!r} / {raised!r}"
+    assert on_disk(root) == after_first, "nothing changed by the second call"
+    print_success("second call: restore_nothing_to_recover")
 
 
 # =============================================================================
@@ -2694,7 +3279,7 @@ def test_finish_leaves_a_restore_that_is_not_applied_alone(tmp_path, databases, 
 # =============================================================================
 
 #: The fields of a restore's state (contract §2): the commit adds none; its count of revoked links goes to the log.
-STATE_FIELDS = {"format", "status", "stage_id", "data_dir", "confirmed_at", "confirmed_by", "backup_created_at", "backup_app_version", "action", "swap", "boot", "applied_at", "finished_at", "reason", "waiting", "session_version"}
+STATE_FIELDS = {"format", "status", "stage_id", "data_dir", "confirmed_at", "confirmed_by", "confirmed_via", "backup_created_at", "backup_app_version", "action", "swap", "boot", "applied_at", "finished_at", "reason", "waiting", "session_version"}
 #: How SQLAlchemy stores a datetime in SQLite: UTC, no offset, always six digits of microseconds.
 SQLALCHEMY_DATETIME = "%Y-%m-%d %H:%M:%S.%f"
 #: How long after its issue a link of the plans below was consumed or revoked.
@@ -3812,3 +4397,115 @@ def test_a_report_the_server_may_not_read_is_no_checked_copy(tmp_path, databases
     assert refusal_of(raised) == ("RestoreStageMissingError", "restore_stage_not_found"), f"a report of mode 000: no checked copy, not {refusal_of(raised)}: {raised}"
     assert (cases.fingerprint(instance.root), restore_items(instance.root)) == (data, items), f"nothing written: {cases.changed(items, restore_items(instance.root))}"
     print_success("a report of mode 000: restore_stage_not_found, nothing written")
+
+
+# =============================================================================
+# (q) Lot L3-2: how a restore was confirmed
+# =============================================================================
+
+#: How a restore may be confirmed (contract L3 §5): the administrators' route, the command line, the hosting panel.
+CONFIRMED_VIA = ("admin", "cli", "panel")
+#: What ``confirmed_via`` reads as before L3-2, when ``RestoreState`` has no such attribute: never a valid value.
+NO_VIA = "<missing: RestoreState has no confirmed_via before L3-2>"
+
+
+def l3_2_name(module: Any, name: str) -> Any:
+    """``module.<name>``, a name lot L3-2 adds, read when the test needs it: its absence fails that test alone."""
+    value = getattr(module, name, None)
+    if value is None:
+        pytest.fail(f"[new] L3-2: {module.__name__}.{name} does not exist yet (contract L3 §5)", pytrace=False)
+    return value
+
+
+def l3_2_parameter(function: Callable[..., Any], name: str) -> None:
+    """The keyword ``name`` of ``function``, which lot L3-2 adds; before it, a failure that says so."""
+    if name not in inspect.signature(function).parameters:
+        pytest.fail(f"[new] L3-2: {function.__qualname__}() takes no {name!r} yet (contract L3 §5)", pytrace=False)
+
+
+def via_of(state: Any) -> str:
+    return getattr(state, "confirmed_via", NO_VIA)
+
+
+def via_on_disk(root: Path) -> object:
+    return json.loads(state_file(root).read_text(encoding="utf-8")).get("confirmed_via", NO_VIA)
+
+
+def test_a_restore_is_confirmed_via_admin_cli_or_panel():
+    """(q) L3-2: ``ConfirmedVia`` is ``Literal["admin", "cli", "panel"]``, in this order, and ``RestoreState`` has the
+    field ``confirmed_via``."""
+    print_section("(q) L3-2 confirmed_via")
+    apply = apply_module()
+    via = get_args(l3_2_name(apply, "ConfirmedVia"))
+    assert via == CONFIRMED_VIA, f"ConfirmedVia is Literal{list(CONFIRMED_VIA)}: {via}"
+    assert "confirmed_via" in apply.RestoreState.model_fields, f"RestoreState has confirmed_via: {sorted(apply.RestoreState.model_fields)}"
+    print_success("admin, cli, panel")
+
+
+@pytest.mark.parametrize("via", CONFIRMED_VIA)
+def test_confirm_restore_records_how_it_was_confirmed(tmp_path, databases, checked, via):
+    """(q) L3-2: ``confirm_restore(..., confirmed_via=)`` records it, in the state it returns, in ``restore.json`` and
+    in what ``read_restore`` reads; ``confirmed_by`` stays as given."""
+    apply = apply_module()
+    l3_2_parameter(apply.confirm_restore, "confirmed_via")
+    instance = build(tmp_path / "instance", databases, checked)
+    state = apply.confirm_restore(instance.stage_id, confirmed_by=CONFIRMED_BY, confirmed_via=via, data_dir=instance.root, now=instance.confirm_at)
+    assert (state.confirmed_by, via_of(state)) == (CONFIRMED_BY, via), f"confirmed by {CONFIRMED_BY}, via {via}: {state}"
+    assert via_on_disk(instance.root) == via, f"restore.json says via {via}: {via_on_disk(instance.root)}"
+    assert via_of(apply.read_restore(instance.root)) == via, "read_restore reads it back"
+    print_success(f"via {via}")
+
+
+@pytest.mark.parametrize("confirmed_by", [CONFIRMED_BY, "cli", "panel"])
+def test_confirm_restore_without_confirmed_via_is_admin_whatever_the_username(tmp_path, databases, checked, confirmed_by):
+    """(q) L3-2: without ``confirmed_via`` a confirmation is the administrators' route's, ``admin``, even for an
+    administrator whose username is literally ``cli`` or ``panel``: the username never decides how it was confirmed."""
+    apply = apply_module()
+    l3_2_parameter(apply.confirm_restore, "confirmed_via")
+    instance = build(tmp_path / "instance", databases, checked)
+    state = apply.confirm_restore(instance.stage_id, confirmed_by=confirmed_by, data_dir=instance.root, now=instance.confirm_at)
+    assert (state.confirmed_by, via_of(state), via_on_disk(instance.root)) == (confirmed_by, "admin", "admin"), f"{confirmed_by!r}: via admin: {state}"
+    print_success(f"{confirmed_by!r}: via admin")
+
+
+@pytest.mark.parametrize("via", [None, *CONFIRMED_VIA], ids=["not-given", *CONFIRMED_VIA])
+def test_confirm_check_records_how_it_was_confirmed(tmp_path, databases, checked, via):
+    """(q) L3-2: ``restore_jobs.confirm_check(..., confirmed_via=)`` hands it to ``confirm_restore``: the state says it;
+    without one, ``admin``."""
+    apply = apply_module()
+    l3_2_parameter(restore_jobs.confirm_check, "confirmed_via")
+    instance = build(tmp_path / "instance", databases, checked)
+    given = {} if via is None else {"confirmed_via": via}
+    state = restore_jobs.confirm_check(instance.stage_id, confirmed_by=CONFIRMED_BY, data_dir=instance.root, **given)
+    expected = via or "admin"
+    assert (state.status, via_of(state), via_on_disk(instance.root)) == ("pending", expected, expected), f"pending, via {expected}: {state}"
+    assert via_of(apply.read_restore(instance.root)) == expected, "read_restore reads it back"
+    print_success(f"{via or 'not given'}: via {expected}")
+
+
+@pytest.mark.parametrize(("confirmed_by", "via"), [("cli", "cli"), (CONFIRMED_BY, "admin"), ("panel", "admin")])
+def test_a_state_written_before_l3_2_reads_its_confirmed_via_from_confirmed_by(tmp_path, confirmed_by, via):
+    """(q) L3-2: ``restore.json`` without the key ``confirmed_via`` — every state written before L3-2 — reads ``cli``
+    when ``confirmed_by`` is ``cli`` (the command line's mark), ``admin`` otherwise: before L3-2 the panel confirmed
+    nothing, so a username ``panel`` was an administrator's."""
+    apply = apply_module()
+    root = tmp_path / "instance"
+    root.mkdir(mode=0o700)
+    ensure_private_dir(restore_dir(root), root)
+    record = {
+        "format": 1,
+        "status": "pending",
+        "stage_id": UNRELATED_CHECK,
+        "data_dir": str(root.resolve()),
+        "confirmed_at": "2026-10-15T22:00:00Z",
+        "confirmed_by": confirmed_by,
+        "backup_created_at": "2026-10-14T09:00:00Z",
+        "backup_app_version": "v1.2.0",
+        "action": "same",
+    }
+    state_file(root).write_text(json.dumps(record), encoding="utf-8")
+    state_file(root).chmod(0o600)
+    state = apply.read_restore(root)
+    assert state is not None, "precondition: a state of before L3-2 is read"
+    assert (state.confirmed_by, via_of(state)) == (confirmed_by, via), f"{confirmed_by!r} without confirmed_via reads via {via}: {state}"
+    print_success(f"{confirmed_by!r}: via {via}")

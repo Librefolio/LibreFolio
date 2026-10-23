@@ -892,7 +892,9 @@ class TestInstanceAccounts:
 
         assert response.status_code == 200, f"{response.status_code} {response.text}"
         body = response.json()
-        assert set(body) == {"profile", "accounts", "email", "support_url", "legal", "client_log_level"}, f"the public configuration holds profile, accounts, email, support_url, legal and client_log_level — nothing missing, nothing undeclared: {body}"
+        # H-62 (contract L3 §6) adds ``mode``; B-33 (22/10) adds ``restore_interrupted``, red until B-33
+        keys = {"profile", "accounts", "email", "support_url", "legal", "client_log_level", "mode", "restore_interrupted"}
+        assert set(body) == keys, f"the public configuration holds profile, accounts, email, support_url, legal, client_log_level, mode and restore_interrupted — nothing missing, nothing undeclared: {body}"
         assert set(body["accounts"]) == {"registration_mode", "registration_locked", "first_account_open", "password_rules"}, f"accounts says nothing about users but whether the first account is still open, beside the mode, its lock and the password rules: {body['accounts']}"
         assert body["accounts"]["first_account_open"] is False, f"first_account_open is a yes or no, false once an account exists — never a count: {body['accounts']}"
         assert _comparable_accounts(body["accounts"])["password_rules"] == PASSWORD_RULES, f"the password rules are the backend's, the same on every instance: expected {PASSWORD_RULES} as (code, value), got {body['accounts']['password_rules']}"

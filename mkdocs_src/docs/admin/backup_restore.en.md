@@ -10,7 +10,7 @@ A backup is one archive with your whole LibreFolio in it: the database and the f
 
 ## 📦 What a Backup Holds {: #contents }
 
-The archive is a zip with the layout of the [data directory](filesystem.md): unpacked into an empty data directory, it is your instance again. A [secure backup](#secure) is the same zip, encrypted with a password into an `.lfbk` file.
+The archive is a zip with the layout of the [data directory](filesystem.md): unpacked into an empty data directory, it is your instance again. A [secure backup](#secure) is the same zip, encrypted with a password into an `.lfbk` file, and a [sealed backup](#sealed) is a secure backup whose password only a private key of yours opens, in a `.tar`.
 
 | In the archive | What it is |
 | --- | --- |
@@ -33,7 +33,7 @@ Never in the archive:
 - 🔒 **Keep it private.** A clear archive holds every user's data and is not encrypted: keep it, and every copy, as private as the server itself. A [secure](#secure) one opens only with its password: keep the password apart from it.
 - 🗝️ **Saved secrets and the instance key.** What LibreFolio encrypted with the instance key, such as the API key of a data source saved in the app, can be read only with that key.
     - A [secure backup](#secure) carries the key LibreFolio generated: its restore re-encrypts those secrets with the key of the installation that receives it, and there is nothing to do.
-    - A clear backup leaves the key out, and so does a secure one whose key came from the environment (`LIBREFOLIO_INSTANCE_KEY`, `LIBREFOLIO_INSTANCE_KEY_FILE`) or could not be used. On an installation with another key, LibreFolio keeps those secrets, reports them as unreadable and never uses a wrong value: **Settings › Plugins** says under each one *Saved, but this instance's key cannot read it: enter it again.* If you still have the old key, put it back first, before anyone enters a secret again: stop LibreFolio, put your copy of `secrets/instance.key` in place of the generated one, or set the old value of the variable, and start it again («The Instance Key» in [Environment Variables](configuration.md)). An installation that keeps its own key, such as a hosted one, or one whose own secrets are already under its key, takes the old key at the restore instead: restore from the command line with `--instance-key-file` and your copy of the old key, and the check re-encrypts those secrets with this installation's key («The Instance Key of Another Installation» in [CLI Admin Tools](cli_tools.md)); on an instance someone hosts for you, ask whoever runs it. Enter the secrets again only if the old key is lost: a secret entered under the new key would become unreadable once the old one is back.
+    - A clear backup leaves the key out, and so does a [sealed](#sealed) one, always, and a secure one whose key came from the environment (`LIBREFOLIO_INSTANCE_KEY`, `LIBREFOLIO_INSTANCE_KEY_FILE`) or could not be used. On an installation with another key, LibreFolio keeps those secrets, reports them as unreadable and never uses a wrong value: **Settings › Plugins** says under each one *Saved, but this instance's key cannot read it: enter it again.* If you still have the old key, put it back first, before anyone enters a secret again: stop LibreFolio, put your copy of `secrets/instance.key` in place of the generated one, or set the old value of the variable, and start it again («The Instance Key» in [Environment Variables](configuration.md)). An installation that keeps its own key, such as a hosted one, or one whose own secrets are already under its key, takes the old key at the restore instead: restore from the command line with `--instance-key-file` and your copy of the old key, and the check re-encrypts those secrets with this installation's key («The Instance Key of Another Installation» in [CLI Admin Tools](cli_tools.md)); on an instance someone hosts for you, ask whoever runs it. Enter the secrets again only if the old key is lost: a secret entered under the new key would become unreadable once the old one is back.
     - For the settings of the whole instance, every start also logs the error *Stored plugin secrets that the instance key cannot read: …* with their count, until they are entered again or the old key is back. No plugin shipped with LibreFolio keeps one today.
 - ⚙️ **Bring your configuration.** Keep a copy of your `.env` with the archives: on another installation, set again the options you need, the email ones included ([Where the Configuration Lives](email.md#where-it-lives)).
 - 🏠 **Any installation can take it**, if it runs the same version of LibreFolio or a newer one, whoever made the archive: Settings, the command line or a hosting panel.
@@ -48,7 +48,7 @@ Three ways give the same archive:
 - **The command line**, on the server: `backup create`.
 - **A hosting panel**, if someone hosts LibreFolio for you and their panel takes backups: see [Backups for Your Hosting Panel](hosting_providers.md#panel-backups).
 
-From Settings and from the command line, the backup can also be [secure](#secure): the same zip, encrypted with a password you choose. A hosting panel's backups are always clear.
+From Settings and from the command line, the backup can also be [secure](#secure): the same zip, encrypted with a password you choose. From the command line, it can also be [sealed](#sealed): encrypted with a random password that only a private key of yours opens, for backups made without anyone at the keyboard. A hosting panel's backups are clear, or sealed when `LIBREFOLIO_BACKUP_RECIPIENTS` is set.
 
 In every case LibreFolio keeps working during the backup, and one backup runs at a time, whoever started it.
 
@@ -140,7 +140,31 @@ For [secure](#secure) archives, add `--password-file` with the path of a file th
 - 🔢 The command prints what it did, and exits with `1` when the archive is not where you asked: keep that output, or have cron mail it to you.
 - 🧭 cron runs commands with a short `PATH`: if it does not find `pipenv` or `docker`, write the full path, which `command -v pipenv` prints.
 - 🗑️ LibreFolio deletes none of these archives: remove the old ones yourself. Keep several, and the last one made before each update.
-- 🔑 Keep a copy of `.env` as well, as private as the archives: no archive holds it. Keep one of `secrets/` too, unless your archives are secure: a clear archive leaves the instance key out, a secure one carries the key LibreFolio generated.
+- 🔑 Keep a copy of `.env` as well, as private as the archives: no archive holds it. Keep one of `secrets/` too, unless your archives are secure: a clear or [sealed](#sealed) archive leaves the instance key out, a secure one carries the key LibreFolio generated.
+- 🔏 For nightly archives that the server itself cannot open, without a password file on its disk, see [Every Night with cron](#sealed-cron), in Sealed Backups.
+
+### 🧰 Backups with restic or Backrest {: #restic }
+
+LibreFolio writes the archive; a backup tool can then send it off-site and keep a history of it. [restic](https://restic.net/) sends a folder to an S3 bucket, Backblaze B2, a server over SFTP and other places, encrypted, and forgets the old copies by a rule you give it. [Backrest](https://github.com/garethgeorge/backrest) is a web interface for restic, with its own scheduler. LibreFolio needs neither: they only read the folder its archives are written to.
+
+A nightly recipe for a host installation, with restic's variables in a private file (`chmod 600`):
+
+```bash
+# /etc/librefolio-restic.env: where the copies go, and the file with restic's password
+RESTIC_REPOSITORY=sftp:backup@nas.example:/srv/restic/librefolio
+RESTIC_PASSWORD_FILE=/root/.restic-librefolio-password
+```
+
+```text
+30 3 * * * cd /path/to/LibreFolio && pipenv run ./dev.py backup create --output /var/backups/librefolio/ && . /etc/librefolio-restic.env && restic backup /var/backups/librefolio/ && restic forget --keep-daily 7 --keep-weekly 4 --prune && find /var/backups/librefolio/ -name 'librefolio-backup-*' -mtime +2 -delete
+```
+
+The line makes the archive, sends the folder, keeps seven daily and four weekly copies in the repository, and removes the local archives older than two days. With Docker, make the archive with the command of [Keep Copies Off the Server](#keep-copies) and give restic the host folder `LibreFolio-data/backups/`. With Backrest, add a plan on that same folder, with its schedule and its retention, and leave `backup create` in cron.
+
+- 🔐 **restic's password is a key to all your data.** restic encrypts the repository with it, but anyone who has it reads every copy in it: keep it as private as the password of a [secure backup](#secure), and a copy of it elsewhere. Lost, the repository cannot be read.
+- 🔑 **No public key.** restic needs its password to write as well as to read, so the server that sends the copies can also read them. If that matters to you, send [sealed backups](#sealed-cron) (`--sealed`): restic then stores files that only your private key opens, and neither the server nor restic's password reads them. [Secure backups](#secure) (`--password-file`) work too, but their password then sits in a file on the same server.
+- 📦 **Little to deduplicate.** Each archive is compressed, and a secure one is encrypted: two nights look different to restic, which stores each archive almost whole. Plan the repository's space for the copies you keep.
+- 🧪 **Try a restore before you need one.** `restic restore latest --target /tmp/librefolio-check`, then check the archive with [`backup restore --dry-run`](#check).
 
 ---
 
@@ -156,6 +180,224 @@ A secure backup is the archive of a clear backup, encrypted with a password you 
 - 💽 **On the server, while it is made,** the clear archive is written first, in the work folder of the backup inside `backups/`, which only the server's user can open; it is removed as soon as the `.lfbk` is written, and when the backup fails. A check decrypts the backup the same way, in a private folder of the data directory, and removes the decrypted archive once it has used it. A run killed outright, by a power cut or `kill -9`, cannot clean up: the next start of LibreFolio removes what it left in clear, and a backup cut short that way must be made again. The folder of a `backup inspect` killed that way goes once it is an hour old.
 
 The design, for developers: [Secure Backups (`.lfbk`)](../developer/architecture/security.md#secure-backups).
+
+---
+
+## 🔏 Sealed Backups: a Key Instead of a Password {: #sealed }
+
+A sealed backup is for a server that makes backups on its own, such as every night, without anyone typing a password and without keeping one on its disk. LibreFolio makes a [secure backup](#secure) with a random password of its own, encrypts that password with [age](https://age-encryption.org/) for a public key you give it, and forgets it: only the private key that goes with it opens the password, and the server that made the backup cannot open it again. A hosting panel's nightly backups work this way, and so can yours.
+
+In three commands:
+
+```bash
+# Once, on a computer of yours (not the server): a key pair; the file holds the private key
+pipenv run ./dev.py backup keygen --identity-file ~/librefolio-backup-key.txt
+
+# On the server: a sealed backup for that public key (the age1… line keygen printed)
+pipenv run ./dev.py backup create --recipient age1… --output /mnt/nas/librefolio/
+
+# Wherever the private key is: check, unpack or restore it
+pipenv run ./dev.py backup restore librefolio-backup-<date>-<time>.tar --identity-file ~/librefolio-backup-key.txt
+```
+
+The sections below explain each step: what the file holds, how to get a key and keep it, how to seal every night, and how to open a sealed backup, with LibreFolio or without it.
+
+```mermaid
+flowchart LR
+    subgraph night["Every night, on the server"]
+        LF["LibreFolio"] -->|"random password"| ENV["backup.lfbk"]
+        LF -->|"the same password, encrypted for age1…"| PWD["password.age"]
+        LF --> MAN["manifest.json"]
+        MAN --> TAR["librefolio-backup-….tar"]
+        PWD --> TAR
+        ENV --> TAR
+    end
+    TAR --> STORE["Your storage: a NAS, restic, a hosting panel"]
+    subgraph restore["To restore, where the private key is"]
+        KEY["private key AGE-SECRET-KEY-1…"] -->|"opens password.age"| PASS["the password"]
+        PASS --> RES["restore of backup.lfbk"]
+    end
+    STORE --> RES
+```
+
+### 📦 What the `.tar` Holds {: #sealed-contents }
+
+A sealed backup is one file, `librefolio-backup-<date>-<time>.tar`, named after the moment the backup started, in UTC, like the other archives. It is a plain, uncompressed tar with exactly three files, always in this order:
+
+| # | File | What it is |
+| --- | --- | --- |
+| 1 | `manifest.json` | A short description, in clear: the format (`lfbk-tar`, version `1`), the public keys the password is encrypted for (`recipients`), the size and SHA-256 of `backup.lfbk` (`lfbk_size`, `lfbk_sha256`), when the backup was made (`created_at`, UTC), the LibreFolio version and the database revision that made it. It holds no personal data |
+| 2 | `password.age` | The password of this backup, encrypted with age for every key in `recipients`, in age's binary form. Once opened, it is 43 characters of letters, digits, `-` and `_`, without a line break |
+| 3 | `backup.lfbk` | A [secure backup](#secure), the same envelope Settings › Administration › Backup makes, encrypted with that password |
+
+- 🎲 **A new password every time.** The server draws 32 random bytes for each backup: no rule to follow, nothing to remember, and two backups never share a password. The password lives only in the memory of the backup while it runs: never in a file, a log or the job's state.
+- 🚪 **The server cannot open its own backup.** Once `password.age` is written, LibreFolio keeps only the public key, which encrypts but opens nothing. Whoever takes the server, its disk or its backups folder takes no way to read the backups it made.
+- 🗝️ **The instance key never goes in**, even one LibreFolio generated, unlike a secure backup made from Settings. Whoever restores it on another installation gives that installation the old key (`LIBREFOLIO_INSTANCE_KEY`, see [What Follows](#what-follows)) or enters the keys of the data providers again. Keep a copy of `secrets/` as you would for a clear archive.
+- 👀 **Whom is it sealed for?** Read the manifest without unpacking anything: `tar xOf librefolio-backup-<date>-<time>.tar manifest.json` prints it, and its `recipients` list holds the `age1…` keys. Compare them with the `# public key:` line of your key file.
+- 🧱 **Keep the file as it is.** LibreFolio reads only a tar of these three files, in this order, with plain headers: a tar rebuilt by hand, such as with `tar cf`, is refused (`sealed_tar_invalid`). Copy, move and store the original.
+
+### 🗝️ Get a Key {: #sealed-key }
+
+The key is an age key pair, made **on a computer of yours, not on the server**: a private key, `AGE-SECRET-KEY-1…`, which opens the backups, and a public key, `age1…`, which only seals them. Two tools make one; use either.
+
+With LibreFolio, where it is installed:
+
+```bash
+pipenv run ./dev.py backup keygen --identity-file ~/librefolio-backup-key.txt
+```
+
+It writes the private key into the file, readable by its owner only (`0600`), and never over a file that exists, then prints the public key:
+
+```text
+✅ Private key written: /home/you/librefolio-backup-key.txt (only its owner can read it). Keep it off this server, and a copy of it elsewhere: a lost key opens no backup.
+🔑 Public key, for --recipient or LIBREFOLIO_BACKUP_RECIPIENTS:
+age1…
+```
+
+With the `age` tool, on any computer: `age-keygen -o ~/librefolio-backup-key.txt` writes the same file and prints the public key; `age-keygen -y ~/librefolio-backup-key.txt` prints it again later. Both tools write the same format, three lines: `# created: …`, `# public key: age1…` and the private key. A file from either one works with `--identity-file` and with `age -d -i`.
+
+You need the `age` tool only to open a backup without LibreFolio ([Open One by Hand](#sealed-by-hand)). To install it on your computer:
+
+=== "Debian / Ubuntu"
+
+    ```bash
+    sudo apt install age
+    ```
+
+=== "Arch Linux"
+
+    ```bash
+    sudo pacman -S age
+    ```
+
+    An AUR helper such as `yay -S age` works too.
+
+=== "Fedora"
+
+    ```bash
+    sudo dnf install age
+    ```
+
+=== "macOS"
+
+    ```bash
+    brew install age
+    ```
+
+=== "Windows"
+
+    ```powershell
+    winget install --id FiloSottile.age
+    ```
+
+    Or download it from [the releases of age](https://github.com/FiloSottile/age/releases).
+
+Where to keep the private key:
+
+- 🏠 **Off the server.** A private key on the server that makes the backups would undo the point: whoever takes the server would open them all. Keep it on your computer, in a password manager that holds files, or on a USB stick you keep at home.
+- 📄 **A second copy elsewhere.** The key is one line of 74 characters: a copy in a password manager, or printed on paper, in another place, survives the loss of the first.
+- 🆘 **A lost key opens nothing.** LibreFolio keeps no copy, and no one can recover it: every backup sealed only for that key is lost with it. Make a new key, change the variable, and keep the backups made from then on.
+- 🔓 **A leaked key opens every backup** sealed for it, to whoever also has the `.tar` files. Make a new key at once, seal for it ([Change the Key](#sealed-rotation)), then delete the copies sealed only for the old one when you no longer need them.
+
+### 🌙 Seal Every Backup: `LIBREFOLIO_BACKUP_RECIPIENTS` {: #sealed-recipients }
+
+`--recipient age1…` seals one backup. To seal them all, put the public key in `LIBREFOLIO_BACKUP_RECIPIENTS`, in `.env`:
+
+```bash
+LIBREFOLIO_BACKUP_RECIPIENTS=age1…
+```
+
+With Docker Compose, `env_file: .env` passes it to the container: run `docker compose up -d` to recreate it, as `docker compose restart` keeps the old values. On a host installation, `pipenv run` reads `.env`; restart the server.
+
+- 🔢 **One or two keys**, comma-separated; the spaces around each one do not count. Two only while you [change the key](#sealed-rotation): the password is then encrypted for both, and either private key opens it.
+- 🧾 **Only age keys**, `age1…`, as `backup keygen` or `age-keygen` prints them: no SSH key, no private key, no other kind of age key, and never the same key twice.
+- 🌐 **Not a secret.** A public key seals and opens nothing, so there is no `_FILE` form, and it may sit in `.env` with the other settings.
+- 🔁 **Read each time it is used**: by `backup create --sealed`, and by every backup a [hosting panel](hosting_providers.md#panel-backups) starts, which it seals. The backups of Settings › Administration › Backup are not sealed: they keep the password you type.
+
+**The check.** The **Security** tab of Settings › Administration, and the start log, report the variable as `backup.recipients`, in one of four states:
+
+| State | What the tab says | What happens |
+| --- | --- | --- |
+| ✅ Set, usable | *The hosting panel's backups are sealed for 1 key: only the private key opens their password.* (or *2 keys*) | `backup create --sealed` and the hosting panel's backups are sealed |
+| ✅ Not set, your own installation | *No recipients are set for the hosting panel's backups: the panel gets plain zip archives.* | `backup create --sealed` stops with `❌ LIBREFOLIO_BACKUP_RECIPIENTS is not set: …`; a hosting panel, if you have one, gets clear zips, as before |
+| ❌ Set, not usable | *LIBREFOLIO_BACKUP_RECIPIENTS cannot be used (…): one or two age1… recipients, comma-separated. The hosting panel's backups answer 503 until it is fixed.* The parentheses hold `BACKUP_RECIPIENTS_INVALID` (not an `age1…` key, or an empty item between two commas), `BACKUP_RECIPIENTS_TOO_MANY` (more than two) or `BACKUP_RECIPIENTS_DUPLICATE` (the same key twice) | The server starts anyway. `backup create --sealed` stops with the same reason, and a hosting panel's backups answer `503` `backup_panel_unavailable`: never a clear zip instead |
+| ❌ Not set, `managed` profile | *LIBREFOLIO_BACKUP_RECIPIENTS is not set: a managed instance never hands a plain backup to its hosting panel, whose backups answer 503 until it is set.* | An instance [hosted for others](hosting_providers.md#managed-profile) never hands its panel a backup in clear: its panel's backups answer `503` `backup_panel_unavailable` until the variable is set |
+
+The messages never quote the value, so that a private key pasted by mistake does not land in a log.
+
+#### 🔄 Change the Key {: #sealed-rotation }
+
+Two keys at once let you change the key without a night left uncovered:
+
+1. **Make the new key** on your computer: `backup keygen --identity-file ~/librefolio-backup-key-2.txt`, or `age-keygen`.
+2. **Seal for both.** Write the old key and the new one, comma-separated: `LIBREFOLIO_BACKUP_RECIPIENTS=age1…old,age1…new`, then recreate the container or restart the server.
+3. **Check the new key.** After the next backup, open it with the new private key alone: `backup inspect librefolio-backup-<date>-<time>.tar --identity-file ~/librefolio-backup-key-2.txt` ends with `✅ Every entry matches the manifest`.
+4. **Drop the old key** from the variable, `LIBREFOLIO_BACKUP_RECIPIENTS=age1…new`, and restart again.
+5. **Keep the old private key** as long as you keep backups made before the change: they are sealed only for it, as their `manifest.json` says. Once the last of them is gone, delete it.
+
+### 🔓 Open a Sealed Backup {: #sealed-open }
+
+A sealed backup opens wherever its private key is, in three ways.
+
+**With LibreFolio**, the commands that take a secure backup take a sealed one too, with `--identity-file`, the file of the private key:
+
+```bash
+# Is it whole, and what does it hold?
+pipenv run ./dev.py backup inspect librefolio-backup-<date>-<time>.tar --identity-file ~/librefolio-backup-key.txt
+
+# Can this installation restore it? A restore tried on a copy
+pipenv run ./dev.py backup restore librefolio-backup-<date>-<time>.tar --identity-file ~/librefolio-backup-key.txt --dry-run
+
+# Restore it at the next start of the server
+pipenv run ./dev.py backup restore librefolio-backup-<date>-<time>.tar --identity-file ~/librefolio-backup-key.txt
+
+# The plain zip inside, to use by hand
+pipenv run ./dev.py backup decrypt librefolio-backup-<date>-<time>.tar --identity-file ~/librefolio-backup-key.txt -o backup.zip
+```
+
+- 🔎 A sealed backup is recognised by its content, whatever its name. The command checks the `.tar` and its manifest, opens `password.age` with the key, checks that the password opens `backup.lfbk`, and only then goes on as for a [secure backup](#check) with its password, printing `🔏 Sealed backup <path>: its password opened with <key file>`.
+- 💽 `backup.lfbk` is first copied into a private folder of the system's temporary folder, removed at the end: that folder needs room for it, about the size of the `.tar`.
+- 🐳 With Docker, the key file is read before the command switches to the server's user, as a password file is: a Docker secret works. Still, a restore on the server puts the private key there for a moment: remove it once the restore is confirmed, or open the backup by hand on your computer and send only `backup.lfbk` and its password.
+- ❌ Without `--identity-file`, a `.tar` stops with `sealed_backup_needs_key`; with `--identity-file`, any other archive stops too. The other refusals: [Opening a Sealed Backup](#sealed-problems).
+
+**In Settings › Administration › Backup**, the restore card takes a `.lfbk` and its password, not the `.tar`, which it refuses with `sealed_backup_needs_key`. Unpack the `.tar` and open the password on your computer, as below (steps 1 and 2), then choose `backup.lfbk` in **Restore an archive** and paste the password when the card asks for it ([Restore from Settings › Administration › Backup](#restore-settings)).
+
+#### 🧰 Open One by Hand {: #sealed-by-hand }
+
+Without LibreFolio at hand, such as on a new computer after the old server is gone, `tar` and `age` open it. `tar` comes with Linux, macOS and Windows 10 and later; `age` installs as in [Get a Key](#sealed-key).
+
+```bash
+# 1. Unpack the three files
+tar xf librefolio-backup-<date>-<time>.tar
+
+# 2. Open the password with the private key, into a private file
+age -d -i ~/librefolio-backup-key.txt -o password.txt password.age
+
+# 3. Restore backup.lfbk with that password, on the installation that receives it
+pipenv run ./dev.py backup restore backup.lfbk --password-file password.txt
+```
+
+- 🔐 `password.txt` holds the key to the whole backup: delete it as soon as the restore is confirmed. Without `-o`, `age` prints the password on the terminal instead, with no line break after it: paste it where LibreFolio asks for it.
+- 🐳 With Docker, copy `backup.lfbk` into `LibreFolio-data/backups/` and run `docker compose exec librefolio python dev.py backup restore /app/backend/data/prod-docker/backups/backup.lfbk`: at a terminal, the command asks the password, without showing it.
+- 🔗 From there, `backup.lfbk` is an ordinary secure backup: [Check a Backup](#check) and [Restore on This Installation](#restore) apply as they are.
+
+### ⏰ Every Night with cron {: #sealed-cron }
+
+With the variable set, `backup create --sealed` makes a sealed backup with no terminal and no password: a cron line is all it takes. Every night at 03:30, as the user that runs LibreFolio (`crontab -e`):
+
+```text
+# Host installation: into a folder of a NAS that is mounted
+30 3 * * * cd /path/to/LibreFolio && pipenv run ./dev.py backup create --sealed --output /mnt/nas/librefolio/
+
+# Docker: -T, as cron gives the command no terminal; the archive lands in LibreFolio-data/backups/
+30 3 * * * cd /path/to/librefolio && docker compose exec -T librefolio python dev.py backup create --sealed
+```
+
+- ✅ The command ends with `🔏 Sealed for 1 key: only the matching private key opens its password, and this server cannot.`, and exits with `1` when the archive is not where you asked, as in [Keep Copies Off the Server](#keep-copies), whose notes on `--output`, `PATH` and old archives apply here too.
+- ❌ `--sealed` goes without `--encrypt`, `--password-file` and `--password-stdin`, and without `--recipient`: the command stops before anything is written. A variable not set or not usable stops it too, with the reason.
+- 🧪 Now and then, open a recent backup with the private key ([Open a Sealed Backup](#sealed-open)): a seal nobody has opened is a seal nobody has tested.
+
+**With restic or Backrest.** Sealed backups fix the weak point noted in [Backups with restic or Backrest](#restic): restic needs its password on the server to write, so whoever has the server can read the repository, but a repository of sealed `.tar` files gives them nothing they can open. Use the recipe of that section with `backup create --sealed --output /var/backups/librefolio/` in place of `backup create --output …`; restic's own encryption stays, as a second layer. As for secure backups, two nights look different to restic, so plan the repository's space for the copies you keep. To restore, `restic restore latest --target /tmp/librefolio-check`, then [open the `.tar`](#sealed-open) where the private key is.
 
 ---
 
@@ -410,6 +652,8 @@ Update the receiving LibreFolio first ([Updating LibreFolio](../user/installatio
 | `database_damaged` | The archive's database fails SQLite's integrity check, SQLite cannot read its schema, or it holds text that is not UTF-8: LibreFolio never writes such text, and after a restore every list holding it would fail to load. Settings › Administration › Backup: *The backup's database is damaged: it cannot be restored.* | Copy the archive again from where you keep it, or use another one. Text that is not UTF-8 means another program wrote to the database, or the archive was changed |
 | `database_foreign_objects` | The archive's database holds a trigger, a view or a virtual table. LibreFolio never creates them, and their SQL would run during the check and in the server after a restore, so the check refuses them before it opens the copy for anything else. Settings › Administration › Backup: *The backup's database holds triggers, views or other objects LibreFolio never creates: it was not made by LibreFolio, or it was changed, and it cannot be restored.* | The archive was not made by LibreFolio, or was changed after: use another backup |
 | `not_a_backup` | Not an archive LibreFolio wrote, such as a data directory zipped by hand | Put such a copy back [by hand](#by-hand), into an empty data directory |
+| `sealed_backup_needs_key` | A sealed nightly backup of a hosting panel (`.tar`): its password is inside, encrypted for the provider's key, and the check cannot open it. Settings › Administration › Backup: *This is a sealed backup of a hosting panel: its password is encrypted for the provider's key. Extract backup.lfbk, open password.age with age, then restore backup.lfbk with that password.* | Restore it where its private key is: `backup restore <archive>.tar --identity-file <key file>` ([Sealed Backups](#sealed)), or the way your hosting provider tells you |
+| `sealed_no_identity`, `sealed_identity_invalid`, `sealed_tar_invalid`, `sealed_manifest_invalid`, `sealed_password_invalid` | A [sealed backup](#sealed) given with `--identity-file` that does not open | See [Making or Opening a Sealed Backup](#sealed-problems) |
 | `no_space` | The copy needs more free space than the disk of the data directory has | Free some space: the archive unpacked, plus twice its database, plus 64 MB, and for a secure backup the size of its `.lfbk` too |
 | `archive_unreadable` | The archive cannot be opened, most often because the server's user may not read it | With Docker and the official image, `sudo chown 1000:1000 <archive>` on the host gives it to that user |
 | `restore_already_pending` | Another restore waits for the next start | Restart LibreFolio to apply it, or drop it with `backup pending --cancel` or **Cancel the restore** in Settings › Administration › Backup |
@@ -425,14 +669,43 @@ Two more messages:
 
 Every code: «Refusals — what the codes mean» in [CLI Admin Tools](cli_tools.md).
 
-One warning lets the restore go on, but read it before you confirm:
+Two notices let the restore go on, but read them before you confirm.
 
+- 🔑 *Your account is not among the administrators of this backup: after the restart you cannot sign in with it.* This one is shown only in the report of Settings › Administration › Backup, in red. After a restore you sign in with an account of the backup, with the password it had then, and the account you are using now is not in it. Before you confirm, make sure you know the password of one of the administrators the report names. If you do not know it, use another backup.
 - `⚠️ Ledger totals differ from the backup's (<n> lines):`, or *Ledger totals differ from the backup's on 2 lines:* in the report of Settings › Administration › Backup: the cash of a broker or the quantity of a position in the copy, once up to date, is not the one the backup recorded. Transactions were lost, added or changed between the backup and the copy, by a migration that corrects data for instance. Read the lines that follow: each gives a broker's number, then a currency or an asset's number, with the backup's amount before the arrow and the copy's after it. The numbers are those in the addresses of the broker's and the asset's pages in the app, `/brokers/<id>` and `/assets/<id>`. Compare these lines with the instance the backup comes from. The warning never blocks the restore: whether you confirm it is up to you.
+
+### 🔏 Making or Opening a Sealed Backup {: #sealed-problems }
+
+Making one, with `backup create --sealed` or `--recipient`: nothing is written, and the command exits with `1`.
+
+| What you see | Why | What to do |
+| --- | --- | --- |
+| `❌ LIBREFOLIO_BACKUP_RECIPIENTS is not set: give the recipients there, or with --recipient age1…` | `--sealed` found no variable: not in `.env`, or the container was not recreated after it was added | Set it ([Seal Every Backup](#sealed-recipients)), then `docker compose up -d`, or run the command from the project folder with `pipenv run`, which reads `.env` |
+| `❌ LIBREFOLIO_BACKUP_RECIPIENTS: item 2 is not an age recipient: expected age1… as age-keygen prints it (BACKUP_RECIPIENTS_INVALID)`, or `expected at most 2 recipients, comma-separated (BACKUP_RECIPIENTS_TOO_MANY)`, or `item 2 repeats an earlier recipient (BACKUP_RECIPIENTS_DUPLICATE)` | The variable holds something else than one or two different `age1…` keys: a private key, an SSH key, a comma too many | Write the public keys only, as `keygen` or `age-keygen -y` prints them. The **Security** tab says the same (`backup.recipients`) |
+| `❌ A --recipient is not an age recipient: expected age1…, as keygen or age-keygen prints it`, `❌ The same recipient is given twice`, `❌ At most 2 recipients: --recipient twice, while a key is being changed` | The same rules, for `--recipient` | Give one or two different public keys |
+| `❌ A sealed backup draws a password of its own: --sealed and --recipient go without --encrypt, --password-file or --password-stdin` | A sealed backup has no password to give | Drop the password options |
+| `❌ --sealed reads the recipients from LIBREFOLIO_BACKUP_RECIPIENTS: give them there or with --recipient, not both` | `--sealed` and `--recipient` together | Keep one of the two |
+| `❌ <path> already exists: a key file is never written over` | `backup keygen` never replaces a key: the old one may still open backups | Choose another file name, or move the old file away first if you are sure no backup needs it |
+
+Opening one, with `--identity-file`: the command changes nothing and exits with `1`. The key file is read first, then the `.tar`.
+
+| What you see | Why | What to do |
+| --- | --- | --- |
+| `(sealed_backup_needs_key)` | A `.tar` given without `--identity-file`, on the command line or in Settings › Administration › Backup | Give the key file, or [open it by hand](#sealed-by-hand) and restore `backup.lfbk` with its password |
+| `❌ --identity-file opens a sealed backup (.tar) only: <path> is not one` | A `.zip` or an `.lfbk` given with `--identity-file` | Drop `--identity-file`: those archives open as usual |
+| `❌ The key file cannot be read (sealed_identity_invalid)`, `Line 3 of the key file is not an age key`, `The key file holds no age key` | The file is not a private key: the public key alone, a key copied with a missing character, or a file the command may not read | Give the file `keygen` or `age-keygen` wrote, with its `AGE-SECRET-KEY-1…` line. Comments (`#`) and blank lines may stay |
+| `❌ None of the keys given opens the password of this backup (sealed_no_identity)` | The backup was sealed for another key: an older one, before a [change of key](#sealed-rotation), or a hosting provider's | Compare its `recipients` (`tar xOf <archive>.tar manifest.json`) with the `# public key:` line of your key files, and give the matching one |
+| `(sealed_tar_invalid)`, such as `The archive is cut short` or `The archive does not hold manifest.json, password.age and backup.lfbk, in this order` | Not the `.tar` LibreFolio wrote: cut short by a copy, rebuilt by hand with `tar cf`, or not a sealed backup | Copy the original again from where you keep it, or use another night's backup |
+| `(sealed_manifest_invalid)`, such as `The manifest does not describe backup.lfbk: its size or SHA-256 differs` | `manifest.json` was changed, or `backup.lfbk` was | The copy is damaged: use another one |
+| `(sealed_password_invalid)` | The key opened `password.age`, but what is inside is not a password LibreFolio writes | Not a LibreFolio backup, or changed: use another copy |
+| `❌ The password does not open this backup (wrong_password)` | The key opened the password, but that password does not open `backup.lfbk`: the two files come from different backups, or one was changed | Use another copy, kept whole as LibreFolio wrote it |
+| `(envelope_damaged)`, during the check or the restore | A byte of `backup.lfbk` was changed after the backup was made: the password was right | Use another copy: LibreFolio reads no part of a damaged `.lfbk` |
 
 ### 🔁 The Restore Does Not Go Through {: #restart-problems }
 
 | What you see | Why | What to do |
 | --- | --- | --- |
+| `backup pending` says `The state of the restore cannot be read`, `(restore_state_unreadable: <reason>)` | `.restore/restore.json` cannot be used: its permissions (`io`), a link or a folder in its place (`not_a_file`), or content LibreFolio did not write (`invalid`). A restore may have stopped half way. No checked copy is removed meanwhile | For `io`, give `.restore/` back to the user that runs LibreFolio and look again. Otherwise stop LibreFolio and run `backup pending --recover`: the data of before comes back from `.restore/previous/`. Then start it, or restore a backup again: «An Unreadable Restore State» in [CLI Admin Tools](cli_tools.md) |
 | `backup pending` ends with `(server_running)` | At the last start, another server process served the data directory: a worker started again on its own, or a second server | Restart the whole server, never one worker, and run one server per data directory |
 | `backup pending` ends with `(instance_blocked)` | The hosting provider blocked the instance: a restore is never applied on a blocked instance | Nothing: the first start after the unblock applies it. `backup pending --cancel` drops it meanwhile |
 | `backup pending` ends with `(other_data_directory)` | The server found its data directory under another path than the one the restore was confirmed for, such as a copy of the data directory | `backup pending --cancel`, or **Cancel the restore** in Settings › Administration › Backup, then restore the archive again: with `backup restore`, where the server runs |
@@ -496,3 +769,4 @@ The window of the restart gives a reason in words where `backup pending` gives a
 - 🏢 **[Hosting for Others](hosting_providers.md)** — [Backups for Your Hosting Panel](hosting_providers.md#panel-backups) and [The Upload Limit of a Restore](hosting_providers.md#restore-upload-limit)
 - 🧑‍💻 For developers: **[Restoring a Backup](../developer/architecture/security.md#backup-restore)** — The swap, the journal, the rollback and the restart
 - 🧑‍💻 For developers: **[Secure Backups (`.lfbk`)](../developer/architecture/security.md#secure-backups)** — The envelope, the password and the instance key a secure backup carries
+- 🧑‍💻 For developers: **[Sealed Backups (`.tar`)](../developer/architecture/security.md#sealed-backups)** — The three members, age through `pyrage`, and the strict reader

@@ -10496,5 +10496,73 @@ mescolare le righe del runner dei due lotti:
     solo quelle vicine alla finestra; `/api/v1/system/health` non era mai montata. La pagina era sana (157 percorsi,
     28 tag, nessun errore). Il test-author ha cambiato il controllo: almeno 3 operazioni disegnate, ognuna un percorso del
     documento che la pagina stessa ha scaricato. Secondo giro **3/3 verdi** (log `ondata4/h-r5-e2e-api-docs-2.log`).
+11. ✅ **H-62, la rotta di ripristino del pannello e il modo «ripristino in corso»** (22/10, base `c0b6a8d06`; contratto
+    `BACKUP-contratto-L3.md` §5-§7, CONCORDATO; analisi `H-62-analisi-turno1.md`; risposte Q5 423 per chiunque, Q6 pagina
+    semplice sullo sfondo della login, Q7 500, Q8 i codici; Q1-Q4 a B).
+    > **Note implementazione**: `config.platform.awaiting_restore()` (`LIBREFOLIO_AWAIT_RESTORE`, valori del blocco,
+    > `await_restore` alias per B); controllo d'avvio; `lifecycle.Step.skip_when` sui sei passi del §6. Scope
+    > `backup:restore` solo biglietto (`access.py`). `api/v1/backup/panel_restore.py`: le 7 rotte, biglietto → 423 → 409,
+    > solo `.lfbk` (il resto si cancella), ripetibilità di confirm e restart, log della conferma con `kid`; schemi chiusi
+    > in `schemas/hosting_panel.py` (`PanelRestoreStageReport` 20 campi, `administrators_count`; `PanelRestoreStatus` con
+    > `confirmed_via`). `refuse_when_awaiting_restore` seconda dipendenza del router, `ALLOWED_WHEN_AWAITING_RESTORE`;
+    > `mode` in ready, instance e panel/status (+ `restore`, 500 se illeggibile); wake-sync `awaiting_restore`. Frontend:
+    > `InstanceAwaitingRestorePage` (sfondo `AnimatedBackground` della login, `role="status"`, si ricarica da sola),
+    > `AwaitingRestoreGate` nel layout radice, il client API ricarica la configurazione sul 423 del modo; 4 chiavi in 4 lingue.
+    > **Rossi → verdi**: backend 169 nuovi (163 rossi) → verdi tranne i 4 «Needs B» (Q1, Q2, Q3, Q4); frontend 36 nuovi →
+    > verdi; 9 file aggiornati 503/503; `services all` verde, `api all` verde tranne i 4 «Needs B».
+    > **⚠️ Fuori pista**: le 7 rotte nel client generato rendono «troppo profondo» un `vi.spyOn(zodiosApi, …)` di
+    > `ForgotPasswordCard.email.test.ts`: cast al modello già usato da altri 4 test (test-author). Il layout radice è
+    > legacy: `children` del gate opzionale.
+    > **Dopo il merge di B** (commit `4eb8e0b59`, merge `dc5f488d4`, 22/10): ✅ `start_check(origin="panel")` e
+    > `_panel_check` (gli stage non del pannello sono 404 per lui, anche alla conferma); `running_check` → 202 con lo stesso
+    > stage; `confirm_check(confirmed_by=<kid>, confirmed_via="panel")`. Gli schemi del pannello riusano i tipi dei campi
+    > di B (B aveva aggiunto due codici di avviso: lo schema chiuso li avrebbe rifiutati con un 500). I 4 «Needs B» verdi;
+    > `backup-panel`, `backup-restore`, `backup-staging`, `backup-apply` verdi; docs con il 409 `backup_awaiting_restore`.
+    > **⚠️ Fuori pista**: rese pubbliche le funzioni di `restore.py` e poi rimesse private su richiesta del coordinatore
+    > (B tocca quel file in B-33); il `getattr` di B in `panel.py` resta, perché i test di B sostituiscono `await_restore`
+    > sul modulo.
+12. ✅ **H-62, le cure della revisione di sicurezza** (22/10, `SEC-review-backup-H62.md`, nessun HIGH né MEDIUM; punti
+    3, 5, 6, 9 a H).
+    > **Note implementazione**: (3) l'upload guarda i primi byte: senza `LFBK` risponde 400 `restore_envelope_required`
+    > prima di scrivere e senza leggere il resto; il caricamento buono di prima resta (il writer non arriva a `finish`).
+    > (5) su `StagingBusyError` un secondo `running_check`: chi perde la corsa risponde con lo stage del vincitore.
+    > (6) il secondo SIGTERM è innocuo (uvicorn 0.52.4: `should_exit` idempotente, nel master `should_exit.set()`; il
+    > watchdog si arma una volta), ma resta una finestra dopo il ripristino dei gestori: flag di processo
+    > `_restart_requested`, un riavvio ripetuto risponde 202 senza segnale. (9) il 503 dell'upload documenta
+    > `backup_upload_unavailable`; `api sync`.
+    > **Rossi → verdi** (test-author): 9 rossi (PR-060 ×4, PR-062 ×2, PR-070, PR-073, HPR-008) → `panel-restore` 123/123,
+    > `hosting-panel-routes` 39/39; `front check` 0 errori.
+    > **⚠️ Fuori pista**: PR-022 (413 su corpo in streaming) mandava byte zero: ora risponde prima il magic, il test manda
+    > `LFBK` + riempitivo. Uso anche `_WRITE_CHUNK` di `restore.py` (privata, come le altre).
+13. ✅ **B-33, la parte d'avvio** (22/10, base `06515e795` con il merge di B; decisione del developer: lo stato del
+    ripristino illeggibile non serve i dati e mostra una pagina «ripristino interrotto, serve l'amministratore»).
+    > **Note implementazione**: `services/platform/restore_guard.py` (`probe_restore_state`, `restore_interrupted`) sul
+    > gancio di B `apply.restore_state_problem`; passo d'avvio `restore-state` subito dopo `pending-restore`; con lo stato
+    > illeggibile saltano `post-migration-fixes`, `lone-transfer-legs` e i sei passi del modo (`_serving_no_data`);
+    > restano database, impostazioni, i passi del ripristino, `serving-lock` (così `--recover` rifiuta a server acceso) e
+    > `idle-monitor`. Terza dipendenza del router `refuse_when_restore_interrupted`: 423 `instance_restore_interrupted`
+    > per chiunque, stesso elenco di rotte ammesse del modo. `/system/instance` + `restore_interrupted`; wake-sync
+    > `restore_interrupted`. Frontend: `InstanceRestoreInterruptedPage` (sfondo della login, `role="alert"`, link a
+    > `admin/cli_tools/#backup-pending-unreadable` nella lingua dell'interfaccia, si ricarica da sola), il gate la mostra
+    > prima della pagina d'attesa; il client ricarica la configurazione sul 423; 5 chiavi in 4 lingue.
+    > Fuori (D6/D7, in attesa del developer): rifiuto dei job del pannello, `instance_key`, `restore.state = unreadable`
+    > in `panel/status` (resta 500 `restore_state_unreadable`, Q7).
+    > **Rossi → verdi** (test-author): backend 78 rossi → verdi (`restore-guard` 25, `restore-interrupted` 24,
+    > `await-restore-mode` 38 + 27, i pin della configurazione pubblica); frontend 34 → verdi (56 + 138); `front check` 0.
+    > **⚠️ Fuori pista**: il merge di B ha cambiato la firma di `RestoreStateUnreadableError` (`reason` prima): un test
+    > di H-62 la costruiva alla vecchia maniera (KeyError → 500), riparato dal test-author.
+14. ✅ **Ultimo lotto dell'ondata 4: adattamento a B (SEC-3/4/5) e D7** (23/10, base `d624b5458`; D7 confermata dal
+    developer, contratto L3 §10 opzione A; D6 rimandata a H-3).
+    > **Note implementazione**: `panel_restore.py`: ogni 500 `restore_state_unreadable` passa l'eccezione (`reason` nel
+    > detail); l'upload si chiude con `finish(replace_others=False)`, poi il controllo del tipo sul file finito (rifiutato
+    > → tolto con `upload_path(...).unlink`, perché `abort()` dopo un `finish` riuscito non fa più niente), poi
+    > `remove_replaced_uploads(keep=id)`; il controllo dei primi byte resta la prima difesa. D7: `GET /panel/status` con
+    > lo stato illeggibile → 200 `restore.state = "unreadable"` con la `reason` (al posto del 500 di Q7); nello stato
+    > «ripristino interrotto» l'avvio di un backup del pannello → 409 `backup_restore_interrupted`, dalla terza
+    > dipendenza del router, dopo il controllo della credenziale fatto a mano (`access.panel_caller`), così `backup/panel.py`
+    > di B resta com'è; la pagina «ripristino interrotto» mostra «Scrivi all'assistenza» con `LIBREFOLIO_SUPPORT_URL`
+    > (`supportChannel`, senza GitHub).
+    > **Rossi → verdi** (test-author): backend 27 rossi → verdi (`panel-restore` 136, `await-restore-mode` 36,
+    > `restore-interrupted` 34, `panel-status` 20, `hosting-panel-routes` 40); frontend 5 → verdi (130).
    > **⚠️ Fuori pista**: `"scarfSettings"` messo e poi tolto da `package.json`, dopo il cambio di Q-C: il file coincide col
    > commit.

@@ -109,11 +109,18 @@ UNAUTHORIZED_ANSWER = {"detail": {"code": "panel_status_unauthorized", "message"
 BLOCKED_ANSWER = {"detail": {"code": "instance_blocked", "message": "This instance is blocked by its hosting provider"}}
 
 #: The keys of the answer, exactly, and the four states of the initial administrator's setup (A's ``AdminSetupState``).
-ANSWER_KEYS = {"admin_setup", "setup_expires_at"}
+#: H-62 (contract L3 §6) adds ``mode`` (normal or awaiting_restore) and ``restore`` (null without a restore recorded):
+#: red until H-62.
+ANSWER_KEYS = {"admin_setup", "setup_expires_at", "mode", "restore"}
 SETUP_STATES = ("none", "pending", "done", "expired")
 
 #: The OpenAPI document: the route's responses, exactly; its one tag; the scheme of its token.
+#: D7 (contract L3 §10 option A, replacing H-62's Q7): a restore state that cannot be read is a 200 with ``restore.state
+#: == "unreadable"``, so the route documents no 500 ``restore_state_unreadable`` any more: either no 500 at all, or one
+#: that does not name that code. Red until D7.
 DOCUMENTED_RESPONSES = {"200", "401", "404", "429", "503"}
+OPTIONAL_RESPONSES = {"500"}
+GONE_CODE = "restore_state_unreadable"
 HOSTING_PANEL_TAG = "Hosting panel"
 STATUS_SCHEME = "PanelStatusToken"
 
@@ -128,7 +135,8 @@ SETUP_EXPIRES_AT = datetime(2026, 10, 23, 9, 41, 27, 125000, tzinfo=UTC)
 #: A date the stand-in holds for a state that has none, which A never gives: the route must not hand it out.
 STRAY_DATE = datetime(2026, 10, 17, 6, 5, 0, tzinfo=UTC)
 #: The answer to the token while the setup waits, ``setup_expires_at`` read as an instant (``_status_answer``).
-PENDING_ANSWER = {"admin_setup": "pending", "setup_expires_at": SETUP_EXPIRES_AT}
+#: H-62: outside the «awaiting restore» mode and without a restore recorded, ``mode`` normal and ``restore`` null.
+PENDING_ANSWER = {"admin_setup": "pending", "setup_expires_at": SETUP_EXPIRES_AT, "mode": "normal", "restore": None}
 
 #: Logged through a logger of this file inside the capture first: a capture that sees nothing proves nothing.
 LOG_CANARY = "R1-04 canary: a line written inside the capture reaches it"
@@ -268,6 +276,8 @@ def _no_panel_variables(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(variable + SECRET_FILE_SUFFIX, raising=False)
     monkeypatch.delenv(BLOCKED_VARIABLE, raising=False)
     monkeypatch.delenv(DELETION_DATE_VARIABLE, raising=False)
+    # H-62: neither is the «awaiting restore» mode on
+    monkeypatch.delenv("LIBREFOLIO_AWAIT_RESTORE", raising=False)
 
 
 async def _request(app: FastAPI, method: str, path: str, headers: dict[str, str] | None = None) -> httpx.Response:
@@ -367,13 +377,15 @@ class InProcess:
 
 
 @pytest_asyncio.fixture
-async def in_process(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[InProcess]:
+async def in_process(app: FastAPI, monkeypatch: pytest.MonkeyPatch, tmp_path) -> AsyncIterator[InProcess]:
     """The real app, for this test: no panel token and no block until the test sets them; an activity record of its own
     (``current_activity()`` reads ``ACTIVITY`` at each request), so the process's record of sleep and wake is never
     touched; and every request's database session replaced (``dependency_overrides``, through monkeypatch) by one
     session on an in-memory database with the ORM schema, never the lane's database. The session is closed and the
     engine disposed on the way out."""
     _no_panel_variables(monkeypatch)
+    # H-62: the route reads the restore of the data directory; an empty one of the test's own, so ``restore`` is null
+    monkeypatch.setenv("LIBREFOLIO_TEST_DATA_DIR", str(tmp_path / "data"))
     assert not instance_blocked(), "Precondition: the instance is not blocked until a test blocks it"
     monkeypatch.setattr(activity_module, "ACTIVITY", activity_module.Activity())
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
@@ -506,7 +518,12 @@ async def test_the_status_answers_the_setup_state_and_the_expiry_of_a_pending_se
     status, body = _status_answer(response)
     assert status == 200, f"GET {STATUS_PATH} with its token answers 200: {response.status_code} {response.text}"
     assert isinstance(body, dict) and set(body) == ANSWER_KEYS, f"the answer holds exactly {sorted(ANSWER_KEYS)}: {response.text}"
-    assert body == {"admin_setup": state, "setup_expires_at": answered}, f"the setup {state}, its status holding {held.isoformat()}: expected admin_setup {state!r} and setup_expires_at {answered.isoformat() if answered else None} (ISO 8601 with the UTC offset, for pending only), got {response.text}"
+    assert body == {
+        "admin_setup": state,
+        "setup_expires_at": answered,
+        "mode": "normal",
+        "restore": None,
+    }, f"the setup {state}, its status holding {held.isoformat()}: expected admin_setup {state!r} and setup_expires_at {answered.isoformat() if answered else None} (ISO 8601 with the UTC offset, for pending only), got {response.text}"
     assert len(reader.calls) == 1, f"admin_setup_status is called once per request: {reader.calls}"
     call = reader.calls[0]
     assert call.session is in_process.session, f"admin_setup_status gets the request's own database session (get_session_generator), got {call.session!r}"
@@ -623,12 +640,15 @@ def _resolved(schema: dict[str, Any], document: dict[str, Any]) -> dict[str, Any
 def test_openapi_documents_the_status_answer_and_its_five_responses(app):
     """R1-06 (§4): the 200 of ``GET /api/v1/panel/status`` is ``PanelStatusResponse``, with exactly two properties and no
     other (``extra="forbid"``): ``admin_setup``, required, a string enum of the four states, and ``setup_expires_at``, a
-    date-time or null. The responses documented are exactly 200, 401, 404, 429 and 503."""
+    date-time or null. The responses documented are 200, 401, 404, 429 and 503; D7: a 500 only if it does not name
+    ``restore_state_unreadable`` (an unreadable restore state is a 200 now)."""
     print_section("R1-06: GET /panel/status in the OpenAPI document")
     document = app.openapi()
     operation = _status_operation(document)
     responses = operation.get("responses", {})
-    assert set(responses) == DOCUMENTED_RESPONSES, f"the route documents exactly the responses {sorted(DOCUMENTED_RESPONSES)}: {sorted(responses)}"
+    assert DOCUMENTED_RESPONSES <= set(responses) <= DOCUMENTED_RESPONSES | OPTIONAL_RESPONSES, f"the route documents the responses {sorted(DOCUMENTED_RESPONSES)}, a 500 at most beside them: {sorted(responses)}"
+    gone = (responses.get("500") or {}).get("description", "")
+    assert GONE_CODE not in gone, f"D7: an unreadable restore state is a 200 now, the route's 500 must not document {GONE_CODE}: {gone!r}"
 
     schema = responses["200"].get("content", {}).get("application/json", {}).get("schema")
     assert schema == {"$ref": "#/components/schemas/PanelStatusResponse"}, f"the 200 of GET {STATUS_PATH} is PanelStatusResponse: {schema}"
