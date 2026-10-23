@@ -89,7 +89,7 @@ backend/app/services/financial_math/
 │   ├── derived_views.py     DerivedViewsBuilder (history, P&L, allocation…), cost positions
 │   ├── data_quality.py      FX pair slug, configured pair sets, build_data_quality_report()
 │   ├── period.py            a period's boundary states, its P&L, the identity that closes it and its residual (the AI Export reconciliation, J-14); the day's P&L change
-│   ├── contributions.py     a position's row in the Dashboard's Performance table: return on the start value, annualized returns, the internal-transfer split (P22)
+│   ├── contributions.py     a position's row in the Dashboard's Performance table: its period P&L (`position_period_pnl`), return on the start value, annualized returns, the internal-transfer split (P22)
 │   └── engine.py            PortfolioCalculationEngine: loads a scope, runs the steps, caches
 └── lots/                    lots analysis math, called by lots_analysis_service.py
     ├── __init__.py          docstring only
@@ -296,9 +296,8 @@ to R, a loss out of R then K). An arrival whose departure is unknown arrives in 
 departure is on the same day is applied last on that day. The replay emits one
 `DailyPortfolioState` for every day of `[date_from, date_to]`,
 so a later `date_from` gets for its days exactly the states of the full replay. It evaluates only
-the **dirty** days, which `_collect_dirty_days()` lists: any other day carries the previous state
-(`dataclasses.replace()`, its containers copied), dated that day, with no external flow and no
-acquisition funding. The rule is developer decision 28 of release 1.3, «recompute whenever a term
+the **dirty** days, which `_collect_dirty_days()` lists: any other day carries the previous state,
+dated that day, with no external flow and no acquisition funding. The rule is developer decision 28 of release 1.3, «recompute whenever a term
 of the formula changes». A replayed day is dirty when it has:
 
 - a cash movement, a transaction that moves a quantity, an external flow, or an internal flow
@@ -319,10 +318,43 @@ of the formula changes». A replayed day is dirty when it has:
 - a split;
 - or it is the first replayed day, `date_from`, or `period_start` when it falls in the replay.
 
-Before `date_from` a quiet day is not even visited: no state is emitted there, and it would only
-carry the previous one, so the loop jumps straight to the next dirty day (`bisect.bisect_right()`
-over the sorted dirty days; `date_from` is always one). The output is the one a day-by-day walk
-gives, and the part of the replay before `date_from` costs its dirty days, not its calendar days.
+A quiet day is never visited: the loop jumps straight to the next dirty day
+(`bisect.bisect_right()` over the sorted dirty days; `date_from` is always one), so the replay
+costs its dirty days, not its calendar days, before and after `date_from` (P4).
+
+**Segments (P4).** `PortfolioCalculationResult.daily_states` is a `DailyStates` (`models.py`), a
+read-only `Sequence` of one state a day held as `StateSegment`s: `start` (a computed day, with
+`state.date == start`), `end` (the last day it holds, included: the day before the next start, or
+`date_to`) and `state`. Inside a segment every field keeps its value except `date`,
+`external_cash_flow` (0) and `acquisition_funding` (None), because every day on which another field
+can change is dirty. Indexing, slicing and iteration build a quiet day when it is read
+(`StateSegment.state_on()`: `dataclasses.replace()`, its containers copied), so the output is the
+one a day-by-day walk gives, while memory grows with the computed days only. Measured on a copy of
+the test database with one deposit typed in 1500 (the floor lowered for the measure): 192 413
+states and 686 MB kept before P4, 397 segments and 5 MB after. A reader that needs the values,
+not one object a day, asks one day (`state_on()`, `state_as_of()`) or walks
+`iter_segments(date_from, date_to)` (segments clipped to the window): `period.state_as_of()`, the
+data-quality report's incomplete-NAV days, `_engine_missing_fx_pairs()`, and the derived views,
+whose windows are found by date arithmetic and read day by day from their segment's state
+(`DerivedViewsBuilder._window_days()`, the day's date taken from the walk, never from the state).
+Nobody mutates a state or its containers after the build.
+
+**Position frames (#48).** With `include_positions` (`calculate()`, part of the blob-cache key) or
+`compute_position_frames` (the builder), the result carries `position_frames`: for each held
+position, `PositionFrame`s (`broker_id`, `asset_id`, `start`, `end` included, `quantity` at the
+owner's share, `market_value`, `cost_basis`, `cost_complete`, `valuation_source`,
+`unrealized_pnl`) — the values `_build_position_state()` gives each day, merged while none of them
+changes (Decimals compared with their exponent). A frame changes only with its own position: a
+quote of another asset does not split it. A position not held on a day has no frame there, so a
+closed position simply ends. The frames are grouped in the order the replay first met each
+position, each group by start: summing from `Decimal("0")`, in that order, the market values (not
+None) of the frames covering a day gives that day's `market_value` exactly. Off by default.
+
+**The asset dimension.** Each state carries `by_asset` (asset id → the held market value summed into
+`market_value`, every broker; no cash). `DerivedViewsBuilder.build_asset_allocation_current()` and
+`build_asset_allocation_history()` turn it into allocation slices named by the caller (`id` = the
+asset id), plus the Liquidity slice of `by_type` (cash and cash in transit): the report's
+`summary.allocation_by_asset` and `allocation_history.asset`.
 
 A movement stored before `EARLIEST_RANGE_START` (1 January 1900, `utils/datetime_utils.py`) is
 replayed exactly, on its own date and in its own order, never moved onto 1900; `calculate()` never

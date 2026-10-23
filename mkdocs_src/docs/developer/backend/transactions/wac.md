@@ -276,6 +276,7 @@ Windows are `(date_from, date_to]`; `None` leaves that side open.
 | `value_at(day)` | Each broker's cash on `day` in T, every foreign balance at that day's rate. Only brokers with a counted movement on or before `day` appear |
 | `balances(as_of=None)` | Each broker's balance in each currency, in that currency; zero and unconverted movements included |
 | `flows(date_from, date_to)` | `CashFlows`, the window's movements at their own dates: `signed_by_type`, `absolute_by_type`, `income_by_position` and `costs_by_position` keyed `(broker_id, asset_id)`, `unallocated_income` and `unallocated_costs` by broker. Income (DIVIDEND, INTEREST) keeps its sign, costs (FEE, TAX) are absolute |
+| `position_flow_steps(date_from, date_to)` | Each position's income and costs of the window as running totals, `(broker_id, asset_id)` → `[(day, income, costs)]`, one entry per day with such a movement, by the rules of `flows()`: one pass where a daily series would call `flows()` every day (#48). With the movements in date order, as the engine loads them, each entry equals `flows(date_from, day)` for the position exactly |
 | `sums_by_date(date_from, date_to, transaction_types)` | Counted movements summed by date and type, dates ascending |
 | `missing_conversions(date_from, date_to, transaction_types)` | One `MissingCashConversion` per pair |
 | `exchange_results(date_from, date_to)` | Each foreign-cash broker's exchange result on cash, ascending by broker, zeros included; `{}` for an empty window |
