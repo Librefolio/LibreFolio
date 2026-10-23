@@ -458,11 +458,13 @@ def _wipe_refusal() -> AssetSourceError:
 
 
 def _removal_refusal() -> AssetSourceError:
-    """X-R62, as ``_reject_removals_of_linked_events`` raises it."""
+    """X-R69, as the removal raises it: a SPLIT among the events that go with the assignment has linked incoming adjustments
+    without a purchase cost, X-R49's code (``PROVIDER_REMOVAL_LINKED_TRANSACTIONS`` no longer exists; the removal's other 409,
+    ``PROVIDER_REMOVAL_CONFLICT``, is the race of a link made meanwhile). The dry run has no 409."""
     return AssetSourceError(
-        "PROVIDER_REMOVAL_LINKED_TRANSACTIONS: removing the provider would delete 1 event(s) it generated, linked to 2 transaction(s); unlink them first",
-        "PROVIDER_REMOVAL_LINKED_TRANSACTIONS",
-        {"asset_id": 2, "item_index": 1, "events": [{"event_id": 52, "date": "2025-06-03", "type": "DIVIDEND", "transaction_ids": [18], "hidden_transactions_count": 1}]},
+        "PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST: removing the provider would delete 1 split(s) it generated, with 2 linked adjustment(s) without a purchase cost; give them a cost first",
+        "PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST",
+        {"asset_id": 2, "item_index": 1, "splits": [{"event_id": 52, "date": "2025-06-03", "transaction_ids": [18], "hidden_transactions_count": 1}]},
     )
 
 

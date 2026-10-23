@@ -230,6 +230,15 @@ are owned by `assets/core.py`; Yahoo owns only its currency sub-operation cache.
   Area/Location name (`Europe/Rome`) is logged as a warning once per name and process, *Exchange
   timezone unknown to this server's timezone database: the current value is dated in UTC*. A fixed
   offset or a name without an area is not logged. Adding `tzdata` is Z-36, a developer decision.
+- **Splits rewrite the past (known limitation, MF-SPL1, option C for 1.3).** Yahoo's `Close` and `ticker.dividends`
+  are both expressed in the share count *after every later split*: AAPL's close of 28 Aug 2020 is 124.81 (the real
+  one was about 499) and its dividend of 7 Aug 2020 is 0.205 (the real one was 0.82), the 4:1 of 31 Aug 2020; NVDA's
+  2023 dividends are 0.004 (paid 0.04) after the 10:1 of June 2024. `auto_adjust=False` does not undo it: the raw
+  frame is split-adjusted too. The engine changes a quantity only with the adjustment linked to the `SPLIT` event, on
+  the day of the split, and reads the quotation as it is, so a position held before a split is valued at its pre-split
+  quantity times a post-split price (10 × 124.81 = 1,248 instead of 4,990; the TWRR jumps and a false loss appears), and
+  a dividend event times the pre-split quantity comes out short. Nothing in the plugin can fix it (Yahoo offers no
+  unadjusted close); the correction belongs to the engine, from the `SPLIT` events, after 1.3 (`TODO_FUTURI.md`).
 - **Rows saved before Z-35 stay adjusted** (developer decision of 23 Oct 2026: no clean-up of saved data).
   The history is stored as it was read: a row written before the change keeps the dividend adjustment of the day
   it was fetched, and the scheduler re-reads only the last 14 days. The user who notices re-reads the whole

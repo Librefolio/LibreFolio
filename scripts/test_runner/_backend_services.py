@@ -1247,12 +1247,21 @@ def services_provider_wipe_split_guard(verbose: bool = False, test_names: list =
 
 
 def services_provider_removal_link_guard(verbose: bool = False, test_names: list = None) -> bool:
-    """Run X-R62: removing a provider refuses while a transaction is linked to an event it generated."""
+    """Run X-R69 (was X-R62): removing a provider unlinks the transactions linked to the events it generated; only a SPLIT with costless adjustments refuses."""
     print_section("Services: Provider Removal Link Guard")
-    print_info("Testing: backend/app/services/assets/provider_management.py (bulk_remove_providers), backend/app/services/assets/event_links.py, backend/app/api/v1/assets/providers.py")
-    print_info("Tests: a removal refused with PROVIDER_REMOVAL_LINKED_TRANSACTIONS (HTTP 409) while a generated event has a linked transaction, only the caller's transactions named, nothing written; a link the check missed is PROVIDER_REMOVAL_CONFLICT (409, no SQL); else the removal is as before")
+    print_info("Testing: backend/app/services/assets/provider_management.py (bulk_remove_providers), backend/app/services/assets/event_links.py, backend/app/services/assets/split_guard.py, backend/app/api/v1/assets/providers.py")
+    print_info("Tests: a removal unlinks (asset_event_id NULL) every transaction linked to an event of the assignment and deletes the assignment with its events; a SPLIT with costless adjustments is refused with PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST (HTTP 409), only the caller's transactions named, nothing written; a link made meanwhile is PROVIDER_REMOVAL_CONFLICT (409, no SQL); else the removal is as before")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_removal_link_guard.py", test_names)
     return run_command(cmd, "Provider removal link guard tests", verbose=verbose)
+
+
+def services_provider_change_impact(verbose: bool = False, test_names: list = None) -> bool:
+    """Run X-R69 / C-65a: the dry run of a provider change or removal (POST /assets/provider/impact) tells what would be deleted and unlinked, and writes nothing."""
+    print_section("Services: Provider Change Impact")
+    print_info("Testing: backend/app/services/assets/provider_management.py (provider_change_impact), backend/app/schemas/provider.py (FAProviderImpact*), backend/app/api/v1/assets/providers.py (POST /provider/impact)")
+    print_info("Tests: per assignment or removal, the reason (none, params_changed, provider_changed, provider_removed) and the prices, events and transactions that would go, the blocking SPLITs as the caller may see them; parity with the real operation; route 200, 401, 422")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_change_impact.py", test_names)
+    return run_command(cmd, "Provider change impact tests", verbose=verbose)
 
 
 def services_event_split_ratio(verbose: bool = False, test_names: list = None) -> bool:
@@ -2837,9 +2846,18 @@ Note: No backend server required.
         "provider-removal-link-guard",
         services_provider_removal_link_guard,
         name="Provider Removal Link Guard",
-        desc="X-R62: DELETE /assets/provider refused before any write with PROVIDER_REMOVAL_LINKED_TRANSACTIONS (409) while an event the removed assignment generated (deleted with it, CASCADE) has a linked transaction (RESTRICT); details name the asset (asset_id, item_index: its first position) and each such event (event_id, date, type) with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller), the message the totals only; the assets before the blocked one are not removed either. A link the check missed is rolled back and answered PROVIDER_REMOVAL_CONFLICT (409, empty params, no SQL text). No linked transaction, a manual event, an asset without an assignment or an empty request: as before",
+        desc="X-R69 (was X-R62): DELETE /assets/provider unlinks (asset_event_id NULL) every transaction linked to an event the removed assignment generated, whoever owns the broker, then deletes the assignment with its events (CASCADE); prices and manual events (and their links) are kept. The one refusal left is X-R49's: PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST (409) while a generated SPLIT has linked incoming ADJUSTMENTs without a purchase cost; details name the asset (asset_id, item_index: its first position) and each such SPLIT with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller), the message gives no id; the assets before the blocked one are not removed either. A link made between the unlinking and the delete is rolled back and answered PROVIDER_REMOVAL_CONFLICT (409, empty params, no SQL text). No linked transaction, a manual event, an asset without an assignment or an empty request: as before",
         # WRITE-SCOPED, the category default: three inactive assets (no lane scheduler refreshes them), two users and two
         # brokers under a unique marker, dated 1984; each test writes its own assignments and wipes by asset and broker id.
+    )
+    add_test(
+        cat,
+        "provider-change-impact",
+        services_provider_change_impact,
+        name="Provider Change Impact",
+        desc="X-R69 / C-65a: POST /assets/provider/impact (AssetSourceManager.provider_change_impact), the dry run of «cambia» and «togli», writes nothing. Per assignment item: reason none | params_changed | provider_changed exactly when the save would wipe (a parametric provider with other params, or leaving one), with prices_deleted (all the asset's), events_deleted (the stored assignment's, manual events excluded), transactions_unlinked (visible or hidden, counted, never named) and blocking_splits (costless-adjustment SPLITs as the caller may see them); none and zeros for a market -> market change, the same code and params or an asset without an assignment. Per removal: provider_removed (else none), prices_deleted 0, the rest as above. Results in order (assignments, then removals). Parity: the numbers equal what the real save or removal then deletes and unlinks, and a blocking SPLIT is the refusal it answers. Route: 200, 401 without a user, 422 for junk (unknown keys included), a missing list defaults to empty",
+        # WRITE-SCOPED, the category default: three inactive assets (no lane scheduler refreshes them), two users and two
+        # brokers under a unique marker, dated 1983; each test writes its own assignments and wipes by asset and broker id.
     )
     add_test(
         cat,

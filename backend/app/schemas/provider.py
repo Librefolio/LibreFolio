@@ -27,7 +27,7 @@ both Financial Assets (FA) and Foreign Exchange (FX) systems.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
@@ -352,6 +352,55 @@ class FAProviderRemovalResult(BaseDeleteResult):
 
 class FABulkRemoveResponse(BaseBulkResponse[FAProviderRemovalResult]):
     """Response for bulk FA provider removal."""
+
+
+# ============================================================================
+# FA PROVIDER CHANGE IMPACT (DRY-RUN, X5-1)
+# ============================================================================
+
+
+class FAProviderImpactRequest(StrictModel):
+    """What the user is about to do to the providers of some assets: the assignments to save and the ones to remove.
+
+    The assignments are the items ``POST /assets/provider`` takes; the removals are the asset ids ``DELETE
+    /assets/provider`` takes. Nothing is written.
+    """
+
+    assignments: List[FAProviderAssignmentItem] = Field(default_factory=list, description="Assignments to save (change of provider or of its parameters)")
+    removals: List[int] = Field(default_factory=list, description="Asset ids whose provider assignment would be removed")
+
+
+class FAProviderImpactSplit(StrictModel):
+    """A SPLIT the change would delete while incoming adjustments linked to it have no purchase cost (the hard refusal)."""
+
+    event_id: int
+    date: str = Field(..., description="Event date (ISO)")
+    transaction_ids: List[int] = Field(..., description="The adjustments the caller can see")
+    hidden_transactions_count: int = Field(..., description="The adjustments on brokers the caller has no access to")
+
+
+class FAProviderImpactResult(StrictModel):
+    """What one assignment or removal would delete, counted before anything is written.
+
+    ``reason``: ``params_changed`` / ``provider_changed`` — a parametric provider's series is invented from its parameters,
+    so new parameters or leaving it deletes every price and the events the provider generated; ``provider_removed`` — the
+    events the provider generated go, the prices stay; ``none`` — nothing is lost. The transactions linked to the deleted
+    events lose the link (they are not deleted). Manual events stay.
+    """
+
+    asset_id: int
+    action: Literal["assign", "remove"]
+    reason: Literal["none", "params_changed", "provider_changed", "provider_removed"]
+    prices_deleted: int = Field(..., ge=0)
+    events_deleted: int = Field(..., ge=0)
+    transactions_unlinked: int = Field(..., ge=0, description="Transactions linked to the deleted events, those the caller cannot see included")
+    blocking_splits: List[FAProviderImpactSplit] = Field(default_factory=list, description="Not empty: the change is refused (a SPLIT with adjustments without a cost)")
+
+
+class FAProviderImpactResponse(StrictModel):
+    """One result per assignment, then one per removal, in the order of the request."""
+
+    results: List[FAProviderImpactResult]
 
 
 # ============================================================================
