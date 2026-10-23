@@ -7847,3 +7847,57 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > restano quelli decisi. Il `＠` a larghezza piena del messaggio di richiesta è stato scritto come `@` normale.
 > **Da provare al primo tag**: il passo gira solo se il passo di build dà un `digest`; le immagini già pubblicate non
 > hanno attestazione (la doc lo dice).
+
+#### B5-1 — ripristino di un backup caricato con la scelta del titolare ✅ 2026-10-23 (backend + frontend; lo step lo collega H)
+
+> Interfaccia: `salvataggi-worktrees-20261021/ondata5/B-b51-interface.md` (§0-§8). Firma di A (`assign_owner_and_send_reset`,
+> `OwnerChoiceModal`) usata con una funzione e una modale finte: il codice di A non è nel ramo.
+> **Note implementazione**:
+> - `staging.py`: `OwnerCandidate`; il rapporto registra `owner_candidates`, `owner_email_checked` e `owner_conflicts`
+>   (`duplicate_email`, `duplicate_username`, `address_is_a_username`); un account con un id non intero o senza nome
+>   (in tutta la tabella) → `database_damaged`. Tutto in sola lettura, con valori legati.
+> - `apply.py`: alla conferma dall'app sul profilo managed la scelta è obbligatoria. L'ordine dei controlli è:
+>   `owner_choice_not_applicable` (400, fuori dal managed) → `owner_email_not_set` → `restore_stage_outdated` (anche
+>   quando l'email del titolare è cambiata) → `owner_conflict` → `owner_choice_required` / `owner_choice_invalid`.
+>   - Se l'email del titolare è già di un account, quell'account è obbligato; altrimenti va bene qualunque admin attivo.
+>   - `RestoreState` riceve `owner_user_id`, `owner_outcome` e `owner_reset_path` (quest'ultimo segreto: mai nello
+>     stato dell'API, nel pannello o nei log).
+>   - Al commit, `_close_the_way_in` chiude l'account scelto nella stessa transazione:
+>     - password = vero hash bcrypt di un segreto casuale;
+>     - email del titolare, `is_superuser=1`, `is_active=1`;
+>     - `is_instance_owner` (prima 0 agli altri, poi 1), solo se la colonna della migrazione 006 di A esiste;
+>     - se l'email è già di un altro account, solo la password.
+>   - Il gancio `owner_assignment_problem()` serve alla guardia di H.
+> - `owner.py`: `assign_restored_owner` è lo step `restore-owner`, da mettere dopo `restore-commit` (la riga la scrive H).
+>   - Un lucchetto non bloccante `.restore/owner.lock` (0600) e un ricontrollo dello stato dopo averlo preso.
+>   - Chiama A con un motore dedicato e registra l'esito una volta sola.
+>   - Non solleva mai; nei log mai email, nomi o link.
+> - API: `owner_choice` nel rapporto; la conferma accetta il corpo `{owner_user_id}` (`extra="forbid"`). `RestoreStatus`
+>   resta invariato (lo schema chiuso del pannello di H).
+> - CLI: `backup pending` stampa una riga sull'account del titolare dopo un ripristino committato; `--json` resta
+>   invariato.
+> - Frontend:
+>   - `confirmRestore(stageId, ownerUserId)`;
+>   - nel flusso, `confirm(ownerUserId)`; `owner_conflict` dimentica il controllo;
+>   - `RestoreReportModal` apre la modale di A quando il rapporto ha `owner_choice` e le passa solo l'account obbligato
+>     o, se non c'è, gli admin attivi;
+>   - 4 codici d'errore nelle 4 lingue; il testo di `restore_stage_outdated` aggiornato;
+>   - `OwnerChoiceModal.svelte` è una **versione finta**: all'unione con il ramo di A si tiene il file di A.
+> - Test (rossi prima, con test-author):
+>   - services: staging 248, apply 387, owner 54;
+>   - api: restore-apply 285;
+>   - utils: cli-restore 132;
+>   - Vitest: 503 + 308 + 360 + 109;
+>   - regressione del backup verde (21 suite, comprese le E2E roundtrip e L3); `front check` 0 errori.
+> **⚠️ Fuori pista**:
+> - Un campo nuovo in `RestoreStatus` faceva rispondere 500 al pannello (lo schema chiuso `PanelRestoreStatus.of` di H):
+>   `owner_outcome` resta solo nello stato su disco.
+> - La revisione di sicurezza indipendente ha trovato il caso «chi prepara il backup forza il rifiuto di A»
+>   (fail-open). Lo chiudono il §7, approvato dal coordinatore, e la chiusura dell'account al commit, concordata con A.
+> **Da fare dopo l'unione dei rami** (H, A):
+> - H: lo step `restore-owner`, la guardia su `owner_assignment_problem`, il test sull'ordine degli step;
+> - A: la sua `unusable_password_hash()` al posto di `_unusable_password_hash`;
+> - l'E2E dell'avvio dopo un ripristino dall'app.
+> **Doc** (docs-writer): `admin/backup_restore.en.md`, sezione nuova `#owner-account` (quando si chiede, quali account,
+> cosa succede al commit, senza email, riga di `backup pending`, tabella dei rifiuti) + un punto in `#restore-settings`.
+> `mkdocs build` strict pulito, check-links 97 validi. Nessun `translate-stamp`: debito di traduzione IT/FR/ES.
