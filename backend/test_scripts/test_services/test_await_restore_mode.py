@@ -14,7 +14,8 @@ Under test, written by H-62 and missing today:
     whose ``skip_when()`` is true at the moment the step comes (read then, not when the step was built), and runs the
     others in order.
 (d) ``app_lifespan.STARTUP_STEPS``: ``admin-bootstrap``, ``scheduler``, ``provider-prewarm``, ``market-holidays``,
-    ``brim-parse-pool`` and ``stored-currencies`` carry a ``skip_when``, true in the mode and false outside it;
+    ``brim-parse-pool`` and ``stored-currencies`` carry a ``skip_when``, true in the mode and false outside it (A5-1b adds
+    ``owner-sync`` to them: nine steps in all);
     ``database``, ``pending-restore``, ``restore-commit`` and ``idle-monitor`` keep running (pinned by the set). B-33
     (22/10): exactly eight steps carry a ``skip_when`` — those six, and ``post-migration-fixes`` and
     ``lone-transfer-legs``, which skip only while the restore is interrupted (false in the mode); all eight true while
@@ -40,9 +41,11 @@ from backend.test_scripts.test_services import test_config_audit as audit
 from backend.test_scripts.test_utils import print_section, print_success
 
 AWAIT_VARIABLE = "LIBREFOLIO_AWAIT_RESTORE"
-#: The six steps the mode skips (§6), and the function each one's ``run`` calls, a global of ``app_lifespan``.
+#: The seven steps the mode skips (§6; ``owner-sync`` since A5-1b), and the function each one's ``run`` calls, a global of ``app_lifespan``.
 SKIPPED_IN_THE_MODE = {
     "admin-bootstrap": "startup_admin_bootstrap",
+    # A5-1b: the owner's address against the variable has nothing to compare on an empty database awaiting its backup
+    "owner-sync": "startup_owner_sync",
     "scheduler": "_start_scheduler",
     "provider-prewarm": "_start_provider_prewarm",
     "market-holidays": "_start_market_holiday_prewarm",
@@ -201,8 +204,8 @@ async def test_run_startup_steps_skips_a_step_whose_skip_when_is_true_when_it_co
 # =============================================================================
 
 
-def test_exactly_the_eight_steps_of_the_mode_and_of_the_interruption_carry_a_skip_when():
-    """(d) In ``STARTUP_STEPS`` exactly eight steps carry a ``skip_when`` (B-33, 22/10): the six of §6 and the two that
+def test_exactly_the_nine_steps_of_the_mode_and_of_the_interruption_carry_a_skip_when():
+    """(d) In ``STARTUP_STEPS`` exactly nine steps carry a ``skip_when`` (B-33, 22/10; ``owner-sync`` since A5-1b): the seven of §6 and the two that
     skip only while the restore is interrupted; the steps the mode keeps are there and carry none."""
     names = [step.name for step in app_lifespan.STARTUP_STEPS]
     with_skip = sorted(step.name for step in app_lifespan.STARTUP_STEPS if _skip_when(step) is not None)

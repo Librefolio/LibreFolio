@@ -19,6 +19,8 @@ from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.email import (
     EmailBudgetRead,
+    EmailChangeConfirmRequest,
+    EmailChangeConfirmResponse,
     EmailCheckRead,
     EmailLinkRequest,
     EmailLinkResponse,
@@ -32,6 +34,7 @@ from backend.app.schemas.email import (
     PasswordResetEmailAccepted,
     PasswordResetEmailRequest,
 )
+from backend.app.services.accounts import instance_owner
 from backend.app.services.email import flows, verification
 from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS
 from backend.app.services.email.delivery import EmailDeliveryError, EmailRateLimitedError, EmailUnavailableError, budget_status, email_config_state
@@ -186,6 +189,27 @@ async def confirm_email_verification(body: EmailVerificationConfirmRequest, sess
     except verification.EmailVerificationLinkInvalidError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error_code": "TOKEN_INVALID", "status": exc.code, "message": "This verification link is not valid"}) from None
     return EmailVerificationConfirmResponse(username=user.username)
+
+
+@router.post("/email-change/confirm", response_model=EmailChangeConfirmResponse, summary="Confirm the new address of the instance owner: spend the link emailed to it")
+async def confirm_owner_email_change(body: EmailChangeConfirmRequest, background: BackgroundTasks, session: AsyncSession = Depends(get_session_generator)) -> EmailChangeConfirmResponse:
+    """No session needed: the link proves that its reader received the email at the new address, which the host put in
+    ``LIBREFOLIO_ADMIN_EMAIL`` of a managed instance. The owner's address becomes the link's, verified; every session of
+    the owner ends (it signs in again, same password); its other change links and its password-reset links stop
+    working. When email works, the address it had before gets a notice after the answer, as for a change of the profile.
+
+    400 ``TOKEN_INVALID`` with the token's ``status`` (``expired``, ``consumed``, ``revoked``, ``unknown``): ``revoked``
+    also when the link no longer matches the instance (the host changed the variable again, the instance is no longer
+    managed, the account is no longer the owner, or another account took the address meanwhile; the link is revoked
+    then and nothing changed). A token of another purpose is ``unknown``.
+    """
+    try:
+        changed = await instance_owner.confirm_email_change(session, body.token)
+    except instance_owner.OwnerEmailChangeLinkInvalidError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error_code": "TOKEN_INVALID", "status": exc.code, "message": "This confirmation link is not valid"}) from None
+    # The notice to the old address (workstream E): after the answer, with a session of its own; never raises.
+    background.add_task(flows.email_changed_work, changed.user.id, changed.old_email, changed.user.email, engine=session.bind)
+    return EmailChangeConfirmResponse(username=changed.user.username)
 
 
 @router.post("/verification/resend", response_model=EmailVerificationResendResponse, summary="Send the verification email again, with the credentials of the sign-in")

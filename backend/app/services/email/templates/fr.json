@@ -44,5 +44,12 @@
     "subject": "L'adresse e-mail de votre compte LibreFolio a changé",
     "intro": "L'adresse e-mail de votre compte sur $instance a été modifiée. Ce message part vers l'adresse qu'il avait avant.",
     "advice": "Si vous avez fait ce changement, vous n'avez rien à faire. Sinon, quelqu'un utilise peut-être votre compte : changez tout de suite votre mot de passe si vous pouvez encore vous connecter, et prévenez l'administrateur de $instance."
+  },
+  "email_change_confirmation": {
+    "subject": "Confirmez la nouvelle adresse e-mail de votre compte administrateur LibreFolio",
+    "intro": "Cette adresse e-mail a été indiquée comme adresse du compte administrateur de votre instance LibreFolio $instance. Confirmez qu'elle est bien la vôtre pour terminer le changement : tant que vous ne le faites pas, rien ne change et le compte garde son adresse actuelle.",
+    "action": "Confirmer cette adresse",
+    "expiry": "Le lien ne fonctionne qu'une seule fois et expire dans $duration. Une fois confirmé, le compte se connecte avec cette adresse et ses sessions ouvertes prennent fin.",
+    "ignore": "Si vous n'attendiez pas cet e-mail, vous pouvez l'ignorer : rien ne change."
   }
 }
