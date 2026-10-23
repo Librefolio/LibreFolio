@@ -48,6 +48,7 @@ from backend.app.config import PROJECT_ROOT
 
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from backend.test_scripts.fx_steps_double import steps_double
 from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
@@ -96,6 +97,7 @@ def _convert_bulk(monkeypatch: pytest.MonkeyPatch, first_rate: dict[tuple[str, s
 
     double = AsyncMock(side_effect=_convert)
     monkeypatch.setattr(fx_currencies_api, "convert_bulk", double)
+    monkeypatch.setattr(fx_currencies_api, "unit_rate_steps", steps_double(lambda source, destination, day: day if day >= first_rate.get((source, destination), date.min) else None))
     return double
 
 
