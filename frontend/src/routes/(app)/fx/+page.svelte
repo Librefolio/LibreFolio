@@ -12,7 +12,7 @@
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
-    import {ArrowLeftRight, CalendarSync, Coins, Plus, RefreshCw, RotateCw, Settings, Trash2, X} from 'lucide-svelte';
+    import {ArrowLeftRight, CalendarSync, ChartLine, Coins, Plus, RefreshCw, RotateCw, Settings, Trash2, X} from 'lucide-svelte';
     import FxCard from '$lib/components/fx/FxCard.svelte';
     import type {FxRow} from '$lib/components/fx/FxTable.svelte';
     import FxTable from '$lib/components/fx/FxTable.svelte';
@@ -22,6 +22,7 @@
     import {ConfirmModal} from '$lib/components/table';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
@@ -1355,11 +1356,14 @@
                 <!-- The cards' view (Y-40): absolute, percent, rolling return -->
                 <div class="flex rounded-lg border border-lf-subtle overflow-hidden" data-testid="fx-global-view" data-view={globalPrimaryView}>
                     <button
-                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                        class="flex-1 inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                         data-testid="fx-global-view-absolute"
                         aria-pressed={globalPrimaryView === 'absolute'}
+                        aria-label={$_('chart.showAbsolute')}
+                        title={$_('chart.showAbsolute')}
                         onclick={() => handleListPrimaryView('absolute')}
-                        >Abs
+                    >
+                        <ChartLine size={14} />
                     </button>
                     <button
                         class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
@@ -1380,27 +1384,52 @@
                     </button>
                 </div>
             {/if}
-            <!-- Settings -->
-            <button class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" data-testid="fx-chart-settings-button" onclick={handleGlobalSettings}>
-                <Settings size={14} />
-                {#if showActionLabels}<span>{$_('sharedResource.settings')}</span>{/if}
-            </button>
+            <!-- Settings. The three buttons say what they do in a delayed tooltip (Y5-F1); a click is theirs, so it
+                 stops before the tooltip's own click, which would pin the hint over the window it opens. -->
+            <Tooltip text={$_('sharedResource.settingsHint')} position="bottom" interactiveChild testId="fx-chart-settings-tooltip">
+                <button
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
+                    data-testid="fx-chart-settings-button"
+                    onclick={(event) => {
+                        event.stopPropagation();
+                        handleGlobalSettings();
+                    }}
+                >
+                    <Settings size={14} />
+                    {#if showActionLabels}<span>{$_('sharedResource.settings')}</span>{/if}
+                </button>
+            </Tooltip>
             <!-- Sync All -->
-            <button class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" data-testid="fx-sync-all-button" use:guideAnchor={'fx.page.sync'} onclick={handleSyncAll}>
-                <RotateCw size={14} />
-                {#if showActionLabels}<span>{$_('sharedResource.syncAll')}</span>{/if}
-            </button>
+            <Tooltip text={$_('sharedResource.syncAllHint')} position="bottom" interactiveChild testId="fx-sync-all-tooltip">
+                <button
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
+                    data-testid="fx-sync-all-button"
+                    use:guideAnchor={'fx.page.sync'}
+                    onclick={(event) => {
+                        event.stopPropagation();
+                        handleSyncAll();
+                    }}
+                >
+                    <RotateCw size={14} />
+                    {#if showActionLabels}<span>{$_('sharedResource.syncAll')}</span>{/if}
+                </button>
+            </Tooltip>
             <!-- Refresh All -->
-            <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
-                data-testid="fx-refresh-all-button"
-                data-busy={pageBusy.busy ? 'true' : 'false'}
-                disabled={pageBusy.busy}
-                onclick={handleRefreshAll}
-            >
-                <RefreshCw class={pageBusy.busy ? 'animate-spin' : ''} size={14} />
-                {#if showActionLabels}<span>{$_('sharedResource.refreshAll')}</span>{/if}
-            </button>
+            <Tooltip text={$_('sharedResource.refreshAllHint')} position="bottom" interactiveChild testId="fx-refresh-tooltip">
+                <button
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
+                    data-testid="fx-refresh-all-button"
+                    data-busy={pageBusy.busy ? 'true' : 'false'}
+                    disabled={pageBusy.busy}
+                    onclick={(event) => {
+                        event.stopPropagation();
+                        handleRefreshAll();
+                    }}
+                >
+                    <RefreshCw class={pageBusy.busy ? 'animate-spin' : ''} size={14} />
+                    {#if showActionLabels}<span>{$_('sharedResource.refreshAll')}</span>{/if}
+                </button>
+            </Tooltip>
         {/snippet}
     </PageToolbar>
 
