@@ -7831,3 +7831,19 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > di specifico per amd64. **CI più lunga (QEMU); da provare al primo tag.**
 > **⚠️ Rischi non verificabili qui**: dipendenze senza pacchetto aarch64 già compilato (si compilerebbero sotto QEMU);
 > formato dell'output di `imagetools inspect`; il controllo gira dopo il push.
+
+#### M-2 — attestazione di build delle immagini su GHCR ✅ 2026-10-23 (nessun test locale: è CI)
+
+> Richiesta del coordinatore cloud, approvata dal developer il 23/10; stesso file di M-1 (`release.yml`).
+> **Note implementazione**: permessi del workflow `id-token: write` e `attestations: write` (oltre a `packages: write`);
+> `id: build-light` e `id: build-full` sui due `build-push-action`; dopo ciascuno `actions/attest-build-provenance@v4`
+> con `subject-name: ghcr.io/librefolio/librefolio` (senza tag, minuscolo), `subject-digest` del passo, `push-to-registry:
+> true`. Firma senza chiave (OIDC di GitHub + Sigstore): nessun segreto. Un'attestazione per digest copre tutti i tag di
+> quella variante. Doc: «Verify the Image You Pull» in `docker_advanced.en.md` (`#verify-image`) con
+> `gh attestation verify oci://ghcr.io/librefolio/librefolio@sha256:<digest> --owner Librefolio`.
+> **⚠️ Fuori pista**: dalla v4 `attest-build-provenance` è solo un involucro di `actions/attest` (l'involucro resta
+> supportato; i nuovi lavori dovrebbero usare `actions/attest`): ho tenuto l'azione richiesta. `create-storage-record`
+> vale `true` di default e chiede il permesso `artifact-metadata: write`: l'ho messo `false`, non serve e così i permessi
+> restano quelli decisi. Il `＠` a larghezza piena del messaggio di richiesta è stato scritto come `@` normale.
+> **Da provare al primo tag**: il passo gira solo se il passo di build dà un `digest`; le immagini già pubblicate non
+> hanno attestazione (la doc lo dice).
