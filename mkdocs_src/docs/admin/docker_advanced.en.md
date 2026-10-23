@@ -368,3 +368,19 @@ Files you may find next to the database:
 All configuration is managed in the `.env` file (copied from `.env.example`); leave the Docker-specific overrides of the `environment:` block as they are. For every variable and its effect, see the **[Configuration Guide](configuration.md)**.
 
 🔐 **Keep users signed in across restarts**: set `JWT_SECRET` in `.env` to a long random string, for example the output of `openssl rand -hex 32`. Without it, LibreFolio generates a new key at every start, so each restart or update of the container signs every user out.
+
+### ✅ 5. Verify the Image You Pull {: #verify-image }
+
+Every image LibreFolio publishes on GHCR (`ghcr.io/librefolio/librefolio`, the full and the light variant) comes with a **build attestation**: a statement, signed by the release pipeline of the project's repository, that this exact image was built there from this code. It is signed without any key of ours to keep or lose (GitHub proves the identity of the run, and Sigstore records it), so anyone can check it.
+
+Take the digest of the image you pulled, then ask GitHub to verify it with the [GitHub CLI](https://cli.github.com/):
+
+```bash
+# The digest of a tag (the line "Digest: sha256:…")
+docker buildx imagetools inspect ghcr.io/librefolio/librefolio:1.3.0
+
+# Verify the attestation of that digest
+gh attestation verify oci://ghcr.io/librefolio/librefolio@sha256:<digest> --owner Librefolio
+```
+
+A verified image prints `✓ Verification succeeded!` with the repository and the workflow that built it. Nothing printed but an error means this digest was not built by LibreFolio's pipeline: do not run it. The attestation covers every tag that points to the same digest (`1.3.0`, `latest`...). Releases published before this check was added carry none.
