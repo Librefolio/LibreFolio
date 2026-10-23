@@ -224,6 +224,18 @@ mandatory for every new plugin:
       column the user maps is the transaction date, whatever it means (`trade_date`,
       `value_date` and `settlement_date` are all aliases of its `date` column,
       [Generic CSV](../../backend/brim/generic_csv.md)).
+    - **Which date each plugin records** (inventory W-B88, 23/10/2026; a column that only the
+      plugin's own tests read is not a date the plugin uses). Every plugin that has both
+      dates in its report records the operation date: Directa (`Data operazione`), DEGIRO
+      (`Datum` / `Date`), InvestEngine (`Trade Date/Time`), Saxo (`Trade Date`), Crédit
+      Agricole (`Data operazione` for securities, `Data Op.` for cash), Schwab (`Date`: of
+      `03/01/2025 as of 02/28/2025` the first date counts), Fineco and Danske Bank. Disnat
+      records `Date de transaction` and falls back to `Date de règlement` only for a row
+      whose trade date is `-` (a dividend has no other date). Avanza, Intesa and Rabobank
+      only have a *currency* column called `Valuta`, never a value date. The test
+      `test_brim_operation_date.py` (`./dev.py test external brim-operation-date`) fixes
+      this per plugin, on rows whose two dates differ: a plugin that switches to the value
+      date fails it.
 - **Known rows quietly, unknown rows loudly.** Leave a row out only for a reason the plugin
   can name (lot W-B85, the developer's principle of 19/10/2026):
     - **Known and safe to leave out** — a blank, header or total row, a reservation, a row

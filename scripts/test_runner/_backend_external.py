@@ -271,6 +271,17 @@ def external_brim_row_skips(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "BRIM row skips tests", verbose=verbose)
 
 
+def external_brim_operation_date(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that BRIM plugins record the operation date, never the value / settlement date (W-B88)."""
+    print_section("External: BRIM Operation Date Tests")
+    print_info("Testing: the transaction date is the day of the operation, not the value / settlement date")
+    print_info("Tests: rows whose two dates differ, per plugin; the Disnat settlement-date fallback for rows with no trade date")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_operation_date.py",
+                            test_names or None)
+    return run_command(cmd, "BRIM operation date tests", verbose=verbose)
+
+
 def external_all(verbose: bool = False,
                  providers: list = None, exclude_providers: list = None) -> bool:
     """Run all external tests (network-dependent)."""
@@ -325,6 +336,9 @@ These tests verify external API integrations:
     add_test(cat, "brim-row-skips", external_brim_row_skips, name="BRIM Row Skips",
              desc="Test the rows BRIM plugins leave out (known quietly, unknown loudly)", prereq="Sample files in test fixtures",
              tests="RowSkips helper, report_issue per plugin, silent rows, versions, plugin classification, catalogue keys")
+    add_test(cat, "brim-operation-date", external_brim_operation_date, name="BRIM Operation Date",
+             desc="Test that BRIM plugins date a transaction with the operation date, never the value / settlement date", prereq="Sample files in test fixtures",
+             tests="Directa, DEGIRO, InvestEngine, Saxo, Credit Agricole, Schwab, Disnat (incl. settlement fallback)")
     add_test(cat, "all", external_all, test_names=False, name="All External Tests",
              desc="Run all external tests")
     registry["external"] = cat

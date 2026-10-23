@@ -256,7 +256,8 @@
       "costBasisNotAllowed": "❌ {type} qui non prende un costo base: toglilo. Lo portano solo le unità che entrano con una Rettifica o un Trasferimento Asset.",
       "costBasisModeIncompatible": "❌ {type} qui non prende un costo base, quindi nessuna modalità Auto o Manuale: toglila.",
       "costBasisNegative": "Il costo di carico non può essere negativo: scrivi 0 o più.",
-      "pairAdjustmentNotAllowed": "Due Rettifiche non si possono collegare: per spostare titoli fra broker usa un Trasferimento Asset."
+      "pairAdjustmentNotAllowed": "Due Rettifiche non si possono collegare: per spostare titoli fra broker usa un Trasferimento Asset.",
+      "pairArrivalBeforeDeparture": "L'arrivo ({arrivalDate}) è datato prima della partenza ({departureDate}). È stato salvato come inserito: controlla le due date."
     },
     "pydantic": {
       "greaterThan": "Il valore deve essere maggiore di {gt}",

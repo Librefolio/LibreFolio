@@ -291,6 +291,7 @@ async def _load_existing_transactions(
         context.existing_by_id = {tx.id: tx for tx in existing_txs}
         context.stored_cost_fields = {tx.id: cost_fields(tx) for tx in existing_txs}
         context.stored_rule_values = {tx.id: rule_values(tx) for tx in existing_txs}
+        context.stored_dates = {tx.id: tx.date for tx in existing_txs}
         context.touched_brokers.update(tx.broker_id for tx in existing_txs)
 
 
@@ -438,6 +439,7 @@ def finalize_response(context: TransactionBatchContext) -> TXBatchResponse:
         return TXBatchResponse(
             committed=False,
             issues=context.issues,
+            warnings=context.warnings,
             results=context.results,
             success_count=success_count,
             wac_results=context.wac_results,
@@ -446,6 +448,7 @@ def finalize_response(context: TransactionBatchContext) -> TXBatchResponse:
         return TXBatchResponse(
             committed=False,
             issues=[],
+            warnings=context.warnings,
             results=context.results,
             success_count=success_count,
             wac_results=context.wac_results,
@@ -453,6 +456,7 @@ def finalize_response(context: TransactionBatchContext) -> TXBatchResponse:
     return TXBatchResponse(
         committed=True,
         issues=[],
+        warnings=context.warnings,
         results=context.results,
         success_count=success_count,
         wac_results=context.wac_results,

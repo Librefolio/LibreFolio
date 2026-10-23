@@ -90,11 +90,13 @@ class TXBatchResponse(BaseBulkResponse[TXBatchResultItem]):
     Extends BaseBulkResponse with transaction-specific fields:
     - committed: whether the batch was committed to DB
     - issues: rich validation issue objects (superset of errors)
+    - warnings: non-blocking remarks about what was saved, or would be (B2)
     - wac_results: WAC computation results for auto items
     """
 
     committed: bool = Field(..., description="Whether the batch was committed to DB")
     issues: List[TXValidationIssue] = Field(default_factory=list, description="Rich validation issues")
+    warnings: List[TXValidationIssue] = Field(default_factory=list, description="Non-blocking warnings: they never stop a commit, nothing is corrected")
     wac_results: Optional[List[WACPreviewResultItem]] = Field(None, description="WAC results for auto items")
 
 
@@ -140,6 +142,9 @@ class TXValidationCode(StrEnum):
     # W-B74: a broker whose transactions hold a value that is no number: its balances cannot be checked, params
     # {brokerId, count}, at index -1 (the broker, not a row).
     LEDGER_UNREADABLE = "ledgerUnreadable"
+    # B2 (W5-3): a warning, never an error (it travels in ``TXBatchResponse.warnings``): a linked TRANSFER or CASH_TRANSFER
+    # whose arrival is dated before its departure. Params {departureDate, arrivalDate} (ISO dates).
+    PAIR_ARRIVAL_BEFORE_DEPARTURE = "pairArrivalBeforeDeparture"
 
 
 class TXValidationCodeInfo(StrictModel):
@@ -151,7 +156,8 @@ class TXValidationCodeInfo(StrictModel):
 
 
 # Precomputed list of all validation codes for the types endpoint.
-VALIDATION_CODE_METADATA: list[TXValidationCodeInfo] = [TXValidationCodeInfo(code=c.value, description=c.name.replace("_", " ").title(), severity="error") for c in TXValidationCode]
+_WARNING_CODES = frozenset({TXValidationCode.PAIR_ARRIVAL_BEFORE_DEPARTURE})
+VALIDATION_CODE_METADATA: list[TXValidationCodeInfo] = [TXValidationCodeInfo(code=c.value, description=c.name.replace("_", " ").title(), severity="warning" if c in _WARNING_CODES else "error") for c in TXValidationCode]
 
 
 # =============================================================================

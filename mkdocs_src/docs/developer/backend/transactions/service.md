@@ -80,7 +80,7 @@ Its order is contractual:
 stores all state that must survive across stages. This includes:
 
 - parsed rows with their original per-operation indices;
-- `issues` and per-operation `results`;
+- `issues` (blocking), `warnings` (non-blocking) and per-operation `results`;
 - preloaded transactions and the touched-broker set;
 - the earliest affected date per broker;
 - every row `apply_creates()` flushed, by its create index (`created_by_index`):
@@ -339,7 +339,8 @@ response that `finalize_response()` builds.
 | Field | Meaning |
 |-------|---------|
 | `committed` | Whether the commit route is allowed to commit this batch |
-| `issues` | Structured `TXValidationIssue` entries |
+| `issues` | Structured `TXValidationIssue` entries: each one blocks the commit |
+| `warnings` | Structured `TXValidationIssue` entries that never block a commit and correct nothing (B2); `[]` when nothing warns. Present in every response, committed or not |
 | `results` | Per-operation `operation`, original `index`, affected `ids`, optional create `link_uuid`, and `status` |
 | `success_count` | Number of operations staged successfully; this is not proof that their rows persisted |
 | `wac_results` | Optional WAC output for create/update rows using `auto` or `auto-detail` |
@@ -411,6 +412,18 @@ broker arrives at the other, and no unit is created or lost. The first rule that
 fails is the group's only issue, on operation `create` at the first leg's index, and
 the two rows stay unlinked. Pair description and tags are checked separately by
 `_validate_pair_description_tags()`.
+
+**A pair in the wrong order is a warning, never an error (B2).** When the arrival leg of a
+linked `TRANSFER` or `CASH_TRANSFER` is dated before its departure leg, the pair is saved
+as sent and `warnings` carries `pairArrivalBeforeDeparture` (params `departureDate` and
+`arrivalDate`, ISO dates; the message is `transactions.errors.pairArrivalBeforeDeparture`).
+The departure is the leg with the negative quantity (the negative amount, for cash); equal
+dates are in order. It is judged at the two places a pair gets its dates: a create group
+(`resolve_create_links()`, on the first create of the group, `ref_id` null) and an update
+that really changes the `date` of a leg of a stored pair (`warn_inverted_updated_pairs()`,
+on the first update that changed one, `ref_id` its id), on the final dates of both legs: one
+warning per pair, none when both legs move to a normal order. A pair already stored in the
+wrong order is never judged again, and an update carrying the stored date changes nothing.
 
 ---
 

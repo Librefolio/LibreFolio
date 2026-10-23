@@ -375,6 +375,19 @@ def resolve_create_links(
                 continue
             pairs[0][1].related_transaction_id = pairs[1][1].id
             pairs[1][1].related_transaction_id = pairs[0][1].id
+            order_result = service._pair_order_warning(pairs[0][1], pairs[1][1])
+            if order_result is not None:
+                order_message, order_code, order_params = order_result
+                context.warnings.append(
+                    TXValidationIssue(
+                        operation="create",
+                        index=pairs[0][0],
+                        ref_id=None,
+                        error=order_message,
+                        code=order_code,
+                        params=order_params,
+                    )
+                )
         else:
             context.issues.append(
                 TXValidationIssue(

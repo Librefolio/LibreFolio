@@ -8544,3 +8544,56 @@ Sola lettura; il documento è `salvataggi-worktrees-20261021/ondata4/W-analisi-t
   promote del Bulk (una creazione con `link_uuid` più `promotes`), rettifiche non collegate, coppia già salvata (nessun giudizio sui dati salvati).
   > **⚠️ Fuori pista**: `pairDescriptionMismatch` e `pairTagsMismatch` non hanno nessun messaggio in `transactions.errors.*` (4 lingue): il cancello dei codici scorre solo `TXValidationCode`. Preesistente, non toccato.
   > Un'altra: la registrazione dell'azione sta in `scripts/test_runner/_backend_services.py`, che il lavoro di W-BS (non ancora committato) ha già toccato: due hunk additivi distinti.
+
+### Ondata 5 · W: W5-1 (W-B88), W5-3 (B2), W5-5 (C-70b) — analisi del primo turno (2026-10-23, base `1fd80c481`)
+
+Kickoff: `salvataggi-worktrees-20261021/ondata5/kickoff-W.md`. Corsia 6183 / `/tmp/librefolio-r13-w` (ricreata con `db populate --force --clean`).
+
+**W5-1 · W-B88, l'inventario** (letto il codice di ogni plugin e le intestazioni dei report d'esempio; log del grep in `ondata5/W-wb88-grep.txt`).
+La data che ogni plugin registra:
+- **Data dell'operazione, già giusto (nessuna cura)**: Directa (`Data operazione`; `COL_VALUTA_DATE` è definita e mai letta), DEGIRO
+  (`Datum`/`Date`; `Valutadatum` mai letta), InvestEngine (`Trade Date/Time`; `Settlement Date` mai letta), Saxo (`Trade Date`; `Value Date`
+  mai letta), Crédit Agricole (titoli `Data operazione`, conti `Data Op.`; `Data valuta`/`Data Val.` mai lette), Schwab (`Date`; il suffisso
+  « as of » è tagliato: vale la prima data).
+- **Data dell'operazione con ripiego dichiarato**: Disnat (`Date de transaction`; quando vale `-`, come nei dividendi, usa `Date de règlement`:
+  è l'unica data della riga, quindi resta).
+- **Falsi positivi** (nominano «Valuta» ma è la **divisa**): Avanza (`Transaktionsvaluta`), Intesa (`Valuta`), Rabobank (`Valuta mutatie`).
+- **Già curati**: Fineco, Danske (treno 2).
+- **Da curare, nel lotto del CSV generico (W5-8)**: `HEADER_MAPPINGS["date"]` elenca insieme `date, data, settlement_date, value_date, trade_date…`
+  e `_map_headers` prende la **prima colonna del file** che coincide: un file con `value_date` prima di `trade_date` data con la valuta. La cura
+  (precedenza fra gli alias, l'operazione batte la valuta) va nello stesso file del campo di CP12, quindi **non** in W5-1 (il kickoff dice di
+  non toccare il generico prima del contratto di X).
+Esito: **nessun plugin dei 12 data con la valuta**. Il lotto diventa «bloccare il principio»: un test di guardia per plugin su una riga in cui le due
+date **differiscono** (CA 27 righe, CA conti 1, Saxo 11, InvestEngine 5, Disnat 22, DEGIRO 32 + 9: nei report d'esempio), azione `brim-operation-date`
+(test-author), e `brim_plugin_guide.md` con la regola e la tabella. Nessun rosso: non c'è nulla da curare, e lo dico invece di inventarlo.
+
+**W5-3 · B2, la segnalazione.** Oggi nessuna issue del batch può essere non bloccante: `finalize_response` (`transaction_batch_stages.py:430-460`)
+rifiuta tutto se `context.issues` non è vuoto, e `TXValidationIssue` non ha una severità. Proposta (additiva, da confermare nel checkpoint):
+`TXBatchResponse.warnings: List[TXValidationIssue]` (default `[]`), riempita da `context.warnings`, presente anche nelle risposte con `committed=True`;
+codice `pairArrivalBeforeDeparture`, params `{departureDate, arrivalDate}`; due punti: creazione (`resolve_create_links`, dopo la validazione della
+coppia) e modifica (dopo `apply_updates`, per ogni gamba di una coppia il cui `date` è cambiato, partner letto dallo stato fuso). Valgono TRANSFER
+(partenza = quantità negativa) e CASH_TRANSFER (partenza = importo negativo); FX_CONVERSION è sullo stesso broker, esclusa. Nessun blocco, nessuna
+correzione. Chiave i18n `transactions.errors.pairArrivalBeforeDeparture (la convenzione dei codici: il cancello W-B69 legge `errors.<code>`)` (4 lingue; il file `i18n/transactions/*.json` è di W2: riga additiva).
+Come il form/Bulk la mostra: lo aggiunge W2 dopo il commit.
+
+**W5-5 · C-70b.** `api/v1/brokers.py:1090` (`BRIMParseError` → `detail=f"Parse error: {e.message}"`); il ramo `ValueError` e `uploads.py:324/326` danno `str(e)`.
+Proposta: `detail={"code": "parse_failed", "plugin_code": …, "reason": e.message, "reason_code": e.details.get("code"), "context": e.details.get("context")}`
+(HTTP 400 invariato); il wizard (`ImportWizardModal.svelte`) mostra «Il plugin {plugin} non ha potuto leggere il file: {motivo}», dove il motivo è
+tradotto se `reason_code` è nel catalogo, altrimenti il testo del plugin; i codici veri arrivano con E-21 (W5-6).
+
+#### W5-1 · esito (2026-10-23)
+✅ 23/10: `test_external/test_brim_operation_date.py` (87 test, azione `brim-operation-date` in `_backend_external.py`): 33 guardie di fixture (la riga esiste e le due date
+differiscono), 60 sulla data (30 righe × «è la data dell'operazione» e «non è la data valuta»), 3 sul ripiego di Disnat. Verdi dall'inizio: nessun plugin dei 12 data con
+la valuta. `brim_plugin_guide.md`: tabella «Which date each plugin records».
+> **Note implementazione**: nessun codice di prodotto toccato; nessun sample toccato. Il CSV generico non è un difetto: la guida lo dichiara già come eccezione
+> («la colonna che l'utente mappa è la data»), quindi l'alias `value_date`/`settlement_date` resta; resta solo l'ambiguità di un file con più colonne data, che dico nel checkpoint come domanda.
+
+#### W5-3 · B2 — esito (2026-10-23)
+✅ 23/10: rossi → verdi. `test_services/test_transfer_pair_order.py` (64 test; azione `transfer-pair-order`): prima della cura 60 rossi (50 «nessun campo `warnings`», 1 enum, 1 default, 8 messaggi i18n) e 4 verdi; dopo: 64 verdi. Test API in
+`test_transactions_batch_split_promote.py` (+53 righe, 2 casi: commit e validate). Cura: `TXBatchResponse.warnings` (additivo, `[]` di default), `TXValidationCode.PAIR_ARRIVAL_BEFORE_DEPARTURE`
+(`pairArrivalBeforeDeparture`; `GET /transactions/types` lo dà con severità `warning`), `TransactionBatchContext.warnings` + `stored_dates`, `_pair_order_warning` (`validation.py`),
+chiamata in `resolve_create_links` (creazione) e `warn_inverted_updated_pairs` (modifica: solo se una gamba cambia davvero la data, giudizio sulle date finali di entrambe, un avviso per coppia).
+Messaggio in 4 lingue: `transactions.errors.pairArrivalBeforeDeparture`. Regressione: `api batch-split-promote` 42, `api transactions` 26, `services transaction` 130, `linked-adjustment-pair` 21,
+`transaction-cost-basis-rule` 244 (incl. il cancello W-B69 «ogni codice ha il suo messaggio»), `i18n check` verde, `api sync` senza errori.
+> **Note implementazione**: la prima versione metteva il messaggio sotto `transactions.warnings.*`; il cancello W-B69 (e il frontend, che mappa `transactions.errors.{code}`) vuole `errors.<code>`: spostato, il test del test-author adeguato.
+> **⚠️ Fuori pista**: nessun frontend mostra ancora `warnings` (né il form né il Bulk): spetta a W2 dopo il commit. Una coppia già salvata invertita non è mai giudicata.
