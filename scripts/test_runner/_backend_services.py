@@ -646,6 +646,16 @@ def services_username_rules(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Username rules tests", verbose=verbose)
 
 
+def services_account_protection(verbose: bool = False, test_names: list = None) -> bool:
+    """Test A5-1: on a managed instance the account of LIBREFOLIO_ADMIN_EMAIL is protected; the command line is not bound by it."""
+    print_section("Services: Account Protection (A5-1)")
+    print_info("Testing: config/accounts.py owner_admin_email, user_service.account_protection, scripts/user_cli.py deactivate and demote")
+    print_info("Tests: the reader never raises, the managed profile protects the address of the variable in any A-Z case, any other profile or an unusable variable protects nobody, the command line and the deleting service stay above the protection")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_account_protection.py", test_names)
+    return run_command(cmd, "Account protection tests", verbose=verbose)
+
+
 def services_username_lookup(verbose: bool = False, test_names: list = None) -> bool:
     """Test A-21a, rule 3: the sign-in's lookup reads an identifier with an @ as an address first."""
     print_section("Services: Username Lookup (A-21a)")
@@ -2301,6 +2311,16 @@ Note: No backend server required.
         desc="No @ in a new username (user create, LIBREFOLIO_ADMIN_USERNAME), spaces, accents and punctuation still taken, legacy names left as they are; no address equal to another account's username, A–Z case aside (register_user, user set-email, user create)",
         # PURE: every database is a private file under tmp_path built with create_all; the command line runs in this
         # process on that file, get_async_engine a tripwire; variables removed with monkeypatch. No lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "account-protection",
+        services_account_protection,
+        name="Account Protection (A5-1)",
+        desc="The paying administrator of a managed instance (LIBREFOLIO_ADMIN_EMAIL, any A-Z case) is protected, no one in another profile or with an unusable variable, the reader never raises; the command line and the deleting service stay above it",
+        # PURE: users built in memory, the command line on a private file under tmp_path, get_settings() read from the
+        # environment with monkeypatch. No lane DB, no server.
         isolation="pure",
     )
     add_test(

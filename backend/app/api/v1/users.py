@@ -10,6 +10,7 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.api import account_protection
 from backend.app.api.v1.auth import deletion_preview_read, get_current_user
 from backend.app.api.v1.settings import require_admin
 from backend.app.db.models import AccountToken, AccountTokenPurpose, User
@@ -104,12 +105,9 @@ def _admin_user_read(user: User, *, holds_place: bool = False, pending_setup: bo
     )
 
 
-def _protected(user: User) -> Optional[HTTPException]:
-    """409 ``ACCOUNT_PROTECTED`` when nobody may delete, deactivate or demote ``user``."""
-    reason = user_service.account_protection(user)
-    if reason is None:
-        return None
-    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "ACCOUNT_PROTECTED", "message": "This account cannot be deleted, deactivated or demoted", "reason": reason})
+def _protected(user: User, message: str = account_protection.CHANGE_MESSAGE) -> Optional[HTTPException]:
+    """409 ``ACCOUNT_PROTECTED`` when nobody may delete, deactivate or demote ``user``; ``message`` words it (the shared answer: ``api/account_protection.py``)."""
+    return account_protection.protection_refusal(user, message)
 
 
 def _user_not_found() -> HTTPException:
@@ -303,9 +301,12 @@ async def delete_account(user_id: int, admin: Annotated[User, Depends(require_ad
 async def create_password_reset_link(user_id: int, admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> LinkTokenResponse:
     """A single-use link to set a new password, shown once; the links issued before for that account stop working.
 
-    An account deleted since the route read it answers 404 (A-54).
+    An account deleted since the route read it answers 404 (A-54). A protected account (the paying administrator of a
+    managed instance) answers 409 ``ACCOUNT_PROTECTED`` before anything else: no link is made and none is revoked.
     """
     user = await _user_or_404(session, user_id)
+    if refusal := _protected(user, account_protection.ELSEWHERE_MESSAGE):
+        raise refusal
     if not await user_service.refreshed_under_lock(session, user):
         raise _user_not_found()
     issued = await user_service.create_password_reset(session, user, created_by_user_id=admin.id)
@@ -317,9 +318,12 @@ async def create_password_reset_link(user_id: int, admin: Annotated[User, Depend
 @router.post("/{user_id}/sessions/revoke", status_code=status.HTTP_204_NO_CONTENT, summary="Sign an account out everywhere (admin)")
 async def revoke_account_sessions(user_id: int, admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> Response:
     """End every session of the account: each device is signed out at its next request. An account deleted since the
-    route read it answers 404 (A-54).
+    route read it answers 404 (A-54). A protected account (the paying administrator of a managed instance) answers 409
+    ``ACCOUNT_PROTECTED`` before anything else: no session ends.
     """
     user = await _user_or_404(session, user_id)
+    if refusal := _protected(user, account_protection.ELSEWHERE_MESSAGE):
+        raise refusal
     if not await user_service.refreshed_under_lock(session, user):
         raise _user_not_found()
     await user_service.end_sessions(session, user)

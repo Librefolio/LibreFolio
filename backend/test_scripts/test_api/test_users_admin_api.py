@@ -54,7 +54,9 @@ Lot A6a (plan phase01Accounts §A6.1) adds:
 12. The hook of lot A7, ``user_service.account_protection(user) -> Optional[str]``, a plain function: ``PATCH`` refuses
     to deactivate or demote an account it gives a reason for, ``DELETE`` refuses to delete it, both 409
     ``ACCOUNT_PROTECTED``, changing nothing; ``GET /users`` and ``PATCH`` answer ``protected: bool`` (a reason exists).
-    Today it protects nobody: every account of the lane is ``protected: false``.
+    Until lot A5-1 it protects nobody; since, on a managed instance the account of ``LIBREFOLIO_ADMIN_EMAIL`` is the one
+    it protects (``TestPayingAdministratorProtection``, in-process). The lane is not managed: every account of it is
+    ``protected: false``.
 
 Lot A7b (plan phase01Accounts, «A7b — Analisi e contratto», contract C5, its backend part) adds:
 
@@ -2287,6 +2289,399 @@ class TestAccountProtectionInProcess:
         violations += [f"PATCH: {problem}" for problem in _user_item_violations(promoted.json(), member, active=True, superuser=True)]
         assert not violations, f"protected must say whether the hook gives a reason:{_verdict(violations)}"
         print_success("protected true for the account the hook protects, false for the others")
+
+
+PROFILE_VARIABLE = "LIBREFOLIO_PROFILE"
+ADMIN_EMAIL_VARIABLE = "LIBREFOLIO_ADMIN_EMAIL"
+#: A5-1: the reason the real hook gives for the paying administrator, as ``detail.reason`` carries it: a stable word, written out.
+PAYING_ADMINISTRATOR = "paying_administrator"
+
+
+def _instance(monkeypatch: pytest.MonkeyPatch, *, profile: Optional[str], admin_email: Optional[str]) -> None:
+    """Set the profile (None: unset) and ``LIBREFOLIO_ADMIN_EMAIL`` (None: unset) of THIS process, and check that ``get_settings()`` reads the profile.
+
+    Set after the accounts have signed in: only the requests under test see the instance. The real hook is not replaced.
+    """
+    monkeypatch.delenv(PROFILE_VARIABLE, raising=False)
+    monkeypatch.delenv(ADMIN_EMAIL_VARIABLE, raising=False)
+    if profile is not None:
+        monkeypatch.setenv(PROFILE_VARIABLE, profile)
+    if admin_email is not None:
+        monkeypatch.setenv(ADMIN_EMAIL_VARIABLE, admin_email)
+    expected = profile or "selfhosted"
+    resolved = get_settings().LIBREFOLIO_PROFILE
+    assert resolved == expected, f"barrier: with {PROFILE_VARIABLE}={profile!r}, get_settings() reads the profile {resolved!r}, not {expected!r}"
+
+
+async def _listed_protection(private: _Private, cookie: str) -> dict[str, Any]:
+    """``username → protected`` for every account GET /users lists (the private instance holds only this case's accounts)."""
+    response = await _call(private, "GET", "/users", cookie=cookie)
+    assert response.status_code == 200, f"GET /users: {response.status_code} {response.text}"
+    return {item["username"]: item.get("protected", "<missing>") for item in response.json()["items"]}
+
+
+class TestPayingAdministratorProtection:
+    """A5-1: the REAL hook (``user_service.account_protection``, not replaced) on a private instance: on a managed instance the account of ``LIBREFOLIO_ADMIN_EMAIL`` is protected. root, the caller, and peer, another administrator, are never the owner's address."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("typed", [pytest.param(None, id="same-case"), pytest.param("upper", id="variable-in-upper-case")])
+    async def test_the_paying_administrator_is_neither_deactivated_demoted_nor_deleted(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch, typed: Optional[str]) -> None:
+        """UADM-A51-01: managed, ``LIBREFOLIO_ADMIN_EMAIL`` = owner's address (also in another A–Z case): PATCH {is_active: false}, PATCH {is_superuser: false} and DELETE on owner, an active administrator → 409 ACCOUNT_PROTECTED, ``detail.reason`` ``paying_administrator``, and owner is as it was, version included, and still signed in. Barrier: GET /users says protected for owner before the calls."""
+        print_section(f"UADM-A51-01: the owner is protected ({typed or 'same case'})")
+        root, cookie = await _admin(private_head)
+        owner = await _add_user(private_head, "a51_owner", admin=True)
+        owner_cookie = await _sign_in(private_head, owner)
+        written = owner.email.upper() if typed == "upper" else owner.email
+        _instance(monkeypatch, profile="managed", admin_email=written)
+        assert (await _listed_protection(private_head, cookie)).get(owner.username) is True, "Barrier: the owner must be listed as protected, or the 409s below prove nothing"
+        before = await _private_user(private_head, owner.user_id)
+        holdings = await _private_holdings(private_head)
+
+        answers = {
+            "deactivate": await _call(private_head, "PATCH", f"/users/{owner.user_id}", cookie=cookie, json={"is_active": False}),
+            "demote": await _call(private_head, "PATCH", f"/users/{owner.user_id}", cookie=cookie, json={"is_superuser": False}),
+            "delete": await _call(private_head, "DELETE", f"/users/{owner.user_id}", cookie=cookie),
+        }
+        after = await _private_user(private_head, owner.user_id)
+
+        violations: list[str] = []
+        for label, response in answers.items():
+            _expect(violations, _refusal(response) == (409, "ACCOUNT_PROTECTED"), f"{label}: expected 409 ACCOUNT_PROTECTED, got {response.status_code} {response.text}")
+            _expect(violations, _detail(response).get("reason") == PAYING_ADMINISTRATOR, f"{label}: detail.reason must be {PAYING_ADMINISTRATOR!r}: {_detail(response)}")
+        _expect(violations, after == before, f"a refused change must change nothing, the version included: {before} → {after}")
+        _expect(violations, await _private_holdings(private_head) == holdings, "a refused change must change no account, broker, grant or transaction")
+        _expect(violations, (await _call(private_head, "GET", "/users", cookie=owner_cookie)).status_code == 200, "the owner must still be signed in as an administrator")
+        assert not violations, f"The paying administrator must stay:{_verdict(violations)}"
+        print_success("409 ACCOUNT_PROTECTED × 3 with the reason; the owner untouched")
+
+    @pytest.mark.asyncio
+    async def test_protection_is_by_email_alone_an_ordinary_account_too(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+        """UADM-A51-02: managed, the variable = the address of keeper, an ORDINARY (non-administrator) account: DELETE → 409 ACCOUNT_PROTECTED, PATCH {is_active: false} → 409; keeper is as it was. Barrier: the same two calls on member, another ordinary account, go through (200, 204)."""
+        print_section("UADM-A51-02: by email, administrator or not")
+        _, cookie = await _admin(private_head)
+        keeper = await _add_user(private_head, "a51_keeper")
+        member = await _add_user(private_head, "a51_member")
+        _instance(monkeypatch, profile="managed", admin_email=keeper.email)
+        before = await _private_user(private_head, keeper.user_id)
+
+        deactivate = await _call(private_head, "PATCH", f"/users/{keeper.user_id}", cookie=cookie, json={"is_active": False})
+        delete = await _call(private_head, "DELETE", f"/users/{keeper.user_id}", cookie=cookie)
+        after = await _private_user(private_head, keeper.user_id)
+        member_deactivated = await _call(private_head, "PATCH", f"/users/{member.user_id}", cookie=cookie, json={"is_active": False})
+        member_deleted = await _call(private_head, "DELETE", f"/users/{member.user_id}", cookie=cookie)
+
+        violations: list[str] = []
+        _expect(violations, _refusal(deactivate) == (409, "ACCOUNT_PROTECTED"), f"deactivate: expected 409 ACCOUNT_PROTECTED, got {deactivate.status_code} {deactivate.text}")
+        _expect(violations, _refusal(delete) == (409, "ACCOUNT_PROTECTED"), f"delete: expected 409 ACCOUNT_PROTECTED, got {delete.status_code} {delete.text}")
+        _expect(violations, after == before, f"nothing may change: {before} → {after}")
+        _expect(violations, (member_deactivated.status_code, member_deleted.status_code) == (200, 204), f"Barrier: another ordinary account is deactivated and deleted: {member_deactivated.status_code} {member_deactivated.text}; {member_deleted.status_code} {member_deleted.text}")
+        assert not violations, f"The protection is by email alone:{_verdict(violations)}"
+        print_success("an ordinary account protected too; the neighbour removable")
+
+    @pytest.mark.asyncio
+    async def test_only_the_paying_administrator_is_listed_protected_and_the_answer_says_so(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+        """UADM-A51-03: managed: GET /users lists owner with ``protected`` true and root, peer and member with false, exactly their fields; a PATCH that changes nothing on owner ({is_active: true}) → 200 with ``protected`` true; PATCH promoting member → 200 with ``protected`` false."""
+        print_section("UADM-A51-03: the protected field")
+        root, cookie = await _admin(private_head)
+        owner = await _add_user(private_head, "a51_owner", admin=True)
+        peer = await _add_user(private_head, "a51_peer", admin=True)
+        member = await _add_user(private_head, "a51_member")
+        _instance(monkeypatch, profile="managed", admin_email=owner.email)
+
+        listed = await _call(private_head, "GET", "/users", cookie=cookie)
+        harmless = await _call(private_head, "PATCH", f"/users/{owner.user_id}", cookie=cookie, json={"is_active": True})
+        promoted = await _call(private_head, "PATCH", f"/users/{member.user_id}", cookie=cookie, json={"is_superuser": True})
+
+        assert (listed.status_code, harmless.status_code, promoted.status_code) == (200, 200, 200), f"GET /users {listed.status_code} {listed.text}; harmless PATCH {harmless.status_code} {harmless.text}; promote {promoted.status_code} {promoted.text}"
+        items = {item.get("id"): item for item in listed.json()["items"]}
+        violations = _user_item_violations(items.get(root.user_id), root, active=True, superuser=True)
+        violations += _user_item_violations(items.get(owner.user_id), owner, active=True, superuser=True, protected=True)
+        violations += _user_item_violations(items.get(peer.user_id), peer, active=True, superuser=True)
+        violations += _user_item_violations(items.get(member.user_id), member, active=True, superuser=False)
+        violations += [f"harmless PATCH: {problem}" for problem in _user_item_violations(harmless.json(), owner, active=True, superuser=True, protected=True)]
+        violations += [f"promote PATCH: {problem}" for problem in _user_item_violations(promoted.json(), member, active=True, superuser=True)]
+        assert not violations, f"protected must be true for the paying administrator alone:{_verdict(violations)}"
+        print_success("protected true for the owner alone, in the list and in the answer of a PATCH")
+
+    @pytest.mark.asyncio
+    async def test_another_administrator_is_still_removable(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+        """UADM-A51-04: managed, the variable = owner's address: peer, an administrator of another address, is demoted (200), deactivated (200) and deleted (204), as without protection; the owner is untouched throughout."""
+        print_section("UADM-A51-04: another administrator is removable")
+        _, cookie = await _admin(private_head)
+        owner = await _add_user(private_head, "a51_owner", admin=True)
+        peer = await _add_user(private_head, "a51_peer", admin=True)
+        _instance(monkeypatch, profile="managed", admin_email=owner.email)
+        owner_before = await _private_user(private_head, owner.user_id)
+
+        demoted = await _call(private_head, "PATCH", f"/users/{peer.user_id}", cookie=cookie, json={"is_superuser": False})
+        deactivated = await _call(private_head, "PATCH", f"/users/{peer.user_id}", cookie=cookie, json={"is_active": False})
+        deleted = await _call(private_head, "DELETE", f"/users/{peer.user_id}", cookie=cookie)
+        usernames = await _listed_protection(private_head, cookie)
+
+        violations: list[str] = []
+        _expect(violations, (demoted.status_code, deactivated.status_code, deleted.status_code) == (200, 200, 204), f"expected 200, 200, 204, got {demoted.status_code} {demoted.text}; {deactivated.status_code} {deactivated.text}; {deleted.status_code} {deleted.text}")
+        _expect(violations, peer.username not in usernames, f"peer must be gone: {sorted(usernames)}")
+        _expect(violations, await _private_user(private_head, owner.user_id) == owner_before, "the owner must be untouched")
+        assert not violations, f"Only the paying administrator is protected:{_verdict(violations)}"
+        print_success("peer demoted, deactivated and deleted")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("profile", [pytest.param(None, id="profile-unset"), pytest.param("selfhosted", id="selfhosted")])
+    async def test_another_profile_protects_nobody_with_the_same_variable(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch, profile: Optional[str]) -> None:
+        """UADM-A51-05: regression zero — the default (selfhosted) profile with ``LIBREFOLIO_ADMIN_EMAIL`` = owner's address: GET /users lists every account ``protected`` false, and owner is demoted (200), deactivated (200) and deleted (204) like any other (root stays the active administrator)."""
+        print_section(f"UADM-A51-05: profile {profile or 'unset'}, same variable")
+        _, cookie = await _admin(private_head)
+        owner = await _add_user(private_head, "a51_owner", admin=True)
+        _instance(monkeypatch, profile=profile, admin_email=owner.email)
+
+        listed = await _listed_protection(private_head, cookie)
+        demoted = await _call(private_head, "PATCH", f"/users/{owner.user_id}", cookie=cookie, json={"is_superuser": False})
+        deactivated = await _call(private_head, "PATCH", f"/users/{owner.user_id}", cookie=cookie, json={"is_active": False})
+        deleted = await _call(private_head, "DELETE", f"/users/{owner.user_id}", cookie=cookie)
+
+        violations: list[str] = []
+        _expect(violations, owner.username in listed, f"Barrier: the owner must be listed: {sorted(listed)}")
+        _expect(violations, [name for name, flag in listed.items() if flag is not False] == [], f"nobody is protected outside the managed profile: {listed}")
+        _expect(violations, (demoted.status_code, deactivated.status_code, deleted.status_code) == (200, 200, 204), f"expected 200, 200, 204, got {demoted.status_code} {demoted.text}; {deactivated.status_code} {deactivated.text}; {deleted.status_code} {deleted.text}")
+        assert not violations, f"Outside the managed profile nothing changes:{_verdict(violations)}"
+        print_success("nobody protected, the owner removable")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("written", [pytest.param(None, id="unset"), pytest.param("", id="empty"), pytest.param("   ", id="blank"), pytest.param("not-an-address", id="not-an-address")])
+    async def test_managed_without_a_usable_variable_protects_nobody(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch, written: Optional[str]) -> None:
+        """UADM-A51-06: managed, ``LIBREFOLIO_ADMIN_EMAIL`` unset, blank or not an address: GET /users answers 200 (the hook raises nothing) with every account ``protected`` false, and an administrator of any address is demoted (200)."""
+        print_section(f"UADM-A51-06: managed, the variable {written!r}")
+        _, cookie = await _admin(private_head)
+        peer = await _add_user(private_head, "a51_peer", admin=True)
+        _instance(monkeypatch, profile="managed", admin_email=written)
+
+        listed = await _listed_protection(private_head, cookie)
+        demoted = await _call(private_head, "PATCH", f"/users/{peer.user_id}", cookie=cookie, json={"is_superuser": False})
+
+        assert peer.username in listed, f"Barrier: peer must be listed: {sorted(listed)}"
+        assert [name for name, flag in listed.items() if flag is not False] == [], f"managed with {written!r}: nobody is protected: {listed}"
+        assert demoted.status_code == 200, f"demoting peer: {demoted.status_code} {demoted.text}"
+        print_success("nobody protected, nothing raised")
+
+
+#: A5-1 extension (developer decision, 23/10): the four more paths the paying administrator is protected on, and what each answers.
+PROTECTED_ELSEWHERE_MESSAGE = "This account is protected: ask the host of this instance if something has to change"
+PROTECTED_DELETION_MESSAGE = "This account cannot be deleted from here: ask the host of this instance"
+PROTECTED_EMAIL_MESSAGE = "The email address of this account can only be changed by the host of this instance"
+OWNER_NEW_PASSWORD = "Owner-Changed-2026"
+
+
+@dataclass(frozen=True)
+class _A51Scene:
+    """root (an administrator, the caller), owner (the paying administrator, an administrator), peer (another administrator) and member (an ordinary account) of one private instance, all signed in, the instance already set to its profile and variable."""
+
+    root: _Account
+    root_cookie: str
+    owner: _Account
+    owner_cookie: str
+    peer: _Account
+    peer_cookie: str
+    member: _Account
+    member_cookie: str
+
+
+async def _a51_scene(private: _Private, monkeypatch: pytest.MonkeyPatch, profile: Optional[str]) -> _A51Scene:
+    """The four accounts signed in, then the profile ``profile`` (None: unset) and ``LIBREFOLIO_ADMIN_EMAIL`` = owner's address set in this process."""
+    root, root_cookie = await _admin(private)
+    owner = await _add_user(private, "a51_owner", admin=True)
+    peer = await _add_user(private, "a51_peer", admin=True)
+    member = await _add_user(private, "a51_member")
+    cookies = [await _sign_in(private, account) for account in (owner, peer, member)]
+    _instance(monkeypatch, profile=profile, admin_email=owner.email)
+    return _A51Scene(root, root_cookie, owner, cookies[0], peer, cookies[1], member, cookies[2])
+
+
+def _protected_refusal_violations(response: httpx.Response, message: str, label: str) -> list[str]:
+    """409 with ``error_code`` ACCOUNT_PROTECTED, the reason of the paying administrator and exactly ``message``."""
+    detail = _detail(response)
+    violations: list[str] = []
+    _expect(violations, response.status_code == 409 and detail.get("error_code") == "ACCOUNT_PROTECTED", f"{label}: expected 409 ACCOUNT_PROTECTED, got {response.status_code} {response.text}")
+    _expect(violations, detail.get("reason") == PAYING_ADMINISTRATOR, f"{label}: detail.reason must be {PAYING_ADMINISTRATOR!r}: {detail}")
+    _expect(violations, detail.get("message") == message, f"{label}: detail.message must be {message!r}: {detail}")
+    return violations
+
+
+async def _profile_of(private: _Private, user_id: int) -> tuple[str, str, int]:
+    """(username, email, session_version) of an account, read fresh."""
+    async with AsyncSession(private.engine) as session:
+        row = (await session.execute(select(User.username, User.email, User.session_version).where(User.id == user_id))).one()
+    return str(row[0]), str(row[1]), int(row[2])
+
+
+NOT_MANAGED = [pytest.param(None, id="profile-unset"), pytest.param("selfhosted", id="selfhosted")]
+
+
+class TestPayingAdministratorOtherPaths:
+    """A5-1 extension: the REAL hook on four more paths — an administrator's reset link and sessions revoke for the owner, the owner's own deletion and email change. Managed: refused with 409 ACCOUNT_PROTECTED. Anyone else, and any other profile: as today."""
+
+    @pytest.mark.asyncio
+    async def test_nobody_creates_a_reset_link_for_the_paying_administrator(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+        """UADM-A51-10: managed: root POST /users/{owner}/password-reset-link → 409 ACCOUNT_PROTECTED (reason, message), and every token row is as it was: none issued, the live reset link the owner already had not revoked. Barrier: the same call for peer and for member → 201."""
+        print_section("UADM-A51-10: no reset link for the owner")
+        private = private_head
+        scene = await _a51_scene(private, monkeypatch, "managed")
+        await _private_issue(private, PASSWORD_RESET, user_id=scene.owner.user_id)
+        before = await _private_token_columns(private)
+
+        refused = await _call(private, "POST", f"/users/{scene.owner.user_id}/password-reset-link", cookie=scene.root_cookie)
+        after = await _private_token_columns(private)
+        allowed = [await _call(private, "POST", f"/users/{account.user_id}/password-reset-link", cookie=scene.root_cookie) for account in (scene.peer, scene.member)]
+
+        violations = _protected_refusal_violations(refused, PROTECTED_ELSEWHERE_MESSAGE, "reset link for the owner")
+        _expect(violations, after == before, f"a refused link must change no token row: {before} → {after}")
+        _expect(violations, [response.status_code for response in allowed] == [201, 201], f"Barrier: peer and member get their link: {[(r.status_code, r.text) for r in allowed]}")
+        assert not violations, f"The owner's password is not reset by another administrator:{_verdict(violations)}"
+        print_success("409, no token touched; peer and member 201")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("profile", NOT_MANAGED)
+    async def test_outside_managed_the_reset_link_for_that_address_is_issued(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch, profile: Optional[str]) -> None:
+        """UADM-A51-11: regression zero — selfhosted (or unset) with the variable = owner's address: POST /users/{owner}/password-reset-link → 201."""
+        scene = await _a51_scene(private_head, monkeypatch, profile)
+        response = await _call(private_head, "POST", f"/users/{scene.owner.user_id}/password-reset-link", cookie=scene.root_cookie)
+        assert response.status_code == 201, f"outside managed the link is issued: {response.status_code} {response.text}"
+
+    @pytest.mark.asyncio
+    async def test_nobody_ends_the_sessions_of_the_paying_administrator(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+        """UADM-A51-12: managed: root POST /users/{owner}/sessions/revoke → 409 ACCOUNT_PROTECTED (reason, message); the owner's session_version is as it was and its session still works. Barrier: the same call for peer → 204 and its version rises, its old session is refused."""
+        print_section("UADM-A51-12: no sessions revoke for the owner")
+        private = private_head
+        scene = await _a51_scene(private, monkeypatch, "managed")
+        before = await _private_user(private, scene.owner.user_id)
+
+        refused = await _call(private, "POST", f"/users/{scene.owner.user_id}/sessions/revoke", cookie=scene.root_cookie)
+        after = await _private_user(private, scene.owner.user_id)
+        still = await _call(private, "GET", "/users", cookie=scene.owner_cookie)
+        peer_before = await _private_user(private, scene.peer.user_id)
+        allowed = await _call(private, "POST", f"/users/{scene.peer.user_id}/sessions/revoke", cookie=scene.root_cookie)
+        peer_after = await _private_user(private, scene.peer.user_id)
+
+        violations = _protected_refusal_violations(refused, PROTECTED_ELSEWHERE_MESSAGE, "sessions revoke for the owner")
+        _expect(violations, after == before, f"no session_version may change: {before} → {after}")
+        _expect(violations, still.status_code == 200, f"the owner's session must still work: {still.status_code}")
+        _expect(violations, allowed.status_code == 204 and peer_after[2] > peer_before[2], f"Barrier: peer's sessions end: {allowed.status_code} {allowed.text}, version {peer_before[2]} → {peer_after[2]}")
+        assert not violations, f"The owner's sessions are not closed by another administrator:{_verdict(violations)}"
+        print_success("409, version unchanged; peer 204")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("profile", NOT_MANAGED)
+    async def test_outside_managed_the_sessions_of_that_address_end(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch, profile: Optional[str]) -> None:
+        """UADM-A51-13: regression zero — selfhosted (or unset): POST /users/{owner}/sessions/revoke → 204 and the version rises."""
+        scene = await _a51_scene(private_head, monkeypatch, profile)
+        before = await _private_user(private_head, scene.owner.user_id)
+        response = await _call(private_head, "POST", f"/users/{scene.owner.user_id}/sessions/revoke", cookie=scene.root_cookie)
+        after = await _private_user(private_head, scene.owner.user_id)
+        assert response.status_code == 204 and after[2] > before[2], f"outside managed the sessions end: {response.status_code} {response.text}, version {before[2]} → {after[2]}"
+
+    @pytest.mark.asyncio
+    async def test_the_paying_administrator_does_not_delete_its_own_account(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+        """UADM-A51-14: managed: DELETE /auth/users/me by the owner → 409 ACCOUNT_PROTECTED (reason, message) BEFORE the last-administrator rule: the owner is made the only active administrator (root and peer deactivated), where an unprotected one would hear 400 LAST_ADMIN; the account is still there and its session works. Barrier: member DELETE /auth/users/me → 200."""
+        print_section("UADM-A51-14: the owner does not delete itself")
+        private = private_head
+        scene = await _a51_scene(private, monkeypatch, "managed")
+        for account in (scene.root, scene.peer):
+            async with AsyncSession(private.engine) as session:
+                row = await session.get(User, account.user_id)
+                row.is_active = False
+                session.add(row)
+                await session.commit()
+        before = await _private_holdings(private)
+
+        refused = await _call(private, "DELETE", "/auth/users/me", cookie=scene.owner_cookie)
+        after = await _private_holdings(private)
+        still = await _call(private, "GET", "/auth/me", cookie=scene.owner_cookie)
+        allowed = await _call(private, "DELETE", "/auth/users/me", cookie=scene.member_cookie)
+
+        violations = _protected_refusal_violations(refused, PROTECTED_DELETION_MESSAGE, "own deletion of the owner")
+        _expect(violations, after == before, "a refused deletion must change nothing")
+        _expect(violations, still.status_code == 200, f"the owner's session must be intact: {still.status_code} {still.text}")
+        _expect(violations, allowed.status_code == 200, f"Barrier: an ordinary account deletes itself: {allowed.status_code} {allowed.text}")
+        assert not violations, f"The paying administrator cannot delete itself:{_verdict(violations)}"
+        print_success("409 before LAST_ADMIN; member 200")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("profile", NOT_MANAGED)
+    async def test_outside_managed_that_address_deletes_itself(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch, profile: Optional[str]) -> None:
+        """UADM-A51-15: regression zero — selfhosted (or unset), the variable = owner's address: DELETE /auth/users/me by the owner (root is another active administrator) → 200, gone."""
+        scene = await _a51_scene(private_head, monkeypatch, profile)
+        response = await _call(private_head, "DELETE", "/auth/users/me", cookie=scene.owner_cookie)
+        usernames = [row[0] for row in (await _private_holdings(private_head))["accounts"]]
+        assert response.status_code == 200 and scene.owner.username not in usernames, f"outside managed the owner deletes itself: {response.status_code} {response.text}, accounts {usernames}"
+
+    @pytest.mark.asyncio
+    async def test_the_paying_administrator_does_not_change_its_email(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+        """UADM-A51-16: managed: PUT /auth/profile by the owner with a NEW email → 409 ACCOUNT_PROTECTED (reason, message) whatever the password — none given, a wrong one, the right one —, before the password is looked at: no failure recorded in the login throttle, no 400 CURRENT_PASSWORD_*; with a new username as well → 409 and the username unchanged; nothing changed on the server (username, email, session_version). Then, allowed: the username alone → 200; the same address in another case → 200 (no change of address); an unchanged email with a new username → 200."""
+        print_section("UADM-A51-16: the owner does not change its email")
+        private = private_head
+        scene = await _a51_scene(private, monkeypatch, "managed")
+        failures: list[tuple[Any, ...]] = []
+        monkeypatch.setattr(auth_api.login_throttle, "record_failure", lambda *arguments: failures.append(arguments))
+        before = await _profile_of(private, scene.owner.user_id)
+        new_email = "a51_owner_moved@example.com"
+        bodies = {
+            "no password": {"email": new_email},
+            "a wrong password": {"email": new_email, "current_password": "Not-The-Password-1"},
+            "the right password": {"email": new_email, "current_password": PRIVATE_PASSWORD},
+            "a new username too": {"username": "a51_owner_renamed", "email": new_email, "current_password": PRIVATE_PASSWORD},
+        }
+
+        answers = {label: await _call(private, "PUT", "/auth/profile", cookie=scene.owner_cookie, json=body) for label, body in bodies.items()}
+        after = await _profile_of(private, scene.owner.user_id)
+
+        violations: list[str] = []
+        for label, response in answers.items():
+            violations += _protected_refusal_violations(response, PROTECTED_EMAIL_MESSAGE, f"email change with {label}")
+        _expect(violations, after == before, f"a refused change must change nothing: {before} → {after}")
+        _expect(violations, failures == [], f"the owner must not be counted against the password limit: {failures}")
+        renamed = await _call(private, "PUT", "/auth/profile", cookie=scene.owner_cookie, json={"username": "a51_owner_renamed"})
+        recased = await _call(private, "PUT", "/auth/profile", cookie=scene.owner_cookie, json={"email": scene.owner.email.upper()})
+        unchanged = await _call(private, "PUT", "/auth/profile", cookie=scene.owner_cookie, json={"username": "a51_owner_again", "email": scene.owner.email})
+        _expect(violations, (renamed.status_code, recased.status_code, unchanged.status_code) == (200, 200, 200), f"the username alone, the same address in another case and a new username with the same email are allowed: {renamed.status_code} {renamed.text}; {recased.status_code} {recased.text}; {unchanged.status_code} {unchanged.text}")
+        _expect(violations, (await _profile_of(private, scene.owner.user_id))[0] == "a51_owner_again", "the username must have changed")
+        assert not violations, f"The paying administrator's email is the host's to change:{_verdict(violations)}"
+        print_success("409 four times before the password; username, case and unchanged email 200")
+
+    @pytest.mark.asyncio
+    async def test_another_account_still_changes_its_email_in_managed(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+        """UADM-A51-17: managed: peer (an administrator of another address) and member change their email with the right password → 200, and the address is the new one."""
+        scene = await _a51_scene(private_head, monkeypatch, "managed")
+        results = {}
+        for account, cookie in ((scene.peer, scene.peer_cookie), (scene.member, scene.member_cookie)):
+            new_email = f"moved_{account.username}@example.com"
+            response = await _call(private_head, "PUT", "/auth/profile", cookie=cookie, json={"email": new_email, "current_password": PRIVATE_PASSWORD})
+            results[account.username] = (response.status_code, (await _profile_of(private_head, account.user_id))[1] == new_email)
+        assert results == {"a51_peer": (200, True), "a51_member": (200, True)}, f"others change their email as before: {results}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("profile", NOT_MANAGED)
+    async def test_outside_managed_that_address_changes_its_email(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch, profile: Optional[str]) -> None:
+        """UADM-A51-18: regression zero — selfhosted (or unset): the owner changes its email with the right password → 200; without a password → 400 CURRENT_PASSWORD_REQUIRED, as today."""
+        scene = await _a51_scene(private_head, monkeypatch, profile)
+        new_email = "a51_owner_moved@example.com"
+        missing = await _call(private_head, "PUT", "/auth/profile", cookie=scene.owner_cookie, json={"email": new_email})
+        changed = await _call(private_head, "PUT", "/auth/profile", cookie=scene.owner_cookie, json={"email": new_email, "current_password": PRIVATE_PASSWORD})
+        assert (missing.status_code, _detail(missing).get("error_code")) == (400, "CURRENT_PASSWORD_REQUIRED"), f"without a password: {missing.status_code} {missing.text}"
+        assert changed.status_code == 200 and (await _profile_of(private_head, scene.owner.user_id))[1] == new_email, f"with it the address changes: {changed.status_code} {changed.text}"
+
+    @pytest.mark.asyncio
+    async def test_the_paying_administrator_still_changes_and_recovers_its_password(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+        """UADM-A51-19: managed: the owner changes its password (POST /auth/change-password → 200) and, holding a reset link (the forgotten-password flow, issued by the service), sets a new one with POST /auth/password-reset → 200, and signs in with it."""
+        print_section("UADM-A51-19: change-password and password-reset stay open")
+        private = private_head
+        scene = await _a51_scene(private, monkeypatch, "managed")
+        assert (await _listed_protection(private, scene.root_cookie)).get(scene.owner.username) is True, "Barrier: the owner is protected"
+
+        changed = await _call(private, "POST", "/auth/change-password", cookie=scene.owner_cookie, json={"current_password": PRIVATE_PASSWORD, "new_password": OWNER_NEW_PASSWORD})
+        link = await _private_issue(private, PASSWORD_RESET, user_id=scene.owner.user_id)
+        reset = await _call(private, "POST", "/auth/password-reset", json={"token": link.token, "new_password": NEW_PASSWORD})
+        signed = await _call(private, "POST", "/auth/login", json={"username": scene.owner.username, "password": NEW_PASSWORD})
+
+        assert (changed.status_code, reset.status_code, signed.status_code) == (200, 200, 200), f"change-password {changed.status_code} {changed.text}; password-reset {reset.status_code} {reset.text}; sign-in {signed.status_code} {signed.text}"
 
 
 class TestAccountDeletionInProcess:

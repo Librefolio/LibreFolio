@@ -359,9 +359,10 @@ describe('UserRow — cancelling the setup link of the waiting administrator (A-
         // A user's click is `HTMLElement.click()`, which a disabled control refuses as a browser does; never
         // `fireEvent.click` here: in jsdom it reaches a disabled button, and Svelte 5's delegated handler fires.
         // The barrier first: the same click on an action of the panel that is on reaches onAction.
-        within(panel).getByTestId('users-action-reset-link').click();
+        // (A5-1: a protected account's reset link and sign-out are off too, so the barrier is the restart of its guides)
+        within(panel).getByTestId('users-action-restart-guides').click();
         expect(mounted.onAction).toHaveBeenCalledTimes(1);
-        expect(mounted.onAction).toHaveBeenCalledWith('reset-link', account);
+        expect(mounted.onAction).toHaveBeenCalledWith('restart-guides', account);
 
         cancel.click();
         expect(mounted.onAction, 'only the barrier’s call: the cancellation handed nothing over').toHaveBeenCalledTimes(1);
