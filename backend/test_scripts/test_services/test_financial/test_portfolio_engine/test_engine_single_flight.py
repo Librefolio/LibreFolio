@@ -107,7 +107,7 @@ from collections import defaultdict
 from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -129,7 +129,7 @@ from backend.app.services.ai_export.components.portfolio_financial import PORTFO
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.dependencies import BuildContext, build_bucket_plan_for_scope
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
-from backend.app.services.financial_math.portfolio.models import PortfolioCalculationResult
+from backend.app.services.financial_math.portfolio.models import DailyStates, PortfolioCalculationResult, StateSegment
 from backend.app.services.pac_allocator.source.distribution import build_planner_current_distribution
 from backend.app.services.portfolio_service import PortfolioService
 from backend.test_scripts.test_utils import print_section, print_success
@@ -796,6 +796,9 @@ def _snapshot(value: Any, path: str = "result", _stack: frozenset[int] = frozens
     if id(value) in _stack:
         return ("cycle", type(value).__name__)
     stack = _stack | {id(value)}
+    if isinstance(value, DailyStates):
+        # P4: the states a consumer could write into are the stored ones, one per segment (start, end, state)
+        return (type(value).__name__, _snapshot(value.segments, f"{path}.segments", stack))
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return _snapshot_dataclass(value, path, stack)
     if isinstance(value, Mapping):
@@ -956,5 +959,20 @@ class TestTheSharedResultIsNotMutatedByItsConsumers:
             write(result)
             assert _differences(before, _snapshot(result)), f"the snapshot missed a write: {name}"
         assert _differences(_snapshot(build()), _snapshot(build())) == [], "two equal results snapshot differently"
+
+        def build_segments() -> PortfolioCalculationResult:
+            state = DailyPortfolioState(date=D0, **state_fields, by_type={"Stock": Decimal("1.0")})
+            return PortfolioCalculationResult(daily_states=DailyStates([StateSegment(start=D0, end=D0 + timedelta(days=2), state=state)]), date_from=D0, date_to=D0)
+
+        segment_writes: dict[str, Callable[[PortfolioCalculationResult], None]] = {
+            "segment state nested dict": lambda result: result.daily_states.segments[0].state.by_type.__setitem__("Stock", Decimal("2")),
+            "segment state set add": lambda result: result.daily_states.segments[0].state.missing_fx_pairs.add("EUR/USD"),
+        }
+        for name, write in segment_writes.items():
+            result = build_segments()
+            before = _snapshot(result)
+            write(result)
+            assert _differences(before, _snapshot(result)), f"the snapshot missed a write: {name}"
+        assert _differences(_snapshot(build_segments()), _snapshot(build_segments())) == [], "two equal segmented results snapshot differently"
         with pytest.raises(_UnsnapshottableValue):
             _snapshot(PortfolioCalculationResult(daily_states=[object()]))
