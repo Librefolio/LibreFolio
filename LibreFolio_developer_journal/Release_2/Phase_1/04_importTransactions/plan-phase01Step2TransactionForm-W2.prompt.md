@@ -63,3 +63,40 @@ data «abc» → fuoco sulla data (sta sopra la quantità). Se il developer vuol
   > **⚠️ Fuori pista**: causa = `focusFirstMarkedCell` prendeva il primo controllo della cella, che nel date picker è il pulsante del calendario, prima del campo
   > di testo. Cura: prima `input`/`combobox`, il pulsante solo se non c'è altro. Rilanciati `transactions-modals` e `tx-fx-completeness`: rc=0 entrambi.
   > Anche nello spec `transactions-modals` due messaggi di asserzione («disabled only by an incomplete form») aggiornati: ⚡ ora è sempre abilitato.
+
+## #47 · Importo totale / Prezzo unitario (11b) — analisi (23/10/2026, base `479f57872` = commit di V-37b)
+
+**Dove si applica.** Solo BUY e SELL hanno quantità **e** cassa obbligatorie (`schemas/transactions/type_metadata.py:177-193`). ADJUSTMENT/TRANSFER hanno la cassa vietata, FX e i trasferimenti di cassa non hanno quantità, dividendo/interesse/spese non hanno quantità. Quindi la **coppia non è interessata**: il selettore vive solo nella sezione singola di BUY/SELL (`TxFormSingleSection.svelte`, il ramo «quantità + cassa»).
+
+**Il calcolo esiste in `financial_math/`? No, non per questo uso.**
+- `valuation.compute_holding_value(qty, raw_price, quote_base_quantity)` = `(qty / base) × raw_price`, `Decimal`, senza arrotondamento: è il valore di mercato di una posizione (il lato «prezzo → importo» ci somiglia, ma non c'è il lato inverso né l'arrotondamento alle colonne).
+- Nessuna funzione per «importo ÷ quantità → prezzo». `average_cost.movement_unit_costs` è il costo medio di un movimento, altra cosa.
+- Il frontend **non** ha `quote_base_quantity` dell'asset (non è nell'`assetStore`) e non può calcolare (regola 6 di `financial-math.instructions.md`).
+- `financial_math/**` è di MF e `api/v1/transactions.py` non ha un endpoint di conversione.
+
+**Regola dei decimali già in uso (W-B64/N63, `db/precision.py`)**: importo ≤ 6 decimali, ≤ 15 cifre significative, ≤ 15 intere; quantità ≤ 10 decimali; prezzo ≤ 12 decimali. È un **limite di ingresso, mai un arrotondamento** (`decimal_limit_issue`). `Transaction` non ha il prezzo: salva solo `quantity` e `amount`. Il prezzo unitario è quindi solo un modo di digitare; l'importo è ciò che si salva.
+
+**Decisioni chieste (bloccano il calcolo, non il resto)** — vedi il messaggio al coordinatore: D1 dove vive il calcolo; D2 `quote_base_quantity`; D3 arrotondamento del valore calcolato; D4 selettore nella modifica multipla.
+
+### #47 — decisioni del coordinatore (23/10/2026, «decise da lui», il developer può cambiarle)
+- **D1** endpoint backend: funzione pura in **file nuovo** `financial_math/trade_amount.py` (MF la rivede), riga nelle mappe, test unitari; poi schema, rotta in `api/v1/transactions.py` (due modi), `api sync`. Il form la interroga con un breve ritardo e non calcola mai.
+- **D2** convenzione dell'app `qty / quote_base_quantity × prezzo`, letta dall'asset nel backend; `compute_holding_value` riusato per prezzo→importo.
+- **D3** half-even alle scale delle colonne: importo 6 decimali, prezzo 12; oltre i limiti d'ingresso resta rosso come oggi.
+- **D4** niente selettore nel Bulk (di W): voce di backlog.
+
+### #47 — disegno (mio)
+- Solo BUY/SELL singola (`quantityMode≠forbidden`, `cashField≠forbidden`, asset non vietato, niente coppia).
+- Backend: `POST /api/v1/transactions/trade-amount` body `{asset_id, quantity, mode: price_to_amount|amount_to_price, value}`; risposta `{mode, result, quote_base_quantity}`, `result` = decimale piano, senza esponente né zeri finali. 404 asset ignoto, 422 quantità zero o valori oltre i limiti d'ingresso.
+- Frontend: selettore a badge `tx-form-entry-mode` (due bottoni, `aria-pressed`); campo prezzo `tx-form-unit-price`; il prezzo calcolato in modalità importo `tx-form-unit-price-computed`; `driver` = ultimo valore scritto (`txTradeAmount.ts`), l'altro si calcola dal backend (`txTradeAmountApi.ts`), mai a mano. Il prezzo è nella valuta della cassa (il backend ignora la valuta).
+
+### #47 — passi
+- ✅ **1. Rossi** (23/10/2026, due `test-author`): backend `test_trade_amount.py` (54 test, rossi per `NotImplementedError`), 32 test API in `test_transactions_api.py` (rossi per 405: rotta assente), frontend `txTradeAmount.test.ts` (62; 14 rossi), `TransactionFormModal.entryMode.test.ts` (25; 22 rossi), un E2E in `transactions-modals.spec.ts` (non girato).
+- ✅ **2. Cura backend** (23/10/2026): `financial_math/trade_amount.py` (`amount_from_unit_price`, `unit_price_from_amount`; `compute_holding_value` riusato, half-even in `localcontext` a 80 cifre), `schemas/transactions/trade_amount.py` (richiesta con limiti d'ingresso `decimal_limit_issue`, quantità ≠ 0), `services/transactions/trade_amount.py` (legge `quote_base_quantity` dell'asset, scale 6 e 12 dalle colonne), rotta `POST /transactions/trade-amount` (404 asset ignoto), mappe in `financial_math/__init__.py`, `financial-math.instructions.md`, `backend.instructions.md`, `developer/backend/financial_math.md`. Unit 54/54 (pytest diretto, funzione pura). `ruff` e `black` puliti.
+- ✅ **3. `api sync`** (generated.ts ignorato da git): alias `trade_amount_api_v1_transactions_trade_amount_post`.
+- ✅ **4. Cura frontend** (23/10/2026): `txTradeAmount.ts` (driver e piano della richiesta), `txTradeAmountApi.ts` (trySave, mai eccezioni, `null` su rifiuto), `TxTradePriceRow.svelte` (badge `tx-form-entry-mode`, prezzo digitato o calcolato), stato nel form (`tradeEntryMode`, `tradeDriver`, `unitPrice`, effetto con attesa di 250 ms e numero di sequenza contro le risposte vecchie), i18n 4 chiavi (`transactions.form.entryModeAmount|entryModeUnitPrice|unitPriceCalculated|unitPriceHint`). Vitest `form/` + gate colori: 374/374.
+  > **Note implementazione**: il badge segue il driver (un importo digitato in modalità prezzo riporta il badge su «Importo totale»); la valuta del prezzo è quella della cassa (il backend ignora la valuta). `unitPrice` non entra nel payload. Il robustezza: `convertTradeAmount` risponde `null` se la risposta non ha `result` (prima un test vecchio con `zodiosApi` finto dava un'eccezione non gestita).
+- ✅ **5. Doc** (`docs-writer`): `form.en.md`, regola «Amounts are totals» e sezione «🧮 Total amount or unit price». Traduzioni = debito.
+- ✅ **6. Backlog**: nuova sezione «W2» in `BACKLOG_POST_1.2.md` con W2-1 (selettore nel Bulk, D4).
+- ✅ **7. Prove finali #47** (23/10/2026, sotto `flock`, corsia 6194): unit 54/54, API `trade_amount` 32/32, `services financial-math` 2545/2545, Vitest `form/` + gate colori 374/374, Vitest `email/` + `plugin-settings/pluginSettingsApi` 1005/1005, E2E `transactions-modals` 26/26, `tx-fx-completeness` 5/5, `tx-wac-fx` 9/9, `tx-wac-mode` 5/5, `tx-wac-formmodal` 10/10, `front check` 0/0, `i18n check` ok, `mkdocs build` rc=0, `check-links` 97 validi.
+  > **⚠️ Fuori pista (1)**: il primo E2E di `transactions-modals` è andato rosso (importo 0): `ExactDecimalInput.onchange` passa il testo grezzo (`83,40`), non quello normalizzato; il piano della richiesta si aspettava un decimale canonico. Cura: `normalizeDecimalInput(unitPrice)` nel calcolo della richiesta, il campo mostra ciò che l'utente scrive.
+  > **⚠️ Fuori pista (2)**: `front check` rosso fuori dal mio perimetro: «Type instantiation is excessively deep» in `email/emailApi.test.ts` (poi `forgotPasswordApi.test.ts`…). Causa: con un endpoint in più il tipo del client Zodios supera la profondità di TS e l'errore cade sul primo `vi.spyOn(zodiosApi, …)` controllato, poi si sposta sul successivo. Cura: helper `src/__tests__/spyOnApi.ts` (vista a una chiave del client) e 5 file di test dell'email/plugin-settings passati a `spyOnApi` (modifica meccanica, solo tipi). Resta valida per ogni futuro endpoint.

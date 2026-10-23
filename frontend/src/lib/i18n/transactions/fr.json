@@ -95,7 +95,11 @@
       "eventCreateAmountRequired": "Le montant est obligatoire",
       "eventCreateDateRequired": "La date est obligatoire",
       "fxDatesHint": "Les dates 'De' et 'À' coïncident généralement : elles diffèrent quand le courtier crédite la nouvelle devise un autre jour.",
-      "eventEditTitle": "Modifier événement pour {asset}"
+      "eventEditTitle": "Modifier événement pour {asset}",
+      "entryModeAmount": "Montant total",
+      "entryModeUnitPrice": "Prix unitaire",
+      "unitPriceCalculated": "calculé",
+      "unitPriceHint": "Le montant est calculé à partir du prix unitaire et de la quantité ; vous pouvez toujours le modifier."
     },
     "bulk": {
       "resetRow": "Réinitialiser la ligne",

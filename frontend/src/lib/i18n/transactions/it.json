@@ -95,7 +95,11 @@
       "eventCreateAmountRequired": "L'importo è obbligatorio",
       "eventCreateDateRequired": "La data è obbligatoria",
       "fxDatesHint": "Le date 'Da' e 'A' di solito coincidono: si separano quando il broker accredita la nuova valuta in un altro giorno.",
-      "eventEditTitle": "Modifica evento per {asset}"
+      "eventEditTitle": "Modifica evento per {asset}",
+      "entryModeAmount": "Importo totale",
+      "entryModeUnitPrice": "Prezzo unitario",
+      "unitPriceCalculated": "calcolato",
+      "unitPriceHint": "L'importo si calcola dal prezzo unitario e dalla quantità; puoi comunque modificarlo."
     },
     "bulk": {
       "resetRow": "Reimposta riga",
