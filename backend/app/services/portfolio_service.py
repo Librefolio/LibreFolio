@@ -67,6 +67,10 @@ from backend.app.schemas.portfolio import (
     PortfolioReportResponse,
     PortfolioSummary,
     PositionsContribution,
+    PositionSeries,
+    PositionSeriesPoint,
+    PositionsSeriesQuery,
+    PositionsSeriesResponse,
     StalePriceAsset,
     UnallocatedContribution,
     UnrealizedBreakdownRow,
@@ -97,6 +101,7 @@ from backend.app.services.financial_math.portfolio.contributions import (
     window_start,
 )
 from backend.app.services.financial_math.portfolio.models import DailyStates
+from backend.app.services.financial_math.portfolio.position_series import acquisitions_from_average_costs, build_position_series
 from backend.app.services.financial_math.returns import (
     annualized_to_cumulative,
     calculate_simple_roi,
@@ -1939,6 +1944,101 @@ class PortfolioService:
             other_effects=other_effects,
             gross_gains=gross_gains,
             gross_losses=gross_losses,
+        )
+
+    async def get_positions_series(self, user_id: int, query: PositionsSeriesQuery) -> PositionsSeriesResponse:
+        """The daily series of the chosen positions: the Dashboard's positions chart (#48).
+
+        One engine run with the position frames (``include_positions``, part of the engine's blob-cache key: the first chart
+        request pays it, a change of the selection reuses it). The series are built by ``financial_math.portfolio.position_series``
+        from that run's frames, realized sales, internal transfers and average costs, and the native cash's income and costs by
+        day; only the asked positions are read. A position of a broker the user cannot read has no frame in the run, so it
+        comes back empty. Period figures are those of ``get_positions_contribution`` at each day.
+        """
+        from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
+
+        today = date_type.today()
+        base_currency = query.target_currency or await self._get_base_currency(user_id)
+        date_from = query.date_range.resolved_start() if query.date_range else None
+        date_to = query.date_range.resolved_end() if query.date_range else None
+        if date_to is not None:
+            date_to = min(date_to, latest_range_end())
+        effective_end = date_to or today
+        if date_from is not None:
+            date_from = min(date_from, effective_end)
+
+        requests = [(key.broker_id, key.asset_id) for key in query.positions]
+        accesses = await self._get_user_broker_access(user_id, query.broker_ids)
+        series_data = []
+        engine_result = None
+        if accesses:
+            engine_result = await PortfolioCalculationEngine(self.db).calculate(
+                user_id=user_id,
+                broker_ids=query.broker_ids,
+                date_from=None,
+                date_to=date_to,
+                target_currency=base_currency,
+                period_start=date_from,
+                include_positions=True,
+            )
+        if engine_result is not None and engine_result.position_frames is not None:
+            frames: dict[tuple[int, int], list] = defaultdict(list)
+            for frame in engine_result.position_frames:
+                frames[(frame.broker_id, frame.asset_id)].append(frame)
+            native_cash = _engine_native_cash(engine_result, base_currency)
+            transfers = list(engine_result.internal_asset_transfers)
+            series_data = build_position_series(
+                requests,
+                date_from=date_from,
+                date_to=effective_end,
+                frames=frames,
+                realized_sales=_period_realized_sales(engine_result.realized_sales, date_from, effective_end),
+                flow_steps=native_cash.position_flow_steps(date_from, effective_end),
+                transfers=transfers,
+                acquisitions=acquisitions_from_average_costs(engine_result.average_costs, transfers),
+            )
+
+        asset_names = await self._get_assets_map({asset_id for _, asset_id in requests})
+        out: list[PositionSeries] = []
+        for index, (broker_id, asset_id) in enumerate(requests):
+            data = series_data[index] if index < len(series_data) else None
+            asset = asset_names.get(asset_id)
+            broker = await self._get_broker(broker_id) if broker_id is not None else None
+            out.append(
+                PositionSeries(
+                    key=query.positions[index],
+                    asset_name=asset.display_name if asset else f"Asset {asset_id}",
+                    asset_ticker=asset.identifier_ticker if asset else None,
+                    broker_name=broker.name if broker else None,
+                    first_date=data.first_date if data else None,
+                    last_date=data.last_date if data else None,
+                    held_at_start=data.held_at_start if data else False,
+                    held_at_end=data.held_at_end if data else False,
+                    closed_on=data.closed_on if data else None,
+                    complete=data.complete if data else True,
+                    points=[
+                        PositionSeriesPoint(
+                            date=point.date,
+                            quantity=point.quantity,
+                            market_value=point.market_value,
+                            cost_basis=point.cost_basis,
+                            pnl=point.pnl,
+                            base=point.base,
+                            pnl_percent=point.pnl_percent,
+                            valuation_source=getattr(point.valuation_source, "value", point.valuation_source),
+                            complete=point.complete,
+                        )
+                        for point in (data.points if data else [])
+                    ],
+                )
+            )
+        missing_pairs = _engine_missing_fx_pairs(engine_result, date_from, effective_end) if engine_result is not None else []
+        return PositionsSeriesResponse(
+            currency=base_currency,
+            date_from=date_from if date_from is not None else (min((p.date for s in out for p in s.points), default=effective_end)),
+            date_to=effective_end,
+            series=out,
+            missing_fx_pairs=[info.pair for info in missing_pairs],
         )
 
     async def get_report(  # noqa: C901 — TODO(P2-refactor): include-flag orchestration

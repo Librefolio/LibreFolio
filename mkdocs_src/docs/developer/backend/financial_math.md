@@ -90,6 +90,7 @@ backend/app/services/financial_math/
 │   ├── data_quality.py      FX pair slug, configured pair sets, build_data_quality_report()
 │   ├── period.py            a period's boundary states, its P&L, the identity that closes it and its residual (the AI Export reconciliation, J-14); the day's P&L change
 │   ├── contributions.py     a position's row in the Dashboard's Performance table: its period P&L (`position_period_pnl`), return on the start value, annualized returns, the internal-transfer split (P22)
+│   ├── position_series.py   a position's daily series for the Dashboard's positions chart: P&L since the period's start (the Performance row's, day by day), its base and the percent on it, from the engine's frames of that position (J5-1, #48)
 │   └── engine.py            PortfolioCalculationEngine: loads a scope, runs the steps, caches
 └── lots/                    lots analysis math, called by lots_analysis_service.py
     ├── __init__.py          docstring only
@@ -349,6 +350,21 @@ quote of another asset does not split it. A position not held on a day has no fr
 closed position simply ends. The frames are grouped in the order the replay first met each
 position, each group by start: summing from `Decimal("0")`, in that order, the market values (not
 None) of the frames covering a day gives that day's `market_value` exactly. Off by default.
+
+**The positions chart (#48).** `position_series.build_position_series()` turns the frames of the chosen positions into one
+series each, a point per calendar day, and nothing else of the engine: it reads the realized sales, the internal transfers, the
+cost of what was bought (`acquisitions_from_average_costs()`) and the income and costs by day
+(`NativeCash.position_flow_steps()`). Its `pnl` on a day is the Performance row's `period_pnl` of the period from `date_from`
+to that day, by the same function (`contributions.position_period_pnl`), so the last point of a series is the table's row.
+Its `base`, the capital the percent is on, is the value at `date_from` in absolute terms, plus the cost of what is bought
+after it, plus what an internal transfer brings in at its value on arrival; a sale never lowers it, and a base that is 0 or
+unknown gives no percent (the developer's decision of 23/10). A closed position ends the day it went to 0, with its final
+pnl; units sent to another broker of the scope stay the sender's until they arrive (P22), so its series goes on to the
+arrival, holding the pnl of the last day held, and the tract settles it there. An asset asked without a broker is the sum
+over the brokers that held it: the tracts of a transfer between them cancel and what it brings in is not new capital. A value
+that is not known leaves `market_value` None and `pnl` the sum of the parts that are known, with `complete` False, as the
+row does. `PortfolioService.get_positions_series()` runs the engine once with `include_positions` (the blob cache keeps it
+between two selections) and serves `POST /api/v1/portfolio/positions-series`.
 
 **The asset dimension.** Each state carries `by_asset` (asset id → the held market value summed into
 `market_value`, every broker; no cash). `DerivedViewsBuilder.build_asset_allocation_current()` and

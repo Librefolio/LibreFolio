@@ -1426,6 +1426,84 @@ class _WacApiSession:
         raise AssertionError("WAC endpoint performed an unexpected read")
 
 
+# ---------------------------------------------------------------------------
+# TestPositionsSeriesEndpoint — POST /portfolio/positions-series (J5-1, #48)
+# ---------------------------------------------------------------------------
+
+
+async def post_positions_series(client: httpx.AsyncClient, body: dict) -> httpx.Response:
+    return await client.post(f"{API_BASE}/portfolio/positions-series", json=body, timeout=TIMEOUT)
+
+
+@pytest.mark.asyncio
+class TestPositionsSeriesEndpoint:
+    async def test_unauthenticated(self, test_server):
+        """POST /portfolio/positions-series without auth -> 401."""
+        print_section("Positions series: unauthenticated")
+        async with httpx.AsyncClient() as client:
+            resp = await post_positions_series(client, {"positions": [{"asset_id": 1}]})
+        assert resp.status_code == 401
+
+    async def test_the_positions_asked_for_are_required_and_capped(self, test_server):
+        print_section("Positions series: validation")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            try:
+                empty = await post_positions_series(client, {"positions": []})
+                too_many = await post_positions_series(client, {"positions": [{"asset_id": index} for index in range(1, 52)]})
+                unknown_field = await post_positions_series(client, {"positions": [{"asset_id": 1}], "include_everything": True})
+            finally:
+                await delete_current_test_user(client, user_id)
+        assert (empty.status_code, too_many.status_code, unknown_field.status_code) == (422, 422, 422)
+
+    async def test_the_series_of_a_position_ends_where_the_reports_contribution_row_does(self, test_server):
+        """One position bought and sold out: the series is daily from the window's first day to the day it closed, its last pnl is the
+        report's ``period_pnl`` for the same position and window. It owns and deletes its user, broker, asset, three transactions and
+        one price, broker first (as the report's date-aware test does)."""
+        print_section("Positions series: end to end")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            broker_id: int | None = None
+            asset_id: int | None = None
+            try:
+                broker_id = await create_broker(client)
+                asset_id = await create_asset(client)
+                await commit_batch(
+                    client,
+                    creates=[
+                        {"broker_id": broker_id, "type": "DEPOSIT", "date": "2025-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2025-01-02", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "SELL", "date": "2025-02-15", "quantity": "-10", "cash": {"code": "EUR", "amount": "1200"}},
+                    ],
+                )
+                price_resp = await client.post(f"{API_BASE}/assets/prices", json=[{"asset_id": asset_id, "prices": [{"date": "2025-01-31", "close": "110.00", "currency": "EUR"}]}], timeout=TIMEOUT)
+                assert price_resp.status_code == 200, price_resp.text
+                window = {"start": "2025-01-31", "end": "2025-02-28"}
+                series_resp = await post_positions_series(client, {"date_range": window, "positions": [{"asset_id": asset_id, "broker_id": broker_id}]})
+                report_resp = await post_portfolio_report(client, {"include_summary": False, "include_history": False, "include_allocation_history": False, "include_positions_contribution": True, "date_range": window})
+            finally:
+                if broker_id is not None:
+                    cleanup_broker = await client.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": True}, timeout=TIMEOUT)
+                    assert cleanup_broker.status_code == 200, cleanup_broker.text
+                if asset_id is not None:
+                    cleanup_asset = await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+                    assert cleanup_asset.status_code == 200, cleanup_asset.text
+                await delete_current_test_user(client, user_id)
+
+        assert series_resp.status_code == 200, series_resp.text
+        body = series_resp.json()
+        assert (body["currency"], body["date_from"], body["date_to"]) == ("EUR", "2025-01-31", "2025-02-28")
+        [series] = body["series"]
+        assert (series["first_date"], series["last_date"], series["closed_on"], series["held_at_start"], series["held_at_end"]) == ("2025-01-31", "2025-02-15", "2025-02-15", True, False)
+        assert [point["date"] for point in series["points"]][:2] == ["2025-01-31", "2025-02-01"]
+        assert len(series["points"]) == 16
+        [row] = report_resp.json()["positions_contribution"]["positions"]
+        assert Decimal(series["points"][-1]["pnl"]) == Decimal(row["period_pnl"])
+        assert (series["points"][-1]["quantity"], series["points"][-1]["market_value"]) == ("0", "0")
+
+
 def _focused_portfolio_app(
     *,
     current_user,
