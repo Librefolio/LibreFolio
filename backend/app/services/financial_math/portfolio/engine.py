@@ -196,6 +196,7 @@ class PortfolioCalculationEngine:
         include_candles: bool = False,
         include_acquisition_funding: bool = False,
         period_start: date_type | None = None,
+        include_positions: bool = False,
     ) -> PortfolioCalculationResult:
         """Run the full portfolio calculation pipeline.
 
@@ -211,6 +212,10 @@ class PortfolioCalculationEngine:
         the engine's existing per-BUY K/R-pool draw as a daily new-vs-reinvested output
         (see AcquisitionFundingContribution) — kept opt-in for consistency, though the
         extra cost is negligible (pure bookkeeping capture, no new data resolution).
+
+        ``include_positions`` (#48, default False) adds ``position_frames``: each held position's values from
+        ``date_from`` on, one frame per stretch in which none of them changes (``PositionFrame``). Part of the blob-cache
+        key, like the two flags above.
 
         ``period_start`` (MF-A) names the day whose end ``position_states_start`` is taken at — the start of the
         caller's period while the states run from ``date_from`` (t=0 for the Dashboard). Without it the snapshot is
@@ -345,6 +350,8 @@ class PortfolioCalculationEngine:
             split_fingerprint,
             include_candles,
             include_acquisition_funding,
+            # #48: the position frames are in the result only when asked
+            include_positions,
             # The day of position_states_start: the named period start, else the requested start (the first replayed
             # day); a run from t=0 never answers for a later date_from with its own first day's snapshot.
             period_start or date_from,
@@ -391,6 +398,7 @@ class PortfolioCalculationEngine:
                 target_currency=target_currency,
                 include_candles=include_candles,
                 include_acquisition_funding=include_acquisition_funding,
+                include_positions=include_positions,
                 period_start=period_start,
                 classification=classification,
                 split_linked_tx_ids=split_linked_tx_ids,
@@ -426,6 +434,7 @@ class PortfolioCalculationEngine:
         target_currency: str,
         include_candles: bool,
         include_acquisition_funding: bool,
+        include_positions: bool,
         period_start: date_type | None,
         classification,
         split_linked_tx_ids: set[int],
@@ -549,6 +558,7 @@ class PortfolioCalculationEngine:
             mark_series=mark_series,
             compute_candles=include_candles,
             compute_acquisition_funding=include_acquisition_funding,
+            compute_position_frames=include_positions,
             period_start=period_start,
         )
         # The builder reads only loaded column attributes of the transactions (no relationship, no deferred column) and no

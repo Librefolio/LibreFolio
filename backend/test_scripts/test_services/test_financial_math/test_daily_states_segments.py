@@ -64,6 +64,7 @@ CONTAINER_FIELDS = {
     "transaction_implied_last_quote_dates",
     "broker_contributions",
     "unrealized_by_currency",
+    "by_asset",
 }
 
 D1 = date(2025, 1, 1)
@@ -117,6 +118,7 @@ def _state(day: date, seed: int) -> DailyPortfolioState:
         pnl_candle=PnlCandleContribution(open=amount(23), high=amount(24), low=amount(25), close=amount(18)),
         acquisition_funding=AcquisitionFundingContribution(from_new_capital=amount(26), from_reinvested=amount(27)),
         unrealized_by_currency={"USD": UnrealizedSplit(asset=amount(28), fx=amount(29), unsplit=amount(30))},
+        by_asset={600 + seed: amount(31), 650 + seed: amount(32)},
     )
 
 

@@ -311,6 +311,42 @@ class DerivedViewsBuilder:
             result.append({"date": day, "components": components})
         return result
 
+    @staticmethod
+    def _asset_components(state: DailyPortfolioState, names: Mapping[int, str], *, with_emoji: bool) -> list[dict]:
+        """The asset dimension of one day: a slice per held asset (``by_asset``) and the Liquidity slice, as by_type's
+        (the cash and the cash in transit), with their shares of the total, largest first."""
+        slices: dict[int | None, Decimal] = dict(state.by_asset)
+        slices[None] = state.cash_value + state.in_transit_cash_value
+        percents = slice_percents(slices)
+        components = []
+        for asset_id, amount in sorted(slices.items(), key=lambda item: -item[1]):
+            component = {
+                "name": "Liquidity" if asset_id is None else names.get(asset_id, f"Asset {asset_id}"),
+                "id": asset_id,
+                "value": percents[asset_id].quantize(Decimal("0.01")),
+                "amount": amount,
+            }
+            if with_emoji:
+                component["emoji"] = None
+            components.append(component)
+        return components
+
+    def allocation_asset_ids(self, date_from: date_type | None = None) -> set[int]:
+        """The assets with a slice in the asset dimension from ``date_from`` on (to name them)."""
+        if self._dates is None:
+            return {asset_id for segment in self.daily_states.iter_segments(date_from, None) for asset_id in segment.state.by_asset}
+        return {asset_id for _day, state in self._window_days(date_from, None) for asset_id in state.by_asset}
+
+    def build_asset_allocation_current(self, names: Mapping[int, str]) -> list[dict]:
+        """The asset dimension of the allocation on the last day (AllocationItem-like dicts, ``id`` = the asset's)."""
+        if not self.daily_states:
+            return []
+        return self._asset_components(self.daily_states[-1], names, with_emoji=True)
+
+    def build_asset_allocation_history(self, names: Mapping[int, str], date_from: date_type | None = None) -> list[dict]:
+        """The asset dimension's history from ``date_from``: ``{date, components}`` per day, as build_allocation_history."""
+        return [{"date": day, "components": self._asset_components(state, names, with_emoji=False)} for day, state in self._window_days(date_from or None, None)]
+
     def build_data_quality_report(self, **kwargs: Any) -> DataQualityReport:
         """The data-quality report of these daily states: see ``data_quality.build_data_quality_report``."""
         return build_data_quality_report(self.daily_states, **kwargs)
