@@ -10859,3 +10859,13 @@ punto di partenza, l'audit dello stesso giorno:
   tasso e Newton restituisce la sua partenza, 0,1 (verificato: apertura 0 il 1/1, versamento 1 000 il 1/3 → la linea
   dice 0,100000 il 1/3). Capita anche su una storia corta, per esempio un conto svuotato e poi rifinanziato nella
   finestra. Cura proposta: nessun tasso quando tutti i flussi sono zero. Dettagli: piano MF, «MF5-4 · P1c».
+
+## W2 · Il form delle transazioni (fase 01)
+
+Sessione nata il 23/10 (ondata 5), sul form (`TransactionFormModal.svelte`). Piano:
+[`Phase_1/04_importTransactions/plan-phase01Step2TransactionForm-W2.prompt.md`](../Phase_1/04_importTransactions/plan-phase01Step2TransactionForm-W2.prompt.md).
+
+- **W2-1 · Il selettore «Importo totale / Prezzo unitario» nella modifica multipla (Bulk)** — minimo, comodità; W2, 23/10
+  (decisione D4 del coordinatore sul #47: niente nel Bulk in questo giro, è di W, e prezzo × quantità può differire
+  dall'addebito reale). Il form di una singola BUY/SELL ha il selettore (`POST /transactions/trade-amount`); la griglia del Bulk
+  no. Se serve, il Bulk riusa lo stesso endpoint e `txTradeAmount.ts`. Dettagli: piano W2, «#47 — decisioni».
