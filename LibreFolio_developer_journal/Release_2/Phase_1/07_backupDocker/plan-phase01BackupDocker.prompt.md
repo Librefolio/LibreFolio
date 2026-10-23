@@ -7799,3 +7799,35 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >
 > **⚠️ Fuori pista**: avevo cambiato il testo del messaggio del 500; i test lo fissano: rimesso com'era, l'informazione
 > nuova è in `reason`.
+
+## Ondata 5 (23/10/2026) — treno 11a
+
+> Kickoff: `salvataggi-worktrees-20261021/ondata5/kickoff-B.md`. Base `1fd80c481` (= `dev_release2`, treni 9 e 10).
+> Lotti: **B5-2** (`backup pending --json` e `--recover <scelta>`, richiesta formale del cloud per `lfc istanza recupera`),
+> **M-1** (immagine arm64), **B5-1** (ripristino con la scelta del titolare, su Opus, dopo la firma di A).
+
+#### B5-2 — `backup pending --json` e `--recover <scelta>` ✅ 2026-10-23
+
+> **Note implementazione** (interfaccia `ondata5/B-b52-interface.md`; rossi di un agente `test-author`):
+> - `--json`: una riga su stdout (`state`, `reason`, `waiting`, `backup_created_at`, `safety_copy`, `choices`, e dopo un
+>   `--recover` anche `recover` ed `error`); testo e log su stderr (anche il gestore dei log a `sys.stdout`); mai nomi,
+>   email, percorsi o id. `safety_copy` = i dati di prima in `.restore/previous/` (presente sì/no e l'ora).
+> - `--recover` prende una scelta obbligatoria: `previous` (stato illeggibile: rimette i dati di prima, è B-33) o
+>   `cancel` (butta il ripristino in attesa). Codici fissi: 0 fatto, 2 uso, 3 niente da recuperare, 4 scelta non valida
+>   in questo stato, 5 fallito. Ripetuto: 3 e non cambia niente. Non chiede mai nulla.
+> - `--json` e `--cancel` si escludono (messaggio di argparse, `_StoreTrueNotWith`); `--recover cancel` fa lo stesso di
+>   `--cancel`. `backup pending` senza opzioni è invariato.
+> - **Rossi**: `utils backup-cli-recover` (nuovo) 116, `backup-cli-restore` 11. **Verdi**: 116 e 120; `backup-cli` 106,
+>   `cli-secure` 106, `cli-sealed` 49, `services backup-apply` 331, `api backup-restore-apply` 262.
+>
+> **⚠️ Fuori pista**: `--recover` senza argomento (B-33, mai uscito) è diventato `--recover previous`: due file di H lo
+> citano ancora (`restore_guard.py:37` con il suo test, `hosting_providers.en.md` righe 1153 e 1188): richiesta nel checkpoint.
+
+#### M-1 — immagine arm64 ✅ 2026-10-23 (nessun test locale: è CI)
+
+> **Note implementazione** (sotto-agente Haiku, riletto): `platforms: linux/amd64,linux/arm64` sui due passi
+> `build-push-action` di `release.yml`; due passi di controllo dopo il push (`docker buildx imagetools inspect` su ogni
+> tag, fallisce se manca una piattaforma); una riga in `installation.en.md`. YAML valido. Il `Dockerfile` non ha niente
+> di specifico per amd64. **CI più lunga (QEMU); da provare al primo tag.**
+> **⚠️ Rischi non verificabili qui**: dipendenze senza pacchetto aarch64 già compilato (si compilerebbero sotto QEMU);
+> formato dell'output di `imagetools inspect`; il controllo gira dopo il push.
