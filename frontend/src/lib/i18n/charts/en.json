@@ -216,7 +216,10 @@
     },
     "comparisonAsset": {
       "placeholder": "Select comparison asset",
-      "loadError": "Assets could not be loaded."
+      "loadError": "Assets could not be loaded.",
+      "blocked": "Not available",
+      "isMainAsset": "This is the asset of the chart",
+      "alreadyCompared": "Already compared in another signal"
     }
   }
 }

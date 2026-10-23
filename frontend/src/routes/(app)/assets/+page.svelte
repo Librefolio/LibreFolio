@@ -98,6 +98,8 @@
         asset_type?: string | null;
         provider_code?: string | null;
         active: boolean;
+        /** Eligible as a comparison benchmark: the comparison picker lists these first (Y5-F4). */
+        is_benchmark?: boolean;
         quote_base_quantity?: number | null;
         tx_count?: number;
         /** A positive quantity is held **now** in a broker the user owns (Risk, `FAinfoResponse`). */
@@ -615,6 +617,7 @@
                 currency: item.currency,
                 icon_url: item.icon_url ?? null,
                 asset_type: item.asset_type ?? null,
+                is_benchmark: item.is_benchmark === true,
                 quote_base_quantity: item.quote_base_quantity ?? 1,
                 provider_code: item.provider_code ?? null,
                 active: item.active ?? true,
@@ -2192,7 +2195,7 @@
     settings={settingsForModal}
     pairData={settingsTargetId ? assets.find((a) => a.id === Number(settingsTargetId))?.chartData : undefined}
     availablePairs={fxPairSlugs}
-    availableAssets={assets.map((a) => ({id: a.id, display_name: a.display_name, icon_url: a.icon_url, asset_type: a.asset_type}))}
+    availableAssets={assets.map((a) => ({id: a.id, display_name: a.display_name, icon_url: a.icon_url, asset_type: a.asset_type, currency: a.currency, is_benchmark: a.is_benchmark}))}
     signalSources={settingsSignalSources}
     calendarRangeDays={calendarReturnRangeDays(dateStart, dateEnd)}
     calendarPreviewResolver={resolveCalendarPreview}

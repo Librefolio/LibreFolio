@@ -98,6 +98,10 @@ Add overlays from three dropdowns, the same as in the detail page's [Signals pan
   the compared assets once for all cards, and asks nothing when no card compares an asset. In the
   window opened for **all charts** a comparison with an asset is not drawn, because the demo curve
   has no real asset to compare with (as in the [Assets list](../assets/index.md)).
+  An asset is picked in the same panel as the risk comparison's: a search box, **Type** and
+  **Currency** filters, each row showing the asset's icon, name, type and currency, and the benchmarks
+  listed first; one click chooses and closes. The chart's own asset is greyed out, and one that
+  another comparison already uses carries a warning mark but can still be chosen.
 - 📐 **Synthetic Benchmarks** — reference curves built from parameters alone, not market data:
   [Linear](../../financial-theory/technical-analysis/synthetic-benchmarks/linear.md),
   [Compound](../../financial-theory/technical-analysis/synthetic-benchmarks/compound.md) and

@@ -305,7 +305,7 @@
 
     // Cross-domain data for signals
     let allConfiguredFxSlugs: string[] = $state([]);
-    let allAssets: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; currency?: string}> = $state([]);
+    let allAssets: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; currency?: string; is_benchmark?: boolean}> = $state([]);
 
     // Classification data (loaded when has_metadata)
     let sectorDistribution: Record<string, number> | null = $state(null);
@@ -1552,6 +1552,7 @@
                 icon_url: a.icon_url ?? null,
                 asset_type: a.asset_type ?? null,
                 currency: a.currency ?? undefined,
+                is_benchmark: a.is_benchmark === true,
             }));
         } catch (e) {
             console.error('Failed to load asset list:', e);

@@ -216,7 +216,10 @@
     },
     "comparisonAsset": {
       "placeholder": "Seleziona asset di confronto",
-      "loadError": "Impossibile caricare gli asset."
+      "loadError": "Impossibile caricare gli asset.",
+      "blocked": "Non disponibili",
+      "isMainAsset": "È l'asset del grafico",
+      "alreadyCompared": "Già confrontato in un altro segnale"
     }
   }
 }
