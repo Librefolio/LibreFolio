@@ -43,6 +43,7 @@
     import {slide} from 'svelte/transition';
     import {goto} from '$app/navigation';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
+    import {onPricesCaughtUp} from '$lib/features/price-refresh/onPricesCaughtUp';
     import {_} from '$lib/i18n';
     import {ExternalLink, X} from 'lucide-svelte';
     import {schemas} from '$lib/api';
@@ -372,9 +373,18 @@
         untrack(() => void pageBusy.track('lots-panel-load', () => loadMain(currentAssetId, currentBrokerIds, currentCurrency)));
     });
 
+    // `effectiveSelectionIds` is a new array whenever an answer lands, even with the same lots (a silent reload after a
+    // price catch-up): the load is the page's only when the selection changes by value, not by identity (Y5-1).
+    let askedSelectionKey: string | null = null;
     $effect(() => {
-        if (!(open && assetId != null && ready)) return;
+        if (!(open && assetId != null && ready)) {
+            askedSelectionKey = null;
+            return;
+        }
         const [currentAssetId, currentBrokerIds, currentCurrency, ids] = [assetId, brokerIds, currency, effectiveSelectionIds];
+        const key = JSON.stringify([currentAssetId, currentBrokerIds, currentCurrency, ids]);
+        if (key === askedSelectionKey) return;
+        askedSelectionKey = key;
         untrack(() => void pageBusy.track('lots-selection-load', () => loadSelectionHistories(currentAssetId, currentBrokerIds, currentCurrency, ids)));
     });
 
@@ -390,6 +400,17 @@
             void pageBusy.track('lots-selection-refresh', () => loadSelectionHistories(currentAssetId, currentBrokerIds, currentCurrency, ids, true));
         });
     });
+
+    // A price catch-up (the bus's `{kind: 'prices'}`, Y5-1, N-Z15-2): the lots on screen are asked again, in silence — the cache
+    // answers them stale, so they stay up with no loading state — and outside `pageBusy`: it is not the page's Refresh.
+    $effect(() =>
+        onPricesCaughtUp(() => {
+            if (!(open && assetId != null && ready)) return;
+            const [currentAssetId, currentBrokerIds, currentCurrency, ids] = [assetId, brokerIds, currency, effectiveSelectionIds];
+            void loadMain(currentAssetId, currentBrokerIds, currentCurrency);
+            void loadSelectionHistories(currentAssetId, currentBrokerIds, currentCurrency, ids);
+        }),
+    );
 
     $effect(() => {
         const isPanelOpen = open && assetId != null;
