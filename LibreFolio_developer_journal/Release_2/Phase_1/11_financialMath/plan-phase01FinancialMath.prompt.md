@@ -4773,3 +4773,54 @@ Base `259a30076` (B5 committato). Via del coordinatore: corpora di prova soltant
   `portfolio-engine` **41**, `roi-fifo-utils` **1970**, `api portfolio` **55**; parità contro `259a30076`: 202 casi, **3
   differenze, tutte e sole i 3 punti contati** (2025-09-30 della linea MWRR «tutto»: 250,188643 → None, 379,189396 →
   None ×2; il resto dei tre report identico); `mkdocs build` 0, `check-links` 0. **CHECKPOINT READY** inviato, FROZEN.
+
+#### MF5-2 · pavimenti N74 e R13-SEC8 — misura prima della cura (24/10, BLOCCATO su una decisione)
+Base `352d48ff3` (P1c committato). Prima dei rossi ho misurato che cosa costa una data sbagliata all'anno 1 senza
+pavimenti (`MF-p4/measure_floor.py`: pavimento abbassato a 0001-01-01 nel solo processo; copie `typo0001` = un
+versamento al 0001-01-02, `buy0001` = un acquisto al 0001-01-02; un processo per caso; log
+`ondata5/MF-floor-measure-before.log`, slot 00:06, carico 3,3):
+
+| Caso | Pavimento 1900 (oggi) | Senza pavimento (anno 1) |
+|---|---|---|
+| motore | 46 318 giorni, 398 segmenti, 0,2 s, 88 MB | 739 912 giorni, **398 segmenti**, 1,7 s, 114 MB |
+| report 1M / 1A | 0,7 s, 134–144 MB | 2,2–2,3 s, 135–146 MB |
+| report «tutto» | 16 s, **1,5 GB** di picco, 79 MB di JSON | **fermato da me a 4,4 GB dopo ~25 s, in crescita** (la macchina ha 15 GB) |
+| lotti 1A | 0,3 s, 95 MB | 4,1 s, 294 MB |
+| lotti «tutto» | 2,0 s, 384 MB, 32 MB di JSON | non lanciato (stima ×16: ~6 GB) |
+
+- **Che cosa vuol dire.** P4 regge: il motore costa i suoi 398 giorni sporchi anche con 740 000 giorni. Restano due cose:
+  (1) un cammino di calcolo, `DailyStateBuilder._valuation_rate_change_days` (un calendario di ogni giorno, letto
+  per ogni valuta: 1,48 milioni di letture nel profilo del report 1M), più i cammini dei lotti (`history_dates` e le
+  scansioni giornaliere che L1 ha lasciato «per progetto»); (2) **il volume d'uscita** (D1, «un punto al giorno»): il
+  report «tutto» e i lotti «tutto» costruiscono e serializzano un punto per ognuno dei 740 000 giorni. Questo è D-P4,
+  rimandato dopo P4: senza pavimenti un refuso può far crescere un report oltre la memoria del server.
+- **Bordo trovato**: con il pavimento tolto, una data al 0001-01-01 fa `day - 1` fuori dal calendario di Python
+  (`_calendar(replay_from - timedelta(days=1), …)`, l'intervallo di transito `max(...) - 1` del classificatore):
+  va coperto da un rosso.
+- **Altri effetti del lotto** (da dire nel checkpoint): l'avviso `rows_before_floor` della qualità dei dati perde senso
+  e va tolto; il messaggio del frontend «tra {min} e {max}» e il selettore dell'anno (`CalendarMonth.svelte:224`,
+  `min="1900"`) vanno cambiati da chi li possiede.
+- In attesa: decisione del developer (via coordinatore) su D-P4 prima di togliere i pavimenti; nel frattempo posso
+  curare il cammino del motore (`_valuation_rate_change_days` sui gradini) senza cambiare nessun numero.
+
+#### MF5-2a · il cammino del calendario dei tassi e il bordo del 0001-01-01 (24/10, senza decisione)
+Via del coordinatore: i pavimenti restano finché il developer non risponde su D-P4; intanto la cura del cammino del
+motore e il rosso del bordo, a pavimento invariato. Revisione W2 #47: inviata a parte («ok», un seguito sulla casa unica:
+`price_marks.py:306-307`, assegnato a MF dopo questo checkpoint).
+- ✅ **Rossi** (test-author): `test_financial_math/test_rate_change_days_on_steps.py` (30): su HEAD 15 rossi per la
+  ragione giusta (9 metodo assente, 4 `OverflowError` a date.min, i 2 di costo: `_read_rate` 92 042 letture per 10 giorni
+  candidati e 137 698 per 21), 15 guardie verdi (equivalenza col riferimento denso su 7 + 4 libri nominati e 80 casuali).
+- ✅ **Cura**: `fx_rates.AskedDayRates.reading_change_days` (i gradini dentro le finestre, il primo giorno d'ogni finestra,
+  il giorno dopo l'ultimo); `DailyStateBuilder._reading_calendar` (sulla vista: quei giorni; su una mappa semplice: i
+  giorni delle chiavi e il giorno dopo; ognuno col giorno prima; nessun giorno prima di date.min);
+  `_valuation_rate_change_days` legge solo quei giorni; tolto `_calendar` (più nessun uso). Docstring di `change_days`,
+  doc `transactions/wac.md`.
+  > **Note implementazione**: 30 + 197 (`test_asked_day_rates`) verdi.
+- ✅ **Porte e parità** (slot 00:49–01:07, carico 4,2 → 2,8; `ondata5/MF-floor-verify.log`): `financial-math` **2815**,
+  `portfolio-engine` **41**, `api portfolio` **55**; `roi-fifo-utils` 2 rossi per l'aiuto `_calendar` tolto, portati da
+  test-author (`test_replay_floor.py`, il registratore avvolge `_reading_calendar`, la stessa intenzione; con un pavimento
+  mutante al 1800 torna rosso), poi **1970** (01:15). Parità contro `352d48ff3`: 6 copie (base, 1900 ×3, 1500, 0001)
+  **220 casi, 0 differenze**; `mkdocs build` 0, `check-links` 0.
+  > **Effetto misurato** (copia `typo0001`, pavimento abbassato all'anno 1 nel solo processo): motore 1,7 → **0,11 s**,
+  > report 1M 2,2 → **0,6 s**, 1A 2,3 → **0,67 s** (uguale al caso col pavimento: 0,7 s). Resta solo il volume d'uscita di
+  > «tutto» (D-P4) e i cammini dei lotti. **CHECKPOINT READY** inviato, FROZEN.

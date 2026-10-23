@@ -454,8 +454,8 @@ def change_days(read: Callable[[str, date_type], Decimal | None], currencies: It
     rate than on the calendar's previous day — the one home of «the day a rate changes».
 
     The caller chooses the reading and the calendar: the native cash reads the last rate known on or before the day,
-    on the calendar of its rate points; the portfolio engine reads the rate of the exact day, on every day of its
-    frame. A rate that appears or disappears is a change, and so is a rate on the calendar's first day.
+    on the calendar of its rate points; the portfolio engine reads the rate of the exact day, on the days a rate can
+    change and the day before each (``DailyStateBuilder._reading_calendar``). A rate that appears or disappears is a change, and so is a rate on the calendar's first day.
     """
     watched = tuple(sorted(set(currencies)))
     changed: list[date_type] = []
