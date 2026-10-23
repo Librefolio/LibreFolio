@@ -555,7 +555,7 @@
                                 {#if icon}
                                     <img src={icon} alt="" class="h-4 w-4 shrink-0 rounded-sm object-contain" onerror={hideBrokenIcon} />
                                 {/if}
-                                <span class="truncate text-sm text-lf-primary">{rowText(current)}</span>
+                                <span use:scrollOnOverflow class="{overflowScrollTextClass} text-sm text-lf-primary" title={rowText(current)}>{rowText(current)}</span>
                                 {#if current.active === false}
                                     <span data-testid="asset-select-selected-inactive-badge" class="shrink-0 rounded bg-lf-neutral px-1.5 py-0.5 text-[10px] font-medium text-lf-secondary">{$t('assets.edit.status.inactive')}</span>
                                 {/if}
@@ -605,7 +605,7 @@
                                     {#if icon}
                                         <img src={icon} alt="" class="h-4 w-4 shrink-0 rounded-sm object-contain" onerror={hideBrokenIcon} />
                                     {/if}
-                                    <span use:scrollOnOverflow class="{overflowScrollTextClass} min-w-0 flex-1 {asset.active === false ? 'opacity-60' : ''}">{rowText(asset)}</span>
+                                    <span use:scrollOnOverflow class="{overflowScrollTextClass} min-w-0 flex-1 {asset.active === false ? 'opacity-60' : ''}" title={rowText(asset)}>{rowText(asset)}</span>
                                     {#if asset.active === false}
                                         <span data-testid="asset-select-inactive-badge" class="shrink-0 rounded bg-lf-neutral px-1.5 py-0.5 text-[10px] font-medium text-lf-secondary">{$t('assets.edit.status.inactive')}</span>
                                     {/if}
@@ -640,7 +640,7 @@
                                             <img src={icon} alt="" class="mt-0.5 h-4 w-4 shrink-0 object-contain opacity-60" onerror={hideBrokenIcon} />
                                         {/if}
                                         <span class="min-w-0 flex-1">
-                                            <span use:scrollOnOverflow class="{overflowScrollTextClass} block">{rowText(asset)}</span>
+                                            <span use:scrollOnOverflow class="{overflowScrollTextClass} block" title={rowText(asset)}>{rowText(asset)}</span>
                                             <span class="block text-[11px] leading-snug text-lf-warning">{verdict?.texts.join(' · ')}</span>
                                         </span>
                                     </button>

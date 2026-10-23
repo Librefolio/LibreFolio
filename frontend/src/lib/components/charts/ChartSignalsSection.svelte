@@ -10,13 +10,15 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
-    import {ArrowLeftRight, BarChart3, Coins, ExternalLink, Info, Loader2, RotateCw, Trash2, AlertTriangle} from 'lucide-svelte';
+    import {ArrowLeftRight, Coins, ExternalLink, Info, Loader2, RotateCw, Trash2, AlertTriangle} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import SearchSelect from '$lib/components/ui/select/SearchSelect.svelte';
+    import AssetPickerPanel from '$lib/components/ui/select/AssetPickerPanel.svelte';
+    import type {PickerAsset, PickerVerdict} from '$lib/components/ui/select/assetPicker';
     import SignalStyleEditor from './SignalStyleEditor.svelte';
     import SignalParamControl from './SignalParamControl.svelte';
     import SignalVisualLegend from './SignalVisualLegend.svelte';
@@ -24,14 +26,11 @@
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {createSignalConfig, getRegisteredSignalTypes, getSignalProblemSeverity, type SignalConfig, type SignalDefinition, type SignalIndicatorGroup, type SignalInputField, type SignalParamDescriptor, type SignalProblem, type SignalProblemSeverity, type SignalStyle} from '$lib/charts/signals';
     import {clearComparisonAssetRuntimeParams} from '$lib/charts/loadComparisonData';
-    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {humanizeKey} from '$lib/utils/text';
     import {translateOr} from '$lib/utils/core/translateOr';
-    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {INPUT_FIELD_ORDER, formatSignalProblem, getParamNumber, getParamString} from './chartSignalsHelpers';
 
     import {numericArrows} from '$lib/actions/numericArrows';
-    import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     // =========================================================================
     // Types
     // =========================================================================
@@ -67,7 +66,7 @@
         /** Available FX pairs for FxPairSignal (slug format: 'EUR-GBP') */
         availablePairs?: string[];
         /** Available assets for AssetComparisonSignal */
-        availableAssets?: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; currency?: string}>;
+        availableAssets?: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; currency?: string | null; is_benchmark?: boolean}>;
         /** Slug of the main chart pair (for crown emoji in dropdown) */
         mainPairSlug?: string;
         /** Called when signals change */
@@ -426,6 +425,19 @@
     /** Main asset ID parsed from mainPairSlug (format: "asset-123") */
     let mainAssetId = $derived(mainPairSlug.startsWith('asset-') ? Number(mainPairSlug.slice(6)) : 0);
 
+    /** The comparison assets as the shared asset panel describes them (Y5-F4). */
+    let comparisonPickerAssets = $derived<PickerAsset[]>((availableAssets ?? []).map((asset) => ({id: asset.id, display_name: asset.display_name, currency: asset.currency ?? '', icon_url: asset.icon_url ?? null, asset_type: asset.asset_type ?? null, is_benchmark: asset.is_benchmark === true})));
+
+    /** The panel's verdicts for one comparison row: the chart's own asset cannot be chosen, one compared by another row can (with a warning). */
+    function comparisonVerdicts(currentAssetId: string): Map<number, PickerVerdict> {
+        const verdicts = new Map<number, PickerVerdict>();
+        for (const asset of availableAssets ?? []) {
+            if (mainAssetId > 0 && asset.id === mainAssetId) verdicts.set(asset.id, {level: 'ineligible', codes: ['main-asset'], texts: [$t('signals.comparisonAsset.isMainAsset')]});
+            else if (usedAssetIds.has(asset.id) && String(asset.id) !== currentAssetId) verdicts.set(asset.id, {level: 'warning', codes: ['already-compared'], texts: [$t('signals.comparisonAsset.alreadyCompared')]});
+        }
+        return verdicts;
+    }
+
     const EVENT_EMOJI: Record<string, string> = {
         DIVIDEND: '💰',
         INTEREST: '💎',
@@ -678,51 +690,22 @@
                                                     {@const assetIdStr = getParamString(signal, desc.key)}
                                                     <div class="flex items-center gap-1">
                                                         <div class="w-48">
-                                                            <SearchSelect
+                                                            <!-- The risk comparison's picker: search, type and currency filters, the benchmarks first (Y5-F4).
+                                                                 The chart's own asset is listed read-only; one already compared below carries a warning. -->
+                                                            <AssetPickerPanel
+                                                                mode="single"
                                                                 testId={`signal-param-${signal.id}-${desc.key}-select`}
-                                                                value={assetIdStr}
-                                                                options={resolveDynamicOptions('configuredAssets').map((o) => {
-                                                                    const aid = Number(o.value);
-                                                                    const isCurrent = o.value === assetIdStr;
-                                                                    const isMain = mainAssetId > 0 && aid === mainAssetId;
-                                                                    const isUsedElsewhere = !isCurrent && usedAssetIds.has(aid);
-                                                                    const suffix = isMain ? ' 👑' : isCurrent ? ' ✓' : isUsedElsewhere ? ' 📌' : '';
-                                                                    return {...o, label: `${o.label}${suffix}`};
-                                                                })}
-                                                                placeholder="— Select asset"
+                                                                assets={comparisonPickerAssets}
+                                                                verdicts={comparisonVerdicts(assetIdStr)}
+                                                                blockedLabel={$t('signals.comparisonAsset.blocked')}
+                                                                value={assetIdStr ? Number(assetIdStr) : null}
+                                                                sections={[{key: 'benchmark', label: $t('assets.benchmarkSection'), match: (asset) => asset.is_benchmark === true}]}
+                                                                restLabel={$t('assets.otherAssetsSection')}
+                                                                placeholder={$t('signals.comparisonAsset.placeholder')}
                                                                 dropdownPosition="auto"
-                                                                maxVisibleItems={8}
-                                                                inlineSearch={true}
-                                                                onchange={(v) => updateSignalParam(signal.id, desc.key, v)}
-                                                            >
-                                                                {#snippet item(option)}
-                                                                    {@const info = findAssetInfo(option.value)}
-                                                                    <!-- A long name scrolls with the project marquee instead of being cut (Y-38). -->
-                                                                    <span class="flex min-w-0 items-center gap-1.5">
-                                                                        {#if info?.icon_url}
-                                                                            <img src={info.icon_url} alt="" class="w-4 h-4 rounded-full object-cover shrink-0" />
-                                                                        {:else if info?.asset_type}
-                                                                            <img src={getAssetTypeIconUrl(info.asset_type)} alt="" class="w-4 h-4 object-contain shrink-0" />
-                                                                        {:else}
-                                                                            <BarChart3 size={14} class="text-lf-secondary shrink-0" />
-                                                                        {/if}
-                                                                        <span use:scrollOnOverflow class="{overflowScrollTextClass} text-xs" title={option.label}>{option.label}</span>
-                                                                    </span>
-                                                                {/snippet}
-                                                                {#snippet selectedItem(option)}
-                                                                    {@const info = findAssetInfo(option.value)}
-                                                                    <span class="flex min-w-0 items-center gap-1.5">
-                                                                        {#if info?.icon_url}
-                                                                            <img src={info.icon_url} alt="" class="w-4 h-4 rounded-full object-cover shrink-0" />
-                                                                        {:else if info?.asset_type}
-                                                                            <img src={getAssetTypeIconUrl(info.asset_type)} alt="" class="w-4 h-4 object-contain shrink-0" />
-                                                                        {:else}
-                                                                            <BarChart3 size={14} class="text-lf-muted shrink-0" />
-                                                                        {/if}
-                                                                        <span use:scrollOnOverflow class="{overflowScrollTextClass} text-xs" title={option.label}>{option.label}</span>
-                                                                    </span>
-                                                                {/snippet}
-                                                            </SearchSelect>
+                                                                dropdownMinWidth={280}
+                                                                onchange={(id) => updateSignalParam(signal.id, desc.key, String(id))}
+                                                            />
                                                         </div>
                                                         {#if onsyncasset && assetIdStr}
                                                             {@const aid = Number(assetIdStr)}

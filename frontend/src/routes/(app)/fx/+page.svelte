@@ -176,7 +176,7 @@
     let signalBackendError = $derived(signalCatalogFailed ? $_('chartSettings.signalCatalogUnavailable') : signalRequestFailed ? $_('chartSettings.signalResultsUnavailable') : null);
 
     // Asset list for cross-domain signal selection (loaded lazily)
-    let availableAssetsList = $state<Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; currency?: string | null}>>([]);
+    let availableAssetsList = $state<Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; currency?: string | null; is_benchmark?: boolean}>>([]);
 
     // Filter bar adaptive layout is now owned by PageToolbar (shared with dashboard/broker-detail/
     // assets) — see the {#snippet filters}/{#snippet actions} below. Tune live via
@@ -861,6 +861,7 @@
                 icon_url: a.icon_url ?? null,
                 asset_type: a.asset_type ?? null,
                 currency: a.currency ?? null,
+                is_benchmark: a.is_benchmark === true,
             }));
             // The cards' comparisons with an asset need its currency (the key of its cached series): ask them now.
             void fetchComparisonSeries();

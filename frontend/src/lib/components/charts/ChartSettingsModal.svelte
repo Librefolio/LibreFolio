@@ -51,7 +51,7 @@
         /** Available FX pairs for FxPairSignal dynamic options (slug format: 'EUR-GBP') */
         availablePairs?: string[];
         /** Available assets for AssetComparisonSignal dynamic options */
-        availableAssets?: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}>;
+        availableAssets?: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; currency?: string | null; is_benchmark?: boolean}>;
         /** Definitions available in the current Asset/FX domain. */
         signalDefinitions?: SignalDefinition[];
         /** Last applied backend signal rendering supplied by the current page. */
