@@ -201,7 +201,8 @@
       "issuesHeader": "Validation errors were found",
       "balanceIssuesHeader": "This configuration causes data inconsistencies",
       "autoOff": "Auto-validate is OFF ({n} rows > {threshold}) — press ⚡️ Validate now before commit",
-      "contextualIssuesHeader": "With the other pending changes, this row causes the following issues:"
+      "contextualIssuesHeader": "With the other pending changes, this row causes the following issues:",
+      "checkSummary": "{n, plural, one {# field needs} other {# fields need}} fixing"
     },
     "errors": {
       "idRequired": "Transaction ID is required and must be > 0",

@@ -605,8 +605,8 @@ test.describe('Transactions', () => {
                 await expect(validInline, 'a refused date is on screen: the form must not call itself valid').toBeHidden({timeout: 5_000});
                 await expect(page.getByTestId('tx-form-save'), 'Apply must not take the previous date behind the refused text').toBeDisabled();
 
-                // «Validate now» keeps the state a complete form gives it, sends nothing, and leads to the field.
-                await expect(validateNow, 'Validate now is disabled only by an incomplete form').toBeEnabled();
+                // «Validate now» is always available (V-37b), sends nothing while the form holds an error of its own, and leads to the field.
+                await expect(validateNow, 'Validate now is always available (V-37b)').toBeEnabled();
                 const runsBeforeClick = await validateRuns(root);
                 await validateNow.click();
                 await expect(dateInput, 'Validate now leads to the refused date').toBeFocused();
@@ -645,7 +645,7 @@ test.describe('Transactions', () => {
             expect(quantitiesPerRequest(posts.validate.slice(validatesAtEdit), broker.id), 'no validate request may carry the refused quantity, not even sign-corrected to 1').toEqual([]);
 
             // «Validate now» stays enabled (the form is complete), sends nothing, and leads to the field.
-            await expect(validateNow, 'Validate now is disabled only by an incomplete form').toBeEnabled();
+            await expect(validateNow, 'Validate now is always available (V-37b)').toBeEnabled();
             const runsBeforeClick = await validateRuns(root);
             await validateNow.click();
             await expect(quantity, 'Validate now leads to the refused quantity').toBeFocused();
