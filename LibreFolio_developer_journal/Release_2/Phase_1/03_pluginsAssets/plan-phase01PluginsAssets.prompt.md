@@ -9007,3 +9007,72 @@ sonda lo legge come «nessun suggerimento» e `call_provider` mette in pausa.
    - **Prova che i casi mordono** (mutazione, file ripristinati con `cmp`): `loadSignalFxPairs` spenta in tutte e due le
      pagine → `-g Y-41` **4 rossi su 4** (`X-mut-y41-*.log`).
    Porta 6191 libera.
+
+---
+
+## Ondata 5 (23/10, base `1fd80c481` = `dev_release2`, treni 9 e 10)
+
+> Brief: `salvataggi-worktrees-20261021/ondata5/kickoff-X.md`. Lotti: X5-2 (Z-35 + Z-32 a/b, **11a**, blocca il tag),
+> X5-4a (contratto CP12, 11b, piccolo e subito), X5-1 (C-65a + W-B2 + X-R69, 11a), X5-F1 (Rolling Return nel cambio, 11a,
+> dopo il commit di Y5-1), X5-3 (N68, 11b), X5-4b (resto di CP12, 11b), due revisioni (Z Q1…S1; Y5-F4). Regola del
+> brief: un checkpoint alla volta, il successivo parte dopo il commit del coordinatore.
+
+### Analisi breve (23/10, sul codice di `1fd80c481`)
+
+**X5-2 · Z-35 + Z-32 (a/b)** — peso piccolo.
+- `ticker.history(...)` è chiamato in due punti (`yahoo_finance/plugin.py` `_acquire_history_data`: `period="max"` e il
+  ramo a intervallo), senza `auto_adjust`. Cura: `auto_adjust=False` in entrambi. Il frame grezzo aggiunge `Adj Close`,
+  ignorato (le colonne richieste restano `Open/High/Low/Close/Volume`).
+- **Provato dal vivo (AAPL, split 4:1 del 31/08/2020, yfinance 1.7.0)**: con `auto_adjust=False` il `Close` del 28/08 è
+  124,81, non ~499: **Yahoo rettifica il `Close` per gli split in ogni modo**, `Adj Close` è l'unico a contare anche i
+  dividendi. Quindi `auto_adjust=False` toglie **solo la rettifica dei dividendi**: il «gradino» di uno split non
+  compare nelle chiusure (non c'è mai stato). Gli split arrivano comunque come eventi (`ticker.splits` → `SPLIT`).
+  **Domanda per MF** (non blocca): il motore, per un asset Yahoo, applica lo SPLIT alla quantità pre-split e legge il
+  prezzo già rettificato per split? È invariata da Z-35 (anche `auto_adjust=True` rettificava gli split), ma è il punto
+  da guardare con i rendimenti.
+- Z-32 (a/b): VOD.L, `info.currency = GBp`, `Close` 73,5 (pence), dividendo 1,9542 (pence, stessa unità). Il dividendo è
+  l'unico punto in cui un evento diventa un importo e il plugin conosce ancora `GBp` (gli schemi piegano il codice a `GBP`
+  senza scala): `_parse_dividend_events` divide per `minor_unit_factor(currency)`. I prezzi restano in pence (la base 100
+  suggerita da Z-32 (d) li divide); lo split è un rapporto, non si scala. Le righe già salvate non si toccano (decisione).
+- Rossi: 6 (3 vecchie asserzioni sui parametri di `history` + chiusure grezze ×2 + `Adj Close` + dividendo `GBp`),
+  guardie: dividendo di un'unità maggiore invariato, split di una linea in pence invariato. Doc: `provider_yahoo_finance.md`
+  e la pagina utente, con la frase «rifai il Sync completo».
+
+**X5-4a · il contratto di CP12** — peso piccolo, **la fondazione c'è già**: famiglia `brim` (`FAMILY_RULES`, `BRIMProvider(
+PluginSettingsMixin)`, `parse_file_offloaded` + `bound_settings_for`, plugin di prova `_brim_settings_lab.py`, doc `plugin_settings.md#brim-parse`).
+Quello che manca per W è «come un plugin BRIM dichiara un campo» (esempio guidato, chiavi i18n, lettura in `parse`) e un
+**punto di contratto aperto**: oggi la modifica di un'impostazione non rende «stantio» un file già interpretato (la
+staleness del parse guarda solo `parsed_plugin_version`, `brim_provider.py` ~909). Per l'«ordine della data» del CSV
+generico serve (proposta): salvare nei metadati del parse l'impronta delle impostazioni (`BoundSettings.fingerprint` c'è già)
+e confrontarla. Il file è di W; decido con il coordinatore se è nel contratto o nel lotto di W. Consegna: sezione nella guida
+dei plugin con l'esempio + un test di contratto (plugin d'esempio dichiara un campo `select`, il predefinito = comportamento
+di oggi, il parse senza valori vede il predefinito, con il valore vede il suo).
+
+**X5-1 · C-65a + W-B2 + X-R69** — peso medio-alto. Stato: `provider_management.py` cancella e scollega in silenzio (una riga di
+log) quando un piano parametrico cambia (`_wipe_reason`), «togli» rifiuta con transazioni collegate (`_reject_removals_of_linked_events`,
+`PROVIDER_REMOVAL_LINKED_TRANSACTIONS`), e rifiuta il cambio con SPLIT con rettifiche senza costo (X-R49). Nuovo: un **dry-run**
+(`POST /assets/providers/impact`, stesse forme dell'assegnazione/rimozione) che restituisce i conteggi (prezzi, eventi, transazioni
+che perdono il collegamento, SPLIT bloccante), la modale (`AssetModal.svelte`, `parametricSwitchInfo` esiste già per prezzi/eventi)
+li mostra prima di «cambia» **e** prima di «togli»; «togli» smette di rifiutare e scollega; resta il rifiuto duro per gli SPLIT.
+Rossi: `api assets` (dry-run con conteggi, «togli» con transazioni collegate non rifiuta più, rifiuto SPLIT), Vitest, E2E
+`front-asset asset-modal`. `api sync`, i18n 4 lingue con lo stesso vocabolario di N68.
+
+**Ordine** (regola del brief: un checkpoint alla volta): X5-2 → (commit) → X5-4a → X5-1 → … Le altre voci (X5-F1, X5-3, X5-4b,
+revisioni) aspettano i loro segnali (Y5-1 committato; il via del coordinatore).
+
+### X5-2 · Z-35 + Z-32 (a/b) — esecuzione
+
+1. ✅ 23/10 · I rossi in `backend/test_scripts/test_services/test_yahoo_finance_errors.py` (file già registrato): le 3
+   asserzioni esatte sui parametri di `history` ora vogliono `auto_adjust: False`; `_AdjustingTicker` (risponde come
+   yfinance: frame rettificato di default, grezzo con `auto_adjust=False` più `Adj Close`); chiusure grezze (intervallo e
+   storia intera), colonna `Adj Close` ignorata, dividendo `GBp` in sterline con prezzi in pence, guardie per unità
+   maggiori (EUR/GBP/USD) e per lo split. Visti **6 rossi su 86** per il motivo giusto (`ondata5/X-z35-red.log`).
+2. ✅ 23/10 · La cura in `yahoo_finance/plugin.py` (`_acquire_history_data`: `auto_adjust=False` nei due rami;
+   `_parse_dividend_events`: importo diviso per `minor_unit_factor(currency)`). Verdi: `test_yahoo_finance_errors.py` +
+   `test_yahoo_finance_fund_metadata.py` + `test_quote_base_suggestion.py` **152/152**; vicini che citano `history_calls`
+   (`rate_limit_results`, `asset_source_refresh`, `range_ceiling`, `current_price_storable`, `provider_core_cache`)
+   **180/180**; `ruff` e `black` puliti.
+   > **⚠️ Fuori pista**: una terza asserzione esatta sui parametri di `history` (retry transitorio) era rossa solo per il
+   > nuovo argomento: aggiornata.
+3. ✅ 23/10 · Doc (EN): `provider_yahoo_finance.md` (acquire, eventi, «Rows saved before Z-35 stay adjusted») e
+   `yahoo-finance.en.md` (voci «History» e «Dividends», limite «Data saved before…» con il Sync completo).

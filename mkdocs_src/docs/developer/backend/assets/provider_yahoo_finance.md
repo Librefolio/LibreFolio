@@ -44,9 +44,15 @@ The Yahoo Finance provider fetches stock, ETF, crypto, and index prices using th
 The public method now delegates its local work to focused helpers without changing its contract:
 
 1. **Acquire — `_acquire_history_data()`**
-   - `start_date == "min"` calls `ticker.history(period="max")`.
-   - A finite range calls `ticker.history(start=start_date, end=end_date + 1 day)`, preserving
-     LibreFolio's inclusive end date over yfinance's exclusive `end`.
+   - `start_date == "min"` calls `ticker.history(period="max", auto_adjust=False)`.
+   - A finite range calls `ticker.history(start=start_date, end=end_date + 1 day, auto_adjust=False)`,
+     preserving LibreFolio's inclusive end date over yfinance's exclusive `end`.
+   - **The closes are the exchange's own** (`auto_adjust=False`, Z-35): `Close` is not rewritten for the
+     dividends paid since. yfinance's default would rewrite it as of the day it is read, so rows saved on
+     different days carried different adjustments, and a return counted a dividend twice (in the price and
+     in its event). Yahoo's `Close` stays adjusted for **splits** in either mode (checked on AAPL's 4:1 of
+     31 Aug 2020: the raw close of 28 Aug is 124.81, not about 499); the splits come as events too. The extra
+     `Adj Close` column of the raw frame is ignored.
    - Currency metadata falls back to `USD`.
    - Otherwise the currency is Yahoo's own code (`ticker.info["currency"]`), passed on unchanged
      as `FAHistoricalData.currency`: `GBp` for a London line quoted in pence, whose price points
@@ -71,6 +77,10 @@ The public method now delegates its local work to focused helpers without changi
 3. **Events — `_parse_dividend_events()` and `_parse_split_events()`**
    - Positive in-range dividends and non-trivial in-range split ratios become typed asset events,
      dated by `_normalize_yahoo_date()` as the prices.
+   - **A dividend of a minor-unit line is divided by the unit's factor** (Z-32 a/b): Yahoo gives a London
+     line's dividends in pence like its closes, so `1.9542` on a `GBp` line becomes `0.019542` GBP
+     (`minor_unit_factor()`, `utils/currency_units.py`). The prices keep their pence (the asset's quote
+     base divides them) and a split ratio is a number of shares, never scaled.
    - The two parsers are also isolated best-effort, so either event family can survive a failure
      in the other.
 
@@ -220,9 +230,11 @@ are owned by `assets/core.py`; Yahoo owns only its currency sub-operation cache.
   Area/Location name (`Europe/Rome`) is logged as a warning once per name and process, *Exchange
   timezone unknown to this server's timezone database: the current value is dated in UTC*. A fixed
   offset or a name without an area is not logged. Adding `tzdata` is Z-36, a developer decision.
-- **Adjusted closes**: `ticker.history()` is called without `auto_adjust`, so yfinance's default
-  (`True`) applies: the stored OHLC are adjusted for dividends and splits as of each fetch, and
-  a row keeps the adjustment of the fetch that last wrote it (Z-35, open after 1.3).
+- **Rows saved before Z-35 stay adjusted** (developer decision of 23 Oct 2026: no clean-up of saved data).
+  The history is stored as it was read: a row written before the change keeps the dividend adjustment of the day
+  it was fetched, and the scheduler re-reads only the last 14 days. The user who notices re-reads the whole
+  history with the full Sync (the dialog of C-66 warns before it overwrites). The same holds for the
+  dividends of a pence line saved before Z-32, still in pence until that Sync.
 
 ---
 
