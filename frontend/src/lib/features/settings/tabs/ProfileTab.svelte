@@ -16,6 +16,7 @@
     import {onMount} from 'svelte';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
     import {sameEmail} from '$lib/features/auth/emailCase';
+    import ProtectedEmailModal from '$lib/features/settings/ProtectedEmailModal.svelte';
 
     // Format date for display, in the interface locale (M-18). The template passes it: read there, the
     // store is tracked, and the date follows a language change.
@@ -64,6 +65,8 @@
     let error: string | null = null;
     /** The code of a refusal the tab words itself (A6e), published on profile-error as data-error-code. */
     let errorCode: string | null = null;
+    // The paying administrator of a managed instance may not change its address from here (A5-1b)
+    let protectedEmailOpen = false;
     /** The current password, asked only while the email is changed (A6e). */
     let emailPassword = '';
 
@@ -128,6 +131,8 @@
         TOO_MANY_ATTEMPTS: 'settings.tooManyPasswordAttempts',
         // The sign-in reads a name with @ as an email address (A-21a)
         USERNAME_INVALID: 'auth.validation.usernameNoAt',
+        // The paying administrator of a managed instance changes its address through the host (A5-1b): the modal says so
+        ACCOUNT_PROTECTED: 'settings.protectedEmail.message',
     };
 
     /** A refusal as the tab shows it: a known code in words (with the code), the server's sentence, or a generic text. */
@@ -174,12 +179,22 @@
         } catch (e: unknown) {
             debug.error('ProfileTab', 'saveField failed', e);
             const refusal = describeRefusal(e);
-            error = refusal.text;
-            errorCode = refusal.code;
+            if (field === 'email' && refusal.code === 'ACCOUNT_PROTECTED') {
+                // No bare error: the modal of the host says what to do (A5-1b)
+                protectedEmailOpen = true;
+                notify({name: 'settings.profile.save.refused', detail: {field: 'email', code: 'ACCOUNT_PROTECTED'}});
+            } else {
+                error = refusal.text;
+                errorCode = refusal.code;
+            }
             if (field === 'username') editedUsername = originalUsername;
             // A wrong or missing password keeps the address typed, to try again; the password goes. Too many failures
             // keep both (A8b, C11): the password may be right, and waiting is all there is to do.
-            else if (refusal.code && refusal.code !== 'TOO_MANY_ATTEMPTS') emailPassword = '';
+            else if (refusal.code === 'ACCOUNT_PROTECTED') {
+                // Retrying is no use: the stored address goes back, and with it the question for the password
+                editedEmail = originalEmail;
+                emailPassword = '';
+            } else if (refusal.code && refusal.code !== 'TOO_MANY_ATTEMPTS') emailPassword = '';
             else if (!refusal.code) editedEmail = originalEmail;
             setTimeout(clearError, 5000);
         } finally {
@@ -218,6 +233,14 @@
             } catch (e: unknown) {
                 debug.error('ProfileTab', 'saveAll field failed', e);
                 const refusal = describeRefusal(e);
+                if (field === 'email' && refusal.code === 'ACCOUNT_PROTECTED') {
+                    // Not a failure to list: the modal of the host says what to do (A5-1b)
+                    protectedEmailOpen = true;
+                    notify({name: 'settings.profile.save.refused', detail: {field: 'email', code: 'ACCOUNT_PROTECTED'}});
+                    editedEmail = originalEmail;
+                    emailPassword = '';
+                    continue;
+                }
                 failed.push({
                     field,
                     label: field === 'username' ? $_('auth.username') : $_('auth.email'),
@@ -225,7 +248,11 @@
                     code: refusal.code,
                 });
                 if (field === 'username') editedUsername = originalUsername;
-                else if (refusal.code && refusal.code !== 'TOO_MANY_ATTEMPTS') emailPassword = '';
+                else if (refusal.code === 'ACCOUNT_PROTECTED') {
+                    // Retrying is no use: the stored address goes back, and with it the question for the password
+                    editedEmail = originalEmail;
+                    emailPassword = '';
+                } else if (refusal.code && refusal.code !== 'TOO_MANY_ATTEMPTS') emailPassword = '';
                 else if (!refusal.code) editedEmail = originalEmail;
             }
         }
@@ -602,6 +629,9 @@
 {#if showDeleteModal && $currentUser}
     <AccountDeletionDialog account={{id: $currentUser.id, username: $currentUser.username, is_active: true}} mode="self" onClose={closeDeleteModal} onDeleted={handleAccountDeleted} open testIdPrefix="profile-delete" />
 {/if}
+
+<!-- The paying administrator of a managed instance changes its address through the host (A5-1b) -->
+<ProtectedEmailModal onClose={() => (protectedEmailOpen = false)} open={protectedEmailOpen} />
 
 <!-- Avatar Image Picker (AssetPicker + ImageEditModal combined) -->
 <ImagePickerWrapper circularPreview={true} filterImages={true} initialUrl={editedAvatarUrl || ''} oncancel={() => (showAvatarPicker = false)} onchange={handleAvatarChange} open={showAvatarPicker} preset="avatar" title={$_('settings.selectAvatar') || 'Select Avatar'} />

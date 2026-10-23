@@ -455,6 +455,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/settings/AccountDeletionDialog.test.ts",
             "src/lib/features/settings/tabs/PreferencesTab.test.ts",
             "src/lib/features/settings/tabs/ProfileTab.test.ts",
+            "src/lib/features/settings/ProtectedEmailModal.test.ts",
             "src/lib/features/settings/tabs/AboutTab.test.ts",
             "src/lib/features/settings/tabs/AboutTab.legal.test.ts",
             "src/lib/features/settings/tabs/GlobalSettingsTab.test.ts",
