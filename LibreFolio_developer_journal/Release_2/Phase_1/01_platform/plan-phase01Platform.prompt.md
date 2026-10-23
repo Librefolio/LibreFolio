@@ -10595,8 +10595,37 @@ DOC-2 (ricerca per lingua), DOC-1 (riordino della guida admin, con le guide Tail
    > `app.html` non toccato (anti-FOUC e colori intatti, nessun hash a mano). Niente spec E2E (decisione del coordinatore:
    > i 70 Vitest coprono il riconoscimento e il guardiano).
    > **Rossi → verdi** (test-author): 70 casi (import mancante) → 70/70; `check-orphans` pulito; `front check` 0/0.
-3. ⏳ **DOC-2 · ricerca per lingua**: analisi `ondata5/H-DOC2-analisi.md`; strada B approvata dal coordinatore e dal developer
-   (un indice per lingua + script che sceglie il file + pulsante «cerca anche nelle altre lingue»). Parte dopo la consegna di H5-1/H5-2.
+3. ✅ **DOC-2 · ricerca per lingua** (23/10, treno 11a; analisi `ondata5/H-DOC2-analisi.md`; strada B approvata dal coordinatore e
+   dal developer).
+   > **Note implementazione**: `mkdocs_src/hooks/search_language_split.py` (hook `on_post_build`, priorità -100) scrive,
+   > accanto a `search/search_index.json`, un indice per lingua `search_index.<en|it|fr|es>.json`: una pagina è della lingua con
+   > cui comincia il suo indirizzo (`it/`, `fr/`, `es/`), il resto è inglese; salta le sotto-build di `mkdocs-static-i18n`
+   > (flag `building` del suo plugin), che erano lavoro e righe di registro inutili. `docs/javascripts/search-language.js`
+   > (senza dipendenze, caricato da `<head>` in `overrides/main.html` PRIMA del bundle di Material) avvolge `fetch`: la
+   > richiesta dell'indice completo diventa quella della lingua della pagina, a meno che la preferenza `lf-docs-search-all-languages`
+   > (localStorage) dica «tutte»; una casella «Cerca anche nelle altre lingue» (4 lingue scritte da me) è il primo figlio
+   > dell'area dei risultati; cambiarla salva la preferenza, tiene la query in sessionStorage e ricarica riaprendo la ricerca;
+   > senza storage vale la lingua della pagina. Una riga in `hooks:` di `mkdocs.yml`; stile in `static/extra.css`.
+   > Misure sulla build: en 3911 voci 5,98 MB · it 1843 1,36 MB · fr 1840 1,44 MB · es 1844 1,38 MB · completo 10,58 MB (prima
+   > ogni visitatore scaricava 10,5 MB). Docs: `developer/docs/translation-pipeline.md`, sezione «Search by Language».
+   > **Rossi → verdi** (test-author): 79 pytest (`utils docs-search-split`; 11 sulla build erano rossi finché il sito non è
+   > stato ricostruito) + 173 Vitest (`core-unit`) tutti verdi; spec Playwright `frontend/e2e/docs/search-language.spec.ts`
+   > (SL-01…SL-07, runner `front-utility docs-search-language`): **7/7 verdi** nello slot (vedi sotto). Nota per chi la rilancia: il
+   > server di prova ricostruisce il sito solo se un `.md` è più nuovo, quindi dopo un cambio dello script o dell'hook va fatto
+   > prima `./dev.py mkdocs build`.
+   > **⚠️ Fuori pista (E2E, il difetto vero)**: il primo giro dell'E2E diede 1 verde e 6 rossi: Material 9.7.7 carica l'indice con
+   > **`XMLHttpRequest`** (il browser lo elenca come `xmlhttprequest`, non `fetch`), quindi il wrapper di `fetch` non scattava mai.
+   > Visto dal vivo nel browser sulla corsia (`initiatorType`); lo script ora avvolge **anche** `XMLHttpRequest.prototype.open`
+   > (`installXhrRewriter`), e `fetch` resta per un Material futuro. Il test-author ha aggiunto 42 casi di Vitest (11 mutanti su 12
+   > li fanno rossi, uno è equivalente), poi **E2E 7/7 verdi** (corsia 6181, `front-utility docs-search-language`, 22 s, sito
+   > ricostruito prima). I Vitest sul solo `fetch` non potevano vederlo: un test di integrazione col browser vero era necessario.
+   > **⚠️ Fuori pista**: il test-author ha scritto i test mentre io scrivevo il codice (li avevo lanciati insieme): sono
+   > scritti dal contratto, non dal codice, e verificati con 9 mutanti; nessun rosso vero da vedere. Il debito di traduzione
+   > è nullo (pagina `developer/`, solo inglese).
+3b. ✅ **`--recover previous`** (23/10, richiesta di B, B5-2): le citazioni del comando che sono di H (`restore_guard.py`
+   con il suo test, `instance_block.py`, `hosting_providers.en.md`, `security.md`, `api/index.md`, il testo `adminHint` nei 4
+   cataloghi, i commenti della pagina) dicono `--recover previous`. I file di B (`cli_tools.en.md`, `backup_cli.py`,
+   `backup_restore.en.md`) restano a B.
 4. ⏳ **DOC-1 · riordino della guida admin**: inventario e albero in `ondata5/H-DOC1-inventario.md` (14 → 28 pagine piatte, la
    gerarchia nella nav; mappa di reindirizzamento delle ancore). Albero approvato dal developer; **non si ristruttura** finché
    non sono committati H5-1, il lotto di B (`backup pending`) e quelli di X sulla doc admin.

@@ -1268,6 +1268,7 @@ hooks:
   - hooks/absolute_hreflang.py
   - hooks/jsonld.py
   - hooks/fr_typography.py
+  - hooks/search_language_split.py
 
 extra_css:
   - static/extra.css

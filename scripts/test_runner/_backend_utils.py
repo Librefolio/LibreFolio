@@ -471,6 +471,15 @@ def utils_docs_fr_typography(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Docs French typography tests", verbose=verbose)
 
 
+def utils_docs_search_split(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the MkDocs hook that splits the search index by language after the build (DOC-2)."""
+    print_section("Utils: Docs Search Language Split")
+    print_info("Testing: mkdocs_src/hooks/search_language_split.py (language_of, split_index, on_post_build), its registration in mkdocs_src/mkdocs.yml and overrides/main.html, the built site's search_index.<lang>.json")
+    print_info("Tests: first path segment decides the language (it/ fr/ es/, anything else en), every doc in exactly one file, same config, input untouched, four UTF-8 files written beside the full index, a missing index warns and does nothing, the built site's files and script order")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_docs_search_split.py", test_names)
+    return run_command(cmd, "Docs search language split tests", verbose=verbose)
+
+
 def utils_normalize_dashboard_fixture(verbose: bool = False, test_names: list = None) -> bool:
     """Test the gallery dashboard fixture normalizer: money scaled, shares and fractions left alone, invariants loud and value-free."""
     print_section("Utils: Dashboard Fixture Normalizer")
@@ -948,6 +957,16 @@ Tests for utility modules and helper functions:
         # registration, and the site configuration MkDocs loads (plugins and hooks) to render one
         # page in memory (Page.render, no build) and to dispatch on_nav on navigations built in
         # the test. No DB, no server, no network, no writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "docs-search-split",
+        utils_docs_search_split,
+        name="Docs Search Language Split",
+        desc="The search_language_split MkDocs hook writes, after the build, one search index per language beside the full one (search_index.en/it/fr/es.json, same config): the language of a doc is its location's first path segment, exactly it, fr or es alone or before / or #, anything else (a name that only starts like one, a language that is not first, an English-only page) is en; every doc of the full index is in exactly one file, unchanged, none lost or duplicated, the input untouched; on_post_build writes four UTF-8 JSON files equal to the split and nothing else, leaves the full index byte for byte, and a missing index warns without raising; the real built index splits with counts adding up and the Italian pages not in en; mkdocs.yml lists the hook and not the script as extra_javascript, main.html loads search-language.js in extrahead; the built site has the four files, every page's html lang among the four languages, and each home page loads the script in the head before Material's bundle",
+        # Dictionaries and files under tmp_path, the hook loaded by path. Reads mkdocs_src/mkdocs.yml, overrides/main.html
+        # and (read only) the built mkdocs_src/site/. No DB, no server, no network, no writes outside tmp_path.
         isolation="pure",
     )
     add_test(
