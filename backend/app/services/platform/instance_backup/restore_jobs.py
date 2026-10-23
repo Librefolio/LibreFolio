@@ -377,7 +377,7 @@ def remove_check(stage_id: str, *, data_dir: Path | None = None) -> None:
     _remove(data_dir, check)
 
 
-def confirm_check(stage_id: str, *, confirmed_by: str, confirmed_via: ConfirmedVia = "admin", data_dir: Path | None = None) -> RestoreState:
+def confirm_check(stage_id: str, *, confirmed_by: str, confirmed_via: ConfirmedVia = "admin", owner_user_id: int | None = None, data_dir: Path | None = None) -> RestoreState:
     """Confirm the restore of a finished check: the next start of the server applies its copy (``apply.py``).
 
     ``BackupPathError`` when ``.restore`` is a link or a file: the confirmation writes there, and a link is refused rather
@@ -393,7 +393,7 @@ def confirm_check(stage_id: str, *, confirmed_by: str, confirmed_via: ConfirmedV
         raise CheckRunningError("The check still runs")
     if check.status == "failed":
         raise RestoreNotRestorableError("The check refused the archive")
-    return confirm_restore(stage_id, confirmed_by=confirmed_by, confirmed_via=confirmed_via, data_dir=data_dir)
+    return confirm_restore(stage_id, confirmed_by=confirmed_by, confirmed_via=confirmed_via, owner_user_id=owner_user_id, data_dir=data_dir)
 
 
 def prune(data_dir: Path, now: datetime | None = None) -> int:

@@ -12,6 +12,7 @@
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
     import {formatBytes} from '$lib/utils/files/upload';
     import type {RestoreStageReport} from './backupApi';
+    import OwnerChoiceModal, {type OwnerCandidate} from './OwnerChoiceModal.svelte';
     import {confirmationMatches, confirmationWords, pickConfirmationWord} from './restoreFlow.svelte';
     import {WARNINGS_SHOWN_APART, restoreTotalsKey, restoreWarningKey} from './restoreText';
 
@@ -20,7 +21,8 @@
         report: RestoreStageReport;
         /** The confirmation is out: nothing can be clicked. */
         busy?: boolean;
-        onConfirm: () => void;
+        /** `ownerUserId`: the account the owner chose (B5-1), `null` when the report asks for none. */
+        onConfirm: (ownerUserId: number | null) => void;
         onDrop: () => void;
         onClose: () => void;
         /** Where the word is picked: a test fixes it. */
@@ -45,8 +47,26 @@
     const listedWarnings = $derived(report.warnings.filter((warning) => !WARNINGS_SHOWN_APART.has(warning)));
     const ownAccountMissing = $derived(report.warnings.includes('confirming_account_not_in_backup'));
 
+    // B5-1: on a managed instance the confirmation names the backup's account that becomes the owner's. Offered: the one
+    // with the owner's address when there is one, otherwise the backup's active administrators.
+    const ownerChoice = $derived(report.owner_choice ?? null);
+    const ownerUsers = $derived.by((): OwnerCandidate[] => {
+        if (ownerChoice === null) return [];
+        const forced = ownerChoice.forced_user_id;
+        const offered = ownerChoice.candidates.filter((candidate) => (forced !== null ? candidate.user_id === forced : candidate.administrator));
+        return offered.map((candidate) => ({id: candidate.user_id, username: candidate.username, email: candidate.email ?? '', is_superuser: candidate.is_superuser, is_active: candidate.is_active}));
+    });
+    let ownerOpen = $state(false);
+
     function confirm() {
-        if (canConfirm) onConfirm();
+        if (!canConfirm) return;
+        if (ownerChoice === null) onConfirm(null);
+        else ownerOpen = true;
+    }
+
+    function confirmOwner(userId: number) {
+        ownerOpen = false;
+        onConfirm(userId);
     }
 
     const REFUSED_INPUT = new Set(['insertFromPaste', 'insertFromPasteAsQuotation', 'insertFromDrop']);
@@ -231,3 +251,7 @@
         </footer>
     </div>
 </ModalBase>
+
+{#if ownerChoice !== null}
+    <OwnerChoiceModal open={open && ownerOpen} ownerEmail={ownerChoice.owner_email} users={ownerUsers} {busy} onConfirm={confirmOwner} onCancel={() => (ownerOpen = false)} />
+{/if}
