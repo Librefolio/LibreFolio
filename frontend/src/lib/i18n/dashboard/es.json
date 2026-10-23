@@ -151,6 +151,7 @@
     "fxOnCash": "Efecto del tipo de cambio sobre el efectivo",
     "allocationNegativeCash": "Liquidez negativa: {amount}",
     "startValueTooltip": "Valor de la posición al inicio del período, calculado como la columna Valor de la Cartera; 0 si la posición aún no existía. Es la base de los porcentajes del período.",
-    "endValueTooltip": "Valor de la posición al final del período, calculado como la columna Valor de la Cartera; 0 si la posición ya estaba cerrada."
+    "endValueTooltip": "Valor de la posición al final del período, calculado como la columna Valor de la Cartera; 0 si la posición ya estaba cerrada.",
+    "transfersAtMarketValue": "Transferencias a valor de mercado"
   }
 }

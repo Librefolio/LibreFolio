@@ -294,6 +294,7 @@
         if (description === 'Unallocated income') return translateOr($t, 'dashboard.unallocatedIncome', description);
         if (description === 'Unallocated costs') return translateOr($t, 'dashboard.unallocatedCosts', description);
         if (description === 'FX on cash') return translateOr($t, 'dashboard.fxOnCash', description);
+        if (description === 'Transfers at market value') return translateOr($t, 'dashboard.transfersAtMarketValue', description);
         if (description === 'Other / reconciliation residual') return translateOr($t, 'dashboard.otherReconciliationResidual', description);
         return description;
     }
