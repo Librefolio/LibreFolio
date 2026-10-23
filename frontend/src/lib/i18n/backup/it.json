@@ -212,7 +212,7 @@
         "post_migration_failed": "Una correzione della copia non è riuscita: la causa è nel log del server.",
         "restore_interrupted": "Il controllo è stato interrotto: controlla di nuovo l'archivio.",
         "restore_stage_expired": "Il controllo è troppo vecchio: controlla di nuovo l'archivio.",
-        "restore_stage_outdated": "LibreFolio è stato aggiornato dopo il controllo: controlla di nuovo l'archivio.",
+        "restore_stage_outdated": "LibreFolio è stato aggiornato, o l'indirizzo del titolare è cambiato, dopo il controllo: controlla di nuovo l'archivio.",
         "restore_not_restorable": "Questo archivio non può essere ripristinato.",
         "restore_already_pending": "Un altro ripristino attende già il prossimo avvio.",
         "restore_not_pending": "Nessun ripristino attende il prossimo avvio.",
@@ -228,7 +228,11 @@
         "envelope_damaged": "Il backup sicuro è danneggiato o è stato modificato: non si può aprire.",
         "envelope_unsupported": "Il backup sicuro viene da un LibreFolio più recente: aggiorna prima LibreFolio.",
         "proxy_too_large": "Un proxy davanti a LibreFolio ha rifiutato un archivio così grande: chiedi a chi lo gestisce di accettare caricamenti più grandi, oppure ripristina dalla riga di comando.",
-        "sealed_backup_needs_key": "Questo è un backup sigillato di un pannello di hosting: la sua password è cifrata per la chiave del fornitore. Estrai backup.lfbk, apri password.age con age, poi ripristina backup.lfbk con quella password."
+        "sealed_backup_needs_key": "Questo è un backup sigillato di un pannello di hosting: la sua password è cifrata per la chiave del fornitore. Estrai backup.lfbk, apri password.age con age, poi ripristina backup.lfbk con quella password.",
+        "owner_choice_required": "Scegli l'account che diventa del titolare prima di confermare.",
+        "owner_choice_invalid": "L'account scelto non può diventare del titolare: scegline uno fra quelli proposti.",
+        "owner_email_not_set": "LIBREFOLIO_ADMIN_EMAIL non è impostata: non si può scegliere l'account del titolare. Chiedi al fornitore dell'hosting.",
+        "owner_conflict": "Il backup contiene due account con lo stesso indirizzo o lo stesso nome, oppure l'indirizzo del titolare come nome di un altro account: qui non si può ripristinare."
       },
       "password": {
         "intro": "Un backup sicuro: scrivi la password con cui è stato fatto.",

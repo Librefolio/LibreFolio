@@ -94,7 +94,8 @@ export interface RestoreApi {
     startCheck(uploadId: string, password?: string): Promise<RestoreStage>;
     getCheck(stageId: string): Promise<RestoreStage>;
     dropCheck(stageId: string): Promise<void>;
-    confirm(stageId: string): Promise<RestoreStatus>;
+    /** `ownerUserId`: the backup's account that becomes the owner's, on a managed instance (B5-1). */
+    confirm(stageId: string, ownerUserId?: number | null): Promise<RestoreStatus>;
     cancelPending(): Promise<void>;
     restart(): Promise<RestoreRestartAccepted>;
     probeServer(): Promise<'up' | 'down'>;
@@ -124,7 +125,7 @@ const MAX_BACKOFF_STEPS = 5;
 // A secure backup's check refused with one of these codes asks for its password again; the upload stays on the server.
 const PASSWORD_AGAIN = new Set(['wrong_password', 'password_required']);
 // A confirmation refused with one of these codes leaves nothing to confirm: the check is forgotten.
-const CHECK_GONE = new Set(['restore_stage_not_found', 'restore_stage_expired', 'restore_stage_outdated', 'restore_not_restorable']);
+const CHECK_GONE = new Set(['restore_stage_not_found', 'restore_stage_expired', 'restore_stage_outdated', 'restore_not_restorable', 'owner_conflict']);
 
 const SERVER_API: RestoreApi = {
     status: getRestoreStatus,
@@ -417,15 +418,16 @@ export class RestoreFlowController {
         await this.#dropNow(stage.stage_id);
     }
 
-    /** Confirm the restore of the checked archive, then ask the server to restart at once (developer decision P8). */
-    async confirm(): Promise<void> {
+    /** Confirm the restore of the checked archive, then ask the server to restart at once (developer decision P8).
+     * `ownerUserId`: the account the owner chose, on a managed instance (B5-1). */
+    async confirm(ownerUserId: number | null = null): Promise<void> {
         const stage = this.stage;
         if (this.state !== 'report' || stage === null || this.report?.restorable !== true) return;
         const generation = this.#next();
         this.state = 'confirming';
         this.#setError(null, null);
         try {
-            const status = await this.#api.confirm(stage.stage_id);
+            const status = await this.#api.confirm(stage.stage_id, ownerUserId);
             if (this.#stale(generation)) return;
             this.status = status;
             this.stage = null;
