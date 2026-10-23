@@ -104,6 +104,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Start Value and End Value explained.** The positions table's two headers have a tooltip, and the positions guide's sentence on them is now in Italian, French and Spanish too.
 - Administrators choose who can sign up (Open, By invitation, Closed) from the **Users** tab too, and every row of the **Security** checks has a **Guide** button opening its documentation page.
 - **Japanese, Chinese and Korean statements preview under the strict content policy.** The CJK fonts are served by LibreFolio, downloaded once from a pinned version and checked against fixed hashes; the browser never loads them from outside.
+- **Sealed nightly backups.** With `LIBREFOLIO_BACKUP_RECIPIENTS` (one or two `age1…` public keys), a backup is a `.tar` holding the encrypted archive, its random password encrypted with age for those keys, and a plain manifest: the instance itself cannot open it again. `./dev.py backup keygen` makes a key pair; the guide shows how to open a sealed backup by hand with `age`.
+- **Hosting providers can restore a nightly backup onto a new machine.** With `LIBREFOLIO_AWAIT_RESTORE` a new instance waits for its data instead of offering a fresh setup; the panel uploads the backup with a signed ticket of scope `backup:restore`, checks it, confirms and restarts; the customer sees a waiting page on the login background, in four languages.
+- **An interrupted restore no longer serves data it cannot vouch for.** When the state of a restore cannot be read, the instance shows a page that asks for the administrator (with a link to the instance's support when one is set), keeps every checked copy, and `./dev.py backup pending --recover` lets the administrator choose between the data of before and a new restore.
+- Backup jobs report the archive's SHA-256; a restore report says that the accounts and credentials come from the backup, and warns when the confirming administrator is not in it. The guide explains nightly copies with restic or Backrest.
+- **Activation and password-reset emails share one limit per network**, `LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS` (20 an hour), beside the instance's hourly budget; wrong passwords never spend it. When an email is held, the page says how many minutes to wait, in a yellow box.
+- In the Users list, an info icon next to «Waiting for verification» explains what it means.
 
 ### 🔄 Changed
 
