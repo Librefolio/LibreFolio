@@ -9076,3 +9076,29 @@ revisioni) aspettano i loro segnali (Y5-1 committato; il via del coordinatore).
    > nuovo argomento: aggiornata.
 3. ✅ 23/10 · Doc (EN): `provider_yahoo_finance.md` (acquire, eventi, «Rows saved before Z-35 stay adjusted») e
    `yahoo-finance.en.md` (voci «History» e «Dividends», limite «Data saved before…» con il Sync completo).
+
+### X5-4a · il contratto di CP12 (BRIM) — esecuzione (23/10, base `2c0cdba05`)
+
+> Via del coordinatore: l'impronta delle impostazioni sta nel contratto («un parse è stantio anche quando l'impronta delle
+> impostazioni legate è diversa da quella salvata nei metadati del parse»): la regola e il test sono miei; il codice in
+> `brim_provider.py` e nella route lo fa W (W5-8).
+
+1. ✅ 23/10 · La regola, pura: `plugin_settings/resolver.py` → `default_settings_fingerprint(fields)` (l'impronta di un plugin
+   i cui campi valgono il predefinito: il riferimento di un parse fatto prima del campo) e `settings_changed_since(saved,
+   current, fields)`: `current` None (plugin senza campi) → mai; altrimenti `current.fingerprint != (saved or default)`.
+   `current` è il valore che avrebbe un parse **per l'utente che guarda**, non per chi ha fatto il parse.
+2. ✅ 23/10 · Il test di contratto `backend/test_scripts/test_services/test_brim_field_contract.py` (nuovo, **11 casi**,
+   puro: niente DB, server, file; registrato come `services brim-field-contract`, `isolation="pure"`): il plugin d'esempio
+   (`date_order`, select personale, predefinito `day_first`) si dichiara e si registra; una dichiarazione che la famiglia
+   rifiuta (segreto personale `required`) è rifiutata; senza configurazione il plugin legge il predefinito e dà l'output di
+   sempre; il parse vede il valore dell'utente che importa e non quello di un altro; la regola (senza campi, uguale/diverso,
+   scelto e rimesso, nessun salvato = predefiniti, chi guarda decide, un segreto impostato dopo il parse). **Visto che morde**:
+   con la base sbagliata (`saved or ""`) 1 rosso, con `return False` 4 rossi; file ripristinato (`cmp`).
+3. ✅ 23/10 · Doc (EN): `developer/backend/brim/architecture.md` (§ «A field in a BRIM plugin: the contract», con l'esempio
+   di dichiarazione, le regole 1-4, un diagramma Mermaid e l'elenco **«To do for W (W5-8)»**) e un rinvio in `plugin_settings.md`.
+   > **Da fare per W (W5-8)**: (1) salvare `bound.fingerprint` nei metadati del parse (`save_parse_result` e la route) come
+   > `parsed_settings_fingerprint`; (2) nella route di elenco e info del file (async, non in `_build_file_info_from_metadata`,
+   > che è sincrona e non conosce l'utente) risolvere `current` per l'utente e fare `parse_is_stale = … or settings_changed_since(
+   > saved, current, plugin.settings_fields)`; (3) un test end-to-end: parse col predefinito, l'utente cambia il valore → stantio;
+   > nuovo parse → non stantio.
+   > **⚠️ Fuori pista**: il punto dell'impronta, che nel kickoff era «una domanda», è risolto dal coordinatore nel contratto.
