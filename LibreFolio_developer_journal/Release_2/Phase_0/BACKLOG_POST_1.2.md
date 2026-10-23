@@ -231,6 +231,7 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
     e si fa con X dopo (piano 04, §7).
 
   🌊 22/10: ondata 5 (proprietario X; C-65a: la modale al cambio di provider)
+  📌 23/10 (developer): C-65a con la stessa regola di X-R69 (modale con i conteggi, poi scollega).
 - ✅ **C-66 · Sync: l'avviso prima di sovrascrivere i dati (F-094)** (chiusa 16/10 dal coordinatore: X `32c64bbd9`, entrata `4b2e0df80`; il developer: il fornitore vince, basta l'avviso; X-R29/X-R30) — basso; W (C-64), 12/10. Il dialogo c'è già ed è
   comune a cambi e asset: `SyncModalBase`, con `FxSyncModal`, `AssetSyncModal` (lista degli asset) e `PageSyncModal`
   (pagine di dettaglio), che sincronizzano l'intervallo della pagina. Manca solo l'avviso quando l'intervallo scelto
@@ -6280,6 +6281,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Da decidere se allineare: per esempio, scollegare anche alla rimozione con la sola regola degli SPLIT.
 
   🌊 22/10: ondata 5 (proprietario X)
+  📌 23/10 (developer): «togli» e «cambia» il fornitore uniformati: tutti e due mostrano la modale con i conteggi (prezzi, eventi, transazioni che perdono il collegamento) e, se confermi, scollegano; il rifiuto duro resta solo per gli SPLIT con rettifiche senza costo (X-R49). N68 («Ricollega eventi») è pensato apposta.
 - **X-R70 · Il refresh conta le date rifiutate dal controllo OHLC** — basso; X, 17/10 (Z, nota di X-R65).
   - `_persist_refresh_item` toglie dal conteggio le date che nessuna colonna tiene e quelle fuori intervallo, ma non
     quelle che `bulk_upsert_prices` rifiuta per OHLC impossibile (chiusura fuori da [minimo, massimo]).
@@ -8311,7 +8313,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     nell'anteprima. Un controllo che fissa il valore di oggi c'è già (J-57, C4).
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-57».
 
-  🌊 22/10: ondata 5 (proprietario W) — diventa protezione in ingresso (rifiuto con un codice chiaro che indica il TRANSFER), non correzione nei calcoli
+  ✖️ 23/10: scartata (developer), motivo: non è un errore rilevabile; un costo mancante inserito dall'utente è responsabilità dell'utente, non si corregge né si rifiuta (la riga 🌊 del 22/10 descriveva il rifiuto della coppia di rettifiche, già consegnato da W in `0af0f3593`)
 - ✅ **J-60 · Un costo di carico scritto a mano può essere negativo** — basso, numeri e dati; J, 19/10 (analisi di J-57
   completa, letto nel codice). **Deciso: (a)**, rifiutarlo e tenere lo 0 (coordinatore, 19/10). I testi li ha
   approvati il developer con J-57. N92 (i) ha poi deciso che un prezzo negativo non si accetta.
@@ -8889,6 +8891,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   - Da decidere: `auto_adjust=False` (prezzi di borsa veri, split a parte) e la riscrittura della storia.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-33 — … lavoro».
   🌊 22/10: ondata 5 (proprietario X)
+  📌 23/10 (developer): nessuna bonifica delle chiusure già salvate: quando se ne accorge, l'utente rilegge la storia completa con il Sync che c'è già; la doc lo dice.
 - ✅ **Z-34 · Il rapporto (C) delle righe Yahoo rimaste spostate** — basso, dati, **dopo la 1.3**; Z, 17/10 (decisione
   N86, D4). **Chiusa il 19/10 come superata** (D7, via del coordinatore): con Z-33r non c'è più riparazione, tutte le
   righe salvate prima restano spostate per decisione del developer, e un rapporto non ha più oggetto.
