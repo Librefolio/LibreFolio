@@ -7,6 +7,10 @@ part of a backup (F04). The password also accepts ``LIBREFOLIO_SMTP_PASSWORD_FIL
 With ``LIBREFOLIO_SMTP_HOST`` unset or blank, email is off and LibreFolio behaves as before release 1.3: every link
 is copied by hand. A value that cannot be used raises ``EmailConfigError``, which names the variable and never holds a
 secret; ``services/email/delivery.py`` turns it into an instance with email off, and says why in the log.
+
+One variable of the section is not an SMTP one: ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS``, how many registration emails
+one client address may send in an hour. It follows the same rules (read at every call, blank is unset, a bad value is an
+``EmailConfigError``), but it does not start with ``SMTP_ENV_PREFIX``.
 """
 
 import os
@@ -15,20 +19,24 @@ from email.utils import getaddresses
 
 from backend.app.config import env_secret
 
-#: Every variable of this section starts with it.
+#: Every variable of this section starts with it, but ``SIGNUP_EMAILS_PER_ADDRESS_VARIABLE``.
 SMTP_ENV_PREFIX = "LIBREFOLIO_SMTP_"
 #: ``starttls`` upgrades a plain connection and refuses to go on without it; ``tls`` is TLS from the first byte
 #: (SMTPS); ``none`` sends in clear, for a relay on the same machine or the local network.
 TLS_MODES: tuple[str, ...] = ("starttls", "tls", "none")
 DEFAULT_SMTP_PORTS: dict[str, int] = {"starttls": 587, "tls": 465, "none": 25}
 DEFAULT_SMTP_MAX_PER_HOUR = 50
+#: How many registration emails one client address (an IPv6 one by its /64) may send in an hour, unless the variable says
+#: otherwise: past it, the account is still created and waits, but its email is held.
+SIGNUP_EMAILS_PER_ADDRESS_VARIABLE = "LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS"
+DEFAULT_SIGNUP_EMAILS_PER_ADDRESS = 20
 
 _HOST_PATTERN = re.compile(r"[A-Za-z0-9._:-]+")
 _DIGITS = re.compile(r"[0-9]+")
 
 
 class EmailConfigError(ValueError):
-    """A ``LIBREFOLIO_SMTP_*`` value that cannot be used: ``variable`` names it, ``code`` says what is wrong.
+    """A ``LIBREFOLIO_SMTP_*`` value (or ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS``) that cannot be used: ``variable`` names it, ``code`` says what is wrong.
 
     The message names the variable and the rule, never the value of a secret.
     """
@@ -121,4 +129,19 @@ def smtp_max_per_hour() -> int:
         return DEFAULT_SMTP_MAX_PER_HOUR
     if not _DIGITS.fullmatch(raw) or int(raw) < 1:
         raise EmailConfigError("LIBREFOLIO_SMTP_MAX_PER_HOUR", "SMTP_MAX_PER_HOUR_INVALID", "expected a whole number of at least 1")
+    return int(raw)
+
+
+def signup_emails_per_address() -> int:
+    """``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS``: how many registration emails one client address may send in an hour; 20
+    when unset or blank.
+
+    Not an SMTP variable (no ``LIBREFOLIO_SMTP_`` prefix), but validated with them: a value that cannot be used makes
+    ``email_config_state()`` report it, and email stays off.
+    """
+    raw = _value(SIGNUP_EMAILS_PER_ADDRESS_VARIABLE)
+    if raw is None:
+        return DEFAULT_SIGNUP_EMAILS_PER_ADDRESS
+    if not _DIGITS.fullmatch(raw) or int(raw) < 1:
+        raise EmailConfigError(SIGNUP_EMAILS_PER_ADDRESS_VARIABLE, "SIGNUP_EMAILS_PER_ADDRESS_INVALID", "expected a whole number of at least 1")
     return int(raw)

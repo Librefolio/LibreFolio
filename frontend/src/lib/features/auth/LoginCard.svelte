@@ -16,6 +16,8 @@
 
     export let redirectTo = '/dashboard';
     export let successMessage = '';
+    /** `warning` draws the message as a notice (an account created whose activation email was held), else as a success. */
+    export let successTone: 'success' | 'warning' = 'success';
     export let onAuthenticated: ((requestedPath: string) => Promise<void>) | undefined = undefined;
 
     let username = '';
@@ -55,7 +57,7 @@
         <form class="space-y-5" data-testid="login-form" on:submit|preventDefault={handleSubmit}>
             <!-- Success Message (from registration) -->
             {#if successMessage}
-                <div class="bg-lf-success-soft border border-lf-success-line text-lf-success-on-soft px-4 py-2 rounded-lg text-sm" data-testid="login-success">
+                <div class="border px-4 py-2 rounded-lg text-sm {successTone === 'warning' ? 'bg-lf-warning-soft border-lf-warning-line text-lf-warning-on-soft' : 'bg-lf-success-soft border-lf-success-line text-lf-success-on-soft'}" data-testid="login-success" data-tone={successTone}>
                     {successMessage}
                 </div>
             {/if}

@@ -87,9 +87,10 @@ after **Register**:
   again** below. A new link replaces the older ones. If you ask too often, or after too many wrong
   passwords, the page tells you in how many minutes you can ask again.
 - 🚦 If the login page says instead that the activation email could not leave now, because there
-  were too many sign-ups from your network in the last hour, no email is on its way. Your account is
-  created all the same: sign in with your username and password, and you are offered **Send the
-  link again**.
+  were too many sign-ups from your network in the last hour (or the instance has sent too many
+  emails), no email is on its way. Your account is created all the same: wait the minutes the page
+  names, then sign in with your username and password, and you are offered **Send the link
+  again**.
 - ⌛ If the page says that the link has expired, sign in the same way: you are offered a new link.
   If the instance has no free place left meanwhile, ask your administrator.
 - ✅ If the page says that the link has already been used, your account is probably active already:
