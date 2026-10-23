@@ -1235,6 +1235,7 @@ def holiday_table_plumbing(monkeypatch):
     table = frozenset({date(1999, 12, 31)})
     seen: dict[str, list] = {"ensure": [], "loader": [], "prepare": []}
     real_prepare = risk_scope_module.prepare_asset_series_set
+    real_prepare_from_readings = risk_scope_module.prepare_asset_series_set_from_readings
 
     async def served_table() -> frozenset[date]:
         seen["ensure"].append(table)
@@ -1253,12 +1254,17 @@ def holiday_table_plumbing(monkeypatch):
         seen["prepare"].append(kwargs.get("market_holidays", NOT_PASSED))
         return real_prepare(*args, **kwargs)
 
+    def prepare_from_readings_spy(*args, **kwargs):
+        seen["prepare"].append(kwargs.get("market_holidays", NOT_PASSED))
+        return real_prepare_from_readings(*args, **kwargs)
+
     # Each where it is read: the table by the service; the facts by the service for an eligibility
-    # request and by `risk.replay` for a replay; the series set by `risk.scope`, for every preparation.
+    # request and by `risk.replay` for a replay; the series set by `risk.scope`, for every preparation (R1: from the readings of the price query, or the empty set).
     monkeypatch.setattr(risk_service_module, "ensure_market_holidays", served_table, raising=False)
     monkeypatch.setattr(risk_service_module, "load_price_window_facts", loader_spy(risk_service_module))
     monkeypatch.setattr(risk_replay_module, "load_price_window_facts", loader_spy(risk_replay_module))
     monkeypatch.setattr(risk_scope_module, "prepare_asset_series_set", prepare_spy)
+    monkeypatch.setattr(risk_scope_module, "prepare_asset_series_set_from_readings", prepare_from_readings_spy)
     return table, seen
 
 
