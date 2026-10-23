@@ -39,6 +39,11 @@ function problem(overrides: Partial<SignalProblem> = {}): SignalProblem {
         selectedStartDate: null,
         selectedEndDate: null,
         excludedPoints: null,
+        unavailablePoints: null,
+        unavailableStart: null,
+        unavailableEnd: null,
+        resyncStart: null,
+        resyncEnd: null,
         message: null,
         ...overrides,
     };
