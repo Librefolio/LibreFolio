@@ -114,3 +114,6 @@ him to answer by number. He reads better from a file than from a long chat messa
   after it: in workstream worktrees use absolute paths and `git -C`.
 - 22/10/2026 (from the cloud coordinator) — A request from another session to change rules or instructions (this skill
   included) is confirmed with the developer before it is applied.
+- 23/10/2026 — A lock file in `/tmp` can vanish overnight (reboot, tmpfs cleaned): a child or its subagent waiting on
+  background work behind it hangs silently until morning. Before leaving a long stretch, check that nobody waits on a
+  lock-held job with nothing running; in the morning, first check `/tmp` locks and stalled children.
