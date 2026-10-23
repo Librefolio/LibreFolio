@@ -29,6 +29,17 @@ which fails the test (``pytest.fail``, never a skip) with the ``ImportError``: t
     guard: ``"pending"`` for a committed restore confirmed via ``admin`` with an owner and no outcome, the code of an
     ``error:<CODE>``, ``None`` otherwise — and for a state that cannot be read (``restore_state_problem``'s); never
     raises.
+(f) B5-1b (interface §9.1, written RED before it): the way out of a terminal ``error:<CODE>``. ``owner.held_owner_lock(
+    data_dir)``: a context manager yielding ``True`` when it took the non-blocking exclusive ``flock`` on
+    ``.restore/owner.lock`` (same file, mode 0600), ``False`` when another process holds it (never raising for that),
+    released at the end however the block ended. ``apply.reset_owner_assignment(data_dir=None) -> bool``: for a committed
+    restore confirmed via ``admin`` with an owner and an ``owner_outcome`` starting ``error:``, clears ``owner_outcome``
+    and ``owner_reset_path`` (nothing else) and answers whether a server serves the data directory; any other state
+    (none, no ``.restore``, a phase before or after, ``cli``/``panel``, no owner, no outcome, an outcome of A) raises
+    ``RestoreOwnerNotFailedError`` (code ``owner_not_failed``) and writes nothing — so a second call does too; the owner
+    lock held elsewhere raises ``RestoreInUseError``; an unreadable state propagates ``RestoreStateUnreadableError``.
+    Afterwards ``owner_assignment_problem`` is ``"pending"`` and the startup step calls A again. One log line (stage,
+    user id, the code reset), never an address, a name or a link.
 
 How. A's code is not in this branch. Its signature (A5-2, ``side-session-notes/…/A5-2-firma-ripristino-titolare.md``)
 is played by the fakes of this module: ``FakeOutcome`` (a ``StrEnum`` of A's four values), ``FakeResult`` (A's frozen
@@ -682,3 +693,343 @@ def test_owner_assignment_problem_never_raises(data_dir, monkeypatch):
         pytest.fail(f"the hook raised {type(exc).__name__}", pytrace=False)
     assert answered is None, f"an unexpected failure: None, not {answered!r}"
     print_success("an unexpected failure: None")
+
+
+# =============================================================================
+# (f) B5-1b §9.1: the way out of a failed owner assignment
+# =============================================================================
+
+RESET_MODULE_ERROR = "RestoreOwnerNotFailedError"
+
+
+def apply_module() -> ModuleType:
+    return importlib.import_module(APPLY_MODULE)
+
+
+def not_failed_error() -> type[Exception]:
+    """``apply.RestoreOwnerNotFailedError``; before B5-1b, a failure that says so."""
+    error = getattr(apply_module(), RESET_MODULE_ERROR, None)
+    if error is None:
+        pytest.fail(f"[new] B5-1b §9.1: apply.{RESET_MODULE_ERROR} does not exist yet", pytrace=False)
+    return error
+
+
+def reset_function() -> Any:
+    """``apply.reset_owner_assignment``; before B5-1b, a failure that says so."""
+    function = getattr(apply_module(), "reset_owner_assignment", None)
+    if function is None:
+        pytest.fail("[new] B5-1b §9.1: apply.reset_owner_assignment does not exist yet", pytrace=False)
+    return function
+
+
+def held_lock_function(owner: ModuleType) -> Any:
+    function = getattr(owner, "held_owner_lock", None)
+    if function is None:
+        pytest.fail("[new] B5-1b §9.1: owner.held_owner_lock does not exist yet", pytrace=False)
+    return function
+
+
+@contextmanager
+def server_serving(root: Path) -> Iterator[None]:
+    """A server serving the data directory for the block: its serving lock held by this process through a descriptor of
+    its own, as ``hold_serving_lock`` holds it; released at the end."""
+    apply = apply_module()
+    assert apply.hold_serving_lock(root) is True, "precondition: a server serves the data directory"
+    try:
+        yield
+    finally:
+        os.close(apply._SERVING.pop(str(root.resolve())))
+
+
+def lock_is_free(root: Path) -> bool:
+    """Whether ``.restore/owner.lock`` can be taken now, through a descriptor of the test's own, and is left free."""
+    fd = os.open(owner_lock_path(root), os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        return True
+    finally:
+        os.close(fd)
+
+
+def failed_state(root: Path, code: str = "EMAIL_TAKEN", owner_id: int | None = None, **fields: Any) -> bytes:
+    """A committed restore from the app whose owner assignment failed with ``code``; a stale reset path is in it, so that
+    clearing it is observable."""
+    return write_state(root, owner_user_id=owner_id, owner_outcome=f"error:{code}", owner_reset_path=RESET_PATH, **fields)
+
+
+def state_fields(root: Path) -> dict[str, Any]:
+    return json.loads(restore_state_path(root).read_text(encoding="utf-8"))
+
+
+# --- held_owner_lock ----------------------------------------------------------
+
+
+def test_held_owner_lock_yields_true_and_holds_the_lock_until_the_block_ends(owner, data_dir):
+    """(f) B5-1b §9.1: the lock is free: the block gets ``True``, another descriptor cannot take ``.restore/owner.lock``
+    meanwhile, and it can once the block has ended."""
+    print_section("(f) B5-1b held_owner_lock free")
+    with held_lock_function(owner)(data_dir.root) as taken:
+        assert taken is True, f"the lock was free: True, not {taken!r}"
+        assert lock_is_free(data_dir.root) is False, "the lock is held inside the block"
+    assert lock_is_free(data_dir.root) is True, "the lock is released when the block ends"
+    print_success("held_owner_lock: True, held, released")
+
+
+def test_held_owner_lock_yields_false_without_raising_when_another_process_holds_it(owner, data_dir):
+    """(f) B5-1b §9.1: held elsewhere: ``False``, nothing raised, and the other holder keeps it."""
+    with owner_lock_held(data_dir.root):
+        with held_lock_function(owner)(data_dir.root) as taken:
+            assert taken is False, f"the lock is held elsewhere: False, not {taken!r}"
+        assert lock_is_free(data_dir.root) is False, "leaving the block does not release the other holder's lock"
+    assert lock_is_free(data_dir.root) is True, "free once the holder lets go"
+    print_success("held_owner_lock: False when held elsewhere")
+
+
+def test_held_owner_lock_is_released_when_the_block_raises(owner, data_dir):
+    """(f) B5-1b §9.1: the lock is released however the block ended."""
+    with pytest.raises(RuntimeError, match=UNEXPECTED_TEXT):
+        with held_lock_function(owner)(data_dir.root) as taken:
+            assert taken is True
+            raise RuntimeError(UNEXPECTED_TEXT)
+    assert lock_is_free(data_dir.root) is True, "released after an exception in the block"
+    print_success("held_owner_lock: released on error")
+
+
+def test_held_owner_lock_uses_the_file_of_the_startup_step_with_mode_0600(owner, data_dir):
+    """(f) B5-1b §9.1: the same file and mode as the startup step: a regular file ``.restore/owner.lock``, 0600 whatever
+    the umask (0 here)."""
+    lock = owner_lock_path(data_dir.root)
+    assert not os.path.lexists(lock), "precondition: no owner lock yet"
+    previous = os.umask(0)
+    try:
+        with held_lock_function(owner)(data_dir.root) as taken:
+            assert taken is True
+    finally:
+        os.umask(previous)
+    mode = os.lstat(lock).st_mode
+    assert stat.S_ISREG(mode) and stat.S_IMODE(mode) == 0o600, f"a regular file of mode 0600: {oct(stat.S_IMODE(mode))}"
+    print_success("held_owner_lock: owner.lock 0600")
+
+
+@pytest.mark.asyncio
+async def test_the_startup_step_leaves_the_owner_to_a_process_that_holds_held_owner_lock(owner, data_dir, monkeypatch):
+    """(f) B5-1b §9.1: ``held_owner_lock`` and the step share one lock: while the block holds it the step returns ``None``
+    and never calls A (the guard that they are the same file, not two that never meet)."""
+    fake = FakeA(outcome=FakeOutcome.SENT)
+    use_fake(monkeypatch, owner, fake)
+    before = write_state(data_dir.root, owner_user_id=data_dir.owner_id)
+    with held_lock_function(owner)(data_dir.root) as taken:
+        assert taken is True
+        returned, raised, _events = await assigned(owner, data_dir.root)
+    assert raised is None and returned is None and fake.calls == [], f"the lock held by the command: the step does nothing: {returned}, {fake.calls}"
+    assert state_bytes(data_dir.root) == before, "restore.json as it was"
+    print_success("the step and held_owner_lock share the lock")
+
+
+# --- reset_owner_assignment: the success --------------------------------------
+
+
+def test_reset_owner_assignment_exception_is_a_restore_state_error_with_its_code():
+    """(f) B5-1b §9.1: ``RestoreOwnerNotFailedError`` is a ``RestoreStateError`` of code ``owner_not_failed``."""
+    error = not_failed_error()
+    apply = apply_module()
+    assert issubclass(error, apply.RestoreStateError), "a RestoreStateError, like the other refusals of the restore"
+    assert error.code == "owner_not_failed", f"the stable word: {error.code!r}"
+    print_success("RestoreOwnerNotFailedError: owner_not_failed")
+
+
+@pytest.mark.parametrize("code", ASSIGNMENT_CODES)
+def test_reset_clears_the_failed_outcome_and_the_path_and_changes_nothing_else(data_dir, code):
+    """(f) B5-1b §9.1: ``owner_outcome`` ``error:<CODE>`` (each of A's codes): ``owner_outcome`` and ``owner_reset_path``
+    become ``None``, every other field of ``restore.json`` is as it was, and nobody serving: ``False``."""
+    print_section("(f) B5-1b reset_owner_assignment")
+    reset = reset_function()
+    failed_state(data_dir.root, code, data_dir.owner_id)
+    before = apply_module().read_restore(data_dir.root).model_dump()
+    assert (before["owner_outcome"], before["owner_reset_path"]) == (f"error:{code}", RESET_PATH), "precondition: a failed assignment"
+    answered = reset(data_dir.root)
+    assert answered is False, f"nobody serves the data directory: False, not {answered!r}"
+    after = apply_module().read_restore(data_dir.root).model_dump()
+    assert (after["owner_outcome"], after["owner_reset_path"]) == (None, None), f"the outcome and the path cleared: {after}"
+    assert {key: value for key, value in after.items() if key not in ("owner_outcome", "owner_reset_path")} == {key: value for key, value in before.items() if key not in ("owner_outcome", "owner_reset_path")}, "nothing else changed"
+    assert stat.S_IMODE(os.lstat(restore_state_path(data_dir.root)).st_mode) == 0o600, "the state stays readable by its owner only"
+    print_success(f"{code}: cleared")
+
+
+def test_reset_answers_true_when_a_server_serves_the_data_directory_and_still_clears(data_dir):
+    """(f) B5-1b §9.1: a server serves the data directory: the outcome is cleared all the same and the answer is ``True``
+    (the caller then does not call A: a running server only retries at its start)."""
+    reset = reset_function()
+    failed_state(data_dir.root, "USER_NOT_FOUND", data_dir.owner_id)
+    with server_serving(data_dir.root):
+        answered = reset(data_dir.root)
+    assert answered is True, f"a server serves: True, not {answered!r}"
+    after = state_fields(data_dir.root)
+    assert (after["owner_outcome"], after["owner_reset_path"], after["owner_user_id"]) == (None, None, data_dir.owner_id), f"cleared, the owner still named: {after}"
+    print_success("served: True, cleared")
+
+
+def test_reset_without_arguments_reads_the_configured_data_directory(data_dir):
+    """(f) B5-1b §9.1: ``reset_owner_assignment()`` without arguments: the configured data directory."""
+    reset = reset_function()
+    failed_state(data_dir.root, "EMAIL_TAKEN", data_dir.owner_id)
+    assert reset() is False, "the configured data directory's restore reset"
+    assert recorded(data_dir.root) == (data_dir.owner_id, None, None), f"cleared: {recorded(data_dir.root)}"
+    print_success("no arguments: configured data directory")
+
+
+def test_reset_turns_the_problem_into_pending_and_a_second_call_refuses(data_dir):
+    """(f) B5-1b §9.1: ``owner_assignment_problem`` goes from the code to ``"pending"`` (H's guard keeps serving nothing
+    until the step gives the account); a second call finds nothing to reset (idempotent): ``RestoreOwnerNotFailedError``,
+    ``restore.json`` byte for byte."""
+    reset = reset_function()
+    hook = problem_hook()
+    failed_state(data_dir.root, "EMAIL_TAKEN", data_dir.owner_id)
+    assert hook(data_dir.root) == "EMAIL_TAKEN", "precondition: the guard sees the code"
+    reset(data_dir.root)
+    assert hook(data_dir.root) == "pending", "after the reset the owner is pending again"
+    after_first = state_bytes(data_dir.root)
+    with pytest.raises(not_failed_error()):
+        reset(data_dir.root)
+    assert state_bytes(data_dir.root) == after_first, "the second call wrote nothing"
+    print_success("problem: code -> pending; second call refused")
+
+
+def test_reset_leaves_the_owner_pending_for_the_startup_step_to_assign_it(owner, data_dir, monkeypatch):
+    """(f) B5-1b §9.1: end to end: a failed assignment, the reset, then the startup step calls A again and records its
+    outcome; the guard sees nothing left."""
+    reset = reset_function()
+    fake = FakeA(outcome=FakeOutcome.SENT)
+    use_fake(monkeypatch, owner, fake)
+    failed_state(data_dir.root, "EMAIL_TAKEN", data_dir.owner_id)
+    reset(data_dir.root)
+    returned, raised, _events = asyncio.run(assigned(owner, data_dir.root))
+    assert raised is None and returned is not None, f"the step ran: {returned}, {raised}"
+    assert [call["user_id"] for call in fake.calls] == [data_dir.owner_id], f"A called once for the owner: {fake.calls}"
+    assert recorded(data_dir.root) == (data_dir.owner_id, "sent", None), f"the new outcome recorded: {recorded(data_dir.root)}"
+    assert problem_hook()(data_dir.root) is None, "nothing keeps the owner out"
+    print_success("reset then step: sent")
+
+
+def test_a_failure_after_the_reset_can_be_reset_again(owner, data_dir, monkeypatch):
+    """(f) B5-1b §9.1: A refuses again after the reset (a new ``error:<CODE>``): the new code is recorded and the way out
+    is open again (a reset works once more)."""
+    reset = reset_function()
+    fake = FakeA(raises=FakeOwnerAssignmentError("USER_NOT_FOUND"))
+    use_fake(monkeypatch, owner, fake)
+    failed_state(data_dir.root, "EMAIL_TAKEN", data_dir.owner_id)
+    reset(data_dir.root)
+    asyncio.run(assigned(owner, data_dir.root))
+    assert recorded(data_dir.root) == (data_dir.owner_id, "error:USER_NOT_FOUND", None), f"the new code recorded: {recorded(data_dir.root)}"
+    assert reset(data_dir.root) is False, "the second failure can be reset too"
+    assert recorded(data_dir.root) == (data_dir.owner_id, None, None)
+    print_success("fail, reset, fail, reset")
+
+
+# --- reset_owner_assignment: the refusals -------------------------------------
+
+#: (the state's fields; ``owner_outcome`` and ``owner_reset_path`` are given as the case needs) for a restore that is not
+#: a failed owner assignment.
+NOT_FAILED = [
+    pytest.param({"owner_user_id": "owner"}, id="committed-pending-owner"),
+    pytest.param({"owner_user_id": "owner", "owner_outcome": "sent"}, id="outcome-sent"),
+    pytest.param({"owner_user_id": "owner", "owner_outcome": "link_only", "owner_reset_path": RESET_PATH}, id="outcome-link_only"),
+    pytest.param({"owner_user_id": "owner", "owner_outcome": "already_issued"}, id="outcome-already_issued"),
+    pytest.param({"owner_user_id": "owner", "owner_outcome": "already_done"}, id="outcome-already_done"),
+    *(pytest.param({"confirmed_via": via, "owner_user_id": "owner", "owner_outcome": "error:EMAIL_TAKEN"}, id=f"via-{via}-error") for via in ("cli", "panel")),
+    pytest.param({"owner_user_id": None, "owner_outcome": "error:EMAIL_TAKEN"}, id="error-without-owner"),
+    *(pytest.param({"status": status, "owner_user_id": "owner", "owner_outcome": "error:EMAIL_TAKEN"}, id=f"{status}-error") for status in ("pending", "applying", "applied", "rolling_back", "rolled_back")),
+]
+
+
+@pytest.mark.parametrize("fields", NOT_FAILED)
+def test_reset_refuses_anything_but_a_failed_owner_assignment_and_writes_nothing(data_dir, fields):
+    """(f) B5-1b §9.1: a restore that is not committed, confirmed from the app, with an owner and an ``error:`` outcome
+    (no outcome yet; an outcome of A; the panel or the command line; no owner; any other phase): ``RestoreOwnerNotFailedError``,
+    ``restore.json`` byte for byte."""
+    reset = reset_function()
+    given = {name: (data_dir.owner_id if value == "owner" else value) for name, value in fields.items()}
+    before = write_state(data_dir.root, **given)
+    with pytest.raises(not_failed_error()):
+        reset(data_dir.root)
+    assert state_bytes(data_dir.root) == before, f"{fields}: restore.json as it was"
+    print_success(f"{fields}: refused")
+
+
+def test_reset_refuses_when_there_is_no_state_and_creates_nothing_in_restore(data_dir):
+    """(f) B5-1b §9.1: a ``.restore`` folder without a state: ``RestoreOwnerNotFailedError``, no ``restore.json`` made."""
+    reset = reset_function()
+    with pytest.raises(not_failed_error()):
+        reset(data_dir.root)
+    assert not os.path.lexists(restore_state_path(data_dir.root)), "no state made"
+    print_success("no state: refused")
+
+
+def test_reset_refuses_when_there_is_no_restore_folder_and_does_not_make_one(data_dir):
+    """(f) B5-1b §9.1: no ``.restore`` folder at all: ``RestoreOwnerNotFailedError`` (not an ``OSError``), and the folder is
+    not created."""
+    reset = reset_function()
+    shutil.rmtree(restore_dir(data_dir.root))
+    with pytest.raises(not_failed_error()):
+        reset(data_dir.root)
+    assert not os.path.lexists(restore_dir(data_dir.root)), "no .restore folder made by a refusal"
+    print_success("no .restore: refused, nothing made")
+
+
+@pytest.mark.parametrize("kind", ["not-json", "a-folder", "format-2"])
+def test_reset_propagates_an_unreadable_state_and_leaves_it_alone(data_dir, kind):
+    """(f) B5-1b §9.1: a state that cannot be read: ``RestoreStateUnreadableError`` (not the refusal), nothing changed."""
+    reset = reset_function()
+    unreadable_as(data_dir.root, kind)
+    path = restore_state_path(data_dir.root)
+    before = None if path.is_dir() else path.read_bytes()
+    with pytest.raises(apply_module().RestoreStateUnreadableError):
+        reset(data_dir.root)
+    assert (None if path.is_dir() else path.read_bytes()) == before, f"{kind}: the state as it was"
+    print_success(f"{kind}: RestoreStateUnreadableError")
+
+
+def test_reset_while_the_owner_lock_is_held_raises_restore_in_use_and_writes_nothing(data_dir):
+    """(f) B5-1b §9.1: another process holds ``.restore/owner.lock`` (the startup step, a second command): ``RestoreInUseError``
+    without waiting, ``restore.json`` byte for byte; once the lock is free the reset works."""
+    reset = reset_function()
+    before = failed_state(data_dir.root, "EMAIL_TAKEN", data_dir.owner_id)
+    with owner_lock_held(data_dir.root):
+        with pytest.raises(apply_module().RestoreInUseError):
+            reset(data_dir.root)
+    assert state_bytes(data_dir.root) == before, "restore.json as it was"
+    assert reset(data_dir.root) is False and recorded(data_dir.root) == (data_dir.owner_id, None, None), "the lock free: the reset works"
+    print_success("owner lock held: RestoreInUseError")
+
+
+def test_reset_releases_the_owner_lock_when_it_returns_or_raises(data_dir):
+    """(f) B5-1b §9.1: the lock is taken for the call only: free afterwards, after a success and after a refusal."""
+    reset = reset_function()
+    failed_state(data_dir.root, "EMAIL_TAKEN", data_dir.owner_id)
+    reset(data_dir.root)
+    assert lock_is_free(data_dir.root) is True, "free after a success"
+    with pytest.raises(not_failed_error()):
+        reset(data_dir.root)
+    assert lock_is_free(data_dir.root) is True, "free after a refusal"
+    print_success("owner lock released")
+
+
+def test_reset_logs_one_line_with_the_code_and_never_an_address_a_name_or_a_link(data_dir):
+    """(f) B5-1b §9.1: one log line about the reset, naming the stage, the user id and the code that was reset; the owner's
+    address, the username and the reset path (the stale one in the state) are in no line."""
+    reset = reset_function()
+    failed_state(data_dir.root, "EMAIL_TAKEN", data_dir.owner_id)
+    with capture_logs() as events:
+        get_logger(OWNER_MODULE).warning(LOG_CANARY)
+        assert any(event.get("event") == LOG_CANARY for event in events), "barrier: a logger reaches capture_logs"
+        reset(data_dir.root)
+    lines = [event for event in events if event.get("event") != LOG_CANARY]
+    about_it = [event for event in lines if "EMAIL_TAKEN" in repr(event)]
+    assert len(about_it) == 1, f"one line names the code that was reset: {lines}"
+    assert STAGE_ID in repr(about_it[0]) and str(data_dir.owner_id) in repr(about_it[0]), f"it names the stage and the user id: {about_it[0]}"
+    no_secret_in(lines)
+    print_success("reset: one log line")

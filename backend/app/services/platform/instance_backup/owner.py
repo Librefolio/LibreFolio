@@ -63,6 +63,19 @@ def _take_owner_lock(data_dir: Path) -> int | None:
     return fd
 
 
+@contextlib.contextmanager
+def held_owner_lock(data_dir: Path):
+    """The owner's lock for a block, not waited for: yields whether this process holds it. Taken before the apply lock,
+    as the startup step does."""
+    fd = _take_owner_lock(data_dir)
+    try:
+        yield fd is not None
+    finally:
+        if fd is not None:
+            with contextlib.suppress(OSError):
+                os.close(fd)
+
+
 def _assign_owner():
     """Workstream A's ``assign_owner_and_send_reset`` and its ``OwnerAssignmentError``, looked up at each call."""
     from backend.app.services.email.flows import OwnerAssignmentError, assign_owner_and_send_reset  # noqa: PLC0415

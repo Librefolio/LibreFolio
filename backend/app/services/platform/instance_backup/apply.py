@@ -306,6 +306,13 @@ class RestoreInUseError(RestoreStateError):
     code = "restore_in_use"
 
 
+class RestoreOwnerNotFailedError(RestoreStateError):
+    """There is no failed assignment of the owner's account to try again (B5-1b): the last restore from the app has no
+    owner named, or its assignment is not in error."""
+
+    code = "owner_not_failed"
+
+
 def _now() -> datetime:
     return datetime.now(UTC)
 
@@ -676,6 +683,34 @@ def record_owner_outcome(data_dir: Path, stage_id: str, outcome: str, reset_path
         state = state.model_copy(update={"owner_outcome": outcome, "owner_reset_path": reset_path})
         _write_state(data_dir, state)
         return state
+
+
+def reset_owner_assignment(data_dir: Path | None = None) -> bool:
+    """Clear the recorded error of the owner's assignment so it is tried again (B5-1b): ``backup pending --recover owner``.
+
+    An outcome of ``error:<CODE>`` is terminal (``owner_pending`` does not retry it), and the restore guard serves no data
+    while it stands. Only that outcome is cleared, with the link; nothing else of the state changes. Whether a server
+    serves the data directory: it only retries at its start, so then nothing is called here.
+
+    ``RestoreOwnerNotFailedError`` when there is nothing to clear (nothing is written); ``RestoreInUseError`` while
+    another process is setting the owner now. Lock order: the owner's lock, then the apply lock.
+    """
+    from backend.app.services.platform.instance_backup.owner import held_owner_lock  # noqa: PLC0415 — owner imports this module
+
+    data_dir = data_dir or get_data_dir()
+    if _restore_folder(data_dir) is not True:
+        raise RestoreOwnerNotFailedError("There is no restore here: nothing to try again")
+    with held_owner_lock(data_dir) as held:
+        if not held:
+            raise RestoreInUseError("The owner's account is being set by another process: run the command again in a moment")
+        with _apply_lock(data_dir), _exclusive_serving_lock(data_dir) as served:
+            state = _read_state(data_dir)
+            if state is None or state.status != "committed" or state.confirmed_via != "admin" or state.owner_user_id is None or state.owner_outcome is None or not state.owner_outcome.startswith("error:"):
+                raise RestoreOwnerNotFailedError("The owner's account has no failed assignment: nothing to try again")
+            code = state.owner_outcome.removeprefix("error:")
+            _write_state(data_dir, state.model_copy(update={"owner_outcome": None, "owner_reset_path": None}))
+    logger.warning("The failed assignment of the owner's account was cleared: it is tried again", stage_id=state.stage_id, user_id=state.owner_user_id, code=code)
+    return served
 
 
 def confirm_restore(

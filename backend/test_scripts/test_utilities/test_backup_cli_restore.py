@@ -114,6 +114,9 @@ it), printed by ``pending`` and by a confirmation on a blocked instance.
     prints no such line (a guard). ``pending --json`` never holds the owner's id, outcome, reset path or email (a guard,
     green before and after: its keys are B5-2's). The owner's fields are written into the state file as raw JSON, so
     that what ``pending`` prints is what fails.
+    Lot B5-1b (interface §9.2, written RED before it): the ``error:<CODE>`` line gains the way out on the same line,
+    ``./dev.py backup pending --recover owner`` (and still the code and «the server log has the cause»); no other
+    outcome's line mentions ``--recover``.
 
 Pure, as ``test_backup_cli.py``, whose fixtures and helpers are imported: data directories under ``tmp_path`` seen through
 ``LIBREFOLIO_DATA_DIR`` (production mode, checked); a real database at the head made once by ``alembic upgrade`` for the
@@ -1787,3 +1790,26 @@ def test_pending_json_never_holds_the_owner(tmp_path, monkeypatch, capsys, outco
     shown = [secret for secret in ("owner", OWNER_RESET_PATH.lower(), "reset-password", OWNER_EMAIL) if secret in both]
     assert shown == [], f"pending --json holds {shown}: {captured.out}"
     print_success(f"{outcome}: nothing of the owner")
+
+
+@pytest.mark.parametrize("code", ["EMAIL_TAKEN", "USER_NOT_FOUND"])
+def test_pending_names_the_way_out_of_a_failed_owner_assignment_on_the_same_line(tmp_path, monkeypatch, capsys, code):
+    """(m) B5-1b §9.2: the one line about a failed owner assignment holds the code, the cause's place (the server log) and
+    the command that tries again, ``./dev.py backup pending --recover owner``; still one line more than without an owner."""
+    print_section("(m) B5-1b pending: the way out of error:<CODE>")
+    extra, out = owner_lines(tmp_path, monkeypatch, capsys, owner_user_id=OWNER_ID, owner_outcome=f"error:{code}", owner_reset_path=None)
+    assert len(extra) == 1, f"one line about the owner's account, not {len(extra)}: {extra}\n{out}"
+    line = extra[0]
+    assert code in line and "server log" in line, f"the code and where the cause is: {line!r}"
+    assert "./dev.py backup pending --recover owner" in line, f"[new] B5-1b: the line names the way out, on the same line: {line!r}"
+    assert "tries again" in line, f"and says what it does: {line!r}"
+    print_success(f"{code}: {line}")
+
+
+@pytest.mark.parametrize("outcome", ["sent", "link_only", "already_issued", "already_done", None])
+def test_pending_names_no_recover_command_for_an_owner_who_is_not_in_error(tmp_path, monkeypatch, capsys, outcome):
+    """(m) B5-1b §9.2, a guard: only the failed outcome points to ``--recover owner``; the others offer nothing to run."""
+    path = OWNER_RESET_PATH if outcome == "link_only" else None
+    extra, out = owner_lines(tmp_path, monkeypatch, capsys, owner_user_id=OWNER_ID, owner_outcome=outcome, owner_reset_path=path)
+    assert "--recover" not in out, f"{outcome}: no recover command: {out}"
+    print_success(f"{outcome}: no --recover")
