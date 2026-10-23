@@ -10649,3 +10649,20 @@ DOC-2 (ricerca per lingua), DOC-1 (riordino della guida admin, con le guide Tail
      solo inglesi). **E2E** nello slot: `security-tab` ASEC-E-04 1/1 e `csp-collector` 23 verdi (1 saltato).
    - ⏳ **Giro 2**: `hosting_providers`, `backup_restore`, `cli_tools`, dopo il merge dei rami di B (B5-1) e A (A5-1b/A5-2) ancora
      aperti; stesso metodo, stesso test.
+5. ✅ **H5-3 · lo step `restore-owner` e la guardia** (24/10). Dopo un ripristino dall'app su un'istanza `managed`, il primo
+   avvio dà al titolare il suo account (B: `assign_restored_owner`; A: `assign_owner_and_send_reset`, non ancora nel ramo, i test
+   usano un finto A). Finché non è fatto, l'istanza non serve dati, sullo stesso meccanismo di B-33.
+   > **Note implementazione**: `Step("restore-owner")` subito dopo `restore-commit`, senza `skip_when`: attende `assign_restored_owner()`
+   > e poi `probe_owner_assignment()`. `restore_guard` ha un secondo stato `_owner_problem` (`None | "pending" | "<CODE>"`, da
+   > `apply.owner_assignment_problem`); `restore_interrupted()` è vero per entrambe le cause, quindi skip dei passi dopo, 423, 409 del
+   > backup del pannello, `/system/instance` e wake seguono senza altro codice. `restore_interrupted_reason()` (`restore_state` vince su
+   > `owner_assignment`) è il nuovo campo `restore_interrupted_reason` di `/system/instance`. **Più worker**: ne assegna uno solo (lock
+   > `.restore/owner.lock`); un altro che ha trovato `pending` resterebbe chiuso per sempre, quindi la dipendenza del router attende
+   > `refresh_restore_state()`: solo per `pending`, al più ogni 2 s (`OWNER_RECHECK_SECONDS`), riesamina in un thread; un codice non si
+   > riesamina mai (rimedio: `./dev.py backup pending --recover owner` di B + riavvio). Pagina: prop `reason`; per `owner_assignment`
+   > titolo/messaggio/hint nuovi (3 chiavi × 4 lingue), cita il comando e linka `admin/backup_restore/` senza ancora.
+   > Test (test-author, rossi prima): `services restore-owner-guard` 46, `api restore-owner-guard` 31, `restore-guard` 25, `await-restore-mode`
+   > 38, `api restore-interrupted` 34; Vitest 111 (pagina, gate, `instanceBlockState`). Il test-author ha provato 10 mutanti su un'implementazione
+   > di riferimento. Doc: `hosting_providers` (sezione `restore-owner-pending`), `security.md`, `overview.md` (passo 18, numerazione
+   > spostata), `api/index.md`.
+   > **⚠️ Fuori pista**: nessuno. Resta a B documentare `--recover owner` in `cli_tools`/`backup_restore` (il link della pagina è a livello di pagina, quindi regge anche al giro 2 di DOC-1).

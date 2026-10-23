@@ -2141,7 +2141,27 @@ every 30 seconds and reloads once `restore_interrupted` reads `false`. When `ins
 (`isInstanceRestoreInterruptedError()`, `frontend/src/lib/features/instance/instanceBlockState.ts`), so the gate shows
 the page even when the configuration was read before.
 
-Tests: `./dev.py test services restore-guard` (`backend/test_scripts/test_services/test_restore_guard.py`: the probe,
+**The owner's account (lot H5-3).** A second reason closes the instance the same way. After a restore from the app on a
+managed instance (`confirmed_via == "admin"` with an `owner_user_id`, see [Backup and Restore](#backup-restore)), the
+startup step `restore-owner`, right after `restore-commit`, awaits workstream B's `assign_restored_owner()`
+(`backend/app/services/platform/instance_backup/owner.py`), which calls workstream A's `assign_owner_and_send_reset` once
+and records the outcome in the restore's state; the step then calls `probe_owner_assignment()`, which asks B's
+`apply.owner_assignment_problem()` (`None`, `pending`, or the code of the refusal, from `error:<CODE>`), keeps it in
+`_owner_problem` and logs one error with the value when it is not `None`. `restore_interrupted()` is true for either
+reason, so the steps after `restore-owner` that carry the skip, the `423`, the `409` of the panel's backup start,
+`/system/instance` and the wake-up follow with no other code; `restore_interrupted_reason()` says which
+(`restore_state` wins over `owner_assignment`), and `InstanceConfigResponse.restore_interrupted_reason` carries it.
+With several workers only the one holding the owner lock (`.restore/owner.lock`) calls A, so another worker's probe can
+find `pending` and would stay closed for good: the router dependency awaits `refresh_restore_state()` first, which, for
+`pending` only and at most every `OWNER_RECHECK_SECONDS` (2 s), asks again in a thread. A code is never asked again for
+the process: the way out is `./dev.py backup pending --recover owner` (B) and a restart. The page
+(`InstanceRestoreInterruptedPage.svelte`, prop `reason`) says «the owner's account is not ready», cites that command and
+links the page-level `admin/backup_restore/`.
+
+Tests: `./dev.py test services restore-owner-guard` and `./dev.py test api restore-owner-guard`
+(`test_restore_owner_guard.py`, `test_restore_owner_guard_api.py`: the probe, the lazy recheck with a patched clock, two
+workers with a real state, the step's place, the 423 walk of every route), and `./dev.py test services restore-guard`
+(`backend/test_scripts/test_services/test_restore_guard.py`: the probe,
 its log line, the step's place and the skipped steps) and `./dev.py test api restore-interrupted`
 (`backend/test_scripts/test_api/test_restore_interrupted_api.py`: the list pinned by name and route, the third
 dependency, `/system/instance`, wake-sync, `/panel/status`).

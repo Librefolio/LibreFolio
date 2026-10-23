@@ -1199,6 +1199,32 @@ the data of before back, and start LibreFolio again: see
 «An Unreadable Restore State» in [Command-Line Tools](cli_tools.md). The instance decides once,
 at its start: a file made readable again while LibreFolio runs counts only at the next start.
 
+### 🧩 When the Owner of a Restored Instance Has No Account Yet {: #restore-owner-pending }
+
+On a managed instance, an administrator who restores a backup from Settings › Administration › Backup
+names the account of the backup that becomes the owner's (the person whose address is
+`LIBREFOLIO_ADMIN_EMAIL`). The first start on the restored data gives that account the owner's
+address and sends the owner a link to choose a password: a backup may come from anywhere, and whoever
+prepared it must not be able to sign in as the owner. A restore from your panel or from the command
+line names no owner, and none of this happens.
+
+Until the owner has their account, the instance serves **no data**, exactly as in
+[the previous section](#restore-interrupted): the same skipped steps, the same `423
+instance_restore_interrupted` for every call but the probes, `GET /api/v1/system/instance`, the
+scheduled wake-up and your panel's routes, and the same `409 backup_restore_interrupted` for a backup
+start. `GET /api/v1/system/instance` adds `"restore_interrupted_reason": "owner_assignment"` (it says
+`"restore_state"` for an unreadable state, and `null` otherwise); users see the page **The owner's
+account is not ready**.
+
+- **It usually takes a moment.** The first start does it right after committing the restore, and the
+  start logs one line with the outcome. With several workers one of them does it and the others ask
+  again every two seconds: they open when it is done, with no restart.
+- **When it cannot be done** (for example the chosen account no longer exists) the start logs one
+  error with the code, `The owner of the restored data has no account yet: LibreFolio serves no data
+  until it is set`, and the instance stays closed. Its administrator stops LibreFolio, runs
+  `./dev.py backup pending --recover owner`, which clears the recorded outcome and tries again, and
+  starts LibreFolio again.
+
 ---
 
 ## 📤 The Upload Limit of a Restore {: #restore-upload-limit }
