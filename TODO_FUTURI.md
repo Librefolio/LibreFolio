@@ -129,6 +129,41 @@ un'architettura unica, pensata bene prima di scrivere codice.
 
 ---
 
+## 🔀 Split e prezzi rettificati dai fornitori (MF-SPL1, 23/10/2026)
+
+**Il problema.** Dopo uno split, Yahoo **riscrive all'indietro** le chiusure (e i dividendi) nelle unità di oggi, anche
+con `auto_adjust=False`: il `Close` è sempre rettificato per gli split (solo `Adj Close` toglie in più i dividendi).
+Yahoo non dà una chiusura «grezza». Il motore invece cambia la quantità solo nel giorno dello split (la rettifica
+collegata all'evento SPLIT) e prima usa il prezzo così com'è.
+
+Esempio, AAPL split 4:1 del 31/08/2020: il 28/08 abbiamo 10 azioni, Yahoo dà 124,81 (il vero era circa 499) →
+10 × 124,81 = **1 248** invece di 4 990; il 31/08 40 × 129 = 5 160. Il TWRR salta del +313 % senza flusso e prima dello
+split compare una perdita finta. Stessa cosa per i dividendi: Yahoo dà 0,205 invece di 0,82 per i dividendi del 2020,
+quindi con le 10 azioni di allora l'importo esce diviso per 4. Verificato dal vivo da X (yfinance 1.7.0) il 23/10.
+Non l'ha introdotto Z-35; il «Sync completo» però estende le chiusure rettificate a tutta la storia prima di ogni split.
+
+**Decisione 1.3**: opzione C — solo documentazione («Known limitation» nella pagina di Yahoo, nota nella metodologia di
+MF) e la voce MF-SPL1 del backlog. Niente codice.
+
+**Idea di soluzione (da riparlarne)**: nel database i prezzi si salvano **veri**, nelle unità del loro giorno; la vista
+rettificata si calcola in lettura.
+- **Gli split sono eventi dell'asset** (fornitore o manuali), con data e rapporto: l'unica fonte.
+- **All'ingresso, un solo normalizzatore** in `financial_math/` (non nel plugin): ogni plugin dichiara nel contratto se
+  consegna prezzi `raw` o `split_adjusted`; se rettificati, il nucleo li riporta al vero moltiplicando per i rapporti
+  degli split **successivi alla data della riga**, letti dagli eventi dell'asset.
+- **Non serve riscaricare la storia intera**: la lista degli split (`ticker.splits`, già letta dal plugin,
+  `plugin.py:370`) è piccola e si legge a ogni aggiornamento; le righe già salvate «vere» restano giuste anche dopo uno
+  split nuovo; si convertono solo le righe appena scaricate, con gli split conosciuti in quel momento.
+- **In lettura, due viste da una funzione sola** `split_factor(asset, da, a)`: la valutazione (Dashboard, lotti, P&L,
+  TWRR) usa prezzo vero × quantità vera; grafici, segnali e rischio usano la serie rettificata (prezzo vero × fattore fino
+  alla data di riferimento), così il grafico resta liscio. Dividendi con la stessa regola.
+- **Dati già salvati**: niente bonifiche; dopo il cambio, il Sync completo scelto dall'utente rilegge la storia.
+- **Prove**: AAPL 4:1 con il valore della posizione continuo attraverso il giorno dello split; uno split inverso; un
+  fornitore che dà già prezzi veri non cambia nulla.
+- **Ordine**: tutto in un treno (normalizzatore + lettori), altrimenti i grafici mostrano il −75 % nel giorno dello split.
+  Stima 4-6 giorni (MF il fattore e il motore; X/Z il contratto dei plugin e l'ingresso; Z/J `price_query` e
+  `market_series`; X dividendi e doc).
+
 ## 📐 Chiusura «rendimento totale» calcolata da noi (idea remota, 22/10/2026)
 
 **Origine**: Z-35 (decisione del developer del 22/10): i prezzi Yahoo si chiedono senza la correzione per i dividendi
