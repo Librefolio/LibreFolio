@@ -735,11 +735,43 @@ def test_missing_reference_inside_selected_range_is_null_with_typed_reason():
     assert missing.provenance.status == SignalCalendarReturnPointStatus.MISSING_REFERENCE
     assert missing.provenance.reference_target_date == missing_reference
     assert missing.provenance.reference_price_date is None
+    # Z5-F1: the warning says which days are undefined and which period to sync again, so the page can say it in the user's
+    # language: the unavailable point's day, and from its missing reference to it.
     assert warning.details == {
         "unavailable_points": 1,
         "reasons": {
             SignalCalendarReturnPointStatus.MISSING_REFERENCE.value: 1,
         },
+        "unavailable_start": affected_current.isoformat(),
+        "unavailable_end": affected_current.isoformat(),
+        "resync_start": missing_reference.isoformat(),
+        "resync_end": affected_current.isoformat(),
+    }
+
+
+def test_every_undefined_calendar_window_says_its_days_and_the_period_to_sync_again():
+    """Z5-F1: a range whose every point is undefined raises, and the error carries what the warning of a partial result
+    does — the first and last undefined day and the period from the earliest reference to the last undefined day — so
+    the page says them in the user's language instead of the plugin's English sentence.
+
+    Red before Z5-F1: the details hold the count and the reasons only.
+    """
+    window_days = 7
+    points = _daily_points(CALENDAR_START, [0.0] * 12)
+    with pytest.raises(SignalUnavailableError) as exc_info:
+        _calendar_compute(points, window_days, visible_start=CALENDAR_START + timedelta(days=window_days))
+
+    assert exc_info.value.reason_code == SignalAvailabilityReason.UNDEFINED_METRIC
+    first_day = CALENDAR_START + timedelta(days=window_days)
+    last_day = CALENDAR_START + timedelta(days=11)
+    assert exc_info.value.details == {
+        "window_days": window_days,
+        "unavailable_points": 5,
+        "reasons": {SignalCalendarReturnPointStatus.INVALID_CURRENT_PRICE.value: 5},
+        "unavailable_start": first_day.isoformat(),
+        "unavailable_end": last_day.isoformat(),
+        "resync_start": CALENDAR_START.isoformat(),
+        "resync_end": last_day.isoformat(),
     }
 
 
@@ -1092,11 +1124,16 @@ async def test_first_undefined_calendar_window_with_later_factual_output_is_part
         SignalWarningCode.UNDEFINED_METRIC_WINDOW,
     ]
     warning = next(item for item in result.warnings if item.code == SignalWarningCode.UNDEFINED_METRIC_WINDOW)
+    # Z5-F1: the day of the undefined point (the first selected day), and the period from its reference (the unusable price) to it
     assert warning.details == {
         "unavailable_points": 1,
         "reasons": {
             SignalCalendarReturnPointStatus.INVALID_REFERENCE_PRICE.value: 1,
         },
+        "unavailable_start": selected_start.isoformat(),
+        "unavailable_end": selected_start.isoformat(),
+        "resync_start": CALENDAR_START.isoformat(),
+        "resync_end": selected_start.isoformat(),
     }
 
 
