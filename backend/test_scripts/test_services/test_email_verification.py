@@ -51,8 +51,12 @@ status, the setting) are not written yet: this module calls the functions of ``v
    ``email_verified_at`` is the moment, the link is consumed by its account, the account's other verification tokens
    are revoked, other purposes and other accounts untouched; committed. A link spent meanwhile is ``consumed``, and
    nothing changes.
-7. ``resend_verification(session, *, identifier, password, address)``: the limit per client address first, keyed by
-   H's ``client_rate_key`` and skipped without an address, before any password is checked; then the password as the
+7. ``resend_verification(session, *, identifier, password, address)``: the counter per client address first
+   (``delivery.ADDRESS_BUDGET``, 20 an hour, shared with the registrations and «forgot password», keyed by H's
+   ``client_rate_key`` and skipped without an address), only looked at before any password is checked — a full one
+   refuses with the longest wait of that counter and the instance's hourly budget when it is spent too, a try costs it
+   nothing — and spent by the email that really goes, just before it (not by a wrong password, nor by a resend that the
+   limit per account or per mailbox, or the budget, refuses; it stays spent if the SMTP server then fails); then the password as the
    login checks it — a dummy hash for an unknown account, one refusal ``INVALID_CREDENTIALS`` for both —; an active
    account is ``EMAIL_VERIFICATION_NOT_NEEDED``, an inactive one that does not wait ``ACCOUNT_DISABLED``; then the
    block, email and links; then the limits per account, counted on the links emailed — tokens carrying an address,
@@ -76,8 +80,9 @@ status, the setting) are not written yet: this module calls the functions of ``v
 Pure: every database is a private SQLite file under ``tmp_path`` built with ``create_all`` and the default global
 settings (NullPool, disposed at teardown), the option set in that file only; accounts written as rows with a real
 bcrypt hash at cost 4; tokens issued by A's token service with the ``now`` the case needs. An autouse fixture removes
-every inherited ``LIBREFOLIO_SMTP_*``, ``LIBREFOLIO_PUBLIC_URL``, ``LIBREFOLIO_BLOCKED``, ``LIBREFOLIO_MAX_USERS`` and
-``LIBREFOLIO_REGISTRATION``; each test sets its own with ``monkeypatch``. The hourly budget, ``RESEND_BY_ADDRESS`` and
+every inherited ``LIBREFOLIO_SMTP_*``, ``LIBREFOLIO_PUBLIC_URL``, ``LIBREFOLIO_BLOCKED``, ``LIBREFOLIO_MAX_USERS``,
+``LIBREFOLIO_REGISTRATION`` and ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS``; each test sets its own with ``monkeypatch``.
+The hourly budget, ``delivery.ADDRESS_BUDGET`` (the counter per client address) and
 ``VERIFICATION_BY_MAILBOX`` are private limiters on a fake clock; ``socket.getaddrinfo`` resolves the loopback only.
 Every SMTP conversation is with ``FakeSmtpServer`` on 127.0.0.1, on a port the OS picks. Nothing is timed.
 """
@@ -124,7 +129,8 @@ PUBLIC_URL_VARIABLE = "LIBREFOLIO_PUBLIC_URL"
 BLOCKED_VARIABLE = "LIBREFOLIO_BLOCKED"
 MAX_USERS_VARIABLE = "LIBREFOLIO_MAX_USERS"
 #: Removed before every test besides the SMTP ones: each changes what this module decides.
-INHERITED = (PUBLIC_URL_VARIABLE, BLOCKED_VARIABLE, MAX_USERS_VARIABLE, "LIBREFOLIO_REGISTRATION")
+SIGNUP_PER_ADDRESS = "LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS"
+INHERITED = (PUBLIC_URL_VARIABLE, BLOCKED_VARIABLE, MAX_USERS_VARIABLE, "LIBREFOLIO_REGISTRATION", SIGNUP_PER_ADDRESS)
 
 #: The public address of the instance, with a port and a path prefix; its host with the port is the email's instance.
 PUBLIC_URL = "https://folio.zq-public.example.com:8443/app"
@@ -164,8 +170,8 @@ SAME_64_KEY = "2001:db8:1:2::/64"
 #: ADDRESS as an IPv4-mapped IPv6 address: the same client.
 MAPPED = "::ffff:198.51.100.7"
 
-#: The process's limiter of «resend», as shipped (the fixture below puts a private one in its place).
-SHIPPED_RESEND = verification.RESEND_BY_ADDRESS
+#: The process's counter per client address (shared by the registrations, «resend» and «forgot password»), as shipped (the fixture below puts a private one in its place).
+SHIPPED_RESEND = delivery.ADDRESS_BUDGET
 #: The process's limiter of verification emails per recipient mailbox, as shipped (a fixture below replaces it too).
 SHIPPED_MAILBOX = verification.VERIFICATION_BY_MAILBOX
 #: One mailbox written four ways, each the address of an account of its own: the limiter keys them all as MAILBOX. The
@@ -224,10 +230,10 @@ def budget(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWindowLi
 
 
 @pytest.fixture(autouse=True)
-def resend_limit(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWindowLimiter:
+def address_limit(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWindowLimiter:
     """A private «resend» limiter with the shipped limit, on the fake clock: no test counts in, or is counted by, the process's."""
     limiter = SlidingWindowLimiter(SHIPPED_RESEND.limit, SHIPPED_RESEND.window_seconds, clock=clock)
-    monkeypatch.setattr(verification, "RESEND_BY_ADDRESS", limiter)
+    monkeypatch.setattr(delivery, "ADDRESS_BUDGET", limiter)
     return limiter
 
 
@@ -508,6 +514,7 @@ def test_the_functions_are_coroutine_functions_with_their_signatures() -> None:
         "ensure_verification_can_be_enabled": [],
         "awaiting_verification": [("session", POSITIONAL), ("user", POSITIONAL)],
         "hold_for_verification": [("session", POSITIONAL), ("user", POSITIONAL), ("first", KEYWORD_ONLY), ("now", KEYWORD_ONLY)],
+        "registration_email_verdict": [("address", POSITIONAL)],
         "registration_email_work": [("user_id", POSITIONAL), ("engine", KEYWORD_ONLY), ("now", KEYWORD_ONLY)],
         "confirm_email": [("session", POSITIONAL), ("token", POSITIONAL), ("now", KEYWORD_ONLY)],
         "resend_verification": [("session", POSITIONAL), ("identifier", KEYWORD_ONLY), ("password", KEYWORD_ONLY), ("address", KEYWORD_ONLY), ("now", KEYWORD_ONLY)],
@@ -526,15 +533,16 @@ def test_the_functions_are_coroutine_functions_with_their_signatures() -> None:
 
 
 def test_the_shipped_limits_lifetime_and_page() -> None:
-    """EMV-002 — contract 1: «resend» 10 requests per 900 s per client address; per account one verification email every 5 minutes and 3 an hour; per recipient mailbox 3 verification emails per 3600 s; a verification link lives 24 hours and opens ``/verify-email`` with the token in the fragment."""
+    """EMV-002 — contract 1: the counter per client address, 20 per 3600 s (``delivery.ADDRESS_BUDGET``, shared by the registrations, «resend» and «forgot password»; no ``RESEND_BY_ADDRESS`` any more); per account one verification email every 5 minutes and 3 an hour; per recipient mailbox 3 verification emails per 3600 s; a verification link lives 24 hours and opens ``/verify-email`` with the token in the fragment."""
     print_section("EMV-002: limits, lifetime, page")
 
-    assert (SHIPPED_RESEND.limit, SHIPPED_RESEND.window_seconds) == (10, 900)
+    assert (SHIPPED_RESEND.limit, SHIPPED_RESEND.window_seconds) == (20, 3600)
+    assert not hasattr(verification, "RESEND_BY_ADDRESS") and not hasattr(verification, "REGISTRATION_EMAILS_BY_ADDRESS"), "the counter per address has one home, delivery.ADDRESS_BUDGET"
     assert isinstance(SHIPPED_MAILBOX, SlidingWindowLimiter) and (SHIPPED_MAILBOX.limit, SHIPPED_MAILBOX.window_seconds) == (3, 3600)
     assert (verification.VERIFICATION_EMAIL_MIN_INTERVAL, verification.VERIFICATION_EMAILS_PER_HOUR) == (timedelta(minutes=5), 3)
     assert verification.VERIFICATION is VERIFICATION and TTL == timedelta(hours=24)
     assert token_service.token_path(VERIFICATION, "zq-token") == f"{PAGE}#token=zq-token"
-    print_success("10/900 s per address, 1 per 5 min and 3 per hour per account, 3/3600 s per mailbox, 24 h, /verify-email#token=")
+    print_success("20/3600 s per address, 1 per 5 min and 3 per hour per account, 3/3600 s per mailbox, 24 h, /verify-email#token=")
 
 
 @pytest.mark.parametrize(
@@ -1321,7 +1329,7 @@ async def test_a_link_whose_email_failed_after_the_data_is_refused_and_the_accou
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("by", ["username", "email"])
-async def test_resend_emails_a_new_link_to_a_waiting_account(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter, resend_limit: SlidingWindowLimiter, by: str) -> None:
+async def test_resend_emails_a_new_link_to_a_waiting_account(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter, address_limit: SlidingWindowLimiter, by: str) -> None:
     """EMV-028 — contract 7: the right password for a waiting account, by username or by email address: the answer is the email's language; one message to the account's address, exactly the verification email of a new link; the hold revoked now, the new token carrying the address, issued now and live; the account still waits. One unit of the budget spent, one request counted for the client address."""
     print_section(f"EMV-028: by {by}")
     moment = utcnow()
@@ -1339,7 +1347,7 @@ async def test_resend_emails_a_new_link_to_a_waiting_account(monkeypatch: pytest
     assert (revoked_hold.id, ensure_utc(revoked_hold.revoked_at)) == (hold.record.id, moment)
     assert (emailed.email, ensure_utc(emailed.created_at), emailed.token_hash) == (alice.email, moment, token_service.hash_token(token))
     assert await _status(engine, token) == TokenStatus.VALID and await _awaits(engine, alice.id) is True
-    assert (budget.count(), resend_limit.count(ADDRESS)) == (1, 1)
+    assert (budget.count(), address_limit.count(ADDRESS)) == (1, 1)
     print_success("en: a new link to the account's address")
 
 
@@ -1445,9 +1453,10 @@ async def test_the_credentials_and_the_account_come_before_the_configuration(mon
 
 
 @pytest.mark.asyncio
-async def test_the_limit_per_address_comes_before_the_password(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, clock: FakeClock, resend_limit: SlidingWindowLimiter) -> None:
-    """EMV-032 — contract 7: ten requests from one client address in a minute — wrong passwords, unknown accounts — each reach the password; the eleventh, with the right password, is refused before any password is checked: ``EmailRateLimitedError`` with the seconds until the oldest request leaves the 15 minutes. Another address is not counted with it and gets its link. Once the window has passed, the first address reaches the password again."""
-    print_section("EMV-032: per address, before the password")
+async def test_a_full_address_counter_refuses_before_the_password_and_costs_nothing(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, clock: FakeClock, address_limit: SlidingWindowLimiter) -> None:
+    """EMV-032 — contract 7: ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS=3``, the address's counter full since START (three emails that went). A request a minute later, with the right password, is refused before any password is checked — the counter is only looked at —: ``EmailRateLimitedError`` with ``3600 - 60`` seconds, and the refusal spends nothing (still 3). Another address is not counted with it and gets its link. Once the window has passed, the first address reaches the password again."""
+    print_section("EMV-032: a full counter, looked at before the password")
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, "3")
     moment = utcnow()
     await _waiting(engine, ALICE, created=moment)
     checked: list[str] = []
@@ -1461,61 +1470,169 @@ async def test_the_limit_per_address_comes_before_the_password(monkeypatch: pyte
     with FakeSmtpServer() as fake:
         _ready(monkeypatch, fake)
         clock.now = START
-        for attempt in range(10):
-            with pytest.raises(verification.VerificationCredentialsError):
-                await _resend(engine, NOBODY if attempt % 2 else ALICE, WRONG_PASSWORD, now=moment)
+        for _spent in range(3):
+            assert delivery.address_budget_hit(ADDRESS).allowed, "setup: three emails of the address"
         clock.now = START + 60
         with pytest.raises(EmailRateLimitedError) as limited:
             await _resend(engine, ALICE, now=moment)
+        counted_after_the_refusal = address_limit.count(ADDRESS)
         checked_before_the_other_address = len(checked)
         assert await _resend(engine, ALICE, address=OTHER_ADDRESS, now=moment) == "en"
-        clock.now = START + 900
+        clock.now = START + 3600
         with pytest.raises(verification.VerificationCredentialsError):
             await _resend(engine, ALICE, WRONG_PASSWORD, now=moment)
 
-    assert limited.value.retry_after == 840.0
-    assert checked_before_the_other_address == 10, "the eleventh request must be refused before its password is checked"
+    assert limited.value.retry_after == 3540.0
+    assert checked_before_the_other_address == 0, "a full counter must refuse before any password is checked"
+    assert counted_after_the_refusal == 3, "the refusal spends nothing"
     assert len(fake.messages) == 1
-    assert (resend_limit.count(ADDRESS), resend_limit.count(OTHER_ADDRESS)) == (1, 1)
-    print_success("the eleventh refused for 840 s, its password unchecked")
+    assert (address_limit.count(ADDRESS), address_limit.count(OTHER_ADDRESS)) == (0, 1)
+    print_success("refused for 3540 s, its password unchecked, nothing spent")
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("first", "eleventh", "key"),
+    ("first", "other_form", "key"),
     [
         pytest.param(SAME_64[0], SAME_64[1], SAME_64_KEY, id="two-addresses-of-one-ipv6-64"),
         pytest.param(ADDRESS, MAPPED, ADDRESS, id="an-ipv4-address-and-its-mapped-form"),
     ],
 )
-async def test_the_limit_per_address_is_keyed_by_client_rate_key(engine: AsyncEngine, resend_limit: SlidingWindowLimiter, first: str, eleventh: str, key: str) -> None:
-    """EMV-033 — contract 7: the requests are counted by workstream H's ``client_rate_key``, the one home of the per-client key (decision P17): two addresses of one IPv6 /64 are one client, and an IPv4-mapped IPv6 address is the IPv4 address — ten from one form, the eleventh from the other is refused."""
-    print_section(f"EMV-033: {first} then {eleventh}")
+async def test_the_counter_per_address_is_keyed_by_client_rate_key(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, address_limit: SlidingWindowLimiter, first: str, other_form: str, key: str) -> None:
+    """EMV-033 — contract 7: the emails are counted by workstream H's ``client_rate_key``, the one home of the per-client key (decision P17): two addresses of one IPv6 /64 are one client, and an IPv4-mapped IPv6 address is the IPv4 address. ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS=2``: two waiting accounts get their link, one from each form, counted under ONE key; a third waiting account, from either form, is refused."""
+    print_section(f"EMV-033: {first} then {other_form}")
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, "2")
     moment = utcnow()
-    await _waiting(engine, ALICE, created=moment)
+    for name in (ALICE, BOB, CAROL):
+        await _waiting(engine, name, created=moment)
 
-    for attempt in range(10):
-        with pytest.raises(verification.VerificationCredentialsError):
-            await _resend(engine, ALICE, WRONG_PASSWORD, address=first if attempt < 5 or first == ADDRESS else eleventh, now=moment)
-    with pytest.raises(EmailRateLimitedError):
-        await _resend(engine, ALICE, WRONG_PASSWORD, address=eleventh, now=moment)
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        assert await _resend(engine, ALICE, address=first, now=moment) == "en"
+        assert await _resend(engine, BOB, address=other_form, now=moment) == "en"
+        with pytest.raises(EmailRateLimitedError):
+            await _resend(engine, CAROL, address=first, now=moment)
+        with pytest.raises(EmailRateLimitedError):
+            await _resend(engine, CAROL, address=other_form, now=moment)
 
-    assert resend_limit.count(key) == 10 and len(resend_limit) == 1
-    print_success(f"one count under {key}")
+    assert len(fake.messages) == 2
+    assert address_limit.count(key) == 2 and len(address_limit) == 1
+    print_success(f"two emails under {key}, the third refused from either form")
 
 
 @pytest.mark.asyncio
-async def test_without_a_client_address_the_limit_per_address_does_not_apply(engine: AsyncEngine, resend_limit: SlidingWindowLimiter) -> None:
-    """EMV-034 — contract 7: without a client address (a unix socket) nothing is counted per address — one shared count would let one client block everyone —: twelve requests all reach the password."""
+async def test_wrong_passwords_never_use_the_address_counter(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, address_limit: SlidingWindowLimiter) -> None:
+    """EMV-036 — a try is not an email: six wrong passwords and requests for an unknown account from one client address (``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS=3``) leave the counter at 0 — the sign-in's limit on wrong passwords is what brakes them —, so a registration still passes the counter afterwards, and the right password then gets its link, counted once."""
+    print_section("EMV-036: wrong passwords cost the counter nothing")
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, "3")
+    moment = utcnow()
+    await _waiting(engine, ALICE, created=moment)
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        for attempt in range(6):
+            with pytest.raises(verification.VerificationCredentialsError):
+                await _resend(engine, NOBODY if attempt % 2 else ALICE, WRONG_PASSWORD, now=moment)
+        after_the_wrong_ones = address_limit.count(ADDRESS)
+        registration = await verification.registration_email_verdict(ADDRESS)
+        language = await _resend(engine, ALICE, now=moment)
+
+    assert after_the_wrong_ones == 0
+    assert registration.allowed is True, "wrong passwords did not use up the registrations of the address"
+    assert language == "en" and len(fake.messages) == 1
+    assert address_limit.count(ADDRESS) == 2, "the registration's unit and the one email that went"
+    print_success("0 after six wrong passwords; then a registration and the one email that went")
+
+
+@pytest.mark.asyncio
+async def test_a_resend_stopped_by_the_account_or_the_mailbox_does_not_use_the_address_counter(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, address_limit: SlidingWindowLimiter, mailbox_limit: SlidingWindowLimiter) -> None:
+    """EMV-037 — the address's unit is spent at the last moment, when the email is about to leave: a resend refused by the limit per account (a link emailed two minutes ago: 180 s) or by the limit per recipient mailbox (three verification emails this hour) leaves the counter at 0, and nothing is created."""
+    print_section("EMV-037: refused by the account or the mailbox")
+    moment = utcnow()
+    alice, _hold = await _waiting(engine, ALICE, created=moment - timedelta(minutes=10))
+    await _emailed(engine, alice, created=moment - timedelta(minutes=2))
+    bob, _hold = await _waiting(engine, BOB, created=moment - timedelta(minutes=10))
+    for _spent in range(3):
+        mailbox_limit.hit(delivery.mailbox_budget_key(bob.email))
+    rows_before = (len(await _rows(engine, alice.id)), len(await _rows(engine, bob.id)))
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        with pytest.raises(EmailRateLimitedError) as by_account:
+            await _resend(engine, ALICE, now=moment)
+        with pytest.raises(EmailRateLimitedError):
+            await _resend(engine, BOB, now=moment)
+
+    assert by_account.value.retry_after == 180.0
+    assert address_limit.count(ADDRESS) == 0 and fake.messages == []
+    assert (len(await _rows(engine, alice.id)), len(await _rows(engine, bob.id))) == rows_before
+    print_success("0 units spent by two refusals")
+
+
+@pytest.mark.asyncio
+async def test_the_address_counter_is_spent_when_the_email_is_about_to_leave_and_stays_spent_if_smtp_fails(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, address_limit: SlidingWindowLimiter) -> None:
+    """EMV-038 — ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS=2``: a resend that sends spends one unit; one whose email the SMTP server refuses (``RECIPIENT_REFUSED``) also does — an email was tried, and the link stays a hold, so the account still waits —; the next resend from that address, even with the right password, is refused with the true wait (3600 s: all its units were spent together)."""
+    print_section("EMV-038: spent before the email, kept when SMTP fails")
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, "2")
+    moment = utcnow()
+    alice, _hold = await _waiting(engine, ALICE, created=moment - timedelta(minutes=10))
+    await _waiting(engine, BOB, created=moment - timedelta(minutes=10))
+    await _waiting(engine, CAROL, created=moment - timedelta(minutes=10))
+
+    with FakeSmtpServer(refuse_recipients={alice.email}) as refusing:
+        _ready(monkeypatch, refusing)
+        with pytest.raises(EmailDeliveryError):
+            await _resend(engine, ALICE, now=moment)
+    counted_after_the_failure = address_limit.count(ADDRESS)
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        assert await _resend(engine, BOB, now=moment) == "en"
+        with pytest.raises(EmailRateLimitedError) as refused:
+            await _resend(engine, CAROL, now=moment)
+
+    assert counted_after_the_failure == 1, "the failed email used its unit"
+    assert address_limit.count(ADDRESS) == 2 and len(fake.messages) == 1
+    assert refused.value.retry_after == pytest.approx(3600)
+    assert await _awaits(engine, alice.id) is True
+    print_success("a failed email stays counted; the third is refused with the true wait")
+
+
+@pytest.mark.asyncio
+async def test_without_a_client_address_the_limit_per_address_does_not_apply(engine: AsyncEngine, address_limit: SlidingWindowLimiter) -> None:
+    """EMV-034 — contract 7: without a client address (a unix socket) nothing is counted per address — one shared count would let one client block everyone —: twenty-two requests all reach the password."""
     print_section("EMV-034: no client address")
     await _waiting(engine, ALICE, created=utcnow())
 
-    for _attempt in range(12):
+    for _attempt in range(22):
         with pytest.raises(verification.VerificationCredentialsError):
             await _resend(engine, ALICE, WRONG_PASSWORD, address=None)
 
-    assert len(resend_limit) == 0
-    print_success("twelve requests, none counted")
+    assert len(address_limit) == 0
+    print_success("twenty-two requests, none counted")
+
+
+@pytest.mark.asyncio
+async def test_a_resend_refused_by_the_address_says_the_longest_wait_with_the_instance(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, clock: FakeClock, budget: SlidingWindowLimiter, address_limit: SlidingWindowLimiter) -> None:
+    """EMV-035 — the wait of a resend stopped by the address's counter is the longest among the counters that stop it. ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS=1``, the address's only unit spent at START, the instance's budget (``LIBREFOLIO_SMTP_MAX_PER_HOUR=1``) spent at START + 600: at START + 700 the resend is ``EmailRateLimitedError`` with ``3600 - 100`` seconds (the instance's, spent at START + 600, longer than the address's ``3600 - 700``); with the budget whole it is the address's own. Neither counter changes: a refused hit is not recorded."""
+    print_section("EMV-035: the longest wait")
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, "1")
+    _usable_without_a_server(monkeypatch, max_per_hour="1")
+    await _waiting(engine, ALICE, created=utcnow())
+
+    clock.now = START
+    assert delivery.address_budget_hit(ADDRESS).allowed, "setup: the address's only unit"
+    clock.now = START + 700
+    with pytest.raises(EmailRateLimitedError) as address_alone:
+        await _resend(engine, ALICE)
+    clock.now = START + 600
+    assert budget.hit(limit=1).allowed, "setup: the only unit of the hour"
+    clock.now = START + 700
+    with pytest.raises(EmailRateLimitedError) as with_the_instance:
+        await _resend(engine, ALICE)
+
+    assert address_alone.value.retry_after == pytest.approx(3600 - 700)
+    assert with_the_instance.value.retry_after == pytest.approx(3600 - 100)
+    assert (address_limit.count(ADDRESS), budget.count()) == (1, 1)
+    print_success("the address's wait alone; the instance's when it is longer")
 
 
 @pytest.mark.asyncio

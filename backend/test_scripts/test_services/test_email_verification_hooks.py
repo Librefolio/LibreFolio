@@ -20,16 +20,22 @@ hooks of E5b are in place. The contract:
 5. ``settings_service._refuse_what_cannot_turn_on``: ``GlobalSettingUnavailableError(key, "EMAIL_VERIFICATION_UNAVAILABLE")``
    for ``require_email_verification`` going from off to on while no email with a link can go out; nothing for on → on,
    on → off, off → off, another setting, or when such an email can go.
-6. ``verification.registration_email_allowed(address)``: ten registration emails an hour per client address, keyed by
-   workstream H's ``client_rate_key`` (an IPv6 client by its /64; decision P17); the eleventh refused and counted for
-   nothing; no address, no limit.
+6. ``verification.registration_email_verdict(address)``: whether the email of a registration may go, by two counters —
+   the client address's (``delivery.ADDRESS_BUDGET``, shared with «send the link again» and «forgot password»: 20 an hour
+   by default, or what ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS`` says, read at every call so that a change is seen at
+   once and no module is reloaded; keyed by workstream H's ``client_rate_key``, an IPv6 client by its /64, decision P17;
+   none for a request without an address) and the instance's hourly budget (only while email is usable). Both are
+   peeked first and the address's hit is recorded only when both admit, so a refused registration counts for nothing;
+   a refusal carries the longest wait of the counters that refuse. A value that cannot be used never raises here (the
+   startup checks report it, and email is off then): the default applies.
 
 Pure: every database is a private SQLite file under ``tmp_path`` built with ``create_all`` and the default global
 settings (NullPool, disposed at teardown); a new instance registers by invitation (workstream A), so the cases that
 register without one set ``registration_mode`` to ``open`` in their file — never through ``LIBREFOLIO_REGISTRATION``,
 which would lock it —, while the invited case keeps the default. Accounts are rows; tokens are issued by A's token
 service with the ``now`` the case needs. An autouse fixture removes every inherited ``LIBREFOLIO_SMTP_*``,
-``LIBREFOLIO_PUBLIC_URL``, ``LIBREFOLIO_BLOCKED``, ``LIBREFOLIO_MAX_USERS`` and ``LIBREFOLIO_REGISTRATION``. No server,
+``LIBREFOLIO_PUBLIC_URL``, ``LIBREFOLIO_BLOCKED``, ``LIBREFOLIO_MAX_USERS``, ``LIBREFOLIO_REGISTRATION`` and
+``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS``. No server,
 no SMTP conversation: the configuration is usable towards a host nothing connects to, and ``socket.getaddrinfo``
 resolves the loopback only.
 
@@ -68,7 +74,10 @@ from backend.test_scripts.test_utils import print_section, print_success
 SMTP_PREFIX = "LIBREFOLIO_SMTP_"
 PUBLIC_URL_VARIABLE = "LIBREFOLIO_PUBLIC_URL"
 MAX_USERS_VARIABLE = "LIBREFOLIO_MAX_USERS"
-INHERITED = (PUBLIC_URL_VARIABLE, "LIBREFOLIO_BLOCKED", MAX_USERS_VARIABLE, "LIBREFOLIO_REGISTRATION")
+SIGNUP_PER_ADDRESS = "LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS"
+#: The process's counter per client address, as shipped: the fixtures replace it with private ones.
+SHIPPED_ADDRESS_BUDGET = delivery.ADDRESS_BUDGET
+INHERITED = (PUBLIC_URL_VARIABLE, "LIBREFOLIO_BLOCKED", MAX_USERS_VARIABLE, "LIBREFOLIO_REGISTRATION", SIGNUP_PER_ADDRESS)
 PUBLIC_URL = "https://folio.zq-public.example.com:8443/app"
 LOOPBACK_NAMES = frozenset({"127.0.0.1", "::1", "localhost"})
 OPTION_KEY = SETTINGS_REGISTRY.global_.REQUIRE_EMAIL_VERIFICATION.key
@@ -333,36 +342,215 @@ async def test_deactivating_an_inactive_account_without_links_changes_nothing(en
     print_success("nothing changed, nothing logged")
 
 
+class FakeClock:
+    """A clock that moves only when the test sets it: ``clock.now = …``."""
+
+    def __init__(self, start: float = 1_000.0) -> None:
+        self.now = start
+
+    def __call__(self) -> float:
+        return self.now
+
+
+START = 1_000.0
+
+
+@pytest.fixture
+def clock() -> FakeClock:
+    return FakeClock()
+
+
+@pytest.fixture
+def address_budget(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWindowLimiter:
+    """The counter per client address, private and on the fake clock. Its own limit is not what decides (the variable is): it is built for far more than any test spends."""
+    limiter = SlidingWindowLimiter(1000, 3600, clock=clock)
+    monkeypatch.setattr(delivery, "ADDRESS_BUDGET", limiter)
+    return limiter
+
+
+@pytest.fixture
+def instance_budget(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWindowLimiter:
+    """The hourly budget of the instance, private and on the fake clock, with the shipped 50."""
+    limiter = SlidingWindowLimiter(50, 3600, max_keys=1, clock=clock)
+    monkeypatch.setattr(delivery, "INSTANCE_BUDGET", limiter)
+    return limiter
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("first", "eleventh", "limited"),
+    ("first", "last", "limited"),
     [
-        pytest.param("198.51.100.7", "198.51.100.7", True, id="ipv4-the-eleventh-of-the-hour-refused"),
+        pytest.param("198.51.100.7", "198.51.100.7", True, id="ipv4-the-21st-of-the-hour-held"),
         pytest.param("2001:db8:1:2::10", "2001:db8:1:2:ffff::1", True, id="ipv6-one-64-is-one-client"),
         pytest.param("198.51.100.7", "203.0.113.9", False, id="another-address-is-another-count"),
         pytest.param(None, None, False, id="no-address-not-limited"),
     ],
 )
-def test_registration_emails_are_counted_per_client_address(monkeypatch: pytest.MonkeyPatch, first: str | None, eleventh: str | None, limited: bool) -> None:
-    """EVK-010 — E5b, after the security review: ``registration_email_allowed(address)`` admits ten registration emails an hour per client address — keyed by workstream H's ``client_rate_key`` (decision P17), an IPv6 client by its /64 — and refuses the eleventh, a refused one counted for nothing; past the hour of the first ten, the address is admitted again. Another address has a count of its own; a request without an address is not limited here. A private limiter with the shipped limit, on a fake clock."""
-    print_section(f"EVK-010: {first} then {eleventh}")
-    assert (verification.REGISTRATION_EMAILS_BY_ADDRESS.limit, verification.REGISTRATION_EMAILS_BY_ADDRESS.window_seconds) == (10, 3600), "the shipped limit"
-    clock = [1_000.0]
-    limiter = SlidingWindowLimiter(10, 3600, clock=lambda: clock[0])
-    monkeypatch.setattr(verification, "REGISTRATION_EMAILS_BY_ADDRESS", limiter)
+async def test_registration_emails_are_counted_per_client_address(monkeypatch: pytest.MonkeyPatch, clock: FakeClock, address_budget: SlidingWindowLimiter, first: str | None, last: str | None, limited: bool) -> None:
+    """EVK-010 — E5b, after the security review, E-26: ``registration_email_verdict(address)`` admits twenty registration emails an hour per client address (the default of ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS``) — keyed by workstream H's ``client_rate_key`` (decision P17), an IPv6 client by its /64 — and refuses the 21st, a refused one counted for nothing and its wait ``3600 - 60`` seconds; past the hour of the first twenty, the address is admitted again. Another address has a count of its own; a request without an address is not limited by it. The shipped counter is built for 20 an hour."""
+    print_section(f"EVK-010: {first} then {last}")
+    assert (SHIPPED_ADDRESS_BUDGET.limit, SHIPPED_ADDRESS_BUDGET.window_seconds) == (20, 3600), "the shipped limit"
+    clock.now = START
 
-    admitted = [verification.registration_email_allowed(first) for _registration in range(10)]
-    clock[0] += 60
-    later = [verification.registration_email_allowed(eleventh) for _registration in range(2)]
-    key = client_rate_key(eleventh)
-    counted = limiter.count(key) if key is not None else len(limiter)
-    clock[0] = 1_000.0 + 3600 + 1
-    past_the_hour = verification.registration_email_allowed(eleventh)
+    admitted = [(await verification.registration_email_verdict(first)).allowed for _registration in range(20)]
+    clock.now = START + 60
+    later = [await verification.registration_email_verdict(last) for _registration in range(2)]
+    key = client_rate_key(last)
+    counted = address_budget.count(key) if key is not None else len(address_budget)
+    clock.now = START + 3600 + 1
+    past_the_hour = await verification.registration_email_verdict(last)
 
-    assert admitted == [True] * 10
-    assert later == ([False, False] if limited else [True, True])
-    assert counted == (10 if limited else 2 if key is not None else 0), "a refused one counts for nothing; no address, no count"
-    assert past_the_hour is True
+    assert admitted == [True] * 20
+    assert [verdict.allowed for verdict in later] == ([False, False] if limited else [True, True])
+    if limited:
+        assert [(verdict.by_address, verdict.by_instance, verdict.retry_after) for verdict in later] == [(True, False, pytest.approx(3600 - 60))] * 2
+    assert counted == (20 if limited else 2 if key is not None else 0), "a refused one counts for nothing; no address, no count"
+    assert past_the_hour.allowed is True
     print_success("limited" if limited else "not limited")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("configured", "limit"),
+    [
+        pytest.param(None, 20, id="unset-is-20"),
+        pytest.param("", 20, id="empty-is-20"),
+        pytest.param("   ", 20, id="spaces-are-20"),
+        pytest.param("3", 3, id="3-holds-the-4th"),
+        pytest.param(" 7 ", 7, id="stripped"),
+        pytest.param("1", 1, id="1-holds-the-2nd"),
+    ],
+)
+async def test_the_limit_of_registration_emails_comes_from_the_variable(monkeypatch: pytest.MonkeyPatch, address_budget: SlidingWindowLimiter, configured: str | None, limit: int) -> None:
+    """EVK-011 — ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS`` sets how many registration emails one client address may send in the hour — 20 unset, empty or blank — and the one after the last is held. The variable is set after the module was imported, on a private counter whose own limit is NOT the configured one: the limit is read from the environment when the registration asks."""
+    print_section(f"EVK-011: {configured!r} → {limit}")
+    if configured is not None:
+        monkeypatch.setenv(SIGNUP_PER_ADDRESS, configured)
+    address = "198.51.100.7"
+
+    admitted = [(await verification.registration_email_verdict(address)).allowed for _registration in range(limit)]
+    after = await verification.registration_email_verdict(address)
+
+    assert admitted == [True] * limit
+    assert after.allowed is False, f"the registration {limit + 1} of the hour was admitted"
+    print_success(f"{limit} admitted, the next one held")
+
+
+@pytest.mark.asyncio
+async def test_a_change_of_the_variable_is_seen_at_the_next_registration(monkeypatch: pytest.MonkeyPatch, address_budget: SlidingWindowLimiter) -> None:
+    """EVK-012 — the limit is read at every call, as ``send_email`` reads the hourly budget: with the variable at 2 the third registration is held; raised to 3, the next one is admitted (the two counted stay counted, the refused one did not count); lowered to 1, the address is held again."""
+    print_section("EVK-012: the variable changes between registrations")
+    address = "198.51.100.7"
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, "2")
+
+    first_two = [(await verification.registration_email_verdict(address)).allowed for _registration in range(2)]
+    third = (await verification.registration_email_verdict(address)).allowed
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, "3")
+    raised = (await verification.registration_email_verdict(address)).allowed
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, "1")
+    lowered = (await verification.registration_email_verdict(address)).allowed
+
+    assert (first_two, third, raised, lowered) == ([True, True], False, True, False)
+    print_success("2 then 3 then 1, each seen at once")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("configured", ["0", "-1", "abc", "1.5"])
+async def test_a_variable_that_cannot_be_used_never_breaks_a_registration(monkeypatch: pytest.MonkeyPatch, address_budget: SlidingWindowLimiter, configured: str) -> None:
+    """EVK-013 — a value that cannot be used is reported by the startup checks (``email.smtp``), and email is off then: ``registration_email_verdict`` does not raise (the account already exists when it is asked) and applies the default of 20."""
+    print_section(f"EVK-013: {configured!r}")
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, configured)
+    address = "198.51.100.7"
+
+    admitted = [(await verification.registration_email_verdict(address)).allowed for _registration in range(20)]
+    after = await verification.registration_email_verdict(address)
+
+    assert admitted == [True] * 20 and after.allowed is False
+    print_success("default 20, no exception")
+
+
+@pytest.mark.asyncio
+async def test_the_instance_budget_spent_holds_the_registration_and_the_address_counts_nothing(monkeypatch: pytest.MonkeyPatch, clock: FakeClock, address_budget: SlidingWindowLimiter, instance_budget: SlidingWindowLimiter) -> None:
+    """EVK-014 — E-26: with email usable and the hourly budget of the instance spent (``LIBREFOLIO_SMTP_MAX_PER_HOUR=1``, its unit taken at START), a registration from an address whose own counter is empty is held, by the instance alone, with the budget's wait (at START + 100: ``3600 - 100``); the address's counter, peeked first and hit only when the email may go, counts nothing; the budget itself is peeked, never spent by the verdict."""
+    print_section("EVK-014: instance budget spent")
+    _links_can_go(monkeypatch)
+    monkeypatch.setenv(SMTP_PREFIX + "MAX_PER_HOUR", "1")
+    clock.now = START
+    assert instance_budget.hit(limit=1).allowed, "setup: the only unit of the hour"
+    clock.now = START + 100
+
+    verdict = await verification.registration_email_verdict("198.51.100.7")
+
+    assert (verdict.allowed, verdict.by_address, verdict.by_instance) == (False, False, True)
+    assert verdict.retry_after == pytest.approx(3600 - 100)
+    assert (len(address_budget), instance_budget.count()) == (0, 1), "nothing counted for the address, nothing more spent by the instance"
+    print_success("held by the instance, the address's counter untouched")
+
+
+@pytest.mark.asyncio
+async def test_a_registration_stopped_by_both_counters_says_the_longest_wait(monkeypatch: pytest.MonkeyPatch, clock: FakeClock, address_budget: SlidingWindowLimiter, instance_budget: SlidingWindowLimiter) -> None:
+    """EVK-015 — E-26: the address's counter full since START (``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS=1``), the instance's budget (``LIBREFOLIO_SMTP_MAX_PER_HOUR=1``) spent at START + 1000: at START + 1500 the registration is held by both, and its wait is the longest, the instance's ``3600 - 500`` (not the address's ``3600 - 1500``). Neither counter changes."""
+    print_section("EVK-015: both counters, the longest wait")
+    _links_can_go(monkeypatch)
+    monkeypatch.setenv(SMTP_PREFIX + "MAX_PER_HOUR", "1")
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, "1")
+    address = "198.51.100.7"
+    clock.now = START
+    assert (await verification.registration_email_verdict(address)).allowed, "setup: the address's only unit"
+    clock.now = START + 1000
+    assert instance_budget.hit(limit=1).allowed, "setup: the only unit of the hour"
+    clock.now = START + 1500
+
+    verdict = await verification.registration_email_verdict(address)
+
+    assert (verdict.allowed, verdict.by_address, verdict.by_instance) == (False, True, True)
+    assert verdict.retry_after == pytest.approx(3600 - 500)
+    assert (address_budget.count(client_rate_key(address)), instance_budget.count()) == (1, 1)
+    print_success("held by both, 3100 s: the longest")
+
+
+@pytest.mark.asyncio
+async def test_an_admitted_registration_spends_the_address_and_not_the_instance(monkeypatch: pytest.MonkeyPatch, address_budget: SlidingWindowLimiter, instance_budget: SlidingWindowLimiter) -> None:
+    """EVK-016 — E-26: with email usable and both counters free, the verdict is allowed with no wait, hits the address's counter once and leaves the instance's budget alone (``send_email`` spends it when the email goes)."""
+    print_section("EVK-016: admitted")
+    _links_can_go(monkeypatch)
+    address = "198.51.100.7"
+
+    verdict = await verification.registration_email_verdict(address)
+
+    assert (verdict.allowed, verdict.retry_after, verdict.by_address, verdict.by_instance) == (True, 0.0, False, False)
+    assert (address_budget.count(client_rate_key(address)), instance_budget.count()) == (1, 0)
+    print_success("allowed: one hit for the address, none for the instance")
+
+
+@pytest.mark.asyncio
+async def test_without_an_address_only_the_instance_budget_can_hold_a_registration(monkeypatch: pytest.MonkeyPatch, clock: FakeClock, address_budget: SlidingWindowLimiter, instance_budget: SlidingWindowLimiter) -> None:
+    """EVK-017 — E-26: a request without an address (a unix socket, or behind a proxy nobody trusts) is not limited by the address's counter, which holds no key for it; the instance's spent budget still holds it, by the instance alone."""
+    print_section("EVK-017: no address")
+    _links_can_go(monkeypatch)
+    monkeypatch.setenv(SMTP_PREFIX + "MAX_PER_HOUR", "1")
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, "1")
+
+    free = [(await verification.registration_email_verdict(None)).allowed for _registration in range(3)]
+    clock.now = START
+    assert instance_budget.hit(limit=1).allowed, "setup: the only unit of the hour"
+    held = await verification.registration_email_verdict(None)
+
+    assert free == [True] * 3 and len(address_budget) == 0
+    assert (held.allowed, held.by_address, held.by_instance) == (False, False, True)
+    print_success("no key for the address; the instance still holds")
+
+
+@pytest.mark.asyncio
+async def test_with_email_off_the_instance_budget_is_not_consulted(monkeypatch: pytest.MonkeyPatch, address_budget: SlidingWindowLimiter, instance_budget: SlidingWindowLimiter) -> None:
+    """EVK-018 — E-26: with email not usable (no server; a registration with the option on is refused before it gets here) the instance's budget is not looked at, and the verdict is the address's alone — as before the budget counted."""
+    print_section("EVK-018: email off")
+    assert instance_budget.hit(limit=1).allowed, "setup: spend the first unit of a budget of one"
+
+    verdict = await verification.registration_email_verdict("198.51.100.7")
+
+    assert verdict.allowed is True
+    print_success("allowed: the address's counter alone")
 
 
 @pytest.mark.asyncio

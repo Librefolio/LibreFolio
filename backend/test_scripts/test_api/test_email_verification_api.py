@@ -45,8 +45,9 @@ not written yet: an account that waits is written as ``hold_for_verification`` l
 Pure: the real auth and email routers run in-process on a private SQLite file under ``tmp_path`` (NullPool, disposed
 at teardown); accounts are rows with a real bcrypt hash at cost 4; tokens are issued by A's token service. An autouse
 fixture removes every inherited ``LIBREFOLIO_SMTP_*``, ``LIBREFOLIO_PUBLIC_URL``, ``LIBREFOLIO_BLOCKED``,
-``LIBREFOLIO_MAX_USERS`` and ``LIBREFOLIO_REGISTRATION``; each test sets its own with ``monkeypatch``. The hourly budget,
-``verification.RESEND_BY_ADDRESS`` and ``verification.VERIFICATION_BY_MAILBOX`` are private limiters on a fake clock;
+``LIBREFOLIO_MAX_USERS``, ``LIBREFOLIO_REGISTRATION`` and ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS``; each test sets its own
+with ``monkeypatch``. The hourly budget, ``delivery.ADDRESS_BUDGET`` (the counter per client address, shared with the
+registrations and «forgot password») and ``verification.VERIFICATION_BY_MAILBOX`` are private limiters on a fake clock;
 ``socket.getaddrinfo`` resolves the loopback only; every SMTP conversation is with ``FakeSmtpServer`` on 127.0.0.1. The
 lane's backend is never called. Nothing is timed.
 """
@@ -138,7 +139,8 @@ RATE_LIMITED_MESSAGE = "Too many requests: try again later"
 #: the plain-string 401 of ``get_current_user`` — what a blocked instance answers a caller without a session — by the code.
 INVALID_CREDENTIALS_ANSWER = {"detail": {"error_code": "INVALID_CREDENTIALS", "message": "Invalid credentials"}}
 
-SHIPPED_RESEND = verification.RESEND_BY_ADDRESS
+SHIPPED_RESEND = delivery.ADDRESS_BUDGET
+SIGNUP_PER_ADDRESS = "LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS"
 #: The process's limiter of verification emails per recipient mailbox, as shipped (a fixture below replaces it too).
 SHIPPED_MAILBOX = verification.VERIFICATION_BY_MAILBOX
 #: One mailbox written four ways, each the address of an account of its own: the limiter keys them all as MAILBOX. The
@@ -201,10 +203,18 @@ def budget(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWindowLi
 
 
 @pytest.fixture(autouse=True)
-def resend_limit(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWindowLimiter:
+def address_limit(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWindowLimiter:
     """A private «resend» limiter with the shipped limit, on the fake clock: no test counts in, or is counted by, the process's."""
     limiter = SlidingWindowLimiter(SHIPPED_RESEND.limit, SHIPPED_RESEND.window_seconds, clock=clock)
-    monkeypatch.setattr(verification, "RESEND_BY_ADDRESS", limiter)
+    monkeypatch.setattr(delivery, "ADDRESS_BUDGET", limiter)
+    return limiter
+
+
+def _one_request_an_hour(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWindowLimiter:
+    """One resend an hour per client address, on a private counter on the fake clock: the limit is ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS=1``, which a request reads when it asks — the counter's own limit is not what decides."""
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, "1")
+    limiter = SlidingWindowLimiter(1, SHIPPED_RESEND.window_seconds, clock=clock)
+    monkeypatch.setattr(delivery, "ADDRESS_BUDGET", limiter)
     return limiter
 
 
@@ -676,14 +686,15 @@ async def test_each_409_answers_its_code_and_message_and_nothing_else(private: _
 @pytest.mark.parametrize(
     ("limit", "seconds"),
     [
-        pytest.param("per-address", 840, id="per-address"),
+        pytest.param("per-address", 3540, id="per-address"),
         pytest.param("per-address-a-fraction-left", 1, id="per-address-half-a-second-left-is-one"),
+        pytest.param("per-address-and-budget", 3570, id="per-address-and-budget-the-longest"),
         pytest.param("per-account", 180, id="per-account"),
         pytest.param("budget", 3000, id="the-hourly-budget"),
     ],
 )
 async def test_each_limit_answers_429_with_retry_after(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, budget: SlidingWindowLimiter, limit: str, seconds: int) -> None:
-    """EVA-009 — contract 3: 429 ``{"error_code": "EMAIL_RATE_LIMITED", "retry_after", "message"}`` with the same whole seconds — rounded up, at least 1 — in ``Retry-After``: ten requests from the client's address in a minute, the eleventh with the right password refused before its password is checked (840 s; half a second left is 1); a link emailed to the account two minutes ago (180 s); the hourly budget spent ten minutes ago (3000 s). Nothing sent."""
+    """EVA-009 — contract 3: 429 ``{"error_code": "EMAIL_RATE_LIMITED", "retry_after", "message"}`` with the same whole seconds — rounded up, at least 1 — in ``Retry-After``: twenty emails of the client's address in the last minute, the next request with the right password refused before its password is checked, the counter only looked at (3540 s; half a second left is 1); the same with the instance's budget (``LIBREFOLIO_SMTP_MAX_PER_HOUR=1``) also spent 30 s after the first of them, which waits longer (3570 s against 3540: the longest of the two); a link emailed to the account two minutes ago (180 s); the hourly budget spent ten minutes ago (3000 s). Nothing sent."""
     print_section(f"EVA-009: {limit}")
     moment = utcnow()
     monkeypatch.setattr(verification, "utcnow", lambda: moment)
@@ -701,12 +712,15 @@ async def test_each_limit_answers_429_with_retry_after(private: _Private, monkey
 
     monkeypatch.setattr(verification, "verify_password_or_dummy", recording)
     with FakeSmtpServer() as fake:
-        _ready(monkeypatch, fake, **({"max_per_hour": "1"} if limit == "budget" else {}))
+        _ready(monkeypatch, fake, **({"max_per_hour": "1"} if limit in ("budget", "per-address-and-budget") else {}))
         clock.now = START
         if limit.startswith("per-address"):
-            for _attempt in range(10):
-                assert (await _resend(private, ALICE, WRONG_PASSWORD)).status_code == 401
-            clock.now = START + (60 if limit == "per-address" else 899.5)
+            for _attempt in range(20):
+                assert delivery.address_budget_hit(FIRST_CLIENT[0]).allowed, "setup: twenty emails of the client address"
+            if limit == "per-address-and-budget":
+                clock.now = START + 30
+                assert budget.hit(limit=1).allowed, "setup: the only unit of the hour, taken after the address's first"
+            clock.now = START + (60 if limit in ("per-address", "per-address-and-budget") else 3599.5)
         elif limit == "budget":
             assert budget.hit(limit=1).allowed, "setup: the only unit of the hour"
             clock.now = START + 600
@@ -774,7 +788,7 @@ async def test_an_address_that_is_not_one_address_answers_422(private: _Private,
         pytest.param({"username": ALICE, "password": ACCOUNT_PASSWORD, "token": "zq-token"}, id="another-field"),
     ],
 )
-async def test_a_body_that_is_not_credentials_answers_422_and_counts_nothing(private: _Private, monkeypatch: pytest.MonkeyPatch, resend_limit: SlidingWindowLimiter, body: dict[str, Any]) -> None:
+async def test_a_body_that_is_not_credentials_answers_422_and_counts_nothing(private: _Private, monkeypatch: pytest.MonkeyPatch, address_limit: SlidingWindowLimiter, body: dict[str, Any]) -> None:
     """EVA-012 — contract 3: a body that is not ``{username, password}`` — a field missing or empty, a username longer than 254 or a password longer than 1024 characters, another field — is refused by validation, 422 with FastAPI's list of errors, before the route: nothing counted for the client's address, nothing sent."""
     print_section(f"EVA-012: {sorted(body)}")
     await _waiting(private.engine)
@@ -784,24 +798,32 @@ async def test_a_body_that_is_not_credentials_answers_422_and_counts_nothing(pri
         response = await _post(private, RESEND, body)
 
     assert response.status_code == 422 and isinstance(response.json().get("detail"), list), response.text
-    assert (len(resend_limit), fake.connections) == (0, 0)
+    assert (len(address_limit), fake.connections) == (0, 0)
     print_success("422, nothing counted")
 
 
 @pytest.mark.asyncio
-async def test_the_client_address_is_keyed_and_a_request_without_one_is_not_counted(private: _Private, resend_limit: SlidingWindowLimiter) -> None:
-    """EVA-013 — contract 4: two clients of one IPv6 /64 count as one — five requests each, the eleventh 429 —; requests without a client address (a unix socket) are not counted per address — twelve of them all reach the password (401)."""
+async def test_the_client_address_is_keyed_and_a_request_without_one_is_not_counted(monkeypatch: pytest.MonkeyPatch, private: _Private, address_limit: SlidingWindowLimiter) -> None:
+    """EVA-013 — contract 4: two clients of one IPv6 /64 count as one — ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS=2``: two waiting accounts get their link, one from each client, the third is 429 from either —; requests without a client address (a unix socket) are not counted per address — twenty-two wrong passwords all reach the password (401), and a resend with the right one sends its email and counts nothing."""
     print_section("EVA-013: the client address")
-    await _waiting(private.engine)
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, "2")
     first, second = SAME_64_CLIENTS
+    await _waiting(private.engine, ALICE)
+    await _waiting(private.engine, BOB)
+    await _waiting(private.engine, CAROL)
 
-    statuses = [(await _resend(private, ALICE, WRONG_PASSWORD, client=first if attempt < 5 else second)).status_code for attempt in range(11)]
-    assert statuses == [401] * 10 + [429], statuses
-    without = [(await _resend(private, ALICE, WRONG_PASSWORD, client=None)).status_code for _attempt in range(12)]
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        statuses = [(await _resend(private, ALICE, client=first)).status_code, (await _resend(private, BOB, client=second)).status_code]
+        refused = [(await _resend(private, CAROL, client=client)).status_code for client in (first, second)]
+        counted = address_limit.count("2001:db8:1:2::/64")
+        without = [(await _resend(private, CAROL, WRONG_PASSWORD, client=None)).status_code for _attempt in range(22)]
+        sent_without_an_address = (await _resend(private, CAROL, client=None)).status_code
 
-    assert without == [401] * 12
-    assert resend_limit.count("2001:db8:1:2::/64") == 10 and len(resend_limit) == 1
-    print_success("one /64, one count; no address, no count")
+    assert statuses == [200, 200] and refused == [429, 429], (statuses, refused)
+    assert without == [401] * 22 and sent_without_an_address == 200
+    assert counted == 2 and len(address_limit) == 1
+    print_success("one /64, one count of emails that went; no address, no count")
 
 
 @pytest.mark.asyncio
@@ -935,11 +957,11 @@ OWN_FORWARDING_HEADERS = FORWARDING_HEADERS
 @pytest.mark.parametrize(("header", "prefix"), FORWARDING_HEADERS)
 @pytest.mark.parametrize("proxy", PRIVATE_PROXIES)
 async def test_two_visitors_behind_one_private_proxy_do_not_share_the_resend_budget(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, proxy: str, header: str, prefix: str) -> None:
-    """EVA-018 — contract 7, red before the cure of decision N70 (H-36's ``rate_limit_address``): ``RESEND_BY_ADDRESS`` at one request for this test, email ready. Both requests come from the proxy's private address — ``172.17.0.1``, the Docker bridge; ``fd00::2``, an IPv6 unique-local one —, each with a forwarding header naming its visitor and each for a name no account has, so that no limit per account applies. Visitor A: 401 ``INVALID_CREDENTIALS``. Visitor B, through the same proxy: 401 too, never 429. Then the skip itself, which B's answer alone would not prove: the limiter per address holds no key at all — neither visitor counted under an address, the proxy's or their own. Nothing sent. The headers are exactly H-36's list — ``X-Forwarded-For``, ``Forwarded`` (``for=…``), ``X-Real-IP`` —, crossed with the two peers: six cases."""
+    """EVA-018 — contract 7, red before the cure of decision N70 (H-36's ``rate_limit_address``): ``delivery.ADDRESS_BUDGET`` at one request for this test, email ready. Both requests come from the proxy's private address — ``172.17.0.1``, the Docker bridge; ``fd00::2``, an IPv6 unique-local one —, each with a forwarding header naming its visitor and each for a name no account has, so that no limit per account applies. Visitor A: 401 ``INVALID_CREDENTIALS``. Visitor B, through the same proxy: 401 too, never 429. Then the skip itself, which B's answer alone would not prove: the limiter per address holds no key at all — neither visitor counted under an address, the proxy's or their own. Nothing sent. The headers are exactly H-36's list — ``X-Forwarded-For``, ``Forwarded`` (``for=…``), ``X-Real-IP`` —, crossed with the two peers: six cases."""
     print_section(f"EVA-018: two visitors behind {proxy}, {header}")
-    by_address = SlidingWindowLimiter(1, SHIPPED_RESEND.window_seconds, clock=clock)
-    monkeypatch.setattr(verification, "RESEND_BY_ADDRESS", by_address)
+    by_address = _one_request_an_hour(monkeypatch, clock)
     peer = (proxy, PROXY_PORT)
+    assert delivery.address_budget_hit(proxy).allowed, "setup: the only unit of the proxy's own address is spent, so a request counted under it would be refused"
 
     with FakeSmtpServer() as fake:
         _ready(monkeypatch, fake)
@@ -949,46 +971,48 @@ async def test_two_visitors_behind_one_private_proxy_do_not_share_the_resend_bud
     assert (first.status_code, first.json()) == (401, INVALID_CREDENTIALS_ANSWER), f"barrier: visitor A reaches the password check: {first.status_code} {first.text}"
     assert second.status_code != 429, f"two visitors behind one private proxy ({proxy}) shared one per-address budget: visitor B was refused because visitor A had asked: {second.text}"
     assert (second.status_code, second.json()) == (401, INVALID_CREDENTIALS_ANSWER), f"{second.status_code} {second.text}"
-    assert len(by_address) == 0, f"a request through a reverse proxy LibreFolio does not trust ({proxy}, {header}) is counted under no address (N70): the limiter per address holds {len(by_address)} key(s)"
+    assert len(by_address) == 1, f"a request through a reverse proxy LibreFolio does not trust ({proxy}, {header}) is counted under no address (N70): the limiter per address holds {len(by_address)} key(s), the setup's one expected"
     assert untrusted_forwarding_seen("local") == (header,), f"N70's skip notes the {header} of a local peer: noted {untrusted_forwarding_seen('local')}"
     assert fake.connections == 0
-    print_success("401 for each visitor, and no key in the limiter per address: the skip")
+    print_success("401 for each visitor, though the proxy's own address is full: the skip")
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("header", "prefix"), OWN_FORWARDING_HEADERS)
 async def test_a_public_clients_own_forwarding_header_moves_nothing(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, header: str, prefix: str) -> None:
-    """EVA-019 — contract 7, a guard, green before and after the cure: ``RESEND_BY_ADDRESS`` at one request for this test, email ready. A client at the public address ``198.51.100.7`` writes a forwarding header itself — ``X-Forwarded-For``, ``Forwarded`` (``for=…``) or ``X-Real-IP`` —, naming ``203.0.113.10``, then ``203.0.113.20``, each time for a name no account has: 401, then 429 ``EMAIL_RATE_LIMITED`` with ``retry_after`` 900 and ``Retry-After: 900`` — the whole window, counted from the first —: what a client writes never moves its own budget. Nothing sent. The forwarding headers that count follow H-36, and the cure may extend the parametrization."""
+    """EVA-019 — contract 7, a guard, green before and after the cure: ``delivery.ADDRESS_BUDGET`` at one request for this test, email ready. A client at the public address ``198.51.100.7`` writes a forwarding header itself — ``X-Forwarded-For``, ``Forwarded`` (``for=…``) or ``X-Real-IP`` —, naming ``203.0.113.10``, then ``203.0.113.20``, each time for a name no account has: 401, then 429 ``EMAIL_RATE_LIMITED`` with ``retry_after`` 3600 and ``Retry-After: 3600`` — the whole window, counted from the first —: what a client writes never moves its own budget. Nothing sent. The forwarding headers that count follow H-36, and the cure may extend the parametrization."""
     print_section(f"EVA-019: a public client's own {header}")
-    monkeypatch.setattr(verification, "RESEND_BY_ADDRESS", SlidingWindowLimiter(1, SHIPPED_RESEND.window_seconds, clock=clock))
+    _one_request_an_hour(monkeypatch, clock)
+    assert delivery.address_budget_hit(FIRST_CLIENT[0]).allowed, "setup: the only unit of the client's real address is spent"
 
     with FakeSmtpServer() as fake:
         _ready(monkeypatch, fake)
         first = await _resend(private, f"{NOBODY}_a", client=FIRST_CLIENT, headers={header: f"{prefix}{VISITOR_A}"})
         second = await _resend(private, f"{NOBODY}_b", client=FIRST_CLIENT, headers={header: f"{prefix}{VISITOR_B}"})
 
-    assert (first.status_code, first.json()) == (401, INVALID_CREDENTIALS_ANSWER), f"barrier: the first request reaches the password check: {first.status_code} {first.text}"
+    assert first.status_code == 429, f"a client at a public address chose its own budget with a {header} header it wrote itself: {first.status_code} {first.text}"
     assert second.status_code == 429, f"a client at a public address chose its own budget with a {header} header it wrote itself: {second.status_code} {second.text}"
-    assert _detail(second) == {"error_code": "EMAIL_RATE_LIMITED", "retry_after": 900, "message": RATE_LIMITED_MESSAGE}
-    assert second.headers.get("retry-after") == "900"
+    assert _detail(second) == {"error_code": "EMAIL_RATE_LIMITED", "retry_after": 3600, "message": RATE_LIMITED_MESSAGE}
+    assert second.headers.get("retry-after") == "3600"
     assert fake.connections == 0
-    print_success(f"401, then 429 whatever its own {header} says")
+    print_success(f"429 twice whatever its own {header} says")
 
 
 @pytest.mark.asyncio
 async def test_a_private_client_without_a_forwarding_header_keeps_its_own_budget(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> None:
-    """EVA-020 — contract 7, a guard, green before and after the cure: ``RESEND_BY_ADDRESS`` at one request for this test, email ready. A device of the local network talks to LibreFolio directly — the private address ``192.168.1.5``, no forwarding header —, twice for a name no account has: 401, then 429 ``EMAIL_RATE_LIMITED`` with ``retry_after`` 900 and ``Retry-After: 900``: a private address alone is not a proxy, and keeps its own budget. Nothing sent. The forwarding headers that count follow H-36, and the cure may extend the parametrization."""
+    """EVA-020 — contract 7, a guard, green before and after the cure: ``delivery.ADDRESS_BUDGET`` at one request for this test, email ready. A device of the local network talks to LibreFolio directly — the private address ``192.168.1.5``, no forwarding header —, twice for a name no account has: 401, then 429 ``EMAIL_RATE_LIMITED`` with ``retry_after`` 3600 and ``Retry-After: 3600``: a private address alone is not a proxy, and keeps its own budget. Nothing sent. The forwarding headers that count follow H-36, and the cure may extend the parametrization."""
     print_section("EVA-020: a device of the local network")
-    monkeypatch.setattr(verification, "RESEND_BY_ADDRESS", SlidingWindowLimiter(1, SHIPPED_RESEND.window_seconds, clock=clock))
+    _one_request_an_hour(monkeypatch, clock)
+    assert delivery.address_budget_hit(LAN_DEVICE[0]).allowed, "setup: the only unit of the device's address is spent"
 
     with FakeSmtpServer() as fake:
         _ready(monkeypatch, fake)
         first = await _resend(private, f"{NOBODY}_a", client=LAN_DEVICE)
         second = await _resend(private, f"{NOBODY}_b", client=LAN_DEVICE)
 
-    assert (first.status_code, first.json()) == (401, INVALID_CREDENTIALS_ANSWER), f"barrier: the first request reaches the password check: {first.status_code} {first.text}"
+    assert first.status_code == 429, f"{first.status_code} {first.text}"
     assert second.status_code == 429, f"a private address without a forwarding header lost its own budget: {second.status_code} {second.text}"
-    assert _detail(second) == {"error_code": "EMAIL_RATE_LIMITED", "retry_after": 900, "message": RATE_LIMITED_MESSAGE}
-    assert second.headers.get("retry-after") == "900"
+    assert _detail(second) == {"error_code": "EMAIL_RATE_LIMITED", "retry_after": 3600, "message": RATE_LIMITED_MESSAGE}
+    assert second.headers.get("retry-after") == "3600"
     assert fake.connections == 0
-    print_success("401, then 429: its own budget")
+    print_success("429: its own budget")

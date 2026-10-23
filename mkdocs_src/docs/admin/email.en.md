@@ -74,6 +74,7 @@ The «Email» section of `.env.example` lists them, commented: copy the lines yo
 | `LIBREFOLIO_SMTP_FROM` | _required_ with a server | The sender: one address, with a name or without, such as `LibreFolio <noreply@example.com>` or `noreply@example.com`. |
 | `LIBREFOLIO_SMTP_REPLY_TO` | _not set_: replies go to the sender | One address, where replies go. |
 | `LIBREFOLIO_SMTP_MAX_PER_HOUR` | `50` | How many emails LibreFolio may send in an hour, per server process: a whole number, at least 1. |
+| `LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS` | `20` | How many registration emails one client address may trigger in an hour, per server process: a whole number, at least 1. Past it, the next new accounts are created and wait, but their emails are held: see [Limits of the Verification Emails](#verification-limits). Not an SMTP variable, which is why its name does not start with `LIBREFOLIO_SMTP_`; it is checked with them, and read only while a server is set. |
 
 - **Empty is the same as not set**: a value that is empty, or holds only spaces, counts as not set.
 - **The login comes in pairs**: set `LIBREFOLIO_SMTP_USER` together with a password, or neither of
@@ -84,7 +85,8 @@ The «Email» section of `.env.example` lists them, commented: copy the lines yo
   are set, `LIBREFOLIO_SMTP_PASSWORD` wins, the file is ignored and the start log has a warning.
   Unlike `JWT_SECRET_FILE`, a password file that cannot be read never stops the server: email stays
   off until it is fixed.
-- **The hourly limit counts per server process**, over the last 60 minutes, in memory: a restart
+- **The hourly limits count per server process**, over the last 60 minutes, in memory:
+  `LIBREFOLIO_SMTP_MAX_PER_HOUR` and `LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS` alike. A restart
   starts the count again from zero. `./dev.py server --workers 4` runs four processes, each with its
   own count, so the instance may send up to four times the limit
   ([Start the Server](cli_tools.md#start-the-server)). The Docker image runs a single process.
@@ -454,7 +456,7 @@ The limits:
 
 | Limit | Past it |
 | --- | --- |
-| 10 requests every 15 minutes from the same address; an IPv6 address counts by its /64, the block one subscriber usually holds | The request is refused until the oldest of them is 15 minutes old. |
+| `LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS` requests an hour (20 by default) from the same address, a count shared with the registrations and **Send the link again** ([Limits on Activation and Password-Reset Emails](#activation-limits)); an IPv6 address counts by its /64, the block one subscriber usually holds | The request is refused until a place frees in that count, or in the hourly limit of the instance if that one waits longer; the answer says how long. |
 | 3 requests an hour for the same username or email address, whether an account matches or not | The request is refused until the oldest of them is an hour old. |
 | The hourly limit of the instance, `LIBREFOLIO_SMTP_MAX_PER_HOUR` | The request is refused until an email fits again. |
 | 3 emails an hour to the same mailbox, whatever account they are for and however its address is written | Nothing is sent, and the answer stays the same. |
@@ -487,15 +489,60 @@ the instance holds those back.
   visitor can write.
 - **A proxy LibreFolio does not trust, on a local address** (a Docker network, your own network or
   your VPN), such as a proxy container in front of the Docker image, the usual setup: these limits
-  per address leave the requests through it out, so that 10 requests from anyone cannot block
-  **Forgot password?**, **Send the link again** or the registration emails for everyone. The limits
+  per address leave the requests through it out, so that the requests of one visitor cannot use up
+  the count of **Forgot password?**, **Send the link again** and the registrations for everyone. The limits
   per username or email address, per account and per mailbox, and the hourly limit of the instance,
   still count them. The log warns once per server process, and the security checks report it as a
   warning of `platform.client_address` (see *The Visitor's Address* above).
 - **A proxy LibreFolio does not trust, on a public address**, such as a CDN: every visitor shares
-  the proxy's address and its count, so 10 requests from anyone block those requests through the
-  proxy for everyone, for up to 15 minutes (an hour for the registration emails). Tell LibreFolio
-  about the proxy.
+  the proxy's address and its count, so the first `LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS` requests of
+  anyone use up the count of those requests through the proxy for everyone, for up to an hour.
+  Tell LibreFolio about the proxy.
+
+## 🚦 Limits on Activation and Password-Reset Emails {: #activation-limits }
+
+The emails that activate an account and the ones that reset a password are held back by **two
+counters**, the same for every way to ask for them. Each counts over the last 60 minutes, in the
+memory of each server process.
+
+| Counter | Variable | Default | What it counts |
+| --- | --- | --- | --- |
+| **Per address** | `LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS` | 20 an hour | The emails that leave for one client address (an IPv6 address by its /64), in one count: the registrations, every **Send the link again** with the right password, and every **Forgot password?** for an account that exists. Tries are not counted: a wrong password, a request for a name no account has, or one refused by another limit costs it nothing |
+| **Per instance** | `LIBREFOLIO_SMTP_MAX_PER_HOUR` | 50 an hour | Every email the instance sends: activations, resets, invitations, notices |
+
+Three more limits stay as they are. They are not counters of activation emails, and they rarely
+matter for an account whose email was held, since nothing has reached its mailbox yet:
+
+- the sign-in's limit on **wrong passwords** ([Configuration](configuration.md)), which
+  **Send the link again** shares with the login page;
+- **3 emails an hour to the same mailbox**, so that LibreFolio cannot be used to flood someone
+  else's address;
+- **1 email every 5 minutes, and 3 an hour, for the same account**, for **Send the link again**.
+
+The per-address counter counts **emails that leave**, not tries. It is looked at first, so a
+request is refused at once, before the password is checked, when the count is full; it is spent at
+the last moment, when the email is about to go, and not by anything else: wrong passwords have
+their own limit, a request for a name no account has costs nothing (and, for **Forgot password?**,
+the answer is the same whether an account matches), and a **Send the link again** refused by the
+limit per account or per mailbox spends nothing. An email that the SMTP server then refuses stays
+counted: it was tried.
+
+When a counter holds a request back, the answer says how many seconds to wait, and that time is
+true: it is the **longest** of the waits of the counters that held it back, so the same request
+made then goes through, unless others from the same network used the place meanwhile (the answer
+then says the new time).
+
+**An example.** An office with one internet address and a limit of 20. Twenty colleagues register
+between 9:00 and 9:40, and their twenty emails go. At 9:45 the 21st, Mario, registers: his account
+is created, but his email is held, and the page tells him to try again in about 15 minutes, the
+time until the 9:00 email leaves the count at 10:00. At 9:46 he signs in and asks for the link
+again: the same counter refuses him, for 14 minutes. At 10:00 he asks again with his username and
+password, and the link goes.
+
+The counter per address is shared on purpose, with a consequence to know: when a network has used
+up its count with registrations, **Forgot password?** from that network waits too, until a place
+frees. Raise `LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS` for a network where many people sign up
+together, such as a school or an office, and restart.
 
 ---
 
@@ -514,10 +561,13 @@ address with a link that LibreFolio emails to the account. The switch is in
 - **Right after the registration**, the login page says: *Account created. We are sending you an
   email with a link to activate it: open it within 24 hours, then sign in. No email after a few
   minutes? Check the spam folder, then sign in with your username and password: you will be
-  offered a new link.* When the client address already had the emails of 10 registrations in the
-  last hour, no email goes, and the page says so instead: *Account created, but the activation
-  email could not leave now: too many sign-ups from your network in the last hour. Sign in with
-  your username and password: you will be offered a new link.* Behind a reverse proxy LibreFolio
+  offered a new link.* When the client address already had the emails of
+  `LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS` registrations (20 by default) in the
+  last hour, or the hourly limit of the instance is spent, no email goes, and the page says so
+  instead, with how long to wait: *Account created, but the activation email could not leave now.
+  Try again in about N minutes: sign in with your username and password, and you will be offered a
+  new link.* N is true: it is the time until both counters admit a new email
+  ([Limits on Activation and Password-Reset Emails](#activation-limits)). Behind a reverse proxy LibreFolio
   does not trust, on a local address (the usual Docker setup), nothing is counted per address, so
   this second text never shows ([Forgotten Passwords](#forgot-password)). Either way the account
   is created and waits.
@@ -596,12 +646,11 @@ the row, for the hint: its owner has not opened the link yet, signing in offers 
 
 | Limit | Past it |
 | --- | --- |
-| The emails of 10 registrations an hour from the same address; an IPv6 address counts by its /64 | The next new accounts are still created and wait, but their emails do not leave: the login page says so right after the registration, and their owners ask for the link again from the login page, under the limits below. |
-| 10 requests of **Send the link again** every 15 minutes from the same address, counted before the password is checked; an IPv6 address counts by its /64 | The request is refused until the oldest of them is 15 minutes old. |
+| `LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS` emails an hour (20 by default) from the same address, counting the emails that leave: the registrations, **Send the link again** with the right password and **Forgot password?** for an account that exists; an IPv6 address counts by its /64 | The next new accounts are still created and wait, but their emails do not leave: the login page says so right after the registration, with how long to wait, and their owners ask for the link again from the login page once that time has passed. **Send the link again** is refused for the same time. |
 | The sign-in's own limit on wrong passwords, shared with the login page: 10 every 15 minutes for the same username or email address, 50 from the same address (see *Failed Sign-ins* in [Configuration](configuration.md)) | The request is refused before the password is checked: the page says in how many minutes to try again. The right password clears the failures of what was typed. |
 | 1 email every 5 minutes, and 3 an hour, for the same account, the email of the registration included | The request is refused: the page says in how many minutes to try again. |
 | 3 emails an hour to the same mailbox, whatever account they are for and however its address is written ([Forgotten Passwords](#forgot-password)): the email of a registration and the links sent again alike, and only the emails that went out | **Send the link again** is refused: the page says in how many minutes to try again. After a registration, the account is created and waits, but no email leaves, and nothing tells its owner: the page gives its usual text, which already says what to do (look in the spam folder, then sign in to be offered a new link). |
-| The hourly limit of the instance, `LIBREFOLIO_SMTP_MAX_PER_HOUR` | The request is refused until an email fits again. |
+| The hourly limit of the instance, `LIBREFOLIO_SMTP_MAX_PER_HOUR` | The request is refused until an email fits again. A registration made while it is spent is held like one past the limit of its address. |
 | A free place, once the account's link has expired | The request is refused: its owner is told to ask you. |
 
 **What stays invisible.** After a registration, *We are sending you an email* means that the email
@@ -681,6 +730,7 @@ The tab names the variable at fault; the code is in the log.
 | `LIBREFOLIO_SMTP_FROM` must be one address… | `SMTP_FROM_INVALID` | One address, with or without a name, such as `LibreFolio <noreply@example.com>`: no list, no line break. |
 | `LIBREFOLIO_SMTP_REPLY_TO` must be one address. | `SMTP_REPLY_TO_INVALID` | The same rule as the sender, or remove the line. |
 | `LIBREFOLIO_SMTP_MAX_PER_HOUR` must be a whole number of at least 1. | `SMTP_MAX_PER_HOUR_INVALID` | Digits only, at least `1`. To stop sending, remove `LIBREFOLIO_SMTP_HOST` instead. |
+| `LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS` must be a whole number of at least 1. | `SIGNUP_EMAILS_PER_ADDRESS_INVALID` | Digits only, at least `1`, or no line at all for the default of `20`. Like the others, it turns email off until it is fixed; the server starts anyway. |
 
 ### 📤 Sending Errors {: #sending-errors }
 
@@ -757,7 +807,7 @@ read again when you ask, where a finding links to the [Email tab](#email-tab) (s
 | `Forgotten password: no email sent` | `warning` | Email or `LIBREFOLIO_PUBLIC_URL` stopped working after the answer, or the email was refused: `reason` and `code` say which. A link created for it is revoked. |
 | `Forgotten password: the request failed` | `error` | An unexpected error, with its type in `error` and nothing more: no detail of the request reaches the log. |
 | `Registration waits for email verification` | `info` | A new account waits for its link; with `user_id`. The `User registered` line of the same registration has `waits_for_email` set to true. |
-| `Verification email held: too many registrations from this address` | `info` | The address of the registration already had the emails of 10 registrations in the hour: the account waits without its email, and the login page tells its owner so; with `user_id`. |
+| `Verification email held: address limit or instance budget reached` | `info` | The address of the registration already had its `LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS` emails (20 by default) in the hour, or the hourly limit of the instance is spent: the account waits without its email, and the login page tells its owner so; with `user_id`. |
 | `Verification link emailed` | `info` | A verification link went out: `user_id`, `token_id` and `language`. |
 | `Verification email: not sent` | `warning` | The email of a registration did not go out: `reason` and `code` say why. The page had said that the email was on its way, so only this line says that it was not. The account still waits, and its owner can ask for the link again. |
 | `Verification email: the account no longer waits, nothing sent` | `info` | An administrator activated, deactivated or deleted the account before its email left; with `user_id`. |

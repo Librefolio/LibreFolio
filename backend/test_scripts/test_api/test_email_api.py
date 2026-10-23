@@ -272,7 +272,9 @@ PURPOSES = {"invite": INVITE, "password_reset": PASSWORD_RESET}
 PAGES = {INVITE: "/invite", PASSWORD_RESET: "/reset-password"}
 DEAD_KINDS = ("expired", "consumed", "revoked", "unknown", "other-purpose")
 #: The «forgot password» limiters as the module ships them, read before any fixture replaces them.
-SHIPPED_BY_ADDRESS = flows.FORGOT_BY_ADDRESS
+SHIPPED_BY_ADDRESS = delivery.ADDRESS_BUDGET
+#: How many activation and reset emails one client address may ask for in an hour: 20 unset.
+SIGNUP_PER_ADDRESS = "LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS"
 SHIPPED_BY_IDENTIFIER = flows.FORGOT_BY_IDENTIFIER
 SHIPPED_BY_MAILBOX = flows.FORGOT_BY_MAILBOX
 #: The address httpx's ASGITransport gives a request unless told otherwise: «the client» of the in-process app.
@@ -346,7 +348,7 @@ class FakeClock:
 def _no_inherited_email_variables(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every ``LIBREFOLIO_SMTP_*``, ``LIBREFOLIO_PUBLIC_URL`` and ``LIBREFOLIO_BLOCKED`` the lane inherited is removed: a test sees only the variables it sets itself."""
     for name in list(os.environ):
-        if name.startswith(SMTP_PREFIX) or name in (PUBLIC_URL_VARIABLE, BLOCKED_VARIABLE):
+        if name.startswith(SMTP_PREFIX) or name in (PUBLIC_URL_VARIABLE, BLOCKED_VARIABLE, SIGNUP_PER_ADDRESS):
             monkeypatch.delenv(name, raising=False)
 
 
@@ -395,7 +397,7 @@ def forgot_limits(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> ForgotLi
         by_identifier=SlidingWindowLimiter(SHIPPED_BY_IDENTIFIER.limit, SHIPPED_BY_IDENTIFIER.window_seconds, clock=clock),
         by_mailbox=SlidingWindowLimiter(SHIPPED_BY_MAILBOX.limit, SHIPPED_BY_MAILBOX.window_seconds, clock=clock),
     )
-    monkeypatch.setattr(flows, "FORGOT_BY_ADDRESS", limits.by_address)
+    monkeypatch.setattr(delivery, "ADDRESS_BUDGET", limits.by_address)
     monkeypatch.setattr(flows, "FORGOT_BY_IDENTIFIER", limits.by_identifier)
     monkeypatch.setattr(flows, "FORGOT_BY_MAILBOX", limits.by_mailbox)
     return limits
@@ -1758,38 +1760,58 @@ async def test_forgot_password_on_an_instance_that_cannot_send_it_is_409_without
 
 
 @pytest.mark.asyncio
-async def test_forgot_password_allows_ten_requests_per_client_address_in_fifteen_minutes(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, forgot_limits: ForgotLimits) -> None:
-    """EMA-035 — contract 7: from one IPv4 client address, ten requests for ten names no account has are 202 — the first at ``START``, the others 120 s later —, counted under that address as is.
-
-    The eleventh, also 120 s after the first, for the member's username and with a forged ``X-Forwarded-For`` naming a
-    second address, is 429 ``EMAIL_RATE_LIMITED`` with ``retry_after`` 780 and ``Retry-After: 780`` (900 - 120), and
-    runs no work: the route counts the address the server gives the request (in production uvicorn rewrites it only
-    for the proxies of ``FORWARDED_ALLOW_IPS``), never the header itself. The second address, for real, gets 202 at
-    once and the member their email: the limit is per address, and the second address has one request counted, its
-    own.
-    """
-    print_section("EMA-035: 10 per client address in 15 minutes")
+async def test_forgot_password_allows_twenty_emails_per_client_address_in_an_hour(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, forgot_limits: ForgotLimits) -> None:
+    """EMA-035 — contract 7: the counter per client address counts the emails that go, not the requests. From one IPv4 client address, twenty requests for twenty names no account has are 202 and leave the counter at 0. With the counter holding twenty emails since ``START``, a request 120 s later — for the member's username, with a forged ``X-Forwarded-For`` naming a second address — is 429 ``EMAIL_RATE_LIMITED`` with ``retry_after`` 3480 and ``Retry-After: 3480`` (3600 - 120), and runs no work: the route counts the address the server gives the request (in production uvicorn rewrites it only for the proxies of ``FORWARDED_ALLOW_IPS``), never the header itself; a name no account has is refused alike. The second address, for real, gets 202 at once and the member their email, which counts one unit under it."""
+    print_section("EMA-035: 20 emails per client address in an hour")
 
     with FakeSmtpServer() as fake:
         _links_ready(monkeypatch, fake)
         clock.now = START
-        first = await _forgot(private, f"{NOBODY}_0", client=FIRST_CLIENT)
+        strangers = [await _forgot(private, f"{NOBODY}_{index}", client=FIRST_CLIENT) for index in range(20)]
+        counted_by_the_strangers = forgot_limits.by_address.count(FIRST_CLIENT[0])
+        for _email in range(20):
+            assert delivery.address_budget_hit(FIRST_CLIENT[0]).allowed, "setup: twenty emails of the address"
         clock.now = START + 120
-        others = [await _forgot(private, f"{NOBODY}_{index}", client=FIRST_CLIENT) for index in range(1, 10)]
         refused = await _forgot(private, MEMBER, client=FIRST_CLIENT, headers={"X-Forwarded-For": SECOND_CLIENT[0]})
+        refused_stranger = await _forgot(private, f"{NOBODY}_x", client=FIRST_CLIENT)
         sent_before = len(fake.messages)
         elsewhere = await _forgot(private, MEMBER, client=SECOND_CLIENT)
 
-    assert [response.status_code for response in (first, *others)] == [202] * 10, [response.text for response in (first, *others)]
-    assert refused.status_code == 429, f"{refused.status_code} {refused.text}"
-    detail = _detail(refused)
-    assert (detail.get("error_code"), detail.get("retry_after")) == ("EMAIL_RATE_LIMITED", 780), detail
-    assert refused.headers.get("Retry-After") == "780", refused.headers
+    assert [response.status_code for response in strangers] == [202] * 20, [response.text for response in strangers]
+    assert counted_by_the_strangers == 0, "a request for a name no account has costs the counter nothing"
+    assert refused.status_code == 429 and refused_stranger.status_code == 429, f"{refused.status_code} {refused.text}; {refused_stranger.status_code}"
+    for response in (refused, refused_stranger):
+        detail = _detail(response)
+        assert (detail.get("error_code"), detail.get("retry_after")) == ("EMAIL_RATE_LIMITED", 3480), detail
+        assert response.headers.get("Retry-After") == "3480", response.headers
     assert sent_before == 0, "the refused request ran the work"
     assert elsewhere.status_code == 202, f"{elsewhere.status_code} {elsewhere.text}"
     assert [message.rcpt_tos for message in fake.messages] == [[private.member.email]]
-    assert (forgot_limits.by_address.count(FIRST_CLIENT[0]), forgot_limits.by_address.count(SECOND_CLIENT[0])) == (10, 1)
-    print_success("202 ten times, then 429 for 780 s whatever the header; another address 202")
+    assert (forgot_limits.by_address.count(FIRST_CLIENT[0]), forgot_limits.by_address.count(SECOND_CLIENT[0])) == (20, 1)
+    print_success("202 twenty times for nobody, 0 counted; 429 for 3480 s whatever the header; another address 202 and one unit")
+
+
+@pytest.mark.asyncio
+async def test_forgot_password_answers_alike_whether_an_account_matches_and_counts_only_an_email_that_goes(private: _Private, monkeypatch: pytest.MonkeyPatch, forgot_limits: ForgotLimits) -> None:
+    """EMA-053 — the answer never depends on the address's counter being spent by the work: a request for the member's username and one for a name no account has, from the same address, both answer 202 with the same body; the member's email goes and costs the counter one unit, the stranger's costs none. Fully full, the counter answers both alike, 429."""
+    print_section("EMA-053: the same answer; only an email that goes is counted")
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, "1")
+
+    with FakeSmtpServer() as fake:
+        _links_ready(monkeypatch, fake)
+        stranger = await _forgot(private, f"{NOBODY}_a", client=FIRST_CLIENT)
+        counted_after_the_stranger = forgot_limits.by_address.count(FIRST_CLIENT[0])
+        member = await _forgot(private, MEMBER, client=FIRST_CLIENT)
+        counted_after_the_member = forgot_limits.by_address.count(FIRST_CLIENT[0])
+        member_again = await _forgot(private, MEMBER, client=FIRST_CLIENT)
+        stranger_again = await _forgot(private, f"{NOBODY}_b", client=FIRST_CLIENT)
+
+    assert (stranger.status_code, stranger.json()) == (member.status_code, member.json()) == (202, stranger.json())
+    assert (counted_after_the_stranger, counted_after_the_member) == (0, 1)
+    assert [message.rcpt_tos for message in fake.messages] == [[private.member.email]]
+    assert (member_again.status_code, stranger_again.status_code) == (429, 429)
+    assert _detail(member_again) == _detail(stranger_again), "a full counter answers alike whether an account matches"
+    print_success("202 alike; 1 unit for the email that went; 429 alike once full")
 
 
 @pytest.mark.asyncio
@@ -2046,13 +2068,13 @@ async def test_a_public_url_no_link_can_start_from_is_invalid_on_every_route(pri
 
 @pytest.mark.asyncio
 async def test_forgot_password_from_a_client_without_an_address_is_limited_per_identifier_only(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, forgot_limits: ForgotLimits) -> None:
-    """EMA-043 — contract 7: requests whose client the server cannot name — no ``client`` in the ASGI scope, as on a unix socket —: eleven for eleven names no account has are 202, more than the ten one address may make, and the limiter per address holds no key, not even a shared one; three for the member's username are 202 and the fourth, a minute later, is 429 ``EMAIL_RATE_LIMITED`` with ``retry_after`` 3540 and the same ``Retry-After``: the limit per identifier still holds. The member got exactly one email, from the first of the three."""
+    """EMA-043 — contract 7: requests whose client the server cannot name — no ``client`` in the ASGI scope, as on a unix socket —: twenty-one for twenty-one names no account has are 202, more than the twenty one address may make, and the limiter per address holds no key, not even a shared one; three for the member's username are 202 and the fourth, a minute later, is 429 ``EMAIL_RATE_LIMITED`` with ``retry_after`` 3540 and the same ``Retry-After``: the limit per identifier still holds. The member got exactly one email, from the first of the three."""
     print_section("EMA-043: no client address")
 
     with FakeSmtpServer() as fake:
         _links_ready(monkeypatch, fake)
         clock.now = START
-        strangers = [await _forgot(private, f"{NOBODY}_{index}", client=None) for index in range(11)]
+        strangers = [await _forgot(private, f"{NOBODY}_{index}", client=None) for index in range(21)]
         for_the_member = [await _forgot(private, MEMBER, client=None) for _ in range(3)]
         clock.now = START + 60
         refused = await _forgot(private, MEMBER, client=None)
@@ -2126,23 +2148,27 @@ async def test_a_blocked_instance_offers_no_email_in_its_public_configuration(pr
 
 @pytest.mark.asyncio
 async def test_forgot_password_counts_an_ipv6_client_by_its_64_and_a_mapped_ipv4_as_the_ipv4(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, forgot_limits: ForgotLimits) -> None:
-    """EMA-047 — contract 7: ten requests from ten addresses of one IPv6 /64, each for another name no account has, are 202; an eleventh from yet another address of that /64 is 429 — one subscriber, one count —, while an address of the next /64 gets 202. Likewise an IPv4 client and its IPv4-mapped form share one count: ten requests from the two in turn are 202, the next is 429. The counts are under ``2001:db8:1:2::/64`` and ``198.51.100.70``."""
+    """EMA-047 — contract 7: twenty emails spent from twenty addresses of one IPv6 /64 (``delivery.address_budget_hit``) fill one count; a request from yet another address of that /64 is 429 — one subscriber, one count —, while an address of the next /64 gets 202. Likewise an IPv4 client and its IPv4-mapped form share one count: twenty emails from the two in turn fill it, the next request is 429. The counts are under ``2001:db8:1:2::/64`` and ``198.51.100.70``."""
     print_section("EMA-047: IPv6 by its /64, a mapped IPv4 as the IPv4")
 
     with FakeSmtpServer() as fake:
         _links_ready(monkeypatch, fake)
         clock.now = START
-        same_64 = [await _forgot(private, f"{NOBODY}_v6_{index}", client=(f"2001:db8:1:2::{index + 1:x}", 40000 + index)) for index in range(10)]
+        for index in range(20):
+            assert delivery.address_budget_hit(f"2001:db8:1:2::{index + 1:x}").allowed, "setup: twenty emails of one /64"
+        same_64 = [202] * 20
         one_more = await _forgot(private, f"{NOBODY}_v6_10", client=("2001:db8:1:2:ffff::1", 40010))
         next_64 = await _forgot(private, f"{NOBODY}_v6_11", client=("2001:db8:1:3::1", 40011))
-        both_forms = [await _forgot(private, f"{NOBODY}_v4_{index}", client=(address, 41000 + index)) for index, address in enumerate(["198.51.100.70", "::ffff:198.51.100.70"] * 5)]
+        for address in ["198.51.100.70", "::ffff:198.51.100.70"] * 10:
+            assert delivery.address_budget_hit(address).allowed, "setup: twenty emails of an IPv4 address and its mapped form"
+        both_forms = [202] * 20
         mapped_more = await _forgot(private, f"{NOBODY}_v4_10", client=("::ffff:198.51.100.70", 41010))
 
-    assert [response.status_code for response in same_64] == [202] * 10, [response.text for response in same_64]
+    assert same_64 == [202] * 20
     assert (one_more.status_code, next_64.status_code) == (429, 202), f"{one_more.status_code} {one_more.text}; {next_64.status_code} {next_64.text}"
-    assert [response.status_code for response in both_forms] == [202] * 10, [response.text for response in both_forms]
+    assert both_forms == [202] * 20
     assert mapped_more.status_code == 429, f"{mapped_more.status_code} {mapped_more.text}"
-    assert (forgot_limits.by_address.count("2001:db8:1:2::/64"), forgot_limits.by_address.count("198.51.100.70")) == (10, 10)
+    assert (forgot_limits.by_address.count("2001:db8:1:2::/64"), forgot_limits.by_address.count("198.51.100.70")) == (20, 20)
     assert fake.messages == []
     print_success("one count per /64, one count for an IPv4 address and its mapped form")
 
@@ -2215,15 +2241,23 @@ FORWARDING_HEADERS = [
 OWN_FORWARDING_HEADERS = FORWARDING_HEADERS
 
 
+def _one_request_an_hour(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWindowLimiter:
+    """One request an hour per client address, on a private counter on the fake clock: the limit is ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS=1``, which a request reads when it asks — the counter's own limit is not what decides."""
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, "1")
+    limiter = SlidingWindowLimiter(1, SHIPPED_BY_ADDRESS.window_seconds, clock=clock)
+    monkeypatch.setattr(delivery, "ADDRESS_BUDGET", limiter)
+    return limiter
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("header", "prefix"), FORWARDING_HEADERS)
 @pytest.mark.parametrize("proxy", PRIVATE_PROXIES)
 async def test_forgot_password_two_visitors_behind_one_private_proxy_do_not_share_a_budget(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, proxy: str, header: str, prefix: str) -> None:
-    """EMA-050 — contract 8, red before the cure of decision N70 (H-36's ``rate_limit_address``): ``FORGOT_BY_ADDRESS`` at one request for this test — the limiter per identifier the fixture's, with its shipped limit —, email and links ready towards a running fake. Both requests come from the proxy's private address — ``172.17.0.1``, the Docker bridge; ``fd00::2``, an IPv6 unique-local one —, each with a forwarding header naming its visitor and each for another name no account has. Visitor A: 202. Visitor B, through the same proxy: 202 too, the same body, never 429. Then the skip itself, which B's answer alone would not prove: the limiter per address holds no key at all — neither visitor counted under an address, the proxy's or their own. Nothing sent. The headers are exactly H-36's list — ``X-Forwarded-For``, ``Forwarded`` (``for=…``), ``X-Real-IP`` —, crossed with the two peers: six cases."""
+    """EMA-050 — contract 8, red before the cure of decision N70 (H-36's ``rate_limit_address``): ``delivery.ADDRESS_BUDGET`` at one request for this test — the limiter per identifier the fixture's, with its shipped limit —, email and links ready towards a running fake. Both requests come from the proxy's private address — ``172.17.0.1``, the Docker bridge; ``fd00::2``, an IPv6 unique-local one —, each with a forwarding header naming its visitor and each for another name no account has. Visitor A: 202. Visitor B, through the same proxy: 202 too, the same body, never 429. Then the skip itself, which B's answer alone would not prove: the limiter per address holds no key at all — neither visitor counted under an address, the proxy's or their own. Nothing sent. The headers are exactly H-36's list — ``X-Forwarded-For``, ``Forwarded`` (``for=…``), ``X-Real-IP`` —, crossed with the two peers: six cases."""
     print_section(f"EMA-050: two visitors behind {proxy}, {header}")
-    by_address = SlidingWindowLimiter(1, SHIPPED_BY_ADDRESS.window_seconds, clock=clock)
-    monkeypatch.setattr(flows, "FORGOT_BY_ADDRESS", by_address)
+    by_address = _one_request_an_hour(monkeypatch, clock)
     peer = (proxy, PROXY_PORT)
+    assert delivery.address_budget_hit(proxy).allowed, "setup: the only unit of the proxy's own address is spent, so a request counted under it would be refused"
 
     with FakeSmtpServer() as fake:
         _links_ready(monkeypatch, fake)
@@ -2233,7 +2267,7 @@ async def test_forgot_password_two_visitors_behind_one_private_proxy_do_not_shar
     assert (first.status_code, set(first.json())) == (202, {"message"}), f"barrier: visitor A is admitted: {first.status_code} {first.text}"
     assert second.status_code != 429, f"two visitors behind one private proxy ({proxy}) shared one per-address budget: visitor B was refused because visitor A had asked: {second.text}"
     assert (second.status_code, second.json()) == (202, first.json()), f"{second.status_code} {second.text}"
-    assert len(by_address) == 0, f"a request through a reverse proxy LibreFolio does not trust ({proxy}, {header}) is counted under no address (N70): the limiter per address holds {len(by_address)} key(s)"
+    assert len(by_address) == 1, f"a request through a reverse proxy LibreFolio does not trust ({proxy}, {header}) is counted under no address (N70): the limiter per address holds {len(by_address)} key(s)"
     assert untrusted_forwarding_seen("local") == (header,), f"N70's skip notes the {header} of a local peer: noted {untrusted_forwarding_seen('local')}"
     assert fake.messages == []
     print_success("202 for each visitor, and no key in the limiter per address: the skip")
@@ -2242,39 +2276,41 @@ async def test_forgot_password_two_visitors_behind_one_private_proxy_do_not_shar
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("header", "prefix"), OWN_FORWARDING_HEADERS)
 async def test_forgot_password_a_public_clients_own_forwarding_header_moves_nothing(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, header: str, prefix: str) -> None:
-    """EMA-051 — contract 8, a guard, green before and after the cure: ``FORGOT_BY_ADDRESS`` at one request for this test, email and links ready towards a running fake. A client at the public address ``198.51.100.7`` writes a forwarding header itself — ``X-Forwarded-For``, ``Forwarded`` (``for=…``) or ``X-Real-IP`` —, naming ``203.0.113.10``, then ``203.0.113.20``, each time for another name no account has: 202, then 429 ``EMAIL_RATE_LIMITED`` with ``retry_after`` 900 and ``Retry-After: 900`` — the whole window, counted from the first —: what a client writes never moves its own budget, as EMA-035 pins at the shipped limit. Nothing sent. The forwarding headers that count follow H-36, and the cure may extend the parametrization."""
+    """EMA-051 — contract 8, a guard, green before and after the cure: ``delivery.ADDRESS_BUDGET`` at one request for this test, email and links ready towards a running fake. A client at the public address ``198.51.100.7`` writes a forwarding header itself — ``X-Forwarded-For``, ``Forwarded`` (``for=…``) or ``X-Real-IP`` —, naming ``203.0.113.10``, then ``203.0.113.20``, each time for another name no account has: 202, then 429 ``EMAIL_RATE_LIMITED`` with ``retry_after`` 3600 and ``Retry-After: 3600`` — the whole window, counted from the first —: what a client writes never moves its own budget, as EMA-035 pins at the shipped limit. Nothing sent. The forwarding headers that count follow H-36, and the cure may extend the parametrization."""
     print_section(f"EMA-051: a public client's own {header}")
-    monkeypatch.setattr(flows, "FORGOT_BY_ADDRESS", SlidingWindowLimiter(1, SHIPPED_BY_ADDRESS.window_seconds, clock=clock))
+    _one_request_an_hour(monkeypatch, clock)
+    assert delivery.address_budget_hit(FIRST_CLIENT[0]).allowed, "setup: the only unit of the client's real address is spent"
 
     with FakeSmtpServer() as fake:
         _links_ready(monkeypatch, fake)
         first = await _forgot(private, f"{NOBODY}_a", client=FIRST_CLIENT, headers={header: f"{prefix}{VISITOR_A}"})
         second = await _forgot(private, f"{NOBODY}_b", client=FIRST_CLIENT, headers={header: f"{prefix}{VISITOR_B}"})
 
-    assert first.status_code == 202, f"barrier: the first request is admitted: {first.status_code} {first.text}"
+    assert first.status_code == 429, f"a client at a public address chose its own budget with a {header} header it wrote itself: {first.status_code} {first.text}"
     assert second.status_code == 429, f"a client at a public address chose its own budget with a {header} header it wrote itself: {second.status_code} {second.text}"
     detail = _detail(second)
-    assert (detail.get("error_code"), detail.get("retry_after")) == ("EMAIL_RATE_LIMITED", 900), detail
-    assert second.headers.get("Retry-After") == "900", second.headers
+    assert (detail.get("error_code"), detail.get("retry_after")) == ("EMAIL_RATE_LIMITED", 3600), detail
+    assert second.headers.get("Retry-After") == "3600", second.headers
     assert fake.messages == []
-    print_success(f"202, then 429 whatever its own {header} says")
+    print_success(f"429 twice whatever its own {header} says")
 
 
 @pytest.mark.asyncio
 async def test_forgot_password_a_private_client_without_a_forwarding_header_keeps_its_own_budget(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> None:
-    """EMA-052 — contract 8, a guard, green before and after the cure: ``FORGOT_BY_ADDRESS`` at one request for this test, email and links ready towards a running fake. A device of the local network talks to LibreFolio directly — the private address ``192.168.1.5``, no forwarding header —, each time for another name no account has: 202, then 429 ``EMAIL_RATE_LIMITED`` with ``retry_after`` 900 and ``Retry-After: 900``: a private address alone is not a proxy, and keeps its own budget. Nothing sent. The forwarding headers that count follow H-36, and the cure may extend the parametrization."""
+    """EMA-052 — contract 8, a guard, green before and after the cure: ``delivery.ADDRESS_BUDGET`` at one request for this test, email and links ready towards a running fake. A device of the local network talks to LibreFolio directly — the private address ``192.168.1.5``, no forwarding header —, each time for another name no account has: 202, then 429 ``EMAIL_RATE_LIMITED`` with ``retry_after`` 3600 and ``Retry-After: 3600``: a private address alone is not a proxy, and keeps its own budget. Nothing sent. The forwarding headers that count follow H-36, and the cure may extend the parametrization."""
     print_section("EMA-052: a device of the local network")
-    monkeypatch.setattr(flows, "FORGOT_BY_ADDRESS", SlidingWindowLimiter(1, SHIPPED_BY_ADDRESS.window_seconds, clock=clock))
+    _one_request_an_hour(monkeypatch, clock)
+    assert delivery.address_budget_hit(LAN_DEVICE[0]).allowed, "setup: the only unit of the device's address is spent"
 
     with FakeSmtpServer() as fake:
         _links_ready(monkeypatch, fake)
         first = await _forgot(private, f"{NOBODY}_a", client=LAN_DEVICE)
         second = await _forgot(private, f"{NOBODY}_b", client=LAN_DEVICE)
 
-    assert first.status_code == 202, f"barrier: the first request is admitted: {first.status_code} {first.text}"
+    assert first.status_code == 429, f"{first.status_code} {first.text}"
     assert second.status_code == 429, f"a private address without a forwarding header lost its own budget: {second.status_code} {second.text}"
     detail = _detail(second)
-    assert (detail.get("error_code"), detail.get("retry_after")) == ("EMAIL_RATE_LIMITED", 900), detail
-    assert second.headers.get("Retry-After") == "900", second.headers
+    assert (detail.get("error_code"), detail.get("retry_after")) == ("EMAIL_RATE_LIMITED", 3600), detail
+    assert second.headers.get("Retry-After") == "3600", second.headers
     assert fake.messages == []
-    print_success("202, then 429: its own budget")
+    print_success("429: its own budget")
