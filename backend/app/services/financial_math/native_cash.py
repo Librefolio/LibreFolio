@@ -328,6 +328,38 @@ class NativeCash:
             unallocated_costs=unallocated_costs,
         )
 
+    def position_flow_steps(self, date_from: date_type | None = None, date_to: date_type | None = None) -> dict[tuple[int, int], list[tuple[date_type, Decimal, Decimal]]]:
+        """Each position's income and costs of ``(date_from, date_to]`` as running totals, on the days they change.
+
+        ``(broker_id, asset_id)`` → ``[(day, income, costs)]``, ascending, one entry per day holding an income (DIVIDEND,
+        INTEREST) or cost (FEE, TAX) movement of the position: the totals from ``date_from`` (excluded) through that day,
+        by the rules of :meth:`flows` — income signed, costs absolute, at the movement's share, a missing conversion left
+        out. One pass instead of a :meth:`flows` call a day (#48); with the movements in date order (the engine's), each
+        entry equals ``flows(date_from, day)``'s figures for the position exactly.
+        """
+        order = sorted(range(len(self.movements)), key=lambda index: self.movements[index].date)
+        totals: dict[tuple[int, int], list[Decimal]] = {}
+        steps: dict[tuple[int, int], list[tuple[date_type, Decimal, Decimal]]] = {}
+        for index in order:
+            movement, value = self.movements[index], self.converted[index]
+            kind = movement.transaction_type
+            if value is None or movement.asset_id is None or not _in_window(movement.date, date_from, date_to):
+                continue
+            if kind not in _INCOME_TYPES and kind not in _COST_TYPES:
+                continue
+            key = (movement.broker_id, movement.asset_id)
+            total = totals.setdefault(key, [_ZERO, _ZERO])
+            if kind in _INCOME_TYPES:
+                total[0] = total[0] + value * movement.share
+            else:
+                total[1] = total[1] + abs(value) * movement.share
+            entries = steps.setdefault(key, [])
+            if entries and entries[-1][0] == movement.date:
+                entries[-1] = (movement.date, total[0], total[1])
+            else:
+                entries.append((movement.date, total[0], total[1]))
+        return steps
+
     def sums_by_date(
         self,
         date_from: date_type | None,

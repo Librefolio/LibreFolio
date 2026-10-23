@@ -90,6 +90,7 @@ from backend.app.services.financial_math.portfolio.contributions import (
     closed_position_annualized,
     closed_position_base,
     period_return_on_start,
+    position_period_pnl,
     transfer_costs_moved_out,
     transfer_tract_adjustments,
     transfer_tracts_moved_in,
@@ -892,6 +893,9 @@ class PortfolioService:
 
         # ── 4. Allocation from engine (scope-aware, includes in-transit) ──
         alloc_type, alloc_sector, alloc_geo = views.build_allocation_current()
+        last_by_asset = views.daily_states[-1].by_asset if views.daily_states else {}
+        alloc_asset_names = {asset_id: asset.display_name for asset_id, asset in (await self._get_assets_map(set(last_by_asset))).items()}
+        alloc_asset = views.build_asset_allocation_current(alloc_asset_names)
 
         def _alloc_from_engine(items: list[dict]) -> list[AllocationItem]:
             return [AllocationItem(**item) for item in items]
@@ -1172,6 +1176,7 @@ class PortfolioService:
             allocation_by_type=_alloc_from_engine(alloc_type),
             allocation_by_sector=_alloc_from_engine(alloc_sector),
             allocation_by_geography=_alloc_from_engine(alloc_geo),
+            allocation_by_asset=_alloc_from_engine(alloc_asset),
             holdings=all_holdings,
             holding_groups=holding_groups,
             by_broker=by_broker_list if include_breakdown else None,
@@ -1730,29 +1735,23 @@ class PortfolioService:
                 ug_end = end_state.unrealized_pnl
                 cb_end = end_state.cost_basis if end_state.cost_complete else None
 
-            # Not held at a boundary counts as zero; held with an unknown unrealized (no rate, incomplete cost) makes
-            # the change unknown — never a figure that hides the missing part.
-            adjustment = tract_adjustments.get(pos_key)
-            unknown_boundary = (qty_at_start > _QUANTITY_DUST_THRESHOLD and start_state is not None and ug_start is None) or (qty_at_end > _QUANTITY_DUST_THRESHOLD and ug_end is None)
-            unrealized_delta = None
-            if not unknown_boundary and (ug_end is not None or ug_start is not None or adjustment is not None):
-                unrealized_delta = (ug_end or Decimal("0")) - (ug_start or Decimal("0")) + (adjustment or Decimal("0"))
-
-            # Assemble period P&L
+            # The period P&L of the row (financial_math.portfolio.contributions, the one home of the formula)
             realized = per_realized.get(pos_key)
             income = per_income.get(pos_key)
             fees = per_fees_taxes.get(pos_key)
+            row_pnl = position_period_pnl(
+                held_at_start=qty_at_start > _QUANTITY_DUST_THRESHOLD and start_state is not None,
+                held_at_end=qty_at_end > _QUANTITY_DUST_THRESHOLD,
+                unrealized_start=ug_start,
+                unrealized_end=ug_end,
+                transfer_adjustment=tract_adjustments.get(pos_key),
+                realized=realized,
+                income=income,
+                fees=fees,
+            )
+            unrealized_delta, period_pnl = row_pnl.unrealized_delta, row_pnl.period_pnl
             has_period_activity = any(value is not None and value != 0 for value in (realized, income, fees))
             has_boundary_position = qty_at_start > _QUANTITY_DUST_THRESHOLD or qty_at_end > _QUANTITY_DUST_THRESHOLD
-
-            pnl_parts = [
-                unrealized_delta,
-                realized,
-                income,
-                Decimal("0") - fees if fees else None,
-            ]
-            non_none = [p for p in pnl_parts if p is not None]
-            period_pnl = sum(non_none, Decimal("0")) if non_none else None
 
             if not has_period_activity and not has_boundary_position and period_pnl is None:
                 continue
@@ -2086,14 +2085,16 @@ class PortfolioService:
                 _precomputed_engine_result=engine_result,
             )
 
-        # ── 4. Allocation history (all 3 dimensions from same engine result) ──
+        # ── 4. Allocation history (all 4 dimensions from same engine result) ──
         alloc_history: AllocationHistoryDimensions | None = None
         if query.include_allocation_history:
             included.append("allocation_history")
+            history_asset_names = {asset_id: asset.display_name for asset_id, asset in (await self._get_assets_map(views.allocation_asset_ids(date_from))).items()}
             alloc_history = AllocationHistoryDimensions(
                 type=[AllocationHistoryPoint(**p) for p in views.build_allocation_history("type", date_from=date_from)],
                 sector=[AllocationHistoryPoint(**p) for p in views.build_allocation_history("sector", date_from=date_from)],
                 geography=[AllocationHistoryPoint(**p) for p in views.build_allocation_history("geography", date_from=date_from)],
+                asset=[AllocationHistoryPoint(**p) for p in views.build_asset_allocation_history(history_asset_names, date_from=date_from)],
             )
 
         # ── 4b. Positions contribution (per-asset period P&L attribution) ──
