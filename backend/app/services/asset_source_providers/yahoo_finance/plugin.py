@@ -326,10 +326,16 @@ def _acquire_history_data(
     start_date: AssetHistoryStartDate,
     end_date: date,
 ) -> _YahooHistoryAcquisition:
-    """Fetch Yahoo history plus best-effort metadata/event series."""
+    """Fetch Yahoo history plus best-effort metadata/event series.
+
+    The closes are asked unadjusted (``auto_adjust=False``, Z-35): yfinance's default rewrites every close for the
+    dividends paid since, as of the day it is read, so a row saved today and one saved last month carried different
+    adjustments, and the dividends (kept as events) counted twice in a return. Yahoo's ``Close`` stays adjusted for splits
+    in either mode; the splits themselves come as events.
+    """
     if start_date == "min":
         history = _yf_with_retry(
-            lambda: ticker.history(period="max"),
+            lambda: ticker.history(period="max", auto_adjust=False),
             label=f"history-max({identifier})",
         )
     else:
@@ -338,6 +344,7 @@ def _acquire_history_data(
             lambda: ticker.history(
                 start=start_date.isoformat(),
                 end=remote_end,
+                auto_adjust=False,
             ),
             label=f"history({identifier})",
         )
@@ -460,10 +467,16 @@ def _parse_dividend_events(
     start_date: AssetHistoryStartDate,
     end_date: date,
 ) -> list[FAAssetEventPoint]:
-    """Map positive, in-range Yahoo dividends to canonical events."""
+    """Map positive, in-range Yahoo dividends to canonical events.
+
+    A line quoted in a minor unit (``GBp``, pence) has its dividends in that unit too: the event is an amount of money,
+    so it is divided by the unit's factor (1.9542 pence is 0.019542 GBP, Z-32). The prices of such a line are kept as
+    Yahoo gives them: the asset's quote base divides them.
+    """
     if dividends is None or dividends.empty:
         return []
 
+    factor = Decimal(minor_unit_factor(currency) or 1)
     events: list[FAAssetEventPoint] = []
     for index_value, amount in dividends.items():
         if not pd.notna(amount) or amount <= 0:
@@ -479,7 +492,7 @@ def _parse_dividend_events(
                 type="DIVIDEND",
                 value=CurrencyAmount(
                     code=currency,
-                    amount=Decimal(str(amount)),
+                    amount=Decimal(str(amount)) / factor,
                 ),
                 notes=f"Yahoo Finance dividend for {identifier}",
             )
