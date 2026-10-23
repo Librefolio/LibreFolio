@@ -360,6 +360,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/fx/FxPriceSummary.test.ts",
             "src/lib/components/fx/FxCard.test.ts",
             "src/lib/components/fx/FxCard.primaryView.test.ts",
+            "src/lib/components/charts/PriceChartCompact.test.ts",
             "src/lib/components/fx/FxTable.test.ts",
             "src/lib/components/fx/FxPairAddModal.test.ts",
             "src/lib/features/files/FilePreviewModal.test.ts",
