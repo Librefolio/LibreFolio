@@ -1,7 +1,7 @@
 """
 An unreadable restore state serves no data: the probe and the startup (LibreFolio 1.3, workstream H, lot B-33, the
 start's part). Developer decision (22/10, via the coordinator): when ``.restore/restore.json`` cannot be read, the
-instance serves no data until the administrator runs ``./dev.py backup pending --recover`` (workstream B).
+instance serves no data until the administrator runs ``./dev.py backup pending --recover previous`` (workstream B).
 
 Under test, written by B-33 (H) and missing today:
 
@@ -52,7 +52,7 @@ from backend.test_scripts.test_utils import print_section, print_success
 GUARD_MODULE = "backend.app.services.platform.restore_guard"
 AWAIT_VARIABLE = "LIBREFOLIO_AWAIT_RESTORE"
 #: The one error line of the probe, word for word (the contract's text, a log line, not a translated UI text).
-PROBE_MESSAGE = "The state of the restore cannot be read: LibreFolio serves no data until the administrator runs ./dev.py backup pending --recover"
+PROBE_MESSAGE = "The state of the restore cannot be read: LibreFolio serves no data until the administrator runs ./dev.py backup pending --recover previous"
 REASONS = ("io", "not_a_file", "invalid")
 #: Written in an unreadable state file: never in the log.
 STATE_CANARY = "b33canary_state_content_7f3a"

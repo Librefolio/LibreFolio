@@ -1159,7 +1159,7 @@ the instance serves **no data** until its administrator chooses what to do, and 
 error, with the reason (`io`, `not_a_file` or `invalid`), never the file's content:
 
 ```text
-The state of the restore cannot be read: LibreFolio serves no data until the administrator runs ./dev.py backup pending --recover
+The state of the restore cannot be read: LibreFolio serves no data until the administrator runs ./dev.py backup pending --recover previous
 ```
 
 - **The start skips** what repairs, writes or warms up the data. The log has one
@@ -1194,7 +1194,7 @@ The state of the restore cannot be read: LibreFolio serves no data until the adm
   Not set or not usable: no link, and no fallback to the project's GitHub.
 
 **The way out is on the machine**, for whoever runs it: stop LibreFolio, run
-`./dev.py backup pending` to see what happened, then `./dev.py backup pending --recover`, which puts
+`./dev.py backup pending` to see what happened, then `./dev.py backup pending --recover previous`, which puts
 the data of before back, and start LibreFolio again: see
 «An Unreadable Restore State» in [Command-Line Tools](cli_tools.md). The instance decides once,
 at its start: a file made readable again while LibreFolio runs counts only at the next start.

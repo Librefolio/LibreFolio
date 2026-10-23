@@ -77,7 +77,7 @@
     "restoreInterrupted": {
       "title": "The restore stopped half way",
       "message": "LibreFolio cannot tell which data it holds, so it shows none until your administrator chooses how to go on.",
-      "adminHint": "Administrator: stop LibreFolio, then run ./dev.py backup pending to see what happened and --recover to put the data of before back.",
+      "adminHint": "Administrator: stop LibreFolio, then run ./dev.py backup pending to see what happened and --recover previous to put the data of before back.",
       "docs": "How to recover",
       "autoReload": "This page reloads by itself once LibreFolio serves the data again.",
       "support": "Contact support"

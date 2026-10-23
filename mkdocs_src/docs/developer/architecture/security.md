@@ -2100,8 +2100,8 @@ The administrator's side is [When the State of a Restore Cannot Be Read](../../a
 kept in the module for the whole process, and `restore_interrupted()` returns it: `False` in a process that never
 probed. When it cannot read the state, the step logs one error with B's `reason` (`io`, `not_a_file`, `invalid`), never
 the state's content, `The state of the restore cannot be read: LibreFolio serves no data until the administrator runs
-./dev.py backup pending --recover`; it never stops the start. A state made readable while the process runs counts only
-at the next start: the way out is `./dev.py backup pending --recover` with LibreFolio stopped, then a restart.
+./dev.py backup pending --recover previous`; it never stops the start. A state made readable while the process runs counts only
+at the next start: the way out is `./dev.py backup pending --recover previous` with LibreFolio stopped, then a restart.
 
 **The start.** While `restore_interrupted()`, `STARTUP_STEPS` skips what repairs, writes or warms up the data:
 `post-migration-fixes` and `lone-transfer-legs` (`skip_when=restore_interrupted`), and the six steps of

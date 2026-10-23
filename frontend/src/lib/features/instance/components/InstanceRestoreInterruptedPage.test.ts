@@ -6,7 +6,7 @@
  * When `.restore/restore.json` cannot be read the backend serves no data: `GET /api/v1/system/instance` answers
  * `restore_interrupted: true` and every other route answers `423 {"detail": {"code": "instance_restore_interrupted"}}`
  * to anyone. The root layout's `AwaitingRestoreGate` then shows this page instead of the app or the login: the restore
- * stopped half way, the administrator must run `./dev.py backup pending --recover`.
+ * stopped half way, the administrator must run `./dev.py backup pending --recover previous`.
  *
  * The contract under test:
  *   - the root `instance-restore-interrupted` holds a `role="alert"` section (an error: something is broken) with an

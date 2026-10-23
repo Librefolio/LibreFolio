@@ -77,7 +77,7 @@
     "restoreInterrupted": {
       "title": "Il ripristino si è fermato a metà",
       "message": "LibreFolio non sa quali dati contiene, quindi non ne mostra nessuno finché il tuo amministratore non sceglie come procedere.",
-      "adminHint": "Amministratore: ferma LibreFolio, poi esegui ./dev.py backup pending per vedere cosa è successo e --recover per rimettere i dati di prima.",
+      "adminHint": "Amministratore: ferma LibreFolio, poi esegui ./dev.py backup pending per vedere cosa è successo e --recover previous per rimettere i dati di prima.",
       "docs": "Come recuperare",
       "autoReload": "La pagina si ricarica da sola quando LibreFolio torna a servire i dati.",
       "support": "Scrivi all'assistenza"

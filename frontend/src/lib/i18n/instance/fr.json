@@ -77,7 +77,7 @@
     "restoreInterrupted": {
       "title": "La restauration s'est arrêtée à mi-chemin",
       "message": "LibreFolio ne sait pas quelles données il contient : il n'en affiche aucune tant que votre administrateur n'a pas choisi comment continuer.",
-      "adminHint": "Administrateur : arrêtez LibreFolio, puis lancez ./dev.py backup pending pour voir ce qui s'est passé et --recover pour remettre les données d'avant.",
+      "adminHint": "Administrateur : arrêtez LibreFolio, puis lancez ./dev.py backup pending pour voir ce qui s'est passé et --recover previous pour remettre les données d'avant.",
       "docs": "Comment récupérer",
       "autoReload": "Cette page se recharge d'elle-même dès que LibreFolio sert à nouveau les données.",
       "support": "Contacter l'assistance"
