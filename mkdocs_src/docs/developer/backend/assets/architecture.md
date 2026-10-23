@@ -463,8 +463,9 @@ the events see the cut range; an item that starts after it gets an empty result 
 `POST /assets/prices/query`, the risk preparation and AI Export all read through this method, so a
 range of theirs that reaches past tomorrow stops there. Before, the last price was carried forward to
 the end, one point per day: about 2.9 million from a recent price to 9999-12-31, followed by a 500
-(`OverflowError`). Without a seed price (none stored before the range), `_build_backward_filled_series()`
-also starts its walk at the first stored price of the range instead of its start: the days before it
+(`OverflowError`). Without a seed price (none stored before the range), the series
+([read by observation](#price-query-observation)) also starts at the first stored price of the range
+instead of its start, as the native `_build_backward_filled_series()` does: the days before it
 cost nothing, and the points emitted are the same. X-R55's own module, `backend/app/utils/date_range_limits.py`,
 keeps the span limit: `RANGE_SPAN_LIMIT_DAYS` (36,525 days, 100 years) back from an end
 (`range_span_floor()`), which bounds the [history-cache walk](#history-cache-walk) of a sync and the
@@ -495,7 +496,7 @@ the builders of their 422 `detail`, `bulk_too_many_items_detail()` and
   500 with a fixed message, the error in the log.
 - **Item-days**: once the prices and the seeds are read, before the events query and the fills,
   `get_prices_bulk()` sums the points each item's backward fill will emit. `_fill_span()` mirrors
-  `_build_backward_filled_series()` without building anything: with a seed (a stored one, or a
+  the native builder `_build_backward_filled_series()` (the days `observe()` emits) without building anything: with a seed (a stored one, or a
   price of the map before the load start), one point per day of the load range; without one, one
   per day from the first stored price to the end; none when the fill emits nothing (no price, or a
   first price after the end). The comparison series of a signal that needs a prepared asset series
@@ -544,14 +545,68 @@ still loads its asset's full daily history, and 300 assets without signals still
 2.9 million points: the asset list does not ask for the [sampled series](#price-query-sampling)
 the query can return (backlog Z-29).
 
-With `target_currency`, the conversion pass converts every close not already in that currency
-through one `convert_bulk()` call per result, scales open, high and low by the same factor, keeps
-the native values in the `original_*` fields, and records the rate's date in
+With `target_currency`, every close not already in that currency is converted ([once for each stretch
+of days](#price-query-observation) on which the price row and the rate row are the same, through
+`convert_bulk()`), open, high and low are scaled by the same factor, the native values are kept in
+the `original_*` fields, and the rate's date is recorded in
 `backward_fill_info.fx_rate_date` / `fx_days_back`. A point whose rate cannot be resolved keeps its
 native price and currency, and the result's `errors` lists the failures, deduplicated and capped at
 ten plus one "… and N more" line. The query never registers an FX pair: the asset page reports
 the pair through its `requiredFxPairs` banners, and its comparison loader drops those points (see
 [Chart internals](../../frontend/components/charts.md#asset-detail-page-sync-and-comparison-sync)).
+
+### 👁️ Series Read by Observation {: #price-query-observation }
+
+The public series is still one point for every calendar day of the load range: the last stored row on
+or before the day, converted (with `target_currency`) at the rate of that day. What changed (X-Q1,
+X-Q2) is how `get_prices_bulk()` builds it. A row only changes on the days a price is stored, and a rate
+on the days a rate is stored, so converting every day repeated the same conversion. The module
+`backend/app/services/assets/observed_prices.py` resolves each day to its two rows, with no conversion,
+and converts each distinct pair once:
+
+```mermaid
+flowchart LR
+    R["Stored rows<br/>(+ seed before start)"] --> D["resolve_days()<br/>last row on or before each day"]
+    S["fx.conversion.unit_rate_steps()<br/>rate row of each day"] --> D
+    D -- "one (price row, rate row) pair,<br/>on its first day" --> C["fx.conversion.convert_bulk()"]
+    C --> P["point_of()<br/>copies the answer to every day of the stretch"]
+    D -- "no target, same currency,<br/>close 0" --> P
+    P --> O["ObservedPrices<br/>/ list of FAPricePoint"]
+```
+
+- **Entry points.** `observe()` returns an `ObservedPrices`; `series_points()` returns the points and the
+  conversion errors for a list of dates, which is how a [sampled series](#price-query-sampling)
+  (Z-29) converts its few dates. Both go through `resolve_days()` and `point_of()`, and `fill_point()`
+  (also reached by `PriceQueryOperations._fill_point()`) is the one rule for the point of a day.
+- **What stays per day.** Only the copy: each day keeps its own date, its `days_back`, its
+  `fx_rate_date` / `fx_days_back` and its `backward_fill_info`. A failed conversion keeps the native
+  price with the price staleness and no FX data; a close of 0 stays native; a day without a usable
+  rate on or before it gets the same error `convert_bulk()` writes, without asking it.
+- **Parity.** The public API is unchanged: one point per day, identical to the digit to what the
+  day-by-day pass gave, with the same `backward_fill_info`, `fx_rate_date`, `fx_days_back`, conversion
+  errors, cap of 10 errors and the final «… and N more FX conversion failures» line.
+  `_build_backward_filled_series()` is no longer the builder of the answers (they come from
+  `observe()`): it stays the native builder, the reference the parity tests compare against, and
+  `_fill_span()` mirrors it.
+- **`ObservedPrices`.** The object the risk engine (R1) reads. `first_point_date` is the range start
+  when a row precedes it, else the first row inside, `None` for no point at all; `observation_dates`
+  are the days a row is stored on inside the range; `point_on(day)` is the point the public series has
+  on that day, `None` before `first_point_date`, and `ValueError` after the range `end` (those rows
+  were not read). `PriceQueryOperations.observed_prices(request, session)` reads the rows and the seed
+  of one `FAPriceQueryItem` and returns it.
+- **Signals.** The load window is unchanged: the visible start minus the signal warm-up, and the
+  signals read the points `observe()` returns. Only a full-history
+  item (`RISK_DRAWDOWN`) loads back to 1900-01-01, and it stays dense because the prepared series
+  (`market_series.py`, not changed here) reads it.
+
+Measured on a 10-year USD asset asked in EUR (3,650 points, a rate on every weekday): 2,608 conversions
+handed to `convert_bulk()` instead of 3,650, with identical points. The time is unchanged (0.26 s against
+0.25 s): this saves conversions, not time.
+
+Tests: `./dev.py test services price-query-observations`
+(`backend/test_scripts/test_services/test_price_query_observations.py`, isolation `pure`): the public
+points and conversion errors against the previous day-by-day pipeline, `convert_bulk()` handed stretches
+and not days, `point_on()` against the public series, and the signal results.
 
 ### 🗜️ Sampled Price Series {: #price-query-sampling }
 
@@ -589,10 +644,10 @@ nothing to fill, no seed and no row in the range, gets an empty series whatever 
 **The points.** A weekly or monthly series holds the dates of `sample_dates()`: the last day of
 each ISO week (Monday to Sunday) or calendar month (`bucket_of()`) from F's bucket to the end's,
 the last bucket cut at the range end. Each point is the one the daily fill has on that date
-(`_fill_point()`, which `_build_backward_filled_series()` uses too): the last stored row on or
-before it, with its `backward_fill_info`. F is one of these dates only when it closes its bucket or
-is the end. With `target_currency`, the conversion pass converts the sample and the point on F like
-any series, each point on its own date.
+(`_fill_point()`, which `_build_backward_filled_series()` and the [observed series](#price-query-observation)
+use too): the last stored row on or before it, with its `backward_fill_info`. F is one of these dates only when it closes its bucket or
+is the end. With `target_currency`, `series_points()` converts the sample and the point on F like
+any series ([once for each stretch](#price-query-observation)), each point on its own date.
 
 **The answer.** `FAPriceQueryResult.resolution` is always present: the step of `prices`, `daily`
 by default. A weekly or monthly result also carries `sample_bounds` (`FAPriceSampleBounds`, two
@@ -1119,7 +1174,7 @@ What a caller returns while a provider is paused, or after it refused:
 
 Financial markets are closed on weekends and holidays. To provide a continuous price series for charts, LibreFolio uses a **backward-fill** strategy.
 
-If a price is requested for a date where no data exists (e.g., Sunday), the system looks back to find the most recent available price (e.g., Friday's close) and uses that. The `backward_fill_info` field in `FAPricePoint` indicates the actual date and staleness (`days_back`). The fill stops at tomorrow by the server's calendar (`datetime_utils.latest_range_end()`, the helper R13-SEC7-1 also uses), the query's [range ceiling](#price-query-range-ceiling).
+If a price is requested for a date where no data exists (e.g., Sunday), the system looks back to find the most recent available price (e.g., Friday's close) and uses that. The `backward_fill_info` field in `FAPricePoint` indicates the actual date and staleness (`days_back`). The points of a query are built by [observation](#price-query-observation); `_build_backward_filled_series()` is the native reference builder. The fill stops at tomorrow by the server's calendar (`datetime_utils.latest_range_end()`, the helper R13-SEC7-1 also uses), the query's [range ceiling](#price-query-range-ceiling).
 
 Backward fill reuses stored market prices only, and valuation adds no separate
 last-purchase-price fallback: the portfolio engine values each holding through the

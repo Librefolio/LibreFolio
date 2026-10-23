@@ -37,13 +37,14 @@ from backend.app.schemas.common import (
     DateRangeModel,
     FxBackwardFillInfo,
 )
-from backend.app.schemas.prices import AssetBackwardFillInfo, FACurrentPriceItem, FACurrentValue, FAPriceQueryResult, FAPriceSampleBounds
+from backend.app.schemas.prices import FACurrentPriceItem, FACurrentValue, FAPriceQueryItem, FAPriceQueryResult, FAPriceSampleBounds
 from backend.app.schemas.provider import (
     FAVolumeKind,
 )
 from backend.app.services.assets import core
 from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceProvider
 from backend.app.services.assets.market_calendar import ensure_market_holidays
+from backend.app.services.assets.observed_prices import ObservedPrices, fill_point, observe, series_points
 from backend.app.services.assets.price_sampling import SampleResolution, choose_resolution, resolve_sample_references, sample_dates
 from backend.app.services.assets.price_store import storable_current_value
 from backend.app.services.assets.registry import AssetProviderRegistry
@@ -192,6 +193,8 @@ class PriceQueryOperations:
         end_date: date_type,
         seed_price: Optional[PriceHistory] = None,
     ) -> list[FAPricePoint]:
+        """Reference for the tests: the dense native series as it was built before X-Q1 (a point for every calendar day, no
+        conversion). Production reads series through ``observed_prices.observe``; ``_fill_span`` mirrors the days this emits."""
         results: list[FAPricePoint] = []
         last_known: Optional[PriceHistory] = seed_price
         current = start_date
@@ -205,46 +208,37 @@ class PriceQueryOperations:
             if ph:
                 last_known = ph
             if last_known:
-                results.append(PriceQueryOperations._fill_point(last_known, current))
+                results.append(fill_point(last_known, current))
             # else: skip days before first known price
             current += timedelta(days=1)
         return results
 
     @staticmethod
     def _fill_point(row: PriceHistory, day: date_type) -> FAPricePoint:
-        """The fill's point on ``day``, from ``row``, the last stored row on or before it: the row itself when it is stored
-        on that day, else its values filled backward, with how far. One rule for the daily fill and the sample (Z-29)."""
-        return FAPricePoint(
-            date=day,
-            open=row.open,
-            high=row.high,
-            low=row.low,
-            close=row.close,
-            volume=row.volume,
-            currency=row.currency,
-            source_plugin_key=row.source_plugin_key,
-            backward_fill_info=None if row.date == day else AssetBackwardFillInfo(actual_rate_date=row.date, days_back=(day - row.date).days),
-        )
+        """The fill's point on ``day`` from ``row`` (``observed_prices.fill_point``): one rule for the daily fill, the sample and
+        the series read by observation (Z-29, X-Q1)."""
+        return fill_point(row, day)
 
     @staticmethod
-    def _sample_series(known: list[PriceHistory], dates: list[date_type]) -> list[FAPricePoint]:
-        """The fill's point on each of ``dates`` (oldest first), from ``known`` (oldest first): the last row on or before
-        the date (Z-29)."""
-        points: list[FAPricePoint] = []
-        cursor = -1
-        for day in dates:
-            while cursor + 1 < len(known) and known[cursor + 1].date <= day:
-                cursor += 1
-            if cursor >= 0:
-                points.append(PriceQueryOperations._fill_point(known[cursor], day))
-        return points
+    async def observed_prices(request: FAPriceQueryItem, session: AsyncSession) -> ObservedPrices:
+        """The series of ``request`` read by observation (X-Q1): ``first_point_date``, ``observation_dates`` and ``point_on(day)``,
+        the point the public series has on that day (no signal, no sampling; the request's range and ``target_currency``).
+
+        For the risk, which asks the last price on or before a day at that day's rate, and the days another asset quotes."""
+        start, end = request.date_range.start, request.date_range.end
+        rows = list((await session.execute(select(PriceHistory).where(and_(PriceHistory.asset_id == request.asset_id, PriceHistory.date >= start, PriceHistory.date <= end)).order_by(PriceHistory.date))).scalars().all())
+        seed = None
+        if not rows or rows[0].date > start:
+            seed = (await session.execute(select(PriceHistory).where(and_(PriceHistory.asset_id == request.asset_id, PriceHistory.date < start)).order_by(PriceHistory.date.desc()).limit(1))).scalars().first()
+        return await observe(session, request.asset_id, rows, seed, start, end, request.target_currency)
 
     @staticmethod
-    def _sampled_points(known: list[PriceHistory], plan: _SamplePlan) -> tuple[list[FAPricePoint], bool]:
-        """The points of ``plan``'s dates, the fill's first day in front when it is not one of them (it travels apart, in
-        ``sample_bounds``): the second value says it is (Z-29)."""
+    def _sampled_points(known: list[PriceHistory], plan: _SamplePlan) -> tuple[list[PriceHistory], list[date_type], bool]:
+        """What the points of ``plan``'s dates stand on: ``known`` (the rows, oldest first) and the dates, the fill's first
+        day in front when it is not one of them (it travels apart, in ``sample_bounds``); the last value says it is. The point
+        of each date is the last row on or before it (``series_points``), converted with the sample (Z-29, X-Q1)."""
         first_apart = plan.first != plan.dates[0]
-        return PriceQueryOperations._sample_series(known, [plan.first, *plan.dates] if first_apart else list(plan.dates)), first_apart
+        return known, [plan.first, *plan.dates] if first_apart else list(plan.dates), first_apart
 
     @staticmethod
     async def _bucket_last_rows(session: AsyncSession, asset_ids: list[int], start: date_type, end: date_type, resolution: SampleResolution) -> dict[int, list[PriceHistory]]:
@@ -354,12 +348,12 @@ class PriceQueryOperations:
         price_maps: dict[int, dict[date_type, PriceHistory]],
         seed_prices: dict[int, PriceHistory],
         asset_ranges: dict[int, tuple[date_type, date_type]],
-    ) -> dict[int, tuple[list[FAPricePoint], bool]]:
-        """Z-29: the points of each planned item once the day budget has passed them, and whether its first one travels
-        apart (``_sampled_points``). Every asset is read once: one the request reads whole (a daily item, a signal's
+    ) -> dict[int, tuple[list[PriceHistory], list[date_type], bool]]:
+        """Z-29: the rows and dates of each planned item's points once the day budget has passed them, and whether its first
+        one travels apart (``_sampled_points``). Every asset is read once: one the request reads whole (a daily item, a signal's
         comparison) on a range that holds the item's is sampled from those rows; the others with one statement per range
         and step (``_bucket_last_rows``) for all of them. Each date gets the point the daily fill has there."""
-        sampled: dict[int, tuple[list[FAPricePoint], bool]] = {index: ([], False) for index, plan in plans.items() if not plan.dates}
+        sampled: dict[int, tuple[list[PriceHistory], list[date_type], bool]] = {index: ([], [], False) for index, plan in plans.items() if not plan.dates}
         groups: dict[tuple[date_type, date_type, SampleResolution], list[int]] = {}
         for index, plan in plans.items():
             if not plan.dates:
@@ -645,7 +639,7 @@ class PriceQueryOperations:
         if item_days > MAX_BULK_ITEM_DAYS:
             raise BulkTooManyDaysError(item_days=item_days, max_item_days=MAX_BULK_ITEM_DAYS)
         sampled = await PriceQueryOperations._read_samples(requests, {index: plan for index, plan in sample_plans.items() if index not in placeholders}, session, price_maps, seed_prices, asset_ranges)
-        sampled.update({index: ([], False) for index in placeholders})
+        sampled.update({index: ([], [], False) for index in placeholders})
 
         # Build backward-filled series per asset (preserving request order)
         results = []
@@ -693,7 +687,9 @@ class PriceQueryOperations:
         for index, (req, (start, end)) in enumerate(zip(requests, load_ranges, strict=True)):
             aid = req.asset_id
             if index in sampled:
-                results.append(FAPriceQueryResult(asset_id=aid, prices=sampled[index][0], resolution=sample_plans[index].resolution if index in sample_plans else "daily"))
+                known, dates, _first_apart = sampled[index]
+                points, conversion_errors = await series_points(session, known, dates, req.target_currency)
+                results.append(FAPriceQueryResult(asset_id=aid, prices=points, errors=conversion_errors, resolution=sample_plans[index].resolution if index in sample_plans else "daily"))
                 continue
             price_map = price_maps.get(aid, {})
             in_memory_seed = max(
@@ -702,9 +698,9 @@ class PriceQueryOperations:
                 default=None,
             )
             seed = in_memory_seed or seed_prices.get(aid)
-            series = PriceQueryOperations._build_backward_filled_series(price_map, start, end, seed_price=seed)
+            observed = await observe(session, aid, list(price_map.values()), seed, start, end, req.target_currency)
             events = [event for event in event_maps.get(aid, []) if start <= event.date <= end] if aid in event_requests else []
-            results.append(FAPriceQueryResult(asset_id=aid, prices=series, events=events))
+            results.append(FAPriceQueryResult(asset_id=aid, prices=observed.points(), errors=list(observed.errors), events=events))
 
         dependency_results: dict[
             tuple[int, int],
@@ -746,175 +742,21 @@ class PriceQueryOperations:
                     default=None,
                 )
                 comparison_seed = in_memory_seed or seed_prices.get(comparison_asset_id)
+                observed_comparison = await observe(session, comparison_asset_id, list(comparison_price_map.values()), comparison_seed, start, end, target)
                 dependency_results[(request_index, comparison_asset_id)] = FAPriceQueryResult(
                     asset_id=comparison_asset_id,
-                    prices=PriceQueryOperations._build_backward_filled_series(
-                        comparison_price_map,
-                        start,
-                        end,
-                        seed_price=comparison_seed,
-                    ),
+                    prices=observed_comparison.points(),
+                    errors=list(observed_comparison.errors),
                 )
 
-        # ── Currency conversion pass ──────────────────────────────────────
-        # For each result whose request has target_currency, convert OHLC
-        # values via FX rates in a single batch call per asset.
-        # E.1 closure (2026-04-22) — the `fx_error` discriminator was removed
-        # from the response: the frontend surfaces the remediation via the
-        # `requiredFxPairs` derived in `routes/(app)/assets/[id]/+page.svelte`,
-        # which already distinguishes 4 states (`ok`/`missing`/`no-data`/`partial-gap`)
-        # with dedicated banners + CTA. Auto-registration is NOT performed:
-        # pair registration is an explicit user action (E.4 cancelled).
-
-        conversion_jobs = [(getattr(req, "target_currency", None), result) for req, result in zip(requests, results, strict=True)]
-        conversion_jobs.extend(
-            (
-                effective_risk_targets.get(request_index),
-                dependency_result,
-            )
-            for (
-                request_index,
-                _comparison_asset_id,
-            ), dependency_result in dependency_results.items()
-        )
-        for target, result in conversion_jobs:
-            if not target or not result.prices:
-                continue
-
-            # Collect conversion requests for close (required) prices
-            # We'll convert close first, then proportionally scale OHLC
-            conversions = []
-            price_indices = []  # track which prices need conversion
-            for i, p in enumerate(result.prices):
-                if p.currency == target:
-                    continue  # already in target currency
-                conversions.append((Currency(code=p.currency, amount=p.close), target, p.date))
-                price_indices.append(i)
-
-            if not conversions:
-                continue
-
-            converted, conv_errors = await convert_bulk(session, conversions, raise_on_error=False)
-
-            # Dedup conversion errors ONCE per job. The old per-point loop ran
-            # `err not in result.errors` for every failed point × every error —
-            # quadratic in the number of failures, and with a full-history load
-            # (E1) tens of thousands of distinct per-date errors made the pass
-            # spin the event loop for minutes (2026-09-02 live wedge).
-            # The list is also CAPPED: errors embed the failing date, so a
-            # long uncovered FX range would otherwise produce a multi-MB
-            # payload nobody reads (the frontend only ever surfaces [0]).
-            if conv_errors:
-                seen = set(result.errors)
-                deduped = []
-                for err in conv_errors:
-                    if err not in seen:
-                        seen.add(err)
-                        deduped.append(err)
-                MAX_CONV_ERRORS = 10
-                if len(deduped) > MAX_CONV_ERRORS:
-                    deduped = deduped[:MAX_CONV_ERRORS] + [f"… and {len(deduped) - MAX_CONV_ERRORS} more FX conversion failures"]
-                result.errors.extend(deduped)
-
-            # Apply conversion results
-            conv_idx = 0
-            for pi in price_indices:
-                conv_result = converted[conv_idx]
-                original_point = result.prices[pi]
-
-                if conv_result is None:
-                    # Conversion failed — keep native price. The FE will hide
-                    # the point from converted chart (same policy as events,
-                    # E.8.2) and surface the FX pair issue via `requiredFxPairs`.
-                    old_bfi = original_point.backward_fill_info
-                    failed_bfi = AssetBackwardFillInfo(
-                        actual_rate_date=old_bfi.actual_rate_date if old_bfi else original_point.date,
-                        days_back=old_bfi.days_back if old_bfi else 0,
-                        fx_rate_date=None,
-                        fx_days_back=None,
-                    )
-                    # Keep the same currency/values, only attach the bfi.
-                    result.prices[pi] = FAPricePoint(
-                        date=original_point.date,
-                        open=original_point.open,
-                        high=original_point.high,
-                        low=original_point.low,
-                        close=original_point.close,
-                        volume=original_point.volume,
-                        currency=original_point.currency,
-                        original_currency=original_point.original_currency,
-                        original_close=original_point.original_close,
-                        original_open=original_point.original_open,
-                        original_high=original_point.original_high,
-                        original_low=original_point.original_low,
-                        source_plugin_key=original_point.source_plugin_key,
-                        backward_fill_info=failed_bfi,
-                    )
-                    conv_idx += 1
-                    continue
-
-                converted_currency, rate_date, _bfill_applied = conv_result
-                original_point = result.prices[pi]
-                original_close = original_point.close
-                original_currency = original_point.currency
-
-                # Compute conversion factor from close conversion
-                if original_close and original_close != 0:
-                    fx_factor = converted_currency.amount / original_close
-                else:
-                    conv_idx += 1
-                    continue
-
-                # Scale all OHLC values by the same factor
-                new_open = original_point.open * fx_factor if original_point.open is not None else None
-                new_high = original_point.high * fx_factor if original_point.high is not None else None
-                new_low = original_point.low * fx_factor if original_point.low is not None else None
-                new_close = converted_currency.amount
-
-                # Compute FX staleness
-                fx_days_back_val = (original_point.date - rate_date).days if rate_date < original_point.date else 0
-
-                # Build new backward_fill_info preserving price staleness
-                old_bfi = original_point.backward_fill_info
-                if old_bfi:
-                    new_bfi = AssetBackwardFillInfo(
-                        actual_rate_date=old_bfi.actual_rate_date,
-                        days_back=old_bfi.days_back,
-                        fx_rate_date=rate_date,
-                        fx_days_back=fx_days_back_val,
-                    )
-                elif fx_days_back_val > 0:
-                    new_bfi = AssetBackwardFillInfo(
-                        actual_rate_date=original_point.date,
-                        days_back=0,
-                        fx_rate_date=rate_date,
-                        fx_days_back=fx_days_back_val,
-                    )
-                else:
-                    new_bfi = None
-
-                # Replace price point with converted version
-                result.prices[pi] = FAPricePoint(
-                    date=original_point.date,
-                    open=new_open,
-                    high=new_high,
-                    low=new_low,
-                    close=new_close,
-                    volume=original_point.volume,
-                    currency=target,
-                    original_currency=original_currency,
-                    original_close=original_close,
-                    original_open=original_point.open,
-                    original_high=original_point.high,
-                    original_low=original_point.low,
-                    source_plugin_key=original_point.source_plugin_key,
-                    backward_fill_info=new_bfi,
-                )
-                conv_idx += 1
+        # X-Q2: the prices above are already converted — a stored row under a rate row is converted once
+        # (``observed_prices``), not once for every day. A failed conversion keeps the native price with its
+        # ``backward_fill_info`` and the FE hides the point from the converted chart (same policy as events, E.8.2) and
+        # surfaces the FX pair issue via ``requiredFxPairs``; auto-registration is NOT performed (E.4 cancelled).
 
         # Z-29: a sampled series' first point travels apart, beside its last; prices keep the buckets' points, the ones
         # the compact chart draws. Here, once every point is converted.
-        for index, (_points, first_apart) in sampled.items():
+        for index, (_known, _dates, first_apart) in sampled.items():
             result = results[index]
             first = result.prices.pop(0) if first_apart and result.prices else (result.prices[0] if result.prices else None)
             result.sample_bounds = FAPriceSampleBounds(first=first, last=result.prices[-1]) if first is not None and result.prices else None

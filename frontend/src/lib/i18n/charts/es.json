@@ -136,7 +136,9 @@
       "resultMissing": "El backend no devolvió ningún resultado para esta señal. Reintenta la solicitud de señales.",
       "partialResult": "Esta señal solo está disponible parcialmente con los datos actuales.",
       "unavailable": "Esta señal no se puede calcular con los datos disponibles.",
-      "partialContiguousSegment": "Señal calculada sobre el segmento contiguo completo {start}–{end}. Se excluyeron {excluded} puntos cargados porque faltaban fechas o campos obligatorios. Entrada completa: {available}/{requested} ({coverage}%, calentamiento incluido). Racha máxima ausente: {consecutive} puntos."
+      "partialContiguousSegment": "Señal calculada sobre el segmento contiguo completo {start}–{end}. Se excluyeron {excluded} puntos cargados porque faltaban fechas o campos obligatorios. Entrada completa: {available}/{requested} ({coverage}%, calentamiento incluido). Racha máxima ausente: {consecutive} puntos.",
+      "undefinedWindowPartial": "{count} puntos de esta rentabilidad no se pueden calcular, del {start} al {end}, porque falta un precio necesario o no es utilizable. Vuelve a sincronizar los precios de este activo del {resyncStart} al {resyncEnd} e inténtalo de nuevo.",
+      "undefinedWindowUnavailable": "Esta rentabilidad no se puede calcular: los {count} puntos, del {start} al {end}, no tienen un precio utilizable. Vuelve a sincronizar los precios de este activo del {resyncStart} al {resyncEnd} e inténtalo de nuevo."
     },
     "axes": {
       "exchangeRate": "Eje del tipo de cambio ({pair})",
