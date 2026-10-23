@@ -103,9 +103,14 @@ LibreFolio turns off the actions it knows the server would refuse, and says why 
 
 - 👑 The instance always keeps an active administrator. Your own row has no actions, so to step
   down: make another account an administrator, then ask them to remove your rights.
-- 🛡️ **Protected** is reserved for the administrator who pays for a
-  [managed instance](hosting_providers.md#managed-profile). No account is protected on a
-  self-hosted instance.
+- 🛡️ **Protected** is the administrator who pays for a
+  [managed instance](hosting_providers.md#managed-profile), the account of `LIBREFOLIO_ADMIN_EMAIL`:
+  nobody can delete, deactivate or demote it, and no other administrator can reset its password or
+  sign it out (`409 ACCOUNT_PROTECTED`); the owner cannot delete its own account or change its own
+  email address from the app, while it still changes its password and its username, and recovers a
+  forgotten password as usual. On the server, `dev.py user` can still deactivate, demote, reset the
+  password, give a reset link and change the email of that account (it has no command to delete one):
+  the emergency exit. No account is protected on a self-hosted instance.
 
 ### ⏳ Accounts Waiting for Their Email {: #waiting }
 
