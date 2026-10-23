@@ -33,7 +33,7 @@
 -->
 <script lang="ts">
     import {todayIso} from '$lib/utils/dateOnly';
-    import {onDestroy, untrack} from 'svelte';
+    import {onDestroy, tick, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
     import {X, ArrowRight, ArrowDown, Check, Pencil, Save, Info} from 'lucide-svelte';
@@ -70,11 +70,13 @@
     import {resolveIssueMessage, type ResolverContext} from '$lib/features/transactions/resolveValidationMessage';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import {generateUUID} from '$lib/utils/core/uuid';
-    import {computeSignHint} from '$lib/features/transactions/form/signHintColor';
+    import {normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
+    import {convertTradeAmount} from '$lib/features/transactions/form/txTradeAmountApi';
+    import {driverAfterEdit, planTradeAmountRequest, type TradeAmountDriver} from '$lib/features/transactions/form/txTradeAmount';
+    import {computeTxFormChecks, type TxFormCell, type TxFormCheckKind} from '$lib/features/transactions/form/txFormChecks';
     import {deduplicateIssues, signLabel, signHintKey} from '$lib/features/transactions/form/txFormFields';
     import {isBulkBalanceIssue} from '$lib/features/transactions/bulk/bulkDisplay';
     import {applySign, buildCreatePayload, buildUpdateDiff, diffDualItem, buildDualCreatePayloads, exactDecimalSign, upgradeAutoToDetail, type TxFields, type TxOriginal, type TxDualSide, type PairFormLayout as PayloadPairLayout} from '$lib/features/transactions/txPayloadHelpers';
-    import {exceedsSignificantDigits, REAL_SIGNIFICANT_DIGITS} from '$lib/utils/core/parseDecimalInput';
     import {lookupFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/currency/fxConversionHelper';
     import type {TXReadItem} from '../types';
@@ -365,6 +367,10 @@
             partnerRow = null;
             loadingPartner = false;
             quantityInputValid = true;
+            checksArmed = false;
+            tradeEntryMode = 'amount';
+            tradeDriver = 'amount';
+            unitPrice = '';
             formWacResult = null;
             wacCurrencyHint = null;
             dualTo = emptyDualTo();
@@ -821,30 +827,82 @@
         return null;
     });
 
-    // Cash sign validation — paired mode uses 'positive' (user enters positive, flip negates FROM).
-    // Single mode uses the type's cashSign rule.
-    let effectiveCashRule = $derived(pairLayout != null ? 'positive' : rule.cashSign);
-    let cashSignResult = $derived(computeSignHint(parseFloat(draft.cash?.amount ?? '0'), effectiveCashRule));
-    let cashToSignViolation = $derived(pairLayout === 'fx' && computeSignHint(parseFloat(dualTo.cash?.amount ?? '0'), 'positive').bad);
-
-    // Block submit for an invalid exact quantity (syntax, digit budget — 15 integer, 10 decimals, 15 significant —
-    // range or sign) and for the legacy cash-sign checks.
-    let hasSignViolation = $derived((rule.quantityMode !== 'forbidden' && !quantityInputValid) || cashSignResult.bad || cashToSignViolation);
-
-    // B-48: a cash amount past the significant digits the backend keeps. The quantity's own budget is in its validity.
-    let cashOverSignificant = $derived(exceedsSignificantDigits(draft.cash?.amount, REAL_SIGNIFICANT_DIGITS));
-    let cashToOverSignificant = $derived(pairLayout === 'fx' && exceedsSignificantDigits(dualTo.cash?.amount, REAL_SIGNIFICANT_DIGITS));
-
-    /** A date picker shows a date it refused: the draft still holds the previous one. */
-    let hasDateError = $derived(!dateMainValid || !dateToValid);
     /**
-     * V-37: the errors the form sees on its own — a quantity or cash sign it refuses, two sides that must differ, a
-     * typed date the picker refused, a cash amount past the significant digits (B-48). While any is on screen the server is not asked: the payload would carry the
-     * sign-corrected quantity or the previous date, and its verdict would be about a draft that is not the one shown.
-     * So no automatic run, no manual one, no «valid» and no Apply. Declared before the scheduler, whose constructor
-     * already reads `enabled`.
+     * V-37 / V-37b: what is wrong with the form on its own, found without the server — `computeTxFormChecks`: first the
+     * required fields, then the format (a quantity or cash sign it refuses, two sides that must differ, a typed date the
+     * picker refused, a cash amount past the significant digits, B-48). The «format» entries are the errors that keep the
+     * server out: while any is on screen the payload would carry the sign-corrected quantity or the previous date, and
+     * its verdict would be about a draft that is not the one shown. So no automatic run, no manual one, no «valid» and
+     * no Apply. Declared before the scheduler, whose constructor already reads `enabled`.
      */
-    let hasLocalErrors = $derived(hasSignViolation || !!dualValidationError || hasDateError || cashOverSignificant || cashToOverSignificant);
+    let formChecks = $derived.by(() => {
+        void $typesVersion; // the type rule may arrive after the first paint
+        return computeTxFormChecks({pairLayout, rule, draft, dualTo: pairLayout ? effectiveDualTo : null, dateValid: dateMainValid, dateToValid, quantityValid: quantityInputValid});
+    });
+    let hasLocalErrors = $derived(formChecks.some((check) => check.kind === 'format'));
+
+    /** V-37b: the cells are marked only after «Validate now» was pressed, and stay marked only while they are wrong. */
+    let checksArmed = $state(false);
+    let markedCells = $derived.by<Partial<Record<TxFormCell, TxFormCheckKind>>>(() => (checksArmed ? Object.fromEntries(formChecks.map((check) => [check.cell, check.kind])) : {}));
+    let markedCount = $derived(Object.keys(markedCells).length);
+
+    // =========================================================================
+    // «Total amount / Unit price» (#47): the user types one, the backend calculates the other
+    // =========================================================================
+
+    /** Quiet time after the last keystroke before the backend is asked for the other value. */
+    const TRADE_AMOUNT_DELAY_MS = 250;
+    /** The badge: which field the user types. It follows the driver after an edit, and the open form starts on the amount. */
+    let tradeEntryMode = $state<TradeAmountDriver>('amount');
+    /** The value written last; the other one is calculated from it (`driverAfterEdit`). Only a typed unit price makes it `unit_price`. */
+    let tradeDriver = $state<TradeAmountDriver>('amount');
+    /** The unit price as the field shows it (a comma stays a comma while typed; the request reads it normalised): calculated while the amount drives, typed while it does. Never part of the payload: only the amount is stored. */
+    let unitPrice = $state('');
+    /** A BUY or SELL: the only types with a quantity and a cash amount both required. A pair has no unit price. */
+    let showEntryMode = $derived(!isReadonly && !pairLayout && rule.quantityMode !== 'forbidden' && rule.cashField !== 'forbidden' && rule.assetField !== 'forbidden');
+    let tradeRequest = $derived(showEntryMode ? planTradeAmountRequest({driver: tradeDriver, assetId: draft.asset_id, quantity: draft.quantity, amount: draft.cash?.amount ?? '', unitPrice: normalizeDecimalInput(unitPrice)}) : null);
+    let tradeRequestKey = $derived(tradeRequest ? JSON.stringify(tradeRequest) : '');
+    let tradeSeq = 0;
+
+    /** The backend's answer lands in the value that does not drive: never in the one the user is typing. */
+    function applyTradeAnswer(mode: 'price_to_amount' | 'amount_to_price', result: string | null) {
+        if (mode === 'amount_to_price') {
+            unitPrice = result ?? '';
+            return;
+        }
+        if (result === null || draft.cash?.amount === result) return;
+        const code = draft.cash?.code || (draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR';
+        draft = {...draft, cash: {code, amount: result}};
+    }
+
+    $effect(() => {
+        void tradeRequestKey;
+        const request = untrack(() => tradeRequest);
+        const seq = ++tradeSeq;
+        if (!request) {
+            // Nothing to calculate from: a calculated unit price has no source left; a typed one stays as the user left it.
+            if (untrack(() => tradeDriver) === 'amount' && untrack(() => unitPrice) !== '') unitPrice = '';
+            return;
+        }
+        const timer = setTimeout(async () => {
+            const answered = await convertTradeAmount(request);
+            // A newer request, or a driver that changed meanwhile, made this answer stale.
+            if (seq === tradeSeq) applyTradeAnswer(request.mode, answered?.result ?? null);
+        }, TRADE_AMOUNT_DELAY_MS);
+        return () => clearTimeout(timer);
+    });
+
+    function onEntryModeChange(mode: TradeAmountDriver) {
+        if (mode === tradeEntryMode) return;
+        tradeEntryMode = mode;
+        // The badge only changes which field the user types; the amount on screen stays what drives until a price is typed.
+        tradeDriver = 'amount';
+    }
+
+    function onUnitPriceInput(value: string) {
+        unitPrice = value;
+        tradeDriver = driverAfterEdit(tradeDriver, 'unit_price');
+    }
 
     // =========================================================================
     // Validate scheduler — debounced/manual/idle, always enabled (1 row).
@@ -1106,31 +1164,30 @@
     // Local errors (V-37): «Validate now» and the first field to fix
     // =========================================================================
 
-    /** The scrollable form body, searched by `focusFirstLocalError`. */
+    /** The scrollable form body, searched by `focusFirstMarkedCell`. */
     let formBodyEl = $state<HTMLDivElement | undefined>(undefined);
 
     /**
-     * Moves the focus to the first field, in screen order, that holds one of the form's own errors. Each selector
-     * matches what that control publishes — the date picker's `data-invalid` root, the quantity input's test id — or,
-     * for the cells that publish nothing, the test id this form gives them. `querySelector` on the list returns the
-     * first match in document order, whatever the layout (single, pair, FX).
+     * Moves the focus to the first marked cell in screen order. Each cell is a `[data-cell]` wrapper that carries
+     * `data-cell-invalid` while it is marked, so `querySelector` returns the first in document order whatever the layout
+     * (single, pair, FX); the focus goes to the first control inside it — the typed field, or the combobox.
      */
-    function focusFirstLocalError() {
-        if (!formBodyEl) return;
-        const selectors: string[] = [];
-        if (hasDateError) selectors.push('[data-invalid="true"] input[type="text"]');
-        if (rule.quantityMode !== 'forbidden' && !quantityInputValid) selectors.push('input[data-testid="tx-form-quantity"]');
-        if (cashSignResult.bad || cashOverSignificant) selectors.push('input[data-testid="tx-form-cash-amount"]', 'input[data-testid="tx-form-cash-from-amount"]');
-        if (cashToSignViolation || cashToOverSignificant) selectors.push('input[data-testid="tx-form-cash-to-amount"]');
-        if (dualValidationError) selectors.push(pairLayout === 'fx' ? '[data-testid="tx-form-cash-to"] [role="combobox"]' : '[data-testid="tx-form-dual-to"] [role="combobox"]');
-        if (selectors.length === 0) return;
-        formBodyEl.querySelector<HTMLElement>(selectors.join(', '))?.focus();
+    async function focusFirstMarkedCell() {
+        await tick();
+        const cell = formBodyEl?.querySelector<HTMLElement>('[data-cell][data-cell-invalid]');
+        // The typed field or the combobox first: the date picker's calendar button comes before its text field in the DOM.
+        (cell?.querySelector<HTMLElement>('input:not([disabled]), [role="combobox"]') ?? cell?.querySelector<HTMLElement>('button:not([disabled])'))?.focus();
     }
 
-    /** «Validate now» asks the server, unless the form holds an error of its own: then it leads to that field. */
+    /**
+     * «Validate now» (V-37b) is always available. It arms the marks, then asks the form first: required fields, then
+     * format. With anything wrong it marks every wrong cell, leads to the first and does not call the server; with
+     * nothing wrong it validates.
+     */
     function validateNow() {
-        if (hasLocalErrors) {
-            focusFirstLocalError();
+        checksArmed = true;
+        if (formChecks.length > 0) {
+            void focusFirstMarkedCell();
             return;
         }
         scheduler.trigger('manual');
@@ -1150,7 +1207,8 @@
         // V-37: Apply is disabled while the form holds an error of its own; this guard
         // covers a click that lands before the button repaints.
         if (hasLocalErrors) {
-            focusFirstLocalError();
+            checksArmed = true;
+            void focusFirstMarkedCell();
             return;
         }
         // Bugfix-5 §A4: when wired from the BulkModal, "Apply" pushes the draft
@@ -1245,6 +1303,11 @@
         draft = {...draft, quantity: v};
     }
     function setCash(v: {code: string; amount: string} | null) {
+        // #47: typing the amount hands the driver (and the badge) back to it; a currency change alone does not.
+        if (showEntryMode && (v?.amount ?? '') !== (draft.cash?.amount ?? '')) {
+            tradeDriver = driverAfterEdit(tradeDriver, 'amount');
+            tradeEntryMode = 'amount';
+        }
         draft = {...draft, cash: v};
     }
     function setCashTo(v: {code: string; amount: string} | null) {
@@ -1350,8 +1413,7 @@
         return 'any';
     });
 
-    // The cash sign checks and `hasSignViolation` live above the validate scheduler, with
-    // `hasLocalErrors`: the scheduler's constructor already reads them.
+    // The form's own checks (`formChecks`, `hasLocalErrors`) live above the validate scheduler: its constructor already reads them.
 
     // =========================================================================
     // W39: Inline broker / asset creation modals
@@ -1471,6 +1533,7 @@
                     {pairLayout}
                     {quantityInputId}
                     {quantityInputSignRule}
+                    {markedCells}
                     {typeImmutable}
                     {wacAvailableCurrencies}
                     {handleSyncFx}
@@ -1522,6 +1585,12 @@
                     {quantityHintId}
                     {quantityInputId}
                     {quantityInputSignRule}
+                    {markedCells}
+                    {showEntryMode}
+                    entryMode={tradeEntryMode}
+                    {unitPrice}
+                    {onEntryModeChange}
+                    {onUnitPriceInput}
                     {rule}
                     {showCostBasisField}
                     {typeImmutable}
@@ -1588,18 +1657,13 @@
         <div class="flex items-center justify-between gap-2 px-5 py-3 border-t border-lf-subtle shrink-0 text-xs">
             <div class="flex items-center gap-2 flex-wrap">
                 {#if !isReadonly}
-                    <button
-                        type="button"
-                        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-lf-secondary hover:bg-lf-hover disabled:opacity-40 disabled:cursor-not-allowed"
-                        disabled={!isFormComplete}
-                        onclick={validateNow}
-                        data-testid="tx-form-validate-now"
-                        title={$t('transactions.validate.now')}
-                    >
+                    <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-lf-secondary hover:bg-lf-hover" onclick={validateNow} data-testid="tx-form-validate-now" title={$t('transactions.validate.now')}>
                         ⚡ <span class="hidden sm:inline">{$t('transactions.validate.now')}</span>
                     </button>
                 {/if}
-                {#if scheduler.state.isValidating || scheduler.state.isPending}
+                {#if markedCount > 0}
+                    <span class="text-[11px] text-lf-danger" data-testid="tx-form-check-summary" data-check-count={markedCount}>{$t('transactions.validate.checkSummary', {values: {n: markedCount}})}</span>
+                {:else if scheduler.state.isValidating || scheduler.state.isPending}
                     <span class="text-[11px] text-lf-muted">{$t('transactions.validate.validating')}</span>
                 {:else if isFreshlyValid}
                     <span class="text-lf-success text-xs flex items-center gap-1" data-testid="tx-form-valid-inline">
