@@ -1,6 +1,6 @@
 """Whether this instance can send email, and the sending itself.
 
-``email_config_state()`` reads the ``LIBREFOLIO_SMTP_*`` variables now and never raises: without a host email is off,
+``email_config_state()`` reads the ``LIBREFOLIO_SMTP_*`` variables (and ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS``) now and never raises: without a host email is off,
 as before release 1.3; a value that cannot be used also turns it off, and is logged once per process with the variable
 at fault (never its value when it is a secret). The server starts either way.
 
@@ -26,8 +26,10 @@ import structlog
 
 from backend.app.config import SecretFileError
 from backend.app.config.email import (
+    DEFAULT_SIGNUP_EMAILS_PER_ADDRESS,
     DEFAULT_SMTP_MAX_PER_HOUR,
     EmailConfigError,
+    signup_emails_per_address,
     smtp_host,
     smtp_max_per_hour,
     smtp_password,
@@ -40,6 +42,7 @@ from backend.app.config.email import (
 from backend.app.config.platform import instance_blocked
 from backend.app.services.email import smtp
 from backend.app.services.email.messages import EmailContent, compose_message
+from backend.app.services.platform.client_address import client_rate_key
 from backend.app.utils.runtime.rate_window import RateDecision, SlidingWindowLimiter
 
 logger = structlog.get_logger(__name__)
@@ -49,6 +52,14 @@ BUDGET_WINDOW_SECONDS = 3600.0
 
 #: The emails this process sent in the last hour; read at call time, so a test can replace it.
 INSTANCE_BUDGET = SlidingWindowLimiter(DEFAULT_SMTP_MAX_PER_HOUR, BUDGET_WINDOW_SECONDS, max_keys=1)
+
+#: The activation and password-reset emails one client address may ask for in the last hour, one count shared by the
+#: three ways to ask: a registration, «send the link again» from the sign-in page, and «forgot password». Keyed by
+#: ``client_rate_key()`` (an IPv6 client by its /64). One limiter for the process, built with the default; its limit
+#: is ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS``, read from the environment at every call and passed to ``hit``/``peek``
+#: (as ``send_email`` does with ``INSTANCE_BUDGET``): nothing is read at import, a change is seen at once, a test sets
+#: the variable. The limiter is thread-safe. Read at call time, so a test can replace it.
+ADDRESS_BUDGET = SlidingWindowLimiter(DEFAULT_SIGNUP_EMAILS_PER_ADDRESS, BUDGET_WINDOW_SECONDS)
 
 
 @dataclass(frozen=True)
@@ -123,6 +134,9 @@ def email_config_state() -> EmailConfigState:  # noqa: PLR0911 — one return pe
         sender = smtp_sender()
         reply_to = smtp_reply_to()
         max_per_hour = smtp_max_per_hour()
+        # Not an SMTP variable, but checked with them: a value that cannot be used turns email off, like the others.
+        # Only checked here: delivery.address_budget_limit() reads it again at every request.
+        signup_emails_per_address()
     except EmailConfigError as exc:
         return _unusable(exc.variable, exc.code, str(exc))
     except SecretFileError as exc:
@@ -150,6 +164,42 @@ def budget_status(max_per_hour: int | None = None) -> RateDecision:
     """What the hourly budget of the instance allows now, without spending it: against ``max_per_hour`` when given (a
     state already read), else against the configured limit."""
     return INSTANCE_BUDGET.peek(limit=max_per_hour if max_per_hour is not None else email_config_state().max_per_hour)
+
+
+def address_budget_limit() -> int:
+    """``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS`` now. A value that cannot be used never raises here: ``email_config_state()``
+    has turned email off and reported it, so the default applies if a request gets this far."""
+    try:
+        return signup_emails_per_address()
+    except EmailConfigError:
+        return DEFAULT_SIGNUP_EMAILS_PER_ADDRESS
+
+
+def address_budget_peek(address: str | None) -> RateDecision:
+    """What the counter of the client ``address`` allows now, without spending it. Allowed when there is no address (a
+    unix socket) or none to count by (behind a proxy nobody trusts): one shared count would let a client block everyone."""
+    limit = address_budget_limit()
+    key = client_rate_key(address)
+    return RateDecision(allowed=True, remaining=limit, retry_after=0.0) if key is None else ADDRESS_BUDGET.peek(key, limit=limit)
+
+
+def address_budget_hit(address: str | None) -> RateDecision:
+    """Spend one unit of the counter of the client ``address`` when it has one left; a refused hit is not recorded.
+    Allowed, and counting nothing, when there is no address (see ``address_budget_peek``)."""
+    limit = address_budget_limit()
+    key = client_rate_key(address)
+    return RateDecision(allowed=True, remaining=limit, retry_after=0.0) if key is None else ADDRESS_BUDGET.hit(key, limit=limit)
+
+
+def longest_wait(*decisions: RateDecision | None) -> float:
+    """The seconds until a request refused by some of these counters can pass all of them: the longest ``retry_after``
+    among the refusals (``None`` and allowed ones do not count). 0 when none refuses."""
+    return max((decision.retry_after for decision in decisions if decision is not None and not decision.allowed), default=0.0)
+
+
+def instance_budget_peek(state: EmailConfigState) -> RateDecision | None:
+    """The hourly budget of the instance against the limit of ``state``, unspent; None when email is not usable."""
+    return budget_status(state.max_per_hour) if state.usable else None
 
 
 #: The two domains of one Gmail mailbox, which ignores the dots of its local part.

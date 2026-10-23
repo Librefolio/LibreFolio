@@ -73,6 +73,8 @@ from backend.app.services.platform.instance_key import INSTANCE_KEY_FILE, instan
 from backend.test_scripts.test_utils import print_section, print_success
 
 SMTP_PREFIX = "LIBREFOLIO_SMTP_"
+#: The one variable of the email section outside the ``LIBREFOLIO_SMTP_`` prefix.
+SIGNUP_PER_ADDRESS = "LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS"
 PUBLIC_URL_VARIABLE = "LIBREFOLIO_PUBLIC_URL"
 #: A public address of the instance, and a value of the variable that is not an http(s) address: recognisable, so that
 #: a summary or a detail echoing either would show it.
@@ -110,6 +112,7 @@ PROBLEMS = [
     pytest.param({"from": "noreply"}, "SMTP_FROM_INVALID", FROM, id="from-invalid"),
     pytest.param({"reply_to": "a@example.com, b@example.com"}, "SMTP_REPLY_TO_INVALID", REPLY_TO, id="reply-to-invalid"),
     pytest.param({"max_per_hour": "0"}, "SMTP_MAX_PER_HOUR_INVALID", MAX_PER_HOUR, id="max-per-hour-invalid"),
+    pytest.param({"signup_emails_per_address": "0"}, "SIGNUP_EMAILS_PER_ADDRESS_INVALID", SIGNUP_PER_ADDRESS, id="signup-emails-per-address-invalid"),
     pytest.param({"user": USER_VALUE, "password_file": MISSING_FILE}, "SMTP_PASSWORD_UNREADABLE", PASSWORD_FILE, id="password-file-missing"),
     pytest.param({"user": USER_VALUE, "password_file": EMPTY_FILE}, "SMTP_PASSWORD_UNREADABLE", PASSWORD_FILE, id="password-file-empty"),
     pytest.param({"user": USER_VALUE}, "SMTP_CREDENTIALS_INCOMPLETE", USER, id="user-without-password"),
@@ -181,7 +184,7 @@ FRESH_IMPORT = textwrap.dedent("""
 def _no_inherited_email_variables(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every ``LIBREFOLIO_SMTP_*`` and ``LIBREFOLIO_PUBLIC_URL`` the lane inherited is removed: a test sees only the variables it sets itself."""
     for name in list(os.environ):
-        if name.startswith(SMTP_PREFIX) or name == PUBLIC_URL_VARIABLE:
+        if name.startswith(SMTP_PREFIX) or name in (PUBLIC_URL_VARIABLE, SIGNUP_PER_ADDRESS):
             monkeypatch.delenv(name, raising=False)
 
 
@@ -246,7 +249,7 @@ def _as_logged(result: ConfigCheck) -> tuple[str, str, dict]:
 
 def _fresh_environment(tmp_path: Path) -> dict[str, str]:
     """This process's environment for a fresh interpreter: no ``LIBREFOLIO_SMTP_*`` nor ``LIBREFOLIO_PUBLIC_URL``, test mode, its data directory in ``tmp_path``, the project root importable."""
-    environment = {name: value for name, value in os.environ.items() if not name.startswith(SMTP_PREFIX) and name != PUBLIC_URL_VARIABLE}
+    environment = {name: value for name, value in os.environ.items() if not name.startswith(SMTP_PREFIX) and name not in (PUBLIC_URL_VARIABLE, SIGNUP_PER_ADDRESS)}
     environment["LIBREFOLIO_TEST_MODE"] = "1"
     environment["LIBREFOLIO_TEST_DATA_DIR"] = str(tmp_path / "data")
     environment["PYTHONPATH"] = os.pathsep.join(filter(None, [str(PROJECT_ROOT), environment.get("PYTHONPATH")]))
@@ -254,7 +257,7 @@ def _fresh_environment(tmp_path: Path) -> dict[str, str]:
 
 
 def _configure(monkeypatch: pytest.MonkeyPatch, variables: dict[str, str | None], tmp_path: Path | None = None) -> None:
-    """Set ``LIBREFOLIO_SMTP_<NAME>`` for each ``name: value``, ``None`` leaving it unset; the file markers become files in ``tmp_path``."""
+    """Set ``LIBREFOLIO_SMTP_<NAME>`` for each ``name: value`` (``signup_emails_per_address`` is ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS``), ``None`` leaving it unset; the file markers become files in ``tmp_path``."""
     for name, value in variables.items():
         if value == MISSING_FILE:
             value = str(tmp_path / "no-such-password-file")
@@ -264,7 +267,7 @@ def _configure(monkeypatch: pytest.MonkeyPatch, variables: dict[str, str | None]
         elif value == PASSWORD_IN_FILE:
             value = str(tmp_path / "password-file")
             Path(value).write_text(f"{SMTP_PASSWORD}\n", encoding="utf-8")
-        variable = SMTP_PREFIX + name.upper()
+        variable = SIGNUP_PER_ADDRESS if name == "signup_emails_per_address" else SMTP_PREFIX + name.upper()
         if value is None:
             monkeypatch.delenv(variable, raising=False)
         else:

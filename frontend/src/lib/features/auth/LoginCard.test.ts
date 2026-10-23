@@ -169,7 +169,7 @@ const translator = writable<(key: string) => string>(identity);
 const signInError = writable<AuthError | null>(null);
 
 /** Mounts the card and returns the element everything it rendered lives in. */
-function mount(props: {successMessage?: string} = {}): HTMLElement {
+function mount(props: {successMessage?: string; successTone?: 'success' | 'warning'} = {}): HTMLElement {
     return render(LoginCard, props).container;
 }
 
@@ -421,6 +421,26 @@ describe('LoginCard — the success message has a handle (A5b)', () => {
         mount({successMessage: 'A message the page handed over'});
 
         expect(screen.getByTestId('login-success')).toHaveTextContent('A message the page handed over');
+    });
+
+    it('draws a success by default: data-tone success, the success roles', () => {
+        mount({successMessage: 'Account created'});
+
+        const box = screen.getByTestId('login-success');
+        expect(box).toHaveAttribute('data-tone', 'success');
+        expect(box.className).toContain('lf-success');
+        expect(box.className).not.toContain('lf-warning');
+    });
+
+    it('draws a warning when its tone says so (an activation email that was held): data-tone warning, the warning roles of the design system', () => {
+        mount({successMessage: 'Account created, email held', successTone: 'warning'});
+
+        const box = screen.getByTestId('login-success');
+        expect(box).toHaveTextContent('Account created, email held');
+        expect(box).toHaveAttribute('data-tone', 'warning');
+        for (const role of ['bg-lf-warning-soft', 'border-lf-warning-line', 'text-lf-warning-on-soft']) expect(box.className, role).toContain(role);
+        expect(box.className, 'no success role left on a warning').not.toContain('lf-success');
+        expect(box.className.includes('dark:'), 'a role changes value under html.dark by itself').toBe(false);
     });
 
     it('draws no login-success without a message', () => {

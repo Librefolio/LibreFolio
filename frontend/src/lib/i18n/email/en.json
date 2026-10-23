@@ -26,7 +26,8 @@
       "SMTP_MAX_PER_HOUR_INVALID": "{variable} must be a whole number of at least 1.",
       "SMTP_PASSWORD_UNREADABLE": "The password file named by {variable} cannot be read.",
       "SMTP_CREDENTIALS_INCOMPLETE": "{variable} is set alone: set both the SMTP user and its password, or neither.",
-      "unknown": "{variable} cannot be used."
+      "unknown": "{variable} cannot be used.",
+      "SIGNUP_EMAILS_PER_ADDRESS_INVALID": "{variable} must be a whole number of at least 1."
     },
     "checks": {
       "smtp": {
@@ -115,7 +116,7 @@
       "signUpUnavailable": "Sign-up is not possible right now: this instance cannot send the verification email. Try again later, or ask its administrator.",
       "settingNeedsEmail": "Needs an email with a link to go out: set up SMTP and LIBREFOLIO_PUBLIC_URL first (Settings › Administration › Email).",
       "settingUnavailable": "Email verification needs an email with a link to go out, and none can go now: check Settings › Administration › Email.",
-      "registeredHeld": "Account created, but the activation email could not leave now: too many sign-ups from your network in the last hour. Sign in with your username and password: you will be offered a new link."
+      "registeredHeld": "Account created. Activation email blocked after too many attempts: try again in about {minutes, plural, one {# minute} other {# minutes}} by entering your username and password on the sign-in page to get a new one."
     },
     "sendLink": {
       "button": "Send by email",

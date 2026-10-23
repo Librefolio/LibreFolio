@@ -23,7 +23,9 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {readable} from 'svelte/store';
 import {cleanup, fireEvent, render, screen, waitFor} from '$test/component';
 
-vi.mock('$lib/i18n', () => ({_: readable((key: string) => key)}));
+// The identity translator, a spy: the values a message was given, which the identity drops, are read from its calls
+const translate = vi.hoisted(() => vi.fn((key: string, _options?: {values?: Record<string, unknown>}) => key));
+vi.mock('$lib/i18n', () => ({_: readable(translate)}));
 vi.mock('$lib/api', () => ({zodiosApi: {register_api_v1_auth_register_post: vi.fn()}}));
 
 import RegisterCard from './RegisterCard.svelte';
@@ -38,13 +40,14 @@ const GOOD_PASSWORD = 'Str0ng!pass';
 type VerificationEmail = 'sending' | 'held' | null;
 
 /** One register answer. A field passed as `undefined` is left out of the body altogether, as an older server leaves it out. */
-function answer(verificationRequired: boolean | undefined, verificationEmail?: VerificationEmail) {
+function answer(verificationRequired: boolean | undefined, verificationEmail?: VerificationEmail, retryAfterSeconds?: number | null) {
     const user = {id: 2, username: 'zq_vera', email: 'zq_vera@example.com', is_active: verificationRequired !== true, is_superuser: false, created_at: '2026-10-16T00:00:00Z'};
     return {
         user,
         message: 'Registration successful',
         ...(verificationRequired === undefined ? {} : {verification_required: verificationRequired}),
         ...(verificationEmail === undefined ? {} : {verification_email: verificationEmail}),
+        ...(retryAfterSeconds === undefined ? {} : {verification_retry_after_seconds: retryAfterSeconds}),
     };
 }
 
@@ -64,6 +67,7 @@ async function fillValidAndSubmit(): Promise<void> {
 
 beforeEach(() => {
     register.mockReset();
+    translate.mockClear();
 });
 
 afterEach(() => {
@@ -112,14 +116,46 @@ describe('RegisterCard — a sign-up that waits for its email verification', () 
         expect(screen.getByTestId('register-form')).toBeInTheDocument();
     });
 
-    it('RCV-04: verification_required true, verification_email "held" → to the sign-in with email.verification.registeredHeld', async () => {
+    it('RCV-04: verification_required true, verification_email "held" → to the sign-in with email.verification.registeredHeld, as a warning', async () => {
         register.mockResolvedValueOnce(answer(true, 'held') as never);
         const {gotoLogin} = mount();
 
         await fillValidAndSubmit();
 
         await waitFor(() => expect(gotoLogin).toHaveBeenCalledTimes(1));
-        expect(gotoLogin).toHaveBeenCalledWith({message: 'email.verification.registeredHeld'});
+        // the held case is a warning for the sign-in's box (lot E-26 (b)); the others carry no tone, as before
+        expect(gotoLogin).toHaveBeenCalledWith({message: 'email.verification.registeredHeld', tone: 'warning'});
+    });
+
+    // The sentence says how long until an email fits again (E-26-q1, decision of 23/10/2026): the server's
+    // `verification_retry_after_seconds`, in whole minutes rounded up, at least one — the `{minutes}` of the message.
+    it.each([
+        [150, 3],
+        [60, 1],
+        [61, 2],
+        [1, 1],
+        [3600, 60],
+    ])('RCV-04b: held for %i s → the message is given {minutes: %i}', async (seconds, minutes) => {
+        register.mockResolvedValueOnce(answer(true, 'held', seconds) as never);
+        const {gotoLogin} = mount();
+
+        await fillValidAndSubmit();
+
+        await waitFor(() => expect(gotoLogin).toHaveBeenCalledTimes(1));
+        expect(translate).toHaveBeenCalledWith('email.verification.registeredHeld', {values: {minutes}});
+    });
+
+    it.each([
+        ['null', null],
+        ['absent (a server that does not say)', undefined],
+    ])('RCV-04c: held with the time %s → at least one minute, never a missing value', async (_label, seconds) => {
+        register.mockResolvedValueOnce(answer(true, 'held', seconds) as never);
+        const {gotoLogin} = mount();
+
+        await fillValidAndSubmit();
+
+        await waitFor(() => expect(gotoLogin).toHaveBeenCalledTimes(1));
+        expect(translate).toHaveBeenCalledWith('email.verification.registeredHeld', {values: {minutes: 1}});
     });
 
     it('RCV-05: verification_required true and no verification_email key at all (an older server) → email.verification.registered, the fallback', async () => {

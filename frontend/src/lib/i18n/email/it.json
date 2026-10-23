@@ -26,7 +26,8 @@
       "SMTP_MAX_PER_HOUR_INVALID": "{variable} deve essere un numero intero di almeno 1.",
       "SMTP_PASSWORD_UNREADABLE": "Il file della password indicato da {variable} non si può leggere.",
       "SMTP_CREDENTIALS_INCOMPLETE": "{variable} è impostata da sola: imposta sia l'utente SMTP sia la sua password, oppure nessuno dei due.",
-      "unknown": "{variable} non si può usare."
+      "unknown": "{variable} non si può usare.",
+      "SIGNUP_EMAILS_PER_ADDRESS_INVALID": "{variable} deve essere un numero intero di almeno 1."
     },
     "checks": {
       "smtp": {
@@ -115,7 +116,7 @@
       "signUpUnavailable": "Ora non è possibile registrarsi: questa istanza non riesce a spedire l'email di verifica. Riprova più tardi, o chiedi al suo amministratore.",
       "settingNeedsEmail": "Serve che un'email con un link possa partire: configura prima SMTP e LIBREFOLIO_PUBLIC_URL (Impostazioni › Amministrazione › Email).",
       "settingUnavailable": "La verifica dell'email richiede che un'email con un link possa partire, e ora non può: controlla Impostazioni › Amministrazione › Email.",
-      "registeredHeld": "Account creato, ma l'email di attivazione non può partire ora: troppe registrazioni dalla tua rete nell'ultima ora. Accedi con nome utente e password: ti verrà proposto un link nuovo."
+      "registeredHeld": "Account creato. Email di attivazione bloccata per troppi tentativi: riprova tra circa {minutes, plural, one {# minuto} other {# minuti}} inserendo utente e password nella pagina di accesso, per ottenere un nuovo invio."
     },
     "sendLink": {
       "button": "Invia per email",

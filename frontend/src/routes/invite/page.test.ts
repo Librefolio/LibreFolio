@@ -56,7 +56,7 @@ const mocks = await vi.hoisted(async () => {
         register: vi.fn().mockName('zodiosApi.register_api_v1_auth_register_post'),
         goto: vi.fn((..._args: unknown[]) => Promise.resolve()).mockName('goto'),
         replaceState: vi.fn((..._args: unknown[]) => {}).mockName('replaceState'),
-        setAuthFlash: vi.fn((_message: string) => {}).mockName('setAuthFlash'),
+        setAuthFlash: vi.fn((_message: string, _tone?: 'success' | 'warning') => {}).mockName('setAuthFlash'),
         takeAuthFlash: vi.fn(() => '').mockName('takeAuthFlash'),
         noopComponent: () => {},
     };
@@ -374,6 +374,21 @@ describe('/invite — leaving for the login page', () => {
         expect(mocks.setAuthFlash).toHaveBeenCalledTimes(1);
         expect(mocks.setAuthFlash, 'the message RegisterCard sends with gotoLogin').toHaveBeenCalledWith('auth.accountCreated');
         expect(mocks.setAuthFlash.mock.invocationCallOrder[0], 'the flash is left before the page goes').toBeLessThan(mocks.goto.mock.invocationCallOrder[0]);
+    });
+
+    it('leaves the message of a held activation email as a warning (lot E-26 (b)), the tone second, before it goes to /', async () => {
+        mocks.inspect.mockResolvedValue(validInvitation({email: 'eve@example.com'}));
+        mocks.register.mockResolvedValue({user: {id: 9, username: 'eve'}, message: 'ok', verification_required: true, verification_email: 'held'});
+        openAt(`/invite#token=${TOKEN}`);
+        render(InvitePage);
+        const form = await formShown();
+
+        await registerAs(form, 'eve');
+
+        await waitFor(() => expect(mocks.goto).toHaveBeenCalledTimes(1));
+        expect(mocks.setAuthFlash).toHaveBeenCalledTimes(1);
+        expect(mocks.setAuthFlash).toHaveBeenCalledWith('email.verification.registeredHeld', 'warning');
+        expect(mocks.setAuthFlash.mock.invocationCallOrder[0]).toBeLessThan(mocks.goto.mock.invocationCallOrder[0]);
     });
 
     it('goes to / with nothing to say when the user follows the login link of the form', async () => {

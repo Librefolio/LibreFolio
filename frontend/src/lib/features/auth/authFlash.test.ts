@@ -69,3 +69,45 @@ describe('authFlash — a message handed over once', () => {
         expect(takeAuthFlash()).toBe('second visit');
     });
 });
+
+/**
+ * The tone of the message (lot E-26 (b), developer decision of 23/10/2026): a registration whose activation email was
+ * held leaves a warning, not a success. `setAuthFlash(message, tone?)` takes the tone, `'success'` when omitted;
+ * `takeAuthFlashTone()` returns it once and clears it, so a later message without a tone is a success again.
+ */
+describe('authFlash — the tone of the message', () => {
+    it('is a success when none was given, and when nothing was set', async () => {
+        const {setAuthFlash, takeAuthFlashTone} = await freshPageLoad();
+
+        expect(takeAuthFlashTone(), 'nothing set').toBe('success');
+
+        setAuthFlash('a message');
+
+        expect(takeAuthFlashTone(), 'no tone given').toBe('success');
+    });
+
+    it('hands back the tone that was set, once', async () => {
+        const {setAuthFlash, takeAuthFlashTone} = await freshPageLoad();
+        setAuthFlash('held', 'warning');
+
+        expect(takeAuthFlashTone(), 'premise: the tone that was set').toBe('warning');
+        expect(takeAuthFlashTone(), 'a second take finds the default').toBe('success');
+    });
+
+    it('is replaced with the message: a later message without a tone is a success', async () => {
+        const {setAuthFlash, takeAuthFlashTone} = await freshPageLoad();
+
+        setAuthFlash('held', 'warning');
+        setAuthFlash('created');
+
+        expect(takeAuthFlashTone()).toBe('success');
+    });
+
+    it('does not disturb the message: taking the tone first, or last, leaves the message to takeAuthFlash', async () => {
+        const {setAuthFlash, takeAuthFlash, takeAuthFlashTone} = await freshPageLoad();
+        setAuthFlash('held', 'warning');
+
+        expect(takeAuthFlashTone()).toBe('warning');
+        expect(takeAuthFlash()).toBe('held');
+    });
+});

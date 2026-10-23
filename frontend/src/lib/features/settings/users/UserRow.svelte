@@ -4,12 +4,17 @@ UserRow — one account of the Users tab: who it is, and the administrator's act
 The backend decides every action (it refuses the last active administrator, a protected account, a full instance);
 the row only turns off, with the reason, what would certainly be refused. One's own account has no action here: it is
 managed from the Profile tab.
+
+An account waiting for its email verification wears an information icon beside its badge (E7-Q4, 23/10/2026): its
+explanation opens in a tooltip on hover, focus, click and tap. The icon is outside the toggle button, which cannot hold
+another button.
 -->
 <script lang="ts">
-    import {ChevronRight, KeyRound, Link2Off, LogOut, RotateCcw, ShieldCheck, ShieldOff, Trash2, UserCheck, UserX} from 'lucide-svelte';
+    import {ChevronRight, Info, KeyRound, Link2Off, LogOut, RotateCcw, ShieldCheck, ShieldOff, Trash2, UserCheck, UserX} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
     import UserAvatar from '$lib/components/ui/media/UserAvatar.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import type {AdminAccount, UserAction} from './types';
 
     interface Props {
@@ -67,34 +72,43 @@ managed from the Profile tab.
     data-user-id={account.id}
     data-username={account.username}
 >
-    <button aria-controls="{uid}-panel" aria-expanded={expanded} class="flex w-full min-w-0 items-center gap-3 text-left" data-testid="users-row-toggle" onclick={() => (expanded = !expanded)} type="button">
-        <ChevronRight class="h-4 w-4 shrink-0 text-lf-muted transition-transform {expanded ? 'rotate-90' : ''}" />
-        <UserAvatar username={account.username} avatarUrl={account.avatar_url ?? null} testId="users-row-avatar" />
-        <span class="min-w-0 flex-1">
-            <span class="flex flex-wrap items-center gap-1.5">
-                <span class="truncate font-medium text-lf-primary">{account.username}</span>
-                {#if isSelf}
-                    <span class="rounded-full border border-lf-subtle bg-lf-selected px-2 py-0.5 text-xs text-lf-primary">{$_('settings.usersTab.badges.you')}</span>
-                {/if}
-                {#if account.is_superuser}
-                    <span class="rounded-full border border-lf-info-line bg-lf-info-soft px-2 py-0.5 text-xs text-lf-info-on-soft">{$_('settings.usersTab.badges.admin')}</span>
-                {/if}
-                {#if pendingSetup}
-                    <span class="rounded-full border border-lf-subtle bg-lf-neutral px-2 py-0.5 text-xs text-lf-secondary" data-testid="users-badge-pending-setup">{$_('settings.usersTab.badges.pendingSetup')}</span>
-                {:else if pendingVerification}
-                    <span class="rounded-full border border-lf-subtle bg-lf-neutral px-2 py-0.5 text-xs text-lf-secondary" data-testid="users-badge-pending-verification" title={$_('settings.usersTab.pendingVerificationHint')}>{$_('settings.usersTab.badges.pendingVerification')}</span>
-                {:else if !account.is_active}
-                    <span class="rounded-full border border-lf-subtle bg-lf-neutral px-2 py-0.5 text-xs text-lf-secondary" data-testid="users-badge-inactive">{$_('settings.usersTab.badges.inactive')}</span>
-                {/if}
-                {#if account.protected}
-                    <span class="rounded-full border border-lf-warning-line bg-lf-warning-soft px-2 py-0.5 text-xs text-lf-warning-on-soft">{$_('settings.usersTab.badges.protected')}</span>
-                {/if}
+    <div class="flex items-center gap-2">
+        <button aria-controls="{uid}-panel" aria-expanded={expanded} class="flex min-w-0 flex-1 items-center gap-3 text-left" data-testid="users-row-toggle" onclick={() => (expanded = !expanded)} type="button">
+            <ChevronRight class="h-4 w-4 shrink-0 text-lf-muted transition-transform {expanded ? 'rotate-90' : ''}" />
+            <UserAvatar username={account.username} avatarUrl={account.avatar_url ?? null} testId="users-row-avatar" />
+            <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-1.5">
+                    <span class="truncate font-medium text-lf-primary">{account.username}</span>
+                    {#if isSelf}
+                        <span class="rounded-full border border-lf-subtle bg-lf-selected px-2 py-0.5 text-xs text-lf-primary">{$_('settings.usersTab.badges.you')}</span>
+                    {/if}
+                    {#if account.is_superuser}
+                        <span class="rounded-full border border-lf-info-line bg-lf-info-soft px-2 py-0.5 text-xs text-lf-info-on-soft">{$_('settings.usersTab.badges.admin')}</span>
+                    {/if}
+                    {#if pendingSetup}
+                        <span class="rounded-full border border-lf-subtle bg-lf-neutral px-2 py-0.5 text-xs text-lf-secondary" data-testid="users-badge-pending-setup">{$_('settings.usersTab.badges.pendingSetup')}</span>
+                    {:else if pendingVerification}
+                        <span class="rounded-full border border-lf-subtle bg-lf-neutral px-2 py-0.5 text-xs text-lf-secondary" data-testid="users-badge-pending-verification">{$_('settings.usersTab.badges.pendingVerification')}</span>
+                    {:else if !account.is_active}
+                        <span class="rounded-full border border-lf-subtle bg-lf-neutral px-2 py-0.5 text-xs text-lf-secondary" data-testid="users-badge-inactive">{$_('settings.usersTab.badges.inactive')}</span>
+                    {/if}
+                    {#if account.protected}
+                        <span class="rounded-full border border-lf-warning-line bg-lf-warning-soft px-2 py-0.5 text-xs text-lf-warning-on-soft">{$_('settings.usersTab.badges.protected')}</span>
+                    {/if}
+                </span>
+                <span class="block truncate text-xs text-lf-muted">
+                    {account.email} · {$_('settings.usersTab.createdOn', {values: {date: formatDateTime(account.created_at)}})}
+                </span>
             </span>
-            <span class="block truncate text-xs text-lf-muted">
-                {account.email} · {$_('settings.usersTab.createdOn', {values: {date: formatDateTime(account.created_at)}})}
-            </span>
-        </span>
-    </button>
+        </button>
+        {#if pendingVerification}
+            <Tooltip interactiveChild maxWidth="320px" position="left" text={$_('settings.usersTab.pendingVerificationHint')}>
+                <button aria-label={$_('settings.usersTab.pendingVerificationHint')} class="shrink-0 rounded p-1 text-lf-muted transition-colors hover:text-lf-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-lf-focus/70" data-testid="users-pending-verification-info" type="button">
+                    <Info aria-hidden="true" class="h-4 w-4" />
+                </button>
+            </Tooltip>
+        {/if}
+    </div>
 
     {#if expanded}
         <div class="mt-3 pl-7" id="{uid}-panel">
@@ -143,8 +157,6 @@ managed from the Profile tab.
                 </div>
                 {#if pendingSetup}
                     <p class="mt-2 text-xs text-lf-muted" data-testid="users-pending-setup-hint">{$_('settings.usersTab.pendingSetupHint')}</p>
-                {:else if pendingVerification}
-                    <p class="mt-2 text-xs text-lf-muted" data-testid="users-pending-verification-hint">{$_('settings.usersTab.pendingVerificationHint')}</p>
                 {/if}
                 {#each reasons as reason (reason)}
                     <p class="mt-2 text-xs text-lf-muted">{$_(REASON_KEY[reason])}</p>

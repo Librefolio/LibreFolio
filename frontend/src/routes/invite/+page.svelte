@@ -58,8 +58,12 @@
         return () => window.removeEventListener('hashchange', onHashChange);
     });
 
-    function handleGotoLogin(event: CustomEvent<{message?: string}>): void {
-        if (event.detail?.message) setAuthFlash(event.detail.message);
+    function handleGotoLogin(event: CustomEvent<{message?: string; tone?: 'warning'}>): void {
+        if (event.detail?.message) {
+            // the tone only when it is not the default, so a plain success is left exactly as before
+            if (event.detail.tone) setAuthFlash(event.detail.message, event.detail.tone);
+            else setAuthFlash(event.detail.message);
+        }
         void goto('/');
     }
 </script>
