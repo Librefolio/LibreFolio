@@ -341,6 +341,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/assets/ScheduledInvestmentEditor.test.ts",
             "src/lib/components/assets/AssetModal.test.ts",
             "src/lib/components/assets/AssetModal.providerLifecycle.test.ts",
+            "src/lib/components/assets/providerImpact.test.ts",
             "src/lib/components/assets/AssetSearchAutocomplete.test.ts",
             "src/lib/components/assets/AssetCurrencyChangeModal.test.ts",
             "src/lib/components/assets/AssetDataEditorSection.test.ts",

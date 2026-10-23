@@ -516,6 +516,8 @@ describe('AssetModal — opt-in creation success links', () => {
             await expectCreationClosed(oncreated, [id, {syncing: true}]);
             expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).toHaveBeenCalledTimes(1);
             expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).toHaveBeenCalledWith([{asset_id: id, provider_code: PROVIDER_CODE, identifier: PROVIDER_IDENTIFIER, identifier_type: 'TICKER', provider_params: null}]);
+            // X5-1: a new asset has no provider to lose, so the save asks no dry run.
+            expect(zodiosApi.provider_change_impact_api_v1_assets_provider_impact_post).not.toHaveBeenCalled();
             expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledTimes(1);
             expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledWith([{asset_id: id, date_range: {start: 'resume', end: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)}}]);
             expect(within(toastMarkup('success')).getByTestId('toast-asset-link')).toHaveAttribute('href', `/assets/${id}`);
@@ -757,7 +759,7 @@ describe('AssetModal — opt-in creation success links', () => {
             expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).toHaveBeenCalledTimes(1);
             const assignment = vi.mocked(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).mock.calls[0]?.[0]?.[0];
             expect(assignment).toMatchObject({asset_id: id, provider_code: SCHEDULED, identifier_type: 'AUTO_GENERATED'});
-            expect(assignment?.provider_params?.schedule, 'the assignment carries the schedule the editor built').toHaveLength(1);
+            expect((assignment?.provider_params as {schedule?: unknown[]} | undefined)?.schedule, 'the assignment carries the schedule the editor built').toHaveLength(1);
             expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledTimes(1);
             expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledWith([{asset_id: id, date_range: {start: 'resume', end: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)}}]);
             await waitFor(() => expect(onsynced).toHaveBeenCalledWith(id, result));
@@ -787,6 +789,8 @@ describe('AssetModal — edit submit', () => {
         expect(patchFn()).toHaveBeenCalledWith([expect.objectContaining({asset_id: 7, display_name: 'New Name', currency: 'USD'})]);
         // No provider on editData → provider removed.
         expect(removeProviderFn()).toHaveBeenCalled();
+        // X5-1: no provider before, nothing to lose: no dry run either.
+        expect(zodiosApi.provider_change_impact_api_v1_assets_provider_impact_post).not.toHaveBeenCalled();
     });
 
     it('opens the destructive currency-change modal when the PATCH is blocked by market data', async () => {
