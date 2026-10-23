@@ -9144,3 +9144,29 @@ revisioni) aspettano i loro segnali (Y5-1 committato; il via del coordinatore).
 8. ✅ 23/10 · Prove: `front check` **0 errori, 0 avvisi**; `component-unit` e `core-unit` verdi; Vitest dei file toccati (219
    test su `providerImpact`, `currencyChangeErrors`, `AssetModal.providerLifecycle`); `i18n audit`: 0 chiavi mancanti o
    inutilizzate. **E2E non lanciati** (`front-asset asset-modal`, `asset-detail`): aspettano lo slot.
+
+### X5-F1 · Rolling Return nel dettaglio del cambio (23/10, base `61318d901`: X5-1 e Y5-1 dentro)
+
+1. ✅ 23/10 · Analisi: la lista dei cambi ha già la vista (Y-40, `fetchCalendarReturns`, `reducedFxQuery.ts`), il backend calcola il rolling return
+   delle coppie (Z-29fx), `AssetChartModeToggle` / `AssetCalendarWindowControls` esistono; mancava il dettaglio. `primaryView` è già
+   un'impostazione della coppia (`'calendar-return'`), condivisa con la scheda della lista.
+2. ✅ 23/10 · I rossi (`test-author`): `fxDetailCalendar.test.ts` (27, il modulo mancava), `AssetCalendarControls.idPrefix.test.ts` (16, 13 rossi),
+   `fxDetailRollingReturn.wiring.test.ts` (8, 3 rossi: la pagina non importava né disegnava i controlli), E2E nuovo
+   `fx/fx-detail-rolling-return.spec.ts` (6 casi `X5-F1`, non osservati rossi: la pagina non aveva la modalità) con la categoria
+   `fx-detail-rolling-return` nel runner. Spec in un file nuovo per non incrociare Y sulla spec del cambio.
+3. ✅ 23/10 · La cura. `AssetChartModeToggle` e `AssetCalendarWindowControls`: prop opzionale `idPrefix` (predefinito `asset`: gli id
+   dell'asset non cambiano; `fx` sul cambio). `lib/charts/fxDetailCalendar.ts` nuovo (puro): `buildFxDetailCalendarQuery` (una conversione di 1
+   unità nel verso mostrato dalla pagina, giornaliera, senza `key`/`max_points`/`sample_like`, con un solo segnale; una in più per ogni
+   `fx-pair` salvato) e `fxDetailCalendarViews`. `fx/[pair]/+page.svelte`: `primaryMode` (aperto da `primaryView`, una scheda in Rolling Return
+   apre il dettaglio in esso), `loadCalendarReturn` (a ogni cambio di periodo, finestra, verso, coppie confrontate, Refresh e al cambio
+   di sessione), finestra come l'asset (`effectiveCalendarReturnWindow`), interruttore e controlli, segnaposto `fx-calendar-return-*`,
+   attributi `data-primary-mode|window-days|series-state|calendar-comparison-*` sulla scheda del grafico, pannello dei segnali
+   limitato a `fx-pair`, `renderCalendarPairComparisons` per le linee dei confronti, salvataggio con `setPairSettings(primaryView)`
+   (il ritorno ai prezzi riporta la vista che la coppia aveva prima, non quella del dettaglio), niente richiesta tornando ai prezzi.
+   Nel Rolling Return i bottoni misura e modifica sono nascosti.
+   > **⚠️ Fuori pista**: nessuna cache dei risultati del rolling return (come N64): ogni cambio di periodo o finestra chiede di nuovo; da valutare se serve.
+4. ✅ 23/10 · Prove: Vitest 51/51 (i tre file nuovi), `front check` 0/0, E2E `front-fx fx-detail-rolling-return` **6/6** al primo giro,
+   `front-fx fx-detail` **33/33**. Poi (24/10, un solo giro sotto il lucchetto, `X-f1-verify`): `core-unit` **10464/10464** (245 file), `component-unit` **5598/5598** (209 file),
+   `fx-unit` **165/165**, `front-asset asset-detail` **56/56**; Prettier `--check` pulito sui file toccati.
+5. ✅ 23/10 · Doc (EN): `user/fx/detail/chart.en.md` («Rolling Return»), `signals.en.md`, `developer/frontend/components/charts.md` (sezione
+   del cambio; corretto il paragrafo dell'asset, che diceva ancora «mai persistita»). Debito di traduzione: `chart` e `signals` it/fr/es.
