@@ -1380,3 +1380,97 @@ test.describe('FX list — a card draws its saved comparisons (Y-41)', () => {
         expect(asked, 'no asset price is asked').toEqual([]);
     });
 });
+
+/**
+ * FX list — the grid toolbar: an icon for the absolute view, a tooltip on settings, sync all and refresh all (Y5-F1).
+ *
+ * The first button of the cards' view group (`fx-global-view-absolute`) draws the price-line icon and no text, with an
+ * `aria-label`; the percentage one stays text. The three action buttons are each wrapped in the shared Tooltip (it opens
+ * after a rest of 500 ms of plain hover). Nothing here asserts the translated text: the tooltip must be non-empty and
+ * not a raw catalogue key. Sync all and refresh all are never clicked; nothing shared is written.
+ *
+ * Red today: the Absolute button is text, and the three buttons carry no tooltip wrapper.
+ */
+test.describe('FX list — the grid toolbar: the Absolute icon and the action tooltips (Y5-F1)', () => {
+    test.describe.configure({timeout: 60_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    /** A key looks like `area.sub.name`: dotted, no space. A rendered sentence is never one. */
+    const looksLikeRawKey = (text: string) => /^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$/.test(text.trim());
+
+    test('in the card view the Absolute button is an icon with an aria-label and no text, and still turns the view', async ({page}) => {
+        await goToFxPage(page);
+        await page.getByTestId('view-mode-grid').click();
+        await waitForSettled(page.getByTestId('fx-page'), 20_000);
+
+        const group = page.getByTestId('fx-global-view');
+        const absolute = page.getByTestId('fx-global-view-absolute');
+        const percentage = page.getByTestId('fx-global-view-percentage');
+        await expect(absolute).toBeVisible({timeout: 10_000});
+
+        await expect(absolute.locator('svg'), 'the Absolute button draws an icon').toHaveCount(1);
+        await expect(absolute, 'and no text').toHaveText(/^\s*$/);
+        const label = await absolute.getAttribute('aria-label');
+        expect(label?.trim() ?? '', 'an accessible name stands in for the text').not.toBe('');
+        expect(looksLikeRawKey(label ?? ''), `the aria-label is a rendered name, not the key "${label}"`).toBe(false);
+        await expect(percentage, 'the percentage button stays text').toHaveText('%');
+
+        // Click % first, then Absolute: whatever the page opened on, the end states are known.
+        await percentage.click();
+        await expect(group).toHaveAttribute('data-view', 'percentage');
+        await expect(percentage).toHaveAttribute('aria-pressed', 'true');
+        await absolute.click();
+        await expect(group).toHaveAttribute('data-view', 'absolute');
+        await expect(absolute).toHaveAttribute('aria-pressed', 'true');
+        await expect(percentage).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    for (const action of [
+        {name: 'settings', wrapper: 'fx-chart-settings-tooltip', button: 'fx-chart-settings-button'},
+        {name: 'sync all', wrapper: 'fx-sync-all-tooltip', button: 'fx-sync-all-button'},
+        {name: 'refresh all', wrapper: 'fx-refresh-tooltip', button: 'fx-refresh-all-button'},
+    ]) {
+        test(`the ${action.name} button is wrapped in a tooltip that opens on hover with a rendered text`, async ({page}) => {
+            await goToFxPage(page);
+            await page.getByTestId('view-mode-grid').click();
+            await waitForSettled(page.getByTestId('fx-page'), 20_000);
+
+            const wrapper = page.getByTestId(action.wrapper);
+            const button = wrapper.getByTestId(action.button);
+            await expect(button, `the ${action.name} button sits inside ${action.wrapper}`).toBeVisible({timeout: 10_000});
+
+            // No tooltip of another control is open when this one is hovered.
+            await page.mouse.move(0, 0);
+            await expect(page.getByRole('tooltip')).toHaveCount(0, {timeout: 5_000});
+
+            await button.hover();
+            const tooltip = page.getByRole('tooltip');
+            await expect(tooltip, 'a rest of the pointer opens the tooltip').toBeVisible({timeout: 3_000});
+            const text = ((await tooltip.textContent()) ?? '').trim();
+            expect(text, 'the tooltip says something').not.toBe('');
+            expect(text.startsWith('sharedResource.'), `the tooltip is a rendered text, not the key "${text}"`).toBe(false);
+            expect(looksLikeRawKey(text), `the tooltip is a rendered text, not the key "${text}"`).toBe(false);
+        });
+    }
+
+    test('a click on the settings button still opens the chart settings, and Escape closes them', async ({page}) => {
+        await goToFxPage(page);
+        await page.getByTestId('view-mode-grid').click();
+        await waitForSettled(page.getByTestId('fx-page'), 20_000);
+
+        const button = page.getByTestId('fx-chart-settings-tooltip').getByTestId('fx-chart-settings-button');
+        await expect(button).toBeVisible({timeout: 10_000});
+        await button.hover();
+        await button.click();
+
+        const modal = page.getByTestId('chart-settings-modal');
+        await expect(modal, 'the tooltip does not swallow the click').toBeVisible({timeout: 5_000});
+        await expect(modal.getByTestId('chart-settings-apply')).toBeEnabled();
+
+        await page.keyboard.press('Escape');
+        await expect(modal, 'the modal closes, nothing left over it').toBeHidden({timeout: 5_000});
+    });
+});

@@ -625,3 +625,57 @@ describe('TimeSeriesStore.generation (N64)', () => {
         expect(generationOf(neighbour), 'a change of one store moved the generation of another: the answers drawn over it would be asked again for nothing (N64)').toBe(before);
     });
 });
+
+// =============================================================================
+//  isStale — whether a catch-up marked the store (Y5-1, plan «Z-14b + Z-15»)
+// =============================================================================
+//
+//  A page that finds its range missing from a stale store, and holds points for it, shows those points at once and asks the
+//  server in background, with no loading state: the store tells which of the two it is. Read-only: only `markStale()` sets it,
+//  only `invalidateAll()` ends it (the points are then forgotten too), and a fetch covering the range clears the *gaps*, not
+//  the mark — a later catch-up marks it again anyway.
+//
+//  Red first: `isStale` does not exist.
+
+describe('TimeSeriesStore.isStale (Y5-1)', () => {
+    it('is false for a store nobody marked, whatever it holds', () => {
+        const store = new TimeSeriesStore<TestPoint>();
+        store.merge([pt('2024-01-01', 1)]);
+        store.markFetched('2024-01-01', '2024-01-01');
+
+        expect(store.isStale).toBe(false);
+    });
+
+    it('is true once markStale() ran, and the points are still readable', () => {
+        const store = new TimeSeriesStore<TestPoint>();
+        store.merge([pt('2024-01-01', 1), pt('2024-01-02', 2)]);
+        store.markFetched('2024-01-01', '2024-01-02');
+
+        store.markStale();
+
+        expect(store.isStale).toBe(true);
+        expect(store.getRange('2024-01-01', '2024-01-02').data).toHaveLength(2);
+        expect(store.getMissingIntervals('2024-01-01', '2024-01-02'), 'the whole range counts as missing').toEqual([{start: '2024-01-01', end: '2024-01-02'}]);
+    });
+
+    it('is false again after invalidateAll()', () => {
+        const store = new TimeSeriesStore<TestPoint>();
+        store.merge([pt('2024-01-01', 1)]);
+        store.markStale();
+
+        store.invalidateAll();
+
+        expect(store.isStale).toBe(false);
+    });
+
+    it('stays true when a fetch covers the range: the mark is the store’s, the gaps are the range’s', () => {
+        const store = new TimeSeriesStore<TestPoint>();
+        store.merge([pt('2024-01-01', 1)]);
+        store.markStale();
+
+        store.markFetched('2024-01-01', '2024-01-01');
+
+        expect(store.isStale).toBe(true);
+        expect(store.getMissingIntervals('2024-01-01', '2024-01-01')).toEqual([]);
+    });
+});

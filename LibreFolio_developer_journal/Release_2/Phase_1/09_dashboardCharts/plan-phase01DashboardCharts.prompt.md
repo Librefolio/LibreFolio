@@ -8527,3 +8527,59 @@ base della percentuale o le date del confronto.
    puliti; in `flock` (dopo oltre un'ora di coda): `front check` **0 errori, 0 avvisi**, `mkdocs build` exit 0, `check-links` exit 0 (97 link validi); log
    `ondata4/y-y49-{check,mkdocs-build,mkdocs-links}.log`.
 
+## 23/10 · Ondata 5 (Y5-1 · Y5-F1…F4 · Y5-2 · riga B5)
+
+> **Base:** `1fd80c481` (= `dev_release2`, treni 9 e 10), `api sync` fatto. Brief: `ondata5/kickoff-Y.md`. Corsia 6189, `/tmp/librefolio-r13-y`.
+> **I treni:** Y5-1, F1-F4 e la riga di B5 sono nell'11a (tranne B5: 11b); Y5-2 nell'11b.
+
+### Y5-1 · Z-14b + Z-15 — la ricarica silenziosa dopo un recupero dei prezzi (PARTI SUBITO, treno 11a)
+
+**Analisi.** Il piano 06 («Z-14b + Z-15 — piano per il mattino», ~3555) è rimasto valido nei fatti; le righe sono cambiate. Il sì del 22/10 vale per le tre
+scelte di UX: D1 (il rischio ricarica **in silenzio**, senza `refreshing`), D2 (le analisi su richiesta **restano**), D3 (i punti vecchi **subito**, la richiesta
+in background, senza `aria-busy`). Nessun dubbio vero nel piano. Un'unica cosa non prevista: `price-refresh-reload.spec.ts` **esiste già** (casi (a)…(h) di Z5,
+Z-13, Z-18, Z-14): si **estende**, non si crea.
+- **L'helper** (nuovo, mio): `features/price-refresh/onPricesCaughtUp.ts`: `onPricesCaughtUp(reload)` ascolta il bus per `{kind: 'prices'}` e chiama `reload` in un
+  microtask, dopo che ogni cache si è segnata stale; una chiave per chiamata; non lancia mai; restituisce la funzione che smette. Mai `refreshVersion` né
+  `requestPortfolioRefresh` (sono l'«Aggiorna»).
+- **`TimeSeriesStore.isStale`** (un getter in sola lettura nel file dello store: la regola D3 delle quattro pagine ne ha bisogno; lo dichiaro nel checkpoint).
+- **Le sei superfici**, ciascuna con un parametro `silent` che non accende nessuno stato di caricamento e con la regola D3 (store stale con punti per
+  l'intervallo: i punti subito, la richiesta in background): `riskPanelController.svelte.ts` (`loadBase(force, silent)`, l'ascolto in un `$effect`),
+  `LotsAnalysisPanel.svelte` (`loadMain` e `loadSelectionHistories` senza `pageBusy`, la cache stale li fa chiedere senza indicatori), il dettaglio asset
+  (`loadChartData(force, signals, propagateError, silent)` + i confronti), il dettaglio cambio (`loadChartData(signals, propagateError, silent)` + i confronti e le
+  coppie), la lista asset (`fetchAllPriceData(silent)`, `fetchPriceSeries(only, silent)`, `loadPeriodChanges(silent)`, i tassi delle coppie) e la lista cambi
+  (`fetchAllPairData(propagateError, silent)` con le sue quattro letture).
+- **I rossi:** Vitest dell'helper (7), di `isStale` (4), del controller del rischio (5, di cui 1 rosso e 4 guardie); gli E2E (i)…(m), (g'), (h') li scrive
+  l'agente `test-author` nello spec esistente; i comuni, nello slot.
+- **File che toccherò:** l'helper (+ test), `TimeSeriesStore.ts` (+ test), `riskPanelController.svelte.ts` (+ test), `LotsAnalysisPanel.svelte`, le quattro pagine,
+  `price-refresh-reload.spec.ts`, la `desc` di `price-refresh` nel runner e la riga dell'helper nel runner (additive, proposte al coordinatore), la doc di sviluppo
+  (`state/domain-state.md`, `live-ticker.md#price-refresh`, `state/registries.md`).
+- **Domande:** nessuna.
+
+1. ✅ 23/10 · L'helper, `isStale`, il controller del rischio e il pannello dei lotti: i rossi e la cura.
+   > **Note implementazione**: `onPricesCaughtUp.test.ts` (nuovo, **7/7**, il rosso era il modulo assente); `TimeSeriesStore.test.ts` (**4 rossi** su `isStale` assente, poi
+   > 38/38); `riskPanelController.test.ts` (nuovo `describe`: **1 rosso** + 4 guardie, poi **107/107**): `loadBase(force, silent)` non accende `refreshing`, l'ascolto non
+   > ricarica se non c'è niente a schermo né dopo lo smontaggio né per un altro segnale; `LotsAnalysisPanel.svelte` solo `<script>`, nessun `pageBusy`.
+2. ✅ 23/10 · Le quattro pagine (solo `<script>`).
+   > **Note implementazione**: dettaglio asset e dettaglio cambio: `silent` in `loadChartData`, `staleShown` (i punti stale subito, senza `loading`), l'ascolto in un
+   > secondo `onMount`; il dettaglio asset ricarica anche i confronti con `force`, quello dei cambi anche i confronti e le coppie dei segnali (la `loadSignalFxPairs` di X,
+   > che usa il mio `ensureSignalFxPairs`); lista asset: `silent` in `fetchAllPriceData`/`fetchPriceSeries`/`loadPeriodChanges`, la scheda con la serie stale la mostra subito
+   > (D3) e i tassi delle coppie si rileggono; lista cambi: `silent` in `fetchAllPairData` e nelle sue quattro letture, la coppia con tassi stale li mostra subito.
+   > **⚠️ Fuori pista**: `loadChartData` del dettaglio asset ha ora un quarto parametro e il blocco della cache stale ripete il mapping dei punti in una funzione locale
+   > (`chartPointsOf`), usata anche dal ramo «cache fresca»: stesso risultato, una copia in meno.
+3. ✅ 23/10 · La documentazione per sviluppatori (docs-writer; solo inglese, nessun file `.it/.fr/.es`, nessun debito di traduzione).
+   > **Note implementazione**: `live-ticker.md` (`#price-refresh-reload`, Mermaid e tabella delle viste), `registries.md` (`isStale`, regola D3, `#stale-reload`), `domain-state.md`
+   > (`#prices-reload`), `core-infrastructure.md`, `app-state.md`, `risk/architecture.md`, `risk-lab.md`. `mkdocs build` strict **0 avvisi**, `check-links` **97 validi**.
+   > **⚠️ Fuori pista**: `app-state.md` non era nella lista ma diceva il contrario («restano stale»): allineata.
+4. ✅ 23/10 · Gli E2E, in corsia 6189 dentro il lock. `price-refresh` **14/15 al primo giro**, poi **15/15**; `asset-list` **44/44**, `fx-list` **29/29**, `asset-detail` **56/56**,
+   `fx-detail` **33/33**, `risk-asset-detail` **5/5**.
+   > **Note implementazione**: l'unico rosso era il caso (j), il pannello dei lotti del Dashboard: `sync-button` diceva «occupato» durante la ricarica silenziosa.
+   > **⚠️ Fuori pista**: causa vera, trovata leggendo il codice e confermata dal verde: `effectiveSelectionIds` è un array nuovo a ogni risposta (anche con gli stessi lotti),
+   > quindi l'effetto «lots-selection-load» ripartiva dentro `pageBusy.track` e accendeva il bottone. Cura in `LotsAnalysisPanel.svelte`: l'effetto riparte solo se la
+   > selezione cambia **per valore** (`askedSelectionKey`, azzerata alla chiusura del pannello). Nessun test di unità del pannello esiste (monta mezza Dashboard): la prova è il caso (j) dell'E2E.
+
+### Y5-F1 · F2 · F3 — ritocchi dal feedback della checklist (treno 11a, consegnati insieme)
+
+- **F1:** nelle barre strumenti delle liste Asset e FX, in vista a schede, il primo pulsante della vista non dice più «Abs»: è l'icona `ChartLine` delle schede (stesso `data-testid`, `aria-label`/`title` «Mostra assoluto»). Nel dettaglio asset in modalità prezzi il selettore Abs/% resta com'è (non toccato). I tre pulsanti (Impostazioni, Sincronizza tutto, Ricarica tutto) sono avvolti nel `Tooltip` condiviso (ritardo di 500 ms già nel componente) con una riga di spiegazione ciascuno; il clic si ferma prima del clic del tooltip (come nella scheda «correlazione»), che altrimenti fisserebbe il suggerimento sopra la finestra aperta. Chiavi nuove `sharedResource.settingsHint|syncAllHint|refreshAllHint` in 4 lingue (`./dev.py i18n add`).
+- **F2:** con la vista «Rolling Return» nell'anteprima, `ChartSettingsModal` passa `allowedSignalTypes` alla sezione dei segnali: solo `asset-comparison` nelle impostazioni degli asset, solo `fx-pair` in quelle dei cambi (è ciò che la vista disegna; nel dettaglio asset è `['asset-comparison']`). Gli altri segnali restano salvati (le operazioni della sezione toccano solo i visibili) e riappaiono tornando ad Abs o %.
+- **F3:** `LineChart` (compatto) dice la risoluzione statica scelta con `onresolution`; `PriceChartCompact` mostra il `ResolutionBadge` del dettaglio (angolo in alto a sinistra) col più grosso tra il passo già applicato dal backend (`sampledResolution`, passato da `AssetCard` dalla riga della pagina, `daily` nella vista a rendimento) e quello del grafico stesso. `ResolutionBadge` pubblica `data-resolution`. Le schede dei cambi mostrano il badge quando è il grafico ad aggregare (i tassi dei cambi non vengono campionati dal backend).
+- **Domande:** nessuna. **Ipotesi da far confermare:** i «tre pulsanti» sono Impostazioni, Sincronizza tutto e Ricarica tutto; il gruppo Abs/%/Rolling Return ha già il suo titolo.
