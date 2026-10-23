@@ -112,6 +112,7 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   ⏳ 22/10: aspetta gli scatti dell'AI Export (5 pagine, desktop e mobile); prima C-51
 - **C-42 · I vincoli delle coppie anche per contante e cambio** — medio. Dettagli: 38, C-42.
   🌊 22/10: ondata 6 (proprietario W)
+  📌 23/10 (developer): sì, l'API rifiuta la coppia di cassa incoerente; i dati salvati non si toccano.
 - **C-43 · Gli 8 scatti dei portali dei broker** — basso; servono schermate vere. Dettagli: 38, C-43.
   ⏳ 22/10: aspetta schermate vere dei portali di 8 broker (la galleria non le fa)
 - ~~**C-44 · Gli helper della galleria in un posto solo**~~ — basso. Dettagli: 38, C-44.
@@ -1261,6 +1262,7 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   scegliere il formato da copiare, perché il modulo ESM di Mermaid ne carica altri. Dettagli:
   [piano del lotto 25](27_releaseImages/plan-phase00ChangelogTranslation.prompt.md), passo «8».
   🌊 22/10: ondata 6 (proprietario H)
+  📌 23/10 (developer): sì, serviamo noi Mermaid (`mermaid.min.js` in `vendor/`, fissato con l'hash): meno latenza e sappiamo cosa si disegna.
 - ✅ **M-23 · Il changelog dell'app in francese senza spazi non separabili** — nella 1.2, M (lotto 27; assegnata a M
   dal coordinatore il 12/10, con `changelog.ts` e i suoi test). Le traduzioni tengono spazi normali, e per le pagine
   della documentazione li cambia in spazi non separabili `mkdocs_src/hooks/fr_typography.py`, al momento della build.
@@ -2799,6 +2801,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Verifica: una run filtrata di `settings/backup-ready`, che con `Europe/Rome` deve mostrare la stessa ora di prima.
 
   🌊 22/10: ondata 6 (proprietario G)
+  📌 23/10 (developer): fuso degli scatti `Europe/Rome`.
 - ✅ **G-15 · Su desktop, in spagnolo, la scheda Email esce dalla barra delle schede di Settings** — basso-medio; G,
   15/10, doppio lancio degli scatti nuovi (`g-new3-a/b`). **Difetto del prodotto, proprietario da instradare.**
   - Con le 3 schede nuove (Utenti, Backup, Email) l'admin ha 7 schede. In uno scatto desktop di 1280 px:
@@ -6389,6 +6392,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     cambia il test.
 
   🌊 22/10: ondata 6 (proprietario X)
+  📌 23/10 (developer): sì, rifiuto `ohlc_inconsistent` di un limite vero dalla parte sbagliata, **solo per i prezzi manuali** (`source_plugin_key == "MANUAL"`, la frontiera dell'API); il percorso dei provider e dello scheduler (`bulk_refresh_prices`, prezzo corrente) continua ad allargare i limiti attorno alla chiusura: un test lo fissa.
 - ✅ **C-97c-4 · I cambi delle valute deboli letti come zeri** (chiusa il 17/10, `7ac14656a`, entrata in dev `e414edf0b`) —
   piccolo, **nella 1.3**; X, 17/10 (revisione di C-97c-3, decisione del coordinatore).
   - La lista, la card e il riepilogo dei cambi, il Δ della lista e il tooltip del cambio di una transazione usano
@@ -6824,6 +6828,7 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   stessa valuta passa dall'API. Leggerla cambia ciò che l'API accetta → da decidere. Cura: le regole delle coppie lette dalla
   tabella, come W-B31/W-B36 per le regole 5–12, con le eccezioni nominate. Dettagli: piano 04, sezione W-B17.
   🌊 22/10: ondata 6 (proprietario W)
+  📌 23/10 (developer): sì, insieme a C-42.
 - **W-B47 · La barra di stato dell'editor CSV solo in inglese** — minimo, chiarezza; W, 16/10 (W-B43). In
   `frontend/src/lib/components/ui/data-editor/CsvEditor.svelte` (~507-513) «N valid row(s)», «• N error(s)» e «• duplicate
   …s» sono scritti a mano in inglese, in ogni import CSV (prezzi, eventi, cambi): un utente in IT, FR o ES li legge in inglese.
@@ -10205,6 +10210,7 @@ da Y il 15/10.
     altri pulsanti «Aggiorna» delle pagine; la scelta spetta al developer.
 
   🌊 22/10: ondata 6 (proprietario Y)
+  📌 23/10 (developer): chiave `dashboard.syncData`.
 - ✅ **Y-16 · Una vista Candele salvata si carica, su una Dashboard nuova, solo grazie a una dipendenza involontaria** —
   minimo, già presente prima di Y11; `test-author` di Y, 16/10. ✅ 17/10, opzione A (coordinatore; entrata con `14072c03d`, treno 209): il comportamento è
   fissato in modo esplicito da un E2E (`page-busy.spec.ts:867`), con una prova di mutazione. Con un `untrack` attorno
@@ -10407,6 +10413,7 @@ da Y il 15/10.
   - Dettagli: piano di Y, «X-R59».
 
   🌊 22/10: ondata 6 (proprietario Y)
+  📌 23/10 (developer): sì, e di più: quando arriva un prezzo corrente, l'ultimo punto della serie in cache e del grafico della card si aggiorna sul posto (senza invalidare la cache né ridisegnare da zero); il Δ arriva dal backend nel poll (`range_start`), così prezzo, grafico e Δ sono allineati all'ultima informazione nota.
 - ✅ **Y-33 · `asset-detail.spec.ts`: 10 s per una navigazione a freddo sotto carico** — minimo, stabilità dei test; Y, 17/10
   (slot E2E di X-R59, 16:05). `goToSeededAssetDetail()` (`frontend/e2e/assets/asset-detail.spec.ts:107-114`) clicca la card
   di Apple e dà 10 s alla radice `asset-detail-page`. Al picco di carico dopo la build (carico a 1 minuto 93 alle 15:24) un
